@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Loader2, Trash2, AlertTriangle, Check, RefreshCw } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -24,16 +24,19 @@ export default function MailCleanup() {
   const [err, setErr] = useState('')
   const [confirming, setConfirming] = useState(false)
 
-  const load = () => {
-    setLoading(true)
+  // ⚠️ הטעינה מקבלת showSpinner: בטעינה הראשונה loading כבר true
+  // (ערך התחלתי), ו-setLoading(true) בגוף האפקט רק גרם לרינדור מיותר.
+  // בריענון ידני הספינר כן נדרש — שם הקריאה מגיעה מאירוע, לא מאפקט.
+  const load = useCallback((showSpinner = true) => {
+    if (showSpinner) setLoading(true)
     fetch('/api/admin/mail/cleanup')
       .then(r => r.json())
       .then(d => { if (d.error) setErr(d.error); else setData(d) })
       .catch(() => setErr('הטעינה נכשלה'))
       .finally(() => setLoading(false))
-  }
+  }, [])
 
-  useEffect(load, [])
+  useEffect(() => { load(false) }, [load])
 
   const run = async () => {
     setRunning(true); setErr(''); setDone('')
@@ -80,7 +83,7 @@ export default function MailCleanup() {
           <h4 className="text-xs font-bold text-slate-700">
             הדואר הנכנס ({data.סהכ_מיילים.toLocaleString('he-IL')})
           </h4>
-          <button onClick={load} className="text-slate-400 hover:text-slate-600" title="רענון">
+          <button onClick={() => load()} className="text-slate-400 hover:text-slate-600" title="רענון">
             <RefreshCw size={13} />
           </button>
         </div>

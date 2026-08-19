@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Loader2, Wrench, AlertTriangle, Check, RefreshCw } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -26,15 +26,17 @@ export default function RebuildRoutingButton() {
   const [err, setErr] = useState('')
   const [confirming, setConfirming] = useState(false)
 
-  const load = () => {
-    setLoading(true); setErr('')
+  // ⚠️ ראו MailCleanup — loading מאותחל ל-true, ולכן setLoading(true)
+  // בגוף האפקט רק הוסיף רינדור. בריענון ידני הספינר נחוץ.
+  const load = useCallback((showSpinner = true) => {
+    if (showSpinner) { setLoading(true); setErr('') }
     fetch('/api/admin/mail/rebuild-from-resend')
       .then(r => r.json())
       .then(d => { if (d.error) setErr(d.error); else setData(d) })
       .catch(() => setErr('הטעינה נכשלה'))
       .finally(() => setLoading(false))
-  }
-  useEffect(load, [])
+  }, [])
+  useEffect(() => { load(false) }, [load])
 
   const run = async () => {
     setRunning(true); setErr(''); setDone('')
@@ -60,7 +62,7 @@ export default function RebuildRoutingButton() {
     return (
       <div className="flex flex-col gap-2 py-2">
         <p className="text-sm text-red-600">{err || 'הטעינה נכשלה'}</p>
-        <button onClick={load} className="self-start text-sm text-slate-600 inline-flex items-center gap-1.5"><RefreshCw size={13} /> נסה שוב</button>
+        <button onClick={() => load()} className="self-start text-sm text-slate-600 inline-flex items-center gap-1.5"><RefreshCw size={13} /> נסה שוב</button>
       </div>
     )
   }
@@ -78,7 +80,7 @@ export default function RebuildRoutingButton() {
 
       <div className="flex items-center justify-between text-xs text-slate-500">
         <span>נסרקו {data.נסרקו.toLocaleString('he-IL')} מיילים · נמשכו {data.נמשכו_מ_Resend.toLocaleString('he-IL')} מ-Resend</span>
-        <button onClick={load} className="text-slate-400 hover:text-slate-600" title="רענון"><RefreshCw size={13} /></button>
+        <button onClick={() => load()} className="text-slate-400 hover:text-slate-600" title="רענון"><RefreshCw size={13} /></button>
       </div>
 
       {nothing ? (
