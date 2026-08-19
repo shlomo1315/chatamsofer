@@ -39,7 +39,13 @@ interface Message {
   account_id?: string | null
 }
 
-interface Account { id: string; email: string; label?: string | null; department?: string | null }
+interface Account {
+  id: string; email: string; label?: string | null; department?: string | null
+  /** תיבת ארכיון: נמשכת בסנכרון אך אינה מוצגת כתיבה לעבודה. */
+  sync_only?: boolean
+  /** התווית שאליה נכנסים מיילי הארכיון — דרכה מגיעים אליהם. */
+  label_id?: string | null
+}
 /** ⚠️ id ולא רק name: האינדקס שומר את *מזהי* התוויות, ולכן הסינון
  *  חייב לרוץ על המזהה. השם משמש לתצוגה בלבד. */
 interface LabelStat { id: string; name: string; count: number }
@@ -371,6 +377,13 @@ export default function GmailInbox() {
     ? (unreadByAccount[account] ?? 0)
     : Object.values(unreadByDept).reduce((a, b) => a + b, 0)
   const activeAccount = accounts.find(a => a.id === account) ?? null
+
+  // 🔴 תיבות העבודה בלבד — בלי תיבות הארכיון (sync_only).
+  //
+  // ⚠️ activeAccount נגזר מ-accounts המלא ולא מכאן: אם המשתמש הגיע
+  // לתיבת ארכיון דרך קישור ישיר, הכותרת עדיין צריכה להציג את שמה
+  // במקום ליפול ל"כל התיבות" ולבלבל.
+  const workAccounts = accounts.filter(a => !a.sync_only)
   const isFollowup = (m: Message) => (m.labels ?? []).includes(FOLLOWUP)
   /** STARRED היא תווית מערכת של Gmail — נשמרת באינדקס כמו כל תווית. */
   const isStarred = (m: Message) => (m.labels ?? []).includes('STARRED')
@@ -392,7 +405,7 @@ export default function GmailInbox() {
             <span dir="ltr" className="truncate">{activeAccount?.email ?? 'כל התיבות'}</span>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            {activeAccount ? (deptLabel(activeAccount.department) ?? 'תיבת דואר') : `${accounts.length} תיבות`}
+            {activeAccount ? (deptLabel(activeAccount.department) ?? 'תיבת דואר') : `${workAccounts.length} תיבות`}
             {' · '}{total.toLocaleString('he-IL')} הודעות
             {totalUnread > 0 && <> · <strong className="text-indigo-600">{totalUnread}</strong> לא נקראו</>}
           </p>
@@ -410,7 +423,7 @@ export default function GmailInbox() {
             <Settings size={14} /> סנכרון
           </Link>
           {/* ── בורר התיבות, בפינה כמו בגמייל ── */}
-          {accounts.length > 0 && (
+          {workAccounts.length > 0 && (
             <div className="relative">
               <button onClick={() => setAccountMenu(o => !o)}
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:border-indigo-300">
@@ -431,9 +444,9 @@ export default function GmailInbox() {
                     <button onClick={() => { setAccount(''); setAccountMenu(false); setPage(0); setSelected(null) }}
                       className={`w-full text-right px-3 py-2.5 hover:bg-slate-50 border-b border-slate-100 ${!account ? 'bg-indigo-50' : ''}`}>
                       <p className="text-xs font-bold text-slate-800">כל התיבות</p>
-                      <p className="text-[11px] text-slate-400">{accounts.length} תיבות מחוברות</p>
+                      <p className="text-[11px] text-slate-400">{workAccounts.length} תיבות מחוברות</p>
                     </button>
-                    {accounts.map(a => {
+                    {workAccounts.map(a => {
                       const n = unreadByAccount[a.id] ?? 0
                       return (
                         <button key={a.id}
@@ -511,28 +524,10 @@ export default function GmailInbox() {
             ))}
           </nav>
 
-          {/* התיבות */}
-          {accounts.length > 1 && (
-            <>
-              <p className="px-3 pt-3 pb-1 text-[10px] font-extrabold uppercase tracking-wide text-slate-400">התיבות</p>
-              <div className="space-y-0.5">
-                <button onClick={() => { setAccount(''); setPage(0) }} className={navBtn(!account)}>
-                  <Mail size={14} /> <span className="flex-1">כל התיבות</span>
-                </button>
-                {accounts.map(a => {
-                  const n = unreadByAccount[a.id] ?? 0
-                  return (
-                    <button key={a.id} onClick={() => { setAccount(a.id); setPage(0); setSelected(null) }}
-                      className={navBtn(account === a.id)} title={a.email}>
-                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: deptColor(a.department) }} />
-                      <span className="flex-1 truncate text-[12px]">{deptLabel(a.department) ?? a.label ?? a.email}</span>
-                      {n > 0 && <span className={`text-[10px] font-bold rounded-full px-1.5 ${account === a.id ? 'bg-white/25' : 'bg-indigo-100 text-indigo-700'}`}>{n}</span>}
-                    </button>
-                  )
-                })}
-              </div>
-            </>
-          )}
+          {/* ⚠️ רשימת "התיבות" הוסרה מכאן — היא הייתה כפילות של בורר
+              התיבות שבכותרת, ובלבלה: אותה בחירה בשני מקומות שונים במסך.
+              זהו אותו טיפול שכבר ניתן לבורר "כל המחלקות" (ראו למטה).
+              המעבר בין תיבות נעשה בבורר שבפינה, כמו בג'ימייל. */}
 
           {/* תוויות Gmail */}
           {labels.length > 0 && (

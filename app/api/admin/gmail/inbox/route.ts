@@ -1,6 +1,7 @@
 ﻿import { NextResponse, type NextRequest } from 'next/server'
 import { requireMailAccess, unauthorized, getServiceClient } from '@/lib/apiAuth'
 import { getGmailClientForToken, parseMessage, getBody } from '@/lib/gmail'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 
 export const dynamic = 'force-dynamic'
 
@@ -105,6 +106,24 @@ export async function GET(request: NextRequest) {
   const label = sp.get('label') ?? ''
   if (label) query = query.contains('labels', [label])
 
+  // 🔴 תיבות "לסנכרון בלבד" (sync_only) אינן חלק מהתצוגה הרגילה.
+  //
+  // המיילים הישנים מ-Gmail נמשכים לארכיון, אבל אין לעבוד בהם: הם הציפו
+  // את הדואר הנכנס ואת "כל ההודעות" באלפי הודעות היסטוריות, והסתירו את
+  // מה שבאמת מחכה לטיפול בתיבות הדומיין.
+  //
+  // ⚠️ מוסתרים רק מהרשימות הכלליות. כשבוחרים במפורש את התיבה (account=)
+  // או את התווית שלה (label=) — הם כן מוצגים, אחרת הארכיון היה נמשך
+  // לשווא ובלי שום דרך להגיע אליו.
+  if (!accountId && !label) {
+    const { data: hidden } = await db.from('gmail_accounts')
+      .select('id').eq('sync_only', true)
+    const hiddenIds = (hidden ?? []).map(a => String((a as { id: string }).id))
+    if (hiddenIds.length) {
+      query = query.or(`account_id.is.null,account_id.not.in.(${hiddenIds.join(',')})`)
+    }
+  }
+
   if (q) {
     // ג ן¸ ׳—׳™׳₪׳•׳© ׳¢׳ ׳׳˜׳-׳“׳׳˜׳” ׳‘׳׳‘׳“ ג€” ׳”׳’׳•׳£ ׳׳™׳ ׳• ׳‘׳׳¡׳“. ׳–׳” ׳׳›׳•׳•׳: ׳—׳™׳₪׳•׳© ׳‘׳’׳•׳£
     // ׳׳—׳™׳™׳‘ ׳©׳׳™׳¨׳× ׳¢׳•׳×׳§, ׳•׳–׳• ׳‘׳“׳™׳•׳§ ׳”׳›׳₪׳™׳׳•׳× ׳©׳”׳׳¢׳‘׳¨ ׳ ׳•׳¢׳“ ׳׳¡׳׳§.
@@ -123,12 +142,24 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: '׳©׳׳™׳₪׳× ׳”׳”׳•׳“׳¢׳•׳× ׳ ׳›׳©׳׳”' }, { status: 500 })
   }
 
-  // ׳׳•׳ ׳” ׳׳-׳ ׳§׳¨׳׳™׳ ׳׳›׳ ׳׳—׳׳§׳” ׳•׳׳›׳ ׳×׳™׳‘׳” ג€” ׳׳×׳’׳™׳•׳× ׳‘׳₪׳׳ ׳ ׳”׳¦׳“׳“׳™.
-  const { data: unreadRows } = await db.from('gmail_messages')
-    .select('department, account_id').eq('is_unread', true).is('deleted_at', null).contains('labels', ['INBOX'])
+  // מונה הלא-נקראים לכל מחלקה ולכל תיבה — לתגיות בפאנל הצדדי.
+  //
+  // 🔴 fetchAllRows ולא שאילתה בודדת: התקרה השקטה של 1,000 חתכה את
+  // הספירה, והמסך הציג מונה נמוך מהאמת. ראו lib/fetchAllRows.
+  //
+  // ⚠️ תיבות sync_only אינן נספרות: הן אינן מוצגות ברשימה, ומונה
+  // "230 לא נקראו" על ארכיון שאי אפשר לפתוח הוא רעש בלבד.
+  const { rows: unreadRows } = await fetchAllRows<{ department?: string | null; account_id?: string | null }>(
+    (from, to) => db.from('gmail_messages')
+      .select('department, account_id').eq('is_unread', true).is('deleted_at', null)
+      .contains('labels', ['INBOX']).range(from, to))
+  const syncOnlyIds = new Set(
+    ((await db.from('gmail_accounts').select('id').eq('sync_only', true)).data ?? [])
+      .map(a => String((a as { id: string }).id)))
   const unreadByDept: Record<string, number> = {}
   const unreadByAccount: Record<string, number> = {}
-  for (const r of (unreadRows ?? []) as { department?: string | null; account_id?: string | null }[]) {
+  for (const r of unreadRows) {
+    if (r.account_id && syncOnlyIds.has(String(r.account_id))) continue
     const k = r.department || '_none'
     unreadByDept[k] = (unreadByDept[k] ?? 0) + 1
     if (r.account_id) unreadByAccount[r.account_id] = (unreadByAccount[r.account_id] ?? 0) + 1
@@ -138,7 +169,7 @@ export async function GET(request: NextRequest) {
   // ⚠️ refresh_token נשלף לשימוש *בשרת בלבד* (משיכת שמות התוויות למטה),
   // ומנוקה לפני שהרשימה נשלחת ללקוח — אסור שיגיע לדפדפן.
   const { data: accountsRaw } = await db.from('gmail_accounts')
-    .select('id, email, label, department, refresh_token').eq('is_active', true).order('email')
+    .select('id, email, label, department, refresh_token, sync_only, label_id').eq('is_active', true).order('email')
   const accounts = (accountsRaw ?? []).map(({ refresh_token: _t, ...rest }) => rest)
 
   // ג ן¸ ׳”׳×׳•׳•׳™׳•׳× ׳ ׳’׳–׳¨׳•׳× ׳׳”׳׳™׳ ׳“׳§׳¡ ׳•׳׳ ׳ ׳©׳׳₪׳•׳× ׳-Gmail ׳‘׳›׳ ׳˜׳¢׳™׳ ׳”: ׳©׳׳™׳₪׳” ׳׳©׳

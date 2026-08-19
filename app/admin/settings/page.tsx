@@ -1,6 +1,6 @@
 import { guardAdminPage } from '@/lib/pageGuard'
 import { redirect } from 'next/navigation'
-import { Bell, Database, Users, UserPlus, GitBranch, Home, FileText, MapPin, Mail, CreditCard, Banknote, Phone, ScrollText, HardDriveDownload, MailWarning, Sparkles, Package, Wrench, Gift, CalendarClock , ShieldCheck } from 'lucide-react'
+import { Bell, Database, Users, UserPlus, GitBranch, Home, FileText, MapPin, Mail, CreditCard, Banknote, Phone, ScrollText, HardDriveDownload, MailWarning, Inbox, Sparkles, Package, Wrench, Gift, CalendarClock , ShieldCheck } from 'lucide-react'
 import Collapsible from '@/components/ui/Collapsible'
 import PageHeader from '@/components/ui/PageHeader'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
@@ -37,6 +37,7 @@ import SendAccountSettings from './SendAccountSettings'
 import DepartmentGatesSettings from './DepartmentGatesSettings'
 import GovDataSettings from './GovDataSettings'
 import LegacyMailSettings from './LegacyMailSettings'
+import MailboxDisplaySettings from './MailboxDisplaySettings'
 import AutoReplySettings from './AutoReplySettings'
 import CardStockAlertSettings from './CardStockAlertSettings'
 import CardReminderSettings from './CardReminderSettings'
@@ -203,6 +204,11 @@ export default async function SettingsPage() {
         {/* מענה אוטומטי — נוסח, כפתורים וסעיפים לכל תיבת מייל */}
         <Collapsible title="מענה אוטומטי לתיבות המייל" icon={<MailWarning size={16} className="text-amber-500" />}>
           <AutoReplySettings />
+        </Collapsible>
+
+        {/* איזו תיבה מוצגת בלשונית מייל ואיזו רק נאספת לארכיון */}
+        <Collapsible title="תצוגת תיבות המייל" icon={<Inbox size={16} className="text-indigo-500" />}>
+          <MailboxDisplaySettings />
         </Collapsible>
 
         <Collapsible title="סנכרון מייל קודם" icon={<Mail size={16} className="text-orange-500" />}>
