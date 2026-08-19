@@ -5412,7 +5412,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
 
             {/* ── טאבים · דסקטופ ─────────────────────────────────────────
                 ⚠️ מוסתר בנייד — שם הניווט הוא הסרגל התחתון הקבוע. */}
-            <div className="hidden sm:flex items-center gap-1 border-b border-slate-200 -mb-1 overflow-x-auto">
+            <div className="hidden sm:flex flex-wrap items-center gap-1 border-b border-slate-200 -mb-1">
               {DASH_TABS.map(t => (
                 <button key={t.key} type="button" onClick={() => setDashTab(t.key)}
                   className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold whitespace-nowrap border-b-2 transition-colors ${

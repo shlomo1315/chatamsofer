@@ -56,3 +56,44 @@ describe('הגנת הקריסה בפועל', () => {
     }
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// מקור ההרעלה: normalizeDateToISO החזיר ערך לא-מזוהה *כמות שהוא* (`return v`),
+// למרות שההערה מעליו הבטיחה "מניעת תאריכים פגומים ב-JSON". כך נכנסו למאגר
+// מחרוזות שאינן תאריך, וחזרו אחר כך לטופס והפילו את הרינדור.
+// ─────────────────────────────────────────────────────────────────────────────
+import { normalizeDateToISO } from './validation'
+import { sanitizeChildrenDates } from './safeDateValue'
+
+describe('normalizeDateToISO — לא מחזיר זבל', () => {
+  it('ממיר את הפורמטים המוכרים', () => {
+    expect(normalizeDateToISO('2026-08-19')).toBe('2026-08-19')
+    expect(normalizeDateToISO('19082026')).toBe('2026-08-19')   // נדרים DDMMYYYY
+    expect(normalizeDateToISO('19/08/2026')).toBe('2026-08-19')
+    expect(normalizeDateToISO('19.08.2026')).toBe('2026-08-19')
+  })
+
+  it('🔴 ערך שאינו תאריך מוחזר null — ולא כמחרוזת גולמית', () => {
+    for (const junk of ['לא ידוע', 'אין', 'xyz', '00-00-0000', '13/13/2026']) {
+      expect(normalizeDateToISO(junk)).toBeNull()
+    }
+  })
+
+  it('ריק מוחזר null', () => {
+    expect(normalizeDateToISO('')).toBeNull()
+    expect(normalizeDateToISO(null)).toBeNull()
+  })
+})
+
+describe('sanitizeChildrenDates', () => {
+  it('מנקה תאריך פגום ומשאיר את שאר השדות', () => {
+    const out = sanitizeChildrenDates([
+      { name: 'א', birth_date: '2026-08-19' },
+      { name: 'ב', birth_date: 'לא ידוע' },
+      { name: 'ג', birth_date: undefined },
+    ])
+    expect(out[0]).toEqual({ name: 'א', birth_date: '2026-08-19' })
+    expect(out[1]).toEqual({ name: 'ב', birth_date: '' })
+    expect(out[2]).toEqual({ name: 'ג', birth_date: '' })
+  })
+})

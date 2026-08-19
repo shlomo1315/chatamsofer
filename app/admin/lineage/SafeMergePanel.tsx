@@ -284,13 +284,15 @@ export default function SafeMergePanel({ onDone }: { onDone: () => void }) {
           {byGen.length > 0 && (
             <div className="rounded-lg border border-emerald-200 bg-white p-3 mb-3">
               <p className="text-[11px] font-bold text-slate-600 mb-2">פיזור הקבוצות לפי דור</p>
-              <div className="flex items-end gap-1 overflow-x-auto pb-1">
+              {/* ⚠️ בלי גלילה אופקית: העמודות מתכווצות יחד (flex-1 + min-w-0)
+                  כך שכל הדורות נראים תמיד. ראה docs/no-horizontal-scroll.md */}
+              <div className="flex items-end gap-1 pb-1">
                 {byGen.map(g => {
                   const max = Math.max(...byGen.map(x => x.groups))
                   const h = Math.max(4, Math.round((g.groups / max) * 56))
                   const deep = g.generation >= 7
                   return (
-                    <div key={g.generation} className="flex flex-col items-center gap-1 min-w-[34px]"
+                    <div key={g.generation} className="flex flex-col items-center gap-1 flex-1 min-w-0"
                       title={`דור ${g.generation}: ${he(g.groups)} קבוצות · ${he(g.copies)} עותקים יוסרו`}>
                       <span className="text-[9px] font-bold text-slate-500">{he(g.groups)}</span>
                       <div style={{ height: h }}

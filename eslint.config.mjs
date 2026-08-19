@@ -1,6 +1,7 @@
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
+import noHorizontalScroll from "./eslint-rules/no-horizontal-scroll.mjs";
 
 const eslintConfig = defineConfig([
   ...nextVitals,
@@ -13,6 +14,13 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  // 🔴 אין גלילה לרוחב בשום מקום במערכת — נאכף בלינט, לא רק בתיעוד.
+  // ההנחיה נשברה שוב ושוב כשהיא הייתה רק הערה. ראה docs/no-horizontal-scroll.md
+  {
+    files: ["app/**/*.tsx", "components/**/*.tsx"],
+    plugins: { local: { rules: { "no-horizontal-scroll": noHorizontalScroll } } },
+    rules: { "local/no-horizontal-scroll": "error" },
+  },
 ]);
 
 export default eslintConfig;

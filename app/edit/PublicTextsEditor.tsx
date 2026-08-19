@@ -161,18 +161,17 @@ export default function PublicTextsEditor({ initialTexts }: { initialTexts: Publ
         <span className="w-px h-5 bg-slate-700" />
 
         {/* בורר מסכים — מעבר ישיר בין תצוגות בלי להזין ת"ז.
-            גליל אופקי: יש יותר מסכים ממה שנכנס לרוחב המסך. */}
-        <div className="flex items-center gap-1 bg-slate-800 rounded-xl p-0.5 max-w-[42vw] overflow-x-auto">
+            ⚠️ היה כאן פס כפתורים עם גלילה אופקית, והמסכים האחרונים פשוט לא
+            נראו. <select> אינו גולש לעולם — כמה שיתווספו מסכים, כולם נגישים.
+            ראה docs/no-horizontal-scroll.md */}
+        <select value={previewStep} onChange={e => setPreviewStep(e.target.value as typeof previewStep)}
+          className="bg-slate-800 text-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-medium max-w-[42vw] truncate border border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
           {PREVIEW_STEPS.map(s => (
-            <button key={s.step} onClick={() => setPreviewStep(s.step)}
-              title={s.needsData ? 'דורש כניסה אמיתית — עשוי להופיע ריק' : undefined}
-              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
-                previewStep === s.step ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-700'
-              }`}>
-              {s.label}{s.needsData && <span className="opacity-50 mr-0.5">*</span>}
-            </button>
+            <option key={s.step} value={s.step}>
+              {s.label}{s.needsData ? ' *' : ''}
+            </option>
           ))}
-        </div>
+        </select>
 
         <span className="w-px h-5 bg-slate-700" />
 

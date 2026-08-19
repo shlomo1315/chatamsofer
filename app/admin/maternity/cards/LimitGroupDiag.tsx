@@ -56,7 +56,7 @@ export default function LimitGroupDiag() {
           <div className="bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600">קבוצות הגבלת חנויות שנמצאו ({groups.length})</div>
           <div className="divide-y divide-slate-100">
             {groups.map((g, i) => (
-              <pre key={i} className="px-3 py-2 text-xs text-slate-700 overflow-x-auto whitespace-pre-wrap break-all">{JSON.stringify(g, null, 2)}</pre>
+              <pre key={i} className="px-3 py-2 text-xs text-slate-700 whitespace-pre-wrap break-all">{JSON.stringify(g, null, 2)}</pre>
             ))}
           </div>
         </div>
@@ -65,7 +65,7 @@ export default function LimitGroupDiag() {
       {result && (
         <details className="mt-3 rounded-lg border border-slate-200">
           <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-slate-600 bg-slate-50">תשובה גולמית מלאה (JSON)</summary>
-          <pre className="px-3 py-2 text-[11px] text-slate-600 overflow-x-auto whitespace-pre-wrap break-all max-h-96">{JSON.stringify(result, null, 2)}</pre>
+          <pre className="px-3 py-2 text-[11px] text-slate-600 whitespace-pre-wrap break-all max-h-96">{JSON.stringify(result, null, 2)}</pre>
         </details>
       )}
     </div>

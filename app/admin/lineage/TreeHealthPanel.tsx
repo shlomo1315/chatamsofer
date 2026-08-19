@@ -107,8 +107,10 @@ export default function TreeHealthPanel({ onLocate, onOpenDuplicates }: {
               ) : (
                 <p className="text-[12px] text-emerald-800 mb-2">אין דור שנקטע — העץ מסועף לכל עומקו. ✅</p>
               )}
-              <div className="overflow-x-auto">
-                <table className="text-[11px] w-full min-w-[320px]">
+              {/* ⚠️ בלי overflow-x ובלי min-w — ארבע עמודות מספריות נכנסות
+                  בכל רוחב מסך. ראה docs/no-horizontal-scroll.md */}
+              <div>
+                <table className="text-[11px] w-full">
                   <thead>
                     <tr className="text-amber-700">
                       <th className="text-right font-bold py-0.5 px-1">דור</th>

@@ -26,17 +26,32 @@ export function normalizeDateToISO(raw?: string | null): string | null {
   const v = String(raw ?? '').trim()
   if (!v) return null
   // כבר ISO תקין (YYYY-MM-DD) — משאירים
-  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return isRealDate(v)
   // DDMMYYYY (8 ספרות רצופות) — הפורמט של נדרים
   let m = v.match(/^(\d{2})(\d{2})(\d{4})$/)
-  if (m) return `${m[3]}-${m[2]}-${m[1]}`
+  if (m) return isRealDate(`${m[3]}-${m[2]}-${m[1]}`)
   // DD/MM/YYYY או DD.MM.YYYY או DD-MM-YYYY
   m = v.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/)
-  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`
+  if (m) return isRealDate(`${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`)
   // YYYY/MM/DD
   m = v.match(/^(\d{4})[./](\d{1,2})[./](\d{1,2})$/)
-  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`
-  return v
+  if (m) return isRealDate(`${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`)
+  // 🔴 ערך שאינו תואם אף פורמט מוכר מוחזר null — ולא כמחרוזת גולמית.
+  // קודם היה כאן `return v`, כלומר "לא ידוע" נכתב כמות שהוא לתוך JSONB
+  // (שאין בו אכיפת טיפוס), חזר אחר כך לטופס, ו-new HDate(InvalidDate) זרק
+  // RangeError בזמן render — מה שהפיל את *כל* הדף. ראה lib/safeDateValue.
+  return null
+}
+
+// אימות שהתאריך קיים באמת ולא רק "נראה" תקין: 13/13/2026 עובר את ה-regex
+// אבל אינו תאריך. Date "מגלגל" חודש 13 לינואר הבא, ולכן משווים חזרה.
+function isRealDate(iso: string): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
+  if (!m) return null
+  const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3])
+  const dt = new Date(y, mo - 1, d)
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null
+  return iso
 }
 
 export function validatePhone(p: string): boolean {

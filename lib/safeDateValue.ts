@@ -31,3 +31,19 @@ export function toSafeDateValue(v?: string | null): string {
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
+
+/**
+ * מסנן את שדות התאריך במערך ילדים לפני כתיבה למאגר.
+ *
+ * 🔴 העמודה `children` היא JSONB — אין למסד הנתונים שום אכיפת טיפוס על
+ * `birth_date` שבתוכה, בניגוד לעמודת `date` אמיתית. כל מחרוזת נכנסת כמות
+ * שהיא, וערך פגום שנכתב פעם אחת חוזר אחר כך לטופס ומפיל את הרינדור.
+ * לכן הסינון חייב לקרות גם בכתיבה ולא רק בקריאה: הקריאה מגינה על הקיים,
+ * הכתיבה מונעת הרעלה חדשה.
+ */
+export function sanitizeChildrenDates<T extends { birth_date?: unknown }>(children: T[]): T[] {
+  return children.map(c => {
+    const raw = typeof c?.birth_date === 'string' ? c.birth_date : ''
+    return { ...c, birth_date: toSafeDateValue(raw) }
+  })
+}

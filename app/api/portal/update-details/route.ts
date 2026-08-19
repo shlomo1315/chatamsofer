@@ -6,6 +6,7 @@ import { normalizePhone } from '@/lib/phone'
 import { validateIsraeliId } from '@/lib/validation'
 import { syncMaternityNamesFromChildren } from '@/lib/babyNames'
 import { childRegisteredSeparatelyMessage, isChildMarried } from '@/lib/childDuplicateMessage'
+import { sanitizeChildrenDates } from '@/lib/safeDateValue'
 
 export const dynamic = 'force-dynamic'
 
@@ -194,7 +195,11 @@ export async function POST(request: NextRequest) {
         }
       }
     }
-    update.children = children.length > 0 ? children : null
+    // 🔴 סינון תאריכים לפני הכתיבה. `children` היא JSONB — אין אכיפת טיפוס
+    // על birth_date שבתוכה, וערך פגום שנכתב חוזר אחר כך לטופס ומפיל את
+    // הרינדור של כל הדף. ראה lib/safeDateValue.
+    const safeChildren = sanitizeChildrenDates(children as { birth_date?: unknown }[])
+    update.children = safeChildren.length > 0 ? safeChildren : null
     update.children_count = typeof children_count === 'number' ? children_count : children.length
   }
 
