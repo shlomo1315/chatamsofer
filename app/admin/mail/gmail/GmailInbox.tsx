@@ -50,7 +50,7 @@ interface Account {
  *  חייב לרוץ על המזהה. השם משמש לתצוגה בלבד. */
 interface LabelStat { id: string; name: string; count: number }
 /** תווית של תיבת ארכיון — הסינון שלה הוא לפי התיבה, לא לפי תווית על ההודעה. */
-interface BoxLabel { id: string; name: string; count: number; account: string }
+interface BoxLabel { id: string; name: string; count: number; account: string; department?: string | null }
 interface Attachment { filename?: string; mimeType?: string; size?: number }
 
 const fmtDate = (d?: string | null) => {
@@ -388,6 +388,20 @@ export default function GmailInbox() {
   // לתיבת ארכיון דרך קישור ישיר, הכותרת עדיין צריכה להציג את שמה
   // במקום ליפול ל"כל התיבות" ולבלבל.
   const workAccounts = accounts.filter(a => !a.sync_only)
+
+  // 🔴 תוויות הארכיון מוצגות רק בתיבה שאליה הן שייכות.
+  //
+  // ⚠️ "גמ״ח ישן" הופיעה גם בתוך תיבת המשרד הראשי — ארכיון של מחלקה
+  // אחרת, שאינו קשור לדואר שמוצג שם. הסינון לפי המחלקה של התיבה הפעילה.
+  //
+  // ⚠️ כשנבחרה תיבת ארכיון עצמה, התווית שלה נשארת גלויה — אחרת הפריט
+  // שנלחץ היה נעלם מהסרגל ברגע הלחיצה.
+  const visibleBoxLabels = (() => {
+    if (!account) return []              // "כל התיבות" — הארכיון אינו חלק מהתצוגה
+    const active = accounts.find(a => a.id === account)
+    if (active?.sync_only) return boxLabels.filter(b => b.account === account)
+    return boxLabels.filter(b => b.department && b.department === active?.department)
+  })()
   const isFollowup = (m: Message) => (m.labels ?? []).includes(FOLLOWUP)
   /** STARRED היא תווית מערכת של Gmail — נשמרת באינדקס כמו כל תווית. */
   const isStarred = (m: Message) => (m.labels ?? []).includes('STARRED')
@@ -539,11 +553,11 @@ export default function GmailInbox() {
 
               ⚠️ הסינון הוא לפי התיבה (setAccount) ולא לפי תווית: התווית
               מתארת מאיזו תיבה המייל הגיע, והיא אינה מוטבעת על ההודעות. */}
-          {boxLabels.length > 0 && (
+          {visibleBoxLabels.length > 0 && (
             <>
               <p className="px-3 pt-3 pb-1 text-[10px] font-extrabold uppercase tracking-wide text-slate-400">מיילים ישנים</p>
               <div className="space-y-0.5">
-                {boxLabels.map(b => (
+                {visibleBoxLabels.map(b => (
                   <button key={b.id}
                     onClick={() => {
                       const on = account === b.account

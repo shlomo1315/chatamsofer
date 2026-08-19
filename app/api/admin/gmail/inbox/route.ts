@@ -224,7 +224,7 @@ export async function GET(request: NextRequest) {
   //
   // הספירה היא לפי התיבה (account_id), לא לפי תווית על ההודעה: התווית
   // מתארת *מאיפה* המייל הגיע, וזה בדיוק מה שהמשתמש מחפש.
-  const boxLabels: { id: string; name: string; count: number; account: string }[] = []
+  const boxLabels: { id: string; name: string; count: number; account: string; department: string | null }[] = []
   {
     const { data: defsRow } = await db.from('app_settings')
       .select('value').eq('key', 'mail_label_defs').maybeSingle()
@@ -234,7 +234,7 @@ export async function GET(request: NextRequest) {
       if (raw) defs = JSON.parse(raw)
     } catch { defs = [] }
 
-    for (const acc of (accountsRaw ?? []) as { id: string; label?: string | null; label_id?: string | null; sync_only?: boolean }[]) {
+    for (const acc of (accountsRaw ?? []) as { id: string; label?: string | null; label_id?: string | null; sync_only?: boolean; department?: string | null }[]) {
       if (!acc.sync_only || !acc.label_id) continue
       const { count: n } = await db.from('gmail_messages')
         .select('id', { count: 'exact', head: true })
@@ -244,6 +244,10 @@ export async function GET(request: NextRequest) {
         name: defs.find(d => d.id === acc.label_id)?.name ?? acc.label ?? 'ארכיון',
         count: n ?? 0,
         account: acc.id,
+        // ⚠️ המחלקה נשלחת כדי שהלקוח יציג את התווית רק בתיבה שאליה היא
+        // שייכת: "גמ״ח ישן" בתוך תיבת המשרד הראשי היא רעש — הארכיון של
+        // הגמ״ח אינו קשור לדואר שנמצא שם.
+        department: acc.department ?? null,
       })
     }
   }
