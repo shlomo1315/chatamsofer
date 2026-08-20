@@ -334,11 +334,95 @@ export function buildDraftBody(type: ReqType, idNumber: string, ctx: Ctx): strin
 /** תיבת האיגוד — היעד של כל טיוטות ההגשה במייל. מוגדר פעם אחת. */
 export const IGUD_MAILBOX = 'igud@chasamsofer.info'
 
-// קישור mailto מלא לטיוטה (subjectPrefix לעקיפה — למשל "בקשת סיוע אלמן")
+/**
+ * קישור לטיוטת הגשה מוכנה (subjectPrefix לעקיפה — למשל "בקשת סיוע אלמן").
+ *
+ * 🔴 קישור Gmail ולא mailto:, ועם הגוף הקומפקטי. שתי סיבות, שתיהן שברו
+ * את ההגשה החוזרת בפועל:
+ *
+ *  1. Gmail חוסם mailto: שנלחץ מתוך גוף הודעה — התוצאה דף לבן. הקישור
+ *     הזה יושב במייל *הדחייה*, כלומר בדיוק אצל מי שכבר נכשל פעם אחת.
+ *  2. הגוף המלא תופח פי ~5.5 בקידוד וחורג ממגבלת ה-URL של Gmail.
+ *
+ * ⚠️ הת"ז כאן ידועה (בשונה מ-/api/request-draft) ולכן היא נכנסת לשורת
+ * הנושא מראש — לפונה לא נותר מה למלא שם.
+ */
 export function draftMailto(type: ReqType, idNumber: string, ctx: Ctx, subjectPrefix?: string): string {
   const subject = `${subjectPrefix ?? SUBJECT_PREFIX[type]} · ת.ז ${idNumber}`
-  const body = buildDraftBody(type, idNumber, ctx)
-  return `mailto:${IGUD_MAILBOX}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+  const body = buildDraftBodyCompact(type, ctx)
+  const p = new URLSearchParams({ view: 'cm', fs: '1', to: IGUD_MAILBOX, su: subject, body })
+  // 🔴 /u/0/ חובה — בלעדיו Gmail מחזיר "Bad Request · Error 400".
+  return `https://mail.google.com/mail/u/0/?${p.toString()}`
+}
+
+/**
+ * קיצור ה-hint לטיוטה בלבד.
+ *
+ * 🔴 מה שנשמר: פורמט והגבלה — בלעדיהם הפונה ממלא שגוי והבקשה נדחית.
+ * מה שיורד: נימוקים והסברי רקע, ששייכים למייל ההנחיות.
+ *
+ * ⚠️ חותך במפריד משפט ולא באמצע מילה: hint קטוע מבלבל יותר מ-hint שאינו קיים.
+ */
+function shortHint(hint?: string): string {
+  if (!hint) return ''
+  const cut = String(hint).split(/[.—]|⚠️/)[0].trim()
+  return cut ? ` (${cut})` : ''
+}
+
+/**
+ * קיצור תווית קובץ — שם המסמך בלבד, בלי ההסבר שאחריו.
+ *
+ * ⚠️ תוויות הקבצים נשאו הסברים שלמים ("הדפיסו את הטופס, החתימו את הרב,
+ * סרקו…") שהוסיפו לבדם כאלף תווים ל-URL.
+ *
+ * 🔴 שם הקובץ עצמו לעולם אינו מקוצר — הוא המזהה שהמערכת מחפשת, וקובץ
+ * בשם שאינו מדויק אינו מזוהה והבקשה נפסלת.
+ */
+function shortLabel(label: string): string {
+  const cut = String(label ?? '').split(/[.—(+]/)[0].trim()
+  return cut || String(label ?? '').trim()
+}
+
+/**
+ * גוף הטיוטה — קומפקטי אך מלא: כל שדה שהפרסר מצפה לו מופיע.
+ *
+ * 🔴 השורש שהפיל את כפתורי ההגשה: קידוד URL של עברית תופח פי ~5.5
+ * ("א" ‑> "%D7%90"). buildDraftBody המלא (1,726 תווים) הפך ל-URL של
+ * 8,411 ו-Gmail דחה אותו — דף לבן.
+ *
+ * ⚠️ ההבדל מ-buildDraftBody הוא בהסברים בלבד. כל שדה וכל שם קובץ נשארים,
+ * כי הפרסר מזהה אותם לפי התווית — גוף שמשמיט שדות נקלט ריק.
+ *
+ * ⚠️ סדר השורות אינו קוסמטי: ההוראה על שורת הנושא ראשונה, כי בלעדיה
+ * הבקשה אינה נקלטת כלל — גם אם כל השאר מולא נכון.
+ */
+export function buildDraftBodyCompact(type: ReqType, ctx: Ctx): string {
+  const L: string[] = []
+
+  // 🔴 ההוראה הקריטית, בראש. ת"ז בשורת הנושא היא המזהה שהקליטה נשענת
+  // עליו, ו"ספרת ביקורת" מצוין במפורש — ת"ז בת 8 ספרות נדחית באימות.
+  L.push('בשורת הנושא למעלה: הקלידו 9 ספרות תעודת זהות, כולל ספרת ביקורת.')
+  L.push('')
+  L.push('מלאו אחרי הנקודתיים. אל תשנו את שמות השדות.')
+  L.push('━━━━━━━━━━')
+
+  for (const f of fieldsFor(type, ctx)) {
+    // ⚠️ שדה עם אפשרויות מוצג עם כולן — הפונה מוחק את המיותר. זה הפורמט
+    // שהפרסר מצפה לו.
+    L.push(f.options
+      ? `${f.label}${shortHint(f.hint)}: ${f.options.join(' / ')}`
+      : `${f.label}${shortHint(f.hint)}: `)
+  }
+
+  const atts = attachmentsFor(type, ctx)
+  if (atts.length) {
+    L.push('━━━━━━━━━━')
+    L.push('צרפו קבצים. שנו את שם כל קובץ בדיוק לשם שלידו:')
+    for (const a of atts.filter(a => a.required)) L.push(`• ${shortLabel(a.label)} ← ${a.name}`)
+    for (const a of atts.filter(a => !a.required)) L.push(`• ${shortLabel(a.label)} ← ${a.name} (אם יש)`)
+  }
+
+  return L.join('\n')
 }
 
 // ── פרסור גוף המייל שהתקבל ────────────────────────────────────────────────────

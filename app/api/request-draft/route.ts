@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
-import { buildDraftBody, SUBJECT_PREFIX, MAILBOX_REQUEST_TYPE, type ReqType } from '@/lib/emailRequestForms'
+import { SUBJECT_PREFIX, MAILBOX_REQUEST_TYPE, IGUD_MAILBOX, buildDraftBodyCompact, type ReqType } from '@/lib/emailRequestForms'
 import { loadCtx } from '@/lib/emailRequestIntake'
+import { gmailComposeLink, GMAIL_URL_SAFE_LIMIT } from "@/lib/draftLink"
 
 /**
  * סוג → תיבת האגף. נגזר מהמיפוי ההפוך שכבר קיים.
@@ -16,17 +17,14 @@ const MAILBOX_FOR: Partial<Record<ReqType, string>> = Object.fromEntries(
 export const dynamic = 'force-dynamic'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// פתיחת טיוטת בקשה ב-Gmail, עם **כל שדות הטופס**.
+// פתיחת טיוטת בקשה ב-Gmail, עם כל שדות הטופס.
 //
-// 🔴 זה מה שהיה שבור: כפתורי ההגשה בנו גוף גנרי משלהם (שם/ת"ז/טלפון
-// בלבד), בעוד הצינור מצפה לשדות המלאים של סוג הבקשה ומפרסר אותם משם.
-// התוצאה — המשפחה שלחה מייל בלי הפרטים שהבקשה דורשת.
+// 🔴 הגוף נבנה כאן ולא בלקוח: רשימת השדות, המסמכים והמגבלות נטענת מהמסד
+// ומשתנה לפי הגדרות המחלקה. גוף שנבנה בלקוח היה גנרי (שם/ת"ז/טלפון),
+// והבקשות נקלטו ריקות.
 //
-// ⚠️ הגוף נבנה כאן ולא בלקוח: buildDraftBody דורש ctx שנטען מהמסד
-// (רשימת השדות, המסמכים והמגבלות משתנה לפי הגדרות המחלקה).
-//
-// ⚠️ הפניה ל-Gmail ולא mailto: — Gmail חוסם mailto מגוף הודעה והתוצאה
-// דף לבן. ראו gmailComposeUrl ב-autoReplyConfig.
+// ⚠️ הגוף קומפקטי בכוונה — ראו draftLink.ts. עברית תופחת פי ~5.5 בקידוד,
+// והטופס המלא לא נכנס ל-URL של Gmail.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const VALID: ReqType[] = ['birth', 'silent_birth', 'loan', 'financial_aid', 'widow']
@@ -41,19 +39,24 @@ export async function GET(request: NextRequest) {
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  // ⚠️ ת"ז אינה ידועה כאן — המשפחה מקלידה אותה בשורת הנושא. מציין-מקום
-  // ריק, כך שהשדות בגוף נבנים אך אין ערך מומצא.
+  // ⚠️ ת"ז אינה ידועה כאן — המשפחה מקלידה אותה בשורת הנושא.
   const ctx = await loadCtx(db, type, true)
-  const body = buildDraftBody(type, '', ctx)
+  const body = buildDraftBodyCompact(type, ctx)
 
-  const mailbox = MAILBOX_FOR[type] ?? 'igud@chasamsofer.info'
+  const mailbox = MAILBOX_FOR[type] ?? IGUD_MAILBOX
   // ⚠️ הנושא נגמר ב-"ת.ז " פתוח: הסמן ממשיך ישירות למספר ואין מה למחוק.
-  // בתיבת אגף די בת"ז לבדה, אבל השארת הקידומת אינה מזיקה והיא מסייעת
-  // לפונה להבין מה הוא שולח.
+  // מציין-מקום בסוגריים נשלח כפי שהוא אצל מי שלא מחק אותו, והבקשה לא
+  // נקלטה — בעוד המייל כן נשלח והמשפחה הייתה בטוחה שהגישה.
   const subject = `${SUBJECT_PREFIX[type]} · ת.ז `
 
-  // 🔴 /u/0/ חובה. בלעדיו Gmail מחזיר "Bad Request · Error 400" —
-  // הנתיב /mail/?view=cm אינו תקף, ורק /mail/u/0/?view=cm עובד.
-  const p = new URLSearchParams({ view: 'cm', fs: '1', to: mailbox, su: subject, body })
-  return NextResponse.redirect(`https://mail.google.com/mail/u/0/?${p.toString()}`)
+  const url = gmailComposeLink({ to: mailbox, subject, body })
+
+  // ⚠️ התראה ולא חסימה: הטסטים נועלים את האורך לכל חמשת הסוגים, אבל
+  // רשימת בתי ההחלמה נטענת מהמסד ויכולה לגדול. אם מישהו יוסיף עשרה
+  // בתים — עדיף שזה יופיע בלוג ולא שהקישור יישבר בשקט אצל הפונה.
+  if (url.length > GMAIL_URL_SAFE_LIMIT) {
+    console.warn(`[request-draft] ${type}: הקישור חורג — ${url.length} תווים (מגבלה ${GMAIL_URL_SAFE_LIMIT})`)
+  }
+
+  return NextResponse.redirect(url)
 }
