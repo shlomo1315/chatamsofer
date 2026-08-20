@@ -17,6 +17,7 @@ import Pagination from '@/components/ui/Pagination'
 import { useTablePagination } from '@/lib/useTablePagination'
 import CityBreakdown from './CityBreakdown'
 import CenterBreakdown from './CenterBreakdown'
+import LoadCardsPanel from './LoadCardsPanel'
 
 export interface RegistrationRow {
   id: string
@@ -436,6 +437,9 @@ export default function HolidayRegistrations({
         </h3>
         <CenterBreakdown distributionId={distributionId} />
       </div>
+
+      {/* ── טעינת הכרטיסים — פעולה כספית, ידנית בלבד ── */}
+      {canEdit && <LoadCardsPanel distributionId={distributionId} />}
 
       {/* ── פילוח לפי עיר ── */}
       <CityBreakdown cities={cities} selected={city} onSelect={setCity} />
