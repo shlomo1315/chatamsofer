@@ -132,15 +132,21 @@ describe('🔴 קישורי ההגשה שבדף ההגדרות באמת נקלט
       const to = params.get('to') ?? ''
       const subj = params.get('su') ?? ''
 
+      // 🔴 במסלול התיבה הנושא ריק *במכוון*: מציין-מקום בסוגריים נשלח
+      // כפי שהוא אצל מי שלא מחק אותו, והבקשה לא נקלטה — בעוד המייל כן
+      // נשלח והמשפחה בטוחה שהגישה. שדה ריק מחייב הקלדה.
       if (p.mailbox) {
-        // מסלול התיבה: הנושא נקי, והת"ז לבדה תספיק
+        expect(subj).toBe('')
+        // הת"ז לבדה, כפי שהמשתמש יקליד, נקלטת לפי התיבה.
+        expect(detectReqTypeForMailbox(VALID_ID, to)).not.toBeNull()
         expect(to).toBe(p.mailbox)
-        expect(detectReqTypeForMailbox(subj.replace(/\[.*?\]/, VALID_ID), to)).not.toBeNull()
-      } else {
-        // מסלול האיגוד: הנושא הוא שקובע
-        expect(to).toBe('igud@chasamsofer.info')
-        expect(isRequestSubject(subj)).toBe(true)
+        return
       }
+      // מסלול האיגוד: הנושא הוא שקובע, ולכן אינו יכול להיות ריק.
+      // ⚠️ הוא נגמר ב-"ת.ז " פתוח — הסמן ממשיך ישירות למספר ואין מה
+      // למחוק. הבדיקה מוסיפה את הת"ז כפי שהמשתמש יקליד.
+      expect(to).toBe('igud@chasamsofer.info')
+      expect(isRequestSubject(`${subj}${VALID_ID}`)).toBe(true)
     })
   }
 

@@ -373,7 +373,9 @@ describe('requestMailtoUrl — קישור Gmail, לא mailto', () => {
     const url = requestMailtoUrl('בקשת הלוואה', 'g@chasamsofer.info')
     const q = new URL(url).searchParams
     expect(q.get('to')).toBe('g@chasamsofer.info')
-    expect(q.get('su')).toContain('ת.ז')
-    expect(q.get('body')).toContain('פרטי הפונה')
+    // 🔴 הנושא ריק במכוון — מציין-מקום בסוגריים נשלח כפי שהוא אצל מי
+    // שלא מחק אותו, והבקשה לא נקלטה בעוד המייל כן נשלח.
+    expect(q.get('su')).toBeNull()
+    expect(q.get('body')).toContain('תעודת זהות')
   })
 })

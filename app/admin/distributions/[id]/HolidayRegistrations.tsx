@@ -18,6 +18,7 @@ import { useTablePagination } from '@/lib/useTablePagination'
 import CityBreakdown from './CityBreakdown'
 import CenterBreakdown from './CenterBreakdown'
 import LoadCardsPanel from './LoadCardsPanel'
+import SendVouchersPanel from './SendVouchersPanel'
 
 export interface RegistrationRow {
   id: string
@@ -440,6 +441,9 @@ export default function HolidayRegistrations({
 
       {/* ── טעינת הכרטיסים — פעולה כספית, ידנית בלבד ── */}
       {canEdit && <LoadCardsPanel distributionId={distributionId} />}
+
+      {/* ── שוברי החלוקה — תצוגה מקדימה ושליחה מרוכזת ── */}
+      {canEdit && <SendVouchersPanel distributionId={distributionId} />}
 
       {/* ── פילוח לפי עיר ── */}
       <CityBreakdown cities={cities} selected={city} onSelect={setCity} />
