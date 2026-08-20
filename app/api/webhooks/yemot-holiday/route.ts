@@ -32,6 +32,10 @@ import { getServiceClient } from '@/lib/apiAuth'
 import { getOpenDistribution, registerToOpenDistribution } from '@/lib/holidayDistributions'
 import { getHolidayMessages, type HolidayMessages } from '@/lib/yemotHolidayMessages'
 import { digitsOnly, idOrFilter, sameId } from '@/lib/idLookup'
+import { centerLabel, type CenterRow } from '@/lib/holidayCenterPick'
+import {
+  CENTER_VARS, buildChoiceList, loadOpenCenters, nextCenterStep,
+} from '@/lib/holidayCenterIvr'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,6 +45,11 @@ export const dynamic = 'force-dynamic'
 const ID_VARS = ['collect_id', 'collect_id2', 'collect_id3']
 const CONFIRM_VARS = ['collect_confirm', 'collect_confirm2', 'collect_confirm3']
 const ID_DIGITS = 9
+
+/** בחירת התפריט הראשי. ⚠️ שם ייחודי — התנגשות עם משתנה קיים = לולאה. */
+const MENU_VAR = 'menu_pick'
+/** ת"ז למסלול המוקדים — נפרד מ-ID_VARS כדי שמסלול אחד לא ידרוס את השני. */
+const CENTER_ID_VARS = ['ctr_id', 'ctr_id2', 'ctr_id3']
 
 function safeEqual(a: string, b: string): boolean {
   const ab = Buffer.from(String(a)), bb = Buffer.from(String(b))
@@ -139,6 +148,148 @@ async function findMemberById(idNumber: string): Promise<Member | null> {
   return exact.find(memberCanRegister) ?? exact[0] ?? null
 }
 
+/**
+ * מסלול 3 (בחירת מוקד) ומסלול 4 (שמיעת המוקד שנבחר).
+ *
+ * 🔴 אינו תלוי בשער הרישום: בחירת המוקדים נפתחת דווקא *אחרי* שהרישום
+ * נסגר, ולכן היא נשלטת ב-centers_open בלבד.
+ *
+ * ⚠️ הכללים עצמם ב-lib/holidayCenterPick ו-lib/holidayCenterIvr, כדי
+ * שהטלפון והממשק הדיגיטלי לא ייפרדו זה מזה.
+ */
+async function handleCenterRoute(
+  choice: string,
+  params: Record<string, string>,
+  msgs: HolidayMessages,
+  callId: string,
+): Promise<NextResponse> {
+  const db = getServiceClient()
+  if (!db) return yemotText([idMessage(msgToken(msgs, 'failed')), goToFolder('hangup')], callId)
+
+  // החלוקה האחרונה — ⚠️ לא getOpenDistribution: היא מחזירה null כשהרישום
+  // סגור, וזה בדיוק המצב שבו בחירת המוקדים פעילה.
+  //
+  // ⚠️ הטבלה היא distributions ולא holiday_distributions: לשם מצביע
+  // distribution_recipients.distribution_id (אומת ב-FK), ומשם קורא גם
+  // lib/holidayDistributions. קריאה מהטבלה השנייה הייתה מחזירה חלוקה
+  // אחרת לגמרי, והבחירה לא הייתה נמצאת לעולם.
+  const { data: distRow } = await db.from('distributions')
+    .select('id, centers_open').order('created_at', { ascending: false }).limit(1).maybeSingle()
+  const dist = distRow as { id: string; centers_open: boolean } | null
+  if (!dist) return yemotText([idMessage(msgToken(msgs, 'centers_closed')), goToFolder('hangup')], callId)
+
+  // ── זיהוי ──
+  let attempt = -1
+  for (let i = CENTER_ID_VARS.length - 1; i >= 0; i--) {
+    if (String(params[CENTER_ID_VARS[i]] ?? '').trim()) { attempt = i; break }
+  }
+  if (attempt < 0) {
+    return yemotText([readTap(CENTER_ID_VARS[0], [msgToken(msgs, 'ask_id')], { max: ID_DIGITS, min: 1 })], callId)
+  }
+
+  const typedId = digitsOnly(params[CENTER_ID_VARS[attempt]])
+  const hasNextTry = attempt + 1 < CENTER_ID_VARS.length
+  if (typedId.length !== ID_DIGITS) {
+    if (hasNextTry) {
+      return yemotText([readTap(CENTER_ID_VARS[attempt + 1],
+        [msgToken(msgs, 'id_invalid'), msgToken(msgs, 'ask_id')], { max: ID_DIGITS, min: 1 })], callId)
+    }
+    return yemotText([idMessage(msgToken(msgs, 'id_invalid')), goToFolder('hangup')], callId)
+  }
+
+  const ben = await findMemberById(typedId)
+  if (!ben) {
+    if (hasNextTry) {
+      return yemotText([readTap(CENTER_ID_VARS[attempt + 1],
+        [msgToken(msgs, 'not_found'), msgToken(msgs, 'ask_id')], { max: ID_DIGITS, min: 1 })], callId)
+    }
+    return yemotText([idMessage(msgToken(msgs, 'not_found')), goToFolder('hangup')], callId)
+  }
+
+  // ⚠️ רק מי שרשום לחלוקה יכול לבחור מוקד — הבחירה נשמרת על הרשומה שלו.
+  const { data: recRow } = await db.from('distribution_recipients')
+    .select('id, center_id').eq('distribution_id', dist.id).eq('beneficiary_id', ben.id).maybeSingle()
+  const rec = recRow as { id: string; center_id: string | null } | null
+  if (!rec) return yemotText([idMessage(msgToken(msgs, 'not_eligible')), goToFolder('hangup')], callId)
+
+  const { centers, taken } = await loadOpenCenters(db, dist.id)
+
+  // ── מסלול 4: שמיעה בלבד ──
+  if (choice === '4') {
+    if (!rec.center_id) return yemotText([idMessage(msgToken(msgs, 'center_none')), goToFolder('hangup')], callId)
+    const c = centers.find(x => x.id === rec.center_id)
+      ?? (await db.from('holiday_centers').select('id, city, name, region, sort_order')
+        .eq('id', rec.center_id).maybeSingle()).data as CenterRow | null
+    const label = centerLabel(c) ?? ''
+    return yemotText([idMessage(msgToken(msgs, 'center_already', { center: label })), goToFolder('hangup')], callId)
+  }
+
+  // ── מסלול 3: בחירה ──
+  const capacities: Record<string, number | null> = {}
+  const { data: caps } = await db.from('holiday_centers').select('id, capacity')
+  for (const r of (caps ?? []) as { id: string; capacity: number | null }[]) capacities[r.id] = r.capacity
+
+  const step = nextCenterStep({
+    centers, taken, capacities,
+    currentCenterId: rec.center_id,
+    centersOpen: !!dist.centers_open,
+    tapped: {
+      region: params[CENTER_VARS.region], city: params[CENTER_VARS.city],
+      center: params[CENTER_VARS.center], confirm: params[CENTER_VARS.confirm],
+    },
+  })
+
+  switch (step.kind) {
+    case 'closed':
+      return yemotText([idMessage(msgToken(msgs, 'centers_closed')), goToFolder('hangup')], callId)
+    case 'no_centers':
+      return yemotText([idMessage(msgToken(msgs, 'centers_closed')), goToFolder('hangup')], callId)
+    case 'already':
+      return yemotText([idMessage(msgToken(msgs, 'center_already', { center: step.label })), goToFolder('hangup')], callId)
+    case 'full':
+      return yemotText([idMessage(msgToken(msgs, 'center_full')), goToFolder('hangup')], callId)
+    case 'cancelled':
+      return yemotText([idMessage(msgToken(msgs, 'cancelled')), goToFolder('hangup')], callId)
+
+    case 'ask_region':
+      return yemotText([readTap(CENTER_VARS.region, [
+        msgToken(msgs, 'centers_intro'),
+        tToken(`${msgs.ask_region?.text ?? ''} ${buildChoiceList(step.options)}`),
+      ], { max: 1, min: 1, allowed: step.options.map((_, i) => i + 1) })], callId)
+
+    case 'ask_city':
+      return yemotText([readTap(CENTER_VARS.city, [
+        tToken(buildChoiceList(step.options.map(o => ({ label: o.city })))),
+      ], { max: 2, min: 1, allowed: step.options.map((_, i) => i + 1) })], callId)
+
+    case 'ask_center':
+      return yemotText([readTap(CENTER_VARS.center, [
+        tToken(buildChoiceList(step.options.map(o => ({ label: o.name })))),
+      ], { max: 1, min: 1, allowed: step.options.map((_, i) => i + 1) })], callId)
+
+    case 'confirm':
+      // 🔴 אזהרת הסופיות מושמעת כאן — *לפני* האישור.
+      return yemotText([readTap(CENTER_VARS.confirm, [
+        msgToken(msgs, 'center_confirm', { center: step.label }),
+      ], { max: 1, min: 1, allowed: [1, 2] })], callId)
+
+    case 'save': {
+      const { error } = await db.from('distribution_recipients').update({
+        center_id: step.center.id,
+        center_chosen_at: new Date().toISOString(),
+        center_source: 'phone',
+      }).eq('id', rec.id).is('center_id', null)   // ⚠️ תנאי המרוץ: לא לדרוס בחירה שנשמרה בינתיים
+
+      if (error) {
+        console.error('[yemot-holiday] שמירת מוקד נכשלה:', error.message)
+        return yemotText([idMessage(msgToken(msgs, 'failed')), goToFolder('hangup')], callId)
+      }
+      console.log(`[yemot-holiday] מוקד נבחר: ben=${ben.id} → ${step.center.id} (${step.label})`)
+      return yemotText([idMessage(msgToken(msgs, 'center_success', { center: step.label })), goToFolder('hangup')], callId)
+    }
+  }
+}
+
 async function handle(params: Record<string, string>): Promise<NextResponse> {
   const apiPhone = String(params['ApiPhone'] ?? '').trim()
   const callId = String(params['ApiCallId'] ?? '').trim()
@@ -154,8 +305,29 @@ async function handle(params: Record<string, string>): Promise<NextResponse> {
   }
 
   const msgs = await getHolidayMessages()
+
+  // ── תפריט ראשי ────────────────────────────────────────────────────────────
+  // 🔴 התפריט ממומש כאן ולא כ-type=menu בימות: שלוחה 6 נשארת כפי שהיא
+  // מוגדרת, ואיננו נוגעים בהגדרה של מסלול רישום שעובד בפרודקשן.
+  //
+  // ⚠️ התפריט קודם ל-getOpenDistribution *במכוון*. קודם השער רץ בראש
+  // הוובהוק וניתק את השיחה כשהרישום סגור — אבל בחירת המוקדים נפתחת
+  // דווקא אחרי שהרישום נסגר, כך שמסלול 3 לא היה נגיש כלל. עכשיו כל
+  // מסלול בודק את השער שלו בנפרד.
+  const choice = String(params[MENU_VAR] ?? '').trim()
+  if (!choice) {
+    return yemotText([
+      readTap(MENU_VAR, [msgToken(msgs, 'main_menu')], { max: 1, min: 1, allowed: [1, 2, 3, 4] }),
+    ], callId)
+  }
+
+  // מסלולים 3 ו-4 — בחירת מוקד ושמיעתו. אינם תלויים בשער הרישום.
+  if (choice === '3' || choice === '4') {
+    return handleCenterRoute(choice, params, msgs, callId)
+  }
+
   // ⚠️ getOpenDistribution בודק גם את מתג-האב של המחלקה (הגדרות → שערי מחלקות),
-  // ולכן סגירה שם מכבה את השלוחה כולה.
+  // ולכן סגירה שם מכבה את מסלול הרישום.
   const dist = await getOpenDistribution()
   if (!dist) {
     return yemotText([idMessage(msgToken(msgs, 'closed')), goToFolder('hangup')], callId)
