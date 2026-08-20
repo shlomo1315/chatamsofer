@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
-  buildDraftBody, parseDraft, validateRequest, fieldsFor,
+  buildDraftBody, buildDraftBodyCompact, parseDraft, validateRequest, fieldsFor,
   detectReqType, SUBJECT_PREFIX, attachmentsFor,
   LOAN_MIN_AMOUNT, LOAN_MAX_AMOUNT, type ReqType,
 } from './emailRequestForms'
+import { RABBI_FORM_BLANK_URL } from './emailTemplates'
 
 // ⚠️ הטסטים נגזרים מהקבועים ולא ממספרים קשיחים: כשהתקרה השתנתה
 // מ-30,000 ל-10,000, טסט עם "20000" כסכום תקין היה נכשל בלי קשר לבאג.
@@ -186,6 +187,36 @@ describe('טופס אישור רב — חובה גם בהגשה במייל', () 
     // נדחית על משהו שמעולם לא ביקשנו ממנו.
     const draft = buildDraftBody('loan', '318344884', ctx)
     expect(draft).toContain('טופס-אישור-רב')
+  })
+
+  // ── 🔴 הקישור להורדת הטופס נשמט מהטיוטה הקומפקטית ──────────────────
+  //
+  // buildDraftBodyCompact היא מה שהכפתורים מייצרים בפועל. הקישור היה
+  // ב-buildDraftBody בלבד, ולכן המבקש התבקש לצרף טופס חתום בלי שנאמר לו
+  // מאיפה להוריד את הריק.
+  it('הקישור להורדת הטופס הריק נכלל בטיוטה הקומפקטית', () => {
+    const draft = buildDraftBodyCompact('loan', ctx)
+    expect(draft).toContain(RABBI_FORM_BLANK_URL)
+    expect(draft).toContain('טופס אישור רב להורדה')
+  })
+
+  it('הקישור מופיע לפני רשימת הקבצים ולא אחריה', () => {
+    // ⚠️ מתחת לרשימה הוא מגיע מאוחר מדי — המבקש כבר עזב לחפש את הטופס.
+    const draft = buildDraftBodyCompact('loan', ctx)
+    expect(draft.indexOf(RABBI_FORM_BLANK_URL)).toBeLessThan(draft.indexOf('צרפו קבצים'))
+  })
+
+  it('הקישור אינו מופיע בבקשות שאינן הלוואה', () => {
+    expect(buildDraftBodyCompact('birth', ctx)).not.toContain(RABBI_FORM_BLANK_URL)
+  })
+
+  // ── אזהרת שמות הקבצים ────────────────────────────────────────────────
+  // "שנו את השם" לבדו אינו אומר למבקש מה קורה אם לא: שם שאינו תואם
+  // במדויק אינו מזוהה, והבקשה נדחית על משהו שנראה לו זניח.
+  it('הטיוטה מזהירה שכל שינוי בשם הקובץ יגרום לדחייה', () => {
+    const draft = buildDraftBodyCompact('loan', ctx)
+    expect(draft).toContain('העתיקו את השם בדיוק')
+    expect(draft).toContain('תידחה')
   })
 
   it('בקשות אחרות אינן דורשות אותו', () => {
