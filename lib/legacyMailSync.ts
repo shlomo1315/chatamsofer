@@ -3,6 +3,7 @@ import { getLegacyGmailClient, getGmailClientForToken, getBody, getGmailClient, 
 import { departmentByEmail, DEPARTMENTS, type DepartmentKey } from './departments'
 import { isWorkspaceConfigured, getWorkspaceGmailClient, ensureArchiveLabel, importRawMessage } from './googleWorkspace'
 import { fetchAllRows } from './fetchAllRows'
+import { handleEmailRequest, isRequestSubject } from './emailRequestIntake'
 
 // חשבון Gmail מטבלת gmail_accounts — טוקן, מחלקה, תווית וסמן סנכרון פר-תיבה.
 export interface GmailAccount {
@@ -265,6 +266,34 @@ export async function syncLegacyMail(
         const imported = (inserted?.length ?? 0) > 0
         results.push({ imported, matched: !!beneficiaryId })
         if (imported) importedGmailIds.push(gmailMessageId)
+
+        // 🔴 קליטת בקשות שהוגשו במייל — גם מהמסלול הזה.
+        //
+        // ⚠️ עד כה handleEmailRequest נקרא **רק** מ-webhook של Resend.
+        // בקשה שהגיעה לתיבת Gmail (source='legacy') נשמרה כמייל רגיל
+        // ומעולם לא הפכה לבקשה: הנושא תקין, detectReqType מזהה אותה
+        // כ-birth — ופשוט אף אחד לא קרא לפונקציה שיוצרת את הרשומה.
+        // המשפחה שלחה, קיבלה מענה אוטומטי, ולא נפתחה לה בקשה.
+        //
+        // ⚠️ רק על מיילים חדשים (imported): הרצה על כל סנכרון הייתה
+        // מייצרת בקשות כפולות מכל מייל היסטורי.
+        if (imported) {
+          if (isRequestSubject(subject)) {
+            try {
+              await handleEmailRequest(admin, {
+                fromEmail: fromEmail || '',
+                subject,
+                body: getBody(full.data.payload) || full.data.snippet || '',
+                attachments: [],
+              })
+              console.log(`[legacy-sync] בקשה נקלטה מהמייל: ${subject}`)
+            } catch (e) {
+              // ⚠️ כשל בקליטה אינו מפיל את הסנכרון — המייל כבר נשמר.
+              console.error(`[legacy-sync] email-request intake failed for ${gmailMessageId}:`,
+                e instanceof Error ? e.message : e)
+            }
+          }
+        }
 
         // עותק ארכיון בתיבת office + הזרקה לתיבת ה-Gmail של המחלקה — לא חוסם.
         // מושכים raw פעם אחת ומשתמשים בו לשני היעדים.
