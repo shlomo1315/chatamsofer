@@ -59,6 +59,48 @@ async function lostRequests(db: NonNullable<ReturnType<typeof getServiceClient>>
       subject,
     })
   }
+
+  // 🔴 סינון כפילויות — מי שכבר יש לו בקשה אינו נכלל.
+  //
+  // ⚠️ בלי זה הכלי היה יוצר בקשה שנייה לאותה משפחה ושולח לה מייל מיותר.
+  // בבדיקה בפועל: מתוך 31 מיילי לידה, 18 כבר טופלו — יותר ממחצית.
+  //
+  // ⚠️ נבדקות *שתי* הטבלאות: maternity_requests (בקשה שנפתחה) וגם
+  // maternity_aids (בקשה שכבר התקדמה). בדיקה על אחת בלבד הייתה מחמיצה
+  // את מי שהבקשה שלו כבר עברה הלאה.
+  const birthIds = out.filter(o => o.type === 'birth' || o.type === 'silent_birth').map(o => o.idNumber)
+  if (birthIds.length) {
+    const { data: bens } = await db.from('beneficiaries')
+      .select('id, id_number, spouse_id_number')
+      .or(`id_number.in.(${birthIds.join(',')}),spouse_id_number.in.(${birthIds.join(',')})`)
+
+    const benByIdNum = new Map<string, string>()
+    for (const b of (bens ?? []) as { id: string; id_number: string | null; spouse_id_number: string | null }[]) {
+      if (b.id_number) benByIdNum.set(b.id_number, b.id)
+      if (b.spouse_id_number) benByIdNum.set(b.spouse_id_number, b.id)
+    }
+    const benIds = [...new Set(benByIdNum.values())]
+
+    const handled = new Set<string>()
+    if (benIds.length) {
+      const [{ data: reqs }, { data: aids }] = await Promise.all([
+        db.from('maternity_requests').select('beneficiary_id').in('beneficiary_id', benIds),
+        db.from('maternity_aids').select('beneficiary_id').in('beneficiary_id', benIds),
+      ])
+      for (const r of [...(reqs ?? []), ...(aids ?? [])] as { beneficiary_id: string | null }[]) {
+        if (r.beneficiary_id) handled.add(r.beneficiary_id)
+      }
+    }
+
+    return out.filter(o => {
+      if (o.type !== 'birth' && o.type !== 'silent_birth') return true
+      const benId = benByIdNum.get(o.idNumber)
+      // ⚠️ מי שאינו במאגר כלל נשאר ברשימה: הצינור עצמו ידחה אותו
+      // בהודעה מנומקת, וזה מידע שהמשפחה צריכה.
+      return !benId || !handled.has(benId)
+    })
+  }
+
   return out
 }
 
