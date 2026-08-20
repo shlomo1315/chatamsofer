@@ -39,13 +39,13 @@ export const REQUEST_MAILTO_PRESETS: {
   /** תיבת האגף — כשקיימת, די בת"ז בנושא (ראו MAILBOX_REQUEST_TYPE). */
   mailbox?: string
 }[] = [
-  { label: 'הגשת בקשת לידה', type: 'birth', subject: 'בקשת לידה', hint: 'עזר יולדות · y@', mailbox: 'y@chasamsofer.info' },
-  { label: 'הגשת בקשת הלוואה', type: 'loan', subject: 'בקשת הלוואה', hint: 'גמ"ח · g@', mailbox: 'g@chasamsofer.info' },
-  { label: 'הגשת בקשת סיוע רפואי', type: 'financial_aid', subject: 'בקשת סיוע רפואי', hint: 'סיוע רפואי · r@', mailbox: 'r@chasamsofer.info' },
-  { label: 'הגשת בקשת סיוע אלמנה', type: 'widow', subject: 'בקשת סיוע אלמנה', hint: 'אלמנות ויתומים · a@', mailbox: 'a@chasamsofer.info' },
+  { label: 'להגשת בקשה לימי החלמה ומזון מוכן לאחר לידה', type: 'birth', subject: 'בקשת לידה', hint: 'עזר יולדות · y@', mailbox: 'y@chasamsofer.info' },
+  { label: 'להגשת בקשת הלוואה (גמ״ח)', type: 'loan', subject: 'בקשת הלוואה', hint: 'גמ"ח · g@', mailbox: 'g@chasamsofer.info' },
+  { label: 'להגשת בקשת סיוע רפואי', type: 'financial_aid', subject: 'בקשת סיוע רפואי', hint: 'סיוע רפואי · r@', mailbox: 'r@chasamsofer.info' },
+  { label: 'להגשת בקשת סיוע לאלמנה', type: 'widow', subject: 'בקשת סיוע אלמנה', hint: 'אלמנות ויתומים · a@', mailbox: 'a@chasamsofer.info' },
   // ⚠️ לידה שקטה אין לה תיבה ייעודית — הנושא הוא שמבחין בינה לבין לידה
   // רגילה, ולכן היא נשלחת לאיגוד עם נושא מלא.
-  { label: 'הגשת בקשת לידה שקטה', type: 'silent_birth', subject: 'בקשת לידה שקטה', hint: 'עזר יולדות · דרך איגוד' },
+  { label: 'להגשת בקשה להחלמה ומזון לאחר לידה שקטה', type: 'silent_birth', subject: 'בקשת לידה שקטה', hint: 'עזר יולדות · דרך איגוד' },
 ]
 
 /**

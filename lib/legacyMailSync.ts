@@ -1,9 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { getLegacyGmailClient, getGmailClientForToken, getBody, getGmailClient, ensureLabel } from './gmail'
+import { getLegacyGmailClient, getGmailClientForToken, getBody, getGmailClient, ensureLabel, getAttachments } from './gmail'
 import { departmentByEmail, DEPARTMENTS, type DepartmentKey } from './departments'
 import { isWorkspaceConfigured, getWorkspaceGmailClient, ensureArchiveLabel, importRawMessage } from './googleWorkspace'
 import { fetchAllRows } from './fetchAllRows'
 import { handleEmailRequest, isRequestSubject } from './emailRequestIntake'
+import { downloadGmailAttachments } from './gmailAttachments'
 
 // חשבון Gmail מטבלת gmail_accounts — טוקן, מחלקה, תווית וסמן סנכרון פר-תיבה.
 export interface GmailAccount {
@@ -222,6 +223,13 @@ export async function syncLegacyMail(
         // שיוך מחלקה: המחלקה של התיבה (forcedDept), ובנפילה — לפי כתובת ה-To.
         const department = forcedDept ?? departmentByEmail(toEmail)?.key ?? 'main'
 
+        // ⚠️ הצירופים נמשכים רק כשיש כאלה — קריאה מיותרת לכל מייל הייתה
+        // מאטה סנכרון של אלפי הודעות ללא תועלת.
+        const attRefs = getAttachments(full.data.payload)
+        const storedAtts = attRefs.length
+          ? await downloadGmailAttachments(gmail, admin, id, attRefs)
+          : []
+
         const row = {
           gmail_message_id: gmailMessageId,
           source: 'legacy',
@@ -239,6 +247,13 @@ export async function syncLegacyMail(
           email_date: emailDate,
           // ברירת המחדל של העמודה היא now(); רק אם יש תאריך אמיתי דורסים אותה.
           ...(emailDate ? { received_at: emailDate } : {}),
+          // 🔴 הצירופים נשמרים — היו חסרים לגמרי.
+          //
+          // ⚠️ בלי זה משפחה שצירפה אישור לידה ותעודות זהות כנדרש קיבלה
+          // דחייה "לא נמצא קובץ בשם אישור-לידה": הצינור מחפש a.url,
+          // ומבחינת המערכת לא היו קבצים כלל. זה שבר את ההגשה במייל
+          // דרך תיבות Gmail.
+          attachments: storedAtts,
           is_read: true,
         }
 
@@ -284,7 +299,7 @@ export async function syncLegacyMail(
                 fromEmail: fromEmail || '',
                 subject,
                 body: getBody(full.data.payload) || full.data.snippet || '',
-                attachments: [],
+                attachments: storedAtts.filter(a => a.url).map(a => ({ filename: a.filename, mimeType: a.mimeType, url: a.url })),
               })
               console.log(`[legacy-sync] בקשה נקלטה מהמייל: ${subject}`)
             } catch (e) {

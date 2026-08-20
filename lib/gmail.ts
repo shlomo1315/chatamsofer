@@ -188,7 +188,7 @@ function isAttachmentPart(part: any): boolean {
   return !!(part.body?.attachmentId || part.body?.data)
 }
 
-function getAttachments(payload: any): Attachment[] {
+export function getAttachments(payload: any): Attachment[] {
   const attachments: Attachment[] = []
   if (!payload) return attachments
 
