@@ -73,7 +73,7 @@ function gmailComposeUrl(to: string, subject: string, body: string): string {
   const p = new URLSearchParams({ view: 'cm', fs: '1', to })
   if (subject) p.set('su', subject)
   if (body) p.set('body', body)
-  return `https://mail.google.com/mail/?${p.toString()}`
+  return `https://mail.google.com/mail/u/0/?${p.toString()}`
 }
 
 /**

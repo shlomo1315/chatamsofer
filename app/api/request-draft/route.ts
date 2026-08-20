@@ -52,6 +52,8 @@ export async function GET(request: NextRequest) {
   // לפונה להבין מה הוא שולח.
   const subject = `${SUBJECT_PREFIX[type]} · ת.ז `
 
+  // 🔴 /u/0/ חובה. בלעדיו Gmail מחזיר "Bad Request · Error 400" —
+  // הנתיב /mail/?view=cm אינו תקף, ורק /mail/u/0/?view=cm עובד.
   const p = new URLSearchParams({ view: 'cm', fs: '1', to: mailbox, su: subject, body })
-  return NextResponse.redirect(`https://mail.google.com/mail/?${p.toString()}`)
+  return NextResponse.redirect(`https://mail.google.com/mail/u/0/?${p.toString()}`)
 }
