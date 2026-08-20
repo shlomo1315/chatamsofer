@@ -402,16 +402,27 @@ function ButtonsEditor({ label, hint, buttons, onChange }: {
   const [pickerOpen, setPickerOpen] = useState(false)
 
   /** מוסיף כפתור הגשה מוכן — נושא שה-webhook מזהה + גוף מונחה. */
-  const addPreset = (p: typeof REQUEST_MAILTO_PRESETS[number]) => {
-    // 🔴 /api/request-draft ולא requestMailtoUrl: הקישור הישן בנה גוף
-    // גנרי (שם/ת"ז/טלפון) בעוד הצינור מצפה לכל שדות הטופס ומפרסר אותם
-    // משם. המשפחה שלחה מייל בלי הפרטים שהבקשה דורשת, והבקשה נקלטה ריקה.
-    //
-    // ⚠️ הגוף חייב להיבנות בשרת — buildDraftBody דורש ctx מהמסד (רשימת
-    // השדות והמסמכים משתנה לפי הגדרות המחלקה).
-    const url = `${window.location.origin}/api/request-draft?type=${encodeURIComponent(p.type)}`
-    onChange([...buttons, { label: p.label, url }])
+  const addPreset = async (p: typeof REQUEST_MAILTO_PRESETS[number]) => {
     setPickerOpen(false)
+    // 🔴 הקישור הנשמר הוא mailto: מלא, ולא הפניה ל-/api/request-draft.
+    //
+    // ⚠️ Gmail עוטף כל קישור https בגוף הודעה ב-google.com/url?q=...
+    // העטיפה הזו שוברת את ההפניה ל-mailto:, והפונה נחת על דף במקום על
+    // טיוטה. mailto: אינו נעטף, ולכן הוא חייב לשבת בכפתור עצמו.
+    //
+    // ⚠️ הגוף נבנה בשרת (buildDraftBodyCompact דורש ctx מהמסד — רשימת
+    // השדות, המסמכים ובתי ההחלמה), ולכן הוא נמשך משם ולא מורכב כאן.
+    //
+    // ⚠️ המחיר: הקישור קפוא ברגע ההוספה. שינוי בשדות הטופס מחייב הוספה
+    // מחדש של הכפתור.
+    try {
+      const res = await fetch(`/api/request-draft?type=${encodeURIComponent(p.type)}&raw=1`)
+      const data = await res.json()
+      if (!res.ok || !data?.url) throw new Error(data?.error ?? 'שגיאה')
+      onChange([...buttons, { label: p.label, url: String(data.url) }])
+    } catch {
+      alert('לא הצלחנו לבנות את קישור ההגשה. נסו שוב.')
+    }
   }
 
   return (

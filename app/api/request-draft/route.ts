@@ -77,5 +77,14 @@ export async function GET(request: NextRequest) {
     console.warn(`[request-draft] ${type}: הקישור חורג — ${url.length} תווים (מגבלה ${GMAIL_URL_SAFE_LIMIT})`)
   }
 
+  // 🔴 ?raw=1 — מחזיר את ה-mailto: עצמו במקום להפנות אליו.
+  //
+  // ⚠️ נדרש למסך ההגדרות: הכפתור שנשמר חייב לשאת את ה-mailto: המלא.
+  // קישור https בגוף מייל נעטף על ידי Gmail ב-google.com/url?q=..., והעטיפה
+  // שוברת את ההפניה — הפונה נוחת על דף במקום על טיוטה.
+  if (sp.get('raw') === '1') {
+    return NextResponse.json({ url })
+  }
+
   return NextResponse.redirect(url)
 }
