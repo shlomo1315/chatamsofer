@@ -56,6 +56,43 @@ export const REQUEST_MAILTO_PRESETS: {
  * ⚠️ הסוגריים המרובעים הם מציין-מקום גלוי: שדה ריק אחרי "ת.ז" נשלח כפי
  * שהוא בלי שהפונה בכלל שם לב שחסר בו משהו.
  */
+/**
+ * קישור פתיחת חלון כתיבה — דרך Gmail ולא דרך mailto:.
+ *
+ * 🔴 Gmail חוסם mailto: שנלחץ מתוך גוף הודעה, והתוצאה היא **דף לבן**.
+ * זו אינה תקלה נדירה: כל הקהל שלנו קורא את המייל בתוך Gmail.
+ *
+ * ⚠️ התוקן פעם אחת ידנית ב-CMS, אבל המחולל כאן המשיך לייצר mailto:
+ * ולכן הבאג חזר בכל נוסח חדש. התיקון חייב לשבת במקור.
+ */
+function gmailComposeUrl(to: string, subject: string, body: string): string {
+  // ⚠️ נושא/גוף ריקים אינם נשלחים כלל: su= ו-body= ריקים מופיעים למשתמש
+  // כשדות שהוגדרו במפורש כריקים, וזה שונה מלא-להגדיר-אותם.
+  const p = new URLSearchParams({ view: 'cm', fs: '1', to })
+  if (subject) p.set('su', subject)
+  if (body) p.set('body', body)
+  return `https://mail.google.com/mail/?${p.toString()}`
+}
+
+/**
+ * ממיר קישור mailto: קיים לקישור Gmail, ומשמר נמען/נושא/גוף.
+ *
+ * ⚠️ מה שאינו mailto: מוחזר כפי שהוא — הפונקציה בטוחה לקריאה על כל URL.
+ */
+export function mailtoToGmail(url: string): string {
+  if (!/^mailto:/i.test(url)) return url
+  try {
+    const [addrPart, queryPart = ''] = url.slice('mailto:'.length).split('?')
+    const to = decodeURIComponent(addrPart)
+    if (!to) return url
+    const q = new URLSearchParams(queryPart)
+    return gmailComposeUrl(to, q.get('subject') ?? '', q.get('body') ?? '')
+  } catch {
+    // כתובת פגומה — עדיף להשאיר כפי שהיא מאשר לייצר קישור שבור
+    return url
+  }
+}
+
 export function requestMailtoUrl(subject: string, mailbox?: string): string {
   // ── הגשה לתיבת האגף: ת"ז בלבד בנושא ──
   //
@@ -73,7 +110,7 @@ export function requestMailtoUrl(subject: string, mailbox?: string): string {
       `טלפון: \n\n` +
       `יש לצרף להודעה זו את כל המסמכים הנדרשים.`
     const subj = '[הקלידו כאן ת.ז — 9 ספרות בלבד]'
-    return `mailto:${mailbox}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`
+    return gmailComposeUrl(mailbox, subj, body)
   }
 
   // ── נפילה-לאחור: הגשה לאיגוד, שם הנושא הוא שקובע את הסוג ──
@@ -91,7 +128,7 @@ export function requestMailtoUrl(subject: string, mailbox?: string): string {
     `טלפון: \n\n` +
     `יש לצרף להודעה זו את כל המסמכים הנדרשים.`
   const subj = `${subject} · ת.ז [הקלידו כאן ת.ז — 9 ספרות]`
-  return `mailto:igud@chasamsofer.info?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`
+  return gmailComposeUrl('igud@chasamsofer.info', subj, body)
 }
 
 export const MAX_BUTTONS = 8
@@ -254,7 +291,12 @@ export function sanitizeButtons(input: unknown): AutoReplyButton[] {
     const url = String((raw as AutoReplyButton).url ?? '').trim().slice(0, MAX_URL_LEN)
     if (!label || !url) continue
     if (!/^(https:\/\/|mailto:)/i.test(url)) continue
-    out.push({ label, url })
+    // 🔴 כל mailto: מומר לקישור Gmail — כאן, ולא רק בברירות המחדל.
+    //
+    // ⚠️ זו הנקודה שכל כפתור עובר בה, כולל נוסחים שנשמרו ב-CMS. תיקון
+    // ברשימת ברירות המחדל בלבד היה מותיר את הכפתורים הקיימים שבורים,
+    // וזו בדיוק הסיבה שהבאג חזר אחרי שתוקן ידנית פעם אחת.
+    out.push({ label, url: mailtoToGmail(url) })
     if (out.length >= MAX_BUTTONS) break
   }
   return out

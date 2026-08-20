@@ -76,8 +76,13 @@ export async function renewExpiringWatches(db: SupabaseClient): Promise<RenewRes
         requestBody: {
           // ⚠️ זהה בדיוק להפעלה הידנית (app/api/admin/gmail/watch): מנוי
           // שמוגדר אחרת בחידוש היה משנה בשקט אילו הודעות נדחפות.
+          //
+          //
+          // 🔴 SENT חובה לצד INBOX. קודם היה INBOX בלבד, כלומר Google דחף
+          // התראה *רק* על דואר נכנס — מייל יוצא לא הפעיל Push ולא הופיע
+          // במערכת עד סנכרון ידני. תיבה שלמה נשארה עם 0 הודעות "נשלחו".
           topicName: topic,
-          labelIds: ['INBOX'],
+          labelIds: ['INBOX', 'SENT'],
           labelFilterBehavior: 'INCLUDE',
         },
       })

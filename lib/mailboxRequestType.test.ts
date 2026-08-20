@@ -122,12 +122,15 @@ describe('🔴 קישורי ההגשה שבדף ההגדרות באמת נקלט
   for (const p of REQUEST_MAILTO_PRESETS) {
     it(`"${p.label}" מייצר קישור שנקלט`, () => {
       const url = requestMailtoUrl(p.subject, p.mailbox)
-      expect(url.startsWith('mailto:')).toBe(true)
+      // 🔴 קישור Gmail ולא mailto: — Gmail חוסם mailto מגוף הודעה
+      // והתוצאה דף לבן. ראו gmailComposeUrl ב-autoReplyConfig.
+      expect(url.startsWith('mailto:')).toBe(false)
+      expect(url).toContain('mail.google.com/mail/')
 
-      // מפרקים את הקישור בחזרה לנמען ולנושא — כפי שלקוח המייל יעשה
-      const to = decodeURIComponent(url.slice('mailto:'.length).split('?')[0])
-      const params = new URLSearchParams(url.split('?')[1] ?? '')
-      const subj = params.get('subject') ?? ''
+      // מפרקים את הקישור בחזרה לנמען ולנושא — כפי ש-Gmail יעשה
+      const params = new URL(url).searchParams
+      const to = params.get('to') ?? ''
+      const subj = params.get('su') ?? ''
 
       if (p.mailbox) {
         // מסלול התיבה: הנושא נקי, והת"ז לבדה תספיק

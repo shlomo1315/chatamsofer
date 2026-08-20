@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { Mail, CheckCircle2, Eye, Reply, AlertCircle, Loader2, ArrowRight } from 'lucide-react'
 import Link from 'next/link'
@@ -44,8 +44,13 @@ export default function MailStatsPage() {
   const [stats, setStats]   = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // ⚠️ setLoading(true) מדולג בטעינה הראשונה — loading כבר true בערך
+  // ההתחלתי, וקריאה סינכרונית בגוף האפקט רק הוסיפה רינדור (והלינט
+  // מפיל עליה את הבנייה). בהחלפת טווח הספינר כן נדרש.
+  const firstLoad = useRef(true)
   useEffect(() => {
-    setLoading(true)
+    if (firstLoad.current) firstLoad.current = false
+    else setLoading(true)
     fetch(`/api/admin/mail/stats?range=${range}`)
       .then(r => r.json())
       .then(d => setStats(d))
@@ -57,7 +62,7 @@ export default function MailStatsPage() {
 
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/admin/mail" className="p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors">
+        <Link href="/admin/mail/gmail" className="p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors">
           <ArrowRight size={18} />
         </Link>
         <div>

@@ -47,9 +47,13 @@ export async function POST(request: NextRequest) {
         userId: 'me',
         requestBody: {
           topicName: topic,
-          // ⚠️ INBOX בלבד ולא כל התיבה: בלי הסינון, כל שינוי תווית בכל
-          // הודעה בארכיון מייצר התראה — עומס עצום בלי תועלת.
-          labelIds: ['INBOX'],
+          // ⚠️ INBOX *וגם* SENT, ולא כל התיבה: בלי סינון, כל שינוי תווית
+          // בכל הודעה בארכיון מייצר התראה — עומס עצום בלי תועלת.
+          //
+          // 🔴 SENT חובה. קודם היה INBOX בלבד, ולכן מייל יוצא לא הפעיל
+          // Push כלל ולא הופיע במערכת עד סנכרון ידני — תיבה שלמה נשארה
+          // עם 0 הודעות "נשלחו" בעוד המשתמש שלח מתוך Gmail.
+          labelIds: ['INBOX', 'SENT'],
           labelFilterBehavior: 'INCLUDE',
         },
       })

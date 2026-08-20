@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  sanitizeButtons, sanitizeSections, normalizeConfig, buildAutoReplyBody,
+  sanitizeButtons, sanitizeSections, normalizeConfig, buildAutoReplyBody, requestMailtoUrl,
   defaultAutoReplyMap, activeReplyContent, MAX_BUTTONS, MAX_SECTIONS,
   type AutoReplySettings,
 } from './autoReplyConfig'
@@ -345,5 +345,35 @@ describe('ברירות המחדל', () => {
     const normalized = normalizeConfig(defaults as unknown as Record<string, unknown>)
     expect(normalized.igud?.message).toBe(defaults.igud?.message)
     expect(normalized.yerid?.enabled).toBe(true)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 כפתור ההגשה חייב להיות קישור Gmail ולא mailto:
+//
+// Gmail חוסם mailto: שנלחץ מתוך גוף הודעה — התוצאה היא דף לבן, וכל הקהל
+// שלנו קורא בתוך Gmail. תוקן פעם אחת ידנית ב-CMS, אבל המחולל המשיך לייצר
+// mailto: והבאג חזר. הטסט נועל את המקור.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('requestMailtoUrl — קישור Gmail, לא mailto', () => {
+  it('הגשה לתיבת אגף אינה מייצרת mailto:', () => {
+    const url = requestMailtoUrl('בקשת הלוואה', 'g@chasamsofer.info')
+    expect(url.startsWith('mailto:')).toBe(false)
+    expect(url).toContain('mail.google.com/mail/')
+    expect(url).toContain('view=cm')
+  })
+
+  it('נפילה-לאחור לאיגוד אף היא אינה mailto:', () => {
+    const url = requestMailtoUrl('בקשת הלוואה')
+    expect(url.startsWith('mailto:')).toBe(false)
+    expect(url).toContain('mail.google.com/mail/')
+  })
+
+  it('הנמען, הנושא והגוף נשמרים בקישור', () => {
+    const url = requestMailtoUrl('בקשת הלוואה', 'g@chasamsofer.info')
+    const q = new URL(url).searchParams
+    expect(q.get('to')).toBe('g@chasamsofer.info')
+    expect(q.get('su')).toContain('ת.ז')
+    expect(q.get('body')).toContain('פרטי הפונה')
   })
 })
