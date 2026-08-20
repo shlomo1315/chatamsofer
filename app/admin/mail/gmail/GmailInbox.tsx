@@ -239,10 +239,23 @@ export default function GmailInbox() {
       setBody(json.body ?? '')
       setBodyError(json.bodyError ?? null)
       setAttachments(json.attachments ?? [])
+      // 🔴 סימון כנקרא ב-Gmail עצמו, לא רק על המסך.
+      //
+      // ⚠️ קודם רק ה-state המקומי התעדכן: ההודעה נראתה נקראה בתוכנה,
+      // ב-Gmail נשארה מודגשת, וברענון הבא (שמושך את מצב האמת מ-Gmail)
+      // היא חזרה להיות לא-נקראה. הסנכרון נראה שבור בעוד איש לא כתב.
+      //
+      // ⚠️ העדכון המקומי נשאר לפניו — התגובה על המסך מיידית, ואינה
+      // ממתינה לסבב הרשת.
       if (m.is_unread) {
         setMessages(list => list.map(x =>
           x.gmail_message_id === m.gmail_message_id ? { ...x, is_unread: false } : x))
         setSelected(s => s ? { ...s, is_unread: false } : s)
+        void fetch('/api/admin/gmail/inbox/actions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'mark-read', messageId: m.gmail_message_id }),
+        }).catch(() => { /* כשל סימון אינו חוסם קריאת ההודעה */ })
       }
     } catch { setBodyError('שגיאת רשת') } finally { setBodyLoading(false) }
   }
