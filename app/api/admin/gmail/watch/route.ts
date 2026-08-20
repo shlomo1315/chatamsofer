@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireNonMailStaff, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { getGmailClientForToken } from '@/lib/gmail'
+import { WATCH_CONFIG_VERSION } from '@/lib/gmailWatchRenew'
 
 export const dynamic = 'force-dynamic'
 
@@ -65,6 +66,10 @@ export async function POST(request: NextRequest) {
       await db.from('gmail_accounts').update({
         watch_started_at: new Date().toISOString(),
         watch_expires_at: expiration,
+        // ⚠️ אותה גרסה שהחידוש האוטומטי בודק (lib/gmailWatchRenew).
+        // בלעדיה מנוי שהופעל ידנית היה נחשב "הגדרה ישנה" ומחודש שוב
+        // בסבב הבא, שעה אחרי שהמשתמש כבר הפעיל אותו.
+        watch_config_version: WATCH_CONFIG_VERSION,
         // ⚠️ ה-historyId שגוגל מחזיר כאן הוא נקודת ההתחלה של המנוי. אם
         // החשבון מעולם לא סונכרן, הוא הסמן ההגיוני להתחיל ממנו.
         ...(res.data?.historyId ? { last_history_id: String(res.data.historyId) } : {}),
@@ -105,8 +110,11 @@ export async function DELETE() {
       // ⚠️ מנוי שכבר אינו קיים אינו שגיאה — ממשיכים לנקות את המצב המקומי.
       console.warn(`[watch] עצירה נכשלה עבור ${acc.email}:`, e instanceof Error ? e.message : e)
     }
+    // ⚠️ גם הגרסה מתאפסת: בלעדיה החידוש האוטומטי היה רואה הגדרה
+    // "עדכנית" על מנוי שכבר נעצר, ולא היה רושם אותו מחדש.
     await db.from('gmail_accounts')
-      .update({ watch_started_at: null, watch_expires_at: null }).eq('id', acc.id)
+      .update({ watch_started_at: null, watch_expires_at: null, watch_config_version: null })
+      .eq('id', acc.id)
   }
 
   return NextResponse.json({ ok: true })

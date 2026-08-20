@@ -23,6 +23,17 @@ import { getGmailClientForToken } from './gmail'
 /** חלון החידוש — מחדשים כשנותרו פחות מכך עד הפקיעה. */
 const RENEW_BEFORE_MS = 3 * 24 * 60 * 60 * 1000
 
+/**
+ * גרסת הגדרת המנוי. מעלים אותה בכל שינוי ב-labelIds.
+ *
+ * 🔴 בלי זה, שינוי בהגדרה נכנס לתוקף רק בפקיעה הבאה — עד שבוע שלם שבו
+ * המנוי הישן ממשיך לרוץ עם ההגדרה הישנה, ואיש אינו יודע.
+ *
+ * ⚠️ v2 = הוספת SENT. קודם המנוי היה על INBOX בלבד, ולכן מייל *יוצא*
+ * לא הפעיל Push כלל ולא הופיע במערכת עד סנכרון ידני.
+ */
+export const WATCH_CONFIG_VERSION = 'v2-inbox-sent'
+
 export interface RenewResult {
   checked: number
   renewed: number
@@ -47,7 +58,7 @@ export async function renewExpiringWatches(db: SupabaseClient): Promise<RenewRes
 
   const { data, error } = await db
     .from('gmail_accounts')
-    .select('id, email, refresh_token, watch_expires_at')
+    .select('id, email, refresh_token, watch_expires_at, watch_config_version')
     .eq('is_active', true)
 
   if (error) {
@@ -57,6 +68,7 @@ export async function renewExpiringWatches(db: SupabaseClient): Promise<RenewRes
 
   const accounts = (data ?? []) as {
     id: string; email: string; refresh_token: string; watch_expires_at: string | null
+    watch_config_version: string | null
   }[]
 
   const now = Date.now()
@@ -65,8 +77,17 @@ export async function renewExpiringWatches(db: SupabaseClient): Promise<RenewRes
     // ⚠️ חשבון בלי תאריך פקיעה נחשב "צריך חידוש": או שהמנוי מעולם לא
     // הופעל, או שהוא נעצר. בשני המקרים הפעלה מחדש היא הפעולה הנכונה.
     const expMs = acc.watch_expires_at ? new Date(acc.watch_expires_at).getTime() : 0
-    const needsRenew = !expMs || (expMs - now) < RENEW_BEFORE_MS
+    // 🔴 גם כשההגדרה השתנתה — לא רק כשקרובה הפקיעה.
+    //
+    // ⚠️ בלי הבדיקה הזו, הוספת SENT ל-labelIds הייתה נכנסת לתוקף רק
+    // בפקיעה הבאה: עד שבוע שלם שבו המנוי הישן ממשיך לרוץ, מייל יוצא
+    // אינו מסונכרן, והמשתמש נדרש לכבות ולהפעיל ידנית.
+    const staleConfig = acc.watch_config_version !== WATCH_CONFIG_VERSION
+    const needsRenew = !expMs || (expMs - now) < RENEW_BEFORE_MS || staleConfig
     if (!needsRenew) continue
+    if (staleConfig) {
+      console.log(`[gmail-watch-renew] ${acc.email}: הגדרה ישנה (${acc.watch_config_version ?? 'ללא'}) — חידוש מיידי`)
+    }
 
     out.checked++
     try {
@@ -95,6 +116,9 @@ export async function renewExpiringWatches(db: SupabaseClient): Promise<RenewRes
       await db.from('gmail_accounts').update({
         watch_started_at: new Date().toISOString(),
         watch_expires_at: expiresAt,
+        // ⚠️ נשמר רק אחרי חידוש שהצליח: אילו נשמר מראש, כישלון היה
+        // מסמן את ההגדרה כעדכנית והחידוש לא היה חוזר.
+        watch_config_version: WATCH_CONFIG_VERSION,
         // ⚠️ last_history_id *אינו* מתעדכן כאן, בניגוד להפעלה הידנית:
         // בחידוש יש כבר סמן היסטוריה תקין, ודריסתו הייתה מדלגת על כל
         // ההודעות שהגיעו מאז הסנכרון האחרון.
