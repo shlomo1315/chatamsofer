@@ -28,7 +28,7 @@ function baseName(name: string): string {
   return String(name ?? '').replace(/\.[^.]+$/, '').trim()
 }
 
-async function loadCtx(admin: SupabaseClient, type: ReqType, pending: boolean) {
+export async function loadCtx(admin: SupabaseClient, type: ReqType, pending: boolean) {
   const silent = type === 'silent_birth'
   const { data: rhRows } = await admin.from('recovery_homes').select('name, availability').order('name')
   const recovery = new Set<string>(RH_DEFAULT)

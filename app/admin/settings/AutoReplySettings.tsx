@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   Loader2, Save, Eye, ChevronDown, Check, AlertCircle, Plus, Trash2, Mail, Clock, Ban, FileText,
 } from 'lucide-react'
-import { REQUEST_MAILTO_PRESETS, requestMailtoUrl, AUTO_REPLY_DEFAULT_TITLE, AUTO_REPLY_DEFAULT_NO_REPLY } from '@/lib/autoReplyConfig'
+import { REQUEST_MAILTO_PRESETS, AUTO_REPLY_DEFAULT_TITLE, AUTO_REPLY_DEFAULT_NO_REPLY } from '@/lib/autoReplyConfig'
 import type {
   AutoReplyMap, AutoReplySettings as Settings, AutoReplyButton, AutoReplySection, AutoReplyMode,
 } from '@/lib/autoReplyConfig'
@@ -403,7 +403,14 @@ function ButtonsEditor({ label, hint, buttons, onChange }: {
 
   /** מוסיף כפתור הגשה מוכן — נושא שה-webhook מזהה + גוף מונחה. */
   const addPreset = (p: typeof REQUEST_MAILTO_PRESETS[number]) => {
-    onChange([...buttons, { label: p.label, url: requestMailtoUrl(p.subject, p.mailbox) }])
+    // 🔴 /api/request-draft ולא requestMailtoUrl: הקישור הישן בנה גוף
+    // גנרי (שם/ת"ז/טלפון) בעוד הצינור מצפה לכל שדות הטופס ומפרסר אותם
+    // משם. המשפחה שלחה מייל בלי הפרטים שהבקשה דורשת, והבקשה נקלטה ריקה.
+    //
+    // ⚠️ הגוף חייב להיבנות בשרת — buildDraftBody דורש ctx מהמסד (רשימת
+    // השדות והמסמכים משתנה לפי הגדרות המחלקה).
+    const url = `${window.location.origin}/api/request-draft?type=${encodeURIComponent(p.type)}`
+    onChange([...buttons, { label: p.label, url }])
     setPickerOpen(false)
   }
 
