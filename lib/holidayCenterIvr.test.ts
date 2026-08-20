@@ -145,3 +145,29 @@ describe('regionsWithCenters', () => {
     expect(regions.map(r => r.key)).toEqual(['jerusalem', 'center', 'north'])
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 אורך ההקשה חייב להיגזר ממספר האפשרויות בפועל.
+//
+// ⚠️ max קשיח = מתקשר תקוע: ימות ממתינה לספרה נוספת שלא תגיע, אחרי
+// הקשה תקינה לגמרי, עד שהזמן נגמר.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('אורך ההקשה בתפריטים', () => {
+  const tapLen = (n: number) => String(n).length
+
+  it('עד 9 אפשרויות — ספרה אחת', () => {
+    expect(tapLen(3)).toBe(1)
+    expect(tapLen(7)).toBe(1)   // מרכז: 7 ערים
+    expect(tapLen(9)).toBe(1)
+  })
+
+  it('10 ומעלה — שתי ספרות', () => {
+    expect(tapLen(10)).toBe(2)
+    expect(tapLen(26)).toBe(2)  // כלל המוקדים
+  })
+
+  it('⚠️ ירושלים (5 מוקדים) נקראת בספרה אחת', () => {
+    const jerusalem = CENTERS.filter(c => c.city === 'ירושלים')
+    expect(tapLen(jerusalem.length)).toBe(1)
+  })
+})

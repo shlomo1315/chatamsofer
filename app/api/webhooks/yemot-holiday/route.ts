@@ -258,14 +258,26 @@ async function handleCenterRoute(
       ], { max: 1, min: 1, allowed: step.options.map((_, i) => i + 1) })], callId)
 
     case 'ask_city':
+      // ⚠️ אורך ההקשה נגזר ממספר האפשרויות בפועל ולא נקבע קשיח: max=2
+      // כשיש 7 ערים היה מותיר את ימות ממתינה לספרה שנייה שלא תגיע,
+      // והמתקשר היה תקוע עד תום הזמן אחרי הקשה תקינה לגמרי.
       return yemotText([readTap(CENTER_VARS.city, [
         tToken(buildChoiceList(step.options.map(o => ({ label: o.city })))),
-      ], { max: 2, min: 1, allowed: step.options.map((_, i) => i + 1) })], callId)
+      ], {
+        max: String(step.options.length).length,
+        min: 1,
+        allowed: step.options.map((_, i) => i + 1),
+      })], callId)
 
     case 'ask_center':
       return yemotText([readTap(CENTER_VARS.center, [
         tToken(buildChoiceList(step.options.map(o => ({ label: o.name })))),
-      ], { max: 1, min: 1, allowed: step.options.map((_, i) => i + 1) })], callId)
+      ], {
+        // אותה נגזרת כמו בערים — ראו ההערה למעלה.
+        max: String(step.options.length).length,
+        min: 1,
+        allowed: step.options.map((_, i) => i + 1),
+      })], callId)
 
     case 'confirm':
       // 🔴 אזהרת הסופיות מושמעת כאן — *לפני* האישור.
