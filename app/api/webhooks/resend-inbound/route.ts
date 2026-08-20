@@ -1011,7 +1011,19 @@ export async function POST(request: NextRequest) {
       // ⚠️ הנעילה ב-sendAutoReply היא לפי messageId+תיבה, ולכן שני
       // מענים מאותה הודעה לשתי תיבות שונים אינם חוסמים זה את זה — אבל
       // עותק שני של אותה הודעה לאותה תיבה כן נחסם.
-      const boxes = resolveAllMailboxes({ direct: directRecipients, cc: ccRecipients })
+      // 🔴 מענה מהתיבה שאליה המייל **נשלח בפועל** — לא מכל כתובת ברשימה.
+      //
+      // ⚠️ הבאג שתוקן כאן: resolveAllMailboxes החזיר גם תיבות שהמייל
+      // הגיע אליהן דרך *העברה* (forwarding), לא בשליחה ישירה. מי ששלח
+      // ל-igud@ בלבד קיבל שני מענים — אחד מאיגוד ואחד מהמשרד הראשי —
+      // כי igud מעביר ל-office, ושתיהן הופיעו ברשימת הנמענים.
+      //
+      // ⚠️ מקור האמת הוא envelope של Resend (receivedForRecipients),
+      // שמכיל את הנמען שאליו ההודעה נשלחה. כותרות כמו delivered-to
+      // ו-x-forwarded-to נוצרות דווקא *בהעברה*, ולכן אינן קובעות.
+      const boxes = receivedForRecipients.length
+        ? resolveAllMailboxes({ direct: receivedForRecipients, cc: [] })
+        : resolveAllMailboxes({ direct: directRecipients, cc: ccRecipients })
       const targets = boxes.length ? boxes : [resolvedToEmail]
       for (const box of targets) {
         const key = departmentByEmail(box)?.key
