@@ -45,6 +45,12 @@ export interface HolidayRow {
   city: string | null
   age: number | null
   children_count: number | null
+  /** מוקד החלוקה שנבחר — בטלפון, בממשק או ידנית. */
+  center_id?: string | null
+  center_name?: string | null
+  center_source?: string | null
+  /** מצב טעינת ה-500₪. ⚠️ הטעינה רצה רק מכפתור מפורש. */
+  load_status?: string | null
 }
 
 const APPROVAL_LABEL: Record<string, string> = { pending: 'ממתין לאישור', approved: 'מאושר', rejected: 'נדחה' }
@@ -79,6 +85,7 @@ type ColKey =
   | 'family_name' | 'first_name' | 'id_number' | 'approval_label' | 'spouse_name'
   | 'approval' | 'card' | 'phone' | 'email' | 'address' | 'city'
   | 'age' | 'children' | 'source' | 'registered_at' | 'amount' | 'message'
+  | 'center'
 
 interface ColDef {
   key: ColKey
@@ -101,6 +108,8 @@ const COLUMNS: ColDef[] = [
   { key: 'email', label: 'מייל', def: false },
   { key: 'address', label: 'כתובת', def: false },
   { key: 'city', label: 'עיר', def: true },
+  // ⚠️ מוצגת כברירת מחדל: זו העמודה שכל עבודת החלוקה נשענת עליה.
+  { key: 'center', label: 'מוקד חלוקה', def: true },
   { key: 'age', label: 'גיל', def: false, align: 'center' },
   { key: 'children', label: 'ילדים', def: true, align: 'center' },
   { key: 'source', label: 'ערוץ', def: true },
@@ -155,13 +164,17 @@ export default function HolidayRecipientsTable({
   // האינדקסים, ורוחב שנשמר למצב אחר היה נדבק לעמודה הלא נכונה.
   const rt = useResizableColumns(`holiday-recipients-${shown.length}${canEdit ? '-e' : ''}`, shown.length + (canEdit ? 1 : 0))
 
-  const inc = useIncrementalRows(rows)
+  // ⚠️ פירוק ישיר ולא גישה דרך אובייקט: האובייקט שה-hook מחזיר מכיל גם
+  // sentinelRef, וכלל react-hooks/refs סימן *כל* גישה דרכו כקריאת ref
+  // בזמן רינדור — כולל shown/total שהם מספרים רגילים. הפירוק מפריד ביניהם.
+  const { rows: incRows, sentinelRef: incSentinel, hasMore: incHasMore, shown: incShown, total: incTotal } =
+    useIncrementalRows(rows)
   // במצב מדופדף השורות כבר חתוכות לעמוד — מוצגות כולן, בלי sentinel.
-  const visibleRows = paginated ? rows : inc.rows
-  const sentinelRef = inc.sentinelRef
-  const hasMore = paginated ? false : inc.hasMore
-  const shownCount = inc.shown
-  const total = inc.total
+  const visibleRows = paginated ? rows : incRows
+  const sentinelRef = incSentinel
+  const hasMore = paginated ? false : incHasMore
+  const shownCount = incShown
+  const total = incTotal
 
   if (!rows.length) {
     return <p className="px-4 py-10 text-center text-slate-400 text-sm font-medium">אין נרשמים לחלוקה זו</p>
@@ -237,6 +250,19 @@ export default function HolidayRecipientsTable({
       case 'email': return <span className="block truncate text-slate-600 text-right" dir="ltr" title={r.email ?? ''}>{r.email ?? '—'}</span>
       case 'address': return <span className="block truncate text-slate-600" title={r.address ?? ''}>{r.address ?? '—'}</span>
       case 'city': return <span className="text-slate-600">{r.city ?? '—'}</span>
+      case 'center': return r.center_name
+        ? (
+          <span className="inline-flex items-center gap-1 whitespace-nowrap">
+            <span className="text-slate-700">{r.center_name}</span>
+            {/* ⚠️ הערוץ מוצג: "בחרתי בטלפון ורשום אחרת" אינו ניתן לבירור בלעדיו. */}
+            {r.center_source && (
+              <span className="text-[10px] text-slate-400">
+                {r.center_source === 'phone' ? 'טלפון' : r.center_source === 'portal' ? 'אתר' : 'ידני'}
+              </span>
+            )}
+          </span>
+        )
+        : <span className="text-slate-300">טרם נבחר</span>
       case 'age': return <span className="text-slate-600 ltr-num">{r.age ?? '—'}</span>
       case 'children': return <span className="text-slate-600 ltr-num">{r.children_count ?? '—'}</span>
       case 'source': {

@@ -31,6 +31,12 @@ export interface RegistrationRow {
   card_number: string | null
   card_linked_at: string | null
   card_link_error: string | null
+  /** מוקד החלוקה שנבחר — בטלפון או בממשק. */
+  center_id?: string | null
+  center_name?: string | null
+  center_source?: string | null
+  /** מצב טעינת ה-500₪ בנדרים. ⚠️ רצה רק מכפתור מפורש. */
+  load_status?: string | null
   name: string
   family_name?: string | null
   first_name?: string | null

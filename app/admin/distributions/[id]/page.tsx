@@ -62,13 +62,13 @@ async function getData(id: string) {
   // supabase-js נגזרים מהמחרוזת *הליטרלית*, ואינטרפולציה מבטלת את ההסקה.
   const fetchWithLabel = () => fetchAllRows<Record<string, unknown>>((from, to) => supabase
       .from('distribution_recipients')
-      .select('id, source, registered_at, phone, notified_at, amount, beneficiary_id, approval_status, approved_at, card_number, card_linked_at, card_link_error, notify_error, beneficiary:beneficiaries(id, full_name, family_name, spouse_name, id_number, phone, phone2, email, address, city, community_affiliation, children_count, birth_date, spouse_birth_date, approval_label:approval_labels(id, name, color, notes))')
+      .select('id, source, registered_at, phone, notified_at, amount, beneficiary_id, approval_status, approved_at, card_number, card_linked_at, card_link_error, notify_error, center_id, center_source, load_status, center:holiday_centers(id, city, name), beneficiary:beneficiaries(id, full_name, family_name, spouse_name, id_number, phone, phone2, email, address, city, community_affiliation, children_count, birth_date, spouse_birth_date, approval_label:approval_labels(id, name, color, notes))')
       .eq('distribution_id', id)
       .order('registered_at', { ascending: false })
       .range(from, to))
   const fetchPlain = () => fetchAllRows<Record<string, unknown>>((from, to) => supabase
       .from('distribution_recipients')
-      .select('id, source, registered_at, phone, notified_at, amount, beneficiary_id, approval_status, approved_at, card_number, card_linked_at, card_link_error, notify_error, beneficiary:beneficiaries(id, full_name, family_name, spouse_name, id_number, phone, phone2, email, address, city, community_affiliation, children_count, birth_date, spouse_birth_date)')
+      .select('id, source, registered_at, phone, notified_at, amount, beneficiary_id, approval_status, approved_at, card_number, card_linked_at, card_link_error, notify_error, center_id, center_source, load_status, center:holiday_centers(id, city, name), beneficiary:beneficiaries(id, full_name, family_name, spouse_name, id_number, phone, phone2, email, address, city, community_affiliation, children_count, birth_date, spouse_birth_date)')
       .eq('distribution_id', id)
       .order('registered_at', { ascending: false })
       .range(from, to))
@@ -98,6 +98,8 @@ async function getData(id: string) {
       notified_at?: string | null; notify_error?: string | null; amount?: number | null; beneficiary_id?: string | null
       approval_status?: string | null; approved_at?: string | null
       card_number?: string | null; card_linked_at?: string | null; card_link_error?: string | null
+      center_id?: string | null; center_source?: string | null; load_status?: string | null
+      center?: { id: string; city: string; name: string } | null
     }
     return {
       id: String(row.id),
@@ -113,6 +115,13 @@ async function getData(id: string) {
       card_number: row.card_number ?? null,
       card_linked_at: row.card_linked_at ?? null,
       card_link_error: row.card_link_error ?? null,
+      center_id: row.center_id ?? null,
+      // ⚠️ עיר ששמה זהה לשם המוקד לא תוצג פעמיים — כך הוזנו רוב הערים.
+      center_name: row.center
+        ? (row.center.city === row.center.name ? row.center.city : `${row.center.city} · ${row.center.name}`)
+        : null,
+      center_source: row.center_source ?? null,
+      load_status: row.load_status ?? null,
       name: [b?.family_name, b?.full_name || b?.spouse_name].filter(Boolean).join(' ') || (b?.full_name ?? 'ללא שם'),
       // ⚠️ שם המשפחה והשם הפרטי נשמרים גם בנפרד, לא רק במחרוזת המאוחדת:
       // פיצול בצד הלקוח לפי רווח היה שובר שמות משפחה מורכבים ("בן דוד",
