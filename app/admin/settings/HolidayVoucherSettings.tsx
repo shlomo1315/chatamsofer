@@ -24,6 +24,7 @@ export default function HolidayVoucherSettings() {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [done, setDone] = useState('')
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -74,10 +75,31 @@ export default function HolidayVoucherSettings() {
         המוקד, הכתובת והשעות נלקחים אוטומטית מהמוקד שהמשפחה בחרה.
       </p>
 
-      <a href="/api/admin/holiday-voucher/preview" target="_blank" rel="noopener noreferrer"
+      {/* ⚠️ חלונית באותה כרטיסייה ולא target="_blank": כרטיסייה חדשה
+          מוציאה את המשתמש מההגדרות, והוא חוזר לדף שנטען מחדש ומאבד
+          שינויים שטרם נשמרו. */}
+      <button type="button" onClick={() => setPreviewOpen(true)}
         className="inline-flex w-fit items-center gap-1.5 rounded-xl border border-teal-300 bg-white px-3 py-2 text-xs font-bold text-teal-800 hover:bg-teal-50">
         <Eye size={13} /> תצוגה מקדימה של השובר
-      </a>
+      </button>
+
+      {previewOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+          onClick={() => setPreviewOpen(false)}>
+          <div className="flex h-full max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+              <h4 className="text-sm font-extrabold text-slate-800">תצוגה מקדימה — שובר החלוקה</h4>
+              <button type="button" onClick={() => setPreviewOpen(false)}
+                className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+            </div>
+            {/* ⚠️ key מאלץ טעינה מחדש בכל פתיחה — אחרת מוצג ה-PDF הישן
+                אחרי שמירת מלל חדש. */}
+            <iframe key={String(previewOpen)} src="/api/admin/holiday-voucher/preview"
+              className="flex-1 w-full" title="תצוגה מקדימה של השובר" />
+          </div>
+        </div>
+      )}
 
       <label className="flex flex-col gap-1">
         <span className="text-[11px] font-bold text-slate-600">כותרת השובר</span>

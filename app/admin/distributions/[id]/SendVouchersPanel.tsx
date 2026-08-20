@@ -25,6 +25,7 @@ export default function SendVouchersPanel({ distributionId }: { distributionId: 
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [done, setDone] = useState('')
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   async function check() {
     setBusy(true); setErr(''); setDone('')
@@ -67,10 +68,12 @@ export default function SendVouchersPanel({ distributionId }: { distributionId: 
 
       <div className="flex flex-wrap items-center gap-2">
         {/* 🔴 לראות לפני ששולחים. */}
-        <a href="/api/admin/holiday-voucher/preview" target="_blank" rel="noopener noreferrer"
+        {/* ⚠️ חלונית ולא כרטיסייה חדשה — ראו HolidayVoucherSettings.
+            עריכת המלל עצמה נמצאת בהגדרות, כי היא כללית לכל החלוקות. */}
+        <button type="button" onClick={() => setPreviewOpen(true)}
           className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-300 bg-white px-3 py-2 text-xs font-bold text-indigo-800 hover:bg-indigo-50">
           <Eye size={13} /> תצוגה מקדימה של השובר
-        </a>
+        </button>
         <button type="button" onClick={check} disabled={busy}
           className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40">
           {busy && !stats ? <Loader2 size={13} className="animate-spin" /> : null}
@@ -104,6 +107,22 @@ export default function SendVouchersPanel({ distributionId }: { distributionId: 
           ) : (
             <p className="text-xs font-semibold text-slate-500">אין שוברים לשליחה</p>
           )}
+        </div>
+      )}
+
+      {previewOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+          onClick={() => setPreviewOpen(false)}>
+          <div className="flex h-full max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+              <h4 className="text-sm font-extrabold text-slate-800">תצוגה מקדימה — שובר החלוקה</h4>
+              <button type="button" onClick={() => setPreviewOpen(false)}
+                className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+            </div>
+            <iframe key={String(previewOpen)} src="/api/admin/holiday-voucher/preview"
+              className="flex-1 w-full" title="תצוגה מקדימה של השובר" />
+          </div>
         </div>
       )}
 
