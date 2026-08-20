@@ -38,6 +38,7 @@ import DepartmentGatesSettings from './DepartmentGatesSettings'
 import GovDataSettings from './GovDataSettings'
 import LegacyMailSettings from './LegacyMailSettings'
 import MailboxDisplaySettings from './MailboxDisplaySettings'
+import HolidayCentersManager from './HolidayCentersManager'
 import AutoReplySettings from './AutoReplySettings'
 import CardStockAlertSettings from './CardStockAlertSettings'
 import CardReminderSettings from './CardReminderSettings'
@@ -224,6 +225,12 @@ export default async function SettingsPage() {
             קבוצות הגבלת חנויות, ולעיתים שני מוסדות. */}
         <Collapsible title="נדרים קארד — חלוקות חגים" icon={<Gift size={16} className="text-teal-500" />}>
           <NedarimHolidaySettings />
+        </Collapsible>
+
+        {/* ⚠️ מוקדי החגים נפרדים לחלוטין מבתי ההחלמה של היולדות — מאגר
+            גלובלי משלהם, שנשמר מחג לחג. */}
+        <Collapsible title="מוקדי חלוקה — חגים" icon={<MapPin size={16} className="text-teal-500" />}>
+          <HolidayCentersManager />
         </Collapsible>
 
         {/* Card stock low-balance alert (threshold + recipient emails) */}
