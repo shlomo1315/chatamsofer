@@ -11,6 +11,55 @@ import { DEPARTMENTS } from './departments'
 // אם הוא נשבר — הפנייה נעלמת בשקט. הבדיקות כאן מקבעות את מה שאסור שיישבר.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 הודעת "אין להשיב" — נשמטה לגמרי בנרמול.
+//
+// normalizeConfig בנה אובייקט חדש עם message/buttons/sections/footnote ולא
+// כלל את noReplyNotice. השדה נשלח מהדפדפן, הגיע לשרת, ונזרק בשקט: המנהל
+// הקליד, שמר, וקיבל חזרה את ברירת המחדל.
+//
+// ⚠️ מחרוזת ריקה חייבת להישמר כמחרוזת ריקה ולא להיעלם: ב-renderAutoReply
+// ריק פירושו "ברירת המחדל", אבל הבחנה זו נעשית שם — הנרמול רק מעביר.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('הודעת "אין להשיב" — שמירה', () => {
+  it('נוסח מותאם נשמר בנרמול', () => {
+    const out = normalizeConfig({
+      main: { enabled: true, noReplyNotice: 'נא לא להשיב\nהתיבה אינה מנוטרת' },
+    })
+    expect(out.main!.noReplyNotice).toBe('נא לא להשיב\nהתיבה אינה מנוטרת')
+  })
+
+  it('מחרוזת ריקה נשמרת כפי שהיא', () => {
+    const out = normalizeConfig({ main: { enabled: true, noReplyNotice: '' } })
+    expect(out.main!.noReplyNotice).toBe('')
+  })
+
+  it('כל תיבה שומרת נוסח משלה', () => {
+    const out = normalizeConfig({
+      main: { enabled: true, noReplyNotice: 'נוסח אופיס' },
+      igud: { enabled: true, noReplyNotice: 'נוסח איגוד' },
+    })
+    expect(out.main!.noReplyNotice).toBe('נוסח אופיס')
+    expect(out.igud!.noReplyNotice).toBe('נוסח איגוד')
+  })
+
+  // ⚠️ אותו באג בדיוק בשדה הכותרת — נמצא בסריקה אחרי noReplyNotice.
+  it('כותרת ראשית מותאמת נשמרת בנרמול', () => {
+    const out = normalizeConfig({ main: { enabled: true, title: 'ברוכים הבאים לאיגוד' } })
+    expect(out.main!.title).toBe('ברוכים הבאים לאיגוד')
+  })
+
+  it('כותרת ריקה נשמרת כפי שהיא', () => {
+    const out = normalizeConfig({ main: { enabled: true, title: '' } })
+    expect(out.main!.title).toBe('')
+  })
+
+  it('שדה חסר אינו מפיל את הנרמול', () => {
+    const out = normalizeConfig({ main: { enabled: true } })
+    expect(out.main).toBeDefined()
+  })
+})
+
 describe('כפתורים — ניקוי קישורים', () => {
   it('כתובת https תקינה עוברת', () => {
     const out = sanitizeButtons([{ label: 'לאגף יולדות', url: 'https://chasamsofer.info/maternity' }])

@@ -735,6 +735,18 @@ export function normalizeConfig(raw: Record<string, unknown> | null | undefined)
       // כולם) ולכן מכובדים. רק היעדר גמור של השדה נופל לברירת המחדל.
       sections: Array.isArray(rec.sections) ? sanitizeSections(rec.sections) : base.sections,
       footnote: typeof rec.footnote === 'string' ? rec.footnote.slice(0, MAX_TEXT_LEN) : base.footnote,
+      // 🔴 גם title נשמט כאן — הכותרת שהמנהל הקליד נזרקה בכל שמירה.
+      // ⚠️ ריק נשמר כריק: ההכרעה מול AUTO_REPLY_DEFAULT_TITLE נעשית ברינדור.
+      title: typeof rec.title === 'string' ? rec.title.slice(0, MAX_TITLE_LEN) : base.title,
+      // 🔴 השדה הזה נשמט כאן לגמרי, והנוסח שהמנהל הקליד נזרק בשקט בכל שמירה.
+      //
+      // ⚠️ מחרוזת ריקה נשמרת כפי שהיא ואינה נופלת לברירת המחדל: ההבחנה בין
+      // ריק ל"לא הוגדר" נעשית ב-renderAutoReply (ריק ⇒ הנוסח הסטנדרטי),
+      // והנרמול רק מעביר את מה שנשמר. נפילה לברירת מחדל כאן הייתה מונעת
+      // מהמנהל למחוק את הבלוק.
+      noReplyNotice: typeof rec.noReplyNotice === 'string'
+        ? rec.noReplyNotice.slice(0, MAX_TEXT_LEN)
+        : base.noReplyNotice,
       weeklyCap,
     }
   }
