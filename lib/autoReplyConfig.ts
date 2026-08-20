@@ -131,7 +131,10 @@ const MAX_MESSAGE_LEN = 4000
 const MAX_LABEL_LEN = 120
 const MAX_TITLE_LEN = 160
 const MAX_TEXT_LEN = 1200
-const MAX_URL_LEN = 500
+// ⚠️ 2000 ולא 500: קישור mailto: עם נושא וגוף בעברית מקודד תופח פי 5.5,
+// ושלושה מקישורי ההגשה חצו את 500 ונשמרו פגומים. 2000 הוא הגבול המעשי
+// שכל הדפדפנים ולקוחות המייל מקבלים.
+const MAX_URL_LEN = 2000
 const DEFAULT_WEEKLY_CAP = 10
 const MIN_WEEKLY_CAP = 1
 const MAX_WEEKLY_CAP = 100
@@ -281,8 +284,17 @@ export function sanitizeButtons(input: unknown): AutoReplyButton[] {
   for (const raw of input) {
     if (!raw || typeof raw !== 'object') continue
     const label = String((raw as AutoReplyButton).label ?? '').trim().slice(0, MAX_LABEL_LEN)
-    const url = String((raw as AutoReplyButton).url ?? '').trim().slice(0, MAX_URL_LEN)
+    const url = String((raw as AutoReplyButton).url ?? '').trim()
     if (!label || !url) continue
+    // 🔴 קישור ארוך מדי נדחה במלואו — ולא נחתך.
+    //
+    // החיתוך גזם באמצע רצף %D7%90 של עברית והותיר קידוד פגום ('…%D7'),
+    // כלומר טיוטה שנפתחת עם ג'יבריש או לא נפתחת כלל. עברית תופחת פי 5.5
+    // בקידוד URL, ולכן נושא עברי קצר חוצה את התקרה בקלות.
+    //
+    // ⚠️ חצי קישור גרוע מכפתור חסר: הפונה לוחץ ונוחת על שגיאה, במקום
+    // לראות שאין כפתור ולפנות בדרך אחרת.
+    if (url.length > MAX_URL_LEN) continue
     if (!/^(https:\/\/|mailto:)/i.test(url)) continue
     // 🔴 הכתובת נשמרת **כפי שהוקלדה**. אין כאן שום המרה.
     //

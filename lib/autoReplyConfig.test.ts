@@ -47,6 +47,27 @@ describe('כפתורים — ניקוי קישורים', () => {
     expect(out[0].url).not.toContain('mail.google.com')
   })
 
+  // ── 🔴 חיתוך אורך לא ייצור קידוד פגום ──
+  //
+  // MAX_URL_LEN גזם באמצע רצף %D7%90 של עברית, והתוצאה הייתה קישור
+  // שנגמר ב-'%D7' — טיוטה שנפתחת עם ג'יבריש או לא נפתחת כלל. עברית
+  // תופחת פי 5.5 בקידוד URL, ולכן נושא עברי קצר חוצה את התקרה בקלות.
+  //
+  // הכלל: קישור ארוך מדי נדחה במלואו ולא נשמר חתוך. חצי קישור גרוע
+  // מכפתור חסר — הפונה לוחץ ונוחת על שגיאה.
+  it('קישור ארוך מדי נדחה ואינו נשמר חתוך', () => {
+    const long = 'mailto:y@chasamsofer.info?subject=' + '%D7%90'.repeat(400)
+    const out = sanitizeButtons([{ label: 'בקשה', url: long }])
+    expect(out).toEqual([])
+  })
+
+  it('קישור שנשמר לעולם אינו נגמר בקידוד חלקי', () => {
+    const long = 'mailto:y@chasamsofer.info?subject=' + '%D7%90'.repeat(400)
+    for (const out of [sanitizeButtons([{ label: 'א', url: long }])]) {
+      for (const b of out) expect(b.url).not.toMatch(/%[0-9A-Fa-f]?$/)
+    }
+  })
+
   // 🔴 javascript: בגוף מייל אינו מסוכן בלקוח מייל רגיל, אבל התצוגה
   // המקדימה מרנדרת את אותו HTML בדפדפן של המנהל — שם הוא כן מסוכן.
   it('javascript: נחסם', () => {
