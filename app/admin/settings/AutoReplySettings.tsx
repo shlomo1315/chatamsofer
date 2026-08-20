@@ -108,7 +108,7 @@ export default function AutoReplySettings() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className={`flex flex-col gap-4 ${dirty ? "pb-28" : ""}`}>
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
@@ -128,6 +128,32 @@ export default function AutoReplySettings() {
           )}
         </div>
       </div>
+
+      {/* ── סרגל שמירה צף ──────────────────────────────────────────────
+          🔴 כפתור השמירה ישב בראש הדף בלבד. הנוסחים ארוכים, והמנהל
+          שערך שדה בתחתית לא ראה אותו כלל — ערך, יצא, והשינוי אבד.
+
+          ⚠️ מופיע רק כשיש שינוי שלא נשמר, ונעלם מיד אחרי השמירה: סרגל
+          קבוע היה מכסה תוכן גם כשאין מה לשמור.
+
+          ⚠️ ההבהוב פועם ברקע ולא מסתיר טקסט — animate-pulse על העטיפה
+          היה מרצד את הכיתוב עצמו וקשה לקריאה. */}
+      {dirty && (
+        <div className="fixed bottom-0 inset-x-0 z-50 px-4 pb-4 pt-3 pointer-events-none">
+          <div className="mx-auto max-w-3xl pointer-events-auto flex items-center justify-between gap-3
+                          rounded-2xl border-2 border-amber-300 bg-white shadow-2xl px-4 py-3
+                          animate-[pulse_2s_ease-in-out_infinite]">
+            <span className="flex items-center gap-2 text-sm font-bold text-amber-700">
+              <AlertCircle size={16} /> יש שינויים שלא נשמרו
+            </span>
+            <button onClick={save} disabled={saving}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-bold
+                         hover:bg-indigo-700 disabled:opacity-60 shadow-lg shrink-0">
+              {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} שמירה
+            </button>
+          </div>
+        </div>
+      )}
 
       {err && (
         <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
