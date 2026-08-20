@@ -417,12 +417,19 @@ function ButtonsEditor({ label, hint, buttons, onChange }: {
           <div className="relative">
             <button onClick={() => setPickerOpen(o => !o)}
               className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:text-emerald-700">
-              <Mail size={13} /> קישור הגשה
+              <Mail size={13} /> קישורי הגשה דרך המייל
             </button>
             {pickerOpen && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setPickerOpen(false)} />
-                <div className="absolute left-0 top-6 z-20 w-60 rounded-xl border border-slate-200 bg-white shadow-lg p-1">
+                <div className="absolute left-0 top-6 z-20 w-72 rounded-xl border border-slate-200 bg-white shadow-lg p-1">
+                  {/* ⚠️ מוסבר במפורש: הקישור פותח חלון כתיבה ב-Gmail עם
+                      הנמען והנושא מוכנים. בלי ההסבר לא ברור מה הכפתור
+                      עושה, והמשתמש מוסיף קישור ידני עם נושא שגוי. */}
+                  <p className="px-3 pt-2 pb-1.5 text-[11px] leading-relaxed text-slate-500 border-b border-slate-100">
+                    הכפתור יפתח למשפחה <strong className="text-slate-700">חלון כתיבת מייל</strong> עם
+                    הנמען והנושא מוכנים — הבקשה נקלטת אוטומטית.
+                  </p>
                   {REQUEST_MAILTO_PRESETS.map(p => (
                     <button key={p.subject} onClick={() => addPreset(p)}
                       className="w-full text-right px-3 py-2 rounded-lg hover:bg-emerald-50 transition-colors">
