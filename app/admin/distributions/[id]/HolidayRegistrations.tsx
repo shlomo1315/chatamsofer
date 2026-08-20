@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Search, Download, Loader2, Users, Wallet, Monitor, Phone, Mail, Pencil, CreditCard, Check, X, ShieldCheck, Send } from 'lucide-react'
+import { Search, Download, Loader2, Users, Wallet, Monitor, Phone, Mail, Pencil, CreditCard, Check, X, ShieldCheck, Send, MapPin } from 'lucide-react'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
 import { useToast } from '@/components/ui/Toast'
@@ -16,6 +16,7 @@ import AddRecipientDialog from './AddRecipientDialog'
 import Pagination from '@/components/ui/Pagination'
 import { useTablePagination } from '@/lib/useTablePagination'
 import CityBreakdown from './CityBreakdown'
+import CenterBreakdown from './CenterBreakdown'
 
 export interface RegistrationRow {
   id: string
@@ -426,6 +427,14 @@ export default function HolidayRegistrations({
             </button>
           )}
         </div>
+      </div>
+
+      {/* ── מוקדי החלוקה — מתג הבחירה ופילוח ── */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+        <h3 className="mb-3 flex items-center gap-1.5 text-sm font-extrabold text-slate-800">
+          <MapPin size={15} className="text-indigo-600" /> מוקדי החלוקה
+        </h3>
+        <CenterBreakdown distributionId={distributionId} />
       </div>
 
       {/* ── פילוח לפי עיר ── */}
