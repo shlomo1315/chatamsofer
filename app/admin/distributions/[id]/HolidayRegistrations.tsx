@@ -19,6 +19,7 @@ import CityBreakdown from './CityBreakdown'
 import CenterBreakdown from './CenterBreakdown'
 import LoadCardsPanel from './LoadCardsPanel'
 import SendVouchersPanel from './SendVouchersPanel'
+import TransactionsPanel from './TransactionsPanel'
 
 export interface RegistrationRow {
   id: string
@@ -444,6 +445,9 @@ export default function HolidayRegistrations({
 
       {/* ── שוברי החלוקה — תצוגה מקדימה ושליחה מרוכזת ── */}
       {canEdit && <SendVouchersPanel distributionId={distributionId} />}
+
+      {/* ── עסקאות ואיפוס ── */}
+      {canEdit && <TransactionsPanel distributionId={distributionId} />}
 
       {/* ── פילוח לפי עיר ── */}
       <CityBreakdown cities={cities} selected={city} onSelect={setCity} />
