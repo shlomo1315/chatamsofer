@@ -65,6 +65,21 @@ export default function ComposeDialog({
   const [scheduledAt, setScheduledAt] = useState('')
   const [showSchedule, setShowSchedule] = useState(false)
 
+  // ── טיוטה ──
+  // 🔴 נשמרת ב-Gmail עצמו (users.drafts), לא רק אצלנו: מי שמתחיל לכתוב
+  // כאן וממשיך מהטלפון מוצא את הטיוטה במקום שהוא מצפה לה.
+  //
+  // ⚠️ מושהית ב-2 שניות ולא בכל הקלדה — שמירה על כל תו הייתה יורה
+  // עשרות קריאות ל-Gmail בזמן כתיבת משפט.
+  // ⚠️ ref ולא state: המזהה נקרא בתוך שמירה מושהית ובשליחה, ואינו מוצג.
+  // state היה מרנדר מחדש בכל שמירה בלי שום שינוי על המסך.
+  const [draftSaved, setDraftSaved] = useState<string | null>(null)
+  const draftIdRef = useRef<string | null>(null)
+  /** נמנע משמירה מיותרת כשלא השתנה דבר מאז השמירה האחרונה. */
+  const lastSavedRef = useRef('')
+  /** נדרך מ-onInput של העורך — הגוף אינו ב-state ולכן אין לו תלות טבעית. */
+  const [bodyTick, setBodyTick] = useState(0)
+
   // ── הוספת קישור ──
   // ⚠️ פאנל בתוך החלון ולא prompt(): prompt חוסם את הדפדפן, נראה זר,
   // ואינו מאפשר לקבוע את *הטקסט* שיוצג — רק את הכתובת.
@@ -101,6 +116,39 @@ export default function ComposeDialog({
     const t = setTimeout(() => { void searchContacts(contactQ) }, 300)
     return () => clearTimeout(t)
   }, [contactQ, searchContacts])
+
+  // שמירת טיוטה מושהית — נדלקת על שינוי בנמען/נושא/גוף.
+  //
+  // ⚠️ הגוף נקרא מה-DOM ולא מ-state: העורך הוא contentEditable, ואין
+  // state שמחזיק את תוכנו. לכן הטיימר נדרך גם מ-onInput של העורך.
+  const saveDraft = useCallback(async () => {
+    const html = editorRef.current?.innerHTML ?? ''
+    const snapshot = [to, subject, html].join('|~|')
+    // ריק לגמרי, או זהה למה שכבר נשמר — אין מה לשלוח.
+    if (snapshot === lastSavedRef.current) return
+    if (!to.trim() && !subject.trim() && !html.replace(/<[^>]*>/g, '').trim()) return
+
+    try {
+      const res = await fetch('/api/admin/gmail/drafts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...(draftIdRef.current ? { draft_id: draftIdRef.current } : {}),
+          to: to.trim(), subject: subject.trim(), body: html,
+        }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) return   // כשל שמירה אינו חוסם כתיבה — ננסה בשמירה הבאה
+      if (d.draft_id) draftIdRef.current = String(d.draft_id)
+      lastSavedRef.current = snapshot
+      setDraftSaved(new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }))
+    } catch { /* נסיון חוזר בשמירה הבאה */ }
+  }, [to, subject])
+
+  useEffect(() => {
+    const t = setTimeout(() => { void saveDraft() }, 2000)
+    return () => clearTimeout(t)
+  }, [saveDraft, bodyTick])
 
   // ── צירופים ──
   async function addFiles(files: FileList | null) {
@@ -236,8 +284,16 @@ export default function ComposeDialog({
       ...(scheduledIso ? { scheduledAt: scheduledIso } : {}),
     })
     setSending(false)
-    if (ok) onClose()
-    else setError('השליחה נכשלה')
+    if (ok) {
+      // ⚠️ הטיוטה נמחקת רק אחרי שליחה שהצליחה: אחרת היא נשארת ב-Gmail
+      // לצד ההודעה שנשלחה, והמשתמש רואה את אותו מייל פעמיים.
+      if (draftIdRef.current) {
+        void fetch(`/api/admin/gmail/drafts?draft_id=${encodeURIComponent(draftIdRef.current)}`,
+          { method: 'DELETE' }).catch(() => { /* טיוטה יתומה עדיפה על חסימת השליחה */ })
+        draftIdRef.current = null
+      }
+      onClose()
+    } else setError('השליחה נכשלה')
   }
 
   const tbBtn = 'p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors'
@@ -472,6 +528,7 @@ export default function ComposeDialog({
               לשמור עיצוב. suppressContentEditableWarning נדרש כי React אינו
               שולט בתוכן. */}
           <div ref={editorRef} contentEditable suppressContentEditableWarning dir="rtl"
+            onInput={() => setBodyTick(t => t + 1)}
             className="mx-5 my-3 min-h-[220px] rounded-xl border border-slate-200 px-3 py-2.5 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-indigo-200 overflow-y-auto"
           />
 
@@ -537,7 +594,10 @@ export default function ComposeDialog({
 
         <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-slate-100 bg-slate-50 flex-shrink-0">
           <span className="text-[11px] text-slate-400">
-            {showSchedule && scheduledAt
+            {/* חיווי הטיוטה גובר: הוא מה שמשתנה, ולכן מה שמעניין לדעת. */}
+            {draftSaved
+              ? `הטיוטה נשמרה ב-Gmail · ${draftSaved}`
+              : showSchedule && scheduledAt
               ? 'ההודעה תמתין ותישלח במועד שנבחר'
               : mode === 'reply' ? 'התשובה תישלח בשרשור הקיים' : 'ההודעה תישלח מהתיבה הנבחרת'}
           </span>
