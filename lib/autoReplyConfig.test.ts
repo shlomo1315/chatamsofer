@@ -55,14 +55,23 @@ describe('כפתורים — ניקוי קישורים', () => {
   //
   // הכלל: קישור ארוך מדי נדחה במלואו ולא נשמר חתוך. חצי קישור גרוע
   // מכפתור חסר — הפונה לוחץ ונוחת על שגיאה.
+  // ⚠️ הקישור האמיתי של טופס ההלוואה (~2,900 תווים) חייב לעבור: תקרה
+  // שנמוכה ממנו מוחקת את הכפתור מהמסך אחרי שמירה.
+  it('קישור הגשה אמיתי באורך מלא נשמר ואינו נמחק', () => {
+    const real = 'mailto:g@chasamsofer.info?subject=' + '%D7%90'.repeat(80) + '&body=' + '%D7%91'.repeat(400)
+    const out = sanitizeButtons([{ label: 'בקשת הלוואה', url: real }])
+    expect(out).toHaveLength(1)
+    expect(out[0].url).toBe(real)
+  })
+
   it('קישור ארוך מדי נדחה ואינו נשמר חתוך', () => {
-    const long = 'mailto:y@chasamsofer.info?subject=' + '%D7%90'.repeat(400)
+    const long = 'mailto:y@chasamsofer.info?subject=' + '%D7%90'.repeat(2500)
     const out = sanitizeButtons([{ label: 'בקשה', url: long }])
     expect(out).toEqual([])
   })
 
   it('קישור שנשמר לעולם אינו נגמר בקידוד חלקי', () => {
-    const long = 'mailto:y@chasamsofer.info?subject=' + '%D7%90'.repeat(400)
+    const long = 'mailto:y@chasamsofer.info?subject=' + '%D7%90'.repeat(2500)
     for (const out of [sanitizeButtons([{ label: 'א', url: long }])]) {
       for (const b of out) expect(b.url).not.toMatch(/%[0-9A-Fa-f]?$/)
     }
