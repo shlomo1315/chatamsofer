@@ -6,7 +6,7 @@ import { departmentByEmail, BRAND_NAME } from '@/lib/departments'
 import { sendAutoReply } from '@/lib/autoReplySender'
 import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { handleEmailRequest, isRequestSubject, isRequestMailFor, effectiveRequestSubject } from '@/lib/emailRequestIntake'
-import { resolveMailbox, resolveAllMailboxes } from '@/lib/mailRouting'
+import { resolveMailbox } from '@/lib/mailRouting'
 import { verifySvixSignature, hasSvixHeaders, safeEqual } from '@/lib/svix'
 
 export const dynamic = 'force-dynamic'
@@ -1001,30 +1001,24 @@ export async function POST(request: NextRequest) {
     // אינה מזוהה לפי הנושא, ובלי התיקון הזה הייתה מקבלת גם אישור קליטה
     // וגם את המענה הגנרי — שני מיילים סותרים על פנייה אחת.
     if (!isRequest && !isReplyToUs && !looksLikeLoanInquiry) {
-      // 🔴 מענה מכל תיבה שאליה המייל הופנה, ולא רק מזו שבה הוא נשמר.
+      // 🔴 מענה אוטומטי אחד בלבד, מהתיבה שאליה הפונה שלח.
       //
-      // ⚠️ הבאג: מי ששלח ל-office@ ול-igud@ יחד קיבל את מענה האופיס
-      // *פעמיים*. Google שולח שני עותקים (dual-delivery), שניהם נושאים
-      // את אותה רשימת נמענים, ו-resolveMailbox מחזיר תמיד את הראשונה
-      // מביניהן — כלומר שני העותקים נפתרו ל-office, ואיגוד לא ענה כלל.
+      // הקוד שלח מענה מכל תיבה ברשימת נמעני ה-envelope. הנחת היסוד
+      // הייתה ש-received_for מכיל רק שליחה ישירה — היא שגויה: תיבות
+      // האגפים מעבירות זו לזו (igud→office וגם office→igud), וההעברה
+      // מופיעה ב-envelope בדיוק כמו נמען מכוון.
       //
-      // ⚠️ הנעילה ב-sendAutoReply היא לפי messageId+תיבה, ולכן שני
-      // מענים מאותה הודעה לשתי תיבות שונים אינם חוסמים זה את זה — אבל
-      // עותק שני של אותה הודעה לאותה תיבה כן נחסם.
-      // 🔴 מענה מהתיבה שאליה המייל **נשלח בפועל** — לא מכל כתובת ברשימה.
+      // 🔴 המדידה בפרודקשן (20.08): שליחה ל-igud החזירה main+holidays,
+      // ושליחה ל-office החזירה office+igud. בשני המקרים הפונה קיבל שני
+      // מענים, ולפחות אחד מהם מאגף שאליו לא פנה כלל.
       //
-      // ⚠️ הבאג שתוקן כאן: resolveAllMailboxes החזיר גם תיבות שהמייל
-      // הגיע אליהן דרך *העברה* (forwarding), לא בשליחה ישירה. מי ששלח
-      // ל-igud@ בלבד קיבל שני מענים — אחד מאיגוד ואחד מהמשרד הראשי —
-      // כי igud מעביר ל-office, ושתיהן הופיעו ברשימת הנמענים.
+      // אין בכותרות מה שיבדיל בין השתיים — Resend מוסר delivered-to
+      // ו-x-forwarded-to ריקות (אומת מול ההודעה השמורה). לכן ההכרעה היא
+      // תיבה אחת: זו ש-resolveMailbox בחר, אותה תיבה שבה ההודעה נשמרה.
       //
-      // ⚠️ מקור האמת הוא envelope של Resend (receivedForRecipients),
-      // שמכיל את הנמען שאליו ההודעה נשלחה. כותרות כמו delivered-to
-      // ו-x-forwarded-to נוצרות דווקא *בהעברה*, ולכן אינן קובעות.
-      const boxes = receivedForRecipients.length
-        ? resolveAllMailboxes({ direct: receivedForRecipients, cc: [] })
-        : resolveAllMailboxes({ direct: directRecipients, cc: ccRecipients })
-      const targets = boxes.length ? boxes : [resolvedToEmail]
+      // ⚠️ המחיר: שליחה מכוונת לשני אגפים תיענה מאחד בלבד. זו הכרעת
+      // המשתמש (כל אחד שיעבוד בנפרד) ועדיפה על מענה מאגף שגוי.
+      const targets = [resolvedToEmail]
       for (const box of targets) {
         const key = departmentByEmail(box)?.key
         if (!key) continue
