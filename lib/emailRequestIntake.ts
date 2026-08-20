@@ -4,6 +4,38 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { deliverMail } from './sendMail'
 import { mailFor } from './departments'
 import { emailIntakeRejectedEmail, requestBlockedRejectedEmail, requestReceivedEmail, greetMrs } from './emailTemplates'
+import { readFile } from 'fs/promises'
+import path from 'path'
+import type { MailAttachment } from './sendMail'
+
+/** האם הדחייה נובעת מטופס אישור רב חסר — אותה בדיקה שקובעת את הבלוק בגוף. */
+function needsRabbiForm(errors: string[]): boolean {
+  return errors.some(e => e.includes('טופס-אישור-רב') || e.includes('טופס אישור רב'))
+}
+
+/**
+ * הטופס הריק כצרופה.
+ *
+ * ⚠️ נקרא מהדיסק בכל שליחה ולא נשמר בזיכרון: 193KB אינם שווים מטמון
+ * שנשאר תלוי אחרי החלפת הקובץ.
+ *
+ * ⚠️ כישלון קריאה אינו מפיל את הדחייה — המייל נשלח בלי הצרופה, והקישור
+ * בגוף עדיין נותן למבקש דרך להשיג את הטופס.
+ */
+async function rabbiFormAttachment(): Promise<MailAttachment[] | undefined> {
+  try {
+    const file = path.join(process.cwd(), 'public', 'forms', 'rabbi-form-blank.jpg')
+    const buf = await readFile(file)
+    return [{
+      filename: 'טופס-אישור-רב.jpg',
+      mimeType: 'image/jpeg',
+      contentB64: buf.toString('base64'),
+    }]
+  } catch (e) {
+    console.error('[intake] צירוף טופס אישור רב נכשל:', e instanceof Error ? e.message : String(e))
+    return undefined
+  }
+}
 import {
   detectReqType, detectReqTypeForMailbox, SUBJECT_PREFIX, attachmentsFor, parseDraft, validateRequest,
   draftMailto, IGUD_MAILBOX, type ReqType,
@@ -65,14 +97,20 @@ async function reject(
     name, typeLabel: SUBJECT_PREFIX[type], errors, draftHref, action: ACTION_PARAM[type], greeting,
   })
 
-  // ⚠️ הטופס הריק אינו מצורף עוד כקובץ אלא מוצע כקישור בגוף ההודעה
-  // (ראו emailIntakeRejectedEmail). הצרופה ניפחה כל דחייה במאות קילובייטים
-  // ונשלחה שוב בכל ניסיון חוזר.
+  // ── הטופס הריק מצורף כתמונה, *וגם* מוצע כקישור בגוף ההודעה ──────────
   //
-  // 🔴 הקישור עצמו *חייב* להישאר: הדחייה הזו נשלחת דווקא כשהטופס חסר, ומי
-  // שהגיש במייל לא עבר בפורטל ואין לו מאיפה להוריד אותו. הודעת "חסר טופס"
-  // בלי דרך להשיגו משאירה את המבקש תקוע.
-  return deliverMail(to, mail.subject, mail.html, undefined, { ...mailFor('igud'), skipLog: true })
+  // 🔴 הקישור חייב להישאר בכל מקרה: הדחייה הזו נשלחת דווקא כשהטופס חסר,
+  // ומי שהגיש במייל לא עבר בפורטל ואין לו מאיפה להוריד אותו. הודעת
+  // "חסר טופס" בלי דרך להשיגו משאירה את המבקש תקוע.
+  //
+  // ⚠️ תמונה ולא ה-PDF: המקור הוא 3.4MB, ובניסיונות חוזרים הוא ניפח את
+  // התיבה עד כדי חסימה — כלומר המבקש היה מפסיק לקבל את המייל *כולו*,
+  // ובכללו רשימת השגיאות. הרינדור ל-JPEG הוריד אותו ל-193KB (פי 20),
+  // והטופס נשאר קריא להדפסה. ראו public/forms/rabbi-form-blank.jpg.
+  //
+  // ⚠️ מצורף רק כשזו סיבת הדחייה: מי שנדחה על סכום שגוי אינו זקוק לו.
+  const attachments = needsRabbiForm(errors) ? await rabbiFormAttachment() : undefined
+  return deliverMail(to, mail.subject, mail.html, attachments, { ...mailFor('igud'), skipLog: true })
 }
 
 // מחזיר true אם המייל זוהה כבקשה וטופל (כדי לדלג על מענה אוטומטי אחר).

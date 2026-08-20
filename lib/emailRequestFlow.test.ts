@@ -219,6 +219,17 @@ describe('טופס אישור רב — חובה גם בהגשה במייל', () 
     expect(draft).toContain('תידחה')
   })
 
+  // ── הטופס הריק מצורף כתמונה קלה ──────────────────────────────────
+  //
+  // המקור 3.4MB. בניסיונות חוזרים הוא ניפח את התיבה עד כדי חסימה,
+  // כלומר המבקש הפסיק לקבל את המייל כולו — ובכללו רשימת השגיאות.
+  it('קובץ התמונה קיים ומשקלו סביר לצירוף', async () => {
+    const { readFile } = await import('fs/promises')
+    const buf = await readFile('public/forms/rabbi-form-blank.jpg')
+    expect(buf.length).toBeGreaterThan(20_000)
+    // ⚠️ תקרה מפורשת: קובץ שיגדל שוב מחזיר בדיוק את הבעיה שנפתרה כאן.
+    expect(buf.length).toBeLessThan(600_000)
+  })
   it('בקשות אחרות אינן דורשות אותו', () => {
     expect(attachmentsFor('birth', ctx).some(a => a.name === 'טופס-אישור-רב')).toBe(false)
     expect(attachmentsFor('financial_aid', ctx).some(a => a.name === 'טופס-אישור-רב')).toBe(false)
