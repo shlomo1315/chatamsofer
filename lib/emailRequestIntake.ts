@@ -10,6 +10,7 @@ import {
 } from './emailRequestForms'
 import { isDepartmentOpen, departmentClosedMessage, type GatedDepartment } from './departmentGates'
 import { findOpenLoan, openLoanEmailReason } from './openLoanGuard'
+import { mergeTwinAttachments } from './twinAttachments'
 
 // מיפוי סוג בקשה → מחלקה (שער), כדי לדעת אם המחלקה פתוחה כרגע.
 // משמש גם את חסימת הקליטה (מחלקה סגורה) וגם את בניית קישורי הטיוטה.
@@ -148,6 +149,54 @@ async function handleHolidayEmail(admin: SupabaseClient, msg: Msg): Promise<bool
   return true
 }
 
+/**
+ * צירופי המייל, ואם הוא הגיע ריק — הצירופים של העותק התאום.
+ *
+ * 🔴 dual-delivery של Google מייצר שני עותקים של אותה הודעה, ובאחד מהם
+ * הצירופים חסרים. ראו twinAttachments.ts למדידה ולנימוק המלא.
+ *
+ * ⚠️ פונה ל-DB **רק** כשהעותק הנוכחי ריק — במסלול הרגיל אין כאן שאילתה
+ * נוספת כלל.
+ *
+ * ⚠️ התאום מזוהה לפי שולח + נושא בחלון של שעה. message_id אינו משמש:
+ * לשני העותקים יש מזהים שונים, ובדיוק זו הסיבה שהבאג קיים.
+ *
+ * ⚠️ נכשל-פתוח: אם השאילתה נכשלת מחזירים את מה שיש. שגיאת רשת אינה
+ * סיבה להפיל בקשה תקינה.
+ */
+async function withTwinAttachments(
+  admin: SupabaseClient, msg: Msg, from: string,
+): Promise<InAttachment[]> {
+  const own = (msg.attachments ?? []).filter(a => a?.url)
+  if (own.length) return own
+
+  try {
+    const { data } = await admin
+      .from('inbound_emails')
+      .select('attachments')
+      .eq('subject', msg.subject)
+      .ilike('from_email', from)
+      .gte('received_at', new Date(Date.now() - 60 * 60 * 1000).toISOString())
+      .order('received_at', { ascending: false })
+      .limit(5)
+
+    for (const row of (data ?? []) as { attachments?: unknown }[]) {
+      const raw = typeof row.attachments === 'string'
+        ? JSON.parse(row.attachments)
+        : row.attachments
+      if (!Array.isArray(raw)) continue
+      const merged = mergeTwinAttachments([], raw as InAttachment[])
+      if (merged.length) {
+        console.warn(`[emailRequest] צירופים הושלמו מהעותק התאום — ${from} · "${msg.subject}" (${merged.length} קבצים)`)
+        return merged as InAttachment[]
+      }
+    }
+  } catch (e) {
+    console.error('[emailRequest] שליפת העותק התאום נכשלה — ממשיכים בלעדיה', e)
+  }
+  return own
+}
+
 export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promise<boolean> {
   // ⚠️ נבדק *לפני* detectReqType: הנושא "רישום לחלוקת חגים" אינו סוג טופס, ואילו
   // היה נופל לזיהוי הרגיל הוא היה מוחזר כ-null והמייל היה נבלע בשקט.
@@ -224,11 +273,18 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
   const valid = validateRequest(type, values, ctx)
   const errors: string[] = valid.ok ? [] : valid.errors
 
+  // 🔴 צירופים — כולל השלמה מהעותק התאום (dual-delivery של Google).
+  //
+  // Google מייצר שני עותקים של אותו מייל, ובאחד מהם הצירופים חסרים.
+  // נמדד: מתוך 136 בקשות ב-14 יום, 74 הגיעו כפול ו-17 מהן עם עותק ריק.
+  // עד היום העותק המלא נקלט ראשון — מקרי לחלוטין. ראו twinAttachments.ts.
+  const attachments = await withTwinAttachments(admin, msg, from)
+
   // קבצים לפי שם
   const specs = attachmentsFor(type, ctx)
   const matched: Record<string, string> = {}
   for (const spec of specs) {
-    const f = msg.attachments.find((a) => baseName(a.filename) === spec.name && a.url)
+    const f = attachments.find((a) => baseName(a.filename) === spec.name && a.url)
     if (f?.url) matched[spec.name] = f.url
     else if (spec.required) errors.push(`לא נמצא קובץ בשם "${spec.name}". שנו את שם הקובץ בדיוק לכך וצרפו שוב`)
   }
