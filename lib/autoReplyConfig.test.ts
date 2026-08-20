@@ -22,6 +22,31 @@ describe('כפתורים — ניקוי קישורים', () => {
     expect(out).toHaveLength(1)
   })
 
+  // ── 🔴 mailto: נשמר כפי שהוא ואינו מומר ל-Gmail ──
+  //
+  // הניקוי המיר בעבר כל mailto: לקישור https של Gmail. זה נראה כמו שיפור,
+  // אבל Gmail עוטף כל https בגוף הודעה ב-google.com/url?q= — והעטיפה
+  // שוברת את הטיוטה. mailto: עצמו אינו נעטף, ולכן הוא חייב לשרוד את
+  // השמירה בדיוק כפי שהוקלד.
+  //
+  // ⚠️ ההמרה גם גרמה לכך שמנהל שהקליד mailto: ראה במסך משהו אחר לגמרי,
+  // ונראה היה שההגדרות אינן נשמרות.
+  it('mailto נשמר כפי שהוא — ללא המרה ל-Gmail', () => {
+    const out = sanitizeButtons([{ label: 'הגשה', url: 'mailto:8@chasamsofer.info' }])
+    expect(out).toEqual([{ label: 'הגשה', url: 'mailto:8@chasamsofer.info' }])
+  })
+
+  it('mailto עם נושא וגוף נשמר על כל פרמטריו', () => {
+    const url = 'mailto:igud@chasamsofer.info?subject=%D7%9C%D7%99%D7%93%D7%94&body=%D7%A9%D7%9D'
+    const out = sanitizeButtons([{ label: 'בקשת לידה', url }])
+    expect(out).toEqual([{ label: 'בקשת לידה', url }])
+  })
+
+  it('אף כתובת שנשמרת אינה מצביעה ל-mail.google.com', () => {
+    const out = sanitizeButtons([{ label: 'הגשה', url: 'mailto:office@chasamsofer.info' }])
+    expect(out[0].url).not.toContain('mail.google.com')
+  })
+
   // 🔴 javascript: בגוף מייל אינו מסוכן בלקוח מייל רגיל, אבל התצוגה
   // המקדימה מרנדרת את אותו HTML בדפדפן של המנהל — שם הוא כן מסוכן.
   it('javascript: נחסם', () => {

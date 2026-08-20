@@ -76,24 +76,10 @@ function gmailComposeUrl(to: string, subject: string, body: string): string {
   return `https://mail.google.com/mail/u/0/?${p.toString()}`
 }
 
-/**
- * ממיר קישור mailto: קיים לקישור Gmail, ומשמר נמען/נושא/גוף.
- *
- * ⚠️ מה שאינו mailto: מוחזר כפי שהוא — הפונקציה בטוחה לקריאה על כל URL.
- */
-export function mailtoToGmail(url: string): string {
-  if (!/^mailto:/i.test(url)) return url
-  try {
-    const [addrPart, queryPart = ''] = url.slice('mailto:'.length).split('?')
-    const to = decodeURIComponent(addrPart)
-    if (!to) return url
-    const q = new URLSearchParams(queryPart)
-    return gmailComposeUrl(to, q.get('subject') ?? '', q.get('body') ?? '')
-  } catch {
-    // כתובת פגומה — עדיף להשאיר כפי שהיא מאשר לייצר קישור שבור
-    return url
-  }
-}
+// ⚠️ הייתה כאן mailtoToGmail שהמירה כל mailto: לקישור Gmail. היא הוסרה:
+// Gmail עוטף https בגוף הודעה ב-google.com/url?q= והעטיפה שוברת את הטיוטה,
+// ולכן mailto: חייב להישמר כפי שהוא. אין להחזיר את ההמרה — ראו הטסטים
+// "mailto נשמר כפי שהוא" ב-autoReplyConfig.test.ts.
 
 export function requestMailtoUrl(subject: string, mailbox?: string): string {
   // ── הגשה לתיבת האגף: ת"ז בלבד בנושא ──
@@ -298,12 +284,16 @@ export function sanitizeButtons(input: unknown): AutoReplyButton[] {
     const url = String((raw as AutoReplyButton).url ?? '').trim().slice(0, MAX_URL_LEN)
     if (!label || !url) continue
     if (!/^(https:\/\/|mailto:)/i.test(url)) continue
-    // 🔴 כל mailto: מומר לקישור Gmail — כאן, ולא רק בברירות המחדל.
+    // 🔴 הכתובת נשמרת **כפי שהוקלדה**. אין כאן שום המרה.
     //
-    // ⚠️ זו הנקודה שכל כפתור עובר בה, כולל נוסחים שנשמרו ב-CMS. תיקון
-    // ברשימת ברירות המחדל בלבד היה מותיר את הכפתורים הקיימים שבורים,
-    // וזו בדיוק הסיבה שהבאג חזר אחרי שתוקן ידנית פעם אחת.
-    out.push({ label, url: mailtoToGmail(url) })
+    // בעבר כל mailto: הומר כאן לקישור https של Gmail. זה היה הפוך מהנדרש:
+    // Gmail עוטף כל https בגוף הודעה ב-google.com/url?q=, והעטיפה שוברת את
+    // הטיוטה — הפונה נוחת על דף במקום על חלון כתיבה. mailto: עצמו אינו נעטף,
+    // ולכן הוא זה שחייב לשבת בכפתור.
+    //
+    // ⚠️ ההמרה גם דרסה בשקט את מה שהמנהל הקליד: הוא שמר mailto:, קיבל חזרה
+    // קישור Gmail, והסיק שההגדרות אינן נשמרות כלל.
+    out.push({ label, url })
     if (out.length >= MAX_BUTTONS) break
   }
   return out
