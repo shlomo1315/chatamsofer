@@ -337,12 +337,12 @@ export const IGUD_MAILBOX = 'igud@chasamsofer.info'
 /**
  * קישור לטיוטת הגשה מוכנה (subjectPrefix לעקיפה — למשל "בקשת סיוע אלמן").
  *
- * 🔴 קישור Gmail ולא mailto:, ועם הגוף הקומפקטי. שתי סיבות, שתיהן שברו
- * את ההגשה החוזרת בפועל:
+ * 🔴 mailto: — פותח טיוטה בתוכנת המייל של הפונה עצמו, במקום להוציא אותו
+ * לדפדפן ולחשבון Gmail אחר. הכרעה מפורשת של המנהל.
  *
- *  1. Gmail חוסם mailto: שנלחץ מתוך גוף הודעה — התוצאה דף לבן. הקישור
- *     הזה יושב במייל *הדחייה*, כלומר בדיוק אצל מי שכבר נכשל פעם אחת.
- *  2. הגוף המלא תופח פי ~5.5 בקידוד וחורג ממגבלת ה-URL של Gmail.
+ * ⚠️ הגוף הוא הקומפקטי ולא המלא: מגבלת אורך ה-URL היא של הדפדפן/הלקוח
+ * וחלה גם על mailto:. גוף מלא (~8,400 תווים מקודדים) נחתך באמצע אצל חלק
+ * מהלקוחות, והבקשה נשלחת חסרה בלי שהפונה מבחין.
  *
  * ⚠️ הת"ז כאן ידועה (בשונה מ-/api/request-draft) ולכן היא נכנסת לשורת
  * הנושא מראש — לפונה לא נותר מה למלא שם.
@@ -350,9 +350,7 @@ export const IGUD_MAILBOX = 'igud@chasamsofer.info'
 export function draftMailto(type: ReqType, idNumber: string, ctx: Ctx, subjectPrefix?: string): string {
   const subject = `${subjectPrefix ?? SUBJECT_PREFIX[type]} · ת.ז ${idNumber}`
   const body = buildDraftBodyCompact(type, ctx)
-  const p = new URLSearchParams({ view: 'cm', fs: '1', to: IGUD_MAILBOX, su: subject, body })
-  // 🔴 /u/0/ חובה — בלעדיו Gmail מחזיר "Bad Request · Error 400".
-  return `https://mail.google.com/mail/u/0/?${p.toString()}`
+  return `mailto:${IGUD_MAILBOX}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
 }
 
 /**
@@ -363,6 +361,26 @@ export function draftMailto(type: ReqType, idNumber: string, ctx: Ctx, subjectPr
  *
  * ⚠️ חותך במפריד משפט ולא באמצע מילה: hint קטוע מבלבל יותר מ-hint שאינו קיים.
  */
+/**
+ * ה-hint של שדה בחירה, בלי החלק שחוזר על ההוראה הכללית.
+ *
+ * ⚠️ "השאירו רק אחד, מחקו את השני" הופיע בשלושה שדות באותו טופס והוסיף
+ * מאות תווים ל-URL — בלי להוסיף מידע, כי אותה הוראה כבר נאמרת פעם אחת
+ * בראש הטופס.
+ *
+ * 🔴 מה שנשאר אחריו **אינו** נמחק: "רק אם ביקשתם בית החלמה", ותנאי
+ * רכישת הדירה בהלוואה, הם תוכן שהפונה חייב — ובלעדיו הוא מגיש שגוי.
+ */
+function optionHint(hint?: string): string {
+  if (!hint) return ''
+  const rest = String(hint)
+    .replace(/השאירו\s+רק\s+אח[דת]\s*,?\s*(ומחקו|מחקו)\s+את\s+ה(שני|שאר)\s*\.?/g, '')
+    .replace(/השאירו\s+אח[דת]\s*,?\s*(ומחקו|מחקו)\s+את\s+ה(שני|שאר)\s*\.?/g, '')
+    .replace(/^\s*[—\-–.,]\s*/, '')
+    .trim()
+  return rest ? ` (${rest})` : ''
+}
+
 function shortHint(hint?: string): string {
   if (!hint) return ''
   const cut = String(hint).split(/[.—]|⚠️/)[0].trim()
@@ -379,8 +397,13 @@ function shortHint(hint?: string): string {
  * בשם שאינו מדויק אינו מזוהה והבקשה נפסלת.
  */
 function shortLabel(label: string): string {
-  const cut = String(label ?? '').split(/[.—(+]/)[0].trim()
-  return cut || String(label ?? '').trim()
+  const s = String(label ?? '').trim()
+  // ⚠️ הנקודה אינה מפריד-משפט אמין בעברית: "צילום ת.ז. של שני ההורים"
+  // נחתך ל"צילום ת" והתווית איבדה את משמעותה. חותכים רק בנקודה שאחריה
+  // רווח ואות — כלומר תחילת משפט חדש ממש.
+  const cut = s.split(/[—(+]|\.\s+(?=[א-תA-Za-z])/)[0].trim()
+  // ⚠️ תווית קצרה מדי אינה קיצור אלא שיבוש — עדיף המקור המלא.
+  return cut.length >= 4 ? cut : s
 }
 
 /**
@@ -401,17 +424,32 @@ export function buildDraftBodyCompact(type: ReqType, ctx: Ctx): string {
 
   // 🔴 ההוראה הקריטית, בראש. ת"ז בשורת הנושא היא המזהה שהקליטה נשענת
   // עליו, ו"ספרת ביקורת" מצוין במפורש — ת"ז בת 8 ספרות נדחית באימות.
-  L.push('בשורת הנושא למעלה: הקלידו 9 ספרות תעודת זהות, כולל ספרת ביקורת.')
+  // ⚠️ ההוראה על שורת הנושא ראשונה: בלי ת"ז תקינה שם הבקשה אינה נקלטת
+  // כלל, גם אם כל השאר מולא נכון.
+  L.push('בנושא למעלה: מחקו 123456789 ואת הסוגריים, וכתבו במקומם את ת"ז שלכם — 9 ספרות כולל ספרת ביקורת. אין לשנות את שאר הנושא.')
+  L.push('')
+  // ⚠️ האזהרה בראש ולא בסוף: מי שקורא שני שדות ומתחיל למלא לא יגיע
+  // לשורה שבתחתית. וההשלכה מנוסחת במפורש ("תידחה") — "אנא מלאו בדיוק"
+  // אינו אומר לפונה מה קורה אם לא.
+  L.push('‼️ פרט חסר או לא תקין — הבקשה תידחה ‼️')
   L.push('')
   L.push('מלאו אחרי הנקודתיים. אל תשנו את שמות השדות.')
+  // ⚠️ ההוראה על שדות-הבחירה מרוכזת כאן ולא חוזרת ליד כל שדה: היא הופיעה
+  // שלוש פעמים באותו טופס והוסיפה מאות תווים ל-URL, בלי להוסיף מידע.
+  L.push('בשדות שמופרדים ב-/ — השאירו אחד בלבד ומחקו את השאר.')
   L.push('━━━━━━━━━━')
 
   for (const f of fieldsFor(type, ctx)) {
     // ⚠️ שדה עם אפשרויות מוצג עם כולן — הפונה מוחק את המיותר. זה הפורמט
     // שהפרסר מצפה לו.
+    //
+    // ⚠️ ב-hint של שדה בחירה מושמט רק החלק שחוזר על ההוראה הכללית
+    // ("השאירו אחד, מחקו את השאר"). מה שנשאר הוא תוכן אמיתי שאסור לאבד:
+    // "רק אם ביקשתם בית החלמה", תנאי רכישת הדירה בהלוואה.
+    const hint = f.options ? optionHint(f.hint) : shortHint(f.hint)
     L.push(f.options
-      ? `${f.label}${shortHint(f.hint)}: ${f.options.join(' / ')}`
-      : `${f.label}${shortHint(f.hint)}: `)
+      ? `${f.label}${hint}: ${f.options.join(' / ')}`
+      : `${f.label}${hint}: `)
   }
 
   const atts = attachmentsFor(type, ctx)
