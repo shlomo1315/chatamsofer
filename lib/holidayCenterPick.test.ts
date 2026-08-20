@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { evaluatePick, groupByRegion, REGIONS, type CenterRow, type PickState } from './holidayCenterPick'
+import { evaluatePick, groupByRegion, pickMessage, centerLabel, FINAL_WARNING, REGIONS, type CenterRow, type PickState } from './holidayCenterPick'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 🔴 הכללים כאן משותפים לטלפון ולממשק הדיגיטלי.
@@ -109,5 +109,65 @@ describe('groupByRegion — תפריט האזורים בשלוחה', () => {
 
   it('כל האזורים מוגדרים', () => {
     expect(Object.keys(REGIONS)).toEqual(['jerusalem', 'center', 'north', 'south'])
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 מי שכבר בחר מוקד ומתקשר שוב — רוצה לדעת *איזה*, לא לשמוע שנכשל.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('pickMessage — "כבר בחרתם" היא הודעת אישור', () => {
+  it('משבץ את שם המוקד בהודעת הנעילה', () => {
+    expect(pickMessage('locked', 'ירושלים · אזור נווה צבי'))
+      .toBe('כבר נרשמתם למוקד החלוקה בירושלים · אזור נווה צבי. לא ניתן לשנות את הבחירה')
+  })
+
+  it('⚠️ בלי שם מוקד — המשפט נשאר תקין ואינו מציג {center}', () => {
+    const msg = pickMessage('locked', null)
+    expect(msg).not.toContain('{center}')
+    expect(msg).toBe('כבר נרשמתם למוקד החלוקה. לא ניתן לשנות את הבחירה')
+  })
+
+  it('הודעות שאינן נעילה אינן מושפעות', () => {
+    expect(pickMessage('closed')).toBe('בחירת מוקד החלוקה אינה פתוחה כעת')
+    expect(pickMessage('full')).toBe('המוקד שנבחר מלא. יש לבחור מוקד אחר')
+  })
+})
+
+describe('centerLabel', () => {
+  it('עיר ושם שונים — מציג את שניהם', () => {
+    expect(centerLabel({ city: 'ירושלים', name: 'אזור נווה צבי' }))
+      .toBe('ירושלים · אזור נווה צבי')
+  })
+
+  it('⚠️ עיר ששמה זהה לשם המוקד אינה מוצגת פעמיים', () => {
+    // רוב הערים (חיפה, אלעד, ערד) הוזנו כך.
+    expect(centerLabel({ city: 'חיפה', name: 'חיפה' })).toBe('חיפה')
+  })
+
+  it('null מוחזר כ-null ולא כמחרוזת "null"', () => {
+    expect(centerLabel(null)).toBeNull()
+  })
+})
+
+describe('FINAL_WARNING — אזהרת הסופיות לפני האישור', () => {
+  it('🔴 שני הערוצים מזהירים שהבחירה סופית', () => {
+    // ⚠️ האזהרה חייבת להופיע *לפני* האישור. אחריו אין מה לעשות עם המידע,
+    // והמשפחה מגלה את הנעילה רק כשהיא כבר מנסה לשנות.
+    expect(FINAL_WARNING.phone).toContain('סופית')
+    expect(FINAL_WARNING.portal).toContain('סופית')
+  })
+
+  it('נוסח הטלפון כולל את ההוראה עצמה', () => {
+    // בשלוחה אין "כפתור" — האזהרה וההוראה נשמעות ברצף אחד.
+    expect(FINAL_WARNING.phone).toContain('הקישו 1')
+    expect(FINAL_WARNING.phone).toContain('הקישו 2')
+  })
+
+  it('⚠️ נוסח הטלפון קצר דיו כדי שלא יאבד את המאזין', () => {
+    expect(FINAL_WARNING.phone.length).toBeLessThan(160)
+  })
+
+  it('נוסח האתר מסביר את ההשלכה המעשית', () => {
+    expect(FINAL_WARNING.portal).toContain('השובר')
   })
 })

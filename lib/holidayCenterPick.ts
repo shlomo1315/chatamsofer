@@ -72,12 +72,64 @@ export function evaluatePick(state: PickState, targetCenterId?: string): PickRes
   return { ok: true }
 }
 
-/** הודעה למשתמש לכל סיבת דחייה — משותפת לשני הערוצים. */
+/**
+ * הודעה למשתמש לכל סיבה — משותפת לשני הערוצים.
+ *
+ * 🔴 `locked` אינה הודעת שגיאה אלא **אישור**: מי שמתקשר שוב רוצה לדעת
+ * איזה מוקד בחר, לא לשמוע שנכשל. הנוסח מוסר את המידע ורק אז מבהיר
+ * שאי אפשר לשנות.
+ *
+ * ⚠️ `{center}` מוחלף בשם המוקד — ראו pickMessage(). בלי השם ההודעה
+ * חסרת ערך בדיוק ברגע שבו המשפחה זקוקה לו.
+ */
 export const PICK_MESSAGES: Record<Exclude<PickResult, { ok: true }>['reason'], string> = {
   closed: 'בחירת מוקד החלוקה אינה פתוחה כעת',
-  locked: 'כבר נבחר מוקד ולא ניתן לשנותו. לבירורים יש לפנות למשרד',
+  locked: 'כבר נרשמתם למוקד החלוקה ב{center}. לא ניתן לשנות את הבחירה',
   full: 'המוקד שנבחר מלא. יש לבחור מוקד אחר',
   not_found: 'המוקד המבוקש אינו זמין בחלוקה זו',
+}
+
+/**
+ * ההודעה המוצגת בפועל, עם שם המוקד משובץ.
+ *
+ * ⚠️ נפילה-לאחור כשאין שם: "נרשמתם למוקד החלוקה" בלי שם עדיף על
+ * המחרוזת "{center}" שמושמעת למתקשר כפי שהיא.
+ */
+export function pickMessage(
+  reason: Exclude<PickResult, { ok: true }>['reason'],
+  centerLabel?: string | null,
+): string {
+  const raw = PICK_MESSAGES[reason]
+  if (!raw.includes('{center}')) return raw
+  return centerLabel
+    ? raw.replace('{center}', centerLabel)
+    : raw.replace(' ב{center}', '')
+}
+
+/**
+ * אזהרת הסופיות — מוצגת **לפני** האישור, בשני הערוצים.
+ *
+ * 🔴 חובה לפני האישור ולא אחריו: אחרי הלחיצה כבר אין מה לעשות עם
+ * המידע. משפחה שתגלה רק בדיעבד שהבחירה נעולה תתקשר למשרד.
+ *
+ * ⚠️ שני נוסחים ולא אחד — הטלפון נשמע והאתר נקרא. נוסח ארוך בשלוחה
+ * מאבד את המאזין לפני ההוראה עצמה; נוסח טלגרפי במסך נראה מרושל.
+ * שניהם ניתנים לעריכה בהגדרות (yemotHolidayMessages / הפורטל).
+ */
+export const FINAL_WARNING = {
+  /** שלוחה — קצר, וההוראה מיד אחריו. */
+  phone: 'שימו לב, בחירת המוקד היא סופית ואינה ניתנת לשינוי. ' +
+         'לאישור הרישום למוקד זה הקישו 1, לחזרה לרשימה הקישו 2',
+  /** אתר — אפשר לפרט את ההשלכה. */
+  portal: 'הבחירה סופית. לאחר האישור לא ניתן לשנות את המוקד, ' +
+          'והשובר יישלח למוקד שנבחר בלבד.',
+} as const
+
+/** תווית מוקד לתצוגה: "ירושלים · אזור נווה צבי". */
+export function centerLabel(c: Pick<CenterRow, 'city' | 'name'> | null | undefined): string | null {
+  if (!c) return null
+  // ⚠️ עיר ששמה זהה לשם המוקד (רוב הערים) לא תוצג פעמיים.
+  return c.city === c.name ? c.city : `${c.city} · ${c.name}`
 }
 
 export interface CityGroup {
