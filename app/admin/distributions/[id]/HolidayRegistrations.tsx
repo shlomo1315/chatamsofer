@@ -16,10 +16,7 @@ import AddRecipientDialog from './AddRecipientDialog'
 import Pagination from '@/components/ui/Pagination'
 import { useTablePagination } from '@/lib/useTablePagination'
 import CityBreakdown from './CityBreakdown'
-import CenterBreakdown from './CenterBreakdown'
-import LoadCardsPanel from './LoadCardsPanel'
-import SendVouchersPanel from './SendVouchersPanel'
-import TransactionsPanel from './TransactionsPanel'
+import HolidayToolsTabs from './HolidayToolsTabs'
 
 export interface RegistrationRow {
   id: string
@@ -432,22 +429,10 @@ export default function HolidayRegistrations({
         </div>
       </div>
 
-      {/* ── מוקדי החלוקה — מתג הבחירה ופילוח ── */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 className="mb-3 flex items-center gap-1.5 text-sm font-extrabold text-slate-800">
-          <MapPin size={15} className="text-indigo-600" /> מוקדי החלוקה
-        </h3>
-        <CenterBreakdown distributionId={distributionId} />
-      </div>
-
-      {/* ── טעינת הכרטיסים — פעולה כספית, ידנית בלבד ── */}
-      {canEdit && <LoadCardsPanel distributionId={distributionId} />}
-
-      {/* ── שוברי החלוקה — תצוגה מקדימה ושליחה מרוכזת ── */}
-      {canEdit && <SendVouchersPanel distributionId={distributionId} />}
-
-      {/* ── עסקאות ואיפוס ── */}
-      {canEdit && <TransactionsPanel distributionId={distributionId} />}
+      {/* ── כלי החלוקה — טאבים, באותו דפוס של מסך כרטיסי המזון ──
+          ⚡ רק הטאב הפעיל מרונדר, ולכן אף קריאה לשרת אינה יוצאת עד
+          שנכנסים אליו. זה מה שהאט את המסך כשכל הפאנלים היו זה מתחת לזה. */}
+      {canEdit && <HolidayToolsTabs distributionId={distributionId} />}
 
       {/* ── פילוח לפי עיר ── */}
       <CityBreakdown cities={cities} selected={city} onSelect={setCity} />

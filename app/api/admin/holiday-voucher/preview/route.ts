@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
-import { buildHolidayVoucher, HOLIDAY_VOUCHER_DEFAULTS } from '@/lib/holidayVoucher'
+import { buildHolidayVoucher, HOLIDAY_VOUCHER_DEFAULTS, type HolidayVoucherData } from '@/lib/holidayVoucher'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,12 +21,15 @@ export async function GET(request: NextRequest) {
 
   // ברירת מחדל — נתוני דוגמה, כדי שאפשר יהיה לראות את העיצוב גם לפני
   // שמישהו בחר מוקד.
-  let data = {
+  let data: HolidayVoucherData = {
     familyName: 'משפחת ישראלי',
     centerLabel: 'ירושלים · אזור נווה צבי',
     centerAddress: 'רחוב לדוגמה 12, ירושלים',
     centerHours: "יום ג' י״ב אלול · 10:00–14:00",
     centerPhone: '02-0000000',
+    distributionName: 'חלוקת חגי תשרי',
+    amount: 500,
+    phones: ['0501234567', '0527654321'],
     texts: HOLIDAY_VOUCHER_DEFAULTS,
   }
 

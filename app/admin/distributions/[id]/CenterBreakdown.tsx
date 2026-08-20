@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useCallback } from 'react'
 import { Loader2, MapPin, Check, X, Users } from 'lucide-react'
 import { REGIONS, type RegionKey } from '@/lib/holidayCenterPick'
 
@@ -43,12 +43,21 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
     }
   }, [distributionId])
 
-  const started = useRef(false)
-  useEffect(() => {
-    if (started.current) return
-    started.current = true
+  // 🔴 אינו נטען אוטומטית.
+  //
+  // ⚠️ שתי הקריאות כאן (מוקדים + ספירת נרשמים) רצו בכל פתיחת מסך,
+  // והספירה סורקת את כל שורות החלוקה — ~6,000. זה מה שהאט את המסך
+  // כולו, גם למי שרק רצה לראות את טבלת הנרשמים.
+  //
+  // שאר הפאנלים (טעינה, שוברים, עסקאות) כבר ממתינים ללחיצה.
+  // ⚠️ state ולא ref: הדגל נקרא ברינדור (כדי להחליט מה להציג), וקריאת
+  // ref בזמן רינדור אסורה — react-hooks/refs מפיל עליה את הבנייה.
+  const [opened, setOpened] = useState(false)
+  function open() {
+    if (opened) return
+    setOpened(true)
     void load()
-  }, [load])
+  }
 
   async function toggleCenter(id: string, open: boolean) {
     setBusy(id); setErr('')
@@ -78,6 +87,16 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
       if (!res.ok) { setErr((await res.json()).error ?? 'העדכון נכשל'); return }
       setCentersOpen(next)
     } catch { setErr('שגיאת רשת') } finally { setBusy(null) }
+  }
+
+  // טרם נלחץ — כפתור בלבד, בלי שום קריאה לשרת.
+  if (centers === null && !opened) {
+    return (
+      <button type="button" onClick={open}
+        className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-300 bg-white px-3 py-2 text-xs font-bold text-indigo-800 hover:bg-indigo-50">
+        <MapPin size={13} /> הצג מוקדים ופילוח
+      </button>
+    )
   }
 
   if (centers === null) {

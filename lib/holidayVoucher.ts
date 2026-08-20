@@ -31,11 +31,17 @@ export const PARCHMENT = rgb(0.996, 0.988, 0.976)
 
 export interface HolidayVoucherData {
   familyName: string
+  /** שם החלוקה — מוצג בראש השובר ("חלוקת חגי תשרי תשפ״ז"). */
+  distributionName?: string | null
   /** המוקד שנבחר — "ירושלים · אזור נווה צבי". */
   centerLabel: string
   centerAddress?: string | null
   centerHours?: string | null
   centerPhone?: string | null
+  /** הסכום שנטען לכרטיס — מוצג בהדגשה. */
+  amount?: number | null
+  /** ⚠️ רק מהמספרים האלה ניתן להפעיל את הכרטיס — כמו בשובר היולדות. */
+  phones?: (string | null | undefined)[]
   /** מלל נערך מההגדרות. */
   texts: {
     title: string
@@ -116,6 +122,12 @@ export async function buildHolidayVoucher(data: HolidayVoucherData): Promise<Uin
 
   let y = drawHolidayHeader(c, data.texts.title)
 
+  // שם החלוקה — מזהה איזו חלוקה זו, כשיש כמה בשנה.
+  if (data.distributionName) {
+    centerText(c, data.distributionName, W / 2, y, 12, COPPER)
+    y -= 20
+  }
+
   // שם המשפחה — הפרט הראשון שמחפשים במוקד.
   centerText(c, data.familyName, W / 2, y, 20, EMERALD)
   y -= 30
@@ -130,17 +142,63 @@ export async function buildHolidayVoucher(data: HolidayVoucherData): Promise<Uin
   if (data.centerPhone) centerLines.push(`טלפון: ${data.centerPhone}`)
   y = titledBox(c, MX, y, W - MX * 2, 'מוקד החלוקה שלכם', centerLines)
 
-  y = titledBox(c, MX, y, W - MX * 2, 'הוראות', data.texts.instructions.map((t, i) => `${i + 1}. ${t}`))
+  // ⚠️ המספור בתו נקודה-אמצעית ולא "1." — ספרה+נקודה בתחילת שורה עברית
+  // נדחפת לקצה השמאלי ברנדרר, והתוצאה היא ".1 יש להדפיס" במקום "1. יש".
+  y = titledBox(c, MX, y, W - MX * 2, 'הוראות', data.texts.instructions.map(t => `• ${t}`))
+
+  // ── הסכום שנטען ──
+  if (data.amount != null) {
+    const amtH = 46
+    c.page.drawRectangle({
+      x: MX, y: y - amtH, width: W - MX * 2, height: amtH,
+      color: COPPER_SOFT, borderColor: COPPER, borderWidth: 1.2,
+    })
+    centerText(c, `סכום שנטען לכרטיס: ${data.amount.toLocaleString('he-IL')} ₪`,
+      W / 2, y - 29, 14, EMERALD)
+    y -= amtH + 14
+  }
+
+  // ── הפעלת הכרטיס — אותן הוראות כמו בשובר היולדות ──
+  //
+  // ⚠️ המספרים מצוירים לבדם ב-drawText ולא דרך rightText: ההקשר העברי
+  // הופך ספרות, וטלפון היה מוצג הפוך ("5231313-20").
+  {
+    const lines = [
+      'לאחר קבלת הכרטיס, חובה להפעילו בהתקשרות למוקד:',
+      'להפעלה חייגו: 02-3131325 שלוחה 1',
+      'הזיהוי אוטומטי לפי הטלפון שבמערכת — ההפעלה רק מהמספרים:',
+    ]
+    const uniq = [...new Set((data.phones ?? []).map(p => String(p ?? '').trim()).filter(Boolean))]
+    const titleH = 22
+    const lineH = 14
+    const boxH = titleH + (lines.length + (uniq.length ? 1 : 0)) * lineH + 14
+
+    c.page.drawRectangle({
+      x: MX, y: y - boxH, width: W - MX * 2, height: boxH,
+      color: EMERALD_SOFT, borderColor: EMERALD, borderWidth: 1.2,
+    })
+    c.page.drawRectangle({ x: MX, y: y - titleH, width: W - MX * 2, height: titleH, color: EMERALD })
+    rightText(c, 'הפעלת הכרטיס — חובה לפני השימוש!', W - MX - 14, y - titleH + 7, 11, rgb(1, 1, 1))
+
+    let ay = y - titleH - 14
+    for (const ln of lines) { rightText(c, ln, W - MX - 14, ay, 10, INK); ay -= lineH }
+    if (uniq.length) {
+      const joined = [...uniq].reverse().join('     ')
+      const pw = c.font.widthOfTextAtSize(joined, 11)
+      c.page.drawText(joined, { x: W / 2 - pw / 2, y: ay, size: 11, font: c.font, color: EMERALD })
+    }
+    y -= boxH + 14
+  }
 
   // ⚠️ אזהרת הייחודיות בצבע הפלטה ולא באדום: אדום שמור לשגיאות, וכאן
   // מדובר בהנחיה ולא בתקלה.
-  const warnH = 40
+  const warnH = 34
   c.page.drawRectangle({
     x: MX, y: y - warnH, width: W - MX * 2, height: warnH,
-    color: EMERALD_SOFT, borderColor: EMERALD, borderWidth: 1,
+    color: rgb(1, 1, 1), borderColor: COPPER, borderWidth: 1,
   })
-  centerText(c, 'השובר אישי ומיועד למוקד הרשום בלבד', W / 2, y - 25, 11.5, EMERALD)
-  y -= warnH + 20
+  centerText(c, 'השובר אישי ומיועד למוקד הרשום בלבד', W / 2, y - 22, 11, EMERALD)
+  y -= warnH + 16
 
   centerText(c, data.texts.footer, W / 2, y, 11, SUB)
   y -= 20

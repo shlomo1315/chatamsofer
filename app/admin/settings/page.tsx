@@ -39,6 +39,7 @@ import GovDataSettings from './GovDataSettings'
 import LegacyMailSettings from './LegacyMailSettings'
 import MailboxDisplaySettings from './MailboxDisplaySettings'
 import HolidayCentersManager from './HolidayCentersManager'
+import HolidayVoucherSettings from './HolidayVoucherSettings'
 import AutoReplySettings from './AutoReplySettings'
 import CardStockAlertSettings from './CardStockAlertSettings'
 import CardReminderSettings from './CardReminderSettings'
@@ -229,6 +230,11 @@ export default async function SettingsPage() {
 
         {/* ⚠️ מוקדי החגים נפרדים לחלוטין מבתי ההחלמה של היולדות — מאגר
             גלובלי משלהם, שנשמר מחג לחג. */}
+        {/* מלל השובר — כללי לכל סוגי החלוקות */}
+        <Collapsible title="שובר חלוקה — מלל ועיצוב" icon={<FileText size={16} className="text-teal-500" />}>
+          <HolidayVoucherSettings />
+        </Collapsible>
+
         <Collapsible title="מוקדי חלוקה — חגים" icon={<MapPin size={16} className="text-teal-500" />}>
           <HolidayCentersManager />
         </Collapsible>
