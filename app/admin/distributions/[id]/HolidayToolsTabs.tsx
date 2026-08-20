@@ -1,10 +1,11 @@
 'use client'
 import { useState } from 'react'
-import { MapPin, Wallet, FileText, Receipt } from 'lucide-react'
+import { MapPin, Wallet, FileText, Receipt, Phone } from 'lucide-react'
 import CenterBreakdown from './CenterBreakdown'
 import LoadCardsPanel from './LoadCardsPanel'
 import SendVouchersPanel from './SendVouchersPanel'
 import TransactionsPanel from './TransactionsPanel'
+import IvrSimulator from './IvrSimulator'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // כלי החלוקה — טאבים, באותו דפוס של מסך כרטיסי המזון (CardsTabs).
@@ -16,13 +17,14 @@ import TransactionsPanel from './TransactionsPanel'
 // קריאה לשרת אינה יוצאת עד שמישהו נכנס אליו.
 // ─────────────────────────────────────────────────────────────────────────────
 
-type TabId = 'centers' | 'load' | 'vouchers' | 'tx'
+type TabId = 'centers' | 'load' | 'vouchers' | 'tx' | 'ivr'
 
 const TABS: { id: TabId; label: string; icon: typeof MapPin }[] = [
   { id: 'centers', label: 'מוקדי חלוקה', icon: MapPin },
   { id: 'load', label: 'טעינת כרטיסים', icon: Wallet },
   { id: 'vouchers', label: 'שוברים', icon: FileText },
   { id: 'tx', label: 'עסקאות ואיפוס', icon: Receipt },
+  { id: 'ivr', label: 'בדיקת שלוחה', icon: Phone },
 ]
 
 export default function HolidayToolsTabs({ distributionId }: { distributionId: string }) {
@@ -52,6 +54,7 @@ export default function HolidayToolsTabs({ distributionId }: { distributionId: s
       {tab === 'load' && <LoadCardsPanel distributionId={distributionId} />}
       {tab === 'vouchers' && <SendVouchersPanel distributionId={distributionId} />}
       {tab === 'tx' && <TransactionsPanel distributionId={distributionId} />}
+      {tab === 'ivr' && <IvrSimulator distributionId={distributionId} />}
     </div>
   )
 }
