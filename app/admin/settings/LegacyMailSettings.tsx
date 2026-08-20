@@ -23,6 +23,18 @@ interface Mailbox {
   importTargetEmail?: string | null
 }
 
+interface GmailLabel { id: string; name: string }
+
+/** מצב הבורר של "שייך תווית". null = סגור. */
+interface LabelPicker {
+  box: Mailbox
+  target: string
+  labels: GmailLabel[]
+  /** '' = יצירת תווית חדשה (השם נלקח מ-newName) */
+  selectedId: string
+  newName: string
+}
+
 interface SyncRun {
   id: string
   started_at: string
@@ -54,6 +66,9 @@ export default function LegacyMailSettings() {
   const [status, setStatus] = useState<Status | null>(null)
   const [loading, setLoading] = useState(true)
   const [syncingId, setSyncingId] = useState<string | null>(null)
+  /** בורר התוויות של "שייך תווית". null = סגור. */
+  const [picker, setPicker] = useState<LabelPicker | null>(null)
+  const [labelBusy, setLabelBusy] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -92,22 +107,74 @@ export default function LegacyMailSettings() {
     }
   }
 
+  // ── "שייך תווית" — פותח בורר של תוויות Gmail ─────────────────────────
+  //
+  // 🔴 קודם הכפתור כתב תווית *פנימית* ל-app_settings ולא נגע ב-Gmail כלל.
+  // מהמסך זה נראה כאילו לא קרה כלום: המנהל לחץ, פתח את התיבה ב-Gmail,
+  // ולא מצא שם שום תווית.
+  //
+  // עכשיו הוא שולף את התוויות הקיימות בתיבת היעד ונותן לבחור אחת מהן
+  // או להקליד שם חדש.
   async function applyLabel(box: Mailbox) {
     if (!box.id) return
     setSyncingId(box.id)
     try {
-      const res = await fetch('/api/admin/legacy-mail/apply-label', {
+      const res = await fetch('/api/admin/legacy-mail/gmail-labels', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ accountId: box.id }),
       })
       const d = await res.json()
-      if (!res.ok) throw new Error(d.error || 'שגיאה בשיוך התווית')
-      toast.success(d.labeled > 0 ? `${d.labeled} מיילים סומנו בתווית` : 'כל המיילים כבר מסומנים')
+      if (!res.ok) throw new Error(d.error || 'שליפת התוויות נכשלה')
+      setPicker({
+        box,
+        target: d.target,
+        labels: d.labels ?? [],
+        selectedId: '',
+        // ⚠️ ברירת המחדל היא שם התיבה — זה מה שהמנהל מצפה לראות,
+        // ובלעדיה הוא היה מקליד אותו ידנית בכל פעם.
+        newName: box.label,
+      })
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'שגיאה')
     } finally {
       setSyncingId(null)
+    }
+  }
+
+  /** מאשר את הבחירה בבורר: יוצר/מאתר את התווית ומדביק אותה על ההודעות. */
+  async function confirmLabel() {
+    if (!picker) return
+    const { box, selectedId, newName } = picker
+    if (!selectedId && !newName.trim()) {
+      toast.error('בחרו תווית קיימת או הקלידו שם לתווית חדשה')
+      return
+    }
+    setLabelBusy(true)
+    try {
+      const res = await fetch('/api/admin/legacy-mail/assign-gmail-label', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accountId: box.id,
+          labelId: selectedId || undefined,
+          labelName: selectedId ? undefined : newName.trim(),
+        }),
+      })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'שיוך התווית נכשל')
+      // ⚠️ 0 הודעות אינו כישלון — התווית נוצרה ותחול על הייבוא הבא.
+      toast.success(
+        d.tagged > 0
+          ? `${d.tagged} הודעות תויגו ב-"${d.labelName}" בתיבה ${d.target}`
+          : `התווית "${d.labelName}" מוכנה בתיבה ${d.target} — אין עדיין הודעות מיובאות לתייג`,
+      )
+      setPicker(null)
+      void load()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'שגיאה')
+    } finally {
+      setLabelBusy(false)
     }
   }
 
@@ -473,6 +540,73 @@ export default function LegacyMailSettings() {
         הסנכרון מושך רק מיילים חדשים שטרם יובאו. הסנכרון הראשון עשוי לקחת זמן רב (כל ההיסטוריה).
         המיילים משויכים אוטומטית ללקוח לפי ת״ז בנושא או לפי כתובת השולח.
       </p>
+
+      {/* ── בורר התוויות של "שייך תווית" ────────────────────────────────────
+          המנהל בוחר תווית קיימת מתיבת היעד, או מקליד שם לתווית חדשה.
+          התווית נוצרת ומודבקת ב-Gmail עצמו — לא רק בממשק שלנו. */}
+      {picker && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => !labelBusy && setPicker(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white shadow-2xl p-5 flex flex-col gap-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <div>
+              <h3 className="text-base font-black text-slate-900">שיוך תווית ב-Gmail</h3>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                התיבה <strong className="text-slate-700">{picker.box.label}</strong> — התווית תיווצר
+                בתיבת היעד <strong className="text-slate-700 font-mono">{picker.target}</strong>.
+              </p>
+            </div>
+
+            {/* תווית קיימת */}
+            {picker.labels.length > 0 && (
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-bold text-slate-600">בחרו תווית קיימת</span>
+                <select
+                  value={picker.selectedId}
+                  onChange={e => setPicker({ ...picker, selectedId: e.target.value })}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm bg-white"
+                >
+                  <option value="">— תווית חדשה —</option>
+                  {picker.labels.map(l => (
+                    <option key={l.id} value={l.id}>{l.name}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            {/* שם לתווית חדשה — מוצג רק כשלא נבחרה קיימת */}
+            {!picker.selectedId && (
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-bold text-slate-600">שם התווית החדשה</span>
+                <input
+                  type="text"
+                  value={picker.newName}
+                  onChange={e => setPicker({ ...picker, newName: e.target.value })}
+                  placeholder="לדוגמה: גמ״ח ישן ישן"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                />
+                <span className="text-[11px] text-slate-400">
+                  אם כבר קיימת תווית בשם הזה — היא תשמש כמות שהיא ולא תיווצר כפילות.
+                </span>
+              </label>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <Button variant="ghost" onClick={() => setPicker(null)} disabled={labelBusy}>
+                ביטול
+              </Button>
+              <Button onClick={confirmLabel} disabled={labelBusy}>
+                {labelBusy && <Loader2 size={15} className="animate-spin" />}
+                {labelBusy ? 'משייך…' : 'שייך תווית'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
