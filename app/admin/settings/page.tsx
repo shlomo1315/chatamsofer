@@ -22,8 +22,7 @@ import LoansPortalSettings from './LoansPortalSettings'
 import DistributionsShareSettings from './DistributionsShareSettings'
 import ElevenLabsStudio from './ElevenLabsStudio'
 import YemotCallLog from './YemotCallLog'
-import YemotMaternitySettings from './YemotMaternitySettings'
-import YemotHolidaySettings from './YemotHolidaySettings'
+import PhoneSystemPanel from './PhoneSystemPanel'
 import RegistrationCallSettings from './RegistrationCallSettings'
 import BackupSettings from './BackupSettings'
 import DailyDigestSettings from './DailyDigestSettings'
@@ -259,14 +258,12 @@ export default async function SettingsPage() {
           <DistributionsShareSettings />
         </Collapsible>
 
-        {/* Yemot maternity messages (editable text / human recordings) */}
-        <Collapsible title="הקלטות שלוחת יולדות (ימות)" icon={<Phone size={16} className="text-teal-500" />}>
-          <YemotMaternitySettings />
-        </Collapsible>
-
-        {/* הודעות שלוחת חלוקות החגים — הערוץ המרכזי לרישום לחלוקה */}
-        <Collapsible title="הקלטות שלוחת חלוקות חגים (ימות)" icon={<Phone size={16} className="text-teal-500" />}>
-          <YemotHolidaySettings />
+        {/* ── המערכת הטלפונית — מרכז אחד ──────────────────────────────────
+            🔴 קודם היו כאן שני מסכי הקלטות נפרדים, בלי שום מקום שמראה
+            אילו שלוחות קיימות ומה כל אחת עושה. הפאנל מאחד את שניהם עם
+            עץ הזרימה, כתובות ה-webhook ומשתני הסביבה. */}
+        <Collapsible title="מערכת טלפונית (ימות המשיח)" icon={<Phone size={16} className="text-teal-500" />}>
+          <PhoneSystemPanel />
         </Collapsible>
 
         {/* אולפן ElevenLabs — יצירת קול מטקסט חופשי, בלי שיוך */}
