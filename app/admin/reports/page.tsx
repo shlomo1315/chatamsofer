@@ -3,6 +3,7 @@ import PageHeader from '@/components/ui/PageHeader'
 import { unstable_cache } from 'next/cache'
 import ReportsCharts from './ReportsChartsLazy'
 import ReportBuilder from './ReportBuilder'
+import BeneficiaryReport from './BeneficiaryReport'
 import StaffActivityReport from './StaffActivityReport'
 import { requireStaff, getServiceClient } from '@/lib/apiAuth'
 
@@ -72,6 +73,10 @@ export default async function ReportsPage() {
       {isAdmin && <StaffActivityReport />}
 
       {/* בונה דוחות יולדות — סינון לפי תאריכים/סכומים/בתי החלמה/כרטיסים + הורדה */}
+      {/* דוח הצאצאים — סינון משולב והנפקה לאקסל. ReportBuilder שמתחתיו
+          הוא דוח היולדות ואינו קשור. */}
+      <BeneficiaryReport />
+
       <ReportBuilder />
 
       {/* KPI cards */}
