@@ -6,6 +6,8 @@ import ReportBuilder from './ReportBuilder'
 import BeneficiaryReport from './BeneficiaryReport'
 import StaffActivityReport from './StaffActivityReport'
 import { requireStaff, getServiceClient } from '@/lib/apiAuth'
+import Tabs from '@/components/ui/Tabs'
+import { FileSpreadsheet, BarChart3, Baby, UserCog } from 'lucide-react'
 
 // נתוני הסיכום (ספירות/סכומים) הם ארגון-רחבים ואינם דורשים דיוק של שנייה — ממטמנים ל-5 דק'
 // כדי לא לסרוק את הטבלאות בכל טעינת עמוד. משתמשים ב-service client (בלי cookies) כדי לאפשר מטמון.
@@ -65,20 +67,11 @@ export default async function ReportsPage() {
   const fmtCur = (n: number) =>
     `${new Intl.NumberFormat('he-IL', { maximumFractionDigits: 0 }).format(n)} ₪`
 
-  return (
+  // ⚠️ הדף חולק ללשוניות: ארבעה דוחות שונים לגמרי נערמו זה מתחת לזה,
+  // והמשתמש היה גולל דרך דוח היולדות כדי להגיע לגרפים. הלשונית הפעילה
+  // נשמרת ב-URL (?tab=) כדי שחזרה אחורה תחזיר לאותו מקום.
+  const overviewTab = (
     <div className="flex flex-col gap-6">
-      <PageHeader title="דוחות וניתוח נתונים" subtitle="סטטיסטיקות, מגמות ובונה דוחות להורדה" />
-
-      {/* דוח מזכירים — מי טיפל באילו בקשות/מיילים ומתי (למנהל בלבד) */}
-      {isAdmin && <StaffActivityReport />}
-
-      {/* בונה דוחות יולדות — סינון לפי תאריכים/סכומים/בתי החלמה/כרטיסים + הורדה */}
-      {/* דוח הצאצאים — סינון משולב והנפקה לאקסל. ReportBuilder שמתחתיו
-          הוא דוח היולדות ואינו קשור. */}
-      <BeneficiaryReport />
-
-      <ReportBuilder />
-
       {/* KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
@@ -157,6 +150,45 @@ export default async function ReportsPage() {
           </div>
         </Card>
       </div>
+    </div>
+  )
+
+  const tabs = [
+    {
+      key: 'overview',
+      label: 'סקירה כללית',
+      accent: 'indigo' as const,
+      icon: <BarChart3 size={15} />,
+      content: overviewTab,
+    },
+    {
+      key: 'beneficiaries',
+      label: 'דוח צאצאים',
+      accent: 'emerald' as const,
+      icon: <FileSpreadsheet size={15} />,
+      content: <BeneficiaryReport />,
+    },
+    {
+      key: 'maternity',
+      label: 'דוח יולדות',
+      accent: 'rose' as const,
+      icon: <Baby size={15} />,
+      content: <ReportBuilder />,
+    },
+    // דוח המזכירים חושף מי טיפל במה — למנהל בלבד.
+    ...(isAdmin ? [{
+      key: 'staff',
+      label: 'פעילות מזכירים',
+      accent: 'violet' as const,
+      icon: <UserCog size={15} />,
+      content: <StaffActivityReport />,
+    }] : []),
+  ]
+
+  return (
+    <div className="flex flex-col gap-5">
+      <PageHeader title="דוחות וניתוח נתונים" subtitle="סטטיסטיקות, מגמות ובונה דוחות להורדה" />
+      <Tabs tabs={tabs} />
     </div>
   )
 }

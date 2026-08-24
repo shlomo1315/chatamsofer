@@ -47,11 +47,16 @@ async function loadRows(db: NonNullable<ReturnType<typeof getServiceClient>>) {
   // 🔴 fetchAllRows ולא select רגיל: 7,108 משפחות. .limit() *אינו* עוקף
   // את תקרת 1,000 השקטה — הדוח היה מחזיר 1,000 שורות, נראה תקין
   // לחלוטין, וכל מספרי הסיכום היו שגויים.
+  // 🔴 שם המפתח הזר מצוין במפורש: על העמודה lineage_node_id קיימים
+  // *שני* מפתחות זרים כפולים לאותה טבלה — beneficiaries_lineage_node_id_fkey
+  // ו-fk_lineage_node (כפילות היסטורית). בלי ציון מפורש PostgREST מחזיר
+  // "more than one relationship was found" והדוח יוצא ריק לגמרי.
+  //
   // ⚠️ ה-select במחרוזת אחת ולא בשרשור: פיצול ל-'a' + 'b' מונע
   // מ-TypeScript לגזור את צורת השורה, וה-builder אינו מתאים ל-PageResult.
   return fetchAllRows<Raw>((from, to) => db
     .from('beneficiaries')
-    .select('id, family_name, full_name, id_number, city, address, phone, email, community_affiliation, birth_date, children_count, marital_status, eligibility_status, lineage:lineage_nodes(generation)')
+    .select('id, family_name, full_name, id_number, city, address, phone, email, community_affiliation, birth_date, children_count, marital_status, eligibility_status, lineage:lineage_nodes!beneficiaries_lineage_node_id_fkey(generation)')
     .range(from, to))
 }
 
