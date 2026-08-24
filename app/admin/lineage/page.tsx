@@ -450,7 +450,7 @@ function RelationPicker({ value, onChange, required }: { value: 'son' | 'son_in_
 
 // ─── Tree view ───
 
-function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearFilters, statusFilter, generationFilter, mergeMode, mergeSel, dupIds, onToggleMerge, dupFilter, onMergeGroup, onCleanChildren, onReviewToggle, reviewExcluded, onFocusNode, focusId, anchor, scanIds, locateIds, linked, fullMode = false }: { nodes: LineageNode[]; onRefresh: () => void; onStatusChange: (id: string, status: 'verified' | 'pending' | 'rejected') => void; onRelationChange: (id: string, relation: 'son' | 'son_in_law' | null) => void; onClearFilters: () => void; statusFilter: StatusFilter; generationFilter: number | null; mergeMode: boolean; mergeSel: Set<string>; dupIds: Set<string>; onToggleMerge: (id: string) => void; dupFilter: boolean; onMergeGroup: (id: string) => void; onCleanChildren: (id: string) => void; onReviewToggle?: (id: string) => boolean; reviewExcluded?: Set<string>; onFocusNode: (id: string | null) => void; focusId: string | null; anchor: { id: string; n: number } | null; scanIds: Set<string>; locateIds: Set<string>; linked: Record<string, { id: string; name: string }[]>; fullMode?: boolean }) {
+function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearFilters, statusFilter, onlyMatching = false, generationFilter, mergeMode, mergeSel, dupIds, onToggleMerge, dupFilter, onMergeGroup, onCleanChildren, onReviewToggle, reviewExcluded, onFocusNode, focusId, anchor, scanIds, locateIds, linked, fullMode = false }: { nodes: LineageNode[]; onRefresh: () => void; onStatusChange: (id: string, status: 'verified' | 'pending' | 'rejected') => void; onRelationChange: (id: string, relation: 'son' | 'son_in_law' | null) => void; onClearFilters: () => void; statusFilter: StatusFilter; onlyMatching?: boolean; generationFilter: number | null; mergeMode: boolean; mergeSel: Set<string>; dupIds: Set<string>; onToggleMerge: (id: string) => void; dupFilter: boolean; onMergeGroup: (id: string) => void; onCleanChildren: (id: string) => void; onReviewToggle?: (id: string) => boolean; reviewExcluded?: Set<string>; onFocusNode: (id: string | null) => void; focusId: string | null; anchor: { id: string; n: number } | null; scanIds: Set<string>; locateIds: Set<string>; linked: Record<string, { id: string; name: string }[]>; fullMode?: boolean }) {
   const toast = useToast()
   const router = useRouter()
   const canAdd = useCan('lineage', 'add')
@@ -544,10 +544,21 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
     () => virtualizeOff ? positions : positions.filter(p => inView(p.x, p.y)),
     [positions, inView, virtualizeOff],
   )
-  const visibleEdges = useMemo(
-    () => virtualizeOff ? edges : edges.filter(e => inView(e.from.x, e.from.y) || inView(e.to.x, e.to.y)),
-    [edges, inView, virtualizeOff],
-  )
+  // 🔴 במצב "הצג רק", קו שמוביל לצומת מוסתר חייב להיעלם גם הוא — אחרת
+  // נשארים קווים שמסתיימים באוויר, והעץ נראה שבור.
+  const hiddenByOnly = useCallback((n: { status?: string | null; generation: number }) => {
+    if (!onlyMatching) return false
+    const st = n.status ?? 'verified'
+    if (statusFilter !== null && st !== statusFilter) return true
+    if (generationFilter !== null && n.generation !== generationFilter) return true
+    return false
+  }, [onlyMatching, statusFilter, generationFilter])
+
+  const visibleEdges = useMemo(() => {
+    const base = virtualizeOff ? edges : edges.filter(e => inView(e.from.x, e.from.y) || inView(e.to.x, e.to.y))
+    if (!onlyMatching) return base
+    return base.filter(e => !hiddenByOnly(e.from.node) && !hiddenByOnly(e.to.node))
+  }, [edges, inView, virtualizeOff, onlyMatching, hiddenByOnly])
 
   useEffect(() => {
     const el = canvasRef.current
@@ -982,6 +993,14 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
             const isExcluded = !!reviewExcluded?.has(pos.node.id)
             // ⚠️ כשמאתרים קבוצה מהפאנל, כל השאר מעומעם — אחרת שני צמתים
             // מודגשים בתוך עץ של 500 פשוט נבלעים ואי אפשר למצוא אותם.
+            // 🔴 "הצג רק": מדלגים לגמרי במקום לעמעם. עם 10,975 ממתינים
+            // מול 348 מאומתים, עמעום משאיר את המסך מלא ברעש.
+            //
+            // ⚠️ דרך hiddenByOnly ולא תנאי מקומי: הקווים משתמשים באותה
+            // פונקציה, ושתי הכרעות נפרדות היו נסחפות — צומת שנעלם עם קו
+            // שנשאר, או להפך.
+            if (hiddenByOnly(pos.node)) return null
+
             const isDimmed = mergeMode
               ? false
               : locateIds.size > 0
@@ -1528,13 +1547,14 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
 
 // ─── Table view ───
 
-function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, generationFilter, mergeMode, mergeSel, dupIds, onToggleMerge, dupFilter, onMergeGroup }: {
+function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, onlyMatching = false, generationFilter, mergeMode, mergeSel, dupIds, onToggleMerge, dupFilter, onMergeGroup }: {
   nodes: LineageNode[]
   onRefresh: () => void
   onAdd: (parentId: string | null, parentName: string) => void
   onEdit: (node: LineageNode) => void
   onDelete: (node: LineageNode) => void
   statusFilter: StatusFilter
+  onlyMatching?: boolean
   generationFilter: number | null
   mergeMode: boolean
   mergeSel: Set<string>
@@ -1571,6 +1591,8 @@ function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, ge
   function renderRows(node: TreeNode, depth: number): React.ReactNode {
     const nodeStatus = node.status ?? 'verified'
     const isDup = dupIds.has(node.id)
+    // ראו ההערה ב-TreeView — הסתרה במקום עמעום.
+    if (onlyMatching && statusFilter !== null && nodeStatus !== statusFilter) return null
     const isDimmed = (statusFilter !== null && nodeStatus !== statusFilter)
       || (generationFilter !== null && node.generation !== generationFilter)
       || (dupFilter && !isDup)
@@ -1656,6 +1678,10 @@ export default function LineagePage() {
   const [saveErr, setSaveErr] = useState('')
   const [formParentId, setFormParentId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(null)
+  // 🔴 "הצג רק" — מסתיר את מי שאינו תואם במקום לעמעם אותו.
+  // עם 11,331 צמתים שמהם רק 348 מאומתים, עמעום משאיר את המסך מלא
+  // ברעש: המאומתים בולטים אך טובעים בין 10,975 מעומעמים.
+  const [onlyMatching, setOnlyMatching] = useState(false)
   const [generationFilter, setGenerationFilter] = useState<number | null>(null)
   // ── מצב מיזוג כפולים ──
   const [mergeMode, setMergeMode] = useState(false)
@@ -2256,6 +2282,7 @@ export default function LineagePage() {
             onRelationChange={(id, relation) => setNodes(prev => prev.map(n => n.id === id ? { ...n, relation } : n))}
             onClearFilters={() => { setStatusFilter(null); setGenerationFilter(null); setDupFilter(false) }}
             statusFilter={statusFilter} generationFilter={generationFilter}
+            onlyMatching={onlyMatching}
             mergeMode={mergeMode} mergeSel={mergeSel} dupIds={dupIds} onToggleMerge={toggleMerge}
             dupFilter={dupFilter} onMergeGroup={quickMergeGroup} onCleanChildren={setCleanParentId}
             onFocusNode={(id) => { setFocusId(id); if (id) setAnchor(a => ({ id, n: (a?.n ?? 0) + 1 })) }}
@@ -2291,6 +2318,19 @@ export default function LineagePage() {
                 style={{ background: statusFilter === 'verified' ? '#166534' : '#DCFCE7', color: statusFilter === 'verified' ? '#fff' : '#166534', border: `2px solid ${statusFilter === 'verified' ? '#166534' : 'transparent'}`, cursor: 'pointer' }}>
                 ✓ {verifiedCount} מאומתים
               </button>
+
+              {/* 🔴 מתג "הצג רק" — מסתיר את מי שאינו תואם במקום לעמעם.
+                  עם 11,331 צמתים שמהם 348 מאומתים, עמעום השאיר את המסך
+                  מלא ברעש והמאומתים טבעו בין 10,975 מעומעמים.
+                  ⚠️ מוצג רק כשיש סינון פעיל — בלי סינון הוא היה מרוקן את העץ. */}
+              {(statusFilter !== null || generationFilter !== null) && (
+                <button onClick={() => setOnlyMatching(v => !v)}
+                  title={onlyMatching ? 'מציג רק את התואמים — לחצו להצגת הכול' : 'מציג את הכול, התואמים מודגשים'}
+                  className="text-xs px-2.5 py-1 rounded-full font-bold transition-all"
+                  style={{ background: onlyMatching ? '#4338CA' : '#EEF2FF', color: onlyMatching ? '#fff' : '#4338CA', border: `2px solid ${onlyMatching ? '#4338CA' : 'transparent'}`, cursor: 'pointer' }}>
+                  {onlyMatching ? '👁 מציג רק תואמים' : '👁 הצג רק תואמים'}
+                </button>
+              )}
               <button onClick={() => { setGenerationFilter(null); setStatusFilter(f => f === 'pending' ? null : 'pending') }}
                 className="text-xs px-2.5 py-1 rounded-full font-bold transition-all"
                 style={{ background: statusFilter === 'pending' ? '#92400E' : '#FEF3C7', color: statusFilter === 'pending' ? '#fff' : '#92400E', border: `2px solid ${statusFilter === 'pending' ? '#92400E' : 'transparent'}`, cursor: 'pointer' }}>
@@ -2653,6 +2693,7 @@ export default function LineagePage() {
           nodes={visibleNodes}
           onRefresh={softRefresh}
           statusFilter={statusFilter}
+          onlyMatching={onlyMatching}
           generationFilter={generationFilter}
           mergeMode={mergeMode}
           mergeSel={mergeSel}
