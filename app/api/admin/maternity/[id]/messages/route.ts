@@ -46,9 +46,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const body = (await request.json().catch(() => null)) as
     | { body?: string; extra?: InquiryExtra } | null
 
+  // ⚠️ השם מ-profiles ולא staff.email: בשרשור הופיעה כתובת המייל של
+  // המזכיר במקום שמו — גם מכוער וגם חושף כתובת פנימית בתצוגה.
+  // אותו דפוס כמו בבירור ההלוואות.
+  const { data: profile } = await db
+    .from('profiles').select('full_name').eq('id', staff.userId).maybeSingle()
+  const senderName = String((profile as { full_name?: string } | null)?.full_name ?? '').trim()
+    || 'המזכירות'
+
   const res = await sendMaternityInquiry(
     db, id, body?.body ?? '',
-    { id: staff.userId, name: staff.email ?? 'מזכירות' },
+    { id: staff.userId, name: senderName },
     body?.extra === 'lineage' ? 'lineage' : 'none',
   )
 
