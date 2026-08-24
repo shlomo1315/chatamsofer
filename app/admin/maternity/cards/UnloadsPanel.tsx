@@ -25,14 +25,16 @@ interface Unload {
   unloadedAt: string | null
   dueDate: string | null
   alreadySpent: boolean
+  returnedAmount: number | null
+  reason: string
   error: string | null
 }
 
 interface Summary {
   total: number
   moneyReleased: number
+  unknownAmount: number
   spentCount: number
-  moneySpent: number
   lastUnload: string | null
   silentCount: number
 }
@@ -45,6 +47,24 @@ const fmtDT = (d?: string | null) => {
   return `${p(t.getDate())}.${p(t.getMonth() + 1)}.${String(t.getFullYear()).slice(2)} ${p(t.getHours())}:${p(t.getMinutes())}`
 }
 const ils = (n: number) => `₪${n.toLocaleString('he-IL')}`
+
+/**
+ * כמה ימים עברו מאז הפריקה.
+ * ⚠️ מחושב על גבול היום ולא על הפרש שעות: פריקה אתמול ב-23:00 היא
+ * "אתמול" גם אם עברו רק 10 שעות.
+ */
+function daysSince(iso?: string | null): number | null {
+  if (!iso) return null
+  const then = new Date(iso)
+  if (isNaN(then.getTime())) return null
+  const a = new Date(then.getFullYear(), then.getMonth(), then.getDate())
+  const now = new Date()
+  const b = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  return Math.round((b.getTime() - a.getTime()) / 86400000)
+}
+
+const daysLabel = (d: number | null) =>
+  d == null ? '—' : d === 0 ? 'היום' : d === 1 ? 'אתמול' : `לפני ${d} ימים`
 
 export default function UnloadsPanel() {
   const [rows, setRows] = useState<Unload[]>([])
@@ -89,11 +109,15 @@ export default function UnloadsPanel() {
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Stat icon={<CheckCircle2 size={16} />} label="סה״כ פריקות" value={String(summary.total)}
             color="text-emerald-700" bg="bg-emerald-50" border="border-emerald-100" />
-          <Stat icon={<Wallet size={16} />} label="כסף שנפרק וחזר" value={ils(summary.moneyReleased)}
+          {/* ⚠️ כשיש פריקות ללא סכום שמור, זה מוצג במפורש — אחרת המספר
+              נראה כמו הסכום המלא בעוד הוא חלקי. */}
+          <Stat icon={<Wallet size={16} />} label="כסף שחזר לארנק"
+            value={ils(summary.moneyReleased)}
+            note={summary.unknownAmount > 0 ? `${summary.unknownAmount} ללא סכום שמור` : undefined}
             color="text-indigo-700" bg="bg-indigo-50" border="border-indigo-100" />
           {/* 🔴 ההבחנה החשובה: כרטיס ש"נוצל במלואו" אינו כשל — המשפחה
               השתמשה בכסף, ואין מה לפרוק. */}
-          <Stat icon={<Baby size={16} />} label="נוצלו במלואם" value={`${summary.spentCount} · ${ils(summary.moneySpent)}`}
+          <Stat icon={<Baby size={16} />} label="נוצלו במלואם" value={String(summary.spentCount)}
             color="text-amber-700" bg="bg-amber-50" border="border-amber-100" />
           <Stat icon={<Clock size={16} />} label="פריקה אחרונה" value={fmtDT(summary.lastUnload)}
             color="text-slate-700" bg="bg-slate-50" border="border-slate-200" />
@@ -124,6 +148,9 @@ export default function UnloadsPanel() {
                 <th className="hidden px-3 py-2 font-semibold text-slate-500 sm:table-cell">תאריך לידה</th>
                 <th className="hidden px-3 py-2 font-semibold text-slate-500 md:table-cell">מועד יעד</th>
                 <th className="hidden px-3 py-2 font-semibold text-slate-500 lg:table-cell">כרטיס</th>
+                <th className="px-3 py-2 font-semibold text-slate-500">לפני כמה זמן</th>
+                <th className="hidden px-3 py-2 font-semibold text-slate-500 sm:table-cell">סיבה</th>
+                <th className="px-3 py-2 font-semibold text-slate-500">חזר לארנק</th>
                 <th className="px-3 py-2 font-semibold text-slate-500">תוצאה</th>
                 <th className="px-3 py-2 font-semibold text-slate-500">תיק</th>
               </tr>
@@ -144,6 +171,33 @@ export default function UnloadsPanel() {
                   <td className="hidden px-3 py-2 text-slate-500 md:table-cell">{fmt(r.dueDate)}</td>
                   <td className="hidden px-3 py-2 text-slate-500 lg:table-cell">
                     {r.cardLast4 ? `••${r.cardLast4}` : '—'}
+                  </td>
+                  {/* ⚠️ "לפני X ימים" ולא רק תאריך: המספר הוא מה שמסגיר
+                      פריקה שנתקעה — 12 יום בלי פריקה חדשה הוא הסימן
+                      שהמנגנון שבור. */}
+                  <td className="px-3 py-2">
+                    {(() => {
+                      const d = daysSince(r.unloadedAt)
+                      return (
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                          d != null && d <= 1 ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+                        }`}>
+                          {daysLabel(d)}
+                        </span>
+                      )
+                    })()}
+                  </td>
+                  <td className="hidden px-3 py-2 text-slate-500 sm:table-cell">{r.reason}</td>
+                  {/* 🔴 הסכום שחזר בפועל. ⚠️ "לא נשמר" ולא ₪0 בפריקות
+                      היסטוריות שקדמו לעמודה — אפס הוא נתון, וכאן אין נתון. */}
+                  <td className="px-3 py-2">
+                    {r.returnedAmount != null ? (
+                      <span className={r.returnedAmount > 0 ? 'font-bold text-indigo-700' : 'text-slate-400'}>
+                        {ils(r.returnedAmount)}
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-slate-300">לא נשמר</span>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     {r.alreadySpent ? (
@@ -177,8 +231,8 @@ export default function UnloadsPanel() {
   )
 }
 
-function Stat({ icon, label, value, color, bg, border }: {
-  icon: React.ReactNode; label: string; value: string
+function Stat({ icon, label, value, note, color, bg, border }: {
+  icon: React.ReactNode; label: string; value: string; note?: string
   color: string; bg: string; border: string
 }) {
   return (
@@ -188,6 +242,7 @@ function Stat({ icon, label, value, color, bg, border }: {
         <span className="text-xs font-medium text-slate-600">{label}</span>
       </div>
       <p className={`text-lg font-bold ${color}`}>{value}</p>
+      {note && <p className="mt-0.5 text-[10px] text-slate-400">{note}</p>}
     </div>
   )
 }

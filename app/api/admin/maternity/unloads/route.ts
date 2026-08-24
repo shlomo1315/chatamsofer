@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
+import { requireAdmin, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 
 export const dynamic = 'force-dynamic'
@@ -22,6 +22,7 @@ type Row = {
   card_number: string | null
   card_tlush_id: string | null
   card_balance: number | null
+  card_unloaded_amount: number | string | null
   card_loaded_at: string | null
   card_unloaded_at: string | null
   card_load_error: string | null
@@ -34,8 +35,10 @@ type Row = {
 }
 
 export async function GET() {
-  if (!(await requirePermission('maternity', 'view'))) {
-    return forbidden('אין הרשאה לצפות בפריקות')
+  // 🔒 מנהל בלבד. הפילוח חושף סכומי כסף שחזרו לקופה, יתרות ומלאי —
+  // נתונים כספיים ארגוניים, לא מידע תפעולי של המזכירות.
+  if (!(await requireAdmin())) {
+    return forbidden('פילוח הפריקות שמור למנהל המערכת')
   }
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
@@ -44,7 +47,7 @@ export async function GET() {
   // חותכת את הפילוח בלי שום סימן.
   const { rows, error } = await fetchAllRows<Row>((from, to) => db
     .from('maternity_aids')
-    .select('id, birth_date, birth_type, status, card_number, card_tlush_id, card_balance, card_loaded_at, card_unloaded_at, card_load_error, six_weeks_end, beneficiary:beneficiaries(id, family_name, full_name, spouse_name, nedarim_id)')
+    .select('id, birth_date, birth_type, status, card_number, card_tlush_id, card_balance, card_unloaded_amount, card_loaded_at, card_unloaded_at, card_load_error, six_weeks_end, beneficiary:beneficiaries(id, family_name, full_name, spouse_name, nedarim_id)')
     .not('card_unloaded_at', 'is', null)
     .order('card_unloaded_at', { ascending: false })
     .range(from, to))
@@ -75,24 +78,37 @@ export async function GET() {
       // 🔴 "נוצל במלואו" אינו כשל: נדרים החזירה "אין יתרה לפריקה",
       // כלומר המשפחה השתמשה בכסף. ההבחנה קריטית לסטטיסטיקה.
       alreadySpent: /נוצל במלואו/.test(r.card_load_error ?? ''),
+      // 🔴 הסכום שחזר לארנק. ⚠️ null בפריקות היסטוריות שקדמו לעמודה —
+      // מוצג כ"לא נשמר" ולא כאפס, שהוא נתון שגוי.
+      // ⚠️ numeric מגיע כמחרוזת מ-PostgREST.
+      returnedAmount: r.card_unloaded_amount != null ? Number(r.card_unloaded_amount) : null,
+      // 🔴 למה נפרק: תום 6 שבועות (הרגיל), ביטול אישור, או מחיקת תיק.
+      // ⚠️ נגזר מהסטטוס ומהמועד ולא נשמר כשדה — היומן מכיל את הסיבה
+      // המלאה, אך הוא best-effort ויש בו פערים.
+      reason: (r.status !== 'active' && r.status !== 'completed')
+        ? 'ביטול אישור'
+        : 'תום 6 שבועות',
       error: r.card_load_error,
     }
   })
 
   // ── סיכום ──
-  const AMOUNT = 600   // סכום הטעינה הסטנדרטי
   const spent = unloads.filter(u => u.alreadySpent).length
-  const released = unloads.length - spent
+  // 🔴 מסוכם מהסכום שנשמר בפועל ולא מהכפלה ב-600: לא כל כרטיס נפרק
+  // מלא, והכפלה הייתה מציגה מספר שנראה מדויק ואינו נכון.
+  const withAmount = unloads.filter(u => u.returnedAmount != null)
+  const releasedMoney = withAmount.reduce((sum, u) => sum + (u.returnedAmount ?? 0), 0)
+  // ⚠️ פריקות שקדמו לעמודה — נספרות בנפרד כדי שלא ייראו כאפס.
+  const unknownAmount = unloads.length - withAmount.length
 
   return NextResponse.json({
     unloads,
     summary: {
       total: unloads.length,
       // כסף שחזר לקופה — פריקות שבהן באמת נותרה יתרה
-      moneyReleased: released * AMOUNT,
-      // כסף שנוצל בפועל על ידי המשפחות
+      moneyReleased: releasedMoney,
+      unknownAmount,
       spentCount: spent,
-      moneySpent: spent * AMOUNT,
       // ⚠️ עדיין טעונים — מה שממתין לפריקה עתידית
       lastUnload: unloads[0]?.unloadedAt ?? null,
       silentCount: unloads.filter(u => u.silent).length,

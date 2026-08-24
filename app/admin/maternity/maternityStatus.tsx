@@ -304,11 +304,24 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
     }
     void runBackground()
 
-    // טיפול בבקשה ממתינה מתוך כרטיס הבקשה → חלונית הצלחה ואז קפיצה לבקשה הממתינה הבאה
+    // טיפול בבקשה ממתינה מתוך כרטיס הבקשה → חלונית הצלחה ואז קפיצה לבקשה הבאה
     if (advance && isFinalDecision) {
       setShowSuccess(true)
+      // 🔴 הקפיצה נשארת *באותו סטטוס* שממנו הגיעו.
+      //
+      // קודם היה pendingValues: ['pending'] תמיד — כך שמנהל שאישר תיק
+      // מ"ממתין לאישור מנהל" (deep_review) הועף לתיק ממתין רגיל, יצא
+      // מרצף העבודה שלו, ולא סיים את הרשימה שהתחיל.
+      const fromStatus = String(aid.status ?? 'pending')
+      const nextValues = fromStatus === 'deep_review' ? ['deep_review'] : ['pending']
+      // ⚠️ ההשהיה נשמרת — בלעדיה חלונית ההצלחה מהבהבת ונעלמת לפני
+      // שהמשתמש מספיק לראות מה אושר.
       setTimeout(() => {
-        goToNextPending(supabase, router, { table: 'maternity_aids', statusColumn: 'status', pendingValues: ['pending'], currentId: aid.id, detailBase: '/admin/maternity', listPath: '/admin/maternity' })
+        goToNextPending(supabase, router, {
+          table: 'maternity_aids', statusColumn: 'status',
+          pendingValues: nextValues,
+          currentId: aid.id, detailBase: '/admin/maternity', listPath: '/admin/maternity',
+        })
       }, 1200)
     }
   }

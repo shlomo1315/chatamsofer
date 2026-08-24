@@ -1,6 +1,6 @@
 import { guardPage } from '@/lib/pageGuard'
 import Link from 'next/link'
-import { ArrowRight, Baby, CreditCard, Home, FileText, User, Phone, MapPin, GitBranch, ExternalLink, Mail, Download, Heart, Star, XCircle } from 'lucide-react'
+import { ArrowRight, Baby, CreditCard, Home, FileText, User, Phone, MapPin, GitBranch, ExternalLink, Mail, Download, Heart, Star, XCircle, MessageSquare } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { MaternityAid, Beneficiary } from '@/types'
@@ -9,6 +9,9 @@ import Tabs, { type TabDef } from '@/components/ui/Tabs'
 import { StatusControl } from '../maternityStatus'
 import FamilyApprovalGate from '@/components/admin/FamilyApprovalGate'
 import MaternityActions from './MaternityActions'
+import MaternityInquiryPanel from './MaternityInquiryPanel'
+import AdminReviewAlert from './AdminReviewAlert'
+import { AdminOnly } from '@/components/StaffPermissions'
 import GratitudeTab from './GratitudeTab'
 import FeedbackTab from './FeedbackTab'
 import ExtendEligibility from '../ExtendEligibility'
@@ -425,7 +428,32 @@ export default async function MaternityDetailPage(
       {ben && <FamilyApprovalGate beneficiary={ben as Parameters<typeof FamilyApprovalGate>[0]['beneficiary']} compact />}
 
       {/* טאבים מסודרים לכל נתוני התיק */}
+      {/* 🔴 חלונית שמסבירה למנהל למה התיק הגיע לאישורו. בלעדיה הוא ראה
+          תיק ב"ממתין לאישור מנהל" בלי לדעת מה המזכירה ביקשה שיבדוק.
+          ⚠️ AdminOnly — למזכירה שהעבירה את התיק היא מיותרת. */}
+      {aid.status === 'deep_review' && (
+        <AdminOnly>
+          <AdminReviewAlert
+            reason={(aid as { deep_review_reason?: string | null }).deep_review_reason}
+            motherName={[ben?.family_name, ben?.spouse_name || ben?.full_name].filter(Boolean).join(' ') || undefined}
+          />
+        </AdminOnly>
+      )}
+
       <Tabs tabs={[
+        // 🔴 בירור מול היולדת — שרשור שנשמר בתיק, כמו בהלוואות.
+        // עד כה המזכיר שלח מייל מהתיבה הרגילה והתשובה נעלמה מהתיק.
+        {
+          key: 'inquiry', label: 'בירור', accent: 'rose' as const,
+          icon: <MessageSquare size={15} />,
+          content: (
+            <MaternityInquiryPanel
+              aidId={aid.id}
+              motherName={[ben?.family_name, ben?.spouse_name || ben?.full_name].filter(Boolean).join(' ') || undefined}
+              hasEmail={!!ben?.email}
+            />
+          ),
+        },
         ...(ben ? [{
           key: 'family', label: 'משפחה', accent: 'indigo' as const, icon: <User size={15} />,
           content: (

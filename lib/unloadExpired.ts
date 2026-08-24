@@ -13,6 +13,7 @@ export interface UnloadableAid {
   id: string
   card_tlush_id?: string | null
   card_number?: string | null
+  card_balance?: number | string | null
   six_weeks_end?: string | null
   beneficiary?: { nedarim_id?: string | null } | null
 }
@@ -60,9 +61,15 @@ export async function unloadAidCard(
     cardRemoved = true // אין כרטיס לנתק
   }
 
+  // 🔴 היתרה נשמרת *לפני* האיפוס — אחרת הסכום שחזר לארנק אבד לנצח,
+  // ואי אפשר לדעת אם חזרו 600 מלאים או 80 שנותרו.
+  // ⚠️ numeric מגיע כמחרוזת מ-PostgREST — Number() ולא שימוש ישיר.
+  const balanceBefore = aid.card_balance != null ? Number(aid.card_balance) : null
   await admin.from('maternity_aids').update({
     card_load_status: 'unloaded',
     card_unloaded_at: new Date().toISOString(),
+    // ⚠️ כרטיס שנוצל במלואו — 0 חזר, וזה נתון ולא חוסר מידע.
+    card_unloaded_amount: alreadySpent ? 0 : (Number.isFinite(balanceBefore) ? balanceBefore : null),
     card_balance: 0,
     // ניקוי הכרטיס והאיסוף בתיק רק אם נותק בנדרים בהצלחה — כדי שבלידה הבאה אפשר יהיה לחבר מחדש
     card_number: cardRemoved ? null : aid.card_number,
@@ -124,7 +131,7 @@ export async function runUnloadUnapproved(
 
   const { data: aids, error } = await admin
     .from('maternity_aids')
-    .select('id, status, card_tlush_id, card_number, beneficiary:beneficiaries(nedarim_id, email, full_name, family_name, spouse_name)')
+    .select('id, status, card_tlush_id, card_number, card_balance, beneficiary:beneficiaries(nedarim_id, email, full_name, family_name, spouse_name)')
     .eq('card_load_status', 'loaded')
     .not('card_tlush_id', 'is', null)
     .neq('status', 'active')
@@ -187,7 +194,7 @@ export async function runUnloadExpired(): Promise<{ ok: boolean; processed: numb
   // קיים תמיד, ו-six_weeks_end הוא רק שדה נגזר שלעתים לא מולא.
   const { data: aids, error } = await admin
     .from('maternity_aids')
-    .select('id, card_tlush_id, six_weeks_end, birth_date, card_number, beneficiary:beneficiaries(nedarim_id)')
+    .select('id, card_tlush_id, six_weeks_end, birth_date, card_number, card_balance, beneficiary:beneficiaries(nedarim_id)')
     .eq('card_load_status', 'loaded')
     .not('card_tlush_id', 'is', null)
   if (error) return { ok: false, processed: 0, error: error.message }

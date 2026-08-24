@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Send, Loader2, MessageSquare, Mail, GitBranch, X } from 'lucide-react'
+import { Send, Loader2, MessageSquare, Mail, GitBranch } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -30,11 +30,10 @@ const fmt = (d: string) => {
   return `${p(t.getDate())}.${p(t.getMonth() + 1)}.${String(t.getFullYear()).slice(2)} ${p(t.getHours())}:${p(t.getMinutes())}`
 }
 
-export default function MaternityInquiryPanel({ aidId, motherName, hasEmail, onClose }: {
+export default function MaternityInquiryPanel({ aidId, motherName, hasEmail }: {
   aidId: string
   motherName?: string
   hasEmail: boolean
-  onClose: () => void
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -59,12 +58,14 @@ export default function MaternityInquiryPanel({ aidId, motherName, hasEmail, onC
     }
   }, [aidId])
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // ⚠️ תלוי ב-aidId בלבד: load יציב (useCallback על aidId), ו-toast
+  // נצרך רק בכישלון. תלות בהם הייתה מריצה את ה-effect בכל רינדור.
   useEffect(() => {
     let alive = true
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load().then(err => { if (alive && err) toast.error(err) })
     return () => { alive = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aidId])
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [msgs.length])
@@ -94,19 +95,21 @@ export default function MaternityInquiryPanel({ aidId, motherName, hasEmail, onC
     }
   }
 
+  // ⚠️ פאנל מוטבע ולא מודאל — כמו בבירור ההלוואות. השרשור צריך להיות
+  // גלוי כל הזמן לצד פרטי התיק, לא מאחורי לחיצה: מזכיר שלא רואה שיש
+  // תשובה ממתינה, לא עונה עליה.
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative flex w-full max-w-lg flex-col rounded-xl bg-white shadow-xl" style={{ height: '80vh' }}>
+    <div className="flex flex-col rounded-xl border border-slate-200 bg-white" style={{ height: '70vh' }}>
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <h2 className="inline-flex items-center gap-2 text-sm font-bold text-slate-800">
             <MessageSquare size={16} className="text-pink-600" />
             בירור מול {motherName || 'היולדת'}
           </h2>
-          <button onClick={onClose} aria-label="סגור"
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
-            <X size={17} />
-          </button>
+          {msgs.length > 0 && (
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+              {msgs.length} הודעות
+            </span>
+          )}
         </div>
 
         {/* השרשור */}
@@ -184,7 +187,6 @@ export default function MaternityInquiryPanel({ aidId, motherName, hasEmail, onC
             </>
           )}
         </div>
-      </div>
     </div>
   )
 }

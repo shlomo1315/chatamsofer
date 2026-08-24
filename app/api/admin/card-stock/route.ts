@@ -13,9 +13,12 @@ const NO_STORE = { 'Cache-Control': 'no-store' }
 
 // GET: מלאי נוכחי + יומן התנועות האחרונות (לתצוגה אונליין)
 export async function GET() {
-  // ⚠️ requirePermission ולא requireStaff: המסך חושף מלאי, רכישות ושמות
-  // משפחה של לידות שמחזיקות כרטיס — נתוני מחלקה לכל דבר.
-  if (!(await requirePermission('maternity_cards', 'view'))) {
+  // 🔒 מנהל בלבד — הודק מ-requirePermission('maternity_cards','view').
+  //
+  // המסך חושף מלאי, סכומי רכישה ויתרות כספיות. שלוש מזכירות היו רואות
+  // אותו בפועל, וזה מידע כספי ארגוני ולא מידע תפעולי שנדרש להן לעבודה.
+  // ⚠️ הפעולות המשנות (POST) כבר היו requireAdmin — רק הקריאה הייתה פתוחה.
+  if (!(await requireAdmin())) {
     return NextResponse.json({ error: 'לא מורשה' }, { status: 401, headers: NO_STORE })
   }
   const admin = getServiceClient()
