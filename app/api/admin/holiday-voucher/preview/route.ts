@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
 import { buildHolidayVoucher, HOLIDAY_VOUCHER_DEFAULTS, type HolidayVoucherData } from '@/lib/holidayVoucher'
+import { loadHolidayVoucherTexts } from '@/lib/holidayVoucherTexts'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,6 +20,11 @@ export async function GET(request: NextRequest) {
 
   const recipientId = request.nextUrl.searchParams.get('recipient_id') ?? ''
 
+  // 🔴 המלל הערוך ולא ברירות המחדל הקבועות — אחרת התצוגה המקדימה מציגה
+  // נוסח אחר ממה שהמשפחות יקבלו, וזו בדיוק התכלית שלה.
+  const db = getServiceClient()
+  const texts = db ? await loadHolidayVoucherTexts(db) : HOLIDAY_VOUCHER_DEFAULTS
+
   // ברירת מחדל — נתוני דוגמה, כדי שאפשר יהיה לראות את העיצוב גם לפני
   // שמישהו בחר מוקד.
   let data: HolidayVoucherData = {
@@ -30,13 +36,12 @@ export async function GET(request: NextRequest) {
     distributionName: 'חלוקת חגי תשרי',
     amount: 500,
     phones: ['0501234567', '0527654321'],
-    texts: HOLIDAY_VOUCHER_DEFAULTS,
+    texts,
   }
 
   // ⚠️ עם recipient_id — שובר אמיתי של משפחה קיימת, כדי לראות נתונים
   // אמיתיים ולא רק את התבנית.
   if (recipientId) {
-    const db = getServiceClient()
     if (db) {
       const { data: row } = await db.from('distribution_recipients')
         .select('center:holiday_centers(city, name, address, hours, phone), beneficiary:beneficiaries(family_name, full_name)')
@@ -58,7 +63,12 @@ export async function GET(request: NextRequest) {
           centerAddress: center.address,
           centerHours: center.hours,
           centerPhone: center.phone,
-          texts: HOLIDAY_VOUCHER_DEFAULTS,
+          // ⚠️ נשמרים מנתוני הדוגמה: הם אינם בשאילתה, והשמטתם הציגה שובר
+          // בלי סכום ובלי שם החלוקה — שונה ממה שנשלח בפועל.
+          distributionName: data.distributionName,
+          amount: data.amount,
+          phones: data.phones,
+          texts,
         }
       }
     }

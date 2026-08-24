@@ -1,10 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
 import { HOLIDAY_VOUCHER_DEFAULTS } from '@/lib/holidayVoucher'
+import { HOLIDAY_TEXTS_KEY, loadHolidayVoucherTexts } from '@/lib/holidayVoucherTexts'
 
 export const dynamic = 'force-dynamic'
 
-const KEY = 'holiday_voucher_texts'
+// ⚠️ המפתח מיובא ולא משוכפל — עותק מקומי שנשאר מאחור בשינוי שם היה
+// מנתק את השמירה מהטעינה בשקט.
+const KEY = HOLIDAY_TEXTS_KEY
 
 // מלל שובר החלוקה — כללי לכל סוגי החלוקות.
 //
@@ -18,19 +21,9 @@ export async function GET() {
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  const { data } = await db.from('app_settings').select('value').eq('key', KEY).maybeSingle()
-  let texts = HOLIDAY_VOUCHER_DEFAULTS
-  try {
-    const raw = (data as { value?: string } | null)?.value
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      // ⚠️ מיזוג עם ברירות המחדל: נוסח שנשמר לפני שנוסף שדה חדש אינו
-      // מותיר אותו undefined ומפיל את בניית ה-PDF.
-      texts = { ...HOLIDAY_VOUCHER_DEFAULTS, ...parsed }
-    }
-  } catch { /* נוסח פגום — נופלים לברירת המחדל */ }
-
-  return NextResponse.json({ texts })
+  // ⚠️ אותה פונקציה שהתצוגה והשליחה משתמשות בה — כדי שהמסך בהגדרות
+  // יציג בדיוק את מה שייצא בשובר.
+  return NextResponse.json({ texts: await loadHolidayVoucherTexts(db) })
 }
 
 export async function POST(request: NextRequest) {

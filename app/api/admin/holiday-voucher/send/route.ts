@@ -3,7 +3,8 @@ import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
-import { buildHolidayVoucher, HOLIDAY_VOUCHER_DEFAULTS } from '@/lib/holidayVoucher'
+import { buildHolidayVoucher } from '@/lib/holidayVoucher'
+import { loadHolidayVoucherTexts } from '@/lib/holidayVoucherTexts'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -109,6 +110,9 @@ export async function POST(request: NextRequest) {
 
   console.log(`[holiday-voucher] שולח ${targets.length} שוברים · ${staff.email ?? ''}`)
 
+  // 🔴 המלל הערוך, נטען פעם אחת לכל האצווה ולא פר-שובר.
+  const texts = await loadHolidayVoucherTexts(db)
+
   let sent = 0, failed = 0
   const failures: { id: string; email: string; error: string }[] = []
 
@@ -121,7 +125,7 @@ export async function POST(request: NextRequest) {
         centerAddress: c.address,
         centerHours: c.hours,
         centerPhone: c.phone,
-        texts: HOLIDAY_VOUCHER_DEFAULTS,
+        texts,
       })
 
       const html = `<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8"/></head>
