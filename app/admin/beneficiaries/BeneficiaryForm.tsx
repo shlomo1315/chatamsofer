@@ -9,6 +9,8 @@ import { validateIsraeliId, validatePhone } from '@/lib/validation'
 import { genTone } from '@/lib/lineagePalette'
 import CityStreetPicker from '@/components/ui/CityStreetPicker'
 import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
+import ChildrenEditor from '@/components/admin/ChildrenEditor'
+import { childrenPayload, type EditableChild } from '@/lib/childrenEditor'
 import { useToast } from '@/components/ui/Toast'
 
 const GENDER_BTN_SEL: Record<string, string> = {
@@ -28,22 +30,6 @@ const STATUS_OPTIONS = [
 ]
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-interface ChildEntry {
-  name: string
-  id_number: string
-  doc_type: 'id' | 'passport'
-  gender: string
-  birth_date: string
-  marital_status: string
-  // נשמרים עבור ילדים שנכנסו דרך תיק יולדת — לא לאבד אותם בעריכה
-  birth_status?: 'pending' | 'approved'
-  maternity_aid_id?: string
-}
-
-function emptyChild(): ChildEntry {
-  return { name: '', id_number: '', doc_type: 'id', gender: '', birth_date: '', marital_status: '' }
-}
 
 // סטטוס משפחתי לילד לפי מין: בן → נשוי/לא נשוי, בת → נשואה/לא נשואה
 function maritalOptionsFor(gender: string): { value: string; label: string }[] {
@@ -616,7 +602,7 @@ interface FormState {
 }
 
 interface Props {
-  defaultValues?: Partial<FormState & { lineage_node_id: string; children: ChildEntry[]; lineage_manual: string[] }>
+  defaultValues?: Partial<FormState & { lineage_node_id: string; children: EditableChild[]; lineage_manual: string[] }>
   beneficiaryId?: string
 }
 
@@ -662,10 +648,10 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
   const [suggestSubmitting, setSuggestSubmitting] = useState(false)
   const [suggestError, setSuggestError] = useState('')
   const [allLineageNodes, setAllLineageNodes] = useState<{ id: string; name: string; generation: number }[]>([])
-  const [children, setChildren] = useState<ChildEntry[]>(
+  const [children, setChildren] = useState<EditableChild[]>(
     Array.isArray(defaultValues?.children) ? defaultValues!.children : []
   )
-  const [childErrors, setChildErrors] = useState<Partial<Record<keyof ChildEntry, string>>[]>([])
+  const [childErrors, setChildErrors] = useState<Partial<Record<keyof EditableChild, string>>[]>([])
   const [checkingId, setCheckingId] = useState(false)
   // חלונית הצלחה לאחר שמירה (נסגרת אוטומטית אחרי 3 שניות)
   const [savedInfo, setSavedInfo] = useState<{ name: string; details: string[] } | null>(null)
@@ -698,22 +684,14 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
       setForm(f => ({ ...f, [k]: e.target.value }))
 
-  const handleChildrenCount = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value
-    setForm(f => ({ ...f, children_count: raw }))
-    const n = Math.max(0, Math.min(30, parseInt(raw) || 0))
-    setChildren(prev => {
-      const next = prev.slice(0, n)
-      while (next.length < n) next.push(emptyChild())
-      return next
-    })
-  }
-
-  const setChild = <K extends keyof ChildEntry>(idx: number, key: K, value: ChildEntry[K]) =>
+  const setChild = <K extends keyof EditableChild>(idx: number, key: K, value: EditableChild[K]) =>
     setChildren(prev => prev.map((c, i) => (i === idx ? { ...c, [key]: value } : c)))
 
   // אישור לידה מתוך עריכת המשפחה — מסנכרן את תיק היולדת ל"מאושר" ומסמן את הילד
   const [approvingIdx, setApprovingIdx] = useState<number | null>(null)
+  // תיקי לידה שהמשתמש בחר למחוק יחד עם הילדים. נמחקים רק בשמירה —
+  // כדי שביטול העריכה לא ישאיר תיק מחוק בלי הילד שלו.
+  const [maternityToDelete, setMaternityToDelete] = useState<string[]>([])
   const approveBirth = async (idx: number) => {
     const child = children[idx]
     if (!child.maternity_aid_id) return
@@ -788,8 +766,8 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
       errs.lineage_node_id = 'יש לבחור שיוך שושלת'
     }
 
-    const childErrs: Partial<Record<keyof ChildEntry, string>>[] = children.map(c => {
-      const ce: Partial<Record<keyof ChildEntry, string>> = {}
+    const childErrs: Partial<Record<keyof EditableChild, string>>[] = children.map(c => {
+      const ce: Partial<Record<keyof EditableChild, string>> = {}
       if (!c.name.trim()) ce.name = 'שדה חובה'
       if (!c.gender) ce.gender = 'שדה חובה'
       if (!c.marital_status) ce.marital_status = 'שדה חובה'
@@ -866,20 +844,8 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
         spouse_doc_type: showWifeFields ? form.spouse_doc_type : null,
         spouse_birth_date: showWifeFields ? (form.spouse_birth_date || null) : null,
         spouse_phone: showWifeFields ? (form.spouse_phone || null) : null,
-        children_count: children.length,
-        children: children.map(c => ({
-          name: c.name.trim(),
-          id_number: c.id_number.trim()
-            ? (c.doc_type === 'id' ? c.id_number.replace(/\D/g, '') : c.id_number.trim())
-            : null,
-          doc_type: c.doc_type,
-          gender: c.gender || null,
-          birth_date: c.birth_date || null,
-          marital_status: c.marital_status || null,
-          // שמירת סימוני תיק היולדת אם קיימים (כדי לא לאבד אותם בעריכה)
-          ...(c.birth_status ? { birth_status: c.birth_status } : {}),
-          ...(c.maternity_aid_id ? { maternity_aid_id: c.maternity_aid_id } : {}),
-        })),
+        // ⚠️ children ו-children_count נבנים יחד ובמקום אחד — ראו lib/childrenEditor
+        ...childrenPayload(children),
         notes: form.notes || null,
         // אדם חריג — אין לו ייחוס: מאפסים את שדות הדורות במפורש.
         lineage_node_id: form.is_special ? null : (form.lineage_node_id || null),
@@ -913,6 +879,18 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
           .single()
         if (error) throw error
         targetId = inserted.id
+      }
+
+      // מחיקת תיקי הלידה שהמשתמש אישר למחוק יחד עם הילדים.
+      // ⚠️ אחרי שמירת הכרטסת ולא לפני — כשל כאן לא מבטל את שמירת הילדים.
+      if (maternityToDelete.length) {
+        const { error: aidErr } = await supabase
+          .from('maternity_aids')
+          .delete()
+          .in('id', maternityToDelete)
+          .eq('beneficiary_id', targetId)
+        if (aidErr) toast.error(`הילדים נשמרו, אך מחיקת תיק הלידה נכשלה: ${aidErr.message}`)
+        else setMaternityToDelete([])
       }
 
       // חלונית "נשמר בהצלחה" — מציגה את הפרטים ל-3 שניות ואז נסגרת ומנווטת
@@ -1017,9 +995,6 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
             <Field label="תאריך לידה" required error={errors.birth_date}>
               <HebrewDatePicker value={form.birth_date} onChange={iso => setForm(f => ({ ...f, birth_date: iso }))} maxToday />
             </Field>
-            <Field label="מספר ילדים" required>
-              <FInput type="number" min="0" max="30" value={form.children_count} onChange={handleChildrenCount} required />
-            </Field>
           </div>
         </Section>
       )}
@@ -1049,9 +1024,6 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
               />
               <Field label="תאריך לידה" required error={errors.birth_date}>
                 <HebrewDatePicker value={form.birth_date} onChange={iso => setForm(f => ({ ...f, birth_date: iso }))} maxToday />
-              </Field>
-              <Field label="מספר ילדים" required>
-                <FInput type="number" min="0" max="30" value={form.children_count} onChange={handleChildrenCount} required />
               </Field>
             </div>
           ) : (
@@ -1105,123 +1077,30 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
       )}
 
       {/* ── Children details ── */}
-      {children.length > 0 && (
-        <Section title={`פרטי הילדים (${children.length})`} icon={Users}>
-          <div className="flex flex-col gap-4">
-            {children.map((child, idx) => (
-              <div key={idx} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-center justify-between gap-2 mb-3">
-                  <p className="text-xs font-semibold text-indigo-600">ילד/ה {idx + 1}</p>
-                  {child.birth_status === 'approved' && (
-                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-800">לידה מאושרת</span>
-                  )}
-                  {child.birth_status === 'pending' && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">ממתין לאישור לידה</span>
-                      <button type="button" onClick={() => approveBirth(idx)} disabled={approvingIdx === idx}
-                        className="inline-flex items-center gap-1 text-xs font-medium text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 px-2.5 py-1 rounded-lg transition-colors">
-                        {approvingIdx === idx ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />} אשר לידה
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Field label="שם הילד/ה" required error={childErrors[idx]?.name}>
-                    <FInput
-                      value={child.name}
-                      onChange={e => setChild(idx, 'name', e.target.value)}
-                      placeholder="שם מלא"
-                      required
-                    />
-                  </Field>
-                  <Field label="מין" required error={childErrors[idx]?.gender}>
-                    <div className="flex gap-2">
-                      {[{ v: 'male', l: 'בן' }, { v: 'female', l: 'בת' }].map(({ v, l }) => (
-                        <button key={v} type="button"
-                          onClick={() => { setChild(idx, 'gender', v); setChild(idx, 'marital_status', '') }}
-                          className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                            child.gender === v ? GENDER_BTN_SEL[v] : GENDER_BTN_UNSEL
-                          }`}
-                        >{l}</button>
-                      ))}
-                    </div>
-                  </Field>
-                  <Field label="תאריך לידה" required error={childErrors[idx]?.birth_date}>
-                    <HebrewDatePicker value={child.birth_date} onChange={iso => setChild(idx, 'birth_date', iso)} maxToday />
-                  </Field>
-                  {child.gender && (
-                  <Field label="מצב משפחתי" required error={childErrors[idx]?.marital_status}>
-                    <div className="flex gap-2">
-                      {maritalOptionsFor(child.gender).map(o => (
-                        <button key={o.value} type="button"
-                          onClick={() => setChild(idx, 'marital_status', o.value)}
-                          className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                            child.marital_status === o.value
-                              ? 'bg-indigo-600 text-white border-indigo-600'
-                              : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
-                          }`}
-                        >{o.label}</button>
-                      ))}
-                    </div>
-                  </Field>
-                  )}
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-slate-600">
-                      מסמך זיהוי <span className="text-red-500 mr-1">*</span>
-                    </label>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setChild(idx, 'doc_type', 'id')}
-                        className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
-                          child.doc_type === 'id'
-                            ? 'bg-indigo-600 text-white border-indigo-600'
-                            : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400 hover:bg-indigo-50'
-                        }`}
-                      >
-                        ת&quot;ז
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setChild(idx, 'doc_type', 'passport')}
-                        className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
-                          child.doc_type === 'passport'
-                            ? 'bg-indigo-600 text-white border-indigo-600'
-                            : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400 hover:bg-indigo-50'
-                        }`}
-                      >
-                        דרכון
-                      </button>
-                    </div>
-                    <FInput
-                      value={child.id_number}
-                      onChange={e => { setChild(idx, 'id_number', e.target.value); setChildErrors(prev => prev.map((ce, i) => i === idx ? { ...ce, id_number: undefined } : ce)) }}
-                      onBlur={() => {
-                        const val = child.id_number.trim()
-                        if (!val) {
-                          setChildErrors(prev => prev.map((ce, i) => i === idx ? { ...ce, id_number: 'שדה חובה' } : ce))
-                        } else if (child.doc_type === 'id' && !validateIsraeliId(val)) {
-                          setChildErrors(prev => prev.map((ce, i) => i === idx ? { ...ce, id_number: 'תעודת זהות ישראלית לא תקינה (כולל ספרת ביקורת)' } : ce))
-                        } else {
-                          setChildErrors(prev => prev.map((ce, i) => i === idx ? { ...ce, id_number: undefined } : ce))
-                        }
-                      }}
-                      placeholder={child.doc_type === 'id' ? '123456789' : 'מספר דרכון'}
-                      dir="ltr"
-                      inputMode={child.doc_type === 'id' ? 'numeric' : 'text'}
-                      maxLength={child.doc_type === 'id' ? 9 : 20}
-                      required
-                    />
-                    {childErrors[idx]?.id_number && (
-                      <p className="text-xs text-red-500">{childErrors[idx].id_number}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Section>
-      )}
+      {/* ⚠️ העורך משותף עם הכרטסת (components/admin/ChildrenEditor). הלוגיקה
+          — שינוי מספר, מחיקה, נרמול — יושבת ב-lib/childrenEditor כדי ששני
+          מסלולי השמירה לא ייסחפו זה מזה. */}
+      <Section title={`פרטי הילדים (${children.length})`} icon={Users}>
+        <ChildrenEditor
+          items={children}
+          onChange={setChildren}
+          errors={childErrors}
+          onClearError={(idx, field) =>
+            setChildErrors(prev => prev.map((ce, i) => (i === idx ? { ...ce, [field]: undefined } : ce)))
+          }
+          onApproveBirth={approveBirth}
+          approvingIdx={approvingIdx}
+          onIdBlur={idx => {
+            const child = children[idx]
+            const val = child.id_number.trim()
+            let msg: string | undefined
+            if (!val) msg = 'שדה חובה'
+            else if (child.doc_type === 'id' && !validateIsraeliId(val)) msg = 'תעודת זהות ישראלית לא תקינה (כולל ספרת ביקורת)'
+            setChildErrors(prev => prev.map((ce, i) => (i === idx ? { ...ce, id_number: msg } : ce)))
+          }}
+          onMaternityDeleteQueued={ids => setMaternityToDelete(prev => Array.from(new Set([...prev, ...ids])))}
+        />
+      </Section>
 
       {/* ── Contact ── */}
       <Section title="פרטי קשר" icon={Phone}>

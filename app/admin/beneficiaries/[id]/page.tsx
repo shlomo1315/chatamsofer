@@ -40,6 +40,7 @@ import { pathToRoot, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
 import { nodeIsSelf } from '@/lib/beneficiaryNode'
 import EmailRow from './EmailRow'
 import ChildrenTable from './ChildrenTable'
+import ChildrenTabPanel from './ChildrenTabPanel'
 import PhoneActivity from './PhoneActivity'
 import { registrationSourceLabel } from '@/lib/distributionSources'
 import { genColor, deviatingGens, isNodeVerified } from '@/lib/lineageDeviation'
@@ -409,6 +410,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
     return isNaN(dt.getTime()) ? '—' : format(dt, 'dd/MM/yyyy HH:mm', { locale: he })
   }
   const fullName = [beneficiary.family_name, beneficiary.full_name].filter(Boolean).join(' ')
+  const docTypeVal = (v?: string) => (v === 'passport' ? 'passport' as const : v === 'id' ? 'id' as const : undefined)
   const registeredKids = Array.isArray(beneficiary.children)
     ? (beneficiary.children as { name: string; id_number?: string; gender?: string; birth_date?: string; marital_status?: string; birth_status?: 'pending' | 'approved'; maternity_aid_id?: string }[])
     : []
@@ -478,7 +480,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
           <div className="space-y-2.5">
             <DetailRow label="טלפון ראשי" value={beneficiary.phone ?? '—'} ltr icon={<Phone size={13} />} />
             <DetailRow label="טלפון משני" value={beneficiary.phone2 ?? '—'} ltr />
-            <EmailRow email={beneficiary.email} name={fullName} verifiedAt={beneficiary.email_verified_at} />
+            <EmailRow email={beneficiary.email} name={fullName} verifiedAt={beneficiary.email_verified_at} beneficiaryId={id} />
             <DetailRow label="כתובת" value={beneficiary.address ?? '—'} icon={<MapPin size={13} />} />
             <DetailRow label="עיר" value={beneficiary.city ?? '—'} />
           </div>
@@ -534,30 +536,43 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
   )
 
   // ── Tab: ילדים ──
-  const childrenTab = kids.length === 0 ? (
-    <Card><p className="text-center text-slate-400 text-sm py-6">לא נרשמו ילדים</p></Card>
-  ) : (
-    <Card padding="none">
-      <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-slate-100">
-        <div className="flex items-center gap-2">
-          <Users size={16} className="text-emerald-500" />
-          <h2 className="text-xs font-semibold text-slate-500 uppercase">ילדים ({kids.length})</h2>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* ⚠️ הצ'יפים ספרו רק את הערכים באנגלית והציגו 0 למשפחה שנרשמה
-              בפורטל. נוסף גם צ'יפ "לא צוין" — שני הראשונים אינם מסתכמים
-              ל-kids.length (ילדים מבקשות לידה נשמרים בלי מצב משפחתי),
-              וסכום שלא מסתדר נראה כמו באג. */}
-          <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">נשואים: {kids.filter(c => isChildMarried(c.marital_status)).length}</span>
-          <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">לא נשואים: {kids.filter(c => isChildSingle(c.marital_status)).length}</span>
-          {kids.some(c => !isChildMarried(c.marital_status) && !isChildSingle(c.marital_status)) && (
-            <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">לא צוין: {kids.filter(c => !isChildMarried(c.marital_status) && !isChildSingle(c.marital_status)).length}</span>
-          )}
-        </div>
-      </div>
-      {/* ⚠️ הטבלה הועברה לרכיב לקוח (בורר עמודות + גרירת רוחב הם hooks, והדף
-          הזה הוא Server Component). השורות מגיעות מפורמטות מכאן. */}
-      <ChildrenTable kids={kids.map(c => ({
+  // ⚠️ נערכים רק הילדים הרשומים (registeredKids). kids כולל גם ילדים
+  // ממוזגים מבקשות לידה שטרם נרשמו — שמירה שהייתה כוללת אותם הייתה
+  // "מרשמת" תינוק שעדיין ממתין לאישור לידה.
+  const childrenSummary = (
+    <>
+      {/* ⚠️ הצ'יפים ספרו רק את הערכים באנגלית והציגו 0 למשפחה שנרשמה
+          בפורטל. נוסף גם צ'יפ "לא צוין" — שני הראשונים אינם מסתכמים
+          ל-kids.length (ילדים מבקשות לידה נשמרים בלי מצב משפחתי),
+          וסכום שלא מסתדר נראה כמו באג. */}
+      <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">נשואים: {kids.filter(c => isChildMarried(c.marital_status)).length}</span>
+      <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">לא נשואים: {kids.filter(c => isChildSingle(c.marital_status)).length}</span>
+      {kids.some(c => !isChildMarried(c.marital_status) && !isChildSingle(c.marital_status)) && (
+        <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">לא צוין: {kids.filter(c => !isChildMarried(c.marital_status) && !isChildSingle(c.marital_status)).length}</span>
+      )}
+    </>
+  )
+
+  const childrenTab = (
+    <ChildrenTabPanel
+      beneficiaryId={id}
+      totalShown={kids.length}
+      summary={childrenSummary}
+      registered={registeredKids.map(c => ({
+        name: c.name ?? '',
+        id_number: c.id_number ?? '',
+        // ⚠️ שני השדות מועברים כפי שהם ולא ממוזגים: סוג המסמך נשמר במאגר
+        // תחת id_doc_type (הוותיק, 27,549) או doc_type (החדש, 240).
+        // המצאת ברירת מחדל או כתיבה לשדה אחד בלבד מוחקת נתונים קיימים.
+        doc_type: docTypeVal((c as { doc_type?: string }).doc_type),
+        id_doc_type: docTypeVal((c as { id_doc_type?: string }).id_doc_type),
+        gender: c.gender ?? '',
+        birth_date: c.birth_date ?? '',
+        marital_status: c.marital_status ?? '',
+        birth_status: c.birth_status,
+        maternity_aid_id: c.maternity_aid_id,
+      }))}
+      rows={kids.map(c => ({
         name: c.name,
         id_number: c.id_number,
         gender: c.gender,
@@ -566,8 +581,8 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         marital_label: maritalLabel(c),
         birth_status: c.birth_status,
         birth_cert_url: c.maternity_aid_id ? birthCerts[c.maternity_aid_id] ?? null : null,
-      }))} />
-    </Card>
+      }))}
+    />
   )
 
   // ── Tab: עץ הדורות ──

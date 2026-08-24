@@ -43,11 +43,18 @@ export default async function EditBeneficiaryPage({ params }: { params: Promise<
         lineage_manual: Array.isArray(b.lineage_manual) ? (b.lineage_manual as string[]) : [],
         eligibility_status: b.eligibility_status ?? 'pending',
         children: Array.isArray(b.children)
-          ? (b.children as { name?: string; id_number?: string; doc_type?: string; gender?: string; birth_date?: string; marital_status?: string; birth_status?: 'pending' | 'approved'; maternity_aid_id?: string }[]).map(
+          ? (b.children as { name?: string; id_number?: string; doc_type?: string; id_doc_type?: string; gender?: string; birth_date?: string; marital_status?: string; birth_status?: 'pending' | 'approved'; maternity_aid_id?: string }[]).map(
               (c) => ({
                 name: c.name ?? '',
                 id_number: c.id_number ?? '',
-                doc_type: (c.doc_type === 'passport' ? 'passport' : 'id') as 'id' | 'passport',
+                // 🔴 סוג המסמך נשמר תחת שני שמות: id_doc_type (27,549 רשומות,
+                // מהן 279 בעלי דרכון) ו-doc_type (240). כפיית 'id' על
+                // c.doc_type בלבד הציגה כל בעל דרכון ותיק כבעל ת"ז, ושמירה
+                // הייתה מוחקת את הסימון. ראו lib/childrenEditor.
+                doc_type: c.doc_type === 'passport' ? 'passport' as const
+                  : c.doc_type === 'id' ? 'id' as const : undefined,
+                id_doc_type: c.id_doc_type === 'passport' ? 'passport' as const
+                  : c.id_doc_type === 'id' ? 'id' as const : undefined,
                 gender: c.gender ?? '',
                 birth_date: c.birth_date ?? '',
                 marital_status: c.marital_status ?? '',
