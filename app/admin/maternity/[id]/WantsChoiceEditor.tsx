@@ -1,5 +1,7 @@
 'use client'
 import { useState } from 'react'
+import SendVouchersDialog from '@/components/admin/SendVouchersDialog'
+import { planVoucherPrompt, type VoucherPromptPlan } from '@/lib/maternityVoucherPrompt'
 import { CreditCard, Home, Check, Loader2 } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -16,6 +18,7 @@ export default function WantsChoiceEditor({
   const [foodCard, setFoodCard] = useState(initialFoodCard)
   const [recovery, setRecovery] = useState(initialRecovery)
   const [saving, setSaving] = useState(false)
+  const [voucherPlan, setVoucherPlan] = useState<VoucherPromptPlan | null>(null)
   const [err, setErr] = useState('')
 
   const save = async (nextFood: boolean, nextRec: boolean) => {
@@ -30,6 +33,17 @@ export default function WantsChoiceEditor({
         body: JSON.stringify({ id: aidId, wants_food_card: nextFood, wants_recovery: nextRec }),
       })
       if (!res.ok) { setFoodCard(prevFood); setRecovery(prevRec); const d = await res.json().catch(() => ({})); setErr(d.error ?? 'השמירה נכשלה') }
+      else {
+        // 🔴 תוספת הטבה → שואלים אם לשלוח את השובר החדש. קודם לא נשלח
+        // דבר בשום מסלול, ויולדת שהוסיפה כרטיס מזון נשארה בלעדיו.
+        const plan = planVoucherPrompt(
+          // ⚠️ recoveryHome זהה בשני הצדדים: הרכיב הזה משנה רק את הבחירה,
+          // ושינוי מדומה של הבית היה מייצר שאלה מיותרת.
+          { wantsFoodCard: prevFood, wantsRecovery: prevRec, recoveryHome: null },
+          { wantsFoodCard: nextFood, wantsRecovery: nextRec, recoveryHome: null },
+        )
+        if (plan.shouldAsk) setVoucherPlan(plan)
+      }
     } catch { setFoodCard(prevFood); setRecovery(prevRec); setErr('שגיאת תקשורת') }
     finally { setSaving(false) }
   }
@@ -47,6 +61,11 @@ export default function WantsChoiceEditor({
 
   return (
     <div className="flex flex-col gap-1.5">
+      {voucherPlan && (
+        <SendVouchersDialog open aidId={aidId} plan={voucherPlan}
+          onDone={() => setVoucherPlan(null)} />
+      )}
+
       <div className="flex items-center gap-2 flex-wrap">
         {chip(foodCard, <CreditCard size={13} />, 'כרטיס מזון', () => save(!foodCard, recovery))}
         {chip(recovery, <Home size={13} />, 'בית החלמה', () => save(foodCard, !recovery))}

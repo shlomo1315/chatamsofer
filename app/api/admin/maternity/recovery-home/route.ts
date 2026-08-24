@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
-import { sendRecoveryVoucherUpdate } from '@/lib/sendRecoveryVoucher'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,12 +52,10 @@ export async function POST(request: NextRequest) {
     })
   } catch { /* ignore */ }
 
-  // בית ההחלמה השתנה → שליחה מחדש של שובר ההבראה המעודכן (רק ללידה מאושרת עם מייל).
-  // רץ ברקע כדי לא לעכב את התגובה למזכיר.
+  // 🔴 השליחה *אינה* אוטומטית יותר. המסך שואל את המזכיר ומפעיל את
+  // /api/admin/maternity/send-vouchers לפי בחירתו. שליחה שקטה לא נתנה לו
+  // לדעת אם המשפחה כבר קיבלה, אם זה תיקון טכני, או אם עדיף להתקשר.
   const changed = previous !== next
-  if (changed) {
-    void sendRecoveryVoucherUpdate(admin, aidId).catch(e => console.error('[recovery-home] voucher resend failed:', e))
-  }
 
-  return NextResponse.json({ ok: true, recovery_home: next, voucherResent: changed })
+  return NextResponse.json({ ok: true, recovery_home: next, previous, changed })
 }

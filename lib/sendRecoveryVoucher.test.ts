@@ -11,9 +11,10 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 // מי כן מקבל שובר, ומי נחסם ומאיזו סיבה.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const deliverMail = vi.fn(async () => ({ ok: true }))
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const deliverMail = vi.fn(async (..._a: any[]) => ({ ok: true }))
 
-vi.mock('./sendMail', () => ({ deliverMail: (...a: unknown[]) => deliverMail(...(a as [])) }))
+vi.mock('./sendMail', () => ({ deliverMail: (...a: unknown[]) => deliverMail(...a) }))
 vi.mock('./departments', () => ({ mailFor: () => 'maternity@example.org' }))
 vi.mock('./maternityVoucher', () => ({
   buildRecoveryVoucherOnly: async () => [{ filename: 'v.pdf', mimeType: 'application/pdf', contentB64: 'AA==' }],

@@ -1,5 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
+import SendVouchersDialog from '@/components/admin/SendVouchersDialog'
+import { planVoucherPrompt, type VoucherPromptPlan } from '@/lib/maternityVoucherPrompt'
 import { useRouter } from 'next/navigation'
 import { Home, Loader2, Check, Pencil, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -25,6 +27,7 @@ export default function RecoveryHomeEditor({
   const [editing, setEditing] = useState(false)
   const [homes, setHomes] = useState<string[]>(BUILTIN_HOMES)
   const [saving, setSaving] = useState<string | null>(null)
+  const [voucherPlan, setVoucherPlan] = useState<VoucherPromptPlan | null>(null)
   const [err, setErr] = useState('')
   const [note, setNote] = useState('')
 
@@ -51,8 +54,13 @@ export default function RecoveryHomeEditor({
       })
       const data = await res.json()
       if (!res.ok || data.ok === false) { setErr(data.error || 'הפעולה נכשלה'); setSaving(null); return }
-      if (data.voucherResent) setNote('נשמר · שובר הבראה מעודכן נשלח למייל היולדת')
       setEditing(false)
+      // 🔴 שואלים לפני שליחה — ראו lib/maternityVoucherPrompt.
+      const plan = planVoucherPrompt(
+        { wantsFoodCard: false, wantsRecovery: !!data.previous, recoveryHome: data.previous ?? null },
+        { wantsFoodCard: false, wantsRecovery: !!home, recoveryHome: home || null },
+      )
+      if (plan.shouldAsk) { setVoucherPlan(plan); return }
       router.refresh()
     } catch {
       setErr('שגיאת רשת — נסה שוב')
@@ -65,6 +73,11 @@ export default function RecoveryHomeEditor({
   if (!editing) {
     return (
       <div className="flex flex-col gap-1">
+        {voucherPlan && (
+          <SendVouchersDialog open aidId={aidId} plan={voucherPlan}
+            onDone={() => { setVoucherPlan(null); router.refresh() }} />
+        )}
+
         <div className="flex items-center gap-2 flex-wrap text-sm">
           <span className="text-slate-500">שם: </span>
           <span className="font-semibold text-slate-800">{current || '— לא נבחר'}</span>

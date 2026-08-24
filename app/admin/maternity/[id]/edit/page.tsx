@@ -7,6 +7,8 @@ import { createClient } from '@/lib/supabase/client'
 import { validateIsraeliId } from '@/lib/validation'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
 import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
+import SendVouchersDialog from '@/components/admin/SendVouchersDialog'
+import { planVoucherPrompt, type VoucherPromptPlan } from '@/lib/maternityVoucherPrompt'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import { openDocInNewTab } from '@/lib/docBlob'
 import { format, addWeeks } from 'date-fns'
@@ -56,6 +58,9 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
   const [babyBirthDate, setBabyBirthDate] = useState('')
   const [recoveryHome, setRecoveryHome] = useState('')
   const [initialRecoveryHome, setInitialRecoveryHome] = useState('')
+  // תוכנית שליחת השוברים — נקבעת בשמירה ופותחת את הדיאלוג. ראו
+  // lib/maternityVoucherPrompt: המזכיר מחליט, לא המערכת.
+  const [voucherPlan, setVoucherPlan] = useState<VoucherPromptPlan | null>(null)
   const [certUrl, setCertUrl] = useState<string | null>(null)
   const [certFile, setCertFile] = useState<File | null>(null)
   // האם הזכאות הוארכה ידנית — אם כן, לא נדרוס את six_weeks_end בעת שמירת העריכה
@@ -82,9 +87,6 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
         setBabyGender(data.baby_gender ?? '')
         setBabyBirthDate(data.birth_date ?? '')
         setRecoveryHome(data.recovery_home ?? '')
-        // ⚠️ נשמר כדי לזהות שינוי בשמירה — שינוי בית החלמה חייב לעבור
-        // בנתיב הייעודי ששולח שובר מעודכן. ראו handleSave.
-        setInitialRecoveryHome(data.recovery_home ?? '')
         // ⚠️ נשמר כדי לזהות שינוי בשמירה — שינוי בית החלמה חייב לעבור
         // בנתיב הייעודי ששולח שובר מעודכן. ראו handleSave.
         setInitialRecoveryHome(data.recovery_home ?? '')
@@ -160,24 +162,17 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
         .eq('id', id)
       if (error) throw error
 
-      // 🔴 בית ההחלמה עובר בנתיב הייעודי — הוא ששולח את שובר ההבראה
-      // המעודכן ורושם ביומן הפעילות. כשל בשליחה אינו מבטל את שאר
-      // השמירה, אך מדווח למשתמש כדי שלא יניח שהמייל יצא.
+      // 🔴 בית ההחלמה נשמר כאן, אך השובר *אינו* נשלח מאליו: המזכיר נשאל
+      // בדיאלוג אחרי השמירה. שליחה שקטה לא נתנה לו לדעת אם המשפחה כבר
+      // קיבלה, אם זה תיקון טכני, או אם עדיף להתקשר.
       let voucherWarning = ''
-      if ((recoveryHome || '') !== (initialRecoveryHome || '')) {
-        try {
-          const res = await fetch('/api/admin/maternity/recovery-home', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ aidId: id, home: recoveryHome || null }),
-          })
-          if (!res.ok) {
-            const j = await res.json().catch(() => ({}))
-            voucherWarning = j.error || 'בית ההחלמה נשמר, אך שליחת השובר נכשלה'
-          }
-        } catch {
-          voucherWarning = 'בית ההחלמה נשמר, אך שליחת השובר נכשלה'
-        }
+      const homeChanged = (recoveryHome || '') !== (initialRecoveryHome || '')
+      if (homeChanged) {
+        const { error: rhErr } = await supabase
+          .from('maternity_aids')
+          .update({ recovery_home: recoveryHome || null })
+          .eq('id', id)
+        if (rhErr) voucherWarning = 'שמירת בית ההחלמה נכשלה'
       }
 
       // סנכרון פרטי התינוק בכרטסת המשפחה (שומר על סטטוס הלידה הקיים)
@@ -203,6 +198,18 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
         setSaving(false)
         return
       }
+
+      // 🔴 שינוי שמשפיע על השובר → נשאלת שאלה לפני שעוזבים את המסך.
+      // ⚠️ wantsFoodCard זהה בשני הצדדים: הטופס הזה אינו נוגע בבחירת
+      // ההטבות, ולכן אסור שייראה כאילו כרטיס המזון התווסף או בוטל.
+      if (homeChanged) {
+        const plan = planVoucherPrompt(
+          { wantsFoodCard: false, wantsRecovery: !!initialRecoveryHome, recoveryHome: initialRecoveryHome || null },
+          { wantsFoodCard: false, wantsRecovery: !!recoveryHome, recoveryHome: recoveryHome || null },
+        )
+        if (plan.shouldAsk) { setVoucherPlan(plan); setSaving(false); return }
+      }
+
       router.push(`/admin/maternity/${id}`)
       router.refresh()
     } catch {
@@ -218,8 +225,18 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
     return <div className="max-w-2xl bg-white rounded-xl border p-8 text-center text-red-500">{loadError}</div>
   }
 
+  // ⚠️ הניווט קורה רק אחרי סגירת הדיאלוג — בין אם נשלח ובין אם לא.
+  const finishAfterVouchers = () => {
+    setVoucherPlan(null)
+    router.push(`/admin/maternity/${id}`)
+    router.refresh()
+  }
+
   return (
     <div className="flex flex-col gap-5 max-w-2xl">
+      {voucherPlan && (
+        <SendVouchersDialog open aidId={id} plan={voucherPlan} onDone={finishAfterVouchers} />
+      )}
       <div className="flex items-center gap-3">
         <Link href={`/admin/maternity/${id}`} className="text-slate-400 hover:text-slate-600"><ArrowRight size={20} /></Link>
         <div>
