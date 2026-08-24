@@ -5,6 +5,7 @@ import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { buildHolidayVoucher } from '@/lib/holidayVoucher'
 import { loadHolidayVoucherTexts } from '@/lib/holidayVoucherTexts'
+import { holidayDistributionLabel } from '@/lib/holidayVoucher'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -113,6 +114,18 @@ export async function POST(request: NextRequest) {
   // 🔴 המלל הערוך, נטען פעם אחת לכל האצווה ולא פר-שובר.
   const texts = await loadHolidayVoucherTexts(db)
 
+  // 🔴 שם החלוקה והסכום — נשמטו מהשובר לגמרי. המשפחה קיבלה שובר בלי
+  // לדעת לאיזו חלוקה הוא שייך וכמה נטען לכרטיס.
+  const { data: distRow } = await db
+    .from('distributions')
+    .select('name, year, amount_per_family')
+    .eq('id', distributionId)
+    .maybeSingle()
+  const dist = distRow as { name?: string | null; year?: string | null; amount_per_family?: number | string | null } | null
+  const distributionName = holidayDistributionLabel(dist?.name, dist?.year)
+  // ⚠️ numeric מגיע כמחרוזת מ-PostgREST — Number() ולא שימוש ישיר.
+  const amount = dist?.amount_per_family != null ? Number(dist.amount_per_family) : null
+
   let sent = 0, failed = 0
   const failures: { id: string; email: string; error: string }[] = []
 
@@ -125,6 +138,8 @@ export async function POST(request: NextRequest) {
         centerAddress: c.address,
         centerHours: c.hours,
         centerPhone: c.phone,
+        distributionName,
+        amount: Number.isFinite(amount) ? amount : null,
         texts,
       })
 

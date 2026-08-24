@@ -3,6 +3,7 @@ import {
   buildHolidayVoucher, buildHolidayVouchers,
   HOLIDAY_VOUCHER_DEFAULTS, EMERALD, COPPER, PARCHMENT,
   HOLIDAY_HEADLINE, HOLIDAY_FRAME_STYLE, HOLIDAY_SECTION_TITLES,
+  HOLIDAY_ALERTS, holidayDistributionLabel,
 } from './holidayVoucher'
 import { NAVY, GOLD, CREAM } from './maternityVoucher'
 import { PDFDocument } from 'pdf-lib'
@@ -103,10 +104,13 @@ describe('🔴 הבחנה שעובדת גם בהדפסת שחור-לבן', () =>
   })
 
   it('כותרות הסעיפים אינן זהות לאלה של שובר הלידה', () => {
-    // ⚠️ "מוקד החלוקה שלכם" הופיע בשני השוברים. הנוסח כאן ייחודי לחגים.
+    // ⚠️ "מוקד החלוקה שלכם" הופיע בשני השוברים ובכך ביטל את ההבחנה.
+    // הבדיקה על הנוסח המשותף עצמו, ולא על מילה מסוימת — נוסח יכול
+    // להתעדכן, החפיפה היא זו שאסורה.
     const titles = Object.values(HOLIDAY_SECTION_TITLES)
     expect(titles.every(t => t.trim().length > 0)).toBe(true)
-    expect(HOLIDAY_SECTION_TITLES.center).toContain('חג')
+    expect(HOLIDAY_SECTION_TITLES.center).not.toBe('מוקד החלוקה שלכם')
+    expect(HOLIDAY_SECTION_TITLES.instructions).not.toBe('הוראות')
   })
 
   it('⚠️ הכותרת הענקית לא דוחפת את השובר לעמוד שני', async () => {
@@ -140,5 +144,39 @@ describe('ברירות המחדל של המלל', () => {
 
   it('כוללות הנחיה להביא תעודת זהות', () => {
     expect(HOLIDAY_VOUCHER_DEFAULTS.instructions.join(' ')).toContain('תעודת זהות')
+  })
+})
+
+describe('🔴 ההדגשות שבלעדיהן המשפחה מגיעה בלי שובר או ביום הלא נכון', () => {
+  it('אזהרת חובת ההדפסה קיימת ומפורשת', () => {
+    expect(HOLIDAY_ALERTS.mustPrint).toContain('חובה להדפיס')
+    expect(HOLIDAY_ALERTS.mustPrint).toContain('לא תוכלו לאסוף')
+  })
+
+  it('אזהרת הימים והשעות כוללת את שלוש הנקודות', () => {
+    const all = HOLIDAY_ALERTS.timesStrict.join(' ')
+    expect(all).toContain('אין לבוא בימים ושעות אחרות')
+    expect(all).toContain('בהתנדבות')
+    expect(all).toContain('יבוטלו הכרטיסים שלא נאספו')
+  })
+})
+
+describe('holidayDistributionLabel — שם החלוקה בשובר', () => {
+  it('מצרף שם ושנה', () => {
+    // בטבלה: name="תשרי", year="תשפ״ז"
+    expect(holidayDistributionLabel('תשרי', 'תשפ״ז')).toBe('חלוקת תשרי תשפ״ז')
+  })
+
+  it('אינו מכפיל את המילה "חלוקת" כשהיא כבר בשם', () => {
+    expect(holidayDistributionLabel('חלוקת פסח', 'תשפ״ז')).toBe('חלוקת פסח תשפ״ז')
+  })
+
+  it('בלי שנה — רק השם', () => {
+    expect(holidayDistributionLabel('תשרי', null)).toBe('חלוקת תשרי')
+  })
+
+  it('בלי שם — null, ולא שורה עם המילה "חלוקת" לבדה', () => {
+    expect(holidayDistributionLabel(null, 'תשפ״ז')).toBeNull()
+    expect(holidayDistributionLabel('   ', 'תשפ״ז')).toBeNull()
   })
 })

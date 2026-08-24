@@ -52,11 +52,27 @@ export const HOLIDAY_FRAME_STYLE = 'dashed' as const
  * נוסח זהה בשני מסמכים מבטל את ההבחנה הטקסטואלית.
  */
 export const HOLIDAY_SECTION_TITLES = {
-  center: 'היכן מקבלים את חבילת החג',
+  center: 'מוקד האיסוף שלכם',
   instructions: 'מה צריך להביא',
   amount: 'הסכום שנטען',
   activation: 'הפעלת הכרטיס — חובה לפני השימוש',
   unique: 'שובר אישי — תקף למוקד הרשום בלבד',
+}
+
+/**
+ * 🔴 שתי ההדגשות שבלעדיהן המשפחה מגיעה בלי שובר או ביום הלא נכון.
+ * מוצגות בתיבות בולטות ולא כשורה בין ההוראות — הן נבלעו שם.
+ */
+export const HOLIDAY_ALERTS = {
+  mustPrint:
+    'חובה להדפיס שובר זה ולהציגו במוקד איסוף הכרטיס. ' +
+    'ללא השובר לא תוכלו לאסוף את הכרטיס!',
+  timesStrict: [
+    'בשום אופן אין לבוא בימים ושעות אחרות!',
+    'הדבר פוגע במשפחות המוקדים שפתחו את ביתם וליבם עבורכם בהתנדבות.',
+    'בסיום ימי החלוקה יבוטלו הכרטיסים שלא נאספו,',
+    'ולא תהיה שום אפשרות לאוספם לאחר מכן!',
+  ],
 }
 
 /**
@@ -146,9 +162,9 @@ function drawHolidayHeader(c: Ctx, subtitle: string): number {
   }
 
   // 🔴 הכותרת הענקית — מהות השובר, לא שם הארגון. 46pt מול 26pt בלידה.
-  // ⚠️ ממורכזת על שארית הרוחב (בלי אזור הלוגו), אחרת היא נראית מוסטת.
-  const textCx = (W - 52 - (c.logo ? 60 : 0)) / 2 + 26
-  centerText(c, HOLIDAY_HEADLINE, textCx, bandY + 24, 46, rgb(1, 1, 1))
+  // ⚠️ ממורכזת על **רוחב העמוד המלא** ולא על שארית הרוחב: הקיזוז הקודם
+  // הזיז אותה שמאלה והיא נראתה מוסטת. הלוגו יושב בפינה ואינו דוחק אותה.
+  centerText(c, HOLIDAY_HEADLINE, W / 2, bandY + 24, 46, rgb(1, 1, 1))
   // שם הארגון יורד לשורת משנה קטנה מתחת לפס.
   centerText(c, 'היכל החתם סופר', W / 2, bandY - 18, 12, EMERALD)
 
@@ -161,11 +177,73 @@ function drawHolidayHeader(c: Ctx, subtitle: string): number {
   return y - 8
 }
 
+/**
+ * 🔴 כרטיס המוקד — הפרט שבגללו השובר קיים.
+ * מודגש הרבה מעבר לתיבה רגילה: מסגרת עבה, שם המוקד גדול, ושאר הפרטים
+ * מתחתיו. במוקד עמוס זה מה שצריך להיקרא ממטר.
+ */
+function centerCard(
+  c: Ctx, y: number,
+  label: string, address?: string | null, hours?: string | null, phone?: string | null,
+): number {
+  const x = MX
+  const w = W - MX * 2
+  const titleH = 28
+  const nameH = 27
+  const detail = [
+    address ? `כתובת: ${address}` : null,
+    hours ? `ימים ושעות: ${hours}` : null,
+    phone ? `טלפון: ${phone}` : null,
+  ].filter(Boolean) as string[]
+  const lineH = 16
+  const boxH = titleH + nameH + detail.length * lineH + 12
+
+  // מסגרת עבה (2.5 מול 1.2 בתיבה רגילה) — נבדלת גם בשחור-לבן.
+  c.page.drawRectangle({
+    x, y: y - boxH, width: w, height: boxH,
+    color: rgb(1, 1, 1), borderColor: EMERALD, borderWidth: 2.5,
+  })
+  c.page.drawRectangle({ x, y: y - titleH, width: w, height: titleH, color: EMERALD })
+  rightText(c, HOLIDAY_SECTION_TITLES.center, x + w - 14, y - titleH + 10, 13, rgb(1, 1, 1))
+
+  // שם המוקד — הגדול ביותר בגוף השובר.
+  centerText(c, label, W / 2, y - titleH - 24, 17, EMERALD)
+
+  let cy = y - titleH - nameH - 18
+  for (const line of detail) {
+    rightText(c, line, x + w - 16, cy, 11.5, INK)
+    cy -= lineH
+  }
+  return y - boxH - 12
+}
+
+/**
+ * תיבת אזהרה בולטת — רקע מלא וטקסט לבן, כדי שתיקרא ראשונה.
+ * ⚠️ רקע מלא ולא מסגרת: מסגרת נבלעת בין שאר התיבות בשובר.
+ */
+function alertBox(c: Ctx, y: number, lines: string[], size = 11.5): number {
+  const x = MX
+  const w = W - MX * 2
+  const lineH = size + 5
+  const boxH = lines.length * lineH + 18
+
+  c.page.drawRectangle({ x, y: y - boxH, width: w, height: boxH, color: EMERALD })
+  // פס נחושת בקצה — מוסיף היכר גם כשהרקע מודפס אפור.
+  c.page.drawRectangle({ x, y: y - boxH, width: w, height: 3, color: COPPER })
+
+  let cy = y - 20
+  for (const line of lines) {
+    centerText(c, line, W / 2, cy, size, rgb(1, 1, 1))
+    cy -= lineH
+  }
+  return y - boxH - 14
+}
+
 /** תיבה עם כותרת צבועה. */
 function titledBox(c: Ctx, x: number, y: number, w: number, title: string, lines: string[]): number {
-  const titleH = 26
-  const lineH = 18
-  const boxH = titleH + lines.length * lineH + 14
+  const titleH = 24
+  const lineH = 16.5
+  const boxH = titleH + lines.length * lineH + 12
 
   c.page.drawRectangle({ x, y: y - boxH, width: w, height: boxH, color: rgb(1, 1, 1), borderColor: COPPER, borderWidth: 1.2 })
   c.page.drawRectangle({ x, y: y - titleH, width: w, height: titleH, color: EMERALD })
@@ -208,33 +286,38 @@ export async function buildHolidayVoucher(data: HolidayVoucherData): Promise<Uin
   }
 
   // שם המשפחה — הפרט הראשון שמחפשים במוקד.
-  centerText(c, data.familyName, W / 2, y, 20, EMERALD)
-  y -= 30
+  centerText(c, data.familyName, W / 2, y, 19, EMERALD)
+  y -= 26
 
-  y = centerParagraph(c, data.texts.intro, W / 2, y, W - MX * 2 - 20, 11.5, SUB)
-  y -= 18
+  y = centerParagraph(c, data.texts.intro, W / 2, y, W - MX * 2 - 20, 11, SUB)
+  y -= 12
 
-  // 🔴 המוקד — הפרט המרכזי בשובר.
-  const centerLines = [data.centerLabel]
-  if (data.centerAddress) centerLines.push(data.centerAddress)
-  if (data.centerHours) centerLines.push(data.centerHours)
-  if (data.centerPhone) centerLines.push(`טלפון: ${data.centerPhone}`)
-  y = titledBox(c, MX, y, W - MX * 2, HOLIDAY_SECTION_TITLES.center, centerLines)
+  // 🔴 המוקד — הפרט המרכזי בשובר, בכרטיס מודגש.
+  y = centerCard(c, y, data.centerLabel, data.centerAddress, data.centerHours, data.centerPhone)
+
+  // 🔴 חובה להדפיס — בלי זה המשפחה מגיעה בידיים ריקות.
+  y = alertBox(c, y, [HOLIDAY_ALERTS.mustPrint], 11)
 
   // ⚠️ המספור בתו נקודה-אמצעית ולא "1." — ספרה+נקודה בתחילת שורה עברית
   // נדחפת לקצה השמאלי ברנדרר, והתוצאה היא ".1 יש להדפיס" במקום "1. יש".
   y = titledBox(c, MX, y, W - MX * 2, HOLIDAY_SECTION_TITLES.instructions, data.texts.instructions.map(t => `• ${t}`))
 
+  // 🔴 ההדגשה החזקה בשובר: הגעה מחוץ לימים ולשעות פוגעת במשפחות
+  // המתנדבות, וכרטיס שלא נאסף מבוטל ללא אפשרות שחזור.
+  y = alertBox(c, y, HOLIDAY_ALERTS.timesStrict, 10.5)
+
   // ── הסכום שנטען ──
+  // ⚠️ שורה נמוכה (32) ולא תיבה בגובה 46: שתי תיבות האזהרה החדשות דחפו
+  // את התוכן מתחת לתחתית הדף, וזה בדיוק המקום שבו החזרתיות עלתה בגובה.
   if (data.amount != null) {
-    const amtH = 46
+    const amtH = 32
     c.page.drawRectangle({
       x: MX, y: y - amtH, width: W - MX * 2, height: amtH,
       color: COPPER_SOFT, borderColor: COPPER, borderWidth: 1.2,
     })
     centerText(c, `${HOLIDAY_SECTION_TITLES.amount}: ${data.amount.toLocaleString('he-IL')} ₪`,
-      W / 2, y - 29, 14, EMERALD)
-    y -= amtH + 14
+      W / 2, y - 21, 13, EMERALD)
+    y -= amtH + 10
   }
 
   // ── הפעלת הכרטיס — אותן הוראות כמו בשובר היולדות ──
@@ -248,9 +331,9 @@ export async function buildHolidayVoucher(data: HolidayVoucherData): Promise<Uin
       'הזיהוי אוטומטי לפי הטלפון שבמערכת — ההפעלה רק מהמספרים:',
     ]
     const uniq = [...new Set((data.phones ?? []).map(p => String(p ?? '').trim()).filter(Boolean))]
-    const titleH = 22
-    const lineH = 14
-    const boxH = titleH + (lines.length + (uniq.length ? 1 : 0)) * lineH + 14
+    const titleH = 20
+    const lineH = 13
+    const boxH = titleH + (lines.length + (uniq.length ? 1 : 0)) * lineH + 10
 
     c.page.drawRectangle({
       x: MX, y: y - boxH, width: W - MX * 2, height: boxH,
@@ -259,25 +342,19 @@ export async function buildHolidayVoucher(data: HolidayVoucherData): Promise<Uin
     c.page.drawRectangle({ x: MX, y: y - titleH, width: W - MX * 2, height: titleH, color: EMERALD })
     rightText(c, HOLIDAY_SECTION_TITLES.activation, W - MX - 14, y - titleH + 7, 11, rgb(1, 1, 1))
 
-    let ay = y - titleH - 14
-    for (const ln of lines) { rightText(c, ln, W - MX - 14, ay, 10, INK); ay -= lineH }
+    let ay = y - titleH - 13
+    for (const ln of lines) { rightText(c, ln, W - MX - 14, ay, 9.5, INK); ay -= lineH }
     if (uniq.length) {
       const joined = [...uniq].reverse().join('     ')
       const pw = c.font.widthOfTextAtSize(joined, 11)
       c.page.drawText(joined, { x: W / 2 - pw / 2, y: ay, size: 11, font: c.font, color: EMERALD })
     }
-    y -= boxH + 14
+    y -= boxH + 10
   }
 
-  // ⚠️ אזהרת הייחודיות בצבע הפלטה ולא באדום: אדום שמור לשגיאות, וכאן
-  // מדובר בהנחיה ולא בתקלה.
-  const warnH = 34
-  c.page.drawRectangle({
-    x: MX, y: y - warnH, width: W - MX * 2, height: warnH,
-    color: rgb(1, 1, 1), borderColor: COPPER, borderWidth: 1,
-  })
-  centerText(c, HOLIDAY_SECTION_TITLES.unique, W / 2, y - 22, 11, EMERALD)
-  y -= warnH + 16
+  // ⚠️ תיבת "שובר אישי" הוסרה: היא חזרה על מה שההוראות ואזהרת הימים
+  // כבר אומרות, והגובה שלה נדרש לתיבות האזהרה החדשות. הנוסח נשמר
+  // ב-HOLIDAY_SECTION_TITLES.unique למקרה שיוחזר.
 
   centerText(c, data.texts.footer, W / 2, y, 11, SUB)
   y -= 20
@@ -306,4 +383,21 @@ export async function buildHolidayVouchers(items: HolidayVoucherData[]): Promise
 /** ⚠️ מיוצא לבדיקות: מוודא שהפלטה אכן שונה משל הלידה. */
 export const HOLIDAY_PALETTE: Record<string, RGB> = {
   EMERALD, EMERALD_SOFT, COPPER, COPPER_SOFT, PARCHMENT,
+}
+
+/**
+ * תווית החלוקה לשובר: "חלוקת תשרי תשפ״ז".
+ *
+ * ⚠️ בטבלה name="תשרי" ו-year="תשפ״ז" בשדות נפרדים, ורק צירופם קריא
+ * למשפחה. בלי המילה "חלוקת" השורה נקראת כשם חג ולא כשם החלוקה.
+ */
+export function holidayDistributionLabel(
+  name?: string | null,
+  year?: string | null,
+): string | null {
+  const n = (name ?? '').trim()
+  if (!n) return null
+  const y = (year ?? '').trim()
+  const base = n.startsWith('חלוקת') ? n : `חלוקת ${n}`
+  return y ? `${base} ${y}` : base
 }
