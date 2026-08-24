@@ -360,6 +360,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
   // נצבע אדום, ולכן ההתראה קפצה לכל מי שנרשם למרות ש-5 הדורות הראשונים תקינים.
   const earlyRedGens = deviatingGens(genStatus.entries())
   const earlyDeviation = earlyRedGens.length > 0
+
   // שרשרת (עם relation) לתגיות בן/חתן, וסימוני הצבע הידניים שנשמרו.
   const chainForMarks = Array.isArray(beneficiary?.lineage_chain)
     ? (beneficiary!.lineage_chain as { generation: number; name: string; relation: string | null }[])

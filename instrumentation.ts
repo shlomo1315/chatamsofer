@@ -38,15 +38,42 @@ export async function register() {
 
   // ── פריקה אוטומטית בתום 6 שבועות — מדי יום בחצות שעון ישראל ──
   if (process.env.UNLOAD_EXPIRED_DISABLED !== '1') {
-    let lastUnloadDate = ''
+    // 🔴 המצב נשמר במסד ולא בזיכרון, והחלון אינו שעה אחת.
+    //
+    // קודם: `if (hour !== 0 || date === lastUnloadDate) return` עם
+    // lastUnloadDate במשתנה מקומי. שתי תקלות שהצטברו —
+    //   · כל דפלוי אִפֵּס את המשתנה והפיל את התהליך;
+    //   · החלון היה שעה אחת בלבד, כך שאם השרת עלה מחדש ב-01:00
+    //     הפריקה נדלגה ליום שלם.
+    // התוצאה בפועל: הפריקה לא רצה 12 יום, ו-11 יולדות נשארו עם ₪6,600.
+    //
+    // עכשיו: רץ בכל שעה אחרי חצות ישראל, ומדלג רק אם *כבר רץ היום* לפי
+    // הרישום במסד — כך דפלוי אינו מוחק את הידיעה, ואיחור אינו מבטל.
     const checkUnload = async () => {
       const { date, hour } = israelParts()
-      if (hour !== 0 || date === lastUnloadDate) return
-      lastUnloadDate = date
+      if (hour < 0) return
       try {
+        const { getServiceClient } = await import('@/lib/apiAuth')
+        const db = getServiceClient()
+        if (!db) return
+
+        const KEY = 'unload_expired_last_run'
+        const { data } = await db.from('app_settings').select('value').eq('key', KEY).maybeSingle()
+        // ⚠️ app_settings.value היא עמודת text — נשמר כמחרוזת פשוטה.
+        if ((data as { value?: string } | null)?.value === date) return
+
         const { runUnloadExpired } = await import('@/lib/unloadExpired')
         const res = await runUnloadExpired()
-        console.log(`[unload-expired] daily run · processed=${res.processed}` + (res.error ? ` error=${res.error}` : ''))
+
+        // ⚠️ נרשם רק אחרי ריצה מוצלחת: כשל שנרשם כ"רץ היום" היה חוסם
+        // ניסיון חוזר עד מחר, והכסף היה נשאר תקוע יום נוסף.
+        if (res.ok) {
+          await db.from('app_settings').upsert(
+            { key: KEY, value: date, updated_at: new Date().toISOString() },
+            { onConflict: 'key' },
+          )
+        }
+        console.log(`[unload-expired] run ${date} ${hour}:00 · processed=${res.processed}` + (res.error ? ` error=${res.error}` : ''))
       } catch (err) { console.error('[unload-expired] daily run failed', err) }
     }
 
