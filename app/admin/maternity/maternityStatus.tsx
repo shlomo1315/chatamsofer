@@ -127,6 +127,35 @@ export async function deleteMaternityAid(supabase: ReturnType<typeof createClien
         .eq('id', mother.id)
     }
   }
+  // 🔴 פריקת הטעינה *לפני* המחיקה — אחרת הכסף נשאר יתום בנדרים.
+  //
+  // מקרה אמיתי: משפחת הרצוג. תיק אושר וטען ₪600 (18.08), התיק נמחק,
+  // נפתח תיק חדש שטען ₪600 נוספים (19.08) — והמשפחה נשארה עם ₪1,200
+  // בנדרים בעוד המערכת מציגה ₪600. נמצאו 37 טעינות יתומות כאלה.
+  //
+  // ⚠️ אחרי המחיקה אין דרך לפרוק: card_tlush_id נמחק יחד עם התיק, ואין
+  // ממה לגזור את מספר התלוש.
+  const tlushId = (aid as { card_tlush_id?: string | null }).card_tlush_id
+  const loadStatus = (aid as { card_load_status?: string | null }).card_load_status
+  if (tlushId && loadStatus === 'loaded') {
+    const res = await fetch('/api/nedarim/unload-card', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      // ⚠️ notify:false — מחיקת תיק אינה "ביטול אישור", ומייל על ביטול
+      // היה מבלבל משפחה שהתיק שלה נמחק מסיבה טכנית.
+      body: JSON.stringify({ aidId: aid.id, reason: 'מחיקת תיק היולדת', notify: false }),
+    })
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}))
+      // 🔴 עוצרים את המחיקה: תיק שנמחק בלי שהכסף נפרק הוא בדיוק המצב
+      // שהתיקון הזה נועד למנוע, ואין דרך חזרה.
+      throw new Error(
+        `לא ניתן לפרוק את הטעינה בנדרים (${d.error ?? 'שגיאה'}). ` +
+        'יש לפרוק ידנית לפני מחיקת התיק.',
+      )
+    }
+  }
+
   const { error } = await supabase.from('maternity_aids').delete().eq('id', aid.id)
   if (error) throw error
 }
