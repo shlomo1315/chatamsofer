@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Loader2, ExternalLink, Search, CheckCircle2, Wallet, Baby, Clock } from 'lucide-react'
+import { Loader2, ExternalLink, Search, CheckCircle2, Wallet, Baby, Clock, DownloadCloud } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // פילוח הפריקות — מתי, למי, ומה עלה בגורל הכסף.
@@ -72,6 +72,29 @@ export default function UnloadsPanel() {
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
   const [q, setQ] = useState('')
+  // 🔴 שליפה רטרואקטיבית: 13 הפריקות הראשונות בוצעו לפני שנוספה העמודה
+  // ששומרת את הסכום, והוא אבד. נדרים יודעת מה נפרק מכל תלוש.
+  const [backfill, setBackfill] = useState<{ found: number; missing: number; sum: number } | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const previewBackfill = async () => {
+    setBusy(true)
+    try {
+      const d = await fetch('/api/admin/maternity/backfill-unload-amounts').then(r => r.json())
+      if (d.error) { setErr(d.error); return }
+      setBackfill(d.summary)
+    } catch { setErr('השליפה מנדרים נכשלה') } finally { setBusy(false) }
+  }
+
+  const runBackfill = async () => {
+    if (!confirm('לכתוב את הסכומים שנמצאו בנדרים? הפעולה מעדכנת נתוני כסף.')) return
+    setBusy(true)
+    try {
+      const d = await fetch('/api/admin/maternity/backfill-unload-amounts', { method: 'POST' }).then(r => r.json())
+      if (d.error) { setErr(d.error); return }
+      window.location.reload()
+    } catch { setErr('העדכון נכשל') } finally { setBusy(false) }
+  }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -121,6 +144,34 @@ export default function UnloadsPanel() {
             color="text-amber-700" bg="bg-amber-50" border="border-amber-100" />
           <Stat icon={<Clock size={16} />} label="פריקה אחרונה" value={fmtDT(summary.lastUnload)}
             color="text-slate-700" bg="bg-slate-50" border="border-slate-200" />
+        </div>
+      )}
+
+      {/* ⚠️ מוצג רק כשיש פריקות בלי סכום שמור — אחרת הוא רעש. */}
+      {summary && summary.unknownAmount > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <div className="text-xs text-amber-900">
+            <strong>{summary.unknownAmount} פריקות</strong> בוצעו לפני שהמערכת שמרה את הסכום שחזר.
+            {backfill && (
+              <span className="mr-1">
+                נמצאו בנדרים {backfill.found} · סה״כ {ils(backfill.sum)}
+                {backfill.missing > 0 && ` · ${backfill.missing} לא נמצאו`}
+              </span>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button onClick={previewBackfill} disabled={busy}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50 transition-colors">
+              {busy ? <Loader2 size={13} className="animate-spin" /> : <DownloadCloud size={13} />}
+              בדוק בנדרים
+            </button>
+            {backfill && backfill.found > 0 && (
+              <button onClick={runBackfill} disabled={busy}
+                className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-600 disabled:opacity-50 transition-colors">
+                עדכן {backfill.found} רשומות
+              </button>
+            )}
+          </div>
         </div>
       )}
 
