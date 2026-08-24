@@ -55,6 +55,7 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
   const [babyGender, setBabyGender] = useState<'male' | 'female' | ''>('')
   const [babyBirthDate, setBabyBirthDate] = useState('')
   const [recoveryHome, setRecoveryHome] = useState('')
+  const [initialRecoveryHome, setInitialRecoveryHome] = useState('')
   const [certUrl, setCertUrl] = useState<string | null>(null)
   const [certFile, setCertFile] = useState<File | null>(null)
   // האם הזכאות הוארכה ידנית — אם כן, לא נדרוס את six_weeks_end בעת שמירת העריכה
@@ -81,6 +82,12 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
         setBabyGender(data.baby_gender ?? '')
         setBabyBirthDate(data.birth_date ?? '')
         setRecoveryHome(data.recovery_home ?? '')
+        // ⚠️ נשמר כדי לזהות שינוי בשמירה — שינוי בית החלמה חייב לעבור
+        // בנתיב הייעודי ששולח שובר מעודכן. ראו handleSave.
+        setInitialRecoveryHome(data.recovery_home ?? '')
+        // ⚠️ נשמר כדי לזהות שינוי בשמירה — שינוי בית החלמה חייב לעבור
+        // בנתיב הייעודי ששולח שובר מעודכן. ראו handleSave.
+        setInitialRecoveryHome(data.recovery_home ?? '')
         setCertUrl(data.birth_certificate_url ?? null)
         setEligibilityExtended(!!data.eligibility_extended)
         const ben = data.beneficiary as { id?: string; children?: Child[] } | undefined
@@ -138,7 +145,10 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
         baby_id_number: babyIdNumber || null,
         baby_gender: babyGender || null,
         birth_certificate_url: newCertUrl ?? null,
-        recovery_home: recoveryHome || null,
+        // 🔴 recovery_home *אינו* נכתב כאן. כתיבה ישירה עקפה את
+        // /api/admin/maternity/recovery-home — הנתיב היחיד ששולח את שובר
+        // ההבראה המעודכן וגם רושם ביומן הפעילות. יולדת שקיבלה בית החלמה
+        // מהטופס הזה לא קיבלה מייל עם שובר. ראו הקריאה אחרי ה-update.
       }
       // אם הזכאות הוארכה ידנית — שומרים על תאריך הסיום הידני ולא דורסים אותו.
       // אחרת מחשבים מחדש לפי תאריך הלידה (ברירת מחדל: 6 שבועות).
@@ -149,6 +159,26 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
         .update(updatePayload)
         .eq('id', id)
       if (error) throw error
+
+      // 🔴 בית ההחלמה עובר בנתיב הייעודי — הוא ששולח את שובר ההבראה
+      // המעודכן ורושם ביומן הפעילות. כשל בשליחה אינו מבטל את שאר
+      // השמירה, אך מדווח למשתמש כדי שלא יניח שהמייל יצא.
+      let voucherWarning = ''
+      if ((recoveryHome || '') !== (initialRecoveryHome || '')) {
+        try {
+          const res = await fetch('/api/admin/maternity/recovery-home', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ aidId: id, home: recoveryHome || null }),
+          })
+          if (!res.ok) {
+            const j = await res.json().catch(() => ({}))
+            voucherWarning = j.error || 'בית ההחלמה נשמר, אך שליחת השובר נכשלה'
+          }
+        } catch {
+          voucherWarning = 'בית ההחלמה נשמר, אך שליחת השובר נכשלה'
+        }
+      }
 
       // סנכרון פרטי התינוק בכרטסת המשפחה (שומר על סטטוס הלידה הקיים)
       if (motherId) {
@@ -168,6 +198,11 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
         }
       }
 
+      if (voucherWarning) {
+        setSaveError(voucherWarning)
+        setSaving(false)
+        return
+      }
       router.push(`/admin/maternity/${id}`)
       router.refresh()
     } catch {
