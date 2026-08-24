@@ -1,0 +1,193 @@
+'use client'
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { Loader2, ExternalLink, Search, CheckCircle2, Wallet, Baby, Clock } from 'lucide-react'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// פילוח הפריקות — מתי, למי, ומה עלה בגורל הכסף.
+//
+// 🔴 נבנה אחרי שהתגלה שהפריקה האוטומטית לא רצה 12 יום ואיש לא ידע:
+// המסך הציג מקף בעמודת "ימים לפריקה" ולא היה שום מקום לראות מה קרה
+// בפועל. מדובר ב-600 ₪ לכל משפחה.
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface Unload {
+  aidId: string
+  beneficiaryId: string | null
+  motherName: string
+  nedarimId: string | null
+  birthDate: string | null
+  silent: boolean
+  status: string | null
+  cardLast4: string | null
+  tlushId: string | null
+  loadedAt: string | null
+  unloadedAt: string | null
+  dueDate: string | null
+  alreadySpent: boolean
+  error: string | null
+}
+
+interface Summary {
+  total: number
+  moneyReleased: number
+  spentCount: number
+  moneySpent: number
+  lastUnload: string | null
+  silentCount: number
+}
+
+const fmt = (d?: string | null) => (d ? new Date(d).toLocaleDateString('he-IL') : '—')
+const fmtDT = (d?: string | null) => {
+  if (!d) return '—'
+  const t = new Date(d)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${p(t.getDate())}.${p(t.getMonth() + 1)}.${String(t.getFullYear()).slice(2)} ${p(t.getHours())}:${p(t.getMinutes())}`
+}
+const ils = (n: number) => `₪${n.toLocaleString('he-IL')}`
+
+export default function UnloadsPanel() {
+  const [rows, setRows] = useState<Unload[]>([])
+  const [summary, setSummary] = useState<Summary | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState('')
+  const [q, setQ] = useState('')
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    let alive = true
+    fetch('/api/admin/maternity/unloads')
+      .then(r => r.json())
+      .then(d => {
+        if (!alive) return
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        if (d.error) setErr(d.error)
+        else { setRows(d.unloads ?? []); setSummary(d.summary ?? null) }
+      })
+      .catch(() => { if (alive) setErr('טעינת הפריקות נכשלה') })
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-10 text-sm text-slate-500">
+        <Loader2 size={16} className="animate-spin" /> טוען פריקות…
+      </div>
+    )
+  }
+  if (err) return <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{err}</p>
+
+  const filtered = q.trim()
+    ? rows.filter(r => r.motherName.includes(q.trim()) || (r.nedarimId ?? '').includes(q.trim()))
+    : rows
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* ── סיכום ── */}
+      {summary && (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Stat icon={<CheckCircle2 size={16} />} label="סה״כ פריקות" value={String(summary.total)}
+            color="text-emerald-700" bg="bg-emerald-50" border="border-emerald-100" />
+          <Stat icon={<Wallet size={16} />} label="כסף שנפרק וחזר" value={ils(summary.moneyReleased)}
+            color="text-indigo-700" bg="bg-indigo-50" border="border-indigo-100" />
+          {/* 🔴 ההבחנה החשובה: כרטיס ש"נוצל במלואו" אינו כשל — המשפחה
+              השתמשה בכסף, ואין מה לפרוק. */}
+          <Stat icon={<Baby size={16} />} label="נוצלו במלואם" value={`${summary.spentCount} · ${ils(summary.moneySpent)}`}
+            color="text-amber-700" bg="bg-amber-50" border="border-amber-100" />
+          <Stat icon={<Clock size={16} />} label="פריקה אחרונה" value={fmtDT(summary.lastUnload)}
+            color="text-slate-700" bg="bg-slate-50" border="border-slate-200" />
+        </div>
+      )}
+
+      {/* ── חיפוש ── */}
+      <div className="flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-2">
+        <Search size={15} className="text-slate-400" />
+        <input value={q} onChange={e => setQ(e.target.value)}
+          placeholder="חיפוש לפי שם משפחה או מזהה נדרים…"
+          className="flex-1 bg-transparent text-sm outline-none" />
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-slate-300 py-8 text-center text-sm text-slate-400">
+          טרם בוצעו פריקות
+        </p>
+      ) : (
+        // ⚠️ בלי גלילה לרוחב — עמודות משניות מוסתרות במסך צר.
+        // ראו docs/no-horizontal-scroll.md
+        <div className="rounded-lg border border-slate-200">
+          <table className="w-full text-right text-xs">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="px-3 py-2 font-semibold text-slate-500">שם היולדת</th>
+                <th className="px-3 py-2 font-semibold text-slate-500">תאריך פריקה</th>
+                <th className="hidden px-3 py-2 font-semibold text-slate-500 sm:table-cell">תאריך לידה</th>
+                <th className="hidden px-3 py-2 font-semibold text-slate-500 md:table-cell">מועד יעד</th>
+                <th className="hidden px-3 py-2 font-semibold text-slate-500 lg:table-cell">כרטיס</th>
+                <th className="px-3 py-2 font-semibold text-slate-500">תוצאה</th>
+                <th className="px-3 py-2 font-semibold text-slate-500">תיק</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filtered.map(r => (
+                <tr key={r.aidId} className="hover:bg-slate-50">
+                  <td className="px-3 py-2">
+                    <span className="font-medium text-slate-800">{r.motherName}</span>
+                    {r.silent && (
+                      <span className="mr-1.5 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700">
+                        לידה שקטה
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 font-medium text-emerald-700">{fmtDT(r.unloadedAt)}</td>
+                  <td className="hidden px-3 py-2 text-slate-500 sm:table-cell">{fmt(r.birthDate)}</td>
+                  <td className="hidden px-3 py-2 text-slate-500 md:table-cell">{fmt(r.dueDate)}</td>
+                  <td className="hidden px-3 py-2 text-slate-500 lg:table-cell">
+                    {r.cardLast4 ? `••${r.cardLast4}` : '—'}
+                  </td>
+                  <td className="px-3 py-2">
+                    {r.alreadySpent ? (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                        נוצל במלואו
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
+                        נפרק
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2">
+                    <Link href={`/admin/maternity/${r.aidId}`}
+                      className="inline-flex items-center gap-1 text-indigo-600 hover:underline">
+                      <ExternalLink size={12} /> לתיק
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {filtered.length === 0 && (
+            <p className="border-t border-slate-100 px-3 py-4 text-center text-xs text-slate-400">
+              אין תוצאות לחיפוש
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Stat({ icon, label, value, color, bg, border }: {
+  icon: React.ReactNode; label: string; value: string
+  color: string; bg: string; border: string
+}) {
+  return (
+    <div className={`rounded-xl border ${border} ${bg} p-3`}>
+      <div className={`mb-1 inline-flex items-center gap-1.5 ${color}`}>
+        {icon}
+        <span className="text-xs font-medium text-slate-600">{label}</span>
+      </div>
+      <p className={`text-lg font-bold ${color}`}>{value}</p>
+    </div>
+  )
+}

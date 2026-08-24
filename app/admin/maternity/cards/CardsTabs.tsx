@@ -1,15 +1,17 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Warehouse, CreditCard } from 'lucide-react'
+import { Warehouse, CreditCard, PackageOpen } from 'lucide-react'
 import NedarimFamilies from './NedarimFamilies'
+import UnloadsPanel from './UnloadsPanel'
 
 export default function CardsTabs({ internal }: { internal: React.ReactNode }) {
-  const [tab, setTab] = useState<'internal' | 'nedarim'>('internal')
+  const [tab, setTab] = useState<'internal' | 'nedarim' | 'unloads'>('internal')
   // בהגעה מקישור "ניהול הכרטיס" (?zeout=...) פותחים ישירות את טאב נדרים קארד.
   // נעשה ב-useEffect (צד-לקוח) — ב-SSR אין window, ולכן initializer לבדו לא מספיק.
   useEffect(() => {
     const p = new URLSearchParams(window.location.search)
     if (p.get('zeout') || p.get('tab') === 'nedarim') setTab('nedarim')
+    else if (p.get('tab') === 'unloads') setTab('unloads')
   }, [])
 
   return (
@@ -18,6 +20,7 @@ export default function CardsTabs({ internal }: { internal: React.ReactNode }) {
         {([
           { id: 'internal', label: 'מוקדי מלאי פנימיים', icon: Warehouse },
           { id: 'nedarim', label: 'נדרים קארד', icon: CreditCard },
+          { id: 'unloads', label: 'פריקות', icon: PackageOpen },
         ] as const).map(t => {
           const Icon = t.icon
           const active = tab === t.id
@@ -33,6 +36,7 @@ export default function CardsTabs({ internal }: { internal: React.ReactNode }) {
 
       <div className={tab === 'internal' ? '' : 'hidden'}>{internal}</div>
       {tab === 'nedarim' && <NedarimFamilies />}
+      {tab === 'unloads' && <UnloadsPanel />}
     </div>
   )
 }

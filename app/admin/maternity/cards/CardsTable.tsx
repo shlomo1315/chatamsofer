@@ -150,7 +150,33 @@ export default function CardsTable({ aids }: { aids: MaternityAid[] }) {
         ? <span className="font-bold text-emerald-700">{ils(aid.card_balance)}</span>
         : <span className="text-slate-300">—</span>
       case 'countdown': {
-        const countdown = s === 'loaded' ? unloadCountdown(aid.six_weeks_end) : null
+        // 🔴 כרטיס שנפרק הציג מקף — המזכירות לא ידעה אם הפריקה בוצעה
+        // או שהמערכת פשוט שכחה אותו. מדובר בכסף, וחוסר ידיעה כאן הוא
+        // בדיוק מה שהסתיר 12 יום שבהם הפריקה לא רצה כלל.
+        const unloadedAt = (aid as { card_unloaded_at?: string | null }).card_unloaded_at
+        if (unloadedAt) {
+          return (
+            <div className="flex flex-col items-start gap-1">
+              <span className="inline-block rounded-full bg-emerald-100 px-2.5 py-1 text-[13px] font-semibold text-emerald-800">
+                נפרק · {fmtDate(unloadedAt)}
+              </span>
+              {/* ⚠️ "נוצל במלואו" אינו כשל אלא סיום תקין: נדרים החזירה
+                  "אין יתרה", כלומר המשפחה השתמשה בכסף. */}
+              {/נוצל במלואו/.test((aid as { card_load_error?: string | null }).card_load_error ?? '') && (
+                <span className="inline-block rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                  נוצל במלואו
+                </span>
+              )}
+            </div>
+          )
+        }
+
+        // ⚠️ נופלים לתאריך הלידה + 42 כש-six_weeks_end ריק: הוא NULL
+        // ב-194 מתוך 208 התיקים הטעונים, והעמודה הציגה מקף למרות
+        // שהמועד ידוע היטב.
+        const due = aid.six_weeks_end
+          || (aid.birth_date ? new Date(new Date(aid.birth_date).getTime() + 42 * 86400000).toISOString().slice(0, 10) : undefined)
+        const countdown = s === 'loaded' ? unloadCountdown(due) : null
         return (
           <div className="flex flex-col items-start gap-1">
             {countdown ? <span className={`inline-block text-[13px] font-semibold px-2.5 py-1 rounded-full ${countdown.cls}`}>{countdown.text}</span> : <span className="text-slate-300">—</span>}
