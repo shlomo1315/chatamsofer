@@ -50,11 +50,32 @@ export default function BeneficiaryReport() {
   const [filters, setFilters] = useState<ReportFilters>({})
   const [columns, setColumns] = useState<string[]>(DEFAULT_COLUMNS)
   const [groupBy, setGroupBy] = useState<GroupBy | ''>('')
+  // 🔴 ענף בעץ — "כל הצאצאים תחת אברהם סופר מדור 2". שונה מסינון לפי
+  // מספר דור, שמחזיר את כל מי שבאותו דור בכל העץ.
+  const [branch, setBranch] = useState<string>('')
+  const [branches, setBranches] = useState<{ id: string; name: string; generation: number; parentName: string | null }[]>([])
+  const [branchQuery, setBranchQuery] = useState('')
+  // ⚠️ הסינונים מחולקים ללשוניות: שמונה בוררים בטור אחד היו מסך שצריך
+  // לגלול כדי להבין מה נבחר.
+  const [tab, setTab] = useState<'branch' | 'who' | 'where' | 'output'>('branch')
 
-  const load = useCallback(async (f: ReportFilters): Promise<string | null> => {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    let alive = true
+    fetch('/api/admin/reports/branches')
+      .then(r => r.json())
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      .then(d => { if (alive && d?.nodes) setBranches(d.nodes) })
+      .catch(() => { /* בורר הענפים אינו קריטי לשאר המסך */ })
+    return () => { alive = false }
+  }, [])
+
+  const load = useCallback(async (f: ReportFilters, br: string): Promise<string | null> => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/admin/reports/beneficiaries?filters=${encodeURIComponent(JSON.stringify(f))}`)
+      const q = new URLSearchParams({ filters: JSON.stringify(f) })
+      if (br) q.set('branch', br)
+      const res = await fetch(`/api/admin/reports/beneficiaries?${q}`)
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'טעינה נכשלה')
       setData(json)
@@ -71,9 +92,9 @@ export default function BeneficiaryReport() {
   useEffect(() => {
     let alive = true
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    load(filters).then(err => { if (alive && err) toast.error(err) })
+    load(filters, branch).then(err => { if (alive && err) toast.error(err) })
     return () => { alive = false }
-  }, [filters])
+  }, [filters, branch])
 
   const toggleIn = <T,>(key: keyof ReportFilters, value: T) =>
     setFilters(prev => {
@@ -90,7 +111,7 @@ export default function BeneficiaryReport() {
       const res = await fetch('/api/admin/reports/beneficiaries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filters, columns, groupBy: groupBy || null }),
+        body: JSON.stringify({ filters, columns, groupBy: groupBy || null, branch: branch || null }),
       })
       if (!res.ok) {
         const j = await res.json().catch(() => ({}))
@@ -118,7 +139,7 @@ export default function BeneficiaryReport() {
       active ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300 bg-white text-slate-600 hover:border-indigo-400'
     }`
 
-  const hasFilters = Object.values(filters).some(v => Array.isArray(v) ? v.length > 0 : v != null)
+  const hasFilters = !!branch || Object.values(filters).some(v => Array.isArray(v) ? v.length > 0 : v != null)
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white">
@@ -130,7 +151,7 @@ export default function BeneficiaryReport() {
         <div className="flex items-center gap-2">
           {hasFilters && (
             <button
-              onClick={() => setFilters({})}
+              onClick={() => { setFilters({}); setBranch('') }}
               className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700"
             >
               <X size={12} /> נקה סינון
@@ -170,83 +191,136 @@ export default function BeneficiaryReport() {
 
         {/* ── הסינונים ── */}
         {data && (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Field label="קהילה">
-              <ChipList
-                values={data.options.communities}
-                selected={filters.communities ?? []}
-                onToggle={v => toggleIn('communities', v)}
-                chip={chip}
-              />
-            </Field>
+          <div className="flex flex-col gap-3">
+            {/* ── לשוניות הסינון ── */}
+            <div className="flex flex-wrap gap-1.5 border-b border-slate-200 pb-2">
+              {([
+                ['branch', 'ענף בעץ'],
+                ['who', 'מי'],
+                ['where', 'איפה'],
+                ['output', 'פלט'],
+              ] as const).map(([k, label]) => (
+                <button key={k} type="button" onClick={() => setTab(k)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    tab === k ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                  }`}>
+                  {label}
+                </button>
+              ))}
+            </div>
 
-            <Field label="דור">
-              <div className="flex flex-wrap gap-1.5">
-                {data.options.generations.map(g => (
-                  <button key={g} type="button" onClick={() => toggleIn('generations', g)}
-                    className={chip((filters.generations ?? []).includes(g))}>
-                    דור {g}
-                  </button>
-                ))}
+            {/* ── ענף בעץ ── */}
+            {tab === 'branch' && (
+              <div className="flex flex-col gap-2">
+                <p className="text-xs text-slate-500">
+                  בחרו אדם מהעץ כדי לקבל את <strong>כל הצאצאים תחתיו</strong>, בכל הדורות.
+                </p>
+                {branch && (
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-2">
+                    <span className="text-sm font-semibold text-indigo-900">
+                      {branches.find(b => b.id === branch)?.name ?? 'ענף נבחר'}
+                    </span>
+                    <button onClick={() => setBranch('')}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-indigo-700 hover:underline">
+                      <X size={12} /> בטל בחירה
+                    </button>
+                  </div>
+                )}
+                <input
+                  value={branchQuery} onChange={e => setBranchQuery(e.target.value)}
+                  placeholder="חיפוש שם בעץ…"
+                  className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                {/* ⚠️ מוגבל ל-80 תוצאות: הרשימה מכילה מאות צמתים, והצגת
+                    כולן הפכה את המסך לאיטי ובלתי קריא. */}
+                <div className="flex max-h-56 flex-col gap-1 overflow-y-auto">
+                  {branches
+                    .filter(b => !branchQuery.trim() || b.name.includes(branchQuery.trim()))
+                    .slice(0, 80)
+                    .map(b => (
+                      <button key={b.id} type="button" onClick={() => setBranch(b.id)}
+                        className={`rounded-lg border px-2.5 py-1.5 text-right text-xs transition-colors ${
+                          branch === b.id
+                            ? 'border-indigo-600 bg-indigo-600 text-white'
+                            : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-400'
+                        }`}>
+                        <span className="font-medium">{b.name}</span>
+                        <span className={`mr-2 ${branch === b.id ? 'text-indigo-100' : 'text-slate-400'}`}>
+                          דור {b.generation}
+                          {b.parentName ? ` · בן/בת של ${b.parentName}` : ''}
+                        </span>
+                      </button>
+                    ))}
+                </div>
               </div>
-            </Field>
+            )}
 
-            <Field label="עיר">
-              <ChipList
-                values={data.options.cities}
-                selected={filters.cities ?? []}
-                onToggle={v => toggleIn('cities', v)}
-                chip={chip}
-              />
-            </Field>
-
-            <Field label="מצב משפחתי">
-              <div className="flex flex-wrap gap-1.5">
-                {data.options.maritalStatuses.map(m => (
-                  <button key={m} type="button" onClick={() => toggleIn('maritalStatuses', m)}
-                    className={chip((filters.maritalStatuses ?? []).includes(m))}>
-                    {m}
-                  </button>
-                ))}
+            {/* ── מי ── */}
+            {tab === 'who' && (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Field label="קהילה">
+                  <ChipList values={data.options.communities} selected={filters.communities ?? []}
+                    onToggle={v => toggleIn('communities', v)} chip={chip} />
+                </Field>
+                <Field label="מצב משפחתי">
+                  <div className="flex flex-wrap gap-1.5">
+                    {data.options.maritalStatuses.map(m => (
+                      <button key={m} type="button" onClick={() => toggleIn('maritalStatuses', m)}
+                        className={chip((filters.maritalStatuses ?? []).includes(m))}>{m}</button>
+                    ))}
+                  </div>
+                </Field>
+                <Field label="גיל">
+                  <Range min={filters.ageMin} max={filters.ageMax}
+                    onMin={v => setFilters(p => ({ ...p, ageMin: num(v) }))}
+                    onMax={v => setFilters(p => ({ ...p, ageMax: num(v) }))} />
+                </Field>
+                <Field label="מספר ילדים">
+                  <Range min={filters.childrenMin} max={filters.childrenMax}
+                    onMin={v => setFilters(p => ({ ...p, childrenMin: num(v) }))}
+                    onMax={v => setFilters(p => ({ ...p, childrenMax: num(v) }))} />
+                </Field>
               </div>
-            </Field>
+            )}
 
-            <Field label="גיל">
-              <Range
-                min={filters.ageMin} max={filters.ageMax}
-                onMin={v => setFilters(p => ({ ...p, ageMin: num(v) }))}
-                onMax={v => setFilters(p => ({ ...p, ageMax: num(v) }))}
-              />
-            </Field>
-
-            <Field label="מספר ילדים">
-              <Range
-                min={filters.childrenMin} max={filters.childrenMax}
-                onMin={v => setFilters(p => ({ ...p, childrenMin: num(v) }))}
-                onMax={v => setFilters(p => ({ ...p, childrenMax: num(v) }))}
-              />
-            </Field>
-
-            <Field label="סטטוס רישום">
-              <div className="flex flex-wrap gap-1.5">
-                {data.options.statuses.map(s => (
-                  <button key={s} type="button" onClick={() => toggleIn('statuses', s)}
-                    className={chip((filters.statuses ?? []).includes(s))}>
-                    {STATUS_HE[s] ?? s}
-                  </button>
-                ))}
+            {/* ── איפה ── */}
+            {tab === 'where' && (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Field label="עיר">
+                  <ChipList values={data.options.cities} selected={filters.cities ?? []}
+                    onToggle={v => toggleIn('cities', v)} chip={chip} />
+                </Field>
+                <Field label="דור (מספר, בכל העץ)">
+                  <div className="flex flex-wrap gap-1.5">
+                    {data.options.generations.map(g => (
+                      <button key={g} type="button" onClick={() => toggleIn('generations', g)}
+                        className={chip((filters.generations ?? []).includes(g))}>דור {g}</button>
+                    ))}
+                  </div>
+                </Field>
               </div>
-            </Field>
+            )}
 
-            <Field label="גיליון סיכום (קבץ לפי)">
-              <div className="flex flex-wrap gap-1.5">
-                {([['', 'ללא'], ['community', 'קהילה'], ['generation', 'דור'], ['city', 'עיר']] as const).map(([v, l]) => (
-                  <button key={v} type="button" onClick={() => setGroupBy(v)} className={chip(groupBy === v)}>
-                    {l}
-                  </button>
-                ))}
+            {/* ── פלט ── */}
+            {tab === 'output' && (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Field label="סטטוס רישום">
+                  <div className="flex flex-wrap gap-1.5">
+                    {data.options.statuses.map(st => (
+                      <button key={st} type="button" onClick={() => toggleIn('statuses', st)}
+                        className={chip((filters.statuses ?? []).includes(st))}>{STATUS_HE[st] ?? st}</button>
+                    ))}
+                  </div>
+                </Field>
+                <Field label="גיליון סיכום (קבץ לפי)">
+                  <div className="flex flex-wrap gap-1.5">
+                    {([['', 'ללא'], ['community', 'קהילה'], ['generation', 'דור'], ['city', 'עיר']] as const).map(([v, l]) => (
+                      <button key={v} type="button" onClick={() => setGroupBy(v)} className={chip(groupBy === v)}>{l}</button>
+                    ))}
+                  </div>
+                </Field>
               </div>
-            </Field>
+            )}
           </div>
         )}
 

@@ -35,6 +35,7 @@ type Raw = {
   children_count: number | null
   marital_status: string | null
   eligibility_status: string | null
+  lineage_node_id: string | null
   lineage?: { generation: number | null } | { generation: number | null }[] | null
 }
 
@@ -56,7 +57,7 @@ async function loadRows(db: NonNullable<ReturnType<typeof getServiceClient>>) {
   // מ-TypeScript לגזור את צורת השורה, וה-builder אינו מתאים ל-PageResult.
   return fetchAllRows<Raw>((from, to) => db
     .from('beneficiaries')
-    .select('id, family_name, full_name, id_number, city, address, phone, email, community_affiliation, birth_date, children_count, marital_status, eligibility_status, lineage:lineage_nodes!beneficiaries_lineage_node_id_fkey(generation)')
+    .select('id, family_name, full_name, id_number, city, address, phone, email, community_affiliation, birth_date, children_count, marital_status, eligibility_status, lineage_node_id, lineage:lineage_nodes!beneficiaries_lineage_node_id_fkey(generation)')
     .range(from, to))
 }
 
@@ -80,7 +81,28 @@ function toReportRow(r: Raw): ReportRow {
     childrenCount: r.children_count ?? 0,
     maritalStatus: r.marital_status,
     status: r.eligibility_status,
-  }
+    // ⚠️ נשמר על השורה לסינון לפי ענף. אינו חלק מ-ReportFilters כי
+    // הסינון עצמו נעשה כאן (דורש גישה למסד) ולא במודול הטהור.
+    lineageNodeId: r.lineage_node_id,
+  } as ReportRow & { lineageNodeId: string | null }
+}
+
+/**
+ * 🔴 סינון לפי ענף בעץ — "כל הצאצאים תחת אברהם סופר מדור 2".
+ * שונה מסינון לפי מספר דור, שמחזיר את כל מי שבאותו דור בכל העץ.
+ *
+ * מחזיר null כשאין ענף נבחר, ואז אין סינון.
+ */
+async function branchNodeIds(
+  db: NonNullable<ReturnType<typeof getServiceClient>>,
+  rootId: string | null,
+): Promise<Set<string> | null> {
+  if (!rootId) return null
+  // ⚠️ דרך הפונקציה במסד ולא רקורסיה בקוד: 11,331 צמתים, ושליפת כולם
+  // כדי לטפס עליהם בזיכרון הייתה חוצה את תקרת 1,000 השורות.
+  const { data, error } = await db.rpc('lineage_descendant_ids', { root: rootId })
+  if (error || !Array.isArray(data)) return new Set()
+  return new Set((data as { id: string }[]).map(r => r.id))
 }
 
 function parseFilters(raw: string | null): ReportFilters {
@@ -106,7 +128,19 @@ export async function GET(request: NextRequest) {
 
   const all = rows.map(toReportRow)
   const filters = parseFilters(request.nextUrl.searchParams.get('filters'))
-  const { rows: filtered, excluded } = applyFilters(all, filters)
+
+  // 🔴 סינון הענף קודם לשאר: הוא מצמצם ל"כל הצאצאים תחת X", ורק אז
+  // מוחלים עליהם הגיל/העיר/הילדים.
+  const branchId = request.nextUrl.searchParams.get('branch')
+  const branch = await branchNodeIds(db, branchId)
+  const scoped = branch
+    ? all.filter(r => {
+        const nid = (r as ReportRow & { lineageNodeId?: string | null }).lineageNodeId
+        return nid != null && branch.has(nid)
+      })
+    : all
+
+  const { rows: filtered, excluded } = applyFilters(scoped, filters)
 
   // ערכי הבוררים נגזרים מכל המאגר ולא מהתוצאה המסוננת — אחרת בחירת
   // עיר אחת הייתה מרוקנת את רשימת הערים ומונעת בחירה נוספת.
@@ -115,7 +149,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     total: filtered.length,
-    totalAll: all.length,
+    totalAll: scoped.length,
     excluded,
     // תצוגה מקדימה בלבד — הייצוא המלא עובר ב-POST.
     preview: filtered.slice(0, 50),
@@ -166,7 +200,7 @@ export async function POST(request: NextRequest) {
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
   const body = (await request.json().catch(() => null)) as
-    | { filters?: ReportFilters; columns?: string[]; groupBy?: GroupBy | null }
+    | { filters?: ReportFilters; columns?: string[]; groupBy?: GroupBy | null; branch?: string | null }
     | null
 
   const keys = (body?.columns?.length ? body.columns : DEFAULT_COLUMNS)
@@ -176,7 +210,15 @@ export async function POST(request: NextRequest) {
   const { rows, error } = await loadRows(db)
   if (error) return NextResponse.json({ error }, { status: 500 })
 
-  const { rows: filtered } = applyFilters(rows.map(toReportRow), body?.filters ?? {})
+  // ⚠️ אותו סינון ענף כמו ב-GET — אחרת התצוגה והקובץ מציגים דברים שונים.
+  const branch = await branchNodeIds(db, body?.branch ?? null)
+  const scoped = branch
+    ? rows.map(toReportRow).filter(r => {
+        const nid = (r as ReportRow & { lineageNodeId?: string | null }).lineageNodeId
+        return nid != null && branch.has(nid)
+      })
+    : rows.map(toReportRow)
+  const { rows: filtered } = applyFilters(scoped, body?.filters ?? {})
 
   const detail = {
     name: 'צאצאים',
