@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   buildHolidayVoucher, buildHolidayVouchers,
   HOLIDAY_VOUCHER_DEFAULTS, EMERALD, COPPER, PARCHMENT,
+  HOLIDAY_HEADLINE, HOLIDAY_FRAME_STYLE, HOLIDAY_SECTION_TITLES,
 } from './holidayVoucher'
 import { NAVY, GOLD, CREAM } from './maternityVoucher'
 import { PDFDocument } from 'pdf-lib'
@@ -85,6 +86,49 @@ describe('buildHolidayVouchers — איחוד', () => {
   it('רשימה ריקה מחזירה PDF ריק ולא קורסת', async () => {
     const pdf = await buildHolidayVouchers([])
     expect(Buffer.from(pdf.slice(0, 5)).toString()).toBe('%PDF-')
+  })
+})
+
+describe('🔴 הבחנה שעובדת גם בהדפסת שחור-לבן', () => {
+  // הצבע לבדו אינו מספיק: רוב המשפחות מדפיסות בשחור-לבן, ושם ירוק וכחול
+  // הופכים לאותו אפור. ההבדל חייב להיות מבני וטקסטואלי.
+
+  it('הכותרת הראשית שונה מזו של שובר הלידה', () => {
+    expect(HOLIDAY_HEADLINE).not.toBe('היכל החתם סופר')
+    expect(HOLIDAY_HEADLINE).toContain('חג')
+  })
+
+  it('המסגרת מקווקוות ולא רציפה — נבדל במישוש ובעין גם בלי צבע', () => {
+    expect(HOLIDAY_FRAME_STYLE).toBe('dashed')
+  })
+
+  it('כותרות הסעיפים אינן זהות לאלה של שובר הלידה', () => {
+    // ⚠️ "מוקד החלוקה שלכם" הופיע בשני השוברים. הנוסח כאן ייחודי לחגים.
+    const titles = Object.values(HOLIDAY_SECTION_TITLES)
+    expect(titles.every(t => t.trim().length > 0)).toBe(true)
+    expect(HOLIDAY_SECTION_TITLES.center).toContain('חג')
+  })
+
+  it('⚠️ הכותרת הענקית לא דוחפת את השובר לעמוד שני', async () => {
+    // המקרה המסוכן: מוקד עם שם ארוך + כל השדות + הרבה הוראות.
+    // נבדק גם ה-Y התחתון ולא רק מספר העמודים: תוכן יכול לחרוג מהמסגרת
+    // המקווקוות בלי לפתוח עמוד שני, ואז הוא נדפס על הקו או מתחתיו.
+    const pdf = await buildHolidayVoucher({
+      familyName: 'משפחת אברמוביץ-רוזנברג',
+      distributionName: 'חלוקת חגי תשרי תשפ״ז',
+      centerLabel: 'מוקד ירושלים — אזור שמואל הנביא — משפחת שטרנבוך',
+      centerAddress: 'רחוב יחזקאל 44, קומה ב׳, דירה 12',
+      centerHours: "ימי שני ושלישי 19:00–21:00",
+      centerPhone: '02-1234567',
+      amount: 1500,
+      phones: ['0527101315', '0501234567'],
+      texts: HOLIDAY_VOUCHER_DEFAULTS,
+    })
+    const loaded = await PDFDocument.load(Buffer.from(pdf))
+    expect(loaded.getPageCount()).toBe(1)
+
+    const { lastBottomY, BOTTOM_LIMIT } = await import('./holidayVoucher')
+    expect(lastBottomY).toBeGreaterThan(BOTTOM_LIMIT)
   })
 })
 

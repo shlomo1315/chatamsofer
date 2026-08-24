@@ -1,14 +1,21 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // שובר חלוקת החגים.
 //
-// 🔴 פלטת צבעים **נפרדת** משובר הלידה — דרישה מפורשת. הלידה היא
-// כחול-נייבי + זהב; כאן ירוק-אזמרגד עמוק + נחושת חמה. שני השוברים
-// מגיעים לאותן משפחות, ובלי הבדל ויזואלי חד אי אפשר לדעת ביד איזה
-// שובר מחזיקים — במיוחד במוקד חלוקה עמוס.
+// 🔴 ההבדל משובר הלידה אינו יכול להיות צבע בלבד.
+// קודם נבדלו השניים רק בפלטה (כחול-זהב מול ירוק-נחושת), אבל רוב
+// המשפחות מדפיסות בבית בשחור-לבן — ושם שתי הפלטות קורסות לאותו אפור.
+// המבנה היה זהה פיקסל-בפיקסל: אותה מסגרת, אותו פס בגובה 92, אותה
+// כותרת "היכל החתם סופר" בגודל 26. בהדפסה אי אפשר היה להבדיל ביניהם.
 //
-// ⚠️ מנוע הציור משותף (lib/maternityVoucher): אותן פונקציות טקסט, מסגרת
-// ופסקה. רק הצבעים והתוכן שונים. שכפול המנוע היה מייצר שני מנועים
-// שמתפצלים בכל תיקון.
+// ההבחנה היום מבנית וטקסטואלית, ועובדת גם בלי צבע:
+//   · כותרת ענקית "חלוקת חגים" (46pt) על פס שחור מלא — במקום שם הארגון
+//   · מסגרת חיצונית מקווקוות במקום רציפה — נבדלת גם במבט חטוף
+//   · פס נמוך יותר (68 מול 92) — פרופורציה שונה של ראש הדף
+//   · כותרות סעיפים בנוסח ייחודי ("היכן מקבלים את חבילת החג")
+// הצבע נשאר כתוספת למי שמדפיס בצבע, לא כנשא ההבחנה.
+//
+// ⚠️ מנוע הציור משותף (lib/maternityVoucher): אותן פונקציות טקסט ופסקה.
+// שכפול המנוע היה מייצר שני מנועים שמתפצלים בכל תיקון.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { PDFDocument, rgb, type RGB } from 'pdf-lib'
@@ -28,6 +35,52 @@ export const COPPER = rgb(0.706, 0.443, 0.216)
 export const COPPER_SOFT = rgb(0.988, 0.949, 0.910)
 /** רקע שמנת חמים, גוון שונה מ-CREAM של הלידה. */
 export const PARCHMENT = rgb(0.996, 0.988, 0.976)
+
+// ── ההבחנה שאינה תלויה בצבע ──
+
+/**
+ * 🔴 הכותרת הראשית. שובר הלידה פותח ב"היכל החתם סופר"; כאן הכותרת היא
+ * מהות השובר עצמו, בגופן ענק. זה מה שקורא רואה ראשון גם בצילום שחור-לבן.
+ */
+export const HOLIDAY_HEADLINE = 'חלוקת חגים'
+
+/** מסגרת מקווקוות — שובר הלידה רציף. הבדל שניכר בלי צבע. */
+export const HOLIDAY_FRAME_STYLE = 'dashed' as const
+
+/**
+ * כותרות הסעיפים. ⚠️ "מוקד החלוקה שלכם" הופיע גם בשובר הלידה —
+ * נוסח זהה בשני מסמכים מבטל את ההבחנה הטקסטואלית.
+ */
+export const HOLIDAY_SECTION_TITLES = {
+  center: 'היכן מקבלים את חבילת החג',
+  instructions: 'מה צריך להביא',
+  amount: 'הסכום שנטען',
+  activation: 'הפעלת הכרטיס — חובה לפני השימוש',
+  unique: 'שובר אישי — תקף למוקד הרשום בלבד',
+}
+
+/**
+ * מצייר מלבן מקווקו. pdf-lib אינו תומך ב-dash על drawRectangle, ולכן
+ * הקו מורכב ממקטעים קצרים לאורך ארבע הצלעות.
+ */
+function dashedRect(
+  c: Ctx, x: number, y: number, w: number, h: number,
+  color: RGB, thickness: number, dash = 7, gap = 5,
+) {
+  const step = dash + gap
+  // אופקיים (תחתון ועליון)
+  for (let dx = 0; dx < w; dx += step) {
+    const len = Math.min(dash, w - dx)
+    c.page.drawLine({ start: { x: x + dx, y }, end: { x: x + dx + len, y }, color, thickness })
+    c.page.drawLine({ start: { x: x + dx, y: y + h }, end: { x: x + dx + len, y: y + h }, color, thickness })
+  }
+  // אנכיים (ימין ושמאל)
+  for (let dy = 0; dy < h; dy += step) {
+    const len = Math.min(dash, h - dy)
+    c.page.drawLine({ start: { x, y: y + dy }, end: { x, y: y + dy + len }, color, thickness })
+    c.page.drawLine({ start: { x: x + w, y: y + dy }, end: { x: x + w, y: y + dy + len }, color, thickness })
+  }
+}
 
 export interface HolidayVoucherData {
   familyName: string
@@ -72,23 +125,40 @@ export const HOLIDAY_VOUCHER_DEFAULTS: HolidayVoucherData['texts'] = {
  */
 function drawHolidayHeader(c: Ctx, subtitle: string): number {
   c.page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: PARCHMENT })
-  c.page.drawRectangle({ x: 18, y: 18, width: W - 36, height: H - 36, borderColor: COPPER, borderWidth: 2.5, color: PARCHMENT })
-  c.page.drawRectangle({ x: 24, y: 24, width: W - 48, height: H - 48, borderColor: EMERALD, borderWidth: 0.8, color: PARCHMENT })
 
-  rightText(c, 'בס"ד', W - 34, H - 44, 10, SUB)
+  // 🔴 מסגרת חיצונית **מקווקוות** — שובר הלידה רציף. זהו ההבדל הראשון
+  // שנקלט בעין, והוא שורד הדפסה בשחור-לבן.
+  dashedRect(c, 18, 18, W - 36, H - 36, COPPER, 2.2)
+  c.page.drawRectangle({ x: 26, y: 26, width: W - 52, height: H - 52, borderColor: EMERALD, borderWidth: 0.7 })
 
-  const bandH = 92
-  const bandY = H - 34 - bandH
-  c.page.drawRectangle({ x: 24, y: bandY, width: W - 48, height: bandH, color: EMERALD })
-  c.page.drawRectangle({ x: 24, y: bandY, width: W - 48, height: 4, color: COPPER })
+  rightText(c, 'בס"ד', W - 36, H - 46, 10, SUB)
 
+  // ⚠️ פס נמוך מזה של הלידה (68 מול 92) — פרופורציית ראש דף שונה,
+  // וגם חוסך את הגובה שהכותרת הענקית צורכת.
+  const bandH = 68
+  const bandY = H - 36 - bandH
+  c.page.drawRectangle({ x: 26, y: bandY, width: W - 52, height: bandH, color: EMERALD })
+
+  // הלוגו קטן יותר ובצד — הוא כבר לא הפריט הראשי בראש הדף.
   if (c.logo) {
-    const dim = 64
-    c.page.drawImage(c.logo, { x: W - 34 - dim, y: bandY + (bandH - dim) / 2, width: dim, height: dim })
+    const dim = 44
+    c.page.drawImage(c.logo, { x: W - 40 - dim, y: bandY + (bandH - dim) / 2, width: dim, height: dim })
   }
-  centerText(c, 'היכל החתם סופר', W / 2, bandY + bandH - 40, 26, rgb(1, 1, 1))
-  centerText(c, subtitle, W / 2, bandY + bandH - 64, 13, COPPER_SOFT)
-  return bandY - 28
+
+  // 🔴 הכותרת הענקית — מהות השובר, לא שם הארגון. 46pt מול 26pt בלידה.
+  // ⚠️ ממורכזת על שארית הרוחב (בלי אזור הלוגו), אחרת היא נראית מוסטת.
+  const textCx = (W - 52 - (c.logo ? 60 : 0)) / 2 + 26
+  centerText(c, HOLIDAY_HEADLINE, textCx, bandY + 24, 46, rgb(1, 1, 1))
+  // שם הארגון יורד לשורת משנה קטנה מתחת לפס.
+  centerText(c, 'היכל החתם סופר', W / 2, bandY - 18, 12, EMERALD)
+
+  // כותרת המשנה שהמשתמש עורך בהגדרות.
+  let y = bandY - 36
+  if (subtitle && subtitle !== HOLIDAY_HEADLINE) {
+    centerText(c, subtitle, W / 2, y, 12, COPPER)
+    y -= 18
+  }
+  return y - 8
 }
 
 /** תיבה עם כותרת צבועה. */
@@ -108,6 +178,15 @@ function titledBox(c: Ctx, x: number, y: number, w: number, title: string, lines
   }
   return y - boxH - 16
 }
+
+/**
+ * ⚠️ ה-Y האחרון שנוצל בשובר שנבנה לאחרונה — נחשף לבדיקות בלבד.
+ * ראו BOTTOM_LIMIT.
+ */
+export let lastBottomY = 0
+
+/** הגבול שמתחתיו התוכן חורג מהמסגרת המקווקוות (18) ומהעמוד (0). */
+export const BOTTOM_LIMIT = 30
 
 /** בונה שובר יחיד. */
 export async function buildHolidayVoucher(data: HolidayVoucherData): Promise<Uint8Array> {
@@ -140,11 +219,11 @@ export async function buildHolidayVoucher(data: HolidayVoucherData): Promise<Uin
   if (data.centerAddress) centerLines.push(data.centerAddress)
   if (data.centerHours) centerLines.push(data.centerHours)
   if (data.centerPhone) centerLines.push(`טלפון: ${data.centerPhone}`)
-  y = titledBox(c, MX, y, W - MX * 2, 'מוקד החלוקה שלכם', centerLines)
+  y = titledBox(c, MX, y, W - MX * 2, HOLIDAY_SECTION_TITLES.center, centerLines)
 
   // ⚠️ המספור בתו נקודה-אמצעית ולא "1." — ספרה+נקודה בתחילת שורה עברית
   // נדחפת לקצה השמאלי ברנדרר, והתוצאה היא ".1 יש להדפיס" במקום "1. יש".
-  y = titledBox(c, MX, y, W - MX * 2, 'הוראות', data.texts.instructions.map(t => `• ${t}`))
+  y = titledBox(c, MX, y, W - MX * 2, HOLIDAY_SECTION_TITLES.instructions, data.texts.instructions.map(t => `• ${t}`))
 
   // ── הסכום שנטען ──
   if (data.amount != null) {
@@ -153,7 +232,7 @@ export async function buildHolidayVoucher(data: HolidayVoucherData): Promise<Uin
       x: MX, y: y - amtH, width: W - MX * 2, height: amtH,
       color: COPPER_SOFT, borderColor: COPPER, borderWidth: 1.2,
     })
-    centerText(c, `סכום שנטען לכרטיס: ${data.amount.toLocaleString('he-IL')} ₪`,
+    centerText(c, `${HOLIDAY_SECTION_TITLES.amount}: ${data.amount.toLocaleString('he-IL')} ₪`,
       W / 2, y - 29, 14, EMERALD)
     y -= amtH + 14
   }
@@ -178,7 +257,7 @@ export async function buildHolidayVoucher(data: HolidayVoucherData): Promise<Uin
       color: EMERALD_SOFT, borderColor: EMERALD, borderWidth: 1.2,
     })
     c.page.drawRectangle({ x: MX, y: y - titleH, width: W - MX * 2, height: titleH, color: EMERALD })
-    rightText(c, 'הפעלת הכרטיס — חובה לפני השימוש!', W - MX - 14, y - titleH + 7, 11, rgb(1, 1, 1))
+    rightText(c, HOLIDAY_SECTION_TITLES.activation, W - MX - 14, y - titleH + 7, 11, rgb(1, 1, 1))
 
     let ay = y - titleH - 14
     for (const ln of lines) { rightText(c, ln, W - MX - 14, ay, 10, INK); ay -= lineH }
@@ -197,12 +276,17 @@ export async function buildHolidayVoucher(data: HolidayVoucherData): Promise<Uin
     x: MX, y: y - warnH, width: W - MX * 2, height: warnH,
     color: rgb(1, 1, 1), borderColor: COPPER, borderWidth: 1,
   })
-  centerText(c, 'השובר אישי ומיועד למוקד הרשום בלבד', W / 2, y - 22, 11, EMERALD)
+  centerText(c, HOLIDAY_SECTION_TITLES.unique, W / 2, y - 22, 11, EMERALD)
   y -= warnH + 16
 
   centerText(c, data.texts.footer, W / 2, y, 11, SUB)
   y -= 20
   centerText(c, hebrewDate(new Date()), W / 2, y, 9.5, SUB)
+
+  // ⚠️ ה-Y שנותר בתחתית הדף — נמדד בבדיקות כדי לתפוס גלישה מהמסגרת.
+  // כותרת גדולה יותר או מוקד עם שם ארוך דוחפים אותו כלפי מטה, ומתחת
+  // ל-BOTTOM_LIMIT התוכן חורג מהמסגרת המקווקוות.
+  lastBottomY = y
 
   return doc.save()
 }
