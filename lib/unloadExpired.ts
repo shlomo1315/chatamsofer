@@ -32,7 +32,15 @@ export async function unloadAidCard(
   opts: { returnToStock?: boolean } = {},
 ): Promise<{ ok: boolean; message?: string }> {
   const r = await prikatTlush(creds, String(aid.card_tlush_id))
-  if (!r.ok) {
+
+  // 🔴 "אין יתרה לפריקה" אינו כשל — הכסף כבר נוצל.
+  //
+  // ⚠️ קודם זה נחשב שגיאה, והתיק נשאר loaded עם ₪600 רשומים לנצח: הוא
+  // הופיע כל יום כ"ממתין לפריקה", ניסה שוב, ונכשל שוב. שתי משפחות
+  // נתקעו כך. המשמעות היא סיום תקין — הכרטיס מוצה.
+  const alreadySpent = !r.ok && /אין יתרה/.test(r.message ?? '')
+
+  if (!r.ok && !alreadySpent) {
     await admin.from('maternity_aids').update({ card_load_error: r.message }).eq('id', aid.id)
     return { ok: false, message: r.message }
   }
@@ -59,7 +67,7 @@ export async function unloadAidCard(
     // ניקוי הכרטיס והאיסוף בתיק רק אם נותק בנדרים בהצלחה — כדי שבלידה הבאה אפשר יהיה לחבר מחדש
     card_number: cardRemoved ? null : aid.card_number,
     card_picked_up_at: cardRemoved ? null : undefined,
-    card_load_error: cardRemoveError,
+    card_load_error: alreadySpent ? 'הכרטיס נוצל במלואו — נסגר ללא פריקה' : cardRemoveError,
   }).eq('id', aid.id)
 
   let stockReturned = false
@@ -85,6 +93,8 @@ export async function unloadAidCard(
     entity_id: aid.id,
     details: {
       tlushId: aid.card_tlush_id, reason,
+      // ⚠️ מתועד: הכרטיס נסגר כי הכסף נוצל, לא כי נפרק בפועל.
+      ...(alreadySpent ? { already_spent: true } : {}),
       card_removed: cardRemoved, card_remove_error: cardRemoveError, card_number_last4: cardNumber.slice(-4),
       stock_returned: stockReturned,
     },
