@@ -41,13 +41,19 @@ interface Found {
 }
 
 /**
- * מאתר את סכום התלוש בתוך תשובת נדרים.
+ * מאתר את סכום ה*פריקה* בתוך תשובת נדרים.
  *
- * ⚠️ מבנה התשובה אינו מתועד ומשתנה בין גרסאות, ולכן מחפשים בכל מערך
- * שנראה כמו רשימת טעינות ומזהים לפי TlushId. חיפוש לפי מפתח קבוע
- * אחד היה נשבר בשקט ומחזיר null לכולם.
+ * 🔴 לא סכום הטעינה. הניסיון הראשון חיפש שדה Amount כלשהו על התלוש
+ * והחזיר 600 לכל אחת מ-13 הפריקות — סכום הטעינה, לא מה שחזר בפועל.
+ * משפחה שקנתה ב-599.79 ונשארו לה 0.21 נרשמה כאילו חזרו 600.
+ *
+ * ⚠️ בנדרים הפריקה היא *תנועה נפרדת* בהיסטוריה, עם תיאור "פריקת תלוש".
+ * זו השורה שמחפשים כאן — לא את התלוש עצמו.
+ *
+ * ⚠️ המבנה אינו מתועד ומשתנה, ולכן החיפוש עובר על כל האובייקטים ומזהה
+ * לפי הטקסט. אין כאן ניחוש: אם לא נמצאה שורת פריקה — מוחזר null.
  */
-function findTlushAmount(payload: unknown, tlushId: string): number | null {
+function findUnloadAmount(payload: unknown, tlushId: string): number | null {
   if (!payload || typeof payload !== 'object') return null
   const wanted = String(tlushId).trim()
   let hit: number | null = null
@@ -58,13 +64,21 @@ function findTlushAmount(payload: unknown, tlushId: string): number | null {
     if (typeof node !== 'object') return
 
     const o = node as Record<string, unknown>
-    const idVal = o.TlushId ?? o.tlushId ?? o.Id
-    if (idVal != null && String(idVal).trim() === wanted) {
-      // ⚠️ שמות השדה משתנים; לוקחים את הראשון שהוא מספר תקין.
-      for (const k of ['Amount', 'Sum', 'FreeAmount', 'Balance', 'amount', 'sum']) {
-        const v = o[k]
-        const n = v != null ? Number(v) : NaN
-        if (Number.isFinite(n)) { hit = n; return }
+
+    // תיאור התנועה — כאן מזוהה הפריקה
+    const desc = String(o.Description ?? o.Comment ?? o.Details ?? o.Name ?? o.Product ?? '')
+    const isUnloadRow = /פריק/.test(desc)
+
+    if (isUnloadRow) {
+      // ⚠️ מוודאים שזו הפריקה של *התלוש הזה* ולא של אחר לאותה משפחה:
+      // למשפחה עם כמה לידות יש כמה תלושים.
+      const idVal = String(o.TlushId ?? o.tlushId ?? o.Id ?? '').trim()
+      if (!wanted || !idVal || idVal === wanted) {
+        for (const k of ['Amount', 'Sum', 'Total', 'amount', 'sum']) {
+          const v = o[k]
+          const n = v != null ? Number(v) : NaN
+          if (Number.isFinite(n)) { hit = Math.abs(n); return }
+        }
       }
     }
     Object.values(o).forEach(walk)
@@ -116,10 +130,10 @@ async function collect(): Promise<{ ok: boolean; rows?: Found[]; error?: string 
         cache.set(nedarimId, await getClientCardFull(creds, nedarimId))
       }
       const payload = cache.get(nedarimId)
-      const amount = findTlushAmount(payload, tlush)
+      const amount = findUnloadAmount(payload, tlush)
       out.push({ aidId: r.id, motherName, tlushId: tlush,
         unloadedAt: r.card_unloaded_at, amount,
-        note: amount != null ? 'נמצא בנדרים' : 'התלוש לא נמצא בהיסטוריה' })
+        note: amount != null ? 'נמצא בנדרים' : 'שורת הפריקה לא נמצאה בהיסטוריה' })
     } catch (e) {
       out.push({ aidId: r.id, motherName, tlushId: tlush,
         unloadedAt: r.card_unloaded_at, amount: null,

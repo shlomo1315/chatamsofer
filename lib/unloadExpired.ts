@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { getNedarimCreds, prikatTlush, removeMagneticByNumber } from '@/lib/nedarim'
+import { getNedarimCreds, prikatTlush, removeMagneticByNumber, getClientCard } from '@/lib/nedarim'
 import { unloadDueDate } from './unloadDueDate'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -32,6 +32,23 @@ export async function unloadAidCard(
   // לצאת, והוא חייב לחזור.
   opts: { returnToStock?: boolean } = {},
 ): Promise<{ ok: boolean; message?: string }> {
+  // 🔴 היתרה נשלפת מנדרים *לפני* הפריקה, ולא מ-card_balance שבמסד.
+  //
+  // ⚠️ card_balance נכתב פעם אחת בטעינה ואינו מתעדכן מקניות: משפחה
+  // שקנתה ב-599.79 ונשארו לה 0.21 עדיין רשומה אצלנו כ-600. שמירת הערך
+  // הזה כ"סכום שחזר" רשמה 600 לכל אחת מ-13 הפריקות — מספר שנראה מדויק
+  // והיה שגוי לחלוטין. נדרים היא מקור האמת ליתרה.
+  //
+  // ⚠️ נשלף לפני הפריקה: אחריה היתרה 0 בהגדרה.
+  let balanceBefore: number | null = null
+  const nedId = aid.beneficiary?.nedarim_id ?? null
+  if (nedId) {
+    try {
+      const card = await getClientCard(creds, String(nedId))
+      balanceBefore = card?.totalFreeAmount ?? null
+    } catch { /* כשל בשליפה — נשמר null ("לא נשמר"), לא ניחוש */ }
+  }
+
   const r = await prikatTlush(creds, String(aid.card_tlush_id))
 
   // 🔴 "אין יתרה לפריקה" אינו כשל — הכסף כבר נוצל.
@@ -61,15 +78,12 @@ export async function unloadAidCard(
     cardRemoved = true // אין כרטיס לנתק
   }
 
-  // 🔴 היתרה נשמרת *לפני* האיפוס — אחרת הסכום שחזר לארנק אבד לנצח,
-  // ואי אפשר לדעת אם חזרו 600 מלאים או 80 שנותרו.
-  // ⚠️ numeric מגיע כמחרוזת מ-PostgREST — Number() ולא שימוש ישיר.
-  const balanceBefore = aid.card_balance != null ? Number(aid.card_balance) : null
   await admin.from('maternity_aids').update({
     card_load_status: 'unloaded',
     card_unloaded_at: new Date().toISOString(),
     // ⚠️ כרטיס שנוצל במלואו — 0 חזר, וזה נתון ולא חוסר מידע.
-    card_unloaded_amount: alreadySpent ? 0 : (Number.isFinite(balanceBefore) ? balanceBefore : null),
+    // ⚠️ 0 כשהכרטיס נוצל במלואו — זה נתון ולא חוסר מידע.
+    card_unloaded_amount: alreadySpent ? 0 : balanceBefore,
     card_balance: 0,
     // ניקוי הכרטיס והאיסוף בתיק רק אם נותק בנדרים בהצלחה — כדי שבלידה הבאה אפשר יהיה לחבר מחדש
     card_number: cardRemoved ? null : aid.card_number,
