@@ -153,7 +153,7 @@ export default function DataTable<T extends { id: string }>({
                   {tableId && tc.rt.handle(i)}
                 </th>
               ))}
-              {actions && <th className="bg-slate-50 px-3 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-center">פעולות</th>}
+              {actions && <th className="w-px whitespace-nowrap bg-slate-50 px-3 py-3.5 text-center text-[11px] font-semibold uppercase tracking-wider text-slate-500">פעולות</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -193,7 +193,13 @@ export default function DataTable<T extends { id: string }>({
                     // ⚠️ ה-sticky הוסר יחד עם הגלילה לרוחב: הוא נועד לשמור
                     // את עמודת הפעולות נראית בטבלה שגוללת, ובלי גלילה הוא רק
                     // הוסיף צל על עמודה שממילא במסך.
-                    <td className="px-3 py-3.5 align-middle text-center" onClick={(e) => e.stopPropagation()}>{actions(row)}</td>
+                    // ⚠️ flex ולא text-center: תוכן הפעולות הוא כמעט תמיד
+                    // מכולת flex, ועליה text-center אינו משפיע — הכפתורים
+                    // נצמדו לקצה התא ונחתכו. w-px מכווץ את העמודה לרוחב
+                    // התוכן, ו-nowrap מונע שבירה של הכפתורים לשתי שורות.
+                    <td className="w-px whitespace-nowrap px-3 py-3.5 align-middle" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-center">{actions(row)}</div>
+                    </td>
                   )}
                 </tr>
               ))
