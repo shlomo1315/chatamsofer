@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { getNedarimCreds, prikatTlush, removeMagneticByNumber } from '@/lib/nedarim'
+import { unloadDueDate } from './unloadDueDate'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // פריקת טעינה של תיק בודד — משותפת לפריקה האוטומטית (6 שבועות) ולביטול טעינה
@@ -162,26 +163,48 @@ export async function runUnloadExpired(): Promise<{ ok: boolean; processed: numb
   if (!url || !key) return { ok: false, processed: 0, error: 'Supabase לא מוגדר' }
   const admin = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 
-  const today = new Date().toISOString().slice(0, 10) // yyyy-mm-dd
+  const todayStr = new Date().toISOString().slice(0, 10) // yyyy-mm-dd
 
-  // תיקים שהוטענו, יש להם מזהה טעינה, ועברו 6 שבועות מהלידה (six_weeks_end <= היום)
-  // מושכים גם את מספר הכרטיס ואת מזהה המשפחה בנדרים — כדי למחוק את הכרטיס המגנטי בתום הפריקה.
+  // 🔴 השאילתה *אינה* מסננת לפי six_weeks_end במסד.
+  //
+  // עד כה היא עשתה `.lte('six_weeks_end', today)`, ו-194 מתוך 208
+  // הכרטיסים הטעונים היו עם six_weeks_end = NULL. השוואה ל-NULL אינה
+  // מחזירה שורות לעולם — ולכן הפריקה רצה כל לילה, מצאה 0 תיקים, דיווחה
+  // הצלחה, וכלום לא נפרק. 12 יולדות עברו שישה שבועות עם ₪7,200 תקועים
+  // בכרטיסים, ואף אחד לא ידע.
+  //
+  // ⚠️ הסינון עבר לצד הקוד עם נפילה-לאחור ל-birth_date: תאריך הלידה
+  // קיים תמיד, ו-six_weeks_end הוא רק שדה נגזר שלעתים לא מולא.
   const { data: aids, error } = await admin
     .from('maternity_aids')
-    .select('id, card_tlush_id, six_weeks_end, card_number, beneficiary:beneficiaries(nedarim_id)')
+    .select('id, card_tlush_id, six_weeks_end, birth_date, card_number, beneficiary:beneficiaries(nedarim_id)')
     .eq('card_load_status', 'loaded')
     .not('card_tlush_id', 'is', null)
-    .lte('six_weeks_end', today)
   if (error) return { ok: false, processed: 0, error: error.message }
 
   let processed = 0
+  let skippedNoDate = 0
   for (const aid of aids ?? []) {
+    // ⚠️ דרך unloadDueDate המשותף ולא חישוב מקומי — כך המסך והפריקה
+    // מסכימים על אותו מועד. חישוב כפול הוא בדיוק מה שיצר את הבאג.
+    const due = unloadDueDate(aid as { six_weeks_end?: string | null; birth_date?: string | null })
+    if (!due) { skippedNoDate++; continue }
+    if (due > todayStr) continue   // טרם הגיע המועד
+
     try {
-      const r = await unloadAidCard(admin, creds, aid as UnloadableAid, `פריקה אוטומטית בתום 6 שבועות (${aid.six_weeks_end})`)
+      const derived = !(aid.six_weeks_end ?? '').trim()
+      const r = await unloadAidCard(admin, creds, aid as UnloadableAid,
+        `פריקה אוטומטית בתום 6 שבועות (${due}${derived ? ' — נגזר מתאריך הלידה' : ''})`)
       if (r.ok) processed++
     } catch (e) {
       console.error('[unload-expired] failed for', aid.id, e)
     }
+  }
+
+  // ⚠️ מדווח על תיקים שאין מהם לגזור מועד — אחרת הם נשארים טעונים
+  // לנצח בלי שאיש יידע.
+  if (skippedNoDate > 0) {
+    console.warn(`[unload-expired] ${skippedNoDate} תיקים ללא תאריך לידה ו-six_weeks_end — לא נפרקו`)
   }
 
   return { ok: true, processed }
