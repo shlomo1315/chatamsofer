@@ -71,3 +71,30 @@ export function mailFor(key: DepartmentKey, labelOverride?: string): { fromEmail
 
 /** שם התצוגה לפניות על סדר היוחסין — הנושא ולא המחלקה. */
 export const LINEAGE_MAIL_LABEL = 'תיקוני יוחסין'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 departmentByEmail לעיל מכיר רק את המחלקות הקבועות בקוד. תיבה שנוספה
+// מהממשק לא הייתה מזוהה — המייל הנכנס אליה לא שויך לתיבה, ולא נשלח לה
+// מענה אוטומטי. הגרסה הזו בודקת גם את התיבות המותאמות.
+//
+// ⚠️ אסינכרונית כי היא קוראת מהמסד. הקוראים שמריצים בזרימת המייל
+// הנכנס חייבים להשתמש בה; השאר יכולים להישאר על הגרסה הסינכרונית.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function departmentByEmailAsync(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: any,
+  email?: string | null,
+): Promise<Department | null> {
+  const fixed = departmentByEmail(email)
+  if (fixed) return fixed
+  if (!email || !db) return null
+  try {
+    const { loadCustomMailboxes, asDepartment } = await import('./customMailboxes')
+    const e = email.toLowerCase().trim()
+    const custom = await loadCustomMailboxes(db)
+    const hit = custom.find(m => m.email === e)
+    return hit ? asDepartment(hit) : null
+  } catch {
+    return null
+  }
+}

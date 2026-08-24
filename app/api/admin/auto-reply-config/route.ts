@@ -3,6 +3,7 @@ import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
 import { getAutoReplyConfig, saveAutoReplyConfig, normalizeConfig, type AutoReplyMap } from '@/lib/autoReplyConfig'
 import { renderAutoReply } from '@/lib/autoReplySender'
 import { DEPARTMENTS, type DepartmentKey } from '@/lib/departments'
+import { loadCustomMailboxes, saveCustomMailboxes, asDepartment } from '@/lib/customMailboxes'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // הגדרות המענה האוטומטי — נוסח, כפתורים, סעיפים ומכסה לכל תיבה.
@@ -21,9 +22,15 @@ export async function GET() {
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
   const config = await getAutoReplyConfig(db)
+  // ⚠️ התיבות המותאמות מצטרפות לרשימה בזמן ריצה: DEPARTMENTS קבוע בקוד,
+  // והוספת כתובת בלעדיהן חייבה פריסה חדשה.
+  const custom = await loadCustomMailboxes(db)
   return NextResponse.json({
     config,
-    departments: Object.values(DEPARTMENTS).map(d => ({ key: d.key, label: d.label, email: d.email, color: d.color })),
+    departments: [
+      ...Object.values(DEPARTMENTS).map(d => ({ key: d.key, label: d.label, email: d.email, color: d.color })),
+      ...custom.map(asDepartment).map(d => ({ key: d.key, label: d.label, email: d.email, color: d.color, custom: true })),
+    ],
   })
 }
 

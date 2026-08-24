@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 import { deliverMail, urlToAttachment, type MailAttachment } from '@/lib/sendMail'
-import { departmentByEmail, BRAND_NAME } from '@/lib/departments'
+import { departmentByEmail, departmentByEmailAsync, BRAND_NAME } from '@/lib/departments'
 import { sendAutoReply } from '@/lib/autoReplySender'
 import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { handleEmailRequest, isRequestSubject, isRequestMailFor, effectiveRequestSubject } from '@/lib/emailRequestIntake'
@@ -650,6 +650,33 @@ export async function POST(request: NextRequest) {
 
     const loanTok = rawHaystack.match(/\+l([A-Za-z0-9_-]{8,})@/i)?.[1]
 
+    // בירור יולדות — אותו מנגנון בדיוק, עם קידומת m. ראו lib/maternityInquiry.
+    const maternityTok = rawHaystack.match(/\+m([A-Za-z0-9_-]{8,})@/i)?.[1]
+    if (maternityTok) {
+      try {
+        const { verifyReplyToken } = await import('@/lib/publicToken')
+        const aidId = await verifyReplyToken(admin, maternityTok, 'm')
+        if (aidId) {
+          const { handleMaternityInquiryReply } = await import('@/lib/maternityInquiry')
+          const { stripQuotedReply } = await import('@/lib/surveyParse')
+          const raw = stripQuotedReply(
+            (plain && plain.trim()) ? plain : htmlToPlainText(html ?? ''),
+          )
+          const ok = await handleMaternityInquiryReply(admin, aidId, raw, {
+            messageId: getHeader(data.headers, 'message-id').trim() || undefined,
+            references: (getHeader(data.headers, 'references').trim()
+              || getHeader(data.headers, 'in-reply-to').trim()) || undefined,
+            senderName: from.name || from.email || null,
+          })
+          // ⚠️ יציאה מוקדמת רק בהצלחה: כשל בקליטה חייב להמשיך לנתיבי
+          // הקליטה האחרים, אחרת המייל נבלע ואיש לא רואה אותו.
+          if (ok) return NextResponse.json({ ok: true, handled: 'maternity_inquiry' })
+        }
+      } catch (e) {
+        console.error('[inbound] קליטת בירור יולדת נכשלה:', e)
+      }
+    }
+
     // אבחון: נרשם תמיד כשהמייל נראה כתשובת בירור, גם אם הטוקן לא נמצא.
     // בלי זה אי אפשר לדעת למה הקליטה נכשלה.
     if (looksLikeLoanInquiry || loanTok) {
@@ -720,7 +747,10 @@ export async function POST(request: NextRequest) {
   // ⚠️ שומרים את מפתח המחלקה (department) לצד to_email — קודם לא נשמר כלל
   // (ריק בכל השורות), מה שהשפיע על סינון ההרשאות (canAccessInboundMail בודק
   // department או to_email). נגזר מכתובת הנמען שנפתרה.
-  const resolvedDept = departmentByEmail(resolvedToEmail)?.key ?? null
+  // ⚠️ הגרסה האסינכרונית: היא מכירה גם תיבות שנוספו מהממשק. הסינכרונית
+  // רואה רק את המחלקות הקבועות בקוד, ולכן מייל לתיבה חדשה לא היה משויך
+  // אליה — ולא היה מקבל מענה אוטומטי.
+  const resolvedDept = (await departmentByEmailAsync(admin, resolvedToEmail))?.key ?? null
   const { data: insertedRows, error } = await admin.from('inbound_emails').upsert({
     message_id: messageId,
     from_email: from.email,

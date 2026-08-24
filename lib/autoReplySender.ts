@@ -49,6 +49,8 @@ async function underCap(db: SupabaseClient, email: string, cap: number): Promise
  * שיישלח.
  */
 export function renderAutoReply(dept: DepartmentKey, settings: AutoReplySettings) {
+  // ⚠️ תיבה מותאמת אינה ב-DEPARTMENTS; נופלים ל-main רק לצורך הצבע
+  // והמיתוג, וההגדרות עצמן מגיעות מ-settings.
   const d = DEPARTMENTS[dept] ?? DEPARTMENTS.main
   const active = activeReplyContent(settings)
   return {
@@ -88,7 +90,11 @@ export async function sendAutoReply(
 ): Promise<boolean> {
   try {
     const dept = (opts.department ?? 'main') as DepartmentKey
-    if (!DEPARTMENTS[dept]) return false
+    // 🔴 תיבה שנוספה מהממשק אינה ב-DEPARTMENTS, וחסימה כאן הייתה מונעת
+    // ממנה מענה אוטומטי לגמרי — היא הייתה מופיעה בהגדרות ולא עובדת.
+    // ההגדרות עצמן הן מקור האמת: בלי settings.enabled ממילא לא נשלח דבר.
+    const isCustom = String(dept).startsWith('custom_')
+    if (!DEPARTMENTS[dept] && !isCustom) return false
 
     const config = await getAutoReplyConfig(db)
     const settings = config[dept]

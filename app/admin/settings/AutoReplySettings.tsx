@@ -16,7 +16,7 @@ import type {
 // של מייל ישירות ל-DOM של הניהול כבר גרמה כאן לקריסת removeChild.
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface Dept { key: string; label: string; email: string; color: string }
+interface Dept { key: string; label: string; email: string; color: string; custom?: boolean }
 
 export default function AutoReplySettings() {
   const [saved, setSaved] = useState<AutoReplyMap>({})
@@ -28,6 +28,11 @@ export default function AutoReplySettings() {
   const [okMsg, setOkMsg] = useState('')
   const [openKey, setOpenKey] = useState<string | null>(null)
   const frameRef = useRef<HTMLIFrameElement>(null)
+  // 🔴 הוספת תיבה חדשה: DEPARTMENTS קבוע בקוד, ובלי זה כתובת חדשה
+  // חייבה שינוי קוד ופריסה כדי לקבל מענה אוטומטי.
+  const [newLabel, setNewLabel] = useState('')
+  const [newEmail, setNewEmail] = useState('')
+  const [addingBox, setAddingBox] = useState(false)
 
   useEffect(() => {
     fetch('/api/admin/auto-reply-config')
@@ -107,6 +112,47 @@ export default function AutoReplySettings() {
     return <div className="flex items-center gap-2 text-slate-500 text-sm py-6"><Loader2 size={16} className="animate-spin" /> טוען…</div>
   }
 
+  const reloadDepts = async () => {
+    const d = await fetch('/api/admin/auto-reply-config').then(r => r.json()).catch(() => null)
+    if (d?.departments) setDepts(d.departments)
+  }
+
+  const addMailbox = async () => {
+    const email = newEmail.trim().toLowerCase()
+    const label = newLabel.trim()
+    if (!email || !label) { setErr('יש למלא שם וכתובת'); return }
+    setAddingBox(true); setErr('')
+    try {
+      const res = await fetch('/api/admin/mailboxes/custom', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label, email }),
+      })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'ההוספה נכשלה')
+      setNewLabel(''); setNewEmail('')
+      setOkMsg('התיבה נוספה')
+      await reloadDepts()
+      setTimeout(() => setOkMsg(''), 2500)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'ההוספה נכשלה')
+    } finally { setAddingBox(false) }
+  }
+
+  const removeMailbox = async (email: string, label: string) => {
+    if (!confirm(`להסיר את התיבה "${label}"? הנוסח שנשמר לה יישמר למקרה שתוסיפו אותה שוב.`)) return
+    try {
+      const res = await fetch('/api/admin/mailboxes/custom', {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'ההסרה נכשלה')
+      await reloadDepts()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'ההסרה נכשלה')
+    }
+  }
+
   return (
     <div className={`flex flex-col gap-4 ${dirty ? "pb-28" : ""}`}>
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -117,6 +163,27 @@ export default function AutoReplySettings() {
           <p className="text-sm text-slate-500 mt-1 leading-relaxed">
             לכל תיבה נוסח משלה. המענה נשלח לכל פונה — בלי קשר לתוכן המייל ובלי בדיקה אם הוא רשום.
           </p>
+
+          {/* 🔴 הוספת תיבה חדשה. עד כה רשימת התיבות הייתה קבועה בקוד,
+              וכתובת חדשה חייבה שינוי קוד ופריסה כדי לקבל מענה אוטומטי. */}
+          <div className="mt-3 flex flex-wrap items-end gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-slate-600">שם התיבה</label>
+              <input value={newLabel} onChange={e => setNewLabel(e.target.value)}
+                placeholder="לדוגמה: תרומות"
+                className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-slate-600">כתובת המייל</label>
+              <input value={newEmail} onChange={e => setNewEmail(e.target.value)}
+                placeholder="name@chasamsofer.info" dir="ltr"
+                className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm text-left focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </div>
+            <button onClick={addMailbox} disabled={addingBox}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-60 transition-colors">
+              {addingBox ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} הוסף תיבה
+            </button>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {okMsg && <span className="text-sm text-emerald-600 font-bold flex items-center gap-1"><Check size={15} /> {okMsg}</span>}
@@ -163,8 +230,12 @@ export default function AutoReplySettings() {
 
       <div className="flex flex-col gap-2">
         {depts.map(dept => {
-          const s = draft[dept.key as keyof AutoReplyMap] as Settings | undefined
-          if (!s) return null
+          // 🔴 תיבה חדשה אינה קיימת עדיין ב-draft, ו-`if (!s) return null`
+          // היה מסתיר אותה לגמרי — המשתמש היה מוסיף תיבה ולא רואה אותה.
+          // ברירת מחדל כבויה: היא מופיעה ברשימה, ומקבלת הגדרות ברגע
+          // שנוגעים בה.
+          const s = (draft[dept.key as keyof AutoReplyMap] as Settings | undefined)
+            ?? ({ enabled: false } as Settings)
           const isOpen = openKey === dept.key
 
           return (
@@ -172,6 +243,15 @@ export default function AutoReplySettings() {
               {/* כותרת התיבה */}
               <div className="flex items-center gap-3 px-4 py-3">
                 <span className="w-3 h-3 rounded-full shrink-0" style={{ background: dept.color }} />
+                {/* ⚠️ הסרה מוצעת רק לתיבות שנוספו מהממשק — המחלקות
+                    הקבועות מקודדות בקוד ומחיקתן כאן לא הייתה עושה דבר. */}
+                {dept.custom && (
+                  <button onClick={() => removeMailbox(dept.email, dept.label)}
+                    title="הסרת התיבה"
+                    className="shrink-0 rounded-lg p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors">
+                    <Trash2 size={13} />
+                  </button>
+                )}
                 <button onClick={() => setOpenKey(isOpen ? null : dept.key)}
                   className="flex items-center gap-2 flex-1 min-w-0 text-right">
                   <span className="font-bold text-slate-900 truncate">{dept.label}</span>
