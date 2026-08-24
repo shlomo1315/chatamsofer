@@ -10,6 +10,7 @@ import AddUserButton from './AddUserButton'
 import EditUserButton from './EditUserButton'
 import RecoveryHomeLinks from '../maternity/RecoveryHomeLinks'
 import DocTypesManager from './DocTypesManager'
+import CommunityMerger from './CommunityMerger'
 import EmailTextsManager from './EmailTextsManager'
 import AssistantLearning from './AssistantLearning'
 import MailCleanup from './MailCleanup'
@@ -165,6 +166,11 @@ export default async function SettingsPage() {
         {/* Doc types */}
         <Collapsible title="סוגי מסמכים" icon={<FileText size={16} className="text-sky-500" />}>
           <DocTypesManager />
+        </Collapsible>
+
+        {/* איחוד שמות קהילה — 1,928 ערכים לטקסט חופשי, ראו CommunityMerger */}
+        <Collapsible title="איחוד שמות קהילות" icon={<Users size={16} className="text-amber-500" />}>
+          <CommunityMerger />
         </Collapsible>
 
         {/* Gov address data (cities/streets from Ministry of Interior) */}
