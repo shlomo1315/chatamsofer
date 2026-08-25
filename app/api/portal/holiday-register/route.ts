@@ -124,6 +124,8 @@ export async function GET(request: NextRequest) {
   let centerId: string | null = null
   let centerName: string | null = null
   let hasVoucher = false
+  // ⚠️ מזהה הרשומה — נדרש לבחירת המוקד (holiday-center מזהה לפיו).
+  let recipientId: string | null = null
 
   if (beneficiaryId && sessionId === beneficiaryId && db) {
     const { data } = await db.from('distribution_recipients')
@@ -134,6 +136,7 @@ export async function GET(request: NextRequest) {
       center?: { city?: string; name?: string } | { city?: string; name?: string }[] | null
     } | null
     registered = !!row
+    recipientId = (row as { id?: string } | null)?.id ?? null
     registeredAt = row?.registered_at ?? null
     centerId = row?.center_id ?? null
     // ⚠️ join של Supabase מחזיר מערך או אובייקט — שניהם נתמכים.
@@ -150,7 +153,7 @@ export async function GET(request: NextRequest) {
     // והוא רלוונטי דווקא כשהרישום כבר סגור.
     centersOpen: Boolean((active as { centers_open?: boolean }).centers_open),
     distribution: { id: active.id, name: active.name, year: active.year },
-    registered, registeredAt, centerId, centerName, hasVoucher,
+    registered, registeredAt, centerId, centerName, hasVoucher, recipientId,
   }, { headers: { 'Cache-Control': 'no-store' } })
 }
 

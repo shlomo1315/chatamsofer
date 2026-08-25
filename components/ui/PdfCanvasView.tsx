@@ -72,10 +72,17 @@ export default function PdfCanvasView({
 
     ;(async () => {
       try {
-        const [src, pdfjs] = await Promise.all([
-          direct ? Promise.resolve(url) : loadDocBlob(url, name).then(d => d.objectUrl),
-          getPdfjs(),
-        ])
+        // ⚠️ pdf.js נטען בנפרד מהקובץ, ולא ב-Promise.all: כשהם רצו יחד
+        // כשל בטעינת הספרייה הוצג כשגיאת רשת של הקובץ, וההודעה הצביעה
+        // על הבעיה הלא נכונה.
+        let pdfjs: Awaited<ReturnType<typeof getPdfjs>>
+        try {
+          pdfjs = await getPdfjs()
+        } catch {
+          throw new Error('מציג המסמכים לא נטען — רעננו את הדף')
+        }
+        if (!alive) return
+        const src = direct ? url : (await loadDocBlob(url, name)).objectUrl
         if (!alive) return
         // בערוץ הנתונים ה-blob כבר בזיכרון; ב-direct זו משיכה רגילה מהכתובת.
         //

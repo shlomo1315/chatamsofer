@@ -2109,10 +2109,33 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // ── חלוקת חגים ──
   // ⚠️ נטען בכל כניסה לאזור האישי: הרישום נפתח ונסגר מהניהול, והכפתור חייב
   // לשקף את המצב *כרגע* ולא מצב שנשמר בכניסה קודמת.
-  const [holiday, setHoliday] = useState<{ open: boolean; name: string; year?: string | null; registered: boolean; registeredAt?: string | null } | null>(null)
+  const [holiday, setHoliday] = useState<{
+    open: boolean; name: string; year?: string | null
+    registered: boolean; registeredAt?: string | null
+    /** ⚠️ נשלח גם כשהרישום סגור — שלב בחירת המוקד מתרחש דווקא אז. */
+    centersOpen?: boolean
+    centerId?: string | null
+    centerName?: string | null
+    /** הונפק שובר — מאפשר הורדה. */
+    hasVoucher?: boolean
+    recipientId?: string | null
+  } | null>(null)
   const [holidaySaving, setHolidaySaving] = useState(false)
   // פופאפ מלא לחלוקה: הזמנה להירשם (מקישור המייל), הצלחה חדשה, "כבר רשומים",
   // או "הרישום סגור" (נכנסו מהקישור אך המחלקה/החלוקה סגורה כעת).
+  // ── בחירת מוקד ──
+  // 🔴 שני שלבים בכוונה: בחירה, ואז אישור סופי. הבחירה אינה הפיכה,
+  // והמשפחה לא תוכל לקבל את החבילה במוקד אחר — לכן היא לא נשמרת
+  // בלחיצה אחת.
+  const [centerPicker, setCenterPicker] = useState(false)
+  const [centerData, setCenterData] = useState<{
+    regions: { key: string; label: string; cities: { city: string; centers: { id: string; name: string; city: string; full: boolean }[] }[] }[]
+    warning: string
+  } | null>(null)
+  const [centerConfirm, setCenterConfirm] = useState<{ id: string; label: string } | null>(null)
+  const [centerSaving, setCenterSaving] = useState(false)
+  const [centerDone, setCenterDone] = useState<string | null>(null)
+
   const [holidayModal, setHolidayModal] = useState<{ mode: 'invite' | 'created' | 'already' | 'closed'; name: string; registeredAt?: string | null } | null>(null)
   const [holidayLoaded, setHolidayLoaded] = useState(false)
 
@@ -3182,8 +3205,22 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         .then(r => r.json())
         .then(d => {
           if (!alive) return
-          setHoliday(d?.open
-            ? { open: true, name: String(d.distribution?.name ?? 'חלוקת חגים'), year: d.distribution?.year ?? null, registered: !!d.registered, registeredAt: d.registeredAt ?? null }
+          // 🔴 נשמר גם כשהרישום סגור: המשפחה עדיין צריכה לראות שהיא
+          // רשומה, לבחור מוקד, ולהוריד שובר. קודם הכל נזרק ל-null
+          // והמסך נשאר ריק.
+          setHoliday(d?.active
+            ? {
+                open: !!d.open,
+                name: String(d.distribution?.name ?? 'חלוקת חגים'),
+                year: d.distribution?.year ?? null,
+                registered: !!d.registered,
+                registeredAt: d.registeredAt ?? null,
+                centersOpen: !!d.centersOpen,
+                centerId: d.centerId ?? null,
+                centerName: d.centerName ?? null,
+                hasVoucher: !!d.hasVoucher,
+                recipientId: d.recipientId ?? null,
+              }
             : null)
           // ⚠️ סימון שהנתונים *נטענו* — כדי להבחין בין "עדיין טוען" (holiday=null
           // כברירת מחדל) לבין "נטען, והמחלקה/החלוקה סגורה". בלי זה, מי שנכנס מקישור
@@ -3479,12 +3516,22 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       // עד אז — לא מנקים את הכוונה, וה-effect ינסה שוב כשהם יגיעו.
       if (!holidayLoaded) { /* opened=false כבר נקבע ב-decision */ }
       else if (!holiday) {
-        // נטען, אך אין חלוקה פתוחה (מחלקה סגורה בהגדרות או אין חלוקה פעילה) —
-        // פופאפ "הרישום סגור", כדי שמי שנכנס מהקישור יקבל משוב ולא מסך ריק.
+        // אין חלוקה פעילה כלל (או שהמחלקה סגורה בהגדרות) — כיבוי מוחלט.
         setHolidayModal({ mode: 'closed', name: 'חלוקת החגים' })
       } else if (holiday.registered) {
-        // כבר רשום — פופאפ "כבר התקבלה בקשתכם" עם תאריך הרישום
-        setHolidayModal({ mode: 'already', name: `${holiday.name}${holiday.year ? ` ${holiday.year}` : ''}`, registeredAt: holiday.registeredAt })
+        // 🔴 רשום — מציגים את מצבו: המוקד שנבחר, בחירה פתוחה, או שובר.
+        //
+        // ⚠️ זה החלון שבו המשפחה הכי זקוקה למידע, והוא מגיע *אחרי*
+        // סגירת הרישום. קודם היא לא ראתה כאן דבר.
+        setHolidayModal({
+          mode: 'already',
+          name: `${holiday.name}${holiday.year ? ` ${holiday.year}` : ''}`,
+          registeredAt: holiday.registeredAt,
+        })
+      } else if (!holiday.open) {
+        // ⚠️ הרישום נסגר והמשפחה אינה רשומה — אין לה מה לעשות כאן,
+        // אבל היא חייבת לדעת למה.
+        setHolidayModal({ mode: 'closed', name: `${holiday.name}${holiday.year ? ` ${holiday.year}` : ''}` })
       } else {
         // פופאפ מלא — הזמנה להירשם לחלוקה הפתוחה, עם כפתור
         setHolidayModal({ mode: 'invite', name: `${holiday.name}${holiday.year ? ` ${holiday.year}` : ''}` })
@@ -3495,6 +3542,50 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     // שוב כשבדיקת ההלוואה חוזרת, והכוונה הייתה נשארת דרוכה בלי שיקרה דבר.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, beneficiary, deptGates, gatesLoaded, holiday, openLoanLoaded, openLoanNotice])
+
+  // ── טעינת רשימת המוקדים ──
+  // ⚠️ נטענת רק כשהבורר נפתח: רשימה של 26 מוקדים בכל כניסה לאזור
+  // האישי היא בקשה מיותרת עבור הרוב, שלא יבחרו מוקד כלל.
+  useEffect(() => {
+    if (!centerPicker || !holiday?.recipientId || centerData) return
+    let alive = true
+    void fetch(`/api/portal/holiday-center?recipient_id=${holiday.recipientId}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => { if (alive && d?.regions) setCenterData({ regions: d.regions, warning: d.warning ?? '' }) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [centerPicker, holiday?.recipientId, centerData])
+
+  /** שמירת הבחירה — אחרי האישור הסופי. */
+  const saveCenter = async () => {
+    if (!centerConfirm || !holiday?.recipientId) return
+    setCenterSaving(true)
+    try {
+      const r = await fetch('/api/portal/holiday-center', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipient_id: holiday.recipientId, center_id: centerConfirm.id }),
+      })
+      const d = await r.json()
+      if (!r.ok) {
+        // ⚠️ 409 = מישהו הקדים (טלפון / לשונית אחרת). מרעננים את המצב
+        // כדי שהמשפחה תראה את המוקד שנבחר בפועל, ולא הודעת שגיאה בלבד.
+        alert(d?.error ?? 'השמירה נכשלה')
+        if (r.status === 409) window.location.reload()
+        return
+      }
+      // 🔴 הפופאפ שביקשת: אישור מסודר שהבחירה נקלטה.
+      setCenterDone(d.label ?? centerConfirm.label)
+      setCenterConfirm(null)
+      setCenterPicker(false)
+      // ⚠️ עדכון מקומי — כדי שכניסה חוזרת תציג "כבר בחרת" בלי רענון.
+      setHoliday(h => h ? { ...h, centerName: d.label ?? centerConfirm.label, centerId: centerConfirm.id } : h)
+    } catch {
+      alert('שגיאת תקשורת — הבחירה לא נשמרה')
+    } finally {
+      setCenterSaving(false)
+    }
+  }
 
   // משפחה בהשלמת מסמכים — התראה מיידית בכניסה לאזור האישי, פעם אחת.
   useEffect(() => {
@@ -6984,6 +7075,112 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         {/* ─── פופאפ מלא לאחר רישום לחלוקה — הצלחה חדשה או "כבר רשומים" ───
             ⚠️ מרונדר ברמה הגלובלית העליונה (z-100), לא מקונן בתוך הדשבורד:
             מודאל מקונן עלול להיחתך/להיעלם בתוך container עם overflow/transform. */}
+        {/* ═══ בורר המוקדים ═══ */}
+        {centerPicker && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" dir="rtl"
+            onClick={() => setCenterPicker(false)}>
+            <div className="flex max-h-[88vh] w-full max-w-lg flex-col rounded-3xl bg-white shadow-2xl"
+              onClick={e => e.stopPropagation()}>
+              <div className="border-b border-slate-100 p-5 text-center">
+                <h2 className="text-lg font-extrabold text-slate-900">בחירת מוקד האיסוף</h2>
+                {/* 🔴 האזהרה לפני הבחירה ולא רק באישור — כדי שהמשפחה
+                    תבחר מתוך ידיעה ולא תופתע. */}
+                <p className="mt-1.5 text-[12.5px] leading-relaxed text-amber-800 bg-amber-50 rounded-xl px-3 py-2">
+                  {centerData?.warning || 'הבחירה סופית. לאחר האישור לא ניתן לשנות את המוקד.'}
+                </p>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4">
+                {!centerData ? (
+                  <p className="py-8 text-center text-sm text-slate-400">טוען מוקדים…</p>
+                ) : !centerData.regions.length ? (
+                  <p className="py-8 text-center text-sm text-slate-400">אין מוקדים פתוחים כרגע.</p>
+                ) : (
+                  centerData.regions.map(region => (
+                    <div key={region.key} className="mb-4">
+                      <p className="mb-2 text-[11px] font-bold text-slate-400">{region.label}</p>
+                      <div className="flex flex-col gap-1.5">
+                        {region.cities.flatMap(c => c.centers).map(c => (
+                          <button key={c.id} type="button" disabled={c.full}
+                            onClick={() => setCenterConfirm({ id: c.id, label: c.city === c.name ? c.city : `${c.city} · ${c.name}` })}
+                            className={`rounded-xl border px-4 py-2.5 text-right text-sm transition-colors ${
+                              c.full
+                                ? 'cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300'
+                                : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-400 hover:bg-indigo-50'}`}>
+                            <span className="font-bold">{c.city}</span>
+                            {c.name !== c.city && <span className="text-slate-500"> · {c.name}</span>}
+                            {/* ⚠️ מוקד מלא מסומן ולא מוסתר: "המוקד שלי נעלם"
+                                מבלבל יותר מ"המוקד מלא". */}
+                            {c.full && <span className="mr-1.5 text-[11px] font-bold text-rose-400">מלא</span>}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="border-t border-slate-100 p-4">
+                <button type="button" onClick={() => setCenterPicker(false)}
+                  className="w-full rounded-2xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+                  סגירה
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ═══ אישור סופי ═══ */}
+        {/* 🔴 השלב שמונע בחירה בהיסח הדעת. ההשלכה נאמרת במפורש. */}
+        {centerConfirm && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4" dir="rtl">
+            <div className="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-2xl">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100">
+                <span className="text-2xl">⚠️</span>
+              </div>
+              <h3 className="text-lg font-extrabold text-slate-900">לאשר את הבחירה?</h3>
+              <p className="mt-2 text-sm font-bold text-indigo-700">{centerConfirm.label}</p>
+              <p className="mt-3 text-[13px] leading-relaxed text-slate-600">
+                לאחר האישור <strong>לא ניתן לשנות</strong> את המוקד,
+                ולא ניתן לקבל את החבילה בשום מוקד אחר.
+              </p>
+              <div className="mt-5 flex flex-col gap-2">
+                <button type="button" disabled={centerSaving} onClick={() => void saveCenter()}
+                  className="w-full rounded-2xl bg-gradient-to-b from-indigo-500 to-indigo-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition-all hover:from-indigo-600 hover:to-indigo-700 active:scale-[0.98] disabled:opacity-60">
+                  {centerSaving ? 'שומר…' : 'כן, אני מאשר'}
+                </button>
+                <button type="button" disabled={centerSaving} onClick={() => setCenterConfirm(null)}
+                  className="text-sm text-slate-500 underline hover:text-slate-700">
+                  חזרה לרשימה
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ═══ הבחירה נקלטה ═══ */}
+        {centerDone && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" dir="rtl"
+            onClick={() => setCenterDone(null)}>
+            <div className="w-full max-w-sm rounded-3xl bg-white p-7 text-center shadow-2xl"
+              onClick={e => e.stopPropagation()}>
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+                <Check size={34} className="text-green-600" strokeWidth={3} />
+              </div>
+              <h2 className="text-xl font-extrabold text-slate-900">הבחירה התקבלה!</h2>
+              <p className="mt-2 text-sm font-bold text-teal-700">{centerDone}</p>
+              <p className="mt-3 text-[13.5px] leading-relaxed text-slate-600">
+                מוקד האיסוף שלכם נשמר במערכת. בהמשך יישלח אליכם השובר
+                לאיסוף החבילה מהמוקד שבחרתם.
+              </p>
+              <button type="button" onClick={() => setCenterDone(null)}
+                className="mt-5 w-full rounded-2xl bg-gradient-to-b from-teal-500 to-teal-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition-all hover:from-teal-600 hover:to-teal-700 active:scale-[0.98]">
+                הבנתי, תודה
+              </button>
+            </div>
+          </div>
+        )}
+
         {holidayModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" dir="rtl"
             onClick={() => setHolidayModal(null)}>
@@ -7013,9 +7210,43 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 <p className="text-[13px] text-slate-500 mb-3">
                   נרשמתם בתאריך{' '}
                   <span className="font-bold text-slate-700">
-                    {(() => { try { return new Date(holidayModal.registeredAt!).toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' }) } catch { return '' } })()}
+                    {(() => { try { return new Date(holidayModal.registeredAt!).toLocaleString('he-IL', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) } catch { return '' } })()}
                   </span>
                 </p>
+              )}
+
+              {/* ── המוקד שנבחר ── */}
+              {/* 🔴 הפרט החשוב ביותר למשפחה: לאן להגיע. מוצג בולט. */}
+              {holidayModal.mode === 'already' && holiday?.centerName && (
+                <div className="mb-4 rounded-2xl border-2 border-teal-200 bg-teal-50 px-4 py-3 text-right">
+                  <p className="text-[11px] font-bold text-teal-700">מוקד האיסוף שלכם</p>
+                  <p className="mt-0.5 text-sm font-extrabold text-teal-900">{holiday.centerName}</p>
+                  {/* ⚠️ נאמר במפורש שהבחירה סופית — כדי שלא ינסו לשנות
+                      ויתאכזבו, ולא יגיעו למוקד אחר. */}
+                  <p className="mt-1 text-[11px] text-teal-700">הבחירה סופית ואינה ניתנת לשינוי</p>
+                </div>
+              )}
+
+              {/* ── בחירת מוקד ── */}
+              {holidayModal.mode === 'already' && holiday?.centersOpen && !holiday?.centerName && (
+                <div className="mb-4">
+                  <button type="button" onClick={() => { setHolidayModal(null); setCenterPicker(true) }}
+                    className="w-full rounded-2xl bg-gradient-to-b from-indigo-500 to-indigo-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition-all hover:from-indigo-600 hover:to-indigo-700 active:scale-[0.98]">
+                    בחירת מוקד האיסוף
+                  </button>
+                  <p className="mt-1.5 text-[11px] text-slate-500">
+                    יש לבחור את המוקד שממנו תאספו את החבילה
+                  </p>
+                </div>
+              )}
+
+              {/* ── הורדת השובר ── */}
+              {/* ⚠️ רק כשהונפק בפועל: כפתור שמוביל לשגיאה גרוע מהיעדרו. */}
+              {holidayModal.mode === 'already' && holiday?.hasVoucher && (
+                <a href={`/api/portal/holiday-voucher`} target="_blank" rel="noopener noreferrer"
+                  className="mb-4 flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-emerald-300 bg-emerald-50 px-5 py-3 text-sm font-bold text-emerald-800 transition-colors hover:bg-emerald-100">
+                  הורדת השובר להדפסה
+                </a>
               )}
               <p className="text-[13.5px] leading-relaxed text-slate-600 mb-5">
                 {holidayModal.mode === 'created'
