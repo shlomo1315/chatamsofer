@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import PdfCanvasView from '@/components/ui/PdfCanvasView'
 import { Loader2, FileText, Send, Check, X, Eye } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -120,8 +121,17 @@ export default function SendVouchersPanel({ distributionId }: { distributionId: 
               <button type="button" onClick={() => setPreviewOpen(false)}
                 className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
             </div>
-            <iframe key={String(previewOpen)} src="/api/admin/holiday-voucher/preview"
-              className="flex-1 w-full" title="תצוגה מקדימה של השובר" />
+            {/* 🔴 canvas ולא iframe.
+                ⚠️ נטפרי חוסם PDF שנטען ב-iframe ומציג במקומו מסך
+                "הקובץ הזה יסונן באופן אוטומטי" — כלומר המנהל אינו רואה
+                את השובר כלל. PdfCanvasView מצייר את העמודים בעצמו, וזה
+                אותו פתרון שכבר עובד במסמכי המשפחה ובאישור הלידה. */}
+            <div className="flex-1 overflow-y-auto bg-slate-100 p-3">
+              <PdfCanvasView key={String(previewOpen)}
+                url="/api/admin/holiday-voucher/preview"
+                name="שובר החלוקה" direct
+                className="mx-auto w-full max-w-2xl" />
+            </div>
           </div>
         </div>
       )}

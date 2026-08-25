@@ -1,4 +1,5 @@
 'use client'
+import PdfCanvasView from '@/components/ui/PdfCanvasView'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Loader2, Save, RotateCcw, FileText } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
@@ -133,8 +134,9 @@ export default function VoucherTextsManager() {
                 <Loader2 size={12} className="animate-spin" /> מעדכן…
               </div>
             )}
+            {/* 🔴 canvas ולא iframe — נטפרי חוסם PDF ב-iframe. */}
             {pdfUrl ? (
-              <iframe src={pdfUrl} title="תצוגת השובר" className="w-full h-full border-0" />
+              <PdfCanvasView url={pdfUrl} name="שובר" direct className="w-full" />
             ) : (
               <div className="flex items-center justify-center h-full text-slate-400 text-sm"><Loader2 size={18} className="animate-spin" /></div>
             )}

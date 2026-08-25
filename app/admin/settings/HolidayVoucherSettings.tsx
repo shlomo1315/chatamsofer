@@ -1,4 +1,5 @@
 'use client'
+import PdfCanvasView from '@/components/ui/PdfCanvasView'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Loader2, Eye, Check, X, FileText, Plus, Trash2 } from 'lucide-react'
 
@@ -93,10 +94,16 @@ export default function HolidayVoucherSettings() {
               <button type="button" onClick={() => setPreviewOpen(false)}
                 className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
             </div>
-            {/* ⚠️ key מאלץ טעינה מחדש בכל פתיחה — אחרת מוצג ה-PDF הישן
+            {/* 🔴 canvas ולא iframe — נטפרי חוסם PDF ב-iframe ומציג
+                "הקובץ הזה יסונן באופן אוטומטי" במקום השובר.
+                ⚠️ key מאלץ טעינה מחדש בכל פתיחה — אחרת מוצג ה-PDF הישן
                 אחרי שמירת מלל חדש. */}
-            <iframe key={String(previewOpen)} src="/api/admin/holiday-voucher/preview"
-              className="flex-1 w-full" title="תצוגה מקדימה של השובר" />
+            <div className="flex-1 overflow-y-auto bg-slate-100 p-3">
+              <PdfCanvasView key={String(previewOpen)}
+                url="/api/admin/holiday-voucher/preview"
+                name="שובר החלוקה" direct
+                className="mx-auto w-full max-w-2xl" />
+            </div>
           </div>
         </div>
       )}

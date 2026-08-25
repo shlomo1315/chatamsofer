@@ -483,3 +483,58 @@ describe('requestMailtoUrl — קישור Gmail, לא mailto', () => {
     expect(q.get('body')).toContain('תעודת זהות')
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 הגדרות של תיבה מותאמת נזרקו בשקט בכל שמירה.
+//
+// normalizeConfig עבר על Object.values(DEPARTMENTS) בלבד. תיבה שהמנהל
+// הוסיף (מפתח custom_) לא נקראה כלל: הוא ערך, לחץ "שמור", קיבל
+// "ההגדרות נשמרו" — והתוכן נעלם. בלי שום שגיאה, כי המפתח פשוט דולג.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('🔴 תיבות מייל מותאמות', () => {
+  const custom = {
+    custom_mbox: {
+      enabled: true,
+      mode: 'temp',
+      subject: 'נושאים כלליים',
+      title: 'ברוכים הבאים',
+      message: 'אימייל זה מיועד לנושאים כלליים בלבד',
+      tempMessage: 'נחזור אליכם בהקדם',
+      sections: [],
+      buttons: [],
+    },
+  }
+
+  it('🔴 ההגדרות שורדות את הנרמול', () => {
+    const out = normalizeConfig(custom)
+    expect(out.custom_mbox).toBeDefined()
+    expect(out.custom_mbox?.subject).toBe('נושאים כלליים')
+    expect(out.custom_mbox?.message).toBe('אימייל זה מיועד לנושאים כלליים בלבד')
+    expect(out.custom_mbox?.title).toBe('ברוכים הבאים')
+  })
+
+  it('🔴 המצב (enabled/mode) נשמר', () => {
+    const out = normalizeConfig(custom)
+    expect(out.custom_mbox?.enabled).toBe(true)
+    expect(out.custom_mbox?.mode).toBe('temp')
+  })
+
+  it('⚠️ המחלקות המובנות ממשיכות לעבוד לצידן', () => {
+    const out = normalizeConfig({ ...custom, main: { enabled: true, subject: 'ראשי' } })
+    expect(out.main?.subject).toBe('ראשי')
+    expect(out.custom_mbox?.subject).toBe('נושאים כלליים')
+  })
+
+  it('⚠️ מפתח זר שאינו custom_ אינו נשמר', () => {
+    // אחרת כל שדה שנשלח בבקשה היה נכנס למסד.
+    const out = normalizeConfig({ evil_key: { enabled: true, subject: 'זר' } })
+    expect(out.evil_key).toBeUndefined()
+  })
+
+  it('⚠️ תיבה מותאמת בלי שדות — נופלת לברירת מחדל ואינה קורסת', () => {
+    const out = normalizeConfig({ custom_x: { enabled: true } })
+    expect(out.custom_x).toBeDefined()
+    expect(Array.isArray(out.custom_x?.sections)).toBe(true)
+    expect(Array.isArray(out.custom_x?.buttons)).toBe(true)
+  })
+})

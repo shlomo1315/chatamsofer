@@ -335,3 +335,46 @@ export function normalizeIvr(raw: unknown): IvrConfig {
   const rootId = clean.some(n => n.id === o.rootId) ? String(o.rootId) : clean[0].id
   return { version: Number(o.version) || 1, rootId, nodes: clean }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// אחסון
+//
+// ⚠️ app_settings.value היא עמודת text — חובה JSON.stringify. שמירת
+// אובייקט גולמי נכשלת *בשקט* ונשמרת כ-"[object Object]".
+// ─────────────────────────────────────────────────────────────────────────────
+import { getServiceClient } from './apiAuth'
+
+export async function getIvrConfig(): Promise<IvrConfig> {
+  const admin = getServiceClient()
+  if (!admin) return defaultIvrConfig()
+  try {
+    const { data } = await admin.from('app_settings')
+      .select('value').eq('key', IVR_CONFIG_KEY).maybeSingle()
+    if (!data?.value) return defaultIvrConfig()
+    return normalizeIvr(JSON.parse(String(data.value)))
+  } catch {
+    // ⚠️ נפילה לברירת המחדל ולא זריקה: הווהבוק קורא מכאן, ותקלת קריאה
+    // חייבת להשאיר מערכת טלפונית עובדת ולא לנתק מתקשרים.
+    return defaultIvrConfig()
+  }
+}
+
+export async function saveIvrConfig(cfg: IvrConfig): Promise<{ ok: boolean; error?: string }> {
+  const admin = getServiceClient()
+  if (!admin) return { ok: false, error: 'שגיאת שרת' }
+
+  const clean = normalizeIvr(cfg)
+  // 🔴 אימות לפני שמירה: מבנה שבור פירושו מתקשרים ששומעים שגיאה.
+  const blocking = validateIvr(clean).filter(p => p.level === 'error')
+  if (blocking.length) {
+    return { ok: false, error: blocking.map(p => p.message).join(' · ') }
+  }
+
+  const { error } = await admin.from('app_settings').upsert({
+    key: IVR_CONFIG_KEY,
+    value: JSON.stringify(clean),
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'key' })
+
+  return error ? { ok: false, error: error.message } : { ok: true }
+}

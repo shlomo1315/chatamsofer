@@ -29,6 +29,8 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import {
   MAIN_MENU_MSG_KEY, mergeMainMenuMessages, type MainMenuMessages,
 } from '@/lib/yemotMainMenu'
+import { IVR_CONFIG_KEY, normalizeIvr, type IvrConfig } from '@/lib/ivrBuilder'
+import { ivrStep, nextNodeId, NODE_PARAM, DIGIT_PARAM } from '@/lib/ivrRuntime'
 
 export const dynamic = 'force-dynamic'
 
@@ -84,6 +86,27 @@ async function loadMessages(): Promise<MainMenuMessages> {
   }
 }
 
+/**
+ * מבנה השלוחות שהמנהל בנה.
+ *
+ * ⚠️ מוחזר null כשאין מבנה שמור, ואז רצה המסלול הקבוע שלמטה. כך
+ * המערכת ממשיכה לעבוד בדיוק כשהייתה עד שמישהו נכנס לבנות בפועל.
+ */
+async function loadIvrConfig(): Promise<IvrConfig | null> {
+  const db = admin()
+  if (!db) return null
+  try {
+    const { data } = await db.from('app_settings')
+      .select('value').eq('key', IVR_CONFIG_KEY).maybeSingle()
+    if (!data?.value) return null
+    return normalizeIvr(JSON.parse(String(data.value)))
+  } catch {
+    // ⚠️ נפילה למסלול הקבוע ולא ניתוק: תקלת קריאה חייבת להשאיר מערכת
+    // טלפונית עובדת.
+    return null
+  }
+}
+
 /** התפריט עצמו — הקשה אחת, רק הספרות שיש להן יעד. */
 function askMenu(msgs: MainMenuMessages, withWelcome: boolean, invalid = false): string {
   const prompt = joinTokens(
@@ -106,6 +129,21 @@ async function handle(params: Record<string, string>): Promise<NextResponse> {
   if (!safeEqual(params['ApiToken'] ?? '', secret)) {
     console.warn('[yemot-menu] ApiToken שגוי — דחייה')
     return yemotText([idMessage(tToken('אין הרשאה')), goToFolder('hangup')], callId)
+  }
+
+  // 🔴 מבנה דינמי קודם: אם המנהל בנה שלוחות במסך ההגדרות, הן מנצחות.
+  //
+  // ⚠️ בלי מבנה שמור ממשיכים במסלול הקבוע שלמטה — כך המעבר לניהול
+  // דינמי אינו משנה דבר עבור המתקשר עד שמישהו באמת בונה.
+  const ivr = await loadIvrConfig()
+  if (ivr) {
+    const nodeId = String(params[NODE_PARAM] ?? '').trim()
+    const digit = String(params[DIGIT_PARAM] ?? '').trim()
+    const step = ivrStep(ivr, nodeId, digit)
+    const next = nextNodeId(ivr, nodeId, digit)
+    // ⚠️ המיקום מוחזר לימות כמשתנה: היא אינה שומרת מצב בין קריאות,
+    // ובלעדיו כל הקשה הייתה מתחילה מהתפריט הראשי.
+    return yemotText([...step.commands, `${NODE_PARAM}=${next}`], callId)
   }
 
   const msgs = await loadMessages()

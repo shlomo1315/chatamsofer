@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { CUSTOM_PREFIX } from './customMailboxes'
 import { DEPARTMENTS, type DepartmentKey } from './departments'
 import { escapeHtml } from './emailTemplates'
 
@@ -277,7 +278,13 @@ export function activeReplyContent(s: AutoReplySettings): {
   }
 }
 
+/**
+ * ⚠️ המפתח אינו DepartmentKey בלבד: תיבות שהמנהל הוסיף נושאות מפתח
+ * custom_<שם>, והגבלת הטיפוס למחלקות המובנות היא בדיוק מה שגרם
+ * להגדרות שלהן להיזרק בשקט בכל שמירה.
+ */
 export type AutoReplyMap = Partial<Record<DepartmentKey, AutoReplySettings>>
+  & Record<string, AutoReplySettings | undefined>
 
 /**
  * ניקוי כתובות הכפתורים.
@@ -689,11 +696,27 @@ export function normalizeConfig(raw: Record<string, unknown> | null | undefined)
   const map = defaultAutoReplyMap()
   if (!raw || typeof raw !== 'object') return map
 
-  for (const d of Object.values(DEPARTMENTS)) {
+  // 🔴 גם תיבות מותאמות ולא רק המחלקות המובנות.
+  //
+  // ⚠️ הלולאה עברה על Object.values(DEPARTMENTS) בלבד, וכל תיבה שהמנהל
+  // הוסיף (מפתח custom_) נזרקה *בשקט* בכל שמירה: הוא ערך, לחץ "שמור",
+  // קיבל "ההגדרות נשמרו" — והתוכן נעלם. אין שום שגיאה כי המפתח פשוט
+  // לא נקרא.
+  //
+  // ⚠️ רק מפתחות שמוכרים לנו: מחלקה מובנית או קידומת custom_. מפתח זר
+  // אינו נשמר, אחרת כל שדה שנשלח היה נכנס למסד.
+  const builtinKeys = Object.values(DEPARTMENTS).map(d => d.key as string)
+  const customKeys = Object.keys(raw).filter(k => k.startsWith(CUSTOM_PREFIX))
+  const allKeys = [...builtinKeys, ...customKeys]
+
+  for (const key of allKeys) {
+    const d = { key } as { key: string }
     const v = raw[d.key]
     if (!v || typeof v !== 'object') continue
     const rec = v as Record<string, unknown>
-    const base = map[d.key]!
+    // ⚠️ תיבה מותאמת אינה קיימת ב-map — ברירת המחדל נגזרת מ-main,
+    // שהוא הנוסח הכללי ביותר.
+    const base = map[d.key] ?? map.main!
 
     const capRaw = Number(rec.weeklyCap)
     const weeklyCap = Number.isFinite(capRaw) && capRaw > 0
