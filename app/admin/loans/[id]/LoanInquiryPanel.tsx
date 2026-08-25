@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { staffDisplayName } from '@/lib/staffInitials'
 import { useRouter } from 'next/navigation'
 import { Send, Loader2, MessageSquare, AlertCircle, Mail, CheckCircle2, ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -167,10 +168,13 @@ export default function LoanInquiryPanel({ loanId, hasEmail, applicantName, onSe
         ) : (
           msgs.map(m => {
             const isStaff = m.direction === 'staff'
-            // מי כתב: הנציג בשמו · המבקש בשמו. לא כתובת מייל — היא לא מוסיפה
-            // מידע כאן וגרמה לשורה להתבלגן.
+            // מי כתב: הנציג בראשי תיבות · המבקש בשמו. לא כתובת מייל —
+            // היא לא מוסיפה מידע כאן וגרמה לשורה להתבלגן.
+            //
+            // ⚠️ ראשי תיבות ולשם מלא: השרשור נחשף גם למבקש, ואין סיבה
+            // שידע מי בדיוק מהצוות כתב לו.
             const who = isStaff
-              ? (m.sender_name || 'צוות הגמ״ח')
+              ? staffDisplayName(m.sender_name, 'צוות הגמ״ח')
               : (applicantName || 'המבקש')
 
             return (

@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { staffDisplayName } from '@/lib/staffInitials'
 import { useRouter } from 'next/navigation'
 import { Send, Loader2, MessageSquare, Mail, GitBranch } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
@@ -130,7 +131,9 @@ export default function MaternityInquiryPanel({ aidId, motherName, hasEmail }: {
           ) : (
             msgs.map(m => {
               const isStaff = m.direction === 'staff'
-              const who = isStaff ? (m.sender_name || 'המזכירות') : (motherName || 'היולדת')
+              // ⚠️ ראשי תיבות ולא שם מלא: השרשור נחשף גם ליולדת, ואין
+              // סיבה שתדע מי בדיוק מהמזכירות כתב לה.
+              const who = isStaff ? staffDisplayName(m.sender_name, 'המזכירות') : (motherName || 'היולדת')
               return (
                 <div key={m.id}
                   className={`flex max-w-[85%] flex-col ${isStaff ? 'items-end self-end' : 'items-start self-start'}`}>
