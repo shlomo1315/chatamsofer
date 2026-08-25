@@ -38,7 +38,7 @@ describe('isDeviation', () => {
 })
 
 describe('genColor', () => {
-  it('מאושר → כחול', () => expect(genColor(3, 'verified')).toBe('blue'))
+  it('מאושר → ירוק', () => expect(genColor(3, 'verified')).toBe('green'))
   it('חריגה → אדום', () => expect(genColor(3, 'pending')).toBe('red'))
   it('לא ידוע בתוך 5 הדורות → אדום', () => expect(genColor(3, null)).toBe('red'))
   it('לא ידוע מעל 5 → כתום', () => expect(genColor(9, null)).toBe('orange'))

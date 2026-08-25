@@ -24,7 +24,14 @@ export const EARLY_DEPTH = 5
 /** סטטוס הצומת בעץ. null = לא נמצא צומת תואם במאגר (חוסר ידיעה). */
 export type GenStatus = 'verified' | 'pending' | 'rejected' | null
 
-export type GenColor = 'blue' | 'orange' | 'red'
+/**
+ * 🔴 שלושה מצבים, שלושה צבעים — כפי שסוכם:
+ *   ירוק = מאושר · כתום = ממתין לאימות · אדום = חריג
+ *
+ * ⚠️ המפתח היה 'blue' והגוון בפועל היה זהב — כלומר לא כחול ולא ירוק.
+ * "מאושר" נראה כמו אזהרה, וההבחנה בין שלושת המצבים נמחקה.
+ */
+export type GenColor = 'green' | 'orange' | 'red'
 
 /**
  * נרמול הסטטוס שמגיע מהמסד (text) לטיפוס — כל ערך שאינו מוכר הוא null.
@@ -83,7 +90,7 @@ export function isDeviation(generation: number, status: GenStatus): boolean {
  * מדברת על דור שהצ'יפים מציגים כתקין.
  */
 export function genColor(generation: number, status: GenStatus): GenColor {
-  if (status === 'verified') return 'blue'
+  if (status === 'verified') return 'green'
   return isDeviation(generation, status) ? 'red' : 'orange'
 }
 

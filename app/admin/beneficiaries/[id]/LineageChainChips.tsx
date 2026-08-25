@@ -24,8 +24,8 @@ export interface TreeNode {
   relation?: 'son' | 'son_in_law' | null
 }
 
-// blue=מאושר · orange=ממתין לאימות · red=נדחה. צבעים חזקים ובולטים.
-type Color = 'blue' | 'orange' | 'red'
+// ירוק=מאושר · כתום=ממתין לאימות · אדום=חריג. צבעים חזקים ובולטים.
+type Color = 'green' | 'orange' | 'red'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // שרשרת הדורות. לחיצה על דור פותחת תפריט קטן:
@@ -33,7 +33,7 @@ type Color = 'blue' | 'orange' | 'red'
 //     לצומת (lineage_node_id) והשרשרת נגזרת מחדש בשרת (/api/admin/lineage/assign).
 //   • "סמן ידנית" — צביעה ידנית (override), נשמר ב-/api/admin/lineage-marks.
 // צביעה אוטומטית לפי *סטטוס הצומת בעץ* (lib/lineageDeviation):
-//   verified=כחול · rejected=אדום בכל דור · pending בדורות 2–5=אדום (צומת שנוסף
+//   verified=ירוק · rejected=אדום בכל דור · pending בדורות 2–5=אדום (צומת שנוסף
 //   לתוך הליבה המאושרת) · pending מעל 5 או "לא נמצא"=כתום.
 // ─────────────────────────────────────────────────────────────────────────────
 // ⚠️ עיצוב "קלף וחותם" — עקבי עם עץ הדורות שמתחת ועם מסך הניהול.
@@ -43,12 +43,15 @@ type Color = 'blue' | 'orange' | 'red'
 // ⚠️ הסמנטיקה של הצבע *לא* השתנתה: מאושר/ממתין/חריג נשארים שלושה מצבים
 // נבדלים — רק הגוון הותאם. אחידות עיצובית שמוחקת את ההבחנה הזו הייתה
 // הופכת אזהרה אמיתית לקישוט.
+// 🔴 שלושת הצבעים שסוכמו. הגוון הקודם ל"מאושר" היה זהב (#e0b94a) —
+// כמעט זהה לחום-הנחושת של "ממתין", כך ששני המצבים נראו אותו דבר
+// ו"מאושר" נקרא כאזהרה.
 const STYLE: Record<Color, string> = {
-  blue:   'text-white font-semibold border-[#8a6a1e] bg-[linear-gradient(160deg,#e0b94a,#c69e2d)] shadow-[0_2px_6px_-2px_rgba(198,158,45,0.55)]',
-  orange: 'text-white font-semibold border-[#a15a3d] bg-[linear-gradient(160deg,#c68a4e,#b3703a)] shadow-[0_2px_6px_-2px_rgba(179,112,58,0.55)]',
+  green:  'text-white font-semibold border-[#166534] bg-[linear-gradient(160deg,#22c55e,#16a34a)] shadow-[0_2px_6px_-2px_rgba(22,163,74,0.55)]',
+  orange: 'text-white font-semibold border-[#9a3412] bg-[linear-gradient(160deg,#fb923c,#ea580c)] shadow-[0_2px_6px_-2px_rgba(234,88,12,0.55)]',
   red:    'text-white font-bold border-[#7f1d1d] bg-[linear-gradient(160deg,#b91c1c,#991b1b)] shadow-[0_2px_8px_-2px_rgba(153,27,27,0.6)]',
 }
-const GEN_TXT: Record<Color, string> = { blue: 'text-amber-50/80', orange: 'text-orange-50/80', red: 'text-red-100' }
+const GEN_TXT: Record<Color, string> = { green: 'text-green-50/85', orange: 'text-orange-50/85', red: 'text-red-100' }
 // ⚠️ כלל הצבע מגיע מ-lib/lineageDeviation ואינו משוכפל כאן: הצ'יפים וחלונית
 // ההתראה חייבים לומר את אותו דבר. עותק שני היה נפרד מהראשון בתיקון הבא, ואז
 // ההתראה מדברת על דור שהצ'יפים מציגים כתקין.
@@ -95,11 +98,11 @@ export default function LineageChainChips({
   }, [pickerGen])
 
   // צבע אוטומטי לפי סטטוס הצומת בעץ — בכל דור (כולל מעל 5). דור 1 (חתם סופר)
-  // תמיד מאושר. override ידני ('green'→כחול, 'red'→אדום) גובר.
+  // תמיד מאושר. override ידני ('green'→ירוק, 'red'→אדום) גובר.
   const autoColor = (g: ChainGen): Color => statusColor(g.status, g.generation)
   const colorOf = (g: ChainGen): Color => {
     const m = marks[String(g.generation)]
-    if (m === 'green') return 'blue'
+    if (m === 'green') return 'green'
     if (m === 'red') return 'red'
     return autoColor(g)
   }
@@ -229,8 +232,10 @@ export default function LineageChainChips({
       <p className="text-[11px] text-slate-400 mt-1.5 flex items-center gap-2 flex-wrap">
         {/* ⚠️ נקודות המקרא נגזרות מאותם גוונים כמו הצ'יפים — מקרא שאינו
             תואם את מה שמעליו גרוע מהיעדר מקרא. */}
-        <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#c69e2d] inline-block" /> מאושר</span>
-        <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#b3703a] inline-block" /> ממתין לאימות</span>
+        {/* ⚠️ הנקודות במקרא לוקחות את הגוון *מאותו* STYLE שהצ'יפים
+            משתמשים בו. מקרא בגוון אחר מלמד את הקורא צבע שגוי. */}
+        <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#16a34a] inline-block" /> מאושר</span>
+        <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#ea580c] inline-block" /> ממתין לאימות</span>
         <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#991b1b] inline-block" /> חריג — בדיקה מעמיקה</span>
         <span>· לחצו על דור לבחירת צומת אחר או לסימון ידני.</span>
       </p>

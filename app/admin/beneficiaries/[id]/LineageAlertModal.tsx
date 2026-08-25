@@ -6,7 +6,7 @@ import { AlertTriangle, X } from 'lucide-react'
 export interface AlertGen {
   generation: number
   name: string
-  color: 'blue' | 'red' | 'orange'
+  color: 'green' | 'red' | 'orange'
 }
 
 // חלונית התראה שקופצת בכניסה לכרטסת משפחה שסדר הדורות שלה אינו תקין —
@@ -15,12 +15,15 @@ export interface AlertGen {
 //
 // ⚠️ מי חורג נקבע ב-lib/lineageDeviation ולא כאן. שרשרת שלא נמצאה בעץ בהתאמת
 // שמות *אינה* חריגה — קודם היא נחשבה כזו, וההתראה קפצה לכל מי שנרשם.
+// ⚠️ אותם שלושה צבעים כמו בצ'יפים: ירוק=מאושר · כתום=ממתין · אדום=חריג.
+// ההתראה והצ'יפים מציגים את אותה שרשרת; גוונים שונים בין שני המקומות
+// גורמים לקורא לחשוב שמדובר בשני מצבים שונים.
 const CHIP: Record<AlertGen['color'], string> = {
-  blue:   'bg-blue-600 text-white border-blue-700 font-semibold',
+  green:  'bg-green-600 text-white border-green-700 font-semibold',
   red:    'bg-red-600 text-white border-red-700 font-bold',
   orange: 'bg-orange-500 text-white border-orange-600 font-semibold',
 }
-const GEN_TXT: Record<AlertGen['color'], string> = { blue: 'text-blue-100', red: 'text-red-100', orange: 'text-orange-100' }
+const GEN_TXT: Record<AlertGen['color'], string> = { green: 'text-green-100', red: 'text-red-100', orange: 'text-orange-100' }
 
 export default function LineageAlertModal({ generations, allGens }: {
   generations: number[]            // הדורות החורגים (לטקסט)

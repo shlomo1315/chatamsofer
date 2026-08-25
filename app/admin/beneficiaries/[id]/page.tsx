@@ -374,11 +374,12 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
   const alertSource: { generation: number; name: string }[] = pathNodes.length
     ? pathNodes.map(n => ({ generation: n.generation, name: n.name }))
     : [...chainForMarks].sort((a, b) => a.generation - b.generation)
-  const alertGens: { generation: number; name: string; color: 'blue' | 'red' | 'orange' }[] =
+  const alertGens: { generation: number; name: string; color: 'green' | 'red' | 'orange' }[] =
     alertSource.map(c => ({
       generation: c.generation,
       name: c.generation === 1 ? CHATAM_SOFER_ROOT : c.name,
-      color: c.generation === 1 ? 'blue' : genColor(c.generation, genStatus.get(c.generation) ?? null),
+      // ⚠️ דור 1 (החתם סופר) תמיד מאושר — הוא שורש העץ בהגדרה.
+      color: c.generation === 1 ? 'green' : genColor(c.generation, genStatus.get(c.generation) ?? null),
     }))
 
   if (!beneficiary && isSupabaseConfigured()) notFound()
