@@ -97,8 +97,21 @@ export interface IvrConfig {
 
 export const IVR_CONFIG_KEY = 'yemot_ivr_config'
 
-/** מקשים חוקיים בטלפון. */
+/**
+ * המקשים החוקיים — ספרה בודדת בלבד.
+ *
+ * ⚠️ 12 מקשים הם המקסימום, ובכוונה: הפרוטוקול של ימות מקבל את
+ * הספרות המותרות כרשימה מופרדת בנקודות ("1.2.9"), וזה עובד לספרה
+ * בודדת. שלוחה דו-ספרתית (10 ומעלה) דורשת הגדרה אחרת בימות שטרם
+ * אומתה — ובניית מערכת עליה הייתה מסתכנת בשלוחות שלא עונות.
+ *
+ * ⚠️ תפריט צריך יותר מ-12 יעדים? הפתרון הוא תפריט משנה (מקש 9 →
+ * "לשירותים נוספים"), לא מקש דו-ספרתי.
+ */
 export const VALID_DIGITS = ['0','1','2','3','4','5','6','7','8','9','*','#'] as const
+
+/** מספר המקשים המרבי בתפריט אחד. */
+export const MAX_KEYS_PER_MENU = VALID_DIGITS.length
 
 // ─────────────────────────────────────────────────────────────────────────────
 // אימות
@@ -157,6 +170,11 @@ export function validateIvr(cfg: IvrConfig): IvrProblem[] {
       if (!keys.length) {
         problems.push({ nodeId: n.id, level: 'error',
           message: 'תפריט בלי מקשים — המתקשר יישאר תקוע' })
+      }
+      // ⚠️ מעל 12 אין מקשים פנויים בטלפון. הפתרון הוא תפריט משנה.
+      if (keys.length > MAX_KEYS_PER_MENU) {
+        problems.push({ nodeId: n.id, level: 'error',
+          message: `יותר מ-${MAX_KEYS_PER_MENU} מקשים בתפריט אחד — יש לפצל לתפריט משנה` })
       }
       const usedDigits = new Set<string>()
       for (const k of keys) {

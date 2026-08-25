@@ -236,3 +236,40 @@ describe('⚠️ נרמול מבנה שנשמר', () => {
     expect(n.nodes.map(x => x.id)).toEqual(src.nodes.map(x => x.id))
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ⚠️ מגבלת 12 מקשים — לא שרירותית.
+//
+// הפרוטוקול של ימות מקבל את הספרות המותרות כרשימה ("1.2.9"), וזה עובד
+// לספרה בודדת. שלוחה דו-ספרתית דורשת הגדרה אחרת בימות שטרם אומתה,
+// ובנייה עליה הייתה מסתכנת בשלוחות שלא עונות.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('⚠️ מגבלת המקשים בתפריט', () => {
+  const menuWith = (n: number): IvrConfig => {
+    const digits = ['1','2','3','4','5','6','7','8','9','0','*','#','x','y']
+    const targets = Array.from({ length: n }, (_, i) => node({ id: `t${i}` }))
+    return cfg([
+      node({ id: 'root', type: 'menu', prompt: { text: 'תפריט' },
+        keys: targets.map((t, i) => ({ digit: digits[i], target: t.id })) }),
+      ...targets,
+    ], 'root')
+  }
+
+  it('12 מקשים — תקין', () => {
+    expect(errors(menuWith(12)).filter(e => /מקשים בתפריט אחד/.test(e.message))).toEqual([])
+  })
+
+  it('🔴 13 מקשים — שגיאה שמפנה לפתרון', () => {
+    // ⚠️ ההודעה אומרת *מה לעשות* (תפריט משנה), לא רק שנכשל.
+    const errs = errors(menuWith(13))
+    expect(errs.some(e => /תפריט משנה/.test(e.message))).toBe(true)
+  })
+
+  it('⚠️ ספרה דו-ספרתית נדחית כמקש לא חוקי', () => {
+    const c = cfg([
+      node({ id: 'root', type: 'menu', prompt: { text: 'x' }, keys: [{ digit: '10', target: 'a' }] }),
+      node({ id: 'a' }),
+    ], 'root')
+    expect(errors(c).some(e => /לא חוקי/.test(e.message))).toBe(true)
+  })
+})

@@ -99,6 +99,24 @@ export default function IvrBuilder() {
     return out
   }, [cfg])
 
+  // 🔴 מפת ההקשות: לכל שלוחה — איזה מקש מוביל אליה, ומאיזה תפריט.
+  //
+  // ⚠️ בלעדיה המנהל רואה רשימת שלוחות בלי לדעת מה המתקשר צריך להקיש
+  // כדי להגיע לכל אחת — וזה בדיוק המידע שהוא צריך כדי לכתוב את נוסח
+  // התפריט. שלוחה יכולה להיות מוגעת מכמה תפריטים.
+  const keyPaths = useMemo(() => {
+    const m = new Map<string, { digit: string; from: string }[]>()
+    if (!cfg) return m
+    for (const parent of cfg.nodes) {
+      for (const k of parent.keys ?? []) {
+        const list = m.get(k.target) ?? []
+        list.push({ digit: k.digit, from: parent.name })
+        m.set(k.target, list)
+      }
+    }
+    return m
+  }, [cfg])
+
   const errors = problems.filter(p => p.level === 'error')
   const problemsFor = (id: string) => problems.filter(p => p.nodeId === id)
 
@@ -314,6 +332,14 @@ export default function IvrBuilder() {
                   className="flex flex-1 items-center gap-2 text-right">
                   <ChevronLeft size={15}
                     className={`text-slate-400 transition-transform ${isOpen ? '-rotate-90' : ''}`} />
+                  {/* 🔴 מקש ההקשה — הפרט הראשון שהמנהל מחפש. */}
+                  {(keyPaths.get(node.id) ?? []).map((kp, i) => (
+                    <span key={i}
+                      title={`מקש ${kp.digit} מתוך "${kp.from}"`}
+                      className="inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-slate-800 px-1.5 text-[12px] font-black text-white">
+                      {kp.digit}
+                    </span>
+                  ))}
                   <span className="text-sm font-bold text-slate-800">{node.name}</span>
                   {isRoot && (
                     <span className="rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-bold text-teal-800">
@@ -434,6 +460,10 @@ export default function IvrBuilder() {
                       <div className="flex items-center justify-between">
                         <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
                           <ListTree size={12} /> מקשים
+                          {/* ⚠️ המגבלה נאמרת מראש ולא רק בשגיאה. */}
+                          <span className="font-normal text-slate-400">
+                            ({(node.keys ?? []).length}/12)
+                          </span>
                         </span>
                         <button onClick={() => addNode(node.id)}
                           className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800">

@@ -15,6 +15,8 @@ import { REGIONS, type RegionKey } from '@/lib/holidayCenterPick'
 interface Center {
   id: string; city: string; name: string; region: string
   capacity: number | null; is_active: boolean
+  // ⚠️ נשלפים ממילא ב-COLS — הם מה שהמשפחה רואה בשובר ובטלפון.
+  address?: string | null; phone?: string | null; hours?: string | null
 }
 
 export default function CenterBreakdown({ distributionId }: { distributionId: string }) {
@@ -22,6 +24,40 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [openIds, setOpenIds] = useState<Set<string>>(new Set())
   const [centersOpen, setCentersOpen] = useState(false)
+
+  // 🔴 עריכה במקום ולא בהגדרות.
+  //
+  // ⚠️ הכתובת והשעות הן מה שמופיע בשובר ובשלוחה הטלפונית. כשמוקד
+  // משנה שעות באמצע חלוקה, הניווט להגדרות ובחזרה הוא בדיוק החיכוך
+  // שגורם לא לעדכן — והמשפחות מגיעות בשעה הלא נכונה.
+  const [editing, setEditing] = useState<Center | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const saveCenter = async () => {
+    if (!editing) return
+    setSaving(true)
+    try {
+      const r = await fetch('/api/admin/holiday-centers', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        // ⚠️ נשלחים כל השדות ולא רק מה שהשתנה: ה-POST עושה update מלא,
+        // ושדה חסר היה מתאפס.
+        body: JSON.stringify({
+          id: editing.id, city: editing.city, name: editing.name,
+          address: editing.address ?? '', phone: editing.phone ?? '',
+          hours: editing.hours ?? '', region: editing.region,
+          capacity: editing.capacity, is_active: editing.is_active,
+        }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { alert(d.error ?? 'השמירה נכשלה'); return }
+      setCenters(cs => cs?.map(c => (c.id === editing.id ? editing : c)) ?? cs)
+      setEditing(null)
+    } catch {
+      alert('שגיאת רשת — השינוי לא נשמר')
+    } finally {
+      setSaving(false)
+    }
+  }
   const [busy, setBusy] = useState<string | null>(null)
   const [err, setErr] = useState('')
 
