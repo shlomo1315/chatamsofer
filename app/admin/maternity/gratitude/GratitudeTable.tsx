@@ -1,7 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { Globe, Mail, FileImage, Check, X, Download, Loader2, Send, CheckCircle2 } from 'lucide-react'
+import { Globe, Mail, FileImage, Check, X, Download, Loader2, Send, CheckCircle2, FileText, Clock } from 'lucide-react'
+import BatchPdfDialog from './BatchPdfDialog'
+import { wasSentToDonor, SENT_LABEL, type SentFilter } from '@/lib/gratitudeBatch'
 import SafeDocImage from '@/components/ui/SafeDocImage'
 import { openDocInNewTab } from '@/lib/docBlob'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
@@ -69,16 +71,30 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
   const [items, setItems] = useState(rows)
   const [open, setOpen] = useState<GratitudeRow | null>(null)
   const [statusFilter, setStatusFilter] = useState<'all' | 'received' | 'approved' | 'rejected'>('all')
+  // 🔴 סינון נפרד למצב המשלוח לנדיב. הוא *אינו* סטטוס: ברכה יכולה
+  // להיות מאושרת ועדיין לא נשלחה — וזו בדיוק הרשימה שהמשלוח השבועי מחפש.
+  const [sentFilter, setSentFilter] = useState<SentFilter>('all')
   const [busy, setBusy] = useState(false)
   const [pdf, setPdf] = useState<string | null>(null)
   // בחירה לשליחה מרוכזת + חלונית שליחה (בודדת או מרוכזת)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [sendModal, setSendModal] = useState<{ ids: string[]; email: string } | null>(null)
   const [sending, setSending] = useState(false)
+  // חלונית הקובץ המרוכז — כל הברכות בטווח בקובץ אחד לנדיב
+  const [batchOpen, setBatchOpen] = useState(false)
 
-  const filtered = statusFilter === 'all' ? items : items.filter(r => r.status === statusFilter)
+  const filtered = items.filter(r =>
+    (statusFilter === 'all' || r.status === statusFilter) &&
+    (sentFilter === 'all' || (sentFilter === 'sent') === wasSentToDonor(r)))
   // ניתן לשלוח רק מכתבים שאושרו
   const selectableIds = filtered.filter(r => r.status === 'approved').map(r => r.id)
+
+  // 🔴 בחירה שנעלמה מהמסך אינה נשלחת.
+  //
+  // ⚠️ בלי זה: המשתמש מסמן 5 ברכות, מסנן ל"טרם נשלחו", ולוחץ "שליחה
+  // מרוכזת" — והמערכת שולחת גם את מי שכבר לא מופיעה לפניו. אין דרך
+  // לדעת למי נשלח בפועל, וברכה נשלחת לנדיב פעמיים.
+  const visibleSelected = [...selected].filter(id => selectableIds.includes(id))
 
   function toggleSelect(id: string) {
     setSelected(prev => {
@@ -154,11 +170,17 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
           {STATUS_META[row.status].label}
         </span>
       )
+      // ⚠️ "טרם נשלח" נאמר במפורש ולא בקו מקווקו: קו נראה כמו "אין
+      // נתון", וזה בדיוק ההבדל שהמשתמש מחפש כשהוא בונה משלוח שבועי.
       case 'sent': return row.sent_to_donor_at ? (
-        <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium">
-          <CheckCircle2 size={13} /> {fmtDate(row.sent_to_donor_at)}
+        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+          <CheckCircle2 size={11} /> {fmtDate(row.sent_to_donor_at)}
         </span>
-      ) : <span className="text-slate-300">—</span>
+      ) : (
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+          <Clock size={11} /> טרם נשלח
+        </span>
+      )
     }
   }
 
@@ -220,14 +242,38 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
             {s === 'all' ? `הכל (${items.length})` : `${STATUS_META[s].label} (${items.filter(r => r.status === s).length})`}
           </button>
         ))}
+        {/* מפריד דק בין סינון הסטטוס לסינון המשלוח — שני צירים שונים */}
+        <span className="mx-1 h-5 w-px bg-slate-200" />
+        {(['all', 'unsent', 'sent'] as SentFilter[]).map(k => (
+          <button
+            key={k}
+            onClick={() => setSentFilter(k)}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition ${
+              sentFilter === k
+                ? 'bg-sky-700 text-white'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            {k === 'all' ? 'כל המשלוחים' : `${SENT_LABEL[k]} (${items.filter(r => (k === 'sent') === wasSentToDonor(r)).length})`}
+          </button>
+        ))}
         <div className="flex-1" />
+        {/* 🔴 קובץ מרוכז: עד כה כל ברכה הופקה בנפרד, ולא הייתה דרך
+            לשלוח לנדיב את ברכות השבוע במסמך אחד. */}
         <button
-          onClick={() => openSend([...selected])}
-          disabled={selected.size === 0}
+          onClick={() => setBatchOpen(true)}
+          className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition
+                     bg-white text-sky-700 border border-sky-300 hover:bg-sky-50"
+        >
+          <FileText size={14} /> קובץ מרוכז (PDF)
+        </button>
+        <button
+          onClick={() => openSend(visibleSelected)}
+          disabled={visibleSelected.length === 0}
           className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition
                      bg-pink-600 text-white hover:bg-pink-700 disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          <Send size={14} /> שליחה מרוכזת לנדיב{selected.size > 0 ? ` (${selected.size})` : ''}
+          <Send size={14} /> שליחה מרוכזת לנדיב{visibleSelected.length > 0 ? ` (${visibleSelected.length})` : ''}
         </button>
       </div>
 
@@ -243,7 +289,7 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
               <th className="px-3 py-3 w-10">
                 <input
                   type="checkbox"
-                  checked={selectableIds.length > 0 && selected.size === selectableIds.length}
+                  checked={selectableIds.length > 0 && visibleSelected.length === selectableIds.length}
                   onChange={toggleAll}
                   disabled={selectableIds.length === 0}
                   title="בחר הכל (מאושרים)"
@@ -450,6 +496,10 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
           </div>
         </div>
       )}
+      {/* ⚠️ מקבל את *כל* הפריטים ולא את filtered: הסינון בחלונית עצמאי,
+          ומי שסינן את המסך ל"מאושרות" עדיין רשאי להפיק קובץ של הכול. */}
+      {batchOpen && <BatchPdfDialog rows={items} onClose={() => setBatchOpen(false)} />}
+
     </>
   )
 }
