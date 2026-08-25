@@ -15,7 +15,23 @@ export interface UnloadableAid {
   card_number?: string | null
   card_balance?: number | string | null
   six_weeks_end?: string | null
-  beneficiary?: { nedarim_id?: string | null } | null
+  /** ⚠️ join של Supabase מחזיר לפעמים מערך ולפעמים אובייקט — שניהם נתמכים. */
+  beneficiary?: { nedarim_id?: string | null } | { nedarim_id?: string | null }[] | null
+}
+
+/**
+ * מזהה המשפחה בנדרים.
+ *
+ * ⚠️ שלושת הקוראים מעבירים את השורה עם `as unknown as UnloadableAid`,
+ * שעוקף את בדיקת הטיפוס. גישה ישירה ל-.nedarim_id על מערך הייתה מחזירה
+ * undefined *בשקט*, והיתרה הייתה נשמרת null — כלומר "לא נשמר" על פריקה
+ * שהנתון בה היה זמין.
+ */
+export function nedarimIdOf(aid: UnloadableAid): string | null {
+  const b = aid.beneficiary
+  const one = Array.isArray(b) ? b[0] : b
+  const id = (one?.nedarim_id ?? '').toString().trim()
+  return id || null
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -41,7 +57,7 @@ export async function unloadAidCard(
   //
   // ⚠️ נשלף לפני הפריקה: אחריה היתרה 0 בהגדרה.
   let balanceBefore: number | null = null
-  const nedId = aid.beneficiary?.nedarim_id ?? null
+  const nedId = nedarimIdOf(aid)
   if (nedId) {
     try {
       const card = await getClientCard(creds, String(nedId))
@@ -64,7 +80,10 @@ export async function unloadAidCard(
   }
 
   // מחיקת הכרטיס המגנטי מהמשפחה בנדרים — כדי שבלידה הבאה יקבלו כרטיס חדש
-  const nedarimId = aid.beneficiary?.nedarim_id ?? null
+  // ⚠️ אותו חילוץ: אם ה-join החזיר מערך, המחיקה הייתה מדולגת בשקט
+  // והמשפחה הייתה נשארת עם הכרטיס הישן רשום — כך שבלידה הבאה לא היה
+  // מונפק לה כרטיס חדש.
+  const nedarimId = nedId
   const cardNumber = String(aid.card_number ?? '').trim()
   let cardRemoved = false
   let cardRemoveError: string | null = null
