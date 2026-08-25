@@ -156,6 +156,25 @@ export async function deleteMaternityAid(supabase: ReturnType<typeof createClien
     }
   }
 
+  // 🔴 החזרת הכרטיס למלאי — *לפני* המחיקה, מאותה סיבה כמו פריקת הכסף:
+  // אחרי המחיקה הקישור בין הכרטיס לתיק אבד, ואין למי להחזיר.
+  //
+  // ⚠️ בלי זה כל מחיקת תיק מאושר השאירה כרטיס מנוכה לצמיתות. זה בדיוק
+  // מקור ההפרש שמופיע במסך המלאי ("נוכו ואינם מגובים בלידה מאושרת"),
+  // והדרך היחידה לסגור אותו בדיעבד היא ספירה פיזית.
+  //
+  // ⚠️ אינו עוצר את המחיקה בכישלון, בניגוד לפריקת הכסף: כרטיס אחד
+  // במלאי הוא פער שניתן לתקן בספירה, בעוד ₪600 יתומים בנדרים אינם
+  // ניתנים לאיתור. עצירת המחיקה כאן הייתה מונעת ניקוי תיקים בגלל
+  // תקלה שולית.
+  try {
+    await fetch('/api/admin/maternity/release-card', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ aidId: aid.id }),
+    })
+  } catch { /* המחיקה ממשיכה — ראו ההערה למעלה */ }
+
   const { error } = await supabase.from('maternity_aids').delete().eq('id', aid.id)
   if (error) throw error
 }
