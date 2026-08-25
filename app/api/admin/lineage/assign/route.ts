@@ -107,6 +107,34 @@ export async function POST(request: NextRequest) {
     }
   } catch { /* בדיקת deep_review best-effort — לא חוסמת את השיוך */ }
 
+  // 🔴 רישום המצב הקודם — לפני העדכון, אחרת אין מה לשחזר.
+  //
+  // ⚠️ השינוי דורס את שרשרת הדורות ולעתים מחזיר משפחה מאושרת
+  // ל"ממתין". טעות בבחירת צומת (שמות דומים מאוד בעץ) לא הייתה ניתנת
+  // לתיקון אלא בשחזור ידני מהזיכרון.
+  try {
+    const { data: before } = await db.from('beneficiaries')
+      .select('lineage_chain, lineage_node_id, eligibility_status')
+      .eq('id', String(beneficiaryId)).maybeSingle()
+    const b = before as {
+      lineage_chain?: unknown; lineage_node_id?: string | null; eligibility_status?: string | null
+    } | null
+    await db.from('lineage_assign_log').insert({
+      beneficiary_id: String(beneficiaryId),
+      prev_chain: b?.lineage_chain ?? null,
+      prev_node_id: b?.lineage_node_id ?? null,
+      prev_eligibility: b?.eligibility_status ?? null,
+      new_node_id: nodeId,
+      at_generation: cutGen,
+      changed_by: staff.userId,
+    })
+  } catch (e) {
+    // ⚠️ כשל ברישום אינו חוסם את השיוך: הוא פעולה לגיטימית, וחסימתה
+    // בגלל תקלת יומן הייתה משביתה את העבודה. אבל נרשם ללוג — בלי
+    // הרישום אין ביטול, וזה צריך להיות ידוע.
+    console.error('[lineage/assign] רישום לביטול נכשל:', e instanceof Error ? e.message : e)
+  }
+
   const { error: uErr } = await db
     .from('beneficiaries')
     .update(update)

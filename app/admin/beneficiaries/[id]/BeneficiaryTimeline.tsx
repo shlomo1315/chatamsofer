@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
+import { staffDisplayName } from '@/lib/staffInitials'
 import {
   ClipboardList, MessageSquare, Send, Loader2, User, ChevronDown, ChevronUp,
   FileText, GitBranch,
@@ -71,11 +72,12 @@ export default function BeneficiaryTimeline({
     const all: Entry[] = [
       ...notes.map(n => ({
         kind: 'note' as const, id: `n-${n.id}`, at: n.created_at,
-        author: n.author_name || 'משתמש', body: n.body,
+        // ⚠️ ראשי תיבות — אותו כלל כמו ביומן ההערות שמציג את אותן רשומות.
+        author: staffDisplayName(n.author_name, 'משתמש'), body: n.body,
       })),
       ...history.map(h => ({
         kind: 'docs' as const, id: `d-${h.id}`, at: h.created_at,
-        author: h.requested_by_name || 'המזכירות', req: h,
+        author: staffDisplayName(h.requested_by_name, 'המזכירות'), req: h,
       })),
     ]
     return all.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())

@@ -1,6 +1,6 @@
 'use client'
 import { useState, useMemo, useEffect } from 'react'
-import { ChevronLeft, Loader2, GitBranch, Palette, Check, X, Search } from 'lucide-react'
+import { ChevronLeft, Loader2, GitBranch, Palette, Check, X, Search, AlertTriangle, Undo2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { genColor, asGenStatus } from '@/lib/lineageDeviation'
 
@@ -73,6 +73,14 @@ export default function LineageChainChips({
   const [q, setQ] = useState('')
   const [assigning, setAssigning] = useState(false)
   const [err, setErr] = useState('')
+  // 🔴 הצומת שנבחר *ממתין לאישור* ואינו נשלח עדיין. קודם לחיצה אחת על שם
+  // בבורר הייתה כותבת מיד למסד: דורסת את שרשרת הדורות, ולעתים מחזירה משפחה
+  // מאושרת ל"ממתין לאישור" — בלי שהמשתמש ידע מה עומד לקרות ובלי דרך חזרה.
+  const [pending, setPending] = useState<TreeNode | null>(null)
+  const [undoing, setUndoing] = useState(false)
+  // ⚠️ נשמר בצד הלקוח כדי להציג את כפתור הביטול מיד אחרי השינוי. אין בו
+  // נתונים — השחזור עצמו נשען על היומן בשרת (lineage_assign_log).
+  const [canUndo, setCanUndo] = useState(false)
 
   // ── צמתי הבורר — נטענים *לפי דרישה*, רק כשנפתח בורר לדור מסוים ──
   //
@@ -181,11 +189,46 @@ export default function LineageChainChips({
       })
       const d = await res.json()
       if (!res.ok) { setErr(d.error ?? 'השיוך נכשל'); return }
-      setPickerGen(null); setMenuGen(null); setQ('')
+      setPending(null); setPickerGen(null); setMenuGen(null); setQ('')
+      setCanUndo(true)
       router.refresh()
     } catch { setErr('שגיאת תקשורת') }
     finally { setAssigning(false) }
   }
+
+  // ── ביטול השינוי האחרון — שחזור השרשרת, הצומת והסטטוס שהיו לפניו ──
+  const undo = async () => {
+    setUndoing(true); setErr('')
+    try {
+      const res = await fetch('/api/admin/lineage/assign/undo', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ beneficiaryId }),
+      })
+      const d = await res.json()
+      if (!res.ok) { setErr(d.error ?? 'הביטול נכשל'); return }
+      setCanUndo(false)
+      router.refresh()
+    } catch { setErr('שגיאת תקשורת') }
+    finally { setUndoing(false) }
+  }
+
+  // ── מה בדיוק ישתנה — נגזר מאותה לוגיקה שהשרת מבצע ──
+  //
+  // ⚠️ ההודעה חייבת לתאר את הפעולה *האמיתית*: השרת גוזר מחדש את דורות
+  // 1..N מהצומת שנבחר כלפי מעלה, ומשאיר את הדורות שמתחת. ניסוח כללי
+  // ("האם לשייך?") לא היה מגלה שדורות שהמשתמש לא נגע בהם משתנים גם הם.
+  const impact = useMemo(() => {
+    if (!pending || pickerGen == null) return null
+    const replaced = gens.filter(g => g.generation <= pickerGen)
+    const kept = gens.filter(g => g.generation > pickerGen)
+    const cur = gens.find(g => g.generation === pickerGen)
+    return {
+      cur, replaced, kept,
+      // 🔴 השיוך עשוי להחזיר משפחה שכבר סווגה כחריגה ל"ממתין לאישור".
+      // זה שינוי בסטטוס הזכאות, ולא רק בשמות — חייב להיאמר מראש.
+      isLeaf: kept.length === 0,
+    }
+  }, [pending, pickerGen, gens])
 
   // תגית בן/חתן — רקע לבן מלא וטקסט כהה, כדי שתבלוט ברור על הצ'יפ הצבעוני
   // (כחול/כתום/אדום). בן=כחול כהה · חתן=ענבר כהה.
@@ -240,6 +283,20 @@ export default function LineageChainChips({
         <span>· לחצו על דור לבחירת צומת אחר או לסימון ידני.</span>
       </p>
 
+      {/* ⚠️ כפתור הביטול מוצג רק אחרי שינוי בפועל, ומיד מתחת לשרשרת —
+          במקום שבו רואים את התוצאה ומזהים שהיא שגויה. */}
+      {canUndo && (
+        <div className="mt-2 flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2">
+          <AlertTriangle size={14} className="text-amber-600 shrink-0" />
+          <span className="text-xs text-amber-900 font-medium">שרשרת הדורות עודכנה.</span>
+          <button type="button" onClick={undo} disabled={undoing}
+            className="mr-auto inline-flex items-center gap-1.5 rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-bold text-amber-800 hover:bg-amber-100 transition-colors disabled:opacity-50">
+            {undoing ? <Loader2 size={12} className="animate-spin" /> : <Undo2 size={12} />}
+            בטלו את השינוי
+          </button>
+        </div>
+      )}
+
       {/* בורר צמתים — מודל */}
       {pickerGen != null && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" dir="rtl"
@@ -284,7 +341,7 @@ export default function LineageChainChips({
                   {q.trim() ? 'לא נמצאו צמתים תואמים' : `אין צמתים מאומתים בדור ${pickerGen}`}
                 </p>
               ) : pickerOptions.map(n => (
-                <button key={n.id} type="button" onClick={() => assign(n.id)} disabled={assigning}
+                <button key={n.id} type="button" onClick={() => { setPending(n); setErr('') }} disabled={assigning}
                   className="flex items-center justify-between text-right rounded-lg border border-slate-200 px-3 py-2 text-sm hover:border-indigo-300 hover:bg-indigo-50 transition-colors disabled:opacity-50">
                   <span className="font-medium text-slate-800">
                     {n.name}
@@ -300,6 +357,96 @@ export default function LineageChainChips({
             </div>
             </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────
+          חלונית אישור — מה בדיוק עומד לקרות.
+          🔴 קודם לחיצה על שם בבורר כתבה מיד למסד. בעץ יש שמות כמעט זהים
+          בדורות סמוכים, ובחירה שגויה דרסה את השרשרת ללא דרך חזרה.
+          ───────────────────────────────────────────────────────────────── */}
+      {pending && impact && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4" dir="rtl"
+          onClick={() => !assigning && setPending(null)}>
+          <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[85vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2.5 border-b border-slate-200 px-5 py-4">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 shrink-0">
+                <AlertTriangle size={17} className="text-amber-600" />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">אישור שינוי בשרשרת הדורות</h2>
+                <p className="text-[11px] text-slate-500">קראו מה עומד להשתנות לפני האישור</p>
+              </div>
+            </div>
+
+            <div className="px-5 py-4 space-y-3">
+              {/* מה נבחר */}
+              <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3">
+                <p className="text-xs text-indigo-900 leading-relaxed">
+                  דור {pickerGen} ישתנה
+                  {impact.cur ? <> מ־<b className="font-bold">{impact.cur.name}</b></> : null}
+                  {' '}ל־<b className="font-bold">{pending.name}</b>
+                  {(pending.status ?? '') !== 'verified' && (
+                    <span className="mr-1.5 rounded-full bg-amber-200 px-1.5 py-0.5 text-[10px] font-bold text-amber-900">צומת ממתין לאישור</span>
+                  )}
+                </p>
+              </div>
+
+              {/* מה תיגזר מחדש — ההשלכה הלא-מובנת מאליה */}
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-[11px] font-bold text-slate-700 mb-1.5">מה המערכת תבצע</p>
+                <ul className="space-y-1.5 text-[11px] text-slate-700 leading-relaxed list-disc pr-4">
+                  <li>
+                    <b>דורות 1–{pickerGen} ייגזרו מחדש</b> מהצומת שנבחר כלפי מעלה עד מרן החתם סופר.
+                    ייתכן שגם דורות שלא נגעתם בהם ישתנו.
+                  </li>
+                  {impact.kept.length > 0 ? (
+                    <li>
+                      הדורות שמתחת נשמרים כפי שהם: <b>{impact.kept.map(k => `דור ${k.generation}`).join(', ')}</b>.
+                    </li>
+                  ) : (
+                    <li>זהו הדור האחרון בשרשרת — שיוך המשפחה בעץ (צומת העלה) יוצמד לצומת שנבחר.</li>
+                  )}
+                  <li>
+                    אם המשפחה מסומנת כ<b>חריגה לבדיקה מעמיקה</b> וכל הדורות 2–5 יתאימו לעץ המאושר —
+                    הסטטוס יחזור אוטומטית ל<b>ממתין לאישור</b>.
+                  </li>
+                </ul>
+              </div>
+
+              {/* השרשרת שתידרס — כדי שיראו את השמות עצמם */}
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                <p className="text-[11px] font-bold text-red-800 mb-1.5">הדורות שיידרסו ({impact.replaced.length})</p>
+                <div className="flex flex-wrap gap-1">
+                  {impact.replaced.map(g => (
+                    <span key={g.generation} className="rounded-full bg-white border border-red-200 px-2 py-0.5 text-[10px] text-red-900">
+                      <span className="text-red-400 ml-1">דור {g.generation}</span>{g.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <p className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                <Undo2 size={12} className="text-slate-400" />
+                ניתן לבטל את השינוי מיד אחרי הביצוע, בכפתור שיופיע מתחת לשרשרת.
+              </p>
+
+              {err && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</p>}
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-3">
+              <button type="button" onClick={() => setPending(null)} disabled={assigning}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50">
+                ביטול
+              </button>
+              <button type="button" onClick={() => assign(pending.id)} disabled={assigning}
+                className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 transition-colors disabled:opacity-50">
+                {assigning && <Loader2 size={13} className="animate-spin" />}
+                אשרו את השינוי
+              </button>
+            </div>
           </div>
         </div>
       )}

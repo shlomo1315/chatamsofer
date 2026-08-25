@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { staffDisplayName } from '@/lib/staffInitials'
 import { MessageSquare, Send, Loader2, User } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -106,7 +107,9 @@ export default function BeneficiaryNotesChat({ beneficiaryId }: { beneficiaryId:
                 </div>
                 <div className="flex items-center gap-1.5 mt-1 px-1 text-[11px] text-slate-400">
                   <User size={11} />
-                  <span className="font-medium text-slate-500">{n.author_name || 'משתמש'}</span>
+                  {/* ⚠️ ראשי תיבות בלבד — הכלל אחיד לכל תצוגות איש הצוות
+                      במערכת, ולא רק בשרשור הבירור מול המבקש. */}
+                  <span className="font-medium text-slate-500">{staffDisplayName(n.author_name, 'משתמש')}</span>
                   <span>·</span>
                   <span>{fmtWhen(n.created_at)}</span>
                 </div>

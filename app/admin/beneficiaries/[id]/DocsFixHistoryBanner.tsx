@@ -1,4 +1,5 @@
 import { FileText, GitBranch, Clock, ClipboardList } from 'lucide-react'
+import { staffDisplayName } from '@/lib/staffInitials'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // באנר "מה ביקשנו מהצאצא" — היסטוריית בקשות התיקון/השלמת מסמכים.
@@ -98,7 +99,7 @@ export default function DocsFixHistoryBanner({
               <div key={req.id} className="rounded-xl bg-white/70 border border-slate-200 p-3.5">
                 <div className="flex items-center justify-between mb-2 text-xs text-slate-400">
                   <span className="flex items-center gap-1"><Clock size={12} /> {fmtDateTime(req.created_at)}</span>
-                  {req.requested_by_name && <span>ביקש/ה: {req.requested_by_name}</span>}
+                  {req.requested_by_name && <span>ביקש/ה: {staffDisplayName(req.requested_by_name, '')}</span>}
                 </div>
                 <RequestBody req={req} docLabelMap={docLabelMap} />
               </div>
