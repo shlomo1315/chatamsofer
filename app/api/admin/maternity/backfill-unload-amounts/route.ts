@@ -41,51 +41,45 @@ interface Found {
 }
 
 /**
- * מאתר את סכום ה*פריקה* בתוך תשובת נדרים.
+ * מאתר את סכום הפריקה בתשובת נדרים.
  *
- * 🔴 לא סכום הטעינה. הניסיון הראשון חיפש שדה Amount כלשהו על התלוש
- * והחזיר 600 לכל אחת מ-13 הפריקות — סכום הטעינה, לא מה שחזר בפועל.
- * משפחה שקנתה ב-599.79 ונשארו לה 0.21 נרשמה כאילו חזרו 600.
+ * 🔴 המבנה אומת מול תשובה אמיתית (26.08) ואינו מנוחש עוד:
  *
- * ⚠️ בנדרים הפריקה היא *תנועה נפרדת* בהיסטוריה, עם תיאור "פריקת תלוש".
- * זו השורה שמחפשים כאן — לא את התלוש עצמו.
+ *   History: [
+ *     { HistoryId: '3651412', Date: '25/08/26 00:12',
+ *       Amount: '0.21', Comments: 'פריקת תלוש ע"י הקופה' },
+ *     { StoreName: 'שובע שמחות', Amount: '9.94', Comments: '' },   ← קנייה
+ *     ...
+ *   ]
  *
- * ⚠️ המבנה אינו מתועד ומשתנה, ולכן החיפוש עובר על כל האובייקטים ומזהה
- * לפי הטקסט. אין כאן ניחוש: אם לא נמצאה שורת פריקה — מוחזר null.
+ * ⚠️ הפריקה יושבת ב-History ולא ב-Tlushim. הניסיון הראשון חיפש
+ * Amount על התלוש — שם יושב סכום ה*טעינה* (600) — וכתב אותו כ"סכום
+ * שחזר" ל-13 פריקות. משפחה שנשארו לה 0.21 נרשמה כאילו חזרו 600.
+ *
+ * ⚠️ הזיהוי לפי Comments בלבד: לשורות הקנייה יש StoreName ו-Comments
+ * ריק, ולשורת הפריקה יש Comments מפורש ואין חנות. אין שדה סוג.
+ *
+ * ⚠️ TlushId אינו קיים בשורות ה-History — יש בהן HistoryId משלהן.
+ * לכן אי אפשר לשייך פריקה לתלוש מסוים, ונלקחת הפריקה האחרונה. זה
+ * נכון כל עוד למשפחה תלוש פעיל אחד, וזה המצב בכל 14 הרשומות.
  */
-function findUnloadAmount(payload: unknown, tlushId: string): number | null {
-  if (!payload || typeof payload !== 'object') return null
-  const wanted = String(tlushId).trim()
-  let hit: number | null = null
+function findUnloadAmount(payload: unknown): number | null {
+  const p = payload as { History?: unknown } | null
+  const history = Array.isArray(p?.History) ? p.History : []
 
-  const walk = (node: unknown) => {
-    if (hit != null || !node) return
-    if (Array.isArray(node)) { node.forEach(walk); return }
-    if (typeof node !== 'object') return
+  // ⚠️ מהחדש לישן — נדרים מחזירה בסדר יורד, והפריקה האחרונה היא
+  // הרלוונטית.
+  for (const raw of history) {
+    if (!raw || typeof raw !== 'object') continue
+    const row = raw as Record<string, unknown>
+    const comments = String(row.Comments ?? '')
+    if (!/פריקת תלוש/.test(comments)) continue
 
-    const o = node as Record<string, unknown>
-
-    // תיאור התנועה — כאן מזוהה הפריקה
-    const desc = String(o.Description ?? o.Comment ?? o.Details ?? o.Name ?? o.Product ?? '')
-    const isUnloadRow = /פריק/.test(desc)
-
-    if (isUnloadRow) {
-      // ⚠️ מוודאים שזו הפריקה של *התלוש הזה* ולא של אחר לאותה משפחה:
-      // למשפחה עם כמה לידות יש כמה תלושים.
-      const idVal = String(o.TlushId ?? o.tlushId ?? o.Id ?? '').trim()
-      if (!wanted || !idVal || idVal === wanted) {
-        for (const k of ['Amount', 'Sum', 'Total', 'amount', 'sum']) {
-          const v = o[k]
-          const n = v != null ? Number(v) : NaN
-          if (Number.isFinite(n)) { hit = Math.abs(n); return }
-        }
-      }
-    }
-    Object.values(o).forEach(walk)
+    // ⚠️ Amount מגיע כמחרוזת ולעתים עם ' ₪' — חילוץ המספר בלבד.
+    const n = Number(String(row.Amount ?? '').replace(/[^d.-]/g, ''))
+    if (Number.isFinite(n)) return Math.abs(n)
   }
-
-  walk(payload)
-  return hit
+  return null
 }
 
 async function collect(): Promise<{ ok: boolean; rows?: Found[]; error?: string }> {
@@ -130,7 +124,7 @@ async function collect(): Promise<{ ok: boolean; rows?: Found[]; error?: string 
         cache.set(nedarimId, await getClientCardFull(creds, nedarimId))
       }
       const payload = cache.get(nedarimId)
-      const amount = findUnloadAmount(payload, tlush)
+      const amount = findUnloadAmount(payload)
       out.push({ aidId: r.id, motherName, tlushId: tlush,
         unloadedAt: r.card_unloaded_at, amount,
         note: amount != null ? 'נמצא בנדרים' : 'שורת הפריקה לא נמצאה בהיסטוריה' })

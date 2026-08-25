@@ -1,5 +1,6 @@
 'use client'
 import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useIsAdmin } from '@/components/StaffPermissions'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Clock, Check, X, Baby, Eye, Loader2, Search, FileText, Trash2, AlertTriangle, PencilLine, MessageSquare } from 'lucide-react'
@@ -214,6 +215,9 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
   // המסוננות בבת אחת (עד ~1000 שורות × 15 עמודות = ~15,000 תאים), וכל
   // סינון/מיון/הקלדה בנה אותן מחדש.
   // ⚠️ החיפוש רץ על כל הרשימה (visible) ורק אז נחתך לעמוד — ראו useTablePagination.
+  // 🔒 נתוני הכסף מנדרים — מנהל בלבד.
+  const isAdmin = useIsAdmin()
+
   const pg = useTablePagination(visible)
   const visibleRows = pg.rows
 
@@ -222,8 +226,13 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
   const colFilter = useCallback((c: ColDef<ColKey>) => {
     if ((c.key === 'arrived' || c.key === 'amount') && !showArrived) return false
     if ((c.key === 'loadStatus' || c.key === 'loadDate' || c.key === 'cardLink') && !showCard) return false
+    // 🔒 יתרות ומימוש — מנהל בלבד.
+    //
+    // ⚠️ יורדות מהבורר עצמו ולא רק מהטבלה: עמודה שמופיעה ברשימה ואינה
+    // נטענת נראית כתקלה, ובנתוני כסף היא גם מרמזת שיש מידע שמוסתר.
+    if ((c.key === 'liveBalance' || c.key === 'spent') && !isAdmin) return false
     return true
-  }, [showArrived, showCard])
+  }, [showArrived, showCard, isAdmin])
 
   // extraCols: 1 — עמודת הפעולות קבועה ואינה בבורר, אך נספרת לגרירה.
   const tc = useTableColumns<ColKey>('maternity', COLUMNS, { filter: colFilter, extraCols: 1 })

@@ -5,6 +5,7 @@ import { MaternityAid } from '@/types'
 import Button from '@/components/ui/Button'
 import PageHeader from '@/components/ui/PageHeader'
 import { Can } from '@/components/StaffPermissions'
+import { requireStaff } from '@/lib/apiAuth'
 import MaternityTable from './MaternityTable'
 import ExportExcelButton from '@/components/admin/ExportExcelButton'
 import { APPROVAL_LABEL_SELECT } from '@/lib/approvalLabel'
@@ -43,6 +44,18 @@ async function getMaternityAids(): Promise<MaternityAid[]> {
   // שדות כבדים שאינם בשימוש בטבלה (card_balance, weekly_amount, total_weeks,
   // updated_at) הושמטו מהשליפה בכוונה כדי לצמצם את ה-payload.
   const aids = (data ?? []) as unknown as MaternityAid[]
+
+  // 🔒 נתוני הכסף מנדרים — מנהל בלבד, ומנוקים *בשרת*.
+  //
+  // ⚠️ הסתרת עמודה בלקוח אינה הגנה: הערכים עדיין נשלחים בגוף הדף,
+  // ומי שיפתח את כלי הפיתוח יראה כמה כל משפחה מימשה.
+  const staff = await requireStaff()
+  if (staff?.role !== 'admin') {
+    for (const a of aids) {
+      delete (a as { live_balance?: unknown }).live_balance
+      delete (a as { live_balance_at?: unknown }).live_balance_at
+    }
+  }
   // נפילה-לאחור: רשומות שאין בהן birth_certificate_url — שליפת אישור הלידה מטבלת המסמכים
   const missing = aids.filter(a => !a.birth_certificate_url && a.beneficiary_id)
   if (missing.length) {
