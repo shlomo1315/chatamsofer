@@ -17,6 +17,22 @@ export interface RouteInput {
   isRequest?: boolean
   /** נפילה-לאחור אחרונה: ה-to של ה-envelope */
   envelopeTo?: string
+  /**
+   * 🔴 כתובות התיבות שהמנהל הוסיף בהגדרות.
+   *
+   * ⚠️ departmentByEmail מכיר רק את המחלקות הקבועות. בלי הרשימה הזו
+   * מייל ל-m@chasamsofer.info לא זוהה כתיבה, נפל לכלל "הגיע דרך
+   * ה-copy" — ונענה מ-office@. הפונה שלח לתיבה אחת וקיבל מענה מאחרת.
+   */
+  customEmails?: string[]
+}
+
+/** האם הכתובת היא תיבה מוכרת — קבועה או מותאמת. */
+function knownBox(addr: string, custom?: string[]): string | null {
+  const dep = departmentByEmail(addr)
+  if (dep) return dep.email
+  const a = addr.toLowerCase().trim()
+  return (custom ?? []).some(c => c.toLowerCase().trim() === a) ? a : null
 }
 
 const ORG_DOMAIN = '@chasamsofer.info'
@@ -38,12 +54,12 @@ export function resolveAllMailboxes(input: RouteInput): string[] {
   const seen = new Set<string>()
   const out: string[] = []
   for (const a of [...direct, ...cc]) {
-    const dep = departmentByEmail(a)
-    if (!dep) continue
-    const key = dep.email.toLowerCase()
+    const box = knownBox(a, input.customEmails)
+    if (!box) continue
+    const key = box.toLowerCase()
     if (seen.has(key)) continue
     seen.add(key)
-    out.push(dep.email)
+    out.push(box)
   }
   return out
 }
@@ -55,8 +71,8 @@ export function resolveMailbox(input: RouteInput): string {
 
   // (1) תיבה מוכרת בנמען ישיר — הקובע. Cc נבדק רק אם אין אף נמען ישיר מוכר.
   const knownDept =
-    direct.find(a => departmentByEmail(a)) ??
-    cc.find(a => departmentByEmail(a))
+    direct.find(a => knownBox(a, input.customEmails)) ??
+    cc.find(a => knownBox(a, input.customEmails))
   if (knownDept) return knownDept
 
   // (2) בקשה — תמיד לאיגוד, גם כשהגיעה דרך כתובת ה-copy.

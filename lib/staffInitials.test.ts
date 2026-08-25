@@ -62,12 +62,21 @@ describe('מה שמוצג ליד הודעת צוות', () => {
   })
 })
 
-describe('🔴 כתובת מייל אינה מוצגת', () => {
-  it('מייל נופל לברירת המחדל', () => {
-    // ⚠️ למשתמש בלי שם מלא נשמר המייל ב-sender_name, והשרשור הציג
-    // "5827799@gmail.com" לפונה — חשיפת כתובת פרטית שגם אינה אומרת דבר.
+describe('🔴 כתובת מייל → ראשי תיבות', () => {
+  it('🔴 מייל עם שם נגזר לראשי תיבות', () => {
+    // ⚠️ למשתמשים אין שם ב-Supabase Auth, ולכן sender_name מכיל את
+    // המייל. הצגתו כמו שהוא חושפת כתובת פרטית ליולדת.
+    expect(staffDisplayName('moshe.cohen@gmail.com')).toBe('M.C.')
+    expect(staffDisplayName('yossi_levi@x.co')).toBe('Y.L.')
+  })
+
+  it('⚠️ מייל מספרי נופל לתווית המחלקה — ספרה אינה ראש תיבה', () => {
     expect(staffDisplayName('5827799@gmail.com')).toBe('המזכירות')
-    expect(staffDisplayName('a@b.co', 'צוות הגמ״ח')).toBe('צוות הגמ״ח')
+    expect(staffDisplayName('12345@x.co', 'צוות הגמ״ח')).toBe('צוות הגמ״ח')
+  })
+
+  it('⚠️ שם יחיד במייל — אות אחת', () => {
+    expect(staffDisplayName('mendel@gmail.com')).toBe('M.')
   })
 
   it('⚠️ שם אמיתי ממשיך להתקצר', () => {

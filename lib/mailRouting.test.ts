@@ -129,3 +129,54 @@ describe('נפילות-לאחור', () => {
     expect(box).toBe('x@other.com')
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 תיבה שהמנהל הוסיף לא זוהתה כתיבה מוכרת.
+//
+// מייל ל-m@chasamsofer.info נפל לכלל "הגיע דרך ה-copy" ונענה מ-office@.
+// הפונה שלח לתיבה אחת וקיבל מענה מאחרת, עם נוסח של אגף שאין לו קשר
+// לפנייתו — ואיש לא ידע, כי מבחינת המערכת הכל עבד.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('🔴 תיבות מותאמות', () => {
+  const custom = ['m@chasamsofer.info']
+
+  it('🔴 תיבה מותאמת נבחרת ולא נופלת ל-office', () => {
+    expect(resolveMailbox({
+      direct: ['m@chasamsofer.info'],
+      customEmails: custom,
+    })).toBe('m@chasamsofer.info')
+  })
+
+  it('🔴 גם כשהמייל הגיע דרך כתובת ה-copy', () => {
+    // ⚠️ זה בדיוק המסלול שנפל: Google עושה dual-delivery, והנמען
+    // המקורי מופיע לצד כתובת ה-copy.
+    expect(resolveMailbox({
+      direct: ['m@chasamsofer.info', 'copy@in.chasamsofer.info'],
+      customEmails: custom,
+    })).toBe('m@chasamsofer.info')
+  })
+
+  it('⚠️ גם בלי הרשימה — כלל (3) תופס כתובת ארגונית', () => {
+    // ⚠️ resolveMailbox עצמו *לא* היה הבאג: כלל (3) מחזיר כל כתובת
+    // בדומיין שלנו. הבאג היה ב-departmentByEmail הסינכרוני, שנקרא
+    // אחר כך כדי להחליט מאיזו מחלקה לענות.
+    expect(resolveMailbox({
+      direct: ['m@chasamsofer.info', 'copy@in.chasamsofer.info'],
+    })).toBe('m@chasamsofer.info')
+  })
+
+  it('⚠️ מחלקה קבועה גוברת על תיבה מותאמת ב-Cc', () => {
+    expect(resolveMailbox({
+      direct: ['g@chasamsofer.info'],
+      cc: ['m@chasamsofer.info'],
+      customEmails: custom,
+    })).toBe('g@chasamsofer.info')
+  })
+
+  it('⚠️ רישיות אינה משנה', () => {
+    expect(resolveMailbox({
+      direct: ['M@ChasamSofer.info'],
+      customEmails: custom,
+    })).toBe('M@ChasamSofer.info')
+  })
+})

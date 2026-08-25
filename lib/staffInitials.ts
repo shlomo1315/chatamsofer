@@ -54,12 +54,26 @@ export function staffDisplayName(senderName?: string | null, fallback = 'המז�
   if (!raw) return fallback
   if (SYSTEM_LABELS.has(raw)) return raw
 
-  // 🔴 כתובת מייל אינה שם — ולא מוצגת ליולדת.
+  // 🔴 כתובת מייל → ראשי תיבות, לא הסתרה.
   //
-  // ⚠️ למשתמש שאין לו שם מלא נשמר המייל ב-sender_name, והשרשור הציג
-  // "5827799@gmail.com" לצד ההודעה. זו חשיפה של כתובת פרטית לפונה,
-  // וגם אינה אומרת לו דבר.
-  if (raw.includes('@')) return fallback
+  // ⚠️ שלושה מצבים, ורק אחד מהם נכון:
+  //   · המייל עצמו   — חושף כתובת פרטית ליולדת ואינו אומר לה דבר
+  //   · "המזכירות"   — מוחק את זהות הכותב; שתי מזכירות נראות זהות
+  //   · ראשי תיבות   — מזהה בלי לחשוף. זה מה שסוכם.
+  //
+  // ⚠️ למשתמשים אין שם ב-Supabase Auth, ולכן sender_name מכיל את
+  // המייל. גוזרים מהחלק שלפני ה-@: "moshe.cohen@" → "מ.כ." בלועזית,
+  // ומייל מספרי ("5827799@") נופל לתווית המחלקה — ספרה אינה ראש תיבה.
+  if (raw.includes('@')) {
+    const local = raw.split('@')[0]
+    // מפרידים נפוצים במייל: נקודה, מקף, קו תחתון
+    const parts = local.split(/[._-]+/).filter(p => /^[A-Za-zא-ת]/.test(p))
+    if (parts.length >= 2) return parts.map(p => p[0].toUpperCase() + '.').join('')
+    if (parts.length === 1 && parts[0].length >= 2) {
+      return parts[0][0].toUpperCase() + '.'
+    }
+    return fallback
+  }
 
   return toInitials(raw)
 }

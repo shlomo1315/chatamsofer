@@ -343,12 +343,32 @@ export async function POST(request: NextRequest) {
   // שהמזכיר של אותו אגף עוקב אחריה.
   const isRequestMail = isRequestSubject(subject)
 
+  // 🔴 התיבות שהמנהל הוסיף — בלעדיהן הניתוב אינו מזהה אותן.
+  //
+  // ⚠️ מייל ל-m@chasamsofer.info לא זוהה כתיבה מוכרת, נפל לכלל
+  // "הגיע דרך ה-copy" — ונענה מ-office@. הפונה שלח לתיבה אחת וקיבל
+  // מענה מאחרת, עם נוסח של אגף שאין לו קשר לפנייתו.
+  const customBoxEmails = await (async () => {
+    try {
+      const { loadCustomMailboxes } = await import('@/lib/customMailboxes')
+      const { getServiceClient } = await import('@/lib/apiAuth')
+      const db = getServiceClient()
+      if (!db) return [] as string[]
+      return (await loadCustomMailboxes(db)).map(m => m.email)
+    } catch {
+      // ⚠️ כשל טעינה אינו עוצר את הקליטה: המייל עדיין נשמר, רק
+      // הניתוב חוזר להתנהגות הישנה.
+      return [] as string[]
+    }
+  })()
+
   // כל כללי הניתוב מרוכזים ב-lib/mailRouting (ונבדקים שם).
   const resolvedToEmail = resolveMailbox({
     direct: directRecipients,
     cc: ccRecipients,
     isRequest: isRequestMail,
     envelopeTo: to.email,
+    customEmails: customBoxEmails,
   })
 
   // 🔴 זיהוי הבקשה הסופי — לפי הנושא *או* לפי התיבה שאליה הגיעה.
