@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { awaitingFixes, matchesBucket, adjacentInBucket, isBucket, type AdjacentRow } from './maternityBuckets'
+import { awaitingFixes, matchesBucket, awaitingInquiryReply, returnedFromInquiry, adjacentInBucket, isBucket, type AdjacentRow } from './maternityBuckets'
 
 // ⚠️ מה שנבדק כאן הוא ההסכמה בין הרשימה לניווט. כשהם חלוקים, "הבאה" קופצת
 // ליולדת מלשונית אחרת — וזה בדיוק המצב שהתיקון בא לסגור.
@@ -106,5 +106,58 @@ describe('שכנים בתוך הקבוצה', () => {
     ]
     const from = adjacentInBucket(same, { id: 'b', created_at: '2026-01-01' }, 'pending')
     expect(from).toEqual({ prevId: 'a', nextId: 'c' })
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// בירור מול היולדת — מי שנשלח אליה בירור יורדת מהרשימה עד שתענה.
+// 🔴 קודם התיק המשיך לשבת ב"ממתין לאישור" והמזכירות חיפשה שוב ושוב מה חסר
+// בו, בזמן שהכדור היה אצל היולדת.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('בירור מול היולדת', () => {
+  const pend = (d?: string | null) => ({ status: 'pending', inquiryLastDirection: d })
+  const admin = (d?: string | null) => ({ status: 'deep_review', inquiryLastDirection: d })
+
+  it('🔴 נשלח בירור — יורדת מ"ממתין לאישור"', () => {
+    expect(matchesBucket(pend('staff'), 'pending')).toBe(false)
+    expect(awaitingInquiryReply(pend('staff'))).toBe(true)
+  })
+
+  it('🔴 נשלח בירור — יורדת גם מ"ממתין לאישור מנהל"', () => {
+    // גם למנהל אין מה להכריע עד שתענה.
+    expect(matchesBucket(admin('staff'), 'deep_review')).toBe(false)
+  })
+
+  it('⚠️ אך נשארת ב"הכל" — היא לא נעלמת מהמערכת', () => {
+    expect(matchesBucket(pend('staff'), 'all')).toBe(true)
+    expect(matchesBucket(admin('staff'), 'all')).toBe(true)
+  })
+
+  it('🔴 השיבה — חוזרת לרשימה עם התווית', () => {
+    expect(matchesBucket(pend('applicant'), 'pending')).toBe(true)
+    expect(returnedFromInquiry(pend('applicant'))).toBe(true)
+    expect(matchesBucket(admin('applicant'), 'deep_review')).toBe(true)
+    expect(returnedFromInquiry(admin('applicant'))).toBe(true)
+  })
+
+  it('תיק בלי בירור מוצג כרגיל', () => {
+    // ⚠️ רוב התיקים כאלה — ברירת מחדל שמסתירה הייתה מרוקנת את הרשימה.
+    expect(matchesBucket(pend(null), 'pending')).toBe(true)
+    expect(matchesBucket(pend(undefined), 'pending')).toBe(true)
+    expect(awaitingInquiryReply(pend(null))).toBe(false)
+    expect(returnedFromInquiry(pend(null))).toBe(false)
+  })
+
+  it('⚠️ תיק סגור אינו מושפע', () => {
+    // בירור ישן בתיק מאושר לא יסתיר אותו מ"מאושר".
+    expect(matchesBucket({ status: 'active', inquiryLastDirection: 'staff' }, 'active')).toBe(true)
+    expect(matchesBucket({ status: 'cancelled', inquiryLastDirection: 'staff' }, 'cancelled')).toBe(true)
+  })
+
+  it('⚠️ בירור גובר על "ממתין לתיקונים"', () => {
+    // שניהם אומרים "הכדור אצלה"; הכפילות הייתה מציגה אותה בלשונית אחת.
+    const a = { status: 'pending', baby_name_pending: true, inquiryLastDirection: 'staff' }
+    expect(matchesBucket(a, 'pending_fixes')).toBe(false)
+    expect(matchesBucket(a, 'all')).toBe(true)
   })
 })

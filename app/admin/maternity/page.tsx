@@ -57,6 +57,43 @@ async function getMaternityAids(): Promise<MaternityAid[]> {
     for (const d of docs ?? []) if (d.file_url && !byBen[d.beneficiary_id]) byBen[d.beneficiary_id] = d.file_url
     for (const a of aids) if (!a.birth_certificate_url && byBen[a.beneficiary_id]) a.birth_certificate_url = byBen[a.beneficiary_id]
   }
+  // 🔴 מצב הבירור — תיק שנשלח אליו בירור יורד מהרשימה עד שהיולדת תענה.
+  //
+  // ⚠️ שליפה נפרדת וקלה ולא join: השליפה הראשית כבר מצומצמת בכוונה
+  // לעמודות שהטבלה מציגה (ראו ההערה למעלה), ו-join לשרשור ההודעות היה
+  // מחזיר טקסט מלא של כל ההודעות לכל אלפי השורות.
+  //
+  // ⚠️ נשלף רק כיוון ההודעה האחרונה לכל תיק — זה כל מה שההחלטה דורשת.
+  //
+  // ⚠️ מוגבל לתיקים הפתוחים (pending/deep_review) — רק בהם הכלל חל, וכך
+  // השליפה אינה נגררת אחרי שרשורים של תיקים סגורים. זה גם מרחיק את
+  // תקרת 1,000 השורות של PostgREST, שכאן הייתה נכשלת *בשקט*: בירור
+  // בתיק ישן היה יורד מהחישוב והתיק היה מופיע כאילו לא נשלח אליו דבר.
+  const openIds = aids
+    .filter(a => a.status === 'pending' || a.status === 'deep_review')
+    .map(a => a.id)
+
+  if (openIds.length === 0) return aids
+
+  try {
+    const { data: msgs } = await supabase
+      .from('maternity_messages')
+      .select('aid_id, direction, created_at')
+      .in('aid_id', openIds)
+      .order('created_at', { ascending: false })
+    const lastDir: Record<string, string> = {}
+    for (const m of (msgs ?? []) as { aid_id: string; direction: string }[]) {
+      // הראשון שנראה לכל תיק הוא האחרון בזמן (הסדר יורד)
+      if (!lastDir[m.aid_id]) lastDir[m.aid_id] = m.direction
+    }
+    for (const a of aids) {
+      (a as MaternityAid & { inquiryLastDirection?: string | null }).inquiryLastDirection =
+        lastDir[a.id] ?? null
+    }
+  } catch {
+    // ⚠️ כשל אינו מסתיר תיקים: בלי המידע כולם מוצגים, וזה הצד הבטוח.
+  }
+
   return aids
 }
 

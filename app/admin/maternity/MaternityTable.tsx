@@ -2,7 +2,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Clock, Check, X, Baby, Eye, Loader2, Search, FileText, Trash2, AlertTriangle, PencilLine } from 'lucide-react'
+import { Clock, Check, X, Baby, Eye, Loader2, Search, FileText, Trash2, AlertTriangle, PencilLine, MessageSquare } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { ViewDocButton } from '@/components/ui/DocViewer'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
@@ -14,7 +14,7 @@ import { useConfirm } from '@/components/ui/ConfirmDialog'
 import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
 import { StatusControl, deleteMaternityAid, STATUS_PILL, type MotherRef } from './maternityStatus'
 import { babyNameLabel, type AidNameFields } from '@/lib/babyNames'
-import { matchesBucket, type MaternityBucket, type BucketAid } from '@/lib/maternityBuckets'
+import { matchesBucket, returnedFromInquiry, type MaternityBucket, type BucketAid } from '@/lib/maternityBuckets'
 import { recoveryDaysOf } from '@/lib/maternity'
 import { useTablePagination } from '@/lib/useTablePagination'
 import Pagination from '@/components/ui/Pagination'
@@ -227,6 +227,16 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
       case 'mother': return (
         <span className="inline-flex items-center gap-1.5 flex-wrap font-medium text-slate-800">
           {motherName(m)}
+          {/* 🔴 תווית מהבהבת: היולדת השיבה לבירור והתיק חזר לטיפולנו.
+              בלעדיה השורה נראית ברשימה בדיוק כמו תיק שממתינים *לה*,
+              בזמן שהיא דורשת טיפול מיידי. */}
+          {returnedFromInquiry(aid as BucketAid) && (
+            <span title="היולדת השיבה לבירור — התיק ממתין לטיפולכם"
+              className="animate-returned-pulse inline-flex items-center gap-1 rounded-full bg-amber-100 border border-amber-300 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+              <MessageSquare size={10} className="flex-shrink-0" />
+              חזר מבירור
+            </span>
+          )}
           {/* ⚠️ גם ליד השם וגם בעמודה: מי שכיבה את העמודה עדיין צריך
               לדעת שהיולדת אינה צאצא רגיל. */}
           <ApprovalLabelTag label={approvalLabelOf(m)} size="xs" />

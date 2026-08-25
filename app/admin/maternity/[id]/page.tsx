@@ -136,6 +136,29 @@ async function getAdjacentAids(currentId: string, createdAt: string | null, buck
       .range(from, to))
   if (error) return none
 
+  // 🔴 מצב הבירור מוזן גם לניווט, לא רק לרשימה.
+  //
+  // בלעדיו "הבאה" הייתה נוחתת על יולדת שנשלח אליה בירור — בדיוק זו
+  // שירדה מהרשימה שממנה נכנסו. adjacentInBucket משתמש באותו matchesBucket,
+  // ולכן שדה חסר כאן שקול לקביעה "לא נשלח בירור".
+  //
+  // ⚠️ מוגבל לתיקים הפתוחים: רק בהם הכלל חל.
+  const openIds = rows
+    .filter(r => r.status === 'pending' || r.status === 'deep_review')
+    .map(r => r.id)
+  if (openIds.length > 0) {
+    const { data: msgs } = await supabase
+      .from('maternity_messages')
+      .select('aid_id, direction, created_at')
+      .in('aid_id', openIds)
+      .order('created_at', { ascending: false })
+    const lastDir: Record<string, string> = {}
+    for (const m of (msgs ?? []) as { aid_id: string; direction: string }[]) {
+      if (!lastDir[m.aid_id]) lastDir[m.aid_id] = m.direction
+    }
+    for (const r of rows) r.inquiryLastDirection = lastDir[r.id] ?? null
+  }
+
   const current = { id: currentId, created_at: createdAt }
   return {
     ...adjacentInBucket(rows, current, bucket),
