@@ -136,7 +136,7 @@ export default function VoucherTextsManager() {
             )}
             {/* 🔴 canvas ולא iframe — נטפרי חוסם PDF ב-iframe. */}
             {pdfUrl ? (
-              <PdfCanvasView url={pdfUrl} name="שובר" className="w-full" />
+              <PdfCanvasView url={pdfUrl} name="שובר" direct className="w-full" />
             ) : (
               <div className="flex items-center justify-center h-full text-slate-400 text-sm"><Loader2 size={18} className="animate-spin" /></div>
             )}

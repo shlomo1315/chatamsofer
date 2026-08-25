@@ -77,8 +77,25 @@ export default function PdfCanvasView({
           getPdfjs(),
         ])
         if (!alive) return
-        // בערוץ הנתונים ה-blob כבר בזיכרון; ב-direct זו משיכה רגילה מהכתובת
-        const bytes = new Uint8Array(await (await fetch(src)).arrayBuffer())
+        // בערוץ הנתונים ה-blob כבר בזיכרון; ב-direct זו משיכה רגילה מהכתובת.
+        //
+        // 🔴 credentials חובה: בלעדיו הדפדפן אינו שולח את עוגיית הסשן,
+        // ונתיב שדורש הרשאת צוות מחזיר HTML של דף שגיאה. pdf.js מנסה
+        // לפענח אותו ונופל ב-"Invalid PDF structure" — שגיאה שנראית
+        // כאילו הקובץ פגום, בזמן שהבעיה היא הרשאה.
+        const res = await fetch(src, { credentials: 'same-origin' })
+        if (!res.ok) {
+          throw new Error(res.status === 401 || res.status === 403
+            ? 'אין הרשאה להצגת המסמך'
+            : `טעינת המסמך נכשלה (${res.status})`)
+        }
+        // ⚠️ בדיקת סוג התוכן לפני הפענוח: שגיאה שמוחזרת כ-HTML או JSON
+        // הייתה נראית כ-PDF פגום, וההודעה למשתמש הייתה מטעה לחלוטין.
+        const ct = res.headers.get('content-type') ?? ''
+        if (direct && ct && !/pdf|octet-stream/i.test(ct)) {
+          throw new Error('התקבלה תגובה שאינה מסמך')
+        }
+        const bytes = new Uint8Array(await res.arrayBuffer())
         if (!alive) return
         const doc = await pdfjs.getDocument({ data: bytes }).promise
         if (!alive) return
