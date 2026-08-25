@@ -144,9 +144,44 @@ async function collect(): Promise<{ ok: boolean; rows?: Found[]; error?: string 
   return { ok: true, rows: out }
 }
 
-/** GET — תצוגה מקדימה בלבד. אינו כותב דבר. */
-export async function GET() {
+/**
+ * GET — תצוגה מקדימה בלבד. אינו כותב דבר.
+ *
+ * ⚠️ ?raw=1 מחזיר את תשובת נדרים הגולמית למשפחה אחת.
+ *
+ * 🔴 למה זה קיים: הניסיון הראשון ניחש את מבנה התשובה, מצא שדה Amount
+ * על תלוש הטעינה, וכתב 600 לכל 13 הפריקות — מספר שנראה מדויק והיה
+ * שגוי לחלוטין. המבנה אינו מתועד, ולכן צריך לראות אותו לפני שכותבים.
+ */
+export async function GET(request: NextRequest) {
   if (!(await requireAdmin())) return forbidden('שליפה רטרואקטיבית שמורה למנהל')
+
+  // ── מצב אבחון ──
+  if (request.nextUrl.searchParams.get('raw') === '1') {
+    const creds = await getNedarimCreds()
+    if (!creds) return NextResponse.json({ error: 'חיבור נדרים לא מוגדר' }, { status: 500 })
+    const db = getServiceClient()
+    if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
+
+    const { data } = await db.from('maternity_aids')
+      .select('card_tlush_id, beneficiary:beneficiaries(nedarim_id, family_name)')
+      .not('card_unloaded_at', 'is', null).is('card_unloaded_amount', null)
+      .limit(1).maybeSingle()
+
+    const row = data as { card_tlush_id?: string; beneficiary?: unknown } | null
+    const b = Array.isArray(row?.beneficiary) ? row?.beneficiary[0] : row?.beneficiary
+    const nedId = (b as { nedarim_id?: string } | null)?.nedarim_id
+    if (!nedId) return NextResponse.json({ error: 'לא נמצאה משפחה לבדיקה' }, { status: 404 })
+
+    const payload = await getClientCardFull(creds, String(nedId))
+    return NextResponse.json({
+      diagnostic: true,
+      family: (b as { family_name?: string } | null)?.family_name,
+      tlushId: row?.card_tlush_id,
+      // ⚠️ התשובה המלאה — כדי לראות איפה באמת יושב סכום הפריקה.
+      payload,
+    }, { headers: { 'Cache-Control': 'no-store' } })
+  }
 
   const res = await collect()
   if (!res.ok) return NextResponse.json({ error: res.error }, { status: 500 })

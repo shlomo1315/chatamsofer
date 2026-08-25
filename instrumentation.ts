@@ -94,6 +94,27 @@ export async function register() {
     console.log('[unload-unapproved] hourly safety-net scheduler started')
     // בדיקה כל שעה — מפעילה את הפריקה כשמגיעה שעה 00:xx בישראל (פעם ביום)
     setTimeout(() => { void checkUnload(); setInterval(() => { void checkUnload() }, HOURLY_MS) }, INITIAL_DELAY_MS)
+
+    // ── יתרות מנדרים — כל שעה ──
+    //
+    // 🔴 card_balance נכתב פעם אחת בטעינה ואינו מתעדכן מקניות: כל
+    // היולדות רשומות 600 גם אחרי שקנו. בלי הרענון הזה המזכירה רואה
+    // מספר שנראה מדויק והוא שקר, וזה כבר גרם לרישום שגוי של 13 פריקות.
+    //
+    // ⚠️ ללא דגל תאריך, בשונה מהפריקה: זו פעולת קריאה בלבד שאינה
+    // משנה כסף, וריצה כפולה רק מרעננת שוב.
+    const refreshBalances = async () => {
+      try {
+        const { refreshLiveBalances } = await import('@/lib/refreshLiveBalances')
+        const r = await refreshLiveBalances()
+        if (r.ok) console.log(`[live-balances] רועננו ${r.updated}/${r.checked}${r.failed ? ` · ${r.failed} נכשלו` : ''}`)
+        else console.error('[live-balances] נכשל:', r.error)
+      } catch (e) {
+        console.error('[live-balances] שגיאה:', e instanceof Error ? e.message : e)
+      }
+    }
+    setTimeout(() => { void refreshBalances(); setInterval(() => { void refreshBalances() }, HOURLY_MS) }, INITIAL_DELAY_MS)
+    console.log('[live-balances] hourly Nedarim balance refresh started')
     console.log('[unload-expired] daily midnight (Israel) scheduler started')
   }
 

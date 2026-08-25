@@ -55,7 +55,7 @@ const FILTERS: { key: CardStatus | 'all'; label: string }[] = [
 
 // ── הגדרת העמודות ──
 // עמודת "פעולות" אינה בבורר (קבועה) — ראו extraCols למטה.
-type ColKey = 'mother' | 'wifeId' | 'baby' | 'birth' | 'center' | 'status' | 'loaded' | 'balance' | 'countdown'
+type ColKey = 'mother' | 'wifeId' | 'baby' | 'birth' | 'center' | 'status' | 'loaded' | 'balance' | 'live' | 'spent' | 'countdown'
 
 const COLUMNS: ColDef<ColKey>[] = [
   { key: 'mother', label: 'שם היולדת', def: true },
@@ -65,7 +65,12 @@ const COLUMNS: ColDef<ColKey>[] = [
   { key: 'center', label: 'מוקד', def: true },
   { key: 'status', label: 'סטטוס כרטיס', def: true },
   { key: 'loaded', label: 'סכום שהוטען', def: false },
-  { key: 'balance', label: 'יתרה בכרטיס', def: true },
+  // ⚠️ "יתרה רשומה" היא הערך שנכתב בטעינה ואינו מתעדכן מקניות — כל
+  // היולדות רשומות 600. שתי העמודות הבאות מביאות את האמת מנדרים,
+  // ומרועננות אוטומטית כל שעה (lib/refreshLiveBalances).
+  { key: 'balance', label: 'יתרה רשומה', def: false },
+  { key: 'live', label: 'יתרה בנדרים', def: true },
+  { key: 'spent', label: 'מומש בפועל', def: true },
   { key: 'countdown', label: 'ימים לפריקה', def: true },
 ]
 
@@ -146,6 +151,32 @@ export default function CardsTable({ aids }: { aids: MaternityAid[] }) {
       case 'center': return (aid as { card_center?: { name?: string } }).card_center?.name ?? <span className="text-slate-300">—</span>
       case 'status': return <span className={`inline-block text-[13px] font-semibold px-2.5 py-1 rounded-full border ${STATUS_META[s].cls}`}>{STATUS_META[s].label}</span>
       case 'loaded': return aid.card_load_amount != null ? <span className="text-slate-700">{ils(aid.card_load_amount)}</span> : <span className="text-slate-300">—</span>
+      case 'live': {
+        const lb = (aid as { live_balance?: number | string | null }).live_balance
+        // ⚠️ null = טרם נשלף, ולא 0. הצגת 0 הייתה אומרת שהמשפחה
+        // בזבזה את כל הסכום.
+        if (lb == null) return <span className="text-slate-300">—</span>
+        return <span className="font-bold text-emerald-700">{ils(Number(lb))}</span>
+      }
+      case 'spent': {
+        const lb = (aid as { live_balance?: number | string | null }).live_balance
+        const loaded = aid.card_load_amount != null ? Number(aid.card_load_amount) : 0
+        if (lb == null || !loaded) return <span className="text-slate-300">—</span>
+        // 🔴 המימוש = מה שנטען פחות מה שנשאר. זה מה שהמזכירה שואלת.
+        const spent = Math.max(0, loaded - Number(lb))
+        const pct = Math.round((spent / loaded) * 100)
+        return (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="font-bold text-slate-700">{ils(spent)}</span>
+            <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+              pct >= 90 ? 'bg-emerald-100 text-emerald-700'
+              : pct >= 50 ? 'bg-amber-100 text-amber-700'
+              : 'bg-slate-100 text-slate-500'}`}>
+              {pct}%
+            </span>
+          </span>
+        )
+      }
       case 'balance': return aid.card_status === 'loaded' && aid.card_balance != null
         ? <span className="font-bold text-emerald-700">{ils(aid.card_balance)}</span>
         : <span className="text-slate-300">—</span>

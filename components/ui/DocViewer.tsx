@@ -25,17 +25,29 @@ const isPdfRef = (u?: string | null) => !!u && /\.pdf(\?|#|$)/i.test(u)
 // ישירה במקום כרטיס "פתח בכרטיסייה חדשה".
 // ─────────────────────────────────────────────────────────────────────────────
 function PdfInlineView({ url, name }: { url: string; name?: string | null }) {
-  const [state, setState] = useState({ key: '', src: '', failed: false })
+  const [state, setState] = useState({ key: '', src: '', failed: false, reason: '' })
 
   useEffect(() => {
     let alive = true
     loadDocBlob(url, name)
-      .then(d => { if (alive) setState({ key: url, src: d.objectUrl, failed: false }) })
-      .catch(() => { if (alive) setState({ key: url, src: '', failed: true }) })
+      .then(d => { if (alive) setState({ key: url, src: d.objectUrl, failed: false, reason: '' }) })
+      // 🔴 סיבת הכישלון נשמרת ומוצגת.
+      //
+      // ⚠️ קודם היה כאן catch ריק, והשגיאה נבלעה לחלוטין. התוצאה:
+      // המסך הראה "לא ניתן להציג" בלי שום רמז למה, ותיקון הבעיה דרש
+      // ניחוש. הודעה גלויה היא ההבדל בין תקלה שנפתרת בדקה לבין כזו
+      // שחוזרת שוב ושוב.
+      .catch((e: unknown) => {
+        const reason = e instanceof Error ? e.message : String(e)
+        console.error('[DocViewer] טעינת המסמך נכשלה:', url, reason)
+        if (alive) setState({ key: url, src: '', failed: true, reason })
+      })
     return () => { alive = false }
   }, [url, name])
 
-  const { src, failed } = state.key === url ? state : { src: '', failed: false }
+  const { src, failed, reason } = state.key === url
+    ? state
+    : { src: '', failed: false, reason: '' }
 
   // 🔴 גם כשטעינת ה-blob נכשלה — מנסים לצייר את המסמך.
   //
@@ -51,7 +63,14 @@ function PdfInlineView({ url, name }: { url: string; name?: string | null }) {
         <div className="flex-1 w-full overflow-y-auto rounded-xl bg-white shadow-2xl p-3">
           <PdfCanvasView url={url} name={name} />
         </div>
-        <div className="flex items-center justify-center gap-2 flex-shrink-0">
+        <div className="flex flex-col items-center gap-2 flex-shrink-0">
+          {/* ⚠️ הסיבה מוצגת: בלעדיה כל תקלה נראית זהה, והמשתמש אינו
+              יכול לומר לנו מה קרה. */}
+          {reason && (
+            <p className="rounded-lg bg-white/90 px-3 py-1.5 text-[11px] text-slate-600">
+              {reason}
+            </p>
+          )}
           <button type="button" onClick={() => { downloadDocViaData(url, name).catch(() => {}) }}
             className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-xl shadow-lg transition-colors">
             <Download size={15} /> הורדה

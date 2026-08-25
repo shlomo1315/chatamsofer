@@ -27,7 +27,7 @@ async function getMaternityAids(): Promise<MaternityAid[]> {
     // בלעדיו existing=[] והעדכון דרס את רשימת הילדים של המשפחה כולה — כלומר
     // אישור לידה מהרשימה מחק את כל הילדים הרשומים ואיפס את children_count.
     // (מסכי בית ההחלמה והלידה השקטה שולפים אותו, ולכן שם זה עבד תקין.)
-    .select(`id, beneficiary_id, birth_date, baby_name, baby_gender, baby_id_number, baby_id_type, babies, is_twins, recovery_home, recovery_nights, recovery_arrived, recovery_amount, recovery_amount_status, wants_food_card, wants_recovery, card_status, card_number, card_load_amount, card_loaded_at, card_tlush_id, card_picked_up_at, birth_certificate_url, six_weeks_end, source, status, birth_type, created_at, beneficiary:beneficiaries(${benFields}), card_center:card_centers(name)`)
+    .select(`id, beneficiary_id, birth_date, baby_name, baby_gender, baby_id_number, baby_id_type, babies, is_twins, recovery_home, recovery_nights, recovery_arrived, recovery_amount, recovery_amount_status, wants_food_card, wants_recovery, card_status, card_number, card_load_amount, card_loaded_at, card_tlush_id, live_balance, live_balance_at, card_picked_up_at, birth_certificate_url, six_weeks_end, source, status, birth_type, created_at, beneficiary:beneficiaries(${benFields}), card_center:card_centers(name)`)
     // לידות שקטות מוצגות בלשונית נפרדת ("לידה שקטה") — מסננים ב-DB כדי לא למשוך שורות שנזרקות (כולל birth_type=NULL שנחשב "רגיל")
     .or('birth_type.is.null,birth_type.neq.silent')
     .order('created_at', { ascending: false })

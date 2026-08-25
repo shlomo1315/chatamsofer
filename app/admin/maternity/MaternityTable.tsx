@@ -135,7 +135,7 @@ const CARD_STATUS_PILL: Record<string, { label: string; cls: string }> = {
 type ColKey =
   | 'mother' | 'wifeId' | 'approval_label' | 'baby' | 'benefit' | 'babyId' | 'birth'
   | 'recovery' | 'days' | 'arrived' | 'amount' | 'cert' | 'source'
-  | 'loadStatus' | 'loadDate' | 'cardLink' | 'status'
+  | 'loadStatus' | 'loadDate' | 'cardLink' | 'liveBalance' | 'spent' | 'status'
 
 // ⚠️ ברירת המחדל צומצמה לתשע עמודות שנכנסות בנוחות למסך רגיל. השאר
 // (ת"ז התינוק, אישור לידה, אופן הגשה) זמינות בבורר — קודם כל 12–19
@@ -158,6 +158,13 @@ const COLUMNS: ColDef<ColKey>[] = [
   { key: 'source', label: 'אופן הגשה', def: false },
   { key: 'loadStatus', label: 'סטטוס טעינה', def: true },
   { key: 'loadDate', label: 'תאריך ושעת טעינה', def: false },
+  // 🔴 היתרה בפועל בנדרים — לא card_load_amount שנרשם בטעינה.
+  //
+  // ⚠️ הסכום שנטען אינו משתנה מקניות: משפחה שקנתה ב-599.79 ונשארו לה
+  // 0.21 עדיין רשומה 600. שתי העמודות האלה מרועננות אוטומטית כל שעה
+  // מנדרים (lib/refreshLiveBalances), והן מקור האמת היחיד.
+  { key: 'liveBalance', label: 'יתרה בנדרים', def: false },
+  { key: 'spent', label: 'מומש בפועל', def: false },
   { key: 'cardLink', label: 'שיוך כרטיס', def: true },
   { key: 'status', label: 'סטטוס', def: true },
 ]
@@ -323,6 +330,33 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
         return aid.card_tlush_id && aid.card_loaded_at
           ? <span className="ltr-num text-xs text-slate-600">{format(new Date(aid.card_loaded_at), 'dd/MM/yy', { locale: he })}<br />{format(new Date(aid.card_loaded_at), 'HH:mm', { locale: he })}</span>
           : <span className="text-slate-300">—</span>
+      case 'liveBalance': {
+        // 🔴 היתרה בפועל בנדרים — מרועננת אוטומטית כל שעה.
+        // ⚠️ null = טרם נשלף, ולא 0: הצגת 0 הייתה אומרת שהמשפחה
+        // בזבזה את כל הסכום.
+        const lb = (aid as { live_balance?: number | string | null }).live_balance
+        if (lb == null) return <span className="text-slate-300">—</span>
+        return <span className="ltr-num text-xs font-bold text-emerald-700">₪{Number(lb).toFixed(2)}</span>
+      }
+      case 'spent': {
+        const lb = (aid as { live_balance?: number | string | null }).live_balance
+        const loaded = aid.card_load_amount != null ? Number(aid.card_load_amount) : 0
+        if (lb == null || !loaded) return <span className="text-slate-300">—</span>
+        // 🔴 המימוש = מה שנטען פחות מה שנשאר.
+        const spent = Math.max(0, loaded - Number(lb))
+        const pct = Math.round((spent / loaded) * 100)
+        return (
+          <span className="inline-flex items-center gap-1">
+            <span className="ltr-num text-xs font-bold text-slate-700">₪{spent.toFixed(2)}</span>
+            <span className={`rounded px-1 py-0.5 text-[10px] font-bold ${
+              pct >= 90 ? 'bg-emerald-100 text-emerald-700'
+              : pct >= 50 ? 'bg-amber-100 text-amber-700'
+              : 'bg-slate-100 text-slate-500'}`}>
+              {pct}%
+            </span>
+          </span>
+        )
+      }
       case 'cardLink':
         // שיוך כרטיס בפועל — נקבע רק כשהמשפחה חיברה כרטיס בשיחת ימות (card_picked_up_at)
         return aid.card_picked_up_at ? (
