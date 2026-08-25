@@ -189,7 +189,9 @@ export default function HolidayRegistrations({
     // להימנע מ-12 סריקות של ~6,000 שורות בכל רינדור.
     const registered = new Set<string>()
 
-    for (const r of rows) {
+    // ⚠️ allRows ולא rows: הרשימה נטענת בהדרגה, והפילוחים חייבים
+    // לשקף את *כל* הנרשמים. חישוב מ-rows הראה 75 בירושלים במקום 1,695.
+    for (const r of allRows) {
       bySource[r.source] = (bySource[r.source] ?? 0) + 1
       if (r.beneficiary_id) registered.add(String(r.beneficiary_id))
       const c = r.community?.trim() || 'לא צוין'
@@ -216,7 +218,7 @@ export default function HolidayRegistrations({
       cardsLinked,
       registered,
     }
-  }, [rows])
+  }, [allRows])
 
   const { bySource, communities, cities, ageCounts, kidsCounts } = facets
   const registeredIds = facets.registered

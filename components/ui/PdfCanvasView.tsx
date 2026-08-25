@@ -83,11 +83,23 @@ export default function PdfCanvasView({
         // ונתיב שדורש הרשאת צוות מחזיר HTML של דף שגיאה. pdf.js מנסה
         // לפענח אותו ונופל ב-"Invalid PDF structure" — שגיאה שנראית
         // כאילו הקובץ פגום, בזמן שהבעיה היא הרשאה.
-        const res = await fetch(src, { credentials: 'same-origin' })
+        // ⚠️ ניסיון חוזר על תקלה זמנית של השרת.
+        //
+        // 🔴 Railway מחזיר 418/502 בזמן פריסה — לשנייה-שתיים, בעוד
+        // האתר עצמו תקין. המשתמש ראה "טעינת המסמך נכשלה (418)" ולא
+        // היה לו מושג שדי ללחוץ שוב.
+        let res = await fetch(src, { credentials: 'same-origin' })
+        if (!res.ok && res.status >= 418) {
+          await new Promise(r => setTimeout(r, 1200))
+          if (!alive) return
+          res = await fetch(src, { credentials: 'same-origin' })
+        }
         if (!res.ok) {
-          throw new Error(res.status === 401 || res.status === 403
-            ? 'אין הרשאה להצגת המסמך'
-            : `טעינת המסמך נכשלה (${res.status})`)
+          throw new Error(
+            res.status === 401 || res.status === 403 ? 'אין הרשאה להצגת המסמך'
+            : res.status >= 500 || res.status === 418
+              ? 'השרת אינו זמין כרגע — נסו שוב בעוד רגע'
+              : `טעינת המסמך נכשלה (${res.status})`)
         }
         // ⚠️ בדיקת סוג התוכן לפני הפענוח: שגיאה שמוחזרת כ-HTML או JSON
         // הייתה נראית כ-PDF פגום, וההודעה למשתמש הייתה מטעה לחלוטין.
