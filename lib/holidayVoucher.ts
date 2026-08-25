@@ -23,7 +23,7 @@ import fontkit from '@pdf-lib/fontkit'
 import { HEEBO_TTF_B64 } from './assets/heeboFont'
 import {
   W, H, MX, INK, SUB, type Ctx,
-  hebrewDate, loadLogo, rightText, centerText, centerParagraph,
+  hebrewDate, loadLogo, logoBox, rightText, centerText, centerParagraph,
 } from './maternityVoucher'
 
 // ── הפלטה של החגים ──
@@ -51,9 +51,10 @@ export const HOLIDAY_FRAME_STYLE = 'dashed' as const
  * כותרות הסעיפים. ⚠️ "מוקד החלוקה שלכם" הופיע גם בשובר הלידה —
  * נוסח זהה בשני מסמכים מבטל את ההבחנה הטקסטואלית.
  */
+// ⚠️ "מה צריך להביא" הוסר: כל תוכנו כבר מופיע במקומות אחרים בשובר
+// (חובה להדפיס · המוקד הרשום · הוראות ההפעלה), ותעודת זהות אינה נדרשת.
 export const HOLIDAY_SECTION_TITLES = {
   center: 'מוקד האיסוף שלכם',
-  instructions: 'מה צריך להביא',
   amount: 'הסכום שנטען',
   activation: 'הפעלת הכרטיס — חובה לפני השימוש',
   unique: 'שובר אישי — תקף למוקד הרשום בלבד',
@@ -155,10 +156,11 @@ function drawHolidayHeader(c: Ctx, subtitle: string): number {
   const bandY = H - 36 - bandH
   c.page.drawRectangle({ x: 26, y: bandY, width: W - 52, height: bandH, color: EMERALD })
 
-  // הלוגו קטן יותר ובצד — הוא כבר לא הפריט הראשי בראש הדף.
+  // הלוגו בצד — הכותרת הענקית היא הפריט הראשי בראש הדף.
+  // ⚠️ logoBox ולא ריבוע: הלוגו רחב מגובהו, וציור ב-dim×dim מתח אותו.
   if (c.logo) {
-    const dim = 44
-    c.page.drawImage(c.logo, { x: W - 40 - dim, y: bandY + (bandH - dim) / 2, width: dim, height: dim })
+    const box = logoBox(c.logo, 58)
+    c.page.drawImage(c.logo, { x: W - 40 - box.width, y: bandY + (bandH - box.height) / 2, ...box })
   }
 
   // 🔴 הכותרת הענקית — מהות השובר, לא שם הארגון. 46pt מול 26pt בלידה.
@@ -221,7 +223,7 @@ function centerCard(
  * תיבת אזהרה בולטת — רקע מלא וטקסט לבן, כדי שתיקרא ראשונה.
  * ⚠️ רקע מלא ולא מסגרת: מסגרת נבלעת בין שאר התיבות בשובר.
  */
-function alertBox(c: Ctx, y: number, lines: string[], size = 11.5): number {
+function alertBox(c: Ctx, y: number, lines: string[], size = 11.5, bold = false): number {
   const x = MX
   const w = W - MX * 2
   const lineH = size + 5
@@ -234,6 +236,15 @@ function alertBox(c: Ctx, y: number, lines: string[], size = 11.5): number {
   let cy = y - 20
   for (const line of lines) {
     centerText(c, line, W / 2, cy, size, rgb(1, 1, 1))
+    // 🔴 הדגשה בציור כפול בהיסט זעיר.
+    //
+    // ⚠️ Heebo מוטמע במשקל אחד בלבד — אין לו variant בולד. ציור השורה
+    // פעם שנייה בהיסט של 0.3pt מעבה את הקו ומשיג את אותו אפקט, בלי
+    // להטמיע פונט שני שהיה מוסיף ~120KB לכל שובר.
+    if (bold) {
+      centerText(c, line, W / 2 + 0.3, cy, size, rgb(1, 1, 1))
+      centerText(c, line, W / 2, cy + 0.3, size, rgb(1, 1, 1))
+    }
     cy -= lineH
   }
   return y - boxH - 14
@@ -295,16 +306,15 @@ export async function buildHolidayVoucher(data: HolidayVoucherData): Promise<Uin
   // 🔴 המוקד — הפרט המרכזי בשובר, בכרטיס מודגש.
   y = centerCard(c, y, data.centerLabel, data.centerAddress, data.centerHours, data.centerPhone)
 
+  // 🔴 מיד אחרי המוקד: ההגעה מחוץ לימים ולשעות פוגעת במשפחות המתנדבות,
+  // וכרטיס שלא נאסף מבוטל ללא אפשרות שחזור.
+  //
+  // ⚠️ צמוד לשעות ולא בתחתית הדף: הקורא רואה מתי לבוא ומיד אחר כך מה
+  // קורה אם יבוא בזמן אחר. בתחתית הדף ההדגשה התנתקה מהשעות שהיא מסייגת.
+  y = alertBox(c, y, HOLIDAY_ALERTS.timesStrict, 11, true)
+
   // 🔴 חובה להדפיס — בלי זה המשפחה מגיעה בידיים ריקות.
   y = alertBox(c, y, [HOLIDAY_ALERTS.mustPrint], 11)
-
-  // ⚠️ המספור בתו נקודה-אמצעית ולא "1." — ספרה+נקודה בתחילת שורה עברית
-  // נדחפת לקצה השמאלי ברנדרר, והתוצאה היא ".1 יש להדפיס" במקום "1. יש".
-  y = titledBox(c, MX, y, W - MX * 2, HOLIDAY_SECTION_TITLES.instructions, data.texts.instructions.map(t => `• ${t}`))
-
-  // 🔴 ההדגשה החזקה בשובר: הגעה מחוץ לימים ולשעות פוגעת במשפחות
-  // המתנדבות, וכרטיס שלא נאסף מבוטל ללא אפשרות שחזור.
-  y = alertBox(c, y, HOLIDAY_ALERTS.timesStrict, 10.5)
 
   // ── הסכום שנטען ──
   // ⚠️ שורה נמוכה (32) ולא תיבה בגובה 46: שתי תיבות האזהרה החדשות דחפו

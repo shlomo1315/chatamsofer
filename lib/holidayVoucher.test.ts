@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   buildHolidayVoucher, buildHolidayVouchers,
   HOLIDAY_VOUCHER_DEFAULTS, EMERALD, COPPER, PARCHMENT,
@@ -110,7 +112,8 @@ describe('🔴 הבחנה שעובדת גם בהדפסת שחור-לבן', () =>
     const titles = Object.values(HOLIDAY_SECTION_TITLES)
     expect(titles.every(t => t.trim().length > 0)).toBe(true)
     expect(HOLIDAY_SECTION_TITLES.center).not.toBe('מוקד החלוקה שלכם')
-    expect(HOLIDAY_SECTION_TITLES.instructions).not.toBe('הוראות')
+    // ⚠️ "מה צריך להביא" הוסר — כל תוכנו כבר מופיע במקומות אחרים בשובר.
+    expect('instructions' in HOLIDAY_SECTION_TITLES).toBe(false)
   })
 
   it('⚠️ הכותרת הענקית לא דוחפת את השובר לעמוד שני', async () => {
@@ -178,5 +181,29 @@ describe('holidayDistributionLabel — שם החלוקה בשובר', () => {
   it('בלי שם — null, ולא שורה עם המילה "חלוקת" לבדה', () => {
     expect(holidayDistributionLabel(null, 'תשפ״ז')).toBeNull()
     expect(holidayDistributionLabel('   ', 'תשפ״ז')).toBeNull()
+  })
+})
+
+describe('סדר ההדגשות בשובר', () => {
+  it('🔴 "אין לבוא בימים אחרים" צמוד למוקד ולא בתחתית הדף', () => {
+    // ⚠️ ההדגשה מסייגת את שעות הפתיחה שמופיעות בכרטיס המוקד. כשהיא
+    // ישבה בתחתית הדף היא התנתקה מהן, והקורא ראה את השעות בלי הסיוג.
+    const src = readFileSync(join(process.cwd(), 'lib', 'holidayVoucher.ts'), 'utf8')
+    const center = src.indexOf('centerCard(c, y, data.centerLabel')
+    const strict = src.indexOf('HOLIDAY_ALERTS.timesStrict', center)
+    const print = src.indexOf('HOLIDAY_ALERTS.mustPrint', center)
+    expect(center).toBeGreaterThan(-1)
+    expect(strict).toBeGreaterThan(center)
+    expect(strict).toBeLessThan(print)
+  })
+
+  it('⚠️ ההדגשה מודגשת (bold) והשנייה לא', () => {
+    const src = readFileSync(join(process.cwd(), 'lib', 'holidayVoucher.ts'), 'utf8')
+    expect(src).toMatch(/HOLIDAY_ALERTS\.timesStrict,\s*11,\s*true/)
+  })
+
+  it('⚠️ מקטע "מה צריך להביא" אינו מצויר עוד', () => {
+    const src = readFileSync(join(process.cwd(), 'lib', 'holidayVoucher.ts'), 'utf8')
+    expect(src).not.toContain('HOLIDAY_SECTION_TITLES.instructions')
   })
 })

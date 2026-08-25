@@ -1,5 +1,6 @@
 'use client'
 import { useState, type ReactNode } from 'react'
+import ErrorBoundary from './PortalErrorBoundary'
 import { ChevronDown } from 'lucide-react'
 
 // כרטיס מתקפל — כותרת לחיצה שמרחיבה/מצמצמת את התוכן. headerRight מוצג לצד הכותרת (מחוץ לכפתור).
@@ -23,7 +24,17 @@ export default function Collapsible({
         </button>
         {headerRight}
       </div>
-      {open && <div className="px-5 pb-5">{children}</div>}
+      {/* 🔴 גבול שגיאה סביב תוכן המקטע.
+          ⚠️ רכיב אחד שקורס הפיל את *כל* מסך ההגדרות למסך לבן —
+          "Cannot read properties of undefined (reading 'map')" בכלי מיזוג
+          הקהילות מנע גישה גם לגיבויים, להרשאות ולמערכת הטלפונית.
+          עכשיו הקריסה נעצרת בגבול המקטע, שאר המסך עובד, והשגיאה מדווחת
+          לשרת (ראו PortalErrorBoundary). */}
+      {open && (
+        <div className="px-5 pb-5">
+          <ErrorBoundary>{children}</ErrorBoundary>
+        </div>
+      )}
     </div>
   )
 }

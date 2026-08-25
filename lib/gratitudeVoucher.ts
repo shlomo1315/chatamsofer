@@ -57,7 +57,12 @@ function buildSignature(i: GratitudeVoucherInput): string {
 
 const MIN_LINES = 8       // מספר השורות הריקות בשובר להדפסה
 const LINE_GAP = 30       // מרווח בין השורות
-const MAX_BODY_CHARS = 1500
+// 🔴 תקרת בטיחות בלבד, לא חיתוך תוכן.
+//
+// ⚠️ הערך היה 1500 והטקסט נחתך *באמצע משפט* בלי שום סימן. ברכה ארוכה
+// עוברת עכשיו לדף שני; התקרה כאן קיימת רק כדי שקלט משובש (הדבקה של
+// מסמך שלם) לא ייצור מסמך של מאות עמודים.
+const MAX_BODY_CHARS = 20000
 const BODY_SIZE = 13
 
 const LINE_COLOR = rgb(0.82, 0.84, 0.88)
@@ -127,8 +132,29 @@ export async function buildGratitudeVoucher(input: GratitudeVoucherInput): Promi
     : []
 
   const rowCount = Math.max(MIN_LINES, lines.length)
+
+  // 🔴 ברכה ארוכה עוברת לדף נוסף ואינה נחתכת.
+  //
+  // ⚠️ קודם הלולאה ציירה את *כל* השורות על דף אחד: מה שלא נכנס נכתב
+  // מתחת לתחתית הדף ופשוט נעלם — כשל שקט לחלוטין, כי המסמך נראה תקין
+  // ורק המשפט האחרון חסר.
+  //
+  // ⚠️ מקום שמור לחתימה (SIGN_RESERVE): "בכבוד רב" והחתימה מצוירים אחרי
+  // הלולאה, ובלי השריון הם היו נדחקים אל מחוץ לדף האחרון.
+  const SIGN_RESERVE = 90
+  const BOTTOM = 56
+
   for (let i = 0; i < rowCount; i++) {
-    page.drawLine({
+    // ⚠️ השריון נדרש רק לשורה האחרונה — אמצע הטקסט יכול לרדת נמוך יותר.
+    const needed = (i === rowCount - 1 ? SIGN_RESERVE : 0) + BOTTOM
+    if (y - LINE_GAP < needed) {
+      c.page = doc.addPage([W, H])
+      // ⚠️ הדף הנוסף נקי מכותרת: היא שייכת לפתיח המכתב, וחזרתה באמצע
+      // הברכה הייתה נראית כמכתב שני.
+      y = H - 64
+    }
+
+    c.page.drawLine({
       start: { x: lineX0, y },
       end: { x: lineX1, y },
       thickness: 0.6,
@@ -152,7 +178,9 @@ export async function buildGratitudeVoucher(input: GratitudeVoucherInput): Promi
     rightText(c, sig.slice(0, 80), lineX1 - 4, y, BODY_SIZE, NAVY)
   } else {
     // אין פרטי משפחה (נדיר) — שורה ריקה למילוי ידני
-    page.drawLine({
+    // ⚠️ c.page ולא page: אחרי מעבר לדף שני, page מצביע על הראשון
+    // והקו היה מצויר שם — הרחק מהחתימה שהוא אמור ללוות.
+    c.page.drawLine({
       start: { x: lineX1 - 210, y: y - 2 },
       end: { x: lineX1, y: y - 2 },
       thickness: 0.6,

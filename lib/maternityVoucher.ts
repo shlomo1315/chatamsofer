@@ -74,8 +74,29 @@ function issueDateParts(): { prefix: string; greg: string } {
 }
 
 // לוגו (best-effort — אם לא נמצא, מדלגים)
+/**
+ * הלוגו לשוברים המודפסים.
+ *
+ * ⚠️ logo-voucher.png ולא logo.png: זהו לוגו איגוד הצאצאים בקווים
+ * שחורים נקיים, שנשאר קריא גם בהדפסה בשחור-לבן — כפי שרוב המשפחות
+ * מדפיסות. logo.png נשאר ללא שינוי ומשרת את האתר והמיילים.
+ *
+ * ⚠️ נפילה-לאחור ל-logo.png: שובר בלי לוגו גרוע משובר עם הלוגו הישן.
+ */
 export function loadLogo(): Buffer | null {
+  try { return readFileSync(join(process.cwd(), 'public', 'logo-voucher.png')) } catch { /* ננסה את הישן */ }
   try { return readFileSync(join(process.cwd(), 'public', 'logo.png')) } catch { return null }
+}
+
+/**
+ * מידות הלוגו לפי הגובה הרצוי, בשמירת יחס הצדדים.
+ *
+ * 🔴 השוברים ציירו ריבוע (dim × dim). הלוגו החדש רחב מגובהו (900×796),
+ * וציור בריבוע היה מותח אותו לרוחב.
+ */
+export function logoBox(logo: { width: number; height: number }, targetH: number) {
+  const ratio = logo.width / logo.height
+  return { width: targetH * ratio, height: targetH }
 }
 
 export type Ctx = { page: PDFPage; font: PDFFont; logo: PDFImage | null }
@@ -190,9 +211,10 @@ export function drawHeader(c: Ctx, subtitle: string): number {
   c.page.drawRectangle({ x: 24, y: bandY, width: W - 48, height: 4, color: GOLD })
 
   // לוגו בצד ימין של הפס; שם הארגון ממורכז לרוחב העמוד
+  // ⚠️ logoBox ולא ריבוע: הלוגו רחב מגובהו, וציור ב-dim×dim מתח אותו.
   if (c.logo) {
-    const dim = 64
-    c.page.drawImage(c.logo, { x: W - 34 - dim, y: bandY + (bandH - dim) / 2, width: dim, height: dim })
+    const box = logoBox(c.logo, 76)
+    c.page.drawImage(c.logo, { x: W - 34 - box.width, y: bandY + (bandH - box.height) / 2, ...box })
   }
   centerText(c, 'היכל החתם סופר', W / 2, bandY + bandH - 40, 26, rgb(1, 1, 1))
   centerText(c, subtitle, W / 2, bandY + bandH - 64, 13, GOLD_SOFT)

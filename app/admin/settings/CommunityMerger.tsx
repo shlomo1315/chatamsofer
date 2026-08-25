@@ -36,7 +36,17 @@ export default function CommunityMerger() {
       const res = await fetch('/api/admin/communities')
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'טעינה נכשלה')
-      setData(json)
+      // 🔴 נרמול המבנה ולא setData(json) גולמי.
+      //
+      // ⚠️ res.ok אינו מבטיח שהשדות קיימים: תשובה עם 200 ומבנה חלקי
+      // (שגיאה חלקית בשרת, גרסה ישנה של ה-API) הפילה את *כל* מסך
+      // ההגדרות ב-"Cannot read properties of undefined (reading 'map')".
+      // מסך שלם נופל בגלל רכיב אחד — ולכן ההגנה כאן ולא בכל שימוש.
+      setData({
+        items: Array.isArray(json?.items) ? json.items : [],
+        groups: Array.isArray(json?.groups) ? json.groups : [],
+        withoutCommunity: Number(json?.withoutCommunity) || 0,
+      })
       setPicked({})
       setTarget({})
       return null
