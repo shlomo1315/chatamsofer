@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import IvrBuilder from './IvrBuilder'
 import {
   Phone, ChevronLeft, CornerDownLeft, Hash, ListTree, PlayCircle,
   KeyRound, FileAudio, Info,
@@ -170,6 +171,22 @@ export default function PhoneSystemPanel() {
         </p>
         <div className="mt-3">
           <YemotMainMenuSettings />
+        </div>
+      </div>
+
+      {/* 🔴 בונה השלוחות — כאן המנהל בונה בעצמו.
+          ⚠️ מוצג לפני מפת השלוחות הקיימות: הוא הכלי הפעיל, והמפה
+          שמתחתיו היא תיעוד של מה שקבוע בקוד. */}
+      <div className="rounded-2xl border-2 border-indigo-200 bg-indigo-50/30 p-4">
+        <h4 className="flex items-center gap-1.5 text-sm font-black text-indigo-900">
+          <ListTree size={15} /> בונה השלוחות
+        </h4>
+        <p className="mt-1 text-xs leading-relaxed text-indigo-800">
+          כאן בונים את מבנה המערכת: שלוחות, מקשים, הודעות וקול.
+          כל שינוי נכנס לתוקף מיד אחרי שמירה.
+        </p>
+        <div className="mt-3">
+          <IvrBuilder />
         </div>
       </div>
 

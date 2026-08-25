@@ -129,7 +129,7 @@ export default function SendVouchersPanel({ distributionId }: { distributionId: 
             <div className="flex-1 overflow-y-auto bg-slate-100 p-3">
               <PdfCanvasView key={String(previewOpen)}
                 url="/api/admin/holiday-voucher/preview"
-                name="שובר החלוקה" direct
+                name="שובר החלוקה"
                 className="mx-auto w-full max-w-2xl" />
             </div>
           </div>
