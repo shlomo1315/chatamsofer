@@ -183,6 +183,8 @@ export default async function DistributionDetailPage({ params }: { params: Promi
           id={d.id}
           amount={amount}
           registrationOpen={d.registration_open === true}
+          // ⚠️ 'cancelled' = כיבוי מוחלט: המשפחה רואה "אין חלוקה" בכל הערוצים.
+          distributionActive={d.status !== 'cancelled'}
           distributionName={`${d.name}${d.year ? ` ${d.year}` : ''}`}
         />
       </Suspense>
@@ -196,8 +198,9 @@ export default async function DistributionDetailPage({ params }: { params: Promi
 // ⚠️ רכיב נפרד ולא await בגוף הדף: Suspense עוצר רק על גבול רכיב. await
 // ישיר בדף היה משהה את *כל* הדף בדיוק כמו קודם.
 // ─────────────────────────────────────────────────────────────────────────────
-async function RegistrationsLoader({ id, amount, registrationOpen, distributionName }: {
-  id: string; amount: number; registrationOpen: boolean; distributionName: string
+async function RegistrationsLoader({ id, amount, registrationOpen, distributionActive, distributionName }: {
+  id: string; amount: number; registrationOpen: boolean
+  distributionActive?: boolean; distributionName: string
 }) {
   const data = await getData(id)
   if (!data) return null
@@ -208,6 +211,7 @@ async function RegistrationsLoader({ id, amount, registrationOpen, distributionN
       totalCount={data.total}
       amountPerFamily={amount}
       registrationOpen={registrationOpen}
+      distributionActive={distributionActive}
       distributionName={distributionName}
     />
   )

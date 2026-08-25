@@ -97,7 +97,7 @@ const SOURCE_ICON: Record<RegisterSource, typeof Monitor> = {
 const SOURCE_ORDER: RegisterSource[] = ['phone', 'portal', 'nedarim', 'email', 'admin']
 
 export default function HolidayRegistrations({
-  distributionId, rows, totalCount, amountPerFamily, registrationOpen, distributionName,
+  distributionId, rows, totalCount, amountPerFamily, registrationOpen, distributionActive, distributionName,
 }: {
   distributionId: string
   rows: RegistrationRow[]
@@ -105,6 +105,14 @@ export default function HolidayRegistrations({
   totalCount?: number
   amountPerFamily: number
   registrationOpen: boolean
+  /**
+   * 🔴 האם החלוקה פעילה בכלל.
+   *
+   * ⚠️ שונה מ"רישום פתוח": אחרי סגירת הרישום החלוקה ממשיכה — בוחרים
+   * מוקדים, מנפיקים שוברים ומחלקים. כיבוי כאן מסתיר את החלוקה מכל
+   * הערוצים, וזה מה שעושים כשהיא באמת נגמרה.
+   */
+  distributionActive?: boolean
   distributionName: string
 }) {
   const router = useRouter()
@@ -286,6 +294,27 @@ export default function HolidayRegistrations({
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { toast.error(d.error ?? 'העדכון נכשל'); setToggling(false); return }
       toast.success(registrationOpen ? 'הרישום נסגר' : 'הרישום נפתח — הערוצים פעילים')
+      router.refresh()
+    } catch { toast.error('שגיאת רשת') }
+    setToggling(false)
+  }
+
+  const toggleActive = async () => {
+    const turningOff = distributionActive !== false
+    // ⚠️ אישור לפני כיבוי בלבד: הפעלה מחדש אינה מסוכנת, כיבוי כן —
+    // הוא מסתיר את החלוקה מ-6,000 משפחות בבת אחת.
+    if (turningOff && !window.confirm(
+      )) return
+
+    setToggling(true)
+    try {
+      const res = await fetch('/api/admin/distributions', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: distributionId, status: turningOff ? 'cancelled' : 'active' }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(d.error ?? 'העדכון נכשל'); setToggling(false); return }
+      toast.success(turningOff ? 'החלוקה כובתה' : 'החלוקה הופעלה')
       router.refresh()
     } catch { toast.error('שגיאת רשת') }
     setToggling(false)
@@ -479,6 +508,26 @@ export default function HolidayRegistrations({
               {toggling && <Loader2 size={13} className="animate-spin" />}
               {registrationOpen ? 'סגור את הרישום' : 'פתח את הרישום'}
             </button>
+          )}
+
+          {/* ── כיבוי מוחלט ──
+              🔴 נפרד מסגירת הרישום: אחרי הסגירה החלוקה ממשיכה — בוחרים
+              מוקדים, מנפיקים שוברים ומחלקים. הכיבוי כאן הוא לסוף התהליך,
+              והוא מסתיר את החלוקה מכל הערוצים.
+              ⚠️ קטן ומשני בכוונה — זו אינה פעולה יומיומית. */}
+          {canEdit && (
+            <button type="button" onClick={toggleActive} disabled={toggling}
+              className={`mt-2 w-full text-[11px] font-semibold underline transition-colors ${
+                distributionActive === false
+                  ? 'text-green-700 hover:text-green-900'
+                  : 'text-slate-400 hover:text-rose-600'}`}>
+              {distributionActive === false ? 'הפעל מחדש את החלוקה' : 'כיבוי מוחלט של החלוקה'}
+            </button>
+          )}
+          {distributionActive === false && (
+            <p className="mt-1.5 rounded-lg bg-rose-50 px-2 py-1.5 text-[11px] font-semibold text-rose-700">
+              החלוקה כבויה — המשפחות רואות &quot;אין חלוקה פעילה&quot;
+            </p>
           )}
         </div>
       </div>
