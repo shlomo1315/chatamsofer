@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { getServiceClient } from '@/lib/apiAuth'
-import { getOpenDistribution, registerToOpenDistribution } from '@/lib/holidayDistributions'
+import { getOpenDistribution, getLiveDistribution, registerToOpenDistribution } from '@/lib/holidayDistributions'
 import { holidayRegisteredEmail, holidayAlreadyRegisteredEmail } from '@/lib/emailTemplates'
 import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { deliverMail } from '@/lib/sendMail'
@@ -105,22 +105,53 @@ export async function GET(request: NextRequest) {
   }
 
   const dist = await getOpenDistribution()
-  if (!dist) return NextResponse.json({ open: false }, { headers: { 'Cache-Control': 'no-store' } })
+
+  // 🔴 גם כשהרישום סגור — מחזירים את מצב החלוקה ואת מצב המשפחה.
+  //
+  // ⚠️ קודם הוחזר { open: false } בלבד, וכל המידע נזרק: מי שנכנס
+  // לקישור אחרי סגירת הרישום לא ראה דבר — גם אם הוא כבר רשום, וגם
+  // כשנפתחה לו בחירת מוקד. שלב הבחירה והחלוקה מתרחשים *אחרי* הסגירה,
+  // וזה בדיוק החלון שבו המשפחה זקוקה למידע.
+  const live = dist ? null : await getLiveDistribution()
+  const active = dist ?? live
+  if (!active) {
+    // אין חלוקה פעילה כלל — כיבוי מוחלט.
+    return NextResponse.json({ open: false, active: false }, { headers: { 'Cache-Control': 'no-store' } })
+  }
 
   let registered = false
   let registeredAt: string | null = null
-  if (beneficiaryId && sessionId === beneficiaryId) {
-    if (db) {
-      const { data } = await db.from('distribution_recipients')
-        .select('id, registered_at').eq('distribution_id', dist.id).eq('beneficiary_id', beneficiaryId).maybeSingle()
-      registered = !!data
-      registeredAt = (data as { registered_at?: string | null } | null)?.registered_at ?? null
-    }
+  let centerId: string | null = null
+  let centerName: string | null = null
+  let hasVoucher = false
+
+  if (beneficiaryId && sessionId === beneficiaryId && db) {
+    const { data } = await db.from('distribution_recipients')
+      .select('id, registered_at, center_id, card_number, center:holiday_centers(id, city, name, address, hours, phone)')
+      .eq('distribution_id', active.id).eq('beneficiary_id', beneficiaryId).maybeSingle()
+    const row = data as {
+      registered_at?: string | null; center_id?: string | null; card_number?: string | null
+      center?: { city?: string; name?: string } | { city?: string; name?: string }[] | null
+    } | null
+    registered = !!row
+    registeredAt = row?.registered_at ?? null
+    centerId = row?.center_id ?? null
+    // ⚠️ join של Supabase מחזיר מערך או אובייקט — שניהם נתמכים.
+    const c = Array.isArray(row?.center) ? row?.center[0] : row?.center
+    centerName = c ? (c.city === c.name ? c.city! : `${c.city} · ${c.name}`) : null
+    // ⚠️ שובר קיים = הונפק כרטיס. זה מה שמאפשר הורדה.
+    hasVoucher = Boolean(row?.card_number)
   }
-  return NextResponse.json(
-    { open: true, distribution: { id: dist.id, name: dist.name, year: dist.year }, registered, registeredAt },
-    { headers: { 'Cache-Control': 'no-store' } },
-  )
+
+  return NextResponse.json({
+    open: Boolean(dist),
+    active: true,
+    // ⚠️ centersOpen נשלח תמיד: הוא הקובע אם מציגים בחירת מוקד,
+    // והוא רלוונטי דווקא כשהרישום כבר סגור.
+    centersOpen: Boolean((active as { centers_open?: boolean }).centers_open),
+    distribution: { id: active.id, name: active.name, year: active.year },
+    registered, registeredAt, centerId, centerName, hasVoucher,
+  }, { headers: { 'Cache-Control': 'no-store' } })
 }
 
 export async function POST(request: NextRequest) {

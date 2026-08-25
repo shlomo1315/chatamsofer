@@ -155,3 +155,32 @@ export function statsFromRows(
   }
 }
 
+
+/**
+ * החלוקה הפעילה — גם כשהרישום סגור.
+ *
+ * 🔴 getOpenDistribution מחזיר null ברגע שהרישום נסגר, וכל המידע נזרק.
+ * התוצאה: מי שנכנס לקישור החלוקה אחרי הסגירה לא ראה דבר — גם אם הוא
+ * *כבר רשום*, וגם כשפתחנו לו בחירת מוקד. שלב הבחירה והחלוקה עצמה
+ * מתרחשים אחרי שהרישום נסגר, וזה בדיוק החלון שבו המשפחה זקוקה למידע.
+ *
+ * ⚠️ status='cancelled' הוא הכיבוי המוחלט — אז אין חלוקה כלל.
+ * שאר הסטטוסים נחשבים פעילים.
+ */
+export interface LiveDistribution extends ActiveDistribution {
+  centers_open: boolean
+  status: string
+}
+
+export async function getLiveDistribution(): Promise<LiveDistribution | null> {
+  const db = getServiceClient()
+  if (!db) return null
+  const { data } = await db
+    .from('distributions')
+    .select('id, name, year, amount_per_family, registration_open, centers_open, status')
+    .neq('status', 'cancelled')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  return (data as LiveDistribution | null) ?? null
+}

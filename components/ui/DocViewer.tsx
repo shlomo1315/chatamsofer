@@ -37,16 +37,19 @@ function PdfInlineView({ url, name }: { url: string; name?: string | null }) {
 
   const { src, failed } = state.key === url ? state : { src: '', failed: false }
 
-  // 🔴 גם כשטעינת ה-blob נכשלה — מנסים לצייר את המסמך ישירות.
+  // 🔴 גם כשטעינת ה-blob נכשלה — מנסים לצייר את המסמך.
   //
   // ⚠️ קודם הוצג כאן כרטיס "פתח בכרטיסייה חדשה", והמשתמש נאלץ ללחוץ
-  // פעמיים כדי לראות מסמך שהמערכת יכולה להציג בעצמה. PdfCanvasView
-  // עם direct מושך מהכתובת עם הסשן, וזה עובד גם כשערוץ הנתונים נפל.
+  // פעמיים כדי לראות מסמך שהמערכת יכולה להציג בעצמה.
+  //
+  // ⚠️ *בלי* direct: הקובץ יושב באחסון, ו-direct היה מושך את כתובת
+  // Supabase הגולמית — שנחסמת. PdfCanvasView ינסה שוב דרך ערוץ
+  // הנתונים, והפעם הכישלון יוצג עם הסיבה במקום בכרטיס כפתורים.
   if (failed) {
     return (
       <div className="flex flex-col w-full h-[90vh] gap-2">
         <div className="flex-1 w-full overflow-y-auto rounded-xl bg-white shadow-2xl p-3">
-          <PdfCanvasView url={url} name={name} direct />
+          <PdfCanvasView url={url} name={name} />
         </div>
         <div className="flex items-center justify-center gap-2 flex-shrink-0">
           <button type="button" onClick={() => { downloadDocViaData(url, name).catch(() => {}) }}
