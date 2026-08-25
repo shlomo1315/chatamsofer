@@ -11,7 +11,12 @@ import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 
 export interface GratitudeRow {
   id: string
-  maternity_aid_id: string
+  /** ⚠️ null כשהברכה אינה על לידה — למשל תודה על חלוקת חגים. */
+  maternity_aid_id: string | null
+  /** ההקשר: maternity / holidays / general. */
+  context?: string | null
+  /** ⚠️ המשפחה ישירות — העוגן היחיד לברכה שאינה על לידה. */
+  beneficiary?: { family_name?: string | null; spouse_name?: string | null; full_name?: string | null; email?: string | null } | null
   source: 'web' | 'email' | 'scan'
   body: string | null
   signature: string | null
@@ -41,7 +46,9 @@ const STATUS_META = {
 } as const
 
 function motherName(row: GratitudeRow): string {
-  const b = row.aid?.beneficiary
+  // ⚠️ נפילה-לאחור למשפחה: ברכה שנקלטה ממייל אינה קשורה לתיק לידה,
+  // ובלי זה כל 29 הברכות מהמייל היו מוצגות כ-"—".
+  const b = row.aid?.beneficiary ?? row.beneficiary
   if (!b) return '—'
   return [b.family_name, b.spouse_name || b.full_name].filter(Boolean).join(' ') || '—'
 }

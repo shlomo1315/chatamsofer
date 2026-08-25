@@ -10,7 +10,10 @@ export default async function GratitudePage() {
 
   const { data, error } = await supabase
     .from('gratitude_letters')
-    .select('id, source, body, signature, is_anonymous, scan_url, status, sent_to_donor_at, sent_to_donor_email, created_at, maternity_aid_id, aid:maternity_aids(birth_date, recovery_home, beneficiary:beneficiaries(family_name, spouse_name, full_name, email))')
+    // ⚠️ beneficiary נשלף *ישירות* ולא רק דרך aid: ברכה שנקלטה ממייל
+    // אינה קשורה בהכרח לתיק לידה (רבות מהן על חלוקת חגים), ובלי זה
+    // השם שלה היה מוצג כ-"—".
+    .select('id, source, body, signature, is_anonymous, scan_url, status, sent_to_donor_at, sent_to_donor_email, created_at, maternity_aid_id, context, aid:maternity_aids(birth_date, recovery_home, beneficiary:beneficiaries(family_name, spouse_name, full_name, email)), beneficiary:beneficiaries(family_name, spouse_name, full_name, email)')
     .order('created_at', { ascending: false })
 
   // הטבלה טרם נוצרה (המיגרציה לא הורצה) — לא מפילים את המסך
