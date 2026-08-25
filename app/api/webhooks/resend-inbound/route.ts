@@ -885,7 +885,8 @@ export async function POST(request: NextRequest) {
   }
 
   // מחושבים תמיד — קליטת הבקשה רצה גם ב-retry, כשה-isNew הוא false
-  const isIgud = departmentByEmail(resolvedToEmail)?.key === 'igud'
+  // ⚠️ resolvedDept כבר חושב אסינכרונית למעלה וכולל תיבות מותאמות.
+  const isIgud = resolvedDept === 'igud'
   const bodyText = (plain && plain.trim()) ? plain : htmlToPlainText(html ?? '')
 
   // נושא אפקטיבי: אם הנושא לא זוהה כבקשה — נפילה-לאחור לזיהוי לפי גוף הטופס.
@@ -1050,8 +1051,17 @@ export async function POST(request: NextRequest) {
       // המשתמש (כל אחד שיעבוד בנפרד) ועדיפה על מענה מאגף שגוי.
       const targets = [resolvedToEmail]
       for (const box of targets) {
-        const key = departmentByEmail(box)?.key
-        if (!key) continue
+        // 🔴 Async ולא departmentByEmail הסינכרוני.
+        //
+        // ⚠️ הגרסה הסינכרונית מכירה רק את המחלקות הקבועות. תיבה שהמנהל
+        // הוסיף (m@chasamsofer.info וכדומה) החזירה undefined, והלולאה
+        // עשתה continue — כלומר המענה האוטומטי *לא נשלח בשקט*, בלי שום
+        // לוג ובלי שום דרך לדעת. ההגדרות נשמרו והכל נראה תקין.
+        const key = (await departmentByEmailAsync(admin, box))?.key
+        if (!key) {
+          console.warn('[resend-inbound] אין מחלקה מזוהה לתיבה — מענה אוטומטי מדולג:', box)
+          continue
+        }
         await sendAutoReply(admin, {
           fromEmail: from.email,
           department: key,

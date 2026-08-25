@@ -13,6 +13,7 @@ import { format, differenceInYears } from 'date-fns'
 import { he } from 'date-fns/locale'
 import HolidayRegistrations, { type RegistrationRow } from './HolidayRegistrations'
 import InviteLinkPanel from './InviteLinkPanel'
+import { toRegistrationRow } from '@/lib/distributionRow'
 import type { RegisterSource } from '@/lib/distributionSources'
 import type { ApprovalStatus } from '@/lib/holidayCards'
 
@@ -60,18 +61,29 @@ async function getData(id: string) {
   // ראו lib/fetchAllRows.
   // ⚠️ שתי מחרוזות select מפורשות ולא תבנית עם משתנה: הטיפוסים של
   // supabase-js נגזרים מהמחרוזת *הליטרלית*, ואינטרפולציה מבטלת את ההסקה.
+  // 🔴 רק הדף הראשון בטעינת המסך — השאר נטען ברקע.
+  //
+  // ⚠️ המסך המתין ל-4.8MB (6,047 נרשמים × כל פרטי המשפחה) לפני שהציג
+  // שורה אחת, כדי להראות 50. המסד לוקח 25ms; הזמן כולו הוא המטען.
+  // עכשיו 250 שורות מגיעות מיד, והרשימה המלאה משלימה את עצמה מאחור
+  // דרך /api/admin/distributions/[id]/rows.
+  //
+  // ⚠️ 250 ולא 50: הדפדוף מציג 50, אבל בורר העמודים מאפשר עד 200 —
+  // ו-250 מכסה גם מעבר לעמוד הבא לפני שהרקע הספיק.
+  const FIRST_PAGE = 250
+
   const fetchWithLabel = () => fetchAllRows<Record<string, unknown>>((from, to) => supabase
       .from('distribution_recipients')
       .select('id, source, registered_at, phone, notified_at, amount, beneficiary_id, approval_status, approved_at, card_number, card_linked_at, card_link_error, notify_error, center_id, center_source, load_status, center:holiday_centers(id, city, name), beneficiary:beneficiaries(id, full_name, family_name, spouse_name, id_number, phone, phone2, email, address, city, community_affiliation, children_count, birth_date, spouse_birth_date, approval_label:approval_labels(id, name, color, notes))')
       .eq('distribution_id', id)
       .order('registered_at', { ascending: false })
-      .range(from, to))
+      .range(from, Math.min(to, FIRST_PAGE - 1)))
   const fetchPlain = () => fetchAllRows<Record<string, unknown>>((from, to) => supabase
       .from('distribution_recipients')
       .select('id, source, registered_at, phone, notified_at, amount, beneficiary_id, approval_status, approved_at, card_number, card_linked_at, card_link_error, notify_error, center_id, center_source, load_status, center:holiday_centers(id, city, name), beneficiary:beneficiaries(id, full_name, family_name, spouse_name, id_number, phone, phone2, email, address, city, community_affiliation, children_count, birth_date, spouse_birth_date)')
       .eq('distribution_id', id)
       .order('registered_at', { ascending: false })
-      .range(from, to))
+      .range(from, Math.min(to, FIRST_PAGE - 1)))
 
   // ⚠️ תווית סיבת האישור בנפילה-לאחור: ה-join אינו קיים עד שהמיגרציה של
   // approval_labels רצה, ובלעדיה כל מסך החלוקה היה זורק.
@@ -85,65 +97,21 @@ async function getData(id: string) {
     throw new Error(recRes.error)
   }
 
-  const rows: RegistrationRow[] = recRes.rows.map(r => {
-    const b = (r as unknown as { beneficiary?: BenRow | null }).beneficiary ?? null
-    // גיל — לפי תאריך הלידה של הבעל, ובהיעדרו של האישה
-    const dob = b?.birth_date || b?.spouse_birth_date
-    let age: number | null = null
-    if (dob) {
-      try { age = differenceInYears(new Date(), new Date(dob)) } catch { age = null }
-    }
-    const row = r as unknown as {
-      id: string; source?: string | null; registered_at?: string | null; phone?: string | null
-      notified_at?: string | null; notify_error?: string | null; amount?: number | null; beneficiary_id?: string | null
-      approval_status?: string | null; approved_at?: string | null
-      card_number?: string | null; card_linked_at?: string | null; card_link_error?: string | null
-      center_id?: string | null; center_source?: string | null; load_status?: string | null
-      center?: { id: string; city: string; name: string } | null
-    }
-    return {
-      id: String(row.id),
-      source: ((row.source ?? 'admin') as RegisterSource),
-      registered_at: row.registered_at ?? null,
-      phone: row.phone ?? null,
-      notified_at: row.notified_at ?? null,
-      notify_error: row.notify_error ?? null,
-      amount: row.amount ?? null,
-      beneficiary_id: row.beneficiary_id ?? null,
-      approval_status: ((row.approval_status ?? 'pending') as ApprovalStatus),
-      approved_at: row.approved_at ?? null,
-      card_number: row.card_number ?? null,
-      card_linked_at: row.card_linked_at ?? null,
-      card_link_error: row.card_link_error ?? null,
-      center_id: row.center_id ?? null,
-      // ⚠️ עיר ששמה זהה לשם המוקד לא תוצג פעמיים — כך הוזנו רוב הערים.
-      center_name: row.center
-        ? (row.center.city === row.center.name ? row.center.city : `${row.center.city} · ${row.center.name}`)
-        : null,
-      center_source: row.center_source ?? null,
-      load_status: row.load_status ?? null,
-      name: [b?.family_name, b?.full_name || b?.spouse_name].filter(Boolean).join(' ') || (b?.full_name ?? 'ללא שם'),
-      // ⚠️ שם המשפחה והשם הפרטי נשמרים גם בנפרד, לא רק במחרוזת המאוחדת:
-      // פיצול בצד הלקוח לפי רווח היה שובר שמות משפחה מורכבים ("בן דוד",
-      // "אבו חצירא") ומזיז חצי מהשם לעמודה הלא נכונה.
-      family_name: b?.family_name ?? null,
-      first_name: b?.full_name || b?.spouse_name || null,
-      id_number: b?.id_number ?? null,
-      // ⚠️ מנורמל בשרת ולא בטבלה: HolidayRecipientsTable משותפת עם דף
-      // השיתוף, ושורה שטוחה שומרת אותה חופשייה מצורת ה-join של PostgREST.
-      approval_label: approvalLabelOf(b),
-      spouse_name: b?.spouse_name ?? null,
-      ben_phone: b?.phone || b?.phone2 || null,
-      email: b?.email ?? null,
-      address: b?.address ?? null,
-      city: b?.city ?? null,
-      community: b?.community_affiliation ?? null,
-      children_count: b?.children_count ?? null,
-      age,
-    }
-  })
+  // ⚠️ ההמרה ב-lib/distributionRow: אותה פונקציה משמשת את הרשימה
+  // שנטענת ברקע, ושני מימושים היו יוצרים שורות שונות.
+  const rows: RegistrationRow[] = recRes.rows.map(toRegistrationRow)
 
-  return { rows }
+  // 🔴 מספר הנרשמים האמיתי, ולא rows.length.
+  //
+  // ⚠️ הטעינה הראשונה מביאה 250 שורות בלבד. בלי count נפרד המונה
+  // "נרשמו" היה מציג 250 מתוך 6,047 — מספר שגוי שהמנהל מסתמך עליו
+  // לתקציב, ושהיה מתקן את עצמו בשקט שנייה אחר כך.
+  const { count } = await supabase
+    .from('distribution_recipients')
+    .select('id', { count: 'exact', head: true })
+    .eq('distribution_id', id)
+
+  return { rows, total: count ?? rows.length }
 }
 
 const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yyyy', { locale: he }) : '—'
@@ -237,6 +205,7 @@ async function RegistrationsLoader({ id, amount, registrationOpen, distributionN
     <HolidayRegistrations
       distributionId={id}
       rows={data.rows}
+      totalCount={data.total}
       amountPerFamily={amount}
       registrationOpen={registrationOpen}
       distributionName={distributionName}

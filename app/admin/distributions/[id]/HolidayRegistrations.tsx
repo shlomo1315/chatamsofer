@@ -1,5 +1,6 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
+import { toRegistrationRow } from '@/lib/distributionRow'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Search, Download, Loader2, Users, Wallet, Monitor, Phone, Mail, Pencil, CreditCard, Check, X, ShieldCheck, Send, MapPin } from 'lucide-react'
@@ -96,10 +97,12 @@ const SOURCE_ICON: Record<RegisterSource, typeof Monitor> = {
 const SOURCE_ORDER: RegisterSource[] = ['phone', 'portal', 'nedarim', 'email', 'admin']
 
 export default function HolidayRegistrations({
-  distributionId, rows, amountPerFamily, registrationOpen, distributionName,
+  distributionId, rows, totalCount, amountPerFamily, registrationOpen, distributionName,
 }: {
   distributionId: string
   rows: RegistrationRow[]
+  /** מספר הנרשמים האמיתי — rows עשוי להיות חלקי בזמן הטעינה. */
+  totalCount?: number
   amountPerFamily: number
   registrationOpen: boolean
   distributionName: string
@@ -107,6 +110,50 @@ export default function HolidayRegistrations({
   const router = useRouter()
   const toast = useToast()
   const canEdit = useCan('distributions', 'edit')
+
+  // 🔴 הרשימה המלאה נטענת *אחרי* שהמסך כבר מוצג.
+  //
+  // ⚠️ המסך המתין ל-4.8MB (6,047 נרשמים × כל פרטי המשפחה) לפני שהציג
+  // שורה אחת, כדי להראות 50. המסד לוקח 25ms; הזמן כולו הוא המטען.
+  // עכשיו מגיעות 250 שורות מיד, והשאר משלים מאחור.
+  //
+  // ⚠️ החיפוש והפילוחים ממשיכים לרוץ על *כל* הרשומות — הם פשוט
+  // מתחילים לעבוד על מה שכבר הגיע, ומתעדכנים כשהשאר נוחת.
+  const [allRows, setAllRows] = useState(rows)
+  const [loadingRest, setLoadingRest] = useState(false)
+
+  // ⚠️ rows מתחלף אחרי router.refresh() — הרשימה המלאה נבנית מחדש,
+  // אחרת עדכון סטטוס לא היה נראה עד רענון מלא.
+  useEffect(() => { setAllRows(rows) }, [rows])
+
+  useEffect(() => {
+    // ⚠️ פחות מ-250 = כל הרשימה כבר כאן, אין מה להשלים.
+    if (rows.length < 250) return
+    let alive = true
+    setLoadingRest(true)
+    void (async () => {
+      try {
+        const r = await fetch(`/api/admin/distributions/${distributionId}/rows?offset=${rows.length}`,
+          { cache: 'no-store' })
+        if (!r.ok) return
+        const d = await r.json()
+        if (!alive || !Array.isArray(d.rows)) return
+        // ⚠️ מיזוג לפי מזהה ולא שרשור: אם השרת החזיר שורה שכבר קיימת
+        // (מרוץ מול router.refresh) היא הייתה מופיעה פעמיים.
+        const seen = new Set(rows.map(x => x.id))
+        const extra = (d.rows as Record<string, unknown>[])
+          .map(toRegistrationRow)
+          .filter(x => !seen.has(x.id))
+        if (extra.length) setAllRows(prev => [...prev, ...extra])
+      } catch {
+        // ⚠️ כישלון שקט: הרשימה החלקית עדיין שימושית לחלוטין, והודעת
+        // שגיאה על טעינת רקע רק מבהילה בלי שיש מה לעשות איתה.
+      } finally {
+        if (alive) setLoadingRest(false)
+      }
+    })()
+    return () => { alive = false }
+  }, [distributionId, rows])
   const [query, setQuery] = useState('')
   const [source, setSource] = useState<RegisterSource | 'all'>('all')
   const [community, setCommunity] = useState<string>('all')
@@ -187,19 +234,19 @@ export default function HolidayRegistrations({
   // נגזר פעם אחת מהשורות, והחיפוש עצמו הוא includes בלבד.
   const haystacks = useMemo(() => {
     const m = new Map<string, string>()
-    for (const r of rows) {
+    for (const r of allRows) {
       m.set(r.id, [r.name, r.id_number, r.spouse_name, r.ben_phone, r.phone, r.email, r.address, r.city, r.community]
         .filter(Boolean).join(' ').toLowerCase())
     }
     return m
-  }, [rows])
+  }, [allRows])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     // ⚠️ נבדק פעם אחת מחוץ ללולאה: find() בתוך הלולאה חזר על עצמו לכל שורה.
     const ageTest = ageBucket === 'all' ? null : AGE_BUCKETS.find(b => b.key === ageBucket)?.test
     const kidsTest = kidsBucket === 'all' ? null : KIDS_BUCKETS.find(b => b.key === kidsBucket)?.test
-    return rows.filter(r => {
+    return allRows.filter(r => {
       if (source !== 'all' && r.source !== source) return false
       if (approval !== 'all' && r.approval_status !== approval) return false
       if (community !== 'all' && (r.community?.trim() || 'לא צוין') !== community) return false
@@ -209,7 +256,7 @@ export default function HolidayRegistrations({
       if (!q) return true
       return (haystacks.get(r.id) ?? '').includes(q)
     })
-  }, [rows, haystacks, query, source, community, city, ageBucket, kidsBucket, approval])
+  }, [allRows, haystacks, query, source, community, city, ageBucket, kidsBucket, approval])
 
   // ⚡ הדף המוצג בפועל — דרך ה-hook המשותף (lib/useTablePagination).
   //
@@ -224,7 +271,7 @@ export default function HolidayRegistrations({
   const paged = pg.rows
 
   // הצפי התקציבי — של מה שמסונן כרגע ושל הכל. כך גם "כמה יעלה פילוח מסוים".
-  const expectedAll = rows.length * amountPerFamily
+  const expectedAll = (totalCount ?? allRows.length) * amountPerFamily
   const expectedFiltered = filtered.length * amountPerFamily
 
   const toggleRegistration = async () => {
@@ -361,12 +408,17 @@ export default function HolidayRegistrations({
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <div className="rounded-2xl border-2 border-indigo-200 bg-indigo-50 p-5">
           <div className="flex items-center gap-2 text-indigo-700 mb-1"><Users size={16} /><span className="text-xs font-bold">נרשמו</span></div>
-          <p className="text-3xl font-extrabold text-indigo-900 ltr-num">{rows.length.toLocaleString('he-IL')}</p>
+          {/* ⚠️ totalCount ולא rows.length: הרשימה נטענת בהדרגה,
+              והמונה חייב להיות נכון מהרגע הראשון. */}
+          <p className="text-3xl font-extrabold text-indigo-900 ltr-num">{(totalCount ?? allRows.length).toLocaleString('he-IL')}</p>
+          {loadingRest && (
+            <p className="text-[11px] text-indigo-600 mt-1">טוען את הרשימה המלאה…</p>
+          )}
         </div>
         <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-5">
           <div className="flex items-center gap-2 text-emerald-700 mb-1"><Wallet size={16} /><span className="text-xs font-bold">צפי תקציבי</span></div>
           <p className="text-3xl font-extrabold text-emerald-900 ltr-num">{fmtCur(expectedAll)}</p>
-          <p className="text-[11px] text-emerald-700 mt-1">{rows.length} × {fmtCur(amountPerFamily)} למשפחה</p>
+          <p className="text-[11px] text-emerald-700 mt-1">{totalCount ?? allRows.length} × {fmtCur(amountPerFamily)} למשפחה</p>
         </div>
         {/* ── אישורים וכרטיסים — המסלול שאחרי הרישום ──
             ⚠️ השורות כאן לחיצות ומסננות את הטבלה, בדיוק כמו הצ'יפים שמתחת.
