@@ -234,8 +234,19 @@ export default function AutoReplySettings() {
           // היה מסתיר אותה לגמרי — המשתמש היה מוסיף תיבה ולא רואה אותה.
           // ברירת מחדל כבויה: היא מופיעה ברשימה, ומקבלת הגדרות ברגע
           // שנוגעים בה.
-          const s = (draft[dept.key as keyof AutoReplyMap] as Settings | undefined)
-            ?? ({ enabled: false } as Settings)
+          // 🔴 ברירת המחדל חייבת לכלול את *כל* המערכים.
+          //
+          // ⚠️ קודם היא הייתה { enabled: false } בלבד, ו-s.sections.map
+          // בהמשך קרס על תיבה חדשה שטרם נשמרה:
+          // "Cannot read properties of undefined (reading 'map')".
+          // התיבה נוספה, המסך קרס, והמשתמש לא ידע למה.
+          const raw = draft[dept.key as keyof AutoReplyMap] as Settings | undefined
+          const s: Settings = {
+            ...({ enabled: false } as Settings),
+            ...raw,
+            sections: Array.isArray(raw?.sections) ? raw.sections : [],
+            buttons: Array.isArray(raw?.buttons) ? raw.buttons : [],
+          }
           const isOpen = openKey === dept.key
 
           return (
