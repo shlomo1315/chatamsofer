@@ -61,3 +61,16 @@ describe('מה שמוצג ליד הודעת צוות', () => {
     expect(staffDisplayName(null, 'צוות הגמ״ח')).toBe('צוות הגמ״ח')
   })
 })
+
+describe('🔴 כתובת מייל אינה מוצגת', () => {
+  it('מייל נופל לברירת המחדל', () => {
+    // ⚠️ למשתמש בלי שם מלא נשמר המייל ב-sender_name, והשרשור הציג
+    // "5827799@gmail.com" לפונה — חשיפת כתובת פרטית שגם אינה אומרת דבר.
+    expect(staffDisplayName('5827799@gmail.com')).toBe('המזכירות')
+    expect(staffDisplayName('a@b.co', 'צוות הגמ״ח')).toBe('צוות הגמ״ח')
+  })
+
+  it('⚠️ שם אמיתי ממשיך להתקצר', () => {
+    expect(staffDisplayName('מנדל שמרלר')).toBe('מ.ש.')
+  })
+})

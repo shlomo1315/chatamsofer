@@ -24,7 +24,6 @@ export function recoveryDaysOf(aid: { recovery_eligibility_days?: number | null;
 // ואי אפשר להאריך יולדת ולגלות שהיא עדיין חסומה בבית ההחלמה.
 export const CARD_WINDOW_DAYS = 42
 export const RECOVERY_WINDOW_DAYS = 35
-const WINDOW_GAP_DAYS = CARD_WINDOW_DAYS - RECOVERY_WINDOW_DAYS   // 7
 
 type WindowAid = { birth_date?: string | null; six_weeks_end?: string | null }
 
@@ -37,10 +36,19 @@ export function cardWindowEnd(aid: WindowAid): Date | null {
 
 /** סוף תוקף הזכאות לבית החלמה (5 שבועות מהלידה; הארכה ידנית נגררת גם לכאן). */
 export function recoveryWindowEnd(aid: WindowAid): Date | null {
-  // הארכה ידנית: נגזר מהתאריך שהוזן, פחות אותו פער של שבוע.
-  if (aid.six_weeks_end) {
-    return new Date(new Date(aid.six_weeks_end).getTime() - WINDOW_GAP_DAYS * 86400000)
-  }
+  // 🔴 הארכה ידנית = התאריך שהוזן, בלי לגרוע ממנו.
+  //
+  // ⚠️ קודם נגרעו 7 ימים גם מהארכה ידנית, כדי לשמור על אותו פער שיש
+  // בחישוב האוטומטי (42 לכרטיס מול 35 לבית החלמה). התוצאה: מזכירה
+  // שהאריכה ליולדת עד 30.08 — היא נעלמה מפורטל בית ההחלמה כבר ב-23.08.
+  //
+  // 12 יולדות מאושרות היו מוסתרות מהפורטל, 4 מהן עם הארכה מפורשת
+  // שנרשמה במסד ולא כובדה. בית ההחלמה לא ראה אותן, והן לא יכלו לממש
+  // זכאות שכבר אושרה להן.
+  //
+  // ⚠️ הפער נשאר בחישוב ה*אוטומטי* בלבד — שם הוא כלל עסקי. תאריך
+  // שהוזן ידנית הוא הכרעה מפורשת של המזכירה, ואין לגרוע ממנה.
+  if (aid.six_weeks_end) return new Date(aid.six_weeks_end)
   if (!aid.birth_date) return null
   return new Date(new Date(aid.birth_date).getTime() + RECOVERY_WINDOW_DAYS * 86400000)
 }

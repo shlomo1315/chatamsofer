@@ -53,5 +53,13 @@ export function staffDisplayName(senderName?: string | null, fallback = 'המז�
   const raw = String(senderName ?? '').trim()
   if (!raw) return fallback
   if (SYSTEM_LABELS.has(raw)) return raw
+
+  // 🔴 כתובת מייל אינה שם — ולא מוצגת ליולדת.
+  //
+  // ⚠️ למשתמש שאין לו שם מלא נשמר המייל ב-sender_name, והשרשור הציג
+  // "5827799@gmail.com" לצד ההודעה. זו חשיפה של כתובת פרטית לפונה,
+  // וגם אינה אומרת לו דבר.
+  if (raw.includes('@')) return fallback
+
   return toInitials(raw)
 }
