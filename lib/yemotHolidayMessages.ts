@@ -127,8 +127,14 @@ export const HOLIDAY_MESSAGE_META: HolidayMsgMeta[] = [
   },
   {
     // ⚠️ הודעת אישור ולא שגיאה: מי שמתקשר שוב רוצה לדעת איזה מוקד בחר.
-    key: 'center_already', label: 'כבר נבחר מוקד', allowAudio: false, placeholders: ['center'],
-    defaultText: 'כבר נרשמתם למוקד החלוקה ב{center}. לא ניתן לשנות את הבחירה',
+    //
+    // 🔴 {hours} נוסף כי זו הסיבה השכיחה לשיחה החוזרת: המשפחה יודעת
+    // איזה מוקד בחרה ורוצה לדעת *מתי* לבוא. בלי השעות היא מנתקת ומחפשת
+    // את המידע במקום אחר.
+    // ⚠️ ריק כשלא הוגדרו שעות — המשפט נקטע בטבעיות ולא נשמע "מתי לבוא: ".
+    key: 'center_already', label: 'כבר נבחר מוקד', allowAudio: false,
+    placeholders: ['center', 'hours'],
+    defaultText: 'כבר נרשמתם למוקד החלוקה ב{center}. {hours} לא ניתן לשנות את הבחירה',
   },
   {
     key: 'center_full', label: 'המוקד מלא', allowAudio: true,

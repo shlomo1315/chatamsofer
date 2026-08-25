@@ -221,7 +221,22 @@ async function handleCenterRoute(
       ?? (await db.from('holiday_centers').select('id, city, name, region, sort_order')
         .eq('id', rec.center_id).maybeSingle()).data as CenterRow | null
     const label = centerLabel(c) ?? ''
-    return yemotText([idMessage(msgToken(msgs, 'center_already', { center: label })), goToFolder('hangup')], callId)
+
+    // 🔴 השעות — הסיבה השכיחה לשיחה החוזרת.
+    //
+    // ⚠️ נשלפות בנפרד: CenterRow אינו כולל אותן, והוספתן לטיפוס הייתה
+    // משנה את כל מי שמשתמש בו.
+    const { data: hoursRow } = await db.from('holiday_centers')
+      .select('hours').eq('id', rec.center_id).maybeSingle()
+    const rawHours = String((hoursRow as { hours?: string | null } | null)?.hours ?? '').trim()
+    // ⚠️ ריק נשאר ריק ולא "לא הוגדר": משפט שנקטע בטבעיות עדיף על
+    // הודעה שאומרת למתקשר שמשהו חסר אצלנו.
+    const hours = rawHours ? `שעות הפתיחה ${rawHours}.` : ''
+
+    return yemotText([
+      idMessage(msgToken(msgs, 'center_already', { center: label, hours })),
+      goToFolder('hangup'),
+    ], callId)
   }
 
   // ── מסלול 3: בחירה ──

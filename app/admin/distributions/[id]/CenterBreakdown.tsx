@@ -205,7 +205,29 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
                         {c.capacity != null && ` מתוך ${c.capacity.toLocaleString('he-IL')}`}
                         {full && <span className="mr-1 font-bold text-amber-700">· מלא</span>}
                       </p>
+                      {/* 🔴 השעות והכתובת — מה שהמשפחה רואה בשובר ושומעת
+                          בטלפון. הצגתן כאן היא מה שמאפשר לזהות שהן חסרות
+                          או שגויות לפני שהשוברים יוצאים. */}
+                      {(c.hours || c.address) && (
+                        <p className="mt-0.5 truncate text-[11px] text-slate-400">
+                          {[c.address, c.hours].filter(Boolean).join(' · ')}
+                        </p>
+                      )}
+                      {!c.hours && (
+                        <p className="mt-0.5 text-[11px] font-semibold text-amber-600">
+                          ⚠ לא הוגדרו שעות פתיחה
+                        </p>
+                      )}
                     </div>
+
+                    {/* ⚠️ עריכה במקום: מוקד שמשנה שעות באמצע חלוקה — הניווט
+                        להגדרות ובחזרה הוא החיכוך שגורם לא לעדכן. */}
+                    <button type="button" onClick={() => setEditing({ ...c })}
+                      title="עריכת פרטי המוקד"
+                      className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-600 transition hover:border-indigo-300 hover:text-indigo-700">
+                      עריכה
+                    </button>
+
                     {/* ⚠️ סגירה אינה מבטלת בחירות קיימות — רק מונעת חדשות. */}
                     <button type="button" disabled={busy === c.id}
                       onClick={() => toggleCenter(c.id, !isOpen)}
@@ -225,6 +247,91 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
       })}
 
       {err && <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{err}</p>}
+
+      {/* ═══ עריכת מוקד ═══ */}
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+          onClick={() => !saving && setEditing(null)}>
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl"
+            onClick={e => e.stopPropagation()}>
+            <h4 className="mb-1 text-sm font-black text-slate-800">עריכת מוקד</h4>
+            <p className="mb-4 text-[11px] text-slate-500">
+              הפרטים מופיעים בשובר של המשפחה ובשלוחה הטלפונית.
+            </p>
+
+            <div className="flex flex-col gap-3">
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11px] font-semibold text-slate-600">עיר</span>
+                  <input value={editing.city}
+                    onChange={e => setEditing({ ...editing, city: e.target.value })}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11px] font-semibold text-slate-600">שם המוקד</span>
+                  <input value={editing.name}
+                    onChange={e => setEditing({ ...editing, name: e.target.value })}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
+                </label>
+              </div>
+
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-semibold text-slate-600">כתובת</span>
+                <input value={editing.address ?? ''}
+                  onChange={e => setEditing({ ...editing, address: e.target.value })}
+                  placeholder="רחוב ומספר"
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
+              </label>
+
+              {/* 🔴 השעות — הפרט שמשתנה הכי הרבה, ושבלעדיו המשפחה
+                  מגיעה בזמן הלא נכון. */}
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-semibold text-slate-600">שעות פתיחה</span>
+                <input value={editing.hours ?? ''}
+                  onChange={e => setEditing({ ...editing, hours: e.target.value })}
+                  placeholder="יום ג׳ י״ב אלול · 10:00–14:00"
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
+                <span className="text-[10px] text-slate-400">
+                  הנוסח מוקרא כמו שהוא בטלפון — כתבו אותו כפי שתרצו שיישמע
+                </span>
+              </label>
+
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11px] font-semibold text-slate-600">טלפון</span>
+                  <input dir="ltr" value={editing.phone ?? ''}
+                    onChange={e => setEditing({ ...editing, phone: e.target.value })}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11px] font-semibold text-slate-600">תפוסה מרבית</span>
+                  {/* ⚠️ ריק = ללא הגבלה. 0 הוא "סגור לחלוטין" — ערכים שונים. */}
+                  <input type="number" min={0} value={editing.capacity ?? ''}
+                    onChange={e => setEditing({
+                      ...editing,
+                      capacity: e.target.value === '' ? null : Number(e.target.value),
+                    })}
+                    placeholder="ללא הגבלה"
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
+                </label>
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setEditing(null)} disabled={saving}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+                ביטול
+              </button>
+              <button type="button" onClick={() => void saveCenter()}
+                disabled={saving || !editing.city.trim() || !editing.name.trim()}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300">
+                {saving && <Loader2 size={13} className="animate-spin" />}
+                {saving ? 'שומר…' : 'שמירה'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
