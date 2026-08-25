@@ -2,6 +2,7 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react'
 import { Loader2, Pencil, Plus, Trash2, ExternalLink, ArrowRight } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { ancestorChain } from '@/lib/lineageChain'
 import Modal from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { genTone } from '@/lib/lineagePalette'
@@ -203,13 +204,13 @@ export default function LineageBranchView({ nodeId, self }: {
   }, [allNodes])
 
   // שרשרת הייחוס של הצאצא — שורש → הצאצא
-  const chainIds = useMemo(() => {
-    const out: string[] = []
-    let cur = selfId ? byId.get(selfId) : undefined
-    let guard = 0
-    while (cur && guard < 80) { out.unshift(cur.id); cur = cur.parent_id ? byId.get(cur.parent_id) : undefined; guard++ }
-    return out
-  }, [selfId, byId])
+  //
+  // 🔴 דרך ancestorChain ולא לולאה מקומית. הלולאה הקודמת ספרה צעדים
+  // (guard < 80) בלי לזכור צמתים שכבר נראו, וכשנוצר מעגל בנתונים
+  // (25.08 — מיזוג cascade שמיזג אב לתוך צאצא) היא רצה 80 פעם והציגה
+  // את אותם שני שמות עד "דור 50".
+  const chainResult = useMemo(() => ancestorChain(selfId, byId), [selfId, byId])
+  const chainIds = useMemo(() => chainResult.chain.map(n => n.id), [chainResult])
   const chainSet = useMemo(() => new Set(chainIds), [chainIds])
 
   /** כל צאצאי הצומת בעץ המלא — להצגת היקף הדחייה לפני שמאשרים אותה. */
@@ -491,6 +492,22 @@ export default function LineageBranchView({ nodeId, self }: {
 
   return (
     <div style={{ direction: 'rtl' }}>
+      {/* 🔴 אזהרת מעגל.
+          התצוגה נעצרת בנקודת המעגל ומציגה שרשרת חלקית. בלי האזהרה היא
+          נראית שלמה — וזו הטעיה גרועה מהצגת שגיאה: מי שמסתכל מסיק
+          שהייחוס קצר מכפי שהוא, במקום לדעת שיש תקלה בנתונים. */}
+      {chainResult.cycle && (
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 8,
+                      padding: '10px 12px', borderRadius: 10, background: '#FEF2F2',
+                      border: '1.5px solid #FECACA', color: '#991B1B', fontSize: 12.5, lineHeight: 1.6 }}>
+          <span style={{ fontSize: 15, lineHeight: 1 }}>⚠️</span>
+          <span>
+            <strong>נמצאה לולאה בשרשרת הדורות.</strong> השרשרת המוצגת חלקית ונעצרה
+            בנקודת הלולאה. סביר שמיזוג שגוי חיבר אב-קדמון כצאצא של עצמו —
+            ניתן לבטלו במסך עץ הדורות תחת "ביטול מיזוגים אחרונים".
+          </span>
+        </div>
+      )}
       {/* סרגל עליון — מצב התצוגה + זום */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         {branchRoot ? (

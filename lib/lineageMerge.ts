@@ -164,9 +164,36 @@ export function planCascade(
   const nameOf = (id: string) => byId.get(id)?.name ?? ''
   const genOf = (id: string) => byId.get(id)?.generation ?? 0
 
+  /**
+   * 🔴 האם `ancestor` נמצא בשרשרת ההורים של `node`.
+   *
+   * זו ההגנה שמנעה את התקלה של 25.08: מיזוג cascade מיזג את "רבי אברהם
+   * שמואל בנימין בעל הכתב סופר" (דור 1) לתוך צאצא שלו מדור 5, יחד עם 97
+   * ילדיו. התוצאה הייתה מעגל — אב שהוא גם בן של בנו — והתצוגה טיפסה בו
+   * עד "דור 50".
+   *
+   * ⚠️ נבדק על העץ *שבזיכרון* (byId), שכבר משקף מיזוגים קודמים באותה
+   * תוכנית. בדיקה מול המסד הייתה מפספסת מעגל שנוצר תוך כדי המפל עצמו —
+   * וזה בדיוק מה שקרה שם.
+   */
+  const isAncestorOf = (ancestor: string, node: string): boolean => {
+    let cur = parentOf(node)
+    let hops = 0
+    // ⚠️ מגן הצעדים נדרש: אם כבר קיים מעגל בנתונים, הלולאה לא תיעצר.
+    while (cur && hops++ < 200) {
+      if (cur === ancestor) return true
+      cur = parentOf(cur)
+    }
+    return false
+  }
+
   /** מדמה מיזוג בזיכרון: הילדים עוברים ל-keep והכפילים מסומנים כמחוקים. */
   const apply = (keep: string, ids: string[], direction: MergeStep['direction'], extra?: Partial<MergeStep>) => {
-    const real = ids.filter(id => alive(id) && id !== keep)
+    const real = ids.filter(id =>
+      alive(id) && id !== keep &&
+      // 🔴 לעולם לא למזג אב-קדמון לתוך צאצא שלו, ולא צאצא לתוך אב-קדמון:
+      // שתי הצורות יוצרות מעגל. אלה אינם כפילים אלא שני דורות שונים.
+      !isAncestorOf(id, keep) && !isAncestorOf(keep, id))
     if (!real.length) return
     for (const m of real) {
       for (const c of kids.get(m) ?? []) {

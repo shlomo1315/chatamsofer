@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react'
+import { ancestorIds } from '@/lib/lineageChain'
 import Link from 'next/link'
 import { Plus, RefreshCw, Loader2, ChevronRight, ChevronLeft, ChevronDown, Pencil, Trash2, X, Users, Check, Printer, MapPin, Link2, ExternalLink, Activity, ShieldCheck, ShieldAlert, Ghost, GitMerge } from 'lucide-react'
 import { genTone } from '@/lib/lineagePalette'
@@ -819,9 +820,8 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
     const s = new Set<string>()
     if (!selected) return s
     const nodeMap = new Map(positions.map(p => [p.node.id, p.node]))
-    let cur: TreeNode | undefined = nodeMap.get(selected)
-    let guard = 0
-    while (cur && guard < 60) { s.add(cur.id); cur = cur.parent_id ? nodeMap.get(cur.parent_id) : undefined; guard++ }
+    // ⚠️ ancestorIds ולא מונה צעדים — ראו lib/lineageChain.
+    for (const id of ancestorIds(selected, nodeMap)) s.add(id)
     return s
   }, [selected, positions])
 

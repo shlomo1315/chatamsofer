@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from 'react'
+import { ancestorIds } from '@/lib/lineageChain'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Button from '@/components/ui/Button'
@@ -230,9 +231,9 @@ function LineageTreePicker({
     const s = new Set<string>()
     if (!selected) return s
     const map = new Map(allNodes.map(n => [n.id, n]))
-    let cur = map.get(selected)
-    let guard = 0
-    while (cur && guard < 60) { s.add(cur.id); cur = cur.parent_id ? map.get(cur.parent_id) : undefined; guard++ }
+    // ⚠️ ancestorIds ולא מונה צעדים: מעגל בנתונים היה מוסיף את אותם
+    // צמתים שוב ושוב עד שהמונה נגמר. ראו lib/lineageChain.
+    for (const id of ancestorIds(selected, map)) s.add(id)
     if (selfName) s.add(SELF_ID) // צומת הנרשם תמיד מודגש
     return s
   }, [selected, allNodes, selfName])
