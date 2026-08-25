@@ -22,6 +22,8 @@ export interface KidRow {
   gender?: string
   /** התאריך *מפורמט* — או '—' כשאין/לא תקין. */
   birth_date_label: string
+  /** התאריך הגולמי — למיון כרונולוגי בלבד. אינו מוצג. */
+  birth_date?: string | null
   marital_status?: string
   marital_label: string | null
   birth_status?: 'pending' | 'approved'
@@ -30,17 +32,35 @@ export interface KidRow {
 
 type ColKey = 'index' | 'name' | 'gender' | 'status' | 'birth_date' | 'id_number'
 
-const COLUMNS: ColDef<ColKey>[] = [
-  { key: 'index', label: '#', def: true, align: 'center' },
-  { key: 'name', label: 'שם', def: true },
-  { key: 'gender', label: 'מין', def: true, align: 'center' },
-  { key: 'status', label: 'סטטוס', def: true },
-  { key: 'birth_date', label: 'תאריך לידה', def: true },
-  { key: 'id_number', label: 'מספר זהות', def: true },
+// 🔴 value() חובה בכל עמודה שמרנדרת JSX: בלעדיה המיון עובד על אובייקט
+// React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
+//
+// ⚠️ שם ומספר זהות — מיון בלבד (filterable=false). רשימת ערכים על עמודת
+// שם פותחת ערך ייחודי לכל שורה; זה חסר תועלת.
+const COLUMNS: ColDef<ColKey, KidRow>[] = [
+  // ⚠️ מספר סידורי — לא ניתן למיון. מיון לפי מספר השורה מחזיר את אותו
+  // סדר תמיד ורק נראה כאילו הוא עושה משהו.
+  { key: 'index', label: '#', def: true, align: 'center', sortable: false },
+  { key: 'name', label: 'שם', def: true, value: k => k.name },
+  { key: 'gender', label: 'מין', def: true, align: 'center', kind: 'enum', filterable: true,
+    value: k => k.gender === 'male' ? 'בן' : k.gender === 'female' ? 'בת' : null },
+  { key: 'status', label: 'סטטוס', def: true, kind: 'enum', filterable: true,
+    // ⚠️ הערך הוא התווית המוצגת ולא הקוד: המשתמש מסנן לפי מה שהוא רואה.
+    value: k => k.birth_status === 'pending' ? 'ממתין לאישור לידה'
+      : k.birth_status === 'approved' ? 'לידה מאושרת'
+      : k.marital_label ?? null },
+  { key: 'birth_date', label: 'תאריך לידה', def: true, kind: 'date',
+    // ⚠️ ממוין לפי התאריך הגולמי ולא לפי התווית: "כ״ג אלול" ממוין
+    // אלפביתית ולא כרונולוגית.
+    value: k => k.birth_date ?? null },
+  { key: 'id_number', label: 'מספר זהות', def: true, kind: 'number', value: k => k.id_number ?? null },
 ]
 
 export default function ChildrenTable({ kids }: { kids: KidRow[] }) {
-  const tc = useTableColumns('beneficiary-children', COLUMNS)
+  // ⚠️ mode:'client' — כל הילדים מגיעים כ-prop, אין דפדוף בשרת.
+  const tc = useTableColumns('beneficiary-children', COLUMNS, {
+    sortFilter: { mode: 'client', rows: kids },
+  })
 
   const cell = (c: ColDef<ColKey>, k: KidRow, i: number) => {
     switch (c.key) {
@@ -73,20 +93,19 @@ export default function ChildrenTable({ kids }: { kids: KidRow[] }) {
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="px-4 pt-3">{tc.picker}</div>
+      <div className="px-4 pt-3 flex flex-col gap-2">{tc.picker}{tc.activeFilters}</div>
       {/* ⚠️ בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. */}
       <div className="w-full">
         <table className="w-full text-sm text-right" style={tc.rt.tableStyle}>
           <colgroup>{tc.rt.cols}</colgroup>
           <thead>
             <tr className="bg-slate-50 border-b border-slate-100 text-xs text-slate-500">
-              {tc.shown.map((c, i) => (
-                <th key={c.key} className={`px-4 py-2 ${tc.headClass(c)}`}>{c.label}{tc.rt.handle(i)}</th>
-              ))}
+              {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב. */}
+              {tc.shown.map((c, i) => tc.th(c, i))}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {kids.map((k, i) => (
+            {tc.rows.map((k, i) => (
               <tr key={i} className="hover:bg-slate-50">
                 {tc.shown.map(c => (
                   <td key={c.key} className={`px-4 py-2.5 ${tc.cellClass(c)}`}>{cell(c, k, i)}</td>

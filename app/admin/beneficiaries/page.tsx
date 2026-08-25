@@ -6,13 +6,15 @@ import BeneficiariesTable from './BeneficiariesTable'
 import ExportExcelButton from '@/components/admin/ExportExcelButton'
 import { AdminOnly } from '@/components/StaffPermissions'
 import { readListParams } from '@/lib/listParams'
-import { getBeneficiaries } from '@/lib/beneficiariesList'
+import { getBeneficiaries, SORT_COLUMNS } from '@/lib/beneficiariesList'
 
 export default async function BeneficiariesPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const rawParams = await searchParams
-  const p = readListParams({ get: (k) => rawParams[k] ?? null })
+  // ⚠️ sortCols הוא ה-allowlist: בלעדיו col ו-f נזרקים (fail-closed),
+  // כי שם עמודה מה-URL מגיע לשאילתה. ראו lib/listParams.
+  const p = readListParams({ get: (k) => rawParams[k] ?? null }, { sortCols: SORT_COLUMNS })
   // הרשימה הראשית — רק צאצאים רגילים (החריגים בדף נפרד: /admin/special-approvals)
-  const { rows, total, counts } = await getBeneficiaries(p, false)
+  const { rows, total, counts, filterOptions } = await getBeneficiaries(p, false)
 
   return (
     <div className="flex flex-col gap-6">
@@ -41,6 +43,10 @@ export default async function BeneficiariesPage({ searchParams }: { searchParams
         sort={p.sort}
         marital={p.marital}
         email={p.email}
+        col={p.col}
+        dir={p.dir}
+        colFilters={p.colFilters}
+        filterOptions={filterOptions}
         cardKeys={['all', 'pending', 'deep_review', 'approved', 'rejected']}
       />
     </div>

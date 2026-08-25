@@ -3,6 +3,7 @@ import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { Search, Eye, Phone, Mail, MapPin, Clock, Check, X, Users, FileText, ClipboardCheck, ShieldAlert } from 'lucide-react'
 import DataTable, { Column } from '@/components/ui/DataTable'
+import { SORT_COLUMNS } from '@/lib/listParams'
 import ApprovalLabelTag from '@/components/ui/ApprovalLabelTag'
 import { approvalLabelOf } from '@/lib/approvalLabel'
 import SortButtons, { SortMode } from '@/components/ui/SortButtons'
@@ -63,9 +64,10 @@ const MARITAL_TINT: Record<string, string> = {
 const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[] => [
   {
     key: 'full_name',
+    kind: 'text',
+    value: (row) => fullName(row),
     header: 'שם מלא',
     sortable: true,
-    className: 'min-w-[140px]',
     render: (row) => (
       <Link
         href={`/admin/beneficiaries/${row.id}`}
@@ -79,7 +81,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
             <span className="absolute -bottom-0.5 -left-0.5 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-white" />
           )}
         </div>
-        <span className="font-medium text-slate-800 group-hover/name:text-indigo-600 truncate max-w-[130px]">
+        <span className="font-medium text-slate-800 group-hover/name:text-indigo-600">
           {fullName(row)}
         </span>
       </Link>
@@ -87,9 +89,10 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   },
   {
     key: 'id_number',
+    kind: 'number',
+    value: (row) => row.id_number ?? null,
     header: 'מספר ת.ז.',
     sortable: true,
-    className: 'min-w-[100px]',
     render: (row) =>
       row.id_number ? (
         <span dir="ltr" className="font-mono text-xs text-slate-600 tabular-nums">{row.id_number}</span>
@@ -99,13 +102,14 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   },
   {
     key: 'spouse_name',
+    kind: 'text',
+    value: (row) => row.spouse_name ?? null,
     header: 'בן/בת זוג',
     sortable: true,
-    className: 'min-w-[110px]',
     render: (row) =>
       row.spouse_name ? (
         <div className="flex flex-col gap-0.5">
-          <span className="text-xs text-slate-700 font-medium truncate max-w-[130px]">{row.spouse_name}</span>
+          <span className="text-xs text-slate-700 font-medium">{row.spouse_name}</span>
           {row.spouse_id_number && (
             <span dir="ltr" className="font-mono text-[11px] text-slate-400 tabular-nums">{row.spouse_id_number}</span>
           )}
@@ -116,9 +120,10 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   },
   {
     key: 'phone',
+    kind: 'text',
+    value: (row) => row.phone ?? null,
     header: 'טלפון',
     sortable: false,
-    className: 'min-w-[120px]',
     render: (row) =>
       row.phone ? (
         <div dir="ltr" className="flex items-center gap-1.5 text-xs text-slate-600 tabular-nums w-fit">
@@ -131,9 +136,10 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   },
   {
     key: 'email',
+    kind: 'text',
+    value: (row) => row.email ?? null,
     header: 'מייל',
     sortable: false,
-    className: 'min-w-[130px]',
     render: (row) =>
       row.email ? (
         <button
@@ -152,9 +158,11 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   },
   {
     key: 'city',
+    kind: 'text',
+    filterable: true,
+    value: (row) => row.city ?? null,
     header: 'עיר',
     sortable: true,
-    className: 'min-w-[90px]',
     render: (row) =>
       row.city ? (
         <span className="inline-flex items-center gap-1 text-xs text-slate-600">
@@ -167,9 +175,11 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   },
   {
     key: 'marital_status',
+    kind: 'enum',
+    filterable: true,
+    value: (row) => row.marital_status ?? null,
     header: 'מצב משפחתי',
     sortable: true,
-    className: 'min-w-[100px]',
     render: (row) =>
       row.marital_status ? (
         <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${
@@ -183,8 +193,8 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   },
   {
     key: 'approval_label',
+    sortable: false,
     header: 'סיבת אישור',
-    className: 'min-w-[110px]',
     // ⚠️ מסביר למה אדם שאינו צאצא רשאי להגיש בקשות. רוב הרשומות הן
     // צאצאים רגילים בלי תווית, ולכן התא ריק ברובן ואינו תופס מקום.
     render: (row) => {
@@ -196,8 +206,10 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   },
   {
     key: 'children_count',
+    kind: 'number',
+    value: (row) => row.children_count ?? 0,
     header: 'ילדים',
-    className: 'text-center min-w-[60px]',
+    className: 'text-center',
     sortable: true,
     render: (row) => (
       <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1.5 rounded-full bg-slate-100 text-slate-600 text-xs font-medium tabular-nums">
@@ -207,16 +219,20 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   },
   {
     key: 'eligibility_status',
+    kind: 'enum',
+    filterable: true,
+    value: (row) => row.eligibility_status ?? null,
     header: 'סטטוס',
     sortable: true,
-    className: 'min-w-[120px]',
     render: (row) => <StatusChip status={row.eligibility_status} />,
   },
   {
     key: 'registration_source',
+    kind: 'enum',
+    filterable: true,
+    value: (row) => row.registration_source ?? null,
     header: 'אופן הרישום',
     sortable: true,
-    className: 'min-w-[95px]',
     // ⚠️ צבע לפי הערוץ — כדי שאפשר יהיה לסרוק את העמודה במבט: נדרים=סגול,
     // אתר=אינדיגו, טלפון=טורקיז, מייל=כחול, הזנה ידנית=אפור. "לא תועד"=אפור בהיר.
     render: (row) => {
@@ -272,6 +288,12 @@ interface Props {
   sort: string
   marital: string
   email?: string
+  // ── מיון וסינון מהכותרת. ⚠️ מגיעים מה-URL ומיושמים במסד. ──
+  col?: string
+  dir?: 'asc' | 'desc'
+  colFilters?: Record<string, string[]>
+  /** אפשרויות הסינון — מכל המאגר, לא מהדף. ראו getFilterOptions. */
+  filterOptions?: Record<string, { value: string; count: number }[]>
   // אילו כרטיסי סינון סטטוס להציג (ברירת מחדל: כולם). דף החריגים מצמצם ל-3.
   cardKeys?: Filter[]
   // כפתור פעולה בראש הטבלה (למשל "רישום אדם חריג חדש" בדף החריגים)
@@ -290,9 +312,10 @@ const MARITAL_OPTIONS: { value: string; label: string }[] = [
   { value: 'גרושה', label: 'גרושה' },
 ]
 
-export default function BeneficiariesTable({ data, counts, total, page, size, status, sort, marital, email = 'all', cardKeys, headerAction }: Props) {
+export default function BeneficiariesTable({ data, counts, total, page, size, status, sort, marital, email = 'all', col = '', dir = 'asc', colFilters = {}, filterOptions = {}, cardKeys, headerAction }: Props) {
   const [emailTarget, setEmailTarget] = useState<{ email: string; name: string } | null>(null)
-  const { qInput, setSearch, setStatus, setSort, setMarital, setEmail, setSize, setPage } = useListParams()
+  const { qInput, setSearch, setStatus, setSort, setMarital, setEmail, setSize, setPage, setColSort, setColFilters } =
+    useListParams({ sortCols: SORT_COLUMNS })
 
   const columns = useMemo(
     () => buildColumns((row) => setEmailTarget({ email: row.email!, name: fullName(row) })),
@@ -412,6 +435,16 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
         tableId="beneficiaries"
         rowHref={(row) => `/admin/beneficiaries/${row.id}`}
         serverMode
+        // 🔴 serverMode + sortFilter = המיון והסינון רצים במסד. סינון
+        // בצד הלקוח היה מסנן 50 שורות מתוך 7,066 ומציג תוצאה שנראית
+        // תקינה לחלוטין ואינה.
+        sortFilter={{
+          sort: { key: col || null, dir },
+          onSortChange: (s) => setColSort(s.key ?? '', s.dir),
+          filters: colFilters,
+          onFiltersChange: setColFilters,
+          options: filterOptions,
+        }}
         emptyMessage={qInput ? 'לא נמצאו תוצאות לחיפוש.' : "לא נמצאו צאצאים. לחץ על 'רישום צאצא חדש' להוספה."}
         actions={(row) => (
           <div className="flex items-center gap-1.5">

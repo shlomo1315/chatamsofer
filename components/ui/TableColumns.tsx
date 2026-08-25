@@ -2,6 +2,8 @@
 import { useState, useMemo, useCallback, useEffect, type ReactNode } from 'react'
 import { Columns3, Check } from 'lucide-react'
 import { useResizableColumns, type ResizableColumns } from './ResizableTable'
+import TableHeadMenu, { ActiveFilters } from './TableHeadMenu'
+import { sortRows, filterRows, distinctValues, type ColKind, type SortDir, type DistinctValue } from '@/lib/tableSort'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // בורר עמודות + גרירת רוחב — hook מערכתי אחד לכל טבלאות המערכת.
@@ -42,43 +44,122 @@ import { useResizableColumns, type ResizableColumns } from './ResizableTable'
 
 const VIS_PREFIX = 'tblvis:'
 
-export interface ColDef<K extends string = string> {
+export interface ColDef<K extends string = string, R = never> {
   key: K
   label: string
   /** מוצגת כברירת מחדל. ⚠️ לבחור כך שהסכום נכנס לרוחב מסך רגיל. */
   def: boolean
   align?: 'center'
+
+  // ── מיון וסינון (ראו lib/tableSort) ─────────────────────────────────────
+  /** סוג הערך למיון. ברירת מחדל 'text'. */
+  kind?: ColKind
+  /** ניתנת למיון בלחיצה על הכותרת. ברירת מחדל: true. */
+  sortable?: boolean
+  /**
+   * ניתנת לסינון לפי ערך.
+   *
+   * 🔴 ברירת המחדל false בכוונה: רשימת ערכים על עמודת שם או טלפון
+   * פותחת 7,000 ערכים ייחודיים — כבד וחסר תועלת. סינון לפי ערך שייך
+   * לעמודות עם קבוצת ערכים סגורה (מצב משפחתי, סטטוס, עיר, קהילה).
+   */
+  filterable?: boolean
+  /**
+   * חילוץ הערך הגולמי למיון ולסינון.
+   *
+   * 🔴 חובה בכל עמודה שמרנדרת JSX. בלעדיה המיון עובד על אובייקט React
+   * ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
+   */
+  value?: (row: R) => unknown
+  /** מחלקות נוספות ל-<th> (ריפוד, רקע) — מגיעות מהצרכן דרך tc.th. */
+  headClassName?: string
 }
 
-export interface TableColumns<K extends string> {
+/** מצב המיון: איזו עמודה ובאיזה כיוון. */
+export interface SortState<K extends string = string> {
+  key: K | null
+  dir: SortDir
+}
+
+/**
+ * מיון וסינון — שני מצבים, והבחירה ביניהם אינה אופציונלית.
+ *
+ * 🔴 'client': כל השורות בזיכרון, ה-hook ממיין ומסנן בעצמו.
+ * 🔴 'server': רק עמוד אחד בזיכרון — המיון והסינון חייבים לרוץ במסד.
+ *
+ * ⚠️ טבלה שמדפדפת בשרת ומקבלת 'client' תסנן 50 שורות מתוך 7,066
+ * ותציג תוצאה שנראית תקינה לחלוטין. זה בדיוק הבאג ששרף את המערכת
+ * פעמיים — תקרת 1,000 השורות, וירושלים שהוצגה 75 במקום 1,695.
+ * אין ברירת מחדל בכוונה.
+ */
+export type SortFilterOpts<K extends string, R> =
+  | {
+      mode: 'client'
+      /** כל השורות — לא רק הדף הנוכחי. */
+      rows: readonly R[]
+    }
+  | {
+      mode: 'server'
+      /** שורות הדף הנוכחי — מוחזרות כפי שהן, המסד כבר מיין וסינן. */
+      rows: readonly R[]
+      /** מצב המיון הנוכחי (מה-URL). */
+      sort: SortState<K>
+      onSortChange: (s: SortState<K>) => void
+      /** הערכים הנבחרים לכל עמודה (מה-URL). */
+      filters: Readonly<Record<string, string[]>>
+      onFiltersChange: (f: Record<string, string[]>) => void
+      /**
+       * אפשרויות הסינון — נשלפות בשרת (distinct על כל המאגר).
+       * ⚠️ לא מהשורות שבדף: הן מייצגות 50 מתוך אלפים.
+       */
+      options: Readonly<Record<string, DistinctValue[]>>
+    }
+
+export interface TableColumns<K extends string, R = never> {
   /** העמודות המוצגות בפועל, לפי הסדר. */
-  shown: ColDef<K>[]
+  shown: ColDef<K, R>[]
   /** כל העמודות הרלוונטיות להקשר (אחרי filter), בין אם מוצגות ובין אם לא. */
-  available: ColDef<K>[]
+  available: ColDef<K, R>[]
   /** גרירת הרוחב — כבר מאותחלת עם המזהה והספירה הנכונים. */
   rt: ResizableColumns
   /** ה-UI של הבורר — שורת הכפתורים ולוח הצ׳יפים. */
   picker: ReactNode
   /** מחלקות התא: גלישה + יישור. להעביר לכל <td>. */
-  cellClass: (c: ColDef<K>) => string
+  cellClass: (c: ColDef<K, R>) => string
   /** מחלקות הכותרת: relative (לידית) + יישור. */
-  headClass: (c: ColDef<K>) => string
+  headClass: (c: ColDef<K, R>) => string
+
+  // ── מיון וסינון ─────────────────────────────────────────────────────────
+  /**
+   * כותרת מוכנה — מיון, סינון וידית הגרירה. שורת ה-thead כולה:
+   *   <tr>{tc.shown.map((c, i) => tc.th(c, i))}</tr>
+   */
+  th: (c: ColDef<K, R>, i: number) => ReactNode
+  /**
+   * השורות אחרי מיון וסינון.
+   * ⚠️ במצב 'server' מוחזרות כפי שהתקבלו — המסד כבר עשה את העבודה.
+   */
+  rows: R[]
+  /** שורת המסננים הפעילים. ריקה כשאין — ראו ההערה ב-ActiveFilters. */
+  activeFilters: ReactNode
 }
 
-export function useTableColumns<K extends string>(
+export function useTableColumns<K extends string, R = never>(
   /** מזהה יציב לטבלה. ⚠️ שינוי שלו מאבד את הכיוונון של המשתמשים. */
   tableId: string,
-  columns: ColDef<K>[],
+  columns: ColDef<K, R>[],
   opts?: {
     /** סינון עמודות לפי הקשר (הרשאה, מצב). מה שיורד — יורד גם מהבורר. */
-    filter?: (c: ColDef<K>) => boolean
+    filter?: (c: ColDef<K, R>) => boolean
     /** עמודות נוספות שאינן בבורר (צ׳קבוקס, פעולות) — נספרות לגרירה. */
     extraCols?: number
     /** תוספת למזהה כשאותה טבלה מוצגת בשני מצבים (עריכה מול צפייה). */
     idSuffix?: string
+    /** מיון וסינון מהכותרת. ⚠️ חובה לציין mode — ראו SortFilterOpts. */
+    sortFilter?: SortFilterOpts<K, R>
   },
-): TableColumns<K> {
-  const { filter, extraCols = 0, idSuffix = '' } = opts ?? {}
+): TableColumns<K, R> {
+  const { filter, extraCols = 0, idSuffix = '', sortFilter } = opts ?? {}
 
   const available = useMemo(
     () => (filter ? columns.filter(filter) : columns),
@@ -131,14 +212,114 @@ export function useTableColumns<K extends string>(
   }, [available, persist])
 
   const cellClass = useCallback(
-    (c: ColDef<K>) => `${rt.cellClass}${c.align === 'center' ? ' text-center' : ''}`,
+    (c: ColDef<K, R>) => `${rt.cellClass}${c.align === 'center' ? ' text-center' : ''}`,
     [rt.cellClass],
   )
 
   const headClass = useCallback(
-    (c: ColDef<K>) => `relative${c.align === 'center' ? ' text-center' : ''}`,
+    (c: ColDef<K, R>) => `relative${c.align === 'center' ? ' text-center' : ''}`,
     [],
   )
+
+  // ══ מיון וסינון ═════════════════════════════════════════════════════════
+  //
+  // ⚠️ המצב הפנימי קיים רק ב-'client'. ב-'server' הוא מגיע מה-URL דרך
+  // ההורה — מצב כפול היה נותן לטבלה להציג מיון אחד ולמסד לבצע אחר.
+  const [cSort, setCSort] = useState<SortState<K>>({ key: null, dir: 'asc' })
+  const [cFilters, setCFilters] = useState<Record<string, string[]>>({})
+
+  const isServer = sortFilter?.mode === 'server'
+  const sort = isServer ? sortFilter.sort : cSort
+  const filters = isServer ? sortFilter.filters : cFilters
+
+  const setSort = useCallback((s: SortState<K>) => {
+    if (sortFilter?.mode === 'server') sortFilter.onSortChange(s)
+    else setCSort(s)
+  }, [sortFilter])
+
+  const setFilters = useCallback((f: Record<string, string[]>) => {
+    if (sortFilter?.mode === 'server') sortFilter.onFiltersChange(f)
+    else setCFilters(f)
+  }, [sortFilter])
+
+  /** חילוץ הערך של עמודה משורה — value() אם הוגדרה, אחרת השדה לפי key. */
+  const valueOf = useCallback((c: ColDef<K, R>, row: R): unknown =>
+    c.value ? c.value(row) : (row as Record<string, unknown>)?.[c.key],
+  [])
+
+  // אפשרויות הסינון לכל עמודה. ב-'client' נגזרות מהשורות; ב-'server'
+  // מגיעות מוכנות (distinct על כל המאגר, לא על הדף).
+  const optionsByCol = useMemo(() => {
+    const out: Record<string, DistinctValue[]> = {}
+    if (!sortFilter) return out
+    if (sortFilter.mode === 'server') return sortFilter.options as Record<string, DistinctValue[]>
+    for (const c of available) {
+      if (!c.filterable) continue
+      out[c.key] = distinctValues(sortFilter.rows, r => valueOf(c, r))
+    }
+    return out
+  }, [sortFilter, available, valueOf])
+
+  // 🔴 הסינון קודם למיון: מיון על שורות שממילא יוסתרו הוא עבודה מיותרת,
+  // ועל 7,000 שורות ההבדל מורגש.
+  const rows = useMemo<R[]>(() => {
+    if (!sortFilter) return []
+    // ⚠️ ב-'server' השורות מוחזרות כפי שהתקבלו — המסד כבר מיין וסינן.
+    // מיון נוסף כאן היה ממיין את הדף בתוך עצמו ומייצר סדר שגוי:
+    // 50 שורות ממוינות בתוך רצף של 7,066 נראות ממוינות, ואינן.
+    if (sortFilter.mode === 'server') return [...sortFilter.rows]
+
+    let out = [...sortFilter.rows]
+    for (const c of available) {
+      const sel = filters[c.key]
+      if (!sel?.length) continue
+      out = filterRows(out, r => valueOf(c, r), new Set(sel))
+    }
+    if (sort.key) {
+      const col = available.find(c => c.key === sort.key)
+      if (col) out = sortRows(out, r => valueOf(col, r), col.kind ?? 'text', sort.dir)
+    }
+    return out
+  }, [sortFilter, available, filters, sort, valueOf])
+
+  const th = useCallback((c: ColDef<K, R>, i: number): ReactNode => {
+    const sel = new Set(filters[c.key] ?? [])
+    return (
+      <TableHeadMenu
+        key={c.key}
+        label={c.label}
+        kind={c.kind ?? 'text'}
+        // ⚠️ ברירת המחדל של sortable היא true, ושל filterable היא false.
+        sortable={sortFilter ? c.sortable !== false : false}
+        filterable={!!sortFilter && !!c.filterable}
+        sortDir={sort.key === c.key ? sort.dir : null}
+        onSort={dir => setSort({ key: c.key, dir })}
+        options={optionsByCol[c.key] ?? []}
+        selected={sel}
+        onSelect={next => {
+          const f = { ...filters }
+          if (next.size === 0) delete f[c.key]
+          else f[c.key] = [...next]
+          setFilters(f)
+        }}
+        handle={rt.handle(i)}
+        className={`${headClass(c)} ${c.headClassName ?? ''}`}
+      />
+    )
+  }, [filters, sort, optionsByCol, sortFilter, rt, headClass, setSort, setFilters])
+
+  const activeFilters = useMemo(() => {
+    const items = available
+      .filter(c => (filters[c.key]?.length ?? 0) > 0)
+      .map(c => ({ key: c.key, label: c.label, values: filters[c.key] }))
+    return (
+      <ActiveFilters
+        items={items}
+        onClear={k => { const f = { ...filters }; delete f[k]; setFilters(f) }}
+        onClearAll={() => setFilters({})}
+      />
+    )
+  }, [available, filters, setFilters])
 
   // ⚠️ "הצגת הכל" ליד הבורר ולא בקצה הנגדי: היא פעולה *על* הבורר,
   // וריחוק ממנו נראה כפריט מנותק.
@@ -183,5 +364,5 @@ export function useTableColumns<K extends string>(
     </div>
   )
 
-  return { shown, available, rt, picker, cellClass, headClass }
+  return { shown, available, rt, picker, cellClass, headClass, th, rows, activeFilters }
 }

@@ -2,7 +2,8 @@
 import { ReactNode, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronUp, ChevronDown, Search, Inbox } from 'lucide-react'
-import { useTableColumns, type ColDef } from './TableColumns'
+import { useTableColumns, type ColDef, type SortState, type SortFilterOpts } from './TableColumns'
+import type { ColKind, DistinctValue } from '@/lib/tableSort'
 
 export interface Column<T> {
   key: keyof T | string
@@ -10,6 +11,16 @@ export interface Column<T> {
   render?: (row: T) => ReactNode
   sortable?: boolean
   className?: string
+  // ── מיון וסינון מהכותרת (ראו lib/tableSort) ─────────────────────────────
+  /** סוג הערך למיון. ברירת מחדל 'text'. */
+  kind?: ColKind
+  /**
+   * ניתנת לסינון לפי ערך. ברירת מחדל false — רשימת ערכים על עמודת
+   * שם/טלפון/מייל פותחת ערך ייחודי לכל שורה.
+   */
+  filterable?: boolean
+  /** 🔴 חובה בעמודה שמרנדרת JSX — אחרת המיון עובד על אובייקט React. */
+  value?: (row: T) => unknown
 }
 
 interface DataTableProps<T> {
@@ -33,6 +44,20 @@ interface DataTableProps<T> {
    * שטרם הוסב לא ישבר.
    */
   tableId?: string
+  /**
+   * מיון וסינון מהכותרת.
+   *
+   * ⚠️ ב-serverMode חובה להעביר את המצב והאפשרויות מההורה: סינון בצד
+   * הלקוח היה מסנן את הדף הנוכחי בלבד ומציג תוצאה שנראית תקינה.
+   */
+  sortFilter?: {
+    sort: SortState
+    onSortChange: (s: SortState) => void
+    filters: Readonly<Record<string, string[]>>
+    onFiltersChange: (f: Record<string, string[]>) => void
+    /** נדרש ב-serverMode: distinct על כל המאגר, לא על הדף. */
+    options?: Readonly<Record<string, DistinctValue[]>>
+  }
 }
 
 export default function DataTable<T extends { id: string }>({
@@ -47,6 +72,7 @@ export default function DataTable<T extends { id: string }>({
   rowHref,
   serverMode,
   tableId,
+  sortFilter,
 }: DataTableProps<T>) {
   const router = useRouter()
   const [search, setSearch] = useState('')
@@ -58,21 +84,58 @@ export default function DataTable<T extends { id: string }>({
   // 🔴 בורר עמודות + גרירת רוחב + גלישה — הכלל המערכתי לכל הטבלאות.
   // ⚠️ ה-Column הקיים אינו יודע על `def`, ולכן כל העמודות מוצגות כברירת
   //    מחדל: הסבה של צרכן קיים לא אמורה להעלים ממנו עמודות בלי שביקש.
-  const colDefs = useMemo<ColDef[]>(
-    () => columns.map(c => ({ key: String(c.key), label: c.header, def: true })),
+  const colDefs = useMemo<ColDef<string, T>[]>(
+    () => columns.map(c => ({
+      key: String(c.key),
+      label: c.header,
+      def: true,
+      kind: c.kind,
+      // ⚠️ sortable כאן משמר את הכוונה המקורית של הצרכן (שם/טלפון/מייל
+      // סומנו sortable:false), אבל ב-serverMode המיון עובר למסד ולכן
+      // מותר גם על עמודות שהמיון הפנימי לא תמך בהן.
+      sortable: c.sortable !== false,
+      filterable: c.filterable,
+      value: c.value,
+      // ⚠️ הריפוד והרקע של הכותרת מגיעים מכאן: tc.th מרנדר את ה-<th>
+      // בעצמו, ובלי זה הכותרות היו מאבדות את עיצוב הטבלה.
+      headClassName: `bg-slate-50 px-3 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 ${c.className ?? ''}`,
+    })),
     [columns],
   )
-  const tc = useTableColumns(tableId ?? "", colDefs, {
+
+  // 🔴 שני המצבים: 'server' כשהדף מגיע מהמסד, 'client' כשכל השורות כאן.
+  // בחירה שגויה כאן היא בדיוק הבאג ששרף את המערכת פעמיים — ראו
+  // SortFilterOpts ב-TableColumns.
+  const sfOpts = useMemo<SortFilterOpts<string, T> | undefined>(() => {
+    if (!sortFilter) return undefined
+    if (serverMode) {
+      return {
+        mode: 'server', rows: data,
+        sort: sortFilter.sort, onSortChange: sortFilter.onSortChange,
+        filters: sortFilter.filters, onFiltersChange: sortFilter.onFiltersChange,
+        options: sortFilter.options ?? {},
+      }
+    }
+    return { mode: 'client', rows: data }
+  }, [sortFilter, serverMode, data])
+
+  const tc = useTableColumns<string, T>(tableId ?? "", colDefs, {
     extraCols: actions ? 1 : 0,
+    sortFilter: sfOpts,
   })
   const view = tableId
     ? tc.shown.map(c => columns.find(x => String(x.key) === c.key)!).filter(Boolean)
     : columns
 
+  // השורות שעליהן עובדים: כשיש sortFilter הן עוברות דרך ה-hook (ממוינות
+  // ומסוננות). ⚠️ ב-serverMode ה-hook מחזיר אותן כפי שהתקבלו — המסד כבר
+  // מיין וסינן, ומיון נוסף כאן היה ממיין 50 שורות בתוך רצף של אלפים.
+  const base = sortFilter ? tc.rows : data
+
   const q = search.trim().toLowerCase()
   const filtered = serverMode || q.length < 2
-    ? data
-    : data.filter((row) => {
+    ? base
+    : base.filter((row) => {
         const keys = searchKeys.length ? searchKeys : (Object.keys(row) as (keyof T)[])
         return keys.some((k) => {
           const val = (row as Record<string, unknown>)[k as string]
@@ -81,7 +144,9 @@ export default function DataTable<T extends { id: string }>({
         })
       })
 
-  const sorted = (!serverMode && sortKey)
+  // ⚠️ המיון הפנימי הישן פועל רק כשאין sortFilter: משני מנגנוני מיון
+  // על אותה טבלה היו נלחמים זה בזה.
+  const sorted = (!serverMode && sortKey && !sortFilter)
     ? [...filtered].sort((a, b) => {
         const av = (a as Record<string, unknown>)[sortKey]
         const bv = (b as Record<string, unknown>)[sortKey]
@@ -130,6 +195,10 @@ export default function DataTable<T extends { id: string }>({
       {/* בורר העמודות — מוצג רק כשניתן tableId. */}
       {tableId && tc.picker}
 
+      {/* 🔴 סינון שחבוי בתפריט הוא מלכודת: המשתמש רואה 12 שורות מתוך
+          7,066 ואינו יודע למה. */}
+      {sortFilter && tc.activeFilters}
+
       {/* 🔴 בלי overflow-x: הכלל במערכת הוא שאין גלילה לרוחב בשום טבלה.
           הגרירה מחלקת מחדש את הרוחב הקיים ואינה מרחיבה מעבר למסך. */}
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -138,7 +207,15 @@ export default function DataTable<T extends { id: string }>({
           {tableId && <colgroup>{tc.rt.cols}</colgroup>}
           <thead className="sticky top-0 z-10">
             <tr className="bg-slate-50 border-b-2 border-slate-200">
-              {view.map((col, i) => (
+              {view.map((col, i) => {
+                // ── התקן: כותרת עם מיון וסינון, זהה בכל טבלאות המערכת.
+                // tc.th מרנדר <th> משלו (כולל ידית הגרירה), ולכן הוא
+                // מוחזר כמו שהוא ולא נעטף.
+                if (sortFilter) {
+                  const def = tc.shown.find(c => c.key === String(col.key))
+                  if (def) return tc.th(def, i)
+                }
+                return (
                 <th
                   key={String(col.key)}
                   className={`bg-slate-50 px-3 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 ${tableId ? "relative" : "whitespace-nowrap"} ${col.className ?? ''} ${(col.sortable && !serverMode) ? 'cursor-pointer hover:text-indigo-600 select-none transition-colors' : ''}`}
@@ -152,7 +229,8 @@ export default function DataTable<T extends { id: string }>({
                   </div>
                   {tableId && tc.rt.handle(i)}
                 </th>
-              ))}
+                )
+              })}
               {actions && <th className="w-px whitespace-nowrap bg-slate-50 px-3 py-3.5 text-center text-[11px] font-semibold uppercase tracking-wider text-slate-500">פעולות</th>}
             </tr>
           </thead>

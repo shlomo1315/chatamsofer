@@ -579,6 +579,9 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         id_number: c.id_number,
         gender: c.gender,
         birth_date_label: c.birth_date ? formatDate(c.birth_date) : '—',
+        // ⚠️ גם הגולמי, למיון: התווית מפורמטת ("כ״ג אלול"/"26.08.2026")
+        // וממוינת אלפביתית — לא כרונולוגית.
+        birth_date: c.birth_date,
         marital_status: c.marital_status,
         marital_label: maritalLabel(c),
         birth_status: c.birth_status,

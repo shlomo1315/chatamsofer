@@ -5,6 +5,8 @@
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import type { Beneficiary } from '@/types'
 import type { readListParams } from '@/lib/listParams'
+import { BLANK } from '@/lib/tableSort'
+import { SORT_COLUMNS, FILTER_COLUMNS } from '@/lib/listParams'
 
 // רק העמודות שטבלת הרשימה מציגה/ממיינת/מחפשת בהן — משמיט שדות כבדים (children JSON,
 // lineage_chain, lineage_manual וכו') מה-payload. כרטיס המוטב וייצוא האקסל מושכים בנפרד.
@@ -44,10 +46,81 @@ function escapeOr(v: string) {
 const searchOr = (term: string) =>
   SEARCH_COLUMNS.map((c) => `${c}.ilike.%${escapeOr(term)}%`).join(',')
 
+
+/**
+ * אפשרויות הסינון לכל עמודה — ערך + מונה, מכל המאגר.
+ *
+ * ⚠️ RPC אחד במעבר יחיד (beneficiaries_filter_options). ארבע שאילתות
+ * distinct נפרדות היו סורקות את הטבלה הגדולה במערכת ארבע פעמים בכל
+ * טעינת דף.
+ *
+ * כשל אינו מפיל את הדף: בלי אפשרויות פשוט אין סינון לפי ערך, והטבלה
+ * ממשיכה לעבוד.
+ */
+async function getFilterOptions(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  special: boolean,
+): Promise<Record<string, { value: string; count: number }[]>> {
+  const out: Record<string, { value: string; count: number }[]> = {}
+  try {
+    const { data, error } = await supabase.rpc('beneficiaries_filter_options', { only_special: special })
+    if (error || !Array.isArray(data)) {
+      if (error) console.error('[beneficiaries] filter_options RPC נכשל:', error.message)
+      return out
+    }
+    for (const r of data as { col: string; value: string; cnt: number | string }[]) {
+      (out[r.col] ??= []).push({ value: r.value, count: Number(r.cnt) })
+    }
+    // ⚠️ ממוין לפי שכיחות — ברשימה של 75 ערים, מה שמחפשים בראש.
+    // הריק תמיד אחרון. אותו כלל כמו distinctValues ב-lib/tableSort.
+    for (const list of Object.values(out)) {
+      list.sort((a, b) => {
+        if (a.value === BLANK) return 1
+        if (b.value === BLANK) return -1
+        if (b.count !== a.count) return b.count - a.count
+        return a.value.localeCompare(b.value, 'he', { numeric: true })
+      })
+    }
+  } catch (e) {
+    console.error('[beneficiaries] filter_options נכשל:', e)
+  }
+  return out
+}
+
+/** החלת סינון הערכים על שאילתה. ⚠️ המפתחות כבר עברו allowlist. */
+function applyColFilters<T extends { in: (c: string, v: string[]) => T; or: (f: string) => T }>(
+  q: T,
+  filters: Record<string, string[]>,
+): T {
+  for (const [col, values] of Object.entries(filters)) {
+    if (!FILTER_COLUMNS.includes(col as typeof FILTER_COLUMNS[number])) continue
+    if (!values.length) continue
+    // ⚠️ "(ריק)" הוא ערך לגיטימי לסינון — משפחה בלי עיר היא בדיוק מה
+    // שהמזכירה מחפשת. הוא מתורגם ל-is.null ולא נזרק.
+    const hasBlank = values.includes(BLANK)
+    const real = values.filter(v => v !== BLANK)
+    if (hasBlank && real.length) {
+      q = q.or(`${col}.is.null,${col}.eq.,${col}.in.(${real.map(escapeOr).join(',')})`)
+    } else if (hasBlank) {
+      q = q.or(`${col}.is.null,${col}.eq.`)
+    } else {
+      q = q.in(col, real)
+    }
+  }
+  return q
+}
+
+export { SORT_COLUMNS, FILTER_COLUMNS } from '@/lib/listParams'
+
 export interface ListResult {
   rows: Beneficiary[]
   total: number
   counts: Record<string, number>
+  /**
+   * אפשרויות הסינון לכותרות — ערך + מונה, מכל המאגר.
+   * ⚠️ לא מהשורות שבדף: הן 50 מתוך 7,066.
+   */
+  filterOptions: Record<string, { value: string; count: number }[]>
 }
 
 // בדיקה חד-פעמית לכל תהליך: האם עמודת is_special קיימת. סכימה אינה משתנה
@@ -160,7 +233,7 @@ async function getStatusCounts(
 // special: true = דף האישורים החריגים (is_special=true); false = הרשימה
 // הראשית (הצאצאים הרגילים, is_special=false/null — החריגים לא מופיעים שם).
 export async function getBeneficiaries(p: ReturnType<typeof readListParams>, special = false): Promise<ListResult> {
-  if (!isSupabaseConfigured()) return { rows: [], total: 0, counts: { all: 0 } }
+  if (!isSupabaseConfigured()) return { rows: [], total: 0, counts: { all: 0 }, filterOptions: {} }
   const supabase = await createClient()
 
   const ascending = p.sort === 'oldest' || p.sort === 'alpha'
@@ -218,6 +291,9 @@ function applyEmailFilter<T extends EmailFilterQ>(q: T, mode: string): T {
   }
 }
 
+  // ⚠️ מוחל גם על שאילתת הספירה וגם על שאילתת הנתונים: מונה שאינו
+  // מכיר את הסינון היה מציג "1 מתוך 7,066" על טבלה מסוננת.
+
   // ── שאילתת הנתונים (עמוד אחד). סדר נכון: פילטרים (eq/or) קודם, ואז order+range. ──
   let dataQ = supabase.from('beneficiaries').select(LIST_COLUMNS)
   dataQ = applySpecial(dataQ)
@@ -226,8 +302,23 @@ function applyEmailFilter<T extends EmailFilterQ>(q: T, mode: string): T {
   if (maritalValues.length) dataQ = dataQ.in('marital_status', maritalValues)
   if (p.email && p.email !== 'all') dataQ = applyEmailFilter(dataQ, p.email)
   if (p.q) dataQ = dataQ.or(searchOr(p.q))
+  dataQ = applyColFilters(dataQ, p.colFilters)
+
+  // 🔴 המיון מהכותרת גובר על מיון ברירת המחדל, ורץ *במסד*: הדף מחזיק
+  // 50 שורות מתוך 7,066, ומיון בצד הלקוח היה ממיין את הדף בתוך עצמו
+  // ומציג סדר שנראה נכון לחלוטין ואינו.
+  //
+  // ⚠️ p.col עבר allowlist ב-readListParams — ראו SORT_COLUMNS.
+  const headSort = p.col
+    ? { col: p.col, asc: p.dir === 'asc' }
+    : { col: orderCol, asc: ascending }
+
   const { data, error } = await dataQ
-    .order(orderCol, { ascending, nullsFirst: false })
+    .order(headSort.col, { ascending: headSort.asc, nullsFirst: false })
+    // ⚠️ מיון משני יציב: בלי מפתח ייחודי שני, שורות בעלות אותו ערך
+    // (6,903 נשואים!) מסודרות אחרת בכל שאילתה — ואותה משפחה מופיעה
+    // בשני עמודים או נעלמת לגמרי בין דף לדף.
+    .order('id', { ascending: true })
     .range(from, to)
   if (error) {
     console.error('[beneficiaries] data query failed:', JSON.stringify(error), 'params:', JSON.stringify(p))
@@ -244,7 +335,49 @@ function applyEmailFilter<T extends EmailFilterQ>(q: T, mode: string): T {
   const counts = await getStatusCounts(supabase, { special, hasSpecialCol, maritalValues, q: p.q, applySpecial })
 
   // total = ספירת הפילטר הפעיל (all אם אין סטטוס נבחר)
-  const total = p.status !== 'all' ? (counts[p.status] ?? 0) : (counts.all ?? 0)
+  let total = p.status !== 'all' ? (counts[p.status] ?? 0) : (counts.all ?? 0)
 
-  return { rows: (data ?? []) as unknown as Beneficiary[], total, counts }
+  // 🔴 סינון מכותרת דורש ספירה משלו: counts אינו מכיר אותו, ולכן הדפדוף
+  // היה מציע עמודים שאינם קיימים — "1–50 מתוך 7,066" על טבלה שיש בה 12
+  // שורות, ולחיצה על "הבא" מגיעה לדף ריק.
+  //
+  // ⚠️ שאילתה נוספת רק כשיש סינון פעיל: count:'exact' הוא סריקה בפועל,
+  // ולא כדאי לשלם עליה בכל טעינת דף.
+  if (Object.keys(p.colFilters).length > 0) {
+    try {
+      // ⚠️ הטיפוס מורחב במפורש: שרשור הפילטרים על ה-query builder של
+      // Supabase מייצר היררכיית טיפוסים עמוקה מדי ל-tsc (TS2589).
+      // אותה תבנית כבר בשימוש ב-applySpecial/applyEmailFilter.
+      type CountQ = {
+        eq: (c: string, v: unknown) => CountQ
+        or: (f: string) => CountQ
+        in: (c: string, v: string[]) => CountQ
+        is: (c: string, v: null) => CountQ
+        not: (c: string, o: string, v: null) => CountQ
+        neq: (c: string, v: string) => CountQ
+        then: PromiseLike<{ count: number | null; error: { message: string } | null }>['then']
+      }
+      let cq = supabase.from('beneficiaries')
+        .select('id', { count: 'exact', head: true }) as unknown as CountQ
+      cq = applySpecial(cq)
+      if (p.status === 'pending') cq = cq.or(PENDING_OR)
+      else if (p.status !== 'all') cq = cq.eq('eligibility_status', p.status)
+      if (maritalValues.length) cq = cq.in('marital_status', maritalValues)
+      if (p.email && p.email !== 'all') cq = applyEmailFilter(cq, p.email)
+      if (p.q) cq = cq.or(searchOr(p.q))
+      cq = applyColFilters(cq, p.colFilters)
+      const { count, error: cErr } = await cq
+      if (!cErr && count != null) total = count
+    } catch (e) {
+      // ⚠️ כשל בספירה אינו מפיל את הדף — הרשימה חשובה יותר מהמונה.
+      console.error('[beneficiaries] ספירת הסינון נכשלה:', e)
+    }
+  }
+
+  // ── אפשרויות הסינון לכותרות ────────────────────────────────────────────
+  // 🔴 מהמסד ולא מהשורות שבדף: הדף מחזיק 50 מתוך 7,066, וגזירה ממנו
+  // הייתה מציגה 6 ערים מתוך 75 עם מונים שקריים.
+  const filterOptions = await getFilterOptions(supabase, special)
+
+  return { rows: (data ?? []) as unknown as Beneficiary[], total, counts, filterOptions }
 }
