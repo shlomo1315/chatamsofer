@@ -7,7 +7,6 @@ import {
   SENT_LABEL, STATUS_LABEL,
   type SentFilter, type StatusFilter, type BatchFilters,
 } from '@/lib/gratitudeBatch'
-import type { BatchLetterFull } from '@/lib/gratitudeBatchPdf'
 import type { GratitudeRow } from './GratitudeTable'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -17,16 +16,14 @@ import type { GratitudeRow } from './GratitudeTable'
 // ברכות ייכנסו ומה הפילוח. בלעדיה הוא היה מוריד קובץ ריק, או קובץ שכולל
 // ברכות שכבר נשלחו — וזה בדיוק מה שהוא מנסה למנוע.
 //
-// ⚠️ ה-PDF נבנה בדפדפן ולא ב-route. כך ההורדה אינה עוברת דרך בקשת רשת
-// מאומתת, שבה הדפדפן פותח חלון אימות — אותה החלטה כמו בקטלוג המיילים.
+// ⚠️ ה-PDF נבנה *בשרת*. ניסיון ראשון בנה אותו בדפדפן ונכשל ב-
+// "Failed to execute 'atob' on 'Window'": הפונט המוטמע הוא variable font
+// של 122KB, ו-embedFont עליו אינו עובד שם. שוברי היולדות והחגים תמיד
+// רצו בשרת, וזה המסלול המוכח.
+//
+// ⚠️ הפילוח נשלח לשרת והתוכן נשלף שם מהמסד — הלקוח קובע מה לסנן, לא
+// מה כתוב בברכות.
 // ─────────────────────────────────────────────────────────────────────────────
-
-/** שם היולדת כפי שהוא ייכתב בקובץ. */
-function motherNameOf(r: GratitudeRow): string {
-  const b = r.aid?.beneficiary
-  if (!b) return ''
-  return [b.family_name, b.spouse_name || b.full_name].filter(Boolean).join(' ')
-}
 
 /** ISO → YYYY-MM-DD, לשדות התאריך. */
 const asDay = (d: Date) => d.toISOString().slice(0, 10)
@@ -64,30 +61,26 @@ export default function BatchPdfDialog({ rows, onClose }: {
   async function download() {
     setBusy(true); setErr(null)
     try {
-      // ⚠️ ייבוא דינמי: pdf-lib והפונט המוטמע כבדים, ואין סיבה לטעון
-      // אותם בכל כניסה למסך מכתבי הברכה.
-      const { buildGratitudeBatchPdf } = await import('@/lib/gratitudeBatchPdf')
-      const letters: BatchLetterFull[] = rows.map(r => ({
-        id: r.id,
-        status: r.status,
-        sent_to_donor_at: r.sent_to_donor_at,
-        created_at: r.created_at,
-        body: r.body,
-        signature: r.signature,
-        is_anonymous: r.is_anonymous,
-        source: r.source,
-        scan_url: r.scan_url,
-        motherName: motherNameOf(r),
-        birthDate: r.aid?.birth_date ?? null,
-      }))
-      const bytes = await buildGratitudeBatchPdf({ letters, filters })
+      // 🔴 ההפקה בשרת ולא בדפדפן.
+      //
+      // ⚠️ בדפדפן זה נכשל ב-"Failed to execute 'atob' on 'Window'": הפונט
+      // המוטמע הוא variable font של 122KB, ו-embedFont עליו אינו עובד שם.
+      // שוברי היולדות והחגים תמיד רצו בשרת — זה המסלול המוכח.
+      const res = await fetch('/api/admin/gratitude/batch-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(filters),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => null)
+        throw new Error(j?.error ?? 'שגיאה בהפקת הקובץ')
+      }
 
-      const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' })
+      const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      // שם הקובץ נושא את הטווח — כך שכמה הורדות אינן דורסות זו את זו
-      // בתיקיית ההורדות.
+      // שם הקובץ נושא את הטווח — כך שכמה הורדות אינן דורסות זו את זו.
       const span = from || to ? `${from || 'הכל'}_${to || 'היום'}` : 'כל-התקופה'
       a.download = `מכתבי ברכה ${span}.pdf`
       document.body.appendChild(a)

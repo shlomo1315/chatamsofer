@@ -2,11 +2,18 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
 import { buildGratitudeVoucher } from '@/lib/gratitudeVoucher'
 import { deliverMail } from '@/lib/sendMail'
-import { mailFor } from '@/lib/departments'
+import { mailFor, DEPARTMENTS, type DepartmentKey } from '@/lib/departments'
 import { loadGratitudeLetter, voucherInputFromRow, donorEmailHtml, DONOR_EMAIL_SUBJECT } from '../[id]/shared'
 
 // שליחה מרוכזת של מכתבי ברכה לנדיב — כל מכתב נבנה כ-PDF ונשלח בנפרד לכתובת שנבחרה.
 // מדלג על מכתבים שכבר נשלחו לאותה כתובת (אלא אם force). מסמן sent_to_donor_at לכל שנשלח.
+//
+// 🔴 סינון לפי status הוסר. הוא דרש row.status === 'approved', בעוד כל
+// הברכות במערכת במצב 'received' — ולכן *כל* שליחה דילגה על הכול בשקט
+// והחזירה "0 נשלחו" בלי שום שגיאה. מנגנון האישור בוטל: ברכה שהתקבלה
+// היא ברכה, ואין מה לאשר בה.
+//
+// ⚠️ תיבת השולח נבחרת ואינה קבועה — ברירת המחדל היא עזר יולדות.
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -22,7 +29,7 @@ export async function POST(request: NextRequest) {
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  let payload: { ids?: unknown; email?: string; force?: boolean }
+  let payload: { ids?: unknown; email?: string; force?: boolean; from?: string }
   try { payload = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
 
   const email = (payload.email ?? '').trim().toLowerCase()
@@ -32,7 +39,11 @@ export async function POST(request: NextRequest) {
   const ids = Array.isArray(payload.ids) ? payload.ids.filter((x): x is string => typeof x === 'string') : []
   if (!ids.length) return NextResponse.json({ error: 'לא נבחרו מכתבי ברכה' }, { status: 400 })
 
-  const { fromEmail, fromName, replyTo } = mailFor('maternity')
+  // ⚠️ מפתח לא מוכר נופל ל-maternity ואינו נשלח כמות שהוא: כך בקשה
+  // משובשת שולחת מהתיבה הנכונה במקום להיכשל או לזלוג לתיבה אחרת.
+  const fromKey = (payload.from && payload.from in DEPARTMENTS)
+    ? (payload.from as DepartmentKey) : 'maternity'
+  const { fromEmail, fromName, replyTo } = mailFor(fromKey)
 
   let sent = 0, skipped = 0, failed = 0
   const sentAt = new Date().toISOString()
@@ -40,7 +51,7 @@ export async function POST(request: NextRequest) {
   for (const id of ids) {
     try {
       const row = await loadGratitudeLetter(db, id)
-      if (!row || row.status !== 'approved') { skipped++; continue }
+      if (!row) { skipped++; continue }
       // כבר נשלח לאותה כתובת — מדלגים (אלא אם המשתמש ביקש שליחה חוזרת)
       if (!payload.force && row.sent_to_donor_at && (row.sent_to_donor_email ?? '') === email) { skipped++; continue }
 

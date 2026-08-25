@@ -56,13 +56,23 @@ export async function unloadAidCard(
   // והיה שגוי לחלוטין. נדרים היא מקור האמת ליתרה.
   //
   // ⚠️ נשלף לפני הפריקה: אחריה היתרה 0 בהגדרה.
+  //
+  // ⚠️ ניסיון שני אחרי השהיה: בפריקה יומית מרוכזת חמש קריאות יוצאות
+  // לנדרים בתוך שנייה, ושתיים מהן חזרו ריקות (25.08) — הכסף נפרק כראוי
+  // אך התיעוד נשמר "לא נשמר". ניסיון חוזר יחיד פותר את זה בלי להאט
+  // את המקרה התקין.
   let balanceBefore: number | null = null
   const nedId = nedarimIdOf(aid)
   if (nedId) {
-    try {
-      const card = await getClientCard(creds, String(nedId))
-      balanceBefore = card?.totalFreeAmount ?? null
-    } catch { /* כשל בשליפה — נשמר null ("לא נשמר"), לא ניחוש */ }
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const card = await getClientCard(creds, String(nedId))
+        balanceBefore = card?.totalFreeAmount ?? null
+        if (balanceBefore != null) break
+      } catch { /* נופל לניסיון הבא */ }
+      // ⚠️ רק בין ניסיונות — לא אחרי האחרון.
+      if (attempt === 0) await new Promise(r => setTimeout(r, 400))
+    }
   }
 
   const r = await prikatTlush(creds, String(aid.card_tlush_id))

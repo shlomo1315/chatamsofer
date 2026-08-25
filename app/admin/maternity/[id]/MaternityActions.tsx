@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { HDR_ROW, HDR_PRIMARY, HDR_OUTLINE, HDR_DANGER, HDR_ALERT } from '@/components/ui/cardHeaderButtons'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Edit, Trash2, Loader2, MailPlus } from 'lucide-react'
@@ -57,29 +58,28 @@ export default function MaternityActions({ aid }: { aid: MaternityAid }) {
   // ⚠️ שלושה סגנונות בלבד, אחידים בגודל וברדיוס. קודם כל כפתור עוצב
   // בנפרד — "תיקון שם" החליף מילוי/מתאר לפי מצב, "עריכה" היה מלא
   // ו"מחיקה" מתאר — והשורה נראתה כמו אוסף מקרי.
-  const BTN = 'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50'
-  const PRIMARY = `${BTN} bg-indigo-600 text-white hover:bg-indigo-700`
-  const OUTLINE = `${BTN} border border-slate-300 bg-white text-slate-700 hover:bg-slate-50`
-  const DANGER = `${BTN} border border-red-300 bg-white text-red-600 hover:border-red-600 hover:bg-red-600 hover:text-white`
+  // ⚠️ הסגנונות מגיעים מ-components/ui/cardHeaderButtons ולא מוגדרים כאן:
+  // הכותרת מכילה כפתורים משלושה רכיבים נפרדים, וכל אחד שהגדיר לעצמו
+  // גובה ורדיוס יצר שורה שבורה שנראית כמו שלושה מסכים שונים.
 
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className={HDR_ROW}>
       {/* ⚠️ "תיקון שם" נשאר מודגש כשסומן "עדיין אין שם" — זו אינדיקציה
           למשימה פתוחה, ולא קישוט. שאר הזמן הוא כפתור מתאר ככל השאר. */}
       <button onClick={sendNameFix} disabled={sendingNameFix}
         className={(aid as { baby_name_pending?: boolean }).baby_name_pending
-          ? `${BTN} bg-amber-500 text-white hover:bg-amber-600`
-          : OUTLINE}
+          ? HDR_ALERT
+          : HDR_OUTLINE}
         title="שליחת קישור אישי למייל היולדת להזנת/תיקון שם התינוק">
         {sendingNameFix ? <Loader2 size={14} className="animate-spin" /> : <MailPlus size={14} />} תיקון שם
       </button>
 
       <Link href={`/admin/maternity/${aid.id}/edit`}>
-        <button className={PRIMARY}><Edit size={14} /> עריכה</button>
+        <button className={HDR_PRIMARY}><Edit size={14} /> עריכה</button>
       </Link>
 
-      <button onClick={handleDelete} disabled={deleting} className={DANGER}>
+      <button onClick={handleDelete} disabled={deleting} className={HDR_DANGER}>
         {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />} מחיקה
       </button>
       {confirmDialog}

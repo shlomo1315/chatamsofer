@@ -367,8 +367,10 @@ export default async function MaternityDetailPage(
   const motherId = beneficiary?.spouse_id_number ?? beneficiary?.id_number
   const approvalLabel = approvalLabelOf(beneficiary)
 
+  // ⚠️ בלי max-w-4xl: הפריסה דו-טורית, והגבלת הרוחב הייתה דוחסת את
+  // שני הטורים לרוחב של אחד.
   return (
-    <div className="flex flex-col gap-5 max-w-4xl">
+    <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <BackButton fallback="/admin/maternity" />
@@ -385,7 +387,6 @@ export default async function MaternityDetailPage(
         <div className="flex items-center gap-2">
           {/* ניווט בין יולדות בלי לחזור לרשימה — נעול ללשונית שממנה נכנסו */}
           <AdjacentNav {...adjacent} bucket={bucket} bucketLabel={BUCKET_LABEL[bucket]} />
-          <StatusControl aid={aid} advance familyApproved={beneficiary?.eligibility_status === 'approved'} />
           <MaternityActions aid={aid} />
         </div>
       </div>
@@ -463,20 +464,21 @@ export default async function MaternityDetailPage(
         </AdminOnly>
       )}
 
+      {/* ─────────────────────────────────────────────────────────────────
+          🔴 פריסה זהה לכרטסת ההלוואות: עמודת בירור קבועה בצד שמאל לכל
+          גובה המסך, וכל השאר בטור אחד לצידה.
+
+          ⚠️ הבירור היה טאב, ולכן כל בדיקה של פרט בתיק דרשה יציאה ממנו
+          וחזרה. הוא אינו "עוד מקטע" אלא ההקשר שבו קוראים את כל השאר:
+          מה נשאל, מה ענו, ומה עוד חסר.
+
+          ⚠️ sticky ולא רק grid: הטור הימני ארוך (משפחה, תינוק, כרטיס,
+          בית החלמה, מיילים), ובלי ההצמדה הבירור נעלם אחרי הגלילה
+          הראשונה.
+       ───────────────────────────────────────────────────────────────── */}
+      <div className="grid gap-5 lg:grid-cols-[1fr_minmax(320px,420px)] items-start">
+        <div className="flex flex-col gap-5 min-w-0">
       <Tabs tabs={[
-        // 🔴 בירור מול היולדת — שרשור שנשמר בתיק, כמו בהלוואות.
-        // עד כה המזכיר שלח מייל מהתיבה הרגילה והתשובה נעלמה מהתיק.
-        {
-          key: 'inquiry', label: 'בירור', accent: 'rose' as const,
-          icon: <MessageSquare size={15} />,
-          content: (
-            <MaternityInquiryPanel
-              aidId={aid.id}
-              motherName={[ben?.family_name, ben?.spouse_name || ben?.full_name].filter(Boolean).join(' ') || undefined}
-              hasEmail={!!ben?.email}
-            />
-          ),
-        },
         ...(ben ? [{
           key: 'family', label: 'משפחה', accent: 'indigo' as const, icon: <User size={15} />,
           content: (
@@ -840,6 +842,41 @@ export default async function MaternityDetailPage(
           content: <FeedbackTab aidId={aid.id} />,
         },
       ] as TabDef[]} />
+
+          {/* ── הכרעה על הלידה ──
+              🔴 בתחתית ולא בכותרת. ההחלטה מתקבלת *אחרי* קריאת החומר,
+              והמיקום כאן משקף את סדר העבודה בפועל — בדיוק כמו בכרטסת
+              ההלוואות.
+
+              ⚠️ בכותרת היא ישבה לצד "עריכה" ו"מחיקה" בסגנון שונה משלהם,
+              והציעה הכרעה עוד לפני שנקרא דבר. */}
+          <section className="border-t border-slate-200 pt-5">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <h2 className="text-sm font-bold text-slate-700">סטטוס הלידה</h2>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  אישור, דחייה או העברה לבדיקת מנהל
+                </p>
+              </div>
+              <StatusControl aid={aid} advance variant="header"
+                familyApproved={beneficiary?.eligibility_status === 'approved'} />
+            </div>
+          </section>
+        </div>
+
+        {/* ── טור שמאל: הבירור, צמוד לכל הגובה ── */}
+        <aside className="flex flex-col gap-2 lg:sticky lg:top-4">
+          <div className="flex items-center gap-2 text-rose-600">
+            <MessageSquare size={16} />
+            <h2 className="text-sm font-bold text-slate-700">בירור מול היולדת</h2>
+          </div>
+          <MaternityInquiryPanel
+            aidId={aid.id}
+            motherName={[ben?.family_name, ben?.spouse_name || ben?.full_name].filter(Boolean).join(' ') || undefined}
+            hasEmail={!!ben?.email}
+          />
+        </aside>
+      </div>
     </div>
   )
 }

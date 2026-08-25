@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Globe, Mail, FileImage, Check, X, Download, Loader2, Send, CheckCircle2, FileText, Clock } from 'lucide-react'
 import BatchPdfDialog from './BatchPdfDialog'
+import SendToDonorDialog from './SendToDonorDialog'
 import { wasSentToDonor, SENT_LABEL, type SentFilter } from '@/lib/gratitudeBatch'
 import SafeDocImage from '@/components/ui/SafeDocImage'
 import { openDocInNewTab } from '@/lib/docBlob'
@@ -25,10 +26,6 @@ export interface GratitudeRow {
     recovery_home?: string | null
     beneficiary?: { family_name?: string | null; spouse_name?: string | null; full_name?: string | null; email?: string | null } | null
   } | null
-}
-
-function motherEmailOf(row: GratitudeRow): string {
-  return (row.aid?.beneficiary?.email ?? '').trim()
 }
 
 const SOURCE_META = {
@@ -56,21 +53,21 @@ function fmtDate(iso: string): string {
 
 // ── הגדרת העמודות ──
 // ⚠️ עמודת הצ׳קבוקס (ראשונה) ועמודת "שלח" (אחרונה) אינן בבורר — ראו extraCols.
-type ColKey = 'date' | 'mother' | 'source' | 'body' | 'status' | 'sent'
+type ColKey = 'date' | 'mother' | 'source' | 'body' | 'sent'
 
 const COLUMNS: ColDef<ColKey>[] = [
   { key: 'date', label: 'תאריך', def: true },
   { key: 'mother', label: 'שם היולדת', def: true },
   { key: 'source', label: 'מקור', def: true },
   { key: 'body', label: 'הברכה', def: true },
-  { key: 'status', label: 'סטטוס', def: true },
   { key: 'sent', label: 'נשלח לנדיב', def: true },
 ]
 
 export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
   const [items, setItems] = useState(rows)
   const [open, setOpen] = useState<GratitudeRow | null>(null)
-  const [statusFilter, setStatusFilter] = useState<'all' | 'received' | 'approved' | 'rejected'>('all')
+  // 🔴 סינון הסטטוס בוטל. ברכה שהתקבלה היא ברכה, ואין מה לאשר בה —
+  // וכל 68 הברכות היו 'received', כך ש"מאושרות" תמיד הראה 0.
   // 🔴 סינון נפרד למצב המשלוח לנדיב. הוא *אינו* סטטוס: ברכה יכולה
   // להיות מאושרת ועדיין לא נשלחה — וזו בדיוק הרשימה שהמשלוח השבועי מחפש.
   const [sentFilter, setSentFilter] = useState<SentFilter>('all')
@@ -78,16 +75,19 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
   const [pdf, setPdf] = useState<string | null>(null)
   // בחירה לשליחה מרוכזת + חלונית שליחה (בודדת או מרוכזת)
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [sendModal, setSendModal] = useState<{ ids: string[]; email: string } | null>(null)
-  const [sending, setSending] = useState(false)
+  const [sendModal, setSendModal] = useState<{ ids: string[] } | null>(null)
   // חלונית הקובץ המרוכז — כל הברכות בטווח בקובץ אחד לנדיב
   const [batchOpen, setBatchOpen] = useState(false)
 
   const filtered = items.filter(r =>
-    (statusFilter === 'all' || r.status === statusFilter) &&
-    (sentFilter === 'all' || (sentFilter === 'sent') === wasSentToDonor(r)))
+    sentFilter === 'all' || (sentFilter === 'sent') === wasSentToDonor(r))
   // ניתן לשלוח רק מכתבים שאושרו
-  const selectableIds = filtered.filter(r => r.status === 'approved').map(r => r.id)
+  // 🔴 כל ברכה ניתנת לבחירה.
+  //
+  // ⚠️ קודם היה כאן filter(status === 'approved'), וכל 68 הברכות במערכת
+  // הן 'received' — כך שלא היה *מה* לסמן: כל הצ'קבוקסים היו מושבתים,
+  // ו"שליחה מרוכזת" נשאר אפור לנצח בלי שום הסבר.
+  const selectableIds = filtered.map(r => r.id)
 
   // 🔴 בחירה שנעלמה מהמסך אינה נשלחת.
   //
@@ -107,39 +107,8 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
     setSelected(prev => (prev.size === selectableIds.length ? new Set() : new Set(selectableIds)))
   }
 
-  // פותח את חלונית השליחה — לברכה בודדת או למרוכזת. ברירת מחדל לכתובת: מייל היולדת (בודדת).
-  function openSend(ids: string[]) {
-    const defaultEmail = ids.length === 1 ? motherEmailOf(items.find(r => r.id === ids[0]) ?? {} as GratitudeRow) : ''
-    setSendModal({ ids, email: defaultEmail })
-  }
-
-  async function confirmSend() {
-    if (!sendModal) return
-    const { ids, email } = sendModal
-    setSending(true)
-    try {
-      const isBulk = ids.length > 1
-      const url = isBulk ? '/api/admin/gratitude/send-bulk' : `/api/admin/gratitude/${ids[0]}/send`
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(isBulk ? { ids, email } : { email }),
-      })
-      const d = await res.json()
-      if (!res.ok) { alert(d.error || 'שליחה נכשלה'); return }
-      const sentAt = d.sentAt ?? new Date().toISOString()
-      // עדכון סטטוס מקומי לכל מה שנשלח בפועל (בבודדת — כולם; במרוכזת — לפי מה ששרת עדכן, אך
-      // כאן מסמנים את הנבחרים שהיו approved; שרת דילג על שנשלחו לאותה כתובת)
-      const sentIds = new Set(ids)
-      setItems(prev => prev.map(r => (sentIds.has(r.id) && r.status === 'approved'
-        ? { ...r, sent_to_donor_at: sentAt, sent_to_donor_email: email } : r)))
-      setSendModal(null)
-      setSelected(new Set())
-      if (isBulk) alert(`נשלחו ${d.sent}, דילוג ${d.skipped}${d.failed ? `, נכשלו ${d.failed}` : ''}`)
-    } finally {
-      setSending(false)
-    }
-  }
+  /** פותח את חלונית השליחה. הבחירה והכתובת נקבעות שם. */
+  function openSend(ids: string[]) { setSendModal({ ids }) }
 
   // extraCols: 2 — צ׳קבוקס (לפני) וכפתור השליחה (אחרי), שאינם בבורר.
   const tc = useTableColumns<ColKey>('maternity-gratitude', COLUMNS, { extraCols: 2 })
@@ -165,11 +134,6 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
         )
       }
       case 'body': return <span className="text-slate-600">{row.body?.slice(0, 80) || (row.scan_url ? '— שובר סרוק —' : '—')}</span>
-      case 'status': return (
-        <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_META[row.status].color}`}>
-          {STATUS_META[row.status].label}
-        </span>
-      )
       // ⚠️ "טרם נשלח" נאמר במפורש ולא בקו מקווקו: קו נראה כמו "אין
       // נתון", וזה בדיוק ההבדל שהמשתמש מחפש כשהוא בונה משלוח שבועי.
       case 'sent': return row.sent_to_donor_at ? (
@@ -181,23 +145,6 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
           <Clock size={11} /> טרם נשלח
         </span>
       )
-    }
-  }
-
-  async function decide(id: string, status: 'approved' | 'rejected') {
-    setBusy(true)
-    try {
-      const res = await fetch(`/api/admin/gratitude/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      })
-      if (res.ok) {
-        setItems(prev => prev.map(r => (r.id === id ? { ...r, status } : r)))
-        setOpen(prev => (prev && prev.id === id ? { ...prev, status } : prev))
-      }
-    } finally {
-      setBusy(false)
     }
   }
 
@@ -229,21 +176,6 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
     <>
       {/* סינון + שליחה מרוכזת */}
       <div className="flex gap-2 mb-4 flex-wrap items-center">
-        {(['all', 'received', 'approved', 'rejected'] as const).map(s => (
-          <button
-            key={s}
-            onClick={() => setStatusFilter(s)}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition ${
-              statusFilter === s
-                ? 'bg-slate-800 text-white'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            {s === 'all' ? `הכל (${items.length})` : `${STATUS_META[s].label} (${items.filter(r => r.status === s).length})`}
-          </button>
-        ))}
-        {/* מפריד דק בין סינון הסטטוס לסינון המשלוח — שני צירים שונים */}
-        <span className="mx-1 h-5 w-px bg-slate-200" />
         {(['all', 'unsent', 'sent'] as SentFilter[]).map(k => (
           <button
             key={k}
@@ -307,7 +239,6 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {filtered.map(row => {
-              const canSend = row.status === 'approved'
               return (
                 <tr
                   key={row.id}
@@ -319,16 +250,14 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
                       type="checkbox"
                       checked={selected.has(row.id)}
                       onChange={() => toggleSelect(row.id)}
-                      disabled={!canSend}
-                      title={canSend ? '' : 'ניתן לשלוח רק ברכה שאושרה'}
-                      className="accent-pink-600 cursor-pointer disabled:cursor-not-allowed disabled:opacity-30"
+                      className="accent-pink-600 cursor-pointer"
                     />
                   </td>
                   {tc.shown.map(c => (
                     <td key={c.key} className={`px-4 py-3 ${tc.cellClass(c)}`}>{cell(c.key, row)}</td>
                   ))}
                   <td className="px-4 py-3 align-top" onClick={e => e.stopPropagation()}>
-                    {canSend && (
+                    {(
                       <button
                         onClick={() => openSend([row.id])}
                         title="שליחת הברכה לנדיב במייל"
@@ -401,22 +330,6 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
               )}
 
               <div className="flex gap-2 flex-wrap">
-                <button
-                  onClick={() => decide(open.id, 'approved')}
-                  disabled={busy || open.status === 'approved'}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold
-                             hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
-                >
-                  <Check size={16} /> אישור
-                </button>
-                <button
-                  onClick={() => decide(open.id, 'rejected')}
-                  disabled={busy || open.status === 'rejected'}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-rose-200 text-rose-600 text-sm font-semibold
-                             hover:bg-rose-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
-                >
-                  <X size={16} /> דחייה
-                </button>
                 {!open.scan_url && (
                   <button
                     onClick={() => loadPdf(open)}
@@ -428,15 +341,15 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
                     הצגת השובר
                   </button>
                 )}
-                {open.status === 'approved' && (
-                  <button
-                    onClick={() => openSend([open.id])}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-pink-600 text-white text-sm font-semibold
-                               hover:bg-pink-700 transition"
-                  >
-                    <Send size={16} /> שלח לנדיב
-                  </button>
-                )}
+                {/* ⚠️ תמיד זמין: קודם הותנה ב-status==='approved' ולכן
+                    לא הופיע אף פעם. */}
+                <button
+                  onClick={() => openSend([open.id])}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-pink-600 text-white text-sm font-semibold
+                             hover:bg-pink-700 transition"
+                >
+                  <Send size={16} /> שלח לנדיב
+                </button>
               </div>
               {open.sent_to_donor_at && (
                 <p className="mt-3 text-xs text-emerald-600 flex items-center gap-1">
@@ -450,51 +363,22 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
       )}
 
       {/* חלונית שליחה לנדיב — בודדת או מרוכזת */}
+      {/* 🔴 חלונית השליחה: תצוגה מקדימה של המייל, בחירת תיבת שולח
+          ובחירת אילו ברכות. קודם היא הייתה שדה כתובת בלבד — המזכירה
+          לחצה "שלח" בלי לראות מה הנדיב מקבל ומאיזו תיבה זה יוצא. */}
       {sendModal && (
-        <div
-          className="fixed inset-0 bg-slate-900/40 z-[60] flex items-center justify-center p-4"
-          onClick={() => !sending && setSendModal(null)}
-        >
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-2 mb-1">
-              <Send size={18} className="text-pink-600" />
-              <h2 className="font-bold text-slate-800">
-                {sendModal.ids.length > 1 ? `שליחת ${sendModal.ids.length} ברכות לנדיב` : 'שליחת ברכה לנדיב'}
-              </h2>
-            </div>
-            <p className="text-xs text-slate-500 mb-4">
-              המכתב יישלח כקובץ PDF מעוצב, מאגף עזר ליולדות, לכתובת שתבחר.
-            </p>
-            <label className="block text-xs font-semibold text-slate-600 mb-1.5">כתובת המייל של הנדיב</label>
-            <input
-              type="email"
-              dir="ltr"
-              value={sendModal.email}
-              onChange={e => setSendModal(m => (m ? { ...m, email: e.target.value } : m))}
-              placeholder="donor@example.com"
-              className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm mb-5
-                         focus:outline-none focus:ring-2 focus:ring-pink-500/30 focus:border-pink-400"
-            />
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setSendModal(null)}
-                disabled={sending}
-                className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50 disabled:opacity-40"
-              >
-                ביטול
-              </button>
-              <button
-                onClick={confirmSend}
-                disabled={sending || !sendModal.email.trim()}
-                className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-pink-600 text-white text-sm font-semibold
-                           hover:bg-pink-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
-              >
-                {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                {sending ? 'שולח…' : 'שלח'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <SendToDonorDialog
+          rows={items}
+          preselected={sendModal.ids}
+          onClose={() => setSendModal(null)}
+          onSent={(ids, email) => {
+            const sentAt = new Date().toISOString()
+            const set = new Set(ids)
+            setItems(prev => prev.map(r =>
+              set.has(r.id) ? { ...r, sent_to_donor_at: sentAt, sent_to_donor_email: email } : r))
+            setSelected(new Set())
+          }}
+        />
       )}
       {/* ⚠️ מקבל את *כל* הפריטים ולא את filtered: הסינון בחלונית עצמאי,
           ומי שסינן את המסך ל"מאושרות" עדיין רשאי להפיק קובץ של הכול. */}

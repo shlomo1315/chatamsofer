@@ -42,24 +42,26 @@ export default function AdjacentNav({
     router.push(id ? `/admin/maternity/${id}?st=all` : '/admin/maternity')
   }
 
-  const btn = 'flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium transition-colors'
+  // ⚠️ text-sm ו-px-3 py-1.5 — בדיוק כשאר כפתורי הכותרת (HDR_BTN).
+  // קודם היה text-xs ו-px-2.5, והקבוצה נראתה נמוכה וקטנה משכניה.
+  const btn = 'flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors'
   const live = 'text-slate-600 hover:bg-indigo-50 hover:text-indigo-700'
   const dead = 'text-slate-300'
 
   return (
     <>
-      <div className="flex items-center rounded-lg border border-slate-200 overflow-hidden ml-1">
+      <div className="flex items-center rounded-lg border border-slate-300 bg-white overflow-hidden">
         <button type="button" onClick={() => go(prevId, 'prev')}
           disabled={!prevId && !locked}
           className={`${btn} border-l border-slate-200 ${prevId || locked ? live : dead}`}
           title={locked ? `ללידה הקודמת ב"${bucketLabel}"` : 'ללידה הקודמת'}>
-          <ChevronRight size={15} /> ללידה הקודמת
+          <ChevronRight size={14} /> ללידה הקודמת
         </button>
         <button type="button" onClick={() => go(nextId, 'next')}
           disabled={!nextId && !locked}
           className={`${btn} ${nextId || locked ? live : dead}`}
           title={locked ? `ללידה הבאה ב"${bucketLabel}"` : 'ללידה הבאה'}>
-          ללידה הבאה <ChevronLeft size={15} />
+          ללידה הבאה <ChevronLeft size={14} />
         </button>
       </div>
 

@@ -163,7 +163,15 @@ export async function deleteMaternityAid(supabase: ReturnType<typeof createClien
 type MotherRefLite = { id: string }
 
 // ── Clickable status control ────────────────────────────────────────────────────
-export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: boolean; familyApproved?: boolean }) {
+export function StatusControl({ aid, advance, variant = 'pill' }: {
+  aid: MaternityAid; advance?: boolean; familyApproved?: boolean
+  /**
+   * ⚠️ 'pill' לשורת טבלה — שם הצורה העגולה נכונה וקוראים אותה כתווית
+   * סטטוס. 'header' לכותרת כרטסת, שם הוא יושב לצד כפתורי פעולה וחייב
+   * את אותו גובה ורדיוס שלהם, אחרת השורה נראית שבורה.
+   */
+  variant?: 'pill' | 'header'
+}) {
   const router = useRouter()
   const supabase = createClient()
   const toast = useToast()
@@ -695,7 +703,9 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
             }
             setOpen(o => !o)
           }}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${pill.cls}`}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 border font-medium transition-colors ${
+            variant === 'header' ? 'rounded-lg text-sm' : 'rounded-full text-xs'
+          } ${pill.cls}`}
         >
           <Icon size={13} />
           {pill.label}
