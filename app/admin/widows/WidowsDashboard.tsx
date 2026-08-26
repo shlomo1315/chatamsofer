@@ -15,15 +15,30 @@ const fmtCur = (n: number) => `₪${Math.round(n).toLocaleString('he-IL')}`
 
 type ColKey = 'name' | 'id_number' | 'approval_label' | 'city' | 'children' | 'monthly' | 'total'
 
-const COLUMNS: ColDef<ColKey>[] = [
-  { key: 'name', label: 'שם המשפחה', def: true },
-  { key: 'id_number', label: 'ת.ז.', def: true },
+// ⚠️ headClassName נושא את הריפוד: <th> נבנה בתוך TableHeadMenu, וריפוד
+// שנכתב בצרכן לא היה מגיע אליו.
+const HEAD = 'px-4 py-3'
+
+// 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
+// React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
+// ⚠️ שם/ת.ז. — מיון בלבד (ערך ייחודי לכל שורה). עיר וסיבת אישור הן
+// קבוצות ערכים סגורות ← גם סינון.
+//
+// ⚠️ "סך תמיכות" מחושב מ-payments ולכן ה-value שלו נבנה בתוך הרכיב
+// (הוא תלוי ב-prop), ולא כאן. ראו COLUMNS_WITH_TOTALS למטה.
+const COLUMNS: ColDef<ColKey, Beneficiary>[] = [
+  { key: 'name', label: 'שם המשפחה', def: true, headClassName: HEAD, value: w => fullName(w) },
+  { key: 'id_number', label: 'ת.ז.', def: true, kind: 'number', headClassName: HEAD, value: w => w.id_number || null },
   // ⚠️ עמודה משלה בנוסף לתג שליד השם — ריקה אצל הרוב המוחלט, וזו הכוונה.
-  { key: 'approval_label', label: 'סיבת אישור', def: true },
-  { key: 'city', label: 'עיר', def: true },
-  { key: 'children', label: 'ילדים', def: true, align: 'center' },
-  { key: 'monthly', label: 'תמיכה חודשית', def: true },
-  { key: 'total', label: 'סך תמיכות', def: true },
+  { key: 'approval_label', label: 'סיבת אישור', def: true, kind: 'enum', filterable: true, headClassName: HEAD,
+    value: w => approvalLabelOf(w) || null },
+  { key: 'city', label: 'עיר', def: true, kind: 'enum', filterable: true, headClassName: HEAD, value: w => w.city || null },
+  { key: 'children', label: 'ילדים', def: true, align: 'center', kind: 'number', headClassName: HEAD,
+    value: w => w.children_count ?? 0 },
+  // ⚠️ null (ולא 0) כשאין תמיכה — אחרת "—" היה ממוין כאפס שקלים.
+  { key: 'monthly', label: 'תמיכה חודשית', def: true, kind: 'number', headClassName: HEAD,
+    value: w => w.monthly_support ? Number(w.monthly_support) : null },
+  { key: 'total', label: 'סך תמיכות', def: true, kind: 'number', headClassName: HEAD },
 ]
 
 export default function WidowsDashboard({
@@ -74,12 +89,30 @@ export default function WidowsDashboard({
   // הן חייבות להישאר סכום כללי ולא להשתנות עם הגלילה.
   // דפדוף אחיד: 50 בברירת מחדל, בורר עד 200. החיפוש רץ על כל הרשימה
   // ורק אז נחתך לעמוד — ראו lib/useTablePagination.
-  const pg = useTablePagination(visible)
-  const visibleRows = pg.rows
+  // 🔴 "סך תמיכות" נגזר מ-payments ולכן ה-value שלו נבנה כאן ולא בקבוע:
+  // בלעדיו המיון על העמודה הזאת היה עובד על אובייקט React.
+  const columns = useMemo(
+    () => COLUMNS.map(c => c.key === 'total'
+      ? { ...c, value: (w: Beneficiary) => totalsByFamily[w.id] ?? null }
+      : c),
+    [totalsByFamily],
+  )
 
   // ⚠️ extraCols=1 — עמודת החץ בקצה אינה בבורר אך נספרת לגרירה. היא האחרונה,
   // ולכן האינדקסים של העמודות שבבורר נשארים 0..n-1.
-  const tc = useTableColumns('widows', COLUMNS, { extraCols: 1 })
+  //
+  // 🔴 סדר השרשרת: visible (חיפוש ומיון המסך) → tc.rows (מיון וסינון
+  // מהכותרת) → pg.rows (חיתוך לעמוד). אילו ה-hook היה מקבל את pg.rows,
+  // הסינון מהכותרת היה חל על 50 השורות שכבר על המסך בלבד.
+  // ⚠️ mode:'client' — כל התיקים מגיעים כ-prop, אין דפדוף בשרת.
+  const tc = useTableColumns<ColKey, Beneficiary>('widows', columns, {
+    extraCols: 1,
+    sortFilter: { mode: 'client', rows: visible },
+  })
+
+  // ⚠️ החיתוך אחרון — אחרי המיון והסינון מהכותרת.
+  const pg = useTablePagination(tc.rows)
+  const visibleRows = pg.rows
 
   const cell = (c: ColDef<ColKey>, w: Beneficiary) => {
     switch (c.key) {
@@ -143,21 +176,22 @@ export default function WidowsDashboard({
             </div>
           </div>
         </div>
-        <div className="px-5 pt-3">{tc.picker}</div>
+        <div className="flex flex-col gap-2 px-5 pt-3">{tc.picker}{tc.activeFilters}</div>
         {/* ⚠️ בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. */}
         <div className="w-full px-1 pt-2">
           <table className="w-full text-sm text-right" style={tc.rt.tableStyle}>
             <colgroup>{tc.rt.cols}</colgroup>
             <thead className="bg-slate-50 text-xs text-slate-500 uppercase tracking-wide">
               <tr>
-                {tc.shown.map((c, i) => (
-                  <th key={c.key} className={`px-4 py-3 ${tc.headClass(c)}`}>{c.label}{tc.rt.handle(i)}</th>
-                ))}
+                {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב. */}
+                {tc.shown.map((c, i) => tc.th(c, i))}
                 <th className="px-4 py-3 w-10" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {visible.length === 0 && (
+              {/* 🔴 נמדד מול tc.rows — הסינון מהכותרת יכול לרוקן את הטבלה
+                  גם כשהחיפוש שמעליה החזיר שורות. */}
+              {tc.rows.length === 0 && (
                 <tr><td colSpan={tc.shown.length + 1} className="text-center py-10 text-slate-400">אין תיקים</td></tr>
               )}
               {visibleRows.map(w => (
