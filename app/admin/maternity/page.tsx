@@ -9,6 +9,7 @@ import { requireStaff } from '@/lib/apiAuth'
 import MaternityTable from './MaternityTable'
 import ExportExcelButton from '@/components/admin/ExportExcelButton'
 import { APPROVAL_LABEL_SELECT } from '@/lib/approvalLabel'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 
 async function getMaternityAids(): Promise<MaternityAid[]> {
   if (!isSupabaseConfigured()) return []
@@ -18,7 +19,11 @@ async function getMaternityAids(): Promise<MaternityAid[]> {
   // רק העמודות שהטבלה באמת מציגה — מקטין דרסטית את ה-payload בכל טעינה.
   // ⚠️ שתי גרסאות — עם תווית סיבת האישור ובלעדיה. ה-join אינו קיים עד
   // שהמיגרציה רצה, ומסך היולדות כולו זורק כאן על שגיאה.
-  const run = (benFields: string) => supabase
+  // 🔴 fetchAllRows ולא select רגיל: PostgREST קוטע כל שאילתה ב-1,000
+  // שורות **בשקט** — בלי שגיאה, ובלי ש-.limit() יעקוף. היום יש 243
+  // יולדות ולכן זה עדיין לא מזיק, אבל ברגע שיעברו את התקרה הרשימה
+  // תיחתך והמסך ייראה תקין לחלוטין. ראו lib/fetchAllRows.
+  const runPage = (benFields: string, from: number, to: number) => supabase
     .from('maternity_aids')
     // ⚠️ babies + baby_gender + baby_id_type: דרושים ל-syncBabyStatusInFamily
     // (maternityStatus.tsx) שרץ מכפתור אישור הלידה *ברשימה עצמה*. בלעדיהם
@@ -32,14 +37,21 @@ async function getMaternityAids(): Promise<MaternityAid[]> {
     // לידות שקטות מוצגות בלשונית נפרדת ("לידה שקטה") — מסננים ב-DB כדי לא למשוך שורות שנזרקות (כולל birth_type=NULL שנחשב "רגיל")
     .or('birth_type.is.null,birth_type.neq.silent')
     .order('created_at', { ascending: false })
+    .range(from, to)
+
+  // ⚠️ ה-cast דרך unknown: מחרוזת ה-select נבנית בזמן ריצה (שתי גרסאות,
+  // עם תווית סיבת האישור ובלעדיה), ו-Supabase אינה יכולה לגזור ממנה טיפוס.
+  const run = (benFields: string) =>
+    fetchAllRows<Record<string, unknown>>((from, to) =>
+      runPage(benFields, from, to) as unknown as PromiseLike<{ data: Record<string, unknown>[] | null; error: { message: string } | null }>)
 
   const BEN_BASE = 'id, full_name, family_name, phone, spouse_name, spouse_id_number, children, children_count, eligibility_status'
-  let { data, error } = await run(`${BEN_BASE}, ${APPROVAL_LABEL_SELECT}`)
+  let { rows: data, error } = await run(`${BEN_BASE}, ${APPROVAL_LABEL_SELECT}`)
   if (error) {
     console.error('[maternity] approval label join failed, retrying without it:', error)
-    ;({ data, error } = await run(BEN_BASE))
+    ;({ rows: data, error } = await run(BEN_BASE))
   }
-  if (error) throw error
+  if (error) throw new Error(error)
   // ⚡ select מצומצם לעמודות שהטבלה מציגה בלבד — לכן ה-cast דרך unknown:
   // שדות כבדים שאינם בשימוש בטבלה (card_balance, weekly_amount, total_weeks,
   // updated_at) הושמטו מהשליפה בכוונה כדי לצמצם את ה-payload.

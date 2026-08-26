@@ -371,6 +371,23 @@ export async function POST(request: NextRequest) {
     customEmails: customBoxEmails,
   })
 
+  // 🔴 תיעוד הניתוב — בלי זה אי אפשר לאבחן מענה מתיבה שגויה.
+  //
+  // Resend Inbound אינו שולח כותרות כלל (headers ריקות במסד, אומת
+  // 26.08), ולכן כל ההכרעה נשענת על received_for. כשתיבה מעבירה לתיבה
+  // אחרת — igud@ ל-office@ — Resend מוסר רק את היעד הסופי, ואין בנמצא
+  // שום ראיה לכתובת המקורית. המענה יוצא מהתיבה השנייה, וזה נראה כמו
+  // באג בקוד בזמן שזו הגדרת ההעברה בתיבה.
+  //
+  // ⚠️ השורה הזו היא מה שמאפשר להבדיל בין השניים בלוג.
+  console.log('[resend-inbound] ניתוב:', JSON.stringify({
+    received_for: receivedForRecipients,
+    envelope: envelopeRecipients,
+    hasHeaders: !!data.headers,
+    resolved: resolvedToEmail,
+    subject,
+  }))
+
   // 🔴 זיהוי הבקשה הסופי — לפי הנושא *או* לפי התיבה שאליה הגיעה.
   //
   // הגשה לתיבת אגף עם ת"ז בלבד בנושא היא בקשה תקפה: התיבה אומרת את הסוג.

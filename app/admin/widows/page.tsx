@@ -1,4 +1,5 @@
 import { guardPage } from '@/lib/pageGuard'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Beneficiary, WidowRequest, WidowSupportPayment } from '@/types'
 import PageHeader from '@/components/ui/PageHeader'
@@ -13,11 +14,17 @@ async function getData(): Promise<{ widows: Beneficiary[]; requests: WidowReques
   // את החתימה בבסיס64 (20-80KB), את children/lineage_chain, ואת עמודות
   // ה-portal_* הרגישות — פי כמה מונים יותר מהנדרש, כפול מספר השורות.
   const WIDOW_BASE = 'id, full_name, family_name, id_number, city, children_count, monthly_support, created_at'
-  const runWidows = (fields: string) => supabase
-    .from('beneficiaries')
-    .select(fields)
-    .in('marital_status', ['אלמן', 'אלמנה'])
-    .order('created_at', { ascending: false })
+  // 🔴 fetchAllRows ולא select רגיל: PostgREST קוטע ב-1,000 שורות
+  // **בשקט**, בלי שגיאה ובלי ש-.limit() יעקוף. היום יש 35 אלמנות ולכן
+  // אין נזק, אבל חיתוך שקט הוא בדיוק מה שכבר קרה כאן פעמיים.
+  // ⚠️ ה-cast: מחרוזת ה-select נבנית בזמן ריצה (עם/בלי תווית האישור).
+  const runWidows = (fields: string) => fetchAllRows<Record<string, unknown>>((from, to) =>
+    supabase
+      .from('beneficiaries')
+      .select(fields)
+      .in('marital_status', ['אלמן', 'אלמנה'])
+      .order('created_at', { ascending: false })
+      .range(from, to) as unknown as PromiseLike<{ data: Record<string, unknown>[] | null; error: { message: string } | null }>)
 
   const [widowsRes, requestsRes, paymentsRes] = await Promise.all([
     // ⚠️ תווית סיבת האישור בנפילה-לאחור: אם ה-join אינו קיים (המיגרציה טרם
@@ -45,7 +52,7 @@ async function getData(): Promise<{ widows: Beneficiary[]; requests: WidowReques
   let error: string | null = null
   if (widowsRes.error) {
     console.error('[widows] beneficiaries query failed:', JSON.stringify(widowsRes.error))
-    error = `שגיאה בטעינת תיקי המשפחות: ${widowsRes.error.message}`
+    error = `שגיאה בטעינת תיקי המשפחות: ${widowsRes.error}`
   }
   if (requestsRes.error && requestsRes.error.code !== '42P01') {
     console.error('[widows] widow_requests query failed:', JSON.stringify(requestsRes.error))
@@ -57,7 +64,7 @@ async function getData(): Promise<{ widows: Beneficiary[]; requests: WidowReques
   }
   // ⚡ ה-selects מצומצמים בכוונה (ראו למעלה) ולכן ה-casts דרך unknown
   return {
-    widows: (widowsRes.data ?? []) as unknown as Beneficiary[],
+    widows: (widowsRes.rows ?? []) as unknown as Beneficiary[],
     requests: (requestsRes.data ?? []) as unknown as WidowRequest[],
     payments: (paymentsRes.data ?? []) as unknown as WidowSupportPayment[],
     error,
