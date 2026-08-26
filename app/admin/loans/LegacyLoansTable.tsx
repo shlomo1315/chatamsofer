@@ -62,15 +62,22 @@ type Filter = 'all' | 'taken' | 'not_taken' | 'unlinkable' | 'linked' | 'unlinke
 // לכן extraCols: 1, והידית שלה מקבלת את האינדקס האחרון.
 type ColKey = 'file' | 'borrower' | 'id_number' | 'linked' | 'city' | 'approved' | 'taken' | 'installments'
 
-const COLUMNS: ColDef<ColKey>[] = [
-  { key: 'file', label: 'תיק', def: false },
-  { key: 'borrower', label: 'שם הלווה', def: true },
-  { key: 'id_number', label: 'ת.ז.', def: true },
-  { key: 'linked', label: 'כרטסת', def: true },
-  { key: 'city', label: 'עיר', def: true },
-  { key: 'approved', label: 'אושר', def: true },
-  { key: 'taken', label: 'נלקח בפועל', def: true },
-  { key: 'installments', label: 'תשלומים', def: false, align: 'center' },
+// 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
+// React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
+// ⚠️ שם/ת.ז./תיק — מיון בלבד (ערך ייחודי לכל שורה). עיר והשיוך לכרטסת
+// הם קבוצות ערכים סגורות ← גם סינון.
+const COLUMNS: ColDef<ColKey, LegacyRow>[] = [
+  { key: 'file', label: 'תיק', def: false, kind: 'number', value: r => r.file_number ?? null },
+  { key: 'borrower', label: 'שם הלווה', def: true, value: r => r.borrower_name ?? null },
+  { key: 'id_number', label: 'ת.ז.', def: true, kind: 'number', value: r => r.id_number ?? null },
+  // 🔴 "לא משויך" הוא בדיוק מה שמחפשים ברשימה הזו — ולכן סינון, לא רק מיון.
+  { key: 'linked', label: 'כרטסת', def: true, kind: 'enum', filterable: true,
+    value: r => r.beneficiary_id ? 'משויך' : 'לא משויך' },
+  { key: 'city', label: 'עיר', def: true, kind: 'enum', filterable: true, value: r => r.city || null },
+  // ⚠️ null (ולא 0) כשאין סכום — אחרת "—" היה ממוין כאפס דולר.
+  { key: 'approved', label: 'אושר', def: true, kind: 'number', value: r => r.approved_amount ?? null },
+  { key: 'taken', label: 'נלקח בפועל', def: true, kind: 'number', value: r => r.taken_amount ?? null },
+  { key: 'installments', label: 'תשלומים', def: false, align: 'center', kind: 'number', value: r => r.installments ?? null },
 ]
 
 export default function LegacyLoansTable({ rows }: { rows: LegacyRow[] }) {
@@ -126,11 +133,20 @@ export default function LegacyLoansTable({ rows }: { rows: LegacyRow[] }) {
   // בורר עמודות + גרירת רוחב — רכיב מערכתי משותף.
   // ⚠️ המזהה נשאר 'legacy-loans' כדי לא לאבד כיוונון רוחב קיים; ה-hook
   // מוסיף לו את מספר העמודות הנראות בעצמו.
-  const tc = useTableColumns('legacy-loans', COLUMNS, { extraCols: 1 })
+  //
+  // 🔴 סדר השרשרת: filtered (חיפוש וסינון המסך) → tc.rows (מיון וסינון
+  // מהכותרת) → pg.rows (חיתוך לעמוד). אילו ה-hook היה מקבל את pg.rows,
+  // הסינון מהכותרת היה חל על 50 השורות שכבר על המסך בלבד.
+  // ⚠️ mode:'client' — כל הרשומות מגיעות כ-prop, אין דפדוף בשרת.
+  const tc = useTableColumns<ColKey, LegacyRow>('legacy-loans', COLUMNS, {
+    extraCols: 1,
+    sortFilter: { mode: 'client', rows: filtered },
+  })
 
   // דפדוף אחיד: 50 בברירת מחדל, בורר עד 200. החיפוש רץ על כל הרשימה
   // ורק אז נחתך לעמוד — ראו lib/useTablePagination.
-  const pg = useTablePagination(filtered)
+  // ⚠️ החיתוך אחרון — אחרי המיון והסינון מהכותרת.
+  const pg = useTablePagination(tc.rows)
   const visible = pg.rows
 
   // ── תוכן התא לפי עמודה ──
@@ -287,7 +303,7 @@ export default function LegacyLoansTable({ rows }: { rows: LegacyRow[] }) {
 
       {/* ── הטבלה ── */}
       <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-200">{tc.picker}</div>
+        <div className="flex flex-col gap-2 px-4 py-3 border-b border-slate-200">{tc.picker}{tc.activeFilters}</div>
 
         {/* 🔴 בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. */}
         <div className="w-full">
@@ -297,15 +313,17 @@ export default function LegacyLoansTable({ rows }: { rows: LegacyRow[] }) {
               <tr className="bg-gradient-to-b from-slate-50 to-slate-100/60 border-b border-slate-200
                              [&>th]:px-3 [&>th]:py-3 [&>th]:text-[11px] [&>th]:font-bold [&>th]:uppercase
                              [&>th]:tracking-wide [&>th]:text-slate-500 [&>th]:text-right">
-                {tc.shown.map((c, i) => (
-                  <th key={c.key} className={tc.headClass(c)}>{c.label}{tc.rt.handle(i)}</th>
-                ))}
+                {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב.
+                    ⚠️ הריפוד מגיע מ-[&>th] שעל ה-<tr>. */}
+                {tc.shown.map((c, i) => tc.th(c, i))}
                 {/* ⚠️ עמודת הפעולות אחרונה — האינדקס שלה הוא מספר העמודות הנראות. */}
                 <th className="relative">{tc.rt.handle(tc.shown.length)}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.length === 0 ? (
+              {/* 🔴 נמדד מול tc.rows — הסינון מהכותרת יכול לרוקן את הטבלה
+                  גם כשהחיפוש שמעליה החזיר שורות. */}
+              {tc.rows.length === 0 ? (
                 <tr><td colSpan={20} className="px-4 py-12 text-center text-slate-400">לא נמצאו רשומות</td></tr>
               ) : visible.map(r => (
                 <tr key={r.id} className="even:bg-slate-50/50 hover:bg-indigo-50/40 transition-colors

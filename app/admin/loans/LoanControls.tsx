@@ -10,7 +10,11 @@ import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useCan } from '@/components/StaffPermissions'
 
 // סטטוס זכאות להלוואה: ממתין / זכאי (מאושר) / לא זכאי (לא מאושר)
-const PILL: Record<string, { label: string; cls: string; icon: typeof Clock }> = {
+//
+// ⚠️ מיוצא כדי שהסינון בכותרת הטבלה יציג בדיוק את התוויות שהמשתמש
+// רואה בשורות. שכפול הרשימה שם היה מתפצל ביום שתווית משתנה — ובפרט
+// approved/active/completed שכולם "מאושר" אחד.
+export const PILL: Record<string, { label: string; cls: string; icon: typeof Clock }> = {
   pending:   { label: 'ממתין לאישור', cls: 'bg-amber-100 text-amber-800 hover:bg-amber-200 border-amber-200', icon: Clock },
   inquiry:   { label: 'בתהליך בירור', cls: 'bg-sky-100 text-sky-800 hover:bg-sky-200 border-sky-200', icon: MessageSquare },
   approved:  { label: 'מאושר',        cls: 'bg-green-100 text-green-800 hover:bg-green-200 border-green-200', icon: Check },

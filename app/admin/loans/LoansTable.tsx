@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Clock, Check, X, Eye, Search, Layers, CheckCircle2, Minus, MessageSquare } from 'lucide-react'
-import { LoanStatusControl, DeleteLoanButton } from './LoanControls'
+import { LoanStatusControl, DeleteLoanButton, PILL } from './LoanControls'
 import type { Loan } from '@/types'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
@@ -60,19 +60,34 @@ type ColKey =
   | 'borrower' | 'id_number' | 'approval_label' | 'amount' | 'approved_amount'
   | 'installments' | 'purpose' | 'created_at' | 'disbursed' | 'status'
 
-const COLUMNS: ColDef<ColKey>[] = [
-  { key: 'borrower', label: 'שם הלווה', def: true },
-  { key: 'id_number', label: 'ת.ז.', def: true },
+// 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
+// React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
+// ⚠️ שם/ת.ז./מטרה — מיון בלבד (ערך ייחודי לכל שורה). סיבת אישור, ביצוע
+// וסטטוס הם קבוצות ערכים סגורות ← גם סינון.
+const COLUMNS: ColDef<ColKey, Loan>[] = [
+  { key: 'borrower', label: 'שם הלווה', def: true,
+    value: l => borrowerName(l.beneficiary as BenRef | undefined) },
+  { key: 'id_number', label: 'ת.ז.', def: true, kind: 'number',
+    value: l => (l.beneficiary as BenRef | undefined)?.id_number ?? null },
   // ⚠️ עמודה משלה ולא רק תג ליד השם: כך אפשר למיין/לסרוק את הרשימה לפי
   // סיבת האישור. ריקה אצל הרוב המוחלט — זו בדיוק הכוונה.
-  { key: 'approval_label', label: 'סיבת אישור', def: true },
-  { key: 'amount', label: 'סכום מבוקש', def: true },
-  { key: 'approved_amount', label: 'סכום מאושר', def: true },
-  { key: 'installments', label: 'תשלומים', def: false, align: 'center' },
-  { key: 'purpose', label: 'מטרה', def: false },
-  { key: 'created_at', label: 'תאריך הגשה', def: true },
-  { key: 'disbursed', label: 'ביצוע', def: true },
-  { key: 'status', label: 'סטטוס', def: true },
+  { key: 'approval_label', label: 'סיבת אישור', def: true, kind: 'enum', filterable: true,
+    value: l => approvalLabelOf(l.beneficiary as BenRef | undefined) || null },
+  { key: 'amount', label: 'סכום מבוקש', def: true, kind: 'number', value: l => l.amount },
+  // ⚠️ null (ולא 0) כשטרם אושר סכום — אחרת "טרם" היה ממוין כאפס שקלים.
+  { key: 'approved_amount', label: 'סכום מאושר', def: true, kind: 'number', value: l => l.approved_amount ?? null },
+  { key: 'installments', label: 'תשלומים', def: false, align: 'center', kind: 'number', value: l => l.installments },
+  { key: 'purpose', label: 'מטרה', def: false, value: l => l.purpose ?? null },
+  // ⚠️ ממוין לפי התאריך הגולמי ולא לפי התווית: תאריך מפורמט ממוין
+  // אלפביתית ולא כרונולוגית.
+  { key: 'created_at', label: 'תאריך הגשה', def: true, kind: 'date', value: l => l.created_at },
+  { key: 'disbursed', label: 'ביצוע', def: true, kind: 'enum', filterable: true,
+    value: l => l.disbursed_at ? 'בוצע' : 'טרם בוצע' },
+  { key: 'status', label: 'סטטוס', def: true, kind: 'enum', filterable: true,
+    // 🔴 התווית מ-PILL ולא ה-status הגולמי: approved/active/completed הם
+    // שלושה קודים ותווית אחת ("מאושר"). סינון לפי הקוד היה מפצל את
+    // "מאושר" לשלוש שורות בתפריט — ראו lib/loansListFilter.
+    value: l => PILL[l.status]?.label ?? null },
 ]
 
 const haystack = (l: Loan) => {
@@ -159,11 +174,20 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
   // בורר עמודות + גרירת רוחב — רכיב מערכתי משותף.
   // ⚠️ המזהה נשאר 'loans' כדי לא לאבד כיוונון רוחב קיים; ה-hook מוסיף לו
   // את מספר העמודות הנראות בעצמו.
-  const tc = useTableColumns('loans', COLUMNS, { extraCols: 1 })
+  //
+  // 🔴 סדר השרשרת: visible (חיפוש וסינון המסך) → tc.rows (מיון וסינון
+  // מהכותרת) → pg.rows (חיתוך לעמוד). אילו ה-hook היה מקבל את pg.rows,
+  // הסינון מהכותרת היה חל על 50 השורות שכבר על המסך בלבד.
+  // ⚠️ mode:'client' — כל ההלוואות מגיעות כ-prop, אין דפדוף בשרת.
+  const tc = useTableColumns<ColKey, Loan>('loans', COLUMNS, {
+    extraCols: 1,
+    sortFilter: { mode: 'client', rows: visible },
+  })
 
   // דפדוף אחיד: 50 בברירת מחדל, בורר עד 200. החיפוש רץ על כל הרשימה
   // (visible כבר מסונן) ורק אז נחתך לעמוד — ראו lib/useTablePagination.
-  const pg = useTablePagination(visible)
+  // ⚠️ החיתוך אחרון — אחרי המיון והסינון מהכותרת.
+  const pg = useTablePagination(tc.rows)
   const visibleRows = pg.rows
 
   // ── תוכן התא לפי עמודה ──
@@ -311,7 +335,7 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
           </div>
         </div>
         {/* ── בורר העמודות ── */}
-        <div className="px-5 py-3 border-b border-slate-200">{tc.picker}</div>
+        <div className="flex flex-col gap-2 px-5 py-3 border-b border-slate-200">{tc.picker}{tc.activeFilters}</div>
 
         {/* ⚠️ בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. */}
         <div className="w-full">
@@ -321,16 +345,18 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
               <tr className="bg-gradient-to-b from-slate-50 to-slate-100/60 border-b border-slate-200
                              [&>th]:px-4 [&>th]:py-3.5 [&>th]:text-[11px] [&>th]:font-bold [&>th]:uppercase
                              [&>th]:tracking-wide [&>th]:text-slate-500 [&>th]:align-middle [&>th]:text-right">
-                {tc.shown.map((c, i) => (
-                  <th key={c.key} className={tc.headClass(c)}>{c.label}{tc.rt.handle(i)}</th>
-                ))}
+                {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב.
+                    ⚠️ הריפוד מגיע מ-[&>th] שעל ה-<tr>. */}
+                {tc.shown.map((c, i) => tc.th(c, i))}
                 {/* ⚠️ הידית של "פעולות" היא האחרונה — האינדקס כולל את כל
                     העמודות הנראות שלפניה. */}
                 <th className="relative">פעולות{tc.rt.handle(tc.shown.length)}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {visible.length === 0 ? (
+              {/* 🔴 נמדד מול tc.rows — הסינון מהכותרת יכול לרוקן את הטבלה
+                  גם כשהחיפוש שמעליה החזיר שורות. */}
+              {tc.rows.length === 0 ? (
                 <tr><td colSpan={20} className="px-4 py-12 text-center text-slate-400">לא נמצאו הלוואות בסינון זה</td></tr>
               ) : visibleRows.map(loan => (
                 <tr key={loan.id}
