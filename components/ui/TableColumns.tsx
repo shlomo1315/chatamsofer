@@ -71,8 +71,24 @@ export interface ColDef<K extends string = string, R = never> {
    * ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
    */
   value?: (row: R) => unknown
+  /**
+   * משקל יחסי לרוחב העמודה, לפני שהמשתמש גורר. ברירת מחדל 1.
+   *
+   * 🔴 בלעדיו table-layout:fixed מחלק שווה בשווה: "שם מלא" מקבל
+   * בדיוק כמו "ילדים", השם מתכווץ לשתי שורות והעמודות נדחסות.
+   * ⚠️ יחסי ולא פיקסלים — סכום פיקסלים גדול מהמסך מחזיר את הבעיה.
+   */
+  weight?: number
   /** מחלקות נוספות ל-<th> (ריפוד, רקע) — מגיעות מהצרכן דרך tc.th. */
   headClassName?: string
+  /**
+   * תרגום הערך הגולמי לתצוגה ברשימת הסינון.
+   *
+   * 🔴 בלי זה התפריט מציג את מה שכתוב במסד: "pending", "deep_review",
+   * "nedarim". המזכירה רואה אנגלית בממשק עברי ואינה יודעת מה לסמן.
+   * ⚠️ הסינון עצמו ממשיך לעבוד על הערך הגולמי — רק התצוגה משתנה.
+   */
+  formatValue?: (raw: string) => string
 }
 
 /** מצב המיון: איזו עמודה ובאיזה כיוון. */
@@ -192,9 +208,17 @@ export function useTableColumns<K extends string, R = never>(
   )
 
   // 🔴 המזהה כולל את מספר העמודות הנראות — ראו ההערה בראש הקובץ.
+  // ⚠️ משקלי העמודות המוצגות + משקל לכל עמודה נוספת (פעולות/צ׳קבוקס).
+  // עמודת הפעולות צרה יחסית ולכן 0.8 ולא 1.
+  const weights = useMemo(
+    () => [...shown.map(c => c.weight ?? 1), ...Array(extraCols).fill(0.8)],
+    [shown, extraCols],
+  )
+
   const rt = useResizableColumns(
     `${tableId}-${shown.length}${idSuffix}`,
     shown.length + extraCols,
+    weights,
   )
 
   const toggle = useCallback((k: K) => {
@@ -295,6 +319,7 @@ export function useTableColumns<K extends string, R = never>(
         sortDir={sort.key === c.key ? sort.dir : null}
         onSort={dir => setSort({ key: c.key, dir })}
         options={optionsByCol[c.key] ?? []}
+        formatValue={c.formatValue}
         selected={sel}
         onSelect={next => {
           const f = { ...filters }
@@ -311,7 +336,7 @@ export function useTableColumns<K extends string, R = never>(
   const activeFilters = useMemo(() => {
     const items = available
       .filter(c => (filters[c.key]?.length ?? 0) > 0)
-      .map(c => ({ key: c.key, label: c.label, values: filters[c.key] }))
+      .map(c => ({ key: c.key, label: c.label, values: filters[c.key], format: c.formatValue }))
     return (
       <ActiveFilters
         items={items}

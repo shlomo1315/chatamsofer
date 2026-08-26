@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo, useRef, useEffect, type ReactNode } from 'react'
+import { useState, useMemo, useCallback, useRef, useEffect, type ReactNode } from 'react'
 import { ArrowUp, ArrowDown, Check, Search, X, ListFilter } from 'lucide-react'
 import { BLANK, type ColKind, type SortDir, type DistinctValue } from '@/lib/tableSort'
 
@@ -38,6 +38,8 @@ export interface HeadMenuProps {
   options: DistinctValue[]
   selected: ReadonlySet<string>
   onSelect: (next: Set<string>) => void
+  /** תרגום הערך הגולמי לתצוגה. ⚠️ הסינון עובד על הגולמי. */
+  formatValue?: (raw: string) => string
   /** ידית גרירת הרוחב של ResizableTable. */
   handle?: ReactNode
   className?: string
@@ -45,7 +47,7 @@ export interface HeadMenuProps {
 
 export default function TableHeadMenu({
   label, kind, sortable, filterable, sortDir, onSort,
-  options, selected, onSelect, handle, className = '',
+  options, selected, onSelect, formatValue, handle, className = '',
 }: HeadMenuProps) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
@@ -67,11 +69,15 @@ export default function TableHeadMenu({
     }
   }, [open])
 
+  // ⚠️ החיפוש רץ על *התווית המוצגת*: המשתמש מקליד "ממתין", לא "pending".
+  const labelOf = useCallback((v: string) =>
+    v === BLANK ? '' : (formatValue ? formatValue(v) : v), [formatValue])
+
   const shownOptions = useMemo(() => {
     const term = q.trim()
     if (!term) return options
-    return options.filter(o => o.value !== BLANK && o.value.includes(term))
-  }, [options, q])
+    return options.filter(o => o.value !== BLANK && labelOf(o.value).includes(term))
+  }, [options, q, labelOf])
 
   const canFilter = filterable && options.length > 0
   const isFiltered = selected.size > 0
@@ -144,7 +150,7 @@ export default function TableHeadMenu({
                         {on && <Check size={10} className="text-white" strokeWidth={3} />}
                       </span>
                       <span className="flex-1 truncate text-right">
-                        {o.value === BLANK ? <span className="text-slate-400">(ריק)</span> : o.value}
+                        {o.value === BLANK ? <span className="text-slate-400">(ריק)</span> : labelOf(o.value)}
                       </span>
                       {/* 🔴 המונה אינו קישוט: המשתמש רואה כמה שורות
                           יסתתרו לפני שהוא מסנן. */}
@@ -184,7 +190,7 @@ export default function TableHeadMenu({
 // 7,066 ואינו יודע למה. השורה הזו אומרת מה פעיל ומאפשרת לנקות בלחיצה.
 // ─────────────────────────────────────────────────────────────────────────────
 export function ActiveFilters({ items, onClear, onClearAll }: {
-  items: { key: string; label: string; values: string[] }[]
+  items: { key: string; label: string; values: string[]; format?: (v: string) => string }[]
   onClear: (key: string) => void
   onClearAll: () => void
 }) {
@@ -199,7 +205,7 @@ export function ActiveFilters({ items, onClear, onClearAll }: {
           <span className="font-medium">{it.label}:</span>
           <span className="max-w-40 truncate">
             {it.values.length <= 2
-              ? it.values.map(v => v === BLANK ? '(ריק)' : v).join(', ')
+              ? it.values.map(v => v === BLANK ? '(ריק)' : (it.format ? it.format(v) : v)).join(', ')
               : `${it.values.length} ערכים`}
           </span>
           <X size={10} />

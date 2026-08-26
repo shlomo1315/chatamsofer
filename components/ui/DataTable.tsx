@@ -21,6 +21,10 @@ export interface Column<T> {
   filterable?: boolean
   /** 🔴 חובה בעמודה שמרנדרת JSX — אחרת המיון עובד על אובייקט React. */
   value?: (row: T) => unknown
+  /** תרגום הערך לתצוגה ברשימת הסינון (קוד מסד → עברית). */
+  formatValue?: (raw: string) => string
+  /** משקל יחסי לרוחב העמודה (ברירת מחדל 1). ראו ColDef.weight. */
+  weight?: number
 }
 
 interface DataTableProps<T> {
@@ -96,6 +100,8 @@ export default function DataTable<T extends { id: string }>({
       sortable: c.sortable !== false,
       filterable: c.filterable,
       value: c.value,
+      formatValue: c.formatValue,
+      weight: c.weight,
       // ⚠️ הריפוד והרקע של הכותרת מגיעים מכאן: tc.th מרנדר את ה-<th>
       // בעצמו, ובלי זה הכותרות היו מאבדות את עיצוב הטבלה.
       headClassName: `bg-slate-50 px-3 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 ${c.className ?? ''}`,

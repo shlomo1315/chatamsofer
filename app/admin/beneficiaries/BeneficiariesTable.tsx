@@ -64,6 +64,7 @@ const MARITAL_TINT: Record<string, string> = {
 const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[] => [
   {
     key: 'full_name',
+    weight: 2,
     kind: 'text',
     value: (row) => fullName(row),
     header: 'שם מלא',
@@ -89,6 +90,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   },
   {
     key: 'id_number',
+    weight: 1.15,
     kind: 'number',
     value: (row) => row.id_number ?? null,
     header: 'מספר ת.ז.',
@@ -102,6 +104,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   },
   {
     key: 'spouse_name',
+    weight: 1.35,
     kind: 'text',
     value: (row) => row.spouse_name ?? null,
     header: 'בן/בת זוג',
@@ -120,6 +123,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   },
   {
     key: 'phone',
+    weight: 1.2,
     kind: 'text',
     value: (row) => row.phone ?? null,
     header: 'טלפון',
@@ -136,6 +140,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   },
   {
     key: 'email',
+    weight: 1.9,
     kind: 'text',
     value: (row) => row.email ?? null,
     header: 'מייל',
@@ -158,6 +163,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   },
   {
     key: 'city',
+    weight: 1,
     kind: 'text',
     filterable: true,
     value: (row) => row.city ?? null,
@@ -175,6 +181,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   },
   {
     key: 'marital_status',
+    weight: 1.05,
     kind: 'enum',
     filterable: true,
     value: (row) => row.marital_status ?? null,
@@ -192,20 +199,8 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
       ),
   },
   {
-    key: 'approval_label',
-    sortable: false,
-    header: 'סיבת אישור',
-    // ⚠️ מסביר למה אדם שאינו צאצא רשאי להגיש בקשות. רוב הרשומות הן
-    // צאצאים רגילים בלי תווית, ולכן התא ריק ברובן ואינו תופס מקום.
-    render: (row) => {
-      const label = approvalLabelOf(row)
-      return label
-        ? <ApprovalLabelTag label={label} size="xs" />
-        : <span className="text-slate-300">—</span>
-    },
-  },
-  {
     key: 'children_count',
+    weight: 0.5,
     kind: 'number',
     value: (row) => row.children_count ?? 0,
     header: 'ילדים',
@@ -219,18 +214,24 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   },
   {
     key: 'eligibility_status',
+    weight: 1.5,
     kind: 'enum',
     filterable: true,
     value: (row) => row.eligibility_status ?? null,
+    // ⚠️ במסד שמורים קודים ("pending", "deep_review"). בלי התרגום
+    // התפריט מציג אנגלית בממשק עברי.
+    formatValue: (v) => ELIGIBILITY_LABELS[v as keyof typeof ELIGIBILITY_LABELS] ?? v,
     header: 'סטטוס',
     sortable: true,
     render: (row) => <StatusChip status={row.eligibility_status} />,
   },
   {
     key: 'registration_source',
+    weight: 1.15,
     kind: 'enum',
     filterable: true,
     value: (row) => row.registration_source ?? null,
+    formatValue: (v) => registrationSourceLabel(v),
     header: 'אופן הרישום',
     sortable: true,
     // ⚠️ צבע לפי הערוץ — כדי שאפשר יהיה לסרוק את העמודה במבט: נדרים=סגול,

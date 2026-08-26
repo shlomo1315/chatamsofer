@@ -56,6 +56,18 @@ export function useResizableColumns(
   tableId: string,
   /** מספר העמודות. ⚠️ משתנה כשמסתירים עמודות — ראה ההערה למטה. */
   count: number,
+  /**
+   * משקל יחסי לכל עמודה, לפני שהמשתמש גורר.
+   *
+   * 🔴 בלי זה table-layout:fixed מחלק את הרוחב **שווה בשווה**: "שם מלא"
+   * מקבל בדיוק כמו "ילדים", השם מתכווץ לשתי שורות והעמודות האחרונות
+   * נדחסות. זה מה שקרה כשהוסרו ה-min-w הקשיחים.
+   *
+   * ⚠️ אחוזים ולא פיקסלים: סכום פיקסלים גדול מהמסך מחזיר בדיוק את
+   * הבעיה שבגללה הוסרו ה-min-w — הדפדפן מתעלם מהרוחב והעמודות זזות.
+   * אחוזים תמיד מסתכמים ל-100% ולכן אין גלילה לרוחב.
+   */
+  weights?: readonly number[],
 ): ResizableColumns {
   const [widths, setWidths] = useState<Record<number, number>>({})
   const [loaded, setLoaded] = useState(false)
@@ -114,9 +126,21 @@ export function useResizableColumns(
     })
   }, [persist])
 
-  const cols = Array.from({ length: count }, (_, i) => (
-    <col key={i} style={widths[i] ? { width: `${widths[i]}px` } : undefined} />
-  ))
+  // ⚠️ המשקלים מנורמלים לאחוזים לפי העמודות המוצגות *בפועל*: כשמסתירים
+  // עמודה, הרוחב שלה מתחלק בין הנותרות ולא נשאר חור.
+  const totalWeight = weights?.length
+    ? weights.slice(0, count).reduce((a, b) => a + (b || 1), 0)
+    : 0
+
+  const cols = Array.from({ length: count }, (_, i) => {
+    // רוחב שהמשתמש גרר גובר תמיד על ברירת המחדל.
+    if (widths[i]) return <col key={i} style={{ width: `${widths[i]}px` }} />
+    if (totalWeight > 0) {
+      const w = (weights![i] || 1) / totalWeight * 100
+      return <col key={i} style={{ width: `${w.toFixed(3)}%` }} />
+    }
+    return <col key={i} />
+  })
 
   const handle = (index: number) => (
     // ⚠️ הידית על *הגבול* של התא (השמאלי ב-RTL), ברוחב 7px — מספיק כדי
