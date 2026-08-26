@@ -72,18 +72,29 @@ type ColKey = 'state' | 'home' | 'name' | 'idNumber' | 'phone' | 'city' | 'birth
 
 // ⚠️ "טלפון" נוסף כעמודה בבורר: הוא כבר היה בחיפוש ובייצוא לאקסל, אבל
 // לא הוצג בטבלה — מי שסינן לפי טלפון לא ראה אותו על המסך.
-const COLUMNS: ColDef<ColKey>[] = [
-  { key: 'state', label: 'מצב', def: true },
-  { key: 'home', label: 'בית החלמה', def: true },
-  { key: 'name', label: 'שם המשפחה', def: true },
-  { key: 'idNumber', label: 'ת״ז', def: true },
-  { key: 'phone', label: 'טלפון', def: false },
-  { key: 'city', label: 'עיר', def: true },
-  { key: 'birth', label: 'לידה', def: true },
-  { key: 'arrived', label: 'הגעה', def: true },
-  { key: 'nights', label: 'לילות', def: true, align: 'center' },
-  { key: 'amount', label: 'סכום', def: true },
-  { key: 'receipts', label: 'קבלות', def: true, align: 'center' },
+// 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
+// React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
+// ⚠️ שם/ת״ז/טלפון — מיון בלבד (ערך ייחודי לכל שורה). מצב, בית החלמה
+// ועיר הם קבוצות ערכים סגורות ← גם סינון.
+const COLUMNS: ColDef<ColKey, Row>[] = [
+  { key: 'state', label: 'מצב', def: true, kind: 'enum', filterable: true,
+    // ⚠️ הערך הוא התווית המוצגת ולא הקוד ('realized-charged' וכו').
+    value: r => r.stateLabel },
+  { key: 'home', label: 'בית החלמה', def: true, kind: 'enum', filterable: true, value: r => r.recovery_home ?? null },
+  { key: 'name', label: 'שם המשפחה', def: true, value: r => r.name },
+  { key: 'idNumber', label: 'ת״ז', def: true, kind: 'number', value: r => r.id_number ?? null },
+  { key: 'phone', label: 'טלפון', def: false, value: r => r.phone ?? null },
+  { key: 'city', label: 'עיר', def: true, kind: 'enum', filterable: true, value: r => r.city ?? null },
+  // ⚠️ ממוין לפי התאריך הגולמי ולא לפי התווית: תאריך מפורמט ממוין
+  // אלפביתית ולא כרונולוגית.
+  { key: 'birth', label: 'לידה', def: true, kind: 'date', value: r => r.birth_date ?? null },
+  // ⚠️ null כשלא הגיעה — כך "טרם" יורד לסוף המיון בשני הכיוונים.
+  { key: 'arrived', label: 'הגעה', def: true, kind: 'date', value: r => r.arrived ? r.arrived_at : null },
+  { key: 'nights', label: 'לילות', def: true, align: 'center', kind: 'number', value: r => r.nights ?? null },
+  // ⚠️ null (ולא 0) כשאין סכום — אחרת "—" היה ממוין כאפס שקלים.
+  { key: 'amount', label: 'סכום', def: true, kind: 'number', value: r => r.amount || null },
+  { key: 'receipts', label: 'קבלות', def: true, align: 'center', kind: 'number',
+    value: r => r.receiptCount || null },
 ]
 
 export default function RecoveryReportPage() {
@@ -129,7 +140,12 @@ export default function RecoveryReportPage() {
     })
   }, [rows, homeFilter, stateFilter, q])
 
-  const tc = useTableColumns<ColKey>('maternity-recovery-report', COLUMNS)
+  // 🔴 ה-hook מקבל את filtered (אחרי בוררי בית ההחלמה/המצב והחיפוש)
+  // ולא את rows: הסינון בכותרת חל *על* מה שהבוררים סיננו, לא במקומם.
+  // ⚠️ mode:'client' — כל הדוח נטען בבת אחת, אין דפדוף בשרת.
+  const tc = useTableColumns<ColKey, Row>('maternity-recovery-report', COLUMNS, {
+    sortFilter: { mode: 'client', rows: filtered },
+  })
 
   // תוכן התא לפי מפתח העמודה
   const cell = (key: ColKey, r: Row) => {
@@ -324,18 +340,20 @@ export default function RecoveryReportPage() {
         ) : (
           /* ⚠️ בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. */
           <div className="w-full">
-            <div className="px-5 py-3 border-b border-slate-100">{tc.picker}</div>
+            <div className="flex flex-col gap-2 px-5 py-3 border-b border-slate-100">{tc.picker}{tc.activeFilters}</div>
             <table className="w-full text-[12px] border-collapse" style={tc.rt.tableStyle}>
               <colgroup>{tc.rt.cols}</colgroup>
               <thead className="bg-slate-50 text-slate-500">
                 <tr className="[&>th]:px-3 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right">
-                  {tc.shown.map((c, i) => (
-                    <th key={c.key} className={tc.headClass(c)}>{c.label}{tc.rt.handle(i)}</th>
-                  ))}
+                  {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב.
+                      ⚠️ הריפוד מגיע מ-[&>th] שעל ה-<tr>. */}
+                  {tc.shown.map((c, i) => tc.th(c, i))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {filtered.map(r => (
+                {/* 🔴 tc.rows ולא filtered — אחרת המיון והסינון בכותרת לא
+                    היו משפיעים על מה שמוצג בפועל. */}
+                {tc.rows.map(r => (
                   <tr key={r.id} className="hover:bg-slate-50 [&>td]:px-3 [&>td]:py-2.5">
                     {tc.shown.map(c => (
                       <td key={c.key} className={tc.cellClass(c)}>{cell(c.key, r)}</td>

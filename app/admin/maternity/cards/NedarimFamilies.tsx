@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import {
   Loader2, RefreshCw, Search, X, CreditCard, Plus, Trash2, Wallet,
   Pencil, Check, AlertTriangle, Coins, Users, Receipt, TrendingDown, ArrowDownCircle,
@@ -88,17 +88,30 @@ type FamColKey =
   | 'name' | 'clientId' | 'zeout' | 'card' | 'birth'
   | 'center' | 'phone' | 'groupe' | 'balance' | 'unload'
 
-const FAMILY_COLUMNS: ColDef<FamColKey>[] = [
-  { key: 'name', label: 'שם משפחה', def: true },
-  { key: 'clientId', label: 'מזהה משפחה', def: false },
-  { key: 'zeout', label: 'ת.ז', def: true },
+// 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
+// React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
+// ⚠️ שם/ת.ז/טלפון/מזהה — מיון בלבד (ערך ייחודי לכל שורה). הקטגוריה
+// והמוקד הם קבוצות ערכים סגורות ← גם סינון.
+//
+// ⚠️ ארבע עמודות תלויות ב-stats/info שנטענים בנפרד (כרטיס, לידה, מוקד,
+// ימים לפריקה) — ה-value שלהן נבנה בתוך הרכיב. ראו FAMILY_COLS למטה.
+const FAMILY_COLUMNS: ColDef<FamColKey, Family>[] = [
+  { key: 'name', label: 'שם משפחה', def: true,
+    value: f => [f.FamilyName, f.FirstName].filter(Boolean).join(' ') || null },
+  { key: 'clientId', label: 'מזהה משפחה', def: false, kind: 'number', value: f => f.ClientId },
+  { key: 'zeout', label: 'ת.ז', def: true, kind: 'number', value: f => f.Zeout || null },
   { key: 'card', label: 'מספר כרטיס', def: true },
-  { key: 'birth', label: 'תאריך לידה', def: true },
-  { key: 'center', label: 'מוקד לאיסוף', def: false },
-  { key: 'phone', label: 'טלפון', def: true },
-  { key: 'groupe', label: 'קטגוריה', def: false },
-  { key: 'balance', label: 'יתרה בכרטיס', def: true },
-  { key: 'unload', label: 'ימים לפריקה', def: true },
+  { key: 'birth', label: 'תאריך לידה', def: true, kind: 'date' },
+  { key: 'center', label: 'מוקד לאיסוף', def: false, kind: 'enum', filterable: true },
+  { key: 'phone', label: 'טלפון', def: true, value: f => cleanPhone(f.Phone) },
+  { key: 'groupe', label: 'קטגוריה', def: false, kind: 'enum', filterable: true, value: f => f.Groupe || null },
+  // ⚠️ ממוין כמספר ולא כטקסט: "₪1,200" ו-"₪900" ממוינים אלפביתית הפוך.
+  { key: 'balance', label: 'יתרה בכרטיס', def: true, kind: 'number',
+    value: f => {
+      const n = typeof f.Ytra === 'number' ? f.Ytra : Number(String(f.Ytra ?? '').replace(/[^\d.\-]/g, ''))
+      return Number.isFinite(n) ? n : null
+    } },
+  { key: 'unload', label: 'ימים לפריקה', def: true, kind: 'date' },
 ]
 
 export default function NedarimFamilies() {
@@ -163,14 +176,6 @@ export default function NedarimFamilies() {
     return next
   })
   // "בחר הכל" פועל על השורות המסוננות בלבד (מה שהמשתמש רואה)
-  const filteredIds = filtered.map(f => String(f.ClientId))
-  const allFilteredChecked = filteredIds.length > 0 && filteredIds.every(id => checked.has(id))
-  const toggleAll = () => setChecked(prev => {
-    const next = new Set(prev)
-    if (allFilteredChecked) filteredIds.forEach(id => next.delete(id))
-    else filteredIds.forEach(id => next.add(id))
-    return next
-  })
   const clearChecked = () => setChecked(new Set())
 
   // המשפחות שסומנו למחיקה (לפי כל הרשימה, לא רק המסוננת)
@@ -194,8 +199,43 @@ export default function NedarimFamilies() {
 
   // ⚠️ extraCols תלוי בהרשאה: עמודת הצ׳קבוקס מוצגת למנהל בלבד, ולכן גם
   // האינדקס שמועבר לידית הגרירה מוסט בהתאם (ראו colOffset למטה).
-  const tc = useTableColumns<FamColKey>('nedarim-families', FAMILY_COLUMNS, { extraCols: isAdmin ? 1 : 0 })
+  // 🔴 ארבע העמודות שתלויות ב-stats (כרטיס, לידה, מוקד, ימים לפריקה)
+  // מקבלות את ה-value שלהן כאן: stats נטען בנפרד מהמשפחות, ולכן אי
+  // אפשר לגזור אותן בקבוע. בלעדיהן המיון עליהן עובד על אובייקט React.
+  const famColumns = useMemo(() => {
+    const infoOf = (f: Family) => f.Zeout ? stats?.unloadByZeout?.[String(f.Zeout).trim()] : undefined
+    return FAMILY_COLUMNS.map(c => {
+      switch (c.key) {
+        // ⚠️ null כשאין שיוך — התא מציג "לא בוצע שיוך", וזה מה שמחפשים.
+        case 'card': return { ...c, value: (f: Family) => stats?.cardByClientId?.[String(f.ClientId)] ?? null }
+        case 'birth': return { ...c, value: (f: Family) => infoOf(f)?.birthDate ?? null }
+        case 'center': return { ...c, value: (f: Family) => infoOf(f)?.centerName ?? null }
+        // ⚠️ ממוין לפי מועד הפריקה עצמו — הוא מה שמייצר את הספירה לאחור.
+        case 'unload': return { ...c, value: (f: Family) => infoOf(f)?.unloadDate ?? null }
+        default: return c
+      }
+    })
+  }, [stats])
+
+  // ⚠️ mode:'client' — כל המשפחות נטענות מנדרים בבת אחת, אין דפדוף בשרת.
+  // 🔴 ה-hook מקבל את filtered (אחרי החיפוש) ולא את families.
+  const tc = useTableColumns<FamColKey, Family>('nedarim-families', famColumns, {
+    extraCols: isAdmin ? 1 : 0,
+    sortFilter: { mode: 'client', rows: filtered },
+  })
   const colOffset = isAdmin ? 1 : 0
+
+  // 🔴 "בחר הכל" נגזר מ-tc.rows ולא מ-filtered: הסימון כאן מוביל
+  // למחיקת כרטיסים, וסימון שורה שסוננה החוצה מהכותרת היה מוחק משפחה
+  // שאינה על המסך.
+  const filteredIds = tc.rows.map(f => String(f.ClientId))
+  const allFilteredChecked = filteredIds.length > 0 && filteredIds.every(id => checked.has(id))
+  const toggleAll = () => setChecked(prev => {
+    const next = new Set(prev)
+    if (allFilteredChecked) filteredIds.forEach(id => next.delete(id))
+    else filteredIds.forEach(id => next.add(id))
+    return next
+  })
 
   // תוכן התא לפי מפתח העמודה
   const famCell = (key: FamColKey, f: Family, info?: UnloadInfo) => {
@@ -321,7 +361,7 @@ export default function NedarimFamilies() {
         ) : (
           <>
             {/* בורר העמודות — מעל הטבלה */}
-            <div className="px-4 py-3 border-b border-slate-100">{tc.picker}</div>
+            <div className="flex flex-col gap-2 px-4 py-3 border-b border-slate-100">{tc.picker}{tc.activeFilters}</div>
             {/* ⚠️ גלילה אנכית בלבד — אין גלילה לרוחב בשום טבלה. */}
             <div className="overflow-y-auto max-h-[70vh]">
               <table className="w-full text-[16px] border-collapse" dir="rtl" style={tc.rt.tableStyle}>
@@ -332,13 +372,15 @@ export default function NedarimFamilies() {
                       <input type="checkbox" checked={allFilteredChecked} onChange={toggleAll}
                         title="בחר הכל" className="w-4 h-4 accent-rose-600 cursor-pointer align-middle" />
                     </th></AdminOnly>
-                    {tc.shown.map((c, i) => (
-                      <th key={c.key} className={tc.headClass(c)}>{c.label}{tc.rt.handle(i + colOffset)}</th>
-                    ))}
+                    {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב.
+                        ⚠️ colOffset: תיבת הסימון (למנהל) קודמת לעמודות. */}
+                    {tc.shown.map((c, i) => tc.th(c, i + colOffset))}
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(f => {
+                  {/* 🔴 tc.rows ולא filtered — אחרת המיון והסינון בכותרת לא
+                      היו משפיעים על מה שמוצג בפועל. */}
+                  {tc.rows.map(f => {
                     const info = f.Zeout ? stats?.unloadByZeout?.[String(f.Zeout).trim()] : undefined
                     const isChecked = checked.has(String(f.ClientId))
                     return (
@@ -803,11 +845,19 @@ function PeriodCard({ label, amount, count, loading }: { label: string; amount: 
 // ── עמודות טבלת העסקאות ──
 type TxColKey = 'family' | 'store' | 'date' | 'amount'
 
-const TX_COLUMNS: ColDef<TxColKey>[] = [
-  { key: 'family', label: 'משפחה', def: true },
-  { key: 'store', label: 'חנות', def: true },
-  { key: 'date', label: 'תאריך', def: true },
-  { key: 'amount', label: 'סכום', def: true },
+/** שורת עסקה כפי שנדרים מחזירה — השדות היחידים שהטבלה נוגעת בהם. */
+type Tx = { familyName?: string; store?: string; date?: string; amount?: string | number }
+
+// 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
+// React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
+// ⚠️ החנות היא קבוצת ערכים סגורה ← גם סינון. משפחה/תאריך — מיון בלבד.
+const TX_COLUMNS: ColDef<TxColKey, Tx>[] = [
+  { key: 'family', label: 'משפחה', def: true, value: t => t.familyName || null },
+  { key: 'store', label: 'חנות', def: true, kind: 'enum', filterable: true, value: t => t.store || null },
+  { key: 'date', label: 'תאריך', def: true, kind: 'date', value: t => t.date || null },
+  // ⚠️ ממוין כמספר ולא כטקסט: "₪1,200" ו-"₪900" ממוינים אלפביתית הפוך.
+  { key: 'amount', label: 'סכום', def: true, kind: 'number',
+    value: t => Number.isFinite(Number(t.amount)) ? Number(t.amount) : null },
 ]
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -817,7 +867,11 @@ function TransactionsHistory({ transactions, loading }: { transactions: any[]; l
     ? transactions.filter(t => [t.familyName, t.store, t.date].filter(Boolean).join(' ').includes(q.trim()))
     : transactions
 
-  const tc = useTableColumns<TxColKey>('nedarim-transactions', TX_COLUMNS)
+  // 🔴 ה-hook מקבל את filtered (אחרי החיפוש) ולא את transactions.
+  // ⚠️ mode:'client' — כל ההיסטוריה נטענת בבת אחת, אין דפדוף בשרת.
+  const tc = useTableColumns<TxColKey, Tx>('nedarim-transactions', TX_COLUMNS, {
+    sortFilter: { mode: 'client', rows: filtered as Tx[] },
+  })
 
   // תוכן התא לפי מפתח העמודה
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -844,20 +898,21 @@ function TransactionsHistory({ transactions, loading }: { transactions: any[]; l
         ) : (
           <>
             {/* בורר העמודות — מעל הטבלה */}
-            <div className="px-4 py-3 border-b border-slate-100">{tc.picker}</div>
+            <div className="flex flex-col gap-2 px-4 py-3 border-b border-slate-100">{tc.picker}{tc.activeFilters}</div>
             {/* ⚠️ גלילה אנכית בלבד — אין גלילה לרוחב בשום טבלה. */}
             <div className="max-h-[60vh] overflow-y-auto">
               <table className="w-full text-[16px] border-collapse" dir="rtl" style={tc.rt.tableStyle}>
                 <colgroup>{tc.rt.cols}</colgroup>
                 <thead className="sticky top-0 bg-slate-50">
                   <tr className="text-right text-[15px] font-bold text-slate-600 border-b-2 border-slate-200 [&>th]:bg-slate-50 [&>th]:px-5 [&>th]:py-4 [&>th]:font-bold [&>th]:border-l [&>th]:border-slate-200 [&>th:last-child]:border-l-0">
-                    {tc.shown.map((c, i) => (
-                      <th key={c.key} className={tc.headClass(c)}>{c.label}{tc.rt.handle(i)}</th>
-                    ))}
+                    {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב. */}
+                    {tc.shown.map((c, i) => tc.th(c, i))}
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((t, i) => (
+                  {/* 🔴 tc.rows ולא filtered — אחרת המיון והסינון בכותרת לא
+                      היו משפיעים על מה שמוצג בפועל. */}
+                  {tc.rows.map((t, i) => (
                     <tr key={i} className="border-b border-slate-100 hover:bg-slate-50 [&>td]:px-5 [&>td]:py-4 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0">
                       {tc.shown.map(c => (
                         <td key={c.key} className={tc.cellClass(c)}>{cell(c.key, t)}</td>

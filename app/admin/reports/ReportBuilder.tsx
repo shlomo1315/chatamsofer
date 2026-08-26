@@ -21,16 +21,29 @@ const fmtD = (d: string) => (d ? new Date(d).toLocaleDateString('he-IL') : '')
 type ColKey = 'motherName' | 'motherId' | 'babyName' | 'birthDate' | 'recoveryHome'
   | 'arrived' | 'recoveryAmount' | 'recoveryNights' | 'cardStatus'
 
-const COLUMNS: ColDef<ColKey>[] = [
-  { key: 'motherName', label: 'שם היולדת', def: true },
-  { key: 'motherId', label: 'ת.ז', def: true },
-  { key: 'babyName', label: 'תינוק', def: true },
-  { key: 'birthDate', label: 'תאריך לידה', def: true },
-  { key: 'recoveryHome', label: 'בית החלמה', def: true },
-  { key: 'arrived', label: 'הגעה', def: true, align: 'center' },
-  { key: 'recoveryAmount', label: 'סכום שמומש', def: true },
-  { key: 'recoveryNights', label: 'לילות', def: true, align: 'center' },
-  { key: 'cardStatus', label: 'סטטוס כרטיס', def: false },
+// ⚠️ headClassName נושא את הריפוד: <th> נבנה בתוך TableHeadMenu, וריפוד
+// שנכתב בצרכן לא היה מגיע אליו.
+const HEAD = 'px-3 py-2.5 font-medium'
+
+// 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
+// React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
+// ⚠️ שם/ת.ז/תינוק — מיון בלבד. בית החלמה, הגעה וסטטוס הכרטיס הם
+// קבוצות ערכים סגורות ← גם סינון.
+const COLUMNS: ColDef<ColKey, Row>[] = [
+  { key: 'motherName', label: 'שם היולדת', def: true, headClassName: HEAD, value: r => r.motherName },
+  { key: 'motherId', label: 'ת.ז', def: true, kind: 'number', headClassName: HEAD, value: r => r.motherId || null },
+  { key: 'babyName', label: 'תינוק', def: true, headClassName: HEAD, value: r => r.babyName || null },
+  // ⚠️ ממוין לפי התאריך הגולמי ולא לפי התווית: תאריך מפורמט ממוין
+  // אלפביתית ולא כרונולוגית.
+  { key: 'birthDate', label: 'תאריך לידה', def: true, kind: 'date', headClassName: HEAD, value: r => r.birthDate || null },
+  { key: 'recoveryHome', label: 'בית החלמה', def: true, kind: 'enum', filterable: true, headClassName: HEAD, value: r => r.recoveryHome || null },
+  { key: 'arrived', label: 'הגעה', def: true, align: 'center', kind: 'enum', filterable: true, headClassName: HEAD,
+    // ⚠️ תווית קריאה ולא ✓/✗: בתפריט הסינון סימן גרפי אינו אומר כלום.
+    value: r => r.arrived === true ? 'הגיעה' : r.arrived === false ? 'לא הגיעה' : null },
+  { key: 'recoveryAmount', label: 'סכום שמומש', def: true, kind: 'number', headClassName: HEAD, value: r => r.recoveryAmount ?? null },
+  { key: 'recoveryNights', label: 'לילות', def: true, align: 'center', kind: 'number', headClassName: HEAD, value: r => r.recoveryNights ?? null },
+  { key: 'cardStatus', label: 'סטטוס כרטיס', def: false, kind: 'enum', filterable: true, headClassName: HEAD,
+    value: r => CARD_STATUS[r.cardStatus] ?? r.cardStatus ?? null },
 ]
 
 export default function ReportBuilder() {
@@ -116,7 +129,13 @@ export default function ReportBuilder() {
     setExporting(false)
   }
 
-  const tc = useTableColumns('reports-maternity', COLUMNS)
+  // 🔴 ה-hook מקבל את filtered (אחרי בוררי הדוח) ולא את rows.
+  // ⚠️ הסינון בכותרת הוא **תצוגה בלבד** ואינו משפיע על הייצוא לאקסל —
+  // הדוח המיוצא חייב להישאר מלא, בדיוק כמו בורר העמודות.
+  // ⚠️ mode:'client' — כל הדוח נטען בבת אחת, אין דפדוף בשרת.
+  const tc = useTableColumns<ColKey, Row>('reports-maternity', COLUMNS, {
+    sortFilter: { mode: 'client', rows: filtered },
+  })
 
   const cell = (c: ColDef<ColKey>, r: Row) => {
     switch (c.key) {
@@ -193,7 +212,12 @@ export default function ReportBuilder() {
         ))}
       </div>
 
-      {!loading && !err && filtered.length > 0 && <div className="px-4 pb-3">{tc.picker}</div>}
+      {/* ⚠️ התנאי נשאר filtered ולא tc.rows: סינון מהכותרת שמרוקן את
+          הטבלה חייב להשאיר את הבורר והצ'יפים על המסך, אחרת אין דרך
+          לנקות אותו. */}
+      {!loading && !err && filtered.length > 0 && (
+        <div className="flex flex-col gap-2 px-4 pb-3">{tc.picker}{tc.activeFilters}</div>
+      )}
 
       {/* table */}
       {/* ⚠️ גלילה אנכית בלבד — הכלל: אין גלילה לרוחב בשום טבלה. */}
@@ -209,13 +233,14 @@ export default function ReportBuilder() {
             <colgroup>{tc.rt.cols}</colgroup>
             <thead className="sticky top-0 bg-slate-50">
               <tr className="border-b border-slate-100 text-xs text-slate-500">
-                {tc.shown.map((c, i) => (
-                  <th key={c.key} className={`px-3 py-2.5 font-medium ${tc.headClass(c)}`}>{c.label}{tc.rt.handle(i)}</th>
-                ))}
+                {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב. */}
+                {tc.shown.map((c, i) => tc.th(c, i))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.map(r => (
+              {/* 🔴 tc.rows ולא filtered — אחרת המיון והסינון בכותרת לא
+                  היו משפיעים על מה שמוצג בפועל. */}
+              {tc.rows.map(r => (
                 <tr key={r.id} className="hover:bg-slate-50">
                   {tc.shown.map(c => (
                     <td key={c.key} className={`px-3 py-2 ${tc.cellClass(c)}`}>{cell(c, r)}</td>

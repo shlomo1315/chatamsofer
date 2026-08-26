@@ -38,12 +38,24 @@ const date = (s: string | null) => (s ? new Date(s).toLocaleDateString('he-IL') 
 
 type ColKey = 'name' | 'email' | 'phone' | 'createdAt' | 'requestedAt'
 
-const COLUMNS: ColDef<ColKey>[] = [
-  { key: 'name', label: 'משפחה', def: true },
-  { key: 'email', label: 'כתובת מייל', def: true },
-  { key: 'phone', label: 'טלפון', def: true },
-  { key: 'createdAt', label: 'נרשם', def: true },
-  { key: 'requestedAt', label: 'נשלחה בקשה', def: true },
+// ⚠️ headClassName נושא את הריפוד: <th> נבנה בתוך TableHeadMenu, וריפוד
+// שנכתב בצרכן לא היה מגיע אליו.
+const HEAD = 'px-3 py-2 font-medium'
+
+// 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
+// React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
+// ⚠️ הכל כאן ערך ייחודי כמעט לכל שורה (שם/מייל/טלפון/תאריכים) —
+// מיון בלבד, בלי רשימות ערכים.
+const COLUMNS: ColDef<ColKey, Family>[] = [
+  { key: 'name', label: 'משפחה', def: true, headClassName: HEAD, value: f => f.name },
+  { key: 'email', label: 'כתובת מייל', def: true, headClassName: HEAD, value: f => f.email || null },
+  { key: 'phone', label: 'טלפון', def: true, headClassName: HEAD, value: f => f.phone || null },
+  // ⚠️ ממוין לפי התאריך הגולמי ולא לפי התווית: תאריך מפורמט ממוין
+  // אלפביתית ולא כרונולוגית.
+  { key: 'createdAt', label: 'נרשם', def: true, kind: 'date', headClassName: HEAD, value: f => f.createdAt },
+  // 🔴 null = טרם נשלחה בקשה, והוא בדיוק מי שצריך לקבל ראשון בחימום.
+  // ריקים יורדים לסוף המיון בשני הכיוונים — ראו [[email-warmup-rotation]].
+  { key: 'requestedAt', label: 'נשלחה בקשה', def: true, kind: 'date', headClassName: HEAD, value: f => f.requestedAt },
 ]
 
 export default function EmailVerificationManager() {
@@ -63,7 +75,16 @@ export default function EmailVerificationManager() {
   // ⚠️ ה-hook לפני ה-return המוקדם (`!loaded`) — hook אחרי return מותנה
   // משנה את סדר ה-hooks בין רינדורים ושובר את React.
   // extraCols=1: תיבת הסימון היא הראשונה ואינה בבורר, ולכן ידית הגרירה מקבלת i+1.
-  const tc = useTableColumns('email-verification', COLUMNS, { extraCols: 1 })
+  //
+  // 🔴 ה-hook מקבל את הרשימה אחרי מסנן "רק פגומות" — הסינון בכותרת חל
+  // *על* מה שהמסנן סינן, ולא במקומו. הרשימה מחושבת כאן ולא למטה, כי
+  // ה-hooks חייבים לרוץ לפני ה-return המוקדם.
+  // ⚠️ mode:'client' — כל המשפחות נטענות בבת אחת, אין דפדוף בשרת.
+  const shown = onlyProblems ? families.filter(f => f.problem) : families
+  const tc = useTableColumns<ColKey, Family>('email-verification', COLUMNS, {
+    extraCols: 1,
+    sortFilter: { mode: 'client', rows: shown },
+  })
 
   const cell = (c: ColDef<ColKey>, f: Family) => {
     switch (c.key) {
@@ -217,8 +238,6 @@ export default function EmailVerificationManager() {
     )
   }
 
-  const shown = onlyProblems ? families.filter(f => f.problem) : families
-
   return (
     <div className="space-y-4">
       {/* ── המספרים ── */}
@@ -358,27 +377,30 @@ export default function EmailVerificationManager() {
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {tc.picker}
+          {tc.picker}{tc.activeFilters}
           {/* ⚠️ גלילה אנכית בלבד — הכלל: אין גלילה לרוחב בשום טבלה. */}
           <div className="max-h-96 overflow-y-auto rounded-lg border border-slate-200">
             <table className="w-full text-right text-sm" style={tc.rt.tableStyle}>
               <colgroup>{tc.rt.cols}</colgroup>
               <thead className="sticky top-0 bg-slate-50 text-slate-600">
                 <tr>
+                  {/* 🔴 "סמן הכל" נגזר מ-tc.rows ולא מ-shown: הפעולה שולחת
+                      מיילים אמיתיים, וסימון שורה שסוננה החוצה מהכותרת
+                      היה שולח למי שאינו על המסך. */}
                   <th className="px-2 py-2 w-8">
                     <input type="checkbox"
-                      checked={picked.size > 0 && picked.size === shown.filter(f => f.sendable).length}
-                      onChange={e => setPicked(e.target.checked ? new Set(shown.filter(f => f.sendable).map(f => f.id)) : new Set())} />
+                      checked={picked.size > 0 && picked.size === tc.rows.filter(f => f.sendable).length}
+                      onChange={e => setPicked(e.target.checked ? new Set(tc.rows.filter(f => f.sendable).map(f => f.id)) : new Set())} />
                   </th>
-                  {tc.shown.map((c, i) => (
-                    <th key={c.key} className={`px-3 py-2 font-medium ${tc.headClass(c)}`}>
-                      {c.label}{tc.rt.handle(i + 1)}
-                    </th>
-                  ))}
+                  {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב.
+                      ⚠️ i+1: תיבת הסימון קודמת לעמודות שבבורר. */}
+                  {tc.shown.map((c, i) => tc.th(c, i + 1))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {shown.map(f => (
+                {/* 🔴 tc.rows ולא shown — אחרת המיון והסינון בכותרת לא היו
+                    משפיעים על מה שמוצג בפועל. */}
+                {tc.rows.map(f => (
                   <tr key={f.id} className={!f.sendable ? 'bg-red-50/60' : 'hover:bg-slate-50'}>
                     <td className="px-2 py-2 align-top">
                       <input type="checkbox" disabled={!f.sendable} checked={picked.has(f.id)}
