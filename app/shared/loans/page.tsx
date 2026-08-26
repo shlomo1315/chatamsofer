@@ -8,13 +8,19 @@ import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 // משאירה את הפורטל בלי הפעולה שהוא קיים בשבילה. לכן extraCols: 1.
 type LoanColKey = 'name' | 'id_number' | 'address' | 'phone' | 'email' | 'amount'
 
-const LOAN_COLUMNS: ColDef<LoanColKey>[] = [
-  { key: 'name', label: 'שם', def: true },
-  { key: 'id_number', label: 'ת.ז.', def: true },
-  { key: 'address', label: 'כתובת', def: true },
-  { key: 'phone', label: 'טלפון', def: true },
-  { key: 'email', label: 'מייל', def: false },
-  { key: 'amount', label: 'סכום מאושר', def: true },
+// 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
+// React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
+// ⚠️ הכל כאן ערך ייחודי כמעט לכל שורה — מיון בלבד, בלי רשימות ערכים.
+// ⚠️ COLUMNS מוגדר לפני PortalLoan ולכן הטיפוס מוחל בקריאת ה-hook.
+const LOAN_COLUMNS: ColDef<LoanColKey, PortalLoan>[] = [
+  { key: 'name', label: 'שם', def: true, value: l => borrowerName(l.beneficiary) },
+  { key: 'id_number', label: 'ת.ז.', def: true, kind: 'number', value: l => l.beneficiary?.id_number ?? null },
+  // ⚠️ ממוין לפי הרחוב (מה שמוצג בשורה העליונה בתא), לא לפי העיר.
+  { key: 'address', label: 'כתובת', def: true,
+    value: l => l.beneficiary?.address || l.beneficiary?.city || null },
+  { key: 'phone', label: 'טלפון', def: true, value: l => l.beneficiary?.phone || null },
+  { key: 'email', label: 'מייל', def: false, value: l => l.beneficiary?.email || null },
+  { key: 'amount', label: 'סכום מאושר', def: true, kind: 'number', value: l => shownAmount(l) || null },
 ]
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -370,7 +376,14 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
   }
 
   // בורר עמודות + גרירת רוחב — רכיב מערכתי משותף.
-  const tc = useTableColumns('shared-loans', LOAN_COLUMNS, { extraCols: 1 })
+  //
+  // 🔴 ה-hook מקבל את visibleLoans (אחרי בורר הסטטוס והחיפוש) ולא את
+  // כל ההלוואות: הסינון בכותרת חל *על* מה שכבר סוננו.
+  // ⚠️ mode:'client' — כל ההלוואות נטענות בבת אחת, אין דפדוף בשרת.
+  const tc = useTableColumns<LoanColKey, PortalLoan>('shared-loans', LOAN_COLUMNS, {
+    extraCols: 1,
+    sortFilter: { mode: 'client', rows: visibleLoans },
+  })
 
   const cell = (c: ColDef<LoanColKey>, l: PortalLoan) => {
     const b = l.beneficiary
@@ -528,7 +541,7 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
                   </button>
                 </div>
                 {/* ── בורר העמודות ── */}
-                <div className="mb-3">{tc.picker}</div>
+                <div className="mb-3 flex flex-col gap-2">{tc.picker}{tc.activeFilters}</div>
 
                 {/* ⚠️ בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. */}
                 <div className="w-full rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -538,15 +551,17 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
                       <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] uppercase tracking-wider text-slate-500
                                      [&>th]:px-3 [&>th]:py-3.5 [&>th]:font-semibold [&>th]:text-right
                                      [&>th]:border-l [&>th]:border-slate-100 [&>th:last-child]:border-l-0">
-                        {tc.shown.map((c, i) => (
-                          <th key={c.key} className={tc.headClass(c)}>{c.label}{tc.rt.handle(i)}</th>
-                        ))}
+                        {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב.
+                            ⚠️ הריפוד מגיע מ-[&>th] שעל ה-<tr>. */}
+                        {tc.shown.map((c, i) => tc.th(c, i))}
                         {/* ⚠️ עמודת הסטטוס אחרונה — האינדקס שלה הוא מספר העמודות הנראות. */}
                         <th className="relative">סטטוס{tc.rt.handle(tc.shown.length)}</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {visibleLoans.map((l, i) => {
+                      {/* 🔴 tc.rows ולא visibleLoans — אחרת המיון והסינון
+                          בכותרת לא היו משפיעים על מה שמוצג בפועל. */}
+                      {tc.rows.map((l, i) => {
                         const isDone = !!l.disbursed_at
                         return (
                           <tr key={l.id} className={`border-b border-slate-100 last:border-0 transition-colors

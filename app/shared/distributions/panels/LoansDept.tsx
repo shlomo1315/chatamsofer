@@ -66,15 +66,27 @@ type View = 'all' | 'disbursed' | 'approved_only' | 'pending'
 // ── הגדרת עמודות רשימת ההלוואות ──
 type ColKey = 'name' | 'city' | 'purpose' | 'amount' | 'installments' | 'created' | 'state'
 
-const COLUMNS: ColDef<ColKey>[] = [
-  { key: 'name', label: 'שם הלווה', def: true },
+// 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
+// React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
+// ⚠️ שם — מיון בלבד (ערך ייחודי לכל שורה). עיר, מטרה ומצב הם קבוצות
+// ערכים סגורות ← גם סינון.
+const COLUMNS: ColDef<ColKey, LoanRow>[] = [
+  { key: 'name', label: 'שם הלווה', def: true,
+    value: r => [r.beneficiary?.family_name, r.beneficiary?.full_name || r.beneficiary?.spouse_name]
+      .filter(Boolean).join(' ') || null },
   // ⚠️ העיר הופרדה מהשם לעמודה משלה: איחוד עמודות ערבב שני ערכים בתא אחד.
-  { key: 'city', label: 'עיר', def: false },
-  { key: 'purpose', label: 'מטרה', def: true },
-  { key: 'amount', label: 'סכום', def: true },
-  { key: 'installments', label: 'תשלומים', def: true, align: 'center' },
-  { key: 'created', label: 'הוגש', def: true },
-  { key: 'state', label: 'מצב', def: true },
+  { key: 'city', label: 'עיר', def: false, kind: 'enum', filterable: true, value: r => r.beneficiary?.city || null },
+  { key: 'purpose', label: 'מטרה', def: true, kind: 'enum', filterable: true, value: r => r.purpose || null },
+  // ⚠️ הסכום המאושר קודם למבוקש — בדיוק כמו בתא.
+  { key: 'amount', label: 'סכום', def: true, kind: 'number',
+    value: r => Number(r.approved_amount ?? r.amount ?? 0) || null },
+  { key: 'installments', label: 'תשלומים', def: true, align: 'center', kind: 'number', value: r => r.installments ?? null },
+  // ⚠️ ממוין לפי התאריך הגולמי ולא לפי התווית: תאריך מפורמט ממוין
+  // אלפביתית ולא כרונולוגית.
+  { key: 'created', label: 'הוגש', def: true, kind: 'date', value: r => r.created_at ?? null },
+  { key: 'state', label: 'מצב', def: true, kind: 'enum', filterable: true,
+    // ⚠️ הערך הוא התווית המוצגת ולא הקוד: "נמסר" הוא מצב בפני עצמו.
+    value: r => r.disbursed_at ? 'נמסר' : (STATUS_HE[String(r.status)] ?? String(r.status)) },
 ]
 
 export default function LoansDept({ rows, legacy, onBack }: {
@@ -143,7 +155,14 @@ export default function LoansDept({ rows, legacy, onBack }: {
   }, [filtered])
 
   // בורר עמודות + גרירת רוחב — רכיב מערכתי משותף.
-  const tc = useTableColumns('loans-dept', COLUMNS)
+  //
+  // 🔴 ה-hook מקבל את filtered (אחרי בוררי הטווח והמצב) ולא את rows.
+  // ⚠️ המיון קורה *לפני* החיתוך ל-300: אילו חתכנו קודם, המיון היה
+  // מסדר מחדש את 300 השורות הראשונות בלבד ומציג תוצאה שנראית תקינה.
+  // ⚠️ mode:'client' — כל הרשומות מגיעות כ-prop, אין דפדוף בשרת.
+  const tc = useTableColumns<ColKey, LoanRow>('loans-dept', COLUMNS, {
+    sortFilter: { mode: 'client', rows: filtered },
+  })
 
   const cell = (c: ColDef<ColKey>, r: LoanRow) => {
     const b = r.beneficiary
@@ -249,18 +268,20 @@ export default function LoansDept({ rows, legacy, onBack }: {
       {/* ⚠️ בלי גלילה לרוחב: הבורר קובע מה נכנס למסך. */}
       <Section title="רשימת ההלוואות" hint={`${filtered.length.toLocaleString('he-IL')} רשומות`}>
         <div className="w-full">
-          <div className="pb-3">{tc.picker}</div>
+          <div className="flex flex-col gap-2 pb-3">{tc.picker}{tc.activeFilters}</div>
           <table className="w-full text-[12px] border-collapse" style={tc.rt.tableStyle}>
             <colgroup>{tc.rt.cols}</colgroup>
             <thead>
               <tr className="bg-[#fdfaf3] text-[#8a7a56] [&>th]:px-2.5 [&>th]:py-2 [&>th]:text-right [&>th]:font-bold [&>th]:border-l [&>th]:border-[#f0e9d8] [&>th:last-child]:border-l-0">
-                {tc.shown.map((c, i) => (
-                  <th key={c.key} className={tc.headClass(c)}>{c.label}{tc.rt.handle(i)}</th>
-                ))}
+                {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב.
+                    ⚠️ הריפוד מגיע מ-[&>th] שעל ה-<tr>. */}
+                {tc.shown.map((c, i) => tc.th(c, i))}
               </tr>
             </thead>
             <tbody className="divide-y divide-[#f4efe2]">
-              {filtered.slice(0, 300).map(r => (
+              {/* 🔴 tc.rows ולא filtered — החיתוך ל-300 חל על התוצאה
+                  הממוינת והמסוננת, ולא להפך. */}
+              {tc.rows.slice(0, 300).map(r => (
                 <tr key={r.id} className="[&>td]:px-2.5 [&>td]:py-2 [&>td]:border-l [&>td]:border-[#f4efe2] [&>td:last-child]:border-l-0">
                   {tc.shown.map(c => (
                     <td key={c.key} className={tc.cellClass(c)}>{cell(c, r)}</td>
@@ -269,9 +290,11 @@ export default function LoansDept({ rows, legacy, onBack }: {
               ))}
             </tbody>
           </table>
-          {filtered.length > 300 && (
+          {/* ⚠️ נמדד מול tc.rows — אחרי סינון בכותרת המספר קטן, והשורה
+              הזאת חייבת לספור את מה שבאמת נחתך. */}
+          {tc.rows.length > 300 && (
             <p className="pt-3 text-center text-[11px] text-[#a08a5a]">
-              מוצגות 300 הראשונות מתוך {filtered.length.toLocaleString('he-IL')} · צמצמו את הטווח לתצוגה מלאה
+              מוצגות 300 הראשונות מתוך {tc.rows.length.toLocaleString('he-IL')} · צמצמו את הטווח לתצוגה מלאה
             </p>
           )}
         </div>

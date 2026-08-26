@@ -16,30 +16,66 @@ import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 // ── עמודות סיכום בתי ההחלמה ──
 type HomeColKey = 'home' | 'arrived' | 'nights' | 'paid' | 'unbilled'
 
-const HOME_COLUMNS: ColDef<HomeColKey>[] = [
-  { key: 'home', label: 'בית החלמה', def: true },
-  { key: 'arrived', label: 'יולדות שהגיעו', def: true },
-  { key: 'nights', label: 'לילות', def: true },
-  { key: 'paid', label: 'שולם', def: true },
-  { key: 'unbilled', label: 'טרם חויבו', def: true },
+// ⚠️ stateOf ו-LABEL הועלו מתוך הרכיב לרמת המודול: הם פונקציות טהורות
+// בלי תלות ב-state, וכך אפשר להשתמש בהם גם בהגדרת העמודות (ה-value של
+// "מצב") בלי לשכפל את הלוגיקה ובלי useMemo עם תלויות מזויפות.
+const stateOf = (r: MaternityRow) => {
+  if (!String(r.recovery_home ?? '').trim()) return 'none' as const
+  if (r.recovery_arrived !== true) return 'not-realized' as const
+  return (r.receiptCount ?? 0) > 0 ? 'realized-charged' as const : 'realized-unbilled' as const
+}
+const LABEL = {
+  'realized-charged': 'מימשה וחויבה',
+  'realized-unbilled': 'מימשה — טרם חויבה',
+  'not-realized': 'טרם מימשה',
+  'none': 'ללא בית החלמה',
+} as const
+
+/** שורת הסיכום לבית החלמה אחד — כפי ש-byHome בונה אותה. */
+type HomeSummary = { home: string; arrived: number; unbilled: number; amount: number; nights: number; names: string[] }
+
+// 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
+// React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
+//
+// 🔴 **מיון בלבד, בלי סינון** — לטבלה הזאת יש שורת "סה״כ" שמחושבת מכל
+// בתי ההחלמה. סינון היה מסתיר שורות בזמן שהסיכום ממשיך לכלול אותן,
+// כלומר סכום שאינו מסתדר עם מה שרואים. מיון אינו משנה סכומים.
+const HOME_COLUMNS: ColDef<HomeColKey, HomeSummary>[] = [
+  { key: 'home', label: 'בית החלמה', def: true, value: h => h.home },
+  { key: 'arrived', label: 'יולדות שהגיעו', def: true, kind: 'number', value: h => h.arrived },
+  { key: 'nights', label: 'לילות', def: true, kind: 'number', value: h => h.nights },
+  { key: 'paid', label: 'שולם', def: true, kind: 'number', value: h => h.amount },
+  { key: 'unbilled', label: 'טרם חויבו', def: true, kind: 'number', value: h => h.unbilled },
 ]
 
 // ── עמודות הרשימה השמית ──
 type MatColKey = 'state' | 'name' | 'id_number' | 'city' | 'baby' | 'birth' | 'home' | 'nights' | 'receipts' | 'amount'
 
-const MAT_COLUMNS: ColDef<MatColKey>[] = [
-  { key: 'state', label: 'מצב', def: true },
-  { key: 'name', label: 'שם המשפחה', def: true },
+// 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
+// React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
+// ⚠️ שם/ת״ז/תינוק — מיון בלבד. מצב, עיר ובית החלמה הם קבוצות ערכים
+// סגורות ← גם סינון.
+const MAT_COLUMNS: ColDef<MatColKey, MaternityRow>[] = [
+  { key: 'state', label: 'מצב', def: true, kind: 'enum', filterable: true,
+    // ⚠️ הערך הוא התווית המוצגת ולא הקוד ('realized-charged' וכו').
+    value: r => LABEL[stateOf(r)] },
+  { key: 'name', label: 'שם המשפחה', def: true,
+    value: r => [r.beneficiary?.family_name, r.beneficiary?.full_name || r.beneficiary?.spouse_name]
+      .filter(Boolean).join(' ') || null },
   // ⚠️ הערכים שאוחדו קודם (ת"ז, עיר, תינוק, קבלות) הופרדו לעמודות משלהם —
   // הבורר הוא שמחליט מה נכנס למסך, ולא איחוד שמערבב שני ערכים בתא אחד.
-  { key: 'id_number', label: 'ת״ז', def: false },
-  { key: 'city', label: 'עיר', def: true },
-  { key: 'baby', label: 'שם התינוק', def: false },
-  { key: 'birth', label: 'תאריך לידה', def: true },
-  { key: 'home', label: 'בית החלמה', def: true },
-  { key: 'nights', label: 'לילות', def: true, align: 'center' },
-  { key: 'receipts', label: 'קבלות', def: false, align: 'center' },
-  { key: 'amount', label: 'סכום', def: true },
+  { key: 'id_number', label: 'ת״ז', def: false, kind: 'number', value: r => r.beneficiary?.id_number ?? null },
+  { key: 'city', label: 'עיר', def: true, kind: 'enum', filterable: true, value: r => r.beneficiary?.city ?? null },
+  { key: 'baby', label: 'שם התינוק', def: false, value: r => r.baby_name || null },
+  // ⚠️ ממוין לפי התאריך הגולמי ולא לפי התווית: תאריך מפורמט ממוין
+  // אלפביתית ולא כרונולוגית.
+  { key: 'birth', label: 'תאריך לידה', def: true, kind: 'date', value: r => r.birth_date ?? null },
+  { key: 'home', label: 'בית החלמה', def: true, kind: 'enum', filterable: true, value: r => r.recovery_home || null },
+  { key: 'nights', label: 'לילות', def: true, align: 'center', kind: 'number', value: r => r.recovery_nights ?? null },
+  // ⚠️ null (ולא 0) כשאין — התא מציג "—", וכך הריקים יורדים לסוף המיון.
+  { key: 'receipts', label: 'קבלות', def: false, align: 'center', kind: 'number', value: r => (r.receiptCount ?? 0) || null },
+  { key: 'amount', label: 'סכום', def: true, kind: 'number',
+    value: r => Number(r.recovery_amount ?? 0) > 0 ? Number(r.recovery_amount) : null },
 ]
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -367,17 +403,6 @@ function MaternityPanel({ rows }: { rows: MaternityRow[] }) {
   const [q, setQ] = useState('')
   const [home, setHome] = useState('')
 
-  const stateOf = (r: MaternityRow) => {
-    if (!String(r.recovery_home ?? '').trim()) return 'none' as const
-    if (r.recovery_arrived !== true) return 'not-realized' as const
-    return (r.receiptCount ?? 0) > 0 ? 'realized-charged' as const : 'realized-unbilled' as const
-  }
-  const LABEL = {
-    'realized-charged': 'מימשה וחויבה',
-    'realized-unbilled': 'מימשה — טרם חויבה',
-    'not-realized': 'טרם מימשה',
-    'none': 'ללא בית החלמה',
-  } as const
   const STYLE = {
     'realized-charged': 'bg-emerald-50 text-emerald-800 border-emerald-200',
     'realized-unbilled': 'bg-amber-50 text-amber-800 border-amber-200',
@@ -477,8 +502,16 @@ function MaternityPanel({ rows }: { rows: MaternityRow[] }) {
   const cur = (n: number) => `${new Intl.NumberFormat('he-IL', { maximumFractionDigits: 0 }).format(n)} ₪`
 
   // בורר עמודות + גרירת רוחב — רכיב מערכתי משותף, אחד לכל טבלה.
-  const htc = useTableColumns('shared-recovery-homes', HOME_COLUMNS)
-  const mtc = useTableColumns('shared-maternity-rows', MAT_COLUMNS)
+  // ⚠️ mode:'client' — כל הרשומות מגיעות כ-prop, אין דפדוף בשרת.
+  // 🔴 טבלת בתי ההחלמה: מיון בלבד (אין עמודה עם filterable) — יש בה
+  // שורת "סה״כ", וסינון היה מסתיר שורות בזמן שהסיכום כולל אותן.
+  const htc = useTableColumns<HomeColKey, HomeSummary>('shared-recovery-homes', HOME_COLUMNS, {
+    sortFilter: { mode: 'client', rows: byHome },
+  })
+  // 🔴 הרשימה השמית מקבלת את filtered (אחרי בוררי הטווח/הבית והחיפוש).
+  const mtc = useTableColumns<MatColKey, MaternityRow>('shared-maternity-rows', MAT_COLUMNS, {
+    sortFilter: { mode: 'client', rows: filtered },
+  })
 
   const homeCell = (c: ColDef<HomeColKey>, h: typeof byHome[number]) => {
     switch (c.key) {
@@ -630,20 +663,22 @@ function MaternityPanel({ rows }: { rows: MaternityRow[] }) {
           </div>
           {/* ⚠️ בלי overflow-x ובלי min-w: אין גלילה לרוחב בשום טבלה. */}
           <div className="w-full">
-            <div className="px-3 py-3">{htc.picker}</div>
+            <div className="flex flex-col gap-2 px-3 py-3">{htc.picker}{htc.activeFilters}</div>
             <table className="w-full text-[12px] border-collapse" style={htc.rt.tableStyle}>
               <colgroup>{htc.rt.cols}</colgroup>
               <thead>
                 <tr className="bg-[#fdfaf3] text-[#8a7a56] text-[11px]
                                [&>th]:px-3 [&>th]:py-2 [&>th]:text-right [&>th]:font-bold
                                [&>th]:border-l [&>th]:border-[#f0e9d8] [&>th:last-child]:border-l-0">
-                  {htc.shown.map((c, i) => (
-                    <th key={c.key} className={htc.headClass(c)}>{c.label}{htc.rt.handle(i)}</th>
-                  ))}
+                  {/* כותרת אחידה לכל המערכת — מיון וגרירת רוחב.
+                      ⚠️ הריפוד מגיע מ-[&>th] שעל ה-<tr>. */}
+                  {htc.shown.map((c, i) => htc.th(c, i))}
                 </tr>
               </thead>
               <tbody>
-                {byHome.map(h => (
+                {/* 🔴 htc.rows ולא byHome — אחרת המיון בכותרת לא היה
+                    משפיע על מה שמוצג בפועל. */}
+                {htc.rows.map(h => (
                   <tr key={h.home} className="border-t border-[#f4efe1]
                     [&>td]:px-3 [&>td]:py-2.5 [&>td]:border-l [&>td]:border-[#f0e9d8] [&>td:last-child]:border-l-0">
                     {htc.shown.map(c => (
@@ -672,18 +707,20 @@ function MaternityPanel({ rows }: { rows: MaternityRow[] }) {
         ) : (
           // 🔴 בלי overflow-x: הבורר קובע אילו עמודות נכנסות למסך.
           <div className="w-full">
-            <div className="px-2.5 py-3">{mtc.picker}</div>
+            <div className="flex flex-col gap-2 px-2.5 py-3">{mtc.picker}{mtc.activeFilters}</div>
             <table className="w-full text-[12px] border-collapse" style={mtc.rt.tableStyle}>
               <colgroup>{mtc.rt.cols}</colgroup>
               <thead className="bg-[#faf7ef] text-[#8a7a56]">
                 <tr className="[&>th]:px-2.5 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right [&>th]:border-l [&>th]:border-[#efe7d4] [&>th:last-child]:border-l-0">
-                  {mtc.shown.map((c, i) => (
-                    <th key={c.key} className={mtc.headClass(c)}>{c.label}{mtc.rt.handle(i)}</th>
-                  ))}
+                  {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב.
+                      ⚠️ הריפוד מגיע מ-[&>th] שעל ה-<tr>. */}
+                  {mtc.shown.map((c, i) => mtc.th(c, i))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#f4efe2]">
-                {filtered.map(r => (
+                {/* 🔴 mtc.rows ולא filtered — אחרת המיון והסינון בכותרת
+                    לא היו משפיעים על מה שמוצג בפועל. */}
+                {mtc.rows.map(r => (
                   <tr key={r.id} className="hover:bg-[#faf7ef] [&>td]:px-2.5 [&>td]:py-2 [&>td]:border-l [&>td]:border-[#f4efe2] [&>td:last-child]:border-l-0">
                     {mtc.shown.map(c => (
                       <td key={c.key} className={mtc.cellClass(c)}>{matCell(c, r)}</td>

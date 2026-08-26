@@ -88,13 +88,25 @@ const recoveryDays = (a: Aid) => a.recovery_eligibility_days ?? (a.is_twins ? 4 
 // ת״ז ותאריך לידה זמינים בבורר ובחלונית "פרטים".
 type ColKey = 'mother' | 'motherId' | 'baby' | 'birthDate' | 'days' | 'arrival'
 
-const COLUMNS: ColDef<ColKey>[] = [
-  { key: 'mother', label: 'שם היולדת', def: true },
-  { key: 'motherId', label: 'ת.ז.', def: false },
-  { key: 'baby', label: 'שם התינוק', def: true },
-  { key: 'birthDate', label: 'תאריך לידה', def: false },
-  { key: 'days', label: 'ימי זכאות', def: true, align: 'center' },
-  { key: 'arrival', label: 'הגעה לבית החלמה', def: true, align: 'center' },
+// ⚠️ headClassName נושא את הריפוד: <th> נבנה בתוך TableHeadMenu, וריפוד
+// שנכתב בצרכן לא היה מגיע אליו.
+const HEAD = 'px-4 py-3 text-xs font-semibold text-slate-500 text-center'
+
+// 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
+// React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
+// ⚠️ "הגעה" היא הפעולה עצמה (סימון + טופס) ולא תצוגת נתון — ה-value
+// שלה נבנה בתוך הרכיב מ-state המקומי. ראו portalColumns למטה.
+const COLUMNS: ColDef<ColKey, Aid>[] = [
+  { key: 'mother', label: 'שם היולדת', def: true, headClassName: HEAD, value: a => motherName(a.beneficiary) },
+  { key: 'motherId', label: 'ת.ז.', def: false, kind: 'number', headClassName: HEAD,
+    value: a => a.beneficiary?.spouse_id_number ?? null },
+  { key: 'baby', label: 'שם התינוק', def: true, headClassName: HEAD,
+    value: a => { const nm = babyNameLabel(a as AidNameFields); return nm.missing ? null : nm.text } },
+  // ⚠️ ממוין לפי התאריך הגולמי ולא לפי התווית: תאריך מפורמט ממוין
+  // אלפביתית ולא כרונולוגית.
+  { key: 'birthDate', label: 'תאריך לידה', def: false, kind: 'date', headClassName: HEAD, value: a => a.birth_date ?? null },
+  { key: 'days', label: 'ימי זכאות', def: true, align: 'center', kind: 'number', headClassName: HEAD, value: a => recoveryDays(a) },
+  { key: 'arrival', label: 'הגעה לבית החלמה', def: true, align: 'center', kind: 'enum', filterable: true, headClassName: HEAD },
 ]
 
 // ─── Login Form ───────────────────────────────────────────────────────────────
@@ -658,7 +670,23 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
   }
   // ⚠️ extraCols=1 — עמודת "פרטים" בקצה אינה בבורר אך נספרת לגרירה. היא
   // האחרונה, ולכן האינדקסים של עמודות הבורר נשארים 0..n-1.
-  const tc = useTableColumns('portal-maternity', COLUMNS, { extraCols: 1 })
+  //
+  // 🔴 "הגעה" נגזרת מ-state מקומי (arrived) ולא מהשורה, ולכן ה-value
+  // שלה נבנה כאן. זו העמודה שעליה בית ההחלמה עובד — סינון "טרם סומנה"
+  // הוא בדיוק רשימת העבודה שלו.
+  const portalColumns = useMemo(
+    () => COLUMNS.map(c => c.key === 'arrival'
+      ? { ...c, value: (a: Aid) => (arrived[a.id] ?? null) ? 'סומנה הגעה' : 'טרם סומנה' }
+      : c),
+    [arrived],
+  )
+
+  // ⚠️ mode:'client' — כל היולדות נטענות בבת אחת, אין דפדוף בשרת.
+  // 🔴 ה-hook מקבל את filtered (אחרי החיפוש) ולא את כל הרשימה.
+  const tc = useTableColumns<ColKey, Aid>('portal-maternity', portalColumns, {
+    extraCols: 1,
+    sortFilter: { mode: 'client', rows: filtered },
+  })
 
   // התא של כל עמודה. "הגעה" נשאר כאן ולא הוצא החוצה כי הוא הפעולה עצמה —
   // סימון, טופס המילוי והמצב הנעול — ולא תצוגת נתון.
@@ -929,7 +957,7 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
           </div>
         ) : (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-4 pt-3">{tc.picker}</div>
+            <div className="flex flex-col gap-2 px-4 pt-3">{tc.picker}{tc.activeFilters}</div>
             {/* ⚠️ בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. בנייד
                 המשתמש מסתיר עמודות בבורר במקום לגלול הצידה. */}
             <div className="w-full">
@@ -937,16 +965,15 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                 <colgroup>{tc.rt.cols}</colgroup>
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
-                    {tc.shown.map((c, i) => (
-                      <th key={c.key} className={`px-4 py-3 text-xs font-semibold text-slate-500 text-center ${tc.headClass(c)}`}>
-                        {c.label}{tc.rt.handle(i)}
-                      </th>
-                    ))}
+                    {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב. */}
+                    {tc.shown.map((c, i) => tc.th(c, i))}
                     <th className="px-4 py-3 text-xs font-semibold text-slate-500 text-center" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filtered.map(aid => {
+                  {/* 🔴 tc.rows ולא filtered — אחרת המיון והסינון בכותרת
+                      לא היו משפיעים על מה שמוצג בפועל. */}
+                  {tc.rows.map(aid => {
                     const a = arrived[aid.id] ?? null
                     const status = amountStatus[aid.id] ?? null
                     const editing = editingAmt[aid.id] ?? false
