@@ -69,6 +69,49 @@ export function mailFor(key: DepartmentKey, labelOverride?: string): { fromEmail
   return { fromEmail: dep.email, replyTo: dep.email, fromName: `${BRAND_NAME} · ${labelOverride ?? dep.label}`, department: dep.key }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 mailFor לעיל מכיר רק את המחלקות הקבועות: `DEPARTMENTS[key] ?? main`.
+// תיבה שהמנהל הוסיף מהממשק (custom_m) אינה שם, ולכן **נפלה ל-main** —
+// והמענה האוטומטי יצא מ-office@ במקום מהתיבה שאליה נכתב המייל.
+//
+// זה היה הבאג האמיתי: המענה כן נשלח וההגדרות כן נשמרו, אבל השולח היה
+// שגוי. מבחוץ זה נראה בדיוק כמו "המענה המותאם לא עובד".
+//
+// ⚠️ אסינכרונית כי התיבות המותאמות שמורות במסד. כל קורא בזרימת המייל
+// הנכנס חייב להשתמש בה; שליחה יזומה ממחלקה קבועה יכולה להישאר על
+// mailFor הסינכרונית.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function mailForAsync(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: any,
+  key: DepartmentKey | string,
+  labelOverride?: string,
+): Promise<{ fromEmail: string; replyTo: string; fromName: string; department: DepartmentKey }> {
+  const k = String(key)
+  // מחלקה קבועה — הנתיב הרגיל, בלי פנייה למסד.
+  if (DEPARTMENTS[k as DepartmentKey]) return mailFor(k as DepartmentKey, labelOverride)
+
+  if (k.startsWith('custom_') && db) {
+    try {
+      const { loadCustomMailboxes } = await import('./customMailboxes')
+      const hit = (await loadCustomMailboxes(db)).find(m => m.key === k)
+      if (hit) {
+        return {
+          fromEmail: hit.email,
+          replyTo: hit.email,
+          fromName: `${BRAND_NAME} · ${labelOverride ?? hit.label}`,
+          department: k as DepartmentKey,
+        }
+      }
+    } catch { /* נופל לברירת המחדל למטה */ }
+  }
+
+  // ⚠️ נפילה ל-main רק כשהתיבה באמת לא נמצאה — ועם לוג. הנפילה השקטה
+  // היא שהסתירה את הבאג הזה.
+  console.warn('[mailForAsync] תיבה לא מזוהה, נשלח מהמשרד הראשי:', k)
+  return mailFor('main' as DepartmentKey, labelOverride)
+}
+
 /** שם התצוגה לפניות על סדר היוחסין — הנושא ולא המחלקה. */
 export const LINEAGE_MAIL_LABEL = 'תיקוני יוחסין'
 

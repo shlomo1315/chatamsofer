@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { deliverMail } from './sendMail'
-import { mailFor, DEPARTMENTS, type DepartmentKey } from './departments'
+import { mailForAsync, DEPARTMENTS, type DepartmentKey } from './departments'
 import { shell } from './emailTemplates'
 import { shouldSkipAutoReply, isAutoSubmittedMail } from './maintenanceReply'
 import { getAutoReplyConfig, buildAutoReplyBody, activeReplyContent, AUTO_REPLY_DEFAULT_TITLE, type AutoReplySettings } from './autoReplyConfig'
@@ -160,8 +160,11 @@ export async function sendAutoReply(
     }
 
     const mail = renderAutoReply(dept, settings)
+    // 🔴 mailForAsync ולא mailFor: תיבה שהמנהל הוסיף (custom_m) אינה
+    // ב-DEPARTMENTS, ו-mailFor הפילה אותה בשקט ל-main — המענה יצא
+    // מ-office@ במקום מהתיבה שאליה נכתב המייל.
     const res = await deliverMail(from, mail.subject, mail.html, undefined, {
-      ...mailFor(dept),
+      ...(await mailForAsync(db, dept)),
       tracking: false,
       skipLog: true,
       // 🔴 לא דרך מאגר Gmail — המענה חייב לצאת מכתובת האגף.
