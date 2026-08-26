@@ -15,6 +15,8 @@ import { getPurchases } from '@/lib/cardPurchases'
 import { cardsDelivered } from '@/lib/cardsDelivered'
 import { isSupabaseConfigured } from '@/lib/supabase/server'
 import { isAwaitingCard, holdsCard, AWAITING_SELECT, type AwaitingAid } from '@/lib/awaitingFilter'
+import { maternityCounts } from '@/lib/maternityCounts'
+import LiveRefresh from '@/components/LiveRefresh'
 import PendingTasksPanel from './PendingTasksPanel'
 
 interface DashData {
@@ -75,7 +77,7 @@ const getStats = unstable_cache(
       totalBeneficiaries, newBeneficiariesWeek, approved, pending,
       activeLoans, pendingLoans, loansApprovedWeek,
       loansApprovedTotal, disbursedRows, legacyRows,
-      maternityActive, maternityPending, maternityDeepReview, activeAidRows,
+      matCounts, activeAidRows,
       widowPending, widowInProgress, distributionsPlanned,
       aidPending, aidAwaiting, aidApproved,
       activeLoanAmounts, cardStockBalance, dismissedTasks, deepReview,
@@ -95,11 +97,13 @@ const getStats = unstable_cache(
       supabase.from('loans').select('approved_amount, amount').not('disbursed_at', 'is', null),
       // ארכיון ההלוואות מהמערכת הקודמת
       supabase.from('legacy_loans').select('taken_amount'),
-      // ⚠️ לידות שקטות מוצגות בלשונית נפרדת ומסוננות ממסך היולדות, ולכן הן
-      // מוחרגות גם כאן: אחרת "תיקים פעילים" בדשבורד מציג 50 והמסך 49.
-      supabase.from('maternity_aids').select('id', headCount).eq('status', 'active').or('birth_type.is.null,birth_type.neq.silent'),
-      supabase.from('maternity_aids').select('id', headCount).eq('status', 'pending').or('birth_type.is.null,birth_type.neq.silent'),
-      supabase.from('maternity_aids').select('id', headCount).eq('status', 'deep_review'),
+      // 🔴 מוני היולדות — דרך מקור האמת (lib/maternityCounts), לא בשאילתה
+      // גולמית. הדשבורד הציג "2 ממתינות לאישור מנהל" בעוד המסך הציג 0:
+      // הרשימה מורידה תיק שנשלח אליו בירור והיולדת טרם ענתה, והספירה
+      // הגולמית לא ידעה על הכלל. אותה תקלה כבר תוקנה כאן בכרטיסים ובמלאי.
+      // ⚠️ הצרה מכוונת: הטיפוסים המחוללים של PostgREST עמוקים מדי ומפילים
+      // את tsc ב-"excessively deep" כשהלקוח נכנס כמות שהוא.
+      maternityCounts(supabase as unknown as Parameters<typeof maternityCounts>[0]),
       // ⚠️ מקור אמת יחיד עם מסך הכרטיסים, ולא ספירה עצמאית: העמודה הישנה
       // card_status כמעט אינה נכתבת עוד (card_load_status היא החיה), ולכן
       // "כרטיסים טעונים" בדשבורד הראה 52 בזמן שמסך הכרטיסים הראה 49. שני
@@ -160,9 +164,9 @@ const getStats = unstable_cache(
       legacyCount: (legacyRows.data ?? []).length,
       legacyTakenCount: (legacyRows.data ?? []).filter(x => (x as { taken_amount?: number | null }).taken_amount != null).length,
       totalLoanAmount: (activeLoanAmounts.data ?? []).reduce((s, x) => s + (Number(x.amount) || 0), 0),
-      maternityActive: maternityActive.count ?? 0,
-      maternityPending: maternityPending.count ?? 0,
-      maternityDeepReview: maternityDeepReview.count ?? 0,
+      maternityActive: matCounts.active,
+      maternityPending: matCounts.pending,
+      maternityDeepReview: matCounts.deepReview,
       cardsLoaded: loadedCount,
       cardsPending: awaitingCount,
       cardsRemaining: Number(cardStockBalance.data?.balance ?? 0),
@@ -281,6 +285,9 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-8 pb-10">
+      {/* 🔴 הדשבורד הוא Server Component ולכן היה קפוא עד ריענון ידני.
+          מרענן כל 30 שניות, ומיד בחזרה ללשונית. עוצר כשהיא מוסתרת. */}
+      <LiveRefresh seconds={30} />
 
       {/* ── Header ───────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
