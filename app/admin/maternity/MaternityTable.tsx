@@ -141,33 +141,76 @@ type ColKey =
 // ⚠️ ברירת המחדל צומצמה לתשע עמודות שנכנסות בנוחות למסך רגיל. השאר
 // (ת"ז התינוק, אישור לידה, אופן הגשה) זמינות בבורר — קודם כל 12–19
 // העמודות נדחסו יחד והטקסט נחתך.
-const COLUMNS: ColDef<ColKey>[] = [
-  { key: 'mother', label: 'שם היולדת', def: true },
-  { key: 'wifeId', label: 'ת.ז. האישה', def: true },
+/** היתרה החיה מנדרים — null כשטרם נשלפה. ⚠️ null ≠ 0. */
+const liveOf = (a: MaternityAid) => {
+  const lb = (a as { live_balance?: number | string | null }).live_balance
+  return lb == null ? null : Number(lb)
+}
+
+/** אופן ההגשה בעברית — התווית שהמשתמש רואה בפועל. */
+const SOURCE_LABEL: Record<string, string> = {
+  portal: 'האתר', email: 'מייל', admin: 'הזנה ידנית',
+}
+
+// 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
+// React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
+// ⚠️ שם/ת.ז./תינוק — מיון בלבד (ערך ייחודי לכל שורה). בית החלמה, הטבה,
+// הגעה, אופן הגשה, סטטוס ושיוך כרטיס הם קבוצות ערכים סגורות ← גם סינון.
+const COLUMNS: ColDef<ColKey, MaternityAid>[] = [
+  { key: 'mother', label: 'שם היולדת', def: true,
+    value: a => motherName(a.beneficiary as MotherRef | undefined) },
+  { key: 'wifeId', label: 'ת.ז. האישה', def: true, kind: 'number',
+    value: a => (a.beneficiary as MotherRef | undefined)?.spouse_id_number ?? null },
   // ⚠️ עמודה משלה בנוסף לתג שליד השם — כך אפשר לסרוק את הרשימה לפי
   // סיבת האישור. ריקה אצל הרוב המוחלט, וזו הכוונה.
-  { key: 'approval_label', label: 'סיבת אישור', def: true },
-  { key: 'baby', label: 'שם התינוק', def: true },
-  { key: 'benefit', label: 'הטבה', def: true },
-  { key: 'babyId', label: 'ת.ז. התינוק', def: false },
-  { key: 'birth', label: 'תאריך לידה', def: true },
-  { key: 'recovery', label: 'בית החלמה', def: true },
-  { key: 'days', label: 'ימי זכאות', def: true, align: 'center' },
-  { key: 'arrived', label: 'הגעה', def: true },
-  { key: 'amount', label: 'סכום בית החלמה', def: true },
-  { key: 'cert', label: 'אישור לידה', def: false, align: 'center' },
-  { key: 'source', label: 'אופן הגשה', def: false },
-  { key: 'loadStatus', label: 'סטטוס טעינה', def: true },
-  { key: 'loadDate', label: 'תאריך ושעת טעינה', def: false },
+  { key: 'approval_label', label: 'סיבת אישור', def: true, kind: 'enum', filterable: true,
+    value: a => approvalLabelOf(a.beneficiary as MotherRef | undefined) || null },
+  { key: 'baby', label: 'שם התינוק', def: true,
+    // ⚠️ missing מוצג כמקף — הערך null כדי שירד לסוף המיון ולא ימוין
+    // כטקסט "ממתין".
+    value: a => { const nm = babyNameLabel(a as AidNameFields); return nm.missing ? null : nm.text } },
+  { key: 'benefit', label: 'הטבה', def: true, kind: 'enum', filterable: true,
+    value: a => {
+      const wc = a.wants_food_card !== false, wr = a.wants_recovery !== false
+      return wc && wr ? 'כרטיס + הבראה' : wc ? 'כרטיס בלבד' : wr ? 'בית החלמה בלבד' : null
+    } },
+  { key: 'babyId', label: 'ת.ז. התינוק', def: false, kind: 'number', value: a => a.baby_id_number ?? null },
+  // ⚠️ ממוין לפי התאריך הגולמי ולא לפי התווית: תאריך מפורמט ממוין
+  // אלפביתית ולא כרונולוגית.
+  { key: 'birth', label: 'תאריך לידה', def: true, kind: 'date', value: a => a.birth_date ?? null },
+  { key: 'recovery', label: 'בית החלמה', def: true, kind: 'enum', filterable: true, value: a => a.recovery_home ?? null },
+  { key: 'days', label: 'ימי זכאות', def: true, align: 'center', kind: 'number', value: a => recoveryDaysOf(a) },
+  { key: 'arrived', label: 'הגעה', def: true, kind: 'enum', filterable: true,
+    value: a => a.recovery_arrived === true ? 'הגיעה' : a.recovery_arrived === false ? 'לא הגיעה' : null },
+  { key: 'amount', label: 'סכום בית החלמה', def: true, kind: 'number', value: a => a.recovery_amount ?? null },
+  // ⚠️ אישור לידה — כפתורי צפייה/הורדה. מיון לפי "יש/אין" בלבד.
+  { key: 'cert', label: 'אישור לידה', def: false, align: 'center', kind: 'enum', filterable: true,
+    value: a => a.birth_certificate_url ? 'יש' : 'אין' },
+  { key: 'source', label: 'אופן הגשה', def: false, kind: 'enum', filterable: true,
+    value: a => SOURCE_LABEL[(a as { source?: string | null }).source ?? ''] ?? null },
+  { key: 'loadStatus', label: 'סטטוס טעינה', def: true, kind: 'enum', filterable: true,
+    // ⚠️ "נטען" אמיתי = יש card_tlush_id (אישור מנדרים), בדיוק כמו בתא.
+    value: a => a.card_tlush_id ? 'נטען'
+      : (CARD_STATUS_PILL[a.card_status ?? 'pending'] ?? CARD_STATUS_PILL.pending).label },
+  { key: 'loadDate', label: 'תאריך ושעת טעינה', def: false, kind: 'date',
+    value: a => (a.card_tlush_id && a.card_loaded_at) ? a.card_loaded_at : null },
   // 🔴 היתרה בפועל בנדרים — לא card_load_amount שנרשם בטעינה.
   //
   // ⚠️ הסכום שנטען אינו משתנה מקניות: משפחה שקנתה ב-599.79 ונשארו לה
   // 0.21 עדיין רשומה 600. שתי העמודות האלה מרועננות אוטומטית כל שעה
   // מנדרים (lib/refreshLiveBalances), והן מקור האמת היחיד.
-  { key: 'liveBalance', label: 'יתרה בנדרים', def: false },
-  { key: 'spent', label: 'מומש בפועל', def: false },
-  { key: 'cardLink', label: 'שיוך כרטיס', def: true },
-  { key: 'status', label: 'סטטוס', def: true },
+  { key: 'liveBalance', label: 'יתרה בנדרים', def: false, kind: 'number', value: liveOf },
+  { key: 'spent', label: 'מומש בפועל', def: false, kind: 'number',
+    value: a => {
+      const lb = liveOf(a)
+      const loaded = a.card_load_amount != null ? Number(a.card_load_amount) : 0
+      // ⚠️ null ולא 0: "טרם נשלף" ו"לא מומש כלום" הם דברים שונים.
+      return lb == null || !loaded ? null : Math.max(0, loaded - lb)
+    } },
+  { key: 'cardLink', label: 'שיוך כרטיס', def: true, kind: 'enum', filterable: true,
+    value: a => a.card_picked_up_at ? 'שויך' : 'לא שויך' },
+  { key: 'status', label: 'סטטוס', def: true, kind: 'enum', filterable: true,
+    value: a => STATUS_PILL[a.status]?.label ?? null },
 ]
 
 export default function MaternityTable({ data, showCard, showArrived, hideFilters, emptyMessage, defaultFilter = 'all' }: { data: MaternityAid[]; showCard?: boolean; showArrived?: boolean; hideFilters?: boolean; emptyMessage?: string; defaultFilter?: Filter }) {
@@ -218,9 +261,6 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
   // 🔒 נתוני הכסף מנדרים — מנהל בלבד.
   const isAdmin = useIsAdmin()
 
-  const pg = useTablePagination(visible)
-  const visibleRows = pg.rows
-
   // ⚠️ העמודות שהמסך המארח כיבה (showCard/showArrived) יורדות מהבורר עצמו
   // ולא רק מהטבלה — אחרת המשתמש מסמן עמודה ושום דבר לא קורה.
   const colFilter = useCallback((c: ColDef<ColKey>) => {
@@ -235,7 +275,24 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
   }, [showArrived, showCard, isAdmin])
 
   // extraCols: 1 — עמודת הפעולות קבועה ואינה בבורר, אך נספרת לגרירה.
-  const tc = useTableColumns<ColKey>('maternity', COLUMNS, { filter: colFilter, extraCols: 1 })
+  //
+  // 🔴 סדר השרשרת: visible (חיפוש+סינון+מיון של המסך) → tc.rows (מיון
+  // וסינון מהכותרת) → pg.rows (חיתוך לעמוד). כל היפוך כאן הוא באג שקט:
+  // אילו ה-hook היה מקבל את pg.rows, הסינון מהכותרת היה חל על 50 השורות
+  // שכבר על המסך בלבד — בדיוק תקרת השורות ששרפה את המערכת פעמיים.
+  // ⚠️ mode:'client' — כל הבקשות מגיעות כ-prop, אין דפדוף בשרת.
+  const tc = useTableColumns<ColKey, MaternityAid>('maternity', COLUMNS, {
+    filter: colFilter,
+    extraCols: 1,
+    sortFilter: { mode: 'client', rows: visible },
+  })
+
+  // ⚡ דפדוף אחיד (50 בברירת מחדל, בורר עד 200) — הטבלה רינדרה את כל השורות
+  // המסוננות בבת אחת (עד ~1000 שורות × 15 עמודות = ~15,000 תאים), וכל
+  // סינון/מיון/הקלדה בנה אותן מחדש.
+  // ⚠️ החיתוך אחרון — אחרי המיון והסינון מהכותרת.
+  const pg = useTablePagination(tc.rows)
+  const visibleRows = pg.rows
 
   // תוכן התא לפי מפתח העמודה
   const cell = (key: ColKey, aid: MaternityAid, m?: MotherRef) => {
@@ -441,8 +498,8 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
           </div>
         </div>
         {/* בורר העמודות — מעל הטבלה */}
-        <div className="px-5 py-3 border-b border-slate-100">
-          {tc.picker}
+        <div className="flex flex-col gap-2 px-5 py-3 border-b border-slate-100">
+          {tc.picker}{tc.activeFilters}
         </div>
         <div className="w-full">
           {/* ⚠️ בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. הרוחב מחולק
@@ -451,14 +508,16 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
             <colgroup>{tc.rt.cols}</colgroup>
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 [&>th]:px-2 [&>th]:py-3.5 [&>th]:text-xs [&>th]:font-semibold [&>th]:text-slate-500 [&>th]:align-middle [&>th]:leading-tight">
-                {tc.shown.map((c, i) => (
-                  <th key={c.key} className={tc.headClass(c)}>{c.label}{tc.rt.handle(i)}</th>
-                ))}
+                {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב.
+                    ⚠️ הריפוד מגיע מ-[&>th] שעל ה-<tr>. */}
+                {tc.shown.map((c, i) => tc.th(c, i))}
                 <th className="relative text-center">פעולות{tc.rt.handle(tc.shown.length)}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {visible.length === 0 ? (
+              {/* 🔴 נמדד מול tc.rows — הסינון מהכותרת יכול לרוקן את הטבלה
+                  גם כשהחיפוש שמעליה החזיר שורות. */}
+              {tc.rows.length === 0 ? (
                 <tr><td colSpan={tc.shown.length + 1} className="px-4 py-12 text-center text-slate-400">{emptyMessage ?? 'לא נמצאו לידות בסינון זה'}</td></tr>
               ) : visibleRows.map(aid => {
                 const m = aid.beneficiary as MotherRef | undefined

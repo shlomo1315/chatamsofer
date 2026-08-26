@@ -57,21 +57,45 @@ const FILTERS: { key: CardStatus | 'all'; label: string }[] = [
 // עמודת "פעולות" אינה בבורר (קבועה) — ראו extraCols למטה.
 type ColKey = 'mother' | 'wifeId' | 'baby' | 'birth' | 'center' | 'status' | 'loaded' | 'balance' | 'live' | 'spent' | 'countdown'
 
-const COLUMNS: ColDef<ColKey>[] = [
-  { key: 'mother', label: 'שם היולדת', def: true },
-  { key: 'wifeId', label: 'ת.ז. האישה', def: true },
-  { key: 'baby', label: 'תינוק', def: true },
-  { key: 'birth', label: 'תאריך לידה', def: true },
-  { key: 'center', label: 'מוקד', def: true },
-  { key: 'status', label: 'סטטוס כרטיס', def: true },
-  { key: 'loaded', label: 'סכום שהוטען', def: false },
+/** היתרה החיה מנדרים — null כשטרם נשלפה. ⚠️ null ≠ 0. */
+const liveOf = (a: MaternityAid) => {
+  const lb = (a as { live_balance?: number | string | null }).live_balance
+  return lb == null ? null : Number(lb)
+}
+
+// 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
+// React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
+// ⚠️ שם/ת.ז./תינוק — מיון בלבד (ערך ייחודי לכל שורה). מוקד וסטטוס הם
+// קבוצות ערכים סגורות, ולכן רק הם ניתנים לסינון.
+const COLUMNS: ColDef<ColKey, MaternityAid>[] = [
+  { key: 'mother', label: 'שם היולדת', def: true, value: a => motherName(a.beneficiary as Ben | undefined) },
+  { key: 'wifeId', label: 'ת.ז. האישה', def: true, kind: 'number',
+    value: a => (a.beneficiary as Ben | undefined)?.spouse_id_number ?? null },
+  { key: 'baby', label: 'תינוק', def: true, value: a => babyNameLabel(a as AidNameFields).text || null },
+  // ⚠️ ממוין לפי התאריך הגולמי ולא לפי התווית: תאריך מפורמט ממוין
+  // אלפביתית ולא כרונולוגית.
+  { key: 'birth', label: 'תאריך לידה', def: true, kind: 'date', value: a => a.birth_date ?? null },
+  { key: 'center', label: 'מוקד', def: true, kind: 'enum', filterable: true,
+    value: a => (a as { card_center?: { name?: string } }).card_center?.name ?? null },
+  { key: 'status', label: 'סטטוס כרטיס', def: true, kind: 'enum', filterable: true,
+    // ⚠️ הערך הוא התווית המוצגת ולא הקוד: המזכירה מסננת לפי מה שהיא רואה.
+    value: a => STATUS_META[(a.card_status ?? 'pending') as CardStatus].label },
+  { key: 'loaded', label: 'סכום שהוטען', def: false, kind: 'number', value: a => a.card_load_amount ?? null },
   // ⚠️ "יתרה רשומה" היא הערך שנכתב בטעינה ואינו מתעדכן מקניות — כל
   // היולדות רשומות 600. שתי העמודות הבאות מביאות את האמת מנדרים,
   // ומרועננות אוטומטית כל שעה (lib/refreshLiveBalances).
-  { key: 'balance', label: 'יתרה רשומה', def: false },
-  { key: 'live', label: 'יתרה בנדרים', def: true },
-  { key: 'spent', label: 'מומש בפועל', def: true },
-  { key: 'countdown', label: 'ימים לפריקה', def: true },
+  { key: 'balance', label: 'יתרה רשומה', def: false, kind: 'number',
+    value: a => (a.card_status === 'loaded' ? a.card_balance ?? null : null) },
+  { key: 'live', label: 'יתרה בנדרים', def: true, kind: 'number', value: liveOf },
+  { key: 'spent', label: 'מומש בפועל', def: true, kind: 'number',
+    value: a => {
+      const lb = liveOf(a)
+      const loaded = a.card_load_amount != null ? Number(a.card_load_amount) : 0
+      // ⚠️ null ולא 0: "טרם נשלף" ו"לא מומש כלום" הם דברים שונים.
+      return lb == null || !loaded ? null : Math.max(0, loaded - lb)
+    } },
+  // ⚠️ ממוין לפי מועד הפריקה עצמו — הוא מה שמייצר את הספירה לאחור.
+  { key: 'countdown', label: 'ימים לפריקה', def: true, kind: 'date', value: a => a.six_weeks_end ?? null },
 ]
 
 export default function CardsTable({ aids }: { aids: MaternityAid[] }) {
@@ -132,7 +156,14 @@ export default function CardsTable({ aids }: { aids: MaternityAid[] }) {
   })
 
   // extraCols: 1 — עמודת הפעולות קבועה ואינה בבורר, אך נספרת לגרירה.
-  const tc = useTableColumns<ColKey>('maternity-cards', COLUMNS, { extraCols: 1 })
+  //
+  // 🔴 ה-hook מקבל את filtered (אחרי החיפוש והסינון שמעל הטבלה) ולא את
+  // aids: הסינון בכותרת חל *על* מה שכבר סוננו, ולא במקומם.
+  // ⚠️ mode:'client' — כל הבקשות מגיעות כ-prop, אין דפדוף בשרת.
+  const tc = useTableColumns<ColKey, MaternityAid>('maternity-cards', COLUMNS, {
+    extraCols: 1,
+    sortFilter: { mode: 'client', rows: filtered },
+  })
 
   // תוכן התא לפי מפתח העמודה
   const cell = (key: ColKey, aid: MaternityAid) => {
@@ -250,7 +281,7 @@ export default function CardsTable({ aids }: { aids: MaternityAid[] }) {
       {err && <p className="px-5 mt-3 text-sm text-red-600">{err}</p>}
 
       {/* בורר העמודות — מעל הטבלה */}
-      <div className="px-5 py-3">{tc.picker}</div>
+      <div className="flex flex-col gap-2 px-5 py-3">{tc.picker}{tc.activeFilters}</div>
 
       {/* ⚠️ בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. */}
       <div className="w-full">
@@ -258,16 +289,19 @@ export default function CardsTable({ aids }: { aids: MaternityAid[] }) {
           <colgroup>{tc.rt.cols}</colgroup>
           <thead>
             <tr className="border-b-2 border-slate-200 bg-slate-50 text-[15px] font-bold text-slate-600 [&>th]:px-5 [&>th]:py-4 [&>th]:font-bold [&>th]:text-right [&>th]:border-l [&>th]:border-slate-200 [&>th:last-child]:border-l-0">
-              {tc.shown.map((c, i) => (
-                <th key={c.key} className={tc.headClass(c)}>{c.label}{tc.rt.handle(i)}</th>
-              ))}
+              {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב.
+                  ⚠️ הריפוד מגיע מ-[&>th] שעל ה-<tr>, ולכן אין צורך
+                  ב-headClassName כאן. */}
+              {tc.shown.map((c, i) => tc.th(c, i))}
               <th className="relative">פעולות{tc.rt.handle(tc.shown.length)}</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 ? (
+            {/* 🔴 tc.rows ולא filtered — אחרת המיון והסינון בכותרת לא היו
+                משפיעים על מה שמוצג בפועל. */}
+            {tc.rows.length === 0 ? (
               <tr><td colSpan={tc.shown.length + 1} className="px-5 py-12 text-center text-slate-400">אין בקשות בסינון זה</td></tr>
-            ) : filtered.map(aid => {
+            ) : tc.rows.map(aid => {
               const s = (aid.card_status ?? 'pending') as CardStatus
               const busy = busyId === aid.id
               return (
