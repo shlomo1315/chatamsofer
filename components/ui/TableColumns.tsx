@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo, useCallback, useEffect, type ReactNode } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef, type ReactNode } from 'react'
 import { Columns3, Check } from 'lucide-react'
 import { useResizableColumns, type ResizableColumns } from './ResizableTable'
 import TableHeadMenu, { ActiveFilters } from './TableHeadMenu'
@@ -256,15 +256,35 @@ export function useTableColumns<K extends string, R = never>(
   const sort = isServer ? sortFilter.sort : cSort
   const filters = isServer ? sortFilter.filters : cFilters
 
+  // 🔴 השדות נשלפים מהאובייקט ומשמשים כתלויות במקומו.
+  //
+  // sortFilter מגיע מכל קריאה כאובייקט-ליטרל inline ({ mode, rows }) — כלומר
+  // *זהות חדשה בכל רינדור*. כשהוא היה תלות ישירה של ה-useMemo של rows, כל
+  // רינדור ייצר מערך שורות חדש; useTablePagination משווה `prevAll !== all`
+  // בזמן הרינדור (state נגזר מ-props), הזיהוי נכשל תמיד, setState רץ בכל
+  // רינדור — ולולאה אינסופית הפילה את המסך ב-React #301.
+  // ⚠️ לא לחזור ל-[sortFilter]: התיקון חייב להיות כאן ולא ב-23 אתרי הקריאה.
+  const sfMode = sortFilter?.mode
+  const sfRows = sortFilter?.rows
+  const sfOptions = sortFilter?.mode === 'server' ? sortFilter.options : undefined
+
+  // ⚠️ הקולבקים של מצב 'server' נקראים דרך ref ולא כתלות ישירה — מאותה סיבה
+  // בדיוק: sortFilter הוא ליטרל חדש בכל רינדור, ותלות בו הייתה מייצרת
+  // setSort/setFilters חדשים בכל רינדור ומחלחלת הלאה ל-th.
+  const sfRef = useRef(sortFilter)
+  useEffect(() => { sfRef.current = sortFilter })
+
   const setSort = useCallback((s: SortState<K>) => {
-    if (sortFilter?.mode === 'server') sortFilter.onSortChange(s)
+    const sf = sfRef.current
+    if (sf?.mode === 'server') sf.onSortChange(s)
     else setCSort(s)
-  }, [sortFilter])
+  }, [])
 
   const setFilters = useCallback((f: Record<string, string[]>) => {
-    if (sortFilter?.mode === 'server') sortFilter.onFiltersChange(f)
+    const sf = sfRef.current
+    if (sf?.mode === 'server') sf.onFiltersChange(f)
     else setCFilters(f)
-  }, [sortFilter])
+  }, [])
 
   /** חילוץ הערך של עמודה משורה — value() אם הוגדרה, אחרת השדה לפי key. */
   const valueOf = useCallback((c: ColDef<K, R>, row: R): unknown =>
@@ -275,25 +295,25 @@ export function useTableColumns<K extends string, R = never>(
   // מגיעות מוכנות (distinct על כל המאגר, לא על הדף).
   const optionsByCol = useMemo(() => {
     const out: Record<string, DistinctValue[]> = {}
-    if (!sortFilter) return out
-    if (sortFilter.mode === 'server') return sortFilter.options as Record<string, DistinctValue[]>
+    if (!sfMode || !sfRows) return out
+    if (sfMode === 'server') return (sfOptions ?? {}) as Record<string, DistinctValue[]>
     for (const c of available) {
       if (!c.filterable) continue
-      out[c.key] = distinctValues(sortFilter.rows, r => valueOf(c, r))
+      out[c.key] = distinctValues(sfRows, r => valueOf(c, r))
     }
     return out
-  }, [sortFilter, available, valueOf])
+  }, [sfMode, sfRows, sfOptions, available, valueOf])
 
   // 🔴 הסינון קודם למיון: מיון על שורות שממילא יוסתרו הוא עבודה מיותרת,
   // ועל 7,000 שורות ההבדל מורגש.
   const rows = useMemo<R[]>(() => {
-    if (!sortFilter) return []
+    if (!sfMode || !sfRows) return []
     // ⚠️ ב-'server' השורות מוחזרות כפי שהתקבלו — המסד כבר מיין וסינן.
     // מיון נוסף כאן היה ממיין את הדף בתוך עצמו ומייצר סדר שגוי:
     // 50 שורות ממוינות בתוך רצף של 7,066 נראות ממוינות, ואינן.
-    if (sortFilter.mode === 'server') return [...sortFilter.rows]
+    if (sfMode === 'server') return [...sfRows]
 
-    let out = [...sortFilter.rows]
+    let out = [...sfRows]
     for (const c of available) {
       const sel = filters[c.key]
       if (!sel?.length) continue
@@ -304,7 +324,7 @@ export function useTableColumns<K extends string, R = never>(
       if (col) out = sortRows(out, r => valueOf(col, r), col.kind ?? 'text', sort.dir)
     }
     return out
-  }, [sortFilter, available, filters, sort, valueOf])
+  }, [sfMode, sfRows, available, filters, sort, valueOf])
 
   const th = useCallback((c: ColDef<K, R>, i: number): ReactNode => {
     const sel = new Set(filters[c.key] ?? [])
@@ -314,8 +334,8 @@ export function useTableColumns<K extends string, R = never>(
         label={c.label}
         kind={c.kind ?? 'text'}
         // ⚠️ ברירת המחדל של sortable היא true, ושל filterable היא false.
-        sortable={sortFilter ? c.sortable !== false : false}
-        filterable={!!sortFilter && !!c.filterable}
+        sortable={sfMode ? c.sortable !== false : false}
+        filterable={!!sfMode && !!c.filterable}
         sortDir={sort.key === c.key ? sort.dir : null}
         onSort={dir => setSort({ key: c.key, dir })}
         options={optionsByCol[c.key] ?? []}
@@ -331,7 +351,7 @@ export function useTableColumns<K extends string, R = never>(
         className={`${headClass(c)} ${c.headClassName ?? ''}`}
       />
     )
-  }, [filters, sort, optionsByCol, sortFilter, rt, headClass, setSort, setFilters])
+  }, [filters, sort, optionsByCol, sfMode, rt, headClass, setSort, setFilters])
 
   const activeFilters = useMemo(() => {
     const items = available
