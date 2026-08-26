@@ -37,13 +37,16 @@ export interface GratitudeLetterRow {
 
 type Db = NonNullable<ReturnType<typeof getServiceClient>>
 
-const SELECT =
+// ⚠️ מיוצא: ההורדה המרוכזת שולפת את *אותם* שדות בדיוק. שאילתה נפרדת שם
+// הייתה משמיטה שדה (עיר/ת"ז/ימי החלמה) והמכתב המרוכז היה יוצא חסר לעומת
+// הבודד — בלי שום שגיאה.
+export const GRATITUDE_LETTER_SELECT =
   'id, body, signature, is_anonymous, status, created_at, sent_to_donor_at, sent_to_donor_email, ' +
   'aid:maternity_aids(birth_date, recovery_home, recovery_eligibility_days, is_twins, recovery_stay_from, recovery_stay_to, ' +
   'beneficiary:beneficiaries(family_name, full_name, spouse_name, city, address, id_number, spouse_id_number, email))'
 
 export async function loadGratitudeLetter(db: Db, id: string): Promise<GratitudeLetterRow | null> {
-  const { data } = await db.from('gratitude_letters').select(SELECT).eq('id', id).maybeSingle()
+  const { data } = await db.from('gratitude_letters').select(GRATITUDE_LETTER_SELECT).eq('id', id).maybeSingle()
   return data as unknown as GratitudeLetterRow | null
 }
 

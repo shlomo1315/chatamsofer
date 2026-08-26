@@ -116,7 +116,7 @@ export default function BatchPdfDialog({ rows, onClose }: {
               קובץ מרוכז של הברכות
             </h2>
             <p className="mt-0.5 text-xs text-slate-500">
-              כל הברכות שנבחרו בקובץ PDF אחד, עם ציון מה כבר נשלח לנדיב
+              כל ברכה בדף נפרד ומעוצב, בקובץ PDF אחד — מוכן למסירה לנדיב
             </p>
           </div>
           <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100">
