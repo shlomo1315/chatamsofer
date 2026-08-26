@@ -20,7 +20,7 @@
 // שיידחה. השרת סורק מחדש ברגע ההסרה ואינו סומך על הסימון במסך.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import {
   Ghost, Loader2, Search, ChevronLeft, ExternalLink, ShieldQuestion,
   UserRoundX, UserRoundSearch, CopyX, Info, Copy, ShieldCheck, Trash2,
@@ -124,12 +124,21 @@ const isRemovable = (r: Row) => r.group === 'card_elsewhere' || r.twinNodeId != 
 // אמור לחול על כולן.
 type ColKey = 'node' | 'generation' | 'idNumber' | 'parent' | 'inCard'
 
-const COLUMNS: ColDef<ColKey>[] = [
-  { key: 'node', label: 'שם הצומת', def: true },
-  { key: 'generation', label: 'דור', def: true, align: 'center' },
-  { key: 'idNumber', label: 'ת״ז', def: true },
-  { key: 'parent', label: 'תחת', def: true },
-  { key: 'inCard', label: 'נכתב בכרטסת', def: true },
+// ⚠️ headClassName נושא את הריפוד: <th> נבנה בתוך TableHeadMenu, וריפוד
+// שנכתב בצרכן לא היה מגיע אליו.
+const HEAD = 'px-3 py-2 font-medium'
+
+// 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
+// React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
+// ⚠️ שם/ת״ז/תחת — מיון בלבד: ערך ייחודי לכל שורה. הדור ו"נכתב בכרטסת"
+// הם קבוצות סגורות, ולכן רק הם ניתנים לסינון.
+const COLUMNS: ColDef<ColKey, Row>[] = [
+  { key: 'node', label: 'שם הצומת', def: true, headClassName: HEAD, value: r => r.nodeName || null },
+  { key: 'generation', label: 'דור', def: true, align: 'center', kind: 'number', filterable: true, headClassName: HEAD, value: r => r.generation },
+  { key: 'idNumber', label: 'ת״ז', def: true, kind: 'number', headClassName: HEAD, value: r => r.idNumber || null },
+  { key: 'parent', label: 'תחת', def: true, headClassName: HEAD, value: r => r.parentNodeName || null },
+  // ⚠️ הערך הוא השם שנכתב בכרטסת ההורה — זה מה שהעמודה מציגה בפועל.
+  { key: 'inCard', label: 'נכתב בכרטסת', def: true, headClassName: HEAD, value: r => r.childNameInCard || null },
 ]
 
 export default function GhostChildrenPanel({ onLocate, onFixed }: {
@@ -183,7 +192,19 @@ export default function GhostChildrenPanel({ onLocate, onFixed }: {
 
   // ⚠️ extraCols=2 — תיבת הסימון (הראשונה) ועמודת הקישורים (האחרונה) אינן
   // בבורר. הסימון קודם לכולן, ולכן ידית הגרירה של כל עמודה מקבלת i+1.
-  const tc = useTableColumns('lineage-ghosts', COLUMNS, { extraCols: 2 })
+  //
+  // 🔴 ה-hook מקבל את שורות **הקבוצה הפתוחה** ולא את כל הסריקה: שלוש
+  // הקבוצות חולקות הגדרת עמודות אחת, אך רק אחת פתוחה בכל רגע. העברת
+  // כל השורות הייתה בונה את רשימת ערכי הסינון מקבוצות שאינן על המסך.
+  // ⚠️ mode:'client' — כל השורות מגיעות מהסריקה בבת אחת, אין דפדוף בשרת.
+  const openRows = useMemo(
+    () => (open && data ? data.rows.filter(r => r.group === open) : []),
+    [open, data],
+  )
+  const tc = useTableColumns('lineage-ghosts', COLUMNS, {
+    extraCols: 2,
+    sortFilter: { mode: 'client', rows: openRows },
+  })
 
   const cell = (c: ColDef<ColKey>, r: Row) => {
     switch (c.key) {
@@ -374,7 +395,8 @@ export default function GhostChildrenPanel({ onLocate, onFixed }: {
           )}
 
           {GROUPS.map(g => {
-            const rows = data.rows.filter(r => r.group === g.key)
+            // ⚠️ השורות עצמן מגיעות מ-tc.rows (הקבוצה הפתוחה, ממוינת
+            // ומסוננת) — כאן נחוץ רק המונה שבכותרת המתקפלת.
             const count = data.counts[g.key]
             if (!count) return null
             return (
@@ -390,7 +412,7 @@ export default function GhostChildrenPanel({ onLocate, onFixed }: {
                 {open === g.key && (
                   <div className="rounded-b-xl border border-t-0 border-slate-200 bg-white">
                     <p className="border-b border-slate-100 px-3 py-2 text-[11px] leading-relaxed text-slate-500">{g.hint}</p>
-                    <div className="border-b border-slate-100 px-3 py-2">{tc.picker}</div>
+                    <div className="flex flex-col gap-2 border-b border-slate-100 px-3 py-2">{tc.picker}{tc.activeFilters}</div>
                     {/* ⚠️ גלילה אנכית בלבד — הכלל: אין גלילה לרוחב בשום טבלה. */}
                     <div className="max-h-[26rem] overflow-y-auto">
                       <table className="w-full text-right text-sm" style={tc.rt.tableStyle}>
@@ -398,16 +420,17 @@ export default function GhostChildrenPanel({ onLocate, onFixed }: {
                         <thead className="sticky top-0 bg-slate-50 text-slate-600">
                           <tr>
                             <th className="w-8 px-3 py-2"></th>
-                            {tc.shown.map((c, i) => (
-                              <th key={c.key} className={`px-3 py-2 font-medium ${tc.headClass(c)}`}>
-                                {c.label}{tc.rt.handle(i + 1)}
-                              </th>
-                            ))}
+                            {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב.
+                                ⚠️ i+1: תיבת הסימון קודמת לעמודות שבבורר. */}
+                            {tc.shown.map((c, i) => tc.th(c, i + 1))}
                             <th className="px-3 py-2 font-medium"></th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                          {rows.map(r => (
+                          {/* 🔴 tc.rows ולא rows — הן שורות אותה קבוצה עצמה
+                              (ה-hook קיבל את openRows), אך אחרי המיון והסינון
+                              בכותרת. rows הגולמי היה מתעלם משניהם. */}
+                          {tc.rows.map(r => (
                             <tr key={r.nodeId} className={picked.has(r.nodeId) ? 'bg-rose-50/60' : 'hover:bg-slate-50'}>
                               <td className="px-3 py-2 align-top">
                                 {/* ⚠️ תיבת סימון רק לעותק מוכח. שורה בלי ראיה
@@ -451,9 +474,11 @@ export default function GhostChildrenPanel({ onLocate, onFixed }: {
                         </tbody>
                       </table>
                     </div>
-                    {count > rows.length && (
+                    {/* ⚠️ נמדד מול tc.rows: אחרי סינון בכותרת מוצגות פחות
+                        שורות, והשורה הזאת חייבת לומר כמה באמת על המסך. */}
+                    {count > tc.rows.length && (
                       <p className="border-t border-slate-100 px-3 py-2 text-[11px] text-slate-400">
-                        מוצגות {he(rows.length)} מתוך {he(count)} — הספירה למעלה מלאה.
+                        מוצגות {he(tc.rows.length)} מתוך {he(count)} — הספירה למעלה מלאה.
                       </p>
                     )}
                   </div>
