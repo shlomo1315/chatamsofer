@@ -5,13 +5,23 @@ import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 
 type ColKey = 'branch' | 'recipient' | 'sent' | 'lastUsed' | 'status' | 'actions'
 
-const COLUMNS: ColDef<ColKey>[] = [
-  { key: 'branch', label: 'ענף (דור)', def: true },
-  { key: 'recipient', label: 'נמען', def: true },
-  { key: 'sent', label: 'נשלח', def: true },
-  { key: 'lastUsed', label: 'כניסה אחרונה', def: false },
-  { key: 'status', label: 'סטטוס', def: true },
-  { key: 'actions', label: 'פעולות', def: true },
+// ⚠️ headClassName נושא את הריפוד: <th> נבנה בתוך TableHeadMenu, וריפוד
+// שנכתב בצרכן לא היה מגיע אליו.
+const HEAD = 'text-right px-4 py-2 font-semibold'
+
+// 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
+// React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
+// ⚠️ "פעולות" אינה נתון — רק כפתורים. לא ניתנת למיון ולא לסינון.
+const COLUMNS: ColDef<ColKey, Invite>[] = [
+  { key: 'branch', label: 'ענף (דור)', def: true, headClassName: HEAD, value: i => i.node_name || null },
+  { key: 'recipient', label: 'נמען', def: true, headClassName: HEAD, value: i => i.recipient_name || i.recipient_email || null },
+  { key: 'sent', label: 'נשלח', def: true, kind: 'date', headClassName: HEAD, value: i => i.created_at },
+  // ⚠️ null = טרם נכנס. ריקים יורדים לסוף המיון בשני הכיוונים.
+  { key: 'lastUsed', label: 'כניסה אחרונה', def: false, kind: 'date', headClassName: HEAD, value: i => i.last_used_at },
+  { key: 'status', label: 'סטטוס', def: true, kind: 'enum', filterable: true, headClassName: HEAD,
+    // ⚠️ הערך הוא התווית המוצגת ולא הקוד: המשתמש מסנן לפי מה שהוא רואה.
+    value: i => i.revoked_at ? 'בוטלה' : new Date(i.expires_at) < new Date() ? 'פגה' : 'פעילה' },
+  { key: 'actions', label: 'פעולות', def: true, sortable: false, headClassName: HEAD },
 ]
 
 interface Invite {
@@ -116,7 +126,14 @@ export default function SharePermissionsPanel({ onClose }: { onClose: () => void
 
   // ⚠️ extraCols=1 — עמודת חץ ההרחבה היא הראשונה ואינה בבורר, ולכן ידית
   // הגרירה של כל עמודה מקבלת i+1.
-  const tc = useTableColumns('lineage-share-permissions', COLUMNS, { extraCols: 1 })
+  //
+  // 🔴 ה-hook מקבל את shown (אחרי בורר הסטטוס שמעל הטבלה) ולא את invites:
+  // הסינון בכותרת חייב לחול *על* מה שהבורר כבר סינן, ולא במקומו.
+  // ⚠️ mode:'client' — כל ההזמנות נטענות בבת אחת, אין דפדוף בשרת.
+  const tc = useTableColumns('lineage-share-permissions', COLUMNS, {
+    extraCols: 1,
+    sortFilter: { mode: 'client', rows: shown },
+  })
 
   const cell = (c: ColDef<ColKey>, i: Invite) => {
     switch (c.key) {
@@ -187,13 +204,20 @@ export default function SharePermissionsPanel({ onClose }: { onClose: () => void
           ))}
         </div>
 
-        {!loading && shown.length > 0 && <div className="px-5 py-2.5 border-b border-slate-100">{tc.picker}</div>}
+        {/* ⚠️ התנאי נשאר shown (לפני הסינון בכותרת) ולא tc.rows: סינון
+            שמרוקן את הטבלה חייב להשאיר את הבורר והצ'יפים על המסך, אחרת
+            אין דרך לנקות אותו וכל המסך נראה ריק. */}
+        {!loading && shown.length > 0 && (
+          <div className="flex flex-col gap-2 px-5 py-2.5 border-b border-slate-100">{tc.picker}{tc.activeFilters}</div>
+        )}
 
         {/* ⚠️ גלילה אנכית בלבד — הכלל: אין גלילה לרוחב בשום טבלה. */}
         <div className="overflow-y-auto flex-1">
           {loading ? (
             <div className="py-16 text-center"><Loader2 size={22} className="animate-spin text-slate-400 inline" /></div>
-          ) : shown.length === 0 ? (
+          ) : tc.rows.length === 0 ? (
+            /* ⚠️ נמדד מול tc.rows: סינון בכותרת שמרוקן את הטבלה חייב
+                להציג "אין להצגה" ולא טבלה ריקה בלי הסבר. */
             <div className="py-16 text-center text-sm text-slate-400">אין הרשאות להצגה.</div>
           ) : (
             <table className="w-full text-sm text-right" style={tc.rt.tableStyle}>
@@ -201,15 +225,15 @@ export default function SharePermissionsPanel({ onClose }: { onClose: () => void
               <thead className="sticky top-0 bg-slate-50 border-b border-slate-200 text-xs text-slate-500">
                 <tr>
                   <th className="text-right px-4 py-2 font-semibold w-8"></th>
-                  {tc.shown.map((c, i) => (
-                    <th key={c.key} className={`text-right px-4 py-2 font-semibold ${tc.headClass(c)}`}>
-                      {c.label}{tc.rt.handle(i + 1)}
-                    </th>
-                  ))}
+                  {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב.
+                      ⚠️ i+1: חץ ההרחבה קודם לעמודות שבבורר. */}
+                  {tc.shown.map((c, i) => tc.th(c, i + 1))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {shown.map(i => {
+                {/* 🔴 tc.rows ולא shown — אחרת המיון והסינון בכותרת לא היו
+                    משפיעים על מה שמוצג בפועל. */}
+                {tc.rows.map(i => {
                   const st = statusOf(i)
                   const isOpen = expanded === i.token
                   const acts = activity[i.token] ?? []

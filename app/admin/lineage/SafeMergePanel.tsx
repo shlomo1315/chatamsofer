@@ -37,13 +37,21 @@ const he = (n: number) => n.toLocaleString('he-IL')
 
 type ColKey = 'name' | 'generation' | 'parent' | 'copies' | 'children' | 'families'
 
-const COLUMNS: ColDef<ColKey>[] = [
-  { key: 'name', label: 'שם', def: true },
-  { key: 'generation', label: 'דור', def: true, align: 'center' },
-  { key: 'parent', label: 'תחת', def: true },
-  { key: 'copies', label: 'עותקים', def: true, align: 'center' },
-  { key: 'children', label: 'ילדים', def: true, align: 'center' },
-  { key: 'families', label: 'משפחות', def: true, align: 'center' },
+// ⚠️ headClassName נושא את הריפוד: <th> נבנה בתוך TableHeadMenu, וריפוד
+// שנכתב בצרכן לא היה מגיע אליו.
+const HEAD = 'px-3 py-2 font-medium'
+
+// 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
+// React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
+// ⚠️ שם/תחת — מיון בלבד (ערך ייחודי כמעט לכל שורה). הדור הוא קבוצה
+// סגורה קטנה, ולכן הוא היחיד שניתן לסינון.
+const COLUMNS: ColDef<ColKey, Group>[] = [
+  { key: 'name', label: 'שם', def: true, headClassName: HEAD, value: g => g.name },
+  { key: 'generation', label: 'דור', def: true, align: 'center', kind: 'number', filterable: true, headClassName: HEAD, value: g => g.generation },
+  { key: 'parent', label: 'תחת', def: true, headClassName: HEAD, value: g => g.parentName || null },
+  { key: 'copies', label: 'עותקים', def: true, align: 'center', kind: 'number', headClassName: HEAD, value: g => g.copies },
+  { key: 'children', label: 'ילדים', def: true, align: 'center', kind: 'number', headClassName: HEAD, value: g => g.children },
+  { key: 'families', label: 'משפחות', def: true, align: 'center', kind: 'number', headClassName: HEAD, value: g => g.families },
 ]
 
 export default function SafeMergePanel({ onDone }: { onDone: () => void }) {
@@ -57,7 +65,10 @@ export default function SafeMergePanel({ onDone }: { onDone: () => void }) {
   const [done, setDone] = useState<string | null>(null)
   const [err, setErr] = useState('')
 
-  const tc = useTableColumns('lineage-safe-merge', COLUMNS)
+  // ⚠️ mode:'client' — כל הקבוצות מגיעות מהסריקה בבת אחת, אין דפדוף בשרת.
+  const tc = useTableColumns('lineage-safe-merge', COLUMNS, {
+    sortFilter: { mode: 'client', rows: groups },
+  })
 
   const cell = (c: ColDef<ColKey>, g: Group) => {
     switch (c.key) {
@@ -312,20 +323,21 @@ export default function SafeMergePanel({ onDone }: { onDone: () => void }) {
             </div>
           )}
 
-          <div className="mb-2">{tc.picker}</div>
+          <div className="mb-2 flex flex-col gap-2">{tc.picker}{tc.activeFilters}</div>
           {/* ⚠️ גלילה אנכית בלבד — הכלל: אין גלילה לרוחב בשום טבלה. */}
           <div className="max-h-72 overflow-y-auto rounded-lg border border-emerald-200 bg-white mb-3">
             <table className="w-full text-right text-sm" style={tc.rt.tableStyle}>
               <colgroup>{tc.rt.cols}</colgroup>
               <thead className="sticky top-0 bg-emerald-50 text-slate-600">
                 <tr>
-                  {tc.shown.map((c, i) => (
-                    <th key={c.key} className={`px-3 py-2 font-medium ${tc.headClass(c)}`}>{c.label}{tc.rt.handle(i)}</th>
-                  ))}
+                  {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב. */}
+                  {tc.shown.map((c, i) => tc.th(c, i))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {groups.map((g, i) => (
+                {/* 🔴 tc.rows ולא groups — אחרת המיון והסינון בכותרת לא
+                    היו משפיעים על מה שמוצג בפועל. */}
+                {tc.rows.map((g, i) => (
                   <tr key={`${g.name}-${g.generation}-${i}`} className="hover:bg-emerald-50/50">
                     {tc.shown.map(c => (
                       <td key={c.key} className={`px-3 py-2 ${tc.cellClass(c)}`}>{cell(c, g)}</td>
@@ -334,9 +346,12 @@ export default function SafeMergePanel({ onDone }: { onDone: () => void }) {
                 ))}
               </tbody>
             </table>
-            {stats.groups > groups.length && (
+            {/* ⚠️ נמדד מול tc.rows — אחרי סינון בכותרת מוצגות פחות שורות.
+                המשפט "המיזוג יטפל בכולן" נכון דווקא כאן: הסינון הוא תצוגה
+                בלבד, והמיזוג רץ על כל הקבוצות שנסרקו. */}
+            {stats.groups > tc.rows.length && (
               <p className="px-3 py-1.5 text-xs text-slate-400">
-                מוצגות {he(groups.length)} מתוך {he(stats.groups)} — המיזוג יטפל בכולן.
+                מוצגות {he(tc.rows.length)} מתוך {he(stats.groups)} — המיזוג יטפל בכולן.
               </p>
             )}
           </div>
