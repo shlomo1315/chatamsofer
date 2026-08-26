@@ -62,12 +62,24 @@ function fmtDate(iso: string): string {
 // ⚠️ עמודת הצ׳קבוקס (ראשונה) ועמודת "שלח" (אחרונה) אינן בבורר — ראו extraCols.
 type ColKey = 'date' | 'mother' | 'source' | 'body' | 'sent'
 
-const COLUMNS: ColDef<ColKey>[] = [
-  { key: 'date', label: 'תאריך', def: true },
-  { key: 'mother', label: 'שם היולדת', def: true },
-  { key: 'source', label: 'מקור', def: true },
-  { key: 'body', label: 'הברכה', def: true },
-  { key: 'sent', label: 'נשלח לנדיב', def: true },
+// 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
+// React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
+// ⚠️ שם/הברכה — מיון בלבד. המקור ומצב המשלוח הם קבוצות סגורות ← גם סינון.
+// ⚠️ headClassName נושא את הריפוד: <th> נבנה בתוך TableHeadMenu, וריפוד
+// שנכתב בצרכן לא היה מגיע אליו.
+const HEAD = 'px-4 py-3 font-semibold'
+
+const COLUMNS: ColDef<ColKey, GratitudeRow>[] = [
+  // ⚠️ ממוין לפי התאריך הגולמי ולא לפי התווית: תאריך מפורמט ממוין
+  // אלפביתית ולא כרונולוגית.
+  { key: 'date', label: 'תאריך', def: true, kind: 'date', headClassName: HEAD, value: r => r.created_at },
+  { key: 'mother', label: 'שם היולדת', def: true, headClassName: HEAD, value: r => motherName(r) },
+  { key: 'source', label: 'מקור', def: true, kind: 'enum', filterable: true, headClassName: HEAD,
+    // ⚠️ הערך הוא התווית המוצגת ולא הקוד ('web'/'email'/'scan').
+    value: r => SOURCE_META[r.source]?.label ?? null },
+  { key: 'body', label: 'הברכה', def: true, headClassName: HEAD, value: r => r.body || (r.scan_url ? '— שובר סרוק —' : null) },
+  { key: 'sent', label: 'נשלח לנדיב', def: true, kind: 'enum', filterable: true, headClassName: HEAD,
+    value: r => r.sent_to_donor_at ? 'נשלח' : 'טרם נשלח' },
 ]
 
 export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
@@ -88,13 +100,26 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
 
   const filtered = items.filter(r =>
     sentFilter === 'all' || (sentFilter === 'sent') === wasSentToDonor(r))
+  // extraCols: 2 — צ׳קבוקס (לפני) וכפתור השליחה (אחרי), שאינם בבורר.
+  //
+  // 🔴 ה-hook מקבל את filtered (אחרי בורר המשלוח) ולא את items: הסינון
+  // בכותרת חל *על* מה שהבורר סינן, ולא במקומו.
+  // ⚠️ mode:'client' — כל הברכות מגיעות כ-prop, אין דפדוף בשרת.
+  const tc = useTableColumns<ColKey, GratitudeRow>('maternity-gratitude', COLUMNS, {
+    extraCols: 2,
+    sortFilter: { mode: 'client', rows: filtered },
+  })
+
   // ניתן לשלוח רק מכתבים שאושרו
   // 🔴 כל ברכה ניתנת לבחירה.
   //
   // ⚠️ קודם היה כאן filter(status === 'approved'), וכל 68 הברכות במערכת
   // הן 'received' — כך שלא היה *מה* לסמן: כל הצ'קבוקסים היו מושבתים,
   // ו"שליחה מרוכזת" נשאר אפור לנצח בלי שום הסבר.
-  const selectableIds = filtered.map(r => r.id)
+  //
+  // 🔴 נגזר מ-tc.rows ולא מ-filtered: הסינון מהכותרת הוא דרך *נוספת*
+  // שבה שורה נעלמת מהמסך, וברכה שאינה לפני המשתמש לא תישלח לנדיב.
+  const selectableIds = tc.rows.map(r => r.id)
 
   // 🔴 בחירה שנעלמה מהמסך אינה נשלחת.
   //
@@ -117,8 +142,6 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
   /** פותח את חלונית השליחה. הבחירה והכתובת נקבעות שם. */
   function openSend(ids: string[]) { setSendModal({ ids }) }
 
-  // extraCols: 2 — צ׳קבוקס (לפני) וכפתור השליחה (אחרי), שאינם בבורר.
-  const tc = useTableColumns<ColKey>('maternity-gratitude', COLUMNS, { extraCols: 2 })
 
   // תוכן התא לפי מפתח העמודה
   const cell = (key: ColKey, row: GratitudeRow) => {
@@ -217,7 +240,7 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
       </div>
 
       {/* בורר העמודות — מעל הטבלה */}
-      <div className="mb-3">{tc.picker}</div>
+      <div className="mb-3 flex flex-col gap-2">{tc.picker}{tc.activeFilters}</div>
 
       {/* טבלה — ⚠️ בלי overflow-x: אין גלילה לרוחב בשום טבלה. */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
@@ -235,17 +258,17 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
                   className="accent-pink-600 cursor-pointer disabled:cursor-not-allowed"
                 />
               </th>
-              {/* ⚠️ האינדקס לידית מוסט ב-1 בגלל עמודת הצ׳קבוקס שלפניה. */}
-              {tc.shown.map((c, i) => (
-                <th key={c.key} className={`px-4 py-3 font-semibold ${tc.headClass(c)}`}>
-                  {c.label}{tc.rt.handle(i + 1)}
-                </th>
-              ))}
+              {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב.
+                  ⚠️ האינדקס לידית מוסט ב-1 בגלל עמודת הצ׳קבוקס שלפניה. */}
+              {tc.shown.map((c, i) => tc.th(c, i + 1))}
               <th className="relative px-4 py-3 font-semibold">{tc.rt.handle(tc.shown.length + 1)}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {filtered.map(row => {
+            {/* 🔴 tc.rows ולא filtered — אחרת המיון והסינון בכותרת לא היו
+                משפיעים על מה שמוצג בפועל, והבחירה (selectableIds) הייתה
+                מתייחסת לשורות שאינן על המסך. */}
+            {tc.rows.map(row => {
               return (
                 <tr
                   key={row.id}

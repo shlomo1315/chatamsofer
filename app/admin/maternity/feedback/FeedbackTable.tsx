@@ -72,13 +72,25 @@ function fmtDateTime(iso: string): string {
 // ⚠️ עמודת המחיקה (אחרונה, בלי כותרת) אינה בבורר — ראו extraCols.
 type ColKey = 'date' | 'mother' | 'home' | 'avg' | 'source' | 'notes'
 
-const COLUMNS: ColDef<ColKey>[] = [
-  { key: 'date', label: 'תאריך', def: true },
-  { key: 'mother', label: 'שם היולדת', def: true },
-  { key: 'home', label: 'בית החלמה', def: true },
-  { key: 'avg', label: 'ציון ממוצע', def: true },
-  { key: 'source', label: 'מקור', def: true },
-  { key: 'notes', label: 'הערות', def: true },
+// ⚠️ headClassName נושא את הריפוד: <th> נבנה בתוך TableHeadMenu, וריפוד
+// שנכתב בצרכן לא היה מגיע אליו.
+const HEAD = 'px-4 py-3 font-semibold'
+
+// 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
+// React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
+// ⚠️ שם/הערות — מיון בלבד. בית החלמה והמקור הם קבוצות סגורות ← גם סינון.
+const COLUMNS: ColDef<ColKey, FeedbackRow>[] = [
+  // ⚠️ ממוין לפי התאריך הגולמי ולא לפי התווית: תאריך מפורמט ממוין
+  // אלפביתית ולא כרונולוגית.
+  { key: 'date', label: 'תאריך', def: true, kind: 'date', headClassName: HEAD, value: r => r.created_at },
+  { key: 'mother', label: 'שם היולדת', def: true, headClassName: HEAD, value: r => motherName(r) },
+  { key: 'home', label: 'בית החלמה', def: true, kind: 'enum', filterable: true, headClassName: HEAD, value: r => r.recovery_home || null },
+  // ⚠️ null (ולא 0) כשאין תשובות — אחרת משוב ריק היה ממוין כציון הגרוע ביותר.
+  { key: 'avg', label: 'ציון ממוצע', def: true, kind: 'number', headClassName: HEAD, value: r => rowAvg(r) },
+  { key: 'source', label: 'מקור', def: true, kind: 'enum', filterable: true, headClassName: HEAD,
+    // ⚠️ הערך הוא התווית המוצגת ולא הקוד ('web'/'email').
+    value: r => (SOURCE_META[r.source] ?? SOURCE_META.web).label },
+  { key: 'notes', label: 'הערות', def: true, headClassName: HEAD, value: r => r.free_text || null },
 ]
 
 export default function FeedbackTable({ rows, questions }: { rows: FeedbackRow[]; questions: SurveyQuestion[] }) {
@@ -133,7 +145,11 @@ export default function FeedbackTable({ rows, questions }: { rows: FeedbackRow[]
 
   // ⚠️ לפני ה-return המוקדם של "אין תשובות" — hook חייב לרוץ בכל רינדור.
   // extraCols: 1 — עמודת המחיקה, שאינה בבורר.
-  const tc = useTableColumns<ColKey>('maternity-feedback', COLUMNS, { extraCols: 1 })
+  // ⚠️ mode:'client' — כל המשובים מגיעים כ-prop, אין דפדוף בשרת.
+  const tc = useTableColumns<ColKey, FeedbackRow>('maternity-feedback', COLUMNS, {
+    extraCols: 1,
+    sortFilter: { mode: 'client', rows },
+  })
 
   // תוכן התא לפי מפתח העמודה
   const cell = (key: ColKey, row: FeedbackRow) => {
@@ -220,7 +236,7 @@ export default function FeedbackTable({ rows, questions }: { rows: FeedbackRow[]
       </div>
 
       {/* בורר העמודות — מעל הטבלה */}
-      <div className="mb-3">{tc.picker}</div>
+      <div className="mb-3 flex flex-col gap-2">{tc.picker}{tc.activeFilters}</div>
 
       {/* טבלת התשובות — ⚠️ בלי overflow-x: אין גלילה לרוחב בשום טבלה. */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
@@ -228,16 +244,15 @@ export default function FeedbackTable({ rows, questions }: { rows: FeedbackRow[]
           <colgroup>{tc.rt.cols}</colgroup>
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr className="text-right text-xs text-slate-500">
-              {tc.shown.map((c, i) => (
-                <th key={c.key} className={`px-4 py-3 font-semibold ${tc.headClass(c)}`}>
-                  {c.label}{tc.rt.handle(i)}
-                </th>
-              ))}
+              {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב. */}
+              {tc.shown.map((c, i) => tc.th(c, i))}
               <th className="relative w-12">{tc.rt.handle(tc.shown.length)}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {rows.map(row => {
+            {/* 🔴 tc.rows ולא rows — אחרת המיון והסינון בכותרת לא היו
+                משפיעים על מה שמוצג בפועל. */}
+            {tc.rows.map(row => {
               return (
                 <tr key={row.id} onClick={() => setOpen(row)} className="hover:bg-slate-50 cursor-pointer transition">
                   {tc.shown.map(c => (
