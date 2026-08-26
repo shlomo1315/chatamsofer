@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { CUSTOM_PREFIX } from './customMailboxes'
 import { DEPARTMENTS, type DepartmentKey } from './departments'
 import { escapeHtml } from './emailTemplates'
+import { richToHtml } from './richText'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // מענה אוטומטי — מנגנון אחד לכל התיבות.

@@ -1,8 +1,9 @@
 'use client'
 import { useState, useEffect, useMemo, useRef } from 'react'
+import RichTextArea from '@/components/ui/RichTextArea'
 import {
   Loader2, Save, Eye, ChevronDown, Check, AlertCircle, Plus, Trash2, Mail, Clock, Ban, FileText,
-} from 'lucide-react'
+  GripVertical, ChevronUp } from 'lucide-react'
 import { REQUEST_MAILTO_PRESETS, AUTO_REPLY_DEFAULT_TITLE, AUTO_REPLY_DEFAULT_NO_REPLY } from '@/lib/autoReplyConfig'
 import type {
   AutoReplyMap, AutoReplySettings as Settings, AutoReplyButton, AutoReplySection, AutoReplyMode,
@@ -328,8 +329,8 @@ export default function AutoReplySettings() {
                             className="w-full px-3 py-2 rounded-lg border border-amber-200 bg-white text-sm focus:border-amber-400 outline-none" />
                         </Field>
                         <Field label="תוכן ההודעה">
-                          <textarea value={s.tempMessage} rows={4}
-                            onChange={e => patch(dept.key, { tempMessage: e.target.value })}
+                          <RichTextArea value={s.tempMessage} rows={4}
+                            onChange={v => patch(dept.key, { tempMessage: v })}
                             className="w-full px-3 py-2 rounded-lg border border-amber-200 bg-white text-sm leading-relaxed focus:border-amber-400 outline-none resize-y" />
                         </Field>
                         {/* 🔴 מצב 'זמני' עם טקסט ריק אינו משתיק את התיבה אלא
@@ -370,8 +371,8 @@ export default function AutoReplySettings() {
                     </Field>
 
                     <Field label="פסקת פתיחה">
-                      <textarea value={s.message} rows={5}
-                        onChange={e => patch(dept.key, { message: e.target.value })}
+                      <RichTextArea value={s.message} rows={5}
+                        onChange={v => patch(dept.key, { message: v })}
                         className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm leading-relaxed focus:border-indigo-400 outline-none resize-y" />
                     </Field>
 
@@ -395,11 +396,12 @@ export default function AutoReplySettings() {
                       </p>
                       <div className="flex flex-col gap-2">
                         {s.sections.map((sec, i) => (
-                          <SectionEditor key={i} section={sec}
+                          <SectionEditor key={i} section={sec} index={i} total={s.sections.length}
                             onChange={next => {
                               const arr = [...s.sections]; arr[i] = next
                               patch(dept.key, { sections: arr })
                             }}
+                            onMove={(from, to) => patch(dept.key, { sections: moveItem(s.sections, from, to) })}
                             onRemove={() => patch(dept.key, { sections: s.sections.filter((_, j) => j !== i) })} />
                         ))}
                         {!s.sections.length && (
@@ -411,14 +413,14 @@ export default function AutoReplySettings() {
                     </div>
 
                     <Field label="הערת סיום" hint="מוצגת בתיבה מודגשת בתחתית המייל">
-                      <textarea value={s.footnote} rows={2}
-                        onChange={e => patch(dept.key, { footnote: e.target.value })}
+                      <RichTextArea value={s.footnote} rows={2}
+                        onChange={v => patch(dept.key, { footnote: v })}
                         className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm leading-relaxed focus:border-indigo-400 outline-none resize-y" />
                     </Field>
 
                     <Field label='הודעת "אין להשיב"' hint="הבלוק האדום בתחתית המייל">
-                      <textarea value={s.noReplyNotice ?? ''} rows={3}
-                        onChange={e => patch(dept.key, { noReplyNotice: e.target.value })}
+                      <RichTextArea value={s.noReplyNotice ?? ''} rows={3}
+                        onChange={v => patch(dept.key, { noReplyNotice: v })}
                         placeholder={AUTO_REPLY_DEFAULT_NO_REPLY}
                         className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm leading-relaxed focus:border-indigo-400 outline-none resize-y" />
                       <p className="text-[11.5px] text-slate-400 mt-1">
@@ -601,19 +603,69 @@ function ButtonsEditor({ label, hint, buttons, onChange }: {
   )
 }
 
-function SectionEditor({ section, onChange, onRemove }: {
-  section: AutoReplySection; onChange: (s: AutoReplySection) => void; onRemove: () => void
+/**
+ * הזזת פריט ברשימה.
+ *
+ * 🔴 עד עכשיו לא הייתה דרך להוסיף סעיף באמצע: הכפתור מוסיף בסוף בלבד,
+ * ולשינוי הסדר היה צריך למחוק הכול ולהקליד מחדש לפי הסדר הרצוי.
+ */
+function moveItem<T>(arr: T[], from: number, to: number): T[] {
+  if (from === to || from < 0 || to < 0 || from >= arr.length || to >= arr.length) return arr
+  const next = [...arr]
+  const [item] = next.splice(from, 1)
+  next.splice(to, 0, item)
+  return next
+}
+
+function SectionEditor({ section, index, total, onChange, onMove, onRemove }: {
+  section: AutoReplySection
+  index: number
+  total: number
+  onChange: (s: AutoReplySection) => void
+  onMove: (from: number, to: number) => void
+  onRemove: () => void
 }) {
+  const [dragOver, setDragOver] = useState(false)
+
   return (
-    <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/60 flex flex-col gap-2">
+    <div
+      // ⚠️ גרירה *וגם* חצים: גרירה נוחה בעכבר אבל אינה נגישה במגע
+      // ובמקלדת, והמזכירות עובדות גם מטאבלט.
+      draggable
+      onDragStart={e => {
+        e.dataTransfer.setData('text/plain', String(index))
+        e.dataTransfer.effectAllowed = 'move'
+      }}
+      onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={e => {
+        e.preventDefault()
+        setDragOver(false)
+        const from = Number(e.dataTransfer.getData('text/plain'))
+        if (Number.isFinite(from)) onMove(from, index)
+      }}
+      className={`border rounded-xl p-3 bg-slate-50/60 flex flex-col gap-2 transition-colors ${
+        dragOver ? 'border-indigo-400 bg-indigo-50/70' : 'border-slate-200'
+      }`}
+    >
       <div className="flex items-center gap-1.5">
+        <span className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 shrink-0" title="גררו לשינוי הסדר">
+          <GripVertical size={15} />
+        </span>
+        <span className="text-[10px] font-bold text-slate-400 tabular-nums shrink-0">{index + 1}</span>
         <input value={section.title} placeholder="כותרת הסעיף"
           onChange={e => onChange({ ...section, title: e.target.value })}
           className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm font-bold focus:border-indigo-400 outline-none" />
+        <button type="button" onClick={() => onMove(index, index - 1)} disabled={index === 0}
+          title="העברה למעלה"
+          className="p-1 text-slate-400 hover:text-indigo-600 disabled:opacity-25 shrink-0"><ChevronUp size={14} /></button>
+        <button type="button" onClick={() => onMove(index, index + 1)} disabled={index === total - 1}
+          title="העברה למטה"
+          className="p-1 text-slate-400 hover:text-indigo-600 disabled:opacity-25 shrink-0"><ChevronDown size={14} /></button>
         <button onClick={onRemove} className="p-1.5 text-slate-400 hover:text-red-500 shrink-0"><Trash2 size={14} /></button>
       </div>
-      <textarea value={section.text} rows={2} placeholder="תיאור"
-        onChange={e => onChange({ ...section, text: e.target.value })}
+      <RichTextArea value={section.text} rows={2} placeholder="תיאור"
+        onChange={v => onChange({ ...section, text: v })}
         className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs leading-relaxed focus:border-indigo-400 outline-none resize-y" />
       <ButtonsEditor label="קישורים" buttons={section.buttons}
         onChange={b => onChange({ ...section, buttons: b })} />
