@@ -57,11 +57,20 @@ const STATUS: Record<string, { txt: string; cls: string }> = {
 
 type ColKey = 'ben' | 'idNumber' | 'dup' | 'keep'
 
-const COLUMNS: ColDef<ColKey>[] = [
-  { key: 'ben', label: 'הכרטסת', def: true },
-  { key: 'idNumber', label: 'ת״ז', def: true },
-  { key: 'dup', label: 'העותק שיימחק', def: true },
-  { key: 'keep', label: 'הצומת שיישאר', def: true },
+// 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
+// React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
+// ⚠️ הכרטסת/ת״ז — מיון בלבד: רשימת ערכים על שם או ת״ז פותחת ערך ייחודי
+// לכל שורה. הסטטוס של העותק הוא קבוצה סגורה, ולכן הוא היחיד שניתן לסינון.
+// ⚠️ headClassName נושא את הריפוד: <th> נבנה בתוך TableHeadMenu, וריפוד
+// שנכתב בצרכן לא היה מגיע אליו.
+const HEAD = 'px-3 py-2 font-medium'
+
+const COLUMNS: ColDef<ColKey, Row>[] = [
+  { key: 'ben', label: 'הכרטסת', def: true, headClassName: HEAD, value: r => r.benName },
+  { key: 'idNumber', label: 'ת״ז', def: true, kind: 'number', headClassName: HEAD, value: r => r.benIdNumber || null },
+  // ⚠️ ממוין לפי הדור ולא לפי השם: זו השאלה האמיתית ברשימת כפילויות.
+  { key: 'dup', label: 'העותק שיימחק', def: true, kind: 'number', headClassName: HEAD, value: r => r.dupGeneration },
+  { key: 'keep', label: 'הצומת שיישאר', def: true, kind: 'number', headClassName: HEAD, value: r => r.keepGeneration },
 ]
 
 export default function SelfDuplicatesPanel({ onLocate, onFixed }: {
@@ -111,8 +120,10 @@ export default function SelfDuplicatesPanel({ onLocate, onFixed }: {
   }, [picked, toast, onFixed, scan])
 
   const rows = data?.rows ?? []
-  const allPicked = rows.length > 0 && rows.every(r => picked.has(r.dupNodeId))
-  const toggleAll = () => setPicked(allPicked ? new Set() : new Set(rows.map(r => r.dupNodeId)))
+  // 🔴 "סמן הכל" חייב להיות "סמן את מה שמוצג *עכשיו*" — אחרי הסינון בכותרת.
+  // הכפתור כתוב "סמן את כל N המוצגים", והפעולה מוחקת צמתים מהעץ: סימון
+  // שורה מסוננת שאינה על המסך הוא בדיוק מחיקה שלא נראתה.
+  // ⚠️ shownRows מוגדר אחרי tc (הוא נגזר ממנו) — ראו למטה.
   const toggle = (id: string) => setPicked(p => {
     const n = new Set(p)
     if (n.has(id)) n.delete(id); else n.add(id)
@@ -121,7 +132,17 @@ export default function SelfDuplicatesPanel({ onLocate, onFixed }: {
 
   // ⚠️ extraCols=2 — תיבת הסימון (הראשונה) ועמודת הקישור לכרטסת (האחרונה)
   // אינן בבורר. הסימון קודם לכולן, ולכן ידית הגרירה מקבלת i+1.
-  const tc = useTableColumns('lineage-self-duplicates', COLUMNS, { extraCols: 2 })
+  //
+  // ⚠️ mode:'client' — כל השורות מגיעות מהסריקה בבת אחת, אין דפדוף בשרת.
+  const tc = useTableColumns('lineage-self-duplicates', COLUMNS, {
+    extraCols: 2,
+    sortFilter: { mode: 'client', rows },
+  })
+
+  // השורות שעל המסך בפועל — אחרי המיון והסינון בכותרת.
+  const shownRows = tc.rows
+  const allPicked = shownRows.length > 0 && shownRows.every(r => picked.has(r.dupNodeId))
+  const toggleAll = () => setPicked(allPicked ? new Set() : new Set(shownRows.map(r => r.dupNodeId)))
 
   const cell = (c: ColDef<ColKey>, r: Row) => {
     switch (c.key) {
@@ -214,7 +235,7 @@ export default function SelfDuplicatesPanel({ onLocate, onFixed }: {
                 </span>
                 <button onClick={toggleAll}
                   className="rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-600 hover:border-fuchsia-300">
-                  {allPicked ? 'נקה סימון' : `סמן את כל ${he(rows.length)} המוצגים`}
+                  {allPicked ? 'נקה סימון' : `סמן את כל ${he(shownRows.length)} המוצגים`}
                 </button>
                 <span className="text-[11px] text-slate-500">סומנו {he(picked.size)}</span>
                 <button onClick={() => setConfirm(true)} disabled={!picked.size || fixing}
@@ -225,7 +246,7 @@ export default function SelfDuplicatesPanel({ onLocate, onFixed }: {
               </div>
 
               <div className="rounded-xl border border-slate-200 bg-white">
-                <div className="border-b border-slate-100 px-3 py-2">{tc.picker}</div>
+                <div className="flex flex-col gap-2 border-b border-slate-100 px-3 py-2">{tc.picker}{tc.activeFilters}</div>
                 {/* ⚠️ גלילה אנכית בלבד — הכלל: אין גלילה לרוחב בשום טבלה. */}
                 <div className="max-h-[26rem] overflow-y-auto">
                   <table className="w-full text-right text-sm" style={tc.rt.tableStyle}>
@@ -233,16 +254,16 @@ export default function SelfDuplicatesPanel({ onLocate, onFixed }: {
                     <thead className="sticky top-0 bg-slate-50 text-slate-600">
                       <tr>
                         <th className="w-8 px-3 py-2"></th>
-                        {tc.shown.map((c, i) => (
-                          <th key={c.key} className={`px-3 py-2 font-medium ${tc.headClass(c)}`}>
-                            {c.label}{tc.rt.handle(i + 1)}
-                          </th>
-                        ))}
+                        {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב.
+                            ⚠️ i+1: תיבת הסימון קודמת לעמודות שבבורר. */}
+                        {tc.shown.map((c, i) => tc.th(c, i + 1))}
                         <th className="px-3 py-2 font-medium"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {rows.map(r => (
+                      {/* 🔴 tc.rows ולא rows — אחרת המיון והסינון בכותרת
+                          לא היו משפיעים על מה שמוצג בפועל. */}
+                      {tc.rows.map(r => (
                         <tr key={r.dupNodeId} className={picked.has(r.dupNodeId) ? 'bg-fuchsia-50/60' : 'hover:bg-slate-50'}>
                           <td className="px-3 py-2 align-top">
                             <input type="checkbox" checked={picked.has(r.dupNodeId)}
