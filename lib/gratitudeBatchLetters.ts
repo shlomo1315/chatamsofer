@@ -54,11 +54,18 @@ export async function buildGratitudeBatchLetters(input: BatchLettersInput): Prom
   const rows = selectBatch(input.letters, input.filters)
   const out = await PDFDocument.create()
 
+  // ⚠️ כל ברכה נבנית בנפרד ובזהירות: תוכן חריג בברכה אחת (למשל טקסט
+  // שבור שהתקבל במייל) לא אמור להפיל את כל הקובץ ולמנוע ממאות משפחות
+  // אחרות לצאת. הכשל מתועד ללוג כדי שאפשר יהיה לאתר ולתקן את הרשומה.
   for (const row of rows) {
-    const voucher = await buildGratitudeVoucher(inputFor(row))
-    const src = await PDFDocument.load(Buffer.from(voucher.contentB64, 'base64'))
-    const pages = await out.copyPages(src, src.getPageIndices())
-    for (const p of pages) out.addPage(p)
+    try {
+      const voucher = await buildGratitudeVoucher(inputFor(row))
+      const src = await PDFDocument.load(Buffer.from(voucher.contentB64, 'base64'))
+      const pages = await out.copyPages(src, src.getPageIndices())
+      for (const p of pages) out.addPage(p)
+    } catch (e) {
+      console.error(`[gratitude-batch] דילוג על ברכה ${row.id} — בנייתה נכשלה:`, e instanceof Error ? e.message : e)
+    }
   }
 
   // ⚠️ PDF חייב עמוד אחד לפחות: מסמך בלי עמודים נפתח כ"קובץ פגום", והמשתמש

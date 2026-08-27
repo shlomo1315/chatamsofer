@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { buildGratitudeBatchLetters } from '@/lib/gratitudeBatchLetters'
 import { GRATITUDE_LETTER_SELECT, type GratitudeLetterRow } from '../[id]/shared'
-import type { BatchFilters, SentFilter, StatusFilter } from '@/lib/gratitudeBatch'
+import type { BatchFilters, SentFilter } from '@/lib/gratitudeBatch'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // הפקת הקובץ המרוכז של הברכות — בשרת.
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  let input: { from?: string | null; to?: string | null; sent?: string; status?: string }
+  let input: { from?: string | null; to?: string | null; sent?: string }
   try {
     input = await request.json()
   } catch {
@@ -46,12 +46,10 @@ export async function POST(request: NextRequest) {
   // ⚠️ ערכים לא מוכרים נופלים ל'all' ולא נשלחים כמות שהם לפילוח: כך
   // בקשה משובשת מחזירה יותר מדי ולא פחות מדי, וזה הצד הבטוח.
   const SENT: SentFilter[] = ['all', 'unsent', 'sent']
-  const STATUS: StatusFilter[] = ['all', 'approved', 'received', 'rejected']
   const filters: BatchFilters = {
     from: (input.from ?? '').trim() || null,
     to: (input.to ?? '').trim() || null,
     sent: SENT.includes(input.sent as SentFilter) ? (input.sent as SentFilter) : 'all',
-    status: STATUS.includes(input.status as StatusFilter) ? (input.status as StatusFilter) : 'all',
   }
 
   const { data, error } = await db

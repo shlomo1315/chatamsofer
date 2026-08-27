@@ -73,22 +73,22 @@ describe('טווח תאריכים', () => {
 })
 
 describe('סינון סטטוס', () => {
-  it('מאושרות בלבד', () => {
-    expect(matchesBatch(L({ id: 'a', status: 'approved' }), { status: 'approved' })).toBe(true)
-    expect(matchesBatch(L({ id: 'b', status: 'received' }), { status: 'approved' })).toBe(false)
-    expect(matchesBatch(L({ id: 'c', status: 'rejected' }), { status: 'approved' })).toBe(false)
+  it('ברכות שנדחו אינן נכנסות לקובץ, לא משנה מהסינון שנבחר', () => {
+    expect(matchesBatch(L({ id: 'a', status: 'approved' }), {})).toBe(true)
+    expect(matchesBatch(L({ id: 'b', status: 'received' }), {})).toBe(true)
+    expect(matchesBatch(L({ id: 'c', status: 'rejected' }), {})).toBe(false)
   })
 })
 
 describe('סינונים מצטברים', () => {
-  it('🔴 "מאושרות שטרם נשלחו בשבוע האחרון" — כל השלושה יחד', () => {
+  it('🔴 "טרם נשלחו בשבוע האחרון, לא נדחות" — טווח + משלוח + סטטוס יחד', () => {
     const hit = L({ id: 'hit', status: 'approved', created_at: '2026-08-10T09:00:00Z' })
-    const wrongStatus = L({ id: 'ws', status: 'received', created_at: '2026-08-10T09:00:00Z' })
+    const rejected = L({ id: 'rj', status: 'rejected', created_at: '2026-08-10T09:00:00Z' })
     const alreadySent = L({ id: 'as', created_at: '2026-08-10T09:00:00Z', sent_to_donor_at: '2026-08-11T00:00:00Z' })
     const outOfRange = L({ id: 'or', created_at: '2026-07-01T09:00:00Z' })
-    const f = { from: '2026-08-09', to: '2026-08-15', sent: 'unsent' as const, status: 'approved' as const }
+    const f = { from: '2026-08-09', to: '2026-08-15', sent: 'unsent' as const }
     expect(matchesBatch(hit, f)).toBe(true)
-    expect(matchesBatch(wrongStatus, f)).toBe(false)
+    expect(matchesBatch(rejected, f)).toBe(false)
     expect(matchesBatch(alreadySent, f)).toBe(false)
     expect(matchesBatch(outOfRange, f)).toBe(false)
   })

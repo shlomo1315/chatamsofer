@@ -4,8 +4,8 @@ import { useState, useMemo } from 'react'
 import { FileDown, X, Loader2, CheckCircle2, Clock, FileText } from 'lucide-react'
 import {
   selectBatch, batchStats, rangeLabel,
-  SENT_LABEL, STATUS_LABEL,
-  type SentFilter, type StatusFilter, type BatchFilters,
+  SENT_LABEL,
+  type SentFilter, type BatchFilters,
 } from '@/lib/gratitudeBatch'
 import type { GratitudeRow } from './GratitudeTable'
 
@@ -36,14 +36,16 @@ export default function BatchPdfDialog({ rows, onClose }: {
   // השבועי — "מה חדש מאז הפעם הקודמת" — ומי שרוצה טווח יבחר אותו.
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
+  // מסמן איזה מקש הטווח האחרון הופעל — כדי שהכפתור יישאר מסומן אחרי הלחיצה,
+  // ולא רק ברע הקליקה עצמה. null = לא נבחר קיצור-דרך 7/30, או שהתאריכים נערכו ידנית.
+  const [quickDays, setQuickDays] = useState<number | null>(null)
   const [sent, setSent] = useState<SentFilter>('unsent')
-  const [status, setStatus] = useState<StatusFilter>('approved')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
   const filters: BatchFilters = useMemo(
-    () => ({ from: from || null, to: to || null, sent, status }),
-    [from, to, sent, status])
+    () => ({ from: from || null, to: to || null, sent }),
+    [from, to, sent])
 
   // התצוגה המקדימה משתמשת *בדיוק* באותו selectBatch שמייצר את הקובץ.
   const picked = useMemo(() => selectBatch(rows, filters), [rows, filters])
@@ -56,6 +58,7 @@ export default function BatchPdfDialog({ rows, onClose }: {
     start.setDate(start.getDate() - days)
     setFrom(asDay(start))
     setTo(asDay(now))
+    setQuickDays(days)
   }
 
   async function download() {
@@ -66,14 +69,23 @@ export default function BatchPdfDialog({ rows, onClose }: {
       // ⚠️ בדפדפן זה נכשל ב-"Failed to execute 'atob' on 'Window'": הפונט
       // המוטמע הוא variable font של 122KB, ו-embedFont עליו אינו עובד שם.
       // שוברי היולדות והחגים תמיד רצו בשרת — זה המסלול המוכח.
-      const res = await fetch('/api/admin/gratitude/batch-pdf', {
+      const post = () => fetch('/api/admin/gratitude/batch-pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(filters),
       })
+      let res = await post()
+      // ⚠️ ניסיון חוזר על תקלה זמנית של השרת: רילוויי מחזירה 418/502
+      // לשנייה-שתיים בזמן פריסה, בעוד האתר עצמו תקין. בלי זה המשתמש
+      // רואה "שגיאה בהפקת הקובץ" גנרית בדיוק ברגע שהפצנו עדכון.
+      for (let attempt = 0; !res.ok && res.status >= 418 && attempt < 2; attempt++) {
+        await new Promise(r => setTimeout(r, 1500 * (attempt + 1)))
+        res = await post()
+      }
       if (!res.ok) {
         const j = await res.json().catch(() => null)
-        throw new Error(j?.error ?? 'שגיאה בהפקת הקובץ')
+        throw new Error(j?.error ?? (res.status >= 500 || res.status === 418
+          ? 'השרת אינו זמין כרגע — נסו שוב בעוד רגע' : 'שגיאה בהפקת הקובץ'))
       }
 
       const blob = await res.blob()
@@ -130,19 +142,19 @@ export default function BatchPdfDialog({ rows, onClose }: {
           <div className="flex items-center gap-2">
             <label className="flex-1">
               <span className="mb-0.5 block text-[11px] text-slate-500">מתאריך</span>
-              <input type="date" value={from} onChange={e => setFrom(e.target.value)}
+              <input type="date" value={from} onChange={e => { setFrom(e.target.value); setQuickDays(null) }}
                 className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm" />
             </label>
             <label className="flex-1">
               <span className="mb-0.5 block text-[11px] text-slate-500">עד תאריך</span>
-              <input type="date" value={to} onChange={e => setTo(e.target.value)}
+              <input type="date" value={to} onChange={e => { setTo(e.target.value); setQuickDays(null) }}
                 className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm" />
             </label>
           </div>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            <Btn on={false} onClick={() => quickRange(7)}>השבוע האחרון</Btn>
-            <Btn on={false} onClick={() => quickRange(30)}>החודש האחרון</Btn>
-            <Btn on={!from && !to} onClick={() => { setFrom(''); setTo('') }}>כל התקופה</Btn>
+            <Btn on={quickDays === 7} onClick={() => quickRange(7)}>השבוע האחרון</Btn>
+            <Btn on={quickDays === 30} onClick={() => quickRange(30)}>החודש האחרון</Btn>
+            <Btn on={!from && !to} onClick={() => { setFrom(''); setTo(''); setQuickDays(null) }}>כל התקופה</Btn>
           </div>
         </div>
 
@@ -156,15 +168,9 @@ export default function BatchPdfDialog({ rows, onClose }: {
           </div>
         </div>
 
-        {/* ── סטטוס האישור ── */}
-        <div className="mb-4">
-          <p className="mb-1.5 text-xs font-semibold text-slate-700">סטטוס</p>
-          <div className="flex flex-wrap gap-1.5">
-            {(['approved', 'received', 'rejected', 'all'] as StatusFilter[]).map(k => (
-              <Btn key={k} on={status === k} onClick={() => setStatus(k)}>{STATUS_LABEL[k]}</Btn>
-            ))}
-          </div>
-        </div>
+        {/* מצב המשלוח נשאר בלבד — הסטטוס (מאושר/ממתין/נדחה) הוסר כאן: עניין
+            האישור אינו רלוונטי למסמך הנמסר לנדיב — ברכה מאושרת שטרם נשלחה וברכה
+            שממתינה לאישור נכנסות באותה מידה — רק ברכות שנדחו מוצאות אוטומטית. */}
 
         {/* ── תצוגה מקדימה ──
             🔴 מה שנמצא כאן הוא בדיוק מה שייכנס לקובץ: אותו selectBatch. */}

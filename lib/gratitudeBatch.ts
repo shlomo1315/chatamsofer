@@ -23,16 +23,12 @@ export interface BatchLetter {
 /** מצב המשלוח לנדיב — הפילוח שהמשתמש בוחר. */
 export type SentFilter = 'all' | 'unsent' | 'sent'
 
-/** סינון לפי סטטוס אישור. */
-export type StatusFilter = 'all' | 'approved' | 'received' | 'rejected'
-
 export interface BatchFilters {
   /** מתאריך (YYYY-MM-DD) — כולל את היום עצמו. */
   from?: string | null
   /** עד תאריך (YYYY-MM-DD) — כולל את היום עצמו *במלואו*. */
   to?: string | null
   sent?: SentFilter
-  status?: StatusFilter
 }
 
 /** האם הברכה כבר נשלחה לנדיב. */
@@ -68,8 +64,10 @@ export function matchesBatch(l: BatchLetter, f: BatchFilters): boolean {
   if (sent === 'unsent' && wasSentToDonor(l)) return false
   if (sent === 'sent' && !wasSentToDonor(l)) return false
 
-  const st = f.status ?? 'all'
-  if (st !== 'all' && (l.status ?? '') !== st) return false
+  // ⚠️ אין בחירת סטטוס למשתמש — היא רק חסמה את הפקת עם ערימות שאין להן
+  // שום ערך עסקי. רק ברכה שנדחתה במפורש (תוכן לא מתאים למסירה לנדיב) מודרת תמיד —
+  // לא תלוי בבחירה ששכחו לסמן.
+  if ((l.status ?? '') === 'rejected') return false
 
   return true
 }
@@ -124,11 +122,4 @@ export const SENT_LABEL: Record<SentFilter, string> = {
   all: 'הכל',
   unsent: 'טרם נשלחו לנדיב',
   sent: 'נשלחו לנדיב',
-}
-
-export const STATUS_LABEL: Record<StatusFilter, string> = {
-  all: 'כל הסטטוסים',
-  approved: 'מאושרות בלבד',
-  received: 'ממתינות לאישור',
-  rejected: 'נדחו',
 }
