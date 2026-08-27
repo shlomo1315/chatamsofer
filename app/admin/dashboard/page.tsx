@@ -351,7 +351,7 @@ export default async function DashboardPage() {
             sub="דואר נכנס ויוצא"
             icon={<Mail size={18} />}
             color="violet"
-            href="/admin/mail/gmail"
+            href="/admin/mail"
           />
         )}
       </div>

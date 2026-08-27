@@ -231,9 +231,7 @@ export default function IndexSyncPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
-        {/* ⚠️ /admin/mail/gmail ולא /admin/mail: הראשון הוא מסך ה-Resend
-            הישן, וחזרה ממסך הסנכרון הובילה אליו במקום לתיבה שממנה באנו. */}
-        <Link href="/admin/mail/gmail" className="text-slate-400 hover:text-slate-600">
+        <Link href="/admin/mail" className="text-slate-400 hover:text-slate-600">
           <ArrowRight size={20} />
         </Link>
         <div>

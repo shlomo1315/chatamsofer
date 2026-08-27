@@ -389,14 +389,23 @@ export function getLegacyOAuthClient() {
   )
 }
 
-// URL הרשאה לתיבה הישנה — קריאה בלבד (לא שולחים ממנה). redirect ייעודי כדי
-// להבחין מחיבור ה-office הראשי.
+// URL הרשאה לתיבות המחלקות (gmail_accounts).
+//
+// ⚠️ בעבר ניתנה כאן הרשאת readonly בלבד. זה אפשר קריאה וסנכרון, אבל כל
+// פעולת תיבה (סימון נקרא/לא נקרא, ארכוב, כוכב, מחיקה, תוויות "לטיפול")
+// נכשלה ב-Gmail עם "insufficient authentication scopes".
+//
+// לכן נדרשת הרשאת modify, ובנוסף send כדי לאפשר תשובה/שליחה מתוך אותה תיבה.
+// משתמשים שמחוברים מטוקן ישן יצטרכו חיבור מחדש פעם אחת דרך מסך חיבור תיבות.
 export function getLegacyAuthUrl(): string {
   const oauth = getLegacyOAuthClient()
   return oauth.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
-    scope: ['https://www.googleapis.com/auth/gmail.readonly'],
+    scope: [
+      'https://www.googleapis.com/auth/gmail.modify',
+      'https://www.googleapis.com/auth/gmail.send',
+    ],
   })
 }
 

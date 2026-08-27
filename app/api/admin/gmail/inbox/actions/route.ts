@@ -6,6 +6,10 @@ import { deliverMail } from '@/lib/sendMail'
 
 export const dynamic = 'force-dynamic'
 
+function isInsufficientScopesError(message: string): boolean {
+  return /insufficient authentication scopes|Request had insufficient authentication scopes/i.test(message)
+}
+
 // ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€
 // ׳₪׳¢׳•׳׳•׳× ׳¢׳ ׳”׳•׳“׳¢׳•׳× ג€” ׳©׳׳™׳—׳”, ׳¡׳™׳׳•׳ ׳ ׳§׳¨׳, ׳×׳•׳•׳™׳•׳×, ׳׳—׳™׳§׳”.
 //
@@ -307,6 +311,12 @@ export async function POST(request: NextRequest) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     console.error(`[inbox/actions] ${body.action} נכשל:`, msg)
+    if (isInsufficientScopesError(msg)) {
+      return NextResponse.json({
+        error: 'חסרות הרשאות Gmail לתיבה זו. יש לחבר מחדש את התיבה במסך הגדרות > חיבור תיבה.',
+        code: 'gmail_insufficient_scopes',
+      }, { status: 403 })
+    }
     return NextResponse.json({ error: `הפעולה נכשלה: ${msg}` }, { status: 500 })
   }
 }

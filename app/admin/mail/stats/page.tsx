@@ -62,7 +62,7 @@ export default function MailStatsPage() {
 
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/admin/mail/gmail" className="p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors">
+        <Link href="/admin/mail" className="p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors">
           <ArrowRight size={18} />
         </Link>
         <div>
