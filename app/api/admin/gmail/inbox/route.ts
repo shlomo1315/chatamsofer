@@ -4,6 +4,7 @@ import { getGmailClientForToken, parseMessage, getBody } from '@/lib/gmail'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 
 export const dynamic = 'force-dynamic'
+const UNREAD_LABEL = 'UNREAD'
 
 // ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€
 // ׳×׳™׳‘׳× ׳”׳“׳•׳׳¨ ג€” ׳ ׳‘׳ ׳™׳× ׳¢׳ ׳”׳׳™׳ ׳“׳§׳¡, ׳׳ ׳¢׳ Gmail API.
@@ -49,12 +50,14 @@ export async function GET(request: NextRequest) {
 
     let body = ''
     let attachments: unknown[] = []
+    let unreadInGmail = false
     if (token) {
       try {
         const gmail = getGmailClientForToken(token)
         const res = await gmail.users.messages.get({ userId: 'me', id: messageId, format: 'full' })
         body = getBody(res.data?.payload)
         attachments = parseMessage(res.data).attachments ?? []
+        unreadInGmail = (res.data?.labelIds ?? []).includes(UNREAD_LABEL)
       } catch (e) {
         // ג ן¸ ׳›׳©׳ ׳‘׳׳©׳™׳›׳× ׳”׳’׳•׳£ ׳׳™׳ ׳• ׳׳¡׳×׳™׳¨ ׳׳× ׳”׳”׳•׳“׳¢׳”: ׳”׳׳˜׳-׳“׳׳˜׳” ׳׳•׳¦׳’׳× ׳¢׳
         // ׳”׳•׳“׳¢׳× ׳©׳’׳™׳׳”, ׳›׳“׳™ ׳©׳™׳”׳™׳” ׳‘׳¨׳•׳¨ ׳©׳”׳”׳•׳“׳¢׳” ׳§׳™׳™׳׳× ׳•׳”׳‘׳¢׳™׳” ׳”׳™׳ ׳‘׳˜׳¢׳™׳ ׳”.
@@ -65,14 +68,18 @@ export async function GET(request: NextRequest) {
 
     // ג ן¸ ׳¡׳™׳׳•׳ ׳›׳ ׳§׳¨׳ ׳׳×׳‘׳¦׳¢ ׳‘-Gmail *׳•׳’׳* ׳‘׳׳™׳ ׳“׳§׳¡. ׳¢׳“׳›׳•׳ ׳”׳׳™׳ ׳“׳§׳¡ ׳‘׳׳‘׳“ ׳”׳™׳”
     // ׳׳×׳ ׳’׳© ׳¢׳ ׳”׳¡׳ ׳›׳¨׳•׳ ׳”׳‘׳, ׳©׳׳•׳©׳ ׳׳× ׳׳¦׳‘ ׳”׳׳׳× ׳-Gmail ׳•׳׳—׳–׳™׳¨ ׳׳•׳×׳• ׳׳׳-׳ ׳§׳¨׳.
-    if (row.is_unread === true && token) {
+    let markReadApplied = false
+    if (unreadInGmail && token) {
       try {
         await getGmailClientForToken(token).users.messages.modify({
-          userId: 'me', id: messageId, requestBody: { removeLabelIds: ['UNREAD'] },
+          userId: 'me', id: messageId, requestBody: { removeLabelIds: [UNREAD_LABEL] },
         })
         await db.from('gmail_messages').update({ is_unread: false }).eq('gmail_message_id', messageId)
+        markReadApplied = true
       } catch { /* best-effort ג€” ׳”׳§׳¨׳™׳׳” ׳¢׳¦׳׳” ׳—׳©׳•׳‘׳” ׳™׳•׳×׳¨ ׳׳”׳¡׳™׳׳•׳ */ }
     }
+
+    if (markReadApplied) row.is_unread = false
 
     return NextResponse.json({ message: row, body, attachments })
   }
