@@ -70,6 +70,40 @@ const BODY_SIZE = 13
 
 const LINE_COLOR = rgb(0.82, 0.84, 0.88)
 
+function drawLetterTemplate(c: Ctx, input: GratitudeVoucherInput): number {
+  let y = drawHeader(c, 'אגף עזר ליולדות')
+
+  y -= 20
+  centerText(c, 'דברי ברכה', W / 2, y, 24, NAVY)
+  y -= 12
+  goldDivider(c, W / 2, y)
+  y -= 26
+
+  const infoParts: string[] = []
+  if (typeof input.recoveryDays === 'number' && input.recoveryDays > 0) {
+    const home = (input.recoveryHome ?? '').trim()
+    infoParts.push(home ? `${input.recoveryDays} ימי הבראה בבית ההחלמה ${home}` : `${input.recoveryDays} ימי הבראה`)
+  } else if ((input.recoveryHome ?? '').trim()) {
+    infoParts.push(`בית ההחלמה ${input.recoveryHome!.trim()}`)
+  }
+  if (infoParts.length) {
+    centerText(c, infoParts.join(' · '), W / 2, y, 12, SUB)
+    y -= 16
+  }
+  if ((input.stayDatesHe ?? '').trim()) {
+    centerText(c, input.stayDatesHe!.trim(), W / 2, y, 12, SUB)
+    y -= 16
+  }
+  if ((input.letterDate ?? '').trim()) {
+    const d = new Date(input.letterDate!)
+    if (!isNaN(d.getTime())) {
+      centerText(c, `נכתב בתאריך ${d.toLocaleDateString('he-IL')}`, W / 2, y, 11, SUB)
+      y -= 16
+    }
+  }
+  return y - 12
+}
+
 /**
  * מצייר מכתב ברכה אחד לתוך מסמך PDF קיים (עמוד אחד או יותר).
  *
@@ -82,41 +116,7 @@ export async function renderGratitudeLetter(doc: PDFDocument, font: Ctx['font'],
   const page = doc.addPage([W, H])
   const c: Ctx = { page, font, logo }
 
-  let y = drawHeader(c, 'אגף עזר ליולדות')
-
-  // שובר נקי: רק "דברי ברכה", השורות, ו"בכבוד רב".
-  // (ללא תאריך הנפקה, כותרת משנה, או פסקת הסבר — לבקשת הלקוח.)
-  y -= 20
-  centerText(c, 'דברי ברכה', W / 2, y, 24, NAVY)
-  y -= 12
-  goldDivider(c, W / 2, y)
-  y -= 26
-
-  // ── שורת מידע עליונה: ימי הבראה + בית החלמה, ותאריך כתיבת המכתב ──
-  const infoParts: string[] = []
-  if (typeof input.recoveryDays === 'number' && input.recoveryDays > 0) {
-    const home = (input.recoveryHome ?? '').trim()
-    infoParts.push(home ? `${input.recoveryDays} ימי הבראה בבית ההחלמה ${home}` : `${input.recoveryDays} ימי הבראה`)
-  } else if ((input.recoveryHome ?? '').trim()) {
-    infoParts.push(`בית ההחלמה ${input.recoveryHome!.trim()}`)
-  }
-  if (infoParts.length) {
-    centerText(c, infoParts.join(' · '), W / 2, y, 12, SUB)
-    y -= 16
-  }
-  // תאריכי השהייה בבית ההחלמה (עברי) — רק אם קיימים. הגנה: אין תאריך → לא מדפיסים כלל.
-  if ((input.stayDatesHe ?? '').trim()) {
-    centerText(c, input.stayDatesHe!.trim(), W / 2, y, 12, SUB)
-    y -= 16
-  }
-  if ((input.letterDate ?? '').trim()) {
-    const d = new Date(input.letterDate!)
-    if (!isNaN(d.getTime())) {
-      centerText(c, `נכתב בתאריך ${d.toLocaleDateString('he-IL')}`, W / 2, y, 11, SUB)
-      y -= 16
-    }
-  }
-  y -= 12
+  let y = drawLetterTemplate(c, input)
 
   // ── שורות הכתיבה ──
   const lineX0 = MX + 8
@@ -154,9 +154,7 @@ export async function renderGratitudeLetter(doc: PDFDocument, font: Ctx['font'],
     const needed = (i === rowCount - 1 ? SIGN_RESERVE : 0) + BOTTOM
     if (y - LINE_GAP < needed) {
       c.page = doc.addPage([W, H])
-      // ⚠️ הדף הנוסף נקי מכותרת: היא שייכת לפתיח המכתב, וחזרתה באמצע
-      // הברכה הייתה נראית כמכתב שני.
-      y = H - 64
+      y = drawLetterTemplate(c, input)
     }
 
     c.page.drawLine({

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { FileDown, X, Loader2, CheckCircle2, Clock, FileText } from 'lucide-react'
+import { FileDown, X, CheckCircle2, Clock, FileText } from 'lucide-react'
 import {
   selectBatch, batchStats, rangeLabel,
   SENT_LABEL,
@@ -40,9 +40,6 @@ export default function BatchPdfDialog({ rows, onClose }: {
   // ולא רק ברע הקליקה עצמה. null = לא נבחר קיצור-דרך 7/30, או שהתאריכים נערכו ידנית.
   const [quickDays, setQuickDays] = useState<number | null>(null)
   const [sent, setSent] = useState<SentFilter>('unsent')
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState<string | null>(null)
-
   const filters: BatchFilters = useMemo(
     () => ({ from: from || null, to: to || null, sent }),
     [from, to, sent])
@@ -62,12 +59,25 @@ export default function BatchPdfDialog({ rows, onClose }: {
   }
 
   function download() {
-    // הורדה ישירה שומרת על מחוות הלחיצה המקורית. בחלק מהדפדפנים הורדת
-    // blob לאחר await נחסמת, אף שהשרת כבר סיים ליצור PDF תקין.
+    // ה-iframe שומר את ההורדה באותו מסך. ניווט ישיר פותח עמוד/חלונית,
+    // ו-blob שמגיע אחרי await נחסם בחלק מהדפדפנים.
     const query = new URLSearchParams({ sent })
     if (from) query.set('from', from)
     if (to) query.set('to', to)
-    window.location.assign(`/api/admin/gratitude/batch-pdf?${query}`)
+    const frame = document.createElement('iframe')
+    frame.name = 'gratitude-batch-download'
+    frame.hidden = true
+    document.body.appendChild(frame)
+
+    const form = document.createElement('form')
+    form.method = 'GET'
+    form.action = `/api/admin/gratitude/batch-pdf?${query}`
+    form.target = frame.name
+    document.body.appendChild(form)
+    form.submit()
+    form.remove()
+    setTimeout(() => frame.remove(), 60_000)
+    onClose()
   }
 
   const Btn = ({ on, children, onClick }: { on: boolean; children: React.ReactNode; onClick: () => void }) => (
@@ -169,17 +179,13 @@ export default function BatchPdfDialog({ rows, onClose }: {
           )}
         </div>
 
-        {err && (
-          <p className="mb-3 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">{err}</p>
-        )}
-
         <button
           onClick={download}
-          disabled={busy || stats.total === 0}
+          disabled={stats.total === 0}
           className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
         >
-          {busy ? <Loader2 size={16} className="animate-spin" /> : <FileDown size={16} />}
-          {busy ? 'מפיק…' : `הורד PDF (${stats.total})`}
+          <FileDown size={16} />
+          {`הורד PDF (${stats.total})`}
         </button>
       </div>
     </div>
