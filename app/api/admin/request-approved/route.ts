@@ -52,18 +52,17 @@ export async function POST(request: NextRequest) {
   const ben = (req as unknown as Record<string, unknown>).beneficiary as (RequestApprovedBeneficiary & { id?: string; email?: string | null; eligibility_status?: string }) | null
   if (!ben?.id) return NextResponse.json({ error: 'נתמך לא נמצא' }, { status: 404 })
 
-  // ── אישור לידה: כל המוקדים הפעילים מוצגים בשובר (אין יותר מלאי/שריון/בחירת מוקד) ──
-  // המודל החדש: היולדת מקבלת כרטיס תמיד, ויכולה לגשת לכל אחד מהמוקדים לקבלתו.
-  const birth = req as unknown as { birth_date?: string; recovery_home?: string; birth_type?: string; is_twins?: boolean; recovery_eligibility_days?: number | null; voucher_serial?: string | null; wants_food_card?: boolean; wants_recovery?: boolean }
+  // ── אישור לידה: מוצג רק המוקד שהיולדת בחרה בעת הגשת הבקשה ──
+  // בקשות ישנות שהוגשו לפני שהבחירה נוספה (card_center_id ריק) נופלות
+  // לתצוגת כל המוקדים הפעילים, כדי לא להשאיר אותן בלי שום מוקד בשובר.
+  const birth = req as unknown as { birth_date?: string; recovery_home?: string; birth_type?: string; is_twins?: boolean; recovery_eligibility_days?: number | null; voucher_serial?: string | null; wants_food_card?: boolean; wants_recovery?: boolean; card_center_id?: string | null }
   let centers: { name: string; city?: string | null; address?: string | null; pickup_days?: string | null; pickup_hours?: string | null }[] = []
   let serial = birth.voucher_serial ?? null
   if (type === 'maternity') {
-    // כל המוקדים הפעילים — מוצגים בשובר ובמייל; היולדת בוחרת לאיזה לגשת
-    const { data: ctrs } = await admin
-      .from('card_centers')
-      .select('name, city, address, pickup_days, pickup_hours')
-      .eq('is_active', true)
-      .order('name')
+    const centerCols = 'name, city, address, pickup_days, pickup_hours'
+    const { data: ctrs } = birth.card_center_id
+      ? await admin.from('card_centers').select(centerCols).eq('id', birth.card_center_id)
+      : await admin.from('card_centers').select(centerCols).eq('is_active', true).order('name')
     centers = (ctrs ?? []).map(c => ({
       name: c.name, city: c.city, address: c.address, pickup_days: c.pickup_days, pickup_hours: c.pickup_hours,
     }))

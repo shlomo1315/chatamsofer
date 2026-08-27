@@ -1110,8 +1110,9 @@ export function birthApprovedEmail(
     detailRow('עיר', b.city),
     detailRow('מספר ילדים', b.children_count != null ? String(b.children_count) : ''),
   ].join('')
-  // בלוק כרטיס המזון — תמיד מוצג, עם רשימת כל המוקדים הפעילים.
-  // היולדת יכולה לגשת לכל אחד מהם לקבלת הכרטיס.
+  // בלוק כרטיס המזון — מוצג המוקד שהיולדת בחרה בעצמה בעת הגשת הבקשה.
+  // מוקדים מרובים נשארים כתאימות אחורה לבקשות ישנות שהוגשו לפני הבחירה.
+  const singleCenter = centers.length === 1
   const centerRows = centers.map(c => {
     const place = [c.address, c.city].filter(Boolean).join(', ')
     const sched = [c.pickup_days, c.pickup_hours].filter(Boolean).join(' · ')
@@ -1133,9 +1134,13 @@ export function birthApprovedEmail(
           ${t('card_text')}
         </p>
         <p style="margin:12px 0 0;color:#92400e;font-size:14px;font-weight:800;line-height:1.7;">
-          תוכלו לבחור בכל מוקד לקבלת הכרטיס:
+          ${singleCenter ? 'המוקד שבחרתם לקבלת הכרטיס:' : 'תוכלו לבחור בכל מוקד לקבלת הכרטיס:'}
         </p>
         ${centersTable}
+        <p style="margin:12px 0 0;color:#991b1b;font-size:13.5px;font-weight:900;line-height:1.8;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px 14px;">
+          ⚠️ בשום אופן אין להגיע בימים או בשעות אחרות מהרשומות לעיל! הדבר גורם עוגמת נפש וטרחה
+          למשפחות המוקדים הפותחים את ביתם וליבם עבורכם בהתנדבות.
+        </p>
       </td></tr>
     </table>
     ${cardActivationNotice(opts.phones)}` : `

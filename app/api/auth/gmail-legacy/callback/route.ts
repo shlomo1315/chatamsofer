@@ -107,13 +107,24 @@ export async function GET(request: NextRequest) {
     if (error) console.error('[gmail-legacy/callback] gmail_accounts upsert:', error.message)
 
     // ── משיכה ראשונית מיד אחרי החיבור ──
-    // ⚠️ בלי זה התיבה נשארת ריקה לגמרי עד הסנכרון השעתי (instrumentation.ts),
-    // שרץ בפרודקשן בלבד — כך שמי שחיבר תיבה ראה "אין הודעות" והניח שהחיבור
-    // נכשל. רץ ברקע ולא חוסם את ההפניה חזרה, כי משיכה ראשונה עלולה לקחת דקות.
+    // ⚠️ המסך החדש (/admin/mail) קורא מ-gmail_messages. לכן חייבים להריץ
+    // bootstrap לאינדקס החדש מיד אחרי OAuth, ולא רק את מסלול הייבוא הישן
+    // ל-inbound_emails; אחרת המשתמש רואה תיבה מחוברת ורשימה ריקה.
+    // הריצה ברקע כדי לא לחסום הפניה חזרה למסך.
     if (saved?.id) {
       const startedAt = new Date().toISOString()
       void (async () => {
         try {
+          const { syncAccount } = await import('@/lib/gmailIndexSync')
+          const idx = await syncAccount(db, {
+            id: String(saved.id),
+            email: mailboxEmail,
+            refresh_token: String(saved.refresh_token ?? tokens.refresh_token),
+            last_history_id: null,
+          })
+          console.log(`[gmail-legacy/callback] index bootstrap · ${mailboxEmail} mode=${idx.mode} upserted=${idx.upserted}`)
+
+          // תאימות למסלולים הישנים שנשענים על inbound_emails.
           const { syncLegacyMail } = await import('@/lib/legacyMailSync')
           const result = await syncLegacyMail(db, saved.department as string, { account: saved })
           await db.from('gmail_sync_runs').insert({

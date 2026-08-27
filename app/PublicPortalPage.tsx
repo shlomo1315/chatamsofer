@@ -296,6 +296,42 @@ function BenefitChoices({
   )
 }
 
+// בחירת מוקד איסוף הכרטיס — היולדת בוחרת מוקד אחד מראש בעת הגשת הבקשה, ורק
+// שם היא תוכל לקבל את הכרטיס בהמשך. חובה כשנבחר "כרטיס מזון".
+function CardCenterPicker({
+  centers, value, onChange,
+}: {
+  centers: { id: string; name: string; city: string | null }[]
+  value: string
+  onChange: (id: string) => void
+}) {
+  return (
+    <Field label="מוקד לאיסוף הכרטיס" required
+      hint="הכרטיס יימסר רק במוקד שתבחרו — לא ניתן יהיה לקבלו במוקד אחר.">
+      {centers.length === 0 ? (
+        <p className="text-xs text-slate-400">טוען מוקדים...</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {centers.map(cn => (
+            <button key={cn.id} type="button"
+              onClick={() => onChange(value === cn.id ? '' : cn.id)}
+              className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all duration-150 ${
+                value === cn.id
+                  ? 'bg-amber-100 text-amber-800 border-amber-300'
+                  : 'bg-white text-slate-600 border-slate-200 hover:border-amber-300 hover:bg-amber-50'
+              }`}
+            >{cn.name}{cn.city ? ` — ${cn.city}` : ''}</button>
+          ))}
+        </div>
+      )}
+      <p className="text-xs font-bold text-rose-600 mt-2 leading-relaxed">
+        ⚠️ בשום אופן אין להגיע בימים או בשעות שאינם של המוקד שנבחר. הדבר גורם עוגמת נפש וטרחה
+        למשפחות המוקדים הפותחים את ביתם וליבם עבורכם בהתנדבות!
+      </p>
+    </Field>
+  )
+}
+
 // ComponentPropsWithRef ולא InputHTMLAttributes — כדי שאפשר יהיה להעביר ref
 // (ב-React 19 ref הוא prop רגיל לרכיב פונקציה ועובר דרך ה-spread).
 function TextInput({ className = '', ...props }: React.ComponentPropsWithRef<'input'>) {
@@ -2146,10 +2182,16 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // היולדת בוחרת בעצמה מה היא רוצה. רשימת בתי ההחלמה נפתחת רק כש"בית החלמה" מסומן.
   const [wantsFoodCard, setWantsFoodCard] = useState(false)
   const [wantsRecovery, setWantsRecovery] = useState(false)
+  // מוקד איסוף הכרטיס — היולדת בוחרת אחד מראש; הכרטיס ניתן לאיסוף רק שם.
+  const [cardCenters, setCardCenters] = useState<{ id: string; name: string; city: string | null }[]>([])
+  const [cardCenterId, setCardCenterId] = useState('')
   useEffect(() => {
     fetch('/api/portal/recovery-homes').then(r => r.json()).then(d => {
       if (Array.isArray(d.regular) && d.regular.length) setRecoveryHomes(d.regular)
       if (Array.isArray(d.silent)) setRecoveryHomesSilent(d.silent)
+    }).catch(() => {})
+    fetch('/api/portal/card-centers').then(r => r.json()).then(d => {
+      if (Array.isArray(d.centers)) setCardCenters(d.centers)
     }).catch(() => {})
   }, [])
 
@@ -2940,6 +2982,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     }
     if (!wantsFoodCard && !wantsRecovery) { setError('אנא בחרו לפחות אחת מההטבות: כרטיס מזון או בית החלמה'); return }
     if (wantsRecovery && !birthForm.recovery_home) { setError('אנא בחר בית החלמה'); return }
+    if (wantsFoodCard && !cardCenterId) { setError('אנא בחרו מוקד לאיסוף כרטיס המזון'); return }
     if (!birthCertFile) { setError('אנא צרף אישור לידה'); return }
     if (!beneficiary) return
     // ⚠️ חובה: צילומי תעודות הזהות (הבעל והאשה) הם תנאי להגשת הבקשה למשפחה
@@ -2980,7 +3023,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       const res = await fetch(`/api/portal/birth-request${previewCode ? `?preview=${encodeURIComponent(previewCode)}` : ''}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ beneficiary_id: beneficiary.id, ...birthForm, wants_food_card: wantsFoodCard, wants_recovery: wantsRecovery, is_twins: isTwins, babies, birth_certificate_url: certUrl, baby_name_pending: noBabyName }),
+        body: JSON.stringify({ beneficiary_id: beneficiary.id, ...birthForm, wants_food_card: wantsFoodCard, wants_recovery: wantsRecovery, card_center_id: wantsFoodCard ? cardCenterId : null, is_twins: isTwins, babies, birth_certificate_url: certUrl, baby_name_pending: noBabyName }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'שגיאה בשליחת הבקשה'); return }
@@ -3189,6 +3232,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     setExistingBabyBirthDate(''); setExistingBaby2BirthDate('')
     setBirthCertFile(null)
     setDocFiles({})
+    setCardCenterId('')
     setStep('new-birth')
     return true
   }
@@ -3265,6 +3309,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     setError(''); setShowSilentInfo(false)
     setSilentForm({ birth_date: '', recovery_home: '', notes: '' })
     setBirthCertFile(null)
+    setCardCenterId('')
     setStep('new-silent-birth')
   }
   const handleSilentBirthRequest = async (e: React.FormEvent) => {
@@ -3273,6 +3318,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     if (!silentForm.birth_date) { setError('אנא הזן תאריך לידה'); return }
     if (!wantsFoodCard && !wantsRecovery) { setError('אנא בחרו לפחות אחת מההטבות: כרטיס מזון או בית החלמה'); return }
     if (wantsRecovery && !silentForm.recovery_home) { setError('אנא בחר בית החלמה'); return }
+    if (wantsFoodCard && !cardCenterId) { setError('אנא בחרו מוקד לאיסוף כרטיס המזון'); return }
     if (!birthCertFile) { setError('אנא צרף מסמך אישור'); return }
     setError(''); setLoading(true)
     try {
@@ -3291,7 +3337,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
 
       const res = await fetch(`/api/portal/birth-request${previewCode ? `?preview=${encodeURIComponent(previewCode)}` : ''}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ beneficiary_id: beneficiary.id, birth_type: 'silent', birth_date: silentForm.birth_date, recovery_home: silentForm.recovery_home, wants_food_card: wantsFoodCard, wants_recovery: wantsRecovery, notes: silentForm.notes, birth_certificate_url: certUrl }),
+        body: JSON.stringify({ beneficiary_id: beneficiary.id, birth_type: 'silent', birth_date: silentForm.birth_date, recovery_home: silentForm.recovery_home, wants_food_card: wantsFoodCard, wants_recovery: wantsRecovery, card_center_id: wantsFoodCard ? cardCenterId : null, notes: silentForm.notes, birth_certificate_url: certUrl }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'שגיאה בשליחת הבקשה'); return }
@@ -6424,11 +6470,16 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   <Field label="במה תרצו להיעזר?" required>
                     <BenefitChoices
                       wantsFoodCard={wantsFoodCard} wantsRecovery={wantsRecovery}
-                      onToggleFoodCard={() => setWantsFoodCard(v => !v)}
+                      onToggleFoodCard={() => setWantsFoodCard(v => { const nv = !v; if (!nv) setCardCenterId(''); return nv })}
                       onToggleRecovery={() => setWantsRecovery(v => { const nv = !v; if (!nv) setBirthForm(f => ({ ...f, recovery_home: '' })); return nv })}
                     />
                   </Field>
                 </div>
+                {wantsFoodCard && (
+                  <div className="col-span-2">
+                    <CardCenterPicker centers={cardCenters} value={cardCenterId} onChange={setCardCenterId} />
+                  </div>
+                )}
                 {wantsRecovery && (
                   <div className="col-span-2">
                     <Field label={<EditableText k="birth.home.label" />} required>
@@ -6542,11 +6593,16 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   <Field label="במה תרצו להיעזר?" required>
                     <BenefitChoices
                       wantsFoodCard={wantsFoodCard} wantsRecovery={wantsRecovery}
-                      onToggleFoodCard={() => setWantsFoodCard(v => !v)}
+                      onToggleFoodCard={() => setWantsFoodCard(v => { const nv = !v; if (!nv) setCardCenterId(''); return nv })}
                       onToggleRecovery={() => setWantsRecovery(v => { const nv = !v; if (!nv) setSilentForm(f => ({ ...f, recovery_home: '' })); return nv })}
                     />
                   </Field>
                 </div>
+                {wantsFoodCard && (
+                  <div className="col-span-2">
+                    <CardCenterPicker centers={cardCenters} value={cardCenterId} onChange={setCardCenterId} />
+                  </div>
+                )}
                 {wantsRecovery && (
                   <div className="col-span-2">
                     <Field label={<EditableText k="birth.home.label" />} required>

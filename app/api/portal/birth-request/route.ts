@@ -62,6 +62,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'יש לבחור בית החלמה.' }, { status: 400 })
   }
 
+  const admin = getAdminClient()
+  if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
+
+  // ── בחירת מוקד איסוף הכרטיס — חובה כשנבחר כרטיס מזון ──
+  // הכרטיס ניתן לאיסוף רק במוקד שנבחר כאן, ולא בכל מוקד אחר.
+  let cardCenterId: string | null = null
+  if (wantsFoodCard) {
+    cardCenterId = body.card_center_id ? String(body.card_center_id).trim() : ''
+    if (!cardCenterId) {
+      return NextResponse.json({ error: 'יש לבחור מוקד לאיסוף כרטיס המזון.' }, { status: 400 })
+    }
+    const { data: center } = await admin.from('card_centers')
+      .select('id').eq('id', cardCenterId).eq('is_active', true).maybeSingle()
+    if (!center) {
+      return NextResponse.json({ error: 'המוקד שנבחר אינו זמין. אנא בחרו מוקד אחר.' }, { status: 400 })
+    }
+  }
+
   // ⚠️ שער המחלקה — אם עזר יולדות סגור כרגע, לא מקבלים בקשות חדשות.
   // נבדק לפני כל עיבוד, כדי שגם בקשה שנשלחת ישירות ל-API (עוקפת את הטופס) תיחסם.
   // ⚠️ ?preview= עוקף את השער לבקשה זו בלבד (ראו lib/departmentGates).
@@ -136,9 +154,6 @@ export async function POST(request: NextRequest) {
     }
   }
   const primary = normBabies[0]
-
-  const admin = getAdminClient()
-  if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
   const { data: ben } = await admin
     .from('beneficiaries')
@@ -232,6 +247,7 @@ export async function POST(request: NextRequest) {
     recovery_home: recoveryHomeVal || null,
     wants_food_card: wantsFoodCard,
     wants_recovery: wantsRecovery,
+    card_center_id: cardCenterId,
     notes: notes ? String(notes).trim() : null,
     birth_type: isSilent ? 'silent' : 'live',
     status: 'pending',
