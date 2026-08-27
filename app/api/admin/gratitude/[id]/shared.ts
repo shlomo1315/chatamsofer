@@ -87,6 +87,9 @@ export function voucherInputFromRow(row: GratitudeLetterRow) {
     husbandName: ben?.full_name ?? undefined,
     wifeName: ben?.spouse_name ?? undefined,
     city: ben?.city ?? undefined,
+    // ⚠️ נופל-לאחור למכתבים שאינם מקושרים לתיק לידה (למשל שוחזרו למפרע
+    // מהמייל) — בלעדיו החתימה יוצאת ריקה למרות שהמזכירות מילאה אותה.
+    signature: row.signature ?? undefined,
     street: ben?.address ?? undefined,
     husbandId: ben?.id_number ?? undefined,
     wifeId: ben?.spouse_id_number ?? undefined,

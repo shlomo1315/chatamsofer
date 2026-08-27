@@ -38,6 +38,9 @@ function inputFor(row: GratitudeLetterRow) {
     ...base,
     familyName: undefined, husbandName: undefined, wifeName: undefined,
     city: undefined, street: undefined, husbandId: undefined, wifeId: undefined,
+    // ⚠️ גם שדה החתימה עצמו — אחרת חתימה שהמזכירות מילאה ידנית הייתה
+    // חושפת את זהות המשפחה בדיוק במכתב שבו היא ביקשה שלא להזדהות.
+    signature: undefined,
   }
 }
 

@@ -96,8 +96,10 @@ export default function PdfCanvasView({
         // האתר עצמו תקין. המשתמש ראה "טעינת המסמך נכשלה (418)" ולא
         // היה לו מושג שדי ללחוץ שוב.
         let res = await fetch(src, { credentials: 'same-origin' })
-        if (!res.ok && res.status >= 418) {
-          await new Promise(r => setTimeout(r, 1200))
+        // 🔴 עד 3 ניסיונות (השהיה גוברת): בעיה זמנית ברילוויי בזמן פריסה
+        // עלולה להימשך כמה שניות, לא רק אחת — ניסיון בודד חוזר לא תמיד הספיק.
+        for (let attempt = 0; !res.ok && res.status >= 418 && attempt < 2; attempt++) {
+          await new Promise(r => setTimeout(r, 1500 * (attempt + 1)))
           if (!alive) return
           res = await fetch(src, { credentials: 'same-origin' })
         }

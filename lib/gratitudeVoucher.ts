@@ -16,11 +16,14 @@ import type { MailAttachment } from './sendMail'
 export interface GratitudeVoucherInput {
   mode: 'blank' | 'filled'
   body?: string           // הטקסט שהיולדת כתבה (רק ב-filled)
-  // החתימה נקבעת אוטומטית מפרטי המשפחה — היולדת אינה עורכת אותה.
+  // החתימה נקבעת אוטומטית מפרטי המשפחה. אם אלה חסרים (מכתב שלא
+  // שויך למוטב, למשל) — נופלים ל-signature: חתימה שנשמרה ידנית על המכתב.
   familyName?: string     // שם משפחה
   husbandName?: string    // שם הבעל
   wifeName?: string       // שם האשה
   city?: string           // עיר מגורים
+  /** חתימה שנשמרה ידנית על המכתב — משמשת כנפילה כשאין פרטי משפחה מקושרים למכתב. */
+  signature?: string | null
   husbandId?: string      // ת"ז הבעל — מודפס מתחת לחתימה
   wifeId?: string         // ת"ז האשה — מודפס מתחת לחתימה
   street?: string         // רחוב — מודפס עם העיר מתחת לחתימה
@@ -173,7 +176,10 @@ export async function buildGratitudeVoucher(input: GratitudeVoucherInput): Promi
 
   // החתימה מודפסת בשני המצבים — גם בשובר הריק להדפסה.
   // המשפחה לא צריכה לכתוב את שמה ביד; היא כבר רשומה אצלנו.
-  const sig = buildSignature(input)
+  // החתימה מודפסת בשני המצבים — גם בשובר הריק להדפסה.
+  // עדיפות input.signature: נדרש כשהמכתב אינו מקושר למוטב רשום (מכתבים
+  // ששוחזרו ממייל), ובלעדיו buildSignature היה מחזיר שורה ריקה במקום שורת המשפחה.
+  const sig = (input.signature ?? '').trim() || buildSignature(input)
   if (sig) {
     rightText(c, sig.slice(0, 80), lineX1 - 4, y, BODY_SIZE, NAVY)
   } else {
