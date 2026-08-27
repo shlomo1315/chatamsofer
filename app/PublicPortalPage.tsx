@@ -301,7 +301,7 @@ function BenefitChoices({
 function CardCenterPicker({
   centers, value, onChange,
 }: {
-  centers: { id: string; name: string; city: string | null }[]
+  centers: { id: string; name: string; city: string | null; address?: string | null; pickup_days?: string | null; pickup_hours?: string | null }[]
   value: string
   onChange: (id: string) => void
 }) {
@@ -311,17 +311,28 @@ function CardCenterPicker({
       {centers.length === 0 ? (
         <p className="text-xs text-slate-400">טוען מוקדים...</p>
       ) : (
-        <div className="flex flex-wrap gap-2">
-          {centers.map(cn => (
-            <button key={cn.id} type="button"
-              onClick={() => onChange(value === cn.id ? '' : cn.id)}
-              className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all duration-150 ${
-                value === cn.id
-                  ? 'bg-amber-100 text-amber-800 border-amber-300'
-                  : 'bg-white text-slate-600 border-slate-200 hover:border-amber-300 hover:bg-amber-50'
-              }`}
-            >{cn.name}{cn.city ? ` — ${cn.city}` : ''}</button>
-          ))}
+        <div className="flex flex-col gap-2">
+          {centers.map(cn => {
+            const place = [cn.address, cn.city].filter(Boolean).join(', ')
+            const sched = [cn.pickup_days, cn.pickup_hours].filter(Boolean).join(' · ')
+            return (
+              <button key={cn.id} type="button"
+                onClick={() => onChange(value === cn.id ? '' : cn.id)}
+                className={`w-full text-right px-4 py-2.5 rounded-xl border text-sm transition-all duration-150 ${
+                  value === cn.id
+                    ? 'bg-amber-100 text-amber-800 border-amber-300'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-amber-300 hover:bg-amber-50'
+                }`}
+              >
+                <span className="block font-medium">{cn.name}</span>
+                {(place || sched) && (
+                  <span className="block text-xs opacity-80 mt-0.5">
+                    {[place, sched].filter(Boolean).join(' · ')}
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </div>
       )}
       <p className="text-xs font-bold text-rose-600 mt-2 leading-relaxed">
@@ -2183,7 +2194,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   const [wantsFoodCard, setWantsFoodCard] = useState(false)
   const [wantsRecovery, setWantsRecovery] = useState(false)
   // מוקד איסוף הכרטיס — היולדת בוחרת אחד מראש; הכרטיס ניתן לאיסוף רק שם.
-  const [cardCenters, setCardCenters] = useState<{ id: string; name: string; city: string | null }[]>([])
+  const [cardCenters, setCardCenters] = useState<{ id: string; name: string; city: string | null; address?: string | null; pickup_days?: string | null; pickup_hours?: string | null }[]>([])
   const [cardCenterId, setCardCenterId] = useState('')
   useEffect(() => {
     fetch('/api/portal/recovery-homes').then(r => r.json()).then(d => {

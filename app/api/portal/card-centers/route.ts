@@ -12,9 +12,12 @@ export async function GET() {
   const admin = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
   const { data } = await admin
     .from('card_centers')
-    .select('id, name, city')
+    .select('id, name, city, address, pickup_days, pickup_hours')
     .eq('is_active', true)
     .order('name')
-  const centers = (data ?? []).map((c) => ({ id: c.id, name: c.name, city: c.city ?? null }))
+  const centers = (data ?? []).map((c) => ({
+    id: c.id, name: c.name, city: c.city ?? null,
+    address: c.address ?? null, pickup_days: c.pickup_days ?? null, pickup_hours: c.pickup_hours ?? null,
+  }))
   return NextResponse.json({ centers }, { headers: { 'Cache-Control': 'no-store' } })
 }

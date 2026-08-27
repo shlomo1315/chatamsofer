@@ -381,7 +381,7 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
   // מוקד האיסוף — היולדת בחרה אותו מראש בעת הגשת הבקשה; הכרטיס ניתן
   // לאיסוף רק שם. פירוט (יותר ממוקד אחד) נשאר לתאימות אחורה לבקשות ישנות.
   const singleCenter = (input.centers ?? []).length === 1
-  y = centersBox(c, 'מוקד איסוף הכרטיס', y, input.centers ?? [])
+  y = centersBox(c, singleCenter ? 'מוקד איסוף הכרטיס' : 'מוקדי איסוף הכרטיס', y, input.centers ?? [])
   // ⚠️ פונט וריווח מוקטנים — הבלוק שמתחת ירד נמוך מדי והחתימה נחתכה
   // בקצה העמוד. הקיצור כאן מעלה את כל התחתית פנימה.
   y = paragraph(c,
