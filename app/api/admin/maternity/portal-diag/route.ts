@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
+import { requireStaff, requirePermission, unauthorized, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { isWithinRecoveryWindow, recoveryWindowEnd } from '@/lib/maternity'
 
 export const dynamic = 'force-dynamic'
@@ -12,7 +12,12 @@ export const dynamic = 'force-dynamic'
 // בתוך חלון הזכאות (35 יום) — אלא אם כבר מומש (recovery_amount_status
 // = 'executed'). כל אחד מהתנאים האלה יכול להסביר "מאושרת אך לא נראית".
 //
-// GET ?id_number=<ת"ז האם או ת"ז האשה>
+// GET  ?id_number=<ת"ז האם או ת"ז האשה>            — אבחון בלבד.
+// GET  ?id_number=...&fix=1&days=7            — אבחון, ואם הסיבה היא
+//   שחלון הזכאות נסגר — מאריך אותו ב-N ימים קדימה (ברירת מחדל: 7),
+//   בדיוק כמו לחיצה על "הארכת זכאות" בכרטיס היולדת, כולל רישום בלוג.
+//   פועל רק על תיקים שבאמת חסומים מהפורטל בגלל חלון הזכאות — לא על תיקים
+//   שאינם "active" או בלי recovery_home.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
@@ -37,6 +42,44 @@ export async function GET(request: NextRequest) {
     .eq('beneficiary_id', ben.id)
     .order('created_at', { ascending: false })
 
+  // ⚠️ פעולה רק עם ?fix=1 מפורש — ורק על התיק הרלוונטי היחיד (status='active',
+  // יש recovery_home, מחוץ לחלון). פעולה שכותבת אותה הרשאה שאישור "הארכת
+  // זכאות" בכרטיס היולדת ביצע ידנית — כולל רישום בלוג ואישורים, רק בקריאה אחת.
+  const wantsFix = request.nextUrl.searchParams.get('fix') === '1'
+  let fixed: { aid_id: string; new_recovery_window_end: string } | null = null
+  if (wantsFix) {
+    const editor = await requirePermission('maternity', 'edit')
+    if (!editor) return forbidden()
+    const days = Math.max(1, Number(request.nextUrl.searchParams.get('days') ?? 7) || 7)
+    const target = (aids ?? []).find(a =>
+      a.status === 'active' && !!a.recovery_home &&
+      !isWithinRecoveryWindow(a) && a.recovery_amount_status !== 'executed')
+    if (target) {
+      const newEnd = new Date(); newEnd.setDate(newEnd.getDate() + days)
+      const endIso = newEnd.toISOString().split('T')[0]
+      const { error: updErr } = await db.from('maternity_aids').update({
+        six_weeks_end: endIso,
+        eligibility_extended: true,
+        eligibility_extended_at: new Date().toISOString(),
+        eligibility_extended_by: editor.userId,
+        eligibility_extension_reason: 'הארכה דחופה — יולדת נמצאת בפועל בבית ההחלמה ולא נראתה בפורטל',
+        updated_at: new Date().toISOString(),
+      }).eq('id', target.id)
+      if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 })
+      // רישום ללוג הוא נלווה — כשל בו לא אמור לבטל הארכה שכבר נשמרה.
+      try {
+        await db.from('activity_log').insert({
+          user_id: editor.userId, action: 'maternity_eligibility_extended', entity_type: 'maternity_aids', entity_id: target.id,
+          details: { reason: 'תיקון דחוף מהאבחון — נראות בפורטל בית ההחלמה', to: endIso },
+        })
+      } catch { /* best-effort */ }
+      fixed = { aid_id: target.id, new_recovery_window_end: endIso }
+      // מרעננים את הערכים שיוצגו למטה כך שהדוח ישקף מיד את התיקון.
+      const idx = (aids ?? []).findIndex(a => a.id === target.id)
+      if (idx >= 0 && aids) aids[idx] = { ...aids[idx], six_weeks_end: endIso }
+    }
+  }
+
   const report = (aids ?? []).map(a => {
     const withinWindow = isWithinRecoveryWindow(a)
     const executed = a.recovery_amount_status === 'executed'
@@ -56,6 +99,7 @@ export async function GET(request: NextRequest) {
   })
 
   return NextResponse.json({
+    fixed,
     beneficiary: {
       id: ben.id, name: [ben.family_name, ben.spouse_name || ben.full_name].filter(Boolean).join(' '),
       eligibility_status: ben.eligibility_status,

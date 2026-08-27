@@ -52,10 +52,24 @@ export async function POST(request: NextRequest) {
     sent: SENT.includes(input.sent as SentFilter) ? (input.sent as SentFilter) : 'all',
   }
 
-  const { data, error } = await db
-    .from('gratitude_letters')
-    .select(GRATITUDE_LETTER_SELECT)
-    .order('created_at', { ascending: true })
+  // 🔴 מסננים ב-SQL ולא רק בזיכרון.
+  //
+  // ⚠️ קודם נשלפו *כל* מכתבי הברכה שאי פעם נקלטו — עם גוף המכתב המלא
+  // והג'וינים — ורק אז סוננו ב-JS. ככל שהארכיון גדל זו הפכה לשליפה כבדה
+  // שיכולה להפיל את התהליך עוד לפני שהתחילה בניית ה-PDF, וכשל כזה חוזר
+  // כ-502 בלי גוף JSON — כלומר בלי שום הודעת שגיאה מובנת למשתמש.
+  let query = db.from('gratitude_letters').select(GRATITUDE_LETTER_SELECT)
+  if (filters.from) query = query.gte('created_at', filters.from)
+  // ⚠️ עד-תאריך כולל את היום עצמו במלואו, ולכן משווים לתחילת היום שאחריו.
+  if (filters.to) {
+    const next = new Date(filters.to)
+    next.setDate(next.getDate() + 1)
+    query = query.lt('created_at', next.toISOString().slice(0, 10))
+  }
+  if (filters.sent === 'unsent') query = query.is('sent_to_donor_at', null)
+  if (filters.sent === 'sent') query = query.not('sent_to_donor_at', 'is', null)
+
+  const { data, error } = await query.order('created_at', { ascending: true })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
