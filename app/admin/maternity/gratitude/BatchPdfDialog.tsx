@@ -61,51 +61,13 @@ export default function BatchPdfDialog({ rows, onClose }: {
     setQuickDays(days)
   }
 
-  async function download() {
-    setBusy(true); setErr(null)
-    try {
-      // 🔴 ההפקה בשרת ולא בדפדפן.
-      //
-      // ⚠️ בדפדפן זה נכשל ב-"Failed to execute 'atob' on 'Window'": הפונט
-      // המוטמע הוא variable font של 122KB, ו-embedFont עליו אינו עובד שם.
-      // שוברי היולדות והחגים תמיד רצו בשרת — זה המסלול המוכח.
-      const post = () => fetch('/api/admin/gratitude/batch-pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(filters),
-      })
-      let res = await post()
-      // ⚠️ ניסיון חוזר על תקלה זמנית של השרת: רילוויי מחזירה 418/502
-      // לשנייה-שתיים בזמן פריסה, בעוד האתר עצמו תקין. בלי זה המשתמש
-      // רואה "שגיאה בהפקת הקובץ" גנרית בדיוק ברגע שהפצנו עדכון.
-      for (let attempt = 0; !res.ok && res.status >= 418 && attempt < 2; attempt++) {
-        await new Promise(r => setTimeout(r, 1500 * (attempt + 1)))
-        res = await post()
-      }
-      if (!res.ok) {
-        const j = await res.json().catch(() => null)
-        throw new Error(j?.error ?? (res.status >= 500 || res.status === 418
-          ? 'השרת אינו זמין כרגע — נסו שוב בעוד רגע' : 'שגיאה בהפקת הקובץ'))
-      }
-
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      // שם הקובץ נושא את הטווח — כך שכמה הורדות אינן דורסות זו את זו.
-      const span = from || to ? `${from || 'הכל'}_${to || 'היום'}` : 'כל-התקופה'
-      a.download = `מכתבי ברכה ${span}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      // ⚠️ שחרור מושהה: ביטול מיידי מבטל את ההורדה בחלק מהדפדפנים.
-      setTimeout(() => URL.revokeObjectURL(url), 10_000)
-      onClose()
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'שגיאה בהפקת הקובץ')
-    } finally {
-      setBusy(false)
-    }
+  function download() {
+    // הורדה ישירה שומרת על מחוות הלחיצה המקורית. בחלק מהדפדפנים הורדת
+    // blob לאחר await נחסמת, אף שהשרת כבר סיים ליצור PDF תקין.
+    const query = new URLSearchParams({ sent })
+    if (from) query.set('from', from)
+    if (to) query.set('to', to)
+    window.location.assign(`/api/admin/gratitude/batch-pdf?${query}`)
   }
 
   const Btn = ({ on, children, onClick }: { on: boolean; children: React.ReactNode; onClick: () => void }) => (

@@ -29,19 +29,12 @@ export const dynamic = 'force-dynamic'
 // אחת, ולכן התקרה גבוהה מברירת המחדל.
 export const maxDuration = 300
 
-export async function POST(request: NextRequest) {
+async function generateBatchPdf(input: { from?: string | null; to?: string | null; sent?: string }) {
   const staff = await requireStaff()
   if (!staff) return forbidden('הפקת הקובץ שמורה לצוות')
 
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
-
-  let input: { from?: string | null; to?: string | null; sent?: string }
-  try {
-    input = await request.json()
-  } catch {
-    return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 })
-  }
 
   // ⚠️ ערכים לא מוכרים נופלים ל'all' ולא נשלחים כמות שהם לפילוח: כך
   // בקשה משובשת מחזירה יותר מדי ולא פחות מדי, וזה הצד הבטוח.
@@ -90,4 +83,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'שגיאה בהפקת הקובץ' }, { status: 500 })
   }
+}
+
+export async function GET(request: NextRequest) {
+  const { searchParams } = request.nextUrl
+  return generateBatchPdf({
+    from: searchParams.get('from'),
+    to: searchParams.get('to'),
+    sent: searchParams.get('sent') ?? undefined,
+  })
+}
+
+export async function POST(request: NextRequest) {
+  let input: { from?: string | null; to?: string | null; sent?: string }
+  try {
+    input = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 })
+  }
+  return generateBatchPdf(input)
 }
