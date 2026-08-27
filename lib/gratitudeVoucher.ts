@@ -70,13 +70,15 @@ const BODY_SIZE = 13
 
 const LINE_COLOR = rgb(0.82, 0.84, 0.88)
 
-/** בונה את שובר דברי הברכה כצרופת PDF. */
-export async function buildGratitudeVoucher(input: GratitudeVoucherInput): Promise<MailAttachment> {
-  const doc = await PDFDocument.create()
-  doc.registerFontkit(fontkit)
-  const font = await doc.embedFont(Buffer.from(HEEBO_TTF_B64, 'base64'), { subset: true })
-  const logoBytes = loadLogo()
-  const logo = logoBytes ? await doc.embedPng(logoBytes) : null
+/**
+ * מצייר מכתב ברכה אחד לתוך מסמך PDF קיים (עמוד אחד או יותר).
+ *
+ * 🔴 מופרד מ-buildGratitudeVoucher כדי שקובץ מרוכז יוכל לצייר עשרות מכתבים
+ * לתוך *אותו* מסמך עם פונט מוטמע *פעם אחת* — לא ליצור מסמך+פונט נפרד לכל
+ * מכתב. הטמעת/תחימת הפונט (subset) יקרה, וחזרה עליה 40 פעם היא שהעמיסה
+ * על השרת בפועל עד לכשל בקובץ המרוכז.
+ */
+export async function renderGratitudeLetter(doc: PDFDocument, font: Ctx['font'], logo: Ctx['logo'], input: GratitudeVoucherInput): Promise<void> {
   const page = doc.addPage([W, H])
   const c: Ctx = { page, font, logo }
 
@@ -215,6 +217,16 @@ export async function buildGratitudeVoucher(input: GratitudeVoucherInput): Promi
 
   // קו זהב מסיים בתחתית
   goldDivider(c, W / 2, 74, 90)
+}
+
+/** בונה את שובר דברי הברכה כצרופת PDF (מכתב יחיד — מסמך+פונט משלו). */
+export async function buildGratitudeVoucher(input: GratitudeVoucherInput): Promise<MailAttachment> {
+  const doc = await PDFDocument.create()
+  doc.registerFontkit(fontkit)
+  const font = await doc.embedFont(Buffer.from(HEEBO_TTF_B64, 'base64'), { subset: true })
+  const logoBytes = loadLogo()
+  const logo = logoBytes ? await doc.embedPng(logoBytes) : null
+  await renderGratitudeLetter(doc, font, logo, input)
 
   const bytes = await doc.save()
   return {

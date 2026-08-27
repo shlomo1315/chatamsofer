@@ -6,17 +6,20 @@
 // נועד למעקב פנימי — אבל מי שמוסר את הברכות לנדיב צריך את המכתב המעוצב,
 // בדיוק כפי שהוא נשלח בברכה בודדת.
 //
-// 🔴 שום דבר כאן אינו מצייר. הקובץ קורא ל-buildGratitudeVoucher — *אותו*
-// מחולל של הברכה הבודדת — וממזג את העמודים. שכפול העיצוב היה מבטיח שכל
-// שינוי בבלאנק יישכח כאן, והברכה המרוכזת הייתה נראית אחרת מזו שהנדיב
-// כבר קיבל.
+// 🔴 שום דבר כאן אינו מצייר בעצמו. הקובץ קורא ל-renderGratitudeLetter — אותה
+// לוגיקת ציור של הברכה הבודדת (gratitudeVoucher.ts) — ומצייר כל ברכה לתוך
+// עמוד (או עמודים) במסמך המרוכז. שכפול העיצוב היה מבטיח שכל שינוי בבלאנק
+// יישכח כאן, והברכה המרוכזת הייתה נראית אחרת מזו שהנדיב כבר קיבל.
 //
 // ⚠️ גם המיפוי מהמסד אינו משוכפל: voucherInputFromRow היא אותה פונקציה
 // שמזינה את הברכה הבודדת, ולכן העיר, הת"ז וימי ההחלמה מגיעים בדיוק כמו
 // שם — כולל תיקונים עתידיים.
 // ─────────────────────────────────────────────────────────────────────────────
 import { PDFDocument } from 'pdf-lib'
-import { buildGratitudeVoucher } from './gratitudeVoucher'
+import fontkit from '@pdf-lib/fontkit'
+import { HEEBO_TTF_B64 } from './assets/heeboFont'
+import { loadLogo } from './maternityVoucher'
+import { renderGratitudeLetter } from './gratitudeVoucher'
 import { voucherInputFromRow, type GratitudeLetterRow } from '@/app/api/admin/gratitude/[id]/shared'
 import { selectBatch, type BatchFilters } from './gratitudeBatch'
 
@@ -47,22 +50,26 @@ function inputFor(row: GratitudeLetterRow) {
 /**
  * בונה את הקובץ המרוכז: כל ברכה כמכתב מעוצב, בדף (או דפים) משלה.
  *
- * ⚠️ ברכה ארוכה שגולשת לדף שני שומרת על הרצף — כל עמודי המכתב נכנסים
- * יחד לפני שהמכתב הבא מתחיל.
+ * ⚠️ מסמך PDF אחד עם פונט מוטמע פעם אחת ורק אז מציירים כל המכתבים ישירות לתוכו
+ * — לא יוצרים מסמך+פונט נפרדים לכל מכתב וממזגים דרך copyPages. הטמעת (subset) של
+ * פונט העברית יקרה יחסית, וחזרה עליה עשרות פעמים ברצף אחד היא שהעמיסה על השרת
+ * בפועל עד כשל בקובץ המרוכז.
+ *
+ * ⚠️ כל ברכה נבנית בנפרד ובזהירות: תוכן חריג בברכה אחת (למשל טקסט
+ * שבור שהתקבל במייל) לא אמור להפיל את כל הקובץ ולמנוע ממאות משפחות
+ * אחרות לצאת. הכשל מתועד ללוג כדי שאפשר יהיה לאתר ולתקן את הרשומה.
  */
 export async function buildGratitudeBatchLetters(input: BatchLettersInput): Promise<Uint8Array> {
   const rows = selectBatch(input.letters, input.filters)
   const out = await PDFDocument.create()
+  out.registerFontkit(fontkit)
+  const font = await out.embedFont(Buffer.from(HEEBO_TTF_B64, 'base64'), { subset: true })
+  const logoBytes = loadLogo()
+  const logo = logoBytes ? await out.embedPng(logoBytes) : null
 
-  // ⚠️ כל ברכה נבנית בנפרד ובזהירות: תוכן חריג בברכה אחת (למשל טקסט
-  // שבור שהתקבל במייל) לא אמור להפיל את כל הקובץ ולמנוע ממאות משפחות
-  // אחרות לצאת. הכשל מתועד ללוג כדי שאפשר יהיה לאתר ולתקן את הרשומה.
   for (const row of rows) {
     try {
-      const voucher = await buildGratitudeVoucher(inputFor(row))
-      const src = await PDFDocument.load(Buffer.from(voucher.contentB64, 'base64'))
-      const pages = await out.copyPages(src, src.getPageIndices())
-      for (const p of pages) out.addPage(p)
+      await renderGratitudeLetter(out, font, logo, inputFor(row))
     } catch (e) {
       console.error(`[gratitude-batch] דילוג על ברכה ${row.id} — בנייתה נכשלה:`, e instanceof Error ? e.message : e)
     }
