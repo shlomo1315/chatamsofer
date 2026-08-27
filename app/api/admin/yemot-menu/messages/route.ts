@@ -16,7 +16,9 @@ export async function GET() {
     return NextResponse.json({ error: 'אין הרשאה' }, { status: 403, headers: NO_STORE })
   }
   const messages = await getMainMenuMessages()
-  return NextResponse.json({ messages, meta: MAIN_MENU_MESSAGE_META }, { headers: NO_STORE })
+  // ext — התיקייה בימות שאליה נשמרות ההקלטות של השלוחה הזו, להצגה במסך.
+  const ext = process.env.YEMOT_MENU_EXT || '1'
+  return NextResponse.json({ messages, meta: MAIN_MENU_MESSAGE_META, ext }, { headers: NO_STORE })
 }
 
 export async function POST(request: NextRequest) {

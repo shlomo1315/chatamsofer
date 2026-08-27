@@ -111,3 +111,18 @@ export async function saveMainMenuMessages(input: MainMenuMessages): Promise<boo
   }, { onConflict: 'key' })
   return !error
 }
+
+/**
+ * קובע (או מסיר) את קובץ הקול של הודעה בתפריט הראשי.
+ *
+ * ⚠️ נשמר שם הקובץ היחסי לשלוחה בלבד; ה-webhook מנגן אותו כ-`f-<audio>`.
+ * audio=null מחזיר את ההודעה להקראת טקסט (TTS).
+ */
+export async function setMainMenuMessageAudio(key: string, audio: string | null): Promise<boolean> {
+  if (!MAIN_MENU_MESSAGE_META.some(m => m.key === key)) return false
+  const messages = await getMainMenuMessages()
+  const current = messages[key]
+  if (!current) return false
+  messages[key] = { ...current, audio }
+  return saveMainMenuMessages(messages)
+}

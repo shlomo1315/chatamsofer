@@ -1,15 +1,21 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, Check, Type, Play, Save } from 'lucide-react'
+import { Loader2, Check, Type, Play, Save, Upload, Wand2, Trash2, Mic, Volume2, FolderTree } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 
 type Msg = { text: string; audio?: string | null }
 type Meta = { key: string; label: string; defaultText: string; allowAudio: boolean; hint?: string }
 
+// הודעה דינמית ({משתנה}) אינה יכולה להיות קובץ קול אחד קבוע.
+const hasPlaceholder = (t: string) => /\{[^}]+\}/.test(t)
+// קול שנוצר אוטומטית מסומן בקידומת tts_ (לעומת rec_ של הקלטה אנושית).
+const isGenerated = (audio?: string | null) => !!audio && audio.startsWith('tts_')
+
 // ─────────────────────────────────────────────────────────────────────────────
 // הודעות התפריט הראשי.
 //
-// ⚠️ אותו דפוס בדיוק כמו YemotHolidaySettings — עריכת טקסט והשמעה מקדימה.
+// ⚠️ אותו דפוס בדיוק כמו YemotHolidaySettings / YemotMaternitySettings:
+// עריכת טקסט, השמעה מקדימה, העלאת הקלטה אנושית ויצירת קול ב-ElevenLabs.
 // המספרים בתפריט חייבים להתאים למה שהשלוחה באמת מקבלת (1, 2, 9), והשרת
 // חוסם שמירה בלעדיהם: תפריט שמקריא מקש שאינו מנותב שולח את המתקשר
 // להקשה שתישמע לו כשגויה.
@@ -18,10 +24,14 @@ export default function YemotMainMenuSettings() {
   const toast = useToast()
   const [meta, setMeta] = useState<Meta[]>([])
   const [messages, setMessages] = useState<Record<string, Msg>>({})
+  const [ext, setExt] = useState('1')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savedOk, setSavedOk] = useState(false)
   const [previewId, setPreviewId] = useState<string | null>(null)
+  const [busyKey, setBusyKey] = useState<string | null>(null)
+  const [genAll, setGenAll] = useState(false)
+  const fileInputs = useRef<Record<string, HTMLInputElement | null>>({})
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
@@ -32,6 +42,7 @@ export default function YemotMainMenuSettings() {
         if (!alive || !ok) return
         setMeta(d.meta ?? [])
         setMessages(d.messages ?? {})
+        if (d.ext) setExt(String(d.ext))
       })
       .catch(() => { if (alive) toast.error('שגיאה בטעינת ההודעות') })
       .finally(() => { if (alive) setLoading(false) })
@@ -61,6 +72,73 @@ export default function YemotMainMenuSettings() {
     }
   }
 
+  const uploadRecording = async (key: string, file: File) => {
+    setBusyKey(key)
+    try {
+      const fd = new FormData()
+      fd.set('key', key)
+      fd.set('file', file)
+      const res = await fetch('/api/admin/yemot-menu/recording', { method: 'POST', body: fd })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || 'שגיאה בהעלאה')
+      if (d.messages) setMessages(d.messages)
+      toast.success('ההקלטה הועלתה ותושמע בשיחה')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'שגיאה בהעלאה')
+    } finally { setBusyKey(null) }
+  }
+
+  const removeAudio = async (key: string) => {
+    setBusyKey(key)
+    try {
+      const res = await fetch(`/api/admin/yemot-menu/recording?key=${encodeURIComponent(key)}`, { method: 'DELETE' })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || 'שגיאה בהסרה')
+      if (d.messages) setMessages(d.messages)
+      toast.success('הקול הוסר — ההודעה תוקרא כטקסט')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'שגיאה בהסרה')
+    } finally { setBusyKey(null) }
+  }
+
+  const generateVoice = async (key: string) => {
+    setBusyKey(key)
+    try {
+      const res = await fetch('/api/admin/yemot-menu/generate-voice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, text: messages[key]?.text }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || 'שגיאה ביצירת הקול')
+      if (d.messages) setMessages(d.messages)
+      toast.success('קול טבעי נוצר ויושמע בשיחה')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'שגיאה ביצירת הקול')
+    } finally { setBusyKey(null) }
+  }
+
+  const generateAll = async () => {
+    setGenAll(true)
+    try {
+      // ⚠️ שומרים תחילה, כדי שהיצירה תשתמש בנוסח שעל המסך ולא בשמור הישן.
+      await fetch('/api/admin/yemot-menu/messages', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages }),
+      })
+      const res = await fetch('/api/admin/yemot-menu/generate-voice', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ all: true }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || 'שגיאה ביצירת הקול')
+      if (d.messages) setMessages(d.messages)
+      const errCount = d.errors ? Object.keys(d.errors).length : 0
+      if (errCount > 0) toast.error(`נוצרו ${d.generated?.length ?? 0} הודעות, ${errCount} נכשלו`)
+      else toast.success(`נוצר קול טבעי ל-${d.generated?.length ?? 0} הודעות`)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'שגיאה ביצירת הקול')
+    } finally { setGenAll(false) }
+  }
+
   const save = async () => {
     setSaving(true); setSavedOk(false)
     try {
@@ -88,8 +166,28 @@ export default function YemotMainMenuSettings() {
 
   return (
     <div className="flex flex-col gap-3">
+      {/* 🔴 שיוך ברור: לאיזו תיקייה בימות שייכות ההקלטות של השלוחה הזו.
+          בלי זה אי אפשר לדעת איפה הקבצים יושבים ולמה הם אינם דורסים שלוחה אחרת. */}
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2">
+        <FolderTree size={14} className="text-teal-700" />
+        <span className="text-[12px] font-bold text-teal-900">
+          ההקלטות של התפריט הראשי נשמרות בתיקייה <code className="rounded bg-white px-1.5 py-0.5 font-mono">ivr2:/{ext}/</code>
+        </span>
+        <button
+          onClick={generateAll}
+          disabled={genAll}
+          className="mr-auto inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-teal-700 disabled:opacity-50"
+        >
+          {genAll ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
+          יצירת קול לכל ההודעות
+        </button>
+      </div>
+
       {meta.map(m => {
         const value = messages[m.key]?.text ?? m.defaultText
+        const audio = messages[m.key]?.audio ?? null
+        const busy = busyKey === m.key
+        const canGenerate = m.allowAudio && !!value.trim() && !hasPlaceholder(value)
         return (
           <div key={m.key} className="rounded-xl border border-slate-200 bg-white p-3.5">
             <div className="mb-2 flex items-center gap-2">
@@ -113,6 +211,58 @@ export default function YemotMainMenuSettings() {
               className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-[13px] focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
             />
             {m.hint && <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">{m.hint}</p>}
+
+            {/* ── מה יושמע בפועל: קובץ קול, או הקראת הטקסט ── */}
+            <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2.5">
+              {audio ? (
+                <span className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold ${
+                  isGenerated(audio) ? 'bg-violet-100 text-violet-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                  {isGenerated(audio) ? <Volume2 size={11} /> : <Mic size={11} />}
+                  {isGenerated(audio) ? 'קול שנוצר' : 'הקלטה אנושית'}
+                  <code className="font-mono opacity-70">{audio}</code>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-500">
+                  <Type size={11} /> מוקרא כטקסט
+                </span>
+              )}
+
+              <input
+                ref={el => { fileInputs.current[m.key] = el }}
+                type="file" accept="audio/*" className="hidden"
+                onChange={e => {
+                  const f = e.target.files?.[0]
+                  if (f) void uploadRecording(m.key, f)
+                  e.target.value = ''
+                }}
+              />
+              <button
+                onClick={() => fileInputs.current[m.key]?.click()}
+                disabled={busy || !m.allowAudio}
+                className="mr-auto inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-bold text-slate-600 hover:border-teal-300 disabled:opacity-50"
+              >
+                {busy ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />}
+                העלאת קובץ
+              </button>
+              <button
+                onClick={() => void generateVoice(m.key)}
+                disabled={busy || !canGenerate}
+                title={!canGenerate && hasPlaceholder(value) ? 'הודעה עם {משתנה} אינה יכולה להיות קובץ קול קבוע' : undefined}
+                className="inline-flex items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2 py-1 text-[11px] font-bold text-violet-700 hover:bg-violet-100 disabled:opacity-50"
+              >
+                {busy ? <Loader2 size={11} className="animate-spin" /> : <Wand2 size={11} />}
+                יצירת קול
+              </button>
+              {audio && (
+                <button
+                  onClick={() => void removeAudio(m.key)}
+                  disabled={busy}
+                  className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-2 py-1 text-[11px] font-bold text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                >
+                  <Trash2 size={11} /> הסרה
+                </button>
+              )}
+            </div>
           </div>
         )
       })}
