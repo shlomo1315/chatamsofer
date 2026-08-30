@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyPublicToken } from '@/lib/publicToken'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
-import { babyNamePatch, type AidNameFields } from '@/lib/babyNames'
+import { babyNamesPatch, babiesOf, type AidNameFields } from '@/lib/babyNames'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,17 +26,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'יותר מדי ניסיונות. נסו שוב בעוד מספר דקות.' }, { status: 429 })
   }
 
-  let body: { token?: string; name?: string }
+  // ⚠️ names[] הוא המסלול לתאומים; name הבודד נשמר לתאימות לאחור עם קישורים
+  // שכבר נשלחו ליולדות ועם כל לקוח ישן.
+  let body: { token?: string; name?: string; names?: unknown }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
 
   const aidId = verifyPublicToken(body.token, 'n')
   if (!aidId) return NextResponse.json({ error: 'הקישור אינו תקין או שפג תוקפו' }, { status: 403 })
 
   // רק אותיות עבריות (אותה סינון כמו הטופס הציבורי) — מונע הזנת טקסט פסול
-  const name = hebrewNameOnly(String(body.name ?? '')).trim()
-  if (!name) return NextResponse.json({ error: 'יש להזין שם תקין (אותיות עבריות בלבד)' }, { status: 400 })
-  if (name.length > 60) return NextResponse.json({ error: 'השם ארוך מדי' }, { status: 400 })
+  const rawNames = Array.isArray(body.names)
+    ? (body.names as unknown[]).map(v => hebrewNameOnly(String(v ?? '')).trim())
+    : [hebrewNameOnly(String(body.name ?? '')).trim()]
 
+  // ⚠️ די בשם אחד תקין: יולדת תאומים רשאית להשלים תאום אחד עכשיו ואת השני
+  // בהמשך — הדגל יישאר דלוק והתיק יופיע ברשימת "ממתין לתיקונים" עד שיושלמו שניהם.
+  if (!rawNames.some(Boolean)) {
+    return NextResponse.json({ error: 'יש להזין שם תקין (אותיות עבריות בלבד)' }, { status: 400 })
+  }
+  if (rawNames.some(n => n.length > 60)) {
+    return NextResponse.json({ error: 'השם ארוך מדי' }, { status: 400 })
+  }
   const admin = getAdmin()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
@@ -47,28 +57,43 @@ export async function POST(request: NextRequest) {
     .maybeSingle()
   if (!aid) return NextResponse.json({ error: 'הרשומה לא נמצאה' }, { status: 404 })
 
-  // עדכון השם בתיק + כיבוי דגל "אין שם".
-  // ⚠️ דרך babyNamePatch — כדי שהשם ייכתב גם ל-babies[] וגם ל-baby_name. קודם
-  // נכתב רק השדה הסקלרי, וכרטסת הלידה (שקוראת את המערך) המשיכה להציג את הישן.
+  // עדכון השמות בתיק + כיבוי דגל "אין שם". נכתב גם ל-babies[] וגם ל-baby_name:
+  // קודם נכתב רק השדה הסקלרי, וכרטסת הלידה (שקוראת את המערך) הציגה את הישן.
+  //
+  // ⚠️ babyNamesPatch ולא babyNamePatch: לתאומים נשמר שם לכל תינוק בנפרד.
+  // קודם נכתב תמיד babies[0], ולכן התאום השני נשאר בלי שם לצמיתות.
+  //
+  // ⚠️ שם שלא נשלח נשמר כפי שהוא — כך השלמת תאום אחד אינה מוחקת את האחר.
+  const babies = babiesOf(aid as AidNameFields)
+  const names = babies.map((b, i) => rawNames[i] || (b.name ?? null))
   const { error } = await admin
     .from('maternity_aids')
-    .update(babyNamePatch(aid as AidNameFields, name))
+    .update(babyNamesPatch(aid as AidNameFields, names))
     .eq('id', aidId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // סנכרון לכרטסת המשפחה (children) — כמו בעריכת אדמין: מאתרים את התינוק לפי הקישור
-  // לתיק הלידה או לפי ת"ז, ומעדכנים את שמו. כשל בסנכרון לא חוסם.
+  // סנכרון לכרטסת המשפחה (children) — כמו בעריכת אדמין: מאתרים כל תינוק לפי
+  // הת"ז שלו ומעדכנים את שמו. כשל בסנכרון לא חוסם.
+  //
+  // ⚠️ ההתאמה לפי ת"ז *של כל תאום* ולא לפי baby_id_number של התיק: השדה
+  // הסקלרי מחזיק ת"ז אחת בלבד, ולכן התאום השני לא היה מסונכרן לעולם.
   try {
     if (aid.beneficiary_id) {
       const { data: ben } = await admin.from('beneficiaries').select('children').eq('id', aid.beneficiary_id).maybeSingle()
       const children = Array.isArray(ben?.children) ? ben!.children as Record<string, unknown>[] : []
-      const idx = children.findIndex(c =>
-        (c.maternity_aid_id && c.maternity_aid_id === aidId) ||
-        (aid.baby_id_number && c.id_number === aid.baby_id_number))
-      if (idx !== -1) {
-        const updated = children.map((c, i) => i === idx ? { ...c, name } : c)
-        await admin.from('beneficiaries').update({ children: updated }).eq('id', aid.beneficiary_id)
-      }
+      const digits = (v: unknown) => String(v ?? '').replace(/\D/g, '')
+      let changed = false
+      const updated = children.map(c => {
+        const hit = babies.findIndex((b, i) =>
+          names[i] && digits(b.id_number) && digits(b.id_number) === digits(c.id_number))
+        if (hit !== -1) { changed = true; return { ...c, name: names[hit] } }
+        // לידה בודדת ותיקה — אין ת"ז לתינוק, נופלים לקישור לתיק.
+        if (babies.length === 1 && names[0] && c.maternity_aid_id === aidId) {
+          changed = true; return { ...c, name: names[0] }
+        }
+        return c
+      })
+      if (changed) await admin.from('beneficiaries').update({ children: updated }).eq('id', aid.beneficiary_id)
     }
   } catch { /* best-effort */ }
 

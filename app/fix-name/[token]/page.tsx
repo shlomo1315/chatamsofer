@@ -1,5 +1,6 @@
 import { verifyPublicToken } from '@/lib/publicToken'
 import { createClient } from '@supabase/supabase-js'
+import { babiesOf, babyLabel, type AidNameFields } from '@/lib/babyNames'
 import FixNameForm from './FixNameForm'
 
 export const dynamic = 'force-dynamic'
@@ -32,15 +33,34 @@ export default async function Page({ params }: { params: Promise<{ token: string
   // שליפת מצב התיק — שם נוכחי + האם עדיין ממתין לשם
   let currentName = ''
   let alreadyDone = false
+  // ⚠️ נשלף מערך התינוקות ולא רק השדה הסקלרי: ליולדת תאומים הוצג שדה אחד
+  // בלבד, והתאום השני נשאר בלי שם. כל תינוק מקבל שדה משלו, מזוהה בת"ז.
+  let babies: { name: string | null; label: string }[] = []
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (url && key) {
     const admin = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
-    const { data } = await admin.from('maternity_aids').select('baby_name, baby_name_pending').eq('id', aidId).maybeSingle()
+    const { data } = await admin.from('maternity_aids')
+      .select('baby_name, baby_name_pending, baby_gender, baby_id_type, baby_id_number, babies')
+      .eq('id', aidId).maybeSingle()
     if (data?.baby_name) currentName = String(data.baby_name)
+    if (data) {
+      const list = babiesOf(data as AidNameFields)
+      babies = list.map((b, i) => ({
+        name: b.name ? String(b.name) : null,
+        // ⚠️ תווית מוצגת רק לתאומים: בלידה בודדת "תינוק 1" מיותר ומבלבל.
+        label: list.length > 1 ? babyLabel(b, i) : '',
+      }))
+    }
     // הקישור נשלח כשהשם היה חסר (baby_name_pending=true). אם כבר לא ממתין ויש שם —
     // התיקון כבר בוצע (ע"י היולדת או אדמין). הקישור "מוצה" — מציגים חיווי, לא טופס.
-    alreadyDone = data ? (!data.baby_name_pending && !!data.baby_name) : false
+    //
+    // ⚠️ נבדק שלכל התינוקות יש שם ולא רק לשדה הסקלרי: הוא משקף את התאום
+    // הראשון בלבד, ולכן יולדת תאומים הייתה נחסמת מהטופס בזמן שלתאום השני
+    // עדיין אין שם.
+    alreadyDone = data
+      ? (!data.baby_name_pending && babies.length > 0 && babies.every(b => b.name))
+      : false
   }
 
   if (alreadyDone) {
@@ -61,5 +81,5 @@ export default async function Page({ params }: { params: Promise<{ token: string
     )
   }
 
-  return <FixNameForm token={token} currentName={currentName} />
+  return <FixNameForm token={token} currentName={currentName} babies={babies} />
 }

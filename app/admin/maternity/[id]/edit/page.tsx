@@ -12,7 +12,7 @@ import { planVoucherPrompt, type VoucherPromptPlan } from '@/lib/maternityVouche
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import { openDocInNewTab } from '@/lib/docBlob'
 import { format, addWeeks } from 'date-fns'
-import { babyNamePatch } from '@/lib/babyNames'
+import { babyNamesPatch, babiesOf, babyLabel, type AidNameFields, type BabyEntry } from '@/lib/babyNames'
 import { he } from 'date-fns/locale'
 
 const RECOVERY_HOMES = ['אם וילד', 'טלזסטון', 'ביכורים']
@@ -47,11 +47,13 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
   const [children, setChildren] = useState<Child[]>([])
 
   // editable fields
-  const [babyName, setBabyName] = useState('')
   // "עדיין אין שם" — כשמסומן, השם נשמר NULL והדגל baby_name_pending=true (לא טקסט בשדה)
   const [babyNamePending, setBabyNamePending] = useState(false)
   // מערך התינוקות של התיק — נשמר כדי שהשמירה תעדכן גם אותו ולא רק את השדה הסקלרי
   const [aidBabies, setAidBabies] = useState<unknown>(null)
+  // ⚠️ שם לכל תינוק בנפרד. קודם הוצג שדה אחד בלבד וכל שמירה כתבה ל-babies[0],
+  // ולכן בתיק תאומים התאום השני נשאר בלי שם לצמיתות.
+  const [babyNames, setBabyNames] = useState<string[]>([])
   const [babyIdType, setBabyIdType] = useState<'id' | 'passport'>('id')
   const [babyIdNumber, setBabyIdNumber] = useState('')
   const [babyGender, setBabyGender] = useState<'male' | 'female' | ''>('')
@@ -79,9 +81,9 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
           .eq('id', id)
           .single()
         if (error || !data) throw error ?? new Error('not found')
-        setBabyName(data.baby_name ?? '')
         setBabyNamePending(!!data.baby_name_pending)
         setAidBabies((data as { babies?: unknown }).babies ?? null)
+        setBabyNames(babiesOf(data as AidNameFields).map(b => b.name ?? ''))
         setBabyIdType(data.baby_id_type ?? 'id')
         setBabyIdNumber(data.baby_id_number ?? '')
         setBabyGender(data.baby_gender ?? '')
@@ -103,6 +105,9 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
     })()
   }, [id, supabase])
 
+  // רשימת התינוקות להצגה — מהמערך השמור בתיק. בתאומים כל שדה מסומן בת"ז.
+  const babySlots: BabyEntry[] = babiesOf({ babies: aidBabies } as AidNameFields)
+
   const clearErr = (key: string) => setFieldErrors(p => {
     if (!p[key]) return p
     const next = { ...p }; delete next[key]; return next
@@ -110,7 +115,7 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
 
   const validate = (): Record<string, string> => {
     const e: Record<string, string> = {}
-    if (!babyName.trim() && !babyNamePending) e.babyName = 'שם תינוק חובה (או סמנו "עדיין אין שם")'
+    if (!babyNames.some(n => n.trim()) && !babyNamePending) e.babyName = 'שם תינוק חובה (או סמנו "עדיין אין שם")'
     if (!babyIdNumber.trim()) e.babyIdNumber = babyIdType === 'id' ? 'מספר תעודת זהות תינוק חובה' : 'מספר דרכון חובה'
     else if (babyIdType === 'id' && !validateIsraeliId(babyIdNumber)) e.babyIdNumber = 'תעודת זהות ישראלית לא תקינה'
     if (!babyGender) e.babyGender = 'יש לבחור מין תינוק'
@@ -139,10 +144,14 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
 
       const updatePayload: Record<string, unknown> = {
         birth_date: babyBirthDate,
-        // ⚠️ דרך babyNamePatch: השם נכתב גם ל-babies[] וגם ל-baby_name. קודם
+        // ⚠️ דרך babyNamesPatch: השמות נכתבים גם ל-babies[] וגם ל-baby_name. קודם
         // נכתב רק השדה הסקלרי, ולכן סימון "עדיין אין שם" השאיר במערך שם ישן
         // (או להיפך) — וכל מסך הציג משהו אחר.
-        ...babyNamePatch({ babies: aidBabies }, babyNamePending ? null : (babyName.trim() || null)),
+        //
+        // ⚠️ שם לכל תינוק בנפרד: הגרסה הקודמת כתבה תמיד ל-babies[0], ולכן
+        // בתיק תאומים התאום השני נשאר בלי שם.
+        ...babyNamesPatch({ babies: aidBabies },
+          babyNamePending ? babyNames.map(() => null) : babyNames.map(n => n.trim() || null)),
         baby_id_type: babyIdType,
         baby_id_number: babyIdNumber || null,
         baby_gender: babyGender || null,
@@ -177,18 +186,34 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
 
       // סנכרון פרטי התינוק בכרטסת המשפחה (שומר על סטטוס הלידה הקיים)
       if (motherId) {
-        const idx = children.findIndex(c =>
-          (c.maternity_aid_id && c.maternity_aid_id === id) ||
-          (babyIdNumber && c.id_number === babyIdNumber))
-        if (idx !== -1) {
-          const updated = children.map((c, i) => i === idx ? {
-            ...c,
-            name: babyName.trim(),
-            id_number: babyIdNumber.trim() || null,
-            doc_type: babyIdType,
-            gender: babyGender || null,
-            birth_date: babyBirthDate || null,
-          } : c)
+        // ⚠️ מסונכרן כל תינוק לפי הת"ז שלו ולא רק הראשון: בתיק תאומים
+        // התאום השני לא הגיע לכרטסת המשפחה לעולם.
+        const digits = (v: unknown) => String(v ?? '').replace(/\D/g, '')
+        let touched = false
+        const updated = children.map(c => {
+          const hit = babySlots.findIndex((b, i) =>
+            babyNames[i]?.trim() && digits(b.id_number) && digits(b.id_number) === digits(c.id_number))
+          if (hit !== -1) {
+            touched = true
+            return { ...c, name: babyNames[hit].trim(), gender: babySlots[hit].gender ?? null }
+          }
+          // לידה בודדת — אין ת"ז פר-תינוק, נופלים לקישור לתיק כמו קודם.
+          const single = babySlots.length === 1 &&
+            ((c.maternity_aid_id && c.maternity_aid_id === id) || (babyIdNumber && c.id_number === babyIdNumber))
+          if (single) {
+            touched = true
+            return {
+              ...c,
+              name: (babyNames[0] ?? '').trim(),
+              id_number: babyIdNumber.trim() || null,
+              doc_type: babyIdType,
+              gender: babyGender || null,
+              birth_date: babyBirthDate || null,
+            }
+          }
+          return c
+        })
+        if (touched) {
           await supabase.from('beneficiaries').update({ children: updated }).eq('id', motherId)
         }
       }
@@ -248,12 +273,26 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
       <div className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-4">
         {/* Baby name */}
         <div className="flex flex-col gap-2">
-          <label className="text-xs font-medium text-slate-600">שם התינוק <span className="text-red-500">*</span></label>
-          <input type="text" value={babyNamePending ? '' : babyName}
-            disabled={babyNamePending}
-            placeholder={babyNamePending ? 'עדיין אין שם' : ''}
-            onChange={e => { setBabyName(e.target.value); clearErr('babyName') }}
-            className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 disabled:bg-slate-50 disabled:text-slate-400 ${fieldErrors.babyName ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`} />
+          <label className="text-xs font-medium text-slate-600">
+            {babySlots.length > 1 ? 'שמות התינוקות' : 'שם התינוק'} <span className="text-red-500">*</span>
+          </label>
+          {/* שדה לכל תינוק. בתאומים כל שדה נושא את ת"ז התינוק — בלעדיה
+              אי אפשר לדעת איזה שם שייך למי. */}
+          {babySlots.map((slot, i) => (
+            <div key={i} className="flex flex-col gap-1">
+              {babySlots.length > 1 && (
+                <span className="text-[11px] font-semibold text-slate-400">{babyLabel(slot, i)}</span>
+              )}
+              <input type="text" value={babyNamePending ? '' : (babyNames[i] ?? '')}
+                disabled={babyNamePending}
+                placeholder={babyNamePending ? 'עדיין אין שם' : ''}
+                onChange={e => {
+                  setBabyNames(prev => prev.map((n, j) => (j === i ? e.target.value : n)))
+                  clearErr('babyName')
+                }}
+                className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 disabled:bg-slate-50 disabled:text-slate-400 ${fieldErrors.babyName ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`} />
+            </div>
+          ))}
           {/* כפתור "עדיין אין שם" — שומר את הדגל ולא טקסט בשדה */}
           <button type="button"
             onClick={() => { setBabyNamePending(v => !v); clearErr('babyName') }}

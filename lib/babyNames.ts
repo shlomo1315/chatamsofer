@@ -115,6 +115,50 @@ export function babyNamePatch(aid: AidNameFields, name: string | null, index = 0
   return patch
 }
 
+/**
+ * תווית זיהוי לתינוק אחד ברשימת תאומים — "תינוק 1 · בת · ת״ז 246483283".
+ *
+ * 🔴 בלי זה שני שדות שם ריקים זה מעל זה הם חסרי משמעות: היולדת אינה
+ * יודעת איזה שם שייך למי. הת"ז היא המזהה הוודאי (היא מופיעה על תעודת
+ * הלידה), והמין הוא הסימן המהיר לעין.
+ */
+export function babyLabel(b: BabyEntry, index: number): string {
+  const parts = [`תינוק ${index + 1}`]
+  const g = clean(b.gender)
+  if (g === 'male') parts.push('בן')
+  else if (g === 'female') parts.push('בת')
+  const id = clean(b.id_number)
+  if (id) parts.push(`${b.id_type === 'passport' ? 'דרכון' : 'ת״ז'} ${id}`)
+  return parts.join(' · ')
+}
+
+/**
+ * שמירת שמות *כל* התינוקות בתיק בפעולה אחת — המסלול לתאומים.
+ *
+ * 🔴 הבאג שזה פותר: כל הכותבים קראו ל-babyNamePatch בלי index, כלומר
+ * כתבו תמיד ל-babies[0]. ליולדת תאומים נשלחה בקשת תיקון על תינוק אחד
+ * בלבד, וגם עריכה ידנית בתוכנה הציגה רק את הראשון. בפועל נמצאו במסד
+ * שלושה תיקי תאומים עם תינוק אחד בעל שם והשני null — התאום השני אבד.
+ *
+ * ⚠️ הדגל baby_name_pending נשאר דלוק כל עוד *תאום אחד* חסר שם. אחרת
+ * מילוי של תאום אחד היה מוציא את התיק מרשימת "ממתין לתיקונים", והשני
+ * לא היה מושלם לעולם.
+ *
+ * ⚠️ שם ריק אינו מוחק שם קיים של תאום אחר — כל תא נכתב בנפרד.
+ */
+export function babyNamesPatch(aid: AidNameFields, names: (string | null)[]): Record<string, unknown> {
+  const current = babiesOf(aid)
+  const arr = current.map((b, i) => ({ ...b, name: clean(names[i]) }))
+  const allNamed = arr.length > 0 && arr.every(b => b.name)
+  return {
+    babies: arr,
+    // השדה הסקלרי משקף את התינוק הראשון — כך המסכים שקוראים אותו נשארים נכונים
+    baby_name: clean(arr[0]?.name),
+    baby_name_pending: !allNamed,
+    updated_at: new Date().toISOString(),
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // סנכרון שם התינוק מרשימת הילדים של המשפחה אל תיק הלידה.
 //
