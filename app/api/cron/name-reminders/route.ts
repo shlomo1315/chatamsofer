@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { getServiceClient, verifyCronSecret } from '@/lib/apiAuth'
+import { getServiceClient, verifyCronSecret, requirePermission } from '@/lib/apiAuth'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { isBlockedForMail } from '@/lib/jewishCalendar'
@@ -32,13 +32,28 @@ export const maxDuration = 300
 type BenJoin = { email?: string | null; full_name?: string | null; family_name?: string | null; spouse_name?: string | null }
 
 export async function GET(request: NextRequest) {
-  // נכשל-סגור: בלי CRON_SECRET תואם — חסום.
-  if (!verifyCronSecret(request)) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  // ⚠️ בדיקה יבשה: ?dry=1 מחזיר את הרשימה המדויקת בלי לשלוח מייל ובלי לגעת
+  // במונה. נועד לאימות לפני הפעלת התזמון — רשימת נמענים אמיתית היא הדבר
+  // היחיד שמוכיח שהסינון נכון, ו-51 מיילים שיצאו בטעות אי אפשר להחזיר.
+  const dryRun = request.nextUrl.searchParams.get('dry') === '1'
+
+  // 🔴 שתי דרכי גישה, ובכוונה שונות:
+  //   • CRON_SECRET — לריצה האוטומטית מ-Railway (אין שם משתמש מחובר).
+  //   • צוות מחובר — רק לבדיקה היבשה, כדי שאפשר יהיה לפתוח את הכתובת
+  //     בדפדפן ולראות מי היה מקבל בלי להחזיק את הסוד ביד.
+  //
+  // ⚠️ הצוות *אינו* יכול להפעיל שליחה אמיתית דרך הדפדפן: פתיחת כתובת
+  // בטעות (או קישור ששותף) הייתה שולחת עשרות מיילים אמיתיים בלחיצה אחת.
+  const byCronSecret = verifyCronSecret(request)
+  if (!byCronSecret) {
+    if (!dryRun) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    const staff = await requirePermission('maternity', 'edit')
+    if (!staff) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
   const now = new Date()
-  if (isBlockedForMail(now)) {
+  // בבדיקה יבשה לא חוסמים על שבת/חג — אחרת אי אפשר לאמת את הרשימה בשבת.
+  if (!dryRun && isBlockedForMail(now)) {
     console.log('[name-reminders] דילוג — שבת/חג')
     return NextResponse.json({ ok: true, skipped: 'shabbat_or_holiday' })
   }
@@ -66,6 +81,42 @@ export async function GET(request: NextRequest) {
 
   const withEmail = rows.map(r => ({ ...r, email: one(r.beneficiary)?.email ?? null }))
   const targets = selectNameReminderTargets(withEmail, now)
+
+  // בדיקה יבשה — מי היה מקבל, ואיך נראה המייל. שום מייל לא נשלח.
+  if (dryRun) {
+    const preview = targets.map(t => {
+      const ben = one((t as { beneficiary?: BenJoin | BenJoin[] | null }).beneficiary)
+      const babies = babiesOf(t as AidNameFields)
+      return {
+        id: t.id,
+        family: [ben?.family_name, ben?.spouse_name || ben?.full_name].filter(Boolean).join(' '),
+        email: t.email,
+        babies: babies.length,
+        reminderNumber: (t.name_reminder_count ?? 0) + 1,
+        lastSent: t.name_reminder_sent_at ?? 'טרם נשלחה',
+      }
+    })
+    const sample = targets[0]
+    return NextResponse.json({
+      ok: true,
+      dryRun: true,
+      note: 'בדיקה בלבד — לא נשלח אף מייל ולא עודכן שום מונה',
+      checkedWithFlag: rows.length,
+      wouldSend: targets.length,
+      skipped: rows.length - targets.length,
+      maxReminders: MAX_NAME_REMINDERS,
+      recipients: preview,
+      // דוגמת נוסח — כדי לראות את המייל עצמו לפני שהוא יוצא.
+      sampleMail: sample
+        ? buildNameFixMail({
+            aidId: sample.id,
+            motherName: 'משפחת ישראלי',
+            reminderNumber: 1,
+            babyCount: babiesOf(sample as AidNameFields).length,
+          }).html
+        : null,
+    })
+  }
 
   let sent = 0
   const failures: { id: string; error: string }[] = []
