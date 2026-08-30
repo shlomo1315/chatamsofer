@@ -12,6 +12,7 @@ import { SOURCE_LABEL, type RegisterSource } from '@/lib/distributionSources'
 import { downloadXlsx, type XlsxColumn } from '@/lib/downloadXlsx'
 import type { ApprovalStatus } from '@/lib/holidayCards'
 import HolidayRecipientsTable, { type HolidayRow } from './HolidayRecipientsTable'
+import VoucherAfterLoadDialog from './VoucherAfterLoadDialog'
 import type { ApprovalLabel } from '@/types'
 import AddRecipientDialog from './AddRecipientDialog'
 import Pagination from '@/components/ui/Pagination'
@@ -39,6 +40,7 @@ export interface RegistrationRow {
   center_source?: string | null
   /** מצב טעינת ה-500₪ בנדרים. ⚠️ רצה רק מכפתור מפורש. */
   load_status?: string | null
+  load_error?: string | null
   name: string
   family_name?: string | null
   first_name?: string | null
@@ -98,9 +100,13 @@ const SOURCE_ORDER: RegisterSource[] = ['phone', 'portal', 'nedarim', 'email', '
 
 export default function HolidayRegistrations({
   distributionId, rows, totalCount, amountPerFamily, registrationOpen, distributionActive, distributionName,
+  testMode = false, testEmail = null,
 }: {
   distributionId: string
   rows: RegistrationRow[]
+  /** ⚠️ מצב בדיקה של החלוקה — משנה את נוסח האישור ואת יעד המייל. */
+  testMode?: boolean
+  testEmail?: string | null
   /** מספר הנרשמים האמיתי — rows עשוי להיות חלקי בזמן הטעינה. */
   totalCount?: number
   amountPerFamily: number
@@ -354,6 +360,50 @@ export default function HolidayRegistrations({
       router.refresh()
     } catch { toast.error('שגיאת רשת') }
     setBusyId(null)
+  }
+
+  // ── טעינת כרטיס בודד ──
+  //
+  // 🔴 כסף אמיתי. שני שערים לפני שהוא יוצא: חלונית אישור שמציגה את השם,
+  // הסכום והמוקד, ו-confirm:true בשרת. לחיצה בשורה הלא נכונה היא טעינה
+  // למשפחה אחרת בלי דרך חזרה.
+  //
+  // ⚠️ אחרי טעינה מוצלחת נפתחת חלונית השובר — ולא נשלח מייל אוטומטית.
+  // המייל יוצא רק בלחיצה מפורשת שם, אחרי שראית מה יֵצא.
+  const [loadingId, setLoadingId] = useState<string | null>(null)
+  const [confirmLoad, setConfirmLoad] = useState<HolidayRow | null>(null)
+  const [voucherFor, setVoucherFor] = useState<HolidayRow | null>(null)
+
+  const loadCard = (id: string) => {
+    const row = allRows.find(r => r.id === id)
+    if (row) setConfirmLoad(row)
+  }
+
+  const runLoad = async (row: HolidayRow) => {
+    setConfirmLoad(null)
+    setLoadingId(row.id)
+    try {
+      const res = await fetch('/api/admin/holiday-load', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          distribution_id: distributionId, ids: [row.id],
+          amount: amountPerFamily || undefined, confirm: true,
+        }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(d.error ?? 'הטעינה נכשלה'); setLoadingId(null); return }
+
+      // ⚠️ failedList נבדק ולא רק res.ok: הבקשה מצליחה גם כשהמשפחה עצמה
+      // נכשלה, והודעת הצלחה כאן הייתה מסתירה כרטיס ריק.
+      const failure = (d.failedList as { error?: string }[] | undefined)?.[0]
+      if (failure) { toast.error(failure.error ?? 'הטעינה נכשלה'); setLoadingId(null); router.refresh(); return }
+
+      toast.success(d.testMode ? 'מצב בדיקה — לא נטען כרטיס' : 'הכרטיס נטען')
+      router.refresh()
+      // ⚠️ השובר נפתח רק אחרי הצלחה — ראו ההערה למעלה.
+      setVoucherFor(row)
+    } catch { toast.error('שגיאת רשת') }
+    setLoadingId(null)
   }
 
   // שליחת הודעת האישור — מייל + צינתוק. בלי בחירה: כל המאושרים שטרם קיבלו.
@@ -661,10 +711,78 @@ export default function HolidayRegistrations({
           fmtCur={fmtCur}
           controls={{
             canEdit, selected, toggleRow, allShownSelected, toggleAllShown,
-            busyId, setApprovalFor, clearCard, showMessage: true,
+            busyId, setApprovalFor, clearCard, loadCard, loadingId, showMessage: true,
           }}
         />
       </div>
+
+      {/* ── אישור לפני טעינה בודדת ──
+          🔴 כסף אמיתי בלי דרך חזרה. השם, הסכום והמוקד מוצגים שוב כדי
+          שלחיצה בשורה הלא נכונה תיתפס כאן ולא אצל המשפחה. */}
+      {confirmLoad && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+          onClick={() => setConfirmLoad(null)}>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h4 className="mb-3 text-sm font-extrabold text-slate-900">אישור טעינת כרטיס</h4>
+
+            <dl className="mb-4 flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
+              <div className="flex justify-between gap-3">
+                <dt className="text-slate-500">משפחה</dt>
+                <dd className="font-bold text-slate-800">{[confirmLoad.family_name, confirmLoad.first_name].filter(Boolean).join(' ')}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-slate-500">תעודת זהות</dt>
+                <dd className="font-mono text-slate-700 ltr-num">{confirmLoad.id_number ?? '—'}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-slate-500">סכום</dt>
+                <dd className="text-base font-extrabold text-emerald-800">{fmtCur(amountPerFamily)}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-slate-500">מוקד</dt>
+                <dd className={confirmLoad.center_name ? 'font-bold text-slate-800' : 'text-amber-700'}>
+                  {confirmLoad.center_name ?? 'טרם נבחר'}
+                </dd>
+              </div>
+            </dl>
+
+            {!confirmLoad.center_name && (
+              <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] leading-relaxed text-amber-900">
+                אפשר לטעון גם בלי מוקד, אבל <strong>לא יהיה שובר לשלוח</strong> — הוא בנוי סביב
+                המוקד. השובר יישלח אחרי שהמשפחה תבחר.
+              </p>
+            )}
+
+            <div className="flex gap-2">
+              <button type="button" onClick={() => void runLoad(confirmLoad)}
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-extrabold text-white hover:bg-emerald-700">
+                <Check size={14} /> אישור וטעינה
+              </button>
+              <button type="button" onClick={() => setConfirmLoad(null)}
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50">
+                ביטול
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* חלונית השובר — נפתחת רק אחרי טעינה מוצלחת */}
+      {voucherFor && (
+        <VoucherAfterLoadDialog
+          distributionId={distributionId}
+          testMode={testMode}
+          testEmail={testEmail}
+          target={{
+            id: voucherFor.id,
+            familyName: [voucherFor.family_name, voucherFor.first_name].filter(Boolean).join(' ') || 'משפחה',
+            idNumber: voucherFor.id_number ?? null,
+            email: voucherFor.email ?? null,
+            centerName: voucherFor.center_name ?? null,
+          }}
+          onClose={() => setVoucherFor(null)}
+        />
+      )}
 
       {/* ⚠️ הדפדוף היה מחושב אך לא מרונדר — הטבלה קיבלה את כל השורות.
           החיפוש והסינון רצים על המערך המלא (filtered) והחיתוך לעמוד

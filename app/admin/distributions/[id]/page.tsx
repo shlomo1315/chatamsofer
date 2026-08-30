@@ -74,13 +74,13 @@ async function getData(id: string) {
 
   const fetchWithLabel = () => fetchAllRows<Record<string, unknown>>((from, to) => supabase
       .from('distribution_recipients')
-      .select('id, source, registered_at, phone, notified_at, amount, beneficiary_id, approval_status, approved_at, card_number, card_linked_at, card_link_error, notify_error, center_id, center_source, load_status, center:holiday_centers(id, city, name), beneficiary:beneficiaries(id, full_name, family_name, spouse_name, id_number, phone, phone2, email, address, city, community_affiliation, children_count, birth_date, spouse_birth_date, approval_label:approval_labels(id, name, color, notes))')
+      .select('id, source, registered_at, phone, notified_at, amount, beneficiary_id, approval_status, approved_at, card_number, card_linked_at, card_link_error, notify_error, center_id, center_source, load_status, load_error, center:holiday_centers(id, city, name), beneficiary:beneficiaries(id, full_name, family_name, spouse_name, id_number, phone, phone2, email, address, city, community_affiliation, children_count, birth_date, spouse_birth_date, approval_label:approval_labels(id, name, color, notes))')
       .eq('distribution_id', id)
       .order('registered_at', { ascending: false })
       .range(from, Math.min(to, FIRST_PAGE - 1)))
   const fetchPlain = () => fetchAllRows<Record<string, unknown>>((from, to) => supabase
       .from('distribution_recipients')
-      .select('id, source, registered_at, phone, notified_at, amount, beneficiary_id, approval_status, approved_at, card_number, card_linked_at, card_link_error, notify_error, center_id, center_source, load_status, center:holiday_centers(id, city, name), beneficiary:beneficiaries(id, full_name, family_name, spouse_name, id_number, phone, phone2, email, address, city, community_affiliation, children_count, birth_date, spouse_birth_date)')
+      .select('id, source, registered_at, phone, notified_at, amount, beneficiary_id, approval_status, approved_at, card_number, card_linked_at, card_link_error, notify_error, center_id, center_source, load_status, load_error, center:holiday_centers(id, city, name), beneficiary:beneficiaries(id, full_name, family_name, spouse_name, id_number, phone, phone2, email, address, city, community_affiliation, children_count, birth_date, spouse_birth_date)')
       .eq('distribution_id', id)
       .order('registered_at', { ascending: false })
       .range(from, Math.min(to, FIRST_PAGE - 1)))
@@ -186,6 +186,8 @@ export default async function DistributionDetailPage({ params }: { params: Promi
           // ⚠️ 'cancelled' = כיבוי מוחלט: המשפחה רואה "אין חלוקה" בכל הערוצים.
           distributionActive={d.status !== 'cancelled'}
           distributionName={`${d.name}${d.year ? ` ${d.year}` : ''}`}
+          testMode={(d as { test_mode?: boolean | null }).test_mode === true}
+          testEmail={(d as { test_email?: string | null }).test_email ?? null}
         />
       </Suspense>
     </div>
@@ -198,9 +200,12 @@ export default async function DistributionDetailPage({ params }: { params: Promi
 // ⚠️ רכיב נפרד ולא await בגוף הדף: Suspense עוצר רק על גבול רכיב. await
 // ישיר בדף היה משהה את *כל* הדף בדיוק כמו קודם.
 // ─────────────────────────────────────────────────────────────────────────────
-async function RegistrationsLoader({ id, amount, registrationOpen, distributionActive, distributionName }: {
+async function RegistrationsLoader({ id, amount, registrationOpen, distributionActive, distributionName,
+  testMode, testEmail }: {
   id: string; amount: number; registrationOpen: boolean
   distributionActive?: boolean; distributionName: string
+  /** ⚠️ מצב בדיקה — משנה את נוסח האישור ואת יעד המייל בחלונית השובר. */
+  testMode?: boolean; testEmail?: string | null
 }) {
   const data = await getData(id)
   if (!data) return null
@@ -213,6 +218,8 @@ async function RegistrationsLoader({ id, amount, registrationOpen, distributionA
       registrationOpen={registrationOpen}
       distributionActive={distributionActive}
       distributionName={distributionName}
+      testMode={testMode}
+      testEmail={testEmail}
     />
   )
 }

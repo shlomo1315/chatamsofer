@@ -12,7 +12,7 @@
 'use client'
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { Monitor, Phone, Mail, CreditCard, Pencil, Check, X, Loader2, Columns3 } from 'lucide-react'
+import { Monitor, Phone, Mail, CreditCard, Pencil, Check, X, Loader2, Columns3, Wallet } from 'lucide-react'
 import { SOURCE_LABEL, type RegisterSource } from '@/lib/distributionSources'
 import { useIncrementalRows } from '@/lib/useIncrementalRows'
 import { useResizableColumns } from '@/components/ui/ResizableTable'
@@ -51,6 +51,7 @@ export interface HolidayRow {
   center_source?: string | null
   /** מצב טעינת ה-500₪. ⚠️ הטעינה רצה רק מכפתור מפורש. */
   load_status?: string | null
+  load_error?: string | null
 }
 
 const APPROVAL_LABEL: Record<string, string> = { pending: 'ממתין לאישור', approved: 'מאושר', rejected: 'נדחה' }
@@ -72,6 +73,10 @@ export interface HolidayTableControls {
   busyId?: string | null
   setApprovalFor?: (ids: string[], status: 'approved' | 'rejected') => void
   clearCard?: (id: string) => void
+  /** 🔴 טעינת כרטיס בודד — כסף אמיתי. הקורא אחראי לאישור לפני הקריאה. */
+  loadCard?: (id: string) => void
+  /** מזהה השורה שנטענת כרגע — כדי לנעול את הכפתור שלה בלבד. */
+  loadingId?: string | null
   showMessage?: boolean
   hideApproval?: boolean
   hideCard?: boolean
@@ -85,7 +90,7 @@ type ColKey =
   | 'family_name' | 'first_name' | 'id_number' | 'approval_label' | 'spouse_name'
   | 'approval' | 'card' | 'phone' | 'email' | 'address' | 'city'
   | 'age' | 'children' | 'source' | 'registered_at' | 'amount' | 'message'
-  | 'center'
+  | 'center' | 'load'
 
 interface ColDef {
   key: ColKey
@@ -110,6 +115,9 @@ const COLUMNS: ColDef[] = [
   { key: 'city', label: 'עיר', def: true },
   // ⚠️ מוצגת כברירת מחדל: זו העמודה שכל עבודת החלוקה נשענת עליה.
   { key: 'center', label: 'מוקד חלוקה', def: true },
+  // ⚠️ הסטטוס והפעולה באותה עמודה ולא בשתיים: "נטען?" ו"טען" הם אותה
+  // שאלה משני צדדים, והפרדתם מכריחה לקרוא שתי עמודות כדי לדעת מה לעשות.
+  { key: 'load', label: 'טעינה', def: true },
   { key: 'age', label: 'גיל', def: false, align: 'center' },
   { key: 'children', label: 'ילדים', def: true, align: 'center' },
   { key: 'source', label: 'ערוץ', def: true },
@@ -135,7 +143,7 @@ export default function HolidayRecipientsTable({
   paginated?: boolean
 }) {
   const { canEdit = false, selected, toggleRow, allShownSelected, toggleAllShown,
-    busyId, setApprovalFor, clearCard, showMessage = false,
+    busyId, setApprovalFor, clearCard, loadCard, loadingId, showMessage = false,
     hideApproval = false, hideCard = false, hideSource = false } = controls
 
   const [picker, setPicker] = useState(false)
@@ -244,6 +252,42 @@ export default function HolidayRecipientsTable({
         )
         if (r.card_link_error) return <span className="text-[11px] font-bold text-rose-700" title={r.card_link_error}>נכשל</span>
         return <span className="text-[11px] text-slate-400">{r.approval_status === 'approved' ? 'ממתין לשיוך' : '—'}</span>
+      case 'load': {
+        // ⚠️ אותם כללים כמו eligibleForLoad בשרת: מאושר + יש ת"ז + טרם
+        // נטען. כפתור שמוצג למי שאינו זכאי מייצר לחיצה שתמיד נכשלת.
+        if (r.load_status === 'loaded') return (
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700">
+            <Check size={12} className="flex-shrink-0" /> נטען
+          </span>
+        )
+        if (r.load_status === 'pending') return (
+          <span className="inline-flex items-center gap-1 text-[11px] text-amber-700">
+            <Loader2 size={12} className="animate-spin flex-shrink-0" /> בתהליך
+          </span>
+        )
+        if (r.approval_status !== 'approved') return <span className="text-[11px] text-slate-400">—</span>
+        if (!(r.id_number ?? '').trim()) return (
+          <span className="text-[11px] text-amber-700" title="בלי ת״ז אי אפשר לטעון או להקים בנדרים">חסרה ת״ז</span>
+        )
+
+        const failed = r.load_status === 'failed'
+        return (
+          <div className="flex items-center gap-1.5">
+            {canEdit && loadCard && (
+              <button type="button" onClick={() => loadCard(r.id)} disabled={loadingId === r.id}
+                title={failed ? 'הטעינה נכשלה — נסו שוב' : 'טעינת הכרטיס'}
+                className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-bold transition-colors disabled:opacity-40 ${
+                  failed
+                    ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
+                    : 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'}`}>
+                {loadingId === r.id ? <Loader2 size={12} className="animate-spin" /> : <Wallet size={12} />}
+                {failed ? 'נסה שוב' : 'טען'}
+              </button>
+            )}
+            {failed && <span className="text-[11px] text-rose-600" title={r.load_error ?? ''}>נכשל</span>}
+          </div>
+        )
+      }
       case 'phone': return <span className="font-mono text-slate-600 ltr-num">{r.ben_phone ?? r.phone ?? '—'}</span>
       // ⚠️ text-right מפורש: dir="ltr" הופך את ברירת המחדל לשמאל, והמייל
       // היה נצמד לצד ההפוך מהכותרת.

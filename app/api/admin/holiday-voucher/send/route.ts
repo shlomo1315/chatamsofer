@@ -95,6 +95,8 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => ({})) as {
     distribution_id?: string; confirm?: boolean; ids?: string[]; resend?: boolean
+    /** ⚠️ דריסת כתובת לשורה *אחת* בלבד — ראו הבדיקה למטה. */
+    email?: string
   }
   // 🔴 שער האישור.
   if (!body.confirm) return NextResponse.json({ error: 'נדרש אישור מפורש לשליחה' }, { status: 400 })
@@ -104,6 +106,25 @@ export async function POST(request: NextRequest) {
 
   const all = await loadRows(db, distributionId)
   const scoped = body.ids?.length ? all.filter(r => body.ids!.includes(r.id)) : all
+
+  // ── דריסת כתובת מחלונית השובר ──
+  //
+  // 🔴 מותרת רק כששולחים לשורה *אחת*: דריסה על אצווה הייתה שולחת את
+  // השוברים של כל המשפחות לאותה כתובת.
+  //
+  // ⚠️ נשמרת גם בכרטסת: כתובת שגויה מתגלה בדיוק ברגע הזה, ותיקון שחי רק
+  // בשליחה הזו היה אובד — והשליחה הבאה הייתה נכשלת שוב באותה כתובת.
+  const override = String(body.email ?? '').trim()
+  if (override && scoped.length === 1) {
+    const row = scoped[0]
+    if (override !== row.email) {
+      const { data: recRow } = await db.from('distribution_recipients')
+        .select('beneficiary_id').eq('id', row.id).maybeSingle()
+      const benId = (recRow as { beneficiary_id?: string | null } | null)?.beneficiary_id
+      if (benId) await db.from('beneficiaries').update({ email: override }).eq('id', benId)
+    }
+    row.email = override
+  }
   // ⚠️ resend מפורש בלבד: בלעדיו מי שכבר קיבל אינו מקבל שוב, כדי שלחיצה
   // שנייה על הכפתור לא תציף את כולם בשובר כפול.
   const targets = scoped.filter(r => r.email && r.center && (body.resend || !r.alreadySent))

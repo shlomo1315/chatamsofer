@@ -42,7 +42,7 @@ export function toRegistrationRow(r: Record<string, unknown>): RegistrationRow {
     notified_at?: string | null; notify_error?: string | null; amount?: number | null; beneficiary_id?: string | null
     approval_status?: string | null; approved_at?: string | null
     card_number?: string | null; card_linked_at?: string | null; card_link_error?: string | null
-    center_id?: string | null; center_source?: string | null; load_status?: string | null
+    center_id?: string | null; center_source?: string | null; load_status?: string | null; load_error?: string | null
     center?: { id: string; city: string; name: string } | null
   }
   return {
@@ -66,6 +66,7 @@ export function toRegistrationRow(r: Record<string, unknown>): RegistrationRow {
       : null,
     center_source: row.center_source ?? null,
     load_status: row.load_status ?? null,
+    load_error: row.load_error ?? null,
     name: [b?.family_name, b?.full_name || b?.spouse_name].filter(Boolean).join(' ') || (b?.full_name ?? 'ללא שם'),
     // ⚠️ שם המשפחה והשם הפרטי נשמרים גם בנפרד, לא רק במחרוזת המאוחדת:
     // פיצול בצד הלקוח לפי רווח היה שובר שמות משפחה מורכבים ("בן דוד",
