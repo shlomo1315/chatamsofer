@@ -273,15 +273,20 @@ async function handleCenterRoute(
       ], { max: 1, min: 1, allowed: step.options.map((_, i) => i + 1) })], callId)
 
     case 'ask_city':
-      // ⚠️ אורך ההקשה נגזר ממספר האפשרויות בפועל ולא נקבע קשיח: max=2
-      // כשיש 7 ערים היה מותיר את ימות ממתינה לספרה שנייה שלא תגיע,
-      // והמתקשר היה תקוע עד תום הזמן אחרי הקשה תקינה לגמרי.
+      // 🔴 המספר הוא של *העיר* ולא מיקום ברשימה.
+      //
+      // ⚠️ שלושת הערכים למטה חייבים להיגזר מ-number ולא מהאינדקס:
+      //   · ההקראה — "לרכסים הקישו 18" ולא "הקישו 4"
+      //   · allowed — אחרת הקשה 18 נדחית כלא חוקית
+      //   · max     — אורך המספר הגדול ביותר. נגזר ממספר האפשרויות,
+      //     4 ערים היו נותנות ספרה אחת, וימות הייתה קוטעת את "18" ל-"1"
+      //     ושולחת את המתקשר לירושלים.
       return yemotText([readTap(CENTER_VARS.city, [
-        tToken(buildChoiceList(step.options.map(o => ({ label: o.city })))),
+        tToken(step.options.map(o => `ל${o.city} הקישו ${o.number}`).join(' ')),
       ], {
-        max: String(step.options.length).length,
+        max: Math.max(...step.options.map(o => String(o.number).length)),
         min: 1,
-        allowed: step.options.map((_, i) => i + 1),
+        allowed: step.options.map(o => o.number),
       })], callId)
 
     case 'ask_center':

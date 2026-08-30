@@ -11,6 +11,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { evaluatePick, groupByRegion, centerLabel, REGIONS, type CenterRow, type RegionKey } from './holidayCenterPick'
+import { citiesByNumber, findCityByNumber } from './holidayCityMenu'
 
 /** משתנה נפרד לכל שלב — קריאה חוזרת של משתנה מלא יוצרת לולאה בימות. */
 export const CENTER_VARS = {
@@ -104,8 +105,12 @@ export type CenterFlowStep =
   | { kind: 'closed' }
   | { kind: 'already'; centerId: string; label: string }
   | { kind: 'no_centers' }
+  // ⚠️ ask_region נשאר בטיפוס אך אינו מוחזר עוד — שכבת האזור הוסרה
+  // מהזרימה (ראו ההערה ב-nextCenterStep). הקוראים שמטפלים בו אינם
+  // שבורים, הם פשוט לא ייקראו.
   | { kind: 'ask_region'; options: { key: RegionKey; label: string }[] }
-  | { kind: 'ask_city'; region: RegionKey; options: { city: string; centers: CenterRow[] }[] }
+  /** ⚠️ options נושא את מספר העיר — הוא מה שמוקרא, ולא מיקום ברשימה. */
+  | { kind: 'ask_city'; options: { number: number; city: string; centers: CenterRow[] }[] }
   | { kind: 'ask_center'; city: string; options: CenterRow[] }
   | { kind: 'confirm'; center: CenterRow; label: string }
   | { kind: 'full'; center: CenterRow }
@@ -125,15 +130,20 @@ export function nextCenterStep(input: CenterFlowInput): CenterFlowStep {
 
   if (!centers.length) return { kind: 'no_centers' }
 
-  const regions = regionsWithCenters(centers)
-  const regionIdx = Number(tapped.region ?? 0) - 1
-  const region = regions[regionIdx]
-  if (!region) return { kind: 'ask_region', options: regions }
-
-  const cities = groupByRegion(centers)[region.key]
-  const cityIdx = Number(tapped.city ?? 0) - 1
-  const city = cities[cityIdx]
-  if (!city) return { kind: 'ask_city', region: region.key, options: cities }
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 השלב הראשון הוא *עיר*, ולא אזור.
+  //
+  // ⚠️ שכבת האזור (ירושלים והסביבה / מרכז / צפון / דרום) הוסרה במכוון:
+  // מתוך 18 הערים ברשימה, 15 הן מוקד יחיד — ולהן היא הוסיפה הקשה
+  // שלמה בלי שום תועלת.
+  //
+  // 🔴 ההקשה היא מספר העיר (sort_order) ולא מיקום ברשימה. המספר מתפרסם
+  // למשפחות מראש; אילו היה נגזר מהמיקום, סגירת עיר אחת הייתה מזיזה את
+  // כל המספרים שאחריה, ומי שיודע את המספר שלו היה מגיע לעיר אחרת.
+  // ─────────────────────────────────────────────────────────────────────────
+  const cities = citiesByNumber(centers)
+  const city = findCityByNumber(centers, tapped.city)
+  if (!city) return { kind: 'ask_city', options: cities }
 
   // ⚠️ עיר עם מוקד יחיד מדלגת על שלב הבחירה — תפריט בן אפשרות אחת מיותר.
   let center: CenterRow | undefined

@@ -5,6 +5,7 @@ import {
   FINAL_WARNING, REGIONS, type CenterRow,
 } from '@/lib/holidayCenterPick'
 import { loadOpenCenters } from '@/lib/holidayCenterIvr'
+import { citiesByNumber } from '@/lib/holidayCityMenu'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,21 +58,28 @@ export async function GET(request: NextRequest) {
   const capacities: Record<string, number | null> = {}
   for (const r of (caps ?? []) as { id: string; capacity: number | null }[]) capacities[r.id] = r.capacity
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 קיבוץ לפי *ערים* ולא לפי אזורים — כמו בשלוחה.
+  //
+  // ⚠️ המבנה נשאר "regions" בשם השדה כדי לא לשבור את הממשק שכבר עובד,
+  // אבל בפועל יש קבוצה אחת שמכילה את כל הערים. שכבת האזור הוסרה: מתוך
+  // 18 הערים, 15 הן מוקד יחיד, והיא הוסיפה להן מדרג מיותר.
+  //
   // ⚠️ מוקד מלא נשלח עם סימון ולא מוסתר: "המוקד שלי נעלם" מבלבל יותר
   // מ"המוקד מלא".
-  const grouped = groupByRegion(centers)
-  const regions = (Object.keys(REGIONS) as (keyof typeof REGIONS)[])
-    .filter(k => grouped[k].length)
-    .map(k => ({
-      key: k, label: REGIONS[k],
-      cities: grouped[k].map(g => ({
-        city: g.city,
-        centers: g.centers.map(c => ({
-          id: c.id, name: c.name, city: c.city,
-          full: capacities[c.id] != null && (taken[c.id] ?? 0) >= (capacities[c.id] as number),
-        })),
+  // ─────────────────────────────────────────────────────────────────────────
+  const regions = [{
+    key: 'all' as const,
+    label: '',
+    cities: citiesByNumber(centers).map(g => ({
+      city: g.city,
+      number: g.number,
+      centers: g.centers.map(c => ({
+        id: c.id, name: c.name, city: c.city,
+        full: capacities[c.id] != null && (taken[c.id] ?? 0) >= (capacities[c.id] as number),
       })),
-    }))
+    })),
+  }]
 
   return NextResponse.json({
     open: !!dist.centers_open,

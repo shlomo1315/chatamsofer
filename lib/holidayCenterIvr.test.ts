@@ -13,11 +13,11 @@ import type { CenterRow } from './holidayCenterPick'
 // ─────────────────────────────────────────────────────────────────────────────
 
 const CENTERS: CenterRow[] = [
-  { id: 'j1', city: 'ירושלים', name: 'אזור נווה צבי', region: 'jerusalem', sort_order: 10 },
-  { id: 'j2', city: 'ירושלים', name: 'אזור מאה שערים', region: 'jerusalem', sort_order: 20 },
-  { id: 'b1', city: 'ביתר עילית', name: 'ביתר עילית', region: 'jerusalem', sort_order: 60 },
-  { id: 'c1', city: 'בני ברק', name: 'אזור סקולוב', region: 'center', sort_order: 10 },
-  { id: 'n1', city: 'חיפה', name: 'חיפה', region: 'north', sort_order: 10 },
+  { id: 'j1', city: 'ירושלים', name: 'אזור נווה צבי', region: 'jerusalem', sort_order: 1 },
+  { id: 'j2', city: 'ירושלים', name: 'אזור מאה שערים', region: 'jerusalem', sort_order: 1 },
+  { id: 'b1', city: 'ביתר עילית', name: 'ביתר עילית', region: 'jerusalem', sort_order: 7 },
+  { id: 'c1', city: 'בני ברק', name: 'אזור סקולוב', region: 'center', sort_order: 2 },
+  { id: 'n1', city: 'חיפה', name: 'חיפה', region: 'north', sort_order: 8 },
 ]
 
 const base: CenterFlowInput = {
@@ -45,45 +45,45 @@ describe('nextCenterStep — זרימת בחירת המוקד', () => {
     expect(s.kind).toBe('no_centers')
   })
 
-  it('השלב הראשון הוא בחירת אזור', () => {
+  // 🔴 שכבת האזור הוסרה מהזרימה: מתוך 18 הערים ברשימה האמיתית, 15 הן
+  // מוקד יחיד — ולהן היא הוסיפה הקשה שלמה בלי תועלת. השלב הראשון הוא
+  // העיר, לפי המספר הקבוע שלה. ראו lib/holidayCityFlow.test.ts.
+  it('🔴 השלב הראשון הוא בחירת עיר', () => {
     const s = nextCenterStep(base)
-    expect(s.kind).toBe('ask_region')
-    if (s.kind === 'ask_region') {
-      // ⚠️ דרום אינו מוצע — אין בו מוקדים פתוחים בדוגמה הזו.
-      expect(s.options.map(o => o.key)).toEqual(['jerusalem', 'center', 'north'])
-    }
+    expect(s.kind).toBe('ask_city')
   })
 
-  it('אחרי אזור — בחירת עיר', () => {
-    const s = nextCenterStep({ ...base, tapped: { region: '1' } })
+  it('כל הערים מוצעות, כל אחת פעם אחת', () => {
+    const s = nextCenterStep({ ...base, tapped: {} })
     expect(s.kind).toBe('ask_city')
     if (s.kind === 'ask_city') {
-      // 🔴 ירושלים פעם אחת, למרות שני מוקדים.
-      expect(s.options.map(o => o.city)).toEqual(['ירושלים', 'ביתר עילית'])
+      // 🔴 ירושלים פעם אחת, למרות שני מוקדים. הסדר לפי מספר העיר.
+      expect(s.options.map(o => o.city)).toEqual(['ירושלים', 'בני ברק', 'ביתר עילית', 'חיפה'])
+      expect(s.options.map(o => o.number)).toEqual([1, 2, 7, 8])
     }
   })
 
   it('🔴 עיר עם כמה מוקדים — מוצג תפריט מוקדים', () => {
-    const s = nextCenterStep({ ...base, tapped: { region: '1', city: '1' } })
+    const s = nextCenterStep({ ...base, tapped: { city: '1' } })
     expect(s.kind).toBe('ask_center')
     if (s.kind === 'ask_center') expect(s.options).toHaveLength(2)
   })
 
   it('🔴 עיר עם מוקד יחיד מדלגת ישר לאישור', () => {
     // ⚠️ תפריט בן אפשרות אחת מבזבז את זמן המאזין ומבלבל.
-    const s = nextCenterStep({ ...base, tapped: { region: '1', city: '2' } })
+    const s = nextCenterStep({ ...base, tapped: { city: '7' } })
     expect(s.kind).toBe('confirm')
     if (s.kind === 'confirm') expect(s.center.id).toBe('b1')
   })
 
   it('אישור בהקשה 1 → שמירה', () => {
-    const s = nextCenterStep({ ...base, tapped: { region: '1', city: '2', confirm: '1' } })
+    const s = nextCenterStep({ ...base, tapped: { city: '7', confirm: '1' } })
     expect(s.kind).toBe('save')
     if (s.kind === 'save') expect(s.center.id).toBe('b1')
   })
 
   it('הקשה שאינה 1 → ביטול, בלי שמירה', () => {
-    const s = nextCenterStep({ ...base, tapped: { region: '1', city: '2', confirm: '2' } })
+    const s = nextCenterStep({ ...base, tapped: { city: '7', confirm: '2' } })
     expect(s.kind).toBe('cancelled')
   })
 
@@ -91,7 +91,7 @@ describe('nextCenterStep — זרימת בחירת המוקד', () => {
     const s = nextCenterStep({
       ...base,
       capacities: { b1: 10 }, taken: { b1: 10 },
-      tapped: { region: '1', city: '2' },
+      tapped: { city: '7' },
     })
     expect(s.kind).toBe('full')
   })
@@ -100,24 +100,26 @@ describe('nextCenterStep — זרימת בחירת המוקד', () => {
     const s = nextCenterStep({
       ...base,
       capacities: { b1: 10 }, taken: { b1: 9 },
-      tapped: { region: '1', city: '2' },
+      tapped: { city: '7' },
     })
     expect(s.kind).toBe('confirm')
   })
 
   it('⚠️ הקשה מחוץ לטווח מחזירה לתפריט ולא קורסת', () => {
     // מי שהקיש 9 בתפריט בן 3 אפשרויות — שומע את התפריט שוב.
-    const s = nextCenterStep({ ...base, tapped: { region: '9' } })
-    expect(s.kind).toBe('ask_region')
-  })
-
-  it('⚠️ הקשת עיר מחוץ לטווח מחזירה לרשימת הערים', () => {
-    const s = nextCenterStep({ ...base, tapped: { region: '1', city: '9' } })
+    const s = nextCenterStep({ ...base, tapped: { city: '99' } })
     expect(s.kind).toBe('ask_city')
   })
 
-  it('בחירה מאזור אחר עובדת (מרכז → בני ברק)', () => {
-    const s = nextCenterStep({ ...base, tapped: { region: '2', city: '1' } })
+  it('⚠️ הקשת עיר מחוץ לטווח מחזירה לרשימת הערים', () => {
+    const s = nextCenterStep({ ...base, tapped: { city: '9' } })
+    expect(s.kind).toBe('ask_city')
+  })
+
+  it('בחירת עיר אחרת עובדת (2 → בני ברק)', () => {
+    // ⚠️ בני ברק היא מספר 2 ברשימה, ויש לה מוקד יחיד בדוגמה — ולכן
+    // ההקשה מגיעה ישירות לאישור.
+    const s = nextCenterStep({ ...base, tapped: { city: '2' } })
     expect(s.kind).toBe('confirm')
     if (s.kind === 'confirm') expect(s.center.id).toBe('c1')
   })

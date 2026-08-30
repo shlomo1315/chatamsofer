@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { normalizeCardExpiry } from './distributionCardExpiry'
+import { toNedarimExpiry } from './holidayCardLoad'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ולידציית תוקף הכרטיס בשמירת החלוקה.
@@ -55,8 +56,10 @@ describe('normalizeCardExpiry — 🔴 פגום נבלם', () => {
 })
 
 describe('normalizeCardExpiry — התוצאה עוברת נכון ל-nedarim', () => {
-  it('מה שנשמר כאן הוא בדיוק מה ש-toNedarimExpiry יודע להמיר', async () => {
-    const { toNedarimExpiry } = await import('./holidayCardLoad')
+  // ⚠️ import רגיל ולא דינמי: await import() בתוך הטסט טען את שרשרת
+  // המודולים של נדרים בזמן הריצה, לקח כ-7 שניות תחת עומס, וחצה את
+  // ה-timeout — כשל שנראה כרגרסיה אקראית ואינו קשור לנבדק עצמו.
+  it('מה שנשמר כאן הוא בדיוק מה ש-toNedarimExpiry יודע להמיר', () => {
     const r = normalizeCardExpiry('2026-11-20')
     expect(r.ok && toNedarimExpiry(r.value)).toBe('20/11/2026')
   })
