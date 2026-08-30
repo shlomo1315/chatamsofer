@@ -1,12 +1,13 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Paperclip, Upload, Trash2, Loader2, FileText, ExternalLink, Image as ImageIcon, Download } from 'lucide-react'
+import { Paperclip, Upload, Trash2, Loader2, FileText, ExternalLink, Image as ImageIcon, Download, AlertTriangle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { docDownloadName } from '@/lib/docUrl'
 import { openDocInNewTab, downloadDocViaData, releaseDoc } from '@/lib/docBlob'
 import SafeDocImage from '@/components/ui/SafeDocImage'
 import { ViewDocButton } from '@/components/ui/DocViewer'
 import { useDocTypes } from '@/lib/useDocTypes'
+import { docNameMismatch } from '@/lib/docNameMismatch'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
@@ -51,6 +52,8 @@ export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { b
   const [uploading, setUploading] = useState(false)
   const [docType, setDocType] = useState('id_husband')
   const [error, setError] = useState('')
+  // אזהרת סתירה בין שם הקובץ לסוג שנבחר — מוצגת אחרי ההעלאה, לא חוסמת.
+  const [mismatch, setMismatch] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -69,6 +72,13 @@ export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { b
     if (!files || files.length === 0) return
     setUploading(true)
     setError('')
+    // ⚠️ אזהרה ולא חסימה: שם קובץ אינו ראיה על תוכנו, וקובץ מאוחד
+    // ("תעודות זהות משפחה.pdf") לגיטימי תחת כל תווית. חסימה הייתה עוצרת
+    // העלאות תקינות. ראו lib/docNameMismatch.
+    const warns = Array.from(files)
+      .map(f => docNameMismatch(f.name, docType))
+      .filter((w): w is string => !!w)
+    setMismatch(warns[0] ?? '')
     try {
       for (const file of Array.from(files)) {
         const ext = file.name.split('.').pop()
@@ -157,6 +167,13 @@ export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { b
       </div>
 
       {error && <p className="text-xs text-red-600">{error}</p>}
+      {mismatch && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2">
+          <AlertTriangle size={14} className="text-amber-600 shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-900 leading-relaxed flex-1">{mismatch}</p>
+          <button onClick={() => setMismatch('')} className="text-xs font-bold text-amber-700 hover:text-amber-900">סגירה</button>
+        </div>
+      )}
 
       {/* List */}
       {loading ? (
