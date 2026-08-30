@@ -17,7 +17,7 @@ export default async function EditDistributionPage({ params }: { params: Promise
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('distributions')
-    .select('id, name, year, description, amount_per_family, distribution_date')
+    .select('id, name, year, description, amount_per_family, distribution_date, card_expiry')
     .eq('id', id)
     .single()
   if (error && error.code !== 'PGRST116' && error.code !== '22P02') throw error

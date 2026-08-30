@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
+import { normalizeCardExpiry } from '@/lib/distributionCardExpiry'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,6 +22,7 @@ interface Body {
   amount_per_family?: number | null
   registration_open?: boolean
   distribution_date?: string | null
+  card_expiry?: string | null
   status?: string
 }
 
@@ -63,12 +65,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'סכום לא תקין' }, { status: 400 })
   }
 
+  const expiry = normalizeCardExpiry(body.card_expiry)
+  if (!expiry.ok) return NextResponse.json({ error: expiry.error }, { status: 400 })
+
   const { data, error } = await db.from('distributions').insert({
     name,
     year: String(body.year ?? '').trim() || null,
     description: String(body.description ?? '').trim() || null,
     amount_per_family: amount,
     distribution_date: body.distribution_date || null,
+    card_expiry: expiry.value,
     status: 'planning',
     registration_open: false,
     created_by: staff.userId,
@@ -100,6 +106,13 @@ export async function PATCH(request: NextRequest) {
   if (body.description !== undefined) updates.description = String(body.description).trim() || null
   if (body.distribution_date !== undefined) updates.distribution_date = body.distribution_date || null
   if (body.status !== undefined) updates.status = body.status
+  // ⚠️ נבדק גם כאן ולא רק בטופס: תאריך פגום מתגלה אחרת רק ברגע הטעינה,
+  // מול מאות משפחות בבת אחת.
+  if (body.card_expiry !== undefined) {
+    const e = normalizeCardExpiry(body.card_expiry)
+    if (!e.ok) return NextResponse.json({ error: e.error }, { status: 400 })
+    updates.card_expiry = e.value
+  }
   if (body.amount_per_family !== undefined) {
     const amount = body.amount_per_family == null ? null : Number(body.amount_per_family)
     if (amount != null && (!Number.isFinite(amount) || amount < 0)) {

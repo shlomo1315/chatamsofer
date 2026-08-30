@@ -49,6 +49,7 @@ export interface DistributionFormValues {
   description?: string | null
   amount_per_family?: number | null
   distribution_date?: string | null
+  card_expiry?: string | null
 }
 
 const YEARS = hebrewYearOptions()
@@ -61,6 +62,7 @@ export default function DistributionForm({ initial }: { initial?: DistributionFo
   const [year, setYear] = useState(initial?.year ?? '')
   const [amount, setAmount] = useState(initial?.amount_per_family != null ? String(initial.amount_per_family) : '')
   const [date, setDate] = useState(initial?.distribution_date ?? '')
+  const [cardExpiry, setCardExpiry] = useState(initial?.card_expiry ?? '')
   const [description, setDescription] = useState(initial?.description ?? '')
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
@@ -78,6 +80,7 @@ export default function DistributionForm({ initial }: { initial?: DistributionFo
           ...(isEdit ? { id: initial!.id } : {}),
           name: name.trim(), year: year.trim(), description: description.trim(),
           amount_per_family: amountNum, distribution_date: date || null,
+          card_expiry: cardExpiry || null,
         }),
       })
       const d = await res.json().catch(() => ({}))
@@ -115,6 +118,14 @@ export default function DistributionForm({ initial }: { initial?: DistributionFo
         <div className="sm:col-span-1">
           <label className="mb-1.5 block text-xs font-bold text-slate-600">תאריך החלוקה (לא חובה)</label>
           <HebrewDatePicker value={date} onChange={setDate} yearFirst />
+        </div>
+        <div className="sm:col-span-1">
+          <label className="mb-1.5 block text-xs font-bold text-slate-600">תוקף הכרטיס (לא חובה)</label>
+          <HebrewDatePicker value={cardExpiry} onChange={setCardExpiry} yearFirst />
+          <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
+            עד התאריך הזה אפשר לנצל את היתרה. התוקף נשלח לנדרים בזמן הטענת
+            הכרטיסים, ומודפס על השובר. <strong>ריק</strong> = הטענה ללא הגבלת זמן.
+          </p>
         </div>
         <div className="sm:col-span-2">
           <label className="mb-1.5 block text-xs font-bold text-slate-600">תיאור / הערות</label>
