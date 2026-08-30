@@ -9,6 +9,7 @@ import YemotMaternitySettings from '@/app/admin/settings/YemotMaternitySettings'
 import YemotHolidaySettings from '@/app/admin/settings/YemotHolidaySettings'
 import YemotMainMenuSettings from '@/app/admin/settings/YemotMainMenuSettings'
 import YemotCallLog from '@/app/admin/settings/YemotCallLog'
+import RegistrationCallSettings from '@/app/admin/settings/RegistrationCallSettings'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // עץ השלוחות ומסך השלוחה.
@@ -136,7 +137,14 @@ export default function PhoneSystemClient() {
             אלה אינם חלק מהתפריט: המשפחה אינה מחייגת אלינו אלא מקבלת מאיתנו שיחה.
           </p>
           {outbound.map(e => (
-            <ExtCard key={e.id} ext={e} onOpen={() => { setOpenId(e.id); setTab('tree') }} />
+            <ExtCard key={e.id} ext={e}
+              onOpen={() => {
+                setOpenId(e.id)
+                // ⚠️ להודעת האישור יש הקלטה לעריכה — נפתחת עליה. לקוד
+                // האימות אין (הוא מקריא קוד שנוצר בזמן אמת), ולכן שם
+                // המבנה הוא מה שיש להראות.
+                setTab(e.id === 'announce' ? 'messages' : 'tree')
+              }} />
           ))}
         </section>
 
@@ -155,7 +163,9 @@ export default function PhoneSystemClient() {
   // ── מסך שלוחה ──
   // ⚠️ ההודעות לעריכה קיימות רק לחלק מהשלוחות; ללא כאלה הלשונית אינה מוצגת
   // כלל, במקום להציג לשונית ריקה שנראית כתקלה.
-  const hasMessages = ext.id === 'menu' || !!ext.messagesKey
+  // ⚠️ 'announce' נכלל אף שאין לו messagesKey: ההקלטה שלו נערכת
+  // ב-RegistrationCallSettings, וזו הודעה לכל דבר מבחינת המנהל.
+  const hasMessages = ext.id === 'menu' || ext.id === 'announce' || !!ext.messagesKey
   const tabs: { key: Tab; label: string; icon: typeof MessageSquare }[] = [
     ...(hasMessages ? [{ key: 'messages' as Tab, label: 'הודעות', icon: MessageSquare }] : []),
     { key: 'tree', label: 'מבנה השיחה', icon: ListTree },
@@ -195,6 +205,7 @@ export default function PhoneSystemClient() {
       {active === 'messages' && (
         <div className="rounded-2xl border border-slate-200 bg-white p-4">
           {ext.id === 'menu' && <YemotMainMenuSettings />}
+          {ext.id === 'announce' && <RegistrationCallSettings />}
           {ext.messagesKey === 'holiday' && <YemotHolidaySettings />}
           {ext.messagesKey === 'maternity' && <YemotMaternitySettings />}
         </div>
