@@ -18,21 +18,23 @@ const rowWithoutAid = {
   },
 } as unknown as GratitudeLetterRow
 
-// מכתב רגיל — המשפחה מגיעה דרך תיק הלידה. חייב להמשיך לעבוד כרגיל.
+// מכתב עם תיק לידה — פרטי הלידה מהתיק, המשפחה מהקישור הישיר.
 const rowWithAid = {
   id: 'y', body: 'תודה', signature: null, is_anonymous: false,
   status: 'approved', created_at: '2026-07-28T00:00:00Z',
   aid: {
     birth_date: '2026-07-01', recovery_home: 'בית החלמה',
     recovery_eligibility_days: 2, is_twins: false,
-    beneficiary: { family_name: 'כהן', full_name: 'יעקב', spouse_name: 'רחל', city: 'ירושלים' },
   },
-  letterBen: null,
+  letterBen: { family_name: 'כהן', full_name: 'יעקב', spouse_name: 'רחל', city: 'ירושלים' },
 } as unknown as GratitudeLetterRow
 
 describe('חתימת מכתב ברכה — נפילה למוטב המקושר ישירות', () => {
   it('השאילתה שולפת גם את המוטב הישיר', () => {
-    expect(GRATITUDE_LETTER_SELECT).toMatch(/letterBen:beneficiaries!beneficiary_id/)
+    expect(GRATITUDE_LETTER_SELECT).toContain('letterBen:beneficiaries(')
+    // ⚠️ שליפה *אחת* מ-beneficiaries: שתיים באותה שאילתה דו-משמעיות
+    // ל-PostgREST והפילו את ההורדה המרוכזת כולה.
+    expect(GRATITUDE_LETTER_SELECT.match(/beneficiaries\(/g)).toHaveLength(1)
   })
 
   it('benOf מוצא את המשפחה גם כשאין תיק לידה', () => {
@@ -50,7 +52,7 @@ describe('חתימת מכתב ברכה — נפילה למוטב המקושר י
     expect(input.wifeId).toBe('987654321')
   })
 
-  it('תיק הלידה נשאר מקור העדיפות כשהוא קיים', () => {
+  it('מכתב עם תיק לידה — המשפחה עדיין נשלפת', () => {
     expect(benOf(rowWithAid)?.family_name).toBe('כהן')
     expect(voucherInputFromRow(rowWithAid).city).toBe('ירושלים')
   })

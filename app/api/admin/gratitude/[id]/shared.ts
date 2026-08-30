@@ -53,14 +53,20 @@ type Db = NonNullable<ReturnType<typeof getServiceClient>>
 // לידה יצא בלי חתימה — קו מקווקו במקום שם המשפחה, בלי שום שגיאה.
 const BEN_FIELDS = 'family_name, full_name, spouse_name, city, address, id_number, spouse_id_number, email'
 
-// ⚠️ הכינוי כאן הוא letterBen ולא beneficiary: שני יחסים באותו שם באותה
-// שאילתה הם דו-משמעיים ל-PostgREST. הכינוי הייחודי, יחד ציון עמודת
-// המפתח (!beneficiary_id), קובע חד-משמעית דרך איזה FK ללכת.
+// 🔴 המשפחה נשלפת דרך beneficiary_id של המכתב, ולא דרך תיק הלידה.
+//
+// ⚠️ קודם היא נשלפה *רק* דרך maternity_aids → beneficiary, ו-29 מכתבים
+// שאינם מקושרים לתיק לידה יצאו בלי חתימה — קו מקווקו במקום שם המשפחה,
+// בלי שום שגיאה.
+//
+// ⚠️ ולא דרך *שני* המסלולים: שתי שליפות מאותה טבלה באותה שאילתה הן
+// דו-משמעיות ל-PostgREST והפילו את ההורדה המרוכזת כולה. נבדק מול המסד —
+// לכל 113 המכתבים יש beneficiary_id, כולל אלה שיש להם גם תיק לידה, ושני
+// המסלולים מחזירים את אותה משפחה. לכן מסלול אחד מספיק והוא גם הנכון.
 export const GRATITUDE_LETTER_SELECT =
   'id, body, signature, is_anonymous, status, created_at, sent_to_donor_at, sent_to_donor_email, ' +
-  `aid:maternity_aids(birth_date, recovery_home, recovery_eligibility_days, is_twins, recovery_stay_from, recovery_stay_to, ` +
-  `beneficiary:beneficiaries(${BEN_FIELDS})), ` +
-  `letterBen:beneficiaries!beneficiary_id(${BEN_FIELDS})`
+  `aid:maternity_aids(birth_date, recovery_home, recovery_eligibility_days, is_twins, recovery_stay_from, recovery_stay_to), ` +
+  `letterBen:beneficiaries(${BEN_FIELDS})`
 
 export async function loadGratitudeLetter(db: Db, id: string): Promise<GratitudeLetterRow | null> {
   const { data } = await db.from('gratitude_letters').select(GRATITUDE_LETTER_SELECT).eq('id', id).maybeSingle()
@@ -88,7 +94,7 @@ export function aidOf(row: GratitudeLetterRow | null): AidInfo | null {
  * לא נכשל, הוא פשוט צייר קו מקווקו למילוי ידני.
  */
 export function benOf(row: GratitudeLetterRow | null): BenFull | null {
-  return one(aidOf(row)?.beneficiary) ?? one(row?.letterBen)
+  return one(row?.letterBen)
 }
 
 /** שם התצוגה של היולדת — "משפחה + שם" (או '' אם אין). */
