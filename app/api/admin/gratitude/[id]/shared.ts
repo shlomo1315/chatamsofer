@@ -33,6 +33,14 @@ export interface GratitudeLetterRow {
   sent_to_donor_at?: string | null
   sent_to_donor_email?: string | null
   aid: AidInfo | null
+  /**
+   * המוטב המקושר ישירות למכתב (gratitude_letters.beneficiary_id).
+   *
+   * 🔴 לא כל מכתב מקושר לתיק לידה: מכתב שנקלט ממייל, או שהוגש לפני
+   * שנפתח התיק, נשמר עם beneficiary_id בלבד ו-maternity_aid_id = NULL.
+   * השדה הזה הוא מקור המשפחה במקרים האלה.
+   */
+  letterBen?: BenFull | null
 }
 
 type Db = NonNullable<ReturnType<typeof getServiceClient>>
@@ -40,26 +48,47 @@ type Db = NonNullable<ReturnType<typeof getServiceClient>>
 // ⚠️ מיוצא: ההורדה המרוכזת שולפת את *אותם* שדות בדיוק. שאילתה נפרדת שם
 // הייתה משמיטה שדה (עיר/ת"ז/ימי החלמה) והמכתב המרוכז היה יוצא חסר לעומת
 // הבודד — בלי שום שגיאה.
+// ⚠️ נשלפים *שני* מסלולים אל המשפחה: דרך תיק הלידה, ובנוסף המוטב
+// המקושר ישירות למכתב. עד כה נשלף רק המסלול הראשון, וכל מכתב בלי תיק
+// לידה יצא בלי חתימה — קו מקווקו במקום שם המשפחה, בלי שום שגיאה.
+const BEN_FIELDS = 'family_name, full_name, spouse_name, city, address, id_number, spouse_id_number, email'
+
+// ⚠️ הכינוי כאן הוא letterBen ולא beneficiary: שני יחסים באותו שם באותה
+// שאילתה הם דו-משמעיים ל-PostgREST. הכינוי הייחודי, יחד ציון עמודת
+// המפתח (!beneficiary_id), קובע חד-משמעית דרך איזה FK ללכת.
 export const GRATITUDE_LETTER_SELECT =
   'id, body, signature, is_anonymous, status, created_at, sent_to_donor_at, sent_to_donor_email, ' +
-  'aid:maternity_aids(birth_date, recovery_home, recovery_eligibility_days, is_twins, recovery_stay_from, recovery_stay_to, ' +
-  'beneficiary:beneficiaries(family_name, full_name, spouse_name, city, address, id_number, spouse_id_number, email))'
+  `aid:maternity_aids(birth_date, recovery_home, recovery_eligibility_days, is_twins, recovery_stay_from, recovery_stay_to, ` +
+  `beneficiary:beneficiaries(${BEN_FIELDS})), ` +
+  `letterBen:beneficiaries!beneficiary_id(${BEN_FIELDS})`
 
 export async function loadGratitudeLetter(db: Db, id: string): Promise<GratitudeLetterRow | null> {
   const { data } = await db.from('gratitude_letters').select(GRATITUDE_LETTER_SELECT).eq('id', id).maybeSingle()
   return data as unknown as GratitudeLetterRow | null
 }
 
-/** פרטי הלידה מרשומת המכתב (Supabase מחזיר יחסים כמערך או אובייקט). */
-export function aidOf(row: GratitudeLetterRow | null): AidInfo | null {
-  const aid = row?.aid
-  return (Array.isArray(aid) ? aid[0] : aid) as AidInfo | null
+/** יחס של Supabase — מוחזר כמערך או כאובייקט בודד, תלוי בשאילתה. */
+function one<T>(rel: T | T[] | null | undefined): T | null {
+  return ((Array.isArray(rel) ? rel[0] : rel) ?? null) as T | null
 }
 
-/** פרטי המשפחה מרשומת המכתב (Supabase מחזיר יחסים כמערך או אובייקט). */
+/** פרטי הלידה מרשומת המכתב (Supabase מחזיר יחסים כמערך או אובייקט). */
+export function aidOf(row: GratitudeLetterRow | null): AidInfo | null {
+  return one(row?.aid)
+}
+
+/**
+ * פרטי המשפחה מרשומת המכתב.
+ *
+ * 🔴 שני מסלולים, לפי סדר עדיפות: תיק הלידה קודם (שם הנתונים מאומתים
+ * מול הלידה עצמה), ובהיעדרו — המוטב המקושר ישירות למכתב.
+ *
+ * ⚠️ בלי הנפילה השנייה כל מכתב שאינו מקושר לתיק לידה יצא בלי חתימה,
+ * למרות שהמשפחה רשומה אצלנו במלואה. זו הייתה חתימה ריקה בשקט — הקוד
+ * לא נכשל, הוא פשוט צייר קו מקווקו למילוי ידני.
+ */
 export function benOf(row: GratitudeLetterRow | null): BenFull | null {
-  const ben = aidOf(row)?.beneficiary
-  return (Array.isArray(ben) ? ben[0] : ben) as BenFull | null
+  return one(aidOf(row)?.beneficiary) ?? one(row?.letterBen)
 }
 
 /** שם התצוגה של היולדת — "משפחה + שם" (או '' אם אין). */

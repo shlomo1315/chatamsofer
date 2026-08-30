@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { buildGratitudeBatchLetters } from '@/lib/gratitudeBatchLetters'
-import { GRATITUDE_LETTER_SELECT, type GratitudeLetterRow } from '../[id]/shared'
+import { GRATITUDE_LETTER_SELECT, benOf, type GratitudeLetterRow } from '../[id]/shared'
 import { selectBatch, type BatchFilters, type SentFilter } from '@/lib/gratitudeBatch'
 
 // אבחון הפקת הקובץ המרוכז: מריץ את אותו מסלול בדיוק, אך מחזיר JSON עם
@@ -54,6 +54,10 @@ export async function GET(request: NextRequest) {
       filters,
       totalLettersInDb: letters.length,
       selected: picked.length,
+      // ⚠️ מכתבים שייצאו בלי שם משפחה — קו מקווקו במקום החתימה. אמור
+      // להיות 0. ערך גדול מ-0 מסמן שהמשפחה לא נשלפת (למשל מסלול קישור
+      // חדש שלא נוסף לשאילתה), וזה כשל שקט שאינו מפיל דבר.
+      missingSignature: picked.filter(r => !r.is_anonymous && !benOf(r)?.family_name).length,
       dbMs,
       buildMs: Date.now() - t1,
       pdfBytes: bytes.length,
