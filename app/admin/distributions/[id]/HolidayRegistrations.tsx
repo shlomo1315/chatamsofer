@@ -13,6 +13,7 @@ import { downloadXlsx, type XlsxColumn } from '@/lib/downloadXlsx'
 import type { ApprovalStatus } from '@/lib/holidayCards'
 import HolidayRecipientsTable, { type HolidayRow } from './HolidayRecipientsTable'
 import VoucherAfterLoadDialog from './VoucherAfterLoadDialog'
+import { scopeBulkLoad, scopeBulkVoucher } from '@/lib/holidayBulkScope'
 import type { ApprovalLabel } from '@/types'
 import AddRecipientDialog from './AddRecipientDialog'
 import Pagination from '@/components/ui/Pagination'
@@ -406,6 +407,70 @@ export default function HolidayRegistrations({
     setLoadingId(null)
   }
 
+  // ── פעולות קבוצתיות: טעינה ושליחת שוברים ──
+  //
+  // 🔴 הסימון חוצה עמודים ומגיע למאות שורות. לכן נפתחת חלונית שמראה
+  // *מראש* כמה ייטענו, כמה יידלגו ולמה, וכמה כסף בסך הכל — ולא רק
+  // confirm() עם מספר אחד.
+  const [bulkAction, setBulkAction] = useState<'load' | 'voucher' | null>(null)
+  const [bulkBusy, setBulkBusy] = useState(false)
+
+  const selectedRows = useMemo(
+    () => allRows.filter(r => selected.has(r.id)),
+    [allRows, selected],
+  )
+  const loadScope = useMemo(() => scopeBulkLoad(selectedRows), [selectedRows])
+  const voucherScope = useMemo(() => scopeBulkVoucher(selectedRows), [selectedRows])
+
+  const runBulkLoad = async () => {
+    setBulkBusy(true)
+    try {
+      const res = await fetch('/api/admin/holiday-load', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          distribution_id: distributionId,
+          ids: loadScope.eligible.map(r => r.id),
+          amount: amountPerFamily || undefined, confirm: true,
+        }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(d.error ?? 'הטעינה נכשלה'); setBulkBusy(false); return }
+      toast.success(d.testMode
+        ? `מצב בדיקה — ${d.loaded ?? 0} עברו את המסלול, לא נטען כרטיס`
+        : `${d.loaded ?? 0} כרטיסים נטענו${d.failed ? ` · ${d.failed} נכשלו` : ''}`)
+      setBulkAction(null)
+      setSelected(new Set())
+      router.refresh()
+    } catch { toast.error('שגיאת רשת') }
+    setBulkBusy(false)
+  }
+
+  const runBulkVoucher = async () => {
+    setBulkBusy(true)
+    try {
+      const res = await fetch('/api/admin/holiday-voucher/send', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          distribution_id: distributionId,
+          ids: voucherScope.eligible.map(r => r.id),
+          confirm: true,
+        }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(d.error ?? 'השליחה נכשלה'); setBulkBusy(false); return }
+      if (d.sent === 0) {
+        // ⚠️ sent:0 אינו הצלחה — ראו את אותה בדיקה בחלונית הבודדת.
+        toast.error(d.note ?? 'לא נשלח דבר')
+        setBulkBusy(false); return
+      }
+      toast.success(`${d.sent} שוברים נשלחו${d.failed ? ` · ${d.failed} נכשלו` : ''}`)
+      setBulkAction(null)
+      setSelected(new Set())
+      router.refresh()
+    } catch { toast.error('שגיאת רשת') }
+    setBulkBusy(false)
+  }
+
   // שליחת הודעת האישור — מייל + צינתוק. בלי בחירה: כל המאושרים שטרם קיבלו.
   // ⚠️ הצינתוק אינו "תוספת" למייל: לחלק מהמשפחות אין מייל, ואצלן הוא הערוץ
   // היחיד. לכן שני הערוצים נשלחים יחד וכל אחד נכשל בנפרד.
@@ -695,6 +760,21 @@ export default function HolidayRegistrations({
             className="inline-flex items-center gap-1.5 rounded-xl bg-teal-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-teal-700 disabled:opacity-50">
             {notifying ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} שליחת הודעת אישור
           </button>
+          {/* 🔴 טעינה ושליחה — שתי פעולות נפרדות ולא אחת: לא כל מי שנטען
+              בחר מוקד, ולא כל מי שבחר מוקד כבר נטען. איחודן היה מחייב
+              לחכות לאיטי שבשניהם. */}
+          <button type="button" disabled={bulkBusy || loadScope.eligible.length === 0}
+            onClick={() => setBulkAction('load')}
+            title={loadScope.eligible.length === 0 ? 'אין בסימון מי שזכאי לטעינה' : undefined}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-40">
+            <Wallet size={13} /> טעינת כרטיסים ({loadScope.eligible.length})
+          </button>
+          <button type="button" disabled={bulkBusy || voucherScope.eligible.length === 0}
+            onClick={() => setBulkAction('voucher')}
+            title={voucherScope.eligible.length === 0 ? 'אין בסימון מי שבחר מוקד ויש לו מייל' : undefined}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-40">
+            <MapPin size={13} /> שליחת שוברים ({voucherScope.eligible.length})
+          </button>
           <button type="button" onClick={() => setSelected(new Set())}
             className="text-xs font-bold text-slate-500 hover:text-slate-700">ביטול הסימון</button>
           <span className="text-[11.5px] text-indigo-700">אישור פותח למשפחה את שיוך הכרטיס בשלוחה הטלפונית ובממשק</span>
@@ -715,6 +795,74 @@ export default function HolidayRegistrations({
           }}
         />
       </div>
+
+      {/* ── אישור לפעולה קבוצתית ──
+          🔴 מציג *מראש* מי יידלג ולמה. בלי זה ההפרש בין "סומנו 800"
+          ל"נטענו 340" נראה כתקלה, והמנהל מנסה שוב על אותן שורות. */}
+      {bulkAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+          onClick={() => !bulkBusy && setBulkAction(null)}>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h4 className="mb-3 text-sm font-extrabold text-slate-900">
+              {bulkAction === 'load' ? 'טעינת כרטיסים' : 'שליחת שוברים'}
+            </h4>
+
+            {bulkAction === 'load' ? (
+              <>
+                <p className="text-xs text-slate-600">
+                  ייטענו <strong className="text-emerald-800">{loadScope.eligible.length}</strong> כרטיסים
+                  × {fmtCur(amountPerFamily)}
+                </p>
+                <p className="my-2 text-2xl font-extrabold text-emerald-900">
+                  {fmtCur(loadScope.eligible.length * amountPerFamily)}
+                </p>
+                <ul className="mb-3 flex flex-col gap-0.5 text-[11px] text-slate-500">
+                  {loadScope.alreadyLoaded > 0 && <li>· {loadScope.alreadyLoaded} כבר נטענו ולא ייטענו שוב</li>}
+                  {loadScope.notApproved > 0 && <li>· {loadScope.notApproved} טרם אושרו</li>}
+                  {loadScope.noId > 0 && <li className="text-amber-700">· {loadScope.noId} בלי ת״ז — לא ייטענו</li>}
+                </ul>
+                {testMode
+                  ? <p className="mb-3 rounded-lg border-2 border-amber-400 bg-amber-50 px-2.5 py-2 text-[11px] font-bold text-amber-900">
+                      🧪 מצב בדיקה — לא ייטען שום כרטיס ולא ייצא שקל.
+                    </p>
+                  : <p className="mb-3 text-[11px] font-bold text-rose-700">הפעולה אינה הפיכה.</p>}
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-slate-600">
+                  יישלחו <strong className="text-indigo-800">{voucherScope.eligible.length}</strong> שוברים במייל.
+                </p>
+                <ul className="my-3 flex flex-col gap-0.5 text-[11px] text-slate-500">
+                  {voucherScope.noCenter > 0 && <li className="text-amber-700">· {voucherScope.noCenter} טרם בחרו מוקד — אין להם שובר</li>}
+                  {voucherScope.noEmail > 0 && <li className="text-amber-700">· {voucherScope.noEmail} בלי כתובת מייל</li>}
+                </ul>
+                {testMode && (
+                  <p className="mb-3 rounded-lg border-2 border-amber-400 bg-amber-50 px-2.5 py-2 text-[11px] font-bold text-amber-900">
+                    🧪 מצב בדיקה — {testEmail
+                      ? <>הכל יישלח ל־<span dir="ltr">{testEmail}</span> ולא למשפחות.</>
+                      : <>אין כתובת בדיקה, ולא יישלח דבר.</>}
+                  </p>
+                )}
+                {/* ⚠️ מי שכבר קיבל אינו מקבל שוב — resend אינו נשלח כאן. */}
+                <p className="mb-3 text-[11px] text-slate-500">מי שכבר קיבל שובר לא יקבל אותו שוב.</p>
+              </>
+            )}
+
+            <div className="flex gap-2">
+              <button type="button" disabled={bulkBusy}
+                onClick={() => void (bulkAction === 'load' ? runBulkLoad() : runBulkVoucher())}
+                className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-extrabold text-white disabled:opacity-40 ${
+                  bulkAction === 'load' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+                {bulkBusy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} אישור
+              </button>
+              <button type="button" disabled={bulkBusy} onClick={() => setBulkAction(null)}
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+                ביטול
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── אישור לפני טעינה בודדת ──
           🔴 כסף אמיתי בלי דרך חזרה. השם, הסכום והמוקד מוצגים שוב כדי
