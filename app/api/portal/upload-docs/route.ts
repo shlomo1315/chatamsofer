@@ -31,6 +31,25 @@ export async function POST(request: NextRequest) {
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 הסשן נבדק *לפני* קריאת גוף הבקשה, ולא אחריה.
+  //
+  // formData() מושך את כל הקבצים מהרשת. כשהבדיקה הייתה אחריו, משפחה על
+  // חיבור סלולרי איטי העלתה את כל המסמכים, המתינה — ורק אז נדחתה: בלוג
+  // נראתה בקשה שנמשכה 45 שניות והסתיימה ב-401. הסשן הוא 6 שעות, ומי
+  // שפתח את הפורטל, אסף מסמכים וחזר להעלות נפל בדיוק כאן.
+  //
+  // ⚠️ getPortalBeneficiaryId קורא עוגייה בלבד ואינו נוגע בגוף — ולכן
+  // אפשר להקדים אותו בלי לשנות דבר בהתנהגות.
+  //
+  // ⚠️ השוואת הבעלות עצמה נשארת אחרי הקריאה: beneficiary_id מגיע בגוף
+  // הטופס. מה שהוקדם הוא הדחייה שאינה תלויה בו כלל.
+  // ─────────────────────────────────────────────────────────────────────────
+  const sessionBeneficiaryId = getPortalBeneficiaryId(request)
+  if (!sessionBeneficiaryId) {
+    return NextResponse.json({ error: 'פג תוקף החיבור. יש לאתר את הפרטים מחדש ולנסות שוב.' }, { status: 401 })
+  }
+
   let formData: FormData
   try {
     formData = await request.formData()
@@ -42,8 +61,7 @@ export async function POST(request: NextRequest) {
   if (!beneficiaryId) return NextResponse.json({ error: 'חסר מזהה צאצא' }, { status: 400 })
 
   // אימות בעלות: רק בעל הסשן בפורטל רשאי להעלות מסמכים לתיק שלו (מניעת IDOR)
-  const sessionBeneficiaryId = getPortalBeneficiaryId(request)
-  if (!sessionBeneficiaryId || sessionBeneficiaryId !== beneficiaryId) {
+  if (sessionBeneficiaryId !== beneficiaryId) {
     return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
   }
 

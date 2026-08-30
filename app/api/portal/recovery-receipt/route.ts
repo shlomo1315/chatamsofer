@@ -4,6 +4,7 @@ import { cookies } from 'next/headers'
 import { portalCookieName } from '../login/route'
 import { verifyRecoveryPortalToken } from '@/lib/recoveryPortalAuth'
 import { extractUrl } from '@/lib/extractUrl'
+import { RECOVERY_COOKIE_RE } from '@/lib/recoveryCookieShape'
 
 export const dynamic = 'force-dynamic'
 
@@ -181,6 +182,23 @@ async function fetchLinkedFile(link: string): Promise<FetchedFile | { error: str
 
 // העלאת קובץ הקבלה של בית ההחלמה (קובץ או קישור). מאומת דרך עוגיית הפורטל + בעלות על הרשומה.
 export async function POST(request: NextRequest) {
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 דחייה מוקדמת למי שאין לו סשן כלל — לפני משיכת הקובץ מהרשת.
+  //
+  // formData() מושך את הקבלה כולה. בלי הבדיקה הזו נציג שהסשן שלו פג העלה
+  // קובץ שלם, המתין, ורק אז קיבל 401 (אותו דפוס שנצפה בלוג ב-upload-docs:
+  // בקשה של 45 שניות שנגמרה בדחייה).
+  //
+  // ⚠️ האימות המלא *חייב* להישאר אחרי הקריאה: שם העוגייה נגזר מ-home,
+  // ו-home מגיע בגוף הטופס. לכן כאן נבדק רק שקיימת עוגיית פורטל כלשהי —
+  // תנאי הכרחי שאינו תלוי בגוף. מי שעובר אותו עדיין נבדק לגופו למטה,
+  // כך שאין כאן שום הקלה באבטחה.
+  // ─────────────────────────────────────────────────────────────────────────
+  const preCookies = await cookies()
+  if (!preCookies.getAll().some(c => RECOVERY_COOKIE_RE.test(c.name))) {
+    return NextResponse.json({ error: 'פג תוקף החיבור. יש להתחבר מחדש ולנסות שוב.' }, { status: 401 })
+  }
+
   const form = await request.formData()
   const home = String(form.get('home') ?? '')
   const aidId = String(form.get('aidId') ?? '')
