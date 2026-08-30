@@ -127,9 +127,13 @@ export default function SendVouchersPanel({ distributionId }: { distributionId: 
                 את השובר כלל. PdfCanvasView מצייר את העמודים בעצמו, וזה
                 אותו פתרון שכבר עובד במסמכי המשפחה ובאישור הלידה. */}
             <div className="flex-1 overflow-y-auto bg-slate-100 p-3">
+              {/* ⚠️ asData ולא direct: הנתיב דורש סשן צוות ומייצר PDF דינמית.
+                  direct מושך application/pdf גולמי — וזה בדיוק סוג התוכן
+                  שנטפרי חוסמת, כך שהתצוגה המקדימה נכשלה אצל כל מי שגולש
+                  דרך הסינון. ערוץ הנתונים מעביר base64 מעורבל ב-JSON. */}
               <PdfCanvasView key={String(previewOpen)}
                 url="/api/admin/holiday-voucher/preview"
-                name="שובר החלוקה" direct
+                name="שובר החלוקה" asData
                 className="mx-auto w-full max-w-2xl" />
             </div>
           </div>

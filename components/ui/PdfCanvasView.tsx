@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Loader2, AlertTriangle, FileText } from 'lucide-react'
 import { loadDocBlob } from '@/lib/docBlob'
+import { scrambleBytes, DOC_CIPHER_ID } from '@/lib/docCipher'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // תצוגת PDF שמצוירת על גבי canvas.
@@ -36,6 +37,7 @@ export default function PdfCanvasView({
   maxPages,
   cover = false,
   direct = false,
+  asData = false,
 }: {
   url: string
   name?: string | null
@@ -49,6 +51,11 @@ export default function PdfCanvasView({
       ויפול ב-"Invalid PDF structure".
       (פורטל בית ההחלמה), שבהם הקובץ ממילא נגיש בכתובת ציבורית. */
   direct?: boolean
+  /** 🔴 הכתובת מחזירה JSON מעורבל ({ data, enc }) ולא PDF גולמי.
+      למסלולים *דינמיים* שמייצרים PDF בשרת ודורשים סשן צוות: ערוץ הנתונים
+      הרגיל (loadDocBlob) בנוי סביב נתיבי אחסון ואינו מתאים להם, ומשיכה
+      ישירה נחסמת ע"י נטפרי לפי סוג התוכן. ראו lib/docCipher. */
+  asData?: boolean
 }) {
   const hostRef = useRef<HTMLDivElement>(null)
   const [state, setState] = useState<{ key: string; pages: number; error: string; loading: boolean }>(
@@ -82,7 +89,8 @@ export default function PdfCanvasView({
           throw new Error('מציג המסמכים לא נטען — רעננו את הדף')
         }
         if (!alive) return
-        const src = direct ? url : (await loadDocBlob(url, name)).objectUrl
+        // ⚠️ asData מושך מהכתובת עצמה (כמו direct) אבל מפענח JSON מעורבל.
+        const src = (direct || asData) ? url : (await loadDocBlob(url, name)).objectUrl
         if (!alive) return
         // בערוץ הנתונים ה-blob כבר בזיכרון; ב-direct זו משיכה רגילה מהכתובת.
         //
@@ -113,10 +121,26 @@ export default function PdfCanvasView({
         // ⚠️ בדיקת סוג התוכן לפני הפענוח: שגיאה שמוחזרת כ-HTML או JSON
         // הייתה נראית כ-PDF פגום, וההודעה למשתמש הייתה מטעה לחלוטין.
         const ct = res.headers.get('content-type') ?? ''
+        // ⚠️ ב-asData התגובה היא JSON *במכוון*, ולכן הבדיקה חלה על direct בלבד.
         if (direct && ct && !/pdf|octet-stream/i.test(ct)) {
           throw new Error('התקבלה תגובה שאינה מסמך')
         }
-        const bytes = new Uint8Array(await res.arrayBuffer())
+        // ⚠️ בערוץ הנתונים המטען מגיע כ-base64 מעורבל בתוך JSON, ולא כבתים.
+        // הערבול מבוטל כאן בזיכרון — ראו lib/docCipher ו-BatchPdfDialog.
+        let bytes: Uint8Array
+        if (asData) {
+          const payload = await res.json().catch(() => null) as
+            { data?: string; enc?: string; error?: string } | null
+          if (payload?.error) throw new Error(payload.error)
+          if (!payload?.data) throw new Error('המסמך שהתקבל ריק — נסו שוב')
+          const binary = atob(payload.data)
+          const buf = new Uint8Array(binary.length)
+          for (let i = 0; i < binary.length; i++) buf[i] = binary.charCodeAt(i)
+          if (payload.enc === DOC_CIPHER_ID) scrambleBytes(buf)
+          bytes = buf
+        } else {
+          bytes = new Uint8Array(await res.arrayBuffer())
+        }
         if (!alive) return
         const doc = await pdfjs.getDocument({ data: bytes }).promise
         if (!alive) return
@@ -164,7 +188,7 @@ export default function PdfCanvasView({
       alive = false
       try { mount.remove() } catch { /* כבר הוסר */ }
     }
-  }, [url, name, maxPages, cover, direct])
+  }, [url, name, maxPages, cover, direct, asData])
 
   const current = state.key === url ? state : { pages: 0, error: '', loading: true }
 

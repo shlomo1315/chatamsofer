@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
 import { buildHolidayVoucher, HOLIDAY_VOUCHER_DEFAULTS, type HolidayVoucherData } from '@/lib/holidayVoucher'
 import { loadHolidayVoucherTexts } from '@/lib/holidayVoucherTexts'
+import { scrambleBytes, DOC_CIPHER_ID } from '@/lib/docCipher'
 
 export const dynamic = 'force-dynamic'
 
@@ -75,12 +76,38 @@ export async function GET(request: NextRequest) {
   }
 
   const pdf = await buildHolidayVoucher(data)
-  return new NextResponse(Buffer.from(pdf), {
-    headers: {
-      'Content-Type': 'application/pdf',
-      // inline ולא attachment — נפתח בכרטיסייה במקום להוריד קובץ.
-      'Content-Disposition': 'inline; filename="holiday-voucher-preview.pdf"',
-      'Cache-Control': 'no-store',
-    },
-  })
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 ברירת המחדל היא ערוץ הנתונים, ולא PDF גולמי.
+  //
+  // ⚠️ נטפרי חוסמת לפי *סוג התוכן*: תגובת application/pdf נחסמת, והמנהל
+  // ראה תצוגה מקדימה ריקה או שגיאה — כלומר הכלי שנועד לבדוק את השובר
+  // לפני שליחה לאלפי משפחות היה בדיוק זה שלא עבד. אותה חסימה בדיוק
+  // הפילה את ההורדה המרוכזת של מכתבי הברכה.
+  //
+  // המטען מעורבל לפני ה-base64: בלעדיו החתימה "JVBERi" מזוהה גם בתוך
+  // JSON. הדפדפן מבטל את הערבול בזיכרון ומצייר עם pdf.js (ראו
+  // lib/docCipher, components/ui/PdfCanvasView).
+  //
+  // ⚠️ ?raw=1 נשמר להורדה/פתיחה ידנית בכרטיסייה, שם נדרש קובץ אמיתי.
+  // ─────────────────────────────────────────────────────────────────────────
+  if (request.nextUrl.searchParams.get('raw') === '1') {
+    return new NextResponse(Buffer.from(pdf), {
+      headers: {
+        'Content-Type': 'application/pdf',
+        // inline ולא attachment — נפתח בכרטיסייה במקום להוריד קובץ.
+        'Content-Disposition': 'inline; filename="holiday-voucher-preview.pdf"',
+        'Cache-Control': 'no-store',
+      },
+    })
+  }
+
+  const scrambled = scrambleBytes(new Uint8Array(pdf))
+  return NextResponse.json({
+    name: 'שובר החלוקה.pdf',
+    contentType: 'application/pdf',
+    size: pdf.length,
+    enc: DOC_CIPHER_ID,
+    data: Buffer.from(scrambled).toString('base64'),
+  }, { headers: { 'Cache-Control': 'no-store' } })
 }

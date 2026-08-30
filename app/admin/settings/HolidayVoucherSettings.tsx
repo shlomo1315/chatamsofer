@@ -99,9 +99,11 @@ export default function HolidayVoucherSettings() {
                 ⚠️ key מאלץ טעינה מחדש בכל פתיחה — אחרת מוצג ה-PDF הישן
                 אחרי שמירת מלל חדש. */}
             <div className="flex-1 overflow-y-auto bg-slate-100 p-3">
+              {/* ⚠️ asData ולא direct — ראו SendVouchersPanel: המשיכה הישירה
+                  מחזירה application/pdf, וזה סוג התוכן שנטפרי חוסמת. */}
               <PdfCanvasView key={String(previewOpen)}
                 url="/api/admin/holiday-voucher/preview"
-                name="שובר החלוקה" direct
+                name="שובר החלוקה" asData
                 className="mx-auto w-full max-w-2xl" />
             </div>
           </div>
