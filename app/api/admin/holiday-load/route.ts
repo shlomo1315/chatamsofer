@@ -68,6 +68,7 @@ export async function GET(request: NextRequest) {
   if (!distributionId) return NextResponse.json({ error: 'חסר מזהה חלוקה' }, { status: 400 })
 
   const amount = Number(request.nextUrl.searchParams.get('amount') ?? DEFAULT_LOAD_AMOUNT)
+
   const rows = await loadRows(db, distributionId)
   const targets = eligibleForLoad(rows)
 
@@ -110,6 +111,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'סכום לא תקין' }, { status: 400 })
   }
 
+  // ⚠️ תוקף הכרטיס נלקח *מהחלוקה* ולא מהגדרה גלובלית: כל חג נפרק במועד
+  // אחר, והגדרה משותפת הייתה נכונה לחלוקה אחת ושגויה לכל השאר.
+  const { data: distRow } = await db.from('distributions')
+    .select('card_expiry').eq('id', distributionId).maybeSingle()
+  const expiryIso = (distRow as { card_expiry?: string | null } | null)?.card_expiry ?? null
+
   const rows = await loadRows(db, distributionId)
   // ⚠️ בחירה חלקית (ids) מסוננת *אחרי* אותם כללי זכאות — לא במקומם.
   const scoped = body.ids?.length ? rows.filter(r => body.ids!.includes(r.id)) : rows
@@ -127,7 +134,7 @@ export async function POST(request: NextRequest) {
     .in('id', targets.map(t => t.recipientId))
 
   try {
-    const summary = await runLoadBatch(db, targets, amount, { delayMs: 120 })
+    const summary = await runLoadBatch(db, targets, amount, { delayMs: 120, expiryIso })
     return NextResponse.json({ ok: true, ...summary, outcomes: undefined, failedList: summary.outcomes.filter(o => !o.ok) })
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'תקלה'

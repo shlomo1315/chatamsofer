@@ -74,6 +74,10 @@ export const HOLIDAY_ALERTS = {
     'בסיום ימי החלוקה יבוטלו הכרטיסים שלא נאספו,',
     'ולא תהיה שום אפשרות לאוספם לאחר מכן!',
   ],
+  // ⚠️ מוצג *בתוך* כרטיס המוקד ולא כתיבה נפרדת: הקישור בין השם לבין
+  // "רק כאן" חייב להיות במבט אחד. משפחה שרואה את המשפט הרחק מהשם עלולה
+  // להבין שמדובר בהנחיה כללית ולהגיע למוקד קרוב יותר.
+  centerOnly: 'האיסוף אך ורק במוקד זה — לא ניתן לאסוף במוקד אחר',
 }
 
 /**
@@ -198,7 +202,9 @@ function centerCard(
     phone ? `טלפון: ${phone}` : null,
   ].filter(Boolean) as string[]
   const lineH = 16
-  const boxH = titleH + nameH + detail.length * lineH + 12
+  // פס "רק כאן" — מתחת לשם המוקד, בתוך אותו כרטיס.
+  const onlyH = 20
+  const boxH = titleH + nameH + onlyH + detail.length * lineH + 12
 
   // מסגרת עבה (2.5 מול 1.2 בתיבה רגילה) — נבדלת גם בשחור-לבן.
   c.page.drawRectangle({
@@ -211,7 +217,13 @@ function centerCard(
   // שם המוקד — הגדול ביותר בגוף השובר.
   centerText(c, label, W / 2, y - titleH - 24, 17, EMERALD)
 
-  let cy = y - titleH - nameH - 18
+  // 🔴 "רק כאן" — פס מלא צמוד לשם. רקע מלא ולא טקסט רגיל, כי זו ההנחיה
+  // היחידה בשובר שמשפחה עלולה להניח שאינה חלה עליה.
+  const onlyY = y - titleH - nameH - 4
+  c.page.drawRectangle({ x: x + 10, y: onlyY - onlyH + 4, width: w - 20, height: onlyH, color: EMERALD })
+  centerText(c, HOLIDAY_ALERTS.centerOnly, W / 2, onlyY - onlyH + 10, 10.5, rgb(1, 1, 1))
+
+  let cy = y - titleH - nameH - onlyH - 18
   for (const line of detail) {
     rightText(c, line, x + w - 16, cy, 11.5, INK)
     cy -= lineH
