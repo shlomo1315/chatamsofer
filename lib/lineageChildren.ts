@@ -14,10 +14,28 @@ interface LineageRow { id: string; name: string; relation: string | null }
 
 export interface LineageChild { nodeId: string; name: string; relation: string | null }
 
+export interface LineageChildrenResult {
+  children: LineageChild[]
+  /**
+   * העץ המאושר נגמר כאן — אך קיימים צאצאים שטרם אושרו.
+   *
+   * 🔴 בלי השדה הזה `children: []` היה דו-משמעי: גם עלה אמיתי בסוף
+   * השושלת וגם צומת עם מאות צאצאים שכולם ממתינים לאישור נראים זהים.
+   * התיעוד מנחה את הטופס "המשך עד children:[]", ולכן הבורר פשוט נעצר —
+   * זו הייתה התקיעה אחרי הדור הראשון.
+   *
+   * ⚠️ השמות עצמם *אינם* נחשפים. הצגת דורות ממתינים נשללה במכוון
+   * (ראו app/api/lineage): סדר ייחוס אינו נבנה על רשומה שטרם נבדקה.
+   * כאן נמסרת רק *עובדת קיומו* של המשך — שהיא מה שהטופס צריך כדי
+   * לפתוח הזנה ידנית (lineage_new_nodes) במקום להיתקע.
+   */
+  hasPending: boolean
+}
+
 // parentId=null → השורש (parent_id is null); אחרת ילדי הצומת. status=verified בלבד.
 export async function fetchLineageChildren(
   parentId: string | null,
-): Promise<{ children: LineageChild[] } | { error: string }> {
+): Promise<LineageChildrenResult | { error: string }> {
   const client = getClient()
   if (!client) return { error: 'שגיאת שרת' }
 
@@ -38,5 +56,19 @@ export async function fetchLineageChildren(
     name: n.name,
     relation: n.relation ?? null,
   }))
-  return { children }
+
+  // ⚠️ נבדק רק כשאין ילדים מאושרים: זו השאלה היחידה שבה התשובה משנה
+  // התנהגות, ואין טעם בשאילתה נוספת כשהבורר ממילא ממשיך לדור הבא.
+  let hasPending = false
+  if (children.length === 0 && parentId) {
+    const { data: pending } = await client
+      .from('lineage_nodes')
+      .select('id')
+      .eq('parent_id', parentId)
+      .eq('status', 'pending')
+      .limit(1)
+    hasPending = (pending?.length ?? 0) > 0
+  }
+
+  return { children, hasPending }
 }
