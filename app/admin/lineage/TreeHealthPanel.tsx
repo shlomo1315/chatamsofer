@@ -1,6 +1,6 @@
 'use client'
-import { useState, useCallback } from 'react'
-import { Activity, Loader2, RefreshCw, AlertTriangle, Users, Trash2, GitMerge, IdCard, ChevronLeft, EyeOff } from 'lucide-react'
+import { useState, useCallback, useRef, useEffect } from 'react'
+import { Activity, Loader2, RefreshCw, AlertTriangle, Users, Trash2, GitMerge, IdCard, ChevronLeft, EyeOff, Link2Off, Check } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // "בריאות העץ" — פאנל אבחון שמציג את כל התקלות המבניות בעץ הדורות במקום אחד:
@@ -12,9 +12,23 @@ interface Orphan { id: string; name: string; generation: number; status: string 
 interface Invisible extends Orphan { reason: string; descendants: number }
 interface ManyChild { id: string; name: string; generation: number; children: number }
 interface DupId { idNumber: string; owners: { benId: string; name: string; field: 'בעל' | 'אשה' }[] }
+/** חוליה חסומה — צומת לא-מאומת שילדיו מאומתים, שחוסם את בורר הדורות. */
+interface BlockedLink {
+  id: string
+  name: string
+  generation: number | null
+  status: string | null
+  verifiedChildren: number
+  subtreeSize: number
+  ancestorsVerified: boolean
+}
+
 interface HealthData {
   scannedNodes: number
   scannedBeneficiaries: number
+  /** 🔴 החוליות שחוסמות את בורר הדורות. */
+  blockedLinks?: BlockedLink[]
+  verifiedUnreachable?: { verified: number; reachable: number; unreachable: number }
   invisible: Invisible[]
   dangling: Invisible[]
   orphans: Orphan[]
@@ -36,6 +50,27 @@ export default function TreeHealthPanel({ onLocate, onOpenDuplicates }: {
   const [data, setData] = useState<HealthData | null>(null)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
+  const [approving, setApproving] = useState<string | null>(null)
+  const [approveErr, setApproveErr] = useState('')
+
+  // אישור חוליה חוסמת — צומת אחד בלבד, ואז סריקה מחדש כדי שהמספרים
+  // ישקפו את המצב האמיתי (אישור אחד עשוי לחשוף חסימה שהייתה מתחתיו).
+  const approve = useCallback(async (b: BlockedLink) => {
+    setApproving(b.id); setApproveErr('')
+    try {
+      const res = await fetch('/api/admin/lineage/approve-link', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nodeId: b.id }),
+      })
+      const d = await res.json()
+      if (!res.ok) { setApproveErr(d.error || 'האישור נכשל'); return }
+      await scanRef.current?.()
+    } catch {
+      setApproveErr('שגיאת רשת — נסו שוב')
+    } finally {
+      setApproving(null)
+    }
+  }, [])
 
   const scan = useCallback(async () => {
     setLoading(true); setErr('')
@@ -47,6 +82,11 @@ export default function TreeHealthPanel({ onLocate, onOpenDuplicates }: {
     } catch { setErr('שגיאת רשת') }
     setLoading(false)
   }, [])
+
+  // ⚠️ ref ולא תלות ישירה: approve מוגדר לפני scan, וגם כך הוא לא נבנה מחדש
+  // בכל רינדור — אחרת כל סריקה הייתה מייצרת מחדש את כל כפתורי האישור.
+  const scanRef = useRef<typeof scan | null>(null)
+  useEffect(() => { scanRef.current = scan }, [scan])
 
   const dupNamesTotal = data ? data.duplicateNames.exact + data.duplicateNames.strong + data.duplicateNames.possible : 0
   // 🔴 צמתים שלא צויירו בעץ כלל לפני התיקון — מעגל הורות או הורה שנמחק.
@@ -87,7 +127,59 @@ export default function TreeHealthPanel({ onLocate, onOpenDuplicates }: {
               tone={data.orphans.length ? 'rose' : 'green'} />
             <SummaryCard icon={<IdCard size={15} />} label="ת״ז כפולות" value={data.duplicateIdsCount}
               tone={data.duplicateIdsCount ? 'red' : 'green'} />
+            <SummaryCard icon={<Link2Off size={15} />} label="חוליות חוסמות" value={data.blockedLinks?.length ?? 0}
+              tone={data.blockedLinks?.length ? 'red' : 'green'} />
           </div>
+
+          {/* 🔴 חוליות חוסמות — התקלה שמונעת ממשפחות למצוא את עצמן *עכשיו*.
+              צומת לא-מאומת שילדיו מאומתים: הבורר מדלג עליו, וכל תת-העץ
+              שמתחתיו בלתי נגיש. מוצג ראשון כי הוא חוסם רישום בפועל. */}
+          {data.blockedLinks?.length ? (
+            <div className="rounded-xl border-2 border-red-300 bg-red-50 p-3">
+              <p className="text-sm font-extrabold text-red-900 mb-1">
+                חוליות שחוסמות את בורר הדורות
+              </p>
+              <p className="text-xs text-red-800 leading-relaxed mb-2">
+                צומת שאינו מאומת אך ילדיו כן — בורר הדורות מדלג עליו, ולכן כל הצאצאים
+                שמתחתיו אינם נגישים והמשפחה נעצרת באמצע.
+                {data.verifiedUnreachable && data.verifiedUnreachable.unreachable > 0 && (
+                  <> כרגע <strong>{data.verifiedUnreachable.unreachable}</strong> צמתים מאומתים
+                  מתוך {data.verifiedUnreachable.verified} אינם נגישים מהשורש.</>
+                )}
+              </p>
+              <div className="flex flex-col gap-1.5">
+                {data.blockedLinks.map(b => (
+                  <div key={b.id}
+                    className="rounded-lg border border-red-200 bg-white px-3 py-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <button onClick={() => onLocate(b.id)}
+                      className="font-bold text-slate-800 hover:text-indigo-700 hover:underline text-right">
+                      {b.name}
+                    </button>
+                    <span className="text-xs text-slate-500">דור {b.generation ?? '—'}</span>
+                    <span className="text-xs font-bold text-red-600">
+                      חוסם {b.verifiedChildren} מאומתים
+                      {b.subtreeSize > b.verifiedChildren && ` · ${b.subtreeSize} בתת-העץ`}
+                    </span>
+                    {/* ⚠️ שרשרת אבות שאינה מאומתת = הצוואר האמיתי גבוה יותר.
+                        אישור כאן לבדו לא יפתח את המסלול. */}
+                    {!b.ancestorsVerified && (
+                      <span className="text-[11px] rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 font-semibold">
+                        יש חסימה גם מעליו
+                      </span>
+                    )}
+                    <button
+                      onClick={() => approve(b)}
+                      disabled={approving === b.id}
+                      className="mr-auto inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 px-3 py-1.5 text-xs font-bold text-white">
+                      {approving === b.id ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                      אישור החוליה
+                    </button>
+                  </div>
+                ))}
+              </div>
+              {approveErr && <p className="mt-2 text-xs font-semibold text-red-700">{approveErr}</p>}
+            </div>
+          ) : null}
 
           {/* 🔴 פער העומק — הסיבה שנרשמים נתקעים ולא משלימים רישום.
               מוצג ראשון: זו התקלה היחידה כאן שחוסמת משתמשים *עכשיו*. */}

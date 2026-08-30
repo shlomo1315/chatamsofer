@@ -4,6 +4,7 @@ import { requirePermission, forbidden } from '@/lib/apiAuth'
 import { compareHebrewNames } from '@/lib/hebrewNames'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { buildForest, type Forest } from '@/lib/lineageForest'
+import { findBlockedLinks } from '@/lib/lineageBlockedLinks'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,6 +38,32 @@ interface BenRow {
 // סף "חריג ילדים": צומת עם יותר מזה ילדים ישירים חשוד ככפילות לא-ממוזגת
 // (כל צאצא שרשם את אותו אב הוסיף עותק-ילד תחתיו). לא שגיאה ודאית — דגל לבדיקה.
 const MANY_CHILDREN = 15
+
+/**
+ * כמה צמתים מאומתים אינם נגישים מהשורש דרך מסלול מאומת *רציף*.
+ *
+ * 🔴 זה המדד שמכמת את הבאג: 38 מתוך 353 המאומתים היו בלתי נגישים. צומת
+ * מאומת שאינו נספר כאן פשוט לא קיים מבחינת בורר הדורות.
+ */
+function countUnreachableVerified(nodes: NodeRow[]): { verified: number; reachable: number; unreachable: number } {
+  const verified = nodes.filter(n => (n.status ?? '') === 'verified')
+  const childrenOf = new Map<string, NodeRow[]>()
+  for (const n of verified) {
+    if (!n.parent_id) continue
+    const arr = childrenOf.get(n.parent_id)
+    if (arr) arr.push(n)
+    else childrenOf.set(n.parent_id, [n])
+  }
+  const seen = new Set<string>()
+  const stack = verified.filter(n => !n.parent_id).map(n => n.id)
+  while (stack.length) {
+    const cur = stack.pop()!
+    if (seen.has(cur)) continue
+    seen.add(cur)
+    for (const c of childrenOf.get(cur) ?? []) stack.push(c.id)
+  }
+  return { verified: verified.length, reachable: seen.size, unreachable: verified.length - seen.size }
+}
 
 // גודל תת-העץ של צומת ביער שנבנה — "כמה צאצאים היו נעלמים איתו".
 function subtreeSize(forest: Forest<NodeRow>, id: string): number {
@@ -225,9 +252,26 @@ export async function GET() {
     }
   }
 
+  // 🔴 חוליות חסומות — צומת לא-מאומת שילדיו כן מאומתים.
+  //
+  // בורר הדורות יורד מהשורש ומדלג על צומת לא-מאומת, ולכן כל תת-העץ שמתחתיו
+  // בלתי נגיש: המשפחה אינה מוצאת את עצמה והבורר נעצר באמצע. נמצאו 4 חוליות
+  // כאלה שחסמו 38 צאצאים מאומתים — 11% מהעץ המאושר — אחת מהן בדור 3.
+  //
+  // ⚠️ הסימן שזו תקלת נתונים ולא שאלה גנאלוגית: מישהו כבר אישר את הילדים.
+  // אי אפשר לאשר ילד בלי שההורה קיים, ולכן ההורה הוכר — רק סטטוסו לא עודכן.
+  const blockedLinks = findBlockedLinks(nodes)
+  // כמה מוטבים תלויים בכל חוליה — הצדקה מספרית לדחיפות.
+  const blockedNodeIds = new Set<string>()
+  for (const b of blockedLinks) blockedNodeIds.add(b.id)
+  const verifiedUnreachable = countUnreachableVerified(nodes)
+
   return NextResponse.json({
     scannedNodes: nodes.length,
     scannedBeneficiaries: bens.length,
+    // 🔴 חוליות שחוסמות את בורר הדורות — ראו ההערה למעלה
+    blockedLinks,
+    verifiedUnreachable,
     // 🔴 פער העומק — ראו ההערה למעלה
     depth,
     bottleneck,
