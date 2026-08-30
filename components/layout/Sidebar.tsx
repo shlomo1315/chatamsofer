@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, GitBranch, Baby, CreditCard, Gift,
   BarChart3, Settings, Menu, X, Building2, Trees, HeartHandshake,
-  Mail, ChevronDown, ChevronUp, UtensilsCrossed, HandCoins, Heart, Send, Star, ShieldAlert,
+  Mail, ChevronDown, ChevronUp, UtensilsCrossed, HandCoins, Heart, Send, Star, ShieldAlert, PhoneCall,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { UserPermissions, SectionKey, UserRole } from '@/types'
@@ -241,6 +241,13 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
           <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">שירותים</p>
         </div>
         {bottomVisible.map(renderLink)}
+
+        {/* ── מערכת טלפונית ──
+            ⚠️ למנהלים בלבד ולא לפי SectionKey: הוספת מפתח הרשאה חדש הייתה
+            דורשת מיגרציה לכל המשתמשים הקיימים, וזו ממילא עבודת מנהל —
+            שינוי הודעה כאן נשמע מיד לכל מי שמחייג. אותו דפוס כמו
+            "אישורים חריגים". */}
+        {isAdmin && renderLink({ href: '/admin/phone', label: 'מערכת טלפונית', icon: PhoneCall })}
         </>)}
 
         {/* ── מייל Resend — מוסתר מהתפריט ──────────────────────────────────

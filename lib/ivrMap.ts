@@ -42,6 +42,13 @@ export interface IvrExtension {
   env: string[]
   /** הערות תפעול שחשוב שהמנהל ידע. */
   notes: string[]
+  /**
+   * 🔴 שיחה *יוצאת* — אנחנו מחייגים אל המשפחה, לא היא אלינו.
+   *
+   * ⚠️ ההבחנה אינה קוסמטית: הצגת מסלול יוצא בתוך עץ התפריט מתארת מסלול
+   * שאיש אינו עובר, ומי שמחפש "למה לא הגיע הקוד" מחפש במקום הלא נכון.
+   */
+  outbound?: boolean
   tree: IvrNode[]
 }
 
@@ -177,6 +184,7 @@ export const IVR_EXTENSIONS: IvrExtension[] = [
     yemotType: 'שלוחת API (type=api) — יעד לשיחה יוצאת',
     messagesKey: null,
     env: ['YEMOT_TOKEN', 'YEMOT_OTP_TEMPLATE_ID', 'YEMOT_WEBHOOK_SECRET'],
+    outbound: true,
     notes: [
       'הקוד מוקרא ספרה-ספרה ונמחק מיד אחרי ההקראה — הוא חד-פעמי.',
       'אין כאן הודעות לעריכה: השלוחה מקריאה אך ורק את הקוד, בלי טקסט קבוע.',
@@ -185,6 +193,30 @@ export const IVR_EXTENSIONS: IvrExtension[] = [
       {
         id: 'o-read', title: 'הקראת הקוד', kind: 'readout',
         what: 'שולף את הקוד הממתין למספר המתקשר, מקריא אותו ספרה-ספרה, ומנקה אותו.',
+      },
+    ],
+  },
+  {
+    id: 'announce',
+    title: 'הודעת אישור לאחר רישום',
+    purpose:
+      'צינתוק למי שנרשם לחלוקה ואושר. שיחה יוצאת שמנגנת הקלטה קבועה — המשפחה אינה מחייגת.',
+    // ⚠️ אין webhook: התבנית בימות מנגנת קובץ שהועלה מראש, והשרת שלנו רק
+    // מפעיל אותה (RunCampaign). אין נקודה שימות פונה אליה באמצע השיחה.
+    webhook: '—',
+    yemotType: 'תבנית קמפיין בימות שמנגנת קובץ מוקלט',
+    messagesKey: null,
+    env: ['YEMOT_TOKEN', 'YEMOT_ANNOUNCE_TEMPLATE_ID', 'YEMOT_OTP_CALLER_ID'],
+    outbound: true,
+    notes: [
+      '🔴 הצינתוק אינו "תוספת" למייל: לחלק מהמשפחות אין מייל כלל, ואצלן זהו הערוץ היחיד.',
+      'ההקלטה נערכת ומוקלטת במסך הזה; ימות רק מנגנת את הקובץ.',
+      'בלי YEMOT_ANNOUNCE_TEMPLATE_ID לא נשלח דבר — ובשקט. המסך מציין זאת במפורש.',
+    ],
+    tree: [
+      {
+        id: 'a-play', title: 'ניגון ההקלטה', kind: 'readout',
+        what: 'מחייג למשפחה ומשמיע את ההקלטה שהועלתה. אין תפריט ואין הקשות.',
       },
     ],
   },
