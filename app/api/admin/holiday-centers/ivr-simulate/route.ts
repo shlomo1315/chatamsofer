@@ -1,10 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
 import {
-  loadOpenCenters, nextCenterStep, buildChoiceList, regionsWithCenters,
+  loadOpenCenters, nextCenterStep, buildChoiceList,
   type CenterFlowStep,
 } from '@/lib/holidayCenterIvr'
-import { REGIONS } from '@/lib/holidayCenterPick'
+import { citiesByNumber } from '@/lib/holidayCityMenu'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,8 +40,13 @@ function speak(step: CenterFlowStep): { text: string; expects: string | null; do
         done: false,
       }
     case 'ask_city':
+      // 🔴 לפי מספר העיר ולא לפי מיקום — בדיוק כמו בשלוחה עצמה.
+      //
+      // ⚠️ סימולטור שממספר אחרת מהשלוחה גרוע מאין סימולטור: הוא מראה
+      // "הקישו 3" בזמן שהמתקשר האמיתי שומע "הקישו 7", והבדיקה מאשרת
+      // מסלול שאינו קיים.
       return {
-        text: buildChoiceList(step.options.map(o => ({ label: o.city }))),
+        text: step.options.map(o => `ל${o.city} הקישו ${o.number}`).join(' '),
         expects: 'city',
         done: false,
       }
@@ -123,7 +128,9 @@ export async function POST(request: NextRequest) {
     state: {
       centersOpen: !!dist.centers_open,
       centersCount: centers.length,
-      regions: regionsWithCenters(centers).map(r => REGIONS[r.key]),
+      // ⚠️ ערים ולא אזורים: שכבת האזור הוסרה מהזרימה, והצגתה כאן הייתה
+      // מתארת מסלול שהמתקשר אינו עובר.
+      regions: citiesByNumber(centers).map(c => `${c.number}. ${c.city}`),
       full: centers
         .filter(c => capacities[c.id] != null && (taken[c.id] ?? 0) >= (capacities[c.id] as number))
         .map(c => `${c.city} · ${c.name}`),
