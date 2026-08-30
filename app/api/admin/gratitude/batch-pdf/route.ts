@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { buildGratitudeBatchLetters } from '@/lib/gratitudeBatchLetters'
+import { scrambleBytes, DOC_CIPHER_ID } from '@/lib/docCipher'
 import { GRATITUDE_LETTER_SELECT, type GratitudeLetterRow } from '../[id]/shared'
 import type { BatchFilters, SentFilter } from '@/lib/gratitudeBatch'
 
@@ -70,15 +71,24 @@ async function generateBatchPdf(input: { from?: string | null; to?: string | nul
 
   try {
     const bytes = await buildGratitudeBatchLetters({ letters, filters })
-    return new NextResponse(Buffer.from(bytes), {
-      headers: {
-        'Content-Type': 'application/pdf',
-        // ⚠️ שם הקובץ נשלח מקודד: שם עברי ב-Content-Disposition ללא
-        // filename* נשבר לג'יבריש בחלק מהדפדפנים.
-        'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent('מכתבי ברכה.pdf')}`,
-        'Cache-Control': 'no-store',
-      },
-    })
+
+    // 🔴 הקובץ נשלח כ*נתונים* ולא כקובץ — אותו ערוץ כמו /api/files/data.
+    //
+    // ⚠️ נטפרי מזהה תגובה לפי סוג התוכן שלה. תגובת application/pdf היא
+    // "קובץ" ונחסמת ב-418 Blocked by NetFree — וזה בדיוק מה שקרה כאן:
+    // ההורדה המרוכזת נכשלה אצל כל מי שגולש דרך הסינון.
+    //
+    // ⚠️ המטען מעורבל לפני ה-base64. בלעדיו ה-base64 נושא את חתימת ה-PDF
+    // ("JVBERi") בתחילתו, והמסנן מזהה אותה גם בתוך JSON. הדפדפן מבטל את
+    // הערבול בזיכרון ומרכיב Blob מקומי (ראו lib/docCipher, lib/docBlob).
+    const scrambled = scrambleBytes(new Uint8Array(bytes))
+    return NextResponse.json({
+      name: 'מכתבי ברכה.pdf',
+      contentType: 'application/pdf',
+      size: bytes.length,
+      enc: DOC_CIPHER_ID,
+      data: Buffer.from(scrambled).toString('base64'),
+    }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'שגיאה בהפקת הקובץ' }, { status: 500 })

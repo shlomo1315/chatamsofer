@@ -7,6 +7,7 @@ import {
   SENT_LABEL,
   type SentFilter, type BatchFilters,
 } from '@/lib/gratitudeBatch'
+import { scrambleBytes, DOC_CIPHER_ID } from '@/lib/docCipher'
 import type { GratitudeRow } from './GratitudeTable'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -78,6 +79,16 @@ export default function BatchPdfDialog({ rows, onClose }: {
 
       const res = await fetch(`/api/admin/gratitude/batch-pdf?${query}`, { cache: 'no-store' })
       if (!res.ok) {
+        // 🔴 418 = נטפרי חסמה את הבקשה, ולא כשל של המערכת.
+        //
+        // ⚠️ נטפרי חוסמת את *כל* הדומיין railway.app, כולל /api/health.
+        // מי שנכנס דרך כתובת ה-Railway במקום דרך chasamsofer.co.il מקבל
+        // חסימה על כל פעולה — והיא נראית כמו תקלה בתוכנה. ההודעה מפנה
+        // לדומיין הנכון במקום להציג מספר שאין לו משמעות למשתמש.
+        if (res.status === 418) {
+          setErr('הגישה נחסמה על ידי הסינון (נטפרי). יש להיכנס לכתובת https://chasamsofer.co.il ולא לכתובת הזמנית של השרת.')
+          return
+        }
         // השרת מחזיר JSON על שגיאה — מציגים את ההודעה האמיתית ולא "נכשל".
         let msg = `הפקת הקובץ נכשלה (${res.status})`
         try {
@@ -88,9 +99,18 @@ export default function BatchPdfDialog({ rows, onClose }: {
         return
       }
 
-      const blob = await res.blob()
-      // ⚠️ בדיקת שפיות: תשובה שאינה PDF (למשל דף שגיאה של פרוקסי) הייתה
-      // יורדת כקובץ פגום שנפתח כ"קובץ שבור" בלי שום הסבר.
+      // 🔴 השרת מחזיר JSON עם base64 מעורבל ולא PDF — ראו batch-pdf/route.
+      // תגובת application/pdf נחסמת ע"י נטפרי ב-418, וזה מה שהפיל את
+      // ההורדה. כאן מרכיבים את הקובץ מקומית, בלי שהוא עובר ברשת כקובץ.
+      const payload = await res.json()
+      if (!payload?.data) { setErr('הקובץ שהתקבל ריק — נסו שוב או צמצמו את הטווח'); return }
+
+      const binary = atob(payload.data as string)
+      const bytes = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+      // ביטול הערבול שנעשה בשרת (אותה פונקציה — היא סימטרית).
+      if (payload.enc === DOC_CIPHER_ID) scrambleBytes(bytes)
+      const blob = new Blob([bytes], { type: 'application/pdf' })
       if (blob.size === 0) { setErr('הקובץ שהתקבל ריק — נסו שוב או צמצמו את הטווח'); return }
 
       const url = URL.createObjectURL(blob)
