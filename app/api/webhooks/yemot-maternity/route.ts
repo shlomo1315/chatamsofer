@@ -271,14 +271,14 @@ async function entry(req: NextRequest): Promise<NextResponse> {
       return new NextResponse(cached.body, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
     }
   }
-  const res = await handle(params)
+  const res = await handleMaternityCall(params)
   if (sig) {
     try { const body = await res.clone().text(); pruneReqDedup(Date.now()); _reqDedup.set(sig, { at: Date.now(), body }) } catch { /* ignore */ }
   }
   return res
 }
 
-async function handle(params: Record<string, string>): Promise<NextResponse> {
+export async function handleMaternityCall(params: Record<string, string>): Promise<NextResponse> {
   const apiPhone = String(params['ApiPhone'] ?? '').trim()
   const callId = String(params['ApiCallId'] ?? '').trim()
   // הכרטיס שהוקלד באחרון מבין משתני הניסיון (לתצוגה בלוג בלבד)

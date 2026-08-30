@@ -31,6 +31,9 @@ import {
 } from '@/lib/yemotMainMenu'
 import { IVR_CONFIG_KEY, normalizeIvr, type IvrConfig } from '@/lib/ivrBuilder'
 import { ivrStep, nextNodeId, NODE_PARAM, DIGIT_PARAM } from '@/lib/ivrRuntime'
+import { resolveRoute, ROUTE_PARAM } from '@/lib/ivrDelegate'
+import { handleHolidayCall } from '../yemot-holiday/route'
+import { handleMaternityCall } from '../yemot-maternity/route'
 
 export const dynamic = 'force-dynamic'
 
@@ -118,6 +121,21 @@ function askMenu(msgs: MainMenuMessages, withWelcome: boolean, invalid = false):
   return `read=${prompt}=${ops.join(',')}`
 }
 
+/**
+ * מוסיף לתשובה את המסלול הנוכחי, כדי שהקריאה הבאה תדע היכן היא.
+ *
+ * ⚠️ לא מוסיפים כשהשיחה נגמרה (go_to_folder=hangup): שמירת מסלול על
+ * שיחה שמסתיימת אינה מזיקה, אבל היא מבלבלת בקריאת הלוג — ובעיקר,
+ * ימות מתעלמת ממשתנים אחרי ניתוק.
+ */
+async function withRoute(res: NextResponse, route: string): Promise<NextResponse> {
+  const body = await res.text()
+  if (body.includes('go_to_folder=hangup')) return new NextResponse(body, { headers: res.headers })
+  // ⚠️ הפורמט של ימות: פקודות מופרדות ב-& ומסתיימות ב-&.
+  const withVar = `${body}${ROUTE_PARAM}=${route}&`
+  return new NextResponse(withVar, { headers: res.headers })
+}
+
 async function handle(params: Record<string, string>): Promise<NextResponse> {
   const callId = String(params['ApiCallId'] ?? '').trim()
 
@@ -149,7 +167,32 @@ async function handle(params: Record<string, string>): Promise<NextResponse> {
   const msgs = await loadMessages()
   const choice = String(params['choice'] ?? '').trim()
 
-  // אין הקשה עדיין — ברכה ותפריט.
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 כתובת אחת: הראשית מטפלת בחגים וביולדות בעצמה, בלי go_to_folder.
+  //
+  // ⚠️ מותנה ב-YEMOT_SINGLE_ENDPOINT. בלי המתג ההתנהגות נשארת בדיוק כפי
+  // שהייתה — זו שלוחה חיה, ומעבר שקט היה משנה את מסלול השיחה של כל
+  // מתקשר ברגע הפריסה, בלי שאיש בדק.
+  //
+  // ⚠️ המסלול מוחזר לימות כמשתנה: היא אינה שומרת מצב, ובלעדיו כל הקשה
+  // הייתה חוזרת לתפריט הראשי (ראו lib/ivrDelegate).
+  if (process.env.YEMOT_SINGLE_ENDPOINT === '1') {
+    const route = resolveRoute(params, choice)
+    if (route === 'holiday') {
+      const res = await handleHolidayCall(params)
+      return withRoute(res, 'holiday')
+    }
+    if (route === 'maternity') {
+      const res = await handleMaternityCall(params)
+      return withRoute(res, 'maternity')
+    }
+  }
+
+  // 🔴 אחרי בדיקת המסלול ולא לפניה.
+  //
+  // ⚠️ בתוך מסלול, ההקשות הן של המסלול עצמו (ת"ז, בחירת מוקד) ו-choice
+  // ריק. בדיקה מוקדמת הייתה זורקת את המתקשר בחזרה לתפריט הראשי בכל
+  // הקשה — לולאה שאי אפשר לצאת ממנה אלא בניתוק.
   if (!choice) return yemotText([askMenu(msgs, true)], callId)
 
   switch (choice) {

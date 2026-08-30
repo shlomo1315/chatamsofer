@@ -322,7 +322,7 @@ async function handleCenterRoute(
   }
 }
 
-async function handle(params: Record<string, string>): Promise<NextResponse> {
+export async function handleHolidayCall(params: Record<string, string>): Promise<NextResponse> {
   const apiPhone = String(params['ApiPhone'] ?? '').trim()
   const callId = String(params['ApiCallId'] ?? '').trim()
 
@@ -450,7 +450,7 @@ function paramsFromSearch(url: URL): Record<string, string> {
 }
 
 export async function GET(request: NextRequest) {
-  return handle(paramsFromSearch(new URL(request.url)))
+  return handleHolidayCall(paramsFromSearch(new URL(request.url)))
 }
 
 export async function POST(request: NextRequest) {
@@ -465,5 +465,5 @@ export async function POST(request: NextRequest) {
       form.forEach((v, k) => { params[k] = String(v) })
     }
   } catch { /* ימות שולחת לעיתים ב-query בלבד */ }
-  return handle(params)
+  return handleHolidayCall(params)
 }
