@@ -228,5 +228,13 @@ export function verifyCronSecret(request: Request): boolean {
   }
   const auth = request.headers.get('authorization')
   if (auth?.startsWith('Bearer ') && eq(auth.slice(7))) return true
-  return eq(new URL(request.url).searchParams.get('secret'))
+
+  // 🔴 שני שמות הפרמטר נתמכים, ובכוונה.
+  //
+  // ⚠️ התיעוד בכל ה-cron אומר `?token=`, וכך גם הוגדרו שירותי ה-cron
+  // ב-Railway בפועל — אבל כאן נקרא `secret` בלבד. כל הרצה דרך פרמטר
+  // בכתובת נדחתה ב-401, והכשל שקט לחלוטין: ל-cron אין מי שיקרא את
+  // תשובתו, ולכן משימה שלא רצה מעולם נראית זהה למשימה שרצה בהצלחה.
+  const sp = new URL(request.url).searchParams
+  return eq(sp.get('token')) || eq(sp.get('secret'))
 }
