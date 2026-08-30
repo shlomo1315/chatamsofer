@@ -50,7 +50,40 @@ describe('eligibleForLoad — מי מקבל טעינה', () => {
 
   it('מעביר ת"ז ושם ליעד', () => {
     const [t] = eligibleForLoad([row({ id_number: '987654321', name: 'כהן' })])
-    expect(t).toEqual({ recipientId: 'r1', idNumber: '987654321', name: 'כהן' })
+    expect(t.recipientId).toBe('r1')
+    expect(t.idNumber).toBe('987654321')
+    expect(t.name).toBe('כהן')
+  })
+
+  // ⚠️ 🔴 השדות הבאים אינם לתצוגה: הם מה שנשלח לנדרים כשהמשפחה אינה
+  // קיימת שם וצריך להקים אותה. .map שהשמיט אותם היה מקים לקוח בלי טלפון
+  // וכתובת — לקוח שאינו שמיש למוקד החלוקה, ובלי שום סימן שמשהו חסר.
+  it('🔴 מעביר גם את פרטי ההקמה בנדרים', () => {
+    const [t] = eligibleForLoad([row({
+      id_number: '987654321',
+      spouse_id_number: '022963573',
+      family_name: 'כהן',
+      full_name: 'יעקב',
+      phone: '0501234567',
+      phone2: '0527654321',
+      email: 'a@b.com',
+      address: 'הרצל 1',
+      city: 'ירושלים',
+    })])
+    expect(t.spouseIdNumber).toBe('022963573')
+    expect(t.familyName).toBe('כהן')
+    expect(t.fullName).toBe('יעקב')
+    expect(t.phone).toBe('0501234567')
+    expect(t.phone2).toBe('0527654321')
+    expect(t.email).toBe('a@b.com')
+    expect(t.address).toBe('הרצל 1')
+    expect(t.city).toBe('ירושלים')
+  })
+
+  it('שדות הקמה חסרים → null ולא undefined שנשלח לנדרים כמחרוזת', () => {
+    const [t] = eligibleForLoad([row({ id_number: '987654321' })])
+    expect(t.spouseIdNumber).toBeNull()
+    expect(t.phone).toBeNull()
   })
 
   it('רשימה ריקה אינה קורסת', () => {

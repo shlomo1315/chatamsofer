@@ -19,6 +19,9 @@ interface Preview {
   alreadyLoaded: number
   failed: number
   skipped: { notApproved: number; noId: number }
+  /** ⚠️ מגיע מהחלוקה — ראו lib/holidayTestMode. */
+  testMode?: boolean
+  testEmail?: string | null
 }
 
 const fmt = (n: number) => new Intl.NumberFormat('he-IL').format(n)
@@ -45,7 +48,13 @@ export default function LoadCardsPanel({ distributionId }: { distributionId: str
   async function run() {
     if (!preview) return
     // ⚠️ אישור אחרון בטקסט חופשי — הסכום נאמר שוב, במילים של המשתמש.
-    if (!confirm(`לטעון ${fmt(preview.total)} ₪ ל-${fmt(preview.eligible)} כרטיסים?\n\nהפעולה אינה הפיכה.`)) return
+    // 🔴 נוסח שונה במצב בדיקה: "הפעולה אינה הפיכה" על הרצת בדיקה מרתיע
+    // מיותר, ו"נטענו X" בלי אזהרה מטעה לכיוון ההפוך.
+    const msg = preview.testMode
+      ? `מצב בדיקה — לא ייטען שום כרטיס ולא ייצא שקל.\n\nהמסלול ירוץ על ${fmt(preview.eligible)} משפחות${
+          preview.testEmail ? `, והמיילים יישלחו ל-${preview.testEmail} בלבד` : ' (בלי שליחת מייל — אין כתובת בדיקה)'}.\n\nלהמשיך?`
+      : `לטעון ${fmt(preview.total)} ₪ ל-${fmt(preview.eligible)} כרטיסים?\n\nהפעולה אינה הפיכה.`
+    if (!confirm(msg)) return
 
     setBusy(true); setErr(''); setDone('')
     try {
@@ -56,7 +65,11 @@ export default function LoadCardsPanel({ distributionId }: { distributionId: str
       })
       const d = await res.json()
       if (!res.ok) { setErr(d.error ?? 'הטעינה נכשלה'); return }
-      setDone(`${fmt(d.loaded ?? 0)} כרטיסים נטענו` + (d.failed ? ` · ${fmt(d.failed)} נכשלו` : ''))
+      // 🔴 "נטענו" בלי סיוג אחרי הרצת בדיקה הוא בדיוק המשפט שגורם לחשוב
+      // שהעבודה נגמרה — בזמן שאף כרטיס אינו טעון.
+      setDone(d.testMode
+        ? `🧪 מצב בדיקה — ${fmt(d.loaded ?? 0)} משפחות עברו את המסלול. לא נטען שום כרטיס.`
+        : `${fmt(d.loaded ?? 0)} כרטיסים נטענו` + (d.failed ? ` · ${fmt(d.failed)} נכשלו` : ''))
       setPreview(null)
     } catch { setErr('שגיאת רשת') } finally { setBusy(false) }
   }
@@ -88,6 +101,18 @@ export default function LoadCardsPanel({ distributionId }: { distributionId: str
 
       {preview && (
         <div className="mt-3 rounded-xl border border-emerald-300 bg-white p-3.5">
+          {/* 🔴 באנר מצב הבדיקה — לפני המספרים, לא אחריהם: הסכום הגדול
+              מושך את העין, ובלי האזהרה מעליו קל להניח שזו טעינה אמיתית. */}
+          {preview.testMode && (
+            <div className="mb-3 rounded-lg border-2 border-amber-400 bg-amber-50 px-3 py-2">
+              <p className="text-xs font-extrabold text-amber-900">🧪 החלוקה במצב בדיקה</p>
+              <p className="mt-0.5 text-[11px] leading-relaxed text-amber-800">
+                לא ייטען שום כרטיס ולא ייצא שקל. {preview.testEmail
+                  ? <>המיילים יישלחו ל־<strong dir="ltr">{preview.testEmail}</strong> בלבד.</>
+                  : <>לא תוגדר כתובת בדיקה — לא יישלח מייל כלל.</>}
+              </p>
+            </div>
+          )}
           <p className="text-sm text-slate-700">
             ייטענו <strong className="text-emerald-800">{fmt(preview.eligible)}</strong> כרטיסים
             × {fmt(preview.amount)} ₪

@@ -15,8 +15,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   getHolidayNedarimCreds, getHolidayLimitedId, addTlush,
-  findClientByZeout, normalizeZeout, type NedarimCreds,
+  findClientByZeout, normalizeZeout, saveClientCard, type NedarimCreds,
 } from './nedarim'
+import { pickZeoutForCreate, isAlreadyRegistered } from './holidayClientCreate'
+import { testModeOutcome } from './holidayTestMode'
 
 /** סכום ברירת המחדל לטעינה. ⚠️ ניתן לשינוי מהמסך — אינו קבוע קשיח. */
 export const DEFAULT_LOAD_AMOUNT = 500
@@ -25,6 +27,15 @@ export interface LoadTarget {
   recipientId: string
   idNumber: string | null
   name: string
+  /** ⚠️ הפרטים הבאים נדרשים *רק* להקמת המשפחה בנדרים כשאינה קיימת. */
+  spouseIdNumber?: string | null
+  familyName?: string | null
+  fullName?: string | null
+  phone?: string | null
+  phone2?: string | null
+  email?: string | null
+  address?: string | null
+  city?: string | null
 }
 
 export interface LoadOutcome {
@@ -82,11 +93,63 @@ export async function loadOne(
   }
 
   try {
-    const clientId = await findClientByZeout(creds, zeout)
+    // ─────────────────────────────────────────────────────────────────────
+    // איתור המשפחה — ואם אינה קיימת, הקמתה.
+    //
+    // ⚠️ מחפשים לפי *שתי* הת"ז ולא רק לפי אחת: המשפחה בנדרים עשויה להיות
+    // רשומה על שם בן/בת הזוג. חיפוש לפי אחת בלבד החזיר null, המערכת ניסתה
+    // להקים משפחה קיימת, ונדרים דחו ב"מספר זהות זה כבר רשום אצל X".
+    //
+    // ⚠️ כשל *החיפוש* אינו סיבה לוותר: GetClient_Table עלול להיכשל מצד
+    // נדרים, ואילו SaveClientCard מצליחה ומחזירה ClientId בכל מקרה.
+    // ─────────────────────────────────────────────────────────────────────
+    let clientId: string | null = null
+    for (const candidate of [target.idNumber, target.spouseIdNumber].filter(Boolean)) {
+      if (clientId) break
+      try {
+        clientId = await findClientByZeout(creds, String(candidate))
+      } catch (e) {
+        console.error('[holiday-load] חיפוש המשפחה בנדרים נכשל — ממשיכים להקמה:',
+          e instanceof Error ? e.message : e)
+      }
+    }
+
     if (!clientId) {
-      // ⚠️ הודעה מפורשת ולא "נכשל": המשפחה אינה קיימת בנדרים, וזה מצב
-      // שדורש פעולה אנושית (חיבור כרטיס) ולא נסיון חוזר.
-      return { recipientId: target.recipientId, ok: false, error: 'לא נמצא לקוח בנדרים לתעודת זהות זו' }
+      const createZeout = pickZeoutForCreate(target.idNumber, target.spouseIdNumber)
+      if (!createZeout) {
+        return { recipientId: target.recipientId, ok: false, error: 'אין תעודת זהות ברשומה' }
+      }
+      try {
+        // ⚠️ Groupe 'חלוקת חגים' ולא ברירת המחדל 'לידות': שיוך לקבוצה
+        // הלא נכונה מערבב את משפחות החגים עם היולדות בנדרים.
+        clientId = await saveClientCard(creds, {
+          id_number: createZeout,
+          family_name: target.familyName ?? target.name,
+          full_name: target.fullName ?? target.name,
+          phone: target.phone,
+          phone2: target.phone2,
+          email: target.email,
+          address: target.address,
+          city: target.city,
+        }, null, 'חלוקת חגים')
+      } catch (e) {
+        // 🔴 "כבר רשום אצל X" אינו כשל: המשפחה קיימת בנדרים תחת רשומה
+        // אחרת (בדרך כלל בן/בת הזוג), והחיפוש פשוט לא מצא אותה. מנסים
+        // לאתר שוב לפי הת"ז השנייה לפני שמוותרים.
+        const raw = e instanceof Error ? e.message : String(e)
+        if (!isAlreadyRegistered(raw)) throw e
+        for (const candidate of [target.spouseIdNumber, target.idNumber].filter(Boolean)) {
+          if (clientId) break
+          try { clientId = await findClientByZeout(creds, String(candidate)) } catch { /* ממשיכים */ }
+        }
+        if (!clientId) {
+          return { recipientId: target.recipientId, ok: false, error: `המשפחה קיימת בנדרים אך לא אותרה — ${raw}` }
+        }
+      }
+    }
+
+    if (!clientId) {
+      return { recipientId: target.recipientId, ok: false, error: 'הקמת המשפחה בנדרים לא החזירה מזהה' }
     }
 
     // ⚠️ התוקף עובר לנדרים. קודם נשלח undefined והכרטיסים יצאו בלי
@@ -109,20 +172,38 @@ export async function runLoadBatch(
   db: SupabaseClient,
   targets: LoadTarget[],
   amount: number = DEFAULT_LOAD_AMOUNT,
-  opts: { delayMs?: number; expiryIso?: string | null } = {},
+  opts: { delayMs?: number; expiryIso?: string | null; testMode?: boolean } = {},
 ): Promise<LoadSummary> {
   const summary: LoadSummary = { attempted: targets.length, loaded: 0, failed: 0, outcomes: [] }
   if (!targets.length) return summary
 
-  const creds = await getHolidayNedarimCreds()
-  if (!creds) {
+  // ⚠️ במצב בדיקה אין קריאה לנדרים כלל, ולכן גם אין צורך בהרשאות. דרישת
+  // הרשאות כאן הייתה חוסמת בדיוק את הבדיקה שנועדה לרוץ לפני שהן מוגדרות.
+  const creds = opts.testMode ? null : await getHolidayNedarimCreds()
+  if (!creds && !opts.testMode) {
     // 🔴 נכשל-סגור: בלי הרשאות אין לנסות עם ברירת מחדל כלשהי.
     throw new Error('לא הוגדרו הרשאות נדרים לחלוקות חגים')
   }
-  const limitedId = await getHolidayLimitedId()
+  const limitedId = opts.testMode ? '' : await getHolidayLimitedId()
 
   for (const t of targets) {
-    const outcome = await loadOne(creds, limitedId, t, amount, opts.expiryIso)
+    // ─────────────────────────────────────────────────────────────────────
+    // 🔴 מצב בדיקה — לא נוגעים בנדרים ולא נוגעים במסד.
+    //
+    // ⚠️ ה-return המוקדם הוא כל הביטחון: אין קריאה ל-addTlush, אין הקמת
+    // לקוח, ואין כתיבת load_status. שורה שסומנה 'loaded' בבדיקה הייתה
+    // נחסמת מטעינה אמיתית אחר כך — כלומר משפחה בלי כסף בכרטיס, בשקט.
+    // ─────────────────────────────────────────────────────────────────────
+    if (opts.testMode) {
+      summary.outcomes.push(testModeOutcome(t))
+      summary.loaded++
+      if (opts.delayMs) await new Promise(r => setTimeout(r, opts.delayMs))
+      continue
+    }
+
+    // ⚠️ creds מובטח כאן: מצב בדיקה יצא ב-continue למעלה, ובלעדיו
+    // הפונקציה כבר זרקה.
+    const outcome = await loadOne(creds!, limitedId, t, amount, opts.expiryIso)
     summary.outcomes.push(outcome)
     if (outcome.ok) summary.loaded++; else summary.failed++
 
@@ -153,10 +234,33 @@ export function eligibleForLoad(rows: {
   load_status?: string | null
   id_number?: string | null
   name?: string
+  // ⚠️ הפרטים הבאים אינם לתצוגה: הם נשלחים לנדרים בהקמת המשפחה כשאינה
+  // קיימת שם. השמטתם הייתה מקימה לקוח בלי טלפון וכתובת — לקוח שאינו
+  // שמיש למוקד החלוקה, ובלי שום סימן שמשהו חסר.
+  spouse_id_number?: string | null
+  family_name?: string | null
+  full_name?: string | null
+  phone?: string | null
+  phone2?: string | null
+  email?: string | null
+  address?: string | null
+  city?: string | null
 }[]): LoadTarget[] {
   return rows
     .filter(r => r.approval_status === 'approved')
     .filter(r => r.load_status !== 'loaded')
     .filter(r => !!(r.id_number ?? '').trim())
-    .map(r => ({ recipientId: r.id, idNumber: r.id_number ?? null, name: r.name ?? '' }))
+    .map(r => ({
+      recipientId: r.id,
+      idNumber: r.id_number ?? null,
+      name: r.name ?? '',
+      spouseIdNumber: r.spouse_id_number ?? null,
+      familyName: r.family_name ?? null,
+      fullName: r.full_name ?? null,
+      phone: r.phone ?? null,
+      phone2: r.phone2 ?? null,
+      email: r.email ?? null,
+      address: r.address ?? null,
+      city: r.city ?? null,
+    }))
 }

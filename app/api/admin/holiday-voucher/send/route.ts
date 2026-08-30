@@ -6,6 +6,7 @@ import { mailFor } from '@/lib/departments'
 import { buildHolidayVoucher } from '@/lib/holidayVoucher'
 import { loadHolidayVoucherTexts } from '@/lib/holidayVoucherTexts'
 import { holidayDistributionLabel } from '@/lib/holidayVoucher'
+import { resolveTestMode, recipientForTestMail } from '@/lib/holidayTestMode'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -118,10 +119,22 @@ export async function POST(request: NextRequest) {
   // לדעת לאיזו חלוקה הוא שייך וכמה נטען לכרטיס.
   const { data: distRow } = await db
     .from('distributions')
-    .select('name, year, amount_per_family')
+    .select('name, year, amount_per_family, test_mode, test_email')
     .eq('id', distributionId)
     .maybeSingle()
-  const dist = distRow as { name?: string | null; year?: string | null; amount_per_family?: number | string | null } | null
+  const dist = distRow as {
+    name?: string | null; year?: string | null; amount_per_family?: number | string | null
+    test_mode?: boolean | null; test_email?: string | null
+  } | null
+
+  // 🔴 מצב בדיקה: המייל *לעולם* אינו יוצא למשפחה. ראו lib/holidayTestMode.
+  const testMode = resolveTestMode(dist)
+  if (testMode.active && !testMode.email) {
+    return NextResponse.json({
+      ok: true, sent: 0, failed: 0, testMode: true,
+      note: 'מצב בדיקה בלי כתובת בדיקה — לא נשלח דבר',
+    })
+  }
   const distributionName = holidayDistributionLabel(dist?.name, dist?.year)
   // ⚠️ numeric מגיע כמחרוזת מ-PostgREST — Number() ולא שימוש ישיר.
   const amount = dist?.amount_per_family != null ? Number(dist.amount_per_family) : null
@@ -154,16 +167,27 @@ ${c.address ? `<br/><strong>כתובת:</strong> ${c.address}` : ''}</p>
 <p>בברכת חג כשר ושמח,<br/>איגוד הצאצאים · היכל החתם סופר</p>
 </body></html>`
 
+      // 🔴 הנמען האמיתי — במצב בדיקה זו כתובת הבדיקה ולעולם לא המשפחה.
+      const to = recipientForTestMail(testMode, t.email)
+      if (!to) { failed++; failures.push({ id: t.id, email: t.email, error: 'אין נמען' }); continue }
+
       const res = await deliverMail(
-        t.email, 'שובר חלוקת חגים — היכל החתם סופר', html,
+        to, testMode.active
+          ? `[בדיקה · ${t.familyName}] שובר חלוקת חגים — היכל החתם סופר`
+          : 'שובר חלוקת חגים — היכל החתם סופר', html,
         [{ filename: 'שובר-חלוקת-חגים.pdf', mimeType: 'application/pdf', contentB64: Buffer.from(pdf).toString('base64') }],
         mailFor('holidays'),
       )
 
       if (res.ok) {
         sent++
-        await db.from('distribution_recipients')
-          .update({ email_sent_at: new Date().toISOString(), email_error: null }).eq('id', t.id)
+        // 🔴 לא מסמנים במצב בדיקה: email_sent_at הוא בדיוק מה שמונע
+        // שליחה חוזרת, ושורה שסומנה בבדיקה לא תקבל את השובר האמיתי —
+        // המשפחה נשארת בלי שובר, בשקט.
+        if (!testMode.active) {
+          await db.from('distribution_recipients')
+            .update({ email_sent_at: new Date().toISOString(), email_error: null }).eq('id', t.id)
+        }
       } else {
         failed++
         failures.push({ id: t.id, email: t.email, error: res.error ?? 'שליחה נכשלה' })

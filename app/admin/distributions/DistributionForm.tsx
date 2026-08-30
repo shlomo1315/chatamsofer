@@ -50,6 +50,8 @@ export interface DistributionFormValues {
   amount_per_family?: number | null
   distribution_date?: string | null
   card_expiry?: string | null
+  test_mode?: boolean | null
+  test_email?: string | null
 }
 
 const YEARS = hebrewYearOptions()
@@ -63,6 +65,8 @@ export default function DistributionForm({ initial }: { initial?: DistributionFo
   const [amount, setAmount] = useState(initial?.amount_per_family != null ? String(initial.amount_per_family) : '')
   const [date, setDate] = useState(initial?.distribution_date ?? '')
   const [cardExpiry, setCardExpiry] = useState(initial?.card_expiry ?? '')
+  const [testMode, setTestMode] = useState(!!initial?.test_mode)
+  const [testEmail, setTestEmail] = useState(initial?.test_email ?? '')
   const [description, setDescription] = useState(initial?.description ?? '')
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
@@ -81,6 +85,7 @@ export default function DistributionForm({ initial }: { initial?: DistributionFo
           name: name.trim(), year: year.trim(), description: description.trim(),
           amount_per_family: amountNum, distribution_date: date || null,
           card_expiry: cardExpiry || null,
+          test_mode: testMode, test_email: testEmail.trim() || null,
         }),
       })
       const d = await res.json().catch(() => ({}))
@@ -132,6 +137,38 @@ export default function DistributionForm({ initial }: { initial?: DistributionFo
           <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3}
             placeholder="פרטים פנימיים על החלוקה" className={`${field} resize-none`} />
         </div>
+      </div>
+
+      {/* ── מצב בדיקה ──
+          🔴 מוצג בכתום ובולט במכוון: מצב בדיקה שנשכח דלוק הוא תקלה שקטה
+          — המסך מדווח "נטענו X כרטיסים" ואף שקל לא יצא. */}
+      <div className={`rounded-xl border-2 p-3.5 transition-colors ${
+        testMode ? 'border-amber-400 bg-amber-50' : 'border-slate-200 bg-slate-50/50'}`}>
+        <label className="flex cursor-pointer items-start gap-2.5">
+          <input type="checkbox" checked={testMode} onChange={e => setTestMode(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-400" />
+          <span className="flex-1">
+            <span className="block text-sm font-extrabold text-slate-800">מצב בדיקה</span>
+            <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-500">
+              המסלול המלא רץ — שובר נוצר ומייל נשלח — אבל <strong>שום כרטיס אינו נטען בנדרים</strong>,
+              ואף משפחה אינה מקבלת דבר. המיילים נשלחים רק לכתובת הבדיקה.
+            </span>
+          </span>
+        </label>
+
+        {testMode && (
+          <div className="mt-3 border-t border-amber-200 pt-3">
+            <label className="mb-1.5 block text-xs font-bold text-slate-600">כתובת לקבלת שוברי הבדיקה</label>
+            <input value={testEmail} onChange={e => setTestEmail(e.target.value)}
+              type="email" dir="ltr" placeholder="you@example.com"
+              className={`${field} text-left`} />
+            <p className="mt-1 text-[11px] leading-relaxed text-amber-800">
+              {testEmail.trim()
+                ? <>כל השוברים יישלחו לכתובת הזו בלבד.</>
+                : <><strong>ריק</strong> — לא יישלח שום מייל. השובר עדיין ייווצר ואפשר לראותו בתצוגה המקדימה.</>}
+            </p>
+          </div>
+        )}
       </div>
 
       {!isEdit && (

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { eligibleForLoad, runLoadBatch, DEFAULT_LOAD_AMOUNT } from '@/lib/holidayCardLoad'
+import { resolveTestMode } from '@/lib/holidayTestMode'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -16,7 +17,18 @@ export const maxDuration = 300
 // מפורש: בקשה בלי האישור נדחית, כדי שקריאה מקרית לא תטען כסף.
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface Ben { id_number: string | null; family_name: string | null; full_name: string | null }
+interface Ben {
+  id_number: string | null
+  family_name: string | null
+  full_name: string | null
+  /** ⚠️ להקמת המשפחה בנדרים בלבד — ראו LoadTarget. */
+  spouse_id_number: string | null
+  phone: string | null
+  phone2: string | null
+  email: string | null
+  address: string | null
+  city: string | null
+}
 
 /**
  * ⚠️ beneficiary מגיע כמערך: Supabase מסיק כך מכל יחס join, גם כשהוא
@@ -40,7 +52,9 @@ async function loadRows(
 ) {
   const { rows } = await fetchAllRows<Row>((from, to) => db
     .from('distribution_recipients')
-    .select('id, approval_status, load_status, beneficiary:beneficiaries(id_number, family_name, full_name)')
+    // ⚠️ השדות הנוספים נדרשים *רק* להקמת המשפחה בנדרים כשאינה קיימת שם:
+    // לקוח שמוקם בלי טלפון וכתובת אינו שמיש למוקד החלוקה.
+    .select('id, approval_status, load_status, beneficiary:beneficiaries(id_number, spouse_id_number, family_name, full_name, phone, phone2, email, address, city)')
     .eq('distribution_id', distributionId)
     .range(from, to))
 
@@ -52,6 +66,14 @@ async function loadRows(
       load_status: r.load_status,
       id_number: b?.id_number ?? null,
       name: [b?.family_name, b?.full_name].filter(Boolean).join(' ') || 'ללא שם',
+      spouse_id_number: b?.spouse_id_number ?? null,
+      family_name: b?.family_name ?? null,
+      full_name: b?.full_name ?? null,
+      phone: b?.phone ?? null,
+      phone2: b?.phone2 ?? null,
+      email: b?.email ?? null,
+      address: b?.address ?? null,
+      city: b?.city ?? null,
     }
   })
 }
@@ -72,8 +94,16 @@ export async function GET(request: NextRequest) {
   const rows = await loadRows(db, distributionId)
   const targets = eligibleForLoad(rows)
 
+  // ⚠️ מדווח כבר בתצוגה המקדימה: מנהל שלוחץ "טען" בלי לדעת שהחלוקה
+  // במצב בדיקה מקבל "נטענו X" ומניח שהעבודה נגמרה.
+  const { data: preRow } = await db.from('distributions')
+    .select('test_mode, test_email').eq('id', distributionId).maybeSingle()
+  const preTest = resolveTestMode(preRow as { test_mode?: boolean | null; test_email?: string | null } | null)
+
   return NextResponse.json({
     amount,
+    testMode: preTest.active,
+    testEmail: preTest.email,
     eligible: targets.length,
     total: amount * targets.length,
     alreadyLoaded: rows.filter(r => r.load_status === 'loaded').length,
@@ -114,8 +144,12 @@ export async function POST(request: NextRequest) {
   // ⚠️ תוקף הכרטיס נלקח *מהחלוקה* ולא מהגדרה גלובלית: כל חג נפרק במועד
   // אחר, והגדרה משותפת הייתה נכונה לחלוקה אחת ושגויה לכל השאר.
   const { data: distRow } = await db.from('distributions')
-    .select('card_expiry').eq('id', distributionId).maybeSingle()
-  const expiryIso = (distRow as { card_expiry?: string | null } | null)?.card_expiry ?? null
+    .select('card_expiry, test_mode, test_email').eq('id', distributionId).maybeSingle()
+  const dist = distRow as { card_expiry?: string | null; test_mode?: boolean | null; test_email?: string | null } | null
+  const expiryIso = dist?.card_expiry ?? null
+  // 🔴 מצב בדיקה נקרא *מהחלוקה* ולא מגוף הבקשה: לקוח לא יכול לבקש
+  // "אל תטען באמת", וגם לא להפך — לכפות טעינה אמיתית על חלוקת בדיקה.
+  const testMode = resolveTestMode(dist)
 
   const rows = await loadRows(db, distributionId)
   // ⚠️ בחירה חלקית (ids) מסוננת *אחרי* אותם כללי זכאות — לא במקומם.
@@ -129,13 +163,26 @@ export async function POST(request: NextRequest) {
   console.log(`[holiday-load] מתחיל: ${targets.length} משפחות × ${amount}₪ · ${staff.email ?? ''}`)
 
   // מסמנים 'pending' לפני היציאה — כך המסך מראה מה בתהליך גם אם נפל באמצע.
-  await db.from('distribution_recipients')
-    .update({ load_status: 'pending', load_error: null })
-    .in('id', targets.map(t => t.recipientId))
+  //
+  // 🔴 לא במצב בדיקה: שם אין טעינה אמיתית, ושורה שנשארה 'pending' אחרי
+  // בדיקה נראית כטעינה שרצה ונתקעה — ואיש לא ינסה אותה שוב. המשפחה
+  // הייתה נשארת בלי כסף בכרטיס בלי שום סימן.
+  if (!testMode.active) {
+    await db.from('distribution_recipients')
+      .update({ load_status: 'pending', load_error: null })
+      .in('id', targets.map(t => t.recipientId))
+  }
 
   try {
-    const summary = await runLoadBatch(db, targets, amount, { delayMs: 120, expiryIso })
-    return NextResponse.json({ ok: true, ...summary, outcomes: undefined, failedList: summary.outcomes.filter(o => !o.ok) })
+    const summary = await runLoadBatch(db, targets, amount, { delayMs: 120, expiryIso, testMode: testMode.active })
+    // ⚠️ testMode מוחזר במפורש: בלעדיו המסך היה מציג "נטענו 40 כרטיסים"
+    // בלי שום רמז שלא יצא שקל, וזו בדיוק ההודעה שגורמת לחשוב שהעבודה נגמרה.
+    return NextResponse.json({
+      ok: true, ...summary, outcomes: undefined,
+      failedList: summary.outcomes.filter(o => !o.ok),
+      testMode: testMode.active,
+      testEmail: testMode.email,
+    })
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'תקלה'
     console.error('[holiday-load] נכשל:', msg)

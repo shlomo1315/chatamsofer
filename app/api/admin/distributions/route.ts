@@ -23,6 +23,8 @@ interface Body {
   registration_open?: boolean
   distribution_date?: string | null
   card_expiry?: string | null
+  test_mode?: boolean
+  test_email?: string | null
   status?: string
 }
 
@@ -75,6 +77,8 @@ export async function POST(request: NextRequest) {
     amount_per_family: amount,
     distribution_date: body.distribution_date || null,
     card_expiry: expiry.value,
+    test_mode: body.test_mode === true,
+    test_email: String(body.test_email ?? '').trim() || null,
     status: 'planning',
     registration_open: false,
     created_by: staff.userId,
@@ -113,6 +117,10 @@ export async function PATCH(request: NextRequest) {
     if (!e.ok) return NextResponse.json({ error: e.error }, { status: 400 })
     updates.card_expiry = e.value
   }
+  // ⚠️ מצב בדיקה נשמר במפורש ולא נגזר: === true כדי ש-undefined לא יידלק,
+  // וכיבוי מפורש יכבה. זהו המתג שמונע יציאת כסף אמיתי.
+  if (body.test_mode !== undefined) updates.test_mode = body.test_mode === true
+  if (body.test_email !== undefined) updates.test_email = String(body.test_email ?? '').trim() || null
   if (body.amount_per_family !== undefined) {
     const amount = body.amount_per_family == null ? null : Number(body.amount_per_family)
     if (amount != null && (!Number.isFinite(amount) || amount < 0)) {
