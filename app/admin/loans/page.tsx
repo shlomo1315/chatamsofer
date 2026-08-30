@@ -70,7 +70,10 @@ async function getLoans(): Promise<Loan[]> {
     // ⚠️ eligibility_status: מודל האישור מסתיר את בורר "היקף האישור" כשהמשפחה
     // כבר מאושרת. בלי השדה הזה הרשימה הייתה מציגה את השאלה תמיד, בעוד הכרטסת
     // מסתירה אותה — אותו אישור, שתי התנהגויות.
-    .select(`id, amount, approved_amount, installments, purpose, status, disbursed_at, disbursed_by, created_at, beneficiary:beneficiaries(${benFields})`)
+    // ⚠️ note_sent_at/by: שלב "נשלח שטר" שקודם לביצוע, ונקבע בפורטל הביצוע
+    // בכפתור נפרד. בלעדיו הרשימה הראתה רק את ההפקדה, והשלב שביניהם — שטר
+    // שיצא לחתימה וטרם חזר — לא היה נראה כאן כלל.
+    .select(`id, amount, approved_amount, installments, purpose, status, note_sent_at, note_sent_by, disbursed_at, disbursed_by, created_at, beneficiary:beneficiaries(${benFields})`)
     // 🔴 טיוטות שממתינות לטופס אישור רב אינן בקשות שהוגשו, ולכן אינן
     // מוצגות כאן כלל. הן נוצרות ברגע שהמבקש מוריד את הטופס — לפני שהוא
     // החתים רב והחזיר אותו — וכניסתן לרשימה הייתה מציגה למזכיר תיקים

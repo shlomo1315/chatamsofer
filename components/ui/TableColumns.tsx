@@ -4,6 +4,7 @@ import { Columns3, Check } from 'lucide-react'
 import { useResizableColumns, type ResizableColumns } from './ResizableTable'
 import TableHeadMenu, { ActiveFilters } from './TableHeadMenu'
 import { sortRows, filterRows, distinctValues, type ColKind, type SortDir, type DistinctValue } from '@/lib/tableSort'
+import { mergeSavedVisibility, toSavedVisibility, type SavedVisibility } from '@/lib/tableColumnVisibility'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // בורר עמודות + גרירת רוחב — hook מערכתי אחד לכל טבלאות המערכת.
@@ -193,13 +194,26 @@ export function useTableColumns<K extends string, R = never>(
     try {
       const raw = localStorage.getItem(VIS_PREFIX + tableId)
       if (!raw) return
-      const keys = JSON.parse(raw)
-      if (Array.isArray(keys)) setVisible(new Set(keys as K[]))
+      const parsed = JSON.parse(raw)
+      // 🔴 ממוזג ולא נדרס: בחירה שמורה אינה מכירה עמודה שנוספה לקוד
+      // אחריה, והשמה ישירה הייתה מסתירה כל עמודה חדשה מכל מי שאי פעם
+      // נגע בבורר — כלומר מהמשתמשים הוותיקים דווקא. ראו lib/tableColumnVisibility.
+      if (Array.isArray(parsed) || (parsed && typeof parsed === 'object')) {
+        setVisible(mergeSavedVisibility(columns, parsed as SavedVisibility))
+      }
     } catch { /* אחסון חסום — ברירות המחדל */ }
+    // ⚠️ columns אינו בתלויות בכוונה: הוא מערך חדש בכל רינדור, וכל שינוי
+    // בו היה טוען מחדש מהאחסון ומבטל בחירה שהמשתמש הרגע עשה.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableId])
 
   const persist = useCallback((next: Set<K>) => {
-    try { localStorage.setItem(VIS_PREFIX + tableId, JSON.stringify([...next])) } catch { /* ignore */ }
+    // ⚠️ נשמרים גם המפתחות הקיימים כעת (known) — בלעדיהם אי אפשר להבחין
+    // בטעינה הבאה בין עמודה שהמשתמש הסתיר לבין עמודה שנוספה מאז.
+    try {
+      localStorage.setItem(VIS_PREFIX + tableId, JSON.stringify(toSavedVisibility(columns, next)))
+    } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableId])
 
   const shown = useMemo(

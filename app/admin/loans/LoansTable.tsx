@@ -58,7 +58,7 @@ const CARD_DEFS: CardDef[] = [
 // את השורה בלי מוצא. לכן extraCols: 1 והידיות מוסטות באחד.
 type ColKey =
   | 'borrower' | 'id_number' | 'approval_label' | 'amount' | 'approved_amount'
-  | 'installments' | 'purpose' | 'created_at' | 'disbursed' | 'status'
+  | 'installments' | 'purpose' | 'created_at' | 'note_sent' | 'disbursed' | 'status'
 
 // 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
 // React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
@@ -81,6 +81,11 @@ const COLUMNS: ColDef<ColKey, Loan>[] = [
   // ⚠️ ממוין לפי התאריך הגולמי ולא לפי התווית: תאריך מפורמט ממוין
   // אלפביתית ולא כרונולוגית.
   { key: 'created_at', label: 'תאריך הגשה', def: true, kind: 'date', value: l => l.created_at },
+  // ⚠️ שטר וביצוע הם שני שלבים ולא אחד — בדיוק כפי שפורטל הביצוע מציג
+  // אותם בשני כפתורים נפרדים. השטר יוצא לחתימה, ורק אחר כך מופקד הכסף;
+  // הפער ביניהם הוא עבודה פתוחה, ועמודה משותפת הייתה מסתירה אותו.
+  { key: 'note_sent', label: 'שטר', def: true, kind: 'enum', filterable: true,
+    value: l => l.note_sent_at ? 'נשלח שטר' : 'טרם נשלח' },
   { key: 'disbursed', label: 'ביצוע', def: true, kind: 'enum', filterable: true,
     value: l => l.disbursed_at ? 'בוצע' : 'טרם בוצע' },
   { key: 'status', label: 'סטטוס', def: true, kind: 'enum', filterable: true,
@@ -233,6 +238,24 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
         return <span className="text-slate-600">{loan.purpose ?? '—'}</span>
       case 'created_at':
         return <span className="ltr-num text-slate-500 text-xs">{fmtDate(loan.created_at)}</span>
+      case 'note_sent':
+        // ⚠️ כחול ולא ירוק — אותו צבע שהכפתור מקבל בפורטל הביצוע, ומבדיל
+        // במבט אחד בין "השטר יצא" (שלב ביניים) לבין "הכסף הופקד" (סיום).
+        return loan.note_sent_at ? (
+          <div className="flex flex-col gap-0.5">
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-sky-700">
+              <CheckCircle2 size={13} className="flex-shrink-0" />
+              נשלח שטר
+            </span>
+            <span className="text-[11px] text-slate-400 ltr-num">{fmtDate(loan.note_sent_at)}</span>
+            {loan.note_sent_by && <span className="text-[11px] text-slate-400">{loan.note_sent_by}</span>}
+          </div>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-xs text-slate-400">
+            <Minus size={13} />
+            טרם נשלח
+          </span>
+        )
       case 'disbursed':
         return loan.disbursed_at ? (
           <div className="flex flex-col gap-0.5">

@@ -259,6 +259,13 @@ export interface Loan {
   approved_by?: string
   start_date?: string
   end_date?: string
+  /**
+   * ⚠️ שני שלבים נפרדים, ולא אחד: note_sent_at = השטר נשלח לחתימה,
+   * disbursed_at = ההפקדה בוצעה בפועל. שניהם נקבעים בפורטל הביצוע,
+   * בשני כפתורים שונים, והפער ביניהם הוא עבודה שממתינה.
+   */
+  note_sent_at?: string | null
+  note_sent_by?: string | null
   disbursed_at?: string | null
   disbursed_by?: string | null
   /** טופס אישור הרב החתום, כפי שצורף בהגשה. */
