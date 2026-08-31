@@ -136,7 +136,14 @@ export default function UnloadsPanel() {
               נראה כמו הסכום המלא בעוד הוא חלקי. */}
           <Stat icon={<Wallet size={16} />} label="כסף שחזר לארנק"
             value={ils(summary.moneyReleased)}
-            note={summary.unknownAmount > 0 ? `${summary.unknownAmount} ללא סכום שמור` : undefined}
+            // ⚠️ שתי סיבות שונות ל-0, ואסור שייראו זהות:
+            //   · פריקות בלי נתון שמור  → הסכום האמיתי אינו ידוע
+            //   · כל הכרטיסים נוצלו      → 0 הוא התשובה הנכונה
+            note={summary.unknownAmount > 0
+              ? `${summary.unknownAmount} מתוך ${summary.total} עדיין בלי סכום שמור`
+              : summary.moneyReleased === 0 && summary.total > 0
+                ? 'כל הכרטיסים נוצלו במלואם'
+                : undefined}
             color="text-indigo-700" bg="bg-indigo-50" border="border-indigo-100" />
           {/* 🔴 ההבחנה החשובה: כרטיס ש"נוצל במלואו" אינו כשל — המשפחה
               השתמשה בכסף, ואין מה לפרוק. */}
@@ -150,12 +157,20 @@ export default function UnloadsPanel() {
       {/* ⚠️ מוצג רק כשיש פריקות בלי סכום שמור — אחרת הוא רעש. */}
       {summary && summary.unknownAmount > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
-          <div className="text-xs text-amber-900">
-            <strong>{summary.unknownAmount} פריקות</strong> בוצעו לפני שהמערכת שמרה את הסכום שחזר.
-            {backfill && (
-              <span className="mr-1">
-                נמצאו בנדרים {backfill.found} · סה״כ {ils(backfill.sum)}
-                {backfill.missing > 0 && ` · ${backfill.missing} לא נמצאו`}
+          {/* ⚠️ הניסוח הקודם ("נמצאו בנדרים 12 · עדכן 12 רשומות") לא אמר
+              מה עומד לקרות, ו"סה״כ 0₪" נראה כתקלה במקום כנתון. */}
+          <div className="text-xs leading-relaxed text-amber-900">
+            <strong>{summary.unknownAmount} פריקות</strong> בוצעו לפני שהמערכת התחילה לשמור
+            כמה כסף חזר לארנק — ולכן הן אינן נספרות בסכום שלמעלה.
+            {backfill ? (
+              <span className="mt-1 block">
+                בנדרים נמצאו <strong>{backfill.found}</strong> מהן, בסך הכל <strong>{ils(backfill.sum)}</strong>
+                {backfill.sum === 0 && ' (כלומר הכרטיסים נוצלו במלואם)'}
+                {backfill.missing > 0 && ` · ${backfill.missing} לא נמצאו בנדרים ויישארו בלי נתון`}.
+              </span>
+            ) : (
+              <span className="mt-1 block text-amber-800">
+                &quot;בדוק בנדרים&quot; שולף את הסכומים בלי לשנות דבר — העדכון נעשה רק בלחיצה נפרדת.
               </span>
             )}
           </div>
@@ -167,8 +182,9 @@ export default function UnloadsPanel() {
             </button>
             {backfill && backfill.found > 0 && (
               <button onClick={runBackfill} disabled={busy}
+                title="כותב את הסכומים שנמצאו לרשומות במערכת"
                 className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-600 disabled:opacity-50 transition-colors">
-                עדכן {backfill.found} רשומות
+                שמור את {backfill.found} הסכומים
               </button>
             )}
           </div>
