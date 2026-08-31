@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { recoveryRange, shouldJumpMonth } from '@/lib/recoveryRange'
 import { ChevronRight, ChevronLeft, Check } from 'lucide-react'
 
 // לוח לסימון ימי השהייה בבית ההחלמה — קליל ומהיר.
@@ -63,8 +64,18 @@ export default function RecoveryDatePicker({ maxDays, from, to, onChange }: Prop
     // זכאות של 2 ימים = 2 תאים בסך הכל (הגעה + יום נוסף), לא 3.
     // יום העזיבה אינו נגזם ליום הנוכחי — הזכאות נמשכת קדימה גם אם טרם חלפה.
     const arrival = startOfDay(d)
-    const departure = new Date(arrival.getTime() + (maxDays - 1) * DAY_MS)
-    onChange(iso(arrival), iso(departure))
+    const { from, to } = recoveryRange(iso(arrival), maxDays)
+    onChange(from, to)
+
+    // 🔴 קפיצה לחודש שבו יום היציאה נמצא.
+    //
+    // ⚠️ ביום האחרון של החודש, היציאה נופלת בחודש הבא — והלוח נשאר על
+    // החודש הנוכחי. היולדת רואה תא אחד מסומן ומניחה שהסימון נכשל,
+    // בזמן שהטווח נשמר נכון.
+    if (shouldJumpMonth(to, viewMonth)) {
+      const [y, m] = to.split('-').map(Number)
+      setViewMonth(new Date(y, m - 1, 1))
+    }
   }
 
   // היום המרוחק ביותר שאפשר להגיע אליו בסימון — הגעה היום + מלוא הזכאות.

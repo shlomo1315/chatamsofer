@@ -1,4 +1,5 @@
 'use client'
+import { docKeysToHebrew } from '@/lib/docKeysHebrew'
 import { MessageSquare, XCircle, FileWarning, Search, AlertTriangle, Clock } from 'lucide-react'
 import BeneficiaryNotesChat from './BeneficiaryNotesChat'
 
@@ -79,7 +80,10 @@ export default function InquiryPanel({ beneficiaryId, state }: {
                 tone="blue"
                 icon={<FileWarning size={14} />}
                 title="מסמכים שנדרשו"
-                body={[requiredDocs?.trim(), docsNotes?.trim()].filter(Boolean).join('\n')}
+                // 🔴 תוויות בעברית ולא המפתחות הגולמיים: "id_husband,
+                // id_husband_appx,id_wife" אינו קריא למזכירה, והוא מה
+                // שהוצג כאן עד כה.
+                body={[docKeysToHebrew(requiredDocs), docsNotes?.trim()].filter(Boolean).join('\n')}
                 stale={!isDocsPending}
               />
             )}
