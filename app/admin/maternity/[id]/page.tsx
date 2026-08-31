@@ -21,6 +21,7 @@ import { recoveryDaysOf } from '@/lib/maternity'
 import { formatIsraeliId } from '@/lib/validation'
 import { getDocTypes } from '@/lib/serverDocTypes'
 import { docTypeLabel } from '@/lib/docTypes'
+import { pickLatestPerType } from '@/lib/maternityDocs'
 import { docViewUrl, docDownloadUrl, docDownloadName } from '@/lib/docUrl'
 import BackButton from '@/components/ui/BackButton'
 import ApprovalLabelTag from '@/components/ui/ApprovalLabelTag'
@@ -45,7 +46,7 @@ import { format, differenceInCalendarDays } from 'date-fns'
 import { he } from 'date-fns/locale'
 import { registrationSourceLabel } from '@/lib/distributionSources'
 
-interface BeneficiaryDoc { doc_type: string; file_url: string | null; file_name: string | null }
+interface BeneficiaryDoc { doc_type: string; file_url: string | null; file_name: string | null; uploaded_at?: string | null }
 
 async function getAid(id: string): Promise<MaternityAid | null> {
   if (!isSupabaseConfigured()) return null
@@ -170,16 +171,19 @@ async function getAdjacentAids(currentId: string, createdAt: string | null, buck
 async function getBeneficiaryDocs(beneficiaryId: string): Promise<BeneficiaryDoc[]> {
   if (!isSupabaseConfigured()) return []
   const supabase = await createClient()
+  // 🔴 בלי סינון לפי סוג.
+  //
+  // ⚠️ קודם נשלפו כאן ארבעה סוגים בלבד (ת"ז וספחים של הבעל והאישה),
+  // ולכן "מסמך אחר", ת"ז ילד וכל סוג שנוסף מההגדרות לא הופיעו כלל
+  // בכרטסת היולדת — למרות שהם קיימים ומוצגים בכרטסת הצאצא. ההפרש
+  // נראה כאילו המשפחה לא העלתה מסמך, בזמן שהוא היה שם כל הזמן.
   const { data } = await supabase
     .from('documents')
-    .select('doc_type, file_url, file_name')
+    .select('doc_type, file_url, file_name, uploaded_at')
     .eq('beneficiary_id', beneficiaryId)
-    .in('doc_type', ['id_husband', 'id_husband_appx', 'id_wife', 'id_wife_appx'])
     .order('uploaded_at', { ascending: false })
   if (!data) return []
-  // מחזיר doc אחד לכל סוג (הכי חדש)
-  const seen = new Set<string>()
-  return data.filter(d => { if (seen.has(d.doc_type)) return false; seen.add(d.doc_type); return true })
+  return pickLatestPerType(data)
 }
 
 // מטמון קצר-מועד למפת צמתי השושלת — נמנע מסריקת כל הטבלה בכל טעינת כרטסת.
