@@ -437,6 +437,40 @@ export default function IvrBuilder() {
                     )}
                   </div>
 
+                  {/* ── הגדרות ההקשה ──
+                      🔴 היו קבועות בקוד (10 שניות בתפריט, 15 בקליטה).
+                      ⚠️ מבוגר שמקיש לאט לא הספיק, והשיחה המשיכה בלי
+                      שהקיש — מבחינתו המערכת התעלמה ממנו. */}
+                  {(node.type === 'menu' || node.type === 'input') && (
+                    <div className="grid gap-2.5 sm:grid-cols-2">
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs font-semibold text-slate-600">שניות המתנה להקשה</span>
+                        <input type="number" min={3} max={60} dir="ltr"
+                          value={node.waitSeconds ?? ''}
+                          placeholder={node.type === 'menu' ? '10' : '15'}
+                          onChange={e => patch(node.id, {
+                            waitSeconds: e.target.value ? Number(e.target.value) : undefined,
+                          })}
+                          className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
+                        <span className="text-[11px] text-slate-500">
+                          ריק = ברירת המחדל. למבוגרים כדאי 20 ומעלה.
+                        </span>
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs font-semibold text-slate-600">חזרות על ההודעה</span>
+                        <input type="number" min={1} max={5} dir="ltr"
+                          value={node.repeats ?? ''} placeholder="1"
+                          onChange={e => patch(node.id, {
+                            repeats: e.target.value ? Number(e.target.value) : undefined,
+                          })}
+                          className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
+                        <span className="text-[11px] text-slate-500">
+                          כמה פעמים תושמע ההודעה כשאין הקשה.
+                        </span>
+                      </label>
+                    </div>
+                  )}
+
                   {/* שדות לפי סוג */}
                   {node.type === 'transfer' && (
                     <label className="flex flex-col gap-1">

@@ -94,6 +94,20 @@ export interface IvrNodeDef {
   invalid?: IvrAudio
   /** כבוי = השלוחה קיימת אך אינה פעילה; המקש אליה מדלג. */
   enabled?: boolean
+  /**
+   * שניות המתנה להקשה. ריק = ברירת המחדל (10 בתפריט, 15 בקליטה).
+   *
+   * ⚠️ היה קבוע בקוד. מבוגר שמקיש לאט לא הספיק, והשיחה עברה הלאה
+   * בלי שהקיש — נראה לו כאילו המערכת התעלמה ממנו.
+   */
+  waitSeconds?: number
+  /**
+   * מספר הפעמים שההודעה חוזרת כשאין הקשה.
+   *
+   * ⚠️ ברירת המחדל של ימות היא פעם אחת. מי שלא שמע בפעם הראשונה
+   * מנתק, ואיש אינו יודע שהוא ניסה.
+   */
+  repeats?: number
 }
 
 /** המערכת כולה. */
@@ -354,6 +368,15 @@ export function normalizeIvr(raw: unknown): IvrConfig {
         : undefined,
       folder: n.folder ?? undefined,
       phone: n.phone ?? undefined,
+      // 🔴 כל שדה חייב להופיע כאן. normalizeIvr הוא שער, ומה שאינו
+      // מוזכר בו נמחק בשמירה **בשקט** — המנהל מגדיר, שומר, וההגדרה
+      // פשוט איננה. maxDigits נפל בדיוק כך.
+      //
+      // ⚠️ 0/שלילי → undefined ולא נשמרים: אפס ספרות ואפס שניות הם
+      // הגדרות בלתי אפשריות שהיו שוברות את השלוחה.
+      maxDigits: Number(n.maxDigits) > 0 ? Number(n.maxDigits) : undefined,
+      waitSeconds: Number(n.waitSeconds) > 0 ? Number(n.waitSeconds) : undefined,
+      repeats: Number(n.repeats) > 1 ? Number(n.repeats) : undefined,
       invalid: n.invalid
         ? { text: String(n.invalid.text ?? ''), file: n.invalid.file ?? null }
         : undefined,

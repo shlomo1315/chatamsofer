@@ -297,3 +297,38 @@ describe('🔴 כיסוי סוגי השלוחות', () => {
     expect(Object.keys(NODE_TYPE_LABEL).sort()).toEqual(Object.keys(NODE_TYPE_HINT).sort())
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 normalizeIvr הוא שער: שדה שאינו מוזכר בו נמחק בשמירה **בשקט**.
+//
+// ⚠️ maxDigits נפל בדיוק כך — הוגדר במודל, נשלח מהמסך, ונעלם בשמירה.
+// המנהל מגדיר 9 ספרות, שומר, וההגדרה איננה. שום שגיאה.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('🔴 normalizeIvr שומר את כל שדות ההגדרה', () => {
+  const withOpts = (extra: Partial<IvrNodeDef>): IvrConfig => ({
+    version: 1, rootId: 'r',
+    nodes: [{ id: 'r', name: 'קליטה', type: 'input', prompt: { text: 'הקישו' }, ...extra }],
+  })
+
+  it('maxDigits שורד שמירה', () => {
+    expect(normalizeIvr(withOpts({ maxDigits: 9 })).nodes[0].maxDigits).toBe(9)
+  })
+
+  it('waitSeconds שורד שמירה', () => {
+    expect(normalizeIvr(withOpts({ waitSeconds: 25 })).nodes[0].waitSeconds).toBe(25)
+  })
+
+  it('repeats שורד שמירה', () => {
+    expect(normalizeIvr(withOpts({ repeats: 3 })).nodes[0].repeats).toBe(3)
+  })
+
+  it('⚠️ 0 אינו נשמר — אפס ספרות/שניות הוא הגדרה בלתי אפשרית', () => {
+    const n = normalizeIvr(withOpts({ maxDigits: 0, waitSeconds: 0 })).nodes[0]
+    expect(n.maxDigits).toBeUndefined()
+    expect(n.waitSeconds).toBeUndefined()
+  })
+
+  it('⚠️ repeats=1 אינו נשמר — זו ברירת המחדל ממילא', () => {
+    expect(normalizeIvr(withOpts({ repeats: 1 })).nodes[0].repeats).toBeUndefined()
+  })
+})

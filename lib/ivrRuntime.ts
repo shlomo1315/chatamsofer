@@ -44,11 +44,36 @@ export interface IvrStepResult {
 }
 
 /** בונה בקשת הקשה עבור תפריט. */
+/**
+ * שניות ההמתנה להקשה.
+ *
+ * ⚠️ היה קבוע ב-10. מבוגר שמקיש לאט לא הספיק, והשיחה המשיכה בלי
+ * שהקיש — מבחינתו המערכת התעלמה ממנו. עכשיו ניתן להגדרה לכל שלוחה.
+ *
+ * ⚠️ תחום 3..60: אפס היה מדלג על ההקשה לגמרי, וערך ענק משאיר את
+ * המתקשר תלוי על הקו.
+ */
+function waitOf(node: IvrNodeDef, fallback: number): number {
+  const n = Number(node.waitSeconds ?? 0)
+  if (!Number.isFinite(n) || n <= 0) return fallback
+  return Math.min(Math.max(Math.round(n), 3), 60)
+}
+
+/** מספר החזרות על ההודעה כשאין הקשה. ⚠️ 1..5. */
+function repeatsOf(node: IvrNodeDef): string {
+  const n = Number(node.repeats ?? 0)
+  if (!Number.isFinite(n) || n <= 1) return ''
+  return String(Math.min(Math.round(n), 5))
+}
+
 function readMenu(node: IvrNodeDef, prompt: string): string {
   const digits = (node.keys ?? []).map(k => k.digit).join('.')
   // ⚠️ re_enter='yes' הוא מה שמונע לולאה: ימות מבקשת הקשה חדשה במקום
   // לשלוח שוב את הערך הקודם.
-  const ops = [DIGIT_PARAM, 'yes', '1', '1', '10', 'No', 'no', 'no', '', digits, '', '', '', '']
+  const ops = [
+    DIGIT_PARAM, 'yes', '1', '1', String(waitOf(node, 10)),
+    'No', 'no', 'no', '', digits, repeatsOf(node), '', '', '',
+  ]
   return `read=${prompt}=${ops.join(',')}`
 }
 
@@ -137,7 +162,10 @@ function enterNode(
       // ⚠️ אורך מרבי נגזר מההגדרה. בלעדיו ימות ממתינה עד תום הזמן
       // גם אחרי שהמתקשר סיים להקיש, והשיחה נראית תקועה.
       const max = Number(node.maxDigits ?? 0)
-      const ops = ['ivrInput', 'yes', max > 0 ? String(max) : '', '1', '15', 'No', 'no', 'no', '', '', '', '', '', '']
+      const ops = [
+        'ivrInput', 'yes', max > 0 ? String(max) : '', '1', String(waitOf(node, 15)),
+        'No', 'no', 'no', '', '', repeatsOf(node), '', '', '',
+      ]
       return { commands: [`read=${prompt || tToken('נא להקיש את המספר')}=${ops.join(',')}`] }
     }
 
