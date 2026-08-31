@@ -138,6 +138,14 @@ export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { b
   //
   // ⚠️ groupDocsByType ממיין לפי מועד ההעלאה, כדי שהצד הקדמי יהיה (1/2).
   const groups = groupDocsByType(docs)
+  // 🔴 גלריה לכל סוג: לחיצה על צד אחד של ת"ז פותחת חלונית שאפשר
+  // לעבור בה לצד השני — במקום לסגור ולפתוח כרטיס אחר.
+  const galleryOf: Record<string, { url: string; name: string | null }[]> = {}
+  for (const g of groups) {
+    galleryOf[g.doc_type] = g.files
+      .map(f => ({ url: String(f.file_url ?? ''), name: f.file_name }))
+      .filter(x => x.url)
+  }
   const typeCounts: Record<string, number> = {}
   const docIndex: Record<string, number> = {}
   for (const g of groups) {
@@ -207,7 +215,7 @@ export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { b
                   (נטפרי חוסם PDF ב-iframe/viewer ומציג NETFREE); במקום זה אייקון
                   ופתיחה בכרטיסייה חדשה = ניווט מלא לדומיין שלנו, שנטפרי לא חוסם. */}
               {doc.file_url && isImage(doc.file_name) ? (
-                <ViewDocButton url={doc.file_url} className="block">
+                <ViewDocButton url={doc.file_url} className="block" gallery={galleryOf[doc.doc_type]} index={(docIndex[doc.id] ?? 1) - 1}>
                   <SafeDocImage path={doc.file_url} name={doc.file_name} className="w-full h-28 object-cover" />
                 </ViewDocButton>
               ) : doc.file_url && isPdf(doc.file_name) ? (
@@ -217,14 +225,14 @@ export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { b
                 // PdfCanvasView, שמצייר את העמודים בעצמו על canvas ולכן
                 // נטפרי אינה חוסמת אותו. פתיחה בכרטיסייה הוציאה את
                 // המזכירה מהכרטסת בכל מסמך.
-                <ViewDocButton url={doc.file_url} className="block">
+                <ViewDocButton url={doc.file_url} className="block" gallery={galleryOf[doc.doc_type]} index={(docIndex[doc.id] ?? 1) - 1}>
                   <div className="w-full h-28 overflow-hidden bg-slate-50">
                     <PdfCanvasView url={doc.file_url} name={doc.file_name}
                       maxPages={1} cover className="w-full h-full" />
                   </div>
                 </ViewDocButton>
               ) : (
-                <ViewDocButton url={doc.file_url} className="block">
+                <ViewDocButton url={doc.file_url} className="block" gallery={galleryOf[doc.doc_type]} index={(docIndex[doc.id] ?? 1) - 1}>
                   <div className="w-full h-28 flex items-center justify-center bg-slate-50 text-slate-300">
                     {isImage(doc.file_name) ? <ImageIcon size={28} /> : <FileText size={28} />}
                   </div>

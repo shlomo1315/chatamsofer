@@ -147,6 +147,13 @@ export default function PdfCanvasView({
 
         // רוחב התצוגה — מצייר ברזולוציה כפולה כדי שיישאר חד גם במסכי Retina
         const cssWidth = Math.min(host.clientWidth || 800, 1000)
+        // 🔴 במצב cover הקנבס *נמתח* למילוי המסגרת (object-fit: cover),
+        // ולכן ציור לפי רוחב המסגרת בלבד יוצא מטושטש — במיוחד בכרטיס
+        // קטן (~180px) שמוצג על פני מסגרת גבוהה יותר.
+        //
+        // ⚠️ רצפה של 640px ולא הכפלה חסרת גבול: מסמך סרוק גדול היה
+        // מצויר בעשרות מגה-פיקסלים ומקפיא את הדפדפן על כרטסת עם 6 קבצים.
+        const drawWidth = cover ? Math.max(cssWidth, 640) : cssWidth
         const scaleFactor = Math.min(window.devicePixelRatio || 1, 2)
 
         const lastPage = maxPages ? Math.min(maxPages, doc.numPages) : doc.numPages
@@ -154,7 +161,7 @@ export default function PdfCanvasView({
           if (!alive) return
           const page = await doc.getPage(n)
           const base = page.getViewport({ scale: 1 })
-          const viewport = page.getViewport({ scale: (cssWidth / base.width) * scaleFactor })
+          const viewport = page.getViewport({ scale: (drawWidth / base.width) * scaleFactor })
 
           const canvas = document.createElement('canvas')
           canvas.width = viewport.width
@@ -163,6 +170,12 @@ export default function PdfCanvasView({
           canvas.style.height = cover ? '100%' : 'auto'
           if (cover) canvas.style.objectFit = 'cover'
           canvas.style.display = 'block'
+          // 🔴 במצב cover התצוגה יושבת *בתוך* כפתור פתיחה, והקנבס בלע
+          // את הלחיצה — הכרטיס נראה לחיץ ולא הגיב כלל.
+          //
+          // ⚠️ רק ב-cover: בתצוגה מלאה המשתמש בוחר טקסט ומגלגל על
+          // הקנבס עצמו, ושם ביטול האירועים היה מזיק.
+          if (cover) canvas.style.pointerEvents = 'none'
           if (!cover) { canvas.style.marginBottom = '12px'; canvas.style.borderRadius = '8px' }
           canvas.style.background = '#fff'
           const ctx = canvas.getContext('2d')

@@ -21,7 +21,7 @@ import { recoveryDaysOf } from '@/lib/maternity'
 import { formatIsraeliId } from '@/lib/validation'
 import { getDocTypes } from '@/lib/serverDocTypes'
 import { docTypeLabel } from '@/lib/docTypes'
-import { pickLatestPerType } from '@/lib/maternityDocs'
+import { groupDocsByType } from '@/lib/groupDocsByType'
 import { docViewUrl, docDownloadUrl, docDownloadName } from '@/lib/docUrl'
 import BackButton from '@/components/ui/BackButton'
 import ApprovalLabelTag from '@/components/ui/ApprovalLabelTag'
@@ -183,7 +183,12 @@ async function getBeneficiaryDocs(beneficiaryId: string): Promise<BeneficiaryDoc
     .eq('beneficiary_id', beneficiaryId)
     .order('uploaded_at', { ascending: false })
   if (!data) return []
-  return pickLatestPerType(data)
+  // 🔴 *כל* הקבצים ולא החדש מכל סוג.
+  //
+  // ⚠️ pickLatestPerType הסתיר את הצד השני של ת"ז דו-צדדית: המשפחה
+  // מעלה שני קבצים תחת id_wife (appendMode), והכרטסת הציגה אחד בלבד —
+  // בלי שום סימן שיש עוד. הקיבוץ נעשה בתצוגה, עם מונה.
+  return data
 }
 
 // מטמון קצר-מועד למפת צמתי השושלת — נמנע מסריקת כל הטבלה בכל טעינת כרטסת.
@@ -525,19 +530,20 @@ export default async function MaternityDetailPage(
                     <span className="text-xs font-semibold text-slate-500 uppercase">מסמכים</span>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
-                    {idDocs.find(d => d.doc_type === 'id_husband') && (
-                      <DocCard label="ת.ז. הבעל" person={motherName} url={idDocs.find(d => d.doc_type === 'id_husband')!.file_url ?? undefined} />
-                    )}
-                    {/* ספח ת"ז הבעל — קובץ נפרד ליד תעודת הזהות עצמה */}
-                    {idDocs.find(d => d.doc_type === 'id_husband_appx') && (
-                      <DocCard label="ספח ת.ז. הבעל" person={motherName} url={idDocs.find(d => d.doc_type === 'id_husband_appx')!.file_url ?? undefined} />
-                    )}
-                    {idDocs.find(d => d.doc_type === 'id_wife') && (
-                      <DocCard label="ת.ז. האישה" person={motherName} url={idDocs.find(d => d.doc_type === 'id_wife')!.file_url ?? undefined} />
-                    )}
-                    {/* ספח ת"ז האישה — קובץ נפרד ליד תעודת הזהות עצמה */}
-                    {idDocs.find(d => d.doc_type === 'id_wife_appx') && (
-                      <DocCard label="ספח ת.ז. האישה" person={motherName} url={idDocs.find(d => d.doc_type === 'id_wife_appx')!.file_url ?? undefined} />
+                    {/* 🔴 לולאה על כל המסמכים ולא ארבע בדיקות קשיחות.
+                        ⚠️ הרשימה הקשיחה הסתירה כל סוג אחר ("מסמך אחר",
+                        ת"ז ילד, סוג שנוסף מההגדרות), וגם את הצד השני של
+                        ת"ז דו-צדדית. המונה (1/2) אומר שזה מכוון. */}
+                    {groupDocsByType(idDocs).map(g =>
+                      g.files.map((f, i) => (
+                        <DocCard
+                          key={`${g.doc_type}-${i}`}
+                          label={g.files.length > 1
+                            ? `${docTypeLabel(g.doc_type, docTypeList)} (${i + 1}/${g.files.length})`
+                            : docTypeLabel(g.doc_type, docTypeList)}
+                          person={motherName}
+                          url={f.file_url ?? undefined} />
+                      )),
                     )}
                     {aid.birth_certificate_url && (
                       <DocCard label="אישור לידה" person={motherName} url={aid.birth_certificate_url} />
