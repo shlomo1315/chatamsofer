@@ -329,6 +329,45 @@ export default function HolidayRegistrations({
 
   // אישור / דחייה — לשורה בודדת או לכל המסומנות. אותה קריאה בשני המקרים, כדי
   // שלא יהיו שני מסלולי עדכון שיכולים להיפרד זה מזה.
+  // ── אישור המוני של כל הממתינים ──
+  //
+  // 🔴 6,047 שורות ממתינות, וסימון ידני של כולן אינו מעשי. בלי כלי
+  // כזה אף אחד לא יאושר, ולכן גם אף כרטיס לא ייטען.
+  //
+  // ⚠️ שני שלבים כמו בטעינה: בדיקה שמציגה מי ייכלל, ואז אישור מפורש.
+  // ההיקף מגיע מהשרת ולא מחושב כאן — הוא הקובע.
+  const [approveScope, setApproveScope] = useState<{
+    eligible: number; total: number
+    skipped: { alreadyDecided: number; noId: number; duplicateId: number }
+  } | null>(null)
+  const [approveBusy, setApproveBusy] = useState(false)
+
+  const checkBulkApprove = async () => {
+    setApproveBusy(true)
+    try {
+      const r = await fetch(`/api/admin/distributions/${distributionId}/bulk-approve`, { cache: 'no-store' })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { toast.error(d.error ?? 'הבדיקה נכשלה'); return }
+      setApproveScope(d)
+    } catch { toast.error('שגיאת רשת') } finally { setApproveBusy(false) }
+  }
+
+  const runBulkApprove = async () => {
+    if (!approveScope) return
+    setApproveBusy(true)
+    try {
+      const r = await fetch(`/api/admin/distributions/${distributionId}/bulk-approve`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: true }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { toast.error(d.error ?? 'האישור נכשל'); return }
+      toast.success(`${(d.approved ?? 0).toLocaleString('he-IL')} משפחות אושרו`)
+      setApproveScope(null)
+      router.refresh()
+    } catch { toast.error('שגיאת רשת') } finally { setApproveBusy(false) }
+  }
+
   const setApprovalFor = async (ids: string[], status: ApprovalStatus) => {
     if (!ids.length) return
     setBusyId(ids.length === 1 ? ids[0] : 'bulk')
@@ -737,6 +776,61 @@ export default function HolidayRegistrations({
       </div>
 
       {/* ── פעולה מרוכזת על המסומנים ── */}
+      {/* ── אישור כל הממתינים ──
+          🔴 מוצג רק כשיש ממתינים ואין סימון: כשסומנו שורות, הכפתורים
+          בסרגל הסימון הם הפעולה הנכונה, ושני מסלולים על המסך בו-זמנית
+          מזמינים לחיצה על הלא-נכון. */}
+      {canEdit && selected.size === 0 && (
+        <div className="flex flex-col gap-2.5 rounded-2xl border border-slate-200 bg-white p-4">
+          <div>
+            <h3 className="text-[13px] font-extrabold text-slate-800">אישור כל הממתינים</h3>
+            <p className="mt-0.5 text-[11.5px] leading-relaxed text-slate-500">
+              🔴 אישור פותח את בחירת המוקד ואת הטעינה.
+              <strong className="text-slate-700"> מי שכבר אושר או נדחה — לא ייגע.</strong>
+            </p>
+          </div>
+
+          {approveScope ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
+              <p className="text-sm font-bold text-emerald-900">
+                יאושרו {approveScope.eligible.toLocaleString('he-IL')} משפחות
+              </p>
+              {/* ⚠️ מפרט מי לא ייכלל — אחרת ההפרש נראה כתקלה. */}
+              <ul className="mt-1 flex flex-col gap-0.5 text-[11px] text-slate-600">
+                {approveScope.skipped.alreadyDecided > 0 && (
+                  <li>· {approveScope.skipped.alreadyDecided.toLocaleString('he-IL')} כבר הוכרעו ולא ייגעו</li>
+                )}
+                {approveScope.skipped.noId > 0 && (
+                  <li className="text-amber-700">· {approveScope.skipped.noId.toLocaleString('he-IL')} בלי ת״ז — לא יאושרו</li>
+                )}
+                {approveScope.skipped.duplicateId > 0 && (
+                  <li className="text-amber-700">· {approveScope.skipped.duplicateId.toLocaleString('he-IL')} כפילויות ת״ז</li>
+                )}
+              </ul>
+              {approveScope.eligible > 0 ? (
+                <div className="mt-2.5 flex items-center gap-2">
+                  <button type="button" disabled={approveBusy} onClick={() => void runBulkApprove()}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-extrabold text-white hover:bg-emerald-700 disabled:opacity-40">
+                    {approveBusy ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                    כן, אשר {approveScope.eligible.toLocaleString('he-IL')}
+                  </button>
+                  <button type="button" onClick={() => setApproveScope(null)}
+                    className="text-xs font-bold text-slate-500 hover:text-slate-700">ביטול</button>
+                </div>
+              ) : (
+                <p className="mt-2 text-xs font-semibold text-slate-500">אין מי לאשר</p>
+              )}
+            </div>
+          ) : (
+            <button type="button" disabled={approveBusy} onClick={() => void checkBulkApprove()}
+              className="inline-flex w-fit items-center gap-1.5 rounded-xl border border-emerald-300 bg-white px-3.5 py-2 text-xs font-bold text-emerald-800 hover:bg-emerald-50 disabled:opacity-40">
+              {approveBusy ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+              בדיקה לפני אישור
+            </button>
+          )}
+        </div>
+      )}
+
       {canEdit && selected.size > 0 && (
         <div className="flex items-center gap-3 flex-wrap rounded-2xl border-2 border-indigo-200 bg-indigo-50 px-4 py-3">
           <span className="text-[13px] font-bold text-indigo-900">{/* ⚠️ הסימון חוצה עמודים: "סימון הכל" מסמן את כל התוצאות המסוננות, לא רק את השורות שבעמוד הנוכחי. בלי לומר זאת, מונה של 800 מול 50 שורות על המסך נראה כתקלה. */}
