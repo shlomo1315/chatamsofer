@@ -12,6 +12,7 @@ import { ViewDocButton } from '@/components/ui/DocViewer'
 import DocThumb from '@/components/ui/DocThumb'
 import SafeDocImage from '@/components/ui/SafeDocImage'
 import PdfCanvasView from '@/components/ui/PdfCanvasView'
+import { groupDocsByType } from '@/lib/groupDocsByType'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import Card from '@/components/ui/Card'
 import PriorRejectionAlert from './PriorRejectionAlert'
@@ -124,8 +125,22 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
   const ID_ORDER = ['id_husband', 'id_wife', 'id_husband_appx', 'id_wife_appx']
   const byIdOrder = (a: { doc_type: string }, b: { doc_type: string }) =>
     ID_ORDER.indexOf(a.doc_type) - ID_ORDER.indexOf(b.doc_type)
-  const idPrimary = idDocs.filter(d => !d.doc_type.endsWith('_appx')).sort(byIdOrder)
-  const idAppendix = idDocs.filter(d => d.doc_type.endsWith('_appx')).sort(byIdOrder)
+  // 🔴 כרטיס אחד לכל *סוג* מסמך, לא לכל קובץ.
+  //
+  // ⚠️ ת"ז דו-צדדית מועלית כשני קבצים באותו doc_type, והצגתם כשני
+  // כרטיסים נראית ככפילות. אותו כלל בדיוק חל בכרטסת המוטב ובלידות —
+  // המשתמש ביקש במפורש שהתצוגה תהיה זהה בכל המסכים.
+  //
+  // ⚠️ הקבצים אינם ממוזגים פיזית: מיזוג PDF נכשל על סריקה חריגה
+  // ומאבד את המסמך. הכרטיס מציג את הראשון, והגלריה נותנת את השאר.
+  const firstOfType = <T extends { doc_type: string; file_url: string | null; file_name: string | null }>(rows: T[]): T[] =>
+    groupDocsByType(rows).map(g => g.files[0] as T)
+
+  const idPrimary = firstOfType(idDocs.filter(d => !d.doc_type.endsWith('_appx')).sort(byIdOrder))
+  const idAppendix = firstOfType(idDocs.filter(d => d.doc_type.endsWith('_appx')).sort(byIdOrder))
+  // מספר הקבצים בכל סוג — לתווית "N עמודים".
+  const pagesOfType: Record<string, number> = {}
+  for (const g of groupDocsByType(idDocs)) pagesOfType[g.doc_type] = g.files.length
   // ⚠️ מסמכים שאינם ת"ז — טופס אישור רב, אישורים, כל השאר. עד כה סוננו.
   //
   // 🔴 רשימת *חסימה* צרה ולא רשימת היתר: בדיוק כאן ישבה קודם רשימה קשיחה
@@ -399,12 +414,14 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
                       <LoanDocCard key={`id-${i}`} label={ID_LABELS[d.doc_type] ?? d.doc_type}
                         person={borrower} url={d.file_url ?? undefined}
                         gallery={docGallery} index={idIndexOf(d)}
+                        pages={pagesOfType[d.doc_type] ?? 1}
                         className="flex-[2] min-w-[180px]" imgClass="h-64" />
                     ))}
                     {idAppendix.map((d, i) => (
                       <LoanDocCard key={`ax-${i}`} label={ID_LABELS[d.doc_type] ?? d.doc_type}
                         person={borrower} url={d.file_url ?? undefined}
                         gallery={docGallery} index={idIndexOf(d)}
+                        pages={pagesOfType[d.doc_type] ?? 1}
                         className="flex-[1] min-w-[110px]" imgClass="h-64" />
                     ))}
                   </div>
@@ -466,7 +483,9 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
 
 // כרטיס מסמך זהות. `className` קובע את הרוחב היחסי בשורה (ת"ז מול ספח),
 // `imgClass` את הגובה — כדי שכל הכרטיסים יתיישרו לאותו קו בסיס.
-function LoanDocCard({ label, url, person, gallery, index, className = '', imgClass = 'h-72' }: {
+function LoanDocCard({ label, url, person, gallery, index, pages = 1, className = '', imgClass = 'h-72' }: {
+  /** מספר הקבצים באותו סוג — ת"ז דו-צדדית = 2. */
+  pages?: number
   label: string; url?: string; person?: string
   gallery?: { url: string; name?: string | null }[]
   index?: number
@@ -493,7 +512,10 @@ function LoanDocCard({ label, url, person, gallery, index, className = '', imgCl
         </div>
       )}
       <span className="text-xs font-medium text-slate-600 group-hover:text-indigo-600 flex items-center justify-center gap-1 text-center">
-        <span className="truncate" title={label}>{label}</span> <ExternalLink size={11} className="flex-shrink-0" />
+        <span className="truncate" title={label}>{label}</span>
+        {/* ⚠️ "2 עמודים" — הכרטיס מייצג את המסמך כולו. */}
+        {pages > 1 && <span className="flex-shrink-0 text-indigo-500">· {pages} עמודים</span>}
+        <ExternalLink size={11} className="flex-shrink-0" />
       </span>
     </ViewDocButton>
       <DownloadDocButton url={url} docType={label} person={person} variant="button" className="justify-center" />

@@ -206,10 +206,12 @@ export default function PdfCanvasView({
   const current = state.key === url ? state : { pages: 0, error: '', loading: true }
 
   return (
-    <div className={className}>
+    // ⚠️ relative רק ב-cover: הוא מה שמאפשר לשכבות לשבת זו על זו
+    // במקום להיערם. ראו ההערות על השכבות עצמן.
+    <div className={cover ? `relative ${className}` : className}>
       {current.loading && (
         cover
-          ? <div className="w-full h-full flex items-center justify-center bg-slate-50"><Loader2 size={18} className="animate-spin text-slate-300" /></div>
+          ? <div className="absolute inset-0 flex items-center justify-center bg-slate-50 pointer-events-none"><Loader2 size={18} className="animate-spin text-slate-300" /></div>
           : <div className="flex flex-col items-center justify-center gap-3 py-12 text-slate-500">
               <Loader2 size={28} className="animate-spin text-indigo-500" />
               <p className="text-sm">טוען את המסמך...</p>
@@ -217,7 +219,7 @@ export default function PdfCanvasView({
       )}
       {current.error && (
         cover
-          ? <div className="w-full h-full flex flex-col items-center justify-center gap-1 bg-rose-50/50 text-rose-400">
+          ? <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-rose-50/50 text-rose-400 pointer-events-none">
               <FileText size={22} /><span className="text-[10px] font-medium">PDF</span>
             </div>
           : <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
@@ -226,7 +228,12 @@ export default function PdfCanvasView({
               <p className="text-xs text-slate-400">{current.error}</p>
             </div>
       )}
-      <div ref={hostRef} className={cover ? 'w-full h-full overflow-hidden' : undefined} />
+      {/* 🔴 ב-cover כל התצוגה שקופה ללחיצות.
+          ⚠️ לא די בביטול על הקנבס: המכולה עצמה, וגם שכבות הטעינה
+          והשגיאה שמעליה, בלעו את הלחיצה. זו הסיבה שדווקא כרטיסי
+          ה-PDF לא נפתחו — בעוד התמונות לידם נפתחו כרגיל. */}
+      <div ref={hostRef}
+        className={cover ? 'w-full h-full overflow-hidden pointer-events-none' : undefined} />
       {!cover && !current.loading && !current.error && current.pages > 1 && (
         <p className="text-center text-xs text-slate-400 pb-2">{current.pages} עמודים</p>
       )}

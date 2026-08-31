@@ -1,6 +1,7 @@
 'use client'
 import { groupDocsByType } from '@/lib/groupDocsByType'
 import PdfCanvasView from '@/components/ui/PdfCanvasView'
+import { babyNameLabel } from '@/lib/babyNames'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Paperclip, Upload, Trash2, Loader2, FileText, ExternalLink, Image as ImageIcon, Download, AlertTriangle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -33,6 +34,24 @@ const formatUploaded = (raw?: string) => {
   } catch { return '' }
 }
 
+/**
+ * האם זה מסמך אישור לידה.
+ *
+ * ⚠️ בדיקה על שני המפתחים: המערכת השתמשה ב-birth_cert ובגרסאות
+ * ותיקות גם ב-birth_certificate, ובדיקה על אחד בלבד הייתה מפספסת
+ * בשקט את המסמכים הישנים.
+ */
+const isBirthDoc = (t?: string | null) => !!t && /^birth_cert/i.test(t)
+
+/** תאריך הלידה בלבד — בלי שעה, שאינה מעניינת כאן. */
+const formatBirth = (raw: string) => {
+  try {
+    return new Date(raw).toLocaleDateString('he-IL', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+    })
+  } catch { return '' }
+}
+
 const isImage = (name?: string | null) => !!name && /\.(png|jpe?g|gif|webp|bmp|heic)$/i.test(name)
 const isPdf = (name?: string | null) => !!name && /\.pdf$/i.test(name)
 
@@ -57,6 +76,14 @@ export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { b
   // אזהרת סתירה בין שם הקובץ לסוג שנבחר — מוצגת אחרי ההעלאה, לא חוסמת.
   const [mismatch, setMismatch] = useState('')
 
+  // 🔴 שם התינוק ותאריך הלידה, לתצוגה על כרטיס אישור הלידה.
+  //
+  // ⚠️ המסמכים אינם מקושרים לילד (אין child_id בטבלת documents), ולכן
+  // אי אפשר לדעת *לאיזה* ילד שייך אישור מסוים כשיש כמה. לכן מוצגים
+  // כל תיקי הלידה של המשפחה — "אישור לידה" בלי שם הוא בדיוק המצב
+  // שבו המזכירה נאלצת לפתוח את הקובץ כדי לדעת על מי מדובר.
+  const [births, setBirths] = useState<{ name: string; date: string | null }[]>([])
+
   const load = useCallback(async () => {
     setLoading(true)
     const { data, error } = await supabase
@@ -66,6 +93,29 @@ export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { b
       .order('uploaded_at', { ascending: false })
     if (!error) setDocs(data ?? [])
     setLoading(false)
+  }, [supabase, beneficiaryId])
+
+  // ⚠️ שליפה נפרדת ולא join: documents אינה מקושרת ל-maternity_aids
+  // בשום מפתח, והחיבור היחיד הוא המוטב עצמו.
+  useEffect(() => {
+    let alive = true
+    void (async () => {
+      const { data } = await supabase
+        .from('maternity_aids')
+        .select('baby_name, baby_name_pending, babies, birth_date')
+        .eq('beneficiary_id', beneficiaryId)
+        .order('birth_date', { ascending: false })
+      if (!alive || !data) return
+      setBirths(data.map(a => {
+        const label = babyNameLabel(a as Parameters<typeof babyNameLabel>[0])
+        return {
+          // ⚠️ "—" מוחלף בטקסט מפורש: מקף על כרטיס מסמך נראה כתקלה.
+          name: label.missing ? 'ללא שם' : label.text,
+          date: (a as { birth_date?: string | null }).birth_date ?? null,
+        }
+      }))
+    })()
+    return () => { alive = false }
   }, [supabase, beneficiaryId])
 
   useEffect(() => { load() }, [load])
@@ -209,8 +259,17 @@ export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { b
         <p className="text-sm text-slate-400 text-center py-4">אין קבצים מצורפים עדיין.</p>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {docs.map((doc) => (
-            <div key={doc.id} className="group relative border border-slate-200 rounded-xl overflow-hidden bg-white">
+          {/* 🔴 כרטיס אחד לכל *סוג* מסמך, לא לכל קובץ.
+              ⚠️ groupDocsByType כבר חושב למעלה אך שימש רק למונה, והרשימה
+              עצמה עברה על docs השטוח — ולכן שני צדדי ת"ז הוצגו כשני
+              כרטיסים נפרדים שנראו ככפילות.
+              ⚠️ הקבצים אינם ממוזגים פיזית: מיזוג PDF נכשל על סריקה
+              חריגה ומאבד את המסמך. זו תצוגה מאוחדת בלבד. */}
+          {groups.map((g) => {
+            const doc = g.files[0] as DocRow
+            const pages = g.files.length
+            return (
+            <div key={g.doc_type} className="group relative border border-slate-200 rounded-xl overflow-hidden bg-white">
               {/* תמונות — תצוגה מקדימה בלחיצה (מודל). PDF — לא מוטמע ב-iframe
                   (נטפרי חוסם PDF ב-iframe/viewer ומציג NETFREE); במקום זה אייקון
                   ופתיחה בכרטיסייה חדשה = ניווט מלא לדומיין שלנו, שנטפרי לא חוסם. */}
@@ -241,16 +300,27 @@ export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { b
               <div className="p-2">
                 <p className="text-[11px] font-medium text-indigo-700 bg-indigo-50 inline-block px-1.5 py-0.5 rounded">
                   {typeLabel(doc.doc_type)}
-                  {/* 🔴 מונה כשיש כמה קבצים מאותו סוג.
+                  {/* 🔴 מספר העמודים במסמך.
                       ⚠️ ת"ז דו-צדדית וספח מרובה עמודים מועלים כשני קבצים
-                      (appendMode), ושני כרטיסים בשם זהה נראים ככפילות.
-                      המונה אומר שזה מכוון. */}
-                  {(typeCounts[doc.doc_type] ?? 0) > 1 && (
-                    <span className="mr-1 text-indigo-500">
-                      ({docIndex[doc.id]}/{typeCounts[doc.doc_type]})
-                    </span>
+                      (appendMode). קודם הם הוצגו כשני כרטיסים שנראו
+                      ככפילות; עכשיו זה כרטיס אחד, והמונה אומר כמה עמודים
+                      יש בו. */}
+                  {pages > 1 && (
+                    <span className="mr-1 text-indigo-500">· {pages} עמודים</span>
                   )}
                 </p>
+                {/* 🔴 שם התינוק ותאריך הלידה על אישור הלידה.
+                    ⚠️ בלעדיהם "אישור לידה" אינו אומר על *מי* מדובר,
+                    והמזכירה נאלצת לפתוח את הקובץ בכל פעם. */}
+                {isBirthDoc(doc.doc_type) && births.length > 0 && (
+                  <p className="mt-1 flex flex-wrap gap-x-1.5 gap-y-0.5 text-[10.5px] font-semibold text-emerald-700">
+                    {births.map((b, i) => (
+                      <span key={i} className="rounded bg-emerald-50 px-1.5 py-0.5">
+                        {b.name}{b.date ? ` · ${formatBirth(b.date)}` : ''}
+                      </span>
+                    ))}
+                  </p>
+                )}
                 {/* שם הקובץ הגולמי (כפי שהמשתמש קרא לו) לא מוצג — אינו מעניין
                     ולעתים מבלבל. מזהים את המסמך לפי הסוג (התווית) בלבד. */}
                 {doc.uploaded_at && (
@@ -283,7 +353,8 @@ export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { b
                 </button>
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
       {confirmDialog}

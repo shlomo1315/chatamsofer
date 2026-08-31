@@ -14,6 +14,7 @@ const HebrewDatePicker = dynamic(() => import('@/components/ui/HebrewDatePicker'
 const ConfettiSuccess = dynamic(() => import('@/components/ui/ConfettiSuccess'), { ssr: false })
 import { ViewDocButton, downloadDocDirect } from '@/components/ui/DocViewer'
 import PdfCanvasView from '@/components/ui/PdfCanvasView'
+import DeadlineCountdown from '@/components/ui/DeadlineCountdown'
 import SignaturePad from '@/components/ui/SignaturePad'
 import { useDocTypes } from '@/lib/useDocTypes'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
@@ -2178,6 +2179,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   const [centerData, setCenterData] = useState<{
     regions: { key: string; label: string; cities: { city: string; centers: { id: string; name: string; city: string; full: boolean }[] }[] }[]
     warning: string
+    /** ⚠️ המועד האחרון — null = ללא הגבלה. ראו lib/centerDeadline. */
+    deadline: string | null
+    /** 🔴 למה סגור. null = פתוח. */
+    closedReason: 'closed' | 'not_approved' | 'deadline' | null
   } | null>(null)
   const [centerConfirm, setCenterConfirm] = useState<{ id: string; label: string } | null>(null)
   const [centerSaving, setCenterSaving] = useState(false)
@@ -3608,7 +3613,15 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     let alive = true
     void fetch(`/api/portal/holiday-center?recipient_id=${holiday.recipientId}`, { cache: 'no-store' })
       .then(r => r.json())
-      .then(d => { if (alive && d?.regions) setCenterData({ regions: d.regions, warning: d.warning ?? '' }) })
+      .then(d => {
+        if (!alive || !d?.regions) return
+        setCenterData({
+          regions: d.regions,
+          warning: d.warning ?? '',
+          deadline: d.deadline ?? null,
+          closedReason: d.closedReason ?? null,
+        })
+      })
       .catch(() => {})
     return () => { alive = false }
   }, [centerPicker, holiday?.recipientId, centerData])
@@ -7155,11 +7168,30 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 <p className="mt-1.5 text-[12.5px] leading-relaxed text-amber-800 bg-amber-50 rounded-xl px-3 py-2">
                   {centerData?.warning || 'הבחירה סופית. לאחר האישור לא ניתן לשנות את המוקד.'}
                 </p>
+
+                {/* 🔴 הטיימר — אותו נוסח שנשמע בטלפון.
+                    ⚠️ מוצג גם כשהבחירה עדיין פתוחה: זו כל מטרתו. */}
+                {centerData?.deadline && (
+                  <div className="mt-2 flex justify-center">
+                    <DeadlineCountdown deadline={centerData.deadline} />
+                  </div>
+                )}
               </div>
 
               <div className="flex-1 overflow-y-auto p-4">
                 {!centerData ? (
                   <p className="py-8 text-center text-sm text-slate-400">טוען מוקדים…</p>
+                ) : centerData.closedReason ? (
+                  /* 🔴 חסום — ואומרים *למה*.
+                     ⚠️ "לא ניתן לבחור" בלי סיבה שולח את המשפחה לטלפון
+                     במשרד. משפחה שיודעת שבקשתה בבדיקה — ממתינה. */
+                  <p className="mx-auto my-8 max-w-sm rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-[13px] font-semibold leading-relaxed text-amber-900">
+                    {centerData.closedReason === 'not_approved'
+                      ? 'בקשתכם לחלוקה עדיין בבדיקה. בחירת מוקד תתאפשר לאחר אישור הבקשה.'
+                      : centerData.closedReason === 'deadline'
+                        ? 'המועד לבחירת מוקד החלוקה הסתיים.'
+                        : 'בחירת מוקד החלוקה אינה פתוחה כעת.'}
+                  </p>
                 ) : !centerData.regions.length ? (
                   <p className="py-8 text-center text-sm text-slate-400">אין מוקדים פתוחים כרגע.</p>
                 ) : (

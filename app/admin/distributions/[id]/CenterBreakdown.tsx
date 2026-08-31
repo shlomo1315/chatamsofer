@@ -1,7 +1,9 @@
 'use client'
 import { useState, useCallback } from 'react'
-import { Loader2, MapPin, Check, X, Users } from 'lucide-react'
+import { Loader2, MapPin, Check, X, Users, CalendarClock } from 'lucide-react'
 import { REGIONS, type RegionKey } from '@/lib/holidayCenterPick'
+import DeadlineCountdown from '@/components/ui/DeadlineCountdown'
+import { toLocalInput } from '@/lib/centerDeadline'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // פילוח לפי מוקדי חלוקה + מתג פתיחת הבחירה.
@@ -24,6 +26,13 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [openIds, setOpenIds] = useState<Set<string>>(new Set())
   const [centersOpen, setCentersOpen] = useState(false)
+
+  // 🔴 המועד האחרון לבחירה.
+  //
+  // ⚠️ שני ערכים: מה שנשמר, ומה שבשדה. בלי ההפרדה אי אפשר לדעת אם
+  // המנהל שינה משהו — וכפתור השמירה היה מהבהב מרגע הטעינה.
+  const [deadline, setDeadline] = useState<string | null>(null)
+  const [deadlineDraft, setDeadlineDraft] = useState('')
 
   // 🔴 עריכה במקום ולא בהגדרות.
   //
@@ -72,7 +81,15 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
       setCenters((c.centers ?? []).filter((x: Center) => x.is_active))
       setCounts(c.counts ?? {})
       setOpenIds(new Set<string>(c.openIds ?? []))
-      if (dRes.ok) setCentersOpen(!!(await dRes.json()).centers_open)
+      if (dRes.ok) {
+        const d = await dRes.json()
+        setCentersOpen(!!d.centers_open)
+        setDeadline(d.centers_deadline ?? null)
+        // ⚠️ הקלט של datetime-local אינו מקבל ISO עם Z — הוא מצפה
+        // ל"YYYY-MM-DDTHH:mm" בשעון המקומי. המרה שגויה כאן מציגה
+        // למנהל שעה אחרת משמורה, והוא "מתקן" אותה בטעות.
+        setDeadlineDraft(d.centers_deadline ? toLocalInput(d.centers_deadline) : '')
+      }
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'שגיאה')
       setCenters([])
@@ -112,12 +129,35 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
     } catch { setErr('שגיאת רשת') } finally { setBusy(null) }
   }
 
+  // 🔴 שמירת המועד — נפרדת מהמתג.
+  //
+  // ⚠️ נשלח בנפרד ולא יחד עם centers_open: המנהל שמגדיר תאריך אינו
+  // מתכוון לשנות את המתג, ושליחה משותפת הייתה פותחת או סוגרת בטעות.
+  async function saveDeadline() {
+    setBusy('deadline'); setErr('')
+    try {
+      const res = await fetch(`/api/admin/distributions/${encodeURIComponent(distributionId)}/centers-open`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // ⚠️ ריק נשלח כ-null במפורש = הסרת המועד. undefined היה
+        // משאיר את הקיים, ו"מחקתי את התאריך" לא היה עושה דבר.
+        body: JSON.stringify({
+          centers_deadline: deadlineDraft ? new Date(deadlineDraft).toISOString() : null,
+        }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setErr(d.error ?? 'העדכון נכשל'); return }
+      setDeadline(deadlineDraft ? new Date(deadlineDraft).toISOString() : null)
+    } catch { setErr('שגיאת רשת') } finally { setBusy(null) }
+  }
+
   async function toggleGate(next: boolean) {
     setBusy('gate'); setErr('')
     try {
       const res = await fetch(`/api/admin/distributions/${encodeURIComponent(distributionId)}/centers-open`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        // ⚠️ רק המתג — המועד נשמר בנפרד ואינו נמחק כאן.
         body: JSON.stringify({ centers_open: next }),
       })
       if (!res.ok) { setErr((await res.json()).error ?? 'העדכון נכשל'); return }
@@ -169,6 +209,53 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
           {busy === 'gate' ? <Loader2 size={13} className="animate-spin" /> : centersOpen ? <X size={13} /> : <Check size={13} />}
           {centersOpen ? 'סגור בחירה' : 'פתח בחירה'}
         </button>
+      </div>
+
+      {/* ── המועד האחרון לבחירה ──
+          🔴 המשפחה שומעת את הספירה בטלפון ורואה אותה באתר. בלי מועד
+          מוגדר אין ספירה כלל — וזה תקין: המתג לבדו ממשיך לעבוד.
+          ⚠️ אינו מחליף את המתג אלא מתווסף לו. מתג סגור גובר תמיד. */}
+      <div className="flex flex-col gap-2.5 rounded-2xl border border-slate-200 bg-white p-4">
+        <div className="flex items-center gap-1.5">
+          <CalendarClock size={14} className="text-slate-400" />
+          <h3 className="text-[13px] font-extrabold text-slate-800">מועד אחרון לבחירת מוקד</h3>
+        </div>
+        <p className="-mt-1 text-[11px] leading-relaxed text-slate-500">
+          המשפחות ישמעו בטלפון ויראו באתר כמה זמן נותר. ריק = ללא הגבלה,
+          והבחירה נסגרת רק בכיבוי המתג למעלה.
+        </p>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="datetime-local"
+            value={deadlineDraft}
+            onChange={e => setDeadlineDraft(e.target.value)}
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-200"
+          />
+          {/* 🔴 כלל ברזל: כפתור שמירה שמהבהב ברגע שיש שינוי. */}
+          <button
+            type="button"
+            disabled={busy === 'deadline' || toLocalInput(deadline) === deadlineDraft}
+            onClick={() => void saveDeadline()}
+            className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-extrabold transition disabled:opacity-40 ${
+              toLocalInput(deadline) !== deadlineDraft
+                ? 'animate-pulse bg-emerald-600 text-white hover:bg-emerald-700'
+                : 'border border-slate-200 bg-white text-slate-500'
+            }`}>
+            {busy === 'deadline' ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+            {toLocalInput(deadline) !== deadlineDraft ? 'שמור מועד' : 'נשמר'}
+          </button>
+          {deadlineDraft && (
+            <button type="button" onClick={() => setDeadlineDraft('')}
+              className="text-xs font-bold text-slate-500 hover:text-rose-700">
+              הסר מועד
+            </button>
+          )}
+        </div>
+
+        {/* ⚠️ מוצג מהערך *השמור* ולא מהטיוטה: ספירה שרצה לפי שדה שטרם
+            נשמר מתארת מצב שאינו קיים לאף משפחה. */}
+        <DeadlineCountdown deadline={deadline} />
       </div>
 
       <div className="flex items-center gap-2 text-xs text-slate-500">

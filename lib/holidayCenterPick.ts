@@ -30,6 +30,22 @@ export interface CenterRow {
 export interface PickState {
   /** מתג בחירת המוקדים בחלוקה. ⚠️ עצמאי משער הרישום. */
   centersOpen: boolean
+  /**
+   * 🔴 האם המשפחה אושרה לחלוקה.
+   *
+   * ⚠️ נוסף אחרי תקלה: הנחתי ששער הבחירה בודק אישור, והוא לא בדק —
+   * 87 משפחות שאינן מאושרות בחרו מוקד. ההנחה לא הייתה מגובה בקוד.
+   *
+   * ⚠️ undefined = לא נבדק, ואינו חוסם: קורא שאינו מעביר את השדה היה
+   * מאבד את כל הבחירות בשקט אילו הוא נחשב "לא מאושר".
+   */
+  approved?: boolean
+  /**
+   * האם המועד האחרון לבחירה חלף. ⚠️ ראו lib/centerDeadline.
+   *
+   * ⚠️ undefined אינו חוסם — מאותו טעם בדיוק.
+   */
+  deadlinePassed?: boolean
   /** המוקד שכבר נבחר, אם נבחר. */
   currentCenterId: string | null
   centerExists: boolean
@@ -41,25 +57,38 @@ export interface PickState {
 
 export type PickResult =
   | { ok: true }
-  | { ok: false; reason: 'closed' | 'locked' | 'full' | 'not_found' }
+  | { ok: false; reason: 'closed' | 'not_approved' | 'deadline' | 'locked' | 'full' | 'not_found' }
 
 /**
  * מכריע אם מותר לבחור את המוקד.
  *
  * סדר הבדיקות אינו שרירותי:
- *   1. מתג סגור  — אין מה לדון בו כלל
- *   2. נעילה     — ⚠️ גוברת על התקרה: מי שכבר בחר מוקד שהתמלא נשאר בו
- *   3. קיום      — לפני התקרה, שאם לא כן "מלא" יוחזר על מוקד שאינו קיים
- *   4. תקרה
+ *   1. מתג סגור   — אין מה לדון בו כלל, וזו ההודעה המדויקת ביותר
+ *   2. נעילה      — 🔴 לפני האישור והמועד: מי שכבר בחר זכאי לשמוע מה בחר
+ *                    גם אם אינו מאושר וגם אחרי שהמועד חלף. חסימתו הופכת
+ *                    שגיאה שלנו לעונש שלו.
+ *   3. אישור      — 🔴 רק משפחה מאושרת בוחרת מוקד
+ *   4. מועד אחרון
+ *   5. קיום       — לפני התקרה, שאם לא כן "מלא" יוחזר על מוקד שאינו קיים
+ *   6. תקרה
  */
 export function evaluatePick(state: PickState, targetCenterId?: string): PickResult {
   if (!state.centersOpen) return { ok: false, reason: 'closed' }
 
   // ⚠️ בחירה חוזרת באותו מוקד אינה שגיאה — הקשה כפולה בטלפון שכיחה,
   // ו"כבר בחרת בזה" הוא כישלון מיותר שמבלבל.
+  //
+  // 🔴 לפני שערי האישור והמועד במכוון: מי שכבר בחר מוקד חייב לשמוע
+  // איזה מוקד זה, גם אם אינו מאושר וגם אחרי שהמועד חלף.
   if (state.currentCenterId && state.currentCenterId !== targetCenterId) {
     return { ok: false, reason: 'locked' }
   }
+
+  // 🔴 רק משפחה מאושרת בוחרת מוקד.
+  // ⚠️ === false ולא !approved: undefined פירושו "לא נבדק" ואינו חוסם.
+  if (state.approved === false) return { ok: false, reason: 'not_approved' }
+
+  if (state.deadlinePassed === true) return { ok: false, reason: 'deadline' }
 
   if (!state.centerExists || !state.centerIsOpenInDistribution) {
     return { ok: false, reason: 'not_found' }
@@ -84,6 +113,10 @@ export function evaluatePick(state: PickState, targetCenterId?: string): PickRes
  */
 export const PICK_MESSAGES: Record<Exclude<PickResult, { ok: true }>['reason'], string> = {
   closed: 'בחירת מוקד החלוקה אינה פתוחה כעת',
+  // ⚠️ אומר מה לעשות ולא רק שנחסם: משפחה ששומעת "אין הרשאה" מתקשרת
+  // למשרד, ומשפחה ששומעת "בקשתכם בבדיקה" ממתינה.
+  not_approved: 'בקשתכם לחלוקה עדיין בבדיקה. בחירת מוקד תתאפשר לאחר אישור הבקשה',
+  deadline: 'המועד לבחירת מוקד החלוקה הסתיים',
   locked: 'כבר נרשמתם למוקד החלוקה ב{center}. לא ניתן לשנות את הבחירה',
   full: 'המוקד שנבחר מלא. יש לבחור מוקד אחר',
   not_found: 'המוקד המבוקש אינו זמין בחלוקה זו',

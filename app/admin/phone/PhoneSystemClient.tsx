@@ -134,9 +134,14 @@ type Tab = 'messages' | 'tree' | 'settings'
 // ── הטאבים הראשיים ──
 // ⚠️ "בונה" שני ולא אחרון: זה המקום שבו באמת עורכים, וקודם הוא היה
 // בתחתית עמוד ארוך אחרי גלילה. "מבנה" נשאר ראשון כי הוא התמונה הכללית.
-type MainTab = 'tree' | 'log' | 'setup'
+type MainTab = 'build' | 'tree' | 'log' | 'setup'
+
+// 🔴 'build' ראשון ולא 'tree': זה המסך שבו *עורכים*. קודם הוא היה
+// בתחתית עמוד ארוך, מתחת לרשימה שאי אפשר לערוך — ולכן נראה כאילו
+// אי אפשר להוסיף או לשנות שלוחות בכלל.
 const MAIN_TABS: { key: MainTab; label: string; icon: typeof Phone }[] = [
-  { key: 'tree', label: 'השלוחות', icon: Phone },
+  { key: 'build', label: 'השלוחות', icon: ListTree },
+  { key: 'tree', label: 'מסלולים קבועים', icon: Phone },
   { key: 'log', label: 'יומן שיחות', icon: History },
   { key: 'setup', label: 'חיבור לימות', icon: PlayCircle },
 ]
@@ -144,7 +149,7 @@ const MAIN_TABS: { key: MainTab; label: string; icon: typeof Phone }[] = [
 export default function PhoneSystemClient() {
   const [openId, setOpenId] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('messages')
-  const [main, setMain] = useState<MainTab>('tree')
+  const [main, setMain] = useState<MainTab>('build')
 
   const ext = IVR_EXTENSIONS.find(e => e.id === openId) ?? null
 
@@ -155,8 +160,7 @@ export default function PhoneSystemClient() {
     return (
       <div className="flex flex-col gap-5">
         {/* ── טאבים ראשיים ──
-            🔴 קודם הכל ישב בעמוד אחד ארוך, והבונה — המקום שבו באמת
-            עורכים — היה בתחתיתו אחרי גלילה ארוכה. */}
+            ⚠️ סדר קבוע: עריכה · מסלולים · יומן · חיבור. */}
         <div className="flex flex-wrap gap-1.5 border-b border-slate-200 pb-3">
           {MAIN_TABS.map(t => (
             <button key={t.key} type="button" onClick={() => setMain(t.key)}
@@ -168,6 +172,20 @@ export default function PhoneSystemClient() {
             </button>
           ))}
         </div>
+
+        {/* ── השלוחות שניתן לערוך ──
+            🔴 הטאב הראשון, ובמסך משלו. קודם הוא ישב בתחתית טאב אחר,
+            מתחת לרשימה קבועה שאי אפשר לערוך — ולכן נראה כאילו המערכת
+            אינה מאפשרת להוסיף או לשנות שלוחות כלל. */}
+        {main === 'build' && (
+          <div className="flex flex-col gap-3">
+            <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11.5px] leading-relaxed text-amber-900">
+              🔴 המבנה כאן הוא <strong>מה שמושמע בפועל</strong> לכל מי שמחייג.
+              הוספה, שינוי שם, מקשים והודעות — הכל נשמר מיד בלי פריסה.
+            </p>
+            <IvrBuilder />
+          </div>
+        )}
 
         {main === 'log' && <YemotCallLog />}
 
@@ -212,26 +230,6 @@ export default function PhoneSystemClient() {
                 setTab(e.id === 'announce' ? 'messages' : 'tree')
               }} />
           ))}
-        </section>
-
-        {/* ── שלוחות שנבנו כאן ──
-            🔴 באותו מסך ולא בטאב נפרד: ההפרדה יצרה רושם ששתי הרשימות
-            אינן קשורות, בזמן שהמבנה שנבנה כאן *מחליף* את התפריט שלמעלה.
-            ⚠️ למטה ולא למעלה: השלוחות הקיימות הן מה שרץ בפועל היום. */}
-        <section className="flex flex-col gap-3 border-t border-slate-200 pt-5">
-          <div>
-            <h2 className="flex items-center gap-1.5 text-[13px] font-extrabold text-slate-700">
-              <ListTree size={14} className="text-indigo-500" /> בניית שלוחות משלך
-            </h2>
-            <p className="mt-0.5 text-[11.5px] leading-relaxed text-slate-500">
-              הוספה, עריכה ושינוי מבנה — בלי פריסה.
-            </p>
-          </div>
-          <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11.5px] leading-relaxed text-amber-900">
-            🔴 מבנה שנשמר כאן <strong>מחליף את התפריט הקבוע</strong> לכל מי שמחייג.
-            כל עוד לא נשמר דבר — המערכת ממשיכה לעבוד בדיוק כפי שהיא.
-          </p>
-          <IvrBuilder />
         </section>
 
         </>)}

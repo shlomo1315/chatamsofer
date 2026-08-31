@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
+import { deadlineState } from '@/lib/centerDeadline'
 import {
   evaluatePick, groupByRegion, centerLabel, pickMessage,
   FINAL_WARNING, REGIONS, type CenterRow,
@@ -23,8 +24,9 @@ export const dynamic = 'force-dynamic'
 /** החלוקה האחרונה. ⚠️ distributions ולא holiday_distributions — ראו FK. */
 async function latestDistribution(db: NonNullable<ReturnType<typeof getServiceClient>>) {
   const { data } = await db.from('distributions')
-    .select('id, centers_open').order('created_at', { ascending: false }).limit(1).maybeSingle()
-  return data as { id: string; centers_open: boolean } | null
+    .select('id, centers_open, centers_deadline')
+    .order('created_at', { ascending: false }).limit(1).maybeSingle()
+  return data as { id: string; centers_open: boolean; centers_deadline: string | null } | null
 }
 
 export async function GET(request: NextRequest) {
@@ -37,9 +39,13 @@ export async function GET(request: NextRequest) {
   const dist = await latestDistribution(db)
   if (!dist) return NextResponse.json({ open: false, centers: [] })
 
+  // ⚠️ approval_status נשלף במפורש — הוא שער הבחירה, לא קישוט.
   const { data: recRow } = await db.from('distribution_recipients')
-    .select('id, center_id, distribution_id').eq('id', recipientId).maybeSingle()
-  const rec = recRow as { id: string; center_id: string | null; distribution_id: string } | null
+    .select('id, center_id, distribution_id, approval_status').eq('id', recipientId).maybeSingle()
+  const rec = recRow as {
+    id: string; center_id: string | null; distribution_id: string
+    approval_status: string | null
+  } | null
   if (!rec) return NextResponse.json({ error: 'הרשומה לא נמצאה' }, { status: 404 })
 
   const { centers, taken } = await loadOpenCenters(db, rec.distribution_id)
@@ -81,11 +87,26 @@ export async function GET(request: NextRequest) {
     })),
   }]
 
+  // 🔴 אותם שערים בדיוק כמו בשמירה: המסך אינו רשאי להציג בחירה
+  // שה-POST ידחה. פער כזה נראה למשפחה כתקלה ולא ככלל.
+  const dl = deadlineState(dist.centers_deadline ?? null)
+  const approved = rec.approval_status === 'approved'
+
   return NextResponse.json({
-    open: !!dist.centers_open,
+    // ⚠️ "פתוח" = המתג פתוח **וגם** מאושר **וגם** המועד לא חלף.
+    open: !!dist.centers_open && approved && !dl.closed,
+    // הסיבה נשלחת בנפרד — המסך אומר *למה* סגור ולא רק שסגור.
+    closedReason: !dist.centers_open ? 'closed'
+      : !approved ? 'not_approved'
+      : dl.closed ? 'deadline'
+      : null,
     locked: !!rec.center_id,
     chosen: chosen ? { id: chosen.id, label: centerLabel(chosen) } : null,
     warning: FINAL_WARNING.portal,
+    // 🔴 הספירה לאחור. ⚠️ נשלח msLeft ולא טקסט מוכן: הטקסט מתיישן
+    // בשנייה שאחרי, והמסך מעדכן אותו בעצמו כל דקה.
+    deadline: dist.centers_deadline ?? null,
+    msLeft: dl.msLeft,
     regions,
   })
 }
@@ -102,9 +123,14 @@ export async function POST(request: NextRequest) {
   const dist = await latestDistribution(db)
   if (!dist) return NextResponse.json({ error: pickMessage('closed') }, { status: 400 })
 
+  // 🔴 approval_status — שער הבחירה. בלעדיו כאן, ה-POST היה ממשיך
+  // לשמור בחירות של משפחות שאינן מאושרות בזמן שה-GET כבר חוסם אותן.
   const { data: recRow } = await db.from('distribution_recipients')
-    .select('id, center_id, distribution_id').eq('id', recipientId).maybeSingle()
-  const rec = recRow as { id: string; center_id: string | null; distribution_id: string } | null
+    .select('id, center_id, distribution_id, approval_status').eq('id', recipientId).maybeSingle()
+  const rec = recRow as {
+    id: string; center_id: string | null; distribution_id: string
+    approval_status: string | null
+  } | null
   if (!rec) return NextResponse.json({ error: 'הרשומה לא נמצאה' }, { status: 404 })
 
   const { data: centerRow } = await db.from('holiday_centers')
@@ -123,6 +149,10 @@ export async function POST(request: NextRequest) {
 
   const verdict = evaluatePick({
     centersOpen: !!dist.centers_open,
+    // 🔴 רק משפחה מאושרת בוחרת מוקד.
+    approved: rec.approval_status === 'approved',
+    // ⚠️ אותו מועד בדיוק כמו בשלוחה — מקור אחד, שני ערוצים.
+    deadlinePassed: deadlineState(dist.centers_deadline ?? null).closed,
     currentCenterId: rec.center_id,
     centerExists: !!center && center.is_active,
     centerIsOpenInDistribution: !!openRow,

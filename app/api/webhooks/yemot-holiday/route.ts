@@ -28,6 +28,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'node:crypto'
+import { deadlineState, formatCountdown } from '@/lib/centerDeadline'
 import { getServiceClient } from '@/lib/apiAuth'
 import { getOpenDistribution, registerToOpenDistribution } from '@/lib/holidayDistributions'
 import { getHolidayMessages, type HolidayMessages } from '@/lib/yemotHolidayMessages'
@@ -98,6 +99,10 @@ const msgToken = (msgs: HolidayMessages, key: string, repl?: Record<string, stri
   if (m?.audio) return `f-${m.audio}`
   let t = m?.text ?? ''
   if (repl) for (const [k, v] of Object.entries(repl)) t = t.replaceAll(`{${k}}`, v)
+  // ⚠️ טקסט ריק מחזיר מחרוזת ריקה ולא "t-": מנהל שמוחק נוסח הודעה
+  // היה יוצר טוקן ריק בתשובה לימות, ואין לדעת איך היא מגיבה לו.
+  // הקוראים מסננים אותו ב-filter(Boolean) וב-joinTokens.
+  if (!t.trim()) return ''
   return tToken(t)
 }
 
@@ -174,8 +179,11 @@ async function handleCenterRoute(
   // lib/holidayDistributions. קריאה מהטבלה השנייה הייתה מחזירה חלוקה
   // אחרת לגמרי, והבחירה לא הייתה נמצאת לעולם.
   const { data: distRow } = await db.from('distributions')
-    .select('id, centers_open').order('created_at', { ascending: false }).limit(1).maybeSingle()
-  const dist = distRow as { id: string; centers_open: boolean } | null
+    .select('id, centers_open, centers_deadline')
+    .order('created_at', { ascending: false }).limit(1).maybeSingle()
+  const dist = distRow as {
+    id: string; centers_open: boolean; centers_deadline: string | null
+  } | null
   if (!dist) return yemotText([idMessage(msgToken(msgs, 'centers_closed')), goToFolder('hangup')], callId)
 
   // ── זיהוי ──
@@ -207,9 +215,13 @@ async function handleCenterRoute(
   }
 
   // ⚠️ רק מי שרשום לחלוקה יכול לבחור מוקד — הבחירה נשמרת על הרשומה שלו.
+  // ⚠️ approval_status — שער הבחירה, ראו הערך המחושב למטה.
   const { data: recRow } = await db.from('distribution_recipients')
-    .select('id, center_id').eq('distribution_id', dist.id).eq('beneficiary_id', ben.id).maybeSingle()
-  const rec = recRow as { id: string; center_id: string | null } | null
+    .select('id, center_id, approval_status')
+    .eq('distribution_id', dist.id).eq('beneficiary_id', ben.id).maybeSingle()
+  const rec = recRow as {
+    id: string; center_id: string | null; approval_status: string | null
+  } | null
   if (!rec) return yemotText([idMessage(msgToken(msgs, 'not_eligible')), goToFolder('hangup')], callId)
 
   const { centers, taken } = await loadOpenCenters(db, dist.id)
@@ -222,19 +234,13 @@ async function handleCenterRoute(
         .eq('id', rec.center_id).maybeSingle()).data as CenterRow | null
     const label = centerLabel(c) ?? ''
 
-    // 🔴 השעות — הסיבה השכיחה לשיחה החוזרת.
+    // 🔴 בלי שעות ובלי תאריכים — במכוון.
     //
-    // ⚠️ נשלפות בנפרד: CenterRow אינו כולל אותן, והוספתן לטיפוס הייתה
-    // משנה את כל מי שמשתמש בו.
-    const { data: hoursRow } = await db.from('holiday_centers')
-      .select('hours').eq('id', rec.center_id).maybeSingle()
-    const rawHours = String((hoursRow as { hours?: string | null } | null)?.hours ?? '').trim()
-    // ⚠️ ריק נשאר ריק ולא "לא הוגדר": משפט שנקטע בטבעיות עדיף על
-    // הודעה שאומרת למתקשר שמשהו חסר אצלנו.
-    const hours = rawHours ? `שעות הפתיחה ${rawHours}.` : ''
-
+    // מועדי החלוקה טרם נקבעו, והקראתם כאן הייתה מוסרת מידע שישתנה.
+    // ההודעה עצמה אומרת שתישלח הודעה מסודרת; ראו center_already
+    // ב-lib/yemotHolidayMessages, שממנו הוסר {hours} לגמרי.
     return yemotText([
-      idMessage(msgToken(msgs, 'center_already', { center: label, hours })),
+      idMessage(msgToken(msgs, 'center_already', { center: label })),
       goToFolder('hangup'),
     ], callId)
   }
@@ -244,10 +250,29 @@ async function handleCenterRoute(
   const { data: caps } = await db.from('holiday_centers').select('id, capacity')
   for (const r of (caps ?? []) as { id: string; capacity: number | null }[]) capacities[r.id] = r.capacity
 
+  // ─────────────────────────────────────────────────────────────────────
+  // 🔴 השער האפקטיבי — שלושה תנאים, לא אחד.
+  //
+  // ⚠️ nextCenterStep מקבלת centersOpen בודד, ולכן שלושת השערים
+  // מחושבים כאן לערך אחד. בלי זה הטלפון היה מאפשר בדיוק את מה שהאתר
+  // חוסם — וזה מה שקרה בפועל: 87 משפחות שאינן מאושרות בחרו מוקד.
+  // ─────────────────────────────────────────────────────────────────────
+  const dl = deadlineState(dist.centers_deadline ?? null)
+  const approved = rec.approval_status === 'approved'
+  const gateOpen = !!dist.centers_open && approved && !dl.closed
+
+  // 🔴 הספירה לאחור שתושמע לפני הבחירה.
+  //
+  // ⚠️ מחרוזת ריקה כשאין מועד — msgToken על טקסט ריק אינו מוסיף דבר
+  // לתשובה, ולכן אין צורך בהסתעפות בכל מקום שמשמיע אותה.
+  const countdown = dl.msLeft !== null && !dl.closed
+    ? msgToken(msgs, 'centers_countdown', { left: formatCountdown(dl.msLeft) })
+    : ''
+
   const step = nextCenterStep({
     centers, taken, capacities,
     currentCenterId: rec.center_id,
-    centersOpen: !!dist.centers_open,
+    centersOpen: gateOpen,
     tapped: {
       region: params[CENTER_VARS.region], city: params[CENTER_VARS.city],
       center: params[CENTER_VARS.center], confirm: params[CENTER_VARS.confirm],
@@ -255,8 +280,14 @@ async function handleCenterRoute(
   })
 
   switch (step.kind) {
-    case 'closed':
-      return yemotText([idMessage(msgToken(msgs, 'centers_closed')), goToFolder('hangup')], callId)
+    case 'closed': {
+      // ⚠️ הודעה לפי הסיבה: "סגור" למי שממתין לאישור שולח אותו למשרד,
+      // בזמן שהוא רק צריך לדעת שהבקשה בבדיקה.
+      const key = !dist.centers_open ? 'centers_closed'
+        : !approved ? 'not_eligible'
+        : 'centers_deadline_over'
+      return yemotText([idMessage(msgToken(msgs, key)), goToFolder('hangup')], callId)
+    }
     case 'no_centers':
       return yemotText([idMessage(msgToken(msgs, 'centers_closed')), goToFolder('hangup')], callId)
     case 'already':
@@ -267,10 +298,13 @@ async function handleCenterRoute(
       return yemotText([idMessage(msgToken(msgs, 'cancelled')), goToFolder('hangup')], callId)
 
     case 'ask_region':
+      // ⚠️ הספירה אחרי ההסבר ולפני התפריט: לפניו היא נשמעת כאזהרה
+      // מנותקת, ואחרי התפריט המאזין כבר מקיש ואינו שומע אותה.
       return yemotText([readTap(CENTER_VARS.region, [
         msgToken(msgs, 'centers_intro'),
+        countdown,
         tToken(`${msgs.ask_region?.text ?? ''} ${buildChoiceList(step.options)}`),
-      ], { max: 1, min: 1, allowed: step.options.map((_, i) => i + 1) })], callId)
+      ].filter(Boolean), { max: 1, min: 1, allowed: step.options.map((_, i) => i + 1) })], callId)
 
     case 'ask_city':
       // 🔴 המספר הוא של *העיר* ולא מיקום ברשימה.
