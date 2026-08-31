@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireAdmin, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { getNedarimCreds, getClientCardFull } from '@/lib/nedarim'
+import { parseNedarimAmount } from '@/lib/nedarimAmount'
 import { logActivity } from '@/lib/activityLog'
 
 export const dynamic = 'force-dynamic'
@@ -75,9 +76,11 @@ function findUnloadAmount(payload: unknown): number | null {
     const comments = String(row.Comments ?? '')
     if (!/פריקת תלוש/.test(comments)) continue
 
-    // ⚠️ Amount מגיע כמחרוזת ולעתים עם ' ₪' — חילוץ המספר בלבד.
-    const n = Number(String(row.Amount ?? '').replace(/[^d.-]/g, ''))
-    if (Number.isFinite(n)) return Math.abs(n)
+    // ⚠️ Amount מגיע כמחרוזת ולעתים עם ' ₪' — החילוץ מרוכז
+    // ב-parseNedarimAmount. כאן ישבה שגיאת מחלקה שמחקה את הספרות
+    // עצמן ([^d.-] בלי לוכסן), וזו הסיבה שהעמודה נשארה ריקה.
+    const n = parseNedarimAmount(row.Amount)
+    if (n != null) return n
   }
   return null
 }

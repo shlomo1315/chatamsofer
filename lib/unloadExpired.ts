@@ -110,14 +110,23 @@ export async function unloadAidCard(
   await admin.from('maternity_aids').update({
     card_load_status: 'unloaded',
     card_unloaded_at: new Date().toISOString(),
-    // ⚠️ כרטיס שנוצל במלואו — 0 חזר, וזה נתון ולא חוסר מידע.
     // ⚠️ 0 כשהכרטיס נוצל במלואו — זה נתון ולא חוסר מידע.
+    //
+    // 🔴 null נשמר רק כששליפת היתרה *נכשלה*, ואז הוא נתון חסר אמיתי
+    // שהכלי הרטרואקטיבי צריך למלא. ההבחנה בין "0 חזר" ל"לא ידוע"
+    // היא כל ההבדל בין כרטיס מנוצל לבין תקלה שאיש לא שם לב אליה.
     card_unloaded_amount: alreadySpent ? 0 : balanceBefore,
     card_balance: 0,
     // ניקוי הכרטיס והאיסוף בתיק רק אם נותק בנדרים בהצלחה — כדי שבלידה הבאה אפשר יהיה לחבר מחדש
     card_number: cardRemoved ? null : aid.card_number,
     card_picked_up_at: cardRemoved ? null : undefined,
-    card_load_error: alreadySpent ? 'הכרטיס נוצל במלואו — נסגר ללא פריקה' : cardRemoveError,
+    // ⚠️ כישלון שליפת היתרה נרשם במפורש: בלעדיו השורה נראית כפריקה
+    // תקינה שפשוט אין לה סכום, ואיש אינו יודע שהנתון אבד.
+    card_load_error: alreadySpent
+      ? 'הכרטיס נוצל במלואו — נסגר ללא פריקה'
+      : (cardRemoveError ?? (balanceBefore == null
+          ? 'הפריקה בוצעה אך לא נשלפה היתרה מנדרים — הסכום שחזר אינו ידוע'
+          : null)),
   }).eq('id', aid.id)
 
   let stockReturned = false
