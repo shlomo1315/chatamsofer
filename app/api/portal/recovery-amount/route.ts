@@ -7,6 +7,7 @@ import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { recoveryRealizedEmail } from '@/lib/emailTemplates'
 import { ensureEmailTexts } from '@/lib/emailTextsStore'
+import { recoveryWindowEnd, RECOVERY_WINDOW_DAYS } from '@/lib/maternity'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,7 +44,6 @@ export async function POST(request: NextRequest) {
   if (!from || !to) return NextResponse.json({ error: 'יש לסמן את תאריכי השהייה בלוח' }, { status: 400 })
   const fromMs = new Date(from).getTime(), toMs = new Date(to).getTime()
   const todayMs = new Date(new Date().toISOString().slice(0, 10)).getTime()
-  const windowStart = todayMs - 35 * 86400000
   // ⚠️ יום ההגעה חייב להיות בעבר (עד היום) — אי אפשר להצהיר על הגעה עתידית.
   // אבל יום העזיבה *כן* רשאי ליפול בעתיד, וזה השינוי: מי שהגיעה היום זכאית
   // ליומיים (או לארבעה), והנציג רושם את מלוא הזכאות מיד. עד כה נדרש
@@ -52,9 +52,12 @@ export async function POST(request: NextRequest) {
   // התקרה על יום העזיבה נשמרת בלי בדיקה נפרדת: הטווח חייב להתאים ל-nightsNum
   // (מיד למטה), ו-nightsNum מוגבל לימי הזכאות של היולדת (בהמשך, אחרי שליפת
   // הרשומה). כלומר to לעולם אינו חורג מיום ההגעה + ימי הזכאות.
-  if (toMs < fromMs || fromMs < windowStart || fromMs > todayMs) {
+  //
+  // ⚠️ גבול תחילת החלון *אינו* נבדק כאן אלא אחרי שליפת הרשומה — ראו
+  // ההערה שם. כאן נשארת רק הבדיקה שאינה תלויה ביולדת המסוימת.
+  if (toMs < fromMs || fromMs > todayMs) {
     return NextResponse.json(
-      { error: 'תאריכי השהייה מחוץ לחלון הזכאות — יום ההגעה חייב להיות בחמשת השבועות האחרונים ולא בעתיד' },
+      { error: 'תאריכי השהייה מחוץ לחלון הזכאות — יום ההגעה אינו יכול להיות בעתיד' },
       { status: 400 },
     )
   }
@@ -73,10 +76,32 @@ export async function POST(request: NextRequest) {
 
   // אבטחה: הרשומה שייכת לבית ההחלמה הזה, וסומן שהיולדת הגיעה
   const { data: aid } = await admin.from('maternity_aids')
-    .select('id, recovery_home, recovery_arrived, recovery_receipt_url, recovery_locked, is_twins, recovery_eligibility_days, beneficiaries(family_name, full_name, spouse_name)')
+    .select('id, recovery_home, recovery_arrived, recovery_receipt_url, recovery_locked, is_twins, recovery_eligibility_days, birth_date, six_weeks_end, beneficiaries(family_name, full_name, spouse_name)')
     .eq('id', aidId).maybeSingle()
   if (!aid || aid.recovery_home !== home) {
     return NextResponse.json({ error: 'הרשומה לא נמצאה בבית החלמה זה' }, { status: 404 })
+  }
+
+  // 🔴 גבול תחילת חלון הזכאות — נבדק כאן ולא למעלה, כי הוא תלוי ביולדת.
+  //
+  // ⚠️ קודם ישב למעלה `todayMs - 35`: חלון מתגלגל מהיום, שאינו יודע דבר
+  // על הארכה ידנית. הפורטל לעומת זאת מציג את היולדת לפי recoveryWindowEnd,
+  // שמכבד הארכה. התוצאה הייתה סתירה בין קריאה לכתיבה — בית ההחלמה ראה
+  // יולדת עם הארכה מאושרת, ניסה להזין את הסכום, וקיבל "מחוץ לחלון".
+  //
+  // ⚠️ אותו מקור אמת של api/portal/data ושל בורר התאריכים בלקוח: תחילת
+  // החלון היא סוף הזכאות פחות 35 יום, כך שהארכה מזיזה את שני הקצוות.
+  const windowEnd = recoveryWindowEnd(aid)
+  if (!windowEnd) {
+    return NextResponse.json({ error: 'לא נקבע תאריך לידה לרשומה — פנה למשרד' }, { status: 400 })
+  }
+  const windowEndMs = new Date(windowEnd.toISOString().slice(0, 10)).getTime()
+  const windowStart = windowEndMs - RECOVERY_WINDOW_DAYS * 86400000
+  if (fromMs < windowStart || fromMs > windowEndMs) {
+    return NextResponse.json(
+      { error: 'תאריכי השהייה מחוץ לחלון הזכאות — יום ההגעה חייב ליפול בתוך חמשת השבועות שמיום הלידה' },
+      { status: 400 },
+    )
   }
   // מספר הלילות לא יעלה על ימי הזכאות (רגילה=2 · תאומים=4; או ערך שנקבע ידנית)
   const maxNights = aid.recovery_eligibility_days ?? (aid.is_twins ? 4 : 2)
