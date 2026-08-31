@@ -39,11 +39,13 @@ describe('eligibleForLoad — מי מקבל טעינה', () => {
 
   it('מסנן רשימה מעורבת נכון', () => {
     const targets = eligibleForLoad([
-      row({ id: 'a' }),
-      row({ id: 'b', approval_status: 'pending' }),
-      row({ id: 'c', load_status: 'loaded' }),
+      // ⚠️ ת"ז שונה לכל שורה: הסינון מדלג על ת"ז שכבר נראתה (הגנה מפני
+      // טעינה כפולה), ות"ז זהה הייתה בודקת אותה ולא את הסינון שכאן.
+      row({ id: 'a', id_number: '111111118' }),
+      row({ id: 'b', approval_status: 'pending', id_number: '222222226' }),
+      row({ id: 'c', load_status: 'loaded', id_number: '333333334' }),
       row({ id: 'd', id_number: null }),
-      row({ id: 'e', load_status: 'failed' }),
+      row({ id: 'e', load_status: 'failed', id_number: '444444442' }),
     ])
     expect(targets.map(t => t.recipientId)).toEqual(['a', 'e'])
   })
@@ -78,6 +80,28 @@ describe('eligibleForLoad — מי מקבל טעינה', () => {
     expect(t.email).toBe('a@b.com')
     expect(t.address).toBe('הרצל 1')
     expect(t.city).toBe('ירושלים')
+  })
+
+  // 🔴 הגנה אחרונה מפני טעינה כפולה.
+  //
+  // ⚠️ במסד יש אינדקס ייחודי (distribution_recipients_uniq_beneficiary)
+  // שמונע שתי שורות לאותה משפחה בחלוקה אחת, וזו ההגנה החזקה. הבדיקה
+  // כאן היא השכבה השנייה: אם הרשימה מגיעה פגומה מסיבה כלשהי, הכסף
+  // עדיין לא ייצא פעמיים — וכסף שיצא פעמיים אינו ניתן להחזרה.
+  it('🔴 אותה ת"ז פעמיים ברשימה → נטענת פעם אחת בלבד', () => {
+    const targets = eligibleForLoad([
+      { id: 'r1', approval_status: 'approved', load_status: null, id_number: '123456782', name: 'כהן' },
+      { id: 'r2', approval_status: 'approved', load_status: null, id_number: '123456782', name: 'כהן' },
+    ])
+    expect(targets).toHaveLength(1)
+  })
+
+  it('⚠️ ת"ז שונות נטענות שתיהן — הסינון אינו גורף', () => {
+    const targets = eligibleForLoad([
+      { id: 'r1', approval_status: 'approved', load_status: null, id_number: '123456782', name: 'כהן' },
+      { id: 'r2', approval_status: 'approved', load_status: null, id_number: '987654321', name: 'לוי' },
+    ])
+    expect(targets).toHaveLength(2)
   })
 
   it('שדות הקמה חסרים → null ולא undefined שנשלח לנדרים כמחרוזת', () => {

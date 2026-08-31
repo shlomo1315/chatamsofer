@@ -105,6 +105,20 @@ export async function GET(request: NextRequest) {
     testMode: preTest.active,
     testEmail: preTest.email,
     eligible: targets.length,
+    // 🔴 מי בדיוק ייטען — ולא רק כמה.
+    //
+    // ⚠️ מספר לבדו אינו ניתן לבדיקה: "ייטענו 340" אינו מאפשר לוודא
+    // שמשפחה מסוימת נכללת, או שמישהו שלא אמור להיטען אינו ברשימה.
+    // זו פעולה כספית, והרשימה היא מה שמאפשר לאשר אותה בעיניים פקוחות.
+    //
+    // ⚠️ מוגבל ל-500 שמות: רשימה של אלפי שורות מנפחת את התשובה בלי
+    // להוסיף ודאות. המונה למעלה תמיד מלא.
+    eligibleList: targets.slice(0, 500).map(t => ({
+      id: t.recipientId,
+      name: t.name,
+      idNumber: t.idNumber,
+    })),
+    eligibleListTruncated: targets.length > 500,
     total: amount * targets.length,
     alreadyLoaded: rows.filter(r => r.load_status === 'loaded').length,
     failed: rows.filter(r => r.load_status === 'failed').length,

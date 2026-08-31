@@ -22,6 +22,9 @@ interface Preview {
   /** ⚠️ מגיע מהחלוקה — ראו lib/holidayTestMode. */
   testMode?: boolean
   testEmail?: string | null
+  /** 🔴 מי בדיוק ייטען — לא רק כמה. */
+  eligibleList?: { id: string; name: string; idNumber: string | null }[]
+  eligibleListTruncated?: boolean
 }
 
 const fmt = (n: number) => new Intl.NumberFormat('he-IL').format(n)
@@ -127,6 +130,32 @@ export default function LoadCardsPanel({ distributionId }: { distributionId: str
             )}
             {preview.failed > 0 && <li>· {fmt(preview.failed)} נכשלו בעבר וייכללו בנסיון חוזר</li>}
           </ul>
+
+          {/* 🔴 מי בדיוק ייטען.
+              ⚠️ מספר לבדו אינו ניתן לבדיקה — אי אפשר לוודא שמשפחה
+              מסוימת נכללת, או שמי שאינו אמור להיטען אינו ברשימה.
+              זו פעולה כספית, וזו הרשימה שמאפשרת לאשר בעיניים פקוחות. */}
+          {preview.eligibleList && preview.eligibleList.length > 0 && (
+            <details className="mb-3 rounded-xl border border-slate-200 bg-slate-50">
+              <summary className="cursor-pointer px-3 py-2 text-[11.5px] font-bold text-slate-700 hover:bg-slate-100">
+                הצג את {fmt(preview.eligible)} המשפחות שייטענו
+              </summary>
+              <ul className="max-h-64 overflow-y-auto border-t border-slate-200 px-3 py-2">
+                {preview.eligibleList.map((r, i) => (
+                  <li key={r.id} className="flex items-center gap-2 py-0.5 text-[11.5px]">
+                    <span className="w-8 flex-shrink-0 text-left text-slate-400 ltr-num">{i + 1}.</span>
+                    <span className="flex-1 truncate text-slate-700">{r.name}</span>
+                    <span className="flex-shrink-0 font-mono text-slate-500 ltr-num">{r.idNumber ?? '—'}</span>
+                  </li>
+                ))}
+              </ul>
+              {preview.eligibleListTruncated && (
+                <p className="border-t border-slate-200 px-3 py-1.5 text-[11px] text-slate-500">
+                  מוצגות 500 הראשונות מתוך {fmt(preview.eligible)} — כולן ייטענו.
+                </p>
+              )}
+            </details>
+          )}
 
           {preview.eligible > 0 ? (
             <div className="flex items-center gap-2">

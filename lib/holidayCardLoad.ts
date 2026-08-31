@@ -246,10 +246,27 @@ export function eligibleForLoad(rows: {
   address?: string | null
   city?: string | null
 }[]): LoadTarget[] {
+  // 🔴 שכבת הגנה אחרונה מפני טעינה כפולה.
+  //
+  // ⚠️ במסד יש אינדקס ייחודי על (distribution_id, beneficiary_id) שמונע
+  // שתי שורות לאותה משפחה, וזו ההגנה החזקה. כאן מסננים לפי *תעודת
+  // הזהות* — כי היא המפתח שלפיו נדרים מזהה את המשפחה, ושתי רשומות
+  // שונות עם אותה ת"ז היו מייצרות שתי טעינות לאותו כרטיס.
+  //
+  // ⚠️ כסף שיצא פעמיים אינו ניתן להחזרה, ולכן העלות של סינון מיותר
+  // נמוכה בהרבה מהעלות של החמצה.
+  const seenId = new Set<string>()
+
   return rows
     .filter(r => r.approval_status === 'approved')
     .filter(r => r.load_status !== 'loaded')
     .filter(r => !!(r.id_number ?? '').trim())
+    .filter(r => {
+      const key = String(r.id_number ?? '').trim()
+      if (seenId.has(key)) return false
+      seenId.add(key)
+      return true
+    })
     .map(r => ({
       recipientId: r.id,
       idNumber: r.id_number ?? null,
