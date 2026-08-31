@@ -5,6 +5,7 @@ import { deliverMail } from './sendMail'
 import { mailFor } from './departments'
 import { emailIntakeRejectedEmail, requestBlockedRejectedEmail, requestReceivedEmail, greetMrs } from './emailTemplates'
 import { isReplyToOurMail } from './intakeReplyLoop'
+import { isOurMailbox } from './ourMailboxes'
 import { readFile } from 'fs/promises'
 import path from 'path'
 import type { MailAttachment } from './sendMail'
@@ -112,6 +113,27 @@ async function reject(
   // ⚠️ מצורף רק כשזו סיבת הדחייה: מי שנדחה על סכום שגוי אינו זקוק לו.
   const attachments = needsRabbiForm(errors) ? await rabbiFormAttachment() : undefined
   return deliverMail(to, mail.subject, mail.html, attachments, { ...mailFor('igud'), skipLog: true })
+}
+
+/**
+ * האם המייל הגיע מתיבה מחוברת שלנו.
+ *
+ * ⚠️ נטען מ-gmail_accounts ולא מרשימה קשיחה: תיבה שתתווסף בעתיד תיכנס
+ * מעצמה, ורשימה בקוד הייתה מחזירה את הבאג בשקט בפעם הבאה.
+ *
+ * 🔴 נכשל-*פתוח* במכוון: אם השאילתה נכשלה, ממשיכים לטפל בבקשה. חסימה
+ * בספק הייתה משתיקה בקשות אמיתיות ממשפחות — נזק גדול יותר ממענה מיותר
+ * לתיבה שלנו, שאותו ממילא תופסת ההגנה על @chasamsofer.info.
+ */
+async function isFromOurMailbox(admin: SupabaseClient, from: string): Promise<boolean> {
+  try {
+    const { data } = await admin.from('gmail_accounts').select('email')
+    const list = (data ?? []).map(r => String((r as { email?: string }).email ?? ''))
+    return isOurMailbox(from, list)
+  } catch (e) {
+    console.error('[emailRequestIntake] בדיקת התיבות נכשלה — ממשיכים:', e instanceof Error ? e.message : e)
+    return isOurMailbox(from, [])
+  }
 }
 
 // מחזיר true אם המייל זוהה כבקשה וטופל (כדי לדלג על מענה אוטומטי אחר).
@@ -259,6 +281,22 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
   // ─────────────────────────────────────────────────────────────────────────
   if (isReplyToOurMail(msg.subject)) {
     console.log(`[emailRequestIntake] 🔴 תשובה על הודעת דחייה — לא נשלח מענה (from=${from})`)
+    return true
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 מייל שיצא מתיבה שלנו אינו בקשה.
+  //
+  // התיבות המחוברות (עזר ליולדות, גמ"ח ישן) משמשות את המזכירות למתן
+  // שירות. כשמזכירה עונה משם למשפחה, המייל נקלט כפנייה חדשה, אין בו
+  // ת"ז בנושא, ונשלחת אליה "הבקשה לא נקלטה" — היא מוצפת והמשפחה אינה
+  // מקבלת דבר. מהתיבה הזו לבדה נקלטו 17,000 מיילים.
+  //
+  // ⚠️ הבדיקה הקיימת כיסתה רק @chasamsofer.info; שלוש מהתיבות שלנו
+  // יושבות ב-Gmail ונפלו בפער.
+  // ─────────────────────────────────────────────────────────────────────────
+  if (await isFromOurMailbox(admin, from)) {
+    console.log(`[emailRequestIntake] 🔴 מייל מתיבה שלנו — לא נשלח מענה (from=${from})`)
     return true
   }
 
