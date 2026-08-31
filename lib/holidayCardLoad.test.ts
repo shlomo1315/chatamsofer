@@ -82,6 +82,32 @@ describe('eligibleForLoad — מי מקבל טעינה', () => {
     expect(t.city).toBe('ירושלים')
   })
 
+  // ── 🔴 רק מי שבחר מוקד ──
+  //
+  // הטעינה והשובר הם פעולה אחת: מיד אחרי הטעינה נשלח השובר, והשובר
+  // בנוי כולו סביב המוקד. טעינה למי שטרם בחר מוציאה כסף בלי שיש מה
+  // לשלוח, והמשפחה אינה יודעת לאן להגיע.
+  it('🔴 מי שטרם בחר מוקד אינו נטען', () => {
+    const targets = eligibleForLoad([
+      { id: 'r1', approval_status: 'approved', load_status: null, id_number: '123456782', name: 'כהן', center_id: null },
+    ])
+    expect(targets).toHaveLength(0)
+  })
+
+  it('מי שבחר מוקד — נטען', () => {
+    const targets = eligibleForLoad([
+      { id: 'r1', approval_status: 'approved', load_status: null, id_number: '123456782', name: 'כהן', center_id: 'c1' },
+    ])
+    expect(targets).toHaveLength(1)
+  })
+
+  it('⚠️ בלי השדה כלל — נטען. הקוראים שאינם מעבירים center_id לא נשברים', () => {
+    const targets = eligibleForLoad([
+      { id: 'r1', approval_status: 'approved', load_status: null, id_number: '123456782', name: 'כהן' },
+    ])
+    expect(targets).toHaveLength(1)
+  })
+
   // 🔴 הגנה אחרונה מפני טעינה כפולה.
   //
   // ⚠️ במסד יש אינדקס ייחודי (distribution_recipients_uniq_beneficiary)

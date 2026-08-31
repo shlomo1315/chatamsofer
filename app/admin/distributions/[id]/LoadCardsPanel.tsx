@@ -18,7 +18,7 @@ interface Preview {
   total: number
   alreadyLoaded: number
   failed: number
-  skipped: { notApproved: number; noId: number }
+  skipped: { notApproved: number; noId: number; noCenter?: number }
   /** ⚠️ מגיע מהחלוקה — ראו lib/holidayTestMode. */
   testMode?: boolean
   testEmail?: string | null
@@ -83,8 +83,10 @@ export default function LoadCardsPanel({ distributionId }: { distributionId: str
         <Wallet size={15} /> טעינת כרטיסים
       </h3>
       <p className="mb-3 text-[11px] text-slate-500">
-        נטענים רק מאושרים שטרם נטענו ויש להם תעודת זהות.
-        <strong className="text-slate-700"> הפעולה רצה רק מכאן ולעולם לא אוטומטית.</strong>
+        נטענים רק מאושרים <strong className="text-slate-700">שכבר בחרו מוקד</strong>, שטרם נטענו ויש להם תעודת זהות.
+        מיד אחרי הטעינה נשלח אליהם השובר במייל.
+        <strong className="text-slate-700"> הפעולה רצה רק מכאן ולעולם לא אוטומטית</strong> —
+        אפשר להריץ אותה שוב ושוב, וכל פעם ייטענו רק מי שנוספו מאז.
       </p>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -125,6 +127,9 @@ export default function LoadCardsPanel({ distributionId }: { distributionId: str
           <ul className="mb-3 flex flex-col gap-0.5 text-[11px] text-slate-500">
             {preview.alreadyLoaded > 0 && <li>· {fmt(preview.alreadyLoaded)} כבר נטענו ולא ייטענו שוב</li>}
             {preview.skipped.notApproved > 0 && <li>· {fmt(preview.skipped.notApproved)} טרם אושרו</li>}
+            {(preview.skipped.noCenter ?? 0) > 0 && (
+              <li className="text-slate-500">· {fmt(preview.skipped.noCenter!)} טרם בחרו מוקד — ייטענו אחרי שיבחרו</li>
+            )}
             {preview.skipped.noId > 0 && (
               <li className="text-amber-700">· {fmt(preview.skipped.noId)} מאושרים בלי תעודת זהות — לא ייטענו</li>
             )}

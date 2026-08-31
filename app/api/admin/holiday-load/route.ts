@@ -39,6 +39,8 @@ interface Row {
   id: string
   approval_status: string | null
   load_status: string | null
+  /** 🔴 טעינה רק למי שבחר מוקד — ראו eligibleForLoad. */
+  center_id: string | null
   beneficiary: Ben | Ben[] | null
 }
 
@@ -54,7 +56,7 @@ async function loadRows(
     .from('distribution_recipients')
     // ⚠️ השדות הנוספים נדרשים *רק* להקמת המשפחה בנדרים כשאינה קיימת שם:
     // לקוח שמוקם בלי טלפון וכתובת אינו שמיש למוקד החלוקה.
-    .select('id, approval_status, load_status, beneficiary:beneficiaries(id_number, spouse_id_number, family_name, full_name, phone, phone2, email, address, city)')
+    .select('id, approval_status, load_status, center_id, beneficiary:beneficiaries(id_number, spouse_id_number, family_name, full_name, phone, phone2, email, address, city)')
     .eq('distribution_id', distributionId)
     .range(from, to))
 
@@ -64,6 +66,7 @@ async function loadRows(
       id: r.id,
       approval_status: r.approval_status,
       load_status: r.load_status,
+      center_id: r.center_id,
       id_number: b?.id_number ?? null,
       name: [b?.family_name, b?.full_name].filter(Boolean).join(' ') || 'ללא שם',
       spouse_id_number: b?.spouse_id_number ?? null,
@@ -127,6 +130,13 @@ export async function GET(request: NextRequest) {
     skipped: {
       notApproved: rows.filter(r => r.approval_status !== 'approved').length,
       noId: rows.filter(r => r.approval_status === 'approved' && !(r.id_number ?? '').trim()).length,
+      // 🔴 מאושרים שטרם בחרו מוקד — הקבוצה שממתינה, ולא כשל.
+      //
+      // ⚠️ בלי המספר הזה ההפרש בין "6,050 מאושרים" ל"340 ייטענו" נראה
+      // כתקלה. הוא בדיוק הנתון שאתה צריך כדי להחליט מתי להריץ שוב.
+      noCenter: rows.filter(r =>
+        r.approval_status === 'approved' && !!(r.id_number ?? '').trim()
+        && r.load_status !== 'loaded' && !r.center_id).length,
     },
   })
 }

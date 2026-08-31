@@ -237,6 +237,8 @@ export function eligibleForLoad(rows: {
   // ⚠️ הפרטים הבאים אינם לתצוגה: הם נשלחים לנדרים בהקמת המשפחה כשאינה
   // קיימת שם. השמטתם הייתה מקימה לקוח בלי טלפון וכתובת — לקוח שאינו
   // שמיש למוקד החלוקה, ובלי שום סימן שמשהו חסר.
+  /** 🔴 מזהה המוקד שנבחר. null = טרם בחר → אינו נטען. */
+  center_id?: string | null
   spouse_id_number?: string | null
   family_name?: string | null
   full_name?: string | null
@@ -261,6 +263,16 @@ export function eligibleForLoad(rows: {
     .filter(r => r.approval_status === 'approved')
     .filter(r => r.load_status !== 'loaded')
     .filter(r => !!(r.id_number ?? '').trim())
+    // 🔴 רק מי שבחר מוקד.
+    //
+    // הטעינה והשובר הם פעולה אחת: מיד אחרי הטעינה נשלח השובר, והוא
+    // בנוי כולו סביב המוקד — הכתובת, המועד והמקום. טעינה למי שטרם
+    // בחר מוציאה כסף בלי שיש מה לשלוח, והמשפחה אינה יודעת לאן להגיע.
+    //
+    // ⚠️ undefined ≠ null: מי שלא העביר את השדה כלל (קורא ישן) אינו
+    // נחסם, ורק מי שנבדק ונמצא בלי מוקד יורד. חסימה על undefined
+    // הייתה מאפסת בשקט את הטעינה אצל כל קורא שלא עודכן.
+    .filter(r => r.center_id === undefined || !!r.center_id)
     .filter(r => {
       const key = String(r.id_number ?? '').trim()
       if (seenId.has(key)) return false
