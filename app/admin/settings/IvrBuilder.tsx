@@ -40,6 +40,32 @@ interface LoadedData {
 // הקיימות עושות. נעול בטסט (ivrBuilder.test.ts).
 const TYPE_ORDER: IvrNodeType[] = ['menu', 'message', 'input', 'transfer', 'dial', 'record', 'hangup', 'raw']
 
+/**
+ * קטע בטופס השלוחה — כותרת קטנה ותוכן.
+ *
+ * 🔴 בלי החלוקה הזו כל השדות נערמו זה על זה באותו משקל חזותי:
+ * השם, ההודעה, המקשים וההגדרות המתקדמות נראו כרשימה אחת ארוכה,
+ * ואי אפשר היה למצוא שדה מסוים בלי לקרוא את כולם.
+ *
+ * ⚠️ הכותרת קטנה ואפורה במכוון — היא מסמנת גבול, לא מושכת תשומת לב
+ * לעצמה. כותרת בולטת מדי הייתה מתחרה בשדות שהיא אמורה לארגן.
+ */
+function Section({ title, hint, children }: {
+  title: string
+  hint?: string
+  children: React.ReactNode
+}) {
+  return (
+    <section className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3">
+      <div>
+        <h5 className="text-[11px] font-black uppercase tracking-wide text-slate-400">{title}</h5>
+        {hint && <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">{hint}</p>}
+      </div>
+      {children}
+    </section>
+  )
+}
+
 /** מזהה חדש ויציב. ⚠️ בלי תלות ב-Date/Math.random בזמן רינדור. */
 let idCounter = 0
 const newId = () => `n${Date.now().toString(36)}${(idCounter++).toString(36)}`
@@ -390,6 +416,14 @@ export default function IvrBuilder() {
                       כבוי
                     </span>
                   )}
+                  {/* 🔴 סוג הימות בשם ולא כקוד: "תא קולי" ולא
+                      "voicemail_email". הכותרת הייתה מראה 'סוג אחר'
+                      לכל 24 הסוגים, ואי אפשר היה להבחין ביניהם ברשימה. */}
+                  {node.type === 'raw' && node.yemotType && (
+                    <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">
+                      {yemotTypeByKey(node.yemotType)?.label ?? node.yemotType}
+                    </span>
+                  )}
                   {hasError && <AlertTriangle size={13} className="text-rose-500" />}
                 </button>
 
@@ -407,6 +441,33 @@ export default function IvrBuilder() {
                 )}
               </div>
 
+              {/* 🔴 תקציר מתחת לשם — מה השלוחה אומרת ולאן היא מובילה.
+                  ⚠️ בלעדיו הרשימה היא שמות בלבד, ולמצוא שלוחה מסוימת
+                  אפשר רק בפתיחת כל אחת בתורה.
+                  ⚠️ מוסתר כשהשלוחה פתוחה — שם המידע מוצג במלואו. */}
+              {!isOpen && (
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3.5 pb-2.5 text-[11px] text-slate-500">
+                  {node.prompt?.text?.trim() && (
+                    <span className="max-w-full truncate italic">
+                      &quot;{node.prompt.text.trim().slice(0, 70)}
+                      {node.prompt.text.trim().length > 70 ? '…' : ''}&quot;
+                    </span>
+                  )}
+                  {node.type === 'menu' && (node.keys ?? []).length > 0 && (
+                    <span className="inline-flex items-center gap-1 text-slate-400">
+                      <ListTree size={11} />
+                      {(node.keys ?? []).map(k => k.digit).join(' · ')}
+                    </span>
+                  )}
+                  {node.type === 'transfer' && node.folder && (
+                    <span className="font-mono text-slate-400" dir="ltr">→ {node.folder}</span>
+                  )}
+                  {node.type === 'dial' && node.phone && (
+                    <span className="font-mono text-slate-400" dir="ltr">→ {node.phone}</span>
+                  )}
+                </div>
+              )}
+
               {/* גוף */}
               {isOpen && (
                 <div className="flex flex-col gap-3 border-t border-slate-100 px-3.5 py-3">
@@ -416,30 +477,37 @@ export default function IvrBuilder() {
                     </ul>
                   )}
 
-                  {/* שם + סוג */}
-                  <div className="grid gap-2.5 sm:grid-cols-2">
-                    <label className="flex flex-col gap-1">
-                      <span className="text-xs font-semibold text-slate-600">שם השלוחה</span>
-                      <input value={node.name}
-                        onChange={e => patch(node.id, { name: e.target.value })}
-                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
-                    </label>
-                    <label className="flex flex-col gap-1">
-                      <span className="text-xs font-semibold text-slate-600">מה קורה בשלוחה</span>
-                      <select value={node.type}
-                        onChange={e => patch(node.id, { type: e.target.value as IvrNodeType })}
-                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm">
-                        {TYPE_ORDER.map(t => (
-                          <option key={t} value={t}>{data.typeLabels[t]}</option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                  <p className="flex items-start gap-1.5 text-xs text-slate-500">
-                    <Info size={12} className="mt-0.5 shrink-0" /> {data.typeHints[node.type]}
-                  </p>
+                  {/* ── 1. מה זו השלוחה ── */}
+                  <Section title="השלוחה">
+                    <div className="grid gap-2.5 sm:grid-cols-2">
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs font-semibold text-slate-600">שם השלוחה</span>
+                        <input value={node.name}
+                          onChange={e => patch(node.id, { name: e.target.value })}
+                          className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
+                        {/* ⚠️ נאמר במפורש: המנהל הניח שהשם נשמע למתקשר
+                            והתלבט בניסוחו לשווא. */}
+                        <span className="text-[11px] text-slate-400">לשימוש פנימי — אינו נשמע למתקשר.</span>
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs font-semibold text-slate-600">מה קורה בשלוחה</span>
+                        <select value={node.type}
+                          onChange={e => patch(node.id, { type: e.target.value as IvrNodeType })}
+                          className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm">
+                          {TYPE_ORDER.map(t => (
+                            <option key={t} value={t}>{data.typeLabels[t]}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <p className="flex items-start gap-1.5 rounded-lg bg-slate-50 px-2.5 py-2 text-[11.5px] leading-relaxed text-slate-600">
+                      <Info size={12} className="mt-0.5 shrink-0 text-slate-400" /> {data.typeHints[node.type]}
+                    </p>
+                  </Section>
 
-                  {/* ההודעה */}
+                  {/* ── 2. מה נשמע ── */}
+                  <Section title="מה המתקשר שומע"
+                    hint="הטקסט מוקרא בקול ממוחשב, או שאפשר להפיק ממנו קול טבעי.">
                   <label className="flex flex-col gap-1">
                     <span className="flex items-center justify-between text-xs font-semibold text-slate-600">
                       <span>ההודעה שנשמעת</span>
@@ -467,12 +535,15 @@ export default function IvrBuilder() {
                       </button>
                     )}
                   </div>
+                  </Section>
 
-                  {/* ── הגדרות ההקשה ──
+                  {/* ── 3. הגדרות ההקשה ──
                       🔴 היו קבועות בקוד (10 שניות בתפריט, 15 בקליטה).
                       ⚠️ מבוגר שמקיש לאט לא הספיק, והשיחה המשיכה בלי
                       שהקיש — מבחינתו המערכת התעלמה ממנו. */}
                   {(node.type === 'menu' || node.type === 'input') && (
+                    <Section title="ההקשה"
+                      hint="כמה זמן ממתינים למתקשר, וכמה פעמים חוזרים על ההודעה.">
                     <div className="grid gap-2.5 sm:grid-cols-2">
                       <label className="flex flex-col gap-1">
                         <span className="text-xs font-semibold text-slate-600">שניות המתנה להקשה</span>
@@ -500,10 +571,14 @@ export default function IvrBuilder() {
                         </span>
                       </label>
                     </div>
+                    </Section>
                   )}
 
-                  {/* שדות לפי סוג */}
+                  {/* ── 4. שדות לפי סוג ──
+                      ⚠️ מוצג רק מה ששייך לסוג הנבחר. הצגת כל השדות
+                      תמיד הייתה מחייבת את המנהל להבין אילו מהם רלוונטיים. */}
                   {node.type === 'transfer' && (
+                    <Section title="יעד ההעברה">
                     <label className="flex flex-col gap-1">
                       <span className="text-xs font-semibold text-slate-600">שלוחת היעד בימות</span>
                       <input dir="ltr" value={node.folder ?? ''} placeholder="/2"
@@ -513,6 +588,7 @@ export default function IvrBuilder() {
                         כפי שהיא מוגדרת בימות — למשל <code dir="ltr">/2</code>
                       </span>
                     </label>
+                    </Section>
                   )}
 
                   {/* 🔴 שלוחת קליטה — מספר הספרות.
@@ -521,6 +597,7 @@ export default function IvrBuilder() {
                       במודל ובשרת אך לא הוצע כאן, כך שכל שלוחת קליטה
                       שנבנתה במסך נתקעה. */}
                   {node.type === 'input' && (
+                    <Section title="הקלט מהמתקשר">
                     <label className="flex flex-col gap-1">
                       <span className="text-xs font-semibold text-slate-600">מספר ספרות</span>
                       <input type="number" min={1} max={20} dir="ltr"
@@ -535,15 +612,18 @@ export default function IvrBuilder() {
                         לתעודת זהות — 9. ריק = ללא הגבלה, והשיחה תמתין עד תום הזמן.
                       </span>
                     </label>
+                    </Section>
                   )}
 
                   {node.type === 'dial' && (
+                    <Section title="יעד החיוג">
                     <label className="flex flex-col gap-1">
                       <span className="text-xs font-semibold text-slate-600">מספר לחיוג</span>
                       <input dir="ltr" value={node.phone ?? ''} placeholder="02-1234567"
                         onChange={e => patch(node.id, { phone: e.target.value })}
                         className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
                     </label>
+                    </Section>
                   )}
 
                   {/* ── כל סוגי השלוחות של ימות ──
@@ -554,6 +634,8 @@ export default function IvrBuilder() {
                       אליה את המתקשר. לכן חובה לומר במפורש מה צריך
                       להגדיר שם — שלוחה שלא הוגדרה תשמיע שקט. */}
                   {node.type === 'raw' && (
+                    <Section title="סוג השלוחה בימות"
+                      hint="השלוחה תיווצר בימות אוטומטית בשמירה.">
                     <div className="flex flex-col gap-2.5">
                       <label className="flex flex-col gap-1">
                         <span className="text-xs font-semibold text-slate-600">מה השלוחה עושה</span>
@@ -664,10 +746,15 @@ export default function IvrBuilder() {
                         </label>
                       )}
                     </div>
+                    </Section>
                   )}
 
-                  {/* מקשי התפריט */}
+                  {/* ── 5. מקשי התפריט ──
+                      🔴 הקטע החשוב ביותר בשלוחת תפריט: הוא מגדיר לאן
+                      המתקשר מגיע. */}
                   {node.type === 'menu' && (
+                    <Section title="מקשים"
+                      hint="כל מקש מוביל לשלוחה אחרת. אפשר להוסיף שלוחה חדשה ישירות מכאן.">
                     <div className="flex flex-col gap-2">
                       <div className="flex items-center justify-between">
                         <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
@@ -726,8 +813,10 @@ export default function IvrBuilder() {
                           className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
                       </label>
                     </div>
+                    </Section>
                   )}
-                  {/* ── הגדרות מתקדמות ──
+
+                  {/* ── 6. הגדרות מתקדמות ──
                       🔴 קיימות בכל שלוחה בימות, ולכן כאן ולא בסוג
                       מסוים. ⚠️ ב-details מקופל: רובן אינן נדרשות
                       ברוב השלוחות, ופתוחות היו מטביעות את השדות
