@@ -286,7 +286,7 @@ describe('⚠️ מגבלת המקשים בתפריט', () => {
 describe('🔴 כיסוי סוגי השלוחות', () => {
   it('לכל סוג יש תווית והסבר', () => {
     const types: IvrNodeType[] =
-      ['menu', 'message', 'transfer', 'dial', 'record', 'input', 'hangup']
+      ['menu', 'message', 'transfer', 'dial', 'record', 'input', 'raw', 'hangup']
     for (const t of types) {
       expect(NODE_TYPE_LABEL[t], `חסרה תווית ל-${t}`).toBeTruthy()
       expect(NODE_TYPE_HINT[t], `חסר הסבר ל-${t}`).toBeTruthy()

@@ -13,6 +13,7 @@
 //   • פקודות מופרדות ב-"&". טקסט TTS אסור שיכיל: . - " ' & |
 // ─────────────────────────────────────────────────────────────────────────────
 import type { IvrConfig, IvrNodeDef, IvrAudio } from './ivrBuilder'
+import { sanitizeRawCommand } from './ivrRawCommand'
 
 /** TTS של ימות אינו סובל את התווים האלה — כולל גרש וגרשיים עבריים. */
 export const ttsClean = (t: string) =>
@@ -167,6 +168,29 @@ function enterNode(
         'No', 'no', 'no', '', '', repeatsOf(node), '', '', '',
       ]
       return { commands: [`read=${prompt || tToken('נא להקיש את המספר')}=${ops.join(',')}`] }
+    }
+
+    case 'raw': {
+      // 🔴 הדלת לכל שאר סוגי השלוחות של ימות.
+      //
+      // ⚠️ פקודה שנפסלה בסינון אינה נשלחת: היא הייתה שוברת את *כל*
+      // התשובה, וכל המתקשרים — לא רק בשלוחה הזו — היו שומעים שגיאה.
+      // במקרה כזה משמיעים הודעה ומנתקים, שזו התנהגות מובנת.
+      const cmd = sanitizeRawCommand(node.rawCommand)
+      if (!cmd) {
+        return {
+          commands: [
+            `id_list_message=${prompt || tToken('השלוחה אינה מוגדרת כראוי')}`,
+            'go_to_folder=hangup',
+          ],
+        }
+      }
+      return {
+        commands: [
+          ...(prompt ? [`id_list_message=${prompt}`] : []),
+          cmd,
+        ],
+      }
     }
 
     case 'hangup':

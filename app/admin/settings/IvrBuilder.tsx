@@ -37,7 +37,7 @@ interface LoadedData {
 // 'input' נשמט כאן בטעות: הוא נתמך במלואו בשרת אך לא הוצע במסך,
 // ולכן אי אפשר היה לבנות שלוחה שקולטת ת"ז — בדיוק מה שהשלוחות
 // הקיימות עושות. נעול בטסט (ivrBuilder.test.ts).
-const TYPE_ORDER: IvrNodeType[] = ['menu', 'message', 'input', 'transfer', 'dial', 'record', 'hangup']
+const TYPE_ORDER: IvrNodeType[] = ['menu', 'message', 'input', 'transfer', 'dial', 'record', 'hangup', 'raw']
 
 /** מזהה חדש ויציב. ⚠️ בלי תלות ב-Date/Math.random בזמן רינדור. */
 let idCounter = 0
@@ -99,6 +99,11 @@ export default function IvrBuilder() {
       }
       if (n.type === 'dial' && !(n.phone ?? '').replace(/\D/g, '')) {
         out.push({ nodeId: n.id, level: 'error', message: 'לא הוגדר מספר לחיוג' })
+      }
+      // ⚠️ פקודה פסולה חוסמת שמירה: היא הייתה משתיקה את השלוחה,
+      // והמנהל היה מגלה זאת רק כשמתקשר מתלונן.
+      if (n.type === 'raw' && !/^[a-zA-Z_][a-zA-Z0-9_]*=.+$/.test((n.rawCommand ?? '').trim())) {
+        out.push({ nodeId: n.id, level: 'error', message: 'פקודת ימות חסרה או פסולה' })
       }
     }
     return out
@@ -512,6 +517,33 @@ export default function IvrBuilder() {
                       <input dir="ltr" value={node.phone ?? ''} placeholder="02-1234567"
                         onChange={e => patch(node.id, { phone: e.target.value })}
                         className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
+                    </label>
+                  )}
+
+                  {/* ── סוג אחר מימות ──
+                      🔴 הדלת לכל ~40 סוגי השלוחות של ימות בלי לבנות
+                      כל אחד מהם: תא קולי, פקס, פילטר זמנים, זמני היום.
+                      ⚠️ הפקודה מסוננת לפני השליחה — "&" מפריד פקודות
+                      בפרוטוקול, וערך שמכיל אותו מזריק פקודה נוספת. */}
+                  {node.type === 'raw' && (
+                    <label className="flex flex-col gap-1">
+                      <span className="text-xs font-semibold text-slate-600">פקודת ימות</span>
+                      <input dir="ltr" value={node.rawCommand ?? ''}
+                        placeholder="go_to_folder=/7"
+                        onChange={e => patch(node.id, { rawCommand: e.target.value })}
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 font-mono text-sm" />
+                      <span className="text-[11px] leading-relaxed text-slate-500">
+                        הדביקו פקודה מהתיעוד של ימות — למשל <code dir="ltr">go_to_folder=/7</code> לתא קולי.
+                        כך אפשר להשתמש בכל סוג שלוחה שימות מציעה.
+                      </span>
+                      {/* ⚠️ אזהרה מיידית ולא רק בשמירה: פקודה שבורה
+                          משתיקה את השלוחה, והמנהל מגלה זאת רק כשמתקשר
+                          מתלונן. */}
+                      {node.rawCommand && !/^[a-zA-Z_][a-zA-Z0-9_]*=.+$/.test(node.rawCommand.trim()) && (
+                        <span className="text-[11px] font-bold text-rose-700">
+                          הצורה חייבת להיות שם_פקודה=ערך, בלי רווחים בשם ובלי התו &amp;
+                        </span>
+                      )}
                     </label>
                   )}
 

@@ -22,6 +22,7 @@ export type IvrNodeType =
   | 'dial'       // חיוג למספר טלפון חיצוני
   | 'record'     // הקלטת הודעה מהמתקשר
   | 'input'      // קליטת נתון מהמתקשר (ת"ז/מספר) והקראתו חזרה
+  | 'raw'        // פקודת ימות חופשית — הדלת לכל שאר סוגי השלוחות
   | 'hangup'     // ניתוק
 
 export const NODE_TYPE_LABEL: Record<IvrNodeType, string> = {
@@ -31,6 +32,7 @@ export const NODE_TYPE_LABEL: Record<IvrNodeType, string> = {
   dial: 'חיוג למספר',
   record: 'הקלטה מהמתקשר',
   input: 'קליטת מספר מהמתקשר',
+  raw: 'סוג אחר מימות (מתקדם)',
   hangup: 'ניתוק השיחה',
 }
 
@@ -41,6 +43,7 @@ export const NODE_TYPE_HINT: Record<IvrNodeType, string> = {
   dial: 'מחייג למספר טלפון. השיחה יוצאת מהמערכת.',
   record: 'המתקשר משאיר הודעה מוקלטת. ההקלטה נשמרת בימות.',
   input: 'המתקשר מקיש מספר (למשל ת"ז), והמערכת מקריאה אותו חזרה לאישור.',
+  raw: 'לכל סוג שלוחה אחר של ימות — תא קולי, פקס, פילטר זמנים, זמני היום. מדביקים את הפקודה מהתיעוד.',
   hangup: 'מסיים את השיחה.',
 }
 
@@ -94,6 +97,13 @@ export interface IvrNodeDef {
   invalid?: IvrAudio
   /** כבוי = השלוחה קיימת אך אינה פעילה; המקש אליה מדלג. */
   enabled?: boolean
+  /**
+   * פקודת ימות גולמית (type='raw').
+   *
+   * 🔴 מסוננת ב-sanitizeRawCommand לפני שהיא נכתבת לתשובה: "&"
+   * מפריד פקודות, ולכן ערך שמכיל אותו מזריק פקודה נוספת.
+   */
+  rawCommand?: string
   /**
    * שניות המתנה להקשה. ריק = ברירת המחדל (10 בתפריט, 15 בקליטה).
    *
@@ -374,6 +384,7 @@ export function normalizeIvr(raw: unknown): IvrConfig {
       //
       // ⚠️ 0/שלילי → undefined ולא נשמרים: אפס ספרות ואפס שניות הם
       // הגדרות בלתי אפשריות שהיו שוברות את השלוחה.
+      rawCommand: n.rawCommand ? String(n.rawCommand) : undefined,
       maxDigits: Number(n.maxDigits) > 0 ? Number(n.maxDigits) : undefined,
       waitSeconds: Number(n.waitSeconds) > 0 ? Number(n.waitSeconds) : undefined,
       repeats: Number(n.repeats) > 1 ? Number(n.repeats) : undefined,
