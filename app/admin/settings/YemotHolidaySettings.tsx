@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Loader2, Check, Type, Mic, Volume2, Upload, Trash2, Wand2, Play } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
+import StickySaveBar from '@/components/ui/StickySaveBar'
+import { dirtyMessageKeys } from '@/lib/dirtyMessages'
 
 type Msg = { text: string; audio?: string | null }
 type Meta = { key: string; label: string; defaultText: string; allowAudio: boolean; placeholders?: string[]; hint?: string }
@@ -25,6 +27,11 @@ export default function YemotHolidaySettings() {
   const toast = useToast()
   const [meta, setMeta] = useState<Meta[]>([])
   const [messages, setMessages] = useState<Record<string, Msg>>({})
+  // 🔴 עותק המצב השמור — ההשוואה מולו היא מה שמזהה שינוי שלא נשמר.
+  //
+  // ⚠️ בלי זה המנהל עורך נוסח, יוצא מהמסך, והשינוי אובד בשקט: ההודעה
+  // נראתה מעודכנת והטלפון ממשיך להשמיע את הנוסח הישן.
+  const [saved, setSaved] = useState<Record<string, Msg>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savedOk, setSavedOk] = useState(false)
@@ -47,7 +54,7 @@ export default function YemotHolidaySettings() {
       const res = await fetch('/api/admin/yemot-holiday/recording', { method: 'POST', body: fd })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { toast.error(d.error || 'ההעלאה נכשלה'); setBusyKey(null); return }
-      setMessages(d.messages ?? messages)
+      setMessages(d.messages ?? messages); setSaved(d.messages ?? messages)
       toast.success('ההקלטה הועלתה')
     } catch { toast.error('שגיאת רשת') }
     setBusyKey(null)
@@ -59,7 +66,7 @@ export default function YemotHolidaySettings() {
       const res = await fetch(`/api/admin/yemot-holiday/recording?key=${encodeURIComponent(key)}`, { method: 'DELETE' })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { toast.error(d.error || 'ההסרה נכשלה'); setBusyKey(null); return }
-      setMessages(d.messages ?? messages)
+      setMessages(d.messages ?? messages); setSaved(d.messages ?? messages)
       toast.success('הקול הוסר — ההודעה תוקרא כטקסט')
     } catch { toast.error('שגיאת רשת') }
     setBusyKey(null)
@@ -74,7 +81,7 @@ export default function YemotHolidaySettings() {
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { toast.error(d.error || 'יצירת הקול נכשלה'); setBusyKey(null); return }
-      setMessages(d.messages ?? messages)
+      setMessages(d.messages ?? messages); setSaved(d.messages ?? messages)
       toast.success('נוצר קול טבעי להודעה')
     } catch { toast.error('שגיאת רשת') }
     setBusyKey(null)
@@ -90,7 +97,7 @@ export default function YemotHolidaySettings() {
         if (!alive) return
         if (!msgs.ok) { toast.error(msgs.data.error || 'שגיאה בטעינה'); return }
         setMeta(msgs.data.meta ?? [])
-        setMessages(msgs.data.messages ?? {})
+        setMessages(msgs.data.messages ?? {}); setSaved(msgs.data.messages ?? {})
         if (cfg.ok) {
           setHasKey(!!cfg.data.hasKey)
           setVoiceId(cfg.data.voiceId ?? '')
@@ -136,12 +143,14 @@ export default function YemotHolidaySettings() {
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { toast.error(d.error || 'שגיאה בשמירה'); setSaving(false); return }
-      setMessages(d.messages ?? messages)
+      setMessages(d.messages ?? messages); setSaved(d.messages ?? messages)
       setSavedOk(true)
       setTimeout(() => setSavedOk(false), 2500)
     } catch { toast.error('שגיאת רשת') }
     setSaving(false)
   }
+
+  const dirtyKeys = dirtyMessageKeys(messages, saved)
 
   if (loading) {
     return <div className="flex items-center gap-2 py-6 text-sm text-slate-400"><Loader2 size={15} className="animate-spin" /> טוען הודעות…</div>
@@ -279,6 +288,14 @@ export default function YemotHolidaySettings() {
         </Button>
         {savedOk && <span className="text-[13px] font-bold text-green-600">✓ נשמר</span>}
       </div>
+
+      {/* 🔴 סרגל צף — הכפתור למעלה יורד מהמסך בדיוק כשמתחילים לערוך. */}
+      <StickySaveBar
+        dirty={dirtyKeys.length > 0}
+        saving={saving}
+        onSave={() => void save()}
+        hint={dirtyKeys.length === 1 ? 'הודעה אחת שונתה' : `${dirtyKeys.length} הודעות שונו`}
+      />
     </div>
   )
 }

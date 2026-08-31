@@ -5,6 +5,7 @@ import {
   KeyRound, Copy, Check, MessageSquare, Settings2, History,
 } from 'lucide-react'
 import { IVR_EXTENSIONS, type IvrNode, type IvrExtension } from '@/lib/ivrMap'
+import { mainPathTitles } from '@/lib/ivrSteps'
 import YemotMaternitySettings from '@/app/admin/settings/YemotMaternitySettings'
 import YemotHolidaySettings from '@/app/admin/settings/YemotHolidaySettings'
 import YemotMainMenuSettings from '@/app/admin/settings/YemotMainMenuSettings'
@@ -81,13 +82,22 @@ function CopyUrl({ path }: { path: string }) {
 /** כרטיס שלוחה ברשימה. */
 function ExtCard({ ext, onOpen }: { ext: IvrExtension; onOpen: () => void }) {
   const Icon = ext.outbound ? PhoneOutgoing : Phone
+  const steps = mainPathTitles(ext.tree)
   return (
     <button type="button" onClick={onOpen}
       className="flex w-full items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-right transition-colors hover:border-teal-300 hover:bg-teal-50/30">
-      <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${
-        ext.outbound ? 'bg-violet-50' : 'bg-teal-50'}`}>
-        <Icon size={16} className={ext.outbound ? 'text-violet-600' : 'text-teal-600'} />
-      </div>
+      {/* 🔴 מספר ההקשה במקום האייקון — זו השאלה הראשונה שנשאלת על שלוחה
+          ("איך מגיעים לשם"), והיא הייתה חסרה לגמרי מהמסך. */}
+      {ext.digit ? (
+        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-slate-900 font-mono text-sm font-extrabold text-white">
+          {ext.digit}
+        </div>
+      ) : (
+        <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${
+          ext.outbound ? 'bg-violet-50' : 'bg-teal-50'}`}>
+          <Icon size={16} className={ext.outbound ? 'text-violet-600' : 'text-teal-600'} />
+        </div>
+      )}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-extrabold text-slate-900">{ext.title}</h3>
@@ -98,6 +108,20 @@ function ExtCard({ ext, onOpen }: { ext: IvrExtension; onOpen: () => void }) {
           )}
         </div>
         <p className="mt-0.5 text-[12px] leading-relaxed text-slate-500">{ext.purpose}</p>
+
+        {/* 🔴 שרשרת השלבים — כדי לראות את המבנה בלי להיכנס לשלוחה.
+            ⚠️ רק המסלול הראשי (הילד הראשון בכל רמה): הצגת כל הענפים
+            הופכת את הכרטיס לקיר טקסט, ואת הרשימה לבלתי-קריאה. */}
+        {steps.length > 1 && (
+          <p className="mt-1.5 flex flex-wrap items-center gap-1 text-[11px] text-slate-400">
+            {steps.map((s, i) => (
+              <span key={i} className="inline-flex items-center gap-1">
+                {i > 0 && <ChevronLeft size={10} className="text-slate-300" />}
+                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600">{s}</span>
+              </span>
+            ))}
+          </p>
+        )}
       </div>
       <ChevronLeft size={16} className="mt-1 flex-shrink-0 text-slate-300" />
     </button>

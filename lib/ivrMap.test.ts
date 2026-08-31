@@ -59,6 +59,26 @@ describe('🔴 שיחות יוצאות מופרדות מהתפריט', () => {
   })
 })
 
+describe('🔴 מספר ההקשה לכל שלוחה', () => {
+  // ⚠️ המספר הוא מה שהמנהל מחפש כשהוא רוצה לדעת "איך מגיעים לשם".
+  // הוא חייב להתאים ל-DIGIT_TO_ROUTE ב-lib/ivrDelegate — אחרת המסך
+  // מבטיח מקש אחד והשלוחה עונה לאחר.
+  it('חגים 1, יולדות 2', () => {
+    expect(IVR_EXTENSIONS.find(e => e.id === 'holiday')?.digit).toBe('1')
+    expect(IVR_EXTENSIONS.find(e => e.id === 'maternity')?.digit).toBe('2')
+  })
+
+  it('⚠️ לתפריט הראשי אין מקש — מגיעים אליו בחיוג', () => {
+    expect(IVR_EXTENSIONS.find(e => e.id === 'menu')?.digit).toBeUndefined()
+  })
+
+  it('⚠️ לשיחות יוצאות אין מקש — לא מקישים אליהן כלל', () => {
+    for (const e of IVR_EXTENSIONS.filter(x => x.outbound)) {
+      expect(e.digit, e.id).toBeUndefined()
+    }
+  })
+})
+
 describe('שלוחות שיש להן הודעות לעריכה', () => {
   it('חגים ויולדות מקושרות לרשימות ההודעות', () => {
     expect(IVR_EXTENSIONS.find(e => e.id === 'holiday')?.messagesKey).toBe('holiday')

@@ -49,6 +49,13 @@ export interface IvrExtension {
    * שאיש אינו עובר, ומי שמחפש "למה לא הגיע הקוד" מחפש במקום הלא נכון.
    */
   outbound?: boolean
+  /**
+   * המקש שמגיעים בו לשלוחה מהתפריט הראשי.
+   *
+   * ⚠️ חסר בשלוחה הראשית עצמה (אליה מגיעים בחיוג) ובשיחות היוצאות
+   * (שאליהן לא מקישים כלל) — ולכן הוא אופציונלי ולא ריק.
+   */
+  digit?: string
   tree: IvrNode[]
 }
 
@@ -89,6 +96,7 @@ export const IVR_EXTENSIONS: IvrExtension[] = [
     webhook: '/api/webhooks/yemot-holiday',
     yemotType: 'שלוחת API (type=api)',
     messagesKey: 'holiday',
+    digit: '1',
     env: ['YEMOT_WEBHOOK_SECRET'],
     notes: [
       'הרישום ובחירת המוקדים הם שני מתגים נפרדים בחלוקה — אפשר לפתוח רישום בלי מוקדים.',
@@ -150,6 +158,7 @@ export const IVR_EXTENSIONS: IvrExtension[] = [
     webhook: '/api/webhooks/yemot-maternity',
     yemotType: 'שלוחת API (type=api)',
     messagesKey: 'maternity',
+    digit: '2',
     env: ['YEMOT_WEBHOOK_SECRET', 'NEDARIM_*'],
     notes: [
       'השלוחה מבצעת פעולה כספית (טעינת כרטיס) — לכן ApiToken נאכף ונכשל-סגור.',
