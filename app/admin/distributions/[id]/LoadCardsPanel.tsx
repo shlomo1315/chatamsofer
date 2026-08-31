@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { Loader2, Wallet, AlertTriangle, Check, X } from 'lucide-react'
+import { Loader2, Wallet, AlertTriangle, Check, X, Bell } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // טעינת הכרטיסים — הפעולה הכספית.
@@ -35,6 +35,46 @@ export default function LoadCardsPanel({ distributionId }: { distributionId: str
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [done, setDone] = useState('')
+
+  // ── הודעה שהכרטיס מוכן ──
+  //
+  // 🔴 פעולה נפרדת מהטעינה, במכוון: אפשר לטעון היום ולהודיע מחר,
+  // ואפשר להריץ שוב אחרי טעינה נוספת בלי לצנתק שנית את מי שכבר קיבל.
+  //
+  // ⚠️ אין שוברים — ההודעה הזו היא כל מה שהמשפחה מקבלת.
+  const [notifyScope, setNotifyScope] = useState<{
+    phone: number; email: number; callConfigured: boolean
+    skipped: { notLoaded: number; noCenter: number; alreadyNotified: number; badPhone: number; noContact: number }
+  } | null>(null)
+  const [notifyBusy, setNotifyBusy] = useState(false)
+
+  async function checkNotify() {
+    setNotifyBusy(true); setErr('')
+    try {
+      const res = await fetch(`/api/admin/distributions/${encodeURIComponent(distributionId)}/pickup-notify`,
+        { cache: 'no-store' })
+      const d = await res.json()
+      if (!res.ok) { setErr(d.error ?? 'הבדיקה נכשלה'); return }
+      setNotifyScope(d)
+    } catch { setErr('שגיאת רשת') } finally { setNotifyBusy(false) }
+  }
+
+  async function runNotify() {
+    if (!notifyScope) return
+    setNotifyBusy(true); setErr(''); setDone('')
+    try {
+      const res = await fetch(`/api/admin/distributions/${encodeURIComponent(distributionId)}/pickup-notify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: true }),
+      })
+      const d = await res.json()
+      if (!res.ok) { setErr(d.error ?? 'השליחה נכשלה'); return }
+      setDone(`${fmt(d.calls ?? 0)} צינתוקים · ${fmt(d.mails ?? 0)} מיילים` +
+        (d.failed ? ` · ${fmt(d.failed)} נכשלו` : ''))
+      setNotifyScope(null)
+    } catch { setErr('שגיאת רשת') } finally { setNotifyBusy(false) }
+  }
 
   async function loadPreview() {
     setBusy(true); setErr(''); setDone('')
@@ -84,9 +124,11 @@ export default function LoadCardsPanel({ distributionId }: { distributionId: str
       </h3>
       <p className="mb-3 text-[11px] text-slate-500">
         נטענים רק מאושרים <strong className="text-slate-700">שכבר בחרו מוקד</strong>, שטרם נטענו ויש להם תעודת זהות.
-        מיד אחרי הטעינה נשלח אליהם השובר במייל.
+        {/* ⚠️ אין שוברים בחלוקה הזו: המשפחה מגיעה למוקד ומקבלת את הכרטיס.
+            ההודעה נשלחת בכפתור נפרד למטה, ולא אוטומטית עם הטעינה. */}
         <strong className="text-slate-700"> הפעולה רצה רק מכאן ולעולם לא אוטומטית</strong> —
         אפשר להריץ אותה שוב ושוב, וכל פעם ייטענו רק מי שנוספו מאז.
+        אחרי הטעינה — שלחו להם הודעה בכפתור למטה.
       </p>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -179,6 +221,76 @@ export default function LoadCardsPanel({ distributionId }: { distributionId: str
           )}
         </div>
       )}
+
+      {/* ── הודעה שהכרטיס מוכן ──
+          🔴 פעולה נפרדת מהטעינה: אפשר לטעון היום ולהודיע מחר, ואפשר
+          להריץ שוב אחרי טעינה נוספת בלי לצנתק שנית את מי שכבר קיבל.
+          ⚠️ אין שוברים — ההודעה הזו היא כל מה שהמשפחה מקבלת. */}
+      <div className="mt-4 flex flex-col gap-2.5 rounded-xl border border-indigo-200 bg-white p-3.5">
+        <div>
+          <h4 className="flex items-center gap-1.5 text-[13px] font-extrabold text-indigo-900">
+            <Bell size={14} /> הודעה שהכרטיס מוכן
+          </h4>
+          <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
+            צינתוק ומייל למי <strong className="text-slate-700">שכבר נטען לו הכרטיס</strong>.
+            ההודעה אומרת באיזה מוקד לאסוף, ושרק שם אפשר.
+            אפשר להריץ שוב — מי שכבר קיבל לא יקבל שנית.
+          </p>
+        </div>
+
+        {notifyScope ? (
+          <div className="rounded-lg border border-indigo-200 bg-indigo-50/60 p-3">
+            <p className="text-sm font-bold text-indigo-900">
+              {fmt(notifyScope.phone)} צינתוקים · {fmt(notifyScope.email)} מיילים
+            </p>
+            <ul className="mt-1 flex flex-col gap-0.5 text-[11px] text-slate-600">
+              {notifyScope.skipped.alreadyNotified > 0 && (
+                <li>· {fmt(notifyScope.skipped.alreadyNotified)} כבר קיבלו הודעה</li>
+              )}
+              {notifyScope.skipped.notLoaded > 0 && (
+                <li>· {fmt(notifyScope.skipped.notLoaded)} טרם נטענו — יקבלו אחרי הטעינה</li>
+              )}
+              {notifyScope.skipped.noCenter > 0 && (
+                <li>· {fmt(notifyScope.skipped.noCenter)} בלי מוקד</li>
+              )}
+              {notifyScope.skipped.badPhone > 0 && (
+                <li className="text-amber-700">· {fmt(notifyScope.skipped.badPhone)} מספר טלפון לא תקין</li>
+              )}
+              {/* 🔴 מי שאין לו שום דרך ליצור קשר — הוא לא יֵדע שהכרטיס מחכה. */}
+              {notifyScope.skipped.noContact > 0 && (
+                <li className="font-bold text-rose-700">
+                  · {fmt(notifyScope.skipped.noContact)} בלי טלפון ובלי מייל — דורשים טיפול ידני
+                </li>
+              )}
+            </ul>
+            {/* ⚠️ נאמר מראש: בלי הגדרת ימות הצינתוק לא יֵצא כלל. */}
+            {!notifyScope.callConfigured && notifyScope.phone > 0 && (
+              <p className="mt-2 rounded-lg bg-amber-100 px-2.5 py-1.5 text-[11px] font-semibold text-amber-900">
+                חיבור השיחות היוצאות אינו מוגדר — יישלחו מיילים בלבד.
+              </p>
+            )}
+            {(notifyScope.phone + notifyScope.email) > 0 ? (
+              <div className="mt-2.5 flex items-center gap-2">
+                <button type="button" disabled={notifyBusy} onClick={() => void runNotify()}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-extrabold text-white hover:bg-indigo-700 disabled:opacity-40">
+                  {notifyBusy ? <Loader2 size={13} className="animate-spin" /> : <Bell size={13} />}
+                  שלח עכשיו
+                </button>
+                <button type="button" onClick={() => setNotifyScope(null)}
+                  className="text-xs font-bold text-slate-500 hover:text-slate-700">ביטול</button>
+              </div>
+            ) : (
+              <p className="mt-2 text-xs font-semibold text-slate-500">אין למי להודיע כרגע</p>
+            )}
+          </div>
+        ) : (
+          <button type="button" disabled={notifyBusy} onClick={() => void checkNotify()}
+            className="inline-flex w-fit items-center gap-1.5 rounded-xl border border-indigo-300 bg-white px-3 py-2 text-xs font-bold text-indigo-800 hover:bg-indigo-50 disabled:opacity-40">
+            {notifyBusy ? <Loader2 size={13} className="animate-spin" /> : <Bell size={13} />}
+            בדיקה לפני שליחה
+          </button>
+        )}
+      </div>
 
       {done && (
         <p className="mt-3 flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">

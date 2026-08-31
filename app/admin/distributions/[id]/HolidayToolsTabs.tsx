@@ -6,6 +6,7 @@ import LoadCardsPanel from './LoadCardsPanel'
 import SendVouchersPanel from './SendVouchersPanel'
 import TransactionsPanel from './TransactionsPanel'
 import IvrSimulator from './IvrSimulator'
+import ToolPanelBoundary from './ToolPanelBoundary'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // כלי החלוקה — טאבים, באותו דפוס של מסך כרטיסי המזון (CardsTabs).
@@ -49,12 +50,26 @@ export default function HolidayToolsTabs({ distributionId }: { distributionId: s
         })}
       </div>
 
-      {/* ⚠️ רינדור מותנה ולא hidden: פאנל מוסתר עדיין רץ ויורה קריאות. */}
-      {tab === 'centers' && <CenterBreakdown distributionId={distributionId} />}
-      {tab === 'load' && <LoadCardsPanel distributionId={distributionId} />}
-      {tab === 'vouchers' && <SendVouchersPanel distributionId={distributionId} />}
-      {tab === 'tx' && <TransactionsPanel distributionId={distributionId} />}
-      {tab === 'ivr' && <IvrSimulator distributionId={distributionId} />}
+      {/* ⚠️ רינדור מותנה ולא hidden: פאנל מוסתר עדיין רץ ויורה קריאות.
+
+          🔴 כל פאנל בגבול-שגיאה משלו: עד כה תקלה באחד מהם הפילה את
+          **כל** דף החלוקה, כולל טבלת הנרשמים והאישורים. אובדן הגישה
+          לחלוקה כולה בגלל פאנל צדדי חמור בהרבה מהתקלה עצמה. */}
+      {tab === 'centers' && (
+        <ToolPanelBoundary name="מוקדי חלוקה"><CenterBreakdown distributionId={distributionId} /></ToolPanelBoundary>
+      )}
+      {tab === 'load' && (
+        <ToolPanelBoundary name="טעינת כרטיסים"><LoadCardsPanel distributionId={distributionId} /></ToolPanelBoundary>
+      )}
+      {tab === 'vouchers' && (
+        <ToolPanelBoundary name="שוברים"><SendVouchersPanel distributionId={distributionId} /></ToolPanelBoundary>
+      )}
+      {tab === 'tx' && (
+        <ToolPanelBoundary name="עסקאות ואיפוס"><TransactionsPanel distributionId={distributionId} /></ToolPanelBoundary>
+      )}
+      {tab === 'ivr' && (
+        <ToolPanelBoundary name="בדיקת שלוחה"><IvrSimulator distributionId={distributionId} /></ToolPanelBoundary>
+      )}
     </div>
   )
 }

@@ -216,11 +216,15 @@ async function handleCenterRoute(
 
   // ⚠️ רק מי שרשום לחלוקה יכול לבחור מוקד — הבחירה נשמרת על הרשומה שלו.
   // ⚠️ approval_status — שער הבחירה, ראו הערך המחושב למטה.
+  // ⚠️ load_status נשלף כדי להבחין בין "בחרת מוקד" ל"הכרטיס מוכן":
+  // מי שהכרטיס שלו כבר טעון מתקשר בעקבות הצינתוק, וההודעה שהוא צריך
+  // לשמוע היא איפה לאסוף — לא אישור על בחירה שעשה לפני שבועיים.
   const { data: recRow } = await db.from('distribution_recipients')
-    .select('id, center_id, approval_status')
+    .select('id, center_id, approval_status, load_status')
     .eq('distribution_id', dist.id).eq('beneficiary_id', ben.id).maybeSingle()
   const rec = recRow as {
     id: string; center_id: string | null; approval_status: string | null
+    load_status: string | null
   } | null
   if (!rec) return yemotText([idMessage(msgToken(msgs, 'not_eligible')), goToFolder('hangup')], callId)
 
@@ -234,13 +238,17 @@ async function handleCenterRoute(
         .eq('id', rec.center_id).maybeSingle()).data as CenterRow | null
     const label = centerLabel(c) ?? ''
 
-    // 🔴 בלי שעות ובלי תאריכים — במכוון.
+    // 🔴 שתי הודעות שונות לשני מצבים.
     //
-    // מועדי החלוקה טרם נקבעו, והקראתם כאן הייתה מוסרת מידע שישתנה.
-    // ההודעה עצמה אומרת שתישלח הודעה מסודרת; ראו center_already
-    // ב-lib/yemotHolidayMessages, שממנו הוסר {hours} לגמרי.
+    // מי שהכרטיס שלו כבר נטען מתקשר בעקבות הצינתוק, והשאלה שלו היא
+    // "איפה אני אוסף". אישור על בחירה שעשה לפני שבועיים אינו עונה
+    // עליה, ומשאיר אותו מתקשר למשרד.
+    //
+    // ⚠️ בלי שעות ובלי תאריכים בשתיהן — מועדי החלוקה טרם נקבעו,
+    // והקראתם כאן הייתה מוסרת מידע שישתנה.
+    const readyKey = rec.load_status === 'loaded' ? 'card_ready' : 'center_already'
     return yemotText([
-      idMessage(msgToken(msgs, 'center_already', { center: label })),
+      idMessage(msgToken(msgs, readyKey, { center: label })),
       goToFolder('hangup'),
     ], callId)
   }
