@@ -131,11 +131,21 @@ function ExtCard({ ext, onOpen }: { ext: IvrExtension; onOpen: () => void }) {
 
 type Tab = 'messages' | 'tree' | 'settings'
 
+// ── הטאבים הראשיים ──
+// ⚠️ "בונה" שני ולא אחרון: זה המקום שבו באמת עורכים, וקודם הוא היה
+// בתחתית עמוד ארוך אחרי גלילה. "מבנה" נשאר ראשון כי הוא התמונה הכללית.
+type MainTab = 'tree' | 'builder' | 'log' | 'setup'
+const MAIN_TABS: { key: MainTab; label: string; icon: typeof Phone }[] = [
+  { key: 'tree', label: 'השלוחות', icon: Phone },
+  { key: 'builder', label: 'בונה שלוחות', icon: ListTree },
+  { key: 'log', label: 'יומן שיחות', icon: History },
+  { key: 'setup', label: 'חיבור לימות', icon: PlayCircle },
+]
+
 export default function PhoneSystemClient() {
   const [openId, setOpenId] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('messages')
-  const [showLog, setShowLog] = useState(false)
-  const [showBuilder, setShowBuilder] = useState(false)
+  const [main, setMain] = useState<MainTab>('tree')
 
   const ext = IVR_EXTENSIONS.find(e => e.id === openId) ?? null
 
@@ -145,20 +155,47 @@ export default function PhoneSystemClient() {
     const outbound = IVR_EXTENSIONS.filter(e => e.outbound)
     return (
       <div className="flex flex-col gap-5">
-        {/* 🔴 הכתובת היחידה שצריך בימות — למעלה ובגדול.
-            ⚠️ בלי זה המנהל רואה כתובת בכל שלוחה ומניח שצריך להגדיר את
-            כולן, בזמן שהראשית מטפלת בהכל. */}
-        <div className="rounded-2xl border-2 border-teal-200 bg-teal-50/60 p-4">
-          <h2 className="text-[13px] font-extrabold text-teal-900">
-            הכתובת להגדרה בימות — אחת לכל המערכת
-          </h2>
-          <p className="mb-2.5 mt-0.5 text-[11.5px] leading-relaxed text-teal-800">
-            מגדירים שלוחה אחת מסוג <strong>API</strong> ומדביקים את הכתובת.
-            כל התפריט — חגים, יולדות והודעות — רץ מכאן, ושינוי בו אינו דורש נגיעה בימות.
-          </p>
-          <CopyUrl path="/api/webhooks/yemot" />
+        {/* ── טאבים ראשיים ──
+            🔴 קודם הכל ישב בעמוד אחד ארוך, והבונה — המקום שבו באמת
+            עורכים — היה בתחתיתו אחרי גלילה ארוכה. */}
+        <div className="flex flex-wrap gap-1.5 border-b border-slate-200 pb-3">
+          {MAIN_TABS.map(t => (
+            <button key={t.key} type="button" onClick={() => setMain(t.key)}
+              className={`inline-flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-bold transition-colors ${
+                main === t.key
+                  ? 'border-teal-300 bg-teal-50 text-teal-800'
+                  : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}>
+              <t.icon size={13} /> {t.label}
+            </button>
+          ))}
         </div>
 
+        {main === 'builder' && (
+          <section className="flex flex-col gap-3">
+            <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11.5px] leading-relaxed text-amber-900">
+              🔴 מבנה שנשמר כאן <strong>מחליף את התפריט הקבוע</strong> לכל מי שמחייג.
+              כל עוד לא נשמר דבר — המערכת ממשיכה לעבוד בדיוק כפי שהיא.
+            </p>
+            <IvrBuilder />
+          </section>
+        )}
+
+        {main === 'log' && <YemotCallLog />}
+
+        {main === 'setup' && (
+          <div className="rounded-2xl border-2 border-teal-200 bg-teal-50/60 p-4">
+            <h2 className="text-[13px] font-extrabold text-teal-900">
+              הכתובת להגדרה בימות — אחת לכל המערכת
+            </h2>
+            <p className="mb-2.5 mt-0.5 text-[11.5px] leading-relaxed text-teal-800">
+              מגדירים שלוחה אחת מסוג <strong>API</strong> ומדביקים את הכתובת.
+              כל התפריט — חגים, יולדות והודעות — רץ מכאן, ושינוי בו אינו דורש נגיעה בימות.
+            </p>
+            <CopyUrl path="/api/webhooks/yemot" />
+          </div>
+        )}
+
+        {main === 'tree' && (<>
         <section className="flex flex-col gap-2">
           <h2 className="flex items-center gap-1.5 text-[13px] font-extrabold text-slate-700">
             <Phone size={14} className="text-teal-600" /> שלוחות — מה שומע מי שמחייג
@@ -188,35 +225,7 @@ export default function PhoneSystemClient() {
           ))}
         </section>
 
-        {/* 🔴 בונה השלוחות — כאן מוסיפים שלוחות חדשות בלי פריסה.
-            ⚠️ מקופל כברירת מחדל: מבנה שנשמר כאן *מחליף* את התפריט הקבוע
-            לכל המתקשרים, ולכן הוא לא צריך להיפתח בטעות. */}
-        <section className="rounded-2xl border border-slate-200 bg-white">
-          <button type="button" onClick={() => setShowBuilder(v => !v)}
-            className="flex w-full items-center gap-2 px-4 py-3 text-right text-[13px] font-extrabold text-slate-700 hover:bg-slate-50">
-            <ListTree size={14} className="text-indigo-500" /> בונה שלוחות — הוספה ועריכה
-            <span className="rounded-md bg-indigo-50 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700">מתקדם</span>
-            <ChevronLeft size={15} className={`mr-auto text-slate-300 transition-transform ${showBuilder ? '-rotate-90' : ''}`} />
-          </button>
-          {showBuilder && (
-            <div className="border-t border-slate-200 p-4">
-              <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11.5px] leading-relaxed text-amber-900">
-                🔴 מבנה שנשמר כאן <strong>מחליף את התפריט הקבוע</strong> לכל מי שמחייג.
-                כל עוד לא נשמר דבר — המערכת ממשיכה לעבוד בדיוק כפי שהיא.
-              </p>
-              <IvrBuilder />
-            </div>
-          )}
-        </section>
-
-        <section className="rounded-2xl border border-slate-200 bg-white">
-          <button type="button" onClick={() => setShowLog(v => !v)}
-            className="flex w-full items-center gap-2 px-4 py-3 text-right text-[13px] font-extrabold text-slate-700 hover:bg-slate-50">
-            <History size={14} className="text-slate-400" /> יומן שיחות
-            <ChevronLeft size={15} className={`mr-auto text-slate-300 transition-transform ${showLog ? '-rotate-90' : ''}`} />
-          </button>
-          {showLog && <div className="border-t border-slate-200 p-4"><YemotCallLog /></div>}
-        </section>
+        </>)}
       </div>
     )
   }
