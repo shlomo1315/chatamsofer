@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   validateIvr, ivrIsValid, defaultIvrConfig, normalizeIvr,
-  type IvrConfig, type IvrNodeDef,
+  NODE_TYPE_LABEL, NODE_TYPE_HINT,
+  type IvrConfig, type IvrNodeDef, type IvrNodeType,
 } from './ivrBuilder'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -271,5 +272,28 @@ describe('⚠️ מגבלת המקשים בתפריט', () => {
       node({ id: 'a' }),
     ], 'root')
     expect(errors(c).some(e => /לא חוקי/.test(e.message))).toBe(true)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 כל סוג שה-runtime מיישם חייב להיות בר-בחירה במסך.
+//
+// ⚠️ 'input' היה מוגדר במודל, נתמך במלואו ב-lib/ivrRuntime, ופשוט
+// נשמט מרשימת הסוגים במסך — כך שאי אפשר היה לבנות שלוחה שקולטת ת"ז,
+// בדיוק מה שהשלוחות הקיימות עושות. שום דבר לא נכשל; האפשרות פשוט
+// לא הייתה שם.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('🔴 כיסוי סוגי השלוחות', () => {
+  it('לכל סוג יש תווית והסבר', () => {
+    const types: IvrNodeType[] =
+      ['menu', 'message', 'transfer', 'dial', 'record', 'input', 'hangup']
+    for (const t of types) {
+      expect(NODE_TYPE_LABEL[t], `חסרה תווית ל-${t}`).toBeTruthy()
+      expect(NODE_TYPE_HINT[t], `חסר הסבר ל-${t}`).toBeTruthy()
+    }
+  })
+
+  it('⚠️ אין סוג עם תווית אך בלי הסבר, ולהפך', () => {
+    expect(Object.keys(NODE_TYPE_LABEL).sort()).toEqual(Object.keys(NODE_TYPE_HINT).sort())
   })
 })

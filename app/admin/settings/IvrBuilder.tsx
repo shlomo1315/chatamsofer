@@ -33,7 +33,11 @@ interface LoadedData {
   tokenSet: boolean
 }
 
-const TYPE_ORDER: IvrNodeType[] = ['menu', 'message', 'transfer', 'dial', 'record', 'hangup']
+// ⚠️ חייב לכלול את *כל* הסוגים שה-runtime מיישם (lib/ivrRuntime).
+// 'input' נשמט כאן בטעות: הוא נתמך במלואו בשרת אך לא הוצע במסך,
+// ולכן אי אפשר היה לבנות שלוחה שקולטת ת"ז — בדיוק מה שהשלוחות
+// הקיימות עושות. נעול בטסט (ivrBuilder.test.ts).
+const TYPE_ORDER: IvrNodeType[] = ['menu', 'message', 'input', 'transfer', 'dial', 'record', 'hangup']
 
 /** מזהה חדש ויציב. ⚠️ בלי תלות ב-Date/Math.random בזמן רינדור. */
 let idCounter = 0
@@ -442,6 +446,28 @@ export default function IvrBuilder() {
                         className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
                       <span className="text-[11px] text-slate-500">
                         כפי שהיא מוגדרת בימות — למשל <code dir="ltr">/2</code>
+                      </span>
+                    </label>
+                  )}
+
+                  {/* 🔴 שלוחת קליטה — מספר הספרות.
+                      ⚠️ בלי הגבלה ימות ממתינה עד תום הזמן: המתקשר
+                      מסיים להקיש ת"ז והשיחה פשוט תלויה. השדה היה קיים
+                      במודל ובשרת אך לא הוצע כאן, כך שכל שלוחת קליטה
+                      שנבנתה במסך נתקעה. */}
+                  {node.type === 'input' && (
+                    <label className="flex flex-col gap-1">
+                      <span className="text-xs font-semibold text-slate-600">מספר ספרות</span>
+                      <input type="number" min={1} max={20} dir="ltr"
+                        value={node.maxDigits ?? ''} placeholder="9"
+                        onChange={e => patch(node.id, {
+                          // ⚠️ ריק = ללא הגבלה (undefined), ולא 0:
+                          // 0 היה נשמר כמגבלה בלתי אפשרית.
+                          maxDigits: e.target.value ? Number(e.target.value) : undefined,
+                        })}
+                        className="w-28 rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
+                      <span className="text-[11px] text-slate-500">
+                        לתעודת זהות — 9. ריק = ללא הגבלה, והשיחה תמתין עד תום הזמן.
                       </span>
                     </label>
                   )}
