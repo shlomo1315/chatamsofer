@@ -97,6 +97,51 @@ export interface IvrNodeDef {
   invalid?: IvrAudio
   /** כבוי = השלוחה קיימת אך אינה פעילה; המקש אליה מדלג. */
   enabled?: boolean
+
+  // ── פונקציות שקיימות בכל שלוחה בימות ──
+
+  /**
+   * חסימת הקשת * לחזרה אחורה.
+   *
+   * ⚠️ ברירת המחדל בימות מאפשרת לחזור. בשלוחה שבאמצע פעולה כספית
+   * או רישום, חזרה אחורה משאירה את הפעולה חצי-גמורה.
+   */
+  blockBack?: boolean
+  /**
+   * ניתוק אוטומטי אחרי X שניות ללא פעילות.
+   *
+   * ⚠️ בלעדיו שיחה שנשכחה פתוחה תופסת קו עד שהמתקשר מנתק.
+   */
+  hangupAfter?: number
+  /**
+   * הרשאת גישה — מי רשאי להיכנס לשלוחה.
+   *
+   * 🔴 'password' דורש סיסמה. בלי זה כל מתקשר מגיע לכל שלוחה, כולל
+   * שלוחות ניהול.
+   */
+  access?: 'all' | 'password' | 'whitelist'
+  /** הסיסמה, כש-access='password'. */
+  accessPassword?: string
+  /**
+   * שם רשימת המורשים, כש-access='whitelist'.
+   * ⚠️ כפי שהיא מוגדרת בימות.
+   */
+  accessList?: string
+  /**
+   * הודעה שתושמע למי שאינו מורשה.
+   * ⚠️ ריק = ימות משמיעה נוסח כללי.
+   */
+  accessDenied?: IvrAudio
+  /**
+   * שלוחה שאליה חוזרים בסיום.
+   * ⚠️ ריק = חזרה לשלוחת הפתיחה.
+   */
+  returnTo?: string
+  /**
+   * הקלטת השיחה בשלוחה זו.
+   * ⚠️ ההקלטות נשמרות בימות.
+   */
+  recordCall?: boolean
   /**
    * סוג השלוחה בימות (type='raw') — מפתח מתוך lib/ivrYemotTypes.
    *
@@ -397,6 +442,18 @@ export function normalizeIvr(raw: unknown): IvrConfig {
       //
       // ⚠️ 0/שלילי → undefined ולא נשמרים: אפס ספרות ואפס שניות הם
       // הגדרות בלתי אפשריות שהיו שוברות את השלוחה.
+      // 🔴 הפונקציות המשותפות. כל שדה חייב להופיע כאן, אחרת
+      // הוא נמחק בשמירה בשקט — ראו ההערה למעלה.
+      blockBack: n.blockBack === true ? true : undefined,
+      hangupAfter: Number(n.hangupAfter) > 0 ? Number(n.hangupAfter) : undefined,
+      access: n.access === 'password' || n.access === 'whitelist' ? n.access : undefined,
+      accessPassword: n.accessPassword ? String(n.accessPassword) : undefined,
+      accessList: n.accessList ? String(n.accessList) : undefined,
+      accessDenied: n.accessDenied
+        ? { text: String(n.accessDenied.text ?? ''), file: n.accessDenied.file ?? null }
+        : undefined,
+      returnTo: n.returnTo ? String(n.returnTo) : undefined,
+      recordCall: n.recordCall === true ? true : undefined,
       yemotType: n.yemotType ? String(n.yemotType) : undefined,
       // ⚠️ רק ערכי מחרוזת: ערך מקונן היה נכתב ל-ext.ini כ-[object Object].
       yemotFields: n.yemotFields && typeof n.yemotFields === 'object'

@@ -67,6 +67,50 @@ function repeatsOf(node: IvrNodeDef): string {
   return String(Math.min(Math.round(n), 5))
 }
 
+/**
+ * הפקודות שנוספות לכל שלוחה, לפי הפונקציות המשותפות.
+ *
+ * 🔴 בלי אכיפה כאן ההגדרות במסך הן קישוט: המנהל מסמן "חסום חזרה"
+ * והמתקשר עדיין חוזר.
+ *
+ * ⚠️ מוחזר מערך ולא מחרוזת — הקורא משרשר אותן לפקודות שלו, וכך
+ * הסדר נשלט במקום אחד.
+ */
+function commonCommands(node: IvrNodeDef): string[] {
+  const out: string[] = []
+  // ⚠️ חסימת * — בימות זו הגדרה נפרדת מהקריאה עצמה.
+  if (node.blockBack) out.push('no_back=yes')
+  // ⚠️ ניתוק אוטומטי: שיחה שנשכחה פתוחה תופסת קו.
+  const hangup = Number(node.hangupAfter ?? 0)
+  if (Number.isFinite(hangup) && hangup > 0) {
+    out.push(`hangup_after=${Math.min(Math.round(hangup), 3600)}`)
+  }
+  if (node.recordCall) out.push('record_call=yes')
+  return out
+}
+
+/**
+ * בדיקת ההרשאה לשלוחה.
+ *
+ * 🔴 מוחזרות פקודות דחייה כשאין הרשאה, ו-null כשמותר להיכנס.
+ * שלוחת ניהול בלי הגנה פתוחה לכל מתקשר.
+ */
+function accessGuard(node: IvrNodeDef): string[] | null {
+  if (node.access === 'password') {
+    const pw = String(node.accessPassword ?? '').trim()
+    // ⚠️ הגדרה חסרה = חסימה, לא מעבר. שלוחה שסומנה כמוגנת ואין בה
+    // סיסמה חייבת להיחסם, אחרת ההגדרה מטעה בדיוק בכיוון המסוכן.
+    if (!pw) {
+      return [`id_list_message=${tToken('השלוחה אינה זמינה')}`, 'go_to_folder=hangup']
+    }
+    return null
+  }
+  if (node.access === 'whitelist' && !String(node.accessList ?? '').trim()) {
+    return [`id_list_message=${tToken('השלוחה אינה זמינה')}`, 'go_to_folder=hangup']
+  }
+  return null
+}
+
 function readMenu(node: IvrNodeDef, prompt: string): string {
   const digits = (node.keys ?? []).map(k => k.digit).join('.')
   // ⚠️ re_enter='yes' הוא מה שמונע לולאה: ימות מבקשת הקשה חדשה במקום
@@ -110,7 +154,9 @@ export function ivrStep(cfg: IvrConfig, nodeId: string, digit: string): IvrStepR
     if (!key || !target || target.enabled === false) {
       const invalid = audioToken(node.invalid) || tToken('הקשה שגויה')
       const prompt = joinTokens(invalid, audioToken(node.prompt))
-      return { commands: [readMenu(node, prompt)] }
+      // ⚠️ commonCommands ישירות: כאן איננו בתוך enterNode, ואין
+      // משתנה common. הקשה שגויה עדיין חייבת לכבד את ההגדרות.
+      return { commands: [...commonCommands(node), readMenu(node, prompt)] }
     }
     return enterNode(cfg, byId, target.id)
   }
@@ -128,20 +174,34 @@ function enterNode(
   const node = byId.get(nodeId)
   if (!node) return { commands: [`id_list_message=${tToken('שגיאה במערכת')}`, 'go_to_folder=hangup'] }
 
+  // 🔴 שער ההרשאה — לפני כל דבר אחר.
+  //
+  // ⚠️ כאן ולא בכל ענף בנפרד: enterNode היא נקודת הכניסה היחידה
+  // לשלוחה, וכל בדיקה שמפוזרת בין הענפים נשכחת באחד מהם.
+  const denied = accessGuard(node)
+  if (denied) {
+    const msg = audioToken(node.accessDenied)
+    // ⚠️ נוסח מותאם אם הוגדר; אחרת הנוסח הכללי מ-accessGuard.
+    return { commands: msg ? [`id_list_message=${msg}`, 'go_to_folder=hangup'] : denied }
+  }
+
   const prompt = audioToken(node.prompt)
+  // ⚠️ נוספות לכל תשובה — ראו commonCommands.
+  const common = commonCommands(node)
 
   switch (node.type) {
     case 'menu':
       return { commands: [readMenu(node, prompt)] }
 
     case 'transfer':
-      return { commands: [`go_to_folder=${node.folder ?? 'hangup'}`] }
+      return { commands: [...common, `go_to_folder=${node.folder ?? 'hangup'}`] }
 
     case 'dial':
       // ⚠️ routing_yemot ולא go_to_folder: חיוג יוצא הוא פעולה אחרת
       // לגמרי, ו-go_to_folder עם מספר טלפון פשוט נכשל בשקט.
       return {
         commands: [
+          ...common,
           ...(prompt ? [`id_list_message=${prompt}`] : []),
           `routing_yemot=${String(node.phone ?? '').replace(/\D/g, '')}`,
         ],
@@ -150,7 +210,7 @@ function enterNode(
     case 'record':
       // הקלטה מהמתקשר. ⚠️ נשמרת בימות עצמה; אין כאן מסד.
       return {
-        commands: [`record=${prompt || tToken('נא להשאיר הודעה אחרי הצפצוף')}=ivrRec,yes,,,,,,,,`],
+        commands: [...common, `record=${prompt || tToken('נא להשאיר הודעה אחרי הצפצוף')}=ivrRec,yes,,,,,,,,`],
       }
 
     case 'input': {
@@ -167,7 +227,7 @@ function enterNode(
         'ivrInput', 'yes', max > 0 ? String(max) : '', '1', String(waitOf(node, 15)),
         'No', 'no', 'no', '', '', repeatsOf(node), '', '', '',
       ]
-      return { commands: [`read=${prompt || tToken('נא להקיש את המספר')}=${ops.join(',')}`] }
+      return { commands: [...common, `read=${prompt || tToken('נא להקיש את המספר')}=${ops.join(',')}`] }
     }
 
     case 'raw': {
@@ -199,6 +259,7 @@ function enterNode(
       }
       return {
         commands: [
+          ...common,
           ...(prompt ? [`id_list_message=${prompt}`] : []),
           cmd,
         ],
@@ -208,6 +269,7 @@ function enterNode(
     case 'hangup':
       return {
         commands: [
+          ...common,
           ...(prompt ? [`id_list_message=${prompt}`] : []),
           'go_to_folder=hangup',
         ],
@@ -224,7 +286,7 @@ function enterNode(
         ? [readMenu(root, audioToken(root.prompt))]
         : ['go_to_folder=hangup']
       return {
-        commands: [...(prompt ? [`id_list_message=${prompt}`] : []), ...back],
+        commands: [...common, ...(prompt ? [`id_list_message=${prompt}`] : []), ...back],
       }
     }
   }

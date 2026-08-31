@@ -209,3 +209,74 @@ describe('⚠️ מצבי קצה שלא מפילים שיחה', () => {
     expect(cmdCount).toBeLessThanOrEqual(3)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 הפונקציות שקיימות בכל שלוחה בימות.
+//
+// ⚠️ בלי אכיפה ב-runtime ההגדרות במסך הן קישוט: המנהל מסמן "חסום
+// חזרה", שומר, והמתקשר עדיין חוזר אחורה.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('🔴 פונקציות משותפות לכל שלוחה', () => {
+  const cfgWith = (extra: Partial<IvrNodeDef>): IvrConfig => ({
+    version: 1, rootId: 'r',
+    nodes: [{ id: 'r', name: 'ראשי', type: 'message', prompt: { text: 'שלום' }, ...extra }],
+  })
+
+  const all = (c: IvrConfig) => ivrStep(c, '', '').commands.join('&')
+
+  it('חסימת חזרה נאכפת', () => {
+    expect(all(cfgWith({ blockBack: true }))).toContain('no_back=yes')
+  })
+
+  it('⚠️ לא מסומן → אין פקודה. ברירת המחדל של ימות נשמרת', () => {
+    expect(all(cfgWith({}))).not.toContain('no_back')
+  })
+
+  it('ניתוק אוטומטי נאכף', () => {
+    expect(all(cfgWith({ hangupAfter: 90 }))).toContain('hangup_after=90')
+  })
+
+  it('⚠️ ערך חריג נחתך — שעה היא הגבול', () => {
+    expect(all(cfgWith({ hangupAfter: 99999 }))).toContain('hangup_after=3600')
+  })
+
+  it('⚠️ אפס/שלילי אינם נאכפים — הם לא "נתק מיד"', () => {
+    expect(all(cfgWith({ hangupAfter: 0 }))).not.toContain('hangup_after')
+    expect(all(cfgWith({ hangupAfter: -5 }))).not.toContain('hangup_after')
+  })
+
+  it('הקלטת שיחה נאכפת', () => {
+    expect(all(cfgWith({ recordCall: true }))).toContain('record_call=yes')
+  })
+})
+
+describe('🔴 שער ההרשאה', () => {
+  const guarded = (extra: Partial<IvrNodeDef>): IvrConfig => ({
+    version: 1, rootId: 'r',
+    nodes: [{ id: 'r', name: 'ניהול', type: 'message', prompt: { text: 'שלום' }, ...extra }],
+  })
+
+  it('בלי הגדרת הרשאה — פתוח', () => {
+    expect(ivrStep(guarded({}), '', '').commands.join('&')).toContain('שלום')
+  })
+
+  it('🔴 סומן "סיסמה" בלי סיסמה → נחסם, לא נפתח', () => {
+    // ⚠️ הכיוון המסוכן: הגדרה חסרה שנופלת ל"פתוח" משאירה שלוחת
+    // ניהול חשופה בדיוק כשהמנהל חשב שהגן עליה.
+    const out = ivrStep(guarded({ access: 'password' }), '', '').commands.join('&')
+    expect(out).toContain('hangup')
+    expect(out).not.toContain('שלום')
+  })
+
+  it('🔴 רשימת מורשים בלי רשימה → נחסם', () => {
+    const out = ivrStep(guarded({ access: 'whitelist' }), '', '').commands.join('&')
+    expect(out).toContain('hangup')
+  })
+
+  it('⚠️ נוסח דחייה מותאם מושמע במקום הכללי', () => {
+    const out = ivrStep(guarded({
+      access: 'password', accessDenied: { text: 'אין גישה לשלוחה זו' },
+    }), '', '').commands.join('&')
+    expect(out).toContain('אין גישה לשלוחה זו')
+  })
+})

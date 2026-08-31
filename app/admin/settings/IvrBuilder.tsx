@@ -727,6 +727,102 @@ export default function IvrBuilder() {
                       </label>
                     </div>
                   )}
+                  {/* ── הגדרות מתקדמות ──
+                      🔴 קיימות בכל שלוחה בימות, ולכן כאן ולא בסוג
+                      מסוים. ⚠️ ב-details מקופל: רובן אינן נדרשות
+                      ברוב השלוחות, ופתוחות היו מטביעות את השדות
+                      שכן משנים. */}
+                  <details className="rounded-xl border border-slate-200 bg-slate-50">
+                    <summary className="cursor-pointer px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100">
+                      הגדרות מתקדמות
+                    </summary>
+                    <div className="flex flex-col gap-2.5 border-t border-slate-200 px-3 py-3">
+                      <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                        <input type="checkbox" checked={node.blockBack === true}
+                          onChange={e => patch(node.id, { blockBack: e.target.checked || undefined })} />
+                        חסום חזרה אחורה (מקש *)
+                      </label>
+                      <span className="-mt-1.5 text-[11px] text-slate-500">
+                        מומלץ בשלוחה שבאמצע רישום — חזרה משאירה אותו חצי-גמור.
+                      </span>
+
+                      <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                        <input type="checkbox" checked={node.recordCall === true}
+                          onChange={e => patch(node.id, { recordCall: e.target.checked || undefined })} />
+                        הקלט את השיחה
+                      </label>
+
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs font-semibold text-slate-600">ניתוק אוטומטי אחרי (שניות)</span>
+                        <input type="number" min={0} max={3600} dir="ltr"
+                          value={node.hangupAfter ?? ''} placeholder="ללא"
+                          onChange={e => patch(node.id, {
+                            hangupAfter: e.target.value ? Number(e.target.value) : undefined,
+                          })}
+                          className="w-32 rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
+                        <span className="text-[11px] text-slate-500">
+                          שיחה שנשכחה פתוחה תופסת קו. ריק = ללא ניתוק.
+                        </span>
+                      </label>
+
+                      {/* 🔴 הרשאת גישה. */}
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs font-semibold text-slate-600">מי רשאי להיכנס</span>
+                        <select value={node.access ?? ''}
+                          onChange={e => patch(node.id, {
+                            access: (e.target.value || undefined) as 'password' | 'whitelist' | undefined,
+                          })}
+                          className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm">
+                          <option value="">כל המתקשרים</option>
+                          <option value="password">בסיסמה בלבד</option>
+                          <option value="whitelist">רשימת מורשים</option>
+                        </select>
+                      </label>
+
+                      {node.access === 'password' && (
+                        <label className="flex flex-col gap-1">
+                          <span className="text-xs font-semibold text-slate-600">
+                            הסיסמה <span className="text-rose-600">*</span>
+                          </span>
+                          <input dir="ltr" value={node.accessPassword ?? ''}
+                            onChange={e => patch(node.id, { accessPassword: e.target.value })}
+                            className="w-40 rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
+                          {/* ⚠️ בלי סיסמה השלוחה נחסמת לגמרי — כך נבנה
+                              ה-runtime, כדי שהגדרה חסרה לא תשאיר שלוחה
+                              מוגנת-לכאורה פתוחה לכולם. */}
+                          {!(node.accessPassword ?? '').trim() && (
+                            <span className="text-[11px] font-bold text-rose-700">
+                              בלי סיסמה השלוחה תיחסם לכל המתקשרים
+                            </span>
+                          )}
+                        </label>
+                      )}
+
+                      {node.access === 'whitelist' && (
+                        <label className="flex flex-col gap-1">
+                          <span className="text-xs font-semibold text-slate-600">
+                            שם רשימת המורשים <span className="text-rose-600">*</span>
+                          </span>
+                          <input dir="ltr" value={node.accessList ?? ''}
+                            onChange={e => patch(node.id, { accessList: e.target.value })}
+                            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
+                          <span className="text-[11px] text-slate-500">כפי שהיא מוגדרת בימות.</span>
+                        </label>
+                      )}
+
+                      {node.access && (
+                        <label className="flex flex-col gap-1">
+                          <span className="text-xs font-semibold text-slate-600">מה ישמע מי שאינו מורשה</span>
+                          <input value={node.accessDenied?.text ?? ''}
+                            placeholder="השלוחה אינה זמינה"
+                            onChange={e => patch(node.id, {
+                              accessDenied: { ...node.accessDenied, text: e.target.value },
+                            })}
+                            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
+                        </label>
+                      )}
+                    </div>
+                  </details>
                 </div>
               )}
             </div>
