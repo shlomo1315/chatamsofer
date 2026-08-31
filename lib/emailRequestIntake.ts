@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { deliverMail } from './sendMail'
 import { mailFor } from './departments'
 import { emailIntakeRejectedEmail, requestBlockedRejectedEmail, requestReceivedEmail, greetMrs } from './emailTemplates'
+import { isReplyToOurMail } from './intakeReplyLoop'
 import { readFile } from 'fs/promises'
 import path from 'path'
 import type { MailAttachment } from './sendMail'
@@ -245,6 +246,21 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
 
   const from = (msg.fromEmail || '').toLowerCase()
   if (!from || from.endsWith('@chasamsofer.info') || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(from)) return true
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 בלימת לולאת דחיות.
+  //
+  // מי שמשיב על הודעת "הבקשה לא נקלטה" שלנו — התשובה נקלטת כפנייה חדשה,
+  // אין בה ת"ז בנושא, ולכן יוצאת דחייה נוספת שעליה הוא משיב שוב. ביומן
+  // הנכנס נצפו ארבעה סיבובים על אותה כותרת בתוך רבע שעה.
+  //
+  // ⚠️ יוצאים בשקט (true = "טופל"): תשובה על דחייה אינה בקשה, וכל מענה
+  // עליה הוא בדיוק מה שמזין את הלולאה.
+  // ─────────────────────────────────────────────────────────────────────────
+  if (isReplyToOurMail(msg.subject)) {
+    console.log(`[emailRequestIntake] 🔴 תשובה על הודעת דחייה — לא נשלח מענה (from=${from})`)
+    return true
+  }
 
   // ⚠️ שער המחלקה — מחלקה סגורה לא קולטת בקשות באף ערוץ, כולל מייל. בלי הבדיקה
   // הזו נקלטו בקשות הלוואה (גמ״ח) למרות שהמחלקה סגורה — הטופס הציבורי חסום אך
