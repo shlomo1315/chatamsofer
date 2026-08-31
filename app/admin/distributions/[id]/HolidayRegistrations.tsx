@@ -137,9 +137,29 @@ export default function HolidayRegistrations({
   const [allRows, setAllRows] = useState(rows)
   const [loadingRest, setLoadingRest] = useState(false)
 
-  // ⚠️ rows מתחלף אחרי router.refresh() — הרשימה המלאה נבנית מחדש,
-  // אחרת עדכון סטטוס לא היה נראה עד רענון מלא.
-  useEffect(() => { setAllRows(rows) }, [rows])
+  // 🔴 המפתח היציב של הרשימה — ולא מערך ה-props עצמו.
+  //
+  // ⚠️ rows הוא מערך חדש בכל רינדור של רכיב-השרת. תלות בו יצרה מעגל:
+  // ה-effect רץ, קורא setAllRows, זה מרנדר, rows מקבל זהות חדשה,
+  // ה-effect רץ שוב — עד ש-React נופל ב-#301 והמסך מת.
+  //
+  // ⚠️ אורך + המזהה האחרון מזהים רשימה חדשה באמינות מספקת כאן:
+  // השלמת השורות תלויה רק ב"כמה כבר יש" ו"מהיכן להמשיך".
+  const rowsKey = `${rows.length}:${rows[rows.length - 1]?.id ?? ''}`
+
+  // 🔴 סנכרון rows → allRows בזמן הרינדור, לא ב-useEffect.
+  //
+  // ⚠️ זהו הדפוס הרשמי של React ל"state שנגזר מ-props" (אותו דפוס
+  // שכבר בשימוש ב-useTablePagination). ה-effect הקודם הפעיל רינדור
+  // נוסף בכל החלפת זהות של rows, וזו הייתה הלולאה.
+  //
+  // ⚠️ ההשוואה היא על המפתח ולא על המערך: השוואת מערכים נכשלת תמיד,
+  // כי כל רינדור של רכיב-השרת מייצר מערך חדש עם אותו תוכן.
+  const [prevKey, setPrevKey] = useState(rowsKey)
+  if (prevKey !== rowsKey) {
+    setPrevKey(rowsKey)
+    setAllRows(rows)
+  }
 
   useEffect(() => {
     // ⚠️ פחות מ-250 = כל הרשימה כבר כאן, אין מה להשלים.
@@ -168,7 +188,10 @@ export default function HolidayRegistrations({
       }
     })()
     return () => { alive = false }
-  }, [distributionId, rows])
+    // 🔴 rowsKey ולא rows — ראו ההערה למעלה. תלות במערך עצמו היא
+    // הלולאה שהפילה את המסך.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [distributionId, rowsKey])
   const [query, setQuery] = useState('')
   const [source, setSource] = useState<RegisterSource | 'all'>('all')
   const [community, setCommunity] = useState<string>('all')
