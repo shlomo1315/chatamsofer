@@ -1,3 +1,4 @@
+import { isAlreadyGone, describeDeleteFailure } from '@/lib/userDeletion'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
@@ -99,16 +100,30 @@ export async function DELETE(request: NextRequest) {
   const { id } = body
   if (!id) return NextResponse.json({ error: 'חסר מזהה משתמש' }, { status: 400 })
 
-  // מוחקים גם את הפרופיל וגם את משתמש ה-Auth. קודם הפרופיל — כי הוא זה שחוסם
-  // יצירה מחדש (unique על email). אם רק Auth נמחק, נשאר פרופיל יתום שמונע גם
-  // התחברות (אין Auth) וגם חיבור מחדש ("כבר קיים").
-  await admin.from('profiles').delete().eq('id', id)
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 סדר הפעולות: Auth תחילה, ורק אחריו הפרופיל.
+  //
+  // ⚠️ קודם נמחק הפרופיל ראשון, ואז נכשלה מחיקת Auth — ונשאר משתמש Auth
+  // בלי פרופיל: הוא אינו מופיע ברשימת המשתמשים, אי אפשר למחוק אותו
+  // מהמסך, והמייל שלו חסום ליצירה מחדש. מצב גרוע יותר מלא-למחוק-בכלל.
+  //
+  // 🔴 הזהויות נמחקות לפני המשתמש: GoTrue נופל ב-"Database error deleting
+  // user" כשיש יותר מזהות אחת (נרשם במייל ואז התחבר עם Google — אותה
+  // כתובת, שתי שורות ב-auth.identities). זה בדיוק המצב שנצפה בפרודקשן.
+  //
+  // ⚠️ ניקוי הזהויות הוא best-effort: אם ה-RPC אינו קיים עדיין, ממשיכים
+  // למחיקה הרגילה. מחיקה שעובדת ברוב המקרים עדיפה על נפילה בכולם.
+  // ─────────────────────────────────────────────────────────────────────────
+  await admin.rpc('delete_user_identities', { target_user: id }).then(undefined, () => {})
 
   const { error } = await admin.auth.admin.deleteUser(id)
-  // "not found" — משתמש ה-Auth כבר נמחק בעבר; הפרופיל נוקה כעת, אז זו הצלחה.
-  if (error && !/not found|does not exist/i.test(error.message)) {
-    return NextResponse.json({ error: `שגיאה במחיקה: ${error.message}` }, { status: 500 })
+  if (error && !isAlreadyGone(error.message)) {
+    return NextResponse.json({ error: describeDeleteFailure(error.message) }, { status: 500 })
   }
+
+  // ⚠️ אחרי ההצלחה. profiles.id הוא FK עם ON DELETE CASCADE, ולכן השורה
+  // כבר נמחקה — הקריאה כאן מנקה פרופיל יתום שנשאר ממחיקה שנכשלה בעבר.
+  await admin.from('profiles').delete().eq('id', id)
 
   return NextResponse.json({ ok: true })
 }
