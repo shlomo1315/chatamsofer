@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Loader2, Check, Play, Download, RotateCcw, Volume2, Wand2, Trash2, Mic, PhoneCall } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
+import StickySaveBar from '@/components/ui/StickySaveBar'
 
 export default function RegistrationCallSettings() {
   const toast = useToast()
@@ -236,6 +237,9 @@ export default function RegistrationCallSettings() {
       </div>
 
       <p className="text-[11px] text-slate-400">השיחה תומכת במאות שיחות במקביל.</p>
+
+      {/* 🔴 כלל ברזל: כל עריכה מציפה כפתור שמירה מהבהב. */}
+      <StickySaveBar dirty={dirty} saving={saving} onSave={() => void save()} />
     </div>
   )
 }

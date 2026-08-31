@@ -21,6 +21,7 @@ export type IvrNodeType =
   | 'transfer'   // הפניה לשלוחה אחרת בימות (למשל השלוחות הקיימות)
   | 'dial'       // חיוג למספר טלפון חיצוני
   | 'record'     // הקלטת הודעה מהמתקשר
+  | 'input'      // קליטת נתון מהמתקשר (ת"ז/מספר) והקראתו חזרה
   | 'hangup'     // ניתוק
 
 export const NODE_TYPE_LABEL: Record<IvrNodeType, string> = {
@@ -29,6 +30,7 @@ export const NODE_TYPE_LABEL: Record<IvrNodeType, string> = {
   transfer: 'מעבר לשלוחה',
   dial: 'חיוג למספר',
   record: 'הקלטה מהמתקשר',
+  input: 'קליטת מספר מהמתקשר',
   hangup: 'ניתוק השיחה',
 }
 
@@ -38,6 +40,7 @@ export const NODE_TYPE_HINT: Record<IvrNodeType, string> = {
   transfer: 'מעביר את השיחה לשלוחה קיימת בימות — למשל חלוקת חגים או יולדות.',
   dial: 'מחייג למספר טלפון. השיחה יוצאת מהמערכת.',
   record: 'המתקשר משאיר הודעה מוקלטת. ההקלטה נשמרת בימות.',
+  input: 'המתקשר מקיש מספר (למשל ת"ז), והמערכת מקריאה אותו חזרה לאישור.',
   hangup: 'מסיים את השיחה.',
 }
 
@@ -77,6 +80,13 @@ export interface IvrNodeDef {
   folder?: string
   /** למספר החיוג (type='dial'). */
   phone?: string
+  /**
+   * מספר הספרות המרבי בקליטה (type='input').
+   *
+   * ⚠️ ריק = ללא הגבלה, וימות ממתינה עד תום הזמן. לת"ז יש לציין 9,
+   * אחרת המתקשר מסיים להקיש והשיחה נתקעת עד ה-timeout.
+   */
+  maxDigits?: number
   /**
    * הודעה כשההקשה שגויה (type='menu').
    * ריק = משתמשים בברירת המחדל הכללית.

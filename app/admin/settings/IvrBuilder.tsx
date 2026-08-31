@@ -6,6 +6,7 @@ import {
   Phone, ListTree, Volume2, Sparkles, ChevronLeft, Power,
 } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
+import StickySaveBar from '@/components/ui/StickySaveBar'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import type {
   IvrConfig, IvrNodeDef, IvrNodeType, IvrProblem,
@@ -521,6 +522,16 @@ export default function IvrBuilder() {
           )
         })}
       </div>
+
+      {/* 🔴 כלל ברזל: כל עריכה מציפה כפתור שמירה מהבהב.
+          ⚠️ הכפתור שלמעלה יורד מהמסך ברגע שמתחילים לערוך שלוחה —
+          בדיוק כשהוא הופך לרלוונטי. */}
+      <StickySaveBar
+        dirty={dirty}
+        saving={saving}
+        onSave={() => void save()}
+        hint={errors.length > 0 ? `${errors.length} בעיות חוסמות שמירה` : undefined}
+      />
     </div>
   )
 }

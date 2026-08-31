@@ -127,6 +127,20 @@ function enterNode(
         commands: [`record=${prompt || tToken('נא להשאיר הודעה אחרי הצפצוף')}=ivrRec,yes,,,,,,,,`],
       }
 
+    case 'input': {
+      // 🔴 קליטת מספר מהמתקשר (ת"ז, מספר כרטיס).
+      //
+      // ⚠️ משתנה ייעודי (ivrInput) ולא שם כללי: קריאה חוזרת של משתנה
+      // שכבר מלא יוצרת לולאה אינסופית בימות — אותה מלכודת שתועדה
+      // בשלוחת החגים עם ID_VARS.
+      //
+      // ⚠️ אורך מרבי נגזר מההגדרה. בלעדיו ימות ממתינה עד תום הזמן
+      // גם אחרי שהמתקשר סיים להקיש, והשיחה נראית תקועה.
+      const max = Number(node.maxDigits ?? 0)
+      const ops = ['ivrInput', 'yes', max > 0 ? String(max) : '', '1', '15', 'No', 'no', 'no', '', '', '', '', '', '']
+      return { commands: [`read=${prompt || tToken('נא להקיש את המספר')}=${ops.join(',')}`] }
+    }
+
     case 'hangup':
       return {
         commands: [

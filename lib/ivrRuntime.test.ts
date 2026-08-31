@@ -185,6 +185,22 @@ describe('⚠️ מצבי קצה שלא מפילים שיחה', () => {
     }
   })
 
+  // ── קליטת מספר מהמתקשר ──
+  //
+  // 🔴 השלב שהיה חסר לבניית שלוחה מלאה: בלעדיו אי אפשר לבנות מסלול
+  // שמבקש ת"ז. כל שלוחה שדורשת נתון הייתה חייבת קוד ייעודי.
+  it('🔴 קליטת מספר — read עם משתנה ייעודי', () => {
+    const c = cfg([node({ id: 'a', type: 'input', prompt: { text: 'הקישו תעודת זהות' } })], 'a')
+    const out = reply(c)
+    expect(out).toContain('read=')
+    expect(out).toContain('ivrInput')
+  })
+
+  it('⚠️ אורך ההקשה נגזר מההגדרה ולא קבוע', () => {
+    const c = cfg([node({ id: 'a', type: 'input', prompt: { text: 'x' }, maxDigits: 9 })], 'a')
+    expect(reply(c)).toContain(',9,')
+  })
+
   it('טקסט עם תווים אסורים אינו שובר את הפרוטוקול', () => {
     const c = cfg([node({ id: 'a', type: 'message', prompt: { text: 'שלום. "עולם" & עוד' } })], 'a')
     const out = reply(c)
