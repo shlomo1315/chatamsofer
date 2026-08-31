@@ -110,6 +110,13 @@ export default function IvrBuilder() {
           if (!(n.folder ?? '').trim()) {
             out.push({ nodeId: n.id, level: 'error', message: 'לא הוגדר מספר השלוחה בימות' })
           }
+          // 🔴 שדה חובה חסר = שלוחה שנוצרת בימות ואינה עובדת.
+          const def = yemotTypeByKey(n.yemotType)
+          for (const f of def?.fields ?? []) {
+            if (f.required && !(n.yemotFields?.[f.key] ?? '').trim()) {
+              out.push({ nodeId: n.id, level: 'error', message: `חסר: ${f.label}` })
+            }
+          }
         } else if (!/^[a-zA-Z_][a-zA-Z0-9_]*=.+$/.test((n.rawCommand ?? '').trim())) {
           out.push({ nodeId: n.id, level: 'error', message: 'פקודת ימות חסרה או פסולה' })
         }
@@ -213,7 +220,17 @@ export default function IvrBuilder() {
       if (!r.ok) throw new Error(d.error ?? 'שמירה נכשלה')
       setCfg(d.config)
       setDirty(false)
-      toast.success('המבנה נשמר — הוא פעיל מיד')
+      // 🔴 כשל בסנכרון לימות אינו מפיל את השמירה, אבל חייב להיאמר:
+      // שלוחה שלא סונכרנה משמיעה שקט בטלפון, ואיש לא יידע למה.
+      const errs = (d.syncErrors ?? []) as { name: string; error: string }[]
+      if (errs.length) {
+        toast.error(`נשמר, אך ${errs.length} שלוחות לא סונכרנו לימות: ` +
+          errs.map(e => e.name).join(', '))
+      } else {
+        toast.success(d.yemotConnected
+          ? 'נשמר — השלוחות עודכנו גם בימות'
+          : 'המבנה נשמר — הוא פעיל מיד')
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'שמירה נכשלה')
     } finally {
@@ -574,11 +591,56 @@ export default function IvrBuilder() {
                                 onChange={e => patch(node.id, { folder: e.target.value })}
                                 className="w-40 rounded-lg border border-slate-200 px-3 py-1.5 font-mono text-sm" />
                             </label>
-                            {/* 🔴 מה להגדיר בימות. בלי זה המנהל בוחר
-                                סוג, שומר, והשלוחה משמיעה שקט. */}
+                            {/* ── השדות של הסוג ──
+                                🔴 לכל סוג בימות פרמטרים משלו. תא קולי
+                                בלי כתובת מייל אינו שולח לאיש, ופילטר
+                                בלי שעות אינו מסנן דבר. */}
+                            {(def?.fields ?? []).map(f => {
+                              const val = node.yemotFields?.[f.key] ?? ''
+                              const setVal = (v: string) => patch(node.id, {
+                                yemotFields: { ...(node.yemotFields ?? {}), [f.key]: v },
+                              })
+                              return (
+                                <label key={f.key} className="flex flex-col gap-1">
+                                  <span className="text-xs font-semibold text-slate-600">
+                                    {f.label}
+                                    {f.required && <span className="mr-1 text-rose-600">*</span>}
+                                  </span>
+                                  {f.kind === 'select' ? (
+                                    <select value={val} onChange={e => setVal(e.target.value)}
+                                      className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm">
+                                      {/* ⚠️ אפשרות ריקה רק כשהשדה אינו חובה. */}
+                                      {!f.required && <option value="">— ברירת מחדל —</option>}
+                                      {(f.options ?? []).map(o => (
+                                        <option key={o.value} value={o.value}>{o.label}</option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <input
+                                      type={f.kind === 'number' ? 'number'
+                                        : f.kind === 'email' ? 'email'
+                                        : f.kind === 'time' ? 'time' : 'text'}
+                                      dir={f.kind === 'email' || f.kind === 'number' ? 'ltr' : undefined}
+                                      value={val} placeholder={f.placeholder}
+                                      onChange={e => setVal(e.target.value)}
+                                      className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
+                                  )}
+                                  {f.hint && (
+                                    <span className="text-[11px] leading-relaxed text-slate-500">{f.hint}</span>
+                                  )}
+                                  {/* ⚠️ חסר חובה נאמר תוך כדי עריכה: שמירה
+                                      חסומה ממילא, ועדיף לדעת עכשיו. */}
+                                  {f.required && !val.trim() && (
+                                    <span className="text-[11px] font-bold text-rose-700">שדה חובה</span>
+                                  )}
+                                </label>
+                              )
+                            })}
+
+                            {/* ✅ מה יקרה בשמירה. */}
                             {def && (
-                              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11.5px] leading-relaxed text-amber-900">
-                                <strong>לפני שזה יעבוד:</strong> {def.setupHint}
+                              <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11.5px] leading-relaxed text-emerald-900">
+                                {def.setupHint}
                               </p>
                             )}
                           </>

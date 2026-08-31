@@ -4,17 +4,44 @@
 // 🔴 המנהל אינו אמור לחפש פקודות בפורום של ימות כדי להגדיר תא קולי.
 // כאן כל סוג מקבל שם עברי, הסבר, והפקודה נבנית מאליה.
 //
-// ⚠️ הסוגים כאן מגיעים לימות דרך go_to_folder אל שלוחה שמוגדרת שם
-// בסוג המתאים. זה *לא* אותו דבר כמו לבנות את הסוג אצלנו: ימות היא
-// שמריצה אותו, ואנחנו רק שולחים אליה את המתקשר.
+// 🔴 השלוחה נוצרת בימות **אוטומטית** בשמירה: אנחנו מעלים ext.ini
+// דרך UploadFile (ראו lib/yemotExtIni). המנהל אינו נוגע בימות כלל —
+// אחרת לא הרווחנו דבר מהמסך הזה.
 //
-// 🔴 ההבחנה הזו חשובה ואסור להסתיר אותה מהמנהל: שלוחה שאינה קיימת
-// בצד של ימות תשמיע שקט. לכן כל סוג כאן אומר במפורש מה צריך להגדיר
-// שם, ו-setupHint מוצג במסך ליד השדה.
+// ⚠️ ימות עדיין היא שמריצה את הסוג בזמן השיחה; אנחנו רק יוצרים את
+// השלוחה ושולחים אליה את המתקשר ב-go_to_folder.
+//
+// ⚠️ לכל סוג פרמטרים משלו — fields. שם פרמטר שגוי נכתב לקובץ, ימות
+// מתעלמת ממנו, והשלוחה עובדת חלקית בלי שום שגיאה.
 //
 // ⚠️ מקור: התיעוד הרשמי של ימות (f2.freeivr.co.il/topic/78, topic/17278).
 // ערכי ה-type הם כפי שהם מופיעים שם.
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * שדה הגדרה של סוג שלוחה.
+ *
+ * 🔴 לכל סוג בימות יש פרמטרים משלו. בלי השדות האלה המנהל בוחר
+ * "תא קולי" ואין לו איך לומר לאן יישלח המייל.
+ *
+ * ⚠️ `key` הוא שם הפרמטר ב-ext.ini של ימות ואינו שרירותי — שם שגוי
+ * נכתב לקובץ, ימות מתעלמת ממנו, והשלוחה עובדת חלקית בלי שום שגיאה.
+ */
+export interface YemotTypeField {
+  /** שם הפרמטר ב-ext.ini. */
+  key: string
+  /** התווית בעברית. */
+  label: string
+  /** סוג הקלט. */
+  kind: 'text' | 'number' | 'email' | 'time' | 'select'
+  /** לאפשרויות סגורות (kind='select'). */
+  options?: { value: string; label: string }[]
+  /** הסבר קצר מתחת לשדה. */
+  hint?: string
+  /** 🔴 חובה — שמירה תיחסם בלעדיו. */
+  required?: boolean
+  placeholder?: string
+}
 
 export interface YemotTypeDef {
   /** ערך ה-type בימות. */
@@ -31,6 +58,12 @@ export interface YemotTypeDef {
   setupHint: string
   /** קטגוריה — לקיבוץ ברשימה. */
   group: 'שירות' | 'מידע' | 'תוכן' | 'ניהול'
+  /**
+   * הפרמטרים של הסוג.
+   *
+   * ⚠️ ריק = הסוג עובד בלי הגדרות נוספות (למשל "השעה כעת").
+   */
+  fields?: YemotTypeField[]
 }
 
 /**
@@ -47,83 +80,148 @@ export const YEMOT_TYPES: YemotTypeDef[] = [
   {
     key: 'voicemail_email', label: 'תא קולי (עם עותק למייל)', group: 'שירות',
     what: 'המתקשר משאיר הודעה, וההקלטה נשלחת גם לכתובת מייל.',
-    setupHint: 'בימות: שלוחה מסוג voicemail_email, ובה כתובת המייל לקבלת ההודעות.',
+    setupHint: 'השלוחה תיווצר בימות אוטומטית עם כתובת המייל שתזין.',
+    fields: [
+      { key: 'email', label: 'כתובת המייל לקבלת ההודעות', kind: 'email',
+        required: true, placeholder: 'office@example.co.il',
+        hint: 'לכאן תישלח כל הודעה שיושארו בתא הקולי.' },
+      { key: 'max_seconds', label: 'אורך הקלטה מרבי (שניות)', kind: 'number',
+        placeholder: '120', hint: 'ריק = ברירת המחדל של ימות.' },
+    ]
   },
   {
     key: 'voice_mail', label: 'תא קולי', group: 'שירות',
     what: 'המתקשר משאיר הודעה. ההקלטה נשמרת בימות.',
-    setupHint: 'בימות: שלוחה מסוג voice_mail.',
+    setupHint: 'השלוחה תיווצר בימות אוטומטית.',
+    fields: [
+      { key: 'max_seconds', label: 'אורך הקלטה מרבי (שניות)', kind: 'number',
+        placeholder: '120', hint: 'ריק = ברירת המחדל של ימות.' },
+    ]
   },
   {
     key: 'access_filter', label: 'פילטר לפי שעות ותאריכים', group: 'שירות',
     what: 'חוסם או מאפשר כניסה לפי שעה ותאריך — למשל מוקד שסגור בלילה.',
-    setupHint: 'בימות: שלוחה מסוג access_filter, ובה טווחי השעות והתאריכים המותרים.',
+    setupHint: 'השלוחה תיווצר בימות אוטומטית עם טווח השעות שתגדיר.',
+    fields: [
+      { key: 'start_time', label: 'פתוח משעה', kind: 'time', required: true,
+        placeholder: '08:00' },
+      { key: 'end_time', label: 'פתוח עד שעה', kind: 'time', required: true,
+        placeholder: '20:00',
+        hint: 'מחוץ לטווח המתקשר ישמע את ההודעה שהגדרת למעלה.' },
+      { key: 'days', label: 'ימים', kind: 'select', options: [
+        { value: '1234567', label: 'כל השבוע' },
+        { value: '123456', label: 'ראשון עד שישי' },
+        { value: '12345', label: 'ראשון עד חמישי' },
+      ], hint: 'ריק = כל השבוע.' },
+    ]
   },
   {
     key: 'send_fax', label: 'שליחת פקס', group: 'שירות',
     what: 'שולח מסמך בפקס למספר שהמתקשר מקיש.',
-    setupHint: 'בימות: שלוחה מסוג send_fax, ובה הקובץ לשליחה.',
+    setupHint: 'השלוחה תיווצר בימות אוטומטית. את הקובץ לשליחה יש להעלות בימות.',
+    fields: [
+      { key: 'file', label: 'שם הקובץ לשליחה', kind: 'text',
+        placeholder: 'doc.pdf', hint: 'הקובץ חייב להיות מועלה בימות.' },
+    ]
   },
   {
     key: 'template_add_number', label: 'הרשמה לרשימת תפוצה', group: 'שירות',
     what: 'מוסיף את מספר המתקשר לרשימת תפוצה להודעות.',
-    setupHint: 'בימות: שלוחה מסוג template_add_number, ובה שם רשימת התפוצה.',
+    setupHint: 'השלוחה תיווצר בימות אוטומטית עם רשימת התפוצה שתציין.',
+    fields: [
+      { key: 'template', label: 'שם רשימת התפוצה', kind: 'text', required: true,
+        hint: 'כפי שהיא מוגדרת בימות.' },
+    ]
   },
   {
     key: 'template_remove_number', label: 'הסרה מרשימת תפוצה', group: 'שירות',
     what: 'מסיר את מספר המתקשר מרשימת התפוצה.',
-    setupHint: 'בימות: שלוחה מסוג template_remove_number, ובה שם רשימת התפוצה.',
+    setupHint: 'השלוחה תיווצר בימות אוטומטית עם רשימת התפוצה שתציין.',
+    fields: [
+      { key: 'template', label: 'שם רשימת התפוצה', kind: 'text', required: true,
+        hint: 'כפי שהיא מוגדרת בימות.' },
+    ]
   },
 
   // ── מידע ──
   {
     key: 'zmanim', label: 'זמני היום בהלכה', group: 'מידע',
     what: 'מקריא זמני היום — נץ, שקיעה, זמני תפילה.',
-    setupHint: 'בימות: שלוחה מסוג zmanim, ובה יישוב ברירת המחדל.',
+    setupHint: 'השלוחה תיווצר בימות אוטומטית עם היישוב שתבחר.',
+    fields: [
+      { key: 'city', label: 'יישוב', kind: 'select', required: true, options: [
+        { value: 'jerusalem', label: 'ירושלים' },
+        { value: 'bneibrak', label: 'בני ברק' },
+        { value: 'beitshemesh', label: 'בית שמש' },
+        { value: 'ashdod', label: 'אשדוד' },
+        { value: 'haifa', label: 'חיפה' },
+        { value: 'telaviv', label: 'תל אביב' },
+      ], hint: 'הזמנים מחושבים לפי היישוב שנבחר.' },
+    ]
   },
   {
     key: 'say_hour_and_minute', label: 'השעה כעת', group: 'מידע',
     what: 'מקריא את השעה הנוכחית.',
-    setupHint: 'בימות: שלוחה מסוג say_hour_and_minute.',
+    setupHint: 'השלוחה תיווצר בימות אוטומטית. אין הגדרות נוספות.',
   },
   {
     key: 'exchange_rates', label: 'שערי מטבע', group: 'מידע',
     what: 'מקריא שערי מטבע עדכניים.',
-    setupHint: 'בימות: שלוחה מסוג exchange_rates.',
+    setupHint: 'השלוחה תיווצר בימות אוטומטית.',
   },
 
   // ── תוכן ──
   {
     key: 'playfile', label: 'השמעת קבצים', group: 'תוכן',
     what: 'משמיע קובץ או תיקיית קבצים שהועלו לימות.',
-    setupHint: 'בימות: שלוחה מסוג playfile, ובה הקבצים להשמעה.',
+    setupHint: 'השלוחה תיווצר בימות אוטומטית. את הקבצים יש להעלות בימות.',
+    fields: [
+      { key: 'folder', label: 'תיקיית הקבצים בימות', kind: 'text',
+        placeholder: 'ivr2:/9', hint: 'התיקייה שבה נמצאים הקבצים להשמעה.' },
+    ]
   },
   {
     key: 'folder_play_random', label: 'השמעה אקראית', group: 'תוכן',
     what: 'משמיע קובץ אקראי מתוך תיקייה.',
-    setupHint: 'בימות: שלוחה מסוג folder_play_random, ובה התיקייה.',
+    setupHint: 'השלוחה תיווצר בימות אוטומטית. את הקבצים יש להעלות בימות.',
+    fields: [
+      { key: 'folder', label: 'תיקיית הקבצים בימות', kind: 'text',
+        placeholder: 'ivr2:/9', hint: 'ייבחר קובץ אקראי מתוכה.' },
+    ]
   },
   {
     key: 'last_play', label: 'האזנה אחרונה', group: 'תוכן',
     what: 'ממשיך מהמקום שבו המתקשר עצר בפעם הקודמת.',
-    setupHint: 'בימות: שלוחה מסוג last_play.',
+    setupHint: 'השלוחה תיווצר בימות אוטומטית.',
   },
   {
     key: 'confbridge', label: 'ועידה או שידור חי', group: 'תוכן',
     what: 'חדר ועידה משותף, או האזנה לשידור חי.',
-    setupHint: 'בימות: שלוחה מסוג confbridge, ובה הגדרות החדר.',
+    setupHint: 'השלוחה תיווצר בימות אוטומטית.',
+    fields: [
+      { key: 'room', label: 'מספר החדר', kind: 'text', required: true,
+        placeholder: '1', hint: 'כל המתקשרים לאותו מספר חדר שומעים זה את זה.' },
+      { key: 'listen_only', label: 'מצב', kind: 'select', options: [
+        { value: '', label: 'ועידה — כולם מדברים' },
+        { value: 'yes', label: 'שידור חי — האזנה בלבד' },
+      ] },
+    ]
   },
 
   // ── ניהול ──
   {
     key: 'admin_login', label: 'כניסה לניהול', group: 'ניהול',
     what: 'כניסת מנהל למערכת הטלפונית באמצעות סיסמה.',
-    setupHint: 'בימות: שלוחה מסוג admin_login.',
+    setupHint: 'השלוחה תיווצר בימות אוטומטית.',
+    fields: [
+      { key: 'password', label: 'סיסמת הכניסה', kind: 'text', required: true,
+        hint: '🔴 מי שיודע אותה יכול לשנות את כל המערכת הטלפונית.' },
+    ]
   },
   {
     key: 'time_keeper', label: 'שמירת סדרים', group: 'ניהול',
     what: 'רישום נוכחות והקדשת זמן לימוד.',
-    setupHint: 'בימות: שלוחה מסוג time_keeper.',
+    setupHint: 'השלוחה תיווצר בימות אוטומטית.',
   },
 ]
 

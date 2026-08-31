@@ -67,3 +67,50 @@ describe('yemotTypeGroups — הקיבוץ לרשימה', () => {
     for (const g of yemotTypeGroups()) expect(g.types.length).toBeGreaterThan(0)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 השדות של כל סוג — הם מה שנכתב ל-ext.ini בימות.
+//
+// ⚠️ שם פרמטר שגוי נכתב לקובץ, ימות מתעלמת ממנו, והשלוחה עובדת
+// חלקית בלי שום שגיאה. זו התקלה שהכי קשה לאבחן.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('🔴 שדות ההגדרה לכל סוג', () => {
+  it('שם פרמטר תקין — כך ext.ini מצפה לו', () => {
+    for (const t of YEMOT_TYPES) {
+      for (const f of t.fields ?? []) {
+        expect(f.key, `${t.key}.${f.key}`).toMatch(/^[a-zA-Z_][a-zA-Z0-9_]*$/)
+      }
+    }
+  })
+
+  it('לכל שדה יש תווית בעברית', () => {
+    for (const t of YEMOT_TYPES) {
+      for (const f of t.fields ?? []) {
+        expect(f.label, `${t.key}.${f.key}`).toBeTruthy()
+      }
+    }
+  })
+
+  it('🔴 אין שם פרמטר כפול באותו סוג — השני היה דורס את הראשון', () => {
+    for (const t of YEMOT_TYPES) {
+      const keys = (t.fields ?? []).map(f => f.key)
+      expect(new Set(keys).size, t.key).toBe(keys.length)
+    }
+  })
+
+  it('⚠️ שדה select חייב אפשרויות — אחרת הבורר ריק', () => {
+    for (const t of YEMOT_TYPES) {
+      for (const f of t.fields ?? []) {
+        if (f.kind === 'select') {
+          expect(f.options?.length, `${t.key}.${f.key}`).toBeGreaterThan(0)
+        }
+      }
+    }
+  })
+
+  it('הסוגים שדורשים הגדרה אכן מבקשים אותה', () => {
+    // ⚠️ תא קולי בלי כתובת מייל אינו שולח לאיש; פילטר בלי שעות אינו מסנן.
+    expect(yemotTypeByKey('voicemail_email')?.fields?.some(f => f.key === 'email' && f.required)).toBe(true)
+    expect(yemotTypeByKey('access_filter')?.fields?.some(f => f.required)).toBe(true)
+  })
+})

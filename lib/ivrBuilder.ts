@@ -105,6 +105,12 @@ export interface IvrNodeDef {
    */
   yemotType?: string
   /**
+   * הערכים שהמנהל מילא לשדות הסוג (ראו YemotTypeField).
+   *
+   * ⚠️ נכתבים ל-ext.ini בימות. מפתח = שם הפרמטר שם.
+   */
+  yemotFields?: Record<string, string>
+  /**
    * פקודת ימות גולמית (type='raw').
    *
    * 🔴 מסוננת ב-sanitizeRawCommand לפני שהיא נכתבת לתשובה: "&"
@@ -392,6 +398,12 @@ export function normalizeIvr(raw: unknown): IvrConfig {
       // ⚠️ 0/שלילי → undefined ולא נשמרים: אפס ספרות ואפס שניות הם
       // הגדרות בלתי אפשריות שהיו שוברות את השלוחה.
       yemotType: n.yemotType ? String(n.yemotType) : undefined,
+      // ⚠️ רק ערכי מחרוזת: ערך מקונן היה נכתב ל-ext.ini כ-[object Object].
+      yemotFields: n.yemotFields && typeof n.yemotFields === 'object'
+        ? Object.fromEntries(Object.entries(n.yemotFields)
+            .filter(([, v]) => v != null && v !== '')
+            .map(([k, v]) => [k, String(v)]))
+        : undefined,
       rawCommand: n.rawCommand ? String(n.rawCommand) : undefined,
       maxDigits: Number(n.maxDigits) > 0 ? Number(n.maxDigits) : undefined,
       waitSeconds: Number(n.waitSeconds) > 0 ? Number(n.waitSeconds) : undefined,

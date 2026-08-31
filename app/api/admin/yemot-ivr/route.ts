@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
+import { yemotConfigured, syncExtensionToYemot } from '@/lib/yemot'
+import { buildExtIni, extIniPath } from '@/lib/yemotExtIni'
 import {
   getIvrConfig, saveIvrConfig, validateIvr, normalizeIvr,
   NODE_TYPE_LABEL, NODE_TYPE_HINT, VALID_DIGITS, type IvrConfig,
@@ -70,5 +72,43 @@ export async function POST(request: NextRequest) {
   // ⚠️ מוחזר המבנה המנורמל ולא זה שנשלח: הלקוח חייב להציג בדיוק את מה
   // שנשמר, אחרת המסך מראה שדות שלא שרדו את הנרמול.
   const saved = normalizeIvr(body.config)
-  return NextResponse.json({ ok: true, config: saved, problems: validateIvr(saved) })
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 סנכרון השלוחות לימות — בכל שמירה.
+  //
+  // המנהל אינו נוגע בימות: הוא בוחר "תא קולי", ממלא כתובת מייל,
+  // ולוחץ שמור — והשלוחה נוצרת שם בפועל.
+  //
+  // ⚠️ בכל שמירה ולא רק ביצירה: המנהל שמשנה כתובת מייל מצפה שזה
+  // ייכנס לתוקף, ו-ext.ini שנשאר מאחור היה שולח לכתובת הישנה.
+  //
+  // ⚠️ כשל בסנכרון **אינו מפיל את השמירה**: המבנה שלנו כבר נשמר
+  // ותקין, וימות עלולה להיות זמנית לא זמינה. הכשלים מוחזרים למסך
+  // כדי שהמנהל יידע — שקט כאן פירושו שלוחה שמשמיעה שקט בטלפון.
+  // ─────────────────────────────────────────────────────────────────────────
+  const syncErrors: { name: string; error: string }[] = []
+  if (yemotConfigured()) {
+    for (const node of saved.nodes) {
+      if (node.type !== 'raw' || !node.yemotType) continue
+      const path = extIniPath(node.folder)
+      if (!path) {
+        syncErrors.push({ name: node.name, error: 'מספר שלוחה לא תקין' })
+        continue
+      }
+      const ini = buildExtIni({ type: node.yemotType, extra: node.yemotFields })
+      if (!ini) {
+        syncErrors.push({ name: node.name, error: 'סוג שלוחה לא מוכר' })
+        continue
+      }
+      const r = await syncExtensionToYemot(path, ini)
+      if (!r.ok) syncErrors.push({ name: node.name, error: r.error ?? 'הסנכרון נכשל' })
+    }
+  }
+
+  return NextResponse.json({
+    ok: true, config: saved, problems: validateIvr(saved),
+    // ⚠️ נשלח תמיד, גם ריק: המסך מבחין בין "לא סונכרן" לבין "סונכרן בהצלחה".
+    syncErrors,
+    yemotConnected: yemotConfigured(),
+  })
 }
