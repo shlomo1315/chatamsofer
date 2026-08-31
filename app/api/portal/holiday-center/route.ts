@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
+import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { deadlineState } from '@/lib/centerDeadline'
 import {
   evaluatePick, groupByRegion, centerLabel, pickMessage,
@@ -17,9 +18,48 @@ export const dynamic = 'force-dynamic'
 // שכל אחד אוכף כללים משלו נפרדים ברגע שמשנים אחד מהם, והמשפחה מגלה
 // שהטלפון מאפשר מה שהמסך חוסם.
 //
-// ⚠️ הזיהוי הוא לפי מזהה הרשומה (recipient) שהפורטל כבר אימת. אין כאן
-// אימות משלנו — הוא נעשה במסלול הכניסה לפורטל.
+// 🔴 הרשומה נקשרת לסשן הפורטל, ולא נלקחת מהפרמטר כמות שהיא.
+//
+// ⚠️ קודם היה כתוב כאן "אין כאן אימות משלנו — הוא נעשה במסלול הכניסה
+// לפורטל". זה לא היה נכון: recipient_id הגיע מהבקשה, והנתיב פנה איתו
+// דרך service client שעוקף RLS. מי שהחזיק מזהה של משפחה אחרת יכול היה
+// לקרוא את המוקד שלה — וגרוע מכך, *לקבוע לה* מוקד. הקביעה ננעלת
+// לצמיתות (`.is('center_id', null)`), והמשפחה הייתה מגיעה לעיר הלא נכונה
+// בלי שום דרך לתקן.
+//
+// ⚠️ מזהה שאינו ניתן לניחוש אינו הרשאה. הוא מגיע ללוגים, להיסטוריית
+// דפדפן ולשיתופי מסך — ומרגע שדלף הוא הופך לגישת כתיבה.
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * מאתר את רשומת החלוקה ומוודא שהיא של המשפחה המחוברת.
+ *
+ * ⚠️ ההשוואה היא מול beneficiary_id שבסשן החתום — אותו דפוס בדיוק
+ * שנעשה ב-holiday-voucher ובשאר נתיבי הפורטל.
+ */
+async function loadOwnRecipient(
+  db: NonNullable<ReturnType<typeof getServiceClient>>,
+  request: NextRequest,
+  recipientId: string,
+) {
+  const sessionId = getPortalBeneficiaryId(request)
+  if (!sessionId) return { error: 'נדרש אימות', status: 401 as const, rec: null }
+
+  const { data } = await db.from('distribution_recipients')
+    .select('id, center_id, distribution_id, approval_status, beneficiary_id')
+    .eq('id', recipientId).maybeSingle()
+  const rec = data as {
+    id: string; center_id: string | null; distribution_id: string
+    approval_status: string | null; beneficiary_id: string | null
+  } | null
+
+  // ⚠️ אותה תשובה בדיוק לרשומה שאינה קיימת ולרשומה של משפחה אחרת:
+  // הבחנה ביניהן הייתה הופכת את הנתיב לכלי לגילוי מזהים תקפים.
+  if (!rec || rec.beneficiary_id !== sessionId) {
+    return { error: 'הרשומה לא נמצאה', status: 404 as const, rec: null }
+  }
+  return { error: null, status: 200 as const, rec }
+}
 
 /** החלוקה האחרונה. ⚠️ distributions ולא holiday_distributions — ראו FK. */
 async function latestDistribution(db: NonNullable<ReturnType<typeof getServiceClient>>) {
@@ -40,13 +80,10 @@ export async function GET(request: NextRequest) {
   if (!dist) return NextResponse.json({ open: false, centers: [] })
 
   // ⚠️ approval_status נשלף במפורש — הוא שער הבחירה, לא קישוט.
-  const { data: recRow } = await db.from('distribution_recipients')
-    .select('id, center_id, distribution_id, approval_status').eq('id', recipientId).maybeSingle()
-  const rec = recRow as {
-    id: string; center_id: string | null; distribution_id: string
-    approval_status: string | null
-  } | null
-  if (!rec) return NextResponse.json({ error: 'הרשומה לא נמצאה' }, { status: 404 })
+  // 🔒 הקשירה לסשן — ראו loadOwnRecipient.
+  const own = await loadOwnRecipient(db, request, recipientId)
+  if (!own.rec) return NextResponse.json({ error: own.error }, { status: own.status })
+  const rec = own.rec
 
   const { centers, taken } = await loadOpenCenters(db, rec.distribution_id)
 
@@ -125,13 +162,11 @@ export async function POST(request: NextRequest) {
 
   // 🔴 approval_status — שער הבחירה. בלעדיו כאן, ה-POST היה ממשיך
   // לשמור בחירות של משפחות שאינן מאושרות בזמן שה-GET כבר חוסם אותן.
-  const { data: recRow } = await db.from('distribution_recipients')
-    .select('id, center_id, distribution_id, approval_status').eq('id', recipientId).maybeSingle()
-  const rec = recRow as {
-    id: string; center_id: string | null; distribution_id: string
-    approval_status: string | null
-  } | null
-  if (!rec) return NextResponse.json({ error: 'הרשומה לא נמצאה' }, { status: 404 })
+  //
+  // 🔒 הקשירה לסשן קריטית דווקא כאן: זו הכתיבה, והיא בלתי הפיכה.
+  const own = await loadOwnRecipient(db, request, recipientId)
+  if (!own.rec) return NextResponse.json({ error: own.error }, { status: own.status })
+  const rec = own.rec
 
   const { data: centerRow } = await db.from('holiday_centers')
     .select('id, city, name, region, sort_order, capacity, is_active').eq('id', centerId).maybeSingle()
