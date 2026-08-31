@@ -11,6 +11,7 @@ import YemotHolidaySettings from '@/app/admin/settings/YemotHolidaySettings'
 import YemotMainMenuSettings from '@/app/admin/settings/YemotMainMenuSettings'
 import YemotCallLog from '@/app/admin/settings/YemotCallLog'
 import RegistrationCallSettings from '@/app/admin/settings/RegistrationCallSettings'
+import IvrBuilder from '@/app/admin/settings/IvrBuilder'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // עץ השלוחות ומסך השלוחה.
@@ -134,6 +135,7 @@ export default function PhoneSystemClient() {
   const [openId, setOpenId] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('messages')
   const [showLog, setShowLog] = useState(false)
+  const [showBuilder, setShowBuilder] = useState(false)
 
   const ext = IVR_EXTENSIONS.find(e => e.id === openId) ?? null
 
@@ -143,6 +145,20 @@ export default function PhoneSystemClient() {
     const outbound = IVR_EXTENSIONS.filter(e => e.outbound)
     return (
       <div className="flex flex-col gap-5">
+        {/* 🔴 הכתובת היחידה שצריך בימות — למעלה ובגדול.
+            ⚠️ בלי זה המנהל רואה כתובת בכל שלוחה ומניח שצריך להגדיר את
+            כולן, בזמן שהראשית מטפלת בהכל. */}
+        <div className="rounded-2xl border-2 border-teal-200 bg-teal-50/60 p-4">
+          <h2 className="text-[13px] font-extrabold text-teal-900">
+            הכתובת להגדרה בימות — אחת לכל המערכת
+          </h2>
+          <p className="mb-2.5 mt-0.5 text-[11.5px] leading-relaxed text-teal-800">
+            מגדירים שלוחה אחת מסוג <strong>API</strong> ומדביקים את הכתובת.
+            כל התפריט — חגים, יולדות והודעות — רץ מכאן, ושינוי בו אינו דורש נגיעה בימות.
+          </p>
+          <CopyUrl path="/api/webhooks/yemot" />
+        </div>
+
         <section className="flex flex-col gap-2">
           <h2 className="flex items-center gap-1.5 text-[13px] font-extrabold text-slate-700">
             <Phone size={14} className="text-teal-600" /> שלוחות — מה שומע מי שמחייג
@@ -170,6 +186,27 @@ export default function PhoneSystemClient() {
                 setTab(e.id === 'announce' ? 'messages' : 'tree')
               }} />
           ))}
+        </section>
+
+        {/* 🔴 בונה השלוחות — כאן מוסיפים שלוחות חדשות בלי פריסה.
+            ⚠️ מקופל כברירת מחדל: מבנה שנשמר כאן *מחליף* את התפריט הקבוע
+            לכל המתקשרים, ולכן הוא לא צריך להיפתח בטעות. */}
+        <section className="rounded-2xl border border-slate-200 bg-white">
+          <button type="button" onClick={() => setShowBuilder(v => !v)}
+            className="flex w-full items-center gap-2 px-4 py-3 text-right text-[13px] font-extrabold text-slate-700 hover:bg-slate-50">
+            <ListTree size={14} className="text-indigo-500" /> בונה שלוחות — הוספה ועריכה
+            <span className="rounded-md bg-indigo-50 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700">מתקדם</span>
+            <ChevronLeft size={15} className={`mr-auto text-slate-300 transition-transform ${showBuilder ? '-rotate-90' : ''}`} />
+          </button>
+          {showBuilder && (
+            <div className="border-t border-slate-200 p-4">
+              <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11.5px] leading-relaxed text-amber-900">
+                🔴 מבנה שנשמר כאן <strong>מחליף את התפריט הקבוע</strong> לכל מי שמחייג.
+                כל עוד לא נשמר דבר — המערכת ממשיכה לעבוד בדיוק כפי שהיא.
+              </p>
+              <IvrBuilder />
+            </div>
+          )}
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white">

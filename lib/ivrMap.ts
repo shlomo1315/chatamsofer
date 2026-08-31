@@ -68,11 +68,12 @@ export const IVR_EXTENSIONS: IvrExtension[] = [
     webhook: '/api/webhooks/yemot',
     yemotType: 'שלוחת API (type=api) — השלוחה הראשית',
     messagesKey: null,
-    env: ['YEMOT_WEBHOOK_SECRET', 'YEMOT_FOLDER_HOLIDAY', 'YEMOT_FOLDER_MATERNITY'],
+    env: ['YEMOT_WEBHOOK_SECRET', 'YEMOT_SINGLE_ENDPOINT'],
     notes: [
-      'הניתוב נעשה ב-go_to_folder — ימות מעבירה את השיחה, והשלוחות עצמן לא השתנו.',
-      'מי שמחייג ישירות לשלוחה פנימית ממשיך לעבוד בדיוק כמו קודם.',
-      'הודעות התפריט נערכות בכרטיס התכלת שלמעלה.',
+      '🔴 זו הכתובת היחידה שצריך להגדיר בימות. כל התפריט — חגים, יולדות והודעות — רץ מכאן.',
+      'הניתוב הפנימי נעשה בשרת שלנו ולא ב-go_to_folder: שינוי בתפריט אינו דורש נגיעה בימות.',
+      'הכתובות הישנות ממשיכות לעבוד במקביל — מי שכבר הגדיר שלוחה נפרדת אינו נשבר.',
+      'הודעות התפריט נערכות בלשונית "הודעות".',
     ],
     tree: [
       {
@@ -94,7 +95,9 @@ export const IVR_EXTENSIONS: IvrExtension[] = [
     purpose:
       'רישום לחלוקת החגים ובחירת מוקד האיסוף. הערוץ המרכזי לרישום — חלק גדול מהמשפחות אינן גולשות.',
     webhook: '/api/webhooks/yemot-holiday',
-    yemotType: 'שלוחת API (type=api)',
+    // ⚠️ אינה נקודת כניסה עוד: מגיעים אליה דרך התפריט הראשי. הכתובת
+    // נשארת חיה כדי שמי שכבר הגדיר אותה בימות לא יישבר.
+    yemotType: 'מגיעים דרך התפריט הראשי · הכתובת נשארה זמינה לחיוג ישיר',
     messagesKey: 'holiday',
     digit: '1',
     env: ['YEMOT_WEBHOOK_SECRET'],
@@ -156,7 +159,8 @@ export const IVR_EXTENSIONS: IvrExtension[] = [
     title: 'יולדות',
     purpose: 'שיוך כרטיס מזון ליולדת וטעינתו, מול מערכת נדרים פלוס.',
     webhook: '/api/webhooks/yemot-maternity',
-    yemotType: 'שלוחת API (type=api)',
+    // ⚠️ ראו ההערה בשלוחת החגים — אותו דבר בדיוק.
+    yemotType: 'מגיעים דרך התפריט הראשי · הכתובת נשארה זמינה לחיוג ישיר',
     messagesKey: 'maternity',
     digit: '2',
     env: ['YEMOT_WEBHOOK_SECRET', 'NEDARIM_*'],
