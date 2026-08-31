@@ -10,10 +10,11 @@
 // שתיהן — 16 עמודות קבועות אינן יכולות להיכנס, ואיחוד פוגע בקריאוּת.
 // ─────────────────────────────────────────────────────────────────────────────
 'use client'
-import { useState, useMemo } from 'react'
+
 import Link from 'next/link'
-import { Monitor, Phone, Mail, CreditCard, Pencil, Check, X, Loader2, Columns3, Wallet } from 'lucide-react'
+import { Monitor, Phone, Mail, CreditCard, Pencil, Check, X, Loader2, Wallet } from 'lucide-react'
 import { SOURCE_LABEL, type RegisterSource } from '@/lib/distributionSources'
+import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import { useIncrementalRows } from '@/lib/useIncrementalRows'
 import { useResizableColumns } from '@/components/ui/ResizableTable'
 import ApprovalLabelTag, { type ApprovalLabel } from '@/components/ui/ApprovalLabelTag'
@@ -55,6 +56,12 @@ export interface HolidayRow {
 }
 
 const APPROVAL_LABEL: Record<string, string> = { pending: 'ממתין לאישור', approved: 'מאושר', rejected: 'נדחה' }
+
+// ⚠️ תוויות ולא הקודים הגולמיים: תפריט הסינון מציג את מה שהעמודה מציגה,
+// ורשימה של loaded/failed/pending הייתה מחייבת לתרגם בראש.
+const LOAD_LABEL: Record<string, string> = {
+  loaded: 'נטען', pending: 'בתהליך', failed: 'נכשל', '': 'טרם',
+}
 const APPROVAL_STYLE: Record<string, string> = {
   pending: 'bg-amber-50 text-amber-800 border-amber-200',
   approved: 'bg-green-50 text-green-800 border-green-200',
@@ -92,38 +99,49 @@ type ColKey =
   | 'age' | 'children' | 'source' | 'registered_at' | 'amount' | 'message'
   | 'center' | 'load'
 
-interface ColDef {
-  key: ColKey
-  label: string
-  /** מוצגת כברירת מחדל. ⚠️ הברירה נבחרה כך שהסכום נכנס לרוחב מסך רגיל. */
-  def: boolean
-  align?: 'center'
-}
+// ⚠️ ColDef מיובא מ-components/ui/TableColumns — הטיפוס המקומי שהיה כאן
+// לא כלל value/kind/filterable, ולכן לא איפשר מיון וסינון מהכותרת.
 
-const COLUMNS: ColDef[] = [
-  { key: 'family_name', label: 'שם משפחה', def: true },
-  { key: 'first_name', label: 'שם פרטי', def: true },
-  { key: 'id_number', label: 'ת״ז', def: true },
+// 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
+// React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
+//
+// ⚠️ kind + filterable רק לעמודות שהן *קבוצת ערכים סגורה*: מוקד, עיר,
+// ערוץ, אישור וטעינה. שם, ת"ז וטלפון ייחודיים לכל שורה — תפריט סינון
+// שלהם היה רשימה בת 6,000 פריטים.
+const COLUMNS: ColDef<ColKey, HolidayRow>[] = [
+  { key: 'family_name', label: 'שם משפחה', def: true, value: r => r.family_name ?? r.name ?? null },
+  { key: 'first_name', label: 'שם פרטי', def: true, value: r => r.first_name ?? null },
+  { key: 'id_number', label: 'ת״ז', def: true, kind: 'number', value: r => r.id_number ?? null },
   // ⚠️ עמודה משלה בנוסף לתג שליד שם המשפחה — ריקה אצל הרוב המוחלט.
-  { key: 'approval_label', label: 'סיבת אישור', def: true },
-  { key: 'spouse_name', label: 'בן/בת זוג', def: false },
-  { key: 'approval', label: 'אישור הבקשה', def: true },
-  { key: 'card', label: 'כרטיס', def: false },
-  { key: 'phone', label: 'טלפון', def: true },
-  { key: 'email', label: 'מייל', def: false },
-  { key: 'address', label: 'כתובת', def: false },
-  { key: 'city', label: 'עיר', def: true },
+  { key: 'approval_label', label: 'סיבת אישור', def: true, kind: 'enum', filterable: true,
+    value: r => r.approval_label?.name ?? null },
+  { key: 'spouse_name', label: 'בן/בת זוג', def: false, value: r => r.spouse_name ?? null },
+  { key: 'approval', label: 'אישור הבקשה', def: true, kind: 'enum', filterable: true,
+    value: r => APPROVAL_LABEL[r.approval_status] ?? null },
+  { key: 'card', label: 'כרטיס', def: false, value: r => r.card_number ?? null },
+  { key: 'phone', label: 'טלפון', def: true, value: r => r.ben_phone ?? r.phone ?? null },
+  { key: 'email', label: 'מייל', def: false, value: r => r.email ?? null },
+  { key: 'address', label: 'כתובת', def: false, value: r => r.address ?? null },
+  { key: 'city', label: 'עיר', def: true, kind: 'enum', filterable: true, value: r => r.city ?? null },
   // ⚠️ מוצגת כברירת מחדל: זו העמודה שכל עבודת החלוקה נשענת עליה.
-  { key: 'center', label: 'מוקד חלוקה', def: true },
+  // 🔴 filterable — "מי טרם בחר מוקד" היא השאלה המרכזית בשלב הזה.
+  { key: 'center', label: 'מוקד חלוקה', def: true, kind: 'enum', filterable: true,
+    value: r => r.center_name ?? 'טרם נבחר' },
   // ⚠️ הסטטוס והפעולה באותה עמודה ולא בשתיים: "נטען?" ו"טען" הם אותה
   // שאלה משני צדדים, והפרדתם מכריחה לקרוא שתי עמודות כדי לדעת מה לעשות.
-  { key: 'load', label: 'טעינה', def: true },
-  { key: 'age', label: 'גיל', def: false, align: 'center' },
-  { key: 'children', label: 'ילדים', def: true, align: 'center' },
-  { key: 'source', label: 'ערוץ', def: true },
-  { key: 'registered_at', label: 'תאריך רישום', def: true },
-  { key: 'amount', label: 'סכום', def: true },
-  { key: 'message', label: 'הודעה', def: false },
+  { key: 'load', label: 'טעינה', def: true, kind: 'enum', filterable: true,
+    value: r => LOAD_LABEL[r.load_status ?? ''] ?? 'טרם' },
+  { key: 'age', label: 'גיל', def: false, align: 'center', kind: 'number', value: r => r.age },
+  { key: 'children', label: 'ילדים', def: true, align: 'center', kind: 'number', value: r => r.children_count },
+  { key: 'source', label: 'ערוץ', def: true, kind: 'enum', filterable: true,
+    value: r => SOURCE_LABEL[r.source] ?? r.source },
+  // ⚠️ ממוין לפי התאריך הגולמי ולא לפי התווית: תאריך מפורמט ממוין
+  // אלפביתית ולא כרונולוגית.
+  { key: 'registered_at', label: 'תאריך רישום', def: true, kind: 'date', value: r => r.registered_at },
+  // ⚠️ הסכום זהה לכל השורות (amountPerFamily) — value מחזיר null כדי
+  // שלא ייווצר תפריט סינון בן ערך אחד.
+  { key: 'amount', label: 'סכום', def: true, value: () => null },
+  { key: 'message', label: 'הודעה', def: false, value: () => null },
 ]
 
 export default function HolidayRecipientsTable({
@@ -146,26 +164,28 @@ export default function HolidayRecipientsTable({
     busyId, setApprovalFor, clearCard, loadCard, loadingId, showMessage = false,
     hideApproval = false, hideCard = false, hideSource = false } = controls
 
-  const [picker, setPicker] = useState(false)
-  const [visible, setVisible] = useState<Set<ColKey>>(
-    () => new Set(COLUMNS.filter(c => c.def).map(c => c.key)),
-  )
-
+  // 🔴 המנגנון המשותף (useTableColumns) ולא מימוש מקומי: הוא מביא איתו
+  // מיון וסינון בכותרת — בדיוק כמו ב-17 הטבלאות האחרות. הטבלה הזו הייתה
+  // היחידה בלי זה, ובה דווקא השאלות הכי שכיחות ("מי טרם בחר מוקד", "מי
+  // בבני ברק") דרשו לסרוק אלפי שורות בעין.
+  //
   // ⚠️ העמודות שהקורא הסתיר (dept השיתוף) יורדות מהבורר עצמו ולא רק
   // מהטבלה — אחרת המשתמש מסמן עמודה ושום דבר לא קורה.
-  const available = useMemo(() => COLUMNS.filter(c => {
-    if (c.key === 'approval' && hideApproval) return false
-    if (c.key === 'card' && hideCard) return false
-    if (c.key === 'source' && hideSource) return false
-    if (c.key === 'message' && !showMessage) return false
-    if (c.key === 'amount' && amountPerFamily == null) return false
-    return true
-  }), [hideApproval, hideCard, hideSource, showMessage, amountPerFamily])
-
-  const shown = useMemo(
-    () => available.filter(c => visible.has(c.key)),
-    [available, visible],
-  )
+  const tc = useTableColumns<ColKey, HolidayRow>('holiday-recipients', COLUMNS, {
+    extraCols: canEdit ? 1 : 0,
+    filter: c => {
+      if (c.key === 'approval' && hideApproval) return false
+      if (c.key === 'card' && hideCard) return false
+      if (c.key === 'source' && hideSource) return false
+      if (c.key === 'message' && !showMessage) return false
+      if (c.key === 'amount' && amountPerFamily == null) return false
+      return true
+    },
+    // ⚠️ mode:'client' — הקורא מעביר את השורות המסוננות כבר, והמיון
+    // והסינון רצים עליהן בזיכרון. השרת אינו מעורב.
+    sortFilter: { mode: 'client', rows },
+  })
+  const shown = tc.shown
 
   // 🔴 גרירת רוחב עמודות (כמו באקסל) — רכיב מערכתי משותף לכל הטבלאות.
   // ⚠️ המזהה כולל את מספר העמודות הנראות: הסתרת עמודה מזיזה את כל
@@ -175,10 +195,12 @@ export default function HolidayRecipientsTable({
   // ⚠️ פירוק ישיר ולא גישה דרך אובייקט: האובייקט שה-hook מחזיר מכיל גם
   // sentinelRef, וכלל react-hooks/refs סימן *כל* גישה דרכו כקריאת ref
   // בזמן רינדור — כולל shown/total שהם מספרים רגילים. הפירוק מפריד ביניהם.
+  // 🔴 tc.rows ולא rows: המיון והסינון מהכותרת חלים כאן. שימוש ב-rows
+  // הגולמי היה מציג טבלה שמתעלמת מהסינון שהמשתמש הרגע בחר.
   const { rows: incRows, sentinelRef: incSentinel, hasMore: incHasMore, shown: incShown, total: incTotal } =
-    useIncrementalRows(rows)
+    useIncrementalRows(tc.rows)
   // במצב מדופדף השורות כבר חתוכות לעמוד — מוצגות כולן, בלי sentinel.
-  const visibleRows = paginated ? rows : incRows
+  const visibleRows = paginated ? tc.rows : incRows
   const sentinelRef = incSentinel
   const hasMore = paginated ? false : incHasMore
   const shownCount = incShown
@@ -186,14 +208,6 @@ export default function HolidayRecipientsTable({
 
   if (!rows.length) {
     return <p className="px-4 py-10 text-center text-slate-400 text-sm font-medium">אין נרשמים לחלוקה זו</p>
-  }
-
-  const toggleCol = (k: ColKey) => {
-    setVisible(prev => {
-      const next = new Set(prev)
-      if (next.has(k)) next.delete(k); else next.add(k)
-      return next
-    })
   }
 
   const cell = (c: ColDef, r: HolidayRow) => {
@@ -342,42 +356,9 @@ export default function HolidayRecipientsTable({
       {/* ── בורר העמודות ── */}
       {/* ⚠️ "הצגת הכל" ליד הבורר ולא בקצה הנגדי: הוא פעולה *על* הבורר,
           וריחוק ממנו נראה כפריט מנותק. */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <button type="button" onClick={() => setPicker(o => !o)}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-600 transition hover:border-indigo-300 hover:text-indigo-600">
-          <Columns3 size={13} />
-          בחירת עמודות ({shown.length}/{available.length})
-          <span className="text-slate-400">{picker ? '▲' : '▼'}</span>
-        </button>
-        {shown.length < available.length && (
-          <button type="button" onClick={() => setVisible(new Set(available.map(c => c.key)))}
-            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-500 transition hover:border-indigo-300 hover:text-indigo-600">
-            הצגת כל העמודות
-          </button>
-        )}
-        {rt.customized && (
-          <button type="button" onClick={rt.reset}
-            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-500 transition hover:border-indigo-300 hover:text-indigo-600">
-            איפוס רוחב העמודות
-          </button>
-        )}
-      </div>
-
-      {picker && (
-        <div className="flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-          {available.map(c => {
-            const on = visible.has(c.key)
-            return (
-              <button key={c.key} type="button" onClick={() => toggleCol(c.key)}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-bold transition ${
-                  on ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
-                }`}>
-                {on && <Check size={11} />}{c.label}
-              </button>
-            )
-          })}
-        </div>
-      )}
+      {/* ⚠️ הבורר מגיע מה-hook ולא נבנה כאן: הוא כולל גם את איפוס
+          המיון והסינון, שמימוש מקומי היה משמיט. */}
+      {tc.picker}
 
       {/* ⚠️ בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. */}
       <div className="w-full">
@@ -391,11 +372,9 @@ export default function HolidayRecipientsTable({
                     className="h-4 w-4 accent-indigo-600" aria-label="סימון כל המוצגים" />
                 </th>
               )}
-              {shown.map((c, i) => (
-                <th key={c.key} className={`relative ${c.align === 'center' ? 'text-center' : ''}`}>
-                  {c.label}{rt.handle(canEdit ? i + 1 : i)}
-                </th>
-              ))}
+              {/* 🔴 tc.th ולא <th> ידני: זה מה שמביא את תפריט המיון
+                  והסינון בלחיצה על הכותרת, יחד עם ידית הגרירה. */}
+              {shown.map((c, i) => tc.th(c, canEdit ? i + 1 : i))}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
