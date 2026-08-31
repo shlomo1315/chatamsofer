@@ -134,52 +134,63 @@ export default function HolidayRegistrations({
   //
   // ⚠️ החיפוש והפילוחים ממשיכים לרוץ על *כל* הרשומות — הם פשוט
   // מתחילים לעבוד על מה שכבר הגיע, ומתעדכנים כשהשאר נוחת.
-  const [allRows, setAllRows] = useState(rows)
+  // 🔴 רק *התוספת* שנטענה ברקע נשמרת ב-state — לא הרשימה המלאה.
+  //
+  // ⚠️ קודם ישב כאן allRows יחיד שמילא שני תפקידים סותרים: גם state
+  // נגזר מ-props (שנדרס בכל router.refresh) וגם צבירה של טעינת הרקע.
+  // זו הייתה הלולאה שנשארה אחרי התיקון הקודם:
+  //
+  //   רקע טוען 5,800 → allRows=6,050 → router.refresh מחזיר 250
+  //   שורות חדשות → rowsKey משתנה → setAllRows(rows) דורס ל-250
+  //   → ה-effect רץ שוב → טוען 5,800 שוב → וחוזר חלילה.
+  //
+  // כל סיבוב הוא בקשת רשת של ~4.8MB ורינדור מלא של הטבלה; React נופל
+  // ב-#301 והמסך מת. ההפרדה מבטלת את המעגל מהשורש: הדריסה לא קיימת
+  // עוד, כי אין מה לדרוס — rows מגיע מה-props ו-extraRows נצבר לצדו.
+  const [extraRows, setExtraRows] = useState<RegistrationRow[]>([])
   const [loadingRest, setLoadingRest] = useState(false)
 
   // 🔴 המפתח היציב של הרשימה — ולא מערך ה-props עצמו.
   //
-  // ⚠️ rows הוא מערך חדש בכל רינדור של רכיב-השרת. תלות בו יצרה מעגל:
-  // ה-effect רץ, קורא setAllRows, זה מרנדר, rows מקבל זהות חדשה,
-  // ה-effect רץ שוב — עד ש-React נופל ב-#301 והמסך מת.
+  // ⚠️ rows הוא מערך חדש בכל רינדור של רכיב-השרת, ולכן תלות בו
+  // מפעילה כל effect מחדש ללא סוף.
   //
   // ⚠️ אורך + המזהה האחרון מזהים רשימה חדשה באמינות מספקת כאן:
   // השלמת השורות תלויה רק ב"כמה כבר יש" ו"מהיכן להמשיך".
   const rowsKey = `${rows.length}:${rows[rows.length - 1]?.id ?? ''}`
 
-  // 🔴 סנכרון rows → allRows בזמן הרינדור, לא ב-useEffect.
+  // 🔴 האיחוד — נגזר בזמן הרינדור, לא state.
   //
-  // ⚠️ זהו הדפוס הרשמי של React ל"state שנגזר מ-props" (אותו דפוס
-  // שכבר בשימוש ב-useTablePagination). ה-effect הקודם הפעיל רינדור
-  // נוסף בכל החלפת זהות של rows, וזו הייתה הלולאה.
-  //
-  // ⚠️ ההשוואה היא על המפתח ולא על המערך: השוואת מערכים נכשלת תמיד,
-  // כי כל רינדור של רכיב-השרת מייצר מערך חדש עם אותו תוכן.
-  const [prevKey, setPrevKey] = useState(rowsKey)
-  if (prevKey !== rowsKey) {
-    setPrevKey(rowsKey)
-    setAllRows(rows)
-  }
+  // ⚠️ מיזוג לפי מזהה: אחרי router.refresh העמוד הראשון מגיע מעודכן
+  // מהשרת, והוא מנצח את העותק הישן שנצבר ברקע — כך שעדכון סטטוס
+  // נראה מיד. בלי זה שורה שנטענה ברקע הייתה מסתירה את הגרסה החדשה.
+  const allRows = useMemo(() => {
+    if (!extraRows.length) return rows
+    const seen = new Set(rows.map(r => r.id))
+    return [...rows, ...extraRows.filter(r => !seen.has(r.id))]
+  }, [rows, extraRows])
 
   useEffect(() => {
     // ⚠️ פחות מ-250 = כל הרשימה כבר כאן, אין מה להשלים.
     if (rows.length < 250) return
     let alive = true
-    setLoadingRest(true)
     void (async () => {
+      // ⚠️ בתוך ה-async ולא בגוף ה-effect: הכלל set-state-in-effect
+      // מפיל את הבנייה על setState סינכרוני בגוף effect. כאן זו טעינה
+      // אסינכרונית תקינה, והעברת הסימון לתוך ה-callback מבטאת בדיוק את
+      // מה שקורה — הדגל נדלק כשהבקשה יוצאת לדרך.
+      if (!alive) return
+      setLoadingRest(true)
       try {
         const r = await fetch(`/api/admin/distributions/${distributionId}/rows?offset=${rows.length}`,
           { cache: 'no-store' })
         if (!r.ok) return
         const d = await r.json()
         if (!alive || !Array.isArray(d.rows)) return
-        // ⚠️ מיזוג לפי מזהה ולא שרשור: אם השרת החזיר שורה שכבר קיימת
-        // (מרוץ מול router.refresh) היא הייתה מופיעה פעמיים.
-        const seen = new Set(rows.map(x => x.id))
-        const extra = (d.rows as Record<string, unknown>[])
-          .map(toRegistrationRow)
-          .filter(x => !seen.has(x.id))
-        if (extra.length) setAllRows(prev => [...prev, ...extra])
+        // ⚠️ החלפה ולא צבירה: הבקשה מביאה את כל מה שמעבר ל-offset בבת
+        // אחת, ולכן היא התוצאה השלמה. צבירה עם prev הייתה מכפילה שורות
+        // בכל ריצה חוזרת של ה-effect.
+        setExtraRows((d.rows as Record<string, unknown>[]).map(toRegistrationRow))
       } catch {
         // ⚠️ כישלון שקט: הרשימה החלקית עדיין שימושית לחלוטין, והודעת
         // שגיאה על טעינת רקע רק מבהילה בלי שיש מה לעשות איתה.
