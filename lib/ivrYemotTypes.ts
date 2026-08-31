@@ -143,6 +143,56 @@ export const YEMOT_TYPES: YemotTypeDef[] = [
     ]
   },
 
+  {
+    key: 'tzintuk', label: 'צינתוק', group: 'שירות',
+    what: 'המערכת מצלצלת למתקשר ומנתקת — הוא נרשם לרשימת הצינתוקים ומקבל שיחה חוזרת.',
+    setupHint: 'השלוחה תיווצר בימות אוטומטית עם רשימת הצינתוקים שתציין.',
+    fields: [
+      { key: 'template', label: 'שם רשימת הצינתוקים', kind: 'text', required: true,
+        hint: 'הרשימה שאליה נרשם המתקשר. כפי שהיא מוגדרת בימות.' },
+      { key: 'action', label: 'הפעולה', kind: 'select', options: [
+        { value: 'add', label: 'הוספה לרשימה' },
+        { value: 'remove', label: 'הסרה מהרשימה' },
+      ], hint: 'ריק = הוספה.' },
+    ],
+  },
+  {
+    key: 'missed_calls', label: 'התראה על שיחה שלא נענתה', group: 'שירות',
+    what: 'שולח SMS או מייל על כל שיחה שלא נענתה.',
+    setupHint: 'השלוחה תיווצר בימות אוטומטית עם היעד להתראות.',
+    fields: [
+      { key: 'email', label: 'כתובת מייל להתראות', kind: 'email',
+        placeholder: 'office@example.co.il' },
+      { key: 'sms', label: 'מספר לקבלת SMS', kind: 'text', placeholder: '0501234567',
+        hint: 'אפשר למלא מייל, SMS, או שניהם.' },
+    ],
+  },
+  {
+    key: 'queue', label: 'תור המתנה', group: 'שירות',
+    what: 'המתקשרים ממתינים בתור עד שנציג מתפנה.',
+    setupHint: 'השלוחה תיווצר בימות אוטומטית עם מספרי הנציגים.',
+    fields: [
+      { key: 'phones', label: 'מספרי הנציגים', kind: 'text', required: true,
+        placeholder: '0501234567,0507654321',
+        hint: 'מופרדים בפסיק. השיחה תעבור לראשון שפנוי.' },
+      { key: 'max_wait', label: 'זמן המתנה מרבי (שניות)', kind: 'number', placeholder: '300' },
+    ],
+  },
+  {
+    key: 'routing', label: 'ניתוב למספר טלפון', group: 'שירות',
+    what: 'מעביר את השיחה למספר טלפון ישראלי.',
+    setupHint: 'השלוחה תיווצר בימות אוטומטית עם המספר שתזין.',
+    fields: [
+      { key: 'phone', label: 'מספר הטלפון', kind: 'text', required: true,
+        placeholder: '0501234567' },
+    ],
+  },
+  {
+    key: 'sip', label: 'חשבון SIP', group: 'שירות',
+    what: 'מאפשר חיבור מכשיר או תוכנת SIP למערכת.',
+    setupHint: 'השלוחה תיווצר בימות אוטומטית.',
+  },
+
   // ── מידע ──
   {
     key: 'zmanim', label: 'זמני היום בהלכה', group: 'מידע',
@@ -217,6 +267,29 @@ export const YEMOT_TYPES: YemotTypeDef[] = [
       { key: 'password', label: 'סיסמת הכניסה', kind: 'text', required: true,
         hint: '🔴 מי שיודע אותה יכול לשנות את כל המערכת הטלפונית.' },
     ]
+  },
+  {
+    key: 'donation_campaign', label: 'קמפיין התרמה', group: 'ניהול',
+    what: 'קבלת תרומות בטלפון, כולל חיוב אשראי.',
+    setupHint: 'השלוחה תיווצר בימות אוטומטית. חשבון הסליקה מוגדר בימות.',
+    fields: [
+      { key: 'campaign', label: 'שם הקמפיין', kind: 'text', required: true },
+    ],
+  },
+  {
+    key: 'examination', label: 'מבחן', group: 'ניהול',
+    what: 'מבחן טלפוני עם שאלות ותשובות בהקשה.',
+    setupHint: 'השלוחה תיווצר בימות אוטומטית. את השאלות יש להגדיר בימות.',
+  },
+  {
+    key: 'api', label: 'שלוחת API (למערכת חיצונית)', group: 'ניהול',
+    what: 'מעביר את השיחה לשרת חיצוני — כמו השלוחות של החגים והיולדות.',
+    setupHint: 'השלוחה תיווצר בימות אוטומטית עם הכתובת שתזין.',
+    fields: [
+      { key: 'api_url', label: 'כתובת ה-API', kind: 'text', required: true,
+        placeholder: 'https://chasamsofer.co.il/api/webhooks/yemot',
+        hint: '🔴 רק אם אתה יודע בדיוק מה אתה עושה — כתובת שגויה משתיקה את השלוחה.' },
+    ],
   },
   {
     key: 'time_keeper', label: 'שמירת סדרים', group: 'ניהול',
