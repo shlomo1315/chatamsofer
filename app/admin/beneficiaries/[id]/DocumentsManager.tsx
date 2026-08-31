@@ -1,9 +1,11 @@
 'use client'
+import { groupDocsByType } from '@/lib/groupDocsByType'
+import PdfCanvasView from '@/components/ui/PdfCanvasView'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Paperclip, Upload, Trash2, Loader2, FileText, ExternalLink, Image as ImageIcon, Download, AlertTriangle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { docDownloadName } from '@/lib/docUrl'
-import { openDocInNewTab, downloadDocViaData, releaseDoc } from '@/lib/docBlob'
+import { downloadDocViaData, releaseDoc } from '@/lib/docBlob'
 import SafeDocImage from '@/components/ui/SafeDocImage'
 import { ViewDocButton } from '@/components/ui/DocViewer'
 import { useDocTypes } from '@/lib/useDocTypes'
@@ -128,6 +130,21 @@ export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { b
     }
   }
 
+  // 🔴 כמה קבצים יש בכל סוג, ומה מיקומו של כל אחד.
+  //
+  // ⚠️ ת"ז דו-צדדית וספח מרובה עמודים מועלים כשני קבצים מאותו סוג —
+  // התנהגות מכוונת (appendMode ב-upload-docs). בלי המונה שני כרטיסים
+  // בשם זהה נראים ככפילות או כתקלה.
+  //
+  // ⚠️ groupDocsByType ממיין לפי מועד ההעלאה, כדי שהצד הקדמי יהיה (1/2).
+  const groups = groupDocsByType(docs)
+  const typeCounts: Record<string, number> = {}
+  const docIndex: Record<string, number> = {}
+  for (const g of groups) {
+    typeCounts[g.doc_type] = g.files.length
+    g.files.forEach((f, i) => { docIndex[(f as DocRow).id] = i + 1 })
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
@@ -194,11 +211,18 @@ export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { b
                   <SafeDocImage path={doc.file_url} name={doc.file_name} className="w-full h-28 object-cover" />
                 </ViewDocButton>
               ) : doc.file_url && isPdf(doc.file_name) ? (
-                <button type="button"
-                  onClick={() => { openDocInNewTab(doc.file_url!, doc.file_name).catch(e => toast.error(e?.message || 'שגיאה בפתיחת הקובץ')) }}
-                  className="w-full h-28 flex flex-col items-center justify-center gap-1.5 bg-rose-50/50 text-rose-400 hover:bg-rose-50 hover:text-rose-500 transition-colors">
-                  <FileText size={28} /> <span className="text-[11px] font-medium">פתח PDF</span>
-                </button>
+                // 🔴 תצוגה מקדימה בחלונית, לא כרטיסייה חדשה.
+                //
+                // ⚠️ ההערה שמעל תיארה מצב שכבר אינו נכון: היא נכתבה לפני
+                // PdfCanvasView, שמצייר את העמודים בעצמו על canvas ולכן
+                // נטפרי אינה חוסמת אותו. פתיחה בכרטיסייה הוציאה את
+                // המזכירה מהכרטסת בכל מסמך.
+                <ViewDocButton url={doc.file_url} className="block">
+                  <div className="w-full h-28 overflow-hidden bg-slate-50">
+                    <PdfCanvasView url={doc.file_url} name={doc.file_name}
+                      maxPages={1} cover className="w-full h-full" />
+                  </div>
+                </ViewDocButton>
               ) : (
                 <ViewDocButton url={doc.file_url} className="block">
                   <div className="w-full h-28 flex items-center justify-center bg-slate-50 text-slate-300">
@@ -209,6 +233,15 @@ export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { b
               <div className="p-2">
                 <p className="text-[11px] font-medium text-indigo-700 bg-indigo-50 inline-block px-1.5 py-0.5 rounded">
                   {typeLabel(doc.doc_type)}
+                  {/* 🔴 מונה כשיש כמה קבצים מאותו סוג.
+                      ⚠️ ת"ז דו-צדדית וספח מרובה עמודים מועלים כשני קבצים
+                      (appendMode), ושני כרטיסים בשם זהה נראים ככפילות.
+                      המונה אומר שזה מכוון. */}
+                  {(typeCounts[doc.doc_type] ?? 0) > 1 && (
+                    <span className="mr-1 text-indigo-500">
+                      ({docIndex[doc.id]}/{typeCounts[doc.doc_type]})
+                    </span>
+                  )}
                 </p>
                 {/* שם הקובץ הגולמי (כפי שהמשתמש קרא לו) לא מוצג — אינו מעניין
                     ולעתים מבלבל. מזהים את המסמך לפי הסוג (התווית) בלבד. */}
