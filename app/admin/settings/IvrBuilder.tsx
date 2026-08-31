@@ -5,6 +5,7 @@ import {
   Loader2, Plus, Trash2, Save, Copy, Check, AlertTriangle, Info,
   Phone, ListTree, Volume2, Sparkles, ChevronLeft, Power,
 } from 'lucide-react'
+import { yemotTypeGroups, yemotTypeByKey } from '@/lib/ivrYemotTypes'
 import { useToast } from '@/components/ui/Toast'
 import StickySaveBar from '@/components/ui/StickySaveBar'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
@@ -102,8 +103,16 @@ export default function IvrBuilder() {
       }
       // ⚠️ פקודה פסולה חוסמת שמירה: היא הייתה משתיקה את השלוחה,
       // והמנהל היה מגלה זאת רק כשמתקשר מתלונן.
-      if (n.type === 'raw' && !/^[a-zA-Z_][a-zA-Z0-9_]*=.+$/.test((n.rawCommand ?? '').trim())) {
-        out.push({ nodeId: n.id, level: 'error', message: 'פקודת ימות חסרה או פסולה' })
+      if (n.type === 'raw') {
+        // ⚠️ שני מצבים, שני אימותים: בחירה מרשימה דורשת מספר שלוחה,
+        // ופקודה חופשית דורשת צורה תקינה.
+        if (n.yemotType) {
+          if (!(n.folder ?? '').trim()) {
+            out.push({ nodeId: n.id, level: 'error', message: 'לא הוגדר מספר השלוחה בימות' })
+          }
+        } else if (!/^[a-zA-Z_][a-zA-Z0-9_]*=.+$/.test((n.rawCommand ?? '').trim())) {
+          out.push({ nodeId: n.id, level: 'error', message: 'פקודת ימות חסרה או פסולה' })
+        }
       }
     }
     return out
@@ -520,31 +529,79 @@ export default function IvrBuilder() {
                     </label>
                   )}
 
-                  {/* ── סוג אחר מימות ──
-                      🔴 הדלת לכל ~40 סוגי השלוחות של ימות בלי לבנות
-                      כל אחד מהם: תא קולי, פקס, פילטר זמנים, זמני היום.
-                      ⚠️ הפקודה מסוננת לפני השליחה — "&" מפריד פקודות
-                      בפרוטוקול, וערך שמכיל אותו מזריק פקודה נוספת. */}
+                  {/* ── כל סוגי השלוחות של ימות ──
+                      🔴 בחירה בעברית מרשימה, לא פקודה. המנהל אינו
+                      אמור לחפש בפורום של ימות כדי להגדיר תא קולי.
+
+                      ⚠️ ימות היא שמריצה את הסוג; אנחנו רק שולחים
+                      אליה את המתקשר. לכן חובה לומר במפורש מה צריך
+                      להגדיר שם — שלוחה שלא הוגדרה תשמיע שקט. */}
                   {node.type === 'raw' && (
-                    <label className="flex flex-col gap-1">
-                      <span className="text-xs font-semibold text-slate-600">פקודת ימות</span>
-                      <input dir="ltr" value={node.rawCommand ?? ''}
-                        placeholder="go_to_folder=/7"
-                        onChange={e => patch(node.id, { rawCommand: e.target.value })}
-                        className="rounded-lg border border-slate-200 px-3 py-1.5 font-mono text-sm" />
-                      <span className="text-[11px] leading-relaxed text-slate-500">
-                        הדביקו פקודה מהתיעוד של ימות — למשל <code dir="ltr">go_to_folder=/7</code> לתא קולי.
-                        כך אפשר להשתמש בכל סוג שלוחה שימות מציעה.
-                      </span>
-                      {/* ⚠️ אזהרה מיידית ולא רק בשמירה: פקודה שבורה
-                          משתיקה את השלוחה, והמנהל מגלה זאת רק כשמתקשר
-                          מתלונן. */}
-                      {node.rawCommand && !/^[a-zA-Z_][a-zA-Z0-9_]*=.+$/.test(node.rawCommand.trim()) && (
-                        <span className="text-[11px] font-bold text-rose-700">
-                          הצורה חייבת להיות שם_פקודה=ערך, בלי רווחים בשם ובלי התו &amp;
-                        </span>
+                    <div className="flex flex-col gap-2.5">
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs font-semibold text-slate-600">מה השלוחה עושה</span>
+                        <select value={node.yemotType ?? ''}
+                          onChange={e => patch(node.id, {
+                            yemotType: e.target.value || undefined,
+                            // ⚠️ מעבר בין המצבים מנקה את השני: פקודה
+                            // שנשארה מאחור הייתה רצה במקום הבחירה.
+                            rawCommand: e.target.value ? undefined : node.rawCommand,
+                          })}
+                          className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm">
+                          <option value="">— פקודה חופשית (למתקדמים) —</option>
+                          {yemotTypeGroups().map(g => (
+                            <optgroup key={g.group} label={g.group}>
+                              {g.types.map(t => (
+                                <option key={t.key} value={t.key}>{t.label}</option>
+                              ))}
+                            </optgroup>
+                          ))}
+                        </select>
+                      </label>
+
+                      {node.yemotType ? (() => {
+                        const def = yemotTypeByKey(node.yemotType)
+                        return (
+                          <>
+                            {def && (
+                              <p className="rounded-lg bg-slate-50 px-3 py-2 text-[11.5px] leading-relaxed text-slate-600">
+                                {def.what}
+                              </p>
+                            )}
+                            <label className="flex flex-col gap-1">
+                              <span className="text-xs font-semibold text-slate-600">מספר השלוחה בימות</span>
+                              <input dir="ltr" value={node.folder ?? ''} placeholder="/7"
+                                onChange={e => patch(node.id, { folder: e.target.value })}
+                                className="w-40 rounded-lg border border-slate-200 px-3 py-1.5 font-mono text-sm" />
+                            </label>
+                            {/* 🔴 מה להגדיר בימות. בלי זה המנהל בוחר
+                                סוג, שומר, והשלוחה משמיעה שקט. */}
+                            {def && (
+                              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11.5px] leading-relaxed text-amber-900">
+                                <strong>לפני שזה יעבוד:</strong> {def.setupHint}
+                              </p>
+                            )}
+                          </>
+                        )
+                      })() : (
+                        <label className="flex flex-col gap-1">
+                          <span className="text-xs font-semibold text-slate-600">פקודת ימות</span>
+                          <input dir="ltr" value={node.rawCommand ?? ''}
+                            placeholder="go_to_folder=/7"
+                            onChange={e => patch(node.id, { rawCommand: e.target.value })}
+                            className="rounded-lg border border-slate-200 px-3 py-1.5 font-mono text-sm" />
+                          <span className="text-[11px] leading-relaxed text-slate-500">
+                            לכל סוג שאינו ברשימה — הדביקו פקודה מהתיעוד של ימות.
+                          </span>
+                          {/* ⚠️ אזהרה תוך כדי עריכה ולא רק בשמירה. */}
+                          {node.rawCommand && !/^[a-zA-Z_][a-zA-Z0-9_]*=.+$/.test(node.rawCommand.trim()) && (
+                            <span className="text-[11px] font-bold text-rose-700">
+                              הצורה חייבת להיות שם_פקודה=ערך, בלי רווחים בשם ובלי התו &amp;
+                            </span>
+                          )}
+                        </label>
                       )}
-                    </label>
+                    </div>
                   )}
 
                   {/* מקשי התפריט */}

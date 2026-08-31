@@ -98,6 +98,13 @@ export interface IvrNodeDef {
   /** כבוי = השלוחה קיימת אך אינה פעילה; המקש אליה מדלג. */
   enabled?: boolean
   /**
+   * סוג השלוחה בימות (type='raw') — מפתח מתוך lib/ivrYemotTypes.
+   *
+   * ⚠️ המנהל בוחר שם עברי מרשימה; זה המפתח שנשמר. ריק = הוא בחר
+   * "פקודה חופשית" והזין את הפקודה ידנית ב-rawCommand.
+   */
+  yemotType?: string
+  /**
    * פקודת ימות גולמית (type='raw').
    *
    * 🔴 מסוננת ב-sanitizeRawCommand לפני שהיא נכתבת לתשובה: "&"
@@ -384,6 +391,7 @@ export function normalizeIvr(raw: unknown): IvrConfig {
       //
       // ⚠️ 0/שלילי → undefined ולא נשמרים: אפס ספרות ואפס שניות הם
       // הגדרות בלתי אפשריות שהיו שוברות את השלוחה.
+      yemotType: n.yemotType ? String(n.yemotType) : undefined,
       rawCommand: n.rawCommand ? String(n.rawCommand) : undefined,
       maxDigits: Number(n.maxDigits) > 0 ? Number(n.maxDigits) : undefined,
       waitSeconds: Number(n.waitSeconds) > 0 ? Number(n.waitSeconds) : undefined,
