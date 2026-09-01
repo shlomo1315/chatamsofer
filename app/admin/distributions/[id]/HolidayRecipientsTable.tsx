@@ -294,6 +294,17 @@ export default function HolidayRecipientsTable({
         if (!(r.id_number ?? '').trim()) return (
           <span className="text-[11px] text-amber-700" title="בלי ת״ז אי אפשר לטעון או להקים בנדרים">חסרה ת״ז</span>
         )
+        // 🔴 בלי מוקד אין טעינה — הכרטיס נמסר *במוקד*, ולכן טעינה למי
+        // שטרם בחר יוצרת כרטיס טעון שאין לאיש דרך למסור.
+        //
+        // ⚠️ eligibleForLoad בשרת כבר חוסם זאת, אבל הכפתור הוצג בכל זאת:
+        // לחיצה עליו נכשלה תמיד, והמסך נראה כאילו הטעינה אפשרית ופשוט
+        // לא עובדת.
+        if (!r.center_id) return (
+          <span className="text-[11px] text-slate-400" title="הכרטיס נמסר במוקד — יש לבחור מוקד לפני הטעינה">
+            טרם נבחר מוקד
+          </span>
+        )
 
         const failed = r.load_status === 'failed'
         return (

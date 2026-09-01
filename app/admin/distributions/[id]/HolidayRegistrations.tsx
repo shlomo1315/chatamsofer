@@ -1004,6 +1004,13 @@ export default function HolidayRegistrations({
                   {loadScope.alreadyLoaded > 0 && <li>· {loadScope.alreadyLoaded} כבר נטענו ולא ייטענו שוב</li>}
                   {loadScope.notApproved > 0 && <li>· {loadScope.notApproved} טרם אושרו</li>}
                   {loadScope.noId > 0 && <li className="text-amber-700">· {loadScope.noId} בלי ת״ז — לא ייטענו</li>}
+                  {/* 🔴 הכרטיס נמסר במוקד — טעינה בלעדיו יוצרת כרטיס
+                      טעון שאין לאיש דרך למסור. */}
+                  {loadScope.noCenter > 0 && (
+                    <li className="text-amber-700">
+                      · {loadScope.noCenter} טרם בחרו מוקד — לא ייטענו
+                    </li>
+                  )}
                 </ul>
                 {testMode
                   ? <p className="mb-3 rounded-lg border-2 border-amber-400 bg-amber-50 px-2.5 py-2 text-[11px] font-bold text-amber-900">

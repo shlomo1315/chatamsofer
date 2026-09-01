@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { toRegistrationRow } from '@/lib/distributionRow'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -72,5 +73,14 @@ export async function GET(
     return NextResponse.json({ error: res.error }, { status: 500 })
   }
 
-  return NextResponse.json({ rows: res.rows }, { headers: { 'Cache-Control': 'no-store' } })
+  // 🔴 ההמרה חייבת לרוץ גם כאן, לא רק בעמוד עצמו.
+  //
+  // ⚠️ הנתיב הזה מזין את השורות שנטענות בהדרגה ברקע, והן הוחזרו גולמיות:
+  // center_name נגזר מה-join ב-toRegistrationRow, כך שכל שורה שהגיעה מכאן
+  // הציגה "טרם נבחר" גם למשפחה שבחרה מוקד. אותה פונקציה בדיוק שהעמוד
+  // משתמש בה — אחרת שתי הדרכים לאותה טבלה מציגות נתונים שונים.
+  return NextResponse.json(
+    { rows: res.rows.map(toRegistrationRow) },
+    { headers: { 'Cache-Control': 'no-store' } },
+  )
 }

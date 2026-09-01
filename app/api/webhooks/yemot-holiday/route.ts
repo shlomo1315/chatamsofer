@@ -131,6 +131,25 @@ type Member = {
 // ⚠️ כרטסת שאינה פתוחה לרישום: לא-פעילה, או שנדחתה. רישום של משפחה שנדחתה
 // יוצר התחייבות תקציבית למי שהארגון החליט לא לאשר — ולכן נחסם ומוסבר בשיחה.
 // כרטסת שממתינה לאישור *כן* נרשמת: היא רשומה באיגוד, והאישור לחלוקה נפרד.
+/**
+ * השם שמוקרא בשיחה — שם משפחה ואחריו השם הפרטי.
+ *
+ * ⚠️ full_name ולא spouse_name: full_name הוא שמו הפרטי של הבעל, וזה
+ * מה שהמתקשר מצפה לשמוע. צירוף spouse_name היה גורם לשלוחה להקריא
+ * "משפחת <שם האישה>".
+ *
+ * ⚠️ מקור אחד לכל המסלולים: הרישום, בחירת המוקד וחיבור הכרטיס חייבים
+ * להקריא בדיוק אותו שם, אחרת אותו אדם נשמע אחרת בכל מסלול.
+ *
+ * ⚠️ שם ריק אפשרי (רשומות ישנות בלי שם כלל) — הקורא מסנן טוקן ריק.
+ */
+function readableName(m: Member): string {
+  const family = m.family_name?.trim() ?? ''
+  const first = m.full_name?.trim() ?? ''
+  if (family && first) return `${family} ${first}`
+  return family || first
+}
+
 function memberCanRegister(m: Member): boolean {
   if (m.is_active === false) return false
   return m.eligibility_status !== 'rejected'
@@ -269,9 +288,11 @@ async function handleCardRoute(
     // לפני שהוא מוסר מספר כרטיס. בלי זה הוא מקיש בעיוורון, ומי שהקיש
     // ת"ז שגויה משייך כרטיס למשפחה אחרת בלי לדעת.
     return yemotText([readTap(CARD_VARS[0], [
-      msgToken(msgs, 'identify', { name: ben.family_name?.trim() || ben.full_name?.trim() || '' }),
+      msgToken(msgs, 'identify', { name: readableName(ben) }),
       msgToken(msgs, 'card_ask'),
-    ], { max: '', min: 1 })], callId)
+      // ⚠️ סינון טוקן ריק: הודעה שנוסחה נמחק מייצרת "t-" ריק, וימות
+      // מגיבה לו בצורה בלתי צפויה במקום לדלג עליו.
+    ].filter(Boolean), { max: '', min: 1 })], callId)
   }
 
   const card = digitsOnly(params[CARD_VARS[cAttempt]])
@@ -546,11 +567,24 @@ async function handleCenterRoute(
       // זיהתה *אותו* לפני שהוא בוחר. מי שהקיש ת"ז שגויה היה בוחר מוקד
       // למשפחה אחרת — ואי אפשר לבטל.
       return yemotText([readTap(CENTER_VARS.city, [
-        msgToken(msgs, 'identify', { name: ben.family_name?.trim() || ben.full_name?.trim() || '' }),
+        msgToken(msgs, 'identify', { name: readableName(ben) }),
         msgToken(msgs, 'centers_intro'),
         countdown,
         msgToken(msgs, 'ask_city_intro'),
-        tToken(step.options.map(o => `ל${o.city} הקישו ${o.number}`).join(' ')),
+        // ─────────────────────────────────────────────────────────────
+        // 🔴 ההקלטה קודמת לרשימה הנבנית.
+        //
+        // ⚠️ כאן נשלח תמיד tToken — טקסט גולמי — גם כשלמנהל כבר היה
+        // קובץ ElevenLabs מוכן. שתי תוצאות: העריכה שלו לא נשמעה
+        // (הקובץ התעלם), וימות נאלצה לייצר קול ל-18 ערים בזמן אמת —
+        // מה שהוסיף כחצי דקה של שקט לפני כל בחירה.
+        //
+        // ⚠️ נופלים לרשימה הנבנית כשאין הקלטה: היא תמיד מדויקת, בעוד
+        // שהקלטה מתיישנת ברגע שמוקד נפתח או נסגר.
+        // ─────────────────────────────────────────────────────────────
+        msgs.ask_city?.audio
+          ? msgToken(msgs, 'ask_city')
+          : tToken(step.options.map(o => `ל${o.city} הקישו ${o.number}`).join(' ')),
       ].filter(Boolean), {
         max: Math.max(...step.options.map(o => String(o.number).length)),
         min: 1,
@@ -559,6 +593,8 @@ async function handleCenterRoute(
 
     case 'ask_center':
       return yemotText([readTap(CENTER_VARS.center, [
+        // ⚠️ נשאר טקסט חי: רשימת המוקדים *בתוך עיר* משתנה לפי העיר
+        // שנבחרה, ולכן קובץ אחד אינו יכול לשרת אותה. ראו ask_city.
         tToken(buildChoiceList(step.options.map(o => ({ label: o.name })))),
       ], {
         // אותה נגזרת כמו בערים — ראו ההערה למעלה.
@@ -673,11 +709,7 @@ export async function handleHolidayCall(params: Record<string, string>): Promise
     return yemotText([idMessage(msgToken(msgs, 'not_eligible')), goToFolder('hangup')], callId)
   }
 
-  // ⚠️ הקראה בשלוחה = *שם המשפחה בלבד*. קודם צורף גם שם האישה/הפרטי
-  // (spouse_name || full_name) והשלוחה הקריאה "משפחת <שם האישה>" — לא רצוי.
-  // נופלים ל-full_name רק כשאין family_name כלל (רשומות ישנות), כדי שלא ייווצר
-  // זיהוי ריק.
-  const name = (ben.family_name?.trim() || ben.full_name?.trim() || '').trim()
+  const name = readableName(ben)
   const distName = `${dist.name}${dist.year ? ` ${dist.year}` : ''}`
 
   // ⚠️ כבר רשום — בכל ערוץ (אתר, מייל, נדרים או שיחה קודמת). נאמר לו זאת *לפני*

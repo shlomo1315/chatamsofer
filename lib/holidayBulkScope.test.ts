@@ -46,9 +46,19 @@ describe('scopeBulkLoad — 🔴 מי ייטען', () => {
     expect(s.eligible).toHaveLength(1)
   })
 
-  it('⚠️ בלי מוקד עדיין נטען: הכסף אינו תלוי במוקד, רק השובר', () => {
+  // 🔴 הכלל התהפך: קודם נכתב כאן ש"הכסף אינו תלוי במוקד, רק השובר",
+  // וזה שגוי — הכרטיס נמסר פיזית *במוקד*. טעינה למי שטרם בחר יוצרת
+  // כרטיס טעון בכסף אמיתי שאין לאיש דרך למסור.
+  it('🔴 בלי מוקד אינו נטען — אין לאן למסור את הכרטיס', () => {
     const s = scopeBulkLoad([row({ center_id: null })])
+    expect(s.eligible).toHaveLength(0)
+    expect(s.noCenter).toBe(1)
+  })
+
+  it('עם מוקד — נטען', () => {
+    const s = scopeBulkLoad([row({ center_id: 'c1' })])
     expect(s.eligible).toHaveLength(1)
+    expect(s.noCenter).toBe(0)
   })
 
   it('הכל ביחד — הספירה מסתכמת', () => {

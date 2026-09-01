@@ -24,20 +24,32 @@ export interface LoadScope<T> {
   alreadyLoaded: number
   notApproved: number
   noId: number
+  /** 🔴 טרם בחרו מוקד — אינם נטענים. */
+  noCenter: number
 }
 
 /**
  * מי ייטען בפועל.
  *
  * ⚠️ 'failed' *נכלל* במכוון — ניסיון חוזר הוא בדיוק מה שרוצים ממנו.
- * ⚠️ היעדר מוקד אינו חוסם: הכסף אינו תלוי במוקד, רק השובר.
+ *
+ * 🔴 היעדר מוקד חוסם. קודם היה כתוב כאן ש"הכסף אינו תלוי במוקד, רק
+ * השובר" — וזה שגוי: הכרטיס נמסר פיזית *במוקד*. טעינה למי שטרם בחר
+ * יוצרת כרטיס טעון בכסף אמיתי שאין לאיש דרך למסור, והכסף יושב עליו
+ * עד שמישהו מבחין.
+ *
+ * ⚠️ eligibleForLoad בשרת כבר חסם זאת, כך שהשורות האלה נספרו כ"ייטענו"
+ * ואז נשרו בשקט — ההפרש בין "סומנו 800" ל"נטענו 340" נראה כתקלה.
  */
 export function scopeBulkLoad<T extends BulkRow>(rows: T[]): LoadScope<T> {
-  const out: LoadScope<T> = { eligible: [], alreadyLoaded: 0, notApproved: 0, noId: 0 }
+  const out: LoadScope<T> = {
+    eligible: [], alreadyLoaded: 0, notApproved: 0, noId: 0, noCenter: 0,
+  }
   for (const r of rows) {
     if (r.load_status === 'loaded') { out.alreadyLoaded++; continue }
     if (r.approval_status !== 'approved') { out.notApproved++; continue }
     if (!String(r.id_number ?? '').trim()) { out.noId++; continue }
+    if (!String(r.center_id ?? '').trim()) { out.noCenter++; continue }
     out.eligible.push(r)
   }
   return out
