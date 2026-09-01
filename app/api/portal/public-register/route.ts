@@ -247,10 +247,20 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
     return NextResponse.json({ error: 'יש לאמת לפחות מספר טלפון אחד בקוד שיוקרא בשיחה לפני סיום הרישום.' }, { status: 400 })
   }
 
+  // 🔴 ת"ז מנורמלת ל-9 ספרות, כולל אפסים מובילים.
+  //
+  // ⚠️ replace(/\D/g,'') לבדו מנקה תווים אך אינו משלים אפס מוביל, ולכן
+  // "23603491" ו-"023603491" נשמרו כשתי מחרוזות שונות. בדיקת הכפילות
+  // היא eq מדויק — היא לא מצאה את הקיימת, ואותו אדם נרשם פעמיים
+  // (גרינפלד מרדכי, 12.08 ו-28.08, אותו טלפון ואותה משפחה).
+  //
+  // ⚠️ הנרמול חייב לקרות *לפני* בדיקת הכפילות וגם לפני השמירה: נרמול
+  // רק באחת מהן משאיר את הפער פתוח מהצד השני.
+  // ⚠️ דרכון אינו מנורמל — הוא אינו בן 9 ספרות ואותיותיו משמעותיות.
   const isPassport = String(id_doc_type ?? 'id') === 'passport'
   const cleanId = isPassport
     ? String(id_number).trim()
-    : String(id_number).replace(/\D/g, '')
+    : String(id_number).replace(/\D/g, '').padStart(9, '0')
 
   if (isPassport) {
     if (cleanId.length < 5 || cleanId.length > 20) {
@@ -292,12 +302,21 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
     }
   }
 
-  const { data: existing } = await admin.from('beneficiaries').select('id').eq('id_number', cleanId).maybeSingle()
+  // ⚠️ נבדקות שתי הצורות: הרשומות שנוצרו לפני הנרמול שמורות בלי האפס
+  // המוביל, ובדיקה על הצורה המנורמלת בלבד לא הייתה מוצאת אותן — כלומר
+  // הכפילות הייתה ממשיכה להיווצר מול כל מי שכבר רשום.
+  const idVariants = Array.from(new Set(
+    isPassport ? [cleanId] : [cleanId, cleanId.replace(/^0+/, '')].filter(Boolean),
+  ))
+  const { data: existing } = await admin.from('beneficiaries')
+    .select('id').in('id_number', idVariants).limit(1).maybeSingle()
   if (existing) return NextResponse.json({ error: 'תעודת זהות זו כבר רשומה במערכת' }, { status: 409 })
 
   const isSpousePassport = String(spouse_id_doc_type ?? 'id') === 'passport'
   const cleanSpouseId = spouse_id_number
-    ? (isSpousePassport ? String(spouse_id_number).trim() : String(spouse_id_number).replace(/\D/g, ''))
+    // ⚠️ אותו נרמול כמו לבעל — אחרת ת"ז האישה נשמרת בשתי צורות ובדיקות
+    // הכפילות מולה (כולל "זהה לזו של הבעל") מפספסות.
+    ? (isSpousePassport ? String(spouse_id_number).trim() : String(spouse_id_number).replace(/\D/g, '').padStart(9, '0'))
     : ''
 
   // ⚠️ אבטחת נתונים: הבעל והאשה חייבים להיות שני אנשים שונים.
