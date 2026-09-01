@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { rowsKeyOf } from '@/lib/rowsKey'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // גלילה אינסופית לטבלאות ארוכות.
@@ -40,9 +41,23 @@ export function useIncrementalRows<T>(
   // זהה ל-useTablePagination): סינון מחזיר מערך חדש בכל הקלדה, ו-effect
   // שקורא setLimit היה מרנדר את הרשימה פעמיים בכל תו — כלומר בדיוק העומס
   // שהגלילה ההדרגתית באה למנוע, על הרשימה הגדולה ביותר במסך.
-  const [prev, setPrev] = useState<{ all: T[]; initial: number }>({ all, initial })
-  if (prev.all !== all || prev.initial !== initial) {
-    setPrev({ all, initial })
+  // 🔴 ההשוואה היא על *תוכן* הרשימה ולא על זהות המערך.
+  //
+  // ⚠️ זו הייתה הלולאה שהפילה את מסך החלוקה ב-React #301:
+  // HolidayRecipientsTable מעביר ל-useTableColumns את `filter` כפונקציה
+  // inline — זהות חדשה בכל רינדור. משם כל השרשרת מתחדשת
+  // (filter → available → tc.rows), כלומר `all` כאן הוא מערך חדש בכל
+  // רינדור גם כשהשורות זהות לחלוטין. ההשוואה `prev.all !== all` נכשלה
+  // תמיד, setPrev רץ בכל רינדור, וכל setState בזמן רינדור מזמן רינדור
+  // נוסף — עד ש-React נופל ב-#301 והמסך מת.
+  //
+  // ⚠️ מפתח ולא השוואת זהות: כך הרשימה מזוהה לפי מה שהיא באמת מכילה,
+  // ולא לפי מי יצר את המערך. זה מחסן את ה-hook מפני *כל* קורא שמעביר
+  // מערך נגזר — ולא רק מפני אתר הקריאה האחד שנפל.
+  const key = rowsKeyOf(all)
+  const [prev, setPrev] = useState<{ key: string; initial: number }>({ key, initial })
+  if (prev.key !== key || prev.initial !== initial) {
+    setPrev({ key, initial })
     if (limit !== initial) setLimit(initial)
   }
 

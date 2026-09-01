@@ -1,6 +1,7 @@
 'use client'
 import { useState, useMemo } from 'react'
 import { PAGE_SIZES, DEFAULT_PAGE_SIZE } from '@/lib/listParams'
+import { rowsKeyOf } from '@/lib/rowsKey'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // דפדוף אחיד לכל טבלאות המערכת.
@@ -36,9 +37,16 @@ export function useTablePagination<T>(all: T[], opts?: { initialSize?: number })
   // את הרשימה הקודמת ב-state ומשווים בזמן הרינדור.
   // useEffect שקורא setPage היה מרנדר פעמיים בכל חיפוש (ורשימה חדשה נוצרת
   // בכל הקלדה) — בדיוק העומס שהדפדוף בא לפתור.
-  const [prevAll, setPrevAll] = useState(all)
-  if (prevAll !== all) {
-    setPrevAll(all)
+  // 🔴 ההשוואה על *תוכן* הרשימה ולא על זהות המערך — ראו lib/useIncrementalRows.
+  //
+  // ⚠️ קורא שמעביר מערך נגזר שנבנה מחדש בכל רינדור (למשל useTableColumns עם
+  // `filter` inline) היה מכשיל את ההשוואה תמיד: setPrevAll רץ בכל רינדור,
+  // וכל setState בזמן רינדור מזמן רינדור נוסף — לולאה אינסופית ו-React #301.
+  // בדיוק כך נפל מסך החלוקה. מפתח-תוכן מחסן את ה-hook מכל קורא כזה.
+  const key = rowsKeyOf(all)
+  const [prevKey, setPrevKey] = useState(key)
+  if (prevKey !== key) {
+    setPrevKey(key)
     if (page !== 1) setPage(1)
   }
 
