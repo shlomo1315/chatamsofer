@@ -79,6 +79,17 @@ export default function IvrBuilder() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
+
+  // ── רשימות התפוצה והצינתוקים שקיימות בימות ──
+  // ⚠️ נטענות פעם אחת ואינן חוסמות: אם ימות אינה זמינה נשארת הקלדה
+  // חופשית, כי חסימת המסך בגלל שירות חיצוני מונעת עבודה שאפשר לבצע.
+  const [templates, setTemplates] = useState<string[]>([])
+  useEffect(() => {
+    void fetch('/api/admin/yemot-templates/lists', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => setTemplates(Array.isArray(d?.lists) ? d.lists : []))
+      .catch(() => {})
+  }, [])
   const [openId, setOpenId] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [voiceFor, setVoiceFor] = useState<string | null>(null)
@@ -554,6 +565,45 @@ export default function IvrBuilder() {
                             : data.typeHints.raw)
                         : data.typeHints[node.type]}
                     </p>
+
+                    {/* ── מקש ההקשה ──
+                        🔴 המקש *הוא* מספר השלוחה. עריכתו כאן משנה את
+                        המקש בתפריט האב עצמו — כלומר גם מה שהמתקשר מקיש
+                        וגם לאן הוא מגיע, בפעולה אחת.
+                        ⚠️ שדה נפרד ל"מספר השלוחה" היה הגדרה שנייה לאותו
+                        דבר, והשתיים נפרדות זו מזו בשקט. */}
+                    {(keyPaths.get(node.id) ?? []).length > 0 && (
+                      <div className="flex flex-col gap-1.5">
+                        <span className="text-xs font-semibold text-slate-600">מקש ההקשה</span>
+                        {(keyPaths.get(node.id) ?? []).map((kp, i) => (
+                          <div key={i} className="flex flex-wrap items-center gap-2">
+                            <input dir="ltr" value={kp.digit} maxLength={1}
+                              onChange={e => {
+                                const d = e.target.value.replace(/[^0-9*#]/g, '').slice(0, 1)
+                                if (!d) return
+                                // ⚠️ מקש תפוס באותו תפריט נדחה: שני מקשים
+                                // זהים = ימות בוחרת אחד מהם באקראי.
+                                const parent = cfg?.nodes.find(n => n.name === kp.from)
+                                if (parent?.keys?.some(k => k.digit === d && k.target !== node.id)) {
+                                  toast.error(`מקש ${d} כבר תפוס בתפריט "${kp.from}"`)
+                                  return
+                                }
+                                setCfg(c => c && ({
+                                  ...c,
+                                  nodes: c.nodes.map(n => (n.name === kp.from && n.keys
+                                    ? { ...n, keys: n.keys.map(k => (k.target === node.id ? { ...k, digit: d } : k)) }
+                                    : n)),
+                                }))
+                                setDirty(true)
+                              }}
+                              className="w-14 rounded-lg border border-slate-200 px-3 py-1.5 text-center font-mono text-sm font-bold" />
+                            <span className="text-[11.5px] text-slate-500">
+                              מתוך התפריט &quot;{kp.from}&quot;
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </Section>
 
                   {/* ── 2. מה נשמע ── */}
@@ -702,12 +752,12 @@ export default function IvrBuilder() {
                                 {def.what}
                               </p>
                             )}
-                            <label className="flex flex-col gap-1">
-                              <span className="text-xs font-semibold text-slate-600">מספר השלוחה בימות</span>
-                              <input dir="ltr" value={node.folder ?? ''} placeholder="/7"
-                                onChange={e => patch(node.id, { folder: e.target.value })}
-                                className="w-40 rounded-lg border border-slate-200 px-3 py-1.5 font-mono text-sm" />
-                            </label>
+                            {/* ⚠️ שדה "מספר השלוחה בימות" הוסר מכאן: המספר
+                                נגזר מהמקש שמוביל לשלוחה, והוא כבר מוצג
+                                בכותרת. בקשה להזין אותו שוב הייתה בקשה
+                                לחזור על מה שכבר הוגדר — ושתי הגדרות לאותו
+                                דבר נפרדות זו מזו בשקט. ראו "מקש ההקשה"
+                                בסעיף השלוחה. */}
                             {/* ── השדות של הסוג ──
                                 🔴 לכל סוג בימות פרמטרים משלו. תא קולי
                                 בלי כתובת מייל אינו שולח לאיש, ופילטר
@@ -732,6 +782,29 @@ export default function IvrBuilder() {
                                         <option key={o.value} value={o.value}>{o.label}</option>
                                       ))}
                                     </select>
+                                  ) : f.kind === 'template' ? (
+                                    /* ── רשימת תפוצה / צינתוקים ──
+                                       🔴 בורר ולא הקלדה: שם שאינו קיים
+                                       בימות אינו נכשל — הוא נכתב לקובץ,
+                                       ימות אינה מוצאת רשימה בשם הזה,
+                                       והשלוחה פשוט לא רושמת איש. טעות
+                                       כתיב אחת היא בדיוק המקרה הזה.
+                                       ⚠️ datalist ולא select: אפשר לבחור
+                                       מהקיימות *וגם* להקליד שם חדש, כדי
+                                       שאפשר יהיה להקים רשימה בימות
+                                       ולהצביע עליה מיד. */
+                                    <>
+                                      <input list="yemot-templates" value={val}
+                                        placeholder={templates.length ? 'בחרו רשימה או הקלידו שם חדש' : 'שם הרשימה בימות'}
+                                        onChange={e => setVal(e.target.value)}
+                                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
+                                      {templates.length > 0 && !!val.trim()
+                                        && !templates.includes(val.trim()) && (
+                                        <span className="text-[11px] font-bold text-amber-700">
+                                          ⚠️ רשימה בשם זה אינה קיימת בימות — יש להקים אותה שם, אחרת איש לא יירשם
+                                        </span>
+                                      )}
+                                    </>
                                   ) : (
                                     <input
                                       type={f.kind === 'number' ? 'number'

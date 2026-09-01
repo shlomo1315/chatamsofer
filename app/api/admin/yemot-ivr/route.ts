@@ -25,10 +25,28 @@ const NO_STORE = { 'Cache-Control': 'no-store' }
  */
 function webhookUrl(request: NextRequest): string {
   const envBase = (process.env.NEXT_PUBLIC_SITE_URL ?? '').replace(/\/$/, '')
-  if (envBase) return `${envBase}/api/webhooks/yemot`
-  const host = request.headers.get('host') ?? 'chasamsofer.co.il'
-  const proto = host.startsWith('localhost') ? 'http' : 'https'
-  return `${proto}://${host}/api/webhooks/yemot`
+  const base = envBase || (() => {
+    const host = request.headers.get('host') ?? 'chasamsofer.co.il'
+    const proto = host.startsWith('localhost') ? 'http' : 'https'
+    return `${proto}://${host}`
+  })()
+
+  // ───────────────────────────────────────────────────────────────────────
+  // 🔴 ApiToken בכתובת — בלעדיו השלוחה עונה "אין הרשאה" ומנתקת.
+  //
+  // ⚠️ זה היה באג אמיתי: המסך הציג כתובת נקייה, המנהל הדביק אותה בימות
+  // בדיוק כפי שהוצגה, וכל שיחה נדחתה. הוובהוק דורש ApiToken (fail-closed,
+  // כמו כל שלוחות המערכת), והכתובת שהוצגה לא יכלה לעבוד לעולם.
+  //
+  // ⚠️ ימות מעבירה את פרמטרי הכתובת בכל בקשה, ולכן הטוקן מגיע מאליו בכל
+  // צעד של השיחה — אין צורך להוסיף אותו ידנית לכל שלב.
+  //
+  // ⚠️ הטוקן חסוי: הכתובת מוצגת למנהלים בלבד (requireStaff(['admin'])),
+  // וזו הסיבה שהיא נבנית בשרת ולא בלקוח.
+  // ───────────────────────────────────────────────────────────────────────
+  const secret = process.env.YEMOT_WEBHOOK_SECRET ?? ''
+  const path = `${base}/api/webhooks/yemot`
+  return secret ? `${path}?ApiToken=${encodeURIComponent(secret)}` : path
 }
 
 export async function GET(request: NextRequest) {

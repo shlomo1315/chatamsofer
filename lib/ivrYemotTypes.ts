@@ -33,7 +33,11 @@ export interface YemotTypeField {
   /** התווית בעברית. */
   label: string
   /** סוג הקלט. */
-  kind: 'text' | 'number' | 'email' | 'time' | 'select'
+  // ⚠️ 'template' = רשימת תפוצה/צינתוקים בימות. הוא אינו טקסט חופשי
+  // במכוון: שם שאינו קיים בימות אינו נכשל — הוא נכתב לקובץ, ימות אינה
+  // מוצאת רשימה בשם הזה, והשלוחה פשוט לא רושמת איש. הממשק מציג בורר
+  // של הרשימות הקיימות (ראו api/admin/yemot-templates/lists).
+  kind: 'text' | 'number' | 'email' | 'time' | 'select' | 'template'
   /** לאפשרויות סגורות (kind='select'). */
   options?: { value: string; label: string }[]
   /** הסבר קצר מתחת לשדה. */
@@ -129,7 +133,7 @@ export const YEMOT_TYPES: YemotTypeDef[] = [
     what: 'מוסיף את מספר המתקשר לרשימת תפוצה להודעות.',
     setupHint: 'השלוחה תיווצר בימות אוטומטית עם רשימת התפוצה שתציין.',
     fields: [
-      { key: 'template', label: 'שם רשימת התפוצה', kind: 'text', required: true,
+      { key: 'template', label: 'שם רשימת התפוצה', kind: 'template', required: true,
         hint: 'כפי שהיא מוגדרת בימות.' },
     ]
   },
@@ -138,7 +142,7 @@ export const YEMOT_TYPES: YemotTypeDef[] = [
     what: 'מסיר את מספר המתקשר מרשימת התפוצה.',
     setupHint: 'השלוחה תיווצר בימות אוטומטית עם רשימת התפוצה שתציין.',
     fields: [
-      { key: 'template', label: 'שם רשימת התפוצה', kind: 'text', required: true,
+      { key: 'template', label: 'שם רשימת התפוצה', kind: 'template', required: true,
         hint: 'כפי שהיא מוגדרת בימות.' },
     ]
   },
@@ -148,7 +152,7 @@ export const YEMOT_TYPES: YemotTypeDef[] = [
     what: 'המערכת מצלצלת למתקשר ומנתקת — הוא נרשם לרשימת הצינתוקים ומקבל שיחה חוזרת.',
     setupHint: 'השלוחה תיווצר בימות אוטומטית עם רשימת הצינתוקים שתציין.',
     fields: [
-      { key: 'template', label: 'שם רשימת הצינתוקים', kind: 'text', required: true,
+      { key: 'template', label: 'שם רשימת הצינתוקים', kind: 'template', required: true,
         hint: 'הרשימה שאליה נרשם המתקשר. כפי שהיא מוגדרת בימות.' },
       { key: 'action', label: 'הפעולה', kind: 'select', options: [
         { value: 'add', label: 'הוספה לרשימה' },

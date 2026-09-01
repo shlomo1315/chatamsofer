@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Phone, PhoneOutgoing, ChevronLeft, Hash, ListTree, PlayCircle,
   KeyRound, Copy, Check, MessageSquare, Settings2, History,
@@ -63,10 +63,12 @@ function TreeNode({ node, depth = 0 }: { node: IvrNode; depth?: number }) {
 }
 
 /** כפתור העתקת הכתובת — ⚠️ הכתובת המלאה, כדי שאפשר יהיה להדביק בימות כמו שהיא. */
-function CopyUrl({ path }: { path: string }) {
+function CopyUrl({ path, full: fullUrl }: { path: string; full?: string }) {
   const [done, setDone] = useState(false)
   if (path === '—') return null
-  const full = `${SITE}${path}`
+  // 🔴 הכתובת המלאה מגיעה מהשרת עם ה-ApiToken. בלעדיו ימות מקבלת
+  // "אין הרשאה" ומנתקת מיד — הכתובת שהוצגה כאן לא יכלה לעבוד לעולם.
+  const full = fullUrl ?? `${SITE}${path}`
   return (
     <button type="button"
       onClick={() => {
@@ -151,6 +153,17 @@ const MAIN_TABS: { key: MainTab; label: string; icon: typeof Phone }[] = [
 ]
 
 export default function PhoneSystemClient() {
+  // ── הכתובות המלאות מהשרת (כולל ApiToken) ──
+  // ⚠️ לא נבנות בלקוח: הטוקן חסוי, והנתיב מוגן למנהלים בלבד.
+  const [urls, setUrls] = useState<Record<string, string>>({})
+  const [hasSecret, setHasSecret] = useState(true)
+  useEffect(() => {
+    void fetch('/api/admin/yemot-urls', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => { setUrls(d?.urls ?? {}); setHasSecret(d?.hasSecret !== false) })
+      .catch(() => {})
+  }, [])
+
   const [openId, setOpenId] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('messages')
   const [main, setMain] = useState<MainTab>('build')
@@ -208,7 +221,15 @@ export default function PhoneSystemClient() {
               מגדירים שלוחה אחת מסוג <strong>API</strong> ומדביקים את הכתובת.
               כל התפריט — חגים, יולדות והודעות — רץ מכאן, ושינוי בו אינו דורש נגיעה בימות.
             </p>
-            <CopyUrl path="/api/webhooks/yemot" />
+            <CopyUrl path="/api/webhooks/yemot" full={urls.menu} />
+            {/* 🔴 בלי הסוד הכתובת נדחית בכל שיחה — וזה חייב להיראות כאן
+                ולא רק בלוג של השרת. */}
+            {!hasSecret && (
+              <p className="mt-2 rounded-lg bg-rose-50 px-2.5 py-2 text-[11.5px] font-bold text-rose-700">
+                ⚠️ YEMOT_WEBHOOK_SECRET אינו מוגדר בשרת — כל שיחה תיענה
+                ב&quot;אין הרשאה&quot; ותנותק. יש להגדיר אותו לפני ההדבקה בימות.
+              </p>
+            )}
           </div>
         )}
 
@@ -313,7 +334,7 @@ export default function PhoneSystemClient() {
               <PlayCircle size={14} className="text-slate-400" /> הגדרה בימות
             </h3>
             <p className="mb-2 text-[12px] text-slate-600">{ext.yemotType}</p>
-            <CopyUrl path={ext.webhook} />
+            <CopyUrl path={ext.webhook} full={urls[ext.id]} />
             {ext.webhook === '—' && (
               <p className="text-[11.5px] text-slate-500">
                 אין כתובת — ימות מנגנת קובץ שהועלה מראש, ואינה פונה לשרת באמצע השיחה.
