@@ -80,6 +80,24 @@ export default function IvrBuilder() {
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
 
+  // ── בדיקת קבצי הקול ──
+  // 🔴 הפניה לקובץ שאינו קיים = שלוחה אילמת. ראו verify-audio.
+  const [verifying, setVerifying] = useState(false)
+  const verifyAudio = async () => {
+    setVerifying(true)
+    try {
+      const res = await fetch('/api/admin/yemot-ivr/verify-audio', { method: 'POST' })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(d.error || 'הבדיקה נכשלה'); return }
+      if (!d.cleaned) { toast.success('כל ההודעות מצביעות על קבצים קיימים'); return }
+      // ⚠️ טעינה מחדש: ההגדרות שונו בשרת, והמסך היה מציג את הישן.
+      toast.success(`נוקו ${d.cleaned} הפניות שבורות — ההודעות חזרו להקראת טקסט`)
+      const fresh = await fetch('/api/admin/yemot-ivr', { cache: 'no-store' })
+        .then(r => r.json()).catch(() => null)
+      if (fresh?.config) { setCfg(fresh.config); setDirty(false) }
+    } catch { toast.error('שגיאת רשת') } finally { setVerifying(false) }
+  }
+
   // ── רשימות התפוצה והצינתוקים שקיימות בימות ──
   // ⚠️ נטענות פעם אחת ואינן חוסמות: אם ימות אינה זמינה נשארת הקלדה
   // חופשית, כי חסימת המסך בגלל שירות חיצוני מונעת עבודה שאפשר לבצע.
@@ -353,6 +371,22 @@ export default function IvrBuilder() {
             YEMOT_WEBHOOK_SECRET אינו מוגדר בשרת — עד שיוגדר, כל שיחה תישמע &quot;אין הרשאה&quot;.
           </p>
         )}
+
+        {/* ── בדיקת קבצי הקול ──
+            🔴 הודעה שמצביעה על קובץ שאינו קיים משמיעה *שקט מוחלט*:
+            ימות מדלגת עליו בשקט, המתקשר אינו יודע מה להקיש, והשיחה
+            חוזרת על עצמה עד שהיא מתנתקת. אין שגיאה בשום צד, ולכן זו
+            תקלה שאי אפשר לאבחן בלי הכפתור הזה. */}
+        <div className="mt-2.5 flex flex-wrap items-center gap-2">
+          <button type="button" disabled={verifying} onClick={() => void verifyAudio()}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50 disabled:opacity-50">
+            {verifying ? <Loader2 size={12} className="animate-spin" /> : <Volume2 size={12} />}
+            בדיקת קבצי הקול
+          </button>
+          <span className="text-[11px] text-indigo-800">
+            מוודא שכל הודעה מצביעה על קובץ שקיים בימות. הפניה שבורה = שלוחה אילמת.
+          </span>
+        </div>
       </div>
 
       {/* ── סרגל פעולה ── */}

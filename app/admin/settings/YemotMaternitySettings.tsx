@@ -99,7 +99,10 @@ export default function YemotMaternitySettings() {
         .map(m => m.key)
         .filter(k => {
           const t = String(next[k]?.text ?? '').trim()
-          return t && !dynamic(t) && t !== String(before[k]?.text ?? '').trim()
+          // 🔴 הקלטה אנושית אינה נדרסת — ראו YemotHolidaySettings.
+          const human = !!next[k]?.audio && !isGenerated(next[k]?.audio)
+          return t && !dynamic(t) && !human
+            && t !== String(before[k]?.text ?? '').trim()
         })
       if (keys.length) {
         toast.info(`יוצר קול ל-${keys.length} הודעות…`)

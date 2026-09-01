@@ -192,11 +192,14 @@ export default function YemotHolidaySettings() {
       // ⚠️ הודעה דינמית ({name}, {list}) מדולגת — קובץ יחיד אינו יכול
       // להקריא ערך שמשתנה בכל שיחה, והשרת חוסם זאת ממילא.
       // ─────────────────────────────────────────────────────────────────────
+      // 🔴 הקלטה אנושית (rec_) אינה נדרסת: היא הוקלטה בכוונה, ויצירה
+      // אוטומטית עליה הייתה מוחקת אותה בלי שביקשת — ובלי דרך לשחזר.
       const dynamic = (t: string) => /\{[^}]+\}/.test(t)
+      const human = (a?: string | null) => !!a && !a.startsWith('tts_')
       const needVoice = changedKeys.filter(k => {
         const m = meta.find(x => x.key === k)
         const t = String(next[k]?.text ?? '').trim()
-        return m?.allowAudio && t && !dynamic(t)
+        return m?.allowAudio && t && !dynamic(t) && !human(next[k]?.audio)
       })
       if (needVoice.length) {
         // ⚠️ info ולא loading: ל-Toast של המערכת אין מצב טעינה שאפשר לסגור.

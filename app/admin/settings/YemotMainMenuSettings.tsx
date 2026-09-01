@@ -173,8 +173,12 @@ export default function YemotMainMenuSettings() {
         .map(m => m.key)
         .filter(k => {
           const t = String(next[k]?.text ?? '').trim()
+          // 🔴 הקלטה אנושית (שאינה tts_) אינה נדרסת: היא הוקלטה בכוונה,
+          // ויצירה אוטומטית עליה הייתה מוחקת אותה בלי דרך לשחזר.
+          const human = !isGenerated(next[k]?.audio) && !!next[k]?.audio
           // ⚠️ רק מה שהשתנה — ראו ההערה ליד savedMsgs.
-          return t && !/\{[^}]+\}/.test(t) && t !== String(before[k]?.text ?? '').trim()
+          return t && !hasPlaceholder(t) && !human
+            && t !== String(before[k]?.text ?? '').trim()
         })
       if (keys.length) {
         toast.info(`יוצר קול ל-${keys.length} הודעות…`)
