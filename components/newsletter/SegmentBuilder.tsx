@@ -32,6 +32,8 @@ interface FilterOptions {
   communities: string[]
   maritalStatuses: string[]
   eligibilityStatuses: string[]
+  distributions: { id: string; name: string; date: string | null }[]
+  centers: { id: string; label: string }[]
 }
 
 // שלושת המקורות הקבועים. קבוצות שמורות מתווספות אליהם דינמית כקוביות.
@@ -41,6 +43,7 @@ const SOURCES: { value: FixedSource; label: string; description: string }[] = [
   { value: 'beneficiaries', label: 'צאצאים', description: 'הצאצאים הרשומים במערכת' },
   { value: 'staff', label: 'צוות', description: 'אנשי הצוות של הארגון' },
   { value: 'recovery_homes', label: 'בתי החלמה', description: 'כתובות הדיווח של בתי ההחלמה' },
+  { value: 'distribution', label: 'חלוקת חגים', description: 'הנרשמים לחלוקה — לפי מוקד, אישור וטעינה' },
 ]
 
 interface ContactList {
@@ -79,10 +82,14 @@ export default function SegmentBuilder({
   const hasSource = Boolean(def.source)
   // רשימה מקובץ — חייבים לבחור רשימה ספציפית
   const needsList = def.source === 'contact_list' && !def.contactListId
-  const canShow = hasSource && !needsList
+  // ⚠️ בלי חלוקה נבחרת אין קהל להציג — כמו רשימה חיצונית בלי רשימה.
+  // בלי זה המונה היה מציג 0 נמענים כאילו הסינון החזיר ריק.
+  const needsDist = def.source === 'distribution' && !def.distributionId
+  const canShow = hasSource && !needsList && !needsDist
 
   const [options, setOptions] = useState<FilterOptions>({
     cities: [], communities: [], maritalStatuses: [], eligibilityStatuses: [],
+    distributions: [], centers: [],
   })
   const [result, setResult] = useState<PreviewResult | null>(null)
   const [loading, setLoading] = useState(false)
@@ -131,6 +138,8 @@ export default function SegmentBuilder({
         communities: d.communities ?? [],
         maritalStatuses: d.maritalStatuses ?? [],
         eligibilityStatuses: d.eligibilityStatuses ?? [],
+        distributions: d.distributions ?? [],
+        centers: d.centers ?? [],
       }))
       .catch(() => { /* ignore */ })
   }, [])
@@ -161,6 +170,7 @@ export default function SegmentBuilder({
   useEffect(() => { setShowList(false) }, [def.source, def.contactListId])
 
   const isBen = def.source === 'beneficiaries'
+  const isDist = def.source === 'distribution'
   const recipients = result?.recipients ?? []
 
   // ── פעולות על הרשימה ──
@@ -341,6 +351,117 @@ export default function SegmentBuilder({
             onChange({ source: 'contact_list', contactListId: id })
           }}
         />
+      )}
+
+      {/* ── 2א. מסנני חלוקת חגים ──
+          ⚠️ אותו דפוס Pill כמו בצאצאים, וגם אותה סמנטיקה: ריבוי ערכים
+          באותה שורה הוא איחוד ("בחר מוקד או טרם בחר" = שניהם), ובין
+          שורות שונות זו הצטלבות. ההסבר מוצג למשתמש כדי שלא ינחש. */}
+      {isDist && (
+        <div className={`${CARD} p-5`}>
+          <div className="mb-4 flex items-center gap-1.5">
+            <Filter size={15} className="text-slate-400" />
+            <h3 className="text-sm font-semibold text-slate-700">מסנני החלוקה</h3>
+          </div>
+
+          <label className="mb-2 block text-xs font-semibold text-slate-500">איזו חלוקה</label>
+          <select
+            value={def.distributionId ?? ''}
+            onChange={e => patch({ distributionId: e.target.value || undefined })}
+            className="mb-5 w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm
+                       focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+          >
+            <option value="">— בחרו חלוקה —</option>
+            {options.distributions.map(d => (
+              <option key={d.id} value={d.id}>
+                {d.name}{d.date ? ` · ${new Date(d.date).toLocaleDateString('he-IL')}` : ''}
+              </option>
+            ))}
+          </select>
+
+          {def.distributionId && (
+            <>
+              <p className="mb-4 rounded-lg bg-slate-50 px-3 py-2 text-[11.5px] text-slate-500">
+                בכל שורה אפשר לסמן כמה אפשרויות — הן מתחברות ב&quot;או&quot;.
+                בין שורות שונות הסינון מצטמצם. בלי סימון כלל — כל הנרשמים.
+              </p>
+
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-xs font-semibold text-slate-500">מוקד חלוקה</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {([['has_center', 'בחרו מוקד'], ['no_center', 'טרם בחרו מוקד']] as const).map(([v, l]) => (
+                      <Pill key={v} label={l}
+                        active={(def.distCenterState ?? []).includes(v)}
+                        onClick={() => {
+                          const cur = def.distCenterState ?? []
+                          patch({ distCenterState: cur.includes(v) ? cur.filter(x => x !== v) : [...cur, v] })
+                        }} />
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-semibold text-slate-500">אישור הבקשה</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {([['approved', 'מאושר'], ['pending', 'ממתין'], ['rejected', 'נדחה']] as const).map(([v, l]) => (
+                      <Pill key={v} label={l}
+                        active={(def.distApproval ?? []).includes(v)}
+                        onClick={() => {
+                          const cur = def.distApproval ?? []
+                          patch({ distApproval: cur.includes(v) ? cur.filter(x => x !== v) : [...cur, v] })
+                        }} />
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-semibold text-slate-500">טעינת הכרטיס</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {([['loaded', 'נטען'], ['not_loaded', 'טרם נטען']] as const).map(([v, l]) => (
+                      <Pill key={v} label={l}
+                        active={(def.distLoadState ?? []).includes(v)}
+                        onClick={() => {
+                          const cur = def.distLoadState ?? []
+                          patch({ distLoadState: cur.includes(v) ? cur.filter(x => x !== v) : [...cur, v] })
+                        }} />
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-semibold text-slate-500">עיר</label>
+                  <div className="flex max-h-32 flex-wrap gap-1.5 overflow-y-auto">
+                    {options.cities.map(city => (
+                      <Pill key={city} label={city}
+                        active={(def.distCity ?? []).includes(city)}
+                        onClick={() => {
+                          const cur = def.distCity ?? []
+                          patch({ distCity: cur.includes(city) ? cur.filter(x => x !== city) : [...cur, city] })
+                        }} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {options.centers.length > 0 && (
+                <div className="mt-5">
+                  <label className="mb-2 block text-xs font-semibold text-slate-500">מוקדים מסוימים</label>
+                  <div className="flex max-h-32 flex-wrap gap-1.5 overflow-y-auto">
+                    {options.centers.map(c => (
+                      <Pill key={c.id} label={c.label}
+                        active={(def.distCenterIds ?? []).includes(c.id)}
+                        onClick={() => {
+                          const cur = def.distCenterIds ?? []
+                          patch({ distCenterIds: cur.includes(c.id) ? cur.filter(x => x !== c.id) : [...cur, c.id] })
+                        }} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       )}
 
       {/* ── 2. מסננים ── */}
@@ -872,7 +993,10 @@ function NewGroupModal({ onClose, onCreated }: {
           <div>
             <label className="mb-2 block text-xs font-semibold text-slate-500">מקור הנמענים</label>
             <div className="flex flex-col gap-1.5">
-              {SOURCES.map(s => (
+              {/* ⚠️ חלוקת חגים אינה כאן: היא מחייבת בחירת חלוקה, והמודל
+                  הזה שולח מקור בלבד — כלומר קבוצה ריקה. היא נבחרת
+                  בבונה הקהל עצמו, שם יש בורר החלוקה והמסננים. */}
+              {SOURCES.filter(s => s.value !== 'distribution').map(s => (
                 <label
                   key={s.value}
                   className={`flex cursor-pointer items-center gap-2.5 rounded-xl border p-3 transition ${

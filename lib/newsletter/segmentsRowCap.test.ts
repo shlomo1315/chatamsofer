@@ -50,3 +50,48 @@ describe('🔴 תקרת 1,000 השורות בבניית הקהל', () => {
     expect(rows).toHaveLength(1000)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 הבאג שבא *אחרי* התיקון: 954 במקום 6,615.
+//
+// אובייקט שאילתה של supabase-js הוא בר-שימוש חד-פעמי. כשבונים אותו פעם
+// אחת מחוץ ללולאה וקוראים ל-.range() שוב ושוב, התנאי *מצטבר* במקום
+// להתחלף — הדפים אינם דפים, והתוצאה חלקית בלי שום שגיאה.
+//
+// ⚠️ זה נראה כמו התקרה המקורית ולכן מטעה במיוחד: המספר גדל מעט (978→954
+// הוא אפילו ירד) ונראה כאילו "התיקון עבד חלקית". הכלל: פונקציה שבונה
+// את השאילתה מאפס בכל דף.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('🔴 שאילתה חוזרת חייבת להיבנות מחדש בכל דף', () => {
+  /** מדמה את supabase-js: range מצטבר, ולכן דף שני מחזיר חיתוך ריק. */
+  function reusableQuery(total: number) {
+    const all = Array.from({ length: total }, (_, i) => ({ id: String(i) }))
+    let lo = 0, hi = Infinity, used = false
+    return {
+      range(from: number, to: number) {
+        // הצטברות: הטווח החדש נחתך עם הקודם במקום להחליפו
+        lo = Math.max(lo, from); hi = Math.min(hi, to)
+        used = true
+        return this
+      },
+      then(res: (v: { data: { id: string }[]; error: null }) => void) {
+        const slice = lo > hi ? [] : all.slice(lo, Math.min(hi + 1, lo + 1000))
+        res({ data: slice, error: null })
+      },
+      get wasUsed() { return used },
+    }
+  }
+
+  it('שימוש חוזר באותו אובייקט מחזיר רשימה חלקית — זה היה הבאג', async () => {
+    const q = reusableQuery(7201)
+    const { rows } = await fetchAllRows<{ id: string }>((from, to) => q.range(from, to) as never)
+    expect(rows.length).toBeLessThan(7201)
+  })
+
+  it('בנייה מחדש בכל דף מחזירה את כל 7,201', async () => {
+    const all = Array.from({ length: 7201 }, (_, i) => ({ id: String(i) }))
+    const { rows } = await fetchAllRows<{ id: string }>((from, to) =>
+      Promise.resolve({ data: all.slice(from, Math.min(to + 1, from + 1000)), error: null }))
+    expect(rows).toHaveLength(7201)
+  })
+})

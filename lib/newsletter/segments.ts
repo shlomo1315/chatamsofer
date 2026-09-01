@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { buildMergeData, type MergeSource } from './merge'
 import { suppressionSet } from '../unsubscribe'
 import { fetchAllRows } from '../fetchAllRows'
+import { joinOne } from '../joinOne'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // בונה הקהל.
@@ -11,7 +12,18 @@ import { fetchAllRows } from '../fetchAllRows'
 // בטווח גילים מסוים".
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type SegmentSource = 'beneficiaries' | 'staff' | 'recovery_homes' | 'contact_list'
+export type SegmentSource = 'beneficiaries' | 'staff' | 'recovery_homes' | 'contact_list' | 'distribution'
+
+/**
+ * מצבי הנרשמים בחלוקת חגים.
+ *
+ * ⚠️ הסמנטיקה זהה לשאר המסננים (סטטוס זכאות, מצב משפחתי): ריבוי ערכים
+ * *באותה* קטגוריה הוא איחוד — "בחר מוקד או טרם בחר" = שניהם. בין קטגוריות
+ * שונות זו הצטלבות — "בחר מוקד" + "מאושר" = גם וגם. כך זה עובד בצאצאים,
+ * וסמנטיקה אחרת כאן הייתה מפתיעה בדיוק במקום שבו טעות עולה בשליחה שגויה.
+ */
+export type DistributionCenterState = 'has_center' | 'no_center'
+export type DistributionLoadState = 'loaded' | 'not_loaded'
 
 export interface SegmentDef {
   source: SegmentSource
@@ -31,6 +43,15 @@ export interface SegmentDef {
   hadMaternity?: boolean
   // רשימה חיצונית
   contactListId?: string
+
+  // ── חלוקת חגים ──
+  // ⚠️ כל קטגוריה מסננת בנפרד, וריקה = בלי סינון (כל הנרשמים).
+  distributionId?: string
+  distCenterState?: DistributionCenterState[]  // בחר מוקד / טרם בחר
+  distApproval?: string[]                      // approved | pending | rejected
+  distLoadState?: DistributionLoadState[]      // נטען / טרם נטען
+  distCenterIds?: string[]                     // מוקדים מסוימים
+  distCity?: string[]                          // עיר המשפחה
 
   // ── עריכה ידנית של הרשימה שהתקבלה מהמסננים ──
   // excluded: כתובות שהוסרו ידנית (סימון ומחיקה מהרשימה)
@@ -54,6 +75,21 @@ interface BeneficiaryRow extends MergeSource {
   community_affiliation?: string | null
   children?: { birth_date?: string | null }[] | null
   past_benefits?: { update_topics?: string[] } | null
+}
+
+/**
+ * שורת רישום לחלוקה, עם המשפחה שממנה נלקח המייל.
+ *
+ * 🔴 beneficiary הוא מערך *או* אובייקט — Supabase מחזיר join מקונן בשתי
+ * הצורות, וגישה ישירה לשדה על מערך מחזירה undefined בשקט. זו בדיוק
+ * המלכודת שהסתירה את מוקדי החלוקה מהטבלה. לכן joinOne בכל קריאה.
+ */
+interface DistRegRow {
+  id: string
+  center_id?: string | null
+  approval_status?: string | null
+  load_status?: string | null
+  beneficiary?: BeneficiaryRow | BeneficiaryRow[] | null
 }
 
 const AGE_MS = 365.25 * 24 * 60 * 60 * 1000
@@ -99,6 +135,55 @@ export async function resolveSegment(
       .filter(h => h.report_email)
       .map(h => ({ email: String(h.report_email), beneficiaryId: null, src: { full_name: h.name } }))
 
+  } else if (def.source === 'distribution' && def.distributionId) {
+    // ── נרשמי חלוקת חגים ──
+    //
+    // 🔴 המייל מגיע מהמשפחה (beneficiaries) ולא מהרישום: לרישום עצמו אין
+    // כתובת. לכן join, ומכאן גם שמשפחה בלי מייל נספרת ב-noEmail כרגיל.
+    //
+    // ⚠️ fetchAllRows ולא await: 6,051 נרשמים בחלוקה אחת — הרבה מעבר
+    // לתקרת ה-1,000 ששלחה את הניוזלטר ל-15% מהרשימה.
+    const { rows: regs } = await fetchAllRows<DistRegRow>((from, to) => db
+      .from('distribution_recipients')
+      .select('id, center_id, approval_status, load_status, beneficiary:beneficiaries(id, email, family_name, full_name, spouse_name, marital_status, city, address, phone, phone2, id_number, children_count, children, gender, eligibility_status, is_active, community_affiliation, past_benefits)')
+      .eq('distribution_id', def.distributionId!)
+      .range(from, to))
+
+    let list = regs
+
+    // ⚠️ ריק = בלי סינון. ריבוי ערכים באותה קטגוריה הוא איחוד.
+    if (def.distCenterState?.length) {
+      const wantHas = def.distCenterState.includes('has_center')
+      const wantNo = def.distCenterState.includes('no_center')
+      list = list.filter(r => (r.center_id ? wantHas : wantNo))
+    }
+    if (def.distApproval?.length) {
+      const want = new Set(def.distApproval)
+      list = list.filter(r => want.has(r.approval_status ?? 'pending'))
+    }
+    if (def.distLoadState?.length) {
+      const wantLoaded = def.distLoadState.includes('loaded')
+      const wantNot = def.distLoadState.includes('not_loaded')
+      list = list.filter(r => (r.load_status === 'loaded' ? wantLoaded : wantNot))
+    }
+    if (def.distCenterIds?.length) {
+      const want = new Set(def.distCenterIds)
+      list = list.filter(r => r.center_id && want.has(r.center_id))
+    }
+    if (def.distCity?.length) {
+      const want = new Set(def.distCity)
+      list = list.filter(r => want.has((joinOne(r.beneficiary)?.city ?? '').trim()))
+    }
+
+    const bens = list
+      .map(r => joinOne(r.beneficiary))
+      .filter((b): b is BeneficiaryRow => !!b)
+
+    noEmail = bens.filter(b => !b.email?.trim()).length
+    rows = bens
+      .filter(b => b.email?.trim())
+      .map(b => ({ email: String(b.email).trim(), beneficiaryId: b.id, src: b }))
+
   } else if (def.source === 'contact_list' && def.contactListId) {
     const { rows: data } = await fetchAllRows<{ email: string; data: unknown }>(
       (from, to) => db.from('contacts').select('email, data').eq('list_id', def.contactListId!).range(from, to))
@@ -110,27 +195,32 @@ export async function resolveSegment(
 
   } else {
     // ── מוטבים — המקור העיקרי ──
-    let q = db.from('beneficiaries').select(
-      'id, email, family_name, full_name, spouse_name, marital_status, city, address, phone, phone2, id_number, children_count, children, gender, eligibility_status, is_active, community_affiliation, past_benefits',
-    )
-
-    if (def.isActive !== undefined) q = q.eq('is_active', def.isActive)
-    if (def.eligibilityStatus?.length) q = q.in('eligibility_status', def.eligibilityStatus)
-    if (def.city?.length) q = q.in('city', def.city)
-    if (def.maritalStatus?.length) q = q.in('marital_status', def.maritalStatus)
-    if (def.gender) q = q.eq('gender', def.gender)
-    if (def.minChildren != null) q = q.gte('children_count', def.minChildren)
-    if (def.maxChildren != null) q = q.lte('children_count', def.maxChildren)
-    // community_affiliation הוא טקסט חופשי (לא enum) — לכן ILIKE ולא שוויון
-    if (def.communityAffiliation) q = q.ilike('community_affiliation', `%${def.communityAffiliation}%`)
-
-    // 🔴 fetchAllRows ולא await q — זו הייתה דליפה שקטה לפרודקשן.
+    // 🔴 השאילתה נבנית מחדש בכל דף, ולא פעם אחת מחוץ ללולאה.
     //
-    // PostgREST חותך ב-1,000 שורות בלי שגיאה ובלי אזהרה. הקהל נבנה מ-1,000
-    // מוטבים במקום 7,201, ואחרי דה-דופליקציה הוצגו 978 נמענים מתוך 6,615
-    // כתובות ייחודיות. כלומר כל קמפיין שנשלח מכאן הגיע ל-15% מהרשימה,
-    // והמסך הציג את המספר החלקי כאילו הוא המלא.
-    const { rows: allBens } = await fetchAllRows<BeneficiaryRow>((from, to) => q.range(from, to))
+    // ⚠️ אובייקט שאילתה של supabase-js הוא בר-שימוש *חד-פעמי*: קריאה
+    // חוזרת ל-.range() על אותו אובייקט מוסיפה תנאי במקום להחליפו, ולכן
+    // הדפים אינם דפים. כך בדיוק הוצגו 954 נמענים במקום 6,615 — אחרי
+    // שהתקרה כבר "תוקנה". פונקציה שבונה מאפס היא הדפוס היחיד שעובד
+    // (ראו app/api/admin/distributions/[id]/rows/route.ts).
+    const page = (from: number, to: number) => {
+      let q = db.from('beneficiaries').select(
+        'id, email, family_name, full_name, spouse_name, marital_status, city, address, phone, phone2, id_number, children_count, children, gender, eligibility_status, is_active, community_affiliation, past_benefits',
+      )
+      if (def.isActive !== undefined) q = q.eq('is_active', def.isActive)
+      if (def.eligibilityStatus?.length) q = q.in('eligibility_status', def.eligibilityStatus)
+      if (def.city?.length) q = q.in('city', def.city)
+      if (def.maritalStatus?.length) q = q.in('marital_status', def.maritalStatus)
+      if (def.gender) q = q.eq('gender', def.gender)
+      if (def.minChildren != null) q = q.gte('children_count', def.minChildren)
+      if (def.maxChildren != null) q = q.lte('children_count', def.maxChildren)
+      // community_affiliation הוא טקסט חופשי (לא enum) — לכן ILIKE ולא שוויון
+      if (def.communityAffiliation) q = q.ilike('community_affiliation', `%${def.communityAffiliation}%`)
+      // ⚠️ סדר יציב חובה בשליפה בדפים: בלעדיו PostgREST רשאי להחזיר
+      // שורות בסדר שונה בכל דף, וחלק מהשורות יופיעו פעמיים או ייעלמו.
+      return q.order('id', { ascending: true }).range(from, to)
+    }
+
+    const { rows: allBens } = await fetchAllRows<BeneficiaryRow>(page)
     let list = allBens
 
     // סינון בזיכרון — דברים ש-PostgREST לא יודע לעשות על JSON

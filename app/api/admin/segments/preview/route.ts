@@ -60,6 +60,8 @@ export async function GET() {
   }>((from, to) => db
     .from('beneficiaries')
     .select('city, community_affiliation, marital_status, eligibility_status')
+    // ⚠️ סדר יציב — בלעדיו הדפים חופפים ושורות נעלמות.
+    .order('id', { ascending: true })
     .range(from, to))
 
   const cities = new Set<string>()
@@ -88,7 +90,29 @@ export async function GET() {
   const ELIGIBILITY_OPTIONS = ['pending', 'approved', 'rejected', 'review', 'docs_pending']
   for (const e of ELIGIBILITY_OPTIONS) eligibilityStatuses.add(e)
 
+  // ── חלוקות חגים ומוקדיהן — למקור הנמענים "חלוקת חגים" ──
+  // ⚠️ נשלפות כאן ולא בנתיב נפרד: הבונה כבר קורא לנתיב הזה בטעינה,
+  // ובקשה שנייה הייתה מוסיפה הבהוב בלי שום צורך.
+  const { rows: dists } = await fetchAllRows<{ id: string; name: string; distribution_date: string | null }>(
+    (from, to) => db.from('distributions')
+      .select('id, name, distribution_date')
+      .order('distribution_date', { ascending: false, nullsFirst: false })
+      .range(from, to))
+
+  const { rows: centers } = await fetchAllRows<{ id: string; city: string | null; name: string | null }>(
+    (from, to) => db.from('holiday_centers').select('id, city, name').range(from, to))
+
   return NextResponse.json({
+    distributions: (dists ?? []).map(d => ({
+      id: d.id, name: d.name, date: d.distribution_date,
+    })),
+    // ⚠️ אותה נוסחה כמו בטבלת הנרשמים: עיר ששמה זהה לשם המוקד אינה
+    // מוצגת פעמיים — כך הוזנו רוב הערים.
+    centers: (centers ?? []).map(c => {
+      const city = (c.city ?? '').trim()
+      const nm = (c.name ?? '').trim()
+      return { id: c.id, label: !city ? nm : !nm || city === nm ? city : `${city} · ${nm}` }
+    }).sort((a, b) => a.label.localeCompare(b.label, 'he')),
     cities: [...cities].sort((a, b) => a.localeCompare(b, 'he')),
     communities: [...communities].sort((a, b) => a.localeCompare(b, 'he')),
     // סדר קבוע ועקבי (לא אלפביתי) — כמו בטופס
