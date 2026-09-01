@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Search, X, Loader2, Check, Mic, MicOff, Save, AlertTriangle } from 'lucide-react'
+import { Search, X, Loader2, Check, Mic, MicOff, Save, AlertTriangle, Volume2, RefreshCw } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // מרכז הנוסחים — כל מה שנאמר בטלפון, במסך אחד.
@@ -34,13 +34,23 @@ type Msg = { text?: string; audio?: string | null }
 
 /** שלוש השלוחות — אותו חוזה API בדיוק לכל אחת. */
 const SOURCES = [
-  { id: 'menu', label: 'תפריט ראשי', api: '/api/admin/yemot-menu/messages', tone: 'bg-sky-100 text-sky-800' },
-  { id: 'holiday', label: 'חלוקת חגים', api: '/api/admin/yemot-holiday/messages', tone: 'bg-teal-100 text-teal-800' },
-  { id: 'maternity', label: 'יולדות', api: '/api/admin/yemot-maternity/messages', tone: 'bg-pink-100 text-pink-800' },
+  { id: 'menu', label: 'תפריט ראשי',
+    api: '/api/admin/yemot-menu/messages',
+    voice: '/api/admin/yemot-menu/generate-voice', tone: 'bg-sky-100 text-sky-800' },
+  { id: 'holiday', label: 'חלוקת חגים',
+    api: '/api/admin/yemot-holiday/messages',
+    voice: '/api/admin/yemot-holiday/generate-voice', tone: 'bg-teal-100 text-teal-800' },
+  { id: 'maternity', label: 'יולדות',
+    api: '/api/admin/yemot-maternity/messages',
+    voice: '/api/admin/yemot-maternity/generate-voice', tone: 'bg-pink-100 text-pink-800' },
 ] as const
 
 type SourceId = typeof SOURCES[number]['id']
-type Row = { source: SourceId; meta: Meta; saved: string; draft: string }
+type Row = {
+  source: SourceId; meta: Meta; saved: string; draft: string
+  /** שם קובץ הקול המשויך. tts_ = נוצר ב-ElevenLabs; אחרת הקלטה אנושית. */
+  audio: string | null
+}
 
 /** נרמול לחיפוש עברי — גרשיים ומקפים לא אמורים למנוע התאמה. */
 const norm = (s: string) =>
@@ -62,7 +72,10 @@ export default function AllMessages() {
         const d = await res.json() as { messages?: Record<string, Msg>; meta?: Meta[] }
         for (const m of d.meta ?? []) {
           const text = d.messages?.[m.key]?.text ?? m.defaultText
-          all.push({ source: src.id, meta: m, saved: text, draft: text })
+          all.push({
+            source: src.id, meta: m, saved: text, draft: text,
+            audio: d.messages?.[m.key]?.audio ?? null,
+          })
         }
       } catch { /* שלוחה שלא נטענה אינה מונעת את הצגת השאר */ }
     }
@@ -82,6 +95,22 @@ export default function AllMessages() {
       norm(r.meta.key).includes(needle))
   }, [rows, q])
 
+  /** מושך את רשימת הערים האמיתית לתוך הטקסט, במקום {list}. */
+  async function refreshCities(row: Row) {
+    const id = `${row.source}:${row.meta.key}`
+    setBusy(id); setErr('')
+    try {
+      const res = await fetch('/api/admin/holiday-centers/city-list', { cache: 'no-store' })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setErr(d.error ?? 'שליפת הערים נכשלה'); return }
+      setRows(prev => (prev ?? []).map(r =>
+        r.source === row.source && r.meta.key === row.meta.key
+          ? { ...r, draft: String(d.text ?? '') } : r))
+      setOkKey(id)
+      setTimeout(() => setOkKey(k => (k === id ? null : k)), 2000)
+    } catch { setErr('שגיאת רשת') } finally { setBusy(null) }
+  }
+
   async function save(row: Row) {
     const id = `${row.source}:${row.meta.key}`
     setBusy(id); setErr(''); setOkKey(null)
@@ -93,7 +122,14 @@ export default function AllMessages() {
       const messages: Record<string, Msg> = {}
       for (const r of rows ?? []) {
         if (r.source !== row.source) continue
-        messages[r.meta.key] = { text: r.meta.key === row.meta.key ? row.draft : r.saved }
+        // 🔴 audio נשלח יחד עם הטקסט: הנתיב מחליף את האובייקט כולו,
+        // ושליחת { text } בלבד הייתה מוחקת את שיוך קובץ הקול של *כל*
+        // הודעות השלוחה — כלומר כל ההקלטות היו מפסיקות להתנגן בשמירה
+        // של הודעה אחת, בלי שום סימן.
+        messages[r.meta.key] = {
+          text: r.meta.key === row.meta.key ? row.draft : r.saved,
+          audio: r.audio,
+        }
       }
       const res = await fetch(src.api, {
         method: 'POST',
@@ -102,9 +138,30 @@ export default function AllMessages() {
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { setErr(d.error ?? 'השמירה נכשלה'); return }
+
+      // ── יצירת קול טבעי ──
+      // 🔴 שמירה = הקלטה חדשה, כמו בשאר המסכים. הקלטה גוברת על הטקסט,
+      // ולכן בלי זה "נשמר" מופיע בעוד שבטלפון נשמעת הגרסה הקודמת.
+      // ⚠️ מדולג על הודעה דינמית (השרת חוסם אותה ממילא) ועל הקלטה
+      // אנושית, שנעשתה בכוונה ואין דרך לשחזר אותה.
+      let newAudio = row.audio
+      const human = !!row.audio && !row.audio.startsWith('tts_')
+      const dynamic = /\{[^}]+\}/.test(row.draft)
+      if (row.meta.allowAudio && row.draft.trim() && !dynamic && !human) {
+        try {
+          const vr = await fetch(src.voice, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: row.meta.key, text: row.draft }),
+          })
+          const vd = await vr.json().catch(() => ({}))
+          if (vr.ok && vd.audio) newAudio = vd.audio
+          else if (!vr.ok) setErr(vd.error ?? 'הטקסט נשמר, אך יצירת הקול נכשלה')
+        } catch { setErr('הטקסט נשמר, אך יצירת הקול נכשלה') }
+      }
+
       setRows(prev => (prev ?? []).map(r =>
         r.source === row.source && r.meta.key === row.meta.key
-          ? { ...r, saved: row.draft } : r))
+          ? { ...r, saved: row.draft, audio: newAudio } : r))
       setOkKey(id)
       setTimeout(() => setOkKey(k => (k === id ? null : k)), 2000)
     } catch { setErr('שגיאת רשת') } finally { setBusy(null) }
@@ -171,11 +228,22 @@ export default function AllMessages() {
                 </span>
                 <span className="text-[13px] font-extrabold text-slate-800">{row.meta.label}</span>
                 {/* ⚠️ ההבחנה שלא הייתה גלויה בשום מסך. */}
-                <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
-                  row.meta.allowAudio ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                  {row.meta.allowAudio ? <Mic size={9} /> : <MicOff size={9} />}
-                  {row.meta.allowAudio ? 'ניתן להקליט' : 'טקסט בלבד'}
-                </span>
+                {/* 🔴 מה נשמע *עכשיו* — לא מה מותר. הקלטה גוברת על
+                    הטקסט, וזו ההבחנה שלא הופיעה בשום מסך. */}
+                {row.audio ? (
+                  <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
+                    row.audio.startsWith('tts_')
+                      ? 'bg-violet-50 text-violet-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                    {row.audio.startsWith('tts_') ? <Volume2 size={9} /> : <Mic size={9} />}
+                    {row.audio.startsWith('tts_') ? 'קול טבעי' : 'הקלטה אנושית'}
+                  </span>
+                ) : (
+                  <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
+                    row.meta.allowAudio ? 'bg-slate-100 text-slate-500' : 'bg-slate-100 text-slate-400'}`}>
+                    {row.meta.allowAudio ? <Mic size={9} /> : <MicOff size={9} />}
+                    {row.meta.allowAudio ? 'קול ממוחשב' : 'טקסט בלבד'}
+                  </span>
+                )}
                 {(row.meta.placeholders ?? []).map(p => (
                   <span key={p} dir="ltr"
                     className="rounded bg-indigo-50 px-1.5 py-0.5 font-mono text-[10px] font-bold text-indigo-700">
@@ -202,6 +270,20 @@ export default function AllMessages() {
               />
 
               <div className="mt-2 flex flex-wrap items-center gap-2">
+                {/* ── רשימת הערים ──
+                    🔴 ההודעה דינמית ({list}), ולכן לא ניתן ליצור לה קול
+                    כל עוד המשתנה בתוכה. "רענון הרשימה" מושך את הערים
+                    האמיתיות לתוך הטקסט — ומאותו רגע אפשר לערוך ולהקליט.
+                    ⚠️ אחרי כל פתיחה או סגירה של מוקד יש לרענן שוב:
+                    הקלטה ישנה תשלח משפחות לעיר הלא נכונה. */}
+                {row.meta.key === 'ask_city' && (
+                  <button type="button" disabled={busy === id}
+                    onClick={() => void refreshCities(row)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-teal-300 px-3 py-1.5 text-[11.5px] font-bold text-teal-700 hover:bg-teal-50 disabled:opacity-50">
+                    {busy === id ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                    רענון הרשימה
+                  </button>
+                )}
                 <button type="button" disabled={!changed || busy === id} onClick={() => void save(row)}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-[11.5px] font-bold text-white hover:bg-teal-700 disabled:opacity-40">
                   {busy === id ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} שמירה
