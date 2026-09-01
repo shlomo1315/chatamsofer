@@ -101,18 +101,6 @@ async function getData(id: string) {
   // שנטענת ברקע, ושני מימושים היו יוצרים שורות שונות.
   const rows: RegistrationRow[] = recRes.rows.map(toRegistrationRow)
 
-  // ⚠️ אבחון: כמה שורות יש להן מוקד במסד לעומת כמה שרדו את ההמרה.
-  // פער בין השניים אומר שה-join לא חזר או שהמיפוי איבד אותו — וזו תקלה
-  // שנראית למשתמש כ"בחרתי מוקד והמערכת לא זוכרת".
-  const withCenterId = rows.filter(r => r.center_id).length
-  const withCenterName = rows.filter(r => r.center_name).length
-  if (withCenterId !== withCenterName) {
-    console.error(
-      `[admin/distributions/${id}] פער במוקדים: ${withCenterId} שורות עם center_id ` +
-      `אך רק ${withCenterName} עם שם מוקד — ה-join לא חזר`,
-    )
-  }
-
   // 🔴 מספר הנרשמים האמיתי, ולא rows.length.
   //
   // ⚠️ הטעינה הראשונה מביאה 250 שורות בלבד. בלי count נפרד המונה

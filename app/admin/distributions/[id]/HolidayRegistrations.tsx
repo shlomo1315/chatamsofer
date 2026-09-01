@@ -20,6 +20,7 @@ import AddRecipientDialog from './AddRecipientDialog'
 import Pagination from '@/components/ui/Pagination'
 import { useTablePagination } from '@/lib/useTablePagination'
 import CityBreakdown from './CityBreakdown'
+import CenterLiveBreakdown from './CenterLiveBreakdown'
 import HolidayToolsTabs from './HolidayToolsTabs'
 import GatesPanel from './GatesPanel'
 
@@ -236,7 +237,13 @@ export default function HolidayRegistrations({
         // ⚠️ החלפה ולא צבירה: הבקשה מביאה את כל מה שמעבר ל-offset בבת
         // אחת, ולכן היא התוצאה השלמה. צבירה עם prev הייתה מכפילה שורות
         // בכל ריצה חוזרת של ה-effect.
-        setExtraRows((d.rows as Record<string, unknown>[]).map(toRegistrationRow))
+        // 🔴 בלי toRegistrationRow — הנתיב כבר מחזיר שורות מומרות.
+        //
+        // ⚠️ המרה שנייה *מוחקת* נתונים: center_name נגזר מהשדה `center`
+        // של ה-join, וזה כבר אינו קיים בשורה מומרת. התוצאה הייתה null,
+        // כלומר כל משפחה שבחרה מוקד הוצגה כ"טרם נבחר" ברגע שטעינת הרקע
+        // מסתיימת — נכון לרגע, ואז נעלם.
+        setExtraRows(d.rows as RegistrationRow[])
       } catch {
         // ⚠️ כישלון שקט: הרשימה החלקית עדיין שימושית לחלוטין, והודעת
         // שגיאה על טעינת רקע רק מבהילה בלי שיש מה לעשות איתה.
@@ -779,6 +786,10 @@ export default function HolidayRegistrations({
       {canEdit && <HolidayToolsTabs distributionId={distributionId} />}
 
       {/* ── פילוח לפי עיר ── */}
+      {/* 🔴 פילוח המוקדים — השאלה המרכזית בשלב הבחירה: לאן המשפחות
+          הולכות ואיפה צפוי עומס. מוצג רק כשמישהו כבר בחר. */}
+      <CenterLiveBreakdown rows={allRows} total={totalCount ?? allRows.length} />
+
       <CityBreakdown cities={cities} selected={city} onSelect={setCity} />
 
       {/* ── פילוחים לחיצים ── */}
