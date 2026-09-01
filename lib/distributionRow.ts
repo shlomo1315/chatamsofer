@@ -29,6 +29,28 @@ export interface BenRow {
   spouse_birth_date?: string | null
 }
 
+/**
+ * שם המוקד להצגה, מתוך ה-join.
+ *
+ * 🔴 מקבל מערך *או* אובייקט: Supabase מחזיר join מקונן בשתי הצורות.
+ * הגישה הישירה ל-`.city` על מערך החזירה undefined בשקט — המוקד היה
+ * שמור כראוי במסד, ובטבלת הנרשמים נכתב "טרם נבחר".
+ *
+ * ⚠️ עיר ששמה זהה לשם המוקד אינה מוצגת פעמיים — כך הוזנו רוב הערים.
+ */
+function centerName(
+  c: { city?: string; name?: string } | { city?: string; name?: string }[] | null | undefined,
+): string | null {
+  const one = Array.isArray(c) ? c[0] : c
+  if (!one) return null
+  const city = String(one.city ?? '').trim()
+  const name = String(one.name ?? '').trim()
+  if (!city && !name) return null
+  if (!city) return name
+  if (!name || city === name) return city
+  return `${city} · ${name}`
+}
+
 export function toRegistrationRow(r: Record<string, unknown>): RegistrationRow {
   const b = (r as unknown as { beneficiary?: BenRow | null }).beneficiary ?? null
   // גיל — לפי תאריך הלידה של הבעל, ובהיעדרו של האישה
@@ -43,7 +65,12 @@ export function toRegistrationRow(r: Record<string, unknown>): RegistrationRow {
     approval_status?: string | null; approved_at?: string | null
     card_number?: string | null; card_linked_at?: string | null; card_link_error?: string | null
     center_id?: string | null; center_source?: string | null; load_status?: string | null; load_error?: string | null
-    center?: { id: string; city: string; name: string } | null
+    // 🔴 מערך *או* אובייקט — Supabase מחזיר join מקונן בשתי הצורות,
+    // ותלוי בסכימה ובנתיב השליפה. טיפוס שמכסה רק אובייקט אינו נכשל
+    // בקומפילציה, אלא מחזיר undefined בזמן ריצה: המוקד נשמר כראוי
+    // במסד, ובטבלה נכתב "טרם נבחר". ראו גם lib/mailFor וההערה שם.
+    center?: { id: string; city: string; name: string }
+      | { id: string; city: string; name: string }[] | null
   }
   return {
     id: String(row.id),
@@ -61,9 +88,7 @@ export function toRegistrationRow(r: Record<string, unknown>): RegistrationRow {
     card_link_error: row.card_link_error ?? null,
     center_id: row.center_id ?? null,
     // ⚠️ עיר ששמה זהה לשם המוקד לא תוצג פעמיים — כך הוזנו רוב הערים.
-    center_name: row.center
-      ? (row.center.city === row.center.name ? row.center.city : `${row.center.city} · ${row.center.name}`)
-      : null,
+    center_name: centerName(row.center),
     center_source: row.center_source ?? null,
     load_status: row.load_status ?? null,
     load_error: row.load_error ?? null,

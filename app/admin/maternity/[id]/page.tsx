@@ -45,6 +45,7 @@ import MailTabBoundary from './MailTabBoundary'
 import { format, differenceInCalendarDays } from 'date-fns'
 import { he } from 'date-fns/locale'
 import { registrationSourceLabel } from '@/lib/distributionSources'
+import { joinOne } from '@/lib/joinOne'
 
 interface BeneficiaryDoc { doc_type: string; file_url: string | null; file_name: string | null; uploaded_at?: string | null }
 
@@ -718,7 +719,7 @@ export default async function MaternityDetailPage(
                   rejected:       { label: 'נדחה',              cls: 'bg-red-100 text-red-800' },
                 }
                 const m = meta[cs] ?? meta.pending
-                const center = (aid as { card_center?: { name?: string } }).card_center
+                const center = joinOne((aid as { card_center?: { name?: string } | { name?: string }[] }).card_center)
                 const cardNum = (aid as { card_number?: string | null }).card_number
                 // מציגים מספר כרטיס רק אם נדרים אישר את החיבור (card_picked_up_at נקבע בהצלחה),
                 // אחרת ייתכן שהמספר הוקש אך לא חובר בפועל — נציג "עדיין לא שויך כרטיס".

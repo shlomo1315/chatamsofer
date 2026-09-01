@@ -7,6 +7,7 @@ import type { MaternityAid, CardCenter, CardStatus } from '@/types'
 import ExtendEligibility from '../ExtendEligibility'
 import { useCan } from '@/components/StaffPermissions'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
+import { joinOne } from '@/lib/joinOne'
 
 const STATUS_META: Record<CardStatus, { label: string; cls: string }> = {
   pending:        { label: 'ממתין לאישור',     cls: 'bg-amber-100 text-amber-800 border-amber-200' },
@@ -76,7 +77,7 @@ const COLUMNS: ColDef<ColKey, MaternityAid>[] = [
   // אלפביתית ולא כרונולוגית.
   { key: 'birth', label: 'תאריך לידה', def: true, kind: 'date', value: a => a.birth_date ?? null },
   { key: 'center', label: 'מוקד', def: true, kind: 'enum', filterable: true,
-    value: a => (a as { card_center?: { name?: string } }).card_center?.name ?? null },
+    value: a => joinOne((a as { card_center?: { name?: string } | { name?: string }[] }).card_center)?.name ?? null },
   { key: 'status', label: 'סטטוס כרטיס', def: true, kind: 'enum', filterable: true,
     // ⚠️ הערך הוא התווית המוצגת ולא הקוד: המזכירה מסננת לפי מה שהיא רואה.
     value: a => STATUS_META[(a.card_status ?? 'pending') as CardStatus].label },
@@ -179,7 +180,7 @@ export default function CardsTable({ aids }: { aids: MaternityAid[] }) {
           : <span className={nm.pending ? 'text-amber-700 font-semibold' : 'text-slate-700'}>{nm.pending ? `⏳ ${nm.text}` : nm.text}</span>
       }
       case 'birth': return <span className="ltr-num text-slate-600">{fmtDate(aid.birth_date)}</span>
-      case 'center': return (aid as { card_center?: { name?: string } }).card_center?.name ?? <span className="text-slate-300">—</span>
+      case 'center': return joinOne((aid as { card_center?: { name?: string } | { name?: string }[] }).card_center)?.name ?? <span className="text-slate-300">—</span>
       case 'status': return <span className={`inline-block text-[13px] font-semibold px-2.5 py-1 rounded-full border ${STATUS_META[s].cls}`}>{STATUS_META[s].label}</span>
       case 'loaded': return aid.card_load_amount != null ? <span className="text-slate-700">{ils(aid.card_load_amount)}</span> : <span className="text-slate-300">—</span>
       case 'live': {
