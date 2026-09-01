@@ -24,6 +24,10 @@ export default function YemotMainMenuSettings() {
   const toast = useToast()
   const [meta, setMeta] = useState<Meta[]>([])
   const [messages, setMessages] = useState<Record<string, Msg>>({})
+  // ⚠️ עותק המצב השמור — ההשוואה מולו היא מה שמזהה שטקסט באמת השתנה.
+  // בלעדיו כל שמירה הייתה מייצרת מחדש את כל ההודעות ומבזבזת מכסת
+  // ElevenLabs על טקסט שאיש לא נגע בו.
+  const [savedMsgs, setSavedMsgs] = useState<Record<string, Msg>>({})
   const [ext, setExt] = useState('1')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -41,7 +45,7 @@ export default function YemotMainMenuSettings() {
       .then(({ ok, d }) => {
         if (!alive || !ok) return
         setMeta(d.meta ?? [])
-        setMessages(d.messages ?? {})
+        setMessages(d.messages ?? {}); setSavedMsgs(d.messages ?? {})
         if (d.ext) setExt(String(d.ext))
       })
       .catch(() => { if (alive) toast.error('שגיאה בטעינת ההודעות') })
@@ -140,6 +144,8 @@ export default function YemotMainMenuSettings() {
   }
 
   const save = async () => {
+    // ⚠️ נלכד לפני השמירה — ראו savedMsgs.
+    const before = savedMsgs
     setSaving(true); setSavedOk(false)
     try {
       const res = await fetch('/api/admin/yemot-menu/messages', {
@@ -149,7 +155,47 @@ export default function YemotMainMenuSettings() {
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { toast.error(d.error || 'שגיאה בשמירה'); setSaving(false); return }
-      setMessages(d.messages ?? messages)
+      const next = d.messages ?? messages
+      setMessages(next)
+
+      // ─────────────────────────────────────────────────────────────────────
+      // 🔴 שמירה = יצירת קול טבעי. זו ההתנהגות בכל שלוש השלוחות.
+      //
+      // ⚠️ הקלטה גוברת על הטקסט: הודעה שיש לה קובץ קול משמיעה אותו
+      // ומתעלמת מהטקסט לגמרי. בלי חידוש אוטומטי, "שמרתי" הראה ✓ בעוד
+      // שבטלפון נשמעה הגרסה הקודמת — בלי שום סימן לכך בשום מסך.
+      //
+      // ⚠️ מדלגים על הודעה דינמית ({name}, {list}): קובץ קול יחיד אינו
+      // יכול להקריא ערך שמשתנה בכל שיחה, והשרת חוסם זאת ממילא.
+      // ─────────────────────────────────────────────────────────────────────
+      const keys = (meta ?? [])
+        .filter(m => m.allowAudio)
+        .map(m => m.key)
+        .filter(k => {
+          const t = String(next[k]?.text ?? '').trim()
+          // ⚠️ רק מה שהשתנה — ראו ההערה ליד savedMsgs.
+          return t && !/\{[^}]+\}/.test(t) && t !== String(before[k]?.text ?? '').trim()
+        })
+      if (keys.length) {
+        toast.info(`יוצר קול ל-${keys.length} הודעות…`)
+        let failed = 0
+        let latest = next
+        for (const key of keys) {
+          try {
+            const vr = await fetch('/api/admin/yemot-menu/generate-voice', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key, text: next[key]?.text ?? '' }),
+            })
+            const vd = await vr.json().catch(() => ({}))
+            if (!vr.ok) { failed++; continue }
+            if (vd.messages) latest = vd.messages
+          } catch { failed++ }
+        }
+        setMessages(latest); setSavedMsgs(latest)
+        if (failed) toast.error(`הטקסט נשמר, אך יצירת הקול נכשלה ב-${failed} הודעות`)
+        else toast.success('נשמר — והקול נוצר בהתאם')
+      }
+
       setSavedOk(true)
       setTimeout(() => setSavedOk(false), 2500)
     } catch { toast.error('שגיאת רשת') }

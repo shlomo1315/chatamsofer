@@ -69,6 +69,9 @@ export default function YemotMaternitySettings() {
   async function save() {
     setSaving(true)
     setSavedOk(false)
+    // ⚠️ נלכד *לפני* השמירה: setSaved למטה דורס אותו, וההשוואה מולו
+    // הייתה מחזירה תמיד "שום דבר לא השתנה" ולא מייצרת קול לאיש.
+    const before = saved
     try {
       const res = await fetch('/api/admin/yemot-maternity/messages', {
         method: 'POST',
@@ -77,9 +80,48 @@ export default function YemotMaternitySettings() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'שגיאה בשמירה')
-      if (data.messages) { setMessages(data.messages); setSaved(data.messages) }
+      const next = data.messages ?? messages
+      if (data.messages) { setMessages(next); setSaved(next) }
+
+      // ─────────────────────────────────────────────────────────────────────
+      // 🔴 שמירה = יצירת קול טבעי, כמו בשאר השלוחות.
+      //
+      // ⚠️ הקלטה גוברת על הטקסט: הודעה שיש לה קובץ משמיעה אותו ומתעלמת
+      // מהטקסט. בלי חידוש אוטומטי "נשמר" הופיע על המסך בעוד שבטלפון
+      // נשמעה הגרסה הקודמת, בלי שום סימן לכך.
+      //
+      // ⚠️ רק מה שהשתנה, ורק לא-דינמי: קובץ יחיד אינו יכול להקריא
+      // {name} או {card} שמשתנים בכל שיחה.
+      // ─────────────────────────────────────────────────────────────────────
+      const dynamic = (t: string) => /\{[^}]+\}/.test(t)
+      const keys = meta
+        .filter(m => m.allowAudio)
+        .map(m => m.key)
+        .filter(k => {
+          const t = String(next[k]?.text ?? '').trim()
+          return t && !dynamic(t) && t !== String(before[k]?.text ?? '').trim()
+        })
+      if (keys.length) {
+        toast.info(`יוצר קול ל-${keys.length} הודעות…`)
+        let failed = 0
+        let latest = next
+        for (const key of keys) {
+          try {
+            const vr = await fetch('/api/admin/yemot-maternity/generate-voice', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key, text: next[key]?.text ?? '' }),
+            })
+            const vd = await vr.json().catch(() => ({}))
+            if (!vr.ok) { failed++; continue }
+            if (vd.messages) latest = vd.messages
+          } catch { failed++ }
+        }
+        setMessages(latest); setSaved(latest)
+        if (failed) toast.error(`הטקסט נשמר, אך יצירת הקול נכשלה ב-${failed} הודעות`)
+      }
+
       setSavedOk(true)
-      toast.success('ההודעות נשמרו')
+      toast.success(keys.length ? 'נשמר — והקול נוצר בהתאם' : 'ההודעות נשמרו')
       setTimeout(() => setSavedOk(false), 2500)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'שגיאה בשמירה')
