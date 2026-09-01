@@ -119,7 +119,13 @@ export async function GET(request: NextRequest) {
     if (!prof || prof.is_active === false || !STAFF.includes(String(prof.role))) {
       // משתמש Google שאינו מורשה — ניתוק והודעה
       await supabase.auth.signOut()
-      return NextResponse.redirect(new URL('/login?error=unauthorized', origin))
+      // המייל נמסר חזרה כדי שהפופאפ יוכל להראות *איזה* חשבון נחסם. בלעדיו,
+      // מי שמחובר לכמה חשבונות גוגל אינו יודע במי מהם ניסה להיכנס.
+      // ⚠️ אין כאן דליפה: זו הכתובת שהמשתמש עצמו בחר להתחבר איתה כרגע.
+      const deny = new URL('/login', origin)
+      deny.searchParams.set('error', 'unauthorized')
+      if (user.email) deny.searchParams.set('denied', user.email)
+      return NextResponse.redirect(deny)
     }
   }
 
