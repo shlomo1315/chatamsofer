@@ -215,13 +215,27 @@ async function handleCardRoute(
 
   // ⚠️ החלוקה האחרונה ולא getOpenDistribution — ראו handleCenterRoute.
   const { data: distRow } = await db.from('distributions')
-    .select('id, amount_per_family, card_expiry, test_mode')
+    .select('id, amount_per_family, card_expiry, test_mode, pickup_open')
     .order('created_at', { ascending: false }).limit(1).maybeSingle()
   const dist = distRow as {
     id: string; amount_per_family: number | null
     card_expiry: string | null; test_mode: boolean | null
+    pickup_open: boolean | null
   } | null
   if (!dist) return yemotText([idMessage(msgToken(msgs, 'closed')), goToFolder('hangup')], callId)
+
+  // 🔴 השער הראשון: האם החלוקה בכלל התחילה.
+  //
+  // ⚠️ נבדק *לפני* הזיהוי, ולא אחריו: אין טעם לבקש ת"ז כדי לענות בסוף
+  // "עדיין אי אפשר". שאר השערים (רשום, מאושר, מוקד) תלויים במשפחה
+  // ולכן דורשים זיהוי — זה תלוי בחלוקה בלבד.
+  //
+  // ⚠️ בלי זה נשאלה משפחה מאושרת שבחרה מוקד להקיש מספר כרטיס בזמן
+  // שהאיסוף סגור וטרם חולק ולו כרטיס אחד. אותו שער בדיוק שהפורטל
+  // כבר אוכף (app/api/portal/holiday-register) — השלוחה נשכחה.
+  if (!dist.pickup_open) {
+    return yemotText([idMessage(msgToken(msgs, 'card_pickup_closed')), goToFolder('hangup')], callId)
+  }
 
   // ── זיהוי ──
   let attempt = -1
