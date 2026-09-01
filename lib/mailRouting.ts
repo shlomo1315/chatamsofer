@@ -70,9 +70,22 @@ export function resolveMailbox(input: RouteInput): string {
   const all = [...direct, ...cc]
 
   // (1) תיבה מוכרת בנמען ישיר — הקובע. Cc נבדק רק אם אין אף נמען ישיר מוכר.
-  const knownDept =
-    direct.find(a => knownBox(a, input.customEmails)) ??
-    cc.find(a => knownBox(a, input.customEmails))
+  //
+  // 🔴 תיבה *ייעודית* גוברת על office, גם כשהיא מופיעה אחריה ברשימה.
+  //
+  // ⚠️ office היא יעד ההעברה של שאר התיבות, ולכן היא נספחת ל-envelope
+  // כמעט תמיד — גם כשהפונה כתב לאגף אחד בלבד. הסדר ב-received_for
+  // שרירותי, וכשהיא הופיעה ראשונה היא "בלעה" את הפנייה: מייל שנשלח
+  // ל-c@ בלבד נשמר תחת office, והמענה האוטומטי יצא ממשרד ראשי במקום
+  // מעזר לחגים. לפונה זה נראה כאילו ההגדרות של האגף אינן עובדות.
+  //
+  // ⚠️ office עדיין נבחרת כשהיא התיבה המוכרת היחידה — ראו הבדיקה
+  // ב-mailRouting.test.ts.
+  const isGeneric = (a: string) => /^office@/i.test(a.trim())
+  const pick = (list: string[]) =>
+    list.find(a => knownBox(a, input.customEmails) && !isGeneric(a)) ??
+    list.find(a => knownBox(a, input.customEmails))
+  const knownDept = pick(direct) ?? pick(cc)
   if (knownDept) return knownDept
 
   // (2) בקשה — תמיד לאיגוד, גם כשהגיעה דרך כתובת ה-copy.

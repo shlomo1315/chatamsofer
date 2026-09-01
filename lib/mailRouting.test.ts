@@ -180,3 +180,46 @@ describe('🔴 תיבות מותאמות', () => {
     })).toBe('M@ChasamSofer.info')
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 מייל שנשלח ל-c@ בלבד נענה ממשרד ראשי.
+//
+// office היא יעד ההעברה של שאר התיבות, ולכן היא נספחת ל-received_for
+// כמעט תמיד — גם כשהפונה כתב לאגף אחד. הסדר שם שרירותי, וכשהיא הופיעה
+// ראשונה היא בלעה את הפנייה. בפרודקשן:
+//   received_for: [copy@in…, office@…, c@…] → resolved: office@
+// ההגדרות של עזר לחגים היו תקינות לחלוטין; התיבה פשוט לא נבחרה.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('🔴 תיבה ייעודית גוברת על office', () => {
+  it('c@ נבחרת גם כש-office מופיעה לפניה — המקרה מהפרודקשן', () => {
+    expect(resolveMailbox({
+      direct: ['copy@in.chasamsofer.info', 'office@chasamsofer.info', 'c@chasamsofer.info'],
+    })).toBe('c@chasamsofer.info')
+  })
+
+  it('גם כשהייעודית אחרונה מבין כמה', () => {
+    expect(resolveMailbox({
+      direct: ['office@chasamsofer.info', 'y@chasamsofer.info'],
+    })).toBe('y@chasamsofer.info')
+  })
+
+  it('office נבחרת כשהיא התיבה המוכרת היחידה', () => {
+    expect(resolveMailbox({
+      direct: ['copy@in.chasamsofer.info', 'office@chasamsofer.info'],
+    })).toBe('office@chasamsofer.info')
+  })
+
+  it('ייעודית ב-Cc אינה גוברת על ייעודית בנמען ישיר', () => {
+    expect(resolveMailbox({
+      direct: ['g@chasamsofer.info'],
+      cc: ['y@chasamsofer.info'],
+    })).toBe('g@chasamsofer.info')
+  })
+
+  it('office ישירה נבחרת על פני ייעודית ב-Cc בלבד', () => {
+    expect(resolveMailbox({
+      direct: ['office@chasamsofer.info'],
+      cc: ['c@chasamsofer.info'],
+    })).toBe('office@chasamsofer.info')
+  })
+})
