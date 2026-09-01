@@ -111,6 +111,49 @@ export default function AllMessages() {
     } catch { setErr('שגיאת רשת') } finally { setBusy(null) }
   }
 
+  /**
+   * יצירת קול מחדש — גם כשהטקסט לא השתנה.
+   *
+   * ⚠️ שומר קודם: היצירה בשרת קוראת את הטקסט השמור, ובלי שמירה היא
+   * הייתה מייצרת קול לנוסח הישן בעוד שעל המסך מופיע החדש.
+   */
+  async function regenerate(row: Row) {
+    const id = `${row.source}:${row.meta.key}`
+    setBusy(id); setErr(''); setOkKey(null)
+    const src = SOURCES.find(s => s.id === row.source)!
+    try {
+      const messages: Record<string, Msg> = {}
+      for (const r of rows ?? []) {
+        if (r.source !== row.source) continue
+        messages[r.meta.key] = {
+          text: r.meta.key === row.meta.key ? row.draft : r.saved,
+          audio: r.audio,
+        }
+      }
+      const sr = await fetch(src.api, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages }),
+      })
+      if (!sr.ok) {
+        const sd = await sr.json().catch(() => ({}))
+        setErr(sd.error ?? 'השמירה נכשלה'); return
+      }
+
+      const vr = await fetch(src.voice, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: row.meta.key, text: row.draft }),
+      })
+      const vd = await vr.json().catch(() => ({}))
+      if (!vr.ok) { setErr(vd.error ?? 'יצירת הקול נכשלה'); return }
+
+      setRows(prev => (prev ?? []).map(r =>
+        r.source === row.source && r.meta.key === row.meta.key
+          ? { ...r, saved: row.draft, audio: vd.audio ?? r.audio } : r))
+      setOkKey(id)
+      setTimeout(() => setOkKey(k => (k === id ? null : k)), 2500)
+    } catch { setErr('שגיאת רשת') } finally { setBusy(null) }
+  }
+
   async function save(row: Row) {
     const id = `${row.source}:${row.meta.key}`
     setBusy(id); setErr(''); setOkKey(null)
@@ -282,6 +325,20 @@ export default function AllMessages() {
                     className="inline-flex items-center gap-1.5 rounded-lg border border-teal-300 px-3 py-1.5 text-[11.5px] font-bold text-teal-700 hover:bg-teal-50 disabled:opacity-50">
                     {busy === id ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
                     רענון הרשימה
+                  </button>
+                )}
+                {/* ── יצירת קול מחדש ──
+                    🔴 השמירה מייצרת קול רק כשהטקסט השתנה, כדי לא לבזבז
+                    מכסת ElevenLabs על 51 הודעות בכל לחיצה. אבל אז אין
+                    שום דרך לרענן הקלטה שהטקסט שלה נשאר כשהיה — למשל
+                    אחרי שינוי בקול עצמו, או כשההקלטה הקודמת יצאה פגומה.
+                    ⚠️ מוצג רק להודעה שאפשר להקליט ושאין בה משתנה. */}
+                {row.meta.allowAudio && row.draft.trim() && !/\{[^}]+\}/.test(row.draft) && (
+                  <button type="button" disabled={busy === id}
+                    onClick={() => void regenerate(row)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300 px-3 py-1.5 text-[11.5px] font-bold text-violet-700 hover:bg-violet-50 disabled:opacity-50">
+                    {busy === id ? <Loader2 size={12} className="animate-spin" /> : <Volume2 size={12} />}
+                    יצירת קול מחדש
                   </button>
                 )}
                 <button type="button" disabled={!changed || busy === id} onClick={() => void save(row)}
