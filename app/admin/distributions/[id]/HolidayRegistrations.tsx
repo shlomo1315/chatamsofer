@@ -2,6 +2,7 @@
 import { useMemo, useState, useEffect } from 'react'
 import { toRegistrationRow } from '@/lib/distributionRow'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { Search, Download, Loader2, Users, Wallet, Monitor, Phone, Mail, Pencil, CreditCard, Check, X, ShieldCheck, Send, MapPin } from 'lucide-react'
 import { format } from 'date-fns'
@@ -256,6 +257,41 @@ export default function HolidayRegistrations({
     // הלולאה שהפילה את המסך.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [distributionId, rowsKey])
+
+  // ── רענון חי ──
+  //
+  // 🔴 המסך נצפה בזמן שהמשפחות בוחרות מוקד בפועל, ובזמן שהמשרד מאשר
+  // ומשייך במקביל. נתון שדורש רענון ידני כדי להתעדכן הוא נתון שמישהו
+  // מסתמך עליו כשהוא כבר לא נכון.
+  //
+  // ⚠️ debounce של 800ms כמו במסך המייל: בחירת מוקד המונית מייצרת
+  // מקבץ אירועים, ורענון לכל אחד מהם היה מטיח את המסך בעצמו.
+  // ⚠️ גם focus/visibilitychange — לשונית שהוסתרה ונפתחה מחדש מציגה
+  // נתון ישן, ו-Realtime לבדו אינו מכסה את זה.
+  useEffect(() => {
+    const supabase = createClient()
+    let t: ReturnType<typeof setTimeout> | null = null
+    const debounced = () => { if (t) clearTimeout(t); t = setTimeout(() => router.refresh(), 800) }
+    const ch = supabase
+      .channel(`distribution-live-${distributionId}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'distribution_recipients', filter: `distribution_id=eq.${distributionId}` },
+        () => debounced())
+      // ⚠️ גם המוקדים עצמם: שינוי שם או פתיחת מוקד משנה את מה שהטבלה מציגה.
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'holiday_centers' }, () => debounced())
+      .subscribe()
+    const onFocus = () => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') router.refresh()
+    }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onFocus)
+    return () => {
+      supabase.removeChannel(ch)
+      if (t) clearTimeout(t)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onFocus)
+    }
+  }, [distributionId, router])
   const [query, setQuery] = useState('')
   const [source, setSource] = useState<RegisterSource | 'all'>('all')
   const [community, setCommunity] = useState<string>('all')
