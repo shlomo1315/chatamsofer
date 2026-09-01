@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { buildMergeData, type MergeSource } from './merge'
 import { suppressionSet } from '../unsubscribe'
+import { fetchAllRows } from '../fetchAllRows'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // בונה הקהל.
@@ -85,19 +86,22 @@ export async function resolveSegment(
   let noEmail = 0
 
   if (def.source === 'staff') {
-    const { data } = await db.from('profiles').select('email, full_name').eq('is_active', true)
+    const { rows: data } = await fetchAllRows<{ email: string | null; full_name: string | null }>(
+      (from, to) => db.from('profiles').select('email, full_name').eq('is_active', true).range(from, to))
     rows = (data ?? [])
       .filter(p => p.email)
       .map(p => ({ email: String(p.email), beneficiaryId: null, src: { full_name: p.full_name } }))
 
   } else if (def.source === 'recovery_homes') {
-    const { data } = await db.from('recovery_homes').select('name, report_email')
+    const { rows: data } = await fetchAllRows<{ name: string | null; report_email: string | null }>(
+      (from, to) => db.from('recovery_homes').select('name, report_email').range(from, to))
     rows = (data ?? [])
       .filter(h => h.report_email)
       .map(h => ({ email: String(h.report_email), beneficiaryId: null, src: { full_name: h.name } }))
 
   } else if (def.source === 'contact_list' && def.contactListId) {
-    const { data } = await db.from('contacts').select('email, data').eq('list_id', def.contactListId)
+    const { rows: data } = await fetchAllRows<{ email: string; data: unknown }>(
+      (from, to) => db.from('contacts').select('email, data').eq('list_id', def.contactListId!).range(from, to))
     rows = (data ?? []).map(c => ({
       email: String(c.email),
       beneficiaryId: null,
@@ -120,8 +124,14 @@ export async function resolveSegment(
     // community_affiliation הוא טקסט חופשי (לא enum) — לכן ILIKE ולא שוויון
     if (def.communityAffiliation) q = q.ilike('community_affiliation', `%${def.communityAffiliation}%`)
 
-    const { data } = await q
-    let list = (data ?? []) as BeneficiaryRow[]
+    // 🔴 fetchAllRows ולא await q — זו הייתה דליפה שקטה לפרודקשן.
+    //
+    // PostgREST חותך ב-1,000 שורות בלי שגיאה ובלי אזהרה. הקהל נבנה מ-1,000
+    // מוטבים במקום 7,201, ואחרי דה-דופליקציה הוצגו 978 נמענים מתוך 6,615
+    // כתובות ייחודיות. כלומר כל קמפיין שנשלח מכאן הגיע ל-15% מהרשימה,
+    // והמסך הציג את המספר החלקי כאילו הוא המלא.
+    const { rows: allBens } = await fetchAllRows<BeneficiaryRow>((from, to) => q.range(from, to))
+    let list = allBens
 
     // סינון בזיכרון — דברים ש-PostgREST לא יודע לעשות על JSON
     if (def.childAgeFrom != null || def.childAgeTo != null) {
@@ -144,14 +154,15 @@ export async function resolveSegment(
 
     // joins — יש הלוואה פעילה / קיבל עזר יולדות
     if (def.hasLoan) {
-      const { data: loans } = await db.from('loans')
-        .select('beneficiary_id').in('status', ['approved', 'active'])
+      const { rows: loans } = await fetchAllRows<{ beneficiary_id: string }>((from, to) => db.from('loans')
+        .select('beneficiary_id').in('status', ['approved', 'active']).range(from, to))
       const ids = new Set((loans ?? []).map(l => String(l.beneficiary_id)))
       list = list.filter(b => ids.has(b.id))
     }
 
     if (def.hadMaternity) {
-      const { data: aids } = await db.from('maternity_aids').select('beneficiary_id')
+      const { rows: aids } = await fetchAllRows<{ beneficiary_id: string }>(
+        (from, to) => db.from('maternity_aids').select('beneficiary_id').range(from, to))
       const ids = new Set((aids ?? []).map(a => String(a.beneficiary_id)))
       list = list.filter(b => ids.has(b.id))
     }

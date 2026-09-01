@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
 import { resolveSegment, type SegmentDef } from '@/lib/newsletter/segments'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 
 // מונה קהל חי — כמה נמענים יוצאים מהמסננים שנבחרו.
 // מוצג במסך בונה הקהל ומתעדכן בכל שינוי.
@@ -48,9 +49,18 @@ export async function GET() {
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  const { data } = await db
+  // 🔴 fetchAllRows ולא await: אותה תקרה שקטה שחתכה את הקהל עצמו.
+  // כאן היא חתכה את *רשימת המסננים* — ערים שכל המוטבים שלהן נמצאים
+  // מעבר לשורה ה-1000 פשוט לא הופיעו כאפשרות סינון, בלי שום סימן.
+  const { rows: data } = await fetchAllRows<{
+    city?: string | null
+    community_affiliation?: string | null
+    marital_status?: string | null
+    eligibility_status?: string | null
+  }>((from, to) => db
     .from('beneficiaries')
     .select('city, community_affiliation, marital_status, eligibility_status')
+    .range(from, to))
 
   const cities = new Set<string>()
   const communities = new Set<string>()

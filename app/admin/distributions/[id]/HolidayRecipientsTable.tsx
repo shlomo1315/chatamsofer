@@ -11,6 +11,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 'use client'
 
+import { useEffect } from 'react'
 import Link from 'next/link'
 import { Monitor, Phone, Mail, CreditCard, Pencil, Check, X, Loader2, Wallet } from 'lucide-react'
 import { SOURCE_LABEL, type RegisterSource } from '@/lib/distributionSources'
@@ -156,6 +157,7 @@ const COLUMNS: ColDef<ColKey, HolidayRow>[] = [
 
 export default function HolidayRecipientsTable({
   rows, amountPerFamily, fmtDateTime, fmtCur, controls = {}, paginated = false,
+  onRowsChange, pageSlice,
 }: {
   rows: HolidayRow[]
   amountPerFamily: number | null
@@ -163,12 +165,23 @@ export default function HolidayRecipientsTable({
   fmtCur: (n: number) => string
   controls?: HolidayTableControls
   /**
-   * ⚠️ הקורא מדפדף בעצמו ומעביר עמוד מוכן — לכן הגלילה האינסופית מכובה.
+   * ⚠️ הגלילה האינסופית מכובה — הדפדוף מנוהל בחוץ.
    * בלי זה שתי המכניקות רצות יחד: העמוד מוגבל ל-50 שורות, והגלילה
    * האינסופית "טוענת עוד" מתוכן — כלומר כפתור שלא עושה כלום.
    * דף השיתוף ממשיך בגלילה אינסופית (ברירת המחדל).
    */
   paginated?: boolean
+  /**
+   * 🔴 הודעה לקורא על השורות שנותרו אחרי המיון והסינון של הכותרת.
+   *
+   * ⚠️ בלי זה הקורא חייב לדפדף *לפני* הטבלה, והטבלה מקבלת עמוד אחד —
+   * כלומר המסננים נבנים מ-50 שורות מתוך אלפים. כך בדיוק קרה שחיפוש
+   * "שמרלר" הציג "טרם נבחר 5 · בני ברק 1": המונים ספרו את הדף, לא
+   * את הרשימה. הסדר הנכון הוא visible → tc.rows → pg.rows.
+   */
+  onRowsChange?: (rows: HolidayRow[]) => void
+  /** חיתוך לעמוד — מוחל *אחרי* המיון והסינון. */
+  pageSlice?: (rows: HolidayRow[]) => HolidayRow[]
 }) {
   const { canEdit = false, selected, toggleRow, allShownSelected, toggleAllShown,
     busyId, setApprovalFor, clearCard, loadCard, loadingId, showMessage = false,
@@ -210,8 +223,21 @@ export default function HolidayRecipientsTable({
   // הגולמי היה מציג טבלה שמתעלמת מהסינון שהמשתמש הרגע בחר.
   const { rows: incRows, sentinelRef: incSentinel, hasMore: incHasMore, shown: incShown, total: incTotal } =
     useIncrementalRows(tc.rows)
-  // במצב מדופדף השורות כבר חתוכות לעמוד — מוצגות כולן, בלי sentinel.
-  const visibleRows = paginated ? tc.rows : incRows
+
+  // 🔴 מדווח לקורא מה שרד את המיון והסינון, כדי שהוא ידפדף על *התוצאה*.
+  //
+  // ⚠️ בתוך useEffect ולא בגוף הרינדור: קריאה ל-setState של ההורה תוך כדי
+  // רינדור הבן היא בדיוק לולאת הרינדור שהפילה את המסך הזה בעבר.
+  // ⚠️ התלות היא באורך ובמזהה האחרון ולא במערך: tc.rows הוא מערך חדש
+  // בכל רינדור, ותלות בו מפעילה את ה-effect לנצח.
+  const rowsSig = `${tc.rows.length}:${tc.rows[tc.rows.length - 1]?.id ?? ''}`
+  useEffect(() => {
+    onRowsChange?.(tc.rows)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowsSig])
+
+  // במצב מדופדף החיתוך לעמוד קורה *אחרי* המיון והסינון, לא לפניהם.
+  const visibleRows = paginated ? (pageSlice ? pageSlice(tc.rows) : tc.rows) : incRows
   const sentinelRef = incSentinel
   const hasMore = paginated ? false : incHasMore
   const shownCount = incShown

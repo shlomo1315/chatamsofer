@@ -371,7 +371,15 @@ export default function HolidayRegistrations({
   // ⚠️ האיפוס לעמוד 1 מגיע מה-hook, שמזהה רשימה חדשה בזמן הרינדור.
   // כאן היה useEffect שקרא setPage — הוא רינדר פעמיים בכל הקלדה בחיפוש,
   // כי filtered הוא מערך חדש בכל תו. זה בדיוק העומס שהדפדוף בא לפתור.
-  const pg = useTablePagination(filtered)
+  // 🔴 הסדר: filtered → tc.rows (מיון וסינון הכותרת) → pg.rows (עמוד).
+  //
+  // ⚠️ קודם ישב כאן useTablePagination(filtered) והטבלה קיבלה עמוד מוכן.
+  // המשמעות: המסננים בכותרת נבנו מ-50 שורות מתוך ~6,000, וגם *הסינון
+  // עצמו* חל על הדף בלבד. חיפוש "שמרלר" הציג "טרם נבחר 5 · בני ברק 1"
+  // במקום לספור את כל הרשימה, ומוקד שאיש מהדף הנוכחי לא בחר פשוט
+  // נעדר מהתפריט. הדפדוף חייב לחול על תוצאת הסינון, לא להפך.
+  const [sorted, setSorted] = useState<RegistrationRow[]>(filtered)
+  const pg = useTablePagination(sorted)
   const paged = pg.rows
 
   // הצפי התקציבי — של מה שמסונן כרגע ושל הכל. כך גם "כמה יעלה פילוח מסוים".
@@ -976,8 +984,10 @@ export default function HolidayRegistrations({
       {/* ── טבלת הנרשמים — קומפוננטה משותפת עם דף השיתוף (זהות מובטחת) ── */}
       <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
         <HolidayRecipientsTable
-          rows={paged}
+          rows={filtered}
           paginated
+          onRowsChange={rs => setSorted(rs as RegistrationRow[])}
+          pageSlice={() => paged}
           amountPerFamily={amountPerFamily}
           fmtDateTime={fmtDateTime}
           fmtCur={fmtCur}
