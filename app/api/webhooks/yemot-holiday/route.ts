@@ -527,12 +527,21 @@ async function handleCenterRoute(
       //   · max     — אורך המספר הגדול ביותר. נגזר ממספר האפשרויות,
       //     4 ערים היו נותנות ספרה אחת, וימות הייתה קוטעת את "18" ל-"1"
       //     ושולחת את המתקשר לירושלים.
-      // 🔴 ההקדמה מושמעת מההגדרות (ניתנת להקלטה בקול טבעי), והרשימה
-      // עצמה נבנית מהמוקדים הפתוחים ונאמרת ב-TTS מיד אחריה.
+      // 🔴 ההסבר והספירה מושמעים כאן ולא רק ב-ask_region.
+      //
+      // ⚠️ זה היה באג שקט: שכבת האזורים נעקפת (רוב הערים הן מוקד יחיד),
+      // ולכן המסלול בפועל מגיע ישר ל-ask_city — ו-centers_intro
+      // והספירה לאחור לא נשמעו לאיש. המשפחה לא שמעה שהבחירה סופית,
+      // שהכרטיס נמסר רק במוקד שנבחר, וכמה זמן נותר לבחור.
+      //
+      // ⚠️ הסדר: הסבר → ספירה → הקדמה → רשימה. הספירה לפני הרשימה
+      // ולא אחריה, כי מרגע שהרשימה מתחילה המאזין כבר מקיש.
       return yemotText([readTap(CENTER_VARS.city, [
+        msgToken(msgs, 'centers_intro'),
+        countdown,
         msgToken(msgs, 'ask_city_intro'),
         tToken(step.options.map(o => `ל${o.city} הקישו ${o.number}`).join(' ')),
-      ], {
+      ].filter(Boolean), {
         max: Math.max(...step.options.map(o => String(o.number).length)),
         min: 1,
         allowed: step.options.map(o => o.number),

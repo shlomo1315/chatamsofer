@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, Check, Type, Mic, Volume2, Upload, Trash2, Wand2, Play } from 'lucide-react'
+import { Loader2, Check, Type, Mic, Volume2, Upload, Trash2, Wand2, Play, RefreshCw } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import StickySaveBar from '@/components/ui/StickySaveBar'
@@ -71,6 +71,32 @@ export default function YemotHolidaySettings() {
     } catch { toast.error('שגיאת רשת') }
     setBusyKey(null)
   }
+
+  // ── רענון רשימת הערים לתוך הטקסט ──
+  // 🔴 זה מה שהופך הודעה דינמית לניתנת להקלטה: {list} מוחלף ברשימה
+  // האמיתית, ומאותו רגע יש טקסט ממשי שאפשר לערוך ולייצר ממנו קול.
+  const [citySig, setCitySig] = useState<string | null>(null)
+  const [liveSig, setLiveSig] = useState<string | null>(null)
+
+  const refreshCityList = async () => {
+    setBusyKey('ask_city')
+    try {
+      const res = await fetch('/api/admin/holiday-centers/city-list', { cache: 'no-store' })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(d.error || 'שליפת הערים נכשלה'); setBusyKey(null); return }
+      setMessages(prev => ({ ...prev, ask_city: { ...(prev.ask_city ?? {}), text: d.text } }))
+      setCitySig(d.signature ?? null); setLiveSig(d.signature ?? null)
+      toast.success(`נטענו ${d.cities?.length ?? 0} ערים — ניתן לערוך ואז ליצור קול`)
+    } catch { toast.error('שגיאת רשת') }
+    setBusyKey(null)
+  }
+
+  // ⚠️ בדיקת סטייה בטעינת המסך: הקלטה שנעשתה לפני שינוי במוקדים אומרת
+  // מספרים שכבר אינם נכונים, וזה בדיוק מה שאי אפשר לראות בלי התרעה.
+  useEffect(() => {
+    void fetch('/api/admin/holiday-centers/city-list', { cache: 'no-store' })
+      .then(r => r.json()).then(d => setLiveSig(d?.signature ?? null)).catch(() => {})
+  }, [])
 
   const generateVoice = async (key: string, text: string) => {
     setBusyKey(key)
@@ -243,6 +269,25 @@ export default function YemotHolidaySettings() {
               className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-[13px] focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
             />
             {m.hint && <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">{m.hint}</p>}
+
+            {/* ── רשימת הערים: רענון + התרעת סטייה ── */}
+            {m.key === 'ask_city' && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button type="button" disabled={busyKey === 'ask_city'}
+                  onClick={() => void refreshCityList()}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-teal-300 px-2.5 py-1.5 text-[11.5px] font-bold text-teal-700 hover:bg-teal-50 disabled:opacity-60">
+                  {busyKey === 'ask_city' ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                  רענון הרשימה
+                </button>
+                {/* 🔴 ההתרעה שמונעת שליחת משפחות למקום הלא נכון: הוקלטה
+                    רשימה, ומאז נפתח או נסגר מוקד — המספרים כבר אינם נכונים. */}
+                {messages.ask_city?.audio && citySig && liveSig && citySig !== liveSig && (
+                  <span className="inline-flex items-center gap-1 rounded-lg bg-rose-50 px-2.5 py-1.5 text-[11.5px] font-bold text-rose-700">
+                    ⚠️ המוקדים השתנו מאז ההקלטה — יש לרענן ולהקליט מחדש
+                  </span>
+                )}
+              </div>
+            )}
             {missingVar.length > 0 && (
               <p className="mt-1.5 text-[11.5px] font-bold text-red-600">
                 חסר בטקסט: {missingVar.map(p => `{${p}}`).join(' ')} — בלעדיו ההודעה לא תקריא את הנתון
