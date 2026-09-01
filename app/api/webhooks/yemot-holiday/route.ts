@@ -265,7 +265,13 @@ async function handleCardRoute(
     if (String(params[CARD_VARS[i]] ?? '').trim()) { cAttempt = i; break }
   }
   if (cAttempt < 0) {
-    return yemotText([readTap(CARD_VARS[0], [msgToken(msgs, 'card_ask')], { max: '', min: 1 })], callId)
+    // 🔴 הזיהוי נאמר לפני הבקשה: המתקשר חייב לדעת שהמערכת זיהתה *אותו*
+    // לפני שהוא מוסר מספר כרטיס. בלי זה הוא מקיש בעיוורון, ומי שהקיש
+    // ת"ז שגויה משייך כרטיס למשפחה אחרת בלי לדעת.
+    return yemotText([readTap(CARD_VARS[0], [
+      msgToken(msgs, 'identify', { name: ben.family_name?.trim() || ben.full_name?.trim() || '' }),
+      msgToken(msgs, 'card_ask'),
+    ], { max: '', min: 1 })], callId)
   }
 
   const card = digitsOnly(params[CARD_VARS[cAttempt]])
@@ -536,7 +542,11 @@ async function handleCenterRoute(
       //
       // ⚠️ הסדר: הסבר → ספירה → הקדמה → רשימה. הספירה לפני הרשימה
       // ולא אחריה, כי מרגע שהרשימה מתחילה המאזין כבר מקיש.
+      // 🔴 הזיהוי ראשון: בחירת מוקד היא סופית, והמתקשר חייב לדעת שהמערכת
+      // זיהתה *אותו* לפני שהוא בוחר. מי שהקיש ת"ז שגויה היה בוחר מוקד
+      // למשפחה אחרת — ואי אפשר לבטל.
       return yemotText([readTap(CENTER_VARS.city, [
+        msgToken(msgs, 'identify', { name: ben.family_name?.trim() || ben.full_name?.trim() || '' }),
         msgToken(msgs, 'centers_intro'),
         countdown,
         msgToken(msgs, 'ask_city_intro'),
