@@ -12,6 +12,7 @@ import YemotMainMenuSettings from '@/app/admin/settings/YemotMainMenuSettings'
 import YemotCallLog from '@/app/admin/settings/YemotCallLog'
 import RegistrationCallSettings from '@/app/admin/settings/RegistrationCallSettings'
 import IvrBuilder from '@/app/admin/settings/IvrBuilder'
+import AllMessages from './AllMessages'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // עץ השלוחות ומסך השלוחה.
@@ -134,13 +135,16 @@ type Tab = 'messages' | 'tree' | 'settings'
 // ── הטאבים הראשיים ──
 // ⚠️ "בונה" שני ולא אחרון: זה המקום שבו באמת עורכים, וקודם הוא היה
 // בתחתית עמוד ארוך אחרי גלילה. "מבנה" נשאר ראשון כי הוא התמונה הכללית.
-type MainTab = 'build' | 'tree' | 'log' | 'setup'
+type MainTab = 'build' | 'messages' | 'tree' | 'log' | 'setup'
 
 // 🔴 'build' ראשון ולא 'tree': זה המסך שבו *עורכים*. קודם הוא היה
 // בתחתית עמוד ארוך, מתחת לרשימה שאי אפשר לערוך — ולכן נראה כאילו
 // אי אפשר להוסיף או לשנות שלוחות בכלל.
 const MAIN_TABS: { key: MainTab; label: string; icon: typeof Phone }[] = [
   { key: 'build', label: 'השלוחות', icon: ListTree },
+  // 🔴 שני בסדר: "שמעתי משפט ואני רוצה לתקן אותו" היא הפעולה השכיחה
+  // ביותר, וקודם היא דרשה לנחש לאיזו שלוחה המשפט שייך ולפתוח אותה.
+  { key: 'messages', label: 'כל הנוסחים', icon: MessageSquare },
   { key: 'tree', label: 'מסלולים קבועים', icon: Phone },
   { key: 'log', label: 'יומן שיחות', icon: History },
   { key: 'setup', label: 'חיבור לימות', icon: PlayCircle },
@@ -186,6 +190,12 @@ export default function PhoneSystemClient() {
             <IvrBuilder />
           </div>
         )}
+
+        {/* ── כל הנוסחים ──
+            🔴 51 ההודעות של שלוש השלוחות במקום אחד, עם חיפוש על גוף
+            ההודעה. קודם הן ישבו בשלושה מסכים נפרדים, וכדי לתקן משפט
+            שנשמע בטלפון היה צריך לדעת מראש לאיזו שלוחה הוא שייך. */}
+        {main === 'messages' && <AllMessages />}
 
         {main === 'log' && <YemotCallLog />}
 

@@ -291,8 +291,11 @@ async function handleCenterRoute(
     case 'closed': {
       // ⚠️ הודעה לפי הסיבה: "סגור" למי שממתין לאישור שולח אותו למשרד,
       // בזמן שהוא רק צריך לדעת שהבקשה בבדיקה.
+      // 🔴 pending_approval ולא not_eligible: מי שממתין לאישור שמע
+      // "הכרטסת שלכם אינה פעילה, פנו למשרד" — הודעה שגויה שנשלחה
+      // ל-6,048 משפחות שרשומות כראוי. ההמתנה היא המצב התקין בשלב הזה.
       const key = !dist.centers_open ? 'centers_closed'
-        : !approved ? 'not_eligible'
+        : !approved ? 'pending_approval'
         : 'centers_deadline_over'
       return yemotText([idMessage(msgToken(msgs, key)), goToFolder('hangup')], callId)
     }
@@ -323,7 +326,10 @@ async function handleCenterRoute(
       //   · max     — אורך המספר הגדול ביותר. נגזר ממספר האפשרויות,
       //     4 ערים היו נותנות ספרה אחת, וימות הייתה קוטעת את "18" ל-"1"
       //     ושולחת את המתקשר לירושלים.
+      // 🔴 ההקדמה מושמעת מההגדרות (ניתנת להקלטה בקול טבעי), והרשימה
+      // עצמה נבנית מהמוקדים הפתוחים ונאמרת ב-TTS מיד אחריה.
       return yemotText([readTap(CENTER_VARS.city, [
+        msgToken(msgs, 'ask_city_intro'),
         tToken(step.options.map(o => `ל${o.city} הקישו ${o.number}`).join(' ')),
       ], {
         max: Math.max(...step.options.map(o => String(o.number).length)),
@@ -399,6 +405,7 @@ export async function handleHolidayCall(params: Record<string, string>): Promise
   if (choice === '3' || choice === '4') {
     return handleCenterRoute(choice, params, msgs, callId)
   }
+
 
   // ⚠️ getOpenDistribution בודק גם את מתג-האב של המחלקה (הגדרות → שערי מחלקות),
   // ולכן סגירה שם מכבה את מסלול הרישום.

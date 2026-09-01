@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
-import { uploadFileToYemot, yemotConfigured } from '@/lib/yemot'
+import { uploadFileToYemot, deleteFileFromYemot, yemotConfigured } from '@/lib/yemot'
 import { generateSpeech } from '@/lib/elevenTts'
 import { setMaternityMessageAudio, MATERNITY_MESSAGE_META, getMaternityMessages } from '@/lib/yemotMaternityMessages'
 
@@ -26,7 +26,12 @@ async function generateOne(key: string, text: string): Promise<{ ok: true; audio
   const speech = await generateSpeech(text)
   if (!speech.ok || !speech.audio) return { ok: false, error: speech.error ?? 'יצירת הקול נכשלה' }
 
-  const baseName = `tts_${key}`
+  // 🔴 חותמת בשם הקובץ — ראו ההסבר המלא ב-yemot-holiday/generate-voice.
+  // שם קבוע גרם לימות לנגן את ההקלטה הישנה אחרי כל עריכה, בלי שום סימן.
+  // ⚠️ הקובץ הקודם נקרא לפני השמירה, אחרת שמו כבר נדרס ולא נדע מה למחוק.
+  const prevAudio = (await getMaternityMessages())[key]?.audio ?? null
+
+  const baseName = `tts_${key}_${Date.now().toString(36)}`
   const path = `ivr2:/${MATERNITY_EXT}/${baseName}.mp3`
   const blob = new Blob([speech.audio], { type: 'audio/mpeg' })
   const up = await uploadFileToYemot(path, blob, `${baseName}.mp3`)
@@ -34,6 +39,12 @@ async function generateOne(key: string, text: string): Promise<{ ok: true; audio
 
   const saved = await setMaternityMessageAudio(key, baseName)
   if (!saved) return { ok: false, error: 'הקול נוצר אך שמירת ההגדרה נכשלה' }
+
+  // ניקוי הקובץ הקודם — best-effort, אחרי השמירה. ראו yemot-holiday.
+  if (prevAudio && prevAudio !== baseName) {
+    const gone = await deleteFileFromYemot(`ivr2:/${MATERNITY_EXT}/${prevAudio}.mp3`)
+    if (!gone.ok) console.warn(`[yemot-maternity] מחיקת הקובץ הקודם נכשלה (${prevAudio}): ${gone.error}`)
+  }
   return { ok: true, audio: baseName }
 }
 

@@ -14,8 +14,12 @@ export default function Collapsible({
   children: ReactNode
 }) {
   const [open, setOpen] = useState(defaultOpen)
+  // ⚠️ data-settings-item מסמן את המקטע לחיפוש במסך ההגדרות (ראו
+  // app/admin/settings/SettingsSearch.tsx). הוא יושב כאן ולא באתרי הקריאה
+  // כדי שכל 36 המקטעים יסומנו בלי לגעת בכל אחד מהם בנפרד; במסכים אחרים
+  // הוא מאפיין עודף וחסר משמעות.
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
+    <div data-settings-item className="bg-white rounded-xl border border-slate-200 shadow-sm">
       <div className="flex items-center justify-between px-5 py-3.5">
         <button type="button" onClick={() => setOpen(o => !o)} className="flex items-center gap-2 flex-1 text-right">
           {icon}

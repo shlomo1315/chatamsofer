@@ -121,11 +121,25 @@ export async function GET(request: NextRequest) {
 
   let registered = false
   let registeredAt: string | null = null
+  // ⚠️ join של Supabase מחזיר מערך או אובייקט — הטיפוס מכסה את שתי הצורות.
+  type CenterJoin = {
+    city?: string; name?: string
+    address?: string | null; hours?: string | null; phone?: string | null
+  }
+
   let centerId: string | null = null
   let centerName: string | null = null
+  // 🔴 פרטי האיסוף — נשלחים *רק* כששער האיסוף פתוח (ראו למטה).
+  let centerAddress: string | null = null
+  let centerHours: string | null = null
+  let centerPhone: string | null = null
   let hasVoucher = false
   // ⚠️ מזהה הרשומה — נדרש לבחירת המוקד (holiday-center מזהה לפיו).
   let recipientId: string | null = null
+
+  // שער האיסוף — נקרא פעם אחת, ומכתיב אם פרטי המוקד בכלל נשלחים.
+  const pickupOpen = Boolean((active as { pickup_open?: boolean }).pickup_open)
+  const pickupNote = (active as { pickup_note?: string | null }).pickup_note ?? null
 
   if (beneficiaryId && sessionId === beneficiaryId && db) {
     const { data } = await db.from('distribution_recipients')
@@ -133,7 +147,7 @@ export async function GET(request: NextRequest) {
       .eq('distribution_id', active.id).eq('beneficiary_id', beneficiaryId).maybeSingle()
     const row = data as {
       registered_at?: string | null; center_id?: string | null; card_number?: string | null
-      center?: { city?: string; name?: string } | { city?: string; name?: string }[] | null
+      center?: CenterJoin | CenterJoin[] | null
     } | null
     registered = !!row
     recipientId = (row as { id?: string } | null)?.id ?? null
@@ -142,6 +156,19 @@ export async function GET(request: NextRequest) {
     // ⚠️ join של Supabase מחזיר מערך או אובייקט — שניהם נתמכים.
     const c = Array.isArray(row?.center) ? row?.center[0] : row?.center
     centerName = c ? (c.city === c.name ? c.city! : `${c.city} · ${c.name}`) : null
+    // ─────────────────────────────────────────────────────────────────────
+    // 🔴 הכתובת והשעות נשלחות רק כששער האיסוף פתוח.
+    //
+    // ⚠️ שליחה מוקדמת שלהן הייתה מגיעה למשפחה עוד בשלב הבחירה — כלומר
+    // אלפי משפחות היו מגיעות למוקד שבועיים לפני שהכרטיסים הוטענו,
+    // אל בתים פרטיים של מתנדבים. הסינון הוא בשרת ולא בתצוגה, כדי
+    // שהנתון לא יגיע לדפדפן כלל.
+    // ─────────────────────────────────────────────────────────────────────
+    if (pickupOpen && c) {
+      centerAddress = c.address ?? null
+      centerHours = c.hours ?? null
+      centerPhone = c.phone ?? null
+    }
     // ⚠️ שובר קיים = הונפק כרטיס. זה מה שמאפשר הורדה.
     hasVoucher = Boolean(row?.card_number)
   }
@@ -154,6 +181,9 @@ export async function GET(request: NextRequest) {
     centersOpen: Boolean((active as { centers_open?: boolean }).centers_open),
     distribution: { id: active.id, name: active.name, year: active.year },
     registered, registeredAt, centerId, centerName, hasVoucher, recipientId,
+    // 🔴 שער האיסוף — המשפחה יודעת *לאן* מרגע הבחירה, אבל *מתי* רק כאן.
+    pickupOpen, pickupNote,
+    centerAddress, centerHours, centerPhone,
   }, { headers: { 'Cache-Control': 'no-store' } })
 }
 

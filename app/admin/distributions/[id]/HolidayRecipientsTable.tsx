@@ -16,6 +16,7 @@ import { Monitor, Phone, Mail, CreditCard, Pencil, Check, X, Loader2, Wallet } f
 import { SOURCE_LABEL, type RegisterSource } from '@/lib/distributionSources'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import { useIncrementalRows } from '@/lib/useIncrementalRows'
+import CenterCellEditor, { type CenterOption } from './CenterCellEditor'
 import { useResizableColumns } from '@/components/ui/ResizableTable'
 import ApprovalLabelTag, { type ApprovalLabel } from '@/components/ui/ApprovalLabelTag'
 
@@ -88,6 +89,15 @@ export interface HolidayTableControls {
   hideApproval?: boolean
   hideCard?: boolean
   hideSource?: boolean
+  /** 🔴 שיוך מוקד ידני — המוקדים הפתוחים בחלוקה. ריק/חסר = העמודה לקריאה בלבד.
+      ⚠️ נטענים פעם אחת ברמת הטבלה: בקשה לכל שורה על 6,000 שורות היא בדיוק
+      העומס שהדפדוף בא למנוע. */
+  centerOptions?: CenterOption[]
+  /** נקרא אחרי שיוך שנשמר — הקורא מעדכן את השורה במקום לטעון הכל מחדש. */
+  onCenterAssigned?: (
+    recipientId: string,
+    next: { center_id: string | null; center_name: string | null; center_source: string | null },
+  ) => void
 }
 
 // ── הגדרת העמודות ──
@@ -162,7 +172,8 @@ export default function HolidayRecipientsTable({
 }) {
   const { canEdit = false, selected, toggleRow, allShownSelected, toggleAllShown,
     busyId, setApprovalFor, clearCard, loadCard, loadingId, showMessage = false,
-    hideApproval = false, hideCard = false, hideSource = false } = controls
+    hideApproval = false, hideCard = false, hideSource = false,
+    centerOptions, onCenterAssigned } = controls
 
   // 🔴 המנגנון המשותף (useTableColumns) ולא מימוש מקומי: הוא מביא איתו
   // מיון וסינון בכותרת — בדיוק כמו ב-17 הטבלאות האחרות. הטבלה הזו הייתה
@@ -308,7 +319,20 @@ export default function HolidayRecipientsTable({
       case 'email': return <span className="block truncate text-slate-600 text-right" dir="ltr" title={r.email ?? ''}>{r.email ?? '—'}</span>
       case 'address': return <span className="block truncate text-slate-600" title={r.address ?? ''}>{r.address ?? '—'}</span>
       case 'city': return <span className="text-slate-600">{r.city ?? '—'}</span>
-      case 'center': return r.center_name
+      // 🔴 שיוך ידני מהתא: המוקד נבחר עד כה רק בערוצים שהמשפחה מפעילה,
+      // ולמשרד לא הייתה שום דרך לשייך מוקד למי שלא הסתדר עם אף אחד מהם.
+      case 'center':
+        return canEdit && centerOptions && onCenterAssigned
+          ? (
+            <CenterCellEditor
+              recipientId={r.id}
+              centerName={r.center_name}
+              centerSource={r.center_source}
+              centers={centerOptions}
+              onSaved={next => onCenterAssigned(r.id, next)}
+            />
+          )
+          : r.center_name
         ? (
           <span className="inline-flex items-center gap-1 whitespace-nowrap">
             <span className="text-slate-700">{r.center_name}</span>

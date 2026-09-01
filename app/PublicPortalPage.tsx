@@ -2167,13 +2167,20 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     /** הונפק שובר — מאפשר הורדה. */
     hasVoucher?: boolean
     recipientId?: string | null
+    /** 🔴 שער האיסוף — "אפשר כבר לבוא למוקד". נפרד מ-centersOpen. */
+    pickupOpen?: boolean
+    pickupNote?: string | null
+    /** ⚠️ מגיעים מהשרת רק כש-pickupOpen — ראו holiday-register. */
+    centerAddress?: string | null
+    centerHours?: string | null
+    centerPhone?: string | null
   } | null>(null)
   const [holidaySaving, setHolidaySaving] = useState(false)
   // פופאפ מלא לחלוקה: הזמנה להירשם (מקישור המייל), הצלחה חדשה, "כבר רשומים",
   // או "הרישום סגור" (נכנסו מהקישור אך המחלקה/החלוקה סגורה כעת).
   // ── בחירת מוקד ──
   // 🔴 שני שלבים בכוונה: בחירה, ואז אישור סופי. הבחירה אינה הפיכה,
-  // והמשפחה לא תוכל לקבל את החבילה במוקד אחר — לכן היא לא נשמרת
+  // והמשפחה לא תוכל לקבל את הכרטיס במוקד אחר — לכן היא לא נשמרת
   // בלחיצה אחת.
   const [centerPicker, setCenterPicker] = useState(false)
   const [centerData, setCenterData] = useState<{
@@ -3280,6 +3287,13 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 centerName: d.centerName ?? null,
                 hasVoucher: !!d.hasVoucher,
                 recipientId: d.recipientId ?? null,
+                // 🔴 שער האיסוף ופרטי המוקד. ⚠️ הכתובת והשעות מגיעות
+                // מהשרת רק כששער האיסוף פתוח — ראו holiday-register.
+                pickupOpen: !!d.pickupOpen,
+                pickupNote: d.pickupNote ?? null,
+                centerAddress: d.centerAddress ?? null,
+                centerHours: d.centerHours ?? null,
+                centerPhone: d.centerPhone ?? null,
               }
             : null)
           // ⚠️ סימון שהנתונים *נטענו* — כדי להבחין בין "עדיין טוען" (holiday=null
@@ -3590,9 +3604,21 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
           name: `${holiday.name}${holiday.year ? ` ${holiday.year}` : ''}`,
           registeredAt: holiday.registeredAt,
         })
-      } else if (!holiday.open) {
+      } else if (!holiday.open && !holiday.centersOpen) {
         // ⚠️ הרישום נסגר והמשפחה אינה רשומה — אין לה מה לעשות כאן,
         // אבל היא חייבת לדעת למה.
+        //
+        // 🔴 centersOpen נבדק כאן: "הרישום סגור" ו"בחירת המוקדים סגורה"
+        // הם שני שערים נפרדים, ושלב בחירת המוקד מתרחש *דווקא* אחרי
+        // שהרישום נסגר. בדיקת holiday.open לבדה הראתה "הרישום סגור כעת"
+        // למשפחות בזמן שבחירת המוקדים הייתה פתוחה לרווחה — כלומר חסמה
+        // את המסך בדיוק בשלב שבו הן נדרשו לפעול.
+        setHolidayModal({ mode: 'closed', name: `${holiday.name}${holiday.year ? ` ${holiday.year}` : ''}` })
+      } else if (!holiday.open) {
+        // ⚠️ הרישום סגור אך בחירת המוקדים פתוחה, והמשפחה אינה רשומה.
+        // אסור להציג "להגשת בקשת רישום" — הרישום סגור והכפתור ייכשל;
+        // ואסור להציג "הרישום סגור" בלבד, כי זה מסתיר שהשלב הפעיל הוא
+        // בחירת המוקד. לכן: מצב סגור, עם הסבר שמפריד בין השניים.
         setHolidayModal({ mode: 'closed', name: `${holiday.name}${holiday.year ? ` ${holiday.year}` : ''}` })
       } else {
         // פופאפ מלא — הזמנה להירשם לחלוקה הפתוחה, עם כפתור
@@ -7241,7 +7267,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               <p className="mt-2 text-sm font-bold text-indigo-700">{centerConfirm.label}</p>
               <p className="mt-3 text-[13px] leading-relaxed text-slate-600">
                 לאחר האישור <strong>לא ניתן לשנות</strong> את המוקד,
-                ולא ניתן לקבל את החבילה בשום מוקד אחר.
+                ולא ניתן לקבל את הכרטיס בשום מוקד אחר.
               </p>
               <div className="mt-5 flex flex-col gap-2">
                 <button type="button" disabled={centerSaving} onClick={() => void saveCenter()}
@@ -7268,9 +7294,19 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               </div>
               <h2 className="text-xl font-extrabold text-slate-900">הבחירה התקבלה!</h2>
               <p className="mt-2 text-sm font-bold text-teal-700">{centerDone}</p>
+              {/* 🔴 האזהרה על השעות היא עיקר ההודעה ולא הערת שוליים:
+                  המוקדים הם משפחות שפתחו את ביתן בהתנדבות, והגעה בשעה
+                  שלא צוינה מטילה עליהן טורח שאין להן דרך להתמודד איתו.
+                  ⚠️ הוסרה ההבטחה ל"שובר" — אין שוברים בשלב זה, וההבטחה
+                  שלחה משפחות לחפש מסמך שלא יגיע. */}
               <p className="mt-3 text-[13.5px] leading-relaxed text-slate-600">
-                מוקד האיסוף שלכם נשמר במערכת. בהמשך יישלח אליכם השובר
-                לאיסוף החבילה מהמוקד שבחרתם.
+                בעזרת השם תקבלו עדכון מסודר במייל ובטלפון על השעות והמיקום
+                המדויק של המוקד.
+              </p>
+              <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2.5 text-[13px] font-semibold leading-relaxed text-amber-900">
+                שימו לב! אין לבוא בשום אופן בשעות וימים אחרים כפי שיצוין
+                בהודעה — זה גורם עגמת נפש וטרחה למשפחות המוקדים שפתחו את
+                ביתם בהתנדבות!
               </p>
               <button type="button" onClick={() => setCenterDone(null)}
                 className="mt-5 w-full rounded-2xl bg-gradient-to-b from-teal-500 to-teal-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition-all hover:from-teal-600 hover:to-teal-700 active:scale-[0.98]">
@@ -7323,6 +7359,49 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   {/* ⚠️ נאמר במפורש שהבחירה סופית — כדי שלא ינסו לשנות
                       ויתאכזבו, ולא יגיעו למוקד אחר. */}
                   <p className="mt-1 text-[11px] text-teal-700">הבחירה סופית ואינה ניתנת לשינוי</p>
+
+                  {/* ── שער האיסוף פתוח: הכתובת המדויקת והשעות ── */}
+                  {holiday?.pickupOpen && (holiday.centerAddress || holiday.centerHours) && (
+                    <div className="mt-2.5 border-t border-teal-200 pt-2.5">
+                      {holiday.centerAddress && (
+                        <p className="text-[12.5px] font-bold text-teal-900">
+                          📍 {holiday.centerAddress}
+                        </p>
+                      )}
+                      {holiday.centerHours && (
+                        <p className="mt-0.5 text-[12.5px] font-extrabold text-teal-900">
+                          🕐 {holiday.centerHours}
+                        </p>
+                      )}
+                      {holiday.centerPhone && (
+                        <p className="mt-0.5 text-[11.5px] text-teal-700" dir="ltr">
+                          ☎ {holiday.centerPhone}
+                        </p>
+                      )}
+                      {holiday.pickupNote && (
+                        <p className="mt-1.5 text-[11.5px] leading-relaxed text-teal-800">
+                          {holiday.pickupNote}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── האיסוף טרם נפתח ──
+                  🔴 המשפחה יודעת לאן, אבל לא מתי. בלי אמירה מפורשת היא
+                  מניחה שאפשר לבוא כבר עכשיו — ומגיעה לבית פרטי של מתנדב
+                  שבועיים לפני שהכרטיסים הוטענו. */}
+              {holidayModal.mode === 'already' && holiday?.centerName && !holiday?.pickupOpen && (
+                <div className="mb-4 rounded-2xl border-2 border-amber-200 bg-amber-50 px-4 py-3 text-right">
+                  <p className="text-[12.5px] leading-relaxed text-amber-900">
+                    שימו לב, כשהמוקד ייפתח תקבלו עדכון מסודר בטלפון ובמייל,
+                    ותוכלו גם להיכנס לכאן ולראות את המיקום המדויק והשעות של המוקד.
+                  </p>
+                  <p className="mt-1.5 text-[12.5px] font-bold leading-relaxed text-amber-900">
+                    אין לבוא בשום אופן בשעות וימים אחרים — זה גורם עגמת נפש
+                    וטרחה למשפחות המוקדים שפתחו את ביתם בהתנדבות!
+                  </p>
                 </div>
               )}
 
@@ -7334,7 +7413,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     בחירת מוקד האיסוף
                   </button>
                   <p className="mt-1.5 text-[11px] text-slate-500">
-                    יש לבחור את המוקד שממנו תאספו את החבילה
+                    יש לבחור את המוקד שממנו תאספו את הכרטיס
                   </p>
                 </div>
               )}
@@ -7347,15 +7426,31 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   הורדת השובר להדפסה
                 </a>
               )}
+              {/* ⚠️ הפסקה כולה מותנית: מחרוזת ריקה בתוך <p> משאירה רווח
+                  תחתון (mb-5) שמנתק את הכפתור משאר החלונית. */}
+              {/* ⚠️ הפסקה יורדת בשני מצבים, ומאותה סיבה: היא סותרת את מה
+                  שמוצג מעליה.
+                  · טרם נבחר מוקד ובחירה פתוחה → "אין צורך בפעולה" סותר את
+                    כפתור הבחירה ושולח את המשפחה להמתין.
+                  · כבר נבחר מוקד → הכרטיס הירוק כבר אומר הכל, ו"נשלח עדכון
+                    לגבי ההמשך" רק מטשטש אותו. */}
+              {!(holidayModal.mode === 'already'
+                && ((holiday?.centersOpen && !holiday?.centerName) || !!holiday?.centerName)) && (
               <p className="text-[13.5px] leading-relaxed text-slate-600 mb-5">
                 {holidayModal.mode === 'created'
                   ? 'הבקשה שלכם לחלוקה נקלטה בהצלחה. נשלח לכם עדכון מסודר לגבי ההמשך. אין צורך בפעולה נוספת.'
                   : holidayModal.mode === 'invite'
                   ? 'משפחתכם מוזמנת להירשם לחלוקה זו. לחצו על הכפתור להגשת בקשת הרישום — לאחר מכן יישלח אליכם עדכון בהמשך.'
                   : holidayModal.mode === 'closed'
-                  ? 'הרישום לחלוקת החגים אינו פתוח כעת. כשייפתח נעדכן אתכם. נשמח לעמוד לרשותכם במועד הרישום.'
+                  // ⚠️ שתי הודעות ולא אחת: כשבחירת המוקדים פתוחה, "הרישום
+                  // סגור, נעדכן אתכם" הוא מידע *שגוי* — הוא שולח את המשפחה
+                  // להמתין בזמן שהשלב הפעיל דורש ממנה לפעול עכשיו.
+                  ? (holiday?.centersOpen
+                    ? 'הרישום לחלוקה נסגר, ובשלב זה נבחרים מוקדי האיסוף. רישומכם לא נמצא במערכת — אם נרשמתם ואתם רואים הודעה זו, אנא פנו אלינו.'
+                    : 'הרישום לחלוקת החגים אינו פתוח כעת. כשייפתח נעדכן אתכם. נשמח לעמוד לרשותכם במועד הרישום.')
                   : 'הרישום שלכם לחלוקה זו כבר התקבל במערכת. נשלח לכם עדכון מסודר לגבי ההמשך.'}
               </p>
+              )}
               {holidayModal.mode === 'invite' ? (
                 <div className="flex flex-col gap-2">
                   <button type="button" disabled={holidaySaving}

@@ -1,7 +1,8 @@
 import { guardAdminPage } from '@/lib/pageGuard'
 import { redirect } from 'next/navigation'
-import { Bell, Database, Users, UserPlus, GitBranch, Home, FileText, MapPin, Mail, CreditCard, Banknote, Phone, ScrollText, HardDriveDownload, MailWarning, Inbox, Sparkles, Package, Wrench, Gift, CalendarClock , ShieldCheck } from 'lucide-react'
+import { Bell, Database, Users, UserPlus, GitBranch, Home, FileText, MapPin, Mail, CreditCard, Banknote, Phone, HardDriveDownload, MailWarning, Inbox, Sparkles, Package, Wrench, Gift, CalendarClock , ShieldCheck } from 'lucide-react'
 import Collapsible from '@/components/ui/Collapsible'
+import SettingsSearch from './SettingsSearch'
 import PageHeader from '@/components/ui/PageHeader'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Profile, ROLE_LABELS } from '@/types'
@@ -22,9 +23,6 @@ import NedarimHolidaySettings from './NedarimHolidaySettings'
 import LoansPortalSettings from './LoansPortalSettings'
 import DistributionsShareSettings from './DistributionsShareSettings'
 import ElevenLabsStudio from './ElevenLabsStudio'
-import YemotCallLog from './YemotCallLog'
-import PhoneSystemPanel from './PhoneSystemPanel'
-import RegistrationCallSettings from './RegistrationCallSettings'
 import BackupSettings from './BackupSettings'
 import DailyDigestSettings from './DailyDigestSettings'
 import OtpRolloutSettings from './OtpRolloutSettings'
@@ -102,6 +100,10 @@ export default async function SettingsPage() {
   return (
     <div className="flex flex-col gap-6 max-w-5xl">
       <PageHeader title="הגדרות" subtitle="ניהול המערכת והמשתמשים" />
+
+      {/* 🔴 חיפוש על 36 המקטעים — ראו SettingsSearch. בלעדיו המנהל סורק
+          את כל הכותרות בעין ומנחש באיזו מהן ההגדרה יושבת. */}
+      <SettingsSearch />
 
       <div className="flex flex-col gap-3">
         {/* Supabase connection */}
@@ -264,12 +266,23 @@ export default async function SettingsPage() {
           <DistributionsShareSettings />
         </Collapsible>
 
-        {/* ── המערכת הטלפונית — מרכז אחד ──────────────────────────────────
-            🔴 קודם היו כאן שני מסכי הקלטות נפרדים, בלי שום מקום שמראה
-            אילו שלוחות קיימות ומה כל אחת עושה. הפאנל מאחד את שניהם עם
-            עץ הזרימה, כתובות ה-webhook ומשתני הסביבה. */}
+        {/* ── המערכת הטלפונית — עברה למסך משלה ────────────────────────────
+            🔴 הפאנל שישב כאן הוסר, ולא הוקטן: הוא הציג בונה שלוחות שני,
+            מקביל לזה שב-/admin/phone. שני מסכים שנראים זהים ורק אחד מהם
+            מתוחזק — המנהל ערך במסך המת ולא הבין למה שום דבר לא השתנה.
+            ⚠️ נשארת הפניה ולא הסרה שקטה: מי שהתרגל להיכנס לכאן חייב
+            לדעת לאן ללכת, אחרת הוא מחפש מסך שנעלם. */}
         <Collapsible title="מערכת טלפונית (ימות המשיח)" icon={<Phone size={16} className="text-teal-500" />}>
-          <PhoneSystemPanel />
+          <div className="flex flex-col gap-3 rounded-2xl border border-teal-200 bg-teal-50/40 p-4">
+            <p className="text-[13px] leading-relaxed text-teal-900">
+              ניהול המערכת הטלפונית עבר למסך ייעודי: השלוחות, ההודעות, ההקלטות,
+              יומן השיחות והחיבור לימות — הכל במקום אחד.
+            </p>
+            <a href="/admin/phone"
+              className="inline-flex w-fit items-center gap-1.5 rounded-xl bg-teal-600 px-4 py-2 text-xs font-extrabold text-white hover:bg-teal-700">
+              <Phone size={13} /> מעבר למערכת הטלפונית
+            </a>
+          </div>
         </Collapsible>
 
         {/* אולפן ElevenLabs — יצירת קול מטקסט חופשי, בלי שיוך */}
@@ -310,15 +323,9 @@ export default async function SettingsPage() {
           <BackupSettings />
         </Collapsible>
 
-        {/* Registration call announcement (editable text + ElevenLabs preview) */}
-        <Collapsible title="הקלטת הודעת רישום (שיחה יוצאת)" icon={<Phone size={16} className="text-teal-500" />}>
-          <RegistrationCallSettings />
-        </Collapsible>
-
-        {/* Yemot telephony log */}
-        <Collapsible title="יומן שיחות ימות" icon={<ScrollText size={16} className="text-teal-500" />}>
-          <YemotCallLog />
-        </Collapsible>
+        {/* ⚠️ הקלטת הודעת הרישום ויומן השיחות הוסרו מכאן — שניהם מוצגים
+            ב-/admin/phone (השלוחה "הודעה כללית" והטאב "יומן שיחות").
+            אלה היו *אותם רכיבים* בשני נתיבים, ולכן לא היה לזה מקור אמת. */}
 
         {/* Public registration gate */}
         <Collapsible title="הרשמה ציבורית" icon={<UserPlus size={16} className="text-indigo-500" />}>

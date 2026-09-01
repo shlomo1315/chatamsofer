@@ -35,6 +35,37 @@ export async function uploadFileToYemot(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// מחיקת קובץ מימות.
+//
+// 🔴 למה זה נדרש: שמות הקבצים כוללים חותמת זמן (כדי לעקוף את מטמון
+// ימות — ראו generate-voice), ולכן כל יצירה מחדש משאירה את הקובץ הקודם
+// בתיקייה. בלי ניקוי, תיקיית השלוחה מתמלאת בעשרות הקלטות נטושות ואי
+// אפשר לדעת איזו מהן פעילה.
+//
+// ⚠️ כישלון מחיקה *אינו* מפיל את הפעולה: הקובץ החדש כבר הועלה ונשמר,
+// והשיחה תשמיע אותו כראוי. קובץ יתום הוא אי-נוחות, לא תקלה.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function deleteFileFromYemot(
+  path: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const token = process.env.YEMOT_TOKEN
+  if (!token) return { ok: false, error: 'YEMOT_TOKEN אינו מוגדר בשרת' }
+
+  try {
+    const url = `${YEMOT_API}/FileAction?token=${encodeURIComponent(token)}`
+      + `&action=delete&path=${encodeURIComponent(path)}`
+    const res = await fetch(url)
+    const json = await res.json().catch(() => null)
+    if (!json || json.responseStatus !== 'OK') {
+      return { ok: false, error: json ? JSON.stringify(json) : `HTTP ${res.status}` }
+    }
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // יצירת שלוחה בימות אוטומטית.
 //
 // 🔴 המנהל אינו נוגע בימות. הוא בוחר "תא קולי" במסך שלנו, ממלא כתובת

@@ -20,12 +20,18 @@ export async function GET(_request: NextRequest, ctx: { params: Promise<{ id: st
 
   const { id } = await ctx.params
   const { data } = await db.from('distributions')
-    .select('centers_open, centers_deadline').eq('id', id).maybeSingle()
-  const row = data as { centers_open?: boolean; centers_deadline?: string | null } | null
+    .select('centers_open, centers_deadline, pickup_open, pickup_note').eq('id', id).maybeSingle()
+  const row = data as {
+    centers_open?: boolean; centers_deadline?: string | null
+    pickup_open?: boolean; pickup_note?: string | null
+  } | null
   const dl = deadlineState(row?.centers_deadline ?? null)
   return NextResponse.json({
     centers_open: !!row?.centers_open,
     centers_deadline: row?.centers_deadline ?? null,
+    // 🔴 שער האיסוף — שער שלישי ונפרד. ראו המיגרציה 20260901_pickup_open.
+    pickup_open: !!row?.pickup_open,
+    pickup_note: row?.pickup_note ?? null,
     // ⚠️ הספירה מחושבת בשרת: שעון הדפדפן עלול להיות מוסט, והמנהל
     // היה רואה מספר אחר ממה שהמשפחות שומעות בטלפון.
     ms_left: dl.msLeft,
@@ -45,11 +51,19 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     centers_open?: boolean
     /** ⚠️ undefined = לא נגענו במועד. null = הסרת המועד. */
     centers_deadline?: string | null
+    /** 🔴 שער האיסוף — נפרד לחלוטין משער הבחירה. */
+    pickup_open?: boolean
+    pickup_note?: string | null
   }
 
   const patch: Record<string, unknown> = {}
 
   if (body.centers_open !== undefined) patch.centers_open = !!body.centers_open
+  if (body.pickup_open !== undefined) patch.pickup_open = !!body.pickup_open
+  // ⚠️ מחרוזת ריקה נשמרת כ-null: "מחקתי את ההודעה" חייב למחוק אותה.
+  if (body.pickup_note !== undefined) {
+    patch.pickup_note = String(body.pickup_note ?? '').trim() || null
+  }
 
   // ⚠️ המועד מטופל בנפרד מהמתג: שמירת המתג אינה אמורה למחוק מועד
   // שהוגדר, ולהפך. הבחנה בין undefined ל-null היא כל ההבדל.

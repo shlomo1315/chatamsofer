@@ -66,7 +66,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: speech.error ?? 'יצירת הקול נכשלה' }, { status: 502 })
   }
 
-  const baseName = `ivr_${safeName(nodeId)}_${field}`
+  // 🔴 חותמת בשם הקובץ — ראו ההסבר המלא ב-yemot-holiday/generate-voice.
+  // שם קבוע גרם לימות לנגן את ההקלטה הישנה אחרי כל עריכה, בלי שום סימן.
+  const baseName = `ivr_${safeName(nodeId)}_${field}_${Date.now().toString(36)}`
   const path = `ivr2:/${IVR_EXT}/${baseName}.mp3`
   const up = await uploadFileToYemot(
     path, new Blob([speech.audio as BlobPart], { type: 'audio/mpeg' }), `${baseName}.mp3`)

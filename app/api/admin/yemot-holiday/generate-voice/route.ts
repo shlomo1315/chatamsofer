@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
-import { uploadFileToYemot, yemotConfigured } from '@/lib/yemot'
+import { uploadFileToYemot, deleteFileFromYemot, yemotConfigured } from '@/lib/yemot'
 import { generateSpeech } from '@/lib/elevenTts'
 import { setHolidayMessageAudio, HOLIDAY_MESSAGE_META, getHolidayMessages } from '@/lib/yemotHolidayMessages'
 
@@ -27,7 +27,21 @@ async function generateOne(key: string, text: string): Promise<{ ok: true; audio
   const speech = await generateSpeech(text)
   if (!speech.ok || !speech.audio) return { ok: false, error: speech.error ?? 'יצירת הקול נכשלה' }
 
-  const baseName = `tts_${key}`
+  // ⚠️ הקובץ הקודם נקרא *לפני* השמירה, אחרת שמו כבר נדרס ולא נדע מה למחוק.
+  const prevAudio = (await getHolidayMessages())[key]?.audio ?? null
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 שם ייחודי לכל גרסה — ולא `tts_<key>` קבוע.
+  //
+  // ⚠️ זה היה באג שקט וקשה לאבחון: השם הקבוע גרם לכל יצירה מחדש לדרוס
+  // את אותו נתיב בימות, וימות המשיכה לנגן את הגרסה שבמטמון שלה. המנהל
+  // ערך את הטקסט, לחץ "יצירת קול טבעי", קיבל "נשמר בהצלחה" — ובטלפון
+  // נשמעה ההקלטה הישנה. אין שום סימן לתקלה בשום מסך.
+  //
+  // ⚠️ החותמת חייבת להיות בשם הקובץ ולא בפרמטר שאילתה: ימות מנגנת קובץ
+  // מהתיקייה שלה לפי שם, ואין שם שכבת HTTP שאפשר לעקוף בה מטמון.
+  // ─────────────────────────────────────────────────────────────────────────
+  const baseName = `tts_${key}_${Date.now().toString(36)}`
   const path = `ivr2:/${HOLIDAY_EXT}/${baseName}.mp3`
   const blob = new Blob([speech.audio], { type: 'audio/mpeg' })
   const up = await uploadFileToYemot(path, blob, `${baseName}.mp3`)
@@ -35,6 +49,15 @@ async function generateOne(key: string, text: string): Promise<{ ok: true; audio
 
   const saved = await setHolidayMessageAudio(key, baseName)
   if (!saved) return { ok: false, error: 'הקול נוצר אך שמירת ההגדרה נכשלה' }
+
+  // ── ניקוי הקובץ הקודם ──
+  // ⚠️ אחרי השמירה ולא לפניה: אם המחיקה תרוץ קודם וההעלאה תיכשל, השלוחה
+  // תישאר בלי שום קובץ ותשמיע שקט. עדיף קובץ יתום מהודעה אילמת.
+  // ⚠️ best-effort: כישלון מחיקה אינו הופך יצירה מוצלחת לכישלון.
+  if (prevAudio && prevAudio !== baseName) {
+    const gone = await deleteFileFromYemot(`ivr2:/${HOLIDAY_EXT}/${prevAudio}.mp3`)
+    if (!gone.ok) console.warn(`[yemot-holiday] מחיקת הקובץ הקודם נכשלה (${prevAudio}): ${gone.error}`)
+  }
   return { ok: true, audio: baseName }
 }
 

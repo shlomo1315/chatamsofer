@@ -12,6 +12,7 @@ import { SOURCE_LABEL, type RegisterSource } from '@/lib/distributionSources'
 import { downloadXlsx, type XlsxColumn } from '@/lib/downloadXlsx'
 import type { ApprovalStatus } from '@/lib/holidayCards'
 import HolidayRecipientsTable, { type HolidayRow } from './HolidayRecipientsTable'
+import { type CenterOption } from './CenterCellEditor'
 import VoucherAfterLoadDialog from './VoucherAfterLoadDialog'
 import { scopeBulkLoad, scopeBulkVoucher } from '@/lib/holidayBulkScope'
 import type { ApprovalLabel } from '@/types'
@@ -20,6 +21,7 @@ import Pagination from '@/components/ui/Pagination'
 import { useTablePagination } from '@/lib/useTablePagination'
 import CityBreakdown from './CityBreakdown'
 import HolidayToolsTabs from './HolidayToolsTabs'
+import GatesPanel from './GatesPanel'
 
 export interface RegistrationRow {
   id: string
@@ -164,11 +166,55 @@ export default function HolidayRegistrations({
   // ⚠️ מיזוג לפי מזהה: אחרי router.refresh העמוד הראשון מגיע מעודכן
   // מהשרת, והוא מנצח את העותק הישן שנצבר ברקע — כך שעדכון סטטוס
   // נראה מיד. בלי זה שורה שנטענה ברקע הייתה מסתירה את הגרסה החדשה.
+  // 🔴 שיוכי מוקד שנעשו כאן — נדרסים מעל השורות מהשרת.
+  //
+  // ⚠️ שכבה מקומית ולא router.refresh: רענון על 6,000 שורות אחרי כל
+  // שיוך בודד הוא בדיוק העומס שהדפדוף בא למנוע, והוא היה גם מאבד את
+  // מיקום הגלילה של מי שמשייך עשרות שורות ברצף.
+  const [centerOverrides, setCenterOverrides] = useState<Record<string, {
+    center_id: string | null; center_name: string | null; center_source: string | null
+  }>>({})
+
+  // ── המוקדים הפתוחים בחלוקה — לבורר השיוך הידני שבתא ──
+  // ⚠️ נטענים פעם אחת ברמת המסך ומועברים לטבלה, ולא לכל שורה בנפרד.
+  const [centerOptions, setCenterOptions] = useState<CenterOption[]>([])
+  useEffect(() => {
+    if (!canEdit) return
+    let alive = true
+    void fetch(`/api/admin/holiday-centers?distribution_id=${encodeURIComponent(distributionId)}`,
+      { cache: 'no-store' })
+      .then(r => r.json())
+      .then((d: {
+        centers?: { id: string; city: string | null; name: string | null; capacity: number | null; is_active?: boolean }[]
+        counts?: Record<string, number>
+        openIds?: string[]
+      }) => {
+        if (!alive) return
+        // ⚠️ רק המוקדים שנפתחו *בחלוקה הזו*: שיוך למוקד שאינו פתוח בה
+        // היה שולח משפחה למקום שלא מחלק בחג הנוכחי.
+        const open = new Set(d.openIds ?? [])
+        setCenterOptions((d.centers ?? [])
+          .filter(c => open.has(c.id) && c.is_active !== false)
+          .map(c => ({
+            id: c.id, city: c.city, name: c.name,
+            full: c.capacity != null && (d.counts?.[c.id] ?? 0) >= c.capacity,
+          })))
+      })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [canEdit, distributionId])
+
   const allRows = useMemo(() => {
-    if (!extraRows.length) return rows
-    const seen = new Set(rows.map(r => r.id))
-    return [...rows, ...extraRows.filter(r => !seen.has(r.id))]
-  }, [rows, extraRows])
+    const base = extraRows.length
+      ? (() => {
+          const seen = new Set(rows.map(r => r.id))
+          return [...rows, ...extraRows.filter(r => !seen.has(r.id))]
+        })()
+      : rows
+    const keys = Object.keys(centerOverrides)
+    if (!keys.length) return base
+    return base.map(r => (centerOverrides[r.id] ? { ...r, ...centerOverrides[r.id] } : r))
+  }, [rows, extraRows, centerOverrides])
 
   useEffect(() => {
     // ⚠️ פחות מ-250 = כל הרשימה כבר כאן, אין מה להשלים.
@@ -623,6 +669,17 @@ export default function HolidayRegistrations({
 
   return (
     <div className="flex flex-col gap-5">
+      {/* ── לוח השערים ──
+          🔴 ראשון במסך בכוונה: "מה פתוח כרגע" היא השאלה שנשאלת לפני כל
+          פעולה אחרת, וקודם התשובה הייתה מפוזרת בין כרטיס לטאב נסתר. */}
+      <GatesPanel
+        distributionId={distributionId}
+        registrationOpen={registrationOpen}
+        onToggleRegistration={() => void toggleRegistration()}
+        registrationBusy={toggling}
+        canEdit={canEdit}
+      />
+
       {/* ── מונים חיים: נרשמים וצפי תקציבי ── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <div className="rounded-2xl border-2 border-indigo-200 bg-indigo-50 p-5">
@@ -685,18 +742,14 @@ export default function HolidayRegistrations({
             })}
           </div>
         </div>
-        <div className={`rounded-2xl border-2 p-5 ${registrationOpen ? 'border-green-300 bg-green-50' : 'border-slate-200 bg-slate-50'}`}>
-          <p className="text-xs font-bold text-slate-500 mb-1">מצב הרישום</p>
-          <p className={`text-lg font-extrabold ${registrationOpen ? 'text-green-700' : 'text-slate-600'}`}>
-            {registrationOpen ? '🟢 פתוח לרישום' : '⚪ סגור'}
+        {/* ⚠️ שער הרישום עבר ל-GatesPanel (מוצג מעל הכרטיסים) יחד עם שער
+            בחירת המוקדים והמועד — שני השערים חייבים להיראות זה לצד זה.
+            כאן נותר רק הכיבוי המוחלט, שהוא פעולת סוף-תהליך ולא שער. */}
+        <div className="rounded-2xl border-2 border-slate-200 bg-slate-50 p-5">
+          <p className="text-xs font-bold text-slate-500 mb-1">כיבוי החלוקה</p>
+          <p className="text-[11px] leading-relaxed text-slate-500">
+            מסתיר את החלוקה מכל הערוצים. השערים עצמם מנוהלים בלוח שלמעלה.
           </p>
-          {canEdit && (
-            <button type="button" onClick={toggleRegistration} disabled={toggling}
-              className={`mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-white transition ${registrationOpen ? 'bg-slate-600 hover:bg-slate-700' : 'bg-green-600 hover:bg-green-700'} disabled:opacity-50`}>
-              {toggling && <Loader2 size={13} className="animate-spin" />}
-              {registrationOpen ? 'סגור את הרישום' : 'פתח את הרישום'}
-            </button>
-          )}
 
           {/* ── כיבוי מוחלט ──
               🔴 נפרד מסגירת הרישום: אחרי הסגירה החלוקה ממשיכה — בוחרים
@@ -920,6 +973,9 @@ export default function HolidayRegistrations({
           controls={{
             canEdit, selected, toggleRow, allShownSelected, toggleAllShown,
             busyId, setApprovalFor, clearCard, loadCard, loadingId, showMessage: true,
+            centerOptions,
+            onCenterAssigned: (id, next) =>
+              setCenterOverrides(prev => ({ ...prev, [id]: next })),
           }}
         />
       </div>

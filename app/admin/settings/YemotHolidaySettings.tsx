@@ -136,6 +136,9 @@ export default function YemotHolidaySettings() {
 
   const save = async () => {
     setSaving(true); setSavedOk(false)
+    // ⚠️ מחושב כאן ולא נלקח מ-dirtyKeys שלמטה: הוא נגזר מ-messages/saved
+    // *לפני* השמירה, וזו בדיוק הרשימה שצריך לחדש לה קול.
+    const changedKeys = dirtyMessageKeys(messages, saved)
     try {
       const res = await fetch('/api/admin/yemot-holiday/messages', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -143,7 +146,44 @@ export default function YemotHolidaySettings() {
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { toast.error(d.error || 'שגיאה בשמירה'); setSaving(false); return }
-      setMessages(d.messages ?? messages); setSaved(d.messages ?? messages)
+      const next: Record<string, Msg> = d.messages ?? messages
+      setMessages(next); setSaved(next)
+
+      // ─────────────────────────────────────────────────────────────────────
+      // 🔴 חידוש הקול אוטומטית — "שמרתי" חייב להיות גם "זה מה שיישמע".
+      //
+      // ⚠️ הבאג שזה פותר: הודעה עם הקלטה משמיעה את *הקובץ*, לא את הטקסט.
+      // מי שערך טקסט ושמר קיבל "✓ נשמר" ובטלפון נשמעה ההקלטה הישנה —
+      // בלי שום סימן לכך בשום מסך.
+      //
+      // ⚠️ רק הודעות שכבר יש להן קול: יצירה להודעה שהמנהל בחר להשאיר
+      // כהקראת טקסט הייתה משנה את התנהגותה בלי שביקש.
+      // ⚠️ ורק אלה שהטקסט שלהן באמת השתנה — אחרת כל שמירה הייתה מייצרת
+      // מחדש עשרות קבצים ומבזבזת מכסת ElevenLabs.
+      // ─────────────────────────────────────────────────────────────────────
+      const needVoice = changedKeys.filter(k => next[k]?.audio)
+      if (needVoice.length) {
+        // ⚠️ info ולא loading: ל-Toast של המערכת אין מצב טעינה שאפשר לסגור.
+        // המשוב הסופי מגיע בסיום הלולאה.
+        toast.info(`מחדש קול ל-${needVoice.length} הודעות…`)
+        let failed = 0
+        let latest = next
+        for (const key of needVoice) {
+          try {
+            const vr = await fetch('/api/admin/yemot-holiday/generate-voice', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key, text: next[key]?.text ?? '' }),
+            })
+            const vd = await vr.json().catch(() => ({}))
+            if (!vr.ok) { failed++; continue }
+            if (vd.messages) latest = vd.messages
+          } catch { failed++ }
+        }
+        setMessages(latest); setSaved(latest)
+        if (failed) toast.error(`הטקסט נשמר, אך יצירת הקול נכשלה ב-${failed} הודעות`)
+        else toast.success('נשמר — והקול חודש בהתאם')
+      }
+
       setSavedOk(true)
       setTimeout(() => setSavedOk(false), 2500)
     } catch { toast.error('שגיאת רשת') }
