@@ -489,19 +489,70 @@ export default function IvrBuilder() {
                             והתלבט בניסוחו לשווא. */}
                         <span className="text-[11px] text-slate-400">לשימוש פנימי — אינו נשמע למתקשר.</span>
                       </label>
+                      {/* ─────────────────────────────────────────────────
+                          🔴 בורר אחד לכל 30 הסוגים.
+
+                          ⚠️ קודם היו שני שלבים: רשימה של 7 סוגים בסיסיים,
+                          שהאחרון בה נקרא "סוג אחר מימות (מתקדם)" — ורק
+                          מתוכו נפתחה רשימת 23 סוגי ימות. כלומר תא קולי,
+                          פילטר שעות, תור המתנה וזמני היום היו קיימים
+                          במלואם בקוד, אבל מי שלא ידע לפתוח את האפשרות
+                          האחרונה לא ידע שהם קיימים בכלל.
+
+                          ⚠️ הערך המשולב: סוג בסיסי נשמר כ-type, וסוג ימות
+                          נשמר כ-type='raw' + yemotType. הפיצול נשאר
+                          במודל כי הוא אמיתי (הבסיסיים מורצים על ידינו,
+                          האחרים על ידי ימות) — אבל הוא אינו עניינו של
+                          המנהל, ולכן אינו מופיע במסך. */}
                       <label className="flex flex-col gap-1">
                         <span className="text-xs font-semibold text-slate-600">מה קורה בשלוחה</span>
-                        <select value={node.type}
-                          onChange={e => patch(node.id, { type: e.target.value as IvrNodeType })}
+                        <select value={node.type === 'raw' ? `y:${node.yemotType ?? ''}` : node.type}
+                          onChange={e => {
+                            const v = e.target.value
+                            if (v.startsWith('y:')) {
+                              const key = v.slice(2)
+                              patch(node.id, {
+                                type: 'raw',
+                                yemotType: key || undefined,
+                                // ⚠️ מעבר בין המצבים מנקה את השני: פקודה
+                                // שנשארה מאחור הייתה רצה במקום הבחירה.
+                                rawCommand: key ? undefined : node.rawCommand,
+                              })
+                            } else {
+                              patch(node.id, {
+                                type: v as IvrNodeType,
+                                yemotType: undefined, rawCommand: undefined,
+                              })
+                            }
+                          }}
                           className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm">
-                          {TYPE_ORDER.map(t => (
-                            <option key={t} value={t}>{data.typeLabels[t]}</option>
+                          <optgroup label="בסיסי">
+                            {TYPE_ORDER.filter(t => t !== 'raw').map(t => (
+                              <option key={t} value={t}>{data.typeLabels[t]}</option>
+                            ))}
+                          </optgroup>
+                          {yemotTypeGroups().map(g => (
+                            <optgroup key={g.group} label={g.group}>
+                              {g.types.map(t => (
+                                <option key={t.key} value={`y:${t.key}`}>{t.label}</option>
+                              ))}
+                            </optgroup>
                           ))}
+                          {/* ⚠️ אחרון ובמכוון: הדלת לכל סוג שימות יוסיפו,
+                              אבל שורה שגויה כאן יוצרת שלוחה אילמת. */}
+                          <optgroup label="מתקדם">
+                            <option value="y:">פקודה חופשית של ימות</option>
+                          </optgroup>
                         </select>
                       </label>
                     </div>
                     <p className="flex items-start gap-1.5 rounded-lg bg-slate-50 px-2.5 py-2 text-[11.5px] leading-relaxed text-slate-600">
-                      <Info size={12} className="mt-0.5 shrink-0 text-slate-400" /> {data.typeHints[node.type]}
+                      <Info size={12} className="mt-0.5 shrink-0 text-slate-400" />
+                      {node.type === 'raw'
+                        ? (node.yemotType
+                            ? (yemotTypeByKey(node.yemotType)?.what ?? data.typeHints.raw)
+                            : data.typeHints.raw)
+                        : data.typeHints[node.type]}
                     </p>
                   </Section>
 
@@ -632,32 +683,16 @@ export default function IvrBuilder() {
 
                       ⚠️ ימות היא שמריצה את הסוג; אנחנו רק שולחים
                       אליה את המתקשר. לכן חובה לומר במפורש מה צריך
-                      להגדיר שם — שלוחה שלא הוגדרה תשמיע שקט. */}
+                      להגדיר שם — שלוחה שלא הוגדרה תשמיע שקט.
+
+                      ⚠️ הבורר עצמו עלה למעלה ("מה קורה בשלוחה") — כאן
+                      נשארו רק ההגדרות של הסוג שנבחר. בורר שני באותו מסך
+                      הראה את אותה רשימה פעמיים, ושינוי באחד לא השתקף
+                      בשני עד רינדור מחדש. */}
                   {node.type === 'raw' && (
-                    <Section title="סוג השלוחה בימות"
+                    <Section title="הגדרות הסוג"
                       hint="השלוחה תיווצר בימות אוטומטית בשמירה.">
                     <div className="flex flex-col gap-2.5">
-                      <label className="flex flex-col gap-1">
-                        <span className="text-xs font-semibold text-slate-600">מה השלוחה עושה</span>
-                        <select value={node.yemotType ?? ''}
-                          onChange={e => patch(node.id, {
-                            yemotType: e.target.value || undefined,
-                            // ⚠️ מעבר בין המצבים מנקה את השני: פקודה
-                            // שנשארה מאחור הייתה רצה במקום הבחירה.
-                            rawCommand: e.target.value ? undefined : node.rawCommand,
-                          })}
-                          className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm">
-                          <option value="">— פקודה חופשית (למתקדמים) —</option>
-                          {yemotTypeGroups().map(g => (
-                            <optgroup key={g.group} label={g.group}>
-                              {g.types.map(t => (
-                                <option key={t.key} value={t.key}>{t.label}</option>
-                              ))}
-                            </optgroup>
-                          ))}
-                        </select>
-                      </label>
-
                       {node.yemotType ? (() => {
                         const def = yemotTypeByKey(node.yemotType)
                         return (
