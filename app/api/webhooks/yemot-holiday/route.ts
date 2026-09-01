@@ -34,6 +34,7 @@ import { getOpenDistribution, registerToOpenDistribution } from '@/lib/holidayDi
 import { getHolidayMessages, type HolidayMessages } from '@/lib/yemotHolidayMessages'
 import { digitsOnly, idOrFilter, sameId } from '@/lib/idLookup'
 import { centerLabel, type CenterRow } from '@/lib/holidayCenterPick'
+import { runLoadBatch } from '@/lib/holidayCardLoad'
 import {
   CENTER_VARS, buildChoiceList, loadOpenCenters, nextCenterStep,
 } from '@/lib/holidayCenterIvr'
@@ -51,6 +52,16 @@ const ID_DIGITS = 9
 const MENU_VAR = 'menu_pick'
 /** ת"ז למסלול המוקדים — נפרד מ-ID_VARS כדי שמסלול אחד לא ידרוס את השני. */
 const CENTER_ID_VARS = ['ctr_id', 'ctr_id2', 'ctr_id3']
+
+// ── מקש 2: חיבור כרטיס נדרים ──
+// ⚠️ משתנים נפרדים לחלוטין ממסלולי הרישום והמוקד: ימות מחזירה בכל בקשה גם
+// את ההקשות הקודמות, ושימוש חוזר במשתנה של מסלול אחר היה גורם למסלול
+// "לדלג" על שלב שהמתקשר מעולם לא ביצע.
+const CARD_ID_VARS = ['crd_id', 'crd_id2', 'crd_id3']
+const CARD_VARS = ['crd_num', 'crd_num2', 'crd_num3']
+const CARD_CONFIRM_VARS = ['crd_ok', 'crd_ok2', 'crd_ok3']
+/** ⚠️ מינימום ספרות בכרטיס נדרים — קצר מזה הוא בוודאות שגיאת הקשה. */
+const CARD_MIN_DIGITS = 8
 
 function safeEqual(a: string, b: string): boolean {
   const ab = Buffer.from(String(a)), bb = Buffer.from(String(b))
@@ -162,6 +173,196 @@ async function findMemberById(idNumber: string): Promise<Member | null> {
  * ⚠️ הכללים עצמם ב-lib/holidayCenterPick ו-lib/holidayCenterIvr, כדי
  * שהטלפון והממשק הדיגיטלי לא ייפרדו זה מזה.
  */
+/**
+ * מסלול 2 — חיבור כרטיס נדרים שהמשפחה קיבלה במוקד.
+ *
+ * 🔴 סדר הפעולות: קודם מוקד, אחר כך כרטיס. הכרטיס נמסר *במוקד*, ולכן מי
+ * שטרם בחר מוקד אין לו כרטיס ביד — ובקשה להקיש מספר הייתה שולחת אותו
+ * לחפש משהו שאינו קיים.
+ *
+ * ⚠️ אינו תלוי בשער הרישום: החיבור מתרחש אחרי שהרישום נסגר ואחרי
+ * שהמוקדים חילקו. בדיקת getOpenDistribution כאן הייתה מנתקת את השיחה.
+ *
+ * ⚠️ אישור הספרות לפני השיוך — כמו בשלוחת היולדות: הקשה שגויה משייכת
+ * כרטיס של משפחה אחרת, וזו טעות שאי אפשר לתקן בטלפון.
+ */
+async function handleCardRoute(
+  params: Record<string, string>,
+  msgs: HolidayMessages,
+  callId: string,
+): Promise<NextResponse> {
+  const db = getServiceClient()
+  if (!db) return yemotText([idMessage(msgToken(msgs, 'failed')), goToFolder('hangup')], callId)
+
+  // ⚠️ החלוקה האחרונה ולא getOpenDistribution — ראו handleCenterRoute.
+  const { data: distRow } = await db.from('distributions')
+    .select('id, amount_per_family, card_expiry, test_mode')
+    .order('created_at', { ascending: false }).limit(1).maybeSingle()
+  const dist = distRow as {
+    id: string; amount_per_family: number | null
+    card_expiry: string | null; test_mode: boolean | null
+  } | null
+  if (!dist) return yemotText([idMessage(msgToken(msgs, 'closed')), goToFolder('hangup')], callId)
+
+  // ── זיהוי ──
+  let attempt = -1
+  for (let i = CARD_ID_VARS.length - 1; i >= 0; i--) {
+    if (String(params[CARD_ID_VARS[i]] ?? '').trim()) { attempt = i; break }
+  }
+  if (attempt < 0) {
+    return yemotText([readTap(CARD_ID_VARS[0], [msgToken(msgs, 'ask_id')], { max: ID_DIGITS, min: 1 })], callId)
+  }
+
+  const typedId = digitsOnly(params[CARD_ID_VARS[attempt]])
+  const hasNextTry = attempt + 1 < CARD_ID_VARS.length
+  if (typedId.length !== ID_DIGITS) {
+    if (hasNextTry) {
+      return yemotText([readTap(CARD_ID_VARS[attempt + 1],
+        [msgToken(msgs, 'id_invalid'), msgToken(msgs, 'ask_id')], { max: ID_DIGITS, min: 1 })], callId)
+    }
+    return yemotText([idMessage(msgToken(msgs, 'id_invalid')), goToFolder('hangup')], callId)
+  }
+
+  const ben = await findMemberById(typedId)
+  if (!ben) {
+    if (hasNextTry) {
+      return yemotText([readTap(CARD_ID_VARS[attempt + 1],
+        [msgToken(msgs, 'not_found'), msgToken(msgs, 'ask_id')], { max: ID_DIGITS, min: 1 })], callId)
+    }
+    return yemotText([idMessage(msgToken(msgs, 'not_found')), goToFolder('hangup')], callId)
+  }
+
+  const { data: recRow } = await db.from('distribution_recipients')
+    .select('id, center_id, approval_status, card_number, load_status')
+    .eq('distribution_id', dist.id).eq('beneficiary_id', ben.id).maybeSingle()
+  const rec = recRow as {
+    id: string; center_id: string | null; approval_status: string | null
+    card_number: string | null; load_status: string | null
+  } | null
+
+  // לא רשום לחלוקה — אין למה לחבר כרטיס.
+  if (!rec) return yemotText([idMessage(msgToken(msgs, 'not_found')), goToFolder('hangup')], callId)
+
+  // ⚠️ ממתין לאישור — ולא "כרטסת שאינה פעילה". ראו ההערה בשער הבחירה.
+  if (rec.approval_status !== 'approved') {
+    return yemotText([idMessage(msgToken(msgs, 'pending_approval')), goToFolder('hangup')], callId)
+  }
+
+  // 🔴 השער האמיתי של המסלול: בלי מוקד אין כרטיס ביד.
+  if (!rec.center_id) {
+    return yemotText([idMessage(msgToken(msgs, 'card_no_center')), goToFolder('hangup')], callId)
+  }
+
+  // ⚠️ כרטיס שכבר חובר — לא מציעים לחבר שוב. חיבור שני היה מחליף כרטיס
+  // שכבר הוטען, כלומר כסף שנשאר על כרטיס שאיש אינו מחזיק.
+  if (rec.card_number) {
+    return yemotText([idMessage(msgToken(msgs, 'card_already')), goToFolder('hangup')], callId)
+  }
+
+  // ── הקשת מספר הכרטיס ──
+  let cAttempt = -1
+  for (let i = CARD_VARS.length - 1; i >= 0; i--) {
+    if (String(params[CARD_VARS[i]] ?? '').trim()) { cAttempt = i; break }
+  }
+  if (cAttempt < 0) {
+    return yemotText([readTap(CARD_VARS[0], [msgToken(msgs, 'card_ask')], { max: '', min: 1 })], callId)
+  }
+
+  const card = digitsOnly(params[CARD_VARS[cAttempt]])
+  const hasNextCard = cAttempt + 1 < CARD_VARS.length
+  if (card.length < CARD_MIN_DIGITS) {
+    if (hasNextCard) {
+      return yemotText([readTap(CARD_VARS[cAttempt + 1],
+        [msgToken(msgs, 'card_invalid'), msgToken(msgs, 'card_ask')], { max: '', min: 1 })], callId)
+    }
+    return yemotText([idMessage(msgToken(msgs, 'card_invalid')), goToFolder('hangup')], callId)
+  }
+
+  // ── אישור הספרות ──
+  // ⚠️ הספרות מוקראות מופרדות בפסיקים — אחרת ימות מקריאה מספר ארוך
+  // כמילה אחת ואי אפשר לאמת אותו באוזן.
+  const confirm = String(params[CARD_CONFIRM_VARS[cAttempt]] ?? '').trim()
+  if (!confirm) {
+    return yemotText([readTap(CARD_CONFIRM_VARS[cAttempt], [
+      msgToken(msgs, 'card_readback', { card: card.split('').join(', ') + ' , ,' }),
+    ], { max: 1, min: 1, allowed: [1, 2] })], callId)
+  }
+
+  // תיקון (2) — מבקשים מספר חדש במשתנה הבא, אחרת קריאה חוזרת של משתנה
+  // מלא יוצרת לולאה אינסופית בימות.
+  if (confirm === '2') {
+    if (hasNextCard) {
+      return yemotText([readTap(CARD_VARS[cAttempt + 1], [msgToken(msgs, 'card_ask')], { max: '', min: 1 })], callId)
+    }
+    return yemotText([idMessage(msgToken(msgs, 'card_invalid')), goToFolder('hangup')], callId)
+  }
+
+  // ── שיוך וטעינה ──
+  // 🔴 אותו מנגנון בדיוק שהמסך הניהולי משתמש בו (runLoadBatch): מימוש
+  // שני היה נפרד ממנו בשקט — מצב בדיקה, תקרת חנויות ותוקף הכרטיס כולם
+  // יושבים שם, ושכפולם היה יוצר שתי התנהגויות שונות לאותה פעולה.
+  const amount = Number(dist.amount_per_family ?? 0)
+  if (!amount) {
+    console.error(`[yemot-holiday] אין סכום לחלוקה ${dist.id} — לא ניתן לטעון`)
+    return yemotText([
+      idMessage(msgToken(msgs, 'card_failed', { reason: 'לא הוגדר סכום לחלוקה' })),
+      goToFolder('hangup'),
+    ], callId)
+  }
+
+  // ⚠️ הכרטיס נשמר *לפני* הטעינה: runLoadBatch קורא אותו מהרשומה.
+  const { error: saveErr } = await db.from('distribution_recipients')
+    .update({ card_number: card, card_linked_at: new Date().toISOString(), card_link_error: null })
+    .eq('id', rec.id).is('card_number', null)
+  if (saveErr) {
+    console.error('[yemot-holiday] שמירת מספר הכרטיס נכשלה:', saveErr.message)
+    return yemotText([
+      idMessage(msgToken(msgs, 'card_failed', { reason: 'שגיאה טכנית בשמירה' })),
+      goToFolder('hangup'),
+    ], callId)
+  }
+
+  try {
+    const summary = await runLoadBatch(db, [{
+      recipientId: rec.id,
+      idNumber: ben.id_number ?? null,
+      name: ben.family_name ?? ben.full_name ?? '',
+      spouseIdNumber: ben.spouse_id_number ?? null,
+      familyName: ben.family_name ?? null,
+      fullName: ben.full_name ?? null,
+    }], amount, { expiryIso: dist.card_expiry, testMode: !!dist.test_mode })
+
+    const bad = summary.outcomes.find(o => !o.ok)
+    if (bad) {
+      // ⚠️ מנקים את מספר הכרטיס: השארתו חוסמת ניסיון חוזר ("כרטיס כבר
+      // מחובר") על כרטיס שלא הוטען — כלומר משפחה בלי כסף ובלי דרך לתקן.
+      await db.from('distribution_recipients')
+        .update({ card_number: null, card_linked_at: null, card_link_error: bad.error ?? 'טעינה נכשלה' })
+        .eq('id', rec.id)
+      console.error(`[yemot-holiday] טעינה נכשלה rec=${rec.id}: ${bad.error}`)
+      // 🔴 הסיבה המדויקת נאמרת למתקשר — "אירעה תקלה" סתמית שולחת
+      // את כולם למשרד, גם את מי שרק הקיש כרטיס של מישהו אחר.
+      return yemotText([
+        idMessage(msgToken(msgs, 'card_failed', { reason: bad.error ?? '' })),
+        goToFolder('hangup'),
+      ], callId)
+    }
+
+    console.log(`[yemot-holiday] כרטיס חובר והוטען rec=${rec.id} card=****${card.slice(-4)}`)
+    return yemotText([idMessage(msgToken(msgs, 'card_success')), goToFolder('hangup')], callId)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'תקלה'
+    await db.from('distribution_recipients')
+      .update({ card_number: null, card_linked_at: null, card_link_error: msg })
+      .eq('id', rec.id)
+    console.error('[yemot-holiday] טעינה זרקה:', msg)
+    return yemotText([
+      idMessage(msgToken(msgs, 'card_failed', { reason: msg })),
+      goToFolder('hangup'),
+    ], callId)
+  }
+}
+
 async function handleCenterRoute(
   choice: string,
   params: Record<string, string>,
@@ -404,6 +605,12 @@ export async function handleHolidayCall(params: Record<string, string>): Promise
   // מסלולים 3 ו-4 — בחירת מוקד ושמיעתו. אינם תלויים בשער הרישום.
   if (choice === '3' || choice === '4') {
     return handleCenterRoute(choice, params, msgs, callId)
+  }
+
+  // מסלול 2 — חיבור כרטיס נדרים. גם הוא אינו תלוי בשער הרישום: הכרטיס
+  // נמסר במוקד אחרי שהרישום נסגר.
+  if (choice === '2') {
+    return handleCardRoute(params, msgs, callId)
   }
 
 
