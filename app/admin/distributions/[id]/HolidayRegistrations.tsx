@@ -686,8 +686,25 @@ export default function HolidayRegistrations({
     { header: 'טלפון', kind: 'id' }, { header: 'מייל' }, { header: 'כתובת' }, { header: 'עיר' },
     { header: 'קהילה' }, { header: 'גיל', kind: 'number' }, { header: 'ילדים', kind: 'number' },
     { header: 'ערוץ' }, { header: 'תאריך רישום', kind: 'date' }, { header: 'סכום מתוכנן', kind: 'number' },
-    { header: 'אישור' }, { header: 'מספר כרטיס', kind: 'id' }, { header: 'שויך בתאריך', kind: 'date' },
+    { header: 'אישור' },
+    // 🔴 המוקד — העמודה שכל עבודת החלוקה נשענת עליה, והיא נעדרה מהייצוא.
+    //
+    // ⚠️ שלוש עמודות ולא אחת: "טרם נבחר" מפורש כדי שאפשר יהיה לסנן באקסל
+    // על מי שטרם בחר (תא ריק אינו ניתן להבחנה מנתון חסר), וערוץ הבחירה
+    // כי "בחרתי בטלפון ורשום אחרת" אינו ניתן לבירור בלעדיו.
+    { header: 'מוקד חלוקה' }, { header: 'עיר המוקד' }, { header: 'אופן בחירת המוקד' },
+    { header: 'סטטוס טעינה' },
+    { header: 'מספר כרטיס', kind: 'id' }, { header: 'שויך בתאריך', kind: 'date' },
   ]
+
+  // ⚠️ אותן תוויות בדיוק כמו בטבלה — ייצוא שמדבר בשפה אחרת מהמסך מחייב
+  // את הקורא לתרגם, ופותח פער בין מה שנראה למה שנשלח.
+  const CENTER_SOURCE_LABEL: Record<string, string> = {
+    phone: 'טלפון', portal: 'אתר', office: 'שויך במשרד',
+  }
+  const LOAD_LABEL_XLSX: Record<string, string> = {
+    loaded: 'נטען', failed: 'נכשל', pending: 'בתהליך',
+  }
 
   const [exporting, setExporting] = useState(false)
   const exportExcel = async () => {
@@ -701,7 +718,15 @@ export default function HolidayRegistrations({
           r.family_name || r.name, r.first_name || '', r.id_number, r.spouse_name, r.ben_phone ?? r.phone, r.email,
           r.address, r.city, r.community, r.age, r.children_count,
           SOURCE_LABEL[r.source], r.registered_at, amountPerFamily || null,
-          APPROVAL_LABEL[r.approval_status], r.card_number, r.card_linked_at,
+          APPROVAL_LABEL[r.approval_status],
+          // ⚠️ "טרם נבחר" מפורש ולא תא ריק — כדי שניתן יהיה לסנן עליו.
+          r.center_name ?? 'טרם נבחר',
+          // ⚠️ העיר לחוד: center_name הוא "עיר · אזור", ומיון לפי עיר
+          // באקסל דורש עמודה משלה.
+          r.center_name ? (r.center_name.split(' · ')[0] ?? '') : '',
+          r.center_name ? (CENTER_SOURCE_LABEL[r.center_source ?? ''] ?? 'ידני') : '',
+          LOAD_LABEL_XLSX[r.load_status ?? ''] ?? 'טרם נטען',
+          r.card_number, r.card_linked_at,
         ]),
       })
     } catch (e) {
