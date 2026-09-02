@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireNonMailStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { scrambleBytes, DOC_CIPHER_ID } from '@/lib/docCipher'
 import {
   buildCenterListPdf, buildAllCentersPdf, buildSummaryPdf, centerListName,
   type CenterListInput,
@@ -84,6 +85,32 @@ function pdfResponse(bytes: Uint8Array, filename: string, fallback: string) {
   })
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// "ערוץ הנתונים" — הקובץ חוזר כ-JSON מעורבל במקום כתגובת קובץ.
+//
+// 🔴 נטפרי חוסם ZIP לפי סוג התגובה ומציג "סוג הקובץ אינו נתמך". התוכן תקין
+// לחלוטין — מה שנחסם הוא ה-Content-Type.
+//
+// ⚠️ base64 לבדו אינו מספיק: חתימת הקובץ בתחילת המחרוזת ("UEsDB" ל-ZIP,
+// "JVBERi" ל-PDF) מזוהה גם בתוך JSON. אחרי XOR אין שום חתימה מוכרת, והדפדפן
+// מבטל את הערבול בזיכרון ומרכיב Blob מקומי — כתובת blob: אינה עוברת ברשת
+// ולכן אין שם מה לסנן.
+//
+// ⚠️ אותה שיטה בדיוק שכבר עובדת למסמכים (lib/docCipher + lib/docBlob).
+// האבטחה לא השתנתה: היא נשענת על requireNonMailStaff בראש הנתיב.
+// ─────────────────────────────────────────────────────────────────────────────
+function dataResponse(bytes: Uint8Array, filename: string, contentType: string) {
+  const copy = new Uint8Array(bytes)
+  scrambleBytes(copy)
+  return NextResponse.json({
+    data: Buffer.from(copy).toString('base64'),
+    contentType,
+    name: filename,
+    size: bytes.length,
+    enc: DOC_CIPHER_ID,
+  }, { headers: { 'Cache-Control': 'no-store' } })
+}
+
 export async function GET(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   if (!(await requireNonMailStaff())) return unauthorized()
   const db = getServiceClient()
@@ -91,6 +118,8 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
 
   const { id } = await ctx.params
   const sp = request.nextUrl.searchParams
+  // כשדולק — הקובץ חוזר כ-JSON מעורבל ולא כתגובת קובץ. ראו dataResponse.
+  const asData = sp.get('data') === '1'
 
   const { data: dist } = await db.from('distributions')
     .select('name, year').eq('id', id).maybeSingle()
@@ -138,7 +167,8 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     const bytes = await buildSummaryPdf(distName, centers.map(c => ({
       centerName: c.name ?? 'מוקד', centerCity: c.city, count: (byCenter.get(c.id) ?? []).length,
     })))
-    return pdfResponse(bytes, `סיכום כרטיסים — ${distName}.pdf`, 'summary')
+    const fn = `סיכום כרטיסים לכל המוקדים — ${distName}.pdf`
+    return asData ? dataResponse(bytes, fn, 'application/pdf') : pdfResponse(bytes, fn, 'summary')
   }
 
   // ── מוקד יחיד ──
@@ -147,7 +177,9 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     const c = centers.find(x => x.id === centerId)
     if (!c) return NextResponse.json({ error: 'המוקד לא נמצא' }, { status: 404 })
     const bytes = await buildCenterListPdf(inputFor(c))
-    return pdfResponse(bytes, `${c.name ?? 'מוקד'} — ${distName}.pdf`, 'center-list')
+    // 🔴 השם אומר מה הקובץ מכיל: "אופקים — רשימה לראש המוקד".
+    const fn = `${c.name ?? 'מוקד'} — רשימה לראש המוקד — ${distName}.pdf`
+    return asData ? dataResponse(bytes, fn, 'application/pdf') : pdfResponse(bytes, fn, 'center-list')
   }
 
   // ── ZIP: קובץ נפרד לכל מוקד ──
@@ -157,16 +189,22 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     for (const c of centers) {
       const bytes = await buildCenterListPdf(inputFor(c))
       // ⚠️ תווים אסורים בשמות קבצים מוסרים — ZIP עם שם פגום אינו נפתח בחלונות.
+      // השם אומר מה הקובץ מכיל, כדי שאפשר יהיה להעביר אותו הלאה כמות שהוא.
       const safe = (c.name ?? 'מוקד').replace(/[\\/:*?"<>|]/g, '-')
-      zip.file(`${safe}.pdf`, bytes)
+      zip.file(`${safe} — רשימה לראש המוקד.pdf`, bytes)
     }
     // ⚠️ Buffer<ArrayBuffer> ולא Buffer<ArrayBufferLike>: BodyInit אינו מקבל
     // את השני. אותו שיקול בדיוק כמו ב-lib/fileAccess.
-    const out = Buffer.from(await zip.generateAsync({ type: 'uint8array' })) as Buffer<ArrayBuffer>
+    const raw = await zip.generateAsync({ type: 'uint8array' })
+    const zipName = `רשימות לראשי המוקדים — קובץ לכל מוקד — ${distName}.zip`
+    // 🔴 ZIP הוא הסוג שנטפרי חוסם בפועל ("סוג הקובץ אינו נתמך"), ולכן
+    // ההורדה שלו עוברת תמיד בערוץ הנתונים.
+    if (asData) return dataResponse(raw, zipName, 'application/zip')
+    const out = Buffer.from(raw) as Buffer<ArrayBuffer>
     return new NextResponse(out, {
       headers: {
         'Content-Type': 'application/zip',
-        'Content-Disposition': attachmentHeader(`רשימות מוקדים — ${distName}.zip`, 'center-lists'),
+        'Content-Disposition': attachmentHeader(zipName, 'center-lists'),
         'Cache-Control': 'no-store',
       },
     })
@@ -175,7 +213,8 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   // ── כל המוקדים בקובץ אחד ──
   if (sp.get('all') === '1') {
     const bytes = await buildAllCentersPdf(distName, centers.map(inputFor))
-    return pdfResponse(bytes, `רשימות מוקדים — ${distName}.pdf`, 'center-lists')
+    const fn = `כל המוקדים — רשימות לראשי המוקדים — ${distName}.pdf`
+    return asData ? dataResponse(bytes, fn, 'application/pdf') : pdfResponse(bytes, fn, 'center-lists')
   }
 
   // ── ברירת מחדל: רשימת המוקדים לבורר שבמסך ──

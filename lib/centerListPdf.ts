@@ -1,7 +1,10 @@
-import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib'
+import { PDFDocument, rgb, type PDFFont, type PDFPage, type PDFImage } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
 import { HEEBO_TTF_B64 } from './assets/heeboFont'
 import { toVisual } from './pdfBidi'
+// ⚠️ אותו טוען לוגו כמו בשוברים — logoBox שומר על יחס הצדדים (הלוגו רחב
+// מגובהו, וציור בריבוע מותח אותו).
+import { loadLogo, logoBox } from './maternityVoucher'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // רשימות איסוף למוקדי החלוקה — PDF להדפסה ולעבודה בשטח.
@@ -49,12 +52,16 @@ const ACCENT = rgb(0.31, 0.27, 0.90)
 // בפועל. טבלה צרה שמותירה שוליים ריקים קשה יותר לקריאה, לא פחות.
 // 🔴 סך הרוחב חייב להיות ≤ W-MARGIN*2 (=527.3). חריגה דוחפת את העמודה
 // השמאלית אל מחוץ לדף, והכתובת נחתכת בהדפסה בלי שום סימן.
+// ⚠️ המספור ראשון (הימני ביותר) — הוא הסימוכין שקוראים בו בטלפון
+// ("מספר 47 לא הגיע"), ולכן הוא צריך להיות הדבר הראשון שהעין פוגשת.
+// 🔴 המספור מתחיל מ-1 בכל מוקד בנפרד ואינו רץ על פני המוקדים.
 const COLS = [
-  { key: 'got', label: 'האם קיבל', width: 52, align: 'center' as const },
-  { key: 'id', label: 'תעודת זהות', width: 76, align: 'right' as const },
-  { key: 'name', label: 'שם ומשפחה', width: 158, align: 'right' as const },
-  { key: 'phone', label: 'טלפון', width: 72, align: 'right' as const },
-  { key: 'address', label: 'כתובת', width: 169, align: 'right' as const },
+  { key: 'num', label: '#', width: 26, align: 'center' as const },
+  { key: 'got', label: 'האם קיבל', width: 50, align: 'center' as const },
+  { key: 'id', label: 'תעודת זהות', width: 74, align: 'right' as const },
+  { key: 'name', label: 'שם ומשפחה', width: 152, align: 'right' as const },
+  { key: 'phone', label: 'טלפון', width: 70, align: 'right' as const },
+  { key: 'address', label: 'כתובת', width: 155, align: 'right' as const },
 ]
 const TABLE_W = COLS.reduce((s, c) => s + c.width, 0)
 
@@ -103,6 +110,19 @@ function drawCell(
   const w = font.widthOfTextAtSize(v, size)
   const x = align === 'center' ? right - width / 2 - w / 2 : right - 5 - w
   page.drawText(v, { x, y, size, font, color })
+}
+
+/**
+ * לוגו קטן בפינה השמאלית העליונה — בכל דף.
+ *
+ * ⚠️ בכל דף ולא רק בראשון: הדפים נמסרים בערימה ומתפזרים, וכל דף צריך
+ * לזהות את עצמו. אותו שיקול כמו שם המוקד בתחתית.
+ * ⚠️ מתחת לפס המבטא ולא מעליו — כדי שלא ייגע בו.
+ */
+function drawLogo(page: PDFPage, logo: PDFImage | null) {
+  if (!logo) return
+  const box = logoBox(logo, 26)
+  page.drawImage(logo, { x: MARGIN, y: H - MARGIN - 12 - box.height, ...box })
 }
 
 /** כותרת הדף — שם המוקד ושם החלוקה. */
@@ -191,7 +211,7 @@ function drawFooter(page: PDFPage, font: PDFFont, n: number, of: number, centerN
  *
  * 🔴 מתחיל תמיד בעמוד חדש — ראו ההסבר בראש הקובץ.
  */
-export function addCenterPages(pdf: PDFDocument, font: PDFFont, input: CenterListInput): void {
+export function addCenterPages(pdf: PDFDocument, font: PDFFont, input: CenterListInput, logo: PDFImage | null = null): void {
   // מיון א־ב לפי שם. ⚠️ localeCompare עברי — סדר ASCII אינו סדר אלפבית.
   const rows = [...input.rows].sort((a, b) =>
     String(a.name ?? '').localeCompare(String(b.name ?? ''), 'he'))
@@ -213,8 +233,13 @@ export function addCenterPages(pdf: PDFDocument, font: PDFFont, input: CenterLis
   if (!pages.length) pages.push([])
 
   const tableRight = W - MARGIN
+  // 🔴 המספור רץ על פני עמודי המוקד ואינו מתאפס בכל דף: "מספר 47" חייב
+  // להיות אחד ויחיד ברשימה, אחרת אי אפשר להפנות אליו בטלפון.
+  // ⚠️ מתאפס בין מוקדים — כל רשימה עומדת בפני עצמה.
+  let rowNumber = 0
   pages.forEach((pageRows, idx) => {
     const page = pdf.addPage([W, H])
+    drawLogo(page, logo)
     if (idx === 0) drawHeader(page, font, input, rows.length)
     const top = idx === 0 ? FIRST_TOP : NEXT_TOP
 
@@ -232,6 +257,7 @@ export function addCenterPages(pdf: PDFDocument, font: PDFFont, input: CenterLis
     let y = top - HEAD_H
     pageRows.forEach((r, i) => {
       y -= ROW_H
+      rowNumber++
       // פסים מתחלפים — העין לא מאבדת שורה ברשימה של 40
       if (i % 2 === 1) {
         page.drawRectangle({
@@ -251,6 +277,10 @@ export function addCenterPages(pdf: PDFDocument, font: PDFFont, input: CenterLis
             borderColor: rgb(0.55, 0.58, 0.65), borderWidth: 0.9,
             color: rgb(1, 1, 1),
           })
+        } else if (col.key === 'num') {
+          // ⚠️ אפור מרוסן: המספר הוא סימוכין, לא נתון שמתחרה בשם.
+          drawCell(page, font, String(rowNumber), right, col.width, ty,
+            { size: 8.5, color: MUTED, align: 'center' })
         } else {
           const val = col.key === 'id' ? (r.idNumber ?? '')
             : col.key === 'name' ? (r.name ?? '')
@@ -283,12 +313,29 @@ export function addCenterPages(pdf: PDFDocument, font: PDFFont, input: CenterLis
   })
 }
 
-/** רשימת מוקד יחיד — קובץ עצמאי. */
-export async function buildCenterListPdf(input: CenterListInput): Promise<Uint8Array> {
+/**
+ * מסמך חדש עם פונט עברי ולוגו מוטמע.
+ *
+ * ⚠️ הלוגו מוטמע **פעם אחת** למסמך ומצויר בכל דף. הטמעה חוזרת הייתה
+ * מכפילה את התמונה בקובץ — 26 מוקדים × מאות עמודים.
+ * ⚠️ לוגו חסר אינו שובר דבר: drawLogo פשוט אינו מצייר.
+ */
+async function newDoc() {
   const pdf = await PDFDocument.create()
   pdf.registerFontkit(fontkit)
   const font = await pdf.embedFont(Buffer.from(HEEBO_TTF_B64, 'base64'), { subset: true })
-  addCenterPages(pdf, font, input)
+  let logo: PDFImage | null = null
+  try {
+    const bytes = loadLogo()
+    if (bytes) logo = await pdf.embedPng(bytes)
+  } catch { /* לוגו פגום לא ימנע את הפקת הרשימה */ }
+  return { pdf, font, logo }
+}
+
+/** רשימת מוקד יחיד — קובץ עצמאי. */
+export async function buildCenterListPdf(input: CenterListInput): Promise<Uint8Array> {
+  const { pdf, font, logo } = await newDoc()
+  addCenterPages(pdf, font, input, logo)
   return pdf.save()
 }
 
@@ -304,9 +351,11 @@ export interface SummaryRow {
 
 export function addSummaryPage(
   pdf: PDFDocument, font: PDFFont, distributionName: string, rows: SummaryRow[],
+  logo: PDFImage | null = null,
 ): void {
   const page = pdf.addPage([W, H])
   const right = W - MARGIN
+  drawLogo(page, logo)
 
   page.drawRectangle({ x: MARGIN, y: H - MARGIN - 5, width: W - MARGIN * 2, height: 3.5, color: ACCENT })
 
@@ -383,10 +432,8 @@ export function addSummaryPage(
 export async function buildSummaryPdf(
   distributionName: string, rows: SummaryRow[],
 ): Promise<Uint8Array> {
-  const pdf = await PDFDocument.create()
-  pdf.registerFontkit(fontkit)
-  const font = await pdf.embedFont(Buffer.from(HEEBO_TTF_B64, 'base64'), { subset: true })
-  addSummaryPage(pdf, font, distributionName, rows)
+  const { pdf, font, logo } = await newDoc()
+  addSummaryPage(pdf, font, distributionName, rows, logo)
   return pdf.save()
 }
 
@@ -394,17 +441,15 @@ export async function buildSummaryPdf(
 export async function buildAllCentersPdf(
   distributionName: string, centers: CenterListInput[],
 ): Promise<Uint8Array> {
-  const pdf = await PDFDocument.create()
-  pdf.registerFontkit(fontkit)
-  const font = await pdf.embedFont(Buffer.from(HEEBO_TTF_B64, 'base64'), { subset: true })
+  const { pdf, font, logo } = await newDoc()
 
   addSummaryPage(pdf, font, distributionName, centers.map(c => ({
     centerName: c.centerName, centerCity: c.centerCity, count: c.rows.length,
-  })))
+  })), logo)
 
   // ⚠️ סדר קבוע לפי שם — כדי שהערימה המודפסת תיראה אותו דבר בכל הפקה.
   const sorted = [...centers].sort((a, b) => a.centerName.localeCompare(b.centerName, 'he'))
-  for (const c of sorted) addCenterPages(pdf, font, c)
+  for (const c of sorted) addCenterPages(pdf, font, c, logo)
 
   return pdf.save()
 }
