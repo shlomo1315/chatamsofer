@@ -708,13 +708,33 @@ export default function HolidayRegistrations({
 
   const [exporting, setExporting] = useState(false)
   const exportExcel = async () => {
+    // 🔴 רשת ביטחון אחרונה: בלי סינון פעיל, הייצוא חייב לכלול את כל הרשומות.
+    // ⚠️ הכפתור כבר חסום בזמן הטעינה, אבל בדיקה מול totalCount תופסת גם
+    // מקרה שבו הטעינה "הסתיימה" והרשימה בכל זאת חלקית (בקשה שנכשלה בשקט).
+    // עדיף לעצור מלייצר קובץ חסר שנראה תקין.
+    const noFilters = !query.trim() && source === 'all' && approval === 'all'
+      && community === 'all' && city === 'all' && ageBucket === 'all' && kidsBucket === 'all'
+    if (noFilters && totalCount != null && sorted.length < totalCount) {
+      toast.error(`נטענו ${sorted.length} מתוך ${totalCount} רשומות. המתינו לסיום הטעינה ונסו שוב.`)
+      return
+    }
     setExporting(true)
     try {
       await downloadXlsx({
         filename: `${distributionName || 'חלוקה'} — נרשמים`,
         sheetName: 'נרשמים',
         columns: XLSX_COLUMNS,
-        rows: filtered.map(r => [
+        // 🔴 sorted ולא filtered — sorted הוא תוצאת *מסנני הכותרת* (tc.rows),
+        // ו-filtered הוא רק שלב הסינון העליון שלפניהם.
+        //
+        // ⚠️ הייצוא נתן מספר אחר מהמסך: המנהל סינן "טרם נבחר" בעמודת מוקד
+        // החלוקה, ראה 833 שורות, וקיבל קובץ עם 62. הייצוא פשוט לא ידע על
+        // הסינון שהוא ראה מולו. מספר שסותר את המסך שולל אמון בשניהם, כי
+        // אי אפשר לדעת מי מהם צודק.
+        //
+        // ⚠️ הכלל: הייצוא חייב לצאת מאותו מערך שממנו נגזר העמוד המוצג
+        // (sorted → pg.rows). כל שלב מוקדם יותר מתעלם מחלק מהסינון.
+        rows: sorted.map(r => [
           r.family_name || r.name, r.first_name || '', r.id_number, r.spouse_name, r.ben_phone ?? r.phone, r.email,
           r.address, r.city, r.community, r.age, r.children_count,
           SOURCE_LABEL[r.source], r.registered_at, amountPerFamily || null,
@@ -936,9 +956,16 @@ export default function HolidayRegistrations({
             הודעת אישור לכל המאושרים
           </button>
         )}
-        <button type="button" onClick={() => void exportExcel()} disabled={exporting}
+        {/* 🔴 חסום עוד הרשימה נטענת ברקע.
+            ⚠️ הרשימה מגיעה בשני שלבים (עמוד ראשון מהשרת + השאר ברקע), וייצוא
+            באמצע הפיק קובץ עם מה שהספיק להגיע — קובץ קטן שנראה שלם לגמרי.
+            קובץ חסר גרוע מכפתור מושבת לרגע: אין בו שום סימן שחסר בו משהו. */}
+        <button type="button" onClick={() => void exportExcel()}
+          disabled={exporting || loadingRest}
+          title={loadingRest ? 'הרשימה עדיין נטענת — המתינו כדי לייצא את כולה' : undefined}
           className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50">
-          {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} ייצוא לאקסל
+          {exporting || loadingRest ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+          {loadingRest ? 'טוען את כל הרשומות…' : 'ייצוא לאקסל'}
         </button>
       </div>
 
