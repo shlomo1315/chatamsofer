@@ -408,3 +408,23 @@ export async function buildAllCentersPdf(
 
   return pdf.save()
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// שם המשפחה לרשימה: משפחה · בעל · "ו"אישה — "כהן אברהם ושרה".
+//
+// 🔴 הבעל לפני האישה. קודם הופיע כאן שם האישה בלבד (spouse_name || full_name),
+// וכל הרשימות הודפסו עם השם הפרטי השגוי.
+//
+// ⚠️ במסד: full_name = הבעל · spouse_name = האישה.
+// ⚠️ מורכב לפי מה שקיים ולא בתבנית קבועה — כרטסת שחסר בה אחד מהשניים
+// (אלמנה, רישום חלקי) לא תניב "כהן ו" או שם ריק.
+// ─────────────────────────────────────────────────────────────────────────────
+export function centerListName(b: {
+  family_name?: string | null; full_name?: string | null; spouse_name?: string | null
+}): string {
+  const fam = (b.family_name ?? '').trim()
+  const husband = (b.full_name ?? '').trim()
+  const wife = (b.spouse_name ?? '').trim()
+  const people = husband && wife ? `${husband} ו${wife}` : (husband || wife)
+  return [fam, people].filter(Boolean).join(' ').trim() || 'ללא שם'
+}

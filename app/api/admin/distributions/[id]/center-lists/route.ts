@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { requireNonMailStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import {
-  buildCenterListPdf, buildAllCentersPdf, buildSummaryPdf,
+  buildCenterListPdf, buildAllCentersPdf, buildSummaryPdf, centerListName,
   type CenterListInput,
 } from '@/lib/centerListPdf'
 
@@ -34,10 +34,8 @@ interface Row {
   }>
 }
 
-/** שם להצגה: משפחה + שם פרטי, כמו בשאר המסמכים. */
-function displayName(b: { family_name?: string | null; spouse_name?: string | null; full_name?: string | null }): string {
-  return [b.family_name, b.spouse_name || b.full_name].filter(Boolean).join(' ').trim() || 'ללא שם'
-}
+// ⚠️ ניסוח השם ("כהן אברהם ושרה") יושב ב-lib/centerListPdf → centerListName
+// ומכוסה בבדיקות. לא עותק מקומי, כדי שלא יסטה ממנו.
 
 /** כתובת מלאה — הרחוב ואחריו העיר, כי הרשימה נמסרת גם למי שאינו מקומי. */
 function fullAddress(b: { address?: string | null; city?: string | null }): string {
@@ -122,7 +120,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     if (!b) continue
     const arr = byCenter.get(r.center_id) ?? []
     arr.push({
-      idNumber: b.id_number, name: displayName(b),
+      idNumber: b.id_number, name: centerListName(b),
       phone: b.phone, address: fullAddress(b),
     })
     byCenter.set(r.center_id, arr)
