@@ -74,7 +74,12 @@ const HEAD_H = 22
 // 🔴 מיקום מוחלט (y מלמטה), לא היסט: הכותרת מסתיימת בקו ב-H-MARGIN-82,
 // והטבלה מתחילה מיד מתחתיו. חישוב יחסי כאן נתן ערך שחרג מגובה הדף.
 const FIRST_TOP = H - MARGIN - 92   // עמוד ראשון — אחרי הכותרת
-const NEXT_TOP = H - MARGIN - 30    // עמודי המשך — אחרי כותרת מוקטנת
+// 🔴 מתחת ללוגו, לא לצידו.
+//
+// ⚠️ היה כאן -30, והטבלה התחילה בתוך הלוגו (שיורד עד H-MARGIN-52) — כותרות
+// העמודות נחתכו לתוכו מהעמוד השני והלאה. הלוגו יושב בשמאל והטבלה ברוחב מלא,
+// ולכן אין כאן "לצד" — הטבלה חייבת להתחיל אחריו.
+const NEXT_TOP = H - MARGIN - 62    // עמודי המשך — אחרי הלוגו והכותרת המוקטנת
 
 /** חיתוך טקסט לרוחב עמודה — עדיף קטוע מאשר גולש על השכנה. */
 function fit(font: PDFFont, text: string, size: number, maxW: number): string {
@@ -121,7 +126,7 @@ function drawCell(
  */
 function drawLogo(page: PDFPage, logo: PDFImage | null) {
   if (!logo) return
-  const box = logoBox(logo, 26)
+  const box = logoBox(logo, 40)
   page.drawImage(logo, { x: MARGIN, y: H - MARGIN - 12 - box.height, ...box })
 }
 

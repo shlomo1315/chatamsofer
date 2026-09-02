@@ -126,3 +126,55 @@ describe('🔴 המקרים שהתגלו בפרודקשן', () => {
     expect(isWithinRecoveryWindow({ six_weeks_end: today })).toBe(true)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// הארכה נפרדת לבית החלמה (recovery_end_override).
+//
+// 🔴 הסיכון המרכזי בשינוי הזה: פגיעה באלפי הרשומות הקיימות. NULL חייב
+// להתנהג בדיוק כמו קודם.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('recoveryWindowEnd — דריסה נפרדת לבית החלמה', () => {
+  const iso2 = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null)
+
+  it('דריסה מפורשת גוברת על תאריך הכרטיס', () => {
+    expect(iso2(recoveryWindowEnd({
+      birth_date: '2026-07-19', six_weeks_end: '2026-08-30',
+      recovery_end_override: '2026-09-15',
+    }))).toBe('2026-09-15')
+  })
+
+  it('דריסה מוקדמת מהכרטיס מכובדת גם היא', () => {
+    // המזכירה רשאית להאריך את הכרטיס בלבד ולהשאיר את בית ההחלמה קצר יותר.
+    expect(iso2(recoveryWindowEnd({
+      birth_date: '2026-07-19', six_weeks_end: '2026-09-30',
+      recovery_end_override: '2026-08-20',
+    }))).toBe('2026-08-20')
+  })
+
+  // 🔴 תאימות לאחור — הבדיקה החשובה ביותר כאן.
+  it('בלי דריסה — בדיוק ההתנהגות הקודמת', () => {
+    const aid = { birth_date: '2026-07-19', six_weeks_end: '2026-08-30' }
+    expect(iso2(recoveryWindowEnd(aid))).toBe(iso2(recoveryWindowEnd({ ...aid, recovery_end_override: null })))
+    expect(iso2(recoveryWindowEnd(aid))).toBe('2026-08-30')
+  })
+
+  it('null אינו "אין זכאות" אלא "כמו הכרטיס"', () => {
+    expect(iso2(recoveryWindowEnd({
+      birth_date: '2026-07-19', recovery_end_override: null,
+    }))).toBe('2026-08-23')   // 35 יום, החישוב האוטומטי
+  })
+
+  it('דריסה בלבד, בלי six_weeks_end', () => {
+    expect(iso2(recoveryWindowEnd({
+      birth_date: '2026-07-19', recovery_end_override: '2026-10-01',
+    }))).toBe('2026-10-01')
+  })
+
+  it('⚠️ הדריסה אינה משפיעה על חלון הכרטיס', () => {
+    const aid = {
+      birth_date: '2026-07-19', six_weeks_end: '2026-08-30',
+      recovery_end_override: '2026-12-31',
+    }
+    expect(iso2(cardWindowEnd(aid))).toBe('2026-08-30')
+  })
+})

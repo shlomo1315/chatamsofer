@@ -25,7 +25,12 @@ export function recoveryDaysOf(aid: { recovery_eligibility_days?: number | null;
 export const CARD_WINDOW_DAYS = 42
 export const RECOVERY_WINDOW_DAYS = 35
 
-type WindowAid = { birth_date?: string | null; six_weeks_end?: string | null }
+type WindowAid = {
+  birth_date?: string | null
+  six_weeks_end?: string | null
+  /** דריסה לבית החלמה בלבד. NULL/undefined = נגזר מהכרטיס, כמו קודם. */
+  recovery_end_override?: string | null
+}
 
 /** סוף תוקף כרטיס המזון (6 שבועות מהלידה, או התאריך שהוארך ידנית). */
 export function cardWindowEnd(aid: WindowAid): Date | null {
@@ -48,6 +53,12 @@ export function recoveryWindowEnd(aid: WindowAid): Date | null {
   //
   // ⚠️ הפער נשאר בחישוב ה*אוטומטי* בלבד — שם הוא כלל עסקי. תאריך
   // שהוזן ידנית הוא הכרעה מפורשת של המזכירה, ואין לגרוע ממנה.
+  //
+  // 🔴 דריסה נפרדת לבית החלמה קודמת לכול: כשהמזכירה בחרה במפורש להאריך
+  // *רק* את בית ההחלמה (או בתאריך אחר מהכרטיס), זו ההכרעה המחייבת.
+  // ⚠️ NULL אינו "אין זכאות" אלא "כמו הכרטיס" — כך שכל הרשומות הקיימות
+  // ממשיכות להתנהג בדיוק כפי שהתנהגו.
+  if (aid.recovery_end_override) return new Date(aid.recovery_end_override)
   if (aid.six_weeks_end) return new Date(aid.six_weeks_end)
   if (!aid.birth_date) return null
   return new Date(new Date(aid.birth_date).getTime() + RECOVERY_WINDOW_DAYS * 86400000)

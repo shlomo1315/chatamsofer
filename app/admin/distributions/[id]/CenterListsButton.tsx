@@ -61,7 +61,47 @@ export default function CenterListsButton({ distributionId }: { distributionId: 
   // מעורבל, והדפדפן מרכיב אותו ל-Blob מקומי — כתובת blob: אינה עוברת ברשת
   // ולכן אין שם מה לסנן. אותה שיטה שכבר עובדת למסמכים (lib/docCipher).
   const [busy, setBusy] = useState<string | null>(null)
-  const downloadViaData = async (qs: string, key: string) => {
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 הסיומת נאכפת בצד הלקוח.
+  //
+  // ⚠️ הקובץ יורד מ-blob:, ולכן הסיומת נקבעת **רק** ממה שכתוב ב-a.download —
+  // אין כאן Content-Type שהדפדפן יכול ליפול אליו. שם עברי ארוך עם מקפים
+  // ארוכים (—) וגרשיים יצא בלי סיומת תקינה, וחלונות לא ידע לפתוח את הקובץ.
+  //
+  // ⚠️ לא מסתפקים ב-endsWith: שם שמסתיים ב-".זיפ" או שנחתך באמצע הסיומת
+  // צריך גם הוא לקבל סיומת אמיתית.
+  // ─────────────────────────────────────────────────────────────────────────
+  const withExt = (name: string, ext: string): string => {
+    const clean = String(name ?? '').replace(/[\\/:*?"<>|]/g, '-').trim()
+    const base = clean.toLowerCase().endsWith(`.${ext}`)
+      ? clean.slice(0, clean.length - ext.length - 1)
+      : clean
+    return `${base || 'download'}.${ext}`
+  }
+
+  const saveBlob = (bytes: Uint8Array<ArrayBuffer>, contentType: string, name: string, ext: string) => {
+    const url = URL.createObjectURL(new Blob([bytes], { type: contentType }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = withExt(name, ext)
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    // ⚠️ שחרור מושהה: ביטול מיידי מבטל את ההורדה בחלק מהדפדפנים.
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+  }
+
+  // ⚠️ Uint8Array<ArrayBuffer> ולא ArrayBufferLike — BlobPart אינו מקבל
+  // את השני. אותו שיקול כמו ב-lib/fileAccess.
+  const decode = (d: { data: string; enc?: string }): Uint8Array<ArrayBuffer> => {
+    const bin = atob(d.data)
+    const bytes = new Uint8Array(new ArrayBuffer(bin.length))
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+    if (d.enc === DOC_CIPHER_ID) scrambleBytes(bytes)
+    return bytes
+  }
+  const downloadViaData = async (qs: string, key: string, ext: string) => {
     setBusy(key)
     try {
       const res = await fetch(`${base}?${qs}&data=1`, { credentials: 'same-origin' })
@@ -70,19 +110,7 @@ export default function CenterListsButton({ distributionId }: { distributionId: 
         throw new Error(d.error || 'ההורדה נכשלה')
       }
       const d = await res.json() as { data: string; contentType: string; name: string; enc?: string }
-      const bin = atob(d.data)
-      const bytes = new Uint8Array(bin.length)
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
-      if (d.enc === DOC_CIPHER_ID) scrambleBytes(bytes)
-      const url = URL.createObjectURL(new Blob([bytes], { type: d.contentType }))
-      const a = document.createElement('a')
-      a.href = url
-      a.download = d.name
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      // ⚠️ שחרור מושהה: ביטול מיידי מבטל את ההורדה בחלק מהדפדפנים.
-      setTimeout(() => URL.revokeObjectURL(url), 10_000)
+      saveBlob(decode(d), d.contentType, d.name, ext)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'ההורדה נכשלה')
     } finally {
@@ -111,18 +139,7 @@ export default function CenterListsButton({ distributionId }: { distributionId: 
       { credentials: 'same-origin' })
     if (!res.ok) return
     const d = await res.json() as { data: string; contentType: string; name: string; enc?: string }
-    const bin = atob(d.data)
-    const bytes = new Uint8Array(bin.length)
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
-    if (d.enc === DOC_CIPHER_ID) scrambleBytes(bytes)
-    const url = URL.createObjectURL(new Blob([bytes], { type: d.contentType }))
-    const a = document.createElement('a')
-    a.href = url
-    a.download = d.name
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+    saveBlob(decode(d), d.contentType, d.name, 'pdf')
   }
 
   const total = centers.reduce((s, c) => s + c.count, 0)
@@ -230,7 +247,7 @@ export default function CenterListsButton({ distributionId }: { distributionId: 
                 {distName && `החלוקה: ${distName}`}
               </span>
               <button type="button" disabled={busy !== null}
-                onClick={() => void downloadViaData('zip=1', 'zip')}
+                onClick={() => void downloadViaData('zip=1', 'zip', 'zip')}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-[11px] font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-60">
                 {busy === 'zip' ? <Loader2 size={11} className="animate-spin" /> : <FileArchive size={11} />}
                 הורדה כקובץ ZIP אחד
