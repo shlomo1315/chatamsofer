@@ -18,6 +18,7 @@ import VoucherAfterLoadDialog from './VoucherAfterLoadDialog'
 import { scopeBulkLoad, scopeBulkVoucher } from '@/lib/holidayBulkScope'
 import type { ApprovalLabel } from '@/types'
 import AddRecipientDialog from './AddRecipientDialog'
+import AutoAssignButton from './AutoAssignButton'
 import Pagination from '@/components/ui/Pagination'
 import { useTablePagination } from '@/lib/useTablePagination'
 import CityBreakdown from './CityBreakdown'
@@ -947,6 +948,14 @@ export default function HolidayRegistrations({
             בזמן, בלי לפתוח מחדש את הרישום לכולם. */}
         {canEdit && (
           <AddRecipientDialog distributionId={distributionId} existingIds={registeredIds} />
+        )}
+        {/* שיבוץ אוטומטי לפי עיר — למי שלא בחר עד תום המועד.
+            ⚠️ הכפתור פותח תצוגה מקדימה; הוא אינו מבצע בלחיצה. */}
+        {canEdit && (
+          <AutoAssignButton
+            distributionId={distributionId}
+            onDone={() => router.refresh()}
+          />
         )}
         {canEdit && approvalCounts.approved > 0 && (
           <button type="button" disabled={notifying} onClick={() => void notify([])}
