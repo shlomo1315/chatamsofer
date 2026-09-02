@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
-import { deadlineState } from '@/lib/centerDeadline'
+import { recipientDeadlineState, effectiveDeadline } from '@/lib/centerDeadline'
 import {
   evaluatePick, groupByRegion, centerLabel, pickMessage,
   FINAL_WARNING, REGIONS, type CenterRow,
@@ -46,11 +46,13 @@ async function loadOwnRecipient(
   if (!sessionId) return { error: 'נדרש אימות', status: 401 as const, rec: null }
 
   const { data } = await db.from('distribution_recipients')
-    .select('id, center_id, distribution_id, approval_status, beneficiary_id')
+    .select('id, center_id, distribution_id, approval_status, beneficiary_id, source, deadline_extended')
     .eq('id', recipientId).maybeSingle()
   const rec = data as {
     id: string; center_id: string | null; distribution_id: string
     approval_status: string | null; beneficiary_id: string | null
+    // ⚠️ למועד המוארך — ראו lib/centerDeadline.
+    source: string | null; deadline_extended: boolean | null
   } | null
 
   // ⚠️ אותה תשובה בדיוק לרשומה שאינה קיימת ולרשומה של משפחה אחרת:
@@ -64,9 +66,9 @@ async function loadOwnRecipient(
 /** החלוקה האחרונה. ⚠️ distributions ולא holiday_distributions — ראו FK. */
 async function latestDistribution(db: NonNullable<ReturnType<typeof getServiceClient>>) {
   const { data } = await db.from('distributions')
-    .select('id, centers_open, centers_deadline')
+    .select('id, centers_open, centers_deadline, centers_deadline_extended')
     .order('created_at', { ascending: false }).limit(1).maybeSingle()
-  return data as { id: string; centers_open: boolean; centers_deadline: string | null } | null
+  return data as { id: string; centers_open: boolean; centers_deadline: string | null; centers_deadline_extended: string | null } | null
 }
 
 export async function GET(request: NextRequest) {
@@ -126,7 +128,11 @@ export async function GET(request: NextRequest) {
 
   // 🔴 אותם שערים בדיוק כמו בשמירה: המסך אינו רשאי להציג בחירה
   // שה-POST ידחה. פער כזה נראה למשפחה כתקלה ולא ככלל.
-  const dl = deadlineState(dist.centers_deadline ?? null)
+  // ⚠️ המועד לפי השורה: מי שנוסף ידנית (או סומן) מקבל את המועד המוארך,
+  // והספירה שהוא רואה היא למועד *שלו*. ראו lib/centerDeadline.
+  const dl = recipientDeadlineState(
+    dist.centers_deadline ?? null, dist.centers_deadline_extended ?? null, rec,
+  )
   const approved = rec.approval_status === 'approved'
 
   return NextResponse.json({
@@ -142,8 +148,14 @@ export async function GET(request: NextRequest) {
     warning: FINAL_WARNING.portal,
     // 🔴 הספירה לאחור. ⚠️ נשלח msLeft ולא טקסט מוכן: הטקסט מתיישן
     // בשנייה שאחרי, והמסך מעדכן אותו בעצמו כל דקה.
-    deadline: dist.centers_deadline ?? null,
+    // ⚠️ המועד *של המשפחה* ולא הכללי — אחרת מי שקיבל הארכה רואה ספירה
+    // לשעה שאינה חלה עליו, וזו בדיוק הטעות שההארכה באה למנוע.
+    deadline: effectiveDeadline(
+      dist.centers_deadline ?? null, dist.centers_deadline_extended ?? null, rec,
+    ),
     msLeft: dl.msLeft,
+    /** האם חלה על המשפחה הזו הארכה — כדי שהמסך יוכל לומר זאת במפורש. */
+    deadlineExtended: dl.extended,
     regions,
   })
 }
@@ -187,7 +199,11 @@ export async function POST(request: NextRequest) {
     // 🔴 רק משפחה מאושרת בוחרת מוקד.
     approved: rec.approval_status === 'approved',
     // ⚠️ אותו מועד בדיוק כמו בשלוחה — מקור אחד, שני ערוצים.
-    deadlinePassed: deadlineState(dist.centers_deadline ?? null).closed,
+    // ⚠️ לפי השורה: מי שקיבל הארכה נשמר גם אחרי המועד הכללי. אילו כאן
+    // נשאר המועד הכללי, המסך היה מציג בחירה פתוחה וה-POST היה דוחה אותה.
+    deadlinePassed: recipientDeadlineState(
+      dist.centers_deadline ?? null, dist.centers_deadline_extended ?? null, rec,
+    ).closed,
     currentCenterId: rec.center_id,
     centerExists: !!center && center.is_active,
     centerIsOpenInDistribution: !!openRow,

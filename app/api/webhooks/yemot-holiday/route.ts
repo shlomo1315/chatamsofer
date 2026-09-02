@@ -28,7 +28,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'node:crypto'
-import { deadlineState, formatCountdown } from '@/lib/centerDeadline'
+import { deadlineState, recipientDeadlineState, formatCountdown } from '@/lib/centerDeadline'
 import { getServiceClient } from '@/lib/apiAuth'
 import { getOpenDistribution, registerToOpenDistribution } from '@/lib/holidayDistributions'
 import { getHolidayMessages, type HolidayMessages } from '@/lib/yemotHolidayMessages'
@@ -421,10 +421,11 @@ async function handleCenterRoute(
   // lib/holidayDistributions. קריאה מהטבלה השנייה הייתה מחזירה חלוקה
   // אחרת לגמרי, והבחירה לא הייתה נמצאת לעולם.
   const { data: distRow } = await db.from('distributions')
-    .select('id, centers_open, centers_deadline')
+    .select('id, centers_open, centers_deadline, centers_deadline_extended')
     .order('created_at', { ascending: false }).limit(1).maybeSingle()
   const dist = distRow as {
-    id: string; centers_open: boolean; centers_deadline: string | null
+    id: string; centers_open: boolean
+    centers_deadline: string | null; centers_deadline_extended: string | null
   } | null
   if (!dist) return yemotText([idMessage(msgToken(msgs, 'centers_closed')), goToFolder('hangup')], callId)
 
@@ -462,11 +463,12 @@ async function handleCenterRoute(
   // מי שהכרטיס שלו כבר טעון מתקשר בעקבות הצינתוק, וההודעה שהוא צריך
   // לשמוע היא איפה לאסוף — לא אישור על בחירה שעשה לפני שבועיים.
   const { data: recRow } = await db.from('distribution_recipients')
-    .select('id, center_id, approval_status, load_status')
+    // ⚠️ source ו-deadline_extended נדרשים למועד המוארך (lib/centerDeadline).
+    .select('id, center_id, approval_status, load_status, source, deadline_extended')
     .eq('distribution_id', dist.id).eq('beneficiary_id', ben.id).maybeSingle()
   const rec = recRow as {
     id: string; center_id: string | null; approval_status: string | null
-    load_status: string | null
+    load_status: string | null; source: string | null; deadline_extended: boolean | null
   } | null
   if (!rec) return yemotText([idMessage(msgToken(msgs, 'not_eligible')), goToFolder('hangup')], callId)
 
@@ -507,7 +509,11 @@ async function handleCenterRoute(
   // מחושבים כאן לערך אחד. בלי זה הטלפון היה מאפשר בדיוק את מה שהאתר
   // חוסם — וזה מה שקרה בפועל: 87 משפחות שאינן מאושרות בחרו מוקד.
   // ─────────────────────────────────────────────────────────────────────
-  const dl = deadlineState(dist.centers_deadline ?? null)
+  // ⚠️ המועד לפי השורה ולא לפי החלוקה: מי שנוסף ידנית (או סומן) מקבל את
+  // המועד המוארך, ושומע ספירה לאחור למועד *שלו*. ראו lib/centerDeadline.
+  const dl = recipientDeadlineState(
+    dist.centers_deadline ?? null, dist.centers_deadline_extended ?? null, rec,
+  )
   const approved = rec.approval_status === 'approved'
   const gateOpen = !!dist.centers_open && approved && !dl.closed
 

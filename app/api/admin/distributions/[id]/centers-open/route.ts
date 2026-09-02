@@ -20,15 +20,35 @@ export async function GET(_request: NextRequest, ctx: { params: Promise<{ id: st
 
   const { id } = await ctx.params
   const { data } = await db.from('distributions')
-    .select('centers_open, centers_deadline, pickup_open, pickup_note').eq('id', id).maybeSingle()
+    .select('centers_open, centers_deadline, centers_deadline_extended, pickup_open, pickup_note').eq('id', id).maybeSingle()
   const row = data as {
     centers_open?: boolean; centers_deadline?: string | null
+    centers_deadline_extended?: string | null
     pickup_open?: boolean; pickup_note?: string | null
   } | null
   const dl = deadlineState(row?.centers_deadline ?? null)
+
+  // כמה בקבוצת ההארכה, וכמה מהם עדיין לא בחרו — המנהל צריך לדעת על מי
+  // ההגדרה חלה בפועל לפני שהוא קובע שעה.
+  // ⚠️ head+count ולא שליפת שורות: המספר הוא כל מה שנדרש כאן.
+  const [{ count: extTotal }, { count: extPending }] = await Promise.all([
+    db.from('distribution_recipients')
+      .select('id', { count: 'exact', head: true })
+      .eq('distribution_id', id)
+      .or('source.eq.admin,deadline_extended.is.true'),
+    db.from('distribution_recipients')
+      .select('id', { count: 'exact', head: true })
+      .eq('distribution_id', id)
+      .is('center_id', null)
+      .or('source.eq.admin,deadline_extended.is.true'),
+  ])
+
   return NextResponse.json({
+    extended_count: { total: extTotal ?? 0, pending: extPending ?? 0 },
     centers_open: !!row?.centers_open,
     centers_deadline: row?.centers_deadline ?? null,
+    // 🔴 המועד המוארך — חל על source=admin ועל מי שסומן ידנית.
+    centers_deadline_extended: row?.centers_deadline_extended ?? null,
     // 🔴 שער האיסוף — שער שלישי ונפרד. ראו המיגרציה 20260901_pickup_open.
     pickup_open: !!row?.pickup_open,
     pickup_note: row?.pickup_note ?? null,
@@ -51,6 +71,8 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     centers_open?: boolean
     /** ⚠️ undefined = לא נגענו במועד. null = הסרת המועד. */
     centers_deadline?: string | null
+    /** 🔴 המועד המוארך — לקבוצה בלבד. undefined = לא נגענו, null = ביטול. */
+    centers_deadline_extended?: string | null
     /** 🔴 שער האיסוף — נפרד לחלוטין משער הבחירה. */
     pickup_open?: boolean
     pickup_note?: string | null
@@ -80,6 +102,21 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
         return NextResponse.json({ error: 'תאריך לא תקין' }, { status: 400 })
       }
       patch.centers_deadline = at.toISOString()
+    }
+  }
+
+  // 🔴 המועד המוארך — לקבוצה בלבד (source=admin או סימון ידני).
+  // ⚠️ אותה הבחנה undefined/null בדיוק כמו במועד הכללי.
+  if (body.centers_deadline_extended !== undefined) {
+    const raw = String(body.centers_deadline_extended ?? '').trim()
+    if (!raw) {
+      patch.centers_deadline_extended = null
+    } else {
+      const at = new Date(raw)
+      if (Number.isNaN(at.getTime())) {
+        return NextResponse.json({ error: 'תאריך ההארכה אינו תקין' }, { status: 400 })
+      }
+      patch.centers_deadline_extended = at.toISOString()
     }
   }
 

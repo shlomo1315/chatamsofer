@@ -86,3 +86,69 @@ export function toLocalInput(iso: string | null | undefined): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
     + `T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// מועד מוארך לקבוצה מוגדרת.
+//
+// 🔴 למה זה נדרש: משפחה שנוספה ידנית נרשמת מאוחר — בדיוק משום שפספסה את
+// הרישום הרגיל — והמועד הכללי חולף עליה לפני שהספיקה לבחור. שעת סגירה אחת
+// לכולם מענישה את מי שנוסף באיחור שלא באשמתו.
+//
+// מי בקבוצה: כל מי ש-source='admin' (הוספה ידנית) **או** שסומן ידנית
+// בדגל deadline_extended. שני המסלולים במכוון — הראשון חוסך סימון חוזר
+// של כל תוספת חדשה, השני מאפשר להאריך גם למי שנרשם בערוץ אחר והתקשר.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface RecipientDeadlineInput {
+  /** ערוץ הרישום. 'admin' = הוספה ידנית. */
+  source?: string | null
+  /** סומן ידנית לקבלת ההארכה. */
+  deadline_extended?: boolean | null
+}
+
+/** האם השורה זכאית למועד המוארך. */
+export function isExtendedRecipient(rec: RecipientDeadlineInput | null | undefined): boolean {
+  if (!rec) return false
+  return rec.source === 'admin' || rec.deadline_extended === true
+}
+
+/**
+ * המועד החל על שורה מסוימת.
+ *
+ * 🔴 מאריך בלבד — לעולם לא מקצר.
+ *
+ * ⚠️ אילו המועד המוארך היה גובר תמיד, תאריך שהוקלד מוקדם מדי היה **נועל
+ * את הקבוצה לפני כולם** — ההפך הגמור מכוונת ההגדרה. לכן נבחר המאוחר
+ * מבין השניים, וטעות הקלדה יכולה רק להשאיר פתוח, לא לסגור.
+ */
+export function effectiveDeadline(
+  base: string | null | undefined,
+  extended: string | null | undefined,
+  rec: RecipientDeadlineInput | null | undefined,
+): string | null {
+  const b = String(base ?? '').trim() || null
+  if (!isExtendedRecipient(rec)) return b
+
+  const e = String(extended ?? '').trim() || null
+  if (!e) return b
+  if (!b) return e
+
+  const bt = new Date(b).getTime()
+  const et = new Date(e).getTime()
+  // ⚠️ תאריך פגום אינו מבטל את השני — עקבי עם deadlineState שאינו סוגר על פגום.
+  if (Number.isNaN(et)) return b
+  if (Number.isNaN(bt)) return e
+  return et > bt ? e : b
+}
+
+/** מצב המועד לשורה מסוימת — הצירוף שהקוראים צריכים בפועל. */
+export function recipientDeadlineState(
+  base: string | null | undefined,
+  extended: string | null | undefined,
+  rec: RecipientDeadlineInput | null | undefined,
+  now: Date = new Date(),
+): DeadlineState & { extended: boolean } {
+  const eff = effectiveDeadline(base, extended, rec)
+  const state = deadlineState(eff, now)
+  return { ...state, extended: isExtendedRecipient(rec) && eff !== (String(base ?? '').trim() || null) }
+}

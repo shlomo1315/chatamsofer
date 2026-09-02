@@ -57,7 +57,13 @@ export default function GatesPanel({
   const [draft, setDraft] = useState('')
   const [msLeft, setMsLeft] = useState<number | null>(null)
   const [passed, setPassed] = useState(false)
-  const [busy, setBusy] = useState<'gate' | 'deadline' | 'pickup' | 'note' | null>(null)
+  // 🔴 מועד מוארך — חל על מי שנוסף ידנית (source=admin) ועל מי שסומן ידנית.
+  // ⚠️ משפחה שנוספה ידנית נרשמת מאוחר בהגדרה, ולכן המועד הכללי חולף עליה
+  // לפני שהספיקה לבחור.
+  const [extDeadline, setExtDeadline] = useState<string | null>(null)
+  const [extDraft, setExtDraft] = useState('')
+  const [extCount, setExtCount] = useState<{ total: number; pending: number } | null>(null)
+  const [busy, setBusy] = useState<'gate' | 'deadline' | 'pickup' | 'note' | 'ext' | null>(null)
   const [err, setErr] = useState('')
 
   const load = useCallback(async () => {
@@ -75,6 +81,9 @@ export default function GatesPanel({
       setDraft(toLocalInput(d.centers_deadline ?? null))
       setMsLeft(typeof d.ms_left === 'number' ? d.ms_left : null)
       setPassed(!!d.deadline_passed)
+      setExtDeadline(d.centers_deadline_extended ?? null)
+      setExtDraft(toLocalInput(d.centers_deadline_extended ?? null))
+      if (d.extended_count) setExtCount(d.extended_count)
     } catch { /* טעינה שנכשלה משאירה את הלוח במצב "טוען" ואינה מפילה את המסך */ }
   }, [distributionId])
 
@@ -90,7 +99,7 @@ export default function GatesPanel({
     return () => clearInterval(t)
   }, [msLeft === null])
 
-  async function post(body: Record<string, unknown>, which: 'gate' | 'deadline' | 'pickup' | 'note') {
+  async function post(body: Record<string, unknown>, which: 'gate' | 'deadline' | 'pickup' | 'note' | 'ext') {
     setBusy(which); setErr('')
     try {
       const res = await fetch(
@@ -257,6 +266,60 @@ export default function GatesPanel({
                 onClick={() => { setDraft(''); void post({ centers_deadline: null }, 'deadline') }}
                 className="text-[11px] font-semibold text-slate-500 underline hover:text-rose-600">
                 הסרת המועד
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── מועד מוארך לקבוצה ──
+          🔴 משפחה שנוספה ידנית נרשמת מאוחר בהגדרה — היא פספסה את הרישום
+          הרגיל — ולכן המועד הכללי חולף עליה לפני שהספיקה לבחור. */}
+      {canEdit && (
+        <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50/50 p-3.5">
+          <p className="flex items-center gap-1.5 text-[11px] font-bold text-violet-700">
+            <CalendarClock size={13} className="text-violet-400" /> מועד מוארך — למי שנוסף ידנית
+          </p>
+
+          <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
+            חל אוטומטית על כל מי שנוסף בהזנה ידנית, ובנוסף על משפחות שתסמנו
+            בטבלה. {extCount && (
+              <span className="font-bold text-violet-800">
+                כרגע {extCount.total} בקבוצה
+                {extCount.pending > 0 && `, מהם ${extCount.pending} טרם בחרו`}.
+              </span>
+            )}
+          </p>
+
+          {/* ⚠️ מאריך בלבד: שעה מוקדמת מהמועד הכללי מתעלמת ואינה נועלת
+              את הקבוצה לפני כולם. נאמר במפורש כדי שלא ייראה כתקלה. */}
+          <p className="mt-1 text-[11px] text-slate-500">
+            מאריך בלבד — שעה מוקדמת מהמועד הכללי לא תקצר לאף אחד.
+          </p>
+
+          {extDeadline === null && (
+            <p className="mt-1.5 text-[11px] font-semibold text-slate-500">
+              לא הוגדרה הארכה — כולם נסגרים במועד הכללי.
+            </p>
+          )}
+
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <input type="datetime-local" value={extDraft} onChange={e => setExtDraft(e.target.value)}
+              className="rounded-lg border border-violet-300 bg-white px-2.5 py-1.5 text-xs text-slate-700" />
+            <button type="button" disabled={busy === 'ext'}
+              onClick={() => void post(
+                { centers_deadline_extended: extDraft ? new Date(extDraft).toISOString() : null },
+                'ext',
+              )}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-700 disabled:opacity-50">
+              {busy === 'ext' ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+              שמור הארכה
+            </button>
+            {extDeadline && (
+              <button type="button" disabled={busy === 'ext'}
+                onClick={() => { setExtDraft(''); void post({ centers_deadline_extended: null }, 'ext') }}
+                className="text-[11px] font-semibold text-slate-500 underline hover:text-rose-600">
+                ביטול ההארכה
               </button>
             )}
           </div>
