@@ -19,6 +19,7 @@ import { scopeBulkLoad, scopeBulkVoucher } from '@/lib/holidayBulkScope'
 import type { ApprovalLabel } from '@/types'
 import AddRecipientDialog from './AddRecipientDialog'
 import AutoAssignButton from './AutoAssignButton'
+import CenterListsButton from './CenterListsButton'
 import Pagination from '@/components/ui/Pagination'
 import { useTablePagination } from '@/lib/useTablePagination'
 import CityBreakdown from './CityBreakdown'
@@ -957,6 +958,8 @@ export default function HolidayRegistrations({
             onDone={() => router.refresh()}
           />
         )}
+        {/* רשימות איסוף מודפסות — מוצג גם למי שאינו עורך: זו קריאה בלבד. */}
+        <CenterListsButton distributionId={distributionId} />
         {canEdit && approvalCounts.approved > 0 && (
           <button type="button" disabled={notifying} onClick={() => void notify([])}
             title="מייל וצינתוק לכל מי שאושר וטרם קיבל הודעה"
