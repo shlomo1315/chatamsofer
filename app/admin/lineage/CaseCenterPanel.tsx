@@ -60,6 +60,17 @@ const SEVERITY_DOT: Record<Case['severity'], { color: string; label: string }> =
 
 type Filter = 'open' | 'all' | 'done'
 
+// איפה מטפלים בכל סוג. ⚠️ המרכז מנהל החלטות ואינו משנה מבנה, ולכן מקרה
+// בלי הפנייה לכלי המטפל הוא מבוי סתום: המנהל יודע שיש בעיה ולא לאן ללכת.
+const KIND_TOOL: Record<CaseKind, string> = {
+  duplicate: 'טיפול: מרכז מיזוגים — בחרו את שתי הרשומות ומזגו',
+  self_duplicate: 'טיפול: הכלי "דור אחרון כפול" מתקן אוטומטית את המסומנים',
+  ghost_child: 'טיפול: עריכת הצומת בעץ — שיוך לאב קיים או מחיקה',
+  unlinked: 'טיפול: הכלי "משפחות ללא צומת" מציע שיוך לפי שרשרת הייחוס',
+  many_children: 'טיפול: פתחו את הצומת בעץ ובדקו כפילויות בין הילדים',
+  blocked_link: 'טיפול: אמתו את הצומת כדי לשחרר את הענף שמתחתיו',
+}
+
 export default function CaseCenterPanel() {
   const toast = useToast()
   const [cases, setCases] = useState<Case[]>([])
@@ -301,7 +312,9 @@ function CaseTable({ cases, saving, onOpen, onDecide }: {
                       style={{ background: SEVERITY_DOT[c.severity].color }}
                       title={SEVERITY_DOT[c.severity].label} />
                     <span className="text-[11px] text-slate-400">
-                      {c.nodes.length} רשומות
+                      {/* ⚠️ ממצא מקובץ (משפחות ללא צומת) אינו מפנה לצמתים —
+                          "0 רשומות" היה נראה כתקלה במקום כקיבוץ. */}
+                      {c.nodes.length > 0 ? `${c.nodes.length} רשומות` : 'קיבוץ'}
                       {c.generation != null && ` · דור ${c.generation}`}
                     </span>
                   </div>
@@ -378,6 +391,11 @@ function FocusView({ c, index, total, note, onNote, saving, onDecide, onStep }: 
             {c.generation != null && ` · דור ${c.generation}`}
           </p>
         )}
+
+        {/* לאן ללכת מכאן — המרכז מחליט, הכלים מתקנים */}
+        <p className="mt-3 rounded-lg bg-indigo-50 px-3 py-2 text-[11px] font-medium text-indigo-800">
+          {KIND_TOOL[c.kind]}
+        </p>
 
         {/* הרשומות המעורבות — כאן ההכרעה נופלת */}
         <div className="mt-4 grid gap-2 sm:grid-cols-2">
