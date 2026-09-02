@@ -2,13 +2,14 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react'
 import { ancestorIds } from '@/lib/lineageChain'
 import Link from 'next/link'
-import { Plus, RefreshCw, Loader2, ChevronRight, ChevronLeft, ChevronDown, Pencil, Trash2, X, Users, Check, Printer, MapPin, Link2, ExternalLink, Activity, ShieldCheck, ShieldAlert, Ghost, GitMerge } from 'lucide-react'
+import { Plus, RefreshCw, Loader2, ChevronRight, ChevronLeft, ChevronDown, Pencil, Trash2, X, Users, Check, Printer, MapPin, Link2, ExternalLink, Activity, ShieldCheck, ShieldAlert, Ghost, GitMerge, ClipboardCheck } from 'lucide-react'
 import { genTone } from '@/lib/lineagePalette'
 import ShareBranchModal from './ShareBranchModal'
 import SharePermissionsPanel from './SharePermissionsPanel'
 import { useRouter } from 'next/navigation'
 import DuplicatesPanel from './DuplicatesPanel'
 import TreeHealthPanel from './TreeHealthPanel'
+import CaseCenterPanel from './CaseCenterPanel'
 import SafeMergePanel from './SafeMergePanel'
 import MergeCenterPanel from './MergeCenterPanel'
 import UnlinkedPanel from './UnlinkedPanel'
@@ -1795,6 +1796,7 @@ export default function LineagePage() {
   const [printPick, setPrintPick] = useState(false)
   const [showDups, setShowDups] = useState(false)
   const [showHealth, setShowHealth] = useState(false)
+  const [showCases, setShowCases] = useState(false)
   const [showSafeMerge, setShowSafeMerge] = useState(false)
   const [showMergeCenter, setShowMergeCenter] = useState(false)
   const [showUnlinked, setShowUnlinked] = useState(false)
@@ -2367,6 +2369,14 @@ export default function LineagePage() {
           </button>
           {/* מרכז המיזוגים — סריקה של כל העץ. זה הכלי לעבודה בהיקף; המיזוג
               הידני שלצידו נשאר למקרה נקודתי שרואים בעין. */}
+          {/* 🔴 נקודת הכניסה הראשית לתחזוקת העץ — ראשון בסרגל בכוונה.
+              שאר הכלים שלצידו הם כל אחד רשימה נפרדת שאינה זוכרת מה כבר נבדק;
+              כאן הכול במקום אחד, וההכרעה נשמרת. */}
+          <button onClick={() => setShowCases(s => !s)}
+            className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm"
+            style={{ background: showCases ? '#4F46E5' : '#fff', color: showCases ? '#fff' : '#4338CA', border: '1px solid #C7D2FE' }}>
+            <ClipboardCheck size={14} /> {showCases ? 'סגור מרכז בקרה' : 'מרכז בקרה'}
+          </button>
           <button onClick={() => { setShowDups(s => !s); if (mergeMode) exitMerge() }}
             className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm"
             style={{ background: showDups ? '#7C3AED' : '#fff', color: showDups ? '#fff' : '#5B21B6', border: '1px solid #DDD6FE' }}>
@@ -2484,6 +2494,12 @@ export default function LineagePage() {
           // התיקון מוחק צמתים ומזיז כרטסות — העץ שעל המסך התיישן.
           onFixed={() => { void softRefresh() }}
         />
+      )}
+
+      {showCases && (
+        <div style={{ marginTop: 16 }}>
+          <CaseCenterPanel />
+        </div>
       )}
 
       {showHealth && (
