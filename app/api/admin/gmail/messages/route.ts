@@ -1,6 +1,7 @@
 ﻿import { NextResponse, type NextRequest } from 'next/server'
 import { getGmailClient, parseMessage } from '@/lib/gmail'
 import { requireMailAccess, unauthorized } from '@/lib/apiAuth'
+import { allowedMailboxEmails } from '@/lib/mailAccess'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,7 +17,26 @@ export async function GET(request: NextRequest) {
     const { DEPARTMENTS } = await import('@/lib/departments')
     const deptEmail = department && DEPARTMENTS[department as keyof typeof DEPARTMENTS]?.email
     const deptFilter = deptEmail ? `(to:${deptEmail} OR from:${deptEmail})` : ''
-    const combinedQ = [q, deptFilter].filter(Boolean).join(' ')
+
+    // ─────────────────────────────────────────────────────────────────────
+    // 🔴 סינון התיבות המורשות נכפה על השאילתה — הוא אינו תלוי ב-department
+    // שהקורא שלח.
+    //
+    // ⚠️ המסנן היחיד כאן היה הפרמטר מה-query string, ו-folder=ALL מסיר גם
+    // את סינון התוויות. משתמש שפשוט לא שלח department קיבל חיפוש חופשי על
+    // כל תיבות הארגון.
+    //
+    // ⚠️ נכשל-סגור: מי שאין לו אף תיבה מקבל רשימה ריקה ולא את הכול.
+    // ─────────────────────────────────────────────────────────────────────
+    const allowed = allowedMailboxEmails(staff)
+    if (allowed !== null && allowed.length === 0) {
+      return NextResponse.json({ messages: [] })
+    }
+    const scopeFilter = allowed === null
+      ? ''
+      : `(${allowed.map(e => `to:${e} OR from:${e}`).join(' OR ')})`
+
+    const combinedQ = [q, deptFilter, scopeFilter].filter(Boolean).join(' ')
 
     const gmail = await getGmailClient()
     // folder=ALL ג†’ search all mail (no label filter), used for beneficiary threads

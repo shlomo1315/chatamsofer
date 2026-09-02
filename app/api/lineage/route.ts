@@ -41,11 +41,24 @@ export async function GET(request: NextRequest) {
   // ⚠️ מאושרים בלבד. הוצגו כאן לזמן קצר גם דורות שממתינים לאישור, כדי לצמצם
   // כפילויות (נרשם שאינו מוצא רשומה קיימת מזין אותה שוב) — אבל ההחלטה נסוגה:
   // סדר ייחוס אינו אמור להיבנות על רשומה שטרם נבדקה.
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 רשימת עמודות מפורשת — לא select('*').
+  //
+  // ⚠️ הנתיב הזה **ציבורי לחלוטין** (בורר הדורות בטופס הרישום ובטופס נדרים
+  // החיצוני). כאן ישב select('*'), ומיגרציה מאוחרת הוסיפה לטבלה עמודת
+  // id_number — כך שת"ז אמיתיות (89 על צמתים מאושרים) נחשפו לכל מי שקרא
+  // /api/lineage?all=1, בלי ששום שורת קוד השתנתה.
+  //
+  // 🔴 הכלל: select('*') בנתיב ציבורי חושף אוטומטית כל עמודה שתתווסף בעתיד.
+  // בנתיב לא-מאומת חובה למנות את העמודות במפורש.
+  // ─────────────────────────────────────────────────────────────────────────
+  const PUBLIC_COLS = 'id, name, parent_id, generation, status, relation'
+
   let nodes: Record<string, unknown>[] = []
   if (all === '1') {
     // ⚠️ כל המאושרים — שליפה בדפים. .limit() לבדו נחתך ל-1000 בעץ גדול. ראו lib/fetchAllRows.
     const { rows, error } = await fetchAllRows<Record<string, unknown>>((from, to) =>
-      client.from('lineage_nodes').select('*').eq('status', 'verified').order('generation').order('name').range(from, to),
+      client.from('lineage_nodes').select(PUBLIC_COLS).eq('status', 'verified').order('generation').order('name').range(from, to),
     )
     if (error) return NextResponse.json({ error }, { status: 500 })
     nodes = rows
@@ -53,7 +66,7 @@ export async function GET(request: NextRequest) {
     // דור אחד בלבד (הורה נתון או שורשים) — קטן ממילא, שאילתה רגילה מספיקה.
     let query = client
       .from('lineage_nodes')
-      .select('*')
+      .select(PUBLIC_COLS)
       .eq('status', 'verified')
       .order('generation')
       .order('name')

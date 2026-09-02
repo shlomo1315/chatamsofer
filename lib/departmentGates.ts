@@ -1,3 +1,4 @@
+import { randomInt } from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getServiceClient } from '@/lib/apiAuth'
 
@@ -131,8 +132,13 @@ export async function regenerateDepartmentPreviewCode(admin?: SupabaseClient): P
   const client = admin ?? getServiceClient()
   if (!client) return null
   // 24 תווים — ארוך דיו שלא ינוחש, קצר דיו להעתקה נוחה.
-  const code = Array.from({ length: 24 }, () =>
-    'abcdefghijkmnpqrstuvwxyz23456789'[Math.floor(Math.random() * 32)]).join('')
+  //
+  // 🔴 randomInt ולא Math.random: הקוד הזה פותח מחלקות שנסגרו מנהלית, כלומר
+  // הוא סוד אבטחה. Math.random ב-V8 הוא xorshift128+ ואינו קריפטוגרפי —
+  // תוקף שראה פלט קודם משחזר את מצב המחולל וחוזה את הקוד הבא.
+  // ראו את אותו נימוק ב-lib/portalPassword.ts.
+  const ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789'
+  const code = Array.from({ length: 24 }, () => ALPHABET[randomInt(ALPHABET.length)]).join('')
   const { error } = await client.from('app_settings').upsert(
     { key: PREVIEW_KEY, value: code, updated_at: new Date().toISOString() },
     { onConflict: 'key' },

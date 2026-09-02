@@ -35,8 +35,24 @@ export async function POST(request: NextRequest) {
 
   const norm = normalizePhone(raw)
   const digits = raw.replace(/\D/g, '')
-  // וריאציות — כדי לתפוס מספרים ששמורים בפורמטים שונים (עם/בלי מקף, 0 מוביל)
-  const variants = Array.from(new Set([norm, digits, raw].filter(Boolean)))
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 רק ספרות. הקלט הגולמי אינו נכנס לשאילתה בשום צורה.
+  //
+  // ⚠️ זה היה חור אבטחה חמור: `raw` (אחרי trim() בלבד) נשתל במחרוזת ה-.or().
+  // הנתיב פתוח לאינטרנט ללא שום אימות ורץ עם service client שעוקף RLS, ולכן
+  // תוקף יכול היה לשלוח ערך ובו פסיקים ולהזריק תנאי על עמודה אחרת — למשל
+  // `portal_password_hash.like.$2b$10$a*` — ולקבל אורקל בוליאני (taken).
+  // כלומר חילוץ תו-אחר-תו של גיבובי סיסמאות הפורטל ושל ת"ז מכל המאגר.
+  //
+  // ⚠️ אותו באג בדיוק כבר תוקן ב-public-register וב-update-details (שם עברו
+  // ל-.in()). המסלול הזה פוספס בשני התיקונים — והוא היחיד מהשלושה שאינו
+  // מאומת כלל. תיקון חור אבטחה חייב סריקה של **כל** אתרי הקריאה לאותו דפוס.
+  //
+  // טלפון הוא ספרות בלבד, ולכן כאן די בסינון: אין צורך ב-.in() כמו בת"ז
+  // (שם ערך דרכון מכיל אותיות לגיטימיות ולכן אי אפשר לסנן).
+  // ─────────────────────────────────────────────────────────────────────────
+  const variants = Array.from(new Set([norm, digits].filter(v => /^\d{6,15}$/.test(v))))
+  if (!variants.length) return NextResponse.json({ taken: false })
 
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ taken: false })

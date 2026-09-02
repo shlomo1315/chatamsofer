@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
+import { requireNonMailStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { syncTransactions } from '@/lib/holidayTransactions'
 
@@ -16,7 +16,7 @@ const one = <T,>(v: T | T[] | null | undefined): T | null =>
   Array.isArray(v) ? (v[0] ?? null) : (v ?? null)
 
 export async function GET(request: NextRequest) {
-  const staff = await requireStaff()
+  const staff = await requireNonMailStaff()
   if (!staff) return unauthorized()
 
   const db = getServiceClient()
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
+  const staff = await requireNonMailStaff()
   if (!staff) return unauthorized()
 
   const db = getServiceClient()

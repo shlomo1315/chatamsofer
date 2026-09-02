@@ -1,5 +1,6 @@
 ﻿import { NextResponse, type NextRequest } from 'next/server'
-import { requireMailAccess, unauthorized, getServiceClient } from '@/lib/apiAuth'
+import { requireMailAccess, unauthorized, getServiceClient, allowedMailboxKeys } from '@/lib/apiAuth'
+import { canAccessGmailMessage, allowedMailboxEmails } from '@/lib/mailAccess'
 import { getGmailClientForToken, parseMessage, getBody } from '@/lib/gmail'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 
@@ -39,6 +40,16 @@ export async function GET(request: NextRequest) {
 
   // ג”€ג”€ ׳”׳•׳“׳¢׳” ׳‘׳•׳“׳“׳×: ׳׳˜׳-׳“׳׳˜׳” ׳׳”׳׳™׳ ׳“׳§׳¡ + ׳’׳•׳£ ׳-Gmail ג”€ג”€
   if (messageId) {
+    // 🔴 בעלות-מחלקה לפני שליפת ההודעה.
+    //
+    // ⚠️ כאן לא הייתה שום בדיקה: מזהה הודעה הספיק כדי למשוך מטא-דאטה, גוף
+    // מלא וצירופים (סריקות ת"ז) של כל הודעה בארגון, גם ממחלקה שהמשתמש
+    // אינו מורשה לה. מזהה שאינו ניתן לניחוש אינו הרשאה.
+    //
+    // ⚠️ נכשל-סגור: הודעה שאינה נמצאת מוחזרת כ"לא נמצאה" ולא כמותרת.
+    if (!(await canAccessGmailMessage(db, staff, messageId))) {
+      return NextResponse.json({ error: 'ההודעה לא נמצאה' }, { status: 404 })
+    }
     const { data } = await db.from('gmail_messages')
       .select(LIST_COLS).eq('gmail_message_id', messageId).maybeSingle()
     if (!data) return NextResponse.json({ error: 'ההודעה לא נמצאה' }, { status: 404 })
@@ -104,6 +115,39 @@ export async function GET(request: NextRequest) {
   else query = query.contains('labels', ['INBOX'])
 
   if (department) query = query.eq('department', department)
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 אכיפת התיבות המורשות — מדיניות, לא פרמטר.
+  //
+  // ⚠️ עד כה הסינון היחיד היה department/account **מה-query string**, כלומר
+  // ערך שהקורא שולט בו. מזכירת הלוואות שקראה ?folder=all קיבלה את התכתבות
+  // יולדות, אלמנות וסיוע רפואי. הסתרת התפריט לא הועילה — fetch מהקונסול
+  // החזיר הכול.
+  //
+  // אותה מדיניות בדיוק שכבר נאכפת ב-/api/admin/mail/** (lib/mailAccess).
+  // ⚠️ גם original_to: הודעה שהועברה שומרת שם את היעד המקורי, ולפיו נקבעת
+  // המחלקה במסך.
+  // ─────────────────────────────────────────────────────────────────────────
+  const allowedKeys = allowedMailboxKeys(staff)
+  if (allowedKeys !== null) {
+    if (allowedKeys.length === 0) {
+      return NextResponse.json({ messages: [], total: 0, counts: {} })
+    }
+    // ⚠️ הערכים מקורם בקוד (DEPARTMENTS) ולא בקלט משתמש, אבל מסננים בכל
+    // זאת: מחרוזת .or() מורכבת היא הדפוס שכבר יצר חור הזרקה במערכת הזו
+    // שלוש פעמים. תו מפריד שייכנס אי-פעם לשם מחלקה או לכתובת תיבה היה
+    // הופך את זה לשאילתה אחרת, ואף אחד לא היה מחפש כאן.
+    const safe = (v: string) => /^[A-Za-z0-9._@-]+$/.test(v)
+    const emails = (allowedMailboxEmails(staff) ?? []).filter(safe)
+    const keys = allowedKeys.filter(safe)
+    const clauses = [
+      ...(keys.length ? [`department.in.(${keys.join(',')})`] : []),
+      ...emails.flatMap(e => [`to_email.eq.${e}`, `original_to.eq.${e}`]),
+    ]
+    // נכשל-סגור: אם לא נותר שום תנאי תקין, אין להחזיר את הכול.
+    if (!clauses.length) return NextResponse.json({ messages: [], total: 0, counts: {} })
+    query = query.or(clauses.join(','))
+  }
   // ג ן¸ ׳¡׳™׳ ׳•׳ ׳׳₪׳™ ׳×׳™׳‘׳”: ׳›׳©׳׳—׳•׳‘׳¨׳•׳× ׳›׳׳” ׳×׳™׳‘׳•׳×, "׳“׳•׳׳¨ ׳ ׳›׳ ׳¡" ׳׳¢׳¨׳‘׳‘ ׳׳× ׳›׳•׳׳
   // ׳•׳׳™ ׳׳₪׳©׳¨ ׳׳¢׳‘׳•׳“ ׳¢׳ ׳×׳™׳‘׳” ׳׳—׳×.
   const accountId = sp.get('account') ?? ''

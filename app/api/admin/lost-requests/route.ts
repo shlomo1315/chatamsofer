@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
+import { requireNonMailStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { detectReqType } from '@/lib/emailRequestForms'
 import { handleEmailRequest } from '@/lib/emailRequestIntake'
@@ -105,7 +105,7 @@ async function lostRequests(db: NonNullable<ReturnType<typeof getServiceClient>>
 }
 
 export async function GET() {
-  const staff = await requireStaff()
+  const staff = await requireNonMailStaff()
   if (!staff) return unauthorized()
 
   const db = getServiceClient()
@@ -127,7 +127,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
+  const staff = await requireNonMailStaff()
   if (!staff) return unauthorized()
 
   const db = getServiceClient()

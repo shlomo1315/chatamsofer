@@ -68,3 +68,70 @@ export async function filterAccessibleInboundIds(
       || (m.to_email != null && emails.includes(String(m.to_email))))
     .map(m => String(m.id))
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// אותה אכיפה בדיוק, על הודעות Gmail.
+//
+// 🔴 עץ /api/admin/gmail/** בדק requireMailAccess בלבד ולא קרא מעולם
+// ל-allowedMailboxKeys: הסינון היחיד היה department/account מה-query string,
+// כלומר פרמטר שהקורא שולט בו — לא מדיניות. מזכירת הלוואות שקראה ?folder=all
+// קיבלה את התכתבות יולדות, אלמנות וסיוע רפואי, ושליפה לפי מזהה החזירה גוף
+// וצירופים של כל הודעה בארגון (סריקות ת"ז).
+//
+// ⚠️ מקבילה ל-canAccessInboundMail ולא שימוש חוזר בה: הטבלאות שונות
+// (gmail_messages מול inbound_emails) ומפתח הזיהוי שונה (gmail_message_id).
+// ─────────────────────────────────────────────────────────────────────────────
+export async function canAccessGmailMessage(
+  admin: SupabaseClient,
+  staff: StaffContext,
+  gmailMessageId: string,
+): Promise<boolean> {
+  const keys = allowedMailboxKeys(staff)
+  if (keys === null) return true      // מנהל / ללא הגבלה
+  if (keys.length === 0) return false // חסום לגמרי
+
+  const { data: mail } = await admin
+    .from('gmail_messages')
+    .select('to_email, original_to, department')
+    .eq('gmail_message_id', gmailMessageId)
+    .maybeSingle()
+  if (!mail) return false             // לא נמצא — נכשל סגור
+
+  // ⚠️ גם original_to: הודעה שהועברה לתיבה אחרת שומרת שם את היעד המקורי,
+  // ולפיו נקבעת המחלקה במסך. התעלמות ממנו הייתה חוסמת גישה לגיטימית.
+  const emails = allowedMailboxEmails(staff) ?? []
+  const byDept = mail.department != null && keys.includes(String(mail.department))
+  const byEmail = [mail.to_email, mail.original_to]
+    .filter(Boolean)
+    .some(e => emails.includes(String(e)))
+  return byDept || byEmail
+}
+
+/**
+ * בעלות-מחלקה על שרשור Gmail שלם.
+ *
+ * ⚠️ מספיק שהודעה **אחת** בשרשור שייכת לתיבה מורשית: תשובה שנשלחה מתיבה
+ * אחרת אינה הופכת את השרשור לזר, ודרישה שכל ההודעות יתאימו הייתה חוסמת
+ * התכתבות לגיטימית שעברה בין מחלקות.
+ */
+export async function canAccessGmailThread(
+  admin: SupabaseClient,
+  staff: StaffContext,
+  threadId: string,
+): Promise<boolean> {
+  const keys = allowedMailboxKeys(staff)
+  if (keys === null) return true
+  if (keys.length === 0) return false
+
+  const { data: rows } = await admin
+    .from('gmail_messages')
+    .select('to_email, original_to, department')
+    .eq('thread_id', threadId)
+  if (!rows?.length) return false     // לא נמצא — נכשל סגור
+
+  const emails = allowedMailboxEmails(staff) ?? []
+  return rows.some(m =>
+    (m.department != null && keys.includes(String(m.department)))
+    || [m.to_email, m.original_to].filter(Boolean).some(e => emails.includes(String(e))),
+  )
+}

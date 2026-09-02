@@ -1,6 +1,7 @@
 ﻿import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { requireMailAccess, unauthorized } from '@/lib/apiAuth'
+import { requireMailAccess, unauthorized, getServiceClient } from '@/lib/apiAuth'
+import { canAccessInboundMail } from '@/lib/mailAccess'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,6 +13,16 @@ export async function POST(request: NextRequest) {
 
   const { messageId, followUpAt } = await request.json()
   if (!messageId) return NextResponse.json({ error: 'messageId ׳—׳¡׳¨' }, { status: 400 })
+
+  // 🔴 בעלות-מחלקה — הייתה חסרה כאן בעוד היא קיימת בכל השכנות
+  // (spam/trash/assign-beneficiary). נראה כהשמטה ולא כהחלטה: בלעדיה
+  // כל בעל גישה לדואר יכול לקבוע תזכורת על מייל של מחלקה אחרת
+  // ולהקפיץ אותו לראש הרשימה שלה.
+  const gate = getServiceClient()
+  if (!gate) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
+  if (!(await canAccessInboundMail(gate, staff, String(messageId)))) {
+    return NextResponse.json({ error: 'ההודעה לא נמצאה' }, { status: 404 })
+  }
 
   let value: string | null = null
   if (followUpAt) {

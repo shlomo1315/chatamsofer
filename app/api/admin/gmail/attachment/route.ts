@@ -1,6 +1,7 @@
 ﻿import { NextResponse, type NextRequest } from 'next/server'
 import { getGmailClient } from '@/lib/gmail'
-import { requireMailAccess, unauthorized } from '@/lib/apiAuth'
+import { requireMailAccess, unauthorized, getServiceClient } from '@/lib/apiAuth'
+import { canAccessGmailMessage } from '@/lib/mailAccess'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,6 +27,17 @@ export async function GET(request: NextRequest) {
 
   if (!messageId || !attachmentId) {
     return NextResponse.json({ error: 'missing params' }, { status: 400 })
+  }
+
+  // 🔴 בעלות-מחלקה על ההודעה שהצירוף שייך לה.
+  //
+  // ⚠️ הנתיב החזיר את בייטי הצירוף לפי מזהה בלבד — כלומר סריקות ת"ז ומסמכים
+  // של כל מחלקה, לכל מי שיש לו גישה כלשהי לדואר. זה הצירוף הרגיש ביותר
+  // בעץ gmail, ולכן הוא הראשון שנסגר.
+  const db = getServiceClient()
+  if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
+  if (!(await canAccessGmailMessage(db, staff, messageId))) {
+    return NextResponse.json({ error: 'ההודעה לא נמצאה' }, { status: 404 })
   }
 
   // inlineData: small attachment already embedded in the message (no extra API call needed)

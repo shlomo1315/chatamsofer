@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
+import { requireStaff, requireAdmin, unauthorized, getServiceClient } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,7 +40,11 @@ export async function GET() {
 }
 
 export async function PATCH(request: NextRequest) {
-  const staff = await requireStaff()
+  // 🔴 requireAdmin: הפעולה קובעת sync_only, ותיבה כזו נעלמת מהרשימות של
+  // **כל** המשתמשים. ב-requireStaff בלבד יכול היה איש צוות מכל מחלקה
+  // (גם בלי שום הרשאת דואר) להשבית את הדואר הנכנס של מחלקה אחרת.
+  // הגדרת תיבות היא פעולת מנהל, לא פעולה שוטפת.
+  const staff = await requireAdmin()
   if (!staff) return unauthorized()
 
   const db = getServiceClient()

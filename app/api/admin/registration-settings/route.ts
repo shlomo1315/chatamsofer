@@ -1,3 +1,4 @@
+import { randomInt } from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireAdmin, unauthorized } from '@/lib/apiAuth'
@@ -72,7 +73,12 @@ export async function POST(request: NextRequest) {
     console.log(`[registration-settings] ערוץ המייל בפורטל: ${body.emailChannelDisabled ? 'מוסתר (מצב תקלה)' : 'פעיל'}`)
   }
   if (body.regenerate) {
-    const code = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6)
+    // 🔴 randomInt ולא Math.random: הקוד פותח את הרישום הציבורי גם כשהוא סגור
+    // מנהלית, ולכן הוא סוד אבטחה. Math.random ב-V8 אינו קריפטוגרפי — מי שראה
+    // קוד קודם יכול לשחזר את מצב המחולל ולחזות את הבא.
+    // ראו את אותו נימוק ב-lib/portalPassword.ts.
+    const ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789'
+    const code = Array.from({ length: 14 }, () => ALPHABET[randomInt(ALPHABET.length)]).join('')
     await sb.from('app_settings').upsert(
       { key: 'registration_bypass_code', value: code, updated_at: new Date().toISOString() },
       { onConflict: 'key' },

@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff, requirePermission, forbidden } from '@/lib/apiAuth'
+import { requireNonMailStaff, requirePermission, forbidden } from '@/lib/apiAuth'
 import { resyncSubtree, approveVerifiedBeneficiaries, cascadeRejectSubtree, invalidateLineageCache, lineageCacheVersion, getCachedLineageTree, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
 import { syncChildrenOfBeneficiary } from '@/lib/lineageFamilyChildren'
 import { logActivity } from '@/lib/activityLog'
@@ -33,7 +33,7 @@ const PAYLOAD_STALE_MAX_MS = 10 * 60_000
 let _payloadInflight: Promise<LineagePayload> | null = null
 
 export async function GET(request: NextRequest) {
-  if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401, headers: NO_STORE })
+  if (!(await requireNonMailStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401, headers: NO_STORE })
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'חיבור Supabase לא מוגדר' }, { status: 500, headers: NO_STORE })
 

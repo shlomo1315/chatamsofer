@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff, forbidden, getServiceClient } from '@/lib/apiAuth'
+import { requireNonMailStaff, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { toRegistrationRow } from '@/lib/distributionRow'
 
@@ -34,7 +34,14 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  if (!(await requireStaff())) return forbidden()
+  // 🔴 requireNonMailStaff ולא requireStaff.
+  //
+  // ⚠️ המסלול מחזיר את **כל** שורות החלוקה (fetchAllRows עוקף את תקרת 1,000),
+  // ומחרוזת ה-select כאן היא הרחבה בקוד: ת"ז, שני טלפונים, מייל, כתובת
+  // מגורים ותאריכי לידה של אלפי משפחות. חשבון mail_only — שה-proxy חוסם
+  // מכל מסך ניהול — יכול היה למשוך את המרשם כולו בקריאת fetch אחת מהקונסול.
+  // זה בדיוק התרחיש שבגללו נוצרה requireNonMailStaff; המסלול לא הועבר אליה.
+  if (!(await requireNonMailStaff())) return forbidden()
 
   const { id } = await params
   const db = getServiceClient()
