@@ -44,14 +44,43 @@ function fullAddress(b: { address?: string | null; city?: string | null }): stri
   return [b.address, b.city].filter(Boolean).join(', ').trim()
 }
 
-function pdfResponse(bytes: Uint8Array, filename: string) {
-  // ⚠️ RFC 5987 לשם עברי — filename="..." לבדו יורד כאחוזים. ראו /api/files.
-  const ascii = filename.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '')
+// ─────────────────────────────────────────────────────────────────────────────
+// כותרת ההורדה.
+//
+// 🔴 שם ה-ASCII חייב להיות **קריא**, לא רצף קווים תחתונים.
+//
+// ⚠️ הכלל הישן החליף כל תו שאינו ASCII ב-'_', כך ש"אזור מאה שערים — תשרי.pdf"
+// הפך ל-"_____ ___ ______ _ ____.pdf". חלק מהדפדפנים (ונטפרי בדרך) מעדיפים
+// את filename= הפשוט על פני filename*=, ואז המשתמש מקבל קובץ בשם קווים.
+//
+// לכן: filename* נושא את השם העברי המלא, ו-filename נושא שם לועזי אמיתי
+// שנבנה מהחלקים הלטיניים/הספרתיים בלבד — ואם לא נותר כלום, שם ברירת מחדל
+// בעל משמעות.
+// ─────────────────────────────────────────────────────────────────────────────
+function asciiFallback(filename: string, fallback: string): string {
+  const ext = filename.match(/\.[a-z0-9]+$/i)?.[0] ?? ''
+  const base = filename.slice(0, filename.length - ext.length)
+  const kept = base
+    .replace(/[^\x20-\x7E]+/g, ' ')   // כל רצף לא-לטיני → רווח אחד
+    .replace(/["\\/:*?<>|]+/g, '')    // תווים אסורים בשמות קבצים
+    .replace(/[\s_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .trim()
+  // ⚠️ נדרשות **אותיות**, לא רק תווים: שם עברי שמכיל שנה החזיר "2026.zip",
+  // שם חסר משמעות שאינו אומר לאיזה קובץ הוא שייך. עדיף שם לועזי קבוע.
+  return (/[A-Za-z]{2,}/.test(kept) ? kept : fallback) + ext
+}
+
+function attachmentHeader(filename: string, fallback: string): string {
+  return `attachment; filename="${asciiFallback(filename, fallback)}"; `
+    + `filename*=UTF-8''${encodeURIComponent(filename)}`
+}
+
+function pdfResponse(bytes: Uint8Array, filename: string, fallback: string) {
   return new NextResponse(Buffer.from(bytes), {
     headers: {
       'Content-Type': 'application/pdf',
-      'Content-Disposition':
-        `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      'Content-Disposition': attachmentHeader(filename, fallback),
       'Cache-Control': 'no-store',
     },
   })
@@ -111,7 +140,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     const bytes = await buildSummaryPdf(distName, centers.map(c => ({
       centerName: c.name ?? 'מוקד', centerCity: c.city, count: (byCenter.get(c.id) ?? []).length,
     })))
-    return pdfResponse(bytes, `סיכום כרטיסים — ${distName}.pdf`)
+    return pdfResponse(bytes, `סיכום כרטיסים — ${distName}.pdf`, 'summary')
   }
 
   // ── מוקד יחיד ──
@@ -120,7 +149,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     const c = centers.find(x => x.id === centerId)
     if (!c) return NextResponse.json({ error: 'המוקד לא נמצא' }, { status: 404 })
     const bytes = await buildCenterListPdf(inputFor(c))
-    return pdfResponse(bytes, `${c.name ?? 'מוקד'} — ${distName}.pdf`)
+    return pdfResponse(bytes, `${c.name ?? 'מוקד'} — ${distName}.pdf`, 'center-list')
   }
 
   // ── ZIP: קובץ נפרד לכל מוקד ──
@@ -136,13 +165,10 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     // ⚠️ Buffer<ArrayBuffer> ולא Buffer<ArrayBufferLike>: BodyInit אינו מקבל
     // את השני. אותו שיקול בדיוק כמו ב-lib/fileAccess.
     const out = Buffer.from(await zip.generateAsync({ type: 'uint8array' })) as Buffer<ArrayBuffer>
-    const filename = `רשימות מוקדים — ${distName}.zip`
-    const ascii = filename.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '')
     return new NextResponse(out, {
       headers: {
         'Content-Type': 'application/zip',
-        'Content-Disposition':
-          `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+        'Content-Disposition': attachmentHeader(`רשימות מוקדים — ${distName}.zip`, 'center-lists'),
         'Cache-Control': 'no-store',
       },
     })
@@ -151,7 +177,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   // ── כל המוקדים בקובץ אחד ──
   if (sp.get('all') === '1') {
     const bytes = await buildAllCentersPdf(distName, centers.map(inputFor))
-    return pdfResponse(bytes, `רשימות מוקדים — ${distName}.pdf`)
+    return pdfResponse(bytes, `רשימות מוקדים — ${distName}.pdf`, 'center-lists')
   }
 
   // ── ברירת מחדל: רשימת המוקדים לבורר שבמסך ──

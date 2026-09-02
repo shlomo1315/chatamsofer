@@ -45,15 +45,22 @@ const ACCENT = rgb(0.31, 0.27, 0.90)
 // ── מבנה הטבלה ──
 // 🔴 "האם קיבל" ראשון (הימני ביותר): זו העמודה שמסמנים בה בשטח, והיא
 // צריכה ליפול תחת האגודל של מי שמחזיק את הדף.
+// ⚠️ הרוחב שהתפנה מעמודת החתימה חולק לשם ולכתובת — שני השדות שנחתכים
+// בפועל. טבלה צרה שמותירה שוליים ריקים קשה יותר לקריאה, לא פחות.
+// 🔴 סך הרוחב חייב להיות ≤ W-MARGIN*2 (=527.3). חריגה דוחפת את העמודה
+// השמאלית אל מחוץ לדף, והכתובת נחתכת בהדפסה בלי שום סימן.
 const COLS = [
   { key: 'got', label: 'האם קיבל', width: 52, align: 'center' as const },
-  { key: 'id', label: 'תעודת זהות', width: 78, align: 'right' as const },
-  { key: 'name', label: 'שם ומשפחה', width: 150, align: 'right' as const },
-  { key: 'phone', label: 'טלפון', width: 76, align: 'right' as const },
-  { key: 'address', label: 'כתובת', width: 148, align: 'right' as const },
-  { key: 'sign', label: 'חתימה', width: 74, align: 'center' as const },
+  { key: 'id', label: 'תעודת זהות', width: 76, align: 'right' as const },
+  { key: 'name', label: 'שם ומשפחה', width: 158, align: 'right' as const },
+  { key: 'phone', label: 'טלפון', width: 72, align: 'right' as const },
+  { key: 'address', label: 'כתובת', width: 169, align: 'right' as const },
 ]
 const TABLE_W = COLS.reduce((s, c) => s + c.width, 0)
+
+/** מיוצאים לבדיקה — הטסט אוכף שהטבלה נכנסת בדף. */
+export const TABLE_WIDTH = TABLE_W
+export const PAGE_CONTENT_WIDTH = W - MARGIN * 2
 
 const ROW_H = 20
 const HEAD_H = 22
@@ -243,12 +250,6 @@ export function addCenterPages(pdf: PDFDocument, font: PDFFont, input: CenterLis
             width: box, height: box,
             borderColor: rgb(0.55, 0.58, 0.65), borderWidth: 0.9,
             color: rgb(1, 1, 1),
-          })
-        } else if (col.key === 'sign') {
-          // קו חתימה עדין
-          page.drawLine({
-            start: { x: right - col.width + 8, y: y + 5 }, end: { x: right - 8, y: y + 5 },
-            thickness: 0.5, color: rgb(0.80, 0.82, 0.88),
           })
         } else {
           const val = col.key === 'id' ? (r.idNumber ?? '')
