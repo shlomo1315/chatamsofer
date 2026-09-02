@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { maybeMarkDocsReturned } from '@/lib/docsReturnCheck'
+import { normalizeLineageNodeName, lineageIdentityKey } from '@/lib/lineageNameFormat'
 
 export const dynamic = 'force-dynamic'
 
@@ -80,12 +81,23 @@ export async function POST(request: NextRequest) {
       let gen: number = sel.generation as number
       let lastId: string = sel.id
       for (const n of newNodes) {
-        const nm = (n?.name ?? '').toString().trim().replace(/\s+/g, ' ')
+        // ⚠️ נרמול לניסוח האחיד — היה חסר כאן בעוד public-register כן מנרמל,
+        // כך שאותו אדם נכנס לעץ בשני ניסוחים לפי המסלול שדרכו נוסף.
+        const raw = (n?.name ?? '').toString().trim().replace(/\s+/g, ' ')
+        const nm = normalizeLineageNodeName({ name: raw }) || raw
         if (!nm || nm.length > MAX_NAME) continue
         gen += 1
         const rel = n?.relation === 'son' || n?.relation === 'son_in_law' ? n.relation : null
-        const { data: existing } = await admin.from('lineage_nodes')
-          .select('id, generation').eq('parent_id', parentId).eq('status', 'verified').ilike('name', nm).limit(1).maybeSingle()
+        // 🔴 זהה ל-public-register: הבדיקה חיפשה רק `verified` בהשוואה מילולית,
+        // וכל צומת שנוסף ידנית הוא `pending` — כך שכל תיקון ייחוס יצר עותק
+        // נוסף של אותו אדם. ההשוואה עברה למפתח זהות שמתעלם מתארים וברכות.
+        const key = lineageIdentityKey(nm)
+        const { data: siblings } = await admin.from('lineage_nodes')
+          .select('id, generation, name, status').eq('parent_id', parentId)
+        const matches = (siblings ?? []).filter(
+          (s: { name: string }) => lineageIdentityKey(s.name) === key,
+        )
+        const existing = matches.find((s: { status: string }) => s.status === 'verified') ?? matches[0]
         if (existing?.id) { parentId = existing.id; lastId = existing.id; gen = (existing.generation as number) ?? gen; continue }
         const { data: node } = await admin.from('lineage_nodes')
           .insert({ name: nm, parent_id: parentId, generation: gen, relation: rel, status: 'pending' })

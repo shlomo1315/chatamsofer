@@ -12,7 +12,7 @@ import { placeAnnouncementCall } from '@/lib/yemotCall'
 import { getRegistrationCallText, getRegistrationCallAudio } from '@/lib/registrationCallMessage'
 import { verifyVerifyToken } from '@/lib/verifyToken'
 import { buildDraftLinks } from '@/lib/emailRequestIntake'
-import { normalizeLineageNodeName } from '@/lib/lineageNameFormat'
+import { normalizeLineageNodeName, lineageIdentityKey } from '@/lib/lineageNameFormat'
 import { invalidateLineageCache } from '@/lib/lineageSync'
 import { normalizePhone } from '@/lib/phone'
 import { attachOrphanMailToBeneficiary } from '@/lib/legacyMailSync'
@@ -574,10 +574,30 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
           if (!nm) continue
           gen += 1
           const rel = n?.relation === 'son' || n?.relation === 'son_in_law' ? n.relation : null
-          // שם שכבר אושר (מאומת) תחת אותו אב — שימוש חוזר בצומת הקיים, בלי ליצור כפילות
-          // "ממתין לאישור" שתדרוש אישור חוזר. זה מונע את הבאג של אישור חוזר לשם מאושר.
-          const { data: existing } = await admin.from('lineage_nodes')
-            .select('id, generation').eq('parent_id', parentId).eq('status', 'verified').ilike('name', nm).limit(1).maybeSingle()
+          // ─────────────────────────────────────────────────────────────────
+          // שימוש חוזר בצומת קיים תחת אותו אב, במקום ליצור עותק נוסף.
+          //
+          // 🔴 קודם נבדקו כאן רק צמתים `verified`, בהשוואת `ilike` על השם
+          // המלא. אבל כל צומת שנרשם מוסיף ידנית נוצר `pending`, ולכן הבדיקה
+          // כמעט לעולם לא מצאה דבר: כל נרשם שהוסיף את אותו אדם יצר עותק חדש.
+          // בייצור נמצאו כך ארבעה עותקים של "רבי יהודה ומרת גיטל ברנדייס"
+          // תחת אותו אב, ומתחת לכל אחד עותק נוסף של אותו בן.
+          //
+          // 🔴 וההשוואה עצמה הייתה על השם המילולי, כך ש"ומרת גיטל" ו"וגיטל"
+          // נחשבו לשני אנשים. עכשיו משווים לפי מפתח זהות (lineageIdentityKey)
+          // שמתעלם מתארים, ברכות וגרשיים.
+          //
+          // ⚠️ הסטטוס אינו מסנן עוד, אבל `verified` מקבל עדיפות: אם קיימים גם
+          // מאומת וגם ממתין, נכון להמשיך דרך המאומת.
+          // ⚠️ הסינון בקוד ולא ב-SQL — המפתח נגזר בטיפוס ואין לו ייצוג ב-SQL.
+          // מספר האחים תחת אב יחיד קטן, ולכן זה זול.
+          const key = lineageIdentityKey(nm)
+          const { data: siblings } = await admin.from('lineage_nodes')
+            .select('id, generation, name, status').eq('parent_id', parentId)
+          const matches = (siblings ?? []).filter(
+            (s: { name: string }) => lineageIdentityKey(s.name) === key,
+          )
+          const existing = matches.find((s: { status: string }) => s.status === 'verified') ?? matches[0]
           if (existing?.id) { parentId = existing.id; lastId = existing.id; gen = (existing.generation as number) ?? gen; continue }
           const { data: node } = await admin.from('lineage_nodes')
             .insert({ name: nm, parent_id: parentId, generation: gen, relation: rel, status: 'pending' })
