@@ -1528,6 +1528,28 @@ function validatePhone(p: string): boolean {
   return d.length === 10 && d.startsWith('05')
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// קו נייח — 9 ספרות עם קידומת אזורית. מותר **רק** ב"טלפון נוסף".
+//
+// ⚠️ הטלפון הראשי וטלפון בן/בת הזוג נשארים ניידים בלבד: דרכם יוצאים SMS
+// וצינתוקים, ונייח שנשמר שם היה משתיק את שניהם בלי שהמשפחה תדע.
+//
+// 🔴 למה בכל זאת מאפשרים: יש משפחות שיש להן קו בית בלבד. עד כה הן לא יכלו
+// להשלים רישום, כי כל שדות הטלפון דרשו 05. הכניסה למערכת כבר תומכת בנייח
+// (הקוד מוקרא בשיחה, לא ב-SMS) — רק הטופס חסם.
+//
+// ⚠️ מותאם ל-lib/validation.ts. שינוי כאן מחייב שינוי שם.
+// ─────────────────────────────────────────────────────────────────────────────
+function validateLandline(p: string): boolean {
+  const d = p.replace(/\D/g, '')
+  return d.length === 9 && /^0[234789]$/.test(d.slice(0, 2))
+}
+
+/** נייד או נייח — לשדה "טלפון נוסף" בלבד. */
+function validatePhoneOrLandline(p: string): boolean {
+  return validatePhone(p) || validateLandline(p)
+}
+
 function validateEmail(e: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim())
 }
@@ -2743,8 +2765,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     if (regForm.phone && !validatePhone(regForm.phone)) {
       setPhoneError('אנא הזן מספר נייד תקין המתחיל ב-05'); setError('אנא תקן את שגיאות הטופס'); return
     }
-    if (regForm.phone2 && regForm.phone2.trim() && !validatePhone(regForm.phone2)) {
-      setError('טלפון נוסף אינו תקין — יש להזין מספר נייד ישראלי המתחיל ב-05'); return
+    if (regForm.phone2 && regForm.phone2.trim() && !validatePhoneOrLandline(regForm.phone2)) {
+      setError('טלפון נוסף אינו תקין — נייד (10 ספרות, 05) או קו נייח (9 ספרות עם קידומת אזורית)'); return
     }
     // טלפון נוסף לא יכול להיות זהה לטלפון הבעל או האשה
     if (regForm.phone2 && regForm.phone2.trim()) {
@@ -4957,8 +4979,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   )}
                   <div className="col-span-2 sm:col-span-1">
                     <Field label={<EditableText k="reg.phone.extra" />} hint={<EditableText k="reg.optional" />}>
-                      <TextInput type="tel" value={regForm.phone2} onChange={setReg('phone2')} placeholder="0500000000" dir="ltr" maxLength={11} />
-                      <VerifyControl channel="phone" value={regForm.phone2} valid={validatePhone(regForm.phone2)} onToken={setRegPhone2Token} optionalHint={anyPhoneVerified ? phoneOptionalHint : undefined} />
+                      <TextInput type="tel" value={regForm.phone2} onChange={setReg('phone2')} placeholder="0500000000 או 025381234" dir="ltr" maxLength={11} />
+                      <VerifyControl channel="phone" value={regForm.phone2} valid={validatePhoneOrLandline(regForm.phone2)} onToken={setRegPhone2Token} optionalHint={anyPhoneVerified ? phoneOptionalHint : undefined} />
                     </Field>
                   </div>
                   <div className="col-span-2">
@@ -7614,10 +7636,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 </Field>
                 <Field label="טלפון נוסף" hint="לא חובה">
                   <TextInput value={editForm.phone2} onChange={e => setEditForm(f => ({ ...f, phone2: e.target.value }))} dir="ltr" inputMode="tel" />
-                  {editForm.phone2 && validatePhone(editForm.phone2) && isVerifiedPhone(editForm.phone2) && editPhone2Token === null ? (
+                  {editForm.phone2 && validatePhoneOrLandline(editForm.phone2) && isVerifiedPhone(editForm.phone2) && editPhone2Token === null ? (
                     <p className="mt-1.5 flex items-center gap-1 text-xs text-green-700"><CheckCircle2 size={13} /> מספר מאומת</p>
                   ) : (
-                    <VerifyControl channel="phone" value={editForm.phone2} valid={validatePhone(editForm.phone2)} onToken={setEditPhone2Token} />
+                    <VerifyControl channel="phone" value={editForm.phone2} valid={validatePhoneOrLandline(editForm.phone2)} onToken={setEditPhone2Token} />
                   )}
                 </Field>
                 <Field label="מייל">

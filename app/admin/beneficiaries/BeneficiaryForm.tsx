@@ -1110,7 +1110,8 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
             <FInput type="tel" value={form.phone} onChange={set('phone')} placeholder="050-0000000" dir="ltr" required />
           </Field>
           <Field label="טלפון נוסף">
-            <FInput type="tel" value={form.phone2} onChange={set('phone2')} placeholder="050-0000000" dir="ltr" />
+            {/* ⚠️ נייד או נייח — זה השדה היחיד שמקבל קו בית (ראו lib/validation). */}
+            <FInput type="tel" value={form.phone2} onChange={set('phone2')} placeholder="050-0000000 או 02-5381234" dir="ltr" />
           </Field>
           <Field label="אימייל" required error={errors.email}>
             <EmailInput value={form.email} onChange={v => setForm(f => ({ ...f, email: v }))} placeholder="name@example.com" required />

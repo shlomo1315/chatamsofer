@@ -22,6 +22,12 @@ export default function ElevenLabsStudio() {
   const [savingCfg, setSavingCfg] = useState(false)
   const [previewing, setPreviewing] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  // 🔴 שגיאת החיבור נשמרת במסך ואינה נזרקת כ-toast.
+  //
+  // ⚠️ toast על כשל חיבור קפץ בכל שמירה ובכל בחירת קול — כלומר שוב ושוב על
+  // אותה תקלה אחת, שהמשתמש כבר יודע עליה. הודעה חולפת גם נעלמת לפני שספיקו
+  // לקרוא אותה, ואינה מסבירה מה לעשות. כאן היא נשארת ליד השדה שגרם לה.
+  const [connError, setConnError] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const [playing, setPlaying] = useState(false)
 
@@ -33,6 +39,7 @@ export default function ElevenLabsStudio() {
         setHasKey(!!d.hasKey)
         setVoiceId(d.voiceId ?? '')
         setVoices(d.voices ?? [])
+        setConnError(d.voicesError ?? null)
       })
       .catch(() => {})
     return () => { if (audioRef.current) { audioRef.current.pause(); audioRef.current = null } }
@@ -48,8 +55,8 @@ export default function ElevenLabsStudio() {
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || 'שגיאה בשמירה')
       setHasKey(!!d.hasKey); setVoiceId(d.voiceId ?? voiceId); setVoices(d.voices ?? []); setApiKeyInput('')
-      if (d.voicesError) toast.error(`חיבור ל-ElevenLabs: ${d.voicesError}`)
-      else toast.success('ההגדרות נשמרו')
+      setConnError(d.voicesError ?? null)
+      if (!d.voicesError) toast.success('ההגדרות נשמרו')
     } catch (e) { toast.error(e instanceof Error ? e.message : 'שגיאה בשמירה') }
     finally { setSavingCfg(false) }
   }
@@ -136,6 +143,22 @@ export default function ElevenLabsStudio() {
             {savingCfg ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} שמור
           </Button>
         </div>
+
+        {/* ⚠️ ההגדרות נשמרו — מה שנכשל הוא החיבור. ההפרדה חשובה: בלעדיה
+            נראה שהשמירה עצמה נכשלה, והמשתמש מקליד את המפתח שוב ושוב. */}
+        {connError && (
+          <div className="mt-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+            <KeyRound size={13} className="mt-0.5 flex-shrink-0 text-amber-600" />
+            <div className="text-[11px] leading-relaxed text-amber-800">
+              <p className="font-semibold">ההגדרות נשמרו, אך אין חיבור ל-ElevenLabs</p>
+              <p className="mt-0.5 text-amber-700">{connError}</p>
+              <p className="mt-1 text-amber-600">
+                בדקו שהמפתח בתוקף ושיש בו הרשאות <strong>Voices</strong> ו-<strong>Text&nbsp;to&nbsp;Speech</strong>,
+                ושנותרה יתרת תווים בחשבון. עד אז יצירת הקול לא תעבוד.
+              </p>
+            </div>
+          </div>
+        )}
         <p className="text-[11px] text-slate-500 mt-2">
           <span className="inline-flex items-center bg-indigo-100 text-indigo-700 rounded-full px-2 py-0.5 font-medium">🇮🇱 עברית</span>
           {' '}מנוע Eleven v3. אם המבטא נשמע אנגלי — בחר קול עברי.

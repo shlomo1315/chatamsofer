@@ -36,6 +36,8 @@ export default function YemotMaternitySettings() {
   const [hasKey, setHasKey] = useState(false)
   const [voiceId, setVoiceId] = useState('')
   const [voices, setVoices] = useState<Voice[]>([])
+  // ⚠️ כשל חיבור נשאר במסך ולא נזרק כ-toast — ראו ההסבר ב-ElevenLabsStudio.
+  const [connError, setConnError] = useState<string | null>(null)
   const [apiKeyInput, setApiKeyInput] = useState('')
   const [savingCfg, setSavingCfg] = useState(false)
 
@@ -147,8 +149,8 @@ export default function YemotMaternitySettings() {
       setVoiceId(data.voiceId ?? voiceId)
       setVoices(data.voices ?? [])
       setApiKeyInput('')
-      if (data.voicesError) toast.error(`חיבור ל-ElevenLabs: ${data.voicesError}`)
-      else toast.success('הגדרות הקול נשמרו')
+      setConnError(data.voicesError ?? null)
+      if (!data.voicesError) toast.success('הגדרות הקול נשמרו')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'שגיאה בשמירה')
     } finally {
@@ -344,6 +346,21 @@ export default function YemotMaternitySettings() {
             שמור
           </Button>
         </div>
+
+        {connError && (
+          <div className="mt-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+            <KeyRound size={13} className="mt-0.5 flex-shrink-0 text-amber-600" />
+            <div className="text-[11px] leading-relaxed text-amber-800">
+              <p className="font-semibold">ההגדרות נשמרו, אך אין חיבור ל-ElevenLabs</p>
+              <p className="mt-0.5 text-amber-700">{connError}</p>
+              <p className="mt-1 text-amber-600">
+                בדקו שהמפתח בתוקף ושיש בו הרשאות <strong>Voices</strong> ו-<strong>Text&nbsp;to&nbsp;Speech</strong>,
+                ושנותרה יתרת תווים בחשבון. עד אז יצירת הקול לא תעבוד.
+              </p>
+            </div>
+          </div>
+        )}
+
         <p className="text-[11px] text-slate-500 mt-2 flex items-center gap-1.5 flex-wrap">
           <span className="inline-flex items-center bg-indigo-100 text-indigo-700 rounded-full px-2 py-0.5 font-medium">🇮🇱 עברית</span>
           הקול נוצר עם מנוע Eleven v3 (התמיכה הטובה ביותר בעברית), עם נפילה-לאחור אוטומטית. אם המבטא נשמע אנגלי — הקול שנבחר הוא קול אנגלי; בחר/י קול עברי והשווה עם כפתור ההשמעה.

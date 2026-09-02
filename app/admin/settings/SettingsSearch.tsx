@@ -50,14 +50,32 @@ export default function SettingsSearch() {
       return
     }
 
+    // ── שלב א': התאמה בכותרות ──
+    // הכותרת היא הטקסט של הכפתור הראשון במקטע; נופלים לטקסט המלא אם השתנה המבנה.
+    const titleMatch = items.map(el =>
+      norm(el.querySelector('button')?.textContent ?? el.textContent ?? '').includes(needle)
+    )
+
+    // ── שלב ב': נפילה לחיפוש בתוכן ──
+    //
+    // 🔴 בלי זה, חיפוש של ערך שמופיע *בתוך* הגדרה — כתובת מייל, שם תיבה,
+    // מספר טלפון — הסתיר את **כל** המסך והציג "לא נמצאה הגדרה מתאימה".
+    // המנהל שחיפש office@chasamsofer.info נשאר מול מסך ריק, אף שההגדרה
+    // שמכילה את הכתובת קיימת. חיפוש שמחזיר ריק על ערך שקיים גרוע מאין
+    // חיפוש בכלל: הוא מלמד שהדבר אינו קיים.
+    //
+    // ⚠️ הכותרות קודמות בכוונה: כשיש התאמה בכותרת היא כמעט תמיד מה שחיפשו,
+    // וחיפוש בתוכן היה מציף מקטעים שרק מזכירים את המילה אגב אורחא.
+    const useContent = !titleMatch.some(Boolean)
+
     let hits = 0
-    for (const el of items) {
-      // הכותרת היא הטקסט של הכפתור הראשון במקטע; נופלים לטקסט המלא אם השתנה המבנה.
-      const title = el.querySelector('button')?.textContent ?? el.textContent ?? ''
-      const match = norm(title).includes(needle)
+    items.forEach((el, i) => {
+      const match = useContent
+        ? norm(el.textContent ?? '').includes(needle)
+        : titleMatch[i]
       el.hidden = !match
       if (match) hits++
-    }
+    })
     // קבוצה שכל פריטיה הוסתרו — גם הכותרת שלה יורדת, אחרת נשארת כותרת ריקה.
     for (const g of groups) {
       const visible = Array.from(
@@ -104,7 +122,7 @@ export default function SettingsSearch() {
       {count !== null && (
         <p className="pr-1 text-[12px] font-medium text-slate-500">
           {count === 0
-            ? 'לא נמצאה הגדרה מתאימה'
+            ? 'לא נמצאה הגדרה מתאימה — נסו מילה מהכותרת, למשל "מייל" או "טלפון"'
             : `${count} הגדרות מתאימות`}
         </p>
       )}
