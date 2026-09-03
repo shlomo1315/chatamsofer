@@ -5,6 +5,7 @@ import { portalCookieName } from '../login/route'
 import { verifyRecoveryPortalToken } from '@/lib/recoveryPortalAuth'
 import { extractUrl } from '@/lib/extractUrl'
 import { RECOVERY_COOKIE_RE } from '@/lib/recoveryCookieShape'
+import { scanReceiptNumber } from '@/lib/receiptOcr'
 
 export const dynamic = 'force-dynamic'
 
@@ -265,5 +266,19 @@ export async function POST(request: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ ok: true, url })
+  // ── זיהוי מספר הקבלה מתוך הקובץ ──
+  //
+  // 🔴 **אחרי** שהקבלה כבר נשמרה, ולעולם לא לפניה: הזיהוי הוא נוחות,
+  // וכשל בו אינו רשאי למנוע העלאה שהצליחה.
+  //
+  // ⚠️ המספר מוחזר להצגה ואינו נשמר כאן. מספר שגוי שנשמר בשקט גרוע ממספר
+  // חסר — איש לא יידע שצריך לבדוק אותו. בית ההחלמה רואה, מתקן אם צריך,
+  // ורק אז הוא נשמר עם שאר הפרטים.
+  const scan = await scanReceiptNumber(bytes, contentType)
+
+  return NextResponse.json({
+    ok: true, url,
+    receiptNumber: scan.number,
+    receiptConfidence: scan.confidence,
+  })
 }

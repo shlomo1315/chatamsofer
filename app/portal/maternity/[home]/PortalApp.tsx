@@ -332,6 +332,15 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
   const [receiptFile, setReceiptFile] = useState<Record<string, File | null>>({})
   // קישור ישיר לקובץ הקבלה — חלופה להעלאה פיזית (די באחד מהם)
   const [receiptLinkInput, setReceiptLinkInput] = useState<Record<string, string>>({})
+  // ── מספר הקבלה ──
+  // ⚠️ מזוהה אוטומטית מהקובץ (lib/receiptOcr) וממולא כהצעה בלבד. הנציג
+  // רואה, מתקן אם צריך, ורק אז הוא נשמר — זיהוי אינו ודאי, ומספר שגוי
+  // שנשמר בשקט גרוע ממספר חסר.
+  const [receiptInput, setReceiptInput] = useState<Record<string, string>>(
+    () => Object.fromEntries(aids.map(a => [a.id, a.recovery_receipt_number ?? ''])),
+  )
+  /** סומן כזיהוי אוטומטי — כדי להציג לנציג שהמספר לא הוקלד בידיו. */
+  const [receiptAuto, setReceiptAuto] = useState<Record<string, 'high' | 'low' | null>>({})
   const [receiptUrl, setReceiptUrl] = useState<Record<string, string | null>>(
     () => Object.fromEntries(aids.map(a => [a.id, a.recovery_receipt_url ?? null])),
   )
@@ -372,6 +381,12 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
       if (r.ok && d.url) {
         setReceiptUrl(m => ({ ...m, [aidId]: d.url }))
         setReceiptFile(m => ({ ...m, [aidId]: file }))
+        // ⚠️ המספר שזוהה ממלא את השדה **אם הוא ריק**. הקלדה ידנית קודמת
+        // גוברת תמיד — הזיהוי אינו ודאי, ואסור לו לדרוס מה שאדם הזין.
+        if (d.receiptNumber) {
+          setReceiptInput(m => (m[aidId] ? m : { ...m, [aidId]: String(d.receiptNumber) }))
+          setReceiptAuto(m => ({ ...m, [aidId]: d.receiptConfidence ?? 'low' }))
+        }
       } else {
         // כשל העלאה — מציגים סיבה במקום להשאיר את הנציג תקוע בלי משוב
         setUploadErr(m => ({ ...m, [aidId]: d.error || 'העלאת הקובץ נכשלה — נסו שוב' }))
@@ -395,6 +410,11 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
       const d = await r.json().catch(() => ({}))
       if (r.ok && d.url) {
         setReceiptUrl(m => ({ ...m, [aidId]: d.url }))
+        // ⚠️ אותו טיפול כמו בהעלאה — הזיהוי חל גם על קובץ שהגיע מקישור.
+        if (d.receiptNumber) {
+          setReceiptInput(m => (m[aidId] ? m : { ...m, [aidId]: String(d.receiptNumber) }))
+          setReceiptAuto(m => ({ ...m, [aidId]: d.receiptConfidence ?? 'low' }))
+        }
         return d.url as string
       }
       setUploadErr(m => ({ ...m, [aidId]: d.error || 'לא ניתן להוריד את הקובץ מהקישור' }))
@@ -445,6 +465,9 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
           stayTo: stayTo[aidId] ?? null,
           // קישור ישיר לקבלה (אם הוזן במקום העלאת קובץ) — ה-backend ישמור אותו
           receiptUrl: receiptUrl[aidId] ?? null,
+          // מספר הקבלה — מזוהה אוטומטית ונערך ידנית. ⚠️ אינו חובה: הקובץ
+          // הוא הראיה, והמספר הוא נוחות לאיתור בהנהלת החשבונות.
+          receiptNumber: receiptInput[aidId]?.trim() || undefined,
         }),
       })
       if (r.ok) {
@@ -1032,9 +1055,36 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                                   }}
                                 />
                               </div>
-                              {/* ⚠️ שדה "מספר קבלה" הוסר: הקבלה עצמה מצורפת, והמספר
-                                  מופיע עליה. שדה נפרד רק הכפיל הקלדה ידנית והוסיף
-                                  מקום לטעות. */}
+                              {/* ── מספר הקבלה ──
+                                  ⚠️ מזוהה אוטומטית מהקובץ שהועלה וממולא כהצעה.
+                                  מוצג לעריכה ולא נשמר בשקט: הזיהוי אינו ודאי,
+                                  ומספר שגוי שנשמר בלי שאיש ראה אותו גרוע ממספר
+                                  חסר. הקלדה ידנית גוברת תמיד. */}
+                              <label className="flex flex-col gap-1.5 text-right">
+                                <span className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+                                  מספר קבלה
+                                  {receiptAuto[aid.id] && (
+                                    <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
+                                      receiptAuto[aid.id] === 'high'
+                                        ? 'bg-emerald-100 text-emerald-700'
+                                        : 'bg-amber-100 text-amber-800'
+                                    }`}>
+                                      {receiptAuto[aid.id] === 'high' ? 'זוהה מהקבלה' : 'זוהה — כדאי לוודא'}
+                                    </span>
+                                  )}
+                                </span>
+                                <input
+                                  type="text" inputMode="numeric"
+                                  value={receiptInput[aid.id] ?? ''}
+                                  onChange={e => {
+                                    setReceiptInput(m => ({ ...m, [aid.id]: e.target.value }))
+                                    // עריכה ידנית מסירה את התווית — המספר כבר אינו "מזוהה".
+                                    setReceiptAuto(m => ({ ...m, [aid.id]: null }))
+                                  }}
+                                  placeholder="יתמלא אוטומטית מהקבלה"
+                                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                                />
+                              </label>
                               <label className="flex flex-col gap-1.5 text-right">
                                 <span className="text-sm font-semibold text-slate-600">קובץ קבלה (תמונה/PDF)</span>
                                 <input
