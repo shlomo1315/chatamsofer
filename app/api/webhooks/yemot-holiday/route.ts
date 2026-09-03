@@ -29,6 +29,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'node:crypto'
 import { deadlineState, recipientDeadlineState, formatCountdown } from '@/lib/centerDeadline'
+import { checkCardIdentity } from '@/lib/yemotCardIdentity'
 import { getServiceClient } from '@/lib/apiAuth'
 import { getOpenDistribution, registerToOpenDistribution } from '@/lib/holidayDistributions'
 import { getHolidayMessages, type HolidayMessages } from '@/lib/yemotHolidayMessages'
@@ -60,6 +61,8 @@ const CENTER_ID_VARS = ['ctr_id', 'ctr_id2', 'ctr_id3']
 const CARD_ID_VARS = ['crd_id', 'crd_id2', 'crd_id3']
 const CARD_VARS = ['crd_num', 'crd_num2', 'crd_num3']
 const CARD_CONFIRM_VARS = ['crd_ok', 'crd_ok2', 'crd_ok3']
+/** תאריך לידה לאימות מתקשר שאינו מהטלפון הרשום. ראו lib/yemotCardIdentity. */
+const BIRTH_VAR = 'crd_birth'
 /** ⚠️ מינימום ספרות בכרטיס נדרים — קצר מזה הוא בוודאות שגיאת הקשה. */
 const CARD_MIN_DIGITS = 8
 
@@ -205,6 +208,68 @@ async function findMemberById(idNumber: string): Promise<Member | null> {
  * ⚠️ אישור הספרות לפני השיוך — כמו בשלוחת היולדות: הקשה שגויה משייכת
  * כרטיס של משפחה אחרת, וזו טעות שאי אפשר לתקן בטלפון.
  */
+// ─────────────────────────────────────────────────────────────────────────────
+// מקש 1 — בדיקת זכאות.
+//
+// 🔴 שלוש תשובות שונות, ולכל אחת משמעות אחרת למתקשר:
+//   · ת"ז אינה במאגר      → אינכם רשומים באיגוד הצאצאים (יש להירשם)
+//   · רשום באיגוד, לא בחלוקה → אינכם רשומים לחלוקה זו
+//   · רשום בחלוקה          → זכאי / ממתין לאישור
+//
+// ⚠️ ההבחנה בין השלוש היא כל התועלת של המסלול. תשובה אחת גורפת ("אינך
+// זכאי") הייתה שולחת את כולם למשרד בלי לדעת מה לתקן.
+// ─────────────────────────────────────────────────────────────────────────────
+const ELIG_ID_VARS = ['elg_id', 'elg_id2', 'elg_id3']
+
+async function handleEligibilityRoute(
+  params: Record<string, string>,
+  msgs: HolidayMessages,
+  callId: string,
+): Promise<NextResponse> {
+  const db = getServiceClient()
+  if (!db) return yemotText([idMessage(msgToken(msgs, 'failed')), goToFolder('hangup')], callId)
+
+  // ── הקשת ת"ז ──
+  // ⚠️ ימות מחזירה בכל בקשה גם את ההקשות הקודמות; מאתרים את האחרונה.
+  let attempt = -1
+  for (let i = ELIG_ID_VARS.length - 1; i >= 0; i--) {
+    if (String(params[ELIG_ID_VARS[i]] ?? '').trim()) { attempt = i; break }
+  }
+  if (attempt < 0) {
+    return yemotText([readTap(ELIG_ID_VARS[0], [msgToken(msgs, 'ask_id')], { max: ID_DIGITS, min: 1 })], callId)
+  }
+
+  const typedId = digitsOnly(params[ELIG_ID_VARS[attempt]])
+  const hasNextTry = attempt + 1 < ELIG_ID_VARS.length
+  const retry = (key: string) => yemotText([readTap(ELIG_ID_VARS[attempt + 1],
+    [msgToken(msgs, key), msgToken(msgs, 'ask_id')], { max: ID_DIGITS, min: 1 })], callId)
+  const stop = (key: string) => yemotText([idMessage(msgToken(msgs, key)), goToFolder('hangup')], callId)
+
+  if (typedId.length !== ID_DIGITS) {
+    return hasNextTry ? retry('id_invalid') : stop('id_invalid')
+  }
+
+  // ── לא באיגוד כלל ──
+  const ben = await findMemberById(typedId)
+  if (!ben) return hasNextTry ? retry('not_found') : stop('not_found')
+
+  // ── באיגוד, אך לא בחלוקה הנוכחית ──
+  // ⚠️ distributions ולא holiday_distributions — ראו ההערה ב-handleCenterRoute.
+  const { data: distRow } = await db.from('distributions')
+    .select('id').order('created_at', { ascending: false }).limit(1).maybeSingle()
+  const dist = distRow as { id: string } | null
+  if (!dist) return stop('not_eligible')
+
+  const { data: recRow } = await db.from('distribution_recipients')
+    .select('approval_status')
+    .eq('distribution_id', dist.id).eq('beneficiary_id', ben.id).maybeSingle()
+  const rec = recRow as { approval_status: string | null } | null
+  if (!rec) return stop('not_eligible')
+
+  // ── רשום: מאושר או ממתין ──
+  return stop(rec.approval_status === 'approved' ? 'eligible_yes' : 'eligible_pending')
+}
+
 async function handleCardRoute(
   params: Record<string, string>,
   msgs: HolidayMessages,
@@ -290,6 +355,57 @@ async function handleCardRoute(
   // שכבר הוטען, כלומר כסף שנשאר על כרטיס שאיש אינו מחזיק.
   if (rec.card_number) {
     return yemotText([idMessage(msgToken(msgs, 'card_already')), goToFolder('hangup')], callId)
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 אימות המתקשר — לפני שהוא מוסר מספר כרטיס.
+  //
+  // שיוך כרטיס הוא פעולה כספית שאי אפשר לבטל בטלפון, ות"ז אינה סוד:
+  // היא מופיעה על כל מסמך. לכן נדרשת ראיה נוספת — או שליטה בטלפון
+  // הרשום בכרטסת, או ידיעת תאריך לידה.
+  //
+  // ⚠️ הבדיקה כאן ולא אחרי הקשת מספר הכרטיס: מי שאינו מזוהה לא אמור
+  // להגיע לשלב שבו הוא מקיש מספר.
+  // ראו lib/yemotCardIdentity — הכללים והבדיקות שם.
+  // ─────────────────────────────────────────────────────────────────────────
+  const { data: idRow } = await db.from('beneficiaries')
+    .select('phone, phone2, spouse_phone, birth_date, spouse_birth_date')
+    .eq('id', ben.id).maybeSingle()
+  const idData = idRow as {
+    phone: string | null; phone2: string | null; spouse_phone: string | null
+    birth_date: string | null; spouse_birth_date: string | null
+  } | null
+
+  // 🔴 ApiPhone הוא השדה שימות מעבירה בו את מספר המתקשר — אומת מול
+  // שלוחת היולדות שכבר עובדת בייצור.
+  //
+  // ⚠️ שם שדה שגוי היה מחזיר מחרוזת ריקה, וכל מתקשר — גם מהטלפון הרשום —
+  // היה נדרש לתאריך לידה. כשל שקט שנראה כמו החמרה מכוונת.
+  const callerPhone = String(params['ApiPhone'] ?? '').trim()
+  const typedBirth = digitsOnly(params[BIRTH_VAR] ?? '')
+
+  const identity = checkCardIdentity(
+    {
+      phones: [idData?.phone, idData?.phone2, idData?.spouse_phone],
+      birthDates: [idData?.birth_date, idData?.spouse_birth_date],
+    },
+    callerPhone,
+    typedBirth,
+  )
+
+  if (!identity.ok) {
+    if (identity.reason === 'need_birth_date') {
+      // ⚠️ הזיהוי נאמר לפני הבקשה — המתקשר צריך לדעת את מי המערכת זיהתה
+      // לפני שהוא מוסר פרט אישי נוסף.
+      return yemotText([readTap(BIRTH_VAR, [
+        msgToken(msgs, 'identify', { name: readableName(ben) }),
+        msgToken(msgs, 'card_ask_birth'),
+      ], { max: 8, min: 8 })], callId)
+    }
+    const key = identity.reason === 'no_birth_date_on_file'
+      ? 'card_no_birth_on_file'
+      : 'card_birth_mismatch'
+    return yemotText([idMessage(msgToken(msgs, key)), goToFolder('hangup')], callId)
   }
 
   // ── הקשת מספר הכרטיס ──
@@ -677,15 +793,27 @@ export async function handleHolidayCall(params: Record<string, string>): Promise
     ], callId)
   }
 
-  // מסלולים 3 ו-4 — בחירת מוקד ושמיעתו. אינם תלויים בשער הרישום.
-  if (choice === '3' || choice === '4') {
-    return handleCenterRoute(choice, params, msgs, callId)
+  // ─────────────────────────────────────────────────────────────────────────
+  // התפריט: 1 = בדיקת זכאות · 2 = המוקד שנבחר · 3 = חיבור כרטיס.
+  //
+  // ⚠️ אף אחד מהם אינו תלוי בשער הרישום — הרישום נסגר, והשלוחה ממשיכה
+  // לשרת את מי שכבר רשום.
+  //
+  // ⚠️ מקש 4 נשמר בשקט כבחירת מוקד: הוא אינו מוכרז בתפריט (הבחירה
+  // נסגרה וכולם שובצו), אבל מי שהקיש מתוך הרגל עדיין מגיע ליעד מוכר
+  // במקום ל"הקשה שגויה".
+  // ─────────────────────────────────────────────────────────────────────────
+  if (choice === '1') {
+    return handleEligibilityRoute(params, msgs, callId)
   }
-
-  // מסלול 2 — חיבור כרטיס נדרים. גם הוא אינו תלוי בשער הרישום: הכרטיס
-  // נמסר במוקד אחרי שהרישום נסגר.
   if (choice === '2') {
+    return handleCenterRoute('4', params, msgs, callId)   // שמיעת המוקד שנבחר
+  }
+  if (choice === '3') {
     return handleCardRoute(params, msgs, callId)
+  }
+  if (choice === '4') {
+    return handleCenterRoute('3', params, msgs, callId)   // בחירה — לא מוכרז
   }
 
 
