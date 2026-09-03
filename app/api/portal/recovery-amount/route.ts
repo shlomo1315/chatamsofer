@@ -120,6 +120,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'יש לצרף קובץ קבלה (העלאה או קישור ישיר)' }, { status: 400 })
   }
 
+  // ⚠️ מספר הקבלה אינו נדרש בטופס: הוא מופיע על הקבלה המצורפת, ושדה נפרד
+  // רק הכפיל הקלדה ידנית. הקובץ (או קישור ישיר) הוא החובה — נבדק למעלה.
+  //
+  // ⏳ מתוכנן: זיהוי אוטומטי של מספר הקבלה מתוך הקובץ (OCR), כדי שהמספר
+  // יישמר בלי הקלדה. עד אז הוא נשמר רק אם נשלח.
+
   const { error } = await admin.from('maternity_aids').update({
     recovery_amount: amt,
     recovery_nights: nightsNum,

@@ -154,6 +154,17 @@ export function isHolidaySubject(subject: string): boolean {
   return /חלוק[הת]?\s*(ה)?חגים/.test(s) || /רישום\s*לחלוק/.test(s)
 }
 
+/**
+ * 🔴 אינה בשימוש — ערוץ הרישום במייל בוטל (ראו handleEmailRequest).
+ *
+ * נשמרת ולא נמחקה: היא מתעדת את הזיהוי, את בדיקת ההתאמה בין כתובת השולח
+ * לכתובת הרשומה, ואת ההודעות — כל מה שיידרש אם אי פעם יוחלט להחזיר את
+ * הערוץ. מחיקה הייתה מאבדת את ההקשר ומחייבת לבנות אותו מחדש.
+ *
+ * ⚠️ אין להחזיר אותה בלי להחזיר גם את הטיוטה במענה האוטומטי — ערוץ שנקלט
+ * בלי דרך מוצהרת להשתמש בו הוא בדיוק חצי-הדרך שגרם לבלאגן.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function handleHolidayEmail(admin: SupabaseClient, msg: Msg): Promise<boolean> {
   const from = (msg.fromEmail || '').toLowerCase()
   if (!from || from.endsWith('@chasamsofer.info') || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(from)) return true
@@ -259,9 +270,21 @@ async function withTwinAttachments(
 }
 
 export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promise<boolean> {
-  // ⚠️ נבדק *לפני* detectReqType: הנושא "רישום לחלוקת חגים" אינו סוג טופס, ואילו
-  // היה נופל לזיהוי הרגיל הוא היה מוחזר כ-null והמייל היה נבלע בשקט.
-  if (isHolidaySubject(msg.subject)) return handleHolidayEmail(admin, msg)
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 רישום לחלוקת חגים במייל — בוטל.
+  //
+  // הרישום נעשה בטלפון ובאזור האישי. הערוץ במייל היה תלוי בהתאמה מדויקת
+  // בין כתובת השולח לכתובת הרשומה, וכל פער יצר פנייה שנראית כרישום ואינה
+  // נקלטת — בלאגן במקום שירות.
+  //
+  // ⚠️ מוחזר false ולא true: כך המייל **אינו נבלע** אלא ממשיך לתיבה
+  // כפנייה רגילה, והמזכירה רואה אותו ויכולה לענות. הבליעה השקטה הייתה
+  // משאירה משפחה בהמתנה לתשובה שלא תגיע.
+  //
+  // ⚠️ הזיהוי (isHolidaySubject) נשאר בקוד: הוא עדיין מונע מהנושא הזה
+  // ליפול לזיהוי סוגי הטפסים ולהתפרש כבקשה אחרת.
+  // ─────────────────────────────────────────────────────────────────────────
+  if (isHolidaySubject(msg.subject)) return false
 
   const type = detectReqType(msg.subject)
   if (!type) return false
@@ -625,21 +648,16 @@ export async function buildDraftLinks(
     const prefix = `בקשת סיוע ${maritalStatus}` // "בקשת סיוע אלמן" / "בקשת סיוע אלמנה"
     links.push({ label: prefix, href: draftMailto('widow', idNumber, ctx, prefix), open: isOpen('widow') })
   }
-  // ── רישום לחלוקת חגים במייל ──
-  // ⚠️ מופיע רק כשיש חלוקה שהרישום אליה פתוח *וגם* מתג-האב פתוח — שתי הבדיקות
-  // יחד יושבות ב-getOpenDistribution, ולכן די בקריאה אחת. בלי שדות למלא:
-  // הנושא נושא את הת"ז וזה כל מה שנדרש.
-  const { getOpenDistribution } = await import('./holidayDistributions')
-  const openDist = await getOpenDistribution()
-  if (openDist) {
-    const subject = `${HOLIDAY_SUBJECT_PREFIX} ${idNumber}`
-    const body = `שלום וברכה\n\nאבקש לרשום אותי לחלוקת ${openDist.name}${openDist.year ? ` ${openDist.year}` : ''}.\n\nאין צורך למלא פרטים נוספים — יש לשלוח את המייל כמו שהוא.`
-    links.push({
-      label: `להרשמה לחלוקת ${openDist.name}${openDist.year ? ` ${openDist.year}` : ''}`,
-      href: `mailto:${IGUD_MAILBOX}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
-      open: true,
-    })
-  }
+  // ── רישום לחלוקת חגים במייל — בוטל ──
+  //
+  // 🔴 הערוץ הוסר במכוון. הרישום נעשה בטלפון ובאזור האישי, ושני אלה
+  // מזהים את המשפחה ומאשרים לה מיד. הרישום במייל, לעומתם, היה תלוי
+  // בהתאמה בין כתובת השולח לכתובת הרשומה — וכל פער בין השתיים יצר
+  // פנייה שנראית כרישום אך אינה נקלטת, ובלאגן במקום שירות.
+  //
+  // ⚠️ הטיוטה המוכנה הוסרה כאן, וקליטת המייל עצמה נחסמה ב-handleEmailRequest.
+  // ⚠️ אין להחזיר בלי להחזיר גם את הקליטה — קישור שמייצר פנייה שאיש אינו
+  // קולט גרוע מהיעדר קישור.
 
   // ⚠️ מחלקה סגורה (שער סגור בהגדרות) — לא מוצגת כלל, לא מאפור. המשתמש ביקש
   // שכפתור של מחלקה שאינה פעילה לא יופיע בכלל, גם במייל וגם בטופס הציבורי.
