@@ -6,7 +6,7 @@ import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import type { Beneficiary } from '@/types'
 import type { readListParams } from '@/lib/listParams'
 import { BLANK } from '@/lib/tableSort'
-import { SORT_COLUMNS, FILTER_COLUMNS } from '@/lib/listParams'
+import { SORT_COLUMNS, FILTER_COLUMNS, ageToBirthRange, hasAdvFilters, type AdvFilters } from '@/lib/listParams'
 
 // רק העמודות שטבלת הרשימה מציגה/ממיינת/מחפשת בהן — משמיט שדות כבדים (children JSON,
 // lineage_chain, lineage_manual וכו') מה-payload. כרטיס המוטב וייצוא האקסל מושכים בנפרד.
@@ -87,6 +87,58 @@ async function getFilterOptions(
   return out
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// החלת הסינון המתקדם על שאילתה.
+//
+// 🔴 מיוצא ומשמש *גם* את הייצוא לאקסל (app/api/admin/export). הפילטרים חייבים
+// להיות זהים בין המסך לקובץ: כשהם שוכפלו בשני מקומות, הקובץ שירד לא תאם את
+// מה שהוצג — ראו export-must-match-screen. פונקציה אחת = אין דרך שיסטו.
+// ─────────────────────────────────────────────────────────────────────────────
+// ⚠️ הטיפוס רקורסיבי דרך Self: כל מתודה מחזירה את *הטיפוס עצמו* ולא AdvQ
+// גנרי, אחרת שרשור הפילטרים מאבד את הטיפוס של הקורא (CountQ/StatusQ)
+// ו-tsc פוסל את ההשמה בחזרה.
+export interface AdvQ {
+  gte: (c: string, v: unknown) => AdvQ
+  lte: (c: string, v: unknown) => AdvQ
+  lt: (c: string, v: unknown) => AdvQ
+  eq: (c: string, v: unknown) => AdvQ
+  is: (c: string, v: null) => AdvQ
+  not: (c: string, o: string, v: null) => AdvQ
+  ilike: (c: string, v: string) => AdvQ
+}
+
+export function applyAdvFilters<T extends AdvQ>(q: T, a: AdvFilters, today = new Date()): T {
+  // ── גיל → טווח תאריכי לידה (sargable; ראו ageToBirthRange) ──
+  const { from, to } = ageToBirthRange(a.ageMin, a.ageMax, today)
+  if (from) q = q.gte('birth_date', from) as T
+  if (to) q = q.lte('birth_date', to) as T
+
+  if (a.kidsMin !== undefined) q = q.gte('children_count', a.kidsMin) as T
+  if (a.kidsMax !== undefined) q = q.lte('children_count', a.kidsMax) as T
+
+  // ⚠️ created_at הוא timestamptz ו-reg_to הוא יום שלם: בלי הדחיפה ליום
+  // הבא, "עד 06.09" היה מחמיץ את כל מי שנרשם באותו יום אחרי חצות.
+  if (a.regFrom) q = q.gte('created_at', `${a.regFrom}T00:00:00`) as T
+  if (a.regTo) {
+    const d = new Date(`${a.regTo}T00:00:00Z`)
+    d.setUTCDate(d.getUTCDate() + 1)
+    q = q.lt('created_at', d.toISOString().slice(0, 10)) as T
+  }
+
+  // 🔴 קהילה = ilike ולא eq: השדה טקסט חופשי, ו"ויזניץ" מופיעה גם כ"ויזניץ
+  // מרכז" וכ"קהילת ויזניץ". השוואה מדויקת הייתה מחמיצה את רובן.
+  // ⚠️ % ו-_ מנוטרלים — אחרת קלט המשתמש הופך לתבנית חיפוש משלו.
+  if (a.community) {
+    const safe = a.community.replace(/[\\%_]/g, (m) => `\\${m}`)
+    q = q.ilike('community_affiliation', `%${safe}%`) as T
+  }
+
+  if (a.gender) q = q.eq('gender', a.gender) as T
+  if (a.lineage === 'linked') q = q.not('lineage_node_id', 'is', null) as T
+  else if (a.lineage === 'unlinked') q = q.is('lineage_node_id', null) as T
+  return q
+}
+
 /** החלת סינון הערכים על שאילתה. ⚠️ המפתחות כבר עברו allowlist. */
 function applyColFilters<T extends { in: (c: string, v: string[]) => T; or: (f: string) => T }>(
   q: T,
@@ -121,6 +173,45 @@ export interface ListResult {
    * ⚠️ לא מהשורות שבדף: הן 50 מתוך 7,066.
    */
   filterOptions: Record<string, { value: string; count: number }[]>
+  /** הקהילות הנפוצות — צ'יפס לחיצה בסינון המתקדם. ראו getCommunityOptions. */
+  communities: { value: string; count: number }[]
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// הקהילות הנפוצות — לצ'יפס בסינון המתקדם.
+//
+// 🔴 רק הנפוצות ולא כולן: השדה הוא טקסט חופשי עם 1,838 ערכים שונים ל-7,196
+// רשומות, מהם 1,478 מופיעים פעם אחת בלבד ("ויזניץ מרכז", "קהילת ויזניץ",
+// "ויזניץ שיכון"...). רשימה מלאה הייתה בלתי קריאה ובלתי שמישה. הצ'יפס הוא
+// קיצור לנפוצות; החיפוש החופשי (ilike) תופס את כל השאר, כולל הוואריאציות.
+//
+// כשל אינו מפיל את הדף — בלי צ'יפס נשארת תיבת החיפוש.
+// ─────────────────────────────────────────────────────────────────────────────
+const COMMUNITY_MIN_COUNT = 20   // 39 ערכים מכסים 4,470 רשומות
+const COMMUNITY_LIMIT = 24
+
+async function getCommunityOptions(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  special: boolean,
+): Promise<{ value: string; count: number }[]> {
+  try {
+    const { data, error } = await supabase.rpc('beneficiaries_community_options', {
+      only_special: special,
+      min_count: COMMUNITY_MIN_COUNT,
+      max_rows: COMMUNITY_LIMIT,
+    })
+    if (error || !Array.isArray(data)) {
+      // ⚠️ המיגרציות כאן מורצות ידנית — יש חלון שבו הקוד בפרודקשן וה-RPC עדיין
+      // לא קיים. בלי הבליעה הזו הדף היה נופל כולו בגלל קישוט.
+      if (error) console.error('[beneficiaries] community_options נכשל:', error.message)
+      return []
+    }
+    return (data as { value: string; cnt: number | string }[])
+      .map(r => ({ value: r.value, count: Number(r.cnt) }))
+  } catch (e) {
+    console.error('[beneficiaries] community_options זרק:', e)
+    return []
+  }
 }
 
 // בדיקה חד-פעמית לכל תהליך: האם עמודת is_special קיימת. סכימה אינה משתנה
@@ -171,12 +262,56 @@ function bucketsFromRaw(raw: Map<string, number>): Record<string, number> {
 // הכרטיסים. הבדיקה נשמרת ברמת המודול כדי לא לשלם על ניסיון כושל בכל טעינת דף.
 let countsRpcMissing = false
 
+// ── סינון לפי מצב המייל ──
+//
+// הרקע: נרשמים רבים (בעיקר דרך נדרים) הקלידו כתובת שגויה, וכל מייל אליהם
+// נופל — כולל שובר החלוקה. הסינון מאפשר לאתר אותם ולטפל.
+//
+// ⚠️ "פגום" נבדק ב-SQL ולא בקוד: סינון בזיכרון היה עובד רק על העמוד
+// הנוכחי (50 שורות), והמונה "מתוך N" היה משקר.
+//
+// ⚠️ הבדיקה גסה במכוון — היעדר @ או נקודה בדומיין. כתובת שעוברת אותה
+// עדיין יכולה להיות שגויה (שם שאינו קיים), וזה בדיוק מה שאי אפשר לזהות
+// בשאילתה. ראו lib/emailDomainFix לזיהוי שגיאות הכתיב בדומיין.
+//
+// ⚠️ ברמת המודול (ולא בתוך getBeneficiaries): גם ספירת הכרטיסים חייבת
+// להחיל אותו, אחרת הכרטיס סותר את השורות שמתחתיו.
+type EmailFilterQ = { is: (c: string, v: null) => EmailFilterQ; not: (c: string, o: string, v: null) => EmailFilterQ; or: (f: string) => EmailFilterQ; neq: (c: string, v: string) => EmailFilterQ }
+function applyEmailFilter<T extends EmailFilterQ>(q: T, mode: string): T {
+  switch (mode) {
+    case 'verified':
+      return q.not('email_verified_at', 'is', null) as T
+    case 'unverified':
+      // ⚠️ רק מי שיש לו כתובת בכלל — מי שאין לו מייל אינו "לא מאומת",
+      // הוא פשוט לא רלוונטי לטיפול הזה.
+      return q.is('email_verified_at', null).not('email', 'is', null).neq('email', '') as T
+    case 'invalid':
+      return q.not('email', 'is', null).neq('email', '')
+        .or('email.not.like.%@%,email.not.like.%.%') as T
+    case 'no_email':
+      return q.or('email.is.null,email.eq.') as T
+    default:
+      return q
+  }
+}
+
 type CountsCtx = {
   special: boolean
   hasSpecialCol: boolean
   maritalValues: string[]
   q: string
   applySpecial: <T extends { eq: (c: string, v: unknown) => T; or: (f: string) => T }>(q: T) => T
+  /**
+   * הסינון המתקדם ו/או סינון העמודות, אם פעילים.
+   *
+   * 🔴 ה-RPC מקבל רק special/marital/q ואינו יודע עליהם דבר. בלי זה
+   * הכרטיסים היו ממשיכים להציג 7,196 בזמן שהטבלה מציגה 40 שורות — בדיוק
+   * הסתירה שהמסך אמור למנוע. כשיש סינון כזה נופלים למסלול הספירות
+   * הנפרד, שיודע להחיל כל פילטר.
+   */
+  adv: AdvFilters
+  colFilters: Record<string, string[]>
+  email: string
 }
 
 async function getStatusCounts(
@@ -186,7 +321,15 @@ async function getStatusCounts(
   // ⚠️ אם עמודת is_special עדיין לא קיימת, ה-RPC (שמסנן עליה תמיד) אינו יכול
   // לשחזר את ההתנהגות הקיימת — שם "אין עמודה" פירושו *בלי סינון כלל*. מקרה קצה
   // תיאורטי (המיגרציה רצה מזמן), אבל הנפילה-לאחור זולה מספירה שגויה.
-  if (!countsRpcMissing && ctx.hasSpecialCol) {
+  // ⚠️ יש סינון שה-RPC אינו יודע לבטא? הכרטיסים חייבים לכבד אותו, אחרת הם
+  // סותרים את הטבלה שמתחתיהם. במקרה כזה מוותרים על ה-RPC לטובת המסלול
+  // שמחיל את כל הפילטרים. זהו מסלול יקר יותר, ולכן רק כשבאמת צריך.
+  const needsFullCount =
+    hasAdvFilters(ctx.adv) ||
+    Object.keys(ctx.colFilters).length > 0 ||
+    (ctx.email !== '' && ctx.email !== 'all')
+
+  if (!needsFullCount && !countsRpcMissing && ctx.hasSpecialCol) {
     try {
       const { data, error } = await supabase.rpc('beneficiaries_status_counts', {
         p_special: ctx.special,
@@ -215,12 +358,33 @@ async function getStatusCounts(
   // ── מסלול חלופי: השיטה הישנה, שמונה ספירות במקביל. ──
   const countFor = async (status: string): Promise<[string, number]> => {
     try {
-      let q = supabase.from('beneficiaries').select('id', { count: 'exact', head: true })
-      q = ctx.applySpecial(q)
+      // ⚠️ הטיפוס מורחב במפורש — שרשור פילטרים על ה-query builder של Supabase
+      // מייצר היררכיית טיפוסים עמוקה מדי ל-tsc (TS2589). אותה תבנית כמו CountQ.
+      // ⚠️ עצמאי ולא חיתוך עם AdvQ — ראו CountQ.
+      interface StatusQ {
+        gte: (c: string, v: unknown) => StatusQ
+        lte: (c: string, v: unknown) => StatusQ
+        lt: (c: string, v: unknown) => StatusQ
+        ilike: (c: string, v: string) => StatusQ
+        eq: (c: string, v: unknown) => StatusQ
+        is: (c: string, v: null) => StatusQ
+        not: (c: string, o: string, v: null) => StatusQ
+        or: (f: string) => StatusQ
+        in: (c: string, v: string[]) => StatusQ
+        neq: (c: string, v: string) => StatusQ
+        then: PromiseLike<{ count: number | null; error: { message: string } | null }>['then']
+      }
+      let q = supabase.from('beneficiaries')
+        .select('id', { count: 'exact', head: true }) as unknown as StatusQ
+      q = ctx.applySpecial(q as never) as StatusQ
       if (status === 'pending') q = q.or(PENDING_OR)
-      else if (status !== 'all') q = q.eq('eligibility_status', status)
+      else if (status !== 'all') q = q.eq('eligibility_status', status) as StatusQ
       if (ctx.maritalValues.length) q = q.in('marital_status', ctx.maritalValues)
       if (ctx.q) q = q.or(searchOr(ctx.q))
+      // 🔴 אותם פילטרים בדיוק כמו הטבלה — אחרת הכרטיס סותר את השורות.
+      if (ctx.email && ctx.email !== 'all') q = applyEmailFilter(q as never, ctx.email) as StatusQ
+      q = applyColFilters(q as never, ctx.colFilters) as StatusQ
+      q = applyAdvFilters(q, ctx.adv) as StatusQ
       const { count: c, error: cErr } = await q
       if (cErr) { console.error(`[beneficiaries] count(${status}) failed:`, cErr.message); return [status, 0] }
       return [status, c ?? 0]
@@ -233,7 +397,7 @@ async function getStatusCounts(
 // special: true = דף האישורים החריגים (is_special=true); false = הרשימה
 // הראשית (הצאצאים הרגילים, is_special=false/null — החריגים לא מופיעים שם).
 export async function getBeneficiaries(p: ReturnType<typeof readListParams>, special = false): Promise<ListResult> {
-  if (!isSupabaseConfigured()) return { rows: [], total: 0, counts: { all: 0 }, filterOptions: {} }
+  if (!isSupabaseConfigured()) return { rows: [], total: 0, counts: { all: 0 }, filterOptions: {}, communities: [] }
   const supabase = await createClient()
 
   const ascending = p.sort === 'oldest' || p.sort === 'alpha'
@@ -261,36 +425,6 @@ export async function getBeneficiaries(p: ReturnType<typeof readListParams>, spe
     return special ? q.eq('is_special', true) : q.or('is_special.is.null,is_special.eq.false')
   }
 
-// ── סינון לפי מצב המייל ──
-//
-// הרקע: נרשמים רבים (בעיקר דרך נדרים) הקלידו כתובת שגויה, וכל מייל אליהם
-// נופל — כולל שובר החלוקה. הסינון מאפשר לאתר אותם ולטפל.
-//
-// ⚠️ "פגום" נבדק ב-SQL ולא בקוד: סינון בזיכרון היה עובד רק על העמוד
-// הנוכחי (50 שורות), והמונה "מתוך N" היה משקר.
-//
-// ⚠️ הבדיקה גסה במכוון — היעדר @ או נקודה בדומיין. כתובת שעוברת אותה
-// עדיין יכולה להיות שגויה (שם שאינו קיים), וזה בדיוק מה שאי אפשר לזהות
-// בשאילתה. ראו lib/emailDomainFix לזיהוי שגיאות הכתיב בדומיין.
-type EmailFilterQ = { is: (c: string, v: null) => EmailFilterQ; not: (c: string, o: string, v: null) => EmailFilterQ; or: (f: string) => EmailFilterQ; neq: (c: string, v: string) => EmailFilterQ }
-function applyEmailFilter<T extends EmailFilterQ>(q: T, mode: string): T {
-  switch (mode) {
-    case 'verified':
-      return q.not('email_verified_at', 'is', null) as T
-    case 'unverified':
-      // ⚠️ רק מי שיש לו כתובת בכלל — מי שאין לו מייל אינו "לא מאומת",
-      // הוא פשוט לא רלוונטי לטיפול הזה.
-      return q.is('email_verified_at', null).not('email', 'is', null).neq('email', '') as T
-    case 'invalid':
-      return q.not('email', 'is', null).neq('email', '')
-        .or('email.not.like.%@%,email.not.like.%.%') as T
-    case 'no_email':
-      return q.or('email.is.null,email.eq.') as T
-    default:
-      return q
-  }
-}
-
   // ⚠️ מוחל גם על שאילתת הספירה וגם על שאילתת הנתונים: מונה שאינו
   // מכיר את הסינון היה מציג "1 מתוך 7,066" על טבלה מסוננת.
 
@@ -303,6 +437,9 @@ function applyEmailFilter<T extends EmailFilterQ>(q: T, mode: string): T {
   if (p.email && p.email !== 'all') dataQ = applyEmailFilter(dataQ, p.email)
   if (p.q) dataQ = dataQ.or(searchOr(p.q))
   dataQ = applyColFilters(dataQ, p.colFilters)
+  // ⚠️ הטיפוס מורחב במפורש — ראו CountQ. שרשור על ה-builder של Supabase
+  // מייצר היררכיית טיפוסים עמוקה מדי ל-tsc (TS2589).
+  dataQ = applyAdvFilters(dataQ as unknown as AdvQ, p.adv) as unknown as typeof dataQ
 
   // 🔴 המיון מהכותרת גובר על מיון ברירת המחדל, ורץ *במסד*: הדף מחזיק
   // 50 שורות מתוך 7,066, ומיון בצד הלקוח היה ממיין את הדף בתוך עצמו
@@ -332,7 +469,10 @@ function applyEmailFilter<T extends EmailFilterQ>(q: T, mode: string): T {
   // בדיוק אותם פילטרים, ורק ממד הסטטוס שונה. עכשיו RPC אחד מקבץ במעבר יחיד.
   //
   // כשל בספירה אינו מפיל את הדף — נופל ל-0 (הרשימה עצמה חשובה יותר).
-  const counts = await getStatusCounts(supabase, { special, hasSpecialCol, maritalValues, q: p.q, applySpecial })
+  const counts = await getStatusCounts(supabase, {
+    special, hasSpecialCol, maritalValues, q: p.q, applySpecial,
+    adv: p.adv, colFilters: p.colFilters, email: p.email,
+  })
 
   // total = ספירת הפילטר הפעיל (all אם אין סטטוס נבחר)
   let total = p.status !== 'all' ? (counts[p.status] ?? 0) : (counts.all ?? 0)
@@ -343,12 +483,20 @@ function applyEmailFilter<T extends EmailFilterQ>(q: T, mode: string): T {
   //
   // ⚠️ שאילתה נוספת רק כשיש סינון פעיל: count:'exact' הוא סריקה בפועל,
   // ולא כדאי לשלם עליה בכל טעינת דף.
-  if (Object.keys(p.colFilters).length > 0) {
+  // ⚠️ גם סינון מתקדם מחייב ספירה משלו, מאותה סיבה בדיוק: counts (וה-RPC
+  // שמאחוריו) אינם מכירים אותו, והמונה היה מציג 7,196 על טבלה מסוננת.
+  if (Object.keys(p.colFilters).length > 0 || hasAdvFilters(p.adv)) {
     try {
       // ⚠️ הטיפוס מורחב במפורש: שרשור הפילטרים על ה-query builder של
       // Supabase מייצר היררכיית טיפוסים עמוקה מדי ל-tsc (TS2589).
       // אותה תבנית כבר בשימוש ב-applySpecial/applyEmailFilter.
-      type CountQ = {
+      // ⚠️ עצמאי ולא חיתוך עם AdvQ: בחיתוך, eq/is/not מופיעים פעמיים עם
+      // טיפוס החזרה אחר, ו-tsc בוחר את הלא-נכון. כאן כל מתודה מחזירה CountQ.
+      interface CountQ {
+        gte: (c: string, v: unknown) => CountQ
+        lte: (c: string, v: unknown) => CountQ
+        lt: (c: string, v: unknown) => CountQ
+        ilike: (c: string, v: string) => CountQ
         eq: (c: string, v: unknown) => CountQ
         or: (f: string) => CountQ
         in: (c: string, v: string[]) => CountQ
@@ -366,6 +514,7 @@ function applyEmailFilter<T extends EmailFilterQ>(q: T, mode: string): T {
       if (p.email && p.email !== 'all') cq = applyEmailFilter(cq, p.email)
       if (p.q) cq = cq.or(searchOr(p.q))
       cq = applyColFilters(cq, p.colFilters)
+      cq = applyAdvFilters(cq as unknown as AdvQ, p.adv) as unknown as CountQ
       const { count, error: cErr } = await cq
       if (!cErr && count != null) total = count
     } catch (e) {
@@ -377,7 +526,11 @@ function applyEmailFilter<T extends EmailFilterQ>(q: T, mode: string): T {
   // ── אפשרויות הסינון לכותרות ────────────────────────────────────────────
   // 🔴 מהמסד ולא מהשורות שבדף: הדף מחזיק 50 מתוך 7,066, וגזירה ממנו
   // הייתה מציגה 6 ערים מתוך 75 עם מונים שקריים.
-  const filterOptions = await getFilterOptions(supabase, special)
+  // ⚠️ במקביל — שתי שאילתות בלתי תלויות; ברצף הן היו מוסיפות סבב מיותר.
+  const [filterOptions, communities] = await Promise.all([
+    getFilterOptions(supabase, special),
+    getCommunityOptions(supabase, special),
+  ])
 
-  return { rows: (data ?? []) as unknown as Beneficiary[], total, counts, filterOptions }
+  return { rows: (data ?? []) as unknown as Beneficiary[], total, counts, filterOptions, communities }
 }

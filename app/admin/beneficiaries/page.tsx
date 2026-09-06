@@ -14,7 +14,7 @@ export default async function BeneficiariesPage({ searchParams }: { searchParams
   // כי שם עמודה מה-URL מגיע לשאילתה. ראו lib/listParams.
   const p = readListParams({ get: (k) => rawParams[k] ?? null }, { sortCols: SORT_COLUMNS })
   // הרשימה הראשית — רק צאצאים רגילים (החריגים בדף נפרד: /admin/special-approvals)
-  const { rows, total, counts, filterOptions } = await getBeneficiaries(p, false)
+  const { rows, total, counts, filterOptions, communities } = await getBeneficiaries(p, false)
 
   return (
     <div className="flex flex-col gap-6">
@@ -47,6 +47,8 @@ export default async function BeneficiariesPage({ searchParams }: { searchParams
         dir={p.dir}
         colFilters={p.colFilters}
         filterOptions={filterOptions}
+        adv={p.adv}
+        communities={communities}
         cardKeys={['all', 'pending', 'deep_review', 'approved', 'rejected']}
       />
     </div>

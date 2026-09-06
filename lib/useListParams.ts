@@ -1,7 +1,7 @@
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { readListParams, encodeColFilters, type ListParams, DEFAULT_PAGE_SIZE } from './listParams'
+import { readListParams, encodeColFilters, ADV_KEYS, type ListParams, type AdvFilters, DEFAULT_PAGE_SIZE } from './listParams'
 
 // Hook לניהול מצב רשימה דרך ה-URL (page/size/q/status/sort), כדי ש:
 //  • החיפוש/סינון/עמוד ירוצו בצד ה-DB (ה-server component קורא את ה-params),
@@ -66,6 +66,31 @@ export function useListParams(opts?: {
     router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
   }, [router, pathname, searchParams, opts?.defaultStatus, opts?.defaultSort])
 
+  /**
+   * כתיבת הסינון המתקדם ל-URL.
+   *
+   * ⚠️ קודם מוחקים את *כל* מפתחות הסינון המתקדם ואז כותבים את מה שפעיל:
+   * עדכון-במקום היה משאיר ב-URL שדה שהמשתמש ניקה, והסינון היה ממשיך לחול
+   * בלי שיופיע בממשק.
+   */
+  const pushAdv = useCallback((adv: AdvFilters) => {
+    const sp = new URLSearchParams(searchParams.toString())
+    for (const k of ADV_KEYS) sp.delete(k)
+    const put = (k: string, v: string | number | undefined) => {
+      if (v === undefined || v === '' || v === null) return
+      sp.set(k, String(v))
+    }
+    put('age_min', adv.ageMin); put('age_max', adv.ageMax)
+    put('kids_min', adv.kidsMin); put('kids_max', adv.kidsMax)
+    put('reg_from', adv.regFrom); put('reg_to', adv.regTo)
+    put('community', adv.community?.trim())
+    put('gender', adv.gender); put('lineage', adv.lineage)
+    // כל שינוי סינון מאפס לעמוד 1 — אחרת נשארים בעמוד 7 של תוצאה בת עמוד אחד.
+    sp.delete('page')
+    const qs = sp.toString()
+    router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }, [router, pathname, searchParams])
+
   const setSearch = useCallback((value: string) => {
     setQInput(value)
     lastUrlQ.current = value.trim()
@@ -85,6 +110,15 @@ export function useListParams(opts?: {
     // תוצאה שיש בה שני עמודים, ורואה מסך ריק.
     setColSort: (col: string, dir: 'asc' | 'desc') => pushParams({ col, dir }),
     setColFilters: (colFilters: Record<string, string[]>) => pushParams({ colFilters }),
+    /**
+     * עדכון הסינון המתקדם. מקבל את המצב המלא ומחליף אותו.
+     *
+     * ⚠️ מפתח שערכו ריק/undefined *נמחק* מה-URL ולא נשמר כפרמטר ריק —
+     * אחרת הכתובת מתמלאת ב-age_min=&age_max=& ואי אפשר לקרוא אותה.
+     */
+    setAdv: (adv: AdvFilters) => pushAdv(adv),
+    /** ניקוי כל הסינון המתקדם בבת אחת. */
+    clearAdv: () => pushAdv({}),
     setSize: (size: number) => pushParams({ size }),
     setPage: (page: number) => pushParams({ page }, false),
   }

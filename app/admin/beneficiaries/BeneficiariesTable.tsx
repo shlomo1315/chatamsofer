@@ -11,6 +11,8 @@ import Pagination from '@/components/ui/Pagination'
 import QuickEmailModal from '@/components/QuickEmailModal'
 import SendLineageLinkButton from './SendLineageLinkButton'
 import { useListParams } from '@/lib/useListParams'
+import { type AdvFilters } from '@/lib/listParams'
+import AdvancedFilters from './AdvancedFilters'
 import { Beneficiary, ELIGIBILITY_LABELS } from '@/types'
 import { registrationSourceLabel, registrationSourceOf } from '@/lib/distributionSources'
 
@@ -295,6 +297,10 @@ interface Props {
   colFilters?: Record<string, string[]>
   /** אפשרויות הסינון — מכל המאגר, לא מהדף. ראו getFilterOptions. */
   filterOptions?: Record<string, { value: string; count: number }[]>
+  /** הסינון המתקדם (גיל/קהילה/ילדים/תאריך/מין/עץ). ⚠️ מיושם במסד. */
+  adv?: AdvFilters
+  /** הקהילות הנפוצות לצ'יפס בסינון המתקדם. */
+  communities?: { value: string; count: number }[]
   // אילו כרטיסי סינון סטטוס להציג (ברירת מחדל: כולם). דף החריגים מצמצם ל-3.
   cardKeys?: Filter[]
   // כפתור פעולה בראש הטבלה (למשל "רישום אדם חריג חדש" בדף החריגים)
@@ -313,15 +319,19 @@ const MARITAL_OPTIONS: { value: string; label: string }[] = [
   { value: 'גרושה', label: 'גרושה' },
 ]
 
-export default function BeneficiariesTable({ data, counts, total, page, size, status, sort, marital, email = 'all', col = '', dir = 'asc', colFilters = {}, filterOptions = {}, cardKeys, headerAction }: Props) {
+export default function BeneficiariesTable({ data, counts, total, page, size, status, sort, marital, email = 'all', col = '', dir = 'asc', colFilters = {}, filterOptions = {}, adv = {}, communities = [], cardKeys, headerAction }: Props) {
   const [emailTarget, setEmailTarget] = useState<{ email: string; name: string } | null>(null)
-  const { qInput, setSearch, setStatus, setSort, setMarital, setEmail, setSize, setPage, setColSort, setColFilters } =
+  const { qInput, setSearch, setStatus, setSort, setMarital, setEmail, setSize, setPage, setColSort, setColFilters, setAdv, clearAdv } =
     useListParams({ sortCols: SORT_COLUMNS })
 
   const columns = useMemo(
     () => buildColumns((row) => setEmailTarget({ email: row.email!, name: fullName(row) })),
     []
   )
+
+  // מספר הסינונים המתקדמים הפעילים — לתג על הכפתור.
+  // ⚠️ טווח (מ-/עד) נספר כשניים כי הם שני שדות נפרדים שהמשתמש מנקה בנפרד.
+  const advCount = Object.values(adv).filter(v => v !== undefined && v !== '').length
 
   const activeFilter = (status || 'all') as Filter
   // כרטיסי הסינון להצגה — כברירת מחדל כולם; דף החריגים מעביר קבוצה מצומצמת.
@@ -429,6 +439,16 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
           <SortButtons value={sort as SortMode} onChange={(m) => setSort(m)} />
         </div>
       </div>
+
+      {/* ── סינון מתקדם — גיל/קהילה/ילדים/תאריך הרשמה/מין/עץ הדורות ── */}
+      {/* ⚠️ רץ במסד, וה"ייצוא לאקסל" גורר את אותם פרמטרים מה-URL. */}
+      <AdvancedFilters
+        value={adv}
+        communities={communities}
+        activeCount={advCount}
+        onChange={setAdv}
+        onClear={clearAdv}
+      />
 
       <DataTable
         data={data}

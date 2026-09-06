@@ -4,6 +4,9 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
 import { buildXlsx, xlsxHeaders, todayStamp, type Column, type CellValue } from '@/lib/xlsx'
 import type { SectionKey } from '@/types'
+import { readAdvFilters, parseColFilters, SORT_COLUMNS, FILTER_COLUMNS } from '@/lib/listParams'
+import { applyAdvFilters } from '@/lib/beneficiariesList'
+import { BLANK } from '@/lib/tableSort'
 
 export const dynamic = 'force-dynamic'
 // ⚠️ חובה. exceljs נשען על Buffer ועל zlib של Node ואינו רץ ב-Edge runtime.
@@ -66,6 +69,45 @@ const benSearchOr = (term: string) => {
   return BEN_SEARCH_COLUMNS.map(c => `${c}.ilike.%${safe}%`).join(',')
 }
 
+/** גיל מתאריך לידה — לעמודת הגיל בקובץ. ריק אם אין/פגום. */
+function ageOf(s?: string | null): number | null {
+  if (!s) return null
+  const b = new Date(s)
+  if (Number.isNaN(b.getTime())) return null
+  const now = new Date()
+  let age = now.getUTCFullYear() - b.getUTCFullYear()
+  const m = now.getUTCMonth() - b.getUTCMonth()
+  if (m < 0 || (m === 0 && now.getUTCDate() < b.getUTCDate())) age--
+  return age >= 0 && age < 130 ? age : null
+}
+
+// ⚠️ שוכפל מ-lib/beneficiariesList (שם הן פנימיות). חייבות להישאר זהות —
+// אחרת הקובץ שיורד אינו תואם למסך, וזה בדיוק הבאג שתוקן כאן.
+type ExpQ = { in: (c: string, v: string[]) => ExpQ; or: (f: string) => ExpQ; is: (c: string, v: null) => ExpQ; not: (c: string, o: string, v: null) => ExpQ; neq: (c: string, v: string) => ExpQ }
+
+function applyExportColFilters<T extends ExpQ>(q: T, filters: Record<string, string[]>): T {
+  for (const [col, values] of Object.entries(filters)) {
+    if (!(FILTER_COLUMNS as readonly string[]).includes(col)) continue
+    if (!values.length) continue
+    const hasBlank = values.includes(BLANK)
+    const real = values.filter(v => v !== BLANK).map(v => v.replace(/[,()]/g, ' '))
+    if (hasBlank && real.length) q = q.or(`${col}.is.null,${col}.eq.,${col}.in.(${real.join(',')})`) as T
+    else if (hasBlank) q = q.or(`${col}.is.null,${col}.eq.`) as T
+    else q = q.in(col, real) as T
+  }
+  return q
+}
+
+function applyExportEmailFilter<T extends ExpQ>(q: T, mode: string): T {
+  switch (mode) {
+    case 'verified': return q.not('email_verified_at', 'is', null) as T
+    case 'unverified': return q.is('email_verified_at', null).not('email', 'is', null).neq('email', '') as T
+    case 'invalid': return q.not('email', 'is', null).neq('email', '').or('email.not.like.%@%,email.not.like.%.%') as T
+    case 'no_email': return q.or('email.is.null,email.eq.') as T
+    default: return q
+  }
+}
+
 async function fetchAll<T>(build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
   const out: T[] = []
   for (let from = 0; from < MAX_ROWS; from += PAGE) {
@@ -105,24 +147,36 @@ export async function GET(request: NextRequest) {
     const marital = (sp.get('marital') ?? 'all').trim()
     const q = (sp.get('q') ?? '').trim()
     const special = sp.get('special') === '1'
+    const emailMode = (sp.get('email') ?? 'all').trim()
+    // 🔴 אותו allowlist ואותו פענוח כמו המסך — שם עמודה מה-URL נכנס לשאילתה.
+    const colFilters = parseColFilters(sp.get('f'), SORT_COLUMNS)
+    const adv = readAdvFilters(sp)
 
     const data = await fetchAll<Row>((from, to) => {
       let qy = admin.from('beneficiaries')
-        .select('family_name, full_name, id_number, spouse_name, spouse_id_number, marital_status, phone, email, city, address, children_count, eligibility_status, created_at')
+        .select('family_name, full_name, id_number, spouse_name, spouse_id_number, marital_status, phone, email, city, address, community_affiliation, birth_date, children_count, eligibility_status, created_at')
       qy = special ? qy.eq('is_special', true) : qy.or('is_special.is.null,is_special.eq.false')
       if (status === 'pending') qy = qy.or(BEN_PENDING_OR)
       else if (status !== 'all') qy = qy.eq('eligibility_status', status)
       if (marital && marital !== 'all') qy = qy.in('marital_status', marital.split(',').filter(Boolean))
       if (q) qy = qy.or(benSearchOr(q))
+      // 🔴 הסינונים המתקדמים מוחלים דרך *אותה* פונקציה שהמסך משתמש בה.
+      // שכפול הלוגיקה כאן הוא בדיוק מה שגרם בעבר לקובץ שאינו תואם למסך.
+      if (emailMode && emailMode !== 'all') qy = applyExportEmailFilter(qy as never, emailMode) as typeof qy
+      qy = applyExportColFilters(qy as never, colFilters) as typeof qy
+      qy = applyAdvFilters(qy as never, adv) as typeof qy
       return qy.order('family_name').range(from, to)
     })
     columns = [
       { header: 'שם משפחה' }, { header: 'שם פרטי' }, { header: 'ת.ז', kind: 'id' },
       { header: 'בן/בת זוג' }, { header: 'ת.ז בן/זוג', kind: 'id' }, { header: 'מצב משפחתי' },
       { header: 'טלפון', kind: 'id' }, { header: 'מייל' }, { header: 'עיר' }, { header: 'כתובת' },
+      // ⚠️ קהילה וגיל נוספו לקובץ: אפשר לסנן לפיהם, ולכן מי שמייצא חייב
+      // לראות אותם בעמודה — אחרת הקובץ אינו מסביר את עצמו.
+      { header: 'קהילה' }, { header: 'גיל', kind: 'number' },
       { header: 'מס׳ ילדים', kind: 'number' }, { header: 'סטטוס' }, { header: 'נרשם', kind: 'date' },
     ]
-    rows = (data ?? []).map((b: Row) => [b.family_name, b.full_name, b.id_number, b.spouse_name, b.spouse_id_number, b.marital_status, b.phone, b.email, b.city, b.address, b.children_count, he(b.eligibility_status), dt(b.created_at)])
+    rows = (data ?? []).map((b: Row) => [b.family_name, b.full_name, b.id_number, b.spouse_name, b.spouse_id_number, b.marital_status, b.phone, b.email, b.city, b.address, b.community_affiliation, ageOf(b.birth_date), b.children_count, he(b.eligibility_status), dt(b.created_at)])
   } else if (type === 'loans') {
     filename = 'הלוואות'
     // ⚠️ בלי טיוטות שממתינות לטופס אישור רב — הן אינן בקשות שהוגשו,

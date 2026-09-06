@@ -1,6 +1,7 @@
 'use client'
 import { FileSpreadsheet } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
+import { ADV_KEYS } from '@/lib/listParams'
 
 // כפתור ייצוא לאקסל — קישור ישיר ל-API שמחזיר קובץ .xlsx מעוצב (RTL, כותרת
 // קפואה, סכומים כמספרים). ⚠️ בעבר זה היה CSV; ראו lib/xlsx למה זה השתנה.
@@ -11,7 +12,12 @@ import { useSearchParams } from 'next/navigation'
 // ⚠️ ללא 'special': דף החריגים הוא נתיב נפרד (/admin/special-approvals) ואין
 // בו כפתור ייצוא, כך שהערך לעולם אינו מופיע בכתובת. הצד השרתי עדיין תומך בו,
 // כדי שהוספת כפתור שם בעתיד תעבוד בלי שינוי נוסף.
-const FILTER_KEYS = ['status', 'marital', 'q'] as const
+// 🔴 כל מפתח סינון שהמסך מכיר חייב להופיע כאן, אחרת הקובץ שיורד רחב מהמסך
+// והמשתמש אינו יודע. זה בדיוק הבאג שכבר קרה פעם (833 במסך מול 62 באקסל):
+// המפתחות היו משוכפלים, נוסף סינון, ורק צד אחד עודכן.
+// ⚠️ 'f' = סינון העמודות (עיר/סטטוס/מקור), ו-ADV_KEYS = הסינון המתקדם
+// (גיל, קהילה, ילדים, תאריך הרשמה, מין, עץ דורות).
+const FILTER_KEYS = ['status', 'marital', 'q', 'email', 'f', ...ADV_KEYS] as const
 
 export default function ExportExcelButton({ type, label = 'ייצוא לאקסל' }: { type: string; label?: string }) {
   const sp = useSearchParams()
