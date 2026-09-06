@@ -16,7 +16,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
-  Loader2, RefreshCw, Check, X, ShieldCheck, ListChecks, BarChart3,
+  Loader2, RefreshCw, Check, X, ShieldCheck, ListChecks, BarChart3, ChevronDown,
   AlertTriangle, ChevronLeft, Search, Users, ExternalLink,
 } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
@@ -37,6 +37,9 @@ interface TopRow {
   id: string; name: string; generation: number; status: string
   depth: number; childCount: number; families: number
   pendingKids: number; verifiedKids: number
+  parentId: string | null
+  /** יש לו ילדים שלא נשלחו (חריגה מהעומק) — נפתחים דרך "פתח לאישור". */
+  truncated: boolean
 }
 interface ChildRow {
   id: string; name: string; generation: number; status: string
@@ -95,6 +98,8 @@ export default function ApprovalCenterPanel() {
   const [q, setQ] = useState('')
   /** המשפחה שנפתחה לצפייה מהירה (שרשרת דורות + מחיקה). */
   const [quickId, setQuickId] = useState<string | null>(null)
+  /** הצמתים שההזחה שלהם סגורה. ראו toggleCollapse. */
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
   const load = useCallback(async (parentId?: string) => {
     setLoading(true)
@@ -163,6 +168,58 @@ export default function ApprovalCenterPanel() {
     if (!t) return approved
     return approved.filter(a => a.name.includes(t) || (a.parentName ?? '').includes(t))
   }, [approved, q])
+
+  // ── קיפול ההזחות ──
+  // ⚠️ שומרים את ה*סגורים* ולא את הפתוחים: כך ענף חדש שנוסף לעץ מופיע
+  // פתוח כברירת מחדל, במקום להיעלם עד שייפתח ידנית.
+  const toggleCollapse = (id: string) =>
+    setCollapsed(prev => {
+      const n = new Set(prev)
+      if (n.has(id)) n.delete(id); else n.add(id)
+      return n
+    })
+
+  /**
+   * השורות שבאמת מוצגות — שורה מוסתרת אם אחד מאבותיה סגור.
+   *
+   * ⚠️ מסתמך על כך שהרשימה מגיעה בסדר עומק (אב תמיד לפני ילדיו): מחזיקים
+   * את העומק הסגור הרדוד ביותר, וכל שורה עמוקה ממנו מסוננת עד שחוזרים
+   * לרמה שווה או רדודה יותר.
+   */
+  const visibleTree = useMemo(() => {
+    const out: TopRow[] = []
+    let hideDeeperThan: number | null = null
+    for (const t of topTree) {
+      if (hideDeeperThan !== null && t.depth > hideDeeperThan) continue
+      hideDeeperThan = null
+      out.push(t)
+      if (collapsed.has(t.id) && t.childCount > 0) hideDeeperThan = t.depth
+    }
+    return out
+  }, [topTree, collapsed])
+
+  /** סימון מהיר של סטטוס מתוך עץ המבנה — בלי לצאת מהמסך. */
+  const quickSet = async (nodeId: string, status: 'verified' | 'pending') => {
+    setBusy(true)
+    try {
+      const res = await fetch('/api/admin/lineage/approvals', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nodeIds: [nodeId], status }),
+      })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'העדכון נכשל')
+      // ⚠️ עדכון מקומי ולא טעינה מחדש: טעינה הייתה מאפסת את מצב הקיפול
+      // ומקפיצה את הגלילה חזרה לראש — בעבודה רצופה זה בלתי נסבל.
+      setTopTree(prev => prev.map(t => (t.id === nodeId ? { ...t, status } : t)))
+      setSummary(s => s ? {
+        ...s,
+        verified: s.verified + (status === 'verified' ? 1 : -1),
+        pending: s.pending + (status === 'pending' ? 1 : -1),
+      } : s)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'העדכון נכשל')
+    } finally { setBusy(false) }
+  }
 
   /** המאושרים מקובצים לפי דור — לתצוגה בהזחה. */
   const approvedByGen = useMemo(() => {
@@ -286,33 +343,89 @@ export default function ApprovalCenterPanel() {
               🔴 "פילוח לפי דור" אומר כמה אושרו, לא *מי* ואיפה. כאן רואים
               את המבנה עצמו: מי תלוי במי, ומה מאושר בכל ענף. */}
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2">
-              <span className="text-[11px] font-bold text-slate-600">מבנה העץ — הדורות העליונים</span>
-              <span className="text-[10px] text-slate-400">לחיצה פותחת את הדור לאישור</span>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2">
+              <span className="text-[11px] font-bold text-slate-600">מבנה העץ</span>
+              <span className="flex items-center gap-1.5">
+                <button onClick={() => setCollapsed(new Set())}
+                  className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-600 hover:bg-slate-50">
+                  פתח הכל
+                </button>
+                <button onClick={() => setCollapsed(new Set(topTree.filter(t => t.childCount > 0).map(t => t.id)))}
+                  className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-600 hover:bg-slate-50">
+                  סגור הכל
+                </button>
+              </span>
             </div>
-            <div className="max-h-96 overflow-y-auto">
-              {topTree.map(t => {
+            <div className="max-h-[28rem] overflow-y-auto">
+              {visibleTree.map(t => {
                 const meta = STATUS_META[t.status] ?? STATUS_META.pending
+                const isCollapsed = collapsed.has(t.id)
+                const hasKids = t.childCount > 0
                 return (
-                  <button key={t.id}
-                    onClick={() => { setTab('queue'); openParent(t.id) }}
-                    className="flex w-full items-center gap-2 border-b border-slate-50 px-3 py-1.5 text-right transition-colors last:border-0 hover:bg-indigo-50/50"
-                    style={{ paddingRight: 12 + t.depth * 18 }}>
+                  <div key={t.id}
+                    className="flex items-center gap-1.5 border-b border-slate-50 px-3 py-1.5 last:border-0 hover:bg-slate-50/60"
+                    style={{ paddingRight: 10 + t.depth * 18 }}>
+                    {/* ── קיפול/פתיחה ── */}
+                    <button
+                      onClick={() => toggleCollapse(t.id)}
+                      disabled={!hasKids}
+                      title={hasKids ? (isCollapsed ? 'פתח' : 'סגור') : undefined}
+                      className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded ${
+                        hasKids ? 'text-slate-500 hover:bg-slate-200' : 'text-transparent'
+                      }`}>
+                      {hasKids && (isCollapsed ? <ChevronLeft size={13} /> : <ChevronDown size={13} />)}
+                    </button>
+
                     {/* נקודת הסטטוס — הצבע הוא הסימן */}
                     <span className="h-2 w-2 flex-shrink-0 rounded-full" style={{ background: meta.ring }} />
-                    <span className="min-w-0 flex-1 truncate text-[12px] text-slate-700">{t.name}</span>
+
+                    <button onClick={() => { setTab('queue'); openParent(t.id) }}
+                      title="פתח את הדור הזה לאישור"
+                      className="min-w-0 flex-1 truncate text-right text-[12px] text-slate-700 hover:text-indigo-600">
+                      {t.name}
+                    </button>
+
                     <span className="flex flex-shrink-0 items-center gap-1.5 text-[10px]">
                       <span className="rounded bg-slate-100 px-1 font-bold text-slate-500">ד{t.generation}</span>
-                      {t.childCount > 0 && (
+                      {hasKids && (
                         <span className="tabular-nums text-slate-400">
                           <b className="text-green-700">{t.verifiedKids}</b>
                           <span className="text-slate-300">/</span>
                           {t.childCount}
+                          {isCollapsed && <span className="mr-0.5 text-slate-300">▾</span>}
                         </span>
                       )}
                       {t.families > 0 && <span className="font-bold text-amber-700">{t.families}👥</span>}
                     </span>
-                  </button>
+
+                    {/* ── סימון מהיר ──
+                        🔴 לחיצה אחת משנה סטטוס בלי לצאת מהמסך. לחיצה על
+                        הסטטוס הנוכחי אינה עושה דבר (השרת מדלג על מה שלא משתנה). */}
+                    <span className="flex flex-shrink-0 items-center gap-0.5">
+                      <button
+                        onClick={() => quickSet(t.id, 'verified')}
+                        disabled={busy || t.status === 'verified'}
+                        title="סמן כמאושר"
+                        className={`flex h-5 w-5 items-center justify-center rounded border transition-colors ${
+                          t.status === 'verified'
+                            ? 'border-green-300 bg-green-100 text-green-700'
+                            : 'border-slate-200 text-slate-400 hover:border-green-400 hover:bg-green-50 hover:text-green-700'
+                        }`}>
+                        <Check size={11} />
+                      </button>
+                      <button
+                        onClick={() => quickSet(t.id, 'pending')}
+                        disabled={busy || t.status === 'pending'}
+                        title="החזר לממתין לאישור"
+                        className={`flex h-5 w-5 items-center justify-center rounded border text-[10px] font-bold transition-colors ${
+                          t.status === 'pending'
+                            ? 'border-slate-300 bg-slate-200 text-slate-600'
+                            : 'border-slate-200 text-slate-400 hover:border-amber-400 hover:bg-amber-50 hover:text-amber-700'
+                        }`}>
+                        ⏳
+                      </button>
+                    </span>
+                  </div>
                 )
               })}
             </div>

@@ -222,24 +222,33 @@ export async function GET(request: NextRequest) {
   // נבנה עץ אמיתי מהשורש ומטה עם עומק, כך שרואים את המבנה עצמו: מי תלוי
   // במי, מה מאושר ומה לא. מוגבל בעומק ובמספר ילדים — 10,527 צמתים אינם
   // נקראים ברשימה אחת, והמנהל פותח לעומק דרך מסך המיקוד.
-  const TOP_DEPTH = 4
-  const TOP_KIDS = 12
+  // ⚠️ עומק גדול יותר מבעבר: הרשימה נפתחת מקופלת ונפרשת בלחיצה, ולכן
+  // אפשר לשלוח עץ עמוק בלי להציף את המסך. TOP_KIDS מגן מפני אב עם 92 ילדים.
+  const TOP_DEPTH = 6
+  const TOP_KIDS = 40
   type TopRow = {
     id: string; name: string; generation: number; status: string
     depth: number; childCount: number; families: number
     pendingKids: number; verifiedKids: number
+    parentId: string | null
+    /** יש לו ילדים שלא נשלחו (חריגה מהעומק/התקרה) — הקיפול יסמן זאת. */
+    truncated: boolean
   }
   const top: TopRow[] = []
   const walkTop = (n: NodeRow, depth: number) => {
     const children = kids.get(n.id) ?? []
+    const willRecurse = depth < TOP_DEPTH
+    const shown = willRecurse ? Math.min(children.length, TOP_KIDS) : 0
     top.push({
       id: n.id, name: n.name, generation: n.generation, status: st(n),
       depth, childCount: children.length,
       families: famCount.get(n.id) ?? 0,
       pendingKids: children.filter(c => st(c) === 'pending').length,
       verifiedKids: children.filter(c => st(c) === 'verified').length,
+      parentId: n.parent_id,
+      truncated: children.length > shown,
     })
-    if (depth >= TOP_DEPTH) return
+    if (!willRecurse) return
     // ⚠️ ממוין לפי גודל הענף — הענפים המשמעותיים קודם, לא לפי א״ב.
     const sorted = [...children]
       .sort((a, b) => (kids.get(b.id) ?? []).length - (kids.get(a.id) ?? []).length)
