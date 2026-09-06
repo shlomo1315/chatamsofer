@@ -90,7 +90,7 @@ export default function CleanChildrenPanel({
 
   // הצומת שיישאר: המאומת, אחרת בעל הכי הרבה ילדים
   const pickKeep = (g: CleanNode[]) =>
-    g.find(n => (n.status ?? 'verified') === 'verified') ??
+    g.find(n => (n.status ?? 'pending') === 'verified') ??
     [...g].sort((a, b) => b.childCount - a.childCount)[0]
 
   // השם שיישאר: הניסוח *הנפוץ ביותר* בקבוצה, ובתיקו — הארוך יותר.

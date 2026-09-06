@@ -182,7 +182,7 @@ export default function LineageTreeSvg({
             })}
           </svg>
           {positions.map(pos => {
-            const st = pos.node.status ?? 'verified'
+            const st = pos.node.status ?? 'pending'
             const genPal = pal(pos.node.generation)
             const relOverlay = pos.node.relation === 'son_in_law' ? 'linear-gradient(rgba(0,0,0,0.30),rgba(0,0,0,0.30)), ' : ''
             const isSel = selectedId === pos.node.id

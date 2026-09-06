@@ -49,10 +49,20 @@ export function genTone(generation: number): GenTone {
  * ⚠️ אל תמזג אותו לפלטה: גוון הדור אומר "באיזה דור", והסטטוס אומר
  * "האם אומת". מיזוג היה מוחק את ההבחנה והופך אזהרה אמיתית לקישוט.
  */
+// 🔴 צבעים *סמנטיים* ולא גווני זהב.
+//
+// עד כאן 'verified' ו-'pending' קיבלו שניהם גוונים מסולם הדורות (זהב מול
+// נחושת) — שני צבעים חמים שנראים כמעט זהים במבט. יחד עם זה שגוף הצומת
+// בעץ נצבע לפי *הדור*, התוצאה הייתה שצומת ממתין בדור 1 נראה זהוב-ירקרק,
+// והמנהל קרא אותו כמאושר. 357 מתוך 10,505 הצמתים מאושרים (3.4%) — כלומר
+// כמעט כל מה שנראה "מוכן" בעץ כלל לא אומת.
+//
+// עכשיו: ירוק = אומת · אפור = ממתין · אדום = נדחה. אפור נבחר במכוון
+// ולא צהוב — הוא נקרא כ"לא גמור" ואינו מתחרה בירוק על תשומת הלב.
 export const NODE_STATUS = {
-  verified: { label: 'מאומת', dot: '#c69e2d', bg: '#FBF3DA', border: '#e0b94a', text: '#8a6a1e' },
-  pending:  { label: 'ממתין לאימות', dot: '#b3703a', bg: '#F6E9D8', border: '#c68a4e', text: '#7a4a26' },
-  rejected: { label: 'נדחה', dot: '#991b1b', bg: '#FBEEEE', border: '#dc8b8b', text: '#7f1d1d' },
+  verified: { label: 'מאושר', dot: '#16A34A', bg: '#DCFCE7', border: '#22C55E', text: '#15803D' },
+  pending:  { label: 'ממתין לאישור', dot: '#94A3B8', bg: '#F1F5F9', border: '#CBD5E1', text: '#64748B' },
+  rejected: { label: 'נדחה', dot: '#DC2626', bg: '#FEE2E2', border: '#F87171', text: '#B91C1C' },
 } as const
 
 export type NodeStatus = keyof typeof NODE_STATUS

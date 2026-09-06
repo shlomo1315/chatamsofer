@@ -15,6 +15,7 @@ import MergeCenterPanel from './MergeCenterPanel'
 import UnlinkedPanel from './UnlinkedPanel'
 import MergePlanModal, { type PlanResp as MergePlanResp } from './MergePlanModal'
 import FamilyRequestsPanel from './FamilyRequestsPanel'
+import ApprovalCenterPanel from './ApprovalCenterPanel'
 import CleanChildrenPanel from './CleanChildrenPanel'
 import GhostChildrenPanel from './GhostChildrenPanel'
 import SelfDuplicatesPanel from './SelfDuplicatesPanel'
@@ -42,9 +43,25 @@ function nextStatus(cur: LineageNode['status']): 'verified' | 'pending' | 'rejec
 }
 
 function statusColor(s: LineageNode['status']) {
-  if (s === 'verified') return '#22C55E'
-  if (s === 'rejected') return '#EF4444'
-  return '#F59E0B'
+  if (s === 'verified') return '#16A34A'
+  if (s === 'rejected') return '#DC2626'
+  return '#94A3B8'
+}
+
+// 🔴 רקע הצומת לפי הסטטוס — מקור האמת הוויזואלי של "האם אומת".
+//
+// מאושר = ירוק מלא · ממתין = אפור חיוור · נדחה = אדום. האפור נבחר במכוון
+// (ולא צהוב): הוא נקרא כ"לא גמור", ואינו מתחרה בירוק על תשומת הלב. כשכל
+// העץ אפור — זו האמת, ובלעדיה אי אפשר לדעת מה נשאר לאשר.
+function statusBg(s: LineageNode['status']) {
+  if (s === 'verified') return 'linear-gradient(160deg,#4ADE80,#16A34A)'
+  if (s === 'rejected') return 'linear-gradient(160deg,#FCA5A5,#DC2626)'
+  return 'linear-gradient(160deg,#F1F5F9,#CBD5E1)'
+}
+
+/** צבע הטקסט על גוף הצומת — כהה על האפור החיוור, לבן על המלאים. */
+function statusFg(s: LineageNode['status']) {
+  return s === 'pending' || !s ? '#334155' : '#fff'
 }
 
 interface TreeNode extends LineageNode {
@@ -550,7 +567,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
   // נשארים קווים שמסתיימים באוויר, והעץ נראה שבור.
   const hiddenByOnly = useCallback((n: { status?: string | null; generation: number }) => {
     if (!onlyMatching) return false
-    const st = n.status ?? 'verified'
+    const st = n.status ?? 'pending'
     if (statusFilter !== null && st !== statusFilter) return true
     if (generationFilter !== null && n.generation !== generationFilter) return true
     return false
@@ -975,7 +992,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
           </svg>
 
           {visiblePositions.map(pos => {
-            const nodeStatus = pos.node.status ?? 'verified'
+            const nodeStatus = pos.node.status ?? 'pending'
             const genPal = pal(pos.node.generation)
             // הבדל בתוך צבע הדור בלי להחוויר: בן = צבע הדור המלא · חתן = אותו גוון, כהה יותר
             const relOverlay = pos.node.relation === 'son_in_law'
@@ -1041,7 +1058,13 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                 style={{
                   position: 'absolute', left: rx * zoom, top: ry * zoom,
                   width: NW * zoom, height: NH * zoom, borderRadius: 16 * zoom,
-                  background: relOverlay + p.bg,
+                  // 🔴 הרקע נגזר מה*סטטוס* ולא מהדור.
+                  //
+                  // עד כאן הוא היה p.bg — גוון הדור (זהב/נחושת/ארד), והסטטוס
+                  // היה נקודה של 20px בפינה. התוצאה: צומת ממתין בדור 1 נראה
+                  // זהוב-ירקרק ונקרא כמאושר, בזמן שרק 3.4% מהעץ באמת אושר.
+                  // הדור ממשיך להופיע בתג המספר שבפינה, ששם הוא מספיק.
+                  background: relOverlay + statusBg(nodeStatus),
                   boxShadow: inMerge
                     ? `0 0 0 3px #fff, 0 0 0 6px #16A34A, 0 12px 32px rgba(22,163,74,0.4)`
                     // הקבוצה שאותרה מהפאנל — טבעת סגולה עבה ובולטת
@@ -1127,11 +1150,13 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                     עם רצפה נמוכה (4px) במקום 9px. קודם הרצפה הגבוהה השאירה טקסט
                     בגודל קבוע בעוד הצומת מתכווץ, ולכן השם גלש/נחתך בזום קטן. */}
                 <span style={{
-                  color: '#fff', fontWeight: 700,
+                  // ⚠️ הטקסט נגזר מהסטטוס יחד עם הרקע: על האפור החיוור
+                  // (ממתין) טקסט לבן היה בלתי קריא.
+                  color: statusFg(nodeStatus), fontWeight: 700,
                   fontSize: Math.max(4, (pos.node.name.length > 14 ? 11 : pos.node.name.length > 10 ? 13 : 14) * zoom),
                   textAlign: 'center', direction: 'rtl',
                   padding: `0 ${14 * zoom}px`, lineHeight: 1.25,
-                  textShadow: '0 1px 4px rgba(0,0,0,0.3)',
+                  textShadow: nodeStatus === 'pending' ? 'none' : '0 1px 4px rgba(0,0,0,0.3)',
                   maxWidth: (NW - 16) * zoom,
                   overflow: 'hidden',
                   display: '-webkit-box',
@@ -1182,7 +1207,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                       {[...pos.node.children]
                         .sort((a, b) => a.name.localeCompare(b.name, 'he'))
                         .map(kid => {
-                          const ks = (kid.status ?? 'verified') as 'verified' | 'pending' | 'rejected'
+                          const ks = (kid.status ?? 'pending') as 'verified' | 'pending' | 'rejected'
                           const meta = ks === 'verified'
                             ? { bg: '#DCFCE7', fg: '#166534', label: 'מאושר' }
                             : ks === 'rejected'
@@ -1440,9 +1465,9 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                 <span style={{ background: pal(selPos.node.generation).light, color: pal(selPos.node.generation).text, padding: '2px 10px', borderRadius: 20, fontWeight: 700 }}>דור {selPos.node.generation}</span>
                 <span>{selPos.node.children.length} ילדים</span>
                 <span style={{ padding: '2px 10px', borderRadius: 20, fontWeight: 700,
-                  background: (selPos.node.status ?? 'verified') === 'verified' ? '#DCFCE7' : (selPos.node.status === 'rejected' ? '#FEE2E2' : '#FEF3C7'),
-                  color: (selPos.node.status ?? 'verified') === 'verified' ? '#166534' : (selPos.node.status === 'rejected' ? '#991B1B' : '#92400E') }}>
-                  {(selPos.node.status ?? 'verified') === 'verified' ? '✓ מאומת' : (selPos.node.status === 'rejected' ? '✗ לא מאושר' : '⏳ ממתין')}
+                  background: (selPos.node.status ?? 'pending') === 'verified' ? '#DCFCE7' : (selPos.node.status === 'rejected' ? '#FEE2E2' : '#FEF3C7'),
+                  color: (selPos.node.status ?? 'pending') === 'verified' ? '#166534' : (selPos.node.status === 'rejected' ? '#991B1B' : '#92400E') }}>
+                  {(selPos.node.status ?? 'pending') === 'verified' ? '✓ מאומת' : (selPos.node.status === 'rejected' ? '✗ לא מאושר' : '⏳ ממתין')}
                 </span>
               </div>
             </div>
@@ -1450,8 +1475,8 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
               {[
                 ...(canEdit ? [{ label: 'עריכה', fn: () => { setFormName(selPos.node.name); setFormRelation(selPos.node.relation ?? null); setModal({ type: 'edit', node: selPos.node }) }, color: pal(selPos.node.generation).ring, bg: pal(selPos.node.generation).light }] : []),
                 ...(canAdd ? [{ label: 'הוסף ילד', fn: () => { setFormName(''); setModal({ type: 'add', parentId: selPos.node.id, parentName: selPos.node.name }) }, color: '#059669', bg: '#ECFDF5' }] : []),
-                ...(canEdit && (selPos.node.status ?? 'verified') !== 'verified' ? [{ label: '✓ אמת', fn: () => handleSetStatus(selPos.node, 'verified' as const), color: '#16A34A', bg: '#F0FDF4' }] : []),
-                ...(canEdit && (selPos.node.status ?? 'verified') !== 'rejected' ? [{ label: '✗ דחה', fn: () => handleSetStatus(selPos.node, 'rejected' as const), color: '#DC2626', bg: '#FEF2F2' }] : []),
+                ...(canEdit && (selPos.node.status ?? 'pending') !== 'verified' ? [{ label: '✓ אמת', fn: () => handleSetStatus(selPos.node, 'verified' as const), color: '#16A34A', bg: '#F0FDF4' }] : []),
+                ...(canEdit && (selPos.node.status ?? 'pending') !== 'rejected' ? [{ label: '✗ דחה', fn: () => handleSetStatus(selPos.node, 'rejected' as const), color: '#DC2626', bg: '#FEF2F2' }] : []),
                 ...(canDelete ? [{ label: 'מחיקה', fn: () => setModal({ type: 'delete', node: selPos.node }), color: '#64748B', bg: '#F1F5F9' }] : []),
               ].map(b => (
                 <button key={b.label} onClick={b.fn} style={{ background: b.bg, color: b.color, border: `1.5px solid ${b.color}22`, borderRadius: 10, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', transition: 'opacity .15s' }}>{b.label}</button>
@@ -1548,6 +1573,23 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
 
 // ─── Table view ───
 
+/** פריט בתפריט הפעולות של שורה. */
+function MenuItem({ icon, label, onClick, danger }: { icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean }) {
+  return (
+    <button onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 7, padding: '6px 9px',
+        border: 'none', borderRadius: 7, background: 'transparent', cursor: 'pointer',
+        fontSize: 12, fontWeight: 600, color: danger ? '#DC2626' : '#475569',
+        textAlign: 'right', width: '100%',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.background = danger ? '#FEF2F2' : '#F1F5F9' }}
+      onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+      {icon}{label}
+    </button>
+  )
+}
+
 function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, onlyMatching = false, generationFilter, mergeMode, mergeSel, dupIds, onToggleMerge, dupFilter, onMergeGroup }: {
   nodes: LineageNode[]
   onRefresh: () => void
@@ -1569,6 +1611,8 @@ function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, on
   const canDelete = useCan('lineage', 'delete')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const roots = useMemo(() => buildTree(nodes), [nodes])
+  /** השורה שתפריט הפעולות שלה פתוח. ראו ההערה ליד כפתור ה-⋯. */
+  const [rowMenu, setRowMenu] = useState<string | null>(null)
   const childCount = useMemo(() => {
     const map = new Map<string, number>()
     nodes.forEach(n => { if (n.parent_id) map.set(n.parent_id, (map.get(n.parent_id) ?? 0) + 1) })
@@ -1590,7 +1634,12 @@ function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, on
   }
 
   function renderRows(node: TreeNode, depth: number): React.ReactNode {
-    const nodeStatus = node.status ?? 'verified'
+    // 🔴 ברירת המחדל היא 'pending' ולא 'verified'.
+    //
+    // צומת בלי סטטוס הוצג כ*מאושר* — כלומר היעדר מידע נקרא כאישור. זהו
+    // מקור נוסף ל"ירוקים שלא מאושרים", והוא מסוכן במיוחד: אישור הוא מה
+    // שצריך להיאמר במפורש, לא מה שמונח כברירת מחדל.
+    const nodeStatus = node.status ?? 'pending'
     const isDup = dupIds.has(node.id)
     // ראו ההערה ב-TreeView — הסתרה במקום עמעום.
     if (onlyMatching && statusFilter !== null && nodeStatus !== statusFilter) return null
@@ -1629,13 +1678,31 @@ function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, on
           <div style={{ minWidth: 56, textAlign: 'center', fontSize: 12, color: '#94A3B8', flexShrink: 0 }}>
             {childCount.get(node.id) ? `${childCount.get(node.id)}` : '—'}
           </div>
-          <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+          {/* ── פעולות ──
+              🔴 היו כאן עד 4 כפתורים צבעוניים על *כל* שורה (מזג/הוסף/ערוך/מחק),
+              והם הציפו את הרשימה: העין נתפסת בכפתורים ולא בשם ובסטטוס. עכשיו
+              כפתור אחד דיסקרטי שנפתח בלחיצה — אותן פעולות בדיוק, בלי הרעש. */}
+          <div style={{ display: 'flex', gap: 5, flexShrink: 0, position: 'relative' }}>
             {isDup && !mergeMode && (
-              <button onClick={() => onMergeGroup(node.id)} title="מזג כפילים (אותו גזע)" style={{ width: 28, height: 28, borderRadius: 7, background: '#F3E8FF', border: '1.5px solid #E9D5FF', color: '#9333EA', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>⚯</button>
+              <button onClick={() => onMergeGroup(node.id)} title="מזג כפילים (אותו גזע)" style={{ width: 26, height: 26, borderRadius: 7, background: '#F3E8FF', border: '1.5px solid #E9D5FF', color: '#9333EA', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>⚯</button>
             )}
-            {canAdd && <button onClick={() => onAdd(node.id, node.name)} title="הוסף ילד" style={{ width: 28, height: 28, borderRadius: 7, background: '#ECFDF5', border: '1.5px solid #BBF7D0', color: '#059669', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Plus size={12} /></button>}
-            {canEdit && <button onClick={() => onEdit(node)} title="עריכה" style={{ width: 28, height: 28, borderRadius: 7, background: p.light, border: `1.5px solid ${p.ring}33`, color: p.ring, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Pencil size={11} /></button>}
-            {canDelete && <button onClick={() => onDelete(node)} title="מחיקה" style={{ width: 28, height: 28, borderRadius: 7, background: '#FEF2F2', border: '1.5px solid #FECACA', color: '#DC2626', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={11} /></button>}
+            {(canAdd || canEdit || canDelete) && (
+              <button
+                onClick={() => setRowMenu(cur => cur === node.id ? null : node.id)}
+                title="פעולות"
+                style={{ width: 26, height: 26, borderRadius: 7, background: rowMenu === node.id ? '#E2E8F0' : 'transparent', border: '1.5px solid #E2E8F0', color: '#64748B', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 15, lineHeight: 1 }}>⋯</button>
+            )}
+            {rowMenu === node.id && (
+              <>
+                {/* שכבה שסוגרת בלחיצה בחוץ */}
+                <div onClick={() => setRowMenu(null)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+                <div style={{ position: 'absolute', top: 30, left: 0, zIndex: 41, background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, boxShadow: '0 8px 24px rgba(15,23,42,0.14)', padding: 4, minWidth: 150, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {canAdd && <MenuItem icon={<Plus size={12} />} label="הוסף ילד" onClick={() => { setRowMenu(null); onAdd(node.id, node.name) }} />}
+                  {canEdit && <MenuItem icon={<Pencil size={11} />} label="עריכה" onClick={() => { setRowMenu(null); onEdit(node) }} />}
+                  {canDelete && <MenuItem icon={<Trash2 size={11} />} label="מחיקה" danger onClick={() => { setRowMenu(null); onDelete(node) }} />}
+                </div>
+              </>
+            )}
           </div>
         </div>
         {isExpanded && node.children.map(c => renderRows(c, depth + 1))}
@@ -1672,6 +1739,8 @@ export default function LineagePage() {
   const [nodes, setNodes] = useState<LineageNode[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<View>('tree')
+  /** אזור העבודה שמעל העץ — אישורים או בקשות משפחות. */
+  const [workTab, setWorkTab] = useState<'approvals' | 'requests'>('approvals')
   const [modal, setModal] = useState<ModalState>(null)
   const [formName, setFormName] = useState('')
   const [formRelation, setFormRelation] = useState<'son' | 'son_in_law' | null>(null)
@@ -1848,7 +1917,7 @@ export default function LineagePage() {
   // ברירת מחדל ל-keep: הצומת המאומת בבחירה, אחרת הראשון
   const effectiveKeepId = keepId && mergeSel.has(keepId)
     ? keepId
-    : (selectedNodes.find(n => (n.status ?? 'verified') === 'verified')?.id ?? selectedNodes[0]?.id ?? null)
+    : (selectedNodes.find(n => (n.status ?? 'pending') === 'verified')?.id ?? selectedNodes[0]?.id ?? null)
 
   // השם המנוסח בעושר הרב ביותר מבין הנבחרים — ברירת המחדל לשם הסופי.
   // ⚠️ הכי הרבה מילים ואז הכי ארוך, ולא "השם של הצומת שנשאר": הצומת שנשאר
@@ -2190,7 +2259,7 @@ export default function LineagePage() {
     return counts
   }, [nodes])
 
-  const verifiedCount = useMemo(() => nodes.filter(n => (n.status ?? 'verified') === 'verified').length, [nodes])
+  const verifiedCount = useMemo(() => nodes.filter(n => (n.status ?? 'pending') === 'verified').length, [nodes])
   const pendingCount = useMemo(() => nodes.filter(n => n.status === 'pending').length, [nodes])
   const rejectedCount = useMemo(() => nodes.filter(n => n.status === 'rejected').length, [nodes])
 
@@ -2462,9 +2531,26 @@ export default function LineagePage() {
           של בקשת שרשרת לא עשה דבר בעץ. התוצאה: 147 בקשות שהמתינו ללא טיפול,
           הוותיקה שלושה שבועות. מרכז הבקשות מציג מצב לכל בקשה, משווה בין
           הרשום למבוקש, ומחיל את השרשרת בלחיצה. */}
+      {/* ── אזור העבודה ──
+          🔴 שתי כניסות במקום פיזור: "מרכז האישורים" עונה על "מי מאושר ומי לא"
+          (357 מתוך 10,505 — 3.4%), ו"בקשות משפחות" על מה שהגיע מבחוץ.
+          קודם כל אחד מהם היה באנר/פאנל נפרד, ואי אפשר היה לדעת מאיפה מתחילים. */}
       {canEdit && (
         <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-          <FamilyRequestsPanel />
+          <div className="mb-3 flex flex-wrap items-center gap-1.5">
+            {([
+              { v: 'approvals' as const, l: 'מרכז האישורים' },
+              { v: 'requests' as const, l: 'בקשות משפחות' },
+            ]).map(o => (
+              <button key={o.v} onClick={() => setWorkTab(o.v)}
+                className={`rounded-lg border px-3 py-1.5 text-xs font-bold transition-all ${
+                  workTab === o.v
+                    ? 'border-slate-800 bg-slate-800 text-white'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-400'
+                }`}>{o.l}</button>
+            ))}
+          </div>
+          {workTab === 'approvals' ? <ApprovalCenterPanel /> : <FamilyRequestsPanel />}
         </div>
       )}
 
@@ -2758,7 +2844,7 @@ export default function LineagePage() {
                 <select value={formParentId ?? ''} onChange={e => setFormParentId(e.target.value || null)}
                   style={{ border: '1.5px solid #E2E8F0', borderRadius: 11, padding: '11px 14px', fontSize: 14, direction: 'rtl', outline: 'none', fontFamily: 'inherit', background: '#FAFBFF', cursor: 'pointer' }}>
                   <option value="">— בחר אב/אם —</option>
-                  {[...nodes].filter(n => (n.status ?? 'verified') === 'verified').sort((a, b) => a.generation - b.generation || a.name.localeCompare(b.name, 'he')).map(n => (
+                  {[...nodes].filter(n => (n.status ?? 'pending') === 'verified').sort((a, b) => a.generation - b.generation || a.name.localeCompare(b.name, 'he')).map(n => (
                     <option key={n.id} value={n.id}>{n.name} (דור {n.generation})</option>
                   ))}
                 </select>
