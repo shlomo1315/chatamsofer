@@ -14,7 +14,7 @@ import SafeMergePanel from './SafeMergePanel'
 import MergeCenterPanel from './MergeCenterPanel'
 import UnlinkedPanel from './UnlinkedPanel'
 import MergePlanModal, { type PlanResp as MergePlanResp } from './MergePlanModal'
-import SuggestionsInbox from './SuggestionsInbox'
+import FamilyRequestsPanel from './FamilyRequestsPanel'
 import CleanChildrenPanel from './CleanChildrenPanel'
 import GhostChildrenPanel from './GhostChildrenPanel'
 import SelfDuplicatesPanel from './SelfDuplicatesPanel'
@@ -2457,8 +2457,16 @@ export default function LineagePage() {
         </div>
       </div>
 
-      {/* הצעות תיקון-ייחוס מצאצאים — באנר שמופיע רק כשיש ממתינות */}
-      {canEdit && <SuggestionsInbox onApplied={() => { void softRefresh() }} />}
+      {/* ── בקשות תיקון ממשפחות ── */}
+      {/* 🔴 היה כאן באנר (SuggestionsInbox) בלי סטטוס ובלי היסטוריה, ואישור
+          של בקשת שרשרת לא עשה דבר בעץ. התוצאה: 147 בקשות שהמתינו ללא טיפול,
+          הוותיקה שלושה שבועות. מרכז הבקשות מציג מצב לכל בקשה, משווה בין
+          הרשום למבוקש, ומחיל את השרשרת בלחיצה. */}
+      {canEdit && (
+        <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+          <FamilyRequestsPanel />
+        </div>
+      )}
 
       {showSafeMerge && <SafeMergePanel onDone={() => { void softRefresh() }} />}
       {showMergeCenter && (

@@ -29,18 +29,50 @@ function getAdmin(): SupabaseClient | null {
 
 interface InviteRow { token: string; root_node_id: string; revoked_at: string | null; expires_at: string; recipient_name: string | null; beneficiary_id?: string | null; mode?: string | null }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// האם המחרוזת נראית כמו *שם* ולא כמו משפט שהוקלד לתוך שדה השם.
+//
+// 🔴 זה מה שהחליף את סינון ה-verified בבורר. הסינון הישן היה גורף מדי: הוא
+// אמנם הסתיר את הזבל, אבל יחד איתו הסתיר 96% מהעץ האמיתי והשאיר את רוב
+// המשפחות בלי שום אפשרות בחירה.
+//
+// במקום זה מזהים את הזבל עצמו. בפועל הוא נראה כך:
+//   "רבי אני נכד של הגאון... אני מודה לכם באופן אישי"
+//   "רבי לא ידוע לנו דרך מי, אך השבט הלוי כתב שאנו צאצאים"
+// כלומר גוף ראשון/פנייה למשרד, או משפט ארוך במיוחד.
+//
+// ⚠️ מכויל מול הנתונים בפועל: הכלל מסיר 12 רשומות מתוך 10,505, ואף לא אחת
+// מהמאושרות. שמות ארוכים לגיטימיים ("רבי יעקב סופר בעל 'מעיין הסופר' גאב"ד
+// ערלוי ביתר") נשארים — ולכן הסף על מספר מילים ולא על אורך התווים.
+// ─────────────────────────────────────────────────────────────────────────────
+const SENTENCE_MARKERS = /(^|\s)(אני|אנחנו|אנו|שלי|שלנו|לכם|תודה|מודה|איני|בבקשה|יש מכתב|כפי המקובל|נראה לי|לדעתי|כמדומני|לא ידוע)(\s|$)/
+const MAX_NAME_WORDS = 12
+
+export function looksLikeName(raw: string | null | undefined): boolean {
+  const name = (raw ?? '').trim()
+  if (!name) return false
+  if (SENTENCE_MARKERS.test(name)) return false
+  return name.split(/\s+/).length <= MAX_NAME_WORDS
+}
+
 // אימות ההזמנה — מחזיר את שורת ההזמנה או null (מבוטלת/פגה/לא קיימת).
-async function resolveInvite(admin: SupabaseClient, token: string | null): Promise<InviteRow | null> {
-  if (!token) return null
+//
+// ⚠️ expired מוחזר בנפרד: "פג תוקף" הוא המצב הנפוץ ביותר, והיחיד שהמשפחה
+// יכולה לפתור בעצמה (בקשת קישור חדש). ערבובו עם "לא קיים/בוטל" הפך את מסך
+// השגיאה למבוי סתום. ⚠️ אינו מסגיר קיום טוקן שלא היה קיים מעולם.
+async function resolveInvite(
+  admin: SupabaseClient, token: string | null,
+): Promise<{ invite: InviteRow | null; expired: boolean }> {
+  if (!token) return { invite: null, expired: false }
   const { data } = await admin
     .from('lineage_share_invites')
     .select('token, root_node_id, revoked_at, expires_at, recipient_name, beneficiary_id, mode')
     .eq('token', token)
     .maybeSingle()
-  if (!data) return null
-  if (data.revoked_at) return null
-  if (new Date(data.expires_at) < new Date()) return null
-  return data as InviteRow
+  if (!data) return { invite: null, expired: false }
+  if (data.revoked_at) return { invite: null, expired: false }
+  if (new Date(data.expires_at) < new Date()) return { invite: null, expired: true }
+  return { invite: data as InviteRow, expired: false }
 }
 
 // GET ?token=... → תת-העץ מהצומת ומטה (לתצוגה בעמוד הציבורי)
@@ -49,8 +81,15 @@ export async function GET(request: NextRequest) {
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
   const token = request.nextUrl.searchParams.get('token')
-  const inv = await resolveInvite(admin, token)
-  if (!inv) return NextResponse.json({ error: 'הקישור אינו תקין, בוטל, או פג תוקפו' }, { status: 403 })
+  const { invite: inv, expired } = await resolveInvite(admin, token)
+  if (!inv) {
+    return NextResponse.json({
+      error: expired
+        ? 'תוקף הקישור פג'
+        : 'הקישור אינו תקין או שבוטל',
+      expired,
+    }, { status: 403 })
+  }
 
   // שליפה בדפים: .limit() לבדו לא עוקף את db-max-rows=1000 (ראו lib/fetchAllRows).
   const { rows: nodes } = await fetchAllRows<TreeNodeRow>((from, to) =>
@@ -119,17 +158,34 @@ export async function GET(request: NextRequest) {
   // העץ המלא אין במה לבחור. נשלחות עמודות התצוגה בלבד (שם/הורה/דור), בלי
   // שום מידע אישי על נרשמים, ולכן אין כאן חשיפה מעבר לשמות האבות.
   //
-  // 🔴 מאושרים בלבד. הבורר הציג גם צמתים ממתינים, וביניהם טקסט חופשי שמישהו
-  // הקליד לתוך שדה שם ("אני נכד של... אני מודה לכם באופן אישי"). בחירה בצומת
-  // כזה מצמידה את הנרשם לרשומה שאולי בכלל תידחה, והרשימה נראית כאילו העץ
-  // מלא זבל.
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 הבורר כולל גם צמתים *ממתינים*, ולא מאושרים בלבד.
   //
-  // ⚠️ השורש נשמר תמיד: הוא נקודת העוגן לתיקון הדור הראשון, וסינון שלו היה
-  // מרוקן את הבורר בדיוק במקום שבו הוא הכי נחוץ.
+  // הרקע: הסינון ל-verified בלבד נועד להסתיר רשומות זבל, אבל בפועל רק 357
+  // מתוך 10,505 הצמתים מאושרים (3.4%). התוצאה: אצל 4,271 מתוך 4,409 האבות
+  // (97%!) לא היה *אף* ילד מאושר, והמשפחה שפתחה את הקישור קיבלה רשימה ריקה
+  // עם ההודעה "אין דורות אחרים לבחירה — ניתן לפנות למשרד". כלומר רוב מוחלט
+  // של המשפחות פשוט לא יכלו לתקן כלום. זה מקור התלונות "לא עובד לי" ו"אין
+  // אפשרות לתקן" — באג ולוגיקה שגויה, ולא חוסר נתונים.
+  //
+  // מה שמחליף את הסינון הגורף:
+  //   • צמתים דחויים עדיין מוסתרים — בהם אין טעם לבחור.
+  //   • זבל מסונן לפי *צורת השם* (ראו looksLikeName) ולא לפי סטטוס: משפט
+  //     חופשי שהוקלד לתוך שדה שם אינו שם של אדם, ואפשר לזהות אותו ישירות.
+  //   • הסטטוס נשלח לדף, כדי שצומת שטרם אושר יסומן "טרם אומת" ולא יוצג
+  //     כעובדה. הבחירה ממילא נכנסת לתור אישור אצל המנהל.
+  //
+  // ⚠️ השורש נשמר תמיד: הוא נקודת העוגן לתיקון הדור הראשון.
+  // ─────────────────────────────────────────────────────────────────────────
   const fullTree = inv.mode === 'order'
     ? nodes
-      .filter(n => n.status === 'verified' || !n.parent_id)
-      .map(n => ({ id: n.id, name: n.name, parent_id: n.parent_id, generation: n.generation, relation: n.relation ?? null }))
+      .filter(n => !n.parent_id || (n.status !== 'rejected' && looksLikeName(n.name)))
+      .map(n => ({
+        id: n.id, name: n.name, parent_id: n.parent_id,
+        generation: n.generation, relation: n.relation ?? null,
+        // ⚠️ 'verified' | 'pending' בלבד — הדף מסמן בעזרתו "טרם אומת".
+        status: n.status === 'verified' ? 'verified' : 'pending',
+      }))
     : undefined
 
   return NextResponse.json({
@@ -151,8 +207,13 @@ export async function POST(request: NextRequest) {
   let body: { token?: string; nodeId?: string; action?: 'verify' | 'reject' | 'rename'; name?: string }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
 
-  const inv = await resolveInvite(admin, body.token ?? null)
-  if (!inv) return NextResponse.json({ error: 'הקישור אינו תקין, בוטל, או פג תוקפו' }, { status: 403 })
+  const { invite: inv, expired: postExpired } = await resolveInvite(admin, body.token ?? null)
+  if (!inv) {
+    return NextResponse.json({
+      error: postExpired ? 'תוקף הקישור פג' : 'הקישור אינו תקין או שבוטל',
+      expired: postExpired,
+    }, { status: 403 })
+  }
 
   const { nodeId, action } = body
   if (!nodeId || !action) return NextResponse.json({ error: 'חסרים פרמטרים' }, { status: 400 })

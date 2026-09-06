@@ -54,12 +54,33 @@ export default function LineageReviewClient({ token }: { token: string }) {
   // שכבר קיים בעץ היא המקור המרכזי לכפילויות, ובדף התיקון היא לא הייתה קיימת
   // כלל — כאן דווקא, כשמתקנים שרשרת שגויה, הפיתוי להוסיף במקום לחפש גדול יותר.
   const [addGate, setAddGate] = useState<Node | null>(null)
+  // ── קישור שפג תוקפו ──
+  // 🔴 המצב הנפוץ ביותר בתלונות "לא עובד לי". מסך השגיאה היה מבוי סתום,
+  // ולכן יש כאן מסלול לבקשת קישור חדש ישירות מהדף.
+  const [expired, setExpired] = useState(false)
+  const [renewState, setRenewState] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle')
+
+  const requestNew = useCallback(async () => {
+    setRenewState('sending')
+    try {
+      const r = await fetch('/api/public/lineage-review/renew', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      })
+      setRenewState(r.ok ? 'sent' : 'failed')
+    } catch { setRenewState('failed') }
+  }, [token])
 
   const load = useCallback(async () => {
     try {
       const res = await fetch(`/api/public/lineage-review?token=${encodeURIComponent(token)}`)
       const data = await res.json()
-      if (!res.ok) { setError(data.error || 'שגיאה'); setLoading(false); return }
+      if (!res.ok) {
+        // ⚠️ מבדילים "פג תוקף" משאר הכשלים: זה המצב הנפוץ ביותר (5 מתוך 10
+        // הקישורים שנשלחו כבר פגו), והוא היחיד שהמשפחה יכולה לפתור לבד.
+        if (data.expired) setExpired(true)
+        setError(data.error || 'שגיאה'); setLoading(false); return
+      }
       setNodes(data.nodes ?? [])
       setRootId(data.rootNodeId ?? null)
       setRecipient(data.recipient ?? null)
@@ -94,19 +115,33 @@ export default function LineageReviewClient({ token }: { token: string }) {
     return fixGen.node.id === selfNodeId ? idx - 1 : idx
   }, [fixGen, chain, selfNodeId])
 
-  const pickOptions = useMemo(() => {
+  // כל האפשרויות בדור, *לפני* הסינון לפי הקלדה — הבסיס למונה ולתיבת החיפוש.
+  const pickAll = useMemo(() => {
     if (anchorIdx < 0) return []
     const anchor = chain[anchorIdx]
     if (!anchor) return []
     // ההורה בשרשרת: הדור שלפני הדור שמוחלף. בדור הראשון — שורש העץ עצמו.
     const parentId = anchorIdx > 0 ? chain[anchorIdx - 1].id : (fullTree.find(n => !n.parent_id)?.id ?? null)
     if (!parentId) return []
-    const siblings = fullTree.filter(n => n.parent_id === parentId && n.id !== anchor.id)
+    return fullTree
+      .filter(n => n.parent_id === parentId && n.id !== anchor.id)
+      // ⚠️ מאושרים קודם: הם הזיהוי הבטוח, וברשימה ארוכה כדאי שיהיו בראש.
+      .sort((a, b) => {
+        const av = a.status === 'verified' ? 0 : 1
+        const bv = b.status === 'verified' ? 0 : 1
+        return av !== bv ? av - bv : a.name.localeCompare(b.name, 'he')
+      })
+  }, [fullTree, anchorIdx, chain])
+
+  const pickOptions = useMemo(() => {
     const q = pickQuery.trim()
-    return siblings
-      .filter(n => !q || n.name.includes(q))
-      .sort((a, b) => a.name.localeCompare(b.name, 'he'))
-  }, [pickQuery, fullTree, anchorIdx, chain])
+    if (!q) return pickAll
+    // ⚠️ חיפוש סובלני: מתעלם מגרשיים/גרש ומרווחים כפולים, שמופיעים בשמות
+    // ("הגר\"ר", "רבי  משה") ומכשילים התאמה מילולית פשוטה.
+    const norm = (s: string) => s.replace(/["'׳״]/g, '').replace(/\s+/g, ' ').trim()
+    const nq = norm(q)
+    return pickAll.filter(n => norm(n.name).includes(nq))
+  }, [pickQuery, pickAll])
 
   // מיון היררכי — שורש, ואז ילדים בהזחה לפי דור
   const ordered = useMemo(() => {
@@ -197,8 +232,35 @@ export default function LineageReviewClient({ token }: { token: string }) {
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-rose-50">
             <AlertTriangle size={28} className="text-rose-500" />
           </div>
-          <h1 className="text-xl font-bold" style={{ color: '#1B3256' }}>הקישור אינו זמין</h1>
-          <p className="mt-3 text-sm leading-relaxed text-slate-600">{error}</p>
+          <h1 className="text-xl font-bold" style={{ color: '#1B3256' }}>
+            {expired ? 'תוקף הקישור פג' : 'הקישור אינו זמין'}
+          </h1>
+          {/* 🔴 מסך זה היה קצה מבוי סתום: המשפחה קיבלה "הקישור אינו תקין, בוטל,
+              או פג תוקפו" בלי לדעת מה קרה ובלי דרך להמשיך — וזה מקור התלונות
+              "לא עובד לי". עכשיו מוסבר מה קרה, ויש דרך לבקש קישור חדש. */}
+          <p className="mt-3 text-sm leading-relaxed text-slate-600">
+            {expired
+              ? 'הקישור האישי שנשלח אליכם היה בתוקף לזמן מוגבל, והוא פג. אין צורך לעשות דבר — ניתן לבקש קישור חדש ולהמשיך בדיוק מאותו מקום.'
+              : error}
+          </p>
+          <button
+            type="button"
+            onClick={requestNew}
+            disabled={renewState !== 'idle'}
+            className="mt-5 w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-60"
+          >
+            {renewState === 'sending' ? 'שולח…' : renewState === 'sent' ? '✓ הבקשה נשלחה' : 'שלחו לי קישור חדש'}
+          </button>
+          {renewState === 'sent' && (
+            <p className="mt-2 text-xs leading-relaxed text-green-700">
+              הבקשה התקבלה. הקישור החדש יישלח למייל הרשום אצלנו בהקדם.
+            </p>
+          )}
+          {renewState === 'failed' && (
+            <p className="mt-2 text-xs leading-relaxed text-rose-600">
+              שליחת הבקשה נכשלה. ניתן לפנות למשרד ולבקש קישור חדש.
+            </p>
+          )}
         </div>
       </main>
     )
@@ -316,21 +378,46 @@ export default function LineageReviewClient({ token }: { token: string }) {
                                 {i > 0 ? <> ילדיו של <span className="text-indigo-700">{chain[i - 1].name}</span></> : <> צאצאי מרן החתם סופר זי&quot;ע</>}:</>
                             )}
                           </p>
+                          {/* ⚠️ בעבר נכתב כאן "רק דורות מאושרים", והרשימה אכן סוננה כך —
+                              אבל רק 3.4% מהעץ מאושר, ולכן אצל 97% מהמשפחות הבורר היה ריק
+                              לגמרי. עכשיו מוצגים גם דורות שטרם אומתו, מסומנים ככאלה. */}
                           <p className="mb-2 text-[10px] text-slate-400">
-                            מוצגים רק דורות <strong>מאושרים</strong> ששייכים לדור זה — כך השרשרת נשארת תקינה.
+                            הבחירה נשלחת לאישור המשרד ואינה משנה את העץ מיד. דור המסומן
+                            <span className="mx-1 rounded border border-amber-200 bg-amber-50 px-1 text-amber-700">טרם אומת</span>
+                            עדיין ממתין לבדיקה — אפשר לבחור בו.
                           </p>
-                          {/* תיבת החיפוש רק כשיש הרבה אפשרויות; ברשימה קצרה היא מיותרת */}
-                          {pickOptions.length > 8 && (
-                            <input value={pickQuery} onChange={e => setPickQuery(e.target.value)} autoFocus
-                              placeholder="סינון לפי שם…"
-                              className="mb-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                          {/* תיבת החיפוש רק כשיש הרבה אפשרויות; ברשימה קצרה היא מיותרת.
+                              ⚠️ הסף נבדק מול *כל* האפשרויות ולא מול המסוננות: כשהסינון
+                              מצמצם ל-2 תוצאות התיבה הייתה נעלמת יחד עם הטקסט שהוקלד,
+                              והמשתמש נתקע בלי דרך לנקות אותו. */}
+                          {(pickAll.length > 8 || pickQuery.trim()) && (
+                            <div className="relative mb-2">
+                              <input value={pickQuery} onChange={e => setPickQuery(e.target.value)} autoFocus
+                                placeholder={`סינון מתוך ${pickAll.length.toLocaleString('he-IL')} דורות…`}
+                                className="w-full rounded-lg border border-slate-300 px-3 py-2 pl-8 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                              {pickQuery && (
+                                <button type="button" onClick={() => setPickQuery('')} title="ניקוי"
+                                  className="absolute top-1/2 left-2 -translate-y-1/2 text-slate-400 hover:text-red-600">✕</button>
+                              )}
+                            </div>
+                          )}
+                          {/* ⚠️ הודעה מפורשת כשהרשימה ארוכה — "מאות אנשים" בלי הסבר
+                              נראה כמו תקלה. כאן ברור שזה הדור הנכון וצריך לחפש בו. */}
+                          {pickAll.length > 25 && !pickQuery.trim() && (
+                            <p className="mb-2 rounded-lg bg-slate-50 px-2 py-1.5 text-[10px] text-slate-500">
+                              בדור זה רשומים {pickAll.length.toLocaleString('he-IL')} שמות. מומלץ להקליד
+                              חלק מהשם בתיבה שלמעלה כדי למצוא את המבוקש.
+                            </p>
                           )}
                           <div className="max-h-56 overflow-y-auto flex flex-col gap-1">
                             {pickOptions.length === 0 && (
                               <p className="py-3 text-center text-[11px] text-slate-400">
+                                {/* ⚠️ שתי הודעות שונות: "לא נמצא בחיפוש" הוא מצב זמין
+                                    לתיקון (לנקות ולנסות שוב), ואילו רשימה ריקה באמת
+                                    מפנה להוספת דור חסר — ולא סתם "לפנות למשרד". */}
                                 {pickQuery.trim()
-                                  ? 'לא נמצאו תוצאות לסינון זה'
-                                  : 'אין דורות אחרים לבחירה בשלב זה — ניתן לפנות למשרד'}
+                                  ? 'לא נמצאו תוצאות לחיפוש זה — נסו לנקות את התיבה או להקליד חלק אחר מהשם'
+                                  : 'אין דורות אחרים רשומים תחת דור זה. אם הדור שלכם חסר — סגרו חלונית זו ובחרו "הוספת דור חסר".'}
                               </p>
                             )}
                             {pickOptions.map(o => (
@@ -352,6 +439,13 @@ export default function LineageReviewClient({ token }: { token: string }) {
                                 className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-right text-sm hover:border-indigo-300 hover:bg-indigo-50 disabled:opacity-50">
                                 <span className="font-bold text-slate-800">{o.name}</span>
                                 <span className="mr-2 text-[10px] text-slate-400">דור {o.generation}</span>
+                                {/* ⚠️ סימון גלוי לדור שטרם אומת — הוא בר-בחירה, אבל
+                                    אסור שייראה כעובדה מאושרת. */}
+                                {o.status !== 'verified' && (
+                                  <span className="mr-2 rounded border border-amber-200 bg-amber-50 px-1 text-[10px] text-amber-700">
+                                    טרם אומת
+                                  </span>
+                                )}
                               </button>
                             ))}
                           </div>

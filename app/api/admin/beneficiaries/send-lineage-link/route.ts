@@ -55,9 +55,17 @@ export async function POST(request: NextRequest) {
   const token = randomBytes(16).toString('base64url')
   const recipientName = [ben.family_name, ben.spouse_name || ben.full_name].filter(Boolean).join(' ') || 'משפחה יקרה'
 
-  // ⚠️ 7 ימים ולא 30 (ברירת המחדל של הטבלה) — וזה נאכף כאן בפועל ולא רק
-  // נכתב במייל. קישור אישי שנשאר פתוח חודש הוא חשיפה מיותרת.
-  const expiresAt = new Date(Date.now() + 7 * 86400_000).toISOString()
+  // ── תוקף הקישור ──
+  // 🔴 30 יום, אחרי שהיה 7. הנימוק המקורי (חשיפה מיותרת) היה סביר בתיאוריה,
+  // אבל בפועל 5 מתוך 10 הקישורים שנשלחו פגו בעוד 9 מהם כבר נפתחו: משפחה
+  // שקראה את המייל אחרי שבוע, או חזרה להשלים את התיקון מאוחר יותר, נחסמה.
+  // זה מקור מרכזי לתלונות "קיבלתי קישור ולא עובד".
+  //
+  // ⚠️ החשיפה נשארת מוגבלת: הקישור מאפשר *הצעות בלבד* (mode='order' חוסם
+  // verify/reject), הוא מוגבל לענף אחד, וניתן לביטול מיידי מהממשק. בנוסף
+  // אפשר עכשיו לבקש קישור חדש מהדף עצמו (ראו lineage-review/renew).
+  const LINK_DAYS = 30
+  const expiresAt = new Date(Date.now() + LINK_DAYS * 86400_000).toISOString()
 
   const { error } = await admin.from('lineage_share_invites').insert({
     token,
