@@ -17,9 +17,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   Loader2, RefreshCw, Check, X, ShieldCheck, ListChecks, BarChart3,
-  AlertTriangle, ChevronLeft, Search, Users,
+  AlertTriangle, ChevronLeft, Search, Users, ExternalLink,
 } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
+import QuickChainModal from './QuickChainModal'
 
 interface Summary {
   total: number; verified: number; pending: number; rejected: number
@@ -30,19 +31,26 @@ interface QueueRow {
   parentId: string; parentName: string; parentStatus: string
   generation: number; pendingCount: number; totalCount: number; families: number
 }
+interface FamilyLink { id: string; name: string }
 interface ChildRow {
   id: string; name: string; generation: number; status: string
   relation: string | null; childCount: number; families: number
+  familyLinks: FamilyLink[]
   approvalSource: string | null; approvedAt: string | null; approvalNote: string | null
+  /** 0 = ילד ישיר · 1 = נכד. קובע את ההזחה בתצוגה. */
+  depth: number
+  parentId: string | null
 }
 interface ApprovedRow {
   id: string; name: string; generation: number
   approvalSource: string; approvedAt: string | null; approvalNote: string | null
-  families: number; childCount: number
+  families: number; familyLinks: FamilyLink[]; childCount: number
   parentName: string | null; parentApproved: boolean
 }
 interface Focus {
-  parent: { id: string; name: string; generation: number; status: string }
+  parent: { id: string; name: string; generation: number; status: string; families: number; familyLinks: FamilyLink[] }
+  /** שרשרת האבות מהשורש עד הצומת — "איפה אנחנו עומדים בעץ". */
+  trail: { id: string; name: string; generation: number; status: string }[]
   children: ChildRow[]
 }
 
@@ -78,6 +86,8 @@ export default function ApprovalCenterPanel() {
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [note, setNote] = useState('')
   const [q, setQ] = useState('')
+  /** המשפחה שנפתחה לצפייה מהירה (שרשרת דורות + מחיקה). */
+  const [quickId, setQuickId] = useState<string | null>(null)
 
   const load = useCallback(async (parentId?: string) => {
     setLoading(true)
@@ -145,6 +155,17 @@ export default function ApprovalCenterPanel() {
     if (!t) return approved
     return approved.filter(a => a.name.includes(t) || (a.parentName ?? '').includes(t))
   }, [approved, q])
+
+  /** המאושרים מקובצים לפי דור — לתצוגה בהזחה. */
+  const approvedByGen = useMemo(() => {
+    const m = new Map<number, ApprovedRow[]>()
+    for (const a of filteredApproved.slice(0, 400)) {
+      const l = m.get(a.generation) ?? []
+      l.push(a)
+      m.set(a.generation, l)
+    }
+    return [...m.entries()].sort((a, b) => a[0] - b[0])
+  }, [filteredApproved])
 
   const pct = summary && summary.total
     ? Math.round((summary.verified / summary.total) * 100) : 0
@@ -316,15 +337,35 @@ export default function ApprovalCenterPanel() {
       {/* ═══ מיקוד: אב אחד וכל ילדיו ═══ */}
       {tab === 'queue' && focus && (
         <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <div className="mb-3 flex items-center justify-between gap-2">
+          <div className="mb-3 flex items-start justify-between gap-2">
             <div className="min-w-0">
+              {/* ── שרשרת האבות ──
+                  ⚠️ בלעדיה אי אפשר לדעת איפה בעץ אנחנו: השם "רבי משה סופר"
+                  חוזר עשרות פעמים בדורות שונים. */}
+              {focus.trail.length > 1 && (
+                <div className="mb-1.5 flex flex-wrap items-center gap-1 text-[10px] text-slate-400">
+                  {focus.trail.slice(0, -1).map((t, i) => (
+                    <span key={t.id} className="flex items-center gap-1">
+                      {i > 0 && <span className="text-slate-300">›</span>}
+                      <button onClick={() => openParent(t.id)}
+                        className="rounded px-1 py-0.5 hover:bg-slate-100 hover:text-indigo-600">
+                        {t.name}
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
               <h4 className="truncate text-base font-bold text-slate-800">{focus.parent.name}</h4>
-              <p className="text-[11px] text-slate-500">
-                דור {focus.parent.generation} · {focus.children.length} ילדים
+              <p className="flex flex-wrap items-center gap-x-2 text-[11px] text-slate-500">
+                <span className="rounded bg-slate-100 px-1.5 py-0.5 font-bold text-slate-600">דור {focus.parent.generation}</span>
+                <span>{focus.children.filter(c => c.depth === 0).length} ילדים ישירים</span>
+                {focus.parent.familyLinks.length > 0 && (
+                  <CardLinks links={focus.parent.familyLinks} count={focus.parent.families} onQuick={setQuickId} />
+                )}
               </p>
             </div>
             <button onClick={closeFocus}
-              className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-50">
+              className="flex-shrink-0 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-50">
               חזרה לתור
             </button>
           </div>
@@ -337,33 +378,58 @@ export default function ApprovalCenterPanel() {
             <span className="text-slate-400">נבחרו {picked.size}</span>
           </div>
 
-          <div className="mb-3 flex max-h-80 flex-col gap-1 overflow-y-auto">
+          {/* ── הצאצאים בהזחה ──
+              🔴 שני דורות: ילדים ישירים, ומתחת לכל אחד הנכדים שלו מוזחים.
+              בלי הנכדים אפשר לאשר בן בלי לדעת שתלוי בו ענף שלם. */}
+          <div className="mb-3 flex max-h-96 flex-col gap-0.5 overflow-y-auto">
             {focus.children.map(c => {
               const meta = STATUS_META[c.status] ?? STATUS_META.pending
               const on = picked.has(c.id)
+              const child = c.depth === 0
               return (
-                <label key={c.id}
-                  className={`flex cursor-pointer items-center gap-2.5 rounded-lg border px-2.5 py-2 transition-all ${
-                    on ? 'border-indigo-300 bg-indigo-50/60' : 'border-slate-200 bg-white hover:border-slate-300'
-                  }`}>
-                  <input type="checkbox" checked={on}
-                    onChange={() => setPicked(prev => {
-                      const n = new Set(prev)
-                      if (n.has(c.id)) n.delete(c.id); else n.add(c.id)
-                      return n
-                    })}
-                    className="h-4 w-4 flex-shrink-0 accent-indigo-600" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-slate-800">{c.name}</span>
-                    <span className="text-[10px] text-slate-500">
-                      {c.childCount > 0 && <>{c.childCount} ילדים · </>}
-                      {c.families > 0 ? <b className="text-amber-700">{c.families} משפחות</b> : 'אין משפחות'}
-                      {c.relation && <> · {c.relation === 'son_in_law' ? 'חתן' : 'בן'}</>}
+                <div key={c.id} className="flex items-stretch" style={{ paddingRight: c.depth * 26 }}>
+                  {/* קו הזחה — מראה במבט שהשורה תלויה בשורה שמעליה */}
+                  {c.depth > 0 && (
+                    <span className="mr-1 flex w-4 flex-shrink-0 items-center justify-center">
+                      <span className="h-full w-px bg-slate-200" />
                     </span>
-                  </span>
-                  <span className="flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold"
-                    style={{ background: meta.bg, color: meta.fg }}>{meta.label}</span>
-                </label>
+                  )}
+                  <label
+                    className={`flex flex-1 cursor-pointer items-center gap-2.5 rounded-lg border px-2.5 transition-all ${
+                      child ? 'py-2' : 'py-1.5'
+                    } ${on ? 'border-indigo-300 bg-indigo-50/60' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                    <input type="checkbox" checked={on}
+                      onChange={() => setPicked(prev => {
+                        const n = new Set(prev)
+                        if (n.has(c.id)) n.delete(c.id); else n.add(c.id)
+                        return n
+                      })}
+                      className="h-4 w-4 flex-shrink-0 accent-indigo-600" />
+                    <span className="min-w-0 flex-1">
+                      <span className={`block truncate text-slate-800 ${child ? 'text-sm font-medium' : 'text-[12px]'}`}>
+                        {c.name}
+                      </span>
+                      <span className="flex flex-wrap items-center gap-x-1.5 text-[10px] text-slate-500">
+                        <span className="rounded bg-slate-100 px-1 font-bold text-slate-500">דור {c.generation}</span>
+                        {c.childCount > 0 && <span>{c.childCount} ילדים</span>}
+                        {c.families > 0
+                          ? <CardLinks links={c.familyLinks} count={c.families} onQuick={setQuickId} />
+                          : <span className="text-slate-400">אין משפחות</span>}
+                        {c.relation && <span>· {c.relation === 'son_in_law' ? 'חתן' : 'בן'}</span>}
+                      </span>
+                    </span>
+                    {/* ⚠️ מעבר לדור הזה כאב — כך יורדים לעומק בלי לחזור לתור */}
+                    {c.childCount > 0 && (
+                      <button onClick={e => { e.preventDefault(); openParent(c.id) }}
+                        title="פתח את הדור הזה"
+                        className="flex-shrink-0 rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-500 hover:border-indigo-300 hover:text-indigo-600">
+                        פתח
+                      </button>
+                    )}
+                    <span className="flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold"
+                      style={{ background: meta.bg, color: meta.fg }}>{meta.label}</span>
+                  </label>
+                </div>
               )
             })}
           </div>
@@ -412,40 +478,54 @@ export default function ApprovalCenterPanel() {
             {q && ` (מתוך ${approved.length.toLocaleString('he-IL')})`}
           </p>
 
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-            {filteredApproved.slice(0, 300).map(a => (
-              <div key={a.id} className="flex items-center gap-3 border-b border-slate-100 px-3 py-2 last:border-0">
-                <span className="h-7 w-1 flex-shrink-0 rounded-full bg-green-500" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-slate-800">
-                    {a.name}
-                    {/* ⚠️ הסימון שחושף "ירוק שאינו באמת מאושר" */}
-                    {!a.parentApproved && (
-                      <span className="mr-2 rounded border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[10px] font-bold text-rose-700">
-                        האב אינו מאושר
+          {/* ── מקובץ לפי דור, בהזחה ──
+              🔴 רשימה שטוחה של 357 שמות אינה נקראת. הקיבוץ לפי דור והזחה
+              לפי עומק הופכים אותה לתמונה: כמה אושרו בכל דור, ומי הם. */}
+          <div className="flex flex-col gap-2">
+            {approvedByGen.map(([gen, rows]) => (
+              <div key={gen} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-1.5">
+                  <span className="text-[11px] font-bold text-slate-600">דור {gen}</span>
+                  <span className="text-[11px] tabular-nums text-slate-400">{rows.length} מאושרים</span>
+                </div>
+                {rows.map(a => (
+                  <div key={a.id} className="flex items-center gap-2.5 border-b border-slate-100 px-3 py-2 last:border-0"
+                    style={{ paddingRight: 12 + Math.min(gen - 1, 8) * 12 }}>
+                    <span className="h-7 w-1 flex-shrink-0 rounded-full bg-green-500" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-slate-800">
+                        {a.name}
+                        {/* ⚠️ הסימון שחושף "ירוק שאינו באמת מאושר" */}
+                        {!a.parentApproved && (
+                          <span className="mr-2 rounded border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[10px] font-bold text-rose-700">
+                            האב אינו מאושר
+                          </span>
+                        )}
                       </span>
-                    )}
-                  </span>
-                  <span className="text-[10px] text-slate-500">
-                    דור {a.generation}
-                    {a.parentName && <> · תחת {a.parentName}</>}
-                    {a.families > 0 && <> · <b className="text-slate-600">{a.families} משפחות</b></>}
-                  </span>
-                </span>
-                <span className="flex-shrink-0 text-left">
-                  <span className="block rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
-                    {SOURCE_LABEL[a.approvalSource] ?? a.approvalSource}
-                  </span>
-                  {a.approvedAt && (
-                    <span className="mt-0.5 block text-[10px] text-slate-400">
-                      {new Date(a.approvedAt).toLocaleDateString('he-IL')}
+                      <span className="flex flex-wrap items-center gap-x-1.5 text-[10px] text-slate-500">
+                        {a.parentName && <span>תחת {a.parentName}</span>}
+                        {a.childCount > 0 && <span>· {a.childCount} ילדים</span>}
+                        {a.families > 0 && <CardLinks links={a.familyLinks} count={a.families} onQuick={setQuickId} />}
+                      </span>
                     </span>
-                  )}
-                </span>
+                    <span className="flex-shrink-0 text-left">
+                      <span className="block rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                        {SOURCE_LABEL[a.approvalSource] ?? a.approvalSource}
+                      </span>
+                      {a.approvedAt && (
+                        <span className="mt-0.5 block text-[10px] text-slate-400">
+                          {new Date(a.approvedAt).toLocaleDateString('he-IL')}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                ))}
               </div>
             ))}
             {!filteredApproved.length && (
-              <p className="py-10 text-center text-sm text-slate-400">לא נמצאו צמתים מאושרים.</p>
+              <p className="rounded-xl border border-slate-200 bg-white py-10 text-center text-sm text-slate-400">
+                לא נמצאו צמתים מאושרים.
+              </p>
             )}
           </div>
           {filteredApproved.length > 300 && (
@@ -455,7 +535,52 @@ export default function ApprovalCenterPanel() {
           )}
         </div>
       )}
+
+      {/* צפייה מהירה בסדר הדורות + מחיקה מכל המחלקות */}
+      {quickId && (
+        <QuickChainModal
+          beneficiaryId={quickId}
+          onClose={() => setQuickId(null)}
+          // ⚠️ אחרי מחיקה טוענים מחדש: המונים והרשימות מתייחסים למשפחה שכבר אינה קיימת.
+          onDeleted={() => { void load(focus?.parent.id) }}
+        />
+      )}
     </div>
+  )
+}
+
+/**
+ * קישורי כרטסת למשפחות התלויות בצומת.
+ *
+ * ⚠️ נפתח בכרטיסייה חדשה: המנהל באמצע רשימת אישור, וניווט באותו חלון היה
+ * מאבד את הסימונים שכבר עשה.
+ */
+function CardLinks({ links, count, onQuick }: { links: FamilyLink[]; count: number; onQuick?: (id: string) => void }) {
+  if (!links.length) {
+    return <span className="font-medium text-amber-700">{count} משפחות</span>
+  }
+  return (
+    <span className="flex flex-wrap items-center gap-1">
+      {links.map(l => (
+        <span key={l.id} className="inline-flex overflow-hidden rounded border border-amber-200 bg-amber-50">
+          {/* צפייה מהירה — שרשרת הדורות + מחיקה, בלי לעזוב את המסך */}
+          <button onClick={e => { e.preventDefault(); e.stopPropagation(); onQuick?.(l.id) }}
+            title={`צפייה מהירה בסדר הדורות — ${l.name}`}
+            className="px-1.5 py-0.5 font-medium text-amber-800 hover:bg-amber-100">
+            {l.name || 'כרטסת'}
+          </button>
+          <a href={`/admin/beneficiaries/${l.id}`} target="_blank" rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+            title="פתיחת הכרטסת המלאה בכרטיסייה חדשה"
+            className="flex items-center border-r border-amber-200 px-1 text-amber-700 hover:bg-amber-100">
+            <ExternalLink size={9} />
+          </a>
+        </span>
+      ))}
+      {count > links.length && (
+        <span className="text-slate-400">ועוד {count - links.length}</span>
+      )}
+    </span>
   )
 }
 

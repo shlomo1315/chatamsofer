@@ -58,14 +58,24 @@ export async function GET(request: NextRequest) {
     admin.from('lineage_nodes').select(NODE_COLS).range(from, to),
   )
 
-  // כמה משפחות תלויות בכל צומת — זה מה שהופך אישור לדחוף.
-  const { rows: bens } = await fetchAllRows<{ lineage_node_id: string | null }>((from, to) =>
-    admin.from('beneficiaries').select('lineage_node_id').not('lineage_node_id', 'is', null).range(from, to),
+  // המשפחות התלויות בכל צומת — גם המונה (מה שהופך אישור לדחוף) וגם הזהות
+  // עצמה, כדי שאפשר יהיה לפתוח את הכרטסת ישירות מהשורה בלי לחפש בנפרד.
+  const { rows: bens } = await fetchAllRows<{ id: string; full_name: string | null; family_name: string | null; lineage_node_id: string | null }>((from, to) =>
+    admin.from('beneficiaries')
+      .select('id, full_name, family_name, lineage_node_id')
+      .not('lineage_node_id', 'is', null).range(from, to),
   )
   const famCount = new Map<string, number>()
+  const famList = new Map<string, { id: string; name: string }[]>()
   for (const b of bens) {
     if (!b.lineage_node_id) continue
     famCount.set(b.lineage_node_id, (famCount.get(b.lineage_node_id) ?? 0) + 1)
+    // ⚠️ עד 5 לשורה — הכרטסות נועדו לפתיחה מהירה, לא לרשימה מלאה.
+    const l = famList.get(b.lineage_node_id) ?? []
+    if (l.length < 5) {
+      l.push({ id: b.id, name: [b.family_name, b.full_name].filter(Boolean).join(' ') })
+      famList.set(b.lineage_node_id, l)
+    }
   }
 
   const kids = new Map<string, NodeRow[]>()
@@ -106,22 +116,59 @@ export async function GET(request: NextRequest) {
   if (parentId) {
     const parent = byId.get(parentId)
     if (parent) {
+      // ── שרשרת האבות מעל הצומת ──
+      // ⚠️ בלעדיה אי אפשר לדעת *איפה* בעץ אנחנו עומדים: השם לבדו
+      // ("רבי משה סופר") חוזר עשרות פעמים בדורות שונים.
+      const trail: { id: string; name: string; generation: number; status: string }[] = []
+      let cur: NodeRow | undefined = parent
+      const guard = new Set<string>()
+      while (cur && !guard.has(cur.id)) {
+        guard.add(cur.id)
+        trail.unshift({ id: cur.id, name: cur.name, generation: cur.generation, status: st(cur) })
+        cur = cur.parent_id ? byId.get(cur.parent_id) : undefined
+      }
+
+      // ── הצאצאים בהזחה ──
+      // 🔴 שני דורות ולא אחד: "מי הצאצאים של הדור הזה" פירושו גם הנכדים.
+      // בלעדיהם המנהל מאשר בן בלי לדעת שתלוי בו ענף שלם.
+      type OutChild = {
+        id: string; name: string; generation: number; status: string
+        relation: string | null; childCount: number; families: number
+        familyLinks: { id: string; name: string }[]
+        approvalSource: string | null; approvedAt: string | null; approvalNote: string | null
+        depth: number; parentId: string | null
+      }
+      const shape = (c: NodeRow, depth: number): OutChild => ({
+        id: c.id, name: c.name, generation: c.generation, status: st(c),
+        relation: c.relation,
+        childCount: (kids.get(c.id) ?? []).length,
+        families: famCount.get(c.id) ?? 0,
+        familyLinks: famList.get(c.id) ?? [],
+        approvalSource: c.approval_source,
+        approvedAt: c.approved_at,
+        approvalNote: c.approval_note,
+        depth, parentId: c.parent_id,
+      })
+      const out: OutChild[] = []
+      const level1 = (kids.get(parentId) ?? [])
+        .sort((a, b) => (famCount.get(b.id) ?? 0) - (famCount.get(a.id) ?? 0) || a.name.localeCompare(b.name, 'he'))
+      for (const c of level1) {
+        out.push(shape(c, 0))
+        // דור הנכדים — ממוין באותו היגיון, מוזח מתחת לאביו.
+        const level2 = (kids.get(c.id) ?? [])
+          .sort((a, b) => (famCount.get(b.id) ?? 0) - (famCount.get(a.id) ?? 0) || a.name.localeCompare(b.name, 'he'))
+        for (const g of level2) out.push(shape(g, 1))
+      }
+
       focus = {
         parent: {
           id: parent.id, name: parent.name, generation: parent.generation,
           status: st(parent), approvalSource: parent.approval_source,
+          families: famCount.get(parent.id) ?? 0,
+          familyLinks: famList.get(parent.id) ?? [],
         },
-        children: (kids.get(parentId) ?? [])
-          .map(c => ({
-            id: c.id, name: c.name, generation: c.generation, status: st(c),
-            relation: c.relation,
-            childCount: (kids.get(c.id) ?? []).length,
-            families: famCount.get(c.id) ?? 0,
-            approvalSource: c.approval_source,
-            approvedAt: c.approved_at,
-            approvalNote: c.approval_note,
-          }))
-          .sort((a, b) => b.families - a.families || a.name.localeCompare(b.name, 'he')),
+        trail,
+        children: out,
       }
     }
   }
@@ -160,6 +207,7 @@ export async function GET(request: NextRequest) {
       approvedAt: n.approved_at,
       approvalNote: n.approval_note,
       families: famCount.get(n.id) ?? 0,
+      familyLinks: famList.get(n.id) ?? [],
       childCount: (kids.get(n.id) ?? []).length,
       // ⚠️ צומת מאושר שאביו אינו מאושר = שרשרת שבורה. זה בדיוק מה שאי
       // אפשר היה לראות קודם, והוא מסביר "ירוקים שלא באמת מאושרים".
