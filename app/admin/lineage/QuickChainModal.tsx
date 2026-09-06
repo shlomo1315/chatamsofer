@@ -14,10 +14,15 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useCallback } from 'react'
-import { Loader2, X, Trash2, ExternalLink, AlertTriangle, GitBranch } from 'lucide-react'
+import { Loader2, X, Trash2, ExternalLink, AlertTriangle, GitBranch, Copy, CheckCircle2 } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 
 interface ChainRow { generation: number; name: string; relation?: string | null }
+interface Dup {
+  id: string; name: string; idNumber: string | null; phone: string | null
+  city: string | null; isSpecial: boolean; status: string | null
+  createdAt: string; match: 'id' | 'phone' | 'name'
+}
 interface Detail {
   id: string
   name: string
@@ -27,6 +32,17 @@ interface Detail {
   status: string | null
   chain: ChainRow[]
   nodeName: string | null
+  nodeStatus: string | null
+  /** אחים בעלי אותו שם בעץ — כפילות במיזוג. */
+  nodeSiblingDup: number
+  duplicates: Dup[]
+}
+
+/** עוצמת ההתאמה. ⚠️ שם בלבד הוא רמז חלש — "שטרן משה" חוזר עשרות פעמים. */
+const MATCH_META: Record<Dup['match'], { label: string; cls: string; strong: boolean }> = {
+  id: { label: 'אותה ת״ז', cls: 'border-rose-300 bg-rose-50 text-rose-800', strong: true },
+  phone: { label: 'אותו טלפון', cls: 'border-amber-300 bg-amber-50 text-amber-800', strong: true },
+  name: { label: 'אותו שם בלבד', cls: 'border-slate-300 bg-slate-50 text-slate-600', strong: false },
 }
 
 export default function QuickChainModal({
@@ -102,6 +118,64 @@ export default function QuickChainModal({
                 {d.city && <span>{d.city}</span>}
               </p>
             </div>
+
+            {/* ── כפילויות ──
+                🔴 זו השאלה שמכריעה אם למחוק: רישום כפול נמחק בלב שקט,
+                וכרטסת יחידה היא כל מה שיש על המשפחה. */}
+            {d.duplicates.length > 0 ? (
+              <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-2.5">
+                <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold text-amber-900">
+                  <Copy size={12} /> נמצאו {d.duplicates.length} כרטסות נוספות שעשויות להיות אותו אדם
+                </p>
+                <div className="flex flex-col gap-1">
+                  {d.duplicates.map(dp => {
+                    const m = MATCH_META[dp.match]
+                    return (
+                      <div key={dp.id} className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 ${m.cls}`}>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[12px] font-medium">{dp.name}</span>
+                          <span className="flex flex-wrap items-center gap-x-1.5 text-[10px] opacity-80">
+                            {dp.idNumber && <span dir="ltr">{dp.idNumber}</span>}
+                            {dp.phone && <span dir="ltr">{dp.phone}</span>}
+                            {dp.city && <span>{dp.city}</span>}
+                            {dp.isSpecial && <span className="font-bold">· אישורים חריגים</span>}
+                          </span>
+                        </span>
+                        <span className="flex-shrink-0 rounded-full bg-white/70 px-1.5 py-0.5 text-[9px] font-bold">
+                          {m.label}
+                        </span>
+                        <a href={`/admin/beneficiaries/${dp.id}`} target="_blank" rel="noopener noreferrer"
+                          className="flex-shrink-0 rounded p-1 hover:bg-white/60" title="פתיחת הכרטסת">
+                          <ExternalLink size={11} />
+                        </a>
+                      </div>
+                    )
+                  })}
+                </div>
+                {/* ⚠️ אזהרה מפורשת: שם זהה לבדו אינו הוכחה. */}
+                {d.duplicates.every(x => x.match === 'name') && (
+                  <p className="mt-1.5 text-[10px] leading-relaxed text-amber-800">
+                    כל ההתאמות הן <b>לפי שם בלבד</b> — שם נפוץ חוזר במאגר עשרות פעמים.
+                    ודאו לפי ת״ז או טלפון לפני מחיקה.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="mb-3 flex items-center gap-1.5 rounded-xl border border-green-200 bg-green-50 px-2.5 py-2 text-[11px] text-green-800">
+                <CheckCircle2 size={12} /> אין כרטסת נוספת לאדם זה במערכת.
+              </div>
+            )}
+
+            {/* כפילות בעץ עצמו */}
+            {d.nodeSiblingDup > 0 && (
+              <div className="mb-3 flex items-start gap-1.5 rounded-xl border border-purple-200 bg-purple-50 px-2.5 py-2">
+                <Copy size={12} className="mt-0.5 flex-shrink-0 text-purple-600" />
+                <p className="text-[11px] leading-relaxed text-purple-800">
+                  בעץ קיימים <b>{d.nodeSiblingDup}</b> צמתים נוספים באותו שם תחת אותו אב —
+                  כלומר הצומת עצמו כפול וטעון מיזוג.
+                </p>
+              </div>
+            )}
 
             {/* ── השרשרת ── */}
             {d.chain.length ? (

@@ -32,6 +32,12 @@ interface QueueRow {
   generation: number; pendingCount: number; totalCount: number; families: number
 }
 interface FamilyLink { id: string; name: string }
+/** שורה בעץ הדורות העליונים שבתמונת המצב. depth קובע את ההזחה. */
+interface TopRow {
+  id: string; name: string; generation: number; status: string
+  depth: number; childCount: number; families: number
+  pendingKids: number; verifiedKids: number
+}
 interface ChildRow {
   id: string; name: string; generation: number; status: string
   relation: string | null; childCount: number; families: number
@@ -75,6 +81,7 @@ export default function ApprovalCenterPanel() {
   const [tab, setTab] = useState<Tab>('overview')
   const [summary, setSummary] = useState<Summary | null>(null)
   const [byGeneration, setByGeneration] = useState<GenRow[]>([])
+  const [topTree, setTopTree] = useState<TopRow[]>([])
   const [queue, setQueue] = useState<QueueRow[]>([])
   const [approved, setApproved] = useState<ApprovedRow[]>([])
   const [brokenChain, setBrokenChain] = useState(0)
@@ -100,6 +107,7 @@ export default function ApprovalCenterPanel() {
       if (!res.ok) throw new Error(d.error || 'טעינת מצב האישורים נכשלה')
       setSummary(d.summary ?? null)
       setByGeneration(d.byGeneration ?? [])
+      setTopTree(d.topTree ?? [])
       setQueue(d.queue ?? [])
       setApproved(d.approved ?? [])
       setBrokenChain(d.brokenChain ?? 0)
@@ -272,6 +280,42 @@ export default function ApprovalCenterPanel() {
                 </p>
               </div>
             )}
+          </div>
+
+          {/* ── מבנה העץ בהזחה ──
+              🔴 "פילוח לפי דור" אומר כמה אושרו, לא *מי* ואיפה. כאן רואים
+              את המבנה עצמו: מי תלוי במי, ומה מאושר בכל ענף. */}
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2">
+              <span className="text-[11px] font-bold text-slate-600">מבנה העץ — הדורות העליונים</span>
+              <span className="text-[10px] text-slate-400">לחיצה פותחת את הדור לאישור</span>
+            </div>
+            <div className="max-h-96 overflow-y-auto">
+              {topTree.map(t => {
+                const meta = STATUS_META[t.status] ?? STATUS_META.pending
+                return (
+                  <button key={t.id}
+                    onClick={() => { setTab('queue'); openParent(t.id) }}
+                    className="flex w-full items-center gap-2 border-b border-slate-50 px-3 py-1.5 text-right transition-colors last:border-0 hover:bg-indigo-50/50"
+                    style={{ paddingRight: 12 + t.depth * 18 }}>
+                    {/* נקודת הסטטוס — הצבע הוא הסימן */}
+                    <span className="h-2 w-2 flex-shrink-0 rounded-full" style={{ background: meta.ring }} />
+                    <span className="min-w-0 flex-1 truncate text-[12px] text-slate-700">{t.name}</span>
+                    <span className="flex flex-shrink-0 items-center gap-1.5 text-[10px]">
+                      <span className="rounded bg-slate-100 px-1 font-bold text-slate-500">ד{t.generation}</span>
+                      {t.childCount > 0 && (
+                        <span className="tabular-nums text-slate-400">
+                          <b className="text-green-700">{t.verifiedKids}</b>
+                          <span className="text-slate-300">/</span>
+                          {t.childCount}
+                        </span>
+                      )}
+                      {t.families > 0 && <span className="font-bold text-amber-700">{t.families}👥</span>}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           {/* פילוח לפי דור */}

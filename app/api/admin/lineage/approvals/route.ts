@@ -216,9 +216,43 @@ export async function GET(request: NextRequest) {
     }))
     .sort((a, b) => a.generation - b.generation || a.name.localeCompare(b.name, 'he'))
 
+  // ── עץ הדורות העליונים, בהזחה ──
+  //
+  // 🔴 "פילוח לפי דור" עונה כמה אושרו בכל דור, אבל לא *מי* ואיפה. כאן
+  // נבנה עץ אמיתי מהשורש ומטה עם עומק, כך שרואים את המבנה עצמו: מי תלוי
+  // במי, מה מאושר ומה לא. מוגבל בעומק ובמספר ילדים — 10,527 צמתים אינם
+  // נקראים ברשימה אחת, והמנהל פותח לעומק דרך מסך המיקוד.
+  const TOP_DEPTH = 4
+  const TOP_KIDS = 12
+  type TopRow = {
+    id: string; name: string; generation: number; status: string
+    depth: number; childCount: number; families: number
+    pendingKids: number; verifiedKids: number
+  }
+  const top: TopRow[] = []
+  const walkTop = (n: NodeRow, depth: number) => {
+    const children = kids.get(n.id) ?? []
+    top.push({
+      id: n.id, name: n.name, generation: n.generation, status: st(n),
+      depth, childCount: children.length,
+      families: famCount.get(n.id) ?? 0,
+      pendingKids: children.filter(c => st(c) === 'pending').length,
+      verifiedKids: children.filter(c => st(c) === 'verified').length,
+    })
+    if (depth >= TOP_DEPTH) return
+    // ⚠️ ממוין לפי גודל הענף — הענפים המשמעותיים קודם, לא לפי א״ב.
+    const sorted = [...children]
+      .sort((a, b) => (kids.get(b.id) ?? []).length - (kids.get(a.id) ?? []).length)
+      .slice(0, TOP_KIDS)
+    for (const c of sorted) walkTop(c, depth + 1)
+  }
+  const rootNode = nodes.find(n => !n.parent_id)
+  if (rootNode) walkTop(rootNode, 0)
+
   return NextResponse.json({
     summary,
     byGeneration,
+    topTree: top,
     focus,
     queue: queue.slice(0, 200),
     approved,

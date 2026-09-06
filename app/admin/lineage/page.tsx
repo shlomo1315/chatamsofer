@@ -16,6 +16,7 @@ import UnlinkedPanel from './UnlinkedPanel'
 import MergePlanModal, { type PlanResp as MergePlanResp } from './MergePlanModal'
 import FamilyRequestsPanel from './FamilyRequestsPanel'
 import ApprovalCenterPanel from './ApprovalCenterPanel'
+import TreeAuditPanel from './TreeAuditPanel'
 import CleanChildrenPanel from './CleanChildrenPanel'
 import GhostChildrenPanel from './GhostChildrenPanel'
 import SelfDuplicatesPanel from './SelfDuplicatesPanel'
@@ -1740,7 +1741,7 @@ export default function LineagePage() {
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<View>('tree')
   /** אזור העבודה שמעל העץ — אישורים או בקשות משפחות. */
-  const [workTab, setWorkTab] = useState<'approvals' | 'requests'>('approvals')
+  const [workTab, setWorkTab] = useState<'approvals' | 'requests' | 'audit'>('approvals')
   const [modal, setModal] = useState<ModalState>(null)
   const [formName, setFormName] = useState('')
   const [formRelation, setFormRelation] = useState<'son' | 'son_in_law' | null>(null)
@@ -2541,6 +2542,7 @@ export default function LineagePage() {
             {([
               { v: 'approvals' as const, l: 'מרכז האישורים' },
               { v: 'requests' as const, l: 'בקשות משפחות' },
+              { v: 'audit' as const, l: 'ביקורת תקינות' },
             ]).map(o => (
               <button key={o.v} onClick={() => setWorkTab(o.v)}
                 className={`rounded-lg border px-3 py-1.5 text-xs font-bold transition-all ${
@@ -2550,7 +2552,9 @@ export default function LineagePage() {
                 }`}>{o.l}</button>
             ))}
           </div>
-          {workTab === 'approvals' ? <ApprovalCenterPanel /> : <FamilyRequestsPanel />}
+          {workTab === 'approvals' && <ApprovalCenterPanel />}
+          {workTab === 'requests' && <FamilyRequestsPanel />}
+          {workTab === 'audit' && <TreeAuditPanel onLocate={(id) => { setView('tree'); handleLocate([id]) }} />}
         </div>
       )}
 
