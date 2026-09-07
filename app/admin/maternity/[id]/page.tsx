@@ -824,9 +824,15 @@ export default async function MaternityDetailPage(
                   <span className="font-bold text-slate-800 ltr-num">{aid.recovery_receipt_number}</span>
                 </div>
               )}
+              {/* ── הקבלה עצמה ──
+                  🔴 עד כאן הופיע כאן כפתור הורדה בלבד, בלי תצוגה מקדימה —
+                  ולכן מי שבדק חיוב לא ראה את הקבלה אלא רק "מסמך", והיה צריך
+                  להוריד כל קובץ בנפרד כדי לדעת מה בו. DocCard מצייר את
+                  התמונה או את העמוד הראשון של ה-PDF, בדיוק כמו שאר המסמכים
+                  בכרטסת, ולחיצה פותחת את הקובץ המלא. */}
               {aid.recovery_receipt_url && (
-                <div className="mt-2">
-                  <DownloadDocButton url={aid.recovery_receipt_url} docType="קבלה" person={motherName} name={aid.recovery_receipt_url} label="קובץ קבלה" variant="button" />
+                <div className="mt-2 max-w-[220px]">
+                  <DocCard label="קבלה מבית ההחלמה" url={aid.recovery_receipt_url} person={motherName} />
                 </div>
               )}
               {aid.recovery_locked && (
@@ -909,8 +915,12 @@ function DocCard({ label, url, person }: { label: string; url?: string; person?:
       <span className="text-[10px] text-slate-300">לא הועלה</span>
     </div>
   )
-  const isImage = /\.(jpe?g|png|webp|gif|heic)(\?|$)/i.test(url)
-  const isPdf = /\.pdf(\?|$)/i.test(url)
+  // ⚠️ הסיומת נבדקת על *נתיב* הקובץ ולא על הכתובת המלאה: כתובת חתומה
+  // מסתיימת ב-?token=… , וגם שם קובץ יכול להכיל נקודה. בלי זה קבלה
+  // תקינה נפלה ל"מסמך כללי" ולא הוצגה בתצוגה מקדימה.
+  const path = url.split(/[?#]/)[0]
+  const isImage = /\.(jpe?g|png|webp|gif|heic|avif)$/i.test(path)
+  const isPdf = /\.pdf$/i.test(path)
   return (
     <div className="flex flex-col gap-1.5">
       <ViewDocButton url={url}
