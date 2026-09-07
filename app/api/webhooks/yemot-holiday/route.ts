@@ -212,12 +212,17 @@ async function findMemberById(idNumber: string): Promise<Member | null> {
 // מקש 1 — בדיקת זכאות.
 //
 // 🔴 שלוש תשובות שונות, ולכל אחת משמעות אחרת למתקשר:
-//   · ת"ז אינה במאגר      → אינכם רשומים באיגוד הצאצאים (יש להירשם)
-//   · רשום באיגוד, לא בחלוקה → אינכם רשומים לחלוקה זו
-//   · רשום בחלוקה          → זכאי / ממתין לאישור
+//   1. רשום בחלוקה           → זכאי / ממתין לאישור  (eligible_yes / eligible_pending)
+//   2. רשום באיגוד, לא בחלוקה → "אינכם רשומים לקבלת מענק לחגים הקרובים"
+//                               (not_registered_dist)
+//   3. ת"ז אינה במאגר         → "אינכם רשומים באיגוד הצאצאים"  (not_found)
 //
 // ⚠️ ההבחנה בין השלוש היא כל התועלת של המסלול. תשובה אחת גורפת ("אינך
 // זכאי") הייתה שולחת את כולם למשרד בלי לדעת מה לתקן.
+//
+// 🔴 מקרה 2 הוא התיקון המרכזי כאן: קודם הוא ענה not_found — כלומר משפחה
+// שרשומה באיגוד ופשוט לא נרשמה לחלוקה שמעה "אינכם רשומים באיגוד הצאצאים"
+// והופנתה להירשם למשהו שהיא כבר רשומה אליו. נכון להיום זה 1,158 משפחות.
 // ─────────────────────────────────────────────────────────────────────────────
 const ELIG_ID_VARS = ['elg_id', 'elg_id2', 'elg_id3']
 
@@ -249,22 +254,28 @@ async function handleEligibilityRoute(
     return hasNextTry ? retry('id_invalid') : stop('id_invalid')
   }
 
-  // ── לא באיגוד כלל ──
+  // ── 3. לא באיגוד כלל ──
+  // "אינכם רשומים באיגוד הצאצאים" — התשובה היחידה שמפנה להרשמה לאיגוד.
   const ben = await findMemberById(typedId)
   if (!ben) return hasNextTry ? retry('not_found') : stop('not_found')
 
-  // ── באיגוד, אך לא בחלוקה הנוכחית ──
+  // ── 2. רשום באיגוד, אך לא בחלוקה הנוכחית ──
+  //
+  // 🔴 not_registered_dist ולא not_found: מי שרשום באיגוד ולא נרשם לחלוקה
+  // שמע "אינכם רשומים באיגוד הצאצאים" — הודעה שגויה שמפנה אותו להירשם
+  // מחדש למשהו שהוא כבר רשום אליו. נכון להיום זה 1,158 משפחות.
+  //
   // ⚠️ distributions ולא holiday_distributions — ראו ההערה ב-handleCenterRoute.
   const { data: distRow } = await db.from('distributions')
     .select('id').order('created_at', { ascending: false }).limit(1).maybeSingle()
   const dist = distRow as { id: string } | null
-  if (!dist) return stop('not_eligible')
+  if (!dist) return stop('not_registered_dist')
 
   const { data: recRow } = await db.from('distribution_recipients')
     .select('approval_status')
     .eq('distribution_id', dist.id).eq('beneficiary_id', ben.id).maybeSingle()
   const rec = recRow as { approval_status: string | null } | null
-  if (!rec) return stop('not_eligible')
+  if (!rec) return stop('not_registered_dist')
 
   // ── רשום: מאושר או ממתין ──
   return stop(rec.approval_status === 'approved' ? 'eligible_yes' : 'eligible_pending')
