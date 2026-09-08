@@ -1,7 +1,6 @@
 'use client'
 import { useState, useCallback } from 'react'
 import { Loader2, MapPin, Check, X, Users, CalendarClock } from 'lucide-react'
-import { REGIONS, type RegionKey } from '@/lib/holidayCenterPick'
 import DeadlineCountdown from '@/components/ui/DeadlineCountdown'
 import { toLocalInput } from '@/lib/centerDeadline'
 
@@ -13,6 +12,11 @@ import { toLocalInput } from '@/lib/centerDeadline'
 // ⚠️ מתג "בחירת המוקדים פתוחה" עצמאי משער הרישום: הבחירה נפתחת דווקא
 // אחרי שהרישום נסגר.
 // ─────────────────────────────────────────────────────────────────────────────
+
+/** תא עריכה בטבלה — נראה כטקסט עד שנוגעים בו. */
+const CELL = 'rounded-lg border border-transparent bg-transparent px-2 py-1.5 text-[13px] text-slate-800 ' +
+  'hover:border-slate-200 hover:bg-slate-50 focus:border-indigo-300 focus:bg-white focus:outline-none ' +
+  'focus:ring-2 focus:ring-indigo-100 placeholder:text-slate-300'
 
 interface Center {
   id: string; city: string; name: string; region: string
@@ -36,41 +40,58 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
   const [deadline, setDeadline] = useState<string | null>(null)
   const [deadlineDraft, setDeadlineDraft] = useState('')
 
-  // 🔴 עריכה במקום ולא בהגדרות.
+  // 🔴 עריכה במקום, בתוך השורה עצמה.
   //
   // ⚠️ הכתובת והשעות הן מה שמופיע בשובר ובשלוחה הטלפונית. כשמוקד
-  // משנה שעות באמצע חלוקה, הניווט להגדרות ובחזרה הוא בדיוק החיכוך
-  // שגורם לא לעדכן — והמשפחות מגיעות בשעה הלא נכונה.
-  const [editing, setEditing] = useState<Center | null>(null)
-  const [saving, setSaving] = useState(false)
+  // משנה שעות באמצע חלוקה, הניווט להגדרות ובחזרה — או פתיחת חלונית
+  // וסגירתה לכל שדה — הוא בדיוק החיכוך שגורם לא לעדכן, והמשפחות
+  // מגיעות בשעה הלא נכונה.
+  //
+  // ⚠️ טיוטה לכל שורה בנפרד: המנהל עשוי לתקן שלושה מוקדים ברצף, ושמירה
+  // אוטומטית על כל הקשה הייתה שולחת בקשה לכל אות.
+  const [drafts, setDrafts] = useState<Record<string, Partial<Center>>>({})
+  const [busy, setBusy] = useState<string | null>(null)
+  const [err, setErr] = useState('')
 
-  const saveCenter = async () => {
-    if (!editing) return
-    setSaving(true)
+  /** הערכים המוצגים בשורה — הטיוטה מעל השמור. */
+  const draftOf = (c: Center): Center => ({ ...c, ...(drafts[c.id] ?? {}) })
+  const setDraft = (id: string, patch: Partial<Center>) =>
+    setDrafts(p => ({ ...p, [id]: { ...(p[id] ?? {}), ...patch } }))
+
+  /** האם השורה שונה מהשמור — קובע אם כפתור השמירה מוצג. */
+  const isDirty = (c: Center): boolean => {
+    const d = drafts[c.id]
+    if (!d) return false
+    return (Object.keys(d) as (keyof Center)[]).some(k => (d[k] ?? '') !== (c[k] ?? ''))
+  }
+
+  async function saveRow(id: string) {
+    const cur = centers?.find(c => c.id === id)
+    if (!cur) return
+    const next = { ...cur, ...(drafts[id] ?? {}) }
+    setBusy(id); setErr('')
     try {
       const r = await fetch('/api/admin/holiday-centers', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         // ⚠️ נשלחים כל השדות ולא רק מה שהשתנה: ה-POST עושה update מלא,
         // ושדה חסר היה מתאפס.
         body: JSON.stringify({
-          id: editing.id, city: editing.city, name: editing.name,
-          address: editing.address ?? '', phone: editing.phone ?? '',
-          hours: editing.hours ?? '', region: editing.region,
-          capacity: editing.capacity, is_active: editing.is_active,
+          id: next.id, city: next.city, name: next.name,
+          address: next.address ?? '', phone: next.phone ?? '',
+          hours: next.hours ?? '', region: next.region,
+          capacity: next.capacity, is_active: next.is_active,
         }),
       })
       const d = await r.json().catch(() => ({}))
-      if (!r.ok) { alert(d.error ?? 'השמירה נכשלה'); return }
-      setCenters(cs => cs?.map(c => (c.id === editing.id ? editing : c)) ?? cs)
-      setEditing(null)
+      if (!r.ok) { setErr(d.error ?? 'השמירה נכשלה'); return }
+      setCenters(cs => cs?.map(c => (c.id === id ? next : c)) ?? cs)
+      // ⚠️ הטיוטה נמחקת רק אחרי שמירה מוצלחת — אחרת שמירה שנכשלה
+      // הייתה מוחקת את מה שהמנהל הקליד.
+      setDrafts(p => { const q = { ...p }; delete q[id]; return q })
     } catch {
-      alert('שגיאת רשת — השינוי לא נשמר')
-    } finally {
-      setSaving(false)
-    }
+      setErr('שגיאת רשת — השינוי לא נשמר')
+    } finally { setBusy(null) }
   }
-  const [busy, setBusy] = useState<string | null>(null)
-  const [err, setErr] = useState('')
 
   const load = useCallback(async () => {
     try {
@@ -155,6 +176,40 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
         if (pickup) next.add(id); else next.delete(id)
         return next
       })
+    } catch { setErr('שגיאת רשת') } finally { setBusy(null) }
+  }
+
+  /**
+   * פתיחת/סגירת החלוקה בכל המוקדים בבת אחת.
+   *
+   * ⚠️ מאשר לפני: השינוי נשמע מיד בשלוחה הטלפונית אצל אלפי משפחות,
+   * ופתיחה בטעות שולחת אותן למוקד שאין בו כרטיסים.
+   *
+   * ⚠️ ברצף ולא במקביל: 26 בקשות בו-זמנית מציפות את המסד, ותקלה באמצע
+   * הייתה משאירה מצב חלקי בלי לדעת היכן זה נעצר.
+   */
+  async function bulkPickup(pickup: boolean) {
+    if (!centers?.length) return
+    const verb = pickup ? 'לפתוח את החלוקה בכל' : 'לסגור את החלוקה בכל'
+    if (!confirm(`${verb} ${centers.length} המוקדים?\n\nהשינוי נשמע מיד בשלוחה הטלפונית.`)) return
+    setBusy('bulk'); setErr('')
+    try {
+      for (const c of centers) {
+        const res = await fetch('/api/admin/holiday-centers', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ distribution_id: distributionId, center_id: c.id, pickup }),
+        })
+        if (!res.ok) {
+          setErr(`העדכון נעצר במוקד ${c.city} ${c.name}. הקודמים נשמרו.`)
+          break
+        }
+        setPickupIds(prev => {
+          const next = new Set(prev)
+          if (pickup) next.add(c.id); else next.delete(c.id)
+          return next
+        })
+      }
     } catch { setErr('שגיאת רשת') } finally { setBusy(null) }
   }
 
@@ -287,198 +342,153 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
         <DeadlineCountdown deadline={deadline} />
       </div>
 
-      <div className="flex items-center gap-2 text-xs text-slate-500">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
         <Users size={13} />
         <span><strong className="text-slate-800">{chosen.toLocaleString('he-IL')}</strong> בחרו מוקד</span>
         <span className="text-slate-300">·</span>
-        <span>{openCenters.length} מוקדים פתוחים מתוך {centers.length}</span>
+        <span>{openCenters.length} פתוחים לבחירה מתוך {centers.length}</span>
+        <span className="text-slate-300">·</span>
+        <span className="font-bold text-emerald-700">{pickupIds.size} מחלקים כרטיסים</span>
+
+        {/* ⚠️ פעולה על הכל — 26 מוקדים בלחיצה אחת כל אחד הם עבודה מיותרת
+            ביום שכולם מתחילים לחלק. מאשר לפני, כי זו פעולה שנשמעת מיד
+            בשלוחה הטלפונית אצל אלפי משפחות. */}
+        <span className="flex-1" />
+        <button type="button" disabled={busy === 'bulk'}
+          onClick={() => void bulkPickup(true)}
+          className="rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-40">
+          {busy === 'bulk' ? '…' : 'פתח חלוקה בכולם'}
+        </button>
+        <button type="button" disabled={busy === 'bulk'}
+          onClick={() => void bulkPickup(false)}
+          className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 transition hover:border-rose-300 hover:text-rose-700 disabled:opacity-40">
+          סגור בכולם
+        </button>
       </div>
 
-      {(Object.keys(REGIONS) as RegionKey[]).map(rk => {
-        const list = centers.filter(c => c.region === rk)
-        if (!list.length) return null
-        return (
-          <div key={rk}>
-            <h4 className="mb-2 flex items-center gap-1.5 text-xs font-extrabold text-slate-700">
-              <MapPin size={13} className="text-indigo-600" /> {REGIONS[rk]}
-            </h4>
-            <div className="flex flex-col gap-1.5">
-              {list.map(c => {
-                const n = counts[c.id] ?? 0
-                const isOpen = openIds.has(c.id)
-                const isPickup = pickupIds.has(c.id)
-                const full = c.capacity != null && n >= c.capacity
-                return (
-                  <div key={c.id}
-                    className={`flex flex-wrap items-center gap-2 rounded-xl border p-3 ${
-                      isOpen ? 'border-indigo-200 bg-white' : 'border-slate-200 bg-slate-50'
+      {/* ═══ טבלת המוקדים ═══
+          🔴 טבלה אחת ולא כרטיסים מקובצים לפי אזור: 26 מוקדים בכרטיסים
+          נפרדים תחת ארבע כותרות אזור מאלצים גלילה וחיפוש ויזואלי כדי
+          להשוות שני מוקדים או למצוא אחד מסוים.
+
+          ⚠️ ללא גלילה לרוחב (נאכף בלינט — eslint-rules/no-horizontal-scroll):
+          העמודות הצרות מקבלות רוחב קבוע, ושדות הטקסט מתרחבים לשארית.
+          ⚠️ העריכה במקום ולא בחלונית: מוקד שמעדכן שעות באמצע חלוקה —
+          פתיחת חלונית וסגירתה בכל שדה היא החיכוך שגורם לא לעדכן. */}
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        {/* כותרות — מוסתרות בנייד, שם כל שורה נפרסת ככרטיס */}
+        <div className="hidden items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-extrabold text-slate-600 lg:flex">
+          <span className="w-32 shrink-0">עיר</span>
+          <span className="w-40 shrink-0">שם המוקד</span>
+          <span className="flex-1 min-w-0">כתובת</span>
+          <span className="w-40 shrink-0">ימים ושעות</span>
+          <span className="w-28 shrink-0">טלפון</span>
+          <span className="w-16 shrink-0 text-center">נרשמו</span>
+          <span className="w-20 shrink-0 text-center">בחירה</span>
+          <span className="w-20 shrink-0 text-center">חלוקה</span>
+        </div>
+
+        {/* ⚠️ ממוין לפי עיר ואז שם: הטבלה כבר אינה מקובצת לפי אזור, ובלי
+            מיון יציב שני מוקדים של אותה עיר יכולים ליפול רחוק זה מזה. */}
+        <div className="divide-y divide-slate-100">
+          {[...centers].sort((a, b) =>
+            a.city.localeCompare(b.city, 'he') || a.name.localeCompare(b.name, 'he'),
+          ).map(c => {
+            const n = counts[c.id] ?? 0
+            const isOpen = openIds.has(c.id)
+            const isPickup = pickupIds.has(c.id)
+            const full = c.capacity != null && n >= c.capacity
+            const d = draftOf(c)
+            const dirty = isDirty(c)
+            return (
+              <div key={c.id}
+                className={`flex flex-col gap-2 px-3 py-2 lg:flex-row lg:items-center ${
+                  isPickup ? 'bg-emerald-50/40' : 'bg-white'
+                }`}>
+                {/* עיר */}
+                <input value={d.city}
+                  onChange={e => setDraft(c.id, { city: e.target.value })}
+                  placeholder="עיר"
+                  className={`${CELL} w-full lg:w-32 lg:shrink-0 font-bold`} />
+
+                {/* שם המוקד */}
+                <input value={d.name}
+                  onChange={e => setDraft(c.id, { name: e.target.value })}
+                  placeholder="שם המוקד"
+                  className={`${CELL} w-full lg:w-40 lg:shrink-0`} />
+
+                {/* כתובת */}
+                <input value={d.address ?? ''}
+                  onChange={e => setDraft(c.id, { address: e.target.value })}
+                  placeholder="כתובת"
+                  className={`${CELL} w-full lg:flex-1 lg:min-w-0`} />
+
+                {/* ימים ושעות */}
+                <input value={d.hours ?? ''}
+                  onChange={e => setDraft(c.id, { hours: e.target.value })}
+                  placeholder="א׳–ה׳ 10:00–14:00"
+                  className={`${CELL} w-full lg:w-40 lg:shrink-0 ${
+                    !d.hours ? 'border-amber-300 bg-amber-50 placeholder:text-amber-600' : ''
+                  }`} />
+
+                {/* טלפון */}
+                <input dir="ltr" value={d.phone ?? ''}
+                  onChange={e => setDraft(c.id, { phone: e.target.value })}
+                  placeholder="טלפון"
+                  className={`${CELL} w-full text-right lg:w-28 lg:shrink-0`} />
+
+                {/* נרשמו */}
+                <span className="w-full text-[11px] tabular-nums text-slate-500 lg:w-16 lg:shrink-0 lg:text-center">
+                  {n.toLocaleString('he-IL')}
+                  {c.capacity != null && <span className="text-slate-400">/{c.capacity}</span>}
+                  {full && <span className="mr-1 font-bold text-amber-700">מלא</span>}
+                </span>
+
+                <div className="flex items-center gap-2">
+                  {/* ⚠️ סגירה אינה מבטלת בחירות קיימות — רק מונעת חדשות. */}
+                  <button type="button" disabled={busy === c.id}
+                    onClick={() => toggleCenter(c.id, !isOpen)}
+                    title="האם המוקד מוצע לבחירה בשלב הרישום"
+                    className={`w-20 shrink-0 rounded-lg px-2 py-1.5 text-[11px] font-bold transition ${
+                      isOpen
+                        ? 'border border-indigo-300 bg-indigo-50 text-indigo-700'
+                        : 'border border-slate-300 bg-white text-slate-500 hover:border-indigo-300'
                     }`}>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-bold text-slate-800">
-                        {c.city === c.name ? c.city : `${c.city} · ${c.name}`}
-                      </p>
-                      <p className="text-[11px] text-slate-500">
-                        {n.toLocaleString('he-IL')} נרשמו
-                        {c.capacity != null && ` מתוך ${c.capacity.toLocaleString('he-IL')}`}
-                        {full && <span className="mr-1 font-bold text-amber-700">· מלא</span>}
-                      </p>
-                      {/* 🔴 השעות והכתובת — מה שהמשפחה רואה בשובר ושומעת
-                          בטלפון. הצגתן כאן היא מה שמאפשר לזהות שהן חסרות
-                          או שגויות לפני שהשוברים יוצאים. */}
-                      {(c.hours || c.address) && (
-                        <p className="mt-0.5 truncate text-[11px] text-slate-400">
-                          {[c.address, c.hours].filter(Boolean).join(' · ')}
-                        </p>
-                      )}
-                      {!c.hours && (
-                        <p className="mt-0.5 text-[11px] font-semibold text-amber-600">
-                          ⚠ לא הוגדרו שעות פתיחה
-                        </p>
-                      )}
-                    </div>
+                    {busy === c.id ? '…' : isOpen ? 'פתוח' : 'סגור'}
+                  </button>
 
-                    {/* ⚠️ עריכה במקום: מוקד שמשנה שעות באמצע חלוקה — הניווט
-                        להגדרות ובחזרה הוא החיכוך שגורם לא לעדכן. */}
-                    <button type="button" onClick={() => setEditing({ ...c })}
-                      title="עריכת פרטי המוקד"
-                      className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-600 transition hover:border-indigo-300 hover:text-indigo-700">
-                      עריכה
+                  {/* 🔴 השער שהשלוחה הטלפונית בודקת: רק מי שרשום במוקד
+                      שמסומן "מחלק" יוכל לשייך כרטיס בטלפון. */}
+                  <button type="button" disabled={busy === c.id}
+                    onClick={() => togglePickup(c.id, !isPickup)}
+                    title={isPickup
+                      ? 'המוקד מחלק כרטיסים — הרשומים בו יכולים לשייך בטלפון'
+                      : 'המוקד טרם החל לחלק — הרשומים בו יישמעו שהמוקד שלהם עדיין סגור'}
+                    className={`w-20 shrink-0 rounded-lg px-2 py-1.5 text-[11px] font-bold transition ${
+                      isPickup
+                        ? 'border border-emerald-400 bg-emerald-100 text-emerald-800'
+                        : 'border border-slate-300 bg-white text-slate-500 hover:border-emerald-300'
+                    }`}>
+                    {busy === c.id ? '…' : isPickup ? '✓ מחלק' : 'טרם'}
+                  </button>
+
+                  {/* 🔴 כלל ברזל: כפתור שמירה שמהבהב ברגע שיש שינוי.
+                      מוצג רק כשיש מה לשמור — אחרת 26 כפתורים מתים. */}
+                  {dirty && (
+                    <button type="button" disabled={busy === c.id}
+                      onClick={() => void saveRow(c.id)}
+                      className="shrink-0 animate-pulse rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-extrabold text-white hover:bg-emerald-700">
+                      {busy === c.id ? <Loader2 size={12} className="animate-spin" /> : 'שמור'}
                     </button>
-
-                    {/* ── בחירה ── */}
-                    {/* ⚠️ סגירה אינה מבטלת בחירות קיימות — רק מונעת חדשות. */}
-                    <div className="flex flex-col items-center gap-0.5">
-                      <span className="text-[9px] font-bold text-slate-400">בחירה</span>
-                      <button type="button" disabled={busy === c.id}
-                        onClick={() => toggleCenter(c.id, !isOpen)}
-                        title="האם המוקד מוצע לבחירה בשלב הרישום"
-                        className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition ${
-                          isOpen
-                            ? 'border border-indigo-300 bg-indigo-50 text-indigo-700'
-                            : 'border border-slate-300 bg-white text-slate-500 hover:border-indigo-300'
-                        }`}>
-                        {busy === c.id ? <Loader2 size={12} className="animate-spin" /> : isOpen ? 'פתוח' : 'סגור'}
-                      </button>
-                    </div>
-
-                    {/* ── חלוקת כרטיסים ── */}
-                    {/* 🔴 זה השער שהשלוחה הטלפונית בודקת: רק מי שרשום במוקד
-                        שמסומן כאן "מחלק" יוכל לשייך את הכרטיס שלו בטלפון.
-                        מי שהמוקד שלו סגור שומע את *שם המוקד שלו* ושהוא טרם
-                        החל לחלק — ולא הודעה כללית ששולחת אותו למשרד.
-                        ⚠️ נפרד מ"בחירה" בכוונה: הרישום כבר נסגר, והחלוקה
-                        רק מתחילה. */}
-                    <div className="flex flex-col items-center gap-0.5">
-                      <span className="text-[9px] font-bold text-slate-400">חלוקה</span>
-                      <button type="button" disabled={busy === c.id}
-                        onClick={() => togglePickup(c.id, !isPickup)}
-                        title={isPickup
-                          ? 'המוקד מחלק כרטיסים — הרשומים בו יכולים לשייך בטלפון'
-                          : 'המוקד טרם החל לחלק — הרשומים בו יישמעו שהמוקד שלהם עדיין סגור'}
-                        className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition ${
-                          isPickup
-                            ? 'border border-emerald-300 bg-emerald-50 text-emerald-700'
-                            : 'border border-slate-300 bg-white text-slate-500 hover:border-emerald-300'
-                        }`}>
-                        {busy === c.id
-                          ? <Loader2 size={12} className="animate-spin" />
-                          : isPickup ? '✓ מחלק' : 'טרם'}
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )
-      })}
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
 
       {err && <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{err}</p>}
-
-      {/* ═══ עריכת מוקד ═══ */}
-      {editing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
-          onClick={() => !saving && setEditing(null)}>
-          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl"
-            onClick={e => e.stopPropagation()}>
-            <h4 className="mb-1 text-sm font-black text-slate-800">עריכת מוקד</h4>
-            <p className="mb-4 text-[11px] text-slate-500">
-              הפרטים מופיעים בשובר של המשפחה ובשלוחה הטלפונית.
-            </p>
-
-            <div className="flex flex-col gap-3">
-              <div className="grid grid-cols-2 gap-2">
-                <label className="flex flex-col gap-1">
-                  <span className="text-[11px] font-semibold text-slate-600">עיר</span>
-                  <input value={editing.city}
-                    onChange={e => setEditing({ ...editing, city: e.target.value })}
-                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
-                </label>
-                <label className="flex flex-col gap-1">
-                  <span className="text-[11px] font-semibold text-slate-600">שם המוקד</span>
-                  <input value={editing.name}
-                    onChange={e => setEditing({ ...editing, name: e.target.value })}
-                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
-                </label>
-              </div>
-
-              <label className="flex flex-col gap-1">
-                <span className="text-[11px] font-semibold text-slate-600">כתובת</span>
-                <input value={editing.address ?? ''}
-                  onChange={e => setEditing({ ...editing, address: e.target.value })}
-                  placeholder="רחוב ומספר"
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
-              </label>
-
-              {/* 🔴 השעות — הפרט שמשתנה הכי הרבה, ושבלעדיו המשפחה
-                  מגיעה בזמן הלא נכון. */}
-              <label className="flex flex-col gap-1">
-                <span className="text-[11px] font-semibold text-slate-600">שעות פתיחה</span>
-                <input value={editing.hours ?? ''}
-                  onChange={e => setEditing({ ...editing, hours: e.target.value })}
-                  placeholder="יום ג׳ י״ב אלול · 10:00–14:00"
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
-                <span className="text-[10px] text-slate-400">
-                  הנוסח מוקרא כמו שהוא בטלפון — כתבו אותו כפי שתרצו שיישמע
-                </span>
-              </label>
-
-              <div className="grid grid-cols-2 gap-2">
-                <label className="flex flex-col gap-1">
-                  <span className="text-[11px] font-semibold text-slate-600">טלפון</span>
-                  <input dir="ltr" value={editing.phone ?? ''}
-                    onChange={e => setEditing({ ...editing, phone: e.target.value })}
-                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
-                </label>
-                <label className="flex flex-col gap-1">
-                  <span className="text-[11px] font-semibold text-slate-600">תפוסה מרבית</span>
-                  {/* ⚠️ ריק = ללא הגבלה. 0 הוא "סגור לחלוטין" — ערכים שונים. */}
-                  <input type="number" min={0} value={editing.capacity ?? ''}
-                    onChange={e => setEditing({
-                      ...editing,
-                      capacity: e.target.value === '' ? null : Number(e.target.value),
-                    })}
-                    placeholder="ללא הגבלה"
-                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm" />
-                </label>
-              </div>
-            </div>
-
-            <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={() => setEditing(null)} disabled={saving}
-                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40">
-                ביטול
-              </button>
-              <button type="button" onClick={() => void saveCenter()}
-                disabled={saving || !editing.city.trim() || !editing.name.trim()}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300">
-                {saving && <Loader2 size={13} className="animate-spin" />}
-                {saving ? 'שומר…' : 'שמירה'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
