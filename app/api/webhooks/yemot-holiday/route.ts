@@ -708,23 +708,21 @@ async function handleCenterRoute(
 
     const readyKey = centerStatusKey({ centerPickupOpen, loaded: rec.load_status === 'loaded' })
 
-    // 🔴 כשהמוקד פתוח — הכתובת והשעות נאמרות כאן, מאותם שדות שבמקש 3.
-    // המתקשר הגיע בדיוק בשביל זה, ובלעדיהן הוא מתקשר למשרד לשאול לאן.
+    // 🔴 פרטי המוקד נאמרים תמיד — שם המוקד יצא מהנוסח כדי שהפתיח יהיה
+    // כשיר לקול טבעי, ולכן זהו המקום היחיד שבו המשפחה שומעת *לאן* ללכת.
     //
     // ⚠️ הקלטה אנושית גוברת על ההקראה, כמו בכל הודעה אחרת בשלוחה.
-    const details = centerPickupOpen || rec.load_status === 'loaded'
-      ? await (async () => {
-        const { data: sc } = await db.from('holiday_centers')
-          .select('city, name, address, hours, audio_file').eq('id', rec.center_id).maybeSingle()
-        const s = sc as SpokenCenter | null
-        if (s?.audio_file) return `f-${s.audio_file}`
-        const t = spokenCenterDetails(s)
-        return t ? tToken(t) : ''
-      })()
-      : ''
+    // ⚠️ נפילה לשם המוקד בלבד כשאין כתובת ושעות: הודעה בלי שום מוקד
+    // אינה עונה על השאלה שבגללה המתקשר הגיע.
+    const { data: sc } = await db.from('holiday_centers')
+      .select('city, name, address, hours, audio_file').eq('id', rec.center_id).maybeSingle()
+    const s = sc as SpokenCenter | null
+    const details = s?.audio_file
+      ? `f-${s.audio_file}`
+      : (spokenCenterDetails(s) ? tToken(spokenCenterDetails(s)) : (label ? tToken(label) : ''))
 
     return yemotText([
-      idMessage(...[msgToken(msgs, readyKey, { center: label }), details].filter(Boolean)),
+      idMessage(...[msgToken(msgs, readyKey), details].filter(Boolean)),
       goToFolder('hangup'),
     ], callId)
   }
@@ -781,8 +779,21 @@ async function handleCenterRoute(
     }
     case 'no_centers':
       return yemotText([idMessage(msgToken(msgs, 'centers_closed')), goToFolder('hangup')], callId)
-    case 'already':
-      return yemotText([idMessage(msgToken(msgs, 'center_already', { center: step.label })), goToFolder('hangup')], callId)
+    case 'already': {
+      // 🔴 שם המוקד יצא מהנוסח כדי שהפתיח יהיה כשיר לקול טבעי, ולכן הוא
+      // נאמר כאן — מהקלטת המוקד, ואם אין כזו מהשדות עצמם. בלעדיו
+      // ההודעה אינה עונה על השאלה שבגללה המשפחה התקשרה.
+      const { data: acRow } = await db.from('holiday_centers')
+        .select('city, name, address, hours, audio_file').eq('id', rec.center_id).maybeSingle()
+      const ac = acRow as SpokenCenter | null
+      const acDetails = ac?.audio_file
+        ? `f-${ac.audio_file}`
+        : (spokenCenterDetails(ac) ? tToken(spokenCenterDetails(ac)) : tToken(step.label))
+      return yemotText([
+        idMessage(...[msgToken(msgs, 'center_already'), acDetails].filter(Boolean)),
+        goToFolder('hangup'),
+      ], callId)
+    }
     case 'full':
       return yemotText([idMessage(msgToken(msgs, 'center_full')), goToFolder('hangup')], callId)
     case 'cancelled':
