@@ -95,8 +95,20 @@ export async function POST(request: NextRequest) {
         name: s.proposed_name, parent_id: s.parent_id, generation: gen,
         relation: s.relation ?? null, status: 'pending',
       })
+    } else if (s.kind === 'note') {
+      // 🔴 'note' אינו ניתן לאישור במסלול הזה.
+      //
+      // ⚠️ עד כה נכתב כאן "אין שינוי בעץ, רק סימון כמטופל" — וזה בדיוק
+      // מה שבלע בקשות: בקשת תיקון ייחוס מהאזור האישי נשמרת כ-note, המנהל
+      // לחץ "אשר", הבקשה סומנה כמאושרת והעץ לא השתנה. בלי שגיאה, בלי סימן.
+      //
+      // ⚠️ הטיפול ב-note עבר ל-/api/admin/lineage/requests ("בקשות משפחות"),
+      // שם השרשרת מחולצת מה-payload ומוחלת בפועל. המסלול הזה נשאר לסוגי
+      // ההצעות הישנים (rename/add_child/reparent) בלבד.
+      return NextResponse.json({
+        error: 'בקשת תיקון ייחוס אינה מאושרת ממסך זה — יש לטפל בה במסך "בקשות משפחות".',
+      }, { status: 400 })
     }
-    // 'note' — אין שינוי בעץ, רק סימון כמטופל.
 
     await admin.from('lineage_review_suggestions').update({
       status: 'approved', resolved_at: new Date().toISOString(), resolved_by: staff.userId,

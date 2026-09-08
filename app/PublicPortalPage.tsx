@@ -20,7 +20,10 @@ import { useDocTypes } from '@/lib/useDocTypes'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
 import { LOAN_DECLARATIONS, MATERNITY_SUBMIT_DAYS, LOAN_MAX_AMOUNT } from '@/lib/emailRequestForms'
 import { textOf, errorText, type PublicTexts } from '@/lib/publicTexts'
-import { composeLineageName, findTitles } from '@/lib/lineageNameFormat'
+import { composeLineageName, findTitles, lineageIdentityKey } from '@/lib/lineageNameFormat'
+// ⚠️ מקור אמת יחיד לסף הטקסט החופשי — אותה פונקציה שהשרת מאמת בה,
+// כדי שהכפתור לא ייפתח על טקסט שהשרת ידחה (ולהפך).
+import { cleanFixText } from '@/lib/lineageFixRequest'
 import { genTone } from '@/lib/lineagePalette'
 import { resolveDeepLinkAction } from '@/lib/deepLinkAction'
 import EditableText, { EditProvider } from './EditableText'
@@ -996,12 +999,29 @@ export interface LineageResult {
    */
   selfIsExisting: boolean
 }
-function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r: LineageResult) => void }) {
+/**
+ * בורר סדר הדורות.
+ *
+ * @param includePending  מציג גם צמתים שממתינים לאישור (מסלול תיקון ייחוס
+ *   בלבד — ראו /api/lineage). בהרשמה נשאר כבוי: רישום חדש אינו נבנה על
+ *   רשומה שטרם נבדקה.
+ * @param prefillChain  השרשרת הרשומה היום, לטעינה מראש כנקודת פתיחה.
+ *   ⚠️ "תיקון" משמעו לשנות משהו קיים — בלי זה נדרש היה לבנות 8-9 דורות
+ *   מאפס בכל בקשה, וזה לבדו הפיל את רוב הבקשות באמצע.
+ */
+function LineageBuilder({ selfName, onChange, includePending = false, prefillChain }: {
+  selfName: string
+  onChange: (r: LineageResult) => void
+  includePending?: boolean
+  prefillChain?: { name: string; relation?: 'son' | 'son_in_law' | null }[] | null
+}) {
   const [root, setRoot] = useState<{ id: string; name: string } | null>(null)
   const [chain, setChain] = useState<{ id: string | null; name: string; relation: 'son' | 'son_in_law' | null; isNew: boolean }[]>([])
   const [options, setOptions] = useState<LineageNode[]>([])
   const [loading, setLoading] = useState(true)
   const [addOpen, setAddOpen] = useState(false)
+  // כמה דורות נטענו מראש מהשרשרת הקיימת — לתצוגת ההסבר בלבד.
+  const [prefilled, setPrefilled] = useState(0)
   // ⚠️ שלושה שדות ולא שדה שם אחד: כשהיה שדה חופשי, כל נרשם כתב אחרת ("רבי",
   // "ר'", "הרב", ועם "שליט\"א" בסוף) — ואותו אדם נכנס לעץ בכמה ניסוחים שנראים
   // כמו אנשים שונים. כאן מזינים רק את השמות, והמערכת מרכיבה את הניסוח האחיד.
@@ -1042,16 +1062,62 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
     setNameGate(true)
   }
 
-  const fetchChildren = async (parentId: string) => { try { const r = await fetch(`/api/lineage?parent_id=${parentId}`); const d = await r.json(); return (d.nodes ?? []) as LineageNode[] } catch { return [] } }
+  // ⚠️ הדגל נשלח בכל שליפת דור — אחרת הדור הראשון היה מציג ממתינים והדור
+  // הבא לא, והמשתמש היה נתקע שוב באמצע בלי להבין למה.
+  const pendingQS = includePending ? '&include_pending=1' : ''
+  const fetchChildren = async (parentId: string) => { try { const r = await fetch(`/api/lineage?parent_id=${parentId}${pendingQS}`); const d = await r.json(); return (d.nodes ?? []) as LineageNode[] } catch { return [] } }
 
   useEffect(() => {
     (async () => {
       try {
         const r = await fetch('/api/lineage'); const d = await r.json(); const rn = (d.nodes ?? [])[0]
-        if (rn) { setRoot({ id: rn.id, name: rn.name }); setOptions(await fetchChildren(rn.id)) }
+        if (rn) {
+          setRoot({ id: rn.id, name: rn.name })
+          // ── טעינה מראש של השרשרת הקיימת ──
+          // ⚠️ ההליכה היא צעד-אחר-צעד במורד העץ, ולא התאמה גורפת: כל דור
+          // מחפש את שמו בין *ילדי הדור הקודם* בלבד. התאמה כלל-עצית לפי שם
+          // הייתה משייכת לענף זר — 79% מהצמתים בנוסח "רבי X ומרת Y", ושמות
+          // חוזרים בין ענפים.
+          //
+          // ⚠️ עצירה בדור הראשון שלא נמצא: משם והלאה זה בדיוק מה שהמשתמש
+          // בא לתקן, והוא ממשיך ידנית. אין המצאה של צמתים שאינם בעץ.
+          const pre = (prefillChain ?? []).filter(c => c?.name?.trim())
+          if (pre.length) {
+            const built: { id: string | null; name: string; relation: 'son' | 'son_in_law' | null; isNew: boolean }[] = []
+            let parentId = rn.id as string
+            // דור 1 הוא השורש עצמו, והוא קבוע בתצוגה — מדלגים עליו.
+            //
+            // 🔴 הזיהוי לפי *מיקום* (generation === 1) ולא לפי השם.
+            // ⚠️ השוואת שמות נכשלת כאן: השורש בעץ הוא «מרן החתם סופר זי"ע»
+            // ואילו בשרשרות השמורות כתוב «רבינו החתם סופר» — ו-«רבינו»
+            // אינו ברשימת התארים, כך ש-lineageIdentityKey מחזיר מפתחות
+            // שונים. הסתמכות על השם הייתה מפילה את הטעינה מראש אצל 6,873
+            // המוטבים (95%) — הם היו מקבלים טופס ריק בדיוק כמו קודם.
+            const first = prefillChain?.[0] as { generation?: number } | undefined
+            const startIdx = (Number(first?.generation) === 1
+              || /חתם\s*סופר/.test(pre[0].name)) ? 1 : 0
+            for (let i = startIdx; i < pre.length; i++) {
+              const kids = await fetchChildren(parentId)
+              const key = lineageIdentityKey(pre[i].name)
+              const hit = kids.find(k => lineageIdentityKey(k.name) === key)
+              if (!hit) break
+              built.push({ id: hit.id, name: hit.name, relation: hit.relation ?? null, isNew: false })
+              parentId = hit.id
+            }
+            if (built.length) {
+              setChain(built)
+              setOptions(await fetchChildren(parentId))
+              setPrefilled(built.length)
+              setLoading(false)
+              return
+            }
+          }
+          setOptions(await fetchChildren(rn.id))
+        }
       } catch { /* ignore */ }
       setLoading(false)
     })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -1143,6 +1209,20 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
 
   return (
     <div className="flex flex-col">
+      {/* ⚠️ הסבר על נקודת הפתיחה: בלי זה נראה כאילו המערכת "בנתה משהו לבד",
+          והמשתמש אינו יודע שמותר (וצריך) למחוק מכאן ולתקן. */}
+      {prefilled > 0 && (
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 mb-3">
+          <p className="text-[13px] text-indigo-900 leading-relaxed">
+            טענו עבורכם את <span className="font-bold">{prefilled} הדורות</span> הרשומים אצלנו היום, כנקודת פתיחה.
+            <span className="block mt-1">
+              מחקו בעזרת <span className="font-bold">✗</span> את הדור שממנו הטעות מתחילה (וכל מה שאחריו יימחק יחד איתו),
+              ובנו משם את הסדר הנכון.
+            </span>
+          </p>
+        </div>
+      )}
+
       {/* סיכום הדורות שנבחרו — דור 1 קבוע ואז השרשרת */}
       {[{ name: root?.name ?? 'רבינו החתם סופר זיע״א', relation: null as 'son' | 'son_in_law' | null, fixed: true, isNew: false }, ...chain.map(c => ({ ...c, fixed: false }))].map((row, i, arr) => {
         const col = genStyle(i)
@@ -1274,6 +1354,11 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
                         <button type="button" onClick={() => pickVerified(node)}
                           className="flex-1 text-right text-sm px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:border-indigo-400 hover:bg-indigo-50 transition-all duration-150">
                           {node.name}{node.relation ? <span className="text-[10px] text-slate-400 mr-1">({node.relation === 'son' ? 'בן' : 'חתן'})</span> : null}
+                          {/* ⚠️ סימון מפורש של רשומה שטרם אושרה. בלי זה היא נראית
+                              זהה למאושרת, והמשתמש מסיק שהייחוס שלו כבר נבדק. */}
+                          {(node.status ?? 'verified') !== 'verified' && (
+                            <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 border border-slate-200 rounded-full px-1.5 py-0.5 mr-1.5 whitespace-nowrap">ממתין לאישור</span>
+                          )}
                         </button>
                         {canMarkSelfHere && (
                           /* ⚠️ הכפתור בולט ומסומן בטקסט ולא באייקון מעומעם: מי
@@ -5866,6 +5951,18 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                       🔴 עד כה נקרא כאן GEN_COLORS, פלטה מקומית באינדיגו-ורוד,
                       וההערה טענה שזו "אותה פלטה שהעץ בניהול משתמש בה" — לא
                       נכון. אותו אדם באותו דור נצבע ורוד כאן וזהב בכרטסת. */}
+                  {/* 🔴 הבהרה שהצבע אינו סטטוס.
+                      ⚠️ הגוונים כאן נגזרים מ-genStyle לפי *מספר הדור* בלבד
+                      (סולם זהב→נחושת→ארד), ואינם אומרים דבר על אישור. הגוונים
+                      החמימים של דורות 3-4 נקראו כ"ירוק = מאושר", ומשפחות הסיקו
+                      שהייחוס שלהן נבדק ואושר — בעוד שבפועל רק 3.4% מהעץ מאושר,
+                      ובדורות 6-8 פחות מ-1.5%. הצבע נשאר (הוא מבחין בין דורות),
+                      והמשמעות נאמרת במילים. */}
+                  <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mb-2.5 leading-relaxed">
+                    זהו סדר הדורות <span className="font-bold">כפי שהוא רשום אצלנו</span>.
+                    הצבעים מציינים את <span className="font-bold">מספר הדור</span> בלבד — ואינם מעידים על אישור או בדיקה.
+                  </p>
+
                   <div className="relative pr-3">
                     {beneficiary.lineage_chain.map((c, i, arr) => {
                       const gen = genStyle(i)
@@ -5916,7 +6013,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                               בהרשמה. עד כה היה כאן שדה טקסט חופשי בלבד, והמנהל
                               נדרש לפענח מהמלל מה בדיוק לשנות ולהקליד בעצמו. */}
                           <div className="rounded-xl border border-slate-200 bg-white p-3">
-                            <LineageBuilder selfName={fixSelfName} onChange={setPortalFixLineage} />
+                            <LineageBuilder selfName={fixSelfName} onChange={setPortalFixLineage}
+                              includePending
+                              prefillChain={Array.isArray(beneficiary.lineage_chain) ? beneficiary.lineage_chain : null} />
                           </div>
 
                           {/* ⚠️ הערה חופשית נשארת, כתוספת: היא הדרך היחידה לתאר
@@ -5931,15 +6030,24 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
                           />
                           {lineageFixErr && <p className="text-xs text-red-600">{lineageFixErr}</p>}
+                          {/* 🔴 השליחה אינה נעולה עוד על השלמת השרשרת.
+                              עד כה הכפתור היה disabled עד ש-valid, וכל מי שלא
+                              הצליח להשלים את הדורות (הרוב — רק 1.5% מהעץ מאושר
+                              בדורות העמוקים) לא יכול היה לשלוח *דבר*, גם לא
+                              לתאר את הבעיה במילים. הפנייה פשוט מתה בטופס.
+                              עכשיו: שרשרת מלאה = בקשה מפורשת; אחרת נשלח תיאור
+                              מילולי, שהשרת תומך בו מאז ומעולם (validateFixRequest). */}
                           <button type="button" onClick={submitLineageFix}
-                            disabled={lineageFixSending || !portalFixLineage?.valid}
+                            disabled={lineageFixSending || (!portalFixLineage?.valid && cleanFixText(lineageFixText).length < 10)}
                             className="self-start inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-bold rounded-lg px-4 py-2 transition-colors">
                             {lineageFixSending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
                             שליחת הבקשה
                           </button>
                           {!portalFixLineage?.valid && (
-                            <p className="text-[11px] text-slate-400">
-                              יש להשלים את שרשרת הדורות עד אליכם כדי לשלוח.
+                            <p className="text-[11px] text-slate-500 leading-relaxed">
+                              {cleanFixText(lineageFixText).length >= 10
+                                ? 'השרשרת אינה מלאה — הבקשה תישלח כתיאור מילולי, והמשרד יטפל בה.'
+                                : 'לא מצליחים להשלים את שרשרת הדורות? כתבו בהערה שלמעלה מה צריך לתקן (לפחות 10 תווים) ושלחו כך.'}
                             </p>
                           )}
                         </>
@@ -6440,7 +6548,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     )}
 
                     <p className="text-sm font-semibold text-slate-800 mb-2">בנו מחדש את שרשרת הדורות המתוקנת:</p>
-                    <LineageBuilder selfName={fixSelfName} onChange={setFixLineageResult} />
+                    <LineageBuilder selfName={fixSelfName} onChange={setFixLineageResult}
+                      includePending
+                      prefillChain={Array.isArray(beneficiary.lineage_chain) ? beneficiary.lineage_chain : null} />
 
                     {error && <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</div>}
 

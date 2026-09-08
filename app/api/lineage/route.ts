@@ -15,6 +15,17 @@ export async function GET(request: NextRequest) {
   const parentId = request.nextUrl.searchParams.get('parent_id')
   const all = request.nextUrl.searchParams.get('all')
   const nodeId = request.nextUrl.searchParams.get('node_id')
+  // 🔴 בקשת תיקון ייחוס בלבד — הרשימה כוללת גם צמתים שממתינים לאישור.
+  //
+  // ⚠️ למה זה הכרחי: רק 3.4% מהעץ מאושר, ומדור 6 ומטה פחות מ-1.5%
+  // (דור 6: 16 מאושרים מול 1,332 ממתינים). מי שביקש לתקן את הייחוס שלו
+  // הגיע לדור 5-6, קיבל רשימה ריקה, ולא יכול היה להתקדם ולא לשלוח —
+  // כי כפתור השליחה נעול עד להשלמת השרשרת. זה מקור הבקשות התקועות.
+  //
+  // ⚠️ מסלול נפרד ולא שינוי ברירת המחדל: טופס ההרשמה חייב להישאר על
+  // מאושרים בלבד — רישום חדש אינו נבנה על רשומה שטרם נבדקה. כאן מדובר
+  // בתיקון של ייחוס *קיים*, שממילא עובר אישור מנהל לפני שהוא נכנס לעץ.
+  const includePending = request.nextUrl.searchParams.get('include_pending') === '1'
 
   const client = getClient()
   if (!client) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
@@ -67,9 +78,13 @@ export async function GET(request: NextRequest) {
     let query = client
       .from('lineage_nodes')
       .select(PUBLIC_COLS)
-      .eq('status', 'verified')
       .order('generation')
       .order('name')
+    // ⚠️ 'rejected' לעולם לא מוצג — צומת שנדחה במפורש אינו אפשרות בחירה,
+    // גם לא בתיקון. ההרחבה היא ל-'pending' בלבד.
+    query = includePending
+      ? query.in('status', ['verified', 'pending'])
+      : query.eq('status', 'verified')
     query = parentId ? query.eq('parent_id', parentId) : query.is('parent_id', null)
     const { data, error } = await query
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
