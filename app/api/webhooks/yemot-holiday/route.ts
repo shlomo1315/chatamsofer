@@ -37,6 +37,7 @@ import { digitsOnly, idOrFilter, sameId } from '@/lib/idLookup'
 import { centerLabel, type CenterRow } from '@/lib/holidayCenterPick'
 import { ensureCenterOpening } from '@/lib/centerOpeningRow'
 import { spokenCenterName, spokenCenterDetails } from '@/lib/holidayCenterSpeech'
+import { centerStatusKey } from '@/lib/holidayCenterStatusMessage'
 import { runLoadBatch } from '@/lib/holidayCardLoad'
 import {
   CENTER_VARS, buildChoiceList, loadOpenCenters, nextCenterStep,
@@ -696,11 +697,34 @@ async function handleCenterRoute(
     // "איפה אני אוסף". אישור על בחירה שעשה לפני שבועיים אינו עונה
     // עליה, ומשאיר אותו מתקשר למשרד.
     //
-    // ⚠️ בלי שעות ובלי תאריכים בשתיהן — מועדי החלוקה טרם נקבעו,
-    // והקראתם כאן הייתה מוסרת מידע שישתנה.
-    const readyKey = rec.load_status === 'loaded' ? 'card_ready' : 'center_already'
+    // 🔴 ההכרעה לפי pickup_open_at ולא לפי load_status — ראו
+    // lib/holidayCenterStatusMessage. הטעינה מתרחשת רק אחרי שהמשפחה
+    // הגיעה למוקד, ולכן היא אינה יכולה לשמש עדות לכך שהמוקד פתוח.
+    const { data: openRow4 } = await db.from('holiday_center_openings')
+      .select('pickup_open_at')
+      .eq('distribution_id', dist.id).eq('center_id', rec.center_id)
+      .maybeSingle()
+    const centerPickupOpen = !!(openRow4 as { pickup_open_at: string | null } | null)?.pickup_open_at
+
+    const readyKey = centerStatusKey({ centerPickupOpen, loaded: rec.load_status === 'loaded' })
+
+    // 🔴 כשהמוקד פתוח — הכתובת והשעות נאמרות כאן, מאותם שדות שבמקש 3.
+    // המתקשר הגיע בדיוק בשביל זה, ובלעדיהן הוא מתקשר למשרד לשאול לאן.
+    //
+    // ⚠️ הקלטה אנושית גוברת על ההקראה, כמו בכל הודעה אחרת בשלוחה.
+    const details = centerPickupOpen || rec.load_status === 'loaded'
+      ? await (async () => {
+        const { data: sc } = await db.from('holiday_centers')
+          .select('city, name, address, hours, audio_file').eq('id', rec.center_id).maybeSingle()
+        const s = sc as SpokenCenter | null
+        if (s?.audio_file) return `f-${s.audio_file}`
+        const t = spokenCenterDetails(s)
+        return t ? tToken(t) : ''
+      })()
+      : ''
+
     return yemotText([
-      idMessage(msgToken(msgs, readyKey, { center: label })),
+      idMessage(...[msgToken(msgs, readyKey, { center: label }), details].filter(Boolean)),
       goToFolder('hangup'),
     ], callId)
   }
