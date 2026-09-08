@@ -29,7 +29,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'node:crypto'
 import { deadlineState, recipientDeadlineState, formatCountdown } from '@/lib/centerDeadline'
-import { checkCardIdentity } from '@/lib/yemotCardIdentity'
+import { resolveCardFamily, isKnownPhone } from '@/lib/yemotCardIdentity'
 import { getServiceClient } from '@/lib/apiAuth'
 import { getOpenDistribution, registerToOpenDistribution } from '@/lib/holidayDistributions'
 import { getHolidayMessages, type HolidayMessages } from '@/lib/yemotHolidayMessages'
@@ -58,11 +58,16 @@ const CENTER_ID_VARS = ['ctr_id', 'ctr_id2', 'ctr_id3']
 // ⚠️ משתנים נפרדים לחלוטין ממסלולי הרישום והמוקד: ימות מחזירה בכל בקשה גם
 // את ההקשות הקודמות, ושימוש חוזר במשתנה של מסלול אחר היה גורם למסלול
 // "לדלג" על שלב שהמתקשר מעולם לא ביצע.
-const CARD_ID_VARS = ['crd_id', 'crd_id2', 'crd_id3']
+// ⚠️ אין כאן CARD_ID_VARS: מקש 3 אינו מבקש ת"ז לזיהוי — הוא מזהה לפי
+// מספר המתקשר (ApiPhone), כמו שלוחת היולדות. ת"ז נדרשת רק להכרעה בין
+// כמה משפחות על אותו מספר, ולכך משמש CARD_PICK_ID_VARS.
 const CARD_VARS = ['crd_num', 'crd_num2', 'crd_num3']
 const CARD_CONFIRM_VARS = ['crd_ok', 'crd_ok2', 'crd_ok3']
-/** תאריך לידה לאימות מתקשר שאינו מהטלפון הרשום. ראו lib/yemotCardIdentity. */
-const BIRTH_VAR = 'crd_birth'
+/**
+ * ת"ז להכרעה בין כמה משפחות שרשומות על אותו מספר טלפון.
+ * ⚠️ אינה אימות — הטלפון הוא הראיה. ראו lib/yemotCardIdentity.
+ */
+const CARD_PICK_ID_VARS = ['crd_pick', 'crd_pick2', 'crd_pick3']
 /** ⚠️ מינימום ספרות בכרטיס נדרים — קצר מזה הוא בוודאות שגיאת הקשה. */
 const CARD_MIN_DIGITS = 8
 
@@ -184,6 +189,41 @@ async function findMemberById(idNumber: string): Promise<Member | null> {
   // מעדיפים כרטסת שיכולה להירשם — כדי ששתי כרטסות היסטוריות (אחת לא פעילה)
   // לא יחסמו משפחה שדווקא כן רשומה כראוי.
   return exact.find(memberCanRegister) ?? exact[0] ?? null
+}
+
+/**
+ * כל הכרטסות שמספר המתקשר רשום בהן — הבסיס לזיהוי בשיוך כרטיס.
+ *
+ * 🔴 אותו רעיון כמו findFamilyByPhone בשלוחת היולדות: המתקשר אינו מקיש
+ * ת"ז, והמספר שממנו הוא מתקשר הוא הזיהוי.
+ *
+ * ⚠️ ההבדל מהיולדות: שם נלקחת ההתאמה הראשונה, כי הפעולה רק *שולפת* תיק.
+ * כאן מדובר בשיוך כרטיס טעון, ולכן מוחזרות **כל** ההתאמות וההכרעה
+ * ביניהן נעשית בהמשך. 82 מספרים בחלוקת תשרי רשומים אצל יותר ממשפחה אחת.
+ *
+ * ⚠️ הנתיב המהיר לפי 7 הספרות האחרונות (ספרות בלבד — בטוח ל-ilike),
+ * ואחריו אימות חוזר בקוד: המספרים שמורים בכמה פורמטים, ו-ilike לבדו
+ * היה מתאים גם מספר שונה שסופו זהה.
+ */
+async function findMembersByPhone(callerPhone: string): Promise<Member[]> {
+  const db = getServiceClient()
+  if (!db) return []
+  const digits = String(callerPhone ?? '').replace(/\D/g, '')
+  // ⚠️ מספר קצר מדי = שיחה בלי זיהוי מתקשר. אין להתאים אותו לאיש.
+  if (digits.length < 9) return []
+  const last7 = digits.slice(-7)
+
+  const { data } = await db
+    .from('beneficiaries')
+    .select('id, full_name, family_name, spouse_name, id_number, spouse_id_number, is_active, eligibility_status, phone, phone2, spouse_phone')
+    .eq('is_active', true)
+    .or(`phone.ilike.%${last7}%,phone2.ilike.%${last7}%,spouse_phone.ilike.%${last7}%`)
+    .limit(50)
+
+  const rows = (data ?? []) as (Member & {
+    phone: string | null; phone2: string | null; spouse_phone: string | null
+  })[]
+  return rows.filter(r => isKnownPhone(callerPhone, [r.phone, r.phone2, r.spouse_phone]))
 }
 
 /**
@@ -313,33 +353,55 @@ async function handleCardRoute(
     return yemotText([idMessage(msgToken(msgs, 'card_pickup_closed')), goToFolder('hangup')], callId)
   }
 
-  // ── זיהוי ──
-  let attempt = -1
-  for (let i = CARD_ID_VARS.length - 1; i >= 0; i--) {
-    if (String(params[CARD_ID_VARS[i]] ?? '').trim()) { attempt = i; break }
+  // ── זיהוי לפי מספר המתקשר ──
+  //
+  // 🔴 אותו רעיון כמו בשלוחת היולדות: המתקשר אינו מקיש ת"ז, והמספר שממנו
+  // הוא מתקשר הוא הזיהוי. ת"ז אינה סוד — היא מופיעה על כל מסמך — ולכן
+  // היא לעולם אינה הראיה לפעולה כספית שאי אפשר לבטל בטלפון.
+  //
+  // ⚠️ ApiPhone ולא ApiCallerID — אומת מול שלוחת היולדות שעובדת בייצור.
+  // שם שדה שגוי מחזיר מחרוזת ריקה, וכל המתקשרים היו נחסמים בשקט.
+  const callerPhone = String(params['ApiPhone'] ?? '').trim()
+  const candidates = await findMembersByPhone(callerPhone)
+
+  // ת"ז להכרעה — נקראת רק כשהמספר משויך ליותר ממשפחה אחת.
+  let pickAttempt = -1
+  for (let i = CARD_PICK_ID_VARS.length - 1; i >= 0; i--) {
+    if (String(params[CARD_PICK_ID_VARS[i]] ?? '').trim()) { pickAttempt = i; break }
   }
-  if (attempt < 0) {
-    return yemotText([readTap(CARD_ID_VARS[0], [msgToken(msgs, 'ask_id')], { max: ID_DIGITS, min: 1 })], callId)
+  const typedPick = pickAttempt >= 0 ? digitsOnly(params[CARD_PICK_ID_VARS[pickAttempt]]) : ''
+
+  const resolved = resolveCardFamily(
+    candidates.map(c => ({ id: c.id, id_number: c.id_number })),
+    typedPick,
+  )
+
+  if (!resolved.ok) {
+    // המספר אינו רשום אצלנו — נאמר מפורשות, בלי מסלול עוקף.
+    if (resolved.reason === 'phone_unknown') {
+      console.log(`[yemot-holiday] card: phone not found: ${callerPhone} callId=${callId}`)
+      return yemotText([idMessage(msgToken(msgs, 'card_phone_unknown')), goToFolder('hangup')], callId)
+    }
+
+    // ⚠️ המספר משויך לכמה משפחות — מבקשים ת"ז להכרעה, ולא מנחשים.
+    if (resolved.reason === 'need_id_choice') {
+      return yemotText([readTap(CARD_PICK_ID_VARS[0],
+        [msgToken(msgs, 'card_ask_id_multi')], { max: ID_DIGITS, min: 1 })], callId)
+    }
+
+    // הת"ז אינה מבין משפחות המספר. ⚠️ משתנה חדש לכל ניסיון — קריאה
+    // חוזרת של משתנה מלא יוצרת לולאה אינסופית בימות.
+    const hasNextPick = pickAttempt + 1 < CARD_PICK_ID_VARS.length
+    if (hasNextPick) {
+      return yemotText([readTap(CARD_PICK_ID_VARS[pickAttempt + 1],
+        [msgToken(msgs, 'card_id_not_on_phone'), msgToken(msgs, 'card_ask_id_multi')],
+        { max: ID_DIGITS, min: 1 })], callId)
+    }
+    return yemotText([idMessage(msgToken(msgs, 'card_id_not_on_phone')), goToFolder('hangup')], callId)
   }
 
-  const typedId = digitsOnly(params[CARD_ID_VARS[attempt]])
-  const hasNextTry = attempt + 1 < CARD_ID_VARS.length
-  if (typedId.length !== ID_DIGITS) {
-    if (hasNextTry) {
-      return yemotText([readTap(CARD_ID_VARS[attempt + 1],
-        [msgToken(msgs, 'id_invalid'), msgToken(msgs, 'ask_id')], { max: ID_DIGITS, min: 1 })], callId)
-    }
-    return yemotText([idMessage(msgToken(msgs, 'id_invalid')), goToFolder('hangup')], callId)
-  }
-
-  const ben = await findMemberById(typedId)
-  if (!ben) {
-    if (hasNextTry) {
-      return yemotText([readTap(CARD_ID_VARS[attempt + 1],
-        [msgToken(msgs, 'not_found'), msgToken(msgs, 'ask_id')], { max: ID_DIGITS, min: 1 })], callId)
-    }
-    return yemotText([idMessage(msgToken(msgs, 'not_found')), goToFolder('hangup')], callId)
-  }
+  const ben = candidates.find(c => c.id === resolved.familyId)
+  if (!ben) return yemotText([idMessage(msgToken(msgs, 'failed')), goToFolder('hangup')], callId)
 
   const { data: recRow } = await db.from('distribution_recipients')
     .select('id, center_id, approval_status, card_number, load_status')
@@ -368,56 +430,8 @@ async function handleCardRoute(
     return yemotText([idMessage(msgToken(msgs, 'card_already')), goToFolder('hangup')], callId)
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // 🔴 אימות המתקשר — לפני שהוא מוסר מספר כרטיס.
-  //
-  // שיוך כרטיס הוא פעולה כספית שאי אפשר לבטל בטלפון, ות"ז אינה סוד:
-  // היא מופיעה על כל מסמך. לכן נדרשת ראיה נוספת — או שליטה בטלפון
-  // הרשום בכרטסת, או ידיעת תאריך לידה.
-  //
-  // ⚠️ הבדיקה כאן ולא אחרי הקשת מספר הכרטיס: מי שאינו מזוהה לא אמור
-  // להגיע לשלב שבו הוא מקיש מספר.
-  // ראו lib/yemotCardIdentity — הכללים והבדיקות שם.
-  // ─────────────────────────────────────────────────────────────────────────
-  const { data: idRow } = await db.from('beneficiaries')
-    .select('phone, phone2, spouse_phone, birth_date, spouse_birth_date')
-    .eq('id', ben.id).maybeSingle()
-  const idData = idRow as {
-    phone: string | null; phone2: string | null; spouse_phone: string | null
-    birth_date: string | null; spouse_birth_date: string | null
-  } | null
-
-  // 🔴 ApiPhone הוא השדה שימות מעבירה בו את מספר המתקשר — אומת מול
-  // שלוחת היולדות שכבר עובדת בייצור.
-  //
-  // ⚠️ שם שדה שגוי היה מחזיר מחרוזת ריקה, וכל מתקשר — גם מהטלפון הרשום —
-  // היה נדרש לתאריך לידה. כשל שקט שנראה כמו החמרה מכוונת.
-  const callerPhone = String(params['ApiPhone'] ?? '').trim()
-  const typedBirth = digitsOnly(params[BIRTH_VAR] ?? '')
-
-  const identity = checkCardIdentity(
-    {
-      phones: [idData?.phone, idData?.phone2, idData?.spouse_phone],
-      birthDates: [idData?.birth_date, idData?.spouse_birth_date],
-    },
-    callerPhone,
-    typedBirth,
-  )
-
-  if (!identity.ok) {
-    if (identity.reason === 'need_birth_date') {
-      // ⚠️ הזיהוי נאמר לפני הבקשה — המתקשר צריך לדעת את מי המערכת זיהתה
-      // לפני שהוא מוסר פרט אישי נוסף.
-      return yemotText([readTap(BIRTH_VAR, [
-        msgToken(msgs, 'identify', { name: readableName(ben) }),
-        msgToken(msgs, 'card_ask_birth'),
-      ], { max: 8, min: 8 })], callId)
-    }
-    const key = identity.reason === 'no_birth_date_on_file'
-      ? 'card_no_birth_on_file'
-      : 'card_birth_mismatch'
-    return yemotText([idMessage(msgToken(msgs, key)), goToFolder('hangup')], callId)
-  }
+  // ⚠️ הזיהוי כבר נעשה למעלה, לפי מספר המתקשר — לפני כל שער אחר.
+  // אין כאן אימות נוסף: השליטה במספר הרשום היא הראיה.
 
   // ── הקשת מספר הכרטיס ──
   let cAttempt = -1

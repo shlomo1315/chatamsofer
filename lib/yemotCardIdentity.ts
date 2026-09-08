@@ -1,53 +1,43 @@
 import { normalizePhone } from '@/lib/phone'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// זיהוי המתקשר לפני שיוך כרטיס בשלוחה.
+// זיהוי המתקשר לפני שיוך כרטיס בשלוחת החגים.
 //
-// 🔴 שיוך כרטיס הוא פעולה כספית: הוא קושר כרטיס נטען למשפחה, ואי אפשר
-// לבטלו בטלפון. ת"ז לבדה אינה סוד — היא מופיעה על כל מסמך — ולכן היא
-// אינה מספיקה כדי לאשר את הפעולה.
+// 🔴 הכלל: מספר המתקשר הוא הזיהוי — אותו רעיון כמו בשלוחת היולדות
+// (app/api/webhooks/yemot-maternity), שם המתקשר אינו מקיש ת"ז כלל
+// והמשפחה נמצאת לפי ApiPhone מול phone / phone2 / spouse_phone.
 //
-// שתי דרכי זיהוי:
-//   1. המתקשר מתקשר **מטלפון הרשום בכרטסת** — זיהוי מיידי. השליטה במספר
-//      היא הראיה, בדיוק כמו קוד שנשלח ב-SMS.
-//   2. מטלפון אחר — נדרש **תאריך לידה** (8 ספרות). מי שיודע ת"ז אך לא
-//      תאריך לידה אינו בן הבית.
+// ⚠️ ת"ז אינה ראיה. היא מופיעה על כל מסמך, ושיוך כרטיס הוא פעולה כספית
+// שאי אפשר לבטל בטלפון. לכן ת"ז לעולם אינה *פותחת* את המסלול — היא
+// משמשת רק להכרעה בין משפחות שכבר הוכחו שייכות לאותו מספר.
 //
-// ⚠️ מתקבל תאריך הלידה של הבעל **או** של האישה. 126 משפחות חסר להן אחד
-// מהשניים במערכת, וחובת שניהם הייתה נועלת אותן מחוץ למערכת.
+// ⚠️ תאריך לידה בוטל כדרך אימות. מי שמתקשר ממספר שאינו רשום נחסם ושומע
+// זאת מפורשות, במקום להיות מנותב לאימות חלופי.
+//
+// 🔴 הטלפון המשותף — הסיבה שהמודול הזה קיים בכלל:
+// 82 מספרים בחלוקת תשרי רשומים אצל יותר ממשפחה אחת (172 משפחות; מספר
+// אחד מוביל ל-6). ביולדות "ההתאמה הראשונה" מספיקה כי היא רק *שולפת* תיק;
+// כאן היא הייתה משייכת כרטיס טעון למשפחה הלא נכונה. לכן ריבוי התאמות
+// אינו נפתר בניחוש אלא בהקשת ת"ז — מצומצמת לאותן משפחות בלבד.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export interface CardIdentityState {
-  /** הטלפונים הרשומים בכרטסת: בעל, אישה, נוסף. */
-  phones: (string | null | undefined)[]
-  /** תאריכי הלידה הרשומים (ISO), אם קיימים. */
-  birthDates: (string | null | undefined)[]
+/** משפחה מועמדת — כל מה שנדרש כדי להכריע בין כמה על אותו מספר. */
+export interface PhoneCandidate {
+  id: string
+  id_number: string | null | undefined
 }
 
-export type IdentityResult =
-  /** הטלפון מוכר — אפשר לשייך מיד. */
-  | { ok: true; via: 'phone' }
-  /** תאריך הלידה שהוקש תואם — אפשר לשייך. */
-  | { ok: true; via: 'birth_date' }
-  /** נדרש תאריך לידה (המתקשר אינו מטלפון מוכר). */
-  | { ok: false; reason: 'need_birth_date' }
-  /** התאריך שהוקש אינו תואם. */
-  | { ok: false; reason: 'birth_date_mismatch' }
-  /** אין בכרטסת אף תאריך לידה — אי אפשר לאמת בטלפון. */
-  | { ok: false; reason: 'no_birth_date_on_file' }
-
-/**
- * המרת ISO ל-8 ספרות כפי שהמתקשר מקיש: DDMMYYYY.
- *
- * ⚠️ סדר ישראלי (יום-חודש-שנה) ולא ISO — זה מה שאדם מקיש כשמבקשים ממנו
- * תאריך לידה.
- */
-export function isoToDigits(iso: string | null | undefined): string | null {
-  const s = String(iso ?? '').trim()
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s)
-  if (!m) return null
-  return `${m[3]}${m[2]}${m[1]}`
-}
+export type CardIdentityResult =
+  /** מספר מוכר ומשפחה אחת בלבד — אפשר לשייך מיד, בלי הקשה. */
+  | { ok: true; via: 'phone'; familyId: string }
+  /** ת"ז שהוקשה הכריעה בין כמה משפחות על אותו מספר. */
+  | { ok: true; via: 'phone_and_id'; familyId: string }
+  /** המספר אינו רשום באף כרטסת. */
+  | { ok: false; reason: 'phone_unknown' }
+  /** המספר משויך לכמה משפחות — נדרשת ת"ז להכרעה. */
+  | { ok: false; reason: 'need_id_choice' }
+  /** הת"ז שהוקשה אינה שייכת לאף אחת ממשפחות המספר. */
+  | { ok: false; reason: 'id_not_on_phone' }
 
 /** האם המספר שהתקשר ממנו מוכר בכרטסת. */
 export function isKnownPhone(
@@ -65,32 +55,38 @@ export function isKnownPhone(
 }
 
 /**
- * מכריע אם המתקשר מזוהה מספיק כדי לשייך כרטיס.
+ * מכריע את המשפחה שעבורה ישויך הכרטיס.
  *
- * @param typedDigits 8 הספרות שהוקשו, אם הוקשו.
+ * @param candidates המשפחות שהמספר של המתקשר רשום אצלן (כבר סוננו לפי טלפון).
+ * @param typedId    ת"ז שהוקשה, אם הוקשה — רלוונטית רק כשיש יותר ממועמדת אחת.
  */
-export function checkCardIdentity(
-  state: CardIdentityState,
-  callerPhone: string | null | undefined,
-  typedDigits?: string | null,
-): IdentityResult {
-  // 1. טלפון מוכר — גובר על הכול, ואין צורך בהקשה נוספת.
-  if (isKnownPhone(callerPhone, state.phones)) return { ok: true, via: 'phone' }
+export function resolveCardFamily(
+  candidates: PhoneCandidate[],
+  typedId?: string | null,
+): CardIdentityResult {
+  // ⚠️ נכשל-סגור: בלי מספר מוכר אין שיוך, ואין מסלול עוקף.
+  if (!candidates.length) return { ok: false, reason: 'phone_unknown' }
 
-  const expected = state.birthDates
-    .map(isoToDigits)
-    .filter((d): d is string => !!d)
+  // המקרה הרגיל (5,935 מתוך 6,107) — משפחה אחת, בלי שום הקשה.
+  if (candidates.length === 1) {
+    return { ok: true, via: 'phone', familyId: candidates[0].id }
+  }
 
-  // ⚠️ אין במה לאמת. נכשל-סגור: עדיף לשלוח למשרד מאשר לשייך בלי זיהוי.
-  if (!expected.length) return { ok: false, reason: 'no_birth_date_on_file' }
+  const typed = String(typedId ?? '').replace(/\D/g, '')
+  if (!typed) return { ok: false, reason: 'need_id_choice' }
 
-  const typed = String(typedDigits ?? '').replace(/\D/g, '')
-  if (!typed) return { ok: false, reason: 'need_birth_date' }
-  // ⚠️ אורך שגוי נחשב אי-התאמה ולא "טרם הוקש": המתקשר כן הקיש משהו,
-  // וההודעה הנכונה היא שהתאריך אינו נכון.
-  if (typed.length !== 8) return { ok: false, reason: 'birth_date_mismatch' }
+  // ⚠️ ההשוואה מרופדת באפסים משני הצדדים: ת"ז נשמרת לעתים בלי אפס מוביל,
+  // והמתקשר מקיש 9 ספרות מלאות. בלי זה התאמה אמיתית הייתה נכשלת.
+  const norm = (s: string) => s.replace(/\D/g, '').padStart(9, '0')
+  const want = norm(typed)
+  const hit = candidates.find(c => {
+    const cid = String(c.id_number ?? '').replace(/\D/g, '')
+    return cid.length > 0 && norm(cid) === want
+  })
 
-  return expected.includes(typed)
-    ? { ok: true, via: 'birth_date' }
-    : { ok: false, reason: 'birth_date_mismatch' }
+  // ⚠️ ההכרעה מצומצמת למשפחות של אותו מספר בלבד. ת"ז של משפחה אחרת —
+  // גם אם היא קיימת במערכת — אינה פותחת כאן דבר.
+  return hit
+    ? { ok: true, via: 'phone_and_id', familyId: hit.id }
+    : { ok: false, reason: 'id_not_on_phone' }
 }
