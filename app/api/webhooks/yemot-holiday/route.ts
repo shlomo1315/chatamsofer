@@ -39,6 +39,7 @@ import { ensureCenterOpening } from '@/lib/centerOpeningRow'
 import { spokenCenterName, spokenCenterDetails } from '@/lib/holidayCenterSpeech'
 import { centerStatusKey } from '@/lib/holidayCenterStatusMessage'
 import { runLoadBatch } from '@/lib/holidayCardLoad'
+import { linkHolidayCard } from '@/lib/holidayCards'
 import {
   CENTER_VARS, buildChoiceList, loadOpenCenters, nextCenterStep,
 } from '@/lib/holidayCenterIvr'
@@ -543,14 +544,23 @@ async function handleCardRoute(
     ], callId)
   }
 
-  // ⚠️ הכרטיס נשמר *לפני* הטעינה: runLoadBatch קורא אותו מהרשומה.
-  const { error: saveErr } = await db.from('distribution_recipients')
-    .update({ card_number: card, card_linked_at: new Date().toISOString(), card_link_error: null })
-    .eq('id', rec.id).is('card_number', null)
-  if (saveErr) {
-    console.error('[yemot-holiday] שמירת מספר הכרטיס נכשלה:', saveErr.message)
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 השיוך בנדרים קודם לטעינה — ורק הצלחתו מתירה לכתוב אצלנו.
+  //
+  // ⚠️ עד כה נכתב כאן card_number ישירות למסד, בלי שום קריאה לנדרים.
+  // הכרטיס נטען (הכסף אכן ירד), הרשומה נראתה משויכת, ובנדרים לא היה שום
+  // כרטיס מקושר למשפחה — כלומר כרטיס מת ביד המשפחה. גרוע מכך, הרשומה
+  // המלאה חסמה ניסיון חוזר ב"כבר חיברתם את הכרטיס", בלי דרך לתקן מהקו.
+  //
+  // ⚠️ linkHolidayCard היא אותה פונקציה שהמסך הניהולי משתמש בה: היא
+  // מאתרת את המשפחה בנדרים, קוראת ל-SetClientMagneticCard, מאמתת בשליפה
+  // חוזרת, וכותבת אצלנו רק אחרי שהשיוך אושר.
+  // ─────────────────────────────────────────────────────────────────────────
+  const link = await linkHolidayCard(ben.id, card, { phone: callerPhone || null })
+  if (!link.ok) {
+    console.error(`[yemot-holiday] שיוך הכרטיס נכשל rec=${rec.id}: ${link.error}`)
     return yemotText([
-      idMessage(msgToken(msgs, 'card_failed', { reason: 'שגיאה טכנית בשמירה' })),
+      idMessage(msgToken(msgs, 'card_failed', { reason: link.error ?? '' })),
       goToFolder('hangup'),
     ], callId)
   }
@@ -558,6 +568,7 @@ async function handleCardRoute(
   try {
     const summary = await runLoadBatch(db, [{
       recipientId: rec.id,
+      beneficiaryId: ben.id,
       idNumber: ben.id_number ?? null,
       name: ben.family_name ?? ben.full_name ?? '',
       spouseIdNumber: ben.spouse_id_number ?? null,
@@ -569,6 +580,11 @@ async function handleCardRoute(
     if (bad) {
       // ⚠️ מנקים את מספר הכרטיס: השארתו חוסמת ניסיון חוזר ("כרטיס כבר
       // מחובר") על כרטיס שלא הוטען — כלומר משפחה בלי כסף ובלי דרך לתקן.
+      //
+      // ⚠️ הכרטיס נשאר משויך בנדרים: ניתוקו כאן היה מסתכן בניתוק כרטיס
+      // שכן נטען (הטעינה עשויה להיכשל *אחרי* שירדה). ניסיון חוזר עם אותו
+      // כרטיס יעבור — נדרים מחזירה "כבר משויך למשפחה זו", ו-linkHolidayCard
+      // מזהה זאת כהצלחה. כרטיס *אחר* יידרש בתשומת לב מהמשרד.
       await db.from('distribution_recipients')
         .update({ card_number: null, card_linked_at: null, card_link_error: bad.error ?? 'טעינה נכשלה' })
         .eq('id', rec.id)

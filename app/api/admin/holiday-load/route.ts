@@ -41,6 +41,8 @@ interface Row {
   load_status: string | null
   /** 🔴 טעינה רק למי שבחר מוקד — ראו eligibleForLoad. */
   center_id: string | null
+  /** 🔴 לשמירת nedarim_id שנפתר בטעינה — ראו runLoadBatch. */
+  beneficiary_id: string | null
   beneficiary: Ben | Ben[] | null
 }
 
@@ -56,7 +58,7 @@ async function loadRows(
     .from('distribution_recipients')
     // ⚠️ השדות הנוספים נדרשים *רק* להקמת המשפחה בנדרים כשאינה קיימת שם:
     // לקוח שמוקם בלי טלפון וכתובת אינו שמיש למוקד החלוקה.
-    .select('id, approval_status, load_status, center_id, beneficiary:beneficiaries(id_number, spouse_id_number, family_name, full_name, phone, phone2, email, address, city)')
+    .select('id, approval_status, load_status, center_id, beneficiary_id, beneficiary:beneficiaries(id_number, spouse_id_number, family_name, full_name, phone, phone2, email, address, city)')
     .eq('distribution_id', distributionId)
     .range(from, to))
 
@@ -67,6 +69,7 @@ async function loadRows(
       approval_status: r.approval_status,
       load_status: r.load_status,
       center_id: r.center_id,
+      beneficiary_id: r.beneficiary_id ?? null,
       id_number: b?.id_number ?? null,
       name: [b?.family_name, b?.full_name].filter(Boolean).join(' ') || 'ללא שם',
       spouse_id_number: b?.spouse_id_number ?? null,

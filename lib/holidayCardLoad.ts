@@ -25,6 +25,8 @@ export const DEFAULT_LOAD_AMOUNT = 500
 
 export interface LoadTarget {
   recipientId: string
+  /** 🔴 לשמירת nedarim_id שנפתר בטעינה. בלעדיו המזהה אובד. */
+  beneficiaryId?: string | null
   idNumber: string | null
   name: string
   /** ⚠️ הפרטים הבאים נדרשים *רק* להקמת המשפחה בנדרים כשאינה קיימת. */
@@ -43,6 +45,14 @@ export interface LoadOutcome {
   ok: boolean
   error?: string
   tlushId?: string | null
+  /**
+   * מזהה המשפחה בנדרים כפי שנפתר בטעינה — באיתור או בהקמה.
+   *
+   * ⚠️ נוסף כי ההקמה כאן יצרה משפחה בנדרים בלי לשמור את המזהה אצלנו.
+   * beneficiaries.nedarim_id נשאר null, ואז שיוך הכרטיס לא מצא את
+   * המשפחה ונכשל ב"המשפחה אינה קיימת בנדרים" — על משפחה שהוקמה זה עתה.
+   */
+  clientId?: string | null
 }
 
 export interface LoadSummary {
@@ -155,8 +165,8 @@ export async function loadOne(
     // ⚠️ התוקף עובר לנדרים. קודם נשלח undefined והכרטיסים יצאו בלי
     // תאריך תפוגה כלל — היתרה נשארה זמינה ללא הגבלת זמן.
     const res = await addTlush(creds, clientId, amount, toNedarimExpiry(expiryIso), 'חלוקת חגים', limitedId)
-    if (!res.ok) return { recipientId: target.recipientId, ok: false, error: res.message || 'הטעינה נדחתה' }
-    return { recipientId: target.recipientId, ok: true, tlushId: res.tlushId }
+    if (!res.ok) return { recipientId: target.recipientId, ok: false, error: res.message || 'הטעינה נדחתה', clientId }
+    return { recipientId: target.recipientId, ok: true, tlushId: res.tlushId, clientId }
   } catch (e) {
     return { recipientId: target.recipientId, ok: false, error: e instanceof Error ? e.message : 'תקלה' }
   }
@@ -213,6 +223,18 @@ export async function runLoadBatch(
       loaded_at: outcome.ok ? new Date().toISOString() : null,
     }).eq('id', t.recipientId)
 
+    // 🔴 שמירת מזהה נדרים — גם כשהטעינה נכשלה.
+    //
+    // ⚠️ ההקמה בנדרים הצליחה ברגע שיש clientId, ובלי לשמור אותו כאן
+    // המשפחה קיימת שם ואינה ידועה לנו: שיוך הכרטיס לא ימצא אותה, וניסיון
+    // חוזר ינסה להקים אותה שוב ויידחה ב"מספר זהות זה כבר רשום".
+    if (outcome.clientId && t.beneficiaryId) {
+      const { error: nidErr } = await db.from('beneficiaries')
+        .update({ nedarim_id: String(outcome.clientId) })
+        .eq('id', t.beneficiaryId).is('nedarim_id', null)
+      if (nidErr) console.error(`[holiday-load] שמירת nedarim_id נכשלה ben=${t.beneficiaryId}:`, nidErr.message)
+    }
+
     if (opts.delayMs) await new Promise(r => setTimeout(r, opts.delayMs))
   }
 
@@ -234,6 +256,8 @@ export function eligibleForLoad(rows: {
   load_status?: string | null
   id_number?: string | null
   name?: string
+  /** 🔴 לשמירת nedarim_id שנפתר בטעינה. */
+  beneficiary_id?: string | null
   // ⚠️ הפרטים הבאים אינם לתצוגה: הם נשלחים לנדרים בהקמת המשפחה כשאינה
   // קיימת שם. השמטתם הייתה מקימה לקוח בלי טלפון וכתובת — לקוח שאינו
   // שמיש למוקד החלוקה, ובלי שום סימן שמשהו חסר.
@@ -281,6 +305,7 @@ export function eligibleForLoad(rows: {
     })
     .map(r => ({
       recipientId: r.id,
+      beneficiaryId: r.beneficiary_id ?? null,
       idNumber: r.id_number ?? null,
       name: r.name ?? '',
       spouseIdNumber: r.spouse_id_number ?? null,
