@@ -214,7 +214,14 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ distribution_id: distributionId, center_id: id, pickup }),
       })
-      if (!res.ok) { setErr((await res.json()).error ?? 'העדכון נכשל'); return }
+      if (!res.ok) {
+        // ⚠️ קוד הסטטוס נאמר מפורשות: "העדכון נכשל" לבדו אינו מבחין בין
+        // ניתוק הרשאה (401), מוקד שאינו בחלוקה (404) ותקלת שרת (500),
+        // וזה ההבדל בין תיקון של דקה לחיפוש עיוור.
+        const d = await res.json().catch(() => ({}))
+        setErr(`${d.error ?? 'העדכון נכשל'} (${res.status})`)
+        return
+      }
       setPickupIds(prev => {
         const next = new Set(prev)
         if (pickup) next.add(id); else next.delete(id)

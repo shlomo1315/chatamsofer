@@ -138,6 +138,9 @@ export async function PATCH(request: NextRequest) {
       .update({ pickup_open_at: b.pickup ? new Date().toISOString() : null })
       .eq('distribution_id', distributionId).eq('center_id', centerId)
       .select('center_id')
+    // ⚠️ לוג מפורש: כשהכפתור "לא מגיב" אין דרך אחרת לדעת אם הבקשה
+    // הגיעה בכלל, ומה השרת עשה איתה.
+    console.log(`[holiday-centers] pickup=${b.pickup} dist=${distributionId} center=${centerId} rows=${data?.length ?? 0}${error ? ` err=${error.message}` : ''}`)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     if (!data?.length) {
       return NextResponse.json({ error: 'המוקד אינו משויך לחלוקה זו' }, { status: 404 })
