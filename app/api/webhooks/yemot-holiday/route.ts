@@ -35,6 +35,7 @@ import { getOpenDistribution, registerToOpenDistribution } from '@/lib/holidayDi
 import { getHolidayMessages, type HolidayMessages } from '@/lib/yemotHolidayMessages'
 import { digitsOnly, idOrFilter, sameId } from '@/lib/idLookup'
 import { centerLabel, type CenterRow } from '@/lib/holidayCenterPick'
+import { spokenCenterName, spokenCenterDetails } from '@/lib/holidayCenterSpeech'
 import { runLoadBatch } from '@/lib/holidayCardLoad'
 import {
   CENTER_VARS, buildChoiceList, loadOpenCenters, nextCenterStep,
@@ -82,6 +83,13 @@ function safeEqual(a: string, b: string): boolean {
 // את ההקראה. הסרתם משאירה "תשפז", שימות מקריאה כמילה תקינה.
 const tts = (t: string) => String(t ?? '').replace(/[.\-"'&|׳״]/g, ' ').replace(/\s+/g, ' ').trim()
 const tToken = (t: string) => `t-${tts(t)}`
+
+/** מוקד כפי שהוא נשמע בקו — השדות מהטבלה + הקלטה אופציונלית. */
+type SpokenCenter = {
+  city: string | null; name: string | null
+  address: string | null; hours: string | null
+  audio_file: string | null
+}
 const joinTokens = (...tokens: string[]) => tokens.filter(Boolean).join('.')
 const idMessage = (...tokens: string[]) => `id_list_message=${joinTokens(...tokens)}`
 const goToFolder = (target: string) => `go_to_folder=${target}`
@@ -444,20 +452,34 @@ async function handleCardRoute(
 
   if (!(openRow as { pickup_open_at: string | null } | null)?.pickup_open_at) {
     const { data: cRow } = await db.from('holiday_centers')
-      .select('city, name').eq('id', rec.center_id).maybeSingle()
-    const c = cRow as { city: string | null; name: string | null } | null
-    // ⚠️ הפרדה במילה ולא ב-"·" של centerLabel: המפריד הגרפי נועד למסך,
-    // וב-TTS הוא נקרא כרעש או נבלע. כאן זה נאמר באוזן.
-    // ⚠️ נופל לשם היישוב וממנו ל"שנרשמתם בו": הודעה עם חור באמצע
-    // ("המוקד שבו נרשמתם, , טרם החל") נשמעת כתקלה.
-    const centerName = (c?.city && c?.name && c.city !== c.name)
-      ? `${c.city}, ${c.name}`
-      : (c?.name || c?.city || 'שנרשמתם בו')
+      .select('city, name, address, hours, audio_file').eq('id', rec.center_id).maybeSingle()
+    const c = cRow as SpokenCenter | null
+    // ⚠️ נופל ל"שנרשמתם בו": הודעה עם חור באמצע ("המוקד שבו נרשמתם, ,
+    // טרם החל") נשמעת כתקלה.
+    const centerName = spokenCenterName(c) || 'שנרשמתם בו'
     return yemotText([
       idMessage(msgToken(msgs, 'card_center_not_open', { center: centerName })),
       goToFolder('hangup'),
     ], callId)
   }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 פרטי המוקד נאמרים לפני בקשת מספר הכרטיס: לאן ללכת ומתי.
+  //
+  // ⚠️ מאותם שדות שבטבלת המוקדים ובשובר — מקור אחד. מי שמעדכן שעות
+  // בטבלה מעדכן בכך גם את מה שנשמע בקו.
+  //
+  // ⚠️ הקלטה אנושית גוברת על ההקראה כשהיא קיימת, כמו בכל הודעה אחרת
+  // בשלוחה. מוקד בלי הקלטה עדיין נשמע נכון — ב-TTS מאותם שדות.
+  // ⚠️ נאמר פעם אחת בלבד, בבקשה הראשונה למספר: חזרה עליו בכל ניסיון
+  // הקשה מאריכה את השיחה בלי להוסיף מידע.
+  // ─────────────────────────────────────────────────────────────────────────
+  const { data: openCenterRow } = await db.from('holiday_centers')
+    .select('city, name, address, hours, audio_file').eq('id', rec.center_id).maybeSingle()
+  const openCenter = openCenterRow as SpokenCenter | null
+  const centerIntro = openCenter?.audio_file
+    ? `f-${openCenter.audio_file}`
+    : (spokenCenterDetails(openCenter) ? tToken(spokenCenterDetails(openCenter)) : '')
 
   // ⚠️ כרטיס שכבר חובר — לא מציעים לחבר שוב. חיבור שני היה מחליף כרטיס
   // שכבר הוטען, כלומר כסף שנשאר על כרטיס שאיש אינו מחזיק.
@@ -479,6 +501,8 @@ async function handleCardRoute(
     // ת"ז שגויה משייך כרטיס למשפחה אחרת בלי לדעת.
     return yemotText([readTap(CARD_VARS[0], [
       msgToken(msgs, 'identify', { name: readableName(ben) }),
+      // 🔴 לאן ללכת ומתי — לפני שמבקשים את המספר.
+      centerIntro,
       msgToken(msgs, 'card_ask'),
       // ⚠️ סינון טוקן ריק: הודעה שנוסחה נמחק מייצרת "t-" ריק, וימות
       // מגיבה לו בצורה בלתי צפויה במקום לדלג עליו.
@@ -566,7 +590,14 @@ async function handleCardRoute(
     }
 
     console.log(`[yemot-holiday] כרטיס חובר והוטען rec=${rec.id} card=****${card.slice(-4)}`)
-    return yemotText([idMessage(msgToken(msgs, 'card_success')), goToFolder('hangup')], callId)
+    // 🔴 פרטי המוקד נאמרים שוב בסיום — זה הרגע שבו המתקשר צריך לדעת
+    // לאן ללכת ומתי. עד כה השיחה נותקה מיד אחרי "חובר בהצלחה", והוא
+    // נשאר בלי כתובת ובלי שעות.
+    return yemotText([
+      idMessage(msgToken(msgs, 'card_success')),
+      centerIntro,
+      goToFolder('hangup'),
+    ].filter(Boolean), callId)
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'תקלה'
     await db.from('distribution_recipients')

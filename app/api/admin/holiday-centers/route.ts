@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic'
 // או שעות שהתעדכנו חייבות להגיע לשובר שטרם נשלח.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const COLS = 'id, city, name, address, phone, hours, region, capacity, is_active, sort_order'
+const COLS = 'id, city, name, address, phone, hours, region, capacity, is_active, sort_order, audio_file'
 
 export async function GET(request: NextRequest) {
   const staff = await requireStaff()

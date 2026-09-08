@@ -1,8 +1,9 @@
 'use client'
 import { useState, useCallback } from 'react'
-import { Loader2, MapPin, Check, X, Users, CalendarClock } from 'lucide-react'
+import { Loader2, MapPin, Check, X, Users, CalendarClock, Volume2 } from 'lucide-react'
 import DeadlineCountdown from '@/components/ui/DeadlineCountdown'
 import { toLocalInput } from '@/lib/centerDeadline'
+import { spokenCenterDetails } from '@/lib/holidayCenterSpeech'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // פילוח לפי מוקדי חלוקה + מתג פתיחת הבחירה.
@@ -23,6 +24,8 @@ interface Center {
   capacity: number | null; is_active: boolean
   // ⚠️ נשלפים ממילא ב-COLS — הם מה שהמשפחה רואה בשובר ובטלפון.
   address?: string | null; phone?: string | null; hours?: string | null
+  /** שם קובץ ההקלטה בימות. ריק = פרטי המוקד ייקראו ב-TTS מהשדות. */
+  audio_file?: string | null
 }
 
 export default function CenterBreakdown({ distributionId }: { distributionId: string }) {
@@ -176,6 +179,36 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
         if (pickup) next.add(id); else next.delete(id)
         return next
       })
+    } catch { setErr('שגיאת רשת') } finally { setBusy(null) }
+  }
+
+  /**
+   * העלאת הקלטה אנושית לפרטי המוקד.
+   *
+   * ⚠️ ההקלטה מחליפה את *הקול* ולא את התוכן: מוקד בלי הקלטה עדיין
+   * נשמע נכון, בהקראה מאותם שדות. לכן זו תוספת ולא דרישה.
+   */
+  async function uploadRecording(id: string, file: File) {
+    setBusy(`rec-${id}`); setErr('')
+    try {
+      const fd = new FormData()
+      fd.append('center_id', id)
+      fd.append('file', file)
+      const res = await fetch('/api/admin/holiday-centers/recording', { method: 'POST', body: fd })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setErr(d.error ?? 'ההעלאה נכשלה'); return }
+      setCenters(cs => cs?.map(c => (c.id === id ? { ...c, audio_file: d.audio_file } : c)) ?? cs)
+    } catch { setErr('שגיאת רשת — ההקלטה לא הועלתה') } finally { setBusy(null) }
+  }
+
+  /** הסרת ההקלטה — הפרטים חוזרים להיקרא מהשדות. */
+  async function removeRecording(id: string) {
+    setBusy(`rec-${id}`); setErr('')
+    try {
+      const res = await fetch(`/api/admin/holiday-centers/recording?center_id=${encodeURIComponent(id)}`,
+        { method: 'DELETE' })
+      if (!res.ok) { setErr((await res.json()).error ?? 'ההסרה נכשלה'); return }
+      setCenters(cs => cs?.map(c => (c.id === id ? { ...c, audio_file: null } : c)) ?? cs)
     } catch { setErr('שגיאת רשת') } finally { setBusy(null) }
   }
 
@@ -381,7 +414,7 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
           <span className="w-32 shrink-0">עיר</span>
           <span className="w-40 shrink-0">שם המוקד</span>
           <span className="flex-1 min-w-0">כתובת</span>
-          <span className="w-40 shrink-0">ימים ושעות</span>
+          <span className="w-56 shrink-0">ימים ושעות</span>
           <span className="w-28 shrink-0">טלפון</span>
           <span className="w-16 shrink-0 text-center">נרשמו</span>
           <span className="w-20 shrink-0 text-center">בחירה</span>
@@ -418,16 +451,24 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
                   className={`${CELL} w-full lg:w-40 lg:shrink-0`} />
 
                 {/* כתובת */}
-                <input value={d.address ?? ''}
+                {/* ⚠️ textarea ולא input: כתובת מלאה ארוכה משדה שורה אחת,
+                    והטקסט נגלל אופקית בתוכו — כלומר רואים ממנו מילה או
+                    שתיים ואי אפשר לערוך אותו בבטחה. */}
+                <textarea value={d.address ?? ''}
                   onChange={e => setDraft(c.id, { address: e.target.value })}
-                  placeholder="כתובת"
-                  className={`${CELL} w-full lg:flex-1 lg:min-w-0`} />
+                  placeholder="כתובת מלאה"
+                  rows={2}
+                  className={`${CELL} w-full resize-y leading-snug lg:flex-1 lg:min-w-0`} />
 
                 {/* ימים ושעות */}
-                <input value={d.hours ?? ''}
+                {/* 🔴 זה השדה שנשמע בטלפון, ולעתים הוא ארוך ("א׳–ג׳ 10:00–14:00,
+                    ד׳ 16:00–20:00"). בשדה שורה אחת ברוחב 10rem נראתה ממנו
+                    מילה אחת, ואי אפשר היה לוודא מה בדיוק ייאמר למתקשר. */}
+                <textarea value={d.hours ?? ''}
                   onChange={e => setDraft(c.id, { hours: e.target.value })}
                   placeholder="א׳–ה׳ 10:00–14:00"
-                  className={`${CELL} w-full lg:w-40 lg:shrink-0 ${
+                  rows={2}
+                  className={`${CELL} w-full resize-y leading-snug lg:w-56 lg:shrink-0 ${
                     !d.hours ? 'border-amber-300 bg-amber-50 placeholder:text-amber-600' : ''
                   }`} />
 
@@ -479,6 +520,39 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
                       onClick={() => void saveRow(c.id)}
                       className="shrink-0 animate-pulse rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-extrabold text-white hover:bg-emerald-700">
                       {busy === c.id ? <Loader2 size={12} className="animate-spin" /> : 'שמור'}
+                    </button>
+                  )}
+                </div>
+
+                {/* ── כך זה יישמע בטלפון ──
+                    🔴 מוצג מהשדות עצמם: מי שמעדכן כתובת או שעות רואה מיד
+                    מה המתקשר ישמע, ולא צריך להתקשר כדי לבדוק.
+                    ⚠️ מהטיוטה ולא מהשמור — כדי שהתצוגה תעקוב אחרי ההקלדה. */}
+                <div className="flex w-full flex-wrap items-center gap-2 border-t border-slate-100 pt-1.5 lg:w-auto lg:basis-full">
+                  <Volume2 size={12} className="shrink-0 text-slate-400" />
+                  <span className="min-w-0 flex-1 truncate text-[11px] text-slate-500">
+                    {c.audio_file
+                      ? <span className="font-bold text-teal-700">מושמעת הקלטה אנושית</span>
+                      : (spokenCenterDetails(d) || <span className="text-slate-300">אין מה להשמיע — חסרים פרטים</span>)}
+                  </span>
+
+                  {/* ⚠️ ההקלטה גוברת על ההקראה. מוקד בלי הקלטה עדיין
+                      נשמע נכון, ולכן זו תוספת ולא תנאי. */}
+                  <label className="shrink-0 cursor-pointer rounded-lg border border-teal-300 bg-teal-50 px-2.5 py-1 text-[10.5px] font-bold text-teal-700 transition hover:bg-teal-100">
+                    {busy === `rec-${c.id}` ? 'מעלה…' : c.audio_file ? 'החלף הקלטה' : 'העלה הקלטה'}
+                    <input type="file" accept="audio/*" className="hidden"
+                      onChange={e => {
+                        const f = e.target.files?.[0]
+                        e.target.value = ''
+                        if (f) void uploadRecording(c.id, f)
+                      }} />
+                  </label>
+                  {c.audio_file && (
+                    <button type="button" disabled={busy === `rec-${c.id}`}
+                      onClick={() => void removeRecording(c.id)}
+                      title="הסרת ההקלטה — הפרטים ייקראו מהשדות"
+                      className="shrink-0 rounded-lg border border-slate-300 bg-white px-2 py-1 text-[10.5px] font-bold text-slate-500 transition hover:border-rose-300 hover:text-rose-700">
+                      הסר
                     </button>
                   )}
                 </div>
