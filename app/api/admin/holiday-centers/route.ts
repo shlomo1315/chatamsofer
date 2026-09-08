@@ -31,6 +31,8 @@ export async function GET(request: NextRequest) {
   const distributionId = request.nextUrl.searchParams.get('distribution_id') ?? ''
   const counts: Record<string, number> = {}
   const openIds: string[] = []
+  /** המוקדים שכבר החלו לחלק כרטיסים בפועל (pickup_open_at). */
+  const pickupIds: string[] = []
 
   if (distributionId) {
     const { data: taken } = await db.rpc('holiday_center_counts', { dist_id: distributionId })
@@ -50,11 +52,15 @@ export async function GET(request: NextRequest) {
     }
 
     const { data: open } = await db.from('holiday_center_openings')
-      .select('center_id').eq('distribution_id', distributionId)
-    for (const o of (open ?? []) as { center_id: string }[]) openIds.push(o.center_id)
+      .select('center_id, pickup_open_at').eq('distribution_id', distributionId)
+    for (const o of (open ?? []) as { center_id: string; pickup_open_at: string | null }[]) {
+      openIds.push(o.center_id)
+      // מוקדים שכבר מחלקים כרטיסים — רשימה נפרדת מ-openIds (בחירה ≠ חלוקה).
+      if (o.pickup_open_at) pickupIds.push(o.center_id)
+    }
   }
 
-  return NextResponse.json({ centers: data ?? [], counts, openIds })
+  return NextResponse.json({ centers: data ?? [], counts, openIds, pickupIds })
 }
 
 export async function POST(request: NextRequest) {
@@ -94,7 +100,16 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ ok: true })
 }
 
-/** פתיחה/סגירה של מוקד בחלוקה מסוימת. */
+/**
+ * פתיחה/סגירה של מוקד בחלוקה מסוימת.
+ *
+ * שתי פעולות נפרדות על אותה שורה, ובכוונה לא אחת:
+ *   open   — האם המוקד מוצע *לבחירה* (שלב הרישום).
+ *   pickup — האם המוקד כבר *מחלק כרטיסים* (שלב השיוך).
+ *
+ * ⚠️ מוקד יכול להיות סגור לבחירה ופתוח לחלוקה בו-זמנית — זה בדיוק המצב
+ * הרגיל אחרי סגירת הרישום. ערבוב השניים היה סוגר לשיוך את מי שכבר בחר.
+ */
 export async function PATCH(request: NextRequest) {
   const staff = await requireStaff()
   if (!staff) return unauthorized()
@@ -103,12 +118,31 @@ export async function PATCH(request: NextRequest) {
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
   const b = await request.json().catch(() => ({})) as {
-    distribution_id?: string; center_id?: string; open?: boolean
+    distribution_id?: string; center_id?: string; open?: boolean; pickup?: boolean
   }
   const distributionId = String(b.distribution_id ?? '')
   const centerId = String(b.center_id ?? '')
   if (!distributionId || !centerId) {
     return NextResponse.json({ error: 'חסר מזהה חלוקה או מוקד' }, { status: 400 })
+  }
+
+  // ── פתיחת/סגירת חלוקת הכרטיסים במוקד ──
+  //
+  // ⚠️ עדכון ולא upsert: השורה חייבת להתקיים כבר (המוקד נבחר לחלוקה).
+  // upsert היה יוצר מוקד "פתוח לחלוקה" שאיש לא נרשם אליו.
+  //
+  // ⚠️ סגירה מאפסת ל-NULL ואינה מוחקת את השורה — מחיקה הייתה מסירה את
+  // המוקד מרשימת הבחירה שעל בסיסה משפחות כבר נרשמו.
+  if (b.pickup !== undefined) {
+    const { data, error } = await db.from('holiday_center_openings')
+      .update({ pickup_open_at: b.pickup ? new Date().toISOString() : null })
+      .eq('distribution_id', distributionId).eq('center_id', centerId)
+      .select('center_id')
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (!data?.length) {
+      return NextResponse.json({ error: 'המוקד אינו משויך לחלוקה זו' }, { status: 404 })
+    }
+    return NextResponse.json({ ok: true })
   }
 
   if (b.open) {

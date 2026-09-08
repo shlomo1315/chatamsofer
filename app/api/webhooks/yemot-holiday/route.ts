@@ -424,6 +424,41 @@ async function handleCardRoute(
     return yemotText([idMessage(msgToken(msgs, 'card_no_center')), goToFolder('hangup')], callId)
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 השער הפר-מוקדי: האם *המוקד של המשפחה הזו* כבר החל לחלק.
+  //
+  // ⚠️ המוקדים אינם מחלקים באותו יום. עד כה pickup_open היה מתג יחיד לכל
+  // החלוקה, וזה הכריח לבחור בין להשאיר את כולם סגורים עד שהמוקד האחרון
+  // מחלק, לבין לבקש ממי שאין כרטיס בידו להקיש מספר שאינו קיים.
+  //
+  // ⚠️ שם המוקד נאמר בהודעה: "טרם נפתח" סתמי שולח את המאזין למשרד, בעוד
+  // שהשכן שלו — מאותו יישוב, ממוקד אחר — כבר קיבל כרטיס.
+  //
+  // ⚠️ NULL ולא היעדר שורה: השורה ב-holiday_center_openings היא הרשימה
+  // שעל בסיסה המשפחה בחרה מוקד, ומחיקתה הייתה מוחקת את הבחירה עצמה.
+  // ─────────────────────────────────────────────────────────────────────────
+  const { data: openRow } = await db.from('holiday_center_openings')
+    .select('pickup_open_at')
+    .eq('distribution_id', dist.id).eq('center_id', rec.center_id)
+    .maybeSingle()
+
+  if (!(openRow as { pickup_open_at: string | null } | null)?.pickup_open_at) {
+    const { data: cRow } = await db.from('holiday_centers')
+      .select('city, name').eq('id', rec.center_id).maybeSingle()
+    const c = cRow as { city: string | null; name: string | null } | null
+    // ⚠️ הפרדה במילה ולא ב-"·" של centerLabel: המפריד הגרפי נועד למסך,
+    // וב-TTS הוא נקרא כרעש או נבלע. כאן זה נאמר באוזן.
+    // ⚠️ נופל לשם היישוב וממנו ל"שנרשמתם בו": הודעה עם חור באמצע
+    // ("המוקד שבו נרשמתם, , טרם החל") נשמעת כתקלה.
+    const centerName = (c?.city && c?.name && c.city !== c.name)
+      ? `${c.city}, ${c.name}`
+      : (c?.name || c?.city || 'שנרשמתם בו')
+    return yemotText([
+      idMessage(msgToken(msgs, 'card_center_not_open', { center: centerName })),
+      goToFolder('hangup'),
+    ], callId)
+  }
+
   // ⚠️ כרטיס שכבר חובר — לא מציעים לחבר שוב. חיבור שני היה מחליף כרטיס
   // שכבר הוטען, כלומר כסף שנשאר על כרטיס שאיש אינו מחזיק.
   if (rec.card_number) {

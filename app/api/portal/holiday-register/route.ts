@@ -164,7 +164,24 @@ export async function GET(request: NextRequest) {
     // אל בתים פרטיים של מתנדבים. הסינון הוא בשרת ולא בתצוגה, כדי
     // שהנתון לא יגיע לדפדפן כלל.
     // ─────────────────────────────────────────────────────────────────────
-    if (pickupOpen && c) {
+    // ─────────────────────────────────────────────────────────────────────
+    // 🔴 גם השער הפר-מוקדי, ולא רק המתג הראשי.
+    //
+    // ⚠️ המוקדים אינם מחלקים באותו יום. בלי הבדיקה הזו, ברגע שהמתג הראשי
+    // נפתח היו נשלחות הכתובת והשעות של *כל* המוקדים — כולל אלה שטרם קיבלו
+    // כרטיסים — ומשפחות היו מגיעות לבית פרטי של מתנדב שאין לו מה לתת להן.
+    // אותו שער בדיוק שהשלוחה הטלפונית אוכפת (yemot-holiday, מקש 3), כדי
+    // ששני הערוצים לא ייפרדו זה מזה.
+    // ─────────────────────────────────────────────────────────────────────
+    let centerPickupOpen = false
+    if (pickupOpen && centerId) {
+      const { data: openRow } = await db.from('holiday_center_openings')
+        .select('pickup_open_at')
+        .eq('distribution_id', active.id).eq('center_id', centerId)
+        .maybeSingle()
+      centerPickupOpen = !!(openRow as { pickup_open_at: string | null } | null)?.pickup_open_at
+    }
+    if (centerPickupOpen && c) {
       centerAddress = c.address ?? null
       centerHours = c.hours ?? null
       centerPhone = c.phone ?? null

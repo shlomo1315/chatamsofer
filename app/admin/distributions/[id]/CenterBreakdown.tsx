@@ -25,6 +25,8 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
   const [centers, setCenters] = useState<Center[] | null>(null)
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [openIds, setOpenIds] = useState<Set<string>>(new Set())
+  /** המוקדים שכבר מחלקים כרטיסים — נפרד מ-openIds (בחירה ≠ חלוקה). */
+  const [pickupIds, setPickupIds] = useState<Set<string>>(new Set())
   const [centersOpen, setCentersOpen] = useState(false)
 
   // 🔴 המועד האחרון לבחירה.
@@ -81,6 +83,7 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
       setCenters((c.centers ?? []).filter((x: Center) => x.is_active))
       setCounts(c.counts ?? {})
       setOpenIds(new Set<string>(c.openIds ?? []))
+      setPickupIds(new Set<string>(c.pickupIds ?? []))
       if (dRes.ok) {
         const d = await dRes.json()
         setCentersOpen(!!d.centers_open)
@@ -124,6 +127,32 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
       setOpenIds(prev => {
         const next = new Set(prev)
         if (open) next.add(id); else next.delete(id)
+        return next
+      })
+    } catch { setErr('שגיאת רשת') } finally { setBusy(null) }
+  }
+
+  /**
+   * פתיחת/סגירת חלוקת הכרטיסים במוקד בודד.
+   *
+   * 🔴 נפרד לחלוטין מ-toggleCenter: "פתוח לבחירה" ו"מחלק כרטיסים" הם שני
+   * שלבים שונים בזמן. מוקד סגור לבחירה (הרישום נגמר) יכול וצריך להיות
+   * פתוח לחלוקה.
+   *
+   * ⚠️ זה מה שהשלוחה הטלפונית בודקת לפני שהיא מבקשת מספר כרטיס.
+   */
+  async function togglePickup(id: string, pickup: boolean) {
+    setBusy(id); setErr('')
+    try {
+      const res = await fetch('/api/admin/holiday-centers', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ distribution_id: distributionId, center_id: id, pickup }),
+      })
+      if (!res.ok) { setErr((await res.json()).error ?? 'העדכון נכשל'); return }
+      setPickupIds(prev => {
+        const next = new Set(prev)
+        if (pickup) next.add(id); else next.delete(id)
         return next
       })
     } catch { setErr('שגיאת רשת') } finally { setBusy(null) }
@@ -277,6 +306,7 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
               {list.map(c => {
                 const n = counts[c.id] ?? 0
                 const isOpen = openIds.has(c.id)
+                const isPickup = pickupIds.has(c.id)
                 const full = c.capacity != null && n >= c.capacity
                 return (
                   <div key={c.id}
@@ -315,16 +345,46 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
                       עריכה
                     </button>
 
+                    {/* ── בחירה ── */}
                     {/* ⚠️ סגירה אינה מבטלת בחירות קיימות — רק מונעת חדשות. */}
-                    <button type="button" disabled={busy === c.id}
-                      onClick={() => toggleCenter(c.id, !isOpen)}
-                      className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition ${
-                        isOpen
-                          ? 'border border-indigo-300 bg-indigo-50 text-indigo-700'
-                          : 'border border-slate-300 bg-white text-slate-500 hover:border-indigo-300'
-                      }`}>
-                      {busy === c.id ? <Loader2 size={12} className="animate-spin" /> : isOpen ? 'פתוח' : 'סגור'}
-                    </button>
+                    <div className="flex flex-col items-center gap-0.5">
+                      <span className="text-[9px] font-bold text-slate-400">בחירה</span>
+                      <button type="button" disabled={busy === c.id}
+                        onClick={() => toggleCenter(c.id, !isOpen)}
+                        title="האם המוקד מוצע לבחירה בשלב הרישום"
+                        className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition ${
+                          isOpen
+                            ? 'border border-indigo-300 bg-indigo-50 text-indigo-700'
+                            : 'border border-slate-300 bg-white text-slate-500 hover:border-indigo-300'
+                        }`}>
+                        {busy === c.id ? <Loader2 size={12} className="animate-spin" /> : isOpen ? 'פתוח' : 'סגור'}
+                      </button>
+                    </div>
+
+                    {/* ── חלוקת כרטיסים ── */}
+                    {/* 🔴 זה השער שהשלוחה הטלפונית בודקת: רק מי שרשום במוקד
+                        שמסומן כאן "מחלק" יוכל לשייך את הכרטיס שלו בטלפון.
+                        מי שהמוקד שלו סגור שומע את *שם המוקד שלו* ושהוא טרם
+                        החל לחלק — ולא הודעה כללית ששולחת אותו למשרד.
+                        ⚠️ נפרד מ"בחירה" בכוונה: הרישום כבר נסגר, והחלוקה
+                        רק מתחילה. */}
+                    <div className="flex flex-col items-center gap-0.5">
+                      <span className="text-[9px] font-bold text-slate-400">חלוקה</span>
+                      <button type="button" disabled={busy === c.id}
+                        onClick={() => togglePickup(c.id, !isPickup)}
+                        title={isPickup
+                          ? 'המוקד מחלק כרטיסים — הרשומים בו יכולים לשייך בטלפון'
+                          : 'המוקד טרם החל לחלק — הרשומים בו יישמעו שהמוקד שלהם עדיין סגור'}
+                        className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition ${
+                          isPickup
+                            ? 'border border-emerald-300 bg-emerald-50 text-emerald-700'
+                            : 'border border-slate-300 bg-white text-slate-500 hover:border-emerald-300'
+                        }`}>
+                        {busy === c.id
+                          ? <Loader2 size={12} className="animate-spin" />
+                          : isPickup ? '✓ מחלק' : 'טרם'}
+                      </button>
+                    </div>
                   </div>
                 )
               })}
