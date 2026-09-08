@@ -1230,6 +1230,56 @@ export function birthRejectedEmail(opts: {
   }
 }
 
+/**
+ * דחיית בקשת הלוואה — עם סיבת הדחייה.
+ *
+ * 🔴 עד כה דחיית הלוואה לא שלחה דבר: הסיבה נשמרה במערכת בלבד, והמבקש לא
+ * ידע שבקשתו נדחתה וגם לא מדוע. אישור כן שלח מייל, ולכן מי שנדחה פשוט לא
+ * שמע יותר — והמשרד קיבל פניות חוזרות "מה קרה עם הבקשה שלי".
+ *
+ * ⚠️ הפנייה היא למבקש עצמו, בשונה ממייל דחיית הלידה שפונה ליולדת.
+ * greetByStatus ולא פתיח קבוע: אלמנה/גרושה מקבלת "הרבנית ... תחי׳".
+ */
+export function loanRejectedEmail(opts: {
+  family_name?: string | null
+  full_name?: string | null
+  marital_status?: string | null
+  reason?: string | null
+}): BuiltEmail {
+  const t = (k: string) => textFor('loan_rejected', k)
+  const greet = greetByStatus(opts.family_name, opts.full_name, opts.marital_status)
+  const reason = (opts.reason ?? '').trim()
+  const officeLink = `<a href="mailto:${OFFICE_EMAIL}" style="color:#b91c1c;font-weight:700;text-decoration:none;">${OFFICE_EMAIL}</a>`
+  const reasonBlock = reason ? `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;">
+      <tr><td style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:16px 20px;">
+        <p style="margin:0 0 8px;color:#b91c1c;font-size:14px;font-weight:900;">${escapeHtml(t('reason_title'))}</p>
+        <p style="margin:0;color:#991b1b;font-size:14px;line-height:1.8;white-space:pre-wrap;">${escapeHtml(reason)}</p>
+      </td></tr>
+    </table>` : ''
+  const body = `
+    ${autoReplyNote()}
+    <p style="margin:0 0 16px;color:#0f172a;font-size:16px;font-weight:700;font-family:'Heebo',Arial,sans-serif;">${greet}</p>
+    <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.9;">
+      ${escapeHtml(t('body'))}
+    </p>
+    ${reasonBlock}
+    <p style="margin:14px 0 0;color:#334155;font-size:13px;line-height:1.7;">
+      ${escapeHtml(t('office_note')).replace(/\{מייל_משרד\}/g, officeLink)}
+    </p>
+    ${noReplyBox()}`
+  return {
+    subject: t('subject'),
+    html: shell({
+      preheader: t('preheader'),
+      accent: '#dc2626',
+      title: t('title'),
+      subtitle: t('subtitle'),
+      body,
+    }),
+  }
+}
+
 // ─── אישור כרטיס מזון ליולדת (שובר) ───────────────────────────────────────────
 // בלוק "הפעלת הכרטיס" — הוראה מודגשת המשותפת למיילי הכרטיס. חובה להפעיל את הכרטיס דרך המוקד
 // הטלפוני, ורק ממספרי הטלפון המעודכנים במערכת. אם נמסרו מספרים — הם מוצגים במפורש (בכיוון LTR).

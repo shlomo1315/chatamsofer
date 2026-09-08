@@ -104,6 +104,23 @@ export function LoanStatusControl({ loan, advance, familyApproved, variant = 'pi
             body: JSON.stringify({ type: 'loan', id: loan.id }),
           }).catch(() => {})
         }
+        // 🔴 בדחייה — מייל עם סיבת הדחייה.
+        //
+        // עד כה לא נשלח דבר: הסיבה נשמרה במערכת בלבד, והמבקש לא ידע
+        // שבקשתו נדחתה וגם לא מדוע. אישור כן שלח מייל, ולכן מי שנדחה פשוט
+        // לא שמע יותר.
+        //
+        // ⚠️ הסיבה נשלחת מכאן ולא נשלפת בשרת: היא נכתבה ברגע זה, ושליפה
+        // מיידית עלולה להקדים את הכתיבה.
+        if (next === 'rejected') {
+          void fetch('/api/admin/request-rejected', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'loan', id: loan.id,
+              reason: String(extra.rejection_reason ?? ''),
+            }),
+          }).catch(() => {})
+        }
         // רק כשלא בזרימת "בקשה הבאה" — נרענן ברקע לעדכון המספרים
         if (!(advance && isFinalDecision)) router.refresh()
       } catch (err: unknown) {

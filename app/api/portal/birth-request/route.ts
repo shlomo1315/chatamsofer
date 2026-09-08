@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'חובה לצרף אישור לידה' }, { status: 400 })
   }
 
+
   // ── בחירת ההטבות: כרטיס מזון ו/או בית החלמה ──
   // undefined = לא נשלח (לקוח ישן) → נחשב true, כדי לשמור על התנהגות "שתיהן".
   const wantsFoodCard = body.wants_food_card !== false
@@ -64,6 +65,42 @@ export async function POST(request: NextRequest) {
 
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
+
+  // ── צילומי תעודות הזהות והספחים ──
+  //
+  // 🔴 נדרשים בכל בקשת לידה (רגילה ושקטה), גם ממשפחה מאושרת. עד כה נדרש
+  // אישור לידה בלבד, והצילומים נדרשו רק ממשפחה שטרם אושרה — כלומר משפחה
+  // מאושרת הגישה בקשה בלי שום מסמך מזהה, והם נאספו ידנית מחוץ למערכת.
+  // אותו כלל שכבר חל על בקשת הלוואה.
+  //
+  // ⚠️ נבדק בשרת ולא רק בטופס, מאותה סיבה כמו אישור הלידה: בקשה שנשלחת
+  // ישירות ל-API עוקפת כל בדיקה שנעשית בלקוח בלבד.
+  //
+  // ⚠️ הרשימה נגזרת מהמצב המשפחתי ולא מ-required_docs: הצ'ק-ליסט של
+  // המזכירות נקבע לצורך אישור הרישום ועשוי להיות ריק אחרי שהושלם.
+  {
+    const { data: benRow } = await admin.from('beneficiaries')
+      .select('marital_status').eq('id', String(beneficiary_id)).maybeSingle()
+    const ms = (benRow as { marital_status?: string | null } | null)?.marital_status ?? ''
+    const needed = ms === 'נשואים' ? ['id_husband', 'id_husband_appx', 'id_wife', 'id_wife_appx']
+      : ['גרושה', 'אלמנה'].includes(ms) ? ['id_wife', 'id_wife_appx']
+      : ['id_husband', 'id_husband_appx']
+
+    const { data: docRows } = await admin.from('documents')
+      .select('doc_type').eq('beneficiary_id', String(beneficiary_id)).in('doc_type', needed)
+    const have = new Set((docRows ?? []).map(d => (d as { doc_type: string }).doc_type))
+    const missing = needed.filter(d => !have.has(d))
+    if (missing.length) {
+      const LABEL: Record<string, string> = {
+        id_husband: 'תעודת זהות של הבעל', id_husband_appx: 'ספח של הבעל',
+        id_wife: 'תעודת זהות של האישה', id_wife_appx: 'ספח של האישה',
+      }
+      return NextResponse.json(
+        { error: `חובה לצרף: ${missing.map(d => LABEL[d] ?? d).join(', ')}` },
+        { status: 400 },
+      )
+    }
+  }
 
   // ── בחירת מוקד איסוף הכרטיס — חובה כשנבחר כרטיס מזון ──
   // הכרטיס ניתן לאיסוף רק במוקד שנבחר כאן, ולא בכל מוקד אחר.

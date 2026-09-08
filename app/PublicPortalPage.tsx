@@ -3244,7 +3244,11 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     // של המזכירות: הצ'ק-ליסט נקבע לצורך אישור הרישום ועשוי להיות מצומצם
     // (או ריק, אם כבר הושלם), ואילו כאן נדרשים הצילומים המעודכנים במלואם
     // בכל הגשה — כולל הספח עם כל פרטי הילדים.
-    if (loanModalOpen) return docsByMaritalStatus
+    //
+    // 🔴 אותו כלל חל על בקשת לידה (רגילה ושקטה): עד כה נדרש אישור לידה
+    // בלבד, וצילומי הת"ז נדרשו רק ממשפחה שטרם אושרה — כלומר משפחה מאושרת
+    // הגישה בקשה בלי שום מסמך מזהה, והמסמכים נאספו ידנית מחוץ למערכת.
+    if (loanModalOpen || step === 'new-birth' || step === 'new-silent-birth') return docsByMaritalStatus
     const rd = (beneficiary?.required_docs ?? '').split(',').map(s => s.trim()).filter(Boolean)
     return rd.length ? rd : docsByMaritalStatus
   })()
@@ -3257,8 +3261,15 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // מייל המשרד (office) — לבירורי דחייה. נפרד מ-igud (שמשמש לרישום/הטבות).
   const officeMailto = `mailto:office@chasamsofer.info?subject=${encodeURIComponent('בירור דחיית רישום ' + (beneficiary?.id_number || pendingAuth?.id || ''))}`
 
-  // צאצא שטרם אושר — בהגשת הבקשה הראשונה נצרף גם צילומי תעודת זהות (אם עוד לא הועלו)
-  const needsIdWithRequest = !!beneficiary && !isApproved && requiredDocs.some(d => !existingDocs[d])
+  // צאצא שטרם אושר — בהגשת הבקשה הראשונה נצרף גם צילומי תעודת זהות (אם עוד לא הועלו).
+  //
+  // 🔴 בבקשת לידה (רגילה ושקטה) הצילומים נדרשים *תמיד*, גם ממשפחה מאושרת:
+  // עד כה נדרש אישור לידה בלבד, ולכן משפחה מאושרת הגישה בקשה בלי שום מסמך
+  // מזהה והמסמכים נאספו ידנית מחוץ למערכת. אותו כלל שכבר חל על הלוואות.
+  const isBirthRequest = step === 'new-birth' || step === 'new-silent-birth'
+  const needsIdWithRequest = !!beneficiary
+    && (!isApproved || isBirthRequest)
+    && requiredDocs.some(d => !existingDocs[d])
   // האם עדיין חסרים מסמכים נדרשים (לכרטיס "העלאת מסמכים נדרשים" בדשבורד)
   const docsMissing = !!beneficiary && requiredDocs.some(d => !existingDocs[d])
 
@@ -3372,8 +3383,16 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     if (wantsRecovery && !silentForm.recovery_home) { setError('אנא בחר בית החלמה'); return }
     if (wantsFoodCard && !cardCenterId) { setError('אנא בחרו מוקד לאיסוף כרטיס המזון'); return }
     if (!birthCertFile) { setError('אנא צרף מסמך אישור'); return }
+    // ⚠️ צילומי הת"ז והספח — אותה דרישה כמו בלידה רגילה ובהלוואה.
+    if (needsIdWithRequest) {
+      const miss = missingRequestIdDocs()
+      if (miss.length) { setError(`חובה לצרף את כל צילומי תעודות הזהות והספחים כדי להגיש את הבקשה: ${miss.map(docLabel).join(', ')}`); return }
+    }
     setError(''); setLoading(true)
     try {
+      if (needsIdWithRequest && !(await uploadRequiredIdDocs())) {
+        setError('שגיאה בהעלאת תעודת הזהות. אנא נסה שוב.'); setLoading(false); return
+      }
       // ⚠️ כמו בלידה רגילה — כשל בהעלאה עוצר, ולא נשלח בשקט בלי מסמך
       const fd = new FormData()
       fd.append('file', birthCertFile)

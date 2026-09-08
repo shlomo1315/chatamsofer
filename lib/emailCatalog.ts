@@ -583,6 +583,36 @@ export const EMAIL_CATALOG: EmailSpec[] = [
   },
 
   {
+    // 🔴 עד כה דחיית הלוואה לא שלחה דבר: הסיבה נשמרה במערכת בלבד, והמבקש
+    // לא ידע שבקשתו נדחתה — וגם לא מדוע. אישור הלוואה כן שלח מייל, ולכן
+    // מבקש שנדחה פשוט לא שמע יותר.
+    id: 'loan_rejected',
+    group: 'loans',
+    title: 'בקשת ההלוואה נדחתה',
+    trigger: 'כשמנהל דוחה בקשת הלוואה ומזין סיבה. הסיבה נכללת במייל',
+    recipient: 'מבקש ההלוואה',
+    department: 'gemach',
+    wired: true,
+    fields: [
+      { key: 'subject', label: 'שורת הנושא', default: 'בנוגע לבקשת ההלוואה — היכל החתם סופר' },
+      { key: 'preheader', label: 'שורת התצוגה המקדימה', default: 'בנוגע לבקשת ההלוואה שהגשתם' },
+      { key: 'title', label: 'כותרת ראשית', default: 'בנוגע לבקשת ההלוואה' },
+      { key: 'subtitle', label: 'כותרת משנה', default: 'גמ״ח · היכל החתם סופר' },
+      {
+        key: 'body', label: 'גוף ההודעה',
+        default: 'לאחר בדיקת בקשת ההלוואה שהוגשה, אנו מצטערים להודיע כי הבקשה נדחתה.',
+        multiline: true,
+      },
+      { key: 'reason_title', label: 'כותרת בלוק סיבת הדחייה', default: 'סיבת הדחייה' },
+      {
+        key: 'office_note', label: 'שורת הפנייה למשרד',
+        default: 'לבירורים ולפרטים נוספים ניתן לפנות למשרד בכתובת {מייל_משרד}.',
+        multiline: true, vars: ['{מייל_משרד}'],
+      },
+    ],
+  },
+
+  {
     id: 'registration_approved',
     group: 'registration',
     title: 'הרישום לאיגוד אושר',
