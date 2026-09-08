@@ -2,7 +2,6 @@ import { guardAdminPage } from '@/lib/pageGuard'
 import { redirect } from 'next/navigation'
 import { Bell, Database, Users, UserPlus, GitBranch, Home, FileText, MapPin, Mail, CreditCard, Banknote, Phone, HardDriveDownload, MailWarning, Inbox, Sparkles, Package, Wrench, Gift, CalendarClock , ShieldCheck } from 'lucide-react'
 import Collapsible from '@/components/ui/Collapsible'
-import SettingsSearch from './SettingsSearch'
 import PageHeader from '@/components/ui/PageHeader'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Profile, ROLE_LABELS } from '@/types'
@@ -100,10 +99,6 @@ export default async function SettingsPage() {
   return (
     <div className="flex flex-col gap-6 max-w-5xl">
       <PageHeader title="הגדרות" subtitle="ניהול המערכת והמשתמשים" />
-
-      {/* 🔴 חיפוש על 36 המקטעים — ראו SettingsSearch. בלעדיו המנהל סורק
-          את כל הכותרות בעין ומנחש באיזו מהן ההגדרה יושבת. */}
-      <SettingsSearch />
 
       <div className="flex flex-col gap-3">
         {/* Supabase connection */}
