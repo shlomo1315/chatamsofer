@@ -365,22 +365,30 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
         })}
       </div>
 
-      {/* חיפוש (רץ על כל הרשומות ב-DB) + מיון */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[220px]">
-          <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
-          <input
-            type="text"
-            value={qInput}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="חיפוש חופשי בכל הרשומות..."
-            className="w-full pr-9 pl-3 py-2 text-sm rounded-xl border border-slate-200 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition-all"
-          />
-        </div>
-        {/* סינון מצב משפחתי — בחירה מרובה (צ'יפס). אפשר לסמן כמה יחד;
+      {/* ── חיפוש ── */}
+      {/* 🔴 שורה משלו. קודם הוא חלק משורת flex-wrap אחת יחד עם מצב משפחתי,
+          מייל ומיון — ארבע קבוצות שנשברו זו לתוך זו לפי רוחב המסך, בלי
+          תוויות מיושרות. אי אפשר היה לסרוק את האזור במבט. */}
+      <div className="relative">
+        <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
+        <input
+          type="text"
+          value={qInput}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="חיפוש חופשי בכל הרשומות..."
+          className="w-full pr-9 pl-3 py-2 text-sm rounded-xl border border-slate-200 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition-all"
+        />
+      </div>
+
+      {/* ── סינון בסיסי — שורה לכל קריטריון, תווית ברוחב אחיד ──
+          ⚠️ אותו מבנה בדיוק שבפאנל המתקדם (ראו Row ב-AdvancedFilters):
+          שני אזורים שנראים אותו דבר נקראים כמערכת אחת. */}
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm px-4 py-1">
+        {/* מצב משפחתי — בחירה מרובה (צ'יפס). אפשר לסמן כמה יחד;
             בלי סימון כלל = כל המצבים. הערך נשמר כרשימה מופרדת בפסיקים. */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-slate-500">מצב משפחתי:</span>
+        <div className="flex items-start gap-3 py-2.5 border-b border-slate-100">
+          <span className="w-24 shrink-0 pt-1.5 text-xs font-semibold text-slate-600">מצב משפחתי</span>
+          <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
           {(() => {
             const selected = marital && marital !== 'all' ? marital.split(',').filter(Boolean) : []
             const toggle = (v: string) => {
@@ -388,7 +396,7 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
               setMarital(next.length ? next.join(',') : 'all')
             }
             return (
-              <div className="inline-flex items-center gap-1.5 flex-wrap">
+              <>
                 {/* "הכל" — פעיל כשאין שום סימון */}
                 <button type="button" onClick={() => setMarital('all')}
                   className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
@@ -410,33 +418,45 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
                     </button>
                   )
                 })}
-              </div>
+              </>
             )
           })()}
+          </div>
+          {marital && marital !== 'all' && (
+            <button type="button" onClick={() => setMarital('all')} title="ניקוי מצב משפחתי"
+              className="shrink-0 mt-1 text-slate-300 hover:text-red-600 transition-colors"><X size={13} /></button>
+          )}
         </div>
-        {/* ── סינון לפי מצב המייל ── */}
+
+        {/* ── מצב המייל ── */}
         {/* הרקע: נרשמים רבים הקלידו כתובת שגויה, וכל מייל אליהם נופל —
             כולל שובר החלוקה. הסינון מאתר אותם לטיפול. */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-xs text-slate-500">מייל:</span>
-          {([
-            { v: 'all', l: 'הכל' },
-            { v: 'verified', l: 'מאומת' },
-            { v: 'unverified', l: 'לא מאומת' },
-            { v: 'invalid', l: 'פגום' },
-            { v: 'no_email', l: 'ללא מייל' },
-          ] as const).map(o => (
-            <button key={o.v} type="button" onClick={() => setEmail(o.v)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
-                email === o.v
-                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
-                  : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600'
-              }`}>{o.l}</button>
-          ))}
+        <div className="flex items-start gap-3 py-2.5 border-b border-slate-100">
+          <span className="w-24 shrink-0 pt-1.5 text-xs font-semibold text-slate-600">מייל</span>
+          <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
+            {([
+              { v: 'all', l: 'הכל' },
+              { v: 'verified', l: 'מאומת' },
+              { v: 'unverified', l: 'לא מאומת' },
+              { v: 'invalid', l: 'פגום' },
+              { v: 'no_email', l: 'ללא מייל' },
+            ] as const).map(o => (
+              <button key={o.v} type="button" onClick={() => setEmail(o.v)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                  email === o.v
+                    ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                    : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600'
+                }`}>{o.l}</button>
+            ))}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500">מיון:</span>
-          <SortButtons value={sort as SortMode} onChange={(m) => setSort(m)} />
+
+        {/* ── מיון ── */}
+        <div className="flex items-start gap-3 py-2.5">
+          <span className="w-24 shrink-0 pt-1.5 text-xs font-semibold text-slate-600">מיון</span>
+          <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
+            <SortButtons value={sort as SortMode} onChange={(m) => setSort(m)} />
+          </div>
         </div>
       </div>
 
