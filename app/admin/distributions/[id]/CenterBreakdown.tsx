@@ -1,5 +1,5 @@
 'use client'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { Loader2, MapPin, Check, X, Users, CalendarClock, Volume2 } from 'lucide-react'
 import DeadlineCountdown from '@/components/ui/DeadlineCountdown'
 import { toLocalInput } from '@/lib/centerDeadline'
@@ -55,6 +55,9 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
   const [drafts, setDrafts] = useState<Record<string, Partial<Center>>>({})
   const [busy, setBusy] = useState<string | null>(null)
   const [err, setErr] = useState('')
+  /** המוקד שמושמע כרגע (תצוגה מקדימה). */
+  const [preview, setPreview] = useState<string | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
   /** הערכים המוצגים בשורה — הטיוטה מעל השמור. */
   const draftOf = (c: Center): Center => ({ ...c, ...(drafts[c.id] ?? {}) })
@@ -199,6 +202,46 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
       if (!res.ok) { setErr(d.error ?? 'ההעלאה נכשלה'); return }
       setCenters(cs => cs?.map(c => (c.id === id ? { ...c, audio_file: d.audio_file } : c)) ?? cs)
     } catch { setErr('שגיאת רשת — ההקלטה לא הועלתה') } finally { setBusy(null) }
+  }
+
+  /**
+   * יצירת הקראה בקול טבעי (ElevenLabs) מפרטי המוקד.
+   *
+   * ⚠️ הטקסט נבנה בשרת מהשדות השמורים ולא נשלח מכאן: אחרת אפשר היה
+   * לייצר הקלטה שאינה תואמת למה שרשום בטבלה ומודפס בשובר.
+   */
+  async function generateVoice(id: string) {
+    setBusy(`rec-${id}`); setErr('')
+    try {
+      const res = await fetch('/api/admin/holiday-centers/recording', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ center_id: id }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setErr(d.error ?? 'יצירת הקול נכשלה'); return }
+      setCenters(cs => cs?.map(c => (c.id === id ? { ...c, audio_file: d.audio_file } : c)) ?? cs)
+    } catch { setErr('שגיאת רשת — הקול לא נוצר') } finally { setBusy(null) }
+  }
+
+  /** השמעה מקדימה — בלי לייצר קובץ בימות. */
+  async function playPreview(id: string, text: string) {
+    if (!text) return
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
+    setPreview(id); setErr('')
+    try {
+      const res = await fetch('/api/admin/elevenlabs/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok || !d?.audio) { setErr(d?.error ?? 'ההשמעה נכשלה'); return }
+      const audio = new Audio(`data:${d.mime || 'audio/mpeg'};base64,${d.audio}`)
+      audioRef.current = audio
+      audio.onended = () => { if (audioRef.current === audio) audioRef.current = null }
+      await audio.play()
+    } catch { setErr('שגיאה בהשמעה') } finally { setPreview(null) }
   }
 
   /** הסרת ההקלטה — הפרטים חוזרים להיקרא מהשדות. */
@@ -536,10 +579,29 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
                       : (spokenCenterDetails(d) || <span className="text-slate-300">אין מה להשמיע — חסרים פרטים</span>)}
                   </span>
 
+                  {/* ⚠️ השמעה לפני יצירה — לשמוע איך זה יישמע בלי לייצר
+                      קובץ ובלי להתקשר. אותו מסלול preview שבנוסחי השלוחה. */}
+                  <button type="button" disabled={preview === c.id || !spokenCenterDetails(d)}
+                    onClick={() => void playPreview(c.id, spokenCenterDetails(d))}
+                    title="השמעה — כך זה יישמע"
+                    className="shrink-0 rounded-lg border border-slate-300 bg-white px-2 py-1 text-[10.5px] font-bold text-slate-600 transition hover:border-violet-300 hover:text-violet-700 disabled:opacity-40">
+                    {preview === c.id ? '…' : '▶ השמע'}
+                  </button>
+
+                  {/* 🔴 קול טבעי (ElevenLabs) — אותו מנגנון שכבר משמש את
+                      שאר הודעות השלוחה, במקום הקול הרובוטי של ימות.
+                      הטקסט נבנה מהשדות עצמם, ולכן אין מה להקליד. */}
+                  <button type="button" disabled={busy === `rec-${c.id}` || !spokenCenterDetails(d)}
+                    onClick={() => void generateVoice(c.id)}
+                    title="יצירת הקראה בקול טבעי מהשם, הכתובת והשעות"
+                    className="shrink-0 rounded-lg border border-violet-300 bg-violet-50 px-2.5 py-1 text-[10.5px] font-bold text-violet-700 transition hover:bg-violet-100 disabled:opacity-40">
+                    {busy === `rec-${c.id}` ? 'מייצר…' : c.audio_file ? 'חדש בקול טבעי' : 'יצירת קול טבעי'}
+                  </button>
+
                   {/* ⚠️ ההקלטה גוברת על ההקראה. מוקד בלי הקלטה עדיין
                       נשמע נכון, ולכן זו תוספת ולא תנאי. */}
                   <label className="shrink-0 cursor-pointer rounded-lg border border-teal-300 bg-teal-50 px-2.5 py-1 text-[10.5px] font-bold text-teal-700 transition hover:bg-teal-100">
-                    {busy === `rec-${c.id}` ? 'מעלה…' : c.audio_file ? 'החלף הקלטה' : 'העלה הקלטה'}
+                    {busy === `rec-${c.id}` ? 'מעלה…' : 'העלה קובץ'}
                     <input type="file" accept="audio/*" className="hidden"
                       onChange={e => {
                         const f = e.target.files?.[0]

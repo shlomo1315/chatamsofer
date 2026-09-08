@@ -1,7 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
 import { getServiceClient } from '@/lib/apiAuth'
-import { uploadFileToYemot, yemotConfigured } from '@/lib/yemot'
+import { uploadFileToYemot, deleteFileFromYemot, yemotConfigured } from '@/lib/yemot'
+import { generateSpeech } from '@/lib/elevenTts'
+import { spokenCenterDetails } from '@/lib/holidayCenterSpeech'
 
 export const dynamic = 'force-dynamic'
 
@@ -71,6 +73,72 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ ok: true, audio_file: baseName })
+}
+
+// PUT — יצירת קול טבעי (ElevenLabs) מפרטי המוקד. { center_id }
+//
+// 🔴 אותו קול נוירוני שכבר משמש את שאר הודעות השלוחה — לא הקול הרובוטי
+// של ימות. הטקסט נבנה מהשדות עצמם (spokenCenterDetails), כך שמה שנשמע
+// הוא בדיוק מה שרשום בטבלה ומודפס בשובר.
+export async function PUT(request: NextRequest) {
+  if (!(await requireStaff(['admin']))) {
+    return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
+  }
+  if (!yemotConfigured()) {
+    return NextResponse.json({ error: 'YEMOT_TOKEN אינו מוגדר בשרת' }, { status: 500 })
+  }
+  const db = getServiceClient()
+  if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
+
+  const b = await request.json().catch(() => ({})) as { center_id?: string }
+  const centerId = String(b.center_id ?? '').trim()
+  if (!centerId) return NextResponse.json({ error: 'חסר מזהה מוקד' }, { status: 400 })
+
+  const { data: row } = await db.from('holiday_centers')
+    .select('id, city, name, address, hours, audio_file').eq('id', centerId).maybeSingle()
+  const c = row as {
+    id: string; city: string | null; name: string | null
+    address: string | null; hours: string | null; audio_file: string | null
+  } | null
+  if (!c) return NextResponse.json({ error: 'המוקד לא נמצא' }, { status: 404 })
+
+  // ⚠️ הטקסט מהשדות ולא מקלט חופשי: אחרת ההקלטה והשובר יכולים להיפרד
+  // זה מזה בשקט, והמשפחה תשמע כתובת אחת ותקרא אחרת.
+  const text = spokenCenterDetails(c)
+  if (!text) {
+    return NextResponse.json({ error: 'אין מה להקריא — יש למלא שם, כתובת ושעות ולשמור' }, { status: 400 })
+  }
+
+  const speech = await generateSpeech(text)
+  if (!speech.ok || !speech.audio) {
+    return NextResponse.json({ error: speech.error ?? 'יצירת הקול נכשלה' }, { status: 502 })
+  }
+
+  // 🔴 חותמת זמן בשם — ימות ממטמנת לפי שם הקובץ. ראו ההערה למעלה.
+  const baseName = `ctr_${centerId.replace(/-/g, '').slice(0, 12)}_${Date.now().toString(36)}`
+  const path = `ivr2:/${HOLIDAY_EXT}/${baseName}.mp3`
+  const blob = new Blob([speech.audio], { type: 'audio/mpeg' })
+  const up = await uploadFileToYemot(path, blob, `${baseName}.mp3`)
+  if (!up.ok) {
+    return NextResponse.json({ error: `העלאה לימות נכשלה: ${up.error}` }, { status: 502 })
+  }
+
+  const { error } = await db.from('holiday_centers')
+    .update({ audio_file: baseName }).eq('id', centerId)
+  if (error) {
+    return NextResponse.json({ error: 'הקול נוצר אך שמירת ההגדרה נכשלה' }, { status: 500 })
+  }
+
+  // ⚠️ ניקוי הקובץ הקודם — אחרי השמירה ובמאמץ-מיטבי: אם המחיקה תרוץ
+  // קודם וההעלאה תיכשל, המוקד יישאר בלי קובץ וישמיע שקט.
+  if (c.audio_file && c.audio_file !== baseName) {
+    for (const ext of ['mp3', 'wav']) {
+      const gone = await deleteFileFromYemot(`ivr2:/${HOLIDAY_EXT}/${c.audio_file}.${ext}`)
+      if (gone.ok) break
+    }
+  }
+
+  return NextResponse.json({ ok: true, audio_file: baseName, text })
 }
 
 // DELETE — הסרת ההקלטה (חזרה להקראה מהשדות). ?center_id=...
