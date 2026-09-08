@@ -114,7 +114,19 @@ const isAlreadyMsg = (m: string) =>
 export async function linkHolidayCard(
   beneficiaryId: string,
   cardNumber: string,
-  opts: { phone?: string | null } = {},
+  opts: {
+    phone?: string | null
+    /**
+     * 🔴 מזהה החלוקה שהקורא כבר זיהה — עוקף את getOpenDistribution.
+     *
+     * ⚠️ getOpenDistribution מחזירה חלוקה רק כש-registration_open=true,
+     * כלומר שער *הרישום*. שיוך הכרטיס קורה בשלב האיסוף, הרבה אחרי
+     * שהרישום נסגר — ואז היא מחזירה null, וכל שיוך נדחה ב"אינכם מאושרים
+     * לשיוך כרטיס בחלוקה זו". שלוחת הטלפון כבר זיהתה את החלוקה לפי
+     * pickup_open, ואין שום סיבה לחפש אותה שוב לפי שער אחר.
+     */
+    distributionId?: string | null
+  } = {},
 ): Promise<LinkCardResult> {
   const digits = String(cardNumber ?? '').replace(/\D/g, '')
   if (digits.length !== HOLIDAY_CARD_DIGITS) return { ok: false, linked: false, error: 'מספר הכרטיס אינו תקין' }
@@ -122,13 +134,25 @@ export async function linkHolidayCard(
   const db = getServiceClient()
   if (!db) return { ok: false, linked: false, error: 'שגיאת שרת' }
 
-  const elig = await cardEligibility(beneficiaryId)
-  if (!elig.allowed) {
+  // ⚠️ כשהקורא מסר חלוקה — נבדקת השורה שלה בלבד, ולא שער הרישום.
+  let rec: HolidayRecipient
+  if (opts.distributionId) {
+    const row = await getRecipient(opts.distributionId, beneficiaryId)
+    if (!row) return { ok: false, linked: false, error: 'אינכם רשומים לחלוקה זו' }
+    if (row.approval_status === 'rejected' || row.approval_status !== 'approved') {
+      return { ok: false, linked: false, error: 'אינכם מאושרים לשיוך כרטיס בחלוקה זו' }
+    }
     // כרטיס שכבר שויך — לא נוגעים בו, וזו הצלחה מבחינת המתקשר
-    if (elig.reason === 'already_linked') return { ok: true, linked: false }
-    return { ok: false, linked: false, error: 'אינכם מאושרים לשיוך כרטיס בחלוקה זו' }
+    if (row.card_number && row.card_linked_at) return { ok: true, linked: false }
+    rec = row
+  } else {
+    const elig = await cardEligibility(beneficiaryId)
+    if (!elig.allowed) {
+      if (elig.reason === 'already_linked') return { ok: true, linked: false }
+      return { ok: false, linked: false, error: 'אינכם מאושרים לשיוך כרטיס בחלוקה זו' }
+    }
+    rec = elig.recipient
   }
-  const rec = elig.recipient
 
   // ⚠️ הרשאת החגים ולא הראשית: החגים והיולדות הם שני תקציבים בנדרים
   const creds = await getHolidayNedarimCreds()

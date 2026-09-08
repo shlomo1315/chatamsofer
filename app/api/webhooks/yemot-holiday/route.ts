@@ -556,7 +556,12 @@ async function handleCardRoute(
   // מאתרת את המשפחה בנדרים, קוראת ל-SetClientMagneticCard, מאמתת בשליפה
   // חוזרת, וכותבת אצלנו רק אחרי שהשיוך אושר.
   // ─────────────────────────────────────────────────────────────────────────
-  const link = await linkHolidayCard(ben.id, card, { phone: callerPhone || null })
+  // ⚠️ dist.id נמסר במפורש: בלעדיו linkHolidayCard מחפשת חלוקה לפי
+  // registration_open — שער הרישום, שסגור בשלב האיסוף — וכל שיוך נדחה.
+  const link = await linkHolidayCard(ben.id, card, {
+    phone: callerPhone || null,
+    distributionId: dist.id,
+  })
   if (!link.ok) {
     console.error(`[yemot-holiday] שיוך הכרטיס נכשל rec=${rec.id}: ${link.error}`)
     return yemotText([
