@@ -99,6 +99,44 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
     } finally { setBusy(null) }
   }
 
+  /** המוקדים שיש בהם שינוי לא שמור — מזין את הכפתור הצף. */
+  const dirtyIds = (centers ?? []).filter(isDirty).map(c => c.id)
+
+  /**
+   * שמירת כל השינויים שנצברו.
+   *
+   * ⚠️ ברצף ולא במקביל: המנהל עשוי לתקן חמישה מוקדים לפני שהוא שומר,
+   * ובקשות בו-זמנית מקשות לדעת היכן זה נעצר כשמשהו נכשל.
+   */
+  async function saveAll() {
+    setBusy('saveall'); setErr('')
+    try {
+      for (const id of dirtyIds) {
+        const cur = centers?.find(c => c.id === id)
+        if (!cur) continue
+        const next = { ...cur, ...(drafts[id] ?? {}) }
+        const r = await fetch('/api/admin/holiday-centers', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: next.id, city: next.city, name: next.name,
+            address: next.address ?? '', phone: next.phone ?? '',
+            hours: next.hours ?? '', region: next.region,
+            capacity: next.capacity, is_active: next.is_active,
+          }),
+        })
+        if (!r.ok) {
+          const d = await r.json().catch(() => ({}))
+          setErr(`${d.error ?? 'השמירה נכשלה'} — נעצר ב${next.city} ${next.name}. הקודמים נשמרו.`)
+          return
+        }
+        setCenters(cs => cs?.map(c => (c.id === id ? next : c)) ?? cs)
+        setDrafts(p => { const q = { ...p }; delete q[id]; return q })
+      }
+    } catch {
+      setErr('שגיאת רשת — לא כל השינויים נשמרו')
+    } finally { setBusy(null) }
+  }
+
   const load = useCallback(async () => {
     try {
       const [cRes, dRes] = await Promise.all([
@@ -452,17 +490,10 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
           ⚠️ העריכה במקום ולא בחלונית: מוקד שמעדכן שעות באמצע חלוקה —
           פתיחת חלונית וסגירתה בכל שדה היא החיכוך שגורם לא לעדכן. */}
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-        {/* כותרות — מוסתרות בנייד, שם כל שורה נפרסת ככרטיס */}
-        <div className="hidden items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-extrabold text-slate-600 lg:flex">
-          <span className="w-32 shrink-0">עיר</span>
-          <span className="w-40 shrink-0">שם המוקד</span>
-          <span className="flex-1 min-w-0">כתובת</span>
-          <span className="w-56 shrink-0">ימים ושעות</span>
-          <span className="w-28 shrink-0">טלפון</span>
-          <span className="w-16 shrink-0 text-center">נרשמו</span>
-          <span className="w-20 shrink-0 text-center">בחירה</span>
-          <span className="w-20 shrink-0 text-center">חלוקה</span>
-        </div>
+        {/* 🔴 אין שורת כותרות אחת ל-8 עמודות.
+            ⚠️ שמונה פקדים בשורה אחת (212 יחידות רוחב קבוע + כתובת גמישה
+            + ארבעה כפתורי הקלטה) נדחסו זה לתוך זה, והטקסט נקטע. במקום
+            זאת כל מוקד הוא בלוק: שורת זיהוי, שורת פרטים, שורת קול. */}
 
         {/* ⚠️ ממוין לפי עיר ואז שם: הטבלה כבר אינה מקובצת לפי אזור, ובלי
             מיון יציב שני מוקדים של אותה עיר יכולים ליפול רחוק זה מזה. */}
@@ -478,128 +509,118 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
             const dirty = isDirty(c)
             return (
               <div key={c.id}
-                className={`flex flex-col gap-2 px-3 py-2 lg:flex-row lg:items-center ${
-                  isPickup ? 'bg-emerald-50/40' : 'bg-white'
-                }`}>
-                {/* עיר */}
-                <input value={d.city}
-                  onChange={e => setDraft(c.id, { city: e.target.value })}
-                  placeholder="עיר"
-                  className={`${CELL} w-full lg:w-32 lg:shrink-0 font-bold`} />
+                className={`px-3 py-3 ${isPickup ? 'bg-emerald-50/40' : 'bg-white'}`}>
 
-                {/* שם המוקד */}
-                <input value={d.name}
-                  onChange={e => setDraft(c.id, { name: e.target.value })}
-                  placeholder="שם המוקד"
-                  className={`${CELL} w-full lg:w-40 lg:shrink-0`} />
+                {/* ── שורה 1: זהות המוקד + מצב + פעולות ── */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <input value={d.city}
+                    onChange={e => setDraft(c.id, { city: e.target.value })}
+                    placeholder="עיר"
+                    className={`${CELL} w-36 shrink-0 font-bold`} />
+                  <input value={d.name}
+                    onChange={e => setDraft(c.id, { name: e.target.value })}
+                    placeholder="שם המוקד"
+                    className={`${CELL} min-w-0 flex-1`} />
 
-                {/* כתובת */}
-                {/* ⚠️ textarea ולא input: כתובת מלאה ארוכה משדה שורה אחת,
-                    והטקסט נגלל אופקית בתוכו — כלומר רואים ממנו מילה או
-                    שתיים ואי אפשר לערוך אותו בבטחה. */}
-                <textarea value={d.address ?? ''}
-                  onChange={e => setDraft(c.id, { address: e.target.value })}
-                  placeholder="כתובת מלאה"
-                  rows={2}
-                  className={`${CELL} w-full resize-y leading-snug lg:flex-1 lg:min-w-0`} />
+                  <span className="shrink-0 whitespace-nowrap text-[11px] tabular-nums text-slate-500">
+                    {n.toLocaleString('he-IL')} נרשמו
+                    {full && <span className="mr-1 font-bold text-amber-700">· מלא</span>}
+                  </span>
 
-                {/* ימים ושעות */}
-                {/* 🔴 זה השדה שנשמע בטלפון, ולעתים הוא ארוך ("א׳–ג׳ 10:00–14:00,
-                    ד׳ 16:00–20:00"). בשדה שורה אחת ברוחב 10rem נראתה ממנו
-                    מילה אחת, ואי אפשר היה לוודא מה בדיוק ייאמר למתקשר. */}
-                <textarea value={d.hours ?? ''}
-                  onChange={e => setDraft(c.id, { hours: e.target.value })}
-                  placeholder="א׳–ה׳ 10:00–14:00"
-                  rows={2}
-                  className={`${CELL} w-full resize-y leading-snug lg:w-56 lg:shrink-0 ${
-                    !d.hours ? 'border-amber-300 bg-amber-50 placeholder:text-amber-600' : ''
-                  }`} />
-
-                {/* טלפון */}
-                <input dir="ltr" value={d.phone ?? ''}
-                  onChange={e => setDraft(c.id, { phone: e.target.value })}
-                  placeholder="טלפון"
-                  className={`${CELL} w-full text-right lg:w-28 lg:shrink-0`} />
-
-                {/* נרשמו */}
-                <span className="w-full text-[11px] tabular-nums text-slate-500 lg:w-16 lg:shrink-0 lg:text-center">
-                  {n.toLocaleString('he-IL')}
-                  {c.capacity != null && <span className="text-slate-400">/{c.capacity}</span>}
-                  {full && <span className="mr-1 font-bold text-amber-700">מלא</span>}
-                </span>
-
-                <div className="flex items-center gap-2">
                   {/* ⚠️ סגירה אינה מבטלת בחירות קיימות — רק מונעת חדשות. */}
                   <button type="button" disabled={busy === c.id}
                     onClick={() => toggleCenter(c.id, !isOpen)}
                     title="האם המוקד מוצע לבחירה בשלב הרישום"
-                    className={`w-20 shrink-0 rounded-lg px-2 py-1.5 text-[11px] font-bold transition ${
+                    className={`w-28 shrink-0 rounded-lg px-2 py-1.5 text-[11px] font-bold transition ${
                       isOpen
                         ? 'border border-indigo-300 bg-indigo-50 text-indigo-700'
                         : 'border border-slate-300 bg-white text-slate-500 hover:border-indigo-300'
                     }`}>
-                    {busy === c.id ? '…' : isOpen ? 'פתוח' : 'סגור'}
+                    {busy === c.id ? '…' : isOpen ? 'בחירה: פתוח' : 'בחירה: סגור'}
                   </button>
 
-                  {/* 🔴 השער שהשלוחה הטלפונית בודקת: רק מי שרשום במוקד
-                      שמסומן "מחלק" יוכל לשייך כרטיס בטלפון. */}
+                  {/* 🔴 השער שהשלוחה הטלפונית בודקת. */}
                   <button type="button" disabled={busy === c.id}
                     onClick={() => togglePickup(c.id, !isPickup)}
                     title={isPickup
                       ? 'המוקד מחלק כרטיסים — הרשומים בו יכולים לשייך בטלפון'
                       : 'המוקד טרם החל לחלק — הרשומים בו יישמעו שהמוקד שלהם עדיין סגור'}
-                    className={`w-20 shrink-0 rounded-lg px-2 py-1.5 text-[11px] font-bold transition ${
+                    className={`w-32 shrink-0 rounded-lg px-2 py-1.5 text-[11px] font-bold transition ${
                       isPickup
                         ? 'border border-emerald-400 bg-emerald-100 text-emerald-800'
                         : 'border border-slate-300 bg-white text-slate-500 hover:border-emerald-300'
                     }`}>
-                    {busy === c.id ? '…' : isPickup ? '✓ מחלק' : 'טרם'}
+                    {busy === c.id ? '…' : isPickup ? '✓ מחלק כרטיסים' : 'טרם מחלק'}
                   </button>
 
-                  {/* 🔴 כלל ברזל: כפתור שמירה שמהבהב ברגע שיש שינוי.
-                      מוצג רק כשיש מה לשמור — אחרת 26 כפתורים מתים. */}
+                  {/* 🔴 כלל ברזל: כפתור שמירה שמהבהב ברגע שיש שינוי. */}
                   {dirty && (
                     <button type="button" disabled={busy === c.id}
                       onClick={() => void saveRow(c.id)}
-                      className="shrink-0 animate-pulse rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-extrabold text-white hover:bg-emerald-700">
+                      className="shrink-0 animate-pulse rounded-lg bg-emerald-600 px-4 py-1.5 text-[11px] font-extrabold text-white hover:bg-emerald-700">
                       {busy === c.id ? <Loader2 size={12} className="animate-spin" /> : 'שמור'}
                     </button>
                   )}
                 </div>
 
-                {/* ── כך זה יישמע בטלפון ──
-                    🔴 מוצג מהשדות עצמם: מי שמעדכן כתובת או שעות רואה מיד
-                    מה המתקשר ישמע, ולא צריך להתקשר כדי לבדוק.
-                    ⚠️ מהטיוטה ולא מהשמור — כדי שהתצוגה תעקוב אחרי ההקלדה. */}
-                <div className="flex w-full flex-wrap items-center gap-2 border-t border-slate-100 pt-1.5 lg:w-auto lg:basis-full">
+                {/* ── שורה 2: הפרטים שנשמעים בטלפון ומודפסים בשובר ──
+                    ⚠️ תוויות מעל השדות: בלעדיהן אי אפשר לדעת מה כל תיבה,
+                    והכתובת והשעות נראו כשני שדות זהים. */}
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <label className="flex min-w-[16rem] flex-1 flex-col gap-0.5">
+                    <span className="text-[10px] font-bold text-slate-400">כתובת</span>
+                    <textarea value={d.address ?? ''}
+                      onChange={e => setDraft(c.id, { address: e.target.value })}
+                      placeholder="רחוב ומספר"
+                      rows={2}
+                      className={`${CELL} w-full resize-y border-slate-200 leading-snug`} />
+                  </label>
+
+                  <label className="flex min-w-[16rem] flex-1 flex-col gap-0.5">
+                    <span className="text-[10px] font-bold text-slate-400">ימים ושעות</span>
+                    <textarea value={d.hours ?? ''}
+                      onChange={e => setDraft(c.id, { hours: e.target.value })}
+                      placeholder="ימים ושעות הפתיחה"
+                      rows={2}
+                      className={`${CELL} w-full resize-y leading-snug ${
+                        d.hours ? 'border-slate-200' : 'border-amber-300 bg-amber-50 placeholder:text-amber-600'
+                      }`} />
+                  </label>
+
+                  <label className="flex w-40 flex-col gap-0.5">
+                    <span className="text-[10px] font-bold text-slate-400">טלפון</span>
+                    <input dir="ltr" value={d.phone ?? ''}
+                      onChange={e => setDraft(c.id, { phone: e.target.value })}
+                      placeholder="טלפון"
+                      className={`${CELL} w-full border-slate-200 text-right`} />
+                  </label>
+                </div>
+
+                {/* ── שורה 3: כך זה יישמע ──
+                    🔴 מוצג מהשדות עצמם, ומתעדכן תוך כדי הקלדה. */}
+                <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-1.5">
                   <Volume2 size={12} className="shrink-0 text-slate-400" />
-                  <span className="min-w-0 flex-1 truncate text-[11px] text-slate-500">
+                  <span className="min-w-[12rem] flex-1 text-[11px] leading-snug text-slate-500">
                     {c.audio_file
-                      ? <span className="font-bold text-teal-700">מושמעת הקלטה אנושית</span>
+                      ? <span className="font-bold text-teal-700">מושמעת הקלטה שהוכנה</span>
                       : (spokenCenterDetails(d) || <span className="text-slate-300">אין מה להשמיע — חסרים פרטים</span>)}
                   </span>
 
-                  {/* ⚠️ השמעה לפני יצירה — לשמוע איך זה יישמע בלי לייצר
-                      קובץ ובלי להתקשר. אותו מסלול preview שבנוסחי השלוחה. */}
                   <button type="button" disabled={preview === c.id || !spokenCenterDetails(d)}
                     onClick={() => void playPreview(c.id, spokenCenterDetails(d))}
                     title="השמעה — כך זה יישמע"
-                    className="shrink-0 rounded-lg border border-slate-300 bg-white px-2 py-1 text-[10.5px] font-bold text-slate-600 transition hover:border-violet-300 hover:text-violet-700 disabled:opacity-40">
+                    className="shrink-0 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[10.5px] font-bold text-slate-600 transition hover:border-violet-300 hover:text-violet-700 disabled:opacity-40">
                     {preview === c.id ? '…' : '▶ השמע'}
                   </button>
 
-                  {/* 🔴 קול טבעי (ElevenLabs) — אותו מנגנון שכבר משמש את
-                      שאר הודעות השלוחה, במקום הקול הרובוטי של ימות.
-                      הטקסט נבנה מהשדות עצמם, ולכן אין מה להקליד. */}
+                  {/* 🔴 אותו קול טבעי (ElevenLabs) שכבר משמש את שאר השלוחה. */}
                   <button type="button" disabled={busy === `rec-${c.id}` || !spokenCenterDetails(d)}
                     onClick={() => void generateVoice(c.id)}
                     title="יצירת הקראה בקול טבעי מהשם, הכתובת והשעות"
                     className="shrink-0 rounded-lg border border-violet-300 bg-violet-50 px-2.5 py-1 text-[10.5px] font-bold text-violet-700 transition hover:bg-violet-100 disabled:opacity-40">
-                    {busy === `rec-${c.id}` ? 'מייצר…' : c.audio_file ? 'חדש בקול טבעי' : 'יצירת קול טבעי'}
+                    {busy === `rec-${c.id}` ? 'מייצר…' : c.audio_file ? 'יצירה מחדש' : 'יצירת קול טבעי'}
                   </button>
 
-                  {/* ⚠️ ההקלטה גוברת על ההקראה. מוקד בלי הקלטה עדיין
-                      נשמע נכון, ולכן זו תוספת ולא תנאי. */}
                   <label className="shrink-0 cursor-pointer rounded-lg border border-teal-300 bg-teal-50 px-2.5 py-1 text-[10.5px] font-bold text-teal-700 transition hover:bg-teal-100">
                     {busy === `rec-${c.id}` ? 'מעלה…' : 'העלה קובץ'}
                     <input type="file" accept="audio/*" className="hidden"
@@ -609,6 +630,7 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
                         if (f) void uploadRecording(c.id, f)
                       }} />
                   </label>
+
                   {c.audio_file && (
                     <button type="button" disabled={busy === `rec-${c.id}`}
                       onClick={() => void removeRecording(c.id)}
@@ -625,6 +647,23 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
       </div>
 
       {err && <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{err}</p>}
+
+      {/* ═══ שמירת כל השינויים — כפתור צף ═══
+          🔴 כלל ברזל: כפתור שמירה שמהבהב ברגע שיש שינוי.
+          ⚠️ צף ולא בתוך הזרימה: 26 מוקדים הם רשימה ארוכה, ומי שערך מוקד
+          בראש הטבלה וגלל למטה לא ראה שנשאר לו שינוי לא שמור — ויצא מהמסך
+          בלי לשמור. הכפתור נשאר על המסך כל עוד יש מה לשמור. */}
+      {dirtyIds.length > 0 && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-4 z-40 flex justify-center px-4">
+          <button type="button" disabled={busy === 'saveall'}
+            onClick={() => void saveAll()}
+            className="pointer-events-auto inline-flex animate-pulse items-center gap-2 rounded-full bg-emerald-600 px-6 py-3 text-sm font-extrabold text-white shadow-lg shadow-emerald-600/30 transition hover:bg-emerald-700 disabled:opacity-60">
+            {busy === 'saveall'
+              ? <><Loader2 size={15} className="animate-spin" /> שומר…</>
+              : <><Check size={15} /> שמירת {dirtyIds.length} שינויים</>}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
