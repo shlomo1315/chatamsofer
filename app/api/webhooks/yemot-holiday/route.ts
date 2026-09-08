@@ -35,6 +35,7 @@ import { getOpenDistribution, registerToOpenDistribution } from '@/lib/holidayDi
 import { getHolidayMessages, type HolidayMessages } from '@/lib/yemotHolidayMessages'
 import { digitsOnly, idOrFilter, sameId } from '@/lib/idLookup'
 import { centerLabel, type CenterRow } from '@/lib/holidayCenterPick'
+import { ensureCenterOpening } from '@/lib/centerOpeningRow'
 import { spokenCenterName, spokenCenterDetails } from '@/lib/holidayCenterSpeech'
 import { runLoadBatch } from '@/lib/holidayCardLoad'
 import {
@@ -847,6 +848,9 @@ async function handleCenterRoute(
         console.error('[yemot-holiday] שמירת מוקד נכשלה:', error.message)
         return yemotText([idMessage(msgToken(msgs, 'failed')), goToFolder('hangup')], callId)
       }
+      // ⚠️ אחרי השמירה ובכוונה: הבחירה כבר נשמרה, וכשל כאן אינו כשל בבחירה.
+      await ensureCenterOpening(db, dist.id, step.center.id)
+
       console.log(`[yemot-holiday] מוקד נבחר: ben=${ben.id} → ${step.center.id} (${step.label})`)
       return yemotText([idMessage(msgToken(msgs, 'center_success', { center: step.label })), goToFolder('hangup')], callId)
     }

@@ -7,6 +7,7 @@ import {
   FINAL_WARNING, REGIONS, type CenterRow,
 } from '@/lib/holidayCenterPick'
 import { loadOpenCenters } from '@/lib/holidayCenterIvr'
+import { ensureCenterOpening } from '@/lib/centerOpeningRow'
 import { citiesByNumber } from '@/lib/holidayCityMenu'
 
 export const dynamic = 'force-dynamic'
@@ -241,6 +242,9 @@ export async function POST(request: NextRequest) {
     // מרוץ: מישהו הקדים אותנו (למשל בטלפון) בין הבדיקה לשמירה.
     return NextResponse.json({ error: pickMessage('locked'), reason: 'locked' }, { status: 409 })
   }
+
+  // ⚠️ אחרי השמירה ובכוונה: הבחירה כבר נשמרה, וכשל כאן אינו כשל בבחירה.
+  await ensureCenterOpening(db, rec.distribution_id, centerId)
 
   console.log(`[portal/holiday-center] נבחר מוקד: rec=${rec.id} → ${centerId}`)
   return NextResponse.json({ ok: true, label: centerLabel(center) })

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
+import { ensureCenterOpening } from '@/lib/centerOpeningRow'
 
 export const dynamic = 'force-dynamic'
 
@@ -95,6 +96,9 @@ export async function POST(request: NextRequest) {
     console.error('[admin/assign-center] שמירה נכשלה:', error.message)
     return NextResponse.json({ error: 'השמירה נכשלה' }, { status: 500 })
   }
+
+  // ⚠️ אחרי השמירה ובכוונה: השיוך כבר נשמר, וכשל כאן אינו כשל בשיוך.
+  await ensureCenterOpening(db, rec.distribution_id, centerId)
 
   const label = [center.city, center.name].filter(Boolean).join(' · ')
   console.log(
