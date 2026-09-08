@@ -175,12 +175,54 @@ export async function resolveSegment(
       list = list.filter(r => want.has((joinOne(r.beneficiary)?.city ?? '').trim()))
     }
 
-    const bens = list
-      .map(r => joinOne(r.beneficiary))
-      .filter((b): b is BeneficiaryRow => !!b)
+    // ─────────────────────────────────────────────────────────────────────
+    // 🔴 פרטי המוקד של כל משפחה — למשתני המיזוג {{מוקד}}, {{מוקד_כתובת}}…
+    //
+    // ⚠️ שתי שליפות ולא join לכל שורה: 6,106 נרשמים מול 26 מוקדים. join
+    // היה מביא את אותו מוקד מאות פעמים, ומפה בזיכרון עולה שתי שאילתות.
+    //
+    // ⚠️ pickup_open_at הוא מה שמבדיל בין מוקד שמחלק לכזה שטרם — אותו
+    // שדה שמכריע בשלוחת הטלפון. הוא מזין את {{מוקד_סטטוס}} ואת הבלוקים
+    // המותנים, כדי שאפשר יהיה לכתוב טקסט אחר לכל מצב.
+    // ─────────────────────────────────────────────────────────────────────
+    const centerById = new Map<string, {
+      name: string | null; city: string | null
+      address: string | null; hours: string | null
+    }>()
+    const pickupOpenIds = new Set<string>()
+    if (list.some(r => r.center_id)) {
+      const [{ rows: centers }, { rows: openings }] = await Promise.all([
+        fetchAllRows<{ id: string; name: string | null; city: string | null; address: string | null; hours: string | null }>(
+          (from, to) => db.from('holiday_centers').select('id, name, city, address, hours').range(from, to)),
+        fetchAllRows<{ center_id: string; pickup_open_at: string | null }>(
+          (from, to) => db.from('holiday_center_openings')
+            .select('center_id, pickup_open_at')
+            .eq('distribution_id', def.distributionId!).range(from, to)),
+      ])
+      for (const c of centers ?? []) centerById.set(String(c.id), c)
+      for (const o of openings ?? []) if (o.pickup_open_at) pickupOpenIds.add(String(o.center_id))
+    }
 
-    noEmail = bens.filter(b => !b.email?.trim()).length
-    rows = bens
+    const withCenter = list
+      .map(r => {
+        const b = joinOne(r.beneficiary)
+        if (!b) return null
+        const c = r.center_id ? centerById.get(String(r.center_id)) : null
+        // ⚠️ הפרטים נכנסים ל-src ומשם ל-merge_data — הסנאפשוט שנשמר
+        // בזמן המימוש. מוקד שייפתח אחר כך לא ישנה מייל שכבר נשלח.
+        return {
+          ...b,
+          center_name: c?.name ?? null,
+          center_city: c?.city ?? null,
+          center_address: c?.address ?? null,
+          center_hours: c?.hours ?? null,
+          center_pickup_open: r.center_id ? pickupOpenIds.has(String(r.center_id)) : null,
+        }
+      })
+      .filter((b): b is NonNullable<typeof b> => !!b)
+
+    noEmail = withCenter.filter(b => !b.email?.trim()).length
+    rows = withCenter
       .filter(b => b.email?.trim())
       .map(b => ({ email: String(b.email).trim(), beneficiaryId: b.id, src: b }))
 

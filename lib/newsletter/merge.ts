@@ -19,6 +19,13 @@ export interface MergeSource {
   children_count?: number | null
   email?: string | null
   id_number?: string | null
+  // ── מוקד החלוקה — נשלף בזמן מימוש הסגמנט (ראו segments.ts) ──
+  center_name?: string | null
+  center_city?: string | null
+  center_address?: string | null
+  center_hours?: string | null
+  /** האם המוקד כבר החל לחלק (holiday_center_openings.pickup_open_at). */
+  center_pickup_open?: boolean | null
   [key: string]: unknown
 }
 
@@ -40,7 +47,45 @@ export const MERGE_TAGS: MergeTag[] = [
   { token: 'מייל',         label: 'כתובת מייל',         example: 'moshe@example.com' },
   { token: 'תעודת_זהות',   label: 'תעודת זהות',         example: '123456789' },
   { token: 'מספר_ילדים',   label: 'מספר ילדים',         example: '7' },
+  // ── מוקד החלוקה של המשפחה ──
+  // 🔴 כל משפחה מקבלת את המוקד *שלה*. בלי זה אי אפשר לשלוח מייל אחד
+  // ל-6,106 משפחות: הכתובת והשעות שונות בין 26 המוקדים, ומשפחה שקיבלה
+  // כתובת של מוקד אחר מגיעה למקום הלא נכון.
+  { token: 'מוקד',         label: 'מוקד החלוקה',        example: 'בני ברק, אזור סקולוב' },
+  { token: 'מוקד_עיר',     label: 'עיר המוקד',          example: 'בני ברק' },
+  { token: 'מוקד_כתובת',   label: 'כתובת המוקד',        example: 'יואל 6 קומה 2' },
+  { token: 'מוקד_שעות',    label: 'ימי ושעות הקבלה',    example: 'ימי רביעי וחמישי, 16:00–23:00' },
+  { token: 'מוקד_סטטוס',   label: 'מצב המוקד',          example: 'מחלק' },
   { token: 'קישור_הסרה',   label: 'קישור הסרה מהתפוצה', example: '(נוצר אוטומטית)' },
+]
+
+// ─────────────────────────────────────────────────────────────────────────────
+// בלוקים מותנים — פסקה שלמה שמופיעה רק לחלק מהנמענים.
+//
+// 🔴 שדה סטטוס לבדו אינו מספיק: המנהל צריך לכתוב *פסקאות שונות* לשני
+// המצבים — "הכרטיס ממתין, הנה הכתובת והשעות" מול "נעדכן כשהמוקד ייפתח".
+// בלי זה הוא נאלץ לשלוח שני קמפיינים ולסנן ידנית, וטעות בסינון שולחת
+// משפחה לדלת נעולה.
+// ─────────────────────────────────────────────────────────────────────────────
+export interface ConditionalBlock {
+  /** {{#שם}} ... {{/שם}} */
+  name: string
+  label: string
+  /** הבלוק נשאר כשהתנאי מתקיים על מפת הערכים. */
+  test: (data: Record<string, string>) => boolean
+}
+
+export const CONDITIONAL_BLOCKS: ConditionalBlock[] = [
+  {
+    name: 'אם_מוקד_מחלק',
+    label: 'רק למי שהמוקד שלו כבר מחלק',
+    test: d => d['מוקד_סטטוס'] === 'מחלק',
+  },
+  {
+    name: 'אם_מוקד_טרם_מחלק',
+    label: 'רק למי שהמוקד שלו טרם החל לחלק',
+    test: d => d['מוקד_סטטוס'] === 'טרם מחלק',
+  },
 ]
 
 // ברירות מחדל — אף פעם לא משאירים {{משתנה}} ריק במייל שיוצא ללקוח
@@ -56,6 +101,13 @@ const FALLBACKS: Record<string, string> = {
   'מייל': '',
   'תעודת_זהות': '',
   'מספר_ילדים': '',
+  // ⚠️ ריק ולא "המוקד שלכם": משפחה שטרם בחרה מוקד תקבל משפט חסר במקום
+  // טקסט שמתחזה למידע.
+  'מוקד': '',
+  'מוקד_עיר': '',
+  'מוקד_כתובת': '',
+  'מוקד_שעות': '',
+  'מוקד_סטטוס': '',
   'קישור_הסרה': '',
 }
 
@@ -88,8 +140,27 @@ export function buildMergeData(src: MergeSource, unsubscribeUrl = ''): Record<st
     'מייל': (src.email ?? '').trim(),
     'תעודת_זהות': (src.id_number ?? '').trim(),
     'מספר_ילדים': src.children_count != null ? String(src.children_count) : '',
+    // ── מוקד החלוקה ──
+    // ⚠️ אותה הרכבה כמו בטלפון ובשובר (spokenCenterName): עיר ששמה זהה
+    // לשם המוקד אינה נאמרת פעמיים.
+    'מוקד': centerLabel(src),
+    'מוקד_עיר': (src.center_city ?? '').trim(),
+    'מוקד_כתובת': (src.center_address ?? '').trim(),
+    'מוקד_שעות': (src.center_hours ?? '').trim(),
+    // ⚠️ ריק כשאין מוקד כלל — כדי ששני הבלוקים המותנים לא יתפסו אותו.
+    'מוקד_סטטוס': centerLabel(src)
+      ? (src.center_pickup_open ? 'מחלק' : 'טרם מחלק')
+      : '',
     'קישור_הסרה': unsubscribeUrl,
   }
+}
+
+/** שם המוקד לתצוגה — עיר ושם, בלי כפילות. */
+function centerLabel(src: MergeSource): string {
+  const city = (src.center_city ?? '').trim()
+  const name = (src.center_name ?? '').trim()
+  if (city && name && city !== name) return `${city}, ${name}`
+  return name || city || ''
 }
 
 /**
@@ -103,7 +174,19 @@ export function applyMerge(
   data: Record<string, string>,
   html = true,
 ): string {
-  return String(template ?? '').replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, rawKey: string) => {
+  // ── שלב א': בלוקים מותנים ──
+  // 🔴 קודם לכל, ולפני הזרקת המשתנים: משתנים בתוך בלוק שיורד אינם צריכים
+  // להיות מוזרקים כלל, ובלוק שנשאר מוזרק בהמשך כמו כל טקסט אחר.
+  //
+  // ⚠️ הסרה ולא השארה ריקה — שרידי {{#...}} במייל שיוצא ללקוח נראים כתקלה.
+  let out = String(template ?? '')
+  for (const block of CONDITIONAL_BLOCKS) {
+    // [\s\S] ולא . — הבלוק משתרע על פני שורות.
+    const re = new RegExp(`\\{\\{\\s*#\\s*${block.name}\\s*\\}\\}([\\s\\S]*?)\\{\\{\\s*/\\s*${block.name}\\s*\\}\\}`, 'g')
+    out = out.replace(re, (_m, body: string) => (block.test(data) ? body : ''))
+  }
+
+  return out.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, rawKey: string) => {
     const key = rawKey.trim()
     const raw = data[key] ?? FALLBACKS[key] ?? ''
 
@@ -125,8 +208,18 @@ export function extractTags(template: string): string[] {
   return [...out]
 }
 
-/** משתנים שנכתבו בתוכן אך אינם מוכרים — מוצגים כאזהרה במסך העריכה. */
+/**
+ * משתנים שנכתבו בתוכן אך אינם מוכרים — מוצגים כאזהרה במסך העריכה.
+ *
+ * ⚠️ תחביר הבלוקים ({{#שם}} / {{/שם}}) אינו משתנה: בלעדי הסינון הזה כל
+ * בלוק מותנה היה מסומן למנהל כשגיאה, והוא היה מוחק אותו.
+ */
 export function unknownTags(template: string): string[] {
   const known = new Set(MERGE_TAGS.map(t => t.token))
-  return extractTags(template).filter(t => !known.has(t))
+  const blocks = new Set(CONDITIONAL_BLOCKS.map(b => b.name))
+  return extractTags(template).filter(t => {
+    const bare = t.replace(/^[#/]\s*/, '').trim()
+    if (bare !== t && blocks.has(bare)) return false
+    return !known.has(t)
+  })
 }

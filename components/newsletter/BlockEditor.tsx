@@ -8,7 +8,7 @@ import {
   Pencil, Eye,
 } from 'lucide-react'
 import type { Block, BlockType } from '@/lib/newsletter/blocks'
-import { MERGE_TAGS } from '@/lib/newsletter/merge'
+import { MERGE_TAGS, CONDITIONAL_BLOCKS } from '@/lib/newsletter/merge'
 import { NEWSLETTER_ACTIONS } from '@/lib/newsletter/actions'
 import { useToast } from '@/components/ui/Toast'
 
@@ -45,9 +45,20 @@ function newBlock(type: BlockType): Block {
 // ── תצוגה מקדימה: ערכי דוגמה לכל משתנה מיזוג ──
 const DEMO: Record<string, string> = Object.fromEntries(MERGE_TAGS.map(t => [t.token, t.example]))
 
-/** מחליף כל {{משתנה}} בערך הדוגמה שלו. משתנה לא מוכר נשאר כפי שהוא. */
+/**
+ * מחליף כל {{משתנה}} בערך הדוגמה שלו. משתנה לא מוכר נשאר כפי שהוא.
+ *
+ * ⚠️ בלוקים מותנים מוצגים *כולם* בתצוגה המקדימה, בלי תגי הפתיחה והסגירה:
+ * המנהל צריך לראות את הטקסט שכתב. בשליחה בפועל כל נמען יקבל רק את הבלוק
+ * שמתאים לו (ראו applyMerge). השארת התגים הגולמיים נראתה כתקלה בעיצוב.
+ */
 function renderDemo(html: string): string {
-  return String(html ?? '').replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, k: string) => DEMO[k.trim()] ?? `{{${k}}}`)
+  let out = String(html ?? '')
+  for (const b of CONDITIONAL_BLOCKS) {
+    const re = new RegExp(`\\{\\{\\s*#\\s*${b.name}\\s*\\}\\}([\\s\\S]*?)\\{\\{\\s*/\\s*${b.name}\\s*\\}\\}`, 'g')
+    out = out.replace(re, (_m, body: string) => body)
+  }
+  return out.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, k: string) => DEMO[k.trim()] ?? `{{${k}}}`)
 }
 
 /** מצב תפריט ה-@ הצף — נשלט מהקומפוננטה הראשית כדי שיוכל להיות fixed מעל הכל. */
@@ -120,6 +131,34 @@ export function MergeTagPicker({ onPick, hint }: {
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm font-medium text-slate-700">{t.label}</span>
                     <span className="block truncate text-xs text-slate-400">{t.example}</span>
+                  </span>
+                </button>
+              ))}
+
+              {/* ── בלוקים מותנים ──
+                  🔴 פסקה שלמה שמופיעה רק לחלק מהנמענים. בלעדיהם המנהל
+                  נאלץ לשלוח שני קמפיינים ולסנן ידנית, וטעות בסינון
+                  שולחת משפחה למוקד שעדיין לא מחלק. */}
+              <div className="border-y border-slate-100 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500">
+                פסקה מותנית — מוצגת רק למי שהתנאי מתקיים לגביו
+              </div>
+              {CONDITIONAL_BLOCKS.map(b => (
+                <button
+                  key={b.name}
+                  type="button"
+                  onClick={() => { onPick(`#${b.name}}}\n\n{{/${b.name}`); setOpen(false) }}
+                  className="flex w-full items-start gap-2 border-b border-slate-50 px-3 py-2 text-right
+                             transition last:border-0 hover:bg-amber-50"
+                >
+                  <code className="mt-0.5 flex-shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[11px]
+                                   font-bold text-amber-700">
+                    {`{{#${b.name}}}`}
+                  </code>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium text-slate-700">{b.label}</span>
+                    <span className="block truncate text-xs text-slate-400">
+                      הטקסט שבין הפתיחה לסגירה יישלח רק להם
+                    </span>
                   </span>
                 </button>
               ))}

@@ -3,6 +3,7 @@
 // עם נפילה-לאחור ל-ENV. הקול שנוצר מועלה לימות ומושמע בשיחה במקום ה-TTS הרובוטי.
 // תיעוד: https://elevenlabs.io/docs/api-reference/text-to-speech
 import { getServiceClient } from '@/lib/apiAuth'
+import { describeElevenError } from './elevenQuota'
 
 const ELEVEN_API = 'https://api.elevenlabs.io/v1'
 const SETTINGS_KEY = 'elevenlabs_tts'
@@ -160,5 +161,12 @@ export async function generateSpeech(
   const multi = await attempt(MULTILINGUAL_MODEL, { withSettings: true })
   if (multi.ok) return { ok: true, audio: multi.audio }
 
-  return { ok: false, error: `ElevenLabs החזיר שגיאה: ${v3.errText || turbo.errText || multi.errText || 'לא ידוע'}` }
+  // 🔴 הסיבה נאמרת בעברית ולא כ-JSON גולמי — ראו lib/elevenQuota.
+  //
+  // ⚠️ שלושת הניסיונות נכשלים מאותה סיבה כשהמכסה נגמרה, ולכן נבחר
+  // הראשון שיש בו טקסט. הלוג נשמר כדי שנוכל לאבחן גם מה שלא זוהה.
+  const status = v3.status || turbo.status || multi.status || 0
+  const errText = v3.errText || turbo.errText || multi.errText || ''
+  console.error(`[elevenTts] יצירת הקול נכשלה status=${status}: ${errText}`)
+  return { ok: false, error: describeElevenError(status, errText) }
 }
