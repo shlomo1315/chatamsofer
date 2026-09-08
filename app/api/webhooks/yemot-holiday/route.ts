@@ -565,6 +565,18 @@ async function handleCardRoute(
     ], callId)
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 כרטיס שכבר נטען לא נטען שוב — גם אם השיוך רץ מחדש.
+  //
+  // ⚠️ הטלפון בונה את יעד הטעינה ישירות ואינו עובר דרך eligibleForLoad,
+  // שם יושב הסינון על load_status='loaded'. משפחה ששויכה מחדש (למשל אחרי
+  // שיוך שנכשל בנדרים בזמן שהכסף כבר ירד) הייתה נטענת פעם שנייה.
+  // ─────────────────────────────────────────────────────────────────────────
+  if (rec.load_status === 'loaded') {
+    console.log(`[yemot-holiday] כרטיס שויך; טעינה דולגה — כבר נטען rec=${rec.id}`)
+    return yemotText([idMessage(msgToken(msgs, 'card_success')), goToFolder('hangup')], callId)
+  }
+
   try {
     const summary = await runLoadBatch(db, [{
       recipientId: rec.id,
