@@ -20,10 +20,26 @@
 import { getServiceClient } from '@/lib/apiAuth'
 import { getOpenDistribution, type ActiveDistribution } from '@/lib/holidayDistributions'
 import {
-  getHolidayNedarimCreds, setMagneticCard, getClientCardFull, findClientByZeout,
+  getHolidayNedarimCreds, setMagneticCard, getClientCardFull, findClientByZeout, saveClientCard,
 } from '@/lib/nedarim'
+import { pickZeoutForCreate, isAlreadyRegistered } from '@/lib/holidayClientCreate'
 
 export const HOLIDAY_CARD_DIGITS = 16
+
+/** שדות המשפחה הדרושים לאיתור *ולהקמה* בנדרים. */
+interface BenRow {
+  id: string
+  id_number?: string | null
+  spouse_id_number?: string | null
+  family_name?: string | null
+  full_name?: string | null
+  phone?: string | null
+  phone2?: string | null
+  email?: string | null
+  address?: string | null
+  city?: string | null
+  nedarim_id?: string | null
+}
 
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected'
 
@@ -162,20 +178,78 @@ export async function linkHolidayCard(
   // שכרטיס תקין תמיד ישויך גם למשפחה שה-nedarim_id שלה לא נשמר בעבר.
   const { data: ben } = await db
     .from('beneficiaries')
-    .select('id, id_number, nedarim_id')
+    .select('id, id_number, spouse_id_number, family_name, full_name, phone, phone2, email, address, city, nedarim_id')
     .eq('id', beneficiaryId)
     .maybeSingle()
-  let nedarimId = ben?.nedarim_id ? String(ben.nedarim_id) : null
-  if (!nedarimId && ben?.id_number) {
-    try {
-      nedarimId = await findClientByZeout(creds, String(ben.id_number))
-      if (nedarimId) await db.from('beneficiaries').update({ nedarim_id: nedarimId }).eq('id', beneficiaryId)
-    } catch (e) { console.error('[holidayCards] findClientByZeout failed', e) }
+  const bn = ben as BenRow | null
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 איתור המשפחה בנדרים — ואם אינה קיימת, הקמתה.
+  //
+  // ⚠️ עד כה רק *חיפשנו*, ומשפחה שלא נמצאה נדחתה ב"המשפחה אינה קיימת
+  // בנדרים". אבל runLoadBatch (הטעינה) מקימה משפחה כשאינה קיימת — ולכן
+  // מי שכבר נטען עבר, ומי שהגיע לשיוך לפני טעינה נדחה. בפועל: משפחה
+  // שנבדקה אתמול עבדה (היא נטענה קודם), ומשפחות היום נכשלו.
+  //
+  // ⚠️ חיפוש לפי *שתי* הת"ז: המשפחה בנדרים עשויה להיות רשומה על שם
+  // בן/בת הזוג, וחיפוש לפי אחת בלבד החזיר null על משפחה שקיימת.
+  // ─────────────────────────────────────────────────────────────────────────
+  let nedarimId = bn?.nedarim_id ? String(bn.nedarim_id) : null
+
+  const lookup = async (): Promise<string | null> => {
+    for (const cand of [bn?.id_number, bn?.spouse_id_number].filter(Boolean)) {
+      try {
+        const hit = await findClientByZeout(creds, String(cand))
+        if (hit) return hit
+      } catch (e) { console.error('[holidayCards] findClientByZeout failed', e) }
+    }
+    return null
   }
+
+  if (!nedarimId) nedarimId = await lookup()
+
   if (!nedarimId) {
-    const error = 'המשפחה אינה קיימת בנדרים'
+    // 🔴 הקמה — אותה התנהגות בדיוק כמו בטעינה (lib/holidayCardLoad).
+    const createZeout = pickZeoutForCreate(bn?.id_number, bn?.spouse_id_number)
+    if (!createZeout) {
+      const error = 'אין תעודת זהות ברשומה'
+      await db.from('distribution_recipients').update({ card_link_error: error }).eq('id', rec.id)
+      return { ok: false, linked: false, error }
+    }
+    try {
+      // ⚠️ Groupe 'חלוקת חגים' — אחרת המשפחה מתערבבת עם משפחות היולדות.
+      nedarimId = await saveClientCard(creds, {
+        id_number: createZeout,
+        family_name: bn?.family_name ?? '',
+        full_name: bn?.full_name ?? '',
+        phone: bn?.phone, phone2: bn?.phone2, email: bn?.email,
+        address: bn?.address, city: bn?.city,
+      }, null, 'חלוקת חגים')
+    } catch (e) {
+      // 🔴 "כבר רשום אצל X" אינו כשל: המשפחה קיימת תחת רשומה אחרת
+      // (בדרך כלל בן/בת הזוג) והחיפוש לא מצא אותה. מנסים לאתר שוב.
+      const raw = e instanceof Error ? e.message : String(e)
+      if (!isAlreadyRegistered(raw)) {
+        const error = `הקמת המשפחה בנדרים נכשלה — ${raw}`
+        await db.from('distribution_recipients').update({ card_link_error: error }).eq('id', rec.id)
+        return { ok: false, linked: false, error }
+      }
+      nedarimId = await lookup()
+      if (!nedarimId) {
+        const error = `המשפחה קיימת בנדרים אך לא אותרה — ${raw}`
+        await db.from('distribution_recipients').update({ card_link_error: error }).eq('id', rec.id)
+        return { ok: false, linked: false, error }
+      }
+    }
+  }
+
+  if (!nedarimId) {
+    const error = 'הקמת המשפחה בנדרים לא החזירה מזהה'
     await db.from('distribution_recipients').update({ card_link_error: error }).eq('id', rec.id)
     return { ok: false, linked: false, error }
+  }
+  if (nedarimId !== bn?.nedarim_id) {
+    await db.from('beneficiaries').update({ nedarim_id: nedarimId }).eq('id', beneficiaryId)
   }
 
   let ok = false, message = ''
@@ -183,6 +257,26 @@ export async function linkHolidayCard(
     const r = await setMagneticCard(creds, nedarimId, digits, { timeoutMs: 12_000 })
     ok = r.ok; message = r.message
   } catch (e) { message = e instanceof Error ? e.message : String(e) }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 מזהה שמור שנדרים אינה מכירה — מאתרים מחדש ומנסים שוב.
+  //
+  // ⚠️ "מספר לקוח לא מוכר" על nedarim_id ששמור אצלנו פירושו שהרשומה
+  // בנדרים נמחקה או מוזגה. בלי הניסיון החוזר המשפחה נתקעת לנצח על מזהה
+  // מת, והשגיאה נראית כתקלת מערכת במקום כנתון מיושן.
+  // ─────────────────────────────────────────────────────────────────────────
+  if (!ok && /לא מוכר|לא נמצא|not found/i.test(message)) {
+    const fresh = await lookup()
+    if (fresh && fresh !== nedarimId) {
+      console.warn(`[holidayCards] nedarim_id ${nedarimId} אינו מוכר — מאותר מחדש כ-${fresh}`)
+      nedarimId = fresh
+      await db.from('beneficiaries').update({ nedarim_id: fresh }).eq('id', beneficiaryId)
+      try {
+        const r2 = await setMagneticCard(creds, fresh, digits, { timeoutMs: 12_000 })
+        ok = r2.ok; message = r2.message
+      } catch (e) { message = e instanceof Error ? e.message : String(e) }
+    }
+  }
 
   if (!ok) {
     // ייתכן שנדרים כן קישר והחזיר שגיאה — מאמתים בשליפה חוזרת לפני דיווח כשל
