@@ -105,6 +105,7 @@ export interface AdvQ {
   is: (c: string, v: null) => AdvQ
   not: (c: string, o: string, v: null) => AdvQ
   ilike: (c: string, v: string) => AdvQ
+  in: (c: string, v: string[]) => AdvQ
 }
 
 export function applyAdvFilters<T extends AdvQ>(q: T, a: AdvFilters, today = new Date()): T {
@@ -132,6 +133,11 @@ export function applyAdvFilters<T extends AdvQ>(q: T, a: AdvFilters, today = new
     const safe = a.community.replace(/[\\%_]/g, (m) => `\\${m}`)
     q = q.ilike('community_affiliation', `%${safe}%`) as T
   }
+
+  // 🔴 עיר = in ולא ilike, בניגוד לקהילה: 72 ערים בלבד, ולכן בחירה מדויקת.
+  // ilike היה תופס "רמת גן" בתוך "רמת גן מזרח" ומרחיב את התוצאה בשקט.
+  // ⚠️ הערכים עוברים כערכי in() ולא כשם עמודה — supabase-js מבריח אותם.
+  if (a.cities?.length) q = q.in('city', [...a.cities]) as T
 
   if (a.gender) q = q.eq('gender', a.gender) as T
   if (a.lineage === 'linked') q = q.not('lineage_node_id', 'is', null) as T

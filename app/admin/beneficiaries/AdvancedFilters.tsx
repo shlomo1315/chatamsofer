@@ -92,6 +92,7 @@ export default function AdvancedFilters({
   onChange,
   onClear,
   communities = [],
+  cities = [],
   activeCount,
 }: {
   value: AdvFilters
@@ -99,6 +100,8 @@ export default function AdvancedFilters({
   onClear: () => void
   /** הקהילות הנפוצות — לצ'יפס לחיצה. ראו getCommunityOptions. */
   communities?: CommunityOption[]
+  /** הערים שבשימוש בפועל, עם מונים. ראו getFilterOptions. */
+  cities?: CommunityOption[]
   /** מספר הסינונים הפעילים — מוצג על הכפתור. */
   activeCount: number
 }) {
@@ -310,6 +313,35 @@ export default function AdvancedFilters({
                 })}
               </>
             )}
+          </Row>
+
+          {/* ── עיר ── */}
+          {/* 🔴 בחירה מרובה ולא "מכיל", בניגוד לקהילה: 72 ערים בלבד, ולכן
+              רשימה שמישה. חיפוש "מכיל" היה תופס "רמת גן" בתוך "רמת גן
+              מזרח" ומרחיב את התוצאה בלי שהמשתמש רואה זאת.
+              ⚠️ בחירה מרובה היא איחוד — "בני ברק + ירושלים" = שתיהן. */}
+          <Row label="עיר" onReset={draft.cities?.length ? () => apply({ cities: undefined }) : undefined}>
+            {cities.length === 0 ? (
+              <span className="text-xs text-slate-400">אין ערים להצגה</span>
+            ) : cities.map((c) => {
+              const on = draft.cities?.includes(c.value) ?? false
+              return (
+                <button
+                  key={c.value}
+                  type="button"
+                  onClick={() => {
+                    const cur = draft.cities ?? []
+                    const next = on ? cur.filter(v => v !== c.value) : [...cur, c.value]
+                    apply({ cities: next.length ? next : undefined })
+                  }}
+                  title={`${c.value} — ${c.count.toLocaleString('he-IL')} רשומות`}
+                  className={`${CHIP} ${on ? CHIP_PICK : CHIP_OFF}`}
+                >
+                  {c.value}
+                  <span className="opacity-60 mr-1 tabular-nums">{c.count.toLocaleString('he-IL')}</span>
+                </button>
+              )
+            })}
           </Row>
 
           {/* ── תאריך הרשמה ── */}

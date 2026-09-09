@@ -465,6 +465,7 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
       <AdvancedFilters
         value={adv}
         communities={communities}
+        cities={filterOptions.city ?? []}
         activeCount={advCount}
         onChange={setAdv}
         onClear={clearAdv}

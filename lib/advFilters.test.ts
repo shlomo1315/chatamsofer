@@ -61,6 +61,41 @@ describe('readAdvFilters — אימות קלט', () => {
     expect(readAdvFilters(sp({ community: '   ' })).community).toBeUndefined()
   })
 
+  // ───────────────────────────────────────────────────────────────────────
+  // 🔴 עיר בסינון המתקדם — בחירה מרובה מרשימה סגורה.
+  //
+  // ⚠️ שונה מקהילה: 72 ערים ל-7,284 רשומות (מול 1,838 קהילות), ולכן
+  // רשימה שמישה ו-ilike היה תופס ערים לא מתכוונות — "רמת גן" בתוך
+  // "רמת גן מזרח". כאן בחירה מדויקת בלבד.
+  //
+  // ⚠️ הערכים מגיעים מה-URL ומשמשים בשאילתה: הם עוברים כערכי in() ולא
+  // כשם עמודה, ולכן supabase-js מבריח אותם. האורך נחתך בכל זאת, כדי
+  // ש-URL תפוח לא ייצור שאילתה ענקית.
+  // ───────────────────────────────────────────────────────────────────────
+  it('עיר — רשימה מופרדת בפסיקים', () => {
+    expect(readAdvFilters(sp({ city: 'בני ברק' })).cities).toEqual(['בני ברק'])
+    expect(readAdvFilters(sp({ city: 'בני ברק,ירושלים' })).cities).toEqual(['בני ברק', 'ירושלים'])
+  })
+
+  it('עיר — מתעלם מרווחים ומערכים ריקים', () => {
+    expect(readAdvFilters(sp({ city: ' בני ברק , , ירושלים ' })).cities).toEqual(['בני ברק', 'ירושלים'])
+    expect(readAdvFilters(sp({ city: '   ' })).cities).toBeUndefined()
+    expect(readAdvFilters(sp({ city: ',,,' })).cities).toBeUndefined()
+  })
+
+  it('עיר — כפילויות נבלעות', () => {
+    expect(readAdvFilters(sp({ city: 'חיפה,חיפה' })).cities).toEqual(['חיפה'])
+  })
+
+  it('🔴 עיר — נחסמת רשימה תפוחה מה-URL', () => {
+    const many = Array.from({ length: 200 }, (_, i) => `עיר${i}`).join(',')
+    expect(readAdvFilters(sp({ city: many })).cities!.length).toBeLessThanOrEqual(100)
+  })
+
+  it('hasAdvFilters מזהה עיר כסינון פעיל', () => {
+    expect(hasAdvFilters(readAdvFilters(sp({ city: 'אשדוד' })))).toBe(true)
+  })
+
   it('hasAdvFilters מזהה ריק מול פעיל', () => {
     expect(hasAdvFilters(readAdvFilters(sp({})))).toBe(false)
     expect(hasAdvFilters(readAdvFilters(sp({ age_min: '20' })))).toBe(true)

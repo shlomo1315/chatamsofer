@@ -165,6 +165,17 @@ export interface AdvFilters {
    * ובחירת "ויזניץ" הייתה מחמיצה את כל הוואריאציות. ilike תופס את כולן.
    */
   community?: string
+  /**
+   * ערים — בחירה מרובה מרשימה סגורה.
+   *
+   * 🔴 בחירה ולא ilike, בניגוד לקהילה: 72 ערים בלבד ל-7,284 רשומות, ולכן
+   * רשימה שמישה לגמרי. ilike היה תופס ערים לא מתכוונות — "רמת גן" בתוך
+   * "רמת גן מזרח" — והמזכירה לא הייתה רואה שהתוצאה רחבה מהכוונה.
+   *
+   * ⚠️ קיים גם סינון עיר בכותרת העמודה (FILTER_COLUMNS). שניהם מצטלבים
+   * ורצים במסד; הפאנל נועד לשלב עיר עם גיל/קהילה בלי לצאת ממנו.
+   */
+  cities?: string[]
   /** מין: male | female. */
   gender?: string
   /** שיוך לעץ הדורות: linked = משויך · unlinked = חסר בעץ. */
@@ -221,6 +232,13 @@ export function readAdvFilters(sp: { get(k: string): string | null }): AdvFilter
 
   const community = (sp.get('community') ?? '').trim()
   if (community) out.community = community.slice(0, 100)
+
+  // ⚠️ תקרה על מספר הערים: URL תפוח היה מייצר רשימת in() ענקית. 100 הוא
+  // הרבה מעבר ל-72 הערים הקיימות, ולכן אינו חוסם שימוש אמיתי.
+  const cities = Array.from(new Set(
+    (sp.get('city') ?? '').split(',').map(s => s.trim()).filter(Boolean),
+  )).slice(0, 100)
+  if (cities.length) out.cities = cities
   const gender = (sp.get('gender') ?? '').trim()
   if (gender === 'male' || gender === 'female') out.gender = gender
   const lineage = (sp.get('lineage') ?? '').trim()
@@ -236,7 +254,7 @@ export function hasAdvFilters(a: AdvFilters): boolean {
 /** מפתחות ה-URL של הסינון המתקדם — מקור אמת יחיד לייצוא ולניקוי. */
 export const ADV_KEYS = [
   'age_min', 'age_max', 'kids_min', 'kids_max',
-  'reg_from', 'reg_to', 'community', 'gender', 'lineage',
+  'reg_from', 'reg_to', 'community', 'city', 'gender', 'lineage',
 ] as const
 
 /**

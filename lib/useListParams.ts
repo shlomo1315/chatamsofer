@@ -84,6 +84,9 @@ export function useListParams(opts?: {
     put('kids_min', adv.kidsMin); put('kids_max', adv.kidsMax)
     put('reg_from', adv.regFrom); put('reg_to', adv.regTo)
     put('community', adv.community?.trim())
+    // ⚠️ מופרד בפסיקים — אותו פורמט שקורא readAdvFilters. רשימה ריקה
+    // אינה נכתבת כלל, אחרת נשאר city= ריק בכתובת.
+    put('city', adv.cities?.length ? adv.cities.join(',') : undefined)
     put('gender', adv.gender); put('lineage', adv.lineage)
     // כל שינוי סינון מאפס לעמוד 1 — אחרת נשארים בעמוד 7 של תוצאה בת עמוד אחד.
     sp.delete('page')
