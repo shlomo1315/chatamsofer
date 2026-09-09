@@ -1,3 +1,4 @@
+import { fmtLoanAmount } from '@/lib/loanCurrency'
 import Card from '@/components/ui/Card'
 import PageHeader from '@/components/ui/PageHeader'
 import { unstable_cache } from 'next/cache'
@@ -64,6 +65,8 @@ export default async function ReportsPage() {
     .reduce((s: number, l: { amount: number }) => s + l.amount, 0)
 
   // סמל השקל אחרי המספר ("12,500 ₪") — Intl עם style currency מציב אותו לפני
+  // ⚠️ ליולדות בלבד: יתרות כרטיסי המזון באמת נקובות בשקלים. סכומי
+  // ההלוואות משתמשים ב-fmtLoanAmount (דולר) — ראו lib/loanCurrency.
   const fmtCur = (n: number) =>
     `${new Intl.NumberFormat('he-IL', { maximumFractionDigits: 0 }).format(n)} ₪`
 
@@ -77,8 +80,8 @@ export default async function ReportsPage() {
         {[
           { label: 'סה״כ צאצאים', value: data.beneficiaries.length, color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100' },
           { label: 'צאצאים מאושרים', value: data.beneficiaries.filter((b: { eligibility_status: string }) => b.eligibility_status === 'approved').length, color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-100' },
-          { label: 'סכום הלוואות כולל', value: fmtCur(totalLoanAmount), color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100' },
-          { label: 'הלוואות פעילות', value: fmtCur(activeLoanAmount), color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-100' },
+          { label: 'סכום הלוואות כולל', value: fmtLoanAmount(totalLoanAmount), color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100' },
+          { label: 'הלוואות פעילות', value: fmtLoanAmount(activeLoanAmount), color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-100' },
         ].map(({ label, value, color, bg, border }) => (
           <div key={label} className={`${bg} rounded-xl p-5 text-center border ${border} shadow-sm`}>
             <p className={`text-xl font-bold ltr-num ${color}`}>{value}</p>

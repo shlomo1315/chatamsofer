@@ -188,7 +188,7 @@ export default function EditLoanPage({ params }: { params: Promise<{ id: string 
           {fieldErrors.amount && <p className="text-xs text-red-600">{fieldErrors.amount}</p>}
         </div>
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-slate-600">סכום שאושר בפועל (₪)</label>
+          <label className="text-xs font-medium text-slate-600">סכום שאושר בפועל ($)</label>
           <input type="text" inputMode="numeric" value={approvedAmount} onChange={e => { const v = e.target.value.replace(/\D/g, ''); setApprovedAmount(v) }}
             className="rounded-lg border border-slate-300 focus:ring-indigo-500 px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left" dir="ltr" placeholder="ריק = כסכום המבוקש" />
           <p className="text-[11px] text-slate-400">הסכום שמוצג בפורטל הביצוע</p>

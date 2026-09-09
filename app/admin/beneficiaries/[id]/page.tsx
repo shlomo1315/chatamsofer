@@ -1,4 +1,5 @@
 import { guardPage } from '@/lib/pageGuard'
+import { fmtLoanAmount } from '@/lib/loanCurrency'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowRight, Phone, MapPin, Calendar, Users, GitBranch, ChevronLeft, FileText, User, Activity, Baby, CreditCard, Paperclip, Mail, Gift, AlertTriangle, MessageSquare } from 'lucide-react'
@@ -281,7 +282,7 @@ async function getActivity(id: string): Promise<ActivityItem[]> {
   if (maternity.error) throw maternity.error
   const items: ActivityItem[] = []
   for (const l of loans.data ?? []) {
-    items.push({ kind: 'loan', id: l.id, title: `בקשת הלוואה${l.purpose ? ` — ${l.purpose}` : ''}${l.amount ? ` (₪${Math.round(Number(l.amount)).toLocaleString('he-IL')})` : ''}`, date: l.created_at, status: l.status })
+    items.push({ kind: 'loan', id: l.id, title: `בקשת הלוואה${l.purpose ? ` — ${l.purpose}` : ''}${l.amount ? ` (${fmtLoanAmount(l.amount)})` : ''}`, date: l.created_at, status: l.status })
   }
   for (const m of maternity.data ?? []) {
     items.push({ kind: 'maternity', id: m.id, title: `פתיחת תיק לידה${m.baby_name ? ` — ${m.baby_name}` : ''}`, date: m.created_at, status: m.status })

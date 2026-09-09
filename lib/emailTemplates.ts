@@ -6,6 +6,7 @@
 // התבניות נשארות סינכרוניות ואין צורך לשנות את כל מקומות הקריאה.
 // ─────────────────────────────────────────────────────────────────────────────
 import { textFor } from './emailTextsStore'
+import { fmtLoanAmount } from './loanCurrency'
 
 export interface BuiltEmail {
   subject: string
@@ -1031,7 +1032,9 @@ export function loanApprovedEmail(
   loan: { amount?: number | null; approved_amount?: number | null; installments?: number | null; monthly_payment?: number | null; purpose?: string | null },
 ): BuiltEmail {
   const fullName = [b.family_name, b.full_name].filter(Boolean).join(' ') || (b.full_name ?? '')
-  const fmt = (n?: number | null) => (n != null ? `₪${Number(n).toLocaleString('he-IL')}` : '')
+  // 🔴 דולר ולא שקל — ראו lib/loanCurrency. אישורי הגמ"ח שנשלחו הציגו ₪
+  // על סכומים שנקובים בדולר, כלומר סכום שאינו קיים.
+  const fmt = fmtLoanAmount
   const benRows = [
     detailRow('שם מלא', fullName),
     detailRow('מספר זהות', b.id_number),

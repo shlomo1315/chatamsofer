@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { deliverMail, urlToAttachment } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
+import { fmtLoanAmount } from '@/lib/loanCurrency'
 import { requestReceivedEmail } from '@/lib/emailTemplates'
 import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { signedDocUrl } from '@/lib/docUrl'
@@ -146,9 +147,9 @@ export async function POST(request: NextRequest) {
         requestRows: [
           ['מטרת ההלוואה', String(purpose).trim()],
           ['פירוט', purpose_details ? String(purpose_details).trim() : ''],
-          ['סכום מבוקש', `₪${parsedAmount.toLocaleString('he-IL')}`],
+          ['סכום מבוקש', fmtLoanAmount(parsedAmount)],
           ['מספר תשלומים', parsedInstallments],
-          ['תשלום חודשי משוער', `₪${Math.round(monthly_payment).toLocaleString('he-IL')}`],
+          ['תשלום חודשי משוער', fmtLoanAmount(monthly_payment)],
           ['פנייה קודמת לגמ"ח', parsedDeclaration],
           ['הערות', notes ? String(notes).trim() : ''],
         ],
