@@ -55,8 +55,11 @@ const DEMO: Record<string, string> = Object.fromEntries(MERGE_TAGS.map(t => [t.t
 function renderDemo(html: string): string {
   let out = String(html ?? '')
   for (const b of CONDITIONAL_BLOCKS) {
-    const re = new RegExp(`\\{\\{\\s*#\\s*${b.name}\\s*\\}\\}([\\s\\S]*?)\\{\\{\\s*/\\s*${b.name}\\s*\\}\\}`, 'g')
-    out = out.replace(re, (_m, body: string) => body)
+    // ⚠️ אותה בליעת עטיפה כמו ב-applyMerge: העורך עוטף כל שורה ב-<div>,
+    // ובלי זה תגי הפתיחה והסגירה נשארים גלויים בתצוגה המקדימה.
+    const o = `(?:<(?:div|p)[^>]*>\\s*)?\\{\\{\\s*#\\s*${b.name}\\s*\\}\\}(?:\\s*</(?:div|p)>)?`
+    const c = `(?:<(?:div|p)[^>]*>\\s*)?\\{\\{\\s*/\\s*${b.name}\\s*\\}\\}(?:\\s*</(?:div|p)>)?`
+    out = out.replace(new RegExp(`${o}([\\s\\S]*?)${c}`, 'g'), (_m, body: string) => body)
   }
   return out.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, k: string) => DEMO[k.trim()] ?? `{{${k}}}`)
 }
