@@ -414,7 +414,8 @@ export function weeklyLoansReportEmail(
   // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל").
   const t = (k: string) => textFor('weekly_loans_report', k)
   const T = (k: string) => escapeHtml(t(k))
-  const fmtCur = (n: number) => `₪${Math.round(Number(n) || 0).toLocaleString('he-IL')}`
+  // 🔴 דולר — אגף ההלוואות כולו נקוב בדולרים. ראו lib/loanCurrency.
+  const fmtCur = fmtLoanAmount
   const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''
 
   const statBox = (value: number, label: string, color: string) => `

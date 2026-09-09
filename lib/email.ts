@@ -1,4 +1,5 @@
 import { deliverMail } from './sendMail'
+import { fmtLoanAmount } from './loanCurrency'
 import type { MailOptions } from './sendMail'
 
 export interface EmailPayload {
@@ -109,10 +110,10 @@ export function templateLoanApproved(name: string, amount: number): EmailPayload
     html: baseTemplate('בקשת הלוואה אושרה', `
       <h2 style="margin:0 0 16px;color:#1e293b;font-size:18px;">שלום ${name},</h2>
       <p style="margin:0 0 12px;color:#475569;font-size:15px;line-height:1.6;">
-        שמחים לבשר לך כי בקשת ההלוואה שלך על סך <strong>₪${amount.toLocaleString('he-IL')}</strong> אושרה.
+        שמחים לבשר לך כי בקשת ההלוואה שלך על סך <strong>${fmtLoanAmount(amount)}</strong> אושרה.
       </p>
       <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:16px;margin:20px 0;">
-        <p style="margin:0;color:#166534;font-size:14px;font-weight:600;">הלוואה מאושרת — סכום: ₪${amount.toLocaleString('he-IL')}</p>
+        <p style="margin:0;color:#166534;font-size:14px;font-weight:600;">הלוואה מאושרת — סכום: ${fmtLoanAmount(amount)}</p>
       </div>
       <p style="margin:16px 0 0;color:#475569;font-size:14px;">נציג יצור איתך קשר בהקדם לתיאום פרטי התשלום.</p>
     `),
