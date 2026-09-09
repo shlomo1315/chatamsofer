@@ -10,6 +10,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyPortalToken, PORTAL_COOKIE } from '@/lib/loansPortalAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { matchesLoanStage, LOAN_STAGES, type LoanStage } from '@/lib/loansPortalFilter'
 import { buildXlsx, xlsxHeaders, todayStamp, type CellValue, type Column } from '@/lib/xlsx'
 
 export const dynamic = 'force-dynamic'
@@ -20,6 +21,7 @@ type Loan = {
   approved_amount?: number | null
   amount?: number | null
   installments?: number | null
+  note_sent_at?: string | null
   disbursed_at?: string | null
   beneficiary?: {
     full_name?: string | null; family_name?: string | null; id_number?: string | null
@@ -27,9 +29,12 @@ type Loan = {
   } | null
 }
 
-const FILTER_LABEL: Record<string, string> = {
-  all: 'כל ההלוואות', pending: 'ממתינות לביצוע', done: 'בוצעו',
-}
+// 🔴 אותם שלבים בדיוק שבמסך — מקור אמת ב-lib/loansPortalFilter.
+// ⚠️ רשימה משוכפלת כאן הייתה מפילה בשקט שלב חדש ל-'all', והקובץ שיורד
+// היה רחב מהמסך בלי שום סימן. ראו export-must-match-screen.
+const FILTER_LABEL: Record<string, string> = Object.fromEntries(
+  LOAN_STAGES.map(s => [s.key, s.label]),
+)
 
 const COLUMNS: Column[] = [
   { header: 'שם משפחה' }, { header: 'שם פרטי' },
@@ -63,14 +68,13 @@ export async function GET(req: NextRequest) {
   // כמערך, ולכן חתימת Loan לעולם לא תתאים להם ישירות (כך גם ב-/api/shared/loans).
   const { rows: raw } = await fetchAllRows<unknown>((from, to) => admin
     .from('loans')
-    .select('amount, approved_amount, installments, disbursed_at, beneficiary:beneficiaries(full_name, family_name, id_number, city, address, phone, email)')
+    .select('amount, approved_amount, installments, note_sent_at, disbursed_at, beneficiary:beneficiaries(full_name, family_name, id_number, city, address, phone, email)')
     .in('status', ['approved', 'active'])
     .order('created_at', { ascending: false })
     .range(from, to))
   const loans = (raw ?? []) as Loan[]
 
-  const visible = loans.filter(l =>
-    filter === 'pending' ? !l.disbursed_at : filter === 'done' ? !!l.disbursed_at : true)
+  const visible = loans.filter(l => matchesLoanStage(l, filter as LoanStage))
 
   const rows: CellValue[][] = visible.map(l => {
     const b = l.beneficiary
@@ -78,7 +82,7 @@ export async function GET(req: NextRequest) {
       b?.family_name, b?.full_name, b?.id_number, b?.address, b?.city, b?.phone, b?.email,
       Number(l.approved_amount ?? l.amount) || 0,
       l.installments,
-      l.disbursed_at ? 'בוצעה' : 'ממתינה לביצוע',
+      l.disbursed_at ? 'בוצעה' : (l.note_sent_at ? 'נשלח שטר — ממתין' : 'טרם נשלח שטר'),
       l.disbursed_at ? new Date(l.disbursed_at) : null,
     ]
   })

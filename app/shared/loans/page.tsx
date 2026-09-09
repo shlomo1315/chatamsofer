@@ -2,11 +2,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Lock, LogIn, LogOut, CreditCard, CheckCircle2, Clock3, Loader2, Calendar, User, RefreshCw, Download, Send, Search, X, RotateCcw } from 'lucide-react'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
+import { matchesLoanStage, LOAN_STAGES, type LoanStage } from '@/lib/loansPortalFilter'
 
 // ── הגדרת עמודות טבלת ההלוואות ──
 // ⚠️ עמודת הסטטוס אינה בבורר: היא נושאת את כפתורי הביצוע/הביטול, והסתרתה
 // משאירה את הפורטל בלי הפעולה שהוא קיים בשבילה. לכן extraCols: 1.
-type LoanColKey = 'name' | 'id_number' | 'address' | 'phone' | 'email' | 'amount'
+type LoanColKey = 'name' | 'id_number' | 'address' | 'phone' | 'email' | 'amount' | 'installments'
 
 // 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
 // React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
@@ -21,6 +22,9 @@ const LOAN_COLUMNS: ColDef<LoanColKey, PortalLoan>[] = [
   { key: 'phone', label: 'טלפון', def: true, value: l => l.beneficiary?.phone || null },
   { key: 'email', label: 'מייל', def: false, value: l => l.beneficiary?.email || null },
   { key: 'amount', label: 'סכום מאושר', def: true, kind: 'number', value: l => shownAmount(l) || null },
+  // 🔴 כמות התשלומים — מוצגת בגדול: זה הנתון שהגורם המבצע צריך מול
+  // כל הלוואה, ועד כה הוא היה קיים בנתונים ולא הופיע בשום מקום במסך.
+  { key: 'installments', label: 'תשלומים', def: true, kind: 'number', value: l => l.installments || null },
 ]
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -270,7 +274,8 @@ function DisburseModal({ loan, onClose, onDone }: {
   )
 }
 
-type FilterMode = 'all' | 'pending' | 'done'
+// 🔴 שלבי ההלוואה — מקור אמת ב-lib/loansPortalFilter (עם טסטים).
+type FilterMode = LoanStage
 
 // ── Portal Screen ─────────────────────────────────────────────────────────────
 function PortalScreen({ onLogout }: { onLogout: () => void }) {
@@ -364,16 +369,19 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
     }
   }
 
-  const pending = loans.filter(l => !l.disbursed_at)
-  const done = loans.filter(l => !!l.disbursed_at)
-  const byFilter = filter === 'pending' ? pending : filter === 'done' ? done : loans
+  // 🔴 הסינון עובר דרך matchesLoanStage — אותה הכרעה שנבדקת בטסטים.
+  // ⚠️ "נשלח שטר" הוא שלב ביניים ולא קטגוריה נפרדת מ"ממתינות": הלוואה
+  // שנשלח לה שטר עדיין ממתינה לביצוע, ולכן נספרת בשתיהן במכוון.
+  const pending = loans.filter(l => matchesLoanStage(l, 'pending'))
+  const done = loans.filter(l => matchesLoanStage(l, 'done'))
+  const noNote = loans.filter(l => matchesLoanStage(l, 'no_note'))
+  const noteSent = loans.filter(l => matchesLoanStage(l, 'note_sent'))
+  const byFilter = loans.filter(l => matchesLoanStage(l, filter))
   const visibleLoans = byFilter.filter(l => matchesSearch(l, search))
 
-  const filterLabel: Record<FilterMode, string> = {
-    all: 'כל ההלוואות',
-    pending: 'ממתינות לביצוע',
-    done: 'בוצעו',
-  }
+  const filterLabel = Object.fromEntries(
+    LOAN_STAGES.map(s => [s.key, s.label]),
+  ) as Record<FilterMode, string>
 
   // בורר עמודות + גרירת רוחב — רכיב מערכתי משותף.
   //
@@ -410,6 +418,17 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
           : <span className="text-slate-300">—</span>
       case 'amount':
         return <span className="font-bold text-emerald-700 tabular-nums">{fmtCur(shownAmount(l))}</span>
+      // 🔴 בולט ולא מספר בשורה: זה הנתון שנבדק מול כל הלוואה בזמן הביצוע,
+      // ומספר קטן בין שאר העמודות נקרא לא נכון בסריקה מהירה.
+      case 'installments':
+        return l.installments
+          ? (
+            <span className="inline-flex items-baseline gap-1 rounded-lg bg-indigo-50 px-2 py-0.5 font-bold text-indigo-700">
+              <span className="text-base tabular-nums">{l.installments}</span>
+              <span className="text-[10px] font-semibold opacity-70">תשלומים</span>
+            </span>
+          )
+          : <span className="text-slate-300">—</span>
     }
   }
 
@@ -427,6 +446,10 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
 
   const statCards: { key: FilterMode; label: string; value: number; numCls: string; dotCls: string; activeCls: string }[] = [
     { key: 'pending', label: 'ממתינות לביצוע', value: pending.length, numCls: 'text-amber-600', dotCls: 'bg-amber-400', activeCls: 'bg-amber-50 border-amber-300 ring-2 ring-amber-200' },
+    // 🔴 שני שלבי הביניים — בלעדיהם אי אפשר לדעת למי כבר נשלח שטר,
+    // והשטרות נשלחו פעמיים לאותם אנשים.
+    { key: 'no_note', label: 'טרם נשלח שטר', value: noNote.length, numCls: 'text-slate-600', dotCls: 'bg-slate-400', activeCls: 'bg-slate-50 border-slate-300 ring-2 ring-slate-200' },
+    { key: 'note_sent', label: 'נשלח שטר — ממתין', value: noteSent.length, numCls: 'text-sky-600', dotCls: 'bg-sky-400', activeCls: 'bg-sky-50 border-sky-300 ring-2 ring-sky-200' },
     { key: 'all', label: 'סה״כ הלוואות', value: loans.length, numCls: 'text-indigo-600', dotCls: 'bg-indigo-400', activeCls: 'bg-indigo-50 border-indigo-300 ring-2 ring-indigo-200' },
     { key: 'done', label: 'בוצעו', value: done.length, numCls: 'text-emerald-600', dotCls: 'bg-emerald-400', activeCls: 'bg-emerald-50 border-emerald-300 ring-2 ring-emerald-200' },
   ]
@@ -469,7 +492,9 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
           בלי סיבה. */}
       <main className="max-w-[1800px] mx-auto px-4 py-6 flex flex-col gap-6">
         {/* Filter Cards */}
-        <div className="grid grid-cols-3 gap-3">
+        {/* ⚠️ 5 כרטיסים: 2 בשורה בנייד, 3 בטאבלט, 5 במסך מלא. grid-cols-3
+            קבוע היה משאיר שני כרטיסים בודדים בשורה שנייה. */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {statCards.map(s => {
             const isActive = filter === s.key
             return (
