@@ -266,7 +266,32 @@ export async function linkHolidayCard(
   // מת, והשגיאה נראית כתקלת מערכת במקום כנתון מיושן.
   // ─────────────────────────────────────────────────────────────────────────
   if (!ok && /לא מוכר|לא נמצא|not found/i.test(message)) {
-    const fresh = await lookup()
+    // ⚠️ קודם איתור מחדש, ואם גם הוא ריק — הקמה.
+    //
+    // 🔴 בלי ההקמה המשפחה נתקעת לנצח: המזהה השמור מת, החיפוש אינו מוצא
+    // דבר (הרשומה נמחקה בנדרים), ואנחנו לא מנסים להקים כי nedarim_id
+    // *כן* קיים אצלנו. זה בדיוק מה שקרה לנחמן — נכשל שוב ושוב.
+    let fresh = await lookup()
+    if (!fresh) {
+      const createZeout = pickZeoutForCreate(bn?.id_number, bn?.spouse_id_number)
+      if (createZeout) {
+        try {
+          fresh = await saveClientCard(creds, {
+            id_number: createZeout,
+            family_name: bn?.family_name ?? '',
+            full_name: bn?.full_name ?? '',
+            phone: bn?.phone, phone2: bn?.phone2, email: bn?.email,
+            address: bn?.address, city: bn?.city,
+          }, null, 'חלוקת חגים')
+          console.warn(`[holidayCards] nedarim_id ${nedarimId} מת — המשפחה הוקמה מחדש כ-${fresh}`)
+        } catch (e) {
+          const raw = e instanceof Error ? e.message : String(e)
+          // "כבר רשום" — קיימת תחת רשומה אחרת; מאתרים שוב.
+          if (isAlreadyRegistered(raw)) fresh = await lookup()
+          else console.error('[holidayCards] הקמה מחדש נכשלה:', raw)
+        }
+      }
+    }
     if (fresh && fresh !== nedarimId) {
       console.warn(`[holidayCards] nedarim_id ${nedarimId} אינו מוכר — מאותר מחדש כ-${fresh}`)
       nedarimId = fresh
