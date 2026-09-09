@@ -398,6 +398,21 @@ export default function BlockEditor({
     if (id) update(id, { content: el.innerHTML })
   }
 
+  /**
+   * הזרקת פסקה מותנית — תג פתיחה, שורה לתוכן, ותג סגירה.
+   *
+   * ⚠️ שלוש שורות ולא תג בודד: המנהל צריך לראות *לאן* לכתוב. תג פתיחה
+   * בלי סגירה נשאר גלוי במייל שיוצא, וזה בדיוק מה שהבלוק נועד למנוע.
+   */
+  function insertBlockTag(name: string) {
+    const el = lastEditable.current
+    if (!el) return
+    el.focus()
+    document.execCommand('insertText', false, `{{#${name}}}\n\n{{/${name}}}`)
+    const id = el.dataset.blockId
+    if (id) update(id, { content: el.innerHTML })
+  }
+
   /** סידור מחדש: מזיז את הבלוק הנגרר לפני/אחרי בלוק היעד */
   function reorder(dragId: string, targetId: string, position: 'before' | 'after') {
     if (dragId === targetId) return
@@ -493,6 +508,40 @@ export default function BlockEditor({
                   {`{{${t.token}}}`}
                 </code>
                 <span className="min-w-0 flex-1 truncate text-[11px] text-slate-500">{t.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* ── פסקאות מותנות ──
+              🔴 מחליפות פסקה שלמה ולא מילה: משפחה שהמוקד שלה סגור אינה
+              צריכה כתובת ושעות אלא הודעת המתנה. בלי זה נשלחים שני
+              קמפיינים נפרדים, וטעות בסינון שולחת משפחה לדלת נעולה. */}
+          <h3 className="mb-2 mt-4 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-400">
+            <Braces size={13} /> פסקה מותנית
+          </h3>
+          <p className="mb-2 text-[11px] leading-relaxed text-slate-400">
+            הטקסט שבין הפתיחה לסגירה יישלח רק למי שהתנאי מתקיים לגביו.
+          </p>
+          <div className="flex flex-col gap-1 overflow-hidden rounded-lg border border-amber-200">
+            {CONDITIONAL_BLOCKS.map(b => (
+              <button
+                key={b.name}
+                type="button"
+                draggable
+                onDragStart={e => {
+                  e.dataTransfer.setData('text/plain', `{{#${b.name}}}\n\n{{/${b.name}}}`)
+                  e.dataTransfer.effectAllowed = 'copy'
+                }}
+                onDragEnd={() => setDropTargetId(null)}
+                onMouseDown={e => { e.preventDefault(); insertBlockTag(b.name) }}
+                className="flex cursor-grab items-start gap-2 border-b border-amber-50 px-2.5 py-1.5
+                           text-right transition last:border-0 hover:bg-amber-50 active:cursor-grabbing"
+              >
+                <GripVertical size={12} className="mt-0.5 flex-shrink-0 text-amber-300" />
+                <code className="flex-shrink-0 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-bold text-amber-700">
+                  {`{{#${b.name}}}`}
+                </code>
+                <span className="min-w-0 flex-1 text-[11px] leading-snug text-slate-500">{b.label}</span>
               </button>
             ))}
           </div>
