@@ -4,6 +4,7 @@ export const metadata = { title: 'היכל החתם סופר - מערכת ניה
 import Sidebar from '@/components/layout/Sidebar'
 import Header from '@/components/layout/Header'
 import WelcomeModal from '@/components/ui/WelcomeModal'
+import DeployBanner from '@/components/ui/DeployBanner'
 import NameChangeAlert from '@/components/admin/NameChangeAlert'
 import { ToastProvider } from '@/components/ui/Toast'
 import { StaffPermissionsProvider } from '@/components/StaffPermissions'
@@ -33,6 +34,8 @@ export default async function DashboardLayout({
   return (
     <ToastProvider>
     <div className="flex h-screen overflow-hidden bg-slate-50">
+      {/* 🔴 עדכון גרסה — באמצע פריסה או אחריה. ראו DeployBanner. */}
+      <DeployBanner />
       <WelcomeModal />
       {/* בקשות תיקון שם ממתינות — קופצת בכניסה לתוכנה. */}
       <NameChangeAlert />

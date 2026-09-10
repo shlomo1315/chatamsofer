@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Package, Plus, Minus, Loader2, X, History, AlertTriangle, CheckCircle2, Clock, RefreshCw, ClipboardCheck } from 'lucide-react'
 import { useStaffPermissions } from '@/components/StaffPermissions'
+import { networkErrorMessage } from '@/lib/networkErrorMessage'
 
 type LedgerRow = {
   id: string
@@ -117,7 +118,7 @@ export default function StockManager() {
       setPurchasedCards(typeof d.purchasedCards === 'number' ? d.purchasedCards : 0)
       setPurchases(Array.isArray(d.purchases) ? d.purchases as Purchase[] : [])
       setUnapproved(Array.isArray(d.loadedNotApproved) ? d.loadedNotApproved as UnapprovedLoad[] : [])
-    } catch { /* ignore */ }
+    } catch (e) { /* ignore */ }
     setLoading(false)
   }, [])
 
@@ -137,7 +138,7 @@ export default function StockManager() {
         setFlash(d.error)
         setTimeout(() => setFlash(''), 5000)
       }
-    } catch { /* ignore */ }
+    } catch (e) { /* ignore */ }
     setReturning(null)
     await load()
   }, [load])
@@ -164,7 +165,7 @@ export default function StockManager() {
         setFlash(d?.error || 'ביטול הטעינה נכשל')
       }
       setTimeout(() => setFlash(''), 6000)
-    } catch { setFlash('שגיאת רשת') }
+    } catch (e) { setFlash(networkErrorMessage(e)) }
     setReturning(null)
     await load()
   }, [load])
@@ -185,7 +186,7 @@ export default function StockManager() {
         setFlash(d?.error || 'הפעולה נכשלה')
       }
       setTimeout(() => setFlash(''), 7000)
-    } catch { setFlash('שגיאת רשת') }
+    } catch (e) { setFlash(networkErrorMessage(e)) }
     setFixingAll(false)
     await load()
   }, [load])
@@ -205,7 +206,7 @@ export default function StockManager() {
       else if (d.processed > 0) setFlash(`${d.processed} יולדות טופלו וקיבלו שובר`)
       else setFlash('אין יולדות לטיפול כרגע')
       await load()
-    } catch { setFlash('שגיאה בהרצת התור') }
+    } catch (e) { setFlash('שגיאה בהרצת התור') }
     setRunning(false)
   }, [load])
   useEffect(() => { const t = setTimeout(() => { void load() }, 0); return () => clearTimeout(t) }, [load])
@@ -713,7 +714,7 @@ function BaselineModal({ currentBalance, issued, unapprovedCount, onClose, onDon
       if (!r.ok) { setErr(d.error || 'שגיאה'); setBusy(false); return }
       const extra = d.processed > 0 ? ` · ${d.processed} יולדות ממתינות נטענו` : ''
       onDone(`המלאי נקבע ל-${target} כרטיסים${extra}`)
-    } catch { setErr('שגיאת רשת'); setBusy(false) }
+    } catch (e) { setErr(networkErrorMessage(e)); setBusy(false) }
   }
 
   return (
@@ -865,7 +866,7 @@ function StockMovementModal({ mode, currentBalance, awaiting, onClose, onDone, o
 
       const processedMsg = isAdd && d.processed > 0 ? ` — ${d.processed} יולדות מרשימת ההמתנה קיבלו שובר` : ''
       onDone(isAdd ? `נוספו ${n} כרטיסים למלאי${processedMsg}` : `הורדו ${n} כרטיסים מהמלאי`)
-    } catch { setErr('שגיאת רשת'); setBusy(false) }
+    } catch (e) { setErr(networkErrorMessage(e)); setBusy(false) }
   }
 
   return (
@@ -989,7 +990,7 @@ function PurchaseModal({ onClose, onDone }: { onClose: () => void; onDone: (msg:
       const d = await r.json()
       if (!r.ok) { setErr(d.error || 'שגיאה'); setBusy(false); return }
       onDone(`נרשמה רכישה של ${n.toLocaleString('he-IL')} כרטיסים`)
-    } catch { setErr('שגיאת רשת'); setBusy(false) }
+    } catch (e) { setErr(networkErrorMessage(e)); setBusy(false) }
   }
 
   return (
