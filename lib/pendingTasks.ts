@@ -15,7 +15,7 @@ const WIDOW_TYPE_LABELS: Record<string, string> = {
 
 export interface PendingTask {
   id: string
-  type: 'beneficiary' | 'loan' | 'maternity' | 'widow' | 'financial_aid' | 'name_change'
+  type: 'beneficiary' | 'loan' | 'maternity' | 'widow' | 'financial_aid' | 'name_change' | 'lineage'
   name: string
   detail: string
   href: string
@@ -36,7 +36,7 @@ const benName = (b: Ben) => [b?.family_name, b?.full_name].filter(Boolean).join(
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function getPendingTasks(supabase: SupabaseClient<any>): Promise<PendingTask[]> {
-  const [beneficiaries, loans, maternity, widows, financial, dismissed, nameChanges] = await Promise.all([
+  const [beneficiaries, loans, maternity, widows, financial, dismissed, lineage, nameChanges] = await Promise.all([
     supabase.from('beneficiaries')
       .select('id, full_name, family_name, created_at')
       .eq('eligibility_status', 'pending')
@@ -54,6 +54,13 @@ export async function getPendingTasks(supabase: SupabaseClient<any>): Promise<Pe
       .select('id, created_at, beneficiary:beneficiary_id(full_name, family_name)')
       .eq('status', 'pending').order('created_at', { ascending: false }).limit(100),
     supabase.from('dismissed_pending_tasks').select('entity_type, entity_id'),
+    // 🔴 בקשות תיקון סדר דורות — 158 מהן נערמו מ-16.08 בלי להופיע בשום
+    // מקום. הן נשמרו, קיבלו API, ופשוט לא נספרו בלוח הבקרה.
+    // ⚠️ מוגנת בנפרד: כשל בשליפה לא יפיל את שאר הלוח.
+    supabase.from('lineage_review_suggestions')
+      .select('id, created_at, beneficiary_id, payload')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false }).limit(100),
     // ⚠️ בקשות תיקון שם — נשלפות בנפרד ובתוך catch משלהן: אין כאן embed של
     // המוטב (השם נפתר בהמשך), וכשל בשליפה מחזיר רשימה ריקה במקום להפיל את
     // כל לוח הבקרה יחד איתו.
@@ -115,6 +122,21 @@ export async function getPendingTasks(supabase: SupabaseClient<any>): Promise<Pe
     }
   }
 
+  // שמות המבקשים בבקשות הדורות — באותו דפוס של בקשות תיקון השם.
+  const lineageRows = (lineage.data ?? []) as { id: string; created_at: string; beneficiary_id: string | null }[]
+  const lnNames = new Map<string, string>()
+  if (lineageRows.length) {
+    const ids = [...new Set(lineageRows.map(r => r.beneficiary_id).filter(Boolean) as string[])]
+    if (ids.length) {
+      const bens = await supabase.from('beneficiaries')
+        .select('id, full_name, family_name').in('id', ids)
+        .then(r => (r.error ? [] : (r.data ?? [])), () => [])
+      for (const b of bens as { id: string; full_name?: string; family_name?: string }[]) {
+        lnNames.set(String(b.id), benName({ full_name: b.full_name, family_name: b.family_name }))
+      }
+    }
+  }
+
   const tasks: PendingTask[] = [
     ...(beneficiaries.data ?? []).filter(b => !handledBenIds.has(b.id)).map((b): PendingTask => ({
       id: b.id, type: 'beneficiary', name: benName({ full_name: b.full_name, family_name: b.family_name }),
@@ -135,6 +157,16 @@ export async function getPendingTasks(supabase: SupabaseClient<any>): Promise<Pe
     ...(financial.data ?? []).map((f): PendingTask => ({
       id: f.id, type: 'financial_aid', name: benName(f.beneficiary as Ben),
       detail: 'סיוע רפואי/כספי', href: `/admin/financial-aid/${f.id}`, createdAt: f.created_at,
+    })),
+    // ── בקשות תיקון סדר דורות ──
+    // ⚠️ רק בקשות עם beneficiary_id: בקשה שהגיעה מקישור חיצוני אינה
+    // משויכת למוטב, ואין לה כרטסת להפנות אליה.
+    ...lineageRows.filter(r => r.beneficiary_id).map((r): PendingTask => ({
+      id: r.id, type: 'lineage',
+      name: lnNames.get(String(r.beneficiary_id)) ?? 'לא ידוע',
+      detail: 'בקשת תיקון סדר הדורות',
+      href: `/admin/beneficiaries/${r.beneficiary_id}`,
+      createdAt: r.created_at,
     })),
     ...nameChangeRows.map((n): PendingTask => ({
       id: n.id, type: 'name_change',

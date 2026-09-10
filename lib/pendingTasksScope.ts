@@ -12,7 +12,7 @@ import { roleAllows } from '@/lib/permissions'
 // בבירור (undefined → נופל מהרשימה) במקום לדלוף בשקט.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type TaskType = 'beneficiary' | 'loan' | 'maternity' | 'widow' | 'financial_aid' | 'name_change'
+export type TaskType = 'beneficiary' | 'loan' | 'maternity' | 'widow' | 'financial_aid' | 'name_change' | 'lineage'
 
 export interface TaskLike {
   type: TaskType
@@ -28,6 +28,10 @@ export const TASK_TYPE_SECTION: Record<TaskType, SectionKey> = {
   // ⚠️ בקשת תיקון שם היא כתיבה על כרטסת המוטב, ולכן נשלטת בהרשאת הצאצאים —
   // בדיוק כמו נתיב האישור עצמו (requirePermission('beneficiaries')).
   name_change:   'beneficiaries',
+  // 🔴 בקשת תיקון סדר דורות — הייחוס קובע זכאות, ולכן הרשאת הצאצאים.
+  // ⚠️ בלי השורה הזו 158 בקשות לא הופיעו בלוח הבקרה כלל: הן נשמרו,
+  // קיבלו API, ופשוט לא נספרו בשום מקום.
+  lineage:       'beneficiaries',
 }
 
 export function visibleTasks<T extends TaskLike>(
