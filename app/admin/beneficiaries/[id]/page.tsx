@@ -637,6 +637,11 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
             // צבע לפי סטטוס הצומת בעץ (כחול=מאושר / כתום=ממתין / אדום=נדחה). דור 1 תמיד מאושר.
             status: isRoot ? 'verified' : (genStatus.get(c.generation) ?? null),
             relation: isRoot ? null : ((c.relation as 'son' | 'son_in_law' | null | undefined) ?? null),
+            // 🔴 הצבע נחתם כאן, מול הקובץ המאושר — הצ'יפים הם רכיב לקוח
+            // ואינם יכולים לשאול את המסד. בלי זה הם נפלו לתווית שעל הצומת
+            // והציגו ירוק על מי שאינו ברשימה המאושרת הראשונית.
+            color: isRoot ? 'green' as const
+              : genColorByRef(c.generation, c.name, genStatus.get(c.generation) ?? null, approvedRef),
           }
         })
         // אם משום מה אין דור 1 כלל בשרשרת — מוסיפים אותו בראש (החתם סופר קבוע).

@@ -5,6 +5,7 @@ import { resyncSubtree, approveVerifiedBeneficiaries, cascadeRejectSubtree, inva
 import { syncChildrenOfBeneficiary } from '@/lib/lineageFamilyChildren'
 import { logActivity } from '@/lib/activityLog'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { getApprovedRefLookup } from '@/lib/lineageApprovedRef'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -119,7 +120,21 @@ async function buildPayload(admin: ReturnType<typeof getAdminClient>, force = fa
       ;(linked[row.lineage_node_id] ??= []).push({ id: row.id, name })
     }
 
-    const body: LineagePayload = { nodes: nodes as unknown as Record<string, unknown>[], linked }
+    // ─────────────────────────────────────────────────────────────────────
+    // 🔴 חותמת "בקובץ המאושר" על כל צומת — 5 הדורות הראשונים.
+    //
+    // ⚠️ העץ הוא רכיב לקוח ואינו יכול לשאול את המסד. בלי החותמת הזו הוא
+    // נאלץ להסתמך על התווית שעל הצומת (status='verified'), וזה בדיוק הבאג:
+    // גולדגלנץ יושב בדור 3 עם תווית 'verified' אף שאינו בקובץ, ולכן נצבע
+    // ירוק. הצבע חייב לנבוע מהקובץ, ובמקום אחד — כאן.
+    // ─────────────────────────────────────────────────────────────────────
+    const inRef = await getApprovedRefLookup(admin!)
+    const stamped = (nodes as unknown as Record<string, unknown>[]).map(n => ({
+      ...n,
+      in_ref: inRef(String(n.name ?? ''), Number(n.generation ?? 0)),
+    }))
+
+    const body: LineagePayload = { nodes: stamped, linked }
     _payloadCache = { at: Date.now(), version, body }
     return body
   })()

@@ -7,7 +7,8 @@ import Modal from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { genTone } from '@/lib/lineagePalette'
 import { useCan } from '@/components/StaffPermissions'
-import { genColor, asGenStatus } from '@/lib/lineageDeviation'
+import { asGenStatus } from '@/lib/lineageDeviation'
+import { genColorByRef } from '@/lib/lineageApprovedColor'
 
 interface LineageNode {
   id: string
@@ -16,6 +17,8 @@ interface LineageNode {
   parent_id: string | null
   relation?: 'son' | 'son_in_law' | null
   status?: 'verified' | 'pending' | 'rejected'
+  // 🔴 האם הצומת קיים בקובץ הייחוס המאושר, לפי שם *ודור*. נחתם בשרת.
+  in_ref?: boolean
 }
 
 // צבעי סטטוס — זהים לעץ הניהול: מאומת=ירוק, ממתין=כתום, נדחה=אדום
@@ -591,7 +594,14 @@ export default function LineageBranchView({ nodeId, self }: {
             // כמו הצ'יפים בכרטסת: צומת pending בדורות 2–5 הוא *חריגה* וצבעו אדום,
             // לא כתום. קודם העץ צבע לפי status בלבד ולכן הראה כתום בעוד הצ'יפ אדום —
             // אותו צומת בשני צבעים. עכשיו מקור אמת אחד לצבע.
-            const gColor = genColor(node.generation, asGenStatus(node.status))
+            // 🔴 הצבע מהקובץ המאושר, לא מהתווית. השרת חותם in_ref על כל צומת
+            // (app/api/admin/lineage). צומת בדורות 2–5 שאינו בקובץ הוא אדום גם
+            // אם התווית אומרת 'verified' — זה בדיוק מה שהחזיק את גולדגלנץ ירוק
+            // בדור 3 אף שמעולם לא היה ברשימה המאושרת הראשונית.
+            const gColor = genColorByRef(
+              node.generation, node.name, asGenStatus(node.status),
+              () => node.in_ref === true,
+            )
             const p = st === 'rejected' || gColor === 'red'
               ? STATUS_NODE.rejected
               : gColor === 'orange'

@@ -12,6 +12,9 @@ export interface ChainGen {
   // ולכן כתום (ממתין) ולא אדום. הצבע נגזר ב-lib/lineageDeviation.
   status?: 'verified' | 'pending' | 'rejected' | null
   relation?: 'son' | 'son_in_law' | null
+  // 🔴 הצבע שחושב בשרת מול הקובץ המאושר. הרכיב הזה הוא לקוח ואינו יכול
+  // לשאול את lineage_approved_ref בעצמו, ולכן הצבע מגיע מוכן.
+  color?: Color
 }
 
 // צומת בעץ — לבורר "בחר צומת אחר"
@@ -55,8 +58,13 @@ const GEN_TXT: Record<Color, string> = { green: 'text-green-50/85', orange: 'tex
 // ⚠️ כלל הצבע מגיע מ-lib/lineageDeviation ואינו משוכפל כאן: הצ'יפים וחלונית
 // ההתראה חייבים לומר את אותו דבר. עותק שני היה נפרד מהראשון בתיקון הבא, ואז
 // ההתראה מדברת על דור שהצ'יפים מציגים כתקין.
-const statusColor = (s: ChainGen['status'], generation: number): Color =>
-  genColor(generation, asGenStatus(s))
+// 🔴 הצבע מגיע מהשרת, שחישב אותו מול הקובץ המאושר. נפילה-לאחור ל-genColor
+// רק כשלא נשלח צבע (מסך ישן שטרם עודכן) — ואז הכלל הישן לפי התווית.
+//
+// ⚠️ זו הייתה נקודת הכשל: הצ'יפים חישבו לבדם לפי status='verified', ולכן
+// הציגו ירוק על צומת שאינו בקובץ בעוד חלונית ההתראה כבר אמרה אדום.
+const statusColor = (g: ChainGen): Color =>
+  g.color ?? genColor(g.generation, asGenStatus(g.status))
 
 export default function LineageChainChips({
   beneficiaryId, gens, initialMarks,
@@ -107,7 +115,7 @@ export default function LineageChainChips({
 
   // צבע אוטומטי לפי סטטוס הצומת בעץ — בכל דור (כולל מעל 5). דור 1 (חתם סופר)
   // תמיד מאושר. override ידני ('green'→ירוק, 'red'→אדום) גובר.
-  const autoColor = (g: ChainGen): Color => statusColor(g.status, g.generation)
+  const autoColor = (g: ChainGen): Color => statusColor(g)
   const colorOf = (g: ChainGen): Color => {
     const m = marks[String(g.generation)]
     if (m === 'green') return 'green'

@@ -39,6 +39,8 @@ import RecoveryUnlockButton from './RecoveryUnlockButton'
 import LineageTreeToggle from './LineageTreeToggle'
 import LineageChainChips, { type ChainGen } from '@/app/admin/beneficiaries/[id]/LineageChainChips'
 import { isNodeVerified } from '@/lib/lineageDeviation'
+import { genColorByRef } from '@/lib/lineageApprovedColor'
+import { getApprovedRefLookup } from '@/lib/lineageApprovedRef'
 import WantsChoiceEditor from './WantsChoiceEditor'
 import CollapsibleMailThread from './CollapsibleMailThread'
 import MailTabBoundary from './MailTabBoundary'
@@ -319,14 +321,12 @@ export default async function MaternityDetailPage(
   },
 ) {
   await guardPage('maternity')
-  const _t0 = Date.now()
   const { id } = await params
   // ⚠️ מאומת מול רשימת הלשוניות ולא מועבר כמות שהוא: ערך שרירותי מהכתובת
   // היה נכנס ישר להשוואת סטטוס ומרוקן את הניווט בלי שום הסבר.
   const stRaw = (await searchParams)?.st
   const bucket: MaternityBucket = isBucket(stRaw) ? stRaw : 'all'
   const aid = await getAid(id)
-  const _tAid = Date.now()
   const ben = aid?.beneficiary as Beneficiary | undefined
   const typedChain = Array.isArray(ben?.lineage_chain)
     ? (ben.lineage_chain as { generation: number; name: string; relation?: string | null }[])
@@ -340,8 +340,8 @@ export default async function MaternityDetailPage(
     // ניווט הבאה/קודמת — לפי סדר הרשימה הראשית (created_at), נעול ללשונית
     getAdjacentAids(id, (aid as { created_at?: string } | null)?.created_at ?? null, bucket),
   ])
-  // מדידת זמן זמנית לאבחון האיטיות — נראה ב-Railway logs היכן הזמן מתבזבז
-  console.log(`[perf] maternity/${id}: getAid=${_tAid - _t0}ms, lineage+docs=${Date.now() - _tAid}ms, total=${Date.now() - _t0}ms`)
+  // 🔴 הייחוס המאושר — מכריע את צבע 5 הדורות הראשונים בצ'יפים שלמטה.
+  const approvedRef = await getApprovedRefLookup(await createClient())
   const lineageManual = Array.isArray(ben?.lineage_manual) ? (ben.lineage_manual as string[]) : []
   // סימונים ידניים (override צבע) — כמו בכרטסת הצאצא
   const manualMarks = ((ben as { lineage_manual_marks?: Record<string, 'red' | 'green'> } | undefined)?.lineage_manual_marks) ?? {}
@@ -588,6 +588,10 @@ export default async function MaternityDetailPage(
                         // צבע לפי סטטוס הצומת בעץ (כחול=מאושר / כתום=ממתין / אדום=נדחה)
                         status: isRoot ? 'verified' : (genStatus.get(c.generation) ?? null),
                         relation: isRoot ? null : ((c.relation as 'son' | 'son_in_law' | null | undefined) ?? null),
+                        // 🔴 אותו כלל כמו בכרטסת הצאצא: הקובץ המאושר מכריע
+                        // ב-5 הדורות הראשונים, לא התווית שעל הצומת.
+                        color: isRoot ? 'green' as const
+                          : genColorByRef(c.generation, c.name, genStatus.get(c.generation) ?? null, approvedRef),
                       }
                     })
                     if (!gens.some(g => g.generation === 1)) {
