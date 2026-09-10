@@ -255,7 +255,7 @@ export async function POST(request: NextRequest) {
 // ⚠️ אין מחיקה של צמתים: דור שהמשפחה "הסירה" עשוי להיות אביהם של אחרים.
 // המוטב פשוט מחובר מחדש לצומת הנכון, והישן נשאר לשאר הענף.
 // ─────────────────────────────────────────────────────────────────────────────
-async function applyChain(
+export async function applyChain(
   admin: SupabaseClient,
   beneficiaryId: string,
   chain: ChainRow[],

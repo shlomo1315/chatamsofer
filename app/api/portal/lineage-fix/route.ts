@@ -122,5 +122,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'שמירת הבקשה נכשלה' }, { status: 500 })
   }
 
-  return NextResponse.json({ ok: true })
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 קליטה מיידית — בקשת תיקון היא רישום מחדש, לא בקשה לאישור.
+  //
+  // ⚠️ עד כה כל בקשה המתינה לאישור ידני, ו-158 בקשות נערמו מ-16.08 בלי
+  // שאיש ידע עליהן. המשפחה תיקנה את הייחוס שלה — זה נקלט עכשיו, והכרטסת
+  // חוזרת למסלול הרגיל כאילו נרשמה מחדש.
+  //
+  // ⚠️ רק שרשרת מובנית נקלטת אוטומטית. טקסט חופשי ("יש בעיה בדור 4")
+  // אינו ניתן להחלה בלי פרשנות, והוא נשאר ממתין לטיפול ידני.
+  //
+  // ⚠️ כשל בהחלה אינו כשל בבקשה: הבקשה כבר נשמרה, והמשפחה קיבלה אישור.
+  // היא פשוט תטופל ידנית — ראו מסך בקשות התיקון.
+  // ─────────────────────────────────────────────────────────────────────────
+  if (chain?.length) {
+    try {
+      const { autoApplyLineageFix } = await import('@/lib/lineageAutoFix')
+      const res = await autoApplyLineageFix(admin, ben.id, chain)
+      return NextResponse.json({ ok: true, applied: res.applied, needsReview: res.needsReview })
+    } catch (e) {
+      console.error('[lineage-fix] קליטה אוטומטית נכשלה — ממתין לטיפול ידני:',
+        e instanceof Error ? e.message : e)
+    }
+  }
+
+  return NextResponse.json({ ok: true, applied: false })
 }
