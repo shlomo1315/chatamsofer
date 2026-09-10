@@ -7,7 +7,7 @@ import Modal from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { genTone } from '@/lib/lineagePalette'
 import { useCan } from '@/components/StaffPermissions'
-import { asGenStatus } from '@/lib/lineageDeviation'
+import { asGenStatus, genColor } from '@/lib/lineageDeviation'
 import { genColorByRef } from '@/lib/lineageApprovedColor'
 
 interface LineageNode {
@@ -598,10 +598,15 @@ export default function LineageBranchView({ nodeId, self }: {
             // (app/api/admin/lineage). צומת בדורות 2–5 שאינו בקובץ הוא אדום גם
             // אם התווית אומרת 'verified' — זה בדיוק מה שהחזיק את גולדגלנץ ירוק
             // בדור 3 אף שמעולם לא היה ברשימה המאושרת הראשונית.
-            const gColor = genColorByRef(
-              node.generation, node.name, asGenStatus(node.status),
-              () => node.in_ref === true,
-            )
+            // ⚠️ נפילה בטוחה כשאין חותמת: in_ref נחתם ב-/api/admin/lineage
+            // בלבד. עץ שנטען ממקור אחר (או מ-payload שנשמר לפני הפריסה)
+            // מגיע בלי השדה, ו-`in_ref === true` היה מחזיר false לכל צומת —
+            // כלומר *כל* דורות 2–5 אדומים בבת אחת. אדום גורף אינו אזהרה,
+            // הוא תקלה שנראית כמו נתונים, ולכן בהיעדר חותמת חוזרים לתווית.
+            const stamped = typeof node.in_ref === 'boolean'
+            const gColor = stamped
+              ? genColorByRef(node.generation, node.name, asGenStatus(node.status), () => node.in_ref === true)
+              : genColor(node.generation, asGenStatus(node.status))
             const p = st === 'rejected' || gColor === 'red'
               ? STATUS_NODE.rejected
               : gColor === 'orange'
