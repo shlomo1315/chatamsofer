@@ -45,3 +45,37 @@ export function isAlreadyRegistered(message: string | null | undefined): boolean
   if (!s) return false
   return /כבר רשום|already (exists|registered)/i.test(s)
 }
+
+/**
+ * האם השגיאה מנדרים אומרת "המזהה השמור אצלנו אינו מוכר".
+ *
+ * 🔴 המצב: nedarim_id ששמור בכרטסת הפך לא תקף — המשפחה אוחדה או נמחקה
+ * בנדרים. AddTlush נכשל ב"שגיאה באיתור משפחה", והכרטיס אינו נטען.
+ */
+export function isUnknownClient(message: string | null | undefined): boolean {
+  const s = String(message ?? '')
+  if (!s) return false
+  return /איתור משפחה|לא נמצא|not found/i.test(s)
+}
+
+/**
+ * מה לעשות כשהמזהה השמור אינו מוכר: לחפש קודם, ורק אם אין — להקים.
+ *
+ * 🔴 הבאג שזה סוגר, מלוגי 10.09: הקוד קרא ישר להקמה (SaveClientCard בלי
+ * ClientId), כלומר ביקש מנדרים משפחה *חדשה*. אבל המשפחה קיימת שם — רק
+ * המזהה שלנו התיישן. נדרים דחו ב"מספר זהות זה כבר רשום אצל <אותה משפחה
+ * בדיוק>", וההטענה נעצרה.
+ *
+ * ⚠️ זו הייתה לולאה סגורה שחזרה בכל ריצה: הטענה נכשלת → מנסה להקים →
+ * נדחה כי כבר קיים → הכרטיס מוחזר למלאי → וחוזר חלילה. שלוש יולדות
+ * (בלום, גולדשטין, פקשר) נתקעו בה חמש ריצות רצופות ולא קיבלו כרטיס.
+ *
+ * ⚠️ שתי הת"ז נבדקות — המשפחה בנדרים רשומה לעתים על שם בן/בת הזוג,
+ * וחיפוש לפי אחת בלבד מחמיץ אותה בדיוק כשידוע שהיא שם.
+ */
+export function reviveLookupOrder(
+  idNumber: string | null | undefined,
+  spouseIdNumber: string | null | undefined,
+): string[] {
+  return [idNumber, spouseIdNumber].map(v => String(v ?? '').trim()).filter(Boolean)
+}

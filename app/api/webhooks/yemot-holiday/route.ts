@@ -38,6 +38,7 @@ import { centerLabel, type CenterRow } from '@/lib/holidayCenterPick'
 import { ensureCenterOpening } from '@/lib/centerOpeningRow'
 import { spokenCenterName, spokenCenterDetails } from '@/lib/holidayCenterSpeech'
 import { centerStatusKey } from '@/lib/holidayCenterStatusMessage'
+import { stripUnfilledPlaceholders } from '@/lib/yemotPlaceholders'
 import { runLoadBatch } from '@/lib/holidayCardLoad'
 import { linkHolidayCard } from '@/lib/holidayCards'
 import {
@@ -129,6 +130,18 @@ const msgToken = (msgs: HolidayMessages, key: string, repl?: Record<string, stri
   if (m?.audio) return `f-${m.audio}`
   let t = m?.text ?? ''
   if (repl) for (const [k, v] of Object.entries(repl)) t = t.replaceAll(`{${k}}`, v)
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 שדה שלא הוחלף אינו מוקרא כטקסט.
+  //
+  // ⚠️ מה שקרה בפועל: card_ready ו-center_already מכילים {center}, אך נקראו
+  // בלי הערך — כי שם המוקד נאמר בטוקן נפרד אחריהם (spokenCenterDetails).
+  // ימות הקריאה את הסוגריים כפשוטן, והמשפחות שמעו "מוכן לאיסוף במוקד
+  // סוגריים סנטר סוגריים". ההודעה נשמעה כתקלה בדיוק ברגע שבו היא הכי חשובה.
+  //
+  // ⚠️ מסירים ולא משאירים: הערך כבר נאמר אחר כך, והשארת חור בטקסט עדיפה
+  // בהרבה על הקראת שם המשתנה. רווחים כפולים מתנקים ב-tts.
+  // ─────────────────────────────────────────────────────────────────────────
+  t = stripUnfilledPlaceholders(t)
   // ⚠️ טקסט ריק מחזיר מחרוזת ריקה ולא "t-": מנהל שמוחק נוסח הודעה
   // היה יוצר טוקן ריק בתשובה לימות, ואין לדעת איך היא מגיבה לו.
   // הקוראים מסננים אותו ב-filter(Boolean) וב-joinTokens.

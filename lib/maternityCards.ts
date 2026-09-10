@@ -7,6 +7,7 @@ import { logActivity } from '@/lib/activityLog'
 import { consumeOneCard, getStockBalance } from '@/lib/cardStock'
 import { maybeSendLowStockAlert } from '@/lib/cardStockAlert'
 import { isAwaitingCard, AWAITING_SELECT } from '@/lib/awaitingFilter'
+import { reviveLookupOrder, isUnknownClient } from '@/lib/holidayClientCreate'
 
 // סכום הטעינה הקבוע ליולדת בעת אישור הלידה
 export const MATERNITY_LOAD_AMOUNT = 600
@@ -229,6 +230,36 @@ export async function loadMaternityCardOnApproval(
   // אז addTlush נכשל ב"שגיאה באיתור משפחה" והכרטיס לא נטען לעולם.
   // מזהים את המצב, מקימים מחדש עם אותה ת"ז, ומנסים שוב פעם אחת.
   const reviveClient = async (): Promise<string | null> => {
+    // ─────────────────────────────────────────────────────────────────────
+    // 🔴 קודם מחפשים, ורק אחר כך מקימים.
+    //
+    // ⚠️ קודם הפונקציה קראה ישר ל-saveClientCard עם clientId=null, כלומר
+    // ביקשה מנדרים *להקים משפחה חדשה*. אבל המשפחה קיימת שם — רק המזהה
+    // ששמור אצלנו כבר אינו תקף. נדרים דחו ב"מספר זהות זה כבר רשום אצל
+    // <אותה משפחה בדיוק>", ההקמה נכשלה, ההטענה נעצרה, והיולדת נשארה בלי
+    // כרטיס. זו הייתה לולאה סגורה: הטעינה נכשלת → מנסה להקים → נדחה כי
+    // כבר קיים → הטעינה נכשלת שוב, בכל ריצה מחדש.
+    //
+    // ⚠️ מחפשים לפי שתי הת"ז (בעל ואשה): המשפחה בנדרים רשומה לעתים על
+    // שם בן/בת הזוג, וחיפוש לפי אחת בלבד מחמיץ אותה בדיוק כשידוע לנו
+    // בוודאות שהיא שם.
+    // ─────────────────────────────────────────────────────────────────────
+    for (const candidate of reviveLookupOrder(b.id_number, b.spouse_id_number)) {
+      try {
+        const existing = await findClientByZeout(creds, candidate)
+        if (existing) {
+          if (existing !== b.nedarim_id) {
+            await admin.from('beneficiaries').update({ nedarim_id: existing }).eq('id', b.id)
+          }
+          console.warn(`[maternityCards] nedarim_id ${b.nedarim_id} אינו תקף — המשפחה אותרה מחדש כ-${existing}`)
+          return existing
+        }
+      } catch (e) {
+        console.error('[maternityCards] איתור המשפחה בנדרים נכשל:', e instanceof Error ? e.message : e)
+      }
+    }
+
+    // לא נמצאה כלל — עכשיו ההקמה מוצדקת.
     try {
       const fresh = await saveClientCard(creds, { ...b, id_number: zeout }, null)
       if (fresh && fresh !== b.nedarim_id) {
@@ -244,7 +275,7 @@ export async function loadMaternityCardOnApproval(
 
   try {
     result = await addTlush(creds, clientId, amount, undefined, 'הטענת זכאות יולדת (אישור לידה) — היכל החתם סופר', limitedId)
-    if (!result.ok && /איתור משפחה|לא נמצא|not found/i.test(result.message ?? '')) {
+    if (!result.ok && isUnknownClient(result.message)) {
       const revived = await reviveClient()
       if (revived) {
         clientId = revived
