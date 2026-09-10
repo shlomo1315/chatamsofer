@@ -45,6 +45,8 @@ import ChildrenTabPanel from './ChildrenTabPanel'
 import PhoneActivity from './PhoneActivity'
 import { registrationSourceLabel } from '@/lib/distributionSources'
 import { genColor, deviatingGens, isNodeVerified } from '@/lib/lineageDeviation'
+import { genColorByRef } from '@/lib/lineageApprovedColor'
+import { getApprovedRefLookup } from '@/lib/lineageApprovedRef'
 import { isChildMarried, isChildSingle } from '@/lib/childDuplicateMessage'
 
 // ⚡ עמודות מפורשות במקום select('*'). שתי סיבות:
@@ -368,6 +370,10 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
     : []
   const manualMarks = ((beneficiary as { lineage_manual_marks?: Record<string, 'red' | 'green'> } | null)?.lineage_manual_marks) ?? {}
 
+  // 🔴 הייחוס המאושר — 5 הדורות הראשונים. מי שאינו בו נצבע אדום, גם אם
+  // התווית בעץ אומרת 'verified'. ראו lib/lineageApprovedColor.
+  const approvedRef = await getApprovedRefLookup(await createClient())
+
   // כל הדורות בצבעים לחלונית ההתראה (דור 1 = החתם סופר תמיד כחול/מאושר).
   const CHATAM_SOFER_ROOT = 'מרן החתם סופר זי"ע'
   // גם כאן המסלול בעץ קודם לעותק השמור — אחרת ההתראה מפרטת דורות לפי שמות
@@ -380,7 +386,9 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
       generation: c.generation,
       name: c.generation === 1 ? CHATAM_SOFER_ROOT : c.name,
       // ⚠️ דור 1 (החתם סופר) תמיד מאושר — הוא שורש העץ בהגדרה.
-      color: c.generation === 1 ? 'green' : genColor(c.generation, genStatus.get(c.generation) ?? null),
+      // 🔴 הצבע נקבע מהקובץ המאושר ולא מהתווית — ראו lineageApprovedColor.
+      color: c.generation === 1 ? 'green'
+        : genColorByRef(c.generation, c.name, genStatus.get(c.generation) ?? null, approvedRef),
     }))
 
   if (!beneficiary && isSupabaseConfigured()) notFound()
