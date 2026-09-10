@@ -134,7 +134,7 @@ const CARD_STATUS_PILL: Record<string, { label: string; cls: string }> = {
 // לפי אותו מפתח. קודם הכותרות היו במערך נפרד מהתאים, וכל הוספת עמודה
 // במקום אחד ושכחה באחר הסיטה את כל השורה.
 type ColKey =
-  | 'mother' | 'wifeId' | 'approval_label' | 'baby' | 'benefit' | 'babyId' | 'birth'
+  | 'mother' | 'wifeId' | 'baby' | 'benefit' | 'babyId' | 'birth'
   | 'recovery' | 'days' | 'arrived' | 'amount' | 'cert' | 'source'
   | 'loadStatus' | 'loadDate' | 'cardLink' | 'liveBalance' | 'spent' | 'status'
 
@@ -161,10 +161,6 @@ const COLUMNS: ColDef<ColKey, MaternityAid>[] = [
     value: a => motherName(a.beneficiary as MotherRef | undefined) },
   { key: 'wifeId', label: 'ת.ז. האישה', def: true, kind: 'number',
     value: a => (a.beneficiary as MotherRef | undefined)?.spouse_id_number ?? null },
-  // ⚠️ עמודה משלה בנוסף לתג שליד השם — כך אפשר לסרוק את הרשימה לפי
-  // סיבת האישור. ריקה אצל הרוב המוחלט, וזו הכוונה.
-  { key: 'approval_label', label: 'סיבת אישור', def: true, kind: 'enum', filterable: true,
-    value: a => approvalLabelOf(a.beneficiary as MotherRef | undefined) || null },
   { key: 'baby', label: 'שם התינוק', def: true,
     // ⚠️ missing מוצג כמקף — הערך null כדי שירד לסוף המיון ולא ימוין
     // כטקסט "ממתין".
@@ -316,15 +312,15 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
         </span>
       )
       case 'wifeId': return <span className="ltr-num text-xs font-mono text-slate-600">{m?.spouse_id_number ?? '—'}</span>
-      case 'approval_label': {
-        const lbl = approvalLabelOf(m)
-        return lbl ? <ApprovalLabelTag label={lbl} size="xs" /> : <span className="text-slate-300">—</span>
-      }
       case 'baby': return (
         <span className="inline-flex items-center gap-1.5 flex-wrap text-slate-700">
           {(() => {
             const nm = babyNameLabel(aid as AidNameFields)
-            if (nm.missing) return <span className="text-slate-300">—</span>
+            // ⚠️ מקף ריק לא אמר דבר: הצוות לא ידע אם היולדת מסרה שאין שם
+            // עדיין, או שפשוט לא נשאלה. הנוסח מפורש בשני המצבים.
+            if (nm.missing) {
+              return <span className="text-[11px] text-slate-400">היולדת ציינה שעדיין אין שם</span>
+            }
             return nm.pending
               ? <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300">⏳ {nm.text}</span>
               : <span>{nm.text}</span>
