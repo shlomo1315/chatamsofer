@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react'
 import { ancestorIds } from '@/lib/lineageChain'
 import Link from 'next/link'
 import { Plus, RefreshCw, Loader2, ChevronRight, ChevronLeft, ChevronDown, Pencil, Trash2, X, Users, Check, Printer, MapPin, Link2, ExternalLink, Activity, ShieldCheck, ShieldAlert, Ghost, GitMerge, ClipboardCheck } from 'lucide-react'
@@ -36,6 +36,20 @@ interface LineageNode {
 }
 
 type StatusFilter = 'verified' | 'pending' | 'rejected' | null
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 מתג "הצג פעולות" — כפתורי העריכה מוסתרים כברירת מחדל.
+//
+// ⚠️ המסך מחזיק 11,331 צמתים, וכפתורי הוספה/עריכה/מחיקה יושבים על כל שורה
+// ועל כל צומת בעץ. בעבודה על עץ שרובו טרם נבדק, לחיצה אחת בטעות משנה ייחוס
+// של משפחה — ואין שום דרך לראות זאת מהמסך.
+//
+// ⚠️ המתג *מסתיר* ולעולם אינו מעניק: ההרשאה נבדקת כרגיל, ומי שאין לו הרשאה
+// לא יראה את הכפתורים גם כשהמתג דלוק. שלושה רכיבים (עץ, טבלה, הדף) קוראים
+// מאותו context, אחרת הם היו נחלקים ביניהם.
+// ─────────────────────────────────────────────────────────────────────────────
+const ActionsCtx = createContext(false)
+const useActionsOn = () => useContext(ActionsCtx)
 
 function nextStatus(cur: LineageNode['status']): 'verified' | 'pending' | 'rejected' {
   if (cur === 'verified') return 'pending'
@@ -473,9 +487,10 @@ function RelationPicker({ value, onChange, required }: { value: 'son' | 'son_in_
 function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearFilters, statusFilter, onlyMatching = false, generationFilter, mergeMode, mergeSel, dupIds, onToggleMerge, dupFilter, onMergeGroup, onCleanChildren, onReviewToggle, reviewExcluded, onFocusNode, focusId, anchor, scanIds, locateIds, linked, fullMode = false }: { nodes: LineageNode[]; onRefresh: () => void; onStatusChange: (id: string, status: 'verified' | 'pending' | 'rejected') => void; onRelationChange: (id: string, relation: 'son' | 'son_in_law' | null) => void; onClearFilters: () => void; statusFilter: StatusFilter; onlyMatching?: boolean; generationFilter: number | null; mergeMode: boolean; mergeSel: Set<string>; dupIds: Set<string>; onToggleMerge: (id: string) => void; dupFilter: boolean; onMergeGroup: (id: string) => void; onCleanChildren: (id: string) => void; onReviewToggle?: (id: string) => boolean; reviewExcluded?: Set<string>; onFocusNode: (id: string | null) => void; focusId: string | null; anchor: { id: string; n: number } | null; scanIds: Set<string>; locateIds: Set<string>; linked: Record<string, { id: string; name: string }[]>; fullMode?: boolean }) {
   const toast = useToast()
   const router = useRouter()
-  const canAdd = useCan('lineage', 'add')
-  const canEdit = useCan('lineage', 'edit')
-  const canDelete = useCan('lineage', 'delete')
+  const actionsOn = useActionsOn()
+  const canAdd = useCan('lineage', 'add') && actionsOn
+  const canEdit = useCan('lineage', 'edit') && actionsOn
+  const canDelete = useCan('lineage', 'delete') && actionsOn
   const [selected, setSelected] = useState<string | null>(null)
   const [hovered, setHovered] = useState<string | null>(null)
   // hover עם השהיה לסגירה — מאפשר להזיז את העכבר אל החלונית בלי שהיא תיעלם
@@ -1607,9 +1622,10 @@ function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, on
   dupFilter: boolean
   onMergeGroup: (id: string) => void
 }) {
-  const canAdd = useCan('lineage', 'add')
-  const canEdit = useCan('lineage', 'edit')
-  const canDelete = useCan('lineage', 'delete')
+  const actionsOn = useActionsOn()
+  const canAdd = useCan('lineage', 'add') && actionsOn
+  const canEdit = useCan('lineage', 'edit') && actionsOn
+  const canDelete = useCan('lineage', 'delete') && actionsOn
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const roots = useMemo(() => buildTree(nodes), [nodes])
   /** השורה שתפריט הפעולות שלה פתוח. ראו ההערה ליד כפתור ה-⋯. */
@@ -1734,9 +1750,11 @@ function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, on
 type View = 'tree' | 'table'
 
 export default function LineagePage() {
-  const canAdd = useCan('lineage', 'add')
-  const canEdit = useCan('lineage', 'edit')
-  const canDelete = useCan('lineage', 'delete')
+  // 🔴 הדף *מחזיק* את המתג ומספק אותו — הרכיבים שמתחתיו קוראים ממנו.
+  const [actionsOn, setActionsOn] = useState(false)
+  const canAdd = useCan('lineage', 'add') && actionsOn
+  const canEdit = useCan('lineage', 'edit') && actionsOn
+  const canDelete = useCan('lineage', 'delete') && actionsOn
   const [nodes, setNodes] = useState<LineageNode[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<View>('tree')
@@ -2373,6 +2391,7 @@ export default function LineagePage() {
   }
 
   return (
+    <ActionsCtx.Provider value={actionsOn}>
     <div dir="rtl">
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
@@ -2433,6 +2452,16 @@ export default function LineagePage() {
               </button>
             ))}
           </div>
+          {/* 🔴 מתג הפעולות — ראו ActionsCtx. מוסתר כברירת מחדל כדי
+              שלחיצה בטעות על עץ בן 11,331 צמתים לא תשנה ייחוס. */}
+          <button onClick={() => setActionsOn(v => !v)}
+            title={actionsOn ? 'הסתרת כפתורי עריכה' : 'הצגת כפתורי עריכה (הוספה · עריכה · מחיקה)'}
+            className={`h-9 px-3 rounded-xl border text-sm font-bold flex items-center gap-1.5 transition-colors ${
+              actionsOn
+                ? 'bg-amber-50 border-amber-300 text-amber-800'
+                : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+            {actionsOn ? '🔓 פעולות גלויות' : '🔒 הצג פעולות'}
+          </button>
           <button onClick={loadAll} disabled={loading} title="רענן"
             className="w-9 h-9 rounded-xl bg-white border border-gray-200 text-violet-600 flex items-center justify-center hover:bg-violet-50 transition-colors disabled:opacity-50">
             <RefreshCw size={14} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
@@ -3073,5 +3102,6 @@ export default function LineagePage() {
         </Modal>
       )}
     </div>
+    </ActionsCtx.Provider>
   )
 }
