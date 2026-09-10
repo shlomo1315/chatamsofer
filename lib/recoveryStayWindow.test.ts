@@ -28,7 +28,7 @@ const day = (iso: string) => new Date(iso).getTime()
  * משוקף כאן יישבר בטסטים ולא אצל המשפחה.
  */
 function stayAllowed(
-  aid: { birth_date?: string | null; six_weeks_end?: string | null },
+  aid: { birth_date?: string | null; six_weeks_end?: string | null; eligibility_extended?: boolean | null },
   arrivalIso: string,
   todayIso: string,
 ): boolean {
@@ -68,7 +68,7 @@ describe('חלון השהייה — בלי הארכה', () => {
 
 describe('🔴 הארכה ידנית — הבאג שתוקן', () => {
   // הארכה עד 30.08 ⇒ החלון כולו זז: 26.07–30.08
-  const extended = { birth_date: '2026-06-01', six_weeks_end: '2026-08-30' }
+  const extended = { birth_date: '2026-06-01', six_weeks_end: '2026-08-30', eligibility_extended: true }
 
   it('הגעה בתוך ההארכה מתקבלת — גם הרבה אחרי 35 יום מהלידה', () => {
     // ⚠️ זה בדיוק המקרה שנחסם קודם: 20.08 רחוק מ-35 יום מהלידה,

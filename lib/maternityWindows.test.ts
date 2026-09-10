@@ -51,7 +51,7 @@ describe('עם הארכה ידנית — התאריך שהוזן, לשניהם',
   //
   // תאריך שהוזן ידנית הוא הכרעה מפורשת של המזכירה. הפער בין החלונות
   // הוא כלל עסקי של החישוב האוטומטי בלבד, ואין לגרוע ממנה.
-  const aid = { birth_date: '2026-06-01', six_weeks_end: '2026-08-01' }
+  const aid = { birth_date: '2026-06-01', six_weeks_end: '2026-08-01', eligibility_extended: true }
 
   it('כרטיס: התאריך שהוארך', () => {
     expect(iso(cardWindowEnd(aid))).toBe('2026-08-01')
@@ -65,6 +65,50 @@ describe('עם הארכה ידנית — התאריך שהוזן, לשניהם',
     const noExt = { birth_date: '2026-06-01', six_weeks_end: null }
     expect(isWithinRecoveryWindow(noExt)).toBe(false)   // 06/07 — כבר עבר
     expect(isWithinRecoveryWindow(aid)).toBe(true)      // 25/07 — עדיין פתוח
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 six_weeks_end אוטומטי אינו הארכה.
+//
+// ⚠️ הוא נכתב בהרשמה כלידה+42, ולכן "יש six_weeks_end" אינו מעיד על
+// החלטה של מזכירה. הקוד התייחס לכל ערך כאל הארכה ידנית, ולכן בית ההחלמה
+// קיבל 42 יום במקום 35 — שבוע שלם של זכאות שאינה קיימת.
+//
+// ⚠️ בפועל: 27 יולדות הוצגו כזכאיות בפורטל אחרי שהזכאות שלהן פקעה. בית
+// ההחלמה ראה אותן ברשימה, והן הגיעו לשם.
+//
+// 🔴 ההבחנה: תאריך *זהה* ללידה+42 הוא חישוב אוטומטי ונגרע ממנו שבוע.
+// תאריך *אחר* הוא הכרעה מפורשת ואינו נגרע — הכלל שכבר נקבע קודם.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('🔴 six_weeks_end אוטומטי מול הארכה ידנית', () => {
+  it('🔴 אוטומטי (לידה+42) — בית החלמה מקבל 35 ולא 42', () => {
+    // 01/06 + 42 = 13/07 · הציפייה: 01/06 + 35 = 06/07
+    expect(iso(recoveryWindowEnd({ birth_date: '2026-06-01', six_weeks_end: '2026-07-13' })))
+      .toBe('2026-07-06')
+  })
+
+  it('הכרטיס עצמו אינו מושפע — נשאר 42', () => {
+    expect(iso(cardWindowEnd({ birth_date: '2026-06-01', six_weeks_end: '2026-07-13' })))
+      .toBe('2026-07-13')
+  })
+
+  it('הארכה ידנית (תאריך אחר) — עדיין אינה נגרעת', () => {
+    expect(iso(recoveryWindowEnd({ birth_date: '2026-06-01', six_weeks_end: '2026-08-01', eligibility_extended: true })))
+      .toBe('2026-08-01')
+  })
+
+  // ⚠️ דריסה מפורשת לבית החלמה גוברת על הכול, גם על הזיהוי האוטומטי.
+  it('recovery_end_override גובר תמיד', () => {
+    expect(iso(recoveryWindowEnd({
+      birth_date: '2026-06-01', six_weeks_end: '2026-07-13',
+      recovery_end_override: '2026-07-20',
+    }))).toBe('2026-07-20')
+  })
+
+  it('בלי six_weeks_end — 35 יום כרגיל', () => {
+    expect(iso(recoveryWindowEnd({ birth_date: '2026-06-01', six_weeks_end: null })))
+      .toBe('2026-07-06')
   })
 })
 
@@ -101,7 +145,7 @@ describe('isWithinRecoveryWindow — גבולות', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('🔴 המקרים שהתגלו בפרודקשן', () => {
   it('וואגשאל — הוארכה ל-30.08 ונעלמה ב-23.08', () => {
-    const aid = { birth_date: '2026-07-19', six_weeks_end: '2026-08-30' }
+    const aid = { birth_date: '2026-07-19', six_weeks_end: '2026-08-30', eligibility_extended: true }
     expect(iso(recoveryWindowEnd(aid))).toBe('2026-08-30')
   })
 
@@ -153,7 +197,7 @@ describe('recoveryWindowEnd — דריסה נפרדת לבית החלמה', () =
 
   // 🔴 תאימות לאחור — הבדיקה החשובה ביותר כאן.
   it('בלי דריסה — בדיוק ההתנהגות הקודמת', () => {
-    const aid = { birth_date: '2026-07-19', six_weeks_end: '2026-08-30' }
+    const aid = { birth_date: '2026-07-19', six_weeks_end: '2026-08-30', eligibility_extended: true }
     expect(iso2(recoveryWindowEnd(aid))).toBe(iso2(recoveryWindowEnd({ ...aid, recovery_end_override: null })))
     expect(iso2(recoveryWindowEnd(aid))).toBe('2026-08-30')
   })

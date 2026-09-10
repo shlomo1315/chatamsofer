@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
   const { data, error } = await admin
     .from('maternity_aids')
     .select(`
-      id, birth_date, baby_name, baby_gender, six_weeks_end,
+      id, birth_date, baby_name, baby_gender, six_weeks_end, eligibility_extended, recovery_end_override,
       is_twins, babies, recovery_eligibility_days,
       recovery_from, recovery_to, card_number, recovery_arrived,
       recovery_amount, recovery_amount_status, recovery_nights, recovery_receipt_number,
@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
   // לילה והתשלום נגבה חסר), ועד כה הרשומה נעלמה מהפורטל ולבית ההחלמה לא הייתה
   // שום דרך להשלים את ההפרש. החלון עדיין חוסם *הגשה ראשונה* מאוחרת.
   const filtered = (data ?? []).filter((a: {
-    birth_date: string; six_weeks_end?: string; recovery_amount_status?: string | null
+    birth_date: string; six_weeks_end?: string; eligibility_extended?: boolean | null; recovery_end_override?: string | null; recovery_amount_status?: string | null
   }) => a.recovery_amount_status === 'executed' || isWithinRecoveryWindow(a))
 
   // קבלות מרובות (תשלומים משלימים) — נשלפות בשאילתה אחת לכל הרשומות.

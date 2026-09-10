@@ -34,6 +34,8 @@ interface Aid {
   babies?: { name?: string | null; gender?: 'male' | 'female' | null; id_type?: 'id' | 'passport'; id_number?: string | null }[]
   recovery_eligibility_days?: number | null
   six_weeks_end?: string
+  eligibility_extended?: boolean | null
+  recovery_end_override?: string | null
   recovery_from?: string
   recovery_to?: string
   card_number?: string

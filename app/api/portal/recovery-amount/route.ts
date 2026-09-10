@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
 
   // אבטחה: הרשומה שייכת לבית ההחלמה הזה, וסומן שהיולדת הגיעה
   const { data: aid } = await admin.from('maternity_aids')
-    .select('id, recovery_home, recovery_arrived, recovery_receipt_url, recovery_locked, is_twins, recovery_eligibility_days, birth_date, six_weeks_end, beneficiaries(family_name, full_name, spouse_name)')
+    .select('id, recovery_home, recovery_arrived, recovery_receipt_url, recovery_locked, is_twins, recovery_eligibility_days, birth_date, six_weeks_end, eligibility_extended, recovery_end_override, beneficiaries(family_name, full_name, spouse_name)')
     .eq('id', aidId).maybeSingle()
   if (!aid || aid.recovery_home !== home) {
     return NextResponse.json({ error: 'הרשומה לא נמצאה בבית החלמה זה' }, { status: 404 })
