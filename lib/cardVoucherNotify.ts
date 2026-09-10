@@ -31,7 +31,10 @@ export async function notifyCenterStockReplenished(admin: SupabaseClient, center
       .eq('card_center_id', centerId)
       .eq('card_voucher_status', 'awaiting_stock')
       .eq('status', 'active')
-      .neq('birth_type', 'silent')
+      // 🔴 לידה שקטה *אינה* מוחרגת: היא מקבלת כרטיס מזון ככל לידה, והשובר
+      // שלה נבנה בניסוח ייעודי (maternityVoucher). ההחרגה שהייתה כאן מנעה
+      // ממנה את ההודעה על חידוש המלאי — ראו lib/awaitingFilter.
+      //
       // מי שלא ביקשה כרטיס מזון — לא מקבלת שובר כרטיס גם כשהמלאי מתחדש.
       // הפילטר סובלני ל-null (בקשות ישנות = ביקשו): רק false נחסם במפורש.
       .not('wants_food_card', 'is', false)

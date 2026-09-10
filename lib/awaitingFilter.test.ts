@@ -26,9 +26,34 @@ describe('מי ממתינה לכרטיס מזון', () => {
     expect(isAwaitingCard({ card_status: 'pending', card_tlush_id: 'T123' })).toBe(false)
   })
 
-  it('לידה שקטה ונדחית אינן נספרות', () => {
-    expect(isAwaitingCard({ card_status: 'pending', birth_type: 'silent' })).toBe(false)
+  it('לידה שנדחתה ידנית אינה נספרת', () => {
     expect(isAwaitingCard({ card_status: 'rejected' })).toBe(false)
+  })
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // 🔴 לידה שקטה מקבלת כרטיס מזון.
+  //
+  // ⚠️ עד 10.09 התור החריג אותה, ושלוש מתוך ארבע הלידות השקטות הפעילות
+  // כבר קיבלו 600 ₪ בפועל (הרצוג, פרנקל, זלקוביץ) — כלומר ההחרגה מעולם
+  // לא שיקפה את המדיניות. דורמשקין נחסמה רק משום שהמלאי אזל ברגע האישור
+  // ונדרשה ריצה חוזרת, ושם המסנן תפס אותה.
+  //
+  // ⚠️ הסתירה הייתה גלויה: maternityVoucher בונה שובר ייעודי ללידה שקטה,
+  // כלומר המערכת הנפיקה לה שובר וסירבה לטעון אותו.
+  // ───────────────────────────────────────────────────────────────────────────
+  it('🔴 לידה שקטה כן ממתינה לכרטיס — ההחרגה חסמה זכאות אמיתית', () => {
+    expect(isAwaitingCard({ card_status: 'pending', birth_type: 'silent' })).toBe(true)
+  })
+
+  it('🔴 לידה שקטה שכבר נטענה — אינה חוזרת לתור', () => {
+    // ⚠️ הכלל שהוסר הוא ההחרגה בלבד; שאר התנאים חלים עליה ככל לידה,
+    // ובלעדיהם היא הייתה נטענת שוב ושוב.
+    expect(isAwaitingCard({ birth_type: 'silent', card_load_status: 'loaded' })).toBe(false)
+    expect(isAwaitingCard({ birth_type: 'silent', card_tlush_id: '3629975' })).toBe(false)
+  })
+
+  it('לידה שקטה שלא ביקשה כרטיס מזון — עדיין מדולגת', () => {
+    expect(isAwaitingCard({ birth_type: 'silent', wants_food_card: false })).toBe(false)
   })
 
   it('מי שלא ביקשה כרטיס מזון אינה נספרת', () => {
