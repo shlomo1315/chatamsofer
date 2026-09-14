@@ -772,15 +772,13 @@ async function handleCenterRoute(
     const phase4 = pickupPhaseOf(openRow4 as { pickup_open_at: string | null; pickup_ended_at: string | null } | null)
 
     if (phase4 === 'ended') {
-      // 🔴 שם המוקד בתוך ההודעה — המוקדים אינם מסיימים באותו יום.
+      // 🔴 "המוקד שלכם" — הודעה קבועה, ולכן מוקלטת בקול המערכת.
       //
-      // ⚠️ "החלוקה הסתיימה" בלי שם נשמע כאילו הכול נגמר בכל הארץ, בזמן
-      // שהמוקד של השכן עדיין מחלק — והמתקשר פונה למשרד לברר.
-      const { data: ecRow } = await db.from('holiday_centers')
-        .select('city, name, address, hours, audio_file').eq('id', rec.center_id).maybeSingle()
-      const centerName = spokenCenterName(ecRow as SpokenCenter | null) || 'שנרשמתם בו'
+      // ⚠️ נוסח עם שם המוקד היה נקרא ב-TTS של ימות ונשמע משובש. המאזין
+      // הגיע לכאן ממסלול המוקד שלו, ולכן "שלכם" מדויק באותה מידה —
+      // ואינו דורש שליפת המוקד כלל.
       return yemotText([
-        idMessage(msgToken(msgs, 'card_center_ended', { center: centerName })),
+        idMessage(msgToken(msgs, 'card_center_ended')),
         goToFolder('hangup'),
       ], callId)
     }
