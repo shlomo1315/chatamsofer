@@ -58,10 +58,21 @@ export async function POST(request: NextRequest) {
     }
     update.email = newEmail || null
   }
+  // ⚠️ מספר שכבר מאומת אצל המשפחה (verified_phones) אינו דורש אימות חוזר:
+  // הבעלות עליו כבר הוכחה. בלי זה משפחה שהחליפה בין הטלפון הראשי לטלפון
+  // הנוסף שלה עצמה נחסמה, והממשק אף לא הציג לה כפתור אימות — כי אין מה
+  // לאמת. הכלל חל על כל שדות הטלפון (15.09).
+  const alreadyVerified = (v: string): boolean => {
+    const list = Array.isArray((ben as { verified_phones?: unknown }).verified_phones)
+      ? ((ben as { verified_phones: string[] }).verified_phones) : []
+    return list.some(p => normalizeVerifyValue('phone', String(p ?? '')) === normalizeVerifyValue('phone', v))
+  }
+
   if (phone !== undefined) {
     const newPhone = phone ? String(phone).trim() : ''
     const changed = normalizeVerifyValue('phone', newPhone) !== normalizeVerifyValue('phone', String(ben.phone ?? ''))
-    if (changed && newPhone && !verifyVerifyToken(phone_verify_token as string | undefined, 'phone', newPhone)) {
+    if (changed && newPhone && !alreadyVerified(newPhone)
+      && !verifyVerifyToken(phone_verify_token as string | undefined, 'phone', newPhone)) {
       return NextResponse.json({ error: 'יש לאמת את מספר הטלפון החדש בקוד שיוקרא בשיחה.' }, { status: 400 })
     }
     update.phone = newPhone || null
@@ -82,7 +93,7 @@ export async function POST(request: NextRequest) {
     if (value === undefined) return null
     const next = value ? String(value).trim() : ''
     const changed = normalizeVerifyValue('phone', next) !== normalizeVerifyValue('phone', String(current ?? ''))
-    if (changed && next && !tokenFor(next)) {
+    if (changed && next && !alreadyVerified(next) && !tokenFor(next)) {
       return NextResponse.json({ error: `יש לאמת את ${label} בקוד שיוקרא בשיחה.` }, { status: 400 })
     }
     update[field] = next || null

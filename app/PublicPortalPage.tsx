@@ -2417,7 +2417,14 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     const emailChanged = (editForm.email ?? '').trim().toLowerCase() !== (beneficiary.email ?? '').trim().toLowerCase()
     const phoneChanged = (editForm.phone ?? '').replace(/\D/g, '') !== (beneficiary.phone ?? '').replace(/\D/g, '')
     if (emailChanged && editForm.email && !editEmailToken) { setError('יש לאמת את כתובת המייל החדשה בקוד שנשלח אליה.'); return }
-    if (phoneChanged && editForm.phone && !editPhoneToken) { setError('יש לאמת את מספר הטלפון החדש בקוד שיוקרא בשיחה.'); return }
+    // ⚠️ מספר שכבר מאומת אצל המשפחה אינו דורש אימות חוזר. הממשק מסתיר
+    // עבורו את כפתור האימות (ובצדק — אין מה לאמת), אבל השמירה עדיין
+    // דרשה אסימון, והמשתמש נחסם בלי שום דרך להתקדם: הודעה שמבקשת לאמת,
+    // ואין כפתור לאמת בו. כך נתקעו משפחות שהחליפו טלפון ראשי במספר
+    // שכבר היה רשום ומאומת אצלן (15.09).
+    if (phoneChanged && editForm.phone && !editPhoneToken && !isVerifiedPhone(editForm.phone)) {
+      setError('יש לאמת את מספר הטלפון החדש בקוד שיוקרא בשיחה.'); return
+    }
     // טלפון נוסף לא יכול להיות זהה לטלפון הבעל או האשה
     if (editForm.phone2 && editForm.phone2.trim()) {
       const ep2 = editForm.phone2.replace(/\D/g, '')
@@ -4110,11 +4117,29 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       // ⚠️ אותו מבנה בדיוק כמו בהרשמה ובתיקון שהמשרד דורש (ראו
       // handleFixLineageSubmit): דור 1 הוא רבינו החתם סופר, אחריו
       // האבות לפי הסדר, והמבקש עצמו אחרון.
-      const anc = portalFixLineage?.ancestors ?? []
-      const chain = portalFixLineage?.valid ? [
+      // ─────────────────────────────────────────────────────────────────
+      // 🔴 השרשרת נשלחת גם כשאינה "valid" — כאן זה *תיקון*, לא הרשמה.
+      //
+      // ⚠️ valid דורש שהמבקש יוסיף את עצמו כדור נוסף ויבחר בן/חתן. זה
+      // נכון בהרשמה, אבל מי שבא לתקן שם בדור 4 אינו מוסיף את עצמו —
+      // ולכן valid נשאר false, השרשרת המתוקנת *לא נשלחה כלל*, ולמשרד
+      // הגיעה הערה חופשית בלבד. המשפחות דיווחו שהתיקון "לא עובד",
+      // והוא באמת לא הגיע (15.09).
+      //
+      // ⚠️ מספיק שיש דור אחד עם שם. תקינות מלאה נבדקת במשרד ממילא —
+      // זו בקשה לאישור, לא כתיבה ישירה לעץ.
+      //
+      // ⚠️ המבקש עצמו נוסף רק כשבחר קשר, אחרת היינו מוסיפים לו דור
+      // שהוא לא ביקש.
+      // ─────────────────────────────────────────────────────────────────
+      const anc = (portalFixLineage?.ancestors ?? []).filter(a => a.name?.trim())
+      const selfRel = portalFixLineage?.selfRelation as string | null
+      const chain = anc.length ? [
         { generation: 1, name: 'רבינו החתם סופר', relation: null as string | null },
         ...anc.map((a, i) => ({ generation: i + 2, name: a.name, relation: a.relation as string | null })),
-        { generation: anc.length + 2, name: fixSelfName, relation: portalFixLineage.selfRelation as string | null },
+        ...(selfRel && fixSelfName?.trim()
+          ? [{ generation: anc.length + 2, name: fixSelfName, relation: selfRel }]
+          : []),
       ] : null
 
       const res = await fetch('/api/portal/lineage-fix', {
@@ -6038,7 +6063,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                               עכשיו: שרשרת מלאה = בקשה מפורשת; אחרת נשלח תיאור
                               מילולי, שהשרת תומך בו מאז ומעולם (validateFixRequest). */}
                           <button type="button" onClick={submitLineageFix}
-                            disabled={lineageFixSending || (!portalFixLineage?.valid && cleanFixText(lineageFixText).length < 10)}
+                            disabled={lineageFixSending || (
+                              !(portalFixLineage?.ancestors ?? []).some(a => a.name?.trim())
+                              && cleanFixText(lineageFixText).length < 10
+                            )}
                             className="self-start inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-bold rounded-lg px-4 py-2 transition-colors">
                             {lineageFixSending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
                             שליחת הבקשה
