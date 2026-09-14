@@ -377,11 +377,25 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
 
   // כל הדורות בצבעים לחלונית ההתראה (דור 1 = החתם סופר תמיד כחול/מאושר).
   const CHATAM_SOFER_ROOT = 'מרן החתם סופר זי"ע'
-  // גם כאן המסלול בעץ קודם לעותק השמור — אחרת ההתראה מפרטת דורות לפי שמות
-  // ישנים בעוד הצ'יפים כבר מציגים את העץ המעודכן.
-  const alertSource: { generation: number; name: string }[] = pathNodes.length
-    ? pathNodes.map(n => ({ generation: n.generation, name: n.name }))
-    : [...chainForMarks].sort((a, b) => a.generation - b.generation)
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 מה שהמשפחה בחרה קודם למסלול בעץ — הקובץ המאושר הוא מקור האמת.
+  //
+  // ⚠️ עד כה העץ גבר, וזה צבע באדום משפחות שבחרו *נכון*: 37 שמות יושבים
+  // בעץ בדור אחר מזה שבקובץ, ו-313 משפחות שבחרו בדיוק לפי הקובץ הוצגו
+  // כחריגות ונשלחו לבדיקה מעמיקה. ריינר (325745180) בחר "יצחק צבי פריי"
+  // בדור 3 ו"שמעון ואסתר פריי" בדור 4 — שתיהן בדיוק כמו בקובץ — והעץ,
+  // שבו שניהם בדור 3, הוא שחלק.
+  //
+  // ⚠️ תיקון העץ הוא שלב נפרד (מיפוי וסינון כפילויות), ואינו צריך לעכב
+  // אישור משפחות שהייחוס שלהן תואם את הקובץ.
+  //
+  // ⚠️ נפילה למסלול העץ רק כשאין שרשרת שמורה — משפחה ישנה שנקשרה לצומת
+  // בלי לבחור בעצמה. בלי זה היא הייתה מוצגת בלי דורות כלל.
+  // ─────────────────────────────────────────────────────────────────────────
+  const savedChain = [...chainForMarks].sort((a, b) => a.generation - b.generation)
+  const alertSource: { generation: number; name: string }[] = savedChain.length
+    ? savedChain
+    : pathNodes.map(n => ({ generation: n.generation, name: n.name }))
   const alertGens: { generation: number; name: string; color: 'green' | 'red' | 'orange' }[] =
     alertSource.map(c => ({
       generation: c.generation,
@@ -636,14 +650,18 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         // של הנרשם מתחילה מדור 2. בונים מהשרשרת הממוינת לפי דור.
         const chainSorted = [...chainForMarks].sort((a, b) => a.generation - b.generation)
         const CHATAM_SOFER = 'מרן החתם סופר זי"ע'
-        // ✅ המסלול בעץ קודם לעותק השמור — כך הצ'יפים מציגים את מה שבעץ *עכשיו*
-        // (שם וסטטוס), ותיקון בעץ משתקף מיד. העותק השמור משמש רק כשאין שיוך
-        // לצומת (שרשרת ידנית), ואז אין ממה לגזור.
+        // 🔴 מה שהמשפחה בחרה קודם למסלול בעץ — אותו כלל כמו ב-alertSource.
+        //
+        // ⚠️ העדפת העץ צבעה באדום 313 משפחות שבחרו *נכון* לפי הקובץ המאושר:
+        // 37 שמות יושבים בעץ בדור אחר מזה שבקובץ. הצ'יפים והחלונית חייבים
+        // לגזור מאותו מקור, אחרת הם יחלקו זה על זה על אותה משפחה.
+        //
+        // ⚠️ נפילה לעץ רק כשאין שרשרת שמורה (משפחה שנקשרה לצומת בלי לבחור).
         const source: { generation: number; name: string; relation: string | null }[] =
-          pathNodes.length
-            ? pathNodes.map(n => ({ generation: n.generation, name: n.name, relation: n.relation ?? null }))
-            : chainSorted.length
-              ? chainSorted
+          chainSorted.length
+            ? chainSorted
+            : pathNodes.length
+              ? pathNodes.map(n => ({ generation: n.generation, name: n.name, relation: n.relation ?? null }))
               : lineagePath.map((name, i) => ({ generation: i + 1, name, relation: null as string | null }))
         const gens: import('./LineageChainChips').ChainGen[] = source.map(c => {
           const isRoot = c.generation === 1
