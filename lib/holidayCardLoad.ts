@@ -15,7 +15,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   getHolidayNedarimCreds, getHolidayLimitedId, addTlush,
-  findClientByZeout, normalizeZeout, saveClientCard, type NedarimCreds,
+  findClientByZeout, normalizeZeout, saveClientCard, getClientCardFull,
+  type NedarimCreds,
 } from './nedarim'
 import { pickZeoutForCreate, isAlreadyRegistered } from './holidayClientCreate'
 import { testModeOutcome } from './holidayTestMode'
@@ -160,6 +161,35 @@ export async function loadOne(
 
     if (!clientId) {
       return { recipientId: target.recipientId, ok: false, error: 'הקמת המשפחה בנדרים לא החזירה מזהה' }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // 🔴 שער אחרון לפני שהכסף יוצא: האם *נדרים* כבר טענה למשפחה הזו?
+    //
+    // ⚠️ כל ההגנות שקדמו לכאן נשענות על load_status שלנו, והבאג הוא בדיוק
+    // שהוא אינו אמין: הקריאה ל-addTlush יוצאת *לפני* שנכתב 'loaded', ולכן
+    // ריצה שנקטעה בין השתיים (timeout, כשל רשת, נפילת תהליך) משאירה כסף
+    // שיצא ושורה שנראית "לא נטענה" — והיא נטענת שוב.
+    //
+    // ⚠️ AddTlush אינה idempotent: אין לה מפתח ייחודיות (LimitedId הוא
+    // הגבלת חנויות בלבד), ולכן שליחה כפולה = טעינה כפולה, בלי כל התרעה.
+    // התגלה 14.09 אצל סלושץ (300505997) — ₪500 פעמיים.
+    //
+    // 🔴 כשל *בבדיקה* אינו עוצר את הטעינה: משפחה שלא נטענה מעולם הייתה
+    // נחסמת בגלל תקלת רשת רגעית, וזה הנזק ההפוך. חוסמים רק על ידיעה ודאית.
+    // ─────────────────────────────────────────────────────────────────────
+    try {
+      const card = await getClientCardFull(creds, clientId)
+      const already = countHolidayLoads(card, amount)
+      if (already > 0) {
+        return {
+          recipientId: target.recipientId, ok: false, clientId,
+          error: `כבר נטען בנדרים (${already} טעינות של ${amount}) — הטעינה נמנעה`,
+        }
+      }
+    } catch (e) {
+      console.error('[holiday-load] בדיקת טעינה קיימת נכשלה — ממשיכים לטעינה:',
+        e instanceof Error ? e.message : e)
     }
 
     // ⚠️ התוקף עובר לנדרים. קודם נשלח undefined והכרטיסים יצאו בלי
@@ -317,4 +347,51 @@ export function eligibleForLoad(rows: {
       address: r.address ?? null,
       city: r.city ?? null,
     }))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 כמה טעינות בסכום החלוקה כבר קיימות בנדרים למשפחה הזו.
+//
+// ⚠️ מבנה התשובה של GetClientCard אינו אחיד — הטעינות מגיעות תחת מפתחות
+// שונים, ולעיתים כאובייקט יחיד ולא כמערך. קריאה לפי מפתח אחד בלבד החזירה
+// 0 בשקט, כלומר "לא נטען" על משפחה שכן נטענה — בדיוק הכשל שהפונקציה
+// אמורה למנוע.
+//
+// ⚠️ נספרות רק טעינות בסכום המדויק של החלוקה: למשפחה עשויות להיות טעינות
+// מתוכניות אחרות (יולדות, סיוע), וספירתן הייתה חוסמת חלוקת חגים לגיטימית.
+// ─────────────────────────────────────────────────────────────────────────────
+export function countHolidayLoads(payload: unknown, amount: number): number {
+  if (!payload || typeof payload !== 'object') return 0
+  const obj = payload as Record<string, unknown>
+
+  const asRows = (v: unknown): Record<string, unknown>[] => {
+    if (Array.isArray(v)) return v.filter(x => x && typeof x === 'object') as Record<string, unknown>[]
+    // ⚠️ פריט יחיד מוחזר כאובייקט ולא כמערך באורך 1.
+    if (v && typeof v === 'object') return [v as Record<string, unknown>]
+    return []
+  }
+
+  const looksLikeLoad = (r: Record<string, unknown>) =>
+    'Amount' in r || 'TlushId' in r || 'Sum' in r
+
+  let rows: Record<string, unknown>[] = []
+  for (const key of ['Tlushim', 'Tlushim_Table', 'Loads', 'Tlush']) {
+    if (key in obj) { rows = asRows(obj[key]); if (rows.length) break }
+  }
+  if (!rows.length) {
+    for (const v of Object.values(obj)) {
+      const cand = asRows(v)
+      if (cand.length && cand.some(looksLikeLoad)) { rows = cand; break }
+    }
+  }
+
+  const num = (v: unknown): number => {
+    const n = Number(String(v ?? '').replace(/[^\d.-]/g, ''))
+    return Number.isFinite(n) ? n : NaN
+  }
+
+  return rows.filter(r => {
+    const a = num(r.Amount ?? r.Sum)
+    return Number.isFinite(a) && Math.abs(a - amount) < 0.01
+  }).length
 }
