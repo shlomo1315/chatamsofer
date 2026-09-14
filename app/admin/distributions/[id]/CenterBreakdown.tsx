@@ -4,6 +4,7 @@ import { Loader2, MapPin, Check, X, Users, CalendarClock, Volume2 } from 'lucide
 import DeadlineCountdown from '@/components/ui/DeadlineCountdown'
 import { toLocalInput } from '@/lib/centerDeadline'
 import { spokenCenterDetails } from '@/lib/holidayCenterSpeech'
+import { PICKUP_PHASE_LABEL, type PickupPhase } from '@/lib/centerPickupPhase'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // פילוח לפי מוקדי חלוקה + מתג פתיחת הבחירה.
@@ -13,6 +14,14 @@ import { spokenCenterDetails } from '@/lib/holidayCenterSpeech'
 // ⚠️ מתג "בחירת המוקדים פתוחה" עצמאי משער הרישום: הבחירה נפתחת דווקא
 // אחרי שהרישום נסגר.
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ⚠️ מה *באמת* יישמע בטלפון בכל שלב — הסבר על הכפתור עצמו.
+// בלי זה אין דרך לדעת מה סגירת מוקד עושה, מלבד להתקשר ולבדוק.
+const PHASE_HINT: Record<PickupPhase, string> = {
+  not_started: 'בטלפון: "המוקד שבו נרשמתם טרם החל בחלוקת הכרטיסים" — כלומר המתינו להודעה',
+  active: 'המוקד מחלק — הרשומים בו יכולים לשייך כרטיס בטלפון',
+  ended: 'בטלפון: "החלוקה כבר הסתיימה, אין אפשרות לקבל כעת כרטיס. עמכם הסליחה"',
+}
 
 /** תא עריכה בטבלה — נראה כטקסט עד שנוגעים בו. */
 const CELL = 'rounded-lg border border-transparent bg-transparent px-2 py-1.5 text-[13px] text-slate-800 ' +
@@ -34,6 +43,8 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
   const [openIds, setOpenIds] = useState<Set<string>>(new Set())
   /** המוקדים שכבר מחלקים כרטיסים — נפרד מ-openIds (בחירה ≠ חלוקה). */
   const [pickupIds, setPickupIds] = useState<Set<string>>(new Set())
+  /** 🔴 שלב החלוקה לכל מוקד: טרם מחלק · מחלק · נסגרה החלוקה. */
+  const [phases, setPhases] = useState<Record<string, PickupPhase>>({})
   const [centersOpen, setCentersOpen] = useState(false)
 
   // 🔴 המועד האחרון לבחירה.
@@ -149,6 +160,7 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
       setCounts(c.counts ?? {})
       setOpenIds(new Set<string>(c.openIds ?? []))
       setPickupIds(new Set<string>(c.pickupIds ?? []))
+      setPhases((c.phases ?? {}) as Record<string, PickupPhase>)
       if (dRes.ok) {
         const d = await dRes.json()
         setCentersOpen(!!d.centers_open)
@@ -206,13 +218,13 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
    *
    * ⚠️ זה מה שהשלוחה הטלפונית בודקת לפני שהיא מבקשת מספר כרטיס.
    */
-  async function togglePickup(id: string, pickup: boolean) {
+  async function setPhase(id: string, phase: PickupPhase) {
     setBusy(id); setErr('')
     try {
       const res = await fetch('/api/admin/holiday-centers', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ distribution_id: distributionId, center_id: id, pickup }),
+        body: JSON.stringify({ distribution_id: distributionId, center_id: id, phase }),
       })
       if (!res.ok) {
         // ⚠️ קוד הסטטוס נאמר מפורשות: "העדכון נכשל" לבדו אינו מבחין בין
@@ -222,9 +234,11 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
         setErr(`${d.error ?? 'העדכון נכשל'} (${res.status})`)
         return
       }
+      setPhases(prev => ({ ...prev, [id]: phase }))
+      // ⚠️ pickupIds משרת את המונה שבראש המסך — נשמר מסונכרן עם השלב.
       setPickupIds(prev => {
         const next = new Set(prev)
-        if (pickup) next.add(id); else next.delete(id)
+        if (phase === 'active') next.add(id); else next.delete(id)
         return next
       })
     } catch { setErr('שגיאת רשת') } finally { setBusy(null) }
@@ -309,25 +323,34 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
    * ⚠️ ברצף ולא במקביל: 26 בקשות בו-זמנית מציפות את המסד, ותקלה באמצע
    * הייתה משאירה מצב חלקי בלי לדעת היכן זה נעצר.
    */
-  async function bulkPickup(pickup: boolean) {
+  /**
+   * החלת שלב על כל המוקדים בבת אחת.
+   *
+   * 🔴 מקבל שלב ולא בוליאני: "סגור בכולם" שלח pickup:false, שנקרא כ"טרם
+   * החל" — וכל המשפחות שמעו שעליהן להמתין להודעה, אחרי שהחלוקה נגמרה.
+   */
+  async function bulkPhase(phase: PickupPhase) {
     if (!centers?.length) return
-    const verb = pickup ? 'לפתוח את החלוקה בכל' : 'לסגור את החלוקה בכל'
-    if (!confirm(`${verb} ${centers.length} המוקדים?\n\nהשינוי נשמע מיד בשלוחה הטלפונית.`)) return
+    const verb = phase === 'active' ? 'לפתוח את החלוקה בכל'
+      : phase === 'ended' ? 'לסמן שהחלוקה הסתיימה בכל'
+      : 'להחזיר ל"טרם מחלק" את כל'
+    if (!confirm(`${verb} ${centers.length} המוקדים?\n\n${PHASE_HINT[phase]}\n\nהשינוי נשמע מיד בשלוחה הטלפונית.`)) return
     setBusy('bulk'); setErr('')
     try {
       for (const c of centers) {
         const res = await fetch('/api/admin/holiday-centers', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ distribution_id: distributionId, center_id: c.id, pickup }),
+          body: JSON.stringify({ distribution_id: distributionId, center_id: c.id, phase }),
         })
         if (!res.ok) {
           setErr(`העדכון נעצר במוקד ${c.city} ${c.name}. הקודמים נשמרו.`)
           break
         }
+        setPhases(prev => ({ ...prev, [c.id]: phase }))
         setPickupIds(prev => {
           const next = new Set(prev)
-          if (pickup) next.add(c.id); else next.delete(c.id)
+          if (phase === 'active') next.add(c.id); else next.delete(c.id)
           return next
         })
       }
@@ -476,14 +499,17 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
             בשלוחה הטלפונית אצל אלפי משפחות. */}
         <span className="flex-1" />
         <button type="button" disabled={busy === 'bulk'}
-          onClick={() => void bulkPickup(true)}
+          onClick={() => void bulkPhase('active')}
+          title={PHASE_HINT.active}
           className="rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-40">
           {busy === 'bulk' ? '…' : 'פתח חלוקה בכולם'}
         </button>
+        {/* 🔴 "הסתיימה" ולא "סגור": סגירה סתם נשמעה כ"טרם החל". */}
         <button type="button" disabled={busy === 'bulk'}
-          onClick={() => void bulkPickup(false)}
-          className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 transition hover:border-rose-300 hover:text-rose-700 disabled:opacity-40">
-          סגור בכולם
+          onClick={() => void bulkPhase('ended')}
+          title={PHASE_HINT.ended}
+          className="rounded-lg border border-rose-300 bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-700 transition hover:bg-rose-100 disabled:opacity-40">
+          סיים חלוקה בכולם
         </button>
       </div>
 
@@ -511,6 +537,8 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
             const n = counts[c.id] ?? 0
             const isOpen = openIds.has(c.id)
             const isPickup = pickupIds.has(c.id)
+            // 🔴 ברירת המחדל היא "טרם מחלק" — מוקד בלי שורה טרם החל.
+            const phase: PickupPhase = phases[c.id] ?? (isPickup ? "active" : "not_started")
             const full = c.capacity != null && n >= c.capacity
             const d = draftOf(c)
             const dirty = isDirty(c)
@@ -546,19 +574,27 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
                     {busy === c.id ? '…' : isOpen ? 'בחירה: פתוח' : 'בחירה: סגור'}
                   </button>
 
-                  {/* 🔴 השער שהשלוחה הטלפונית בודקת. */}
-                  <button type="button" disabled={busy === c.id}
-                    onClick={() => togglePickup(c.id, !isPickup)}
-                    title={isPickup
-                      ? 'המוקד מחלק כרטיסים — הרשומים בו יכולים לשייך בטלפון'
-                      : 'המוקד טרם החל לחלק — הרשומים בו יישמעו שהמוקד שלהם עדיין סגור'}
-                    className={`w-32 shrink-0 rounded-lg px-2 py-1.5 text-[11px] font-bold transition ${
-                      isPickup
-                        ? 'border border-emerald-400 bg-emerald-100 text-emerald-800'
-                        : 'border border-slate-300 bg-white text-slate-500 hover:border-emerald-300'
-                    }`}>
-                    {busy === c.id ? '…' : isPickup ? '✓ מחלק כרטיסים' : 'טרם מחלק'}
-                  </button>
+                  {/* ── 🔴 שלב החלוקה — השער שהשלוחה הטלפונית בודקת ──
+                      שלוש דרגות ולא כפתור מתחלף: "טרם" ו"נסגר" הם שניהם
+                      מוקד שאינו מחלק, אבל המשפט למתקשר הפוך — אחד אומר
+                      להמתין להודעה, השני שהמועד עבר. ראו lib/centerPickupPhase. */}
+                  <div className="flex shrink-0 overflow-hidden rounded-lg border border-slate-300"
+                    title="מה נשמע בטלפון למי שנרשם למוקד הזה">
+                    {(['not_started', 'active', 'ended'] as const).map((p, i) => {
+                      const on = phase === p
+                      const tone = p === 'active' ? 'bg-emerald-600' : p === 'ended' ? 'bg-rose-600' : 'bg-slate-500'
+                      return (
+                        <button key={p} type="button" disabled={busy === c.id}
+                          onClick={() => void setPhase(c.id, p)}
+                          title={PHASE_HINT[p]}
+                          className={`px-2.5 py-1.5 text-[11px] font-bold transition disabled:opacity-40 ${
+                            i > 0 ? 'border-r border-slate-300' : ''
+                          } ${on ? `${tone} text-white` : 'bg-white text-slate-500 hover:bg-slate-50'}`}>
+                          {busy === c.id && on ? '…' : PICKUP_PHASE_LABEL[p]}
+                        </button>
+                      )
+                    })}
+                  </div>
 
                   {/* 🔴 כלל ברזל: כפתור שמירה שמהבהב ברגע שיש שינוי. */}
                   {dirty && (
@@ -602,6 +638,31 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
                       className={`${CELL} w-full border-slate-200 text-right`} />
                   </label>
                 </div>
+
+                {/* ── 🔴 מה נשמע *עכשיו* לפי המצב שנבחר ──
+                    ⚠️ ההקלטה שנשמעת בגלל המצב יושבת במסך אחר, בתוך 47
+                    הודעות. בלי השורה הזו אין דרך לדעת מה סגירת מוקד עושה
+                    מלבד להתקשר ולבדוק. */}
+                {phase !== 'active' && (
+                  <div className={`mt-2 flex flex-wrap items-center gap-2 rounded-lg px-2.5 py-1.5 ${
+                    phase === 'ended' ? 'bg-rose-50' : 'bg-slate-100'}`}>
+                    <Volume2 size={12} className={`shrink-0 ${phase === 'ended' ? 'text-rose-400' : 'text-slate-400'}`} />
+                    <span className={`min-w-[12rem] flex-1 text-[11px] leading-snug ${
+                      phase === 'ended' ? 'text-rose-800' : 'text-slate-600'}`}>
+                      <span className="font-bold">הרשומים כאן ישמעו: </span>
+                      {phase === 'ended'
+                        ? '"החלוקה כבר הסתיימה, אין אפשרות לקבל כעת כרטיס. עמכם הסליחה"'
+                        : `"המוקד שבו נרשמתם, ${c.city} ${c.name}, טרם החל בחלוקת הכרטיסים"`}
+                    </span>
+                    {/* ⚠️ "טרם החל" מכילה את שם המוקד ולכן אינה ניתנת להקלטה
+                        כקובץ אחד — היא נקראת בקול המערכת. "הסתיימה" קבועה. */}
+                    <a href="/admin/phone" target="_blank" rel="noopener"
+                      title="עריכת הנוסח וההקלטה במערכת הטלפונית"
+                      className="shrink-0 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[10.5px] font-bold text-slate-600 transition hover:border-violet-300 hover:text-violet-700">
+                      ערוך נוסח
+                    </a>
+                  </div>
+                )}
 
                 {/* ── שורה 3: כך זה יישמע ──
                     🔴 מוצג מהשדות עצמם, ומתעדכן תוך כדי הקלדה. */}

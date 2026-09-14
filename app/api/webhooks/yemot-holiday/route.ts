@@ -40,6 +40,7 @@ import { spokenCenterName, spokenCenterDetails } from '@/lib/holidayCenterSpeech
 import { centerStatusKey } from '@/lib/holidayCenterStatusMessage'
 import { stripUnfilledPlaceholders } from '@/lib/yemotPlaceholders'
 import { pickupClosedMessageKey } from '@/lib/holidayPickupClosedMessage'
+import { pickupPhaseOf } from '@/lib/centerPickupPhase'
 import { runLoadBatch } from '@/lib/holidayCardLoad'
 import { linkHolidayCard } from '@/lib/holidayCards'
 import {
@@ -473,11 +474,23 @@ async function handleCardRoute(
   // שעל בסיסה המשפחה בחרה מוקד, ומחיקתה הייתה מוחקת את הבחירה עצמה.
   // ─────────────────────────────────────────────────────────────────────────
   const { data: openRow } = await db.from('holiday_center_openings')
-    .select('pickup_open_at')
+    .select('pickup_open_at, pickup_ended_at')
     .eq('distribution_id', dist.id).eq('center_id', rec.center_id)
     .maybeSingle()
 
-  if (!(openRow as { pickup_open_at: string | null } | null)?.pickup_open_at) {
+  // 🔴 שלושה מצבים ולא שניים — ראו lib/centerPickupPhase.
+  //
+  // ⚠️ "טרם החל" ו"כבר נסגר" הם שניהם מוקד שאינו מחלק, אבל המשפט למתקשר
+  // הפוך: אחד אומר להמתין להודעה, השני שהמועד עבר. עד כה נשמע "טרם החל"
+  // גם אחרי הסיום, ומי שאיחר המשיך להמתין להודעה שלא תגיע.
+  const phase = pickupPhaseOf(openRow as { pickup_open_at: string | null; pickup_ended_at: string | null } | null)
+
+  if (phase === 'ended') {
+    // ⚠️ נוסח קבוע ובלי שם מוקד — ולכן ניתן להקלטה בקול המערכת.
+    return yemotText([idMessage(msgToken(msgs, 'card_pickup_ended')), goToFolder('hangup')], callId)
+  }
+
+  if (phase === 'not_started') {
     const { data: cRow } = await db.from('holiday_centers')
       .select('city, name, address, hours, audio_file').eq('id', rec.center_id).maybeSingle()
     const c = cRow as SpokenCenter | null

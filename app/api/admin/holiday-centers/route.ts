@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
+import { pickupPhaseOf, pickupPhasePatch, type PickupPhase } from '@/lib/centerPickupPhase'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,6 +34,8 @@ export async function GET(request: NextRequest) {
   const openIds: string[] = []
   /** המוקדים שכבר החלו לחלק כרטיסים בפועל (pickup_open_at). */
   const pickupIds: string[] = []
+  /** 🔴 השלב המלא לכל מוקד: טרם מחלק · מחלק · נסגרה החלוקה. */
+  const phases: Record<string, PickupPhase> = {}
 
   if (distributionId) {
     const { data: taken } = await db.rpc('holiday_center_counts', { dist_id: distributionId })
@@ -52,15 +55,17 @@ export async function GET(request: NextRequest) {
     }
 
     const { data: open } = await db.from('holiday_center_openings')
-      .select('center_id, pickup_open_at').eq('distribution_id', distributionId)
-    for (const o of (open ?? []) as { center_id: string; pickup_open_at: string | null }[]) {
+      .select('center_id, pickup_open_at, pickup_ended_at').eq('distribution_id', distributionId)
+    for (const o of (open ?? []) as { center_id: string; pickup_open_at: string | null; pickup_ended_at: string | null }[]) {
       openIds.push(o.center_id)
       // מוקדים שכבר מחלקים כרטיסים — רשימה נפרדת מ-openIds (בחירה ≠ חלוקה).
       if (o.pickup_open_at) pickupIds.push(o.center_id)
+      // 🔴 השלב המלא (טרם/מחלק/נסגר) — ראו lib/centerPickupPhase.
+      phases[o.center_id] = pickupPhaseOf(o)
     }
   }
 
-  return NextResponse.json({ centers: data ?? [], counts, openIds, pickupIds })
+  return NextResponse.json({ centers: data ?? [], counts, openIds, pickupIds, phases })
 }
 
 export async function POST(request: NextRequest) {
@@ -118,7 +123,7 @@ export async function PATCH(request: NextRequest) {
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
   const b = await request.json().catch(() => ({})) as {
-    distribution_id?: string; center_id?: string; open?: boolean; pickup?: boolean
+    distribution_id?: string; center_id?: string; open?: boolean; pickup?: boolean; phase?: string
   }
   const distributionId = String(b.distribution_id ?? '')
   const centerId = String(b.center_id ?? '')
@@ -133,19 +138,31 @@ export async function PATCH(request: NextRequest) {
   //
   // ⚠️ סגירה מאפסת ל-NULL ואינה מוחקת את השורה — מחיקה הייתה מסירה את
   // המוקד מרשימת הבחירה שעל בסיסה משפחות כבר נרשמו.
-  if (b.pickup !== undefined) {
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 שלב החלוקה: טרם מחלק · מחלק · נסגרה החלוקה.
+  //
+  // ⚠️ `phase` מחליף את `pickup` הבוליאני. הישן נשמר לתאימות (קורא שלא
+  // עודכן), אבל אינו יכול לבטא "נסגר" — ולכן סגירה דרכו נקראה כ"טרם החל",
+  // והמתקשר נשלח להמתין להודעה שלא תגיע.
+  // ─────────────────────────────────────────────────────────────────────────
+  const phase: PickupPhase | null =
+    b.phase === 'not_started' || b.phase === 'active' || b.phase === 'ended' ? b.phase
+    : b.pickup !== undefined ? (b.pickup ? 'active' : 'not_started')
+    : null
+
+  if (phase) {
     const { data, error } = await db.from('holiday_center_openings')
-      .update({ pickup_open_at: b.pickup ? new Date().toISOString() : null })
+      .update(pickupPhasePatch(phase))
       .eq('distribution_id', distributionId).eq('center_id', centerId)
       .select('center_id')
     // ⚠️ לוג מפורש: כשהכפתור "לא מגיב" אין דרך אחרת לדעת אם הבקשה
     // הגיעה בכלל, ומה השרת עשה איתה.
-    console.log(`[holiday-centers] pickup=${b.pickup} dist=${distributionId} center=${centerId} rows=${data?.length ?? 0}${error ? ` err=${error.message}` : ''}`)
+    console.log(`[holiday-centers] phase=${phase} dist=${distributionId} center=${centerId} rows=${data?.length ?? 0}${error ? ` err=${error.message}` : ''}`)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     if (!data?.length) {
       return NextResponse.json({ error: 'המוקד אינו משויך לחלוקה זו' }, { status: 404 })
     }
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, phase })
   }
 
   if (b.open) {
