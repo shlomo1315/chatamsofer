@@ -289,7 +289,23 @@ async function getLineagePath(
   nodeId?: string | null,
   chain?: { generation: number; name: string }[] | null,
 ): Promise<string[]> {
-  // (1) נתיב מהעץ המאושר — המקור המדויק ביותר
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 (1) מה שהמשפחה בחרה — הקובץ המאושר הוא מקור האמת, לא העץ.
+  //
+  // ⚠️ עד כה העץ גבר, ואותו מוטב הוצג אחרת בשתי כרטסות: בצאצאים עשרה
+  // דורות ירוקים לפי בחירתו, וכאן שמונה דורות שחלקם אדומים — כי העץ
+  // חולק על הקובץ בדור של 37 שמות. עקשטיין (212404438) הוא בדיוק זה.
+  //
+  // ⚠️ תיקון העץ הוא שלב נפרד ואינו צריך לעכב אישור יולדות.
+  // ─────────────────────────────────────────────────────────────────────────
+  if (Array.isArray(chain) && chain.length) {
+    const fromChain = [...chain]
+      .filter(e => e && typeof e.name === 'string' && e.name.trim())
+      .sort((a, b) => (a.generation ?? 0) - (b.generation ?? 0))
+      .map(e => e.name.trim())
+    if (fromChain.length) return fromChain
+  }
+  // (2) נפילה-לאחור: מסלול העץ — רק כשאין שרשרת שמורה כלל.
   if (nodeId && isSupabaseConfigured()) {
     const map = await getLineageMap()
     const path: string[] = []
@@ -301,13 +317,6 @@ async function getLineagePath(
       guard++
     }
     if (path.length) return path
-  }
-  // (2) נפילה-לאחור: השרשרת שהוקלדה בטופס, ממוינת לפי דור (1..N)
-  if (Array.isArray(chain) && chain.length) {
-    return [...chain]
-      .filter(e => e && typeof e.name === 'string' && e.name.trim())
-      .sort((a, b) => (a.generation ?? 0) - (b.generation ?? 0))
-      .map(e => e.name.trim())
   }
   return []
 }
