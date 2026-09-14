@@ -137,9 +137,22 @@ export async function runJob(job: Job): Promise<{ ok: boolean; error?: string }>
     : await setMainMenuMessageAudio(job.key, baseName)
   if (!saved) return { ok: false, error: 'הקול נוצר אך שמירת ההגדרה נכשלה' }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // ⚠️ הקובץ הקודם אינו בהכרח בשלוחה שאליה מעלים עכשיו: הקלטות ותיקות של
+  // החגים יושבות ב-ivr2:/6 בעוד YEMOT_HOLIDAY_EXT הוא 8, ומחיקה מ-8 בלבד
+  // נכשלה על כל אחת מהן (14.09). זו פסולת בלבד ולא תקלת ניגון — הקובץ
+  // החדש כבר נשמר — אבל היא מצטברת בכל החלפת קול.
+  //
+  // ⚠️ best-effort על כל מועמד: עוצרים בהצלחה הראשונה ומתעלמים מהשאר.
+  // ─────────────────────────────────────────────────────────────────────────
   if (prev && prev !== baseName) {
-    const gone = await deleteFileFromYemot(ext ? `ivr2:/${ext}/${prev}.mp3` : `ivr2:/${prev}.mp3`)
-    if (!gone.ok) console.warn(`[voice-rebuild] מחיקת הקובץ הקודם נכשלה (${prev}): ${gone.error}`)
+    const candidates = [ext, HOLIDAY_EXT, '6', '7', ''].filter((v, i, a) => a.indexOf(v) === i)
+    let removed = false
+    for (const e of candidates) {
+      const gone = await deleteFileFromYemot(e ? `ivr2:/${e}/${prev}.mp3` : `ivr2:/${prev}.mp3`)
+      if (gone.ok) { removed = true; break }
+    }
+    if (!removed) console.warn(`[voice-rebuild] הקובץ הקודם לא נמחק (${prev}) — נשאר יתום, הניגון תקין`)
   }
   return { ok: true }
 }
