@@ -287,4 +287,42 @@ export async function register() {
     setTimeout(() => { void tickNewsletter(); setInterval(() => { void tickNewsletter() }, MINUTE_MS) }, INITIAL_DELAY_MS)
     console.log('[newsletter] sender started (every 1m)')
   }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // ── החלפת קול ⇒ יצירה מחדש של כל ההקלטות — כל 5 דקות ──
+  //
+  // 🔴 החלפת הקול בהגדרות משנה רק הקלטות *חדשות*. כל קובץ MP3 שכבר הועלה
+  // לימות ממשיך להתנגן בקול הישן, ולכן המערכת מדברת בשני קולות: החדש
+  // בהודעות הטקסט, הישן בכל מה שהוקלט. אין מסך שמראה את הפער.
+  //
+  // ⚠️ נעילה בזיכרון: ריצה אורכת דקות, וטיק שני שנכנס באמצע היה מייצר את
+  // אותם קבצים במקביל ודורס את התוצאה של קודמו.
+  // ─────────────────────────────────────────────────────────────────────────
+  if (process.env.VOICE_REBUILD_DISABLED !== '1') {
+    let rebuilding = false
+    const tickVoiceRebuild = async () => {
+      if (rebuilding) return
+      try {
+        const { getVoiceStale, clearVoiceStale } = await import('@/lib/elevenTts')
+        const stale = await getVoiceStale()
+        if (!stale.stale) return
+
+        rebuilding = true
+        console.log(`[voice-rebuild] הקול הוחלף (${stale.voiceId}) — מייצר מחדש את כל ההקלטות`)
+        const { rebuildAllRecordings } = await import('@/lib/voiceRebuild')
+        const res = await rebuildAllRecordings()
+        console.log(`[voice-rebuild] הושלם: ${res.ok}/${res.total} הוחלפו, ${res.failed} נכשלו`)
+
+        // ⚠️ מסמנים כהושלם גם כשחלק נכשלו: אחרת הריצה תחזור כל 5 דקות
+        // ותייצר שוב את מה שכבר הוחלף. הכשלים נרשמו בלוג ויוצגו במסך.
+        await clearVoiceStale()
+      } catch (err) {
+        console.error('[voice-rebuild] tick failed', err)
+      } finally {
+        rebuilding = false
+      }
+    }
+    setTimeout(() => { void tickVoiceRebuild(); setInterval(() => { void tickVoiceRebuild() }, 5 * MINUTE_MS) }, INITIAL_DELAY_MS)
+    console.log('[voice-rebuild] watcher started (every 5m)')
+  }
 }

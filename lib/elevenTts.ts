@@ -59,7 +59,56 @@ export async function saveElevenConfig(input: { apiKey?: string; voiceId?: strin
     { key: SETTINGS_KEY, value: JSON.stringify(next), updated_at: new Date().toISOString() },
     { onConflict: 'key' },
   )
-  return !error
+  if (error) return false
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 הקול השתנה ⇒ כל ההקלטות הקיימות מיושנות.
+  //
+  // ⚠️ החלפת הקול משפיעה רק על הקלטות *חדשות*. כל קובץ MP3 שכבר הועלה
+  // לימות ממשיך להתנגן בקול הישן, ואין שום מסך שמראה זאת — המנהל מחליף
+  // קול, שומע "נשמר בהצלחה", ובטלפון נשמעים שני קולות שונים לסירוגין.
+  //
+  // נרשמת כאן חותמת בלבד; היצירה עצמה רצה ברקע (voiceRebuildQueue), כי
+  // 39 קבצים הם דקות ארוכות ובקשת השמירה הייתה נקטעת ב-timeout הרבה
+  // לפני הסוף — ומשאירה חלק מההקלטות מוחלפות וחלק לא.
+  // ─────────────────────────────────────────────────────────────────────────
+  if (input.voiceId !== undefined && String(input.voiceId).trim() !== (current.voiceId ?? '')) {
+    await admin.from('app_settings').upsert({
+      key: VOICE_STALE_KEY,
+      value: JSON.stringify({ voiceId: next.voiceId, markedAt: new Date().toISOString(), done: false }),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'key' })
+  }
+  return true
+}
+
+/** חותמת "ההקלטות אינן תואמות לקול הנוכחי". ⚠️ app_settings היא text — תמיד JSON.stringify. */
+export const VOICE_STALE_KEY = 'elevenlabs_recordings_stale'
+
+/** האם קיימות הקלטות שעדיין בקול הישן. */
+export async function getVoiceStale(): Promise<{ stale: boolean; voiceId: string | null; markedAt: string | null }> {
+  const admin = getServiceClient()
+  if (!admin) return { stale: false, voiceId: null, markedAt: null }
+  const { data } = await admin.from('app_settings').select('value').eq('key', VOICE_STALE_KEY).maybeSingle()
+  if (!data?.value) return { stale: false, voiceId: null, markedAt: null }
+  try {
+    const p = JSON.parse(data.value)
+    return { stale: !p?.done, voiceId: p?.voiceId ?? null, markedAt: p?.markedAt ?? null }
+  } catch { return { stale: false, voiceId: null, markedAt: null } }
+}
+
+/** סימון שההחלפה הושלמה. */
+export async function clearVoiceStale(): Promise<void> {
+  const admin = getServiceClient()
+  if (!admin) return
+  const { data } = await admin.from('app_settings').select('value').eq('key', VOICE_STALE_KEY).maybeSingle()
+  let p: Record<string, unknown> = {}
+  if (data?.value) { try { p = JSON.parse(data.value) } catch { /* ignore */ } }
+  await admin.from('app_settings').upsert({
+    key: VOICE_STALE_KEY,
+    value: JSON.stringify({ ...p, done: true, finishedAt: new Date().toISOString() }),
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'key' })
 }
 
 // האם מוגדר מפתח (בלי לחשוף אותו) — לתצוגת סטטוס בהגדרות
