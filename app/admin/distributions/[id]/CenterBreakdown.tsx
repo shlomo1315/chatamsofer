@@ -21,7 +21,7 @@ import AudioPlayer from '@/components/ui/AudioPlayer'
 const PHASE_HINT: Record<PickupPhase, string> = {
   not_started: 'בטלפון: "המוקד שבו נרשמתם טרם החל בחלוקת הכרטיסים" — כלומר המתינו להודעה',
   active: 'המוקד מחלק — הרשומים בו יכולים לשייך כרטיס בטלפון',
-  ended: 'בטלפון: "החלוקה כבר הסתיימה, אין אפשרות לקבל כעת כרטיס. עמכם הסליחה"',
+  ended: 'בטלפון: "החלוקה במוקד <שם המוקד> כבר הסתיימה, אין אפשרות לקבל כעת כרטיס. עמכם הסליחה"',
 }
 
 /** תא עריכה בטבלה — נראה כטקסט עד שנוגעים בו. */
@@ -665,7 +665,7 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
                       phase === 'ended' ? 'text-rose-800' : 'text-slate-600'}`}>
                       <span className="font-bold">הרשומים כאן ישמעו: </span>
                       {phase === 'ended'
-                        ? '"החלוקה כבר הסתיימה, אין אפשרות לקבל כעת כרטיס. עמכם הסליחה"'
+                        ? `"החלוקה במוקד ${c.city} ${c.name} כבר הסתיימה, אין אפשרות לקבל כעת כרטיס. עמכם הסליחה"`
                         : `"המוקד שבו נרשמתם, ${c.city} ${c.name}, טרם החל בחלוקת הכרטיסים"`}
                     </span>
                     {/* 🔴 כפתור השמעה משלה — ולא של פרטי המוקד.
@@ -678,7 +678,7 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
                       : (
                         <button type="button" disabled={preview === `msg-${c.id}`}
                           onClick={() => void playPreview(`msg-${c.id}`, phase === 'ended'
-                            ? 'החלוקה כבר הסתיימה, אין אפשרות לקבל כעת כרטיס. עמכם הסליחה'
+                            ? `שימו לב, החלוקה במוקד ${c.city} ${c.name} כבר הסתיימה, אין אפשרות לקבל כעת כרטיס. עמכם הסליחה`
                             : `שימו לב, המוקד שבו נרשמתם, ${c.city} ${c.name}, טרם החל בחלוקת הכרטיסים`)}
                           title="השמעת ההודעה הזו — לא פרטי המוקד"
                           className={`shrink-0 rounded-lg border bg-white px-2.5 py-1 text-[10.5px] font-bold transition disabled:opacity-40 ${
