@@ -1,3 +1,4 @@
+import { displayChain } from '@/lib/lineageDisplayChain'
 import { idDocLabel } from '@/lib/idDocLabel'
 import { guardPage } from '@/lib/pageGuard'
 import Link from 'next/link'
@@ -583,17 +584,22 @@ export default async function MaternityDetailPage(
                       .sort((a, b) => (a.generation ?? 0) - (b.generation ?? 0))
                     // המסלול בעץ קודם לעותק השמור — כמו בכרטסת הצאצא. השם מגיע
                     // מהעץ העדכני; תגית בן/חתן נלקחת מהעותק לפי מספר הדור.
-                    const fromTree = !!ben?.lineage_node_id && lineagePath.length > 0
+                    // 🔴 אותו מקור בדיוק כמו בכרטסת הצאצא — ראו lineageDisplayChain.
+                    //
+                    // ⚠️ עד כה העץ גבר כאן (fromTree), ולכן אותו מוטב הוצג
+                    // אחרת בשתי הכרטסות: בלייכברד (200360204) קיבל שבעה
+                    // דורות עם כפילות — "רבי חנניה בלייכברד" יושב בעץ גם
+                    // בדור 6 וגם בדור 7 — בעוד שבצאצאים הוצגו שישה תקינים.
                     const relOf = (g: number) => chainSorted.find(c => c.generation === g)?.relation ?? null
-                    const source: { generation: number; name: string; relation?: string | null }[] =
-                      fromTree
-                        ? lineagePath.map((name, i) => ({ generation: i + 1, name, relation: relOf(i + 1) }))
-                        : chainSorted.length
-                        ? chainSorted
-                        : [
-                            ...lineagePath.map((name, i) => ({ generation: i + 1, name, relation: null })),
+                    const source = displayChain(
+                      chainSorted,
+                      lineagePath.length
+                        ? [
+                            ...lineagePath.map((name, i) => ({ generation: i + 1, name, relation: relOf(i + 1) })),
                             ...lineageManual.map((name, i) => ({ generation: lineagePath.length + 1 + i, name, relation: null })),
                           ]
+                        : [],
+                    )
                     if (!source.length) return null
                     const gens: ChainGen[] = source.map(c => {
                       const isRoot = c.generation === 1

@@ -1,3 +1,4 @@
+import { displayChain } from '@/lib/lineageDisplayChain'
 import { guardPage } from '@/lib/pageGuard'
 import { fmtLoanAmount } from '@/lib/loanCurrency'
 import { notFound } from 'next/navigation'
@@ -392,10 +393,8 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
   // ⚠️ נפילה למסלול העץ רק כשאין שרשרת שמורה — משפחה ישנה שנקשרה לצומת
   // בלי לבחור בעצמה. בלי זה היא הייתה מוצגת בלי דורות כלל.
   // ─────────────────────────────────────────────────────────────────────────
-  const savedChain = [...chainForMarks].sort((a, b) => a.generation - b.generation)
-  const alertSource: { generation: number; name: string }[] = savedChain.length
-    ? savedChain
-    : pathNodes.map(n => ({ generation: n.generation, name: n.name }))
+  // 🔴 מקור אחד לכל המסכים — ראו lib/lineageDisplayChain.
+  const alertSource = displayChain(chainForMarks, pathNodes)
   const alertGens: { generation: number; name: string; color: 'green' | 'red' | 'orange' }[] =
     alertSource.map(c => ({
       generation: c.generation,
@@ -657,12 +656,14 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         // לגזור מאותו מקור, אחרת הם יחלקו זה על זה על אותה משפחה.
         //
         // ⚠️ נפילה לעץ רק כשאין שרשרת שמורה (משפחה שנקשרה לצומת בלי לבחור).
-        const source: { generation: number; name: string; relation: string | null }[] =
-          chainSorted.length
-            ? chainSorted
-            : pathNodes.length
-              ? pathNodes.map(n => ({ generation: n.generation, name: n.name, relation: n.relation ?? null }))
-              : lineagePath.map((name, i) => ({ generation: i + 1, name, relation: null as string | null }))
+        // 🔴 אותו מקור בדיוק כמו החלונית ו-כרטסת היולדות.
+        // ⚠️ lineagePath הוא נפילה אחרונה — שרשרת ידנית בלי שיוך לצומת.
+        const source = displayChain(
+          chainSorted,
+          pathNodes.length
+            ? pathNodes.map(n => ({ generation: n.generation, name: n.name, relation: n.relation ?? null }))
+            : lineagePath.map((name, i) => ({ generation: i + 1, name, relation: null as string | null })),
+        )
         const gens: import('./LineageChainChips').ChainGen[] = source.map(c => {
           const isRoot = c.generation === 1
           return {
