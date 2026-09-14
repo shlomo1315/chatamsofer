@@ -1,10 +1,11 @@
 'use client'
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback } from 'react'
 import { Loader2, MapPin, Check, X, Users, CalendarClock, Volume2 } from 'lucide-react'
 import DeadlineCountdown from '@/components/ui/DeadlineCountdown'
 import { toLocalInput } from '@/lib/centerDeadline'
 import { spokenCenterDetails } from '@/lib/holidayCenterSpeech'
 import { PICKUP_PHASE_LABEL, type PickupPhase } from '@/lib/centerPickupPhase'
+import AudioPlayer from '@/components/ui/AudioPlayer'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // פילוח לפי מוקדי חלוקה + מתג פתיחת הבחירה.
@@ -68,7 +69,9 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
   const [err, setErr] = useState('')
   /** המוקד שמושמע כרגע (תצוגה מקדימה). */
   const [preview, setPreview] = useState<string | null>(null)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+  /** 🔴 הנגן הפעיל — מזהה השורה והמקור. אחד בלבד, אחרת שתי הקלטות
+   *  מתנגנות יחד ואי אפשר לדעת מה שומעים. */
+  const [player, setPlayer] = useState<{ id: string; src: string } | null>(null)
 
   /** הערכים המוצגים בשורה — הטיוטה מעל השמור. */
   const draftOf = (c: Center): Center => ({ ...c, ...(drafts[c.id] ?? {}) })
@@ -290,9 +293,15 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
   }
 
   /** השמעה מקדימה — בלי לייצר קובץ בימות. */
+  /**
+   * יצירת ההשמעה — ומסירתה לנגן.
+   *
+   * 🔴 לא מנגן ישירות: הנגן (components/ui/AudioPlayer) נותן מחוון, עצירה
+   * וקפיצה לזמן. עד כה ההשמעה הייתה new Audio().play() בלי שום שליטה,
+   * ומי שבדק הודעה ארוכה נאלץ להאזין לכולה ולהתחיל מחדש בכל פעם.
+   */
   async function playPreview(id: string, text: string) {
     if (!text) return
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
     setPreview(id); setErr('')
     try {
       const res = await fetch('/api/admin/elevenlabs/preview', {
@@ -302,10 +311,9 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok || !d?.audio) { setErr(d?.error ?? 'ההשמעה נכשלה'); return }
-      const audio = new Audio(`data:${d.mime || 'audio/mpeg'};base64,${d.audio}`)
-      audioRef.current = audio
-      audio.onended = () => { if (audioRef.current === audio) audioRef.current = null }
-      await audio.play()
+      // ⚠️ המקור נשמר ב-state ולא מנוגן מיד: הנגן מתחיל אותו בעצמו,
+      // וכך נשארת שליטה אחת במקום שני נגנים שמתנגשים.
+      setPlayer({ id, src: `data:${d.mime || 'audio/mpeg'};base64,${d.audio}` })
     } catch { setErr('שגיאה בהשמעה') } finally { setPreview(null) }
   }
 
@@ -663,17 +671,23 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
                     {/* 🔴 כפתור השמעה משלה — ולא של פרטי המוקד.
                         ⚠️ בלעדיו "▶ השמע" היחיד בשורה היה של פרטי המוקד,
                         והשמיע כתובת ושעות דווקא כשהמוקד סגור. */}
-                    <button type="button" disabled={preview === `msg-${c.id}`}
-                      onClick={() => void playPreview(`msg-${c.id}`, phase === 'ended'
-                        ? 'החלוקה כבר הסתיימה, אין אפשרות לקבל כעת כרטיס. עמכם הסליחה'
-                        : `שימו לב, המוקד שבו נרשמתם, ${c.city} ${c.name}, טרם החל בחלוקת הכרטיסים`)}
-                      title="השמעת ההודעה הזו — לא פרטי המוקד"
-                      className={`shrink-0 rounded-lg border bg-white px-2.5 py-1 text-[10.5px] font-bold transition disabled:opacity-40 ${
-                        phase === 'ended'
-                          ? 'border-rose-300 text-rose-700 hover:bg-rose-50'
-                          : 'border-slate-300 text-slate-600 hover:border-violet-300 hover:text-violet-700'}`}>
-                      {preview === `msg-${c.id}` ? '…' : '▶ השמע'}
-                    </button>
+                    {player?.id === `msg-${c.id}`
+                      ? <AudioPlayer src={player.src} tone={phase === 'ended' ? 'rose' : 'slate'}
+                          fileName={`${c.city}-${c.name}-${phase === 'ended' ? 'הסתיימה' : 'טרם-מחלק'}`}
+                          onClose={() => setPlayer(null)} />
+                      : (
+                        <button type="button" disabled={preview === `msg-${c.id}`}
+                          onClick={() => void playPreview(`msg-${c.id}`, phase === 'ended'
+                            ? 'החלוקה כבר הסתיימה, אין אפשרות לקבל כעת כרטיס. עמכם הסליחה'
+                            : `שימו לב, המוקד שבו נרשמתם, ${c.city} ${c.name}, טרם החל בחלוקת הכרטיסים`)}
+                          title="השמעת ההודעה הזו — לא פרטי המוקד"
+                          className={`shrink-0 rounded-lg border bg-white px-2.5 py-1 text-[10.5px] font-bold transition disabled:opacity-40 ${
+                            phase === 'ended'
+                              ? 'border-rose-300 text-rose-700 hover:bg-rose-50'
+                              : 'border-slate-300 text-slate-600 hover:border-violet-300 hover:text-violet-700'}`}>
+                          {preview === `msg-${c.id}` ? '…' : '▶ השמע'}
+                        </button>
+                      )}
                     {/* ⚠️ "טרם החל" מכילה את שם המוקד ולכן אינה ניתנת להקלטה
                         כקובץ אחד — היא נקראת בקול המערכת. "הסתיימה" קבועה. */}
                     <a href="/admin/phone" target="_blank" rel="noopener"
@@ -694,12 +708,18 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
                       : (spokenCenterDetails(d) || <span className="text-slate-300">אין מה להשמיע — חסרים פרטים</span>)}
                   </span>
 
-                  <button type="button" disabled={preview === c.id || !spokenCenterDetails(d)}
-                    onClick={() => void playPreview(c.id, spokenCenterDetails(d))}
-                    title="השמעה — כך זה יישמע"
-                    className="shrink-0 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[10.5px] font-bold text-slate-600 transition hover:border-violet-300 hover:text-violet-700 disabled:opacity-40">
-                    {preview === c.id ? '…' : '▶ השמע'}
-                  </button>
+                  {player?.id === c.id
+                    ? <AudioPlayer src={player.src} tone="violet"
+                        fileName={`${c.city}-${c.name}-פרטי-המוקד`}
+                        onClose={() => setPlayer(null)} />
+                    : (
+                      <button type="button" disabled={preview === c.id || !spokenCenterDetails(d)}
+                        onClick={() => void playPreview(c.id, spokenCenterDetails(d))}
+                        title="השמעה — כך זה יישמע"
+                        className="shrink-0 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[10.5px] font-bold text-slate-600 transition hover:border-violet-300 hover:text-violet-700 disabled:opacity-40">
+                        {preview === c.id ? '…' : '▶ השמע'}
+                      </button>
+                    )}
 
                   {/* 🔴 אותו קול טבעי (ElevenLabs) שכבר משמש את שאר השלוחה. */}
                   <button type="button" disabled={busy === `rec-${c.id}` || !spokenCenterDetails(d)}

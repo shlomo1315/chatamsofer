@@ -485,11 +485,12 @@ async function handleCardRoute(
   // גם אחרי הסיום, ומי שאיחר המשיך להמתין להודעה שלא תגיע.
   const phase = pickupPhaseOf(openRow as { pickup_open_at: string | null; pickup_ended_at: string | null } | null)
 
-  if (phase === 'ended') {
-    // ⚠️ נוסח קבוע ובלי שם מוקד — ולכן ניתן להקלטה בקול המערכת.
-    return yemotText([idMessage(msgToken(msgs, 'card_pickup_ended')), goToFolder('hangup')], callId)
-  }
-
+  // 🔴 מוקד שסיים לחלק אינו חוסם *שיוך* כרטיס.
+  //
+  // ⚠️ מי שמגיע לכאן מחזיק כרטיס ביד — הוא כבר היה במוקד וקיבל אותו.
+  // חסימתו כאן הייתה משאירה כרטיס אמיתי בלי שיוך ובלי כסף, בדיוק אצל
+  // מי שהספיק בזמן. "החלוקה הסתיימה" נאמר למי שבא *לקבל* כרטיס, לא
+  // למי שבא לשייך אחד שכבר בידו.
   if (phase === 'not_started') {
     const { data: cRow } = await db.from('holiday_centers')
       .select('city, name, address, hours, audio_file').eq('id', rec.center_id).maybeSingle()
@@ -759,12 +760,22 @@ async function handleCenterRoute(
     // lib/holidayCenterStatusMessage. הטעינה מתרחשת רק אחרי שהמשפחה
     // הגיעה למוקד, ולכן היא אינה יכולה לשמש עדות לכך שהמוקד פתוח.
     const { data: openRow4 } = await db.from('holiday_center_openings')
-      .select('pickup_open_at')
+      .select('pickup_open_at, pickup_ended_at')
       .eq('distribution_id', dist.id).eq('center_id', rec.center_id)
       .maybeSingle()
-    const centerPickupOpen = !!(openRow4 as { pickup_open_at: string | null } | null)?.pickup_open_at
+    // 🔴 גם כאן השלב המלא ולא pickup_open_at לבדו.
+    //
+    // ⚠️ סגירת מוקד כותבת את *שתי* החותמות, ולכן בדיקת pickup_open_at
+    // בלבד החזירה "פתוח" על מוקד שנסגר — והמתקשר שמע "ניתן לבוא לאסוף"
+    // אחרי שהחלוקה הסתיימה (14.09, בני ברק סקולוב). זהו מסלול נפרד
+    // ממקש שיוך הכרטיס, ולכן התיקון שם לא כיסה אותו.
+    const phase4 = pickupPhaseOf(openRow4 as { pickup_open_at: string | null; pickup_ended_at: string | null } | null)
 
-    const readyKey = centerStatusKey({ centerPickupOpen, loaded: rec.load_status === 'loaded' })
+    if (phase4 === 'ended') {
+      return yemotText([idMessage(msgToken(msgs, 'card_pickup_ended')), goToFolder('hangup')], callId)
+    }
+
+    const readyKey = centerStatusKey({ centerPickupOpen: phase4 === 'active', loaded: rec.load_status === 'loaded' })
 
     // 🔴 פרטי המוקד נאמרים תמיד — שם המוקד יצא מהנוסח כדי שהפתיח יהיה
     // כשיר לקול טבעי, ולכן זהו המקום היחיד שבו המשפחה שומעת *לאן* ללכת.
