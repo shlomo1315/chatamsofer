@@ -654,6 +654,20 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
                         ? '"החלוקה כבר הסתיימה, אין אפשרות לקבל כעת כרטיס. עמכם הסליחה"'
                         : `"המוקד שבו נרשמתם, ${c.city} ${c.name}, טרם החל בחלוקת הכרטיסים"`}
                     </span>
+                    {/* 🔴 כפתור השמעה משלה — ולא של פרטי המוקד.
+                        ⚠️ בלעדיו "▶ השמע" היחיד בשורה היה של פרטי המוקד,
+                        והשמיע כתובת ושעות דווקא כשהמוקד סגור. */}
+                    <button type="button" disabled={preview === `msg-${c.id}`}
+                      onClick={() => void playPreview(`msg-${c.id}`, phase === 'ended'
+                        ? 'החלוקה כבר הסתיימה, אין אפשרות לקבל כעת כרטיס. עמכם הסליחה'
+                        : `שימו לב, המוקד שבו נרשמתם, ${c.city} ${c.name}, טרם החל בחלוקת הכרטיסים`)}
+                      title="השמעת ההודעה הזו — לא פרטי המוקד"
+                      className={`shrink-0 rounded-lg border bg-white px-2.5 py-1 text-[10.5px] font-bold transition disabled:opacity-40 ${
+                        phase === 'ended'
+                          ? 'border-rose-300 text-rose-700 hover:bg-rose-50'
+                          : 'border-slate-300 text-slate-600 hover:border-violet-300 hover:text-violet-700'}`}>
+                      {preview === `msg-${c.id}` ? '…' : '▶ השמע'}
+                    </button>
                     {/* ⚠️ "טרם החל" מכילה את שם המוקד ולכן אינה ניתנת להקלטה
                         כקובץ אחד — היא נקראת בקול המערכת. "הסתיימה" קבועה. */}
                     <a href="/admin/phone" target="_blank" rel="noopener"
