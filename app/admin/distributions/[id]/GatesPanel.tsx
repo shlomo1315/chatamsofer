@@ -190,11 +190,20 @@ export default function GatesPanel({
               pickupOpen ? 'text-emerald-800' : 'text-slate-600'}`}>
               {pickupOpen === null ? 'טוען…'
                 : pickupOpen ? 'המשפחות רואות כתובת ושעות'
-                : 'טרם נפתח — המשפחות רואות הודעת המתנה'}
+                : 'סגור — בטלפון נשמע שהחלוקה הסתיימה'}
             </p>
             <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
               ⚠️ לפתוח רק כשהכרטיסים מוכנים במוקדים — הכתובות הן בתים פרטיים של מתנדבים.
             </p>
+            {/* 🔴 סגירה *אחרי* שחולקו כרטיסים משמיעה "החלוקה הסתיימה"; לפני
+                שהחל האיסוף נשמע "טרם נפתחה". אותו מתג, שני נוסחים — והמנהל
+                צריך לדעת מה יישמע לפני שהוא סוגר. */}
+            {pickupOpen === false && (
+              <p className="mt-1 text-[11px] leading-relaxed text-amber-700">
+                ההודעה הנשמעת נבחרת לבד: לפני תחילת האיסוף — &quot;טרם נפתחה&quot;, ואחריו — &quot;החלוקה הסתיימה&quot;.
+                ניתן לערוך את שני הנוסחים במערכת הטלפונית.
+              </p>
+            )}
           </div>
           {canEdit && pickupOpen !== null && (
             <button type="button" disabled={busy === 'pickup'}

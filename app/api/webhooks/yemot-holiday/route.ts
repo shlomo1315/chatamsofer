@@ -39,6 +39,7 @@ import { ensureCenterOpening } from '@/lib/centerOpeningRow'
 import { spokenCenterName, spokenCenterDetails } from '@/lib/holidayCenterSpeech'
 import { centerStatusKey } from '@/lib/holidayCenterStatusMessage'
 import { stripUnfilledPlaceholders } from '@/lib/yemotPlaceholders'
+import { pickupClosedMessageKey } from '@/lib/holidayPickupClosedMessage'
 import { runLoadBatch } from '@/lib/holidayCardLoad'
 import { linkHolidayCard } from '@/lib/holidayCards'
 import {
@@ -374,7 +375,17 @@ async function handleCardRoute(
   // שהאיסוף סגור וטרם חולק ולו כרטיס אחד. אותו שער בדיוק שהפורטל
   // כבר אוכף (app/api/portal/holiday-register) — השלוחה נשכחה.
   if (!dist.pickup_open) {
-    return yemotText([idMessage(msgToken(msgs, 'card_pickup_closed')), goToFolder('hangup')], callId)
+    // 🔴 "טרם נפתח" מול "כבר הסתיים" — אותו שער סגור, משפט הפוך.
+    //
+    // ⚠️ ההבחנה לפי עובדה ולא לפי תאריך: האם כבר חולק ולו כרטיס אחד.
+    // בלי זה מי שאיחר שמע "עדיין לא נפתחה" והמשיך להמתין להודעה שלא
+    // תגיע. ראו lib/holidayPickupClosedMessage.
+    const { count } = await db.from('holiday_center_openings')
+      .select('center_id', { count: 'exact', head: true })
+      .eq('distribution_id', dist.id)
+      .not('pickup_open_at', 'is', null)
+    const key = pickupClosedMessageKey({ pickupOpen: false, everStarted: (count ?? 0) > 0 })
+    return yemotText([idMessage(msgToken(msgs, key ?? 'card_pickup_closed')), goToFolder('hangup')], callId)
   }
 
   // ── זיהוי לפי מספר המתקשר ──
