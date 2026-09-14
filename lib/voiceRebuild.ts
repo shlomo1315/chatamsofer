@@ -67,9 +67,14 @@ export async function buildJobs(): Promise<Job[]> {
   // החלטה תפעולית (האם הוא בכלל פעיל), ולא חלק מהחלפת קול.
   const db = getServiceClient()
   if (db) {
+    // 🔴 כל מוקד *פעיל* — ולא רק מי שכבר הוקלט.
+    //
+    // ⚠️ הסינון הקודם (audio_file לא ריק) השאיר 25 מתוך 26 המוקדים בלי
+    // הקלטה, ולכן פרטיהם נקראו ב-TTS של ימות — קול משובש בעברית לצד
+    // הודעות מוקלטות. מי שהתקשר שמע שני קולות שונים באותה שיחה.
     const { data } = await db.from('holiday_centers')
       .select('id, city, name, address, hours, audio_file')
-      .not('audio_file', 'is', null)
+      .eq('is_active', true)
       .order('id')
     for (const c of (data ?? []) as Record<string, unknown>[]) {
       const text = spokenCenterDetails(c as never)

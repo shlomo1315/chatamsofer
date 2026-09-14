@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
 import { pickupPhaseOf, pickupPhasePatch, type PickupPhase } from '@/lib/centerPickupPhase'
 import { ensureCenterOpening } from '@/lib/centerOpeningRow'
+import { spokenCenterDetails } from '@/lib/holidayCenterSpeech'
 
 export const dynamic = 'force-dynamic'
 
@@ -103,7 +104,43 @@ export async function POST(request: NextRequest) {
     const msg = error.code === '23505' ? 'כבר קיים מוקד בשם זה באותה עיר' : error.message
     return NextResponse.json({ error: msg }, { status: 400 })
   }
-  return NextResponse.json({ ok: true })
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 הקלטה בקול המערכת — מיד עם השמירה.
+  //
+  // ⚠️ 25 מתוך 26 המוקדים היו בלי הקלטה, ולכן פרטיהם נקראו ב-TTS של
+  // ימות — קול משובש בעברית לצד הודעות מוקלטות. מי שהתקשר שמע שני
+  // קולות שונים באותה שיחה, ולא היה שום סימן לכך בשום מסך.
+  //
+  // ⚠️ אחרי השמירה ולא לפניה: ההקראה נבנית מהשדות (שם, כתובת, שעות),
+  // ויצירה מהערכים הישנים הייתה מקליטה כתובת שכבר לא נכונה.
+  //
+  // ⚠️ כשל ביצירה אינו מפיל את השמירה: הנתונים כבר נשמרו, והמוקד יישמע
+  // ב-TTS עד שההקלטה תיווצר. השמירה חייבת להצליח גם כשימות או
+  // ElevenLabs אינם זמינים.
+  // ─────────────────────────────────────────────────────────────────────────
+  const centerId = id || (await db.from('holiday_centers')
+    .select('id').eq('city', city).eq('name', name).maybeSingle()).data?.id
+  let recording: { ok: boolean; error?: string } | null = null
+  if (centerId && row.is_active) {
+    try {
+      const { runJob } = await import('@/lib/voiceRebuild')
+      const text = spokenCenterDetails(row)
+      if (text) {
+        recording = await runJob({
+          kind: 'center', key: String(centerId),
+          label: `מוקד · ${city} ${name}`, text,
+        })
+      }
+    } catch (e) {
+      recording = { ok: false, error: e instanceof Error ? e.message : 'תקלה' }
+    }
+    if (recording && !recording.ok) {
+      console.error(`[holiday-centers] יצירת ההקלטה נכשלה center=${centerId}: ${recording.error}`)
+    }
+  }
+
+  return NextResponse.json({ ok: true, recording })
 }
 
 /**
