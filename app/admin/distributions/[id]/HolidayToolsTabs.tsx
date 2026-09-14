@@ -32,7 +32,7 @@ export default function HolidayToolsTabs({ distributionId }: { distributionId: s
   const [tab, setTab] = useState<TabId>('centers')
 
   return (
-    <div className="flex flex-col gap-5">
+    <div id="tools-centers" className="flex flex-col gap-5">
       {/* ⚠️ flex-wrap ולא overflow-x-auto: גלילה לרוחב אסורה במערכת
           (eslint-rules/no-horizontal-scroll). בנייד הטאבים יורדים לשורה
           שנייה במקום להיחתך מחוץ למסך. */}

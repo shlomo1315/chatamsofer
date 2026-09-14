@@ -65,6 +65,11 @@ export default function GatesPanel({
   const [extCount, setExtCount] = useState<{ total: number; pending: number } | null>(null)
   const [busy, setBusy] = useState<'gate' | 'deadline' | 'pickup' | 'note' | 'ext' | null>(null)
   const [err, setErr] = useState('')
+  // 🔴 סיכום המוקדים — כמה בכל שלב, בלי לפתוח את לשונית "מוקדי חלוקה".
+  //
+  // ⚠️ השערים נראים כאן והמוקדים מוחבאים בלשונית שנפתחת בלחיצה, ולכן
+  // "האיסוף פתוח" יכול להיראות תקין בזמן שאף מוקד אינו מחלק בפועל.
+  const [centerSummary, setCenterSummary] = useState<Record<string, number> | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -84,6 +89,29 @@ export default function GatesPanel({
       setExtDeadline(d.centers_deadline_extended ?? null)
       setExtDraft(toLocalInput(d.centers_deadline_extended ?? null))
       if (d.extended_count) setExtCount(d.extended_count)
+
+      // ⚠️ שאילתה נפרדת ובלי await משותף: כשל בספירת המוקדים אינו סיבה
+      // להשאיר את כל לוח השערים ריק.
+      try {
+        const cRes = await fetch(
+          `/api/admin/holiday-centers?distribution_id=${encodeURIComponent(distributionId)}`,
+          { cache: 'no-store' },
+        )
+        const c = await cRes.json().catch(() => ({}))
+        if (cRes.ok) {
+          const ph = (c.phases ?? {}) as Record<string, string>
+          const active = (c.centers ?? []).filter((x: { is_active?: boolean }) => x.is_active !== false)
+          const tally: Record<string, number> = { not_started: 0, active: 0, ended: 0, closed: 0 }
+          for (const ctr of active as { id: string }[]) {
+            // ⚠️ מוקד בלי שורה אינו פתוח לחלוקה כלל — נספר בנפרד ולא
+            // כ"טרם מחלק", אחרת המספרים אומרים שכולם ממתינים להתחלה.
+            const p = ph[ctr.id]
+            if (!p) tally.closed++
+            else tally[p] = (tally[p] ?? 0) + 1
+          }
+          setCenterSummary(tally)
+        }
+      } catch { /* הסיכום הוא תצוגה בלבד */ }
     } catch { /* טעינה שנכשלה משאירה את הלוח במצב "טוען" ואינה מפילה את המסך */ }
   }, [distributionId])
 
@@ -216,6 +244,40 @@ export default function GatesPanel({
             </button>
           )}
         </div>
+
+        {/* ── 🔴 מצב המוקדים בפועל ──
+            ⚠️ "האיסוף פתוח" הוא שער כללי בלבד. מי שמחלק בפועל נקבע מוקד
+            אחר מוקד, ובלי הסיכום הזה השער נראה תקין בזמן שאף מוקד אינו
+            מחלק — והמשפחות שומעות שעליהן להמתין. */}
+        {centerSummary && (
+          <div className="mt-2.5 flex flex-wrap items-center gap-2 rounded-lg bg-white/70 px-2.5 py-2">
+            <span className="text-[11px] font-bold text-slate-500">המוקדים:</span>
+            {centerSummary.active > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-extrabold text-emerald-800">
+                {centerSummary.active} מחלקים
+              </span>
+            )}
+            {centerSummary.not_started > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-extrabold text-slate-700">
+                {centerSummary.not_started} טרם מחלקים
+              </span>
+            )}
+            {centerSummary.ended > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-extrabold text-rose-800">
+                {centerSummary.ended} סיימו
+              </span>
+            )}
+            {centerSummary.closed > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-500">
+                {centerSummary.closed} לא בחלוקה
+              </span>
+            )}
+            <a href="#tools-centers"
+              className="mr-auto text-[11px] font-bold text-indigo-600 underline-offset-2 hover:underline">
+              לניהול המוקדים ←
+            </a>
+          </div>
+        )}
 
         {/* הודעה חופשית שמוצגת לצד השעות (למשל "יש להביא תעודת זהות"). */}
         {canEdit && (
