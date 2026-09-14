@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
 import { pickupPhaseOf, pickupPhasePatch, type PickupPhase } from '@/lib/centerPickupPhase'
+import { ensureCenterOpening } from '@/lib/centerOpeningRow'
 
 export const dynamic = 'force-dynamic'
 
@@ -151,6 +152,14 @@ export async function PATCH(request: NextRequest) {
     : null
 
   if (phase) {
+    // 🔴 יוצרים את שורת הפתיחה אם אינה קיימת, ורק אז מעדכנים.
+    //
+    // ⚠️ מוקד שלא שויך לחלוקה אין לו שורה, ולכן ה-update פגע ב-0 שורות
+    // והכפתור פשוט "לא הגיב" (14.09, אופקים). 2 מוקדים מתוך 26 היו כך.
+    // ⚠️ ignoreDuplicates בתוך ensureCenterOpening — בלעדיו היצירה הייתה
+    // מאפסת את המצב של מוקד שכבר מחלק.
+    await ensureCenterOpening(db, distributionId, centerId)
+
     const { data, error } = await db.from('holiday_center_openings')
       .update(pickupPhasePatch(phase))
       .eq('distribution_id', distributionId).eq('center_id', centerId)

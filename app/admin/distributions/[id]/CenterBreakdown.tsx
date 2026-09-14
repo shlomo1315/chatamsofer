@@ -230,8 +230,14 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
         // ⚠️ קוד הסטטוס נאמר מפורשות: "העדכון נכשל" לבדו אינו מבחין בין
         // ניתוק הרשאה (401), מוקד שאינו בחלוקה (404) ותקלת שרת (500),
         // וזה ההבדל בין תיקון של דקה לחיפוש עיוור.
+        //
+        // 🔴 שם המוקד בהודעה: הודעת השגיאה מוצגת בראש הרשימה, ובלי השם
+        // אי אפשר לדעת על *איזה* מוקד היא מדברת — והכפתור נראה כמי
+        // ש"לא הגיב" (14.09, אופקים).
         const d = await res.json().catch(() => ({}))
-        setErr(`${d.error ?? 'העדכון נכשל'} (${res.status})`)
+        const c = centers?.find(x => x.id === id)
+        const where = c ? ` — ${c.city} ${c.name}` : ''
+        setErr(`${d.error ?? 'העדכון נכשל'}${where} (${res.status})`)
         return
       }
       setPhases(prev => ({ ...prev, [id]: phase }))
