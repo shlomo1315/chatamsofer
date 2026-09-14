@@ -3,7 +3,7 @@ import { deliverMail } from './sendMail'
 import { mailFor } from './departments'
 import { shell, greetByStatus } from './emailTemplates'
 import { getOrCreateReplyToken } from './publicToken'
-import { signPublicToken } from './publicToken'
+import { randomBytes } from 'node:crypto'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // בירור מול היולדת — התכתבות דו-כיוונית, מקבילה לבירור ההלוואות.
@@ -37,6 +37,7 @@ interface AidRow {
     spouse_name?: string | null
     marital_status?: string | null
     email?: string | null
+    lineage_node_id?: string | null
   } | null
 }
 
@@ -77,7 +78,7 @@ export async function sendMaternityInquiry(
 
   const { data: aid } = await db
     .from('maternity_aids')
-    .select('id, beneficiary_id, beneficiary:beneficiaries(family_name, full_name, spouse_name, marital_status, email)')
+    .select('id, beneficiary_id, beneficiary:beneficiaries(family_name, full_name, spouse_name, marital_status, email, lineage_node_id)')
     .eq('id', aidId)
     .maybeSingle()
 
@@ -92,13 +93,42 @@ export async function sendMaternityInquiry(
   const token = await getOrCreateReplyToken(db, 'm', aidId, 'maternity_aids')
   if (!token) return { ok: false, error: 'הנפקת מזהה המענה נכשלה' }
 
-  // ⚠️ קישור תיקון הדורות נשען על המוטב ולא על התיק: העץ שייך למשפחה.
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 קישור תיקון הדורות — הזמנה אמיתית ב-lineage_share_invites.
+  //
+  // ⚠️ עד כה נשלח כאן טוקן *חתום* (signPublicToken) שלא נרשם בשום מקום,
+  // בעוד ש-/api/public/lineage-review מחפש את הטוקן בטבלת ההזמנות. שום
+  // קישור שנשלח מהבירור לא נפתח מעולם — המשפחה לחצה וקיבלה "קישור לא
+  // תקין", והמזכירות המתינה לתיקון שלא יכול היה להגיע (15.09).
+  //
+  // ⚠️ אותם פרמטרים בדיוק כמו במסלול שעובד (send-lineage-link): mode='order'
+  // מגביל להצעות בלבד, 30 יום תוקף, ומוגבל לענף של המשפחה.
+  //
+  // ⚠️ בלי שיוך לצומת אין ענף להציג — מדלגים על הקישור במקום לשלוח
+  // קישור שייפתח ריק.
+  // ─────────────────────────────────────────────────────────────────────────
   let lineageBlock = ''
-  if (extra === 'lineage' && a.beneficiary_id) {
-    const lineageToken = signPublicToken('s', a.beneficiary_id)
-    const base = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
+  if (extra === 'lineage' && a.beneficiary_id && ben?.lineage_node_id) {
+    const lineageToken = randomBytes(16).toString('base64url')
+    const recipientName = [ben.family_name, ben.spouse_name || ben.full_name]
+      .filter(Boolean).join(' ') || 'משפחה יקרה'
+    const { error: invErr } = await db.from('lineage_share_invites').insert({
+      token: lineageToken,
+      root_node_id: ben.lineage_node_id,
+      beneficiary_id: a.beneficiary_id,
+      mode: 'order',
+      expires_at: new Date(Date.now() + 30 * 86400_000).toISOString(),
+      recipient_name: recipientName,
+      recipient_email: email,
+      created_by: sender.id,
+    })
+    // ⚠️ כשל ביצירת ההזמנה אינו מבטל את הבירור — הטקסט של המזכירות
+    // חשוב בפני עצמו. פשוט לא מצרפים קישור שלא יעבוד.
+    const base = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://chasamsofer.co.il').replace(/\/$/, '')
     const url = `${base}/lineage-review/${lineageToken}`
-    lineageBlock = `
+    if (invErr) {
+      console.error('[maternityInquiry] יצירת הזמנת תיקון הדורות נכשלה:', invErr.message)
+    } else lineageBlock = `
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
         <tr><td style="background:#eef2ff;border-right:4px solid #4f46e5;border-radius:0 12px 12px 0;padding:16px 20px;">
           <p style="margin:0 0 10px;color:#3730a3;font-size:15px;font-weight:700;">תיקון סדר הדורות</p>
