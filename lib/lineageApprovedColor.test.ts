@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { genColorByRef, isInApprovedRef } from './lineageApprovedColor'
+import { genColorByRef, isInApprovedRef, deviatingGensByRef } from './lineageApprovedColor'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 🔴 הכלל שסוכם: עד דור 5 — מי שבטבלה המאושרת ירוק, וכל השאר אדום.
@@ -84,5 +84,52 @@ describe('🔴 genColorByRef — הצבע נקבע מהקובץ ולא מהתו�
   // ⚠️ שם ריק אינו מפיל ואינו נצבע ירוק בטעות.
   it('שם ריק בתוך 5 הדורות → אדום', () => {
     expect(genColorByRef(3, '', 'verified', inRef)).toBe('red')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 הכותרת והצבעים חייבים להסכים — הבאג מ-14.09 (שרייבר דוד 039916333).
+//
+// הכותרת אמרה "דור 4, דור 5" בעוד שארבעה דורות נצבעו אדום. הסיבה: דורות 2
+// ו-3 נושאים verified אך אינם בקובץ המאושר — הצבע ראה זאת, הספירה לא.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('🔴 deviatingGensByRef — מקור אחד לכותרת ולצבעים', () => {
+  // השרשרת האמיתית מהכרטסת: 2 ו-3 מסומנים verified אך אינם בקובץ.
+  const chain = [
+    { generation: 2, name: 'רבי שמעון סופר "בעל מכתב סופר"', status: 'verified' as const },
+    { generation: 3, name: 'רבי אשר ולאה מרים סופר', status: 'verified' as const },
+    { generation: 4, name: 'רבי יואל סופר', status: 'pending' as const },
+    { generation: 5, name: 'רבי צבי סופר', status: 'pending' as const },
+  ]
+
+  it('סופר כל דור אדום — כולל verified שאינו בקובץ', () => {
+    expect(deviatingGensByRef(chain, inRef)).toEqual([2, 3, 4, 5])
+  })
+
+  it('🔴 הרשימה זהה בדיוק לדורות שנצבעו אדום', () => {
+    const red = chain
+      .filter(c => genColorByRef(c.generation, c.name, c.status, inRef) === 'red')
+      .map(c => c.generation)
+    expect(deviatingGensByRef(chain, inRef)).toEqual(red)
+  })
+
+  it('דור 1 לעולם אינו חורג', () => {
+    expect(deviatingGensByRef([{ generation: 1, name: 'מרן החתם סופר זי"ע', status: null }], inRef)).toEqual([])
+  })
+
+  it('שרשרת תקינה לגמרי → רשימה ריקה (אין התראה)', () => {
+    expect(deviatingGensByRef([
+      { generation: 2, name: 'רבי צבי יהודה ורעכיל פרידמן', status: 'verified' as const },
+      { generation: 3, name: 'רבי יצחק צבי ורויזא פריי', status: 'pending' as const },
+    ], inRef)).toEqual([])
+  })
+
+  // ⚠️ מעל דור 5 הקובץ אינו חל — התווית מכריעה, וכתום אינו חריגה.
+  it('דור 7 ממתין אינו נספר כחורג', () => {
+    expect(deviatingGensByRef([{ generation: 7, name: 'מישהו', status: 'pending' as const }], inRef)).toEqual([])
+  })
+
+  it('🔴 rejected מעל דור 5 כן נספר', () => {
+    expect(deviatingGensByRef([{ generation: 8, name: 'מישהו', status: 'rejected' as const }], inRef)).toEqual([8])
   })
 })

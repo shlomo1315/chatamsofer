@@ -341,7 +341,12 @@ export default async function MaternityDetailPage(
     getAdjacentAids(id, (aid as { created_at?: string } | null)?.created_at ?? null, bucket),
   ])
   // 🔴 הייחוס המאושר — מכריע את צבע 5 הדורות הראשונים בצ'יפים שלמטה.
-  const approvedRef = await getApprovedRefLookup(await createClient())
+  //
+  // 🔴 service client: ב-lineage_approved_ref מופעל RLS *בלי אף מדיניות*, ולכן
+  // createClient מבוסס-הסשן מחזיר 0 שורות **בשקט** — וכל דורות 2–5 נצבעים אדום
+  // אצל כל היולדות. אותה תקלה בדיוק תוקנה בכרטסת הצאצא (14.09).
+  const { getServiceClient: getApprovedRefDb } = await import('@/lib/apiAuth')
+  const approvedRef = await getApprovedRefLookup(getApprovedRefDb())
   const lineageManual = Array.isArray(ben?.lineage_manual) ? (ben.lineage_manual as string[]) : []
   // סימונים ידניים (override צבע) — כמו בכרטסת הצאצא
   const manualMarks = ((ben as { lineage_manual_marks?: Record<string, 'red' | 'green'> } | undefined)?.lineage_manual_marks) ?? {}

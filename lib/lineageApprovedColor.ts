@@ -64,3 +64,26 @@ export function genColorByRef(
   // מעל הליבה המאושרת — כמו קודם.
   return status === 'verified' ? 'green' : 'orange'
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 הדורות החורגים — *נגזרים מהצבעים שהמסך מציג*, ולא מחישוב נפרד.
+//
+// ⚠️ הבאג שחשף זאת (14.09, שרייבר דוד 039916333): הכותרת אמרה "דור 4, דור 5"
+// בעוד שבחלונית *ארבעה* דורות היו אדומים (2,3,4,5). הסיבה: הכותרת נגזרה
+// מ-deviatingGens שבודקת את ה*תווית*, והצבעים מ-genColorByRef שבודקת את
+// ה*קובץ המאושר*. דורות 2 ו-3 נושאים verified אך אינם בקובץ — ולכן נצבעו
+// אדום אך לא נספרו. מזכיר שקורא "דור 4, דור 5" ורואה ארבעה אדומים אינו יודע
+// במה להאמין, וזו בדיוק הסתירה ש-lineageDeviation נכתב כדי למנוע.
+//
+// 🔴 הכלל: מקור אחד לאמת. מי שאדום — נספר. אין דרך ששניהם יחלקו.
+// ─────────────────────────────────────────────────────────────────────────────
+export function deviatingGensByRef(
+  chain: Iterable<{ generation: number; name: string; status: GenStatus }>,
+  inRef: (name: string, generation: number) => boolean,
+): number[] {
+  const out: number[] = []
+  for (const c of chain) {
+    if (genColorByRef(c.generation, c.name, c.status, inRef) === 'red') out.push(c.generation)
+  }
+  return [...new Set(out)].sort((a, b) => a - b)
+}

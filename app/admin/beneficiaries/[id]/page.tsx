@@ -44,8 +44,8 @@ import ChildrenTable from './ChildrenTable'
 import ChildrenTabPanel from './ChildrenTabPanel'
 import PhoneActivity from './PhoneActivity'
 import { registrationSourceLabel } from '@/lib/distributionSources'
-import { genColor, deviatingGens, isNodeVerified } from '@/lib/lineageDeviation'
-import { genColorByRef } from '@/lib/lineageApprovedColor'
+import { isNodeVerified } from '@/lib/lineageDeviation'
+import { genColorByRef, deviatingGensByRef } from '@/lib/lineageApprovedColor'
 import { getApprovedRefLookup } from '@/lib/lineageApprovedRef'
 import { isChildMarried, isChildSingle } from '@/lib/childDuplicateMessage'
 
@@ -358,12 +358,6 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
   const lineagePath = lineageData.path
   const pathNodes = lineageData.pathNodes   // מסלול הצמתים בעץ — מקור האמת כשקיים
   const genStatus = lineageData.genStatus   // דור → סטטוס הצומת בעץ (לצביעה כחול/כתום/אדום)
-  // ⚠️ כלל החריגה מרוכז ב-lib/lineageDeviation ומשותף לצ'יפים, לחלונית ובכרטסת
-  // היולדות. בפרט: "אין צומת תואם במאגר" אינו חריגה אלא חוסר ידיעה — קודם הוא
-  // נצבע אדום, ולכן ההתראה קפצה לכל מי שנרשם למרות ש-5 הדורות הראשונים תקינים.
-  const earlyRedGens = deviatingGens(genStatus.entries())
-  const earlyDeviation = earlyRedGens.length > 0
-
   // שרשרת (עם relation) לתגיות בן/חתן, וסימוני הצבע הידניים שנשמרו.
   const chainForMarks = Array.isArray(beneficiary?.lineage_chain)
     ? (beneficiary!.lineage_chain as { generation: number; name: string; relation: string | null }[])
@@ -372,7 +366,14 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
 
   // 🔴 הייחוס המאושר — 5 הדורות הראשונים. מי שאינו בו נצבע אדום, גם אם
   // התווית בעץ אומרת 'verified'. ראו lib/lineageApprovedColor.
-  const approvedRef = await getApprovedRefLookup(await createClient())
+  //
+  // 🔴 service client, בדיוק כמו getAllLineageNodes ומאותה סיבה: ב-lineage_approved_ref
+  // מופעל RLS *בלי אף מדיניות*, ולכן createClient מבוסס-הסשן מחזיר 0 שורות
+  // **בשקט** (data=[], בלי error). התוצאה: inRef מחזיר false לכל שם, וכל דורות
+  // 2–5 נצבעים אדום אצל *כל* המשפחות — נראה כמו נתונים שגויים ולא כמו תקלה.
+  // התגלה 14.09 אצל שרייבר דוד, ששני דורותיו הראשונים זהים תו-בתו לקובץ.
+  const { getServiceClient: getApprovedRefDb } = await import('@/lib/apiAuth')
+  const approvedRef = await getApprovedRefLookup(getApprovedRefDb())
 
   // כל הדורות בצבעים לחלונית ההתראה (דור 1 = החתם סופר תמיד כחול/מאושר).
   const CHATAM_SOFER_ROOT = 'מרן החתם סופר זי"ע'
@@ -390,6 +391,21 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
       color: c.generation === 1 ? 'green'
         : genColorByRef(c.generation, c.name, genStatus.get(c.generation) ?? null, approvedRef),
     }))
+
+  // 🔴 הדורות החורגים נגזרים מ*אותה* שרשרת שממנה נגזרו הצבעים — ולא מהתווית.
+  //
+  // ⚠️ הבאג (14.09, שרייבר דוד 039916333): deviatingGens בדקה את התווית בלבד
+  // ואמרה "דור 4, דור 5", בעוד שהחלונית צבעה ארבעה דורות אדומים — דורות 2 ו-3
+  // נושאים verified אך אינם בקובץ המאושר. הכותרת והצבעים חלקו על אותו מסך.
+  const earlyRedGens = deviatingGensByRef(
+    alertSource.map(c => ({
+      generation: c.generation,
+      name: c.generation === 1 ? CHATAM_SOFER_ROOT : c.name,
+      status: genStatus.get(c.generation) ?? null,
+    })),
+    approvedRef,
+  )
+  const earlyDeviation = earlyRedGens.length > 0
 
   if (!beneficiary && isSupabaseConfigured()) notFound()
 

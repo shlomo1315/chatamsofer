@@ -39,6 +39,13 @@ export async function getApprovedRefLookup(db: any): Promise<ApprovedRefLookup> 
   try {
     const { data, error } = await db.from('lineage_approved_ref').select('name, generation')
     if (error || !Array.isArray(data)) throw new Error('approved_ref load failed')
+    // 🔴 טבלה ריקה היא *תקלה*, לא "קובץ בלי שורות".
+    //
+    // ⚠️ ב-lineage_approved_ref מופעל RLS בלי אף מדיניות: לקוח מבוסס-סשן מקבל
+    // data=[] ו-error=null — כלומר "הצלחה" שמכילה אפס שורות. התוצאה הייתה
+    // inRef=false לכל שם, וכל דורות 2–5 אדומים אצל *כל* המשפחות (14.09).
+    // נפילה לבודק המתירני מציגה את התווית, וזה עדיף על התראה כוזבת גורפת.
+    if (data.length === 0) throw new Error('approved_ref empty — RLS או טבלה ריקה')
     const keys = new Set<string>()
     for (const r of data as { name: string; generation: number }[]) {
       keys.add(keyOf(r.name, r.generation))
