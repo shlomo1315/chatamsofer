@@ -1,3 +1,4 @@
+import { idDocLabel } from '@/lib/idDocLabel'
 import { guardPage } from '@/lib/pageGuard'
 import Link from 'next/link'
 import { ArrowRight, Baby, CreditCard, Home, FileText, User, Phone, MapPin, GitBranch, ExternalLink, Mail, Download, Heart, Star, XCircle, MessageSquare } from 'lucide-react'
@@ -394,7 +395,7 @@ export default async function MaternityDetailPage(
               <h1 className="text-xl font-bold text-slate-900">{motherName}</h1>
               <ApprovalLabelTag label={approvalLabel} />
             </div>
-            {motherId && <p className="text-sm text-slate-500 ltr-num">ת.ז. {formatIsraeliId(motherId)}</p>}
+            {motherId && <p className="text-sm text-slate-500 ltr-num">{idDocLabel(ben?.spouse_doc_type)} {ben?.spouse_doc_type === "passport" ? motherId : formatIsraeliId(motherId)}</p>}
             {/* ההסבר המלא של התווית — בכרטסת יש מקום לשורה, בשורת טבלה אין. */}
             {approvalLabel?.notes && <p className="text-xs text-slate-500 mt-0.5">{approvalLabel.notes}</p>}
           </div>
@@ -507,7 +508,7 @@ export default async function MaternityDetailPage(
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-slate-400">פרטי הבעל</p>
                   <DetailRow label="שם מלא" value={[ben.family_name, ben.full_name].filter(Boolean).join(' ') || '—'} />
-                  <DetailRow label="ת.ז." value={formatIsraeliId(ben.id_number) || '—'} ltr />
+                  <DetailRow label={idDocLabel(ben.id_doc_type)} value={ben.id_doc_type === "passport" ? (ben.id_number || "—") : (formatIsraeliId(ben.id_number) || "—")} ltr />
                   <DetailRow label="מצב משפחתי" value={ben.marital_status ?? '—'} />
                   <DetailRow label="קהילה" value={(ben as { community_affiliation?: string | null }).community_affiliation?.trim() || '—'} />
                   <DetailRow label="מספר ילדים" value={String(ben.children_count ?? 0)} />
@@ -524,7 +525,7 @@ export default async function MaternityDetailPage(
                   <div className="space-y-2">
                     <p className="text-xs font-semibold text-slate-400">פרטי האישה</p>
                     <DetailRow label="שם" value={ben.spouse_name} />
-                    {ben.spouse_id_number && <DetailRow label="ת.ז." value={formatIsraeliId(ben.spouse_id_number)} ltr />}
+                    {ben.spouse_id_number && <DetailRow label={idDocLabel(ben.spouse_doc_type)} value={ben.spouse_doc_type === "passport" ? ben.spouse_id_number : formatIsraeliId(ben.spouse_id_number)} ltr />}
                     {ben.spouse_birth_date && <DetailRow label="תאריך לידה" value={fmtDate(ben.spouse_birth_date)} />}
                   </div>
                 )}

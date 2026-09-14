@@ -20,6 +20,11 @@ export const dynamic = 'force-dynamic'
 // הגשות חוזרות באותו יום.
 const SILENT_BIRTH_COOLDOWN_MONTHS = 6
 
+// 🔴 משפחה שמזוהה בדרכון — מרווח מינימלי בין בקשות לידה (חודשים).
+// ⚠️ אין מספר זיהוי יציב לנולד, ולכן בדיקת הכפילות לפי baby_id_number
+// אינה מגינה. 10 חודשים הוא פרק הזמן המינימלי הסביר בין לידות.
+const PASSPORT_COOLDOWN_MONTHS = 10
+
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -194,7 +199,7 @@ export async function POST(request: NextRequest) {
 
   const { data: ben } = await admin
     .from('beneficiaries')
-    .select('id, eligibility_status, rejection_reason, email, full_name, family_name, id_number, phone, address, city, marital_status, spouse_name, spouse_id_number, children_count')
+    .select('id, eligibility_status, rejection_reason, email, full_name, family_name, id_number, phone, address, city, marital_status, spouse_name, spouse_id_number, children_count, id_doc_type, spouse_doc_type')
     .eq('id', String(beneficiary_id))
     .maybeSingle()
 
@@ -209,22 +214,38 @@ export async function POST(request: NextRequest) {
   // אינה רצה עליה כלל — ולא הייתה שום מגבלה. בפועל אותה יולדת הגישה כמה
   // בקשות באותו יום. מגבילים להגשה אחת כל 6 חודשים (עד פעמיים בשנה).
   // בקשה שנדחתה (cancelled) אינה נספרת, בעקביות עם בדיקת הכפילות.
-  if (isSilent) {
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 אותו צינון חל על משפחה שמזוהה בדרכון — 10 חודשים.
+  //
+  // ⚠️ למי שאין ת"ז ישראלית אין מספר יציב לנולד, ולכן בדיקת הכפילות לפי
+  // baby_id_number אינה מגינה: משפחת לוק (15.09) הגישה ארבע בקשות על
+  // אותו תינוק והקלידה בכל פעם מספר אחר — פעמיים את מספרי ההורים עצמם.
+  // כל בקשה נראתה כתינוק חדש, ואחת מהן אושרה וכרטיס נטען.
+  //
+  // ⚠️ 10 חודשים ולא 6: זהו פרק הזמן המינימלי הסביר בין לידות, ולכן
+  // בקשה שנייה בתוכו היא כמעט תמיד כפילות ולא לידה חדשה.
+  // ─────────────────────────────────────────────────────────────────────────
+  const isPassportFamily = ben.id_doc_type === 'passport' || ben.spouse_doc_type === 'passport'
+  if (isSilent || isPassportFamily) {
+    const months = isSilent ? SILENT_BIRTH_COOLDOWN_MONTHS : PASSPORT_COOLDOWN_MONTHS
     const since = new Date()
-    since.setMonth(since.getMonth() - SILENT_BIRTH_COOLDOWN_MONTHS)
-    const { data: recent } = await admin
+    since.setMonth(since.getMonth() - months)
+    let q = admin
       .from('maternity_aids')
       .select('id, created_at')
       .eq('beneficiary_id', String(beneficiary_id))
-      .eq('birth_type', 'silent')
       .not('status', 'eq', 'cancelled')
       .gte('created_at', since.toISOString())
+    // ⚠️ בלידה שקטה הצינון חל על לידות שקטות בלבד, כדי שלא יחסום לידה
+    // רגילה שיש לה ת"ז ובדיקת כפילות משלה.
+    if (isSilent) q = q.eq('birth_type', 'silent')
+    const { data: recent } = await q
       .order('created_at', { ascending: false })
       .limit(1)
     if (recent?.length) {
       const last = new Date(recent[0].created_at as string)
       const next = new Date(last)
-      next.setMonth(next.getMonth() + SILENT_BIRTH_COOLDOWN_MONTHS)
+      next.setMonth(next.getMonth() + months)
       const fmtDate = (d: Date) => d.toLocaleDateString('he-IL')
       return NextResponse.json({
         error: `כבר הוגשה בקשה מסוג זה בתאריך ${fmtDate(last)}. ניתן להגיש בקשה נוספת החל מ-${fmtDate(next)}. אם קיימות נסיבות מיוחדות, נשמח לסייע — אנא פנו למשרד.`,
@@ -240,6 +261,34 @@ export async function POST(request: NextRequest) {
     // "12345678" מול "012345678"). בדיקה לפי הערך המנורמל בלבד פספסה אותן,
     // ואז המערכת אישרה בקשה כפולה על אותו תינוק. בודקים את שתי הצורות.
     const idVariants = Array.from(new Set([idNorm, idNorm.replace(/^0+/, '')].filter(Boolean)))
+
+    // ─────────────────────────────────────────────────────────────────────
+    // 🔴 מספר הנולד אינו יכול להיות מספר של אדם קיים במערכת.
+    //
+    // ⚠️ משפחת לוק (15.09) הזינה אצל התינוק את מספרי הדרכון של ההורים
+    // עצמם, וזה עבר. בת"ז ישראלית ספרת הביקורת חוסמת מספר מומצא, אבל
+    // בדרכון אין מה לבדוק — ולכן הבדיקה היחידה האפשרית היא שהמספר אינו
+    // שייך כבר למישהו אחר.
+    //
+    // ⚠️ נבדק מול שני השדות: המוטב ובן/בת הזוג. מספר של אח שכבר רשום
+    // כמוטב בעצמו ייחסם גם הוא — וזה נכון: אותו מספר אינו יכול לשמש
+    // שני אנשים.
+    // ─────────────────────────────────────────────────────────────────────
+    // ⚠️ שתי שאילתות `in` ולא `.or()` עם מחרוזת בנויה: ערך הדרכון מגיע
+    // מהמשתמש כפי שהוא, ופסיק או נקודה בתוכו שוברים את תחביר ה-or —
+    // או גרוע מכך, משנים את משמעות התנאי. ראו ביקורת האבטחה מ-02.09.
+    const [{ data: asSelf }, { data: asSpouse }] = await Promise.all([
+      admin.from('beneficiaries').select('id').in('id_number', idVariants).limit(1),
+      admin.from('beneficiaries').select('id').in('spouse_id_number', idVariants).limit(1),
+    ])
+    const belongsToAdult = [...(asSelf ?? []), ...(asSpouse ?? [])]
+    if (belongsToAdult.length) {
+      return NextResponse.json({
+        error: 'מספר הזיהוי שהוזן עבור הנולד שייך כבר לאדם אחר הרשום במערכת. ' +
+          'יש להזין את מספר הדרכון או תעודת הזהות של הנולד עצמו.',
+        duplicate: 'belongs_to_adult',
+      }, { status: 409 })
+    }
     // ⚠️ מניעת בקשה חוזרת על *אותו תינוק* (לפי ת"ז) — לתמיד. אם כבר הוגשה בקשת
     // לידה על ת"ז זו, אי אפשר להגיש עליה שוב, בכל סטטוס (כולל אחרי אישור):
     //   • אושרה (active) → "הבקשה ללידה זו כבר אושרה".
@@ -258,6 +307,37 @@ export async function POST(request: NextRequest) {
           ? 'הבקשה ללידה זו כבר אושרה.'
           : 'כבר הגשתם בקשה ללידה זו, הבקשה בטיפול ותקבלו על כך עדכון בהקדם.',
         duplicate: 'in_progress',
+      }, { status: 409 })
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // 🔴 שער שני: אותה משפחה + אותו תאריך לידה.
+    //
+    // ⚠️ הבדיקה לפי מספר התינוק לבדה אינה מספיקה, כי המספר עצמו עשוי
+    // להיות שגוי. לוק (15.09) הגישו ארבע פעמים על אותו תינוק והקלידו
+    // בכל פעם מספר אחר — פעמיים את ת"ז ההורים עצמם — ולכן כל בקשה
+    // נראתה כתינוק חדש. אחת מהן כבר אושרה וכרטיס נטען.
+    //
+    // ⚠️ תאומים נולדים באותו יום ולכן היו נחסמים — אבל הם מוגשים
+    // כבקשה אחת (is_twins/babies), ולא כשתי בקשות נפרדות.
+    //
+    // ⚠️ cancelled אינו חוסם, כמו בשער הראשון: בקשה שנדחתה ניתן להגיש
+    // מחדש אחרי תיקון.
+    // ─────────────────────────────────────────────────────────────────────
+    const { data: sameBirth } = await admin
+      .from('maternity_aids')
+      .select('id, status')
+      .eq('beneficiary_id', ben.id)
+      .eq('birth_date', String(birth_date))
+      .not('status', 'eq', 'cancelled')
+      .limit(1)
+    if (sameBirth?.length) {
+      const approved = sameBirth[0].status === 'active' || sameBirth[0].status === 'completed'
+      return NextResponse.json({
+        error: approved
+          ? 'הבקשה ללידה זו כבר אושרה. אם מדובר בלידה אחרת, אנא פנו למשרד.'
+          : 'כבר הגשתם בקשה ללידה בתאריך זה, הבקשה בטיפול ותקבלו על כך עדכון בהקדם.',
+        duplicate: 'same_birth_date',
       }, { status: 409 })
     }
     // ⚠️ החסימה היחידה כאן היא על *בקשת לידה כפולה* (נבדקה למעלה מול maternity_aids).
