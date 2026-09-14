@@ -102,14 +102,28 @@ describe('ההודעה קיימת וניתנת להקלטה', () => {
     expect(m!.allowAudio).toBe(true)
   })
 
-  it('🔴 card_center_not_open אומרת את שם המוקד', () => {
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 הוחלף (14.09): שם המוקד יצא מהנוסח לטובת הקול המוקלט.
+  //
+  // ⚠️ כל עוד ההודעה הכילה {center} היא נקראה כולה ב-TTS של ימות — קול
+  // משובש בעברית, לצד הודעות מוקלטות באותה שיחה. השם לא היה שווה את
+  // המחיר: המאזין הגיע דרך המוקד שלו, ו"המוקד שבו נרשמתם" מדויק באותה
+  // מידה. אותו שיקול הוחל על card_center_ended ועל card_ready.
+  // ─────────────────────────────────────────────────────────────────────────
+  it('🔴 card_center_not_open ניתנת להקלטה — בלי שם מוקד', () => {
     const m = HOLIDAY_MESSAGE_META.find(x => x.key === 'card_center_not_open')
     expect(m).toBeDefined()
-    // ⚠️ בלי {center} ההודעה חוזרת להיות "טרם נפתח" סתמי — וזה בדיוק
-    // מה שהיא באה לפתור: המאזין צריך לדעת על איזה מוקד מדובר.
-    expect(m!.placeholders).toContain('center')
-    expect(m!.defaultText).toContain('{center}')
-    // ⚠️ דינמית ⇒ אינה ניתנת להקלטה: שם המוקד משתנה בין מאזין למאזין.
-    expect(m!.allowAudio).toBe(false)
+    expect(m!.defaultText).not.toContain('{center}')
+    expect(m!.allowAudio).toBe(true)
+    // ⚠️ עדיין חייבת לומר *מה* קרה, אחרת היא חסרת תוכן.
+    expect(m!.defaultText).toContain('טרם החל')
+  })
+
+  it('🔴 card_center_ended ניתנת להקלטה — בלי שם מוקד', () => {
+    const m = HOLIDAY_MESSAGE_META.find(x => x.key === 'card_center_ended')
+    expect(m).toBeDefined()
+    expect(m!.defaultText).not.toContain('{center}')
+    expect(m!.allowAudio).toBe(true)
+    expect(m!.defaultText).toContain('הסתיימה')
   })
 })

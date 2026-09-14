@@ -492,14 +492,10 @@ async function handleCardRoute(
   // מי שהספיק בזמן. "החלוקה הסתיימה" נאמר למי שבא *לקבל* כרטיס, לא
   // למי שבא לשייך אחד שכבר בידו.
   if (phase === 'not_started') {
-    const { data: cRow } = await db.from('holiday_centers')
-      .select('city, name, address, hours, audio_file').eq('id', rec.center_id).maybeSingle()
-    const c = cRow as SpokenCenter | null
-    // ⚠️ נופל ל"שנרשמתם בו": הודעה עם חור באמצע ("המוקד שבו נרשמתם, ,
-    // טרם החל") נשמעת כתקלה.
-    const centerName = spokenCenterName(c) || 'שנרשמתם בו'
+    // 🔴 בלי שם המוקד — ההודעה קבועה ולכן נשמעת בהקלטה ולא ב-TTS.
+    // ⚠️ המאזין הגיע דרך המוקד שלו, ו"המוקד שבו נרשמתם" מדויק באותה מידה.
     return yemotText([
-      idMessage(msgToken(msgs, 'card_center_not_open', { center: centerName })),
+      idMessage(msgToken(msgs, 'card_center_not_open')),
       goToFolder('hangup'),
     ], callId)
   }
