@@ -120,6 +120,82 @@ export async function saveHolidayLimitedId(limitedId: string): Promise<boolean> 
 export type NedarimResponse = { Result?: string; Message?: string; [k: string]: unknown }
 const isOk = (r: NedarimResponse) => String(r.Result ?? '').toUpperCase() === 'OK'
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 תור קצב גלובלי לכל קריאה יוצאת לנדרים — per-instance, בזיכרון.
+//
+// ⚠️ ב-14-15.09 נדרים דיווחו על קרוב ל-3,000 פניות בשעה מה-IP שלנו ואיימו
+// בחסימה. הסיבה: כל שיחת שיוך כרטיס בשלוחת החגים מבצעת 2-5 קריאות (חיפוש,
+// הקמה, שיוך, אימות), ולפני החג עשרות משפחות מתקשרות באותה דקה — בלי גורם
+// בקוד שמגביל כמה קריאות יוצאות בו-זמנית לצד השלישי. זה לא לולאה על אותה
+// בקשה (הבדיקה "כבר משויך" עובדת נכון ועוצרת retry לפני שהוא נוגע בנדרים);
+// זה עומס לגיטימי מרוכז שהצטבר בלי שום ריסון.
+//
+// ⚠️ תור ולא Promise.all חסום: קריאה שממתינה בתור עדיין מחזירה תשובה בסוף,
+// ולא נכשלת — רק נדחית. חלון האינטראקטיבי (שיחת ימות, 15 שניות) מוגן בנפרד
+// ע"י timeoutMs הקצר שהמסלולים האלה כבר מעבירים.
+// ─────────────────────────────────────────────────────────────────────────────
+const MAX_CONCURRENT_REQUESTS = 3
+const MIN_GAP_MS = 150
+let activeRequests = 0
+let lastDispatchAt = 0
+const queue: (() => boolean)[] = []
+
+// ⚠️ אין כאן תקרה קשיחה לשעה, בכוונה. תקרה כזו (למשל 800) נראית נכונה מול
+// התלונה של נדרים, אבל היא נאכפת בדיוק בערב שלפני החג — כשמאות משפחות
+// מתקשרות לשייך, כל אחת צורכת 2-5 קריאות, והמאוחרות היו מקבלות "נסו שוב
+// בעוד רגע" על פעולה שאי אפשר לדחות. הוויסות למטה מוריד את *הפיק הרגעי*
+// שהוא מה שנדרים חוסמים עליו, בלי לחסום אף משפחה.
+
+// ⚠️ הפריט בתור עצמו מחזיר true אם תפס slot בפועל: entry שבוטל (פג הזמן
+// שהוקצב לו בתור) מחזיר false, ואז ה-slot שהוקצה לו כאן משתחרר מיד לפריט
+// הבא — אחרת activeRequests "דולף" על כל בקשה שפגה בתור, עד שהתור נתקע
+// לצמיתות על התקרה בלי לשחרר אף slot.
+function scheduleNext() {
+  if (activeRequests >= MAX_CONCURRENT_REQUESTS || queue.length === 0) return
+  const now = Date.now()
+  const wait = Math.max(0, lastDispatchAt + MIN_GAP_MS - now)
+  setTimeout(() => {
+    const next = queue.shift()
+    if (!next) return
+    activeRequests++
+    lastDispatchAt = Date.now()
+    if (!next()) activeRequests--
+    scheduleNext()
+  }, wait)
+}
+
+// ⚠️ תקרה על ההמתנה *בתור עצמו* — נפרדת מ-timeoutMs של הבקשה. בלעדיה עומס
+// קיצוני (מאות שיחות בו-זמנית) יכול להשאיר בקשה תקועה בתור דקות ארוכות,
+// גם אם הרשת לנדרים תקינה — וזה בדיוק הזמן שנספר מתוך 15 השניות שיש
+// לימות. עדיף כישלון מהיר וברור ("נסו שוב בעוד רגע") מהמתנה שקטה שחורגת
+// מחלון השיחה.
+const QUEUE_WAIT_TIMEOUT_MS = 8_000
+
+function acquireSlot(): Promise<() => void> {
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const entry = (): boolean => {
+      if (settled) return false // כבר פג הזמן — לא תופס slot, הבא בתור מקבל אותו
+      settled = true
+      clearTimeout(waitTimer)
+      resolve(() => {
+        activeRequests--
+        scheduleNext()
+      })
+      return true
+    }
+    const waitTimer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      const idx = queue.indexOf(entry)
+      if (idx !== -1) queue.splice(idx, 1)
+      reject(new Error('נדרים עמוס כרגע — נסו שוב בעוד רגע'))
+    }, QUEUE_WAIT_TIMEOUT_MS)
+    queue.push(entry)
+    scheduleNext()
+  })
+}
+
 // שליחת בקשה לנדרים (FORM urlencoded) והחזרת ה-JSON המפוענח
 // timeoutMs ניתן לקיצור בנתיבים אינטראקטיביים (שיחת ימות) כדי לא לחרוג מחלון התגובה של ימות.
 async function nedarimRequest(
@@ -127,6 +203,20 @@ async function nedarimRequest(
   action: string,
   params: Record<string, string | undefined>,
   timeoutMs = 25_000,
+): Promise<NedarimResponse> {
+  const release = await acquireSlot()
+  try {
+    return await nedarimRequestRaw(creds, action, params, timeoutMs)
+  } finally {
+    release()
+  }
+}
+
+async function nedarimRequestRaw(
+  creds: NedarimCreds,
+  action: string,
+  params: Record<string, string | undefined>,
+  timeoutMs: number,
 ): Promise<NedarimResponse> {
   const form = new URLSearchParams()
   form.set('Action', action)

@@ -315,15 +315,32 @@ export async function linkHolidayCard(
     return { ok: false, linked: false, error: message || 'שגיאה טכנית' }
   }
 
-  const { error: upErr } = await db.from('distribution_recipients').update({
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 השיוך אושר בנדרים — נרשם אצלנו *מיד*, וזו הרשומה שמונעת כל פנייה
+  // נוספת אליהם על המשפחה הזו.
+  //
+  // ⚠️ כתיבה שנכשלה אינה "אזהרה בלוג": כל עוד card_number ריק אצלנו, השער
+  // בשלוחה (`if (rec.card_number)`) אינו תופס, והשיחה הבאה של אותה משפחה
+  // רצה שוב את כל המסלול — חיפוש, הקמה ושיוך — על כרטיס שכבר משויך. זה
+  // מכפיל פניות לנדרים בדיוק על מי שכבר סיים, וזה מה שהציף אותם ב-15.09.
+  //
+  // ⚠️ ניסיון חוזר אחד לכתיבה לפני שמוותרים: תקלת רשת רגעית מול המסד היא
+  // בדיוק המקרה שיוצר את הפער, והיא גם בדיוק המקרה שניסיון שני פותר.
+  // ─────────────────────────────────────────────────────────────────────────
+  const linkedRow = {
     card_number: digits,
     card_linked_at: new Date().toISOString(),
     card_link_error: null,
     card_linked_phone: opts.phone ?? null,
-  }).eq('id', rec.id)
+  }
+  let upErr = (await db.from('distribution_recipients').update(linkedRow).eq('id', rec.id)).error
   if (upErr) {
-    // הכרטיס שויך בנדרים אך לא נשמר אצלנו — מדווחים כדי שלא ייווצר פער שקט
-    console.error('[holidayCards] card linked in Nedarim but DB update failed:', upErr.message)
+    upErr = (await db.from('distribution_recipients').update(linkedRow).eq('id', rec.id)).error
+  }
+  if (upErr) {
+    // 🔴 הכרטיס שויך בנדרים ואצלנו הרשומה ריקה — פער שגורר פנייה חוזרת
+    // לנדרים בשיחה הבאה. נרשם כשגיאה מפורשת כדי שיימצא במסך התקלות.
+    console.error(`[holidayCards] 🔴 שויך בנדרים אך לא נשמר אצלנו rec=${rec.id} card=${digits}:`, upErr.message)
     return { ok: true, linked: true, error: upErr.message }
   }
   return { ok: true, linked: true }
