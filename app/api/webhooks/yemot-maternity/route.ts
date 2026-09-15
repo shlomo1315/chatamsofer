@@ -173,9 +173,13 @@ function confirmReadCommand(M: MaternityMessages, card: string, confirmVar = 'co
 // מהיר: מסננים ב-DB לפי 7 הספרות האחרונות (עמיד למקפים/רווחים/קידומת 972 בפורמט
 // השמור), ואז מאמתים בנרמול מלא ב-JS. אם לא נמצא — fallback לסריקה מלאה כדי שלא
 // נפספס פורמטים חריגים (הטלפונים נשמרים כפי שהוקלדו, בלי נרמול).
-const BENEFICIARY_COLS = 'id, full_name, family_name, spouse_name, id_number, phone, phone2, spouse_phone, nedarim_id'
+// ⚠️ spouse_id_number נשלף לצורך *איתור מחדש בנדרים* ולא לתצוגה: המשפחה שם
+// עשויה להיות רשומה על שם בן/בת הזוג, וחיפוש לפי ת"ז אחת בלבד מחזיר null על
+// משפחה שקיימת. ראו מסלול "מזהה מת" למטה.
+const BENEFICIARY_COLS = 'id, full_name, family_name, spouse_name, id_number, spouse_id_number, phone, phone2, spouse_phone, nedarim_id'
 type FamilyRow = {
   id: string; full_name: string | null; family_name: string | null; spouse_name: string | null; id_number: string | null
+  spouse_id_number: string | null
   phone: string | null; phone2: string | null; spouse_phone: string | null; nedarim_id: string | null
 }
 
@@ -408,6 +412,37 @@ export async function handleMaternityCall(params: Record<string, string>): Promi
         const r = await setMagneticCard(creds, nedarimId, cardNumber, { timeoutMs: 12_000 })
         linkOk = r.ok; linkMsg = r.message
       } catch (e) { linkMsg = e instanceof Error ? e.message : String(e) }
+
+      // ─────────────────────────────────────────────────────────────────────
+      // 🔴 מזהה נדרים שמור שנדרים אינה מכירה — מאתרים מחדש ומנסים שוב.
+      //
+      // ⚠️ האיתור למעלה רץ *רק* כש-nedarim_id חסר לגמרי. משפחה שהמזהה שלה
+      // שמור אצלנו אך נמחק/מוזג בנדרים נתקעה לנצח: setMagneticCard מחזיר
+      // "מספר לקוח לא מוכר", cardLinkedInNedarim שואל את *אותו* מזהה מת
+      // ומחזיר false, והמתקשר שומע שגיאה בכל שיחה מחדש — עם כרטיס טעון ביד.
+      // כך נתקע גרינוואלד (474675): ₪600 נטענו ב-10.09 והכרטיס לא שויך.
+      //
+      // ⚠️ אותו תיקון בדיוק כבר קיים בחלוקות החגים (lib/holidayCards) — כאן
+      // הוא פשוט לא נוסף. מחפשים לפי שתי הת"ז: המשפחה בנדרים עשויה להיות
+      // רשומה על שם בן/בת הזוג.
+      // ─────────────────────────────────────────────────────────────────────
+      if (!linkOk && /לא מוכר|לא נמצא|not found/i.test(linkMsg)) {
+        let fresh: string | null = null
+        for (const cand of [family?.id_number, family?.spouse_id_number].filter(Boolean)) {
+          if (fresh) break
+          try { fresh = await findClientByZeout(creds, String(cand)) } catch { /* ממשיכים למועמד הבא */ }
+        }
+        if (fresh && fresh !== nedarimId) {
+          console.warn(`[yemot-maternity] nedarim_id ${nedarimId} אינו מוכר — מאותר מחדש כ-${fresh}`)
+          nedarimId = fresh
+          await admin.from('beneficiaries').update({ nedarim_id: fresh }).eq('id', family!.id).then(undefined, () => {})
+          try {
+            const r2 = await setMagneticCard(creds, fresh, cardNumber, { timeoutMs: 12_000 })
+            linkOk = r2.ok; linkMsg = r2.message
+          } catch (e) { linkMsg = e instanceof Error ? e.message : String(e) }
+        }
+      }
+
       if (!linkOk) {
         already = isAlreadyMsg(linkMsg) || (await cardLinkedInNedarim())
       }
