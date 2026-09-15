@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import Card from '@/components/ui/Card'
 import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
 import { useCan } from '@/components/StaffPermissions'
+import BeneficiaryNameEditor from '@/components/admin/BeneficiaryNameEditor'
 import {
   Beneficiary, WidowRequest, WidowSupportPayment, WidowSupportType,
   WIDOW_SUPPORT_TYPE_LABELS, WIDOW_REQUEST_TYPE_LABELS, WIDOW_REQUEST_STATUS_LABELS, WIDOW_REQUEST_STATUS_COLORS,
@@ -19,6 +20,9 @@ export default function FamilyFile({ widow, requests, payments }: { widow: Benef
   const router = useRouter()
   const supabase = createClient()
   const canEdit = useCan('widows', 'edit')
+  // 🔴 עריכת השם נשענת על הרשאת הצאצאים ולא על זו של האלמנות — השם שמור
+  // בכרטסת הצאצא, וסימון 'צאצאים: ללא' חייב לחסום גם מכאן.
+  const canEditBeneficiaries = useCan('beneficiaries', 'edit')
   const [busy, setBusy] = useState<string | null>(null)
   const [err, setErr] = useState('')
 
@@ -82,7 +86,19 @@ export default function FamilyFile({ widow, requests, payments }: { widow: Benef
           </Link>
         </div>
         <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-          <p><span className="text-slate-500">שם: </span>{[widow.family_name, widow.full_name].filter(Boolean).join(' ')}</p>
+          {/* 🔴 השם ניתן לתיקון מכאן — ראו components/admin/BeneficiaryNameEditor.
+              ⚠️ ההרשאה היא של הצאצאים ולא של האלמנות: השם שמור בכרטסת הצאצא
+              (אלמנה היא רשומת beneficiaries רגילה), ומי שהוגבל למחלקה זו בלבד
+              אינו אמור לשנות אותו. */}
+          <p className="flex items-center gap-1">
+            <span className="text-slate-500">שם: </span>
+            <BeneficiaryNameEditor
+              beneficiaryId={widow.id}
+              familyName={widow.family_name ?? ''}
+              fullName={widow.full_name ?? ''}
+              canEdit={canEditBeneficiaries}
+            />
+          </p>
           <p><span className="text-slate-500">ת.ז: </span><span className="ltr-num">{widow.id_number}</span></p>
           <p><span className="text-slate-500">מצב: </span>{widow.marital_status ?? '—'}</p>
           {widow.phone && <p className="flex items-center gap-1"><Phone size={12} className="text-slate-400" /><span className="ltr-num">{widow.phone}</span></p>}

@@ -1,4 +1,6 @@
 import { guardPage } from '@/lib/pageGuard'
+import { roleAllows } from '@/lib/permissions'
+import BeneficiaryNameEditor from '@/components/admin/BeneficiaryNameEditor'
 import Link from 'next/link'
 import { ArrowRight, CreditCard, FileText, Edit, CheckCircle2, Clock, ExternalLink, Users, MessageSquare, Banknote } from 'lucide-react'
 import { notFound } from 'next/navigation'
@@ -80,7 +82,11 @@ const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yyyy', { locale: 
 const fmtCur = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('he-IL')}`
 
 export default async function LoanDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  await guardPage('loans')
+  const staff = await guardPage('loans')
+  // 🔴 עריכת השם נשענת על הרשאת *הצאצאים*, לא על זו של ההלוואות — השם שמור
+  // בכרטסת הצאצא. מזכירת גמ"ח שסומן לה 'צאצאים: ללא' לא תראה את הכפתור.
+  const canEditBeneficiaries = staff.role === 'admin'
+    || roleAllows(staff.role, staff.permissions, 'beneficiaries', 'edit')
   const { id } = await params
   const loan = await getLoan(id)
   const beneficiaryId = (loan?.beneficiary as { id?: string } | undefined)?.id
@@ -226,6 +232,19 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl font-bold text-slate-900">{borrower ?? 'פרטי הלוואה'}</h1>
               <ApprovalLabelTag label={approvalLabelOf(b)} />
+              {/* 🔴 תיקון השם מכאן — ראו components/admin/BeneficiaryNameEditor.
+                  ⚠️ הכותרת מציגה את *הלווה* (הבעל, ובהיעדרו האישה), והעורך
+                  נוגע בשם הצאצא עצמו (family_name/full_name) ולא ב-spouse_name.
+                  לכן הוא מוצג לצדה ואינו מחליף אותה: החלפה הייתה מסתירה את
+                  שם בת הזוג במשפחות שבהן היא הלווה. */}
+              {b?.id && (
+                <BeneficiaryNameEditor
+                  beneficiaryId={b.id}
+                  familyName={b.family_name ?? ''}
+                  fullName={b.full_name ?? ''}
+                  canEdit={canEditBeneficiaries}
+                />
+              )}
             </div>
             <p className="text-sm text-slate-500 ltr-num">{b?.id_number}</p>
             {/* ההסבר המלא של התווית — בכרטסת יש מקום לשורה, בשורת טבלה אין. */}

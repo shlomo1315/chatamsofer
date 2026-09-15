@@ -1,6 +1,7 @@
 import { displayChain } from '@/lib/lineageDisplayChain'
 import { idDocLabel } from '@/lib/idDocLabel'
 import { guardPage } from '@/lib/pageGuard'
+import { roleAllows } from '@/lib/permissions'
 import Link from 'next/link'
 import { ArrowRight, Baby, CreditCard, Home, FileText, User, Phone, MapPin, GitBranch, ExternalLink, Mail, Download, Heart, Star, XCircle, MessageSquare } from 'lucide-react'
 import { notFound } from 'next/navigation'
@@ -10,6 +11,7 @@ import Card from '@/components/ui/Card'
 import Tabs, { type TabDef } from '@/components/ui/Tabs'
 import { StatusControl } from '../maternityStatus'
 import FamilyApprovalGate from '@/components/admin/FamilyApprovalGate'
+import BeneficiaryNameEditor from '@/components/admin/BeneficiaryNameEditor'
 import MaternityActions from './MaternityActions'
 import MaternityInquiryPanel from './MaternityInquiryPanel'
 import AdminReviewAlert from './AdminReviewAlert'
@@ -331,7 +333,13 @@ export default async function MaternityDetailPage(
     searchParams?: Promise<Record<string, string | string[] | undefined>>
   },
 ) {
-  await guardPage('maternity')
+  const staff = await guardPage('maternity')
+  // 🔴 עריכת השם נשענת על הרשאת *הצאצאים* ולא על זו של היולדות: השם שמור
+  // בכרטסת הצאצא, ומזכירה שהוגבלה למחלקה אחת בלבד אינה אמורה לשנות אותו
+  // דרך מסך אחר. ה-RLS על beneficiaries פתוח לכל איש צוות, ולכן זו
+  // ההכרעה היחידה — הכפתור כלל לא מוצג למי שאינו מורשה.
+  const canEditBeneficiaries = staff.role === 'admin'
+    || roleAllows(staff.role, staff.permissions, 'beneficiaries', 'edit')
   const { id } = await params
   // ⚠️ מאומת מול רשימת הלשוניות ולא מועבר כמות שהוא: ערך שרירותי מהכתובת
   // היה נכנס ישר להשוואת סטטוס ומרוקן את הניווט בלי שום הסבר.
@@ -517,7 +525,20 @@ export default async function MaternityDetailPage(
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-slate-400">פרטי הבעל</p>
-                  <DetailRow label="שם מלא" value={[ben.family_name, ben.full_name].filter(Boolean).join(' ') || '—'} />
+                  {/* 🔴 השם ניתן לעריכה מכאן — ראו components/admin/BeneficiaryNameEditor.
+                      עד כה הוא הוצג כטקסט בלבד, והמזכירה שראתה שם שגוי נאלצה
+                      לעבור לכרטסת הצאצא (ורק אם ידעה שזו הדרך). */}
+                  <DetailRow
+                    label="שם מלא"
+                    value={
+                      <BeneficiaryNameEditor
+                        beneficiaryId={ben.id}
+                        familyName={ben.family_name ?? ''}
+                        fullName={ben.full_name ?? ''}
+                        canEdit={canEditBeneficiaries}
+                      />
+                    }
+                  />
                   <DetailRow label={idDocLabel(ben.id_doc_type)} value={ben.id_doc_type === "passport" ? (ben.id_number || "—") : (formatIsraeliId(ben.id_number) || "—")} ltr />
                   <DetailRow label="מצב משפחתי" value={ben.marital_status ?? '—'} />
                   <DetailRow label="קהילה" value={(ben as { community_affiliation?: string | null }).community_affiliation?.trim() || '—'} />
@@ -923,7 +944,9 @@ export default async function MaternityDetailPage(
   )
 }
 
-function DetailRow({ label, value, ltr, icon }: { label: string; value: string; ltr?: boolean; icon?: React.ReactNode }) {
+// ⚠️ value מקבל גם ReactNode: שורת השם מארחת עורך אינטראקטיבי (עריכת שם
+// המשפחה והשם הפרטי מכאן, בלי מעבר לכרטסת הצאצא), ולא רק טקסט.
+function DetailRow({ label, value, ltr, icon }: { label: string; value: React.ReactNode; ltr?: boolean; icon?: React.ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-2">
       <span className="text-xs text-slate-500 flex-shrink-0 flex items-center gap-1">{icon}{label}</span>
