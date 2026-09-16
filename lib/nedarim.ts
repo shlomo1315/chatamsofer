@@ -291,9 +291,55 @@ export function isPassportId(fields: { id_number?: string | null; id_type?: stri
   return s.length > 0 && /[^\d\s-]/.test(s)
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 מטמון קצר לטבלת הלקוחות — הבזבוז הגדול ביותר מול נדרים.
+//
+// ⚠️ findClientByZeout מושכת את *כל* טבלת הלקוחות (אלפי משפחות) כדי לאתר
+// משפחה אחת, ו-loadOne קוראת לה פעמיים לכל טעינה (ת"ז הבעל ואז האישה).
+// בערב החג, בקצב של ~5 שיוכי כרטיסים בדקה, זה עשר משיכות של הטבלה המלאה
+// בכל דקה — על אותם נתונים בדיוק. זה החלק הארי של העומס שנדרים מדדו.
+//
+// ⚠️ 60 שניות ולא יותר: הקמת משפחה חדשה חייבת להיראות בחיפוש שאחריה, אחרת
+// המערכת תנסה להקים אותה שוב ותידחה ב"כבר רשום". החלון קצר דיו לכך, וארוך
+// דיו כדי לבלוע את כל השיחות המקבילות של אותה דקה.
+//
+// ⚠️ מטמון לכל מוסד בנפרד (mosadId): היולדות והחגים הם שני מוסדות שונים עם
+// שתי טבלאות שונות, וערבוב ביניהם היה מחזיר את המשפחה הלא נכונה.
+// ─────────────────────────────────────────────────────────────────────────────
+type ClientsTableResult = { total: unknown; families: Record<string, unknown>[]; meta: Record<string, unknown> }
+const CLIENTS_TABLE_TTL_MS = 60_000
+const clientsTableCache = new Map<string, { at: number; value: ClientsTableResult }>()
+/** ⚠️ בקשות מקבילות מתמזגות לקריאה אחת — אחרת עשר שיחות בו-זמנית מייצרות
+ *  עשר משיכות של אותה טבלה לפני שהראשונה הספיקה להיכנס למטמון. */
+const clientsTableInflight = new Map<string, Promise<ClientsTableResult>>()
+
+/** ניקוי המטמון למוסד — נקרא אחרי הקמת משפחה, כדי שתימצא מיד. */
+export function invalidateClientsTable(creds: NedarimCreds) {
+  clientsTableCache.delete(creds.mosadId)
+  clientsTableInflight.delete(creds.mosadId)
+}
+
 // משיכת רשימת כל המשפחות (GetClient_Table) → { total, families[], meta }
 // meta = כל השדות ברמה העליונה של התגובה (למעט data) — לאיתור שדות לא מתועדים כמו יתרת ארנק המוסד
-export async function getClientsTable(creds: NedarimCreds) {
+export async function getClientsTable(creds: NedarimCreds): Promise<ClientsTableResult> {
+  const key = creds.mosadId
+  const hit = clientsTableCache.get(key)
+  if (hit && Date.now() - hit.at < CLIENTS_TABLE_TTL_MS) return hit.value
+
+  const inflight = clientsTableInflight.get(key)
+  if (inflight) return inflight
+
+  const p = fetchClientsTable(creds)
+    .then(value => {
+      clientsTableCache.set(key, { at: Date.now(), value })
+      return value
+    })
+    .finally(() => { clientsTableInflight.delete(key) })
+  clientsTableInflight.set(key, p)
+  return p
+}
+
+async function fetchClientsTable(creds: NedarimCreds): Promise<ClientsTableResult> {
   const r = await nedarimRequest(creds, 'GetClient_Table', {})
   if (!isOk(r)) throw new Error(r.Message || 'כשל במשיכת רשימת המשפחות מנדרים')
   const rows = Array.isArray(r.data) ? (r.data as Record<string, unknown>[]) : []
@@ -371,6 +417,11 @@ export async function saveClientCard(
     Comments: 'נוצר/עודכן אוטומטית ממערכת היכל החתם סופר',
   })
   if (!isOk(r)) throw new Error(r.Message || 'כשל בהקמת/עדכון משפחה בנדרים')
+  // 🔴 המטמון של טבלת הלקוחות מתיישן ברגע זה — משפחה שהוקמה כעת חייבת
+  // להימצא בחיפוש הבא. בלי הניקוי הזה חיפוש בתוך חלון המטמון היה מחזיר
+  // null על משפחה שקיימת, והמערכת הייתה מנסה להקים אותה שוב ונדחית
+  // ב"מספר זהות זה כבר רשום".
+  invalidateClientsTable(creds)
   const id = String(r.Message ?? '').trim()
   return id || clientId || null
 }
@@ -378,6 +429,8 @@ export async function saveClientCard(
 // מחיקת משפחה
 export async function deleteClient(creds: NedarimCreds, clientId: string) {
   const r = await nedarimRequest(creds, 'SaveClientCard', { ClientId: clientId, Deleted: '1' })
+  // ⚠️ כמו בהקמה — משפחה שנמחקה אסור שתמשיך להופיע בחיפוש מהמטמון.
+  if (isOk(r)) invalidateClientsTable(creds)
   return { ok: isOk(r), message: String(r.Message ?? '') }
 }
 
