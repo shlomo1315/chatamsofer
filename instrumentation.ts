@@ -103,18 +103,50 @@ export async function register() {
     //
     // ⚠️ ללא דגל תאריך, בשונה מהפריקה: זו פעולת קריאה בלבד שאינה
     // משנה כסף, וריצה כפולה רק מרעננת שוב.
+    // ─────────────────────────────────────────────────────────────────────
+    // 🔴 מפסק — ריצה שכשלה *כולה* אינה חוזרת מעצמה.
+    //
+    // ⚠️ ב-15-16.09 הרענון רץ כל שעה על ~223 משפחות והחזיר 0 הצלחות ו-223
+    // כשלים, שעה אחר שעה. כל משפחה נקראת פעמיים (ניסיון חוזר ב-
+    // refreshLiveBalances) ⇒ ~450 פניות לנדרים בכל שעה, כולן לחינם. נדרים
+    // ספרו מעל 2,500 פניות בשעה ואיימו לחסום את ה-IP. הוויסות שנוסף קודם
+    // האט את הקצב אבל לא נגע בסיבה: worker שממשיך לנסות בלי סוף.
+    //
+    // ⚠️ 0 הצלחות מתוך מאות אינו "תקלה רגעית" אלא תקלה מבנית (הרשאה שגויה,
+    // מוסד לא נכון, ממשק שהשתנה) — ואין שום ערך בניסיון החוזר. נעצרים
+    // ומשאירים שורת לוג מפורשת, במקום להציף צד שלישי עד לחסימה.
+    // ─────────────────────────────────────────────────────────────────────
+    let balancesStopped = false
     const refreshBalances = async () => {
+      if (balancesStopped) return
       try {
         const { refreshLiveBalances } = await import('@/lib/refreshLiveBalances')
         const r = await refreshLiveBalances()
-        if (r.ok) console.log(`[live-balances] רועננו ${r.updated}/${r.checked}${r.failed ? ` · ${r.failed} נכשלו` : ''}`)
-        else console.error('[live-balances] נכשל:', r.error)
+        if (r.ok) {
+          console.log(`[live-balances] רועננו ${r.updated}/${r.checked}${r.failed ? ` · ${r.failed} נכשלו` : ''}`)
+          // 🔴 כשל גורף — מפסיקים עד הפריסה הבאה.
+          if (r.checked > 0 && r.updated === 0) {
+            balancesStopped = true
+            console.error(
+              `[live-balances] 🔴 הופסק: ${r.checked} משפחות נבדקו ואף אחת לא הצליחה. ` +
+              'זו תקלה מבנית ולא רעש רגעי — כל ניסיון נוסף רק מציף את נדרים. ' +
+              'לבדוק הרשאות/מוסד ואז לפרוס מחדש.',
+            )
+          }
+        } else {
+          // ⚠️ כשל כולל (אין הרשאות, אין מסד) — גם הוא עוצר: אין טעם לחזור
+          // כל שעה על קריאה שלא יכולה להצליח.
+          balancesStopped = true
+          console.error('[live-balances] 🔴 הופסק —', r.error)
+        }
       } catch (e) {
         console.error('[live-balances] שגיאה:', e instanceof Error ? e.message : e)
       }
     }
-    setTimeout(() => { void refreshBalances(); setInterval(() => { void refreshBalances() }, HOURLY_MS) }, INITIAL_DELAY_MS)
-    console.log('[live-balances] hourly Nedarim balance refresh started')
+    if (process.env.LIVE_BALANCES_DISABLED !== '1') {
+      setTimeout(() => { void refreshBalances(); setInterval(() => { void refreshBalances() }, HOURLY_MS) }, INITIAL_DELAY_MS)
+      console.log('[live-balances] hourly Nedarim balance refresh started')
+    }
     console.log('[unload-expired] daily midnight (Israel) scheduler started')
   }
 

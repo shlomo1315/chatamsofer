@@ -48,6 +48,8 @@ export async function refreshLiveBalances(): Promise<RefreshResult> {
   const now = new Date().toISOString()
   let updated = 0
   let failed = 0
+  /** ⚠️ רק הכשל הראשון נרשם — ראו ההערה בלולאה. */
+  let loggedFirstError = false
 
   for (const r of rows) {
     const b = Array.isArray(r.beneficiary) ? r.beneficiary[0] : r.beneficiary
@@ -66,7 +68,17 @@ export async function refreshLiveBalances(): Promise<RefreshResult> {
           const card = await getClientCard(creds, nedId)
           balance = card?.totalFreeAmount ?? null
           if (balance != null) break
-        } catch { /* נופל לניסיון הבא */ }
+        } catch (e) {
+          // 🔴 השגיאה נבלעה עד כה לגמרי. התוצאה: הרענון החזיר "0/223 · 223
+          // נכשלו" שעה אחר שעה בלי שאיש ידע *למה*, והסיבה האמיתית (תשובת
+          // נדרים) מעולם לא הגיעה לשום לוג. נרשם רק לכשל הראשון בכל ריצה,
+          // כדי לא להפוך את הלוג עצמו להצפה.
+          if (!loggedFirstError) {
+            loggedFirstError = true
+            console.error(`[live-balances] הכשל הראשון (ned=${nedId}):`,
+              e instanceof Error ? e.message : e)
+          }
+        }
         if (attempt === 0) await sleep(400)
       }
       cache.set(nedId, balance)
