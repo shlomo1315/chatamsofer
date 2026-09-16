@@ -1002,17 +1002,17 @@ export interface LineageResult {
 /**
  * בורר סדר הדורות.
  *
- * @param includePending  מציג גם צמתים שממתינים לאישור (מסלול תיקון ייחוס
- *   בלבד — ראו /api/lineage). בהרשמה נשאר כבוי: רישום חדש אינו נבנה על
- *   רשומה שטרם נבדקה.
+ * ⚠️ מציג צמתים מאושרים בלבד, בכל המסלולים. הדגל includePending הוסר:
+ *   סדר ייחוס אינו נבנה על רשומה שטרם נבדקה, גם לא בתיקון. מה שחסר בעץ
+ *   מוקלד ידנית ונכנס כ-pending לאישור המשרד.
+ *
  * @param prefillChain  השרשרת הרשומה היום, לטעינה מראש כנקודת פתיחה.
  *   ⚠️ "תיקון" משמעו לשנות משהו קיים — בלי זה נדרש היה לבנות 8-9 דורות
  *   מאפס בכל בקשה, וזה לבדו הפיל את רוב הבקשות באמצע.
  */
-function LineageBuilder({ selfName, onChange, includePending = false, prefillChain }: {
+function LineageBuilder({ selfName, onChange, prefillChain }: {
   selfName: string
   onChange: (r: LineageResult) => void
-  includePending?: boolean
   prefillChain?: { name: string; relation?: 'son' | 'son_in_law' | null }[] | null
 }) {
   const [root, setRoot] = useState<{ id: string; name: string } | null>(null)
@@ -1062,10 +1062,8 @@ function LineageBuilder({ selfName, onChange, includePending = false, prefillCha
     setNameGate(true)
   }
 
-  // ⚠️ הדגל נשלח בכל שליפת דור — אחרת הדור הראשון היה מציג ממתינים והדור
-  // הבא לא, והמשתמש היה נתקע שוב באמצע בלי להבין למה.
-  const pendingQS = includePending ? '&include_pending=1' : ''
-  const fetchChildren = async (parentId: string) => { try { const r = await fetch(`/api/lineage?parent_id=${parentId}${pendingQS}`); const d = await r.json(); return (d.nodes ?? []) as LineageNode[] } catch { return [] } }
+  // ⚠️ בלי include_pending: השליפה מחזירה צמתים מאושרים בלבד בכל דור.
+  const fetchChildren = async (parentId: string) => { try { const r = await fetch(`/api/lineage?parent_id=${parentId}`); const d = await r.json(); return (d.nodes ?? []) as LineageNode[] } catch { return [] } }
 
   useEffect(() => {
     (async () => {
@@ -5983,11 +5981,19 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                       שהייחוס שלהן נבדק ואושר — בעוד שבפועל רק 3.4% מהעץ מאושר,
                       ובדורות 6-8 פחות מ-1.5%. הצבע נשאר (הוא מבחין בין דורות),
                       והמשמעות נאמרת במילים. */}
+                  {/* 🔴 התצוגה מוסתרת בזמן עריכה — מסך אחד ולא שניים.
+                      ⚠️ עד כה השרשרת הקיימת נשארה למעלה וה-LineageBuilder נפתח
+                      מתחתיה, כשהוא ממילא טעון באותם דורות (prefillChain). המשתמש
+                      ראה את אותם שמות פעמיים ולא היה ברור באיזה מהם הוא עורך.
+                      העורך טעון מראש, ולכן שום מידע אינו אובד בהסתרה. */}
+                  {!lineageFixOpen && (
                   <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mb-2.5 leading-relaxed">
                     זהו סדר הדורות <span className="font-bold">כפי שהוא רשום אצלנו</span>.
                     הצבעים מציינים את <span className="font-bold">מספר הדור</span> בלבד — ואינם מעידים על אישור או בדיקה.
                   </p>
+                  )}
 
+                  {!lineageFixOpen && (
                   <div className="relative pr-3">
                     {beneficiary.lineage_chain.map((c, i, arr) => {
                       const gen = genStyle(i)
@@ -6017,6 +6023,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                       )
                     })}
                   </div>
+                  )}
 
                   {/* ⚠️ בקשה ולא עריכה ישירה: הייחוס קובע זכאות, ושינוי
                       שלו עובר בדיקה במשרד לפני שהוא נכנס לעץ. */}
@@ -6039,7 +6046,6 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                               נדרש לפענח מהמלל מה בדיוק לשנות ולהקליד בעצמו. */}
                           <div className="rounded-xl border border-slate-200 bg-white p-3">
                             <LineageBuilder selfName={fixSelfName} onChange={setPortalFixLineage}
-                              includePending
                               prefillChain={Array.isArray(beneficiary.lineage_chain) ? beneficiary.lineage_chain : null} />
                           </div>
 
@@ -6577,7 +6583,6 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
 
                     <p className="text-sm font-semibold text-slate-800 mb-2">בנו מחדש את שרשרת הדורות המתוקנת:</p>
                     <LineageBuilder selfName={fixSelfName} onChange={setFixLineageResult}
-                      includePending
                       prefillChain={Array.isArray(beneficiary.lineage_chain) ? beneficiary.lineage_chain : null} />
 
                     {error && <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</div>}
