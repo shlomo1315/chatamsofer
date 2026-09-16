@@ -38,7 +38,15 @@ interface BenRow {
   email?: string | null
   address?: string | null
   city?: string | null
-  nedarim_id?: string | null
+  /**
+   * 🔴 מזהה המשפחה במוסד *החגים* בנדרים (7014553).
+   *
+   * ⚠️ נפרד מ-nedarim_id, ששייכת למוסד היולדות (7018265). מזהה לקוח שנוצר
+   * במוסד אחד חסר משמעות בשני, ושימוש בו שם פונה על משפחה אחרת לגמרי —
+   * כלומר כסף שיוצא ללא הנמען הנכון. 66 משפחות מחזיקות כרטיסים משני
+   * המוסדות, ואצלן הבלבול הזה היה ודאי.
+   */
+  nedarim_id_holiday?: string | null
 }
 
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected'
@@ -178,7 +186,7 @@ export async function linkHolidayCard(
   // שכרטיס תקין תמיד ישויך גם למשפחה שה-nedarim_id שלה לא נשמר בעבר.
   const { data: ben } = await db
     .from('beneficiaries')
-    .select('id, id_number, spouse_id_number, family_name, full_name, phone, phone2, email, address, city, nedarim_id')
+    .select('id, id_number, spouse_id_number, family_name, full_name, phone, phone2, email, address, city, nedarim_id_holiday')
     .eq('id', beneficiaryId)
     .maybeSingle()
   const bn = ben as BenRow | null
@@ -194,7 +202,7 @@ export async function linkHolidayCard(
   // ⚠️ חיפוש לפי *שתי* הת"ז: המשפחה בנדרים עשויה להיות רשומה על שם
   // בן/בת הזוג, וחיפוש לפי אחת בלבד החזיר null על משפחה שקיימת.
   // ─────────────────────────────────────────────────────────────────────────
-  let nedarimId = bn?.nedarim_id ? String(bn.nedarim_id) : null
+  let nedarimId = bn?.nedarim_id_holiday ? String(bn.nedarim_id_holiday) : null
 
   const lookup = async (): Promise<string | null> => {
     for (const cand of [bn?.id_number, bn?.spouse_id_number].filter(Boolean)) {
@@ -248,8 +256,8 @@ export async function linkHolidayCard(
     await db.from('distribution_recipients').update({ card_link_error: error }).eq('id', rec.id)
     return { ok: false, linked: false, error }
   }
-  if (nedarimId !== bn?.nedarim_id) {
-    await db.from('beneficiaries').update({ nedarim_id: nedarimId }).eq('id', beneficiaryId)
+  if (nedarimId !== bn?.nedarim_id_holiday) {
+    await db.from('beneficiaries').update({ nedarim_id_holiday: nedarimId }).eq('id', beneficiaryId)
   }
 
   let ok = false, message = ''
@@ -295,7 +303,7 @@ export async function linkHolidayCard(
     if (fresh && fresh !== nedarimId) {
       console.warn(`[holidayCards] nedarim_id ${nedarimId} אינו מוכר — מאותר מחדש כ-${fresh}`)
       nedarimId = fresh
-      await db.from('beneficiaries').update({ nedarim_id: fresh }).eq('id', beneficiaryId)
+      await db.from('beneficiaries').update({ nedarim_id_holiday: fresh }).eq('id', beneficiaryId)
       try {
         const r2 = await setMagneticCard(creds, fresh, digits, { timeoutMs: 12_000 })
         ok = r2.ok; message = r2.message

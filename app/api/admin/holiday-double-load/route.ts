@@ -45,11 +45,11 @@ export async function GET(req: NextRequest) {
   // משפחות או לבדוק אותן פעמיים, והדוח היה חסר בלי שיידע איש.
   const { rows } = await fetchAllRows<{
     id: string; loaded_at: string | null; card_number: string | null
-    beneficiary: { id_number: string | null; family_name: string | null; full_name: string | null; nedarim_id: string | null }
-      | { id_number: string | null; family_name: string | null; full_name: string | null; nedarim_id: string | null }[] | null
+    beneficiary: { id_number: string | null; family_name: string | null; full_name: string | null; nedarim_id_holiday: string | null }
+      | { id_number: string | null; family_name: string | null; full_name: string | null; nedarim_id_holiday: string | null }[] | null
   }>((from, to) => admin
     .from('distribution_recipients')
-    .select('id, loaded_at, card_number, beneficiary:beneficiaries(id_number, family_name, full_name, nedarim_id)')
+    .select('id, loaded_at, card_number, beneficiary:beneficiaries(id_number, family_name, full_name, nedarim_id_holiday)')
     .eq('load_status', 'loaded')
     .order('loaded_at', { ascending: true })
     .order('id', { ascending: true })
@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
 
   for (const r of slice) {
     const b = Array.isArray(r.beneficiary) ? r.beneficiary[0] : r.beneficiary
-    const nedId = b?.nedarim_id
+    const nedId = b?.nedarim_id_holiday
     if (!nedId) { errors.push({ id: r.id, name: b?.family_name, reason: 'אין מזהה נדרים' }); continue }
 
     let payload: unknown = null

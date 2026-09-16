@@ -258,11 +258,18 @@ export async function runLoadBatch(
     // ⚠️ ההקמה בנדרים הצליחה ברגע שיש clientId, ובלי לשמור אותו כאן
     // המשפחה קיימת שם ואינה ידועה לנו: שיוך הכרטיס לא ימצא אותה, וניסיון
     // חוזר ינסה להקים אותה שוב ויידחה ב"מספר זהות זה כבר רשום".
+    //
+    // 🔴 נכתב ל-nedarim_id_holiday ולא ל-nedarim_id.
+    //
+    // ⚠️ זה היה מקור הערבוב: טעינת חגים שמרה מזהה של מוסד החגים (7014553)
+    // בעמודה ששייכת למוסד היולדות (7018265). אצל משפחה שיש לה גם תיק
+    // יולדות, המסלול של היולדות קרא את המזהה הזה ופנה איתו למוסד שלו —
+    // מזהה שאינו קיים שם, או גרוע מכך, מזהה של משפחה אחרת לגמרי.
     if (outcome.clientId && t.beneficiaryId) {
       const { error: nidErr } = await db.from('beneficiaries')
-        .update({ nedarim_id: String(outcome.clientId) })
-        .eq('id', t.beneficiaryId).is('nedarim_id', null)
-      if (nidErr) console.error(`[holiday-load] שמירת nedarim_id נכשלה ben=${t.beneficiaryId}:`, nidErr.message)
+        .update({ nedarim_id_holiday: String(outcome.clientId) })
+        .eq('id', t.beneficiaryId).is('nedarim_id_holiday', null)
+      if (nidErr) console.error(`[holiday-load] שמירת nedarim_id_holiday נכשלה ben=${t.beneficiaryId}:`, nidErr.message)
     }
 
     if (opts.delayMs) await new Promise(r => setTimeout(r, opts.delayMs))
