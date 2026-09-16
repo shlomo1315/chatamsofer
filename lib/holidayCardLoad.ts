@@ -28,6 +28,15 @@ export interface LoadTarget {
   recipientId: string
   /** 🔴 לשמירת nedarim_id שנפתר בטעינה. בלעדיו המזהה אובד. */
   beneficiaryId?: string | null
+  /**
+   * 🔴 מזהה מוסד *החגים* (7014553) השמור אצלנו — חוסך את החיפוש כולו.
+   *
+   * ⚠️ כשהוא קיים אין קריאה ל-findClientByZeout, שמושכת את כל טבלת
+   * הלקוחות. זה ההבדל בין אלפי רשומות לכל טעינה לבין אפס.
+   *
+   * ⚠️ מוסד החגים בלבד — לעולם לא nedarim_id, ששייכת ליולדות (7018265).
+   */
+  nedarimIdHoliday?: string | null
   idNumber: string | null
   name: string
   /** ⚠️ הפרטים הבאים נדרשים *רק* להקמת המשפחה בנדרים כשאינה קיימת. */
@@ -114,14 +123,32 @@ export async function loadOne(
     // ⚠️ כשל *החיפוש* אינו סיבה לוותר: GetClient_Table עלול להיכשל מצד
     // נדרים, ואילו SaveClientCard מצליחה ומחזירה ClientId בכל מקרה.
     // ─────────────────────────────────────────────────────────────────────
-    let clientId: string | null = null
-    for (const candidate of [target.idNumber, target.spouseIdNumber].filter(Boolean)) {
-      if (clientId) break
-      try {
-        clientId = await findClientByZeout(creds, String(candidate))
-      } catch (e) {
-        console.error('[holiday-load] חיפוש המשפחה בנדרים נכשל — ממשיכים להקמה:',
-          e instanceof Error ? e.message : e)
+    // 🔴 מזהה החגים שכבר שמור אצלנו — בלי שום פנייה לנדרים.
+    //
+    // ⚠️ עד כה החיפוש רץ *תמיד*, גם כשהמזהה היה ידוע, וכל findClientByZeout
+    // מושכת את **כל** טבלת הלקוחות (אלפי רשומות) פעמיים לכל טעינה. זה מה
+    // שניפח את הספירה אצל נדרים עד לאיום בחסימה — לא מספר השיוכים, שהיה
+    // 208 בלילה שלם.
+    //
+    // 🔴 בטוח רק בזכות ההפרדה: nedarim_id_holiday שייך למוסד 7014553 בלבד.
+    // אותו דילוג על nedarim_id המשותפת היה פונה עם מזהה של מוסד היולדות.
+    //
+    // ⚠️ מזהה מת עדיין מטופל: getClientCardFull/addTlush ייכשלו, ומסלול
+    // ההתאוששות הקיים יאתר מחדש. הדילוג חוסך את המקרה הנפוץ בלי לוותר
+    // על החריג.
+    let clientId: string | null = target.nedarimIdHoliday
+      ? String(target.nedarimIdHoliday)
+      : null
+
+    if (!clientId) {
+      for (const candidate of [target.idNumber, target.spouseIdNumber].filter(Boolean)) {
+        if (clientId) break
+        try {
+          clientId = await findClientByZeout(creds, String(candidate))
+        } catch (e) {
+          console.error('[holiday-load] חיפוש המשפחה בנדרים נכשל — ממשיכים להקמה:',
+            e instanceof Error ? e.message : e)
+        }
       }
     }
 
@@ -295,6 +322,8 @@ export function eligibleForLoad(rows: {
   name?: string
   /** 🔴 לשמירת nedarim_id שנפתר בטעינה. */
   beneficiary_id?: string | null
+  /** 🔴 מזהה מוסד החגים — נוכחותו מדלגת על החיפוש בנדרים לגמרי. */
+  nedarim_id_holiday?: string | null
   // ⚠️ הפרטים הבאים אינם לתצוגה: הם נשלחים לנדרים בהקמת המשפחה כשאינה
   // קיימת שם. השמטתם הייתה מקימה לקוח בלי טלפון וכתובת — לקוח שאינו
   // שמיש למוקד החלוקה, ובלי שום סימן שמשהו חסר.
@@ -343,6 +372,7 @@ export function eligibleForLoad(rows: {
     .map(r => ({
       recipientId: r.id,
       beneficiaryId: r.beneficiary_id ?? null,
+      nedarimIdHoliday: r.nedarim_id_holiday ?? null,
       idNumber: r.id_number ?? null,
       name: r.name ?? '',
       spouseIdNumber: r.spouse_id_number ?? null,

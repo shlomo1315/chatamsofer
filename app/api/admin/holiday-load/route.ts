@@ -28,6 +28,8 @@ interface Ben {
   email: string | null
   address: string | null
   city: string | null
+  /** 🔴 מזהה מוסד החגים — מדלג על החיפוש בנדרים. */
+  nedarim_id_holiday: string | null
 }
 
 /**
@@ -58,7 +60,7 @@ async function loadRows(
     .from('distribution_recipients')
     // ⚠️ השדות הנוספים נדרשים *רק* להקמת המשפחה בנדרים כשאינה קיימת שם:
     // לקוח שמוקם בלי טלפון וכתובת אינו שמיש למוקד החלוקה.
-    .select('id, approval_status, load_status, center_id, beneficiary_id, beneficiary:beneficiaries(id_number, spouse_id_number, family_name, full_name, phone, phone2, email, address, city)')
+    .select('id, approval_status, load_status, center_id, beneficiary_id, beneficiary:beneficiaries(id_number, spouse_id_number, family_name, full_name, phone, phone2, email, address, city, nedarim_id_holiday)')
     .eq('distribution_id', distributionId)
     .range(from, to))
 
@@ -70,6 +72,7 @@ async function loadRows(
       load_status: r.load_status,
       center_id: r.center_id,
       beneficiary_id: r.beneficiary_id ?? null,
+      nedarim_id_holiday: b?.nedarim_id_holiday ?? null,
       id_number: b?.id_number ?? null,
       name: [b?.family_name, b?.full_name].filter(Boolean).join(' ') || 'ללא שם',
       spouse_id_number: b?.spouse_id_number ?? null,

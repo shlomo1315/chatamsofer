@@ -160,6 +160,13 @@ type Member = {
   spouse_id_number?: string | null
   is_active?: boolean | null
   eligibility_status?: string | null
+  /**
+   * 🔴 מזהה המשפחה במוסד *החגים* בנדרים (7014553).
+   *
+   * ⚠️ נוכחותו חוסכת את משיכת טבלת הלקוחות המלאה בטעינה. נפרד מ-nedarim_id
+   * ששייכת למוסד היולדות — מזהה ממוסד אחד אינו תקף בשני.
+   */
+  nedarim_id_holiday?: string | null
 }
 
 // ⚠️ כרטסת שאינה פתוחה לרישום: לא-פעילה, או שנדחתה. רישום של משפחה שנדחתה
@@ -241,7 +248,7 @@ async function findMembersByPhone(callerPhone: string): Promise<Member[]> {
 
   const { data } = await db
     .from('beneficiaries')
-    .select('id, full_name, family_name, spouse_name, id_number, spouse_id_number, is_active, eligibility_status, phone, phone2, spouse_phone')
+    .select('id, full_name, family_name, spouse_name, id_number, spouse_id_number, is_active, eligibility_status, phone, phone2, spouse_phone, nedarim_id_holiday')
     .eq('is_active', true)
     .or(`phone.ilike.%${last7}%,phone2.ilike.%${last7}%,spouse_phone.ilike.%${last7}%`)
     .limit(50)
@@ -625,6 +632,9 @@ async function handleCardRoute(
       spouseIdNumber: ben.spouse_id_number ?? null,
       familyName: ben.family_name ?? null,
       fullName: ben.full_name ?? null,
+      // 🔴 מזהה מוסד החגים — כשהוא קיים הטעינה מדלגת על משיכת טבלת
+      // הלקוחות המלאה מנדרים. זה המסלול החם: כאן עוברים רוב השיוכים.
+      nedarimIdHoliday: ben.nedarim_id_holiday ?? null,
     }], amount, { expiryIso: dist.card_expiry, testMode: !!dist.test_mode })
 
     const bad = summary.outcomes.find(o => !o.ok)
