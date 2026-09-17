@@ -378,8 +378,17 @@ export async function findClientByZeout(creds: NedarimCreds, zeout: string): Pro
   const { families } = await getClientsTable(creds)
   // ⚠️ לא רק שדה Zeout: בנדרים ת"ז בן/בת הזוג יושבת בשדה נפרד, ומשפחה
   // שהוקמה על שם הבעל לא נמצאה כשחיפשנו לפי ת"ז האשה (ולהפך).
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 גם Tsad3Id — שם שדה שאין בו "zeout" ולכן הסינון פסח עליו.
+  //
+  // ⚠️ דרכון נשמר ב-Tsad3Id (ראו saveClientCard), והחיפוש כאן לא הסתכל
+  // בו כלל. התוצאה: משפחת דרכון לא נמצאה אף פעם, נראתה כחדשה, והוקמה
+  // שוב בכל פנייה — כרטסת לכרטיס וכרטסת לכסף. תיקון שם השדה בכתיבה
+  // בלבד לא היה מספיק, כי הקריאה עדיין לא הייתה מוצאת אותו.
+  // ─────────────────────────────────────────────────────────────────────────
   const match = families.find(row =>
-    Object.entries(row).some(([k, v]) => /zeout|tz\b|teudat/i.test(k) && normalizeZeout(v) === want),
+    Object.entries(row).some(([k, v]) =>
+      /zeout|tz\b|teudat|tsad3/i.test(k) && normalizeZeout(v) === want),
   )
   return match ? String(match.ClientId) : null
 }
@@ -407,8 +416,24 @@ export async function saveClientCard(
     FamilyName: b.family_name || b.full_name || '',
     FirstName: b.full_name || '',
     Zeout: passport ? undefined : idValue,
-    // מזהה ג' — השדה שנדרים מקצה למסמך שאינו ת"ז ישראלית.
-    Zeout3: passport ? idValue : undefined,
+    // ─────────────────────────────────────────────────────────────────────────
+    // 🔴 השדה הוא Tsad3Id ("מספר צד ג'"), ולא Zeout3.
+    //
+    // ⚠️ זה היה באג שקט לחלוטין: נדרים מחזירה Result=OK על Zeout3 ופשוט
+    // **מתעלמת ממנו**. הכרטסת נוצרה בלי שום מזהה — לא Zeout ולא Tsad3Id —
+    // ומכיוון ש-findClientByZeout מחפשת לפי מזהה, היא לא מצאה את המשפחה
+    // בשיחה הבאה, המערכת הסיקה "משפחה חדשה", והקימה כרטסת שנייה.
+    //
+    // ⚠️ התוצאה בפועל (17.09): 4 משפחות דרכון עם *שתי* כרטסות — הכרטיס
+    // שויך לאחת והכסף נטען לשנייה. הן נדחו בקופה ב"אין תלושים זמינים
+    // למימוש בכרטיס זה" והסתובבו עם כרטיס ריק. בראנדער, קליין נחום יואל,
+    // שווארץ ושטרן מאיר, ₪500 כל אחת.
+    //
+    // 🔴 אומת מול נדרים על כרטסת בדיקה: כתיבה ב-Zeout3 אינה נשמרת, כתיבה
+    // ב-Tsad3Id נשמרת ומוחזרת בקריאה. זה גם השם שנדרים מחזירה ב-
+    // GetClientCard, כלומר שדה אחד לכתיבה ולקריאה.
+    // ─────────────────────────────────────────────────────────────────────────
+    Tsad3Id: passport ? idValue : undefined,
     Address: [b.address, b.city].filter(Boolean).join(', ') || undefined,
     Phone1: b.phone ?? undefined,
     Phone2: b.phone2 ?? undefined,
