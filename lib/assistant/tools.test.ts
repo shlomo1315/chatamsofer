@@ -266,3 +266,52 @@ describe('עץ הדורות (lineage_tree)', () => {
     expect(r.message).toContain('לא נמצא')
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 חלוקות החגים — מה שהעוזר חייב להכיר כדי לענות על מצב משפחה.
+//
+// ⚠️ הפער שהבדיקות האלה סוגרות (17.09): מפרט distribution_recipients כלל
+// רק את שלב הרישום ושיוך הכרטיס. העמודות שקובעות אם *נטען כסף*
+// (load_status/loaded_at/load_error) ואיזה *מוקד* שובץ (center_id) לא היו
+// שם, ולכן לשאלה "האם נטען לפלוני" לא הייתה תשובה — העוזר לא ידע שהשדה
+// קיים. במקביל holiday_centers כלל לא הופיעה, כך ש-center_id הצביע
+// לטבלה בלתי־מוכרת והתשובה הייתה UUID במקום שם המוקד.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('סכמת חלוקות החגים — כיסוי מלא של מצב משפחה', () => {
+  const spec = (t: string) => TABLES.find(x => x.table === t)
+
+  it('🔴 נרשמי חלוקה — כל שלבי המסלול מיוצגים', () => {
+    const cols = spec('distribution_recipients')?.columns ?? []
+    // רישום → שיבוץ מוקד → כרטיס → טעינה
+    for (const c of [
+      'registered_at', 'approval_status',
+      'center_id', 'center_source',
+      'card_number', 'card_linked_at', 'card_link_error',
+      'load_status', 'loaded_at', 'load_error',
+    ]) {
+      expect(cols, `חסרה העמודה ${c}`).toContain(c)
+    }
+  })
+
+  it('🔴 מוקדי החגים הם טבלה מוכרת — בלעדיה center_id חסר משמעות', () => {
+    const hc = spec('holiday_centers')
+    expect(hc).toBeDefined()
+    expect(hc?.columns).toContain('name')
+    // ⚠️ מוקדי היולדות הם טבלה אחרת ואינם תחליף
+    expect(spec('card_centers')).toBeDefined()
+    expect(hc?.table).not.toBe('card_centers')
+  })
+
+  it('פתיחת/סגירת מוקד בחלוקה מיוצגת', () => {
+    const op = spec('holiday_center_openings')
+    expect(op).toBeDefined()
+    expect(op?.columns).toContain('pickup_open_at')
+    expect(op?.columns).toContain('pickup_ended_at')
+  })
+
+  it('ההסבר מזהיר שאין להציג load_status כהוכחה ליתרה בנדרים', () => {
+    const about = spec('distribution_recipients')?.about ?? ''
+    expect(about).toMatch(/נדרים/)
+    expect(about).toMatch(/load_status/)
+  })
+})

@@ -62,8 +62,15 @@ export const TABLES: TableSpec[] = [
     table: 'distribution_recipients',
     label: 'נרשמי חלוקה',
     perm: 'distributions',
-    about: 'הנרשמים לחלוקת חגים — שורה לכל משפחה שנרשמה לחלוקה מסוימת. distribution_id מקשר לחלוקה, source = אופן הרישום (אתר/נדרים/שלוחה), approval_status = סטטוס האישור, amount = הסכום, card_number/card_linked_at = שיוך כרטיס. פרטי המשפחה מצורפים דרך beneficiary. ⚠️ לשאלה "כמה נרשמו לחלוקה X" — count_data על טבלה זו עם סינון distribution_id, או פילוח לפי approval_status/source.',
-    columns: ['id', 'distribution_id', 'source', 'registered_at', 'phone', 'notified_at', 'amount', 'beneficiary_id', 'approval_status', 'approved_at', 'card_number', 'card_linked_at'],
+    about: 'הנרשמים לחלוקת חגים — שורה לכל משפחה שנרשמה לחלוקה מסוימת. distribution_id מקשר לחלוקה, source = אופן הרישום (אתר/נדרים/שלוחה), approval_status = סטטוס האישור, amount = הסכום. פרטי המשפחה מצורפים דרך beneficiary. ⚠️ לשאלה "כמה נרשמו לחלוקה X" — count_data על טבלה זו עם סינון distribution_id, או פילוח לפי approval_status/source.\n'
+      + '🔴 שלושה שלבים נפרדים, ואל תבלבל ביניהם — זו הטעות הנפוצה:\n'
+      + '  1. נרשם — קיימת שורה כאן (registered_at). "האם X נרשם לחלוקת חגים" = האם יש שורה.\n'
+      + '  2. שובץ למוקד — center_id מלא. center_source: chosen=המשפחה בחרה · auto=שובצה אוטומטית · admin=הוגדר במשרד.\n'
+      + '  3. קיבל כרטיס ונטען — card_number (הכרטיס שויך) ואז load_status=loaded (הכסף נטען).\n'
+      + '⚠️ הסדר קבוע: אין טעינה בלי שיוך כרטיס. מי שאין לו card_number פשוט טרם אסף כרטיס — זה **לא** כשל טעינה.\n'
+      + '⚠️ load_status: loaded=נטען · failed=נכשל (load_error מפרט) · ריק=טרם נטען. card_link_error = למה שיוך הכרטיס נכשל.\n'
+      + '🔴 load_status הוא מה שרשום אצלנו ואינו הוכחה שהכסף בנדרים: ב-17.09 נמצאו 4 משפחות עם loaded ובלי תלוש בנדרים (כרטסת כפולה בדרכונים). לבירור יתרה אמיתית — לפנות לנדרים, לא להסתמך על השדה הזה.',
+    columns: ['id', 'distribution_id', 'source', 'registered_at', 'phone', 'notified_at', 'amount', 'beneficiary_id', 'approval_status', 'approved_at', 'card_number', 'card_linked_at', 'card_link_error', 'load_status', 'loaded_at', 'load_error', 'center_id', 'center_source', 'center_chosen_at', 'received_at'],
     dateCol: 'registered_at',
     statusCol: 'approval_status',
     joinBeneficiary: true,
@@ -125,11 +132,30 @@ export const TABLES: TableSpec[] = [
   },
   {
     table: 'card_centers',
-    label: 'מוקדי חלוקת כרטיסים',
+    label: 'מוקדי חלוקת כרטיסים (יולדות)',
     perm: 'maternity',
-    about: 'המוקדים שבהם היולדות אוספות את כרטיס המזון, כולל המלאי בכל מוקד.',
+    about: 'המוקדים שבהם היולדות אוספות את כרטיס המזון, כולל המלאי בכל מוקד. ⚠️ מוקדי היולדות בלבד — מוקדי חלוקות החגים הם טבלה אחרת (holiday_centers).',
     columns: ['id', 'name', 'city', 'address', 'stock', 'is_active', 'phone'],
     searchCols: ['name', 'city'],
+  },
+  {
+    // 🔴 חסרה כאן לגמרי עד 17.09, ולכן לשאלה "באיזה מוקד נרשם X" לא הייתה
+    // תשובה: distribution_recipients.center_id הצביע לטבלה שהעוזר לא הכיר,
+    // והוא היה מחזיר מזהה UUID במקום שם המוקד.
+    table: 'holiday_centers',
+    label: 'מוקדי חלוקות החגים',
+    perm: 'distributions',
+    about: 'מוקדי איסוף הכרטיסים בחלוקות החגים (26 מוקדים: אופקים, אלעד, אשדוד, אזורים בבני ברק ובירושלים וכו\'). ⚠️ אלה **אינם** חנויות — החנויות שבהן ניתן לממש את הכרטיס מוגדרות בנדרים, לא כאן. distribution_recipients.center_id מקשר לטבלה זו; לשאלה "באיזה מוקד נרשם X" יש להחזיר את name ולא את המזהה.',
+    columns: ['id', 'name', 'city', 'address', 'region', 'phone', 'hours', 'capacity', 'is_active'],
+    searchCols: ['name', 'city', 'region'],
+  },
+  {
+    table: 'holiday_center_openings',
+    label: 'פתיחת/סגירת מוקד בחלוקה',
+    perm: 'distributions',
+    about: 'מתי כל מוקד נפתח לחלוקה ומתי סגר, לכל חלוקה בנפרד. pickup_open_at = המוקד החל לחלק · pickup_ended_at = סיים. ⚠️ שורה חסרה למוקד פירושה שהוא טרם נפתח כלל. ⚠️ מוקד שסגר אינו חוסם שיוך כרטיס שכבר נמסר ביד — רק קבלת כרטיס חדש.',
+    columns: ['distribution_id', 'center_id', 'pickup_open_at', 'pickup_ended_at', 'capacity_override'],
+    dateCol: 'pickup_open_at',
   },
   {
     table: 'recovery_homes',
