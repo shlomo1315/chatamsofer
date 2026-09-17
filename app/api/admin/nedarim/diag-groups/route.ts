@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
-import { getNedarimCreds, getLimitedStoresList, findClientByZeout, getClientCardFull } from '@/lib/nedarim'
+import { getNedarimCreds, getHolidayNedarimCreds, getLimitedStoresList, findClientByZeout, getClientCardFull } from '@/lib/nedarim'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,9 +20,30 @@ export async function GET(request: NextRequest) {
   const out: Record<string, unknown> = {}
   try {
     const { groups, raw } = await getLimitedStoresList(creds)
-    out.limitedStores = { groups, raw }
+    out.limitedStores = { mosadId: creds.mosadId, groups, raw }
   } catch (e) {
     out.limitedStoresError = e instanceof Error ? e.message : String(e)
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // 🔴 קבוצות מוסד *החגים* — בנפרד.
+  //
+  // ⚠️ הקבוצות למעלה נשלפות עם ההרשאה הראשית (מוסד היולדות, 7018265),
+  // וקבוצות הגבלה הן לכל מוסד בנפרד. מי שחיפש כאן את מזהה הקבוצה של החגים
+  // (7014553) פשוט לא ראה אותה — וזה חלק ממה שהותיר את LimitedId של החגים
+  // ריק ואת 3,878 הטעינות בלי אכיפת חנויות.
+  //
+  // ⚠️ נדלג כשאין הרשאה נפרדת: getHolidayNedarimCreds נופלת-לאחור לראשית,
+  // ושליפה כפולה של אותו מוסד רק מכפילה פניות לנדרים בלי להוסיף מידע.
+  // ───────────────────────────────────────────────────────────────────────────
+  try {
+    const holidayCreds = await getHolidayNedarimCreds()
+    if (holidayCreds && holidayCreds.mosadId !== creds.mosadId) {
+      const { groups, raw } = await getLimitedStoresList(holidayCreds)
+      out.holidayLimitedStores = { mosadId: holidayCreds.mosadId, groups, raw }
+    }
+  } catch (e) {
+    out.holidayLimitedStoresError = e instanceof Error ? e.message : String(e)
   }
 
   const zeout = request.nextUrl.searchParams.get('zeout')?.trim()

@@ -173,13 +173,21 @@ export default function NedarimHolidaySettings() {
           )}
 
           {/* ── קבוצת הגבלת חנויות ── */}
-          {/* ⚠️ ריק = בלי הגבלה, כלומר הכרטיס יעבוד בכל חנות. זה מצב תקין לחגים
-              (בניגוד ליולדות שמוגבלות לאוכל מוכן), ולכן אינו נחסם — רק מוסבר. */}
-          <div className="mt-1 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
-            <label className="text-xs font-medium text-slate-600">קבוצת הגבלת חנויות לחגים (LimitedId)</label>
+          {/* 🔴 שדה חובה בפועל — לא "רשות".
+              ⚠️ כאן נכתב שריק הוא "מצב תקין לחגים", וזו הייתה ההנחה השגויה
+              שאיפשרה את התקלה: 3,878 טעינות (08.09–16.09) יצאו בלי LimitedId
+              וניתנו למימוש בכל בית עסק ברשת. הקטגוריה "חלוקת חגים" בנדרים
+              היא Groupe — תיוג לדוחות — ואינה אוכפת חנויות.
+              ⚠️ הטעינה עצמה נכשלת-סגור כשהשדה ריק (lib/holidayCardLoad),
+              והאזהרה כאן היא כדי שזה ייראה *לפני* מנת טעינה ולא בתוכה. */}
+          <div className={`mt-1 rounded-xl border p-3.5 ${
+            limitedId.trim() ? 'border-slate-200 bg-slate-50' : 'border-rose-300 bg-rose-50'}`}>
+            <label className="text-xs font-medium text-slate-600">
+              קבוצת הגבלת חנויות לחגים (LimitedId) <span className="font-bold text-rose-600">— חובה</span>
+            </label>
             <div className="mt-1.5 flex items-center gap-2">
               <input value={limitedId} onChange={e => setLimitedId(e.target.value.replace(/\D/g, ''))} dir="ltr" inputMode="numeric"
-                placeholder="ריק = בלי הגבלה" maxLength={10}
+                placeholder="חובה — מזהה הקבוצה" maxLength={10}
                 className="w-40 rounded-lg border border-slate-300 px-3 py-2 text-sm text-left tabular-nums focus:outline-none focus:ring-2 focus:ring-teal-500" />
               <button type="button" onClick={saveLimit} disabled={savingLimit}
                 className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50">
@@ -187,10 +195,20 @@ export default function NedarimHolidaySettings() {
               </button>
               {savedLimit && <span className="text-xs font-bold text-green-600">✓ נשמר</span>}
             </div>
-            <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
-              המזהה המדויק מופיע בבדיקת החיבור למעלה. השארה ריקה = הכרטיס יעבוד בכל חנות,
-              וזה מצב תקין לחגים בניגוד לכרטיסי היולדות המוגבלים לאוכל מוכן.
-            </p>
+            {limitedId.trim() ? (
+              <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
+                המזהה המדויק מופיע בבדיקת החיבור למעלה. ההגבלה מוצמדת לכל טעינה
+                בנפרד (LimitedId ב-AddTlush), ולכן היא חלה על טעינות חדשות בלבד.
+              </p>
+            ) : (
+              <p className="mt-1.5 text-[11.5px] font-medium leading-relaxed text-rose-700">
+                ⚠️ בלי מזהה קבוצה הטעינה תיחסם. שדה ריק אינו «בלי הגבלה» אלא
+                <span className="font-bold"> היעדר אכיפה</span> — התלוש יהיה ניתן למימוש
+                בכל בית עסק ברשת, גם מחוץ לרשימת החנויות שהוגדרה.
+                הקטגוריה «חלוקת חגים» בנדרים היא תיוג לדוחות ואינה מגבילה חנויות.
+                המזהה מופיע ב<span className="font-bold">בדיקת החיבור</span> למעלה.
+              </p>
+            )}
           </div>
 
           {error && <p className="text-xs font-bold text-rose-600">{error}</p>}
