@@ -241,6 +241,32 @@ export function extractProposedChain(payload: unknown): ChainRow[] {
   return []
 }
 
+/**
+ * השרשרת כפי שהייתה *לפני* שהבקשה הוחלה, מתוך ה-payload.
+ *
+ * 🔴 נדרש משום שבקשה מהאזור האישי נקלטת אוטומטית ברגע ההגשה
+ * (autoApplyLineageFix), ולכן lineage_chain שבכרטסת כבר שווה למבוקש.
+ * השוואה מולו מייצרת "אין שינוי" ומסתירה מהמשרד את כל התיקון — זה מה
+ * שדווח כ"המשפחה רואה תיקון ואנחנו לא רואים כלום".
+ *
+ * ⚠️ מחזירה null (ולא מערך ריק) כשאין chain_before: אין להתייחס
+ * לבקשה ותיקה שנשמרה לפני שהשדה נוסף כאילו השרשרת שלה הייתה ריקה —
+ * אחרת כל דור בה ייראה "נוסף". null מסמן לקורא ליפול לשרשרת החיה.
+ */
+export function extractChainBefore(payload: unknown): ChainRow[] | null {
+  const p = payload as { chain_before?: unknown } | null
+  if (!p || !Array.isArray(p.chain_before)) return null
+  const rows = (p.chain_before as ChainRow[])
+    .filter(r => r && typeof r.name === 'string' && r.name.trim())
+    .map(r => ({
+      generation: Number(r.generation) || 0,
+      name: String(r.name).trim(),
+      relation: rel(r.relation),
+    }))
+    .filter(r => r.generation > 0)
+  return rows.length ? rows : null
+}
+
 /** "דור 5: רבי שלמה ומרת חיה שרה שפירא (חתן)" → שורת שרשרת. */
 const LINE = /^\s*דור\s+(\d{1,2})\s*[:.]\s*(.+?)\s*$/
 const REL_SUFFIX = /\s*\((בן|חתן)\)\s*$/

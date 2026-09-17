@@ -5,7 +5,7 @@ import { NODE_SELECT, pathToRoot, chainFromPath, invalidateLineageCache, resyncS
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { logActivity } from '@/lib/activityLog'
 import {
-  diffChains, extractProposedChain, extractRequesterNote, extractRequesterName,
+  diffChains, extractProposedChain, extractChainBefore, extractRequesterNote, extractRequesterName,
   normalizeName, matchChild, type ChainRow,
 } from '@/lib/lineageChainDiff'
 
@@ -85,7 +85,22 @@ export async function GET(request: NextRequest) {
     const proposed = extractProposedChain(r.payload)
     // ⚠️ ההשוואה מחושבת בשרת ולא בדפדפן: היא צריכה להיות זהה למה שהאישור
     // יחיל בפועל, וחישוב כפול בשני מקומות הוא בדיוק הדרך שבהם הם מסתעפים.
-    const diff = proposed.length ? diffChains(current, proposed) : null
+    // ─────────────────────────────────────────────────────────────────────
+    // 🔴 ההשוואה היא מול השרשרת שהייתה *לפני* ההחלה, לא מול החיה.
+    //
+    // ⚠️ זה היה הבאג שדווח כ"המשפחה רואה תיקון ואצלי לא רואים כלום":
+    // בקשה מהאזור האישי נקלטת אוטומטית (autoApplyLineageFix) ברגע
+    // ההגשה, ולכן lineage_chain *כבר שווה* למוצע. הדיף השווה מוצע מול
+    // עצמו, יצא "הכול זהה" (0 שינויים, firstDivergence=null), והמסך
+    // הציג בקשה בלי שום הבדל — כאילו לא התבקש דבר.
+    //
+    // ⚠️ chain_before נשמר ב-payload בדיוק לשם כך (lineage-fix/route).
+    // כשהוא קיים הוא מקור האמת להשוואה; בבקשות ותיקות שאין בהן
+    // chain_before נשארת ההתנהגות הישנה.
+    // ─────────────────────────────────────────────────────────────────────
+    const before = extractChainBefore(r.payload)
+    const baseline = before ?? current
+    const diff = proposed.length ? diffChains(baseline, proposed) : null
     return {
       id: r.id, kind: r.kind, status: r.status,
       workState: r.work_state ?? 'open',
@@ -98,6 +113,13 @@ export async function GET(request: NextRequest) {
         || r.reviewer_name || extractRequesterName(r.payload),
       contact: ben ? { phone: ben.phone, email: ben.email, city: ben.city } : null,
       note: extractRequesterNote(r.payload),
+      // 🔴 האם התיקון כבר נכנס לעץ. בקשה מהאזור האישי נקלטת אוטומטית,
+      // ולכן "פתוחה" כאן אין פירושה "לא קרה כלום" — זה בדיוק מה שהטעה.
+      // ⚠️ נגזר מהשוואת תוכן ולא מדגל: אין עמודה שמתעדת את הקליטה, ואם
+      // השרשרת החיה כבר זהה למבוקש — התיקון בפועל הוחל.
+      alreadyApplied: proposed.length > 0 && current.length > 0
+        && diffChains(current, proposed).identical,
+      chainBefore: before,
       nodeName: r.node_id ? nameById[r.node_id] ?? null : null,
       parentName: r.parent_id ? nameById[r.parent_id] ?? null : null,
       proposedName: r.proposed_name,
