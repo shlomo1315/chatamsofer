@@ -461,6 +461,23 @@ export async function addTlush(
 // מחזיר את המבנה הגולמי כדי שנזהה את שם/מזהה הקבוצה המדויקים כפי שנדרים מחזירה.
 export async function getLimitedStoresList(creds: NedarimCreds): Promise<{ groups: Record<string, unknown>[]; raw: NedarimResponse }> {
   const r = await nedarimRequest(creds, 'GetLimitedStoresList', {})
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // 🔴 שגיאה מנדרים נזרקת, ולא מוחזרת כרשימה ריקה.
+  //
+  // ⚠️ זה היה באג מסוכן: כשנדרים החזירה Result=Error (חסימת IP, הרשאה
+  // שגויה, פעולה לא מוכרת), הפענוח למטה לא מצא מערך קבוצות והחזיר
+  // groups: [] — ומסך ההגדרות הציג "✓ החיבור תקין · 0 קבוצות הגבלת
+  // חנויות". כלומר כשל מלא הוצג כהצלחה, והקבוצה שקיימת אצל נדרים נראתה
+  // כאילו אינה קיימת. על בסיס ה"0" הזה כמעט הוסקה מסקנה שלא נבנתה קבוצה.
+  //
+  // ⚠️ "אפס קבוצות" ו"לא הצלחנו לקרוא את הקבוצות" הן שתי תשובות שונות
+  // לחלוטין, והשנייה חייבת להיראות כתקלה.
+  // ───────────────────────────────────────────────────────────────────────────
+  if (String(r.Result ?? '').toUpperCase() === 'ERROR') {
+    throw new Error(String(r.Message ?? '').trim() || 'נדרים החזירה שגיאה בשליפת קבוצות הגבלת החנויות')
+  }
+
   const known = Array.isArray(r.data) ? (r.data as Record<string, unknown>[])
     : Array.isArray((r as { List?: unknown }).List) ? ((r as { List: Record<string, unknown>[] }).List)
     : Array.isArray((r as { Groups?: unknown }).Groups) ? ((r as { Groups: Record<string, unknown>[] }).Groups)
