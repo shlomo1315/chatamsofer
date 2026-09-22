@@ -17,6 +17,7 @@ export type EmailGroup =
   | 'loans'           // הלוואות
   | 'aid'             // סיוע רפואי ואלמנות
   | 'gratitude'       // מכתבי ברכה ומשוב
+  | 'book_fair'       // יריד ספרים
   | 'auto_reply'      // מענים אוטומטיים
   | 'system'          // מערכת: אימות, סיסמאות, דוחות
 
@@ -28,6 +29,7 @@ export const GROUP_LABELS: Record<EmailGroup, string> = {
   loans: 'הלוואות',
   aid: 'סיוע רפואי ואלמנות',
   gratitude: 'מכתבי ברכה ומשוב',
+  book_fair: 'יריד ספרים',
   auto_reply: 'מענים אוטומטיים',
   system: 'מערכת',
 }
@@ -196,6 +198,30 @@ export const EMAIL_CATALOG: EmailSpec[] = [
       { key: 'request_title', label: 'כותרת טבלת פרטי הבקשה', default: 'פרטי הבקשה:' },
       { key: 'docs_title', label: 'כותרת רשימת המסמכים', default: 'מסמכים מצורפים:' },
       { key: 'footnote', label: 'הערה בתחתית', default: 'תקבל/י עדכון על המשך הטיפול בהמשך.', multiline: true },
+    ],
+  },
+  // ── יריד ספרים ────────────────────────────────────────────────────────────
+  {
+    id: 'book_fair_order_confirmed',
+    group: 'book_fair',
+    title: 'אישור הזמנה',
+    trigger: 'מיד עם אישור התשלום על הזמנה בחנות היריד',
+    recipient: 'הלקוח שהזמין',
+    department: 'yerid',
+    wired: true,
+    fields: [
+      { key: 'subject', label: 'שורת הנושא', default: 'הזמנה {מספר} התקבלה — יריד הספרים', vars: ['{מספר}'], hint: '{מספר} יוחלף במספר ההזמנה' },
+      { key: 'preheader', label: 'שורת התצוגה המקדימה', default: 'התשלום התקבל וההזמנה נקלטה.', vars: ['{מספר}'] },
+      { key: 'title', label: 'כותרת ראשית', default: 'ההזמנה התקבלה' },
+      { key: 'kicker', label: 'תווית קטנה מעל הפתיח', default: 'אישור הזמנה' },
+      { key: 'greeting_fallback', label: 'פנייה כשאין שם', default: 'שלום רב' , hint: 'מוצג רק כשלא נמסר שם בהזמנה' },
+      { key: 'intro', label: 'פסקת פתיחה', default: 'תודה על הזמנתך! התשלום התקבל בהצלחה וההזמנה נקלטה במערכת.', multiline: true },
+      { key: 'order_number_label', label: 'תווית מספר ההזמנה', default: 'מספר ההזמנה' },
+      { key: 'items_title', label: 'כותרת טבלת הספרים', default: 'פירוט ההזמנה:' },
+      { key: 'delivery_title', label: 'כותרת פרטי המשלוח', default: 'פרטי המשלוח:' },
+      { key: 'pickup_note', label: 'הודעה לאיסוף עצמי', default: 'ההזמנה תמתין לאיסוף. נעדכן אותך כשתהיה מוכנה.', multiline: true },
+      { key: 'track_button', label: 'כיתוב כפתור המעקב', default: 'מעקב אחר ההזמנה' },
+      { key: 'footnote', label: 'הערה בתחתית', default: 'לכל שאלה ניתן להשיב למייל זה.', multiline: true },
     ],
   },
   {

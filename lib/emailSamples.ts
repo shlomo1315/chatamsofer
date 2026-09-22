@@ -8,6 +8,7 @@ import {
   birthApprovedEmail, birthRejectedEmail, maternityCardEmail, cardStockReplenishedEmail,
   portalCredentialsEmail, recoveryRealizedEmail, recoveryEditRequestEmail, gratitudeRequestEmail,
   recoveryFeedbackEmail, verifyCodeEmail, gratitudeReceivedEmail,
+  bookFairOrderConfirmedEmail,
 } from '@/lib/emailTemplates'
 import type { RenderedEmail } from '@/lib/emailReviewPage'
 
@@ -20,6 +21,17 @@ const SAMPLES: { title: string; recipient: string; trigger: string; build: () =>
       [['שם מלא', 'ישראל כהן'], ['תעודת זהות', '123456789'], ['טלפון', '050-1234567']],
       [{ label: 'הגשת בקשת הלוואה', href: 'mailto:igud@chasamsofer.info?subject=hloavaa' }], 'נשואים',
       undefined, { open: true, name: 'חלוקת חג תשרי תשפ״ו' }) },
+  { title: 'אישור הזמנה — יריד ספרים', recipient: 'לקוח היריד', trigger: 'אישור התשלום בחנות',
+    build: () => bookFairOrderConfirmedEmail({
+      orderNumber: 'YR-1042', customerName: 'ישראל כהן',
+      items: [
+        { title: 'משנה ברורה — מהדורת פאר', quantity: 1, lineTotalAgorot: 18_000 },
+        { title: 'חומש עם רש״י', quantity: 2, lineTotalAgorot: 9_000 },
+      ],
+      itemsTotalAgorot: 27_000, shippingAgorot: 3_500, totalAgorot: 30_500,
+      deliveryMethod: 'shipping', address: 'רחוב הרב קוק 10', cityName: 'בני ברק',
+      trackingToken: 'ZXhhbXBsZS10b2tlbi1mb3ItcHJldmlldw',
+    }) },
   { title: 'אישור קליטת פנייה במייל', recipient: 'פונה', trigger: 'קליטת בקשה במייל',
     build: () => emailIntakeConfirmedEmail('משפחת כהן', 'בקשת הלוואה') },
   { title: 'בקשה נחסמה — רישום נדחה', recipient: 'פונה', trigger: 'בקשה ממי שרישומו נדחה',

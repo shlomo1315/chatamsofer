@@ -7,6 +7,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { textFor } from './emailTextsStore'
 import { fmtLoanAmount } from './loanCurrency'
+import { fmtAgorot } from './bookFairPricing'
 
 export interface BuiltEmail {
   subject: string
@@ -2251,6 +2252,125 @@ export function rabbiFormEmail(opts: {
       accent: '#4f46e5',
       title: 'טופס אישור רב',
       subtitle: 'גמ״ח היכל החתם סופר',
+      body,
+    }),
+  }
+}
+
+// ─── אישור הזמנה — יריד הספרים ───────────────────────────────────────────────
+//
+// 🔴 נשלח מה-callback של הסליקה, אחרי שההזמנה סומנה כשולמה — ולא
+// מהצ'קאאוט. הזמנה שנוצרה וטרם שולמה אינה "מאושרת", ומייל אישור עליה
+// היה מבטיח ללקוח משהו שאולי לעולם לא יקרה.
+//
+// ⚠️ הטופס בחנות מבטיח "לקבלת אישור וקישור למעקב" — עד היום האימייל
+// נשמר ואיש לא שלח אליו דבר.
+//
+// ⚠️ אין noReplyBox: תיבת היריד מנוטרת (departments.ts), ולקוח שיש לו
+// שאלה על הזמנה צריך להיות מסוגל להשיב.
+export function bookFairOrderConfirmedEmail(opts: {
+  orderNumber: string
+  customerName?: string | null
+  items: { title: string; quantity: number; lineTotalAgorot: number }[]
+  itemsTotalAgorot: number
+  shippingAgorot: number
+  totalAgorot: number
+  deliveryMethod: 'shipping' | 'pickup'
+  address?: string | null
+  cityName?: string | null
+  /** הטוקן החתום מ-book_fair_orders.tracking_token. ריק = בלי כפתור מעקב. */
+  trackingToken?: string | null
+}): BuiltEmail {
+  const {
+    orderNumber, customerName, items, itemsTotalAgorot, shippingAgorot,
+    totalAgorot, deliveryMethod, address, cityName, trackingToken,
+  } = opts
+
+  const accent = '#0ea5e9'   // תכלת — צבע מחלקת היריד (departments.ts)
+  const t = (k: string) => textFor('book_fair_order_confirmed', k)
+    .replace(/\{מספר\}/g, orderNumber)
+  const T = (k: string) => escapeHtml(t(k))
+
+  // ⚠️ fmtAgorot של המחלקה ולא עיצוב מקומי: סכום שמוצג במייל אחרת
+  // מאשר במסך ובדף המעקב נראה כמו סכום אחר, ולקוח שמשווה יחשוב שחויב
+  // בטעות. (הנוסח הוא ₪305.50, לא 305.50 ₪.)
+  const money = fmtAgorot
+
+  // שורות הספרים. ⚠️ escapeHtml על שם הספר — הוא מגיע מהקטלוג, אך
+  // הכלל בקובץ הזה הוא לנטרל כל ערך שאינו קבוע בקוד.
+  const itemsHtml = items.map(it => `
+    <tr>
+      <td style="padding:10px 16px;color:#0f172a;font-size:14px;border-bottom:1px solid #f1f5f9;">
+        ${escapeHtml(it.title)}
+        ${it.quantity > 1 ? `<span style="color:#64748b;font-size:13px;"> × ${it.quantity}</span>` : ''}
+      </td>
+      <td style="padding:10px 16px;color:#0f172a;font-size:14px;font-weight:700;text-align:left;white-space:nowrap;border-bottom:1px solid #f1f5f9;">
+        ${money(it.lineTotalAgorot)}
+      </td>
+    </tr>`).join('')
+
+  const sumRow = (label: string, value: string, bold = false) => `
+    <tr>
+      <td style="padding:${bold ? '12' : '8'}px 16px;color:${bold ? '#0f172a' : '#64748b'};font-size:${bold ? '15' : '13'}px;font-weight:${bold ? '800' : '500'};${bold ? 'border-top:2px solid #e2e8f0;' : ''}">${label}</td>
+      <td style="padding:${bold ? '12' : '8'}px 16px;color:${bold ? '#0f172a' : '#334155'};font-size:${bold ? '17' : '14'}px;font-weight:${bold ? '900' : '700'};text-align:left;white-space:nowrap;${bold ? 'border-top:2px solid #e2e8f0;' : ''}">${value}</td>
+    </tr>`
+
+  // ⚠️ המשלוח מוצג גם כשהוא 0 — "משלוח חינם" הוא מידע, והשמטתו נראית
+  // כאילו נשכח.
+  const deliveryHtml = deliveryMethod === 'shipping'
+    ? `
+    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">${T('delivery_title')}</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+      ${detailRow('כתובת למשלוח', [address, cityName].filter(Boolean).join(', '))}
+    </table>`
+    : `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
+      <tr><td style="background:#f0f9ff;border-right:4px solid ${accent};border-radius:0 12px 12px 0;padding:16px 20px;">
+        <p style="margin:0;color:#075985;font-size:14px;font-weight:700;line-height:1.7;">${T('pickup_note')}</p>
+      </td></tr>
+    </table>`
+
+  const trackHtml = trackingToken
+    ? `<div style="margin:0 0 22px;">${btn(
+        `${PORTAL_BASE_DEFAULT.replace(/\/$/, '')}/yerid/order/${encodeURIComponent(trackingToken)}`,
+        t('track_button'), accent,
+      )}</div>`
+    : ''
+
+  const body = `
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;letter-spacing:0.5px;">${T('kicker')}</p>
+    <h2 style="margin:0 0 14px;color:#0f172a;font-size:22px;font-weight:900;">
+      ${customerName ? escapeHtml(customerName) : T('greeting_fallback')}
+    </h2>
+    <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.8;">${t('intro')}</p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
+      <tr><td style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:14px 20px;text-align:center;">
+        <p style="margin:0 0 2px;color:#0369a1;font-size:13px;font-weight:600;">${T('order_number_label')}</p>
+        <p style="margin:0;color:#0c4a6e;font-size:20px;font-weight:900;letter-spacing:1px;">${escapeHtml(orderNumber)}</p>
+      </td></tr>
+    </table>
+
+    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">${T('items_title')}</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+      ${itemsHtml}
+      ${sumRow('סה״כ ספרים', money(itemsTotalAgorot))}
+      ${sumRow('משלוח', shippingAgorot > 0 ? money(shippingAgorot) : 'חינם')}
+      ${sumRow('סה״כ ששולם', money(totalAgorot), true)}
+    </table>
+
+    ${deliveryHtml}
+    ${trackHtml}
+    <p style="margin:0 0 4px;color:#94a3b8;font-size:13px;line-height:1.7;">${T('footnote')}</p>
+  `
+
+  return {
+    subject: t('subject'),
+    html: shell({
+      preheader: t('preheader'),
+      accent,
+      title: t('title'),
+      subtitle: 'יריד הספרים',
       body,
     }),
   }

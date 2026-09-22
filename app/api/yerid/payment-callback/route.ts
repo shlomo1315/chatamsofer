@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { getPaymentProvider, sanitizeProviderResponse } from '@/lib/payments'
 import { amountMatches } from '@/lib/bookFairPricing'
+import { deliverMail } from '@/lib/sendMail'
+import { mailFor } from '@/lib/departments'
+import { bookFairOrderConfirmedEmail } from '@/lib/emailTemplates'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
+import { oneOf } from '@/types/bookFair'
 
 // דיווח תשלום מספק הסליקה — הנקודה היחידה שבה הזמנה מסומנת כשולמה.
 //
@@ -28,8 +33,10 @@ async function handle(raw: Record<string, unknown>) {
     return NextResponse.json({ error: 'דיווח לא תקין' }, { status: 400 })
   }
 
+  // ⚠️ נשלפים גם שדות הלקוח והמשלוח — הם דרושים למייל האישור בהמשך,
+  // ושליפה שנייה שם הייתה מרוץ מול עדכון הסטטוס.
   const { data: order } = await db.from('book_fair_orders')
-    .select('id, order_number, status, total_agorot')
+    .select('id, order_number, status, total_agorot, items_total_agorot, shipping_agorot, customer_name, customer_email, delivery_method, address_text, tracking_token, city:book_fair_cities(name)')
     .eq('id', verified.orderId).maybeSingle()
 
   if (!order) {
@@ -107,6 +114,61 @@ async function handle(raw: Record<string, unknown>) {
     .select('cart_token').eq('order_id', order.id).eq('status', 'held').limit(1)
   if (res?.[0]) {
     await db.rpc('book_fair_consume', { p_cart_token: res[0].cart_token, p_order_id: order.id })
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // ── מייל אישור ללקוח ──
+  //
+  // 🔴 הטופס בחנות מבטיח "לקבלת אישור וקישור למעקב", והאימייל נשמר —
+  // אך עד היום איש לא שלח אליו דבר.
+  //
+  // ⚠️ כאן ולא בצ'קאאוט: הזמנה שנוצרה וטרם שולמה אינה מאושרת. וכאן
+  // *אחרי* ה-update המותנה, שהוא הנקודה היחידה שמתרחשת פעם אחת בדיוק
+  // להזמנה — דיווח כפול מהספק לא ישלח מייל שני.
+  //
+  // ⚠️ אינו חוסם את התשובה לספק: ספק שאינו מקבל 200 מהר מדווח שוב,
+  // ושליחת מייל אינה סיבה להזמין דיווח חוזר. כשל במייל אינו הופך
+  // תשלום שהתקבל לכישלון.
+  // ─────────────────────────────────────────────────────────────────────────
+  if (order.customer_email) {
+    const to = order.customer_email as string
+    void (async () => {
+      // ⚠️ לפני בניית התבנית ולא לפני השליחה: התבנית קוראת את הטקסטים
+      // הערוכים סינכרונית, וטעינה מאוחרת הייתה מרעננת מטמון שכבר שימש.
+      await ensureEmailTexts()
+
+      const { data: items } = await db.from('book_fair_order_items')
+        .select('title_snapshot, quantity, line_total_agorot')
+        .eq('order_id', order.id)
+
+      const mail = bookFairOrderConfirmedEmail({
+        orderNumber: order.order_number as string,
+        customerName: order.customer_name as string | null,
+        items: (items ?? []).map((i: { title_snapshot: string; quantity: number; line_total_agorot: number }) => ({
+          title: i.title_snapshot, quantity: i.quantity, lineTotalAgorot: i.line_total_agorot,
+        })),
+        itemsTotalAgorot: order.items_total_agorot as number,
+        shippingAgorot: order.shipping_agorot as number,
+        totalAgorot: order.total_agorot as number,
+        deliveryMethod: order.delivery_method === 'pickup' ? 'pickup' : 'shipping',
+        address: order.address_text as string | null,
+        // ⚠️ join של Supabase מגיע כמערך או כאובייקט — oneOf מנרמל.
+        cityName: oneOf(order.city as { name: string } | { name: string }[] | null)?.name ?? null,
+        // ⚠️ הטוקן נשלף ואינו נחתם מחדש: הוא כבר נוצר בצ'קאאוט ונשמר.
+        trackingToken: order.tracking_token as string | null,
+      })
+
+      // transactional: אישור הזמנה אינו דיוור — בלי מעקב פתיחות
+      // ובלי List-Unsubscribe, שרק היו פוגעים במסירה.
+      const sent = await deliverMail(to, mail.subject, mail.html, undefined, {
+        ...mailFor('yerid'), transactional: true,
+      })
+      if (!sent.ok) {
+        console.error(`[fair/callback] מייל אישור להזמנה ${order.order_number} נכשל:`, sent.error)
+      }
+    })().catch(err => {
+      console.error(`[fair/callback] בניית מייל האישור נכשלה (${order.order_number}):`, err)
+    })
   }
 
   return NextResponse.json({ ok: true, status: 'paid', orderNumber: order.order_number })
