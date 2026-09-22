@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, GitBranch, Baby, CreditCard, Gift,
   BarChart3, Settings, Menu, X, Building2, Trees, HeartHandshake,
-  Mail, ChevronDown, ChevronUp, UtensilsCrossed, HandCoins, Heart, Send, Star, ShieldAlert, PhoneCall,
+  Mail, ChevronDown, ChevronUp, UtensilsCrossed, HandCoins, Heart, Send, Star, ShieldAlert, PhoneCall, BookOpen,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { UserPermissions, SectionKey, UserRole } from '@/types'
@@ -68,6 +68,7 @@ const navBottom: NavItem[] = [
   { href: '/admin/widows',        label: 'אלמנות ויתומים', icon: HeartHandshake, section: 'widows' },
   { href: '/admin/reports',       label: 'דוחות',          icon: BarChart3,      section: 'reports' },
   { href: '/admin/newsletter',    label: 'ניוזלטר',        icon: Send,           section: 'newsletter' },
+  { href: '/admin/book-fair',     label: 'יריד ספרים',     icon: BookOpen,       section: 'book_fair' },
 ]
 
 const bottomItems: { href: string; label: string; icon: React.ElementType }[] = [
