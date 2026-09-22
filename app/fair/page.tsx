@@ -48,8 +48,11 @@ async function getData() {
     books: rows.map(({ stock_web, ...b }) => ({ ...b, in_stock: stock_web > 0 })),
     cities: (cities ?? []) as PublicCity[],
     tiers: (tiers ?? []) as PublicTier[],
-    // ⚠️ ברירת המחדל היא פתוח: הגדרה חסרה לא תשבית חנות שעובדת.
-    open: gate?.value !== 'false',
+    // 🔴 ברירת המחדל היא *סגור*: מפתח חסר פירושו שאיש לא פתח את היריד
+    // עדיין, ופתיחה מכללא הייתה חושפת קטלוג שטרם הוכן ומקבלת הזמנות
+    // על מלאי שלא נבדק. חייב להיות זהה לבדיקה ב-api/fair/checkout,
+    // אחרת המסך יציג "סגור" בעוד ההזמנות מתקבלות.
+    open: String(gate?.value ?? '') === 'true',
   }
 }
 

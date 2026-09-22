@@ -39,9 +39,12 @@ export async function POST(request: NextRequest) {
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה שגויה' }, { status: 400 }) }
 
   // ── האם היריד פתוח ──
+  // 🔴 ברירת המחדל *סגור*, וחייבת להיות זהה לזו שבדף החנות: מפתח חסר
+  // פירושו שאיש לא פתח את היריד. פער בין השניים היה מציג "סגור" ללקוח
+  // בעוד השרת מקבל הזמנות — או להפך.
   const { data: gate } = await db.from('app_settings')
     .select('value').eq('key', 'book_fair_open').maybeSingle()
-  if (gate && gate.value === 'false') {
+  if (String(gate?.value ?? '') !== 'true') {
     return NextResponse.json({ error: 'היריד סגור כרגע להזמנות' }, { status: 403 })
   }
 

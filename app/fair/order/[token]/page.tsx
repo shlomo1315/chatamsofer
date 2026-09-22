@@ -4,7 +4,7 @@ import { verifyPublicToken } from '@/lib/publicToken'
 import { getServiceClient } from '@/lib/apiAuth'
 import { fmtAgorot } from '@/lib/bookFairPricing'
 import {
-  BOOK_FAIR_DELIVERY_LABELS,
+  BOOK_FAIR_DELIVERY_LABELS, oneOf,
   type BookFairOrderStatus,
 } from '@/types/bookFair'
 
@@ -66,7 +66,7 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
   const view = CUSTOMER_VIEW[status] ?? CUSTOMER_VIEW.pending_payment
   const Icon = view.icon
   // ⚠️ join של Supabase מגיע כמערך או כאובייקט, תלוי בהקשר — שתי הצורות
-  const city = Array.isArray(order.city) ? order.city[0] : order.city
+  const city = oneOf(order.city)
 
   return (
     <main className="mx-auto max-w-2xl px-5 py-8">

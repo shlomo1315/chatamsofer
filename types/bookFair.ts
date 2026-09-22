@@ -122,7 +122,21 @@ export interface BookFairOrder {
   updated_at: string
   // joins אופציונליים
   items?: BookFairOrderItem[]
-  city?: BookFairCity | null
+  /**
+   * 🔴 שתי הצורות במכוון: join של Supabase מוטפס כמערך גם ביחס
+   * רבים-לאחד, ומגיע בפועל פעם כאובייקט ופעם כמערך, תלוי בהקשר.
+   *
+   * ⚠️ הרחבת הטיפוס ולא `as unknown as` בצרכן: ההמרה הכפויה מסתירה
+   * את אי-ההתאמה במקום לטפל בה, וכבר הפילה במערכת פעולה אחת בשקט.
+   * מי שקורא בשדה חייב לנרמל: `Array.isArray(x) ? x[0] : x`.
+   */
+  city?: BookFairCity | BookFairCity[] | null
+}
+
+/** נרמול join שעשוי להגיע כמערך או כאובייקט יחיד. */
+export function oneOf<T>(v: T | T[] | null | undefined): T | null {
+  if (!v) return null
+  return Array.isArray(v) ? (v[0] ?? null) : v
 }
 
 export interface BookFairReservation {
