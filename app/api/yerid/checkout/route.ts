@@ -207,7 +207,7 @@ export async function POST(request: NextRequest) {
     customerName: String(body.customer_name ?? ''),
     customerEmail: String(body.customer_email ?? '') || null,
     customerPhone: String(body.customer_phone ?? ''),
-    returnUrl: `${origin}/fair/order/${trackingToken}`,
+    returnUrl: `${origin}/yerid/order/${trackingToken}`,
     description: `יריד ספרים — הזמנה ${order.order_number}`,
   })
 

@@ -138,7 +138,7 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
 
       <p className="text-center text-base text-stone-500">
         שמרו את הקישור לצפייה בהזמנה בכל עת ·{' '}
-        <Link href="/fair" className="font-medium text-[#1E3A5F] underline">חזרה ליריד</Link>
+        <Link href="/yerid" className="font-medium text-[#1E3A5F] underline">חזרה ליריד</Link>
       </p>
     </main>
   )
@@ -152,7 +152,7 @@ function Invalid() {
       <p className="text-lg text-stone-600">
         ייתכן שהקישור הועתק חלקית או שפג תוקפו.
       </p>
-      <Link href="/fair" className="mt-2 rounded-xl bg-[#1E3A5F] px-6 py-3 text-lg font-semibold text-white">
+      <Link href="/yerid" className="mt-2 rounded-xl bg-[#1E3A5F] px-6 py-3 text-lg font-semibold text-white">
         לחזרה ליריד
       </Link>
     </main>

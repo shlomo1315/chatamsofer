@@ -15,7 +15,7 @@ type CartLine = { book: PublicBook; quantity: number }
 
 const CART_KEY = 'book_fair_cart_v1'
 
-export default function FairStore({ books, cities, tiers, open }: {
+export default function YeridStore({ books, cities, tiers, open }: {
   books: PublicBook[]; cities: PublicCity[]; tiers: PublicTier[]; open: boolean
 }) {
   const [query, setQuery] = useState('')
@@ -286,7 +286,7 @@ function CartPanel({ lines, cities, tiers, onClose, onSetQty }: {
     setError('')
     setBusy(true)
     try {
-      const res = await fetch('/api/fair/checkout', {
+      const res = await fetch('/api/yerid/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

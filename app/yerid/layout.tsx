@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description: 'הזמנת ספרים מיריד הספרים',
 }
 
-export default function FairLayout({ children }: { children: React.ReactNode }) {
+export default function YeridLayout({ children }: { children: React.ReactNode }) {
   return (
     <div dir="rtl" className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
       {children}

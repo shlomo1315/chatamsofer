@@ -62,7 +62,7 @@ describe('ספק מדומה', () => {
     const r = await p.createCharge({ orderId: 'o1', orderNumber: 'BF-26-ABC123', amountAgorot: 12000 })
     expect(r.ok).toBe(true)
     expect(r.transactionId).toMatch(/^MOCK-/)
-    expect(r.redirectUrl).toContain('/fair/mock-payment')
+    expect(r.redirectUrl).toContain('/yerid/mock-payment')
   })
 
   it('דוחה סכום אפס', async () => {

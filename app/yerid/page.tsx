@@ -1,6 +1,6 @@
 import { getServiceClient } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
-import FairStore from './FairStore'
+import FairStore from './YeridStore'
 
 // חנות יריד הספרים.
 //
@@ -50,7 +50,7 @@ async function getData() {
     tiers: (tiers ?? []) as PublicTier[],
     // 🔴 ברירת המחדל היא *סגור*: מפתח חסר פירושו שאיש לא פתח את היריד
     // עדיין, ופתיחה מכללא הייתה חושפת קטלוג שטרם הוכן ומקבלת הזמנות
-    // על מלאי שלא נבדק. חייב להיות זהה לבדיקה ב-api/fair/checkout,
+    // על מלאי שלא נבדק. חייב להיות זהה לבדיקה ב-api/yerid/checkout,
     // אחרת המסך יציג "סגור" בעוד ההזמנות מתקבלות.
     open: String(gate?.value ?? '') === 'true',
   }

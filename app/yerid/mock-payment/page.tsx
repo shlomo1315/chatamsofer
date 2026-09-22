@@ -19,13 +19,13 @@ function MockPaymentInner() {
   const txn = params.get('txn') ?? ''
   const order = params.get('order') ?? ''
   const amount = Number(params.get('amount') ?? 0)
-  const returnUrl = params.get('return') ?? '/fair'
+  const returnUrl = params.get('return') ?? '/yerid'
 
   async function pay(result: 'ok' | 'fail') {
     setBusy(result)
     try {
       // מדמה את הדיווח שהספק שולח לשרת שלנו
-      await fetch('/api/fair/payment-callback', {
+      await fetch('/api/yerid/payment-callback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ txn, order, amount, result: result === 'fail' ? 'fail' : 'ok' }),

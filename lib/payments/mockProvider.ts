@@ -56,7 +56,7 @@ export class MockPaymentProvider implements PaymentProvider {
       ...(req.returnUrl ? { return: req.returnUrl } : {}),
     })
 
-    return { ok: true, transactionId, redirectUrl: `/fair/mock-payment?${params}` }
+    return { ok: true, transactionId, redirectUrl: `/yerid/mock-payment?${params}` }
   }
 
   async verifyCallback(raw: Record<string, unknown>): Promise<VerifiedCharge | null> {
