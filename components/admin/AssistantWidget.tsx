@@ -40,9 +40,23 @@ export default function AssistantWidget() {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [activity, setActivity] = useState('')   // מה העוזר עושה כרגע
+  // ⚠️ state ולא ref: התצוגה צריכה להתעדכן כשמצטרפת שאלה לתור, ושינוי ref
+  // אינו מפעיל רינדור — הסימון היה נשאר על 0.
+  const [queued, setQueued] = useState(0)
 
   const endRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  // ⚠️ ref ולא state: send נקראת שוב מתוך עצמה בסוף (עיבוד התור), ו-busy
+  // מתוך state היה הערך שנתפס בקריאה הקודמת — כלומר שתי בקשות במקביל.
+  const busyRef = useRef(false)
+  /** שאלות שנשלחו בזמן שהעוזר עונה, לפי סדר ההקלדה. */
+  const queueRef = useRef<string[]>([])
+  /**
+   * מזהה השיחה הנוכחית. "שיחה חדשה" או סגירה מקדמות אותו, וכל בקשה
+   * שנפתחה לפני כן מפסיקה לכתוב למצב — אחרת תשובה שאיחרה הייתה נוחתת
+   * בתוך שיחה שכבר אופסה.
+   */
+  const runIdRef = useRef(0)
 
   useEffect(() => {
     if (open) inputRef.current?.focus()
@@ -57,6 +71,18 @@ export default function AssistantWidget() {
     setMsgs([])
     setInput('')
     setErr('')
+    // 🔴 גם התור מתרוקן, ולא רק ההודעות: בלעדיו שאלה שהמתינה מהשיחה
+    // הקודמת הייתה נשלחת אל תוך השיחה החדשה — שאלה שהמשתמש כבר ויתר
+    // עליה, בשיחה שאמורה להתחיל נקייה.
+    queueRef.current = []
+    setQueued(0)
+    // ⚠️ הבקשה שרצה כרגע אינה ניתנת לביטול, אך תשובתה כבר אינה שייכת
+    // לשיחה הזו. קידום המונה גורם ל-finally ולמאזיני הזרם להתעלם ממנה,
+    // אחרת תשובה ישנה הייתה נוחתת בתוך שיחה נקייה.
+    runIdRef.current++
+    busyRef.current = false
+    setBusy(false)
+    setActivity('')
     inputRef.current?.focus()
   }
 
@@ -68,15 +94,50 @@ export default function AssistantWidget() {
 
   const send = async (text: string) => {
     const q = text.trim()
-    if (!q || busy) return
+    if (!q) return
 
-    const next: Msg[] = [...msgs, { role: 'user', content: q }]
-    setMsgs(next)
+    // ─────────────────────────────────────────────────────────────────────────
+    // 🔴 אפשר להקליד ולשלוח גם בזמן שהעוזר עונה.
+    //
+    // ⚠️ עד כה שדה הקלט והכפתור היו disabled כל זמן ש-busy, ו-send יצאה
+    // מיד ב-return. שאלת המשך נבלעה בשקט: מי שהקליד בזמן התשובה לא קיבל
+    // שום סימן שדבר לא נשלח.
+    //
+    // 🔴 השאלה החדשה נכנסת לתור ולא נשלחת במקביל: השרת מקבל את כל
+    // ההיסטוריה בכל קריאה, ושתי בקשות בו-זמנית היו נשלחות עם אותה
+    // היסטוריה בדיוק — כלומר התשובה השנייה מתעלמת מהראשונה, ושני
+    // setMsgs מתחרים על אותו מצב. התור שומר על סדר השיחה.
+    // ─────────────────────────────────────────────────────────────────────────
+    if (busyRef.current) {
+      setMsgs(m => [...m, { role: 'user', content: q }])
+      queueRef.current.push(q)
+      setQueued(queueRef.current.length)
+      setInput('')
+      return
+    }
+
+    busyRef.current = true
+    const runId = runIdRef.current   // השיחה שאליה התשובה הזו שייכת
+    // ⚠️ ההיסטוריה נקראת מתוך ה-setState העדכני ולא מ-msgs שנתפס בסגירה:
+    // שאלה שהמתינה בתור נשלחת אחרי ששתי ההודעות כבר נכנסו למצב, ושימוש
+    // ב-msgs הישן היה שולח לשרת שיחה חסרה.
+    let next: Msg[] = []
+    setMsgs(m => {
+      const already = m.length > 0 && m[m.length - 1].role === 'user'
+        && m[m.length - 1].content === q
+      next = already ? m : [...m, { role: 'user', content: q }]
+      return next
+    })
     setInput('')
     setBusy(true)
     setErr('')
 
     setActivity('עוזר חושב…')
+
+    // האם הבקשה עדיין שייכת לשיחה הפתוחה. אחרי "שיחה חדשה" או סגירה
+    // התשובה נזרקת במקום להיכתב לתוך שיחה אחרת.
+    const live = () => runIdRef.current === runId
+    let failed = false
 
     try {
       const res = await fetch('/api/admin/assistant', {
@@ -88,10 +149,11 @@ export default function AssistantWidget() {
       // שגיאות (401/429/503) חוזרות כ-JSON רגיל, לא כזרם
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
-        setErr(d.error ?? 'שגיאה')
+        failed = true
+        if (live()) setErr(d.error ?? 'שגיאה')
         return
       }
-      if (!res.body) { setErr('שגיאת תקשורת'); return }
+      if (!res.body) { failed = true; if (live()) setErr('שגיאת תקשורת'); return }
 
       // NDJSON — שורה לכל אירוע. מציג את פעילות העוזר בזמן אמת.
       const reader = res.body.getReader()
@@ -101,6 +163,8 @@ export default function AssistantWidget() {
       for (;;) {
         const { done, value } = await reader.read()
         if (done) break
+        // השיחה אופסה תוך כדי — מפסיקים לקרוא במקום להמשיך לכתוב אליה.
+        if (!live()) { void reader.cancel().catch(() => {}); break }
         buf += decoder.decode(value, { stream: true })
 
         const lines = buf.split('\n')
@@ -115,14 +179,50 @@ export default function AssistantWidget() {
           else if (ev.type === 'reply') {
             setMsgs(m => [...m, { role: 'assistant', content: ev.text ?? '' }])
           }
-          else if (ev.type === 'error') setErr(ev.text ?? 'שגיאה')
+          else if (ev.type === 'error') { failed = true; setErr(ev.text ?? 'שגיאה') }
         }
       }
     } catch {
-      setErr('שגיאת תקשורת — נסה שוב')
+      failed = true
+      if (live()) setErr('שגיאת תקשורת — נסה שוב')
     } finally {
-      setBusy(false)
-      setActivity('')
+      // השיחה אופסה תוך כדי — reset כבר שחרר את המצב ובעליו הם הריצה
+      // החדשה. נגיעה כאן הייתה מדליקה ספינר על שיחה נקייה.
+      if (live()) {
+        setBusy(false)
+        setActivity('')
+        busyRef.current = false
+
+        // ── השאלה הבאה בתור ──
+        // ⚠️ רק אחרי ש-busyRef שוחרר, אחרת הקריאה החוזרת תזהה "עסוק" ותחזיר
+        // את השאלה לתור — לולאה שקטה שבה שום דבר אינו נשלח.
+        //
+        // 🔴 שגיאה עוצרת את התור ואינה שולפת ממנו: המשך אוטומטי היה מוחק
+        // את הודעת השגיאה (setErr('') בראש send) לפני שהמשתמש הספיק
+        // לקרוא אותה, ובכשל מתמשך — 429 למשל — היה יורה את כל התור אל
+        // תוך אותו קיר. השאלות נשארות על המסך; המשתמש בוחר אם לשלוח שוב.
+        let nextQ: string | undefined
+        if (failed) {
+          // 🔴 התור נזרק ולא נשמר: שאלה שנשארת בו אינה ניתנת לשליפה בשום
+          // מסלול — אין כפתור "נסה שוב" — והמונה היה מצהיר "ממתינה" על
+          // שאלה שלעולם לא תישלח. המשתמש מקבל אמירה מפורשת כמה נבלעו,
+          // וההודעות עצמן נשארות על המסך כדי שיוכל לשלוח שוב בהקלקה.
+          const dropped = queueRef.current.length
+          queueRef.current = []
+          if (dropped > 0) {
+            setErr(e => `${e || 'שגיאה'} · ${dropped === 1
+              ? 'השאלה הנוספת לא נשלחה'
+              : `${dropped} השאלות הנוספות לא נשלחו`}`)
+          }
+        } else {
+          nextQ = queueRef.current.shift()
+        }
+        // ⚠️ המונה נגזר מאורך התור בכל מסלול, כולל עצירה בשגיאה. בלי זה
+        // הסימון "שאלה נוספת ממתינה" היה נתקע על ערך ישן לנצח.
+        setQueued(queueRef.current.length)
+        if (nextQ) void send(nextQ)
+        else inputRef.current?.focus()
+      }
     }
   }
 
@@ -254,7 +354,16 @@ export default function AssistantWidget() {
             {busy && (
               <div className="self-end flex items-center gap-2 bg-white border border-slate-200 rounded-2xl rounded-bl-md px-3.5 py-2.5 max-w-[90%]">
                 <Loader2 size={14} className="animate-spin text-indigo-500 shrink-0" />
-                <span className="text-sm text-slate-500">{activity || 'עוזר עובד…'}</span>
+                <span className="text-sm text-slate-500">
+                  {activity || 'עוזר עובד…'}
+                  {/* ⚠️ שאלה שממתינה בתור נאמרת במפורש: בלי זה מי שהקליד
+                      שאלה נוספת רואה אותה על המסך ואינו יודע אם היא נשלחה. */}
+                  {queued > 0 && (
+                    <span className="text-slate-400">
+                      {' · '}{queued === 1 ? 'שאלה נוספת ממתינה' : `${queued} שאלות ממתינות`}
+                    </span>
+                  )}
+                </span>
               </div>
             )}
 
@@ -276,13 +385,14 @@ export default function AssistantWidget() {
               ref={inputRef}
               value={input}
               onChange={e => setInput(e.target.value)}
-              placeholder="שאל שאלה על המערכת..."
-              disabled={busy}
-              className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 focus:bg-white transition-all disabled:opacity-60"
+              // ⚠️ אינו disabled בזמן תשובה: שאלת המשך נכנסת לתור ונשלחת
+              // כשהתשובה הנוכחית מסתיימת. חסימת השדה בלעה שאלות בשקט.
+              placeholder={busy ? 'אפשר לכתוב שאלה נוספת…' : 'שאל שאלה על המערכת...'}
+              className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 focus:bg-white transition-all"
             />
             <button
               type="submit"
-              disabled={busy || !input.trim()}
+              disabled={!input.trim()}
               className="w-10 h-10 shrink-0 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Send size={16} />
