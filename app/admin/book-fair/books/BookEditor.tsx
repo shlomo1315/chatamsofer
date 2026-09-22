@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { X, Loader2 } from 'lucide-react'
 import type { BookFairBook } from '@/types/bookFair'
-import { agorotToShekels } from '@/lib/bookFairPricing'
+import { agorotToShekels, bookImageUrl } from '@/lib/bookFairPricing'
 
 // עורך ספר — יצירה ועריכה.
 //
@@ -34,6 +34,41 @@ export default function BookEditor({ book, onClose, onSaved }: {
   })
 
   const set = (k: keyof typeof form, v: string | boolean) => setForm(f => ({ ...f, [k]: v }))
+
+  // ── תמונת כריכה ──
+  const [imgUrl, setImgUrl] = useState<string | null>(bookImageUrl(book?.image_path))
+  const [imgBusy, setImgBusy] = useState(false)
+
+  async function uploadImage(file: File) {
+    if (!book) return
+    setImgBusy(true); setError('')
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch(`/api/admin/book-fair/books/${book.id}/image`, { method: 'POST', body: fd })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(json.error ?? 'העלאת התמונה נכשלה'); return }
+      // ⚠️ הכתובת מהשרת ולא נתיב שנבנה בלקוח: שם הקובץ נקבע בשרת
+      // (חותמת זמן ייחודית, כדי שהחלפה לא תציג את הישנה מהמטמון).
+      setImgUrl(json.url)
+    } catch {
+      setError('העלאת התמונה נכשלה')
+    } finally {
+      setImgBusy(false)
+    }
+  }
+
+  async function removeImage() {
+    if (!book) return
+    setImgBusy(true); setError('')
+    try {
+      const res = await fetch(`/api/admin/book-fair/books/${book.id}/image`, { method: 'DELETE' })
+      if (!res.ok) { setError('הסרת התמונה נכשלה'); return }
+      setImgUrl(null)
+    } finally {
+      setImgBusy(false)
+    }
+  }
 
   async function save() {
     setError('')
@@ -125,6 +160,45 @@ export default function BookEditor({ book, onClose, onSaved }: {
               המלאי נערך במסך המלאי, כדי שכל תנועה תירשם ביומן.
               כרגע: <b>{book!.stock_web}</b> באתר, <b>{book!.stock_phone}</b> בטלפון.
             </p>
+          )}
+
+          {/* ── תמונת כריכה ──
+              ⚠️ זמינה רק בעריכה ולא ביצירה: ההעלאה דורשת מזהה ספר
+              קיים כדי לשייך אליו את הקובץ. */}
+          {!isNew && (
+            <div className="sm:col-span-2 flex flex-col gap-2 rounded-xl border border-slate-200 p-4">
+              <span className="text-sm font-medium text-slate-700">תמונת כריכה</span>
+              <div className="flex items-start gap-4">
+                {imgUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={imgUrl} alt="" className="h-28 w-20 rounded border border-slate-200 object-contain" />
+                ) : (
+                  <div className="flex h-28 w-20 items-center justify-center rounded border border-dashed border-slate-300 text-xs text-slate-400">
+                    אין
+                  </div>
+                )}
+                <div className="flex flex-col gap-2">
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) uploadImage(f) }}
+                    disabled={imgBusy}
+                    className="text-sm file:ml-2 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:text-slate-700"
+                  />
+                  <span className="text-xs text-slate-400">JPG, PNG או WEBP · עד 5MB</span>
+                  {imgUrl && (
+                    <button
+                      onClick={removeImage}
+                      disabled={imgBusy}
+                      className="self-start text-xs text-red-600 hover:underline disabled:opacity-50"
+                    >
+                      הסרת התמונה
+                    </button>
+                  )}
+                  {imgBusy && <span className="text-xs text-indigo-600">מעלה…</span>}
+                </div>
+              </div>
+            </div>
           )}
 
           <label className="sm:col-span-2 flex items-center gap-2 text-sm text-slate-700">

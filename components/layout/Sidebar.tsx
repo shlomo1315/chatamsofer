@@ -134,7 +134,23 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
   // מריץ. קודם הייתה כאן ברירת מחדל מתירנית משלה ("ללא סימון = גלוי"), ולכן
   // הסרגל הציג מחלקות שהמשתמש מעולם לא הורשה אליהן.
   const canSee = (section?: SectionKey) => sectionVisible(!!isAdmin, role, permissions, section)
-  const topVisible = navTop.filter(i => canSee(i.section))
+
+  // 🔴 לוח הבקרה מוסתר ממי שיש לו מחלקה אחת בלבד.
+  //
+  // הוא פריט ללא section ולכן היה גלוי לכולם — ומי שהורשה למחלקה אחת
+  // בלבד ראה בתפריט "לוח בקרה" שמוביל למסך ריק עם "לא הוגדרו לך
+  // מחלקות". מבחינתו זה נראה כמו תקלה, לא כמו הרשאה מכוונת.
+  //
+  // ⚠️ ההכרעה נעשית גם בשרת (app/admin/dashboard/page.tsx מפנה למחלקה
+  // היחידה). כאן רק מסירים את הפריט מהתפריט — הסתרה בתפריט לבדה
+  // אינה הגנה, והפניה בשרת לבדה משאירה פריט שמוביל להפניה.
+  const deptCount = [
+    ...navTop.filter(i => i.section), ...navBottom, ...maternityChildren,
+  ].filter(i => canSee(i.section)).length
+
+  const topVisible = navTop.filter(i =>
+    i.section ? canSee(i.section) : (isAdmin || deptCount !== 1)
+  )
   const bottomVisible = navBottom.filter(i => canSee(i.section))
   const maternityVisible = maternityChildren.filter(c => canSee(c.section))
 

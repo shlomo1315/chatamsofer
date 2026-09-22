@@ -246,6 +246,32 @@ export default async function DashboardPage() {
   ]
   const anyDept = DEPT_SECTIONS.some(can)
 
+  // ── משתמש של מחלקה אחת — ישר אליה ─────────────────────────────────────
+  //
+  // 🔴 מי שהורשה למחלקה *אחת בלבד* נחת כאן על לוח בקרה ריק עם ההודעה
+  // "לא הוגדרו לך מחלקות". מבחינתו זו תקלה: הוא קיבל גישה, ורואה מסך
+  // שאומר שאין לו כלום. הפנייה ישירה למחלקה שלו הופכת את הכניסה
+  // למה שהיא באמת — הוא נוחת בעבודה שלו.
+  //
+  // ⚠️ מנהל לעולם אינו מופנה: הוא רואה הכול, ולוח הבקרה הוא המסך שלו.
+  // ⚠️ רק כשיש בדיוק אחת: שתיים ומעלה — הלוח הוא המקום הנכון לבחור.
+  if (staff.role !== 'admin') {
+    const HOME: Partial<Record<SectionKey, string>> = {
+      book_fair:     '/admin/book-fair',
+      beneficiaries: '/admin/beneficiaries',
+      lineage:       '/admin/lineage',
+      loans:         '/admin/loans',
+      financial_aid: '/admin/financial-aid',
+      distributions: '/admin/distributions',
+      widows:        '/admin/widows',
+      maternity:     '/admin/maternity/recovery',
+      newsletter:    '/admin/newsletter',
+      reports:       '/admin/reports',
+    }
+    const allowed = (Object.keys(HOME) as SectionKey[]).filter(can)
+    if (allowed.length === 1) redirect(HOME[allowed[0]]!)
+  }
+
   const cached = await getStats()
   // ⚠️ מלאי הכרטיסים נקרא *מחוץ* למטמון, בכל טעינה. הספירות הכבדות יכולות
   // להיות בנות חמש שניות, אבל המלאי לא: כשהדשבורד הציג 251 ומסך הכרטיסים 250,

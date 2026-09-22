@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { X, Loader2, UserPlus, Check, AlertTriangle, Eye, EyeOff } from 'lucide-react'
+import { X, Loader2, UserPlus, Check, AlertTriangle } from 'lucide-react'
 import EmailInput from '@/components/ui/EmailInput'
 import { ROLE_LABELS, type UserRole, type SectionKey, type PermissionLevel, type UserPermissions } from '@/types'
 import { ALL_SECTIONS } from '@/lib/permissions'
@@ -33,12 +33,12 @@ export default function AddUserButton() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
-  const [showPw, setShowPw] = useState(false)
+
 
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('')
-  const [password, setPassword] = useState('')
+
+
   const [role, setRole] = useState<UserRole>('secretary')
   const [permissions, setPermissions] = useState<UserPermissions>(defaultPerms())
 
@@ -66,9 +66,9 @@ export default function AddUserButton() {
   const isAdmin = role === 'admin'
 
   const reset = () => {
-    setFullName(''); setEmail(''); setPhone(''); setPassword(''); setRole('secretary')
+    setFullName(''); setEmail(''); setRole('secretary')
     setPermissions(defaultPerms())
-    setError(''); setDone(false); setShowPw(false)
+    setError(''); setDone(false)
     setMailAccount(''); setMailLabelIds([])
   }
 
@@ -81,7 +81,7 @@ export default function AddUserButton() {
       const res = await fetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ full_name: fullName, email, phone, password, role, permissions: isAdmin ? {} : permissions, mail_account: mailAccount || null, mail_label_ids: mailLabelIds }),
+        body: JSON.stringify({ full_name: fullName, email, role, permissions: isAdmin ? {} : permissions, mail_account: mailAccount || null, mail_label_ids: mailLabelIds }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? 'שגיאה ביצירת המשתמש'); setSaving(false); return }
@@ -127,22 +127,15 @@ export default function AddUserButton() {
                   <EmailInput value={email} onChange={setEmail}
                     inputClassName="text-left" />
                 </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-600">טלפון <span className="text-red-500">*</span></label>
-                  <input value={phone} onChange={e => setPhone(e.target.value)}
-                    placeholder="05X-XXXXXXX" dir="ltr"
-                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-600">סיסמה <span className="font-normal text-slate-400">(אופציונלי — לכניסה עם Google השאר ריק)</span></label>
-                  <div className="relative">
-                    <input type={showPw ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} dir="ltr"
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 pl-9 text-sm text-left focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                    <button type="button" onClick={() => setShowPw(v => !v)} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                      {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
-                    </button>
-                  </div>
-                </div>
+                {/* ⚠️ טלפון וסיסמה הוסרו מהטופס במכוון.
+                    הכניסה לניהול היא Google בלבד (ראו admin-login-google-only):
+                    הסיסמה אינה משמשת לכניסה, והטלפון היה שדה *חובה* שחסם
+                    יצירת משתמש בלי שיש בו שימוש.
+                    ⚠️ השדות עצמם נשמרו בשרת ובמסך העריכה — רק טופס היצירה
+                    נוקה, כדי לא לשבור משתמשים קיימים שיש להם טלפון. */}
+                <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                  הכניסה למערכת מתבצעת עם חשבון Google של האימייל שהוזן.
+                </p>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-slate-600">תפקיד <span className="text-red-500">*</span></label>
                   <div className="grid grid-cols-2 gap-2">
@@ -256,7 +249,7 @@ export default function AddUserButton() {
 
                 <div className="flex gap-2 justify-end mt-1">
                   <button onClick={close} disabled={saving} className="px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50">ביטול</button>
-                  <button onClick={submit} disabled={saving || !fullName.trim() || !email.trim() || !phone.trim() || (password.length > 0 && password.length < 6)}
+                  <button onClick={submit} disabled={saving || !fullName.trim() || !email.trim()}
                     className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
                     {saving ? <Loader2 size={15} className="animate-spin" /> : <UserPlus size={15} />} צור משתמש
                   </button>

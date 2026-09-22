@@ -152,3 +152,21 @@ export function cartTotals(lines: CartLineInput[], shippingAgorot: number): Cart
 export function amountMatches(chargedAgorot: number, orderTotalAgorot: number): boolean {
   return Math.round(chargedAgorot) === Math.round(orderTotalAgorot)
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// תמונת כריכה
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * כתובת ציבורית לתמונת כריכה, או null כשאין תמונה.
+ *
+ * ⚠️ נבנית מכתובת Supabase ולא נשמרת במסד: כתובת מלאה שנשמרת בשורה
+ * הופכת שגויה ברגע שהפרויקט עובר או שהדומיין משתנה, והתמונות נשברות
+ * בשקט בכל הקטלוג.
+ */
+export function bookImageUrl(imagePath: string | null | undefined): string | null {
+  if (!imagePath) return null
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!base) return null
+  return `${base}/storage/v1/object/public/book-fair-images/${imagePath}`
+}
