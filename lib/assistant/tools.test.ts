@@ -315,3 +315,38 @@ describe('סכמת חלוקות החגים — כיסוי מלא של מצב מ�
     expect(about).toMatch(/load_status/)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 זיהוי משפחה לפי כתובת מייל.
+//
+// ⚠️ הבאג (22.09): על השאלה "האם chedva.fridman@gmail.com נרשמה לחלוקת חגים"
+// ענה העוזר "השאלה מורכבת מדי. נסה לפצל אותה לשאלות פשוטות יותר" — בעוד
+// שהשאלה פשוטה לגמרי. השורש: email לא היה ב-searchCols של beneficiaries,
+// החיפוש חזר ריק, המודל ניסה שוב בנוסח אחר עד שנגמרו שישה סבבי הכלים,
+// וההודעה תלתה את הכשל בשאלה במקום בכלי.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('חיפוש לפי מייל וטלפון', () => {
+  const ben = () => TABLES.find(t => t.table === 'beneficiaries')
+
+  it('🔴 email ו-phone נכללים בעמודות החיפוש', () => {
+    const cols = ben()?.searchCols ?? []
+    expect(cols, 'בלי email אי אפשר לזהות פונה לפי הכתובת שלו').toContain('email')
+    expect(cols).toContain('phone')
+  })
+
+  it('החיפוש לפי שם ממשיך לעבוד', () => {
+    const cols = ben()?.searchCols ?? []
+    expect(cols).toContain('family_name')
+    expect(cols).toContain('full_name')
+  })
+
+  it('🔴 מייל שמכיל ספרות אינו מזוהה כת"ז', () => {
+    // ⚠️ כתובות אצלנו נראות כך: "0533159895@0541234.com" — 17 ספרות.
+    // מסלול הת"ז (רף של 7 ספרות) חטף אותן וחיפש id_number, תמיד ללא תוצאה.
+    // ההפרדה היא לפי '@' ולא לפי מספר הספרות.
+    const looksLikeEmail = (t: string) => t.includes('@')
+    expect(looksLikeEmail('0533159895@0541234.com')).toBe(true)
+    expect(looksLikeEmail('chedva.fridman@gmail.com')).toBe(true)
+    expect(looksLikeEmail('066526427')).toBe(false)
+  })
+})

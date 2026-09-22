@@ -44,7 +44,11 @@ export const TABLES: TableSpec[] = [
     about: 'כל המשפחות הרשומות באיגוד הצאצאים: פרטים אישיים, כתובת, ילדים, תאריך לידה (birth_date — לחישוב גיל), סטטוס אישור הרישום, שיוך לעץ הדורות. לשאלת גיל של אדם רשום — חשב מ-birth_date.',
     columns: ['id', 'family_name', 'full_name', 'spouse_name', 'id_number', 'spouse_id_number', 'phone', 'email', 'city', 'address', 'marital_status', 'birth_date', 'spouse_birth_date', 'children_count', 'children', 'eligibility_status', 'rejection_reason', 'lineage_node_id', 'created_at'],
     dateCol: 'created_at',
-    searchCols: ['family_name', 'full_name', 'spouse_name', 'city'],
+    // 🔴 email ו-phone בחיפוש: פנייה מזוהה בפועל לפי כתובת המייל או הטלפון
+    // שממנה היא הגיעה, ולא לפי שם. בלעדיהם שאלה כמו "האם chedva@... נרשמה
+    // לחלוקת חגים" לא החזירה דבר, העוזר ניסה שוב ושוב ושרף את שישה סבבי
+    // הכלים — ואז ענה "השאלה מורכבת מדי", כלומר תלה את הכשל בשאלה ולא בכלי.
+    searchCols: ['family_name', 'full_name', 'spouse_name', 'city', 'email', 'phone'],
     route: '/admin/beneficiaries/{id}',
     statusCol: 'eligibility_status',
   },

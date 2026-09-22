@@ -387,9 +387,26 @@ async function searchRows(
   const cols = spec.searchCols ?? []
   if (!cols.length) return []
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 כתובת מייל מטופלת ראשונה, ולפני מסלול הת"ז.
+  //
+  // ⚠️ כתובות מייל אצלנו מכילות ספרות ("0533159895@0541234.com"), ולכן
+  // מסלול הת"ז שלמטה חטף אותן — 17 ספרות עוברות את הרף של 7 — וחיפש
+  // id_number.eq.<כל הספרות>. התוצאה ריקה תמיד, ואז החיפוש המילולי פיצל
+  // את הכתובת לפי רווחים (אין בה) ונשאר עם "מילה" אחת ארוכה.
+  //
+  // ⚠️ ההתאמה היא ilike על הכתובת המלאה ולא split: פיצול כתובת לחלקים
+  // היה מחזיר כל מי שיש לו gmail.
+  // ─────────────────────────────────────────────────────────────────────────
+  if (term.includes('@') && cols.includes('email')) {
+    const { data } = await buildQuery(ctx, spec, input, select)
+      .ilike('email', term.trim()).limit(limit)
+    if (data?.length) return data as never
+  }
+
   // ת"ז / מספר — התאמה מדויקת
   const digits = term.replace(/\D/g, '')
-  if (digits.length >= 7 && spec.columns.includes('id_number')) {
+  if (!term.includes('@') && digits.length >= 7 && spec.columns.includes('id_number')) {
     const idFilter = spec.columns.includes('spouse_id_number')
       ? `id_number.eq.${digits},spouse_id_number.eq.${digits}`
       : `id_number.eq.${digits}`
