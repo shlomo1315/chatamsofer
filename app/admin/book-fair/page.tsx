@@ -8,6 +8,7 @@ import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import PageHeader from '@/components/ui/PageHeader'
 import { fmtAgorot } from '@/lib/bookFairPricing'
+import { isMockPayment } from '@/lib/payments'
 import {
   BOOK_FAIR_STATUS_LABELS, BOOK_FAIR_STATUS_COLORS,
   type BookFairOrderStatus, type BookFairChannel,
@@ -74,6 +75,8 @@ async function getData() {
 export default async function BookFairPage() {
   await guardPage('book_fair')
   const { orders, books, open, cities, tiers } = await getData()
+  // 🔴 האם הסליקה אמיתית. ראו הבאנר למטה — זו הבדיקה החשובה ביותר במסך.
+  const mockPay = await isMockPayment()
 
   const paid = orders.filter(o => PAID.includes(o.status))
   const revenue = paid.reduce((s, o) => s + o.total_agorot - o.refunded_agorot, 0)
@@ -118,6 +121,35 @@ export default async function BookFairPage() {
           {open ? 'היריד פתוח' : 'היריד סגור'}
         </span>
       </PageHeader>
+
+      {/* ─────────────────────────────────────────────────────────────────
+          🔴 הסליקה מדומה — הכסף אינו נגבה.
+
+          ⚠️ זו האזהרה החשובה ביותר במסך, ולכן היא מעל חוסמי הפתיחה
+          ובאדום ולא בענבר: כל שאר החוסמים מונעים מכירה, וזה מאפשר
+          מכירה שנראית תקינה לגמרי ואינה גובה שקל. לקוח לוחץ "אישור
+          התשלום" בלי כרטיס, ההזמנה מסומנת "שולמה", והמלאי יורד.
+
+          ⚠️ מוצג גם כשהיריד סגור: דווקא אז נוטים לפתוח "רק לבדיקה"
+          ולשכוח. הבאנר נעלם מעצמו ברגע שספק אמיתי מוגדר.
+          ───────────────────────────────────────────────────────────────── */}
+      {mockPay && (
+        <section className="rounded-2xl border-2 border-red-300 bg-red-50 p-5">
+          <h2 className="mb-2 flex items-center gap-2 font-semibold text-red-900">
+            <AlertTriangle size={18} /> הסליקה במצב בדיקה — כסף אינו נגבה
+          </h2>
+          <p className="text-sm leading-relaxed text-red-800">
+            ספק הסליקה המחובר הוא <strong>מדומה</strong>. כל הזמנה באתר עוברת דרך
+            דף אישור פנימי, מסומנת כ״שולמה״ ומורידה מהמלאי — <strong>בלי שנגבה
+            תשלום</strong>. מתאים לבדיקות בלבד.
+          </p>
+          <p className="mt-2 text-sm font-medium text-red-900">
+            {open
+              ? '🔴 היריד פתוח כרגע במצב הזה. כל הזמנה שתתקבל תהיה ללא תשלום.'
+              : 'אין לפתוח את היריד לקהל לפני חיבור ספק סליקה אמיתי.'}
+          </p>
+        </section>
+      )}
 
       {/* ── מה חוסם ── */}
       {blockers.length > 0 && (

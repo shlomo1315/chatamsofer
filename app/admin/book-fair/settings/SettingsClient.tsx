@@ -12,8 +12,10 @@ import { useCan } from '@/components/StaffPermissions'
 
 type TierRow = { min_books: string; max_books: string; price: string }
 
-export default function SettingsClient({ cities, tiers, open }: {
+export default function SettingsClient({ cities, tiers, open, mockPay }: {
   cities: BookFairCity[]; tiers: BookFairShippingTier[]; open: boolean
+  /** הסליקה המחוברת מדומה — פתיחת היריד תתקבל רק אחרי אישור מפורש. */
+  mockPay: boolean
 }) {
   const router = useRouter()
   const { confirm, confirmDialog } = useConfirm()
@@ -65,6 +67,21 @@ export default function SettingsClient({ cities, tiers, open }: {
 
   async function toggleOpen() {
     const next = !isOpen
+
+    // 🔴 פתיחה כשהסליקה מדומה = חנות שמוכרת בלי לגבות. המתג היה
+    // לחיצה אחת בלי שום שאלה, והתקלה מתגלה רק כשמישהו משווה הזמנות
+    // לבנק. הסגירה, לעומת זאת, לעולם אינה נשאלת — עצירה היא תמיד
+    // הצד הבטוח.
+    if (next && mockPay) {
+      const go = await confirm({
+        title: 'הסליקה במצב בדיקה',
+        message: 'ספק הסליקה המחובר מדומה: כל הזמנה תסומן כ״שולמה״ ותוריד מהמלאי ' +
+                 'בלי שייגבה תשלום. לפתוח בכל זאת?',
+        confirmLabel: 'פתח בכל זאת', danger: true,
+      })
+      if (!go) return
+    }
+
     const ok = await call('/api/admin/book-fair/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -153,6 +170,18 @@ export default function SettingsClient({ cities, tiers, open }: {
             {busy === 'gate' ? <Loader2 size={15} className="animate-spin" /> : isOpen ? 'סגירת היריד' : 'פתיחת היריד'}
           </button>
         </div>
+
+        {/* ⚠️ מוצג ליד המתג ולא רק בלוח הבקרה: זה המקום שבו מקבלים את
+            ההחלטה, ומי שמגיע לכאן ישירות לא ראה את הבאנר שם. */}
+        {mockPay && (
+          <p className="mt-3 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-800">
+            <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+            <span>
+              <strong>הסליקה במצב בדיקה</strong> — הזמנות יסומנו כ״שולמו״ ויורידו
+              מהמלאי בלי שייגבה תשלום.
+            </span>
+          </p>
+        )}
       </section>
 
       {/* ── ערי משלוח ── */}

@@ -321,6 +321,50 @@ export async function register() {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // ── ניקוי יריד הספרים — כל 15 דקות ──
+  //
+  // 🔴 המלאי נשחק בלי זה. השריון מנכה מהמלאי מיד (stock_web/stock_phone
+  // פירושם "זמין למכירה"), ולכן כל עגלה נטושה וכל שיחה שהתנתקה מחזיקה
+  // עותקים שלא יוחזרו לעולם — הקטלוג יציג "אזל" על ספרים שעל המדף.
+  //
+  // ⚠️ הפקיעה העצלה שבתוך book_fair_reserve מכסה רק את מי שמנסה לקנות
+  // את *אותו* ספר. הקטלוג, המסכים והתראות המלאי אינם עוברים דרכה.
+  //
+  // ⚠️ 15 דקות ולא שעה: ה-TTL של שריון הוא 20 דקות, וריצה שעתית הייתה
+  // מותירה מלאי מוקפא עד 40 דקות מיותרות בשיא היריד.
+  //
+  // ⚠️ הראוט /api/cron/book-fair-cleanup נשאר להרצה ידנית. כאן מייבאים
+  // את הפונקציה ישירות, כמו בכל שאר המשימות.
+  if (process.env.BOOK_FAIR_CLEANUP_DISABLED !== '1') {
+    let cleaning = false
+    const tickBookFair = async () => {
+      // ריצה אורכת שניות ועושה קריאות רשת לספק הסליקה; טיק שנכנס
+      // באמצע היה מאמת את אותן הזמנות פעמיים.
+      if (cleaning) return
+      cleaning = true
+      try {
+        const { getServiceClient } = await import('@/lib/apiAuth')
+        const db = getServiceClient()
+        if (!db) return
+        const { runBookFairCleanup } = await import('@/lib/bookFairCleanup')
+        const r = await runBookFairCleanup(db)
+        if (r.expiredReservations || r.cancelledOrders || r.rescuedOrders || r.stockDrift) {
+          console.log(
+            `[book-fair-cleanup] expired=${r.expiredReservations} cancelled=${r.cancelledOrders}` +
+            ` rescued=${r.rescuedOrders}` + (r.stockDrift ? ` ⚠️ drift=${r.stockDrift}` : ''),
+          )
+        }
+      } catch (err) {
+        console.error('[book-fair-cleanup] tick failed', err)
+      } finally {
+        cleaning = false
+      }
+    }
+    setTimeout(() => { void tickBookFair(); setInterval(() => { void tickBookFair() }, 15 * MINUTE_MS) }, INITIAL_DELAY_MS)
+    console.log('[book-fair-cleanup] scheduler started (every 15m)')
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // ── החלפת קול ⇒ יצירה מחדש של כל ההקלטות — כל 5 דקות ──
   //
   // 🔴 החלפת הקול בהגדרות משנה רק הקלטות *חדשות*. כל קובץ MP3 שכבר הועלה

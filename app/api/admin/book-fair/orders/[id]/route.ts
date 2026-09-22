@@ -20,14 +20,27 @@ export const runtime = 'nodejs'
  */
 const ALLOWED_NEXT: Partial<Record<BookFairOrderStatus, BookFairOrderStatus[]>> = {
   pending_payment:  ['cancelled', 'failed'],
-  payment_mismatch: ['paid', 'cancelled', 'refunded'],
-  paid:             ['picking', 'cancelled', 'refunded', 'partially_refunded'],
+  payment_mismatch: ['paid', 'cancelled'],
+  paid:             ['picking', 'cancelled'],
   picking:          ['packed', 'paid', 'cancelled'],
   packed:           ['shipped', 'delivered', 'picking'],
   shipped:          ['delivered', 'packed'],
-  delivered:        ['refunded', 'partially_refunded'],
+  delivered:        [],
   failed:           ['cancelled'],
 }
+
+/**
+ * 🔴 סטטוסי הזיכוי אינם מעבר סטטוס — הם תוצאה של פעולה כספית.
+ *
+ * ⚠️ עד היום הם היו ברשימה למעלה, וזה היה באג כסף שקט: לחיצה על
+ * "זוכה" שינתה את הסטטוס בלבד, refunded_agorot נשאר 0, וההכנסות
+ * בלוח הבקרה (total - refunded) המשיכו לספור את הסכום המלא. ההזמנה
+ * נראתה מזוכה ואיש לא ידע שהדוח שגוי.
+ *
+ * הדרך היחידה אליהם היא POST /refund, שמזכה אצל הספק, כותב את הסכום
+ * ומחזיר מלאי — ומגיע לסטטוס הזה בעצמו.
+ */
+const REFUND_ONLY: BookFairOrderStatus[] = ['refunded', 'partially_refunded']
 
 function clean(v: unknown): string {
   return String(v ?? '').replace(/[‎‏‪-‮⁦-⁩]/g, '').trim()
@@ -55,6 +68,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (body.status !== undefined) {
     const next = String(body.status) as BookFairOrderStatus
     if (next !== current) {
+      // ⚠️ הודעה נפרדת ומכוונת לזיכוי: "לא ניתן לעבור" היה נקרא כתקלה
+      // ומסתיר את העובדה שיש מסלול תקין אחר.
+      if (REFUND_ONLY.includes(next)) {
+        return NextResponse.json({
+          error: 'סימון זיכוי אינו שינוי סטטוס — השתמשו בפעולת הזיכוי, שמחזירה את הכסף ורושמת את הסכום.',
+        }, { status: 400 })
+      }
       const allowed = ALLOWED_NEXT[current] ?? []
       if (!allowed.includes(next)) {
         return NextResponse.json({

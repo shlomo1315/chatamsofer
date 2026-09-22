@@ -2,6 +2,7 @@ import { guardPage } from '@/lib/pageGuard'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import PageHeader from '@/components/ui/PageHeader'
 import type { BookFairCity, BookFairShippingTier } from '@/types/bookFair'
+import { isMockPayment } from '@/lib/payments'
 import SettingsClient from './SettingsClient'
 
 // הגדרות יריד הספרים: פתיחה/סגירה, ערי משלוח ומדרגות תעריף.
@@ -31,7 +32,8 @@ export default async function BookFairSettingsPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="הגדרות היריד" subtitle="פתיחת הזמנות, ערי משלוח ותעריפים" />
-      <SettingsClient cities={cities} tiers={tiers} open={open} />
+      {/* 🔴 mockPay נקרא בשרת ולא בלקוח: פרטי הספק אינם נחשפים לדפדפן. */}
+      <SettingsClient cities={cities} tiers={tiers} open={open} mockPay={await isMockPayment()} />
     </div>
   )
 }

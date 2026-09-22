@@ -1,10 +1,13 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, Check, Mic, CreditCard, AlertTriangle } from 'lucide-react'
-import type { BookFairOrder, BookFairOrderStatus, BookFairRecording } from '@/types/bookFair'
+import { Loader2, Check, Mic, CreditCard, AlertTriangle, RotateCcw } from 'lucide-react'
+import type {
+  BookFairOrder, BookFairOrderStatus, BookFairOrderItem, BookFairRecording,
+} from '@/types/bookFair'
 import { BOOK_FAIR_STATUS_LABELS } from '@/types/bookFair'
 import { fmtAgorot } from '@/lib/bookFairPricing'
+import { canRefund } from '@/lib/bookFairRefund'
 import { useCan } from '@/components/StaffPermissions'
 
 // פאנל הפעולות בכרטיס ההזמנה.
@@ -18,20 +21,26 @@ type Payment = {
   transaction_id: string | null; created_at: string; error_message: string | null
 }
 
-/** מעברי הסטטוס המותרים — חייב להיות זהה לשרת, אחרת כפתור יחזיר שגיאה. */
+/**
+ * מעברי הסטטוס המותרים — חייב להיות זהה לשרת, אחרת כפתור יחזיר שגיאה.
+ *
+ * ⚠️ סטטוסי הזיכוי הוסרו מכאן במכוון. הם אינם מעבר סטטוס אלא תוצאה של
+ * פעולה כספית, ויש להם סקשן משלהם למטה — השרת דוחה אותם ב-PATCH.
+ */
 const NEXT: Partial<Record<BookFairOrderStatus, BookFairOrderStatus[]>> = {
   pending_payment:  ['cancelled', 'failed'],
-  payment_mismatch: ['paid', 'cancelled', 'refunded'],
-  paid:             ['picking', 'cancelled', 'refunded', 'partially_refunded'],
+  payment_mismatch: ['paid', 'cancelled'],
+  paid:             ['picking', 'cancelled'],
   picking:          ['packed', 'paid', 'cancelled'],
   packed:           ['shipped', 'delivered', 'picking'],
   shipped:          ['delivered', 'packed'],
-  delivered:        ['refunded', 'partially_refunded'],
+  delivered:        [],
   failed:           ['cancelled'],
 }
 
-export default function OrderPanel({ order, cities, recordings, payments }: {
+export default function OrderPanel({ order, items, cities, recordings, payments }: {
   order: BookFairOrder
+  items: BookFairOrderItem[]
   cities: { id: string; name: string }[]
   recordings: BookFairRecording[]
   payments: Payment[]
@@ -44,6 +53,30 @@ export default function OrderPanel({ order, cities, recordings, payments }: {
   const [notes, setNotes] = useState(order.notes ?? '')
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState('')
+
+  // ── זיכוי ──
+  const [refundOpen, setRefundOpen] = useState(false)
+  /** כמה עותקים להחזיר מכל שורה, לפי מזהה שורה. */
+  const [back, setBack] = useState<Record<string, number>>({})
+  const [refundShip, setRefundShip] = useState(false)
+  const [restock, setRestock] = useState(true)
+  const [refundReason, setRefundReason] = useState('')
+  const [refundNote, setRefundNote] = useState('')
+
+  const refundable = canRefund(order.status)
+  const remaining = order.total_agorot - order.refunded_agorot
+
+  // ⚠️ מחושב מהבחירה ולא נשמר ב-state: state נגזר שמתעדכן ב-effect הוא
+  // בדיוק הדפוס שגרם ללולאת רינדור במסך החלוקה.
+  const picked = Object.entries(back).filter(([, q]) => q > 0)
+  const linesTotal = picked.reduce((s, [id, q]) => {
+    const it = items.find(i => i.id === id)
+    return s + (it ? it.unit_price_agorot * q : 0)
+  }, 0)
+  const refundTotal = linesTotal + (refundShip ? order.shipping_agorot : 0)
+  // בלי בחירה כלל — זיכוי מלא של היתרה.
+  const effectiveRefund = picked.length || refundShip ? refundTotal : remaining
+  const refundValid = effectiveRefund > 0 && effectiveRefund <= remaining
 
   const addressRec = recordings.find(r => r.kind === 'address')
   const needsAddress = order.delivery_method === 'shipping' && !order.address_confirmed
@@ -61,6 +94,55 @@ export default function OrderPanel({ order, cities, recordings, payments }: {
       router.refresh()
     } catch {
       setError('הפעולה נכשלה — בדקו את החיבור')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  /**
+   * מבצע זיכוי.
+   *
+   * 🔴 אישור מפורש עם הסכום בתוכו: זו פעולה כספית שאינה הפיכה בלחיצה,
+   * ו"האם אתה בטוח?" בלי מספר אינו אישור אלא טקס.
+   */
+  async function doRefund() {
+    if (!refundValid) return
+    const full = effectiveRefund >= remaining
+    const msg = `לזכות ${fmtAgorot(effectiveRefund)}` +
+      (full ? ' (זיכוי מלא של היתרה)' : ' (זיכוי חלקי)') +
+      (restock && picked.length ? ' ולהחזיר את העותקים למלאי' : '') + '?'
+    if (!window.confirm(msg)) return
+
+    setBusy('refund'); setError('')
+    try {
+      const res = await fetch(`/api/admin/book-fair/orders/${order.id}/refund`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          // ⚠️ בלי בחירת שורות נשלח undefined ולא 0 — השרת מפרש חסר
+          // כ"היתרה המלאה", ו-0 כשגיאה.
+          amount_agorot: picked.length || refundShip ? effectiveRefund : undefined,
+          lines: picked.map(([id, q]) => ({ itemId: id, quantity: q })),
+          include_shipping: refundShip,
+          restock,
+          reason: [refundReason, refundNote].filter(Boolean).join(' — ') || undefined,
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(json.error ?? 'הזיכוי נכשל'); return }
+
+      // ⚠️ זיכוי ידני נאמר במפורש: הסטטוס השתנה אבל הכסף *לא* חזר
+      // מעצמו, ומי שלא יידע זאת יסגור את הפנייה בלי להעביר תשלום.
+      if (json.manualRequired) {
+        window.alert(
+          `נרשם זיכוי של ${fmtAgorot(json.amountAgorot)}.\n\n` +
+          '⚠️ הכסף לא הוחזר אוטומטית — יש לבצע את ההעברה ללקוח ידנית.',
+        )
+      }
+      setRefundOpen(false); setBack({}); setRefundShip(false); setRefundReason(''); setRefundNote('')
+      router.refresh()
+    } catch {
+      setError('הזיכוי נכשל — בדקו את החיבור')
     } finally {
       setBusy(null)
     }
@@ -175,6 +257,132 @@ export default function OrderPanel({ order, cities, recordings, payments }: {
           </p>
         )}
       </section>
+
+      {/* ─────────────────────────────────────────────────────────────────
+          ── זיכוי ──
+
+          🔴 סקשן נפרד ולא כפתור סטטוס. עד היום "זוכה" היה מעבר סטטוס
+          רגיל: הסטטוס השתנה, refunded_agorot נשאר 0, וההכנסות המשיכו
+          לספור את הסכום המלא. כאן הכסף באמת חוזר ונרשם.
+          ───────────────────────────────────────────────────────────── */}
+      {refundable && (
+        <section className="rounded-2xl border border-orange-200 bg-orange-50/40 p-5">
+          <h2 className="mb-1 flex items-center gap-2 font-semibold text-slate-900">
+            <RotateCcw size={16} className="text-orange-600" /> זיכוי
+          </h2>
+          <p className="mb-3 text-sm text-slate-600">
+            שולם {fmtAgorot(order.total_agorot)}
+            {order.refunded_agorot > 0 && <> · זוכה עד כה {fmtAgorot(order.refunded_agorot)}</>}
+            {' · '}<strong className="text-slate-800">ניתן לזכות {fmtAgorot(remaining)}</strong>
+          </p>
+
+          {!refundOpen ? (
+            <button
+              onClick={() => setRefundOpen(true)}
+              disabled={!canEdit}
+              className="rounded-xl border border-orange-300 bg-white px-4 py-2 text-sm font-medium text-orange-800 transition hover:bg-orange-50 disabled:opacity-40"
+            >
+              ביצוע זיכוי
+            </button>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {/* ⚠️ בחירת שורות היא גם מה שחוזר למלאי וגם מה שמחשב את
+                  הסכום. בלי בחירה — זיכוי מלא של היתרה בלי החזרת מלאי. */}
+              <div className="flex flex-col gap-1.5">
+                <p className="text-xs font-medium text-slate-500">מה חוזר? (ריק = זיכוי כספי מלא בלי החזרת ספרים)</p>
+                {items.map(it => {
+                  const q = back[it.id] ?? 0
+                  return (
+                    <div key={it.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm text-slate-800">{it.title_snapshot}</p>
+                        <p className="text-xs text-slate-500">
+                          {it.quantity} × {fmtAgorot(it.unit_price_agorot)}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button
+                          onClick={() => setBack(b => ({ ...b, [it.id]: Math.max(0, q - 1) }))}
+                          disabled={q <= 0}
+                          className="h-7 w-7 rounded-lg border border-slate-200 text-slate-600 disabled:opacity-30"
+                        >−</button>
+                        <span className="w-7 text-center text-sm tabular-nums">{q}</span>
+                        <button
+                          onClick={() => setBack(b => ({ ...b, [it.id]: Math.min(it.quantity, q + 1) }))}
+                          disabled={q >= it.quantity}
+                          className="h-7 w-7 rounded-lg border border-slate-200 text-slate-600 disabled:opacity-30"
+                        >+</button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {order.shipping_agorot > 0 && (
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input type="checkbox" checked={refundShip} onChange={e => setRefundShip(e.target.checked)} className="rounded" />
+                  לזכות גם את דמי המשלוח ({fmtAgorot(order.shipping_agorot)})
+                </label>
+              )}
+
+              {picked.length > 0 && (
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input type="checkbox" checked={restock} onChange={e => setRestock(e.target.checked)} className="rounded" />
+                  להחזיר את העותקים למלאי
+                  {/* ⚠️ ברירת המחדל מסומנת, אך ספר פגום אינו חוזר למדף. */}
+                  <span className="text-xs text-slate-400">(בטלו אם הספרים פגומים)</span>
+                </label>
+              )}
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <select
+                  value={refundReason}
+                  onChange={e => setRefundReason(e.target.value)}
+                  className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                >
+                  <option value="">סיבת הזיכוי…</option>
+                  <option value="ביטול הזמנה">ביטול הזמנה</option>
+                  <option value="ספר פגום">ספר פגום</option>
+                  <option value="ספר חסר במלאי">ספר חסר במלאי</option>
+                  <option value="טעות בהזמנה">טעות בהזמנה</option>
+                  <option value="אחר">אחר</option>
+                </select>
+                <input
+                  value={refundNote}
+                  onChange={e => setRefundNote(e.target.value)}
+                  placeholder="פירוט (לא חובה)"
+                  className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-2.5">
+                <span className="text-sm text-slate-600">סכום הזיכוי</span>
+                <span className="text-lg font-semibold tabular-nums text-orange-700">
+                  {fmtAgorot(effectiveRefund)}
+                </span>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={doRefund}
+                  disabled={!canEdit || !!busy || !refundValid}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-orange-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-orange-700 disabled:opacity-40"
+                >
+                  {busy === 'refund' ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
+                  אישור הזיכוי
+                </button>
+                <button
+                  onClick={() => { setRefundOpen(false); setBack({}); setRefundShip(false) }}
+                  disabled={!!busy}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-600 disabled:opacity-40"
+                >
+                  ביטול
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* ── הערות ── */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5">

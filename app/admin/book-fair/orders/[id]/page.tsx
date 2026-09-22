@@ -138,6 +138,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         {/* ── פעולות ── */}
         <OrderPanel
           order={o}
+          items={(items ?? []) as BookFairOrderItem[]}
           cities={(cities ?? []) as { id: string; name: string }[]}
           recordings={(recordings ?? []) as BookFairRecording[]}
           payments={(payments ?? []) as { id: string; status: string; amount_agorot: number; transaction_id: string | null; created_at: string; error_message: string | null }[]}
