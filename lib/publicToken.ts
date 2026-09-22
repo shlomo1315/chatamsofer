@@ -10,12 +10,18 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 // g = gratitude, s = survey, l = loan inquiry, n = name-fix (תיקון שם התינוק)
 // g=מכתב ברכה · s=שיתוף · l=בירור הלוואה · n=תיקון שם · m=בירור יולדת
-export type PublicTokenKind = 'g' | 's' | 'l' | 'n' | 'm'
+// f=מעקב הזמנה ביריד הספרים
+export type PublicTokenKind = 'g' | 's' | 'l' | 'n' | 'm' | 'f'
 
 const TTL_MS = 90 * 24 * 60 * 60 * 1000 // 90 יום (ברירת מחדל)
 // תוקף מותאם לכל סוג — תיקון שם תקף 7 ימים בלבד (חלון קצר, מאובטח יותר)
+//
+// ⚠️ מעקב הזמנה ביריד תקף שנה: הלקוח מקבל את הקישור במייל, ועשוי לחזור
+// אליו הרבה אחרי המשלוח כדי לאמת מה הזמין. קישור שפג הופך את המייל
+// לחסר ערך, ואין כאן מידע רגיש מעבר לפרטי ההזמנה שלו עצמו.
 const TTL_BY_KIND: Partial<Record<PublicTokenKind, number>> = {
   n: 7 * 24 * 60 * 60 * 1000,
+  f: 365 * 24 * 60 * 60 * 1000,
 }
 
 // ⚠️ מחרוזת ריקה = אין סוד חתימה, ולכן אין קישור (ראו lib/signedToken).
