@@ -4,6 +4,7 @@ import { Search, ShoppingBag, Plus, Minus, X, Check } from 'lucide-react'
 import { fmtAgorot, bookImageUrl } from '@/lib/bookFairPricing'
 import { shippingCost, totalVolumes } from '@/lib/bookFairShipping'
 import type { PublicBook, PublicCity, PublicTier } from './page'
+import Countdown from './Countdown'
 
 // חנות יריד הספרים.
 //
@@ -21,8 +22,10 @@ type CartLine = { book: PublicBook; quantity: number }
 
 const CART_KEY = 'book_fair_cart_v1'
 
-export default function YeridStore({ books, cities, tiers, open }: {
+export default function YeridStore({ books, cities, tiers, open, openAt }: {
   books: PublicBook[]; cities: PublicCity[]; tiers: PublicTier[]; open: boolean
+  /** מועד הפתיחה המתוכנן (ISO) — לספירה לאחור במסך ההמתנה. */
+  openAt: string | null
 }) {
   const [query, setQuery] = useState('')
 
@@ -90,7 +93,7 @@ export default function YeridStore({ books, cities, tiers, open }: {
   }, [])
 
   // ── היריד סגור — מסך המתנה עם רישום לתזכורת ──
-  if (!open) return <ClosedScreen />
+  if (!open) return <ClosedScreen openAt={openAt} />
 
   return (
     <div className="min-h-screen bg-[#F5F0E6] pb-28 lg:pb-0">
@@ -207,7 +210,7 @@ export default function YeridStore({ books, cities, tiers, open }: {
  * להקליד את הכתובת, ושורה אחת של "ייפתח בקרוב" מבזבזת את זה. הרישום
  * לתזכורת הופך ביקור אבוד לפנייה שתחזור ביום הפתיחה.
  */
-function ClosedScreen() {
+function ClosedScreen({ openAt }: { openAt: string | null }) {
   const [email, setEmail] = useState('')
   const [state, setState] = useState<'idle' | 'sending' | 'done'>('idle')
   const [error, setError] = useState('')
@@ -251,14 +254,10 @@ function ClosedScreen() {
       </h1>
       <p className="mt-2 text-lg text-[#B8860B]">שע״י היכל החתם סופר</p>
 
-      {/* ── מועד הפתיחה — הלב של הדף ── */}
-      <div className="mt-10 w-full max-w-md rounded-2xl border border-[#B8860B]/30 bg-[#F5F0E6]/5 px-6 py-7">
-        <p className="text-base text-[#F5F0E6]/60">המערכת תיפתח בעז״ה</p>
-        <p className="mt-2 text-2xl font-bold text-[#F5F0E6] sm:text-3xl">
-          ביום כ״ג תשרי
-        </p>
-        <p className="mt-1 text-xl text-[#B8860B]">בשעה 10:00 בלילה</p>
-      </div>
+      {/* ── מועד הפתיחה + ספירה לאחור — הלב של הדף ──
+          ⚠️ התאריך מגיע מההגדרות ולא קבוע בקוד: דחיית מועד היא שינוי
+          במסך ההגדרות, ובלי פריסה. */}
+      <Countdown openAt={openAt} />
 
       {/* ── תזכורת ── */}
       <div className="mt-10 w-full max-w-md">

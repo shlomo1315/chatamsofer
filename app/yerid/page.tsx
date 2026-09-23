@@ -24,7 +24,7 @@ export type PublicTier = {
 
 async function getData() {
   const db = getServiceClient()
-  if (!db) return { books: [] as PublicBook[], cities: [], tiers: [], open: false }
+  if (!db) return { books: [] as PublicBook[], cities: [], tiers: [], open: false, openAt: null }
 
   // ── שלב א: האם היריד פתוח ──
   //
@@ -36,15 +36,18 @@ async function getData() {
   // הפתיחה הרשמית (63 מופעי price_agorot נמדדו בפרודקשן).
   //
   // "לא מרונדר" אינו "לא נשלח". מה שאסור להיחשף — לא נשלף.
-  const { data: gate } = await db.from('app_settings')
-    .select('value').eq('key', 'book_fair_open').maybeSingle()
+  const [{ data: gate }, { data: at }] = await Promise.all([
+    db.from('app_settings').select('value').eq('key', 'book_fair_open').maybeSingle(),
+    db.from('app_settings').select('value').eq('key', 'book_fair_open_at').maybeSingle(),
+  ])
+  const openAt = String((at as { value?: string } | null)?.value ?? '') || null
 
   // 🔴 ברירת המחדל היא *סגור*: מפתח חסר פירושו שאיש לא פתח את היריד
   // עדיין, ופתיחה מכללא הייתה חושפת קטלוג שטרם הוכן ומקבלת הזמנות
   // על מלאי שלא נבדק. חייב להיות זהה לבדיקה ב-api/yerid/checkout,
   // אחרת המסך יציג "סגור" בעוד ההזמנות מתקבלות.
   const open = String(gate?.value ?? '') === 'true'
-  if (!open) return { books: [] as PublicBook[], cities: [], tiers: [], open: false }
+  if (!open) return { books: [] as PublicBook[], cities: [], tiers: [], open: false, openAt }
 
   // ── שלב ב: הקטלוג — רק אחרי שהיריד פתוח ──
   const [{ books }, { data: cities }, { data: tiers }] = await Promise.all([
@@ -62,10 +65,11 @@ async function getData() {
     cities: (cities ?? []) as PublicCity[],
     tiers: (tiers ?? []) as PublicTier[],
     open: true,
+    openAt,
   }
 }
 
 export default async function FairPage() {
-  const { books, cities, tiers, open } = await getData()
-  return <FairStore books={books} cities={cities} tiers={tiers} open={open} />
+  const { books, cities, tiers, open, openAt } = await getData()
+  return <FairStore books={books} cities={cities} tiers={tiers} open={open} openAt={openAt} />
 }
