@@ -259,9 +259,34 @@ export default function SettingsClient({ cities, tiers, open, openAt, mockPay }:
         <h2 className="mb-1 flex items-center gap-2 font-semibold text-slate-900">
           <MapPin size={17} /> ערי משלוח
         </h2>
-        <p className="mb-4 text-sm text-slate-500">
+        <p className="mb-1 text-sm text-slate-500">
           הלקוח בוחר מתוך הרשימה. עיר שאינה כאן — לא ניתן להזמין אליה משלוח.
         </p>
+        <p className="mb-4 text-xs text-slate-400">
+          הקוד בטלפון הוא הספרה שהלקוח מקיש במוקד (ירושלים 1, בני ברק 2…).
+          עדיף רצף מ-1 בלי דילוגים — קל יותר להקראה.
+        </p>
+
+        {/* ⚠️ פער ברצף אינו שגיאה במסד (הייחודיות נשמרת), אבל בטלפון
+            הוא מבלבל: המוקד מקריא "1, 2, 4" והמאזין חושב שפספס. */}
+        {(() => {
+          const codes = cities
+            .map(c => c.phone_code)
+            .filter((n): n is number => typeof n === 'number')
+            .sort((a, b) => a - b)
+          if (codes.length < 2) return null
+          const gaps: number[] = []
+          for (let n = 1; n < codes[codes.length - 1]; n++) {
+            if (!codes.includes(n)) gaps.push(n)
+          }
+          if (!gaps.length) return null
+          return (
+            <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              הקודים בטלפון אינם רצופים — חסרים {gaps.join(', ')}. המערכת תעבוד,
+              אך ההקראה במוקד תישמע כאילו דולגה עיר.
+            </p>
+          )
+        })()}
 
         {cities.length > 0 && (
           <ul className="mb-4 flex flex-col gap-2">
