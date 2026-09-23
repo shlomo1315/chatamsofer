@@ -28,6 +28,11 @@ export default function BookEditor({ book, onClose, onSaved }: {
     // ⚠️ המחיר מוצג ונערך בשקלים; ההמרה לאגורות בשרת, בנקודה אחת.
     price:     book ? String(agorotToShekels(book.price_agorot)) : '',
     phone_code: book?.phone_code != null ? String(book.phone_code) : '',
+    // ⚠️ שני השדות האלה התקבלו בשרת מהיום הראשון ולא היה להם שדה בטופס:
+    // התיאור לא היה ניתן למילוי כלל, וסדר התצוגה לא היה ניתן לשינוי.
+    description: book?.description ?? '',
+    unlimited_stock: book?.unlimited_stock ?? false,
+    sort_order:  String(book?.sort_order ?? 0),
     stock_web:   '0',
     stock_phone: '0',
     is_active: book?.is_active ?? true,
@@ -84,6 +89,9 @@ export default function BookEditor({ book, onClose, onSaved }: {
         volumes: Number(form.volumes) || 1,
         price: form.price,
         phone_code: form.phone_code,
+        description: form.description,
+        unlimited_stock: form.unlimited_stock,
+        sort_order: Number(form.sort_order) || 0,
         is_active: form.is_active,
       }
       // מלאי פתיחה נשלח רק ביצירה
@@ -146,7 +154,41 @@ export default function BookEditor({ book, onClose, onSaved }: {
             <input value={form.phone_code} onChange={e => set('phone_code', e.target.value)} className={INPUT} dir="ltr" inputMode="numeric" />
           </Field>
 
-          {isNew ? (
+          <Field label="תיאור" hint="מוצג בכרטיס הספר בחנות" className="sm:col-span-2">
+            <textarea
+              value={form.description}
+              onChange={e => set('description', e.target.value)}
+              rows={3}
+              className={`${INPUT} resize-y`}
+              placeholder="תיאור קצר של הספר — מה כולל, מהדורה, קהל היעד…"
+            />
+          </Field>
+
+          {/* ⚠️ הקטלוג ממוין לפי sort_order ואז לפי שם; 0 לכולם = מיון
+              אלפביתי בפועל. ערך נמוך יותר עולה למעלה. */}
+          <Field label="סדר תצוגה" hint="0 = ברירת מחדל (לפי שם). נמוך יותר = מוקדם יותר">
+            <input value={form.sort_order} onChange={e => set('sort_order', e.target.value)} className={INPUT} dir="ltr" inputMode="numeric" />
+          </Field>
+
+          {/* ── מלאי בלתי מוגבל ──
+              🔴 רוב ספרי היריד מוזמנים מהמו״ל ואינם אוזלים. ספר כזה
+              אינו משתתף בשריון, אינו נספר במלאי, ותמיד מוצג כזמין. */}
+          <label className="sm:col-span-2 flex items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <input
+              type="checkbox"
+              checked={form.unlimited_stock}
+              onChange={e => set('unlimited_stock', e.target.checked)}
+              className="mt-0.5 rounded"
+            />
+            <span className="text-sm">
+              <span className="font-medium text-slate-800">מלאי בלתי מוגבל</span>
+              <span className="block text-xs text-slate-500">
+                הזמנה מהמו״ל — הספר תמיד זמין, בשני הערוצים, ואינו נספר במלאי.
+              </span>
+            </span>
+          </label>
+
+          {isNew && !form.unlimited_stock ? (
             <>
               <Field label="מלאי פתיחה — אתר" hint="עותקים למכירה באתר">
                 <input value={form.stock_web} onChange={e => set('stock_web', e.target.value)} className={INPUT} dir="ltr" inputMode="numeric" />
@@ -155,6 +197,10 @@ export default function BookEditor({ book, onClose, onSaved }: {
                 <input value={form.stock_phone} onChange={e => set('stock_phone', e.target.value)} className={INPUT} dir="ltr" inputMode="numeric" />
               </Field>
             </>
+          ) : isNew ? null : form.unlimited_stock ? (
+            <p className="sm:col-span-2 rounded-xl bg-slate-50 px-4 py-3 text-xs text-slate-500">
+              הספר מסומן כבלתי מוגבל — עמודות המלאי אינן בשימוש עבורו.
+            </p>
           ) : (
             <p className="sm:col-span-2 rounded-xl bg-slate-50 px-4 py-3 text-xs text-slate-500">
               המלאי נערך במסך המלאי, כדי שכל תנועה תירשם ביומן.

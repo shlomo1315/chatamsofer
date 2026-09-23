@@ -37,7 +37,7 @@ export async function PUT(request: NextRequest) {
   const db = getServiceClient()
   if (!db) return serverMisconfigured()
 
-  let body: { tiers?: { min_books: unknown; max_books: unknown; price: unknown }[] }
+  let body: { tiers?: { min_books: unknown; max_books: unknown; price: unknown; step_volumes?: unknown; step_price?: unknown }[] }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה שגויה' }, { status: 400 }) }
 
   const raw = Array.isArray(body.tiers) ? body.tiers : []
@@ -63,7 +63,17 @@ export async function PUT(request: NextRequest) {
     if (price === null) {
       return NextResponse.json({ error: `מדרגה ${i + 1}: מחיר לא תקין` }, { status: 400 })
     }
-    tiers.push({ min_books: min, max_books: max, price_agorot: price })
+    // ── שדות המדרגה הפתוחה ──
+    // ⚠️ זוג: אחד בלי השני נבלע בשקט כמחיר קבוע. validateTiers חוסם,
+    // וה-check במסד הוא רשת הביטחון האחרונה.
+    const hasStep = t.step_volumes != null && String(t.step_volumes) !== ''
+    const stepVol = hasStep ? Number(t.step_volumes) : null
+    const stepAg  = hasStep ? shekelsToAgorot(t.step_price as string | number) : null
+    if (hasStep && (!Number.isInteger(stepVol) || stepAg === null)) {
+      return NextResponse.json({ error: `מדרגה ${i + 1}: תוספת מדורגת לא תקינה` }, { status: 400 })
+    }
+
+    tiers.push({ min_books: min, max_books: max, price_agorot: price, step_volumes: stepVol, step_agorot: stepAg })
   }
 
   // 🔴 ולידציה *גם בשרת* ולא רק בלקוח: הלקוח יכול לעקוף, וטבלה עם פער

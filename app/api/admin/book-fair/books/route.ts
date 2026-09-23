@@ -66,6 +66,11 @@ export async function POST(request: NextRequest) {
     stock_web: stockWeb,
     stock_phone: stockPhone,
     phone_code: phoneCode,
+    // ⚠️ התקבל ב-PATCH אך לא ביצירה: סדר שנקבע בטופס של ספר חדש נבלע
+    // בשקט, והספר נחת בברירת המחדל 0.
+    sort_order: Number(body.sort_order) || 0,
+    // 🔴 ספר בלתי מוגבל אינו משתתף בשריון ואינו נספר במלאי.
+    unlimited_stock: body.unlimited_stock === true,
     is_active: body.is_active !== false,
   }).select('id, sku, title').single()
 

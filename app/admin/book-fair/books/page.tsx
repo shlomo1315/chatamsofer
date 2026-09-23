@@ -20,7 +20,7 @@ async function getBooks(): Promise<BookFairBook[]> {
   const { rows, error } = await fetchAllRows<BookFairBook>((from, to) =>
     supabase
       .from('book_fair_books')
-      .select('id, sku, title, author, publisher, volumes, price_agorot, image_path, stock_web, stock_phone, phone_code, is_active, sort_order, created_at, updated_at')
+      .select('id, sku, title, author, publisher, volumes, price_agorot, image_path, description, stock_web, stock_phone, unlimited_stock, phone_code, is_active, sort_order, created_at, updated_at')
       .order('sort_order', { ascending: true })
       .order('title', { ascending: true })
       .range(from, to)

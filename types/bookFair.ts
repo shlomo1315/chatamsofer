@@ -54,6 +54,14 @@ export interface BookFairBook {
   stock_web: number
   /** 🔴 מכסת הטלפון. העברה בין השתיים ידנית בלבד. */
   stock_phone: number
+  /**
+   * 🔴 ספר שאינו מוגבל במלאי (הזמנה מהמו״ל) — תמיד זמין.
+   *
+   * ⚠️ כשtrue, stock_web/stock_phone חסרי משמעות: אין שריון, אין ניכוי
+   * ואין רישום ביומן. כל בדיקת זמינות חייבת לבדוק את הדגל *לפני*
+   * המספר, אחרת ספר כזה עם מלאי 0 יוצג כ"אזל" בזמן שאפשר להזמינו.
+   */
+  unlimited_stock: boolean
   phone_code?: number | null     // קוד להקשה בשלוחה
   is_active: boolean
   sort_order: number
@@ -76,9 +84,13 @@ export interface BookFairCity {
  */
 export interface BookFairShippingTier {
   id: string
+  /** ⚠️ כרכים ולא ספרים — השם היסטורי. ראו מיגרציה 20260923. */
   min_books: number
   max_books: number | null
   price_agorot: number
+  /** מדרגה פתוחה: כל step_volumes כרכים מעל המינימום מוסיפים step_agorot. */
+  step_volumes: number | null
+  step_agorot: number | null
   created_at: string
 }
 

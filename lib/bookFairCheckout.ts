@@ -6,7 +6,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { cartTotals, type CartLineInput } from './bookFairPricing'
-import { shippingCost, type TierInput } from './bookFairShipping'
+import { shippingCost, totalVolumes, type TierInput } from './bookFairShipping'
 import type { BookFairDeliveryMethod } from '@/types/bookFair'
 
 export interface CheckoutItem {
@@ -116,15 +116,17 @@ export function validateCheckout(
   const lines: CartLineInput[] = input.items.map(i => ({
     unit_price_agorot: i.unit_price_agorot, quantity: i.quantity,
   }))
-  const bookCount = input.items.reduce((s, i) => s + i.quantity, 0)
-  const shipping = shippingCost(input.delivery_method, bookCount, tiers)
+  // 🔴 כרכים ולא פריטים: "שו״ת חתם סופר" הוא פריט אחד בן 6 כרכים,
+  // ומשלוחו עולה כמו 6 ספרים. ספירת פריטים תמחרה אותו כחוברת אחת.
+  const volumeCount = totalVolumes(input.items)
+  const shipping = shippingCost(input.delivery_method, volumeCount, tiers)
 
   // 🔴 null פירושו "אין מדרגת משלוח מתאימה" — ולא חינם. המשך בסכום 0
   // היה גורם לעמותה לשלוח על חשבונה בלי שאיש ידע.
   if (shipping === null) {
     return {
       ok: false,
-      errors: [`לא הוגדר תעריף משלוח ל-${bookCount} ספרים. אנא צרו קשר.`],
+      errors: [`לא הוגדר תעריף משלוח ל-${volumeCount} כרכים. אנא צרו קשר.`],
     }
   }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolveShippingTier, shippingCost, validateTiers, tierLabel, type TierInput } from './bookFairShipping'
+import { resolveShippingTier, shippingCost, validateTiers, tierLabel, totalVolumes, type TierInput } from './bookFairShipping'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 🔴 תעריף המשלוח לפי *כמות ספרים* — לא לפי יעד ולא לפי סכום.
@@ -128,7 +128,7 @@ describe('🔴 validateTiers — השער שמונע טבלה פגומה', () =>
   it('דורש התחלה מספר אחד', () => {
     const r = validateTiers([{ min_books: 2, max_books: null, price_agorot: 3500 }])
     expect(r.ok).toBe(false)
-    expect(r.errors.join(' ')).toContain('ספר אחד')
+    expect(r.errors.join(' ')).toContain('כרך אחד')
   })
 
   it('מדרגה פתוחה באמצע נפסלת', () => {
@@ -174,5 +174,125 @@ describe('tierLabel', () => {
   })
   it('ערך בודד', () => {
     expect(tierLabel({ min_books: 5, max_books: 5 })).toBe('5')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 מחירון היריד בפועל — לפי כרכים, כפי שנמסר.
+//
+//   עד 3 כרכים   — 20 ₪
+//   4 עד 6       — 25 ₪
+//   7 עד 13      — 35 ₪
+//   מ-14 ומעלה   — 45 ₪, ותוספת 10 ₪ לכל 3 כרכים נוספים
+//
+// ⚠️ הטבלה הזו נעולה בטסט בכוונה: שינוי מקרי במדרגות משנה כסף אמיתי
+// בכל הזמנה, ובלי בדיקה הוא מתגלה רק בדוח החודשי.
+// ─────────────────────────────────────────────────────────────────────────────
+const FAIR_TIERS: TierInput[] = [
+  { min_books: 1,  max_books: 3,    price_agorot: 2000 },
+  { min_books: 4,  max_books: 6,    price_agorot: 2500 },
+  { min_books: 7,  max_books: 13,   price_agorot: 3500 },
+  { min_books: 14, max_books: null, price_agorot: 4500, step_volumes: 3, step_agorot: 1000 },
+]
+
+describe('מחירון היריד — שלוש המדרגות הקבועות', () => {
+  it('עד 3 כרכים — 20 ₪', () => {
+    expect(resolveShippingTier(1, FAIR_TIERS)).toBe(2000)
+    expect(resolveShippingTier(3, FAIR_TIERS)).toBe(2000)
+  })
+
+  it('4 עד 6 כרכים — 25 ₪', () => {
+    expect(resolveShippingTier(4, FAIR_TIERS)).toBe(2500)
+    expect(resolveShippingTier(6, FAIR_TIERS)).toBe(2500)
+  })
+
+  it('7 עד 13 כרכים — 35 ₪', () => {
+    expect(resolveShippingTier(7, FAIR_TIERS)).toBe(3500)
+    expect(resolveShippingTier(13, FAIR_TIERS)).toBe(3500)
+  })
+
+  it('הגבולות מדויקים — כרך אחד מעביר מדרגה', () => {
+    expect(resolveShippingTier(3, FAIR_TIERS)).toBe(2000)
+    expect(resolveShippingTier(4, FAIR_TIERS)).toBe(2500)
+    expect(resolveShippingTier(6, FAIR_TIERS)).toBe(2500)
+    expect(resolveShippingTier(7, FAIR_TIERS)).toBe(3500)
+    expect(resolveShippingTier(13, FAIR_TIERS)).toBe(3500)
+    expect(resolveShippingTier(14, FAIR_TIERS)).toBe(4500)
+  })
+})
+
+describe('מחירון היריד — המדרגה הפתוחה (10 ₪ לכל 3 כרכים)', () => {
+  it('14-16 כרכים — 45 ₪', () => {
+    expect(resolveShippingTier(14, FAIR_TIERS)).toBe(4500)
+    expect(resolveShippingTier(15, FAIR_TIERS)).toBe(4500)
+    expect(resolveShippingTier(16, FAIR_TIERS)).toBe(4500)
+  })
+
+  it('17-19 כרכים — 55 ₪', () => {
+    expect(resolveShippingTier(17, FAIR_TIERS)).toBe(5500)
+    expect(resolveShippingTier(19, FAIR_TIERS)).toBe(5500)
+  })
+
+  it('20-22 כרכים — 65 ₪', () => {
+    expect(resolveShippingTier(20, FAIR_TIERS)).toBe(6500)
+    expect(resolveShippingTier(22, FAIR_TIERS)).toBe(6500)
+  })
+
+  it('🔴 סדרה גדולה מתומחרת ולא נופלת למחיר קבוע', () => {
+    // 90 כרכים: (90-14+1)=77 → ceil(77/3)-1 = 25 קפיצות → 45+250
+    expect(resolveShippingTier(90, FAIR_TIERS)).toBe(4500 + 25 * 1000)
+  })
+})
+
+describe('totalVolumes — ספירת כרכים בעגלה', () => {
+  it('🔴 כפל בכמות: שני עותקים של סדרה בת 6 הם 12 כרכים', () => {
+    expect(totalVolumes([{ volumes: 6, quantity: 2 }])).toBe(12)
+  })
+
+  it('מסכם שורות מעורבות', () => {
+    // שו"ת חת"ס (6 כרכים) + 2 חוברות בנות כרך
+    expect(totalVolumes([
+      { volumes: 6, quantity: 1 },
+      { volumes: 1, quantity: 2 },
+    ])).toBe(8)
+  })
+
+  it('🔴 פריט אחד בן 6 כרכים אינו נספר כספר אחד', () => {
+    const vols = totalVolumes([{ volumes: 6, quantity: 1 }])
+    expect(vols).toBe(6)
+    // לפי כרכים — מדרגה שנייה (25 ₪), ולא הראשונה (20 ₪)
+    expect(resolveShippingTier(vols, FAIR_TIERS)).toBe(2500)
+  })
+
+  it('volumes חסר או פסול נספר ככרך אחד', () => {
+    expect(totalVolumes([{ volumes: 0, quantity: 3 }])).toBe(3)
+    expect(totalVolumes([{ volumes: NaN, quantity: 2 }])).toBe(2)
+  })
+
+  it('עגלה ריקה — אפס', () => {
+    expect(totalVolumes([])).toBe(0)
+  })
+})
+
+describe('validateTiers — שדות המדרגה הפתוחה', () => {
+  it('המחירון בפועל תקין', () => {
+    expect(validateTiers(FAIR_TIERS).ok).toBe(true)
+  })
+
+  it('🔴 קפיצה בלי תוספת נדחית — אחרת היא נבלעת כמחיר קבוע', () => {
+    const r = validateTiers([
+      { min_books: 1, max_books: null, price_agorot: 2000, step_volumes: 3 },
+    ])
+    expect(r.ok).toBe(false)
+    expect(r.errors.join(' ')).toContain('גם את גודל הקפיצה וגם את התוספת')
+  })
+
+  it('תוספת מדורגת במדרגה סגורה נדחית', () => {
+    const r = validateTiers([
+      { min_books: 1, max_books: 3, price_agorot: 2000, step_volumes: 3, step_agorot: 1000 },
+      { min_books: 4, max_books: null, price_agorot: 2500 },
+    ])
+    expect(r.ok).toBe(false)
+    expect(r.errors.join(' ')).toContain('רק במדרגה הפתוחה')
   })
 })

@@ -10,7 +10,7 @@ import { useCan } from '@/components/StaffPermissions'
 
 // הגדרות היריד: מתג פתיחה, ערי משלוח, ומדרגות תעריף.
 
-type TierRow = { min_books: string; max_books: string; price: string }
+type TierRow = { min_books: string; max_books: string; price: string; step_volumes: string; step_price: string }
 
 export default function SettingsClient({ cities, tiers, open, mockPay }: {
   cities: BookFairCity[]; tiers: BookFairShippingTier[]; open: boolean
@@ -37,8 +37,10 @@ export default function SettingsClient({ cities, tiers, open, mockPay }: {
           min_books: String(t.min_books),
           max_books: t.max_books === null ? '' : String(t.max_books),
           price: String(agorotToShekels(t.price_agorot)),
+          step_volumes: t.step_volumes == null ? '' : String(t.step_volumes),
+          step_price: t.step_agorot == null ? '' : String(agorotToShekels(t.step_agorot)),
         }))
-      : [{ min_books: '1', max_books: '', price: '' }]
+      : [{ min_books: '1', max_books: '', price: '', step_volumes: '', step_price: '' }]
   )
 
   // ולידציה חיה — המשתמש רואה את הבעיה תוך כדי הקלדה ולא אחרי שמירה
@@ -46,6 +48,8 @@ export default function SettingsClient({ cities, tiers, open, mockPay }: {
     min_books: Number(r.min_books),
     max_books: r.max_books.trim() === '' ? null : Number(r.max_books),
     price_agorot: Math.round((Number(r.price) || 0) * 100),
+    step_volumes: r.step_volumes.trim() === '' ? null : Number(r.step_volumes),
+    step_agorot: r.step_price.trim() === '' ? null : Math.round((Number(r.step_price) || 0) * 100),
   }))
   const check = validateTiers(parsed)
 
@@ -130,6 +134,8 @@ export default function SettingsClient({ cities, tiers, open, mockPay }: {
           min_books: Number(r.min_books),
           max_books: r.max_books.trim() === '' ? null : Number(r.max_books),
           price: r.price,
+          step_volumes: r.step_volumes.trim() === '' ? null : Number(r.step_volumes),
+          step_price: r.step_price,
         })),
       }),
     }, 'tiers')
@@ -261,7 +267,7 @@ export default function SettingsClient({ cities, tiers, open, mockPay }: {
           <Truck size={17} /> תעריף משלוח
         </h2>
         <p className="mb-4 text-sm text-slate-500">
-          המחיר נקבע לפי מספר הספרים בהזמנה. איסוף עצמי תמיד ללא עלות.
+          המחיר נקבע לפי מספר ה<strong>כרכים</strong> בהזמנה — סדרה בת 6 כרכים נספרת כ-6. איסוף עצמי תמיד ללא עלות.
         </p>
 
         <div className="mb-3 flex flex-col gap-2">
@@ -285,7 +291,26 @@ export default function SettingsClient({ cities, tiers, open, mockPay }: {
                   disabled={!canEdit} dir="ltr" inputMode="decimal"
                   className="rounded-xl border border-slate-200 px-3 py-2 text-sm" />
               </label>
-              <span className="pb-2 text-sm text-slate-400">{tierLabel(parsed[i])} ספרים</span>
+              {/* ⚠️ תוספת מדורגת — רק במדרגה הפתוחה ("ומעלה"). בלעדיה
+                  הזמנה של 90 כרכים משלמת בדיוק כמו הזמנה של 14. */}
+              {r.max_books.trim() === '' && (
+                <>
+                  <span className="pb-2 text-sm text-slate-400">+</span>
+                  <label className="flex w-28 flex-col gap-1">
+                    <span className="text-xs text-slate-500">₪ לכל</span>
+                    <input value={r.step_price} onChange={e => setRow(i, 'step_price', e.target.value)}
+                      disabled={!canEdit} dir="ltr" inputMode="decimal" placeholder="ללא"
+                      className="rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+                  </label>
+                  <label className="flex w-24 flex-col gap-1">
+                    <span className="text-xs text-slate-500">כרכים</span>
+                    <input value={r.step_volumes} onChange={e => setRow(i, 'step_volumes', e.target.value)}
+                      disabled={!canEdit} dir="ltr" inputMode="numeric" placeholder="ללא"
+                      className="rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+                  </label>
+                </>
+              )}
+              <span className="pb-2 text-sm text-slate-400">{tierLabel(parsed[i])} כרכים</span>
               {canEdit && rows.length > 1 && (
                 <button
                   onClick={() => setRows(rs => rs.filter((_, j) => j !== i))}
@@ -301,7 +326,7 @@ export default function SettingsClient({ cities, tiers, open, mockPay }: {
 
         {canEdit && (
           <button
-            onClick={() => setRows(rs => [...rs, { min_books: '', max_books: '', price: '' }])}
+            onClick={() => setRows(rs => [...rs, { min_books: '', max_books: '', price: '', step_volumes: '', step_price: '' }])}
             className="mb-4 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
           >
             <Plus size={14} /> מדרגה נוספת

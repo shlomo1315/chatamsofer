@@ -31,7 +31,7 @@ type OrderRow = {
 
 type BookRow = {
   id: string; title: string; sku: string
-  stock_web: number; stock_phone: number; is_active: boolean
+  stock_web: number; stock_phone: number; is_active: boolean; unlimited_stock: boolean
 }
 
 /** סטטוסים שנחשבים הכנסה בפועל — הזמנה שלא שולמה אינה הכנסה. */
@@ -54,7 +54,7 @@ async function getData() {
     ),
     fetchAllRows<BookRow>((from, to) =>
       supabase.from('book_fair_books')
-        .select('id, title, sku, stock_web, stock_phone, is_active')
+        .select('id, title, sku, stock_web, stock_phone, is_active, unlimited_stock')
         .range(from, to)
     ),
     supabase.from('app_settings').select('value').eq('key', 'book_fair_open').maybeSingle(),
@@ -92,12 +92,14 @@ export default async function BookFairPage() {
   const mismatch = orders.filter(o => o.status === 'payment_mismatch')
 
   const activeBooks = books.filter(b => b.is_active)
-  const stockWeb = activeBooks.reduce((s, b) => s + b.stock_web, 0)
-  const stockPhone = activeBooks.reduce((s, b) => s + b.stock_phone, 0)
+  const limited = activeBooks.filter(b => !b.unlimited_stock)
+  const stockWeb = limited.reduce((s, b) => s + b.stock_web, 0)
+  const stockPhone = limited.reduce((s, b) => s + b.stock_phone, 0)
   // ⚠️ "אוזל" = נותרו 3 ומטה באחד הערוצים, אך לא אפס בשניהם — ספר
   // שאזל לגמרי כבר אינו דורש החלטה, הוא פשוט לא נמכר.
   const lowStock = activeBooks
-    .filter(b => (b.stock_web + b.stock_phone) > 0 && (b.stock_web + b.stock_phone) <= 3)
+    // ⚠️ ספר בלתי מוגבל לעולם אינו "אוזל" — הוא מוזמן מהמו״ל.
+    .filter(b => !b.unlimited_stock && (b.stock_web + b.stock_phone) > 0 && (b.stock_web + b.stock_phone) <= 3)
     .slice(0, 5)
 
   const byChannel = {

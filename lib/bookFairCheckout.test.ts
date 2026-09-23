@@ -194,3 +194,43 @@ describe('makeCartToken', () => {
     expect(seen.size).toBe(100)
   })
 })
+
+// ⚠️ BASE הוא איסוף עצמי (משלוח תמיד 0) — כאן נדרשת הזמנת משלוח.
+const SHIP = { delivery_method: 'shipping' as const, city_id: 'city-jlm', address_text: 'הרב קוק 10' }
+
+describe('המשלוח מחושב לפי כרכים ולא לפי פריטים', () => {
+  it('🔴 פריט אחד בן 6 כרכים עובר את מדרגת 1-3', () => {
+    // פריט בודד: ספירת פריטים הייתה נותנת 1 ⇒ מדרגה ראשונה (35).
+    // ספירת כרכים נותנת 6 ⇒ מדרגה שנייה (50).
+    const r = validateCheckout(
+      { ...BASE, ...SHIP, items: [ITEM({ volumes: 6, quantity: 1 })] },
+      TIERS, CITIES,
+    )
+    expect(r.ok).toBe(true)
+    expect(r.totals!.shipping_agorot).toBe(5000)
+  })
+
+  it('פריט בן כרך אחד נשאר במדרגה הראשונה', () => {
+    const r = validateCheckout(
+      { ...BASE, ...SHIP, items: [ITEM({ volumes: 1, quantity: 1 })] },
+      TIERS, CITIES,
+    )
+    expect(r.totals!.shipping_agorot).toBe(3500)
+  })
+
+  it('🔴 הכמות מוכפלת: שני עותקים של סדרה בת 2 כרכים = 4 כרכים', () => {
+    const r = validateCheckout(
+      { ...BASE, ...SHIP, items: [ITEM({ volumes: 2, quantity: 2 })] },
+      TIERS, CITIES,
+    )
+    expect(r.totals!.shipping_agorot).toBe(5000)
+  })
+
+  it('איסוף עצמי — 0 בלי קשר לכרכים', () => {
+    const r = validateCheckout(
+      { ...BASE, delivery_method: 'pickup', items: [ITEM({ volumes: 20, quantity: 3 })] },
+      TIERS, CITIES,
+    )
+    expect(r.totals!.shipping_agorot).toBe(0)
+  })
+})

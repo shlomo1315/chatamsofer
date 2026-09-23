@@ -2,7 +2,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { Search, ShoppingBag, Plus, Minus, X, Check } from 'lucide-react'
 import { fmtAgorot, bookImageUrl } from '@/lib/bookFairPricing'
-import { shippingCost } from '@/lib/bookFairShipping'
+import { shippingCost, totalVolumes } from '@/lib/bookFairShipping'
 import type { PublicBook, PublicCity, PublicTier } from './page'
 
 // חנות יריד הספרים.
@@ -298,6 +298,15 @@ function BookCard({ book, inCart, justAdded, onAdd, onSetQty }: {
           </p>
         )}
 
+        {/* ⚠️ התיאור נשלף ונערך במסך הקטלוג מהיום הראשון ולא הוצג כאן —
+            המזכירה כתבה תיאורים שאיש לא ראה. מוגבל לשלוש שורות כדי
+            שהכרטיסים יישארו באותו גובה ברשת. */}
+        {book.description && (
+          <p className="mt-2 line-clamp-3 text-[15px] leading-relaxed text-[#141210]/45">
+            {book.description}
+          </p>
+        )}
+
         <div className="mt-5 flex items-end justify-between gap-3 border-t border-[#141210]/8 pt-4">
           <span className="text-[26px] font-bold leading-none text-[#6B2737]">
             {fmtAgorot(book.price_agorot)}
@@ -365,8 +374,11 @@ function CartPanel({ lines, cities, tiers, onClose, onSetQty }: {
   const [error, setError] = useState('')
 
   const bookCount = lines.reduce((s, l) => s + l.quantity, 0)
+  // 🔴 המשלוח לפי כרכים ולא לפי פריטים — זהה לחישוב בשרת
+  // (validateCheckout). פער בין השניים מציג ללקוח מחיר אחד וגובה אחר.
+  const volumeCount = totalVolumes(lines.map(l => ({ volumes: l.book.volumes, quantity: l.quantity })))
   const itemsTotal = lines.reduce((s, l) => s + l.book.price_agorot * l.quantity, 0)
-  const ship = shippingCost(method, bookCount, tiers)
+  const ship = shippingCost(method, volumeCount, tiers)
   const total = itemsTotal + (ship ?? 0)
 
   async function submit() {

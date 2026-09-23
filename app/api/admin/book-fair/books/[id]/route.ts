@@ -63,6 +63,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (body.description !== undefined) patch.description = clean(body.description) || null
   if (body.is_active !== undefined)   patch.is_active = body.is_active !== false
   if (body.sort_order !== undefined)  patch.sort_order = Number(body.sort_order) || 0
+  if (body.unlimited_stock !== undefined) patch.unlimited_stock = body.unlimited_stock === true
 
   // 🔴 חסימה מפורשת: ניסיון לערוך מלאי דרך נתיב זה נדחה ואינו מתעלם
   // בשקט — אחרת מסך שנכתב בעתיד "יעדכן מלאי" ולא יקרה כלום.

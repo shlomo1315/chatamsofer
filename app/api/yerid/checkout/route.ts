@@ -84,7 +84,9 @@ export async function POST(request: NextRequest) {
 
   // ── מדרגות המשלוח והערים ──
   const [{ data: tiers }, { data: cities }] = await Promise.all([
-    db.from('book_fair_shipping_tiers').select('min_books, max_books, price_agorot'),
+    // ⚠️ שדות הקפיצה חובה: בלעדיהם המדרגה הפתוחה נגבית כמחיר קבוע,
+    // והזמנה של 90 כרכים משלמת כמו 14.
+    db.from('book_fair_shipping_tiers').select('min_books, max_books, price_agorot, step_volumes, step_agorot'),
     db.from('book_fair_cities').select('id').eq('is_active', true),
   ])
 
