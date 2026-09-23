@@ -101,7 +101,12 @@ export default function YeridStore({ books, cities, tiers, open }: {
         <div className="mx-auto max-w-6xl px-5 py-10 sm:py-14">
           <div className="flex items-start justify-between gap-6">
             <div>
-              <Ornament />
+              {/* הלוגו הרשמי — זהה למסך ההמתנה ולשאר המערכת. */}
+              <img
+                src="/logo.png"
+                alt="איגוד הצאצאים של רבינו החתם סופר"
+                className="w-24 sm:w-28"
+              />
               <h1 className="mt-4 text-4xl font-bold leading-none text-[#F5F0E6] sm:text-5xl">
                 יריד הספרים
               </h1>
@@ -233,7 +238,13 @@ function ClosedScreen() {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-[#141210] px-6 py-16 text-center">
-      <Ornament />
+      {/* ⚠️ הלוגו הרשמי ולא עיטור מעוצב: זה הסמל שמופיע בכל המערכת
+          ובמיילים, והוא מה שמזהה את העמותה מול הקהל. */}
+      <img
+        src="/logo.png"
+        alt="איגוד הצאצאים של רבינו החתם סופר"
+        className="w-40 sm:w-48"
+      />
 
       <h1 className="mt-6 text-3xl font-bold leading-tight text-[#F5F0E6] sm:text-4xl">
         מערכת הזמנת ספרי החתם סופר
@@ -305,16 +316,6 @@ function ClosedScreen() {
         היכל החתם סופר
       </p>
     </main>
-  )
-}
-
-function Ornament() {
-  return (
-    <svg width="44" height="18" viewBox="0 0 44 18" aria-hidden="true" className="text-[#B8860B]">
-      <path d="M2 9 L10 2 L18 9 L10 16 Z" fill="currentColor" opacity="0.55" />
-      <path d="M22 9 L30 2 L38 9 L30 16 Z" fill="currentColor" opacity="0.85" />
-      <circle cx="42" cy="9" r="1.6" fill="currentColor" />
-    </svg>
   )
 }
 
