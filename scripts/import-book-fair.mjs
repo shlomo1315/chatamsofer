@@ -18,7 +18,7 @@ import { readFileSync } from 'node:fs'
 // טעינת .env.local (הסקריפט רץ מחוץ ל-Next)
 try {
   for (const line of readFileSync('.env.local', 'utf8').split('\n')) {
-    const m = line.match(/^([A-Z_]+)=(.*)$/)
+    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/)
     if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim().replace(/^["']|["']$/g, '')
   }
 } catch { /* אין קובץ — נסתמך על משתני הסביבה */ }
