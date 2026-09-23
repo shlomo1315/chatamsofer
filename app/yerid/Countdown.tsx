@@ -85,10 +85,13 @@ export default function Countdown({ openAt }: { openAt: string | null }) {
       <p className="mt-1 text-xl text-[#B8860B]">בשעה 10:00 בלילה</p>
 
       {/* ── השעון ──
-          ⚠️ tabular-nums: בלי זה הספרות בעלות רוחב שונה והמספרים
-          "קופצים" בכל שנייה. */}
+          ⚠️ הסדר בקוד הוא הסדר על המסך: ימים משמאל ושניות מימין,
+          כמקובל בעברית. הדף כולו RTL, ולכן הפריט הראשון ברשת יושב
+          בימין — לכן ימים נכתבים אחרונים.
+          ⚠️ tabular-nums: בלי זה לספרות רוחב שונה והמספרים "קופצים"
+          בכל שנייה. */}
       {left && (
-        <div className="mt-6 grid grid-cols-4 gap-2" dir="ltr">
+        <div className="mt-6 grid grid-cols-4 gap-2">
           <Unit value={left.seconds} label="שניות" />
           <Unit value={left.minutes} label="דקות" />
           <Unit value={left.hours}   label="שעות" />
