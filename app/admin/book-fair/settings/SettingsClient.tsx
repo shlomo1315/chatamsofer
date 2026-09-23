@@ -7,6 +7,7 @@ import { fmtAgorot, agorotToShekels } from '@/lib/bookFairPricing'
 import { validateTiers, resolveShippingTier, tierLabel, type TierInput } from '@/lib/bookFairShipping'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useCan } from '@/components/StaffPermissions'
+import PaymentSettings from './PaymentSettings'
 
 // הגדרות היריד: מתג פתיחה, ערי משלוח, ומדרגות תעריף.
 
@@ -249,6 +250,9 @@ export default function SettingsClient({ cities, tiers, open, openAt, mockPay }:
           </p>
         )}
       </section>
+
+      {/* ── ספק הסליקה ── */}
+      <PaymentSettings />
 
       {/* ── ערי משלוח ── */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5">
