@@ -15,6 +15,7 @@ export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 const KEY = 'book_fair_open'
+const OPEN_AT_KEY = 'book_fair_open_at'
 
 /**
  * קריאת המתג.
@@ -40,6 +41,32 @@ export async function POST(request: NextRequest) {
 
   let body: Record<string, unknown>
   try { body = await request.json() } catch { return NextResponse.json({ error: 'גוף בקשה שגוי' }, { status: 400 }) }
+
+  // ── מועד הפתיחה האוטומטית ──
+  // ⚠️ נשמר בנפרד מהמתג: אפשר לדחות מועד בלי לגעת במצב הנוכחי.
+  if (body.openAt !== undefined) {
+    const raw = String(body.openAt ?? '').trim()
+    // ריק = ביטול הפתיחה האוטומטית.
+    if (raw) {
+      // 🔴 תאריך פגום נדחה כאן ולא נבלע: ערך שאינו נפרס פירושו שהיריד
+      // לא ייפתח לעולם, בשקט מוחלט.
+      const d = new Date(raw)
+      if (Number.isNaN(d.getTime())) {
+        return NextResponse.json({ error: 'מועד פתיחה לא תקין' }, { status: 400 })
+      }
+    }
+    const { error: atErr } = await db.from('app_settings')
+      .upsert({ key: OPEN_AT_KEY, value: raw }, { onConflict: 'key' })
+    if (atErr) {
+      console.error('[book-fair/settings] open_at upsert failed:', atErr)
+      return NextResponse.json({ error: 'שמירת המועד נכשלה' }, { status: 500 })
+    }
+    await logActivity(db, {
+      userId: staff.userId, action: 'update', entityType: 'app_settings',
+      entityId: OPEN_AT_KEY, details: { openAt: raw || null },
+    })
+    if (body.open === undefined) return NextResponse.json({ ok: true, openAt: raw || null })
+  }
 
   if (typeof body.open !== 'boolean') {
     return NextResponse.json({ error: 'ערך המתג חייב להיות בוליאני' }, { status: 400 })

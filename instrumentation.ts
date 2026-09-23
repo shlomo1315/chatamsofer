@@ -321,6 +321,42 @@ export async function register() {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // ── פתיחה אוטומטית של היריד — כל דקה ──
+  //
+  // 🔴 בלי זה מישהו צריך להיות ער בשעה היעודה וללחוץ. פתיחה ידנית
+  // שנשכחת פירושה שכל מי שנרשם לתזכורת מקבל הבטחה שלא קוימה.
+  //
+  // ⚠️ כל דקה ולא כל שעה: המועד נקוב בשעה מדויקת (22:00), ובדיקה
+  // שעתית הייתה פותחת עד 59 דקות מאוחר — אחרי שהקהל כבר ניסה ונטש.
+  //
+  // ⚠️ הבדיקה עצמה היא שאילתה אחת קלה שיוצאת מיד כשהיריד כבר פתוח,
+  // ולכן היא זולה גם בתדירות הזו.
+  if (process.env.BOOK_FAIR_AUTO_OPEN_DISABLED !== '1') {
+    let opening = false
+    const tickOpen = async () => {
+      if (opening) return
+      opening = true
+      try {
+        const { getServiceClient } = await import('@/lib/apiAuth')
+        const db = getServiceClient()
+        if (!db) return
+        const { checkAndOpenBookFair } = await import('@/lib/bookFairOpening')
+        const r = await checkAndOpenBookFair(db)
+        if (r.opened) {
+          console.log(`[book-fair-open] 🟢 היריד נפתח · ${r.mailed} תזכורות נשלחו` +
+            (r.failed ? ` · ${r.failed} נכשלו` : ''))
+        }
+      } catch (err) {
+        console.error('[book-fair-open] tick failed', err)
+      } finally {
+        opening = false
+      }
+    }
+    setTimeout(() => { void tickOpen(); setInterval(() => { void tickOpen() }, MINUTE_MS) }, INITIAL_DELAY_MS)
+    console.log('[book-fair-open] auto-open watcher started (every 1m)')
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // ── ניקוי יריד הספרים — כל 15 דקות ──
   //
   // 🔴 המלאי נשחק בלי זה. השריון מנכה מהמלאי מיד (stock_web/stock_phone

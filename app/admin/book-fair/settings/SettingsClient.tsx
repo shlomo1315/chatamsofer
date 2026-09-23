@@ -12,8 +12,24 @@ import { useCan } from '@/components/StaffPermissions'
 
 type TierRow = { min_books: string; max_books: string; price: string; step_volumes: string; step_price: string }
 
-export default function SettingsClient({ cities, tiers, open, mockPay }: {
+/**
+ * ISO → הערך שתגית datetime-local מצפה לו (YYYY-MM-DDTHH:mm), בשעון מקומי.
+ *
+ * ⚠️ לא slice על ה-ISO: זה היה מציג UTC ומזיז את השעה בשעתיים-שלוש,
+ * והמנהל היה קובע 22:00 ומקבל פתיחה ב-19:00.
+ */
+function toLocalInput(iso: string | null): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+export default function SettingsClient({ cities, tiers, open, openAt, mockPay }: {
   cities: BookFairCity[]; tiers: BookFairShippingTier[]; open: boolean
+  /** מועד הפתיחה האוטומטית (ISO), או null אם לא נקבע. */
+  openAt: string | null
   /** הסליקה המחוברת מדומה — פתיחת היריד תתקבל רק אחרי אישור מפורש. */
   mockPay: boolean
 }) {
@@ -24,6 +40,20 @@ export default function SettingsClient({ cities, tiers, open, mockPay }: {
   const [isOpen, setIsOpen] = useState(open)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState('')
+
+  // ── מועד פתיחה אוטומטית ──
+  const [schedule, setSchedule] = useState(() => toLocalInput(openAt))
+
+  async function saveSchedule() {
+    // ⚠️ נשלח כ-ISO מלא ולא כערך השדה: datetime-local מחזיר מחרוזת
+    // בלי אזור זמן, והשרת היה מפרש אותה כ-UTC.
+    const iso = schedule.trim() ? new Date(schedule).toISOString() : ''
+    await call('/api/admin/book-fair/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ openAt: iso }),
+    }, 'schedule')
+  }
 
   // ── ערים ──
   const [newCity, setNewCity] = useState({ name: '', phone_code: '' })
@@ -176,6 +206,36 @@ export default function SettingsClient({ cities, tiers, open, mockPay }: {
             {busy === 'gate' ? <Loader2 size={15} className="animate-spin" /> : isOpen ? 'סגירת היריד' : 'פתיחת היריד'}
           </button>
         </div>
+
+        {/* ── פתיחה אוטומטית ──
+            🔴 בלי זה מישהו צריך להיות ער בשעה היעודה וללחוץ, וכל מי
+            שנרשם לתזכורת מקבל הבטחה שלא קוימה.
+            ⚠️ מוצג רק כשהיריד סגור — אחרי הפתיחה זה כבר לא רלוונטי. */}
+        {!isOpen && (
+          <div className="mt-4 flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-4">
+            <span className="text-sm font-medium text-slate-700">פתיחה אוטומטית</span>
+            <p className="text-xs text-slate-500">
+              היריד ייפתח מעצמו במועד הזה, ותישלח תזכורת לכל מי שנרשם בדף ההמתנה.
+              השאירו ריק כדי לפתוח ידנית בלבד.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="datetime-local"
+                value={schedule}
+                onChange={e => setSchedule(e.target.value)}
+                disabled={!canEdit}
+                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+              />
+              <button
+                onClick={saveSchedule}
+                disabled={!canEdit || !!busy}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
+              >
+                {busy === 'schedule' ? <Loader2 size={14} className="animate-spin" /> : 'שמירת המועד'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ⚠️ מוצג ליד המתג ולא רק בלוח הבקרה: זה המקום שבו מקבלים את
             ההחלטה, ומי שמגיע לכאן ישירות לא ראה את הבאנר שם. */}

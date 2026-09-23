@@ -2375,3 +2375,36 @@ export function bookFairOrderConfirmedEmail(opts: {
     }),
   }
 }
+
+// ─── היריד נפתח — תזכורת למי שנרשם ─────────────────────────────────────────
+//
+// ⚠️ נשלח פעם אחת בלבד, לכל מי שהשאיר כתובת בדף ההמתנה. ההרשמה היא
+// בקשה מפורשת, ולכן זה transactional ולא דיוור.
+//
+// ⚠️ קצר בכוונה: המקבל ביקש דבר אחד — לדעת שנפתח. כפתור אחד, בלי
+// פירוט קטלוג שרק דוחה את הקליק.
+export function bookFairOpenedEmail(): BuiltEmail {
+  const accent = '#0ea5e9'
+  const t = (k: string) => textFor('book_fair_opened', k)
+  const T = (k: string) => escapeHtml(t(k))
+  const url = `${PORTAL_BASE_DEFAULT.replace(/\/$/, '')}/yerid`
+
+  const body = `
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;letter-spacing:0.5px;">${T('kicker')}</p>
+    <h2 style="margin:0 0 14px;color:#0f172a;font-size:22px;font-weight:900;">${T('headline')}</h2>
+    <p style="margin:0 0 24px;color:#475569;font-size:15px;line-height:1.8;">${t('intro')}</p>
+    <div style="margin:0 0 22px;">${btn(url, t('cta'), accent)}</div>
+    <p style="margin:0;color:#94a3b8;font-size:13px;line-height:1.7;">${T('footnote')}</p>
+  `
+
+  return {
+    subject: t('subject'),
+    html: shell({
+      preheader: t('preheader'),
+      accent,
+      title: t('title'),
+      subtitle: 'יריד הספרים',
+      body,
+    }),
+  }
+}

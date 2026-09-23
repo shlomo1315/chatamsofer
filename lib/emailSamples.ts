@@ -8,7 +8,7 @@ import {
   birthApprovedEmail, birthRejectedEmail, maternityCardEmail, cardStockReplenishedEmail,
   portalCredentialsEmail, recoveryRealizedEmail, recoveryEditRequestEmail, gratitudeRequestEmail,
   recoveryFeedbackEmail, verifyCodeEmail, gratitudeReceivedEmail,
-  bookFairOrderConfirmedEmail,
+  bookFairOrderConfirmedEmail, bookFairOpenedEmail,
 } from '@/lib/emailTemplates'
 import type { RenderedEmail } from '@/lib/emailReviewPage'
 
@@ -32,6 +32,8 @@ const SAMPLES: { title: string; recipient: string; trigger: string; build: () =>
       deliveryMethod: 'shipping', address: 'רחוב הרב קוק 10', cityName: 'בני ברק',
       trackingToken: 'ZXhhbXBsZS10b2tlbi1mb3ItcHJldmlldw',
     }) },
+  { title: 'היריד נפתח — תזכורת', recipient: 'נרשמי התזכורת', trigger: 'פתיחת היריד',
+    build: () => bookFairOpenedEmail() },
   { title: 'אישור קליטת פנייה במייל', recipient: 'פונה', trigger: 'קליטת בקשה במייל',
     build: () => emailIntakeConfirmedEmail('משפחת כהן', 'בקשת הלוואה') },
   { title: 'בקשה נחסמה — רישום נדחה', recipient: 'פונה', trigger: 'בקשה ממי שרישומו נדחה',
