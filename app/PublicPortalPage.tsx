@@ -1980,6 +1980,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   const [lineageFixSending, setLineageFixSending] = useState(false)
   const [lineageFixErr, setLineageFixErr] = useState('')
   const [lineageFixDone, setLineageFixDone] = useState(false)
+  /** האם התיקון נקלט בפועל, או נשאר לטיפול ידני (טקסט חופשי / עמימות). */
+  const [lineageFixApplied, setLineageFixApplied] = useState(false)
   // 🔴 שרשרת הדורות שנבנתה בעורך שבאזור האישי.
   // ⚠️ נפרד מ-fixLineageResult (תיקון שהמשרד דרש, בזרימת המסמכים): שני
   // המסלולים יכולים להיות פתוחים בו-זמנית, ומצב משותף היה מערבב ביניהם.
@@ -4147,6 +4149,20 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { setLineageFixErr(d.error ?? 'שליחת הבקשה נכשלה'); return }
+
+      // 🔴 השרשרת המעודכנת נכנסת למסך מיד.
+      //
+      // ⚠️ עד כה המצב המקומי לא התעדכן, והמוטב המשיך לראות את הייחוס
+      // הישן עד רענון ידני — כלומר שלח תיקון, ראה שלא השתנה כלום,
+      // ודיווח שהמערכת לא עובדת. התיקון כן נשמר.
+      if (Array.isArray(d.lineage_chain)) {
+        setBeneficiary(b => b ? { ...b, lineage_chain: d.lineage_chain } : b)
+      }
+
+      // ⚠️ מבחין בין קליטה מיידית לבין בקשה שנשארה לטיפול ידני:
+      // טקסט חופשי בלי שרשרת מובנית, או מקרה עמימות שההחלה נכשלה בו.
+      // הודעת "נשמר" על בקשה שלא הוחלה היא בדיוק השקר שגרם לבלבול.
+      setLineageFixApplied(d.applied === true)
       setLineageFixDone(true)
       setLineageFixText('')
       setPortalFixLineage(null)
@@ -6025,20 +6041,31 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   </div>
                   )}
 
-                  {/* ⚠️ בקשה ולא עריכה ישירה: הייחוס קובע זכאות, ושינוי
-                      שלו עובר בדיקה במשרד לפני שהוא נכנס לעץ. */}
+                  {/* 🔴 התיקון נקלט מיד ואינו ממתין לאישור.
+                      ⚠️ הטקסטים כאן אמרו "תיבדק במשרד" ו"אינו משתנה מיד"
+                      גם אחרי שהמסלול שונה לקליטה מיידית. התוצאה: המוטב
+                      חשב שלא נשמר, והמזכירות חיפשה תור אישור שאינו קיים. */}
                   {lineageFixOpen && (
                     <div className="mt-3 rounded-xl border border-indigo-200 bg-indigo-50/60 p-3 flex flex-col gap-2">
                       {lineageFixDone ? (
-                        <p className="flex items-center gap-2 text-sm text-green-700">
-                          <CheckCircle2 size={16} className="shrink-0" />
-                          הבקשה התקבלה ותיבדק במשרד. תודה!
-                        </p>
+                        lineageFixApplied ? (
+                          <p className="flex items-center gap-2 text-sm text-green-700">
+                            <CheckCircle2 size={16} className="shrink-0" />
+                            הייחוס עודכן ונשמר. תודה!
+                          </p>
+                        ) : (
+                          // ⚠️ נאמר במפורש שהתיקון *טרם* נכנס: הודעת "נשמר"
+                          // על בקשה שנשארה לטיפול ידני היא בדיוק מה שגרם
+                          // למשפחות לחשוב שהכל תקין בזמן שדבר לא קרה.
+                          <p className="flex items-center gap-2 text-sm text-amber-700">
+                            <CheckCircle2 size={16} className="shrink-0" />
+                            הבקשה התקבלה ותטופל במשרד — הייחוס טרם עודכן.
+                          </p>
+                        )
                       ) : (
                         <>
                           <p className="text-xs text-slate-600 leading-relaxed">
-                            בנו מחדש את סדר הדורות הנכון. הבקשה נבדקת במשרד לפני שהיא
-                            נכנסת — הרישום עצמו אינו משתנה מיד.
+                            בנו מחדש את סדר הדורות הנכון. השינוי נשמר מיד עם השליחה.
                           </p>
 
                           {/* 🔴 עורך הדורות המלא — אותו רכיב שבו מולאו הדורות

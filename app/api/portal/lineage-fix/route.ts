@@ -139,7 +139,24 @@ export async function POST(request: NextRequest) {
     try {
       const { autoApplyLineageFix } = await import('@/lib/lineageAutoFix')
       const res = await autoApplyLineageFix(admin, ben.id, chain)
-      return NextResponse.json({ ok: true, applied: res.applied, needsReview: res.needsReview })
+
+      // 🔴 השרשרת המעודכנת חוזרת ללקוח.
+      //
+      // ⚠️ בלי זה המסך ממשיך להציג את הייחוס הישן עד רענון ידני —
+      // המוטב שולח, רואה את מה שהיה, ומדווח ש"התיקון לא נשמר" בזמן
+      // שהוא כן נשמר. זו בדיוק התלונה שהגיעה מהמשפחות.
+      //
+      // ⚠️ נקרא *אחרי* ההחלה: הטריגר במסד בנה את השרשרת מהעץ, וזו
+      // האמת — לא מה שהלקוח שלח.
+      const { data: fresh } = await admin.from('beneficiaries')
+        .select('lineage_chain').eq('id', ben.id).maybeSingle()
+
+      return NextResponse.json({
+        ok: true,
+        applied: res.applied,
+        needsReview: res.needsReview,
+        lineage_chain: (fresh as { lineage_chain?: unknown } | null)?.lineage_chain ?? null,
+      })
     } catch (e) {
       console.error('[lineage-fix] קליטה אוטומטית נכשלה — ממתין לטיפול ידני:',
         e instanceof Error ? e.message : e)

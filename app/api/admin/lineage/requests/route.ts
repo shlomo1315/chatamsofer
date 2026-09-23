@@ -347,19 +347,40 @@ export async function applyChain(
   plan.sort((a, b) => a.step.generation - b.step.generation)
 
   // ── שלב ב': כתיבה ──
+  //
+  // 🔴 הדור נגזר מהאב בפועל ולא מ-step.generation שהגיע מהלקוח.
+  //
+  // ⚠️ הטופס בפורטל ממספר את הדורות ברצף לפי מיקום במערך (1,2,3…),
+  // ולא לפי הדור האמיתי בעץ. מוטב שמוסיף או מוחק דור אחד מזיז את כל
+  // המספור שאחריו, והצמתים נוצרו עם generation שסותר את parent_id.
+  // התוצאה: פער בשרשרת ⇒ chainHasGap ⇒ המשפחה נשלחת ל-deep_review
+  // בלי סיבה, וגם lineage_chain נבנה מהמסלול הפגום.
+  //
+  // parent.generation + 1 הוא הדפוס בכל שאר המסלולים (beneficiaryNode,
+  // fix-lineage, public-register, reparent) — רק כאן הוא חסר.
   let parentId = root.id
+  let parentGen = Number(root.generation ?? 1)
   let createdNodes = 0
   for (const { step, existingId } of plan) {
-    if (existingId) { parentId = existingId; continue }
+    if (existingId) {
+      parentId = existingId
+      // הדור נקרא מהעץ ולא מההצעה — צומת קיים הוא מקור האמת.
+      const { data: ex } = await admin.from('lineage_nodes')
+        .select('generation').eq('id', existingId).maybeSingle()
+      parentGen = Number((ex as { generation?: number } | null)?.generation ?? parentGen + 1)
+      continue
+    }
+    const gen = parentGen + 1
     const { data: created, error } = await admin.from('lineage_nodes').insert({
       name: step.name.trim(),
       parent_id: parentId,
-      generation: step.generation,
+      generation: gen,
       relation: step.relation ?? null,
       status: 'pending',
     }).select('id').single()
-    if (error) throw new Error(`יצירת דור ${step.generation} נכשלה: ${error.message}`)
+    if (error) throw new Error(`יצירת דור ${gen} נכשלה: ${error.message}`)
     parentId = (created as { id: string }).id
+    parentGen = gen
     createdNodes++
   }
 
