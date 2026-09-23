@@ -26,7 +26,28 @@ async function getData() {
   const db = getServiceClient()
   if (!db) return { books: [] as PublicBook[], cities: [], tiers: [], open: false }
 
-  const [{ books }, { data: cities }, { data: tiers }, { data: gate }] = await Promise.all([
+  // ── שלב א: האם היריד פתוח ──
+  //
+  // 🔴 נשלף לבדו ולפני הקטלוג, ולא במקביל אליו.
+  //
+  // ⚠️ שליפה מקבילה החזירה את הקטלוג המלא גם כשהיריד סגור, והוא נסע
+  // ל-props של הקומפוננטה — כלומר ישב ב-HTML של הדף גם כשהמסך הציג
+  // "ייפתח בקרוב". כל הכותרים והמחירים היו גלויים ב"הצג מקור" לפני
+  // הפתיחה הרשמית (63 מופעי price_agorot נמדדו בפרודקשן).
+  //
+  // "לא מרונדר" אינו "לא נשלח". מה שאסור להיחשף — לא נשלף.
+  const { data: gate } = await db.from('app_settings')
+    .select('value').eq('key', 'book_fair_open').maybeSingle()
+
+  // 🔴 ברירת המחדל היא *סגור*: מפתח חסר פירושו שאיש לא פתח את היריד
+  // עדיין, ופתיחה מכללא הייתה חושפת קטלוג שטרם הוכן ומקבלת הזמנות
+  // על מלאי שלא נבדק. חייב להיות זהה לבדיקה ב-api/yerid/checkout,
+  // אחרת המסך יציג "סגור" בעוד ההזמנות מתקבלות.
+  const open = String(gate?.value ?? '') === 'true'
+  if (!open) return { books: [] as PublicBook[], cities: [], tiers: [], open: false }
+
+  // ── שלב ב: הקטלוג — רק אחרי שהיריד פתוח ──
+  const [{ books }, { data: cities }, { data: tiers }] = await Promise.all([
     fetchPublicCatalog(db),
     db.from('book_fair_cities').select('id, name').eq('is_active', true).order('sort_order'),
     // ⚠️ step_volumes/step_agorot נשלפים גם הם: בלעדיהם המדרגה הפתוחה
@@ -34,18 +55,13 @@ async function getData() {
     db.from('book_fair_shipping_tiers')
       .select('min_books, max_books, price_agorot, step_volumes, step_agorot')
       .order('min_books'),
-    db.from('app_settings').select('value').eq('key', 'book_fair_open').maybeSingle(),
   ])
 
   return {
     books,
     cities: (cities ?? []) as PublicCity[],
     tiers: (tiers ?? []) as PublicTier[],
-    // 🔴 ברירת המחדל היא *סגור*: מפתח חסר פירושו שאיש לא פתח את היריד
-    // עדיין, ופתיחה מכללא הייתה חושפת קטלוג שטרם הוכן ומקבלת הזמנות
-    // על מלאי שלא נבדק. חייב להיות זהה לבדיקה ב-api/yerid/checkout,
-    // אחרת המסך יציג "סגור" בעוד ההזמנות מתקבלות.
-    open: String(gate?.value ?? '') === 'true',
+    open: true,
   }
 }
 
