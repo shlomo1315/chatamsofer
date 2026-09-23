@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import {
   BookOpen, ShoppingCart, Boxes, Settings2, TrendingUp, Mic,
-  AlertTriangle, Package, Globe, Phone, ArrowLeft, CircleDot,
+  AlertTriangle, Package, Globe, Phone, ArrowLeft, CircleDot, Mail,
 } from 'lucide-react'
 import { guardPage } from '@/lib/pageGuard'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
@@ -39,11 +39,11 @@ const PAID = ['paid', 'picking', 'packed', 'shipped', 'delivered', 'partially_re
 
 async function getData() {
   if (!isSupabaseConfigured()) {
-    return { orders: [] as OrderRow[], books: [] as BookRow[], open: false, cities: 0, tiers: 0 }
+    return { orders: [] as OrderRow[], books: [] as BookRow[], open: false, cities: 0, tiers: 0, reminders: 0 }
   }
   const supabase = await createClient()
 
-  const [o, b, gate, c, t] = await Promise.all([
+  const [o, b, gate, c, t, rem] = await Promise.all([
     // ⚠️ fetchAllRows: PostgREST קוטע ב-1,000 שורות בשקט, וסיכום על
     // רשימה חתוכה נראה בדיוק כמו סיכום מלא.
     fetchAllRows<OrderRow>((from, to) =>
@@ -60,6 +60,8 @@ async function getData() {
     supabase.from('app_settings').select('value').eq('key', 'book_fair_open').maybeSingle(),
     supabase.from('book_fair_cities').select('id', { count: 'exact', head: true }).eq('is_active', true),
     supabase.from('book_fair_shipping_tiers').select('id', { count: 'exact', head: true }),
+    // נרשמים לתזכורת שטרם קיבלו הודעה — רלוונטי רק כשהיריד סגור.
+    supabase.from('book_fair_reminders').select('id', { count: 'exact', head: true }).is('notified_at', null),
   ])
 
   return {
@@ -69,12 +71,13 @@ async function getData() {
     open: String(gate.data?.value ?? '') === 'true',
     cities: c.count ?? 0,
     tiers: t.count ?? 0,
+    reminders: rem.count ?? 0,
   }
 }
 
 export default async function BookFairPage() {
   await guardPage('book_fair')
-  const { orders, books, open, cities, tiers } = await getData()
+  const { orders, books, open, cities, tiers, reminders } = await getData()
   // 🔴 האם הסליקה אמיתית. ראו הבאנר למטה — זו הבדיקה החשובה ביותר במסך.
   const mockPay = await isMockPayment()
 
@@ -149,6 +152,20 @@ export default async function BookFairPage() {
             {open
               ? '🔴 היריד פתוח כרגע במצב הזה. כל הזמנה שתתקבל תהיה ללא תשלום.'
               : 'אין לפתוח את היריד לקהל לפני חיבור ספק סליקה אמיתי.'}
+          </p>
+        </section>
+      )}
+
+      {/* ── ממתינים לפתיחה ──
+          ⚠️ מוצג רק כשהיריד סגור ויש נרשמים: כשהוא פתוח הרשימה כבר
+          קיבלה את התזכורת ואינה מידע פעיל. */}
+      {!open && reminders > 0 && (
+        <section className="rounded-2xl border border-[#B8860B]/40 bg-amber-50/60 p-5">
+          <h2 className="mb-1 flex items-center gap-2 font-semibold text-amber-900">
+            <Mail size={17} /> {reminders} נרשמו לתזכורת
+          </h2>
+          <p className="text-sm text-amber-800">
+            השאירו כתובת מייל בדף ההמתנה ומצפים לעדכון כשהמערכת תיפתח.
           </p>
         </section>
       )}

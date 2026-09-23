@@ -89,19 +89,8 @@ export default function YeridStore({ books, cities, tiers, open }: {
     })
   }, [])
 
-  // ── היריד סגור ──
-  if (!open) {
-    return (
-      <main className="flex min-h-screen flex-col items-center justify-center bg-[#141210] px-6 text-center">
-        <Ornament />
-        <h1 className="mt-6 text-4xl font-bold text-[#F5F0E6]">יריד הספרים</h1>
-        <p className="mt-1 text-lg text-[#B8860B]">היכל החתם סופר</p>
-        <p className="mt-8 max-w-md text-xl leading-relaxed text-[#F5F0E6]/70">
-          ההזמנות ייפתחו בקרוב.
-        </p>
-      </main>
-    )
-  }
+  // ── היריד סגור — מסך המתנה עם רישום לתזכורת ──
+  if (!open) return <ClosedScreen />
 
   return (
     <div className="min-h-screen bg-[#F5F0E6] pb-28 lg:pb-0">
@@ -206,6 +195,119 @@ export default function YeridStore({ books, cities, tiers, open }: {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** קישוט השער — צורה גיאומטרית פשוטה, לא אייקון גנרי. */
+/**
+ * מסך ההמתנה לפני פתיחת היריד.
+ *
+ * ⚠️ אינו "הודעת סגירה" אלא דף נחיתה: מי שמגיע לכאן התעניין מספיק כדי
+ * להקליד את הכתובת, ושורה אחת של "ייפתח בקרוב" מבזבזת את זה. הרישום
+ * לתזכורת הופך ביקור אבוד לפנייה שתחזור ביום הפתיחה.
+ */
+function ClosedScreen() {
+  const [email, setEmail] = useState('')
+  const [state, setState] = useState<'idle' | 'sending' | 'done'>('idle')
+  const [error, setError] = useState('')
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    const v = email.trim()
+    // ⚠️ בדיקה בסיסית בלקוח כדי לא לשלוח בקשה סתם; השרת מאמת שוב.
+    if (!v || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) {
+      setError('נא להזין כתובת אימייל תקינה')
+      return
+    }
+    setState('sending'); setError('')
+    try {
+      const res = await fetch('/api/yerid/remind-me', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: v }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(json.error ?? 'הרישום נכשל'); setState('idle'); return }
+      setState('done')
+    } catch {
+      setError('הרישום נכשל — בדקו את החיבור')
+      setState('idle')
+    }
+  }
+
+  return (
+    <main className="flex min-h-screen flex-col items-center justify-center bg-[#141210] px-6 py-16 text-center">
+      <Ornament />
+
+      <h1 className="mt-6 text-3xl font-bold leading-tight text-[#F5F0E6] sm:text-4xl">
+        מערכת הזמנת ספרי החתם סופר
+      </h1>
+      <p className="mt-2 text-lg text-[#B8860B]">שע״י היכל החתם סופר</p>
+
+      {/* ── מועד הפתיחה — הלב של הדף ── */}
+      <div className="mt-10 w-full max-w-md rounded-2xl border border-[#B8860B]/30 bg-[#F5F0E6]/5 px-6 py-7">
+        <p className="text-base text-[#F5F0E6]/60">המערכת תיפתח בעז״ה</p>
+        <p className="mt-2 text-2xl font-bold text-[#F5F0E6] sm:text-3xl">
+          ביום כ״ג תשרי
+        </p>
+        <p className="mt-1 text-xl text-[#B8860B]">בשעה 10:00 בלילה</p>
+      </div>
+
+      {/* ── תזכורת ── */}
+      <div className="mt-10 w-full max-w-md">
+        {state === 'done' ? (
+          // ⚠️ אישור מפורש ומפורט: "נרשמת" לבד משאיר ספק אם באמת נקלט.
+          <div className="rounded-2xl border border-[#B8860B]/40 bg-[#B8860B]/10 px-6 py-7">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#B8860B]">
+              <Check size={26} className="text-[#141210]" strokeWidth={3} />
+            </div>
+            <p className="text-lg font-bold text-[#F5F0E6]">הכתובת נקלטה במערכת</p>
+            <p className="mt-2 text-base leading-relaxed text-[#F5F0E6]/70">
+              נשלח אליכם תזכורת במייל ברגע שהמערכת תיפתח.
+              <br />
+              תודה על ההתעניינות!
+            </p>
+          </div>
+        ) : (
+          <>
+            <p className="mb-4 text-base leading-relaxed text-[#F5F0E6]/70">
+              רוצים שנזכיר לכם?
+              <br />
+              השאירו כתובת מייל ונעדכן אתכם ברגע שהמערכת נפתחת.
+            </p>
+
+            <form onSubmit={submit} className="flex flex-col gap-3">
+              <input
+                type="email"
+                value={email}
+                onChange={e => { setEmail(e.target.value); setError('') }}
+                placeholder="הכניסו כתובת מייל"
+                dir="ltr"
+                // ⚠️ אזור לחיצה גדול וטיפוגרפיה גדולה — קהל היעד כולל
+                // קונים מבוגרים ומכשירים ישנים.
+                className="w-full rounded-xl border-2 border-[#F5F0E6]/20 bg-[#F5F0E6]/5 px-5 py-4 text-center text-lg text-[#F5F0E6] outline-none transition placeholder:text-[#F5F0E6]/35 focus:border-[#B8860B]"
+                disabled={state === 'sending'}
+              />
+
+              {error && (
+                <p className="text-base text-red-300">{error}</p>
+              )}
+
+              <button
+                type="submit"
+                disabled={state === 'sending' || !email.trim()}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#B8860B] px-6 py-4 text-lg font-bold text-[#141210] transition hover:bg-[#c9960f] disabled:opacity-40"
+              >
+                {state === 'sending' ? 'שולח…' : 'שלחו לי תזכורת'}
+              </button>
+            </form>
+          </>
+        )}
+      </div>
+
+      <p className="mt-12 text-sm text-[#F5F0E6]/35">
+        היכל החתם סופר
+      </p>
+    </main>
+  )
+}
+
 function Ornament() {
   return (
     <svg width="44" height="18" viewBox="0 0 44 18" aria-hidden="true" className="text-[#B8860B]">
