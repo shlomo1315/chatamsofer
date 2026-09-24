@@ -2241,6 +2241,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     baby_id_number: '', baby_id_type: 'id',
   })
   const [birthCertFile, setBirthCertFile] = useState<File | null>(null)
+  // אישור לידה של התאום השני — בתאומים יש שני מסמכים נפרדים, לא אחד משותף.
+  const [birthCertFile2, setBirthCertFile2] = useState<File | null>(null)
   const [noBabyName, setNoBabyName] = useState(false)   // סימון "עדיין אין שם" — להשלמה בכניסה הבאה
   const [babyIdError, setBabyIdError] = useState('')
   // תאריך הלידה של ילד קיים שזוהה לפי ת"ז (תינוק ראשון / תאום שני). כשקיים —
@@ -3121,6 +3123,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     if (wantsRecovery && !birthForm.recovery_home) { setError('אנא בחר בית החלמה'); return }
     if (wantsFoodCard && !cardCenterId) { setError('אנא בחרו מוקד לאיסוף כרטיס המזון'); return }
     if (!birthCertFile) { setError('אנא צרף אישור לידה'); return }
+    // בתאומים יש שני אישורי לידה נפרדים — אחד לכל תינוק, לא מסמך משותף.
+    if (isTwins && !birthCertFile2) { setError('אנא צרפו אישור לידה עבור כל אחד משני התאומים'); return }
     if (!beneficiary) return
     // ⚠️ חובה: צילומי תעודות הזהות (הבעל והאשה) הם תנאי להגשת הבקשה למשפחה
     // שטרם אושרה. לא ניתן להתקדם בלעדיהם — לא קיימים במערכת וגם לא הועלו כעת.
@@ -3152,6 +3156,22 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         setLoading(false); return
       }
 
+      // בתאומים — אישור הלידה השני של התינוק השני, בנפרד מהראשון.
+      let certUrl2 = ''
+      if (isTwins && birthCertFile2) {
+        const fd2 = new FormData()
+        fd2.append('file', birthCertFile2)
+        fd2.append('beneficiary_id', beneficiary.id)
+        fd2.append('doc_type', 'birth_cert')
+        const upRes2 = await fetch('/api/portal/upload-docs', { method: 'POST', body: fd2 })
+        const upData2 = await upRes2.json().catch(() => ({}))
+        certUrl2 = upRes2.ok ? (upData2.url ?? '') : ''
+        if (!certUrl2) {
+          setError(upData2.error || 'שגיאה בהעלאת אישור הלידה השני. אנא נסו שוב או צרפו קובץ אחר.')
+          setLoading(false); return
+        }
+      }
+
       // רשימת התינוקות — תינוק אחד בלידה רגילה, שניים בתאומים
       const babies = [
         { name: birthForm.baby_name, gender: birthForm.baby_gender, id_type: birthForm.baby_id_type, id_number: birthForm.baby_id_number },
@@ -3160,7 +3180,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       const res = await fetch(`/api/portal/birth-request${previewCode ? `?preview=${encodeURIComponent(previewCode)}` : ''}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ beneficiary_id: beneficiary.id, ...birthForm, wants_food_card: wantsFoodCard, wants_recovery: wantsRecovery, card_center_id: wantsFoodCard ? cardCenterId : null, is_twins: isTwins, babies, birth_certificate_url: certUrl, baby_name_pending: noBabyName }),
+        body: JSON.stringify({ beneficiary_id: beneficiary.id, ...birthForm, wants_food_card: wantsFoodCard, wants_recovery: wantsRecovery, card_center_id: wantsFoodCard ? cardCenterId : null, is_twins: isTwins, babies, birth_certificate_url: certUrl, birth_certificate_url_2: certUrl2 || undefined, baby_name_pending: noBabyName }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'שגיאה בשליחת הבקשה'); return }
@@ -6663,6 +6683,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                             if (!v) {
                               setBaby2({ baby_gender: '', baby_name: '', baby_id_number: '', baby_id_type: 'id' })
                               setNoBaby2Name(false); setBaby2IdError(''); setExistingBaby2BirthDate('')
+                              setBirthCertFile2(null)
                             }
                           }}
                           className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-all duration-150 ${
@@ -6767,8 +6788,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     />
                   </Field>
                 </div>
-                <div className="col-span-2">
-                  <Field label={<EditableText k="birth.cert.label" />} required hint={`אישור הלידה מבית החולים. ${UPLOAD_HINT}`}>
+                <div className={isTwins ? 'col-span-2 sm:col-span-1' : 'col-span-2'}>
+                  <Field label={isTwins ? 'אישור לידה — תינוק ראשון' : <EditableText k="birth.cert.label" />} required hint={`אישור הלידה מבית החולים. ${UPLOAD_HINT}`}>
                     {birthCertFile ? (
                       <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
                         <span className="text-sm text-green-700 flex items-center gap-2">
@@ -6788,6 +6809,31 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     )}
                   </Field>
                 </div>
+                {/* אישור לידה שני — רק בתאומים. שני מסמכים נפרדים, אחד לכל תינוק,
+                    ולא מסמך משותף אחד. */}
+                {isTwins && (
+                  <div className="col-span-2 sm:col-span-1">
+                    <Field label="אישור לידה — תינוק שני" required hint={`אישור הלידה מבית החולים. ${UPLOAD_HINT}`}>
+                      {birthCertFile2 ? (
+                        <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                          <span className="text-sm text-green-700 flex items-center gap-2">
+                            <CheckCircle2 size={14} /> {birthCertFile2.name}
+                          </span>
+                          <button type="button" onClick={() => setBirthCertFile2(null)} className="text-red-400 hover:text-red-600">
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-violet-50 border-2 border-dashed border-slate-300 hover:border-violet-400 rounded-xl px-4 py-3 transition-all duration-150">
+                          <Upload size={16} className="text-slate-400" />
+                          <span className="text-sm text-slate-500">לחץ להעלאת אישור לידה</span>
+                          <input type="file" accept={UPLOAD_ACCEPT} className="hidden"
+                            onChange={e => setBirthCertFile2(e.target.files?.[0] ?? null)} />
+                        </label>
+                      )}
+                    </Field>
+                  </div>
+                )}
               </div>
             </Card>
 

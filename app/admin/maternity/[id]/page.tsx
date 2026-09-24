@@ -584,7 +584,10 @@ export default async function MaternityDetailPage(
                       )),
                     )}
                     {aid.birth_certificate_url && (
-                      <DocCard label="אישור לידה" person={motherName} url={aid.birth_certificate_url} />
+                      <DocCard label={aid.is_twins ? 'אישור לידה — תינוק 1' : 'אישור לידה'} person={motherName} url={aid.birth_certificate_url} />
+                    )}
+                    {aid.is_twins && aid.birth_certificate_url_2 && (
+                      <DocCard label="אישור לידה — תינוק 2" person={motherName} url={aid.birth_certificate_url_2} />
                     )}
                   </div>
                 </div>
@@ -731,11 +734,26 @@ export default async function MaternityDetailPage(
                   <div className="flex items-center justify-between gap-2 mb-3">
                     <div className="flex items-center gap-2 text-indigo-600">
                       <FileText size={16} />
-                      <span className="text-xs font-semibold text-slate-500 uppercase">אישור לידה</span>
+                      <span className="text-xs font-semibold text-slate-500 uppercase">
+                        {aid.is_twins ? 'אישור לידה — תינוק 1' : 'אישור לידה'}
+                      </span>
                     </div>
                     <DownloadDocButton url={aid.birth_certificate_url} docType="אישור לידה" person={motherName} name={aid.birth_certificate_url} variant="button" />
                   </div>
                   <BirthCertificatePreview aidId={aid.id} beneficiaryId={aid.beneficiary_id} url={aid.birth_certificate_url} person={motherName} />
+                </Card>
+              )}
+              {/* אישור לידה שני — רק בתאומים, מסמך נפרד לתינוק השני. */}
+              {aid.is_twins && aid.birth_certificate_url_2 && (
+                <Card>
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2 text-violet-600">
+                      <FileText size={16} />
+                      <span className="text-xs font-semibold text-slate-500 uppercase">אישור לידה — תינוק 2</span>
+                    </div>
+                    <DownloadDocButton url={aid.birth_certificate_url_2} docType="אישור לידה" person={motherName} name={aid.birth_certificate_url_2} variant="button" />
+                  </div>
+                  <BirthCertificatePreview aidId={aid.id} beneficiaryId={aid.beneficiary_id} url={aid.birth_certificate_url_2} person={motherName} field="birth_certificate_url_2" />
                 </Card>
               )}
               {aid.notes && (

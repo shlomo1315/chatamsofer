@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 })
   }
 
-  const { beneficiary_id, birth_date, baby_name, baby_gender, recovery_home, notes, baby_id_number, baby_id_type, birth_certificate_url, birth_type, is_twins, babies } = body
+  const { beneficiary_id, birth_date, baby_name, baby_gender, recovery_home, notes, baby_id_number, baby_id_type, birth_certificate_url, birth_certificate_url_2, birth_type, is_twins, babies } = body
 
   if (!beneficiary_id || !birth_date) {
     return NextResponse.json({ error: 'שדות חובה חסרים' }, { status: 400 })
@@ -51,6 +51,12 @@ export async function POST(request: NextRequest) {
   // ל-API (בעקיפת הטופס) הצליחה להיקלט ללא אישור לידה כלל.
   if (!birth_certificate_url || !String(birth_certificate_url).trim()) {
     return NextResponse.json({ error: 'חובה לצרף אישור לידה' }, { status: 400 })
+  }
+
+  // 🔴 בלידת תאומים יש שני אישורי לידה נפרדים (אחד לכל תינוק), ולא מסמך
+  // משותף — לכן שני הקבצים חובה, לא רק הראשון.
+  if (is_twins === true && (!birth_certificate_url_2 || !String(birth_certificate_url_2).trim())) {
+    return NextResponse.json({ error: 'חובה לצרף אישור לידה עבור כל אחד משני התאומים' }, { status: 400 })
   }
 
 
@@ -361,6 +367,9 @@ export async function POST(request: NextRequest) {
     babies: (!isSilent && normBabies.length) ? normBabies : null,
     recovery_eligibility_days: defaultRecoveryDays(twins),
     birth_certificate_url: birth_certificate_url ? String(birth_certificate_url) : null,
+    // ⚠️ רק בתאומים: לידה רגילה לעולם אינה שולחת שדה זה, כדי שלא יישאר
+    // ערך ישן דבוק לאחר מעבר בין "תאומים" ל"לידה רגילה" באותו טופס.
+    birth_certificate_url_2: (twins && birth_certificate_url_2) ? String(birth_certificate_url_2) : null,
     recovery_home: recoveryHomeVal || null,
     wants_food_card: wantsFoodCard,
     wants_recovery: wantsRecovery,
@@ -380,6 +389,8 @@ export async function POST(request: NextRequest) {
     const benEmail = ben.email
     const genderLbl = (g?: string | null) => g === 'male' ? 'בן' : g === 'female' ? 'בת' : ''
     const certUrl = birth_certificate_url ? String(birth_certificate_url) : ''
+    // בתאומים יש שני אישורי לידה נפרדים — מצטרפים שניהם למייל.
+    const certUrl2 = (twins && birth_certificate_url_2) ? String(birth_certificate_url_2) : ''
     // שורות פרטי התינוקות למייל — בתאומים מפורטות לכל תינוק בנפרד
     const babyRows: [string, string][] = twins
       ? normBabies.flatMap((b, i): [string, string][] => [
@@ -407,10 +418,18 @@ export async function POST(request: NextRequest) {
               ['תאריך לידה', String(birth_date)],
               ['בית החלמה', recovery_home ? String(recovery_home).trim() : ''],
             ],
-        documents: [{ name: 'אישור לידה', url: certUrl ? await signedDocUrl(admin, certUrl) : undefined }],
+        documents: certUrl2
+          ? [
+              { name: 'אישור לידה — תינוק 1', url: await signedDocUrl(admin, certUrl) },
+              { name: 'אישור לידה — תינוק 2', url: await signedDocUrl(admin, certUrl2) },
+            ]
+          : [{ name: 'אישור לידה', url: certUrl ? await signedDocUrl(admin, certUrl) : undefined }],
       })
-      const att = certUrl ? await urlToAttachment(certUrl, 'אישור-לידה') : null
-      await deliverMail(benEmail, mail.subject, mail.html, att ? [att] : undefined, mailFor('igud'))
+      const attachments = (await Promise.all([
+        certUrl ? urlToAttachment(certUrl, certUrl2 ? 'אישור-לידה-1' : 'אישור-לידה') : null,
+        certUrl2 ? urlToAttachment(certUrl2, 'אישור-לידה-2') : null,
+      ])).filter((a): a is NonNullable<typeof a> => !!a)
+      await deliverMail(benEmail, mail.subject, mail.html, attachments.length ? attachments : undefined, mailFor('igud'))
     })().catch(() => {})
   }
 

@@ -20,11 +20,14 @@ export default function BirthCertificatePreview({
   beneficiaryId,
   url: initialUrl,
   person,
+  field = 'birth_certificate_url',
 }: {
   aidId: string
   beneficiaryId: string
   url: string
   person?: string
+  /** עמודת היעד בעדכון/מחיקה — birth_certificate_url_2 לאישור השני בתאומים. */
+  field?: 'birth_certificate_url' | 'birth_certificate_url_2'
 }) {
   const router = useRouter()
   const supabase = createClient()
@@ -42,7 +45,7 @@ export default function BirthCertificatePreview({
       const { error: upErr } = await supabase.storage.from('documents').upload(path, file, { upsert: true })
       if (upErr) throw upErr
       const { data: pub } = supabase.storage.from('documents').getPublicUrl(path)
-      const { error } = await supabase.from('maternity_aids').update({ birth_certificate_url: pub.publicUrl }).eq('id', aidId)
+      const { error } = await supabase.from('maternity_aids').update({ [field]: pub.publicUrl }).eq('id', aidId)
       if (error) throw error
       setUrl(pub.publicUrl)
       toast.success('הקובץ הוחלף בהצלחה')
@@ -58,7 +61,7 @@ export default function BirthCertificatePreview({
     if (!(await confirm({ title: 'מחיקת אישור לידה', message: 'למחוק את אישור הלידה?', confirmLabel: 'מחיקה', danger: true }))) return
     setBusy(true)
     try {
-      const { error } = await supabase.from('maternity_aids').update({ birth_certificate_url: null }).eq('id', aidId)
+      const { error } = await supabase.from('maternity_aids').update({ [field]: null }).eq('id', aidId)
       if (error) throw error
       toast.success('אישור הלידה נמחק')
       router.refresh()

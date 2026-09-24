@@ -3,6 +3,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react'
 import { Search, ShoppingBag, Plus, Minus, X, Check } from 'lucide-react'
 import { fmtAgorot, bookImageUrl } from '@/lib/bookFairPricing'
 import { shippingCost, totalVolumes } from '@/lib/bookFairShipping'
+import { cleanEmail, emailError } from '@/lib/emailAddress'
 import type { PublicBook, PublicCity, PublicTier } from './page'
 import Countdown from './Countdown'
 
@@ -217,12 +218,11 @@ function ClosedScreen({ openAt }: { openAt: string | null }) {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    const v = email.trim()
-    // ⚠️ בדיקה בסיסית בלקוח כדי לא לשלוח בקשה סתם; השרת מאמת שוב.
-    if (!v || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) {
-      setError('נא להזין כתובת אימייל תקינה')
-      return
-    }
+    const v = cleanEmail(email)
+    // ⚠️ בדיקה בלקוח כדי לא לשלוח בקשה סתם; השרת מאמת שוב באותם כללים.
+    const msg = emailError(v)
+    if (msg) { setError(msg); return }
+
     setState('sending'); setError('')
     try {
       const res = await fetch('/api/yerid/remind-me', {
@@ -240,19 +240,22 @@ function ClosedScreen({ openAt }: { openAt: string | null }) {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-[#141210] px-6 py-16 text-center">
+    // ⚠️ רקע כחול בהיר ולא כהה: הלוגו הוא חותם זהב, וזהב על כמעט-שחור
+    // מאבד ניגודיות — הוא "נבלע" ברקע במקום לשבת עליו. כחול בהיר הוא
+    // הצבע המשלים לזהב, ומבליט אותו בלי להתחרות בו.
+    <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-[#EAF4FC] via-[#DCEBF8] to-[#CFE2F3] px-6 py-16 text-center">
       {/* ⚠️ הלוגו הרשמי ולא עיטור מעוצב: זה הסמל שמופיע בכל המערכת
           ובמיילים, והוא מה שמזהה את העמותה מול הקהל. */}
       <img
-        src="/logo.png"
-        alt="איגוד הצאצאים של רבינו החתם סופר"
-        className="w-40 sm:w-48"
+        src="/logo-heichal.png"
+        alt="היכל החתם סופר"
+        className="w-44 sm:w-56"
       />
 
-      <h1 className="mt-6 text-3xl font-bold leading-tight text-[#F5F0E6] sm:text-4xl">
+      <h1 className="mt-6 text-3xl font-bold leading-tight text-[#12314F] sm:text-4xl">
         מערכת הזמנת ספרי החתם סופר
       </h1>
-      <p className="mt-2 text-lg text-[#B8860B]">שע״י היכל החתם סופר</p>
+      <p className="mt-2 text-lg font-semibold text-[#8A6212]">שע״י היכל החתם סופר</p>
 
       {/* ── מועד הפתיחה + ספירה לאחור — הלב של הדף ──
           ⚠️ התאריך מגיע מההגדרות ולא קבוע בקוד: דחיית מועד היא שינוי
@@ -263,12 +266,12 @@ function ClosedScreen({ openAt }: { openAt: string | null }) {
       <div className="mt-10 w-full max-w-md">
         {state === 'done' ? (
           // ⚠️ אישור מפורש ומפורט: "נרשמת" לבד משאיר ספק אם באמת נקלט.
-          <div className="rounded-2xl border border-[#B8860B]/40 bg-[#B8860B]/10 px-6 py-7">
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#B8860B]">
-              <Check size={26} className="text-[#141210]" strokeWidth={3} />
+          <div className="rounded-2xl border border-[#0F7B4F]/25 bg-white/70 px-6 py-7 shadow-sm">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#0F7B4F]">
+              <Check size={26} className="text-white" strokeWidth={3} />
             </div>
-            <p className="text-lg font-bold text-[#F5F0E6]">הכתובת נקלטה במערכת</p>
-            <p className="mt-2 text-base leading-relaxed text-[#F5F0E6]/70">
+            <p className="text-lg font-bold text-[#12314F]">הכתובת נקלטה במערכת</p>
+            <p className="mt-2 text-base leading-relaxed text-[#3B5670]">
               נשלח אליכם תזכורת במייל ברגע שהמערכת תיפתח.
               <br />
               תודה על ההתעניינות!
@@ -276,33 +279,41 @@ function ClosedScreen({ openAt }: { openAt: string | null }) {
           </div>
         ) : (
           <>
-            <p className="mb-4 text-base leading-relaxed text-[#F5F0E6]/70">
+            <p className="mb-4 text-base leading-relaxed text-[#3B5670]">
               רוצים שנזכיר לכם?
               <br />
               השאירו כתובת מייל ונעדכן אתכם ברגע שהמערכת נפתחת.
             </p>
 
-            <form onSubmit={submit} className="flex flex-col gap-3">
+            <form onSubmit={submit} noValidate className="flex flex-col gap-3">
               <input
                 type="email"
                 value={email}
                 onChange={e => { setEmail(e.target.value); setError('') }}
+                // ⚠️ הבדיקה רצה גם ביציאה מהשדה ולא רק בשליחה: מי
+                // שמקליד כתובת פגומה מגלה זאת מיד, ולא אחרי לחיצה.
+                onBlur={() => { const m = emailError(email); if (m) setError(m) }}
                 placeholder="הכניסו כתובת מייל"
                 dir="ltr"
+                inputMode="email"
+                autoComplete="email"
                 // ⚠️ אזור לחיצה גדול וטיפוגרפיה גדולה — קהל היעד כולל
                 // קונים מבוגרים ומכשירים ישנים.
-                className="w-full rounded-xl border-2 border-[#F5F0E6]/20 bg-[#F5F0E6]/5 px-5 py-4 text-center text-lg text-[#F5F0E6] outline-none transition placeholder:text-[#F5F0E6]/35 focus:border-[#B8860B]"
+                className={`w-full rounded-xl border-2 bg-white px-5 py-4 text-center text-lg text-[#12314F] outline-none transition placeholder:text-[#8AA5BD] ${
+                  error ? 'border-red-400' : 'border-[#9DC3E6] focus:border-[#B8860B]'
+                }`}
                 disabled={state === 'sending'}
+                aria-invalid={!!error}
               />
 
               {error && (
-                <p className="text-base text-red-300">{error}</p>
+                <p className="text-base font-medium text-red-700">{error}</p>
               )}
 
               <button
                 type="submit"
                 disabled={state === 'sending' || !email.trim()}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#B8860B] px-6 py-4 text-lg font-bold text-[#141210] transition hover:bg-[#c9960f] disabled:opacity-40"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#B8860B] px-6 py-4 text-lg font-bold text-white shadow-sm transition hover:bg-[#9d730a] disabled:opacity-40"
               >
                 {state === 'sending' ? 'שולח…' : 'שלחו לי תזכורת'}
               </button>
@@ -311,7 +322,7 @@ function ClosedScreen({ openAt }: { openAt: string | null }) {
         )}
       </div>
 
-      <p className="mt-12 text-sm text-[#F5F0E6]/35">
+      <p className="mt-12 text-sm text-[#3B5670]/60">
         היכל החתם סופר
       </p>
     </main>

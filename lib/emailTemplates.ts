@@ -8,6 +8,7 @@
 import { textFor } from './emailTextsStore'
 import { fmtLoanAmount } from './loanCurrency'
 import { fmtAgorot } from './bookFairPricing'
+import { richToHtml } from './richText'
 
 export interface BuiltEmail {
   subject: string
@@ -2403,6 +2404,48 @@ export function bookFairOpenedEmail(): BuiltEmail {
       preheader: t('preheader'),
       accent,
       title: t('title'),
+      subtitle: 'יריד הספרים',
+      body,
+    }),
+  }
+}
+
+/**
+ * ניוזלטר יריד הספרים — הודעה שהצוות מנסח בעצמו.
+ *
+ * ⚠️ הגוף מגיע מ-richToHtml ולא כ-HTML גולמי: הטקסט נכתב בשדה חופשי
+ * במסך הניהול, וקבלת HTML משם הייתה פותחת הזרקה לאלפי נמענים.
+ *
+ * 🔴 קישור ביטול ההרשמה אינו אופציונלי — דיוור בלי דרך יציאה נחסם על
+ * ידי ספקי הדואר, ופוגע במוניטין השולח של כל המערכת.
+ */
+export function bookFairNewsletterEmail(opts: {
+  subject: string
+  body: string
+  unsubscribeUrl?: string
+}): BuiltEmail {
+  const accent = '#0ea5e9'
+  const url = `${PORTAL_BASE_DEFAULT.replace(/\/$/, '')}/yerid`
+
+  const unsub = opts.unsubscribeUrl
+    ? `<p style="margin:18px 0 0;color:#94a3b8;font-size:12px;line-height:1.7;">
+         אינכם מעוניינים לקבל עוד הודעות?
+         <a href="${escapeHtml(opts.unsubscribeUrl)}" style="color:#94a3b8;">להסרה מרשימת התפוצה</a>
+       </p>`
+    : ''
+
+  const body = `
+    <div style="margin:0 0 24px;color:#334155;font-size:15px;line-height:1.9;">${richToHtml(opts.body)}</div>
+    <div style="margin:0 0 6px;">${btn(url, 'לחנות הספרים', accent)}</div>
+    ${unsub}
+  `
+
+  return {
+    subject: opts.subject,
+    html: shell({
+      preheader: opts.subject,
+      accent,
+      title: 'היכל החתם סופר',
       subtitle: 'יריד הספרים',
       body,
     }),

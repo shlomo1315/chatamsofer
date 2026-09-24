@@ -168,6 +168,8 @@ export interface MaternityAid {
   is_twins?: boolean
   babies?: { name?: string | null; gender?: 'male' | 'female' | null; id_type?: 'id' | 'passport'; id_number?: string | null }[]
   birth_certificate_url?: string
+  // אישור לידה של התינוק השני — רק בתאומים, שני מסמכים נפרדים ולא אחד משותף.
+  birth_certificate_url_2?: string
   // תאריך סיום הזכאות האפקטיבי (ברירת מחדל: לידה + 6 שבועות; ניתן להארכה ידנית)
   six_weeks_end?: string
   // הארכת זכאות ידנית — חורגת מ-6 השבועות במקרים חריגים

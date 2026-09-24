@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
+import { cleanEmail, emailError } from '@/lib/emailAddress'
 
 // הרשמה לתזכורת פתיחת היריד.
 //
@@ -10,9 +11,6 @@ import { rateLimit, clientIp } from '@/lib/rateLimit'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
-
-/** ⚠️ מכוונת-רחבה: תפקידה לתפוס שגיאת הקלדה, לא לאמת קיום תיבה. */
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
 export async function POST(request: NextRequest) {
   const ip = clientIp(request)
@@ -25,28 +23,28 @@ export async function POST(request: NextRequest) {
   let body: { email?: unknown }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה שגויה' }, { status: 400 }) }
 
-  // ⚠️ ניקוי תווי כיווניות בלתי נראים — מגיעים מהדבקה ושוברים גם את
-  // הוולידציה וגם את השליחה בפועל. תקלה חוזרת במערכת.
-  const email = String(body.email ?? '')
-    .replace(/[‎‏‪-‮⁦-⁩]/g, '')
-    .trim()
-    .toLowerCase()
-
-  if (!email || email.length > 254 || !EMAIL_RE.test(email)) {
-    return NextResponse.json({ error: 'כתובת אימייל לא תקינה' }, { status: 400 })
-  }
+  // ⚠️ הניקוי והבדיקה מגיעים מ-lib/emailAddress — אותו מקור אמת בדיוק
+  // שהטופס משתמש בו. שני ביטויים נפרדים היו יוצרים מצב שבו הטופס מאשר
+  // כתובת שהשרת דוחה, והמשתמש מקבל שגיאה בלי להבין למה.
+  const email = cleanEmail(body.email)
+  const invalid = emailError(email)
+  if (invalid) return NextResponse.json({ error: invalid }, { status: 400 })
 
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת תצורה' }, { status: 500 })
 
-  // ⚠️ upsert ולא insert: מי שנרשם פעמיים מקבל את אותה תשובה חיובית
-  // במקום שגיאת כפילות. אין שום סיבה לספר לו שהוא כבר ברשימה — זה
-  // רק מבלבל, והתוצאה מבחינתו זהה.
-  const { error } = await db.from('book_fair_reminders')
-    .upsert({ email }, { onConflict: 'email', ignoreDuplicates: true })
+  // ⚠️ insert רגיל ולא upsert: ה-upsert דרש onConflict:'email', ובלי
+  // אינדקס ייחודי על העמודה Postgres זורק 42P10 — וזה בדיוק מה שקרה
+  // כאן. *כל* הרשמה נכשלה מיום הקמת המחלקה והטבלה נותרה ריקה.
+  //
+  // 🔴 השורש תוקן במיגרציה 20260923_book_fair_reminders_unique, אבל
+  // insert + טיפול ב-23505 עמיד יותר: הוא נשען על הכפילות עצמה ולא על
+  // שם האילוץ, ולכן אינו יכול להישבר שוב באותה צורה השקטה.
+  const { error } = await db.from('book_fair_reminders').insert({ email })
 
   if (error) {
-    // ⚠️ 23505 = כבר קיים. זו הצלחה מבחינת המשתמש.
+    // ⚠️ 23505 = כבר קיים. זו הצלחה מבחינת המשתמש: אין שום סיבה לספר
+    // לו שהוא כבר ברשימה — זה רק מבלבל, והתוצאה מבחינתו זהה.
     if (error.code !== '23505') {
       console.error('[fair/remind] insert failed:', error)
       return NextResponse.json({ error: 'הרישום נכשל, נסו שוב' }, { status: 500 })
