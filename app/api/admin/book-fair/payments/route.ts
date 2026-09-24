@@ -25,6 +25,7 @@ export async function GET() {
     mosadId: s.mosadId ?? '',
     hasApiValid: Boolean(s.apiValid),
     testMode: s.testMode !== false,   // ברירת מחדל: מצב בדיקה
+    category: s.category ?? '',
     // 🔴 מה *באמת* פעיל כרגע, ולא מה שהוזן. השניים נפרדים: ספק
     // שהוזן חלקית נופל למדומה, והמסך חייב לומר את זה.
     activeProvider: provider.name,
@@ -83,6 +84,10 @@ export async function POST(request: NextRequest) {
 
   if (body.testMode !== undefined) {
     patch.testMode = body.testMode === true
+  }
+
+  if (body.category !== undefined) {
+    patch.category = String(body.category).trim().slice(0, 500)
   }
 
   if (!Object.keys(patch).length) {

@@ -36,6 +36,7 @@ export interface ChargeResult {
   error?: string
 }
 
+
 /** מה שהספק דיווח בקריאה חוזרת, אחרי שאומת. */
 export interface VerifiedCharge {
   orderId: string

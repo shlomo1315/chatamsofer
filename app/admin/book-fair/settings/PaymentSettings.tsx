@@ -18,6 +18,7 @@ type State = {
   hasApiValid: boolean
   testMode: boolean
   activeProvider: string
+  category: string
 }
 
 export default function PaymentSettings() {
@@ -136,6 +137,19 @@ export default function PaymentSettings() {
                 onBlur={e => { if (e.target.value.trim() !== s.mosadId) save({ mosadId: e.target.value }, 'mosad') }}
                 disabled={!canEdit || !!busy}
                 dir="ltr" inputMode="numeric"
+                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+              />
+            </label>
+
+            {/* ⚠️ קטגוריה בתוך המוסד (שדה Groupe בנדרים) — כך תשלומי היריד
+                מתויגים בנפרד משאר התרומות באותו מוסד, בלי לפצל למוסד חדש. */}
+            <label className="flex flex-col gap-1">
+              <span className="text-sm font-medium text-slate-700">קטגוריה בנדרים</span>
+              <input
+                defaultValue={s.category}
+                onBlur={e => { if (e.target.value.trim() !== s.category) save({ category: e.target.value }, 'category') }}
+                disabled={!canEdit || !!busy}
+                placeholder="למשל: יריד ספרים"
                 className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
               />
             </label>

@@ -42,12 +42,12 @@ const TIMEOUT_MS = 25_000
 export class NedarimPaymentProvider implements PaymentProvider {
   readonly name = 'nedarim'
 
-  private async creds(): Promise<{ mosadId: string; apiValid: string } | null> {
+  private async creds(): Promise<{ mosadId: string; apiValid: string; category: string } | null> {
     const s = await getPaymentSettings()
     const mosadId = (s.mosadId ?? '').trim()
     const apiValid = (s.apiValid ?? '').trim()
     if (!mosadId || !apiValid) return null
-    return { mosadId, apiValid }
+    return { mosadId, apiValid, category: (s.category ?? '').trim() }
   }
 
   async isConfigured(): Promise<boolean> {
@@ -153,6 +153,9 @@ export class NedarimPaymentProvider implements PaymentProvider {
       ...(req.customerPhone ? { Phone: req.customerPhone } : {}),
       ...(req.description   ? { Comment: req.description } : {}),
       ...(req.returnUrl     ? { ReturnUrl: req.returnUrl } : {}),
+      // ⚠️ נעולה (GroupeLock) כשמוגדרת: כל תשלומי היריד מתויגים לאותה
+      // קטגוריה בממשק הניהול של המוסד, בלי שהלקוח יוכל לשנות אותה.
+      ...(c.category ? { Groupe: c.category, GroupeLock: '1' } : {}),
     })
 
     // ⚠️ אין כאן קריאת רשת: נדרים בונים את העסקה כשהלקוח מגיע לדף.

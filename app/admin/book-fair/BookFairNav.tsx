@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutGrid, ShoppingCart, BookOpen, Settings2, ExternalLink } from 'lucide-react'
+import { LayoutGrid, ShoppingCart, BookOpen, Users, Settings2, ExternalLink } from 'lucide-react'
 
 // סרגל ניווט פנימי של מחלקת היריד.
 //
@@ -18,6 +18,7 @@ const TABS = [
   { href: '/admin/book-fair',          label: 'סקירה',   icon: LayoutGrid },
   { href: '/admin/book-fair/orders',   label: 'הזמנות',  icon: ShoppingCart },
   { href: '/admin/book-fair/books',    label: 'קטלוג',   icon: BookOpen },
+  { href: '/admin/book-fair/audience', label: 'תפוצה',   icon: Users },
   { href: '/admin/book-fair/settings', label: 'הגדרות',  icon: Settings2 },
 ]
 
