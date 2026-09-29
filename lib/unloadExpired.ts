@@ -278,3 +278,56 @@ export async function runUnloadExpired(): Promise<{ ok: boolean; processed: numb
 
   return { ok: true, processed }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// שומר-סף: מתריע אם הפריקה היומית לא רצה בהצלחה יותר מיום.
+//
+// 🔴 נוסף אחרי שהמשתנה UNLOAD_EXPIRED_DISABLED הודלק ב-Railway (כנראה
+// לצורך ניפוי תקלה אחרת) ונשאר דלוק שבועיים בלי שאיש שם לב — 9 יולדות
+// עברו שישה שבועות ונשארו עם 600 ₪ נעולים בכרטיס, בשקט מוחלט. אותו
+// דפוס בדיוק כמו checkBackupFreshness (lib/dailyBackup.ts): הדגל עצמו
+// עלול לחזור (ניפוי תקלה עתידי, טעות אנוש), ולכן ההגנה היא לא "לזכור
+// לכבות" אלא בדיקה יומית עצמאית שמזהה שהריצה נעדרת ומתריעה בעצמה.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function checkUnloadFreshness(): Promise<void> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) return
+  const admin = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
+
+  const dayKey = (d: Date) =>
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d)
+  const today = dayKey(new Date())
+  const yesterday = dayKey(new Date(Date.now() - 86400000))
+
+  const { data } = await admin.from('app_settings').select('value').eq('key', 'unload_expired_last_run').maybeSingle()
+  const last = (data as { value?: string } | null)?.value ?? null
+  // ⚠️ הריצה בפועל מסמנת ליום שאחריה (מריצה בחצות 15.09 היא "16.09"),
+  // ולכן "אתמול" נספר כתקין — הוא נכתב מאותו לילה. שני ימים ברציפות
+  // בלי עדכון הם מה שמסגיר שהמנגנון לא רץ, לא איחור של שעות בודדות.
+  if (last === today || last === yesterday) return
+
+  const ALERT_KEY = 'unload_expired_alert_date'
+  const { data: alerted } = await admin.from('app_settings').select('value').eq('key', ALERT_KEY).maybeSingle()
+  if ((alerted as { value?: string } | null)?.value === today) return // כבר התרענו היום — לא מציפים
+
+  await admin.from('app_settings').upsert({ key: ALERT_KEY, value: today }, { onConflict: 'key' })
+
+  const { count: dueCount } = await admin
+    .from('maternity_aids')
+    .select('id', { count: 'exact', head: true })
+    .eq('card_load_status', 'loaded')
+    .not('card_tlush_id', 'is', null)
+    .lte('six_weeks_end', today)
+
+  const { deliverMail } = await import('@/lib/sendMail')
+  const REPORT_TO = 'office@chasamsofer.info'
+  await deliverMail(REPORT_TO, '🔴 פריקת כרטיסי יולדות לא רצה',
+    `<div dir="rtl" style="font-family:'Heebo',Arial,sans-serif">
+      <p>הפריקה האוטומטית של כרטיסי יולדות (בתום 6 שבועות) לא רצה בהצלחה מאז <b>${last ?? '(אין רישום)'}</b>.</p>
+      <p>${dueCount ?? 0} תיקים ממתינים כרגע לפריקה.</p>
+      <p>יש לבדוק את המשתנה <code>UNLOAD_EXPIRED_DISABLED</code> בהגדרות הפריסה (Railway), ואת מסך המלאי → פריקות.</p>
+    </div>`,
+    undefined, { fromEmail: REPORT_TO, replyTo: REPORT_TO, skipLog: true },
+  ).catch(() => {})
+}

@@ -150,6 +150,24 @@ export async function register() {
     console.log('[unload-expired] daily midnight (Israel) scheduler started')
   }
 
+  // ── שומר-סף על הפריקה — כל שעה, תמיד, גם כש-UNLOAD_EXPIRED_DISABLED דלוק ──
+  //
+  // 🔴 נוסף בעקבות תקלה: UNLOAD_EXPIRED_DISABLED הודלק (כנראה לניפוי תקלה
+  // אחרת) ונשאר דלוק שבועיים — 9 יולדות נשארו עם ₪600 נעולים, בלי שאף
+  // התראה יצאה, כי השומר-סף הקודם היה רק תצוגה במסך (UnloadsPanel) שאיש
+  // לא הביט בה. חובה לבדוק *מחוץ* לתנאי UNLOAD_EXPIRED_DISABLED — אחרת
+  // אותו דגל שמשתיק את הפריקה משתיק גם את ההתראה על השתקתה.
+  {
+    const tickUnloadFreshness = async () => {
+      try {
+        const { checkUnloadFreshness } = await import('@/lib/unloadExpired')
+        await checkUnloadFreshness()
+      } catch (err) { console.error('[unload-expired] freshness check failed', err) }
+    }
+    setTimeout(() => { void tickUnloadFreshness(); setInterval(() => { void tickUnloadFreshness() }, HOURLY_MS) }, INITIAL_DELAY_MS)
+    console.log('[unload-expired] freshness watchdog started (every 1h, always on)')
+  }
+
   // ── רענון מאגר הכתובות (ערים/רחובות) ממשרד הפנים — מדי יום בחצות שעון ישראל ──
   if (process.env.GOV_SYNC_DISABLED !== '1') {
     let lastGovDate = ''
@@ -436,5 +454,21 @@ export async function register() {
     }
     setTimeout(() => { void tickVoiceRebuild(); setInterval(() => { void tickVoiceRebuild() }, 5 * MINUTE_MS) }, INITIAL_DELAY_MS)
     console.log('[voice-rebuild] watcher started (every 5m)')
+  }
+
+  // ── שומר-סף על דגלי *_DISABLED — כל שעה, תמיד, בלי תנאי משלו ──
+  //
+  // 🔴 מדווח פעם בשבוע אם אחד מדגלי ההשבתה של המתזמן דלוק. חייב להיות
+  // כאן, מחוץ לכל if(...DISABLED), כדי שהוא לא יושתק על ידי הדגל
+  // שהוא אמור להתריע עליו.
+  {
+    const tickSchedulerFlags = async () => {
+      try {
+        const { checkSchedulerFlags } = await import('@/lib/schedulerFlagsWatch')
+        await checkSchedulerFlags()
+      } catch (err) { console.error('[scheduler-flags] watch failed', err) }
+    }
+    setTimeout(() => { void tickSchedulerFlags(); setInterval(() => { void tickSchedulerFlags() }, HOURLY_MS) }, INITIAL_DELAY_MS)
+    console.log('[scheduler-flags] weekly watchdog started (checks hourly, alerts weekly)')
   }
 }
