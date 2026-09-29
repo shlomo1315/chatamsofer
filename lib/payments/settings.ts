@@ -40,6 +40,13 @@ export interface PaymentSettings {
    * שהלקוח לא ישנה אותה בדף התשלום.
    */
   category?: string
+  /**
+   * 🔴 מפתח חתימת HMAC על עדכוני ה-Webhook (whsec_ + 64 הקס), אם הופעל
+   * בצד נדרים (מסך הגדרות > API > Webhook, או API SetWebhookSecret).
+   * בלעדיו אנחנו נסמכים על רשימת ה-IP בלבד — שכבה חלשה יותר, כי כתובת
+   * יכולה להתחדש. עם המפתח, כל עדכון מאומת קריפטוגרפית.
+   */
+  webhookSecret?: string
 }
 
 async function read(): Promise<PaymentSettings> {

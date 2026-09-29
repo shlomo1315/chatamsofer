@@ -6,6 +6,7 @@ import { shippingCost, totalVolumes } from '@/lib/bookFairShipping'
 import { cleanEmail, emailError } from '@/lib/emailAddress'
 import type { PublicBook, PublicCity, PublicTier } from './page'
 import Countdown from './Countdown'
+import NedarimIframe from './NedarimIframe'
 
 // חנות יריד הספרים.
 //
@@ -479,12 +480,16 @@ function CartPanel({ lines, cities, tiers, onClose, onSetQty }: {
   lines: CartLine[]; cities: PublicCity[]; tiers: PublicTier[]
   onClose: () => void; onSetQty: (id: string, q: number) => void
 }) {
-  const [step, setStep] = useState<'cart' | 'details'>('cart')
+  const [step, setStep] = useState<'cart' | 'details' | 'payment'>('cart')
   const [method, setMethod] = useState<'pickup' | 'shipping'>('pickup')
   const [cityId, setCityId] = useState('')
   const [form, setForm] = useState({ name: '', phone: '', email: '', address: '' })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  // ⚠️ שני מסלולים אפשריים מהשרת: אייפרם (payment) או redirect (ספק
+  // ישן/מדומה) — ראו lib/payments/types.ts ChargeResult.
+  const [payment, setPayment] = useState<{ transactionId: string; key: string } | null>(null)
+  const [trackingToken, setTrackingToken] = useState('')
 
   const bookCount = lines.reduce((s, l) => s + l.quantity, 0)
   // 🔴 המשלוח לפי כרכים ולא לפי פריטים — זהה לחישוב בשרת
@@ -512,7 +517,17 @@ function CartPanel({ lines, cities, tiers, onClose, onSetQty }: {
       if (!res.ok) { setError(json.error ?? 'ההזמנה נכשלה'); return }
       // ⚠️ מנקים את העגלה רק אחרי שההזמנה נוצרה בהצלחה
       try { localStorage.removeItem(CART_KEY) } catch { /* לא קריטי */ }
-      window.location.href = json.redirectUrl
+      setTrackingToken(json.trackingToken ?? '')
+      if (json.iframeTransaction) {
+        // אייפרם: התורם משלם בתוך הדף, בלי לעזוב אותו.
+        setPayment(json.iframeTransaction)
+        setStep('payment')
+      } else if (json.redirectUrl) {
+        // ספק מבוסס redirect (למשל מדומה) — הלקוח עוזב לדף מתארח.
+        window.location.href = json.redirectUrl
+      } else {
+        setError('פתיחת התשלום נכשלה')
+      }
     } catch {
       setError('ההזמנה נכשלה. בדקו את החיבור ונסו שוב.')
     } finally {
@@ -525,15 +540,28 @@ function CartPanel({ lines, cities, tiers, onClose, onSetQty }: {
       <div className="flex h-full w-full max-w-lg flex-col bg-[#F5F0E6]" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b-2 border-[#B8860B] bg-[#141210] px-5 py-4">
           <h2 className="text-xl font-bold text-[#F5F0E6]">
-            {step === 'cart' ? 'העגלה שלי' : 'פרטי ההזמנה'}
+            {step === 'cart' ? 'העגלה שלי' : step === 'details' ? 'פרטי ההזמנה' : 'תשלום'}
           </h2>
-          <button onClick={onClose} aria-label="סגירה" className="rounded p-2 text-[#F5F0E6]/60 hover:text-[#F5F0E6]">
-            <X size={22} />
-          </button>
+          {/* ⚠️ בשלב התשלום אין כפתור סגירה: ניתוק באמצע יוצר הזמנה
+              תקועה (pending_payment) שהמלאי שלה משוריין 25 דקות. */}
+          {step !== 'payment' && (
+            <button onClick={onClose} aria-label="סגירה" className="rounded p-2 text-[#F5F0E6]/60 hover:text-[#F5F0E6]">
+              <X size={22} />
+            </button>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
-          {step === 'cart' ? (
+          {step === 'payment' && payment ? (
+            <NedarimIframe
+              transactionId={payment.transactionId}
+              key_={payment.key}
+              onSuccess={() => {
+                window.location.href = trackingToken ? `/yerid/order/${trackingToken}` : '/yerid'
+              }}
+              onBack={() => { setPayment(null); setStep('details') }}
+            />
+          ) : step === 'cart' ? (
             !lines.length ? (
               <p className="py-16 text-center text-lg text-[#141210]/50">העגלה ריקה</p>
             ) : (
@@ -619,7 +647,7 @@ function CartPanel({ lines, cities, tiers, onClose, onSetQty }: {
           )}
         </div>
 
-        {lines.length > 0 && (
+        {lines.length > 0 && step !== 'payment' && (
           <div className="border-t-2 border-[#141210]/10 bg-white px-5 py-4">
             <dl className="mb-3 flex flex-col gap-1.5 text-base">
               <div className="flex justify-between text-[#141210]/70">

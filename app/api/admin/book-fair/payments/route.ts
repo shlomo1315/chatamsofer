@@ -26,6 +26,7 @@ export async function GET() {
     hasApiValid: Boolean(s.apiValid),
     testMode: s.testMode !== false,   // ברירת מחדל: מצב בדיקה
     category: s.category ?? '',
+    hasWebhookSecret: Boolean(s.webhookSecret),
     // 🔴 מה *באמת* פעיל כרגע, ולא מה שהוזן. השניים נפרדים: ספק
     // שהוזן חלקית נופל למדומה, והמסך חייב לומר את זה.
     activeProvider: provider.name,
@@ -88,6 +89,20 @@ export async function POST(request: NextRequest) {
 
   if (body.category !== undefined) {
     patch.category = String(body.category).trim().slice(0, 500)
+  }
+
+  // ⚠️ ריק = אל תשנה, כמו apiValid — לא לדרוס מפתח קיים בטעות.
+  // ⚠️ פורמט קשיח (whsec_ + 64 הקס): זה בדיוק מה שנדרים מציגים
+  // כשמגרילים את המפתח דרכם — הזנה ידנית של סיסמה חופשית הייתה
+  // מבטלת את הביטחון שהחתימה אמורה לתת.
+  if (body.webhookSecret !== undefined) {
+    const v = String(body.webhookSecret).trim()
+    if (v) {
+      if (!/^whsec_[0-9a-f]{64}$/.test(v)) {
+        return NextResponse.json({ error: 'מפתח חתימה לא בפורמט תקין (whsec_ ואחריו 64 תווי הקס)' }, { status: 400 })
+      }
+      patch.webhookSecret = v
+    }
   }
 
   if (!Object.keys(patch).length) {

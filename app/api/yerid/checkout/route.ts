@@ -234,7 +234,10 @@ export async function POST(request: NextRequest) {
     orderNumber: order.order_number,
     trackingToken,
     cartToken,
+    // ⚠️ שני המסלולים אפשריים בו-זמנית (ספק ישן=redirectUrl, אייפרם
+    // מסלול ב'=iframeTransaction) — הלקוח בודק מה חזר ומציג בהתאם.
     redirectUrl: charge.redirectUrl,
+    iframeTransaction: charge.iframeTransaction,
     total_agorot: totals.total_agorot,
   })
 }

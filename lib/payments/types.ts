@@ -31,6 +31,12 @@ export interface ChargeResult {
    * לחובות אבטחת כרטיסי אשראי.
    */
   redirectUrl?: string
+  /**
+   * 🔴 מסלול אייפרם (נדרים פלוס שיטה 3, מסלול ב'): העסקה כבר הוקמה
+   * בשרת עם הסכום הנעול, והלקוח מזריק רק את שני הערכים האלה לאייפרם
+   * ב-StartPayment. הדפדפן אינו רואה ואינו יכול לשנות את הסכום.
+   */
+  iframeTransaction?: { transactionId: string; key: string }
   /** מזהה העסקה אצל הספק, אם הוחזר מיד. */
   transactionId?: string
   error?: string

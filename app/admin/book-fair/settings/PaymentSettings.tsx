@@ -19,6 +19,7 @@ type State = {
   testMode: boolean
   activeProvider: string
   category: string
+  hasWebhookSecret: boolean
 }
 
 export default function PaymentSettings() {
@@ -27,6 +28,8 @@ export default function PaymentSettings() {
   const [s, setS] = useState<State | null>(null)
   const [apiValid, setApiValid] = useState('')
   const [showKey, setShowKey] = useState(false)
+  const [webhookSecret, setWebhookSecret] = useState('')
+  const [showSecret, setShowSecret] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
@@ -52,6 +55,7 @@ export default function PaymentSettings() {
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { setMsg({ ok: false, text: d.error ?? 'השמירה נכשלה' }); return }
       setApiValid('')
+      setWebhookSecret('')
       // רענון המצב, כולל מה שבאמת פעיל אחרי השינוי
       const fresh = await fetch('/api/admin/book-fair/payments').then(r => r.json())
       setS(fresh)
@@ -185,6 +189,46 @@ export default function PaymentSettings() {
                   {busy === 'key' ? <Loader2 size={14} className="animate-spin" /> : 'שמירה'}
                 </button>
               </div>
+            </label>
+
+            {/* ⚠️ שכבת אבטחה נוספת על עדכוני ה-Webhook, מעבר לרשימת ה-IP
+                של נדרים — מומלץ מאוד להפעיל (ראו NedarimPlus-AP.md).
+                מוגרל אצל נדרים במסך הגדרות > API > Webhook > "חתימת
+                HMAC" ומועתק לכאן; לעולם לא מוצג שוב אחרי השמירה. */}
+            <label className="flex flex-col gap-1 sm:col-span-2">
+              <span className="text-sm font-medium text-slate-700">
+                מפתח חתימת Webhook
+                {s.hasWebhookSecret && <span className="mr-2 text-xs font-normal text-emerald-600">· הוזן</span>}
+              </span>
+              <div className="flex gap-2">
+                <input
+                  type={showSecret ? 'text' : 'password'}
+                  value={webhookSecret}
+                  onChange={e => setWebhookSecret(e.target.value)}
+                  placeholder={s.hasWebhookSecret ? '••••••••  (ריק = ללא שינוי)' : 'whsec_...'}
+                  disabled={!canEdit || !!busy}
+                  dir="ltr"
+                  className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowSecret(v => !v)}
+                  className="rounded-xl border border-slate-200 px-3 text-slate-500 hover:bg-slate-50"
+                  title={showSecret ? 'הסתרה' : 'הצגה'}
+                >
+                  {showSecret ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+                <button
+                  onClick={() => save({ webhookSecret }, 'secret')}
+                  disabled={!canEdit || !!busy || !webhookSecret.trim()}
+                  className="rounded-xl bg-slate-800 px-4 text-sm font-medium text-white disabled:opacity-40"
+                >
+                  {busy === 'secret' ? <Loader2 size={14} className="animate-spin" /> : 'שמירה'}
+                </button>
+              </div>
+              <span className="text-xs text-slate-400">
+                מגרילים אצל נדרים (הגדרות ← API ← Webhook ← חתימת HMAC) ומדביקים כאן, <b>לפני</b> ההפעלה שם.
+              </span>
             </label>
 
             {/* 🔴 המתג שמפריד בין בדיקה לגבייה אמיתית. */}

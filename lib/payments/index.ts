@@ -11,6 +11,7 @@ import { mockProvider } from './mockProvider'
 
 export type { PaymentProvider, ChargeRequest, ChargeResult, VerifiedCharge } from './types'
 export { sanitizeProviderResponse } from './types'
+export { verifyNedarimSignature, isNedarimWebhookIp, NEDARIM_WEBHOOK_IPS } from './nedarimProvider'
 
 /**
  * הספק הפעיל.

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
-import { getPaymentProvider, sanitizeProviderResponse } from '@/lib/payments'
+import { getPaymentProvider, sanitizeProviderResponse, verifyNedarimSignature, isNedarimWebhookIp } from '@/lib/payments'
+import { getPaymentSettings } from '@/lib/payments/settings'
+import { clientIpOrNull } from '@/lib/rateLimit'
 import { amountMatches } from '@/lib/bookFairPricing'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
@@ -11,20 +13,52 @@ import { oneOf } from '@/types/bookFair'
 // דיווח תשלום מספק הסליקה — הנקודה היחידה שבה הזמנה מסומנת כשולמה.
 //
 // 🔴 הנתיב פתוח בהכרח (הספק קורא אליו משרת שלו), ולכן הדיווח עצמו
-// אינו נאמן: כל אחד יכול לשלוח בקשה שאומרת "הזמנה X שולמה". שלוש
+// אינו נאמן: כל אחד יכול לשלוח בקשה שאומרת "הזמנה X שולמה". ארבע
 // שכבות ההגנה:
-//   1. verifyCallback של הספק מאמת מולו — הדיווח הוא רמז, לא ראיה
+//   0. (נדרים) חתימת HMAC על הגוף הגולמי + כתובת IP מוכרת
+//   1. verifyCallback של הספק מאמת מבנה — הדיווח הוא רמז, לא ראיה
 //   2. השוואת סכום מדויקת מול ההזמנה
 //   3. עמידות בקריאה כפולה — ספקים שולחים שוב כשלא קיבלו תשובה מהר
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-async function handle(raw: Record<string, unknown>) {
+interface RequestContext {
+  clientIp: string | null
+  rawBody: string | null
+  tsHeader: string | null
+  sigHeader: string | null
+}
+
+async function handle(raw: Record<string, unknown>, ctx: RequestContext) {
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת תצורה' }, { status: 500 })
 
   const provider = await getPaymentProvider()
+
+  // ── שכבה 0: נדרים בלבד — חתימת HMAC + כתובת IP מוכרת ──
+  //
+  // 🔴 שתיהן בדיקה משלימה, לא תחליפית: החתימה נשברת אם המפתח לא הוגדר
+  // (fail-open בכוונה — ראו למטה), וה-IP נשבר אם נדרים מחדשים כתובות
+  // בלי הודעה. שתיהן יחד הן ההגנה שהתיעוד ממליץ עליה.
+  if (provider.name === 'nedarim') {
+    if (ctx.clientIp && !isNedarimWebhookIp(ctx.clientIp)) {
+      console.warn(`[fair/callback] דיווח מכתובת IP לא מוכרת (${ctx.clientIp}) — נדחה`)
+      return NextResponse.json({ error: 'מקור לא מוכר' }, { status: 403 })
+    }
+
+    const settings = await getPaymentSettings()
+    const secret = (settings.webhookSecret ?? '').trim()
+    // ⚠️ fail-open אם לא הוגדר מפתח: החתימה היא הגנה נוספת מעל ה-IP,
+    // לא היחידה. מוסד שלא הפעיל אותה בצד נדרים ממשיך לקבל עדכונים
+    // בדיוק כמו קודם — בדיוק ההתנהגות שהתיעוד מתאר.
+    if (secret) {
+      if (!verifyNedarimSignature(ctx.rawBody ?? '', ctx.tsHeader, ctx.sigHeader, secret)) {
+        console.warn('[fair/callback] חתימת HMAC לא תקינה — נדחה')
+        return NextResponse.json({ error: 'חתימה לא תקינה' }, { status: 401 })
+      }
+    }
+  }
 
   // ── שכבה 1: אימות מול הספק ──
   const verified = await provider.verifyCallback(raw)
@@ -175,11 +209,22 @@ async function handle(raw: Record<string, unknown>) {
 }
 
 export async function POST(request: NextRequest) {
+  const ctx: RequestContext = {
+    clientIp: clientIpOrNull(request),
+    rawBody: null,
+    tsHeader: request.headers.get('x-nedarim-timestamp'),
+    sigHeader: request.headers.get('x-nedarim-signature'),
+  }
+
   let raw: Record<string, unknown> = {}
   const ct = request.headers.get('content-type') ?? ''
   try {
     if (ct.includes('json')) {
-      raw = await request.json()
+      // 🔴 חייב את הבייטים הגולמיים בדיוק כפי שהתקבלו לצורך אימות ה-HMAC
+      // (ראו verifyNedarimSignature) — JSON.parse ואז JSON.stringify
+      // מחדש היה יכול לשנות רווחים/סדר שדות ולפסול חתימה תקינה.
+      ctx.rawBody = await request.text()
+      raw = JSON.parse(ctx.rawBody)
     } else {
       // ⚠️ ספקים ישראליים שולחים לרוב form-urlencoded ולא JSON
       const form = await request.formData()
@@ -192,10 +237,13 @@ export async function POST(request: NextRequest) {
     if (!(k in raw)) raw[k] = v
   }
 
-  return handle(raw)
+  return handle(raw, ctx)
 }
 
-/** ⚠️ חלק מהספקים מדווחים ב-GET. אותה לוגיקה בדיוק. */
+/** ⚠️ חלק מהספקים מדווחים ב-GET. אותה לוגיקה בדיוק (בלי חתימת HMAC —
+ * זו חתומה על גוף POST בלבד). */
 export async function GET(request: NextRequest) {
-  return handle(Object.fromEntries(request.nextUrl.searchParams))
+  return handle(Object.fromEntries(request.nextUrl.searchParams), {
+    clientIp: clientIpOrNull(request), rawBody: null, tsHeader: null, sigHeader: null,
+  })
 }
