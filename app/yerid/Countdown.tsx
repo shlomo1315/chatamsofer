@@ -67,22 +67,22 @@ export default function Countdown({ openAt }: { openAt: string | null }) {
   if (done) {
     return (
       <div className="mt-10 w-full max-w-md rounded-2xl border border-[#B8860B]/40 bg-[#B8860B]/10 px-6 py-7">
-        <p className="text-xl font-bold text-[#F5F0E6]">המערכת נפתחת ברגעים אלו…</p>
-        <p className="mt-2 text-base text-[#F5F0E6]/70">רעננו את הדף בעוד רגע.</p>
+        <p className="text-xl font-bold text-[#12314F]">המערכת נפתחת ברגעים אלו…</p>
+        <p className="mt-2 text-base text-[#3B5670]">רעננו את הדף בעוד רגע.</p>
       </div>
     )
   }
 
   return (
-    <div className="mt-10 w-full max-w-md rounded-2xl border border-[#B8860B]/30 bg-[#F5F0E6]/5 px-6 py-7">
-      <p className="text-base text-[#F5F0E6]/60">המערכת תיפתח בעז״ה</p>
+    <div className="mt-10 w-full max-w-md rounded-2xl border border-[#B8860B]/30 bg-white/60 px-6 py-7">
+      <p className="text-base text-[#3B5670]">המערכת תיפתח בעז״ה</p>
 
       {heb && (
-        <p className="mt-2 text-2xl font-bold leading-snug text-[#F5F0E6] sm:text-3xl">
+        <p className="mt-2 text-2xl font-bold leading-snug text-[#12314F] sm:text-3xl">
           {heb}
         </p>
       )}
-      <p className="mt-1 text-xl text-[#B8860B]">בשעה 10:00 בלילה</p>
+      <p className="mt-1 text-xl text-[#8A6212]">בשעה 10:00 בלילה</p>
 
       {/* ── השעון ──
           ⚠️ הסדר בקוד הוא הסדר על המסך: ימים משמאל ושניות מימין,
@@ -104,11 +104,11 @@ export default function Countdown({ openAt }: { openAt: string | null }) {
 
 function Unit({ value, label }: { value: number; label: string }) {
   return (
-    <div className="rounded-xl border border-[#B8860B]/25 bg-[#141210]/40 py-3">
+    <div className="rounded-xl border border-[#B8860B]/25 bg-[#12314F] py-3">
       <div className="text-2xl font-bold tabular-nums text-[#F5F0E6] sm:text-3xl">
         {String(value).padStart(2, '0')}
       </div>
-      <div className="mt-0.5 text-xs text-[#F5F0E6]/50">{label}</div>
+      <div className="mt-0.5 text-xs text-[#F5F0E6]/70">{label}</div>
     </div>
   )
 }
