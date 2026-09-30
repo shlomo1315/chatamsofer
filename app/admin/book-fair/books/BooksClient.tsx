@@ -1,7 +1,7 @@
 'use client'
 import { useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, Plus, Pencil, Trash2, Loader2, BookOpen, Globe, Phone, ArrowLeftRight } from 'lucide-react'
+import { Search, Plus, Pencil, Trash2, Loader2, BookOpen, Globe, Phone, ArrowLeftRight, Barcode } from 'lucide-react'
 import type { BookFairBook } from '@/types/bookFair'
 import { fmtAgorot } from '@/lib/bookFairPricing'
 import { useTablePagination } from '@/lib/useTablePagination'
@@ -51,6 +51,7 @@ export default function BooksClient({ books }: { books: BookFairBook[] }) {
   const [creating, setCreating] = useState(false)
   const [moving, setMoving] = useState<BookFairBook | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [downloadingBarcodes, setDownloadingBarcodes] = useState(false)
 
   // חיפוש חופשי על מק"ט, שם ומחבר
   const filtered = useMemo(() => {
@@ -76,6 +77,48 @@ export default function BooksClient({ books }: { books: BookFairBook[] }) {
     web: books.reduce((s, b) => s + b.stock_web, 0),
     phone: books.reduce((s, b) => s + b.stock_phone, 0),
   }), [books])
+
+  // ⚠️ אותו דפוס בדיוק כמו /api/admin/gratitude/batch-pdf: נטפרי חוסמת
+  // תגובת application/pdf ב-418, ולכן השרת מחזיר JSON מעורבל (docCipher)
+  // ובונים Blob מקומי בדפדפן — לא ניווט ישיר ולא iframe.
+  const downloadBarcodes = useCallback(async () => {
+    setDownloadingBarcodes(true)
+    try {
+      const res = await fetch('/api/admin/book-fair/barcodes', { cache: 'no-store' })
+      if (!res.ok) {
+        if (res.status === 418) {
+          alert('הגישה נחסמה על ידי הסינון (נטפרי). יש להיכנס לכתובת https://chasamsofer.co.il ולא לכתובת הזמנית של השרת.')
+          return
+        }
+        const d = await res.json().catch(() => ({}))
+        alert(d?.error ?? `הפקת הגיליון נכשלה (${res.status})`)
+        return
+      }
+      const payload = await res.json()
+      if (!payload?.data) { alert('הקובץ שהתקבל ריק — נסו שוב'); return }
+
+      const { scrambleBytes, DOC_CIPHER_ID } = await import('@/lib/docCipher')
+      const binary = atob(payload.data as string)
+      const bytes = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+      if (payload.enc === DOC_CIPHER_ID) scrambleBytes(bytes)
+      const blob = new Blob([bytes], { type: payload.contentType || 'application/pdf' })
+      if (blob.size === 0) { alert('הקובץ שהתקבל ריק — נסו שוב'); return }
+
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = payload.name || 'ברקודים.pdf'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    } catch {
+      alert('הפקת הגיליון נכשלה — בדקו את החיבור')
+    } finally {
+      setDownloadingBarcodes(false)
+    }
+  }, [])
 
   const del = useCallback(async (b: BookFairBook) => {
     const ok = await confirm({
@@ -128,6 +171,15 @@ export default function BooksClient({ books }: { books: BookFairBook[] }) {
             </div>
             {tc.picker}
             {tc.activeFilters}
+            <button
+              onClick={downloadBarcodes}
+              disabled={downloadingBarcodes}
+              title="גיליון A4 להדפסה — שם ספר וברקוד לכל ספר פעיל, לחיתוך והדבקה ליד הספרים ביריד"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+            >
+              {downloadingBarcodes ? <Loader2 size={16} className="animate-spin" /> : <Barcode size={16} />}
+              ברקודים להדפסה
+            </button>
             {canAdd && (
               <button
                 onClick={() => setCreating(true)}
