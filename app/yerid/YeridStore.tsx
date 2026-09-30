@@ -7,6 +7,7 @@ import { cleanEmail, emailError } from '@/lib/emailAddress'
 import type { PublicBook, PublicCity, PublicTier } from './page'
 import Countdown from './Countdown'
 import NedarimIframe from './NedarimIframe'
+import StreetPicker from '@/components/ui/StreetPicker'
 
 // חנות יריד הספרים.
 //
@@ -619,10 +620,17 @@ function CartPanel({ lines, cities, tiers, onClose, onSetQty }: {
                       משלוחים לערים שברשימה בלבד
                     </span>
                   </Field>
-                  <Field label="כתובת מלאה" required>
-                    <input value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
-                      placeholder="רחוב, מספר בית ודירה" className={INPUT} />
-                  </Field>
+                  {/* ⚠️ רחוב נבחר מהמאגר הרשמי (gov_streets) ולא מוקלד
+                      חופשי — כדי שהשליח יקבל כתובת אמיתית ולא טעות הקלדה.
+                      העיר עצמה כבר נבחרה למעלה מתוך הרשימה הסגורה. */}
+                  <StreetPicker
+                    city={cities.find(c => c.id === cityId)?.name ?? ''}
+                    address={form.address}
+                    onAddressChange={address => setForm(f => ({ ...f, address }))}
+                    addressRequired
+                    houseRequired
+                    labelSize="sm"
+                  />
                 </>
               )}
 
@@ -681,7 +689,11 @@ function CartPanel({ lines, cities, tiers, onClose, onSetQty }: {
                   className="rounded-lg border-2 border-[#141210]/20 px-5 py-4 text-lg font-medium text-[#141210]/70">
                   חזרה
                 </button>
-                <button onClick={submit} disabled={busy || ship === null}
+                <button
+                  onClick={submit}
+                  // ⚠️ StreetPicker מחזיר כתובת ריקה כשהרחוב לא תואם
+                  // לרשימה הרשמית — חוסמים שליחה עד שנבחר רחוב אמיתי.
+                  disabled={busy || ship === null || (method === 'shipping' && !form.address.trim())}
                   className="flex-1 rounded-lg bg-[#6B2737] py-4 text-lg font-semibold text-[#F5F0E6] transition hover:bg-[#141210] disabled:opacity-50">
                   {busy ? 'מעביר לתשלום…' : `לתשלום ${fmtAgorot(total)}`}
                 </button>
