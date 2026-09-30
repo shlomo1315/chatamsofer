@@ -26,11 +26,16 @@ export async function GET() {
     db.from('book_fair_books')
       .select('sku, title')
       .eq('is_active', true)
-      .order('sku', { ascending: true })
       .range(from, to)
   )
   if (error) return NextResponse.json({ error: 'טעינת הקטלוג נכשלה' }, { status: 500 })
   if (!rows.length) return NextResponse.json({ error: 'אין ספרים פעילים בקטלוג' }, { status: 404 })
+
+  // ⚠️ מיון א"ב בעברית ב-JS ולא ב-PostgREST: סדר ה-collation של המסד
+  // אינו סדר האלפבית העברי, ו-order('title') החזיר סדר שנראה אקראי.
+  // localeCompare עם 'he' הוא המיון שהמשתמש מצפה לו כשהוא מחפש ספר
+  // בערימת התוויות המודפסת.
+  rows.sort((a, b) => a.title.localeCompare(b.title, 'he'))
 
   try {
     const bytes = await buildBookFairBarcodesPdf(rows)

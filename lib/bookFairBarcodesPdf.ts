@@ -39,15 +39,25 @@ const PER_PAGE = COLS * ROWS
 const INK = rgb(0.10, 0.11, 0.15)
 const BORDER = rgb(0.82, 0.84, 0.88)
 
-/** מייצר PNG של ברקוד CODE128 עבור המק"ט, ברזולוציה גבוהה להדפסה חדה. */
+/**
+ * מייצר PNG של ברקוד CODE128 עבור המק"ט.
+ *
+ * 🔴 width גבוה בכוונה (6, לא 2.4): נבדק בפועל (רינדור PDF ל-300 DPI +
+ * פענוח עם ZXing) שרוחב פס נמוך נשבר בהגדלה מ-PDF להדפסה — האנטי-
+ * אליאסינג בהמרה מטשטש קצוות בצורה לא אחידה, ורוחבי המודולים בפועל
+ * יוצאים לא-אחידים (למשל 8/5/13/4 פיקסלים באותו ברקוד, שם הכל אמור
+ * להיות כפולות של מודול אחד). ברקוד "רזה" נראה תקין בעין ונכשל בסורק
+ * אמיתי. width=6 מרחיב כל מודול פי 2.5, כך שאותה טעות טשטוש הופכת
+ * לחלק זניח מרוחב הפס ולא לרובו.
+ */
 function makeBarcodePng(sku: string): Uint8Array {
-  const canvas = createCanvas(400, 130)
+  const canvas = createCanvas(800, 220)
   JsBarcode(canvas as unknown as HTMLCanvasElement, sku, {
     format: 'CODE128',
     displayValue: false, // המק"ט מודפס בטקסט נפרד (פונט עברי-תואם, גודל אחיד עם הכותרת)
     margin: 0,
-    width: 2.4,
-    height: 90,
+    width: 6,
+    height: 160,
   })
   return canvas.toBuffer('image/png')
 }

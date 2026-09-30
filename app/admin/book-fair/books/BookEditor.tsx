@@ -6,9 +6,13 @@ import { agorotToShekels, bookImageUrl } from '@/lib/bookFairPricing'
 
 // עורך ספר — יצירה ועריכה.
 //
-// 🔴 המלאי אינו נערך כאן, ובכוונה: כל תנועת מלאי חייבת לעבור דרך היומן
-// (מסך המלאי / העברה בין ערוצים), אחרת ההתאמה בין העמודה לתנועות נשברת
-// והבאג שקט לחלוטין. ביצירה *כן* נקבע מלאי פתיחה — הוא נרשם ביומן.
+// 🔴 המלאי נערך כאן כ*כמות מוחלטת*, אך לעולם אינו נכתב ישירות: השמירה
+// מחשבת את ההפרש מול הערך הקיים ושולחת אותו ל-/api/admin/book-fair/stock
+// כתנועת adjust. כך היומן נשאר מקור אמת מלא — UPDATE ישיר על העמודה היה
+// שובר בשקט את ההתאמה בין המלאי לתנועות.
+//
+// ⚠️ שדה מוחלט ולא דלתא, למרות שה-API מקבל דלתא: המשתמש סופר מדף ויודע
+// "יש 15", לא "צריך להוסיף 3". התרגום נעשה כאן.
 
 export default function BookEditor({ book, onClose, onSaved }: {
   book: BookFairBook | null
@@ -33,8 +37,10 @@ export default function BookEditor({ book, onClose, onSaved }: {
     description: book?.description ?? '',
     unlimited_stock: book?.unlimited_stock ?? false,
     sort_order:  String(book?.sort_order ?? 0),
-    stock_web:   '0',
-    stock_phone: '0',
+    // ⚠️ בעריכה נטענת הכמות הקיימת (כדי שהשדה יהיה "כמה יש", לא "כמה
+    // להוסיף"); ביצירה זהו מלאי פתיחה ומתחיל מאפס.
+    stock_web:   String(book?.stock_web ?? 0),
+    stock_phone: String(book?.stock_phone ?? 0),
     is_active: book?.is_active ?? true,
   })
 
@@ -110,6 +116,38 @@ export default function BookEditor({ book, onClose, onSaved }: {
       )
       const json = await res.json().catch(() => ({}))
       if (!res.ok) { setError(json.error ?? 'השמירה נכשלה'); return }
+
+      // ── שינוי מלאי בעריכה — כתנועה ביומן, לא ככתיבה ישירה ──
+      //
+      // 🔴 אחרי שמירת הפרטים ולא לפניה: תנועת מלאי שנרשמה ואז השמירה
+      // נכשלה הייתה משאירה יומן שמתאר שינוי שלא קרה.
+      // ⚠️ ספר בלתי-מוגבל מדלג — העמודות חסרות משמעות עבורו.
+      if (!isNew && !form.unlimited_stock) {
+        const deltas: { channel: 'web' | 'phone'; delta: number }[] = [
+          { channel: 'web',   delta: (Number(form.stock_web) || 0) - book!.stock_web },
+          { channel: 'phone', delta: (Number(form.stock_phone) || 0) - book!.stock_phone },
+        ]
+        for (const { channel, delta } of deltas) {
+          if (!delta) continue
+          const sr = await fetch('/api/admin/book-fair/stock', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              op: 'adjust', book_id: book!.id, channel, delta,
+              reason: delta > 0 ? 'restock' : 'adjust',
+              note: 'עודכן מעורך הספר',
+            }),
+          })
+          if (!sr.ok) {
+            const sj = await sr.json().catch(() => ({}))
+            // ⚠️ הפרטים כבר נשמרו — נאמר במפורש מה עבר ומה לא, במקום
+            // "השמירה נכשלה" שיגרום למשתמש לנסות שוב ולשמור פעמיים.
+            setError(`הפרטים נשמרו, אך עדכון המלאי (${channel === 'web' ? 'אתר' : 'טלפון'}) נכשל: ${sj.error ?? 'שגיאה'}`)
+            return
+          }
+        }
+      }
+
       onSaved()
     } catch {
       setError('השמירה נכשלה — בדקו את החיבור')
@@ -188,24 +226,27 @@ export default function BookEditor({ book, onClose, onSaved }: {
             </span>
           </label>
 
-          {isNew && !form.unlimited_stock ? (
-            <>
-              <Field label="מלאי פתיחה — אתר" hint="עותקים למכירה באתר">
-                <input value={form.stock_web} onChange={e => set('stock_web', e.target.value)} className={INPUT} dir="ltr" inputMode="numeric" />
-              </Field>
-              <Field label="מלאי פתיחה — טלפון" hint="מכסה נפרדת לחלוטין">
-                <input value={form.stock_phone} onChange={e => set('stock_phone', e.target.value)} className={INPUT} dir="ltr" inputMode="numeric" />
-              </Field>
-            </>
-          ) : isNew ? null : form.unlimited_stock ? (
+          {form.unlimited_stock ? (
             <p className="sm:col-span-2 rounded-xl bg-slate-50 px-4 py-3 text-xs text-slate-500">
               הספר מסומן כבלתי מוגבל — עמודות המלאי אינן בשימוש עבורו.
             </p>
           ) : (
-            <p className="sm:col-span-2 rounded-xl bg-slate-50 px-4 py-3 text-xs text-slate-500">
-              המלאי נערך במסך המלאי, כדי שכל תנועה תירשם ביומן.
-              כרגע: <b>{book!.stock_web}</b> באתר, <b>{book!.stock_phone}</b> בטלפון.
-            </p>
+            <>
+              {/* ⚠️ כמות מוחלטת ("כמה יש") ולא דלתא: כך סופרים על המדף.
+                  ההפרש מול הקיים נשלח כתנועת adjust ונרשם ביומן. */}
+              <Field
+                label={isNew ? 'מלאי פתיחה — אתר' : 'מלאי — אתר'}
+                hint={isNew ? 'עותקים למכירה באתר' : `כרגע ${book!.stock_web} · השינוי יירשם ביומן`}
+              >
+                <input value={form.stock_web} onChange={e => set('stock_web', e.target.value)} className={INPUT} dir="ltr" inputMode="numeric" />
+              </Field>
+              <Field
+                label={isNew ? 'מלאי פתיחה — טלפון' : 'מלאי — טלפון'}
+                hint={isNew ? 'מכסה נפרדת לחלוטין' : `כרגע ${book!.stock_phone} · מכסה נפרדת`}
+              >
+                <input value={form.stock_phone} onChange={e => set('stock_phone', e.target.value)} className={INPUT} dir="ltr" inputMode="numeric" />
+              </Field>
+            </>
           )}
 
           {/* ── תמונת כריכה ──
