@@ -6,6 +6,12 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react', 'date-fns', 'recharts'],
   },
+  // ⚠️ @napi-rs/canvas הוא binding native (js-binding.js), לא מודול ESM —
+  // Turbopack נכשל בבנייה כשהוא מנסה לצרף (bundle) אותו: "non-ecmascript
+  // placeable asset". serverExternalPackages משאיר אותו כ-require חיצוני
+  // שנטען מ-node_modules ב-runtime, בלי לעבור bundling כלל. נדרש ליצירת
+  // ברקודים ל-PDF יריד הספרים (lib/bookFairBarcodesPdf.ts).
+  serverExternalPackages: ['@napi-rs/canvas'],
   async headers() {
     // ⚠️ no-cache ולא no-store. ההבדל מכריע לביצועים: no-store אוסר על
     // הדפדפן לשמור את התגובה בכלל, ולכן גם ה-Router Cache של Next נפסל —
