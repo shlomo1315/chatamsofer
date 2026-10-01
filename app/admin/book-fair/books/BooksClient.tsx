@@ -1,7 +1,7 @@
 'use client'
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, Plus, Pencil, Trash2, Loader2, BookOpen, Globe, Phone, Package, Barcode } from 'lucide-react'
+import { Search, Plus, Pencil, Trash2, Loader2, BookOpen, Globe, Phone, Package, Barcode, Image as ImageIcon } from 'lucide-react'
 import type { BookFairBook } from '@/types/bookFair'
 import { fmtAgorot } from '@/lib/bookFairPricing'
 import { useTablePagination } from '@/lib/useTablePagination'
@@ -51,6 +51,10 @@ export default function BooksClient({ books }: { books: BookFairBook[] }) {
   const [moving, setMoving] = useState<BookFairBook | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [downloadingBarcodes, setDownloadingBarcodes] = useState(false)
+  /** הספר שתמונתו מועלית כרגע. ⚠️ מזהה ולא בוליאני — אחרת כל הכפתורים
+   *  בטבלה היו מציגים טעינה בבת אחת. */
+  const [imgBusyId, setImgBusyId] = useState<string | null>(null)
+  const imgInputs = useRef<Record<string, HTMLInputElement | null>>({})
 
   // חיפוש חופשי על מק"ט, שם ומחבר
   const filtered = useMemo(() => {
@@ -118,6 +122,28 @@ export default function BooksClient({ books }: { books: BookFairBook[] }) {
       setDownloadingBarcodes(false)
     }
   }, [])
+
+  /**
+   * החלפת תמונת הספר.
+   *
+   * ⚠️ router.refresh ולא עדכון state מקומי: ה-image_path החדש נקבע
+   * בשרת (שם ייחודי נגד מטמון), ועדכון מקומי היה מנחש אותו.
+   */
+  const uploadImage = useCallback(async (b: BookFairBook, file: File) => {
+    setImgBusyId(b.id)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch(`/api/admin/book-fair/books/${b.id}/image`, { method: 'POST', body: fd })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { alert(json.error ?? 'העלאת התמונה נכשלה'); return }
+      router.refresh()
+    } catch {
+      alert('העלאת התמונה נכשלה — בדקו את החיבור')
+    } finally {
+      setImgBusyId(null)
+    }
+  }, [router])
 
   const del = useCallback(async (b: BookFairBook) => {
     const ok = await confirm({
@@ -196,7 +222,7 @@ export default function BooksClient({ books }: { books: BookFairBook[] }) {
               <thead className="border-b border-slate-200 bg-slate-50">
                 <tr>
                   {tc.shown.map((c, i) => tc.th(c, i))}
-                  <th className={`${HEAD} w-32 text-left`}>פעולות</th>
+                  <th className={`${HEAD} w-40 text-left`}>פעולות</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -215,6 +241,35 @@ export default function BooksClient({ books }: { books: BookFairBook[] }) {
                             עדכון מלאי נעשה דרך כפתור המלאי שלמטה. */}
                         {canEdit && (
                           <>
+                            {/* ── החלפת תמונה בלחיצה אחת ──
+                                🔴 ישירות מהטבלה ולא דרך עורך הספר: החלפת
+                                תמונה היא הפעולה החוזרת ביותר על הקטלוג,
+                                ושלושה מסכים בדרך אליה הפכו אותה למשימה.
+                                ⚠️ input מוסתר ולא מודאל — הדפדפן פותח את
+                                בוחר הקבצים, ומיד אחרי ההעלאה router.refresh
+                                מרענן את השורה. */}
+                            <IconButton
+                              title="החלפת תמונת הספר"
+                              disabled={imgBusyId === b.id}
+                              onClick={() => imgInputs.current[b.id]?.click()}
+                            >
+                              {imgBusyId === b.id
+                                ? <Loader2 size={15} className="animate-spin" />
+                                : <ImageIcon size={15} />}
+                            </IconButton>
+                            <input
+                              ref={el => { imgInputs.current[b.id] = el }}
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp,image/gif"
+                              hidden
+                              onChange={e => {
+                                const f = e.target.files?.[0]
+                                // ⚠️ איפוס הערך: בחירת *אותו* קובץ שוב
+                                // לא מפעילה onChange אם הערך לא נוקה.
+                                e.target.value = ''
+                                if (f) void uploadImage(b, f)
+                              }}
+                            />
                             <IconButton title="עדכון מלאי" onClick={() => setMoving(b)}>
                               <Package size={15} />
                             </IconButton>
