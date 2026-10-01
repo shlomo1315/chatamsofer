@@ -16,11 +16,11 @@ export const dynamic = 'force-dynamic'
 export const metadata = { robots: { index: false, follow: false } }
 
 export default async function FairPreviewPage() {
-  const { books, cities, tiers, openAt } = await getData(true)
+  const { books, cities, tiers, openAt, pickup } = await getData(true)
   return (
     <FairStore
       books={books} cities={cities} tiers={tiers}
-      open={true} openAt={openAt}
+      open={true} openAt={openAt} pickup={pickup}
       previewToken={bookFairPreviewToken()}
     />
   )

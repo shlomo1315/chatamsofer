@@ -1,6 +1,6 @@
 'use client'
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
-import { Search, ShoppingBag, Plus, Minus, X, Check, UserRound, Truck, Loader2 } from 'lucide-react'
+import { Search, ShoppingBag, Plus, Minus, X, Check, UserRound, Truck, Loader2, Package } from 'lucide-react'
 import { fmtAgorot, bookImageUrl } from '@/lib/bookFairPricing'
 import { shippingCost, totalVolumes } from '@/lib/bookFairShipping'
 import { cleanEmail, emailError } from '@/lib/emailAddress'
@@ -25,7 +25,7 @@ type CartLine = { book: PublicBook; quantity: number }
 
 const CART_KEY = 'book_fair_cart_v1'
 
-export default function YeridStore({ books, cities, tiers, open, openAt, previewToken }: {
+export default function YeridStore({ books, cities, tiers, open, openAt, previewToken, pickup }: {
   books: PublicBook[]; cities: PublicCity[]; tiers: PublicTier[]; open: boolean
   /** מועד הפתיחה המתוכנן (ISO) — לספירה לאחור במסך ההמתנה. */
   openAt: string | null
@@ -34,6 +34,13 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
    * הפתיחה הרשמית. ⚠️ null בחנות הציבורית — ואז ה-checkout חוסם כרגיל.
    */
   previewToken?: string | null
+  /**
+   * מצב האיסוף העצמי, מחושב בשרת.
+   *
+   * 🔴 בשרת ולא בלקוח: שעון הדפדפן נתון לשינוי, ולקוח עם שעון מוטה
+   * היה רואה "איסוף זמין" אחרי הסגירה. ראו lib/bookFairPickup.
+   */
+  pickup?: { available: boolean; message: string; ready_hours: number } | null
 }) {
   const [query, setQuery] = useState('')
 
@@ -59,6 +66,32 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
   const [flight, setFlight] = useState<{ id: number; from: DOMRect } | null>(null)
   const cartBtnRef = useRef<HTMLButtonElement>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+
+  // ── סורק הברקוד ──
+  //
+  // 🔴 סורק ברקוד מתנהג כמקלדת: הוא "מקליד" את המק"ט ומסיים ב-Enter.
+  // שתי בעיות שהתגלו בשימוש אמיתי:
+  //   1. המק"ט נשאר בשדה, ולכן הסריקה הבאה נדבקה לקודמת וצריך למחוק ביד.
+  //   2. היה צריך ללחוץ על השדה לפני כל סריקה, אחרת ההקלדה הלכה לאיבוד.
+  //
+  // הפתרון: מיקוד אוטומטי על השדה בכל מקום בדף, וניקויו אחרי Enter.
+  //
+  // ⚠️ המיקוד *לא* נגזל כשהמוכר מקליד בשדה אחר (טופס ההזמנה) או כשיש
+  // חלונית פתוחה — אחרת אי אפשר היה למלא את הטופס בכלל.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (cartOpen) return
+      const el = e.target as HTMLElement | null
+      const tag = el?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return
+      // ⚠️ רק תווים מדפיסים: Tab/Escape/חצים חייבים להמשיך לעבוד כרגיל.
+      if (e.key.length !== 1 || e.ctrlKey || e.altKey || e.metaKey) return
+      searchRef.current?.focus()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [cartOpen])
 
   useEffect(() => {
     try { localStorage.setItem(CART_KEY, JSON.stringify([...cart])) } catch { /* לא קריטי */ }
@@ -79,6 +112,26 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
     )
     return [...exact, ...rest]
   }, [books, query])
+
+  // ── קיבוץ לקטגוריות ──
+  //
+  // 🔴 הקטלוג המודפס בנוי בקטגוריות, והחנות צריכה להיראות כמוהו.
+  // הקטגוריה יושבת בשדה description (כך הגיעה מהאקסל) והסדר נגזר
+  // מקידומת המק"ט — ראו categoryOrder ב-lib/bookFairCatalog.
+  //
+  // ⚠️ בחיפוש אין קיבוץ: מי שחיפש רוצה לראות את התוצאות לפי רלוונטיות,
+  // ופיזורן לכותרות קטגוריה היה מסתיר את ההתאמה המדויקת.
+  const groups = useMemo(() => {
+    if (query.trim()) return null
+    const map = new Map<string, PublicBook[]>()
+    for (const b of filtered) {
+      const key = (b.description ?? '').trim() || 'נוספים'
+      const arr = map.get(key)
+      if (arr) arr.push(b)
+      else map.set(key, [b])
+    }
+    return [...map.entries()]
+  }, [filtered, query])
 
   const lines: CartLine[] = useMemo(() => {
     const out: CartLine[] = []
@@ -177,13 +230,38 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
           <div className="relative flex-1">
             <Search size={19} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[#141210]/30" />
             <input
+              ref={searchRef}
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="חיפוש לפי שם או מק״ט"
+              // 🔴 Enter = סוף סריקה אצל סורק הברקוד. מוסיפים לעגלה את
+              // ההתאמה המדויקת ומנקים את השדה, כדי שהסריקה הבאה תתחיל
+              // נקייה — קודם היה צריך למחוק ביד בין ספר לספר.
+              onKeyDown={e => {
+                if (e.key !== 'Enter') return
+                e.preventDefault()
+                const q = query.trim().toLowerCase()
+                if (!q) return
+                const hit = books.find(b => b.sku.toLowerCase() === q)
+                  ?? (filtered.length === 1 ? filtered[0] : null)
+                if (hit && hit.in_stock) {
+                  add(hit, cartBtnRef.current)
+                  setQuery('')
+                }
+              }}
+              placeholder="חיפוש או סריקת ברקוד"
               inputMode="search"
-              aria-label="חיפוש ספר"
+              aria-label="חיפוש ספר או סריקת ברקוד"
               className="w-full rounded-xl border-2 border-[#141210]/10 bg-white py-3 pr-12 pl-4 text-base outline-none transition placeholder:text-[#141210]/30 focus:border-[#B8860B]"
             />
+            {query && (
+              <button
+                onClick={() => { setQuery(''); searchRef.current?.focus() }}
+                aria-label="ניקוי החיפוש"
+                className="absolute left-3 top-1/2 -translate-y-1/2 rounded-lg p-1 text-[#141210]/35 transition hover:bg-[#141210]/5 hover:text-[#141210]"
+              >
+                <X size={17} />
+              </button>
+            )}
           </div>
 
           {/* ⚠️ העגלה גלויה תמיד ולא מוסתרת מאחורי אייקון */}
@@ -216,19 +294,49 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
               </p>
             )}
 
-            {/* ── המדף ── */}
-            <div className="grid grid-cols-1 gap-x-5 gap-y-8 pb-16 sm:grid-cols-2 lg:grid-cols-3">
-              {filtered.map(b => (
-                <BookCard
-                  key={b.id}
-                  book={b}
-                  inCart={cart.get(b.id) ?? 0}
-                  justAdded={justAdded === b.id}
-                  onAdd={el => add(b, el)}
-                  onSetQty={q => setQty(b.id, q)}
-                />
-              ))}
-            </div>
+            {/* ── המדף ──
+                🔴 מסודר בקטגוריות כמו הקטלוג המודפס, ולא בסדר א"ב.
+                ⚠️ בחיפוש הקיבוץ מתבטל (groups=null) — התוצאות מוצגות
+                לפי רלוונטיות, והתאמת מק"ט מדויקת ראשונה. */}
+            {groups ? (
+              <div className="pb-16">
+                {groups.map(([category, items]) => (
+                  <section key={category} className="mb-10">
+                    <div className="mb-4 flex items-baseline gap-3 border-b border-[#141210]/10 pb-2">
+                      <h2 className="text-xl font-bold text-[#12314F]">{category}</h2>
+                      <span className="text-sm text-[#141210]/40">
+                        {items.length} {items.length === 1 ? 'ספר' : 'ספרים'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
+                      {items.map(b => (
+                        <BookCard
+                          key={b.id}
+                          book={b}
+                          inCart={cart.get(b.id) ?? 0}
+                          justAdded={justAdded === b.id}
+                          onAdd={el => add(b, el)}
+                          onSetQty={q => setQty(b.id, q)}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-x-5 gap-y-8 pb-16 sm:grid-cols-2 lg:grid-cols-3">
+                {filtered.map(b => (
+                  <BookCard
+                    key={b.id}
+                    book={b}
+                    inCart={cart.get(b.id) ?? 0}
+                    justAdded={justAdded === b.id}
+                    onAdd={el => add(b, el)}
+                    onSetQty={q => setQty(b.id, q)}
+                  />
+                ))}
+              </div>
+            )}
           </>
         )}
       </main>
@@ -265,7 +373,7 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
       {cartOpen && (
         <CartPanel
           lines={lines} cities={cities} tiers={tiers}
-          previewToken={previewToken}
+          previewToken={previewToken} pickup={pickup}
           onClose={() => setCartOpen(false)} onSetQty={setQty}
         />
       )}
@@ -594,15 +702,16 @@ function EmptyCatalog() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function CartPanel({ lines, cities, tiers, previewToken, onClose, onSetQty }: {
+function CartPanel({ lines, cities, tiers, previewToken, pickup, onClose, onSetQty }: {
   lines: CartLine[]; cities: PublicCity[]; tiers: PublicTier[]
   previewToken?: string | null
+  pickup?: { available: boolean; message: string; ready_hours: number } | null
   onClose: () => void; onSetQty: (id: string, q: number) => void
 }) {
   const [step, setStep] = useState<'cart' | 'details' | 'payment'>('cart')
-  // 🔴 משלוח בלבד: האיסוף העצמי מהיריד בוטל באתר (הוא נשאר במכירה
-  // הטלפונית). המצב קבוע ואינו ניתן לשינוי — אין בורר.
-  const method = 'shipping' as const
+  // ⚠️ ברירת המחדל משלוח גם כשהאיסוף פתוח: רוב ההזמנות הן משלוח,
+  // והאיסוף הוא בחירה מודעת.
+  const [method, setMethod] = useState<'pickup' | 'shipping'>('shipping')
   const [cityId, setCityId] = useState('')
   const [form, setForm] = useState({ name: '', phone: '', email: '', address: '' })
   const [busy, setBusy] = useState(false)
@@ -617,7 +726,14 @@ function CartPanel({ lines, cities, tiers, previewToken, onClose, onSetQty }: {
   // (validateCheckout). פער בין השניים מציג ללקוח מחיר אחד וגובה אחר.
   const volumeCount = totalVolumes(lines.map(l => ({ volumes: l.book.volumes, quantity: l.quantity })))
   const itemsTotal = lines.reduce((s, l) => s + l.book.price_agorot * l.quantity, 0)
-  const ship = shippingCost(method, volumeCount, tiers)
+  // 🔴 איסוף עצמי = 0 ולא null: null פירושו "אין מדרגה מתאימה" וחוסם
+  // את ההזמנה, בעוד שבאיסוף פשוט אין דמי משלוח.
+  // ⚠️ מחיר המשלוח מחושב תמיד, גם באיסוף: הוא מוצג על כפתור המשלוח
+  // כדי שהקונה יראה מה הוא חוסך, ולכן אינו יכול להיות תלוי בבחירה.
+  const shipQuote = shippingCost('shipping', volumeCount, tiers)
+  // 🔴 איסוף עצמי = 0 ולא null: null פירושו "אין מדרגה מתאימה" וחוסם
+  // את ההזמנה, בעוד שבאיסוף פשוט אין דמי משלוח.
+  const ship = method === 'pickup' ? 0 : shipQuote
   const total = itemsTotal + (ship ?? 0)
 
   // 🔴 הכפתור נעול עד שכל שדות החובה מלאים ותקינים. בלי זה הלקוח מגיע
@@ -627,8 +743,9 @@ function CartPanel({ lines, cities, tiers, previewToken, onClose, onSetQty }: {
     form.name.trim().length >= 2 &&
     /^0\d{8,9}$/.test(form.phone.replace(/\D/g, '')) &&
     !!form.email.trim() && !emailBad &&
-    !!cityId && !!form.address.trim() &&
-    ship !== null
+    // ⚠️ עיר וכתובת נדרשות רק במשלוח — באיסוף אין לאן לשלוח.
+    (method === 'pickup' || (!!cityId && !!form.address.trim())) &&
+    (method === 'pickup' || ship !== null)
 
   async function submit() {
     setError(''); setBusy(true)
@@ -639,8 +756,9 @@ function CartPanel({ lines, cities, tiers, previewToken, onClose, onSetQty }: {
         body: JSON.stringify({
           items: lines.map(l => ({ book_id: l.book.id, quantity: l.quantity })),
           delivery_method: method,
-          city_id: cityId,
-          address_text: form.address,
+          // ⚠️ null באיסוף — ראו ההערה המקבילה בשרת.
+          city_id: method === 'shipping' ? cityId : null,
+          address_text: method === 'shipping' ? form.address : null,
           customer_name: form.name.trim(),
           customer_phone: form.phone.trim(),
           customer_email: cleanEmail(form.email),
@@ -751,39 +869,80 @@ function CartPanel({ lines, cities, tiers, previewToken, onClose, onSetQty }: {
             )
           ) : (
             <div className="flex flex-col gap-5">
-              {/* 🔴 משלוח עד הבית בלבד — האיסוף מהיריד בוטל באתר. */}
-              <div className="flex items-center gap-3 rounded-xl border border-[#12314F]/15 bg-[#12314F]/5 px-4 py-3.5">
-                <Truck size={20} className="flex-shrink-0 text-[#12314F]" />
-                <div>
-                  <p className="font-semibold text-[#12314F]">משלוח עד הבית</p>
-                  <p className="text-sm text-[#141210]/55">
-                    {ship === null ? 'לא הוגדר תעריף משלוח' : ship === 0 ? 'ללא עלות' : `${fmtAgorot(ship)} · ${volumeCount} כרכים`}
-                  </p>
-                </div>
-              </div>
+              {/* ── אופן האספקה ──
+                  ⚠️ האיסוף מוצג רק כשהוא פתוח בפועל (נקבע בשרת).
+                  כשהוא סגור מוצגת הסיבה, כדי שלא ייראה כתקלה. */}
+              <fieldset>
+                <legend className="mb-2 text-lg font-semibold text-[#141210]">איך לקבל את הספרים?</legend>
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMethod('shipping')}
+                    className={`flex items-center gap-3 rounded-xl border-2 px-4 py-3.5 text-right transition ${
+                      method === 'shipping' ? 'border-[#6B2737] bg-white' : 'border-[#141210]/15 hover:border-[#141210]/30'
+                    }`}
+                  >
+                    <Truck size={20} className="flex-shrink-0 text-[#12314F]" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-semibold text-[#12314F]">משלוח עד הבית</span>
+                      <span className="block text-sm text-[#141210]/55">
+                        {shipQuote === null
+                          ? 'לא הוגדר תעריף משלוח'
+                          : `${fmtAgorot(shipQuote)} · ${volumeCount} כרכים`}
+                      </span>
+                    </span>
+                  </button>
 
-              <Field label="עיר" required>
-                <select value={cityId} onChange={e => setCityId(e.target.value)} className={INPUT}>
-                  <option value="">בחרו עיר</option>
-                  {cities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-                {/* ⚠️ אמירה מפורשת: לקוח שאינו מוצא את עירו צריך
-                    להבין מיד שאיננו משלחים אליה. */}
-                <span className="mt-1 block text-sm text-[#141210]/50">
-                  משלוחים לערים שברשימה בלבד
-                </span>
-              </Field>
-              {/* ⚠️ רחוב נבחר מהמאגר הרשמי (gov_streets) ולא מוקלד
-                  חופשי — כדי שהשליח יקבל כתובת אמיתית ולא טעות הקלדה.
-                  העיר עצמה כבר נבחרה למעלה מתוך הרשימה הסגורה. */}
-              <StreetPicker
-                city={cities.find(c => c.id === cityId)?.name ?? ''}
-                address={form.address}
-                onAddressChange={address => setForm(f => ({ ...f, address }))}
-                addressRequired
-                houseRequired
-                labelSize="sm"
-              />
+                  {pickup?.available ? (
+                    <button
+                      type="button"
+                      onClick={() => setMethod('pickup')}
+                      className={`flex items-center gap-3 rounded-xl border-2 px-4 py-3.5 text-right transition ${
+                        method === 'pickup' ? 'border-[#6B2737] bg-white' : 'border-[#141210]/15 hover:border-[#141210]/30'
+                      }`}
+                    >
+                      <Package size={20} className="flex-shrink-0 text-[#2D5016]" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-semibold text-[#2D5016]">איסוף עצמי מהיריד — ללא עלות</span>
+                        <span className="block text-sm text-[#141210]/55">{pickup.message}</span>
+                      </span>
+                    </button>
+                  ) : pickup ? (
+                    <p className="rounded-xl bg-[#141210]/[0.04] px-4 py-3 text-sm text-[#141210]/50">
+                      {pickup.message}
+                    </p>
+                  ) : null}
+                </div>
+              </fieldset>
+
+              {/* ⚠️ שדות הכתובת מוצגים רק במשלוח: באיסוף אין לאן לשלוח,
+                  והצגתם הייתה שדות חובה שאי אפשר למלא בהיגיון. */}
+              {method === 'shipping' && (
+                <>
+                  <Field label="עיר" required>
+                    <select value={cityId} onChange={e => setCityId(e.target.value)} className={INPUT}>
+                      <option value="">בחרו עיר</option>
+                      {cities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                    {/* ⚠️ אמירה מפורשת: לקוח שאינו מוצא את עירו צריך
+                        להבין מיד שאיננו משלחים אליה. */}
+                    <span className="mt-1 block text-sm text-[#141210]/50">
+                      משלוחים לערים שברשימה בלבד
+                    </span>
+                  </Field>
+                  {/* ⚠️ רחוב נבחר מהמאגר הרשמי (gov_streets) ולא מוקלד
+                      חופשי — כדי שהשליח יקבל כתובת אמיתית ולא טעות הקלדה.
+                      העיר עצמה כבר נבחרה למעלה מתוך הרשימה הסגורה. */}
+                  <StreetPicker
+                    city={cities.find(c => c.id === cityId)?.name ?? ''}
+                    address={form.address}
+                    onAddressChange={address => setForm(f => ({ ...f, address }))}
+                    addressRequired
+                    houseRequired
+                    labelSize="sm"
+                  />
+                </>
+              )}
 
               <Field label="שם מלא" required>
                 <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={INPUT} />
@@ -822,7 +981,7 @@ function CartPanel({ lines, cities, tiers, previewToken, onClose, onSetQty }: {
                 <dd className="tabular-nums">{fmtAgorot(itemsTotal)}</dd>
               </div>
               <div className="flex justify-between text-[#141210]/70">
-                <dt>משלוח עד הבית</dt>
+                <dt>{method === 'pickup' ? 'איסוף עצמי מהיריד' : 'משלוח עד הבית'}</dt>
                 <dd className="tabular-nums">
                   {ship === null ? '—' : ship === 0 ? 'ללא עלות' : fmtAgorot(ship)}
                 </dd>

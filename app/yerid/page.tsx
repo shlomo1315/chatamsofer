@@ -16,6 +16,6 @@ export const dynamic = 'force-dynamic'
 export type { PublicBook, PublicCity, PublicTier } from './getData'
 
 export default async function FairPage() {
-  const { books, cities, tiers, open, openAt } = await getData()
-  return <FairStore books={books} cities={cities} tiers={tiers} open={open} openAt={openAt} />
+  const { books, cities, tiers, open, openAt, pickup } = await getData()
+  return <FairStore books={books} cities={cities} tiers={tiers} open={open} openAt={openAt} pickup={pickup} />
 }

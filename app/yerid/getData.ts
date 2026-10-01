@@ -1,5 +1,6 @@
 import { getServiceClient } from '@/lib/apiAuth'
 import { fetchPublicCatalog, type PublicBook } from '@/lib/bookFairCatalog'
+import { PICKUP_CONFIG_KEY, mergePickupConfig, pickupStatus, type PickupConfig } from '@/lib/bookFairPickup'
 
 export type { PublicBook }
 export type PublicCity = { id: string; name: string }
@@ -17,7 +18,7 @@ export type PublicTier = {
  */
 export async function getData(preview = false) {
   const db = getServiceClient()
-  if (!db) return { books: [] as PublicBook[], cities: [], tiers: [], open: false, openAt: null }
+  if (!db) return { books: [] as PublicBook[], cities: [], tiers: [], open: false, openAt: null, pickup: null }
 
   // ── שלב א: האם היריד פתוח ──
   //
@@ -40,10 +41,10 @@ export async function getData(preview = false) {
   // על מלאי שלא נבדק. חייב להיות זהה לבדיקה ב-api/yerid/checkout,
   // אחרת המסך יציג "סגור" בעוד ההזמנות מתקבלות.
   const open = String(gate?.value ?? '') === 'true' || preview
-  if (!open) return { books: [] as PublicBook[], cities: [], tiers: [], open: false, openAt }
+  if (!open) return { books: [] as PublicBook[], cities: [], tiers: [], open: false, openAt, pickup: null }
 
   // ── שלב ב: הקטלוג — רק אחרי שהיריד פתוח ──
-  const [{ books }, { data: cities }, { data: tiers }] = await Promise.all([
+  const [{ books }, { data: cities }, { data: tiers }, { data: pickupRow }] = await Promise.all([
     fetchPublicCatalog(db),
     db.from('book_fair_cities').select('id, name').eq('is_active', true).order('sort_order'),
     // ⚠️ step_volumes/step_agorot נשלפים גם הם: בלעדיהם המדרגה הפתוחה
@@ -51,7 +52,20 @@ export async function getData(preview = false) {
     db.from('book_fair_shipping_tiers')
       .select('min_books, max_books, price_agorot, step_volumes, step_agorot')
       .order('min_books'),
+    db.from('app_settings').select('value').eq('key', PICKUP_CONFIG_KEY).maybeSingle(),
   ])
+
+  // ── חלון האיסוף העצמי ──
+  //
+  // 🔴 מחושב בשרת ולא בלקוח: שעון הדפדפן נתון לשינוי, ולקוח עם שעון
+  // מוטה היה רואה "איסוף זמין" אחרי הסגירה (או להפך). ראו lib/bookFairPickup.
+  let pickupCfg: PickupConfig
+  try {
+    pickupCfg = mergePickupConfig(pickupRow?.value ? JSON.parse(String(pickupRow.value)) : null)
+  } catch {
+    pickupCfg = mergePickupConfig(null)
+  }
+  const pickup = { ...pickupStatus(pickupCfg, new Date()), ready_hours: pickupCfg.ready_hours }
 
   return {
     books,
@@ -59,5 +73,6 @@ export async function getData(preview = false) {
     tiers: (tiers ?? []) as PublicTier[],
     open: true,
     openAt,
+    pickup,
   }
 }

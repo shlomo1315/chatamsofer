@@ -4,6 +4,7 @@ import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { validateCheckout, makeOrderNumber, makeCartToken, type CheckoutItem } from '@/lib/bookFairCheckout'
 import { signPublicToken } from '@/lib/publicToken'
 import { isValidPreviewToken } from '@/lib/bookFairPreview'
+import { PICKUP_CONFIG_KEY, mergePickupConfig, pickupStatus } from '@/lib/bookFairPickup'
 import { getPaymentProvider } from '@/lib/payments'
 import type { TierInput } from '@/lib/bookFairShipping'
 
@@ -96,13 +97,33 @@ export async function POST(request: NextRequest) {
     db.from('book_fair_cities').select('id').eq('is_active', true),
   ])
 
-  // 🔴 באתר יש משלוח בלבד — האיסוף העצמי קיים רק במכירה הטלפונית.
-  // קיבוע בשרת ולא רק בטופס: לקוח ששולח delivery_method:'pickup' ידנית
-  // היה מקבל את הספרים בלי לשלם משלוח.
+  // ── אופן האספקה ──
+  //
+  // 🔴 איסוף עצמי מותר *רק* בתוך חלון האיסוף. לקוח שהשאיר לשונית
+  // פתוחה מלפני הסגירה היה שולח הזמנת איסוף שעתיים אחרי שנסגר, והטופס
+  // בלקוח לבדו אינו הגנה.
+  const wantsPickup = body.delivery_method === 'pickup'
+  if (wantsPickup) {
+    const { data: pickupRow } = await db.from('app_settings')
+      .select('value').eq('key', PICKUP_CONFIG_KEY).maybeSingle()
+    let cfg
+    try {
+      cfg = mergePickupConfig(pickupRow?.value ? JSON.parse(String(pickupRow.value)) : null)
+    } catch {
+      cfg = mergePickupConfig(null)
+    }
+    const status = pickupStatus(cfg, new Date())
+    if (!status.available) {
+      return NextResponse.json({ error: status.message }, { status: 409 })
+    }
+  }
+
+  const deliveryMethod = wantsPickup ? 'pickup' as const : 'shipping' as const
+
   const validation = validateCheckout(
     {
       items,
-      delivery_method: 'shipping',
+      delivery_method: deliveryMethod,
       city_id: body.city_id as string | null,
       address_text: body.address_text as string | null,
       customer_name: body.customer_name as string | null,
@@ -157,9 +178,11 @@ export async function POST(request: NextRequest) {
     customer_name: String(body.customer_name ?? '').trim(),
     customer_phone: String(body.customer_phone ?? '').trim(),
     customer_email: String(body.customer_email ?? '').trim() || null,
-    delivery_method: 'shipping',
-    city_id: body.city_id,
-    address_text: String(body.address_text ?? '').trim(),
+    delivery_method: deliveryMethod,
+    // ⚠️ באיסוף עצמי אין עיר וכתובת — השארתן הייתה יוצרת הזמנת איסוף
+    // שנראית כמשלוח בכל דוח ובכל סינון.
+    city_id: deliveryMethod === 'shipping' ? body.city_id : null,
+    address_text: deliveryMethod === 'shipping' ? String(body.address_text ?? '').trim() : null,
     // ⚠️ באתר הכתובת מוקלדת בעצמה ולכן מאומתת מראש; בטלפון היא מגיעה
     // מהקלטה וממתינה לאימות במשרד.
     address_confirmed: true,

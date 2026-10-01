@@ -1,7 +1,7 @@
 'use client'
 import { useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, Plus, Pencil, Trash2, Loader2, BookOpen, Globe, Phone, ArrowLeftRight, Barcode } from 'lucide-react'
+import { Search, Plus, Pencil, Trash2, Loader2, BookOpen, Globe, Phone, Package, Barcode } from 'lucide-react'
 import type { BookFairBook } from '@/types/bookFair'
 import { fmtAgorot } from '@/lib/bookFairPricing'
 import { useTablePagination } from '@/lib/useTablePagination'
@@ -196,7 +196,7 @@ export default function BooksClient({ books }: { books: BookFairBook[] }) {
               <thead className="border-b border-slate-200 bg-slate-50">
                 <tr>
                   {tc.shown.map((c, i) => tc.th(c, i))}
-                  <th className={`${HEAD} w-28 text-left`}>פעולות</th>
+                  <th className={`${HEAD} w-32 text-left`}>פעולות</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -209,15 +209,19 @@ export default function BooksClient({ books }: { books: BookFairBook[] }) {
                     ))}
                     <td className="px-3 py-2.5 text-left">
                       <div className="flex items-center justify-end gap-1">
+                        {/* ⚠️ "העברת מלאי בין ערוצים" הוסרה: מאז איחוד
+                            המלאי אין בין מה למה להעביר, והכפתור גזל
+                            שליש מרוחב עמודת הפעולות על פעולה מתה.
+                            עדכון מלאי נעשה דרך כפתור המלאי שלמטה. */}
                         {canEdit && (
                           <>
-                            <IconButton title="העברת מלאי בין ערוצים" onClick={() => setMoving(b)}>
-                              <ArrowLeftRight size={15} />
+                            <IconButton title="עדכון מלאי" onClick={() => setMoving(b)}>
+                              <Package size={15} />
                             </IconButton>
-                            <IconButton title="עריכה" onClick={() => setEditing(b)}>
+                            <IconButton title="עריכת הספר" onClick={() => setEditing(b)}>
                               <Pencil size={15} />
                             </IconButton>
-                            <IconButton title="מחיקה" danger disabled={busyId === b.id} onClick={() => del(b)}>
+                            <IconButton title="מחיקת הספר" danger disabled={busyId === b.id} onClick={() => del(b)}>
                               {busyId === b.id ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
                             </IconButton>
                           </>
