@@ -251,13 +251,15 @@ async function handle(request: NextRequest) {
 /**
  * טיפול בשיחה מתוך פרמטרים גולמיים.
  *
- * 🔴 מיוצא כדי שהשלוחה הראשית תוכל להריץ את היריד תחת *אותה כתובת*
- * (YEMOT_SINGLE_ENDPOINT), בלי go_to_folder ובלי להגדיר שלוחה נוספת
- * בימות — בדיוק כמו handleHolidayCall ו-handleMaternityCall.
+ * 🔴 יריד הספרים הוא שלוחה *נפרדת לחלוטין* — כתובת משל עצמה בימות,
+ * שאינה עוברת דרך התפריט הראשי ואינה תלויה בו. זו החלטה מכוונת של
+ * המשתמש: המחלקה עומדת בפני עצמה.
  *
- * ⚠️ חתימת פרמטרים ולא NextRequest: השלוחה הראשית כבר פירקה את הבקשה,
- * ובנייה מחדש של Request הייתה מאבדת את הפרמטרים שהיא עצמה הוסיפה
- * (למשל ivr_route).
+ * ⚠️ אל תחברו אותה ל-handle של התפריט הראשי (lib/ivrDelegate). זה
+ * נוסה ובוטל במכוון.
+ *
+ * ⚠️ חתימת פרמטרים ולא NextRequest: מפרידה את פענוח הבקשה מהלוגיקה,
+ * וכך אפשר לבדוק את השלוחה בלי לבנות Request מדומה.
  */
 export async function handleBookFairCall(params: Record<string, string>): Promise<NextResponse> {
   const supa = db()

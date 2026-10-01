@@ -26,10 +26,6 @@ describe('resolveRoute — הקשה ראשונה', () => {
     expect(resolveRoute({}, '2')).toBe('maternity')
   })
 
-  it('הקשה 3 → יריד הספרים', () => {
-    expect(resolveRoute({}, '3')).toBe('book_fair')
-  })
-
   it('⚠️ הקשה 9 אינה מסלול — היא הודעה שמטופלת בתפריט עצמו', () => {
     expect(resolveRoute({}, '9')).toBeNull()
   })
@@ -45,13 +41,6 @@ describe('resolveRoute — 🔴 המשך שיחה', () => {
     // ⚠️ זה הלב: אחרי שנכנסו לחגים, הקשה "2" היא בחירה *בתוך* החגים
     // ולא מעבר ליולדות. בלי זה כל הקשה הייתה מקפיצה בין מסלולים.
     expect(resolveRoute({ [ROUTE_PARAM]: 'holiday' }, '2')).toBe('holiday')
-  })
-
-  // ⚠️ אותו דבר ביריד: בתוך השיחה ההקשות הן מק"ט וכמות, ו"1"/"2" שם
-  // הן בחירות פנימיות — לא מעבר לחגים או ליולדות.
-  it('מסלול היריד נשמר גם כשמקישים 1 או 2 בתוכו', () => {
-    expect(resolveRoute({ [ROUTE_PARAM]: 'book_fair' }, '1')).toBe('book_fair')
-    expect(resolveRoute({ [ROUTE_PARAM]: 'book_fair' }, '2')).toBe('book_fair')
   })
 
   it('נשאר במסלול גם בלי הקשה', () => {
