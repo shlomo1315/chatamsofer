@@ -51,3 +51,7 @@ scripts/special-approvals-import.sql
 
 # קטלוגים ומסמכי מקור — נתוני עבודה, לא קוד
 *.pdf
+
+# קבצי חקירה זמניים
+.tmp-probe/
+.catalog-cards/
