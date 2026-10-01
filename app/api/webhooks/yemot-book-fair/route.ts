@@ -328,10 +328,29 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
   // ברירות המחדל שבקוד.
   const messages = await getBookFairMessages()
 
-  // ⚠️ היריד סגור — נבדק לפני כל עיבוד, כמו בבדיקה המקבילה ב-checkout.
-  const { data: gate } = await supa.from('app_settings')
-    .select('value').eq('key', 'book_fair_open').maybeSingle()
-  if (String(gate?.value ?? '') !== 'true') {
+  // ── האם השלוחה פתוחה ──
+  //
+  // 🔴 שני מפתחות, ו-או ביניהם:
+  //   book_fair_open       — היריד כולו (אתר + טלפון)
+  //   book_fair_phone_open — הטלפון בלבד
+  //
+  // ⚠️ הפרדה מכוונת: מפתח אחד לשניהם אילץ לפתוח את האתר הציבורי כדי
+  // לבדוק את השיחה בטלפון, כלומר לחשוף קטלוג ולקבל הזמנות אמיתיות
+  // לפני שהסליקה הוגדרה. כעת אפשר לבדוק את מסלול השיחה המלא בזמן
+  // שהאתר ממשיך להציג "ייפתח בקרוב".
+  //
+  // ⚠️ זו *אינה* דלת צדדית להזמנות אמיתיות באתר: הנתיב הזה יוצר
+  // הזמנות בערוץ 'phone' בלבד, ו-/api/yerid/checkout ממשיך לבדוק
+  // את book_fair_open לבדו.
+  const [{ data: gate }, { data: phoneGate }] = await Promise.all([
+    supa.from('app_settings').select('value').eq('key', 'book_fair_open').maybeSingle(),
+    supa.from('app_settings').select('value').eq('key', 'book_fair_phone_open').maybeSingle(),
+  ])
+  const isOpen =
+    String(gate?.value ?? '') === 'true' ||
+    String(phoneGate?.value ?? '') === 'true'
+
+  if (!isOpen) {
     return yemotText(`id_list_message=${msgToken(messages, 'closed')}&go_to_folder=hangup`, callId)
   }
 
