@@ -22,6 +22,7 @@ const PATHS: Record<string, string> = {
   menu: '/api/webhooks/yemot',
   holiday: '/api/webhooks/yemot-holiday',
   maternity: '/api/webhooks/yemot-maternity',
+  book_fair: '/api/webhooks/yemot-book-fair',
   otp: '/api/webhooks/yemot-otp',
 }
 

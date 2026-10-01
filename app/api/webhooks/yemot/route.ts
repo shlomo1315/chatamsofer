@@ -34,6 +34,7 @@ import { ivrStep, nextNodeId, NODE_PARAM, DIGIT_PARAM } from '@/lib/ivrRuntime'
 import { resolveRoute, ROUTE_PARAM } from '@/lib/ivrDelegate'
 import { handleHolidayCall } from '../yemot-holiday/route'
 import { handleMaternityCall } from '../yemot-maternity/route'
+import { handleBookFairCall } from '../yemot-book-fair/route'
 
 export const dynamic = 'force-dynamic'
 
@@ -186,6 +187,10 @@ async function handle(params: Record<string, string>): Promise<NextResponse> {
       const res = await handleMaternityCall(params)
       return withRoute(res, 'maternity')
     }
+    if (route === 'book_fair') {
+      const res = await handleBookFairCall(params)
+      return withRoute(res, 'book_fair')
+    }
   }
 
   // 🔴 אחרי בדיקת המסלול ולא לפניה.
@@ -200,6 +205,8 @@ async function handle(params: Record<string, string>): Promise<NextResponse> {
       return yemotText([goToFolder(FOLDER_HOLIDAY)], callId)
     case '2':
       return yemotText([goToFolder(FOLDER_MATERNITY)], callId)
+    // ⚠️ מקש 3 פעיל רק במצב כתובת-אחת (הטיפול למעלה). בלי המתג אין
+    // שלוחה נפרדת ליריד בימות, ולכן goToFolder היה מוביל לשום מקום.
     case '9':
       // ⚠️ ההודעה ואז חזרה לתפריט ולא ניתוק: מי שבירר הודעה עדיין רוצה
       // להירשם, וניתוק היה מאלץ אותו לחייג שוב.

@@ -20,6 +20,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
+import { safeEqual } from '@/lib/svix'
 import { makeOrderNumber, makeCartToken } from '@/lib/bookFairCheckout'
 import { shippingCost, totalVolumes, type TierInput } from '@/lib/bookFairShipping'
 import {
@@ -236,11 +237,6 @@ export async function POST(request: NextRequest) {
 }
 
 async function handle(request: NextRequest) {
-  const supa = db()
-  // ⚠️ אין מסד ⇒ אין נוסחים. ברירת המחדל שבקוד היא הדבר היחיד שאפשר
-  // להקריא כאן, ולכן הנוסח הזה נשאר מוטמע במכוון.
-  if (!supa) return yemotText('id_list_message=t-שגיאת שרת&go_to_folder=hangup')
-
   const params: Record<string, string> = {}
   request.nextUrl.searchParams.forEach((v, k) => { params[k] = v })
   if (request.method === 'POST') {
@@ -249,12 +245,52 @@ async function handle(request: NextRequest) {
       body.forEach((v, k) => { params[k] = String(v) })
     } catch { /* GET-only request */ }
   }
+  return handleBookFairCall(params)
+}
+
+/**
+ * טיפול בשיחה מתוך פרמטרים גולמיים.
+ *
+ * 🔴 מיוצא כדי שהשלוחה הראשית תוכל להריץ את היריד תחת *אותה כתובת*
+ * (YEMOT_SINGLE_ENDPOINT), בלי go_to_folder ובלי להגדיר שלוחה נוספת
+ * בימות — בדיוק כמו handleHolidayCall ו-handleMaternityCall.
+ *
+ * ⚠️ חתימת פרמטרים ולא NextRequest: השלוחה הראשית כבר פירקה את הבקשה,
+ * ובנייה מחדש של Request הייתה מאבדת את הפרמטרים שהיא עצמה הוסיפה
+ * (למשל ivr_route).
+ */
+export async function handleBookFairCall(params: Record<string, string>): Promise<NextResponse> {
+  const supa = db()
+  // ⚠️ אין מסד ⇒ אין נוסחים. ברירת המחדל שבקוד היא הדבר היחיד שאפשר
+  // להקריא כאן, ולכן הנוסח הזה נשאר מוטמע במכוון.
+  if (!supa) return yemotText('id_list_message=t-שגיאת שרת&go_to_folder=hangup')
 
   const callId = params['ApiCallId'] ?? ''
   const phone = params['ApiPhone'] ?? ''
   if (!callId) return yemotText('id_list_message=t-שגיאת שיחה&go_to_folder=hangup')
 
+  // ── אבטחה: אכיפת ApiToken (השוואה בזמן קבוע) ──
+  //
+  // 🔴 נכשל-סגור. הנתיב הזה משריין מלאי ויוצר הזמנות עם סליקה — כלומר
+  // כסף — והוא היה הוובהוק היחיד מבין החמישה שלא אכף דבר. בלי האכיפה
+  // כל מי שמכיר את הכתובת היה יכול לרוקן את המלאי בלולאה אחת.
+  //
+  // ⚠️ הבדיקה *לפני* כל פעולת מסד, כולל ניקוי הניתוק: בקשת ניתוק
+  // מזויפת עם callId של שיחה אמיתית הייתה מוחקת את ה-session שלה
+  // באמצע השיחה, והמתקשר האמיתי היה מתחיל מאפס.
+  const secret = process.env.YEMOT_WEBHOOK_SECRET
+  if (!secret) {
+    console.error('[yemot-book-fair] YEMOT_WEBHOOK_SECRET אינו מוגדר — דחיית כל הבקשות (fail-closed)')
+    return yemotText('id_list_message=t-אין הרשאה&go_to_folder=hangup', callId)
+  }
+  if (!safeEqual(params['ApiToken'] ?? '', secret)) {
+    console.warn('[yemot-book-fair] ApiToken שגוי — דחייה')
+    return yemotText('id_list_message=t-אין הרשאה&go_to_folder=hangup', callId)
+  }
+
   // ⚠️ ניתוק שיחה — ימות שולחת שוב עם hangup=yes. אין מה להשיב, רק לנקות.
+  // ⚠️ המלאי המשוריין משוחרר דרך פקיעת השריון (20 דק') ולא כאן, כדי
+  // שניתוק באמצע סליקה לא ישחרר מלאי שההזמנה עליו דווקא כן נסגרה.
   if (params['hangup'] === 'yes') {
     await supa.from('book_fair_call_sessions').delete().eq('call_id', callId)
     return yemotText('noop=hangup handled', callId)

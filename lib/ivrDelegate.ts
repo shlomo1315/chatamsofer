@@ -18,12 +18,12 @@
 /** שם המשתנה שבו נשמר המסלול. ⚠️ ייחודי — התנגשות עם משתנה קיים = לולאה. */
 export const ROUTE_PARAM = 'ivr_route'
 
-export type Route = 'holiday' | 'maternity'
+export type Route = 'holiday' | 'maternity' | 'book_fair'
 
-const ROUTES: Record<string, Route> = { holiday: 'holiday', maternity: 'maternity' }
+const ROUTES: Record<string, Route> = { holiday: 'holiday', maternity: 'maternity', book_fair: 'book_fair' }
 
 /** הקשה בתפריט הראשי → מסלול. ⚠️ 9 אינה כאן: היא הודעה שהתפריט משמיע בעצמו. */
-const DIGIT_TO_ROUTE: Record<string, Route> = { '1': 'holiday', '2': 'maternity' }
+const DIGIT_TO_ROUTE: Record<string, Route> = { '1': 'holiday', '2': 'maternity', '3': 'book_fair' }
 
 /**
  * באיזה מסלול השיחה נמצאת.
