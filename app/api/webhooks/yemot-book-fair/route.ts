@@ -269,7 +269,6 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
 
   const callId = params['ApiCallId'] ?? ''
   const phone = params['ApiPhone'] ?? ''
-  if (!callId) return yemotText('id_list_message=t-שגיאת שיחה&go_to_folder=hangup')
 
   // ── אבטחה: אכיפת ApiToken (השוואה בזמן קבוע) ──
   //
@@ -294,8 +293,22 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
   // ⚠️ המלאי המשוריין משוחרר דרך פקיעת השריון (20 דק') ולא כאן, כדי
   // שניתוק באמצע סליקה לא ישחרר מלאי שההזמנה עליו דווקא כן נסגרה.
   if (params['hangup'] === 'yes') {
-    await supa.from('book_fair_call_sessions').delete().eq('call_id', callId)
+    if (callId) await supa.from('book_fair_call_sessions').delete().eq('call_id', callId)
     return yemotText('noop=hangup handled', callId)
+  }
+
+  // ── בדיקת הכתובת מצד ימות ──
+  //
+  // 🔴 ימות פונה לכתובת *בלי ApiCallId* כדי לאמת אותה — גם בהגדרת
+  // השלוחה וגם לפני שיחה. השלוחה החזירה כאן "שגיאת שיחה" וניתקה, ולכן
+  // כל מי שחייג שמע שגיאה מיד: המערכת מעולם לא הגיעה לברכה.
+  //
+  // ⚠️ אף שלוחה אחרת אינה דורשת ApiCallId — רק זו דרשה, וזה היה הבאג.
+  // התשובה חייבת להיות *תקינה* (לא hangup), אחרת ימות מסמנת את הכתובת
+  // כשבורה.
+  if (!callId) {
+    console.log('[yemot-book-fair] בדיקת כתובת מימות (ללא ApiCallId) — מאשר')
+    return yemotText('noop=url check ok')
   }
 
   // ── הנוסחים ──

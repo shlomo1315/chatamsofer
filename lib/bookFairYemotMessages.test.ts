@@ -52,6 +52,20 @@ describe('🔴 התאמה בין המטא-דאטה לברירות המחדל ש�
   })
 })
 
+// 🔴 ימות פונה לכתובת בלי ApiCallId כדי לאמת אותה. השלוחה החזירה
+// "שגיאת שיחה" וניתקה, ולכן כל מי שחייג שמע שגיאה מיד ולא הגיע לברכה.
+// הטסט כאן מגן על הנוסח עצמו: "שגיאת שיחה" אינו אמור להיות מה שנשמע
+// בפתיחת שיחה תקינה.
+describe('🔴 הברכה ולא שגיאה בפתיחת שיחה', () => {
+  it('הצעד הראשון הוא הברכה ובקשת מק"ט, בלי ניתוק', () => {
+    const turn = nextTurn(initialState(), {})
+    expect(turn.response).toContain('read=')
+    expect(turn.response).not.toContain('go_to_folder=hangup')
+    expect(turn.response).not.toContain('שגיאה')
+    expect(turn.state.step).toBe('ask_sku')
+  })
+})
+
 describe('msgToken', () => {
   it('מחזיר TTS של הטקסט כשאין הקלטה', () => {
     expect(msgToken({ welcome: { text: 'שלום לכם' } }, 'welcome')).toBe('t-שלום לכם')
