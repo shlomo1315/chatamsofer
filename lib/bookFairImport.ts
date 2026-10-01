@@ -23,7 +23,7 @@ import { shekelsToAgorot } from './bookFairPricing'
 /** שדות היעד בקטלוג. */
 export type BookField =
   | 'sku' | 'title' | 'author' | 'publisher'
-  | 'volumes' | 'price' | 'stock_web' | 'stock_phone' | 'phone_code'
+  | 'volumes' | 'price' | 'stock' | 'phone_code'
 
 /**
  * כינויים מוכרים לכל שדה. ההשוואה מתבצעת אחרי נרמול (ראו normalizeHeader),
@@ -36,8 +36,15 @@ const HEADER_ALIASES: Record<BookField, string[]> = {
   publisher:   ['הוצאה', 'הוצאת ספרים', 'מוציא לאור', 'publisher'],
   volumes:     ['כרכים', 'מספר כרכים', 'כמות כרכים', 'volumes'],
   price:       ['מחיר', 'מחיר בשקלים', 'מחיר לצרכן', 'עלות', 'price'],
-  stock_web:   ['מלאי אתר', 'מלאי לאתר', 'כמות אתר', 'אתר', 'מלאי אינטרנט', 'stock web'],
-  stock_phone: ['מלאי טלפון', 'מלאי לטלפון', 'כמות טלפון', 'טלפון', 'מלאי טלפוני', 'stock phone'],
+  // ⚠️ המלאי אחד לשני הערוצים. הכינויים הישנים ("מלאי אתר"/"מלאי
+  // טלפון") נשמרים כדי שקובץ ישן עדיין ייקלט — שניהם מתמפים לאותו שדה.
+  // ⚠️ "מלאי הזמנות" ו"מלאי יריד" הן שתי עמודות באותו קובץ; הראשונה
+  // שנמצאת קובעת, ולכן היא הרשומה הראשונה כאן.
+  stock:       [
+    'מלאי הזמנות', 'מלאי', 'כמות', 'כמות במלאי', 'מלאי יריד', 'stock',
+    'מלאי אתר', 'מלאי לאתר', 'כמות אתר', 'אתר', 'מלאי אינטרנט', 'stock web',
+    'מלאי טלפון', 'מלאי לטלפון', 'כמות טלפון', 'טלפון', 'מלאי טלפוני', 'stock phone',
+  ],
   phone_code:  ['קוד טלפוני', 'קוד בטלפון', 'קוד הקשה', 'קוד שלוחה', 'phone code'],
 }
 
@@ -95,8 +102,10 @@ export interface ParsedBook {
   publisher: string | null
   volumes: number
   price_agorot: number
-  stock_web: number
-  stock_phone: number
+  /** המלאי — משותף לאתר ולטלפון. חסר משמעות כש-unlimited_stock. */
+  stock_total: number
+  /** "לא מוגבל" בקובץ — הזמנה מהמו״ל, תמיד זמין. */
+  unlimited_stock: boolean
   phone_code: number | null
 }
 
@@ -132,6 +141,35 @@ function parseCount(v: unknown, fallback: number): number | null {
   if (!/^\d+$/.test(s)) return null
   const n = parseInt(s, 10)
   return Number.isFinite(n) ? n : null
+}
+
+/**
+ * מפענח את תא המלאי.
+ *
+ * 🔴 הקובץ של המשרד אינו מכיל רק מספרים: "לא מוגבל" פירושו הזמנה
+ * מהמו״ל (הספר תמיד זמין ואינו נספר), ו"אזל מהמלאי" פירושו אפס.
+ * פענוח מספרי בלבד היה דוחה מחצית מהשורות כשגויות.
+ *
+ * ⚠️ תא ריק אינו "אזל" אלא "לא צוין" — הוא מוחזר כאפס בלי לסמן
+ * בלתי-מוגבל, ומי שקורא מחליט אם לעדכן בכלל.
+ *
+ * @returns null כשהערך אינו ניתן לפענוח.
+ */
+export function parseStock(v: unknown): { qty: number; unlimited: boolean } | null {
+  const s = cleanText(v).replace(/[,]/g, '').replace(/\s+/g, ' ').trim()
+  if (!s) return { qty: 0, unlimited: false }
+
+  const noQuotes = s.replace(/["'״׳]/g, '')
+  if (/^לא\s*מוגבל/.test(noQuotes) || /^ללא\s*הגבלה/.test(noQuotes)) {
+    return { qty: 0, unlimited: true }
+  }
+  if (/^אזל/.test(noQuotes) || /^נגמר/.test(noQuotes)) {
+    return { qty: 0, unlimited: false }
+  }
+
+  if (!/^\d+$/.test(s)) return null
+  const n = parseInt(s, 10)
+  return Number.isFinite(n) ? { qty: n, unlimited: false } : null
 }
 
 /**
@@ -190,11 +228,8 @@ export function parseBooksTable(rows: unknown[][]): ImportResult {
     if (volumes === null) messages.push(`מספר כרכים לא תקין: "${cleanText(at('volumes'))}"`)
     else if (volumes < 1) messages.push('מספר כרכים חייב להיות לפחות 1')
 
-    const stockWeb = parseCount(at('stock_web'), 0)
-    if (stockWeb === null) messages.push(`מלאי אתר לא תקין: "${cleanText(at('stock_web'))}"`)
-
-    const stockPhone = parseCount(at('stock_phone'), 0)
-    if (stockPhone === null) messages.push(`מלאי טלפון לא תקין: "${cleanText(at('stock_phone'))}"`)
+    const stock = parseStock(at('stock'))
+    if (stock === null) messages.push(`מלאי לא תקין: "${cleanText(at('stock'))}"`)
 
     let phoneCode: number | null = null
     const rawCode = cleanText(at('phone_code'))
@@ -229,8 +264,8 @@ export function parseBooksTable(rows: unknown[][]): ImportResult {
       publisher:   cleanText(at('publisher')) || null,
       volumes:     volumes!,
       price_agorot: price!,
-      stock_web:   stockWeb!,
-      stock_phone: stockPhone!,
+      stock_total:     stock!.qty,
+      unlimited_stock: stock!.unlimited,
       phone_code:  phoneCode,
     })
   }
@@ -250,14 +285,13 @@ export const TEMPLATE_HEADERS: { field: BookField; label: string; required: bool
   { field: 'publisher',   label: 'הוצאה',        required: false, hint: 'אופציונלי' },
   { field: 'volumes',     label: 'מספר כרכים',   required: false, hint: 'ברירת מחדל 1. משמש לאריזה' },
   { field: 'price',       label: 'מחיר',         required: true,  hint: 'בשקלים, למשל 45.90' },
-  { field: 'stock_web',   label: 'מלאי אתר',     required: false, hint: 'כמה עותקים למכירה באתר' },
-  { field: 'stock_phone', label: 'מלאי טלפון',   required: false, hint: 'כמה עותקים למכירה בטלפון' },
+  { field: 'stock',       label: 'מלאי',         required: false, hint: 'מספר עותקים, "לא מוגבל" או "אזל מהמלאי". משותף לאתר ולטלפון' },
   { field: 'phone_code',  label: 'קוד טלפוני',   required: false, hint: 'קוד להקשה בשלוחה. ריק = לא נמכר בטלפון' },
 ]
 
 /** שורות הדוגמה בתבנית — כדי שהמשתמש יראה את הפורמט הצפוי. */
 export const TEMPLATE_SAMPLE: (string | number)[][] = [
-  ['1001', 'שולחן ערוך אורח חיים', 'רבי יוסף קארו', 'מכון ירושלים', 4, 180, 20, 10, 101],
-  ['1002', 'משנה ברורה מהדורה חדשה', 'החפץ חיים', '', 6, 245.9, 15, 5, 102],
-  ['1003', 'חומש עם רש"י', '', '', 5, 120, 30, 0, ''],
+  ['1001', 'שולחן ערוך אורח חיים', 'רבי יוסף קארו', 'מכון ירושלים', 4, 180, 20, 101],
+  ['1002', 'משנה ברורה מהדורה חדשה', 'החפץ חיים', '', 6, 245.9, 'לא מוגבל', 102],
+  ['1003', 'חומש עם רש"י', '', '', 5, 120, 'אזל מהמלאי', ''],
 ]

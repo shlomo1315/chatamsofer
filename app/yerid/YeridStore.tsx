@@ -1,6 +1,6 @@
 'use client'
-import { useState, useMemo, useCallback, useEffect } from 'react'
-import { Search, ShoppingBag, Plus, Minus, X, Check } from 'lucide-react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import { Search, ShoppingBag, Plus, Minus, X, Check, UserRound, Truck, Loader2 } from 'lucide-react'
 import { fmtAgorot, bookImageUrl } from '@/lib/bookFairPricing'
 import { shippingCost, totalVolumes } from '@/lib/bookFairShipping'
 import { cleanEmail, emailError } from '@/lib/emailAddress'
@@ -25,10 +25,15 @@ type CartLine = { book: PublicBook; quantity: number }
 
 const CART_KEY = 'book_fair_cart_v1'
 
-export default function YeridStore({ books, cities, tiers, open, openAt }: {
+export default function YeridStore({ books, cities, tiers, open, openAt, previewToken }: {
   books: PublicBook[]; cities: PublicCity[]; tiers: PublicTier[]; open: boolean
   /** מועד הפתיחה המתוכנן (ISO) — לספירה לאחור במסך ההמתנה. */
   openAt: string | null
+  /**
+   * אסימון חתום מהנתיב הנסתר (/yerid101315) שמאפשר לבצע הזמנה גם לפני
+   * הפתיחה הרשמית. ⚠️ null בחנות הציבורית — ואז ה-checkout חוסם כרגיל.
+   */
+  previewToken?: string | null
 }) {
   const [query, setQuery] = useState('')
 
@@ -47,6 +52,13 @@ export default function YeridStore({ books, cities, tiers, open, openAt }: {
   })
   const [cartOpen, setCartOpen] = useState(false)
   const [justAdded, setJustAdded] = useState<string | null>(null)
+  /** הודעת "נוסף לעגלה" הצפה. ⚠️ שם הספר ולא "נוסף" גנרי — בלחיצות
+   *  מהירות ברצף הקונה צריך לדעת *מה* נכנס. */
+  const [toast, setToast] = useState<string | null>(null)
+  /** גוש מעופף מהכרטיס לעגלה — הפידבק הוויזואלי שהספר "נסע" לסל. */
+  const [flight, setFlight] = useState<{ id: number; from: DOMRect } | null>(null)
+  const cartBtnRef = useRef<HTMLButtonElement>(null)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     try { localStorage.setItem(CART_KEY, JSON.stringify([...cart])) } catch { /* לא קריטי */ }
@@ -80,10 +92,26 @@ export default function YeridStore({ books, cities, tiers, open, openAt }: {
   const bookCount = lines.reduce((s, l) => s + l.quantity, 0)
   const itemsTotal = lines.reduce((s, l) => s + l.book.price_agorot * l.quantity, 0)
 
-  const add = useCallback((b: PublicBook) => {
+  const add = useCallback((b: PublicBook, fromEl?: HTMLElement | null) => {
     setCart(c => new Map(c).set(b.id, (c.get(b.id) ?? 0) + 1))
     setJustAdded(b.id)
     setTimeout(() => setJustAdded(v => v === b.id ? null : v), 1400)
+
+    setToast(b.title)
+    // ⚠️ טיימר יחיד ב-ref: לחיצות רצופות על ספרים שונים היו מייצרות
+    // טיימרים מקבילים, והראשון שמסתיים היה מעלים הודעה של ספר אחר.
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(null), 2200)
+
+    // ⚠️ מדידה מיידית (getBoundingClientRect) ולא ref לאלמנט: הכרטיס
+    // מתחלף למצב "בעגלה" מיד אחרי הלחיצה, וה-DOM שלו כבר לא קיים
+    // כשהאנימציה מתחילה.
+    if (fromEl) {
+      const rect = fromEl.getBoundingClientRect()
+      const id = Date.now()
+      setFlight({ id, from: rect })
+      setTimeout(() => setFlight(f => f?.id === id ? null : f), 700)
+    }
   }, [])
 
   const setQty = useCallback((id: string, qty: number) => {
@@ -99,66 +127,91 @@ export default function YeridStore({ books, cities, tiers, open, openAt }: {
   if (!open) return <ClosedScreen openAt={openAt} />
 
   return (
-    <div className="min-h-screen bg-[#F5F0E6] pb-28 lg:pb-0">
+    <div className="min-h-screen bg-[#FAF7F0] pb-28 lg:pb-0">
       {/* ══ שער ══
-          ⚠️ רקע כהה וזהב — בנוי כמו שער של ספר, וזה מה שנותן לדף
-          נוכחות במקום להיפתח בשדה קלט. */}
-      <header className="relative bg-[#141210]">
-        <div className="mx-auto max-w-6xl px-5 py-10 sm:py-14">
-          <div className="flex items-start justify-between gap-6">
-            <div>
+          ⚠️ רקע בהיר וחם ולא כמעט-שחור. הרקע הכהה היה כבד על העין לאורך
+          גלילה ארוכה בקטלוג, והפך את הדף ל"אתר תדמית" במקום לחנות שנוח
+          לקנות בה. הזהב נשמר כמבטא על רקע בהיר — שם הוא מבליט במקום
+          להתחרות. */}
+      <header className="relative border-b border-[#141210]/8 bg-gradient-to-b from-white to-[#FAF7F0]">
+        <div className="mx-auto max-w-6xl px-5 py-7 sm:py-9">
+          <div className="flex items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
               {/* הלוגו הרשמי — זהה למסך ההמתנה ולשאר המערכת. */}
               <img
                 src="/logo.png"
                 alt="איגוד הצאצאים של רבינו החתם סופר"
-                className="w-24 sm:w-28"
+                className="w-16 sm:w-20"
               />
-              <h1 className="mt-4 text-4xl font-bold leading-none text-[#F5F0E6] sm:text-5xl">
-                יריד הספרים
-              </h1>
-              <p className="mt-2 text-lg text-[#B8860B]">היכל החתם סופר</p>
-              {books.length > 0 && (
-                <p className="mt-5 text-base text-[#F5F0E6]/60">
-                  {books.length} כותרים · משלוח עד הבית או איסוף עצמי
-                </p>
-              )}
+              <div>
+                <h1 className="text-2xl font-bold leading-tight text-[#141210] sm:text-3xl">
+                  יריד הספרים
+                </h1>
+                <p className="mt-0.5 text-base font-medium text-[#8A6212]">היכל החתם סופר</p>
+                {books.length > 0 && (
+                  <p className="mt-1 text-sm text-[#141210]/50">
+                    {books.length} ספרים · משלוח עד הבית
+                  </p>
+                )}
+              </div>
             </div>
 
-            {/* ⚠️ העגלה גלויה תמיד ולא מוסתרת מאחורי אייקון */}
-            <button
-              onClick={() => setCartOpen(true)}
-              className="hidden items-center gap-3 rounded-lg border border-[#B8860B] px-5 py-3 text-base font-medium text-[#B8860B] transition hover:bg-[#B8860B] hover:text-[#141210] lg:flex"
+            {/* ⚠️ אזור אישי — מסלול המעקב אחרי הזמנה קיימת. היה קיים
+                (/yerid/order/<token>) אך לא היה אליו שום כניסה מהחנות. */}
+            <a
+              href="/yerid/my-order"
+              className="hidden items-center gap-2 rounded-xl border border-[#141210]/12 bg-white px-4 py-2.5 text-sm font-medium text-[#141210]/70 transition hover:border-[#B8860B] hover:text-[#141210] sm:flex"
             >
-              <ShoppingBag size={19} />
-              {bookCount > 0 ? `${bookCount} ספרים · ${fmtAgorot(itemsTotal)}` : 'העגלה ריקה'}
-            </button>
+              <UserRound size={17} /> האזור האישי
+            </a>
           </div>
         </div>
-
-        {/* פס זהב שמפריד בין השער לקטלוג */}
-        <div className="h-1 bg-gradient-to-l from-transparent via-[#B8860B] to-transparent" />
       </header>
 
-      <main className="mx-auto max-w-6xl px-5">
+      {/* ══ סרגל דביק: חיפוש + עגלה ══
+          🔴 דביק בכל גלילה. הקטלוג ארוך, והקונה שגלל למטה נאלץ לחזור
+          לראש הדף כדי לחפש או לפתוח את הסל — שני הדברים שהוא עושה
+          הכי הרבה. */}
+      <div className="sticky top-0 z-40 border-b border-[#141210]/8 bg-[#FAF7F0]/95 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center gap-3 px-5 py-3">
+          <div className="relative flex-1">
+            <Search size={19} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[#141210]/30" />
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="חיפוש לפי שם או מק״ט"
+              inputMode="search"
+              aria-label="חיפוש ספר"
+              className="w-full rounded-xl border-2 border-[#141210]/10 bg-white py-3 pr-12 pl-4 text-base outline-none transition placeholder:text-[#141210]/30 focus:border-[#B8860B]"
+            />
+          </div>
+
+          {/* ⚠️ העגלה גלויה תמיד ולא מוסתרת מאחורי אייקון */}
+          <button
+            ref={cartBtnRef}
+            onClick={() => setCartOpen(true)}
+            className={`flex flex-shrink-0 items-center gap-2 rounded-xl px-4 py-3 text-base font-semibold transition ${
+              bookCount > 0
+                ? 'bg-[#6B2737] text-white hover:bg-[#141210]'
+                : 'border-2 border-[#141210]/10 bg-white text-[#141210]/50'
+            }`}
+          >
+            <ShoppingBag size={19} />
+            <span className="hidden sm:inline">
+              {bookCount > 0 ? `${bookCount} · ${fmtAgorot(itemsTotal)}` : 'העגלה ריקה'}
+            </span>
+            {bookCount > 0 && <span className="sm:hidden">{bookCount}</span>}
+          </button>
+        </div>
+      </div>
+
+      <main className="mx-auto max-w-6xl px-5 pt-8">
         {books.length === 0 ? (
           <EmptyCatalog />
         ) : (
           <>
-            {/* ── חיפוש — כלי, לא שער ── */}
-            <div className="relative -mt-7 mb-10">
-              <Search size={22} className="pointer-events-none absolute right-5 top-1/2 -translate-y-1/2 text-[#141210]/30" />
-              <input
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                placeholder="חיפוש לפי שם או מק״ט"
-                inputMode="search"
-                aria-label="חיפוש ספר"
-                className="w-full rounded-lg border-2 border-[#141210]/10 bg-white py-4 pr-14 pl-5 text-lg shadow-sm outline-none transition placeholder:text-[#141210]/30 focus:border-[#B8860B]"
-              />
-            </div>
-
             {query && (
-              <p className="-mt-6 mb-6 text-base text-[#141210]/50">
+              <p className="mb-6 text-base text-[#141210]/50">
                 {filtered.length ? `${filtered.length} ספרים` : 'לא נמצאו ספרים בחיפוש זה'}
               </p>
             )}
@@ -171,7 +224,7 @@ export default function YeridStore({ books, cities, tiers, open, openAt }: {
                   book={b}
                   inCart={cart.get(b.id) ?? 0}
                   justAdded={justAdded === b.id}
-                  onAdd={() => add(b)}
+                  onAdd={el => add(b, el)}
                   onSetQty={q => setQty(b.id, q)}
                 />
               ))}
@@ -180,25 +233,82 @@ export default function YeridStore({ books, cities, tiers, open, openAt }: {
         )}
       </main>
 
-      {/* ── סרגל תחתון בנייד ── */}
+      {/* ── סרגל תחתון בנייד — מעבר לתשלום ── */}
       {bookCount > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t-2 border-[#B8860B] bg-[#141210] p-4 lg:hidden">
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#141210]/10 bg-white p-4 shadow-[0_-4px_16px_rgba(20,18,16,0.08)] lg:hidden">
           <button
             onClick={() => setCartOpen(true)}
-            className="flex w-full items-center justify-between text-lg font-medium text-[#F5F0E6]"
+            className="flex w-full items-center justify-between rounded-xl bg-[#6B2737] px-5 py-3.5 text-lg font-semibold text-white"
           >
             <span className="flex items-center gap-2"><ShoppingBag size={20} /> {bookCount} ספרים</span>
-            <span className="text-[#B8860B]">{fmtAgorot(itemsTotal)}</span>
+            <span>{fmtAgorot(itemsTotal)}</span>
           </button>
         </div>
       )}
 
+      {/* ── הודעת "נוסף לעגלה" ──
+          ⚠️ מתחת לסרגל הדביק ולא מעליו, כדי לא להסתיר את החיפוש. */}
+      {toast && (
+        <div className="pointer-events-none fixed inset-x-0 top-20 z-50 flex justify-center px-5">
+          <div className="flex max-w-sm items-center gap-2.5 rounded-xl bg-[#2D5016] px-5 py-3 text-white shadow-lg animate-[fadeInDown_0.2s_ease-out]">
+            <Check size={19} strokeWidth={3} className="flex-shrink-0" />
+            <span className="truncate text-base font-medium">{toast} נוסף לעגלה</span>
+          </div>
+        </div>
+      )}
+
+      {/* ── הספר "טס" לעגלה ──
+          ⚠️ pointer-events-none: האנימציה חוצה את הדף ואסור שתחסום
+          לחיצה על כרטיס אחר באמצע. */}
+      {flight && <FlyToCart key={flight.id} from={flight.from} toRef={cartBtnRef} />}
+
       {cartOpen && (
         <CartPanel
           lines={lines} cities={cities} tiers={tiers}
+          previewToken={previewToken}
           onClose={() => setCartOpen(false)} onSetQty={setQty}
         />
       )}
+    </div>
+  )
+}
+
+/**
+ * גוש קטן שנע מהכרטיס אל כפתור העגלה.
+ *
+ * ⚠️ היעד נמדד בתוך האפקט ולא בגוף הרינדור: קריאת ref בזמן רינדור
+ * אינה מובטחת — ה-DOM עשוי טרם להתייצב, והמיקום יוצא שגוי.
+ *
+ * ⚠️ requestAnimationFrame לפני שינוי המצב: הגדרת מיקום ההתחלה והסיום
+ * באותו פריים מדלגת על המעבר לגמרי (הדפדפן רואה רק את הערך הסופי).
+ */
+function FlyToCart({ from, toRef }: {
+  from: DOMRect
+  toRef: React.RefObject<HTMLButtonElement | null>
+}) {
+  const [to, setTo] = useState<DOMRect | null>(null)
+  const [arrived, setArrived] = useState(false)
+
+  useEffect(() => {
+    const rect = toRef.current?.getBoundingClientRect()
+    if (!rect) return
+    setTo(rect)
+    const raf = requestAnimationFrame(() => setArrived(true))
+    return () => cancelAnimationFrame(raf)
+  }, [toRef])
+
+  if (!to) return null
+  const style: React.CSSProperties = arrived
+    ? { top: to.top + to.height / 2, left: to.left + to.width / 2, opacity: 0, transform: 'scale(0.3)' }
+    : { top: from.top + from.height / 2, left: from.left + from.width / 2, opacity: 1, transform: 'scale(1)' }
+
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none fixed z-50 -ml-5 -mt-5 flex h-10 w-10 items-center justify-center rounded-full bg-[#6B2737] text-white transition-all duration-[600ms] ease-in-out"
+      style={style}
+    >
+      <ShoppingBag size={18} />
     </div>
   )
 }
@@ -360,10 +470,18 @@ function NoCover({ title }: { title: string }) {
  */
 function BookCard({ book, inCart, justAdded, onAdd, onSetQty }: {
   book: PublicBook; inCart: number; justAdded: boolean
-  onAdd: () => void; onSetQty: (q: number) => void
+  onAdd: (el: HTMLElement | null) => void; onSetQty: (q: number) => void
 }) {
   const out = !book.in_stock
   const img = bookImageUrl(book.image_path)
+  const btnRef = useRef<HTMLButtonElement>(null)
+
+  // ⚠️ המחבר וההוצאה זהים ברוב הקטלוג ("מכון החתם סופר · מכון החתם
+  // סופר"), כי הייבוא מהאקסל מילא את שניהם מאותה עמודה. מציגים ערך
+  // אחד כשהם זהים — הכפילות נראתה כתקלה בנתונים, וזו בדיוק מה שהיא.
+  const credit = book.author && book.publisher && book.author.trim() === book.publisher.trim()
+    ? book.author
+    : [book.author, book.publisher].filter(Boolean).join(' · ')
 
   return (
     <article className={`group relative flex overflow-hidden rounded-l-md bg-white shadow-[0_1px_3px_rgba(20,18,16,0.08)] transition ${
@@ -407,10 +525,8 @@ function BookCard({ book, inCart, justAdded, onAdd, onSetQty }: {
 
         <h2 className="text-[20px] font-bold leading-snug text-[#141210]">{book.title}</h2>
 
-        {(book.author || book.publisher) && (
-          <p className="mt-1.5 text-base leading-relaxed text-[#141210]/55">
-            {[book.author, book.publisher].filter(Boolean).join(' · ')}
-          </p>
+        {credit && (
+          <p className="mt-1.5 text-base leading-relaxed text-[#141210]/55">{credit}</p>
         )}
 
         {/* ⚠️ התיאור נשלף ונערך במסך הקטלוג מהיום הראשון ולא הוצג כאן —
@@ -446,7 +562,8 @@ function BookCard({ book, inCart, justAdded, onAdd, onSetQty }: {
             // ⚠️ הרגע היחיד של תנועה בדף: הכפתור עונה לפעולה של הקונה
             // ומראה בבירור שהספר נכנס.
             <button
-              onClick={onAdd}
+              ref={btnRef}
+              onClick={() => onAdd(btnRef.current)}
               className={`flex min-h-[48px] items-center gap-2 rounded-lg px-6 text-base font-semibold transition-colors duration-200 ${
                 justAdded
                   ? 'bg-[#2D5016] text-white'
@@ -477,12 +594,15 @@ function EmptyCatalog() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function CartPanel({ lines, cities, tiers, onClose, onSetQty }: {
+function CartPanel({ lines, cities, tiers, previewToken, onClose, onSetQty }: {
   lines: CartLine[]; cities: PublicCity[]; tiers: PublicTier[]
+  previewToken?: string | null
   onClose: () => void; onSetQty: (id: string, q: number) => void
 }) {
   const [step, setStep] = useState<'cart' | 'details' | 'payment'>('cart')
-  const [method, setMethod] = useState<'pickup' | 'shipping'>('pickup')
+  // 🔴 משלוח בלבד: האיסוף העצמי מהיריד בוטל באתר (הוא נשאר במכירה
+  // הטלפונית). המצב קבוע ואינו ניתן לשינוי — אין בורר.
+  const method = 'shipping' as const
   const [cityId, setCityId] = useState('')
   const [form, setForm] = useState({ name: '', phone: '', email: '', address: '' })
   const [busy, setBusy] = useState(false)
@@ -500,6 +620,16 @@ function CartPanel({ lines, cities, tiers, onClose, onSetQty }: {
   const ship = shippingCost(method, volumeCount, tiers)
   const total = itemsTotal + (ship ?? 0)
 
+  // 🔴 הכפתור נעול עד שכל שדות החובה מלאים ותקינים. בלי זה הלקוח מגיע
+  // לסליקה, נדחה בשרת, וחוזר לטופס — אחרי שכבר שוריין לו מלאי.
+  const emailBad = emailError(form.email)
+  const detailsOk =
+    form.name.trim().length >= 2 &&
+    /^0\d{8,9}$/.test(form.phone.replace(/\D/g, '')) &&
+    !!form.email.trim() && !emailBad &&
+    !!cityId && !!form.address.trim() &&
+    ship !== null
+
   async function submit() {
     setError(''); setBusy(true)
     try {
@@ -509,9 +639,13 @@ function CartPanel({ lines, cities, tiers, onClose, onSetQty }: {
         body: JSON.stringify({
           items: lines.map(l => ({ book_id: l.book.id, quantity: l.quantity })),
           delivery_method: method,
-          city_id: method === 'shipping' ? cityId : null,
-          address_text: method === 'shipping' ? form.address : null,
-          customer_name: form.name, customer_phone: form.phone, customer_email: form.email,
+          city_id: cityId,
+          address_text: form.address,
+          customer_name: form.name.trim(),
+          customer_phone: form.phone.trim(),
+          customer_email: cleanEmail(form.email),
+          // ⚠️ רק בנתיב הנסתר: מאפשר הזמנת בדיקה לפני פתיחת היריד.
+          preview_token: previewToken ?? undefined,
         }),
       })
       const json = await res.json().catch(() => ({}))
@@ -539,14 +673,22 @@ function CartPanel({ lines, cities, tiers, onClose, onSetQty }: {
   return (
     <div className="fixed inset-0 z-50 flex justify-start bg-[#141210]/60" onClick={onClose}>
       <div className="flex h-full w-full max-w-lg flex-col bg-[#F5F0E6]" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b-2 border-[#B8860B] bg-[#141210] px-5 py-4">
-          <h2 className="text-xl font-bold text-[#F5F0E6]">
-            {step === 'cart' ? 'העגלה שלי' : step === 'details' ? 'פרטי ההזמנה' : 'תשלום'}
-          </h2>
+        <div className="flex items-center justify-between border-b border-[#141210]/10 bg-white px-5 py-4">
+          <div>
+            <h2 className="text-xl font-bold text-[#12314F]">
+              {step === 'cart' ? 'העגלה שלי' : step === 'details' ? 'פרטי ההזמנה' : 'תשלום'}
+            </h2>
+            {step === 'cart' && lines.length > 0 && (
+              <p className="mt-0.5 text-sm text-[#141210]/50">
+                {bookCount} {bookCount === 1 ? 'ספר' : 'ספרים'} · {volumeCount} כרכים
+              </p>
+            )}
+          </div>
           {/* ⚠️ בשלב התשלום אין כפתור סגירה: ניתוק באמצע יוצר הזמנה
               תקועה (pending_payment) שהמלאי שלה משוריין 25 דקות. */}
           {step !== 'payment' && (
-            <button onClick={onClose} aria-label="סגירה" className="rounded p-2 text-[#F5F0E6]/60 hover:text-[#F5F0E6]">
+            <button onClick={onClose} aria-label="סגירה"
+              className="rounded-lg p-2 text-[#141210]/40 transition hover:bg-[#141210]/5 hover:text-[#141210]">
               <X size={22} />
             </button>
           )}
@@ -564,29 +706,42 @@ function CartPanel({ lines, cities, tiers, onClose, onSetQty }: {
             />
           ) : step === 'cart' ? (
             !lines.length ? (
-              <p className="py-16 text-center text-lg text-[#141210]/50">העגלה ריקה</p>
+              <div className="flex flex-col items-center gap-3 py-20 text-center">
+                <ShoppingBag size={44} className="text-[#141210]/15" />
+                <p className="text-lg font-medium text-[#141210]/50">העגלה ריקה</p>
+                <button onClick={onClose} className="text-base font-medium text-[#6B2737] underline underline-offset-4">
+                  חזרה לקטלוג
+                </button>
+              </div>
             ) : (
               <ul className="flex flex-col gap-3">
                 {lines.map(l => (
-                  <li key={l.book.id} className="flex items-start gap-3 rounded-md bg-white p-4">
-                    <div className="min-w-0 flex-1">
-                      <p className="font-mono text-sm text-[#141210]/45">{l.book.sku}</p>
-                      <p className="text-[17px] font-semibold leading-snug text-[#141210]">{l.book.title}</p>
-                      <p className="mt-1 text-base text-[#141210]/55">{fmtAgorot(l.book.price_agorot)} ליחידה</p>
+                  <li key={l.book.id} className="rounded-xl border border-[#141210]/8 bg-white p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="min-w-0 flex-1 text-[17px] font-semibold leading-snug text-[#12314F]">
+                        {l.book.title}
+                      </p>
+                      <button onClick={() => onSetQty(l.book.id, 0)} aria-label="הסרה"
+                        className="-mt-1 flex-shrink-0 rounded-lg p-1.5 text-[#141210]/30 transition hover:bg-[#6B2737]/10 hover:text-[#6B2737]">
+                        <X size={17} />
+                      </button>
                     </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <div className="flex items-center rounded border-2 border-[#141210]/15">
+                    <p className="mt-0.5 text-sm text-[#141210]/45">
+                      {l.book.volumes > 1 ? `${l.book.volumes} כרכים · ` : ''}{fmtAgorot(l.book.price_agorot)} ליחידה
+                    </p>
+                    <div className="mt-3 flex items-center justify-between">
+                      <div className="flex items-center rounded-lg border border-[#141210]/15 bg-[#FAF7F0]">
                         <button onClick={() => onSetQty(l.book.id, l.quantity - 1)} aria-label="הפחתה"
-                          className="flex h-10 w-10 items-center justify-center text-[#141210]/60">
-                          <Minus size={16} />
+                          className="flex h-9 w-9 items-center justify-center text-[#141210]/60 transition hover:text-[#6B2737]">
+                          <Minus size={15} />
                         </button>
-                        <span className="min-w-[2rem] text-center text-lg font-bold tabular-nums">{l.quantity}</span>
+                        <span className="min-w-[2.25rem] text-center text-base font-bold tabular-nums">{l.quantity}</span>
                         <button onClick={() => onSetQty(l.book.id, l.quantity + 1)} aria-label="הוספה"
-                          className="flex h-10 w-10 items-center justify-center text-[#141210]/60">
-                          <Plus size={16} />
+                          className="flex h-9 w-9 items-center justify-center text-[#141210]/60 transition hover:text-[#6B2737]">
+                          <Plus size={15} />
                         </button>
                       </div>
-                      <span className="text-lg font-bold text-[#6B2737]">
+                      <span className="text-lg font-bold tabular-nums text-[#6B2737]">
                         {fmtAgorot(l.book.price_agorot * l.quantity)}
                       </span>
                     </div>
@@ -596,43 +751,39 @@ function CartPanel({ lines, cities, tiers, onClose, onSetQty }: {
             )
           ) : (
             <div className="flex flex-col gap-5">
-              <fieldset>
-                <legend className="mb-2 text-lg font-semibold text-[#141210]">איך לקבל את הספרים?</legend>
-                <div className="flex flex-col gap-2">
-                  <MethodOption active={method === 'pickup'} onClick={() => setMethod('pickup')}
-                    title="איסוף עצמי מהיריד" note="ללא עלות" />
-                  <MethodOption active={method === 'shipping'} onClick={() => setMethod('shipping')}
-                    title="משלוח עד הבית"
-                    note={method === 'shipping' && ship === null ? 'לא הוגדר תעריף' : undefined} />
+              {/* 🔴 משלוח עד הבית בלבד — האיסוף מהיריד בוטל באתר. */}
+              <div className="flex items-center gap-3 rounded-xl border border-[#12314F]/15 bg-[#12314F]/5 px-4 py-3.5">
+                <Truck size={20} className="flex-shrink-0 text-[#12314F]" />
+                <div>
+                  <p className="font-semibold text-[#12314F]">משלוח עד הבית</p>
+                  <p className="text-sm text-[#141210]/55">
+                    {ship === null ? 'לא הוגדר תעריף משלוח' : ship === 0 ? 'ללא עלות' : `${fmtAgorot(ship)} · ${volumeCount} כרכים`}
+                  </p>
                 </div>
-              </fieldset>
+              </div>
 
-              {method === 'shipping' && (
-                <>
-                  <Field label="עיר" required>
-                    <select value={cityId} onChange={e => setCityId(e.target.value)} className={INPUT}>
-                      <option value="">בחרו עיר</option>
-                      {cities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                    {/* ⚠️ אמירה מפורשת: לקוח שאינו מוצא את עירו צריך
-                        להבין מיד שאיננו משלחים אליה. */}
-                    <span className="mt-1 block text-sm text-[#141210]/50">
-                      משלוחים לערים שברשימה בלבד
-                    </span>
-                  </Field>
-                  {/* ⚠️ רחוב נבחר מהמאגר הרשמי (gov_streets) ולא מוקלד
-                      חופשי — כדי שהשליח יקבל כתובת אמיתית ולא טעות הקלדה.
-                      העיר עצמה כבר נבחרה למעלה מתוך הרשימה הסגורה. */}
-                  <StreetPicker
-                    city={cities.find(c => c.id === cityId)?.name ?? ''}
-                    address={form.address}
-                    onAddressChange={address => setForm(f => ({ ...f, address }))}
-                    addressRequired
-                    houseRequired
-                    labelSize="sm"
-                  />
-                </>
-              )}
+              <Field label="עיר" required>
+                <select value={cityId} onChange={e => setCityId(e.target.value)} className={INPUT}>
+                  <option value="">בחרו עיר</option>
+                  {cities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                {/* ⚠️ אמירה מפורשת: לקוח שאינו מוצא את עירו צריך
+                    להבין מיד שאיננו משלחים אליה. */}
+                <span className="mt-1 block text-sm text-[#141210]/50">
+                  משלוחים לערים שברשימה בלבד
+                </span>
+              </Field>
+              {/* ⚠️ רחוב נבחר מהמאגר הרשמי (gov_streets) ולא מוקלד
+                  חופשי — כדי שהשליח יקבל כתובת אמיתית ולא טעות הקלדה.
+                  העיר עצמה כבר נבחרה למעלה מתוך הרשימה הסגורה. */}
+              <StreetPicker
+                city={cities.find(c => c.id === cityId)?.name ?? ''}
+                address={form.address}
+                onAddressChange={address => setForm(f => ({ ...f, address }))}
+                addressRequired
+                houseRequired
+                labelSize="sm"
+              />
 
               <Field label="שם מלא" required>
                 <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={INPUT} />
@@ -641,9 +792,15 @@ function CartPanel({ lines, cities, tiers, onClose, onSetQty }: {
                 <input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
                   inputMode="tel" dir="ltr" className={INPUT} />
               </Field>
-              <Field label="אימייל" hint="לקבלת אישור וקישור למעקב">
+              {/* 🔴 האימייל חובה: הוא הדרך היחידה של הלקוח לקבל את קישור
+                  המעקב. עד כה הוא היה אופציונלי, והזמנה בלי מייל נעלמה
+                  מהלקוח ברגע שסגר את הלשונית. */}
+              <Field label="אימייל" required hint="לקבלת אישור וקישור למעקב">
                 <input value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                   inputMode="email" dir="ltr" className={INPUT} />
+                {form.email.trim() && emailBad && (
+                  <span className="mt-1 block text-sm text-[#6B2737]">{emailBad}</span>
+                )}
               </Field>
 
               {error && (
@@ -657,47 +814,54 @@ function CartPanel({ lines, cities, tiers, onClose, onSetQty }: {
 
         {lines.length > 0 && step !== 'payment' && (
           <div className="border-t-2 border-[#141210]/10 bg-white px-5 py-4">
+            {/* 🔴 המשלוח מוצג כבר בשלב העגלה ולא רק בטופס: לקוח שראה
+                סכום אחד בעגלה וסכום גבוה יותר בתשלום חושב שהוטעה. */}
             <dl className="mb-3 flex flex-col gap-1.5 text-base">
               <div className="flex justify-between text-[#141210]/70">
-                <dt>{bookCount} ספרים</dt>
+                <dt>{bookCount} {bookCount === 1 ? 'ספר' : 'ספרים'}</dt>
                 <dd className="tabular-nums">{fmtAgorot(itemsTotal)}</dd>
               </div>
-              {step === 'details' && (
-                <div className="flex justify-between text-[#141210]/70">
-                  <dt>{method === 'pickup' ? 'איסוף עצמי' : 'משלוח'}</dt>
-                  <dd className="tabular-nums">
-                    {ship === null ? '—' : ship === 0 ? 'ללא עלות' : fmtAgorot(ship)}
-                  </dd>
-                </div>
-              )}
+              <div className="flex justify-between text-[#141210]/70">
+                <dt>משלוח עד הבית</dt>
+                <dd className="tabular-nums">
+                  {ship === null ? '—' : ship === 0 ? 'ללא עלות' : fmtAgorot(ship)}
+                </dd>
+              </div>
               <div className="flex justify-between border-t border-[#141210]/10 pt-2 text-xl font-bold text-[#141210]">
                 <dt>סך הכול</dt>
-                <dd className="tabular-nums text-[#6B2737]">
-                  {fmtAgorot(step === 'details' ? total : itemsTotal)}
-                </dd>
+                <dd className="tabular-nums text-[#6B2737]">{fmtAgorot(total)}</dd>
               </div>
             </dl>
 
             {step === 'cart' ? (
               <button onClick={() => setStep('details')}
-                className="w-full rounded-lg bg-[#141210] py-4 text-lg font-semibold text-[#F5F0E6] transition hover:bg-[#6B2737]">
+                className="w-full rounded-xl bg-[#141210] py-4 text-lg font-semibold text-[#F5F0E6] transition hover:bg-[#6B2737]">
                 המשך להזמנה
               </button>
             ) : (
-              <div className="flex gap-2">
-                <button onClick={() => setStep('cart')}
-                  className="rounded-lg border-2 border-[#141210]/20 px-5 py-4 text-lg font-medium text-[#141210]/70">
-                  חזרה
-                </button>
-                <button
-                  onClick={submit}
-                  // ⚠️ StreetPicker מחזיר כתובת ריקה כשהרחוב לא תואם
-                  // לרשימה הרשמית — חוסמים שליחה עד שנבחר רחוב אמיתי.
-                  disabled={busy || ship === null || (method === 'shipping' && !form.address.trim())}
-                  className="flex-1 rounded-lg bg-[#6B2737] py-4 text-lg font-semibold text-[#F5F0E6] transition hover:bg-[#141210] disabled:opacity-50">
-                  {busy ? 'מעביר לתשלום…' : `לתשלום ${fmtAgorot(total)}`}
-                </button>
-              </div>
+              <>
+                <div className="flex gap-2">
+                  <button onClick={() => setStep('cart')}
+                    className="rounded-xl border-2 border-[#141210]/15 px-5 py-4 text-lg font-medium text-[#141210]/70 transition hover:border-[#141210]/30">
+                    חזרה
+                  </button>
+                  <button
+                    onClick={submit}
+                    // 🔴 נעול עד שכל שדות החובה מלאים ותקינים (ראו detailsOk).
+                    // ⚠️ StreetPicker מחזיר כתובת ריקה כשהרחוב לא תואם
+                    // לרשימה הרשמית — לכן form.address מכסה גם את זה.
+                    disabled={busy || !detailsOk}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#6B2737] py-4 text-lg font-semibold text-[#F5F0E6] transition hover:bg-[#141210] disabled:cursor-not-allowed disabled:opacity-40">
+                    {busy && <Loader2 size={18} className="animate-spin" />}
+                    {busy ? 'מעביר לתשלום…' : `לתשלום ${fmtAgorot(total)}`}
+                  </button>
+                </div>
+                {!detailsOk && !busy && (
+                  <p className="mt-2 text-center text-sm text-[#141210]/45">
+                    {ship === null ? 'לא הוגדר תעריף משלוח' : 'יש למלא את כל שדות החובה'}
+                  </p>
+                )}
+              </>
             )}
           </div>
         )}
@@ -707,20 +871,6 @@ function CartPanel({ lines, cities, tiers, onClose, onSetQty }: {
 }
 
 const INPUT = 'w-full rounded-md border-2 border-[#141210]/15 bg-white px-4 py-3.5 text-lg outline-none transition focus:border-[#B8860B]'
-
-function MethodOption({ active, onClick, title, note }: {
-  active: boolean; onClick: () => void; title: string; note?: string
-}) {
-  return (
-    <button onClick={onClick}
-      className={`flex items-center justify-between rounded-md border-2 px-4 py-4 text-right transition ${
-        active ? 'border-[#6B2737] bg-white' : 'border-[#141210]/15 hover:border-[#141210]/30'
-      }`}>
-      <span className="text-lg font-medium text-[#141210]">{title}</span>
-      {note && <span className="text-base text-[#141210]/50">{note}</span>}
-    </button>
-  )
-}
 
 function Field({ label, required, hint, children }: {
   label: string; required?: boolean; hint?: string; children: React.ReactNode

@@ -184,16 +184,20 @@ export async function POST(request: NextRequest) {
     const { data, error } = await db.from('book_fair_books').insert({
       sku: b.sku, title: b.title, author: b.author, publisher: b.publisher,
       volumes: b.volumes, price_agorot: b.price_agorot,
-      stock_web: b.stock_web, stock_phone: b.stock_phone, phone_code: b.phone_code,
+      stock_total: b.stock_total, unlimited_stock: b.unlimited_stock,
+      phone_code: b.phone_code,
     }).select('id').single()
 
     if (error) { failures.push(`${b.sku}: ${error.message}`); continue }
     created++
 
-    const ledger = []
-    if (b.stock_web > 0)   ledger.push({ book_id: data.id, channel: 'web',   delta: b.stock_web,   reason: 'import', created_by: staff.userId })
-    if (b.stock_phone > 0) ledger.push({ book_id: data.id, channel: 'phone', delta: b.stock_phone, reason: 'import', created_by: staff.userId })
-    if (ledger.length) await db.from('book_fair_stock_ledger').insert(ledger)
+    // ⚠️ ספר בלתי-מוגבל אינו נרשם ביומן: אין לו מלאי להוכיח.
+    if (!b.unlimited_stock && b.stock_total > 0) {
+      await db.from('book_fair_stock_ledger').insert({
+        book_id: data.id, channel: 'web', delta: b.stock_total,
+        reason: 'import', created_by: staff.userId,
+      })
+    }
   }
 
   if (mode === 'merge') {

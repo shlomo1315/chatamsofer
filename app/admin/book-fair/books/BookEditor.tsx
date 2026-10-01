@@ -39,8 +39,7 @@ export default function BookEditor({ book, onClose, onSaved }: {
     sort_order:  String(book?.sort_order ?? 0),
     // ⚠️ בעריכה נטענת הכמות הקיימת (כדי שהשדה יהיה "כמה יש", לא "כמה
     // להוסיף"); ביצירה זהו מלאי פתיחה ומתחיל מאפס.
-    stock_web:   String(book?.stock_web ?? 0),
-    stock_phone: String(book?.stock_phone ?? 0),
+    stock_total: String(book?.stock_total ?? 0),
     is_active: book?.is_active ?? true,
   })
 
@@ -102,8 +101,7 @@ export default function BookEditor({ book, onClose, onSaved }: {
       }
       // מלאי פתיחה נשלח רק ביצירה
       if (isNew) {
-        body.stock_web = Number(form.stock_web) || 0
-        body.stock_phone = Number(form.stock_phone) || 0
+        body.stock_total = Number(form.stock_total) || 0
       }
 
       const res = await fetch(
@@ -121,19 +119,15 @@ export default function BookEditor({ book, onClose, onSaved }: {
       //
       // 🔴 אחרי שמירת הפרטים ולא לפניה: תנועת מלאי שנרשמה ואז השמירה
       // נכשלה הייתה משאירה יומן שמתאר שינוי שלא קרה.
-      // ⚠️ ספר בלתי-מוגבל מדלג — העמודות חסרות משמעות עבורו.
+      // ⚠️ ספר בלתי-מוגבל מדלג — המלאי חסר משמעות עבורו.
       if (!isNew && !form.unlimited_stock) {
-        const deltas: { channel: 'web' | 'phone'; delta: number }[] = [
-          { channel: 'web',   delta: (Number(form.stock_web) || 0) - book!.stock_web },
-          { channel: 'phone', delta: (Number(form.stock_phone) || 0) - book!.stock_phone },
-        ]
-        for (const { channel, delta } of deltas) {
-          if (!delta) continue
+        const delta = (Number(form.stock_total) || 0) - (book!.stock_total ?? 0)
+        if (delta) {
           const sr = await fetch('/api/admin/book-fair/stock', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              op: 'adjust', book_id: book!.id, channel, delta,
+              op: 'adjust', book_id: book!.id, channel: 'web', delta,
               reason: delta > 0 ? 'restock' : 'adjust',
               note: 'עודכן מעורך הספר',
             }),
@@ -142,7 +136,7 @@ export default function BookEditor({ book, onClose, onSaved }: {
             const sj = await sr.json().catch(() => ({}))
             // ⚠️ הפרטים כבר נשמרו — נאמר במפורש מה עבר ומה לא, במקום
             // "השמירה נכשלה" שיגרום למשתמש לנסות שוב ולשמור פעמיים.
-            setError(`הפרטים נשמרו, אך עדכון המלאי (${channel === 'web' ? 'אתר' : 'טלפון'}) נכשל: ${sj.error ?? 'שגיאה'}`)
+            setError(`הפרטים נשמרו, אך עדכון המלאי נכשל: ${sj.error ?? 'שגיאה'}`)
             return
           }
         }
@@ -228,25 +222,20 @@ export default function BookEditor({ book, onClose, onSaved }: {
 
           {form.unlimited_stock ? (
             <p className="sm:col-span-2 rounded-xl bg-slate-50 px-4 py-3 text-xs text-slate-500">
-              הספר מסומן כבלתי מוגבל — עמודות המלאי אינן בשימוש עבורו.
+              הספר מסומן כבלתי מוגבל — המלאי אינו בשימוש עבורו.
             </p>
           ) : (
-            <>
-              {/* ⚠️ כמות מוחלטת ("כמה יש") ולא דלתא: כך סופרים על המדף.
-                  ההפרש מול הקיים נשלח כתנועת adjust ונרשם ביומן. */}
-              <Field
-                label={isNew ? 'מלאי פתיחה — אתר' : 'מלאי — אתר'}
-                hint={isNew ? 'עותקים למכירה באתר' : `כרגע ${book!.stock_web} · השינוי יירשם ביומן`}
-              >
-                <input value={form.stock_web} onChange={e => set('stock_web', e.target.value)} className={INPUT} dir="ltr" inputMode="numeric" />
-              </Field>
-              <Field
-                label={isNew ? 'מלאי פתיחה — טלפון' : 'מלאי — טלפון'}
-                hint={isNew ? 'מכסה נפרדת לחלוטין' : `כרגע ${book!.stock_phone} · מכסה נפרדת`}
-              >
-                <input value={form.stock_phone} onChange={e => set('stock_phone', e.target.value)} className={INPUT} dir="ltr" inputMode="numeric" />
-              </Field>
-            </>
+            /* ⚠️ כמות מוחלטת ("כמה יש") ולא דלתא: כך סופרים על המדף.
+               ההפרש מול הקיים נשלח כתנועת adjust ונרשם ביומן. */
+            <Field
+              label={isNew ? 'מלאי פתיחה' : 'מלאי'}
+              className="sm:col-span-2"
+              hint={isNew
+                ? 'עותקים למכירה — משותף לאתר ולטלפון'
+                : `כרגע ${book!.stock_total ?? 0} · משותף לאתר ולטלפון · השינוי יירשם ביומן`}
+            >
+              <input value={form.stock_total} onChange={e => set('stock_total', e.target.value)} className={INPUT} dir="ltr" inputMode="numeric" />
+            </Field>
           )}
 
           {/* ── תמונת כריכה ──

@@ -48,3 +48,6 @@ next-env.d.ts
 # ⚠️ פלט legacy-loans-to-sql.mjs — אותו PII בדיוק, בצורת INSERT.
 scripts/legacy-loans-import.sql
 scripts/special-approvals-import.sql
+
+# קטלוגים ומסמכי מקור — נתוני עבודה, לא קוד
+*.pdf

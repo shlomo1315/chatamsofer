@@ -3,6 +3,7 @@ import { getServiceClient } from '@/lib/apiAuth'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { validateCheckout, makeOrderNumber, makeCartToken, type CheckoutItem } from '@/lib/bookFairCheckout'
 import { signPublicToken } from '@/lib/publicToken'
+import { isValidPreviewToken } from '@/lib/bookFairPreview'
 import { getPaymentProvider } from '@/lib/payments'
 import type { TierInput } from '@/lib/bookFairShipping'
 
@@ -42,9 +43,14 @@ export async function POST(request: NextRequest) {
   // 🔴 ברירת המחדל *סגור*, וחייבת להיות זהה לזו שבדף החנות: מפתח חסר
   // פירושו שאיש לא פתח את היריד. פער בין השניים היה מציג "סגור" ללקוח
   // בעוד השרת מקבל הזמנות — או להפך.
+  //
+  // ⚠️ אסימון תצוגה מקדימה חתום (מהנתיב הנסתר /yerid101315) עוקף את
+  // הבדיקה — כדי שאפשר יהיה לבדוק את מסלול הרכישה המלא לפני הפתיחה.
+  // החתימה נגזרת מסוד השרת ולכן אינה ניתנת לניחוש; ראו lib/bookFairPreview.
   const { data: gate } = await db.from('app_settings')
     .select('value').eq('key', 'book_fair_open').maybeSingle()
-  if (String(gate?.value ?? '') !== 'true') {
+  const isPreview = isValidPreviewToken(body.preview_token)
+  if (String(gate?.value ?? '') !== 'true' && !isPreview) {
     return NextResponse.json({ error: 'היריד סגור כרגע להזמנות' }, { status: 403 })
   }
 
@@ -90,10 +96,13 @@ export async function POST(request: NextRequest) {
     db.from('book_fair_cities').select('id').eq('is_active', true),
   ])
 
+  // 🔴 באתר יש משלוח בלבד — האיסוף העצמי קיים רק במכירה הטלפונית.
+  // קיבוע בשרת ולא רק בטופס: לקוח ששולח delivery_method:'pickup' ידנית
+  // היה מקבל את הספרים בלי לשלם משלוח.
   const validation = validateCheckout(
     {
       items,
-      delivery_method: body.delivery_method === 'shipping' ? 'shipping' : 'pickup',
+      delivery_method: 'shipping',
       city_id: body.city_id as string | null,
       address_text: body.address_text as string | null,
       customer_name: body.customer_name as string | null,
@@ -148,9 +157,9 @@ export async function POST(request: NextRequest) {
     customer_name: String(body.customer_name ?? '').trim(),
     customer_phone: String(body.customer_phone ?? '').trim(),
     customer_email: String(body.customer_email ?? '').trim() || null,
-    delivery_method: body.delivery_method === 'shipping' ? 'shipping' : 'pickup',
-    city_id: body.delivery_method === 'shipping' ? body.city_id : null,
-    address_text: body.delivery_method === 'shipping' ? String(body.address_text ?? '').trim() : null,
+    delivery_method: 'shipping',
+    city_id: body.city_id,
+    address_text: String(body.address_text ?? '').trim(),
     // ⚠️ באתר הכתובת מוקלדת בעצמה ולכן מאומתת מראש; בטלפון היא מגיעה
     // מהקלטה וממתינה לאימות במשרד.
     address_confirmed: true,

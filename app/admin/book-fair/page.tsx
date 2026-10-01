@@ -31,7 +31,7 @@ type OrderRow = {
 
 type BookRow = {
   id: string; title: string; sku: string
-  stock_web: number; stock_phone: number; is_active: boolean; unlimited_stock: boolean
+  stock_total: number; is_active: boolean; unlimited_stock: boolean
 }
 
 /** סטטוסים שנחשבים הכנסה בפועל — הזמנה שלא שולמה אינה הכנסה. */
@@ -54,7 +54,7 @@ async function getData() {
     ),
     fetchAllRows<BookRow>((from, to) =>
       supabase.from('book_fair_books')
-        .select('id, title, sku, stock_web, stock_phone, is_active, unlimited_stock')
+        .select('id, title, sku, stock_total, is_active, unlimited_stock')
         .range(from, to)
     ),
     supabase.from('app_settings').select('value').eq('key', 'book_fair_open').maybeSingle(),
@@ -96,13 +96,13 @@ export default async function BookFairPage() {
 
   const activeBooks = books.filter(b => b.is_active)
   const limited = activeBooks.filter(b => !b.unlimited_stock)
-  const stockWeb = limited.reduce((s, b) => s + b.stock_web, 0)
-  const stockPhone = limited.reduce((s, b) => s + b.stock_phone, 0)
-  // ⚠️ "אוזל" = נותרו 3 ומטה באחד הערוצים, אך לא אפס בשניהם — ספר
-  // שאזל לגמרי כבר אינו דורש החלטה, הוא פשוט לא נמכר.
+  const stockCopies = limited.reduce((s, b) => s + (b.stock_total ?? 0), 0)
+  const unlimitedCount = activeBooks.length - limited.length
+  // ⚠️ "אוזל" = נותרו 3 ומטה אך לא אפס — ספר שאזל לגמרי כבר אינו דורש
+  // החלטה, הוא פשוט לא נמכר.
   const lowStock = activeBooks
     // ⚠️ ספר בלתי מוגבל לעולם אינו "אוזל" — הוא מוזמן מהמו״ל.
-    .filter(b => !b.unlimited_stock && (b.stock_web + b.stock_phone) > 0 && (b.stock_web + b.stock_phone) <= 3)
+    .filter(b => !b.unlimited_stock && (b.stock_total ?? 0) > 0 && (b.stock_total ?? 0) <= 3)
     .slice(0, 5)
 
   const byChannel = {
@@ -208,13 +208,13 @@ export default async function BookFairPage() {
         />
         <Stat
           icon={Globe} tone="sky"
-          value={stockWeb.toLocaleString('en-US')} label="עותקים באתר"
-          sub={`${activeBooks.length} כותרים פעילים`}
+          value={stockCopies.toLocaleString('en-US')} label="עותקים במלאי"
+          sub={`${activeBooks.length} ספרים פעילים · מלאי משותף לאתר ולטלפון`}
         />
         <Stat
           icon={Phone} tone="violet"
-          value={stockPhone.toLocaleString('en-US')} label="עותקים בטלפון"
-          sub="מכסה נפרדת לחלוטין"
+          value={String(unlimitedCount)} label="ספרים ללא הגבלת מלאי"
+          sub="הזמנה מהמו״ל — תמיד זמינים"
         />
       </div>
 
@@ -259,13 +259,8 @@ export default async function BookFairPage() {
                   <span className="font-mono text-xs text-slate-400">{b.sku}</span>
                   <span className="mr-2 text-slate-800">{b.title}</span>
                 </span>
-                <span className="flex flex-shrink-0 gap-3 text-xs">
-                  <span className={b.stock_web === 0 ? 'text-red-600' : 'text-slate-600'}>
-                    אתר {b.stock_web}
-                  </span>
-                  <span className={b.stock_phone === 0 ? 'text-red-600' : 'text-slate-600'}>
-                    טלפון {b.stock_phone}
-                  </span>
+                <span className="flex-shrink-0 text-xs font-medium text-amber-700">
+                  נותרו {b.stock_total ?? 0}
                 </span>
               </li>
             ))}

@@ -44,9 +44,9 @@ export async function POST(request: NextRequest) {
   const volumes = intOrNull(body.volumes ?? 1)
   if (volumes === null || volumes < 1) return NextResponse.json({ error: 'מספר כרכים לא תקין' }, { status: 400 })
 
-  const stockWeb = intOrNull(body.stock_web ?? 0)
-  const stockPhone = intOrNull(body.stock_phone ?? 0)
-  if (stockWeb === null || stockPhone === null) {
+  // ⚠️ מלאי אחד לשני הערוצים — ראו מיגרציית 20261001.
+  const stockTotal = intOrNull(body.stock_total ?? 0)
+  if (stockTotal === null || stockTotal < 0) {
     return NextResponse.json({ error: 'מלאי לא תקין' }, { status: 400 })
   }
 
@@ -63,8 +63,7 @@ export async function POST(request: NextRequest) {
     description: clean(body.description) || null,
     volumes,
     price_agorot: price,
-    stock_web: stockWeb,
-    stock_phone: stockPhone,
+    stock_total: stockTotal,
     phone_code: phoneCode,
     // ⚠️ התקבל ב-PATCH אך לא ביצירה: סדר שנקבע בטופס של ספר חדש נבלע
     // בשקט, והספר נחת בברירת המחדל 0.
@@ -88,10 +87,13 @@ export async function POST(request: NextRequest) {
 
   // ⚠️ מלאי התחלתי נרשם ביומן כדי שההתאמה בין העמודה ליומן תחזיק
   // מהרגע הראשון — אחרת מסך ההתאמה יתריע על כל ספר חדש.
-  const ledger = []
-  if (stockWeb > 0)   ledger.push({ book_id: data.id, channel: 'web',   delta: stockWeb,   reason: 'restock', note: 'מלאי התחלתי', created_by: staff.userId })
-  if (stockPhone > 0) ledger.push({ book_id: data.id, channel: 'phone', delta: stockPhone, reason: 'restock', note: 'מלאי התחלתי', created_by: staff.userId })
-  if (ledger.length) await db.from('book_fair_stock_ledger').insert(ledger)
+  // ⚠️ ספר בלתי-מוגבל אינו נרשם ביומן: אין לו מלאי להוכיח.
+  if (stockTotal > 0 && body.unlimited_stock !== true) {
+    await db.from('book_fair_stock_ledger').insert({
+      book_id: data.id, channel: 'web', delta: stockTotal,
+      reason: 'restock', note: 'מלאי התחלתי', created_by: staff.userId,
+    })
+  }
 
   await logActivity(db, {
     userId: staff.userId, action: 'create', entityType: 'book_fair_book',

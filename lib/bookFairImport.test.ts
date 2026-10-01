@@ -44,17 +44,25 @@ describe('normalizeHeader / matchHeader — הכותרות שהמשתמש כות
 
   // 🔴 "מלאי טלפון" מכיל את "טלפון" — התאמה בהכלה הייתה משייכת אותו
   // לשדה הלא נכון, לפי סדר המפתחות באובייקט
-  it('🔴 מבחין בין "מלאי אתר", "מלאי טלפון" ו"קוד טלפוני"', () => {
-    expect(matchHeader('מלאי אתר')).toBe('stock_web')
-    expect(matchHeader('מלאי טלפון')).toBe('stock_phone')
+  it('🔴 מבחין בין כותרות המלאי ל"קוד טלפוני"', () => {
+    expect(matchHeader('מלאי אתר')).toBe('stock')
+    expect(matchHeader('מלאי טלפון')).toBe('stock')
+    expect(matchHeader('מלאי הזמנות')).toBe('stock')
     expect(matchHeader('קוד טלפוני')).toBe('phone_code')
+  })
+
+  // 🔴 שתי עמודות מלאי באותו קובץ (כמו ב"רשימה עם מלאי מעודכן"):
+  // הראשונה זוכה, אחרת העמודה השנייה הייתה דורסת את הראשונה.
+  it('🔴 שתי עמודות מלאי — השמאלית קובעת', () => {
+    const m = mapHeaderRow(['מקט', 'שם', 'מחיר', 'מלאי הזמנות', 'מלאי יריד'])
+    expect(m.stock).toBe(3)
   })
 
   it('ממפה שורת כותרות שלמה', () => {
     const m = mapHeaderRow(H)
     expect(m).toEqual({
       sku: 0, title: 1, author: 2, publisher: 3,
-      volumes: 4, price: 5, stock_web: 6, stock_phone: 7, phone_code: 8,
+      volumes: 4, price: 5, stock: 6, phone_code: 8,
     })
   })
 
@@ -93,7 +101,7 @@ describe('parseBooksTable — פענוח תקין', () => {
     expect(r.books).toHaveLength(1)
     expect(r.books[0]).toEqual({
       sku: '1001', title: 'שולחן ערוך', author: 'רבי יוסף קארו', publisher: 'מכון ירושלים',
-      volumes: 4, price_agorot: 18000, stock_web: 20, stock_phone: 10, phone_code: 101,
+      volumes: 4, price_agorot: 18000, stock_total: 20, unlimited_stock: false, phone_code: 101,
     })
   })
 
@@ -110,12 +118,26 @@ describe('parseBooksTable — פענוח תקין', () => {
 
   it('ברירות מחדל: כרך אחד, מלאי אפס, בלי קוד טלפוני', () => {
     const r = parseBooksTable([H, ['1004', 'ספר', '', '', '', '100', '', '', '']])
-    expect(r.books[0]).toMatchObject({ volumes: 1, stock_web: 0, stock_phone: 0, phone_code: null })
+    expect(r.books[0]).toMatchObject({ volumes: 1, stock_total: 0, unlimited_stock: false, phone_code: null })
   })
 
   it('מלאי 0 מפורש נשמר כ-0', () => {
     const r = parseBooksTable([H, ['1005', 'ספר', '', '', '', '100', '0', '0', '']])
-    expect(r.books[0].stock_web).toBe(0)
+    expect(r.books[0].stock_total).toBe(0)
+  })
+
+  // 🔴 הקובץ של המשרד אינו מכיל רק מספרים. פענוח מספרי בלבד דחה
+  // מחצית מהשורות כשגויות.
+  it('🔴 "לא מוגבל" → מלאי בלתי מוגבל, לא שגיאה', () => {
+    const r = parseBooksTable([H, ['1006', 'ספר', '', '', '', '100', 'לא מוגבל', '', '']])
+    expect(r.errors).toHaveLength(0)
+    expect(r.books[0]).toMatchObject({ unlimited_stock: true, stock_total: 0 })
+  })
+
+  it('🔴 "אזל מהמלאי" → אפס, ולא בלתי מוגבל', () => {
+    const r = parseBooksTable([H, ['1007', 'ספר', '', '', '', '100', 'אזל מהמלאי', '', '']])
+    expect(r.errors).toHaveLength(0)
+    expect(r.books[0]).toMatchObject({ unlimited_stock: false, stock_total: 0 })
   })
 
   // ⚠️ קובץ אקסל כמעט תמיד מסתיים בשורות ריקות — הן אינן שגיאה
@@ -168,7 +190,7 @@ describe('🔴 parseBooksTable — שגיאות', () => {
   it('מלאי לא מספרי — שגיאה', () => {
     const r = parseBooksTable([H, ['1001', 'ספר', '', '', '', '100', 'הרבה', '', '']])
     expect(r.books).toHaveLength(0)
-    expect(r.errors[0].messages.join(' ')).toContain('מלאי אתר')
+    expect(r.errors[0].messages.join(' ')).toContain('מלאי')
   })
 
   it('מלאי שלילי נדחה', () => {
@@ -206,7 +228,8 @@ describe('התבנית', () => {
   it('כוללת את כל השדות ומסמנת חובה', () => {
     const required = TEMPLATE_HEADERS.filter(h => h.required).map(h => h.field)
     expect(required).toEqual(['sku', 'title', 'price'])
-    expect(TEMPLATE_HEADERS).toHaveLength(9)
+    // ⚠️ 8 ולא 9: "מלאי אתר" ו"מלאי טלפון" אוחדו לעמודת "מלאי" אחת.
+    expect(TEMPLATE_HEADERS).toHaveLength(8)
   })
 
   // 🔴 אם כותרת התבנית לא מזוהה על ידי המפענח, קובץ שהורד מהמערכת
@@ -247,8 +270,8 @@ describe('🔴 תרחיש מלא — קובץ אמיתי מעורב', () => {
     expect(r.books[1].price_agorot).toBe(12000)
     expect(r.books[2].price_agorot).toBe(125000)
 
-    // 🔴 המלאי הדו-ערוצי נשמר בנפרד
-    expect(r.books[0]).toMatchObject({ stock_web: 10, stock_phone: 5 })
-    expect(r.books[1]).toMatchObject({ stock_web: 20, stock_phone: 0 })
+    // 🔴 המלאי אחד — העמודה השמאלית ("מלאי אתר") היא שנקראת
+    expect(r.books[0]).toMatchObject({ stock_total: 10 })
+    expect(r.books[1]).toMatchObject({ stock_total: 20 })
   })
 })

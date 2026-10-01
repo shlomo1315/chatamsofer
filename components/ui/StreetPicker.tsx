@@ -22,6 +22,11 @@ const DIS = 'disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-al
 
 const _streetsCache = new Map<string, string[]>()
 
+/** ספרות בלבד, עד 4 — למספר בית ולמספר דירה. */
+function digitsOnly(v: string): string {
+  return v.replace(/\D/g, '').slice(0, 4)
+}
+
 // Split "רחוב הרצל 12/3" → { street: "רחוב הרצל", houseNumber: "12", apartment: "3" }
 function splitAddr(addr: string): { street: string; houseNumber: string; apartment: string } {
   const m = addr.trim().match(/^(.*?)\s*(\d[\d\-א-ת\s]*)(?:\/([^/]+))?$/)
@@ -169,12 +174,15 @@ export default function StreetPicker({
         <input
           type="text"
           value={houseNum}
+          // ⚠️ הסינון בהקלדה ולא ב-maxLength/type=number: maxLength אינו
+          // חוסם הדבקה, ו-type=number מאפשר 'e', '+' ומקף.
           onChange={e => {
-            const v = e.target.value
+            const v = digitsOnly(e.target.value)
             setHouseNum(v)
             emitAddress(streetInput, v, apartment)
           }}
           placeholder="12"
+          inputMode="numeric"
           disabled={!city}
           required={houseRequired}
           className={`${BASE} ${DIS}`}
@@ -188,11 +196,12 @@ export default function StreetPicker({
           type="text"
           value={apartment}
           onChange={e => {
-            const v = e.target.value
+            const v = digitsOnly(e.target.value)
             setApartment(v)
             emitAddress(streetInput, houseNum, v)
           }}
           placeholder="3"
+          inputMode="numeric"
           disabled={!city}
           className={`${BASE} ${DIS}`}
         />

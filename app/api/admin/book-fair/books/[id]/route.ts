@@ -5,9 +5,9 @@ import { logActivity } from '@/lib/activityLog'
 
 // עדכון ומחיקת ספר בקטלוג.
 //
-// 🔴 המלאי *אינו* נערך כאן. שינוי ישיר של stock_web/stock_phone היה עוקף
-// את היומן ושובר את ההתאמה בין העמודה לתנועות. המלאי משתנה אך ורק דרך
-// book_fair_adjust_stock ו-book_fair_move_stock (נתיבי /stock).
+// 🔴 המלאי *אינו* נערך כאן. שינוי ישיר של stock_total היה עוקף את היומן
+// ושובר את ההתאמה בין העמודה לתנועות. המלאי משתנה אך ורק דרך
+// book_fair_adjust_stock (נתיב /stock).
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -67,7 +67,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   // 🔴 חסימה מפורשת: ניסיון לערוך מלאי דרך נתיב זה נדחה ואינו מתעלם
   // בשקט — אחרת מסך שנכתב בעתיד "יעדכן מלאי" ולא יקרה כלום.
-  if (body.stock_web !== undefined || body.stock_phone !== undefined) {
+  if (body.stock_total !== undefined || body.stock_web !== undefined || body.stock_phone !== undefined) {
     return NextResponse.json(
       { error: 'עדכון מלאי מתבצע במסך המלאי בלבד, כדי שכל תנועה תירשם ביומן' },
       { status: 400 }

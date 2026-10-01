@@ -93,16 +93,29 @@ async function saveSession(sessionId: string, state: IvrState, orderId?: string)
     .eq('id', sessionId)
 }
 
-/** חיפוש ספר לפי מק"ט/קוד טלפוני — פעיל ובעל מלאי טלפוני. */
+/**
+ * חיפוש ספר לפי מק"ט/קוד טלפוני — פעיל וזמין למכירה.
+ *
+ * 🔴 המלאי משותף לאתר ולטלפון (stock_total). קודם נבדק stock_phone,
+ * ומכיוון שכמעט כל המלאי הוקצה לאתר, הטלפון ענה "אזל" על ספרים
+ * שהיו במחסן.
+ *
+ * 🔴 הקלט מגיע מהקשה בטלפון ולכן חייב להיות ספרות בלבד לפני שהוא
+ * נכנס ל-.or(): פסיק או נקודה במחרוזת שוברים את הביטוי ומרחיבים
+ * את השאילתה לשורות אחרות.
+ */
 async function findBook(sku: string) {
+  const digits = String(sku ?? '').replace(/\D/g, '')
+  if (!digits) return null
+
   const supa = db()!
   const { data } = await supa.from('book_fair_books')
-    .select('id, sku, title, price_agorot, stock_phone, unlimited_stock, is_active')
+    .select('id, sku, title, price_agorot, stock_total, unlimited_stock, is_active')
     .eq('is_active', true)
-    .or(`sku.eq.${sku},phone_code.eq.${sku}`)
+    .or(`sku.eq.${digits},phone_code.eq.${digits}`)
     .limit(1).maybeSingle()
   if (!data) return null
-  const inStock = data.unlimited_stock === true || (data.stock_phone ?? 0) > 0
+  const inStock = data.unlimited_stock === true || (data.stock_total ?? 0) > 0
   return { id: data.id, sku: data.sku, title: data.title, price_agorot: data.price_agorot, in_stock: inStock }
 }
 
@@ -350,9 +363,10 @@ async function handle(request: NextRequest) {
  * תישמע לפני שכותבים ל-reservations. השריון האמיתי (reserveLastItem)
  * קורה רק אחרי שהתשובה כבר מכילה 'reserved: true'.
  *
- * ⚠️ פשוטה בכוונה: קריאת stock_phone/unlimited_stock בלבד, בלי RPC.
- * מרוץ תיאורטי בין שני מתקשרים על העותק האחרון נסגר ב-reserveLastItem
- * עצמה (ה-RPC אטומי ומחזיר שגיאה אם המלאי כבר אזל).
+ * ⚠️ פשוטה בכוונה: קריאת stock_total/unlimited_stock בלבד, בלי RPC.
+ * מרוץ בין מתקשר בטלפון לקונה באתר על העותק האחרון נסגר ב-reserveLastItem
+ * עצמה (ה-RPC אטומי ומחזיר שגיאה אם המלאי כבר אזל) — וזה חשוב במיוחד
+ * כעת, כששני הערוצים מנכים מאותה בריכה.
  */
 async function reserveLastPreview(
   state: IvrState,
@@ -361,8 +375,8 @@ async function reserveLastPreview(
 ): Promise<boolean> {
   const supa = db()!
   const { data } = await supa.from('book_fair_books')
-    .select('stock_phone, unlimited_stock').eq('id', book.id).maybeSingle()
+    .select('stock_total, unlimited_stock').eq('id', book.id).maybeSingle()
   if (!data) return false
   if (data.unlimited_stock === true) return true
-  return (data.stock_phone ?? 0) >= qty
+  return (data.stock_total ?? 0) >= qty
 }

@@ -13,7 +13,7 @@ import BookEditor from './BookEditor'
 import ImportPanel from './ImportPanel'
 import StockMover from './StockMover'
 
-type ColKey = 'sku' | 'title' | 'author' | 'volumes' | 'price' | 'stock_web' | 'stock_phone' | 'phone_code' | 'active'
+type ColKey = 'sku' | 'title' | 'author' | 'volumes' | 'price' | 'stock' | 'phone_code' | 'active'
 
 // ⚠️ headClassName נושא את הריפוד: ה-th נבנה בתוך TableHeadMenu, וריפוד
 // שנכתב בצרכן לא היה מגיע אליו.
@@ -29,8 +29,7 @@ const COLUMNS: ColDef<ColKey, BookFairBook>[] = [
   { key: 'author',      label: 'מחבר',   def: false, headClassName: HEAD, weight: 2, value: b => b.author ?? null },
   { key: 'volumes',     label: 'כרכים',  def: true, kind: 'number', headClassName: HEAD, value: b => b.volumes },
   { key: 'price',       label: 'מחיר',   def: true, kind: 'number', headClassName: HEAD, value: b => b.price_agorot },
-  { key: 'stock_web',   label: 'מלאי אתר',   def: true, kind: 'number', headClassName: HEAD, value: b => b.stock_web },
-  { key: 'stock_phone', label: 'מלאי טלפון', def: true, kind: 'number', headClassName: HEAD, value: b => b.stock_phone },
+  { key: 'stock',       label: 'מלאי',   def: true, kind: 'number', headClassName: HEAD, value: b => b.stock_total ?? 0 },
   { key: 'phone_code',  label: 'קוד טלפוני', def: false, kind: 'number', headClassName: HEAD, value: b => b.phone_code ?? null },
   { key: 'active',      label: 'פעיל',   def: true, kind: 'enum', filterable: true, headClassName: HEAD,
     // ⚠️ הערך הוא התווית המוצגת ולא בוליאני: המשתמש מסנן לפי מה שהוא רואה
@@ -74,8 +73,8 @@ export default function BooksClient({ books }: { books: BookFairBook[] }) {
 
   const totals = useMemo(() => ({
     titles: books.length,
-    web: books.reduce((s, b) => s + b.stock_web, 0),
-    phone: books.reduce((s, b) => s + b.stock_phone, 0),
+    copies: books.reduce((s, b) => s + (b.unlimited_stock ? 0 : (b.stock_total ?? 0)), 0),
+    unlimited: books.filter(b => b.unlimited_stock).length,
   }), [books])
 
   // ⚠️ אותו דפוס בדיוק כמו /api/admin/gratitude/batch-pdf: נטפרי חוסמת
@@ -145,8 +144,8 @@ export default function BooksClient({ books }: { books: BookFairBook[] }) {
       {/* סיכום מלאי — שני הערוצים בנפרד, כי הם נפרדים בפועל */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <SummaryCard icon={BookOpen} label="כותרים בקטלוג" value={totals.titles} tone="slate" />
-        <SummaryCard icon={Globe}    label="עותקים זמינים באתר" value={totals.web} tone="indigo" />
-        <SummaryCard icon={Phone}    label="עותקים זמינים בטלפון" value={totals.phone} tone="emerald" />
+        <SummaryCard icon={Globe}    label="עותקים במלאי" value={totals.copies} tone="indigo" />
+        <SummaryCard icon={Phone}    label="ספרים ללא הגבלת מלאי" value={totals.unlimited} tone="emerald" />
       </div>
 
       {/* לשוניות */}
@@ -273,10 +272,10 @@ function renderCell(key: ColKey, b: BookFairBook) {
       return <span className="tabular-nums">{b.volumes}</span>
     case 'price':
       return <span className="tabular-nums font-medium">{fmtAgorot(b.price_agorot)}</span>
-    case 'stock_web':
-      return <StockBadge n={b.stock_web} />
-    case 'stock_phone':
-      return <StockBadge n={b.stock_phone} />
+    case 'stock':
+      return b.unlimited_stock
+        ? <span className="rounded-md bg-sky-50 px-2 py-0.5 text-xs text-sky-700">ללא הגבלה</span>
+        : <StockBadge n={b.stock_total ?? 0} />
     case 'phone_code':
       return b.phone_code ? <span className="font-mono text-xs">{b.phone_code}</span> : <span className="text-slate-300">—</span>
     case 'active':

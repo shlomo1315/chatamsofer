@@ -10,7 +10,7 @@ import { TEMPLATE_HEADERS } from '@/lib/bookFairImport'
 // מתרחשת רק בלחיצה שנייה מפורשת. קובץ שנכנס חלקית בלי שאיש ידע הוא
 // קטלוג שקרי — הספרים שנשמטו פשוט לא יימכרו ואיש לא יבין למה.
 
-type PreviewBook = { sku: string; title: string; price_agorot: number; stock_web: number; stock_phone: number }
+type PreviewBook = { sku: string; title: string; price_agorot: number; stock_total: number; unlimited_stock: boolean }
 type PreviewUpdate = { sku: string; title: string; oldTitle: string }
 type RowError = { row: number; messages: string[] }
 
@@ -240,8 +240,7 @@ export default function ImportPanel({ canImport, onDone }: { canImport: boolean;
                       <th className="px-3 py-2 text-right w-24">מק״ט</th>
                       <th className="px-3 py-2 text-right">שם</th>
                       <th className="px-3 py-2 text-right w-24">מחיר</th>
-                      <th className="px-3 py-2 text-right w-20">אתר</th>
-                      <th className="px-3 py-2 text-right w-20">טלפון</th>
+                      <th className="px-3 py-2 text-right w-24">מלאי</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -250,8 +249,9 @@ export default function ImportPanel({ canImport, onDone }: { canImport: boolean;
                         <td className="px-3 py-2 font-mono text-xs text-slate-500">{b.sku}</td>
                         <td className="px-3 py-2 truncate" title={b.title}>{b.title}</td>
                         <td className="px-3 py-2 tabular-nums">{fmtAgorot(b.price_agorot)}</td>
-                        <td className="px-3 py-2 tabular-nums">{b.stock_web}</td>
-                        <td className="px-3 py-2 tabular-nums">{b.stock_phone}</td>
+                        <td className="px-3 py-2 tabular-nums">
+                          {b.unlimited_stock ? <span className="text-sky-700">ללא הגבלה</span> : b.stock_total}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
