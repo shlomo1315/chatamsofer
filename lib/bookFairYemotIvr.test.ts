@@ -48,10 +48,14 @@ describe('בחירת ספר', () => {
     expect(turn.state.attempts).toBe(1)
   })
 
-  it('🔴 ספר שאזל — הודעה מפורשת על הערוץ הטלפוני', () => {
+  // ⚠️ הנוסח אינו אומר יותר "אזל בקו הטלפוני": מאז איחוד המלאי
+  // (מיגרציית 20261001) אין מלאי טלפוני נפרד, וספר שאזל אזל בשני
+  // הערוצים. אמירה על "הערוץ הטלפוני" הייתה מרמזת שבאתר הוא זמין.
+  it('🔴 ספר שאזל — הודעה מפורשת עם שם הספר', () => {
     const turn = nextTurn(afterWelcome, { value: '1001', book: { ...BOOK, in_stock: false } })
     expect(turn.response).toContain('אזל')
-    expect(turn.response).toContain('הטלפוני')
+    expect(turn.response).toContain(BOOK.title)
+    expect(turn.response).toContain('הקישו מספר קטלוג אחר')
   })
 
   it('⚠️ כל ניסיון חוזר מקבל שם משתנה חדש — למניעת לולאה אינסופית בימות', () => {

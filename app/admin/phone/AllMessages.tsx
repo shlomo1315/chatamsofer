@@ -32,7 +32,7 @@ type Meta = {
 }
 type Msg = { text?: string; audio?: string | null }
 
-/** שלוש השלוחות — אותו חוזה API בדיוק לכל אחת. */
+/** השלוחות — אותו חוזה API בדיוק לכל אחת. */
 const SOURCES = [
   { id: 'menu', label: 'תפריט ראשי',
     api: '/api/admin/yemot-menu/messages',
@@ -43,6 +43,9 @@ const SOURCES = [
   { id: 'maternity', label: 'יולדות',
     api: '/api/admin/yemot-maternity/messages',
     voice: '/api/admin/yemot-maternity/generate-voice', tone: 'bg-pink-100 text-pink-800' },
+  { id: 'book_fair', label: 'יריד הספרים',
+    api: '/api/admin/yemot-book-fair/messages',
+    voice: '/api/admin/yemot-book-fair/generate-voice', tone: 'bg-amber-100 text-amber-800' },
 ] as const
 
 type SourceId = typeof SOURCES[number]['id']

@@ -23,8 +23,9 @@ import { getServiceClient } from '@/lib/apiAuth'
 import { makeOrderNumber, makeCartToken } from '@/lib/bookFairCheckout'
 import { shippingCost, totalVolumes, type TierInput } from '@/lib/bookFairShipping'
 import {
-  nextTurn, initialState, attemptVarName, type IvrState, type IvrInput,
+  nextTurn, initialState, attemptVarName, msgToken, type IvrState, type IvrInput,
 } from '@/lib/bookFairYemotIvr'
+import { getBookFairMessages } from '@/lib/yemotBookFairMessages'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -236,6 +237,8 @@ export async function POST(request: NextRequest) {
 
 async function handle(request: NextRequest) {
   const supa = db()
+  // ⚠️ אין מסד ⇒ אין נוסחים. ברירת המחדל שבקוד היא הדבר היחיד שאפשר
+  // להקריא כאן, ולכן הנוסח הזה נשאר מוטמע במכוון.
   if (!supa) return yemotText('id_list_message=t-שגיאת שרת&go_to_folder=hangup')
 
   const params: Record<string, string> = {}
@@ -257,11 +260,20 @@ async function handle(request: NextRequest) {
     return yemotText('noop=hangup handled', callId)
   }
 
+  // ── הנוסחים ──
+  // 🔴 נשלפים כאן, פעם אחת לכל בקשה, ומוזנים ל-nextTurn. מכונת המצבים
+  // חייבת להישאר טהורה (בלי גישה למסד) כדי שאפשר יהיה לבדוק בטסטים
+  // *מה המתקשר שומע* — הדבר היחיד שאינו מופיע בשום לוג אחרי שניתק.
+  //
+  // ⚠️ כשל שליפה אינו משתיק את השלוחה: getBookFairMessages מחזירה את
+  // ברירות המחדל שבקוד.
+  const messages = await getBookFairMessages()
+
   // ⚠️ היריד סגור — נבדק לפני כל עיבוד, כמו בבדיקה המקבילה ב-checkout.
   const { data: gate } = await supa.from('app_settings')
     .select('value').eq('key', 'book_fair_open').maybeSingle()
   if (String(gate?.value ?? '') !== 'true') {
-    return yemotText(`id_list_message=t-היריד סגור כרגע להזמנות&go_to_folder=hangup`, callId)
+    return yemotText(`id_list_message=${msgToken(messages, 'closed')}&go_to_folder=hangup`, callId)
   }
 
   const session = await loadSession(callId, phone)
@@ -319,7 +331,7 @@ async function handle(request: NextRequest) {
     input.payment = (code === '000' || code.toUpperCase() === 'OK') ? 'success' : 'failed'
   }
 
-  const turn = nextTurn(state, input)
+  const turn = nextTurn(state, input, messages)
 
   // ── עדכון המלאי בפועל אחרי תשובת "כמות" מוצלחת ──
   if (state.step === 'ask_qty' && input.reserved) {
@@ -331,7 +343,7 @@ async function handle(request: NextRequest) {
     const order = await createOrder(turn.state, session.cart_token, phone)
     if (!order) {
       await saveSession(session.id, { ...turn.state, step: 'done' })
-      return yemotText('id_list_message=t-שגיאה ביצירת ההזמנה אנא פנו למשרד&go_to_folder=hangup', callId)
+      return yemotText(`id_list_message=${msgToken(messages, 'order_error')}&go_to_folder=hangup`, callId)
     }
     await saveSession(session.id, { ...turn.state, order_id: order.id, order_number: order.order_number }, order.id)
     const total = turn.state.items.reduce((s, i) => s + i.price_agorot * i.quantity, 0) + (turn.state.shipping_agorot ?? 0)
