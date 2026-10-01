@@ -285,7 +285,15 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
     return yemotText('id_list_message=t-אין הרשאה&go_to_folder=hangup', callId)
   }
   if (!safeEqual(params['ApiToken'] ?? '', secret)) {
-    console.warn('[yemot-book-fair] ApiToken שגוי — דחייה')
+    // ⚠️ אבחון בלי לחשוף את הסוד: רק אורך הערך שהתקבל, האורך הצפוי,
+    // ורשימת שמות הפרמטרים. בלי זה אי אפשר להבחין בין "הטוקן חסר",
+    // "הטוקן נחתך" ו"הטוקן נכון אבל הסוד בשרת שונה".
+    const got = params['ApiToken'] ?? ''
+    console.warn(
+      `[yemot-book-fair] ApiToken שגוי — דחייה · ` +
+      `אורך שהתקבל=${got.length} · אורך צפוי=${secret.length} · ` +
+      `קיים=${'ApiToken' in params} · פרמטרים=[${Object.keys(params).join(',')}]`
+    )
     return yemotText('id_list_message=t-אין הרשאה&go_to_folder=hangup', callId)
   }
 

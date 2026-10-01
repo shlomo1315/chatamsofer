@@ -63,24 +63,53 @@ function TreeNode({ node, depth = 0 }: { node: IvrNode; depth?: number }) {
   )
 }
 
-/** כפתור העתקת הכתובת — ⚠️ הכתובת המלאה, כדי שאפשר יהיה להדביק בימות כמו שהיא. */
+/**
+ * בלוק ההגדרה להדבקה בימות.
+ *
+ * 🔴 ימות *אינה* קוראת ApiToken מתוך ה-api_link. הכתובת הוצגה כאן
+ * כ-"...?ApiToken=xxx", היא הודבקה בדיוק כך, וימות פנתה בלי שום
+ * פרמטר — כל שיחה נענתה ב"אין הרשאה" ונותקה. אומת בלוגים מול
+ * פרודקשן: אותו טוקן בדיוק עובד כשהוא נשלח ישירות.
+ *
+ * הפורמט שעובד (וכך מוגדרות השלוחות הקיימות):
+ *   api_link=<כתובת בלי query>
+ *   api_add_0=ApiToken=<הטוקן>
+ *
+ * ⚠️ מועתק כבלוק שלם ולא כשורת כתובת: הפרדה לשתי שורות היא *הנקודה*,
+ * והעתקת הכתובת לבדה הייתה מחזירה את התקלה.
+ */
 function CopyUrl({ path, full: fullUrl }: { path: string; full?: string }) {
   const [done, setDone] = useState(false)
   if (path === '—') return null
-  // 🔴 הכתובת המלאה מגיעה מהשרת עם ה-ApiToken. בלעדיו ימות מקבלת
-  // "אין הרשאה" ומנתקת מיד — הכתובת שהוצגה כאן לא יכלה לעבוד לעולם.
+
   const full = fullUrl ?? `${SITE}${path}`
+  // ⚠️ מפרקים את מה שהשרת בנה: הוא מחזיר כתובת עם ?ApiToken=,
+  // וצריך להציג אותה כשתי שורות נפרדות.
+  const [base, qs] = full.split('?')
+  const token = new URLSearchParams(qs ?? '').get('ApiToken') ?? ''
+  const block = token
+    ? `type=api\napi_link=${base}\napi_add_0=ApiToken=${token}`
+    : `type=api\napi_link=${base}`
+
   return (
-    <button type="button"
-      onClick={() => {
-        navigator.clipboard?.writeText(full).then(() => {
-          setDone(true); setTimeout(() => setDone(false), 1500)
-        }).catch(() => {})
-      }}
-      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-mono text-[11px] text-slate-600 hover:bg-slate-50">
-      {done ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
-      <span dir="ltr">{full}</span>
-    </button>
+    <div className="flex flex-col gap-1.5">
+      <button type="button"
+        onClick={() => {
+          navigator.clipboard?.writeText(block).then(() => {
+            setDone(true); setTimeout(() => setDone(false), 1500)
+          }).catch(() => {})
+        }}
+        className="flex items-start gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-right font-mono text-[11px] leading-relaxed text-slate-600 hover:bg-slate-50">
+        {done ? <Check size={12} className="mt-0.5 flex-shrink-0 text-emerald-600" /> : <Copy size={12} className="mt-0.5 flex-shrink-0" />}
+        <span dir="ltr" className="whitespace-pre-wrap break-all">{block}</span>
+      </button>
+      {token && (
+        <p className="text-[11px] leading-relaxed text-amber-700">
+          ⚠️ שתי השורות נדרשות. ימות אינה קוראת את ה-ApiToken מתוך הכתובת
+          עצמה — טוקן שנכתב אחרי &quot;?&quot; נאבד, וכל שיחה תיענה ב&quot;אין הרשאה&quot;.
+        </p>
+      )}
+    </div>
   )
 }
 
