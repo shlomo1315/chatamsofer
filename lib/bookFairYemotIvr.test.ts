@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { nextTurn, initialState, ttsClean, type IvrState } from './bookFairYemotIvr'
+import { nextTurn, initialState, ttsClean, MESSAGE_FALLBACKS, type IvrState } from './bookFairYemotIvr'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 🔴 מה שהמתקשר שומע — הדבר היחיד שבאמת חשוב, ושאי אפשר לראות בשום לוג
@@ -26,7 +26,10 @@ describe('פתיחת השיחה', () => {
     const turn = nextTurn(initialState())
     expect(turn.response).toContain('read=')
     expect(turn.response).toContain('bf_sku')
-    expect(turn.response).toContain('ברוכים הבאים')
+    // ⚠️ נבדק מול MESSAGE_FALLBACKS ולא מול מילים מוטמעות: הנוסחים
+    // ניתנים לעריכה, וטסט שמצפה למילה מסוימת נשבר בכל שינוי ניסוח
+    // (וכך קרה כשהברכה הוחלפה ל"שלום וברכה").
+    expect(turn.response).toContain(MESSAGE_FALLBACKS.welcome)
     expect(turn.state.step).toBe('ask_sku')
   })
 })

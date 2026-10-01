@@ -26,14 +26,39 @@ export type MsgMeta = {
 // ⚠️ allowAudio=false להודעות עם משתנה {...}: קובץ אחד אינו יכול
 // להקריא שם ספר או סכום משתנים, ולכן הקלטה שם הייתה משקרת.
 export const BOOK_FAIR_MESSAGE_META: MsgMeta[] = [
-  // ── פתיחה ──
-  { key: 'welcome', label: 'ברכת פתיחה', defaultText: 'ברוכים הבאים ליריד הספרים של היכל החתם סופר', allowAudio: true,
-    hint: 'מוקראת בתחילת כל שיחה. להימנע מפסיקים ונקודות — הם משבשים את ההקראה.' },
-  { key: 'ask_sku', label: 'בקשת מספר קטלוג', defaultText: 'להזמנת ספר הקישו את מספר הקטלוג ולאחריו סולמית', allowAudio: true },
+  // ── פתיחה ותפריט ראשי ──
+  { key: 'welcome', label: 'ברכת פתיחה', defaultText: 'שלום וברכה הגעתם למערכת הזמנת ספרי החתם סופר שעל ידי ממלכת היכל החתם סופר', allowAudio: true,
+    hint: 'מוקראת בתחילת כל שיחה. ⚠️ להימנע מפסיקים ונקודות ומגרשיים — הם משבשים את ההקראה של ימות.' },
+  { key: 'open_until', label: 'מועד סגירת ההזמנות', defaultText: 'המערכת פתוחה להזמנות עד יום שלישי כ"ה בתשרי בשעה עשר בלילה', allowAudio: true,
+    hint: '🔴 הודעת־עובדה. יש לעדכן אותה כשהמועד משתנה — נוסח שפג מטעה את כל המתקשרים.' },
+  { key: 'to_menu', label: 'הסבר הסולמית', defaultText: 'הינכם מועברים לתפריט בכל שלב ניתן לעבור לתפריט הראשי על ידי הקשה על סולמית', allowAudio: true },
+  { key: 'main_menu', label: 'התפריט הראשי', defaultText: 'להזמנה חדשה הקישו 1 לשמיעת פרטי הזמנה קיימת הקישו 2 להשארת פנייה לשירות לקוחות הקישו 3', allowAudio: true,
+    hint: '⚠️ המספרים כאן חייבים להתאים למה שהתפריט באמת מקבל.' },
+  { key: 'main_menu_retry', label: 'הקשה שגויה בתפריט הראשי', defaultText: 'הקשה שגויה', allowAudio: true },
+
+  // ── תפריט ההזמנה (שלוחה 1) ──
+  { key: 'order_menu', label: 'תפריט ההזמנה', defaultText: 'לזיהוי ספר לפי מספר קטלוג הקישו 1 לשמיעת שמות הספרים לפי קטגוריה הקישו 2 לשמיעת כל הספרים ברצף הקישו 3', allowAudio: true },
+  { key: 'ask_sku', label: 'בקשת מספר קטלוג', defaultText: 'הקישו את מספר הקטלוג של הספר המבוקש ולאחריו סולמית', allowAudio: true },
   { key: 'closed', label: 'היריד סגור', defaultText: 'היריד סגור כרגע להזמנות', allowAudio: true,
     hint: 'מוקראת כשהיריד אינו פתוח. 🔴 ודאו שהנוסח נכון לעובדה ולא זמני — הודעה זמנית על הודעת-עובדה בלבלה בעבר אלפי מתקשרים.' },
 
+  // ── קטגוריות ורשימות ──
+  { key: 'category_menu', label: 'תפריט הקטגוריות', defaultText: 'לשמיעת הספרים בקטגוריה הקישו את מספרה', allowAudio: true,
+    hint: 'אחריה מוקראת רשימת הקטגוריות, שנבנית אוטומטית מהקטלוג.' },
+  { key: 'category_item', label: 'תבנית שורת קטגוריה', defaultText: 'ל{name} הקישו {code}', allowAudio: false, placeholders: ['name', 'code'],
+    hint: 'הודעה דינמית — חובה לכלול {name} ו-{code}. אין הקלטה כי הקטגוריות משתנות.' },
+  { key: 'category_empty', label: 'קטגוריה ריקה', defaultText: 'אין כרגע ספרים בקטגוריה זו', allowAudio: true },
+  { key: 'list_nav', label: 'הניווט ברשימת הספרים', defaultText: 'לבחירת ספר זה הקישו 1 לחזרה לספר הקודם הקישו 2 לחזרה לרשימת הקטגוריות הקישו 3', allowAudio: true },
+  { key: 'list_all_nav', label: 'הניווט ברשימת כל הספרים', defaultText: 'לבחירת ספר זה הקישו 1 לחזרה לספר הקודם הקישו 2 לחזרה לתפריט הקישו 3', allowAudio: true },
+  { key: 'list_end', label: 'סוף הרשימה', defaultText: 'הגעתם לסוף הרשימה', allowAudio: true },
+  { key: 'list_start', label: 'תחילת הרשימה', defaultText: 'זהו הספר הראשון ברשימה', allowAudio: true },
+
   // ── בחירת ספר ──
+  { key: 'book_chosen', label: 'אישור בחירת ספר', defaultText: 'בחרתם {title} המחיר הוא {price} שקלים', allowAudio: false, placeholders: ['title', 'price'],
+    hint: 'הודעה דינמית — חובה לכלול {title} ו-{price}.' },
+  { key: 'confirm_book', label: 'אישור או תיקון', defaultText: 'לאישור הקישו 1 לתיקון הקישו 2', allowAudio: true },
+  { key: 'book_saved', label: 'הספר נשמר', defaultText: 'הספר נשמר בהצלחה', allowAudio: true },
+  { key: 'after_save', label: 'ספר נוסף או תשלום', defaultText: 'להזמנת ספר נוסף הקישו 1 למעבר לתשלום הקישו 2', allowAudio: true },
   { key: 'sku_not_found', label: 'מספר קטלוג לא נמצא', defaultText: 'מספר הקטלוג שהקשתם לא נמצא', allowAudio: true },
   { key: 'sku_retry', label: 'בקשת ניסיון חוזר למק"ט', defaultText: 'נסו שוב או המתינו לנציג', allowAudio: true },
   { key: 'book_sold_out', label: 'הספר אזל', defaultText: 'הספר {title} אזל מהמלאי', allowAudio: false, placeholders: ['title'],
@@ -89,6 +114,17 @@ export const BOOK_FAIR_MESSAGE_META: MsgMeta[] = [
   { key: 'goodbye', label: 'פרידה', defaultText: 'תודה ויום טוב', allowAudio: true },
   { key: 'paid_fail', label: 'התשלום לא אושר', defaultText: 'התשלום לא אושר', allowAudio: true },
   { key: 'paid_fail_retry', label: 'הסבר אחרי כשל תשלום', defaultText: 'ההזמנה לא נקלטה ניתן לנסות שוב או לפנות למשרד', allowAudio: true },
+
+  // ── הזמנה קיימת (שלוחה 2) ──
+  { key: 'orders_none', label: 'לא נמצאו הזמנות', defaultText: 'לא נמצאו הזמנות הרשומות על מספר הטלפון שלכם', allowAudio: true },
+  { key: 'orders_intro', label: 'הקדמה לרשימת ההזמנות', defaultText: 'אלו ההזמנות הרשומות על מספר הטלפון שלכם', allowAudio: true },
+  { key: 'order_line', label: 'תבנית שורת הזמנה', defaultText: 'הזמנה מספר {number} בסך {total} שקלים סטטוס {status}', allowAudio: false, placeholders: ['number', 'total', 'status'],
+    hint: 'הודעה דינמית — חובה לכלול {number}, {total} ו-{status}.' },
+
+  // ── פנייה לשירות לקוחות (שלוחה 3) ──
+  { key: 'inquiry_intro', label: 'בקשת הקלטת פנייה', defaultText: 'השאירו את פנייתכם לאחר הצפצוף ולסיום הקישו סולמית', allowAudio: true },
+  { key: 'inquiry_saved', label: 'הפנייה נשמרה', defaultText: 'פנייתכם נשמרה ונחזור אליכם בהקדם תודה', allowAudio: true },
+  { key: 'inquiry_failed', label: 'הפנייה לא נקלטה', defaultText: 'לא הצלחנו לשמור את הפנייה אנא נסו שוב או פנו למשרד', allowAudio: true },
 
   // ── שגיאות ──
   { key: 'order_error', label: 'שגיאה ביצירת ההזמנה', defaultText: 'שגיאה ביצירת ההזמנה אנא פנו למשרד', allowAudio: true },
