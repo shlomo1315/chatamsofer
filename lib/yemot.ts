@@ -35,6 +35,41 @@ export async function uploadFileToYemot(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// הורדת קובץ מימות — להאזנה להקלטות שהשאירו מתקשרים.
+//
+// 🔴 דרך השרת ולא קישור ישיר לדפדפן: הכתובת של ימות דורשת את ה-token,
+// וקישור שכולל אותו היה חושף את מפתח המערכת בכל דף שמציג הקלטה.
+//
+// ⚠️ ימות מחזירה JSON עם שגיאה (ולא קוד HTTP) כשהקובץ אינו קיים —
+// לכן נבדק סוג התוכן ולא רק הסטטוס. בלי זה היינו מחזירים "אודיו"
+// שהוא בעצם הודעת שגיאה, והנגן היה נשבר בלי הסבר.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function downloadFileFromYemot(
+  path: string,
+): Promise<{ ok: boolean; data?: ArrayBuffer; contentType?: string; error?: string }> {
+  const token = process.env.YEMOT_TOKEN
+  if (!token) return { ok: false, error: 'YEMOT_TOKEN אינו מוגדר בשרת' }
+
+  try {
+    const url = `${YEMOT_API}/DownloadFile?token=${encodeURIComponent(token)}&path=${encodeURIComponent(path)}`
+    const res = await fetch(url, { cache: 'no-store' })
+    if (!res.ok) return { ok: false, error: `HTTP ${res.status}` }
+
+    const ct = res.headers.get('content-type') ?? ''
+    if (ct.includes('application/json')) {
+      const j = await res.json().catch(() => null)
+      return { ok: false, error: j ? JSON.stringify(j) : 'הקובץ לא נמצא' }
+    }
+
+    const data = await res.arrayBuffer()
+    if (!data.byteLength) return { ok: false, error: 'הקובץ ריק' }
+    return { ok: true, data, contentType: ct || 'audio/wav' }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // מחיקת קובץ מימות.
 //
 // 🔴 למה זה נדרש: שמות הקבצים כוללים חותמת זמן (כדי לעקוף את מטמון

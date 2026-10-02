@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import {
   BookOpen, ShoppingCart, Boxes, Settings2, TrendingUp, Mic,
-  AlertTriangle, Package, Globe, Phone, ArrowLeft, CircleDot, Mail,
+  AlertTriangle, Package, Globe, Phone, ArrowLeft, CircleDot, Mail, MessageSquare,
 } from 'lucide-react'
 import { guardPage } from '@/lib/pageGuard'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
@@ -303,11 +303,14 @@ export default async function BookFairPage() {
       )}
 
       {/* ── קיצורים ── */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Shortcut href="/admin/book-fair/orders"   icon={ShoppingCart} label="הזמנות" />
-        <Shortcut href="/admin/book-fair/books"    icon={BookOpen}     label="קטלוג ומלאי" />
-        <Shortcut href="/admin/book-fair/books"    icon={Boxes}        label="ייבוא מאקסל" />
-        <Shortcut href="/admin/book-fair/settings" icon={Settings2}    label="הגדרות" />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <Shortcut href="/admin/book-fair/orders"    icon={ShoppingCart}   label="הזמנות" />
+        <Shortcut href="/admin/book-fair/books"     icon={BookOpen}       label="קטלוג ומלאי" />
+        <Shortcut href="/admin/book-fair/books"     icon={Boxes}          label="ייבוא מאקסל" />
+        {/* ⚠️ פניות מהשלוחה הטלפונית — בלי קיצור כאן אי אפשר היה
+            להגיע למסך בכלל. */}
+        <Shortcut href="/admin/book-fair/inquiries" icon={MessageSquare}  label="פניות מאזינים" />
+        <Shortcut href="/admin/book-fair/settings"  icon={Settings2}      label="הגדרות" />
       </div>
     </div>
   )
