@@ -23,8 +23,11 @@ import { getServiceClient } from '@/lib/apiAuth'
 import { safeEqual } from '@/lib/svix'
 import { makeOrderNumber, makeCartToken } from '@/lib/bookFairCheckout'
 import { shippingCost, totalVolumes, type TierInput } from '@/lib/bookFairShipping'
+import { fetchAllRows } from '@/lib/fetchAllRows'
+import { categoryOrder } from '@/lib/bookFairCatalog'
+import { BOOK_FAIR_STATUS_LABELS, type BookFairOrderStatus } from '@/types/bookFair'
 import {
-  nextTurn, initialState, attemptVarName, msgToken, type IvrState, type IvrInput,
+  nextTurn, initialState, attemptVarName, msgToken, ttsClean, type IvrState, type IvrInput,
 } from '@/lib/bookFairYemotIvr'
 import { getBookFairMessages } from '@/lib/yemotBookFairMessages'
 
@@ -119,6 +122,112 @@ async function findBook(sku: string) {
   if (!data) return null
   const inStock = data.unlimited_stock === true || (data.stock_total ?? 0) > 0
   return { id: data.id, sku: data.sku, title: data.title, price_agorot: data.price_agorot, in_stock: inStock }
+}
+
+/** ספר לפי מזהה — לאישור ספר שכבר הוצע. */
+async function findBookById(id: string) {
+  const supa = db()!
+  const { data } = await supa.from('book_fair_books')
+    .select('id, sku, title, price_agorot, stock_total, unlimited_stock')
+    .eq('id', id).eq('is_active', true).maybeSingle()
+  if (!data) return null
+  return {
+    id: data.id, sku: data.sku, title: data.title, price_agorot: data.price_agorot,
+    in_stock: data.unlimited_stock === true || (data.stock_total ?? 0) > 0,
+  }
+}
+
+/**
+ * שמות הקטגוריות לפי סדר הקטלוג.
+ *
+ * ⚠️ הקטגוריה יושבת ב-description (כך הגיעה מהאקסל), והסדר נגזר
+ * מקידומת המק"ט — בדיוק כמו בחנות.
+ */
+async function listCategories(): Promise<string[]> {
+  const supa = db()!
+  const { rows } = await fetchAllRows<{ sku: string; description: string | null }>((from, to) =>
+    supa.from('book_fair_books')
+      .select('sku, description')
+      .eq('is_active', true).eq('is_hidden', false)
+      .order('sku', { ascending: true })
+      .range(from, to)
+  )
+  const seen = new Map<string, number>()
+  for (const r of rows) {
+    const name = (r.description ?? '').trim()
+    if (!name) continue
+    const ord = categoryOrder(r.sku)
+    if (!seen.has(name) || ord < seen.get(name)!) seen.set(name, ord)
+  }
+  return [...seen.entries()].sort((a, b) => a[1] - b[1]).map(([name]) => name)
+}
+
+/**
+ * הספרים ברשימה — של קטגוריה אחת, או כל הקטלוג כש-category הוא null.
+ *
+ * ⚠️ ספרים שאזלו *נשארים* ברשימה: המתקשר שומע אותם ומקבל "אזל" רק
+ * בניסיון הבחירה. השמטתם הייתה משנה את המספור בין שיחה לשיחה.
+ */
+async function listBooks(category: string | null) {
+  const supa = db()!
+  let q = supa.from('book_fair_books')
+    .select('id, sku, title, price_agorot, stock_total, unlimited_stock, description')
+    .eq('is_active', true).eq('is_hidden', false)
+  if (category) q = q.eq('description', category)
+
+  const { rows } = await fetchAllRows<{
+    id: string; sku: string; title: string; price_agorot: number
+    stock_total: number; unlimited_stock: boolean
+  }>((from, to) => q.order('sku', { ascending: true }).range(from, to))
+
+  return rows.map(b => ({
+    id: b.id, sku: b.sku, title: b.title, price_agorot: b.price_agorot,
+    in_stock: b.unlimited_stock === true || (b.stock_total ?? 0) > 0,
+  }))
+}
+
+/** ההזמנות של המתקשר, לפי מספר הטלפון שממנו התקשר. */
+async function listMyOrders(phone: string) {
+  const supa = db()!
+  const digits = String(phone ?? '').replace(/\D/g, '')
+  if (!digits) return []
+  const { data } = await supa.from('book_fair_orders')
+    .select('order_number, total_agorot, status')
+    .eq('customer_phone', digits)
+    .order('created_at', { ascending: false })
+    .limit(5)
+  return (data ?? []).map(o => ({
+    order_number: o.order_number as string,
+    total_agorot: o.total_agorot as number,
+    // ⚠️ ttsClean על התווית: "אי-התאמה" מכיל מקף, שהוא תו מפריד
+    // בתחביר הטוקנים של ימות ושובר את ההודעה כולה.
+    status: ttsClean(
+      BOOK_FAIR_STATUS_LABELS[o.status as BookFairOrderStatus] ?? 'בטיפול',
+    ),
+  }))
+}
+
+/**
+ * שמירת פנייה לשירות לקוחות.
+ *
+ * ⚠️ מחזירה false ולא זורקת: כשל שמירה חייב להישמע למתקשר כ"לא
+ * נקלט" ולא כניתוק פתאומי.
+ */
+async function saveInquiry(
+  phone: string, recording: string, transcript: string | undefined, callId: string,
+): Promise<boolean> {
+  const supa = db()!
+  const { error } = await supa.from('book_fair_inquiries').insert({
+    phone: String(phone ?? '').replace(/\D/g, '') || 'לא ידוע',
+    recording,
+    transcript: transcript?.trim() || null,
+    call_id: callId || null,
+  })
+  if (error) {
+    console.error('[yemot-book-fair] שמירת הפנייה נכשלה:', error.message)
+    return false
+  }
+  return true
 }
 
 async function findCity(phoneCode: string) {
@@ -360,7 +469,42 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
   // ── בונים את ה-input המתאים לשלב הנוכחי ──
   const input: IvrInput = {}
 
-  if (state.step === 'ask_sku') {
+  if (state.step === 'main_menu') {
+    input.value = paramFor(params, 'bf_main') || paramFor(params, 'bf_main_r')
+    // ⚠️ נשלף מראש עבור בחירה 2: nextTurn טהורה ואינה ניגשת למסד,
+    // ולכן ההזמנות חייבות להיות בידה לפני שהיא מחליטה מה להקריא.
+    if (input.value === '2') input.myOrders = await listMyOrders(phone)
+    if (input.value === '1') input.categories = await listCategories()
+  } else if (state.step === 'order_menu') {
+    // ⚠️ אותו דבר לבחירה 2 (קטגוריות) ו-3 (כל הספרים).
+    const v = paramFor(params, 'bf_omenu')
+    input.value = v
+    if (v === '2') input.categories = await listCategories()
+    if (v === '3') input.browseBooks = await listBooks(null)
+  } else if (state.step === 'category_menu') {
+    input.value = paramFor(params, 'bf_cat')
+    input.categories = await listCategories()
+  } else if (state.step === 'browse') {
+    // ⚠️ שם המשתנה כולל את האינדקס (bf_br<i>) — ראו ההערה ב-browseTurn.
+    input.value = paramFor(params, `bf_br${state.browse_index ?? 0}`)
+    input.browseBooks = await listBooks(state.browse_category ?? null)
+    // ⚠️ הקטגוריות נדרשות גם כאן: הקשה 3 חוזרת לרשימת הקטגוריות,
+    // ובלעדיהן היא הייתה מוצאת רשימה ריקה ומנתקת.
+    if (state.browse_category) input.categories = await listCategories()
+  } else if (state.step === 'confirm_book') {
+    input.value = paramFor(params, 'bf_cbook')
+    // הספר שהוצע — נשמר במצב, כדי לא לחפש אותו שוב.
+    if (state.pending_book_id) input.book = await findBookById(state.pending_book_id)
+    if (state.browse_category !== undefined) {
+      input.browseBooks = await listBooks(state.browse_category ?? null)
+    }
+  } else if (state.step === 'record_inquiry') {
+    input.recording = paramFor(params, 'bf_inq')
+    input.transcript = params['bf_inq_voice'] || undefined
+    if (input.recording) {
+      input.inquirySaved = await saveInquiry(phone, input.recording, input.transcript, callId)
+    }
+  } else if (state.step === 'ask_sku') {
     // ⚠️ בסיס השם תלוי בכמה ספרים כבר בעגלה — ראה ההערה המקבילה
     // ב-lib/bookFairYemotIvr.ts (nextTurn, case 'ask_sku').
     const skuBase = state.items.length ? `bf_sku_next${state.items.length}` : 'bf_sku'
@@ -382,7 +526,8 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
       }
     }
   } else if (state.step === 'ask_more') {
-    input.value = paramFor(params, 'bf_more')
+    // ⚠️ תלוי-כמות — חייב להתאים לשם ב-readTap של nextTurn.
+    input.value = paramFor(params, `bf_more${state.items.length}`)
   } else if (state.step === 'ask_delivery') {
     input.value = paramFor(params, 'bf_deliv')
   } else if (state.step === 'ask_city') {

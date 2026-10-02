@@ -62,7 +62,7 @@ describe('🔴 הברכה ולא שגיאה בפתיחת שיחה', () => {
     expect(turn.response).toContain('read=')
     expect(turn.response).not.toContain('go_to_folder=hangup')
     expect(turn.response).not.toContain('שגיאה')
-    expect(turn.state.step).toBe('ask_sku')
+    expect(turn.state.step).toBe('main_menu')
   })
 })
 
@@ -115,7 +115,7 @@ describe('🔴 nextTurn משתמש בנוסחים שהוזנו', () => {
   it('הברכה המותאמת מוקראת במקום ברירת המחדל', () => {
     const turn = nextTurn(initialState(), {}, {
       welcome: { text: 'ברוכים הבאים ליריד תשפז' },
-      ask_sku: { text: 'הקישו מקט' },
+      main_menu: { text: 'הקישו מקט' },
     })
     expect(turn.response).toContain('t-ברוכים הבאים ליריד תשפז')
     expect(turn.response).toContain('t-הקישו מקט')

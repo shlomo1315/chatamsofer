@@ -75,15 +75,26 @@ export type IvrResponse = string
 
 export type IvrStep =
   | 'welcome'
+  // ── תפריטים ──
+  | 'main_menu'        // 1 הזמנה · 2 הזמנה קיימת · 3 פנייה
+  | 'order_menu'       // 1 מק"ט · 2 קטגוריות · 3 כל הספרים
+  | 'category_menu'    // בחירת קטגוריה
+  | 'browse'           // דפדוף ברשימת ספרים (קטגוריה או הכול)
+  // ── בחירת ספר ──
   | 'ask_sku'
+  | 'confirm_book'     // "בחרתם X המחיר Y" → 1 אישור · 2 תיקון
   | 'ask_qty'
   | 'ask_more'
+  // ── אספקה ותשלום ──
   | 'ask_delivery'
   | 'ask_city'
   | 'record_address'
   | 'ask_name'
   | 'confirm_total'
   | 'payment'
+  // ── שלוחות 2 ו-3 ──
+  | 'my_orders'
+  | 'record_inquiry'
   | 'done'
 
 export interface IvrCartItem {
@@ -107,6 +118,16 @@ export interface IvrState {
   shipping_agorot?: number
   order_id?: string
   order_number?: string
+
+  // ── דפדוף ברשימת ספרים ──
+  /** הקטגוריה שנבחרה. null = דפדוף בכל הקטלוג. */
+  browse_category?: string | null
+  /** המיקום ברשימה. ⚠️ אינדקס ולא מזהה: הרשימה נבנית מחדש בכל בקשה
+   *  (ימות אינה שומרת מצב), והאינדקס הוא מה שמאפשר להמשיך מאותו מקום. */
+  browse_index?: number
+  /** הספר שהוצע אחרון וממתין לאישור — כדי ש"1" יאשר אותו בלי חיפוש חוזר. */
+  pending_book_id?: string
+
   /** ⚠️ סיומת שם המשתנה בניסיון הנוכחי — קריאה חוזרת של משתנה מלא
    *  יוצרת לולאה אינסופית בימות (אותה מלכודת שתועדה בכל שלוחות ימות
    *  הקיימות בפרויקט). */
@@ -130,6 +151,16 @@ export interface IvrInput {
   /** תוצאת הסליקה — מגיעה מ-CreditCard_CODE בבקשה החוזרת מימות. */
   payment?: 'success' | 'failed'
   order_number?: string
+
+  // ── נתונים שה-route שולף עבור המצבים החדשים ──
+  /** שמות הקטגוריות לפי סדר הקטלוג. */
+  categories?: string[]
+  /** הספרים ברשימה הנוכחית (קטגוריה או כל הקטלוג). */
+  browseBooks?: { id: string; sku: string; title: string; price_agorot: number; in_stock: boolean }[]
+  /** ההזמנות של המתקשר, לשלוחה 2. */
+  myOrders?: { order_number: string; total_agorot: number; status: string }[]
+  /** האם הפנייה נשמרה — לשלוחה 3. */
+  inquirySaved?: boolean
 }
 
 export interface IvrTurn {
@@ -284,16 +315,115 @@ export const MESSAGE_FALLBACKS: Record<string, string> = {
 export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMessages): IvrTurn {
   const m = (key: string, vars?: Record<string, string | number>) => msgToken(messages, key, vars)
 
+  // ── סולמית = חזרה לתפריט הראשי, מכל שלב ──
+  //
+  // 🔴 הובטח למתקשר בברכה ("בכל שלב ניתן לעבור לתפריט הראשי על ידי
+  // הקשה על סולמית"), ולכן חייב לעבוד בכל מצב — הבטחה שלא מתקיימת
+  // גרועה מאי-הבטחה.
+  //
+  // ⚠️ לא בשלבי ההקלטה ולא בסליקה: שם הסולמית היא *סיום ההקלטה* ולא
+  // ניווט, ויציאה באמצע סליקה הייתה משאירה הזמנה תלויה.
+  const RECORDING_STEPS: IvrStep[] = ['record_address', 'ask_name', 'record_inquiry']
+  if (
+    input.value === '#' &&
+    state.step !== 'payment' &&
+    state.step !== 'welcome' &&
+    !RECORDING_STEPS.includes(state.step)
+  ) {
+    return {
+      // ⚠️ העגלה נשמרת — הסולמית היא ניווט, לא ביטול.
+      state: { ...state, step: 'main_menu', attempts: 0 },
+      response: readTap('bf_main_r', [m('main_menu')], { max: 1, seconds: 10 }),
+    }
+  }
+
   switch (state.step) {
 
+    // ── הברכה ואז התפריט הראשי ──
     case 'welcome':
       return {
-        state: { ...state, step: 'ask_sku', attempts: 0 },
-        response: readTap('bf_sku', [
+        state: { ...state, step: 'main_menu', attempts: 0 },
+        response: readTap('bf_main', [
           m('welcome'),
-          m('ask_sku'),
-        ], { max: 10, seconds: 10 }),
+          m('open_until'),
+          m('to_menu'),
+          m('main_menu'),
+        ], { max: 1, seconds: 10 }),
       }
+
+    // ── התפריט הראשי ──
+    case 'main_menu': {
+      if (input.value === '1') return orderMenu({ ...state, attempts: 0 }, messages)
+      if (input.value === '2') return myOrdersTurn({ ...state, attempts: 0 }, input, messages)
+      if (input.value === '3') {
+        return {
+          state: { ...state, step: 'record_inquiry', attempts: 0 },
+          response: readRecord('bf_inq', [m('inquiry_intro')], 120),
+        }
+      }
+      return retry(state, 'main_menu', 'bf_main', [
+        m('main_menu_retry'), m('main_menu'),
+      ], { max: 1, seconds: 10 }, false, messages)
+    }
+
+    // ── תפריט ההזמנה ──
+    case 'order_menu': {
+      if (input.value === '1') return askSkuTurn({ ...state, attempts: 0 }, messages)
+      if (input.value === '2') return categoryMenu({ ...state, attempts: 0 }, input, messages)
+      if (input.value === '3') {
+        // 🔴 browse_category = null פירושו "כל הקטלוג", ולא "טרם נבחר".
+        return browseTurn(
+          { ...state, browse_category: null, browse_index: 0, attempts: 0 },
+          input, messages,
+        )
+      }
+      return retry(state, 'order_menu', 'bf_omenu', [
+        m('main_menu_retry'), m('order_menu'),
+      ], { max: 1, seconds: 10 }, false, messages)
+    }
+
+    // ── בחירת קטגוריה ──
+    case 'category_menu': {
+      const cats = input.categories ?? []
+      const idx = Number(input.value) - 1
+      if (!Number.isInteger(idx) || idx < 0 || idx >= cats.length) {
+        return categoryMenu({ ...state, attempts: state.attempts + 1 }, input, messages, true)
+      }
+      return browseTurn(
+        { ...state, browse_category: cats[idx], browse_index: 0, attempts: 0 },
+        input, messages,
+      )
+    }
+
+    // ── דפדוף ברשימת הספרים ──
+    //
+    // 🔴 1 בוחר · 2 חוזר אחורה · 3 יוצא. המתקשר שומע ספר אחד בכל פעם,
+    // ולא רשימה של 114 שמות ברצף שאי אפשר לזכור.
+    case 'browse': {
+      const books = input.browseBooks ?? []
+      const i = state.browse_index ?? 0
+
+      if (input.value === '1') {
+        const book = books[i]
+        if (!book) return browseTurn(state, input, messages)
+        return confirmBookTurn({ ...state, attempts: 0 }, book, messages)
+      }
+      if (input.value === '2') {
+        // ⚠️ בתחילת הרשימה נשארים במקום עם הודעה, ולא גולשים ל-‎-1.
+        if (i <= 0) return browseTurn({ ...state, attempts: 0 }, input, messages, 'start')
+        return browseTurn({ ...state, browse_index: i - 1, attempts: 0 }, input, messages)
+      }
+      if (input.value === '3') {
+        return state.browse_category
+          ? categoryMenu({ ...state, attempts: 0 }, input, messages)
+          : orderMenu({ ...state, attempts: 0 }, messages)
+      }
+      // ⚠️ כל הקשה אחרת = "הבא". זו ההתנהגות הצפויה כשמאזינים לרשימה.
+      if (i + 1 >= books.length) {
+        return browseTurn({ ...state, attempts: 0 }, input, messages, 'end')
+      }
+      return browseTurn({ ...state, browse_index: i + 1, attempts: 0 }, input, messages)
+    }
 
     case 'ask_sku': {
       // ⚠️ בסיס שם המשתנה תלוי בכמה ספרים כבר בעגלה: 'bf_sku' לספר
@@ -313,15 +443,51 @@ export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMe
           m('ask_sku_other'),
         ], { max: 10, seconds: 10 }, false, messages)
       }
+      // 🔴 אישור לפני כמות: המתקשר חייב לדעת *איזה* ספר נבחר לפני
+      // שהוא מתחייב. הקשה שגויה במק"ט דומה הייתה מזמינה ספר אחר.
+      return confirmBookTurn({ ...state, attempts: 0 }, book, messages)
+    }
+
+    // ── אישור הספר שנבחר ──
+    case 'confirm_book': {
+      const book = input.book
+      if (input.value === '1') {
+        if (!book) return askSkuTurn({ ...state, attempts: 0 }, messages)
+        return {
+          state: { ...state, step: 'ask_qty', attempts: 0 },
+          response: readTap('bf_qty', [m('ask_qty')], { max: 2, seconds: 8 }),
+        }
+      }
+      if (input.value === '2') {
+        // תיקון — חזרה למקום שממנו הגיע.
+        return state.browse_index !== undefined && state.browse_category !== undefined
+          ? browseTurn({ ...state, attempts: 0 }, input, messages)
+          : askSkuTurn({ ...state, attempts: 0 }, messages)
+      }
+      return retry(state, 'confirm_book', 'bf_cbook', [
+        m('confirm_book'),
+      ], { max: 1, seconds: 8 }, false, messages)
+    }
+
+    // ── ההזמנות הקיימות (שלוחה 2) ──
+    case 'my_orders':
       return {
-        state: { ...state, step: 'ask_qty', attempts: 0 },
-        response: readTap('bf_qty', [
-          t(ttsClean(book.title)),
-          m('price_word'),
-          n(agorotToSpokenShekels(book.price_agorot)),
-          m('shekels_word'),
-          m('ask_qty'),
-        ], { max: 2, seconds: 8 }),
+        state: { ...state, step: 'done' },
+        response: `${idMessage(m('goodbye'))}&${hangup}`,
+      }
+
+    // ── פנייה לשירות לקוחות (שלוחה 3) ──
+    case 'record_inquiry': {
+      if (!input.recording) {
+        return retry(state, 'record_inquiry', 'bf_inq', [
+          m('no_recording'),
+        ], { max: '', seconds: 120 }, true, messages)
+      }
+      return {
+        state: { ...state, step: 'done' },
+        response: `${idMessage(
+          m(input.inquirySaved === false ? 'inquiry_failed' : 'inquiry_saved'),
+        )}&${hangup}`,
       }
     }
 
@@ -351,9 +517,12 @@ export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMe
 
       return {
         state: { ...state, step: 'ask_more', items, attempts: 0 },
-        response: readTap('bf_more', [
+        // ⚠️ שם המשתנה כולל את מספר הפריטים: בלי זה ההקשה על הספר
+        // השני מקבלת את התשובה שניתנה על הראשון, והשיחה נתקעת.
+        response: readTap(`bf_more${items.length}`, [
+          m('book_saved'),
           m('added_to_cart', { qty, title: book.title }),
-          m('ask_more'),
+          m('after_save'),
         ], { max: 1, min: 1, seconds: 8 }),
       }
     }
@@ -371,7 +540,9 @@ export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMe
       if (input.value === '2') {
         return askDelivery({ ...state, attempts: 0 }, messages)
       }
-      return retry(state, 'ask_more', 'bf_more', [
+      // ⚠️ אותו שם משתנה כמו ב-readTap שמעל (תלוי-כמות), אחרת הניסיון
+      // החוזר קורא משתנה אחר ומקבל ערך ריק לנצח.
+      return retry(state, 'ask_more', `bf_more${state.items.length}`, [
         m('ask_more_retry'),
       ], { max: 1, seconds: 8 }, false, messages)
     }
@@ -516,6 +687,145 @@ export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMe
 }
 
 // ── עזרים ────────────────────────────────────────────────────────────────────
+
+/** תפריט ההזמנה: מק"ט / קטגוריות / כל הספרים. */
+function orderMenu(state: IvrState, messages?: IvrMessages): IvrTurn {
+  return {
+    state: { ...state, step: 'order_menu' },
+    response: readTap(attemptVarName('bf_omenu', state.attempts), [
+      msgToken(messages, 'order_menu'),
+    ], { max: 1, seconds: 10 }),
+  }
+}
+
+/** בקשת מק"ט. */
+function askSkuTurn(state: IvrState, messages?: IvrMessages): IvrTurn {
+  const base = state.items.length ? `bf_sku_next${state.items.length}` : 'bf_sku'
+  return {
+    state: { ...state, step: 'ask_sku' },
+    response: readTap(attemptVarName(base, state.attempts), [
+      msgToken(messages, 'ask_sku'),
+    ], { max: 10, seconds: 10 }),
+  }
+}
+
+/**
+ * רשימת הקטגוריות.
+ *
+ * ⚠️ נבנית מהקטלוג ולא מרשימה קבועה: קטגוריה חדשה מופיעה מאליה,
+ * ורשימה כתובה ביד הייתה נשארת מאחור.
+ *
+ * ⚠️ המספור הוא מיקום ברשימה (1..N) ולא קוד קבוע — המתקשר שומע
+ * "ל<שם> הקישו <מספר>" ולכן הוא תמיד תואם למה שהוקרא.
+ */
+function categoryMenu(
+  state: IvrState, input: IvrInput, messages?: IvrMessages, invalid = false,
+): IvrTurn {
+  const cats = input.categories ?? []
+  if (!cats.length) {
+    return {
+      state: { ...state, step: 'done' },
+      response: `${idMessage(msgToken(messages, 'category_empty'))}&${hangup}`,
+    }
+  }
+  // 🔴 יותר מ-9 קטגוריות מחייב קריאת שתי ספרות, אחרת "10" נקרא כ-"1".
+  const maxDigits = cats.length > 9 ? 2 : 1
+  const tokens = [
+    ...(invalid ? [msgToken(messages, 'main_menu_retry')] : []),
+    msgToken(messages, 'category_menu'),
+    ...cats.map((name, i) => msgToken(messages, 'category_item', { name, code: i + 1 })),
+  ]
+  return {
+    state: { ...state, step: 'category_menu' },
+    response: readTap(attemptVarName('bf_cat', state.attempts), tokens,
+      { max: maxDigits, seconds: 12 }),
+  }
+}
+
+/**
+ * ספר אחד מתוך הרשימה, עם אפשרויות הניווט.
+ *
+ * 🔴 ספר אחד בכל פעם ולא 114 ברצף: רשימה ארוכה בטלפון אינה ניתנת
+ * לזכירה, והמתקשר מנתק באמצע.
+ */
+function browseTurn(
+  state: IvrState, input: IvrInput, messages?: IvrMessages,
+  edge?: 'start' | 'end',
+): IvrTurn {
+  const books = input.browseBooks ?? []
+  if (!books.length) {
+    return {
+      state: { ...state, step: 'done' },
+      response: `${idMessage(msgToken(messages, 'category_empty'))}&${hangup}`,
+    }
+  }
+
+  const i = Math.min(Math.max(state.browse_index ?? 0, 0), books.length - 1)
+  const book = books[i]
+  const navKey = state.browse_category ? 'list_nav' : 'list_all_nav'
+
+  return {
+    state: { ...state, step: 'browse', browse_index: i },
+    // ⚠️ שם משתנה שכולל את האינדקס: בלעדיו ימות מחזירה את ההקשה
+    // הקודמת והדפדוף נתקע על אותו ספר.
+    response: readTap(attemptVarName(`bf_br${i}`, state.attempts), [
+      ...(edge === 'end' ? [msgToken(messages, 'list_end')] : []),
+      ...(edge === 'start' ? [msgToken(messages, 'list_start')] : []),
+      t(ttsClean(book.title)),
+      msgToken(messages, 'price_word'),
+      n(agorotToSpokenShekels(book.price_agorot)),
+      msgToken(messages, 'shekels_word'),
+      msgToken(messages, navKey),
+    ], { max: 1, seconds: 10 }),
+  }
+}
+
+/** "בחרתם X המחיר Y" → 1 אישור · 2 תיקון. */
+function confirmBookTurn(
+  state: IvrState,
+  book: { id: string; title: string; price_agorot: number },
+  messages?: IvrMessages,
+): IvrTurn {
+  return {
+    state: { ...state, step: 'confirm_book', pending_book_id: book.id },
+    response: readTap(attemptVarName('bf_cbook', state.attempts), [
+      msgToken(messages, 'book_chosen', {
+        title: book.title,
+        price: agorotToSpokenShekels(book.price_agorot),
+      }),
+      msgToken(messages, 'confirm_book'),
+    ], { max: 1, seconds: 10 }),
+  }
+}
+
+/**
+ * הקראת ההזמנות הקיימות של המתקשר.
+ *
+ * ⚠️ מנתק בסוף ואינו חוזר לתפריט: מי שביקש לשמוע את הזמנותיו קיבל
+ * את מבוקשו, והחזרה לתפריט בטלפון מבלבלת יותר משהיא עוזרת.
+ */
+function myOrdersTurn(state: IvrState, input: IvrInput, messages?: IvrMessages): IvrTurn {
+  const orders = input.myOrders ?? []
+  if (!orders.length) {
+    return {
+      state: { ...state, step: 'done' },
+      response: `${idMessage(msgToken(messages, 'orders_none'))}&${hangup}`,
+    }
+  }
+  const lines = orders.map(o => msgToken(messages, 'order_line', {
+    number: o.order_number,
+    total: agorotToSpokenShekels(o.total_agorot),
+    status: o.status,
+  }))
+  return {
+    state: { ...state, step: 'done' },
+    response: `${idMessage(
+      msgToken(messages, 'orders_intro'),
+      ...lines,
+      msgToken(messages, 'goodbye'),
+    )}&${hangup}`,
+  }
+}
 
 function askDelivery(state: IvrState, messages?: IvrMessages): IvrTurn {
   return {

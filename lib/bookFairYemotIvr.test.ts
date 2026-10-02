@@ -22,25 +22,40 @@ describe('ttsClean', () => {
 })
 
 describe('פתיחת השיחה', () => {
-  it('מברכת ומבקשת מק"ט דרך read=', () => {
+  it('מברכת ומציגה את התפריט הראשי', () => {
     const turn = nextTurn(initialState())
     expect(turn.response).toContain('read=')
-    expect(turn.response).toContain('bf_sku')
+    expect(turn.response).toContain('bf_main')
     // ⚠️ נבדק מול MESSAGE_FALLBACKS ולא מול מילים מוטמעות: הנוסחים
     // ניתנים לעריכה, וטסט שמצפה למילה מסוימת נשבר בכל שינוי ניסוח
     // (וכך קרה כשהברכה הוחלפה ל"שלום וברכה").
     expect(turn.response).toContain(MESSAGE_FALLBACKS.welcome)
-    expect(turn.state.step).toBe('ask_sku')
+    // 🔴 הברכה מובילה לתפריט ולא ישר למק"ט — ראו bookFairYemotMenu.test.ts
+    expect(turn.state.step).toBe('main_menu')
   })
 })
 
 describe('בחירת ספר', () => {
-  const afterWelcome = nextTurn(initialState()).state
+  // ⚠️ מאז מבנה התפריט החדש המק"ט אינו הצעד הראשון: הברכה מובילה
+  // לתפריט הראשי, ומשם 1 (הזמנה) ואז 1 (זיהוי לפי מק"ט).
+  const afterWelcome = (() => {
+    let s = nextTurn(initialState()).state          // → main_menu
+    s = nextTurn(s, { value: '1' }).state           // → order_menu
+    return nextTurn(s, { value: '1' }).state        // → ask_sku
+  })()
 
-  it('מקריא שם ומחיר ועובר לכמות', () => {
+  // 🔴 מאז מבנה התפריט החדש יש *אישור* לפני הכמות: מק"ט דומה שהוקש
+  // בטעות היה מזמין ספר אחר בלי שהמתקשר ידע.
+  it('מקריא שם ומחיר ומבקש אישור', () => {
     const turn = nextTurn(afterWelcome, { value: '1001', book: BOOK })
     expect(turn.response).toContain('שולחן ערוך')
-    expect(turn.response).toContain('n-120')
+    expect(turn.response).toContain('120')
+    expect(turn.state.step).toBe('confirm_book')
+  })
+
+  it('אישור הספר עובר לכמות', () => {
+    const confirm = nextTurn(afterWelcome, { value: '1001', book: BOOK }).state
+    const turn = nextTurn(confirm, { value: '1', book: BOOK })
     expect(turn.state.step).toBe('ask_qty')
   })
 
@@ -88,7 +103,14 @@ describe('בחירת ספר', () => {
 })
 
 describe('כמות ומעבר לעוד ספר', () => {
-  const afterBook = nextTurn(nextTurn(initialState()).state, { value: '1001', book: BOOK }).state
+  // ⚠️ המסלול המלא: ברכה → תפריט → הזמנה → מק"ט → *אישור* → כמות.
+  const afterBook = (() => {
+    let s = nextTurn(initialState()).state            // main_menu
+    s = nextTurn(s, { value: '1' }).state             // order_menu
+    s = nextTurn(s, { value: '1' }).state             // ask_sku
+    s = nextTurn(s, { value: '1001', book: BOOK }).state  // confirm_book
+    return nextTurn(s, { value: '1', book: BOOK }).state  // ask_qty
+  })()
 
   it('כמות תקינה מוסיפה לעגלה ושואלת "עוד ספר?"', () => {
     const turn = nextTurn(afterBook, { value: '2', book: BOOK, reserved: true })
