@@ -8,6 +8,7 @@ import { validateTiers, resolveShippingTier, tierLabel, type TierInput } from '@
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useCan } from '@/components/StaffPermissions'
 import PaymentSettings from './PaymentSettings'
+import SellerPassword from './SellerPassword'
 
 // הגדרות היריד: מתג פתיחה, ערי משלוח, ומדרגות תעריף.
 
@@ -253,6 +254,9 @@ export default function SettingsClient({ cities, tiers, open, openAt, mockPay }:
 
       {/* ── ספק הסליקה ── */}
       <PaymentSettings />
+
+      {/* ── סיסמת הדוכן ── */}
+      <SellerPassword />
 
       {/* ── ערי משלוח ── */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5">
