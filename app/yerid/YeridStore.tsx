@@ -808,7 +808,23 @@ function BookCard({ book, inCart, justAdded, onAdd, onSetQty, eager }: {
           )}
         </p>
 
-        <div className="mt-auto flex items-center justify-between gap-3 pt-4">
+        {/* 🔴 "כבר הוספת" במפורש: הבקר "+ 1 −" לבדו נראה כמו בורר כמות
+            שעדיין לא נלחץ, והקונה לא ידע שהספר כבר בעגלה — ולחץ שוב.
+            ⚠️ mt-auto עבר לכאן: הוא דוחף את תחתית הכרטיס, ושני אלמנטים
+            איתו היו מפצלים את הרווח ושוברים את יישור הכרטיסים. */}
+        {inCart > 0 && !out && (
+          <p
+            className="mt-auto flex items-center gap-1.5 pt-4 text-[13px] font-semibold"
+            style={{ color: c.main }}
+          >
+            <Check size={14} strokeWidth={3} />
+            כבר הוספת {inCart} {inCart === 1 ? 'עותק' : 'עותקים'} ממוצר זה
+          </p>
+        )}
+
+        <div className={`flex items-center justify-between gap-3 ${
+          inCart > 0 && !out ? 'pt-2' : 'mt-auto pt-4'
+        }`}>
           <span className="text-[25px] font-extrabold leading-none tracking-[-0.03em] tabular-nums text-[#141210]">
             {fmtAgorot(book.price_agorot)}
           </span>
@@ -824,6 +840,10 @@ function BookCard({ book, inCart, justAdded, onAdd, onSetQty, eager }: {
             <div
               className="flex flex-shrink-0 items-center gap-1 rounded-full p-1"
               style={{ background: c.soft }}
+              // 🔴 הבקר לבדו לא אמר דבר: "+ 1 −" נראה כמו בורר כמות
+              // *לפני* הוספה, והקונה לא ידע שהספר כבר בעגלה. הריחוף
+              // אומר זאת במפורש.
+              title={`כבר הוספת ${inCart} ${inCart === 1 ? 'עותק' : 'עותקים'} ממוצר זה · לשינוי הכמות השתמשו בפלוס והמינוס`}
             >
               {/* ⚠️ הריחוף ב-handlers ולא ב-hover: של Tailwind: הצבע
                   מגיע ממשתנה לכל קטגוריה, ו-Tailwind אינו יכול לייצר
