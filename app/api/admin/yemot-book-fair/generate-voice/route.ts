@@ -84,7 +84,9 @@ export async function POST(request: NextRequest) {
   if (!(await requireStaff(['admin']))) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
   if (!yemotConfigured()) return NextResponse.json({ error: 'YEMOT_TOKEN אינו מוגדר בשרת' }, { status: 500 })
 
-  const body = await request.json().catch(() => null) as { key?: string; text?: string; all?: boolean } | null
+  const body = await request.json().catch(() => null) as {
+    key?: string; text?: string; all?: boolean; force?: boolean
+  } | null
   if (!body) return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 })
 
   if (body.all) {
@@ -96,13 +98,22 @@ export async function POST(request: NextRequest) {
     // ארוך שגם חורג מזמן הבקשה. מי שרוצה לחדש נוסח בודד — יש כפתור
     // ייעודי לכל הודעה.
     //
-    // ⚠️ הקלטה אנושית (rec_) לעולם אינה נדרסת כאן.
+    // 🔴 `force` עוקף את הדילוג הזה — וזה היה הכרחי: כש-61 ההקלטות
+    // נוצרו בפורמט פגום (PCM, ראו ההערה ב-generateOne), לכולן *היה*
+    // קובץ, ולכן היצירה הגורפת דילגה על כולן ויצרה אחת בלבד. המסך
+    // הראה "נוצר קול 1" והשלוחה המשיכה לנגן את הקבצים השבורים.
+    //
+    // ⚠️ הקלטה אנושית (rec_) לעולם אינה נדרסת — גם לא עם force.
+    // המנהל הקליט אותה בקולו, ואין שום דרך לשחזר אותה אחרי דריסה.
     const pending = BOOK_FAIR_MESSAGE_META
       .filter(m => m.allowAudio)
       .filter(m => {
         const text = (msgs[m.key]?.text ?? m.defaultText ?? '').trim()
         if (!text || hasPlaceholder(text)) return false
-        return !msgs[m.key]?.audio
+        const audio = msgs[m.key]?.audio
+        if (!audio) return true
+        if (!body.force) return false
+        return !String(audio).startsWith('rec_')
       })
       .map(m => m.key)
 
@@ -116,7 +127,11 @@ export async function POST(request: NextRequest) {
       else errors[key] = r.error
     }
 
-    const remaining = Math.max(0, pending.length - BATCH)
+    // ⚠️ רק מה שבאמת הצליח יורד מהתור. ב-force הפריטים כבר אינם
+    // "חסרים", ולכן ספירה לפי pending.length בלבד הייתה מחזירה את
+    // אותו remaining לנצח והמסך היה נתקע בלולאה.
+    const done = Object.keys(results).length + Object.keys(errors).length
+    const remaining = Math.max(0, pending.length - done)
     return NextResponse.json({
       ok: Object.keys(errors).length === 0,
       generated: Object.keys(results),

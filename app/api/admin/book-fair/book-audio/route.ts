@@ -60,7 +60,7 @@ export async function GET() {
 
   const { data, error } = await db
     .from('book_fair_books')
-    .select('id, sku, title, description, audio_name, is_active, is_hidden')
+    .select('id, sku, title, publisher, description, audio_name, is_active, is_hidden')
     .eq('is_active', true)
     .eq('is_hidden', false)
     .order('sku')

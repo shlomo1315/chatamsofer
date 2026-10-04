@@ -210,7 +210,14 @@ export default function PhoneMessages() {
     }
   }
 
-  async function generateAll() {
+  /**
+   * @param force יוצר מחדש גם הודעות שכבר יש להן קובץ.
+   *
+   * 🔴 בלי force היצירה הגורפת מדלגת על כל הודעה שיש לה audio. כש-61
+   * ההקלטות נוצרו בפורמט פגום הן כולן דולגו, המסך הראה "נוצר קול 1",
+   * והשלוחה המשיכה להשמיע את הקבצים השבורים.
+   */
+  async function generateAll(force = false) {
     setGenAll(true)
     try {
       // שומרים תחילה את הטקסטים כדי שהיצירה תשתמש בנוסח המעודכן
@@ -224,9 +231,13 @@ export default function PhoneMessages() {
       // ⚠️ תקרת סבבים: הגנה מפני לולאה אינסופית אם remaining נתקע.
       let total = 0
       let errCount = 0
-      for (let round = 0; round < 12; round++) {
+      // ⚠️ תקרה גבוהה יותר ב-force: 61 הודעות במנות של 12 הן 6 סבבים,
+      // והתקרה הישנה (12) הספיקה בדיוק רק למצב הרגיל.
+      const maxRounds = force ? 24 : 12
+      for (let round = 0; round < maxRounds; round++) {
         const res = await fetch('/api/admin/yemot-book-fair/generate-voice', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ all: true }),
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ all: true, force }),
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'שגיאה ביצירת הקול')
@@ -395,11 +406,27 @@ export default function PhoneMessages() {
               השמע דוגמה
             </Button>
             {eligibleCount > 0 && (
-              <Button onClick={generateAll} disabled={busyAny} variant="outline" size="sm">
+              <Button onClick={() => generateAll(false)} disabled={busyAny} variant="outline" size="sm">
                 {genAll ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />}
                 צור קול טבעי לכל ההודעות ({eligibleCount})
               </Button>
             )}
+            {/* 🔴 יצירה מחדש של הקיימות — לשימוש כשההקלטות עצמן פגומות.
+                ⚠️ מאשרים תחילה: זו יצירה מחדש בתשלום לכל ההודעות,
+                ולחיצה בטעות שורפת קרדיטים של עשרות קבצים. */}
+            <Button
+              onClick={() => {
+                if (confirm('ליצור מחדש קול טבעי לכל ההודעות הקיימות?\n\nפעולה זו מחליפה את כל ההקלטות הממוחשבות (הקלטות אנושיות לא ייפגעו) וצורכת קרדיטים ב-ElevenLabs.')) {
+                  generateAll(true)
+                }
+              }}
+              disabled={busyAny}
+              variant="outline"
+              size="sm"
+            >
+              {genAll ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />}
+              יצירה מחדש לכולן
+            </Button>
           </div>
         )}
       </div>

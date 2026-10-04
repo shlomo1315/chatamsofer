@@ -206,12 +206,6 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
         <div className="mx-auto max-w-6xl px-5 py-4">
           <div className="flex items-center justify-between gap-6">
             <div className="flex items-center gap-4">
-              {/* הלוגו הרשמי — זהה למסך ההמתנה ולשאר המערכת. */}
-              <img
-                src="/logo.png"
-                alt="איגוד הצאצאים של רבינו החתם סופר"
-                className="w-16 sm:w-20"
-              />
               <div>
                 <h1 className="text-2xl font-bold leading-tight text-[#141210] sm:text-3xl">
                   יריד הספרים

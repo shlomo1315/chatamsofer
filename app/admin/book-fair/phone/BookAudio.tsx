@@ -18,6 +18,8 @@ import { useToast } from '@/components/ui/Toast'
 
 type Book = {
   id: string; sku: string; title: string
+  /** המכון/ההוצאה — מוצג לצד השם כדי להבחין בין מהדורות של אותו חיבור. */
+  publisher: string | null
   description: string | null; audio_name: string | null
 }
 
@@ -65,7 +67,10 @@ export default function BookAudio() {
     const q = query.trim().toLowerCase()
     if (!q) return books
     return books.filter(b =>
-      b.sku.toLowerCase().includes(q) || b.title.toLowerCase().includes(q))
+      b.sku.toLowerCase().includes(q)
+      || b.title.toLowerCase().includes(q)
+      // ⚠️ גם לפי ההוצאה: כך אפשר לאתר בבת אחת את כל ספרי מכון מסוים.
+      || (b.publisher ?? '').toLowerCase().includes(q))
   }, [books, query])
 
   const withAudio = books.filter(b => b.audio_name).length
@@ -248,7 +253,16 @@ export default function BookAudio() {
           {filtered.map(b => (
             <li key={b.id} className="flex flex-wrap items-center gap-2 py-2.5">
               <span className="w-16 flex-shrink-0 font-mono text-xs text-slate-400">{b.sku}</span>
-              <span className="min-w-0 flex-1 truncate text-slate-800">{b.title}</span>
+              {/* ⚠️ השם וההוצאה בעמודה אחת: אותו חיבור יוצא בכמה מהדורות
+                  ("שו״ת חתם סופר" במכון החתם סופר ובהוצאת ראטה), והשם לבדו
+                  אינו מזהה את הספר. בנייד ההוצאה יורדת לשורה שנייה במקום
+                  לדחוק את השם. */}
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-slate-800">{b.title}</span>
+                {b.publisher?.trim() && (
+                  <span className="truncate text-xs text-slate-400">{b.publisher}</span>
+                )}
+              </span>
               {b.audio_name
                 ? <Badge ok>מוקלט</Badge>
                 : <Badge>קול ממוחשב</Badge>}
