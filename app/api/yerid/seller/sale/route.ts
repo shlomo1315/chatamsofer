@@ -87,6 +87,10 @@ export async function POST(request: NextRequest) {
     // ההזמנה ממתינה לאישור נדרים, אחרת מכירה שנדחתה בכרטיס הייתה
     // נספרת כהכנסה.
     status: wantsCharge ? 'pending_payment' : 'paid',
+    // ⚠️ חותמת גם במזומן: בלעדיה ההזמנה מופיעה "שולם" בלי מתי,
+    // וכל דוח הכנסות לפי תאריך תשלום מפספס אותה בשקט. בסליקה
+    // החותמת נקבעת ב-payment-callback כשנדרים מאשרת.
+    paid_at: wantsCharge ? null : new Date().toISOString(),
     payment_method: paymentMethod,
     sold_by: seller.name,
     customer_name: String(body.customer_name ?? '').trim() || 'מכירה בדוכן',

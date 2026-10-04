@@ -158,28 +158,36 @@ export function amountMatches(chargedAgorot: number, orderTotalAgorot: number): 
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
+ * סיומת הגרסה הקלה של הכריכה, כפי ש-scripts/shrink-book-fair-covers
+ * מעלה אותה לצד המקור.
+ */
+export const COVER_THUMB_SUFFIX = '.sm.webp'
+
+/**
  * כתובת ציבורית לתמונת כריכה, או null כשאין תמונה.
  *
  * ⚠️ נבנית מכתובת Supabase ולא נשמרת במסד: כתובת מלאה שנשמרת בשורה
  * הופכת שגויה ברגע שהפרויקט עובר או שהדומיין משתנה, והתמונות נשברות
  * בשקט בכל הקטלוג.
  *
- * 🔴 `width` מפעיל את שירות ההמרה של Supabase (render/image) במקום
- * להגיש את הקובץ המקורי. הכריכות הן PNG של ~300KB עד 600KB כל אחת,
- * ו-111 מהן הן ~34 מגה־בייט — הקטלוג נראה ריק שניות ארוכות עד
- * שהתמונות הגיעו. בכריכה ברוחב 400 הקובץ יורד ל-~11KB, פי 28 פחות.
+ * 🔴 `thumb` מחזיר את הגרסה הקלה (webp ברוחב 400, ~4KB במקום ~310KB).
+ * הקטלוג כולו יורד מ-~34 מגה־בייט ל-~2, וזה ההבדל בין דקה לשתי
+ * שניות בחיבור סלולרי.
  *
- * ⚠️ בלי `width` מוחזר הנתיב המקורי: מסכי הניהול והורדת קבצים צריכים
- * את התמונה המלאה, ולא גרסה מוקטנת.
+ * ⚠️ *לא* שירות ההמרה החי של Supabase (render/image): מדידה הראתה
+ * שהוא לוקח 0.5–2 שניות בכל קריאה ואינו נשמר במטמון כראוי — גרוע
+ * יותר מהמקור, שמוגש מה-CDN. הקבצים מומרים מראש בסקריפט.
+ *
+ * ⚠️ בלי `thumb` מוחזר הנתיב המקורי: מסכי הניהול והורדת קבצים צריכים
+ * את התמונה המלאה.
  */
 export function bookImageUrl(
   imagePath: string | null | undefined,
-  width?: number,
+  thumb?: boolean,
 ): string | null {
   if (!imagePath) return null
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL
   if (!base) return null
-  if (!width) return `${base}/storage/v1/object/public/book-fair-images/${imagePath}`
-  return `${base}/storage/v1/render/image/public/book-fair-images/${imagePath}`
-    + `?width=${width}&quality=75`
+  const file = thumb ? `${imagePath}${COVER_THUMB_SUFFIX}` : imagePath
+  return `${base}/storage/v1/object/public/book-fair-images/${file}`
 }

@@ -221,7 +221,7 @@ describe('bookImageUrl — המרת כריכות', () => {
   it('בלי כתובת Supabase — null ולא כתובת שבורה', () => {
     const saved = process.env.NEXT_PUBLIC_SUPABASE_URL
     delete process.env.NEXT_PUBLIC_SUPABASE_URL
-    expect(bookImageUrl(PATH, 320)).toBeNull()
+    expect(bookImageUrl(PATH, true)).toBeNull()
     process.env.NEXT_PUBLIC_SUPABASE_URL = saved
   })
 
@@ -232,16 +232,17 @@ describe('bookImageUrl — המרת כריכות', () => {
     expect(url).not.toContain('width')
   })
 
-  it('עם רוחב — עובר דרך שירות ההמרה', () => {
-    const url = bookImageUrl(PATH, 320)
-    expect(url).toContain('/render/image/public/book-fair-images/')
-    expect(url).toContain('width=320')
-    expect(url).toContain('quality=75')
+  it('עם thumb — הגרסה הקלה שהומרה מראש', () => {
+    const url = bookImageUrl(PATH, true)
+    expect(url).toContain('/object/public/book-fair-images/')
+    expect(url).toContain('.sm.webp')
+    // ⚠️ לא שירות ההמרה החי — הוא איטי ואינו נשמר במטמון
+    expect(url).not.toContain('render')
   })
 
   it('נתיב חסר מחזיר null בשתי הצורות', () => {
     expect(bookImageUrl(null)).toBeNull()
-    expect(bookImageUrl(undefined, 320)).toBeNull()
+    expect(bookImageUrl(undefined, true)).toBeNull()
     expect(bookImageUrl('')).toBeNull()
   })
 })

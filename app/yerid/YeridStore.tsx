@@ -675,10 +675,10 @@ function BookCard({ book, inCart, justAdded, onAdd, onSetQty, eager }: {
   eager?: boolean
 }) {
   const out = !book.in_stock
-  // 🔴 רוחב 320 ולא הקובץ המקורי: הכריכות הן PNG של 300KB–600KB,
-  // ו-111 מהן הן ~34 מגה־בייט — הקטלוג נראה ריק שניות ארוכות.
-  // בהמרה הקובץ יורד ל-~10KB, וכל הקטלוג ל-~1.1 מגה.
-  const img = bookImageUrl(book.image_path, 320)
+  // 🔴 הגרסה הקלה (~4KB) ולא המקור (~310KB): הקטלוג יורד מ-34 מגה
+  // ל-2, וזה ההבדל בין דקה לשתי שניות בחיבור סלולרי.
+  const img = bookImageUrl(book.image_path, true)
+  const full = bookImageUrl(book.image_path)
   const btnRef = useRef<HTMLButtonElement>(null)
   // הגוון של הקטגוריה — רץ דרך המק"ט, תג הכרכים וכפתור ההוספה.
   const c = categoryColor(book.description)
@@ -717,6 +717,12 @@ function BookCard({ book, inCart, justAdded, onAdd, onSetQty, eager }: {
             loading={eager ? 'eager' : 'lazy'}
             fetchPriority={eager ? 'high' : 'auto'}
             decoding="async"
+            // ⚠️ נפילה למקור כשאין גרסה קלה: שתי כריכות נכשלו בהמרה,
+            // ובלי זה הן היו מסגרות ריקות בקטלוג.
+            onError={e => {
+              const el = e.currentTarget
+              if (full && el.src !== full) el.src = full
+            }}
             // ⚠️ contain ולא cover: כריכת ספר אסור שתיחתך — הכותרת
             // יושבת בדרך כלל למעלה, וחיתוך מוחק אותה.
             className={`h-full w-full object-contain p-3.5 drop-shadow-[0_6px_12px_rgba(0,0,0,0.17)] transition-transform duration-[250ms] motion-reduce:transition-none ${
