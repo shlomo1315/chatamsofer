@@ -25,6 +25,7 @@ import { makeOrderNumber, makeCartToken } from '@/lib/bookFairCheckout'
 import { shippingCost, totalVolumes, type TierInput } from '@/lib/bookFairShipping'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { categoryOrder } from '@/lib/bookFairCatalog'
+import { digitsOnly, matchBookBySku } from '@/lib/bookFairSkuMatch'
 import { BOOK_FAIR_STATUS_LABELS, type BookFairOrderStatus } from '@/types/bookFair'
 import {
   nextTurn, initialState, attemptVarName, msgToken, ttsClean, type IvrState, type IvrInput,
@@ -108,18 +109,37 @@ async function saveSession(sessionId: string, state: IvrState, orderId?: string)
  * 🔴 הקלט מגיע מהקשה בטלפון ולכן חייב להיות ספרות בלבד לפני שהוא
  * נכנס ל-.or(): פסיק או נקודה במחרוזת שוברים את הביטוי ומרחיבים
  * את השאילתה לשורות אחרות.
+ *
+ * 🔴 ההתאמה מנורמלת (lib/bookFairSkuMatch) ולא `sku.eq`: המק"טים
+ * מתחילים באפס ו-14 מהם מכילים מקף שאי אפשר להקיש בטלפון. השוואה
+ * ישירה הפילה "201" מול "0201", ואת כל 14 כרכי "חת״ס על הש״ס".
+ *
+ * ⚠️ הסינון בקוד ולא ב-SQL: אין דרך לנרמל אפס מוביל ומקף בתוך
+ * `.or()` בלי להזריק ביטוי. הקטלוג קטן (112 שורות), ולכן שליפת
+ * המועמדים וסינון בזיכרון זולה ובטוחה יותר.
  */
 async function findBook(sku: string) {
-  const digits = String(sku ?? '').replace(/\D/g, '')
+  const digits = digitsOnly(sku)
   if (!digits) return null
 
   const supa = db()!
-  const { data } = await supa.from('book_fair_books')
-    .select('id, sku, title, price_agorot, stock_total, unlimited_stock, is_active, audio_name')
-    .eq('is_active', true)
-    .or(`sku.eq.${digits},phone_code.eq.${digits}`)
-    .limit(1).maybeSingle()
+  const { rows } = await fetchAllRows<{
+    id: string; sku: string; title: string; price_agorot: number
+    stock_total: number | null; unlimited_stock: boolean | null
+    phone_code: string | null
+  }>((from, to) =>
+    supa.from('book_fair_books')
+      .select('id, sku, title, price_agorot, stock_total, unlimited_stock, phone_code')
+      .eq('is_active', true)
+      .order('sku', { ascending: true })
+      .range(from, to)
+  )
+
+  // קוד טלפוני ייעודי גובר על המק"ט — הוא נקבע ידנית בדיוק לשם כך.
+  const data = rows.find(r => r.phone_code && digitsOnly(r.phone_code) === digits)
+    ?? matchBookBySku(digits, rows)
   if (!data) return null
+
   const inStock = data.unlimited_stock === true || (data.stock_total ?? 0) > 0
   return { id: data.id, sku: data.sku, title: data.title, price_agorot: data.price_agorot, in_stock: inStock }
 }
