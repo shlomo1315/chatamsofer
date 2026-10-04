@@ -702,7 +702,9 @@ function BookCard({ book, inCart, justAdded, onAdd, onSetQty, eager }: {
     // ⚠️ מעוגל בכל הצדדים ובלי שדרה חותכת בצד: השדרה גזרה פינה אחת
     // ישרה והכרטיס נראה חתוך ולא מעוצב.
     <article
-      className="group relative flex flex-col overflow-hidden rounded-[20px] border border-[#141210]/[0.09] bg-white shadow-[0_2px_4px_-2px_rgba(23,19,16,0.13),0_10px_24px_-14px_rgba(23,19,16,0.13)] transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-1 motion-reduce:transform-none motion-reduce:transition-none"
+      // ⚠️ צל עדין בלבד: הצל הכפול הקודם צבע הילה אפורה סביב הכרטיס,
+      // שעל רקע לבן נראתה כאילו הכרטיס עצמו אינו לבן.
+      className="group relative flex flex-col overflow-hidden rounded-[20px] border border-[#141210]/[0.09] bg-white shadow-[0_1px_3px_-1px_rgba(23,19,16,0.08)] transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-1 motion-reduce:transform-none motion-reduce:transition-none"
       style={{ ['--c' as string]: c.main, ['--c-soft' as string]: c.soft }}
       onMouseEnter={e => { e.currentTarget.style.borderColor = `${c.main}52` }}
       onMouseLeave={e => { e.currentTarget.style.borderColor = '' }}
@@ -732,7 +734,10 @@ function BookCard({ book, inCart, justAdded, onAdd, onSetQty, eager }: {
             }}
             // ⚠️ contain ולא cover: כריכת ספר אסור שתיחתך — הכותרת
             // יושבת בדרך כלל למעלה, וחיתוך מוחק אותה.
-            className={`h-full w-full object-contain p-3.5 drop-shadow-[0_6px_12px_rgba(0,0,0,0.17)] transition-transform duration-[250ms] motion-reduce:transition-none ${
+            // ⚠️ בלי drop-shadow: הצל צויר סביב *תוכן* התמונה, וכיוון
+            // שהכריכות מצולמות על רקע לבן הוא נפל על הרקע הלבן של
+            // הכרטיס ויצר הילה אפורה סביב כל ספר.
+            className={`h-full w-full object-contain p-3.5 transition-transform duration-[250ms] motion-reduce:transition-none ${
               out ? '' : 'group-hover:scale-[1.035] motion-reduce:group-hover:scale-100'
             }`}
           />
