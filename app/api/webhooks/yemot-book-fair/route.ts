@@ -1012,6 +1012,30 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
       await saveSession(session.id, { ...turn.state, step: 'done' })
       return yemotText(`id_list_message=${msgToken(messages, 'order_error')}&go_to_folder=hangup`, callId)
     }
+    // ─────────────────────────────────────────────────────────────────────
+    // 🔴 המספר הרץ מוקצה *כאן* — ברגע המעבר לסליקה — ולא ביצירת השורה
+    // ולא אחרי התשלום.
+    //
+    // הכלל נשמר: מי שנטש לפני התשלום לא שורף מספר, כי השורה נוצרת
+    // עם TMP- והמעבר לסליקה הוא הרגע שבו המתקשר באמת מוסר כרטיס.
+    //
+    // ⚠️ אי אפשר להקצות אחרי התשלום: נדרים צריכה את המספר *בפקודה*
+    // כדי שיופיע בדוח ובקבלה (credit_card_remarks למטה), ואחרי
+    // התשלום כבר מאוחר מדי.
+    //
+    // ⚠️ מי שינטוש בדף הסליקה עצמו כן ישרוף מספר — זה המחיר של
+    // התאמה לדוח נדרים, והוא נדיר הרבה יותר מנטישה לפני כן.
+    // ─────────────────────────────────────────────────────────────────────
+    if (String(order.order_number ?? '').startsWith('TMP-')) {
+      const real = await nextOrderNumber(supa)
+      const { error: numErr } = await supa.from('book_fair_orders')
+        .update({ order_number: real }).eq('id', order.id)
+      // ⚠️ כישלון אינו עוצר את התשלום: הזמנה עם TMP- עדיפה על מתקשר
+      // שנתקע אחרי שכבר הקיש הכל.
+      if (numErr) console.error('[yemot-book-fair] הקצאת מספר נכשלה:', numErr)
+      else order.order_number = real
+    }
+
     await saveSession(session.id, { ...turn.state, order_id: order.id, order_number: order.order_number }, order.id)
     const total = turn.state.items.reduce((s, i) => s + i.price_agorot * i.quantity, 0) + (turn.state.shipping_agorot ?? 0)
     const shekels = (Math.round(total) / 100).toFixed(2)
@@ -1047,6 +1071,17 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
     return yemotText(
       [
         intro ? `id_list_message=${intro}` : '',
+        // 🔴 מספר ההזמנה נשלח כ-remarks, ומגיע לדוח של נדרים ולמייל
+        // הקבלה. בלעדיו שורת התשלום שם נושאת רק "Yemot-093130924.2302"
+        // — מזהה פנימי של ימות — ואי אפשר לקשר אותה להזמנה אצלנו אלא
+        // בניחוש לפי שעה וסכום.
+        //
+        // ⚠️ ספרות בלבד ועד 8 (מגבלת addData בנדרים): המספר הרץ שלנו
+        // הוא 6 ספרות ונכנס, אבל TMP-<cart> אינו — ולכן נשלח רק כשהוא
+        // נומרי.
+        ...(/^\d{1,8}$/.test(String(order.order_number ?? ''))
+          ? [`credit_card_remarks=${order.order_number}`]
+          : []),
         `credit_card=nedarim_plus,${shekels},${NEDARIM_TERMINAL},1,1`,
       ].filter(Boolean).join('&'),
       callId,
