@@ -32,6 +32,10 @@ export default function BookAudio() {
   const [menuAudio, setMenuAudio] = useState<string | null>(null)
   /** מתי הגדרות הסליקה נכתבו לימות — null אם מעולם לא. */
   const [setupAt, setSetupAt] = useState<string | null>(null)
+  /** הודעות הסליקה של ימות ומצב ההקלטה שלהן. */
+  const [cardMsgs, setCardMsgs] = useState<
+    { code: string; label: string; text: string; recorded: boolean }[]
+  >([])
   const [loading, setLoading] = useState(true)
   /** מזהה הפריט שבעבודה — חוסם לחיצה כפולה על אותה שורה. */
   const [busy, setBusy] = useState<string | null>(null)
@@ -39,7 +43,7 @@ export default function BookAudio() {
   const [query, setQuery] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   /** לאיזה פריט מיועדת בחירת הקובץ הנוכחית. */
-  const pending = useRef<{ bookId?: string; category?: string; messageKey?: string } | null>(null)
+  const pending = useRef<{ bookId?: string; category?: string; messageKey?: string; cardCode?: string } | null>(null)
   /** איזו הקלטה מתנגנת כרגע. */
   const [playing, setPlaying] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -101,14 +105,19 @@ export default function BookAudio() {
     try {
       // ⚠️ שתי קריאות מקבילות: הספרים יושבים בטבלה, ואילו הקלטת תפריט
       // הקטגוריות היא הודעת מערכת ב-app_settings.
-      const [r, rm, rs] = await Promise.all([
+      const [r, rm, rs, rc] = await Promise.all([
         fetch('/api/admin/book-fair/book-audio', { cache: 'no-store' }),
         fetch('/api/admin/yemot-book-fair/messages', { cache: 'no-store' }),
         fetch('/api/admin/yemot-book-fair/setup', { cache: 'no-store' }),
+        fetch('/api/admin/yemot-book-fair/card-messages', { cache: 'no-store' }),
       ])
       if (rs.ok) {
         const js = await rs.json().catch(() => null)
         setSetupAt(js?.at ?? null)
+      }
+      if (rc.ok) {
+        const jc = await rc.json().catch(() => null)
+        setCardMsgs(jc?.messages ?? [])
       }
       const j = await r.json()
       if (!r.ok) throw new Error(j.error ?? 'טעינה נכשלה')
@@ -217,7 +226,7 @@ export default function BookAudio() {
     }
   }
 
-  function pickFile(target: { bookId?: string; category?: string; messageKey?: string }) {
+  function pickFile(target: { bookId?: string; category?: string; messageKey?: string; cardCode?: string }) {
     pending.current = target
     fileRef.current?.click()
   }
@@ -232,6 +241,17 @@ export default function BookAudio() {
     try {
       const fd = new FormData()
       fd.set('file', file)
+      // 🔴 הודעת סליקה — ראוט נפרד: הקובץ נשמר בשם ההודעה של ימות
+      // (M1422) ולא בשם שלנו, ואין לו רישום במסד כלל.
+      if (target.cardCode) {
+        fd.set('code', target.cardCode)
+        const r = await fetch('/api/admin/yemot-book-fair/card-messages', { method: 'POST', body: fd })
+        const j = await r.json()
+        if (!r.ok) throw new Error(j.error ?? 'ההעלאה נכשלה')
+        toast.success('ההקלטה הועלתה')
+        await load(true)
+        return
+      }
       // 🔴 הודעת מערכת עוברת בראוט אחר: היא נשמרת ב-app_settings ולא
       // בטבלת הספרים, ולכן book-audio אינו יודע לטפל בה.
       if (target.messageKey) {
@@ -301,6 +321,25 @@ export default function BookAudio() {
     }
   }
 
+  /** הסרת הקלטת סליקה — חזרה להודעת ברירת המחדל של ימות. */
+  async function removeCardMsg(code: string) {
+    setBusy(code)
+    try {
+      const r = await fetch(
+        `/api/admin/yemot-book-fair/card-messages?code=${encodeURIComponent(code)}`,
+        { method: 'DELETE' },
+      )
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error ?? 'ההסרה נכשלה')
+      toast.success('ההקלטה הוסרה — תישמע ההודעה של ימות')
+      await load(true)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'ההסרה נכשלה')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   async function removeMenu() {
     setBusy('menu')
     try {
@@ -353,6 +392,38 @@ export default function BookAudio() {
             </Button>
           </div>
         </div>
+      </section>
+
+      {/* ── הקלטות הסליקה ──
+          🔴 אלה הודעות המערכת של ימות (M1422 וכו'), לא הודעות שלנו:
+          מרגע ששולחים credit_card= ימות מקריאה אותן בקול שלה. העלאת
+          קובץ בשם ההודעה בתיקיית השלוחה דורסת אותה. */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <h2 className="mb-1 font-semibold text-slate-900">הקלטות הסליקה</h2>
+        <p className="mb-4 text-sm text-slate-600">
+          ההנחיות שימות מקריאה בזמן התשלום. בלי הקלטה הן נשמעות בקול
+          הממוחשב של ימות.
+        </p>
+        <ul className="flex flex-col divide-y divide-slate-100">
+          {cardMsgs.map(m => (
+            <li key={m.code} className="flex flex-wrap items-center gap-2 py-2.5">
+              <span className="w-16 flex-shrink-0 font-mono text-xs text-slate-400">{m.code}</span>
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-slate-800">{m.label}</span>
+                <span className="truncate text-xs text-slate-400">{m.text}</span>
+              </span>
+              {m.recorded ? <Badge ok>מוקלט</Badge> : <Badge>קול ימות</Badge>}
+              <RowActions
+                busy={busy === m.code}
+                playing={playing === m.code}
+                onPlay={undefined}
+                onGenerate={() => toast.error('להודעות הסליקה אין יצירת קול — יש להעלות הקלטה')}
+                onUpload={() => pickFile({ cardCode: m.code })}
+                onRemove={m.recorded ? () => void removeCardMsg(m.code) : undefined}
+              />
+            </li>
+          ))}
+        </ul>
       </section>
 
       {/* ── כותרת ופעולה גורפת ── */}
