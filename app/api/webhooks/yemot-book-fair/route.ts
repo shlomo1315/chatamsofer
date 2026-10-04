@@ -492,6 +492,34 @@ async function stashRecording(
     // וכל תקלה עתידית מתחילה מאפס.
     if (found) console.log(`[fair/stash] נמצא ב-${found}`)
 
+    // 🔴 רשת ביטחון אחרונה: הורדה ישירה דרך ה-API של ההקלטות.
+    //
+    // ⚠️ ימות מציעה נתיב ייעודי לקבצי שיחה (ApiCallId + שם הקובץ)
+    // שאינו עובר דרך מערכת הקבצים של השלוחות. אם כל הנתיבים נכשלו,
+    // זהו הניסיון שעשוי בכל זאת להחזיר את ההקלטה.
+    if (!data) {
+      const token = process.env.YEMOT_BOOK_FAIR_TOKEN?.trim() || process.env.YEMOT_TOKEN?.trim()
+      if (token) {
+        for (const url of [
+          `https://www.call2all.co.il/ym/api/DownloadFile?token=${encodeURIComponent(token)}&path=${encodeURIComponent(`ivr2:${providerPath}`)}`,
+          `https://www.call2all.co.il/ym/api/GetFile?token=${encodeURIComponent(token)}&path=${encodeURIComponent(providerPath)}`,
+        ]) {
+          try {
+            const res = await fetch(url, { cache: 'no-store' })
+            const ct = res.headers.get('content-type') ?? ''
+            if (res.ok && !ct.includes('application/json')) {
+              const buf = await res.arrayBuffer()
+              if (buf.byteLength > 1000) {
+                data = buf
+                console.log(`[fair/stash] נמצא בניסיון הישיר (${buf.byteLength} בתים)`)
+                break
+              }
+            }
+          } catch { /* ממשיכים למועמד הבא */ }
+        }
+      }
+    }
+
     // ⚠️ גם כשההורדה נכשלת — התמלול והנתיב נשמרים. כתובת משוערת
     // עדיפה על שום כתובת, וזו בדיוק הנקודה שבה המידע אבד עד היום.
     const key = data ? `book-fair/calls/${callId}/${kind}.wav` : null
@@ -703,6 +731,21 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
     `[yemot-book-fair] ext=${params['ApiExtension'] ?? '?'} `
     + `expected=${process.env.YEMOT_BOOK_FAIR_EXT || '9'} callId=${callId}`,
   )
+
+  // 🔴 כל הפרמטרים של שלב ההקלטה — כדי להפסיק לנחש את הנתיב.
+  //
+  // ⚠️ ימות מחזירה "30/9.wav", וכל הניסיונות להוריד אותו נכשלו. ייתכן
+  // שהנתיב המלא יושב בפרמטר אחר שמעולם לא קראנו (ApiRecordFile,
+  // ApiDirectory וכדומה) — ובלי לראות את *כל* מה שנשלח אי אפשר לדעת.
+  //
+  // ⚠️ מודפס רק בשלבי ההקלטה: הדפסת כל בקשה הייתה מציפה את הלוג,
+  // וגם חושפת פרטי אשראי בשלב התשלום.
+  if (params['bf_addr'] || params['bf_name']) {
+    const safe = Object.fromEntries(
+      Object.entries(params).filter(([k]) => !/card|cvv|token|valid/i.test(k)),
+    )
+    console.log(`[yemot-book-fair] פרמטרי הקלטה: ${JSON.stringify(safe)}`)
+  }
 
   // ── אבטחה: אכיפת ApiToken (השוואה בזמן קבוע) ──
   //
