@@ -79,9 +79,11 @@ describe('msgToken', () => {
     expect(msgToken({ goodbye: { text: '   ' } }, 'goodbye')).toBe(`t-${MESSAGE_FALLBACKS.goodbye}`)
   })
 
-  // 🔴 ההקלטה גוברת על הטקסט — זו המלכודת שהפילה אותנו בעבר.
-  it('מעדיף הקלטה על פני הטקסט', () => {
-    expect(msgToken({ welcome: { text: 'טקסט', audio: 'rec_welcome' } }, 'welcome')).toBe('f-rec_welcome')
+  // 🔴 הקבצים מכובים כרגע (MAX_FILES_PER_RESPONSE=0): כל f- הפיל
+  // את השיחה בימות, וקו חי עדיף על קול נוירוני שאיש אינו שומע.
+  // ⚠️ כשהסיבה תימצא והתקרה תוחזר — הטסט הזה יחזור ל-f-.
+  it('כרגע טקסט גם כשיש הקלטה — הקבצים מכובים', () => {
+    expect(msgToken({ welcome: { text: 'טקסט', audio: 'rec_welcome' } }, 'welcome')).toBe('t-טקסט')
   })
 
   // מתג כיבוי חירום — מחזיר את כל השלוחה ל-TTS בלי פריסת קוד.
@@ -140,12 +142,10 @@ describe('🔴 nextTurn משתמש בנוסחים שהוזנו', () => {
     expect(turn.response).toContain(`t-${MESSAGE_FALLBACKS.welcome}`)
   })
 
-  it('הקלטה שהועלתה לברכה מושמעת במקום הטקסט', () => {
-    const turn = nextTurn(initialState(), {}, {
-      welcome: { text: 'לא יישמע', audio: 'rec_welcome' },
-    })
-    expect(turn.response).toContain('f-rec_welcome')
-    expect(turn.response).not.toContain('לא יישמע')
+  it('הנוסח נשמע כ-TTS כשההקלטה מסוננת', () => {
+    const turn = nextTurn(initialState(), {}, { welcome: { text: 'הטקסט שיישמע', audio: 'rec_welcome' } })
+    expect(turn.response).toContain('t-הטקסט שיישמע')
+    expect(turn.response).not.toContain('f-')
   })
 })
 
@@ -169,12 +169,12 @@ describe('🔴 תקרת קבצים בתשובה', () => {
     expect(files.length).toBeLessThanOrEqual(2)
   })
 
-  it('ההודעות העודפות אינן נעלמות בשקט — הן פשוט אינן קבצים', () => {
+  it('התשובה נשארת פקודת read תקינה בת 14 שדות', () => {
     const turn = nextTurn(initialState(), {}, withAudio)
-    // שתי הראשונות כקבצים, והתשובה עדיין תקינה כפקודת read
-    expect(turn.response).toContain('f-tts_a')
     expect(turn.response).toMatch(/^read=/)
     const ops = turn.response.slice(turn.response.lastIndexOf('=') + 1)
     expect(ops.split(',')).toHaveLength(14)
+    // הנוסחים נשמעים כ-TTS ולא נעלמים
+    expect(turn.response).toContain('t-')
   })
 })

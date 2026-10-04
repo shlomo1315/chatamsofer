@@ -70,7 +70,13 @@ interface ReadOpts {
  * (msgToken כבר החזיר טוקן מוכן), והשמעה חלקית עדיפה על ניתוק.
  * ⚠️ הקיצוץ מהסוף — ההודעות הראשונות הן החשובות (ברכה ותפריט).
  */
-const MAX_FILES_PER_RESPONSE = 2
+// ⚠️ 0 — כיבוי. ארבעה קבצים הפילו את השיחה, הורדנו לשניים, וגם
+// שניים הפילו אותה (אומת בשיחה חיה ב-13:0x, 14 שדות וקבצים שנבדקו
+// כתקינים ב-DownloadFile: 97KB ו-88KB, application/octet-stream).
+// 🔴 כלומר *כל* f- בשלוחה הזו מפיל אותה, בניגוד לשלוחת היולדות
+// שמנגנת קבצים באותו רגע מאותו שרת. עד שיימצא ההבדל — טקסט בלבד,
+// כי קו חי עדיף על קול נוירוני שאיש אינו שומע.
+const MAX_FILES_PER_RESPONSE = 0
 
 function capFiles(tokens: string[]): string[] {
   let files = 0
@@ -253,6 +259,18 @@ export function msgToken(
   const fallback = MESSAGE_FALLBACKS[key] ?? ''
   const m = messages?.[key]
   const raw = (typeof m?.text === 'string' && m.text.trim()) ? m.text : fallback
+
+  // 🔴 תקרת הקבצים מכובה (MAX_FILES_PER_RESPONSE=0) — ולכן ההחלפה
+  // חייבת לקרות *כאן*, לפני שנבנה הטוקן. סינון הקבצים בשלב מאוחר
+  // יותר השאיר `read==bf_main` — הודעה ריקה לגמרי, והמתקשר שמע
+  // שתיקה במקום את ההודעה.
+  if (MAX_FILES_PER_RESPONSE === 0) {
+    let only = raw
+    if (vars) {
+      for (const [k, v] of Object.entries(vars)) only = only.split(`{${k}}`).join(String(v))
+    }
+    return t(only.replace(/\{[^}]*\}/g, ' '))
+  }
 
   // 🔴 מתג כיבוי חירום — כבוי כברירת מחדל.
   //
