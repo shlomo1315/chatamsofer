@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useMemo } from 'react'
 import { Loader2, Wand2, Upload, Trash2, Play, Search, Check } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
+import { scrambleBytes, DOC_CIPHER_ID } from '@/lib/docCipher'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // הקלטות הספרים והקטגוריות בשלוחה הטלפונית.
@@ -54,9 +55,20 @@ export default function BookAudio() {
         const d = await res.json().catch(() => ({}))
         throw new Error(d?.error ?? `ההשמעה נכשלה (${res.status})`)
       }
-      // ⚠️ blob ולא כתובת ישירה ב-src: הראוט דורש הרשאת צוות, ותגית
-      // audio רגילה אינה שולחת את העוגיות בכל הדפדפנים.
-      const url = URL.createObjectURL(await res.blob())
+      // ⚠️ JSON עם base64 ולא תגובת audio/*: נטפרי חוסמת תגובת "קובץ"
+      // ב-418, וההשמעה נכשלה אצל כל מי שגולש דרך הסינון. המטען מעורבל
+      // בשרת כדי שגם חתימת הקובץ בתוך ה-base64 לא תזוהה — ראו docCipher.
+      const payload = await res.json()
+      if (!payload?.data) throw new Error(payload?.error ?? 'לא התקבל אודיו')
+      const bin = atob(payload.data)
+      const bytes = new Uint8Array(bin.length)
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+      // ⚠️ enc נבדק ולא מונח: תגובה ישנה שנשמרה במטמון מגיעה בלי
+      // הסימון, ופענוח שלה היה הופך קובץ תקין לרעש.
+      if (payload.enc === DOC_CIPHER_ID) scrambleBytes(bytes)
+      const url = URL.createObjectURL(
+        new Blob([bytes], { type: payload.contentType || 'audio/wav' }),
+      )
       const el = new Audio(url)
       audioRef.current = el
       const done = () => {

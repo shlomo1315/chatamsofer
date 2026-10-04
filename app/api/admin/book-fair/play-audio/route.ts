@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
 import { downloadFileFromYemot, bookFairPath } from '@/lib/yemot'
 import { getBookFairMessages } from '@/lib/yemotBookFairMessages'
+import { scrambleBytes, DOC_CIPHER_ID } from '@/lib/docCipher'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // השמעת הקלטה שכבר יושבת בימות — הודעה, ספר או קטגוריה.
@@ -80,12 +81,25 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'הקובץ לא נמצא בימות' }, { status: 404 })
   }
 
-  return new NextResponse(audio.data, {
-    headers: {
-      'Content-Type': audio.contentType,
-      // 🔴 no-store: אחרי העלאה מחדש השם משתנה, אבל מטמון דפדפן על
-      // אותה כתובת היה משמיע את הקודם — בדיוק הבלבול שהמסך בא למנוע.
-      'Cache-Control': 'no-store',
-    },
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 האודיו נשלח כ*נתונים* ולא כקובץ — בדיוק כמו /api/files/data.
+  //
+  // ⚠️ נטפרי מזהה תגובה לפי סוג התוכן: תגובת audio/* היא "קובץ" ונחסמת
+  // ב-418 Blocked by NetFree. ההשמעה נכשלה אצל כל מי שגולש דרך הסינון.
+  //
+  // ⚠️ המטען מעורבל לפני ה-base64 — בלעדיו ה-base64 נושא את חתימת
+  // הקובץ ("RIFF" ל-WAV, "ID3" ל-MP3) והמסנן מזהה אותה גם בתוך JSON.
+  // הדפדפן מבטל את הערבול ומרכיב Blob מקומי (ראו lib/docCipher).
+  // ─────────────────────────────────────────────────────────────────────────
+  const scrambled = scrambleBytes(new Uint8Array(audio.data))
+  return NextResponse.json({
+    contentType: audio.contentType,
+    size: audio.data.byteLength,
+    enc: DOC_CIPHER_ID,
+    data: Buffer.from(scrambled).toString('base64'),
+  }, {
+    // 🔴 no-store: אחרי העלאה מחדש השם משתנה, אבל מטמון דפדפן על
+    // אותה כתובת היה משמיע את הקודם — בדיוק הבלבול שהמסך בא למנוע.
+    headers: { 'Cache-Control': 'no-store' },
   })
 }

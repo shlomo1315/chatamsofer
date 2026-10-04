@@ -51,8 +51,15 @@ export async function POST(request: NextRequest) {
   const baseName = `rec_${key}_${Date.now().toString(36)}`
   const prevAudio = (await getBookFairMessages())[key]?.audio ?? null
   const path = bookFairPath(`${baseName}.${srcExt}`)
+  // 🔴 לוג מפורש בשני הכיוונים: העלאה שנכשלת בשקט השאירה את ההודעה
+  // עם קובץ ה-TTS הישן, והמנהל שמע קול ממוחשב בלי שום סימן לתקלה.
+  console.log(`[yemot-book-fair/recording] מעלה ${path} (${file.size} בתים, ${fileType || 'ללא סוג'})`)
   const up = await uploadFileToYemot(path, file, `${baseName}.${srcExt}`, 'bookFair')
-  if (!up.ok) return NextResponse.json({ error: `העלאה לימות נכשלה: ${up.error}` }, { status: 502 })
+  if (!up.ok) {
+    console.error(`[yemot-book-fair/recording] ❌ ההעלאה נכשלה (${key}): ${up.error}`)
+    return NextResponse.json({ error: `העלאה לימות נכשלה: ${up.error}` }, { status: 502 })
+  }
+  console.log(`[yemot-book-fair/recording] ✅ הועלה: ${baseName}`)
 
   // שמירת שם הקובץ (יחסי לשלוחה) — השלוחה תשמיע f-<baseName>
   const saved = await setBookFairMessageAudio(key, baseName)

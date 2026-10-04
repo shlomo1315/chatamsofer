@@ -419,13 +419,22 @@ export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMe
     // (read=f-a.f-b.f-c.f-d=...) וכל מתקשר שמע "שגיאה" ונותק.
     // בחגים הדפוס הוא readTap(MENU_VAR, [msgToken(msgs,'main_menu')])
     // — טוקן בודד, בלי שרשור.
+    // 🔴 הכול בתוך ה-read — כדי שאפשר יהיה להקיש מיד.
+    //
+    // ⚠️ קודם הברכה הייתה id_list_message נפרד: ימות משמיעה הודעה
+    // כזו *עד הסוף* בלי לקלוט הקשה, ורק אחריה מגיעה ל-read. מתקשר
+    // חוזר שיודע שהוא רוצה 1 נאלץ לשמוע את כל הפתיחה בכל שיחה.
+    //
+    // ⚠️ טוקנים בתוך read נקטעים בהקשה — זו בדיוק ההתנהגות הרצויה
+    // בתפריט, ולכן כל הטוקנים עוברים לשם.
     case 'welcome':
       return {
         state: { ...state, step: 'main_menu', attempts: 0 },
-        response: [
-          idMessage(m('welcome'), m('open_until'), m('to_menu')),
-          readTap('bf_main', [m('main_menu')], { max: 1, min: 1, seconds: 10 }),
-        ].join('&'),
+        response: readTap(
+          'bf_main',
+          [m('welcome'), m('open_until'), m('to_menu'), m('main_menu')],
+          { max: 1, min: 1, seconds: 10 },
+        ),
       }
 
     // ── התפריט הראשי ──
