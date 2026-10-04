@@ -358,7 +358,7 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
                 </nav>
 
                 <div className="min-w-0 flex-1">
-                {groups.map(([category, items]) => {
+                {groups.map(([category, items], gi) => {
                   const cc = categoryColor(category)
                   return (
                   <section
@@ -389,8 +389,10 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
                         {items.length} {items.length === 1 ? 'ספר' : 'ספרים'}
                       </span>
                     </div>
-                    <div className="grid grid-cols-2 gap-x-5 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
-                      {items.map(b => (
+                    {/* ⚠️ שלוש עמודות ולא ארבע: בארבע הכרטיסים נדחסו
+                        והכריכות הצטמקו. */}
+                    <div className="grid grid-cols-2 gap-x-5 gap-y-7 sm:grid-cols-2 lg:grid-cols-3">
+                      {items.map((b, i) => (
                         <BookCard
                           key={b.id}
                           book={b}
@@ -398,6 +400,8 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
                           justAdded={justAdded === b.id}
                           onAdd={el => add(b, el)}
                           onSetQty={q => setQty(b.id, q)}
+                          // הקטגוריה הראשונה נראית מיד בפתיחה
+                          eager={gi === 0 && i < 6}
                         />
                       ))}
                     </div>
@@ -407,8 +411,8 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-x-5 gap-y-7 pb-16 sm:grid-cols-3 lg:grid-cols-4">
-                {filtered.map(b => (
+              <div className="grid grid-cols-2 gap-x-5 gap-y-7 pb-16 sm:grid-cols-2 lg:grid-cols-3">
+                {filtered.map((b, i) => (
                   <BookCard
                     key={b.id}
                     book={b}
@@ -416,6 +420,7 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
                     justAdded={justAdded === b.id}
                     onAdd={el => add(b, el)}
                     onSetQty={q => setQty(b.id, q)}
+                    eager={i < 6}
                   />
                 ))}
               </div>
@@ -659,12 +664,17 @@ function NoCover({ title }: { title: string }) {
  * ⚠️ ספר בלי תמונה אינו מקבל חור בפריסה אלא שדרת ספר מעוצבת עם שמו —
  * כך הקטלוג נראה שלם גם לפני שכל התמונות הועלו.
  */
-function BookCard({ book, inCart, justAdded, onAdd, onSetQty }: {
+function BookCard({ book, inCart, justAdded, onAdd, onSetQty, eager }: {
   book: PublicBook; inCart: number; justAdded: boolean
   onAdd: (el: HTMLElement | null) => void; onSetQty: (q: number) => void
+  /** הכרטיסים הראשונים — נטענים מיד ולא בעצלתיים. ראו הערה ב-img. */
+  eager?: boolean
 }) {
   const out = !book.in_stock
-  const img = bookImageUrl(book.image_path)
+  // 🔴 רוחב 320 ולא הקובץ המקורי: הכריכות הן PNG של 300KB–600KB,
+  // ו-111 מהן הן ~34 מגה־בייט — הקטלוג נראה ריק שניות ארוכות.
+  // בהמרה הקובץ יורד ל-~10KB, וכל הקטלוג ל-~1.1 מגה.
+  const img = bookImageUrl(book.image_path, 320)
   const btnRef = useRef<HTMLButtonElement>(null)
   // הגוון של הקטגוריה — רץ דרך המק"ט, תג הכרכים וכפתור ההוספה.
   const c = categoryColor(book.description)
@@ -697,7 +707,12 @@ function BookCard({ book, inCart, justAdded, onAdd, onSetQty }: {
           <img
             src={img}
             alt={book.title}
-            loading="lazy"
+            // 🔴 הכרטיסים הראשונים נטענים מיד: loading="lazy" גורף דחה
+            // גם את הכריכות שבמסך הפתיחה, והקונה ראה מסגרות ריקות
+            // ברגע הראשון. ⚠️ fetchPriority דוחף אותן לראש התור.
+            loading={eager ? 'eager' : 'lazy'}
+            fetchPriority={eager ? 'high' : 'auto'}
+            decoding="async"
             // ⚠️ contain ולא cover: כריכת ספר אסור שתיחתך — הכותרת
             // יושבת בדרך כלל למעלה, וחיתוך מוחק אותה.
             className={`h-full w-full object-contain p-3.5 drop-shadow-[0_6px_12px_rgba(0,0,0,0.17)] transition-transform duration-[250ms] motion-reduce:transition-none ${

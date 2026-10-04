@@ -1,8 +1,8 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import {
   shekelsToAgorot, agorotToShekels, agorotToPaymentString,
   fmtAgorot, agorotToSpokenShekels,
-  lineTotal, cartTotals, amountMatches,
+  lineTotal, cartTotals, amountMatches, bookImageUrl,
 } from './bookFairPricing'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -202,5 +202,46 @@ describe('🔴 amountMatches — השער שלפני סימון "שולם"', () 
 
   it('אין סובלנות מובנית', () => {
     expect(amountMatches(24700, 24680)).toBe(false)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 הקטלוג נראה ריק שניות ארוכות: 111 כריכות PNG במשקל מלא הן
+// ~34 מגה־בייט. שירות ההמרה של Supabase מוריד כל אחת ל-~10KB.
+// ⚠️ בלי width מוחזר הקובץ המקורי — מסכי הניהול צריכים אותו מלא.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('bookImageUrl — המרת כריכות', () => {
+  const PATH = 'abc/cover.png'
+  // ⚠️ הכתובת אינה מוגדרת בסביבת הטסטים; בלעדיה הפונקציה מחזירה null
+  // בכוונה (כתובת שבורה גרועה מהיעדר תמונה).
+  const prev = process.env.NEXT_PUBLIC_SUPABASE_URL
+  beforeAll(() => { process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co' })
+  afterAll(() => { process.env.NEXT_PUBLIC_SUPABASE_URL = prev })
+
+  it('בלי כתובת Supabase — null ולא כתובת שבורה', () => {
+    const saved = process.env.NEXT_PUBLIC_SUPABASE_URL
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL
+    expect(bookImageUrl(PATH, 320)).toBeNull()
+    process.env.NEXT_PUBLIC_SUPABASE_URL = saved
+  })
+
+  it('בלי רוחב — הנתיב המקורי', () => {
+    const url = bookImageUrl(PATH)
+    expect(url).toContain('/object/public/book-fair-images/')
+    expect(url).not.toContain('render')
+    expect(url).not.toContain('width')
+  })
+
+  it('עם רוחב — עובר דרך שירות ההמרה', () => {
+    const url = bookImageUrl(PATH, 320)
+    expect(url).toContain('/render/image/public/book-fair-images/')
+    expect(url).toContain('width=320')
+    expect(url).toContain('quality=75')
+  })
+
+  it('נתיב חסר מחזיר null בשתי הצורות', () => {
+    expect(bookImageUrl(null)).toBeNull()
+    expect(bookImageUrl(undefined, 320)).toBeNull()
+    expect(bookImageUrl('')).toBeNull()
   })
 })

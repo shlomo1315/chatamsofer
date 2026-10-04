@@ -163,10 +163,23 @@ export function amountMatches(chargedAgorot: number, orderTotalAgorot: number): 
  * ⚠️ נבנית מכתובת Supabase ולא נשמרת במסד: כתובת מלאה שנשמרת בשורה
  * הופכת שגויה ברגע שהפרויקט עובר או שהדומיין משתנה, והתמונות נשברות
  * בשקט בכל הקטלוג.
+ *
+ * 🔴 `width` מפעיל את שירות ההמרה של Supabase (render/image) במקום
+ * להגיש את הקובץ המקורי. הכריכות הן PNG של ~300KB עד 600KB כל אחת,
+ * ו-111 מהן הן ~34 מגה־בייט — הקטלוג נראה ריק שניות ארוכות עד
+ * שהתמונות הגיעו. בכריכה ברוחב 400 הקובץ יורד ל-~11KB, פי 28 פחות.
+ *
+ * ⚠️ בלי `width` מוחזר הנתיב המקורי: מסכי הניהול והורדת קבצים צריכים
+ * את התמונה המלאה, ולא גרסה מוקטנת.
  */
-export function bookImageUrl(imagePath: string | null | undefined): string | null {
+export function bookImageUrl(
+  imagePath: string | null | undefined,
+  width?: number,
+): string | null {
   if (!imagePath) return null
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL
   if (!base) return null
-  return `${base}/storage/v1/object/public/book-fair-images/${imagePath}`
+  if (!width) return `${base}/storage/v1/object/public/book-fair-images/${imagePath}`
+  return `${base}/storage/v1/render/image/public/book-fair-images/${imagePath}`
+    + `?width=${width}&quality=75`
 }

@@ -17,5 +17,19 @@ export type { PublicBook, PublicCity, PublicTier } from './getData'
 
 export default async function FairPage() {
   const { books, cities, tiers, open, openAt, pickup } = await getData()
-  return <FairStore books={books} cities={cities} tiers={tiers} open={open} openAt={openAt} pickup={pickup} />
+  // ⚠️ רמז חיבור מוקדם לאחסון התמונות: בלעדיו הדפדפן פותח DNS+TLS
+  // מול Supabase רק כשהוא מגיע לכריכה הראשונה, וזה מוסיף סבב שלם
+  // לפני שנראית תמונה אחת.
+  const storage = process.env.NEXT_PUBLIC_SUPABASE_URL
+  return (
+    <>
+      {storage && (
+        <>
+          <link rel="preconnect" href={storage} crossOrigin="" />
+          <link rel="dns-prefetch" href={storage} />
+        </>
+      )}
+      <FairStore books={books} cities={cities} tiers={tiers} open={open} openAt={openAt} pickup={pickup} />
+    </>
+  )
 }
