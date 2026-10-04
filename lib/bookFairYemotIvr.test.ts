@@ -257,13 +257,25 @@ describe('🔴 מבנה read תקין לימות', () => {
     return out.filter(Boolean)
   }
 
-  it('כל פקודת read נושאת בדיוק 13 שדות', () => {
+  // 🔴 14 שדות — זהה לשלוחות החגים והיולדות שעובדות.
+  //
+  // ⚠️ היה כאן 13, אחרי שניסוי עם 14 נכשל. אבל אותו ניסוי רץ כשכל
+  // ההקלטות היו קבצי PCM פגומים, ואז *כל* שיחה עם f- נפלה בכל מבנה
+  // — כך שהוא לא העיד על מספר השדות. ב-16:05 (04.10) הקבצים כבר היו
+  // MP3 תקינים והשיחה עדיין נותקה, וזה מה שהצביע על המבנה.
+  it('כל פקודת read נושאת בדיוק 14 שדות', () => {
     const reads = allReads()
     expect(reads.length).toBeGreaterThan(0)
     for (const cmd of reads) {
-      // read=<הודעה>=<14 שדות מופרדים בפסיק>
       const ops = cmd.slice(cmd.lastIndexOf('=') + 1)
-      expect(ops.split(',')).toHaveLength(13)
+      expect(ops.split(',')).toHaveLength(14)
+    }
+  })
+
+  it('שדות 6-8 הם No,no,no — כמו בחגים', () => {
+    for (const cmd of allReads()) {
+      const ops = cmd.slice(cmd.lastIndexOf('=') + 1).split(',')
+      expect(ops.slice(5, 8)).toEqual(['No', 'no', 'no'])
     }
   })
 
