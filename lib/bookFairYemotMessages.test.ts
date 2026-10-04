@@ -79,10 +79,9 @@ describe('msgToken', () => {
     expect(msgToken({ goodbye: { text: '   ' } }, 'goodbye')).toBe(`t-${MESSAGE_FALLBACKS.goodbye}`)
   })
 
-  // 🔴 הקבצים מכובים (MAX_FILES_PER_RESPONSE=0): כל f- מפיל את
-  // השיחה בימות והשורש טרם נמצא. כשייפתר — הטסט יחזור ל-f-.
-  it('כרגע טקסט גם כשיש הקלטה — הקבצים מכובים', () => {
-    expect(msgToken({ welcome: { text: 'טקסט', audio: 'rec_welcome' } }, 'welcome')).toBe('t-טקסט')
+  // 🔴 ההקלטה גוברת על הטקסט — הקול הטבעי הוא הדרישה.
+  it('מעדיף הקלטה על פני הטקסט', () => {
+    expect(msgToken({ welcome: { text: 'טקסט', audio: 'rec_welcome' } }, 'welcome')).toBe('f-rec_welcome')
   })
 
   // מתג כיבוי חירום — מחזיר את כל השלוחה ל-TTS בלי פריסת קוד.
@@ -141,20 +140,15 @@ describe('🔴 nextTurn משתמש בנוסחים שהוזנו', () => {
     expect(turn.response).toContain(`t-${MESSAGE_FALLBACKS.welcome}`)
   })
 
-  it('הנוסח נשמע כ-TTS כשההקלטות מכובות', () => {
-    const turn = nextTurn(initialState(), {}, { welcome: { text: 'הטקסט שיישמע', audio: 'rec_welcome' } })
-    expect(turn.response).toContain('t-הטקסט שיישמע')
-    expect(turn.response).not.toContain('f-')
+  it('הקלטה שהועלתה לברכה מושמעת במקום הטקסט', () => {
+    const turn = nextTurn(initialState(), {}, { welcome: { text: 'לא יישמע', audio: 'rec_welcome' } })
+    expect(turn.response).toContain('f-rec_welcome')
+    expect(turn.response).not.toContain('לא יישמע')
   })
 })
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 🔴 תקרת הקבצים בתשובה אחת.
-//
-// השלוחה ניתקה כל מתקשר כששלחה ארבעה f- רצופים, בעוד ששלוחת היולדות
-// — שעובדת — שולחת לכל היותר שניים ותמיד אחרי טוקן טקסט.
-// ─────────────────────────────────────────────────────────────────────────────
-describe('🔴 תקרת קבצים בתשובה', () => {
+// 🔴 כל ההקלטות נשלחות — בלי סינון ובלי תקרה, כמו בחגים וביולדות.
+describe('🔴 כל ההקלטות נשלחות', () => {
   const withAudio = {
     welcome: { text: 'ברכה', audio: 'tts_a' },
     open_until: { text: 'פתוח עד', audio: 'tts_b' },
@@ -162,10 +156,9 @@ describe('🔴 תקרת קבצים בתשובה', () => {
     main_menu: { text: 'התפריט', audio: 'tts_d' },
   }
 
-  it('לכל היותר שני קבצים, גם כשלארבע ההודעות יש הקלטה', () => {
+  it('ארבע הקלטות — ארבעה קבצים, אף אחת אינה נזרקת', () => {
     const turn = nextTurn(initialState(), {}, withAudio)
-    const files = turn.response.match(/f-/g) ?? []
-    expect(files.length).toBeLessThanOrEqual(2)
+    expect((turn.response.match(/f-/g) ?? []).length).toBe(4)
   })
 
   it('התשובה נשארת פקודת read תקינה בת 14 שדות', () => {
@@ -173,7 +166,5 @@ describe('🔴 תקרת קבצים בתשובה', () => {
     expect(turn.response).toMatch(/^read=/)
     const ops = turn.response.slice(turn.response.lastIndexOf('=') + 1)
     expect(ops.split(',')).toHaveLength(14)
-    // אף הודעה אינה נעלמת — כולן נשמעות כ-TTS
-    expect(turn.response).toContain('t-')
   })
 })

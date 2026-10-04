@@ -58,43 +58,11 @@ interface ReadOpts {
   keys?: string[]
 }
 
-/**
- * מגביל את מספר הקבצים בתשובה אחת.
- *
- * 🔴 שלוחת היריד ניתקה כל מתקשר כששלחה ארבעה `f-` רצופים, בעוד
- * ששלוחת היולדות — שעובדת היטב — שולחת לכל היותר *שניים*, ותמיד
- * אחרי טוקן טקסט. זה ההבדל שנותר אחרי שמספר השדות תוקן (13→14)
- * והקבצים אומתו כקיימים בתיקייה.
- *
- * ⚠️ הקבצים העודפים *נזרקים ולא מוחלפים*: הנוסח שלהם אינו זמין כאן
- * (msgToken כבר החזיר טוקן מוכן), והשמעה חלקית עדיפה על ניתוק.
- * ⚠️ הקיצוץ מהסוף — ההודעות הראשונות הן החשובות (ברכה ותפריט).
- */
-// 🔴 0 — הקבצים מכובים, והשורש עדיין לא ידוע.
+// 🔴 בלי סינון קבצים ובלי תקרה — בדיוק כמו בחגים וביולדות
+// שעובדות. הניסיונות להגביל (4→2→0) לא פתרו דבר, והוסיפו דרך
+// שבה הודעה יכלה להיעלם בשקט.
 //
-// ⚠️ ארבע השערות נבדקו ונפסלו, כל אחת בראיה ישירה:
-//   1. קבצים חסרים — audio-check: missing_count=0.
-//   2. read עם 13 שדות — תוקן ל-14, השיחה עדיין נפלה.
-//   3. יותר מדי קבצים — הורד מ-4 ל-2, עדיין נפלה.
-//   4. פורמט שגוי — audio-check מדווח PCM 8kHz מונו 16 ביט,
-//      בדיוק מה שימות דורשת. convertAudio=1 כבר המיר נכון.
-//
-// כלומר קובץ תקין לחלוטין, בפורמט הנכון, בתיקייה הנכונה — ועדיין
-// כל אסימון f- מפיל את השיחה. ⚠️ אין שום שגיאה בצד שלנו: מחזירים
-// 200 תקין, והתסמין היחיד הוא מה שנשמע בטלפון.
-//
-// עד שהסיבה תימצא (כנראה צריך לברר מול התמיכה של ימות) — טקסט
-// בלבד. קו חי עדיף על קול נוירוני שאיש אינו שומע.
-const MAX_FILES_PER_RESPONSE = 0
-
-function capFiles(tokens: string[]): string[] {
-  let files = 0
-  return tokens.filter(tok => {
-    if (!tok.startsWith('f-')) return true
-    files++
-    return files <= MAX_FILES_PER_RESPONSE
-  })
-}
+// הקול הטבעי הוא הדרישה; הטוקנים נשלחים כמות שהם.
 
 function readTap(varName: string, promptTokens: string[], opts: ReadOpts = {}): string {
   const { max = '', min = 1, seconds = 12, readAs = 'No', keys } = opts
@@ -116,7 +84,7 @@ function readTap(varName: string, promptTokens: string[], opts: ReadOpts = {}): 
     readAs, 'no', 'no', '',
     (keys ?? []).join('.'), '', '', '', '',
   ]
-  return `read=${joinTokens(...capFiles(promptTokens))}=${ops.join(',')}`
+  return `read=${joinTokens(...promptTokens)}=${ops.join(',')}`
 }
 
 /** הקלטה (record) — נשמרת בתיקיית ImportRecord/ApiRecord של ימות ומוחזר שם קובץ. */
@@ -127,7 +95,7 @@ function readRecord(varName: string, promptTokens: string[], maxSeconds = 30): s
   return `read=${joinTokens(...promptTokens)}=${ops.join(',')}`
 }
 
-const idMessage = (...tokens: string[]) => `id_list_message=${joinTokens(...capFiles(tokens))}`
+const idMessage = (...tokens: string[]) => `id_list_message=${joinTokens(...tokens)}`
 const hangup = 'go_to_folder=hangup'
 
 export type IvrResponse = string
@@ -270,17 +238,6 @@ export function msgToken(
   const fallback = MESSAGE_FALLBACKS[key] ?? ''
   const m = messages?.[key]
   const raw = (typeof m?.text === 'string' && m.text.trim()) ? m.text : fallback
-
-  // 🔴 כשהתקרה 0 ההחלפה חייבת לקרות *כאן*, לפני בניית הטוקן:
-  // סינון מאוחר יותר השאיר `read==bf_main` — הודעה ריקה לגמרי,
-  // והמתקשר שמע שתיקה במקום את ההודעה.
-  if (MAX_FILES_PER_RESPONSE === 0 && m?.audio) {
-    let only = raw
-    if (vars) {
-      for (const [k, v] of Object.entries(vars)) only = only.split(`{${k}}`).join(String(v))
-    }
-    return t(only.replace(/\{[^}]*\}/g, ' '))
-  }
 
   // 🔴 מתג כיבוי חירום — כבוי כברירת מחדל.
   //
@@ -835,7 +792,7 @@ function categoryMenu(
     // 🔴 הקלטת הקטגוריה גוברת על ה-TTS, כמו בכל הודעה אחרת.
     // ⚠️ הקוד נשאר TTS תמיד — קובץ אחד אינו יכול להקריא מספר משתנה.
     ...cats.flatMap((name, i) => {
-      const rec = MAX_FILES_PER_RESPONSE > 0 ? input.categoryAudio?.[name] : null
+      const rec = input.categoryAudio?.[name]
       return rec
         ? [`f-${rec}`, msgToken(messages, 'category_code', { code: i + 1 })]
         : [msgToken(messages, 'category_item', { name, code: i + 1 })]
@@ -903,7 +860,7 @@ function confirmBookTurn(
 ): IvrTurn {
   const price = agorotToSpokenShekels(book.price_agorot)
   // ⚠️ גם הקלטת הספר כפופה לתקרה — ראו MAX_FILES_PER_RESPONSE
-  const tokens = (MAX_FILES_PER_RESPONSE > 0 && book.audio_name)
+  const tokens = book.audio_name
     ? [
         msgToken(messages, 'book_chosen_prefix'),
         `f-${book.audio_name}`,
