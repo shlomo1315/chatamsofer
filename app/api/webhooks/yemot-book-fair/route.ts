@@ -543,6 +543,13 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
       if (Number.isInteger(idx) && idx >= 0 && idx < input.categories.length) {
         input.browseBooks = await listBooks(input.categories[idx])
       }
+      // 🔴 לוג מפורש: "אין ספרים בקטגוריה זו" הוא התסמין היחיד שהמתקשר
+      // שומע, ובלי זה אי אפשר לדעת אם ההקשה לא נקלטה, אם האינדקס חרג,
+      // או אם השאילתה החזירה ריק.
+      console.log(
+        `[yemot-book-fair] cat pick="${input.value}" idx=${idx} `
+        + `cats=${input.categories.length} books=${input.browseBooks?.length ?? 'לא נטען'}`,
+      )
     }
   } else if (state.step === 'browse') {
     // ⚠️ שם המשתנה כולל את האינדקס (bf_br<i>) — ראו ההערה ב-browseTurn.
