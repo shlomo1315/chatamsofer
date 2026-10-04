@@ -12,9 +12,10 @@ export const dynamic = 'force-dynamic'
 // ("שו״ת חתם סופר", "ליקוטי הערות") יוצאים משובשים. הקלטה לכל ספר
 // נשמעת נכון.
 //
-// ⚠️ 🔴 PCM 8kHz מונו — הפורמט היחיד שימות מנגנת. קובץ ב-44.1kHz
-// נשמר אצלה, מופיע ברשימת התיקייה וניתן להורדה, אבל אינו מתנגן,
-// והשיחה נופלת בלי שום שגיאה בצד שלנו. זה עלה שעות אבחון.
+// ⚠️ 🔴 MP3, כמו בחגים וביולדות — **לא** PCM 8kHz. ההמרה המקדימה
+// ל-PCM היא מה שהפיל את השלוחה: כל שיחה עם טוקן `f-` נותקה מיד אחרי
+// הברכה, בכל תצורה, בעוד כל שיחה עם `t-` עבדה (הלוגים של 04.10).
+// `uploadFileToYemot` שולח `convertAudio=1` — ימות ממירה בעצמה.
 //
 // ⚠️ חותמת זמן בשם הקובץ: ימות מחזיקה מטמון לפי שם, ושם קבוע גרם
 // לכך שההקלטה *הישנה* המשיכה להתנגן אחרי כל עדכון, בלי שום סימן.
@@ -29,17 +30,22 @@ async function putAudio(
   prevName: string | null,
 ): Promise<{ ok: true; name: string } | { ok: false; error: string }> {
   const up = await uploadFileToYemot(
-    `ivr2:/${EXT}/${baseName}.wav`,
-    new Blob([bytes], { type: 'audio/wav' }),
-    `${baseName}.wav`,
+    `ivr2:/${EXT}/${baseName}.mp3`,
+    new Blob([bytes], { type: 'audio/mpeg' }),
+    `${baseName}.mp3`,
   )
   if (!up.ok) return { ok: false, error: `העלאה לימות נכשלה: ${up.error}` }
 
   // ניקוי הקודם — best-effort ואחרי ההעלאה: כישלון מחיקה משאיר קובץ
   // מיותר, אבל לא שובר את ההשמעה החדשה.
+  //
+  // ⚠️ שתי הסיומות: הקבצים שנוצרו עד 04.10 הם `.wav` (PCM) ששברו את
+  // השלוחה. מחיקת `.mp3` בלבד הייתה משאירה אותם שם.
   if (prevName && prevName !== baseName) {
-    const gone = await deleteFileFromYemot(`ivr2:/${EXT}/${prevName}.wav`)
-    if (!gone.ok) console.warn(`[book-audio] מחיקת הקובץ הקודם נכשלה (${prevName}): ${gone.error}`)
+    for (const ext of ['mp3', 'wav'] as const) {
+      const gone = await deleteFileFromYemot(`ivr2:/${EXT}/${prevName}.${ext}`)
+      if (!gone.ok) console.warn(`[book-audio] מחיקת הקובץ הקודם נכשלה (${prevName}.${ext}): ${gone.error}`)
+    }
   }
   return { ok: true, name: baseName }
 }
@@ -139,8 +145,8 @@ export async function POST(request: NextRequest) {
 
   /** יוצר ומעלה קול אחד. */
   const one = async (text: string, base: string, prev: string | null) => {
-    // 🔴 pcm_8000 ולא mp3: ראו ההערה בראש הקובץ.
-    const sp = await generateSpeech(text, { outputFormat: 'pcm_8000' })
+    // 🔴 MP3 ולא pcm_8000: ראו ההערה בראש הקובץ.
+    const sp = await generateSpeech(text)
     if (!sp.ok || !sp.audio) return { ok: false as const, error: sp.error ?? 'יצירת הקול נכשלה' }
     return putAudio(base, sp.audio, prev)
   }
@@ -217,7 +223,12 @@ export async function DELETE(request: NextRequest) {
   if (bookId) {
     const { data: b } = await db.from('book_fair_books')
       .select('audio_name').eq('id', bookId).maybeSingle()
-    if (b?.audio_name) await deleteFileFromYemot(`ivr2:/${EXT}/${b.audio_name}.wav`)
+    // ⚠️ שתי הסיומות — ראו ההערה ב-putAudio.
+    if (b?.audio_name) {
+      for (const ex of ['mp3', 'wav'] as const) {
+        await deleteFileFromYemot(`ivr2:/${EXT}/${b.audio_name}.${ex}`)
+      }
+    }
     const { error } = await db.from('book_fair_books')
       .update({ audio_name: null }).eq('id', bookId)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -229,7 +240,11 @@ export async function DELETE(request: NextRequest) {
       .select('value').eq('key', 'book_fair_category_audio').maybeSingle()
     let map: Record<string, string> = {}
     try { map = JSON.parse(String(row?.value ?? '{}')) } catch { /* ריק */ }
-    if (map[category]) await deleteFileFromYemot(`ivr2:/${EXT}/${map[category]}.wav`)
+    if (map[category]) {
+      for (const ex of ['mp3', 'wav'] as const) {
+        await deleteFileFromYemot(`ivr2:/${EXT}/${map[category]}.${ex}`)
+      }
+    }
     delete map[category]
     await db.from('app_settings').upsert({
       key: 'book_fair_category_audio',

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
-import { uploadFileToYemot, yemotConfigured } from '@/lib/yemot'
+import { uploadFileToYemot, deleteFileFromYemot, yemotConfigured } from '@/lib/yemot'
 import {
   setBookFairMessageAudio, BOOK_FAIR_MESSAGE_META, getBookFairMessages,
 } from '@/lib/yemotBookFairMessages'
@@ -36,14 +36,36 @@ export async function POST(request: NextRequest) {
   const fileType = (file as File).type || ''
   if (fileType && !ALLOWED.includes(fileType)) return NextResponse.json({ error: `סוג קובץ לא נתמך (${fileType})` }, { status: 400 })
 
-  const baseName = `rec_${key}`
-  const path = `ivr2:/${BOOK_FAIR_EXT}/${baseName}.wav`
-  const up = await uploadFileToYemot(path, file, `${baseName}.wav`)
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 חותמת זמן בשם, ולא `rec_<key>` קבוע.
+  //
+  // ⚠️ ימות מחזיקה את הקובץ במטמון לפי שמו. עם שם קבוע, מנהל שמקליט
+  // הקלטה חדשה להודעה שכבר הוקלטה מקבל "הועלה בהצלחה" — ובטלפון
+  // ממשיכה להתנגן ההקלטה *הישנה*, בלי שום סימן לתקלה בשום מסך.
+  //
+  // ⚠️ הסיומת נשמרת מהקובץ שהועלה: `convertAudio=1` ממירה בצד ימות,
+  // אבל סיומת שאינה תואמת את התוכן בלבלה אותה בעבר.
+  // ─────────────────────────────────────────────────────────────────────────
+  const srcName = (file as File).name || ''
+  const srcExt = (srcName.match(/\.([a-z0-9]{2,4})$/i)?.[1] || 'mp3').toLowerCase()
+  const baseName = `rec_${key}_${Date.now().toString(36)}`
+  const prevAudio = (await getBookFairMessages())[key]?.audio ?? null
+  const path = `ivr2:/${BOOK_FAIR_EXT}/${baseName}.${srcExt}`
+  const up = await uploadFileToYemot(path, file, `${baseName}.${srcExt}`)
   if (!up.ok) return NextResponse.json({ error: `העלאה לימות נכשלה: ${up.error}` }, { status: 502 })
 
   // שמירת שם הקובץ (יחסי לשלוחה) — השלוחה תשמיע f-<baseName>
   const saved = await setBookFairMessageAudio(key, baseName)
   if (!saved) return NextResponse.json({ error: 'הקובץ הועלה אך שמירת ההגדרה נכשלה' }, { status: 500 })
+
+  // ניקוי הקודם — אחרי השמירה ו-best-effort: אם המחיקה תרוץ קודם
+  // וההעלאה תיכשל, השלוחה תישאר בלי קובץ ותשמיע שקט.
+  // ⚠️ כל הסיומות האפשריות: הקבצים הישנים הם `.wav`, החדשים לפי המקור.
+  if (prevAudio && prevAudio !== baseName) {
+    for (const ex of ['mp3', 'wav', 'ogg', 'm4a', 'mp4', 'webm'] as const) {
+      await deleteFileFromYemot(`ivr2:/${BOOK_FAIR_EXT}/${prevAudio}.${ex}`)
+    }
+  }
 
   return NextResponse.json({ ok: true, audio: baseName, messages: await getBookFairMessages() })
 }

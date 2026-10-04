@@ -28,9 +28,22 @@ function eligible(key: string, text: string): boolean {
 }
 
 async function generateOne(key: string, text: string): Promise<{ ok: true; audio: string } | { ok: false; error: string }> {
-  // 🔴 PCM 8kHz מונו — הפורמט היחיד שימות מנגנת. ב-44.1kHz הקובץ
-  // נשמר, מופיע ברשימה וניתן להורדה, אבל אינו מתנגן והשיחה נופלת.
-  const speech = await generateSpeech(text, { outputFormat: 'pcm_8000' })
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 MP3 — בדיוק כמו בחגים וביולדות, שבהן הקול הטבעי עובד.
+  //
+  // ⚠️ כאן היה הבאג שהפיל את השלוחה: היריד היה *היחיד* שביקש
+  // `pcm_8000` והעלה `.wav`. כל שיחה עם טוקן `f-` נותקה מיד אחרי
+  // הברכה — 100% מהשיחות, בכל תצורה שנוסתה (13/14 שדות, Digits/No,
+  // עם keys ובלי, פתיחה משורשרת ומופרדת). במקביל *כל* שיחה עם `t-`
+  // עבדה. ההוכחה בלוגים של 04.10: 07:57-10:28 ו-13:14 (t-) התקדמו
+  // עד מק"ט ומחיר, וכל שיחות ה-f- הסתיימו ב-noop=hangup.
+  //
+  // ⚠️ ההנחה ש"ימות מנגנת 8kHz בלבד" הובילה לתיקון מראש מיותר:
+  // `uploadFileToYemot` שולח `convertAudio=1`, כלומר **ימות ממירה
+  // בעצמה** לפורמט הניגון שלה. אין צורך להמיר לפניה — ודווקא ההמרה
+  // המקדימה היא מה ששבר.
+  // ─────────────────────────────────────────────────────────────────────────
+  const speech = await generateSpeech(text)
   if (!speech.ok || !speech.audio) return { ok: false, error: speech.error ?? 'יצירת הקול נכשלה' }
 
   // 🔴 חותמת זמן בשם הקובץ, ולא שם קבוע: ימות מחזיקה את הקובץ במטמון
@@ -42,9 +55,9 @@ async function generateOne(key: string, text: string): Promise<{ ok: true; audio
   const prevAudio = (await getBookFairMessages())[key]?.audio ?? null
 
   const baseName = `tts_${key}_${Date.now().toString(36)}`
-  const path = `ivr2:/${BOOK_FAIR_EXT}/${baseName}.wav`
-  const blob = new Blob([speech.audio], { type: 'audio/wav' })
-  const up = await uploadFileToYemot(path, blob, `${baseName}.wav`)
+  const path = `ivr2:/${BOOK_FAIR_EXT}/${baseName}.mp3`
+  const blob = new Blob([speech.audio], { type: 'audio/mpeg' })
+  const up = await uploadFileToYemot(path, blob, `${baseName}.mp3`)
   if (!up.ok) return { ok: false, error: `העלאה לימות נכשלה: ${up.error}` }
 
   const saved = await setBookFairMessageAudio(key, baseName)
@@ -53,8 +66,13 @@ async function generateOne(key: string, text: string): Promise<{ ok: true; audio
   // ניקוי הקובץ הקודם — best-effort ואחרי השמירה: כישלון מחיקה משאיר
   // קובץ מיותר בימות, אבל לא שובר את ההשמעה החדשה.
   if (prevAudio && prevAudio !== baseName) {
-    const gone = await deleteFileFromYemot(`ivr2:/${BOOK_FAIR_EXT}/${prevAudio}.wav`)
-    if (!gone.ok) console.warn(`[yemot-book-fair] מחיקת הקובץ הקודם נכשלה (${prevAudio}): ${gone.error}`)
+    // ⚠️ שתי הסיומות: הקבצים שנוצרו עד 04.10 הם `.wav` פגומים (PCM),
+    // והחדשים `.mp3`. מחיקה של סיומת אחת בלבד הייתה משאירה בשלוחה
+    // בדיוק את הקבצים ששברו אותה.
+    for (const ext of ['mp3', 'wav'] as const) {
+      const gone = await deleteFileFromYemot(`ivr2:/${BOOK_FAIR_EXT}/${prevAudio}.${ext}`)
+      if (!gone.ok) console.warn(`[yemot-book-fair] מחיקת הקובץ הקודם נכשלה (${prevAudio}.${ext}): ${gone.error}`)
+    }
   }
   return { ok: true, audio: baseName }
 }
