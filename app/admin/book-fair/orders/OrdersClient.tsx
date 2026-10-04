@@ -1,7 +1,8 @@
 'use client'
 import { useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Search, Globe, Phone, AlertTriangle, Clock, CheckCircle2, Package, Truck, Mic, XCircle, Store } from 'lucide-react'
+import { Search, Globe, Phone, AlertTriangle, Clock, CheckCircle2, Package, Truck, Mic, XCircle, Store, Undo2 } from 'lucide-react'
 import type { BookFairOrder, BookFairOrderStatus } from '@/types/bookFair'
 import {
   BOOK_FAIR_STATUS_LABELS, BOOK_FAIR_STATUS_COLORS,
@@ -12,7 +13,7 @@ import { useTablePagination } from '@/lib/useTablePagination'
 import Pagination from '@/components/ui/Pagination'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 
-type ColKey = 'order_number' | 'customer' | 'channel' | 'items' | 'delivery' | 'total' | 'status' | 'created'
+type ColKey = 'order_number' | 'customer' | 'phone' | 'channel' | 'items' | 'delivery' | 'total' | 'status' | 'created'
 
 const HEAD = 'px-3 py-3 text-xs font-semibold text-slate-500'
 
@@ -22,14 +23,18 @@ const HEAD = 'px-3 py-3 text-xs font-semibold text-slate-500'
 // ⚠️ filterable רק לקבוצות ערכים סגורות (ערוץ, אופן מסירה, סטטוס) —
 // לא לשם או למספר הזמנה, שערכם ייחודי כמעט בכל שורה.
 //
-// ⚠️ שם וטלפון מאוחדים לתא אחד, ותאריך מוסתר במסכים צרים:
-// הגלילה לרוחב אסורה ונאכפת בלינט, והטבלה הזו רחבה מטבעה.
+// ⚠️ תאריך מוסתר במסכים צרים: הגלילה לרוחב אסורה ונאכפת בלינט,
+// והטבלה הזו רחבה מטבעה.
 function columnsOf(counts: Record<string, number>): ColDef<ColKey, BookFairOrder>[] {
   return [
     { key: 'order_number', label: 'מספר', def: true, headClassName: HEAD, weight: 1,
       value: o => o.order_number },
     { key: 'customer', label: 'לקוח', def: true, headClassName: HEAD, weight: 2,
       value: o => o.customer_name ?? null },
+    // ⚠️ עמודה משלו ולא בתוך תא הלקוח: הטלפון הוא מה שמחפשים בו
+    // בפועל, ומיון לפיו לא היה אפשרי כשהוא נבלע בתוך השם.
+    { key: 'phone', label: 'טלפון', def: true, headClassName: HEAD,
+      value: o => o.customer_phone ?? null },
     { key: 'channel', label: 'ערוץ', def: true, kind: 'enum', filterable: true, headClassName: HEAD,
       // ⚠️ הערך הוא התווית המוצגת ולא הקוד: המשתמש מסנן לפי מה שהוא רואה
       value: o => BOOK_FAIR_CHANNEL_LABELS[o.channel] },
@@ -54,6 +59,8 @@ const CARDS: { key: BookFairOrderStatus | 'all' | 'needs_address'; label: string
   { key: 'picking',        label: 'בליקוט',            icon: Package,       cls: 'border-sky-200 text-sky-700' },
   { key: 'shipped',        label: 'נשלח',              icon: Truck,         cls: 'border-violet-200 text-violet-700' },
   { key: 'payment_mismatch', label: 'אי-התאמה בסכום',  icon: AlertTriangle, cls: 'border-red-200 text-red-700' },
+  // ⚠️ "זוכה" הופיע בטבלה אך לא ככרטיס, ולכן לא הייתה דרך לסנן לפיו.
+  { key: 'refunded',       label: 'זוכה',              icon: Undo2,         cls: 'border-amber-200 text-amber-700' },
   // ⚠️ המבוטלות בכרטיס נפרד ומחוץ ל"הכל": בערב הפתיחה הן היו רוב
   // השורות (ניסיונות שלא הושלמו) והסתירו את ההזמנות שצריך לטפל בהן.
   { key: 'cancelled',      label: 'בוטל',              icon: XCircle,       cls: 'border-slate-200 text-slate-400' },
@@ -63,6 +70,7 @@ export default function OrdersClient({ orders, itemCounts }: {
   orders: BookFairOrder[]
   itemCounts: Record<string, number>
 }) {
+  const router = useRouter()
   const [query, setQuery] = useState('')
   const [card, setCard] = useState<typeof CARDS[number]['key']>('all')
 
@@ -124,7 +132,9 @@ export default function OrdersClient({ orders, itemCounts }: {
   return (
     <div className="flex flex-col gap-4">
       {/* ── כרטיסי סינון ── */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+      {/* ⚠️ 8 עמודות: הכרטיסים הנוספים ("זוכה", "בוטל") נפלו לשורה
+          שנייה לבדם ונראו כמו תקלה. ב-xl כולם בשורה אחת. */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
         {CARDS.map(({ key, label, icon: Icon, cls }) => {
           const n = counts[key] ?? 0
           const active = card === key
@@ -169,7 +179,19 @@ export default function OrdersClient({ orders, itemCounts }: {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {pg.rows.map(o => (
-              <tr key={o.id} className="text-sm transition hover:bg-slate-50">
+              // 🔴 כל השורה לחיצה ופותחת את ההזמנה — קודם רק מספר
+              // ההזמנה היה קישור, והמשתמש לחץ על השורה ולא קרה דבר.
+              // ⚠️ נגיש מהמקלדת (role + tabIndex + Enter) ולא רק בעכבר.
+              <tr
+                key={o.id}
+                role="link"
+                tabIndex={0}
+                onClick={() => router.push(`/admin/book-fair/orders/${o.id}`)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') router.push(`/admin/book-fair/orders/${o.id}`)
+                }}
+                className="cursor-pointer text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
+              >
                 {tc.shown.map(col => (
                   <td key={col.key} className={`px-3 py-2.5 ${tc.cellClass(col)}`}>
                     {renderCell(col.key, o, itemCounts)}
@@ -200,24 +222,36 @@ function renderCell(key: ColKey, o: BookFairOrder, counts: Record<string, number
       return (
         <Link
           href={`/admin/book-fair/orders/${o.id}`}
+          // ⚠️ עוצר את האירוע: השורה כולה כבר מנווטת לאותו יעד, ובלי
+          // זה הניווט קורה פעמיים.
+          onClick={e => e.stopPropagation()}
           className="font-mono text-xs font-semibold text-indigo-700 hover:underline"
         >
           {o.order_number}
         </Link>
       )
 
-    // ⚠️ שם וטלפון בתא אחד: הטבלה רחבה מטבעה והגלילה לרוחב אסורה
     case 'customer':
       return (
-        <div className="min-w-0">
-          <div className="truncate font-medium text-slate-900" title={o.customer_name ?? ''}>
-            {o.customer_name || '—'}
-          </div>
-          {o.customer_phone && (
-            <div className="truncate font-mono text-xs text-slate-500" dir="ltr">{o.customer_phone}</div>
-          )}
+        <div className="min-w-0 truncate font-medium text-slate-900" title={o.customer_name ?? ''}>
+          {o.customer_name || '—'}
         </div>
       )
+
+    // ⚠️ dir="ltr" — מספר טלפון בכיוון RTL מוצג עם האפס בסוף.
+    case 'phone':
+      return o.customer_phone
+        ? (
+          <a
+            href={`tel:${o.customer_phone}`}
+            onClick={e => e.stopPropagation()}
+            dir="ltr"
+            className="font-mono text-xs text-slate-600 hover:text-indigo-700 hover:underline"
+          >
+            {o.customer_phone}
+          </a>
+        )
+        : <span className="text-slate-300">—</span>
 
     case 'channel':
       return (
