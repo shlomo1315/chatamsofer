@@ -28,6 +28,8 @@ export default function BookAudio() {
   const toast = useToast()
   const [books, setBooks] = useState<Book[]>([])
   const [categories, setCategories] = useState<Record<string, string>>({})
+  /** שם קובץ ההקלטה של תפריט הקטגוריות, אם קיימת. */
+  const [menuAudio, setMenuAudio] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   /** מזהה הפריט שבעבודה — חוסם לחיצה כפולה על אותה שורה. */
   const [busy, setBusy] = useState<string | null>(null)
@@ -35,7 +37,7 @@ export default function BookAudio() {
   const [query, setQuery] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   /** לאיזה פריט מיועדת בחירת הקובץ הנוכחית. */
-  const pending = useRef<{ bookId?: string; category?: string } | null>(null)
+  const pending = useRef<{ bookId?: string; category?: string; messageKey?: string } | null>(null)
   /** איזו הקלטה מתנגנת כרגע. */
   const [playing, setPlaying] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -88,11 +90,20 @@ export default function BookAudio() {
   async function load() {
     setLoading(true)
     try {
-      const r = await fetch('/api/admin/book-fair/book-audio', { cache: 'no-store' })
+      // ⚠️ שתי קריאות מקבילות: הספרים יושבים בטבלה, ואילו הקלטת תפריט
+      // הקטגוריות היא הודעת מערכת ב-app_settings.
+      const [r, rm] = await Promise.all([
+        fetch('/api/admin/book-fair/book-audio', { cache: 'no-store' }),
+        fetch('/api/admin/yemot-book-fair/messages', { cache: 'no-store' }),
+      ])
       const j = await r.json()
       if (!r.ok) throw new Error(j.error ?? 'טעינה נכשלה')
       setBooks(j.books ?? [])
       setCategories(j.categories ?? {})
+      if (rm.ok) {
+        const jm = await rm.json().catch(() => null)
+        setMenuAudio(jm?.messages?.category_menu?.audio ?? null)
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'טעינה נכשלה')
     } finally {
@@ -192,7 +203,7 @@ export default function BookAudio() {
     }
   }
 
-  function pickFile(target: { bookId?: string; category?: string }) {
+  function pickFile(target: { bookId?: string; category?: string; messageKey?: string }) {
     pending.current = target
     fileRef.current?.click()
   }
@@ -202,11 +213,22 @@ export default function BookAudio() {
     const target = pending.current
     e.target.value = '' // ⚠️ איפוס: בלעדיו בחירת אותו קובץ שוב אינה מפעילה onChange
     if (!file || !target) return
-    const key = target.bookId ?? `cat:${target.category}`
+    const key = target.messageKey ? 'menu' : (target.bookId ?? `cat:${target.category}`)
     setBusy(key)
     try {
       const fd = new FormData()
       fd.set('file', file)
+      // 🔴 הודעת מערכת עוברת בראוט אחר: היא נשמרת ב-app_settings ולא
+      // בטבלת הספרים, ולכן book-audio אינו יודע לטפל בה.
+      if (target.messageKey) {
+        fd.set('key', target.messageKey)
+        const r = await fetch('/api/admin/yemot-book-fair/recording', { method: 'POST', body: fd })
+        const j = await r.json()
+        if (!r.ok) throw new Error(j.error ?? 'ההעלאה נכשלה')
+        toast.success('ההקלטה הועלתה')
+        await load()
+        return
+      }
       if (target.bookId) fd.set('book_id', target.bookId)
       if (target.category) fd.set('category', target.category)
       const r = await fetch('/api/admin/book-fair/book-audio', { method: 'POST', body: fd })
@@ -216,6 +238,45 @@ export default function BookAudio() {
       await load()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'ההעלאה נכשלה')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  /**
+   * יצירת קול טבעי לתפריט הקטגוריות — מהנוסח השמור.
+   *
+   * ⚠️ הנוסח חייב להכיל את הרשימה עצמה; הוא נערך במסך "נוסחי המערכת".
+   */
+  async function generateMenu() {
+    setBusy('menu')
+    try {
+      const r = await fetch('/api/admin/yemot-book-fair/generate-voice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'category_menu' }),
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error ?? 'יצירת הקול נכשלה')
+      toast.success('הקול נוצר')
+      await load()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'יצירת הקול נכשלה')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function removeMenu() {
+    setBusy('menu')
+    try {
+      const r = await fetch('/api/admin/yemot-book-fair/recording?key=category_menu', { method: 'DELETE' })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error ?? 'ההסרה נכשלה')
+      toast.success('ההקלטה הוסרה — יישמע הקול הממוחשב')
+      await load()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'ההסרה נכשלה')
     } finally {
       setBusy(null)
     }
@@ -262,32 +323,37 @@ export default function BookAudio() {
 
       {/* ── קטגוריות ── */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5">
-        <h2 className="mb-1 font-semibold text-slate-900">הקלטות הקטגוריות</h2>
-        <p className="mb-3 text-sm text-slate-600">
-          נשמעות בתפריט הקטגוריות, לפני מספר ההקשה.
+        <h2 className="mb-1 font-semibold text-slate-900">תפריט הקטגוריות</h2>
+        <p className="mb-4 text-sm text-slate-600">
+          הקלטה אחת שאומרת את כל הרשימה — ״לשאלות ותשובות הקישו 1, לדרוש
+          ואגדה הקישו 2…״. היא מושמעת כמות שהיא, בלי שהמערכת מוסיפה דבר.
         </p>
-        <ul className="flex flex-col divide-y divide-slate-100">
-          {catNames.map(name => {
-            const key = `cat:${name}`
-            const rec = categories[name]
-            return (
-              <li key={name} className="flex flex-wrap items-center gap-2 py-2.5">
-                <span className="min-w-0 flex-1 truncate text-slate-800">{name}</span>
-                {rec
-                  ? <Badge ok>מוקלט</Badge>
-                  : <Badge>קול ממוחשב</Badge>}
-                <RowActions
-                  busy={busy === key}
-                  playing={playing === key}
-                  onPlay={rec ? () => play(key, `category=${encodeURIComponent(name)}`) : undefined}
-                  onGenerate={() => act(key, { category: name }, 'הקול נוצר')}
-                  onUpload={() => pickFile({ category: name })}
-                  onRemove={rec ? () => remove(key, `category=${encodeURIComponent(name)}`) : undefined}
-                />
-              </li>
-            )
-          })}
-        </ul>
+
+        {/* ── הקלטה אחת בלבד ──
+            🔴 תשע ההקלטות הנפרדות הוסרו: הן חייבו תשעה קבצים, והמערכת
+            הוסיפה אחרי כל אחת את מספר ההקשה בנפרד. קובץ אחד שמכיל את
+            המשפט המלא הוא מה שהמנהל באמת צריך.
+            ⚠️ הרשימה המוקלטת קבועה, ואילו הקטגוריות נבנות מהקטלוג —
+            הוספת קטגוריה או שינוי סדר מחייבים הקלטה מחדש. */}
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/70 p-3.5">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-slate-800">
+              {menuAudio ? 'ההקלטה פעילה' : 'אין הקלטה — נשמע קול ממוחשב'}
+            </p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              {catNames.length} קטגוריות: {catNames.join(' · ')}
+            </p>
+          </div>
+          {menuAudio ? <Badge ok>מוקלט</Badge> : <Badge>קול ממוחשב</Badge>}
+          <RowActions
+            busy={busy === 'menu'}
+            playing={playing === 'menu'}
+            onPlay={menuAudio ? () => play('menu', 'key=category_menu') : undefined}
+            onGenerate={() => void generateMenu()}
+            onUpload={() => pickFile({ messageKey: 'category_menu' })}
+            onRemove={menuAudio ? () => void removeMenu() : undefined}
+          />
+        </div>
       </section>
 
       {/* ── ספרים ── */}
