@@ -1,5 +1,6 @@
 'use client'
 import { useState, useMemo, useEffect, useCallback } from 'react'
+import { ilDate } from '@/lib/israelTime'
 import { Search, Loader2, Trash2, Send, Mail, Users, History } from 'lucide-react'
 import type { AudienceMember, AudienceSource } from '@/lib/bookFairAudience'
 import { AUDIENCE_SOURCE_LABELS } from '@/lib/bookFairAudience'
@@ -226,7 +227,7 @@ function renderCell(key: ColKey, m: AudienceMember) {
     case 'spent':
       return <span className="tabular-nums">{m.spentAgorot > 0 ? fmtAgorot(m.spentAgorot) : '—'}</span>
     case 'since':
-      return <span className="whitespace-nowrap text-xs text-slate-500">{new Date(m.since).toLocaleDateString('he-IL')}</span>
+      return <span className="whitespace-nowrap text-xs text-slate-500">{ilDate(m.since)}</span>
   }
 }
 
@@ -440,7 +441,7 @@ function NewsletterHistory() {
                 {n.sent_count}{n.failed_count ? <span className="text-red-600"> ({n.failed_count} נכשלו)</span> : ''}
               </td>
               <td className="whitespace-nowrap px-3 py-2.5 text-xs text-slate-500">
-                {new Date(n.sent_at ?? n.created_at).toLocaleDateString('he-IL')}
+                {ilDate(n.sent_at ?? n.created_at)}
               </td>
             </tr>
           ))}

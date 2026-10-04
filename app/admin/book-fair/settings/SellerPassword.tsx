@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { ilDate } from '@/lib/israelTime'
 import { KeyRound, Loader2, Check, ExternalLink } from 'lucide-react'
 
 // סיסמת הדוכן ביריד.
@@ -67,7 +68,7 @@ export default function SellerPassword() {
             configured ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'
           }`}>
             {configured
-              ? `מוגדרת${updatedAt ? ` · עודכנה ${new Date(updatedAt).toLocaleDateString('he-IL')}` : ''}`
+              ? `מוגדרת${updatedAt ? ` · עודכנה ${ilDate(updatedAt)}` : ''}`
               : '🔴 טרם הוגדרה — אזור המוכרים סגור'}
           </p>
 

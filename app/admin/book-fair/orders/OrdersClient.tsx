@@ -1,5 +1,6 @@
 'use client'
 import { useState, useMemo } from 'react'
+import { ilDate } from '@/lib/israelTime'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Search, Globe, Phone, AlertTriangle, Clock, CheckCircle2, Package, Truck, Mic, XCircle, Store, Undo2 } from 'lucide-react'
@@ -315,7 +316,7 @@ function renderCell(key: ColKey, o: BookFairOrder, counts: Record<string, number
     case 'created':
       return (
         <span className="whitespace-nowrap text-xs text-slate-500">
-          {new Date(o.created_at).toLocaleDateString('he-IL')}
+          {ilDate(o.created_at)}
         </span>
       )
   }

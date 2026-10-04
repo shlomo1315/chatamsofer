@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { ilDateTime } from '@/lib/israelTime'
 import { useRouter } from 'next/navigation'
 import { Loader2, Check, Mic, CreditCard, AlertTriangle, RotateCcw } from 'lucide-react'
 import type {
@@ -82,6 +83,24 @@ export default function OrderPanel({ order, items, cities, recordings, payments 
   const addressRec = recordings.find(r => r.kind === 'address')
   const needsAddress = order.delivery_method === 'shipping' && !order.address_confirmed
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // 🔴 כל ההקלטות של השיחה, ולא רק הכתובת.
+  //
+  // ⚠️ הקלטת השם נשלפה מהמסד, הועברה לפאנל — ונזרקה בשקט: רק
+  // kind==='address' נקראה. בנוסף היא הופיעה אך ורק בתוך כרטיס אימות
+  // הכתובת, שמוצג רק במשלוח — ולכן בהזמנת איסוף עצמי לא הייתה שום
+  // הקלטה במסך, גם לא השם, והפקיד לא ידע למי הספרים שייכים.
+  // ───────────────────────────────────────────────────────────────────────────
+  const REC_LABELS: Record<string, string> = {
+    address: 'כתובת למשלוח',
+    name: 'שם מלא',
+  }
+  // ⚠️ השם ראשון: בכל הזמנה הוא השדה שמזהה את הלקוח.
+  const REC_ORDER = ['name', 'address']
+  const allRecs = [...recordings].sort(
+    (a, b) => REC_ORDER.indexOf(a.kind) - REC_ORDER.indexOf(b.kind),
+  )
+
   async function patch(body: Record<string, unknown>, tag: string) {
     setBusy(tag); setError('')
     try {
@@ -153,6 +172,38 @@ export default function OrderPanel({ order, items, cities, recordings, payments 
 
   return (
     <div className="flex flex-col gap-5">
+      {/* ── הקלטות השיחה ──
+          ⚠️ מוצג בכל הזמנה טלפונית, גם באיסוף עצמי: הקלטת השם היא
+          לעיתים הדרך היחידה לדעת למי הספרים, כשהלקוח לא נרשם באתר. */}
+      {allRecs.length > 0 && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+          <h2 className="mb-3 flex items-center gap-2 font-semibold text-slate-900">
+            <Mic size={17} className="text-slate-500" /> הקלטות השיחה
+          </h2>
+          <div className="flex flex-col gap-4">
+            {allRecs.map(rec => (
+              <div key={rec.id}>
+                <p className="mb-1.5 text-xs font-medium text-slate-500">
+                  {REC_LABELS[rec.kind] ?? rec.kind}
+                </p>
+                {/* ⚠️ נתיב מוגן ולא קישור ישיר לאחסון — ההקלטה מכילה
+                    שם וכתובת מלאה. ⚠️ נטענת כנתונים: נטפרי חוסמת
+                    תגובת audio/* ב-418 והנגן נשאר ריק בלי הסבר. */}
+                <AudioFromData
+                  url={`/api/admin/book-fair/orders/${order.id}/recording?rec=${rec.id}`}
+                />
+                {rec.transcript && (
+                  <p className="mt-1.5 text-sm text-slate-700">
+                    <span className="text-xs text-slate-400">תמלול: </span>
+                    {rec.transcript}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* ── אימות כתובת מההקלטה ── */}
       {needsAddress && (
         <section className="rounded-2xl border-2 border-purple-200 bg-purple-50 p-5">
@@ -416,7 +467,7 @@ export default function OrderPanel({ order, items, cities, recordings, payments 
                     {p.status === 'success' ? 'הצליח' : p.status === 'failed' ? 'נכשל' : p.status === 'refunded' ? 'זוכה' : 'נפתח'}
                   </div>
                   <div className="text-xs text-slate-500">
-                    {new Date(p.created_at).toLocaleString('he-IL')}
+                    {ilDateTime(p.created_at)}
                   </div>
                   {p.error_message && (
                     <div className="mt-1 text-xs text-red-600">{p.error_message}</div>

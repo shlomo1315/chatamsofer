@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { ilDateTime } from '@/lib/israelTime'
 import { notFound } from 'next/navigation'
 import { ArrowRight, Globe, Phone, Mail, MapPin, Calendar } from 'lucide-react'
 import { guardPage } from '@/lib/pageGuard'
@@ -52,7 +53,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         </Link>
         <PageHeader
           title={`הזמנה ${o.order_number}`}
-          subtitle={`${BOOK_FAIR_CHANNEL_LABELS[o.channel]} · ${new Date(o.created_at).toLocaleString('he-IL')}`}
+          subtitle={`${BOOK_FAIR_CHANNEL_LABELS[o.channel]} · ${ilDateTime(o.created_at)}`}
         >
           <span className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${BOOK_FAIR_STATUS_COLORS[o.status]}`}>
             {BOOK_FAIR_STATUS_LABELS[o.status]}
@@ -78,7 +79,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                   : '—'}
               </Detail>
               <Detail icon={Calendar} label="שולם">
-                {o.paid_at ? new Date(o.paid_at).toLocaleString('he-IL') : 'טרם'}
+                {o.paid_at ? ilDateTime(o.paid_at) : 'טרם'}
               </Detail>
               <Detail icon={MapPin} label="מסירה" wide>
                 {BOOK_FAIR_DELIVERY_LABELS[o.delivery_method]}
