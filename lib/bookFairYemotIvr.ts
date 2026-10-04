@@ -931,7 +931,10 @@ function browseTurn(
     response: readTap(attemptVarName(`bf_br${i}`, state.attempts), [
       ...(edge === 'end' ? [msgToken(messages, 'list_end')] : []),
       ...(edge === 'start' ? [msgToken(messages, 'list_start')] : []),
-      t(ttsClean(book.title)),
+      // 🔴 הקלטת הספר גוברת על ה-TTS — כמו בכל מקום אחר בשלוחה.
+      // ⚠️ כאן זה נשכח: הדפדוף הקריא תמיד t-<שם>, ולכן גם ספרים
+      // שהוקלטו נשמעו בקול ממוחשב משובש ("שו ת חתם סופר").
+      book.audio_name ? `f-${book.audio_name}` : t(ttsClean(book.title)),
       msgToken(messages, 'price_word'),
       n(agorotToSpokenShekels(book.price_agorot)),
       msgToken(messages, 'shekels_word'),
