@@ -123,13 +123,16 @@ async function findBook(sku: string) {
   if (!digits) return null
 
   const supa = db()!
+  // 🔴 audio_name נשלף ומוחזר: בלעדיו ה-IVR אינו יודע שיש הקלטה לספר
+  // ונופל ל-TTS. המנהל העלה הקלטה, ראה "מוקלט" במסך — ובטלפון נשמע
+  // קול ממוחשב, בלי שום סימן לתקלה.
   const { rows } = await fetchAllRows<{
     id: string; sku: string; title: string; price_agorot: number
     stock_total: number | null; unlimited_stock: boolean | null
-    phone_code: string | null
+    phone_code: string | null; audio_name: string | null
   }>((from, to) =>
     supa.from('book_fair_books')
-      .select('id, sku, title, price_agorot, stock_total, unlimited_stock, phone_code')
+      .select('id, sku, title, price_agorot, stock_total, unlimited_stock, phone_code, audio_name')
       .eq('is_active', true)
       .order('sku', { ascending: true })
       .range(from, to)
@@ -141,7 +144,11 @@ async function findBook(sku: string) {
   if (!data) return null
 
   const inStock = data.unlimited_stock === true || (data.stock_total ?? 0) > 0
-  return { id: data.id, sku: data.sku, title: data.title, price_agorot: data.price_agorot, in_stock: inStock }
+  return {
+    id: data.id, sku: data.sku, title: data.title,
+    price_agorot: data.price_agorot, in_stock: inStock,
+    audio_name: data.audio_name,
+  }
 }
 
 /** ספר לפי מזהה — לאישור ספר שכבר הוצע. */
@@ -154,6 +161,8 @@ async function findBookById(id: string) {
   return {
     id: data.id, sku: data.sku, title: data.title, price_agorot: data.price_agorot,
     in_stock: data.unlimited_stock === true || (data.stock_total ?? 0) > 0,
+    // ⚠️ כמו ב-findBook — בלי זה אישור הספר מוקרא ב-TTS גם כשיש הקלטה.
+    audio_name: data.audio_name,
   }
 }
 
@@ -198,11 +207,15 @@ async function listBooks(category: string | null) {
   const { rows } = await fetchAllRows<{
     id: string; sku: string; title: string; price_agorot: number
     stock_total: number; unlimited_stock: boolean
+    audio_name: string | null
   }>((from, to) => q.order('sku', { ascending: true }).range(from, to))
 
   return rows.map(b => ({
     id: b.id, sku: b.sku, title: b.title, price_agorot: b.price_agorot,
     in_stock: b.unlimited_stock === true || (b.stock_total ?? 0) > 0,
+    // ⚠️ audio_name נשלף כבר ב-select אך לא הוחזר — ולכן גם בדפדוף
+    // הספרים נשמע TTS במקום ההקלטה.
+    audio_name: b.audio_name,
   }))
 }
 

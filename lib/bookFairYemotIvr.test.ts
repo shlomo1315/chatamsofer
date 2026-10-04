@@ -53,6 +53,20 @@ describe('בחירת ספר', () => {
     expect(turn.state.step).toBe('confirm_book')
   })
 
+  // 🔴 הקלטת הספר גוברת על ה-TTS — ההודעה מתפצלת ל"בחרתם" → הקלטה →
+  // "המחיר X שקלים". ⚠️ ה-webhook שלף את audio_name אך לא החזיר אותו,
+  // ולכן גם ספר שהוקלט נשמע ב-TTS משובש, בלי שום סימן לתקלה.
+  it('ספר עם הקלטה — שמו נשמע מההקלטה ולא מ-TTS', () => {
+    const turn = nextTurn(afterWelcome, {
+      value: '1001',
+      book: { ...BOOK, audio_name: 'rec_bk_0101_abc' },
+    })
+    expect(turn.response).toContain('f-rec_bk_0101_abc')
+    expect(turn.response).not.toContain(BOOK.title)
+    // המחיר עדיין ב-TTS — קובץ יחיד אינו יכול להקריא ערך משתנה.
+    expect(turn.response).toContain('120')
+  })
+
   it('אישור הספר עובר לכמות', () => {
     const confirm = nextTurn(afterWelcome, { value: '1001', book: BOOK }).state
     const turn = nextTurn(confirm, { value: '1', book: BOOK })
