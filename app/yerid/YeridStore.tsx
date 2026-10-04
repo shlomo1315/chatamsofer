@@ -69,6 +69,22 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
     } catch { return new Map() }
   })
   const [cartOpen, setCartOpen] = useState(false)
+
+  // ── הלוגו מתכווץ בגלילה ──
+  //
+  // 🔴 גדול בכניסה (הזהות של היריד), קטן אחרי שהקונה התחיל לגלול —
+  // שם הקטלוג הוא העיקר והלוגו רק שומר הקשר.
+  //
+  // ⚠️ passive: true — מאזין גלילה בלי passive חוסם את הגלילה עצמה
+  // בנייד ויוצר תחושת קפיאה.
+  // ⚠️ סף 40px ולא 0: בדיוק על 0 כל רטט קטן היה מהבהב בין שני הגדלים.
+  const [scrolled, setScrolled] = useState(false)
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 40)
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
   const [justAdded, setJustAdded] = useState<string | null>(null)
   /** הודעת "נוסף לעגלה" הצפה. ⚠️ שם הספר ולא "נוסף" גנרי — בלחיצות
    *  מהירות ברצף הקונה צריך לדעת *מה* נכנס. */
@@ -201,6 +217,18 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
           🔴 גם הלוגו דביק ולא רק החיפוש: בגלילה ארוכה בקטלוג הזהות
           של האתר נעלמה והקונה איבד הקשר. ⚠️ ריפוד מוקטן בגלילה כדי
           שהגוש לא יבלע חצי מסך בנייד. */}
+      {/* ══ הלוגו — ממורכז בראש הדף, מחוץ לגוש הדביק ══
+          🔴 מחוץ ל-sticky בכוונה: בתוכו הוא היה תופס גובה קבוע בכל
+          גלילה ובולע חצי מסך בנייד. כאן הוא נראה גדול בכניסה, ונגלל
+          החוצה כשהקונה יורד לקטלוג — בעוד החיפוש והעגלה נשארים דביקים. */}
+      <div className="bg-[#FAF7F0] px-5 pt-8 pb-6">
+        <img
+          src="/logo-heichal.png"
+          alt="היכל החתם סופר"
+          className="mx-auto w-56 sm:w-72"
+        />
+      </div>
+
       <div className="sticky top-0 z-40 border-b border-[#141210]/8 bg-[#FAF7F0]/95 backdrop-blur">
       <header className="border-b border-[#141210]/8 bg-gradient-to-b from-white/80 to-transparent">
         <div className="mx-auto max-w-6xl px-5 py-4">

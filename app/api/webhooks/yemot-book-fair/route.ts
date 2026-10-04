@@ -399,6 +399,20 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
   const callId = params['ApiCallId'] ?? ''
   const phone = params['ApiPhone'] ?? ''
 
+  // 🔴 באיזו שלוחה השיחה *באמת* רצה.
+  //
+  // ⚠️ ימות מנגנת f-<קובץ> מהתיקייה של השלוחה שבה השיחה נמצאת. קבצי
+  // היריד הועלו לתיקייה 9 (YEMOT_BOOK_FAIR_EXT, ברירת מחדל), ואם
+  // השיחה רצה בשלוחה אחרת — הקבצים פשוט אינם שם.
+  //
+  // זה נשאר עיוור כל היום: הקבצים אומתו קיימים ותקינים בתיקייה 9
+  // (RIFF/WAVE 8kHz מונו), ובכל זאת כל שיחה עם f- נותקה מיד בעוד כל
+  // שיחה עם t- עבדה — בדיוק מה שצפוי כשהנתיב שגוי.
+  console.log(
+    `[yemot-book-fair] ext=${params['ApiExtension'] ?? '?'} `
+    + `expected=${process.env.YEMOT_BOOK_FAIR_EXT || '9'} callId=${callId}`,
+  )
+
   // ── אבטחה: אכיפת ApiToken (השוואה בזמן קבוע) ──
   //
   // 🔴 נכשל-סגור. הנתיב הזה משריין מלאי ויוצר הזמנות עם סליקה — כלומר
