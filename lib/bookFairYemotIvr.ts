@@ -65,7 +65,7 @@ interface ReadOpts {
 // הקול הטבעי הוא הדרישה; הטוקנים נשלחים כמות שהם.
 
 function readTap(varName: string, promptTokens: string[], opts: ReadOpts = {}): string {
-  const { max = '', min = 1, seconds = 12, readAs = 'Digits', keys } = opts
+  const { max = '', min = 1, seconds = 12, readAs = 'No', keys } = opts
   // read=<הודעה>=<שם>,<שימוש בקיים>,<max>,<min>,<שניות>,<אופן הקראה>,...
   //
   // ─────────────────────────────────────────────────────────────────────────
@@ -404,9 +404,14 @@ export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMe
     case 'welcome':
       return {
         state: { ...state, step: 'main_menu', attempts: 0 },
-        // 🔴 keys חובה בתפריט: בחגים (readTap עם allowed:[1,2,3,4])
-        // השדה העשירי נושא את המקשים המותרים, ואצלנו הוא היה ריק.
+        // 🔴 טוקן טקסט ראשון, ורק אחריו קבצים.
+        //
+        // ⚠️ אומת בשיחות אמיתיות: תשובת פתיחה שמתחילה ב-f- מפילה
+        // את השיחה ("שגיאה" וניתוק), בעוד שאותם קבצים *אחרי* טוקן
+        // טקסט מתנגנים. בשלבים הבאים אין בעיה כלל — שם f- ראשון
+        // עובד. זה ההבדל היחיד שהחזיק מים אחרי כל הבדיקות.
         response: readTap('bf_main', [
+          t('שלום'),
           m('welcome'),
           m('open_until'),
           m('to_menu'),
