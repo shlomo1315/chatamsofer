@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutGrid, ShoppingCart, BookOpen, Users, Settings2, ExternalLink, Mail, MessageSquare } from 'lucide-react'
+import { LayoutGrid, ShoppingCart, BookOpen, Users, Settings2, ExternalLink, Mail, MessageSquare, Undo2 } from 'lucide-react'
 
 // סרגל ניווט פנימי של מחלקת היריד.
 //
@@ -23,6 +23,8 @@ const TABS = [
   // אליהם בלי לדעת את הכתובת.
   { href: '/admin/book-fair/emails',   label: 'מיילים',  icon: Mail },
   { href: '/admin/book-fair/inquiries', label: 'פניות',  icon: MessageSquare },
+  // ⚠️ הזיכוי אינו אוטומטי — זו רשימת המשימות של מי שמבצע אותו ידנית.
+  { href: '/admin/book-fair/refunds',  label: 'זיכויים', icon: Undo2 },
   { href: '/admin/book-fair/settings', label: 'הגדרות',  icon: Settings2 },
 ]
 
