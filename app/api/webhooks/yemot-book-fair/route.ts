@@ -49,9 +49,23 @@ function paramFor(params: Record<string, string>, base: string): string {
 }
 
 /**
- * קטגוריית הסליקה בנדרים — מוגדרת גם בהגדרות השלוחה בימות עצמה
- * (credit_card_category_nedarim_plus), חוזרת כאן רק לתיעוד/דיבוג.
- * ⚠️ אינה קובעת דבר בפועל: ההגדרה החיה יושבת בממשק ימות.
+ * 🔴 הגדרות הסליקה *כולן* יושבות בממשק ניהול השלוחה בימות — לא כאן.
+ * הקוד שולח רק את הסכום (`credit_card=<סכום>`), וכל השאר נקרא משם:
+ *
+ *   credit_card_type=nedarim_plus
+ *   credit_card_terminal_number=7004562
+ *   credit_card_category_nedarim_plus=צאצאי מרן החתם סופר
+ *   nedarim_plus_ApiValid=<הסוד, בממשק ימות בלבד>
+ *   credit_card_max_tashloumim=1 · credit_card_currency=1
+ *
+ * ⚠️ ניסיון לשלוח את המסוף בפקודה (`nedarim_plus,<סכום>,<מוסד>,1,1`)
+ * גרם ל"אין מספר מסוף": ימות קוראת את המסוף רק מההגדרות, והפרמטר
+ * השלישי נקרא כשדה אחר.
+ *
+ * ⚠️ גם הקטגוריה אינה נשלחת מכאן — היא נקבעת ב-
+ * credit_card_category_nedarim_plus שבהגדרות השלוחה.
+ *
+ * הערך כאן הוא לתיעוד ולזיהוי הספק ברישום התשלום בלבד.
  */
 const NEDARIM_TERMINAL = '7004562'
 
@@ -649,6 +663,23 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
     //
     // ⚠️ ההנחיות עצמן אינן ניתנות לעריכה כאן והן נערכות בממשק ימות:
     // פרטי הכרטיס הגולמיים לעולם אינם עוברים דרך השרת שלנו.
+    // ─────────────────────────────────────────────────────────────────────
+    // 🔴 "אין מספר מסוף" — ההגדרות חסרות בממשק השלוחה בימות.
+    //
+    // הפורמט כאן תקין (ראו yemot-api-module-protocol):
+    //   credit_card=<סוג סליקה>,<סכום>,<מספר חנות>,<תשלומים>,<מטבע>
+    //
+    // ⚠️ אבל הפקודה לבדה אינה מספיקה: ימות דורשת שההגדרות הבאות
+    // יהיו מוגדרות בממשק ניהול השלוחה, אחרת היא עונה "אין מספר מסוף"
+    // עוד לפני שהיא פונה לנדרים —
+    //   credit_card_type=nedarim_plus
+    //   credit_card_terminal_number=7004562
+    //   credit_card_category_nedarim_plus=צאצאי מרן החתם סופר
+    //   nedarim_plus_ApiValid=<הסוד>
+    //   credit_card_max_tashloumim=1 · credit_card_currency=1
+    //
+    // ⚠️ הקטגוריה נקבעת שם בלבד ואינה ניתנת לשליחה בפקודה.
+    // ─────────────────────────────────────────────────────────────────────
     const intro = msgToken(messages, 'payment_intro')
     return yemotText(
       [

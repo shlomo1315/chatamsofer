@@ -203,6 +203,8 @@ export interface IvrInput {
   categories?: string[]
   /** הספרים ברשימה הנוכחית (קטגוריה או כל הקטלוג). */
   browseBooks?: { id: string; sku: string; title: string; price_agorot: number; in_stock: boolean; audio_name?: string | null }[]
+  /** רשימת ערי המשלוח לפי קוד — להקראה בתפריט העיר. */
+  cityList?: { phone_code: number; name: string }[]
   /** ההזמנות של המתקשר, לשלוחה 2. */
   myOrders?: { order_number: string; total_agorot: number; status: string }[]
   /** האם הפנייה נשמרה — לשלוחה 3. */
