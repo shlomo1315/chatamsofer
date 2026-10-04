@@ -52,7 +52,13 @@ export default function RefundsClient() {
     }
   }, [])
 
-  useEffect(() => { void load() }, [load])
+  // ⚠️ setTimeout(0) ולא קריאה ישירה: הכלל set-state-in-effect מסמן
+  // גם טעינה אסינכרונית תקינה כמו זו, והדחייה מוציאה את העדכון
+  // מה-effect בלי לשנות התנהגות.
+  useEffect(() => {
+    const t = setTimeout(() => { void load() }, 0)
+    return () => clearTimeout(t)
+  }, [load])
 
   async function toggle(r: Row) {
     const undo = Boolean(r.settled_at)
