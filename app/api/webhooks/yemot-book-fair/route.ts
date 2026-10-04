@@ -428,8 +428,71 @@ async function archiveRecording(
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 גיבוי ההקלטה ברגע שהיא נקלטת — לפני שימות דורסת אותה.
+//
+// כל ההקלטות בשלוחה חולקות נתיב קבוע ("30/9.wav" לכתובת, "15/9.wav"
+// לשם): ימות שומרת לפי *מיקום בתסריט*, לא לפי שיחה. המתקשר הבא דורס
+// את ההקלטה של הקודם תוך שניות.
+//
+// ⚠️ הגיבוי הקודם רץ ביצירת ההזמנה — אחרי בחירת משלוח, הקראת סכום
+// ותשלום מלא בכרטיס. עד אז הקובץ כבר לא היה שלו. זו הסיבה שכל
+// storage_path במסד ריק, ושההקלטות של הזמנות ששולמו אבדו.
+//
+// ⚠️ הקובץ נשמר לפי call_id, שהוא ייחודי לשיחה, ולא לפי order_id —
+// ההזמנה עדיין לא קיימת בשלב הזה. createOrder מחברת אותם אחר כך.
+//
+// ⚠️ best-effort מוחלט: כישלון כאן לעולם אינו מפיל את השיחה. מתקשר
+// שמאבד את הקו באמצע הזמנה גרוע מהקלטה חסרה.
+// ─────────────────────────────────────────────────────────────────────────────
+async function stashRecording(
+  callId: string,
+  kind: 'address' | 'name',
+  providerPath: string | undefined,
+  transcript: string | undefined,
+): Promise<void> {
+  if (!providerPath) return
+  try {
+    const supa = db()
+    if (!supa) return
+
+    const extDir = process.env.YEMOT_BOOK_FAIR_EXT || '9'
+    const name = /\.(wav|mp3)$/i.test(providerPath) ? providerPath : `${providerPath}.wav`
+
+    let data: ArrayBuffer | null = null
+    for (const p of [`ivr2:/${name}`, `ivr2:/${extDir}/${name}`]) {
+      for (const scope of ['bookFair', 'default'] as const) {
+        const f = await downloadFileFromYemot(p, scope)
+        if (f.ok && f.data) { data = f.data; break }
+      }
+      if (data) break
+    }
+
+    // ⚠️ גם כשההורדה נכשלת — התמלול והנתיב נשמרים. כתובת משוערת
+    // עדיפה על שום כתובת, וזו בדיוק הנקודה שבה המידע אבד עד היום.
+    const key = data ? `book-fair/calls/${callId}/${kind}.wav` : null
+    if (data && key) {
+      const up = await supa.storage.from('documents')
+        .upload(key, data, { contentType: 'audio/wav', upsert: true })
+      if (up.error) console.warn('[fair/stash] העלאה נכשלה:', up.error.message)
+    } else {
+      console.warn(`[fair/stash] ההורדה מימות נכשלה — נשמר תמלול בלבד. call=${callId} path=${providerPath}`)
+    }
+
+    await supa.from('book_fair_call_recordings').upsert({
+      call_id: callId,
+      kind,
+      provider_path: providerPath,
+      storage_path: data ? key : null,
+      transcript: transcript ?? null,
+    }, { onConflict: 'call_id,kind' })
+  } catch (e) {
+    console.warn('[fair/stash] נכשל:', e)
+  }
+}
+
 /** יצירת ההזמנה בפועל — קורה רק אחרי אישור תשלום, ⚠️ לא לפני. */
-async function createOrder(state: IvrState, cartToken: string, phone: string): Promise<{ id: string; order_number: string } | null> {
+async function createOrder(state: IvrState, cartToken: string, phone: string, callId: string): Promise<{ id: string; order_number: string } | null> {
   const supa = db()!
   const itemsTotal = state.items.reduce((s, i) => s + i.price_agorot * i.quantity, 0)
   const shipping = state.shipping_agorot ?? 0
@@ -490,15 +553,30 @@ async function createOrder(state: IvrState, cartToken: string, phone: string): P
       transcript: state.name_transcript ?? null }] : []),
   ]
 
+  // 🔴 הגיבוי שנעשה בזמן ההקלטה הוא מקור האמת.
+  //
+  // ⚠️ archiveRecording כאן כבר מאחר: הקובץ בימות נדרס מזמן (נתיב
+  // קבוע לכל השיחות). הוא נשאר רק כנפילה-אחורה להזמנות שהתחילו לפני
+  // התיקון, ואם יש גיבוי מהשיחה — הוא מנצח תמיד.
+  const { data: stashed } = await supa.from('book_fair_call_recordings')
+    .select('kind, storage_path, transcript').eq('call_id', callId)
+
+  // ⚠️ מסומן על ההזמנה כדי שהמסך ימצא את ההקלטה גם לפי השיחה.
+  await supa.from('book_fair_call_recordings')
+    .update({ order_id: order.id }).eq('call_id', callId)
+
+  const byKind = new Map((stashed ?? []).map(s => [String(s.kind), s]))
+
   const rows = await Promise.all(recs.map(async r => ({
     order_id: order.id,
     kind: r.kind,
     provider_path: r.path,
-    // ⚠️ best-effort: כישלון העתקה אינו מפיל את ההזמנה. ההקלטה עדיין
-    // נגישה דרך ימות, ו-storage_path פשוט יישאר ריק.
-    storage_path: await archiveRecording(order.id, r.kind, r.path),
-    transcript: r.transcript,
-    transcript_source: r.transcript ? 'yemot' : null,
+    // ⚠️ best-effort: כישלון העתקה אינו מפיל את ההזמנה.
+    storage_path: byKind.get(r.kind)?.storage_path
+      ?? await archiveRecording(order.id, r.kind, r.path),
+    // ⚠️ גם התמלול נופל חזרה למה שנשמר בזמן השיחה.
+    transcript: r.transcript ?? byKind.get(r.kind)?.transcript ?? null,
+    transcript_source: (r.transcript || byKind.get(r.kind)?.transcript) ? 'yemot' : null,
   })))
 
   if (rows.length) await supa.from('book_fair_recordings').insert(rows)
@@ -809,9 +887,17 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
   } else if (state.step === 'record_address') {
     input.recording = paramFor(params, 'bf_addr')
     input.transcript = params['bf_addr_voice'] || undefined
+    // 🔴 מגובה *כאן ועכשיו*, ולא ביצירת ההזמנה.
+    //
+    // ⚠️ כל ההקלטות בשלוחה חולקות את אותו נתיב ("30/9.wav") — ימות
+    // דורסת אותו בשיחה הבאה. הגיבוי ביצירת ההזמנה רץ דקות אחר כך,
+    // אחרי התשלום, וכשהמתקשר הבא כבר הקליט — הקובץ שהועתק היה שלו
+    // או שלא היה כלל. לקוח ששילם 839 ₪ נשאר בלי כתובת.
+    await stashRecording(callId, 'address', input.recording, input.transcript)
   } else if (state.step === 'ask_name') {
     input.recording = paramFor(params, 'bf_name')
     input.transcript = params['bf_name_voice'] || undefined
+    await stashRecording(callId, 'name', input.recording, input.transcript)
   } else if (state.step === 'confirm_total') {
     input.value = paramFor(params, 'bf_conf')
   } else if (state.step === 'payment') {
@@ -828,7 +914,7 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
 
   // ── שלב תשלום: יוצרים את ההזמנה (pending) ומחזירים credit_card= ──
   if (turn.response === '__CREDIT_CARD_PLACEHOLDER__') {
-    const order = await createOrder(turn.state, session.cart_token, phone)
+    const order = await createOrder(turn.state, session.cart_token, phone, callId)
     if (!order) {
       await saveSession(session.id, { ...turn.state, step: 'done' })
       return yemotText(`id_list_message=${msgToken(messages, 'order_error')}&go_to_folder=hangup`, callId)

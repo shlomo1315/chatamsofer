@@ -47,7 +47,9 @@ describe('🔴 התפריט הראשי', () => {
   it('3 → הקלטת פנייה', () => {
     const { state, response } = run([{}, { value: '3' }])
     expect(state.step).toBe('record_inquiry')
-    expect(response).toContain('record')
+    // 🔴 'voice' ולא 'record': זה מה שמפעיל את התמלול בימות. עם
+    // 'record' ההקלטה נשמרת אבל שדה התמלול חוזר ריק תמיד.
+    expect(response).toContain('voice')
   })
 
   it('הקשה שגויה חוזרת על התפריט ואינה מנתקת', () => {

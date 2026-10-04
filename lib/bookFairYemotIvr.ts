@@ -106,7 +106,18 @@ function readTap(varName: string, promptTokens: string[], opts: ReadOpts = {}): 
 function readRecord(varName: string, promptTokens: string[], maxSeconds = 30): string {
   // read=<הודעה>=<שם>,,voice — סוג record עם תמלול-רקע (voice), לא record גרידא:
   // כך גם מתקבל טקסט תמלול (best-effort) וגם קובץ ההקלטה נשמר.
-  const ops = [varName, '', 'record', String(maxSeconds), '9']
+  // ───────────────────────────────────────────────────────────────────────────
+  // 🔴 'voice' ולא 'record': זה מה שמפעיל את התמלול.
+  //
+  // ⚠️ ההערה למעלה *טענה* שנשלח תמלול-רקע, אבל הקוד שלח 'record'
+  // בלבד — ולכן bf_addr_voice חזר ריק בכל שיחה, ושדה התמלול נשאר ריק
+  // בכל ההזמנות. הכתובת הייתה נגישה רק דרך האזנה לקובץ, וכשימות
+  // דרסה אותו (כל ההקלטות חולקות את הנתיב "30/9.wav") היא אבדה.
+  //
+  // ⚠️ התמלול הוא best-effort ואינו מדויק — אבל כתובת משוערת שאפשר
+  // לאמת מול מאגר הרחובות עדיפה לאין ערוך על הזמנה בלי שום כתובת.
+  // ───────────────────────────────────────────────────────────────────────────
+  const ops = [varName, '', 'voice', String(maxSeconds), '9']
   return `read=${joinTokens(...promptTokens)}=${ops.join(',')}`
 }
 
