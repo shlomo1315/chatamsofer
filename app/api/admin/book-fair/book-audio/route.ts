@@ -33,6 +33,7 @@ async function putAudio(
     `ivr2:/${EXT}/${baseName}.mp3`,
     new Blob([bytes], { type: 'audio/mpeg' }),
     `${baseName}.mp3`,
+    'bookFair',
   )
   if (!up.ok) return { ok: false, error: `העלאה לימות נכשלה: ${up.error}` }
 
@@ -43,7 +44,7 @@ async function putAudio(
   // השלוחה. מחיקת `.mp3` בלבד הייתה משאירה אותם שם.
   if (prevName && prevName !== baseName) {
     for (const ext of ['mp3', 'wav'] as const) {
-      const gone = await deleteFileFromYemot(`ivr2:/${EXT}/${prevName}.${ext}`)
+      const gone = await deleteFileFromYemot(`ivr2:/${EXT}/${prevName}.${ext}`, 'bookFair')
       if (!gone.ok) console.warn(`[book-audio] מחיקת הקובץ הקודם נכשלה (${prevName}.${ext}): ${gone.error}`)
     }
   }
@@ -76,7 +77,7 @@ export async function GET() {
   return NextResponse.json({
     books: data ?? [],
     categories,
-    hasVoice: yemotConfigured(),
+    hasVoice: yemotConfigured('bookFair'),
   }, { headers: { 'Cache-Control': 'no-store' } })
 }
 
@@ -85,7 +86,7 @@ export async function POST(request: NextRequest) {
   if (!(await requirePermission('book_fair', 'edit'))) {
     return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
   }
-  if (!yemotConfigured()) {
+  if (!yemotConfigured('bookFair')) {
     return NextResponse.json({ error: 'YEMOT_TOKEN אינו מוגדר בשרת' }, { status: 500 })
   }
   const db = getServiceClient()
@@ -226,7 +227,7 @@ export async function DELETE(request: NextRequest) {
     // ⚠️ שתי הסיומות — ראו ההערה ב-putAudio.
     if (b?.audio_name) {
       for (const ex of ['mp3', 'wav'] as const) {
-        await deleteFileFromYemot(`ivr2:/${EXT}/${b.audio_name}.${ex}`)
+        await deleteFileFromYemot(`ivr2:/${EXT}/${b.audio_name}.${ex}`, 'bookFair')
       }
     }
     const { error } = await db.from('book_fair_books')
@@ -242,7 +243,7 @@ export async function DELETE(request: NextRequest) {
     try { map = JSON.parse(String(row?.value ?? '{}')) } catch { /* ריק */ }
     if (map[category]) {
       for (const ex of ['mp3', 'wav'] as const) {
-        await deleteFileFromYemot(`ivr2:/${EXT}/${map[category]}.${ex}`)
+        await deleteFileFromYemot(`ivr2:/${EXT}/${map[category]}.${ex}`, 'bookFair')
       }
     }
     delete map[category]

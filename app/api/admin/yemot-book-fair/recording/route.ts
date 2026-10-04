@@ -21,7 +21,7 @@ function metaFor(key: string) {
 // POST — העלאת הקלטה אנושית להודעה (multipart: key, file)
 export async function POST(request: NextRequest) {
   if (!(await requireStaff(['admin']))) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
-  if (!yemotConfigured()) return NextResponse.json({ error: 'YEMOT_TOKEN אינו מוגדר בשרת — לא ניתן להעלות הקלטה' }, { status: 500 })
+  if (!yemotConfigured('bookFair')) return NextResponse.json({ error: 'YEMOT_TOKEN אינו מוגדר בשרת — לא ניתן להעלות הקלטה' }, { status: 500 })
 
   const form = await request.formData().catch(() => null)
   if (!form) return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 })
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
   const baseName = `rec_${key}_${Date.now().toString(36)}`
   const prevAudio = (await getBookFairMessages())[key]?.audio ?? null
   const path = `ivr2:/${BOOK_FAIR_EXT}/${baseName}.${srcExt}`
-  const up = await uploadFileToYemot(path, file, `${baseName}.${srcExt}`)
+  const up = await uploadFileToYemot(path, file, `${baseName}.${srcExt}`, 'bookFair')
   if (!up.ok) return NextResponse.json({ error: `העלאה לימות נכשלה: ${up.error}` }, { status: 502 })
 
   // שמירת שם הקובץ (יחסי לשלוחה) — השלוחה תשמיע f-<baseName>
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
   // ⚠️ כל הסיומות האפשריות: הקבצים הישנים הם `.wav`, החדשים לפי המקור.
   if (prevAudio && prevAudio !== baseName) {
     for (const ex of ['mp3', 'wav', 'ogg', 'm4a', 'mp4', 'webm'] as const) {
-      await deleteFileFromYemot(`ivr2:/${BOOK_FAIR_EXT}/${prevAudio}.${ex}`)
+      await deleteFileFromYemot(`ivr2:/${BOOK_FAIR_EXT}/${prevAudio}.${ex}`, 'bookFair')
     }
   }
 

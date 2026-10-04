@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { timingSafeEqual } from 'node:crypto'
 import { getBookFairMessages } from '@/lib/yemotBookFairMessages'
+import { yemotToken } from '@/lib/yemot'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'אין הרשאה' }, { status: 401 })
   }
 
-  const token = process.env.YEMOT_TOKEN
+  const token = yemotToken('bookFair')
   if (!token) return NextResponse.json({ error: 'YEMOT_TOKEN אינו מוגדר בשרת' }, { status: 500 })
 
   const ext = process.env.YEMOT_BOOK_FAIR_EXT || '9'

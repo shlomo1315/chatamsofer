@@ -2,8 +2,32 @@
 // משמש להעלאת הקלטות אנושיות שיושמעו בשלוחת ה-API במקום קול ממוחשב (TTS).
 const YEMOT_API = 'https://www.call2all.co.il/ym/api'
 
-export function yemotConfigured(): boolean {
-  return !!process.env.YEMOT_TOKEN
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 חשבון ימות נפרד לכל מחלקה.
+//
+// ⚠️ זה מה שהפיל את שלוחת היריד ליום שלם: כל ההעלאות עברו בטוקן אחד
+// (YEMOT_TOKEN), ולכן הקבצים של היריד נחתו בחשבון של החגים. ה-API
+// דיווח שהם קיימים ותקינים — ומבחינתו הם היו — אבל השיחה של היריד
+// רצה בחשבון אחר לגמרי ולא מצאה אותם.
+//
+// התסמין היה מטעה לחלוטין: `f-` נכשל ב-100% ו-`t-` עבד ב-100%, מה
+// שנראה כמו בעיית פורמט או מבנה. זה היה נתיב.
+//
+// ⚠️ נפילה-לאחור ל-YEMOT_TOKEN: בלעדיה, הוספת המשתנה החדש הייתה
+// שוברת את החגים והיולדות שעובדות היום.
+// ─────────────────────────────────────────────────────────────────────────────
+export type YemotScope = 'bookFair' | 'default'
+
+export function yemotToken(scope: YemotScope = 'default'): string | undefined {
+  if (scope === 'bookFair') {
+    const t = process.env.YEMOT_BOOK_FAIR_TOKEN
+    if (t && t.trim()) return t.trim()
+  }
+  return process.env.YEMOT_TOKEN
+}
+
+export function yemotConfigured(scope: YemotScope = 'default'): boolean {
+  return !!yemotToken(scope)
 }
 
 // העלאת קובץ (UploadFile, multipart). יוצר את התיקייה במידת הצורך וממיר אודיו לפורמט של ימות.
@@ -12,8 +36,9 @@ export async function uploadFileToYemot(
   path: string,
   file: Blob,
   filename: string,
+  scope: YemotScope = 'default',
 ): Promise<{ ok: boolean; path?: string; error?: string }> {
-  const token = process.env.YEMOT_TOKEN
+  const token = yemotToken(scope)
   if (!token) return { ok: false, error: 'YEMOT_TOKEN אינו מוגדר בשרת' }
 
   const form = new FormData()
@@ -46,8 +71,9 @@ export async function uploadFileToYemot(
 // ─────────────────────────────────────────────────────────────────────────────
 export async function downloadFileFromYemot(
   path: string,
+  scope: YemotScope = 'default',
 ): Promise<{ ok: boolean; data?: ArrayBuffer; contentType?: string; error?: string }> {
-  const token = process.env.YEMOT_TOKEN
+  const token = yemotToken(scope)
   if (!token) return { ok: false, error: 'YEMOT_TOKEN אינו מוגדר בשרת' }
 
   try {
@@ -82,8 +108,9 @@ export async function downloadFileFromYemot(
 // ─────────────────────────────────────────────────────────────────────────────
 export async function deleteFileFromYemot(
   path: string,
+  scope: YemotScope = 'default',
 ): Promise<{ ok: boolean; error?: string }> {
-  const token = process.env.YEMOT_TOKEN
+  const token = yemotToken(scope)
   if (!token) return { ok: false, error: 'YEMOT_TOKEN אינו מוגדר בשרת' }
 
   try {
@@ -122,8 +149,9 @@ export async function deleteFileFromYemot(
 export async function syncExtensionToYemot(
   path: string,
   iniContent: string,
+  scope: YemotScope = 'default',
 ): Promise<{ ok: boolean; error?: string }> {
-  const token = process.env.YEMOT_TOKEN
+  const token = yemotToken(scope)
   if (!token) return { ok: false, error: 'YEMOT_TOKEN אינו מוגדר בשרת' }
   if (!iniContent.trim()) return { ok: false, error: 'הגדרת השלוחה ריקה' }
 

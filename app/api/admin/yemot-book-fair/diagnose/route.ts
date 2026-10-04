@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireStaff, unauthorized } from '@/lib/apiAuth'
 import { getBookFairMessages } from '@/lib/yemotBookFairMessages'
+import { yemotToken } from '@/lib/yemot'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,7 +44,7 @@ async function listDir(token: string, folder: string): Promise<string[]> {
 export async function GET() {
   if (!(await requireStaff(['admin']))) return unauthorized()
 
-  const token = process.env.YEMOT_TOKEN
+  const token = yemotToken('bookFair')
   if (!token) return NextResponse.json({ error: 'YEMOT_TOKEN אינו מוגדר בשרת' }, { status: 500 })
 
   // מה ההגדרות שלנו מצפות לשמוע

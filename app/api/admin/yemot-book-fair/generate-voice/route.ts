@@ -57,7 +57,7 @@ async function generateOne(key: string, text: string): Promise<{ ok: true; audio
   const baseName = `tts_${key}_${Date.now().toString(36)}`
   const path = `ivr2:/${BOOK_FAIR_EXT}/${baseName}.mp3`
   const blob = new Blob([speech.audio], { type: 'audio/mpeg' })
-  const up = await uploadFileToYemot(path, blob, `${baseName}.mp3`)
+  const up = await uploadFileToYemot(path, blob, `${baseName}.mp3`, 'bookFair')
   if (!up.ok) return { ok: false, error: `העלאה לימות נכשלה: ${up.error}` }
 
   const saved = await setBookFairMessageAudio(key, baseName)
@@ -70,7 +70,7 @@ async function generateOne(key: string, text: string): Promise<{ ok: true; audio
     // והחדשים `.mp3`. מחיקה של סיומת אחת בלבד הייתה משאירה בשלוחה
     // בדיוק את הקבצים ששברו אותה.
     for (const ext of ['mp3', 'wav'] as const) {
-      const gone = await deleteFileFromYemot(`ivr2:/${BOOK_FAIR_EXT}/${prevAudio}.${ext}`)
+      const gone = await deleteFileFromYemot(`ivr2:/${BOOK_FAIR_EXT}/${prevAudio}.${ext}`, 'bookFair')
       if (!gone.ok) console.warn(`[yemot-book-fair] מחיקת הקובץ הקודם נכשלה (${prevAudio}.${ext}): ${gone.error}`)
     }
   }
@@ -82,7 +82,7 @@ async function generateOne(key: string, text: string): Promise<{ ok: true; audio
 //   { all: true }  → כל ההודעות הכשירות (טקסט מתוך ההגדרות השמורות)
 export async function POST(request: NextRequest) {
   if (!(await requireStaff(['admin']))) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
-  if (!yemotConfigured()) return NextResponse.json({ error: 'YEMOT_TOKEN אינו מוגדר בשרת' }, { status: 500 })
+  if (!yemotConfigured('bookFair')) return NextResponse.json({ error: 'YEMOT_TOKEN אינו מוגדר בשרת' }, { status: 500 })
 
   const body = await request.json().catch(() => null) as {
     key?: string; text?: string; all?: boolean; force?: boolean; done?: string[]

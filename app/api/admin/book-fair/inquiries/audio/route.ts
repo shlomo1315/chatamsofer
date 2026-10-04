@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
   // ⚠️ שם הקובץ מגיע מימות ונשמר כמות שהוא. מנוקה מתווי נתיב כדי
   // שלא יוכל לטפס מחוץ לתיקיית השלוחה.
   const name = String(row.recording).replace(/[/\\]/g, '')
-  const file = await downloadFileFromYemot(`ivr2:/${BOOK_FAIR_EXT}/${name}.wav`)
+  const file = await downloadFileFromYemot(`ivr2:/${BOOK_FAIR_EXT}/${name}.wav`, 'bookFair')
 
   if (!file.ok || !file.data) {
     console.error('[fair/inquiries/audio] הורדה נכשלה:', file.error)
