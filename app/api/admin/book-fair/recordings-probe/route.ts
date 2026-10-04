@@ -60,9 +60,16 @@ export async function GET(request: NextRequest) {
 
   // ── 1. תוכן תיקיות השלוחה בשני החשבונות ──
   // ⚠️ גם השורש וגם תיקיית השלוחה: ההקלטות עשויות לשבת בכל אחת מהן.
+  // ⚠️ כולל ApiRecord/ImportRecord: ימות שומרת שם הקלטות של מתקשרים,
+  // ולא בתיקיית השלוחה כפי ש-"30/9.wav" מרמז.
   for (const scope of scopes) {
-    out[`dir_${scope}_root`] = await ym(scope, 'GetIVR2Dir', { path: 'ivr2:/' })
-    out[`dir_${scope}_ext`] = await ym(scope, 'GetIVR2Dir', { path: `ivr2:/${extDir}` })
+    for (const p of [
+      'ivr2:/', `ivr2:/${extDir}`,
+      'ivr2:/ApiRecord', 'ivr2:/ImportRecord',
+      `ivr2:/${extDir}/ApiRecord`, 'ivr2:/30', 'ivr2:/15',
+    ]) {
+      out[`dir_${scope}_${p}`] = await ym(scope, 'GetIVR2Dir', { path: p })
+    }
   }
 
   // ── 2. בדיקת כל נתיב שנשמר במסד, בכל צורה אפשרית ──

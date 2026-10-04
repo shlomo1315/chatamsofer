@@ -465,14 +465,32 @@ async function stashRecording(
     const extDir = process.env.YEMOT_BOOK_FAIR_EXT || '9'
     const name = /\.(wav|mp3)$/i.test(providerPath) ? providerPath : `${providerPath}.wav`
 
+    // 🔴 הקלטות של מתקשרים אינן יושבות בתיקיית השלוחה.
+    //
+    // ⚠️ "30/9.wav" נראה כמו נתיב יחסי לשלוחה, ולכן נוסו רק
+    // ivr2:/30/9.wav ו-ivr2:/9/30/9.wav — ושניהם נכשלו. ימות שומרת
+    // הקלטות API תחת תיקיות ייעודיות (ApiRecord/ImportRecord), והן
+    // הראשונות שצריך לנסות.
+    const candidates = [
+      `ivr2:/ApiRecord/${name}`,
+      `ivr2:/ImportRecord/${name}`,
+      `ivr2:/${extDir}/ApiRecord/${name}`,
+      `ivr2:/${name}`,
+      `ivr2:/${extDir}/${name}`,
+    ]
+
     let data: ArrayBuffer | null = null
-    for (const p of [`ivr2:/${name}`, `ivr2:/${extDir}/${name}`]) {
+    let found = ''
+    for (const p of candidates) {
       for (const scope of ['bookFair', 'default'] as const) {
         const f = await downloadFileFromYemot(p, scope)
-        if (f.ok && f.data) { data = f.data; break }
+        if (f.ok && f.data) { data = f.data; found = `${scope}:${p}`; break }
       }
       if (data) break
     }
+    // ⚠️ הנתיב שהצליח נרשם: בלעדיו אי אפשר לדעת איזו תיקייה נכונה,
+    // וכל תקלה עתידית מתחילה מאפס.
+    if (found) console.log(`[fair/stash] נמצא ב-${found}`)
 
     // ⚠️ גם כשההורדה נכשלת — התמלול והנתיב נשמרים. כתובת משוערת
     // עדיפה על שום כתובת, וזו בדיוק הנקודה שבה המידע אבד עד היום.
