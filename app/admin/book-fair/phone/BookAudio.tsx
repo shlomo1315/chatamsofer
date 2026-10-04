@@ -70,7 +70,9 @@ export default function BookAudio() {
       b.sku.toLowerCase().includes(q)
       || b.title.toLowerCase().includes(q)
       // ⚠️ גם לפי ההוצאה: כך אפשר לאתר בבת אחת את כל ספרי מכון מסוים.
-      || (b.publisher ?? '').toLowerCase().includes(q))
+      || (b.publisher ?? '').toLowerCase().includes(q)
+      // גם לפי קטגוריה — לאתר בבת אחת את כל ספרי "שבת ומועדים".
+      || (b.description ?? '').toLowerCase().includes(q))
   }, [books, query])
 
   const withAudio = books.filter(b => b.audio_name).length
@@ -259,8 +261,16 @@ export default function BookAudio() {
                   לדחוק את השם. */}
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-slate-800">{b.title}</span>
-                {b.publisher?.trim() && (
-                  <span className="truncate text-xs text-slate-400">{b.publisher}</span>
+                {/* ⚠️ הקטגוריה יושבת ב-description (כך הגיעה מהאקסל)
+                    ואינה עמודה משלה — ראו lib/bookFairCatalog. */}
+                {(b.publisher?.trim() || b.description?.trim()) && (
+                  <span className="truncate text-xs text-slate-400">
+                    {b.description?.trim() && (
+                      <span className="text-indigo-400">{b.description.trim()}</span>
+                    )}
+                    {b.description?.trim() && b.publisher?.trim() && ' · '}
+                    {b.publisher?.trim()}
+                  </span>
                 )}
               </span>
               {b.audio_name
