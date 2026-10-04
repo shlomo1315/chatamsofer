@@ -220,6 +220,23 @@ export function msgToken(
   const m = messages?.[key]
   const raw = (typeof m?.text === 'string' && m.text.trim()) ? m.text : fallback
 
+  // 🔴 מתג חירום: התעלמות מכל ההקלטות והשמעת טקסט בלבד.
+  //
+  // ימות אומרת "שגיאה" ומנתקת כשהיא מתבקשת לנגן קובץ שאינו קיים
+  // בתיקייה שלה — ואצלנו זה *לא* מייצר שום שגיאה בלוגים: אנחנו
+  // מחזירים 200 תקין עם הוראה לנגן קובץ חסר. התסמין היחיד הוא
+  // שהמתקשר שומע "שגיאה".
+  //
+  // ⚠️ ההקלטות עצמן אינן נמחקות — הן נשארות בהגדרות, והכיבוי מחזיר
+  // אותן. זהו מתג הצלה לקו חי, לא ביטול ההקלטות.
+  if (process.env.YEMOT_BOOK_FAIR_TEXT_ONLY === '1') {
+    let only = raw
+    if (vars) {
+      for (const [k, v] of Object.entries(vars)) only = only.split(`{${k}}`).join(String(v))
+    }
+    return t(only.replace(/\{[^}]*\}/g, ' '))
+  }
+
   // הקלטה אנושית/נוירונית — רק כשאין משתנים להחליף (קובץ אחד אינו
   // יכול להקריא ערך משתנה).
   if (m?.audio && !vars) return `f-${m.audio}`

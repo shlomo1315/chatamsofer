@@ -55,3 +55,6 @@ scripts/special-approvals-import.sql
 # קבצי חקירה זמניים
 .tmp-probe/
 .catalog-cards/
+
+# מוקאפים זמניים — לא נכנסים לריפו
+.mockup/

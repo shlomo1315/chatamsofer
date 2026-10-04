@@ -3,6 +3,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { Search, ShoppingBag, Plus, Minus, X, Check, UserRound, Truck, Loader2, Package } from 'lucide-react'
 import { fmtAgorot, bookImageUrl } from '@/lib/bookFairPricing'
 import { shippingCost, totalVolumes } from '@/lib/bookFairShipping'
+import { categoryColor } from '@/lib/bookFairCategoryColor'
 import { cleanEmail, emailError } from '@/lib/emailAddress'
 import type { PublicBook, PublicCity, PublicTier } from './page'
 import Countdown from './Countdown'
@@ -216,9 +217,14 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
                   יריד הספרים
                 </h1>
                 <p className="mt-0.5 text-base font-medium text-[#8A6212]">היכל החתם סופר</p>
-                {books.length > 0 && (
-                  <p className="mt-1 text-sm text-[#141210]/50">
-                    {books.length} ספרים · משלוח עד הבית
+                {/* 🔴 ערי המשלוח בשער ולא רק בקופה: קונה מחוץ לרשימה
+                    גילה זאת רק אחרי שמילא עגלה וטופס. */}
+                {cities.length > 0 && (
+                  <p className="mt-1 text-sm leading-relaxed text-[#141210]/50">
+                    משלוח עד הבית בערים:{' '}
+                    <span className="font-semibold text-[#141210]">
+                      {cities.map(c => c.name).join(' · ')}
+                    </span>
                   </p>
                 )}
               </div>
@@ -325,39 +331,65 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
                 <nav className="hidden w-52 flex-shrink-0 lg:sticky lg:top-[136px] lg:block">
                   <p className="mb-2 px-3 text-sm font-semibold text-[#141210]/45">קטגוריות</p>
                   <ul className="flex flex-col gap-0.5">
-                    {groups.map(([category, items]) => (
+                    {groups.map(([category, items]) => {
+                      // הנקודה בגוון הקטגוריה — מקשרת בין התפריט למדף
+                      const cc = categoryColor(category)
+                      return (
                       <li key={category}>
                         <button
                           onClick={() => document.getElementById(catId(category))
                             ?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                          className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-right text-base text-[#141210]/70 transition hover:bg-white hover:text-[#6B2737]"
+                          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-right text-base text-[#141210]/70 transition hover:bg-white hover:text-[#141210]"
                         >
-                          <span className="min-w-0 truncate">{category}</span>
+                          <span
+                            aria-hidden="true"
+                            className="h-2.5 w-2.5 flex-shrink-0 rounded-full"
+                            style={{ background: cc.main }}
+                          />
+                          <span className="min-w-0 flex-1 truncate">{category}</span>
                           <span className="flex-shrink-0 text-sm tabular-nums text-[#141210]/35">
                             {items.length}
                           </span>
                         </button>
                       </li>
-                    ))}
+                      )
+                    })}
                   </ul>
                 </nav>
 
                 <div className="min-w-0 flex-1">
-                {groups.map(([category, items]) => (
+                {groups.map(([category, items]) => {
+                  const cc = categoryColor(category)
+                  return (
                   <section
                     key={category}
                     id={catId(category)}
                     // ⚠️ scroll-mt: בלעדיו הכותרת נחתכת מאחורי הגוש
                     // הדביק אחרי קפיצה מהתפריט.
-                    className="mb-10 scroll-mt-[150px]"
+                    className="mb-12 scroll-mt-[150px]"
                   >
-                    <div className="mb-4 flex items-baseline gap-3 border-b border-[#141210]/10 pb-2">
-                      <h2 className="text-xl font-bold text-[#12314F]">{category}</h2>
-                      <span className="text-sm text-[#141210]/40">
+                    {/* 🔴 הקו והכותרת בגוון הקטגוריה: בגלילה ארוכה
+                        הקונה יודע באיזה מדף הוא נמצא בלי לקרוא. */}
+                    <div
+                      className="mb-5 flex items-center gap-3 border-b-2 pb-2.5"
+                      style={{ borderColor: cc.main }}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className="h-2.5 w-2.5 flex-shrink-0 rounded-full"
+                        style={{ background: cc.main }}
+                      />
+                      <h2 className="text-[22px] font-extrabold tracking-[-0.02em]" style={{ color: cc.main }}>
+                        {category}
+                      </h2>
+                      <span
+                        className="ms-auto flex-shrink-0 rounded-full px-2.5 py-0.5 text-[13px] font-semibold tabular-nums"
+                        style={{ color: cc.main, background: cc.soft }}
+                      >
                         {items.length} {items.length === 1 ? 'ספר' : 'ספרים'}
                       </span>
                     </div>
-                    <div className="grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className="grid grid-cols-2 gap-x-5 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
                       {items.map(b => (
                         <BookCard
                           key={b.id}
@@ -370,11 +402,12 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
                       ))}
                     </div>
                   </section>
-                ))}
+                  )
+                })}
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-x-5 gap-y-8 pb-16 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-2 gap-x-5 gap-y-7 pb-16 sm:grid-cols-3 lg:grid-cols-4">
                 {filtered.map(b => (
                   <BookCard
                     key={b.id}
@@ -633,6 +666,8 @@ function BookCard({ book, inCart, justAdded, onAdd, onSetQty }: {
   const out = !book.in_stock
   const img = bookImageUrl(book.image_path)
   const btnRef = useRef<HTMLButtonElement>(null)
+  // הגוון של הקטגוריה — רץ דרך המק"ט, תג הכרכים וכפתור ההוספה.
+  const c = categoryColor(book.description)
 
   // ⚠️ המחבר וההוצאה זהים ברוב הקטלוג ("מכון החתם סופר · מכון החתם
   // סופר"), כי הייבוא מהאקסל מילא את שניהם מאותה עמודה. מציגים ערך
@@ -642,77 +677,103 @@ function BookCard({ book, inCart, justAdded, onAdd, onSetQty }: {
     : [book.author, book.publisher].filter(Boolean).join(' · ')
 
   return (
-    <article className={`group relative flex overflow-hidden rounded-l-md bg-white shadow-[0_1px_3px_rgba(20,18,16,0.08)] transition ${
-      out ? 'opacity-55' : 'hover:shadow-[0_4px_16px_rgba(20,18,16,0.12)]'
-    }`}>
-      {/* שדרת הספר */}
-      <div className={`w-2.5 flex-shrink-0 ${out ? 'bg-[#141210]/20' : 'bg-[#6B2737]'}`} />
+    // ⚠️ מעוגל בכל הצדדים ובלי שדרה חותכת בצד: השדרה גזרה פינה אחת
+    // ישרה והכרטיס נראה חתוך ולא מעוצב.
+    <article
+      className="group relative flex flex-col overflow-hidden rounded-[20px] border border-[#141210]/[0.09] bg-white shadow-[0_2px_4px_-2px_rgba(23,19,16,0.13),0_10px_24px_-14px_rgba(23,19,16,0.13)] transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-1 motion-reduce:transform-none motion-reduce:transition-none"
+      style={{ ['--c' as string]: c.main, ['--c-soft' as string]: c.soft }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = `${c.main}52` }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = '' }}
+    >
+      {/* ── הכריכה ──
+          ⚠️ 3:4 ולא 4:3: ספרי קודש מצולמים לגובה, והמסגרת הרחבה
+          הקטינה אותם לרצועה באמצע הכרטיס. */}
+      <div
+        className="relative aspect-[3/4] w-full overflow-hidden"
+        style={{ background: `radial-gradient(120% 90% at 50% 0%, ${c.soft}, transparent 72%), #EFEAE0` }}
+      >
+        {img ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={img}
+            alt={book.title}
+            loading="lazy"
+            // ⚠️ contain ולא cover: כריכת ספר אסור שתיחתך — הכותרת
+            // יושבת בדרך כלל למעלה, וחיתוך מוחק אותה.
+            className={`h-full w-full object-contain p-3.5 drop-shadow-[0_6px_12px_rgba(0,0,0,0.17)] transition-transform duration-[250ms] motion-reduce:transition-none ${
+              out ? '' : 'group-hover:scale-[1.035] motion-reduce:group-hover:scale-100'
+            }`}
+          />
+        ) : (
+          <NoCover title={book.title} />
+        )}
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* ── הכריכה ── */}
-        <div className="relative aspect-[4/3] w-full overflow-hidden bg-[#141210]/[0.04]">
-          {img ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={img}
-              alt={book.title}
-              loading="lazy"
-              // ⚠️ contain ולא cover: כריכת ספר אסור שתיחתך — הכותרת
-              // יושבת בדרך כלל למעלה, וחיתוך מוחק אותה.
-              className="h-full w-full object-contain p-3"
-            />
-          ) : (
-            <NoCover title={book.title} />
-          )}
-          {out && (
-            <span className="absolute right-3 top-3 rounded bg-[#141210]/85 px-2.5 py-1 text-sm font-medium text-[#F5F0E6]">
+        {/* 🔴 המק"ט אופקי ולא לאורך השדרה: ספרות מסובבות קשות לקריאה,
+            והקונה נאלץ להטות את הראש כדי להשוות מול הקטלוג המודפס. */}
+        <span
+          className="absolute end-3 top-3 rounded-full border bg-white/[0.86] px-2.5 py-0.5 text-[13px] font-bold tabular-nums tracking-wide backdrop-blur-sm"
+          style={{ color: c.main, borderColor: `${c.main}42` }}
+        >
+          {book.sku}
+        </span>
+
+        {/* 🔴 "אזל" נחשף בריחוף מעל הכריכה ב-50% שקיפות: הכריכה נשארת
+            מזוהה מאחורי השכבה, כך שהקונה רואה *איזה* ספר אזל ולא רק
+            שמשהו אזל. בנייד אין ריחוף — התג התחתון נושא את המידע. */}
+        {out && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 grid place-items-center bg-[#171310]/50 opacity-0 backdrop-blur-[1.5px] transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none"
+          >
+            <span className="text-[30px] font-black tracking-wide text-white drop-shadow-[0_2px_14px_rgba(0,0,0,0.45)]">
               אזל
             </span>
-          )}
-        </div>
+          </div>
+        )}
+      </div>
 
-      <div className="flex min-w-0 flex-1 flex-col p-5">
-        <div className="mb-2.5 flex items-baseline justify-between gap-2">
-          <span className="rounded bg-[#F5F0E6] px-2 py-1 font-mono text-sm font-semibold tracking-wide text-[#141210]/70">
-            {book.sku}
-          </span>
+      <div className="flex min-w-0 flex-1 flex-col p-4">
+        <h2 className="line-clamp-2 text-[19px] font-bold leading-snug tracking-[-0.012em] text-[#141210]">
+          {book.title}
+        </h2>
+
+        {/* ⚠️ התיאור ירד מהכרטיס: השדה מחזיק את *הקטגוריה* ולא תיאור
+            אמיתי (כך הגיע מהאקסל), והוא רק דחף את המחיר והכפתור למטה.
+            הקטגוריה כבר מופיעה ככותרת המדף ובגוון הכרטיס. */}
+        <p className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-[#141210]/45">
+          {credit && <span className="min-w-0">{credit}</span>}
           {book.volumes > 1 && (
-            <span className="flex-shrink-0 text-sm text-[#141210]/45">{book.volumes} כרכים</span>
+            <span
+              className="flex-shrink-0 rounded-full px-2 py-px text-[13px] font-semibold"
+              style={{ color: c.main, background: c.soft }}
+            >
+              {book.volumes} כרכים
+            </span>
           )}
-        </div>
+        </p>
 
-        <h2 className="text-[20px] font-bold leading-snug text-[#141210]">{book.title}</h2>
-
-        {credit && (
-          <p className="mt-1.5 text-base leading-relaxed text-[#141210]/55">{credit}</p>
-        )}
-
-        {/* ⚠️ התיאור נשלף ונערך במסך הקטלוג מהיום הראשון ולא הוצג כאן —
-            המזכירה כתבה תיאורים שאיש לא ראה. מוגבל לשלוש שורות כדי
-            שהכרטיסים יישארו באותו גובה ברשת. */}
-        {book.description && (
-          <p className="mt-2 line-clamp-3 text-[15px] leading-relaxed text-[#141210]/45">
-            {book.description}
-          </p>
-        )}
-
-        <div className="mt-5 flex items-end justify-between gap-3 border-t border-[#141210]/8 pt-4">
-          <span className="text-[26px] font-bold leading-none text-[#6B2737]">
+        <div className="mt-auto flex items-center justify-between gap-3 pt-4">
+          <span className="text-[25px] font-extrabold leading-none tracking-[-0.03em] tabular-nums text-[#141210]">
             {fmtAgorot(book.price_agorot)}
           </span>
 
           {out ? (
-            // ⚠️ ריק: התג כבר מוצג על הכריכה, וכפילות רק מבלבלת
-            <span />
+            <span className="rounded-full border border-dashed border-[#141210]/15 px-3.5 py-2 text-sm font-semibold text-[#141210]/40">
+              אזל מהמלאי
+            </span>
           ) : inCart > 0 ? (
-            <div className="flex items-center rounded-lg border-2 border-[#6B2737]">
+            <div className="flex items-center rounded-full border-2" style={{ borderColor: c.main }}>
               <button onClick={() => onSetQty(inCart - 1)} aria-label="הפחתת כמות"
-                className="flex h-12 w-12 items-center justify-center text-[#6B2737] transition hover:bg-[#6B2737]/5">
+                className="flex h-11 w-11 items-center justify-center rounded-full transition hover:bg-[var(--c-soft)]"
+                style={{ color: c.main }}>
                 <Minus size={19} />
               </button>
-              <span className="min-w-[2.25rem] text-center text-xl font-bold tabular-nums">{inCart}</span>
+              <span className="min-w-[2rem] text-center text-lg font-bold tabular-nums" style={{ color: c.main }}>
+                {inCart}
+              </span>
               <button onClick={() => onSetQty(inCart + 1)} aria-label="הוספת כמות"
-                className="flex h-12 w-12 items-center justify-center text-[#6B2737] transition hover:bg-[#6B2737]/5">
+                className="flex h-11 w-11 items-center justify-center rounded-full transition hover:bg-[var(--c-soft)]"
+                style={{ color: c.main }}>
                 <Plus size={19} />
               </button>
             </div>
@@ -722,16 +783,12 @@ function BookCard({ book, inCart, justAdded, onAdd, onSetQty }: {
             <button
               ref={btnRef}
               onClick={() => onAdd(btnRef.current)}
-              className={`flex min-h-[48px] items-center gap-2 rounded-lg px-6 text-base font-semibold transition-colors duration-200 ${
-                justAdded
-                  ? 'bg-[#2D5016] text-white'
-                  : 'bg-[#141210] text-[#F5F0E6] hover:bg-[#6B2737]'
-              }`}
+              className="flex min-h-[48px] flex-shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-5 text-[15px] font-bold text-white transition-colors duration-200"
+              style={{ background: justAdded ? '#2D5016' : c.main }}
             >
               {justAdded ? <><Check size={18} /> נוסף</> : 'הוספה'}
             </button>
           )}
-        </div>
         </div>
       </div>
     </article>
