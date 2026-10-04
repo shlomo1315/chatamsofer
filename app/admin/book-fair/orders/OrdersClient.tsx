@@ -65,6 +65,9 @@ const CARDS: { key: BookFairOrderStatus | 'all' | 'needs_address'; label: string
   { key: 'picking',        label: 'בליקוט',            icon: Package,       cls: 'border-sky-200 text-sky-700' },
   { key: 'shipped',        label: 'נשלח',              icon: Truck,         cls: 'border-violet-200 text-violet-700' },
   { key: 'payment_mismatch', label: 'אי-התאמה בסכום',  icon: AlertTriangle, cls: 'border-red-200 text-red-700' },
+  // ⚠️ כרטיס משלו: אלו אינן הזמנות אלא דפי סליקה שננטשו, והן הסתתרו
+  // בתוך "הכל" בלי שאפשר היה לסנן ולנקות אותן.
+  { key: 'pending_payment', label: 'ממתין לתשלום',     icon: Clock,         cls: 'border-amber-200 text-amber-700' },
   // ⚠️ "זוכה" הופיע בטבלה אך לא ככרטיס, ולכן לא הייתה דרך לסנן לפיו.
   { key: 'refunded',       label: 'זוכה',              icon: Undo2,         cls: 'border-amber-200 text-amber-700' },
   // ⚠️ המבוטלות בכרטיס נפרד ומחוץ ל"הכל": בערב הפתיחה הן היו רוב
@@ -79,13 +82,14 @@ export default function OrdersClient({ orders, itemCounts }: {
   const router = useRouter()
   const [query, setQuery] = useState('')
   const [card, setCard] = useState<typeof CARDS[number]['key']>('all')
+  const [purging, setPurging] = useState(false)
 
   const COLUMNS = useMemo(() => columnsOf(itemCounts), [itemCounts])
 
   const counts = useMemo(() => {
     // ⚠️ "הכל" אינו סופר מבוטלות — ראו ההערה ב-CARDS.
     const c: Record<string, number> = {
-      all: orders.filter(o => o.status !== 'cancelled').length,
+      all: orders.filter(o => o.status !== 'cancelled' && o.status !== 'pending_payment').length,
     }
     for (const o of orders) c[o.status] = (c[o.status] ?? 0) + 1
     // ⚠️ "ממתין לאימות כתובת" אינו סטטוס אלא תנאי: הזמנה טלפונית
@@ -103,8 +107,10 @@ export default function OrdersClient({ orders, itemCounts }: {
         o.delivery_method === 'shipping' && !o.address_confirmed && o.status !== 'cancelled' && o.status !== 'failed'
       )
     } else if (card === 'all') {
-      // ⚠️ המבוטלות מוסתרות מ"הכל" ונגישות רק בכרטיס שלהן.
-      rows = rows.filter(o => o.status !== 'cancelled')
+      // ⚠️ המבוטלות וה"ממתינות לתשלום" מוסתרות מ"הכל" ונגישות רק
+      // בכרטיס שלהן: שתיהן אינן הזמנות אלא ניסיונות שלא הושלמו,
+      // ובערב הפתיחה הן היו רוב השורות והסתירו את מה שצריך טיפול.
+      rows = rows.filter(o => o.status !== 'cancelled' && o.status !== 'pending_payment')
     } else {
       rows = rows.filter(o => o.status === card)
     }
@@ -134,6 +140,45 @@ export default function OrdersClient({ orders, itemCounts }: {
       .reduce((s, o) => s + o.total_agorot - o.refunded_agorot, 0),
     [orders]
   )
+
+  /**
+   * מחיקת כל ההזמנות שננטשו בדף הסליקה.
+   *
+   * 🔴 אישור עם המספר בתוכו: "האם אתה בטוח?" בלי כמות אינו אישור.
+   *
+   * ⚠️ רק ישנות מ-30 דקות (נאכף בשרת): מי שנמצא *כרגע* בדף הסליקה
+   * נמצא בדיוק במצב הזה, ומחיקתו באמצע הורסת תשלום פעיל.
+   */
+  async function purgePending() {
+    const n = tc.rows.length
+    if (!window.confirm(
+      `למחוק ${n} הזמנות שננטשו בדף הסליקה?
+
+` +
+      'לא נגבה עליהן תשלום, והמלאי ישוחרר. הפעולה אינה הפיכה.'
+    )) return
+
+    setPurging(true)
+    try {
+      const res = await fetch('/api/admin/book-fair/orders/purge-pending', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ olderThanMinutes: 30 }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { alert(json.error ?? 'המחיקה נכשלה'); return }
+      // ⚠️ נאמר במפורש כשנמחקו פחות מהמוצג: ההפרש הוא הזמנות שנפתחו
+      // בחצי השעה האחרונה, והן נשארו בכוונה.
+      if ((json.deleted ?? 0) < n) {
+        alert(`נמחקו ${json.deleted} מתוך ${n}. היתר נפתחו בחצי השעה האחרונה ונשארו.`)
+      }
+      router.refresh()
+    } catch {
+      alert('המחיקה נכשלה — בדקו את החיבור')
+    } finally {
+      setPurging(false)
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -175,6 +220,18 @@ export default function OrdersClient({ orders, itemCounts }: {
         <span className="rounded-xl bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800">
           הכנסות: {fmtAgorot(revenue)}
         </span>
+
+        {/* 🔴 ניקוי דפי סליקה שננטשו — מוצג רק בכרטיס שלהם, כדי שלא
+            ייפול בטעות על רשימה אחרת. */}
+        {card === 'pending_payment' && tc.rows.length > 0 && (
+          <button
+            onClick={() => void purgePending()}
+            disabled={purging}
+            className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"
+          >
+            {purging ? 'מוחק…' : 'מחיקת כל הממתינות לתשלום'}
+          </button>
+        )}
       </div>
 
       {/* ⚠️ בלי overflow-x: הגלילה לרוחב אסורה ונאכפת בלינט */}

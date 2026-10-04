@@ -301,17 +301,32 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
             onMouseEnter={e => { if (bookCount > 0) e.currentTarget.style.background = BRAND_GOLD }}
             onMouseLeave={e => { if (bookCount > 0) e.currentTarget.style.background = BRAND_NAVY }}
             style={bookCount > 0 ? { background: BRAND_NAVY } : undefined}
-            className={`flex flex-shrink-0 items-center gap-2 rounded-xl px-4 py-3 text-base font-semibold transition-colors ${
+            // ⚠️ title ולא רק טקסט בכפתור: בנייד הטקסט מתקצר למספר
+            // בלבד, והריחוף הוא ההסבר היחיד שנשאר.
+            title={bookCount > 0
+              ? 'לחצו כאן למעבר לתשלום מהיר ומאובטח'
+              : 'העגלה ריקה — הוסיפו ספרים כדי להמשיך'}
+            // 🔴 העגלה בולטת: היא הצעד שמוביל לתשלום, והיא נראתה
+            // כמו עוד כפתור בשורת החיפוש. טבעת זהב + צל + הגדלה קלה
+            // בריחוף מבדילים אותה בלי לשנות את שפת הצבעים.
+            className={`flex flex-shrink-0 items-center gap-2.5 rounded-xl px-5 py-3 text-base font-bold transition-all ${
               bookCount > 0
-                ? 'text-white'
+                ? 'text-white shadow-lg ring-2 ring-[#C9A227]/40 hover:scale-[1.03] hover:shadow-xl'
                 : 'border-2 border-[#141210]/10 bg-white text-[#141210]/50'
             }`}
           >
-            <ShoppingBag size={19} />
-            <span className="hidden sm:inline">
-              {bookCount > 0 ? `${bookCount} · ${fmtAgorot(itemsTotal)}` : 'העגלה ריקה'}
-            </span>
-            {bookCount > 0 && <span className="sm:hidden">{bookCount}</span>}
+            <ShoppingBag size={20} />
+            {bookCount > 0 ? (
+              <span className="flex items-center gap-2">
+                <span>{bookCount} · {fmtAgorot(itemsTotal)}</span>
+                {/* ⚠️ המחיצה והקריאה לפעולה מוסתרות בנייד — שם אין
+                    רוחב, והמספר עם הסכום הוא המידע החיוני. */}
+                <span className="hidden h-4 w-px bg-white/30 sm:block" />
+                <span className="hidden sm:inline">למעבר לתשלום</span>
+              </span>
+            ) : (
+              <span className="hidden sm:inline">העגלה ריקה</span>
+            )}
           </button>
         </div>
       </div>

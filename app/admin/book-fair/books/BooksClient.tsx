@@ -12,6 +12,7 @@ import { useCan } from '@/components/StaffPermissions'
 import BookEditor from './BookEditor'
 import ImportPanel from './ImportPanel'
 import StockMover from './StockMover'
+import BookOrdersDialog from './BookOrdersDialog'
 
 type ColKey = 'sku' | 'title' | 'author' | 'volumes' | 'price' | 'stock_orig' | 'sold' | 'stock' | 'phone_code' | 'active'
 
@@ -66,6 +67,8 @@ export default function BooksClient({ books, sold = {} }: {
   const [editing, setEditing] = useState<BookFairBook | null>(null)
   const [creating, setCreating] = useState(false)
   const [moving, setMoving] = useState<BookFairBook | null>(null)
+  /** הספר שרשימת מזמיניו פתוחה. */
+  const [ordersOf, setOrdersOf] = useState<BookFairBook | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [downloadingBarcodes, setDownloadingBarcodes] = useState(false)
   /** הספר שתמונתו מועלית כרגע. ⚠️ מזהה ולא בוליאני — אחרת כל הכפתורים
@@ -248,7 +251,7 @@ export default function BooksClient({ books, sold = {} }: {
                   <tr key={b.id} className={`text-sm hover:bg-slate-50 ${b.is_active ? '' : 'opacity-50'}`}>
                     {tc.shown.map(col => (
                       <td key={col.key} className={`px-3 py-2.5 ${tc.cellClass(col)}`}>
-                        {renderCell(col.key, b, sold)}
+                        {renderCell(col.key, b, sold, setOrdersOf)}
                       </td>
                     ))}
                     <td className="px-3 py-2.5 text-left">
@@ -324,6 +327,13 @@ export default function BooksClient({ books, sold = {} }: {
           onSaved={() => { setCreating(false); setEditing(null); router.refresh() }}
         />
       )}
+      {ordersOf && (
+        <BookOrdersDialog
+          book={{ id: ordersOf.id, title: ordersOf.title, sku: ordersOf.sku }}
+          onClose={() => setOrdersOf(null)}
+        />
+      )}
+
       {moving && (
         <StockMover
           book={moving}
@@ -337,7 +347,10 @@ export default function BooksClient({ books, sold = {} }: {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function renderCell(key: ColKey, b: BookFairBook, sold: Record<string, number>) {
+function renderCell(
+  key: ColKey, b: BookFairBook, sold: Record<string, number>,
+  openOrders: (b: BookFairBook) => void,
+) {
   switch (key) {
     case 'sku':
       return <span className="font-mono text-xs text-slate-600">{b.sku}</span>
@@ -356,11 +369,20 @@ function renderCell(key: ColKey, b: BookFairBook, sold: Record<string, number>) 
         ? <span className="text-xs text-slate-400">ללא הגבלה</span>
         : <span className="text-sm text-slate-600">{(b.stock_total ?? 0) + (sold[b.id] ?? 0)}</span>
 
+    // ⚠️ המספר הוא כפתור: הצוות צריך לדעת *מי* הזמין, ועד כה היה
+    // צריך לחפש ידנית בכל ההזמנות. 0 אינו לחיץ — אין מה לפתוח.
     case 'sold': {
       const n = sold[b.id] ?? 0
-      return n > 0
-        ? <span className="font-medium text-sm text-emerald-700">{n}</span>
-        : <span className="text-sm text-slate-300">0</span>
+      if (!n) return <span className="text-sm text-slate-300">0</span>
+      return (
+        <button
+          onClick={() => openOrders(b)}
+          title="לחץ כאן לפתיחת רשימת ההזמנות"
+          className="rounded-md px-2 py-0.5 text-sm font-medium text-emerald-700 underline decoration-dotted underline-offset-2 transition hover:bg-emerald-50 hover:decoration-solid"
+        >
+          {n}
+        </button>
+      )
     }
 
     case 'stock':
