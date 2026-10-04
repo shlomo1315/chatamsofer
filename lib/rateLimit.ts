@@ -84,3 +84,27 @@ export function clientIpOrNull(request: Request): string | null {
 export function clientIp(request: Request): string {
   return clientIpOrNull(request) ?? 'unknown'
 }
+
+/**
+ * כל הכתובות שבשרשרת x-forwarded-for, מהראשונה לאחרונה.
+ *
+ * 🔴 נועד לבדיקת *מקור מוכר* (webhook של ספק), ולא למגבלת קצב.
+ *
+ * ⚠️ ההבחנה קריטית: למגבלת קצב חייבים את הערך האחרון בלבד, כי כל
+ * ערך אחר ניתן לזיוף ע"י הלקוח (ראו clientIpOrNull). אבל לבדיקת
+ * רשימה לבנה ההיגיון הפוך — די בכך ש*אחת* מהכתובות בשרשרת היא
+ * כתובת מוכרת, כי כתובת שאינה ברשימה אינה מעניקה שום גישה.
+ *
+ * ⚠️ זה מה שהפיל את קאלבק התשלומים: נדרים שלחו מ-18.196.146.117
+ * (כתובת רשמית ומאושרת), אבל שכבת ביניים הוסיפה ערך אחריה —
+ * ו-clientIpOrNull החזיר דווקא אותו. התשלום נדחה ב-403, הלקוח חויב,
+ * וההזמנה נותרה "מבוטלת".
+ */
+export function forwardedIps(request: Request): string[] {
+  const out: string[] = []
+  const fwd = request.headers.get('x-forwarded-for')
+  if (fwd) out.push(...fwd.split(',').map(s => s.trim()).filter(Boolean))
+  const real = request.headers.get('x-real-ip')?.trim()
+  if (real && !out.includes(real)) out.push(real)
+  return out
+}

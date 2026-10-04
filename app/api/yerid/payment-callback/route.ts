@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { getPaymentProvider, sanitizeProviderResponse, verifyNedarimSignature, isNedarimWebhookIp } from '@/lib/payments'
 import { getPaymentSettings } from '@/lib/payments/settings'
-import { clientIpOrNull } from '@/lib/rateLimit'
+import { clientIpOrNull, forwardedIps } from '@/lib/rateLimit'
 import { amountMatches } from '@/lib/bookFairPricing'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
@@ -28,6 +28,8 @@ interface RequestContext {
   rawBody: string | null
   tsHeader: string | null
   sigHeader: string | null
+  /** כל הכתובות בשרשרת — ראו ההערה בבדיקת ה-IP למטה. */
+  forwardedIps?: string[]
 }
 
 async function handle(raw: Record<string, unknown>, ctx: RequestContext) {
@@ -42,8 +44,21 @@ async function handle(raw: Record<string, unknown>, ctx: RequestContext) {
   // (fail-open בכוונה — ראו למטה), וה-IP נשבר אם נדרים מחדשים כתובות
   // בלי הודעה. שתיהן יחד הן ההגנה שהתיעוד ממליץ עליה.
   if (provider.name === 'nedarim') {
-    if (ctx.clientIp && !isNedarimWebhookIp(ctx.clientIp)) {
-      console.warn(`[fair/callback] דיווח מכתובת IP לא מוכרת (${ctx.clientIp}) — נדחה`)
+    // 🔴 נבדקת *כל* שרשרת ה-x-forwarded-for, לא רק הערך האחרון.
+    //
+    // ⚠️ זה הפיל תשלום אמיתי (04.10): נדרים שלחו מ-18.196.146.117 —
+    // כתובת רשמית ומאושרת — אבל שכבת ביניים הוסיפה ערך אחריה,
+    // ו-clientIpOrNull מחזיר דווקא את האחרון. הדיווח נדחה ב-403,
+    // הלקוח חויב, וההזמנה נותרה "מבוטלת" בלי שאיש ידע.
+    //
+    // ⚠️ ההיגיון הפוך ממגבלת קצב: שם חייבים את האחרון בלבד (כל ערך
+    // אחר ניתן לזיוף), וכאן די בכך ש*אחת* מהכתובות מוכרת — כתובת
+    // שאינה ברשימה אינה מעניקה שום גישה בפני עצמה.
+    const chain = ctx.forwardedIps?.length
+      ? ctx.forwardedIps
+      : (ctx.clientIp ? [ctx.clientIp] : [])
+    if (chain.length && !chain.some(isNedarimWebhookIp)) {
+      console.warn(`[fair/callback] דיווח מכתובת IP לא מוכרת (${chain.join(' → ')}) — נדחה`)
       return NextResponse.json({ error: 'מקור לא מוכר' }, { status: 403 })
     }
 
@@ -233,7 +248,7 @@ async function handle(raw: Record<string, unknown>, ctx: RequestContext) {
 
 export async function POST(request: NextRequest) {
   const ctx: RequestContext = {
-    clientIp: clientIpOrNull(request),
+    clientIp: clientIpOrNull(request), forwardedIps: forwardedIps(request),
     rawBody: null,
     tsHeader: request.headers.get('x-nedarim-timestamp'),
     sigHeader: request.headers.get('x-nedarim-signature'),
@@ -267,6 +282,7 @@ export async function POST(request: NextRequest) {
  * זו חתומה על גוף POST בלבד). */
 export async function GET(request: NextRequest) {
   return handle(Object.fromEntries(request.nextUrl.searchParams), {
-    clientIp: clientIpOrNull(request), rawBody: null, tsHeader: null, sigHeader: null,
+    clientIp: clientIpOrNull(request), forwardedIps: forwardedIps(request),
+    rawBody: null, tsHeader: null, sigHeader: null,
   })
 }
