@@ -166,7 +166,34 @@ export class NedarimPaymentProvider implements PaymentProvider {
     if (!c) return { ok: false, error: 'סליקת נדרים אינה מוגדרת' }
 
     const shekels = (req.amountAgorot / 100).toFixed(2)
-    const callbackUrl = req.returnUrl ? new URL(req.returnUrl).origin + '/api/yerid/payment-callback' : undefined
+    // ── כתובת ה-CallBack ──
+    //
+    // 🔴 מהסביבה ולא מ-returnUrl. נדרים דיווחה במייל כשל:
+    //   "כתובת היעד: https://localhost:8080/api/yerid/payment-callback
+    //    Unable to connect to the remote server"
+    // הסיבה: returnUrl נבנה מ-request.nextUrl.origin, ומאחורי ה-proxy
+    // של Railway זה מחזיר את הכתובת הפנימית (localhost:8080) ולא את
+    // הדומיין הציבורי. נדרים ניסתה לפנות לעצמה, התשלום נגבה בפועל,
+    // וההזמנה נשארה "ממתינה לתשלום" — כסף שנגבה בלי שהמערכת יודעת.
+    //
+    // ⚠️ בלי בסיס מוגדר אין CallBack *כלל*: שליחת כתובת פנימית גרועה
+    // מאי-שליחה — נדרים מנסה, נכשלת, ושולחת התראה על כל עסקה.
+    const base = (
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      ''
+    ).replace(/\/$/, '')
+
+    const callbackUrl = /^https:\/\//i.test(base)
+      ? `${base}/api/yerid/payment-callback`
+      : undefined
+
+    if (!callbackUrl) {
+      console.error(
+        '[nedarim] אין כתובת בסיס ציבורית (NEXT_PUBLIC_SITE_URL) — ' +
+        'העסקה תיווצר בלי CallBack, והתשלום לא יעודכן אוטומטית',
+      )
+    }
 
     try {
       const r = await this.post(CREATE_TXN_URL, 'CreateTransaction', {
@@ -179,7 +206,13 @@ export class NedarimPaymentProvider implements PaymentProvider {
         ...(req.customerName  ? { FirstName: req.customerName } : {}),
         ...(req.customerEmail ? { Mail: req.customerEmail } : {}),
         ...(req.customerPhone ? { Phone: req.customerPhone } : {}),
-        ...(req.description   ? { Comment: req.description } : {}),
+        // 🔴 שדה ההערות נשאר *ריק* במכוון (החלטת המשתמש 04.10): הוא
+        // מופיע באישור שנשלח לתורם ובקבלה, והקטגוריה (Groupe) כבר
+        // מזהה את התשלום. req.description עדיין קיים לשימוש פנימי
+        // ובספקים אחרים, אך אינו נשלח לנדרים.
+        //
+        // ⚠️ אל תחזירו את Comment בלי לשאול — מספר ההזמנה הפנימי
+        // הודפס באישור ללקוח, וזה בדיוק מה שביקשו להסיר.
         // 🔴 Param2 ולא Param1: Param1 נעלם מהעדכון בביט/העברה בקליק
         // ומסתיר את שני האמצעים האלה מהאייפרם אם נשלח כלל.
         Param2: req.orderNumber,
