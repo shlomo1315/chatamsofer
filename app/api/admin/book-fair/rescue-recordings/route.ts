@@ -38,21 +38,20 @@ type YemotFile = { name?: string; path?: string; mtime?: string }
  * ⚠️ כל המועמדים נסרקים ומאוחדים: המבנה עשוי להשתנות בין חשבונות,
  * ועדיף לסרוק חמישה נתיבים מאשר לנחש אחד.
  */
+// 🔴 שתי התיקיות האלה אומתו בסריקת העץ (yemot-tree):
+//   Trash/ApiRecord — 119 קבצים, 14.1MB
+//   Trash/ApiVoice  — 16 קבצים, 11.5MB
+//
+// ⚠️ שתיהן תחת Trash: ימות מעבירה הקלטות API לסל המיחזור, ולכן
+// עשרה נתיבים שניחשתי קודם החזירו 0.
+//
+// ⚠️ הסדר חשוב: ApiRecord ראשון — שם רוב ההקלטות.
 const VOICE_DIRS = [
-  // 🔴 התיעוד: "ההקלטות נשמרות בתוך תיקיית Record שבתוך התיקיה".
-  // "30/9.wav" = תיקייה 30, קובץ 9 — והן יושבות תחת Record.
-  'ivr2:/30/Record',
-  'ivr2:/15/Record',
-  'ivr2:/9/Record',
-  'ivr2:/Record',
-  'ivr2:/30',
-  'ivr2:/15',
-  // נתיבים שנצפו בממשק
-  'ivr2:/ApiVoice',
-  'ivr2:/Trash/ApiVoice',
-  'ivr2:/ApiRecord',
   'ivr2:/Trash/ApiRecord',
-  'ivr2:/Trash',
+  'ivr2:/Trash/ApiVoice',
+  // ⚠️ נשמרים כנפילה אחורה: ימות עשויה להעביר תיקייה בין מיקומים.
+  'ivr2:/ApiRecord',
+  'ivr2:/ApiVoice',
 ]
 
 async function listVoice(scope: YemotScope): Promise<YemotFile[]> {
@@ -84,9 +83,28 @@ async function listVoice(scope: YemotScope): Promise<YemotFile[]> {
  * חיתוך סיומת רגיל היה הורס אותו.
  */
 function parseVoiceName(name: string): { phone: string; folder: string; ts: number } | null {
-  const m = name.match(/DID-(\d+)-Phone-(\d+)-Folder-([^-]+)-in\.wav-(\d+)/i)
-  if (!m) return null
-  return { phone: m[2], folder: m[3], ts: Number(m[4]) }
+  // ── ApiVoice ──
+  // 🔴 החותמת בתחילת השם, לא בסופו:
+  //   "1791146389-DID-093130924-Phone-0548495636-Folder-9-in.wav"
+  //
+  // ⚠️ ה-regex הקודם חיפש "...-in.wav-<חותמת>" לפי הסדר שראיתי
+  // בצילום המסך של הממשק — שם ימות מציגה את השם הפוך. לכן אף קובץ
+  // לא פוענח, גם כשהתיקייה הנכונה נסרקה.
+  const v = name.match(/^(\d{9,})-DID-\d+-Phone-(\d+)-Folder-([^-]+)-in\.wav/i)
+  if (v) return { phone: v[2], folder: v[3], ts: Number(v[1]) }
+
+  // ── ApiRecord ──
+  // "Phone-0583273227-id---1791144139.wav" — החותמת בסוף, אין שלוחה.
+  const r = name.match(/Phone-(\d+)-id-*-(\d{9,})\.wav/i)
+  if (r) return { phone: r[1], folder: '', ts: Number(r[2]) }
+
+  // ⚠️ נפילה אחורה: כל שם שמכיל טלפון וחותמת עשרונית, בכל סדר.
+  // המבנה של ימות השתנה כבר פעמיים הלילה.
+  const phone = name.match(/Phone-(\d{7,})/i)
+  const ts = name.match(/\b(\d{10})\b/)
+  if (phone && ts) return { phone: phone[1], folder: '', ts: Number(ts[1]) }
+
+  return null
 }
 
 /** נרמול טלפון להשוואה — ימות מחזירה בלי אפס מוביל לעיתים. */

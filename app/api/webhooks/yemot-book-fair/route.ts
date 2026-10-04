@@ -489,21 +489,55 @@ async function stashRecording(
     const at = (callTime ?? '').replace(/\D/g, '')
     const yf = (callYfId ?? '').trim()
 
-    const voiceNames = did && ph && at
-      ? [
-          `DID-${did}-Phone-${ph}-Folder-${extDir}-in.wav-${at}`,
-          `DID-${did}-Phone-${ph}-Folder-${extDir}-in.wav-${at}.wav`,
-        ]
-      : []
+    // ─────────────────────────────────────────────────────────────────────
+    // 🔴 המבנה האמיתי, כפי שאומת בסריקת עץ ימות (yemot-tree):
+    //
+    //   Trash/ApiVoice  — "1791146389-DID-093130924-Phone-0548495636-Folder-9-in.wav"
+    //   Trash/ApiRecord — "Phone-0583273227-id---1791144139.wav"
+    //
+    // ⚠️ החותמת בתחילת השם ב-ApiVoice, לא בסופו. בניתי אותו הפוך לפי
+    // הסדר שראיתי בצילום הממשק — שם ימות מציגה את השם הפוך — ולכן
+    // כל הורדה נכשלה גם כשהתיקייה הייתה נכונה.
+    //
+    // ⚠️ שתי התיקיות תחת Trash: ימות מעבירה הקלטות API לסל המיחזור
+    // מיד, וזו הסיבה שאחד-עשר נתיבים אחרים החזירו "לא נמצא".
+    //
+    // ⚠️ ApiTime הוא חותמת תחילת השיחה, בעוד שם הקובץ נושא את חותמת
+    // *סיום ההקלטה* — הפרש של עשרות שניות. לכן נבדק טווח ולא ערך
+    // יחיד, והחיפוש הוא ברשימת התיקייה ולא בשם מנוחש.
+    // ─────────────────────────────────────────────────────────────────────
+    // 🔴 התיקייה *נרשמת* ומחפשים בה — לא מנחשים שמות.
+    //
+    // ⚠️ ניחוש היה דורש מאות ניסיונות הורדה לכל הקלטה (החותמת היא
+    // של סיום ההקלטה ואינה ידועה מראש), ומאט שיחה חיה. קריאה אחת
+    // ל-GetIVR2Dir מחזירה את כל השמות, והבחירה נעשית מהם.
+    const token = process.env.YEMOT_BOOK_FAIR_TOKEN?.trim() || process.env.YEMOT_TOKEN?.trim()
+    const candidates: string[] = []
 
-    const candidates = [
-      // 🔴 ApiVoice ראשון — שם ההקלטות באמת יושבות.
-      ...voiceNames.flatMap(n => [`ivr2:/ApiVoice/${n}`, `ivr2:/ApiVoice/${n}.wav`]),
-      ...(yf ? [`ivr2:/ApiRecord/${yf}.wav`] : []),
-      `ivr2:/ApiRecord/${name}`,
-      `ivr2:/${name}`,
-      `ivr2:/${extDir}/${name}`,
-    ]
+    if (token && ph) {
+      const phoneTail = ph.replace(/^0/, '')
+      for (const folder of ['ivr2:/Trash/ApiVoice', 'ivr2:/Trash/ApiRecord']) {
+        try {
+          const r = await fetch(
+            `https://www.call2all.co.il/ym/api/GetIVR2Dir?token=${encodeURIComponent(token)}&path=${encodeURIComponent(folder)}`,
+            { cache: 'no-store' },
+          )
+          const j = await r.json().catch(() => null) as { files?: { name?: string }[] } | null
+          // ⚠️ ההתאמה לפי הטלפון בשם, והחדש ביותר ראשון: שתי ההקלטות
+          // של אותה שיחה (שם וכתובת) נבדלות רק בחותמת.
+          const mine = (j?.files ?? [])
+            .map(f => String(f.name ?? ''))
+            .filter(n => n.includes(phoneTail) || n.includes(ph))
+            .sort()
+            .reverse()
+          for (const n of mine.slice(0, 4)) candidates.push(`${folder}/${n}`)
+        } catch { /* תיקייה שאינה נגישה — ממשיכים */ }
+      }
+    }
+
+    // נפילה אחורה לנתיבים הישנים.
+    if (yf) candidates.push(`ivr2:/Trash/ApiRecord/${yf}.wav`)
+    candidates.push(`ivr2:/${name}`, `ivr2:/${extDir}/${name}`)
 
     let data: ArrayBuffer | null = null
     let found = ''
