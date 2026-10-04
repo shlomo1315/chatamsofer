@@ -217,37 +217,22 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
           🔴 גם הלוגו דביק ולא רק החיפוש: בגלילה ארוכה בקטלוג הזהות
           של האתר נעלמה והקונה איבד הקשר. ⚠️ ריפוד מוקטן בגלילה כדי
           שהגוש לא יבלע חצי מסך בנייד. */}
-      {/* ══ הלוגו — ממורכז בראש הדף, מתכווץ בגלילה ══
-          🔴 מחוץ ל-sticky בכוונה: בתוכו הוא היה תופס גובה קבוע בכל
-          גלילה ובולע חצי מסך בנייד. כאן הוא גדול בכניסה — הזהות של
-          היריד — ומתכווץ כשהקונה מתחיל לגלול, כי משם הקטלוג הוא העיקר.
-          ⚠️ transition על הרוחב ולא על scale: scale היה מטשטש את
-          הזהב בכרטיס. */}
-      {/* ⚠️ בלי רקע משלו: ה-header שמתחת נפתח ב-gradient מלבן, ורקע
-          אטום כאן יצר פס בהיר שנראה כמו שתי רצועות נפרדות. */}
-      <div
-        className={`px-5 transition-all duration-300 ${
-          scrolled ? 'pt-3 pb-2' : 'pt-8 pb-4'
-        }`}
-      >
-        <img
-          src="/logo-heichal.png"
-          alt="היכל החתם סופר"
-          className={`mx-auto transition-all duration-300 ${
-            scrolled ? 'w-24 sm:w-28' : 'w-56 sm:w-72'
-          }`}
-        />
-      </div>
-
       <div className="sticky top-0 z-40 border-b border-[#141210]/8 bg-[#FAF7F0]/95 backdrop-blur">
       <header className="border-b border-[#141210]/8 bg-gradient-to-b from-white/80 to-transparent">
         <div className="mx-auto max-w-6xl px-5 py-4">
-          {/* ⚠️ הכותרת ממורכזת מתחת ללוגו, וה"אזור האישי" צף בצד:
-              בפריסת justify-between הכותרת נדחקה לקצה ולא התיישרה עם
-              הלוגו שמעליה. */}
+          {/* ⚠️ הלוגו באותה שורה עם הכותרת ולא מעליה: גוש נפרד בראש
+              הדף תפס גובה רב, ובגלילה הוא נעלם לגמרי יחד עם הזהות.
+              כאן הוא חלק מהשער הדביק — מתכווץ בגלילה ונשאר גלוי. */}
           <div className="relative flex flex-col items-center gap-2 text-center">
-            <div className="flex flex-col items-center">
-              <div>
+            <div className="flex items-center justify-center gap-4">
+              <img
+                src="/logo-heichal.png"
+                alt="היכל החתם סופר"
+                className={`flex-shrink-0 transition-all duration-300 ${
+                  scrolled ? 'w-14 sm:w-16' : 'w-20 sm:w-24'
+                }`}
+              />
+              <div className="text-right">
                 <h1 className="text-2xl font-bold leading-tight text-[#141210] sm:text-3xl">
                   יריד הספרים
                 </h1>
@@ -737,10 +722,9 @@ function BookCard({ book, inCart, justAdded, onAdd, onSetQty, eager }: {
       {/* ── הכריכה ──
           ⚠️ 3:4 ולא 4:3: ספרי קודש מצולמים לגובה, והמסגרת הרחבה
           הקטינה אותם לרצועה באמצע הכרטיס. */}
-      <div
-        className="relative aspect-[3/4] w-full overflow-hidden"
-        style={{ background: `radial-gradient(120% 90% at 50% 0%, ${c.soft}, transparent 72%), #EFEAE0` }}
-      >
+      {/* ⚠️ רקע לבן מלא ולא גוון חול: תמונות הכריכות מצולמות על רקע
+          לבן, והאפור יצר מלבן נראה לעין סביב כל ספר. */}
+      <div className="relative aspect-[3/4] w-full overflow-hidden bg-white">
         {img ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -773,8 +757,10 @@ function BookCard({ book, inCart, justAdded, onAdd, onSetQty, eager }: {
         {/* ⚠️ המק"ט בזהב של הלוגו ולא בגוון הקטגוריה: הוא מידע עזר
             ולא היררכיה, והגוון הצבעוני משך אליו את העין. */}
         <span
-          className="absolute end-3 top-3 rounded-full border bg-white/[0.88] px-2.5 py-0.5 text-[12.5px] font-bold tabular-nums tracking-wide backdrop-blur-sm"
-          style={{ color: BRAND_GOLD, borderColor: `${BRAND_GOLD}40` }}
+          // ⚠️ מסגרת עבה יותר (2px) ובאטימות גבוהה: על רקע לבן מלא
+          // המסגרת הדקה והשקופה כמעט נעלמה.
+          className="absolute end-3 top-3 rounded-full border-2 bg-white/[0.88] px-2.5 py-0.5 text-[12.5px] font-bold tabular-nums tracking-wide backdrop-blur-sm"
+          style={{ color: BRAND_GOLD, borderColor: `${BRAND_GOLD}80` }}
         >
           {book.sku}
         </span>
