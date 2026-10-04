@@ -392,6 +392,9 @@ export const MESSAGE_FALLBACKS: Record<string, string> = {
   goodbye: 'תודה ויום טוב',
   paid_fail: 'התשלום לא אושר',
   paid_fail_retry: 'ההזמנה לא נקלטה ניתן לנסות שוב או לפנות למשרד',
+  // 🔴 נאמר כשאין CreditCard_CODE: ייתכן שהחיוב עבר ואיננו יודעים.
+  // "לא אושר" היה גורם לניסיון חוזר ולחיוב כפול.
+  paid_unknown: 'ההזמנה נקלטה ואנו בודקים את התשלום נציג יחזור אליכם בהקדם',
   orders_none: 'לא נמצאו הזמנות הרשומות על מספר הטלפון שלכם',
   orders_intro: 'אלו ההזמנות הרשומות על מספר הטלפון שלכם',
   order_num_word: 'הזמנה מספר',
@@ -858,6 +861,22 @@ export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMe
           )}&${hangup}`,
         }
       }
+      // 🔴 תוצאה לא ידועה (אין CreditCard_CODE) אינה כישלון.
+      //
+      // ⚠️ "התשלום לא אושר" למי שאולי כן חויב הוא הדבר הגרוע ביותר
+      // שאפשר לומר: הוא ינסה שוב ויחויב פעמיים. במקרה כזה נאמר
+      // שההזמנה נקלטה ושנחזור אליו — וההכרעה עוברת למשרד מול הדוח
+      // של נדרים.
+      if (input.payment === undefined) {
+        return {
+          state: { ...state, step: 'done' },
+          response: `${idMessage(
+            m('paid_unknown'),
+            m('goodbye'),
+          )}&${hangup}`,
+        }
+      }
+
       return {
         state: { ...state, step: 'done' },
         response: `${idMessage(

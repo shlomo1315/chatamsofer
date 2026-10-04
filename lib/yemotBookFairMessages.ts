@@ -132,6 +132,8 @@ export const BOOK_FAIR_MESSAGE_META: MsgMeta[] = [
   { key: 'order_number', label: 'מספר ההזמנה שלכם', defaultText: 'מספר ההזמנה שלכם', allowAudio: true },
   { key: 'goodbye', label: 'פרידה', defaultText: 'תודה ויום טוב', allowAudio: true },
   { key: 'paid_fail', label: 'התשלום לא אושר', defaultText: 'התשלום לא אושר', allowAudio: true },
+  // 🔴 נאמר כשאין CreditCard_CODE — ייתכן שהחיוב עבר ואיננו יודעים.
+  { key: 'paid_unknown', label: 'תוצאת תשלום לא ידועה', defaultText: 'ההזמנה נקלטה ואנו בודקים את התשלום נציג יחזור אליכם בהקדם', allowAudio: true },
   { key: 'paid_fail_retry', label: 'הסבר אחרי כשל תשלום', defaultText: 'ההזמנה לא נקלטה ניתן לנסות שוב או לפנות למשרד', allowAudio: true },
 
   // ── הזמנה קיימת (שלוחה 2) ──

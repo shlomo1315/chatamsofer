@@ -178,3 +178,98 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   return NextResponse.json({ ok: true })
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 מחיקת הזמנה — להסרת הזמנות בדיקה שגזלו מהמלאי האמיתי.
+//
+// ⚠️ המלאי מוחזר *לפני* המחיקה: אחרי שהשורות נמחקו אין עוד דרך לדעת
+// אילו ספרים ובאיזו כמות, והעותקים היו נשארים חסרים לנצח.
+//
+// ⚠️ מוחזר רק לספר מוגבל-מלאי: ל"ללא הגבלה" אין מונה, והגדלתו הייתה
+// יוצרת מספר שאינו אומר דבר.
+//
+// ⚠️ מחיקה ולא ביטול: שורה "מבוטלת" היא עדות למשהו שקרה, ואלו הזמנות
+// בדיקה שלא היו אמורות להתקיים כלל.
+//
+// 🔴 הרשאת delete נדרשת, והפעולה מתועדת ב-activity log עם כל הפרטים —
+// זו מחיקה בלתי הפיכה של רשומה כספית.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const staff = await requirePermission('book_fair', 'delete')
+  if (!staff) return forbidden()
+
+  const db = getServiceClient()
+  if (!db) return serverMisconfigured()
+
+  const { id } = await params
+
+  const { data: order } = await db.from('book_fair_orders')
+    .select('id, order_number, status, channel, total_agorot, customer_name')
+    .eq('id', id).maybeSingle()
+
+  if (!order) return NextResponse.json({ error: 'ההזמנה לא נמצאה' }, { status: 404 })
+
+  // ── 1. החזרת המלאי ──
+  const { data: items } = await db.from('book_fair_order_items')
+    .select('book_id, quantity, title_snapshot').eq('order_id', id)
+
+  const restored: string[] = []
+  const channel = order.channel === 'phone' ? 'phone' : 'web'
+
+  for (const it of items ?? []) {
+    if (!it.book_id) continue   // ספר שנמחק מהקטלוג — אין למה להחזיר
+
+    // ⚠️ נבדק שהספר מוגבל-מלאי לפני ההחזרה.
+    const { data: book } = await db.from('book_fair_books')
+      .select('unlimited_stock, title').eq('id', it.book_id).maybeSingle()
+    if (!book || book.unlimited_stock) continue
+
+    const { error } = await db.rpc('book_fair_adjust_stock', {
+      p_book_id: it.book_id,
+      p_channel: channel,
+      p_delta: it.quantity,
+      p_reason: 'refund',
+      p_note: `מחיקת הזמנה ${order.order_number}`,
+      p_by: staff.userId,
+    })
+    // ⚠️ best-effort: כישלון החזרה אינו עוצר את המחיקה, אבל נרשם.
+    if (error) console.error(`[book-fair/delete] החזרת מלאי נכשלה (${it.title_snapshot}):`, error.message)
+    else restored.push(`${book.title} ×${it.quantity}`)
+  }
+
+  // ── 2. שחרור שריונים פתוחים ──
+  const { data: res } = await db.from('book_fair_reservations')
+    .select('cart_token').eq('order_id', id).eq('status', 'held')
+  for (const r of res ?? []) {
+    await db.rpc('book_fair_release', { p_cart_token: r.cart_token })
+      .then(undefined, () => { /* best-effort — הפקיעה תתפוס ממילא */ })
+  }
+
+  // ── 3. מחיקת השורות התלויות ──
+  // ⚠️ במפורש: אין ON DELETE CASCADE על כל הטבלאות, ושורות יתומות
+  // נספרות ב"נמכר" של הקטלוג.
+  await db.from('book_fair_order_items').delete().eq('order_id', id)
+  await db.from('book_fair_payments').delete().eq('order_id', id)
+  await db.from('book_fair_recordings').delete().eq('order_id', id)
+  await db.from('book_fair_call_recordings').update({ order_id: null }).eq('order_id', id)
+
+  const { error: delErr } = await db.from('book_fair_orders').delete().eq('id', id)
+  if (delErr) {
+    console.error('[book-fair/delete] המחיקה נכשלה:', delErr)
+    return NextResponse.json({ error: 'מחיקת ההזמנה נכשלה' }, { status: 500 })
+  }
+
+  await logActivity(db, {
+    userId: staff.userId, action: 'delete', entityType: 'book_fair_order',
+    entityId: id,
+    details: {
+      order: order.order_number,
+      status: order.status,
+      total_agorot: order.total_agorot,
+      customer: order.customer_name,
+      restored_to_stock: restored,
+    },
+  })
+
+  return NextResponse.json({ ok: true, restored })
+}

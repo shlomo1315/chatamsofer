@@ -994,8 +994,27 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
   } else if (state.step === 'confirm_total') {
     input.value = paramFor(params, 'bf_conf')
   } else if (state.step === 'payment') {
-    const code = params['CreditCard_CODE'] ?? ''
-    input.payment = (code === '000' || code.toUpperCase() === 'OK') ? 'success' : 'failed'
+    // ─────────────────────────────────────────────────────────────────────
+    // 🔴 קוד ריק אינו כישלון — הוא "לא ידוע".
+    //
+    // ⚠️ כשהמתקשר מנתק באמצע הסליקה, או כשימות חוזרת מסיבה אחרת,
+    // CreditCard_CODE חוזר ריק. הקוד סימן זאת כ'failed', ההזמנה
+    // קיבלה "תשלום נכשל" והמלאי שוחרר — בעוד ייתכן שהחיוב דווקא
+    // עבר אצל נדרים ואנחנו לא יודעים עליו.
+    //
+    // ⚠️ 121228 ו-121231 (651 ₪ כל אחת) סומנו כך, ושתיהן עם
+    // error_message="CreditCard_CODE=" — כלומר ריק לגמרי.
+    //
+    // ללא קוד הסטטוס נשאר pending_payment, וההכרעה עוברת לאדם מול
+    // הדוח של נדרים.
+    // ─────────────────────────────────────────────────────────────────────
+    const code = (params['CreditCard_CODE'] ?? '').trim()
+    if (!code) {
+      console.warn(`[yemot-book-fair] אין CreditCard_CODE — התוצאה לא ידועה. call=${callId}`)
+      input.payment = undefined
+    } else {
+      input.payment = (code === '000' || code.toUpperCase() === 'OK') ? 'success' : 'failed'
+    }
   }
 
   const turn = nextTurn(state, input, messages)
@@ -1013,28 +1032,13 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
       return yemotText(`id_list_message=${msgToken(messages, 'order_error')}&go_to_folder=hangup`, callId)
     }
     // ─────────────────────────────────────────────────────────────────────
-    // 🔴 המספר הרץ מוקצה *כאן* — ברגע המעבר לסליקה — ולא ביצירת השורה
-    // ולא אחרי התשלום.
+    // ⚠️ המספר הרץ *אינו* מוקצה כאן — ההזמנה נושאת TMP- עד
+    // שהתשלום מאושר בפועל (finalizeOrder). מתקשר שלא השלים את
+    // הסליקה אינו שורף מספר.
     //
-    // הכלל נשמר: מי שנטש לפני התשלום לא שורף מספר, כי השורה נוצרת
-    // עם TMP- והמעבר לסליקה הוא הרגע שבו המתקשר באמת מוסר כרטיס.
-    //
-    // ⚠️ אי אפשר להקצות אחרי התשלום: נדרים צריכה את המספר *בפקודה*
-    // כדי שיופיע בדוח ובקבלה (credit_card_remarks למטה), ואחרי
-    // התשלום כבר מאוחר מדי.
-    //
-    // ⚠️ מי שינטוש בדף הסליקה עצמו כן ישרוף מספר — זה המחיר של
-    // התאמה לדוח נדרים, והוא נדיר הרבה יותר מנטישה לפני כן.
-    // ─────────────────────────────────────────────────────────────────────
-    if (String(order.order_number ?? '').startsWith('TMP-')) {
-      const real = await nextOrderNumber(supa)
-      const { error: numErr } = await supa.from('book_fair_orders')
-        .update({ order_number: real }).eq('id', order.id)
-      // ⚠️ כישלון אינו עוצר את התשלום: הזמנה עם TMP- עדיפה על מתקשר
-      // שנתקע אחרי שכבר הקיש הכל.
-      if (numErr) console.error('[yemot-book-fair] הקצאת מספר נכשלה:', numErr)
-      else order.order_number = real
-    }
+    // ⚠️ המחיר: credit_card_remarks נשלח רק כשהמספר כבר נומרי,
+    // כלומר בניסיון תשלום חוזר על אותה הזמנה. בדוח של נדרים
+    // ההתאמה לניסיון הראשון היא לפי שעה וסכום.
 
     await saveSession(session.id, { ...turn.state, order_id: order.id, order_number: order.order_number }, order.id)
     const total = turn.state.items.reduce((s, i) => s + i.price_agorot * i.quantity, 0) + (turn.state.shipping_agorot ?? 0)
