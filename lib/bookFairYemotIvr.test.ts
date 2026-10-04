@@ -230,3 +230,50 @@ describe('סיכום ותשלום', () => {
     expect(turn.response).toContain('לא אושר')
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 מבנה פקודת read — השדה שהפיל את השלוחה.
+//
+// השלוחה שלחה 13 שדות במקום 14, וימות ענתה "שגיאה" וניתקה את המתקשר.
+// אין על כך שום סימן בצד שלנו: אנחנו מחזירים 200 תקין, והתסמין היחיד
+// הוא מה שנשמע בטלפון. ⚠️ המספר נאכף כאן כי אי אפשר לגלות אותו אלא
+// בהתקשרות אמיתית.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('🔴 מבנה read תקין לימות', () => {
+  /** כל פקודות ה-read שהשלוחה יכולה להחזיר, מכל שלב. */
+  function allReads(): string[] {
+    const out: string[] = []
+    const push = (r: string) => {
+      for (const cmd of r.split('&')) {
+        if (cmd.startsWith('read=')) out.push(cmd)
+      }
+    }
+    const fresh: IvrState = { step: 'welcome', attempts: 0, items: [] }
+    push(nextTurn(fresh, {}).response)
+    push(nextTurn({ ...fresh, step: 'main_menu' }, { value: '1' }).response)
+    push(nextTurn({ ...fresh, step: 'order_menu' }, { value: '1' }).response)
+    // הקשה לא חוקית → ניסיון חוזר, גם הוא חייב מבנה תקין
+    push(nextTurn({ ...fresh, step: 'main_menu' }, { value: '9' }).response)
+    return out.filter(Boolean)
+  }
+
+  it('כל פקודת read נושאת בדיוק 14 שדות', () => {
+    const reads = allReads()
+    expect(reads.length).toBeGreaterThan(0)
+    for (const cmd of reads) {
+      // read=<הודעה>=<14 שדות מופרדים בפסיק>
+      const ops = cmd.slice(cmd.lastIndexOf('=') + 1)
+      expect(ops.split(',')).toHaveLength(14)
+    }
+  })
+
+  it('אופן ההקראה הוא No — לא Digits שמבקש אישור על כל הקשה', () => {
+    for (const cmd of allReads()) {
+      const ops = cmd.slice(cmd.lastIndexOf('=') + 1).split(',')
+      // מקומות 6-8 בדפוס הבדוק: No,no,no
+      expect(ops[5]).toBe('No')
+      expect(ops[6]).toBe('no')
+      expect(ops[7]).toBe('no')
+    }
+  })
+})
