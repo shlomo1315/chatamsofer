@@ -55,7 +55,13 @@ export const BOOK_FAIR_MESSAGE_META: MsgMeta[] = [
 
   // ── בחירת ספר ──
   { key: 'book_chosen', label: 'אישור בחירת ספר', defaultText: 'בחרתם {title} המחיר הוא {price} שקלים', allowAudio: false, placeholders: ['title', 'price'],
-    hint: 'הודעה דינמית — חובה לכלול {title} ו-{price}.' },
+    hint: 'הודעה דינמית — חובה לכלול {title} ו-{price}. נשמעת רק כשלספר אין הקלטה משלו.' },
+  // ⚠️ שני אלה משמשים רק כשלספר *יש* הקלטה: ההודעה מתפצלת סביבה —
+  // "בחרתם" → הקלטת שם הספר → "המחיר הוא X שקלים".
+  { key: 'book_chosen_prefix', label: 'לפני שם ספר מוקלט', defaultText: 'בחרתם', allowAudio: true,
+    hint: 'נשמע לפני הקלטת שם הספר, כשיש לו הקלטה.' },
+  { key: 'book_chosen_price', label: 'אחרי שם ספר מוקלט', defaultText: 'המחיר הוא {price} שקלים', allowAudio: false, placeholders: ['price'],
+    hint: 'נשמע אחרי הקלטת שם הספר. הודעה דינמית — חובה לכלול {price}.' },
   { key: 'confirm_book', label: 'אישור או תיקון', defaultText: 'לאישור הקישו 1 לתיקון הקישו 2', allowAudio: true },
   { key: 'book_saved', label: 'הספר נשמר', defaultText: 'הספר נשמר בהצלחה', allowAudio: true },
   { key: 'after_save', label: 'ספר נוסף או תשלום', defaultText: 'להזמנת ספר נוסף הקישו 1 למעבר לתשלום הקישו 2', allowAudio: true },

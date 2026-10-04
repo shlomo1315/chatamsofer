@@ -115,7 +115,7 @@ async function findBook(sku: string) {
 
   const supa = db()!
   const { data } = await supa.from('book_fair_books')
-    .select('id, sku, title, price_agorot, stock_total, unlimited_stock, is_active')
+    .select('id, sku, title, price_agorot, stock_total, unlimited_stock, is_active, audio_name')
     .eq('is_active', true)
     .or(`sku.eq.${digits},phone_code.eq.${digits}`)
     .limit(1).maybeSingle()
@@ -128,7 +128,7 @@ async function findBook(sku: string) {
 async function findBookById(id: string) {
   const supa = db()!
   const { data } = await supa.from('book_fair_books')
-    .select('id, sku, title, price_agorot, stock_total, unlimited_stock')
+    .select('id, sku, title, price_agorot, stock_total, unlimited_stock, audio_name')
     .eq('id', id).eq('is_active', true).maybeSingle()
   if (!data) return null
   return {
@@ -171,7 +171,7 @@ async function listCategories(): Promise<string[]> {
 async function listBooks(category: string | null) {
   const supa = db()!
   let q = supa.from('book_fair_books')
-    .select('id, sku, title, price_agorot, stock_total, unlimited_stock, description')
+    .select('id, sku, title, price_agorot, stock_total, unlimited_stock, description, audio_name')
     .eq('is_active', true).eq('is_hidden', false)
   if (category) q = q.eq('description', category)
 

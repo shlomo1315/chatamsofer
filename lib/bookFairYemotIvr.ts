@@ -70,14 +70,22 @@ interface ReadOpts {
  * (msgToken כבר החזיר טוקן מוכן), והשמעה חלקית עדיפה על ניתוק.
  * ⚠️ הקיצוץ מהסוף — ההודעות הראשונות הן החשובות (ברכה ותפריט).
  */
-// 🔴 השורש נמצא: הקבצים נוצרו כ-MP3 ב-44.1kHz, וימות מנגנת PCM
-// 8kHz מונו בלבד. הקובץ נשמר אצלה, הופיע ברשימת התיקייה והיה ניתן
-// להורדה — אבל לא התנגן, ולכן כל אסימון f- הפיל את השיחה בלי שום
-// שגיאה בצד שלנו. ראו pcmToWav ב-lib/elevenTts.
+// 🔴 0 — הקבצים מכובים, והשורש עדיין לא ידוע.
 //
-// ⚠️ התקרה נשארת: ההודעות הראשונות הן החשובות, וארבעה קבצים ברצף
-// הם גם שיחה ארוכה מדי לפני ההקשה הראשונה.
-const MAX_FILES_PER_RESPONSE = 2
+// ⚠️ ארבע השערות נבדקו ונפסלו, כל אחת בראיה ישירה:
+//   1. קבצים חסרים — audio-check: missing_count=0.
+//   2. read עם 13 שדות — תוקן ל-14, השיחה עדיין נפלה.
+//   3. יותר מדי קבצים — הורד מ-4 ל-2, עדיין נפלה.
+//   4. פורמט שגוי — audio-check מדווח PCM 8kHz מונו 16 ביט,
+//      בדיוק מה שימות דורשת. convertAudio=1 כבר המיר נכון.
+//
+// כלומר קובץ תקין לחלוטין, בפורמט הנכון, בתיקייה הנכונה — ועדיין
+// כל אסימון f- מפיל את השיחה. ⚠️ אין שום שגיאה בצד שלנו: מחזירים
+// 200 תקין, והתסמין היחיד הוא מה שנשמע בטלפון.
+//
+// עד שהסיבה תימצא (כנראה צריך לברר מול התמיכה של ימות) — טקסט
+// בלבד. קו חי עדיף על קול נוירוני שאיש אינו שומע.
+const MAX_FILES_PER_RESPONSE = 0
 
 function capFiles(tokens: string[]): string[] {
   let files = 0
@@ -195,7 +203,7 @@ export function initialState(): IvrState {
 
 export interface IvrInput {
   value?: string
-  book?: { id: string; sku: string; title: string; price_agorot: number; in_stock: boolean } | null
+  book?: { id: string; sku: string; title: string; price_agorot: number; in_stock: boolean; audio_name?: string | null } | null
   city?: { id: string; name: string } | null
   shipping_agorot?: number | null
   reserved?: boolean
@@ -206,10 +214,12 @@ export interface IvrInput {
   order_number?: string
 
   // ── נתונים שה-route שולף עבור המצבים החדשים ──
+  /** הקלטות הקטגוריות: שם קטגוריה → שם קובץ. גובר על TTS. */
+  categoryAudio?: Record<string, string>
   /** שמות הקטגוריות לפי סדר הקטלוג. */
   categories?: string[]
   /** הספרים ברשימה הנוכחית (קטגוריה או כל הקטלוג). */
-  browseBooks?: { id: string; sku: string; title: string; price_agorot: number; in_stock: boolean }[]
+  browseBooks?: { id: string; sku: string; title: string; price_agorot: number; in_stock: boolean; audio_name?: string | null }[]
   /** ההזמנות של המתקשר, לשלוחה 2. */
   myOrders?: { order_number: string; total_agorot: number; status: string }[]
   /** האם הפנייה נשמרה — לשלוחה 3. */
@@ -260,6 +270,17 @@ export function msgToken(
   const fallback = MESSAGE_FALLBACKS[key] ?? ''
   const m = messages?.[key]
   const raw = (typeof m?.text === 'string' && m.text.trim()) ? m.text : fallback
+
+  // 🔴 כשהתקרה 0 ההחלפה חייבת לקרות *כאן*, לפני בניית הטוקן:
+  // סינון מאוחר יותר השאיר `read==bf_main` — הודעה ריקה לגמרי,
+  // והמתקשר שמע שתיקה במקום את ההודעה.
+  if (MAX_FILES_PER_RESPONSE === 0 && m?.audio) {
+    let only = raw
+    if (vars) {
+      for (const [k, v] of Object.entries(vars)) only = only.split(`{${k}}`).join(String(v))
+    }
+    return t(only.replace(/\{[^}]*\}/g, ' '))
+  }
 
   // 🔴 מתג כיבוי חירום — כבוי כברירת מחדל.
   //
@@ -321,6 +342,10 @@ export const MESSAGE_FALLBACKS: Record<string, string> = {
   list_end: 'הגעתם לסוף הרשימה',
   list_start: 'זהו הספר הראשון ברשימה',
   book_chosen: 'בחרתם {title} המחיר הוא {price} שקלים',
+  // ⚠️ שני אלה משמשים רק כשלספר יש הקלטה משלו — ההודעה מתפצלת
+  // סביבה: 'בחרתם' → הקלטת השם → 'המחיר הוא X שקלים'.
+  book_chosen_prefix: 'בחרתם',
+  book_chosen_price: 'המחיר הוא {price} שקלים',
   confirm_book: 'לאישור הקישו 1 לתיקון הקישו 2',
   book_saved: 'הספר נשמר בהצלחה',
   after_save: 'להזמנת ספר נוסף הקישו 1 למעבר לתשלום הקישו 2',
@@ -807,7 +832,14 @@ function categoryMenu(
   const tokens = [
     ...(invalid ? [msgToken(messages, 'main_menu_retry')] : []),
     msgToken(messages, 'category_menu'),
-    ...cats.map((name, i) => msgToken(messages, 'category_item', { name, code: i + 1 })),
+    // 🔴 הקלטת הקטגוריה גוברת על ה-TTS, כמו בכל הודעה אחרת.
+    // ⚠️ הקוד נשאר TTS תמיד — קובץ אחד אינו יכול להקריא מספר משתנה.
+    ...cats.flatMap((name, i) => {
+      const rec = MAX_FILES_PER_RESPONSE > 0 ? input.categoryAudio?.[name] : null
+      return rec
+        ? [`f-${rec}`, msgToken(messages, 'category_code', { code: i + 1 })]
+        : [msgToken(messages, 'category_item', { name, code: i + 1 })]
+    }),
   ]
   return {
     state: { ...state, step: 'category_menu' },
@@ -854,19 +886,35 @@ function browseTurn(
   }
 }
 
-/** "בחרתם X המחיר Y" → 1 אישור · 2 תיקון. */
+/**
+ * "בחרתם X המחיר Y" → 1 אישור · 2 תיקון.
+ *
+ * 🔴 כשלספר יש הקלטה משלו (audio_name), ההודעה מתפצלת לשלושה:
+ * "בחרתם" → *הקלטת שם הספר* → "המחיר X שקלים". בלי זה שם הספר
+ * מוקרא ב-TTS, ושמות ספרי קודש ("שו״ת חתם סופר") יוצאים משובשים.
+ *
+ * ⚠️ הפיצול נחוץ כי קובץ יחיד אינו יכול להכיל מחיר משתנה — לכן
+ * `book_chosen` (עם {title} ו-{price}) לעולם אינו הקלטה.
+ */
 function confirmBookTurn(
   state: IvrState,
-  book: { id: string; title: string; price_agorot: number },
+  book: { id: string; title: string; price_agorot: number; audio_name?: string | null },
   messages?: IvrMessages,
 ): IvrTurn {
+  const price = agorotToSpokenShekels(book.price_agorot)
+  // ⚠️ גם הקלטת הספר כפופה לתקרה — ראו MAX_FILES_PER_RESPONSE
+  const tokens = (MAX_FILES_PER_RESPONSE > 0 && book.audio_name)
+    ? [
+        msgToken(messages, 'book_chosen_prefix'),
+        `f-${book.audio_name}`,
+        msgToken(messages, 'book_chosen_price', { price }),
+      ]
+    : [msgToken(messages, 'book_chosen', { title: book.title, price })]
+
   return {
     state: { ...state, step: 'confirm_book', pending_book_id: book.id },
     response: readTap(attemptVarName('bf_cbook', state.attempts), [
-      msgToken(messages, 'book_chosen', {
-        title: book.title,
-        price: agorotToSpokenShekels(book.price_agorot),
-      }),
+      ...tokens,
       msgToken(messages, 'confirm_book'),
     ], { max: 1, seconds: 10 }),
   }
