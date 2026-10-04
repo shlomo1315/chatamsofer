@@ -330,7 +330,11 @@ export async function deliverMail(
     } catch { /* תקלה בהגדרה — נשארים ב-Gmail, הערוץ המוכח */ }
   }
 
-  if (!forceResend && gmailPriority !== 'never' && !options?.unsubscribeUrl && !options?.scheduledAt
+  // 🔴 מחלקת היריד — Resend בלבד (החלטת המשתמש 05.10): בלי resend_id אין
+  // מעקב מסירה/החזרות, ובמסלול Gmail לא נשמר מזהה כזה.
+  const resendOnly = (options?.department ?? departmentByEmail(fromEmail)?.key) === 'yerid'
+
+  if (!forceResend && !resendOnly && gmailPriority !== 'never' && !options?.unsubscribeUrl && !options?.scheduledAt
       && !attachments?.length && isGmailAddress(to)) {
     const cap = gmailPriority === 'high' ? GMAIL_CAP_HIGH : GMAIL_CAP_NORMAL
     const sentBy = await trySendViaGmail(
