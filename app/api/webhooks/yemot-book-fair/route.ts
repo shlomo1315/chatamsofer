@@ -633,7 +633,9 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
       input.book = await findBook(raw)
     }
   } else if (state.step === 'ask_qty') {
-    const raw = paramFor(params, 'bf_qty')
+    // ⚠️ שם תלוי-פריט — ראו ההערה ב-confirm_book. ה-fallback ל-bf_qty
+    // קיים לשיחות שהתחילו לפני השינוי ועדיין פתוחות.
+    const raw = paramFor(params, `bf_qty${state.items.length}`) || paramFor(params, 'bf_qty')
     if (raw) {
       input.value = raw
       // 🔴 הספר נקרא מ-pending_book_id שבמצב ולא מהפרמטרים.

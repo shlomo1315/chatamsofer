@@ -577,9 +577,12 @@ export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMe
       const book = input.book
       if (input.value === '1') {
         if (!book) return askSkuTurn({ ...state, attempts: 0 }, messages)
+        // ⚠️ שם המשתנה כולל את מספר הפריט בעגלה: בלעדיו, ספר שני
+        // באותה שיחה קרא את bf_qty שכבר נקלט, וימות החזירה את הכמות
+        // של הספר הקודם בלי לשאול.
         return {
           state: { ...state, step: 'ask_qty', attempts: 0 },
-          response: readTap('bf_qty', [m('ask_qty')], { max: 2, seconds: 8 }),
+          response: readTap(`bf_qty${state.items.length}`, [m('ask_qty')], { max: 2, seconds: 8 }),
         }
       }
       if (input.value === '2') {
@@ -620,7 +623,7 @@ export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMe
       const book = input.book
 
       if (!book || !Number.isInteger(qty) || qty <= 0 || qty > MAX_QTY) {
-        return retry(state, 'ask_qty', 'bf_qty', [
+        return retry(state, 'ask_qty', `bf_qty${state.items.length}`, [
           m('qty_invalid', { max: MAX_QTY }),
         ], { max: 2, seconds: 8 }, false, messages)
       }

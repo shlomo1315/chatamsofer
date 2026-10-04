@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
-import { downloadFileFromYemot, bookFairPath } from '@/lib/yemot'
+import { downloadFileFromYemot } from '@/lib/yemot'
 import { scrambleBytes, DOC_CIPHER_ID } from '@/lib/docCipher'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -45,17 +45,36 @@ export async function GET(
     return NextResponse.json({ error: 'ההקלטה לא נמצאה' }, { status: 404 })
   }
 
-  // ⚠️ provider_path הוא שם הקובץ כפי שימות החזירה, ולעתים כבר עם
-  // סיומת. התווים המסוכנים והסיומת מוסרים, והסיומת נבדקת למטה.
-  const safe = String(rec.provider_path ?? '')
-    .replace(/[/\\]/g, '')
-    .replace(/\.(wav|mp3|ogg|m4a)$/i, '')
-  if (!safe) return NextResponse.json({ error: 'אין קובץ להקלטה זו' }, { status: 404 })
+  // 🔴 provider_path הוא *נתיב* ולא שם קובץ — "30/9.wav": ימות מחזירה
+  // את תיקיית ההקלטה ואת מספר הקובץ בתוכה.
+  //
+  // ⚠️ הסרת הלוכסנים הרסה אותו ל-"309.wav" והקובץ לא נמצא לעולם —
+  // זה מה שהחזיר "ההקלטה לא נמצאה בימות".
+  //
+  // ⚠️ הגנה מפני טיפוס מעלה (..) נשמרת, אבל לוכסן בודד מותר.
+  const raw = String(rec.provider_path ?? '').trim()
+  if (!raw || raw.includes('..') || raw.startsWith('/')) {
+    return NextResponse.json({ error: 'אין קובץ להקלטה זו' }, { status: 404 })
+  }
 
+  // ⚠️ הנתיב כולל סיומת; אם לא — נבדקות האפשרויות.
+  const candidates = /\.(wav|mp3|ogg|m4a)$/i.test(raw)
+    ? [raw]
+    : EXTS.map(e => `${raw}.${e}`)
+
+  // ⚠️ שני נתיבים אפשריים: ימות מחזירה "30/9.wav" יחסית לשורש
+  // ההקלטות, אבל בחלק מהתצורות הוא יחסי לשלוחה. נבדקים שניהם.
+  const EXT_DIR = process.env.YEMOT_BOOK_FAIR_EXT || '9'
   let audio: { data: ArrayBuffer; contentType: string } | null = null
-  for (const ext of EXTS) {
-    const f = await downloadFileFromYemot(bookFairPath(`${safe}.${ext}`), 'bookFair')
-    if (f.ok && f.data) { audio = { data: f.data, contentType: f.contentType ?? `audio/${ext}` }; break }
+  for (const name of candidates) {
+    for (const path of [`ivr2:/${name}`, `ivr2:/${EXT_DIR}/${name}`]) {
+      const f = await downloadFileFromYemot(path, 'bookFair')
+      if (f.ok && f.data) {
+        audio = { data: f.data, contentType: f.contentType ?? 'audio/wav' }
+        break
+      }
+    }
+    if (audio) break
   }
 
   if (!audio) {
