@@ -54,6 +54,8 @@ export default function OrderPanel({ order, items, cities, recordings, payments 
   const [cityId, setCityId] = useState(order.city_id ?? '')
   const [notes, setNotes] = useState(order.notes ?? '')
   const [busy, setBusy] = useState<string | null>(null)
+  /** כתובת לשליחה חוזרת — ריק = הכתובת ששמורה בהזמנה. */
+  const [resendTo, setResendTo] = useState('')
   const [error, setError] = useState('')
 
   // ── זיכוי ──
@@ -163,6 +165,37 @@ export default function OrderPanel({ order, items, cities, recordings, payments 
       router.refresh()
     } catch {
       setError('הזיכוי נכשל — בדקו את החיבור')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  /**
+   * שליחה חוזרת של מייל האישור.
+   *
+   * 🔴 המייל נשלח רק מתוך קולבק התשלום. הזמנה שסומנה כשולמה בדרך
+   * אחרת — תיקון ידני אחרי כשל קולבק, או מכירה בדוכן — לא קיבלה
+   * מייל כלל, ולא הייתה דרך לשלוח אותו בדיעבד.
+   */
+  async function resendConfirmation() {
+    const to = resendTo.trim() || order.customer_email || ''
+    if (!to) { setError('אין כתובת מייל — הזינו כתובת'); return }
+    if (!window.confirm(`לשלוח את אישור ההזמנה אל ${to}?`)) return
+
+    setBusy('resend'); setError('')
+    try {
+      const res = await fetch(`/api/admin/book-fair/orders/${order.id}/resend-confirmation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(resendTo.trim() ? { to: resendTo.trim() } : {}),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(json.error ?? 'שליחת המייל נכשלה'); return }
+      window.alert(`אישור ההזמנה נשלח אל ${json.to}`)
+      setResendTo('')
+      router.refresh()
+    } catch {
+      setError('שליחת המייל נכשלה — בדקו את החיבור')
     } finally {
       setBusy(null)
     }
@@ -428,6 +461,38 @@ export default function OrderPanel({ order, items, cities, recordings, payments 
               </div>
             </div>
           )}
+        </section>
+      )}
+
+      {/* ── מייל אישור ──
+          ⚠️ מוצג רק להזמנה ששולמה: אישור על הזמנה שלא שולמה הוא שקר. */}
+      {canEdit && ['paid','picking','packed','shipped','delivered'].includes(order.status) && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+          <h2 className="mb-1 font-semibold text-slate-900">מייל אישור</h2>
+          <p className="mb-3 text-sm text-slate-500">
+            {order.customer_email
+              ? `נשלח אל ${order.customer_email}`
+              : 'אין כתובת מייל בהזמנה — הזינו כתובת לשליחה'}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="email"
+              dir="ltr"
+              value={resendTo}
+              onChange={e => setResendTo(e.target.value)}
+              placeholder={order.customer_email ?? 'name@example.com'}
+              className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            />
+            <button
+              onClick={() => void resendConfirmation()}
+              disabled={busy === 'resend'}
+              className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {busy === 'resend'
+                ? <><Loader2 size={14} className="animate-spin" /> שולח…</>
+                : 'שליחת אישור'}
+            </button>
+          </div>
         </section>
       )}
 
