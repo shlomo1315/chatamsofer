@@ -50,6 +50,8 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack, 
   /** תוצאת סריקת כרטיס מגנטי — להצגה למוכר. */
   const [swipe, setSwipe] = useState<{ pan: string; tokef: string; error?: string } | null>(null)
   const [copied, setCopied] = useState('')
+  /** שדה הסריקה — תופס את הקורא לפני שהמיקוד עובר לאייפרם. */
+  const swipeRef = useRef<HTMLInputElement>(null)
   const [height, setHeight] = useState(0)
 
   // ⚠️ עדכני תמיד בלי לגרום לרישום מחדש של ה-listener: הפונקציה
@@ -238,11 +240,49 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack, 
           אייפרם מדומיין אחר אינן מגיעות אלינו, ולכן סריקה כשהסמן
           כבר בשדה הכרטיס תידחף לשדה ותיצור בדיוק את הבאג שדווח
           ("מספר הכרטיס לא תקין"). */}
+      {/* ── שדה הסריקה ──
+          🔴 שדה אמיתי ולא הנחיה "סרקו לפני שתלחצו": ההנחיה הייתה
+          שבירה — המוכר לוחץ על שדה הכרטיס שבאייפרם, המיקוד עובר
+          לדומיין אחר, והסריקה נדחפת לשם כמספר של 19 ספרות
+          ("4580 1700 0907 1136 281") ונדחית כלא תקינה.
+          ⚠️ השדה ממקד את עצמו ונשאר ממוקד, כך שהסריקה תמיד נוחתת
+          אצלנו ולא באייפרם. */}
       {cardReader && status === 'ready' && !swipe && (
-        <p className="rounded-xl border border-[#12314F]/15 bg-[#12314F]/5 px-4 py-2.5 text-sm text-[#12314F]">
-          יש קורא כרטיסים? העבירו את הכרטיס <strong>לפני</strong> שלוחצים על שדות
-          התשלום — המערכת תפענח את המספר והתוקף.
-        </p>
+        <div className="rounded-xl border-2 border-dashed border-[#12314F]/30 bg-[#12314F]/5 px-4 py-3">
+          <label className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-[#12314F]">
+            <CreditCard size={15} /> העבירו כאן את הכרטיס בקורא
+          </label>
+          <input
+            ref={swipeRef}
+            autoFocus
+            inputMode="none"
+            aria-label="סריקת כרטיס בקורא"
+            placeholder="המתנה להעברת כרטיס…"
+            // ⚠️ onBlur מחזיר את המיקוד: לחיצה מקרית במקום אחר
+            // הייתה מחזירה את הבאג.
+            onBlur={e => { if (!swipe) setTimeout(() => e.target.focus(), 0) }}
+            onChange={e => {
+              const raw = e.target.value
+              if (!looksLikeMagneticSwipe(raw)) return
+              e.target.value = ''
+              const card = parseMagneticCard(raw)
+              setSwipe(card
+                ? { pan: card.pan, tokef: card.tokefMMYY }
+                : { pan: '', tokef: '', error: 'הסריקה לא פוענחה — הזינו את פרטי הכרטיס ידנית' })
+            }}
+            className="w-full rounded-lg border border-[#12314F]/20 bg-white px-3 py-2 font-mono text-sm outline-none focus:border-[#12314F]"
+            dir="ltr"
+          />
+          <p className="mt-1.5 text-xs text-[#141210]/50">
+            אין קורא? לחצו על שדות התשלום והקלידו ידנית.
+          </p>
+          {/* 🔴 למה לא מילוי אוטומטי: אייפרם הסליקה שייך לנדרים
+              (דומיין אחר), והדפדפן חוסם גישה לשדותיו. נבדק בקוד
+              המקור של https://www.matara.pro/nedarimplus/iframe/v3/ —
+              הוא מקבל בדיוק שלוש פקודות postMessage: GetHeight,
+              Reset, StartPayment. אין פקודת מילוי שדות ואין שום
+              אזכור של Track2 / קורא מגנטי. זו מגבלת הספק. */}
+        </div>
       )}
       {/* ── תוצאת סריקת הכרטיס ──
           🔴 הסריקה נתפסת רק כשהמיקוד *מחוץ* לאייפרם: הקשות בתוך
