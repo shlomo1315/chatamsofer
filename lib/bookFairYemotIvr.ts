@@ -65,24 +65,29 @@ interface ReadOpts {
 // הקול הטבעי הוא הדרישה; הטוקנים נשלחים כמות שהם.
 
 function readTap(varName: string, promptTokens: string[], opts: ReadOpts = {}): string {
-  const { max = '', min = 1, seconds = 12, readAs = 'No', keys } = opts
-  // read=<הודעה>=<שם>,<שימוש בקיים>,<max>,<min>,<שניות>,<אופן הקראה>,<חסום כוכבית>,<אפס אסור>,<תו החלפה>,<מקשים מותרים>,<חזרות>,<Ok>,<טקסט ריק>,<נוסף>
+  const { max = '', min = 1, seconds = 12, readAs = 'Digits', keys } = opts
+  // read=<הודעה>=<שם>,<שימוש בקיים>,<max>,<min>,<שניות>,<אופן הקראה>,...
   //
-  // 🔴 readAs='No' ולא 'Digits': עם Digits ימות *מקריאה את ההקשה
-  // חזרה ומבקשת אישור* — המתקשר לחץ 1 ושמע "1, לאישור הקישו 1".
-  // בתפריט זה מיותר ומבלבל, והוא הכפיל כל בחירה.
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 בדיוק המבנה שעבד — אל תשנו אותו בלי שיחת בדיקה.
   //
-  // 🔴 ארבעה־עשר שדות ולא שלושה־עשר. השלוחה שלחה 13 וימות ענתה
-  // "שגיאה" וניתקה — מבנה חסר שדה אינו נסלח. ⚠️ המספר נאכף בטסט
-  // מול readMenu ב-lib/ivrRuntime, שהוא הדפוס הבדוק בפרויקט.
+  // הלוגים מ-10:05 מראים שיחות תקינות לחלוטין עם:
+  //   read=t-...=bf_omenu,yes,1,1,10,Digits,,,,,,,
+  // כלומר **13 שדות** ו-**Digits**.
   //
-  // ⚠️ אותם ערכים בדיוק כמו בשלוחות החגים והתפריט הראשי שעובדות:
-  // 'No','no','no' במקומות 6-8.
+  // ⚠️ שיניתי את שניהם בניסיון לתקן את "שגיאה" — ל-14 שדות
+  // ול-'No','no','no' לפי הדפוס של חגים/יולדות — וזה בדיוק מה
+  // ש*שבר* את השלוחה. הדפוס של שלוחה אחרת אינו ראיה לשלוחה הזו.
+  //
+  // ⚠️ המחיר של Digits: ימות מקריאה את ההקשה חזרה ("1, לאישור
+  // הקישו 1"). מטריד, אבל עדיף פי כמה על ניתוק — וזה היה המצב
+  // כשהמערכת עבדה.
+  // ─────────────────────────────────────────────────────────────────────────
   const ops = [
     varName, 'yes',
     String(max), String(min), String(seconds),
-    readAs, 'no', 'no', '',
-    (keys ?? []).join('.'), '', '', '', '',
+    readAs, '', '', '',
+    (keys ?? []).join('.'), '', '', '',
   ]
   return `read=${joinTokens(...promptTokens)}=${ops.join(',')}`
 }
@@ -389,7 +394,7 @@ export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMe
     return {
       // ⚠️ העגלה נשמרת — הסולמית היא ניווט, לא ביטול.
       state: { ...state, step: 'main_menu', attempts: 0 },
-      response: readTap('bf_main_r', [m('main_menu')], { max: 1, seconds: 10 }),
+      response: readTap('bf_main_r', [m('main_menu')], { max: 1, seconds: 10, keys: ['1','2','3'] }),
     }
   }
 
@@ -399,12 +404,14 @@ export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMe
     case 'welcome':
       return {
         state: { ...state, step: 'main_menu', attempts: 0 },
+        // 🔴 keys חובה בתפריט: בחגים (readTap עם allowed:[1,2,3,4])
+        // השדה העשירי נושא את המקשים המותרים, ואצלנו הוא היה ריק.
         response: readTap('bf_main', [
           m('welcome'),
           m('open_until'),
           m('to_menu'),
           m('main_menu'),
-        ], { max: 1, seconds: 10 }),
+        ], { max: 1, seconds: 10, keys: ['1', '2', '3'] }),
       }
 
     // ── התפריט הראשי ──
@@ -687,7 +694,7 @@ export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMe
             : [m('no_shipping_fee')]),
           m('grand_total'), n(agorotToSpokenShekels(total)), m('shekels_word'),
           m('ask_pay'),
-        ], { max: 1, seconds: 12 }),
+        ], { max: 1, seconds: 12, keys: ['1','2'] }),
       }
     }
 
@@ -750,7 +757,7 @@ function orderMenu(state: IvrState, messages?: IvrMessages): IvrTurn {
     state: { ...state, step: 'order_menu' },
     response: readTap(attemptVarName('bf_omenu', state.attempts), [
       msgToken(messages, 'order_menu'),
-    ], { max: 1, seconds: 10 }),
+    ], { max: 1, seconds: 10, keys: ['1','2','3'] }),
   }
 }
 
@@ -873,7 +880,7 @@ function confirmBookTurn(
     response: readTap(attemptVarName('bf_cbook', state.attempts), [
       ...tokens,
       msgToken(messages, 'confirm_book'),
-    ], { max: 1, seconds: 10 }),
+    ], { max: 1, seconds: 10, keys: ['1','2'] }),
   }
 }
 
@@ -911,7 +918,7 @@ function askDelivery(state: IvrState, messages?: IvrMessages): IvrTurn {
     state: { ...state, step: 'ask_delivery' },
     response: readTap('bf_deliv', [
       msgToken(messages, 'ask_delivery'),
-    ], { max: 1, seconds: 10 }),
+    ], { max: 1, seconds: 10, keys: ['1','2'] }),
   }
 }
 

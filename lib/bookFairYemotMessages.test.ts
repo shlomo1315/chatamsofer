@@ -161,10 +161,10 @@ describe('🔴 כל ההקלטות נשלחות', () => {
     expect((turn.response.match(/f-/g) ?? []).length).toBe(4)
   })
 
-  it('התשובה נשארת פקודת read תקינה בת 14 שדות', () => {
+  it('התשובה נשארת פקודת read תקינה בת 13 שדות', () => {
     const turn = nextTurn(initialState(), {}, withAudio)
     expect(turn.response).toMatch(/^read=/)
     const ops = turn.response.slice(turn.response.lastIndexOf('=') + 1)
-    expect(ops.split(',')).toHaveLength(14)
+    expect(ops.split(',')).toHaveLength(13)
   })
 })

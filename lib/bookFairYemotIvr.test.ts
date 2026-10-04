@@ -257,23 +257,23 @@ describe('🔴 מבנה read תקין לימות', () => {
     return out.filter(Boolean)
   }
 
-  it('כל פקודת read נושאת בדיוק 14 שדות', () => {
+  it('כל פקודת read נושאת בדיוק 13 שדות', () => {
     const reads = allReads()
     expect(reads.length).toBeGreaterThan(0)
     for (const cmd of reads) {
       // read=<הודעה>=<14 שדות מופרדים בפסיק>
       const ops = cmd.slice(cmd.lastIndexOf('=') + 1)
-      expect(ops.split(',')).toHaveLength(14)
+      expect(ops.split(',')).toHaveLength(13)
     }
   })
 
-  it('אופן ההקראה הוא No — לא Digits שמבקש אישור על כל הקשה', () => {
+  it('אופן ההקראה הוא Digits — המבנה שעבד בשיחות אמיתיות', () => {
     for (const cmd of allReads()) {
       const ops = cmd.slice(cmd.lastIndexOf('=') + 1).split(',')
-      // מקומות 6-8 בדפוס הבדוק: No,no,no
-      expect(ops[5]).toBe('No')
-      expect(ops[6]).toBe('no')
-      expect(ops[7]).toBe('no')
+      // 🔴 Digits — זה מה שהלוגים מראים בשיחות התקינות של 10:05.
+      // ⚠️ שינוי ל-'No','no','no' (הדפוס של חגים/יולדות) שבר את
+      // השלוחה: כל מתקשר שמע "שגיאה" ונותק.
+      expect(ops[5]).toBe('Digits')
     }
   })
 })
