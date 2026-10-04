@@ -10,6 +10,7 @@ import { useCan } from '@/components/StaffPermissions'
 import PaymentSettings from './PaymentSettings'
 import SellerPassword from './SellerPassword'
 import PhoneMessages from '../phone/PhoneMessages'
+import BookAudio from '../phone/BookAudio'
 
 // הגדרות היריד: מתג פתיחה, ערי משלוח, תעריפים, תשלום ושלוחה טלפונית.
 //
@@ -53,6 +54,7 @@ export default function SettingsClient({ cities, tiers, open, openAt, mockPay }:
   const { confirm, confirmDialog } = useConfirm()
   const canEdit = useCan('book_fair', 'edit')
   const [tab, setTab] = useState<TabId>('general')
+  const [phoneTab, setPhoneTab] = useState<'messages' | 'books'>('messages')
 
   const [isOpen, setIsOpen] = useState(open)
   const [busy, setBusy] = useState<string | null>(null)
@@ -294,7 +296,27 @@ export default function SettingsClient({ cities, tiers, open, openAt, mockPay }:
       {/* ── השלוחה הטלפונית ──
           🔴 כאן ולא במסך נפרד: /admin/book-fair/phone לא הופיע בסרגל
           הניווט, ואי אפשר היה להגיע אליו בלי לדעת את הכתובת. */}
-      {tab === 'phone' && <PhoneMessages />}
+      {tab === 'phone' && (
+        <div className="flex flex-col gap-5">
+          {/* ⚠️ שני חלקים נפרדים: נוסחי המערכת (67 הודעות קבועות)
+              והקלטות התוכן (111 ספרים + 9 קטגוריות). שונים במהותם —
+              אלה נערכים פעם אחת, ואלה משתנים עם הקטלוג. */}
+          <nav className="flex gap-1 rounded-xl bg-slate-100 p-1">
+            {([['messages', 'נוסחי המערכת'], ['books', 'הקלטות ספרים וקטגוריות']] as const).map(([id, label]) => (
+              <button
+                key={id}
+                onClick={() => setPhoneTab(id)}
+                className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition ${
+                  phoneTab === id ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+          {phoneTab === 'messages' ? <PhoneMessages /> : <BookAudio />}
+        </div>
+      )}
 
       {/* ── ערי משלוח ── */}
       <section hidden={tab !== 'shipping'} className="rounded-2xl border border-slate-200 bg-white p-5">

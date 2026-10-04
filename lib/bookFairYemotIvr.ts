@@ -401,22 +401,21 @@ export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMe
   switch (state.step) {
 
     // ── הברכה ואז התפריט הראשי ──
+    //
+    // 🔴 בדיוק כמו בשלוחת החגים שעובדת: הברכה היא id_list_message
+    // נפרד, ורק אחריו read עם הודעה *אחת*.
+    //
+    // ⚠️ קודם כל ארבע ההודעות שורשרו לתוך ה-read אחד
+    // (read=f-a.f-b.f-c.f-d=...) וכל מתקשר שמע "שגיאה" ונותק.
+    // בחגים הדפוס הוא readTap(MENU_VAR, [msgToken(msgs,'main_menu')])
+    // — טוקן בודד, בלי שרשור.
     case 'welcome':
       return {
         state: { ...state, step: 'main_menu', attempts: 0 },
-        // 🔴 טוקן טקסט ראשון, ורק אחריו קבצים.
-        //
-        // ⚠️ אומת בשיחות אמיתיות: תשובת פתיחה שמתחילה ב-f- מפילה
-        // את השיחה ("שגיאה" וניתוק), בעוד שאותם קבצים *אחרי* טוקן
-        // טקסט מתנגנים. בשלבים הבאים אין בעיה כלל — שם f- ראשון
-        // עובד. זה ההבדל היחיד שהחזיק מים אחרי כל הבדיקות.
-        response: readTap('bf_main', [
-          t('שלום'),
-          m('welcome'),
-          m('open_until'),
-          m('to_menu'),
-          m('main_menu'),
-        ], { max: 1, seconds: 10 }),
+        response: [
+          idMessage(m('welcome'), m('open_until'), m('to_menu')),
+          readTap('bf_main', [m('main_menu')], { max: 1, min: 1, seconds: 10 }),
+        ].join('&'),
       }
 
     // ── התפריט הראשי ──

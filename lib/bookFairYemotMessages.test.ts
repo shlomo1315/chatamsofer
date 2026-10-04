@@ -161,10 +161,15 @@ describe('🔴 כל ההקלטות נשלחות', () => {
     expect((turn.response.match(/f-/g) ?? []).length).toBe(4)
   })
 
-  it('התשובה נשארת פקודת read תקינה בת 13 שדות', () => {
+  it('הפתיחה: הודעה נפרדת ואז read עם טוקן בודד — כמו בחגים', () => {
     const turn = nextTurn(initialState(), {}, withAudio)
-    expect(turn.response).toMatch(/^read=/)
-    const ops = turn.response.slice(turn.response.lastIndexOf('=') + 1)
+    const parts = turn.response.split('&').filter(Boolean)
+    expect(parts[0]).toMatch(/^id_list_message=/)
+    expect(parts[1]).toMatch(/^read=/)
+    // ⚠️ ה-read נושא טוקן אחד בלבד — שרשור ארבעה הפיל את השיחה
+    const prompt = parts[1].slice('read='.length, parts[1].lastIndexOf('='))
+    expect(prompt.split('.')).toHaveLength(1)
+    const ops = parts[1].slice(parts[1].lastIndexOf('=') + 1)
     expect(ops.split(',')).toHaveLength(13)
   })
 })
