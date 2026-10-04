@@ -394,7 +394,7 @@ export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMe
     return {
       // ⚠️ העגלה נשמרת — הסולמית היא ניווט, לא ביטול.
       state: { ...state, step: 'main_menu', attempts: 0 },
-      response: readTap('bf_main_r', [m('main_menu')], { max: 1, seconds: 10, keys: ['1','2','3'] }),
+      response: readTap('bf_main_r', [m('main_menu')], { max: 1, seconds: 10 }),
     }
   }
 
@@ -411,7 +411,7 @@ export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMe
           m('open_until'),
           m('to_menu'),
           m('main_menu'),
-        ], { max: 1, seconds: 10, keys: ['1', '2', '3'] }),
+        ], { max: 1, seconds: 10 }),
       }
 
     // ── התפריט הראשי ──
@@ -694,7 +694,7 @@ export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMe
             : [m('no_shipping_fee')]),
           m('grand_total'), n(agorotToSpokenShekels(total)), m('shekels_word'),
           m('ask_pay'),
-        ], { max: 1, seconds: 12, keys: ['1','2'] }),
+        ], { max: 1, seconds: 12 }),
       }
     }
 
@@ -757,7 +757,7 @@ function orderMenu(state: IvrState, messages?: IvrMessages): IvrTurn {
     state: { ...state, step: 'order_menu' },
     response: readTap(attemptVarName('bf_omenu', state.attempts), [
       msgToken(messages, 'order_menu'),
-    ], { max: 1, seconds: 10, keys: ['1','2','3'] }),
+    ], { max: 1, seconds: 10 }),
   }
 }
 
@@ -880,7 +880,7 @@ function confirmBookTurn(
     response: readTap(attemptVarName('bf_cbook', state.attempts), [
       ...tokens,
       msgToken(messages, 'confirm_book'),
-    ], { max: 1, seconds: 10, keys: ['1','2'] }),
+    ], { max: 1, seconds: 10 }),
   }
 }
 
@@ -918,7 +918,7 @@ function askDelivery(state: IvrState, messages?: IvrMessages): IvrTurn {
     state: { ...state, step: 'ask_delivery' },
     response: readTap('bf_deliv', [
       msgToken(messages, 'ask_delivery'),
-    ], { max: 1, seconds: 10, keys: ['1','2'] }),
+    ], { max: 1, seconds: 10 }),
   }
 }
 
