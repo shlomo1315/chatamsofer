@@ -321,4 +321,17 @@ describe('תפריט קטגוריות — הקלטה ידנית', () => {
     expect(turn.response).toContain('הקישו 1')
     expect(turn.response).toContain('הקישו 2')
   })
+
+  // 🔴 הקלטה אחת לכל התפריט — הדרך שהמנהל ביקש: קובץ אחד שמכיל את
+  // כל הרשימה, במקום תשעה קבצים נפרדים.
+  it('הקלטה אחת לכל התפריט מושמעת לבדה, בלי רשימת קטגוריות אחריה', () => {
+    const turn = nextTurn(atCategoryMenu, {
+      categories: CATS,
+      categoryAudio: {},
+    }, { category_menu: { text: 'לא רלוונטי', audio: 'rec_menu_all' } })
+    expect(turn.response).toContain('f-rec_menu_all')
+    // ⚠️ בלי זה המתקשר שומע את הרשימה פעמיים — מוקלטת ואז TTS.
+    expect(turn.response).not.toContain('שאלות ותשובות')
+    expect(turn.response).not.toContain('דרוש ואגדה')
+  })
 })
