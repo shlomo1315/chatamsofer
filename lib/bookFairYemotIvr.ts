@@ -656,6 +656,23 @@ export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMe
 
     case 'ask_more': {
       if (input.value === '1') {
+        // 🔴 חוזרים למקום שממנו הספר נבחר, ולא תמיד לשאלת המק"ט.
+        //
+        // ⚠️ מתקשר שדפדף ברשימה (שלוחה 3 או קטגוריה) ובחר ספר נשאל
+        // פתאום "הקישו מספר קטלוג" — הוא כלל אינו יודע את המק"ט, הוא
+        // הגיע לכאן דווקא כדי *לא* להקיש אותו. עכשיו הוא חוזר לרשימה
+        // באותו מקום שבו עצר.
+        //
+        // ⚠️ מתקדמים לספר *הבא* ולא נשארים על אותו ספר: הוא כבר נוסף
+        // לעגלה, והשמעתו שוב נשמעת כאילו ההוספה נכשלה.
+        if (state.browse_category !== undefined) {
+          const books = input.browseBooks ?? []
+          const nextIdx = (state.browse_index ?? 0) + 1
+          // בסוף הרשימה נשארים על האחרון עם הודעת "סוף הרשימה".
+          return nextIdx >= books.length
+            ? browseTurn({ ...state, attempts: 0 }, input, messages, 'end')
+            : browseTurn({ ...state, browse_index: nextIdx, attempts: 0 }, input, messages)
+        }
         // ⚠️ שם משתנה תלוי-כמות (bf_sku_next<n>): שונה בכל פעם שמוסיפים
         // ספר, כדי שה-read לא יתנגש עם אותה שאלה על ספר קודם באותה שיחה.
         const skuBase = `bf_sku_next${state.items.length}`

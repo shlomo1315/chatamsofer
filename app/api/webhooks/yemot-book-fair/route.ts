@@ -21,6 +21,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { safeEqual } from '@/lib/svix'
+import { downloadFileFromYemot } from '@/lib/yemot'
 import { nextOrderNumber, makeCartToken } from '@/lib/bookFairCheckout'
 import { shippingCost, totalVolumes, type TierInput } from '@/lib/bookFairShipping'
 import { fetchAllRows } from '@/lib/fetchAllRows'
@@ -341,6 +342,61 @@ async function reserveLastItem(state: IvrState, cartToken: string): Promise<bool
   return !error
 }
 
+/**
+ * מעתיק הקלטה מימות לאחסון שלנו ומחזיר את הנתיב, או null בכישלון.
+ *
+ * 🔴 ימות מוחקת הקלטות ישנות, והקלטת הכתובת היא לעיתים המקור היחיד
+ * לכתובת המשלוח. עד כה storage_path נשאר ריק וההקלטה הייתה תלויה
+ * לגמרי בימות.
+ *
+ * ⚠️ best-effort בלבד: כישלון אינו מפיל את יצירת ההזמנה — ההקלטה
+ * עדיין נגישה דרך ימות, והנתיב פשוט יישאר ריק.
+ *
+ * ⚠️ שני חשבונות ושני שורשים: היריד עבר לחשבון משלו ב-04.10, והקלטות
+ * שקדמו לכך יושבות בחשבון הכללי.
+ */
+async function archiveRecording(
+  orderId: string, kind: string, providerPath: string,
+): Promise<string | null> {
+  try {
+    const supa = db()
+    if (!supa || !providerPath) return null
+
+    const extDir = process.env.YEMOT_BOOK_FAIR_EXT || '9'
+    const names = /\.(wav|mp3)$/i.test(providerPath)
+      ? [providerPath]
+      : [`${providerPath}.wav`]
+
+    let data: ArrayBuffer | null = null
+    for (const n of names) {
+      for (const p of [`ivr2:/${n}`, `ivr2:/${extDir}/${n}`]) {
+        for (const scope of ['bookFair', 'default'] as const) {
+          const f = await downloadFileFromYemot(p, scope)
+          if (f.ok && f.data) { data = f.data; break }
+        }
+        if (data) break
+      }
+      if (data) break
+    }
+    if (!data) return null
+
+    // ⚠️ דלי documents ולא דלי חדש: הוא כבר קיים ו*פרטי*, וההקלטה
+    // מכילה שם וכתובת מלאה. דלי ציבורי היה חושף אותן לכל מי שמנחש
+    // את הנתיב.
+    const key = `book-fair/${orderId}/${kind}.wav`
+    const { error } = await supa.storage.from('documents')
+      .upload(key, data, { contentType: 'audio/wav', upsert: true })
+    if (error) {
+      console.warn('[fair/archive] העלאה נכשלה:', error.message)
+      return null
+    }
+    return key
+  } catch (e) {
+    console.warn('[fair/archive] נכשל:', e)
+    return null
+  }
+}
+
 /** יצירת ההזמנה בפועל — קורה רק אחרי אישור תשלום, ⚠️ לא לפני. */
 async function createOrder(state: IvrState, cartToken: string, phone: string): Promise<{ id: string; order_number: string } | null> {
   const supa = db()!
@@ -380,16 +436,29 @@ async function createOrder(state: IvrState, cartToken: string, phone: string): P
 
   // ⚠️ ההקלטות (כתובת/שם) משויכות להזמנה כאן — עד עכשיו היו שייכות רק
   // ל-call_id, וכרטיס ההזמנה לא היה מוצא אותן בלי השיוך המפורש הזה.
-  await supa.from('book_fair_recordings').insert([
-    ...(state.address_recording ? [{
-      order_id: order.id, kind: 'address', provider_path: state.address_recording,
-      transcript: state.address_transcript ?? null, transcript_source: state.address_transcript ? 'yemot' : null,
-    }] : []),
-    ...(state.name_recording ? [{
-      order_id: order.id, kind: 'name', provider_path: state.name_recording,
-      transcript: state.name_transcript ?? null, transcript_source: state.name_transcript ? 'yemot' : null,
-    }] : []),
-  ])
+  //
+  // 🔴 וגם מועתקות לאחסון שלנו: ימות מוחקת הקלטות ישנות, והקלטת
+  // הכתובת היא לעיתים המקור היחיד לכתובת המשלוח. storage_path נשאר
+  // ריק עד כה — ההקלטה הייתה תלויה לגמרי בימות.
+  const recs = [
+    ...(state.address_recording ? [{ kind: 'address' as const, path: state.address_recording,
+      transcript: state.address_transcript ?? null }] : []),
+    ...(state.name_recording ? [{ kind: 'name' as const, path: state.name_recording,
+      transcript: state.name_transcript ?? null }] : []),
+  ]
+
+  const rows = await Promise.all(recs.map(async r => ({
+    order_id: order.id,
+    kind: r.kind,
+    provider_path: r.path,
+    // ⚠️ best-effort: כישלון העתקה אינו מפיל את ההזמנה. ההקלטה עדיין
+    // נגישה דרך ימות, ו-storage_path פשוט יישאר ריק.
+    storage_path: await archiveRecording(order.id, r.kind, r.path),
+    transcript: r.transcript,
+    transcript_source: r.transcript ? 'yemot' : null,
+  })))
+
+  if (rows.length) await supa.from('book_fair_recordings').insert(rows)
 
   return { id: order.id, order_number: order.order_number }
 }
@@ -656,6 +725,11 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
   } else if (state.step === 'ask_more') {
     // ⚠️ תלוי-כמות — חייב להתאים לשם ב-readTap של nextTurn.
     input.value = paramFor(params, `bf_more${state.items.length}`)
+    // ⚠️ "ספר נוסף" מחזיר לדפדוף למי שהגיע משם, ולכן הרשימה חייבת
+    // להיטען כאן — אחרת browseTurn מקבל רשימה ריקה ועונה "אין ספרים".
+    if (input.value === '1' && state.browse_category !== undefined) {
+      input.browseBooks = await listBooks(state.browse_category ?? null)
+    }
   } else if (state.step === 'ask_delivery') {
     input.value = paramFor(params, 'bf_deliv')
     // ⚠️ הרשימה נטענת כבר כאן: בחירה 2 עוברת ל-ask_city *באותה
