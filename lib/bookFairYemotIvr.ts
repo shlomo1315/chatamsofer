@@ -311,8 +311,8 @@ export const MESSAGE_FALLBACKS: Record<string, string> = {
   category_menu: 'לשמיעת הספרים בקטגוריה הקישו את מספרה',
   category_item: 'ל{name} הקישו {code}',
   category_empty: 'אין כרגע ספרים בקטגוריה זו',
-  list_nav: 'לבחירת ספר זה הקישו 1 לחזרה לספר הקודם הקישו 2 לחזרה לרשימת הקטגוריות הקישו 3',
-  list_all_nav: 'לבחירת ספר זה הקישו 1 לחזרה לספר הקודם הקישו 2 לחזרה לתפריט הקישו 3',
+  list_nav: 'לבחירת ספר זה הקישו 1 לספר הבא הקישו 2 לספר הקודם הקישו 3 לחזרה לרשימת הקטגוריות הקישו 4 לסיום ההזמנה הקישו 0',
+  list_all_nav: 'לבחירת ספר זה הקישו 1 לספר הבא הקישו 2 לספר הקודם הקישו 3 לחזרה לתפריט הקישו 4 לסיום ההזמנה הקישו 0',
   list_end: 'הגעתם לסוף הרשימה',
   list_start: 'זהו הספר הראשון ברשימה',
   book_chosen: 'בחרתם {title} המחיר הוא {price} שקלים',
@@ -518,17 +518,22 @@ export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMe
         if (!book) return browseTurn(state, input, messages)
         return confirmBookTurn({ ...state, attempts: 0 }, book, messages)
       }
-      if (input.value === '2') {
+      // 🔴 2 = הבא · 3 = הקודם · 4 = חזרה לקטגוריות · 0 = סיום.
+      //
+      // ⚠️ "הבא" קיבל מקש מפורש משלו: קודם כל הקשה שאינה 1/2/3 קידמה
+      // את הרשימה, ומתקשר שהקיש בטעות התקדם בלי להבין למה.
+      if (input.value === '3') {
         // ⚠️ בתחילת הרשימה נשארים במקום עם הודעה, ולא גולשים ל-‎-1.
         if (i <= 0) return browseTurn({ ...state, attempts: 0 }, input, messages, 'start')
         return browseTurn({ ...state, browse_index: i - 1, attempts: 0 }, input, messages)
       }
-      if (input.value === '3') {
+      if (input.value === '4') {
         return state.browse_category
           ? categoryMenu({ ...state, attempts: 0 }, input, messages)
           : orderMenu({ ...state, attempts: 0 }, messages)
       }
-      // ⚠️ כל הקשה אחרת = "הבא". זו ההתנהגות הצפויה כשמאזינים לרשימה.
+      // ⚠️ כל הקשה אחרת (ובכללה 2) = "הבא" — ההתנהגות הצפויה כשמאזינים
+      // לרשימה, וגם מה שקורה כשההקשה לא נקלטה היטב.
       if (i + 1 >= books.length) {
         return browseTurn({ ...state, attempts: 0 }, input, messages, 'end')
       }

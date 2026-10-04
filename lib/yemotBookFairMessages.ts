@@ -48,8 +48,8 @@ export const BOOK_FAIR_MESSAGE_META: MsgMeta[] = [
   { key: 'category_item', label: 'תבנית שורת קטגוריה', defaultText: 'ל{name} הקישו {code}', allowAudio: false, placeholders: ['name', 'code'],
     hint: 'הודעה דינמית — חובה לכלול {name} ו-{code}. אין הקלטה כי הקטגוריות משתנות.' },
   { key: 'category_empty', label: 'קטגוריה ריקה', defaultText: 'אין כרגע ספרים בקטגוריה זו', allowAudio: true },
-  { key: 'list_nav', label: 'הניווט ברשימת הספרים', defaultText: 'לבחירת ספר זה הקישו 1 לחזרה לספר הקודם הקישו 2 לחזרה לרשימת הקטגוריות הקישו 3', allowAudio: true },
-  { key: 'list_all_nav', label: 'הניווט ברשימת כל הספרים', defaultText: 'לבחירת ספר זה הקישו 1 לחזרה לספר הקודם הקישו 2 לחזרה לתפריט הקישו 3', allowAudio: true },
+  { key: 'list_nav', label: 'הניווט ברשימת הספרים', defaultText: 'לבחירת ספר זה הקישו 1 לספר הבא הקישו 2 לספר הקודם הקישו 3 לחזרה לרשימת הקטגוריות הקישו 4 לסיום ההזמנה הקישו 0', allowAudio: true },
+  { key: 'list_all_nav', label: 'הניווט ברשימת כל הספרים', defaultText: 'לבחירת ספר זה הקישו 1 לספר הבא הקישו 2 לספר הקודם הקישו 3 לחזרה לתפריט הקישו 4 לסיום ההזמנה הקישו 0', allowAudio: true },
   { key: 'list_end', label: 'סוף הרשימה', defaultText: 'הגעתם לסוף הרשימה', allowAudio: true },
   { key: 'list_start', label: 'תחילת הרשימה', defaultText: 'זהו הספר הראשון ברשימה', allowAudio: true },
 
