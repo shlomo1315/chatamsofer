@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, Plus, Trash2, Check, AlertTriangle, MapPin, Truck, Power } from 'lucide-react'
+import { Loader2, Plus, Trash2, Check, AlertTriangle, MapPin, Truck, Power, CreditCard, Phone } from 'lucide-react'
 import type { BookFairCity, BookFairShippingTier } from '@/types/bookFair'
 import { fmtAgorot, agorotToShekels } from '@/lib/bookFairPricing'
 import { validateTiers, resolveShippingTier, tierLabel, type TierInput } from '@/lib/bookFairShipping'
@@ -9,8 +9,22 @@ import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useCan } from '@/components/StaffPermissions'
 import PaymentSettings from './PaymentSettings'
 import SellerPassword from './SellerPassword'
+import PhoneMessages from '../phone/PhoneMessages'
 
-// הגדרות היריד: מתג פתיחה, ערי משלוח, ומדרגות תעריף.
+// הגדרות היריד: מתג פתיחה, ערי משלוח, תעריפים, תשלום ושלוחה טלפונית.
+//
+// 🔴 הכול בטאבים ולא בגלילה אחת ארוכה: המסך החזיק שישה מקטעים זה
+// מתחת לזה, ונוסחי השלוחה הטלפונית ישבו במסך נפרד שלא הופיע בסרגל
+// הניווט כלל — אי אפשר היה למצוא אותם.
+
+const TABS = [
+  { id: 'general', label: 'כללי', icon: Power },
+  { id: 'shipping', label: 'משלוח ותעריפים', icon: Truck },
+  { id: 'payment', label: 'תשלום ודוכן', icon: CreditCard },
+  { id: 'phone', label: 'שלוחה טלפונית', icon: Phone },
+] as const
+
+type TabId = typeof TABS[number]['id']
 
 type TierRow = { min_books: string; max_books: string; price: string; step_volumes: string; step_price: string }
 
@@ -38,6 +52,7 @@ export default function SettingsClient({ cities, tiers, open, openAt, mockPay }:
   const router = useRouter()
   const { confirm, confirmDialog } = useConfirm()
   const canEdit = useCan('book_fair', 'edit')
+  const [tab, setTab] = useState<TabId>('general')
 
   const [isOpen, setIsOpen] = useState(open)
   const [busy, setBusy] = useState<string | null>(null)
@@ -180,8 +195,26 @@ export default function SettingsClient({ cities, tiers, open, openAt, mockPay }:
     <div className="flex flex-col gap-5">
       {confirmDialog}
 
+      {/* ── טאבים ── */}
+      <nav className="flex flex-wrap items-center gap-1 border-b border-slate-200">
+        {TABS.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            className={`-mb-px flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium transition ${
+              tab === id
+                ? 'border-indigo-600 text-indigo-700'
+                : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800'
+            }`}
+          >
+            <Icon size={15} />
+            {label}
+          </button>
+        ))}
+      </nav>
+
       {/* ── מתג פתיחה ── */}
-      <section className={`rounded-2xl border-2 p-5 ${
+      <section hidden={tab !== 'general'} className={`rounded-2xl border-2 p-5 ${
         isOpen ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-white'
       }`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -252,14 +285,19 @@ export default function SettingsClient({ cities, tiers, open, openAt, mockPay }:
         )}
       </section>
 
-      {/* ── ספק הסליקה ── */}
-      <PaymentSettings />
+      {/* ── תשלום ודוכן ── */}
+      <div hidden={tab !== 'payment'} className="flex flex-col gap-5">
+        <PaymentSettings />
+        <SellerPassword />
+      </div>
 
-      {/* ── סיסמת הדוכן ── */}
-      <SellerPassword />
+      {/* ── השלוחה הטלפונית ──
+          🔴 כאן ולא במסך נפרד: /admin/book-fair/phone לא הופיע בסרגל
+          הניווט, ואי אפשר היה להגיע אליו בלי לדעת את הכתובת. */}
+      {tab === 'phone' && <PhoneMessages />}
 
       {/* ── ערי משלוח ── */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5">
+      <section hidden={tab !== 'shipping'} className="rounded-2xl border border-slate-200 bg-white p-5">
         <h2 className="mb-1 flex items-center gap-2 font-semibold text-slate-900">
           <MapPin size={17} /> ערי משלוח
         </h2>
@@ -355,7 +393,7 @@ export default function SettingsClient({ cities, tiers, open, openAt, mockPay }:
       </section>
 
       {/* ── מדרגות משלוח ── */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5">
+      <section hidden={tab !== 'shipping'} className="rounded-2xl border border-slate-200 bg-white p-5">
         <h2 className="mb-1 flex items-center gap-2 font-semibold text-slate-900">
           <Truck size={17} /> תעריף משלוח
         </h2>

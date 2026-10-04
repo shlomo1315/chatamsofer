@@ -16,12 +16,21 @@ export default async function BookFairPhonePage() {
   const staff = await requirePermission('book_fair', 'view')
   if (!staff) redirect('/admin')
 
+  // ⚠️ הנתיב נשמר כדי שקישורים ישנים לא יישברו, אך המסך עצמו חי
+  // עכשיו כטאב בהגדרות — שם הצוות מוצא אותו.
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
         title="השלוחה הטלפונית"
         subtitle="כל מה שנשמע בטלפון — טקסט, קול טבעי והקלטות"
       />
+      <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+        המסך הזה זמין גם תחת{' '}
+        <a href="/admin/book-fair/settings" className="font-semibold text-indigo-700 underline">
+          הגדרות → שלוחה טלפונית
+        </a>
+        .
+      </p>
       <PhoneMessages />
     </div>
   )
