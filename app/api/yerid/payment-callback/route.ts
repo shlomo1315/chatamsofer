@@ -88,7 +88,14 @@ async function handle(raw: Record<string, unknown>, ctx: RequestContext) {
     // ⚠️ channel נדרש לניכוי מלאי הדוכן למטה — בלעדיו התנאי תמיד שקרי
     // ומכירה בדוכן לא הייתה מורידה מלאי כלל.
     .select('id, order_number, status, channel, total_agorot, items_total_agorot, shipping_agorot, customer_name, customer_email, delivery_method, address_text, tracking_token, city:book_fair_cities(name)')
-    .eq('id', verified.orderId).maybeSingle()
+    // 🔴 order_number ולא id: נדרים מחזירה ב-Param2 את *מספר ההזמנה*
+    // ("121213"), ולא את ה-UUID. ההשוואה ל-id לא התאימה לעולם, הקולבק
+    // נדחה עם "דיווח על הזמנה שאינה קיימת", והלקוח חויב בעוד ההזמנה
+    // נשארה "ממתין לתשלום" לנצח.
+    //
+    // ⚠️ בטלפון זה לא התגלה: שם ימות מדווחת ישירות לוובהוק ולא דרך
+    // הקולבק הזה, ולכן רק הזמנות האתר נתקעו.
+    .eq('order_number', verified.orderId).maybeSingle()
 
   if (!order) {
     console.warn('[fair/callback] דיווח על הזמנה שאינה קיימת:', verified.orderId)

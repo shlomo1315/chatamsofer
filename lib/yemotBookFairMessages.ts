@@ -137,8 +137,21 @@ export const BOOK_FAIR_MESSAGE_META: MsgMeta[] = [
   // ── הזמנה קיימת (שלוחה 2) ──
   { key: 'orders_none', label: 'לא נמצאו הזמנות', defaultText: 'לא נמצאו הזמנות הרשומות על מספר הטלפון שלכם', allowAudio: true },
   { key: 'orders_intro', label: 'הקדמה לרשימת ההזמנות', defaultText: 'אלו ההזמנות הרשומות על מספר הטלפון שלכם', allowAudio: true },
-  { key: 'order_line', label: 'תבנית שורת הזמנה', defaultText: 'הזמנה מספר {number} בסך {total} שקלים סטטוס {status}', allowAudio: false, placeholders: ['number', 'total', 'status'],
-    hint: 'הודעה דינמית — חובה לכלול {number}, {total} ו-{status}.' },
+  // 🔴 שורת ההזמנה פוצלה למילות קישור נפרדות, כדי שכל אחת תוכל
+  // להיות מוקלטת בקול טבעי. קודם הייתה תבנית אחת עם {placeholders}
+  // שחייבה TTS לכל המשפט.
+  //
+  // ⚠️ המספר עצמו מוקרא ספרה-ספרה (d-) ואינו נוסח שניתן לעריכה.
+  { key: 'order_num_word', label: 'שורת הזמנה — "הזמנה מספר"', defaultText: 'הזמנה מספר', allowAudio: true },
+  { key: 'order_sum_word', label: 'שורת הזמנה — "בסך"', defaultText: 'בסך', allowAudio: true },
+  { key: 'order_status_word', label: 'שורת הזמנה — "שקלים סטטוס"', defaultText: 'שקלים סטטוס', allowAudio: true },
+  { key: 'status_paid', label: 'סטטוס — שולם', defaultText: 'שולם וההזמנה בטיפול', allowAudio: true },
+  { key: 'status_picking', label: 'סטטוס — בליקוט', defaultText: 'ההזמנה בליקוט', allowAudio: true },
+  { key: 'status_packed', label: 'סטטוס — נארז', defaultText: 'ההזמנה נארזה', allowAudio: true },
+  { key: 'status_shipped', label: 'סטטוס — נשלח', defaultText: 'ההזמנה נשלחה', allowAudio: true },
+  { key: 'status_delivered', label: 'סטטוס — נמסר', defaultText: 'ההזמנה נמסרה', allowAudio: true },
+  { key: 'status_refunded', label: 'סטטוס — זוכה', defaultText: 'ההזמנה זוכתה', allowAudio: true },
+  { key: 'status_partially_refunded', label: 'סטטוס — זוכה חלקית', defaultText: 'ההזמנה זוכתה חלקית', allowAudio: true },
 
   // ── פנייה לשירות לקוחות (שלוחה 3) ──
   { key: 'inquiry_intro', label: 'בקשת הקלטת פנייה', defaultText: 'השאירו את פנייתכם לאחר הצפצוף ולסיום הקישו סולמית', allowAudio: true },
