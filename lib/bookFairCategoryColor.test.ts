@@ -3,8 +3,23 @@ import { categoryColor, DEFAULT_CATEGORY_COLOR } from './bookFairCategoryColor'
 
 describe('categoryColor — צבע לכל קטגוריה', () => {
   it('מחזיר גוון ייעודי לקטגוריה מוכרת', () => {
-    expect(categoryColor('שאלות ותשובות').main).toBe('#6B2737')
-    expect(categoryColor('קורות חייו').main).toBe('#4A4A6A')
+    expect(categoryColor('שאלות ותשובות').main).toBe('#101030')
+    expect(categoryColor('קורות חייו').main).toBe('#13263F')
+  })
+
+  // 🔴 הפלטה נגזרת מהלוגו: כחול־לילה וזהב. גוון שאינו כחלחל (רכיב
+  // כחול שאינו הגבוה) מעיד שמישהו הוסיף צבע שאינו שייך למותג.
+  it('🔴 כל הגוונים כחלחלים — נגזרים מהלוגו', () => {
+    const names = ['שאלות ותשובות', 'דרוש ואגדה', 'על הש"ס', 'סידור ותהילים',
+      'ליקוטים על התורה', 'שבת ומועדים', 'הלכה ומנהג',
+      'ליקוטים בעניינים שונים', 'קורות חייו']
+    for (const n of names) {
+      const hex = categoryColor(n).main
+      const r = parseInt(hex.slice(1, 3), 16)
+      const g = parseInt(hex.slice(3, 5), 16)
+      const b = parseInt(hex.slice(5, 7), 16)
+      expect(b, `${n} (${hex}) — הכחול חייב להיות הרכיב החזק`).toBeGreaterThanOrEqual(Math.max(r, g))
+    }
   })
 
   it('כל תשע הקטגוריות מקבלות גוון שונה זו מזו', () => {
@@ -18,12 +33,12 @@ describe('categoryColor — צבע לכל קטגוריה', () => {
   it('🔴 גרש עברי וגרשיים רגילים מתאימים לאותה קטגוריה', () => {
     // בלי הנרמול הזה "על הש״ס" היה נופל לברירת המחדל ומאבד את הגוון
     expect(categoryColor('על הש״ס')).toEqual(categoryColor('על הש"ס'))
-    expect(categoryColor('על הש״ס').main).toBe('#2F5D50')
+    expect(categoryColor('על הש״ס').main).toBe('#20406B')
   })
 
   it('רווחים מיותרים אינם מפילים את ההתאמה', () => {
-    expect(categoryColor('  שבת ומועדים  ').main).toBe('#A14B2A')
-    expect(categoryColor('שבת  ומועדים').main).toBe('#A14B2A')
+    expect(categoryColor('  שבת ומועדים  ').main).toBe('#2E2F63')
+    expect(categoryColor('שבת  ומועדים').main).toBe('#2E2F63')
   })
 
   it('שם לא מוכר, ריק או חסר מקבל את גוון המותג', () => {

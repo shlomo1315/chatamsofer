@@ -3,7 +3,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { Search, ShoppingBag, Plus, Minus, X, Check, UserRound, Truck, Loader2, Package } from 'lucide-react'
 import { fmtAgorot, bookImageUrl } from '@/lib/bookFairPricing'
 import { shippingCost, totalVolumes } from '@/lib/bookFairShipping'
-import { categoryColor } from '@/lib/bookFairCategoryColor'
+import { categoryColor, BRAND_GOLD, BRAND_NAVY } from '@/lib/bookFairCategoryColor'
 import { cleanEmail, emailError } from '@/lib/emailAddress'
 import type { PublicBook, PublicCity, PublicTier } from './page'
 import Countdown from './Countdown'
@@ -234,7 +234,7 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
                 (/yerid/order/<token>) אך לא היה אליו שום כניסה מהחנות. */}
             <a
               href="/yerid/my-order"
-              className="hidden items-center gap-2 rounded-xl border border-[#141210]/12 bg-white px-4 py-2.5 text-sm font-medium text-[#141210]/70 transition hover:border-[#B8860B] hover:text-[#141210] sm:flex"
+              className="hidden items-center gap-2 rounded-xl border border-[#141210]/12 bg-white px-4 py-2.5 text-sm font-medium text-[#141210]/70 transition hover:border-[#A8823C] hover:text-[#141210] sm:flex"
             >
               <UserRound size={17} /> האזור האישי
             </a>
@@ -272,7 +272,7 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
               placeholder="חיפוש או סריקת ברקוד"
               inputMode="search"
               aria-label="חיפוש ספר או סריקת ברקוד"
-              className="w-full rounded-xl border-2 border-[#141210]/10 bg-white py-3 pr-12 pl-4 text-base outline-none transition placeholder:text-[#141210]/30 focus:border-[#B8860B]"
+              className="w-full rounded-xl border-2 border-[#141210]/10 bg-white py-3 pr-12 pl-4 text-base outline-none transition placeholder:text-[#141210]/30 focus:border-[#A8823C]"
             />
             {query && (
               <button
@@ -289,9 +289,13 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
           <button
             ref={cartBtnRef}
             onClick={() => setCartOpen(true)}
-            className={`flex flex-shrink-0 items-center gap-2 rounded-xl px-4 py-3 text-base font-semibold transition ${
+            // ⚠️ כחול הלוגו ובריחוף זהב — אותה שפה כמו כפתורי ההוספה.
+            onMouseEnter={e => { if (bookCount > 0) e.currentTarget.style.background = BRAND_GOLD }}
+            onMouseLeave={e => { if (bookCount > 0) e.currentTarget.style.background = BRAND_NAVY }}
+            style={bookCount > 0 ? { background: BRAND_NAVY } : undefined}
+            className={`flex flex-shrink-0 items-center gap-2 rounded-xl px-4 py-3 text-base font-semibold transition-colors ${
               bookCount > 0
-                ? 'bg-[#6B2737] text-white hover:bg-[#141210]'
+                ? 'text-white'
                 : 'border-2 border-[#141210]/10 bg-white text-[#141210]/50'
             }`}
           >
@@ -608,7 +612,7 @@ function ClosedScreen({ openAt }: { openAt: string | null }) {
                 // ⚠️ אזור לחיצה גדול וטיפוגרפיה גדולה — קהל היעד כולל
                 // קונים מבוגרים ומכשירים ישנים.
                 className={`w-full rounded-xl border-2 bg-white px-5 py-4 text-center text-lg text-[#12314F] outline-none transition placeholder:text-[#8AA5BD] ${
-                  error ? 'border-red-400' : 'border-[#9DC3E6] focus:border-[#B8860B]'
+                  error ? 'border-red-400' : 'border-[#9DC3E6] focus:border-[#A8823C]'
                 }`}
                 disabled={state === 'sending'}
                 aria-invalid={!!error}
@@ -725,9 +729,11 @@ function BookCard({ book, inCart, justAdded, onAdd, onSetQty, eager }: {
 
         {/* 🔴 המק"ט אופקי ולא לאורך השדרה: ספרות מסובבות קשות לקריאה,
             והקונה נאלץ להטות את הראש כדי להשוות מול הקטלוג המודפס. */}
+        {/* ⚠️ המק"ט בזהב של הלוגו ולא בגוון הקטגוריה: הוא מידע עזר
+            ולא היררכיה, והגוון הצבעוני משך אליו את העין. */}
         <span
-          className="absolute end-3 top-3 rounded-full border bg-white/[0.86] px-2.5 py-0.5 text-[13px] font-bold tabular-nums tracking-wide backdrop-blur-sm"
-          style={{ color: c.main, borderColor: `${c.main}42` }}
+          className="absolute end-3 top-3 rounded-full border bg-white/[0.88] px-2.5 py-0.5 text-[12.5px] font-bold tabular-nums tracking-wide backdrop-blur-sm"
+          style={{ color: BRAND_GOLD, borderColor: `${BRAND_GOLD}40` }}
         >
           {book.sku}
         </span>
@@ -777,31 +783,47 @@ function BookCard({ book, inCart, justAdded, onAdd, onSetQty, eager }: {
               אזל מהמלאי
             </span>
           ) : inCart > 0 ? (
-            <div className="flex items-center rounded-full border-2" style={{ borderColor: c.main }}>
+            // ⚠️ בקר קומפקטי: המסגרת הגדולה בלעה את רוחב הכרטיס
+            // והמחיר נדחק. הכפתורים מלאים בצבע ולא רק קו — כך ברור
+            // שהם לחיצים.
+            <div
+              className="flex flex-shrink-0 items-center gap-1 rounded-full p-1"
+              style={{ background: c.soft }}
+            >
+              {/* ⚠️ הריחוף ב-handlers ולא ב-hover: של Tailwind: הצבע
+                  מגיע ממשתנה לכל קטגוריה, ו-Tailwind אינו יכול לייצר
+                  מחלקה לערך שנקבע בזמן ריצה. */}
               <button onClick={() => onSetQty(inCart - 1)} aria-label="הפחתת כמות"
-                className="flex h-11 w-11 items-center justify-center rounded-full transition hover:bg-[var(--c-soft)]"
-                style={{ color: c.main }}>
-                <Minus size={19} />
+                onMouseEnter={e => { e.currentTarget.style.background = c.main; e.currentTarget.style.color = '#fff' }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.color = c.main }}
+                className="flex h-8 w-8 items-center justify-center rounded-full shadow-sm transition-colors"
+                style={{ background: '#fff', color: c.main }}>
+                <Minus size={16} strokeWidth={3} />
               </button>
-              <span className="min-w-[2rem] text-center text-lg font-bold tabular-nums" style={{ color: c.main }}>
+              <span className="min-w-[1.5rem] text-center text-base font-extrabold tabular-nums" style={{ color: c.main }}>
                 {inCart}
               </span>
               <button onClick={() => onSetQty(inCart + 1)} aria-label="הוספת כמות"
-                className="flex h-11 w-11 items-center justify-center rounded-full transition hover:bg-[var(--c-soft)]"
-                style={{ color: c.main }}>
-                <Plus size={19} />
+                onMouseEnter={e => { e.currentTarget.style.background = c.main; e.currentTarget.style.color = '#fff' }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.color = c.main }}
+                className="flex h-8 w-8 items-center justify-center rounded-full shadow-sm transition-colors"
+                style={{ background: '#fff', color: c.main }}>
+                <Plus size={16} strokeWidth={3} />
               </button>
             </div>
           ) : (
             // ⚠️ הרגע היחיד של תנועה בדף: הכפתור עונה לפעולה של הקונה
-            // ומראה בבירור שהספר נכנס.
+            // ומראה בבירור שהספר נכנס. 🔴 בריחוף הוא עובר לזהב של
+            // הלוגו — סימן ברור שהוא לחיץ.
             <button
               ref={btnRef}
               onClick={() => onAdd(btnRef.current)}
-              className="flex min-h-[48px] flex-shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-5 text-[15px] font-bold text-white transition-colors duration-200"
+              onMouseEnter={e => { if (!justAdded) e.currentTarget.style.background = BRAND_GOLD }}
+              onMouseLeave={e => { if (!justAdded) e.currentTarget.style.background = c.main }}
+              className="flex min-h-[44px] flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-4 text-[14px] font-bold text-white transition-colors duration-200"
               style={{ background: justAdded ? '#2D5016' : c.main }}
             >
-              {justAdded ? <><Check size={18} /> נוסף</> : 'הוספה'}
+              {justAdded ? <><Check size={17} /> נוסף</> : 'הוספה'}
             </button>
           )}
         </div>
@@ -1225,7 +1247,7 @@ function CartPanel({ lines, cities, tiers, previewToken, pickup, onClose, onSetQ
   )
 }
 
-const INPUT = 'w-full rounded-md border-2 border-[#141210]/15 bg-white px-4 py-3.5 text-lg outline-none transition focus:border-[#B8860B]'
+const INPUT = 'w-full rounded-md border-2 border-[#141210]/15 bg-white px-4 py-3.5 text-lg outline-none transition focus:border-[#A8823C]'
 
 function Field({ label, required, hint, error, anchor, children }: {
   label: string; required?: boolean; hint?: string

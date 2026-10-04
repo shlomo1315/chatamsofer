@@ -80,8 +80,24 @@ describe('msgToken', () => {
   })
 
   // 🔴 ההקלטה גוברת על הטקסט — זו המלכודת שהפילה אותנו בעבר.
-  it('מעדיף הקלטה על פני הטקסט', () => {
-    expect(msgToken({ welcome: { text: 'טקסט', audio: 'rec_welcome' } }, 'welcome')).toBe('f-rec_welcome')
+  // 🔴 ברירת המחדל היא טקסט, גם כשיש הקלטה.
+  //
+  // השלוחה ענתה "שגיאה" וניתקה כל מתקשר, כי ביקשה לנגן קבצי f-
+  // שימות לא מצאה אצלה — ואצלנו הלוגים נקיים (מחזירים 200 תקין).
+  // קו חי עם TTS עדיף על קו מת שאמור היה להשמיע קול נוירוני.
+  it('🔴 ברירת מחדל: טקסט, גם כשיש הקלטה', () => {
+    expect(msgToken({ welcome: { text: 'טקסט', audio: 'rec_welcome' } }, 'welcome')).toBe('t-טקסט')
+  })
+
+  it('ההקלטה מושמעת רק כש-YEMOT_BOOK_FAIR_AUDIO=1', () => {
+    const prev = process.env.YEMOT_BOOK_FAIR_AUDIO
+    process.env.YEMOT_BOOK_FAIR_AUDIO = '1'
+    try {
+      expect(msgToken({ welcome: { text: 'טקסט', audio: 'rec_welcome' } }, 'welcome')).toBe('f-rec_welcome')
+    } finally {
+      if (prev === undefined) delete process.env.YEMOT_BOOK_FAIR_AUDIO
+      else process.env.YEMOT_BOOK_FAIR_AUDIO = prev
+    }
   })
 
   // ⚠️ קובץ יחיד אינו יכול להקריא ערך משתנה — עם vars חוזרים ל-TTS.
@@ -128,11 +144,26 @@ describe('🔴 nextTurn משתמש בנוסחים שהוזנו', () => {
     expect(turn.response).toContain(`t-${MESSAGE_FALLBACKS.welcome}`)
   })
 
-  it('הקלטה שהועלתה לברכה מושמעת במקום הטקסט', () => {
+  it('🔴 הקלטה אינה מושמעת כברירת מחדל — הטקסט כן', () => {
     const turn = nextTurn(initialState(), {}, {
-      welcome: { text: 'לא יישמע', audio: 'rec_welcome' },
+      welcome: { text: 'הטקסט שיישמע', audio: 'rec_welcome' },
     })
-    expect(turn.response).toContain('f-rec_welcome')
-    expect(turn.response).not.toContain('לא יישמע')
+    expect(turn.response).not.toContain('f-rec_welcome')
+    expect(turn.response).toContain('t-הטקסט שיישמע')
+  })
+
+  it('ההקלטה מושמעת כש-YEMOT_BOOK_FAIR_AUDIO=1', () => {
+    const prev = process.env.YEMOT_BOOK_FAIR_AUDIO
+    process.env.YEMOT_BOOK_FAIR_AUDIO = '1'
+    try {
+      const turn = nextTurn(initialState(), {}, {
+        welcome: { text: 'לא יישמע', audio: 'rec_welcome' },
+      })
+      expect(turn.response).toContain('f-rec_welcome')
+      expect(turn.response).not.toContain('לא יישמע')
+    } finally {
+      if (prev === undefined) delete process.env.YEMOT_BOOK_FAIR_AUDIO
+      else process.env.YEMOT_BOOK_FAIR_AUDIO = prev
+    }
   })
 })
