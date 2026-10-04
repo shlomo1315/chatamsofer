@@ -32,12 +32,24 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
 
   if (!order) notFound()
 
-  const [{ data: items }, { data: recordings }, { data: payments }, { data: cities }] = await Promise.all([
+  const [{ data: items }, { data: recordings, error: recErr }, { data: payments }, { data: cities }] = await Promise.all([
     supabase.from('book_fair_order_items').select('*').eq('order_id', id),
-    supabase.from('book_fair_recordings').select('*').eq('order_id', id).order('created_at'),
+    // ⚠️ מיון לפי kind ולא לפי created_at: שתי ההקלטות של אותה שיחה
+    // נשמרות באותה שנייה בדיוק (createOrder כותב אותן יחד), ומיון לפי
+    // זמן מחזיר סדר לא יציב בין רינדורים.
+    supabase.from('book_fair_recordings').select('*').eq('order_id', id).order('kind'),
     supabase.from('book_fair_payments').select('*').eq('order_id', id).order('created_at', { ascending: false }),
     supabase.from('book_fair_cities').select('id, name').eq('is_active', true).order('sort_order'),
   ])
+
+  // 🔴 אבחון: הקלטת הכתובת נעלמה מהמסך בעוד היא קיימת במסד
+  // ומקושרת להזמנה. בלי הלוג הזה אי אפשר לדעת אם היא לא נשלפה
+  // (RLS/שגיאה) או שלא רונדרה.
+  if (recErr) console.error('[book-fair/order] שליפת הקלטות נכשלה:', recErr)
+  console.log(
+    `[book-fair/order] ${id} — הקלטות: ${(recordings ?? []).length}` +
+    ` (${(recordings ?? []).map(r => r.kind).join(', ') || 'אין'})`,
+  )
 
   const o = order as BookFairOrder
   const city = oneOf(o.city)

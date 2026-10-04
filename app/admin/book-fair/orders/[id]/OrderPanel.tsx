@@ -98,10 +98,14 @@ export default function OrderPanel({ order, items, cities, recordings, payments 
     name: 'שם מלא',
   }
   // ⚠️ השם ראשון: בכל הזמנה הוא השדה שמזהה את הלקוח.
-  const REC_ORDER = ['name', 'address']
-  const allRecs = [...recordings].sort(
-    (a, b) => REC_ORDER.indexOf(a.kind) - REC_ORDER.indexOf(b.kind),
-  )
+  //
+  // 🔴 rank() ולא indexOf: indexOf מחזיר ‎-1 לכל kind שאינו ברשימה,
+  // וערך שלילי מערבב את הסדר. כאן כל ערך לא מוכר נדחף לסוף.
+  //
+  // ⚠️ המיון לעולם אינו מסנן — כל הקלטה שהגיעה מהשרת מוצגת, גם אם
+  // ה-kind שלה חדש. הסתרת שורה בשקט היא בדיוק מה שקרה עם הקלטת השם.
+  const rank = (k: string) => (k === 'name' ? 0 : k === 'address' ? 1 : 2)
+  const allRecs = [...recordings].sort((a, b) => rank(a.kind) - rank(b.kind))
 
   async function patch(body: Record<string, unknown>, tag: string) {
     setBusy(tag); setError('')
