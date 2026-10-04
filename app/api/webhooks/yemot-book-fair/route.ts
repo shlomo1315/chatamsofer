@@ -450,6 +450,7 @@ async function stashRecording(
   kind: 'address' | 'name',
   providerPath: string | undefined,
   transcript: string | undefined,
+  callYfId?: string,
 ): Promise<void> {
   if (!providerPath) return
   // 🔴 "Digits-0" / "Digits-*" אינו נתיב קובץ אלא *ההקשות* של
@@ -465,13 +466,26 @@ async function stashRecording(
     const extDir = process.env.YEMOT_BOOK_FAIR_EXT || '9'
     const name = /\.(wav|mp3)$/i.test(providerPath) ? providerPath : `${providerPath}.wav`
 
-    // 🔴 הקלטות של מתקשרים אינן יושבות בתיקיית השלוחה.
+    // ─────────────────────────────────────────────────────────────────────
+    // 🔴 הנתיב מורכב משני חלקים ש*מתפצלים*: "30/9.wav" אינו
+    // תיקייה/קובץ אלא <שנייה בשיחה>/<מספר השלוחה>.wav
     //
-    // ⚠️ "30/9.wav" נראה כמו נתיב יחסי לשלוחה, ולכן נוסו רק
-    // ivr2:/30/9.wav ו-ivr2:/9/30/9.wav — ושניהם נכשלו. ימות שומרת
-    // הקלטות API תחת תיקיות ייעודיות (ApiRecord/ImportRecord), והן
-    // הראשונות שצריך לנסות.
+    // הלוג המלא הראה שימות שולחת 19 פרמטרים ו-"30/9.wav" הוא כל מה
+    // שיש — אין שום פרמטר עם נתיב מלא. אבל ApiYFCallId הוא מזהה
+    // השיחה האמיתי, וימות שומרת הקלטות API תחת תיקייה על שמו.
+    //
+    // ⚠️ כל הנתיבים שנוסו קודם התייחסו ל-"30" כתיקייה, ולכן נכשלו.
+    // ─────────────────────────────────────────────────────────────────────
+    const base = name.replace(/\.wav$/i, '')      // "30/9"
+    const file = base.split('/').pop() ?? base    // "9"
+    const yf = (callYfId ?? '').trim()
+
     const candidates = [
+      ...(yf ? [
+        `ivr2:/ApiRecord/${yf}/${file}.wav`,
+        `ivr2:/ApiRecord/${yf}.wav`,
+        `ivr2:/${extDir}/ApiRecord/${yf}/${file}.wav`,
+      ] : []),
       `ivr2:/ApiRecord/${name}`,
       `ivr2:/ImportRecord/${name}`,
       `ivr2:/${extDir}/ApiRecord/${name}`,
@@ -960,11 +974,11 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
     // דורסת אותו בשיחה הבאה. הגיבוי ביצירת ההזמנה רץ דקות אחר כך,
     // אחרי התשלום, וכשהמתקשר הבא כבר הקליט — הקובץ שהועתק היה שלו
     // או שלא היה כלל. לקוח ששילם 839 ₪ נשאר בלי כתובת.
-    await stashRecording(callId, 'address', input.recording, input.transcript)
+    await stashRecording(callId, 'address', input.recording, input.transcript, params['ApiYFCallId'])
   } else if (state.step === 'ask_name') {
     input.recording = paramFor(params, 'bf_name')
     input.transcript = params['bf_name_voice'] || undefined
-    await stashRecording(callId, 'name', input.recording, input.transcript)
+    await stashRecording(callId, 'name', input.recording, input.transcript, params['ApiYFCallId'])
   } else if (state.step === 'confirm_total') {
     input.value = paramFor(params, 'bf_conf')
   } else if (state.step === 'payment') {

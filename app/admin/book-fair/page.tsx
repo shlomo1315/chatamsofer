@@ -26,7 +26,7 @@ type OrderRow = {
   id: string; status: BookFairOrderStatus; channel: BookFairChannel
   total_agorot: number; refunded_agorot: number
   delivery_method: string; address_confirmed: boolean
-  created_at: string; customer_name: string | null; order_number: string
+  created_at: string; paid_at: string | null; customer_name: string | null; order_number: string
 }
 
 type BookRow = {
@@ -48,7 +48,7 @@ async function getData() {
     // רשימה חתוכה נראה בדיוק כמו סיכום מלא.
     fetchAllRows<OrderRow>((from, to) =>
       supabase.from('book_fair_orders')
-        .select('id, status, channel, total_agorot, refunded_agorot, delivery_method, address_confirmed, created_at, customer_name, order_number')
+        .select('id, status, channel, total_agorot, refunded_agorot, delivery_method, address_confirmed, created_at, paid_at, customer_name, order_number')
         .order('created_at', { ascending: false })
         .range(from, to)
     ),
@@ -84,8 +84,24 @@ export default async function BookFairPage() {
   const paid = orders.filter(o => PAID.includes(o.status))
   const revenue = paid.reduce((s, o) => s + o.total_agorot - o.refunded_agorot, 0)
 
-  const today = new Date(); today.setHours(0, 0, 0, 0)
-  const todayOrders = orders.filter(o => new Date(o.created_at) >= today)
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 "הזמנות היום" = ששולמו היום בלבד.
+  //
+  // ⚠️ קודם נספרו *כל* השורות: 42 הזמנות, מתוכן 17 מבוטלות (עגלות
+  // נטושות וניסיונות תשלום שלא הושלמו) ו-5 שטרם שולמו. המספר נראה
+  // מצוין ולא תיאר שום דבר אמיתי — ולא התיישב עם "3 מהאתר · 15
+  // מהטלפון" שמתחתיו, שכבר ספר רק ששולמו.
+  //
+  // ⚠️ לפי שעת ישראל ולא שעת השרת: ב-UTC "היום" מתחלף ב-03:00 שלנו,
+  // ובדיוק בשעות הפעילות של היריד.
+  // ─────────────────────────────────────────────────────────────────────────
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })
+  const isToday = (d: string | null | undefined) =>
+    Boolean(d) && new Date(d!).toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' }) === todayStr
+
+  // ⚠️ לפי שעת התשלום ולא שעת היצירה: הזמנה שנפתחה אתמול ושולמה היום
+  // היא מכירה של היום.
+  const todayOrders = paid.filter(o => isToday(o.paid_at ?? o.created_at))
 
   const needsAddress = orders.filter(o =>
     o.delivery_method === 'shipping' && !o.address_confirmed &&
@@ -105,9 +121,13 @@ export default async function BookFairPage() {
     .filter(b => !b.unlimited_stock && (b.stock_total ?? 0) > 0 && (b.stock_total ?? 0) <= 3)
     .slice(0, 5)
 
+  // ⚠️ מתוך todayOrders ולא מכל ההזמנות: הפירוט יושב מתחת לכותרת
+  // "הזמנות היום", וספירה על כל הימים נתנה שני מספרים שלא מסתכמים
+  // למספר שמעליהם.
   const byChannel = {
-    web: paid.filter(o => o.channel === 'web').length,
-    phone: paid.filter(o => o.channel === 'phone').length,
+    web: todayOrders.filter(o => o.channel === 'web').length,
+    phone: todayOrders.filter(o => o.channel === 'phone').length,
+    fair: todayOrders.filter(o => o.channel === 'fair').length,
   }
 
   // 🔴 מה שחוסם את פתיחת היריד בפועל
@@ -203,8 +223,13 @@ export default async function BookFairPage() {
         />
         <Stat
           icon={ShoppingCart} tone="indigo"
-          value={String(todayOrders.length)} label="הזמנות היום"
-          sub={`${byChannel.web} מהאתר · ${byChannel.phone} מהטלפון`}
+          value={String(todayOrders.length)} label="הזמנות ששולמו היום"
+          sub={[
+            `${byChannel.web} מהאתר`,
+            `${byChannel.phone} מהטלפון`,
+            // ⚠️ הדוכן מוצג רק כשמכר: ביום רגיל "0 מהדוכן" הוא רעש.
+            byChannel.fair ? `${byChannel.fair} מהדוכן` : '',
+          ].filter(Boolean).join(' · ')}
         />
         <Stat
           icon={Globe} tone="sky"
