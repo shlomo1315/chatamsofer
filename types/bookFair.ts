@@ -10,8 +10,13 @@
 // שלמים ודאית, השוואת שברים עשרוניים אינה.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** ערוץ המכירה. המלאי מופרד קשיחות בין השניים — אין גלישה. */
-export type BookFairChannel = 'web' | 'phone'
+/**
+ * ערוץ המכירה.
+ *
+ * ⚠️ 'fair' (דוכן ביריד) היה חסר כאן למרות שהוא קיים במסד ובקוד —
+ * ולכן השוואה אליו נחשבה לשגיאת טיפוס. מלאי הדוכן נפרד (stock_fair).
+ */
+export type BookFairChannel = 'web' | 'phone' | 'fair'
 
 export type BookFairOrderStatus =
   | 'pending_payment'     // נוצרה, טרם שולמה
@@ -128,6 +133,10 @@ export interface BookFairOrder {
   address_text?: string | null
   /** אומת מול ההקלטה במסך הניהול (רלוונטי למשלוח מהטלפון). */
   address_confirmed: boolean
+  /** מזומן/אשראי — רלוונטי למכירה בדוכן (channel='fair') בלבד. */
+  payment_method?: string | null
+  /** שם המוכר בדוכן — לתיעוד, לא לאימות. */
+  sold_by?: string | null
   items_total_agorot: number
   shipping_agorot: number
   /** 🔴 נצרב בעת ההזמנה ואינו מחושב מחדש — זה הסכום שנגבה בפועל. */
@@ -232,6 +241,7 @@ export const BOOK_FAIR_STATUS_COLORS: Record<BookFairOrderStatus, string> = {
 export const BOOK_FAIR_CHANNEL_LABELS: Record<BookFairChannel, string> = {
   web:   'אתר',
   phone: 'טלפון',
+  fair:  'דוכן',
 }
 
 export const BOOK_FAIR_DELIVERY_LABELS: Record<BookFairDeliveryMethod, string> = {

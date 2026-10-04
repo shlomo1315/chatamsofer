@@ -2529,3 +2529,103 @@ export function bookFairNewsletterEmail(opts: {
     }),
   }
 }
+
+// ─── קישורי המעקב להזמנות ───────────────────────────────────────────────────
+//
+// 🔴 נשלח כשלקוח מבקש את הקישורים לפי מספר הטלפון שלו.
+//
+// ⚠️ רק הזמנות ששולמו נכללות — ניסיון שלא הושלם נשאר cancelled,
+// ולקוח שקיבל קישור להזמנה מבוטלת חשב שהיא קיימת ופנה למשרד.
+//
+// ⚠️ אותו עיצוב כמו מייל אישור ההזמנה (shell + אותו accent): שני
+// מיילים על אותה הזמנה שנראים שונה לגמרי נקראים כמו זיוף.
+export function bookFairTrackingLinksEmail(opts: {
+  orders: {
+    orderNumber: string
+    totalAgorot: number
+    trackingToken: string
+    paidAt?: string | null
+    status: string
+    cardLast4?: string | null
+    items?: { title: string; quantity: number }[]
+  }[]
+  portalBase?: string
+}): BuiltEmail {
+  const { orders, portalBase = PORTAL_BASE_DEFAULT } = opts
+  const accent = '#0ea5e9'
+  const base = portalBase.replace(/\/$/, '')
+
+  const STATUS: Record<string, string> = {
+    paid: 'שולם — בהכנה',
+    picking: 'בליקוט',
+    packed: 'ארוז',
+    shipped: 'נשלח',
+    delivered: 'נמסר',
+    payment_mismatch: 'ממתין לבדיקה',
+  }
+
+  // ⚠️ תאריך בעברית ובפורמט מקומי: ISO גולמי במייל ללקוח נראה כמו
+  // תקלה, ולא כמו מידע.
+  const fmtDate = (iso?: string | null) => {
+    if (!iso) return ''
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return ''
+    return d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  }
+
+  const cards = orders.map(o => {
+    const itemsHtml = (o.items ?? []).map(it => `
+      <tr>
+        <td style="padding:7px 16px;color:#334155;font-size:13px;border-bottom:1px solid #f1f5f9;">
+          ${escapeHtml(it.title)}${it.quantity > 1 ? `<span style="color:#94a3b8;"> × ${it.quantity}</span>` : ''}
+        </td>
+      </tr>`).join('')
+
+    const meta = [
+      o.paidAt ? `שולם ב-${fmtDate(o.paidAt)}` : '',
+      o.cardLast4 ? `כרטיס ××××${escapeHtml(o.cardLast4)}` : '',
+      STATUS[o.status] ?? '',
+    ].filter(Boolean).join(' · ')
+
+    return `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+      <tr><td style="background:#f0f9ff;padding:13px 16px;border-bottom:1px solid #bae6fd;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td style="color:#0c4a6e;font-size:16px;font-weight:900;letter-spacing:0.5px;">${escapeHtml(o.orderNumber)}</td>
+          <td style="text-align:left;color:#0f172a;font-size:16px;font-weight:900;white-space:nowrap;">${fmtAgorot(o.totalAgorot)}</td>
+        </tr></table>
+        ${meta ? `<p style="margin:4px 0 0;color:#0369a1;font-size:12px;font-weight:600;">${meta}</p>` : ''}
+      </td></tr>
+      ${itemsHtml}
+      <tr><td style="padding:12px 16px;">
+        <a href="${base}/yerid/order/${encodeURIComponent(o.trackingToken)}"
+           style="display:inline-block;background:${accent};color:#fff;font-size:13px;font-weight:700;text-decoration:none;padding:9px 20px;border-radius:8px;">
+          מעקב אחר ההזמנה
+        </a>
+      </td></tr>
+    </table>`
+  }).join('')
+
+  const body = `
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;letter-spacing:0.5px;">יריד הספרים</p>
+    <h2 style="margin:0 0 14px;color:#0f172a;font-size:22px;font-weight:900;">ההזמנות שלכם</h2>
+    <p style="margin:0 0 22px;color:#475569;font-size:15px;line-height:1.8;">
+      ${orders.length === 1 ? 'זו ההזמנה שנרשמה' : `אלו ${orders.length} ההזמנות שנרשמו`}
+      עם מספר הטלפון שלכם ביריד הספרים של היכל החתם סופר.
+    </p>
+    ${cards}
+    <p style="margin:18px 0 0;color:#94a3b8;font-size:13px;line-height:1.7;">
+      אם לא ביקשתם את ההודעה הזו, אפשר להתעלם ממנה.
+    </p>`
+
+  return {
+    subject: 'ההזמנות שלך — יריד הספרים',
+    html: shell({
+      preheader: `${orders.length} הזמנות ביריד הספרים`,
+      accent,
+      title: 'ההזמנות שלך',
+      subtitle: 'יריד הספרים · היכל החתם סופר',
+      body,
+    }),
+  }
+}

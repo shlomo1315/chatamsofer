@@ -1,7 +1,7 @@
 'use client'
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { Search, Globe, Phone, AlertTriangle, Clock, CheckCircle2, Package, Truck, Mic } from 'lucide-react'
+import { Search, Globe, Phone, AlertTriangle, Clock, CheckCircle2, Package, Truck, Mic, XCircle, Store } from 'lucide-react'
 import type { BookFairOrder, BookFairOrderStatus } from '@/types/bookFair'
 import {
   BOOK_FAIR_STATUS_LABELS, BOOK_FAIR_STATUS_COLORS,
@@ -54,6 +54,9 @@ const CARDS: { key: BookFairOrderStatus | 'all' | 'needs_address'; label: string
   { key: 'picking',        label: 'בליקוט',            icon: Package,       cls: 'border-sky-200 text-sky-700' },
   { key: 'shipped',        label: 'נשלח',              icon: Truck,         cls: 'border-violet-200 text-violet-700' },
   { key: 'payment_mismatch', label: 'אי-התאמה בסכום',  icon: AlertTriangle, cls: 'border-red-200 text-red-700' },
+  // ⚠️ המבוטלות בכרטיס נפרד ומחוץ ל"הכל": בערב הפתיחה הן היו רוב
+  // השורות (ניסיונות שלא הושלמו) והסתירו את ההזמנות שצריך לטפל בהן.
+  { key: 'cancelled',      label: 'בוטל',              icon: XCircle,       cls: 'border-slate-200 text-slate-400' },
 ]
 
 export default function OrdersClient({ orders, itemCounts }: {
@@ -66,7 +69,10 @@ export default function OrdersClient({ orders, itemCounts }: {
   const COLUMNS = useMemo(() => columnsOf(itemCounts), [itemCounts])
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: orders.length }
+    // ⚠️ "הכל" אינו סופר מבוטלות — ראו ההערה ב-CARDS.
+    const c: Record<string, number> = {
+      all: orders.filter(o => o.status !== 'cancelled').length,
+    }
     for (const o of orders) c[o.status] = (c[o.status] ?? 0) + 1
     // ⚠️ "ממתין לאימות כתובת" אינו סטטוס אלא תנאי: הזמנה טלפונית
     // למשלוח שהכתובת בה הוקלטה וטרם הוקלדה במשרד.
@@ -82,7 +88,10 @@ export default function OrdersClient({ orders, itemCounts }: {
       rows = rows.filter(o =>
         o.delivery_method === 'shipping' && !o.address_confirmed && o.status !== 'cancelled' && o.status !== 'failed'
       )
-    } else if (card !== 'all') {
+    } else if (card === 'all') {
+      // ⚠️ המבוטלות מוסתרות מ"הכל" ונגישות רק בכרטיס שלהן.
+      rows = rows.filter(o => o.status !== 'cancelled')
+    } else {
       rows = rows.filter(o => o.status === card)
     }
 
@@ -212,9 +221,21 @@ function renderCell(key: ColKey, o: BookFairOrder, counts: Record<string, number
 
     case 'channel':
       return (
-        <span className="inline-flex items-center gap-1 text-slate-600">
-          {o.channel === 'web' ? <Globe size={13} /> : <Phone size={13} />}
-          <span className="text-xs">{BOOK_FAIR_CHANNEL_LABELS[o.channel]}</span>
+        <span className="inline-flex flex-col gap-0.5 text-slate-600">
+          <span className="inline-flex items-center gap-1">
+            {o.channel === 'web' ? <Globe size={13} />
+              : o.channel === 'fair' ? <Store size={13} />
+              : <Phone size={13} />}
+            <span className="text-xs">{BOOK_FAIR_CHANNEL_LABELS[o.channel]}</span>
+          </span>
+          {/* 🔴 בדוכן אין סליקה — המוכר מתעד מה נגבה בפועל, ובלי
+              שהמסך יציג זאת אי אפשר להצליב מול הקופה בסוף הערב. */}
+          {o.channel === 'fair' && o.payment_method && (
+            <span className="text-[11px] text-slate-400">
+              {o.payment_method === 'cash' ? '💵 מזומן' : '💳 אשראי'}
+              {o.sold_by ? ` · ${o.sold_by}` : ''}
+            </span>
+          )}
         </span>
       )
 
