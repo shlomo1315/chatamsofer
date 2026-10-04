@@ -58,6 +58,29 @@ interface ReadOpts {
   keys?: string[]
 }
 
+/**
+ * מגביל את מספר הקבצים בתשובה אחת.
+ *
+ * 🔴 שלוחת היריד ניתקה כל מתקשר כששלחה ארבעה `f-` רצופים, בעוד
+ * ששלוחת היולדות — שעובדת היטב — שולחת לכל היותר *שניים*, ותמיד
+ * אחרי טוקן טקסט. זה ההבדל שנותר אחרי שמספר השדות תוקן (13→14)
+ * והקבצים אומתו כקיימים בתיקייה.
+ *
+ * ⚠️ הקבצים העודפים *נזרקים ולא מוחלפים*: הנוסח שלהם אינו זמין כאן
+ * (msgToken כבר החזיר טוקן מוכן), והשמעה חלקית עדיפה על ניתוק.
+ * ⚠️ הקיצוץ מהסוף — ההודעות הראשונות הן החשובות (ברכה ותפריט).
+ */
+const MAX_FILES_PER_RESPONSE = 2
+
+function capFiles(tokens: string[]): string[] {
+  let files = 0
+  return tokens.filter(tok => {
+    if (!tok.startsWith('f-')) return true
+    files++
+    return files <= MAX_FILES_PER_RESPONSE
+  })
+}
+
 function readTap(varName: string, promptTokens: string[], opts: ReadOpts = {}): string {
   const { max = '', min = 1, seconds = 12, readAs = 'No', keys } = opts
   // read=<הודעה>=<שם>,<שימוש בקיים>,<max>,<min>,<שניות>,<אופן הקראה>,<חסום כוכבית>,<אפס אסור>,<תו החלפה>,<מקשים מותרים>,<חזרות>,<Ok>,<טקסט ריק>,<נוסף>
@@ -78,7 +101,7 @@ function readTap(varName: string, promptTokens: string[], opts: ReadOpts = {}): 
     readAs, 'no', 'no', '',
     (keys ?? []).join('.'), '', '', '', '',
   ]
-  return `read=${joinTokens(...promptTokens)}=${ops.join(',')}`
+  return `read=${joinTokens(...capFiles(promptTokens))}=${ops.join(',')}`
 }
 
 /** הקלטה (record) — נשמרת בתיקיית ImportRecord/ApiRecord של ימות ומוחזר שם קובץ. */
@@ -89,7 +112,7 @@ function readRecord(varName: string, promptTokens: string[], maxSeconds = 30): s
   return `read=${joinTokens(...promptTokens)}=${ops.join(',')}`
 }
 
-const idMessage = (...tokens: string[]) => `id_list_message=${joinTokens(...tokens)}`
+const idMessage = (...tokens: string[]) => `id_list_message=${joinTokens(...capFiles(tokens))}`
 const hangup = 'go_to_folder=hangup'
 
 export type IvrResponse = string

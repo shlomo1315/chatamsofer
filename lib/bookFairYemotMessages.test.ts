@@ -148,3 +148,33 @@ describe('🔴 nextTurn משתמש בנוסחים שהוזנו', () => {
     expect(turn.response).not.toContain('לא יישמע')
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 תקרת הקבצים בתשובה אחת.
+//
+// השלוחה ניתקה כל מתקשר כששלחה ארבעה f- רצופים, בעוד ששלוחת היולדות
+// — שעובדת — שולחת לכל היותר שניים ותמיד אחרי טוקן טקסט.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('🔴 תקרת קבצים בתשובה', () => {
+  const withAudio = {
+    welcome: { text: 'ברכה', audio: 'tts_a' },
+    open_until: { text: 'פתוח עד', audio: 'tts_b' },
+    to_menu: { text: 'לתפריט', audio: 'tts_c' },
+    main_menu: { text: 'התפריט', audio: 'tts_d' },
+  }
+
+  it('לכל היותר שני קבצים, גם כשלארבע ההודעות יש הקלטה', () => {
+    const turn = nextTurn(initialState(), {}, withAudio)
+    const files = turn.response.match(/f-/g) ?? []
+    expect(files.length).toBeLessThanOrEqual(2)
+  })
+
+  it('ההודעות העודפות אינן נעלמות בשקט — הן פשוט אינן קבצים', () => {
+    const turn = nextTurn(initialState(), {}, withAudio)
+    // שתי הראשונות כקבצים, והתשובה עדיין תקינה כפקודת read
+    expect(turn.response).toContain('f-tts_a')
+    expect(turn.response).toMatch(/^read=/)
+    const ops = turn.response.slice(turn.response.lastIndexOf('=') + 1)
+    expect(ops.split(',')).toHaveLength(14)
+  })
+})

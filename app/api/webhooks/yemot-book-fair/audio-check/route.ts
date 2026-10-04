@@ -69,6 +69,26 @@ export async function GET(request: NextRequest) {
   const hereBases = new Set(here.map(n => n.replace(/\.(mp3|wav)$/i, '')))
   const missing = [...expectedFiles].filter(b => !hereBases.has(b))
 
+  // 🔴 רישום בתיקייה אינו הוכחה שהקובץ מתנגן: קובץ באורך אפס, או
+  // כזה שהמרת האודיו שלו נכשלה, מופיע ברשימה בדיוק כמו תקין.
+  // ⚠️ זו הטעות שחזרה עליה פעמיים — "הקבצים שם" נבדק ברשימה בלבד.
+  const probeNames = here.filter(n => /^tts_/.test(n)).slice(0, 4)
+  const probes = await Promise.all(probeNames.map(async name => {
+    const r = await fetch(
+      `${API}/DownloadFile?token=${encodeURIComponent(token)}`
+      + `&path=${encodeURIComponent(`ivr2:/${ext}/${name}`)}`,
+      { cache: 'no-store' },
+    ).catch(() => null)
+    if (!r) return { name, ok: false, why: 'בקשה נכשלה' }
+    const type = r.headers.get('content-type') ?? ''
+    const len = Number(r.headers.get('content-length') ?? 0)
+    // ⚠️ ימות מחזירה JSON עם שגיאה ולא קוד HTTP כשהקובץ פגום
+    if (type.includes('json')) {
+      return { name, ok: false, why: (await r.text()).slice(0, 120) }
+    }
+    return { name, ok: len > 1000, bytes: len, type }
+  }))
+
   return NextResponse.json({
     ext,
     audio_enabled: process.env.YEMOT_BOOK_FAIR_AUDIO === '1',
@@ -76,6 +96,8 @@ export async function GET(request: NextRequest) {
     present_here: [...expectedFiles].length - missing.length,
     missing_count: missing.length,
     missing: missing.slice(0, 10),
+    // 🔴 העיקר: האם הקובץ באמת ניתן להורדה ובגודל סביר
+    probes,
     // רשימת הקבצים בתיקייה — כדי לראות אם הם שם בשם אחר
     files_here: here.slice(0, 40),
     other_folders: Object.fromEntries(
