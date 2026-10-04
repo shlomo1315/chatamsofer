@@ -231,22 +231,30 @@ export function msgToken(
   const m = messages?.[key]
   const raw = (typeof m?.text === 'string' && m.text.trim()) ? m.text : fallback
 
-  // 🔴 ברירת המחדל היא טקסט, וההקלטות נדלקות במפורש.
+  // 🔴 מתג כיבוי חירום — כבוי כברירת מחדל.
   //
-  // השלוחה ענתה "שגיאה" וניתקה את המתקשר מיד אחרי הברכה. הסיבה:
-  // התשובה ביקשה לנגן ארבעה קבצי f- שימות לא מצאה אצלה. ואצלנו זה
-  // *לא* מייצר שום שגיאה — אנחנו מחזירים 200 תקין עם הוראה לנגן
-  // קובץ חסר, הלוגים נקיים, והתסמין היחיד הוא מה שנשמע בטלפון.
+  // כשהשלוחה ענתה "שגיאה" וניתקה, חשדנו שקבצי ההקלטה חסרים וכיבינו
+  // אותם. ⚠️ החשד היה **שגוי**: בדיקה מול ימות
+  // (/api/webhooks/yemot-book-fair/audio-check) הראתה שכל 16 הקבצים
+  // יושבים בשלוחה 9, ואפס חסרים. הגורם האמיתי היה פקודת read עם 13
+  // שדות במקום 14.
   //
-  // 🔴 לכן הכיוון הפוך מהמקובל: קו חי שמשמיע TTS עדיף על קו מת
-  // שאמור היה להשמיע קול נוירוני. ההקלטות נשמרות בהגדרות ואינן
-  // נמחקות — YEMOT_BOOK_FAIR_AUDIO=1 מחזיר אותן ברגע שאומת שהקבצים
-  // באמת יושבים בתיקיית השלוחה (ראו /api/admin/yemot-book-fair/diagnose).
-  const audioEnabled = process.env.YEMOT_BOOK_FAIR_AUDIO === '1'
+  // ⚠️ ימות *מדלגת בשקט* על f- שהקובץ שלו חסר (ראו lib/ivrRuntime),
+  // ולכן קובץ חסר לעולם אינו הגורם ל"שגיאה" — הוא גורם לשתיקה.
+  //
+  // המתג נשאר לשעת חירום: YEMOT_BOOK_FAIR_TEXT_ONLY=1 מחזיר את כל
+  // השלוחה ל-TTS בלי פריסת קוד.
+  if (process.env.YEMOT_BOOK_FAIR_TEXT_ONLY === '1') {
+    let only = raw
+    if (vars) {
+      for (const [k, v] of Object.entries(vars)) only = only.split(`{${k}}`).join(String(v))
+    }
+    return t(only.replace(/\{[^}]*\}/g, ' '))
+  }
 
   // הקלטה אנושית/נוירונית — רק כשאין משתנים להחליף (קובץ אחד אינו
   // יכול להקריא ערך משתנה).
-  if (audioEnabled && m?.audio && !vars) return `f-${m.audio}`
+  if (m?.audio && !vars) return `f-${m.audio}`
 
   let out = raw
   if (vars) {
