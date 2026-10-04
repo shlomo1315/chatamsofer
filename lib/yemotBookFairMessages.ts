@@ -47,11 +47,6 @@ export const BOOK_FAIR_MESSAGE_META: MsgMeta[] = [
     hint: 'אחריה מוקראת רשימת הקטגוריות, שנבנית אוטומטית מהקטלוג.' },
   { key: 'category_item', label: 'תבנית שורת קטגוריה', defaultText: 'ל{name} הקישו {code}', allowAudio: false, placeholders: ['name', 'code'],
     hint: 'הודעה דינמית — חובה לכלול {name} ו-{code}. אין הקלטה כי הקטגוריות משתנות.' },
-  // 🔴 נקראת רק אחרי הקלטה קולית של שם הקטגוריה (לא TTS): השם מגיע
-  // כקובץ f-, והמספר נאמר בנפרד אחריו — "הקישו" לבדו, בלי השם.
-  // ⚠️ קודם לא הייתה הגדרה כלל: msgToken חזרה ריקה, וה"הקישו" לא
-  // נאמר בכלל אחרי קטגוריה מוקלטת.
-  { key: 'category_code', label: '"הקישו" אחרי קטגוריה מוקלטת', defaultText: 'הקישו {code}', allowAudio: true, placeholders: ['code'] },
   { key: 'category_empty', label: 'קטגוריה ריקה', defaultText: 'אין כרגע ספרים בקטגוריה זו', allowAudio: true },
   { key: 'list_nav', label: 'הניווט ברשימת הספרים', defaultText: 'לבחירת ספר זה הקישו 1 לחזרה לספר הקודם הקישו 2 לחזרה לרשימת הקטגוריות הקישו 3', allowAudio: true },
   { key: 'list_all_nav', label: 'הניווט ברשימת כל הספרים', defaultText: 'לבחירת ספר זה הקישו 1 לחזרה לספר הקודם הקישו 2 לחזרה לתפריט הקישו 3', allowAudio: true },
@@ -65,8 +60,13 @@ export const BOOK_FAIR_MESSAGE_META: MsgMeta[] = [
   // "בחרתם" → הקלטת שם הספר → "המחיר הוא X שקלים".
   { key: 'book_chosen_prefix', label: 'לפני שם ספר מוקלט', defaultText: 'בחרתם', allowAudio: true,
     hint: 'נשמע לפני הקלטת שם הספר, כשיש לו הקלטה.' },
-  { key: 'book_chosen_price', label: 'אחרי שם ספר מוקלט', defaultText: 'המחיר הוא {price} שקלים', allowAudio: false, placeholders: ['price'],
-    hint: 'נשמע אחרי הקלטת שם הספר. הודעה דינמית — חובה לכלול {price}.' },
+  // 🔴 "המחיר הוא" בנפרד מהסכום — כדי שהמילים *כן* יהיו ניתנות להקלטה.
+  // ⚠️ book_chosen_price הישן נשאר רק לתאימות נוסחים שמורים; הוא אינו
+  // בשימוש יותר, כי {price} בתוכו מנע הקלטה והכתיב TTS למשפט כולו.
+  { key: 'price_is_word', label: 'המילים "המחיר הוא"', defaultText: 'המחיר הוא', allowAudio: true,
+    hint: 'נשמע לפני הסכום. הסכום עצמו נאמר במספרים ואינו ניתן להקלטה (הוא משתנה מספר לספר).' },
+  { key: 'book_chosen_price', label: 'אחרי שם ספר מוקלט (לא בשימוש)', defaultText: 'המחיר הוא {price} שקלים', allowAudio: false, placeholders: ['price'],
+    hint: 'אינו בשימוש — המחיר מורכב מ"המחיר הוא" + הסכום + "שקלים".' },
   { key: 'confirm_book', label: 'אישור או תיקון', defaultText: 'לאישור הקישו 1 לתיקון הקישו 2', allowAudio: true },
   { key: 'book_saved', label: 'הספר נשמר', defaultText: 'הספר נשמר בהצלחה', allowAudio: true },
   { key: 'after_save', label: 'ספר נוסף או תשלום', defaultText: 'להזמנת ספר נוסף הקישו 1 למעבר לתשלום הקישו 2', allowAudio: true },

@@ -326,6 +326,7 @@ export const MESSAGE_FALLBACKS: Record<string, string> = {
   book_sold_out: 'הספר {title} אזל מהמלאי',
   ask_sku_other: 'הקישו מספר קטלוג אחר',
   price_word: 'מחיר',
+  price_is_word: 'המחיר הוא',
   shekels_word: 'שקלים',
   ask_qty: 'כמה עותקים הקישו מספר ולאחריו סולמית',
   qty_invalid: 'הקישו מספר בין אחד ל{max}',
@@ -911,13 +912,26 @@ function confirmBookTurn(
 ): IvrTurn {
   const price = agorotToSpokenShekels(book.price_agorot)
   // ⚠️ גם הקלטת הספר כפופה לתקרה — ראו MAX_FILES_PER_RESPONSE
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 המחיר מפוצל לשלושה כדי שהמילים יוכלו להיות מוקלטות:
+  //     "המחיר הוא" (הקלטה) → <מספר> (n- דינמי) → "שקלים" (הקלטה).
+  //
+  // ⚠️ book_chosen_price הוא allowAudio:false ולעולם לא יהיה הקלטה —
+  // הוא מכיל {price} משתנה, וקובץ יחיד אינו יכול להקריא מספר שמשתנה
+  // מספר לספר. לכן המשפט כולו נשמע ב-TTS מתכתי, כולל המילים הקבועות.
+  //
+  // ⚠️ המספר עצמו נשאר n- תמיד — זה בלתי נמנע, וזו גם הדרך שבה ימות
+  // מקריאה מספרים נכון בעברית.
+  // ─────────────────────────────────────────────────────────────────────────
+  const priceTokens = [
+    msgToken(messages, 'price_is_word'),
+    n(price),
+    msgToken(messages, 'shekels_word'),
+  ].filter(Boolean)
+
   const tokens = book.audio_name
-    ? [
-        msgToken(messages, 'book_chosen_prefix'),
-        `f-${book.audio_name}`,
-        msgToken(messages, 'book_chosen_price', { price }),
-      ]
-    : [msgToken(messages, 'book_chosen', { title: book.title, price })]
+    ? [msgToken(messages, 'book_chosen_prefix'), `f-${book.audio_name}`, ...priceTokens]
+    : [msgToken(messages, 'book_chosen_prefix'), t(ttsClean(book.title)), ...priceTokens]
 
   return {
     state: { ...state, step: 'confirm_book', pending_book_id: book.id },

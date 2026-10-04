@@ -161,15 +161,22 @@ describe('🔴 כל ההקלטות נשלחות', () => {
     expect((turn.response.match(/f-/g) ?? []).length).toBe(4)
   })
 
-  it('הפתיחה: הודעה נפרדת ואז read עם טוקן בודד — כמו בחגים', () => {
+  // 🔴 הפתיחה כולה בתוך read אחד — כדי שאפשר יהיה להקיש מיד.
+  //
+  // ⚠️ היה כאן id_list_message נפרד, מתוך הנחה שהוא "הדפוס של החגים".
+  // ימות משמיעה הודעה כזו *עד הסוף* בלי לקלוט הקשה, ולכן מתקשר חוזר
+  // נאלץ לשמוע את כל הפתיחה בכל שיחה.
+  //
+  // ⚠️ הלוגים של 04.10 (07:57, 10:05) מראים שיחות תקינות לחלוטין עם
+  // ארבעה טוקנים בתוך read יחיד — זה מעולם לא היה הגורם לנפילה.
+  it('הפתיחה: הכול בתוך read אחד — הקשה מיידית', () => {
     const turn = nextTurn(initialState(), {}, withAudio)
     const parts = turn.response.split('&').filter(Boolean)
-    expect(parts[0]).toMatch(/^id_list_message=/)
-    expect(parts[1]).toMatch(/^read=/)
-    // ⚠️ ה-read נושא טוקן אחד בלבד — שרשור ארבעה הפיל את השיחה
-    const prompt = parts[1].slice('read='.length, parts[1].lastIndexOf('='))
-    expect(prompt.split('.')).toHaveLength(1)
-    const ops = parts[1].slice(parts[1].lastIndexOf('=') + 1)
-    expect(ops.split(',')).toHaveLength(13)
+    expect(parts).toHaveLength(1)
+    expect(parts[0]).toMatch(/^read=/)
+    const prompt = parts[0].slice('read='.length, parts[0].lastIndexOf('='))
+    expect(prompt.split('.')).toHaveLength(4)
+    const ops = parts[0].slice(parts[0].lastIndexOf('=') + 1)
+    expect(ops.split(',')).toHaveLength(14)
   })
 })
