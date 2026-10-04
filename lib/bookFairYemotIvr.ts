@@ -339,7 +339,7 @@ export const MESSAGE_FALLBACKS: Record<string, string> = {
   price_word: 'מחיר',
   price_is_word: 'המחיר הוא',
   shekels_word: 'שקלים',
-  ask_qty: 'כמה עותקים הקישו מספר ולאחריו סולמית',
+  ask_qty: 'נא הקישו את הכמות שברצונכם להזמין ולסיום הקישו סולמית',
   qty_invalid: 'הקישו מספר בין אחד ל{max}',
   qty_unavailable: 'מצטערים הכמות המבוקשת אינה זמינה',
   added_to_cart: 'נוספו לסל {qty} עותקים של {title}',

@@ -636,13 +636,17 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
     const raw = paramFor(params, 'bf_qty')
     if (raw) {
       input.value = raw
-      // הספר עצמו כבר ידוע מהשלב הקודם — לא מגיע שוב בפרמטרים.
-      // ⚠️ אותה סיומת _r<סיבוב> כמו ב-ask_sku: בלעדיה נקרא המק"ט
-      // *הראשון* שהוקש בשיחה, והכמות שויכה לספר הלא נכון.
-      const skuBase = state.items.length ? `bf_sku_next${state.items.length}` : 'bf_sku'
-      const round = state.sku_round ?? 1
-      const lastSku = params[`${skuBase}_r${round}`] || paramFor(params, skuBase)
-      input.book = lastSku ? await findBook(lastSku) : null
+      // 🔴 הספר נקרא מ-pending_book_id שבמצב ולא מהפרמטרים.
+      //
+      // ⚠️ זה מה שתקע את שלב הכמות: הספר נשלף לפי שם משתנה המק"ט,
+      // ואחרי שהשם קיבל סיומת _r<סיבוב> הערך לא נמצא — book יצא
+      // null, וכל כמות נדחתה ב"הקישו מספר בין אחד ל…" בלולאה.
+      //
+      // ⚠️ המצב הוא המקור האמין: הספר כבר אושר בשלב confirm_book
+      // ונשמר שם, ואין צורך לנחש אותו מחדש מההקשות.
+      input.book = state.pending_book_id
+        ? await findBookById(state.pending_book_id)
+        : null
       if (input.book && Number.isInteger(Number(raw)) && Number(raw) > 0) {
         input.reserved = await reserveLastPreview(state, input.book, Number(raw))
       }

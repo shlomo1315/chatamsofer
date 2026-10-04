@@ -78,7 +78,7 @@ export const BOOK_FAIR_MESSAGE_META: MsgMeta[] = [
   { key: 'price_word', label: 'המילה "מחיר"', defaultText: 'מחיר', allowAudio: true,
     hint: 'מוקראת לפני הסכום. הסכום עצמו נאמר במספרים ואינו ניתן להקלטה.' },
   { key: 'shekels_word', label: 'המילה "שקלים"', defaultText: 'שקלים', allowAudio: true },
-  { key: 'ask_qty', label: 'בקשת כמות', defaultText: 'כמה עותקים הקישו מספר ולאחריו סולמית', allowAudio: true },
+  { key: 'ask_qty', label: 'בקשת כמות', defaultText: 'נא הקישו את הכמות שברצונכם להזמין ולסיום הקישו סולמית', allowAudio: true },
   { key: 'qty_invalid', label: 'כמות לא תקינה', defaultText: 'הקישו מספר בין אחד ל{max}', allowAudio: false, placeholders: ['max'],
     hint: 'הודעה דינמית — {max} הוא הכמות המקסימלית להזמנה אחת.' },
   { key: 'qty_unavailable', label: 'הכמות אינה זמינה במלאי', defaultText: 'מצטערים הכמות המבוקשת אינה זמינה', allowAudio: true },
