@@ -518,6 +518,19 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
   } else if (state.step === 'category_menu') {
     input.value = paramFor(params, 'bf_cat')
     input.categories = await listCategories()
+    // ─────────────────────────────────────────────────────────────────
+    // 🔴 nextTurn עובר מ-category_menu ל-browse *באותה קריאה* (בלי
+    // round-trip נוסף לימות) ברגע שההקשה תקינה. בלי browseBooks כאן,
+    // browseTurn מקבל רשימה ריקה ועונה "אין ספרים בקטגוריה זו" —
+    // גם כשבקטגוריה יש ספרים. חישוב הקטגוריה הנבחרת כאן, באותו אופן
+    // בדיוק שבו case 'category_menu' עושה זאת ב-IVR הטהור.
+    // ─────────────────────────────────────────────────────────────────
+    {
+      const idx = Number(input.value) - 1
+      if (Number.isInteger(idx) && idx >= 0 && idx < input.categories.length) {
+        input.browseBooks = await listBooks(input.categories[idx])
+      }
+    }
   } else if (state.step === 'browse') {
     // ⚠️ שם המשתנה כולל את האינדקס (bf_br<i>) — ראו ההערה ב-browseTurn.
     input.value = paramFor(params, `bf_br${state.browse_index ?? 0}`)

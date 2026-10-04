@@ -811,11 +811,19 @@ function categoryMenu(
     ...(invalid ? [msgToken(messages, 'main_menu_retry')] : []),
     msgToken(messages, 'category_menu'),
     // 🔴 הקלטת הקטגוריה גוברת על ה-TTS, כמו בכל הודעה אחרת.
-    // ⚠️ הקוד נשאר TTS תמיד — קובץ אחד אינו יכול להקריא מספר משתנה.
+    //
+    // ⚠️ ההקלטה מכילה את "הקישו X" בתוכה (המנהל מקליט את המשפט
+    // המלא בעצמו) — ולכן אינה מלווה בשום טוקן נוסף אחריה. קודם
+    // הקוד הוסיף category_code אחרי כל הקלטה, מה שהצריך גם הקלטה
+    // נפרדת לכל ספרה וגם סיבך את מה שאמור היה להיות קובץ אחד פשוט.
+    //
+    // ⚠️ רק כשאין הקלטה בכלל נבנה המשפט מ-TTS — ואז {code} חובה
+    // בתוכו, כי קובץ TTS יחיד אינו יכול להקריא מספר משתנה בפני
+    // עצמו (לכן category_item, לא category_menu, נושא את {code}).
     ...cats.flatMap((name, i) => {
       const rec = input.categoryAudio?.[name]
       return rec
-        ? [`f-${rec}`, msgToken(messages, 'category_code', { code: i + 1 })]
+        ? [`f-${rec}`]
         : [msgToken(messages, 'category_item', { name, code: i + 1 })]
     }),
   ]

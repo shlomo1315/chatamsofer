@@ -47,6 +47,11 @@ export const BOOK_FAIR_MESSAGE_META: MsgMeta[] = [
     hint: 'אחריה מוקראת רשימת הקטגוריות, שנבנית אוטומטית מהקטלוג.' },
   { key: 'category_item', label: 'תבנית שורת קטגוריה', defaultText: 'ל{name} הקישו {code}', allowAudio: false, placeholders: ['name', 'code'],
     hint: 'הודעה דינמית — חובה לכלול {name} ו-{code}. אין הקלטה כי הקטגוריות משתנות.' },
+  // 🔴 נקראת רק אחרי הקלטה קולית של שם הקטגוריה (לא TTS): השם מגיע
+  // כקובץ f-, והמספר נאמר בנפרד אחריו — "הקישו" לבדו, בלי השם.
+  // ⚠️ קודם לא הייתה הגדרה כלל: msgToken חזרה ריקה, וה"הקישו" לא
+  // נאמר בכלל אחרי קטגוריה מוקלטת.
+  { key: 'category_code', label: '"הקישו" אחרי קטגוריה מוקלטת', defaultText: 'הקישו {code}', allowAudio: true, placeholders: ['code'] },
   { key: 'category_empty', label: 'קטגוריה ריקה', defaultText: 'אין כרגע ספרים בקטגוריה זו', allowAudio: true },
   { key: 'list_nav', label: 'הניווט ברשימת הספרים', defaultText: 'לבחירת ספר זה הקישו 1 לחזרה לספר הקודם הקישו 2 לחזרה לרשימת הקטגוריות הקישו 3', allowAudio: true },
   { key: 'list_all_nav', label: 'הניווט ברשימת כל הספרים', defaultText: 'לבחירת ספר זה הקישו 1 לחזרה לספר הקודם הקישו 2 לחזרה לתפריט הקישו 3', allowAudio: true },

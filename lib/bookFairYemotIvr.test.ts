@@ -289,3 +289,36 @@ describe('🔴 מבנה read תקין לימות', () => {
     }
   })
 })
+
+describe('תפריט קטגוריות — הקלטה ידנית', () => {
+  // ⚠️ בחירה 2 בתפריט ההזמנה מובילה לתפריט הקטגוריות. categories
+  // חייב להגיע כבר באותו input — בדיוק כמו שה-webhook טוען אותו
+  // *לפני* הקריאה ל-nextTurn (ראו app/api/webhooks/yemot-book-fair).
+  const CATS = ['שאלות ותשובות', 'דרוש ואגדה']
+  const atCategoryMenu = (() => {
+    let s = nextTurn(initialState()).state          // → main_menu
+    s = nextTurn(s, { value: '1' }).state           // → order_menu
+    return nextTurn(s, { value: '2', categories: CATS }).state  // → category_menu
+  })()
+
+  // 🔴 כשיש הקלטה לקטגוריה, היא היחידה שמושמעת — בלי category_code
+  // או כל טוקן אחר אחריה. המנהל מקליט את "הקישו X" בתוך ההקלטה
+  // שלו בעצמו, ולכן הוספת טוקן נוסף הייתה גורמת ל"הקישו" כפול.
+  it('הקלטה ידנית מופיעה לבדה, בלי תוספת אחריה', () => {
+    const turn = nextTurn(atCategoryMenu, {
+      categories: CATS,
+      categoryAudio: { 'דרוש ואגדה': 'rec_cat_abc123' },
+    })
+    expect(turn.response).toContain('f-rec_cat_abc123')
+    // אין category_code ואין {code} דולף מהתבנית אחרי ההקלטה.
+    expect(turn.response).not.toMatch(/f-rec_cat_abc123\.[^&]*הקישו/)
+  })
+
+  // ⚠️ קטגוריה בלי הקלטה עדיין חייבת TTS עם המספר — זה המקרה
+  // היחיד שבו {code} נדרש, כי קובץ בודד לא יכול להקריא מספר.
+  it('קטגוריה בלי הקלטה משתמשת ב-TTS עם המספר', () => {
+    const turn = nextTurn(atCategoryMenu, { categories: CATS, categoryAudio: {} })
+    expect(turn.response).toContain('הקישו 1')
+    expect(turn.response).toContain('הקישו 2')
+  })
+})
