@@ -65,20 +65,33 @@ export async function GET(
   // ⚠️ שני נתיבים אפשריים: ימות מחזירה "30/9.wav" יחסית לשורש
   // ההקלטות, אבל בחלק מהתצורות הוא יחסי לשלוחה. נבדקים שניהם.
   const EXT_DIR = process.env.YEMOT_BOOK_FAIR_EXT || '9'
+  const tried: string[] = []
   let audio: { data: ArrayBuffer; contentType: string } | null = null
+
+  // 🔴 שני חשבונות ימות: היריד עבר לחשבון משלו (YEMOT_BOOK_FAIR_TOKEN)
+  // ב-04.10 בערב, אבל הקלטות של הזמנות שקדמו לכך יושבות בחשבון הישן.
+  // חיפוש רק בחדש החזיר "ההקלטה לא נמצאה" על כל ההזמנות של אותו יום.
+  const scopes = ['bookFair', 'default'] as const
+
   for (const name of candidates) {
     for (const path of [`ivr2:/${name}`, `ivr2:/${EXT_DIR}/${name}`]) {
-      const f = await downloadFileFromYemot(path, 'bookFair')
-      if (f.ok && f.data) {
-        audio = { data: f.data, contentType: f.contentType ?? 'audio/wav' }
-        break
+      for (const scope of scopes) {
+        tried.push(`${scope}:${path}`)
+        const f = await downloadFileFromYemot(path, scope)
+        if (f.ok && f.data) {
+          audio = { data: f.data, contentType: f.contentType ?? 'audio/wav' }
+          break
+        }
       }
+      if (audio) break
     }
     if (audio) break
   }
 
   if (!audio) {
-    console.error(`[orders/recording] הקובץ לא נמצא בימות: ${raw}`)
+    // ⚠️ כל הנתיבים שנוסו בלוג: בלעדיהם אי אפשר לדעת אם השם שגוי,
+    // התיקייה שגויה, או שהקובץ באמת נמחק מימות.
+    console.error(`[orders/recording] לא נמצא. provider_path="${raw}" · נוסו: ${tried.join(' , ')}`)
     return NextResponse.json({ error: 'ההקלטה לא נמצאה בימות' }, { status: 404 })
   }
 
