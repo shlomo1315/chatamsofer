@@ -116,6 +116,11 @@ export const BOOK_FAIR_MESSAGE_META: MsgMeta[] = [
   { key: 'no_shipping_fee', label: 'ללא דמי משלוח', defaultText: 'ללא דמי משלוח', allowAudio: true },
   { key: 'grand_total', label: 'סך הכל לתשלום', defaultText: 'סך הכל לתשלום', allowAudio: true },
   { key: 'ask_pay', label: 'לתשלום או ביטול', defaultText: 'לתשלום בכרטיס אשראי הקישו אחת לביטול ההזמנה הקישו שתיים', allowAudio: true },
+  // 🔴 מוקראת רגע לפני שימות משתלטת על הסליקה: משם והלאה *ימות*
+  // מקריאה את ההנחיות (מספר כרטיס, תוקף, CVV, ת"ז), והמתקשר שומע
+  // פתאום קול אחר בלי הקשר. הודעת המעבר מכינה אותו לכך.
+  { key: 'payment_intro', label: 'לפני מסירת פרטי האשראי', defaultText: 'הינכם מועברים למערכת הסליקה המאובטחת הקישו את פרטי הכרטיס לפי ההנחיות', allowAudio: true,
+    hint: 'ההנחיות עצמן (מספר כרטיס, תוקף, שלוש ספרות, תעודת זהות) מוקראות ע"י ימות ונערכות בממשק ימות — לא כאן.' },
   { key: 'ask_pay_retry', label: 'חזרה על תשלום/ביטול', defaultText: 'הקישו אחת לתשלום או שתיים לביטול', allowAudio: true },
   { key: 'cancelled', label: 'ההזמנה בוטלה', defaultText: 'ההזמנה בוטלה תודה ולהתראות', allowAudio: true },
 

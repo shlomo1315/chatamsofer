@@ -354,6 +354,7 @@ export const MESSAGE_FALLBACKS: Record<string, string> = {
   no_shipping_fee: 'ללא דמי משלוח',
   grand_total: 'סך הכל לתשלום',
   ask_pay: 'לתשלום בכרטיס אשראי הקישו אחת לביטול ההזמנה הקישו שתיים',
+  payment_intro: 'הינכם מועברים למערכת הסליקה המאובטחת הקישו את פרטי הכרטיס לפי ההנחיות',
   ask_pay_retry: 'הקישו אחת לתשלום או שתיים לביטול',
   cancelled: 'ההזמנה בוטלה תודה ולהתראות',
   paid_ok: 'התשלום התקבל בהצלחה',
@@ -407,6 +408,25 @@ export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMe
       state: { ...state, step: 'main_menu', attempts: 0 },
       response: readTap('bf_main_r', [m('main_menu')], { max: 1, seconds: 10 }),
     }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 הקשה 0 — סיום ההזמנה ומעבר לתשלום, מכל שלב בבחירת הספרים.
+  //
+  // מתקשר שכבר בחר את מה שרצה נאלץ עד כה להמשיך בזרימה עד שאלת
+  // "ספר נוסף או סיום". 0 מקצר את הדרך מכל נקודה.
+  //
+  // ⚠️ רק כשיש *משהו* בעגלה: 0 בעגלה ריקה אינו "סיום" אלא הקשה
+  // חסרת משמעות, והעברה לתשלום בלי פריטים הייתה יוצרת הזמנה ריקה.
+  //
+  // ⚠️ לא בהקלטות, לא בסליקה ולא בשלבים שאחרי בחירת הספרים: שם 0
+  // הוא חלק מהקלט עצמו (כמות, קוד עיר, מספר טלפון) ולא פקודה.
+  const CART_STEPS: IvrStep[] = [
+    'main_menu', 'order_menu', 'category_menu', 'browse', 'ask_sku',
+    'confirm_book', 'ask_more',
+  ]
+  if (input.value === '0' && state.items.length > 0 && CART_STEPS.includes(state.step)) {
+    return askDelivery({ ...state, attempts: 0 }, messages)
   }
 
   switch (state.step) {
@@ -736,6 +756,10 @@ export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMe
       }
       return {
         state: { ...state, step: 'payment', attempts: 0 },
+        // 🔴 payment_intro מוקראת כאן, רגע לפני שימות משתלטת: משם
+        // והלאה *ימות* מקריאה את ההנחיות (מספר כרטיס, תוקף, שלוש
+        // ספרות, ת"ז) בקול משלה, והמתקשר שמע מעבר פתאומי בלי הקשר.
+        // ⚠️ ה-route מצרף אותה לפני שורת credit_card= — ראו שם.
         // 🔴 מכאן הסליקה עצמה מתבצעת בתוך ימות (מודול credit_card) —
         // הפרמטרים המדויקים (מספר מוסד, קטגוריה, ApiValid) מוגדרים
         // בממשק ניהול השלוחה בימות, לא כאן. ה-route בונה את שורת

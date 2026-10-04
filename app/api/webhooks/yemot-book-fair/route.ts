@@ -641,7 +641,22 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
     // ⚠️ הפרמטרים הקבועים (סוג סליקה, מספר מוסד, קטגוריה, ApiValid)
     // מוגדרים בממשק ניהול השלוחה בימות עצמה — לא כאן. billing_sum הוא
     // הדבר היחיד שמשתנה מהזמנה להזמנה, ולכן הוא היחיד שנשלח דינמית.
-    return yemotText(`credit_card=nedarim_plus,${shekels},${NEDARIM_TERMINAL},1,1`, callId)
+    //
+    // 🔴 הודעת מעבר לפני הסליקה: משורת credit_card= והלאה *ימות*
+    // מקריאה את ההנחיות (מספר כרטיס, תוקף, שלוש ספרות, ת"ז) בקול
+    // משלה. בלי ההודעה הזו המתקשר שמע מעבר פתאומי לקול אחר, באמצע
+    // שיחה, בלי שום הסבר — בדיוק ברגע הרגיש שבו הוא מוסר פרטי אשראי.
+    //
+    // ⚠️ ההנחיות עצמן אינן ניתנות לעריכה כאן והן נערכות בממשק ימות:
+    // פרטי הכרטיס הגולמיים לעולם אינם עוברים דרך השרת שלנו.
+    const intro = msgToken(messages, 'payment_intro')
+    return yemotText(
+      [
+        intro ? `id_list_message=${intro}` : '',
+        `credit_card=nedarim_plus,${shekels},${NEDARIM_TERMINAL},1,1`,
+      ].filter(Boolean).join('&'),
+      callId,
+    )
   }
 
   // ── תוצאת תשלום — סוגרים את ההזמנה ומנקים את ה-session ──
