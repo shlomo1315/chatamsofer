@@ -78,7 +78,7 @@ export async function GET(
   }
 
   if (!audio) {
-    console.error(`[orders/recording] הקובץ לא נמצא בימות: ${safe}`)
+    console.error(`[orders/recording] הקובץ לא נמצא בימות: ${raw}`)
     return NextResponse.json({ error: 'ההקלטה לא נמצאה בימות' }, { status: 404 })
   }
 
