@@ -95,10 +95,22 @@ describe('verifyCallback', () => {
     expect(r!.status).toBe('success')
   })
 
-  it('🔴 Status=Error (עדכון סירוב) — נדחה, לעולם לא "שולם"', async () => {
+  // 🔴 סירוב הוא דיווח *תקין* ולא שגיאה.
+  //
+  // ⚠️ קודם הוחזר null, הראוט ענה 400, ונדרים פירשה זאת כ"הדיווח לא
+  // התקבל" ושלחה שוב בלולאה — עד שוויתרה ושלחה מייל תקלה למוסד.
+  // זה קרה ב-121208 ("גנוב החרם כרטיס").
+  it('🔴 Status=Error — מוחזר כ-failed ולא כ-null (אחרת נדרים חוזרת בלולאה)', async () => {
     const r = await provider.verifyCallback({
       Status: 'Error', Message: 'כרטיס סורב', TransactionId: '999', Param2: 'BF-26-0001',
     })
+    expect(r?.status).toBe('failed')
+    expect(r?.orderId).toBe('BF-26-0001')
+  })
+
+  // ⚠️ בלי Param2 אי אפשר לדעת על איזו הזמנה מדובר — זו שגיאה אמיתית.
+  it('סירוב בלי Param2 — נדחה', async () => {
+    const r = await provider.verifyCallback({ Status: 'Error', Message: 'סורב' })
     expect(r).toBeNull()
   })
 

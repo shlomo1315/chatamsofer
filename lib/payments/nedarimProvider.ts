@@ -251,8 +251,32 @@ export class NedarimPaymentProvider implements PaymentProvider {
    * ל-20 קריאות/שעה) היה מיותר וגם עלול לחסום את עצמנו בעומס.
    */
   async verifyCallback(raw: Record<string, unknown>): Promise<VerifiedCharge | null> {
-    // עדכון סירוב (Status=Error) אינו עסקה מוצלחת — לעולם לא מסומן כשולם.
-    if (String(raw.Status ?? '').toUpperCase() === 'ERROR') return null
+    // ─────────────────────────────────────────────────────────────────────
+    // 🔴 סירוב מוחזר כ-'failed' ולא כ-null.
+    //
+    // null גרם לראוט לענות 400, ונדרים מפרשת 400 כ"הדיווח לא התקבל"
+    // ושולחת שוב — בלולאה, עד שהיא מוותרת ושולחת מייל תקלה למוסד.
+    // זה בדיוק מה שקרה ב-121208 ("גנוב החרם כרטיס").
+    //
+    // ⚠️ סירוב *הוא* דיווח תקין: הוא אומר לנו שההזמנה נכשלה, וצריך
+    // לסמן אותה ולשחרר את המלאי. רק דיווח שאינו ניתן לפענוח (בלי
+    // Param2) הוא באמת שגיאה.
+    //
+    // ⚠️ לעולם אינו מסומן כשולם — status:'failed' מוביל בראוט לשחרור
+    // השריון ולסימון ההזמנה ככושלת.
+    // ─────────────────────────────────────────────────────────────────────
+    if (String(raw.Status ?? '').toUpperCase() === 'ERROR') {
+      const failedOrder = String(raw.Param2 ?? '').trim()
+      if (!failedOrder) return null
+      return {
+        orderId: failedOrder,
+        transactionId: String(raw.TransactionId ?? '').trim(),
+        amountAgorot: 0,
+        approvalCode: null,
+        status: 'failed',
+        raw: sanitizeProviderResponse(raw),
+      }
+    }
 
     const txn = String(raw.TransactionId ?? '').trim()
     const orderNumber = String(raw.Param2 ?? '').trim()

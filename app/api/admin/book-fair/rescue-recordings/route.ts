@@ -27,19 +27,45 @@ const API = 'https://www.call2all.co.il/ym/api'
 type YemotFile = { name?: string; path?: string; mtime?: string }
 
 /** קבצי ApiVoice בחשבון נתון. */
+/**
+ * 🔴 ApiVoice יושבת *בתוך* Trash, לא בשורש.
+ *
+ * ⚠️ הצילום מממשק ימות הראה את נתיב הניווט "ApiVoice ‹ Trash ‹
+ * שלוחה ראשית" — כלומר ימות מעבירה הקלטות API לסל המיחזור. סריקת
+ * ivr2:/ApiVoice לבדה החזירה 0 קבצים, בעוד הקבצים עצמם קיימים
+ * ונראים בממשק.
+ *
+ * ⚠️ כל המועמדים נסרקים ומאוחדים: המבנה עשוי להשתנות בין חשבונות,
+ * ועדיף לסרוק חמישה נתיבים מאשר לנחש אחד.
+ */
+const VOICE_DIRS = [
+  'ivr2:/Trash/ApiVoice',
+  'ivr2:/ApiVoice',
+  'ivr2:/Trash/ApiRecord',
+  'ivr2:/ApiRecord',
+  'ivr2:/Trash',
+]
+
 async function listVoice(scope: YemotScope): Promise<YemotFile[]> {
   const token = yemotToken(scope)
   if (!token) return []
-  try {
-    const res = await fetch(
-      `${API}/GetIVR2Dir?token=${encodeURIComponent(token)}&path=${encodeURIComponent('ivr2:/ApiVoice')}`,
-      { cache: 'no-store' },
-    )
-    const j = await res.json().catch(() => null) as { files?: YemotFile[] } | null
-    return j?.files ?? []
-  } catch {
-    return []
+
+  const out: YemotFile[] = []
+  for (const dir of VOICE_DIRS) {
+    try {
+      const res = await fetch(
+        `${API}/GetIVR2Dir?token=${encodeURIComponent(token)}&path=${encodeURIComponent(dir)}`,
+        { cache: 'no-store' },
+      )
+      const j = await res.json().catch(() => null) as { files?: YemotFile[] } | null
+      for (const f of j?.files ?? []) {
+        // ⚠️ הנתיב נשמר על הקובץ: ההורדה בהמשך חייבת לדעת מאיזו
+        // תיקייה הוא בא, ולא להניח ApiVoice.
+        out.push({ ...f, path: `${dir}/${String(f.name ?? '')}` })
+      }
+    } catch { /* תיקייה שאינה קיימת — ממשיכים לבאה */ }
   }
+  return out
 }
 
 /**
@@ -70,12 +96,13 @@ export async function GET(request: NextRequest) {
   const scopes: YemotScope[] = ['bookFair', 'default']
 
   // ── 1. כל קבצי ApiVoice ──
-  const pool: { scope: YemotScope; name: string; phone: string; ts: number }[] = []
+  const pool: { scope: YemotScope; name: string; path: string; phone: string; ts: number }[] = []
   for (const scope of scopes) {
     for (const f of await listVoice(scope)) {
       const nm = String(f.name ?? '')
       const meta = parseVoiceName(nm)
-      if (meta) pool.push({ scope, name: nm, phone: phoneKey(meta.phone), ts: meta.ts })
+      // ⚠️ הנתיב המלא נשמר — ההורדה חייבת לדעת מאיזו תיקייה.
+      if (meta) pool.push({ scope, name: nm, path: String(f.path ?? `ivr2:/ApiVoice/${nm}`), phone: phoneKey(meta.phone), ts: meta.ts })
     }
   }
 
@@ -118,7 +145,7 @@ export async function GET(request: NextRequest) {
       continue
     }
 
-    const f = await downloadFileFromYemot(`ivr2:/ApiVoice/${pick.name}`, pick.scope)
+    const f = await downloadFileFromYemot(pick.path, pick.scope)
     if (!f.ok || !f.data) { report.push(`${label} — ההורדה נכשלה: ${f.error ?? '?'}`); continue }
 
     const key = `book-fair/rescued/${rec.id}.wav`
@@ -127,14 +154,27 @@ export async function GET(request: NextRequest) {
     if (up.error) { report.push(`${label} — העלאה נכשלה: ${up.error.message}`); continue }
 
     await db.from('book_fair_recordings')
-      .update({ storage_path: key, provider_path: `ApiVoice/${pick.name}` })
+      .update({ storage_path: key, provider_path: pick.path })
       .eq('id', rec.id)
     report.push(`${label} ← ${pick.name} ✅ שוחזר (${f.data.byteLength} בתים)`)
     saved++
   }
 
+  // ⚠️ מה נסרק ומה נמצא בכל תיקייה — בלי זה "0 קבצים" אינו מבדיל
+  // בין תיקייה ריקה, תיקייה שאינה קיימת, ושם קובץ שלא פוענח.
+  const dirCounts: Record<string, number> = {}
+  for (const scope of scopes) {
+    for (const dir of VOICE_DIRS) {
+      dirCounts[`${scope} ${dir}`] =
+        pool.filter(f => f.scope === scope && f.path.startsWith(dir)).length
+    }
+  }
+
   return NextResponse.json({
     voice_files_found: pool.length,
+    scanned: dirCounts,
+    // ⚠️ דגימה של שמות אמיתיים: אם הפענוח נכשל, היא מראה מיד למה.
+    sample: pool.slice(0, 3).map(f => f.name),
     missing_recordings: (missing ?? []).length,
     saved,
     report,
