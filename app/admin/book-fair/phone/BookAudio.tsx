@@ -274,6 +274,25 @@ export default function BookAudio() {
     }
   }
 
+  /**
+   * כותב את הגדרות הסליקה לשלוחה בימות.
+   *
+   * ⚠️ ApiValid נקרא בשרת מהגדרות התשלום ואינו עובר בדפדפן.
+   */
+  async function setupPayment() {
+    setBusy('setup')
+    try {
+      const r = await fetch('/api/admin/yemot-book-fair/setup', { method: 'POST' })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error ?? 'ההגדרה נכשלה')
+      toast.success(`שלוחה ${j.ext} הוגדרה · מסוף ${j.terminal}`)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'ההגדרה נכשלה')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   async function removeMenu() {
     setBusy('menu')
     try {
@@ -302,6 +321,28 @@ export default function BookAudio() {
       <input
         ref={fileRef} type="file" accept="audio/*" hidden onChange={onFile}
       />
+
+      {/* ── הגדרת הסליקה בימות ──
+          🔴 "אין מספר מסוף" בטלפון: פקודת credit_card= שאנחנו שולחים
+          תקינה, אבל ימות קוראת את פרטי הסליקה (סוג, מסוף, ApiValid,
+          קטגוריה) מהגדרות השלוחה. הכפתור כותב אותן מהשרת — המנהל
+          אינו נוגע בממשק ימות. */}
+      <section className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="font-semibold text-slate-900">הגדרות הסליקה בשלוחה</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              כותב לימות את מספר המסוף, הקטגוריה וה-ApiValid. נדרש פעם
+              אחת, ושוב רק אם ההגדרות בימות השתנו.
+            </p>
+          </div>
+          <Button onClick={() => void setupPayment()} disabled={busy === 'setup'} className="flex-shrink-0">
+            {busy === 'setup'
+              ? <><Loader2 size={15} className="animate-spin" /> מגדיר…</>
+              : <><Wand2 size={15} /> הגדר סליקה בימות</>}
+          </Button>
+        </div>
+      </section>
 
       {/* ── כותרת ופעולה גורפת ── */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5">
