@@ -1082,6 +1082,15 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
         ...(/^\d{1,8}$/.test(String(order.order_number ?? ''))
           ? [`credit_card_remarks=${order.order_number}`]
           : []),
+        // 🔴 מרוקן את ההערה האוטומטית של ימות.
+        //
+        // ⚠️ ברירת המחדל של comment היא "מערכת טלפונית ימות המשיח",
+        // וממנה נוצרה השורה "Yemot-093130924.2302" בקבלה של נדרים —
+        // מזהה פנימי שאינו אומר דבר לנו ולא ללקוח.
+        //
+        // ⚠️ הערך ריק בכוונה: מספר ההזמנה כבר נשלח ב-remarks, ואין
+        // צורך בטקסט נוסף בקבלה.
+        'credit_card_comment=',
         `credit_card=nedarim_plus,${shekels},${NEDARIM_TERMINAL},1,1`,
       ].filter(Boolean).join('&'),
       callId,
