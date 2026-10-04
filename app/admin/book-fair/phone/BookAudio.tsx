@@ -35,6 +35,43 @@ export default function BookAudio() {
   const fileRef = useRef<HTMLInputElement>(null)
   /** לאיזה פריט מיועדת בחירת הקובץ הנוכחית. */
   const pending = useRef<{ bookId?: string; category?: string } | null>(null)
+  /** איזו הקלטה מתנגנת כרגע. */
+  const [playing, setPlaying] = useState<string | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  /**
+   * משמיע את ההקלטה שבאמת יושבת בימות.
+   *
+   * ⚠️ עוצר ניגון קודם: בלי זה לחיצה על שורה שנייה ניגנה את שתיהן
+   * יחד, ואי אפשר היה להבחין איזו מהן נשמעת.
+   */
+  async function play(id: string, params: string) {
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
+    setPlaying(id)
+    try {
+      const res = await fetch(`/api/admin/book-fair/play-audio?${params}`, { cache: 'no-store' })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d?.error ?? `ההשמעה נכשלה (${res.status})`)
+      }
+      // ⚠️ blob ולא כתובת ישירה ב-src: הראוט דורש הרשאת צוות, ותגית
+      // audio רגילה אינה שולחת את העוגיות בכל הדפדפנים.
+      const url = URL.createObjectURL(await res.blob())
+      const el = new Audio(url)
+      audioRef.current = el
+      const done = () => {
+        URL.revokeObjectURL(url)
+        if (audioRef.current === el) audioRef.current = null
+        setPlaying(null)
+      }
+      el.onended = done
+      el.onerror = () => { done(); toast.error('הדפדפן לא הצליח לנגן את הקובץ') }
+      await el.play()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'שגיאה בהשמעה')
+      setPlaying(null)
+    }
+  }
 
   async function load() {
     setLoading(true)
@@ -229,6 +266,8 @@ export default function BookAudio() {
                   : <Badge>קול ממוחשב</Badge>}
                 <RowActions
                   busy={busy === key}
+                  playing={playing === key}
+                  onPlay={rec ? () => play(key, `category=${encodeURIComponent(name)}`) : undefined}
                   onGenerate={() => act(key, { category: name }, 'הקול נוצר')}
                   onUpload={() => pickFile({ category: name })}
                   onRemove={rec ? () => remove(key, `category=${encodeURIComponent(name)}`) : undefined}
@@ -278,6 +317,8 @@ export default function BookAudio() {
                 : <Badge>קול ממוחשב</Badge>}
               <RowActions
                 busy={busy === b.id}
+                playing={playing === b.id}
+                onPlay={b.audio_name ? () => play(b.id, `book_id=${b.id}`) : undefined}
                 onGenerate={() => act(b.id, { book_id: b.id }, 'הקול נוצר')}
                 onUpload={() => pickFile({ bookId: b.id })}
                 onRemove={b.audio_name ? () => remove(b.id, `book_id=${b.id}`) : undefined}
@@ -303,8 +344,12 @@ function Badge({ children, ok }: { children: React.ReactNode; ok?: boolean }) {
   )
 }
 
-function RowActions({ busy, onGenerate, onUpload, onRemove }: {
+function RowActions({ busy, playing, onPlay, onGenerate, onUpload, onRemove }: {
   busy: boolean
+  /** האם ההקלטה של השורה הזו מתנגנת כרגע. */
+  playing?: boolean
+  /** קיים רק כשיש הקלטה בפועל — אין טעם בכפתור שישמיע כלום. */
+  onPlay?: () => void
   onGenerate: () => void
   onUpload: () => void
   onRemove?: () => void
@@ -314,6 +359,14 @@ function RowActions({ busy, onGenerate, onUpload, onRemove }: {
   }
   return (
     <div className="flex flex-shrink-0 items-center gap-1">
+      {/* 🔴 השמעת מה שבאמת יושב בימות — לא תצוגה מקדימה של TTS.
+          בלי זה אין שום דרך לוודא *איזה* קובץ נשמר, והטעות מתגלה
+          רק בשיחה אמיתית. */}
+      {onPlay && (
+        <IconBtn title="השמעת ההקלטה" onClick={onPlay}>
+          {playing ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+        </IconBtn>
+      )}
       <IconBtn title="צור קול טבעי" onClick={onGenerate}><Wand2 size={14} /></IconBtn>
       <IconBtn title="העלאת הקלטה" onClick={onUpload}><Upload size={14} /></IconBtn>
       {onRemove && (
