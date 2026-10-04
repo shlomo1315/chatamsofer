@@ -260,6 +260,8 @@ export default function SellerClient() {
           <NedarimIframe
             transactionId={payment.transactionId}
             key_={payment.key}
+            // 🔴 רק כאן: בדוכן יש קורא כרטיסים, בחנות הציבורית אין.
+            cardReader
             onSuccess={() => {
               setDone({ orderNumber: payment.orderNumber, total: payment.total, warning: null })
               setPayment(null)

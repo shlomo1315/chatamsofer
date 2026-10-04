@@ -32,9 +32,16 @@ interface Props {
   onSuccess: () => void
   /** נקרא כשהתורם לוחץ "חזרה" בתוך האייפרם. */
   onBack?: () => void
+  /**
+   * יש קורא כרטיסים מגנטי במסך הזה.
+   *
+   * 🔴 רק בדוכן המוכרים. בחנות הציבורית ללקוח אין קורא, וההנחיה
+   * "העבירו את הכרטיס" בלבלה אותו מול טופס רגיל.
+   */
+  cardReader?: boolean
 }
 
-export default function NedarimIframe({ transactionId, key_, onSuccess, onBack }: Props) {
+export default function NedarimIframe({ transactionId, key_, onSuccess, onBack, cardReader = false }: Props) {
   const frameRef = useRef<HTMLIFrameElement>(null)
   const [status, setStatus] = useState<Status>('loading')
   const [errorMsg, setErrorMsg] = useState('')
@@ -132,7 +139,17 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack }
     const frame = frameRef.current
     if (!frame?.contentWindow) return
     frame.contentWindow.postMessage(
-      { Name: 'StartPayment', Value: { TransactionId: transactionId, Key: key_ } },
+      {
+        Name: 'StartPayment',
+        Value: {
+          TransactionId: transactionId,
+          Key: key_,
+          // 🔴 ברירת המחדל של נדרים היא "תרומה", וזו חנות ספרים —
+          // הלקוח קונה ואינו תורם. הסכום מתווסף אוטומטית אחרי
+          // הטקסט ("למעבר לתשלום 52 ₪").
+          ButtonText: 'למעבר לתשלום',
+        },
+      },
       '*',
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -156,7 +173,7 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack }
   // ⚠️ איננו יכולים להזין לשדות של האייפרם (origin אחר), ולכן
   // מוצגים למוכר המספר והתוקף להעתקה — וזה עדיין חוסך את הטעות.
   useEffect(() => {
-    if (status !== 'ready') return
+    if (!cardReader || status !== 'ready') return
     let buf = ''
     let last = 0
 
@@ -187,7 +204,7 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack }
     // ⚠️ capture: חייב לרוץ לפני שהאירוע מגיע לשדות.
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [status])
+  }, [status, cardReader])
 
   // ── בדיקת השדות תוך כדי מילוי ──
   //
@@ -221,7 +238,7 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack }
           אייפרם מדומיין אחר אינן מגיעות אלינו, ולכן סריקה כשהסמן
           כבר בשדה הכרטיס תידחף לשדה ותיצור בדיוק את הבאג שדווח
           ("מספר הכרטיס לא תקין"). */}
-      {status === 'ready' && !swipe && (
+      {cardReader && status === 'ready' && !swipe && (
         <p className="rounded-xl border border-[#12314F]/15 bg-[#12314F]/5 px-4 py-2.5 text-sm text-[#12314F]">
           יש קורא כרטיסים? העבירו את הכרטיס <strong>לפני</strong> שלוחצים על שדות
           התשלום — המערכת תפענח את המספר והתוקף.

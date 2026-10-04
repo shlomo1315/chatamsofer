@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
+import { deliverMail } from '@/lib/sendMail'
+import { mailFor } from '@/lib/departments'
+import { bookFairStatusUpdateEmail } from '@/lib/emailTemplates'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import type { BookFairOrderStatus } from '@/types/bookFair'
 
 // עדכון הזמנה: סטטוס, כתובת שאומתה מההקלטה, והערות.
@@ -131,6 +135,46 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     userId: staff.userId, action: 'update', entityType: 'book_fair_order',
     entityId: id, details: { order: order.order_number, fields: Object.keys(patch) },
   })
+
+  // ── מייל עדכון סטטוס ללקוח ──
+  //
+  // 🔴 עד כה הלקוח קיבל אישור תשלום ואז שתיקה מוחלטת עד שהחבילה
+  // הגיעה. כל שינוי משמעותי נשלח אליו עכשיו.
+  //
+  // ⚠️ רק סטטוסים שיש בהם מה לבשר: 'paid' כבר מכוסה במייל האישור,
+  // וכישלון/ביטול/זיכוי דורשים שיחה ולא מייל אוטומטי.
+  //
+  // ⚠️ אינו חוסם את התשובה: המשרד לא אמור להמתין לשרת מייל, וכשל
+  // בשליחה אינו הופך עדכון סטטוס שבוצע לכישלון.
+  const MAILED: BookFairOrderStatus[] = ['picking', 'packed', 'shipped', 'delivered']
+  if (patch.status && MAILED.includes(patch.status as BookFairOrderStatus)) {
+    void (async () => {
+      try {
+        const { data: full } = await db.from('book_fair_orders')
+          .select('order_number, customer_name, customer_email, delivery_method, tracking_token')
+          .eq('id', id).maybeSingle()
+        if (!full?.customer_email) return
+
+        await ensureEmailTexts()
+        const mail = bookFairStatusUpdateEmail({
+          orderNumber: full.order_number as string,
+          customerName: full.customer_name as string | null,
+          status: patch.status as BookFairOrderStatus,
+          deliveryMethod: full.delivery_method === 'pickup' ? 'pickup' : 'shipping',
+          trackingToken: full.tracking_token as string | null,
+        })
+        const sent = await deliverMail(
+          full.customer_email as string, mail.subject, mail.html, undefined,
+          { ...mailFor('yerid'), transactional: true },
+        )
+        if (!sent.ok) {
+          console.error(`[book-fair/orders] מייל סטטוס ל-${full.order_number} נכשל:`, sent.error)
+        }
+      } catch (e) {
+        console.error('[book-fair/orders] מייל סטטוס נכשל:', e)
+      }
+    })()
+  }
 
   return NextResponse.json({ ok: true })
 }

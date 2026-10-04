@@ -25,6 +25,16 @@ type CartLine = { book: PublicBook; quantity: number }
 
 const CART_KEY = 'book_fair_cart_v1'
 
+/**
+ * מזהה עוגן לקטגוריה.
+ *
+ * ⚠️ נגזר מהשם ולא מאינדקס: אינדקס משתנה כשקטגוריה נוספת או מתרוקנת,
+ * והקישור היה מצביע לקטגוריה אחרת. התווים הלא-תקניים מוחלפים כי
+ * getElementById עם רווחים וגרשיים אינו אמין.
+ */
+const catId = (name: string) =>
+  'cat-' + name.replace(/[^֐-׿a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '')
+
 export default function YeridStore({ books, cities, tiers, open, openAt, previewToken, pickup }: {
   books: PublicBook[]; cities: PublicCity[]; tiers: PublicTier[]; open: boolean
   /** מועד הפתיחה המתוכנן (ISO) — לספירה לאחור במסך ההמתנה. */
@@ -186,8 +196,13 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
           גלילה ארוכה בקטלוג, והפך את הדף ל"אתר תדמית" במקום לחנות שנוח
           לקנות בה. הזהב נשמר כמבטא על רקע בהיר — שם הוא מבליט במקום
           להתחרות. */}
-      <header className="relative border-b border-[#141210]/8 bg-gradient-to-b from-white to-[#FAF7F0]">
-        <div className="mx-auto max-w-6xl px-5 py-7 sm:py-9">
+      {/* ══ שער + סרגל — גוש דביק אחד ══
+          🔴 גם הלוגו דביק ולא רק החיפוש: בגלילה ארוכה בקטלוג הזהות
+          של האתר נעלמה והקונה איבד הקשר. ⚠️ ריפוד מוקטן בגלילה כדי
+          שהגוש לא יבלע חצי מסך בנייד. */}
+      <div className="sticky top-0 z-40 border-b border-[#141210]/8 bg-[#FAF7F0]/95 backdrop-blur">
+      <header className="border-b border-[#141210]/8 bg-gradient-to-b from-white/80 to-transparent">
+        <div className="mx-auto max-w-6xl px-5 py-4">
           <div className="flex items-center justify-between gap-6">
             <div className="flex items-center gap-4">
               {/* הלוגו הרשמי — זהה למסך ההמתנה ולשאר המערכת. */}
@@ -225,7 +240,7 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
           🔴 דביק בכל גלילה. הקטלוג ארוך, והקונה שגלל למטה נאלץ לחזור
           לראש הדף כדי לחפש או לפתוח את הסל — שני הדברים שהוא עושה
           הכי הרבה. */}
-      <div className="sticky top-0 z-40 border-b border-[#141210]/8 bg-[#FAF7F0]/95 backdrop-blur">
+      <div>
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-5 py-3">
           <div className="relative flex-1">
             <Search size={19} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[#141210]/30" />
@@ -282,6 +297,7 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
           </button>
         </div>
       </div>
+      </div>
 
       <main className="mx-auto max-w-6xl px-5 pt-8">
         {books.length === 0 ? (
@@ -299,9 +315,42 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
                 ⚠️ בחיפוש הקיבוץ מתבטל (groups=null) — התוצאות מוצגות
                 לפי רלוונטיות, והתאמת מק"ט מדויקת ראשונה. */}
             {groups ? (
-              <div className="pb-16">
+              <div className="pb-16 lg:flex lg:items-start lg:gap-8">
+                {/* ── תפריט הקטגוריות ──
+                    🔴 ניווט ישיר במקום גלילה דרך 111 ספרים.
+                    ⚠️ דביק מתחת לשער (top-[136px]) ולא בראש המסך —
+                    אחרת הוא נעלם מאחורי הגוש הדביק שמעליו.
+                    ⚠️ מוסתר בנייד: תפריט צד במסך צר גוזל את רוב הרוחב.
+                    שם הקטגוריות מופיעות ככותרות בזרימה ממילא. */}
+                <nav className="hidden w-52 flex-shrink-0 lg:sticky lg:top-[136px] lg:block">
+                  <p className="mb-2 px-3 text-sm font-semibold text-[#141210]/45">קטגוריות</p>
+                  <ul className="flex flex-col gap-0.5">
+                    {groups.map(([category, items]) => (
+                      <li key={category}>
+                        <button
+                          onClick={() => document.getElementById(catId(category))
+                            ?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                          className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-right text-base text-[#141210]/70 transition hover:bg-white hover:text-[#6B2737]"
+                        >
+                          <span className="min-w-0 truncate">{category}</span>
+                          <span className="flex-shrink-0 text-sm tabular-nums text-[#141210]/35">
+                            {items.length}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </nav>
+
+                <div className="min-w-0 flex-1">
                 {groups.map(([category, items]) => (
-                  <section key={category} className="mb-10">
+                  <section
+                    key={category}
+                    id={catId(category)}
+                    // ⚠️ scroll-mt: בלעדיו הכותרת נחתכת מאחורי הגוש
+                    // הדביק אחרי קפיצה מהתפריט.
+                    className="mb-10 scroll-mt-[150px]"
+                  >
                     <div className="mb-4 flex items-baseline gap-3 border-b border-[#141210]/10 pb-2">
                       <h2 className="text-xl font-bold text-[#12314F]">{category}</h2>
                       <span className="text-sm text-[#141210]/40">
@@ -322,6 +371,7 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
                     </div>
                   </section>
                 ))}
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-x-5 gap-y-8 pb-16 sm:grid-cols-2 lg:grid-cols-3">
@@ -713,6 +763,10 @@ function CartPanel({ lines, cities, tiers, previewToken, pickup, onClose, onSetQ
   // והאיסוף הוא בחירה מודעת.
   const [method, setMethod] = useState<'pickup' | 'shipping'>('shipping')
   const [cityId, setCityId] = useState('')
+  /** שדות שהמשתמש נגע בהם — שגיאה מוצגת רק אחרי נגיעה. */
+  const [touched, setTouched] = useState<Record<string, boolean>>({})
+  /** נדלק בלחיצה על "לתשלום" — מציג את כל השגיאות בבת אחת. */
+  const [showErrors, setShowErrors] = useState(false)
   const [form, setForm] = useState({ name: '', phone: '', email: '', address: '' })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -736,16 +790,41 @@ function CartPanel({ lines, cities, tiers, previewToken, pickup, onClose, onSetQ
   const ship = method === 'pickup' ? 0 : shipQuote
   const total = itemsTotal + (ship ?? 0)
 
-  // 🔴 הכפתור נעול עד שכל שדות החובה מלאים ותקינים. בלי זה הלקוח מגיע
-  // לסליקה, נדחה בשרת, וחוזר לטופס — אחרי שכבר שוריין לו מלאי.
+  // ── ולידציה לכל שדה בנפרד ──
+  //
+  // 🔴 שגיאה *לכל שדה* ולא דגל אחד: "יש למלא את כל שדות החובה" אינו
+  // אומר ללקוח מה בדיוק חסר, והוא נתקע בלי לדעת איפה.
+  //
+  // ⚠️ מוצגות רק אחרי נגיעה בשדה (touched) או אחרי לחיצה על "לתשלום" —
+  // אחרת הטופס נפתח אדום כולו למי שעוד לא הקליד דבר.
+  const nameRaw = form.name.trim()
+  const phoneDigits = form.phone.replace(/\D/g, '')
   const emailBad = emailError(form.email)
-  const detailsOk =
-    form.name.trim().length >= 2 &&
-    /^0\d{8,9}$/.test(form.phone.replace(/\D/g, '')) &&
-    !!form.email.trim() && !emailBad &&
-    // ⚠️ עיר וכתובת נדרשות רק במשלוח — באיסוף אין לאן לשלוח.
-    (method === 'pickup' || (!!cityId && !!form.address.trim())) &&
-    (method === 'pickup' || ship !== null)
+
+  const fieldErrors: Record<string, string> = {}
+  // ⚠️ עברית בלבד: שם עם ספרות הוא כמעט תמיד טעות הקלדה בשדה הלא נכון.
+  if (!nameRaw) fieldErrors.name = 'יש להזין שם מלא'
+  else if (nameRaw.length < 2) fieldErrors.name = 'השם קצר מדי'
+  else if (!/^[֐-׿\s'"־-]+$/.test(nameRaw)) fieldErrors.name = 'יש להזין שם בעברית בלבד'
+
+  if (!phoneDigits) fieldErrors.phone = 'יש להזין מספר טלפון'
+  else if (phoneDigits.length < 9) fieldErrors.phone = 'מספר הטלפון קצר מדי'
+  else if (phoneDigits.length > 10) fieldErrors.phone = 'מספר הטלפון ארוך מדי'
+  else if (!/^0\d{8,9}$/.test(phoneDigits)) fieldErrors.phone = 'מספר טלפון לא תקין'
+
+  if (!form.email.trim()) fieldErrors.email = 'יש להזין כתובת מייל'
+  else if (emailBad) fieldErrors.email = 'נא הזינו כתובת מייל תקינה'
+
+  // ⚠️ עיר וכתובת נדרשות רק במשלוח — באיסוף אין לאן לשלוח.
+  if (method === 'shipping') {
+    if (!cityId) fieldErrors.city = 'יש לבחור עיר'
+    if (!form.address.trim()) fieldErrors.address = 'יש לבחור רחוב ומספר בית מהרשימה'
+    if (ship === null) fieldErrors.shipping = 'לא הוגדר תעריף משלוח להזמנה זו'
+  }
+
+  const detailsOk = Object.keys(fieldErrors).length === 0
+  /** האם להציג את השגיאה של שדה זה. */
+  const errFor = (k: string) => (touched[k] || showErrors) ? fieldErrors[k] : undefined
 
   async function submit() {
     setError(''); setBusy(true)
@@ -789,8 +868,18 @@ function CartPanel({ lines, cities, tiers, previewToken, pickup, onClose, onSetQ
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-start bg-[#141210]/60" onClick={onClose}>
-      <div className="flex h-full w-full max-w-lg flex-col bg-[#F5F0E6]" onClick={e => e.stopPropagation()}>
+    // 🔴 חלונית ממורכזת ולא מגירה צדדית: העגלה היא הרגע שבו הקונה
+    // מחליט, והיא צריכה לעמוד במרכז תשומת הלב.
+    // ⚠️ max-h + flex-col: בטופס ארוך התוכן גולל בתוך החלונית ולא
+    // דוחף את כפתור התשלום מחוץ למסך.
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#141210]/60 p-0 sm:p-6"
+      onClick={onClose}
+    >
+      <div
+        className="flex h-full w-full max-w-lg flex-col bg-[#F5F0E6] shadow-2xl sm:h-auto sm:max-h-[90vh] sm:rounded-2xl sm:overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between border-b border-[#141210]/10 bg-white px-5 py-4">
           <div>
             <h2 className="text-xl font-bold text-[#12314F]">
@@ -919,7 +1008,7 @@ function CartPanel({ lines, cities, tiers, previewToken, pickup, onClose, onSetQ
                   והצגתם הייתה שדות חובה שאי אפשר למלא בהיגיון. */}
               {method === 'shipping' && (
                 <>
-                  <Field label="עיר" required>
+                  <Field label="עיר" required error={errFor('city')} anchor="city">
                     <select value={cityId} onChange={e => setCityId(e.target.value)} className={INPUT}>
                       <option value="">בחרו עיר</option>
                       {cities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -944,22 +1033,42 @@ function CartPanel({ lines, cities, tiers, previewToken, pickup, onClose, onSetQ
                 </>
               )}
 
-              <Field label="שם מלא" required>
-                <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={INPUT} />
+              {/* ⚠️ עברית בלבד — הסינון בהקלדה ולא רק בוולידציה: ספרה
+                  בשם היא כמעט תמיד הקלדה בשדה הלא נכון, ועדיף למנוע
+                  אותה מאשר להתריע אחריה. */}
+              <Field label="שם מלא" required error={errFor('name')} anchor="name">
+                <input
+                  value={form.name}
+                  onChange={e => setForm(f => ({
+                    ...f, name: e.target.value.replace(/[^֐-׿\s'"־-]/g, ''),
+                  }))}
+                  onBlur={() => setTouched(t => ({ ...t, name: true }))}
+                  className={INPUT}
+                />
               </Field>
-              <Field label="טלפון" required>
-                <input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-                  inputMode="tel" dir="ltr" className={INPUT} />
+
+              {/* ⚠️ ספרות בלבד, עד 10: maxLength אינו חוסם הדבקה. */}
+              <Field label="טלפון" required error={errFor('phone')} anchor="phone">
+                <input
+                  value={form.phone}
+                  onChange={e => setForm(f => ({
+                    ...f, phone: e.target.value.replace(/\D/g, '').slice(0, 10),
+                  }))}
+                  onBlur={() => setTouched(t => ({ ...t, phone: true }))}
+                  inputMode="numeric" dir="ltr" className={INPUT}
+                />
               </Field>
+
               {/* 🔴 האימייל חובה: הוא הדרך היחידה של הלקוח לקבל את קישור
                   המעקב. עד כה הוא היה אופציונלי, והזמנה בלי מייל נעלמה
                   מהלקוח ברגע שסגר את הלשונית. */}
-              <Field label="אימייל" required hint="לקבלת אישור וקישור למעקב">
-                <input value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                  inputMode="email" dir="ltr" className={INPUT} />
-                {form.email.trim() && emailBad && (
-                  <span className="mt-1 block text-sm text-[#6B2737]">{emailBad}</span>
-                )}
+              <Field label="אימייל" required error={errFor('email')} anchor="email">
+                <input
+                  value={form.email}
+                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                  onBlur={() => setTouched(t => ({ ...t, email: true }))}
+                  inputMode="email" dir="ltr" className={INPUT}
+                />
               </Field>
 
               {error && (
@@ -1004,20 +1113,35 @@ function CartPanel({ lines, cities, tiers, previewToken, pickup, onClose, onSetQ
                     className="rounded-xl border-2 border-[#141210]/15 px-5 py-4 text-lg font-medium text-[#141210]/70 transition hover:border-[#141210]/30">
                     חזרה
                   </button>
+                  {/* 🔴 הכפתור *לחיץ תמיד*: כפתור מושבת אינו אומר
+                      ללקוח מה חסר, והוא נתקע מול מסך שלא מגיב. לחיצה
+                      עם שדה שגוי מדליקה את כל השגיאות ומקפיצה לשדה
+                      הראשון שבעייתי. */}
                   <button
-                    onClick={submit}
-                    // 🔴 נעול עד שכל שדות החובה מלאים ותקינים (ראו detailsOk).
-                    // ⚠️ StreetPicker מחזיר כתובת ריקה כשהרחוב לא תואם
-                    // לרשימה הרשמית — לכן form.address מכסה גם את זה.
-                    disabled={busy || !detailsOk}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#6B2737] py-4 text-lg font-semibold text-[#F5F0E6] transition hover:bg-[#141210] disabled:cursor-not-allowed disabled:opacity-40">
+                    onClick={() => {
+                      if (!detailsOk) {
+                        setShowErrors(true)
+                        // ⚠️ גלילה לשדה הבעייתי: בטופס ארוך השגיאה
+                        // עשויה להיות מחוץ למסך, והלקוח לא יראה אותה.
+                        const first = ['name', 'phone', 'email', 'city', 'address']
+                          .find(k => fieldErrors[k])
+                        if (first) {
+                          document.querySelector(`[data-field="${first}"]`)
+                            ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                        }
+                        return
+                      }
+                      void submit()
+                    }}
+                    disabled={busy}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#6B2737] py-4 text-lg font-semibold text-[#F5F0E6] transition hover:bg-[#141210] disabled:opacity-60">
                     {busy && <Loader2 size={18} className="animate-spin" />}
                     {busy ? 'מעביר לתשלום…' : `לתשלום ${fmtAgorot(total)}`}
                   </button>
                 </div>
-                {!detailsOk && !busy && (
-                  <p className="mt-2 text-center text-sm text-[#141210]/45">
-                    {ship === null ? 'לא הוגדר תעריף משלוח' : 'יש למלא את כל שדות החובה'}
+                {showErrors && !detailsOk && !busy && (
+                  <p className="mt-2 text-center text-sm font-medium text-[#6B2737]">
+                    {Object.values(fieldErrors)[0]}
                   </p>
                 )}
               </>
@@ -1031,16 +1155,23 @@ function CartPanel({ lines, cities, tiers, previewToken, pickup, onClose, onSetQ
 
 const INPUT = 'w-full rounded-md border-2 border-[#141210]/15 bg-white px-4 py-3.5 text-lg outline-none transition focus:border-[#B8860B]'
 
-function Field({ label, required, hint, children }: {
-  label: string; required?: boolean; hint?: string; children: React.ReactNode
+function Field({ label, required, hint, error, anchor, children }: {
+  label: string; required?: boolean; hint?: string
+  /** מזהה לגלילה אוטומטית מכפתור התשלום. */
+  anchor?: string
+  /** שגיאה לשדה זה. ⚠️ מחליפה את ה-hint — שתי שורות מתחת לשדה מבלבלות. */
+  error?: string
+  children: React.ReactNode
 }) {
   return (
-    <label className="flex flex-col gap-1.5">
+    <label data-field={anchor} className="flex flex-col gap-1.5">
       <span className="text-lg font-semibold text-[#141210]">
         {label}{required && <span className="text-[#6B2737]"> *</span>}
       </span>
       {children}
-      {hint && <span className="text-sm text-[#141210]/50">{hint}</span>}
+      {error
+        ? <span className="text-sm font-medium text-[#6B2737]">{error}</span>
+        : hint && <span className="text-sm text-[#141210]/50">{hint}</span>}
     </label>
   )
 }

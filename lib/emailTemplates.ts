@@ -9,6 +9,7 @@ import { textFor } from './emailTextsStore'
 import { fmtLoanAmount } from './loanCurrency'
 import { fmtAgorot } from './bookFairPricing'
 import { richToHtml } from './richText'
+import type { BookFairOrderStatus } from '../types/bookFair'
 
 export interface BuiltEmail {
   subject: string
@@ -2371,6 +2372,83 @@ export function bookFairOrderConfirmedEmail(opts: {
       preheader: t('preheader'),
       accent,
       title: t('title'),
+      subtitle: 'יריד הספרים',
+      body,
+    }),
+  }
+}
+
+// ─── עדכון סטטוס הזמנה ─────────────────────────────────────────────────────
+//
+// 🔴 נשלח בכל שינוי סטטוס משמעותי (ליקוט → אריזה → משלוח → מסירה).
+// עד כה הלקוח קיבל אישור תשלום ואז שתיקה מוחלטת עד שהחבילה הגיעה —
+// והיחיד שידע מה קורה היה המשרד.
+//
+// ⚠️ לא על *כל* שינוי: מעבר ל-paid כבר מכוסה במייל האישור, וסטטוסי
+// כישלון/ביטול דורשים שיחה ולא מייל אוטומטי. ראו STATUS_MAIL.
+export function bookFairStatusUpdateEmail(opts: {
+  orderNumber: string
+  customerName?: string | null
+  status: BookFairOrderStatus
+  deliveryMethod: 'shipping' | 'pickup'
+  trackingToken?: string | null
+}): BuiltEmail {
+  const { orderNumber, customerName, status, deliveryMethod, trackingToken } = opts
+  const accent = '#0ea5e9'
+
+  // ⚠️ נוסח לכל סטטוס, ומנוסח אחרת לאיסוף מול משלוח: "ההזמנה נשלחה"
+  // למי שאוסף בעצמו הוא פשוט לא נכון.
+  const COPY: Partial<Record<BookFairOrderStatus, { title: string; line: string }>> = {
+    picking: {
+      title: 'ההזמנה בהכנה',
+      line: 'אנחנו מלקטים את הספרים שהזמנתם. נעדכן אתכם בשלב הבא.',
+    },
+    packed: deliveryMethod === 'pickup'
+      ? { title: 'ההזמנה מוכנה לאיסוף', line: 'הספרים ארוזים וממתינים לכם. אפשר לגשת ולאסוף.' }
+      : { title: 'ההזמנה ארוזה', line: 'הספרים ארוזים וממתינים לשליח.' },
+    shipped: {
+      title: 'ההזמנה נשלחה',
+      line: 'החבילה יצאה לדרך ותגיע אליכם בימים הקרובים.',
+    },
+    delivered: deliveryMethod === 'pickup'
+      ? { title: 'ההזמנה נאספה', line: 'תודה שרכשתם מאיתנו. שתהיה קריאה מהנה!' }
+      : { title: 'ההזמנה נמסרה', line: 'תודה שרכשתם מאיתנו. שתהיה קריאה מהנה!' },
+  }
+
+  const copy = COPY[status] ?? { title: 'עדכון בהזמנה', line: 'חל עדכון בסטטוס ההזמנה שלכם.' }
+
+  const trackHtml = trackingToken
+    ? `<div style="margin:0 0 22px;">${btn(
+        `${PORTAL_BASE_DEFAULT.replace(/\/$/, '')}/yerid/order/${encodeURIComponent(trackingToken)}`,
+        'מעקב אחרי ההזמנה', accent,
+      )}</div>`
+    : ''
+
+  const body = `
+    <h2 style="margin:0 0 14px;color:#0f172a;font-size:22px;font-weight:900;">
+      ${customerName ? escapeHtml(customerName) : 'שלום'}
+    </h2>
+    <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.8;">${escapeHtml(copy.line)}</p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
+      <tr><td style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:14px 20px;text-align:center;">
+        <p style="margin:0 0 2px;color:#0369a1;font-size:13px;font-weight:600;">מספר הזמנה</p>
+        <p style="margin:0;color:#0c4a6e;font-size:20px;font-weight:900;letter-spacing:1px;">${escapeHtml(orderNumber)}</p>
+      </td></tr>
+    </table>
+
+    ${trackHtml}
+    <p style="margin:0 0 4px;color:#94a3b8;font-size:13px;line-height:1.7;">
+      לשאלות אפשר להשיב למייל זה.
+    </p>
+  `
+
+  return {
+    subject: `${copy.title} — הזמנה ${orderNumber}`,
+    html: shell({
+      preheader: copy.line,
+      accent,
+      title: copy.title,
       subtitle: 'יריד הספרים',
       body,
     }),
