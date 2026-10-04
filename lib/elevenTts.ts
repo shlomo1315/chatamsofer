@@ -161,9 +161,39 @@ async function getElevenStatusKey(): Promise<string> {
 
 // יצירת דיבור מטקסט. מחזיר MP3 (ArrayBuffer). ימות ממירה אותו לפורמט הניגון שלה.
 // voiceId אופציונלי — לאודישן של קול שעדיין לא נשמר כברירת מחדל.
+/**
+ * עוטף PCM גולמי בכותרת WAV תקנית.
+ *
+ * 🔴 ElevenLabs מחזיר `pcm_8000` בלי כותרת, וקובץ כזה אינו מתנגן
+ * בשום נגן — כולל ימות. 44 הבתים כאן הם מה שהופך אותו לקובץ.
+ */
+export function pcmToWav(pcm: ArrayBuffer, sampleRate = 8000): ArrayBuffer {
+  const data = new Uint8Array(pcm)
+  const out = new ArrayBuffer(44 + data.length)
+  const v = new DataView(out)
+  const ascii = (off: number, s: string) => {
+    for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i))
+  }
+  ascii(0, 'RIFF')
+  v.setUint32(4, 36 + data.length, true)
+  ascii(8, 'WAVE')
+  ascii(12, 'fmt ')
+  v.setUint32(16, 16, true)        // אורך ה-fmt chunk
+  v.setUint16(20, 1, true)         // PCM
+  v.setUint16(22, 1, true)         // מונו
+  v.setUint32(24, sampleRate, true)
+  v.setUint32(28, sampleRate * 2, true) // byte rate (16 ביט מונו)
+  v.setUint16(32, 2, true)         // block align
+  v.setUint16(34, 16, true)        // ביטים לדגימה
+  ascii(36, 'data')
+  v.setUint32(40, data.length, true)
+  new Uint8Array(out, 44).set(data)
+  return out
+}
+
 export async function generateSpeech(
   text: string,
-  opts?: { voiceId?: string },
+  opts?: { voiceId?: string; outputFormat?: string },
 ): Promise<{ ok: boolean; audio?: ArrayBuffer; error?: string }> {
   const clean = String(text ?? '').trim()
   if (!clean) return { ok: false, error: 'אין טקסט ליצירה' }
@@ -174,16 +204,24 @@ export async function generateSpeech(
 
   // ניסיון יחיד מול ElevenLabs. languageCode מאכף שפה (v2.5). withSettings — v3 לא מקבל
   // את אותם voice_settings, לכן עבורו שולחים גוף מינימלי.
-  const attempt = async (modelId: string, o?: { languageCode?: string; withSettings?: boolean }): Promise<{ ok: boolean; audio?: ArrayBuffer; status: number; errText?: string }> => {
+  const attempt = async (modelId: string, o?: { languageCode?: string; withSettings?: boolean; outputFormat?: string }): Promise<{ ok: boolean; audio?: ArrayBuffer; status: number; errText?: string }> => {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 60_000)
     try {
       const reqBody: Record<string, unknown> = { text: clean, model_id: modelId }
       if (o?.withSettings) reqBody.voice_settings = { stability: 0.5, similarity_boost: 0.75, style: 0, use_speaker_boost: true }
       if (o?.languageCode) reqBody.language_code = o.languageCode
-      const res = await fetch(`${ELEVEN_API}/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`, {
+      // 🔴 פורמט היעד נקבע מבחוץ: ימות המשיח מנגנת PCM 8kHz מונו
+      // בלבד. קובץ ב-44.1kHz נשמר אצלה, מופיע ברשימת התיקייה וניתן
+      // להורדה — אבל אינו מתנגן, והשיחה נופלת בלי שום שגיאה בצד שלנו.
+      const fmt = o?.outputFormat ?? 'mp3_44100_128'
+      const res = await fetch(`${ELEVEN_API}/text-to-speech/${encodeURIComponent(voiceId)}?output_format=${fmt}`, {
         method: 'POST',
-        headers: { 'xi-api-key': cfg.apiKey, 'Content-Type': 'application/json', accept: 'audio/mpeg' },
+        headers: {
+          'xi-api-key': cfg.apiKey,
+          'Content-Type': 'application/json',
+          accept: fmt.startsWith('pcm') ? 'audio/basic' : 'audio/mpeg',
+        },
         body: JSON.stringify(reqBody),
         signal: controller.signal,
         cache: 'no-store',
@@ -201,14 +239,16 @@ export async function generateSpeech(
 
   // עברית מדויקת: מעדיפים את Eleven v3 (התמיכה הטובה ביותר בעברית). נפילה-לאחור:
   // turbo v2.5 עם אכיפת he, ואז המנוע הרב-לשוני שקורא עברית מהכתב.
-  const v3 = await attempt(V3_MODEL)
-  if (v3.ok) return { ok: true, audio: v3.audio }
+  const fmt = opts?.outputFormat
+  const wrap = (b?: ArrayBuffer) => (b && fmt?.startsWith("pcm") ? pcmToWav(b, Number(fmt.split("_")[1]) || 8000) : b)
+  const v3 = await attempt(V3_MODEL, { outputFormat: fmt })
+  if (v3.ok) return { ok: true, audio: wrap(v3.audio) }
 
-  const turbo = await attempt(HEBREW_ENFORCE_MODEL, { languageCode: 'he', withSettings: true })
-  if (turbo.ok) return { ok: true, audio: turbo.audio }
+  const turbo = await attempt(HEBREW_ENFORCE_MODEL, { languageCode: 'he', withSettings: true, outputFormat: fmt })
+  if (turbo.ok) return { ok: true, audio: wrap(turbo.audio) }
 
-  const multi = await attempt(MULTILINGUAL_MODEL, { withSettings: true })
-  if (multi.ok) return { ok: true, audio: multi.audio }
+  const multi = await attempt(MULTILINGUAL_MODEL, { withSettings: true, outputFormat: fmt })
+  if (multi.ok) return { ok: true, audio: wrap(multi.audio) }
 
   // 🔴 הסיבה נאמרת בעברית ולא כ-JSON גולמי — ראו lib/elevenQuota.
   //
