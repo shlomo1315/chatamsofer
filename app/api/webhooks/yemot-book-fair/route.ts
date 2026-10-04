@@ -224,16 +224,24 @@ async function listBooks(category: string | null) {
   const { rows } = await fetchAllRows<{
     id: string; sku: string; title: string; price_agorot: number
     stock_total: number; unlimited_stock: boolean
-    audio_name: string | null
+    audio_name: string | null; description: string | null
   }>((from, to) => {
-    let q = supa.from('book_fair_books')
+    const q = supa.from('book_fair_books')
       .select('id, sku, title, price_agorot, stock_total, unlimited_stock, description, audio_name')
       .eq('is_active', true).eq('is_hidden', false)
-    if (category) q = q.eq('description', category)
+    // ⚠️ הסינון *אינו* ב-SQL: listCategories מחזירה את השם אחרי trim,
+    // ו-.eq('description', ...) משווה לערך הגולמי שבעמודה. רווח נסתר
+    // בקצה — או כל הפרש אחר — מחזיר אפס שורות בלי שום שגיאה, וזה
+    // בדיוק מה שהמתקשר שמע כ"אין ספרים בקטגוריה זו".
+    //
+    // הקטלוג קטן (112 שורות), ולכן סינון בזיכרון זול ובטוח יותר.
     return q.order('sku', { ascending: true }).range(from, to)
   })
 
-  return rows.map(b => ({
+  const want = (category ?? '').trim()
+  return rows
+    .filter(b => !want || (b.description ?? '').trim() === want)
+    .map(b => ({
     id: b.id, sku: b.sku, title: b.title, price_agorot: b.price_agorot,
     in_stock: b.unlimited_stock === true || (b.stock_total ?? 0) > 0,
     // ⚠️ audio_name נשלף כבר ב-select אך לא הוחזר — ולכן גם בדפדוף
@@ -589,7 +597,8 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
       // או אם השאילתה החזירה ריק.
       console.log(
         `[yemot-book-fair] cat pick="${input.value}" idx=${idx} `
-        + `cats=${input.categories.length} books=${input.browseBooks?.length ?? 'לא נטען'}`,
+        + `cats=${input.categories.length} books=${input.browseBooks?.length ?? 'לא נטען'} `
+        + `name="${input.categories[idx] ?? '—'}" all=${JSON.stringify(input.categories)}`,
       )
     }
   } else if (state.step === 'browse') {
