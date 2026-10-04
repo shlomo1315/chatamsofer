@@ -358,7 +358,7 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
                 <nav className="hidden w-52 flex-shrink-0 lg:sticky lg:top-[136px] lg:block">
                   <p className="mb-2 px-3 text-sm font-semibold text-[#141210]/45">קטגוריות</p>
                   <ul className="flex flex-col gap-0.5">
-                    {groups.map(([category, items]) => {
+                    {groups.map(([category]) => {
                       // הנקודה בגוון הקטגוריה — מקשרת בין התפריט למדף
                       const cc = categoryColor(category)
                       return (
@@ -373,10 +373,10 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
                             className="h-2.5 w-2.5 flex-shrink-0 rounded-full"
                             style={{ background: cc.main }}
                           />
-                          <span className="min-w-0 flex-1 truncate">{category}</span>
-                          <span className="flex-shrink-0 text-sm tabular-nums text-[#141210]/35">
-                            {items.length}
-                          </span>
+                          {/* ⚠️ בלי truncate: "ליקוטים בעניינים שונים" נחתך
+                              ל"ליקוטים בעניינים ש…" ולא אפשר לדעת מה הקטגוריה.
+                              השם נשבר לשתי שורות במקום להיחתך. */}
+                          <span className="min-w-0 flex-1 leading-snug">{category}</span>
                         </button>
                       </li>
                       )
