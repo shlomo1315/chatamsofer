@@ -217,23 +217,36 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
           🔴 גם הלוגו דביק ולא רק החיפוש: בגלילה ארוכה בקטלוג הזהות
           של האתר נעלמה והקונה איבד הקשר. ⚠️ ריפוד מוקטן בגלילה כדי
           שהגוש לא יבלע חצי מסך בנייד. */}
-      {/* ══ הלוגו — ממורכז בראש הדף, מחוץ לגוש הדביק ══
+      {/* ══ הלוגו — ממורכז בראש הדף, מתכווץ בגלילה ══
           🔴 מחוץ ל-sticky בכוונה: בתוכו הוא היה תופס גובה קבוע בכל
-          גלילה ובולע חצי מסך בנייד. כאן הוא נראה גדול בכניסה, ונגלל
-          החוצה כשהקונה יורד לקטלוג — בעוד החיפוש והעגלה נשארים דביקים. */}
-      <div className="bg-[#FAF7F0] px-5 pt-8 pb-6">
+          גלילה ובולע חצי מסך בנייד. כאן הוא גדול בכניסה — הזהות של
+          היריד — ומתכווץ כשהקונה מתחיל לגלול, כי משם הקטלוג הוא העיקר.
+          ⚠️ transition על הרוחב ולא על scale: scale היה מטשטש את
+          הזהב בכרטיס. */}
+      {/* ⚠️ בלי רקע משלו: ה-header שמתחת נפתח ב-gradient מלבן, ורקע
+          אטום כאן יצר פס בהיר שנראה כמו שתי רצועות נפרדות. */}
+      <div
+        className={`px-5 transition-all duration-300 ${
+          scrolled ? 'pt-3 pb-2' : 'pt-8 pb-4'
+        }`}
+      >
         <img
           src="/logo-heichal.png"
           alt="היכל החתם סופר"
-          className="mx-auto w-56 sm:w-72"
+          className={`mx-auto transition-all duration-300 ${
+            scrolled ? 'w-24 sm:w-28' : 'w-56 sm:w-72'
+          }`}
         />
       </div>
 
       <div className="sticky top-0 z-40 border-b border-[#141210]/8 bg-[#FAF7F0]/95 backdrop-blur">
       <header className="border-b border-[#141210]/8 bg-gradient-to-b from-white/80 to-transparent">
         <div className="mx-auto max-w-6xl px-5 py-4">
-          <div className="flex items-center justify-between gap-6">
-            <div className="flex items-center gap-4">
+          {/* ⚠️ הכותרת ממורכזת מתחת ללוגו, וה"אזור האישי" צף בצד:
+              בפריסת justify-between הכותרת נדחקה לקצה ולא התיישרה עם
+              הלוגו שמעליה. */}
+          <div className="relative flex flex-col items-center gap-2 text-center">
+            <div className="flex flex-col items-center">
               <div>
                 <h1 className="text-2xl font-bold leading-tight text-[#141210] sm:text-3xl">
                   יריד הספרים
@@ -256,7 +269,7 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
                 (/yerid/order/<token>) אך לא היה אליו שום כניסה מהחנות. */}
             <a
               href="/yerid/my-order"
-              className="hidden items-center gap-2 rounded-xl border border-[#141210]/12 bg-white px-4 py-2.5 text-sm font-medium text-[#141210]/70 transition hover:border-[#A8823C] hover:text-[#141210] sm:flex"
+              className="absolute left-0 top-0 hidden items-center gap-2 rounded-xl border border-[#141210]/12 bg-white px-4 py-2.5 text-sm font-medium text-[#141210]/70 transition hover:border-[#A8823C] hover:text-[#141210] sm:flex"
             >
               <UserRound size={17} /> האזור האישי
             </a>
