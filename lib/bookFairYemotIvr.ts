@@ -52,9 +52,21 @@ interface ReadOpts {
 }
 
 function readTap(varName: string, promptTokens: string[], opts: ReadOpts = {}): string {
-  const { max = '', min = 1, seconds = 12, readAs = 'Digits' } = opts
+  const { max = '', min = 1, seconds = 12, readAs = 'No' } = opts
   // read=<הודעה>=<שם>,<שימוש בקיים>,<max>,<min>,<שניות>,<אופן הקראה>,<חסום כוכבית>,<אפס אסור>,<תו החלפה>,<מקשים מותרים>,<חזרות>,<Ok>,<טקסט ריק>
-  const ops = [varName, 'yes', String(max), String(min), String(seconds), readAs, '', '', '', '', '', '', '']
+  //
+  // 🔴 readAs='No' ולא 'Digits': עם Digits ימות *מקריאה את ההקשה
+  // חזרה ומבקשת אישור* — המתקשר לחץ 1 ושמע "1, לאישור הקישו 1".
+  // בתפריט זה מיותר ומבלבל, והוא הכפיל כל בחירה.
+  //
+  // ⚠️ אותם ערכים בדיוק כמו בשלוחות החגים והתפריט הראשי שעובדות:
+  // 'No','no','no' במקומות 6-8. זה הדפוס הבדוק בפרויקט.
+  const ops = [
+    varName, 'yes',
+    String(max), String(min), String(seconds),
+    readAs, 'no', 'no', '',
+    '', '', '', '',
+  ]
   return `read=${joinTokens(...promptTokens)}=${ops.join(',')}`
 }
 

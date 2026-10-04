@@ -9,7 +9,6 @@ import { mainPathTitles } from '@/lib/ivrSteps'
 import YemotMaternitySettings from '@/app/admin/settings/YemotMaternitySettings'
 import YemotHolidaySettings from '@/app/admin/settings/YemotHolidaySettings'
 import YemotMainMenuSettings from '@/app/admin/settings/YemotMainMenuSettings'
-import YemotBookFairSettings from '@/app/admin/settings/YemotBookFairSettings'
 import YemotCallLog from '@/app/admin/settings/YemotCallLog'
 import RegistrationCallSettings from '@/app/admin/settings/RegistrationCallSettings'
 import IvrBuilder from '@/app/admin/settings/IvrBuilder'
@@ -346,7 +345,9 @@ export default function PhoneSystemClient() {
           {ext.id === 'announce' && <RegistrationCallSettings />}
           {ext.messagesKey === 'holiday' && <YemotHolidaySettings />}
           {ext.messagesKey === 'maternity' && <YemotMaternitySettings />}
-          {ext.messagesKey === 'book_fair' && <YemotBookFairSettings />}
+          {/* ⚠️ יריד הספרים אינו כאן במכוון: הוא מחלקה עצמאית, וכל
+              הניהול שלו — כולל נוסחי השלוחה והקלטותיה — יושב תחת
+              /admin/book-fair. ראו lib/ivrMap (messagesKey=null). */}
         </div>
       )}
 

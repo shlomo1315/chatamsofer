@@ -303,13 +303,14 @@ export default async function BookFairPage() {
       )}
 
       {/* ── קיצורים ── */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-7">
         <Shortcut href="/admin/book-fair/orders"    icon={ShoppingCart}   label="הזמנות" />
         <Shortcut href="/admin/book-fair/books"     icon={BookOpen}       label="קטלוג ומלאי" />
         <Shortcut href="/admin/book-fair/books"     icon={Boxes}          label="ייבוא מאקסל" />
         {/* ⚠️ פניות מהשלוחה הטלפונית — בלי קיצור כאן אי אפשר היה
             להגיע למסך בכלל. */}
         <Shortcut href="/admin/book-fair/inquiries" icon={MessageSquare}  label="פניות מאזינים" />
+        <Shortcut href="/admin/book-fair/phone"     icon={Mic}            label="שלוחה טלפונית" />
         <Shortcut href="/admin/book-fair/emails"    icon={Mail}           label="מיילים" />
         <Shortcut href="/admin/book-fair/settings"  icon={Settings2}      label="הגדרות" />
       </div>

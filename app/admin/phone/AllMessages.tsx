@@ -43,9 +43,8 @@ const SOURCES = [
   { id: 'maternity', label: 'יולדות',
     api: '/api/admin/yemot-maternity/messages',
     voice: '/api/admin/yemot-maternity/generate-voice', tone: 'bg-pink-100 text-pink-800' },
-  { id: 'book_fair', label: 'יריד הספרים',
-    api: '/api/admin/yemot-book-fair/messages',
-    voice: '/api/admin/yemot-book-fair/generate-voice', tone: 'bg-amber-100 text-amber-800' },
+  // ⚠️ יריד הספרים אינו כאן: הוא מחלקה עצמאית, ונוסחי השלוחה שלו
+  // נערכים ב-/admin/book-fair/phone.
 ] as const
 
 type SourceId = typeof SOURCES[number]['id']

@@ -16,7 +16,7 @@ const isEligible = (m: Meta, text: string) => m.allowAudio && !hasPlaceholder(te
 // קול שנוצר אוטומטית מסומן בקידומת tts_ (לעומת rec_ של הקלטה אנושית)
 const isGenerated = (audio?: string | null) => !!audio && audio.startsWith('tts_')
 
-export default function YemotBookFairSettings() {
+export default function PhoneMessages() {
   const toast = useToast()
   const [meta, setMeta] = useState<Meta[]>([])
   const [messages, setMessages] = useState<Record<string, Msg>>({})
