@@ -213,16 +213,25 @@ async function listCategories(): Promise<string[]> {
  */
 async function listBooks(category: string | null) {
   const supa = db()!
-  let q = supa.from('book_fair_books')
-    .select('id, sku, title, price_agorot, stock_total, unlimited_stock, description, audio_name')
-    .eq('is_active', true).eq('is_hidden', false)
-  if (category) q = q.eq('description', category)
 
+  // 🔴 השאילתה נבנית מחדש בכל עמוד ואינה משותפת.
+  //
+  // ⚠️ זה מה שהחזיר "אין ספרים בקטגוריה זו": builder של Supabase הוא
+  // thenable חד-פעמי — אחרי שהוא בוצע, קריאה חוזרת עליו מחזירה ריק.
+  // fetchAllRows קורא לפונקציה פעם לכל עמוד, ולכן q משותף נצרך בעמוד
+  // הראשון והשאר חזרו ריקים. הלוג הראה cats=9 ו-books=0 בעוד המסד
+  // החזיק 4 שורות תואמות.
   const { rows } = await fetchAllRows<{
     id: string; sku: string; title: string; price_agorot: number
     stock_total: number; unlimited_stock: boolean
     audio_name: string | null
-  }>((from, to) => q.order('sku', { ascending: true }).range(from, to))
+  }>((from, to) => {
+    let q = supa.from('book_fair_books')
+      .select('id, sku, title, price_agorot, stock_total, unlimited_stock, description, audio_name')
+      .eq('is_active', true).eq('is_hidden', false)
+    if (category) q = q.eq('description', category)
+    return q.order('sku', { ascending: true }).range(from, to)
+  })
 
   return rows.map(b => ({
     id: b.id, sku: b.sku, title: b.title, price_agorot: b.price_agorot,
