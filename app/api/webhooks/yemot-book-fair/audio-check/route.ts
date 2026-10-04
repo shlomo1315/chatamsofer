@@ -1,0 +1,85 @@
+import { NextResponse, type NextRequest } from 'next/server'
+import { timingSafeEqual } from 'node:crypto'
+import { getBookFairMessages } from '@/lib/yemotBookFairMessages'
+
+export const dynamic = 'force-dynamic'
+
+const API = 'https://www.call2all.co.il/ym/api'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// האם קבצי ההקלטה של היריד באמת יושבים בשלוחה.
+//
+// 🔴 למה זה קיים: השלוחה ענתה "שגיאה" וניתקה, וחשדנו בקבצים חסרים —
+// אבל לא הייתה שום דרך *לראות* מה יש בתיקייה. בלי זה חוזרים לנחש,
+// וכל ניחוש עולה פריסה ושיחת בדיקה.
+//
+// ⚠️ מוגן באותו ApiToken של השלוחה ולא בהתחברות צוות: הוא נועד
+// לאבחון מהיר בזמן תקלה, כשאין גישה לדפדפן מחובר. אין כאן שום מידע
+// אישי — רק שמות קבצים.
+//
+// ⚠️ fail-closed: בלי טוקן תקין מוחזר 401 לפני כל פנייה לימות.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function safeEqual(a: string, b: string): boolean {
+  const ba = Buffer.from(a), bb = Buffer.from(b)
+  if (ba.length !== bb.length) return false
+  return timingSafeEqual(ba, bb)
+}
+
+async function listDir(token: string, folder: string): Promise<string[]> {
+  const url = `${API}/GetIVR2Dir?token=${encodeURIComponent(token)}`
+    + `&path=${encodeURIComponent(`ivr2:/${folder}`)}`
+  const res = await fetch(url, { cache: 'no-store' }).catch(() => null)
+  if (!res) return []
+  const json = await res.json().catch(() => null) as { files?: unknown } | null
+  const raw = Array.isArray(json?.files) ? json.files : []
+  return raw
+    .map(f => {
+      if (typeof f === 'string') return f
+      const o = f as { name?: unknown; fileName?: unknown }
+      return String(o.name ?? o.fileName ?? '')
+    })
+    .filter(Boolean)
+}
+
+export async function GET(request: NextRequest) {
+  const expected = process.env.YEMOT_WEBHOOK_SECRET ?? ''
+  const got = request.nextUrl.searchParams.get('ApiToken') ?? ''
+  if (!expected || !got || !safeEqual(got, expected)) {
+    return NextResponse.json({ error: 'אין הרשאה' }, { status: 401 })
+  }
+
+  const token = process.env.YEMOT_TOKEN
+  if (!token) return NextResponse.json({ error: 'YEMOT_TOKEN אינו מוגדר בשרת' }, { status: 500 })
+
+  const ext = process.env.YEMOT_BOOK_FAIR_EXT || '9'
+
+  // מה ההגדרות מצפות לשמוע
+  const msgs = await getBookFairMessages()
+  const expectedFiles = new Set<string>()
+  for (const m of Object.values(msgs)) if (m?.audio) expectedFiles.add(String(m.audio))
+
+  // מה קיים בפועל — בשלוחה שלנו, ובשאר כגיבוי לאיתור
+  const folders = [ext, ...['1', '7', '8', '9'].filter(f => f !== ext)]
+  const dirs = await Promise.all(
+    folders.map(async f => ({ folder: f, files: await listDir(token, f) })),
+  )
+
+  const here = dirs.find(d => d.folder === ext)?.files ?? []
+  const hereBases = new Set(here.map(n => n.replace(/\.(mp3|wav)$/i, '')))
+  const missing = [...expectedFiles].filter(b => !hereBases.has(b))
+
+  return NextResponse.json({
+    ext,
+    audio_enabled: process.env.YEMOT_BOOK_FAIR_AUDIO === '1',
+    expected: expectedFiles.size,
+    present_here: [...expectedFiles].length - missing.length,
+    missing_count: missing.length,
+    missing: missing.slice(0, 10),
+    // רשימת הקבצים בתיקייה — כדי לראות אם הם שם בשם אחר
+    files_here: here.slice(0, 40),
+    other_folders: Object.fromEntries(
+      dirs.filter(d => d.folder !== ext).map(d => [d.folder, d.files.filter(n => /^tts_/.test(n)).length]),
+    ),
+  }, { headers: { 'Cache-Control': 'no-store' } })
+}
