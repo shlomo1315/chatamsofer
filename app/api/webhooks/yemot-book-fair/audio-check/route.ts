@@ -86,7 +86,20 @@ export async function GET(request: NextRequest) {
     if (type.includes('json')) {
       return { name, ok: false, why: (await r.text()).slice(0, 120) }
     }
-    return { name, ok: len > 1000, bytes: len, type }
+    // 🔴 כותרת ה-WAV: ימות מנגנת רק PCM 8kHz מונו 16 ביט. קובץ
+    // בקצב דגימה אחר נשמר, מופיע ברשימה, וניתן להורדה — אבל אינו
+    // מתנגן, וזה בדיוק מה שאיננו רואים בשום לוג.
+    const buf = Buffer.from(await r.arrayBuffer())
+    const riff = buf.subarray(0, 4).toString('latin1')
+    const wave = buf.subarray(8, 12).toString('latin1')
+    // fmt chunk: ערוצים @22, קצב דגימה @24, ביטים לדגימה @34
+    const fmt = riff === 'RIFF' && wave === 'WAVE' ? {
+      format: buf.readUInt16LE(20),
+      channels: buf.readUInt16LE(22),
+      sampleRate: buf.readUInt32LE(24),
+      bits: buf.readUInt16LE(34),
+    } : null
+    return { name, ok: len > 1000, bytes: buf.length, riff, wave, fmt }
   }))
 
   return NextResponse.json({
