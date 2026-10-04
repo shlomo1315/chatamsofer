@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
   if (!yemotConfigured()) return NextResponse.json({ error: 'YEMOT_TOKEN אינו מוגדר בשרת' }, { status: 500 })
 
   const body = await request.json().catch(() => null) as {
-    key?: string; text?: string; all?: boolean; force?: boolean
+    key?: string; text?: string; all?: boolean; force?: boolean; done?: string[]
   } | null
   if (!body) return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 })
 
@@ -105,8 +105,18 @@ export async function POST(request: NextRequest) {
     //
     // ⚠️ הקלטה אנושית (rec_) לעולם אינה נדרסת — גם לא עם force.
     // המנהל הקליט אותה בקולו, ואין שום דרך לשחזר אותה אחרי דריסה.
+    //
+    // 🔴 `done` — מה שכבר נוצר בסבבים קודמים של *אותה* ריצה.
+    //
+    // ⚠️ בלעדיו force נכנס ללולאה אינסופית: אחרי סבב, 12 ההודעות
+    // הראשונות עדיין עונות על התנאי (יש להן audio שאינו rec_), ולכן
+    // slice(0,12) בחר שוב בדיוק אותן. המונה במסך טיפס (12→24→36)
+    // בעוד במסד נשארו 12 ייחודיות, וכל סבב שרף קרדיטים מחדש על אותן
+    // הודעות. התסמין: שמות קבצים חדשים לאותו מפתח שוב ושוב בלוג.
+    const alreadyDone = new Set(Array.isArray(body.done) ? body.done : [])
     const pending = BOOK_FAIR_MESSAGE_META
       .filter(m => m.allowAudio)
+      .filter(m => !alreadyDone.has(m.key))
       .filter(m => {
         const text = (msgs[m.key]?.text ?? m.defaultText ?? '').trim()
         if (!text || hasPlaceholder(text)) return false

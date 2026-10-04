@@ -231,23 +231,35 @@ export default function PhoneMessages() {
       // ⚠️ תקרת סבבים: הגנה מפני לולאה אינסופית אם remaining נתקע.
       let total = 0
       let errCount = 0
+      const doneKeys = new Set<string>()
       // ⚠️ תקרה גבוהה יותר ב-force: 61 הודעות במנות של 12 הן 6 סבבים,
       // והתקרה הישנה (12) הספיקה בדיוק רק למצב הרגיל.
       const maxRounds = force ? 24 : 12
       for (let round = 0; round < maxRounds; round++) {
         const res = await fetch('/api/admin/yemot-book-fair/generate-voice', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ all: true, force }),
+          // 🔴 doneKeys — מה שכבר נוצר בסבבים קודמים. בלעדיו השרת
+          // בוחר שוב את אותן 12 ההודעות הראשונות בכל סבב, והמונה
+          // מטפס (12→24→36) בלי שאף הודעה חדשה נוצרת.
+          body: JSON.stringify({ all: true, force, done: [...doneKeys] }),
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'שגיאה ביצירת הקול')
         if (data.messages) { setMessages(data.messages); setSaved(data.messages) }
 
+        // ⚠️ גם מה שנכשל נרשם כ"טופל": אחרת הודעה שנכשלת שוב ושוב
+        // הייתה חוסמת את התור ומונעת מכל השאר להיווצר.
+        for (const k of (data.generated ?? [])) doneKeys.add(k)
+        for (const k of Object.keys(data.errors ?? {})) doneKeys.add(k)
+
         total += data.generated?.length ?? 0
         errCount += data.errors ? Object.keys(data.errors).length : 0
 
         const remaining = Number(data.remaining ?? 0)
-        if (!remaining) break
+        // 🔴 עצירה גם כששום דבר לא התקדם: בלי זה סבב שאינו מייצר דבר
+        // היה חוזר עד תקרת הסבבים ושורף קרדיטים על אותן הודעות.
+        const progressed = (data.generated?.length ?? 0) + Object.keys(data.errors ?? {}).length
+        if (!remaining || !progressed) break
         // ⚠️ מתעדכן תוך כדי: 67 קבצים הם כמה דקות, וסרגל ללא סימן חיים
         // נראה כמו תקיעה.
         toast.info(`נוצרו ${total} · נותרו ${remaining}…`)
