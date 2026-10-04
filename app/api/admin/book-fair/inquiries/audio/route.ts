@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
-import { downloadFileFromYemot } from '@/lib/yemot'
+import { downloadFileFromYemot, bookFairPath } from '@/lib/yemot'
 
 // הקלטת פנייה להאזנה בדפדפן.
 //
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
   // ⚠️ שם הקובץ מגיע מימות ונשמר כמות שהוא. מנוקה מתווי נתיב כדי
   // שלא יוכל לטפס מחוץ לתיקיית השלוחה.
   const name = String(row.recording).replace(/[/\\]/g, '')
-  const file = await downloadFileFromYemot(`ivr2:/${BOOK_FAIR_EXT}/${name}.wav`, 'bookFair')
+  const file = await downloadFileFromYemot(bookFairPath(`${name}.wav`), 'bookFair')
 
   if (!file.ok || !file.data) {
     console.error('[fair/inquiries/audio] הורדה נכשלה:', file.error)

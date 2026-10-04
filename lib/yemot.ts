@@ -30,6 +30,27 @@ export function yemotConfigured(scope: YemotScope = 'default'): boolean {
   return !!yemotToken(scope)
 }
 
+/**
+ * נתיב קובץ בשלוחת היריד.
+ *
+ * 🔴 במערכת הייעודית של היריד אין שלוחה 9 — התפריט יושב ב**שורש**.
+ * לכן `YEMOT_BOOK_FAIR_EXT` ריק פירושו שורש, והנתיב הוא `ivr2:/<קובץ>`.
+ *
+ * ⚠️ בלי הטיפול הזה שרשור ישיר היה מייצר `ivr2://<קובץ>` — נתיב שבור
+ * שימות מקבלת בלי להתלונן, ואז הקובץ פשוט אינו נמצא בזמן השיחה.
+ * זה בדיוק סוג התקלה שאינה מופיעה בשום לוג אצלנו.
+ */
+export function bookFairPath(fileName: string): string {
+  const ext = (process.env.YEMOT_BOOK_FAIR_EXT ?? '').trim().replace(/^\/+|\/+$/g, '')
+  return ext ? `ivr2:/${ext}/${fileName}` : `ivr2:/${fileName}`
+}
+
+/** תיקיית השלוחה של היריד — לרישום תיקייה (GetIVR2Dir). */
+export function bookFairDir(): string {
+  const ext = (process.env.YEMOT_BOOK_FAIR_EXT ?? '').trim().replace(/^\/+|\/+$/g, '')
+  return ext ? `ivr2:/${ext}` : 'ivr2:/'
+}
+
 // העלאת קובץ (UploadFile, multipart). יוצר את התיקייה במידת הצורך וממיר אודיו לפורמט של ימות.
 // path לדוגמה: 'ivr2:/7/rec_ask_card.wav'. מחזיר את הנתיב שנשמר בימות.
 export async function uploadFileToYemot(

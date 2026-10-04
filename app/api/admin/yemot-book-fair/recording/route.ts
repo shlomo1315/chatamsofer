@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
-import { uploadFileToYemot, deleteFileFromYemot, yemotConfigured } from '@/lib/yemot'
+import { uploadFileToYemot, deleteFileFromYemot, yemotConfigured, bookFairPath } from '@/lib/yemot'
 import {
   setBookFairMessageAudio, BOOK_FAIR_MESSAGE_META, getBookFairMessages,
 } from '@/lib/yemotBookFairMessages'
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
   const srcExt = (srcName.match(/\.([a-z0-9]{2,4})$/i)?.[1] || 'mp3').toLowerCase()
   const baseName = `rec_${key}_${Date.now().toString(36)}`
   const prevAudio = (await getBookFairMessages())[key]?.audio ?? null
-  const path = `ivr2:/${BOOK_FAIR_EXT}/${baseName}.${srcExt}`
+  const path = bookFairPath(`${baseName}.${srcExt}`)
   const up = await uploadFileToYemot(path, file, `${baseName}.${srcExt}`, 'bookFair')
   if (!up.ok) return NextResponse.json({ error: `העלאה לימות נכשלה: ${up.error}` }, { status: 502 })
 
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
   // ⚠️ כל הסיומות האפשריות: הקבצים הישנים הם `.wav`, החדשים לפי המקור.
   if (prevAudio && prevAudio !== baseName) {
     for (const ex of ['mp3', 'wav', 'ogg', 'm4a', 'mp4', 'webm'] as const) {
-      await deleteFileFromYemot(`ivr2:/${BOOK_FAIR_EXT}/${prevAudio}.${ex}`, 'bookFair')
+      await deleteFileFromYemot(bookFairPath(`${prevAudio}.${ex}`), 'bookFair')
     }
   }
 

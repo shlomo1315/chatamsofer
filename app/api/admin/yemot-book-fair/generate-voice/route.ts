@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
-import { uploadFileToYemot, deleteFileFromYemot, yemotConfigured } from '@/lib/yemot'
+import { uploadFileToYemot, deleteFileFromYemot, yemotConfigured, bookFairPath } from '@/lib/yemot'
 import { generateSpeech } from '@/lib/elevenTts'
 import {
   setBookFairMessageAudio, BOOK_FAIR_MESSAGE_META, getBookFairMessages,
@@ -55,7 +55,7 @@ async function generateOne(key: string, text: string): Promise<{ ok: true; audio
   const prevAudio = (await getBookFairMessages())[key]?.audio ?? null
 
   const baseName = `tts_${key}_${Date.now().toString(36)}`
-  const path = `ivr2:/${BOOK_FAIR_EXT}/${baseName}.mp3`
+  const path = bookFairPath(`${baseName}.mp3`)
   const blob = new Blob([speech.audio], { type: 'audio/mpeg' })
   const up = await uploadFileToYemot(path, blob, `${baseName}.mp3`, 'bookFair')
   if (!up.ok) return { ok: false, error: `העלאה לימות נכשלה: ${up.error}` }
@@ -70,7 +70,7 @@ async function generateOne(key: string, text: string): Promise<{ ok: true; audio
     // והחדשים `.mp3`. מחיקה של סיומת אחת בלבד הייתה משאירה בשלוחה
     // בדיוק את הקבצים ששברו אותה.
     for (const ext of ['mp3', 'wav'] as const) {
-      const gone = await deleteFileFromYemot(`ivr2:/${BOOK_FAIR_EXT}/${prevAudio}.${ext}`, 'bookFair')
+      const gone = await deleteFileFromYemot(bookFairPath(`${prevAudio}.${ext}`), 'bookFair')
       if (!gone.ok) console.warn(`[yemot-book-fair] מחיקת הקובץ הקודם נכשלה (${prevAudio}.${ext}): ${gone.error}`)
     }
   }

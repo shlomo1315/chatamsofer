@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, getServiceClient } from '@/lib/apiAuth'
-import { uploadFileToYemot, deleteFileFromYemot, yemotConfigured } from '@/lib/yemot'
+import { uploadFileToYemot, deleteFileFromYemot, yemotConfigured, bookFairPath } from '@/lib/yemot'
 import { generateSpeech } from '@/lib/elevenTts'
 
 export const dynamic = 'force-dynamic'
@@ -30,7 +30,7 @@ async function putAudio(
   prevName: string | null,
 ): Promise<{ ok: true; name: string } | { ok: false; error: string }> {
   const up = await uploadFileToYemot(
-    `ivr2:/${EXT}/${baseName}.mp3`,
+    bookFairPath(`${baseName}.mp3`),
     new Blob([bytes], { type: 'audio/mpeg' }),
     `${baseName}.mp3`,
     'bookFair',
@@ -44,7 +44,7 @@ async function putAudio(
   // השלוחה. מחיקת `.mp3` בלבד הייתה משאירה אותם שם.
   if (prevName && prevName !== baseName) {
     for (const ext of ['mp3', 'wav'] as const) {
-      const gone = await deleteFileFromYemot(`ivr2:/${EXT}/${prevName}.${ext}`, 'bookFair')
+      const gone = await deleteFileFromYemot(bookFairPath(`${prevName}.${ext}`), 'bookFair')
       if (!gone.ok) console.warn(`[book-audio] מחיקת הקובץ הקודם נכשלה (${prevName}.${ext}): ${gone.error}`)
     }
   }
@@ -227,7 +227,7 @@ export async function DELETE(request: NextRequest) {
     // ⚠️ שתי הסיומות — ראו ההערה ב-putAudio.
     if (b?.audio_name) {
       for (const ex of ['mp3', 'wav'] as const) {
-        await deleteFileFromYemot(`ivr2:/${EXT}/${b.audio_name}.${ex}`, 'bookFair')
+        await deleteFileFromYemot(bookFairPath(`${b.audio_name}.${ex}`), 'bookFair')
       }
     }
     const { error } = await db.from('book_fair_books')
@@ -243,7 +243,7 @@ export async function DELETE(request: NextRequest) {
     try { map = JSON.parse(String(row?.value ?? '{}')) } catch { /* ריק */ }
     if (map[category]) {
       for (const ex of ['mp3', 'wav'] as const) {
-        await deleteFileFromYemot(`ivr2:/${EXT}/${map[category]}.${ex}`, 'bookFair')
+        await deleteFileFromYemot(bookFairPath(`${map[category]}.${ex}`), 'bookFair')
       }
     }
     delete map[category]
