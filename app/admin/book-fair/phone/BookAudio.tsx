@@ -87,8 +87,15 @@ export default function BookAudio() {
     }
   }
 
-  async function load() {
-    setLoading(true)
+  /**
+   * @param silent רענון בלי מסך "טוען…".
+   *
+   * 🔴 אחרי פעולה על שורה בודדת חייבים silent: setLoading(true) מחליף
+   * את כל המסך, וכשהוא חוזר הדפדפן מאבד את מיקום הגלילה וקופץ לראש.
+   * בהעלאת 111 הקלטות, כל קובץ החזיר את המנהל להתחלה.
+   */
+  async function load(silent = false) {
+    if (!silent) setLoading(true)
     try {
       // ⚠️ שתי קריאות מקבילות: הספרים יושבים בטבלה, ואילו הקלטת תפריט
       // הקטגוריות היא הודעת מערכת ב-app_settings.
@@ -107,7 +114,7 @@ export default function BookAudio() {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'טעינה נכשלה')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
   useEffect(() => { void load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -152,7 +159,7 @@ export default function BookAudio() {
       const j = await r.json()
       if (!r.ok) throw new Error(j.error ?? 'הפעולה נכשלה')
       toast.success(ok)
-      await load()
+      await load(true)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'הפעולה נכשלה')
     } finally {
@@ -167,7 +174,7 @@ export default function BookAudio() {
       const j = await r.json()
       if (!r.ok) throw new Error(j.error ?? 'המחיקה נכשלה')
       toast.success('ההקלטה הוסרה — יישמע הקול הממוחשב')
-      await load()
+      await load(true)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'המחיקה נכשלה')
     } finally {
@@ -195,7 +202,7 @@ export default function BookAudio() {
         if (!j.remaining || !j.done) break
       }
       toast.success(`נוצרו ${total} הקלטות`)
-      await load()
+      await load(true)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'היצירה נכשלה')
     } finally {
@@ -226,7 +233,7 @@ export default function BookAudio() {
         const j = await r.json()
         if (!r.ok) throw new Error(j.error ?? 'ההעלאה נכשלה')
         toast.success('ההקלטה הועלתה')
-        await load()
+        await load(true)
         return
       }
       if (target.bookId) fd.set('book_id', target.bookId)
@@ -235,7 +242,7 @@ export default function BookAudio() {
       const j = await r.json()
       if (!r.ok) throw new Error(j.error ?? 'ההעלאה נכשלה')
       toast.success('ההקלטה הועלתה')
-      await load()
+      await load(true)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'ההעלאה נכשלה')
     } finally {
@@ -259,7 +266,7 @@ export default function BookAudio() {
       const j = await r.json()
       if (!r.ok) throw new Error(j.error ?? 'יצירת הקול נכשלה')
       toast.success('הקול נוצר')
-      await load()
+      await load(true)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'יצירת הקול נכשלה')
     } finally {
@@ -274,7 +281,7 @@ export default function BookAudio() {
       const j = await r.json()
       if (!r.ok) throw new Error(j.error ?? 'ההסרה נכשלה')
       toast.success('ההקלטה הוסרה — יישמע הקול הממוחשב')
-      await load()
+      await load(true)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'ההסרה נכשלה')
     } finally {
