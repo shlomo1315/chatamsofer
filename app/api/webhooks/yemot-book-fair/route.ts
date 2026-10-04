@@ -251,19 +251,50 @@ async function listBooks(category: string | null) {
   }))
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 רק הזמנות ששולמו מוקראות בטלפון.
+//
+// הקראת `cancelled` הפכה את השלוחה למטעה פעמיים בשיחה אחת: תחילה
+// "לא נמצאו הזמנות" (כי הטלפון לא תאם), ומיד אחריה הקראת הזמנה
+// שבוטלה — מתקשר ששמע "הזמנה מספר X בוטל" הבין שההזמנה *שלו* בוטלה.
+//
+// ⚠️ 21 מתוך 29 ההזמנות במסד הן cancelled (עגלות נטושות וניסיונות
+// תשלום שלא הושלמו). אלו אינן הזמנות מבחינת הלקוח — הן רעש פנימי.
+//
+// ⚠️ pending_payment *אינה* מוקראת: הלקוח נטש לפני התשלום ואין לו
+// מה לעקוב אחריו; הקראתה הייתה מרמזת שההזמנה קיימת.
+// ─────────────────────────────────────────────────────────────────────────────
+const SPOKEN_STATUSES = [
+  'paid', 'picking', 'packed', 'shipped', 'delivered',
+  'refunded', 'partially_refunded',
+] as const
+
 /** ההזמנות של המתקשר, לפי מספר הטלפון שממנו התקשר. */
 async function listMyOrders(phone: string) {
   const supa = db()!
   const digits = String(phone ?? '').replace(/\D/g, '')
   if (!digits) return []
+
+  // 🔴 ימות מעבירה את המספר בכמה צורות: "0533157835", "533157835"
+  // (בלי האפס המוביל) ולעיתים עם קידומת "972". השוואה לצורה אחת
+  // בלבד החזירה "לא נמצאו הזמנות" ללקוח שהזמין באמת.
+  const local = digits.replace(/^972/, '')
+  const variants = Array.from(new Set([
+    digits,
+    local,
+    local.startsWith('0') ? local.slice(1) : `0${local}`,
+  ].filter(Boolean)))
+
   const { data } = await supa.from('book_fair_orders')
     .select('order_number, total_agorot, status')
-    .eq('customer_phone', digits)
+    .in('customer_phone', variants)
+    .in('status', SPOKEN_STATUSES as unknown as string[])
     .order('created_at', { ascending: false })
     .limit(5)
   return (data ?? []).map(o => ({
     order_number: o.order_number as string,
     total_agorot: o.total_agorot as number,
+    statusCode: o.status as string,
     // ⚠️ ttsClean על התווית: "אי-התאמה" מכיל מקף, שהוא תו מפריד
     // בתחביר הטוקנים של ימות ושובר את ההודעה כולה.
     status: ttsClean(
@@ -403,9 +434,21 @@ async function createOrder(state: IvrState, cartToken: string, phone: string): P
   const itemsTotal = state.items.reduce((s, i) => s + i.price_agorot * i.quantity, 0)
   const shipping = state.shipping_agorot ?? 0
 
-  const orderNumber = await nextOrderNumber(supa)
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 מספר ההזמנה *אינו* מוקצה כאן — רק אחרי תשלום בפועל.
+  //
+  // השורה חייבת להיווצר לפני הסליקה (נדרים מחזירה callback שצריך
+  // למה להיתלות), אבל המספר הוא משאב שהלקוח שומע ומוסר בטלפון.
+  // הקצאתו לפני התשלום שרפה מספרים על כל מתקשר שנטש: 121201 ו-121202
+  // נוצרו כך תוך שעה, ושתיהן "ממתין לתשלום" לנצח.
+  //
+  // ⚠️ מספר זמני ייחודי ומסומן: order_number הוא NOT NULL ו-UNIQUE,
+  // ולכן אי אפשר להשאירו ריק. התחילית TMP- מסמנת לכל מסך שזו עדיין
+  // אינה הזמנה אמיתית, ו-finalizeOrder מחליפה אותה במספר הרץ.
+  // ─────────────────────────────────────────────────────────────────────────
+  const tempNumber = `TMP-${cartToken.slice(0, 12)}`
   const { data: order, error } = await supa.from('book_fair_orders').insert({
-    order_number: orderNumber,
+    order_number: tempNumber,
     channel: 'phone',
     status: 'pending_payment',
     customer_phone: phone,
@@ -479,9 +522,24 @@ async function finalizeOrder(orderId: string, cartToken: string, code: string) {
   })
 
   if (ok) {
-    await supa.from('book_fair_orders')
-      .update({ status: 'paid', paid_at: new Date().toISOString() })
-      .eq('id', orderId)
+    // 🔴 כאן, ורק כאן, מוקצה מספר ההזמנה: עד לרגע הזה השורה נושאת
+    // מספר זמני (TMP-), כדי שמתקשר שנטש לא ישרוף מספר שהלקוח הבא
+    // היה אמור לקבל.
+    //
+    // ⚠️ נבדק שהמספר עדיין זמני: הסליקה עשויה לדווח פעמיים על אותה
+    // הזמנה, והקצאה חוזרת הייתה משנה את המספר שכבר נמסר ללקוח.
+    const { data: cur } = await supa.from('book_fair_orders')
+      .select('order_number').eq('id', orderId).maybeSingle()
+
+    const patch: Record<string, unknown> = {
+      status: 'paid',
+      paid_at: new Date().toISOString(),
+    }
+    if (String(cur?.order_number ?? '').startsWith('TMP-')) {
+      patch.order_number = await nextOrderNumber(supa)
+    }
+
+    await supa.from('book_fair_orders').update(patch).eq('id', orderId)
   } else {
     await supa.from('book_fair_orders').update({ status: 'failed' }).eq('id', orderId)
     await supa.rpc('book_fair_release', { p_cart_token: cartToken })

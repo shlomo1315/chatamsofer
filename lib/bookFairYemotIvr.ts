@@ -214,8 +214,16 @@ export interface IvrInput {
   browseBooks?: { id: string; sku: string; title: string; price_agorot: number; in_stock: boolean; audio_name?: string | null }[]
   /** רשימת ערי המשלוח לפי קוד — להקראה בתפריט העיר. */
   cityList?: { phone_code: number; name: string }[]
-  /** ההזמנות של המתקשר, לשלוחה 2. */
-  myOrders?: { order_number: string; total_agorot: number; status: string }[]
+  /**
+   * ההזמנות של המתקשר, לשלוחה 2.
+   * ⚠️ status הוא התווית לקריאה · statusCode הוא הקוד, לבחירת הקלטה.
+   */
+  myOrders?: {
+    order_number: string
+    total_agorot: number
+    status: string
+    statusCode?: string
+  }[]
   /** האם הפנייה נשמרה — לשלוחה 3. */
   inquirySaved?: boolean
 }
@@ -376,7 +384,19 @@ export const MESSAGE_FALLBACKS: Record<string, string> = {
   paid_fail_retry: 'ההזמנה לא נקלטה ניתן לנסות שוב או לפנות למשרד',
   orders_none: 'לא נמצאו הזמנות הרשומות על מספר הטלפון שלכם',
   orders_intro: 'אלו ההזמנות הרשומות על מספר הטלפון שלכם',
-  order_line: 'הזמנה מספר {number} בסך {total} שקלים סטטוס {status}',
+  order_num_word: 'הזמנה מספר',
+  order_sum_word: 'בסך',
+  order_status_word: 'שקלים סטטוס',
+  // ⚠️ נוסח לכל סטטוס בנפרד ולא תווית אחת: כך אפשר להקליט אותם בקול
+  // טבעי, ו"אי-התאמה" (שמכיל מקף — תו מפריד בתחביר ימות) אינו עובר
+  // כטקסט חופשי.
+  status_paid: 'שולם וההזמנה בטיפול',
+  status_picking: 'ההזמנה בליקוט',
+  status_packed: 'ההזמנה נארזה',
+  status_shipped: 'ההזמנה נשלחה',
+  status_delivered: 'ההזמנה נמסרה',
+  status_refunded: 'ההזמנה זוכתה',
+  status_partially_refunded: 'ההזמנה זוכתה חלקית',
   inquiry_intro: 'השאירו את פנייתכם לאחר הצפצוף ולסיום הקישו סולמית',
   inquiry_saved: 'פנייתכם נשמרה ונחזור אליכם בהקדם תודה',
   inquiry_failed: 'לא הצלחנו לשמור את הפנייה אנא נסו שוב או פנו למשרד',
@@ -540,6 +560,17 @@ export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMe
         return state.browse_category
           ? categoryMenu({ ...state, attempts: 0 }, input, messages)
           : orderMenu({ ...state, attempts: 0 }, messages)
+      }
+      // 🔴 0 = סיום ההזמנה, גם בתוך הדפדוף.
+      //
+      // ⚠️ קודם 0 נבלע בברירת המחדל "הבא": מתקשר שהקיש 0 כדי לסיים
+      // עבר לספר הבא, הקיש 0 שוב, וכך עד סוף הרשימה. ההודעה הכריזה
+      // "לסיום ההזמנה הקישו 0" ולא היה שום מקש שסוגר בפועל.
+      //
+      // ⚠️ עם עגלה ריקה 0 אינו מסיים — אין מה לסגור, ועדיף להמשיך
+      // לדפדף מאשר לנתק את מי שעוד לא בחר דבר.
+      if (input.value === '0' && state.items.length > 0) {
+        return askDelivery({ ...state, attempts: 0 }, messages)
       }
       // ⚠️ כל הקשה אחרת (ובכללה 2) = "הבא" — ההתנהגות הצפויה כשמאזינים
       // לרשימה, וגם מה שקורה כשההקשה לא נקלטה היטב.
@@ -1024,11 +1055,31 @@ function myOrdersTurn(state: IvrState, input: IvrInput, messages?: IvrMessages):
       response: `${idMessage(msgToken(messages, 'orders_none'))}&${hangup}`,
     }
   }
-  const lines = orders.map(o => msgToken(messages, 'order_line', {
-    number: o.order_number,
-    total: agorotToSpokenShekels(o.total_agorot),
-    status: o.status,
-  }))
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 מספר ההזמנה מוקרא ספרה-ספרה (d-) ולא כמספר (n-/t-).
+  //
+  // "121201" כמספר נשמע "מאה עשרים ואחד אלף מאתיים ואחת" — מי שמנסה
+  // לרשום אותו בטלפון לא יצליח. ספרה-ספרה: "אחת שתיים אחת שתיים
+  // אפס אחת".
+  //
+  // ⚠️ רק הספרות: הזמנות ישנות נושאות מספר עם אותיות (BF-26-KCZ34E)
+  // שימות אינה יודעת להקריא; מהן מוקרא החלק הנומרי בלבד.
+  // ─────────────────────────────────────────────────────────────────────────
+  const lines = orders.flatMap(o => {
+    const digits = String(o.order_number ?? '').replace(/\D/g, '')
+    return [
+      msgToken(messages, 'order_num_word'),
+      digits ? d(digits) : '',
+      msgToken(messages, 'order_sum_word'),
+      n(agorotToSpokenShekels(o.total_agorot)),
+      msgToken(messages, 'order_status_word'),
+      // ⚠️ נפילה חזרה לתווית רק כשהיא קיימת: msgToken מחזיר מחרוזת
+      // ריקה לקוד לא מוכר, ו-t('') ייצר טוקן "t-" ריק שימות מקריאה
+      // כשתיקה באמצע המשפט.
+      (o.statusCode ? msgToken(messages, 'status_' + o.statusCode) : '')
+        || (o.status ? t(ttsClean(o.status)) : ''),
+    ].filter(Boolean)
+  })
   return {
     state: { ...state, step: 'done' },
     response: `${idMessage(

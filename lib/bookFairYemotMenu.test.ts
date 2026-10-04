@@ -135,30 +135,30 @@ describe('🔴 דפדוף ברשימת הספרים', () => {
     expect(s.browse_category).toBeNull()
   })
 
-  it('הקשה שאינה 1/2/3 מקדמת לספר הבא', () => {
-    const turn = nextTurn(toBrowse(), { value: '0', browseBooks: BOOKS })
+  it('2 מקדם לספר הבא', () => {
+    const turn = nextTurn(toBrowse(), { value: '2', browseBooks: BOOKS })
     expect(turn.state.browse_index).toBe(1)
     expect(turn.response).toContain(BOOKS[1].title)
   })
 
-  it('2 חוזר לספר הקודם', () => {
-    let s = nextTurn(toBrowse(), { value: '0', browseBooks: BOOKS }).state
-    s = nextTurn(s, { value: '2', browseBooks: BOOKS }).state
+  it('3 חוזר לספר הקודם', () => {
+    let s = nextTurn(toBrowse(), { value: '2', browseBooks: BOOKS }).state
+    s = nextTurn(s, { value: '3', browseBooks: BOOKS }).state
     expect(s.browse_index).toBe(0)
   })
 
   // 🔴 בלי זה האינדקס היה יורד ל-‎-1 והרשימה קורסת.
-  it('🔴 2 בתחילת הרשימה נשאר במקום ומודיע', () => {
-    const turn = nextTurn(toBrowse(), { value: '2', browseBooks: BOOKS })
+  it('🔴 3 בתחילת הרשימה נשאר במקום ומודיע', () => {
+    const turn = nextTurn(toBrowse(), { value: '3', browseBooks: BOOKS })
     expect(turn.state.browse_index).toBe(0)
     expect(turn.response).toContain(MESSAGE_FALLBACKS.list_start)
   })
 
   it('🔴 סוף הרשימה מודיע ואינו גולש מעבר', () => {
     let s = toBrowse()
-    for (let i = 0; i < 10; i++) s = nextTurn(s, { value: '0', browseBooks: BOOKS }).state
+    for (let i = 0; i < 10; i++) s = nextTurn(s, { value: '2', browseBooks: BOOKS }).state
     expect(s.browse_index).toBe(BOOKS.length - 1)
-    const turn = nextTurn(s, { value: '0', browseBooks: BOOKS })
+    const turn = nextTurn(s, { value: '2', browseBooks: BOOKS })
     expect(turn.response).toContain(MESSAGE_FALLBACKS.list_end)
   })
 
@@ -172,19 +172,34 @@ describe('🔴 דפדוף ברשימת הספרים', () => {
   // ⚠️ שם משתנה חדש לכל אינדקס — אחרת ימות מחזירה את ההקשה הקודמת
   // והדפדוף נתקע על אותו ספר לנצח.
   it('⚠️ שם המשתנה משתנה בין ספר לספר', () => {
-    const a = nextTurn(toBrowse(), { value: '0', browseBooks: BOOKS })
-    const b = nextTurn(a.state, { value: '0', browseBooks: BOOKS })
+    const a = nextTurn(toBrowse(), { value: '2', browseBooks: BOOKS })
+    const b = nextTurn(a.state, { value: '2', browseBooks: BOOKS })
     expect(a.response).toContain('bf_br1')
     expect(b.response).toContain('bf_br2')
   })
 
-  it('3 מכל הספרים חוזר לתפריט ההזמנה', () => {
-    const turn = nextTurn(toBrowse(), { value: '3', browseBooks: BOOKS })
+  it('4 מכל הספרים חוזר לתפריט ההזמנה', () => {
+    const turn = nextTurn(toBrowse(), { value: '4', browseBooks: BOOKS })
     expect(turn.state.step).toBe('order_menu')
   })
 
+  // 🔴 0 נבלע ב"הבא" וההזמנה לא נסגרה לעולם.
+  it('🔴 0 מסיים את ההזמנה כשיש ספרים בעגלה', () => {
+    const s = { ...toBrowse(), items: [
+      { book_id: 'b1', sku: '0101', title: 'א', price_agorot: 1100, quantity: 1 },
+    ] }
+    const turn = nextTurn(s, { value: '0', browseBooks: BOOKS })
+    expect(turn.state.step).toBe('ask_delivery')
+  })
+
+  // ⚠️ בעגלה ריקה אין מה לסגור — 0 ממשיך לדפדף.
+  it('0 בעגלה ריקה אינו מסיים', () => {
+    const turn = nextTurn(toBrowse(), { value: '0', browseBooks: BOOKS })
+    expect(turn.state.step).toBe('browse')
+  })
+
   it('רשימה ריקה אינה קורסת', () => {
-    const turn = nextTurn(toBrowse(), { value: '0', browseBooks: [] })
+    const turn = nextTurn(toBrowse(), { value: '2', browseBooks: [] })
     expect(turn.response).toContain('hangup')
   })
 })
@@ -233,13 +248,41 @@ describe('🔴 הזמנות קיימות', () => {
     expect(turn.response).toContain('hangup')
   })
 
-  it('מקריא את ההזמנות', () => {
+  // 🔴 המספר נשמע ספרה-ספרה: "121201" כמספר שלם מוקרא "מאה עשרים
+  // ואחד אלף מאתיים ואחת", ואי אפשר לרשום אותו בטלפון.
+  it('מקריא את מספר ההזמנה ספרה-ספרה', () => {
     const turn = nextTurn(
       { ...initialState(), step: 'main_menu' },
-      { value: '2', myOrders: [{ order_number: 'BF-1', total_agorot: 10000, status: 'שולם' }] },
+      { value: '2', myOrders: [
+        { order_number: '121201', total_agorot: 1100, status: 'שולם', statusCode: 'paid' },
+      ] },
     )
-    expect(turn.response).toContain('BF')
-    expect(turn.response).toContain('שולם')
+    expect(turn.response).toContain('d-121201')
+    expect(turn.response).toContain(MESSAGE_FALLBACKS.status_paid)
+  })
+
+  // ⚠️ הזמנות ישנות נושאות מספר עם אותיות שימות אינה יודעת להקריא.
+  it('ממספר עם אותיות מוקרא החלק הנומרי', () => {
+    const turn = nextTurn(
+      { ...initialState(), step: 'main_menu' },
+      { value: '2', myOrders: [
+        { order_number: 'BF-26-KCZ34E', total_agorot: 4100, status: 'שולם', statusCode: 'paid' },
+      ] },
+    )
+    // ⚠️ "BF-26-KCZ34E" → "2634": הספרות בלבד, כי ימות אינה מקריאה
+    // אותיות לטיניות. מספר כזה אינו ניתן למסירה בטלפון — ולכן
+    // ההזמנות החדשות נומריות.
+    expect(turn.response).toContain('d-2634')
+  })
+
+  // 🔴 טוקן "t-" ריק גורם לשתיקה באמצע המשפט.
+  it('אין טוקן ריק כשהסטטוס לא מוכר', () => {
+    const turn = nextTurn(
+      { ...initialState(), step: 'main_menu' },
+      { value: '2', myOrders: [{ order_number: '121201', total_agorot: 1100, status: '' }] },
+    )
+    expect(turn.response).not.toContain('.t-.')
+    expect(turn.response).not.toContain('t-&')
   })
 })
 

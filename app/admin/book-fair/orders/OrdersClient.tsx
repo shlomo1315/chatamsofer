@@ -13,7 +13,7 @@ import { useTablePagination } from '@/lib/useTablePagination'
 import Pagination from '@/components/ui/Pagination'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 
-type ColKey = 'order_number' | 'customer' | 'phone' | 'channel' | 'items' | 'delivery' | 'total' | 'status' | 'created'
+type ColKey = 'order_number' | 'customer' | 'phone' | 'channel' | 'items' | 'delivery' | 'total' | 'status' | 'created' | 'paid_at'
 
 const HEAD = 'px-3 py-3 text-xs font-semibold text-slate-500'
 
@@ -48,6 +48,11 @@ function columnsOf(counts: Record<string, number>): ColDef<ColKey, BookFairOrder
       value: o => BOOK_FAIR_STATUS_LABELS[o.status] },
     { key: 'created', label: 'תאריך', def: true, kind: 'date', headClassName: HEAD,
       value: o => o.created_at },
+    // ⚠️ שעת התשלום ולא שעת היצירה: בטלפון המתקשר מתחיל הזמנה ומשלם
+    // דקות אחר כך, ובדוכן הפער גדול אף יותר. "מתי נכנס הכסף" הוא מה
+    // שמשווים מול הדוח של נדרים, ו-created_at אינו עונה על זה.
+    { key: 'paid_at', label: 'שעת תשלום', def: true, kind: 'date', headClassName: HEAD,
+      value: o => o.paid_at ?? null },
   ]
 }
 
