@@ -70,21 +70,9 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
   })
   const [cartOpen, setCartOpen] = useState(false)
 
-  // ── הלוגו מתכווץ בגלילה ──
-  //
-  // 🔴 גדול בכניסה (הזהות של היריד), קטן אחרי שהקונה התחיל לגלול —
-  // שם הקטלוג הוא העיקר והלוגו רק שומר הקשר.
-  //
-  // ⚠️ passive: true — מאזין גלילה בלי passive חוסם את הגלילה עצמה
-  // בנייד ויוצר תחושת קפיאה.
-  // ⚠️ סף 40px ולא 0: בדיוק על 0 כל רטט קטן היה מהבהב בין שני הגדלים.
-  const [scrolled, setScrolled] = useState(false)
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 40)
-    onScroll()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
+  // ⚠️ מאזין הגלילה הוסר: הלוגו בגודל קבוע ואינו מתכווץ, ולכן אין
+  // למה להאזין. מאזין שמעדכן state בכל גלילה מרנדר את כל הקטלוג
+  // מחדש — מחיר מיותר לגמרי כשאין שינוי ויזואלי.
   const [justAdded, setJustAdded] = useState<string | null>(null)
   /** הודעת "נוסף לעגלה" הצפה. ⚠️ שם הספר ולא "נוסף" גנרי — בלחיצות
    *  מהירות ברצף הקונה צריך לדעת *מה* נכנס. */
@@ -220,19 +208,19 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
       <div className="sticky top-0 z-40 border-b border-[#141210]/8 bg-[#FAF7F0]/95 backdrop-blur">
       <header className="border-b border-[#141210]/8 bg-gradient-to-b from-white/80 to-transparent">
         <div className="mx-auto max-w-6xl px-5 py-4">
-          {/* ⚠️ הלוגו באותה שורה עם הכותרת ולא מעליה: גוש נפרד בראש
-              הדף תפס גובה רב, ובגלילה הוא נעלם לגמרי יחד עם הזהות.
-              כאן הוא חלק מהשער הדביק — מתכווץ בגלילה ונשאר גלוי. */}
-          <div className="relative flex flex-col items-center gap-2 text-center">
+          {/* ⚠️ הלוגו בקצה ימין, בקו אחד עם עמודת הקטגוריות שמתחתיו,
+              והכותרת ממורכזת לידו. גודלו קבוע ואינו משתנה בגלילה:
+              לוגו שמתכווץ מזיז את כל השורה ויוצר ריצוד בכל גלילה. */}
+          <div className="relative flex items-center justify-center gap-4 text-center">
+            {/* ⚠️ מוחלט רק מ-sm ומעלה: בנייד אין רוחב לשורה אחת,
+                ולוגו מוחלט היה חופף לכותרת. שם הוא יושב בזרימה. */}
+            <img
+              src="/logo-heichal.png"
+              alt="היכל החתם סופר"
+              className="w-16 flex-shrink-0 sm:absolute sm:right-0 sm:top-1/2 sm:w-24 sm:-translate-y-1/2"
+            />
             <div className="flex items-center justify-center gap-4">
-              <img
-                src="/logo-heichal.png"
-                alt="היכל החתם סופר"
-                className={`flex-shrink-0 transition-all duration-300 ${
-                  scrolled ? 'w-14 sm:w-16' : 'w-20 sm:w-24'
-                }`}
-              />
-              <div className="text-right">
+              <div className="text-center">
                 <h1 className="text-2xl font-bold leading-tight text-[#141210] sm:text-3xl">
                   יריד הספרים
                 </h1>
