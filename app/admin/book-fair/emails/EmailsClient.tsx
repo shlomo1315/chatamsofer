@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import {
-  Mail, Search, Send, Loader2, Check, AlertTriangle, X, Plus,
+  Mail, Search, Send, Loader2, Check, X, Plus,
 } from 'lucide-react'
 import { useCan } from '@/components/StaffPermissions'
 
@@ -13,8 +13,6 @@ type Row = {
   to_email: string | null
   subject: string | null
   sent_at: string | null
-  status: string | null
-  error: string | null
 }
 
 export default function EmailsClient() {
@@ -43,7 +41,12 @@ export default function EmailsClient() {
     }
   }, [q])
 
-  useEffect(() => { void load() }, [load])
+  // ⚠️ setTimeout(0) — כמו במסך הזיכויים: הכלל set-state-in-effect
+  // מסמן גם טעינה אסינכרונית תקינה.
+  useEffect(() => {
+    const t = setTimeout(() => { void load() }, 0)
+    return () => clearTimeout(t)
+  }, [load])
 
   async function send() {
     setError(''); setBusy(true)
@@ -131,17 +134,11 @@ export default function EmailsClient() {
                   </td>
                   <td className="px-3 py-2.5 text-slate-500">{fmt(r.sent_at)}</td>
                   <td className="px-3 py-2.5">
-                    {/* ⚠️ שגיאה מוצגת בטולטיפ ולא נבלעת: מייל שנכשל
-                        בלי סיבה גלויה נראה כאילו פשוט לא נשלח. */}
-                    {r.error ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-red-600" title={r.error}>
-                        <AlertTriangle size={13} /> נכשל
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
-                        <Check size={13} /> נשלח
-                      </span>
-                    )}
+                    {/* sent_emails מתעדת רק מייל שיצא בהצלחה — כישלון
+                        שליחה מוצג מיד בחלון השליחה ולא נשמר כשורה. */}
+                    <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
+                      <Check size={13} /> נשלח
+                    </span>
                   </td>
                 </tr>
               ))}

@@ -24,7 +24,9 @@ export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams.get('q')?.trim() ?? ''
 
   let query = db.from('sent_emails')
-    .select('id, to_email, subject, sent_at, status, error, department')
+    // ⚠️ אין ב-sent_emails עמודות status/error: נרשם בה רק מייל שיצא
+    // בהצלחה. בחירתן הפילה את כל המסך ("column does not exist").
+    .select('id, to_email, subject, sent_at')
     .eq('department', 'yerid')
     .order('sent_at', { ascending: false })
     .limit(PAGE)
