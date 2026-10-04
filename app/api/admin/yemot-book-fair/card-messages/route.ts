@@ -4,7 +4,7 @@ import {
   uploadFileToYemot, deleteFileFromYemot, downloadFileFromYemot,
   bookFairPath, yemotConfigured,
 } from '@/lib/yemot'
-import { scrambleBytes, DOC_CIPHER_ID } from '@/lib/docCipher'
+import { generateSpeech } from '@/lib/elevenTts'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // הקלטות ההנחיות של הסליקה — "הקישו מספר כרטיס", "תוקף", וכו'.
@@ -50,6 +50,7 @@ const MAX_BYTES = 10 * 1024 * 1024
 
 /** הסיומות שימות עשויה לשמור בהן. ⚠️ convertAudio ממירה ל-wav. */
 const EXTS = ['wav', 'mp3'] as const
+export const maxDuration = 300
 
 /** GET — אילו הודעות כבר הוקלטו. */
 export async function GET() {
@@ -72,13 +73,65 @@ export async function GET() {
   }, { headers: { 'Cache-Control': 'no-store' } })
 }
 
-/** POST — העלאת הקלטה (multipart: code, file). */
+/**
+ * POST — העלאת הקלטה (multipart: code, file) או יצירת קול טבעי
+ * (JSON: { code } ליצירה אחת, { all: true } לכולן).
+ */
 export async function POST(request: NextRequest) {
   if (!(await requireStaff(['admin']))) {
     return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
   }
   if (!yemotConfigured('bookFair')) {
     return NextResponse.json({ error: 'טוקן ימות אינו מוגדר' }, { status: 500 })
+  }
+
+  // ── יצירת קול טבעי ──
+  //
+  // 🔴 אותו קול בדיוק כמו בשאר השלוחה: ElevenLabs מייצר מהנוסח,
+  // והקובץ עולה בשם ההודעה של ימות (M1422). כך המתקשר שומע קול אחד
+  // לכל אורך השיחה, גם בשלב הסליקה שמנוהל בצד ימות.
+  const ct = request.headers.get('content-type') ?? ''
+  if (ct.includes('application/json')) {
+    const body = await request.json().catch(() => null) as
+      { code?: string; all?: boolean; text?: string } | null
+    if (!body) return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 })
+
+    const targets = body.all
+      ? CARD_MESSAGES.map(m => ({ code: m.code, text: m.text }))
+      : CARD_MESSAGES
+        .filter(m => m.code === body.code)
+        .map(m => ({ code: m.code, text: (body.text ?? '').trim() || m.text }))
+
+    if (!targets.length) {
+      return NextResponse.json({ error: 'קוד הודעה לא מוכר' }, { status: 400 })
+    }
+
+    const done: string[] = []
+    const errors: Record<string, string> = {}
+    for (const tgt of targets) {
+      const speech = await generateSpeech(tgt.text)
+      if (!speech.ok || !speech.audio) {
+        errors[tgt.code] = speech.error ?? 'יצירת הקול נכשלה'
+        continue
+      }
+      // ⚠️ MP3 — ימות ממירה בעצמה (convertAudio=1). ראו ההערה
+      // ב-generate-voice: המרה מקדימה ל-PCM היא מה שהפיל את השלוחה.
+      const up = await uploadFileToYemot(
+        bookFairPath(`${tgt.code}.mp3`),
+        new Blob([speech.audio], { type: 'audio/mpeg' }),
+        `${tgt.code}.mp3`,
+        'bookFair',
+      )
+      if (up.ok) done.push(tgt.code)
+      else errors[tgt.code] = up.error ?? 'ההעלאה נכשלה'
+    }
+
+    console.log(`[card-messages] נוצרו ${done.length} הקלטות קול טבעי`)
+    return NextResponse.json({
+      ok: Object.keys(errors).length === 0,
+      generated: done,
+      errors,
+    })
   }
 
   const form = await request.formData().catch(() => null)

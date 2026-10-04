@@ -321,6 +321,33 @@ export default function BookAudio() {
     }
   }
 
+  /**
+   * יצירת קול טבעי להודעות הסליקה והעלאתו לימות בשם ההודעה.
+   *
+   * @param code הודעה אחת; בלעדיו — כולן.
+   */
+  async function generateCardMsgs(code?: string) {
+    setBusy(code ?? 'cards')
+    try {
+      const r = await fetch('/api/admin/yemot-book-fair/card-messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(code ? { code } : { all: true }),
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error ?? 'יצירת הקול נכשלה')
+      const n = j.generated?.length ?? 0
+      const failed = Object.keys(j.errors ?? {}).length
+      if (failed) toast.error(`נוצרו ${n}, ${failed} נכשלו`)
+      else toast.success(`נוצר קול טבעי ל-${n} הודעות`)
+      await load(true)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'יצירת הקול נכשלה')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   /** הסרת הקלטת סליקה — חזרה להודעת ברירת המחדל של ימות. */
   async function removeCardMsg(code: string) {
     setBusy(code)
@@ -399,11 +426,24 @@ export default function BookAudio() {
           מרגע ששולחים credit_card= ימות מקריאה אותן בקול שלה. העלאת
           קובץ בשם ההודעה בתיקיית השלוחה דורסת אותה. */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5">
-        <h2 className="mb-1 font-semibold text-slate-900">הקלטות הסליקה</h2>
-        <p className="mb-4 text-sm text-slate-600">
-          ההנחיות שימות מקריאה בזמן התשלום. בלי הקלטה הן נשמעות בקול
-          הממוחשב של ימות.
-        </p>
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="font-semibold text-slate-900">הקלטות הסליקה</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              ההנחיות שימות מקריאה בזמן התשלום. בלי הקלטה הן נשמעות
+              בקול הממוחשב של ימות.
+            </p>
+          </div>
+          <Button
+            onClick={() => void generateCardMsgs()}
+            disabled={busy === 'cards'}
+            className="flex-shrink-0"
+          >
+            {busy === 'cards'
+              ? <><Loader2 size={15} className="animate-spin" /> מייצר…</>
+              : <><Wand2 size={15} /> צור קול טבעי לכולן</>}
+          </Button>
+        </div>
         <ul className="flex flex-col divide-y divide-slate-100">
           {cardMsgs.map(m => (
             <li key={m.code} className="flex flex-wrap items-center gap-2 py-2.5">
@@ -417,7 +457,7 @@ export default function BookAudio() {
                 busy={busy === m.code}
                 playing={playing === m.code}
                 onPlay={undefined}
-                onGenerate={() => toast.error('להודעות הסליקה אין יצירת קול — יש להעלות הקלטה')}
+                onGenerate={() => void generateCardMsgs(m.code)}
                 onUpload={() => pickFile({ cardCode: m.code })}
                 onRemove={m.recorded ? () => void removeCardMsg(m.code) : undefined}
               />
