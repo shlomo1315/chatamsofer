@@ -339,7 +339,8 @@ export const MESSAGE_FALLBACKS: Record<string, string> = {
   ask_next_sku: 'הקישו את מספר הקטלוג של הספר הבא',
   ask_delivery: 'לאיסוף עצמי מהיריד הקישו אחת למשלוח עד הבית הקישו שתיים',
   ask_delivery_retry: 'הקישו אחת לאיסוף עצמי או שתיים למשלוח',
-  ask_city: 'הקישו את קוד העיר שאליה יישלחו הספרים',
+  ask_city: 'לאיזו עיר יישלחו הספרים',
+  city_item: 'ל{name} הקישו {code}',
   city_unknown: 'קוד העיר שהקשתם אינו מוכר',
   city_list_only: 'משלוחים מתבצעים לערים שבמוקד בלבד הקישו קוד עיר אחר',
   shipping_unavailable: 'לא ניתן לחשב את דמי המשלוח להזמנה זו',
@@ -661,10 +662,7 @@ export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMe
         return askName({ ...state, delivery: 'pickup', shipping_agorot: 0, attempts: 0 }, messages)
       }
       if (input.value === '2') {
-        return {
-          state: { ...state, delivery: 'shipping', step: 'ask_city', attempts: 0 },
-          response: readTap('bf_city', [m('ask_city')], { max: 2, seconds: 10 }),
-        }
+        return askCity({ ...state, delivery: 'shipping', attempts: 0 }, input, messages)
       }
       return retry(state, 'ask_delivery', 'bf_deliv', [
         m('ask_delivery_retry'),
@@ -674,10 +672,11 @@ export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMe
     case 'ask_city': {
       const city = input.city
       if (!city) {
-        return retry(state, 'ask_city', 'bf_city', [
-          m('city_unknown'),
-          m('city_list_only'),
-        ], { max: 2, seconds: 10 }, false, messages)
+        // ⚠️ הרשימה מוקראת שוב בניסיון החוזר: מתקשר ששגה צריך לשמוע
+        // את האפשרויות, לא רק ש"הקוד אינו מוכר".
+        return askCity(
+          { ...state, attempts: state.attempts + 1 }, input, messages, true,
+        )
       }
 
       const ship = input.shipping_agorot
@@ -1003,6 +1002,41 @@ function askDelivery(state: IvrState, messages?: IvrMessages): IvrTurn {
     response: readTap('bf_deliv', [
       msgToken(messages, 'ask_delivery'),
     ], { max: 1, seconds: 10 }),
+  }
+}
+
+/**
+ * בקשת עיר המשלוח — עם הקראת הרשימה.
+ *
+ * 🔴 "הקישו את קוד העיר" לבדו חסר תועלת: המתקשר אינו יודע מהו הקוד
+ * של ירושלים. הרשימה נבנית מהערים הפעילות, בדיוק כמו תפריט הקטגוריות.
+ *
+ * ⚠️ מספר הספרות נגזר מהקוד הגבוה ביותר ואינו קבוע על 2: עם שש ערים
+ * (קודים 1–6) ימות חיכתה לספרה שנייה שלא הגיעה, והמתקשר נאלץ להקיש
+ * "01" או להמתין לפקיעת הזמן.
+ */
+function askCity(
+  state: IvrState, input: IvrInput, messages?: IvrMessages, invalid = false,
+): IvrTurn {
+  const cities = input.cityList ?? []
+  const maxCode = cities.reduce((mx, c) => Math.max(mx, c.phone_code), 0)
+  const digits = String(maxCode).length || 1
+
+  const tokens = [
+    ...(invalid ? [msgToken(messages, 'city_unknown')] : []),
+    msgToken(messages, 'ask_city'),
+    // ⚠️ רק כשיש רשימה: בלעדיה נשמעת ההודעה הכללית בלבד, במקום
+    // ששום דבר לא יישמע.
+    ...cities.map(c => msgToken(messages, 'city_item', {
+      name: c.name, code: c.phone_code,
+    })),
+  ]
+
+  return {
+    state: { ...state, step: 'ask_city' },
+    response: readTap(attemptVarName('bf_city', state.attempts), tokens, {
+      max: digits, seconds: 12,
+    }),
   }
 }
 

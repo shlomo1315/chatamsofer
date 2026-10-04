@@ -284,6 +284,24 @@ async function findCity(phoneCode: string) {
   return data ? { id: data.id as string, name: data.name as string } : null
 }
 
+/**
+ * ערי המשלוח הפעילות, לפי קוד — להקראה בתפריט העיר.
+ *
+ * 🔴 בלי זה נשמע "הקישו את קוד העיר" והמתקשר אינו יודע מהו הקוד של
+ * ירושלים. הרשימה נבנית מהמסד, בדיוק כמו תפריט הקטגוריות.
+ */
+async function listCities() {
+  const supa = db()!
+  const { data } = await supa.from('book_fair_cities')
+    .select('phone_code, name')
+    .eq('is_active', true)
+    .order('phone_code', { ascending: true })
+  return (data ?? []).map(c => ({
+    phone_code: Number(c.phone_code),
+    name: String(c.name),
+  }))
+}
+
 async function shippingFor(volumeCount: number): Promise<number | null> {
   const supa = db()!
   const { data: tiers } = await supa.from('book_fair_shipping_tiers')
@@ -611,7 +629,12 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
     input.value = paramFor(params, `bf_more${state.items.length}`)
   } else if (state.step === 'ask_delivery') {
     input.value = paramFor(params, 'bf_deliv')
+    // ⚠️ הרשימה נטענת כבר כאן: בחירה 2 עוברת ל-ask_city *באותה
+    // קריאה*, ובלי הרשימה המתקשר שומע "לאיזו עיר" בלי האפשרויות.
+    if (input.value === '2') input.cityList = await listCities()
   } else if (state.step === 'ask_city') {
+    // ⚠️ גם בניסיון חוזר — הרשימה מוקראת שוב.
+    input.cityList = await listCities()
     const raw = paramFor(params, 'bf_city')
     if (raw) {
       input.value = raw
