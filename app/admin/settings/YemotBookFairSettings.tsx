@@ -217,15 +217,33 @@ export default function YemotBookFairSettings() {
       await fetch('/api/admin/yemot-book-fair/messages', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages }),
       })
-      const res = await fetch('/api/admin/yemot-book-fair/generate-voice', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ all: true }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'שגיאה ביצירת הקול')
-      if (data.messages) { setMessages(data.messages); setSaved(data.messages) }
-      const errCount = data.errors ? Object.keys(data.errors).length : 0
-      if (errCount > 0) toast.error(`נוצרו ${data.generated?.length ?? 0} הודעות, ${errCount} נכשלו`)
-      else toast.success(`נוצר קול טבעי ל-${data.generated?.length ?? 0} הודעות`)
+      // 🔴 היצירה רצה במנות: 67 קבצים ברצף חורגים מזמן הבקשה, והשרת
+      // מחזיר remaining. בלי הלולאה הזו היו נוצרים 12 בלבד והמשתמש
+      // היה רואה "הצליח" וחושב שסיים.
+      //
+      // ⚠️ תקרת סבבים: הגנה מפני לולאה אינסופית אם remaining נתקע.
+      let total = 0
+      let errCount = 0
+      for (let round = 0; round < 12; round++) {
+        const res = await fetch('/api/admin/yemot-book-fair/generate-voice', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ all: true }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'שגיאה ביצירת הקול')
+        if (data.messages) { setMessages(data.messages); setSaved(data.messages) }
+
+        total += data.generated?.length ?? 0
+        errCount += data.errors ? Object.keys(data.errors).length : 0
+
+        const remaining = Number(data.remaining ?? 0)
+        if (!remaining) break
+        // ⚠️ מתעדכן תוך כדי: 67 קבצים הם כמה דקות, וסרגל ללא סימן חיים
+        // נראה כמו תקיעה.
+        toast.info(`נוצרו ${total} · נותרו ${remaining}…`)
+      }
+
+      if (errCount > 0) toast.error(`נוצרו ${total} הודעות, ${errCount} נכשלו`)
+      else toast.success(`נוצר קול טבעי ל-${total} הודעות`)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'שגיאה ביצירת הקול')
     } finally {

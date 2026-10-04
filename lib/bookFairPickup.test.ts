@@ -73,6 +73,48 @@ describe('🔴 pickupStatus — גבול הסגירה', () => {
   })
 })
 
+// 🔴 שונה מהסגירה השבועית: זו סוגרת אחת ולתמיד. היריד נגמר, אין
+// למי לאסוף, ו"יחזור ביום שלישי" היה שקר.
+describe('🔴 מועד סגירה סופי (closes_at)', () => {
+  const cfg = { ...DEFAULT_PICKUP, closes_at: '2026-10-05T18:00:00+03:00' }
+
+  it('לפני המועד — פתוח', () => {
+    // ראשון 4.10, יום שאינו יום הסגירה השבועית
+    expect(pickupStatus(cfg, il('2026-10-04T12:00:00')).available).toBe(true)
+  })
+
+  it('🔴 בדיוק במועד — סגור', () => {
+    const s = pickupStatus(cfg, il('2026-10-05T18:00:00'))
+    expect(s.available).toBe(false)
+    expect(s.message).toContain('משלוח')
+  })
+
+  // 🔴 הלב: הסגירה אינה נפתחת למחרת כמו הסגירה השבועית.
+  it('🔴 יום אחרי — עדיין סגור', () => {
+    expect(pickupStatus(cfg, il('2026-10-06T09:00:00')).available).toBe(false)
+  })
+
+  it('🔴 שבוע אחרי — עדיין סגור', () => {
+    expect(pickupStatus(cfg, il('2026-10-13T09:00:00')).available).toBe(false)
+  })
+
+  it('בלי closes_at — ההתנהגות השבועית נשמרת', () => {
+    expect(pickupStatus(DEFAULT_PICKUP, il('2026-10-06T09:00:00')).available).toBe(true)
+  })
+
+  // ⚠️ תאריך פגום אסור לו לסגור את האיסוף בשקט.
+  it('⚠️ תאריך פגום נזרק ואינו סוגר', () => {
+    const bad = mergePickupConfig({ ...DEFAULT_PICKUP, closes_at: 'מחר בערב' })
+    expect(bad.closes_at).toBeNull()
+    expect(pickupStatus(bad, il('2026-10-06T09:00:00')).available).toBe(true)
+  })
+
+  it('תאריך תקין נשמר במיזוג', () => {
+    const c = mergePickupConfig({ closes_at: '2026-10-05T18:00:00+03:00' })
+    expect(c.closes_at).toBe('2026-10-05T18:00:00+03:00')
+  })
+})
+
 describe('mergePickupConfig', () => {
   it('ערך חסר → ברירת מחדל', () => {
     expect(mergePickupConfig(null)).toEqual(DEFAULT_PICKUP)
@@ -81,7 +123,7 @@ describe('mergePickupConfig', () => {
 
   it('ערכים תקינים נשמרים', () => {
     const c = mergePickupConfig({ enabled: true, ready_hours: 5, closes_weekday: 4, closes_hour: 20 })
-    expect(c).toEqual({ enabled: true, ready_hours: 5, closes_weekday: 4, closes_hour: 20 })
+    expect(c).toEqual({ enabled: true, ready_hours: 5, closes_weekday: 4, closes_hour: 20, closes_at: null })
   })
 
   // ⚠️ הגדרה שבורה אסור לה לבטל את האיסוף בשקט.

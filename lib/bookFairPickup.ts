@@ -22,6 +22,15 @@ export interface PickupConfig {
   closes_weekday: number | null
   /** השעה שבה האיסוף נסגר באותו יום (0-23). */
   closes_hour: number
+  /**
+   * מועד סגירה *סופי* (ISO). מרגע זה האיסוף סגור לתמיד.
+   *
+   * 🔴 שונה מ-closes_weekday: הסגירה השבועית חוזרת בכל שבוע ונפתחת
+   * למחרת, בעוד שזו סוגרת אחת ולתמיד. היריד נגמר — אין למי לאסוף.
+   *
+   * ⚠️ null = אין מועד סופי.
+   */
+  closes_at?: string | null
 }
 
 export const PICKUP_CONFIG_KEY = 'book_fair_pickup'
@@ -31,6 +40,7 @@ export const DEFAULT_PICKUP: PickupConfig = {
   ready_hours: 3,
   closes_weekday: 1,   // יום שני
   closes_hour: 18,     // 18:00
+  closes_at: null,
 }
 
 /**
@@ -56,6 +66,11 @@ export function mergePickupConfig(raw: unknown): PickupConfig {
       : DEFAULT_PICKUP.closes_weekday,
     closes_hour:
       Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : DEFAULT_PICKUP.closes_hour,
+    // ⚠️ תאריך פגום נזרק ואינו סוגר את האיסוף: הגדרה שבורה אסור לה
+    // לבטל בשקט אפשרות שהלקוח רואה.
+    closes_at: typeof r.closes_at === 'string' && !Number.isNaN(Date.parse(r.closes_at))
+      ? r.closes_at
+      : null,
   }
 }
 
@@ -102,6 +117,15 @@ export interface PickupStatus {
 export function pickupStatus(cfg: PickupConfig, now: Date): PickupStatus {
   if (!cfg.enabled) {
     return { available: false, message: 'איסוף עצמי אינו זמין כרגע' }
+  }
+
+  // 🔴 המועד הסופי נבדק *ראשון*: אחריו אין איסוף בכלל, גם ביום
+  // שאינו יום הסגירה השבועית.
+  if (cfg.closes_at) {
+    const until = Date.parse(cfg.closes_at)
+    if (!Number.isNaN(until) && now.getTime() >= until) {
+      return { available: false, message: 'האיסוף העצמי הסתיים — ההזמנות נשלחות במשלוח בלבד' }
+    }
   }
 
   const { weekday, hour } = israelParts(now)

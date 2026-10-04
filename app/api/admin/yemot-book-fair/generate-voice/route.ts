@@ -7,6 +7,10 @@ import {
 } from '@/lib/yemotBookFairMessages'
 
 export const dynamic = 'force-dynamic'
+// 🔴 67 נוסחים × ~4 שניות חורגים בהרבה מברירת המחדל: הבקשה הייתה
+// נקטעת באמצע, חלק מהקבצים היו מועלים, והמסך היה מדווח כישלון כללי
+// בלי לומר מה כן נוצר.
+export const maxDuration = 300
 
 // שלוחת יריד הספרים בימות — שם נשמרים קבצי הקול.
 const BOOK_FAIR_EXT = process.env.YEMOT_BOOK_FAIR_EXT || '9'
@@ -65,21 +69,41 @@ export async function POST(request: NextRequest) {
 
   if (body.all) {
     const msgs = await getBookFairMessages()
-    const keys = BOOK_FAIR_MESSAGE_META.filter((m) => m.allowAudio).map((m) => m.key)
     const results: Record<string, string> = {}
     const errors: Record<string, string> = {}
-    for (const key of keys) {
+
+    // 🔴 רק מה שחסר: יצירה חוזרת של 67 קבצים בכל לחיצה היא בזבוז
+    // ארוך שגם חורג מזמן הבקשה. מי שרוצה לחדש נוסח בודד — יש כפתור
+    // ייעודי לכל הודעה.
+    //
+    // ⚠️ הקלטה אנושית (rec_) לעולם אינה נדרסת כאן.
+    const pending = BOOK_FAIR_MESSAGE_META
+      .filter(m => m.allowAudio)
+      .filter(m => {
+        const text = (msgs[m.key]?.text ?? m.defaultText ?? '').trim()
+        if (!text || hasPlaceholder(text)) return false
+        return !msgs[m.key]?.audio
+      })
+      .map(m => m.key)
+
+    // ⚠️ מנה מוגבלת: כל קובץ לוקח כמה שניות, ו-67 ברצף חורגים מזמן
+    // הבקשה גם עם maxDuration. המסך קורא שוב עד ש-remaining מתאפס.
+    const BATCH = 12
+    for (const key of pending.slice(0, BATCH)) {
       const text = (msgs[key]?.text ?? metaFor(key)?.defaultText ?? '').trim()
-      if (!text) { errors[key] = 'אין טקסט'; continue }
-      if (hasPlaceholder(text)) continue // הודעה דינמית — מדלגים בשקט
       const r = await generateOne(key, text)
       if (r.ok) results[key] = r.audio
       else errors[key] = r.error
     }
+
+    const remaining = Math.max(0, pending.length - BATCH)
     return NextResponse.json({
       ok: Object.keys(errors).length === 0,
       generated: Object.keys(results),
       errors,
+      // 🔴 כמה נותרו — בלי זה המסך אינו יודע שצריך לקרוא שוב,
+      // והמשתמש היה רואה "נוצרו 12" וחושב שסיים.
+      remaining,
       messages: await getBookFairMessages(),
     })
   }

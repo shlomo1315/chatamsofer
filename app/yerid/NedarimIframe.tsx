@@ -37,6 +37,8 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack }
   const frameRef = useRef<HTMLIFrameElement>(null)
   const [status, setStatus] = useState<Status>('loading')
   const [errorMsg, setErrorMsg] = useState('')
+  /** שגיאת שדה מהבדיקה המקדימה (תוקף/CVV/מספר כרטיס). */
+  const [fieldError, setFieldError] = useState('')
   const [height, setHeight] = useState(0)
 
   // ⚠️ עדכני תמיד בלי לגרום לרישום מחדש של ה-listener: הפונקציה
@@ -72,6 +74,36 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack }
           // התורם פשוט סגר. בשני המקרים הכפתור חוזר להיות לחיץ באייפרם.
           setStatus('ready')
           break
+        // ── בדיקת תקינות השדות ──
+        //
+        // 🔴 נוסף אחרי שדווח ש"התוקף ו-3 הספרות לא נקלטים טוב":
+        // בלי זה הלקוח לחץ "שלם", העסקה נדחתה, והוא קיבל הודעה
+        // כללית בלי לדעת *איזה* שדה שגוי. נדרים מחזירה את השדה
+        // המדויק (Card/Expiration/CVV) ואת סוג השגיאה — וזה מה
+        // שמוצג כאן.
+        //
+        // ⚠️ שדות הכרטיס עצמם הם קוד של נדרים בתוך האייפרם ואין
+        // לנו גישה אליהם. מה שכן בשליטתנו הוא לבקש את הבדיקה
+        // ולהציג את התשובה.
+        case 'ValidateFields': {
+          if (Value === 'OK' || (Value as { Value?: string })?.Value === 'OK') {
+            setFieldError('')
+            break
+          }
+          const v = event.data as { Field?: string; ErrorType?: string }
+          const FIELD: Record<string, string> = {
+            Card: 'מספר הכרטיס',
+            Expiration: 'תוקף הכרטיס',
+            CVV: '3 הספרות שבגב הכרטיס',
+          }
+          // ⚠️ שדה ריק אינו שגיאה בזמן מילוי: הבדיקה רצה כל 2 שניות,
+          // ו"יש למלא את מספר הכרטיס" היה מוצג ללקוח שרק התחיל להקליד.
+          // מדווחים רק על ערך *שגוי*, שהוא מידע אמיתי.
+          if (v.ErrorType === 'Empty') { setFieldError(''); break }
+          const name = FIELD[String(v.Field ?? '')] ?? 'אחד משדות הכרטיס'
+          setFieldError(`${name} אינו תקין — בדקו ונסו שוב`)
+          break
+        }
         case 'TransactionResponse': {
           const v = Value as { Status?: string; Message?: string } | undefined
           if (v?.Status === 'OK') {
@@ -102,6 +134,22 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status])
 
+  // ── בדיקת השדות תוך כדי מילוי ──
+  //
+  // 🔴 בלי בקשה יזומה אין תשובה: ValidateFields הוא *בקשה* לאייפרם,
+  // לא אירוע שנשלח מאליו. בלי הלולאה הזו הלקוח היה מגלה שהתוקף שגוי
+  // רק אחרי שהעסקה נדחתה — וזו בדיוק התלונה שדווחה.
+  //
+  // ⚠️ כל 2 שניות ולא בכל הקשה: אין לנו גישה לשדות (הם בתוך האייפרם),
+  // ולכן אין אירוע הקלדה להיתלות בו. מרווח קצר מדי מציף את האייפרם.
+  useEffect(() => {
+    if (status !== 'ready') return
+    const id = setInterval(() => {
+      frameRef.current?.contentWindow?.postMessage({ Name: 'ValidateFields' }, '*')
+    }, 2000)
+    return () => clearInterval(id)
+  }, [status])
+
   return (
     <div className="flex flex-col gap-3">
       {status === 'loading' && (
@@ -112,6 +160,13 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack }
       {status === 'processing' && (
         <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
           ממתין לאישור התשלום באפליקציה…
+        </p>
+      )}
+      {/* 🔴 שגיאת שדה מוצגת בנפרד משגיאת עסקה: היא ניתנת לתיקון
+          מיידי, ואילו שגיאת עסקה דורשת ניסיון חדש. */}
+      {fieldError && status !== 'done' && (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {fieldError}
         </p>
       )}
       {status === 'error' && (

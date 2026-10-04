@@ -70,7 +70,9 @@ async function handle(raw: Record<string, unknown>, ctx: RequestContext) {
   // ⚠️ נשלפים גם שדות הלקוח והמשלוח — הם דרושים למייל האישור בהמשך,
   // ושליפה שנייה שם הייתה מרוץ מול עדכון הסטטוס.
   const { data: order } = await db.from('book_fair_orders')
-    .select('id, order_number, status, total_agorot, items_total_agorot, shipping_agorot, customer_name, customer_email, delivery_method, address_text, tracking_token, city:book_fair_cities(name)')
+    // ⚠️ channel נדרש לניכוי מלאי הדוכן למטה — בלעדיו התנאי תמיד שקרי
+    // ומכירה בדוכן לא הייתה מורידה מלאי כלל.
+    .select('id, order_number, status, channel, total_agorot, items_total_agorot, shipping_agorot, customer_name, customer_email, delivery_method, address_text, tracking_token, city:book_fair_cities(name)')
     .eq('id', verified.orderId).maybeSingle()
 
   if (!order) {
@@ -148,6 +150,27 @@ async function handle(raw: Record<string, unknown>, ctx: RequestContext) {
     .select('cart_token').eq('order_id', order.id).eq('status', 'held').limit(1)
   if (res?.[0]) {
     await db.rpc('book_fair_consume', { p_cart_token: res[0].cart_token, p_order_id: order.id })
+  }
+
+  // ── מלאי הדוכן (ערוץ 'fair') ──
+  //
+  // 🔴 מכירה בדוכן אינה עוברת שריון — היא מנכה ממאגר נפרד (stock_fair)
+  // רק אחרי שהתשלום אושר. בלי זה סליקה בדוכן הייתה נרשמת כהכנסה
+  // והמלאי היה נשאר כאילו לא נמכר דבר.
+  //
+  // ⚠️ כאן ולא ב-sale: לקוח שנטש באמצע הסליקה אינו אמור להוריד מלאי.
+  if (order.channel === 'fair') {
+    const { data: items } = await db.from('book_fair_order_items')
+      .select('book_id, quantity').eq('order_id', order.id)
+    if (items?.length) {
+      const { error: stockErr } = await db.rpc('book_fair_fair_sale', {
+        p_items: items.map(i => ({ book_id: i.book_id, quantity: i.quantity })),
+        p_by: 'סליקה בדוכן',
+      })
+      // ⚠️ כשל כאן אינו הופך תשלום שהתקבל לכישלון — רק מלאי לא מדויק
+      // שאפשר לתקן בספירה.
+      if (stockErr) console.error('[fair/callback] ניכוי מלאי הדוכן נכשל:', stockErr.message)
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────

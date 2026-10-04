@@ -5,6 +5,7 @@ import {
   LogOut, AlertTriangle, Package, ShoppingBag,
 } from 'lucide-react'
 import { fmtAgorot } from '@/lib/bookFairPricing'
+import NedarimIframe from '../NedarimIframe'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // דוכן המכירה ביריד.
@@ -42,6 +43,10 @@ export default function SellerClient() {
   const [query, setQuery] = useState('')
   const [saleBusy, setSaleBusy] = useState(false)
   const [done, setDone] = useState<{ orderNumber: string; total: number; warning: string | null } | null>(null)
+  /** סליקה פעילה — מסך התשלום של נדרים. */
+  const [payment, setPayment] = useState<
+    { transactionId: string; key: string; orderNumber: string; total: number } | null
+  >(null)
   const [saleError, setSaleError] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -138,7 +143,14 @@ export default function SellerClient() {
     })
   }
 
-  async function sell(method: 'cash' | 'card') {
+  /**
+   * רישום מכירה.
+   *
+   * @param method  cash = תיעוד בלבד (הכסף עבר ביד) · card = סליקה אמיתית
+   * @param charge  אשראי בלבד: true פותח את מסך הסליקה של נדרים.
+   *                false מתעד תשלום שנעשה במכשיר חיצוני.
+   */
+  async function sell(method: 'cash' | 'card', charge = false) {
     if (!lines.length) return
     setSaleError(''); setSaleBusy(true)
     try {
@@ -148,11 +160,21 @@ export default function SellerClient() {
         body: JSON.stringify({
           items: lines.map(l => ({ book_id: l.book.id, quantity: l.qty })),
           payment_method: method,
+          charge,
         }),
       })
       const d = await res.json()
       if (res.status === 401) { setSeller(null); return }
       if (!res.ok) { setSaleError(d.error ?? 'רישום המכירה נכשל'); return }
+
+      // 🔴 סליקה: המכירה *טרם* הושלמה. פותחים את מסך התשלום, והעגלה
+      // נשארת עד שהתשלום מאושר — אחרת כישלון סליקה היה מוחק את הסל
+      // והמוכר היה צריך לסרוק הכול מחדש מול הלקוח.
+      if (d.pendingPayment && d.iframeTransaction) {
+        setPayment({ ...d.iframeTransaction, orderNumber: d.orderNumber, total: d.total_agorot })
+        return
+      }
+
       setDone({ orderNumber: d.orderNumber, total: d.total_agorot, warning: d.stockWarning ?? null })
       setCart(new Map())
       // ⚠️ רענון הקטלוג כדי שמלאי הדוכן במסך יתעדכן אחרי הניכוי.
@@ -218,6 +240,38 @@ export default function SellerClient() {
               כניסה
             </button>
           </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── מסך הסליקה ──
+  //
+  // 🔴 העגלה נשמרת עד שהתשלום מאושר: כישלון סליקה מול לקוח שעומד
+  // בדוכן אינו אמור לאלץ סריקה מחדש של כל הספרים.
+  if (payment) {
+    return (
+      <div className="min-h-screen bg-[#FAF7F0] px-4 py-6">
+        <div className="mx-auto max-w-lg">
+          <div className="mb-4 rounded-2xl border border-[#141210]/8 bg-white p-4 text-center">
+            <p className="text-sm text-[#141210]/55">הזמנה {payment.orderNumber}</p>
+            <p className="text-3xl font-bold tabular-nums text-[#6B2737]">{fmtAgorot(payment.total)}</p>
+          </div>
+          <NedarimIframe
+            transactionId={payment.transactionId}
+            key_={payment.key}
+            onSuccess={() => {
+              setDone({ orderNumber: payment.orderNumber, total: payment.total, warning: null })
+              setPayment(null)
+              setCart(new Map())
+              void loadCatalog()
+            }}
+            onBack={() => {
+              // ⚠️ ביטול אינו מוחק את הסל — המוכר עשוי לעבור למזומן.
+              setPayment(null)
+              setSaleError('התשלום בוטל. אפשר לנסות שוב או לגבות במזומן.')
+            }}
+          />
         </div>
       </div>
     )
@@ -424,8 +478,9 @@ export default function SellerClient() {
                 {saleBusy ? <Loader2 size={18} className="animate-spin" /> : <Banknote size={19} />}
                 מזומן
               </button>
+              {/* 🔴 סליקה אמיתית מול נדרים — הלקוח מזין כרטיס כאן. */}
               <button
-                onClick={() => sell('card')}
+                onClick={() => sell('card', true)}
                 disabled={saleBusy}
                 className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#12314F] py-4 text-lg font-semibold text-white transition hover:brightness-110 disabled:opacity-40"
               >
@@ -433,11 +488,17 @@ export default function SellerClient() {
                 אשראי
               </button>
             </div>
-            {/* ⚠️ אמירה מפורשת: המערכת מתעדת, היא אינה סולקת. מוכר
-                שחושב שהלחיצה גובה כסף היה משחרר לקוח בלי לגבות. */}
-            <p className="mt-2 text-center text-xs text-[#141210]/40">
-              הרישום מתעד את המכירה בלבד — הגבייה נעשית בדוכן
-            </p>
+
+            {/* ⚠️ מסלול שלישי, נפרד ומוקטן: תיעוד תשלום שנגבה במכשיר
+                סליקה חיצוני. בלי ההפרדה המוכר לא היה יודע אם הלחיצה
+                גובה כסף או רק רושמת. */}
+            <button
+              onClick={() => sell('card', false)}
+              disabled={saleBusy}
+              className="mt-2 w-full rounded-lg border border-[#141210]/12 py-2 text-sm text-[#141210]/55 transition hover:bg-[#141210]/5 disabled:opacity-40"
+            >
+              שולם במכשיר חיצוני — רישום בלבד
+            </button>
           </div>
         </div>
       )}

@@ -2,12 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { makeOrderNumber } from '@/lib/bookFairCheckout'
 import { SELLER_COOKIE, readSellerToken } from '@/lib/bookFairSeller'
+import { getPaymentProvider } from '@/lib/payments'
 
 // רישום מכירה בדוכן היריד.
 //
-// 🔴 אין סליקה כאן. הכסף עובר ביד (מזומן) או במכשיר סליקה חיצוני,
-// והמערכת רק *מתעדת*. לכן ההזמנה נוצרת ישר כ-'paid' ולא
-// כ-'pending_payment': אין למה לחכות.
+// 🔴 שני מסלולים:
+//   מזומן  — המערכת *מתעדת* בלבד, הכסף עבר ביד. ההזמנה נוצרת כ-'paid'
+//            מיד ומלאי הדוכן מנוכה כאן.
+//   אשראי  — סליקה אמיתית מול נדרים (charge:true). ההזמנה נוצרת
+//            כ-'pending_payment', והמלאי מנוכה רק אחרי אישור התשלום
+//            ב-payment-callback — אחרת נטישה באמצע הסליקה הייתה
+//            מעלימה ספרים מהמדף.
 //
 // 🔴 המלאי שמנוכה הוא stock_fair — מאגר הדוכן, *נפרד* מהמלאי של האתר
 // והטלפון (החלטת המשתמש). מכירה בדוכן אינה מורידה מהמלאי המקוון.
@@ -36,6 +41,12 @@ export async function POST(request: NextRequest) {
   if (rawItems.length > 100) return NextResponse.json({ error: 'יותר מדי פריטים' }, { status: 400 })
 
   const paymentMethod = body.payment_method === 'cash' ? 'cash' : 'card'
+  // 🔴 סליקה אמיתית בדוכן: המוכר מעביר כרטיס והלקוח משלם במקום,
+  // במקום שהמכירה רק *תתועד*. בלי זה המוכר היה צריך מכשיר סליקה
+  // חיצוני ולהקליד את הסכום פעמיים.
+  //
+  // ⚠️ מזומן לעולם אינו נסלק — אין מה לסלוק.
+  const wantsCharge = paymentMethod === 'card' && body.charge === true
 
   // 🔴 המחירים מהמסד ולא מהלקוח — אותו כלל כמו בחנות. מוכר שדפדפנו
   // נפרץ (או שסתם שינה את ה-DOM) אינו יכול לקבוע מחיר.
@@ -72,8 +83,10 @@ export async function POST(request: NextRequest) {
   const { data: order, error: orderErr } = await db.from('book_fair_orders').insert({
     order_number: orderNumber,
     channel: 'fair',
-    // 🔴 'paid' ישירות: הכסף התקבל בדוכן, אין סליקה לחכות לה.
-    status: 'paid',
+    // 🔴 'paid' מיידי רק כשאין סליקה: במזומן הכסף כבר ביד. בסליקה
+    // ההזמנה ממתינה לאישור נדרים, אחרת מכירה שנדחתה בכרטיס הייתה
+    // נספרת כהכנסה.
+    status: wantsCharge ? 'pending_payment' : 'paid',
     payment_method: paymentMethod,
     sold_by: seller.name,
     customer_name: String(body.customer_name ?? '').trim() || 'מכירה בדוכן',
@@ -115,7 +128,54 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'רישום המכירה נכשל' }, { status: 500 })
   }
 
-  // ── ניכוי מלאי הדוכן ──
+  // ── סליקה בכרטיס ──
+  //
+  // 🔴 לפני ניכוי המלאי: סליקה שנכשלת אינה מכירה, וניכוי מלאי עליה
+  // היה מעלים ספרים מהמדף בלי שנמכרו.
+  if (wantsCharge) {
+    const provider = await getPaymentProvider()
+    const origin = request.nextUrl.origin
+    const charge = await provider.createCharge({
+      orderId: order.id,
+      orderNumber: order.order_number,
+      amountAgorot: itemsTotal,
+      customerName: String(body.customer_name ?? '').trim() || 'מכירה בדוכן',
+      customerEmail: null,
+      customerPhone: String(body.customer_phone ?? '').trim(),
+      returnUrl: `${origin}/yerid/seller`,
+      description: `יריד ספרים — דוכן ${order.order_number}`,
+    })
+
+    await db.from('book_fair_payments').insert({
+      order_id: order.id,
+      provider: provider.name,
+      amount_agorot: itemsTotal,
+      status: charge.ok ? 'initiated' : 'failed',
+      transaction_id: charge.transactionId ?? null,
+      error_message: charge.error ?? null,
+    })
+
+    if (!charge.ok) {
+      // ⚠️ ההזמנה מסומנת כנכשלה ואינה נמחקת: היא ראיה לניסיון, והמוכר
+      // יכול לנסות שוב במזומן בלי שהמערכת "שכחה" מה קרה.
+      await db.from('book_fair_orders').update({ status: 'failed' }).eq('id', order.id)
+      return NextResponse.json({ error: charge.error ?? 'פתיחת הסליקה נכשלה' }, { status: 502 })
+    }
+
+    // 🔴 המלאי *אינו* מנוכה כאן: הוא ינוכה אחרי אישור התשלום
+    // (payment-callback), אחרת לקוח שנטש באמצע הסליקה היה מוריד מלאי.
+    return NextResponse.json({
+      ok: true,
+      orderId: order.id,
+      orderNumber: order.order_number,
+      total_agorot: itemsTotal,
+      pendingPayment: true,
+      iframeTransaction: charge.iframeTransaction,
+      redirectUrl: charge.redirectUrl,
+    })
+  }
+
+  // ── ניכוי מלאי הדוכן (מזומן) ──
   // ⚠️ אחרי שההזמנה נרשמה ולא לפני: כישלון כאן משאיר מלאי לא מדויק
   // (שאפשר לתקן בספירה), בעוד שכישלון בסדר ההפוך היה מוריד מלאי על
   // מכירה שלא נרשמה.
