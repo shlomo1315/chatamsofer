@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireStaff, getServiceClient } from '@/lib/apiAuth'
 import { syncExtensionToYemot, yemotConfigured } from '@/lib/yemot'
 import { buildExtIni } from '@/lib/yemotExtIni'
 import { getPaymentSettings } from '@/lib/payments/settings'
@@ -24,6 +24,8 @@ export const runtime = 'nodejs'
 const EXT = process.env.YEMOT_BOOK_FAIR_EXT || '9'
 const TERMINAL = '7004562'
 const CATEGORY = 'צאצאי מרן החתם סופר'
+/** מתי ההגדרה רצה — כדי שהמסך יסמן "מוגדר" גם אחרי רענון. */
+const SETUP_KEY = 'yemot_book_fair_setup'
 
 export async function POST() {
   if (!(await requireStaff(['admin']))) {
@@ -79,6 +81,18 @@ export async function POST() {
     return NextResponse.json({ error: `הסנכרון לימות נכשל: ${r.error}` }, { status: 502 })
   }
 
+  // 🔴 נרשם במסד כדי שהמסך יסמן "מוגדר" גם אחרי רענון: בלי זה המנהל
+  // אינו יודע אם ההגדרה כבר רצה, ולוחץ שוב "ליתר ביטחון".
+  // ⚠️ app_settings.value היא עמודת text — תמיד JSON.stringify.
+  const db = getServiceClient()
+  if (db) {
+    await db.from('app_settings').upsert({
+      key: SETUP_KEY,
+      value: JSON.stringify({ at: new Date().toISOString(), ext: EXT, terminal: TERMINAL }),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'key' })
+  }
+
   // ⚠️ ה-ApiValid מוסתר מהתשובה — אין סיבה שיחזור למסך.
   console.log(`[yemot-book-fair/setup] ✅ שלוחה ${EXT} הוגדרה (מסוף ${TERMINAL})`)
   return NextResponse.json({
@@ -86,5 +100,25 @@ export async function POST() {
     ext: EXT,
     terminal: TERMINAL,
     category: CATEGORY,
+  })
+}
+
+/** מתי ההגדרה רצה לאחרונה — למסך. */
+export async function GET() {
+  if (!(await requireStaff(['admin']))) {
+    return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
+  }
+  const db = getServiceClient()
+  if (!db) return NextResponse.json({ configured: false })
+
+  const { data } = await db.from('app_settings')
+    .select('value').eq('key', SETUP_KEY).maybeSingle()
+  let info: { at?: string; terminal?: string } = {}
+  try { info = JSON.parse(String(data?.value ?? '{}')) } catch { /* ריק */ }
+
+  return NextResponse.json({
+    configured: !!info.at,
+    at: info.at ?? null,
+    terminal: info.terminal ?? null,
   })
 }

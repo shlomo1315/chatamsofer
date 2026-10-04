@@ -30,6 +30,8 @@ export default function BookAudio() {
   const [categories, setCategories] = useState<Record<string, string>>({})
   /** שם קובץ ההקלטה של תפריט הקטגוריות, אם קיימת. */
   const [menuAudio, setMenuAudio] = useState<string | null>(null)
+  /** מתי הגדרות הסליקה נכתבו לימות — null אם מעולם לא. */
+  const [setupAt, setSetupAt] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   /** מזהה הפריט שבעבודה — חוסם לחיצה כפולה על אותה שורה. */
   const [busy, setBusy] = useState<string | null>(null)
@@ -99,10 +101,15 @@ export default function BookAudio() {
     try {
       // ⚠️ שתי קריאות מקבילות: הספרים יושבים בטבלה, ואילו הקלטת תפריט
       // הקטגוריות היא הודעת מערכת ב-app_settings.
-      const [r, rm] = await Promise.all([
+      const [r, rm, rs] = await Promise.all([
         fetch('/api/admin/book-fair/book-audio', { cache: 'no-store' }),
         fetch('/api/admin/yemot-book-fair/messages', { cache: 'no-store' }),
+        fetch('/api/admin/yemot-book-fair/setup', { cache: 'no-store' }),
       ])
+      if (rs.ok) {
+        const js = await rs.json().catch(() => null)
+        setSetupAt(js?.at ?? null)
+      }
       const j = await r.json()
       if (!r.ok) throw new Error(j.error ?? 'טעינה נכשלה')
       setBooks(j.books ?? [])
@@ -286,6 +293,7 @@ export default function BookAudio() {
       const j = await r.json()
       if (!r.ok) throw new Error(j.error ?? 'ההגדרה נכשלה')
       toast.success(`שלוחה ${j.ext} הוגדרה · מסוף ${j.terminal}`)
+      setSetupAt(new Date().toISOString())
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'ההגדרה נכשלה')
     } finally {
@@ -336,11 +344,14 @@ export default function BookAudio() {
               אחת, ושוב רק אם ההגדרות בימות השתנו.
             </p>
           </div>
-          <Button onClick={() => void setupPayment()} disabled={busy === 'setup'} className="flex-shrink-0">
-            {busy === 'setup'
-              ? <><Loader2 size={15} className="animate-spin" /> מגדיר…</>
-              : <><Wand2 size={15} /> הגדר סליקה בימות</>}
-          </Button>
+          <div className="flex flex-shrink-0 items-center gap-2">
+            {setupAt && <Badge ok>מוגדר</Badge>}
+            <Button onClick={() => void setupPayment()} disabled={busy === 'setup'}>
+              {busy === 'setup'
+                ? <><Loader2 size={15} className="animate-spin" /> מגדיר…</>
+                : <><Wand2 size={15} /> {setupAt ? 'הגדר מחדש' : 'הגדר סליקה בימות'}</>}
+            </Button>
+          </div>
         </div>
       </section>
 
