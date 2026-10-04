@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Loader2, CreditCard, Copy, Check } from 'lucide-react'
+import { parseMagneticCard, looksLikeMagneticSwipe } from '@/lib/magneticCard'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // אייפרם סליקה — נדרים פלוס שיטה 3 (מסלול ב': עסקה שהוקמה בשרת).
@@ -39,6 +40,9 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack }
   const [errorMsg, setErrorMsg] = useState('')
   /** שגיאת שדה מהבדיקה המקדימה (תוקף/CVV/מספר כרטיס). */
   const [fieldError, setFieldError] = useState('')
+  /** תוצאת סריקת כרטיס מגנטי — להצגה למוכר. */
+  const [swipe, setSwipe] = useState<{ pan: string; tokef: string; error?: string } | null>(null)
+  const [copied, setCopied] = useState('')
   const [height, setHeight] = useState(0)
 
   // ⚠️ עדכני תמיד בלי לגרום לרישום מחדש של ה-listener: הפונקציה
@@ -134,6 +138,57 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status])
 
+  // ── קורא כרטיסים מגנטי ──
+  //
+  // 🔴 הקורא מתנהג כמקלדת ו"מקליד" את כל הפס ברצף אחד:
+  //     ;4580000000000000=2812101...?
+  // שדה מספר הכרטיס באייפרם בולע את ההתחלה ומתעלם מהשאר, ולכן
+  // המספר יוצא ארוך מדי ("ספרות מיותרות") והתוקף לא מגיע ליעדו.
+  // דווח בפועל: "מספר הכרטיס לא תקין נא לבדוק את הספרות".
+  //
+  // הפתרון: לקלוט את הסריקה ברמת הדף *לפני* שהיא מגיעה לאייפרם,
+  // לפרק אותה, ולהציג את התוקף למוכר להקלדה.
+  //
+  // ⚠️ ה-CVV אינו קיים על הפס המגנטי (תקן ISO 7813) — הוא מודפס על
+  // הכרטיס בלבד. לכן הוא תמיד יוזן ידנית, וזו מגבלת תקן ולא חוסר
+  // במימוש.
+  //
+  // ⚠️ איננו יכולים להזין לשדות של האייפרם (origin אחר), ולכן
+  // מוצגים למוכר המספר והתוקף להעתקה — וזה עדיין חוסך את הטעות.
+  useEffect(() => {
+    if (status !== 'ready') return
+    let buf = ''
+    let last = 0
+
+    function onKey(e: KeyboardEvent) {
+      const now = Date.now()
+      // 🔴 קורא משדר מהר מאוד (<50ms בין תווים). הפרש גדול יותר
+      // פירושו הקלדה אנושית — ואסור לנו לגעת בה.
+      if (now - last > 120) buf = ''
+      last = now
+
+      if (e.key === 'Enter') {
+        const raw = buf
+        buf = ''
+        if (!looksLikeMagneticSwipe(raw)) return
+        const card = parseMagneticCard(raw)
+        // ⚠️ הסריקה נבלעת כאן ואינה ממשיכה לשדות — אחרת היא הייתה
+        // נדחפת שוב לשדה המספר וחוזרת על אותו באג.
+        e.preventDefault()
+        e.stopPropagation()
+        setSwipe(card
+          ? { pan: card.pan, tokef: card.tokefMMYY }
+          : { pan: '', tokef: '', error: 'הסריקה לא פוענחה — הזינו את פרטי הכרטיס ידנית' })
+        return
+      }
+      if (e.key.length === 1) buf += e.key
+    }
+
+    // ⚠️ capture: חייב לרוץ לפני שהאירוע מגיע לשדות.
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [status])
+
   // ── בדיקת השדות תוך כדי מילוי ──
   //
   // 🔴 בלי בקשה יזומה אין תשובה: ValidateFields הוא *בקשה* לאייפרם,
@@ -162,6 +217,62 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack }
           ממתין לאישור התשלום באפליקציה…
         </p>
       )}
+      {/* 🔴 ההנחיה חייבת להיות לפני הסריקה ולא אחריה: הקשות בתוך
+          אייפרם מדומיין אחר אינן מגיעות אלינו, ולכן סריקה כשהסמן
+          כבר בשדה הכרטיס תידחף לשדה ותיצור בדיוק את הבאג שדווח
+          ("מספר הכרטיס לא תקין"). */}
+      {status === 'ready' && !swipe && (
+        <p className="rounded-xl border border-[#12314F]/15 bg-[#12314F]/5 px-4 py-2.5 text-sm text-[#12314F]">
+          יש קורא כרטיסים? העבירו את הכרטיס <strong>לפני</strong> שלוחצים על שדות
+          התשלום — המערכת תפענח את המספר והתוקף.
+        </p>
+      )}
+      {/* ── תוצאת סריקת הכרטיס ──
+          🔴 הסריקה נתפסת רק כשהמיקוד *מחוץ* לאייפרם: הקשות בתוך
+          אייפרם מדומיין אחר אינן מגיעות אלינו כלל. לכן ההנחיה
+          מפורשת — לסרוק לפני הלחיצה על השדות. */}
+      {swipe && (
+        <div className="rounded-xl border-2 border-[#2D5016]/30 bg-[#2D5016]/5 px-4 py-3">
+          {swipe.error ? (
+            <p className="text-sm text-[#6B2737]">{swipe.error}</p>
+          ) : (
+            <>
+              <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-[#2D5016]">
+                <CreditCard size={15} /> הכרטיס נסרק — העתיקו לשדות
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { label: 'מספר הכרטיס', value: swipe.pan },
+                  { label: 'תוקף', value: swipe.tokef.slice(0, 2) + '/' + swipe.tokef.slice(2) },
+                ].map(f => (
+                  <button
+                    key={f.label}
+                    type="button"
+                    onClick={() => {
+                      // ⚠️ התוקף מועתק בלי הלוכסן — כך נדרים מצפה לקבלו.
+                      const raw = f.label === 'תוקף' ? swipe.tokef : f.value
+                      navigator.clipboard?.writeText(raw)
+                        .then(() => { setCopied(f.label); setTimeout(() => setCopied(''), 1500) })
+                        .catch(() => {})
+                    }}
+                    className="flex items-center gap-1.5 rounded-lg border border-[#2D5016]/25 bg-white px-3 py-1.5 text-sm"
+                  >
+                    {copied === f.label ? <Check size={13} className="text-[#2D5016]" /> : <Copy size={13} className="text-[#141210]/40" />}
+                    <span className="text-[#141210]/55">{f.label}:</span>
+                    <span className="font-mono font-semibold" dir="ltr">{f.value}</span>
+                  </button>
+                ))}
+              </div>
+              {/* ⚠️ ה-CVV אינו על הפס המגנטי (תקן ISO 7813) — הוא מודפס
+                  על הכרטיס בלבד. אמירה מפורשת, אחרת המוכר יחפש אותו. */}
+              <p className="mt-2 text-xs text-[#141210]/45">
+                את 3 הספרות שבגב הכרטיס יש להקליד ידנית — הן אינן על הפס המגנטי
+              </p>
+            </>
+          )}
+        </div>
+      )}
+
       {/* 🔴 שגיאת שדה מוצגת בנפרד משגיאת עסקה: היא ניתנת לתיקון
           מיידי, ואילו שגיאת עסקה דורשת ניסיון חדש. */}
       {fieldError && status !== 'done' && (
