@@ -170,9 +170,21 @@ export async function POST(request: NextRequest) {
       .then(undefined, () => { /* שחרור הוא best-effort; הפקיעה תתפוס */ })
   }
 
-  const orderNumber = await nextOrderNumber(db)
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 מספר ההזמנה *אינו* מוקצה כאן — רק אחרי תשלום בפועל, בדיוק כמו
+  // בטלפון.
+  //
+  // השורה חייבת להיווצר לפני הסליקה (נדרים מחזירה callback שצריך למה
+  // להיתלות), אבל המספר הוא משאב שהלקוח רואה ומוסר. הקצאתו לפני
+  // התשלום שרפה מספר על כל מי שנטש את דף הסליקה.
+  //
+  // ⚠️ TMP- ייחודי ומסומן: order_number הוא NOT NULL ו-UNIQUE ולכן אי
+  // אפשר להשאירו ריק. התחילית מסמנת לכל מסך שזו עדיין אינה הזמנה
+  // אמיתית, והקולבק מחליף אותה במספר הרץ.
+  // ─────────────────────────────────────────────────────────────────────────
+  const tempNumber = `TMP-${cartToken.slice(0, 12)}`
   const { data: order, error: orderErr } = await db.from('book_fair_orders').insert({
-    order_number: orderNumber,
+    order_number: tempNumber,
     channel: 'web',
     status: 'pending_payment',
     customer_name: String(body.customer_name ?? '').trim(),

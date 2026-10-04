@@ -8,6 +8,7 @@ import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { bookFairOrderConfirmedEmail } from '@/lib/emailTemplates'
 import { ensureEmailTexts } from '@/lib/emailTextsStore'
+import { nextOrderNumber } from '@/lib/bookFairCheckout'
 import { oneOf } from '@/types/bookFair'
 
 // דיווח תשלום מספק הסליקה — הנקודה היחידה שבה הזמנה מסומנת כשולמה.
@@ -159,12 +160,29 @@ async function handle(raw: Record<string, unknown>, ctx: RequestContext) {
 
   // ⚠️ התנאי על pending_payment חוזר כאן ולא רק למעלה: בין הבדיקה
   // לעדכון עשויה לרוץ קריאה כפולה מקבילה. השורה תתעדכן פעם אחת בלבד.
+  // 🔴 כאן, ורק כאן, מוקצה מספר ההזמנה: עד לרגע הזה השורה נושאת
+  // מספר זמני (TMP-), כדי שמי שנטש את דף הסליקה לא ישרוף מספר
+  // שהלקוח הבא היה אמור לקבל.
+  //
+  // ⚠️ נבדק שהמספר עדיין זמני — דיווח כפול לא ישנה מספר שכבר נמסר.
+  const paidPatch: Record<string, unknown> = {
+    status: 'paid',
+    paid_at: new Date().toISOString(),
+  }
+  if (String(order.order_number ?? '').startsWith('TMP-')) {
+    paidPatch.order_number = await nextOrderNumber(db)
+  }
+
   const { data: updated } = await db.from('book_fair_orders')
-    .update({ status: 'paid', paid_at: new Date().toISOString() })
+    .update(paidPatch)
     .eq('id', order.id).eq('status', 'pending_payment')
-    .select('id').maybeSingle()
+    .select('id, order_number').maybeSingle()
 
   if (!updated) return NextResponse.json({ ok: true, alreadyProcessed: true })
+
+  // ⚠️ המספר החדש נכנס לאובייקט המקומי: מייל האישור ודף המעקב
+  // למטה קוראים ממנו, והיו שולחים את ה-TMP ללקוח.
+  if (updated.order_number) order.order_number = updated.order_number as string
 
   // ── מימוש השריון ──
   // ⚠️ אינו נוגע במלאי (הוא נוכה בשריון) — רק מסמן שלא יוחזר בפקיעה.

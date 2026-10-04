@@ -451,6 +451,9 @@ async function stashRecording(
   providerPath: string | undefined,
   transcript: string | undefined,
   callYfId?: string,
+  callDid?: string,
+  callPhone?: string,
+  callTime?: string,
 ): Promise<void> {
   if (!providerPath) return
   // 🔴 "Digits-0" / "Digits-*" אינו נתיב קובץ אלא *ההקשות* של
@@ -467,28 +470,37 @@ async function stashRecording(
     const name = /\.(wav|mp3)$/i.test(providerPath) ? providerPath : `${providerPath}.wav`
 
     // ─────────────────────────────────────────────────────────────────────
-    // 🔴 הנתיב מורכב משני חלקים ש*מתפצלים*: "30/9.wav" אינו
-    // תיקייה/קובץ אלא <שנייה בשיחה>/<מספר השלוחה>.wav
+    // 🔴 ההקלטות יושבות ב-ivr2:/ApiVoice, ושם הקובץ נבנה מהמטא-דאטה
+    // של השיחה — לא מהערך שחוזר ב-bf_addr:
     //
-    // הלוג המלא הראה שימות שולחת 19 פרמטרים ו-"30/9.wav" הוא כל מה
-    // שיש — אין שום פרמטר עם נתיב מלא. אבל ApiYFCallId הוא מזהה
-    // השיחה האמיתי, וימות שומרת הקלטות API תחת תיקייה על שמו.
+    //   DID-<מספר המערכת>-Phone-<טלפון המתקשר>-Folder-<שלוחה>-in.wav-<ApiTime>
+    //   DID-093130924-Phone-0533161917-Folder-9-in.wav-1791146153
     //
-    // ⚠️ כל הנתיבים שנוסו קודם התייחסו ל-"30" כתיקייה, ולכן נכשלו.
+    // ⚠️ "30/9.wav" אינו נתיב כלל: 30 הוא מספר השניות ו-9 השלוחה.
+    // כל הניסיונות להתייחס אליו כאל תיקייה/קובץ נכשלו, וזה מה שגרם
+    // ל"ההקלטה לא נמצאה בימות" בכל הזמנה.
+    //
+    // ⚠️ ApiTime הוא חותמת השיחה ולא של ההקלטה, ולכן הוא זהה לשתי
+    // ההקלטות באותה שיחה (שם וכתובת) — ההפרדה היא לפי in.wav מול
+    // הסיומות האחרות, וננסה כמה וריאציות.
     // ─────────────────────────────────────────────────────────────────────
-    const base = name.replace(/\.wav$/i, '')      // "30/9"
-    const file = base.split('/').pop() ?? base    // "9"
+    const did = (callDid ?? '').replace(/\D/g, '')
+    const ph = (callPhone ?? '').replace(/\D/g, '')
+    const at = (callTime ?? '').replace(/\D/g, '')
     const yf = (callYfId ?? '').trim()
 
+    const voiceNames = did && ph && at
+      ? [
+          `DID-${did}-Phone-${ph}-Folder-${extDir}-in.wav-${at}`,
+          `DID-${did}-Phone-${ph}-Folder-${extDir}-in.wav-${at}.wav`,
+        ]
+      : []
+
     const candidates = [
-      ...(yf ? [
-        `ivr2:/ApiRecord/${yf}/${file}.wav`,
-        `ivr2:/ApiRecord/${yf}.wav`,
-        `ivr2:/${extDir}/ApiRecord/${yf}/${file}.wav`,
-      ] : []),
+      // 🔴 ApiVoice ראשון — שם ההקלטות באמת יושבות.
+      ...voiceNames.flatMap(n => [`ivr2:/ApiVoice/${n}`, `ivr2:/ApiVoice/${n}.wav`]),
+      ...(yf ? [`ivr2:/ApiRecord/${yf}.wav`] : []),
       `ivr2:/ApiRecord/${name}`,
-      `ivr2:/ImportRecord/${name}`,
-      `ivr2:/${extDir}/ApiRecord/${name}`,
       `ivr2:/${name}`,
       `ivr2:/${extDir}/${name}`,
     ]
@@ -974,11 +986,11 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
     // דורסת אותו בשיחה הבאה. הגיבוי ביצירת ההזמנה רץ דקות אחר כך,
     // אחרי התשלום, וכשהמתקשר הבא כבר הקליט — הקובץ שהועתק היה שלו
     // או שלא היה כלל. לקוח ששילם 839 ₪ נשאר בלי כתובת.
-    await stashRecording(callId, 'address', input.recording, input.transcript, params['ApiYFCallId'])
+    await stashRecording(callId, 'address', input.recording, input.transcript, params['ApiYFCallId'], params['ApiDID'], params['ApiPhone'], params['ApiTime'])
   } else if (state.step === 'ask_name') {
     input.recording = paramFor(params, 'bf_name')
     input.transcript = params['bf_name_voice'] || undefined
-    await stashRecording(callId, 'name', input.recording, input.transcript, params['ApiYFCallId'])
+    await stashRecording(callId, 'name', input.recording, input.transcript, params['ApiYFCallId'], params['ApiDID'], params['ApiPhone'], params['ApiTime'])
   } else if (state.step === 'confirm_total') {
     input.value = paramFor(params, 'bf_conf')
   } else if (state.step === 'payment') {
