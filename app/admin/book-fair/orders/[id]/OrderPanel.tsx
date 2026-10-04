@@ -214,15 +214,11 @@ export default function OrderPanel({ order, items, cities, recordings, payments 
             הקלידו את הכתובת מההקלטה ואשרו. עד לאישור, ההזמנה לא תיכנס לליקוט.
           </p>
 
+          {/* ⚠️ אין כאן נגן: ההקלטה כבר מתנגנת בכרטיס "הקלטות השיחה"
+              שלמעלה, ושני נגנים לאותו קובץ נראים כמו שתי הקלטות שונות.
+              כאן נשאר רק התמלול — הוא מה שמקלידים ממנו. */}
           {addressRec ? (
             <div className="mb-3">
-              {/* ⚠️ ההקלטה נשמעת דרך נתיב מוגן ולא בקישור ישיר לאחסון:
-                  היא מכילה שם וכתובת מלאה.
-                  ⚠️ נטענת כנתונים ולא ב-src ישיר: נטפרי חוסמת תגובת
-                  audio/* ב-418, והנגן נשאר ריק בלי שום הסבר. */}
-              <AudioFromData
-                url={`/api/admin/book-fair/orders/${order.id}/recording?rec=${addressRec.id}`}
-              />
               {addressRec.transcript ? (
                 <div className="mt-2 rounded-lg bg-white/70 p-3">
                   <p className="mb-1 text-xs font-medium text-purple-700">תמלול אוטומטי (הצעה):</p>
