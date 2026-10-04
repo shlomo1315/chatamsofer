@@ -1,6 +1,6 @@
 'use client'
 import { useState, useMemo } from 'react'
-import { ilDate } from '@/lib/israelTime'
+import { ilDate, ilTime } from '@/lib/israelTime'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Search, Globe, Phone, AlertTriangle, Clock, CheckCircle2, Package, Truck, Mic, XCircle, Store, Undo2 } from 'lucide-react'
@@ -318,6 +318,20 @@ function renderCell(key: ColKey, o: BookFairOrder, counts: Record<string, number
         <span className="whitespace-nowrap text-xs text-slate-500">
           {ilDate(o.created_at)}
         </span>
+      )
+
+    // ⚠️ בלי ה-case הזה התא נשאר ריק לגמרי: ה-switch מרנדר כל עמודה
+    // במפורש, ו-value() משמש למיון ולסינון בלבד — לא להצגה.
+    //
+    // ⚠️ שעה ולא תאריך: כל ההזמנות מאותו יום, והשעה היא מה שמשווים
+    // מול הדוח של נדרים. התאריך כבר בעמודה שלצידה.
+    case 'paid_at':
+      return o.paid_at ? (
+        <span className="whitespace-nowrap text-xs text-slate-600">
+          {ilTime(o.paid_at)}
+        </span>
+      ) : (
+        <span className="text-xs text-slate-300">—</span>
       )
   }
 }
