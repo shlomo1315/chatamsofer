@@ -150,12 +150,18 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack, 
           // הלקוח קונה ואינו תורם. הסכום מתווסף אוטומטית אחרי
           // הטקסט ("למעבר לתשלום 52 ₪").
           ButtonText: 'למעבר לתשלום',
+          // 🔴 התוקף מהסריקה — נכנס לעסקה ושדה התוקף נעלם מהמסך.
+          // אומת בקוד האייפרם: 'Tokef' ברשימת השדות המוכרים של
+          // StartPayment, ו-hideTokef מסתיר את השדה כש-d.Tokef מלא.
+          // ⚠️ מספר הכרטיס *אינו* ברשימה ולכן אינו ניתן להזרקה —
+          // הוא נשאר בכפתור העתקה.
+          ...(swipe?.tokef ? { Tokef: swipe.tokef } : {}),
         },
       },
       '*',
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status])
+  }, [status, swipe?.tokef])
 
   // ── קורא כרטיסים מגנטי ──
   //
