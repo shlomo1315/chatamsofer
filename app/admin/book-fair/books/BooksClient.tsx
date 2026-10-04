@@ -13,7 +13,7 @@ import BookEditor from './BookEditor'
 import ImportPanel from './ImportPanel'
 import StockMover from './StockMover'
 
-type ColKey = 'sku' | 'title' | 'author' | 'volumes' | 'price' | 'stock' | 'phone_code' | 'active'
+type ColKey = 'sku' | 'title' | 'author' | 'volumes' | 'price' | 'stock_orig' | 'sold' | 'stock' | 'phone_code' | 'active'
 
 // ⚠️ headClassName נושא את הריפוד: ה-th נבנה בתוך TableHeadMenu, וריפוד
 // שנכתב בצרכן לא היה מגיע אליו.
@@ -23,22 +23,39 @@ const HEAD = 'px-3 py-3 text-xs font-semibold text-slate-500'
 // React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
 // ⚠️ filterable רק לעמודות עם קבוצת ערכים סגורה (פעיל/לא) — לא לשם
 // או למק"ט, שערכם ייחודי כמעט בכל שורה.
-const COLUMNS: ColDef<ColKey, BookFairBook>[] = [
+// ⚠️ פונקציה ולא קבוע: שלוש עמודות המלאי תלויות בכמות שנמכרה,
+// שמגיעה מהשרת ואינה ידועה בזמן טעינת המודול.
+function columnsOf(sold: Record<string, number>): ColDef<ColKey, BookFairBook>[] {
+  return [
   { key: 'sku',         label: 'מק"ט',   def: true, headClassName: HEAD, weight: 1, value: b => b.sku },
   { key: 'title',       label: 'שם הספר', def: true, headClassName: HEAD, weight: 3, value: b => b.title },
   { key: 'author',      label: 'מחבר',   def: false, headClassName: HEAD, weight: 2, value: b => b.author ?? null },
   { key: 'volumes',     label: 'כרכים',  def: true, kind: 'number', headClassName: HEAD, value: b => b.volumes },
   { key: 'price',       label: 'מחיר',   def: true, kind: 'number', headClassName: HEAD, value: b => b.price_agorot },
-  { key: 'stock',       label: 'מלאי',   def: true, kind: 'number', headClassName: HEAD, value: b => b.stock_total ?? 0 },
+  // 🔴 "מלאי מקורי" מחושב ואינו שמור במסד: נשאר + נמכר.
+  //
+  // ⚠️ לספר ללא הגבלת מלאי אין מלאי מקורי. stock_total שלו הוא 0,
+  // והחישוב היה מציג "מלאי מקורי 23" לספר שנמכר 23 פעמים — מספר
+  // שנראה אמיתי לגמרי ואינו נכון.
+  { key: 'stock_orig', label: 'מלאי מקורי', def: true, kind: 'number', headClassName: HEAD,
+    value: b => b.unlimited_stock ? null : (b.stock_total ?? 0) + (sold[b.id] ?? 0) },
+  { key: 'sold',       label: 'נמכר',   def: true, kind: 'number', headClassName: HEAD,
+    value: b => sold[b.id] ?? 0 },
+  { key: 'stock',      label: 'נשאר במלאי', def: true, kind: 'number', headClassName: HEAD, value: b => b.stock_total ?? 0 },
   { key: 'phone_code',  label: 'קוד טלפוני', def: false, kind: 'number', headClassName: HEAD, value: b => b.phone_code ?? null },
   { key: 'active',      label: 'פעיל',   def: true, kind: 'enum', filterable: true, headClassName: HEAD,
     // ⚠️ הערך הוא התווית המוצגת ולא בוליאני: המשתמש מסנן לפי מה שהוא רואה
     value: b => b.is_active ? 'פעיל' : 'מוסתר' },
-]
+  ]
+}
 
 type Tab = 'list' | 'import'
 
-export default function BooksClient({ books }: { books: BookFairBook[] }) {
+export default function BooksClient({ books, sold = {} }: {
+  books: BookFairBook[]
+  /** כמה עותקים נמכרו מכל ספר, לפי מזהה. */
+  sold?: Record<string, number>
+}) {
   const router = useRouter()
   const { confirm, confirmDialog } = useConfirm()
   const canEdit = useCan('book_fair', 'edit')
@@ -70,6 +87,7 @@ export default function BooksClient({ books }: { books: BookFairBook[] }) {
   // 🔴 הסדר חובה: useTableColumns קודם (מסנן וממיין), ורק אז הדפדוף
   // על התוצאה. חיתוך לעמוד לפני סינון היה מציג עמוד ריק על סינון תקין.
   // ⚠️ mode:'client' חובה — הקטלוג נשלף במלואו לשרת ומסונן בזיכרון.
+  const COLUMNS = useMemo(() => columnsOf(sold), [sold])
   const tc = useTableColumns<ColKey, BookFairBook>('book_fair_books', COLUMNS, {
     sortFilter: { mode: 'client', rows: filtered },
   })
@@ -230,7 +248,7 @@ export default function BooksClient({ books }: { books: BookFairBook[] }) {
                   <tr key={b.id} className={`text-sm hover:bg-slate-50 ${b.is_active ? '' : 'opacity-50'}`}>
                     {tc.shown.map(col => (
                       <td key={col.key} className={`px-3 py-2.5 ${tc.cellClass(col)}`}>
-                        {renderCell(col.key, b)}
+                        {renderCell(col.key, b, sold)}
                       </td>
                     ))}
                     <td className="px-3 py-2.5 text-left">
@@ -319,7 +337,7 @@ export default function BooksClient({ books }: { books: BookFairBook[] }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function renderCell(key: ColKey, b: BookFairBook) {
+function renderCell(key: ColKey, b: BookFairBook, sold: Record<string, number>) {
   switch (key) {
     case 'sku':
       return <span className="font-mono text-xs text-slate-600">{b.sku}</span>
@@ -331,6 +349,20 @@ function renderCell(key: ColKey, b: BookFairBook) {
       return <span className="tabular-nums">{b.volumes}</span>
     case 'price':
       return <span className="tabular-nums font-medium">{fmtAgorot(b.price_agorot)}</span>
+    // ⚠️ "ללא הגבלה" ולא מספר: לספר כזה אין מלאי מקורי, והחישוב
+    // נשאר+נמכר היה מציג מספר שגוי שנראה אמיתי.
+    case 'stock_orig':
+      return b.unlimited_stock
+        ? <span className="text-xs text-slate-400">ללא הגבלה</span>
+        : <span className="text-sm text-slate-600">{(b.stock_total ?? 0) + (sold[b.id] ?? 0)}</span>
+
+    case 'sold': {
+      const n = sold[b.id] ?? 0
+      return n > 0
+        ? <span className="font-medium text-sm text-emerald-700">{n}</span>
+        : <span className="text-sm text-slate-300">0</span>
+    }
+
     case 'stock':
       return b.unlimited_stock
         ? <span className="rounded-md bg-sky-50 px-2 py-0.5 text-xs text-sky-700">ללא הגבלה</span>

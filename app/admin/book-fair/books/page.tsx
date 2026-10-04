@@ -32,14 +32,44 @@ async function getBooks(): Promise<BookFairBook[]> {
   return rows
 }
 
+/**
+ * כמה עותקים נמכרו מכל ספר.
+ *
+ * 🔴 רק הזמנות ששולמו: הזמנה נטושה או שבוטלה אינה מכירה, והעותקים
+ * שלה חזרו למלאי. ספירתן הייתה מנפחת את "נמכר" ומקטינה את "מלאי
+ * מקורי" המחושב.
+ *
+ * ⚠️ fetchAllRows: שורות הפריטים חוצות את רף 1,000 מהר הרבה יותר
+ * מהקטלוג עצמו — כל ספר בכל הזמנה הוא שורה.
+ */
+async function getSold(): Promise<Record<string, number>> {
+  if (!isSupabaseConfigured()) return {}
+  const supabase = await createClient()
+
+  const { rows } = await fetchAllRows<{ book_id: string; quantity: number }>((from, to) =>
+    supabase
+      .from('book_fair_order_items')
+      .select('book_id, quantity, order:book_fair_orders!inner(status)')
+      .in('order.status', ['paid', 'picking', 'packed', 'shipped', 'delivered'])
+      .range(from, to) as never
+  )
+
+  const out: Record<string, number> = {}
+  for (const r of rows) {
+    if (!r.book_id) continue
+    out[r.book_id] = (out[r.book_id] ?? 0) + (r.quantity ?? 0)
+  }
+  return out
+}
+
 export default async function BookFairBooksPage() {
   await guardPage('book_fair')
-  const books = await getBooks()
+  const [books, sold] = await Promise.all([getBooks(), getSold()])
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="קטלוג הספרים" subtitle="ספרים, מחירים ומלאי לשני הערוצים" />
-      <BooksClient books={books} />
+      <BooksClient books={books} sold={sold} />
     </div>
   )
 }
