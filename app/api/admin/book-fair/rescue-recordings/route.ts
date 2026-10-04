@@ -39,10 +39,19 @@ type YemotFile = { name?: string; path?: string; mtime?: string }
  * ועדיף לסרוק חמישה נתיבים מאשר לנחש אחד.
  */
 const VOICE_DIRS = [
-  'ivr2:/Trash/ApiVoice',
+  // 🔴 התיעוד: "ההקלטות נשמרות בתוך תיקיית Record שבתוך התיקיה".
+  // "30/9.wav" = תיקייה 30, קובץ 9 — והן יושבות תחת Record.
+  'ivr2:/30/Record',
+  'ivr2:/15/Record',
+  'ivr2:/9/Record',
+  'ivr2:/Record',
+  'ivr2:/30',
+  'ivr2:/15',
+  // נתיבים שנצפו בממשק
   'ivr2:/ApiVoice',
-  'ivr2:/Trash/ApiRecord',
+  'ivr2:/Trash/ApiVoice',
   'ivr2:/ApiRecord',
+  'ivr2:/Trash/ApiRecord',
   'ivr2:/Trash',
 ]
 
@@ -101,8 +110,25 @@ export async function GET(request: NextRequest) {
     for (const f of await listVoice(scope)) {
       const nm = String(f.name ?? '')
       const meta = parseVoiceName(nm)
-      // ⚠️ הנתיב המלא נשמר — ההורדה חייבת לדעת מאיזו תיקייה.
-      if (meta) pool.push({ scope, name: nm, path: String(f.path ?? `ivr2:/ApiVoice/${nm}`), phone: phoneKey(meta.phone), ts: meta.ts })
+      const path = String(f.path ?? `ivr2:/ApiVoice/${nm}`)
+      if (meta) {
+        pool.push({ scope, name: nm, path, phone: phoneKey(meta.phone), ts: meta.ts })
+        continue
+      }
+      // 🔴 שם שאינו בפורמט DID-...-Phone-... עדיין נאסף.
+      //
+      // ⚠️ בתיקיית Record השמות הם "9.wav" בלבד — בלי טלפון ובלי
+      // חותמת. ההתאמה שם היא לפי mtime מול שעת ההזמנה, ולכן הקובץ
+      // נרשם עם ts מה-mtime ובלי טלפון (phone ריק = מתאים לכולם).
+      // ⚠️ ימות מחזירה "04/10/2026 23:38" — פורמט יום/חודש/שנה
+      // ש-Date.parse מפרש הפוך. ההיפוך ל-ISO נעשה כאן.
+      const mt = f.mtime
+        ? Date.parse(String(f.mtime).replace(
+            /^(\d{2})\/(\d{2})\/(\d{4})/, '$3-$2-$1'))
+        : NaN
+      if (Number.isFinite(mt)) {
+        pool.push({ scope, name: nm, path, phone: '', ts: Math.floor(mt / 1000) })
+      }
     }
   }
 
@@ -122,7 +148,9 @@ export async function GET(request: NextRequest) {
       { customer_phone?: string; order_number?: string } | null
     const phone = phoneKey(String(ord?.customer_phone ?? ''))
     const label = `${ord?.order_number ?? '?'} ${rec.kind}`
-    if (!phone) { report.push(`${label} — אין טלפון להזמנה`); continue }
+    // ⚠️ אין טלפון אינו חוסם: קובץ מתיקיית Record מותאם לפי זמן
+    // בלבד, ולכן הוא עדיין יכול להימצא.
+    if (!phone) report.push(`${label} — אין טלפון, התאמה לפי זמן בלבד`)
 
     const recSec = Math.floor(new Date(rec.created_at as string).getTime() / 1000)
 
@@ -131,8 +159,12 @@ export async function GET(request: NextRequest) {
     //
     // ⚠️ חלון של 20 דקות בלבד: אותו מתקשר עשוי להזמין שוב מאוחר יותר,
     // ושיוך הקלטה של שיחה אחרת גרוע מהקלטה חסרה.
+    // ⚠️ קובץ בלי טלפון בשם (תיקיית Record) מותאם לפי זמן בלבד,
+    // ולכן בחלון צר הרבה יותר — דקתיים — כדי לא לשייך שיחה אחרת.
     const near = pool
-      .filter(f => f.phone === phone && Math.abs(f.ts - recSec) < 1200)
+      .filter(f => f.phone
+        ? (f.phone === phone && Math.abs(f.ts - recSec) < 1200)
+        : Math.abs(f.ts - recSec) < 120)
       .sort((a, b) => Math.abs(a.ts - recSec) - Math.abs(b.ts - recSec))
 
     // ⚠️ 'address' מוקלטת לפני 'name' באותה שיחה — המוקדם הוא הכתובת.
