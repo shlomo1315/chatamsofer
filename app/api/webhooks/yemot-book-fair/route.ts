@@ -452,6 +452,12 @@ async function stashRecording(
   transcript: string | undefined,
 ): Promise<void> {
   if (!providerPath) return
+  // 🔴 "Digits-0" / "Digits-*" אינו נתיב קובץ אלא *ההקשות* של
+  // המתקשר — כך ימות עונה כשסוג ה-read הוא 'voice'. ערך כזה נשמר
+  // כ-provider_path, כל הורדה נכשלה, ובמסך נראה "ההקלטה לא נמצאה".
+  if (/^Digits[-=]/i.test(providerPath)) {
+    console.warn(`[fair/stash] ערך שאינו נתיב הקלטה: "${providerPath}" — נשמר תמלול בלבד`)
+  }
   try {
     const supa = db()
     if (!supa) return

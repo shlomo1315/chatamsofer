@@ -47,9 +47,13 @@ describe('🔴 התפריט הראשי', () => {
   it('3 → הקלטת פנייה', () => {
     const { state, response } = run([{}, { value: '3' }])
     expect(state.step).toBe('record_inquiry')
-    // 🔴 'voice' ולא 'record': זה מה שמפעיל את התמלול בימות. עם
-    // 'record' ההקלטה נשמרת אבל שדה התמלול חוזר ריק תמיד.
-    expect(response).toContain('voice')
+    // 🔴 'record' ולא 'voice'.
+    //
+    // ⚠️ 'voice' נראה כמו השדרוג המתבקש אבל משנה את מה שחוזר
+    // במשתנה: במקום נתיב הקובץ חוזרות ההקשות ("Digits-0"), וכל
+    // הורדה מימות נכשלת. התמלול מופעל ב-ext.ini, לא כאן.
+    expect(response).toContain('record')
+    expect(response).not.toContain('voice')
   })
 
   it('הקשה שגויה חוזרת על התפריט ואינה מנתקת', () => {

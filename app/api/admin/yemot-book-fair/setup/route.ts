@@ -56,6 +56,17 @@ export async function POST() {
       api_add_0: token ? `ApiToken=${token}` : '',
       api_url_post: 'yes',
 
+      // ── תמלול הקלטות ──
+      // 🔴 התמלול מופעל *כאן*, לא בפקודת ה-read.
+      //
+      // ⚠️ הניסיון להפעילו דרך read (סוג 'voice' במקום 'record') החזיר
+      // במשתנה את ההקשות של המתקשר ("Digits-0") במקום נתיב הקובץ, כל
+      // הורדה מימות נכשלה, ואף הקלטה לא נשמרה.
+      //
+      // עם ההגדרה הזו ימות מתמללת ברקע ומחזירה את הטקסט במשתנה
+      // <שם>_voice, בלי לשנות את מה שחוזר ב-<שם> עצמו.
+      voice_recognition: 'yes',
+
       // ── סליקה ──
       credit_card_type: 'nedarim_plus',
       credit_card_terminal_number: TERMINAL,
