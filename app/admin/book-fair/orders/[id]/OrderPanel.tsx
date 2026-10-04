@@ -9,6 +9,7 @@ import { BOOK_FAIR_STATUS_LABELS } from '@/types/bookFair'
 import { fmtAgorot } from '@/lib/bookFairPricing'
 import { canRefund } from '@/lib/bookFairRefund'
 import { useCan } from '@/components/StaffPermissions'
+import AudioFromData from '@/components/ui/AudioFromData'
 
 // פאנל הפעולות בכרטיס ההזמנה.
 //
@@ -165,12 +166,11 @@ export default function OrderPanel({ order, items, cities, recordings, payments 
           {addressRec ? (
             <div className="mb-3">
               {/* ⚠️ ההקלטה נשמעת דרך נתיב מוגן ולא בקישור ישיר לאחסון:
-                  היא מכילה שם וכתובת מלאה. */}
-              <audio
-                controls
-                preload="none"
-                src={`/api/admin/book-fair/orders/${order.id}/recording?rec=${addressRec.id}`}
-                className="w-full"
+                  היא מכילה שם וכתובת מלאה.
+                  ⚠️ נטענת כנתונים ולא ב-src ישיר: נטפרי חוסמת תגובת
+                  audio/* ב-418, והנגן נשאר ריק בלי שום הסבר. */}
+              <AudioFromData
+                url={`/api/admin/book-fair/orders/${order.id}/recording?rec=${addressRec.id}`}
               />
               {addressRec.transcript ? (
                 <div className="mt-2 rounded-lg bg-white/70 p-3">

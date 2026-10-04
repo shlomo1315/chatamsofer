@@ -21,7 +21,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { safeEqual } from '@/lib/svix'
-import { makeOrderNumber, makeCartToken } from '@/lib/bookFairCheckout'
+import { nextOrderNumber, makeCartToken } from '@/lib/bookFairCheckout'
 import { shippingCost, totalVolumes, type TierInput } from '@/lib/bookFairShipping'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { categoryOrder } from '@/lib/bookFairCatalog'
@@ -347,7 +347,7 @@ async function createOrder(state: IvrState, cartToken: string, phone: string): P
   const itemsTotal = state.items.reduce((s, i) => s + i.price_agorot * i.quantity, 0)
   const shipping = state.shipping_agorot ?? 0
 
-  const orderNumber = makeOrderNumber(new Date().getFullYear())
+  const orderNumber = await nextOrderNumber(supa)
   const { data: order, error } = await supa.from('book_fair_orders').insert({
     order_number: orderNumber,
     channel: 'phone',
@@ -622,10 +622,12 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
       input.inquirySaved = await saveInquiry(phone, input.recording, input.transcript, callId)
     }
   } else if (state.step === 'ask_sku') {
-    // ⚠️ בסיס השם תלוי בכמה ספרים כבר בעגלה — ראה ההערה המקבילה
-    // ב-lib/bookFairYemotIvr.ts (nextTurn, case 'ask_sku').
+    // ⚠️ בסיס השם תלוי בכמה ספרים כבר בעגלה, והסיומת _r<סיבוב> עולה
+    // בכל שאלה מחדש — ראו askSkuTurn ב-lib/bookFairYemotIvr.ts.
+    // בלי הסיומת ימות מחזירה את המק"ט הקודם ו"להחלפת מק"ט" נתקע.
     const skuBase = state.items.length ? `bf_sku_next${state.items.length}` : 'bf_sku'
-    const raw = paramFor(params, skuBase)
+    const round = state.sku_round ?? 1
+    const raw = params[`${skuBase}_r${round}`] || paramFor(params, skuBase)
     if (raw) {
       input.value = raw
       input.book = await findBook(raw)
@@ -635,8 +637,11 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
     if (raw) {
       input.value = raw
       // הספר עצמו כבר ידוע מהשלב הקודם — לא מגיע שוב בפרמטרים.
+      // ⚠️ אותה סיומת _r<סיבוב> כמו ב-ask_sku: בלעדיה נקרא המק"ט
+      // *הראשון* שהוקש בשיחה, והכמות שויכה לספר הלא נכון.
       const skuBase = state.items.length ? `bf_sku_next${state.items.length}` : 'bf_sku'
-      const lastSku = paramFor(params, skuBase)
+      const round = state.sku_round ?? 1
+      const lastSku = params[`${skuBase}_r${round}`] || paramFor(params, skuBase)
       input.book = lastSku ? await findBook(lastSku) : null
       if (input.book && Number.isInteger(Number(raw)) && Number(raw) > 0) {
         input.reserved = await reserveLastPreview(state, input.book, Number(raw))

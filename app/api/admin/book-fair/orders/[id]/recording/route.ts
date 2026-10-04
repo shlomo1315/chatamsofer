@@ -1,0 +1,80 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
+import { downloadFileFromYemot, bookFairPath } from '@/lib/yemot'
+import { scrambleBytes, DOC_CIPHER_ID } from '@/lib/docCipher'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// הקלטת הכתובת/השם של הזמנה טלפונית — להאזנה במסך ההזמנה.
+//
+// 🔴 הראוט הזה לא היה קיים: המסך הצביע עליו ב-<audio src> וקיבל 404,
+// ונגן ריק נראה בדיוק כמו הקלטה שלא נקלטה. פקיד שלא הצליח לשמוע את
+// הכתובת לא יכול היה לאשר את ההזמנה לליקוט.
+//
+// 🔴 שם הקובץ נקרא מהמסד ולא מפרמטר: קבלת שם חופשי הייתה מאפשרת
+// לקרוא כל קובץ בחשבון ימות, כולל הקלטות של שלוחות אחרות.
+//
+// ⚠️ ההקלטה מכילה שם וכתובת מלאה — ולכן נתיב מוגן בהרשאת צוות,
+// ולא קישור ישיר לאחסון.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
+/** ⚠️ ימות ממירה (convertAudio=1) ושומרת .wav, אבל נבדקות כל הסיומות. */
+const EXTS = ['wav', 'mp3', 'ogg', 'm4a'] as const
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  if (!(await requirePermission('book_fair', 'view'))) return forbidden()
+
+  const db = getServiceClient()
+  if (!db) return serverMisconfigured()
+
+  const { id } = await params
+  const recId = request.nextUrl.searchParams.get('rec')?.trim() ?? ''
+  if (!recId) return NextResponse.json({ error: 'חסר מזהה הקלטה' }, { status: 400 })
+
+  // ⚠️ מאומת שההקלטה באמת שייכת להזמנה הזו: בלי זה מזהה הקלטה של
+  // הזמנה אחרת היה נגיש מכל דף הזמנה.
+  const { data: rec } = await db.from('book_fair_recordings')
+    .select('provider_path, order_id').eq('id', recId).maybeSingle()
+
+  if (!rec || rec.order_id !== id) {
+    return NextResponse.json({ error: 'ההקלטה לא נמצאה' }, { status: 404 })
+  }
+
+  // ⚠️ provider_path הוא שם הקובץ כפי שימות החזירה, ולעתים כבר עם
+  // סיומת. התווים המסוכנים והסיומת מוסרים, והסיומת נבדקת למטה.
+  const safe = String(rec.provider_path ?? '')
+    .replace(/[/\\]/g, '')
+    .replace(/\.(wav|mp3|ogg|m4a)$/i, '')
+  if (!safe) return NextResponse.json({ error: 'אין קובץ להקלטה זו' }, { status: 404 })
+
+  let audio: { data: ArrayBuffer; contentType: string } | null = null
+  for (const ext of EXTS) {
+    const f = await downloadFileFromYemot(bookFairPath(`${safe}.${ext}`), 'bookFair')
+    if (f.ok && f.data) { audio = { data: f.data, contentType: f.contentType ?? `audio/${ext}` }; break }
+  }
+
+  if (!audio) {
+    console.error(`[orders/recording] הקובץ לא נמצא בימות: ${safe}`)
+    return NextResponse.json({ error: 'ההקלטה לא נמצאה בימות' }, { status: 404 })
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 נשלח כ*נתונים* ולא כקובץ — נטפרי חוסמת תגובת audio/* ב-418,
+  // וההאזנה נכשלה אצל כל מי שגולש דרך הסינון.
+  //
+  // ⚠️ המטען מעורבל לפני ה-base64, אחרת חתימת הקובץ ("RIFF") מזוהה
+  // גם בתוך ה-JSON. הדפדפן מבטל את הערבול ומרכיב Blob מקומי.
+  // ─────────────────────────────────────────────────────────────────────────
+  const scrambled = scrambleBytes(new Uint8Array(audio.data))
+  return NextResponse.json({
+    contentType: audio.contentType,
+    size: audio.data.byteLength,
+    enc: DOC_CIPHER_ID,
+    data: Buffer.from(scrambled).toString('base64'),
+  }, { headers: { 'Cache-Control': 'no-store' } })
+}

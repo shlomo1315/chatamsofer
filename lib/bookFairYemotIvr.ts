@@ -176,6 +176,15 @@ export interface IvrState {
    *  יוצרת לולאה אינסופית בימות (אותה מלכודת שתועדה בכל שלוחות ימות
    *  הקיימות בפרויקט). */
   attempts: number
+
+  /**
+   * כמה פעמים נשאל המק"ט בשיחה הזו.
+   *
+   * 🔴 בלי זה "להחלפת מק"ט" נתקע: attempts מתאפס בחזרה לשאלה, שם
+   * המשתנה חוזר ל-bf_sku, וימות מחזירה את הערך שכבר נקלט בו —
+   * כלומר אותו ספר שוב ושוב, בלולאה.
+   */
+  sku_round?: number
 }
 
 export function initialState(): IvrState {
@@ -817,10 +826,16 @@ function orderMenu(state: IvrState, messages?: IvrMessages): IvrTurn {
 
 /** בקשת מק"ט. */
 function askSkuTurn(state: IvrState, messages?: IvrMessages): IvrTurn {
+  // 🔴 הסיבוב נספר בנפרד מ-attempts ועולה בכל שאלה מחדש.
+  //
+  // ⚠️ attempts מתאפס כשחוזרים לשאלה ("2 — להחלפת מק"ט"), ואז שם
+  // המשתנה חזר ל-bf_sku. ימות כבר קלטה ערך בשם הזה ומחזירה אותו
+  // שוב — המתקשר הקיש מק"ט חדש ושמע את אותו ספר, בלולאה.
+  const round = (state.sku_round ?? 0) + 1
   const base = state.items.length ? `bf_sku_next${state.items.length}` : 'bf_sku'
   return {
-    state: { ...state, step: 'ask_sku' },
-    response: readTap(attemptVarName(base, state.attempts), [
+    state: { ...state, step: 'ask_sku', sku_round: round },
+    response: readTap(`${base}_r${round}`, [
       msgToken(messages, 'ask_sku'),
     ], { max: 10, seconds: 10 }),
   }

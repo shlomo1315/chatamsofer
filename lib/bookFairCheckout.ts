@@ -177,3 +177,27 @@ export function makeCartToken(rand: () => number = Math.random): string {
     ALPHABET[Math.floor(rand() * ALPHABET.length)]
   ).join('').toLowerCase()
 }
+
+/**
+ * מספר הזמנה מהרצף במסד — מספרי בלבד, מ-121200.
+ *
+ * 🔴 מספרי ולא BF-26-XXXXXX: המספר מוקרא בטלפון, ואותיות אינן ניתנות
+ * להקראה או להקשה חוזרת. אותו מספר משמש את שני הערוצים — סדרה נפרדת
+ * לטלפון הייתה מחייבת את המשרד לדעת באיזו סדרה לחפש.
+ *
+ * ⚠️ נופל חזרה ל-makeOrderNumber אם הרצף אינו זמין: הזמנה בלי מספר
+ * אינה יכולה להיווצר כלל, ועדיף פורמט ישן על כישלון הזמנה.
+ */
+export async function nextOrderNumber(
+  db: { rpc: (fn: string) => PromiseLike<{ data: unknown; error: unknown }> },
+): Promise<string> {
+  try {
+    const { data, error } = await db.rpc('next_book_fair_order_number')
+    const n = String(data ?? '').trim()
+    if (!error && n) return n
+    console.error('[bookFair] רצף המספרים לא זמין:', error)
+  } catch (e) {
+    console.error('[bookFair] רצף המספרים נכשל:', e)
+  }
+  return makeOrderNumber(new Date().getFullYear())
+}

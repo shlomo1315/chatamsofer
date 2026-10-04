@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
-import { makeOrderNumber } from '@/lib/bookFairCheckout'
+import { nextOrderNumber } from '@/lib/bookFairCheckout'
 import { SELLER_COOKIE, readSellerToken } from '@/lib/bookFairSeller'
 import { getPaymentProvider } from '@/lib/payments'
 
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
   const itemsTotal = lines.reduce((s, l) => s + l.unit * l.qty, 0)
 
   // ── ההזמנה ──
-  const orderNumber = makeOrderNumber(new Date().getFullYear())
+  const orderNumber = await nextOrderNumber(db)
   const { data: order, error: orderErr } = await db.from('book_fair_orders').insert({
     order_number: orderNumber,
     channel: 'fair',

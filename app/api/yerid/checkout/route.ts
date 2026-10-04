@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
-import { validateCheckout, makeOrderNumber, makeCartToken, type CheckoutItem } from '@/lib/bookFairCheckout'
+import { validateCheckout, nextOrderNumber, makeCartToken, type CheckoutItem } from '@/lib/bookFairCheckout'
 import { signPublicToken } from '@/lib/publicToken'
 import { isValidPreviewToken } from '@/lib/bookFairPreview'
 import { PICKUP_CONFIG_KEY, mergePickupConfig, pickupStatus } from '@/lib/bookFairPickup'
@@ -170,7 +170,7 @@ export async function POST(request: NextRequest) {
       .then(undefined, () => { /* שחרור הוא best-effort; הפקיעה תתפוס */ })
   }
 
-  const orderNumber = makeOrderNumber(new Date().getFullYear())
+  const orderNumber = await nextOrderNumber(db)
   const { data: order, error: orderErr } = await db.from('book_fair_orders').insert({
     order_number: orderNumber,
     channel: 'web',
