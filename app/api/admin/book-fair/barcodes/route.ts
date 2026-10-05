@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
-import { buildBookFairBarcodesPdf, buildBookFairBarcodeSheetsPdf } from '@/lib/bookFairBarcodesPdf'
+import { buildBookFairBarcodesPdf, buildBookFairBarcodeSheetsPdf, buildBookFairStickersPdf } from '@/lib/bookFairBarcodesPdf'
 import { scrambleBytes, DOC_CIPHER_ID } from '@/lib/docCipher'
 
 // גיליון תוויות ברקוד להדפסה — כל ספר פעיל בקטלוג, לחיתוך ותלייה על
@@ -19,10 +19,13 @@ export const runtime = 'nodejs'
 //   (ריק)   — גיליון משותף: תווית אחת לכל ספר (כמו קודם)
 //   sheet   — דף מלא לספר אחד (?sku=…&pages=N), 24 תוויות זהות לעמוד
 //   sheets  — שני דפים לכל ספר בקטלוג, PDF אחד
+//   sticker — מדבקות 7×3.5 ס"מ לספר אחד (?sku=…&copies=N), עמוד לכל מדבקה
+//   stickers — מדבקה אחת 7×3.5 ס"מ לכל ספר בקטלוג
 export async function GET(request: NextRequest) {
   const mode = request.nextUrl.searchParams.get('mode') ?? ''
   const onlySku = request.nextUrl.searchParams.get('sku')?.trim() ?? ''
   const pages = Math.max(1, Math.min(20, Number(request.nextUrl.searchParams.get('pages')) || 1))
+  const copies = Math.max(1, Math.min(200, Number(request.nextUrl.searchParams.get('copies')) || 1))
   if (!(await requirePermission('book_fair', 'view'))) return forbidden()
   const db = getServiceClient()
   if (!db) return serverMisconfigured()
@@ -45,17 +48,21 @@ export async function GET(request: NextRequest) {
   rows.sort((a, b) => a.title.localeCompare(b.title, 'he'))
 
   let selected = rows
-  if (mode === 'sheet') {
+  if (mode === 'sheet' || mode === 'sticker') {
     selected = rows.filter(r => r.sku === onlySku)
     if (!selected.length) return NextResponse.json({ error: 'הספר לא נמצא בקטלוג הפעיל' }, { status: 404 })
   }
 
   try {
-    const bytes = mode === 'sheet' || mode === 'sheets'
+    const bytes = mode === 'sticker' || mode === 'stickers'
+      ? await buildBookFairStickersPdf(selected, mode === 'sticker' ? copies : 1)
+      : mode === 'sheet' || mode === 'sheets'
       // ⚠️ הקטלוג המלא — שני עמודים לכל ספר (בקשת המשתמש 05.10).
       ? await buildBookFairBarcodeSheetsPdf(selected, mode === 'sheet' ? pages : 2)
       : await buildBookFairBarcodesPdf(rows)
-    const name = mode === 'sheet'
+    const name = mode === 'sticker' ? `מדבקות - ${selected[0].title}.pdf`
+      : mode === 'stickers' ? 'מדבקות 7x3.5 - כל הספרים.pdf'
+      : mode === 'sheet'
       ? `ברקודים - ${selected[0].title}.pdf`
       : mode === 'sheets' ? 'ברקודים - דף לכל ספר.pdf' : 'ברקודים - יריד ספרים.pdf'
     const scrambled = scrambleBytes(new Uint8Array(bytes))

@@ -234,3 +234,67 @@ export async function buildBookFairBarcodeSheetsPdf(
 
   return pdf.save()
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// מדבקה בודדת 7×3.5 ס"מ — עמוד לכל מדבקה (בקשת המשתמש 05.10), למדפסת
+// מדבקות בגליל. גודל העמוד = גודל המדבקה, בלי מסגרת ובלי רשת.
+//
+// מבנה: שם הספר למעלה (עד 2-3 שורות, מוקטן לפי הצורך — 🔴 תמיד כולו),
+// הברקוד באמצע, המק"ט מתחתיו.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MM = 72 / 25.4
+export const STICKER_W = 70 * MM // 7 ס"מ
+export const STICKER_H = 35 * MM // 3.5 ס"מ
+const ST_PAD = 2.5 * MM
+
+export async function buildBookFairStickersPdf(
+  books: BarcodeLabelInput[],
+  copiesPerBook = 1,
+): Promise<Uint8Array> {
+  const { layoutStickerTitle } = await import('./bookFairStickerTitle')
+  const pdf = await PDFDocument.create()
+  pdf.registerFontkit(fontkit)
+  const font = await pdf.embedFont(Buffer.from(HEEBO_TTF_B64, 'base64'), { subset: true })
+  const measure = (t: string, s: number) => font.widthOfTextAtSize(toVisual(t), s)
+  const copies = Math.max(1, Math.min(200, Math.floor(copiesPerBook)))
+
+  const innerW = STICKER_W - ST_PAD * 2
+  const skuSize = 8
+  const titleMaxH = 30
+
+  for (const book of books) {
+    const barcodeImg = await pdf.embedPng(makeBarcodePng(book.sku))
+    const title = layoutStickerTitle(book.title, measure, innerW, titleMaxH)
+
+    // ── הברקוד ממלא את מה שנשאר בין הכותרת למק"ט ──
+    const gap = 3
+    const availH = STICKER_H - ST_PAD * 2 - title.height - gap - skuSize - 2
+    let bh = Math.min(availH, 46)
+    let bw = bh * (barcodeImg.width / barcodeImg.height)
+    if (bw > innerW) { bh = bh * (innerW / bw); bw = innerW }
+
+    // מרכוז אנכי של כל הבלוק
+    const blockH = title.height + gap + bh + 2 + skuSize
+    const top = STICKER_H - (STICKER_H - blockH) / 2
+
+    for (let c = 0; c < copies; c++) {
+      const page = pdf.addPage([STICKER_W, STICKER_H])
+
+      title.lines.forEach((line, k) => {
+        const v = toVisual(line)
+        const w = font.widthOfTextAtSize(v, title.size)
+        const y = top - title.size * 0.9 - k * title.size * 1.15
+        page.drawText(v, { x: (STICKER_W - w) / 2, y, size: title.size, font, color: INK })
+      })
+
+      const by = top - title.height - gap - bh
+      page.drawImage(barcodeImg, { x: (STICKER_W - bw) / 2, y: by, width: bw, height: bh })
+
+      const skuW = font.widthOfTextAtSize(book.sku, skuSize)
+      page.drawText(book.sku, { x: (STICKER_W - skuW) / 2, y: by - 2 - skuSize * 0.85, size: skuSize, font, color: INK })
+    }
+  }
+
+  return pdf.save()
+}
