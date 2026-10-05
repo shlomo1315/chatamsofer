@@ -33,7 +33,9 @@ export async function GET(request: NextRequest) {
   const utf8Name = encodeURIComponent(safeName || 'file')
   // ⚠️ תצוגת PDF נעשית בניווט מלא בלבד ולא ב-<iframe>: נטפרי חוסם את ה-PDF
   // viewer בתוך iframe ומציג דף NETFREE (ראו components/ui/PdfPreviewBox).
-  const disposition = wantsDownload ? 'attachment' : 'inline'
+  // 🔴 סוג שאינו בטוח להצגה (octet-stream — ראו lib/fileAccess) תמיד
+  // יורד כקובץ ולעולם לא מוצג בדפדפן.
+  const disposition = wantsDownload || contentType === 'application/octet-stream' ? 'attachment' : 'inline'
   headers.set('Content-Disposition', `${disposition}; filename="${asciiName}"; filename*=UTF-8''${utf8Name}`)
   return new NextResponse(buf, { status: 200, headers })
 }

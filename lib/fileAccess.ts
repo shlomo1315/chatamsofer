@@ -34,6 +34,12 @@ const EXT_CONTENT_TYPES: Record<string, string> = {
   '.gif': 'image/gif', '.heic': 'image/heic', '.pdf': 'application/pdf',
 }
 
+/** סוגים שבטוח להציג בדפדפן. ⚠️ בלי svg ובלי html — שניהם מריצים סקריפט. */
+const SAFE_INLINE_TYPES = new Set([
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic',
+  'application/pdf', 'text/plain',
+])
+
 // שם הקובץ הסופי: השם המבוקש אם ניתן, אחרת שם הקובץ מנתיב האחסון.
 // בכל מקרה מובטחת סיומת — כדי שהקובץ ייפתח בתוכנה הנכונה אחרי שמירה.
 function resolveSafeName(path: string, rawName: string): string {
@@ -79,7 +85,14 @@ export async function loadDocument(request: NextRequest): Promise<LoadedDoc | Lo
   // בדפדפן של המעלה. קובץ שהועלה כ-text/html היה מוגש עם Content-Type
   // כזה ו-Content-Disposition: inline — כלומר מורץ במקור (origin) של
   // האתר, עם גישה לעוגיות הסשן. הסיומת נגזרת מהנתיב בשרת ולכן אמינה.
-  const contentType = EXT_CONTENT_TYPES[pathExt.toLowerCase()] || blob.type || 'application/octet-stream'
+  //
+  // 🔴 וגם blob.type עצמו רק מרשימה לבנה (ביקורת אבטחה 05.10): צירוף
+  // למייל נכנס נשמר עם סוג ה-MIME שהשולח הצהיר. evil.html / evil.svg
+  // (סיומת שאינה במפה) הוגש כ-text/html והריץ סקריפט על חשבון איש הצוות
+  // שלחץ "צפייה". סוג שאינו ברשימה ⇒ octet-stream (הורדה, לא הצגה).
+  const declared = (blob.type || '').toLowerCase().split(';')[0].trim()
+  const contentType = EXT_CONTENT_TYPES[pathExt.toLowerCase()]
+    || (SAFE_INLINE_TYPES.has(declared) ? declared : 'application/octet-stream')
 
   return { buf: Buffer.from(await blob.arrayBuffer()), contentType, safeName, path }
 }

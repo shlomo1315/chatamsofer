@@ -34,11 +34,15 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   // data:image/png;base64,XXXX → בייטים גולמיים עם סוג התוכן הנכון.
   // [\s\S] במקום דגל s — היעד אינו es2018.
-  const m = /^data:([^;,]+);base64,([\s\S]+)$/.exec(sig)
-  if (!m) {
-    // ערך שאינו data-URL (למשל קישור ישיר לאחסון) — מפנים אליו.
-    return NextResponse.redirect(sig)
-  }
+  //
+  // 🔴 רק PNG/JPEG, ובלי הפניה (ביקורת אבטחה 05.10). החתימה מגיעה מטופס
+  // רישום ציבורי שבדק רק startsWith('data:image'):
+  //   · data:image/svg+xml עם <script> רץ במקור האתר כשאיש צוות פותח
+  //     את הכתובת ישירות (XSS שמור).
+  //   · ערך שאינו data-URL הופנה אליו — הפניה פתוחה לכל כתובת.
+  // אומת: כל 2,791 החתימות במסד הן image/png — אין מה לשבור.
+  const m = /^data:(image\/(?:png|jpeg));base64,([\s\S]+)$/.exec(sig)
+  if (!m) return new NextResponse('פורמט חתימה לא נתמך', { status: 415 })
 
   const [, contentType, b64] = m
   const bytes = Buffer.from(b64, 'base64')
@@ -47,6 +51,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     headers: {
       'Content-Type': contentType,
       'Content-Length': String(bytes.length),
+      'X-Content-Type-Options': 'nosniff',
       // private — תוכן אישי; מותר במטמון הדפדפן של אותו משתמש בלבד.
       'Cache-Control': 'private, max-age=3600',
     },

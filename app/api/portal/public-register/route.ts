@@ -476,7 +476,9 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
     lineage_chain: Array.isArray(lineage_chain) && lineage_chain.length > 0 ? lineage_chain : null,
     past_benefits: past_benefits && typeof past_benefits === 'object' ? past_benefits : null,
     // חתימה דיגיטלית (data URL של PNG) — נלכדה בעת סימון ההצהרה
-    signature: typeof signature === 'string' && signature.startsWith('data:image') ? signature : null,
+    // 🔴 PNG/JPEG בלבד ועד ~300KB (ביקורת אבטחה 05.10): SVG מריץ סקריפט, ובלי
+    // תקרה אפשר היה לשמור מגה-בייטים בשורה.
+    signature: typeof signature === 'string' && /^data:image\/(png|jpeg);base64,/.test(signature) && signature.length <= 400_000 ? signature : null,
     // 'pending' (בדיקה רגילה) או 'deep_review' (סטייה ביחוס בתוך 5 הדורות)
     eligibility_status: eligibilityStatus,
     is_active: true,

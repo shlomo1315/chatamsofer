@@ -81,18 +81,29 @@ export async function attachOrphanMailToBeneficiary(
     .map(s => String(s ?? '').trim())
     .filter(s => /^\d{9}$/.test(s))
 
-  const orClauses: string[] = []
-  if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) orClauses.push(`from_email.ilike.${email}`)
-  // ת"ז 9 ספרות בנושא — כמו ב-resolveBeneficiaryId (רשום או בן/בת זוג)
-  for (const id of ids) orClauses.push(`subject.ilike.%${id}%`)
-  if (!orClauses.length) return 0
-
-  const { data: rows } = await admin
-    .from('inbound_emails')
-    .select('id')
-    .is('beneficiary_id', null)
-    .or(orClauses.join(','))
-  const orphanIds = (rows ?? []).map(r => r.id)
+  // 🔴 שאילתות נפרדות עם ערך כפרמטר — לא מחרוזת .or() (ביקורת אבטחה 05.10).
+  //
+  // ⚠️ הכתובת מגיעה מטופס רישום ציבורי. בתוך .or() הייתה מחרוזת מסנן:
+  // `x,beneficiary_id.is.null,from_email.ilike.a@b.co` הוסיף תנאים משלו,
+  // ו-`%@gmail.com` (wildcard) שייך לנרשם התוקף עד 1,000 מיילים יתומים
+  // של אחרים. זה המופע הרביעי של אותו דפוס.
+  //
+  // ⚠️ eq ולא ilike לכתובת: שיוך מייל לאדם חייב התאמה מדויקת — כתובות
+  // נשמרות מנורמלות (lowercase) בשני הצדדים.
+  const found = new Set<string>()
+  if (email && /^[^\s@,()%*\\"]+@[^\s@,()%*\\"]+\.[^\s@,()%*\\"]+$/.test(email)) {
+    const { data } = await admin.from('inbound_emails').select('id')
+      .is('beneficiary_id', null).eq('from_email', email)
+    for (const r of data ?? []) found.add(r.id as string)
+  }
+  // ת"ז 9 ספרות בנושא — כמו ב-resolveBeneficiaryId (רשום או בן/בת זוג).
+  // ⚠️ ids מסוננים ל-^\d{9}$ למעלה, ולכן בטוחים בתבנית.
+  for (const id of ids) {
+    const { data } = await admin.from('inbound_emails').select('id')
+      .is('beneficiary_id', null).ilike('subject', `%${id}%`)
+    for (const r of data ?? []) found.add(r.id as string)
+  }
+  const orphanIds = [...found]
   if (!orphanIds.length) return 0
 
   const { error } = await admin
