@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import {
   Search, X, Plus, Minus, Loader2, Check, Banknote, CreditCard,
-  LogOut, AlertTriangle, Package, ShoppingBag,
+  LogOut, AlertTriangle, Package, ShoppingBag, Keyboard,
 } from 'lucide-react'
 import { fmtAgorot } from '@/lib/bookFairPricing'
 import NedarimIframe from '../NedarimIframe'
@@ -48,9 +48,14 @@ export default function SellerClient() {
   const [done, setDone] = useState<{ orderNumber: string | null; total: number; warning: string | null; orderId?: string } | null>(null)
   /** סליקה פעילה — מסך התשלום של נדרים. */
   const [payment, setPayment] = useState<
-    { transactionId: string; key: string; orderId: string; total: number } | null
+    { transactionId: string; key: string; orderId: string; total: number; manual?: boolean } | null
   >(null)
   const [saleError, setSaleError] = useState('')
+  // ── תשלום ידני: סכום חופשי בנדרים, בלי ספרים (בקשת המשתמש 05.10) ──
+  const [manualOpen, setManualOpen] = useState(false)
+  const [manualAmount, setManualAmount] = useState('')
+  const manualAgorot = Math.round(Number(manualAmount.replace(',', '.')) * 100)
+  const manualValid = Number.isFinite(manualAgorot) && manualAgorot >= 100 && manualAgorot <= 2_000_000
   const searchRef = useRef<HTMLInputElement>(null)
 
   const loadCatalog = useCallback(async () => {
@@ -195,6 +200,29 @@ export default function SellerClient() {
     }
   }
 
+  /** תשלום ידני — אותה סליקה בנדרים, עם הסכום שהוקלד. הסל אינו נוגע. */
+  async function payManual() {
+    if (!manualValid) return
+    setSaleError(''); setSaleBusy(true)
+    try {
+      const res = await fetch('/api/yerid/seller/sale', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ manual_amount_agorot: manualAgorot, payment_method: 'card', charge: true }),
+      })
+      const d = await res.json()
+      if (res.status === 401) { setSeller(null); return }
+      if (!res.ok) { setSaleError(d.error ?? 'פתיחת התשלום נכשלה'); return }
+      if (d.pendingPayment && d.iframeTransaction) {
+        setPayment({ ...d.iframeTransaction, orderId: d.orderId, total: d.total_agorot, manual: true })
+      }
+    } catch {
+      setSaleError('פתיחת התשלום נכשלה — בדקו את החיבור')
+    } finally {
+      setSaleBusy(false)
+    }
+  }
+
   // 🔴 המספר האמיתי מוקצה רק אחרי אישור נדרים (payment-callback), שעשוי
   // להגיע שניות אחרי האייפרם. שואלים את השרת עד שהמספר מופיע.
   useEffect(() => {
@@ -288,10 +316,10 @@ export default function SellerClient() {
               רק במצבים מסוימים, והמוכר נתקע מול לקוח בלי דרך לצאת. */}
           <button
             type="button"
-            onClick={() => { setPayment(null); setSaleError('התשלום בוטל. אפשר לנסות שוב או לגבות במזומן.') }}
+            onClick={() => { setPayment(null); setSaleError(payment.manual ? 'התשלום הידני בוטל.' : 'התשלום בוטל. אפשר לנסות שוב או לגבות במזומן.') }}
             className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#141210]/15 bg-white py-3 text-base font-semibold text-[#141210]/75 transition hover:bg-[#141210]/5"
           >
-            <X size={18} /> ביטול וחזרה לסל
+            <X size={18} /> {payment.manual ? 'ביטול וחזרה' : 'ביטול וחזרה לסל'}
           </button>
           <NedarimIframe
             transactionId={payment.transactionId}
@@ -301,8 +329,9 @@ export default function SellerClient() {
             onSuccess={() => {
               setDone({ orderNumber: null, orderId: payment.orderId, total: payment.total, warning: null })
               setPayment(null)
-              setCart(new Map())
-              void loadCatalog()
+              // ⚠️ תשלום ידני אינו קשור לסל — הספרים שנסרקו נשארים.
+              if (payment.manual) { setManualOpen(false); setManualAmount('') }
+              else { setCart(new Map()); void loadCatalog() }
             }}
             onBack={() => {
               // ⚠️ ביטול אינו מוחק את הסל — המוכר עשוי לעבור למזומן.
@@ -418,6 +447,50 @@ export default function SellerClient() {
             </button>
           )}
         </div>
+
+        {/* ── תשלום ידני — סכום חופשי, אותה סליקה בנדרים ── */}
+        {!manualOpen ? (
+          <button
+            type="button"
+            onClick={() => setManualOpen(true)}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[#12314F]/25 bg-white py-3 text-base font-semibold text-[#12314F] transition hover:border-[#12314F]/50 hover:bg-[#12314F]/5"
+          >
+            <Keyboard size={19} /> הזנת תשלום ידנית
+          </button>
+        ) : (
+          <div className="mt-3 rounded-xl border-2 border-[#12314F]/25 bg-white p-4">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-base font-bold text-[#12314F]">תשלום ידני באשראי</p>
+              <button onClick={() => { setManualOpen(false); setManualAmount('') }} aria-label="סגירה"
+                className="rounded-lg p-1 text-[#141210]/40 hover:text-[#141210]"><X size={18} /></button>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <label className="relative min-w-0 flex-[1_1_160px]">
+                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-lg text-[#141210]/40">₪</span>
+                <input
+                  value={manualAmount}
+                  onChange={e => setManualAmount(e.target.value.replace(/[^\d.,]/g, ''))}
+                  onKeyDown={e => { if (e.key === 'Enter' && manualValid && !saleBusy) void payManual() }}
+                  inputMode="decimal"
+                  placeholder="סכום"
+                  aria-label="סכום לתשלום בשקלים"
+                  autoFocus
+                  dir="ltr"
+                  className="w-full rounded-xl border-2 border-[#141210]/10 py-3 pl-10 pr-4 text-xl font-semibold tabular-nums outline-none focus:border-[#B8860B]"
+                />
+              </label>
+              <button
+                onClick={() => void payManual()}
+                disabled={!manualValid || saleBusy}
+                className="flex flex-[1_1_160px] items-center justify-center gap-2 rounded-xl bg-[#12314F] py-3.5 text-lg font-semibold text-white transition hover:bg-[#6B2737] disabled:opacity-40"
+              >
+                {saleBusy ? <Loader2 size={19} className="animate-spin" /> : <CreditCard size={19} />}
+                לתשלום{manualValid ? ` ${fmtAgorot(manualAgorot)}` : ''}
+              </button>
+            </div>
+            {manualAmount && !manualValid && <p className="mt-2 text-sm text-[#6B2737]">סכום בין 1 ל-20,000 ₪</p>}
+          </div>
+        )}
 
         {/* ── תוצאות החיפוש ── */}
         {filtered.length > 0 && (

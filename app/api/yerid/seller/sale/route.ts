@@ -38,8 +38,26 @@ export async function POST(request: NextRequest) {
   let body: Record<string, unknown>
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה שגויה' }, { status: 400 }) }
 
-  const rawItems = Array.isArray(body.items) ? body.items as ItemInput[] : []
-  if (!rawItems.length) return NextResponse.json({ error: 'לא נבחרו ספרים' }, { status: 400 })
+  // ─────────────────────────────────────────────────────────────────────
+  // 🔴 תשלום ידני (בקשת המשתמש 05.10): סכום שהמוכר מקליד, בלי ספרים —
+  // אותה סליקה בנדרים, אותה קטגוריה. אשראי בלבד: מזומן ידני היה מאפשר
+  // לרשום "הכנסה" בלי שום אסמכתה.
+  //
+  // ⚠️ אין שורות פריטים ואין ניכוי מלאי — הסכום אינו קשור לספר מסוים.
+  // ─────────────────────────────────────────────────────────────────────
+  const manual = body.manual_amount_agorot !== undefined && body.manual_amount_agorot !== null
+  const manualAmount = manual ? Math.round(Number(body.manual_amount_agorot)) : 0
+  if (manual) {
+    if (!Number.isFinite(manualAmount) || manualAmount < 100 || manualAmount > 2_000_000) {
+      return NextResponse.json({ error: 'סכום לא תקין (בין 1 ל-20,000 ₪)' }, { status: 400 })
+    }
+    if (body.payment_method !== 'card' || body.charge !== true) {
+      return NextResponse.json({ error: 'תשלום ידני נגבה באשראי בלבד' }, { status: 400 })
+    }
+  }
+
+  const rawItems = manual ? [] : Array.isArray(body.items) ? body.items as ItemInput[] : []
+  if (!rawItems.length && !manual) return NextResponse.json({ error: 'לא נבחרו ספרים' }, { status: 400 })
   if (rawItems.length > 100) return NextResponse.json({ error: 'יותר מדי פריטים' }, { status: 400 })
 
   const paymentMethod = body.payment_method === 'cash' ? 'cash' : 'card'
@@ -60,9 +78,11 @@ export async function POST(request: NextRequest) {
   // 🔴 המחירים מהמסד ולא מהלקוח — אותו כלל כמו בחנות. מוכר שדפדפנו
   // נפרץ (או שסתם שינה את ה-DOM) אינו יכול לקבוע מחיר.
   const ids = [...new Set(rawItems.map(i => String(i.book_id)))]
-  const { data: books, error: booksErr } = await db.from('book_fair_books')
-    .select('id, sku, title, volumes, price_agorot, is_active')
-    .in('id', ids)
+  const { data: books, error: booksErr } = ids.length
+    ? await db.from('book_fair_books')
+      .select('id, sku, title, volumes, price_agorot, is_active')
+      .in('id', ids)
+    : { data: [], error: null }
 
   if (booksErr) {
     console.error('[fair/seller/sale] books fetch failed:', booksErr)
@@ -85,7 +105,7 @@ export async function POST(request: NextRequest) {
     })
   }
 
-  const itemsTotal = lines.reduce((s, l) => s + l.unit * l.qty, 0)
+  const itemsTotal = manual ? manualAmount : lines.reduce((s, l) => s + l.unit * l.qty, 0)
 
   // ── ההזמנה ──
   // 🔴 מספר הזמנה אמיתי רק אחרי תשלום בפועל (החלטת המשתמש 05.10), כמו
@@ -108,7 +128,9 @@ export async function POST(request: NextRequest) {
     paid_at: wantsCharge ? null : new Date().toISOString(),
     payment_method: paymentMethod,
     sold_by: seller.name,
-    customer_name: String(body.customer_name ?? '').trim() || 'מכירה בדוכן',
+    // ⚠️ "תשלום ידני" מזהה במסכי הניהול הזמנה בלי ספרים — אחרת היא
+    // נראית כמו מכירה שהפריטים שלה אבדו.
+    customer_name: String(body.customer_name ?? '').trim() || (manual ? 'תשלום ידני בדוכן' : 'מכירה בדוכן'),
     customer_phone: String(body.customer_phone ?? '').trim() || null,
     customer_email: null,
     // ⚠️ מכירה בדוכן היא איסוף במקום — הקונה לוקח את הספרים איתו.
@@ -126,7 +148,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'רישום המכירה נכשל' }, { status: 500 })
   }
 
-  const { error: itemsErr } = await db.from('book_fair_order_items').insert(
+  const { error: itemsErr } = manual ? { error: null } : await db.from('book_fair_order_items').insert(
     lines.map(l => ({
       order_id: order.id,
       book_id: l.book_id,

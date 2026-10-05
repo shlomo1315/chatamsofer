@@ -371,9 +371,9 @@ function renderCell(
     case 'sku':
       return <span className="font-mono text-xs text-slate-600">{b.sku}</span>
     case 'title':
-      return <span className="font-medium text-slate-900 truncate block" title={b.title}>{b.title}</span>
+      return <span className="block whitespace-normal break-words font-medium text-slate-900">{b.title}</span>
     case 'author':
-      return <span className="truncate block text-slate-500" title={b.author ?? ''}>{b.author || '—'}</span>
+      return <span className="block whitespace-normal break-words text-slate-500">{b.author || '—'}</span>
     case 'volumes':
       return <span className="tabular-nums">{b.volumes}</span>
     case 'price':
