@@ -10,6 +10,7 @@ import { useCan } from '@/components/StaffPermissions'
 import PaymentSettings from './PaymentSettings'
 import SellerPassword from './SellerPassword'
 import OfficeContact from './OfficeContact'
+import DashboardAccess from './DashboardAccess'
 import PhoneMessages from '../phone/PhoneMessages'
 import BookAudio from '../phone/BookAudio'
 
@@ -293,6 +294,7 @@ export default function SettingsClient({ cities, tiers, open, openAt, mockPay }:
         <PaymentSettings />
         <SellerPassword />
         <OfficeContact canEdit={canEdit} />
+        <DashboardAccess canEdit={canEdit} />
       </div>
 
       {/* ── השלוחה הטלפונית ──
