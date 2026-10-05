@@ -379,7 +379,9 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack, 
               </p>
               <div className="flex flex-wrap gap-2">
                 {[
-                  { label: 'מספר הכרטיס', value: swipe.pan },
+                  // 🔴 מוצגות 4 ספרות אחרונות בלבד — המסך בדוכן גלוי לכל העומדים
+                  // ליד. ההעתקה עדיין מעתיקה את המספר המלא (ראו onClick).
+                  { label: 'מספר הכרטיס', value: `•••• ${swipe.pan.slice(-4)}` },
                   { label: 'תוקף', value: swipe.tokef ? swipe.tokef.slice(0, 2) + '/' + swipe.tokef.slice(2) : '' },
                 ].filter(f => f.value).map(f => (
                   <button
@@ -387,7 +389,8 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack, 
                     type="button"
                     onClick={() => {
                       // ⚠️ התוקף מועתק בלי הלוכסן — כך נדרים מצפה לקבלו.
-                      const raw = f.label === 'תוקף' ? swipe.tokef : f.value
+                      // ⚠️ המספר המלא מועתק, אף שעל המסך מוצגות 4 ספרות בלבד.
+                      const raw = f.label === 'תוקף' ? swipe.tokef : swipe.pan
                       navigator.clipboard?.writeText(raw)
                         .then(() => { setCopied(f.label); setTimeout(() => setCopied(''), 1500) })
                         .catch(() => {})
