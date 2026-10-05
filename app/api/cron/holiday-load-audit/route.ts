@@ -45,7 +45,8 @@ interface Row {
 
 export async function GET(request: NextRequest) {
   const sp = request.nextUrl.searchParams
-  const okToken = verifyCronSecret(request) || sp.get('token') === process.env.CRON_SECRET
+  // ⚠️ verifyCronSecret כבר מקבל ?token= בזמן קבוע — ההשוואה הישירה (===) הוסרה.
+  const okToken = verifyCronSecret(request)
   if (!process.env.CRON_SECRET || !okToken) {
     return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
   }

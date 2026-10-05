@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireNonMailStaff, forbidden, getServiceClient } from '@/lib/apiAuth'
+import { requireNonMailStaff, forbidden, getServiceClient, requirePermission } from '@/lib/apiAuth'
 import { DEFAULT_LAYOUT, type FormLayout } from '@/lib/rabbiFormPdf'
 
 export const dynamic = 'force-dynamic'
@@ -31,7 +31,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const staff = await requireNonMailStaff()
+  const staff = await requirePermission('loans', 'edit')
   if (!staff) return forbidden()
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })

@@ -13,8 +13,7 @@
 // שרשאים להגיש בקשות, וזו סמכות של המנהל ולא של המזכירות.
 // ─────────────────────────────────────────────────────────────────────────────
 import { NextResponse, type NextRequest } from 'next/server'
-import { getServiceClient } from '@/lib/apiAuth'
-import { createClient } from '@/lib/supabase/server'
+import { getServiceClient, requireAdmin } from '@/lib/apiAuth'
 import {
   autoMapColumns, missingRequired, cleanIdNumber, cleanPhone, type FieldKey,
 } from '@/lib/specialImportMap'
@@ -26,14 +25,8 @@ export const runtime = 'nodejs'
 // רשת ביטחון: קובץ גדול מזה אינו ייבוא אלא תקלה.
 const MAX_ROWS = 5_000
 
-async function assertAdmin(): Promise<boolean> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return false
-  const { data: profile } = await supabase
-    .from('profiles').select('role').eq('id', user.id).maybeSingle()
-  return profile?.role === 'admin'
-}
+// ⚠️ requireAdmin ולא בדיקה מקומית (ביקורת אבטחה 05.10): הבדיקה הקודמת
+// לא בדקה is_active, ומנהל שהושבת עדיין עבר.
 
 /** ערך תא כמחרוזת — exceljs מחזיר גם אובייקטים (נוסחה, קישור, תאריך). */
 function cellText(v: unknown): string {
@@ -57,7 +50,7 @@ interface ParsedRow {
 }
 
 export async function POST(request: NextRequest) {
-  if (!(await assertAdmin())) {
+  if (!(await requireAdmin())) {
     return NextResponse.json({ error: 'למנהל הראשי בלבד' }, { status: 403 })
   }
   const step = new URL(request.url).searchParams.get('step') ?? 'preview'

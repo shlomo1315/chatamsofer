@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { requireStaff, unauthorized, requirePermission } from '@/lib/apiAuth'
 import { buildMaternityVouchers } from '@/lib/maternityVoucher'
 import { buildInstructionsSheet } from '@/lib/instructionsSheet'
 import { setVoucherTextsCache, fetchVoucherTexts } from '@/lib/voucherTextsStore'
@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
 // POST — תצוגה חיה: מחיל טקסטים זמניים (טיוטת העריכה) לפני הרינדור, בלי לשמור
 // ל-DB. מאפשר למנהל לראות את השינוי לפני שמירה.
 export async function POST(request: NextRequest) {
-  if (!(await requireStaff())) return unauthorized()
+  if (!(await requirePermission('maternity', 'edit'))) return unauthorized()
   let body: { type?: string; texts?: Record<string, string> }
   try { body = await request.json() } catch { body = {} }
   const type = body.type ?? 'card'

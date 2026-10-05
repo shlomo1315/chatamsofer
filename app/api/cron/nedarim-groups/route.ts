@@ -22,8 +22,8 @@ import { getHolidayNedarimCreds, getNedarimCreds, getLimitedStoresList, getHolid
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
+  // ⚠️ verifyCronSecret כבר מקבל ?token= בזמן קבוע — ההשוואה הישירה (===) הוסרה.
   const okToken = verifyCronSecret(request)
-    || request.nextUrl.searchParams.get('token') === process.env.CRON_SECRET
   if (!process.env.CRON_SECRET || !okToken) {
     return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
   }

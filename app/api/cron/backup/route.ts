@@ -29,7 +29,8 @@ const MIN_KEEP = 7 // רשת ביטחון — תמיד שומרים לפחות 7
 export async function GET(request: NextRequest) {
   // נכשל-סגור: אם CRON_SECRET אינו מוגדר או לא תואם — חסום (verifyCronSecret מקבל
   // Authorization: Bearer או ?secret=). מונע גיבוי לא-מורשה גם אם המשתנה נשמט.
-  const okToken = verifyCronSecret(request) || request.nextUrl.searchParams.get('token') === process.env.CRON_SECRET
+  // ⚠️ verifyCronSecret כבר מקבל ?token= בזמן קבוע — ההשוואה הישירה (===) הוסרה.
+  const okToken = verifyCronSecret(request)
   if (!process.env.CRON_SECRET || !okToken) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }

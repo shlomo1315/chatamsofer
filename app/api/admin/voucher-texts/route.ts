@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { requireStaff, unauthorized, requirePermission } from '@/lib/apiAuth'
 import { fetchVoucherTexts, saveVoucherTexts } from '@/lib/voucherTextsStore'
 import { VOUCHER_TEXT_DEFAULTS } from '@/lib/voucherTextsCatalog'
 
@@ -14,7 +14,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  if (!(await requireStaff())) return unauthorized()
+  if (!(await requirePermission('maternity', 'edit'))) return unauthorized()
   let body: { texts?: Record<string, unknown> }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
 

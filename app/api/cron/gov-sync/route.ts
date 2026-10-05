@@ -8,7 +8,8 @@ export const maxDuration = 300
 // רענון לילי (00:00) של מאגר הערים והרחובות מ-data.gov.il (משרד הפנים).
 // מוגן בטוקן CRON_SECRET (נכשל-סגור). מרענן את כל הערים, ואת הרחובות של ערים שכבר נשאלו.
 export async function GET(request: NextRequest) {
-  const okToken = verifyCronSecret(request) || request.nextUrl.searchParams.get('token') === process.env.CRON_SECRET
+  // ⚠️ verifyCronSecret כבר מקבל ?token= בזמן קבוע — ההשוואה הישירה (===) הוסרה.
+  const okToken = verifyCronSecret(request)
   if (!process.env.CRON_SECRET || !okToken) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }

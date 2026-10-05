@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
+import { requireStaff, unauthorized, getServiceClient, requirePermission } from '@/lib/apiAuth'
 import { HOLIDAY_VOUCHER_DEFAULTS } from '@/lib/holidayVoucher'
 import { HOLIDAY_TEXTS_KEY, loadHolidayVoucherTexts } from '@/lib/holidayVoucherTexts'
 
@@ -27,7 +27,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
+  const staff = await requirePermission('distributions', 'edit')
   if (!staff) return unauthorized()
 
   const db = getServiceClient()
