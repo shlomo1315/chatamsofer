@@ -5,7 +5,7 @@ import { canAccessInboundMail } from '@/lib/mailAccess'
 
 export const dynamic = 'force-dynamic'
 
-// ׳׳—׳™׳§׳× ׳׳™׳™׳ ׳ ׳›׳ ׳¡ ׳׳”׳×׳™׳‘׳”
+// מחיקת מייל נכנס מהתיבה
 export async function POST(request: NextRequest) {
   const staff = await requireMailAccess()
   if (!staff) return unauthorized()
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } },
   )
-  // ׳׳ ׳™׳¢׳× ׳׳—׳™׳§׳” ׳—׳•׳¦׳×-׳׳—׳׳§׳•׳×: ׳¨׳§ ׳׳™ ׳©׳׳•׳¨׳©׳” ׳׳×׳™׳‘׳× ׳”׳׳™׳™׳ ׳¨׳©׳׳™ ׳׳׳—׳•׳§ ׳׳•׳×׳•.
+  // מניעת מחיקה חוצת-מחלקות: רק מי שמורשה לתיבת המייל רשאי למחוק אותו.
   if (!(await canAccessInboundMail(admin, staff, String(id)))) return forbidden()
   await admin.from('inbound_emails').delete().eq('id', id)
   return NextResponse.json({ ok: true })

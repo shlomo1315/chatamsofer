@@ -103,6 +103,6 @@ export async function POST(request: NextRequest) {
 }
 
 // ג”€ג”€ג”€ Types ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€
-// DEFAULT_LABELS ׳•-MailLabel ׳׳™׳•׳‘׳׳™׳ ׳-lib/mailLabels (׳׳§׳•׳¨ ׳׳׳× ׳™׳—׳™׳“).
+// DEFAULT_LABELS ו-MailLabel מיובאים מ-lib/mailLabels (מקור אמת יחיד).
 
 interface InternalEmail { name: string; email: string }

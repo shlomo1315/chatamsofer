@@ -9,8 +9,8 @@ export async function POST(request: NextRequest) {
   const staff = await requireMailAccess()
   if (!staff) return unauthorized()
 
-  // read=false ׳׳¡׳׳ ׳›׳׳-׳ ׳§׳¨׳. ׳‘׳¨׳™׳¨׳× ׳”׳׳—׳“׳ true ג€” ׳×׳׳™׳׳•׳× ׳׳׳—׳•׳¨ ׳¢׳ ׳§׳•׳¨׳׳™׳
-  // ׳§׳™׳™׳׳™׳ ׳©׳©׳•׳׳—׳™׳ ׳¨׳§ id.
+  // read=false מסמן כלא-נקרא. ברירת המחדל true — תאימות לאחור עם קוראים
+  // קיימים ששולחים רק id.
   const { id, ids, read } = await request.json()
 
   const requested: string[] = Array.isArray(ids) ? ids.filter(Boolean) : (id ? [id] : [])
@@ -22,8 +22,8 @@ export async function POST(request: NextRequest) {
     { auth: { autoRefreshToken: false, persistSession: false } },
   )
 
-  // ׳׳¡׳ ׳ ׳™׳ ׳׳׳™׳™׳׳™׳ ׳©׳”׳׳©׳×׳׳© ׳׳•׳¨׳©׳” ׳׳”׳ ׳‘׳׳‘׳“ ג€” ׳׳•׳ ׳¢ ׳©׳™׳ ׳•׳™ ׳׳¦׳‘-׳§׳¨׳™׳׳” ׳—׳•׳¦׳”-׳׳—׳׳§׳•׳×
-  // (׳•׳›׳ ׳×׳׳¨׳•׳ ׳׳•׳ ׳™ ׳”-unread ׳©׳ ׳׳—׳׳§׳•׳× ׳׳—׳¨׳•׳×).
+  // מסננים למיילים שהמשתמש מורשה להם בלבד — מונע שינוי מצב-קריאה חוצה-מחלקות
+  // (וכן תמרון מוני ה-unread של מחלקות אחרות).
   const targets = await filterAccessibleInboundIds(admin, staff, requested)
   if (!targets.length) return NextResponse.json({ ok: true, updated: 0 })
 

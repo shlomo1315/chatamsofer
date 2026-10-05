@@ -5,10 +5,10 @@ import { DEPARTMENTS, type DepartmentKey } from '@/lib/departments'
 
 export const dynamic = 'force-dynamic'
 
-// ג ן¸ ׳ ׳™׳˜׳¨׳•׳ ׳×׳•׳•׳™׳ ׳©׳׳•׳¨׳™׳ ׳©׳ ׳׳¡׳ ׳ .or() ׳•׳©׳ ׳×׳‘׳ ׳™׳× ilike. ׳‘׳׳¢׳“׳™׳• ׳₪׳¡׳™׳§ ׳׳• ׳¡׳•׳’׳¨
-// ׳‘׳§׳׳˜ ׳”׳—׳™׳₪׳•׳© ׳׳•׳¡׳™׳₪׳™׳ ׳×׳ ׳׳™ ׳׳¡׳ ׳ ׳׳©׳׳”׳ (filter injection). ׳¡׳™׳ ׳•׳ ׳”׳׳—׳׳§׳” ׳ ׳׳›׳£
-// ׳›׳×׳ ׳׳™ AND ׳ ׳₪׳¨׳“ ׳•׳׳™׳ ׳• ׳ ׳™׳×׳ ׳׳¢׳§׳™׳₪׳” ׳׳›׳׳, ׳•׳׳›׳ ׳”׳—׳©׳™׳₪׳” ׳׳•׳’׳‘׳׳× ג€” ׳׳‘׳ ׳׳™׳ ׳¡׳™׳‘׳”
-// ׳׳׳₪׳©׳¨ ׳׳× ׳–׳” ׳‘׳›׳׳. ׳׳•׳×׳• ׳ ׳™׳˜׳¨׳•׳ ׳›׳׳• ׳‘-beneficiary-search.
+// ⚠️ ניטרול תווים שמורים של מסנן .or() ושל תבנית ilike. בלעדיו פסיק או סוגר
+// בקלט החיפוש מוסיפים תנאי מסנן משלהם (filter injection). סינון המחלקה נאכף
+// כתנאי AND נפרד ואינו ניתן לעקיפה מכאן, ולכן החשיפה מוגבלת — אבל אין סיבה
+// לאפשר את זה בכלל. אותו ניטרול כמו ב-beneficiary-search.
 const safeLike = (q: string) => q.replace(/[,()*%_\\"']/g, ' ').trim()
 
 function getAdminClient() {
@@ -17,43 +17,43 @@ function getAdminClient() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-// ׳”׳׳¨׳× ׳’׳•׳£ ׳˜׳§׳¡׳˜-׳‘׳׳‘׳“ ׳-HTML ׳׳×׳¦׳•׳’׳” ׳ ׳׳׳ ׳”: ׳‘׳¨׳™׳—׳” ׳׳×׳•׳•׳™ HTML, ׳©׳׳™׳¨׳× ׳©׳•׳¨׳•׳× ׳•׳¨׳•׳•׳—׳™׳,
-// ׳•׳”׳₪׳™׳›׳× ׳§׳™׳©׳•׳¨׳™׳ ׳׳׳—׳™׳¦׳™׳ ג€” ׳›׳“׳™ ׳©׳׳™׳™׳ ׳™׳™׳¨׳׳” ׳›׳׳• ׳׳™׳™׳ ׳¨׳’׳™׳ ׳•׳׳ ׳›׳’׳•׳© ׳˜׳§׳¡׳˜ ׳׳—׳“.
+// המרת גוף טקסט-בלבד ל-HTML לתצוגה נאמנה: בריחה מתווי HTML, שמירת שורות ורווחים,
+// והפיכת קישורים ללחיצים — כדי שמייל ייראה כמו מייל רגיל ולא כגוש טקסט אחד.
 function plainToHtml(s: string): string {
   const esc = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   const linked = esc.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>')
   return linked.replace(/\r\n|\r|\n/g, '<br>')
 }
 
-// ׳’׳•׳£ ׳׳•׳›׳-׳׳×׳¦׳•׳’׳”: HTML ׳׳׳™׳×׳™ ׳׳ ׳§׳™׳™׳, ׳׳—׳¨׳× ׳˜׳§׳¡׳˜ ׳©׳”׳•׳׳¨ ׳-HTML ׳¢׳ ׳©׳׳™׳¨׳× ׳©׳•׳¨׳•׳×.
+// גוף מוכן-לתצוגה: HTML אמיתי אם קיים, אחרת טקסט שהומר ל-HTML עם שמירת שורות.
 function displayBody(html: string | null, plain: string | null): string {
   if (html && html.trim()) return html
   if (plain && plain.trim()) return plainToHtml(plain)
   return ''
 }
 
-// ׳˜׳¢׳™׳ ׳× ׳׳™׳™׳׳™׳ ׳-Supabase (׳”׳—׳׳™׳£ ׳׳× Gmail). ׳×׳•׳׳ ׳‘׳¡׳™׳ ׳•׳ ׳׳₪׳™ ׳׳—׳׳§׳” ׳•׳‘׳—׳™׳₪׳•׳©.
+// טעינת מיילים מ-Supabase (החליף את Gmail). תומך בסינון לפי מחלקה ובחיפוש.
 export async function GET(request: NextRequest) {
   const staff = await requireMailAccess()
   if (!staff) return unauthorized()
 
   const folder = request.nextUrl.searchParams.get('folder') ?? 'INBOX'
-  // ׳׳ ׳˜׳¨׳׳™׳ ׳×׳•׳•׳™׳ ׳©׳׳•׳¨׳™׳ ׳©׳ ׳׳¡׳ ׳ PostgREST .or() ׳•׳©׳ ׳×׳‘׳ ׳™׳× ilike (% _ * , ( ) \ " ')
-  // ׳›׳“׳™ ׳׳׳ ׳•׳¢ "׳₪׳¨׳™׳¦׳”" ׳©׳ ׳”׳׳¡׳ ׳ ׳•׳”׳¨׳¦׳× ׳×׳ ׳׳™׳ ׳ ׳•׳¡׳₪׳™׳ (filter injection)
+  // מנטרלים תווים שמורים של מסנן PostgREST .or() ושל תבנית ilike (% _ * , ( ) \ " ')
+  // כדי למנוע "פריצה" של המסנן והרצת תנאים נוספים (filter injection)
   const q = (request.nextUrl.searchParams.get('q') ?? '').trim().replace(/[,()*%_\\"']/g, ' ').trim()
   const department = request.nextUrl.searchParams.get('department') ?? ''
 
-  // ׳“׳₪׳“׳•׳£: 50 ׳׳¢׳׳•׳“. ׳׳•׳©׳›׳™׳ PAGE_SIZE+1 ׳›׳“׳™ ׳׳“׳¢׳× ׳׳ ׳§׳™׳™׳ ׳¢׳׳•׳“ ׳”׳‘׳ ׳‘׳׳™ ׳¡׳₪׳™׳¨׳” ׳ ׳₪׳¨׳“׳×.
+  // דפדוף: 50 לעמוד. מושכים PAGE_SIZE+1 כדי לדעת אם קיים עמוד הבא בלי ספירה נפרדת.
   const PAGE_SIZE = 50
   const page = Math.max(0, parseInt(request.nextUrl.searchParams.get('page') ?? '0', 10) || 0)
   const rangeFrom = page * PAGE_SIZE
-  const rangeTo = rangeFrom + PAGE_SIZE // ׳›׳•׳׳ ג€” ׳©׳•׳¨׳” ׳¢׳•׳“׳₪׳× ׳׳—׳× ׳׳–׳™׳”׳•׳™ hasMore
+  const rangeTo = rangeFrom + PAGE_SIZE // כולל — שורה עודפת אחת לזיהוי hasMore
 
   const admin = getAdminClient()
   const nowIso = new Date().toISOString()
 
-  // ׳׳›׳™׳₪׳× ׳×׳™׳‘׳•׳× ׳׳•׳¨׳©׳•׳×: null = ׳׳׳ ׳”׳’׳‘׳׳”; [] = ׳׳׳ ׳’׳™׳©׳”; ׳׳—׳¨׳× ׳¨׳©׳™׳׳× ׳׳₪׳×׳—׳•׳× ׳׳•׳×׳¨׳™׳.
-  // ׳׳ ׳”׳׳©׳×׳׳© ׳‘׳™׳§׳© ׳×׳™׳‘׳” ׳׳¡׳•׳™׳׳× ׳•׳”׳™׳ ׳׳•׳×׳¨׳× ג€” ׳׳¡׳ ׳ ׳™׳ ׳׳׳™׳”; ׳׳—׳¨׳× ׳׳¡׳ ׳ ׳™׳ ׳׳›׳׳ ׳”׳׳•׳×׳¨׳•׳×.
+  // אכיפת תיבות מורשות: null = ללא הגבלה; [] = ללא גישה; אחרת רשימת מפתחות מותרים.
+  // אם המשתמש ביקש תיבה מסוימת והיא מותרת — מסננים אליה; אחרת מסננים לכלל המותרות.
   const allowed = allowedMailboxKeys(staff)
   const reqIsAllowed = !!department && (allowed === null || allowed.includes(department))
   const effectiveKeys: string[] | null = allowed === null
@@ -62,23 +62,23 @@ export async function GET(request: NextRequest) {
   const effectiveEmails = (effectiveKeys ?? [])
     .map(k => DEPARTMENTS[k as DepartmentKey]?.email)
     .filter((e): e is string => !!e)
-  const blocked = allowed !== null && allowed.length === 0  // mail_only ׳׳׳ ׳×׳™׳‘׳•׳×
+  const blocked = allowed !== null && allowed.length === 0  // mail_only ללא תיבות
   if (blocked) return NextResponse.json({ messages: [] })
 
-  // ׳×׳•׳•׳™׳•׳× ׳׳›׳ ׳׳™׳™׳ ג€” ׳ ׳©׳׳¨׳•׳× ׳‘-app_settings (messageId ג†’ labelId[])
+  // תוויות לכל מייל — נשמרות ב-app_settings (messageId → labelId[])
   const labelsFor = async (): Promise<Record<string, string[]>> => {
     const { data } = await admin.from('app_settings').select('value').eq('key', 'mail_label_assignments').maybeSingle()
     try { return data?.value ? JSON.parse(data.value as string) : {} } catch { return {} }
   }
 
-  // ג”€ג”€ ׳“׳•׳׳¨ ׳™׳•׳¦׳ / ׳׳×׳•׳–׳׳ ג”€ג”€
+  // ── דואר יוצא / מתוזמן ──
   if (folder === 'SENT' || folder === 'SCHEDULED') {
     const assignments = await labelsFor()
     let query = admin.from('sent_emails').select('*').range(rangeFrom, rangeTo)
     if (folder === 'SCHEDULED') {
       query = query.gt('scheduled_at', nowIso).order('scheduled_at', { ascending: true })
     } else {
-      // ׳‘׳“׳•׳׳¨ ׳™׳•׳¦׳ ׳׳ ׳׳¦׳™׳’׳™׳ ׳׳™׳™׳׳™׳ ׳©׳¢׳“׳™׳™׳ ׳׳׳×׳™׳ ׳™׳ ׳׳×׳–׳׳•׳
+      // בדואר יוצא לא מציגים מיילים שעדיין ממתינים לתזמון
       query = query.or(`scheduled_at.is.null,scheduled_at.lte.${nowIso}`).order('sent_at', { ascending: false })
     }
     if (effectiveKeys && effectiveKeys.length === 1) query = query.eq('department', effectiveKeys[0])
@@ -86,14 +86,14 @@ export async function GET(request: NextRequest) {
     if (q) { const s = safeLike(q); query = query.or(`subject.ilike.%${s}%,to_email.ilike.%${s}%`) }
     const { data, error } = await query
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    // ׳”׳©׳•׳¨׳” ׳”-51 (׳׳ ׳§׳™׳™׳׳×) ׳׳¦׳™׳™׳ ׳× ׳©׳™׳© ׳¢׳׳•׳“ ׳”׳‘׳ ג€” ׳—׳•׳×׳›׳™׳ ׳׳•׳×׳” ׳•׳׳—׳–׳™׳¨׳™׳ hasMore.
+    // השורה ה-51 (אם קיימת) מציינת שיש עמוד הבא — חותכים אותה ומחזירים hasMore.
     const rows = data ?? []
     const hasMore = rows.length > PAGE_SIZE
     const messages = rows.slice(0, PAGE_SIZE).map(m => ({
       id: m.id,
       threadId: m.id,
       subject: m.subject ?? '',
-      from: `${m.from_name ?? '׳”׳™׳›׳ ׳”׳—׳×׳ ׳¡׳•׳₪׳¨'} <${m.reply_to ?? 'noreply@chasamsofer.info'}>`,
+      from: `${m.from_name ?? 'היכל החתם סופר'} <${m.reply_to ?? 'noreply@chasamsofer.info'}>`,
       fromEmail: m.reply_to ?? 'noreply@chasamsofer.info',
       to: m.to_email,
       toEmail: m.to_email,
@@ -108,28 +108,28 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ messages, page, pageSize: PAGE_SIZE, hasMore })
   }
 
-  // ג”€ג”€ ׳“׳•׳׳¨ ׳ ׳›׳ ׳¡ / ׳¡׳₪׳׳ / ׳׳¨׳›׳™׳•׳ (LEGACY) ג”€ג”€
+  // ── דואר נכנס / ספאם / ארכיון (LEGACY) ──
   const assignments = await labelsFor()
   const isLegacy = folder === 'LEGACY'
   let query = admin.from('inbound_emails').select('*').order('received_at', { ascending: false }).range(rangeFrom, rangeTo)
   if (isLegacy) {
     query = query.eq('source', 'legacy')
-    // ׳×׳©׳•׳‘׳•׳× ׳¦'׳׳˜ (׳‘׳™׳¨׳•׳¨׳™ ׳”׳׳•׳•׳׳”) ׳׳™׳ ׳ ׳—׳׳§ ׳׳”׳׳¨׳›׳™׳•׳ ג€” ׳׳•׳¦׳׳•׳× ׳’׳ ׳›׳׳, ׳›׳׳• ׳‘׳“׳•׳׳¨ ׳”׳¨׳’׳™׳.
+    // תשובות צ'אט (בירורי הלוואה) אינן חלק מהארכיון — מוצאות גם כאן, כמו בדואר הרגיל.
     query = query.eq('is_chat', false)
     const sub = request.nextUrl.searchParams.get('sub')
     if (sub === 'assigned') query = query.not('beneficiary_id', 'is', null)
     else if (sub === 'unassigned') query = query.is('beneficiary_id', null)
-    // ׳׳¨׳›׳™׳•׳ ׳׳¡׳•׳ ׳ ׳׳₪׳™ ׳”׳׳—׳׳§׳•׳× ׳”׳׳•׳¨׳©׳•׳× (effectiveKeys), ׳‘׳“׳™׳•׳§ ׳›׳׳• ׳”׳“׳•׳׳¨ ׳”׳™׳•׳¦׳ ג€”
-    // ׳•׳׳ ׳׳₪׳™ ׳₪׳¨׳׳˜׳¨ department ׳’׳•׳׳׳™ ׳׳”׳׳§׳•׳— (׳©׳׳™׳₪׳©׳¨ ׳§׳¨׳™׳׳× ׳׳¨׳›׳™׳•׳ ׳©׳ ׳׳—׳׳§׳” ׳–׳¨׳”).
+    // ארכיון מסונן לפי המחלקות המורשות (effectiveKeys), בדיוק כמו הדואר היוצא —
+    // ולא לפי פרמטר department גולמי מהלקוח (שאיפשר קריאת ארכיון של מחלקה זרה).
     if (effectiveKeys && effectiveKeys.length === 1) query = query.eq('department', effectiveKeys[0])
     else if (effectiveKeys && effectiveKeys.length > 1) query = query.in('department', effectiveKeys)
   } else {
     query = folder === 'SPAM' ? query.eq('is_spam', true) : query.eq('is_spam', false)
-    // ׳×׳•׳™׳× "׳¦'׳׳˜" ג€” ׳×׳©׳•׳‘׳•׳× ׳׳‘׳™׳¨׳•׳¨׳™ ׳”׳׳•׳•׳׳”. ׳”׳ ׳׳•׳¦׳’׳•׳× ׳‘׳©׳¨׳©׳•׳¨ ׳©׳‘׳×׳™׳§ ׳”׳”׳׳•׳•׳׳”,
-    // ׳•׳׳›׳ ׳׳•׳¦׳׳•׳× ׳׳”׳“׳•׳׳¨ ׳”׳ ׳›׳ ׳¡ ׳•׳׳§׳‘׳׳•׳× ׳×׳™׳§׳™׳™׳” ׳׳©׳׳”׳.
+    // תוית "צ'אט" — תשובות לבירורי הלוואה. הן מוצגות בשרשור שבתיק ההלוואה,
+    // ולכן מוצאות מהדואר הנכנס ומקבלות תיקייה משלהן.
     query = query.eq('is_chat', folder === 'CHAT')
     query = query.eq('source', 'resend')
-    // ׳“׳•׳׳¨ ׳ ׳›׳ ׳¡ ׳¨׳’׳™׳ ג€” ׳”׳׳—׳׳§׳” ׳ ׳’׳–׳¨׳× ׳׳›׳×׳•׳‘׳× ׳”׳ ׳׳¢׳
+    // דואר נכנס רגיל — המחלקה נגזרת מכתובת הנמען
     if (effectiveEmails.length === 1) query = query.eq('to_email', effectiveEmails[0])
     else if (effectiveEmails.length > 1) query = query.in('to_email', effectiveEmails)
   }
@@ -137,7 +137,7 @@ export async function GET(request: NextRequest) {
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // ׳”׳©׳•׳¨׳” ׳”-51 (׳׳ ׳§׳™׳™׳׳×) ׳׳¡׳׳ ׳× ׳©׳™׳© ׳¢׳׳•׳“ ׳”׳‘׳ ג€” ׳—׳•׳×׳›׳™׳ ׳׳•׳×׳” ׳•׳׳—׳–׳™׳¨׳™׳ hasMore.
+  // השורה ה-51 (אם קיימת) מסמנת שיש עמוד הבא — חותכים אותה ומחזירים hasMore.
   const rows = data ?? []
   const hasMore = rows.length > PAGE_SIZE
   const messages = rows.slice(0, PAGE_SIZE).map(m => ({
@@ -160,7 +160,7 @@ export async function GET(request: NextRequest) {
     beneficiaryId: m.beneficiary_id ?? null,
   }))
 
-  // ׳׳™׳™׳׳™׳ ׳©׳¡׳•׳׳ ׳• ׳׳˜׳™׳₪׳•׳ ׳•׳–׳׳ ׳ ׳”׳’׳™׳¢ ג€” ׳§׳•׳₪׳¦׳™׳ ׳׳¨׳׳© ׳”׳¨׳©׳™׳׳” (׳”׳¢׳“׳›׳ ׳™-׳‘׳™׳•׳×׳¨-׳׳˜׳™׳₪׳•׳ ׳¨׳׳©׳•׳)
+  // מיילים שסומנו לטיפול וזמנם הגיע — קופצים לראש הרשימה (העדכני-ביותר-לטיפול ראשון)
   if (folder !== 'SPAM') {
     messages.sort((a, b) => {
       const aDue = a.followUpAt && a.followUpAt <= nowIso

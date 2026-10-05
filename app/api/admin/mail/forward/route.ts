@@ -12,8 +12,8 @@ function getAdminClient() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-// ׳׳¢׳‘׳™׳¨ ׳׳™׳™׳ ׳׳׳—׳׳§׳”: ׳׳›׳ ׳™׳¡ ׳©׳•׳¨׳” ׳™׳©׳™׳¨׳•׳× ׳-inbound_emails ׳›׳“׳™ ׳©׳™׳•׳₪׳™׳¢ ׳‘׳×׳™׳‘׳× ׳”׳“׳•׳׳¨ ׳©׳ ׳”׳׳—׳׳§׳”,
-// ׳׳׳ ׳×׳׳•׳× ׳‘-Resend inbound webhook (׳©׳׳ ׳׳ ׳×׳‘ ׳׳™׳™׳׳™׳ ׳₪׳ ׳™׳׳™׳™׳).
+// מעביר מייל למחלקה: מכניס שורה ישירות ל-inbound_emails כדי שיופיע בתיבת הדואר של המחלקה,
+// ללא תלות ב-Resend inbound webhook (שלא מנתב מיילים פנימיים).
 export async function POST(request: NextRequest) {
   const staff = await requireMailAccess()
   if (!staff) return unauthorized()
@@ -21,24 +21,24 @@ export async function POST(request: NextRequest) {
   const { messageId, targetDepartment, note } = await request.json()
 
   if (!messageId || !targetDepartment) {
-    return NextResponse.json({ error: '׳—׳¡׳¨׳™׳ ׳₪׳¨׳׳˜׳¨׳™׳' }, { status: 400 })
+    return NextResponse.json({ error: 'חסרים פרמטרים' }, { status: 400 })
   }
 
   const dep = DEPARTMENTS[targetDepartment as DepartmentKey]
-  if (!dep) return NextResponse.json({ error: '׳׳—׳׳§׳” ׳׳ ׳§׳™׳™׳׳×' }, { status: 400 })
+  if (!dep) return NextResponse.json({ error: 'מחלקה לא קיימת' }, { status: 400 })
 
   const admin = getAdminClient()
 
-  // ׳׳™׳׳•׳× ׳’׳™׳©׳” ׳›׳₪׳•׳: (1) ׳”׳׳©׳×׳׳© ׳׳•׳¨׳©׳” ׳׳§׳¨׳•׳ ׳׳× ׳”׳׳™׳™׳ ׳”׳׳§׳•׳¨׳™ ג€” ׳׳—׳¨׳× ׳׳₪׳©׳¨ ׳׳”׳¢׳‘׳™׳¨
-  // ׳׳¢׳¦׳׳• ׳׳™׳™׳ ׳©׳ ׳׳—׳׳§׳” ׳–׳¨׳” ׳•׳׳§׳¨׳•׳ ׳׳× ׳×׳•׳›׳ ׳•; (2) ׳׳—׳׳§׳× ׳”׳™׳¢׳“ ׳”׳™׳ ׳׳—׳× ׳”׳×׳™׳‘׳•׳×
-  // ׳”׳׳•׳¨׳©׳•׳× ׳׳• ג€” ׳׳—׳¨׳× ׳׳₪׳©׳¨ "׳׳©׳×׳•׳" ׳׳™׳™׳ ׳‘׳×׳™׳‘׳” ׳–׳¨׳”. ׳׳ ׳”׳ ׳¢׳•׳‘׳¨ ׳׳× ׳©׳ ׳™׳”׳ (null).
+  // אימות גישה כפול: (1) המשתמש מורשה לקרוא את המייל המקורי — אחרת אפשר להעביר
+  // לעצמו מייל של מחלקה זרה ולקרוא את תוכנו; (2) מחלקת היעד היא אחת התיבות
+  // המורשות לו — אחרת אפשר "לשתול" מייל בתיבה זרה. מנהל עובר את שניהם (null).
   if (!(await canAccessInboundMail(admin, staff, String(messageId)))) return forbidden()
   const allowedEmails = allowedMailboxEmails(staff)
   if (allowedEmails !== null && !allowedEmails.includes(dep.email)) {
-    return forbidden('׳׳™׳ ׳”׳¨׳©׳׳” ׳׳”׳¢׳‘׳™׳¨ ׳׳×׳™׳‘׳” ׳–׳•')
+    return forbidden('אין הרשאה להעביר לתיבה זו')
   }
 
-  // ׳©׳׳™׳₪׳× ׳”׳׳§׳•׳¨
+  // שליפת המקור
   const { data: original, error: fetchErr } = await admin
     .from('inbound_emails')
     .select('*')
@@ -46,10 +46,10 @@ export async function POST(request: NextRequest) {
     .maybeSingle()
 
   if (fetchErr || !original) {
-    return NextResponse.json({ error: '׳”׳׳™׳™׳ ׳”׳׳§׳•׳¨׳™ ׳׳ ׳ ׳׳¦׳' }, { status: 404 })
+    return NextResponse.json({ error: 'המייל המקורי לא נמצא' }, { status: 404 })
   }
 
-  // ׳”-note ׳׳’׳™׳¢ ׳׳”׳׳©׳×׳׳© ׳•׳׳•׳–׳¨׳§ ׳-HTML ג€” escape ׳›׳“׳™ ׳׳׳ ׳•׳¢ ׳”׳–׳¨׳§׳× HTML/׳¡׳§׳¨׳™׳₪׳˜ ׳׳×׳™׳‘׳× ׳”׳™׳¢׳“.
+  // ה-note מגיע מהמשתמש ומוזרק ל-HTML — escape כדי למנוע הזרקת HTML/סקריפט לתיבת היעד.
   const escapeHtml = (s: string) => s.replace(/[&<>"']/g, c =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
   const noteHtml = note
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
   const forwardedBody = `
     ${noteHtml}
     <div style="border-top:1px solid #e2e8f0;padding-top:12px;margin-top:8px;color:#64748b;font-size:12px;">
-      <strong>׳”׳•׳¢׳‘׳¨ ׳:</strong> ${original.from_email} &nbsp;|&nbsp;
+      <strong>הועבר מ:</strong> ${original.from_email} &nbsp;|&nbsp;
       <strong>׳:</strong> ${original.to_email} &nbsp;|&nbsp;
       <strong>׳¢"׳™:</strong> ${staff.email}
     </div>
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
   `
 
   const { error: insertErr } = await admin.from('inbound_emails').insert({
-    // ׳©׳•׳׳¨׳™׳ ׳׳× ׳”׳›׳×׳•׳‘׳× ׳”׳׳§׳•׳¨׳™׳× ׳©׳ ׳”׳©׳•׳׳— ג€” ׳›׳ ׳©"׳”׳©׳‘" ׳™׳—׳–׳•׳¨ ׳׳¦׳׳¦׳, ׳׳ ׳׳׳—׳׳§׳”
+    // שומרים את הכתובת המקורית של השולח — כך ש"השב" יחזור לצאצא, לא למחלקה
     from_email: original.from_email,
     from_name: original.from_name ?? null,
     to_email: dep.email,

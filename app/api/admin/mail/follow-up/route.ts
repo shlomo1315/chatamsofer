@@ -5,14 +5,14 @@ import { canAccessInboundMail } from '@/lib/mailAccess'
 
 export const dynamic = 'force-dynamic'
 
-// ׳¡׳™׳׳•׳ ׳׳™׳™׳ ׳׳˜׳™׳₪׳•׳-׳‘׳”׳׳©׳ ׳‘׳׳•׳¢׳“ ׳׳¡׳•׳™׳ (׳׳• ׳‘׳™׳˜׳•׳ ׳¢׳ followUpAt=null).
-// ׳›׳©׳”׳׳•׳¢׳“ ׳׳’׳™׳¢, ׳”׳׳™׳™׳ ׳§׳•׳₪׳¥ ׳׳¨׳׳© ׳¨׳©׳™׳׳× ׳”׳“׳•׳׳¨ ׳”׳ ׳›׳ ׳¡.
+// סימון מייל לטיפול-בהמשך במועד מסוים (או ביטול עם followUpAt=null).
+// כשהמועד מגיע, המייל קופץ לראש רשימת הדואר הנכנס.
 export async function POST(request: NextRequest) {
   const staff = await requireMailAccess()
   if (!staff) return unauthorized()
 
   const { messageId, followUpAt } = await request.json()
-  if (!messageId) return NextResponse.json({ error: 'messageId ׳—׳¡׳¨' }, { status: 400 })
+  if (!messageId) return NextResponse.json({ error: 'messageId חסר' }, { status: 400 })
 
   // 🔴 בעלות-מחלקה — הייתה חסרה כאן בעוד היא קיימת בכל השכנות
   // (spam/trash/assign-beneficiary). נראה כהשמטה ולא כהחלטה: בלעדיה

@@ -9,16 +9,16 @@ import {
 export const dynamic = 'force-dynamic'
 
 // ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€
-// ׳˜׳™׳•׳˜׳•׳× ג€” ׳¡׳ ׳›׳¨׳•׳ ׳“׳•-׳›׳™׳•׳•׳ ׳™ ׳׳•׳ Gmail.
+// טיוטות — סנכרון דו-כיווני מול Gmail.
 //
-// נ”´ ׳˜׳™׳•׳˜׳” ׳ ׳¢׳¨׳›׳× ׳‘׳©׳ ׳™ ׳׳§׳•׳׳•׳× ׳‘׳•-׳–׳׳ ׳™׳×: ׳‘׳×׳•׳›׳ ׳” ׳•׳‘׳˜׳׳₪׳•׳. ׳׳™׳ ׳“׳¨׳ ׳׳׳–׳’ ׳©׳ ׳™
-// ׳˜׳§׳¡׳˜׳™׳ ׳©׳ ׳›׳×׳‘׳• ׳‘׳׳§׳‘׳™׳, ׳•׳׳›׳ ׳”׳”׳›׳¨׳¢׳” ׳›׳׳ ׳”׳™׳ **׳”׳׳׳•׳—׳¨ ׳’׳•׳‘׳¨ ג€” ׳׳‘׳ ׳׳ ׳‘׳©׳§׳˜**:
-// ׳›׳©׳”׳’׳¨׳¡׳” ׳”׳׳¨׳•׳—׳§׳× ׳”׳×׳§׳“׳׳”, ׳”׳׳©׳×׳׳© ׳׳§׳‘׳ ׳׳–׳”׳¨׳” ׳•׳‘׳•׳—׳¨, ׳•׳׳ ׳׳’׳׳” ׳‘׳“׳™׳¢׳‘׳“ ׳©׳׳”
-// ׳©׳›׳×׳‘ ׳ ׳׳—׳§.
+// 🔴 טיוטה נערכת בשני מקומות בו-זמנית: בתוכנה ובטלפון. אין דרך למזג שני
+// טקסטים שנכתבו במקביל, ולכן ההכרעה כאן היא **המאוחר גובר — אבל לא בשקט**:
+// כשהגרסה המרוחקת התקדמה, המשתמש מקבל אזהרה ובוחר, ולא מגלה בדיעבד שמה
+// שכתב נמחק.
 //
-// GET    ג€” ׳¨׳©׳™׳׳× ׳”׳˜׳™׳•׳˜׳•׳× (׳׳¡׳•׳ ׳›׳¨׳ ׳× ׳-Gmail).
-// POST   ג€” ׳™׳¦׳™׳¨׳”/׳©׳׳™׳¨׳”. ?force=1 ׳׳“׳¨׳™׳¡׳” ׳׳•׳“׳¢׳× ׳׳—׳¨׳™ ׳׳–׳”׳¨׳× ׳”׳×׳ ׳’׳©׳•׳×.
-// DELETE ג€” ׳׳—׳™׳§׳” ׳‘׳©׳ ׳™ ׳”׳¦׳“׳“׳™׳.
+// GET    — רשימת הטיוטות (מסונכרנת מ-Gmail).
+// POST   — יצירה/שמירה. ?force=1 לדריסה מודעת אחרי אזהרת התנגשות.
+// DELETE — מחיקה בשני הצדדים.
 // ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€
 
 const COLS = 'draft_id, message_id, thread_id, to_email, subject, body, updated_at, base_revision'
@@ -33,7 +33,7 @@ export async function GET() {
   const staff = await requireMailAccess()
   if (!staff) return unauthorized()
   const db = getServiceClient()
-  if (!db) return NextResponse.json({ error: '׳©׳’׳™׳׳× ׳©׳¨׳×' }, { status: 500 })
+  if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
   const acc = await activeAccount(db)
   if (!acc) return NextResponse.json({ drafts: [] })
@@ -47,14 +47,14 @@ export async function GET() {
     const remote = (res.data?.drafts ?? []) as RemoteDraft[]
 
     const { removedLocally } = reconcileDrafts(local, remote)
-    // ג ן¸ ׳˜׳™׳•׳˜׳” ׳©׳ ׳¢׳׳׳” ׳-Gmail ׳ ׳׳—׳§׳× ׳׳§׳•׳׳™׳× ׳•׳׳™׳ ׳” ׳ ׳©׳׳¨׳× "׳׳™׳×׳¨ ׳‘׳™׳˜׳—׳•׳":
-    // ׳˜׳™׳•׳˜׳•׳× ׳©׳—׳•׳–׳¨׳•׳× ׳‘׳›׳ ׳¡׳ ׳›׳¨׳•׳ ׳’׳•׳¨׳׳•׳× ׳׳׳©׳×׳׳© ׳׳׳‘׳“ ׳׳׳•׳ ׳‘׳׳¢׳¨׳›׳×.
+    // ⚠️ טיוטה שנעלמה מ-Gmail נמחקת מקומית ואינה נשמרת "ליתר ביטחון":
+    // טיוטות שחוזרות בכל סנכרון גורמות למשתמש לאבד אמון במערכת.
     if (removedLocally.length) {
       await db.from('gmail_drafts').delete().in('draft_id', removedLocally)
     }
 
-    // ג ן¸ ׳׳–׳”׳” ׳”׳”׳•׳“׳¢׳” ׳׳×׳¢׳“׳›׳ ׳-Gmail ׳’׳ ׳‘׳׳™ ׳׳₪׳×׳•׳— ׳׳× ׳”׳˜׳™׳•׳˜׳”: ׳”׳•׳ ׳—׳•׳×׳׳×
-    // ׳”׳’׳¨׳¡׳”, ׳•׳‘׳׳¢׳“׳™׳• ׳׳ ׳ ׳–׳”׳” ׳©׳”׳™׳ ׳ ׳¢׳¨׳›׳” ׳‘׳˜׳׳₪׳•׳.
+    // ⚠️ מזהה ההודעה מתעדכן מ-Gmail גם בלי לפתוח את הטיוטה: הוא חותמת
+    // הגרסה, ובלעדיו לא נזהה שהיא נערכה בטלפון.
     for (const r of remote) {
       const msgId = r.message?.id ? String(r.message.id) : null
       if (msgId) await db.from('gmail_drafts').update({ message_id: msgId }).eq('draft_id', r.id)
@@ -64,9 +64,9 @@ export async function GET() {
       .eq('account_id', acc.id).order('updated_at', { ascending: false })
     return NextResponse.json({ drafts: fresh ?? [] }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
-    // ג ן¸ ׳›׳©׳ ׳׳•׳ Gmail ׳׳—׳–׳™׳¨ ׳׳× ׳”׳׳§׳•׳׳™ ׳•׳׳ ׳¨׳©׳™׳׳” ׳¨׳™׳§׳”: ׳˜׳™׳•׳˜׳” ׳©׳ ׳›׳×׳‘׳” ׳•׳׳
-    // ׳ ׳¨׳׳™׳× ׳”׳™׳ ׳‘׳“׳™׳•׳§ ׳”׳׳¦׳‘ ׳©׳’׳•׳¨׳ ׳׳׳©׳×׳׳© ׳׳›׳×׳•׳‘ ׳׳•׳×׳” ׳©׳•׳‘.
-    console.error('[drafts] ׳¡׳ ׳›׳¨׳•׳ ׳ ׳›׳©׳, ׳׳•׳—׳–׳¨ ׳”׳׳§׳•׳׳™:', e instanceof Error ? e.message : e)
+    // ⚠️ כשל מול Gmail מחזיר את המקומי ולא רשימה ריקה: טיוטה שנכתבה ולא
+    // נראית היא בדיוק המצב שגורם למשתמש לכתוב אותה שוב.
+    console.error('[drafts] סנכרון נכשל, מוחזר המקומי:', e instanceof Error ? e.message : e)
     return NextResponse.json({ drafts: local, stale: true })
   }
 }
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
   const staff = await requireMailAccess()
   if (!staff) return unauthorized()
   const db = getServiceClient()
-  if (!db) return NextResponse.json({ error: '׳©׳’׳™׳׳× ׳©׳¨׳×' }, { status: 500 })
+  if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
   const body = await request.json().catch(() => ({})) as {
     draft_id?: string; to?: string; subject?: string; body?: string
@@ -83,28 +83,28 @@ export async function POST(request: NextRequest) {
   }
 
   if (isDraftEmpty({ to_email: body.to, subject: body.subject, body: body.body })) {
-    return NextResponse.json({ error: '׳”׳˜׳™׳•׳˜׳” ׳¨׳™׳§׳”' }, { status: 400 })
+    return NextResponse.json({ error: 'הטיוטה ריקה' }, { status: 400 })
   }
 
   const acc = await activeAccount(db)
-  if (!acc) return NextResponse.json({ error: '׳׳™׳ ׳×׳™׳‘׳× Gmail ׳₪׳¢׳™׳׳”' }, { status: 404 })
+  if (!acc) return NextResponse.json({ error: 'אין תיבת Gmail פעילה' }, { status: 404 })
 
   const gmail = getGmailClientForToken(acc.refresh_token)
   const draftId = String(body.draft_id ?? '')
 
-  // ג”€ג”€ ׳‘׳“׳™׳§׳× ׳”׳×׳ ׳’׳©׳•׳× ׳׳₪׳ ׳™ ׳›׳×׳™׳‘׳” ג”€ג”€
+  // ── בדיקת התנגשות לפני כתיבה ──
   if (draftId && !body.force) {
     let remoteMsgId: string | null = null
     try {
       const cur = await gmail.users.drafts.get({ userId: 'me', id: draftId, format: 'minimal' })
       remoteMsgId = cur.data?.message?.id ? String(cur.data.message.id) : null
     } catch {
-      remoteMsgId = null   // ׳ ׳׳—׳§׳” ׳‘׳¦׳“ ׳”׳©׳ ׳™
+      remoteMsgId = null   // נמחקה בצד השני
     }
     const conflict = checkDraftConflict(body.base_revision ?? null, remoteMsgId)
     if (conflict.kind !== 'none') {
-      // נ”´ 409 ׳•׳׳ ׳›׳×׳™׳‘׳”: ׳”׳׳©׳×׳׳© ׳—׳™׳™׳‘ ׳׳‘׳—׳•׳¨. ׳“׳¨׳™׳¡׳” ׳©׳§׳˜׳” ׳›׳׳ ׳׳•׳—׳§׳× ׳˜׳§׳¡׳˜
-      // ׳©׳ ׳›׳×׳‘ ׳‘׳׳§׳•׳ ׳׳—׳¨, ׳•׳׳™׳ ׳׳׳ ׳” ׳“׳¨׳ ׳—׳–׳¨׳”.
+      // 🔴 409 ולא כתיבה: המשתמש חייב לבחור. דריסה שקטה כאן מוחקת טקסט
+      // שנכתב במקום אחר, ואין ממנה דרך חזרה.
       return NextResponse.json({
         conflict: conflict.kind,
         message: CONFLICT_MESSAGE[conflict.kind],
@@ -139,8 +139,8 @@ export async function POST(request: NextRequest) {
       to_email: body.to ?? null,
       subject: body.subject ?? null,
       body: body.body ?? null,
-      // ג ן¸ ׳”׳‘׳¡׳™׳¡ ׳׳×׳¢׳“׳›׳ ׳׳׳” ׳©׳ ׳›׳×׳‘ *׳¢׳›׳©׳™׳•*, ׳׳—׳¨׳× ׳”׳©׳׳™׳¨׳” ׳”׳‘׳׳” ׳”׳™׳™׳×׳” ׳׳“׳•׳•׳—׳×
-      // ׳”׳×׳ ׳’׳©׳•׳× ׳׳•׳ ׳”׳¢׳¨׳™׳›׳” ׳©׳ ׳”׳׳©׳×׳׳© ׳¢׳¦׳׳•.
+      // ⚠️ הבסיס מתעדכן למה שנכתב *עכשיו*, אחרת השמירה הבאה הייתה מדווחת
+      // התנגשות מול העריכה של המשתמש עצמו.
       base_revision: newMsgId,
       updated_at: now,
       synced_at: now,
@@ -149,8 +149,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, draft_id: newDraftId, revision: newMsgId })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
-    console.error('[drafts] ׳©׳׳™׳¨׳” ׳ ׳›׳©׳׳”:', msg)
-    return NextResponse.json({ error: '׳©׳׳™׳¨׳× ׳”׳˜׳™׳•׳˜׳” ׳ ׳›׳©׳׳”' }, { status: 500 })
+    console.error('[drafts] שמירה נכשלה:', msg)
+    return NextResponse.json({ error: 'שמירת הטיוטה נכשלה' }, { status: 500 })
   }
 }
 
@@ -158,19 +158,19 @@ export async function DELETE(request: NextRequest) {
   const staff = await requireMailAccess()
   if (!staff) return unauthorized()
   const db = getServiceClient()
-  if (!db) return NextResponse.json({ error: '׳©׳’׳™׳׳× ׳©׳¨׳×' }, { status: 500 })
+  if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
   const draftId = request.nextUrl.searchParams.get('draft_id') ?? ''
-  if (!draftId) return NextResponse.json({ error: '׳—׳¡׳¨ ׳׳–׳”׳”' }, { status: 400 })
+  if (!draftId) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
 
   const acc = await activeAccount(db)
   if (acc) {
     try {
       await getGmailClientForToken(acc.refresh_token).users.drafts.delete({ userId: 'me', id: draftId })
     } catch (e) {
-      // ג ן¸ ׳˜׳™׳•׳˜׳” ׳©׳›׳‘׳¨ ׳׳™׳ ׳” ׳‘-Gmail ׳׳™׳ ׳” ׳©׳’׳™׳׳” ג€” ׳׳׳©׳™׳›׳™׳ ׳׳׳—׳•׳§ ׳׳§׳•׳׳™׳×,
-      // ׳׳—׳¨׳× ׳”׳™׳ ׳ ׳©׳׳¨׳× ׳×׳§׳•׳¢׳” ׳‘׳׳¡׳ ׳׳ ׳¦׳—.
-      console.warn('[drafts] ׳׳—׳™׳§׳” ׳-Gmail ׳ ׳›׳©׳׳”:', e instanceof Error ? e.message : e)
+      // ⚠️ טיוטה שכבר אינה ב-Gmail אינה שגיאה — ממשיכים למחוק מקומית,
+      // אחרת היא נשארת תקועה במסך לנצח.
+      console.warn('[drafts] מחיקה מ-Gmail נכשלה:', e instanceof Error ? e.message : e)
     }
   }
   await db.from('gmail_drafts').delete().eq('draft_id', draftId)

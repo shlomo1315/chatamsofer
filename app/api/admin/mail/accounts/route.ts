@@ -28,7 +28,7 @@ export async function GET() {
   seen.add(mainEmail)
 
   const accounts: { name: string; email: string; isMain: boolean; profileId?: string }[] = [
-    { name: '׳׳©׳¨׳“ ׳¨׳׳©׳™', email: mainEmail, isMain: true },
+    { name: 'משרד ראשי', email: mainEmail, isMain: true },
   ]
 
   for (const p of profiles ?? []) {

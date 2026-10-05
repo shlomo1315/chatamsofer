@@ -5,9 +5,9 @@ import { canAccessGmailMessage } from '@/lib/mailAccess'
 
 export const dynamic = 'force-dynamic'
 
-// ׳‘׳ ׳™׳™׳× ׳›׳•׳×׳¨׳× Content-Disposition ׳×׳§׳™׳ ׳” ׳׳©׳ ׳§׳•׳‘׳¥ (׳›׳•׳׳ ׳¢׳‘׳¨׳™׳× ׳•׳¡׳™׳•׳׳×):
-// filename= ׳¢׳ ׳’׳¨׳¡׳× ASCII ׳‘׳˜׳•׳—׳” (׳‘׳׳™ ׳’׳¨׳©׳™׳™׳/׳×׳•׳•׳™ ׳‘׳§׳¨׳”), ׳•׳‘׳ ׳•׳¡׳£ filename*= ׳׳₪׳™ RFC 5987
-// ׳¢׳ ׳§׳™׳“׳•׳“ UTF-8 ׳׳׳ ג€” ׳›׳ ׳”׳“׳₪׳“׳₪׳ ׳©׳•׳׳¨ ׳׳× ׳”׳©׳ ׳”׳׳§׳•׳¨׳™ ׳›׳•׳׳ ׳”׳¡׳™׳•׳׳×.
+// בניית כותרת Content-Disposition תקינה לשם קובץ (כולל עברית וסיומת):
+// filename= עם גרסת ASCII בטוחה (בלי גרשיים/תווי בקרה), ובנוסף filename*= לפי RFC 5987
+// עם קידוד UTF-8 מלא — כך הדפדפן שומר את השם המקורי כולל הסיומת.
 function contentDisposition(name: string): string {
   const clean = (name || 'attachment').replace(/[\r\n"]/g, '').trim() || 'attachment'
   const ascii = clean.replace(/[^\x20-\x7e]/g, '_')

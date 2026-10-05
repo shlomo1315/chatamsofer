@@ -11,24 +11,24 @@ function getAdminClient() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-// ׳׳—׳–׳™׳¨ { byDepartment: { [deptKey]: count }, total: number }
+// מחזיר { byDepartment: { [deptKey]: count }, total: number }
 export async function GET() {
   const staff = await requireMailAccess()
   if (!staff) return unauthorized()
 
   const admin = getAdminClient()
 
-  // ׳׳©׳×׳׳© ׳׳•׳’׳‘׳ ׳¨׳•׳׳” ׳¡׳₪׳™׳¨׳•׳× ׳¨׳§ ׳׳×׳™׳‘׳•׳× ׳©׳”׳•׳§׳¦׳• ׳׳•
+  // משתמש מוגבל רואה ספירות רק לתיבות שהוקצו לו
   const allowed = allowedMailboxKeys(staff)
-  // ג ן¸ ׳×׳™׳‘׳•׳× noReply ׳׳“׳•׳׳’׳•׳× ׳׳’׳׳¨׳™: ׳”׳ ׳׳•׳˜׳•׳׳˜׳™׳•׳× ׳•׳׳™׳© ׳׳™׳ ׳• ׳¢׳•׳ ׳” ׳‘׳”׳, ׳•׳׳׳₪׳™
-  // ׳”׳”׳•׳“׳¢׳•׳× ׳©׳ ׳¦׳‘׳¨׳• ׳‘׳”׳ ׳ ׳™׳₪׳—׳• ׳׳× "׳›׳ ׳”׳׳—׳׳§׳•׳×" ׳•׳”׳¡׳×׳™׳¨׳• ׳׳× ׳׳” ׳©׳‘׳׳׳× ׳׳׳×׳™׳.
-  // ׳’׳ ׳—׳•׳¡׳ ׳©׳׳™׳׳×׳× count ׳׳—׳× ׳‘׳›׳ ׳¡׳§׳¨ (׳¨׳¥ ׳›׳ 3 ׳“׳§׳•׳× ׳׳›׳ ׳׳ ׳”׳ ׳׳—׳•׳‘׳¨).
+  // ⚠️ תיבות noReply מדולגות לגמרי: הן אוטומטיות ואיש אינו עונה בהן, ואלפי
+  // ההודעות שנצברו בהן ניפחו את "כל המחלקות" והסתירו את מה שבאמת ממתין.
+  // גם חוסך שאילתת count אחת בכל סקר (רץ כל 3 דקות לכל מנהל מחובר).
   const deps = Object.values(DEPARTMENTS)
     .filter(dep => !dep.noReply)
     .filter(dep => allowed === null || allowed.includes(dep.key))
 
-  // ׳¡׳₪׳™׳¨׳” ׳‘׳¦׳“ ׳”-DB ׳׳›׳ ׳×׳™׳‘׳” ׳‘׳׳§׳‘׳™׳ (head:true ג€” ׳׳—׳–׳™׳¨ count ׳‘׳׳‘׳“, ׳‘׳׳™ ׳׳”׳¢׳‘׳™׳¨ ׳©׳•׳¨׳•׳×).
-  // ׳׳—׳׳™׳£ ׳׳©׳™׳›׳” ׳©׳ ׳›׳ ׳”׳©׳•׳¨׳•׳× ׳”׳׳-׳ ׳§׳¨׳׳•׳× ׳•׳¡׳₪׳™׳¨׳×׳ ׳‘-JS ג€” ׳—׳•׳¡׳ ׳”׳¢׳‘׳¨׳× ׳׳׳•׳×/׳׳׳₪׳™ ׳©׳•׳¨׳•׳× ׳‘׳›׳ ׳§׳¨׳™׳׳”.
+  // ספירה בצד ה-DB לכל תיבה במקביל (head:true — מחזיר count בלבד, בלי להעביר שורות).
+  // מחליף משיכה של כל השורות הלא-נקראות וספירתן ב-JS — חוסך העברת מאות/אלפי שורות בכל קריאה.
   const results = await Promise.all(deps.map(async dep => {
     const { count, error } = await admin
       .from('inbound_emails')

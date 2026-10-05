@@ -8,19 +8,19 @@ export const dynamic = 'force-dynamic'
 const UNREAD_LABEL = 'UNREAD'
 
 // ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€
-// ׳×׳™׳‘׳× ׳”׳“׳•׳׳¨ ג€” ׳ ׳‘׳ ׳™׳× ׳¢׳ ׳”׳׳™׳ ׳“׳§׳¡, ׳׳ ׳¢׳ Gmail API.
+// תיבת הדואר — נבנית על האינדקס, לא על Gmail API.
 //
-// נ”´ ׳–׳” ׳”׳”׳‘׳“׳ ׳׳”׳׳¡׳ ׳”׳™׳©׳: ׳¨׳©׳™׳׳× ׳”׳”׳•׳“׳¢׳•׳× ׳ ׳©׳׳₪׳× ׳׳”׳׳¡׳“ (׳׳™׳™׳“׳™, ׳ ׳™׳×׳ ׳׳—׳™׳₪׳•׳©
-// ׳•׳׳¡׳™׳ ׳•׳ ׳׳₪׳™ ׳׳—׳׳§׳”), ׳•׳¨׳§ *׳’׳•׳£ ׳”׳”׳•׳“׳¢׳”* ׳ ׳׳©׳ ׳-Gmail ג€” ׳•׳¨׳§ ׳›׳©׳₪׳•׳×׳—׳™׳ ׳׳•׳×׳”.
+// 🔴 זה ההבדל מהמסך הישן: רשימת ההודעות נשלפת מהמסד (מיידי, ניתן לחיפוש
+// ולסינון לפי מחלקה), ורק *גוף ההודעה* נמשך מ-Gmail — ורק כשפותחים אותה.
 //
-// ג ן¸ ׳”׳׳¡׳ ׳”׳™׳©׳ ׳§׳¨׳ ׳׳× ׳›׳ ׳”׳×׳™׳‘׳” ׳-Gmail ׳‘׳›׳ ׳˜׳¢׳™׳ ׳”, ׳•׳׳›׳ ׳”׳™׳” ׳׳™׳˜׳™, ׳׳ ׳™׳“׳¢
-// ׳׳—׳₪׳© ׳׳₪׳™ ׳׳•׳˜׳‘, ׳•׳׳ ׳™׳›׳•׳ ׳”׳™׳” ׳׳”׳¦׳™׳’ ׳׳—׳׳§׳”. ׳”׳׳™׳ ׳“׳§׳¡ ׳₪׳•׳×׳¨ ׳׳× ׳©׳׳•׳©׳×׳.
+// ⚠️ המסך הישן קרא את כל התיבה מ-Gmail בכל טעינה, ולכן היה איטי, לא ידע
+// לחפש לפי מוטב, ולא יכול היה להציג מחלקה. האינדקס פותר את שלושתם.
 //
-// ג ן¸ ׳”׳’׳•׳£ ׳׳¢׳•׳׳ ׳׳™׳ ׳• ׳ ׳©׳׳¨ ׳‘׳׳¡׳“. ׳”׳•׳ ׳ ׳׳©׳ ׳‘׳›׳ ׳₪׳×׳™׳—׳” ג€” ׳›׳ ׳׳™׳ ׳¢׳•׳×׳§ ׳©׳ ׳™ ׳©׳™׳›׳•׳
-// ׳׳¡׳×׳•׳¨ ׳׳× Gmail, ׳•׳–׳• ׳›׳ ׳”׳¡׳™׳‘׳” ׳©׳”׳׳¢׳‘׳¨ ׳”׳–׳” ׳ ׳¢׳©׳”.
+// ⚠️ הגוף לעולם אינו נשמר במסד. הוא נמשך בכל פתיחה — כך אין עותק שני שיכול
+// לסתור את Gmail, וזו כל הסיבה שהמעבר הזה נעשה.
 //
-// GET ?folder=inbox|sent&department=&q=&page=  ג€” ׳¨׳©׳™׳׳”
-// GET ?id=<gmail_message_id>                    ג€” ׳”׳•׳“׳¢׳” ׳׳׳׳” (׳’׳•׳£ ׳-Gmail)
+// GET ?folder=inbox|sent&department=&q=&page=  — רשימה
+// GET ?id=<gmail_message_id>                    — הודעה מלאה (גוף מ-Gmail)
 // ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€
 
 const PAGE_SIZE = 50
@@ -33,12 +33,12 @@ export async function GET(request: NextRequest) {
   const staff = await requireMailAccess()
   if (!staff) return unauthorized()
   const db = getServiceClient()
-  if (!db) return NextResponse.json({ error: '׳©׳’׳™׳׳× ׳©׳¨׳×' }, { status: 500 })
+  if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
   const sp = request.nextUrl.searchParams
   const messageId = sp.get('id')
 
-  // ג”€ג”€ ׳”׳•׳“׳¢׳” ׳‘׳•׳“׳“׳×: ׳׳˜׳-׳“׳׳˜׳” ׳׳”׳׳™׳ ׳“׳§׳¡ + ׳’׳•׳£ ׳-Gmail ג”€ג”€
+  // ── הודעה בודדת: מטא-דאטה מהאינדקס + גוף מ-Gmail ──
   if (messageId) {
     // 🔴 בעלות-מחלקה לפני שליפת ההודעה.
     //
@@ -70,15 +70,15 @@ export async function GET(request: NextRequest) {
         attachments = parseMessage(res.data).attachments ?? []
         unreadInGmail = (res.data?.labelIds ?? []).includes(UNREAD_LABEL)
       } catch (e) {
-        // ג ן¸ ׳›׳©׳ ׳‘׳׳©׳™׳›׳× ׳”׳’׳•׳£ ׳׳™׳ ׳• ׳׳¡׳×׳™׳¨ ׳׳× ׳”׳”׳•׳“׳¢׳”: ׳”׳׳˜׳-׳“׳׳˜׳” ׳׳•׳¦׳’׳× ׳¢׳
-        // ׳”׳•׳“׳¢׳× ׳©׳’׳™׳׳”, ׳›׳“׳™ ׳©׳™׳”׳™׳” ׳‘׳¨׳•׳¨ ׳©׳”׳”׳•׳“׳¢׳” ׳§׳™׳™׳׳× ׳•׳”׳‘׳¢׳™׳” ׳”׳™׳ ׳‘׳˜׳¢׳™׳ ׳”.
-        console.error('[inbox] ׳׳©׳™׳›׳× ׳’׳•׳£ ׳ ׳›׳©׳׳”:', e instanceof Error ? e.message : e)
-        return NextResponse.json({ message: row, body: '', attachments: [], bodyError: '׳˜׳¢׳™׳ ׳× ׳×׳•׳›׳ ׳”׳”׳•׳“׳¢׳” ׳ ׳›׳©׳׳”' })
+        // ⚠️ כשל במשיכת הגוף אינו מסתיר את ההודעה: המטא-דאטה מוצגת עם
+        // הודעת שגיאה, כדי שיהיה ברור שההודעה קיימת והבעיה היא בטעינה.
+        console.error('[inbox] משיכת גוף נכשלה:', e instanceof Error ? e.message : e)
+        return NextResponse.json({ message: row, body: '', attachments: [], bodyError: 'טעינת תוכן ההודעה נכשלה' })
       }
     }
 
-    // ג ן¸ ׳¡׳™׳׳•׳ ׳›׳ ׳§׳¨׳ ׳׳×׳‘׳¦׳¢ ׳‘-Gmail *׳•׳’׳* ׳‘׳׳™׳ ׳“׳§׳¡. ׳¢׳“׳›׳•׳ ׳”׳׳™׳ ׳“׳§׳¡ ׳‘׳׳‘׳“ ׳”׳™׳”
-    // ׳׳×׳ ׳’׳© ׳¢׳ ׳”׳¡׳ ׳›׳¨׳•׳ ׳”׳‘׳, ׳©׳׳•׳©׳ ׳׳× ׳׳¦׳‘ ׳”׳׳׳× ׳-Gmail ׳•׳׳—׳–׳™׳¨ ׳׳•׳×׳• ׳׳׳-׳ ׳§׳¨׳.
+    // ⚠️ סימון כנקרא מתבצע ב-Gmail *וגם* באינדקס. עדכון האינדקס בלבד היה
+    // מתנגש עם הסנכרון הבא, שמושך את מצב האמת מ-Gmail ומחזיר אותו ללא-נקרא.
     let markReadApplied = false
     if (unreadInGmail && token) {
       try {
@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
         })
         await db.from('gmail_messages').update({ is_unread: false }).eq('gmail_message_id', messageId)
         markReadApplied = true
-      } catch { /* best-effort ג€” ׳”׳§׳¨׳™׳׳” ׳¢׳¦׳׳” ׳—׳©׳•׳‘׳” ׳™׳•׳×׳¨ ׳׳”׳¡׳™׳׳•׳ */ }
+      } catch { /* best-effort — הקריאה עצמה חשובה יותר מהסימון */ }
     }
 
     if (markReadApplied) row.is_unread = false
@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ message: row, body, attachments })
   }
 
-  // ג”€ג”€ ׳¨׳©׳™׳׳” ג”€ג”€
+  // ── רשימה ──
   const folder = sp.get('folder') ?? 'inbox'
   const department = sp.get('department') ?? ''
   const q = (sp.get('q') ?? '').trim()
@@ -105,13 +105,13 @@ export async function GET(request: NextRequest) {
     .select(LIST_COLS, { count: 'exact' })
     .is('deleted_at', null)
 
-  // ג ן¸ ׳”׳¡׳™׳ ׳•׳ ׳׳₪׳™ ׳×׳•׳•׳™׳•׳× Gmail ׳•׳׳ ׳׳₪׳™ ׳©׳“׳” ׳׳©׳׳ ׳•: ׳”׳×׳•׳•׳™׳•׳× ׳”׳ ׳׳§׳•׳¨ ׳”׳׳׳×,
-  // ׳•׳”׳ ׳׳×׳¢׳“׳›׳ ׳•׳× ׳‘׳›׳ ׳¡׳ ׳›׳¨׳•׳. ׳©׳“׳” ׳ ׳’׳–׳¨ ׳”׳™׳” ׳׳×׳™׳™׳©׳.
+  // ⚠️ הסינון לפי תוויות Gmail ולא לפי שדה משלנו: התוויות הן מקור האמת,
+  // והן מתעדכנות בכל סנכרון. שדה נגזר היה מתיישן.
   if (folder === 'sent') query = query.contains('labels', ['SENT'])
   else if (folder === 'unread') query = query.eq('is_unread', true).contains('labels', ['INBOX'])
   else if (folder === 'followup') query = query.contains('labels', ['לטיפול'])
   else if (folder === 'starred') query = query.contains('labels', ['STARRED'])
-  else if (folder === 'all') { /* ׳”׳›׳ ג€” ׳‘׳׳™ ׳¡׳™׳ ׳•׳ ׳×׳•׳•׳™׳× */ }
+  else if (folder === 'all') { /* הכל — בלי סינון תווית */ }
   else query = query.contains('labels', ['INBOX'])
 
   if (department) query = query.eq('department', department)
@@ -148,12 +148,12 @@ export async function GET(request: NextRequest) {
     if (!clauses.length) return NextResponse.json({ messages: [], total: 0, counts: {} })
     query = query.or(clauses.join(','))
   }
-  // ג ן¸ ׳¡׳™׳ ׳•׳ ׳׳₪׳™ ׳×׳™׳‘׳”: ׳›׳©׳׳—׳•׳‘׳¨׳•׳× ׳›׳׳” ׳×׳™׳‘׳•׳×, "׳“׳•׳׳¨ ׳ ׳›׳ ׳¡" ׳׳¢׳¨׳‘׳‘ ׳׳× ׳›׳•׳׳
-  // ׳•׳׳™ ׳׳₪׳©׳¨ ׳׳¢׳‘׳•׳“ ׳¢׳ ׳×׳™׳‘׳” ׳׳—׳×.
+  // ⚠️ סינון לפי תיבה: כשמחוברות כמה תיבות, "דואר נכנס" מערבב את כולן
+  // ואי אפשר לעבוד על תיבה אחת.
   const accountId = sp.get('account') ?? ''
   if (accountId) query = query.eq('account_id', accountId)
 
-  // ׳×׳•׳•׳™׳× Gmail ׳¡׳₪׳¦׳™׳₪׳™׳× (׳׳”׳₪׳׳ ׳ ׳”׳¦׳“׳“׳™).
+  // תווית Gmail ספציפית (מהפאנל הצדדי).
   const label = sp.get('label') ?? ''
   if (label) query = query.contains('labels', [label])
 
@@ -176,8 +176,8 @@ export async function GET(request: NextRequest) {
   }
 
   if (q) {
-    // ג ן¸ ׳—׳™׳₪׳•׳© ׳¢׳ ׳׳˜׳-׳“׳׳˜׳” ׳‘׳׳‘׳“ ג€” ׳”׳’׳•׳£ ׳׳™׳ ׳• ׳‘׳׳¡׳“. ׳–׳” ׳׳›׳•׳•׳: ׳—׳™׳₪׳•׳© ׳‘׳’׳•׳£
-    // ׳׳—׳™׳™׳‘ ׳©׳׳™׳¨׳× ׳¢׳•׳×׳§, ׳•׳–׳• ׳‘׳“׳™׳•׳§ ׳”׳›׳₪׳™׳׳•׳× ׳©׳”׳׳¢׳‘׳¨ ׳ ׳•׳¢׳“ ׳׳¡׳׳§.
+    // ⚠️ חיפוש על מטא-דאטה בלבד — הגוף אינו במסד. זה מכוון: חיפוש בגוף
+    // מחייב שמירת עותק, וזו בדיוק הכפילות שהמעבר נועד לסלק.
     const safe = q.replace(/[%,()]/g, ' ')
     query = query.or(
       `subject.ilike.%${safe}%,from_email.ilike.%${safe}%,from_name.ilike.%${safe}%,snippet.ilike.%${safe}%`,
@@ -190,7 +190,7 @@ export async function GET(request: NextRequest) {
 
   if (error) {
     console.error('[inbox] שליפה נכשלה:', error.message)
-    return NextResponse.json({ error: '׳©׳׳™׳₪׳× ׳”׳”׳•׳“׳¢׳•׳× ׳ ׳›׳©׳׳”' }, { status: 500 })
+    return NextResponse.json({ error: 'שליפת ההודעות נכשלה' }, { status: 500 })
   }
 
   // מונה הלא-נקראים לכל מחלקה ולכל תיבה — לתגיות בפאנל הצדדי.
@@ -216,16 +216,16 @@ export async function GET(request: NextRequest) {
     if (r.account_id) unreadByAccount[r.account_id] = (unreadByAccount[r.account_id] ?? 0) + 1
   }
 
-  // ג”€ג”€ ׳”׳×׳™׳‘׳•׳× ׳•׳”׳×׳•׳•׳™׳•׳× ׳׳₪׳׳ ׳ ׳”׳¦׳“׳“׳™ ג”€ג”€
+  // ── התיבות והתוויות לפאנל הצדדי ──
   // ⚠️ refresh_token נשלף לשימוש *בשרת בלבד* (משיכת שמות התוויות למטה),
   // ומנוקה לפני שהרשימה נשלחת ללקוח — אסור שיגיע לדפדפן.
   const { data: accountsRaw } = await db.from('gmail_accounts')
     .select('id, email, label, department, refresh_token, sync_only, label_id').eq('is_active', true).order('email')
   const accounts = (accountsRaw ?? []).map(({ refresh_token: _t, ...rest }) => rest)
 
-  // ג ן¸ ׳”׳×׳•׳•׳™׳•׳× ׳ ׳’׳–׳¨׳•׳× ׳׳”׳׳™׳ ׳“׳§׳¡ ׳•׳׳ ׳ ׳©׳׳₪׳•׳× ׳-Gmail ׳‘׳›׳ ׳˜׳¢׳™׳ ׳”: ׳©׳׳™׳₪׳” ׳׳©׳
-  // ׳”׳™׳™׳×׳” ׳׳•׳¡׳™׳₪׳” ׳¡׳‘׳‘ ׳¨׳©׳× ׳׳›׳ ׳¨׳¢׳ ׳•׳, ׳•׳”׳×׳•׳•׳™׳•׳× ׳׳׳™׳׳ ׳׳¡׳•׳ ׳›׳¨׳ ׳•׳×.
-  // ׳׳¡׳ ׳ ׳™׳ ׳×׳•׳•׳™׳•׳× ׳׳¢׳¨׳›׳× (INBOX, SENT, CATEGORY_*) ׳©׳׳™׳ ׳ ׳׳¢׳ ׳™׳™׳ ׳•׳× ׳‘׳×׳¦׳•׳’׳”.
+  // ⚠️ התוויות נגזרות מהאינדקס ולא נשלפות מ-Gmail בכל טעינה: שליפה משם
+  // הייתה מוסיפה סבב רשת לכל רענון, והתוויות ממילא מסונכרנות.
+  // מסננים תוויות מערכת (INBOX, SENT, CATEGORY_*) שאינן מעניינות בתצוגה.
   const SYSTEM = /^(INBOX|SENT|DRAFT|SPAM|TRASH|UNREAD|STARRED|IMPORTANT|CHAT|CATEGORY_)/
   const { data: labelRows } = await db.from('gmail_messages')
     .select('labels').is('deleted_at', null).limit(2000)
@@ -303,7 +303,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // ׳׳•׳ ׳” "לטיפול" ג€” ׳׳×׳’׳™׳× ׳‘׳₪׳׳ ׳.
+  // מונה "לטיפול" — מתגית בפלט.
   const { count: followupCount } = await db.from('gmail_messages')
     .select('id', { count: 'exact', head: true })
     .is('deleted_at', null).contains('labels', ['לטיפול'])

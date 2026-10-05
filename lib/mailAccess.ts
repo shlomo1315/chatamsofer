@@ -135,3 +135,29 @@ export async function canAccessGmailThread(
     || [m.to_email, m.original_to].filter(Boolean).some(e => emails.includes(String(e))),
   )
 }
+
+/**
+ * 🔴 האם המשתמש רשאי *לשלוח* מחשבון Gmail מסוים (ביקורת אבטחה 05.10).
+ *
+ * הבאג: inbox/actions שלף את החשבון לפי accountId מהגוף בלי לבדוק —
+ * מזכירה מוגבלת לתיבת יולדות שלחה מייל בשם office@.
+ *
+ * ⚠️ חל רק על שליחה *חדשה* (בלי הודעה/שרשור). תשובה להודעה מורשית
+ * יוצאת מהחשבון של ההודעה גם אם הוא office@: מיילים של מחלקות נקלטים
+ * לעיתים בחשבון הראשי ומנותבים למחלקה לפי כתובת היעד.
+ */
+export async function canUseGmailAccount(
+  admin: SupabaseClient,
+  staff: StaffContext,
+  accountId: string,
+): Promise<boolean> {
+  const keys = allowedMailboxKeys(staff)
+  if (keys === null) return true
+  if (keys.length === 0) return false
+  const { data: acc } = await admin.from('gmail_accounts')
+    .select('email, department').eq('id', accountId).maybeSingle()
+  if (!acc) return false
+  const emails = allowedMailboxEmails(staff) ?? []
+  return (acc.department != null && keys.includes(String(acc.department)))
+    || emails.includes(String(acc.email))
+}

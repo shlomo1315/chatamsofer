@@ -38,8 +38,8 @@ export async function POST(request: NextRequest) {
   const client = getSupabase()
   if (!client) return NextResponse.json({ error: 'server error' }, { status: 500 })
 
-  // ׳׳¢׳ ׳” ׳׳•׳˜׳•׳׳˜׳™ ׳ ׳©׳׳— ׳¨׳§ ׳¢׳ ׳׳™׳™׳ ׳—׳“׳© (׳×׳—׳™׳׳× ׳©׳¨׳©׳•׳¨). ׳׳ ׳‘׳©׳¨׳©׳•׳¨ ׳›׳‘׳¨ ׳§׳™׳™׳׳×
-  // ׳”׳•׳“׳¢׳” ׳©׳™׳¦׳׳” ׳׳׳™׳×׳ ׳• (SENT) ג€” ׳¡׳™׳׳ ׳©׳›׳‘׳¨ ׳¢׳ ׳™׳ ׳•, ׳•׳׳™׳ ׳׳©׳׳•׳— ׳׳¢׳ ׳” ׳׳•׳˜׳•׳׳˜׳™ ׳ ׳•׳¡׳£.
+  // מענה אוטומטי נשלח רק על מייל חדש (תחילת שרשור). אם בשרשור כבר קיימת
+  // הודעה שיצאה מאיתנו (SENT) — סימן שכבר ענינו, ואין לשלוח מענה אוטומטי נוסף.
   let originalMessageId: string | undefined
   if (threadId) {
     try {
@@ -52,13 +52,13 @@ export async function POST(request: NextRequest) {
       if (alreadyReplied) {
         return NextResponse.json({ skipped: true, reason: 'already replied in thread' })
       }
-      // ׳׳–׳”׳” ׳”-Message-ID ׳©׳ ׳”׳”׳•׳“׳¢׳” ׳”׳ ׳›׳ ׳¡׳× ג€” ׳׳¦׳•׳¨׳ ׳©׳¨׳©׳•׳¨ ׳×׳§׳™׳ ׳©׳ ׳”׳×׳©׳•׳‘׳”
+      // מזהה ה-Message-ID של ההודעה הנכנסת — לצורך שרשור תקין של התשובה
       const incoming = msgs.find(m => m.id === gmailMsgId) ?? msgs[0]
       originalMessageId = incoming?.payload?.headers?.find(h => h.name?.toLowerCase() === 'message-id')?.value ?? undefined
     } catch { /* best-effort */ }
   }
 
-  // ׳ ׳₪׳™׳׳” ׳׳—׳•׳¨׳”: ׳׳ ׳׳ ׳”׳¦׳׳—׳ ׳• ׳׳§׳¨׳•׳ ׳׳× ׳”׳©׳¨׳©׳•׳¨, ׳ ׳ ׳¡׳” ׳׳§׳¨׳•׳ ׳׳× ׳”׳”׳•׳“׳¢׳” ׳”׳‘׳•׳“׳“׳×
+  // נפילה אחורה: אם לא הצלחנו לקרוא את השרשור, ננסה לקרוא את ההודעה הבודדת
   if (!originalMessageId) {
     try {
       const gmail = await getGmailClient()
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
   const from = process.env.GMAIL_EMAIL ?? 'office@chasamsofer.info'
   const raw = buildRawEmail({
     from,
-    fromName: '׳”׳™׳›׳ ׳”׳—׳×׳ ׳¡׳•׳₪׳¨',
+    fromName: 'היכל החתם סופר',
     to: fromEmail,
     subject: replySubject,
     html: email.html,
