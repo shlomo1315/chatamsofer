@@ -15,7 +15,7 @@ import BarcodeDialog from './BarcodeDialog'
 import StockMover from './StockMover'
 import BookOrdersDialog from './BookOrdersDialog'
 
-type ColKey = 'sku' | 'title' | 'author' | 'volumes' | 'price' | 'stock_orig' | 'sold' | 'stock' | 'phone_code' | 'active'
+type ColKey = 'sku' | 'title' | 'author' | 'volumes' | 'price' | 'stock_orig' | 'sold' | 'sold_fair' | 'sold_phone' | 'sold_web' | 'stock' | 'phone_code' | 'active'
 
 // ⚠️ headClassName נושא את הריפוד: ה-th נבנה בתוך TableHeadMenu, וריפוד
 // שנכתב בצרכן לא היה מגיע אליו.
@@ -27,7 +27,9 @@ const HEAD = 'px-3 py-3 text-xs font-semibold text-slate-500'
 // או למק"ט, שערכם ייחודי כמעט בכל שורה.
 // ⚠️ פונקציה ולא קבוע: שלוש עמודות המלאי תלויות בכמות שנמכרה,
 // שמגיעה מהשרת ואינה ידועה בזמן טעינת המודול.
-function columnsOf(sold: Record<string, number>): ColDef<ColKey, BookFairBook>[] {
+type SoldBy = Record<string, { fair: number; phone: number; web: number }>
+
+function columnsOf(sold: Record<string, number>, soldBy: SoldBy): ColDef<ColKey, BookFairBook>[] {
   return [
   { key: 'sku',         label: 'מק"ט',   def: true, headClassName: HEAD, weight: 1, value: b => b.sku },
   { key: 'title',       label: 'שם הספר', def: true, headClassName: HEAD, weight: 3, value: b => b.title },
@@ -43,6 +45,10 @@ function columnsOf(sold: Record<string, number>): ColDef<ColKey, BookFairBook>[]
     value: b => b.unlimited_stock ? null : (b.stock_total ?? 0) + (sold[b.id] ?? 0) },
   { key: 'sold',       label: 'נמכר',   def: true, kind: 'number', headClassName: HEAD,
     value: b => sold[b.id] ?? 0 },
+  // פיצול "נמכר" לפי ערוץ (בקשת המשתמש 05.10).
+  { key: 'sold_fair',  label: 'ביריד',  def: true, kind: 'number', headClassName: HEAD, value: b => soldBy[b.id]?.fair ?? 0 },
+  { key: 'sold_phone', label: 'בטלפון', def: true, kind: 'number', headClassName: HEAD, value: b => soldBy[b.id]?.phone ?? 0 },
+  { key: 'sold_web',   label: 'באתר',   def: true, kind: 'number', headClassName: HEAD, value: b => soldBy[b.id]?.web ?? 0 },
   { key: 'stock',      label: 'נשאר במלאי', def: true, kind: 'number', headClassName: HEAD, value: b => b.stock_total ?? 0 },
   { key: 'phone_code',  label: 'קוד טלפוני', def: false, kind: 'number', headClassName: HEAD, value: b => b.phone_code ?? null },
   { key: 'active',      label: 'פעיל',   def: true, kind: 'enum', filterable: true, headClassName: HEAD,
@@ -53,10 +59,12 @@ function columnsOf(sold: Record<string, number>): ColDef<ColKey, BookFairBook>[]
 
 type Tab = 'list' | 'import'
 
-export default function BooksClient({ books, sold = {} }: {
+export default function BooksClient({ books, sold = {}, soldBy = {} }: {
   books: BookFairBook[]
   /** כמה עותקים נמכרו מכל ספר, לפי מזהה. */
   sold?: Record<string, number>
+  /** אותו "נמכר", מפוצל ליריד/טלפון/אתר. */
+  soldBy?: SoldBy
 }) {
   const router = useRouter()
   const { confirm, confirmDialog } = useConfirm()
@@ -92,7 +100,7 @@ export default function BooksClient({ books, sold = {} }: {
   // 🔴 הסדר חובה: useTableColumns קודם (מסנן וממיין), ורק אז הדפדוף
   // על התוצאה. חיתוך לעמוד לפני סינון היה מציג עמוד ריק על סינון תקין.
   // ⚠️ mode:'client' חובה — הקטלוג נשלף במלואו לשרת ומסונן בזיכרון.
-  const COLUMNS = useMemo(() => columnsOf(sold), [sold])
+  const COLUMNS = useMemo(() => columnsOf(sold, soldBy), [sold, soldBy])
   const tc = useTableColumns<ColKey, BookFairBook>('book_fair_books', COLUMNS, {
     sortFilter: { mode: 'client', rows: filtered },
   })
@@ -258,7 +266,7 @@ export default function BooksClient({ books, sold = {} }: {
                   <tr key={b.id} className={`text-sm hover:bg-slate-50 ${b.is_active ? '' : 'opacity-50'}`}>
                     {tc.shown.map(col => (
                       <td key={col.key} className={`px-3 py-2.5 ${tc.cellClass(col)}`}>
-                        {renderCell(col.key, b, sold, setOrdersOf)}
+                        {renderCell(col.key, b, sold, setOrdersOf, soldBy)}
                       </td>
                     ))}
                     <td className="px-3 py-2.5 text-left">
@@ -357,6 +365,7 @@ export default function BooksClient({ books, sold = {} }: {
 function renderCell(
   key: ColKey, b: BookFairBook, sold: Record<string, number>,
   openOrders: (b: BookFairBook) => void,
+  soldBy: SoldBy = {},
 ) {
   switch (key) {
     case 'sku':
@@ -390,6 +399,13 @@ function renderCell(
           {n}
         </button>
       )
+    }
+
+    case 'sold_fair':
+    case 'sold_phone':
+    case 'sold_web': {
+      const n = soldBy[b.id]?.[key === 'sold_fair' ? 'fair' : key === 'sold_phone' ? 'phone' : 'web'] ?? 0
+      return <span className={`text-sm tabular-nums ${n ? 'font-medium text-slate-800' : 'text-slate-300'}`}>{n}</span>
     }
 
     case 'stock':

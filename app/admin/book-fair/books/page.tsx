@@ -42,34 +42,46 @@ async function getBooks(): Promise<BookFairBook[]> {
  * ⚠️ fetchAllRows: שורות הפריטים חוצות את רף 1,000 מהר הרבה יותר
  * מהקטלוג עצמו — כל ספר בכל הזמנה הוא שורה.
  */
-async function getSold(): Promise<Record<string, number>> {
-  if (!isSupabaseConfigured()) return {}
+export type SoldByChannel = Record<string, { fair: number; phone: number; web: number }>
+
+async function getSold(): Promise<{ sold: Record<string, number>; byChannel: SoldByChannel }> {
+  if (!isSupabaseConfigured()) return { sold: {}, byChannel: {} }
   const supabase = await createClient()
 
-  const { rows } = await fetchAllRows<{ book_id: string; quantity: number }>((from, to) =>
+  type Row = { book_id: string; quantity: number; order: { channel: string } | { channel: string }[] | null }
+  // ⚠️ order('id'): דפדוף בלי סדר קבוע עלול לדלג על שורות או לכפול אותן.
+  const { rows } = await fetchAllRows<Row>((from, to) =>
     supabase
       .from('book_fair_order_items')
-      .select('book_id, quantity, order:book_fair_orders!inner(status)')
+      .select('book_id, quantity, order:book_fair_orders!inner(status, channel)')
       .in('order.status', ['paid', 'picking', 'packed', 'shipped', 'delivered'])
+      .order('id')
       .range(from, to) as never
   )
 
-  const out: Record<string, number> = {}
+  const sold: Record<string, number> = {}
+  // פיצול לפי ערוץ (בקשת המשתמש 05.10): יריד (דוכן) · טלפון · אתר.
+  const byChannel: SoldByChannel = {}
   for (const r of rows) {
     if (!r.book_id) continue
-    out[r.book_id] = (out[r.book_id] ?? 0) + (r.quantity ?? 0)
+    const q = r.quantity ?? 0
+    sold[r.book_id] = (sold[r.book_id] ?? 0) + q
+    // ⚠️ join של Supabase מגיע כמערך או כאובייקט — שתי הצורות.
+    const ch = (Array.isArray(r.order) ? r.order[0]?.channel : r.order?.channel) ?? ''
+    const slot = (byChannel[r.book_id] ??= { fair: 0, phone: 0, web: 0 })
+    if (ch === 'fair' || ch === 'phone' || ch === 'web') slot[ch] += q
   }
-  return out
+  return { sold, byChannel }
 }
 
 export default async function BookFairBooksPage() {
   await guardPage('book_fair')
-  const [books, sold] = await Promise.all([getBooks(), getSold()])
+  const [books, { sold, byChannel }] = await Promise.all([getBooks(), getSold()])
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="קטלוג הספרים" subtitle="ספרים, מחירים ומלאי לשני הערוצים" />
-      <BooksClient books={books} sold={sold} />
+      <BooksClient books={books} sold={sold} soldBy={byChannel} />
     </div>
   )
 }
