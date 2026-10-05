@@ -111,6 +111,13 @@ export const BOOK_FAIR_MESSAGE_META: MsgMeta[] = [
   { key: 'ask_name', label: 'בקשת שם מלא', defaultText: 'אמרו את שמכם המלא ולאחר מכן הקישו סולמית', allowAudio: true },
   { key: 'no_name_recording', label: 'לא נקלט שם', defaultText: 'לא נקלטה הקלטה אמרו את שמכם המלא', allowAudio: true },
 
+  // ── הקראת התמלול לאישור ──
+  { key: 'heard_address', label: 'לפני הקראת הכתובת שתומללה', defaultText: 'הכתובת שנקלטה היא', allowAudio: true,
+    hint: 'אחריה מוקרא התמלול של מה שהמתקשר אמר, ואז נוסח האישור.' },
+  { key: 'heard_name', label: 'לפני הקראת השם שתומלל', defaultText: 'השם שנקלט הוא', allowAudio: true },
+  { key: 'confirm_heard', label: 'אישור או הקלטה מחדש', defaultText: 'אם זה נכון הקישו 1 להקלטה מחדש הקישו 2', allowAudio: true,
+    hint: '⚠️ המספרים חייבים להתאים: 1 = נכון · 2 = הקלטה מחדש.' },
+
   // ── סיכום ותשלום ──
   { key: 'total_books', label: 'סך ההזמנה — פתיחה', defaultText: 'סך ההזמנה', allowAudio: true },
   { key: 'for_books', label: 'שקלים עבור הספרים', defaultText: 'שקלים עבור הספרים', allowAudio: true },

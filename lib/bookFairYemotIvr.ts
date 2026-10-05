@@ -143,7 +143,9 @@ export type IvrStep =
   | 'ask_delivery'
   | 'ask_city'
   | 'record_address'
+  | 'confirm_address'  // "שמעתי: X" → 1 נכון · 2 הקלטה מחדש
   | 'ask_name'
+  | 'confirm_name'     // "שמעתי: X" → 1 נכון · 2 הקלטה מחדש
   | 'confirm_total'
   | 'payment'
   // ── שלוחות 2 ו-3 ──
@@ -195,6 +197,15 @@ export interface IvrState {
    * כלומר אותו ספר שוב ושוב, בלולאה.
    */
   sku_round?: number
+
+  /**
+   * מספר ההקלטה הנוכחית של הכתובת/השם (0 = הראשונה).
+   *
+   * 🔴 כל הקלטה מחדש חייבת שם משתנה חדש — אותה מלכודת של sku_round:
+   * read על משתנה שכבר מלא מחזיר את הערך הישן מיד, בלי להקליט.
+   */
+  addr_take?: number
+  name_take?: number
 }
 
 export function initialState(): IvrState {
@@ -211,6 +222,11 @@ export interface IvrInput {
   reserved?: boolean
   recording?: string
   transcript?: string
+  /**
+   * תמלול ElevenLabs של ההקלטה שהתקבלה עכשיו — מוקרא למתקשר לאישור.
+   * ⚠️ ריק/חסר = התמלול נכשל או לא הספיק; השיחה ממשיכה בלי הקראה.
+   */
+  heard?: string
   /** תוצאת הסליקה — מגיעה מ-CreditCard_CODE בבקשה החוזרת מימות. */
   payment?: 'success' | 'failed'
   order_number?: string
@@ -377,6 +393,10 @@ export const MESSAGE_FALLBACKS: Record<string, string> = {
   no_recording: 'לא נקלטה הקלטה נסו שוב',
   ask_name: 'אמרו את שמכם המלא ולאחר מכן הקישו סולמית',
   no_name_recording: 'לא נקלטה הקלטה אמרו את שמכם המלא',
+  // הקראת התמלול לאישור — התמלול עצמו מוקרא ביניהן.
+  heard_address: 'הכתובת שנקלטה היא',
+  heard_name: 'השם שנקלט הוא',
+  confirm_heard: 'אם זה נכון הקישו 1 להקלטה מחדש הקישו 2',
   total_books: 'סך ההזמנה',
   for_books: 'שקלים עבור הספרים',
   plus_shipping: 'ועוד',
@@ -768,9 +788,11 @@ export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMe
         }
       }
 
+      // ⚠️ הזמנה שנייה באותה שיחה: bf_addr כבר מלא מהראשונה — הקלטה חדשה.
+      const addrTake = state.address_recording ? (state.addr_take ?? 0) + 1 : (state.addr_take ?? 0)
       return {
-        state: { ...state, city_id: city.id, city_name: city.name, shipping_agorot: ship, step: 'record_address', attempts: 0 },
-        response: readRecord('bf_addr', [
+        state: { ...state, city_id: city.id, city_name: city.name, shipping_agorot: ship, step: 'record_address', attempts: 0, addr_take: addrTake },
+        response: readRecord(addressVarBase(addrTake), [
           m('shipping_to', { city: city.name }),
           m('ask_address'),
         ], 30),
@@ -778,47 +800,84 @@ export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMe
     }
 
     case 'record_address': {
+      const take = state.addr_take ?? 0
       if (!input.recording) {
-        return retry(state, 'record_address', 'bf_addr', [
+        return retry(state, 'record_address', addressVarBase(take), [
           m('no_recording'),
         ], { max: '', seconds: 30 }, true, messages)
       }
-      return askName({
+      const heard = cleanHeard(input.heard)
+      const next: IvrState = {
         ...state,
         address_recording: input.recording,
-        address_transcript: input.transcript,
+        // ⚠️ תמלול ElevenLabs גובר על של ימות: זה מה שהמתקשר שמע ואישר.
+        address_transcript: input.heard?.trim() || input.transcript,
         attempts: 0,
-      }, messages)
+      }
+      // 🔴 בלי תמלול — ממשיכים כמו לפני שההקראה נוספה. המשרד מאמת ממילא.
+      if (!heard) return askName(next, messages)
+      return {
+        state: { ...next, step: 'confirm_address' },
+        response: readTap(confirmVarBase('addr', take), [
+          m('heard_address'), t(heard), m('confirm_heard'),
+        ], { max: 1, seconds: 10 }),
+      }
+    }
+
+    case 'confirm_address': {
+      const take = state.addr_take ?? 0
+      if (input.value === '1') return askName({ ...state, attempts: 0 }, messages)
+      if (input.value === '2') {
+        // ⚠️ תקרה: אחרי MAX_TAKES הקלטות ממשיכים עם האחרונה — המשרד מאמת.
+        if (take + 1 >= MAX_TAKES) return askName({ ...state, attempts: 0 }, messages)
+        const nextTake = take + 1
+        return {
+          state: { ...state, step: 'record_address', attempts: 0, addr_take: nextTake },
+          response: readRecord(addressVarBase(nextTake), [m('ask_address')], 30),
+        }
+      }
+      return retry(state, 'confirm_address', confirmVarBase('addr', take), [
+        m('confirm_heard'),
+      ], { max: 1, seconds: 10 }, false, messages)
     }
 
     case 'ask_name': {
+      const take = state.name_take ?? 0
       if (!input.recording) {
-        return retry(state, 'ask_name', 'bf_name', [
+        return retry(state, 'ask_name', nameVarBase(take), [
           m('no_name_recording'),
         ], { max: '', seconds: 15 }, true, messages)
       }
-
-      const items = totalOf(state.items)
-      const ship = state.shipping_agorot ?? 0
-      const total = items + ship
-
-      return {
-        state: {
-          ...state,
-          name_recording: input.recording,
-          name_transcript: input.transcript,
-          step: 'confirm_total',
-          attempts: 0,
-        },
-        response: readTap('bf_conf', [
-          m('total_books'), n(agorotToSpokenShekels(items)), m('for_books'),
-          ...(ship > 0
-            ? [m('plus_shipping'), n(agorotToSpokenShekels(ship)), m('shipping_fee_word')]
-            : [m('no_shipping_fee')]),
-          m('grand_total'), n(agorotToSpokenShekels(total)), m('shekels_word'),
-          m('ask_pay'),
-        ], { max: 1, seconds: 12 }),
+      const heard = cleanHeard(input.heard)
+      const next: IvrState = {
+        ...state,
+        name_recording: input.recording,
+        name_transcript: input.heard?.trim() || input.transcript,
+        attempts: 0,
       }
+      if (!heard) return askTotal(next, messages)
+      return {
+        state: { ...next, step: 'confirm_name' },
+        response: readTap(confirmVarBase('name', take), [
+          m('heard_name'), t(heard), m('confirm_heard'),
+        ], { max: 1, seconds: 10 }),
+      }
+    }
+
+    case 'confirm_name': {
+      const take = state.name_take ?? 0
+      if (input.value === '1') return askTotal({ ...state, attempts: 0 }, messages)
+      if (input.value === '2') {
+        if (take + 1 >= MAX_TAKES) return askTotal({ ...state, attempts: 0 }, messages)
+        const nextTake = take + 1
+        return {
+          state: { ...state, step: 'ask_name', attempts: 0, name_take: nextTake },
+          response: readRecord(nameVarBase(nextTake), [m('ask_name')], 15),
+        }
+      }
+      return retry(state, 'confirm_name', confirmVarBase('name', take), [
+        m('confirm_heard'),
+      ], { max: 1, seconds: 10 }, false, messages)
     }
 
     case 'confirm_total': {
@@ -1164,10 +1223,66 @@ function askCity(
 }
 
 function askName(state: IvrState, messages?: IvrMessages): IvrTurn {
+  // ⚠️ הזמנה שנייה באותה שיחה: bf_name כבר מלא מהראשונה — הקלטה חדשה.
+  const take = state.name_recording ? (state.name_take ?? 0) + 1 : (state.name_take ?? 0)
   return {
-    state: { ...state, step: 'ask_name' },
-    response: readRecord('bf_name', [msgToken(messages, 'ask_name')], 15),
+    state: { ...state, step: 'ask_name', name_take: take },
+    response: readRecord(nameVarBase(take), [msgToken(messages, 'ask_name')], 15),
   }
+}
+
+/** סיכום הסכום ובקשת אישור לתשלום — אחרי שהשם נקלט (ואושר). */
+function askTotal(state: IvrState, messages?: IvrMessages): IvrTurn {
+  const m = (key: string) => msgToken(messages, key)
+  const items = totalOf(state.items)
+  const ship = state.shipping_agorot ?? 0
+  const total = items + ship
+  return {
+    state: { ...state, step: 'confirm_total', attempts: 0 },
+    response: readTap('bf_conf', [
+      m('total_books'), n(agorotToSpokenShekels(items)), m('for_books'),
+      ...(ship > 0
+        ? [m('plus_shipping'), n(agorotToSpokenShekels(ship)), m('shipping_fee_word')]
+        : [m('no_shipping_fee')]),
+      m('grand_total'), n(agorotToSpokenShekels(total)), m('shekels_word'),
+      m('ask_pay'),
+    ], { max: 1, seconds: 12 }),
+  }
+}
+
+/** תקרת הקלטות חוזרות לכתובת/לשם — אחריה ממשיכים עם האחרונה. */
+const MAX_TAKES = 3
+
+/**
+ * שמות המשתנים לכל הקלטה. ⚠️ מיוצאים כדי שה-route יקרא בדיוק את
+ * אותו שם — אי-התאמה = המתקשר מקליט והשרת לא רואה את ההקלטה.
+ * הקלטה 0 שומרת על השם ההיסטורי (bf_addr / bf_name).
+ */
+export const addressVarBase = (take: number) => (take > 0 ? `bf_addr_t${take}` : 'bf_addr')
+export const nameVarBase = (take: number) => (take > 0 ? `bf_name_t${take}` : 'bf_name')
+export const confirmVarBase = (kind: 'addr' | 'name', take: number) => `bf_${kind}ok${take}`
+
+/**
+ * ניקוי תמלול להקראה ב-TTS של ימות (t-).
+ *
+ * ⚠️ מחמיר מ-ttsClean: התמלול הוא קלט חופשי, ותו אחד כמו = , . & -
+ * שובר את תחביר פקודת ה-read של ימות. נשארים אותיות, ספרות ורווחים.
+ * ⚠️ מקוצר לאורך סביר — מתקשר שדיבר דקה לא צריך לשמוע הכול שוב.
+ */
+export function cleanTranscriptForTts(text: string, maxLen = 140): string {
+  const clean = String(text ?? '')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (clean.length <= maxLen) return clean
+  const cut = clean.slice(0, maxLen)
+  const sp = cut.lastIndexOf(' ')
+  return (sp > maxLen / 2 ? cut.slice(0, sp) : cut).trim()
+}
+
+/** התמלול כפי שיוקרא, או '' כשאין מה להקריא. */
+function cleanHeard(heard: string | undefined): string {
+  return heard ? cleanTranscriptForTts(heard) : ''
 }
 
 /**

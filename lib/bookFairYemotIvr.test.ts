@@ -349,3 +349,75 @@ describe('תפריט קטגוריות — הקלטה ידנית', () => {
     expect(turn.response).not.toContain('דרוש ואגדה')
   })
 })
+
+describe('🎙️ הקראת התמלול לאישור', () => {
+  const recAddr: IvrState = {
+    step: 'record_address', attempts: 0, delivery: 'shipping',
+    city_id: 'c1', city_name: 'בני ברק', shipping_agorot: 2500,
+    items: [{ book_id: 'b1', sku: '1001', title: 'שולחן ערוך', price_agorot: 12000, quantity: 1 }],
+  }
+
+  it('יש תמלול → מוקרא, ונשאלת שאלת אישור', () => {
+    const turn = nextTurn(recAddr, { recording: 'r1', heard: 'רחוב חזון איש 32, דירה 4.' })
+    expect(turn.state.step).toBe('confirm_address')
+    expect(turn.state.address_transcript).toBe('רחוב חזון איש 32, דירה 4.')
+    expect(turn.response).toContain('t-רחוב חזון איש 32 דירה 4')
+    expect(turn.response).toContain('bf_addrok0')
+  })
+
+  it('🔴 אין תמלול → ממשיכים לשם כמו קודם (בלי הקראה)', () => {
+    const turn = nextTurn(recAddr, { recording: 'r1' })
+    expect(turn.state.step).toBe('ask_name')
+  })
+
+  it('1 = נכון → לשם', () => {
+    const c = nextTurn(recAddr, { recording: 'r1', heard: 'הרצל 5' }).state
+    expect(nextTurn(c, { value: '1' }).state.step).toBe('ask_name')
+  })
+
+  it('🔴 2 = הקלטה מחדש במשתנה חדש (אחרת ימות מחזירה את הישנה)', () => {
+    const c = nextTurn(recAddr, { recording: 'r1', heard: 'הרצל 5' }).state
+    const again = nextTurn(c, { value: '2' })
+    expect(again.state.step).toBe('record_address')
+    expect(again.state.addr_take).toBe(1)
+    expect(again.response).toContain('bf_addr_t1,')
+    // והאישור של ההקלטה השנייה — גם הוא בשם חדש
+    const c2 = nextTurn(again.state, { recording: 'r2', heard: 'הרצל 7' })
+    expect(c2.response).toContain('bf_addrok1')
+  })
+
+  it('תקרת הקלטות — אחרי השלישית ממשיכים עם האחרונה', () => {
+    let s = nextTurn(recAddr, { recording: 'r1', heard: 'א' }).state
+    s = nextTurn(s, { value: '2' }).state
+    s = nextTurn(s, { recording: 'r2', heard: 'ב' }).state
+    s = nextTurn(s, { value: '2' }).state
+    s = nextTurn(s, { recording: 'r3', heard: 'ג' }).state
+    const last = nextTurn(s, { value: '2' })
+    expect(last.state.step).toBe('ask_name')
+    expect(last.state.address_transcript).toBe('ג')
+  })
+
+  it('שם: תמלול → אישור → סיכום', () => {
+    const atName = nextTurn(recAddr, { recording: 'r1' }).state
+    const c = nextTurn(atName, { recording: 'n1', heard: 'שלמה כהן' })
+    expect(c.state.step).toBe('confirm_name')
+    expect(c.response).toContain('t-שלמה כהן')
+    const total = nextTurn(c.state, { value: '1' })
+    expect(total.state.step).toBe('confirm_total')
+    expect(total.response).toContain('bf_conf')
+  })
+
+  it('שם: 2 → הקלטה מחדש ב-bf_name_t1', () => {
+    const atName = nextTurn(recAddr, { recording: 'r1' }).state
+    const c = nextTurn(atName, { recording: 'n1', heard: 'שלמה' }).state
+    const again = nextTurn(c, { value: '2' })
+    expect(again.state.step).toBe('ask_name')
+    expect(again.response).toContain('bf_name_t1,')
+  })
+
+  it('🔴 תווי תחביר של ימות לא נכנסים להקראה', () => {
+    const turn = nextTurn(recAddr, { recording: 'r1', heard: 'א=ב&ג,ד.ה-ו' })
+    const prompt = turn.response.split('=')[1]
+    expect(prompt.split('.')).toContain('t-א ב ג ד ה ו')
+  })
+})

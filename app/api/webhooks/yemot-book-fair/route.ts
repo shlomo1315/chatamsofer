@@ -30,8 +30,10 @@ import { digitsOnly, matchBookBySku } from '@/lib/bookFairSkuMatch'
 import { BOOK_FAIR_STATUS_LABELS, type BookFairOrderStatus } from '@/types/bookFair'
 import {
   nextTurn, initialState, attemptVarName, msgToken, ttsClean, type IvrState, type IvrInput,
+  addressVarBase, nameVarBase, confirmVarBase,
 } from '@/lib/bookFairYemotIvr'
 import { getBookFairMessages } from '@/lib/yemotBookFairMessages'
+import { transcribeHebrew } from '@/lib/elevenStt'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -454,7 +456,7 @@ async function stashRecording(
   callDid?: string,
   callPhone?: string,
   callTime?: string,
-): Promise<void> {
+): Promise<string | undefined> {
   if (!providerPath) return
   // 🔴 "Digits-0" / "Digits-*" אינו נתיב קובץ אלא *ההקשות* של
   // המתקשר — כך ימות עונה כשסוג ה-read הוא 'voice'. ערך כזה נשמר
@@ -582,6 +584,15 @@ async function stashRecording(
 
     // ⚠️ גם כשההורדה נכשלת — התמלול והנתיב נשמרים. כתובת משוערת
     // עדיפה על שום כתובת, וזו בדיוק הנקודה שבה המידע אבד עד היום.
+    // 🎙️ תמלול ElevenLabs על אותו קובץ שכבר הורד — מוקרא למתקשר לאישור.
+    // ⚠️ תקרת זמן קשיחה: זו שיחה חיה. בלי תמלול השיחה ממשיכה כרגיל.
+    let heard: string | undefined
+    if (data) {
+      const t0 = Date.now()
+      heard = (await transcribeHebrew(data, { timeoutMs: 6000 })) ?? undefined
+      console.log(`[fair/stt] ${kind} ${Date.now() - t0}ms ${heard ? 'תומלל' : 'ללא תמלול'} call=${callId}`)
+    }
+
     const key = data ? `book-fair/calls/${callId}/${kind}.wav` : null
     if (data && key) {
       const up = await supa.storage.from('documents')
@@ -596,10 +607,12 @@ async function stashRecording(
       kind,
       provider_path: providerPath,
       storage_path: data ? key : null,
-      transcript: transcript ?? null,
+      transcript: heard ?? transcript ?? null,
     }, { onConflict: 'call_id,kind' })
+    return heard
   } catch (e) {
     console.warn('[fair/stash] נכשל:', e)
+    return undefined
   }
 }
 
@@ -1012,19 +1025,26 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
       }
     }
   } else if (state.step === 'record_address') {
-    input.recording = paramFor(params, 'bf_addr')
-    input.transcript = params['bf_addr_voice'] || undefined
+    // ⚠️ השם תלוי במספר ההקלטה — חייב להתאים ל-readRecord של nextTurn.
+    const base = addressVarBase(state.addr_take ?? 0)
+    input.recording = paramFor(params, base)
+    input.transcript = params[`${base}_voice`] || undefined
     // 🔴 מגובה *כאן ועכשיו*, ולא ביצירת ההזמנה.
     //
     // ⚠️ כל ההקלטות בשלוחה חולקות את אותו נתיב ("30/9.wav") — ימות
     // דורסת אותו בשיחה הבאה. הגיבוי ביצירת ההזמנה רץ דקות אחר כך,
     // אחרי התשלום, וכשהמתקשר הבא כבר הקליט — הקובץ שהועתק היה שלו
     // או שלא היה כלל. לקוח ששילם 839 ₪ נשאר בלי כתובת.
-    await stashRecording(callId, 'address', input.recording, input.transcript, params['ApiYFCallId'], params['ApiDID'], params['ApiPhone'], params['ApiTime'])
+    input.heard = await stashRecording(callId, 'address', input.recording, input.transcript, params['ApiYFCallId'], params['ApiDID'], params['ApiPhone'], params['ApiTime'])
+  } else if (state.step === 'confirm_address') {
+    input.value = paramFor(params, confirmVarBase('addr', state.addr_take ?? 0))
   } else if (state.step === 'ask_name') {
-    input.recording = paramFor(params, 'bf_name')
-    input.transcript = params['bf_name_voice'] || undefined
-    await stashRecording(callId, 'name', input.recording, input.transcript, params['ApiYFCallId'], params['ApiDID'], params['ApiPhone'], params['ApiTime'])
+    const base = nameVarBase(state.name_take ?? 0)
+    input.recording = paramFor(params, base)
+    input.transcript = params[`${base}_voice`] || undefined
+    input.heard = await stashRecording(callId, 'name', input.recording, input.transcript, params['ApiYFCallId'], params['ApiDID'], params['ApiPhone'], params['ApiTime'])
+  } else if (state.step === 'confirm_name') {
+    input.value = paramFor(params, confirmVarBase('name', state.name_take ?? 0))
   } else if (state.step === 'confirm_total') {
     input.value = paramFor(params, 'bf_conf')
   } else if (state.step === 'payment') {
