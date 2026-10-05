@@ -71,7 +71,7 @@ export default function DashboardAccess({ canEdit }: { canEdit: boolean }) {
       {confirmDialog}
       <div className="mb-1 flex flex-wrap items-start justify-between gap-3">
         <h2 className="flex items-center gap-2 font-semibold text-slate-900">
-          <LayoutDashboard size={17} /> לוח המנהל — קישור צפייה
+          <LayoutDashboard size={17} /> ניהול היריד — קישור צפייה
         </h2>
         {info?.configured && (
           <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
@@ -82,7 +82,7 @@ export default function DashboardAccess({ canEdit }: { canEdit: boolean }) {
         )}
       </div>
       <p className="mb-4 text-sm text-slate-500">
-        דף נפרד עם גרפים של כל ההזמנות — אתר, טלפון ודוכן — מתעדכן חי. מספרים בלבד, בלי פרטי לקוחות.
+        דף נפרד עם גרפים של כל ההזמנות ששולמו — אתר, טלפון ודוכן. מתעדכן כל 5 דקות. מספרים בלבד, בלי פרטי לקוחות.
       </p>
 
       {!info ? (

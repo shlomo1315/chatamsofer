@@ -26,7 +26,7 @@ export function Kpi({ label, value, sub }: { label: string; value: string; sub?:
   return (
     <div className="flex min-w-0 flex-col gap-1.5 rounded-2xl border border-[#E6E1D6] bg-white px-5 py-4">
       <span className="text-sm font-semibold text-[#5B6475]">{label}</span>
-      <span className="truncate text-3xl font-extrabold tabular-nums tracking-tight text-[#14213D] sm:text-4xl">{value}</span>
+      <span className="break-words text-3xl font-extrabold tabular-nums tracking-tight text-[#14213D] sm:text-4xl">{value}</span>
       {sub && <span className="text-[13px] text-[#5B6475]">{sub}</span>}
     </div>
   )
@@ -42,8 +42,8 @@ export function BarList({ rows, color = '#14213D', money = true, empty = 'אין
   return (
     <ul className="flex flex-col gap-3">
       {rows.map((r, i) => (
-        <li key={r.label + i} className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)_auto] items-center gap-3">
-          <span className="truncate text-[15px] font-semibold text-[#14213D]" title={r.label}>{r.label}</span>
+        <li key={r.label + i} className="grid grid-cols-[minmax(0,11rem)_minmax(0,1fr)_auto] items-center gap-3">
+          <span className="break-words text-[15px] font-semibold text-[#14213D]">{r.label}</span>
           <span className="h-3 overflow-hidden rounded-full bg-[#F0ECE3]">
             <span className="block h-full rounded-full" style={{ width: `${(r.value / max) * 100}%`, background: i === 0 ? color : `${color}CC` }} />
           </span>

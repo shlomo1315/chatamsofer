@@ -51,13 +51,15 @@ export type StatFilters = {
   to?: string
   channel: Channel | 'all'
   category: string | 'all'
+  /** סינון לפי ספר (title_snapshot). ⚠️ השם ולא המזהה — כך הוא נשמר בהזמנה. */
+  book?: string | 'all'
   delivery: 'all' | 'shipping' | 'pickup'
   size: SizeBucket
   status: StatusGroup
 }
 
 export const DEFAULT_FILTERS: StatFilters = {
-  period: 'all', channel: 'all', category: 'all', delivery: 'all', size: 'all', status: 'paid',
+  period: 'all', channel: 'all', category: 'all', book: 'all', delivery: 'all', size: 'all', status: 'paid',
 }
 
 const ilDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit' })
@@ -110,6 +112,10 @@ export function filterOrders(
   if (f.category !== 'all') {
     catOrders = new Set(items.filter(i => i.book_id && categoryOf.get(i.book_id) === f.category).map(i => i.order_id))
   }
+  let bookOrders: Set<string> | null = null
+  if (f.book && f.book !== 'all') {
+    bookOrders = new Set(items.filter(i => i.title_snapshot === f.book).map(i => i.order_id))
+  }
 
   return orders.filter(o => {
     if (statusGroup(o.status) !== f.status) return false
@@ -117,6 +123,7 @@ export function filterOrders(
     if (f.delivery !== 'all' && o.delivery_method !== f.delivery) return false
     if (f.size !== 'all' && sizeBucket(o.total_agorot) !== f.size) return false
     if (catOrders && !catOrders.has(o.id)) return false
+    if (bookOrders && !bookOrders.has(o.id)) return false
     if (f.period !== 'all') {
       const d = israelDay(new Date(o.created_at))
       if (f.period === 'today' && d !== today) return false
@@ -145,6 +152,8 @@ export type Stats = {
   byHour: number[]
   categories: { name: string; agorot: number; units: number }[]
   topBooks: { title: string; units: number; agorot: number }[]
+  /** כל הספרים שנמכרו — לא רק העשרה המובילים. */
+  allBooks: { title: string; units: number; agorot: number; orders: number }[]
   cities: { name: string; orders: number }[]
   delivery: { shipping: number; pickup: number; pickedUp: number }
 }
@@ -152,10 +161,12 @@ export type Stats = {
 export function computeStats(
   orders: StatOrder[], items: StatItem[], categoryOf: Map<string, string>,
   categoryFilter: string | 'all' = 'all',
+  bookFilter: string | 'all' = 'all',
 ): Stats {
   const ids = new Set(orders.map(o => o.id))
   const its = items.filter(i => ids.has(i.order_id)
-    && (categoryFilter === 'all' || (i.book_id && categoryOf.get(i.book_id) === categoryFilter)))
+    && (categoryFilter === 'all' || (i.book_id && categoryOf.get(i.book_id) === categoryFilter))
+    && (bookFilter === 'all' || i.title_snapshot === bookFilter))
 
   const byChannel: Record<Channel, Money> = { web: zero(), phone: zero(), fair: zero() }
   const byPayment = { cash: zero(), card: zero() }
@@ -196,15 +207,15 @@ export function computeStats(
   }
 
   const cat = new Map<string, { agorot: number; units: number }>()
-  const book = new Map<string, { units: number; agorot: number }>()
+  const book = new Map<string, { units: number; agorot: number; orders: Set<string> }>()
   let units = 0
   for (const i of its) {
     units += i.quantity
     const c = (i.book_id && categoryOf.get(i.book_id)) || 'ללא קטגוריה'
     const cr = cat.get(c) ?? { agorot: 0, units: 0 }
     cr.agorot += i.line_total_agorot; cr.units += i.quantity; cat.set(c, cr)
-    const br = book.get(i.title_snapshot) ?? { units: 0, agorot: 0 }
-    br.units += i.quantity; br.agorot += i.line_total_agorot; book.set(i.title_snapshot, br)
+    const br = book.get(i.title_snapshot) ?? { units: 0, agorot: 0, orders: new Set<string>() }
+    br.units += i.quantity; br.agorot += i.line_total_agorot; br.orders.add(i.order_id); book.set(i.title_snapshot, br)
   }
 
   return {
@@ -218,7 +229,8 @@ export function computeStats(
     byDay: [...day].map(([d, r]) => ({ day: d, ...r })).sort((a, b) => a.day.localeCompare(b.day)),
     byHour,
     categories: [...cat].map(([name, r]) => ({ name, ...r })).sort((a, b) => b.agorot - a.agorot),
-    topBooks: [...book].map(([title, r]) => ({ title, ...r })).sort((a, b) => b.units - a.units || b.agorot - a.agorot).slice(0, 10),
+    topBooks: [...book].map(([title, r]) => ({ title, units: r.units, agorot: r.agorot })).sort((a, b) => b.units - a.units || b.agorot - a.agorot).slice(0, 10),
+    allBooks: [...book].map(([title, r]) => ({ title, units: r.units, agorot: r.agorot, orders: r.orders.size })).sort((a, b) => b.units - a.units || b.agorot - a.agorot),
     cities: [...city].map(([name, n]) => ({ name, orders: n })).sort((a, b) => b.orders - a.orders).slice(0, 8),
     delivery,
   }
@@ -244,4 +256,63 @@ export function lostByChannel(orders: StatOrder[]): Record<Channel, { cancelled:
 /** הקטגוריה יושבת ב-description של הספר (ראו book-fair-sku-has-hyphen). */
 export function categoryName(description: string | null | undefined): string {
   return String(description ?? '').trim() || 'ללא קטגוריה'
+}
+
+export type BookDetail = {
+  title: string
+  units: number
+  agorot: number
+  orders: number
+  avgPerOrder: number
+  byChannel: Record<Channel, { units: number; agorot: number }>
+  byPayment: { cash: number; card: number }
+  byDay: { day: string; units: number; agorot: number }[]
+  byHour: number[]
+  cities: { name: string; units: number }[]
+  delivery: { shipping: number; pickup: number }
+}
+
+/**
+ * כל מה שידוע על ספר אחד, מתוך ההזמנות שכבר סוננו.
+ *
+ * ⚠️ הסכומים כאן הם של *שורות הספר* בלבד (line_total), לא של ההזמנה
+ * כולה — אחרת ספר של ₪15 בהזמנה של ₪500 היה "מכניס" ₪500.
+ */
+export function bookDetail(orders: StatOrder[], items: StatItem[], title: string): BookDetail {
+  const byId = new Map(orders.map(o => [o.id, o]))
+  const lines = items.filter(i => i.title_snapshot === title && byId.has(i.order_id))
+  const byChannel: Record<Channel, { units: number; agorot: number }> = {
+    web: { units: 0, agorot: 0 }, phone: { units: 0, agorot: 0 }, fair: { units: 0, agorot: 0 },
+  }
+  const byPayment = { cash: 0, card: 0 }
+  const day = new Map<string, { units: number; agorot: number }>()
+  const byHour = Array.from({ length: 24 }, () => 0)
+  const city = new Map<string, number>()
+  const delivery = { shipping: 0, pickup: 0 }
+  const orderIds = new Set<string>()
+  let units = 0
+  let agorot = 0
+  for (const l of lines) {
+    const o = byId.get(l.order_id)!
+    units += l.quantity; agorot += l.line_total_agorot; orderIds.add(o.id)
+    const ch = (CHANNELS as string[]).includes(o.channel) ? o.channel as Channel : 'web'
+    byChannel[ch].units += l.quantity; byChannel[ch].agorot += l.line_total_agorot
+    byPayment[o.payment_method === 'cash' ? 'cash' : 'card'] += l.quantity
+    const created = new Date(o.created_at)
+    const d = israelDay(created)
+    const r = day.get(d) ?? { units: 0, agorot: 0 }
+    r.units += l.quantity; r.agorot += l.line_total_agorot; day.set(d, r)
+    byHour[israelHour(created)] += l.quantity
+    if (o.city_name) city.set(o.city_name, (city.get(o.city_name) ?? 0) + l.quantity)
+    delivery[o.delivery_method === 'pickup' ? 'pickup' : 'shipping'] += l.quantity
+  }
+  return {
+    title, units, agorot, orders: orderIds.size,
+    avgPerOrder: orderIds.size ? units / orderIds.size : 0,
+    byChannel, byPayment,
+    byDay: [...day].map(([d, r]) => ({ day: d, ...r })).sort((a, b) => a.day.localeCompare(b.day)),
+    byHour,
+    cities: [...city].map(([name, u]) => ({ name, units: u })).sort((a, b) => b.units - a.units),
+    delivery,
+  }
 }

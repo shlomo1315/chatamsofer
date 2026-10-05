@@ -3,6 +3,7 @@ import { getServiceClient } from '@/lib/apiAuth'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { DASH_CONFIG_KEY, DASH_COOKIE, parseDashConfig, dashTokenValid } from '@/lib/bookFairDashboard'
 import { loadStatsData } from '@/lib/bookFairStatsData'
+import { statusGroup } from '@/lib/bookFairStats'
 
 // נתוני לוח המנהל — כל ההזמנות מכל הערוצים, מספרים בלבד.
 //
@@ -34,15 +35,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'הטעינה נכשלה' }, { status: 500 })
   }
 
-  // 🔴 רשימה לבנה — רק השדות שהגרפים צריכים.
-  const safeOrders = orders.map(o => ({
+  // 🔴 רשימה לבנה — רק השדות שהגרפים צריכים, ורק הזמנות ששולמו
+  // (החלטת המשתמש 05.10: הלוח מציג ששולמו בלבד — אז גם לא נשלח יותר).
+  const safeOrders = orders.filter(o => statusGroup(o.status) === 'paid').map(o => ({
     id: o.id, status: o.status, channel: o.channel,
     total_agorot: o.total_agorot, refunded_agorot: o.refunded_agorot,
     delivery_method: o.delivery_method, payment_method: o.payment_method,
     sold_by: o.sold_by, created_at: o.created_at, city_name: o.city_name,
     picked_up_at: o.picked_up_at ?? null,
   }))
-  const safeItems = items.map(i => ({
+  const paidIds = new Set(safeOrders.map(o => o.id))
+  const safeItems = items.filter(i => paidIds.has(i.order_id)).map(i => ({
     order_id: i.order_id, book_id: i.book_id, title_snapshot: i.title_snapshot,
     quantity: i.quantity, line_total_agorot: i.line_total_agorot,
   }))

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  computeStats, filterOrders, lostByChannel, netAgorot, israelDay, israelHour,
+  computeStats, filterOrders, lostByChannel, netAgorot, israelDay, israelHour, bookDetail,
   DEFAULT_FILTERS, type StatOrder, type StatItem,
 } from './bookFairStats'
 
@@ -100,5 +100,36 @@ describe('lostByChannel', () => {
       o({ status: 'paid', channel: 'web' }),
     ])
     expect(l.web).toEqual({ cancelled: 1, failed: 1, agorot: 150 })
+  })
+})
+
+describe('סינון וניתוח לפי ספר', () => {
+  const now = new Date('2026-10-05T12:00:00Z')
+  const orders = [
+    o({ id: 'a', channel: 'web', total_agorot: 50000, city_name: 'בני ברק' }),
+    o({ id: 'b', channel: 'fair', total_agorot: 3000, payment_method: 'cash', delivery_method: 'pickup' }),
+  ]
+  const items: StatItem[] = [
+    { order_id: 'a', book_id: 'b1', title_snapshot: 'תהילים', quantity: 2, line_total_agorot: 3000 },
+    { order_id: 'a', book_id: 'b2', title_snapshot: 'אחר', quantity: 1, line_total_agorot: 47000 },
+    { order_id: 'b', book_id: 'b1', title_snapshot: 'תהילים', quantity: 1, line_total_agorot: 1500 },
+  ]
+  it('סינון לפי ספר — הזמנות שמכילות אותו', () => {
+    expect(filterOrders(orders, items, cats, { ...DEFAULT_FILTERS, book: 'אחר' }, now).map(x => x.id)).toEqual(['a'])
+  })
+  it('🔴 סכומי הספר = שורות הספר, לא ההזמנה כולה', () => {
+    const d = bookDetail(orders, items, 'תהילים')
+    expect(d.units).toBe(3)
+    expect(d.agorot).toBe(4500)
+    expect(d.orders).toBe(2)
+    expect(d.byChannel.web).toEqual({ units: 2, agorot: 3000 })
+    expect(d.byPayment).toEqual({ cash: 1, card: 2 })
+    expect(d.delivery).toEqual({ shipping: 2, pickup: 1 })
+    expect(d.cities).toEqual([{ name: 'בני ברק', units: 2 }])
+  })
+  it('allBooks — כל הספרים, לא רק 10', () => {
+    const s = computeStats(orders, items, cats)
+    expect(s.allBooks.map(b => b.title)).toEqual(['תהילים', 'אחר'])
+    expect(s.allBooks[0].orders).toBe(2)
   })
 })
