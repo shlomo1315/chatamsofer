@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
-import { getPaymentProvider, sanitizeProviderResponse, verifyNedarimSignature, isNedarimWebhookIp } from '@/lib/payments'
+import { getPaymentProvider, sanitizeProviderResponse, verifyNedarimSignature } from '@/lib/payments'
+import { classifyCallbackSource } from '@/lib/payments/callbackSource'
 import { getPaymentSettings } from '@/lib/payments/settings'
 import { clientIpOrNull, forwardedIps } from '@/lib/rateLimit'
 import { amountMatches } from '@/lib/bookFairPricing'
@@ -31,6 +32,9 @@ interface RequestContext {
   sigHeader: string | null
   /** כל הכתובות בשרשרת — ראו ההערה בבדיקת ה-IP למטה. */
   forwardedIps?: string[]
+  /** הכותרות הגולמיות — לסיווג המקור (lib/payments/callbackSource). */
+  xff?: string | null
+  realIp?: string | null
 }
 
 async function handle(raw: Record<string, unknown>, ctx: RequestContext) {
@@ -44,22 +48,20 @@ async function handle(raw: Record<string, unknown>, ctx: RequestContext) {
   // 🔴 שתיהן בדיקה משלימה, לא תחליפית: החתימה נשברת אם המפתח לא הוגדר
   // (fail-open בכוונה — ראו למטה), וה-IP נשבר אם נדרים מחדשים כתובות
   // בלי הודעה. שתיהן יחד הן ההגנה שהתיעוד ממליץ עליה.
+  let source: 'trusted' | 'spoofed' | 'unknown' | 'n/a' = 'n/a'
   if (provider.name === 'nedarim') {
-    // 🔴 נבדקת *כל* שרשרת ה-x-forwarded-for, לא רק הערך האחרון.
+    // 🔴 רק שתי הכתובות האחרונות בשרשרת נאמנות (ביקורת אבטחה 05.10).
     //
-    // ⚠️ זה הפיל תשלום אמיתי (04.10): נדרים שלחו מ-18.196.146.117 —
-    // כתובת רשמית ומאושרת — אבל שכבת ביניים הוסיפה ערך אחריה,
-    // ו-clientIpOrNull מחזיר דווקא את האחרון. הדיווח נדחה ב-403,
-    // הלקוח חויב, וההזמנה נותרה "מבוטלת" בלי שאיש ידע.
+    // ⚠️ הגרסה הקודמת קיבלה כתובת של נדרים *בכל מקום* בשרשרת — כולל
+    // הערכים הראשונים, שהשולח כותב בעצמו. `X-Forwarded-For: 18.196.146.117`
+    // עבר, ובלי מפתח חתימה כל אחד יכול היה לסמן הזמנה כשולמה.
     //
-    // ⚠️ ההיגיון הפוך ממגבלת קצב: שם חייבים את האחרון בלבד (כל ערך
-    // אחר ניתן לזיוף), וכאן די בכך ש*אחת* מהכתובות מוכרת — כתובת
-    // שאינה ברשימה אינה מעניקה שום גישה בפני עצמה.
-    const chain = ctx.forwardedIps?.length
-      ? ctx.forwardedIps
-      : (ctx.clientIp ? [ctx.clientIp] : [])
-    if (chain.length && !chain.some(isNedarimWebhookIp)) {
-      console.warn(`[fair/callback] דיווח מכתובת IP לא מוכרת (${chain.join(' → ')}) — נדחה`)
+    // ⚠️ 'spoofed' אינו נדחה: הוא מועבר לבדיקת אנוש (למטה). כך, אם ההנחה
+    // על מבנה השרשרת שגויה, תשלום אמיתי לא ייאבד כמו ב-04.10.
+    source = classifyCallbackSource(ctx.xff ?? null, ctx.realIp ?? null)
+    console.log(`[fair/callback] מקור: ${source} · xff="${ctx.xff ?? ''}" · real="${ctx.realIp ?? ''}"`)
+    if (source === 'unknown') {
+      console.warn(`[fair/callback] דיווח מכתובת IP לא מוכרת (${ctx.xff ?? ctx.realIp ?? '?'}) — נדחה`)
       return NextResponse.json({ error: 'מקור לא מוכר' }, { status: 403 })
     }
 
@@ -73,8 +75,12 @@ async function handle(raw: Record<string, unknown>, ctx: RequestContext) {
         console.warn('[fair/callback] חתימת HMAC לא תקינה — נדחה')
         return NextResponse.json({ error: 'חתימה לא תקינה' }, { status: 401 })
       }
+      // חתימה תקינה היא הוכחה חזקה מכל כתובת — אין צורך בבדיקת אנוש.
+      source = 'trusted'
     }
   }
+  // 🔴 דיווח שמקורו לא אומת — לא מסמנים שולם ולא מסמנים נכשל.
+  const hold = source === 'spoofed'
 
   // ── שכבה 1: אימות מול הספק ──
   const verified = await provider.verifyCallback(raw)
@@ -114,12 +120,18 @@ async function handle(raw: Record<string, unknown>, ctx: RequestContext) {
 
   // ── כישלון ──
   if (verified.status === 'failed') {
+    // 🔴 "נכשל" ממקור לא מאומת מתעלם: אחרת זיוף היה מבטל הזמנה של
+    // מישהו אחר ומשחרר את המלאי שלה.
+    if (hold) {
+      console.error(`[fair/callback] 🔴 דיווח כישלון ממקור לא מאומת להזמנה ${order.order_number} — התעלמות`)
+      return NextResponse.json({ ok: true, ignored: true })
+    }
     await db.from('book_fair_payments').insert({
       order_id: order.id, provider: provider.name,
       amount_agorot: verified.amountAgorot, status: 'failed',
       transaction_id: verified.transactionId, provider_response: clean,
     })
-    await db.from('book_fair_orders').update({ status: 'failed' }).eq('id', order.id)
+    await db.from('book_fair_orders').update({ status: 'failed' }).eq('id', order.id).eq('status', 'pending_payment')
 
     // 🔴 שחרור המלאי: אחרת עותקים של הזמנה שנכשלה ננעלים עד הפקיעה.
     await db.from('book_fair_reservations')
@@ -134,19 +146,21 @@ async function handle(raw: Record<string, unknown>, ctx: RequestContext) {
   // ── שכבה 2: השוואת סכום ──
   // 🔴 אי-התאמה אינה מסומנת כשולמה ואינה מסומנת ככשל: הכסף *כן* נגבה,
   // אך לא בסכום הנכון. זו הכרעת אנוש, והיא עולה למסך הניהול.
-  if (!amountMatches(verified.amountAgorot, order.total_agorot)) {
+  if (hold || !amountMatches(verified.amountAgorot, order.total_agorot)) {
     console.error(
-      `[fair/callback] אי-התאמה בסכום: הזמנה ${order.order_number} על ${order.total_agorot} אגורות, נגבו ${verified.amountAgorot}`
+      hold ? `[fair/callback] 🔴 דיווח הצלחה ממקור לא מאומת — הזמנה ${order.order_number} הועברה לבדיקת אנוש` : `[fair/callback] אי-התאמה בסכום: הזמנה ${order.order_number} על ${order.total_agorot} אגורות, נגבו ${verified.amountAgorot}`
     )
     await db.from('book_fair_payments').insert({
       order_id: order.id, provider: provider.name,
       amount_agorot: verified.amountAgorot, status: 'success',
       transaction_id: verified.transactionId, provider_response: clean,
-      error_message: `סכום שנגבה (${verified.amountAgorot}) אינו תואם להזמנה (${order.total_agorot})`,
+      error_message: hold
+        ? '🔴 מקור הדיווח לא אומת (כתובת IP) — לוודא בנדרים שהעסקה קיימת לפני משלוח'
+        : `סכום שנגבה (${verified.amountAgorot}) אינו תואם להזמנה (${order.total_agorot})`,
     })
     await db.from('book_fair_orders')
       .update({ status: 'payment_mismatch', paid_at: new Date().toISOString() })
-      .eq('id', order.id)
+      .eq('id', order.id).eq('status', 'pending_payment')
 
     return NextResponse.json({ ok: true, status: 'mismatch' })
   }
@@ -274,6 +288,7 @@ async function handle(raw: Record<string, unknown>, ctx: RequestContext) {
 export async function POST(request: NextRequest) {
   const ctx: RequestContext = {
     clientIp: clientIpOrNull(request), forwardedIps: forwardedIps(request),
+    xff: request.headers.get('x-forwarded-for'), realIp: request.headers.get('x-real-ip'),
     rawBody: null,
     tsHeader: request.headers.get('x-nedarim-timestamp'),
     sigHeader: request.headers.get('x-nedarim-signature'),
@@ -308,6 +323,7 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   return handle(Object.fromEntries(request.nextUrl.searchParams), {
     clientIp: clientIpOrNull(request), forwardedIps: forwardedIps(request),
+    xff: request.headers.get('x-forwarded-for'), realIp: request.headers.get('x-real-ip'),
     rawBody: null, tsHeader: null, sigHeader: null,
   })
 }
