@@ -22,7 +22,20 @@ export function Card({ title, subtitle, children, className = '' }: {
   )
 }
 
-export function Kpi({ label, value, sub }: { label: string; value: string; sub?: string }) {
+export function Kpi({ label, value, sub, highlight = false }: {
+  label: string; value: string; sub?: string
+  /** מספר מרכזי — רקע כחול כהה ומספר בזהב, כדי שיבלוט מעל השאר. */
+  highlight?: boolean
+}) {
+  if (highlight) {
+    return (
+      <div className="relative flex min-w-0 flex-col gap-1.5 overflow-hidden rounded-2xl bg-[#14213D] px-5 py-4 shadow-lg ring-2 ring-[#B8862B]">
+        <span className="text-sm font-bold text-[#F4F1EA]">{label}</span>
+        <span className="break-words text-4xl font-black tabular-nums tracking-tight text-[#E8B54D] sm:text-5xl">{value}</span>
+        {sub && <span className="text-[13px] text-[#C9CFDB]">{sub}</span>}
+      </div>
+    )
+  }
   return (
     <div className="flex min-w-0 flex-col gap-1.5 rounded-2xl border border-[#E6E1D6] bg-white px-5 py-4">
       <span className="text-sm font-semibold text-[#5B6475]">{label}</span>

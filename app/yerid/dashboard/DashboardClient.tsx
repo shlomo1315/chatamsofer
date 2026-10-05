@@ -210,10 +210,85 @@ export default function DashboardClient() {
           <Kpi label="הכנסות" value={fmtAgorot(s.revenueAgorot)} sub={`מ-${s.orders} הזמנות ששולמו`} />
           <Kpi label="הזמנות" value={s.orders.toLocaleString('en-US')}
             sub={CHANNELS.map(c => `${s.byChannel[c].orders} ${CHANNEL_LABELS[c]}`).join(' · ')} />
-          <Kpi label="ספרים שנמכרו" value={s.units.toLocaleString('en-US')} sub={s.orders ? `ממוצע ${(s.units / s.orders).toFixed(1)} להזמנה` : undefined} />
+          <Kpi highlight label="ספרים שנמכרו" value={s.units.toLocaleString('en-US')} sub={s.orders ? `ממוצע ${(s.units / s.orders).toFixed(1)} להזמנה` : undefined} />
           <Kpi label="הזמנה ממוצעת" value={fmtAgorot(s.avgAgorot)} sub="כולל משלוח" />
           <Kpi label="סוגי ספרים שנמכרו" value={s.allBooks.length.toLocaleString('en-US')} sub="ספרים שונים" />
         </div>
+
+        {/* ── פירוט לפי ספר — כל הספרים, ולחיצה על ספר פותחת את כל הנתונים שלו ── */}
+        <Card title="פירוט לפי ספר" subtitle={`${s.allBooks.length} ספרים שנמכרו בתקופה ובסינון הנוכחיים`}>
+          <div id="book-detail" className="flex flex-wrap gap-5">
+            <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-3">
+              <div className="relative">
+                <Search size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#5B6475]" />
+                <input value={detailQuery} onChange={e => setDetailQuery(e.target.value)} placeholder="חיפוש ספר"
+                  aria-label="חיפוש ספר ברשימה"
+                  className="min-h-[44px] w-full rounded-xl border border-[#E6E1D6] bg-white pr-9 pl-3 text-[15px] outline-none focus:border-[#B8862B]" />
+              </div>
+              <ul className="flex max-h-[34rem] flex-col overflow-y-auto rounded-xl border border-[#F0ECE3]">
+                {listedBooks.map(b => (
+                  <li key={b.title}>
+                    <button type="button" onClick={() => setDetailBook(b.title)}
+                      className={`flex w-full items-start gap-3 border-b border-[#F0ECE3] px-3 py-2.5 text-right last:border-0 ${detailBook === b.title ? 'bg-[#B8862B]/15' : 'hover:bg-[#F8F6F1]'}`}>
+                      <span className="min-w-0 flex-1 break-words text-[15px] font-semibold">{b.title}</span>
+                      <span className="text-sm tabular-nums text-[#5B6475]">{b.units} עותקים</span>
+                    </button>
+                  </li>
+                ))}
+                {!listedBooks.length && <li className="px-3 py-6 text-center text-sm text-[#5B6475]">לא נמצא ספר</li>}
+              </ul>
+            </div>
+
+            <div className="min-w-0 flex-[999_1_360px]">
+              {detail ? (
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <h3 className="break-words text-xl font-extrabold">{detail.title}</h3>
+                    <button onClick={() => setDetailBook('')} className="rounded-lg border border-[#E6E1D6] px-3 py-1.5 text-sm">סגירה</button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <Kpi label="עותקים" value={detail.units.toLocaleString('en-US')} />
+                    <Kpi label="הכנסה מהספר" value={fmtAgorot(detail.agorot)} />
+                    <Kpi label="הזמנות" value={detail.orders.toLocaleString('en-US')} />
+                    <Kpi label="ממוצע להזמנה" value={detail.avgPerOrder.toFixed(1)} sub="עותקים" />
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <p className="mb-2 text-sm font-bold">לפי ערוץ (עותקים)</p>
+                      <SplitBar parts={CHANNELS.map(c => ({ label: CHANNEL_LABELS[c], value: detail.byChannel[c].units, color: CH_COLORS[c], sub: `${detail.byChannel[c].units} · ${fmtAgorot(detail.byChannel[c].agorot)}` }))} />
+                    </div>
+                    <div>
+                      <p className="mb-2 text-sm font-bold">משלוח מול איסוף (עותקים)</p>
+                      <SplitBar parts={[
+                        { label: 'משלוח', value: detail.delivery.shipping, color: NAVY, sub: `${detail.delivery.shipping}` },
+                        { label: 'איסוף', value: detail.delivery.pickup, color: GOLD, sub: `${detail.delivery.pickup}` },
+                      ]} />
+                    </div>
+                  </div>
+                  <div>
+                    <p className="mb-2 text-sm font-bold">לפי יום</p>
+                    <BarList money={false} color="#14213D" empty="אין מכירות"
+                      rows={detail.byDay.map(d => ({ label: `${d.day.slice(8, 10)}.${d.day.slice(5, 7)}`, value: d.units, extra: fmtAgorot(d.agorot) }))} />
+                  </div>
+                  <div>
+                    <p className="mb-2 text-sm font-bold">לפי שעה (עותקים)</p>
+                    <HourBars hours={detail.byHour} />
+                  </div>
+                  <div>
+                    <p className="mb-2 text-sm font-bold">לפי עיר (עותקים)</p>
+                    <BarList money={false} color="#2A9D8F" empty="אין נתוני עיר (מכירות דוכן ואיסוף)"
+                      rows={detail.cities.map(c => ({ label: c.name, value: c.units }))} />
+                  </div>
+                </div>
+              ) : (
+                <div className="flex h-full min-h-[200px] items-center justify-center rounded-xl bg-[#F8F6F1] p-6 text-center text-[15px] text-[#5B6475]">
+                  בחרו ספר מהרשימה כדי לראות את כל הנתונים שלו
+                </div>
+              )}
+            </div>
+          </div>
+        </Card>
+
 
         <div className="flex flex-wrap gap-5">
           <Card title="חלוקה לפי ערוץ" subtitle="לפי סכום ההכנסות" className="flex-[1_1_320px]">
@@ -310,80 +385,6 @@ export default function DashboardClient() {
             </Card>
           </div>
         </div>
-
-        {/* ── פירוט לפי ספר — כל הספרים, ולחיצה על ספר פותחת את כל הנתונים שלו ── */}
-        <Card title="פירוט לפי ספר" subtitle={`${s.allBooks.length} ספרים שנמכרו בתקופה ובסינון הנוכחיים`}>
-          <div id="book-detail" className="flex flex-wrap gap-5">
-            <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-3">
-              <div className="relative">
-                <Search size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#5B6475]" />
-                <input value={detailQuery} onChange={e => setDetailQuery(e.target.value)} placeholder="חיפוש ספר"
-                  aria-label="חיפוש ספר ברשימה"
-                  className="min-h-[44px] w-full rounded-xl border border-[#E6E1D6] bg-white pr-9 pl-3 text-[15px] outline-none focus:border-[#B8862B]" />
-              </div>
-              <ul className="flex max-h-[34rem] flex-col overflow-y-auto rounded-xl border border-[#F0ECE3]">
-                {listedBooks.map(b => (
-                  <li key={b.title}>
-                    <button type="button" onClick={() => setDetailBook(b.title)}
-                      className={`flex w-full items-start gap-3 border-b border-[#F0ECE3] px-3 py-2.5 text-right last:border-0 ${detailBook === b.title ? 'bg-[#B8862B]/15' : 'hover:bg-[#F8F6F1]'}`}>
-                      <span className="min-w-0 flex-1 break-words text-[15px] font-semibold">{b.title}</span>
-                      <span className="text-sm tabular-nums text-[#5B6475]">{b.units} עותקים</span>
-                    </button>
-                  </li>
-                ))}
-                {!listedBooks.length && <li className="px-3 py-6 text-center text-sm text-[#5B6475]">לא נמצא ספר</li>}
-              </ul>
-            </div>
-
-            <div className="min-w-0 flex-[999_1_360px]">
-              {detail ? (
-                <div className="flex flex-col gap-4">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <h3 className="break-words text-xl font-extrabold">{detail.title}</h3>
-                    <button onClick={() => setDetailBook('')} className="rounded-lg border border-[#E6E1D6] px-3 py-1.5 text-sm">סגירה</button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    <Kpi label="עותקים" value={detail.units.toLocaleString('en-US')} />
-                    <Kpi label="הכנסה מהספר" value={fmtAgorot(detail.agorot)} />
-                    <Kpi label="הזמנות" value={detail.orders.toLocaleString('en-US')} />
-                    <Kpi label="ממוצע להזמנה" value={detail.avgPerOrder.toFixed(1)} sub="עותקים" />
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div>
-                      <p className="mb-2 text-sm font-bold">לפי ערוץ (עותקים)</p>
-                      <SplitBar parts={CHANNELS.map(c => ({ label: CHANNEL_LABELS[c], value: detail.byChannel[c].units, color: CH_COLORS[c], sub: `${detail.byChannel[c].units} · ${fmtAgorot(detail.byChannel[c].agorot)}` }))} />
-                    </div>
-                    <div>
-                      <p className="mb-2 text-sm font-bold">משלוח מול איסוף (עותקים)</p>
-                      <SplitBar parts={[
-                        { label: 'משלוח', value: detail.delivery.shipping, color: NAVY, sub: `${detail.delivery.shipping}` },
-                        { label: 'איסוף', value: detail.delivery.pickup, color: GOLD, sub: `${detail.delivery.pickup}` },
-                      ]} />
-                    </div>
-                  </div>
-                  <div>
-                    <p className="mb-2 text-sm font-bold">לפי יום</p>
-                    <BarList money={false} color="#14213D" empty="אין מכירות"
-                      rows={detail.byDay.map(d => ({ label: `${d.day.slice(8, 10)}.${d.day.slice(5, 7)}`, value: d.units, extra: fmtAgorot(d.agorot) }))} />
-                  </div>
-                  <div>
-                    <p className="mb-2 text-sm font-bold">לפי שעה (עותקים)</p>
-                    <HourBars hours={detail.byHour} />
-                  </div>
-                  <div>
-                    <p className="mb-2 text-sm font-bold">לפי עיר (עותקים)</p>
-                    <BarList money={false} color="#2A9D8F" empty="אין נתוני עיר (מכירות דוכן ואיסוף)"
-                      rows={detail.cities.map(c => ({ label: c.name, value: c.units }))} />
-                  </div>
-                </div>
-              ) : (
-                <div className="flex h-full min-h-[200px] items-center justify-center rounded-xl bg-[#F8F6F1] p-6 text-center text-[15px] text-[#5B6475]">
-                  בחרו ספר מהרשימה כדי לראות את כל הנתונים שלו
-                </div>
-              )}
-            </div>
-          </div>
-        </Card>
 
         <p className="text-center text-[13px] text-[#5B6475]">מוצגות הזמנות ששולמו בלבד · מספרים בלבד — ללא שמות, טלפונים או כתובות של לקוחות</p>
       </main>
