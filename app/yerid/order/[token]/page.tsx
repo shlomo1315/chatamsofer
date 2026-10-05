@@ -1,5 +1,8 @@
 import Link from 'next/link'
-import { CheckCircle2, Clock, XCircle, Package, Truck, AlertTriangle, BookOpen } from 'lucide-react'
+import { CheckCircle2, Clock, XCircle, Package, Truck, AlertTriangle, BookOpen, Check, Phone, Mail } from 'lucide-react'
+import {
+  trackingSteps, showShippingEta, OFFICE_CONTACT_KEY, parseOfficeContact, formatIsraeliPhone,
+} from '@/lib/bookFairTracking'
 import { verifyPublicToken } from '@/lib/publicToken'
 import { getServiceClient } from '@/lib/apiAuth'
 import { fmtAgorot } from '@/lib/bookFairPricing'
@@ -58,15 +61,21 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
 
   if (!order) return <Invalid />
 
-  const { data: items } = await db.from('book_fair_order_items')
-    .select('title_snapshot, sku_snapshot, quantity, line_total_agorot')
-    .eq('order_id', orderId)
+  const [{ data: items }, { data: contactRow }] = await Promise.all([
+    db.from('book_fair_order_items')
+      .select('title_snapshot, sku_snapshot, quantity, line_total_agorot')
+      .eq('order_id', orderId),
+    db.from('app_settings').select('value').eq('key', OFFICE_CONTACT_KEY).maybeSingle(),
+  ])
+  const contact = parseOfficeContact(contactRow?.value ?? null)
 
   const status = order.status as BookFairOrderStatus
   const view = CUSTOMER_VIEW[status] ?? CUSTOMER_VIEW.pending_payment
   const Icon = view.icon
   // ⚠️ join של Supabase מגיע כמערך או כאובייקט, תלוי בהקשר — שתי הצורות
   const city = oneOf(order.city)
+  const steps = trackingSteps(status, order.delivery_method)
+  const eta = showShippingEta(status, order.delivery_method)
 
   return (
     <main className="mx-auto max-w-2xl px-5 py-8">
@@ -85,6 +94,54 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
           <p className="text-base opacity-80">מספר הזמנה {order.order_number}</p>
         </div>
       </div>
+
+      {/* ── ציר השלבים ──
+          ⚠️ רק להזמנה ששולמה: בהזמנה שבוטלה או טרם שולמה אין משלוח
+          לעקוב אחריו, והציר היה מבטיח משהו שלא יקרה. */}
+      {steps && (
+        <ol className="mb-5 flex rounded-xl border-2 border-stone-200 bg-white px-2 py-5" aria-label="מצב ההזמנה">
+          {steps.map((s, i) => (
+            <li key={s.label} className="relative flex flex-1 flex-col items-center gap-2 text-center">
+              {i > 0 && (
+                <span aria-hidden className={`absolute top-[17px] h-1 rounded-full ${s.done ? 'bg-[#1E3A5F]' : 'bg-stone-200'}`}
+                  style={{ right: '50%', left: '-50%' }} />
+              )}
+              <span className={`relative z-10 flex h-9 w-9 items-center justify-center rounded-full ${
+                s.done ? 'bg-[#1E3A5F] text-white' : 'border-[3px] border-stone-300 bg-white'
+              } ${s.current ? 'ring-4 ring-[#DCE4EF]' : ''}`}>
+                {s.done && <Check size={18} strokeWidth={3} />}
+              </span>
+              <span className={`text-[15px] ${s.done ? 'font-bold text-stone-900' : 'text-stone-500'}`}>
+                {s.label}
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      {/* ── זמן המשלוח ופנייה למשרד ── */}
+      {eta && (
+        <section className="mb-5 rounded-xl border-2 border-amber-200 bg-amber-50 p-5">
+          <p className="flex items-start gap-2.5 text-[17px] leading-relaxed text-amber-950">
+            <Clock size={22} strokeWidth={1.8} className="mt-0.5 flex-shrink-0" />
+            <span>
+              המשלוח אמור להגיע <b>תוך 14 ימי עסקים</b>. אם הוא מתעכב יותר מזה, נא לפנות למשרד לבירור.
+            </span>
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2.5">
+            {contact.phone && (
+              <a href={`tel:${contact.phone}`}
+                className="flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-xl bg-[#1E3A5F] px-4 text-base font-bold text-white">
+                <Phone size={18} /> <span dir="ltr">{formatIsraeliPhone(contact.phone)}</span>
+              </a>
+            )}
+            <a href={`mailto:${contact.email}?subject=${encodeURIComponent(`בירור על הזמנה ${order.order_number}`)}`}
+              className="flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-xl border-2 border-[#1E3A5F] bg-white px-4 text-base font-bold text-[#1E3A5F]">
+              <Mail size={18} /> מייל למשרד
+            </a>
+          </div>
+        </section>
+      )}
 
       {status === 'pending_payment' && (
         <p className="mb-5 rounded-xl border-2 border-stone-200 bg-white p-4 text-base text-stone-700">

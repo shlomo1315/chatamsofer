@@ -9,6 +9,7 @@ import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useCan } from '@/components/StaffPermissions'
 import PaymentSettings from './PaymentSettings'
 import SellerPassword from './SellerPassword'
+import OfficeContact from './OfficeContact'
 import PhoneMessages from '../phone/PhoneMessages'
 import BookAudio from '../phone/BookAudio'
 
@@ -291,6 +292,7 @@ export default function SettingsClient({ cities, tiers, open, openAt, mockPay }:
       <div hidden={tab !== 'payment'} className="flex flex-col gap-5">
         <PaymentSettings />
         <SellerPassword />
+        <OfficeContact canEdit={canEdit} />
       </div>
 
       {/* ── השלוחה הטלפונית ──
