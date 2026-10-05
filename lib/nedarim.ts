@@ -5,6 +5,7 @@
 // תיעוד: https://matara.pro/nedarimplus/ApiDocumentation.html
 import { getServiceClient } from '@/lib/apiAuth'
 import { nedarimFetch } from '@/lib/nedarimFetch'
+import { guardBeforeNedarim, guardAfterNedarim, opKeyOf } from '@/lib/nedarimGuard'
 
 export const NEDARIM_URL =
   'https://www.matara.pro/nedarimplus/Mechubad/Reports/ManageReports.aspx'
@@ -205,9 +206,17 @@ async function nedarimRequest(
   params: Record<string, string | undefined>,
   timeoutMs = 25_000,
 ): Promise<NedarimResponse> {
+  // 🔴 כלל הברזל (lib/nedarimGuard): נפח חריג, לולאה על אותה פנייה, או רצף
+  // כשלים ⇒ נעצר *לפני* שהפנייה יוצאת לנדרים, ונשלח מייל התראה.
+  await guardBeforeNedarim('cards', opKeyOf(creds.mosadId, action, params))
   const release = await acquireSlot()
   try {
-    return await nedarimRequestRaw(creds, action, params, timeoutMs)
+    const r = await nedarimRequestRaw(creds, action, params, timeoutMs)
+    await guardAfterNedarim('cards', isOk(r), r.Message)
+    return r
+  } catch (e) {
+    await guardAfterNedarim('cards', false, e instanceof Error ? e.message : String(e))
+    throw e
   } finally {
     release()
   }

@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
 import { getNedarimCreds } from '@/lib/nedarim'
+import { guardBeforeNedarim, guardAfterNedarim } from '@/lib/nedarimGuard'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,6 +58,13 @@ export async function POST(request: NextRequest) {
   if (b.email) form.set('Email', String(b.email))
   form.set('Comments', 'נוצר/עודכן אוטומטית ממערכת היכל החתם סופר')
 
+  // 🔴 כלל הברזל — גם פנייה ישירה עוברת דרך השומר (lib/nedarimGuard).
+  // חזרה = שמירת אותה משפחה שוב ושוב.
+  const who = String(b.nedarim_id || b.id_number || b.id)
+  try { await guardBeforeNedarim('cards', `${creds.mosadId}:SaveClientCard:${who}`) } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 429 })
+  }
+
   let responseText = ''
   try {
     const res = await fetch(NEDARIM_URL, {
@@ -65,10 +73,12 @@ export async function POST(request: NextRequest) {
       body: form.toString(),
     })
     responseText = await res.text()
+    await guardAfterNedarim('cards', res.ok, res.ok ? undefined : `HTTP ${res.status}`)
     if (!res.ok) {
       return NextResponse.json({ error: `נדרים החזיר שגיאה (${res.status})`, raw: responseText.slice(0, 500) }, { status: 502 })
     }
   } catch (e) {
+    await guardAfterNedarim('cards', false, e instanceof Error ? e.message : String(e))
     return NextResponse.json({ error: `כשל בחיבור לנדרים פלוס: ${e instanceof Error ? e.message : String(e)}` }, { status: 502 })
   }
 

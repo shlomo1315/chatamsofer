@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
 import { getNedarimCreds, NEDARIM_URL } from '@/lib/nedarim'
+import { guardBeforeNedarim, guardAfterNedarim } from '@/lib/nedarimGuard'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,6 +27,11 @@ export async function GET() {
   form.set('MosadNumber', creds.mosadId)
   form.set('ApiPassword', creds.apiPassword)
 
+  // 🔴 כלל הברזל — גם פנייה ישירה עוברת דרך השומר (lib/nedarimGuard).
+  try { await guardBeforeNedarim('cards', null) } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 429 })
+  }
+
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 25_000)
   let text: string
@@ -38,7 +44,9 @@ export async function GET() {
       cache: 'no-store',
     })
     text = await res.text()
+    await guardAfterNedarim('cards', res.ok, res.ok ? undefined : `HTTP ${res.status}`)
   } catch (e) {
+    await guardAfterNedarim('cards', false, e instanceof Error ? e.message : String(e))
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502 })
   } finally { clearTimeout(timer) }
 

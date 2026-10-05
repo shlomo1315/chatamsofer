@@ -30,6 +30,7 @@ import type {
 import { sanitizeProviderResponse } from './types'
 import { getPaymentSettings } from './settings'
 import { nedarimFetch } from '../nedarimFetch'
+import { guardBeforeNedarim, guardAfterNedarim } from '../nedarimGuard'
 
 /**
  * כתובות נדרים פלוס.
@@ -80,6 +81,25 @@ export class NedarimPaymentProvider implements PaymentProvider {
    * ב-body מחזירה "שגיאת מערכת - חסר פרמטר Action (GET)".
    */
   private async post(
+    url: string,
+    action: string,
+    params: Record<string, string | number | undefined>,
+  ): Promise<Record<string, unknown>> {
+    // 🔴 כלל הברזל (lib/nedarimGuard) — ערוץ "סליקה", נפרד מהכרטיסים: לולאה
+    // בכרטיסים לא תעצור את קופת היריד. חזרה = אותה פעולה על אותה הזמנה.
+    const order = params.Param2 !== undefined ? String(params.Param2) : ''
+    await guardBeforeNedarim('payments', order ? `${action}:${order}` : null)
+    try {
+      const r = await this.postRaw(url, action, params)
+      await guardAfterNedarim('payments', String(r.Status ?? r.Result ?? '').toUpperCase() === 'OK', String(r.Message ?? ''))
+      return r
+    } catch (e) {
+      await guardAfterNedarim('payments', false, e instanceof Error ? e.message : String(e))
+      throw e
+    }
+  }
+
+  private async postRaw(
     url: string,
     action: string,
     params: Record<string, string | number | undefined>,
