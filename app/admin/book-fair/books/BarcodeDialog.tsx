@@ -50,7 +50,7 @@ export default function BarcodeDialog({ books, busy, onDownload, onClose }: {
         <div className="flex flex-col gap-3 rounded-xl border-2 border-slate-900 p-4">
           <div>
             <p className="font-semibold text-slate-900">דף מלא לספר אחד</p>
-            <p className="text-sm text-slate-500">24 ברקודים זהים בדף, שם הספר לאורך בצד שמאל</p>
+            <p className="text-sm text-slate-500">45 ברקודים נמוכים זהים בדף (לגב ספר צר), שם הספר לאורך בצד שמאל</p>
           </div>
           <label className="flex flex-col gap-1.5 text-sm font-semibold text-slate-700">
             ספר
@@ -81,8 +81,8 @@ export default function BarcodeDialog({ books, busy, onDownload, onClose }: {
 
         <div className={row}>
           <div>
-            <p className="font-semibold text-slate-900">דף לכל ספר — כל הקטלוג</p>
-            <p className="text-sm text-slate-500">PDF אחד, עמוד נפרד לכל ספר ({active.length} עמודים)</p>
+            <p className="font-semibold text-slate-900">שני דפים לכל ספר — כל הקטלוג</p>
+            <p className="text-sm text-slate-500">PDF אחד, שני עמודים לכל ספר ({active.length * 2} עמודים)</p>
           </div>
           <button className={btn} disabled={busy} onClick={() => onDownload('?mode=sheets')}>
             {busy && <Loader2 size={15} className="animate-spin" />} הורדת PDF

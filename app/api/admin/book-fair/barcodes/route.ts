@@ -18,7 +18,7 @@ export const runtime = 'nodejs'
 // מצבים (?mode=):
 //   (ריק)   — גיליון משותף: תווית אחת לכל ספר (כמו קודם)
 //   sheet   — דף מלא לספר אחד (?sku=…&pages=N), 24 תוויות זהות לעמוד
-//   sheets  — דף לכל ספר בקטלוג, PDF אחד
+//   sheets  — שני דפים לכל ספר בקטלוג, PDF אחד
 export async function GET(request: NextRequest) {
   const mode = request.nextUrl.searchParams.get('mode') ?? ''
   const onlySku = request.nextUrl.searchParams.get('sku')?.trim() ?? ''
@@ -52,7 +52,8 @@ export async function GET(request: NextRequest) {
 
   try {
     const bytes = mode === 'sheet' || mode === 'sheets'
-      ? await buildBookFairBarcodeSheetsPdf(selected, mode === 'sheet' ? pages : 1)
+      // ⚠️ הקטלוג המלא — שני עמודים לכל ספר (בקשת המשתמש 05.10).
+      ? await buildBookFairBarcodeSheetsPdf(selected, mode === 'sheet' ? pages : 2)
       : await buildBookFairBarcodesPdf(rows)
     const name = mode === 'sheet'
       ? `ברקודים - ${selected[0].title}.pdf`

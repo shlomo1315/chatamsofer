@@ -150,7 +150,8 @@ export async function buildBookFairBarcodesPdf(books: BarcodeLabelInput[]): Prom
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// דף מלא לכל ספר — 24 תוויות זהות של אותו ספר (בקשת המשתמש 05.10).
+// דף מלא לכל ספר — 45 תוויות נמוכות זהות של אותו ספר, לגב ספר צר
+// (בקשת המשתמש 05.10).
 //
 // אותו גודל תווית ואותה רשת 3×8 כמו בגיליון המשותף. שם הספר עובר לפס
 // צר בצד שמאל, לאורך, נקרא מלמטה למעלה. בלי הכותרת למעלה הברקוד גבוה
@@ -160,8 +161,15 @@ export async function buildBookFairBarcodesPdf(books: BarcodeLabelInput[]): Prom
 // (lib/bookFairSideTitle). אין חיתוך ואין "...".
 // ─────────────────────────────────────────────────────────────────────────────
 
-const STRIP_PAD = 3
+const STRIP_PAD = 2.5
 const DIVIDER = rgb(0.89, 0.90, 0.93)
+
+// ── רשת נמוכה לגב ספר צר (בקשת המשתמש 05.10): 3×15 = 45 תוויות לעמוד ──
+// גובה תווית ~47pt ≈ 16.7 מ"מ (במקום ~94pt). הברקוד נשאר ברוחב מלא —
+// הסורק קורא את הרוחב, והגובה (~9 מ"מ) מספיק לסריקה.
+const SPINE_ROWS = 15
+const SPINE_LABEL_H = (H - MARGIN * 2 - GUTTER * (SPINE_ROWS - 1)) / SPINE_ROWS
+const SPINE_PER_PAGE = COLS * SPINE_ROWS
 
 export async function buildBookFairBarcodeSheetsPdf(
   books: BarcodeLabelInput[],
@@ -178,23 +186,23 @@ export async function buildBookFairBarcodeSheetsPdf(
   for (const book of books) {
     // ⚠️ ברקוד אחד לספר, מוטמע פעם אחת ומשמש את כל 24×N התוויות.
     const barcodeImg = await pdf.embedPng(makeBarcodePng(book.sku))
-    const layout = layoutSideTitle(book.title, measure, LABEL_H - 8)
+    const layout = layoutSideTitle(book.title, measure, SPINE_LABEL_H - 6)
     const stripW = layout.thickness + STRIP_PAD * 2
 
     for (let p = 0; p < pages; p++) {
       const page = pdf.addPage([W, H])
-      for (let j = 0; j < PER_PAGE; j++) {
+      for (let j = 0; j < SPINE_PER_PAGE; j++) {
         const col = j % COLS
         const row = Math.floor(j / COLS)
         const x = MARGIN + col * (LABEL_W + GUTTER)
-        const yTop = H - MARGIN - row * (LABEL_H + GUTTER)
-        const yBottom = yTop - LABEL_H
+        const yTop = H - MARGIN - row * (SPINE_LABEL_H + GUTTER)
+        const yBottom = yTop - SPINE_LABEL_H
 
-        page.drawRectangle({ x, y: yBottom, width: LABEL_W, height: LABEL_H, borderColor: BORDER, borderWidth: 0.6 })
+        page.drawRectangle({ x, y: yBottom, width: LABEL_W, height: SPINE_LABEL_H, borderColor: BORDER, borderWidth: 0.6 })
 
         // ── פס השם בצד שמאל ──
         page.drawLine({
-          start: { x: x + stripW, y: yBottom + 4 }, end: { x: x + stripW, y: yTop - 4 },
+          start: { x: x + stripW, y: yBottom + 3 }, end: { x: x + stripW, y: yTop - 3 },
           thickness: 0.5, color: DIVIDER, dashArray: [2, 2],
         })
         // ⚠️ סיבוב 90° נגד כיוון השעון: "למעלה" של הטקסט פונה שמאלה, ולכן
@@ -203,20 +211,20 @@ export async function buildBookFairBarcodeSheetsPdf(
           const v = toVisual(line)
           const w = font.widthOfTextAtSize(v, layout.size)
           const bx = x + STRIP_PAD + layout.size * 0.85 + k * layout.size * 1.15
-          const by = yBottom + (LABEL_H - w) / 2
+          const by = yBottom + (SPINE_LABEL_H - w) / 2
           page.drawText(v, { x: bx, y: by, size: layout.size, font, color: INK, rotate: degrees(90) })
         })
 
         // ── ברקוד + מק"ט, ממורכזים באזור שמימין לפס ──
         const ax = x + stripW
         const aw = LABEL_W - stripW
-        const skuSize = 9
-        let bh = 46
+        const skuSize = 7
+        let bh = 26
         let bw = bh * (barcodeImg.width / barcodeImg.height)
         const maxBw = aw - 12
         if (bw > maxBw) { bh = bh * (maxBw / bw); bw = maxBw }
         const blockH = bh + 4 + skuSize
-        const by = yBottom + (LABEL_H - blockH) / 2 + skuSize + 4
+        const by = yBottom + (SPINE_LABEL_H - blockH) / 2 + skuSize + 4
         page.drawImage(barcodeImg, { x: ax + (aw - bw) / 2, y: by, width: bw, height: bh })
         const skuW = font.widthOfTextAtSize(book.sku, skuSize)
         page.drawText(book.sku, { x: ax + (aw - skuW) / 2, y: by - skuSize - 2, size: skuSize, font, color: INK })
