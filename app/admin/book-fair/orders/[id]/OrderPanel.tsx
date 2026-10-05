@@ -166,6 +166,10 @@ export default function OrderPanel({ order, items, cities, recordings, payments 
           '⚠️ הכסף לא הוחזר אוטומטית — יש לבצע את ההעברה ללקוח ידנית.',
         )
       }
+      // ⚠️ מכירת דוכן: הספרים לא הוחזרו למלאי אוטומטית (ראו route).
+      if (json.standRestockManual) {
+        window.alert('מכירת דוכן — הספרים שהוחזרו לא נוספו למלאי אוטומטית.\n\nיש להחזיר אותם למלאי הדוכן ידנית במסך הקטלוג.')
+      }
       setRefundOpen(false); setBack({}); setRefundShip(false); setRefundReason(''); setRefundNote('')
       router.refresh()
     } catch {

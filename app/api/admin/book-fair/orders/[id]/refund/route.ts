@@ -170,15 +170,33 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // ⚠️ best-effort ובנפרד מהכסף: כישלון כאן אינו מבטל זיכוי שכבר בוצע.
   // ביקורת המלאי (book_fair_stock_audit) תתפוס פער אם נוצר.
   const restocked: string[] = []
-  if (body.restock !== false && lines.length) {
+  // 🔴 מכירת דוכן אינה חוזרת אוטומטית (ביקורת אבטחה 05.10): היא נלקחה
+  // ממלאי הדוכן (stock_fair), ו-book_fair_adjust_stock מוסיף רק למלאי
+  // האתר/הטלפון — כל זיכוי דוכן יצר מלאי מקוון שלא היה קיים.
+  const standOrder = order.channel === 'fair'
+  if (body.restock !== false && lines.length && !standOrder) {
     const channel = order.channel === 'phone' ? 'phone' : 'web'
+    const note = `זיכוי הזמנה ${order.order_number}`
+    // 🔴 כמה כבר הוחזר מההזמנה הזו, לכל ספר. בלי זה זיכוי חלקי של 1 אגורה
+    // עם כל השורות, שוב ושוב, החזיר את אותם עותקים למלאי בכל פעם.
+    const { data: prev } = await db.from('book_fair_stock_ledger')
+      .select('book_id, delta').eq('reason', 'refund').eq('note', note)
+    const returned = new Map<string, number>()
+    for (const r of (prev ?? []) as { book_id: string; delta: number }[]) {
+      returned.set(r.book_id, (returned.get(r.book_id) ?? 0) + r.delta)
+    }
     for (const line of lines) {
       const item = items.find(i => i.id === line.itemId)
       if (!item?.book_id) continue      // ספר שנמחק מהקטלוג — אין למה להחזיר
+      const bought = items.filter(i => i.book_id === item.book_id).reduce((n, i) => n + i.quantity, 0)
+      const already = returned.get(item.book_id) ?? 0
+      const qty = Math.min(line.quantity, bought - already)
+      if (qty <= 0) continue            // כבר הוחזר במלואו בזיכוי קודם
+      returned.set(item.book_id, already + qty)
       const { error } = await db.rpc('book_fair_adjust_stock', {
         p_book_id: item.book_id,
         p_channel: channel,
-        p_delta: line.quantity,
+        p_delta: qty,
         p_reason: 'refund',
         p_note: `זיכוי הזמנה ${order.order_number}`,
         p_by: staff.userId,
@@ -208,6 +226,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     status: plan.nextStatus,
     /** ⚠️ true = הכסף לא הוחזר אוטומטית ויש לבצע העברה ידנית. */
     manualRequired: manual,
+    /** מכירת דוכן — הספרים לא הוחזרו אוטומטית; להחזיר למלאי הדוכן ידנית. */
+    standRestockManual: standOrder && lines.length > 0 && body.restock !== false,
     restocked,
   })
 }
