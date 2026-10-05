@@ -236,28 +236,36 @@ export async function buildBookFairBarcodeSheetsPdf(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// מדבקה בודדת 7×3.5 ס"מ — עמוד לכל מדבקה (בקשת המשתמש 05.10), למדפסת
-// מדבקות בגליל. גודל העמוד = גודל המדבקה, בלי מסגרת ובלי רשת.
+// מדבקות 7×3.5 ס"מ על דף A4 (בקשת המשתמש 05.10).
 //
-// מבנה: שם הספר למעלה (עד 2-3 שורות, מוקטן לפי הצורך — 🔴 תמיד כולו),
-// הברקוד באמצע, המק"ט מתחתיו.
+// רשת 3×8 = 24 מדבקות לעמוד, כל תא *בדיוק* 70×35 מ"מ: 3×70 = 210 מ"מ
+// (כל רוחב ה-A4), 8×35 = 280 מ"מ, והשאר (17 מ"מ) מתחלק לשוליים למעלה
+// ולמטה. כל עמוד — ספר אחד בלבד.
+//
+// מבנה המדבקה: שם הספר למעלה (עד 2-3 שורות, מוקטן לפי הצורך — 🔴 תמיד
+// כולו), הברקוד באמצע, המק"ט מתחתיו. קו חיתוך אפור דק סביב כל תא.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MM = 72 / 25.4
 export const STICKER_W = 70 * MM // 7 ס"מ
 export const STICKER_H = 35 * MM // 3.5 ס"מ
 const ST_PAD = 2.5 * MM
+export const STICKER_COLS = 3
+export const STICKER_ROWS = 8
+const ST_TOP = (H - STICKER_ROWS * STICKER_H) / 2
+const ST_LEFT = (W - STICKER_COLS * STICKER_W) / 2
+const CUT = rgb(0.86, 0.87, 0.9)
 
 export async function buildBookFairStickersPdf(
   books: BarcodeLabelInput[],
-  copiesPerBook = 1,
+  pagesPerBook = 1,
 ): Promise<Uint8Array> {
   const { layoutStickerTitle } = await import('./bookFairStickerTitle')
   const pdf = await PDFDocument.create()
   pdf.registerFontkit(fontkit)
   const font = await pdf.embedFont(Buffer.from(HEEBO_TTF_B64, 'base64'), { subset: true })
   const measure = (t: string, s: number) => font.widthOfTextAtSize(toVisual(t), s)
-  const copies = Math.max(1, Math.min(200, Math.floor(copiesPerBook)))
+  const pages = Math.max(1, Math.min(20, Math.floor(pagesPerBook)))
 
   const innerW = STICKER_W - ST_PAD * 2
   const skuSize = 8
@@ -273,26 +281,31 @@ export async function buildBookFairStickersPdf(
     let bh = Math.min(availH, 46)
     let bw = bh * (barcodeImg.width / barcodeImg.height)
     if (bw > innerW) { bh = bh * (innerW / bw); bw = innerW }
-
-    // מרכוז אנכי של כל הבלוק
     const blockH = title.height + gap + bh + 2 + skuSize
-    const top = STICKER_H - (STICKER_H - blockH) / 2
+    const skuW = font.widthOfTextAtSize(book.sku, skuSize)
 
-    for (let c = 0; c < copies; c++) {
-      const page = pdf.addPage([STICKER_W, STICKER_H])
+    for (let p = 0; p < pages; p++) {
+      const page = pdf.addPage([W, H])
+      for (let r = 0; r < STICKER_ROWS; r++) {
+        for (let c = 0; c < STICKER_COLS; c++) {
+          const x0 = ST_LEFT + c * STICKER_W
+          const y0 = H - ST_TOP - (r + 1) * STICKER_H // תחתית התא
 
-      title.lines.forEach((line, k) => {
-        const v = toVisual(line)
-        const w = font.widthOfTextAtSize(v, title.size)
-        const y = top - title.size * 0.9 - k * title.size * 1.15
-        page.drawText(v, { x: (STICKER_W - w) / 2, y, size: title.size, font, color: INK })
-      })
+          page.drawRectangle({ x: x0, y: y0, width: STICKER_W, height: STICKER_H, borderColor: CUT, borderWidth: 0.4 })
 
-      const by = top - title.height - gap - bh
-      page.drawImage(barcodeImg, { x: (STICKER_W - bw) / 2, y: by, width: bw, height: bh })
-
-      const skuW = font.widthOfTextAtSize(book.sku, skuSize)
-      page.drawText(book.sku, { x: (STICKER_W - skuW) / 2, y: by - 2 - skuSize * 0.85, size: skuSize, font, color: INK })
+          // מרכוז אנכי של הבלוק בתוך התא
+          const top = y0 + STICKER_H - (STICKER_H - blockH) / 2
+          title.lines.forEach((line, k) => {
+            const v = toVisual(line)
+            const w = font.widthOfTextAtSize(v, title.size)
+            const y = top - title.size * 0.9 - k * title.size * 1.15
+            page.drawText(v, { x: x0 + (STICKER_W - w) / 2, y, size: title.size, font, color: INK })
+          })
+          const by = top - title.height - gap - bh
+          page.drawImage(barcodeImg, { x: x0 + (STICKER_W - bw) / 2, y: by, width: bw, height: bh })
+          page.drawText(book.sku, { x: x0 + (STICKER_W - skuW) / 2, y: by - 2 - skuSize * 0.85, size: skuSize, font, color: INK })
+        }
+      }
     }
   }
 

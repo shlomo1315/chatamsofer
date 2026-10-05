@@ -19,13 +19,12 @@ export const runtime = 'nodejs'
 //   (ריק)   — גיליון משותף: תווית אחת לכל ספר (כמו קודם)
 //   sheet   — דף מלא לספר אחד (?sku=…&pages=N), 24 תוויות זהות לעמוד
 //   sheets  — שני דפים לכל ספר בקטלוג, PDF אחד
-//   sticker — מדבקות 7×3.5 ס"מ לספר אחד (?sku=…&copies=N), עמוד לכל מדבקה
-//   stickers — מדבקה אחת 7×3.5 ס"מ לכל ספר בקטלוג
+//   sticker — מדבקות 7×3.5 ס"מ על A4 (24 לעמוד) לספר אחד (?sku=…&pages=N)
+//   stickers — אותו דבר לכל הקטלוג, שני עמודים לכל ספר
 export async function GET(request: NextRequest) {
   const mode = request.nextUrl.searchParams.get('mode') ?? ''
   const onlySku = request.nextUrl.searchParams.get('sku')?.trim() ?? ''
   const pages = Math.max(1, Math.min(20, Number(request.nextUrl.searchParams.get('pages')) || 1))
-  const copies = Math.max(1, Math.min(200, Number(request.nextUrl.searchParams.get('copies')) || 1))
   if (!(await requirePermission('book_fair', 'view'))) return forbidden()
   const db = getServiceClient()
   if (!db) return serverMisconfigured()
@@ -55,7 +54,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const bytes = mode === 'sticker' || mode === 'stickers'
-      ? await buildBookFairStickersPdf(selected, mode === 'sticker' ? copies : 1)
+      ? await buildBookFairStickersPdf(selected, mode === 'sticker' ? pages : 2)
       : mode === 'sheet' || mode === 'sheets'
       // ⚠️ הקטלוג המלא — שני עמודים לכל ספר (בקשת המשתמש 05.10).
       ? await buildBookFairBarcodeSheetsPdf(selected, mode === 'sheet' ? pages : 2)

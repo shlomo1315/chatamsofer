@@ -24,7 +24,7 @@ export default function BarcodeDialog({ books, busy, onDownload, onClose }: {
   const [query, setQuery] = useState('')
   const [pages, setPages] = useState(1)
   const [stQuery, setStQuery] = useState('')
-  const [copies, setCopies] = useState(1)
+  const [stPages, setStPages] = useState(1)
   const stPicked = active.find(b => b.title === stQuery.trim() || b.sku === stQuery.trim()) ?? null
   // ⚠️ הבחירה לפי שם מלא מתוך הרשימה — מחרוזת חלקית אינה ספר.
   const picked = active.find(b => b.title === query.trim() || b.sku === query.trim()) ?? null
@@ -85,7 +85,7 @@ export default function BarcodeDialog({ books, busy, onDownload, onClose }: {
         <div className="flex flex-col gap-3 rounded-xl border-2 border-amber-500 p-4">
           <div>
             <p className="font-semibold text-slate-900">מדבקות 7×3.5 ס״מ</p>
-            <p className="text-sm text-slate-500">עמוד בגודל המדבקה, מדבקה אחת לעמוד — למדפסת מדבקות</p>
+            <p className="text-sm text-slate-500">24 מדבקות בדף A4 (3×8), כל דף לספר אחד</p>
           </div>
           <label className="flex flex-col gap-1.5 text-sm font-semibold text-slate-700">
             ספר
@@ -95,14 +95,14 @@ export default function BarcodeDialog({ books, busy, onDownload, onClose }: {
           </label>
           <div className="flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2 text-sm text-slate-700">
-              כמות מדבקות
-              <input type="number" min={1} max={200} value={copies}
-                onChange={e => setCopies(Math.max(1, Math.min(200, Number(e.target.value) || 1)))}
+              מספר דפים
+              <input type="number" min={1} max={20} value={stPages}
+                onChange={e => setStPages(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
                 className="min-h-[40px] w-20 rounded-xl border border-slate-300 text-center text-base" />
             </label>
             <button
               disabled={busy || !stPicked}
-              onClick={() => stPicked && onDownload(`?mode=sticker&sku=${encodeURIComponent(stPicked.sku)}&copies=${copies}`)}
+              onClick={() => stPicked && onDownload(`?mode=sticker&sku=${encodeURIComponent(stPicked.sku)}&pages=${stPages}`)}
               className="mr-auto inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-amber-600 px-5 text-sm font-bold text-white disabled:opacity-40"
             >
               {busy && <Loader2 size={15} className="animate-spin" />} מדבקות לספר
@@ -110,7 +110,7 @@ export default function BarcodeDialog({ books, busy, onDownload, onClose }: {
           </div>
           {stQuery.trim() && !stPicked && <p className="text-sm text-amber-700">בחרו ספר מהרשימה</p>}
           <button className={btn} disabled={busy} onClick={() => onDownload('?mode=stickers')}>
-            {busy && <Loader2 size={15} className="animate-spin" />} מדבקה לכל ספר בקטלוג ({active.length} מדבקות)
+            {busy && <Loader2 size={15} className="animate-spin" />} כל הקטלוג — 2 דפים לכל ספר ({active.length * 2} דפים)
           </button>
         </div>
 
