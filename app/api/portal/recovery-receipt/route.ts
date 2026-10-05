@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { assertPublicHost } from '@/lib/ssrfGuard'
 import { NextResponse, type NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
 import { portalCookieName } from '../login/route'
@@ -117,6 +118,10 @@ async function fetchLinkedFile(link: string): Promise<FetchedFile | { error: str
     const target = validateTarget(current)
     if ('error' in target) return target
     const u = target.url
+    // 🔴 בדיקת הכתובות שהשם מתורגם אליהן (lib/ssrfGuard) — בכל קפיצה,
+    // כולל הפניות. הבדיקה הטקסטואלית לבדה פספסה IPv6 / CGNAT / שמות
+    // שמתורגמים לכתובת פנימית (ביקורת אבטחה 05.10).
+    if (!(await assertPublicHost(u.hostname))) return { error: 'הקישור אינו נתמך' }
     const key = u.toString()
     if (seen.has(key)) return { error: 'הקישור מפנה במעגל — ודאו שהוא קישור ישיר לקובץ' }
     seen.add(key)

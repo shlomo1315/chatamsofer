@@ -347,7 +347,8 @@ export function emailIntakeRejectedEmail(opts: {
 }): BuiltEmail {
   const { name, typeLabel, errors, draftHref, action, portalUrl = PORTAL_BASE_DEFAULT } = opts
   const greet = opts.greeting?.trim() || greetHe(name)
-  const errorList = errors.map(e => `<li style="margin:0 0 4px;">${e}</li>`).join('')
+  // 🔴 escapeHtml — השגיאות מהדהדות טקסט שהשולח כתב (ביקורת אבטחה 05.10).
+  const errorList = errors.map(e => `<li style="margin:0 0 4px;">${escapeHtml(e)}</li>`).join('')
   // הכפתור מפנה ישירות לטופס ההגשה המתאים (?action=birth|loan|aid) ולא לדף הכללי.
   const base = portalUrl.replace(/\/$/, '')
   const digitalUrl = action ? `${base}/?action=${action}` : `${base}/`
@@ -450,7 +451,7 @@ export function weeklyLoansReportEmail(
       </tr>
       ${newLoans.map((l, i) => `
       <tr style="background:${i % 2 ? '#ffffff' : '#fafbfc'};">
-        <td style="padding:10px 12px;font-size:13px;color:#0f172a;border-top:1px solid #f1f5f9;">${l.name}</td>
+        <td style="padding:10px 12px;font-size:13px;color:#0f172a;border-top:1px solid #f1f5f9;">${escapeHtml(l.name)}</td>
         <td style="padding:10px 12px;font-size:13px;color:#0f172a;font-weight:700;border-top:1px solid #f1f5f9;">${fmtCur(l.amount)}</td>
         <td style="padding:10px 12px;font-size:13px;color:#64748b;border-top:1px solid #f1f5f9;">${l.statusLabel}</td>
         <td style="padding:10px 12px;font-size:13px;color:#64748b;border-top:1px solid #f1f5f9;">${fmtDate(l.createdAt)}</td>
@@ -824,8 +825,9 @@ export function requestReceivedEmail(opts: {
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
       <tr><td style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px 18px;color:#334155;font-size:14px;line-height:2;">
         ${documents.map(d => d.url
-          ? `<a href="${d.url}" target="_blank" download style="color:#4f46e5;font-weight:600;text-decoration:underline;">${d.name}</a>`
-          : `${d.name}`).join('<br/>')}
+          // 🔴 שם הקובץ מגיע מהמשתמש ⇒ escapeHtml; הקישור — https בלבד.
+          ? `<a href="${/^https:\/\//i.test(d.url) ? escapeHtml(d.url) : '#'}" target="_blank" download style="color:#4f46e5;font-weight:600;text-decoration:underline;">${escapeHtml(d.name)}</a>`
+          : `${escapeHtml(d.name)}`).join('<br/>')}
       </td></tr>
     </table>` : ''
 
@@ -954,7 +956,7 @@ export function financialAidInquiryEmail(
     ${reason ? `
     <p style="margin:0 0 8px;color:#334155;font-size:14px;font-weight:700;">סיבת הבקשה:</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
-      <tr><td style="background:#f8fafc;border-right:4px solid #6366f1;border-radius:0 12px 12px 0;padding:14px 18px;color:#334155;font-size:14px;line-height:1.7;white-space:pre-wrap;">${reason}</td></tr>
+      <tr><td style="background:#f8fafc;border-right:4px solid #6366f1;border-radius:0 12px 12px 0;padding:14px 18px;color:#334155;font-size:14px;line-height:1.7;white-space:pre-wrap;">${escapeHtml(reason)}</td></tr>
     </table>` : ''}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;">
       <tr><td style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:16px 20px;">
