@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
       orderId: order.id,
       orderNumber: order.order_number,
       amountAgorot: itemsTotal,
-      customerName: String(body.customer_name ?? '').trim() || 'דוכן',
+      customerName: String(body.customer_name ?? '').trim() || 'תרומה בדוכן',
       customerEmail: null,
       customerPhone: String(body.customer_phone ?? '').trim(),
       returnUrl: `${origin}/yerid/seller`,

@@ -24,7 +24,7 @@ import { useLiveData, agoText, nextText } from '@/components/bookFair/useLiveDat
 
 type Payload = { orders: StatOrder[]; items: StatItem[]; categories: Record<string, string>; at: string }
 
-const REFRESH_MS = 5 * 60 * 1000
+const REFRESH_MS = 30 * 1000
 const NAVY = '#14213D'
 const GOLD = '#B8862B'
 const SELECT = 'min-h-[44px] min-w-0 rounded-xl border-0 bg-[#F4F1EA] px-3 text-[15px] text-[#14213D]'
@@ -206,13 +206,11 @@ export default function DashboardClient() {
         )}
 
         {/* ── מספרים ── */}
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-          <Kpi label="הכנסות" value={fmtAgorot(s.revenueAgorot)} sub={`מ-${s.orders} הזמנות ששולמו`} />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <Kpi label="היקף מכירות" value={fmtAgorot(s.revenueAgorot)} sub={`מ-${s.orders} הזמנות ששולמו`} />
           <Kpi label="הזמנות" value={s.orders.toLocaleString('en-US')}
             sub={CHANNELS.map(c => `${s.byChannel[c].orders} ${CHANNEL_LABELS[c]}`).join(' · ')} />
-          <Kpi highlight label="ספרים שנמכרו" value={s.units.toLocaleString('en-US')} sub={s.orders ? `ממוצע ${(s.units / s.orders).toFixed(1)} להזמנה` : undefined} />
-          <Kpi label="הזמנה ממוצעת" value={fmtAgorot(s.avgAgorot)} sub="כולל משלוח" />
-          <Kpi label="סוגי ספרים שנמכרו" value={s.allBooks.length.toLocaleString('en-US')} sub="ספרים שונים" />
+          <Kpi highlight label="ספרים שנמכרו" value={s.units.toLocaleString('en-US')} />
         </div>
 
         {/* ── פירוט לפי ספר — כל הספרים, ולחיצה על ספר פותחת את כל הנתונים שלו ── */}
