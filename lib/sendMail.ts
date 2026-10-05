@@ -1,3 +1,4 @@
+import { safeError } from '@/lib/safeError'
 import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 import { NOREPLY_FROM, BRAND_NAME, DEPARTMENTS, departmentByEmail } from './departments'
@@ -236,7 +237,7 @@ async function trySendViaGmail(
     console.warn('[mail] כל חשבונות השליחה מוצו או נכשלו — ממשיכים ב-Resend')
     return null
   } catch (e) {
-    console.error('[mail] שליחה דרך Gmail נכשלה, נופלים ל-Resend:', e)
+    console.error('[mail] שליחה דרך Gmail נכשלה, נופלים ל-Resend:', safeError(e))
     return null
   }
 }

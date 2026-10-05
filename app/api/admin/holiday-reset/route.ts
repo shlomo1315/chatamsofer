@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
+import { requirePermission, unauthorized, getServiceClient } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { previewReset, runReset, type ResetTarget } from '@/lib/holidayCardReset'
 
@@ -41,7 +41,7 @@ async function targetsFor(
 }
 
 export async function GET(request: NextRequest) {
-  const staff = await requireStaff()
+  const staff = await requirePermission('distributions', 'view')
   if (!staff) return unauthorized()
 
   const db = getServiceClient()
@@ -62,7 +62,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
+  // 🔴 ניתוק בלתי הפיך של כל הכרטיסים בחלוקה — distributions:edit
+  // (ביקורת אבטחה 05.10: היה פתוח לכל איש צוות).
+  const staff = await requirePermission('distributions', 'edit')
   if (!staff) return unauthorized()
 
   const db = getServiceClient()

@@ -1,3 +1,4 @@
+import { safeError } from '@/lib/safeError'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getLegacyGmailClient, getGmailClientForToken, getBody, getGmailClient, ensureLabel, getAttachments } from './gmail'
 import { departmentByEmail, DEPARTMENTS, type DepartmentKey } from './departments'
@@ -156,7 +157,7 @@ export async function syncLegacyMail(
     officeGmail = await getGmailClient()
     archiveLabelId = await ensureLabel(officeGmail, 'ארכיון מייל קודם')
   } catch (e) {
-    console.error('[legacy-sync] office Gmail unavailable, skipping archive copy:', e)
+    console.error('[legacy-sync] office Gmail unavailable, skipping archive copy:', safeError(e))
   }
 
   // ── ייבוא ל-Google Workspace: תיבת ה-Gmail של המחלקה ──
@@ -174,7 +175,7 @@ export async function syncLegacyMail(
       deptGmail = getWorkspaceGmailClient(deptEmail)
       deptArchiveLabelId = await ensureArchiveLabel(deptGmail)
     } catch (e) {
-      console.error(`[legacy-sync] Workspace import unavailable for ${deptEmail}:`, e)
+      console.error(`[legacy-sync] Workspace import unavailable for ${deptEmail}:`, safeError(e))
       deptGmail = null
     }
   }
@@ -322,7 +323,7 @@ export async function syncLegacyMail(
                   await officeGmail.users.messages.insert({
                     userId: 'me', requestBody: { raw, labelIds: [archiveLabelId] },
                   })
-                } catch (e) { console.error(`[legacy-sync] office archive insert failed for ${id}:`, e) }
+                } catch (e) { console.error(`[legacy-sync] office archive insert failed for ${id}:`, safeError(e)) }
               }
               // הזרקה לתיבת ה-Gmail של המחלקה + סימון imported_to_gmail_at למניעת כפילות
               if (deptGmail && deptArchiveLabelId) {
@@ -331,11 +332,11 @@ export async function syncLegacyMail(
                   await admin.from('inbound_emails')
                     .update({ imported_to_gmail_at: new Date().toISOString() })
                     .eq('gmail_message_id', gmailMessageId)
-                } catch (e) { console.error(`[legacy-sync] dept Gmail import failed for ${id}:`, e) }
+                } catch (e) { console.error(`[legacy-sync] dept Gmail import failed for ${id}:`, safeError(e)) }
               }
             }
           } catch (e) {
-            console.error(`[legacy-sync] raw fetch failed for ${id}:`, e)
+            console.error(`[legacy-sync] raw fetch failed for ${id}:`, safeError(e))
           }
         }
       } catch (err) {
@@ -367,7 +368,7 @@ export async function syncLegacyMail(
   // החלת תווית התיבה על כל המיילים שנקלטו — כל מייל מהתיבה מקבל את תוויתה.
   if (account?.label_id && importedGmailIds.length) {
     try { await applyLabelToMessages(admin, account.label_id, importedGmailIds) }
-    catch (e) { console.error('[legacy-sync] apply label failed:', e) }
+    catch (e) { console.error('[legacy-sync] apply label failed:', safeError(e)) }
   }
 
   const summary = summarizeSync(results)

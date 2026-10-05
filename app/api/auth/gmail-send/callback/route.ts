@@ -1,7 +1,8 @@
+import { safeError } from '@/lib/safeError'
 import { NextResponse, type NextRequest } from 'next/server'
 import { google } from 'googleapis'
 import { getSendOAuthClient, addSendAccount } from '@/lib/gmail'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { requireAdmin, unauthorized } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,7 +18,9 @@ function page(title: string, body: string, ok = false) {
 }
 
 export async function GET(request: NextRequest) {
-  const staff = await requireStaff()
+  // 🔴 מנהל בלבד (ביקורת אבטחה 05.10): חיבור חשבון Google קובע לאן הולך
+  // הגיבוי הלילי של כל המסד ומאיזו תיבה יוצא דואר הארגון.
+  const staff = await requireAdmin()
   if (!staff) return unauthorized()
 
   const code = request.nextUrl.searchParams.get('code')
@@ -53,7 +56,7 @@ export async function GET(request: NextRequest) {
       email = (me.data.email ?? '').toLowerCase().trim()
     }
   } catch (e) {
-    console.error('[gmail-send/callback] זיהוי החשבון נכשל:', e)
+    console.error('[gmail-send/callback] זיהוי החשבון נכשל:', safeError(e))
   }
 
   // ⚠️ בלי כתובת אין דרך לנהל מונה יומי נפרד לחשבון, וכל המאגר היה מתערבב

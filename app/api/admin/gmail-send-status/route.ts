@@ -1,3 +1,4 @@
+import { safeError } from '@/lib/safeError'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, unauthorized } from '@/lib/apiAuth'
@@ -42,7 +43,7 @@ export async function GET() {
       })),
     }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
-    console.error('[gmail-send-status]', e)
+    console.error('[gmail-send-status]', safeError(e))
     return NextResponse.json({ cap: GMAIL_CAP_HIGH, accounts: [] })
   }
 }

@@ -1,8 +1,9 @@
+import { safeError } from '@/lib/safeError'
 import { NextResponse, type NextRequest } from 'next/server'
 import { google } from 'googleapis'
 import { createClient } from '@supabase/supabase-js'
 import { saveLegacyRefreshToken, getLegacyOAuthClient } from '@/lib/gmail'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { requireAdmin, unauthorized } from '@/lib/apiAuth'
 import { DEPARTMENTS, type DepartmentKey } from '@/lib/departments'
 import { DEFAULT_LABELS } from '@/lib/mailLabels'
 
@@ -16,7 +17,9 @@ function admin() {
 }
 
 export async function GET(request: NextRequest) {
-  const staff = await requireStaff()
+  // 🔴 מנהל בלבד (ביקורת אבטחה 05.10): חיבור חשבון Google קובע לאן הולך
+  // הגיבוי הלילי של כל המסד ומאיזו תיבה יוצא דואר הארגון.
+  const staff = await requireAdmin()
   if (!staff) return unauthorized()
 
   const code = request.nextUrl.searchParams.get('code')
@@ -58,7 +61,7 @@ export async function GET(request: NextRequest) {
     const profile = await gmail.users.getProfile({ userId: 'me' })
     mailboxEmail = (profile.data.emailAddress ?? '').toLowerCase().trim()
   } catch (e) {
-    console.error('[gmail-legacy/callback] getProfile failed:', e)
+    console.error('[gmail-legacy/callback] getProfile failed:', safeError(e))
   }
 
   const db = admin()
@@ -90,7 +93,7 @@ export async function GET(request: NextRequest) {
           resolvedLabelId = newLabel.id
         }
       } catch (e) {
-        console.error('[gmail-legacy/callback] label create failed (non-blocking):', e)
+        console.error('[gmail-legacy/callback] label create failed (non-blocking):', safeError(e))
       }
     }
 

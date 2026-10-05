@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSendAuthUrl } from '@/lib/gmail'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { requireAdmin, unauthorized } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,7 +11,9 @@ export const dynamic = 'force-dynamic'
 // לחשבון שאושר בעבר. בלי המסלול הזה המערכת תמשיך לשלוח מהתיבה הראשית ורק
 // *תבקש* להציג כתובת אחרת — בקשה שגוגל מכבד רק אם הכתובת רשומה שם כאליאס.
 export async function GET() {
-  const staff = await requireStaff()
+  // 🔴 מנהל בלבד (ביקורת אבטחה 05.10): חיבור חשבון Google קובע לאן הולך
+  // הגיבוי הלילי של כל המסד ומאיזו תיבה יוצא דואר הארגון.
+  const staff = await requireAdmin()
   if (!staff) return unauthorized()
 
   return NextResponse.redirect(getSendAuthUrl())

@@ -1,3 +1,4 @@
+import { safeError } from '@/lib/safeError'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden } from '@/lib/apiAuth'
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest) {
     } catch (sendErr) {
       // אם השליחה עם הצרופה נכשלה — שולחים שוב בלי הצרופה כדי שהמייל בכל זאת יגיע
       if (attachments.length) {
-        console.error('financial-aid send with attachment failed, retrying without:', sendErr)
+        console.error('financial-aid send with attachment failed, retrying without:', safeError(sendErr))
         attachmentSkipped = true
         res = await gmail.users.messages.send({
           userId: 'me',
@@ -101,7 +102,7 @@ export async function POST(request: NextRequest) {
     }).eq('id', id)
     return NextResponse.json({ ok: true, attachmentSkipped })
   } catch (e) {
-    console.error('financial-aid send error:', e)
+    console.error('financial-aid send error:', safeError(e))
     return NextResponse.json({ error: e instanceof Error ? e.message : 'שגיאה בשליחת המייל' }, { status: 500 })
   }
 }

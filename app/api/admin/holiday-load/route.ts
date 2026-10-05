@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
+import { requirePermission, unauthorized, getServiceClient } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { eligibleForLoad, runLoadBatch, DEFAULT_LOAD_AMOUNT } from '@/lib/holidayCardLoad'
 import { resolveTestMode } from '@/lib/holidayTestMode'
@@ -89,7 +89,7 @@ async function loadRows(
 
 /** תצוגה מקדימה — כמה ייטענו, כמה כבר נטענו, וכמה כסף מדובר. */
 export async function GET(request: NextRequest) {
-  const staff = await requireStaff()
+  const staff = await requirePermission('distributions', 'view')
   if (!staff) return unauthorized()
 
   const db = getServiceClient()
@@ -147,8 +147,14 @@ export async function GET(request: NextRequest) {
   })
 }
 
+/** תקרת טעינה למשפחה — ראו ההערה ב-POST. */
+const MAX_LOAD_AMOUNT = 2000
+
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
+  // 🔴 טעינת כסף אמיתי לכרטיסי כל החלוקה — distributions:edit ולא
+  // requireStaff (ביקורת אבטחה 05.10: כל איש צוות, גם מייל-בלבד, יכול היה
+  // לטעון סכום שרירותי). בפועל רק מנהלים מחזיקים בהרשאה הזו.
+  const staff = await requirePermission('distributions', 'edit')
   if (!staff) return unauthorized()
 
   const db = getServiceClient()
@@ -169,6 +175,11 @@ export async function POST(request: NextRequest) {
   const amount = Number(body.amount ?? DEFAULT_LOAD_AMOUNT)
   if (!Number.isFinite(amount) || amount <= 0) {
     return NextResponse.json({ error: 'סכום לא תקין' }, { status: 400 })
+  }
+  // 🔴 תקרה: כל הטעינות עד היום היו ₪500. ₪5,000 בטעות הקלדה × 6,000
+  // משפחות הוא נזק בלתי הפיך.
+  if (amount > MAX_LOAD_AMOUNT) {
+    return NextResponse.json({ error: `סכום חריג — המקסימום לטעינה הוא ₪${MAX_LOAD_AMOUNT}` }, { status: 400 })
   }
 
   // ⚠️ תוקף הכרטיס נלקח *מהחלוקה* ולא מהגדרה גלובלית: כל חג נפרק במועד

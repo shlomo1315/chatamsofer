@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { google } from 'googleapis'
 import { getOAuthClient, saveRefreshToken } from '@/lib/gmail'
-import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
+import { requireAdmin, unauthorized, getServiceClient } from '@/lib/apiAuth'
 import { DRIVE_TOKEN_KEY, DRIVE_ACCOUNT_KEY } from '@/lib/googleDrive'
 
 export const dynamic = 'force-dynamic'
@@ -18,7 +18,9 @@ async function accountEmail(refreshToken: string): Promise<string | null> {
 }
 
 export async function GET(request: NextRequest) {
-  const staff = await requireStaff()
+  // 🔴 מנהל בלבד (ביקורת אבטחה 05.10): חיבור חשבון Google קובע לאן הולך
+  // הגיבוי הלילי של כל המסד ומאיזו תיבה יוצא דואר הארגון.
+  const staff = await requireAdmin()
   if (!staff) return unauthorized()
 
   const code = request.nextUrl.searchParams.get('code')

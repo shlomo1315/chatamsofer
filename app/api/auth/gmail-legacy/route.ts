@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getLegacyAuthUrl } from '@/lib/gmail'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { requireAdmin, unauthorized } from '@/lib/apiAuth'
 import { DEPARTMENTS } from '@/lib/departments'
 
 export const dynamic = 'force-dynamic'
@@ -9,7 +9,9 @@ export const dynamic = 'force-dynamic'
 // חובה לציין לאיזו מחלקה התיבה שייכת — היא נישאת ב-state של OAuth וחוזרת
 // ב-callback, כך שכל מייל שנקלט מהתיבה יסומן במחלקה הנכונה.
 export async function GET(request: NextRequest) {
-  const staff = await requireStaff()
+  // 🔴 מנהל בלבד (ביקורת אבטחה 05.10): חיבור חשבון Google קובע לאן הולך
+  // הגיבוי הלילי של כל המסד ומאיזו תיבה יוצא דואר הארגון.
+  const staff = await requireAdmin()
   if (!staff) return unauthorized()
 
   const department = request.nextUrl.searchParams.get('department') ?? ''

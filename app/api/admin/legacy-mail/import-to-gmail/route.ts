@@ -1,3 +1,4 @@
+import { safeError } from '@/lib/safeError'
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { requireAdmin, forbidden } from '@/lib/apiAuth'
@@ -94,7 +95,7 @@ export async function POST(request: NextRequest) {
     deptGmail = getWorkspaceGmailClient(targetEmail)
     labelId = await ensureArchiveLabel(deptGmail)
   } catch (e) {
-    console.error('[import-to-gmail] workspace client failed:', e)
+    console.error('[import-to-gmail] workspace client failed:', safeError(e))
     return NextResponse.json({
       error: `שגיאה בחיבור לתיבת היעד (${targetEmail}) — בדוק את הגדרת ה-Service Account.`,
       detail: describeWorkspaceError(e),
@@ -120,7 +121,7 @@ export async function POST(request: NextRequest) {
       await db.from('inbound_emails').update({ imported_to_gmail_at: new Date().toISOString() }).eq('id', row.id)
       imported++
     } catch (e) {
-      console.error(`[import-to-gmail] failed for ${row.gmail_message_id}:`, e)
+      console.error(`[import-to-gmail] failed for ${row.gmail_message_id}:`, safeError(e))
       if (!firstImportError) firstImportError = describeWorkspaceError(e)
       failed++
     }
