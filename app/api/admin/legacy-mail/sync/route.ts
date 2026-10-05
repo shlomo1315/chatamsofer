@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { unauthorized, requireAdmin } from '@/lib/apiAuth'
 import { syncLegacyMail } from '@/lib/legacyMailSync'
 
 export const dynamic = 'force-dynamic'
@@ -15,7 +15,7 @@ function admin() {
 }
 
 export async function POST(request: Request) {
-  const staff = await requireStaff()
+  const staff = await requireAdmin()
   if (!staff) return unauthorized()
 
   const db = admin()

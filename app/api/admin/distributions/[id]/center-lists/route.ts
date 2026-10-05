@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireNonMailStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
+import { unauthorized, getServiceClient, requirePermission } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { scrambleBytes, DOC_CIPHER_ID } from '@/lib/docCipher'
 import {
@@ -120,7 +120,7 @@ function dataResponse(bytes: Uint8Array, filename: string, contentType: string) 
 }
 
 export async function GET(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  if (!(await requireNonMailStaff())) return unauthorized()
+  if (!(await requirePermission('distributions', 'view'))) return unauthorized()
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 

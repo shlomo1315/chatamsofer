@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
+import { unauthorized, getServiceClient, requirePermission } from '@/lib/apiAuth'
 import { pickupPhaseOf, pickupPhasePatch, type PickupPhase } from '@/lib/centerPickupPhase'
 import { ensureCenterOpening } from '@/lib/centerOpeningRow'
 import { spokenCenterDetails } from '@/lib/holidayCenterSpeech'
@@ -19,7 +19,7 @@ export const dynamic = 'force-dynamic'
 const COLS = 'id, city, name, address, phone, hours, region, capacity, is_active, sort_order, audio_file'
 
 export async function GET(request: NextRequest) {
-  const staff = await requireStaff()
+  const staff = await requirePermission('distributions', 'view')
   if (!staff) return unauthorized()
 
   const db = getServiceClient()
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
+  const staff = await requirePermission('distributions', 'edit')
   if (!staff) return unauthorized()
 
   const db = getServiceClient()
@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
  * הרגיל אחרי סגירת הרישום. ערבוב השניים היה סוגר לשיוך את מי שכבר בחר.
  */
 export async function PATCH(request: NextRequest) {
-  const staff = await requireStaff()
+  const staff = await requirePermission('distributions', 'edit')
   if (!staff) return unauthorized()
 
   const db = getServiceClient()
@@ -230,7 +230,7 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const staff = await requireStaff()
+  const staff = await requirePermission('distributions', 'edit')
   if (!staff) return unauthorized()
 
   const db = getServiceClient()

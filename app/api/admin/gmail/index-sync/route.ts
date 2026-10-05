@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireMailAccess, requireNonMailStaff, unauthorized, forbidden, getServiceClient } from '@/lib/apiAuth'
+import { requireMailAccess, unauthorized, forbidden, getServiceClient, requireAdmin } from '@/lib/apiAuth'
 import { syncAccount, type SyncResult } from '@/lib/gmailIndexSync'
 
 export const dynamic = 'force-dynamic'
@@ -73,7 +73,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   // ⚠️ מחמיר מה-GET: הסנכרון כותב לאינדקס ומושך מאות בקשות מ-Gmail, ולכן
   // חשבון "מייל בלבד" אינו מפעיל אותו — הוא צורך דואר, לא מנהל תשתית.
-  const staff = await requireNonMailStaff()
+  const staff = await requireAdmin()
   if (!staff) return forbidden()
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })

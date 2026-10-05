@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { unauthorized, requireAdmin } from '@/lib/apiAuth'
 import { getWorkspaceGmailClient, isWorkspaceConfigured } from '@/lib/googleWorkspace'
 import { DEPARTMENTS, type DepartmentKey } from '@/lib/departments'
 
@@ -27,7 +27,7 @@ function admin() {
 }
 
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
+  const staff = await requireAdmin()
   if (!staff) return unauthorized()
 
   let accountId: string | null = null

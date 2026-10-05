@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { unauthorized, requireAdmin } from '@/lib/apiAuth'
 import { applyLabelToExistingMail, type GmailAccount } from '@/lib/legacyMailSync'
 
 export const dynamic = 'force-dynamic'
@@ -16,7 +16,7 @@ function admin() {
 // שיוך בדיעבד: מחיל את תווית התיבה על מיילים ישנים שכבר נקלטו (source='legacy'
 // באותה מחלקה). שימושי למיילים שנמשכו לפני שהתיבה קיבלה תווית.
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
+  const staff = await requireAdmin()
   if (!staff) return unauthorized()
 
   let accountId: string | null = null

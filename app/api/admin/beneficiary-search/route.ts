@@ -1,11 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { requireNonMailStaff, unauthorized } from '@/lib/apiAuth'
+import { unauthorized, requirePermission } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
-  const staff = await requireNonMailStaff()
+  const staff = await requirePermission('beneficiaries', 'view')
   if (!staff) return unauthorized()
 
   const q      = request.nextUrl.searchParams.get('q')?.trim() ?? ''

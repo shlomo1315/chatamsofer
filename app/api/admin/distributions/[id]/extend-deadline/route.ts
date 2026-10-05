@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireNonMailStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
+import { unauthorized, getServiceClient, requirePermission } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic'
 export async function POST(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   // ⚠️ requireNonMailStaff: הפעולה משנה מי רשאי לבחור מוקד — פעולת חלוקה,
   // לא פעולת דואר.
-  const staff = await requireNonMailStaff()
+  const staff = await requirePermission('distributions', 'edit')
   if (!staff) return unauthorized()
 
   const db = getServiceClient()

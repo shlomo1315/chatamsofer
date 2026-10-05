@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireNonMailStaff, getServiceClient } from '@/lib/apiAuth'
+import { getServiceClient, requirePermission } from '@/lib/apiAuth'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // חתימת ההצהרה של המוטב, כתמונה.
@@ -17,7 +17,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   // בתיקייה הזו. משתמש "מייל בלבד" מנותב בכוח למסך הדואר ואינו אמור
   // להגיע לנתוני מוטבים; דרך המסלול הזה הוא יכול היה לאסוף חתימות יד
   // סרוקות בכמות, לפי מזהי מוטב שמופיעים ברשימת ההודעות שלו.
-  if (!(await requireNonMailStaff())) return new NextResponse('לא מורשה', { status: 401 })
+  if (!(await requirePermission('beneficiaries', 'view'))) return new NextResponse('לא מורשה', { status: 401 })
 
   const { id } = await params
   const db = getServiceClient()

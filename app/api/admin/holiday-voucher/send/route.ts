@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
+import { unauthorized, getServiceClient, requirePermission } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
@@ -65,7 +65,7 @@ async function loadRows(
 }
 
 export async function GET(request: NextRequest) {
-  const staff = await requireStaff()
+  const staff = await requirePermission('distributions', 'view')
   if (!staff) return unauthorized()
 
   const db = getServiceClient()
@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
+  const staff = await requirePermission('distributions', 'edit')
   if (!staff) return unauthorized()
 
   const db = getServiceClient()

@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireNonMailStaff, forbidden, getServiceClient } from '@/lib/apiAuth'
+import { requireNonMailStaff, forbidden, getServiceClient, requireAdmin } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
 import { getGmailClientForToken } from '@/lib/gmail'
 
@@ -50,7 +50,7 @@ interface PatchBody {
 }
 
 export async function PATCH(request: NextRequest) {
-  const staff = await requireNonMailStaff()
+  const staff = await requireAdmin()
   if (!staff) return forbidden()
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
@@ -98,7 +98,7 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const staff = await requireNonMailStaff()
+  const staff = await requireAdmin()
   if (!staff) return forbidden()
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })

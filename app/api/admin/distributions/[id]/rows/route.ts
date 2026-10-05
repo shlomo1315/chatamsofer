@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireNonMailStaff, forbidden, getServiceClient } from '@/lib/apiAuth'
+import { forbidden, getServiceClient, requirePermission } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { toRegistrationRow } from '@/lib/distributionRow'
 
@@ -41,7 +41,7 @@ export async function GET(
   // מגורים ותאריכי לידה של אלפי משפחות. חשבון mail_only — שה-proxy חוסם
   // מכל מסך ניהול — יכול היה למשוך את המרשם כולו בקריאת fetch אחת מהקונסול.
   // זה בדיוק התרחיש שבגללו נוצרה requireNonMailStaff; המסלול לא הועבר אליה.
-  if (!(await requireNonMailStaff())) return forbidden()
+  if (!(await requirePermission('distributions', 'view'))) return forbidden()
 
   const { id } = await params
   const db = getServiceClient()

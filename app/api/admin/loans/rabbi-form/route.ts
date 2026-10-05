@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireNonMailStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
+import { unauthorized, getServiceClient, requirePermission } from '@/lib/apiAuth'
 import { buildRabbiFormPdf, validateRabbiForm, lineageFromChain, DEFAULT_LAYOUT, type FormLayout, type RabbiFormData } from '@/lib/rabbiFormPdf'
 
 export const dynamic = 'force-dynamic'
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
   // 🔴 requireNonMailStaff: ה-PDF מכיל שם, ת"ז ושרשרת יוחסין מלאה של הלווה.
   // ⚠️ זו אותה דלת צד לנתוני הלוואות ש-mail/related-records נסגרה כדי למנוע;
   // כאן היא נותרה פתוחה. חשבון mail_only אינו אמור לראות נתוני הלוואות כלל.
-  const staff = await requireNonMailStaff()
+  const staff = await requirePermission('loans', 'view')
   if (!staff) return unauthorized()
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
@@ -112,7 +112,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   // ⚠️ גם כאן: אותו טופס מופק, ולכן אותה הגנה — אחרת ההגנה על ה-GET
   // נעקפת פשוט בשליחת הנתונים בגוף הבקשה.
-  const staff = await requireNonMailStaff()
+  const staff = await requirePermission('loans', 'edit')
   if (!staff) return unauthorized()
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })

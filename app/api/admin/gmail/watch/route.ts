@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireNonMailStaff, forbidden, getServiceClient } from '@/lib/apiAuth'
+import { forbidden, getServiceClient, requireAdmin } from '@/lib/apiAuth'
 import { getGmailClientForToken } from '@/lib/gmail'
 import { WATCH_CONFIG_VERSION } from '@/lib/gmailWatchRenew'
 
@@ -18,7 +18,7 @@ export const dynamic = 'force-dynamic'
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
-  const staff = await requireNonMailStaff()
+  const staff = await requireAdmin()
   if (!staff) return forbidden()
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE() {
-  const staff = await requireNonMailStaff()
+  const staff = await requireAdmin()
   if (!staff) return forbidden()
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })

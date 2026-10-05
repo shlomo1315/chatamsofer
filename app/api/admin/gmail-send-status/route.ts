@@ -1,7 +1,7 @@
 import { safeError } from '@/lib/safeError'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { requireStaff, unauthorized, requireAdmin } from '@/lib/apiAuth'
 import { listSendAccounts, removeSendAccount } from '@/lib/gmail'
 import { gmailCounterKey, GMAIL_CAP_HIGH } from '@/lib/sendMail'
 
@@ -50,7 +50,7 @@ export async function GET() {
 
 // הסרת חשבון מהמאגר.
 export async function DELETE(request: NextRequest) {
-  const staff = await requireStaff()
+  const staff = await requireAdmin()
   if (!staff) return unauthorized()
 
   const email = request.nextUrl.searchParams.get('email')?.trim()

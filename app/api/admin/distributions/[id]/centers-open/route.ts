@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
+import { unauthorized, getServiceClient, requirePermission } from '@/lib/apiAuth'
 import { deadlineState } from '@/lib/centerDeadline'
 
 export const dynamic = 'force-dynamic'
@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
 // ⚠️ הטבלה היא distributions — לשם מצביע distribution_recipients (FK).
 
 export async function GET(_request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const staff = await requireStaff()
+  const staff = await requirePermission('distributions', 'view')
   if (!staff) return unauthorized()
 
   const db = getServiceClient()
@@ -60,7 +60,7 @@ export async function GET(_request: NextRequest, ctx: { params: Promise<{ id: st
 }
 
 export async function POST(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const staff = await requireStaff()
+  const staff = await requirePermission('distributions', 'edit')
   if (!staff) return unauthorized()
 
   const db = getServiceClient()
