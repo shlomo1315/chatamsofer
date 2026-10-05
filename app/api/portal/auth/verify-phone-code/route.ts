@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
+import { claimCodeAttempt } from '@/lib/otpAttempt'
 import { setPortalSession } from '@/lib/portalSession'
 import { verifyCode } from '@/lib/portalPassword'
 import { BENEFICIARY_SELECT, loadDashboardDocs, normalizeId, resolveBeneficiaryByEnteredId } from '@/lib/portalBeneficiary'
@@ -42,14 +43,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'יותר מדי ניסיונות שגויים. בקש קוד חדש.' }, { status: 400 })
   }
 
-  const codeOk = await verifyCode(code, data.portal_phone_code_hash)
-  if (!codeOk) {
-    await admin
-      .from('beneficiaries')
-      .update({ portal_phone_code_attempts: (data.portal_phone_code_attempts ?? 0) + 1 })
-      .eq('id', data.id)
-    return invalid()
+  // 🔴 תפיסת ניסיון *לפני* ההשוואה, אטומית (lib/otpAttempt). בקשה מקבילה
+  // שהפסידה בתפיסה נדחית בלי לבדוק את הקוד.
+  if (!(await claimCodeAttempt(admin, data.id, 'portal_phone_code_attempts', data.portal_phone_code_attempts))) {
+    return NextResponse.json({ error: 'יותר מדי ניסיונות. נסה שוב בעוד רגע.' }, { status: 429 })
   }
+  // 🔴 גם מגבלה לכל מוטב (לא רק לכל IP): מאגר כתובות IP עקף את המגבלה לכתובת.
+  if (!rateLimit(`portal-verifyphone-id:${data.id}`, 10, 15 * 60 * 1000)) {
+    return NextResponse.json({ error: 'יותר מדי ניסיונות. נסה שוב בעוד מספר דקות.' }, { status: 429 })
+  }
+
+  const codeOk = await verifyCode(code, data.portal_phone_code_hash)
+  if (!codeOk) return invalid()
 
   // הצלחה — ניקוי הקוד (hash + plain) והנפקת סשן למוטב הזה בלבד
   await admin
