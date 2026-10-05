@@ -34,6 +34,7 @@ import {
 } from '@/lib/bookFairYemotIvr'
 import { getBookFairMessages } from '@/lib/yemotBookFairMessages'
 import { transcribeHebrew } from '@/lib/elevenStt'
+import { PICKUP_CONFIG_KEY, mergePickupConfig, pickupStatus } from '@/lib/bookFairPickup'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -616,6 +617,21 @@ async function stashRecording(
   }
 }
 
+/** האם האיסוף העצמי פתוח כרגע — לפי אותה הגדרה שהאתר קורא. */
+async function pickupAvailable(): Promise<boolean> {
+  try {
+    const supa = db()
+    if (!supa) return true
+    const { data } = await supa.from('app_settings').select('value').eq('key', PICKUP_CONFIG_KEY).maybeSingle()
+    let raw: unknown = null
+    try { raw = data?.value ? JSON.parse(String(data.value)) : null } catch { raw = null }
+    return pickupStatus(mergePickupConfig(raw), new Date()).available
+  } catch {
+    // ⚠️ תקלה בקריאה אינה סוגרת את האיסוף בשקט — כמו באתר.
+    return true
+  }
+}
+
 /** יצירת ההזמנה בפועל — קורה רק אחרי אישור תשלום, ⚠️ לא לפני. */
 async function createOrder(state: IvrState, cartToken: string, phone: string, callId: string): Promise<{ id: string; order_number: string } | null> {
   const supa = db()!
@@ -1008,6 +1024,9 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
     }
   } else if (state.step === 'ask_delivery') {
     input.value = paramFor(params, 'bf_deliv')
+    // 🔴 מתקשר ששמע את התפריט רגע לפני שהאיסוף נסגר והקיש 1 — עובר
+    // למשלוח. הזמנת איסוף כשהאיסוף סגור היא הזמנה שאי אפשר לספק.
+    if (input.value === '1' && !(await pickupAvailable())) input.value = '2'
     // ⚠️ הרשימה נטענת כבר כאן: בחירה 2 עוברת ל-ask_city *באותה
     // קריאה*, ובלי הרשימה המתקשר שומע "לאיזו עיר" בלי האפשרויות.
     if (input.value === '2') input.cityList = await listCities()
@@ -1071,7 +1090,19 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
     }
   }
 
-  const turn = nextTurn(state, input, messages)
+  let turn = nextTurn(state, input, messages)
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 איסוף עצמי סגור (החלטת המשתמש 05.10: משלוח בלבד) — אותה הגדרה
+  // בדיוק כמו באתר ('book_fair_pickup'), כדי ששני הערוצים לא יסתרו.
+  //
+  // השאלה "איסוף או משלוח" מדולגת: התור מורץ שוב כאילו הוקש 2 (משלוח),
+  // וכך המתקשר שומע ישר את רשימת הערים. ⚠️ nextTurn נשאר טהור — ההכרעה
+  // כאן, ב-route, ולא בתוכו.
+  // ─────────────────────────────────────────────────────────────────────────
+  if (turn.state.step === 'ask_delivery' && !(await pickupAvailable())) {
+    turn = nextTurn(turn.state, { value: '2', cityList: await listCities() }, messages)
+  }
 
   // ── עדכון המלאי בפועל אחרי תשובת "כמות" מוצלחת ──
   if (state.step === 'ask_qty' && input.reserved) {
