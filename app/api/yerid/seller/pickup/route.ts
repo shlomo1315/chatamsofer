@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
-import { SELLER_COOKIE, readSellerToken } from '@/lib/bookFairSeller'
+import { SELLER_COOKIE, sellerFromRequest } from '@/lib/bookFairSeller'
 import {
   classifyPickupQuery, maskPhone, pickupState, PICKUP_READY_STATUSES,
 } from '@/lib/bookFairStandPickup'
@@ -59,7 +59,10 @@ function toView(o: Row) {
 }
 
 export async function GET(request: NextRequest) {
-  const seller = readSellerToken(request.cookies.get(SELLER_COOKIE)?.value)
+  const sdb = getServiceClient()
+  if (!sdb) return NextResponse.json({ error: 'שגיאת תצורה בשרת' }, { status: 500 })
+  // 🔴 מול הסיסמה *הנוכחית* — החלפתה מנתקת מיד (lib/bookFairSeller).
+  const seller = await sellerFromRequest(request.cookies.get(SELLER_COOKIE)?.value, sdb)
   if (!seller) return NextResponse.json({ error: 'נדרשת התחברות מחדש' }, { status: 401 })
 
   // 🔴 מגבלת קצב: החיפוש מחזיר שם לקוח. בלי מגבלה, סיסמת דוכן שדלפה
@@ -103,7 +106,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const seller = readSellerToken(request.cookies.get(SELLER_COOKIE)?.value)
+  const sdb = getServiceClient()
+  if (!sdb) return NextResponse.json({ error: 'שגיאת תצורה בשרת' }, { status: 500 })
+  // 🔴 מול הסיסמה *הנוכחית* — החלפתה מנתקת מיד (lib/bookFairSeller).
+  const seller = await sellerFromRequest(request.cookies.get(SELLER_COOKIE)?.value, sdb)
   if (!seller) return NextResponse.json({ error: 'נדרשת התחברות מחדש' }, { status: 401 })
 
   const db = getServiceClient()

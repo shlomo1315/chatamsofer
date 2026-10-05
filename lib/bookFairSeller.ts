@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { signPayload, verifySignature, signingConfigured } from '@/lib/signedToken'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -42,25 +43,41 @@ export function sellerPasswordMatches(password: string, storedHash: string): boo
 }
 
 /**
- * אסימון הסשן: חותמת תפוגה + שם המוכר, חתומים.
+ * טביעת הסיסמה הנוכחית — 16 תווים מהגיבוב.
+ *
+ * 🔴 נחתמת בתוך האסימון (ביקורת אבטחה 05.10): החלפת סיסמת הדוכן משנה
+ * את הגיבוב, וכל אסימון שהונפק עם הסיסמה הקודמת נפסל *מיד*. קודם מי
+ * שהסיסמה הישנה דלפה אליו נשאר מחובר עד 24 שעות — ויכול היה לרשום
+ * מכירות במזומן ולמסור הזמנות איסוף.
+ */
+export function passwordTag(storedHash: string): string {
+  return String(storedHash ?? '').slice(0, 16)
+}
+
+/**
+ * אסימון הסשן: חותמת תפוגה + שם המוכר, חתומים יחד עם טביעת הסיסמה.
  *
  * ⚠️ התפוגה *בתוך* המטען החתום ולא רק בתוקף הקוקי: קוקי אפשר לערוך
  * בדפדפן, ותפוגה שנשענת עליו לבדה אינה תפוגה.
  */
-export function makeSellerToken(name: string, now = Date.now()): string | null {
+export function makeSellerToken(name: string, storedHash: string, now = Date.now()): string | null {
+  if (!storedHash) return null
   const exp = now + SELLER_TTL_MS
   // ⚠️ השם מנוקה מתווים שישברו את הפירוק (':' הוא המפריד).
   const safeName = String(name ?? '').replace(/[:|]/g, ' ').trim().slice(0, 40)
   const payload = `${exp}:${safeName}`
-  const sig = signPayload(`fair-seller:${payload}`)
+  const sig = signPayload(`fair-seller:${passwordTag(storedHash)}:${payload}`)
   if (!sig) return null
   return `${payload}:${sig}`
 }
 
-/** מפרק ומאמת אסימון סשן. מחזיר null כשפג או מזויף. */
-export function readSellerToken(token: unknown, now = Date.now()): { name: string } | null {
+/**
+ * מפרק ומאמת אסימון סשן מול גיבוב הסיסמה *הנוכחי*.
+ * מחזיר null כשפג, מזויף, או הונפק לפני החלפת הסיסמה.
+ */
+export function readSellerToken(token: unknown, storedHash: string, now = Date.now()): { name: string } | null {
   const raw = String(token ?? '').trim()
-  if (!raw) return null
+  if (!raw || !storedHash) return null
 
   // ⚠️ פיצול ל-3 חלקים *מהסוף*: שם המוכר עשוי להכיל רווחים, אך לא ':'.
   const parts = raw.split(':')
@@ -71,12 +88,29 @@ export function readSellerToken(token: unknown, now = Date.now()): { name: strin
   if (!Number.isFinite(exp)) return null
 
   const payload = `${exp}:${name}`
-  if (!verifySignature(`fair-seller:${payload}`, sig)) return null
+  if (!verifySignature(`fair-seller:${passwordTag(storedHash)}:${payload}`, sig)) return null
   // 🔴 התפוגה נבדקת *אחרי* החתימה: בדיקת תפוגה על מטען לא מאומת
   // מאפשרת לתוקף להסיק מהתשובה אם החתימה נכונה.
   if (now > exp) return null
 
   return { name }
+}
+
+/** גיבוב הסיסמה השמור. '' = לא הוגדרה (האזור סגור). */
+export function parseSellerHash(raw: unknown): string {
+  try {
+    const cfg = raw ? JSON.parse(String(raw)) : null
+    return String(cfg?.password_hash ?? '')
+  } catch { return '' }
+}
+
+/** המוכר המחובר לבקשה הזו, מול הסיסמה הנוכחית. null = לא מחובר. */
+export async function sellerFromRequest(
+  token: unknown,
+  db: SupabaseClient,
+): Promise<{ name: string } | null> {
+  const { data } = await db.from('app_settings').select('value').eq('key', SELLER_CONFIG_KEY).maybeSingle()
+  return readSellerToken(token, parseSellerHash(data?.value))
 }
 
 export { signingConfigured }

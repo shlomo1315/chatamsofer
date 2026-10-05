@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { nextOrderNumber } from '@/lib/bookFairCheckout'
-import { SELLER_COOKIE, readSellerToken } from '@/lib/bookFairSeller'
+import { SELLER_COOKIE, sellerFromRequest } from '@/lib/bookFairSeller'
 import { getPaymentProvider } from '@/lib/payments'
 
 // רישום מכירה בדוכן היריד.
@@ -27,11 +27,12 @@ export const runtime = 'nodejs'
 type ItemInput = { book_id: string; quantity: number }
 
 export async function POST(request: NextRequest) {
-  const seller = readSellerToken(request.cookies.get(SELLER_COOKIE)?.value)
-  if (!seller) return NextResponse.json({ error: 'נדרשת התחברות מחדש' }, { status: 401 })
-
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת תצורה בשרת' }, { status: 500 })
+
+  // 🔴 מול הסיסמה *הנוכחית* — החלפתה מנתקת מיד (lib/bookFairSeller).
+  const seller = await sellerFromRequest(request.cookies.get(SELLER_COOKIE)?.value, db)
+  if (!seller) return NextResponse.json({ error: 'נדרשת התחברות מחדש' }, { status: 401 })
 
   let body: Record<string, unknown>
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה שגויה' }, { status: 400 }) }

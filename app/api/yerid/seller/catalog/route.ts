@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
-import { SELLER_COOKIE, readSellerToken } from '@/lib/bookFairSeller'
+import { SELLER_COOKIE, sellerFromRequest } from '@/lib/bookFairSeller'
 
 // הקטלוג לדוכן — כולל מלאי הדוכן, שאינו נחשף בחנות הציבורית.
 //
@@ -20,11 +20,12 @@ type Row = {
 }
 
 export async function GET(request: NextRequest) {
-  const seller = readSellerToken(request.cookies.get(SELLER_COOKIE)?.value)
-  if (!seller) return NextResponse.json({ error: 'נדרשת התחברות' }, { status: 401 })
-
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת תצורה בשרת' }, { status: 500 })
+
+  // 🔴 מול הסיסמה *הנוכחית* — החלפתה מנתקת מיד (lib/bookFairSeller).
+  const seller = await sellerFromRequest(request.cookies.get(SELLER_COOKIE)?.value, db)
+  if (!seller) return NextResponse.json({ error: 'נדרשת התחברות' }, { status: 401 })
 
   // ⚠️ fetchAllRows: PostgREST קוטע ב-1,000 שורות בשקט.
   const { rows, error } = await fetchAllRows<Row>((from, to) =>

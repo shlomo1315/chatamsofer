@@ -39,50 +39,64 @@ describe('סיסמת המוכרים', () => {
   })
 })
 
+const H = 'a'.repeat(64)
+
 describe('🔴 אסימון סשן המוכר', () => {
   it('אסימון תקף מחזיר את שם המוכר', () => {
-    const t = makeSellerToken('יוסי כהן')!
-    expect(readSellerToken(t)?.name).toBe('יוסי כהן')
+    const t = makeSellerToken('יוסי כהן', H)!
+    expect(readSellerToken(t, H)?.name).toBe('יוסי כהן')
   })
 
   // 🔴 הלב: תפוגה שנשענת רק על הקוקי אינה תפוגה.
   it('🔴 אסימון שפג נדחה', () => {
     const past = Date.now() - SELLER_TTL_MS - 1000
-    const t = makeSellerToken('יוסי', past)!
-    expect(readSellerToken(t)).toBeNull()
+    const t = makeSellerToken('יוסי', H, past)!
+    expect(readSellerToken(t, H)).toBeNull()
   })
 
   it('אסימון מזויף נדחה', () => {
-    const t = makeSellerToken('יוסי')!
+    const t = makeSellerToken('יוסי', H)!
     const tampered = t.replace(/:[0-9a-f]+$/, ':deadbeef')
-    expect(readSellerToken(tampered)).toBeNull()
+    expect(readSellerToken(tampered, H)).toBeNull()
   })
 
   // 🔴 שינוי התפוגה חייב לשבור את החתימה — אחרת אפשר להאריך סשן לנצח.
   it('🔴 הארכת התפוגה שוברת את החתימה', () => {
-    const t = makeSellerToken('יוסי')!
+    const t = makeSellerToken('יוסי', H)!
     const parts = t.split(':')
     const forged = [String(Date.now() + 10 * SELLER_TTL_MS), ...parts.slice(1)].join(':')
-    expect(readSellerToken(forged)).toBeNull()
+    expect(readSellerToken(forged, H)).toBeNull()
   })
 
   it('קלט פגום אינו מפיל', () => {
-    expect(readSellerToken('')).toBeNull()
-    expect(readSellerToken(null)).toBeNull()
-    expect(readSellerToken('abc')).toBeNull()
-    expect(readSellerToken('a:b:c')).toBeNull()
+    expect(readSellerToken('', H)).toBeNull()
+    expect(readSellerToken(null, H)).toBeNull()
+    expect(readSellerToken('abc', H)).toBeNull()
+    expect(readSellerToken('a:b:c', H)).toBeNull()
   })
 
   // ⚠️ ':' הוא המפריד — שם שמכיל אותו היה שובר את הפירוק.
   it('⚠️ שם עם נקודתיים מנוקה ואינו שובר את הפירוק', () => {
-    const t = makeSellerToken('יוסי:כהן|x')!
-    const read = readSellerToken(t)
+    const t = makeSellerToken('יוסי:כהן|x', H)!
+    const read = readSellerToken(t, H)
     expect(read).not.toBeNull()
     expect(read!.name).not.toContain(':')
   })
 
   it('שם ארוך נחתך ואינו נדחה', () => {
-    const t = makeSellerToken('א'.repeat(200))!
-    expect(readSellerToken(t)).not.toBeNull()
+    const t = makeSellerToken('א'.repeat(200), H)!
+    expect(readSellerToken(t, H)).not.toBeNull()
+  })
+})
+
+describe('🔴 החלפת סיסמה מנתקת מיד', () => {
+  it('אסימון שהונפק עם הסיסמה הקודמת נפסל', () => {
+    const t = makeSellerToken('יוסי', 'a'.repeat(64))!
+    expect(readSellerToken(t, 'a'.repeat(64))?.name).toBe('יוסי')
+    expect(readSellerToken(t, 'b'.repeat(64))).toBeNull()
+  })
+  it('בלי סיסמה מוגדרת — אין סשן', () => {
+    expect(makeSellerToken('יוסי', '')).toBeNull()
+    expect(readSellerToken('1:x:y', '')).toBeNull()
   })
 })

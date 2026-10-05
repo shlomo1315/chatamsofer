@@ -14,6 +14,9 @@ import { getStockBalance, consumeOneCard } from '@/lib/cardStock'
 
 export const dynamic = 'force-dynamic'
 
+/** תקרת הטענה לכרטיס יולדת — ראו ההערה בבדיקת הסכום. */
+const MAX_MATERNITY_LOAD = 3000
+
 function getAdminClient(): SupabaseClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -89,6 +92,11 @@ export async function POST(request: NextRequest) {
   if (!Number.isFinite(amount) || amount <= 0) {
     return NextResponse.json({ error: 'סכום הטענה לא תקין' }, { status: 400 })
   }
+  // 🔴 תקרה (ביקורת אבטחה 05.10): כל 437 הטעינות עד היום היו ₪600.
+  // 18000 במקום 1800 בטעות הקלדה הולך ישר לכרטיס ואינו ניתן לביטול כאן.
+  if (amount > MAX_MATERNITY_LOAD) {
+    return NextResponse.json({ error: `סכום חריג — המקסימום להטענה הוא ₪${MAX_MATERNITY_LOAD}` }, { status: 400 })
+  }
 
   // פרטי המשפחה
   const { data: b, error: bErr } = await admin
@@ -118,9 +126,23 @@ export async function POST(request: NextRequest) {
   if (!clientId) return NextResponse.json({ error: 'לא ניתן לאתר או להקים את המשפחה בנדרים' }, { status: 502 })
 
   // 2) הטענה
-  await admin.from('maternity_aids')
-    .update({ card_load_status: 'pending', card_load_amount: amount, card_load_error: null })
+  //
+  // 🔴 נעילה אטומית (ביקורת אבטחה 05.10): לחיצה כפולה / ניסיון חוזר
+  // מקבילי טענו את הכרטיס פעמיים — שתי הבקשות עברו את כל הבדיקות לפני
+  // שאחת מהן סימנה pending. התנאי בתוך ה-UPDATE עצמו, כך שרק אחת זוכה.
+  //
+  // ⚠️ טעינה חוזרת *מכוונת* אחרי שהראשונה הסתיימה עדיין אפשרית (הכפתור
+  // מוצג גם אחרי טעינה). נעילת pending ישנה (קריסה באמצע) משתחררת אחרי
+  // 10 דקות, כדי שתיק לא ייתקע לנצח.
+  const staleBefore = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+  const { data: claimed } = await admin.from('maternity_aids')
+    .update({ card_load_status: 'pending', card_load_amount: amount, card_load_error: null, updated_at: new Date().toISOString() })
     .eq('id', aid.id)
+    .or(`card_load_status.is.null,card_load_status.neq.pending,updated_at.lt."${staleBefore}"`)
+    .select('id')
+  if (!claimed?.length) {
+    return NextResponse.json({ error: 'הטענה לכרטיס הזה כבר מתבצעת — המתינו לסיומה' }, { status: 409 })
+  }
 
   const expiration = aid.card_expires_at ? format(new Date(aid.card_expires_at), 'dd/MM/yyyy') : undefined
 

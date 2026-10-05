@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'הסיסמה שגויה' }, { status: 401 })
   }
 
-  const token = makeSellerToken(name)
+  const token = makeSellerToken(name, hash)
   if (!token) return NextResponse.json({ error: 'שגיאת תצורה בשרת' }, { status: 500 })
 
   const res = NextResponse.json({ ok: true, name })
