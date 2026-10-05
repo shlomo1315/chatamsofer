@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutGrid, ShoppingCart, BookOpen, Users, Settings2, ExternalLink, Mail, MessageSquare, Undo2 } from 'lucide-react'
+import { LayoutGrid, ShoppingCart, BookOpen, Users, Settings2, ExternalLink, Mail, MessageSquare, Undo2, Store } from 'lucide-react'
 
 // סרגל ניווט פנימי של מחלקת היריד.
 //
@@ -17,6 +17,7 @@ import { LayoutGrid, ShoppingCart, BookOpen, Users, Settings2, ExternalLink, Mai
 const TABS = [
   { href: '/admin/book-fair',          label: 'סקירה',   icon: LayoutGrid },
   { href: '/admin/book-fair/orders',   label: 'הזמנות',  icon: ShoppingCart },
+  { href: '/admin/book-fair/stand',    label: 'דוכן היריד', icon: Store },
   { href: '/admin/book-fair/books',    label: 'קטלוג',   icon: BookOpen },
   { href: '/admin/book-fair/audience', label: 'תפוצה',   icon: Users },
   // ⚠️ מיילים ופניות היו קיימים אך לא הופיעו כאן — אי אפשר היה להגיע
