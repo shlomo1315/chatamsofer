@@ -30,7 +30,7 @@ async function getOrders(): Promise<BookFairOrder[]> {
   const { rows, error } = await fetchAllRows<BookFairOrder>((from, to) =>
     supabase
       .from('book_fair_orders')
-      .select('id, order_number, channel, status, customer_name, customer_phone, customer_email, delivery_method, city_id, address_text, address_confirmed, items_total_agorot, shipping_agorot, total_agorot, refunded_agorot, paid_at, created_at, updated_at, city:book_fair_cities(id, name)')
+      .select('id, order_number, channel, status, customer_name, customer_phone, customer_email, delivery_method, city_id, address_text, address_confirmed, items_total_agorot, shipping_agorot, total_agorot, refunded_agorot, payment_method, paid_at, created_at, updated_at, city:book_fair_cities(id, name)')
       .order('created_at', { ascending: false })
       .range(from, to) as unknown as PromiseLike<{ data: BookFairOrder[] | null; error: { message: string } | null }>
   )

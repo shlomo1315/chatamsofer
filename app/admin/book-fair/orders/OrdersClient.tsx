@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react'
 import { ilDate, ilTime } from '@/lib/israelTime'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Search, Globe, Phone, AlertTriangle, Clock, CheckCircle2, Package, Truck, Mic, XCircle, Store, Undo2 } from 'lucide-react'
+import { Search, Globe, Phone, AlertTriangle, Clock, CheckCircle2, Package, Truck, Mic, XCircle, Store, Undo2, Banknote, CreditCard } from 'lucide-react'
 import type { BookFairOrder, BookFairOrderStatus } from '@/types/bookFair'
 import {
   BOOK_FAIR_STATUS_LABELS, BOOK_FAIR_STATUS_COLORS,
@@ -14,7 +14,20 @@ import { useTablePagination } from '@/lib/useTablePagination'
 import Pagination from '@/components/ui/Pagination'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 
-type ColKey = 'order_number' | 'customer' | 'phone' | 'channel' | 'items' | 'delivery' | 'total' | 'status' | 'created' | 'paid_at'
+type ColKey = 'order_number' | 'customer' | 'phone' | 'channel' | 'items' | 'delivery' | 'total' | 'payment' | 'status' | 'created' | 'paid_at'
+
+/**
+ * אמצעי התשלום כפי שמוצג ומסונן (בקשת המשתמש 05.10).
+ *
+ * ⚠️ מזומן קיים רק בדוכן. באתר ובטלפון התשלום תמיד באשראי דרך נדרים,
+ * גם כש-payment_method לא נשמר בשורה — ולכן הערוץ קובע כשהשדה ריק.
+ */
+function paymentLabel(o: BookFairOrder): 'מזומן' | 'אשראי' | '—' {
+  if (o.payment_method === 'cash') return 'מזומן'
+  if (o.payment_method === 'card') return 'אשראי'
+  if (o.channel === 'web' || o.channel === 'phone') return 'אשראי'
+  return '—'
+}
 
 const HEAD = 'px-3 py-3 text-xs font-semibold text-slate-500'
 
@@ -45,6 +58,8 @@ function columnsOf(counts: Record<string, number>): ColDef<ColKey, BookFairOrder
       value: o => BOOK_FAIR_DELIVERY_LABELS[o.delivery_method] },
     { key: 'total', label: 'סכום', def: true, kind: 'number', headClassName: HEAD,
       value: o => o.total_agorot },
+    { key: 'payment', label: 'תשלום', def: true, kind: 'enum', filterable: true, headClassName: HEAD,
+      value: o => paymentLabel(o) },
     { key: 'status', label: 'סטטוס', def: true, kind: 'enum', filterable: true, headClassName: HEAD,
       value: o => BOOK_FAIR_STATUS_LABELS[o.status] },
     { key: 'created', label: 'תאריך', def: true, kind: 'date', headClassName: HEAD,
@@ -145,6 +160,20 @@ export default function OrdersClient({ orders, itemCounts }: {
   })
   const pg = useTablePagination(tc.rows)
 
+  // 🔴 פילוח לפי אמצעי תשלום — על השורות שבתצוגה (אחרי כרטיס, חיפוש וסינון),
+  // כך שסינון "ערוץ: דוכן" מראה בדיוק כמה נכנס במזומן וכמה באשראי.
+  const byPayment = useMemo(() => {
+    const out = { cash: 0, card: 0 }
+    for (const o of tc.rows) {
+      if (!['paid', 'picking', 'packed', 'shipped', 'delivered', 'partially_refunded'].includes(o.status)) continue
+      const net = o.total_agorot - o.refunded_agorot
+      const p = paymentLabel(o)
+      if (p === 'מזומן') out.cash += net
+      else if (p === 'אשראי') out.card += net
+    }
+    return out
+  }, [tc.rows])
+
   const revenue = useMemo(
     // ⚠️ רק הזמנות ששולמו בפועל, בניכוי זיכויים — לא סך ההזמנות.
     // הזמנה שלא שולמה אינה הכנסה.
@@ -232,6 +261,12 @@ export default function OrdersClient({ orders, itemCounts }: {
         {tc.activeFilters}
         <span className="rounded-xl bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800">
           הכנסות: {fmtAgorot(revenue)}
+        </span>
+        <span className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700">
+          <span className="inline-flex items-center gap-1"><Banknote size={14} className="text-emerald-600" /> מזומן {fmtAgorot(byPayment.cash)}</span>
+          <span className="text-slate-300">|</span>
+          <span className="inline-flex items-center gap-1"><CreditCard size={14} className="text-sky-600" /> אשראי {fmtAgorot(byPayment.card)}</span>
+          <span className="text-xs text-slate-400">(בתצוגה)</span>
         </span>
 
         {/* 🔴 ניקוי דפי סליקה שננטשו — מוצג רק בכרטיס שלהם, כדי שלא
@@ -375,6 +410,17 @@ function renderCell(key: ColKey, o: BookFairOrder, counts: Record<string, number
           )}
         </div>
       )
+
+    case 'payment': {
+      const p = paymentLabel(o)
+      if (p === '—') return <span className="text-slate-300">—</span>
+      return (
+        <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ${
+          p === 'מזומן' ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700'}`}>
+          {p === 'מזומן' ? <Banknote size={12} /> : <CreditCard size={12} />} {p}
+        </span>
+      )
+    }
 
     case 'status':
       return (
