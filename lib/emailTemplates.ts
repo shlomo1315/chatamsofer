@@ -20,6 +20,12 @@ const OFFICE_EMAIL  = 'office@chasamsofer.info'
 const PORTAL_BASE_DEFAULT =
   process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://chasamsofer.co.il'
 const LOGO_URL = `${PORTAL_BASE_DEFAULT.replace(/\/$/, '')}/logo.png`
+/**
+ * לוגו היכל החתם סופר — למיילי היריד (בקשת המשתמש 05.10).
+ * ⚠️ גרסה מוקטנת ייעודית (240×240, ~24KB): המקור 3104×3114 שוקל 1.9MB,
+ * ותוכנות דואר טוענות אותו לאט או חוסמות אותו.
+ */
+export const HEICHAL_LOGO_URL = `${PORTAL_BASE_DEFAULT.replace(/\/$/, '')}/logo-heichal-email.png`
 
 // טופס אישור רב ריק (Google Drive) — למי שמגיש דרך המייל וממלא ביד.
 // ⚠️ קישור ולא קובץ מצורף: PDF מצורף הופך את מסלול המייל לברירת המחדל,
@@ -133,8 +139,10 @@ export function shell(opts: {
   title: string
   subtitle: string
   body: string
+  /** לוגו אחר מהכללי (ראש ותחתית המייל). ברירת מחדל: LOGO_URL. */
+  logoUrl?: string
 }): string {
-  const { preheader = '', accent, title, subtitle, body } = opts
+  const { preheader = '', accent, title, subtitle, body, logoUrl = LOGO_URL } = opts
   // ערכי טקסט מבוססי-משתמש מנוטרלים; body הוא HTML בנוי מראש ולכן אינו מנוטרל
   const safeTitle = escapeHtml(title)
   const safeSubtitle = escapeHtml(subtitle)
@@ -164,7 +172,7 @@ export function shell(opts: {
         <!-- Header: logo + title -->
         <tr>
           <td style="padding:40px 40px 32px;text-align:center;background:#ffffff;">
-            <img src="${LOGO_URL}" alt="היכל החתם סופר" width="80" height="80"
+            <img src="${logoUrl}" alt="היכל החתם סופר" width="80" height="80"
                  style="display:inline-block;margin-bottom:20px;"/>
             <h1 style="margin:0 0 8px;color:#0f172a;font-size:26px;font-weight:900;letter-spacing:-0.5px;">${safeTitle}</h1>
             <p style="margin:0;color:#64748b;font-size:15px;">${safeSubtitle}</p>
@@ -180,7 +188,7 @@ export function shell(opts: {
         <!-- Footer -->
         <tr>
           <td style="background:#f8fafc;padding:24px 40px;text-align:center;border-top:2px solid ${accent}22;">
-            <img src="${LOGO_URL}" alt="לוגו" width="36" height="36"
+            <img src="${logoUrl}" alt="היכל החתם סופר" width="36" height="36"
                  style="border-radius:8px;display:inline-block;margin-bottom:10px;opacity:0.7;"/>
             <p style="margin:0 0 4px;color:#334155;font-size:13px;font-weight:700;">היכל החתם סופר</p>
             <!-- ⚠️ בלי כתובת מייל וללא חזרה על "נשלח אוטומטית": ההבהרה
@@ -2371,6 +2379,7 @@ export function bookFairOrderConfirmedEmail(opts: {
   return {
     subject: t('subject'),
     html: shell({
+      logoUrl: HEICHAL_LOGO_URL,
       preheader: t('preheader'),
       accent,
       title: t('title'),
@@ -2448,6 +2457,7 @@ export function bookFairStatusUpdateEmail(opts: {
   return {
     subject: `${copy.title} — הזמנה ${orderNumber}`,
     html: shell({
+      logoUrl: HEICHAL_LOGO_URL,
       preheader: copy.line,
       accent,
       title: copy.title,
@@ -2481,6 +2491,7 @@ export function bookFairOpenedEmail(): BuiltEmail {
   return {
     subject: t('subject'),
     html: shell({
+      logoUrl: HEICHAL_LOGO_URL,
       preheader: t('preheader'),
       accent,
       title: t('title'),
@@ -2523,6 +2534,7 @@ export function bookFairNewsletterEmail(opts: {
   return {
     subject: opts.subject,
     html: shell({
+      logoUrl: HEICHAL_LOGO_URL,
       preheader: opts.subject,
       accent,
       title: 'היכל החתם סופר',
@@ -2623,6 +2635,7 @@ export function bookFairTrackingLinksEmail(opts: {
   return {
     subject: 'ההזמנות שלך — יריד הספרים',
     html: shell({
+      logoUrl: HEICHAL_LOGO_URL,
       preheader: `${orders.length} הזמנות ביריד הספרים`,
       accent,
       title: 'ההזמנות שלך',
