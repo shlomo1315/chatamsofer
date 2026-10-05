@@ -45,10 +45,10 @@ export default function SellerClient() {
   const [cart, setCart] = useState<Map<string, number>>(new Map())
   const [query, setQuery] = useState('')
   const [saleBusy, setSaleBusy] = useState(false)
-  const [done, setDone] = useState<{ orderNumber: string; total: number; warning: string | null } | null>(null)
+  const [done, setDone] = useState<{ orderNumber: string | null; total: number; warning: string | null; orderId?: string } | null>(null)
   /** סליקה פעילה — מסך התשלום של נדרים. */
   const [payment, setPayment] = useState<
-    { transactionId: string; key: string; orderNumber: string; total: number } | null
+    { transactionId: string; key: string; orderId: string; total: number } | null
   >(null)
   const [saleError, setSaleError] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
@@ -156,8 +156,8 @@ export default function SellerClient() {
    * רישום מכירה.
    *
    * @param method  cash = תיעוד בלבד (הכסף עבר ביד) · card = סליקה אמיתית
-   * @param charge  אשראי בלבד: true פותח את מסך הסליקה של נדרים.
-   *                false מתעד תשלום שנעשה במכשיר חיצוני.
+   * @param charge  אשראי: true פותח את מסך הסליקה של נדרים.
+   *                ⚠️ "שולם במכשיר חיצוני" הוסר (05.10) והשרת דוחה אשראי בלי חיוב.
    */
   async function sell(method: 'cash' | 'card', charge = false) {
     if (!lines.length) return
@@ -180,7 +180,7 @@ export default function SellerClient() {
       // נשארת עד שהתשלום מאושר — אחרת כישלון סליקה היה מוחק את הסל
       // והמוכר היה צריך לסרוק הכול מחדש מול הלקוח.
       if (d.pendingPayment && d.iframeTransaction) {
-        setPayment({ ...d.iframeTransaction, orderNumber: d.orderNumber, total: d.total_agorot })
+        setPayment({ ...d.iframeTransaction, orderId: d.orderId, total: d.total_agorot })
         return
       }
 
@@ -194,6 +194,23 @@ export default function SellerClient() {
       setSaleBusy(false)
     }
   }
+
+  // 🔴 המספר האמיתי מוקצה רק אחרי אישור נדרים (payment-callback), שעשוי
+  // להגיע שניות אחרי האייפרם. שואלים את השרת עד שהמספר מופיע.
+  useEffect(() => {
+    if (!done?.orderId || done.orderNumber) return
+    let tries = 0
+    const t = setInterval(async () => {
+      tries++
+      try {
+        const res = await fetch(`/api/yerid/seller/sale?id=${done.orderId}`, { cache: 'no-store' })
+        const d = await res.json()
+        if (d.orderNumber) { setDone(x => x ? { ...x, orderNumber: d.orderNumber } : x); clearInterval(t) }
+      } catch { /* ננסה שוב */ }
+      if (tries >= 20) clearInterval(t)
+    }, 1500)
+    return () => clearInterval(t)
+  }, [done?.orderId, done?.orderNumber])
 
   // ── מסך טעינה ──
   if (loading) {
@@ -263,16 +280,26 @@ export default function SellerClient() {
       <div className="min-h-screen bg-[#FAF7F0] px-4 py-6">
         <div className="mx-auto max-w-lg">
           <div className="mb-4 rounded-2xl border border-[#141210]/8 bg-white p-4 text-center">
-            <p className="text-sm text-[#141210]/55">הזמנה {payment.orderNumber}</p>
+            {/* ⚠️ בלי מספר הזמנה: הוא מוקצה רק אחרי תשלום בפועל. */}
+            <p className="text-sm text-[#141210]/55">תשלום בכרטיס אשראי</p>
             <p className="text-3xl font-bold tabular-nums text-[#6B2737]">{fmtAgorot(payment.total)}</p>
           </div>
+          {/* 🔴 ביטול וחזרה — תמיד גלוי. כפתור "חזרה" של האייפרם עצמו מופיע
+              רק במצבים מסוימים, והמוכר נתקע מול לקוח בלי דרך לצאת. */}
+          <button
+            type="button"
+            onClick={() => { setPayment(null); setSaleError('התשלום בוטל. אפשר לנסות שוב או לגבות במזומן.') }}
+            className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#141210]/15 bg-white py-3 text-base font-semibold text-[#141210]/75 transition hover:bg-[#141210]/5"
+          >
+            <X size={18} /> ביטול וחזרה לסל
+          </button>
           <NedarimIframe
             transactionId={payment.transactionId}
             key_={payment.key}
             // 🔴 רק כאן: בדוכן יש קורא כרטיסים, בחנות הציבורית אין.
             cardReader
             onSuccess={() => {
-              setDone({ orderNumber: payment.orderNumber, total: payment.total, warning: null })
+              setDone({ orderNumber: null, orderId: payment.orderId, total: payment.total, warning: null })
               setPayment(null)
               setCart(new Map())
               void loadCatalog()
@@ -298,7 +325,7 @@ export default function SellerClient() {
           </div>
           <h2 className="mt-4 text-2xl font-bold text-[#2D5016]">המכירה נרשמה</h2>
           <p className="mt-2 text-lg text-[#141210]/70">
-            {fmtAgorot(done.total)} · הזמנה {done.orderNumber}
+            {fmtAgorot(done.total)} · {done.orderNumber ? `הזמנה ${done.orderNumber}` : 'ממתין לאישור התשלום…'}
           </p>
 
           {done.warning && (
@@ -520,16 +547,6 @@ export default function SellerClient() {
               </button>
             </div>
 
-            {/* ⚠️ מסלול שלישי, נפרד ומוקטן: תיעוד תשלום שנגבה במכשיר
-                סליקה חיצוני. בלי ההפרדה המוכר לא היה יודע אם הלחיצה
-                גובה כסף או רק רושמת. */}
-            <button
-              onClick={() => sell('card', false)}
-              disabled={saleBusy}
-              className="mt-2 w-full rounded-lg border border-[#141210]/12 py-2 text-sm text-[#141210]/55 transition hover:bg-[#141210]/5 disabled:opacity-40"
-            >
-              שולם במכשיר חיצוני — רישום בלבד
-            </button>
           </div>
         </div>
       )}

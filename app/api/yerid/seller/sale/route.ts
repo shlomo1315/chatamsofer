@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { randomUUID } from 'node:crypto'
 import { getServiceClient } from '@/lib/apiAuth'
 import { nextOrderNumber } from '@/lib/bookFairCheckout'
 import { SELLER_COOKIE, sellerFromRequest } from '@/lib/bookFairSeller'
@@ -49,6 +50,13 @@ export async function POST(request: NextRequest) {
   // ⚠️ מזומן לעולם אינו נסלק — אין מה לסלוק.
   const wantsCharge = paymentMethod === 'card' && body.charge === true
 
+  // 🔴 אשראי = סליקה אמיתית בלבד (החלטת המשתמש 05.10): הכפתור "שולם
+  // במכשיר חיצוני" הוסר, והשרת דוחה גם הוא "אשראי" בלי חיוב — אחרת
+  // אפשר היה לרשום מכירה כשולמה בלי שאיש גבה כסף.
+  if (paymentMethod === 'card' && !wantsCharge) {
+    return NextResponse.json({ error: 'אשראי נגבה רק דרך מסך הסליקה' }, { status: 400 })
+  }
+
   // 🔴 המחירים מהמסד ולא מהלקוח — אותו כלל כמו בחנות. מוכר שדפדפנו
   // נפרץ (או שסתם שינה את ה-DOM) אינו יכול לקבוע מחיר.
   const ids = [...new Set(rawItems.map(i => String(i.book_id)))]
@@ -80,7 +88,13 @@ export async function POST(request: NextRequest) {
   const itemsTotal = lines.reduce((s, l) => s + l.unit * l.qty, 0)
 
   // ── ההזמנה ──
-  const orderNumber = await nextOrderNumber(db)
+  // 🔴 מספר הזמנה אמיתי רק אחרי תשלום בפועל (החלטת המשתמש 05.10), כמו
+  // באתר: בסליקה — מספר זמני (TMP-) עד שנדרים מאשרת, ואז payment-callback
+  // מקצה את המספר הבא. סליקה שננטשה לא שורפת מספר.
+  // ⚠️ מזומן — שולם ביד, ולכן מקבל מספר מיד.
+  const orderNumber = wantsCharge
+    ? `TMP-${randomUUID().replace(/-/g, '').slice(0, 12)}`
+    : await nextOrderNumber(db)
   const { data: order, error: orderErr } = await db.from('book_fair_orders').insert({
     order_number: orderNumber,
     channel: 'fair',
@@ -200,4 +214,29 @@ export async function POST(request: NextRequest) {
     // אבל המוכר צריך לדעת שהמספר במסך אינו מדויק.
     stockWarning: stockErr ? 'המכירה נרשמה, אך עדכון מלאי הדוכן נכשל' : null,
   })
+}
+
+/**
+ * מצב מכירה בסליקה — אחרי שהאייפרם דיווח הצלחה.
+ *
+ * ⚠️ המספר האמיתי מוקצה ב-payment-callback (שרת-אל-שרת מנדרים), שעשוי
+ * להגיע שניות אחרי האייפרם. המסך שואל כאן עד שהמספר הסופי מופיע,
+ * במקום להציג למוכר את המספר הזמני.
+ */
+export async function GET(request: NextRequest) {
+  const db = getServiceClient()
+  if (!db) return NextResponse.json({ error: 'שגיאת תצורה בשרת' }, { status: 500 })
+  const seller = await sellerFromRequest(request.cookies.get(SELLER_COOKIE)?.value, db)
+  if (!seller) return NextResponse.json({ error: 'נדרשת התחברות מחדש' }, { status: 401 })
+
+  const id = request.nextUrl.searchParams.get('id') ?? ''
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return NextResponse.json({ error: 'מזהה לא תקין' }, { status: 400 })
+
+  // ⚠️ מכירות דוכן בלבד — המוכר אינו רואה הזמנות אתר/טלפון דרך כאן.
+  const { data } = await db.from('book_fair_orders')
+    .select('order_number, status').eq('id', id).eq('channel', 'fair').maybeSingle()
+  if (!data) return NextResponse.json({ error: 'לא נמצא' }, { status: 404 })
+
+  const tmp = String(data.order_number).startsWith('TMP-')
+  return NextResponse.json({ status: data.status, orderNumber: tmp ? null : data.order_number }, { headers: { 'Cache-Control': 'no-store' } })
 }

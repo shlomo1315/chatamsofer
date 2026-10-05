@@ -53,11 +53,21 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack, 
   /** שדה הסריקה — תופס את הקורא לפני שהמיקוד עובר לאייפרם. */
   const swipeRef = useRef<HTMLInputElement>(null)
   const [height, setHeight] = useState(0)
+  /**
+   * 🔴 בדוכן העסקה מוזרקת רק אחרי סריקה (או "הקלדה ידנית").
+   *
+   * למה: אחרי StartPayment האייפרם ממקד את שדה מספר הכרטיס בעצמו
+   * (נבדק בקוד המקור שלו). המיקוד עבר לאייפרם, הסריקה נחתה שם, והשדה
+   * שומר רק 19 ספרות ראשונות — מספר הכרטיס + 3 ספרות מהתוקף. זה בדיוק
+   * "המספר והתוקף לא נקלטים טוב". עד הסריקה האייפרם במצב המתנה ואינו
+   * גונב את המיקוד משדה הסריקה שלנו.
+   */
+  const [started, setStarted] = useState(!cardReader)
 
   // ⚠️ עדכני תמיד בלי לגרום לרישום מחדש של ה-listener: הפונקציה
   // עצמה (handleMessage) לא תלויה ב-props ישירות, קוראת דרך ref.
   const propsRef = useRef({ onSuccess, onBack })
-  propsRef.current = { onSuccess, onBack }
+  useEffect(() => { propsRef.current = { onSuccess, onBack } })
 
   useEffect(() => {
     // 🔴 נרשם פעם אחת בלבד לכל חיי הקומפוננטה — זו בדיוק האזהרה
@@ -137,7 +147,7 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack, 
 
   // הזרקת העסקה ברגע שהאייפרם מוכן (Ready) — לא לפני, אחרת ההודעה אובדת.
   useEffect(() => {
-    if (status !== 'ready') return
+    if (status !== 'ready' || !started) return
     const frame = frameRef.current
     if (!frame?.contentWindow) return
     frame.contentWindow.postMessage(
@@ -156,12 +166,34 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack, 
           // ⚠️ מספר הכרטיס *אינו* ברשימה ולכן אינו ניתן להזרקה —
           // הוא נשאר בכפתור העתקה.
           ...(swipe?.tokef ? { Tokef: swipe.tokef } : {}),
+          // 🔴 בדוכן — כרטיס אשראי בלבד (בלי Google Pay / Apple Pay / ביט).
+          // 'Methods' מסנן את רשימת אמצעי התשלום של האייפרם.
+          ...(cardReader ? { Methods: 'Card' } : {}),
         },
       },
       '*',
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, swipe?.tokef])
+  }, [status, started, swipe?.tokef])
+
+  /**
+   * סריקה פוענחה: התוקף נכנס לעסקה, ומספר הכרטיס מועתק ללוח.
+   *
+   * ⚠️ האייפרם אינו מקבל מספר כרטיס מבחוץ (לא ברשימת השדות של
+   * StartPayment — נבדק בקוד שלו), ולכן ההדבקה היא הדרך היחידה. אחרי
+   * StartPayment הוא ממקד את שדה המספר בעצמו, כך שנשאר רק Ctrl+V.
+   * ⚠️ ההעתקה מותרת כאן כי הסריקה היא הקלדה = פעולת משתמש.
+   */
+  function acceptSwipe(raw: string) {
+    const card = parseMagneticCard(raw)
+    if (!card) {
+      setSwipe({ pan: '', tokef: '', error: 'הסריקה לא פוענחה — העבירו שוב או הקלידו ידנית' })
+      return
+    }
+    setSwipe({ pan: card.pan, tokef: card.tokefMMYY })
+    navigator.clipboard?.writeText(card.pan).then(() => setCopied('auto')).catch(() => {})
+    setStarted(true)
+  }
 
   // ── קורא כרטיסים מגנטי ──
   //
@@ -196,14 +228,11 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack, 
         const raw = buf
         buf = ''
         if (!looksLikeMagneticSwipe(raw)) return
-        const card = parseMagneticCard(raw)
         // ⚠️ הסריקה נבלעת כאן ואינה ממשיכה לשדות — אחרת היא הייתה
         // נדחפת שוב לשדה המספר וחוזרת על אותו באג.
         e.preventDefault()
         e.stopPropagation()
-        setSwipe(card
-          ? { pan: card.pan, tokef: card.tokefMMYY }
-          : { pan: '', tokef: '', error: 'הסריקה לא פוענחה — הזינו את פרטי הכרטיס ידנית' })
+        acceptSwipe(raw)
         return
       }
       if (e.key.length === 1) buf += e.key
@@ -253,7 +282,7 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack, 
           ("4580 1700 0907 1136 281") ונדחית כלא תקינה.
           ⚠️ השדה ממקד את עצמו ונשאר ממוקד, כך שהסריקה תמיד נוחתת
           אצלנו ולא באייפרם. */}
-      {cardReader && status === 'ready' && !swipe && (
+      {cardReader && status === 'ready' && !started && (
         <div className="rounded-xl border-2 border-dashed border-[#12314F]/30 bg-[#12314F]/5 px-4 py-3">
           <label className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-[#12314F]">
             <CreditCard size={15} /> העבירו כאן את הכרטיס בקורא
@@ -271,17 +300,18 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack, 
               const raw = e.target.value
               if (!looksLikeMagneticSwipe(raw)) return
               e.target.value = ''
-              const card = parseMagneticCard(raw)
-              setSwipe(card
-                ? { pan: card.pan, tokef: card.tokefMMYY }
-                : { pan: '', tokef: '', error: 'הסריקה לא פוענחה — הזינו את פרטי הכרטיס ידנית' })
+              acceptSwipe(raw)
             }}
             className="w-full rounded-lg border border-[#12314F]/20 bg-white px-3 py-2 font-mono text-sm outline-none focus:border-[#12314F]"
             dir="ltr"
           />
-          <p className="mt-1.5 text-xs text-[#141210]/50">
-            אין קורא? לחצו על שדות התשלום והקלידו ידנית.
-          </p>
+          <button
+            type="button"
+            onClick={() => setStarted(true)}
+            className="mt-2 rounded-lg border border-[#12314F]/25 bg-white px-3 py-1.5 text-sm font-semibold text-[#12314F]"
+          >
+            אין קורא — הקלדה ידנית
+          </button>
           {/* 🔴 למה לא מילוי אוטומטי: אייפרם הסליקה שייך לנדרים
               (דומיין אחר), והדפדפן חוסם גישה לשדותיו. נבדק בקוד
               המקור של https://www.matara.pro/nedarimplus/iframe/v3/ —
@@ -301,7 +331,12 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack, 
           ) : (
             <>
               <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-[#2D5016]">
-                <CreditCard size={15} /> הכרטיס נסרק — העתיקו לשדות
+                <CreditCard size={15} /> הכרטיס נסרק — התוקף הוזן אוטומטית
+              </p>
+              <p className="mb-2 text-sm text-[#141210]/70">
+                {copied === 'auto'
+                  ? 'מספר הכרטיס הועתק — לחצו Ctrl+V בשדה מספר הכרטיס'
+                  : 'לחצו על מספר הכרטיס כדי להעתיק, והדביקו בשדה'}
               </p>
               <div className="flex flex-wrap gap-2">
                 {[
@@ -352,10 +387,12 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack, 
         ref={frameRef}
         // allow="payment" חובה כדי ש-Google Pay / Apple Pay יוכלו להיפתח
         // בתוך האייפרם — בלעדיו הם פשוט לא מוצגים.
-        allow="payment"
+        // 🔴 בדוכן בלי allow="payment": בלעדיו האייפרם מסתיר Google Pay /
+        // Apple Pay בעצמו (נבדק בקוד שלו) — שכבה שנייה מעל Methods.
+        allow={cardReader ? undefined : 'payment'}
         scrolling="no"
         src={IFRAME_SRC}
-        style={{ width: '100%', border: 'none', height: height || (status === 'loading' ? 0 : 480) }}
+        style={{ width: '100%', border: 'none', height: !started ? 0 : (height || (status === 'loading' ? 0 : 480)) }}
         title="תשלום מאובטח — נדרים פלוס"
       />
     </div>

@@ -7,7 +7,7 @@ import {
   type StatOrder, type StatItem, type StatFilters, type Channel, type Period,
 } from '@/lib/bookFairStats'
 import { Card, Kpi, BarList, HourBars, SplitBar, Pills, CH_COLORS } from '@/components/bookFair/StatCharts'
-import { useLiveData, agoText } from '@/components/bookFair/useLiveData'
+import { useLiveData, agoText, nextText } from '@/components/bookFair/useLiveData'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ניהול היריד — כל ההזמנות *ששולמו* מכל הערוצים, מספרים בלבד.
@@ -30,7 +30,7 @@ const GOLD = '#B8862B'
 const SELECT = 'min-h-[44px] min-w-0 rounded-xl border-0 bg-[#F4F1EA] px-3 text-[15px] text-[#14213D]'
 
 export default function DashboardClient() {
-  const { data, error, status, updatedAt, reload } = useLiveData<Payload>('/api/yerid/dashboard/data', REFRESH_MS)
+  const { data, error, status, updatedAt, nextAt, reload } = useLiveData<Payload>('/api/yerid/dashboard/data', REFRESH_MS)
   const [f, setF] = useState<StatFilters>({ ...DEFAULT_FILTERS })
   const [bookQuery, setBookQuery] = useState('')
   const [detailBook, setDetailBook] = useState('')
@@ -40,7 +40,8 @@ export default function DashboardClient() {
   const set = <K extends keyof StatFilters>(k: K, v: StatFilters[K]) => setF(p => ({ ...p, [k]: v }))
 
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 15000)
+    // ⚠️ כל שנייה — לספירה לאחור עד העדכון הבא.
+    const t = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(t)
   }, [])
 
@@ -125,7 +126,7 @@ export default function DashboardClient() {
           <div className="flex flex-wrap items-center gap-2.5">
             <span className="flex items-center gap-2 rounded-full bg-white/10 px-3.5 py-2 text-sm">
               <span className={`h-2.5 w-2.5 rounded-full ${error ? 'bg-amber-400' : 'bg-[#4ADE80]'}`} />
-              {error || `${agoText(updatedAt, now)} · מתעדכן כל 5 דקות`}
+              {error || `${agoText(updatedAt, now)} · ${nextText(nextAt, now)}`}
             </span>
             <button onClick={refreshNow} disabled={refreshing}
               className="flex min-h-[44px] items-center gap-2 rounded-xl bg-[#B8862B] px-4 text-sm font-bold text-[#14213D] disabled:opacity-60">
