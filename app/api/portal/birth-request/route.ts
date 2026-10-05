@@ -7,6 +7,7 @@ import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { signedDocUrl } from '@/lib/docUrl'
 import { validateIsraeliId } from '@/lib/validation'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
+import { isOwnDoc } from '@/lib/portalDocs'
 import { notifyRejectedRequest } from '@/lib/rejectedRequestMail'
 import { defaultRecoveryDays, type BabyEntry } from '@/lib/maternity'
 import { rateLimit } from '@/lib/rateLimit'
@@ -160,6 +161,13 @@ export async function POST(request: NextRequest) {
   const sessionId = getPortalBeneficiaryId(request)
   if (!sessionId || sessionId !== String(beneficiary_id)) {
     return NextResponse.json({ error: 'נדרש אימות מחדש — נא לבצע כניסה מחדש לפורטל' }, { status: 401 })
+  }
+
+  // 🔴 אישור הלידה חייב להיות קובץ שהמוטב העלה בעצמו (lib/portalDocs) —
+  // אחרת נתיב של משפחה אחרת הורד וצורף למייל של המגיש.
+  if (!isOwnDoc(birth_certificate_url, sessionId)
+    || (is_twins === true && !isOwnDoc(birth_certificate_url_2, sessionId))) {
+    return NextResponse.json({ error: 'קובץ אישור הלידה לא תקין — נא להעלות אותו מחדש' }, { status: 400 })
   }
 
   // הגבלת קצב per-מוטב — בולמת הצפת בקשות (spam / double-submit)

@@ -11,6 +11,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
+import { ownDocsOnly, isOwnDoc } from '@/lib/portalDocs'
 import { LOAN_DECLARATIONS, LOAN_MAX_AMOUNT } from '@/lib/emailRequestForms'
 import {
   findOpenLoan, findDraftAwaitingRabbiForm, openLoanMessageFor, AWAITING_RABBI_FORM,
@@ -106,7 +107,8 @@ export async function POST(request: NextRequest) {
     purpose_details: purpose_details ? String(purpose_details).trim() : null,
     declaration: parsedDeclaration,
     notes: notes ? String(notes).trim() : null,
-    document_urls: Array.isArray(document_urls) && document_urls.length ? document_urls : null,
+    // 🔴 רק מסמכים שהמוטב העלה בעצמו (lib/portalDocs).
+    document_urls: (() => { const own = ownDocsOnly(document_urls, sessionId); return own.length ? own : null })(),
     // ⚠️ pending ולא AWAITING_RABBI_FORM: הבקשה שלמה ומגיעה ישירות
     // לטיפול המזכיר.
     status: 'pending',
@@ -201,6 +203,10 @@ export async function PUT(request: NextRequest) {
   const formUrl = String(body.rabbi_form_url ?? '').trim()
   if (!formUrl) {
     return NextResponse.json({ error: 'חסר הטופס החתום' }, { status: 400 })
+  }
+  // 🔴 הטופס חייב להיות קובץ שהמוטב העלה בעצמו (lib/portalDocs).
+  if (!isOwnDoc(formUrl, sessionId)) {
+    return NextResponse.json({ error: 'קובץ הטופס לא תקין — נא להעלות אותו מחדש' }, { status: 400 })
   }
 
   const admin = getAdminClient()

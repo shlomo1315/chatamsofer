@@ -7,6 +7,7 @@ import { requestReceivedEmail } from '@/lib/emailTemplates'
 import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { signedDocUrl } from '@/lib/docUrl'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
+import { ownDocsOnly } from '@/lib/portalDocs'
 import { notifyRejectedRequest } from '@/lib/rejectedRequestMail'
 import { rateLimit } from '@/lib/rateLimit'
 import { LOAN_DECLARATIONS, LOAN_MAX_AMOUNT } from '@/lib/emailRequestForms'
@@ -59,6 +60,10 @@ export async function POST(request: NextRequest) {
   if (!sessionId || sessionId !== String(beneficiary_id)) {
     return NextResponse.json({ error: 'נדרש אימות מחדש — נא לבצע כניסה מחדש לפורטל' }, { status: 401 })
   }
+
+  // 🔴 רק מסמכים שהמוטב העלה בעצמו (lib/portalDocs) — נשמרים בבקשה ומצורפים
+  // למייל. קודם נתיב של משפחה אחרת הורד וצורף למייל של המגיש.
+  const ownDocs = ownDocsOnly<{ url?: string; name?: string }>(document_urls, sessionId)
 
   // הגבלת קצב per-מוטב — בולמת הצפת בקשות (spam / double-submit)
   if (!rateLimit(`loan-request:${sessionId}`, 5, 60 * 60 * 1000)) {
@@ -126,7 +131,7 @@ export async function POST(request: NextRequest) {
     purpose_details: purpose_details ? String(purpose_details).trim() : null,
     declaration: parsedDeclaration,
     notes: notes ? String(notes).trim() : null,
-    document_urls: Array.isArray(document_urls) && document_urls.length ? document_urls : null,
+    document_urls: ownDocs.length ? ownDocs : null,
     status: 'pending',
   })
 
@@ -137,9 +142,7 @@ export async function POST(request: NextRequest) {
   // אישור קבלה לצאצא (לא חוסם את הבקשה אם המייל נכשל) — כולל פרטי המבקש, פרטי ההלוואה והמסמכים
   if (ben.email) {
     const benEmail = ben.email
-    const docs = Array.isArray(document_urls)
-      ? (document_urls as { url?: string; name?: string }[]).filter(d => d?.url).map(d => ({ name: d.name || 'מסמך מצורף', url: d.url as string }))
-      : []
+    const docs = ownDocs.map(d => ({ name: d.name || 'מסמך מצורף', url: d.url as string }))
     void (async () => {
       const signedDocs = await Promise.all(docs.map(async d => ({ name: d.name, url: await signedDocUrl(admin, d.url) })))
       const mailData = requestReceivedEmail({
