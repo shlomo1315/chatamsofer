@@ -46,7 +46,6 @@ function columnsOf(sold: Record<string, number>, soldBy: SoldBy): ColDef<ColKey,
   { key: 'sold',       label: 'נמכר',   def: true, kind: 'number', headClassName: HEAD,
     value: b => sold[b.id] ?? 0 },
   // פיצול "נמכר" לפי ערוץ (בקשת המשתמש 05.10).
-  { key: 'sold_fair',  label: 'ביריד',  def: true, kind: 'number', headClassName: HEAD, value: b => soldBy[b.id]?.fair ?? 0 },
   { key: 'sold_phone', label: 'בטלפון', def: true, kind: 'number', headClassName: HEAD, value: b => soldBy[b.id]?.phone ?? 0 },
   { key: 'sold_web',   label: 'באתר',   def: true, kind: 'number', headClassName: HEAD, value: b => soldBy[b.id]?.web ?? 0 },
   { key: 'stock',      label: 'נשאר במלאי', def: true, kind: 'number', headClassName: HEAD, value: b => b.stock_total ?? 0 },
@@ -54,6 +53,8 @@ function columnsOf(sold: Record<string, number>, soldBy: SoldBy): ColDef<ColKey,
   { key: 'active',      label: 'פעיל',   def: true, kind: 'enum', filterable: true, headClassName: HEAD,
     // ⚠️ הערך הוא התווית המוצגת ולא בוליאני: המשתמש מסנן לפי מה שהוא רואה
     value: b => b.is_active ? 'פעיל' : 'מוסתר' },
+  // ⚠️ בסוף בכוונה — הכי שמאלה בטבלה (בקשת המשתמש 05.10).
+  { key: 'sold_fair',  label: 'ביריד',  def: true, kind: 'number', headClassName: HEAD, value: b => soldBy[b.id]?.fair ?? 0 },
   ]
 }
 
