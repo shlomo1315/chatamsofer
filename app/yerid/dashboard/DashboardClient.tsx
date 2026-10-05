@@ -212,7 +212,7 @@ export default function DashboardClient() {
             sub={CHANNELS.map(c => `${s.byChannel[c].orders} ${CHANNEL_LABELS[c]}`).join(' · ')} />
           <Kpi label="ספרים שנמכרו" value={s.units.toLocaleString('en-US')} sub={s.orders ? `ממוצע ${(s.units / s.orders).toFixed(1)} להזמנה` : undefined} />
           <Kpi label="הזמנה ממוצעת" value={fmtAgorot(s.avgAgorot)} sub="כולל משלוח" />
-          <Kpi label="כותרים שנמכרו" value={s.allBooks.length.toLocaleString('en-US')} sub="ספרים שונים" />
+          <Kpi label="סוגי ספרים שנמכרו" value={s.allBooks.length.toLocaleString('en-US')} sub="ספרים שונים" />
         </div>
 
         <div className="flex flex-wrap gap-5">
@@ -243,7 +243,8 @@ export default function DashboardClient() {
           <Card title="הכנסות לפי יום" subtitle="מחולק לפי ערוץ · היום מוצג עד עכשיו" className="flex-[999_1_320px]">
             {s.byDay.length ? (
               <>
-                <div className="flex h-56 items-end gap-3 border-b border-[#E6E1D6] px-2 sm:gap-6">
+                {/* ⚠️ dir=ltr — הימים מסודרים משמאל לימין, מהמוקדם למאוחר (בקשת המשתמש). */}
+                <div dir="ltr" className="flex h-56 items-end gap-3 border-b border-[#E6E1D6] px-2 sm:gap-6">
                   {s.byDay.map(d => (
                     <div key={d.day} className="flex h-full min-w-0 max-w-[150px] flex-1 flex-col justify-end gap-1.5">
                       <span className="text-center text-sm font-bold tabular-nums">{fmtAgorot(d.total)}</span>
@@ -257,10 +258,10 @@ export default function DashboardClient() {
                     </div>
                   ))}
                 </div>
-                <div className="flex gap-3 px-2 pt-2 sm:gap-6">
+                <div dir="ltr" className="flex gap-3 px-2 pt-2 sm:gap-6">
                   {s.byDay.map(d => (
-                    <div key={d.day} className="min-w-0 max-w-[150px] flex-1 text-center">
-                      <p className="text-sm font-semibold">{d.day.slice(8, 10)}.{d.day.slice(5, 7)}</p>
+                    <div key={d.day} dir="rtl" className="min-w-0 max-w-[150px] flex-1 text-center">
+                      <p className="text-sm font-semibold" dir="ltr">{d.day.slice(8, 10)}.{d.day.slice(5, 7)}</p>
                       <p className="text-xs text-[#5B6475]">{d.orders} הזמנות</p>
                     </div>
                   ))}
