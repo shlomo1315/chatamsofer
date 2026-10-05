@@ -29,6 +29,7 @@ import type {
 } from './types'
 import { sanitizeProviderResponse } from './types'
 import { getPaymentSettings } from './settings'
+import { nedarimFetch } from '../nedarimFetch'
 
 /**
  * כתובות נדרים פלוס.
@@ -95,7 +96,7 @@ export class NedarimPaymentProvider implements PaymentProvider {
     const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS)
     let res: Response
     try {
-      res = await fetch(`${url}?Action=${encodeURIComponent(action)}`, {
+      res = await nedarimFetch(`${url}?Action=${encodeURIComponent(action)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: form.toString(),

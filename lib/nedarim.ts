@@ -4,6 +4,7 @@
 // עם נפילה-לאחור ל-ENV (NEDARIM_MOSAD_ID / NEDARIM_API_PASSWORD).
 // תיעוד: https://matara.pro/nedarimplus/ApiDocumentation.html
 import { getServiceClient } from '@/lib/apiAuth'
+import { nedarimFetch } from '@/lib/nedarimFetch'
 
 export const NEDARIM_URL =
   'https://www.matara.pro/nedarimplus/Mechubad/Reports/ManageReports.aspx'
@@ -231,7 +232,7 @@ async function nedarimRequestRaw(
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   let res: Response
   try {
-    res = await fetch(NEDARIM_URL, {
+    res = await nedarimFetch(NEDARIM_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: form.toString(),
