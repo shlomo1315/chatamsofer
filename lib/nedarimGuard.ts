@@ -138,14 +138,27 @@ export class NedarimGuardError extends Error {
 
 const core = new GuardCore()
 const STATE_KEY = 'nedarim_guard'
-const ALERT_TO = (process.env.NEDARIM_GUARD_ALERT_TO || 'office@chasamsofer.info')
-  .split(',').map(s => s.trim()).filter(Boolean)
+/**
+ * לאן נשלחת ההתראה — לפי סדר עדיפות:
+ *   1. NEDARIM_GUARD_ALERT_TO בסביבה
+ *   2. alertTo בהגדרה 'nedarim_guard' במסד (שינוי בלי פריסה)
+ *   3. ברירת המחדל — המייל של המשתמש (בקשתו 05.10, במקום office@)
+ */
+const DEFAULT_ALERT_TO = ['4363773@gmail.com']
+function alertRecipients(): string[] {
+  const env = (process.env.NEDARIM_GUARD_ALERT_TO ?? '').split(',').map(x => x.trim()).filter(Boolean)
+  if (env.length) return env
+  const fromDb = (persisted.alertTo ?? []).map(x => String(x).trim()).filter(x => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x))
+  return fromDb.length ? fromDb : DEFAULT_ALERT_TO
+}
 const CHANNEL_LABEL: Record<GuardChannel, string> = {
   cards: 'כרטיסים (חגים 7014553 / יולדות 7018265)',
   payments: 'סליקה (יריד 7004562)',
 }
 
 type Persisted = {
+  /** נמעני ההתראה — אפשר לעדכן במסד בלי פריסה. */
+  alertTo?: string[]
   pausedUntil?: Partial<Record<GuardChannel, string | null>>
   lastReason?: Partial<Record<GuardChannel, string>>
   lastAlert?: Record<string, string>
@@ -205,7 +218,7 @@ async function alert(dedupeKey: string, subject: string, lines: string[]) {
       ${lines.map(l => `<p style="margin:0 0 8px">${l}</p>`).join('')}
       <p style="margin:12px 0 0;color:#666;font-size:13px">הודעה אוטומטית מהשומר על הפניות לנדרים.</p>
     </div>`
-    for (const to of ALERT_TO) {
+    for (const to of alertRecipients()) {
       await deliverMail(to, subject, html, undefined, { fromEmail: 'office@chasamsofer.info', replyTo: 'office@chasamsofer.info', skipLog: true })
         .catch(() => {})
     }
