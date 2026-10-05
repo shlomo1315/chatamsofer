@@ -10,13 +10,15 @@ import { fmtAgorot } from '@/lib/bookFairPricing'
 
 export const CH_COLORS = { web: '#1E3A8A', phone: '#E09F3E', fair: '#2A9D8F' } as const
 
-export function Card({ title, subtitle, children, className = '' }: {
+export function Card({ title, subtitle, children, className = '', large = false }: {
   title?: string; subtitle?: string; children: React.ReactNode; className?: string
+  /** כותרת גדולה — לאזור מרכזי (פירוט לפי ספר). */
+  large?: boolean
 }) {
   return (
     <section className={`min-w-0 rounded-2xl border border-[#E6E1D6] bg-white p-5 sm:p-6 ${className}`}>
-      {title && <h2 className="text-xl font-bold text-[#14213D]">{title}</h2>}
-      {subtitle && <p className="mt-0.5 text-sm text-[#5B6475]">{subtitle}</p>}
+      {title && <h2 className={`${large ? 'text-2xl sm:text-3xl font-extrabold' : 'text-xl font-bold'} text-[#14213D]`}>{title}</h2>}
+      {subtitle && <p className={`mt-0.5 ${large ? 'text-base' : 'text-sm'} text-[#5B6475]`}>{subtitle}</p>}
       <div className={title || subtitle ? 'mt-4' : ''}>{children}</div>
     </section>
   )
