@@ -143,7 +143,14 @@ export async function register() {
         console.error('[live-balances] שגיאה:', e instanceof Error ? e.message : e)
       }
     }
-    if (process.env.LIVE_BALANCES_DISABLED !== '1') {
+    // 🔴 כבוי כברירת מחדל (05.10) — הפעלה רק ב-LIVE_BALANCES_ENABLED=1.
+    //
+    // ⚠️ המפסק למעלה נשמר בזיכרון בלבד ומתאפס בכל פריסה. ב-05.10 היו ~20
+    // פריסות, והרענון — שמעולם לא הצליח (live_balance_at ריק אצל כל 190)
+    // — ירה בכל אחת 190×2 = ~380 פניות לנדרים תוך דקה וחצי. ~7,600 פניות
+    // ביום אחד, ונדרים חסמו את כתובת ה-IP — וכל תשלומי האשראי ביריד נפלו.
+    // לא להחזיר לפני שהרענון מצליח בפועל *וגם* המפסק נשמר במסד.
+    if (process.env.LIVE_BALANCES_ENABLED === '1' && process.env.LIVE_BALANCES_DISABLED !== '1') {
       setTimeout(() => { void refreshBalances(); setInterval(() => { void refreshBalances() }, HOURLY_MS) }, INITIAL_DELAY_MS)
       console.log('[live-balances] hourly Nedarim balance refresh started')
     }
