@@ -350,8 +350,28 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack, 
           ) : (
             <>
               <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-[#2D5016]">
-                <CreditCard size={15} /> הכרטיס נסרק — התוקף הוזן אוטומטית
+                <CreditCard size={15} /> הכרטיס נסרק
               </p>
+              {/* 🔴 נדרים מסתירים את שדה התוקף כשהוא מוזרק מבחוץ (נבדק בקוד
+                  האייפרם: hideTokef). המוכר ראה "אין תוקף" ונבהל — לכן התוקף
+                  מוצג כאן בבולט, עם דרך חזרה להזנה ידנית אם הסריקה שגויה. */}
+              {swipe.tokef ? (
+                <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg bg-white px-3 py-2">
+                  <span className="text-sm text-[#141210]/65">התוקף נקלט מהכרטיס ונשלח לתשלום:</span>
+                  <span className="text-xl font-bold tabular-nums text-[#2D5016]" dir="ltr">
+                    {swipe.tokef.slice(0, 2)}/{swipe.tokef.slice(2)} ✓
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSwipe(s => s ? { ...s, tokef: '' } : s)}
+                    className="mr-auto rounded-lg border border-[#141210]/20 px-3 py-1.5 text-sm font-semibold text-[#141210]/75 hover:bg-[#141210]/5"
+                  >
+                    הזנת תוקף ידנית
+                  </button>
+                </div>
+              ) : (
+                <p className="mb-2 text-sm text-[#141210]/70">הזינו את התוקף ידנית בשדה התוקף שבטופס התשלום.</p>
+              )}
               <p className="mb-2 text-sm text-[#141210]/70">
                 {copied === 'auto'
                   ? 'מספר הכרטיס הועתק — לחצו Ctrl+V בשדה מספר הכרטיס'
@@ -360,8 +380,8 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack, 
               <div className="flex flex-wrap gap-2">
                 {[
                   { label: 'מספר הכרטיס', value: swipe.pan },
-                  { label: 'תוקף', value: swipe.tokef.slice(0, 2) + '/' + swipe.tokef.slice(2) },
-                ].map(f => (
+                  { label: 'תוקף', value: swipe.tokef ? swipe.tokef.slice(0, 2) + '/' + swipe.tokef.slice(2) : '' },
+                ].filter(f => f.value).map(f => (
                   <button
                     key={f.label}
                     type="button"
