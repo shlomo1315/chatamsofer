@@ -103,11 +103,14 @@ export default async function BookFairPage() {
   // היא מכירה של היום.
   const todayOrders = paid.filter(o => isToday(o.paid_at ?? o.created_at))
 
+  // ⚠️ אותם תנאים בדיוק כמו כרטיסי הסינון במסך ההזמנות (inCard) —
+  // מספר שונה כאן ושם נראה כמו נתון "לא מעודכן".
   const needsAddress = orders.filter(o =>
     o.delivery_method === 'shipping' && !o.address_confirmed &&
-    o.status !== 'cancelled' && o.status !== 'failed'
+    o.status !== 'cancelled' && o.status !== 'failed' && o.status !== 'pending_payment'
   )
-  const toPick = orders.filter(o => o.status === 'paid')
+  // 🔴 לליקוט = משלוחים בלבד: מכירה בדוכן כבר נמסרה ביד (05.10).
+  const toPick = orders.filter(o => o.status === 'paid' && o.delivery_method === 'shipping')
   const mismatch = orders.filter(o => o.status === 'payment_mismatch')
 
   const activeBooks = books.filter(b => b.is_active)

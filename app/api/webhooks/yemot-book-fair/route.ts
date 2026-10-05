@@ -658,9 +658,11 @@ async function createOrder(state: IvrState, cartToken: string, phone: string, ca
     customer_phone: phone,
     delivery_method: state.delivery ?? 'pickup',
     city_id: state.delivery === 'shipping' ? state.city_id : null,
-    // ⚠️ בטלפון הכתובת מגיעה מהקלטה, לא מהקלדה — ממתינה לאימות במשרד.
+    // ⚠️ בטלפון הכתובת מגיעה מהקלטה, לא מהקלדה.
     address_text: state.delivery === 'shipping' ? (state.address_transcript ?? null) : null,
-    address_confirmed: false,
+    // 🔴 מאומתת רק כשהמתקשר שמע את התמלול והקיש 1 (החלטת המשתמש 05.10).
+    // בלי תמלול, או כשנגמרו ההקלטות בלי אישור — ממתינה לאימות במשרד.
+    address_confirmed: state.delivery === 'shipping' && state.address_caller_confirmed === true,
     items_total_agorot: itemsTotal,
     shipping_agorot: shipping,
     total_agorot: itemsTotal + shipping,

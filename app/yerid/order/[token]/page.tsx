@@ -1,5 +1,12 @@
 import Link from 'next/link'
-import { CheckCircle2, Clock, XCircle, Package, Truck, AlertTriangle, BookOpen, Check, Phone, Mail } from 'lucide-react'
+import {
+  CheckCircle2, Clock, XCircle, Package, Truck, AlertTriangle, BookOpen, Check, Phone, Mail,
+  ClipboardCheck, House, Store, PackageCheck,
+} from 'lucide-react'
+
+// סמל לכל שלב בציר — לפי סדר השלבים ב-trackingSteps.
+const SHIP_ICONS = [ClipboardCheck, Truck, House]
+const PICKUP_ICONS = [ClipboardCheck, Store, PackageCheck]
 import {
   trackingSteps, showShippingEta, OFFICE_CONTACT_KEY, parseOfficeContact, formatIsraeliPhone,
 } from '@/lib/bookFairTracking'
@@ -99,23 +106,35 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
           ⚠️ רק להזמנה ששולמה: בהזמנה שבוטלה או טרם שולמה אין משלוח
           לעקוב אחריו, והציר היה מבטיח משהו שלא יקרה. */}
       {steps && (
-        <ol className="mb-5 flex rounded-xl border-2 border-stone-200 bg-white px-2 py-5" aria-label="מצב ההזמנה">
-          {steps.map((s, i) => (
-            <li key={s.label} className="relative flex flex-1 flex-col items-center gap-2 text-center">
-              {i > 0 && (
-                <span aria-hidden className={`absolute top-[17px] h-1 rounded-full ${s.done ? 'bg-[#1E3A5F]' : 'bg-stone-200'}`}
-                  style={{ right: '50%', left: '-50%' }} />
-              )}
-              <span className={`relative z-10 flex h-9 w-9 items-center justify-center rounded-full ${
-                s.done ? 'bg-[#1E3A5F] text-white' : 'border-[3px] border-stone-300 bg-white'
-              } ${s.current ? 'ring-4 ring-[#DCE4EF]' : ''}`}>
-                {s.done && <Check size={18} strokeWidth={3} />}
-              </span>
-              <span className={`text-[15px] ${s.done ? 'font-bold text-stone-900' : 'text-stone-500'}`}>
-                {s.label}
-              </span>
-            </li>
-          ))}
+        <ol className="mb-5 flex overflow-hidden rounded-xl border-2 border-stone-200 bg-white px-2 pb-4 pt-5" aria-label="מצב ההזמנה">
+          {steps.map((s, i) => {
+            const StepIcon = (order.delivery_method === 'pickup' ? PICKUP_ICONS : SHIP_ICONS)[i] ?? Check
+            return (
+              <li key={s.label} aria-current={s.current ? 'step' : undefined}
+                className="relative flex flex-1 flex-col items-center gap-2 text-center">
+                {/* 🔴 הקו מחבר לשלב *הקודם* — inline-start, כלומר ימינה בעברית.
+                    ⚠️ הקוד הקודם השתמש ב-left/right קבועים וצייר כל קו לכיוון
+                    השלב הבא: בין שני הראשונים לא היה קו, ומהאחרון בלט קו
+                    מחוץ לכרטיס. inset-inline עובד נכון בכל כיוון כתיבה. */}
+                {i > 0 && (
+                  <span aria-hidden
+                    className={`absolute top-[22px] h-1 ${s.done ? 'bg-[#1E3A5F]' : 'bg-stone-200'}`}
+                    style={{ insetInlineStart: '-50%', insetInlineEnd: '50%' }} />
+                )}
+                <span className={`relative z-10 flex h-12 w-12 items-center justify-center rounded-full transition ${
+                  s.done ? 'bg-[#1E3A5F] text-white' : 'border-2 border-stone-200 bg-white text-stone-300'
+                } ${s.current ? 'ring-4 ring-[#DCE4EF]' : ''}`}>
+                  {s.done && !s.current
+                    ? <Check size={22} strokeWidth={3} />
+                    : <StepIcon size={22} strokeWidth={1.9} />}
+                </span>
+                <span className={`text-[15px] leading-tight ${
+                  s.current ? 'font-bold text-[#1E3A5F]' : s.done ? 'font-semibold text-stone-700' : 'text-stone-400'}`}>
+                  {s.label}
+                </span>
+              </li>
+            )
+          })}
         </ol>
       )}
 

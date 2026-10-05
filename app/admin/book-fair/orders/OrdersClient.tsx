@@ -64,6 +64,8 @@ const CARDS: { key: BookFairOrderStatus | 'all' | 'needs_address'; label: string
   { key: 'needs_address',  label: 'ממתין לאימות כתובת', icon: Mic,          cls: 'border-purple-200 text-purple-700' },
   { key: 'picking',        label: 'בליקוט',            icon: Package,       cls: 'border-sky-200 text-sky-700' },
   { key: 'shipped',        label: 'נשלח',              icon: Truck,         cls: 'border-violet-200 text-violet-700' },
+  // ⚠️ כולל את מכירות הדוכן — הקונה לוקח את הספרים ביד (בקשת המשתמש 05.10).
+  { key: 'delivered',      label: 'נמסר',              icon: CheckCircle2,  cls: 'border-teal-200 text-teal-700' },
   { key: 'payment_mismatch', label: 'אי-התאמה בסכום',  icon: AlertTriangle, cls: 'border-red-200 text-red-700' },
   // ⚠️ כרטיס משלו: אלו אינן הזמנות אלא דפי סליקה שננטשו, והן הסתתרו
   // בתוך "הכל" בלי שאפשר היה לסנן ולנקות אותן.
@@ -74,6 +76,32 @@ const CARDS: { key: BookFairOrderStatus | 'all' | 'needs_address'; label: string
   // השורות (ניסיונות שלא הושלמו) והסתירו את ההזמנות שצריך לטפל בהן.
   { key: 'cancelled',      label: 'בוטל',              icon: XCircle,       cls: 'border-slate-200 text-slate-400' },
 ]
+
+/**
+ * האם הזמנה שייכת לכרטיס סינון.
+ *
+ * 🔴 שלושה כרטיסים אינם "סטטוס שווה ל-" (בקשת המשתמש 05.10):
+ *   · "שולם — לליקוט" — רק משלוחים. מכירה בדוכן כבר נמסרה ביד, ואיסוף
+ *     עצמי אינו נארז לשליחה.
+ *   · "נמסר" — כולל את מכירות הדוכן ששולמו, ולא רק status='delivered'.
+ *   · "ממתין לאימות כתובת" — תנאי ולא סטטוס; ⚠️ בלי pending_payment:
+ *     הזמנה שלא שולמה אינה צריכה אימות כתובת.
+ */
+function inCard(o: BookFairOrder, key: string): boolean {
+  switch (key) {
+    case 'all':
+      return o.status !== 'cancelled' && o.status !== 'pending_payment'
+    case 'needs_address':
+      return o.delivery_method === 'shipping' && !o.address_confirmed &&
+        o.status !== 'cancelled' && o.status !== 'failed' && o.status !== 'pending_payment'
+    case 'paid':
+      return o.status === 'paid' && o.delivery_method === 'shipping'
+    case 'delivered':
+      return o.status === 'delivered' || (o.channel === 'fair' && o.status === 'paid')
+    default:
+      return o.status === key
+  }
+}
 
 export default function OrdersClient({ orders, itemCounts }: {
   orders: BookFairOrder[]
@@ -86,34 +114,19 @@ export default function OrdersClient({ orders, itemCounts }: {
 
   const COLUMNS = useMemo(() => columnsOf(itemCounts), [itemCounts])
 
+  // ⚠️ המונה והסינון מאותה פונקציה (inCard) — מונה שמחושב בנפרד
+  // היה מראה מספר אחד בכרטיס ושורות אחרות בטבלה.
   const counts = useMemo(() => {
-    // ⚠️ "הכל" אינו סופר מבוטלות — ראו ההערה ב-CARDS.
-    const c: Record<string, number> = {
-      all: orders.filter(o => o.status !== 'cancelled' && o.status !== 'pending_payment').length,
-    }
-    for (const o of orders) c[o.status] = (c[o.status] ?? 0) + 1
-    // ⚠️ "ממתין לאימות כתובת" אינו סטטוס אלא תנאי: הזמנה טלפונית
-    // למשלוח שהכתובת בה הוקלטה וטרם הוקלדה במשרד.
-    c.needs_address = orders.filter(o =>
-      o.delivery_method === 'shipping' && !o.address_confirmed && o.status !== 'cancelled' && o.status !== 'failed'
-    ).length
+    const c: Record<string, number> = {}
+    for (const { key } of CARDS) c[key] = orders.filter(o => inCard(o, key)).length
     return c
   }, [orders])
 
   const filtered = useMemo(() => {
-    let rows = orders
-    if (card === 'needs_address') {
-      rows = rows.filter(o =>
-        o.delivery_method === 'shipping' && !o.address_confirmed && o.status !== 'cancelled' && o.status !== 'failed'
-      )
-    } else if (card === 'all') {
-      // ⚠️ המבוטלות וה"ממתינות לתשלום" מוסתרות מ"הכל" ונגישות רק
-      // בכרטיס שלהן: שתיהן אינן הזמנות אלא ניסיונות שלא הושלמו,
-      // ובערב הפתיחה הן היו רוב השורות והסתירו את מה שצריך טיפול.
-      rows = rows.filter(o => o.status !== 'cancelled' && o.status !== 'pending_payment')
-    } else {
-      rows = rows.filter(o => o.status === card)
-    }
+    // ⚠️ המבוטלות וה"ממתינות לתשלום" מוסתרות מ"הכל" ונגישות רק
+    // בכרטיס שלהן: שתיהן אינן הזמנות אלא ניסיונות שלא הושלמו,
+    // ובערב הפתיחה הן היו רוב השורות והסתירו את מה שצריך טיפול.
+    const rows = orders.filter(o => inCard(o, card))
 
     const q = query.trim().toLowerCase()
     if (!q) return rows

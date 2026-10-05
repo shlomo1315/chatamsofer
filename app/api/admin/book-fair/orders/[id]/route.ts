@@ -123,6 +123,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     patch.address_confirmed = body.address_confirmed === true
   }
 
+  // ── שם הלקוח — מתמלול השם או בהקלדה (בקשת המשתמש 05.10) ──
+  //
+  // ⚠️ בהזמנה טלפונית השם הגיע רק כהקלטה, ולא היה שדה לשמור אותו —
+  // הצוות ראה תמלול אבל לא יכול היה לקבע אותו בהזמנה.
+  if (body.customer_name !== undefined) {
+    const name = clean(body.customer_name)
+    if (name.length < 2) return NextResponse.json({ error: 'שם קצר מדי' }, { status: 400 })
+    if (name.length > 120) return NextResponse.json({ error: 'שם ארוך מדי' }, { status: 400 })
+    patch.customer_name = name
+  }
+
   if (body.notes !== undefined) patch.notes = clean(body.notes) || null
 
   // 🔴 חסימה מפורשת: ניסיון לערוך סכום נדחה ואינו מתעלם בשקט.

@@ -2,15 +2,14 @@
 import { useState } from 'react'
 import { ilDateTime } from '@/lib/israelTime'
 import { useRouter } from 'next/navigation'
-import { Loader2, Check, Mic, CreditCard, AlertTriangle, RotateCcw } from 'lucide-react'
+import { Loader2, CreditCard, AlertTriangle, RotateCcw } from 'lucide-react'
 import type {
-  BookFairOrder, BookFairOrderStatus, BookFairOrderItem, BookFairRecording,
+  BookFairOrder, BookFairOrderStatus, BookFairOrderItem,
 } from '@/types/bookFair'
 import { BOOK_FAIR_STATUS_LABELS } from '@/types/bookFair'
 import { fmtAgorot } from '@/lib/bookFairPricing'
 import { canRefund } from '@/lib/bookFairRefund'
 import { useCan } from '@/components/StaffPermissions'
-import AudioFromData from '@/components/ui/AudioFromData'
 
 // פאנל הפעולות בכרטיס ההזמנה.
 //
@@ -41,18 +40,14 @@ const NEXT: Partial<Record<BookFairOrderStatus, BookFairOrderStatus[]>> = {
   failed:           ['cancelled'],
 }
 
-export default function OrderPanel({ order, items, cities, recordings, payments }: {
+export default function OrderPanel({ order, items, payments }: {
   order: BookFairOrder
   items: BookFairOrderItem[]
-  cities: { id: string; name: string }[]
-  recordings: BookFairRecording[]
   payments: Payment[]
 }) {
   const router = useRouter()
   const canEdit = useCan('book_fair', 'edit')
 
-  const [address, setAddress] = useState(order.address_text ?? '')
-  const [cityId, setCityId] = useState(order.city_id ?? '')
   const [notes, setNotes] = useState(order.notes ?? '')
   const [busy, setBusy] = useState<string | null>(null)
   /** כתובת לשליחה חוזרת — ריק = הכתובת ששמורה בהזמנה. */
@@ -83,32 +78,11 @@ export default function OrderPanel({ order, items, cities, recordings, payments 
   const effectiveRefund = picked.length || refundShip ? refundTotal : remaining
   const refundValid = effectiveRefund > 0 && effectiveRefund <= remaining
 
-  const addressRec = recordings.find(r => r.kind === 'address')
   const needsAddress = order.delivery_method === 'shipping' && !order.address_confirmed
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // 🔴 כל ההקלטות של השיחה, ולא רק הכתובת.
-  //
-  // ⚠️ הקלטת השם נשלפה מהמסד, הועברה לפאנל — ונזרקה בשקט: רק
-  // kind==='address' נקראה. בנוסף היא הופיעה אך ורק בתוך כרטיס אימות
-  // הכתובת, שמוצג רק במשלוח — ולכן בהזמנת איסוף עצמי לא הייתה שום
-  // הקלטה במסך, גם לא השם, והפקיד לא ידע למי הספרים שייכים.
-  // ───────────────────────────────────────────────────────────────────────────
-  const REC_LABELS: Record<string, string> = {
-    address: 'כתובת למשלוח',
-    name: 'שם מלא',
-  }
-  // ⚠️ השם ראשון: בכל הזמנה הוא השדה שמזהה את הלקוח.
-  //
-  // 🔴 rank() ולא indexOf: indexOf מחזיר ‎-1 לכל kind שאינו ברשימה,
-  // וערך שלילי מערבב את הסדר. כאן כל ערך לא מוכר נדחף לסוף.
-  //
-  // ⚠️ המיון לעולם אינו מסנן — כל הקלטה שהגיעה מהשרת מוצגת, גם אם
-  // ה-kind שלה חדש. הסתרת שורה בשקט היא בדיוק מה שקרה עם הקלטת השם.
-  const rank = (k: string) => (k === 'name' ? 0 : k === 'address' ? 1 : 2)
-  const allRecs = [...recordings].sort((a, b) => rank(a.kind) - rank(b.kind))
 
-  async function patch(body: Record<string, unknown>, tag: string) {
+  /** @returns האם נשמר — כדי שעורך פתוח לא ייסגר ויאבד טקסט על כישלון. */
+  async function patch(body: Record<string, unknown>, tag: string): Promise<boolean> {
     setBusy(tag); setError('')
     try {
       const res = await fetch(`/api/admin/book-fair/orders/${order.id}`, {
@@ -117,10 +91,12 @@ export default function OrderPanel({ order, items, cities, recordings, payments 
         body: JSON.stringify(body),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) { setError(json.error ?? 'הפעולה נכשלה'); return }
+      if (!res.ok) { setError(json.error ?? 'הפעולה נכשלה'); return false }
       router.refresh()
+      return true
     } catch {
       setError('הפעולה נכשלה — בדקו את החיבור')
+      return false
     } finally {
       setBusy(null)
     }
@@ -217,111 +193,8 @@ export default function OrderPanel({ order, items, cities, recordings, payments 
 
   return (
     <div className="flex flex-col gap-5">
-      {/* ── הקלטות השיחה ──
-          ⚠️ מוצג בכל הזמנה טלפונית, גם באיסוף עצמי: הקלטת השם היא
-          לעיתים הדרך היחידה לדעת למי הספרים, כשהלקוח לא נרשם באתר. */}
-      {allRecs.length > 0 && (
-        <section className="rounded-2xl border border-slate-200 bg-white p-5">
-          <h2 className="mb-3 flex items-center gap-2 font-semibold text-slate-900">
-            <Mic size={17} className="text-slate-500" /> הקלטות השיחה
-          </h2>
-          <div className="flex flex-col gap-4">
-            {allRecs.map(rec => (
-              <div key={rec.id}>
-                <p className="mb-1.5 text-xs font-medium text-slate-500">
-                  {REC_LABELS[rec.kind] ?? rec.kind}
-                </p>
-                {/* ⚠️ נתיב מוגן ולא קישור ישיר לאחסון — ההקלטה מכילה
-                    שם וכתובת מלאה. ⚠️ נטענת כנתונים: נטפרי חוסמת
-                    תגובת audio/* ב-418 והנגן נשאר ריק בלי הסבר. */}
-                <AudioFromData
-                  url={`/api/admin/book-fair/orders/${order.id}/recording?rec=${rec.id}`}
-                />
-                {rec.transcript && (
-                  <p className="mt-1.5 text-sm text-slate-700">
-                    <span className="text-xs text-slate-400">תמלול: </span>
-                    {rec.transcript}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* ── אימות כתובת מההקלטה ── */}
-      {needsAddress && (
-        <section className="rounded-2xl border-2 border-purple-200 bg-purple-50 p-5">
-          <h2 className="mb-1 flex items-center gap-2 font-semibold text-purple-900">
-            <Mic size={17} /> אימות כתובת
-          </h2>
-          <p className="mb-3 text-sm text-purple-800">
-            הקלידו את הכתובת מההקלטה ואשרו. עד לאישור, ההזמנה לא תיכנס לליקוט.
-          </p>
-
-          {/* ⚠️ אין כאן נגן: ההקלטה כבר מתנגנת בכרטיס "הקלטות השיחה"
-              שלמעלה, ושני נגנים לאותו קובץ נראים כמו שתי הקלטות שונות.
-              כאן נשאר רק התמלול — הוא מה שמקלידים ממנו. */}
-          {addressRec ? (
-            <div className="mb-3">
-              {addressRec.transcript ? (
-                <div className="mt-2 rounded-lg bg-white/70 p-3">
-                  <p className="mb-1 text-xs font-medium text-purple-700">תמלול אוטומטי (הצעה):</p>
-                  <p className="text-sm text-purple-900">{addressRec.transcript}</p>
-                  <button
-                    onClick={() => setAddress(addressRec.transcript ?? '')}
-                    className="mt-2 text-xs font-medium text-purple-700 underline"
-                  >
-                    העתקה לשדה הכתובת
-                  </button>
-                </div>
-              ) : (
-                // ⚠️ תמלול עברית על קו טלפון נכשל לעיתים. כשל בו לעולם
-                // אינו מפיל הזמנה — ההקלטה לבדה מספיקה.
-                <p className="mt-2 text-xs text-purple-700">לא התקבל תמלול — האזינו להקלטה.</p>
-              )}
-            </div>
-          ) : (
-            <p className="mb-3 rounded-lg bg-white/70 p-3 text-sm text-purple-800">
-              אין הקלטה לשיחה זו. התקשרו ללקוח לאימות הכתובת.
-            </p>
-          )}
-
-          <div className="flex flex-col gap-2">
-            <select
-              value={cityId} onChange={e => setCityId(e.target.value)}
-              disabled={!canEdit}
-              className="w-full rounded-xl border border-purple-200 bg-white px-3 py-2 text-sm"
-            >
-              <option value="">בחרו עיר</option>
-              {cities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            <textarea
-              value={address} onChange={e => setAddress(e.target.value)}
-              disabled={!canEdit} rows={2}
-              placeholder="רחוב, מספר בית ודירה"
-              className="w-full rounded-xl border border-purple-200 bg-white px-3 py-2 text-sm"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={() => patch({ address_text: address, city_id: cityId }, 'draft')}
-                disabled={!canEdit || !!busy}
-                className="rounded-xl border border-purple-300 bg-white px-4 py-2 text-sm text-purple-800 disabled:opacity-50"
-              >
-                {busy === 'draft' ? <Loader2 size={14} className="animate-spin" /> : 'שמירה בלבד'}
-              </button>
-              <button
-                onClick={() => patch({ address_text: address, city_id: cityId, address_confirmed: true }, 'confirm')}
-                disabled={!canEdit || !!busy || address.trim().length < 5 || !cityId}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-purple-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
-              >
-                {busy === 'confirm' ? <Loader2 size={14} className="animate-spin" /> : <Check size={15} />}
-                הכתובת אומתה
-              </button>
-            </div>
-          </div>
-        </section>
-      )}
+      {/* ⚠️ ההקלטות, התמלולים ואימות הכתובת עברו לכרטיס "פרטי הלקוח"
+          (CustomerCard) — כל פרטי הלקוח במקום אחד (05.10). */}
 
       {/* ── שינוי סטטוס ── */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5">

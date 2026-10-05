@@ -31,6 +31,23 @@ export async function register() {
 
   if (process.env.NODE_ENV !== 'production') return
 
+  // ── כתובת ה-IP היוצאת של השרת — נרשמת בכל עלייה ──
+  //
+  // 🔴 מפתחות ה-API של נדרים (חגים 7014553, יולדות 7018265) מוגבלים
+  // לכתובות מורשות. בלי Static IP הכתובת של Railway עשויה להשתנות בפריסה,
+  // ואז כל שיוך/טעינת כרטיס נדחה ב"אינו מורשה לגשת מכתובת IP". השורה
+  // הזו מראה מיד אחרי פריסה אם הכתובת השתנתה ומה להוסיף בנדרים (05.10).
+  //
+  // ⚠️ לא נוגע בנדרים: שירות ציבורי שמחזיר את הכתובת בלבד. כשל = שורת לוג.
+  void (async () => {
+    try {
+      const r = await fetch('https://api.ipify.org', { signal: AbortSignal.timeout(5000), cache: 'no-store' })
+      console.log(`[egress-ip] ${(await r.text()).trim()}`)
+    } catch (e) {
+      console.warn('[egress-ip] לא נקבעה:', e instanceof Error ? e.message : e)
+    }
+  })()
+
   // ⚠️ סורק ה-Gmail הישן (lib/autoReply) הוסר. הוא סרק את תיבת Gmail כל 15
   // דקות וענה בעצמו, לפי מכסה של 2 לשבוע — סותרת את המכסה שבמנגנון החי.
   // כל המענה האוטומטי נמצא היום ב-lib/autoReplySender, מונע מהגדרות שנערכות

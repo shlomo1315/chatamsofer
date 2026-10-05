@@ -206,6 +206,16 @@ export interface IvrState {
    */
   addr_take?: number
   name_take?: number
+
+  /**
+   * המתקשר שמע את הכתובת שתומללה והקיש 1 ("נכון").
+   *
+   * 🔴 זה מה שהופך הזמנה טלפונית ל"כתובת מאומתת" (החלטת המשתמש 05.10):
+   * בלי זה כל הזמנת משלוח בטלפון נשארה "ממתינה לאימות כתובת" גם אחרי
+   * שהמתקשר עצמו אישר. ⚠️ false כשאין תמלול, או כשנגמרו ההקלטות החוזרות
+   * בלי אישור — אז המשרד עדיין צריך לשמוע את ההקלטה.
+   */
+  address_caller_confirmed?: boolean
 }
 
 export function initialState(): IvrState {
@@ -812,6 +822,8 @@ export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMe
         address_recording: input.recording,
         // ⚠️ תמלול ElevenLabs גובר על של ימות: זה מה שהמתקשר שמע ואישר.
         address_transcript: input.heard?.trim() || input.transcript,
+        // ⚠️ הקלטה חדשה מבטלת אישור קודם — האישור שייך להקלטה שהוקראה.
+        address_caller_confirmed: false,
         attempts: 0,
       }
       // 🔴 בלי תמלול — ממשיכים כמו לפני שההקראה נוספה. המשרד מאמת ממילא.
@@ -826,10 +838,10 @@ export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMe
 
     case 'confirm_address': {
       const take = state.addr_take ?? 0
-      if (input.value === '1') return askName({ ...state, attempts: 0 }, messages)
+      if (input.value === '1') return askName({ ...state, attempts: 0, address_caller_confirmed: true }, messages)
       if (input.value === '2') {
         // ⚠️ תקרה: אחרי MAX_TAKES הקלטות ממשיכים עם האחרונה — המשרד מאמת.
-        if (take + 1 >= MAX_TAKES) return askName({ ...state, attempts: 0 }, messages)
+        if (take + 1 >= MAX_TAKES) return askName({ ...state, attempts: 0, address_caller_confirmed: false }, messages)
         const nextTake = take + 1
         return {
           state: { ...state, step: 'record_address', attempts: 0, addr_take: nextTake },

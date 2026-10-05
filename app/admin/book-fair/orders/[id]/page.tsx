@@ -1,18 +1,18 @@
 import Link from 'next/link'
 import { ilDateTime } from '@/lib/israelTime'
 import { notFound } from 'next/navigation'
-import { ArrowRight, Globe, Phone, Mail, MapPin, Calendar } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { guardPage } from '@/lib/pageGuard'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import PageHeader from '@/components/ui/PageHeader'
 import { fmtAgorot } from '@/lib/bookFairPricing'
 import {
   BOOK_FAIR_STATUS_LABELS, BOOK_FAIR_STATUS_COLORS,
-  BOOK_FAIR_CHANNEL_LABELS, BOOK_FAIR_DELIVERY_LABELS,
-  oneOf,
+  BOOK_FAIR_CHANNEL_LABELS,
   type BookFairOrder, type BookFairOrderItem, type BookFairRecording,
 } from '@/types/bookFair'
 import OrderPanel from './OrderPanel'
+import CustomerCard from './CustomerCard'
 
 // כרטיס הזמנה בודדת.
 
@@ -52,7 +52,6 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   )
 
   const o = order as BookFairOrder
-  const city = oneOf(o.city)
 
   return (
     <div className="flex flex-col gap-6">
@@ -76,33 +75,12 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         {/* ── פרטי הלקוח והפריטים ── */}
         <div className="flex flex-col gap-5 lg:col-span-2">
-          <section className="rounded-2xl border border-slate-200 bg-white p-5">
-            <h2 className="mb-3 font-semibold text-slate-900">פרטי הלקוח</h2>
-            <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Detail icon={Globe} label="שם">{o.customer_name || '—'}</Detail>
-              <Detail icon={Phone} label="טלפון">
-                {o.customer_phone
-                  ? <a href={`tel:${o.customer_phone}`} dir="ltr" className="font-mono text-indigo-700 hover:underline">{o.customer_phone}</a>
-                  : '—'}
-              </Detail>
-              <Detail icon={Mail} label="אימייל">
-                {o.customer_email
-                  ? <a href={`mailto:${o.customer_email}`} dir="ltr" className="text-indigo-700 hover:underline">{o.customer_email}</a>
-                  : '—'}
-              </Detail>
-              <Detail icon={Calendar} label="שולם">
-                {o.paid_at ? ilDateTime(o.paid_at) : 'טרם'}
-              </Detail>
-              <Detail icon={MapPin} label="מסירה" wide>
-                {BOOK_FAIR_DELIVERY_LABELS[o.delivery_method]}
-                {o.delivery_method === 'shipping' && (
-                  <span className="text-slate-600">
-                    {' · '}{o.address_text || 'טרם הוזנה כתובת'}{city ? `, ${city.name}` : ''}
-                  </span>
-                )}
-              </Detail>
-            </dl>
-          </section>
+          {/* 🔴 שם, כתובת, הקלטות ותמלולים — כרטיס אחד (מוקאפ שאושר 05.10). */}
+          <CustomerCard
+            order={o}
+            recordings={(recordings ?? []) as BookFairRecording[]}
+            cities={(cities ?? []) as { id: string; name: string }[]}
+          />
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5">
             <h2 className="mb-3 font-semibold text-slate-900">הספרים</h2>
@@ -152,24 +130,9 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         <OrderPanel
           order={o}
           items={(items ?? []) as BookFairOrderItem[]}
-          cities={(cities ?? []) as { id: string; name: string }[]}
-          recordings={(recordings ?? []) as BookFairRecording[]}
           payments={(payments ?? []) as { id: string; status: string; amount_agorot: number; transaction_id: string | null; created_at: string; error_message: string | null }[]}
         />
       </div>
-    </div>
-  )
-}
-
-function Detail({ icon: Icon, label, children, wide }: {
-  icon: React.ElementType; label: string; children: React.ReactNode; wide?: boolean
-}) {
-  return (
-    <div className={wide ? 'sm:col-span-2' : ''}>
-      <dt className="mb-0.5 flex items-center gap-1.5 text-xs text-slate-500">
-        <Icon size={13} /> {label}
-      </dt>
-      <dd className="text-sm text-slate-900">{children}</dd>
     </div>
   )
 }

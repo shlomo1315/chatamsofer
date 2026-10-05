@@ -421,3 +421,39 @@ describe('🎙️ הקראת התמלול לאישור', () => {
     expect(prompt.split('.')).toContain('t-א ב ג ד ה ו')
   })
 })
+
+describe('🔴 אישור המתקשר = כתובת מאומתת', () => {
+  const recAddr: IvrState = {
+    step: 'record_address', attempts: 0, delivery: 'shipping',
+    city_id: 'c1', city_name: 'בני ברק', shipping_agorot: 2500,
+    items: [{ book_id: 'b1', sku: '1001', title: 'שולחן ערוך', price_agorot: 12000, quantity: 1 }],
+  }
+
+  it('הקיש 1 אחרי ששמע את הכתובת ⇒ מאומתת', () => {
+    const c = nextTurn(recAddr, { recording: 'r1', heard: 'הרצל 5' }).state
+    expect(nextTurn(c, { value: '1' }).state.address_caller_confirmed).toBe(true)
+  })
+
+  it('אין תמלול ⇒ לא מאומתת (המשרד שומע את ההקלטה)', () => {
+    expect(nextTurn(recAddr, { recording: 'r1' }).state.address_caller_confirmed).toBe(false)
+  })
+
+  it('הקלטה מחדש מבטלת אישור — והאישור החדש קובע', () => {
+    let s = nextTurn(recAddr, { recording: 'r1', heard: 'א' }).state
+    s = nextTurn(s, { value: '2' }).state
+    s = nextTurn(s, { recording: 'r2', heard: 'ב' }).state
+    expect(s.address_caller_confirmed).toBe(false)
+    expect(nextTurn(s, { value: '1' }).state.address_caller_confirmed).toBe(true)
+  })
+
+  it('נגמרו ההקלטות בלי אישור ⇒ לא מאומתת', () => {
+    let s = nextTurn(recAddr, { recording: 'r1', heard: 'א' }).state
+    s = nextTurn(s, { value: '2' }).state
+    s = nextTurn(s, { recording: 'r2', heard: 'ב' }).state
+    s = nextTurn(s, { value: '2' }).state
+    s = nextTurn(s, { recording: 'r3', heard: 'ג' }).state
+    const last = nextTurn(s, { value: '2' })
+    expect(last.state.step).toBe('ask_name')
+    expect(last.state.address_caller_confirmed).toBe(false)
+  })
+})

@@ -85,6 +85,22 @@ async function handle(raw: Record<string, unknown>, ctx: RequestContext) {
   // ── שכבה 1: אימות מול הספק ──
   const verified = await provider.verifyCallback(raw)
   if (!verified) {
+    // ─────────────────────────────────────────────────────────────────────
+    // 🔴 סירוב בלי מזהים — מאשרים קבלה (200) ולא דוחים.
+    //
+    // 05.10 20:09: נדרים שלחה { Status:"Error", Message:"CVV ERROR" } בלי
+    // Param2 ובלי TransactionId (הכרטיס נדחה לפני שנוצרה עסקה). ה-400 שלנו
+    // נקרא אצלם "הקאלבק לא התקבל" ושלח מייל תקלה למוסד. אין כאן שום
+    // פעולה לבצע — אין הזמנה לקשר ואין כסף שעבר — רק לתעד.
+    //
+    // ⚠️ בטוח גם מול זיוף: התשובה אינה משנה דבר במסד.
+    // ─────────────────────────────────────────────────────────────────────
+    const st = String((raw as Record<string, unknown>).Status ?? '').toUpperCase()
+    if (st === 'ERROR') {
+      const msg = String((raw as Record<string, unknown>).Message ?? '').slice(0, 120)
+      console.warn(`[fair/callback] סירוב בלי מזהה הזמנה — אין מה לעדכן: ${msg}`)
+      return NextResponse.json({ ok: true, ignored: 'decline-without-order' })
+    }
     console.warn('[fair/callback] דיווח שלא אומת נדחה')
     return NextResponse.json({ error: 'דיווח לא תקין' }, { status: 400 })
   }
