@@ -29,7 +29,9 @@ const ALLOWED_NEXT: Partial<Record<BookFairOrderStatus, BookFairOrderStatus[]>> 
   picking:          ['packed', 'paid', 'cancelled'],
   packed:           ['shipped', 'delivered', 'picking'],
   shipped:          ['delivered', 'packed'],
-  delivered:        [],
+  // ⚠️ ביטול מסירה — רק לאיסוף עצמי (ראו הבדיקה ב-PATCH): מוכר בדוכן
+  // שלחץ "נמסר" על ההזמנה הלא נכונה. בהזמנה למשלוח "נמסר" הוא עובדה.
+  delivered:        ['paid'],
   failed:           ['cancelled'],
 }
 
@@ -85,7 +87,18 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           error: `לא ניתן לעבור מ"${current}" ל"${next}"`,
         }, { status: 400 })
       }
+      if (current === 'delivered' && order.delivery_method !== 'pickup') {
+        return NextResponse.json({
+          error: 'ביטול מסירה אפשרי רק בהזמנה לאיסוף עצמי',
+        }, { status: 400 })
+      }
       patch.status = next
+      // 🔴 ביטול מסירה מנקה את פרטי המסירה — אחרת הדוכן היה ממשיך
+      // להציג "כבר נמסר" על הזמנה שחזרה להמתין.
+      if (current === 'delivered') {
+        patch.picked_up_at = null
+        patch.picked_up_by = null
+      }
     }
   }
 

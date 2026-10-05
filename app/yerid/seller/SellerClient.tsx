@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { fmtAgorot } from '@/lib/bookFairPricing'
 import NedarimIframe from '../NedarimIframe'
+import PickupPanel from './PickupPanel'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // דוכן המכירה ביריד.
@@ -29,6 +30,8 @@ const DEFAULT_LOW = 3
 
 export default function SellerClient() {
   const [seller, setSeller] = useState<string | null>(null)
+  /** מכירה בדוכן או איסוף הזמנה שהוזמנה באתר/בטלפון. */
+  const [mode, setMode] = useState<'sale' | 'pickup'>('sale')
   const [books, setBooks] = useState<Book[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -65,12 +68,18 @@ export default function SellerClient() {
     }
   }, [])
 
-  useEffect(() => { void loadCatalog() }, [loadCatalog])
+  // ⚠️ setTimeout(0) — כמו במסך הזיכויים: הכלל set-state-in-effect
+  // מסמן גם טעינה אסינכרונית תקינה.
+  useEffect(() => {
+    const t = setTimeout(() => { void loadCatalog() }, 0)
+    return () => clearTimeout(t)
+  }, [loadCatalog])
 
   // ⚠️ מיקוד אוטומטי לשדה החיפוש: סורק הברקוד "מקליד", ובלי מיקוד
   // ההקלדה נעלמת. אותו דפוס כמו בחנות.
   useEffect(() => {
-    if (!seller || done) return
+    // ⚠️ רק במסך המכירה: במסך האיסוף ההקלדה שייכת לשדה החיפוש שלו.
+    if (!seller || done || mode !== 'sale') return
     function onKey(e: KeyboardEvent) {
       const el = e.target as HTMLElement | null
       const tag = el?.tagName
@@ -80,7 +89,7 @@ export default function SellerClient() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [seller, done])
+  }, [seller, done, mode])
 
   async function login() {
     setLoginError(''); setLoginBusy(true)
@@ -328,8 +337,27 @@ export default function SellerClient() {
             <LogOut size={16} /> יציאה
           </button>
         </div>
+        <div className="mx-auto flex max-w-3xl gap-1 px-5 pb-3" role="tablist">
+          {([['sale', 'מכירה'], ['pickup', 'איסוף הזמנה']] as const).map(([m, label]) => (
+            <button
+              key={m}
+              role="tab"
+              aria-selected={mode === m}
+              onClick={() => setMode(m)}
+              className={`flex-1 rounded-xl py-2.5 text-base font-semibold transition ${
+                mode === m ? 'bg-[#12314F] text-white' : 'bg-[#141210]/5 text-[#141210]/60 hover:bg-[#141210]/10'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </header>
 
+      {mode === 'pickup' ? (
+        <main className="mx-auto max-w-3xl px-5 py-5">
+          <PickupPanel onUnauthorized={() => setSeller(null)} />
+        </main>
+      ) : (
       <main className="mx-auto max-w-3xl px-5 py-5">
         {/* ── סריקה / חיפוש ── */}
         <div className="relative">
@@ -453,9 +481,10 @@ export default function SellerClient() {
           </section>
         )}
       </main>
+      )}
 
       {/* ── סרגל התשלום ── */}
-      {lines.length > 0 && (
+      {mode === 'sale' && lines.length > 0 && (
         <div className="fixed inset-x-0 bottom-0 border-t border-[#141210]/10 bg-white p-4 shadow-[0_-4px_16px_rgba(20,18,16,0.08)]">
           <div className="mx-auto max-w-3xl">
             <div className="mb-3 flex items-center justify-between">

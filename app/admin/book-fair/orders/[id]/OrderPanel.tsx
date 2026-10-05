@@ -36,7 +36,8 @@ const NEXT: Partial<Record<BookFairOrderStatus, BookFairOrderStatus[]>> = {
   picking:          ['packed', 'paid', 'cancelled'],
   packed:           ['shipped', 'delivered', 'picking'],
   shipped:          ['delivered', 'packed'],
-  delivered:        [],
+  // ביטול מסירה — לאיסוף עצמי בלבד (מסונן למטה)
+  delivered:        ['paid'],
   failed:           ['cancelled'],
 }
 
@@ -205,7 +206,10 @@ export default function OrderPanel({ order, items, cities, recordings, payments 
     }
   }
 
-  const nextStatuses = NEXT[order.status] ?? []
+  // ⚠️ ביטול מסירה רק באיסוף עצמי — השרת אוכף זאת גם הוא.
+  const nextStatuses = order.status === 'delivered' && order.delivery_method !== 'pickup'
+    ? []
+    : NEXT[order.status] ?? []
 
   return (
     <div className="flex flex-col gap-5">
@@ -318,6 +322,12 @@ export default function OrderPanel({ order, items, cities, recordings, payments 
       {/* ── שינוי סטטוס ── */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5">
         <h2 className="mb-3 font-semibold text-slate-900">מצב ההזמנה</h2>
+        {order.picked_up_at && (
+          <p className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            נאספה בדוכן ע״י {order.picked_up_by || 'מוכר'} ·{' '}
+            {new Date(order.picked_up_at).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem', dateStyle: 'short', timeStyle: 'short' })}
+          </p>
+        )}
         {nextStatuses.length ? (
           <div className="flex flex-col gap-2">
             {nextStatuses.map(s => (
@@ -327,7 +337,7 @@ export default function OrderPanel({ order, items, cities, recordings, payments 
                 disabled={!canEdit || !!busy}
                 className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50 disabled:opacity-50"
               >
-                <span>{BOOK_FAIR_STATUS_LABELS[s]}</span>
+                <span>{order.status === 'delivered' && s === 'paid' ? 'ביטול המסירה (חזרה לממתין לאיסוף)' : BOOK_FAIR_STATUS_LABELS[s]}</span>
                 {busy === `st-${s}` && <Loader2 size={14} className="animate-spin" />}
               </button>
             ))}

@@ -137,6 +137,9 @@ export interface BookFairOrder {
   payment_method?: string | null
   /** שם המוכר בדוכן — לתיעוד, לא לאימות. */
   sold_by?: string | null
+  /** איסוף עצמי בדוכן: מתי נמסרה ומי מסר. */
+  picked_up_at?: string | null
+  picked_up_by?: string | null
   items_total_agorot: number
   shipping_agorot: number
   /** 🔴 נצרב בעת ההזמנה ואינו מחושב מחדש — זה הסכום שנגבה בפועל. */
