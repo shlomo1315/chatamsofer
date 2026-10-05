@@ -1,7 +1,7 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
-import { buildBookFairBarcodesPdf } from '@/lib/bookFairBarcodesPdf'
+import { buildBookFairBarcodesPdf, buildBookFairBarcodeSheetsPdf } from '@/lib/bookFairBarcodesPdf'
 import { scrambleBytes, DOC_CIPHER_ID } from '@/lib/docCipher'
 
 // גיליון תוויות ברקוד להדפסה — כל ספר פעיל בקטלוג, לחיתוך ותלייה על
@@ -15,7 +15,14 @@ import { scrambleBytes, DOC_CIPHER_ID } from '@/lib/docCipher'
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-export async function GET() {
+// מצבים (?mode=):
+//   (ריק)   — גיליון משותף: תווית אחת לכל ספר (כמו קודם)
+//   sheet   — דף מלא לספר אחד (?sku=…&pages=N), 24 תוויות זהות לעמוד
+//   sheets  — דף לכל ספר בקטלוג, PDF אחד
+export async function GET(request: NextRequest) {
+  const mode = request.nextUrl.searchParams.get('mode') ?? ''
+  const onlySku = request.nextUrl.searchParams.get('sku')?.trim() ?? ''
+  const pages = Math.max(1, Math.min(20, Number(request.nextUrl.searchParams.get('pages')) || 1))
   if (!(await requirePermission('book_fair', 'view'))) return forbidden()
   const db = getServiceClient()
   if (!db) return serverMisconfigured()
@@ -37,11 +44,22 @@ export async function GET() {
   // בערימת התוויות המודפסת.
   rows.sort((a, b) => a.title.localeCompare(b.title, 'he'))
 
+  let selected = rows
+  if (mode === 'sheet') {
+    selected = rows.filter(r => r.sku === onlySku)
+    if (!selected.length) return NextResponse.json({ error: 'הספר לא נמצא בקטלוג הפעיל' }, { status: 404 })
+  }
+
   try {
-    const bytes = await buildBookFairBarcodesPdf(rows)
+    const bytes = mode === 'sheet' || mode === 'sheets'
+      ? await buildBookFairBarcodeSheetsPdf(selected, mode === 'sheet' ? pages : 1)
+      : await buildBookFairBarcodesPdf(rows)
+    const name = mode === 'sheet'
+      ? `ברקודים - ${selected[0].title}.pdf`
+      : mode === 'sheets' ? 'ברקודים - דף לכל ספר.pdf' : 'ברקודים - יריד ספרים.pdf'
     const scrambled = scrambleBytes(new Uint8Array(bytes))
     return NextResponse.json({
-      name: 'ברקודים - יריד ספרים.pdf',
+      name,
       contentType: 'application/pdf',
       size: bytes.length,
       enc: DOC_CIPHER_ID,

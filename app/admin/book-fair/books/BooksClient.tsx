@@ -11,6 +11,7 @@ import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useCan } from '@/components/StaffPermissions'
 import BookEditor from './BookEditor'
 import ImportPanel from './ImportPanel'
+import BarcodeDialog from './BarcodeDialog'
 import StockMover from './StockMover'
 import BookOrdersDialog from './BookOrdersDialog'
 
@@ -71,6 +72,7 @@ export default function BooksClient({ books, sold = {} }: {
   const [ordersOf, setOrdersOf] = useState<BookFairBook | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [downloadingBarcodes, setDownloadingBarcodes] = useState(false)
+  const [barcodeOpen, setBarcodeOpen] = useState(false)
   /** הספר שתמונתו מועלית כרגע. ⚠️ מזהה ולא בוליאני — אחרת כל הכפתורים
    *  בטבלה היו מציגים טעינה בבת אחת. */
   const [imgBusyId, setImgBusyId] = useState<string | null>(null)
@@ -105,10 +107,11 @@ export default function BooksClient({ books, sold = {} }: {
   // ⚠️ אותו דפוס בדיוק כמו /api/admin/gratitude/batch-pdf: נטפרי חוסמת
   // תגובת application/pdf ב-418, ולכן השרת מחזיר JSON מעורבל (docCipher)
   // ובונים Blob מקומי בדפדפן — לא ניווט ישיר ולא iframe.
-  const downloadBarcodes = useCallback(async () => {
+  /** @param qs  '' = גיליון משותף · '?mode=sheet&sku=…&pages=N' · '?mode=sheets' */
+  const downloadBarcodes = useCallback(async (qs = '') => {
     setDownloadingBarcodes(true)
     try {
-      const res = await fetch('/api/admin/book-fair/barcodes', { cache: 'no-store' })
+      const res = await fetch(`/api/admin/book-fair/barcodes${qs}`, { cache: 'no-store' })
       if (!res.ok) {
         if (res.status === 418) {
           alert('הגישה נחסמה על ידי הסינון (נטפרי). יש להיכנס לכתובת https://chasamsofer.co.il ולא לכתובת הזמנית של השרת.')
@@ -187,6 +190,10 @@ export default function BooksClient({ books, sold = {} }: {
   return (
     <div className="flex flex-col gap-4">
       {confirmDialog}
+      {barcodeOpen && (
+        <BarcodeDialog books={books} busy={downloadingBarcodes}
+          onDownload={qs => void downloadBarcodes(qs)} onClose={() => setBarcodeOpen(false)} />
+      )}
 
       {/* סיכום מלאי — שני הערוצים בנפרד, כי הם נפרדים בפועל */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -218,7 +225,7 @@ export default function BooksClient({ books, sold = {} }: {
             {tc.picker}
             {tc.activeFilters}
             <button
-              onClick={downloadBarcodes}
+              onClick={() => setBarcodeOpen(true)}
               disabled={downloadingBarcodes}
               title="גיליון A4 להדפסה — שם ספר וברקוד לכל ספר פעיל, לחיתוך והדבקה ליד הספרים ביריד"
               className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"

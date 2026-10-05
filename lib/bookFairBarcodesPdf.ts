@@ -148,3 +148,81 @@ export async function buildBookFairBarcodesPdf(books: BarcodeLabelInput[]): Prom
 
   return pdf.save()
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// דף מלא לכל ספר — 24 תוויות זהות של אותו ספר (בקשת המשתמש 05.10).
+//
+// אותו גודל תווית ואותה רשת 3×8 כמו בגיליון המשותף. שם הספר עובר לפס
+// צר בצד שמאל, לאורך, נקרא מלמטה למעלה. בלי הכותרת למעלה הברקוד גבוה
+// יותר — קל יותר לסריקה.
+//
+// 🔴 כל השם נכנס תמיד — שורה אחת, מוקטנת, או שתי שורות
+// (lib/bookFairSideTitle). אין חיתוך ואין "...".
+// ─────────────────────────────────────────────────────────────────────────────
+
+const STRIP_PAD = 3
+const DIVIDER = rgb(0.89, 0.90, 0.93)
+
+export async function buildBookFairBarcodeSheetsPdf(
+  books: BarcodeLabelInput[],
+  pagesPerBook = 1,
+): Promise<Uint8Array> {
+  const { layoutSideTitle } = await import('./bookFairSideTitle')
+  const { degrees } = await import('pdf-lib')
+  const pdf = await PDFDocument.create()
+  pdf.registerFontkit(fontkit)
+  const font = await pdf.embedFont(Buffer.from(HEEBO_TTF_B64, 'base64'), { subset: true })
+  const measure = (t: string, s: number) => font.widthOfTextAtSize(toVisual(t), s)
+  const pages = Math.max(1, Math.min(20, Math.floor(pagesPerBook)))
+
+  for (const book of books) {
+    // ⚠️ ברקוד אחד לספר, מוטמע פעם אחת ומשמש את כל 24×N התוויות.
+    const barcodeImg = await pdf.embedPng(makeBarcodePng(book.sku))
+    const layout = layoutSideTitle(book.title, measure, LABEL_H - 8)
+    const stripW = layout.thickness + STRIP_PAD * 2
+
+    for (let p = 0; p < pages; p++) {
+      const page = pdf.addPage([W, H])
+      for (let j = 0; j < PER_PAGE; j++) {
+        const col = j % COLS
+        const row = Math.floor(j / COLS)
+        const x = MARGIN + col * (LABEL_W + GUTTER)
+        const yTop = H - MARGIN - row * (LABEL_H + GUTTER)
+        const yBottom = yTop - LABEL_H
+
+        page.drawRectangle({ x, y: yBottom, width: LABEL_W, height: LABEL_H, borderColor: BORDER, borderWidth: 0.6 })
+
+        // ── פס השם בצד שמאל ──
+        page.drawLine({
+          start: { x: x + stripW, y: yBottom + 4 }, end: { x: x + stripW, y: yTop - 4 },
+          thickness: 0.5, color: DIVIDER, dashArray: [2, 2],
+        })
+        // ⚠️ סיבוב 90° נגד כיוון השעון: "למעלה" של הטקסט פונה שמאלה, ולכן
+        // השורה הראשונה היא השמאלית, וקו הבסיס שלה מוזז ימינה בגובה האות.
+        layout.lines.forEach((line, k) => {
+          const v = toVisual(line)
+          const w = font.widthOfTextAtSize(v, layout.size)
+          const bx = x + STRIP_PAD + layout.size * 0.85 + k * layout.size * 1.15
+          const by = yBottom + (LABEL_H - w) / 2
+          page.drawText(v, { x: bx, y: by, size: layout.size, font, color: INK, rotate: degrees(90) })
+        })
+
+        // ── ברקוד + מק"ט, ממורכזים באזור שמימין לפס ──
+        const ax = x + stripW
+        const aw = LABEL_W - stripW
+        const skuSize = 9
+        let bh = 46
+        let bw = bh * (barcodeImg.width / barcodeImg.height)
+        const maxBw = aw - 12
+        if (bw > maxBw) { bh = bh * (maxBw / bw); bw = maxBw }
+        const blockH = bh + 4 + skuSize
+        const by = yBottom + (LABEL_H - blockH) / 2 + skuSize + 4
+        page.drawImage(barcodeImg, { x: ax + (aw - bw) / 2, y: by, width: bw, height: bh })
+        const skuW = font.widthOfTextAtSize(book.sku, skuSize)
+        page.drawText(book.sku, { x: ax + (aw - skuW) / 2, y: by - skuSize - 2, size: skuSize, font, color: INK })
+      }
+    }
+  }
+
+  return pdf.save()
+}
