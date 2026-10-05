@@ -52,6 +52,8 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack, 
   const [copied, setCopied] = useState('')
   /** שדה הסריקה — תופס את הקורא לפני שהמיקוד עובר לאייפרם. */
   const swipeRef = useRef<HTMLInputElement>(null)
+  /** טיימר "הסריקה הסתיימה" — ראו onChange של שדה הסריקה. */
+  const swipeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [height, setHeight] = useState(0)
   /**
    * 🔴 בדוכן העסקה מוזרקת רק אחרי סריקה (או "הקלדה ידנית").
@@ -185,6 +187,9 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack, 
    * ⚠️ ההעתקה מותרת כאן כי הסריקה היא הקלדה = פעולת משתמש.
    */
   function acceptSwipe(raw: string) {
+    // ⚠️ שני מסלולי קליטה (השדה + המאזין הכללי) — מבטלים את השני.
+    if (swipeTimer.current) clearTimeout(swipeTimer.current)
+    if (swipeRef.current) swipeRef.current.value = ''
     const card = parseMagneticCard(raw)
     if (!card) {
       setSwipe({ pan: '', tokef: '', error: 'הסריקה לא פוענחה — העבירו שוב או הקלידו ידנית' })
@@ -296,11 +301,25 @@ export default function NedarimIframe({ transactionId, key_, onSuccess, onBack, 
             // ⚠️ onBlur מחזיר את המיקוד: לחיצה מקרית במקום אחר
             // הייתה מחזירה את הבאג.
             onBlur={e => { if (!swipe) setTimeout(() => e.target.focus(), 0) }}
+            // 🔴 פענוח רק בסוף הסריקה (Enter או הפסקה של 250ms), לא באמצעה:
+            // פענוח מוקדם פתח את האייפרם בזמן שהקורא עוד "הקליד" את שאר
+            // הפס — והתווים הנותרים (ו-Enter!) נחתו בשדות של נדרים.
+            onKeyDown={e => {
+              if (e.key !== 'Enter') return
+              e.preventDefault()
+              const raw = e.currentTarget.value
+              if (swipeTimer.current) clearTimeout(swipeTimer.current)
+              if (looksLikeMagneticSwipe(raw)) { e.currentTarget.value = ''; acceptSwipe(raw) }
+            }}
             onChange={e => {
-              const raw = e.target.value
-              if (!looksLikeMagneticSwipe(raw)) return
-              e.target.value = ''
-              acceptSwipe(raw)
+              const el = e.target
+              if (swipeTimer.current) clearTimeout(swipeTimer.current)
+              swipeTimer.current = setTimeout(() => {
+                const raw = el.value
+                if (!looksLikeMagneticSwipe(raw)) return
+                el.value = ''
+                acceptSwipe(raw)
+              }, 250)
             }}
             className="w-full rounded-lg border border-[#12314F]/20 bg-white px-3 py-2 font-mono text-sm outline-none focus:border-[#12314F]"
             dir="ltr"

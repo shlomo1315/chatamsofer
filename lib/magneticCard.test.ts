@@ -63,3 +63,18 @@ describe('looksLikeMagneticSwipe', () => {
     expect(looksLikeMagneticSwipe('458')).toBe(false)
   })
 })
+
+describe('🔴 סריקה במקלדת עברית (05.10)', () => {
+  it('"ף" במקום ";" — מזוהה ומפוענח', () => {
+    const raw = 'ף4580000000000000=2812101000000000000?'
+    expect(looksLikeMagneticSwipe(raw)).toBe(true)
+    expect(parseMagneticCard(raw)).toMatchObject({ pan: '4580000000000000', tokefMMYY: '1228' })
+  })
+  it('בלי סימן פתיחה בכלל — עדיין מזוהה', () => {
+    expect(looksLikeMagneticSwipe('4580000000000000=2812101?')).toBe(true)
+  })
+  it('🔴 הקלדה ידנית של מספר כרטיס — לא נחשבת סריקה', () => {
+    expect(looksLikeMagneticSwipe('4580000000000000')).toBe(false)
+    expect(looksLikeMagneticSwipe('4580 0000 0000 0000')).toBe(false)
+  })
+})

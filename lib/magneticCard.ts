@@ -26,11 +26,28 @@ export interface MagneticCardData {
   mm: string
 }
 
+/**
+ * 🔴 נרמול סריקה שהוקלדה במקלדת עברית (05.10).
+ *
+ * הקורא "מקליד" כמו מקלדת, ובמחשב שהשפה בו עברית סימן הפתיחה `;`
+ * יוצא "ף". בדיקת הזיהוי חיפשה `;` בתחילת המחרוזת — הסריקה לא זוהתה
+ * כלל, והתוקף לא הוזן לאייפרם. ממירים את התווים העבריים שיושבים על
+ * אותם מקשים חזרה לסימני התקן.
+ */
+export function normalizeSwipe(raw: string): string {
+  return String(raw ?? '')
+    .replace(/ף/g, ';')   // ;
+    .replace(/ץ/g, '.')   // .
+    .replace(/\s+/g, '')
+}
+
 /** האם המחרוזת נראית כמו פס מגנטי ולא כהקלדה ידנית. */
 export function looksLikeMagneticSwipe(raw: string): boolean {
-  const s = String(raw ?? '')
-  // ⚠️ סימני הפתיחה של התקן: %B / ; / או PAN ואחריו = או ^.
-  return /^%?[A-Z]?\d{12,19}[=^]/.test(s.replace(/^;/, '')) || /^%B\d/.test(s) || /^;\d{12,19}=/.test(s)
+  const s = normalizeSwipe(raw)
+  // ⚠️ מחפשים את *מבנה* הפס בכל מקום במחרוזת — PAN, מפריד (= או ^)
+  // ותוקף — ולא רק סימן פתיחה מדויק: קוראים שונים (ושפת מקלדת) משנים
+  // או משמיטים את סימן הפתיחה.
+  return /\d{12,19}=\d{4}/.test(s) || /%?B?\d{12,19}\^[^^]*\^\d{4}/.test(s)
 }
 
 /**
@@ -40,7 +57,7 @@ export function looksLikeMagneticSwipe(raw: string): boolean {
  * להקלדה ידנית ולא "לנחש" מספר כרטיס.
  */
 export function parseMagneticCard(raw: string): MagneticCardData | null {
-  const s = String(raw ?? '').trim()
+  const s = normalizeSwipe(raw).trim()
   if (!s) return null
 
   // Track 2 — הנפוץ: ;PAN=YYMM...
