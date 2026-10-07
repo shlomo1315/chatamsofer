@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { escapeLike } from '@/lib/likeEscape'
 import { requireStaff, getServiceClient } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
@@ -19,7 +20,7 @@ export async function GET() {
 
   // נפילה-לאחור לפי אימייל (כניסה עם Google שאינה מקושרת לאותו id)
   if (!profile && staff.email) {
-    const r = await admin.from('profiles').select('*').ilike('email', staff.email).maybeSingle()
+    const r = await admin.from('profiles').select('*').ilike('email', escapeLike(staff.email)).maybeSingle()
     profile = r.data
   }
 

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { escapeLike } from '@/lib/likeEscape'
 import { verifyReplyToken, type PublicTokenKind } from './publicToken'
 import { parseScores, stripQuotedReply } from './surveyParse'
 import { buildGratitudeVoucher } from './gratitudeVoucher'
@@ -97,7 +98,7 @@ export async function findAidBySenderEmail(
   const { data: bens } = await db
     .from('beneficiaries')
     .select('id')
-    .ilike('email', clean)
+    .ilike('email', escapeLike(clean))
     .limit(5)
   if (!bens?.length) return null
 

@@ -60,7 +60,14 @@ function resolveSafeName(path: string, rawName: string): string {
 export async function loadDocument(request: NextRequest): Promise<LoadedDoc | LoadFailure> {
   const raw = request.nextUrl.searchParams.get('p') ?? ''
   const path = storagePath(raw)
-  if (!path || path.includes('..')) return { status: 400, error: 'נתיב לא תקין' }
+  // 🔴 ביקורת אבטחה 07.10: `<ownId>/%2e%2e/<otherId>/file` (קידוד כפול) עבר
+  // את בדיקת '..', כי הוא מפוענח פעם נוספת רק בתוך ספריית האחסון — וכך
+  // מוטב יכול היה להוריד מסמך של משפחה אחרת. אחרי הפענוח לא אמור להישאר
+  // שום '%', לוכסן הפוך או מקטע '.' / '..'.
+  if (!path || path.includes('..') || path.includes('%') || path.includes('\\') ||
+      path.split('/').some(seg => seg === '.' || seg === '..' || seg === '')) {
+    return { status: 400, error: 'נתיב לא תקין' }
+  }
 
   let allowed = false
   if (await requireStaff()) {

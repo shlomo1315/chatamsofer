@@ -14,6 +14,7 @@
 // בשקט. כאן המזהה גלוי בנושא, ולכן הוא שורד גם כשהכותרות לא.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { escapeLike } from '@/lib/likeEscape'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { AWAITING_RABBI_FORM } from './openLoanGuard'
 
@@ -88,7 +89,7 @@ export async function findLoanForReturnedForm(
   const { data: bens } = await db
     .from('beneficiaries')
     .select('id')
-    .ilike('email', clean)
+    .ilike('email', escapeLike(clean))
     .limit(5)
   if (!bens?.length) return null
 

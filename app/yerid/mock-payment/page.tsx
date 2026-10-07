@@ -12,6 +12,26 @@ import { fmtAgorot } from '@/lib/bookFairPricing'
 // ⚠️ מצהיר על עצמו בבירור ובאדום. דף סליקה מדומה שנראה אמיתי הוא הדרך
 // המהירה ביותר להאמין שכסף נגבה כשלא נגבה דבר.
 
+/**
+ * כתובת החזרה — נתיב באתר שלנו בלבד.
+ *
+ * 🔴 ביקורת אבטחה 07.10: הערך הגיע מה-URL ישירות ל-location.href.
+ * `?return=javascript:...` הריץ קוד במקור של האתר בלחיצה על כל אחד
+ * מהכפתורים — כולל גניבת עוגיות הסשן של איש צוות שקיבל קישור.
+ * ⚠️ גם כתובת חיצונית נחסמת (הפניה פתוחה).
+ */
+function safeReturnPath(raw: string | null): string {
+  if (!raw || typeof window === 'undefined') return '/yerid'
+  try {
+    const u = new URL(raw, window.location.origin)
+    if (u.origin !== window.location.origin) return '/yerid'
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return '/yerid'
+    return u.pathname + u.search + u.hash
+  } catch {
+    return '/yerid'
+  }
+}
+
 function MockPaymentInner() {
   const params = useSearchParams()
   const [busy, setBusy] = useState<'ok' | 'fail' | null>(null)
@@ -19,7 +39,7 @@ function MockPaymentInner() {
   const txn = params.get('txn') ?? ''
   const order = params.get('order') ?? ''
   const amount = Number(params.get('amount') ?? 0)
-  const returnUrl = params.get('return') ?? '/yerid'
+  const returnUrl = safeReturnPath(params.get('return'))
 
   async function pay(result: 'ok' | 'fail') {
     setBusy(result)

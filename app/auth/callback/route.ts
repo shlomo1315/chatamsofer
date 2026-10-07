@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr'
+import { escapeLike } from '@/lib/likeEscape'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
@@ -21,8 +22,12 @@ export async function GET(request: NextRequest) {
   // התחברות מוצלחת — פישינג ממונף על הדומיין של העמותה. מקבלים רק נתיב
   // פנימי; "//host" נדחה גם הוא, כי הדפדפן קורא אותו ככתובת חיצונית.
   // 'register' הוא ערך-דגל של זרימת ההרשמה (נבדק בהמשך), לא נתיב — ולכן מותר.
+  //
+  // 🔴 ביקורת אבטחה 07.10: גם "/\evil.com" ו-"/%09/evil.com" עברו את
+  // הבדיקה — הדפדפן מנרמל לוכסן הפוך ותווי בקרה ל-"//" ומפנה החוצה.
+  // עכשיו: לוכסן אחד, ואחריו לא לוכסן/לוכסן הפוך, ושום רווח, תו בקרה או %.
   const rawNext = requestUrl.searchParams.get('next') ?? '/admin/dashboard'
-  const next = rawNext === 'register' || (rawNext.startsWith('/') && !rawNext.startsWith('//'))
+  const next = rawNext === 'register' || /^\/(?![/\\])[^\s\\%\x00-\x1f\x7f]*$/.test(rawNext)
     ? rawNext
     : '/admin/dashboard'
 
@@ -112,7 +117,7 @@ export async function GET(request: NextRequest) {
     const byId = await adminClient.from('profiles').select('is_active, role').eq('id', user.id).maybeSingle()
     prof = byId.data
     if (!prof && user.email) {
-      const byEmail = await adminClient.from('profiles').select('is_active, role').ilike('email', user.email).maybeSingle()
+      const byEmail = await adminClient.from('profiles').select('is_active, role').ilike('email', escapeLike(user.email)).maybeSingle()
       prof = byEmail.data
     }
     const STAFF = ['admin', 'secretary', 'reviewer', 'collections']

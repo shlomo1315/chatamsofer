@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { google } from 'googleapis'
 import { getSendOAuthClient, addSendAccount } from '@/lib/gmail'
 import { requireAdmin, unauthorized } from '@/lib/apiAuth'
+import { oauthNonceMatches } from '@/lib/oauthState'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,6 +26,11 @@ export async function GET(request: NextRequest) {
 
   const code = request.nextUrl.searchParams.get('code')
   if (!code) return page('שגיאה', 'לא התקבל קוד הרשאה מ-Google. נסו שוב.')
+  // 🔴 CSRF (ביקורת אבטחה 07.10): בלי זה, קוד של חשבון שתוקף אישר היה
+  // הופך את התיבה שלו לתיבה שממנה יוצאים כל קודי האימות של הפורטל.
+  if (!oauthNonceMatches(request, 'send', request.nextUrl.searchParams.get('state'))) {
+    return page('שגיאה', 'בקשת החיבור לא אומתה. התחילו את החיבור מחדש מההגדרות.')
+  }
 
   const oauth = getSendOAuthClient()
   const { tokens } = await oauth.getToken(code)

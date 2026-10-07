@@ -79,6 +79,24 @@ async function handle(raw: Record<string, unknown>, ctx: RequestContext) {
       source = 'trusted'
     }
   }
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 ספק מדומה בייצור — רק כשנבחר במפורש (ביקורת אבטחה 07.10).
+  //
+  // getPaymentProvider נופל למדומה גם כשקריאת ההגדרות נכשלת (מסד לא זמין)
+  // או כשפרט חסר. המדומה מאמת לפי מה שכתוב בבקשה עצמה, בלי IP ובלי חתימה
+  // — כלומר בכשל רגעי כל אחד יכול היה לשלוח "שולם" על הזמנה שלו.
+  //
+  // ⚠️ 503 ולא 200: אם זה דיווח אמיתי של נדרים בזמן תקלה, היא תשלח שוב.
+  // ─────────────────────────────────────────────────────────────────────────
+  if (provider.name === 'mock' && process.env.NODE_ENV === 'production') {
+    const s = await getPaymentSettings().catch(() => ({} as Awaited<ReturnType<typeof getPaymentSettings>>))
+    const explicitMock = s.testMode === true || (s.provider ?? '').trim().toLowerCase() === 'mock'
+    if (!explicitMock) {
+      console.error('[fair/callback] 🔴 ספק מדומה שלא נבחר במפורש בייצור — הדיווח נדחה')
+      return NextResponse.json({ error: 'הסליקה אינה זמינה כרגע' }, { status: 503 })
+    }
+  }
+
   // 🔴 דיווח שמקורו לא אומת — לא מסמנים שולם ולא מסמנים נכשל.
   const hold = source === 'spoofed'
 
@@ -157,6 +175,30 @@ async function handle(raw: Record<string, unknown>, ctx: RequestContext) {
       })
 
     return NextResponse.json({ ok: true, status: 'failed' })
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 שכבה 1.5: העסקה נגבתה *במוסד שלנו* ובשקלים (ביקורת אבטחה 07.10).
+  //
+  // כל מוסדות נדרים — כולל מוסד הבדיקה הציבורי (Mosad=0, ApiValid מפורסם
+  // בתיעוד) — שולחים קולבק מאותן שתי כתובות IP, ו-CallBack הוא פרמטר
+  // שיוצר העסקה בוחר. בלי מפתח חתימה, כל אחד יכול היה לפתוח עסקה במוסד
+  // הבדיקה עם Param2 של ההזמנה שלו, לשלם בכרטיס בדיקה, ולקבל "שולם".
+  //
+  // ⚠️ רק על הצלחה: דיווחי כישלון של נדרים מגיעים בלי MosadNumber (נבדק
+  // מול 114 כישלונות במסד), ואילו כל 609 ההצלחות נשאו 7004562 ו-Currency=1.
+  // ─────────────────────────────────────────────────────────────────────────
+  if (provider.name === 'nedarim') {
+    const s = await getPaymentSettings()
+    const ours = String(s.mosadId ?? '').trim()
+    const theirs = String((raw as Record<string, unknown>).MosadNumber ?? '').trim()
+    const currency = String((raw as Record<string, unknown>).Currency ?? '').trim().toUpperCase()
+    if (!ours || theirs !== ours || (currency && currency !== '1' && currency !== 'ILS')) {
+      console.error(
+        `[fair/callback] 🔴 עסקה ממוסד/מטבע זר נדחתה: הזמנה ${order.order_number} · מוסד "${theirs}" (שלנו ${ours}) · מטבע "${currency}"`,
+      )
+      return NextResponse.json({ error: 'מוסד לא תואם' }, { status: 403 })
+    }
   }
 
   // ── שכבה 2: השוואת סכום ──

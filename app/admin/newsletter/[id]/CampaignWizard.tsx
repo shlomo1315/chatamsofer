@@ -313,6 +313,10 @@ function PreviewStep({ campaignId, onSave, dirty }: {
         ) : (
           <iframe
             srcDoc={data?.html ?? ''}
+            // 🔴 sandbox (ביקורת אבטחה 07.10): בלעדיו סקריפט בתוכן הדיוור רץ
+            // במקור של האתר עם הסשן של מי שצופה — עורך דיוור יכול היה להריץ
+            // קוד בשם מנהל. allow-popups: קישורים במייל נפתחים בלשונית חדשה.
+            sandbox="allow-popups allow-popups-to-escape-sandbox"
             className="w-full rounded-xl border border-slate-200 bg-white"
             style={{ height: '65vh' }}
             title="תצוגה מקדימה"

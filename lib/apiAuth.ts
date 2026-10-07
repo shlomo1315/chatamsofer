@@ -1,4 +1,5 @@
 import { timingSafeEqual } from 'crypto'
+import { escapeLike } from '@/lib/likeEscape'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
@@ -100,7 +101,7 @@ const getStaffProfile = cache(async (userId: string, email: string | null) => {
 
   // נפילה-לאחור לפי אימייל — תמיכה בכניסה עם Google כאשר זהות ה-auth אינה מקושרת לאותו id
   if (email) {
-    const r = await admin.from('profiles').select('*').ilike('email', email).maybeSingle()
+    const r = await admin.from('profiles').select('*').ilike('email', escapeLike(email)).maybeSingle()
     return r.data
   }
   return null

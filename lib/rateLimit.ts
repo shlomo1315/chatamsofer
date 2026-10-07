@@ -70,6 +70,14 @@ export function __resetRateLimits() {
  * הערך הנכון הוא זה שנוסף ע"י ה-proxy הקרוב ביותר לאפליקציה.
  */
 export function clientIpOrNull(request: Request): string | null {
+  // 🔴 x-real-ip קודם (ביקורת אבטחה 07.10). מדידה חיה ב-05.10 (ראו
+  // lib/payments/callbackSource): ב-Railway הערך האחרון ב-x-forwarded-for
+  // הוא כתובת *תשתית* (79.127.178.82), ולא הלקוח — כך שכל הפונים דרך אותו
+  // צומת נספרו כפונה אחד: תוקף אחד יכול היה לנעול את הקופה ואת כניסת
+  // המוכרים לכולם. x-real-ip נקבע ע"י ה-proxy, וזיוף שלו מבחוץ נדרס.
+  const realFirst = request.headers.get('x-real-ip')?.trim()
+  if (realFirst) return realFirst
+
   const fwd = request.headers.get('x-forwarded-for')
   if (fwd) {
     const parts = fwd.split(',').map(s => s.trim()).filter(Boolean)

@@ -48,21 +48,32 @@ export async function POST(request: NextRequest) {
   if (Array.isArray(templateUrls)) {
     // קבצי טמפלייט מאוחסנים בדלי 'documents' — הורדה דרך service-role כדי שתעבוד גם כשהדלי פרטי
     const docAdmin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { autoRefreshToken: false, persistSession: false } })
+    // ─────────────────────────────────────────────────────────────────────
+    // 🔴 רק תבניות מייל וצרופות של מיילים נכנסים (ביקורת אבטחה 07.10).
+    //
+    // קודם הורד *כל* נתיב בדלי — כולל סריקות ת"ז ומסמכים רפואיים של כל
+    // משפחה — וכל כתובת אחרת נמשכה ב-fetch (SSRF לרשת הפנימית), והתוכן
+    // צורף למייל לנמען שהשולח בחר. די היה בהרשאת דואר בלבד.
+    //
+    // ⚠️ השימושים בפועל (MailClient): תבנית מ-email-templates/ והעברת
+    // מייל עם הצרופות שלו מ-mail/. כל השאר מדולג ונרשם בלוג — הודעה ישנה
+    // עם צרופה בצורה אחרת תועבר בלי הצרופה, ולא תיכשל כולה.
+    // ─────────────────────────────────────────────────────────────────────
+    const ALLOWED_PREFIXES = ['email-templates/', 'mail/']
     for (const t of templateUrls) {
       if (!t?.url) continue
+      const path = storagePath(String(t.url))
+      const isStorage = path !== String(t.url) || !/^[a-z]+:/i.test(String(t.url))
+      if (!isStorage || !path || path.includes('..') || path.includes('\\') || /%2e|%2f|%5c/i.test(path) ||
+          !ALLOWED_PREFIXES.some(p => path.startsWith(p))) {
+        console.warn(`[gmail/send] צרופה לא מורשית דולגה (משתמש ${staff.userId}): ${String(t.url).slice(0, 120)}`)
+        continue
+      }
       try {
-        const path = storagePath(String(t.url))
-        let buf: Buffer
-        let ctype: string = t.mimeType || 'application/octet-stream'
-        if (path !== String(t.url)) {
-          const { data: blob } = await docAdmin.storage.from('documents').download(path)
-          if (!blob) continue
-          buf = Buffer.from(await blob.arrayBuffer()); ctype = t.mimeType || blob.type || ctype
-        } else {
-          const res = await fetch(t.url)
-          if (!res.ok) continue
-          buf = Buffer.from(await res.arrayBuffer()); ctype = t.mimeType || res.headers.get('content-type') || ctype
-        }
+        const { data: blob } = await docAdmin.storage.from('documents').download(path)
+        if (!blob) continue
+        const buf = Buffer.from(await blob.arrayBuffer())
+        const ctype = t.mimeType || blob.type || 'application/octet-stream'
         allAttachments.push({ filename: t.filename || 'attachment', mimeType: ctype, contentB64: buf.toString('base64') })
       } catch { /* skip failed attachment */ }
     }

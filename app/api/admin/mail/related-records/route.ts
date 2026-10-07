@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
+import { escapeLike } from '@/lib/likeEscape'
 import { requireMailAccess, getServiceClient, forbidden } from '@/lib/apiAuth'
 import { roleAllows } from '@/lib/permissions'
 import { OPEN_LOAN_STATUSES } from '@/lib/openLoanGuard'
@@ -60,7 +61,7 @@ export async function GET(request: NextRequest) {
   const { data: bens } = await db
     .from('beneficiaries')
     .select('id, family_name, full_name, spouse_name, id_number, eligibility_status')
-    .ilike('email', email)
+    .ilike('email', escapeLike(email))
     .limit(5)
 
   if (!bens?.length) return NextResponse.json({ beneficiaries: [], loans: [], maternity: [] })

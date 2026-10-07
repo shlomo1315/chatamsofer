@@ -3,6 +3,7 @@ import { google } from 'googleapis'
 import { getOAuthClient, saveRefreshToken } from '@/lib/gmail'
 import { requireAdmin, unauthorized, getServiceClient } from '@/lib/apiAuth'
 import { DRIVE_TOKEN_KEY, DRIVE_ACCOUNT_KEY } from '@/lib/googleDrive'
+import { oauthNonceMatches } from '@/lib/oauthState'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,8 +26,14 @@ export async function GET(request: NextRequest) {
 
   const code = request.nextUrl.searchParams.get('code')
   if (!code) return NextResponse.json({ error: 'Missing code' }, { status: 400 })
-  // state נקבע אצלנו בלבד (ראו lib/gmail#getAuthUrl); כל ערך אחר = חשבון דואר.
-  const forBackup = request.nextUrl.searchParams.get('state') === 'backup'
+  // state = "<target>.<nonce>" (ראו app/api/auth/gmail). 🔴 ה-nonce חייב
+  // להתאים לעוגייה של הדפדפן הזה — אחרת זה קוד של חשבון שמישהו אחר אישר
+  // (CSRF, ביקורת אבטחה 07.10), ואסור לשמור את האסימון שלו.
+  const [target, nonce] = (request.nextUrl.searchParams.get('state') ?? '').split('.')
+  if (!oauthNonceMatches(request, 'main', nonce)) {
+    return NextResponse.json({ error: 'בקשת החיבור לא אומתה — התחילו את החיבור מחדש מההגדרות' }, { status: 403 })
+  }
+  const forBackup = target === 'backup'
 
   const oauth = getOAuthClient()
   const { tokens } = await oauth.getToken(code)

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSendAuthUrl } from '@/lib/gmail'
+import { newOAuthNonce, setOAuthNonce } from '@/lib/oauthState'
 import { requireAdmin, unauthorized } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
@@ -16,5 +17,11 @@ export async function GET() {
   const staff = await requireAdmin()
   if (!staff) return unauthorized()
 
-  return NextResponse.redirect(getSendAuthUrl())
+  // 🔴 nonce ב-state + בעוגייה — הגנת CSRF (lib/oauthState).
+  const nonce = newOAuthNonce()
+  const url = new URL(getSendAuthUrl())
+  url.searchParams.set('state', nonce)
+  const res = NextResponse.redirect(url.toString())
+  setOAuthNonce(res, 'send', nonce)
+  return res
 }

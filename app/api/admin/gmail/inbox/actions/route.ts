@@ -168,7 +168,10 @@ export async function POST(request: NextRequest) {
   if (body.threadId && !(await canAccessGmailThread(db, staff, body.threadId))) {
     return NextResponse.json({ error: 'אין הרשאה לתיבה הזו' }, { status: 403 })
   }
-  if (!body.messageId && !body.threadId && !(await canUseGmailAccount(db, staff, acc.id))) {
+  // 🔴 חשבון שנבחר במפורש נבדק *תמיד* (ביקורת אבטחה 07.10): קודם, בקשה עם
+  // messageId של הודעה מורשית + accountId של תיבה אחרת עברה את בדיקת
+  // ההודעה בלבד — ונשלחה מהתיבה האחרת.
+  if ((body.accountId || (!body.messageId && !body.threadId)) && !(await canUseGmailAccount(db, staff, acc.id))) {
     return NextResponse.json({ error: 'אין הרשאה לשלוח מהתיבה הזו' }, { status: 403 })
   }
 

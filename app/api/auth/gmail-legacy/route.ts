@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getLegacyAuthUrl } from '@/lib/gmail'
+import { newOAuthNonce, setOAuthNonce } from '@/lib/oauthState'
 import { requireAdmin, unauthorized } from '@/lib/apiAuth'
 import { DEPARTMENTS } from '@/lib/departments'
 
@@ -31,7 +32,11 @@ export async function GET(request: NextRequest) {
   const url = new URL(getLegacyAuthUrl())
   // ה-state חייב להיות מחרוזת בטוחה ל-URL. JSON גולמי (עם { " : ) שובר את
   // Google ומחזיר 500 — לכן מקודדים ב-base64url.
-  const state = Buffer.from(JSON.stringify({ department, label, labelId, labelName, color })).toString('base64url')
+  // 🔴 n = nonce שנבדק מול עוגייה בחזרה — הגנת CSRF (lib/oauthState).
+  const n = newOAuthNonce()
+  const state = Buffer.from(JSON.stringify({ department, label, labelId, labelName, color, n })).toString('base64url')
   url.searchParams.set('state', state)
-  return NextResponse.redirect(url.toString())
+  const res = NextResponse.redirect(url.toString())
+  setOAuthNonce(res, 'legacy', n)
+  return res
 }

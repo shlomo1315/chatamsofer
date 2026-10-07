@@ -1,4 +1,5 @@
 import { safeError } from '@/lib/safeError'
+import { escapeLike } from '@/lib/likeEscape'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getLegacyGmailClient, getGmailClientForToken, getBody, getGmailClient, ensureLabel, getAttachments } from './gmail'
 import { departmentByEmail, DEPARTMENTS, type DepartmentKey } from './departments'
@@ -62,7 +63,7 @@ export async function resolveBeneficiaryId(
   }
   const from = (opts.fromEmail || '').toLowerCase().trim()
   if (from && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(from)) {
-    const { data } = await admin.from('beneficiaries').select('id').ilike('email', from).maybeSingle()
+    const { data } = await admin.from('beneficiaries').select('id').ilike('email', escapeLike(from)).maybeSingle()
     if (data?.id) return data.id
   }
   return null

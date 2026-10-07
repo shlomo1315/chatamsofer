@@ -1,4 +1,5 @@
 import { isAlreadyGone, describeDeleteFailure } from '@/lib/userDeletion'
+import { escapeLike } from '@/lib/likeEscape'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
   // יצירה מחדש (unique על email). אם קיים פרופיל כזה בלי משתמש Auth תואם — מסירים
   // אותו כדי לאפשר חיבור מחדש. (אם קיים משתמש Auth פעיל — createUser ייכשל כרגיל.)
   {
-    const { data: orphan } = await admin.from('profiles').select('id').ilike('email', email).maybeSingle()
+    const { data: orphan } = await admin.from('profiles').select('id').ilike('email', escapeLike(email)).maybeSingle()
     if (orphan?.id) {
       const { data: authUser, error: authLookupErr } = await admin.auth.admin.getUserById(orphan.id)
       // מוחקים רק כשוודאי שאין משתמש Auth תואם (fail-closed): שגיאת שירות לא

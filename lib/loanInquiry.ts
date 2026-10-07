@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { escapeLike } from '@/lib/likeEscape'
 import { deliverMail } from './sendMail'
 import { mailFor } from './departments'
 import { shell, greetByStatus } from './emailTemplates'
@@ -215,7 +216,7 @@ export async function findLoanByApplicantEmail(
   const { data: bens } = await db
     .from('beneficiaries')
     .select('id')
-    .ilike('email', clean)
+    .ilike('email', escapeLike(clean))
     .limit(5)
 
   if (!bens?.length) return null

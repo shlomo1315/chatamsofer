@@ -11,6 +11,7 @@ import type { Block, BlockType } from '@/lib/newsletter/blocks'
 import { MERGE_TAGS, CONDITIONAL_BLOCKS } from '@/lib/newsletter/merge'
 import { NEWSLETTER_ACTIONS } from '@/lib/newsletter/actions'
 import { useToast } from '@/components/ui/Toast'
+import { sanitizeEmailHtml } from '@/lib/sanitizeEmailHtml'
 
 const NAVY = '#1B3256'
 const GOLD = '#C69D2D'
@@ -915,7 +916,10 @@ function Editable({
   const [empty, setEmpty] = useState(!html)
 
   useEffect(() => {
-    if (ref.current) ref.current.innerHTML = html
+    // 🔴 מנוקה (ביקורת אבטחה 07.10): התוכן השמור נכתב ישירות ל-DOM של
+    // מסך הניהול. <img onerror> בבלוק שנשמר ע"י עורך אחד רץ אצל כל מי
+    // שפותח את הקמפיין לעריכה — כולל מנהל.
+    if (ref.current) ref.current.innerHTML = sanitizeEmailHtml(html)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

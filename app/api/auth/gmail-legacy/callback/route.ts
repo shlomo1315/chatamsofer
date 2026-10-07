@@ -6,6 +6,7 @@ import { saveLegacyRefreshToken, getLegacyOAuthClient } from '@/lib/gmail'
 import { requireAdmin, unauthorized } from '@/lib/apiAuth'
 import { DEPARTMENTS, type DepartmentKey } from '@/lib/departments'
 import { DEFAULT_LABELS } from '@/lib/mailLabels'
+import { oauthNonceMatches } from '@/lib/oauthState'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,6 +25,17 @@ export async function GET(request: NextRequest) {
 
   const code = request.nextUrl.searchParams.get('code')
   if (!code) return NextResponse.json({ error: 'Missing code' }, { status: 400 })
+
+  // 🔴 CSRF (ביקורת אבטחה 07.10): ה-nonce (שדה n ב-state) חייב להתאים לעוגייה
+  // של הדפדפן הזה — לפני שמחליפים את הקוד באסימון.
+  let stateNonce = ''
+  try {
+    const st = JSON.parse(Buffer.from(request.nextUrl.searchParams.get('state') ?? '', 'base64url').toString('utf-8'))
+    stateNonce = String(st?.n ?? '')
+  } catch { /* state פגום ⇒ nonce ריק ⇒ נדחה למטה */ }
+  if (!oauthNonceMatches(request, 'legacy', stateNonce)) {
+    return NextResponse.json({ error: 'בקשת החיבור לא אומתה — התחילו את החיבור מחדש מההגדרות' }, { status: 403 })
+  }
 
   const oauth = getLegacyOAuthClient()
   const { tokens } = await oauth.getToken(code)

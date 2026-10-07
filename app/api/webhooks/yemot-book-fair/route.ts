@@ -760,9 +760,15 @@ async function finalizeOrder(orderId: string, cartToken: string, code: string) {
       patch.order_number = await nextOrderNumber(supa)
     }
 
+    // 🔴 עדכון מותנה (ביקורת אבטחה 07.10): דיווח כפול או מאוחר לא יחזיר
+    // הזמנה שבוטלה / זוכתה / נשלחה למצב "שולם". failed נכלל: מתקשר שכרטיסו
+    // נדחה ומקיש כרטיס אחר באותה שיחה — ההזמנה כבר סומנה נכשלה.
     await supa.from('book_fair_orders').update(patch).eq('id', orderId)
+      .in('status', ['pending_payment', 'failed'])
   } else {
+    // ⚠️ רק מהמתנה לתשלום: סירוב שמגיע אחרי הצלחה לא יבטל הזמנה ששולמה.
     await supa.from('book_fair_orders').update({ status: 'failed' }).eq('id', orderId)
+      .eq('status', 'pending_payment')
     await supa.rpc('book_fair_release', { p_cart_token: cartToken })
       .then(undefined, () => { /* best-effort — הפקיעה תתפוס בכל מקרה */ })
   }

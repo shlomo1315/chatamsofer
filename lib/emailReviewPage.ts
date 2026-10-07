@@ -7,8 +7,11 @@ export interface RenderedEmail { title: string; recipient?: string; trigger?: st
 // כדי שה-CSS של כל מייל לא ידלוף/יתנגש עם השכנים. page-break אחרי כל מייל.
 export function buildEmailReviewPage(emails: RenderedEmail[]): string {
   const cards = emails.map((e, i) => {
-    // ה-HTML של המייל מוזרק ל-iframe דרך srcdoc (מבודד לחלוטין).
-    const srcdoc = e.html.replace(/"/g, '&quot;')
+    // ה-HTML של המייל מוזרק ל-iframe דרך srcdoc, עם sandbox.
+    // 🔴 ביקורת אבטחה 07.10: srcdoc לבדו אינו בידוד — בלי sandbox סקריפט
+    // בנוסח רץ במקור של האתר. וגם & מנוטרל לפני ": אחרת "&quot;" שכבר
+    // בתוך ה-HTML מפוענח כמרכאה וסוגר את התכונה.
+    const srcdoc = e.html.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
     return `
     <section class="mail-page">
       <div class="meta">
@@ -18,7 +21,7 @@ export function buildEmailReviewPage(emails: RenderedEmail[]): string {
           <p>${[e.trigger && `מתי: ${escapeHtml(e.trigger)}`, e.recipient && `נמען: ${escapeHtml(e.recipient)}`].filter(Boolean).join(' · ')}</p>
         </div>
       </div>
-      <iframe class="mail-frame" srcdoc="${srcdoc}" loading="lazy"></iframe>
+      <iframe class="mail-frame" sandbox="allow-popups" srcdoc="${srcdoc}" loading="lazy"></iframe>
     </section>`
   }).join('')
 

@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr'
+import { escapeLike } from '@/lib/likeEscape'
 import { NextResponse, type NextRequest } from 'next/server'
 
 function noCache(res: NextResponse) {
@@ -125,7 +126,7 @@ export async function proxy(request: NextRequest) {
         // אותו מסריקת טבלה מלאה לחיפוש אינדקס.
         const r = await supabase.from('profiles')
           .select('mail_only, role, is_active')
-          .ilike('email', user.email).maybeSingle()
+          .ilike('email', escapeLike(user.email)).maybeSingle()
         prof = r.data
       }
       rememberProfile(user.id, prof ?? null)

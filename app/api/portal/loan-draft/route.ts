@@ -97,6 +97,12 @@ export async function POST(request: NextRequest) {
   if (!rabbiFormUrl) {
     return NextResponse.json({ error: 'חובה לצרף את טופס אישור הרב החתום' }, { status: 400 })
   }
+  // 🔴 אותה בדיקה כמו בהשלמת הטופס (PATCH למטה): בלעדיה המבקש יכול היה
+  // לשמור קישור לקובץ של משפחה אחרת או לכתובת חיצונית, והצוות היה פותח
+  // אותו מגלריית המסמכים של ההלוואה (ביקורת אבטחה 07.10).
+  if (!isOwnDoc(rabbiFormUrl, sessionId)) {
+    return NextResponse.json({ error: 'קובץ טופס הרב אינו תקין — העלו אותו מחדש' }, { status: 400 })
+  }
 
   const fields = {
     beneficiary_id: sessionId,
