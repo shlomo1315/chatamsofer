@@ -35,6 +35,7 @@ import {
 import { getBookFairMessages } from '@/lib/yemotBookFairMessages'
 import { transcribeHebrew } from '@/lib/elevenStt'
 import { PICKUP_CONFIG_KEY, mergePickupConfig, pickupStatus } from '@/lib/bookFairPickup'
+import { archiveInquiryRecording, listYemotFolder } from '@/lib/bookFairInquiryAudio'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -316,16 +317,21 @@ async function saveInquiry(
   phone: string, recording: string, transcript: string | undefined, callId: string,
 ): Promise<boolean> {
   const supa = db()!
-  const { error } = await supa.from('book_fair_inquiries').insert({
-    phone: String(phone ?? '').replace(/\D/g, '') || 'לא ידוע',
+  const cleanPhone = String(phone ?? '').replace(/\D/g, '') || 'לא ידוע'
+  const { data: row, error } = await supa.from('book_fair_inquiries').insert({
+    phone: cleanPhone,
     recording,
     transcript: transcript?.trim() || null,
     call_id: callId || null,
-  })
+  }).select('id').single()
   if (error) {
     console.error('[yemot-book-fair] שמירת הפנייה נכשלה:', error.message)
     return false
   }
+  // 🔴 עותק של ההקלטה אצלנו — מיד, לפני שימות מנקה את סל המיחזור
+  // (08.10: אף פנייה לא נשמעה, כי לא נשמר עותק והנתיב שבמסד אינו נתיב).
+  // ⚠️ ברקע ובלי await: המתקשר לא ימתין לחיפוש ולהורדה.
+  void archiveInquiryRecording(supa, callId || String(row?.id ?? ''), cleanPhone, new Date())
   return true
 }
 
@@ -521,15 +527,12 @@ async function stashRecording(
       const phoneTail = ph.replace(/^0/, '')
       for (const folder of ['ivr2:/Trash/ApiVoice', 'ivr2:/Trash/ApiRecord']) {
         try {
-          const r = await fetch(
-            `https://www.call2all.co.il/ym/api/GetIVR2Dir?token=${encodeURIComponent(token)}&path=${encodeURIComponent(folder)}`,
-            { cache: 'no-store' },
-          )
-          const j = await r.json().catch(() => null) as { files?: { name?: string }[] } | null
+          // 🔴 כל הדפים (08.10): GetIVR2Dir מחזירה 1,000 קבצים בלבד, וקבצים
+          // שמעבר לדף הראשון לא נמצאו — ~10% מההקלטות נשארו בלי עותק.
+          const files = await listYemotFolder(folder)
           // ⚠️ ההתאמה לפי הטלפון בשם, והחדש ביותר ראשון: שתי ההקלטות
           // של אותה שיחה (שם וכתובת) נבדלות רק בחותמת.
-          const mine = (j?.files ?? [])
-            .map(f => String(f.name ?? ''))
+          const mine = files
             .filter(n => n.includes(phoneTail) || n.includes(ph))
             .sort()
             .reverse()

@@ -1,19 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
-import { downloadFileFromYemot, bookFairPath } from '@/lib/yemot'
+import { archiveInquiryRecording, inquiryStorageKey } from '@/lib/bookFairInquiryAudio'
 
 // הקלטת פנייה להאזנה בדפדפן.
 //
 // 🔴 מוגש דרך השרת ולא בקישור ישיר: כתובת ההורדה של ימות דורשת את
 // YEMOT_TOKEN, וקישור שכולל אותו היה חושף את מפתח המערכת בכל דף.
 //
-// 🔴 הנתיב נבנה מהמסד ולא מפרמטר: קבלת path מהלקוח הייתה מאפשרת
-// לקרוא *כל* קובץ בחשבון ימות (כולל הקלטות של שלוחות אחרות).
+// 🔴 הקובץ נמצא לפי נתוני הפנייה במסד ולא לפי פרמטר: קבלת path מהלקוח
+// הייתה מאפשרת לקרוא *כל* קובץ בחשבון ימות.
+//
+// 🔴 08.10: קודם נבנה כאן נתיב מהעמודה recording — "120/9.wav", זהה לכל
+// הפניות ואינו נתיב בכלל — ונוסף לו .wav שני. כל ניסיון החזיר 404 והמסך
+// הציג "הדפדפן לא הצליח לנגן". ראו lib/bookFairInquiryAudio.
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-const BOOK_FAIR_EXT = process.env.YEMOT_BOOK_FAIR_EXT || '9'
+function audio(data: ArrayBuffer) {
+  return new NextResponse(data, {
+    headers: {
+      'Content-Type': 'audio/wav',
+      // ⚠️ no-store: ההקלטות אישיות ואין סיבה שיישמרו במטמון של דפדפן
+      // משותף במשרד.
+      'Cache-Control': 'no-store',
+    },
+  })
+}
 
 export async function GET(request: NextRequest) {
   const staff = await requirePermission('book_fair', 'view')
@@ -26,25 +39,23 @@ export async function GET(request: NextRequest) {
   if (!id) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
 
   const { data: row } = await db.from('book_fair_inquiries')
-    .select('recording').eq('id', id).maybeSingle()
+    .select('id, phone, call_id, created_at, recording').eq('id', id).maybeSingle()
   if (!row?.recording) return NextResponse.json({ error: 'אין הקלטה לפנייה זו' }, { status: 404 })
 
-  // ⚠️ שם הקובץ מגיע מימות ונשמר כמות שהוא. מנוקה מתווי נתיב כדי
-  // שלא יוכל לטפס מחוץ לתיקיית השלוחה.
-  const name = String(row.recording).replace(/[/\\]/g, '')
-  const file = await downloadFileFromYemot(bookFairPath(`${name}.wav`), 'bookFair')
+  // ⚠️ פנייה בלי call_id (ישנה) — המזהה שלה משמש כמפתח העותק.
+  const callId = String(row.call_id || row.id)
 
-  if (!file.ok || !file.data) {
-    console.error('[fair/inquiries/audio] הורדה נכשלה:', file.error)
-    return NextResponse.json({ error: 'ההקלטה לא נמצאה' }, { status: 404 })
-  }
+  // 1. העותק שלנו — נשמר בסיום השיחה או בהשמעה קודמת.
+  const { data: blob } = await db.storage.from('documents').download(inquiryStorageKey(callId))
+  if (blob) return audio(await blob.arrayBuffer())
 
-  return new NextResponse(file.data, {
-    headers: {
-      'Content-Type': file.contentType ?? 'audio/wav',
-      // ⚠️ no-store: ההקלטות אישיות ואין סיבה שיישמרו במטמון של דפדפן
-      // משותף במשרד.
-      'Cache-Control': 'no-store',
-    },
-  })
+  // 2. סל המיחזור של ימות — לפי הטלפון והזמן. נמצא ⇒ נשמר עותק לפעם הבאה.
+  const data = await archiveInquiryRecording(db, callId, String(row.phone ?? ''), new Date(row.created_at))
+  if (data) return audio(data)
+
+  console.error(`[fair/inquiries/audio] ההקלטה לא נמצאה · פנייה ${id}`)
+  return NextResponse.json(
+    { error: 'ההקלטה כבר לא נמצאת בימות (נמחקה מסל המיחזור)' },
+    { status: 404 },
+  )
 }
