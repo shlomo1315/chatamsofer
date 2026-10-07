@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { type NextRequest, NextResponse } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
 import { downloadFileFromYemot } from '@/lib/yemot'
 import { listYemotFolder, timestampOf } from '@/lib/bookFairInquiryAudio'
@@ -43,11 +43,20 @@ const phoneKey = (p: string | null | undefined) =>
 const one = <T,>(v: T | T[]): T => (Array.isArray(v) ? v[0] : v)
 
 export async function GET(request: NextRequest) {
+  return run(request.nextUrl.searchParams.get('apply') === '1')
+}
+
+// ⚠️ POST = ביצוע, מהכפתור בהגדרות היריד. NetFree חוסם ניווט ישיר לכתובת
+// API חדשה ("unknown"), ולכן ההפעלה היא מתוך דף המערכת.
+export async function POST() {
+  return run(true)
+}
+
+async function run(apply: boolean) {
   if (!(await requirePermission('book_fair', 'edit'))) return forbidden()
   const db = getServiceClient()
   if (!db) return serverMisconfigured()
 
-  const apply = request.nextUrl.searchParams.get('apply') === '1'
   const started = Date.now()
   const outOfTime = () => Date.now() - started > BUDGET_MS
   const log: string[] = []

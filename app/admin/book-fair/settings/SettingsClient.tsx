@@ -11,6 +11,7 @@ import PaymentSettings from './PaymentSettings'
 import SellerPassword from './SellerPassword'
 import OfficeContact from './OfficeContact'
 import DashboardAccess from './DashboardAccess'
+import RecordingRescue from './RecordingRescue'
 import PhoneMessages from '../phone/PhoneMessages'
 import BookAudio from '../phone/BookAudio'
 
@@ -295,6 +296,7 @@ export default function SettingsClient({ cities, tiers, open, openAt, mockPay }:
         <SellerPassword />
         <OfficeContact canEdit={canEdit} />
         <DashboardAccess canEdit={canEdit} />
+        <RecordingRescue canEdit={canEdit} />
       </div>
 
       {/* ── השלוחה הטלפונית ──
