@@ -361,6 +361,7 @@ export const MESSAGE_FALLBACKS: Record<string, string> = {
   order_menu: 'לזיהוי ספר לפי מספר קטלוג הקישו 1 לשמיעת שמות הספרים לפי קטגוריה הקישו 2 לשמיעת כל הספרים ברצף הקישו 3',
   ask_sku: 'הקישו את מספר הקטלוג של הספר המבוקש ולאחריו סולמית',
   closed: 'היריד סגור כרגע להזמנות',
+  season_closed: 'היריד נסגר לשנה זו',
   category_menu: 'לשמיעת הספרים בקטגוריה הקישו את מספרה',
   category_item: 'ל{name} הקישו {code}',
   category_empty: 'אין כרגע ספרים בקטגוריה זו',

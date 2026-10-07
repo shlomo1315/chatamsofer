@@ -39,6 +39,8 @@ export const BOOK_FAIR_MESSAGE_META: MsgMeta[] = [
   // ── תפריט ההזמנה (שלוחה 1) ──
   { key: 'order_menu', label: 'תפריט ההזמנה', defaultText: 'לזיהוי ספר לפי מספר קטלוג הקישו 1 לשמיעת שמות הספרים לפי קטגוריה הקישו 2 לשמיעת כל הספרים ברצף הקישו 3', allowAudio: true },
   { key: 'ask_sku', label: 'בקשת מספר קטלוג', defaultText: 'הקישו את מספר הקטלוג של הספר המבוקש ולאחריו סולמית', allowAudio: true },
+  { key: 'season_closed', label: 'היריד נסגר לשנה זו', defaultText: 'היריד נסגר לשנה זו', allowAudio: true,
+    hint: 'מושמע כשהיריד סגור לעונה (book_fair_season_closed), במקום כל התפריט.' },
   { key: 'closed', label: 'היריד סגור', defaultText: 'היריד סגור כרגע להזמנות', allowAudio: true,
     hint: 'מוקראת כשהיריד אינו פתוח. 🔴 ודאו שהנוסח נכון לעובדה ולא זמני — הודעה זמנית על הודעת-עובדה בלבלה בעבר אלפי מתקשרים.' },
 

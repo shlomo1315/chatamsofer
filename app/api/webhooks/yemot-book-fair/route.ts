@@ -910,10 +910,16 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
   // ⚠️ זו *אינה* דלת צדדית להזמנות אמיתיות באתר: הנתיב הזה יוצר
   // הזמנות בערוץ 'phone' בלבד, ו-/api/yerid/checkout ממשיך לבדוק
   // את book_fair_open לבדו.
-  const [{ data: gate }, { data: phoneGate }] = await Promise.all([
+  const [{ data: gate }, { data: phoneGate }, { data: season }] = await Promise.all([
     supa.from('app_settings').select('value').eq('key', 'book_fair_open').maybeSingle(),
     supa.from('app_settings').select('value').eq('key', 'book_fair_phone_open').maybeSingle(),
+    supa.from('app_settings').select('value').eq('key', 'book_fair_season_closed').maybeSingle(),
   ])
+
+  // 🔴 "היריד נסגר לשנה זו" גובר על שני המפתחות (07.10).
+  if (String(season?.value ?? '') === 'true') {
+    return yemotText(`id_list_message=${msgToken(messages, 'season_closed')}&go_to_folder=hangup`, callId)
+  }
   const isOpen =
     String(gate?.value ?? '') === 'true' ||
     String(phoneGate?.value ?? '') === 'true'

@@ -18,7 +18,7 @@ export type PublicTier = {
  */
 export async function getData(preview = false) {
   const db = getServiceClient()
-  if (!db) return { books: [] as PublicBook[], cities: [], tiers: [], open: false, openAt: null, pickup: null }
+  if (!db) return { books: [] as PublicBook[], cities: [], tiers: [], open: false, openAt: null, pickup: null, seasonClosed: false }
 
   // ── שלב א: האם היריד פתוח ──
   //
@@ -30,18 +30,25 @@ export async function getData(preview = false) {
   // הפתיחה הרשמית (63 מופעי price_agorot נמדדו בפרודקשן).
   //
   // "לא מרונדר" אינו "לא נשלח". מה שאסור להיחשף — לא נשלף.
-  const [{ data: gate }, { data: at }] = await Promise.all([
+  const [{ data: gate }, { data: at }, { data: season }] = await Promise.all([
     db.from('app_settings').select('value').eq('key', 'book_fair_open').maybeSingle(),
     db.from('app_settings').select('value').eq('key', 'book_fair_open_at').maybeSingle(),
+    db.from('app_settings').select('value').eq('key', 'book_fair_season_closed').maybeSingle(),
   ])
   const openAt = String((at as { value?: string } | null)?.value ?? '') || null
+
+  // 🔴 "היריד נסגר לשנה זו" גובר על הכול (lib/bookFairOpening SEASON_CLOSED_KEY).
+  // ⚠️ preview (הנתיב הנסתר) עוקף גם אותו — לבדיקות לקראת השנה הבאה.
+  if (!preview && String((season as { value?: string } | null)?.value ?? '') === 'true') {
+    return { books: [] as PublicBook[], cities: [], tiers: [], open: false, openAt, pickup: null, seasonClosed: true }
+  }
 
   // 🔴 ברירת המחדל היא *סגור*: מפתח חסר פירושו שאיש לא פתח את היריד
   // עדיין, ופתיחה מכללא הייתה חושפת קטלוג שטרם הוכן ומקבלת הזמנות
   // על מלאי שלא נבדק. חייב להיות זהה לבדיקה ב-api/yerid/checkout,
   // אחרת המסך יציג "סגור" בעוד ההזמנות מתקבלות.
   const open = String(gate?.value ?? '') === 'true' || preview
-  if (!open) return { books: [] as PublicBook[], cities: [], tiers: [], open: false, openAt, pickup: null }
+  if (!open) return { books: [] as PublicBook[], cities: [], tiers: [], open: false, openAt, pickup: null, seasonClosed: false }
 
   // ── שלב ב: הקטלוג — רק אחרי שהיריד פתוח ──
   const [{ books }, { data: cities }, { data: tiers }, { data: pickupRow }] = await Promise.all([
@@ -74,5 +81,6 @@ export async function getData(preview = false) {
     open: true,
     openAt,
     pickup,
+    seasonClosed: false,
   }
 }

@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic'
 export type { PublicBook, PublicCity, PublicTier } from './getData'
 
 export default async function FairPage() {
-  const { books, cities, tiers, open, openAt, pickup } = await getData()
+  const { books, cities, tiers, open, openAt, pickup, seasonClosed } = await getData()
   // ⚠️ רמז חיבור מוקדם לאחסון התמונות: בלעדיו הדפדפן פותח DNS+TLS
   // מול Supabase רק כשהוא מגיע לכריכה הראשונה, וזה מוסיף סבב שלם
   // לפני שנראית תמונה אחת.
@@ -29,7 +29,7 @@ export default async function FairPage() {
           <link rel="dns-prefetch" href={storage} />
         </>
       )}
-      <FairStore books={books} cities={cities} tiers={tiers} open={open} openAt={openAt} pickup={pickup} />
+      <FairStore books={books} cities={cities} tiers={tiers} open={open} openAt={openAt} pickup={pickup} seasonClosed={seasonClosed} />
     </>
   )
 }

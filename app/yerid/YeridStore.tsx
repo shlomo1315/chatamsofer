@@ -36,7 +36,7 @@ const CART_KEY = 'book_fair_cart_v1'
 const catId = (name: string) =>
   'cat-' + name.replace(/[^֐-׿a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '')
 
-export default function YeridStore({ books, cities, tiers, open, openAt, previewToken, pickup }: {
+export default function YeridStore({ books, cities, tiers, open, openAt, previewToken, pickup, seasonClosed = false }: {
   books: PublicBook[]; cities: PublicCity[]; tiers: PublicTier[]; open: boolean
   /** מועד הפתיחה המתוכנן (ISO) — לספירה לאחור במסך ההמתנה. */
   openAt: string | null
@@ -52,6 +52,8 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
    * היה רואה "איסוף זמין" אחרי הסגירה. ראו lib/bookFairPickup.
    */
   pickup?: { available: boolean; message: string; ready_hours: number } | null
+  /** 🔴 "היריד נסגר לשנה זו" — מסך סיום עם קישור למעקב, במקום מסך ההמתנה. */
+  seasonClosed?: boolean
 }) {
   const [query, setQuery] = useState('')
 
@@ -190,6 +192,9 @@ export default function YeridStore({ books, cities, tiers, open, openAt, preview
       return next
     })
   }, [])
+
+  // ── העונה נסגרה — מסך סיום, ⚠️ לפני מסך ההמתנה (שמציע תזכורת לפתיחה) ──
+  if (seasonClosed) return <SeasonClosedScreen />
 
   // ── היריד סגור — מסך המתנה עם רישום לתזכורת ──
   if (!open) return <ClosedScreen openAt={openAt} />
@@ -537,6 +542,46 @@ function FlyToCart({ from, toRef }: {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * מסך הסיום — "היריד נסגר לשנה זו" (07.10).
+ *
+ * 🔴 הקישור למעקב הוא העיקר כאן: מי שמגיע אחרי הסגירה הוא בעיקר מי
+ * שכבר הזמין ורוצה לדעת מתי יגיעו הספרים. בלי הקישור היה רואה רק
+ * "סגור" ומתקשר למשרד.
+ */
+function SeasonClosedScreen() {
+  return (
+    <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-[#EAF4FC] via-[#DCEBF8] to-[#CFE2F3] px-6 py-16 text-center">
+      <img src="/logo-heichal.png" alt="היכל החתם סופר" className="w-44 sm:w-56" />
+
+      <h1 className="mt-6 text-3xl font-bold leading-tight text-[#12314F] sm:text-4xl">
+        מערכת הזמנת ספרי החתם סופר
+      </h1>
+      <p className="mt-2 text-lg font-semibold text-[#8A6212]">שע״י היכל החתם סופר</p>
+
+      <div className="mt-10 w-full max-w-md rounded-2xl border border-[#9DC3E6] bg-white/80 px-6 py-8 shadow-sm">
+        <p className="text-2xl font-bold text-[#12314F] sm:text-3xl">היריד נסגר לשנה זו</p>
+        <p className="mt-3 text-base leading-relaxed text-[#3B5670]">
+          תודה לכל המזמינים!
+        </p>
+
+        <div className="mt-7 border-t border-[#DCEBF8] pt-6">
+          <p className="text-base font-semibold text-[#12314F]">הזמנתם? אפשר לעקוב אחרי ההזמנה</p>
+          <a
+            href="/yerid/my-order"
+            className="mt-4 inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-[#12314F] px-6 text-lg font-bold text-white transition hover:bg-[#1E4A73]"
+          >
+            <UserRound size={20} /> מעקב אחר הזמנה קיימת
+          </a>
+          <p className="mt-3 text-sm leading-relaxed text-[#3B5670]">
+            מקלידים את מספר הטלפון שאיתו הזמנתם, וקישור למעקב נשלח למייל שבהזמנה.
+          </p>
+        </div>
+      </div>
+    </main>
+  )
+}
 
 /** קישוט השער — צורה גיאומטרית פשוטה, לא אייקון גנרי. */
 /**

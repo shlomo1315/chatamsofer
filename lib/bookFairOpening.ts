@@ -40,8 +40,25 @@ export interface OpeningResult {
  * 🔴 אידמפוטנטי: העדכון מותנה ב-value='false', ולכן ריצה כפולה
  * (חפיפת פריסה) לא תפתח פעמיים ולא תשלח שני מיילים.
  */
+/**
+ * 🔴 "היריד נסגר לשנה זו" (07.10).
+ *
+ * ⚠️ בלעדיו אי אפשר לסגור את היריד: מועד הפתיחה כבר עבר, ולכן כל
+ * book_fair_open='false' נפתח מחדש תוך שניות. ב-07.10 09:22 בדיוק זה
+ * קרה — מישהו סגר, והמתזמן פתח מיד ("נפתח אוטומטית"). הדגל הזה גובר
+ * על הכול: האתר מציג "נסגר לשנה זו", הטלפון אומר את זה, והמתזמן לא נוגע.
+ */
+export const SEASON_CLOSED_KEY = 'book_fair_season_closed'
+
 export async function checkAndOpenBookFair(db: SupabaseClient): Promise<OpeningResult> {
   const out: OpeningResult = { opened: false, mailed: 0, failed: 0 }
+
+  // ── העונה נסגרה — לא פותחים, גם אם מועד הפתיחה עבר ──
+  const { data: season } = await db.from('app_settings')
+    .select('value').eq('key', SEASON_CLOSED_KEY).maybeSingle()
+  if (String((season as { value?: string } | null)?.value ?? '') === 'true') {
+    return { ...out, reason: 'העונה נסגרה' }
+  }
 
   // ── האם כבר פתוח ──
   const { data: gate } = await db.from('app_settings')
