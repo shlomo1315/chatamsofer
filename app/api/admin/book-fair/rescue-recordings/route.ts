@@ -1,233 +1,179 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
-import { downloadFileFromYemot, yemotToken, type YemotScope } from '@/lib/yemot'
+import { downloadFileFromYemot } from '@/lib/yemot'
+import { listYemotFolder, timestampOf } from '@/lib/bookFairInquiryAudio'
+import { transcribeHebrew } from '@/lib/elevenStt'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 🔴 חילוץ רטרואקטיבי של הקלטות מתקשרים מתיקיית ApiVoice בימות.
+// שחזור הקלטות שם/כתובת בהזמנות הטלפוניות + תמלול (בקשת המשתמש 08.10).
 //
-// ההקלטות *קיימות* — הן פשוט לא נמצאו, כי הערך שימות מחזירה ב-bf_addr
-// ("30/9.wav") אינו נתיב קובץ אלא <שניות>/<שלוחה>. השם האמיתי נבנה
-// מהמטא-דאטה של השיחה:
+// 🔴 23 הזמנות הציגו "ההקלטה לא נמצאה": הגיבוי בזמן השיחה חיפש בסל המיחזור
+// של ימות רק בדף הראשון (1,000 מתוך 1,543 קבצים), וההזמנות שהקבצים שלהן
+// נפלו מעבר — נשארו בלי עותק. ועוד ~85 הקלטות עם עותק אבל בלי תמלול.
 //
-//   DID-<מספר המערכת>-Phone-<טלפון המתקשר>-Folder-<שלוחה>-in.wav-<חותמת>
+// כללי ההתאמה (נבדקו מול 417 עותקים ידועים לפני ההרצה):
+//   · שם — הקובץ האחרון בשיחה (94%).
+//   · כתובת — רק כשבשיחה בדיוק שני קבצים. אחרת אין כלל אמין (הטוב
+//     ביותר 78%), וכתובת שגויה פירושה משלוח למקום הלא נכון — ולכן כל
+//     הקלטות השיחה מצורפות כ"הקלטה נוספת" עם תמלול, והצוות בוחר.
 //
-// ⚠️ חותמת הזמן אינה שמורה אצלנו, ולכן אי אפשר לבנות את השם מראש.
-// במקום זאת התיקייה *נסרקת*, וכל קובץ מותאם להזמנה לפי טלפון המתקשר
-// וקרבה בזמן.
+// ⚠️ רץ בשרת ולא בסקריפט מקומי: NetFree חוסם הורדת שמע מ-Supabase.
+// ⚠️ במנות ועם תקציב זמן — מריצים שוב עד ש-remaining=0. בטוח להרצה חוזרת.
 //
-// ⚠️ ברירת המחדל היא תצוגה בלבד. ?save=1 שומר בפועל.
+//   GET ?apply=1  ← ביצוע · בלי apply ← תצוגה בלבד
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
-const API = 'https://www.call2all.co.il/ym/api'
+const BUDGET_MS = 200_000
+const TRASH = ['ivr2:/Trash/ApiRecord', 'ivr2:/Trash/ApiVoice'] as const
+const WINDOW_BEFORE = 20 * 60
+const WINDOW_AFTER = 2 * 60
 
-type YemotFile = { name?: string; path?: string; mtime?: string }
-
-/** קבצי ApiVoice בחשבון נתון. */
-/**
- * 🔴 ApiVoice יושבת *בתוך* Trash, לא בשורש.
- *
- * ⚠️ הצילום מממשק ימות הראה את נתיב הניווט "ApiVoice ‹ Trash ‹
- * שלוחה ראשית" — כלומר ימות מעבירה הקלטות API לסל המיחזור. סריקת
- * ivr2:/ApiVoice לבדה החזירה 0 קבצים, בעוד הקבצים עצמם קיימים
- * ונראים בממשק.
- *
- * ⚠️ כל המועמדים נסרקים ומאוחדים: המבנה עשוי להשתנות בין חשבונות,
- * ועדיף לסרוק חמישה נתיבים מאשר לנחש אחד.
- */
-// 🔴 שתי התיקיות האלה אומתו בסריקת העץ (yemot-tree):
-//   Trash/ApiRecord — 119 קבצים, 14.1MB
-//   Trash/ApiVoice  — 16 קבצים, 11.5MB
-//
-// ⚠️ שתיהן תחת Trash: ימות מעבירה הקלטות API לסל המיחזור, ולכן
-// עשרה נתיבים שניחשתי קודם החזירו 0.
-//
-// ⚠️ הסדר חשוב: ApiRecord ראשון — שם רוב ההקלטות.
-const VOICE_DIRS = [
-  'ivr2:/Trash/ApiRecord',
-  'ivr2:/Trash/ApiVoice',
-  // ⚠️ נשמרים כנפילה אחורה: ימות עשויה להעביר תיקייה בין מיקומים.
-  'ivr2:/ApiRecord',
-  'ivr2:/ApiVoice',
-]
-
-async function listVoice(scope: YemotScope): Promise<YemotFile[]> {
-  const token = yemotToken(scope)
-  if (!token) return []
-
-  const out: YemotFile[] = []
-  for (const dir of VOICE_DIRS) {
-    try {
-      const res = await fetch(
-        `${API}/GetIVR2Dir?token=${encodeURIComponent(token)}&path=${encodeURIComponent(dir)}`,
-        { cache: 'no-store' },
-      )
-      const j = await res.json().catch(() => null) as { files?: YemotFile[] } | null
-      for (const f of j?.files ?? []) {
-        // ⚠️ הנתיב נשמר על הקובץ: ההורדה בהמשך חייבת לדעת מאיזו
-        // תיקייה הוא בא, ולא להניח ApiVoice.
-        out.push({ ...f, path: `${dir}/${String(f.name ?? '')}` })
-      }
-    } catch { /* תיקייה שאינה קיימת — ממשיכים לבאה */ }
-  }
-  return out
+type Rec = {
+  id: string; order_id: string; kind: string; storage_path: string | null; transcript: string | null
+  order: { order_number: string; created_at: string; customer_phone: string | null } |
+         { order_number: string; created_at: string; customer_phone: string | null }[]
 }
 
-/**
- * פירוק שם קובץ ApiVoice.
- *
- * ⚠️ ה-wav יושב *באמצע* השם ("...-in.wav-1791146153") ולא בסופו —
- * חיתוך סיומת רגיל היה הורס אותו.
- */
-function parseVoiceName(name: string): { phone: string; folder: string; ts: number } | null {
-  // ── ApiVoice ──
-  // 🔴 החותמת בתחילת השם, לא בסופו:
-  //   "1791146389-DID-093130924-Phone-0548495636-Folder-9-in.wav"
-  //
-  // ⚠️ ה-regex הקודם חיפש "...-in.wav-<חותמת>" לפי הסדר שראיתי
-  // בצילום המסך של הממשק — שם ימות מציגה את השם הפוך. לכן אף קובץ
-  // לא פוענח, גם כשהתיקייה הנכונה נסרקה.
-  const v = name.match(/^(\d{9,})-DID-\d+-Phone-(\d+)-Folder-([^-]+)-in\.wav/i)
-  if (v) return { phone: v[2], folder: v[3], ts: Number(v[1]) }
-
-  // ── ApiRecord ──
-  // "Phone-0583273227-id---1791144139.wav" — החותמת בסוף, אין שלוחה.
-  const r = name.match(/Phone-(\d+)-id-*-(\d{9,})\.wav/i)
-  if (r) return { phone: r[1], folder: '', ts: Number(r[2]) }
-
-  // ⚠️ נפילה אחורה: כל שם שמכיל טלפון וחותמת עשרונית, בכל סדר.
-  // המבנה של ימות השתנה כבר פעמיים הלילה.
-  const phone = name.match(/Phone-(\d{7,})/i)
-  const ts = name.match(/\b(\d{10})\b/)
-  if (phone && ts) return { phone: phone[1], folder: '', ts: Number(ts[1]) }
-
-  return null
-}
-
-/** נרמול טלפון להשוואה — ימות מחזירה בלי אפס מוביל לעיתים. */
-function phoneKey(p: string): string {
-  const d = String(p ?? '').replace(/\D/g, '').replace(/^972/, '')
-  return d.startsWith('0') ? d.slice(1) : d
-}
+const phoneKey = (p: string | null | undefined) =>
+  String(p ?? '').replace(/\D/g, '').replace(/^972/, '').replace(/^0/, '')
+const one = <T,>(v: T | T[]): T => (Array.isArray(v) ? v[0] : v)
 
 export async function GET(request: NextRequest) {
   if (!(await requirePermission('book_fair', 'edit'))) return forbidden()
-
   const db = getServiceClient()
   if (!db) return serverMisconfigured()
 
-  const save = request.nextUrl.searchParams.get('save') === '1'
-  const scopes: YemotScope[] = ['bookFair', 'default']
+  const apply = request.nextUrl.searchParams.get('apply') === '1'
+  const started = Date.now()
+  const outOfTime = () => Date.now() - started > BUDGET_MS
+  const log: string[] = []
+  const r = { name_rescued: 0, addr_rescued: 0, addr_for_staff: 0, extra_recordings: 0, not_found: 0, transcribed: 0 }
 
-  // ── 1. כל קבצי ApiVoice ──
-  const pool: { scope: YemotScope; name: string; path: string; phone: string; ts: number }[] = []
-  for (const scope of scopes) {
-    for (const f of await listVoice(scope)) {
-      const nm = String(f.name ?? '')
-      const meta = parseVoiceName(nm)
-      const path = String(f.path ?? `ivr2:/ApiVoice/${nm}`)
-      if (meta) {
-        pool.push({ scope, name: nm, path, phone: phoneKey(meta.phone), ts: meta.ts })
-        continue
-      }
-      // 🔴 שם שאינו בפורמט DID-...-Phone-... עדיין נאסף.
-      //
-      // ⚠️ בתיקיית Record השמות הם "9.wav" בלבד — בלי טלפון ובלי
-      // חותמת. ההתאמה שם היא לפי mtime מול שעת ההזמנה, ולכן הקובץ
-      // נרשם עם ts מה-mtime ובלי טלפון (phone ריק = מתאים לכולם).
-      // ⚠️ ימות מחזירה "04/10/2026 23:38" — פורמט יום/חודש/שנה
-      // ש-Date.parse מפרש הפוך. ההיפוך ל-ISO נעשה כאן.
-      const mt = f.mtime
-        ? Date.parse(String(f.mtime).replace(
-            /^(\d{2})\/(\d{2})\/(\d{4})/, '$3-$2-$1'))
-        : NaN
-      if (Number.isFinite(mt)) {
-        pool.push({ scope, name: nm, path, phone: '', ts: Math.floor(mt / 1000) })
+  const { data, error } = await db.from('book_fair_recordings')
+    .select('id, order_id, kind, storage_path, transcript, order:book_fair_orders!inner(order_number, created_at, customer_phone, status, channel)')
+    .eq('order.channel', 'phone')
+    .not('order.status', 'in', '(cancelled,pending_payment,failed)')
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  const recs = (data ?? []) as unknown as Rec[]
+
+  // ── 1. הקלטות חסרות ──
+  const byOrder = new Map<string, Rec[]>()
+  for (const x of recs) {
+    if (x.storage_path || (x.kind !== 'name' && x.kind !== 'address')) continue
+    const list = byOrder.get(x.order_id) ?? []
+    list.push(x)
+    byOrder.set(x.order_id, list)
+  }
+
+  // ⚠️ הזמנה שכבר קיבלה "הקלטות נוספות" מהשחזור — לא מצרפים שוב.
+  const { data: prevNotes } = await db.from('book_fair_recordings')
+    .select('order_id').eq('kind', 'note').like('provider_path', 'ivr2:/Trash/%')
+  const alreadyNoted = new Set((prevNotes ?? []).map(n => n.order_id as string))
+
+  const files: { path: string; ts: number }[] = []
+  if (byOrder.size) {
+    for (const folder of TRASH) {
+      for (const name of await listYemotFolder(folder)) {
+        const ts = timestampOf(name)
+        if (ts !== null) files.push({ path: `${folder}/${name}`, ts })
       }
     }
   }
 
-  // ── 2. ההקלטות שחסר להן קובץ, עם הטלפון והזמן של ההזמנה ──
-  const { data: missing } = await db.from('book_fair_recordings')
-    .select('id, kind, created_at, order:book_fair_orders(customer_phone, order_number)')
-    .is('storage_path', null)
-    .order('created_at', { ascending: false })
-    .limit(60)
-
-  const report: string[] = []
-  let saved = 0
-
-  for (const rec of missing ?? []) {
-    // ⚠️ Supabase מחזיר join של רבים-לאחד כאובייקט *או* כמערך.
-    const ord = (Array.isArray(rec.order) ? rec.order[0] : rec.order) as
-      { customer_phone?: string; order_number?: string } | null
-    const phone = phoneKey(String(ord?.customer_phone ?? ''))
-    const label = `${ord?.order_number ?? '?'} ${rec.kind}`
-    // ⚠️ אין טלפון אינו חוסם: קובץ מתיקיית Record מותאם לפי זמן
-    // בלבד, ולכן הוא עדיין יכול להימצא.
-    if (!phone) report.push(`${label} — אין טלפון, התאמה לפי זמן בלבד`)
-
-    const recSec = Math.floor(new Date(rec.created_at as string).getTime() / 1000)
-
-    // 🔴 התאמה לפי טלפון + קרבה בזמן: באותה שיחה שתי הקלטות (שם
-    // וכתובת) בהפרש שניות, ולכן המועמד הקרוב ביותר הוא הנכון.
-    //
-    // ⚠️ חלון של 20 דקות בלבד: אותו מתקשר עשוי להזמין שוב מאוחר יותר,
-    // ושיוך הקלטה של שיחה אחרת גרוע מהקלטה חסרה.
-    // ⚠️ קובץ בלי טלפון בשם (תיקיית Record) מותאם לפי זמן בלבד,
-    // ולכן בחלון צר הרבה יותר — דקתיים — כדי לא לשייך שיחה אחרת.
-    const near = pool
-      .filter(f => f.phone
-        ? (f.phone === phone && Math.abs(f.ts - recSec) < 1200)
-        : Math.abs(f.ts - recSec) < 120)
-      .sort((a, b) => Math.abs(a.ts - recSec) - Math.abs(b.ts - recSec))
-
-    // ⚠️ 'address' מוקלטת לפני 'name' באותה שיחה — המוקדם הוא הכתובת.
-    const sorted = [...near].sort((a, b) => a.ts - b.ts)
-    const pick = rec.kind === 'address' ? sorted[0] : (sorted[1] ?? sorted[0])
-    if (!pick) { report.push(`${label} — לא נמצאה הקלטה תואמת (טלפון ${phone})`); continue }
-
-    if (!save) {
-      report.push(`${label} ← ${pick.name} (תצוגה בלבד)`)
+  let pendingOrders = 0
+  for (const [orderId, missing] of byOrder) {
+    // ⚠️ כבר טופלה: חסרה רק כתובת לא-ודאית, והקלטות השיחה כבר צורפו —
+    // אין מה להוריד ולתמלל שוב בכל הרצה.
+    if (alreadyNoted.has(orderId) && missing.every(m => m.kind === 'address')) {
+      r.addr_for_staff++
       continue
     }
+    if (outOfTime()) { pendingOrders++; continue }
+    const o = one(missing[0].order)
+    const t = Math.floor(new Date(o.created_at).getTime() / 1000)
+    const ph = phoneKey(o.customer_phone)
+    const cands = ph.length >= 7
+      ? files.filter(f => f.path.includes(ph) && f.ts >= t - WINDOW_BEFORE && f.ts <= t + WINDOW_AFTER)
+          .sort((a, b) => a.ts - b.ts)
+      : []
+    if (!cands.length) { r.not_found += missing.length; log.push(`${o.order_number} — לא נמצאו קבצים`); continue }
+    if (!apply) { log.push(`${o.order_number} — ${cands.length} הקלטות בשיחה · חסרות: ${missing.map(m => m.kind).join('+')}`); continue }
 
-    const f = await downloadFileFromYemot(pick.path, pick.scope)
-    if (!f.ok || !f.data) { report.push(`${label} — ההורדה נכשלה: ${f.error ?? '?'}`); continue }
+    const got: { path: string; storage: string; text: string | null }[] = []
+    for (const c of cands) {
+      let buf: ArrayBuffer | undefined
+      for (const scope of ['bookFair', 'default'] as const) {
+        const f = await downloadFileFromYemot(c.path, scope)
+        if (f.ok && f.data && f.data.byteLength > 1000) { buf = f.data; break }
+      }
+      if (!buf) continue
+      const storage = `book-fair/rescued/${orderId}/${c.ts}.wav`
+      const up = await db.storage.from('documents').upload(storage, buf, { contentType: 'audio/wav', upsert: true })
+      if (up.error) continue
+      got.push({ path: c.path, storage, text: await transcribeHebrew(buf, { timeoutMs: 30_000 }) })
+    }
+    if (!got.length) { r.not_found += missing.length; log.push(`${o.order_number} — ההורדה מימות נכשלה`); continue }
 
-    const key = `book-fair/rescued/${rec.id}.wav`
-    const up = await db.storage.from('documents')
-      .upload(key, f.data, { contentType: 'audio/wav', upsert: true })
-    if (up.error) { report.push(`${label} — העלאה נכשלה: ${up.error.message}`); continue }
-
-    await db.from('book_fair_recordings')
-      .update({ storage_path: key, provider_path: pick.path })
-      .eq('id', rec.id)
-    report.push(`${label} ← ${pick.name} ✅ שוחזר (${f.data.byteLength} בתים)`)
-    saved++
+    const used = new Set<string>()
+    const nameRec = missing.find(m => m.kind === 'name')
+    const addrRec = missing.find(m => m.kind === 'address')
+    if (nameRec) {
+      const n = got[got.length - 1]
+      used.add(n.path)
+      await db.from('book_fair_recordings').update({
+        storage_path: n.storage, provider_path: n.path, transcript: n.text, transcript_source: 'scribe',
+      }).eq('id', nameRec.id)
+      r.name_rescued++
+    }
+    if (addrRec) {
+      if (got.length === 2) {
+        const a = got[0]
+        used.add(a.path)
+        await db.from('book_fair_recordings').update({
+          storage_path: a.storage, provider_path: a.path, transcript: a.text, transcript_source: 'scribe',
+        }).eq('id', addrRec.id)
+        r.addr_rescued++
+      } else {
+        r.addr_for_staff++
+      }
+    }
+    if (!alreadyNoted.has(orderId)) {
+      for (const g of got) {
+        if (used.has(g.path)) continue
+        await db.from('book_fair_recordings').insert({
+          order_id: orderId, kind: 'note', provider_path: g.path, storage_path: g.storage,
+          transcript: g.text, transcript_source: 'scribe',
+        })
+        r.extra_recordings++
+      }
+    }
+    log.push(`${o.order_number} — שוחזר (${got.length} הקלטות בשיחה)`)
   }
 
-  // ⚠️ מה נסרק ומה נמצא בכל תיקייה — בלי זה "0 קבצים" אינו מבדיל
-  // בין תיקייה ריקה, תיקייה שאינה קיימת, ושם קובץ שלא פוענח.
-  const dirCounts: Record<string, number> = {}
-  for (const scope of scopes) {
-    for (const dir of VOICE_DIRS) {
-      dirCounts[`${scope} ${dir}`] =
-        pool.filter(f => f.scope === scope && f.path.startsWith(dir)).length
-    }
+  // ── 2. תמלול להקלטות שיש להן עותק ואין תמלול ──
+  let remainingStt = 0
+  for (const x of recs) {
+    if (!x.storage_path || (x.transcript ?? '').trim()) continue
+    if (!apply || outOfTime()) { remainingStt++; continue }
+    const { data: blob } = await db.storage.from('documents').download(x.storage_path)
+    if (!blob) continue
+    const text = await transcribeHebrew(await blob.arrayBuffer(), { timeoutMs: 30_000 })
+    if (!text) continue
+    await db.from('book_fair_recordings').update({ transcript: text, transcript_source: 'scribe' }).eq('id', x.id)
+    r.transcribed++
   }
 
   return NextResponse.json({
-    voice_files_found: pool.length,
-    scanned: dirCounts,
-    // ⚠️ דגימה של שמות אמיתיים: אם הפענוח נכשל, היא מראה מיד למה.
-    sample: pool.slice(0, 3).map(f => f.name),
-    missing_recordings: (missing ?? []).length,
-    saved,
-    report,
-    hint: save ? 'ההקלטות שנמצאו שוחזרו' : 'הוסיפו ?save=1 לכתובת כדי לשחזר בפועל',
+    mode: apply ? 'בוצע' : 'תצוגה בלבד — הוסיפו ?apply=1 לביצוע',
+    ...r,
+    stt_remaining: remainingStt,
+    orders_remaining: pendingOrders,
+    done: apply && pendingOrders === 0 && remainingStt === 0,
+    hint: outOfTime() ? 'נגמר זמן המנה — רעננו את הדף להמשך' : undefined,
+    log,
   }, { headers: { 'Cache-Control': 'no-store' } })
 }
