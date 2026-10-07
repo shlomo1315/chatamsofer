@@ -14,6 +14,8 @@ import ImportPanel from './ImportPanel'
 import BarcodeDialog from './BarcodeDialog'
 import StockMover from './StockMover'
 import BookOrdersDialog from './BookOrdersDialog'
+import ProblemBookToggle from '../ProblemBookToggle'
+import type { ProblemBooks } from '@/lib/bookFairProblemBooks'
 
 type ColKey = 'sku' | 'title' | 'author' | 'volumes' | 'price' | 'stock_orig' | 'sold' | 'sold_fair' | 'sold_phone' | 'sold_web' | 'stock' | 'phone_code' | 'active'
 
@@ -60,12 +62,14 @@ function columnsOf(sold: Record<string, number>, soldBy: SoldBy): ColDef<ColKey,
 
 type Tab = 'list' | 'import'
 
-export default function BooksClient({ books, sold = {}, soldBy = {} }: {
+export default function BooksClient({ books, sold = {}, soldBy = {}, problems = {} }: {
   books: BookFairBook[]
   /** כמה עותקים נמכרו מכל ספר, לפי מזהה. */
   sold?: Record<string, number>
   /** אותו "נמכר", מפוצל ליריד/טלפון/אתר. */
   soldBy?: SoldBy
+  /** ספרים שסומנו בעייתיים במלאי — ראו lib/bookFairProblemBooks. */
+  problems?: ProblemBooks
 }) {
   const router = useRouter()
   const { confirm, confirmDialog } = useConfirm()
@@ -267,11 +271,13 @@ export default function BooksClient({ books, sold = {}, soldBy = {} }: {
                   <tr key={b.id} className={`text-sm hover:bg-slate-50 ${b.is_active ? '' : 'opacity-50'}`}>
                     {tc.shown.map(col => (
                       <td key={col.key} className={`px-3 py-2.5 ${tc.cellClass(col)}`}>
-                        {renderCell(col.key, b, sold, setOrdersOf, soldBy)}
+                        {renderCell(col.key, b, sold, setOrdersOf, soldBy, problems)}
                       </td>
                     ))}
                     <td className="px-3 py-2.5 text-left">
                       <div className="flex items-center justify-end gap-1">
+                        {/* 🔴 סימון ספר בעייתי — מסך ההזמנות מסנן את כל ההזמנות שהוא בתוכן. */}
+                        <ProblemBookToggle bookId={b.id} problem={b.id in problems} note={problems[b.id]?.note} compact />
                         {/* ⚠️ "העברת מלאי בין ערוצים" הוסרה: מאז איחוד
                             המלאי אין בין מה למה להעביר, והכפתור גזל
                             שליש מרוחב עמודת הפעולות על פעולה מתה.
@@ -367,12 +373,22 @@ function renderCell(
   key: ColKey, b: BookFairBook, sold: Record<string, number>,
   openOrders: (b: BookFairBook) => void,
   soldBy: SoldBy = {},
+  problems: ProblemBooks = {},
 ) {
   switch (key) {
     case 'sku':
       return <span className="font-mono text-xs text-slate-600">{b.sku}</span>
     case 'title':
-      return <span className="block whitespace-normal break-words font-medium text-slate-900">{b.title}</span>
+      return (
+        <span className="block whitespace-normal break-words font-medium text-slate-900">
+          {b.title}
+          {b.id in problems && (
+            <span title={problems[b.id].note ?? undefined} className="mr-1.5 inline-block rounded bg-red-50 px-1.5 py-0.5 align-middle text-[11px] font-semibold text-red-700">
+              בעייתי במלאי{problems[b.id].note ? ` · ${problems[b.id].note}` : ''}
+            </span>
+          )}
+        </span>
+      )
     case 'author':
       return <span className="block whitespace-normal break-words text-slate-500">{b.author || '—'}</span>
     case 'volumes':

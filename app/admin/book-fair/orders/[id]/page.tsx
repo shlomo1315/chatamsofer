@@ -13,6 +13,9 @@ import {
 } from '@/types/bookFair'
 import OrderPanel from './OrderPanel'
 import CustomerCard from './CustomerCard'
+import OrderNav from './OrderNav'
+import ProblemBookToggle from '../../ProblemBookToggle'
+import { PROBLEM_BOOKS_KEY, parseProblemBooks } from '@/lib/bookFairProblemBooks'
 
 // כרטיס הזמנה בודדת.
 
@@ -53,15 +56,31 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
 
   const o = order as BookFairOrder
 
+  // ── שכנות כרונולוגיות + ספרים בעייתיים ──
+  // ⚠️ השכנות הן גיבוי בלבד ל"הבאה/הקודמת": כשנכנסים מהטבלה, הסדר הוא
+  // של הטבלה (OrderNav). מדלגים על מבוטלות ועל ממתינות לתשלום — כמו "הכל".
+  const live = '("cancelled","pending_payment")'
+  const [{ data: newer }, { data: older }, { data: probRow }] = await Promise.all([
+    supabase.from('book_fair_orders').select('id').not('status', 'in', live)
+      .gt('created_at', o.created_at).order('created_at', { ascending: true }).limit(1),
+    supabase.from('book_fair_orders').select('id').not('status', 'in', live)
+      .lt('created_at', o.created_at).order('created_at', { ascending: false }).limit(1),
+    supabase.from('app_settings').select('value').eq('key', PROBLEM_BOOKS_KEY).maybeSingle(),
+  ])
+  const problems = parseProblemBooks(probRow?.value)
+
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <Link
-          href="/admin/book-fair/orders"
-          className="mb-3 inline-flex items-center gap-1 text-sm text-slate-500 transition hover:text-slate-800"
-        >
-          <ArrowRight size={15} /> חזרה להזמנות
-        </Link>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <Link
+            href="/admin/book-fair/orders"
+            className="inline-flex items-center gap-1 text-sm text-slate-500 transition hover:text-slate-800"
+          >
+            <ArrowRight size={15} /> חזרה להזמנות
+          </Link>
+          <OrderNav id={o.id} fallbackPrev={newer?.[0]?.id ?? null} fallbackNext={older?.[0]?.id ?? null} />
+        </div>
         <PageHeader
           title={`הזמנה ${o.order_number}`}
           subtitle={`${BOOK_FAIR_CHANNEL_LABELS[o.channel]} · ${ilDateTime(o.created_at)}`}
@@ -97,8 +116,19 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                   <tr key={it.id}>
                     <td className="py-2.5">
                       {it.sku_snapshot && <div className="font-mono text-xs text-slate-400">{it.sku_snapshot}</div>}
-                      <div className="truncate font-medium text-slate-900" title={it.title_snapshot}>
-                        {it.title_snapshot}
+                      <div className="flex min-w-0 items-center gap-2">
+                        <div className="truncate font-medium text-slate-900" title={it.title_snapshot}>
+                          {it.title_snapshot}
+                        </div>
+                        {/* ⚠️ ספר שנמחק מהקטלוג (book_id ריק) אינו ניתן לסימון. */}
+                        {it.book_id && (
+                          <ProblemBookToggle
+                            bookId={it.book_id}
+                            problem={it.book_id in problems}
+                            note={problems[it.book_id]?.note}
+                            compact={!(it.book_id in problems)}
+                          />
+                        )}
                       </div>
                       {it.volumes_snapshot > 1 && (
                         <div className="text-xs text-slate-500">{it.volumes_snapshot} כרכים</div>

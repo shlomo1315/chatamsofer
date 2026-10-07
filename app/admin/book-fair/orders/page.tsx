@@ -3,7 +3,8 @@ import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import PageHeader from '@/components/ui/PageHeader'
 import type { BookFairOrder } from '@/types/bookFair'
-import OrdersClient from './OrdersClient'
+import { PROBLEM_BOOKS_KEY, parseProblemBooks } from '@/lib/bookFairProblemBooks'
+import OrdersClient, { type ProblemBookInfo } from './OrdersClient'
 
 // מסך ההזמנות — הלב של הניהול היומיומי ביריד.
 //
@@ -59,10 +60,17 @@ async function getOrders(): Promise<BookFairOrder[]> {
   )
 }
 
-/** ספירת הפריטים לכל הזמנה — לעמודה "ספרים". */
-async function getItemCounts(orderIds: string[]): Promise<Map<string, number>> {
-  const out = new Map<string, number>()
-  if (!orderIds.length || !isSupabaseConfigured()) return out
+/**
+ * ספירת הפריטים לכל הזמנה (לעמודה "ספרים") ומזהי הספרים שבה (לסינון
+ * "ספר בעייתי").
+ */
+async function getItems(orderIds: string[]): Promise<{
+  counts: Record<string, number>
+  books: Record<string, string[]>
+}> {
+  const counts: Record<string, number> = {}
+  const books: Record<string, string[]> = {}
+  if (!orderIds.length || !isSupabaseConfigured()) return { counts, books }
   const supabase = await createClient()
 
   // ⚠️ שליפה במנות: רשימת in ארוכה מדי נחתכת, וספירה חלקית הייתה
@@ -71,26 +79,52 @@ async function getItemCounts(orderIds: string[]): Promise<Map<string, number>> {
     const chunk = orderIds.slice(i, i + 200)
     const { data } = await supabase
       .from('book_fair_order_items')
-      .select('order_id, quantity')
+      .select('order_id, book_id, quantity')
       .in('order_id', chunk)
     for (const row of data ?? []) {
-      out.set(row.order_id, (out.get(row.order_id) ?? 0) + row.quantity)
+      counts[row.order_id] = (counts[row.order_id] ?? 0) + row.quantity
+      if (row.book_id) (books[row.order_id] ??= []).push(row.book_id)
     }
   }
-  return out
+  return { counts, books }
+}
+
+/**
+ * הספרים שסומנו בעייתיים, עם שמם מהקטלוג.
+ *
+ * ⚠️ ספר שנמחק מהקטלוג נשאר עם "ספר שנמחק" ולא נעלם: הסימון עדיין
+ * תופס את ההזמנות שלו, ושורה בלי שם הייתה נראית כתקלה.
+ */
+async function getProblemBooks(): Promise<ProblemBookInfo[]> {
+  if (!isSupabaseConfigured()) return []
+  const supabase = await createClient()
+  const { data } = await supabase.from('app_settings').select('value').eq('key', PROBLEM_BOOKS_KEY).maybeSingle()
+  const marks = parseProblemBooks(data?.value)
+  const ids = Object.keys(marks)
+  if (!ids.length) return []
+  const { data: books } = await supabase.from('book_fair_books').select('id, sku, title').in('id', ids)
+  const byId = new Map((books ?? []).map(b => [b.id as string, b as { sku: string | null; title: string }]))
+  return ids.map(id => ({
+    id,
+    sku: byId.get(id)?.sku ?? null,
+    title: byId.get(id)?.title ?? 'ספר שנמחק מהקטלוג',
+    note: marks[id].note,
+  }))
 }
 
 export default async function BookFairOrdersPage() {
   await guardPage('book_fair')
-  const orders = await getOrders()
-  const counts = await getItemCounts(orders.map(o => o.id))
+  const [orders, problemBooks] = await Promise.all([getOrders(), getProblemBooks()])
+  const { counts, books } = await getItems(orders.map(o => o.id))
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="הזמנות" subtitle="הזמנות מהאתר ומהמערכת הטלפונית" />
       <OrdersClient
         orders={orders}
-        itemCounts={Object.fromEntries(counts)}
+        itemCounts={counts}
+        orderBooks={books}
+        problemBooks={problemBooks}
       />
     </div>
   )

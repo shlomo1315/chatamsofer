@@ -4,6 +4,7 @@ import { fetchAllRows } from '@/lib/fetchAllRows'
 import PageHeader from '@/components/ui/PageHeader'
 import type { BookFairBook } from '@/types/bookFair'
 import BooksClient from './BooksClient'
+import { PROBLEM_BOOKS_KEY, parseProblemBooks, type ProblemBooks } from '@/lib/bookFairProblemBooks'
 
 // קטלוג יריד הספרים.
 //
@@ -74,14 +75,22 @@ async function getSold(): Promise<{ sold: Record<string, number>; byChannel: Sol
   return { sold, byChannel }
 }
 
+/** ספרים שסומנו בעייתיים במלאי. */
+async function getProblems(): Promise<ProblemBooks> {
+  if (!isSupabaseConfigured()) return {}
+  const supabase = await createClient()
+  const { data } = await supabase.from('app_settings').select('value').eq('key', PROBLEM_BOOKS_KEY).maybeSingle()
+  return parseProblemBooks(data?.value)
+}
+
 export default async function BookFairBooksPage() {
   await guardPage('book_fair')
-  const [books, { sold, byChannel }] = await Promise.all([getBooks(), getSold()])
+  const [books, { sold, byChannel }, problems] = await Promise.all([getBooks(), getSold(), getProblems()])
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="קטלוג הספרים" subtitle="ספרים, מחירים ומלאי לשני הערוצים" />
-      <BooksClient books={books} sold={sold} soldBy={byChannel} />
+      <BooksClient books={books} sold={sold} soldBy={byChannel} problems={problems} />
     </div>
   )
 }

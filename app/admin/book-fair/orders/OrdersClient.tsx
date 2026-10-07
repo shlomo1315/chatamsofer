@@ -1,20 +1,80 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { ilDate, ilTime } from '@/lib/israelTime'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Search, Globe, Phone, AlertTriangle, Clock, CheckCircle2, Package, Truck, Mic, XCircle, Store, Undo2, Banknote, CreditCard } from 'lucide-react'
+import { Search, Globe, Phone, AlertTriangle, Clock, CheckCircle2, Package, Truck, Mic, XCircle, Store, Undo2, Banknote, CreditCard, Printer, MapPinned, UserX, Flag, X } from 'lucide-react'
 import type { BookFairOrder, BookFairOrderStatus } from '@/types/bookFair'
 import {
   BOOK_FAIR_STATUS_LABELS, BOOK_FAIR_STATUS_COLORS,
-  BOOK_FAIR_CHANNEL_LABELS, BOOK_FAIR_DELIVERY_LABELS,
+  BOOK_FAIR_CHANNEL_LABELS, BOOK_FAIR_DELIVERY_LABELS, oneOf,
 } from '@/types/bookFair'
 import { fmtAgorot } from '@/lib/bookFairPricing'
 import { useTablePagination } from '@/lib/useTablePagination'
 import Pagination from '@/components/ui/Pagination'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
+import { saveNavList, stashPrintIds } from '@/lib/bookFairOrderHandoff'
+import { ordersWithProblemBooks } from '@/lib/bookFairProblemBooks'
 
-type ColKey = 'order_number' | 'customer' | 'phone' | 'channel' | 'items' | 'delivery' | 'total' | 'payment' | 'status' | 'created' | 'paid_at'
+type ColKey = 'order_number' | 'customer' | 'phone' | 'city' | 'channel' | 'items' | 'delivery' | 'verify' | 'total' | 'payment' | 'status' | 'created' | 'paid_at' | 'print'
+
+/** ספר שסומן "בעייתי במלאי" — ראו lib/bookFairProblemBooks. */
+export interface ProblemBookInfo {
+  id: string
+  sku: string | null
+  title: string
+  note: string | null
+}
+
+/** שם העיר להצגה — ריק באיסוף עצמי ובמכירת דוכן. */
+function cityOf(o: BookFairOrder): string | null {
+  return oneOf(o.city)?.name ?? null
+}
+
+/** השם אומת = נשמר בשדה. בטלפון הוא נשאר ריק עד שהמשרד מאשר את התמלול. */
+function nameVerified(o: BookFairOrder): boolean {
+  return !!o.customer_name?.trim()
+}
+
+function addressPending(o: BookFairOrder): boolean {
+  return o.delivery_method === 'shipping' && !o.address_confirmed
+}
+
+/**
+ * מצב אימות הפרטים (בקשת המשתמש 07.10): "על מי עוד צריך לעבוד".
+ *
+ * ⚠️ הערך הוא התווית המוצגת — המשתמש מסנן לפי מה שהוא רואה.
+ */
+function verifyLabel(o: BookFairOrder): string {
+  const n = !nameVerified(o), a = addressPending(o)
+  if (n && a) return 'שם וכתובת ממתינים'
+  if (n) return 'שם ממתין'
+  if (a) return 'כתובת ממתינה'
+  return 'אומת'
+}
+
+/** הזמנה שאינה צריכה טיפול בפרטים — לא שולמה, בוטלה או נכשלה. */
+function isLive(o: BookFairOrder): boolean {
+  return o.status !== 'cancelled' && o.status !== 'failed' && o.status !== 'pending_payment'
+}
+
+/**
+ * פתיחת מסך ההדפסה בלשונית חדשה.
+ *
+ * ⚠️ הזמנה בודדת ב-URL (אפשר לשתף/לרענן); רשימה דרך האחסון בדפדפן,
+ * כי מאות מזהים אינם נכנסים ב-URL.
+ */
+function openPrint(mode: 'notes' | 'addresses', ids: string[]) {
+  if (!ids.length) return
+  let qs: string
+  if (ids.length === 1) qs = `id=${ids[0]}`
+  else {
+    const k = stashPrintIds(ids)
+    if (!k) { alert('הדפדפן חוסם אחסון מקומי — לא ניתן להעביר את הרשימה להדפסה'); return }
+    qs = `k=${encodeURIComponent(k)}`
+  }
+  window.open(`/admin/book-fair/orders/print?mode=${mode}&${qs}`, '_blank')
+}
 
 /**
  * אמצעי התשלום כפי שמוצג ומסונן (בקשת המשתמש 05.10).
@@ -49,6 +109,10 @@ function columnsOf(counts: Record<string, number>): ColDef<ColKey, BookFairOrder
     // בפועל, ומיון לפיו לא היה אפשרי כשהוא נבלע בתוך השם.
     { key: 'phone', label: 'טלפון', def: true, headClassName: HEAD,
       value: o => o.customer_phone ?? null },
+    // ⚠️ filterable: רשימת הערים סגורה (טבלת book_fair_cities), ובה
+    // מסננים את תעודות המשלוח לפי אזור חלוקה.
+    { key: 'city', label: 'עיר', def: true, kind: 'enum', filterable: true, headClassName: HEAD,
+      value: o => cityOf(o) },
     { key: 'channel', label: 'ערוץ', def: true, kind: 'enum', filterable: true, headClassName: HEAD,
       // ⚠️ הערך הוא התווית המוצגת ולא הקוד: המשתמש מסנן לפי מה שהוא רואה
       value: o => BOOK_FAIR_CHANNEL_LABELS[o.channel] },
@@ -56,6 +120,8 @@ function columnsOf(counts: Record<string, number>): ColDef<ColKey, BookFairOrder
       value: o => counts[o.id] ?? 0 },
     { key: 'delivery', label: 'מסירה', def: true, kind: 'enum', filterable: true, headClassName: HEAD,
       value: o => BOOK_FAIR_DELIVERY_LABELS[o.delivery_method] },
+    { key: 'verify', label: 'אימות פרטים', def: true, kind: 'enum', filterable: true, headClassName: HEAD,
+      value: o => verifyLabel(o) },
     { key: 'total', label: 'סכום', def: true, kind: 'number', headClassName: HEAD,
       value: o => o.total_agorot },
     { key: 'payment', label: 'תשלום', def: true, kind: 'enum', filterable: true, headClassName: HEAD,
@@ -69,13 +135,19 @@ function columnsOf(counts: Record<string, number>): ColDef<ColKey, BookFairOrder
     // שמשווים מול הדוח של נדרים, ו-created_at אינו עונה על זה.
     { key: 'paid_at', label: 'שעת תשלום', def: true, kind: 'date', headClassName: HEAD,
       value: o => o.paid_at ?? null },
+    // 🔴 כפתור התעודה בטבלה ולא בתוך ההזמנה (בקשת המשתמש 07.10):
+    // מדפיסים תוך כדי מעבר על הרשימה, בלי להיכנס לכל הזמנה.
+    { key: 'print', label: 'תעודה', def: true, sortable: false, headClassName: HEAD, weight: 0.8 },
   ]
 }
 
 /** כרטיסי הסינון המהיר — מה שהצוות צריך לראות ביום עבודה. */
-const CARDS: { key: BookFairOrderStatus | 'all' | 'needs_address'; label: string; icon: typeof Clock; cls: string }[] = [
+const CARDS: { key: BookFairOrderStatus | 'all' | 'needs_address' | 'needs_name'; label: string; icon: typeof Clock; cls: string }[] = [
   { key: 'all',            label: 'הכל',              icon: Package,       cls: 'border-slate-200 text-slate-600' },
   { key: 'paid',           label: 'שולם — לליקוט',     icon: CheckCircle2,  cls: 'border-emerald-200 text-emerald-700' },
+  // 🔴 "על מי עוד צריך לעבוד" (בקשת המשתמש 07.10): הזמנות טלפוניות שהשם
+  // בהן עדיין רק בהקלטה ובתמלול ולא נשמר במשרד.
+  { key: 'needs_name',     label: 'ממתין לאימות שם',   icon: UserX,         cls: 'border-fuchsia-200 text-fuchsia-700' },
   { key: 'needs_address',  label: 'ממתין לאימות כתובת', icon: Mic,          cls: 'border-purple-200 text-purple-700' },
   { key: 'picking',        label: 'בליקוט',            icon: Package,       cls: 'border-sky-200 text-sky-700' },
   { key: 'shipped',        label: 'נשלח',              icon: Truck,         cls: 'border-violet-200 text-violet-700' },
@@ -107,8 +179,10 @@ function inCard(o: BookFairOrder, key: string): boolean {
     case 'all':
       return o.status !== 'cancelled' && o.status !== 'pending_payment'
     case 'needs_address':
-      return o.delivery_method === 'shipping' && !o.address_confirmed &&
-        o.status !== 'cancelled' && o.status !== 'failed' && o.status !== 'pending_payment'
+      return addressPending(o) && isLive(o)
+    // ⚠️ בלי pending_payment, כמו בכתובת: שיחה שלא הגיעה לתשלום אינה הזמנה.
+    case 'needs_name':
+      return !nameVerified(o) && isLive(o)
     case 'paid':
       return o.status === 'paid' && o.delivery_method === 'shipping'
     case 'delivered':
@@ -118,14 +192,43 @@ function inCard(o: BookFairOrder, key: string): boolean {
   }
 }
 
-export default function OrdersClient({ orders, itemCounts }: {
+export default function OrdersClient({ orders, itemCounts, orderBooks, problemBooks }: {
   orders: BookFairOrder[]
   itemCounts: Record<string, number>
+  /** הזמנה ← מזהי הספרים שבה. */
+  orderBooks: Record<string, string[]>
+  problemBooks: ProblemBookInfo[]
 }) {
   const router = useRouter()
   const [query, setQuery] = useState('')
   const [card, setCard] = useState<typeof CARDS[number]['key']>('all')
   const [purging, setPurging] = useState(false)
+  /** סינון לפי ספר בעייתי: מזהה ספר, '*' = כל הבעייתיים, null = בלי. */
+  const [problem, setProblem] = useState<string | null>(null)
+
+  // הזמנה ← הספרים הבעייתיים שבה.
+  const problemByOrder = useMemo(
+    () => ordersWithProblemBooks(orderBooks, problemBooks.map(b => b.id)),
+    [orderBooks, problemBooks],
+  )
+
+  // ⚠️ המונה בשבב סופר רק הזמנות חיות (כמו "הכל"): הזמנה שבוטלה אינה
+  // דורשת טיפול גם אם הספר הבעייתי בתוכה.
+  const problemCounts = useMemo(() => {
+    const c: Record<string, number> = { '*': 0 }
+    for (const o of orders) {
+      const hit = problemByOrder[o.id]
+      if (!hit || !inCard(o, 'all')) continue
+      c['*']++
+      for (const b of hit) c[b] = (c[b] ?? 0) + 1
+    }
+    return c
+  }, [orders, problemByOrder])
+
+  const titleOf = useMemo(
+    () => Object.fromEntries(problemBooks.map(b => [b.id, b.title])),
+    [problemBooks],
+  )
 
   const COLUMNS = useMemo(() => columnsOf(itemCounts), [itemCounts])
 
@@ -141,7 +244,14 @@ export default function OrdersClient({ orders, itemCounts }: {
     // ⚠️ המבוטלות וה"ממתינות לתשלום" מוסתרות מ"הכל" ונגישות רק
     // בכרטיס שלהן: שתיהן אינן הזמנות אלא ניסיונות שלא הושלמו,
     // ובערב הפתיחה הן היו רוב השורות והסתירו את מה שצריך טיפול.
-    const rows = orders.filter(o => inCard(o, card))
+    let rows = orders.filter(o => inCard(o, card))
+
+    if (problem) {
+      rows = rows.filter(o => {
+        const hit = problemByOrder[o.id]
+        return !!hit && (problem === '*' || hit.includes(problem))
+      })
+    }
 
     const q = query.trim().toLowerCase()
     if (!q) return rows
@@ -149,9 +259,10 @@ export default function OrdersClient({ orders, itemCounts }: {
       o.order_number.toLowerCase().includes(q) ||
       (o.customer_name ?? '').toLowerCase().includes(q) ||
       (o.customer_phone ?? '').includes(q) ||
-      (o.customer_email ?? '').toLowerCase().includes(q)
+      (o.customer_email ?? '').toLowerCase().includes(q) ||
+      (cityOf(o) ?? '').toLowerCase().includes(q)
     )
-  }, [orders, card, query])
+  }, [orders, card, query, problem, problemByOrder])
 
   // 🔴 הסדר חובה: useTableColumns קודם (מסנן וממיין), ורק אז הדפדוף
   // על התוצאה. חיתוך לעמוד לפני סינון היה מציג עמוד ריק על סינון תקין.
@@ -159,6 +270,15 @@ export default function OrdersClient({ orders, itemCounts }: {
     sortFilter: { mode: 'client', rows: filtered },
   })
   const pg = useTablePagination(tc.rows)
+
+  // 🔴 "הבאה/הקודמת" בכרטיס ההזמנה הולכות לפי הסדר שבטבלה — אחרי כרטיס,
+  // חיפוש, סינון ומיון. כך עוברים ברצף על "ממתין לאימות שם" למשל.
+  // ⚠️ כתיבה לאחסון בלבד, בלי setState — אין כאן סיכון ללולאת רינדור.
+  useEffect(() => { saveNavList(tc.rows.map(o => o.id)) }, [tc.rows])
+
+  // ⚠️ רשימת הכתובות למשלוחן — רק משלוחים. איסוף עצמי ומכירת דוכן אינם
+  // נשלחים, ושורה בלי כתובת ברשימה של שליח היא רעש.
+  const shippingRows = useMemo(() => tc.rows.filter(o => o.delivery_method === 'shipping'), [tc.rows])
 
   // 🔴 פילוח לפי אמצעי תשלום — על השורות שבתצוגה (אחרי כרטיס, חיפוש וסינון),
   // כך שסינון "ערוץ: דוכן" מראה בדיוק כמה נכנס במזומן וכמה באשראי.
@@ -225,9 +345,9 @@ export default function OrdersClient({ orders, itemCounts }: {
   return (
     <div className="flex flex-col gap-4">
       {/* ── כרטיסי סינון ── */}
-      {/* ⚠️ 8 עמודות: הכרטיסים הנוספים ("זוכה", "בוטל") נפלו לשורה
-          שנייה לבדם ונראו כמו תקלה. ב-xl כולם בשורה אחת. */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
+      {/* ⚠️ 11 כרטיסים: ב-lg שתי שורות מלאות כמעט (6+5), ורק במסך רחב
+          מאוד כולם בשורה אחת — רוחב קטן יותר היה שובר את התוויות. */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-11">
         {CARDS.map(({ key, label, icon: Icon, cls }) => {
           const n = counts[key] ?? 0
           const active = card === key
@@ -282,6 +402,66 @@ export default function OrdersClient({ orders, itemCounts }: {
         )}
       </div>
 
+      {/* ── הדפסה מרוכזת ──
+          🔴 על השורות שבתצוגה (אחרי כרטיס, חיפוש, סינון ומיון), ובאותו
+          סדר — מה שרואים זה מה שמודפס. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          onClick={() => openPrint('notes', tc.rows.map(o => o.id))}
+          disabled={!tc.rows.length}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-40"
+        >
+          <Printer size={15} /> הדפסת כל תעודות המשלוח ({tc.rows.length})
+        </button>
+        <button
+          onClick={() => openPrint('addresses', shippingRows.map(o => o.id))}
+          disabled={!shippingRows.length}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-white px-4 py-2 text-sm font-medium text-indigo-700 transition hover:bg-indigo-50 disabled:opacity-40"
+        >
+          <MapPinned size={15} /> רשימת כתובות למשלוחן ({shippingRows.length})
+        </button>
+        <span className="text-xs text-slate-400">
+          לפי התצוגה הנוכחית · סינון לפי עיר: בעמודה &quot;עיר&quot; או במסך ההדפסה
+        </span>
+      </div>
+
+      {/* ── ספרים בעייתיים במלאי ──
+          🔴 סימון ספר בקטלוג (או בכרטיס ההזמנה) ← כאן מסננים את כל
+          ההזמנות שהוא בתוכן (בקשת המשתמש 07.10). */}
+      {problemBooks.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-red-200 bg-red-50/60 px-3 py-2">
+          <span className="inline-flex items-center gap-1 text-sm font-semibold text-red-800">
+            <Flag size={14} /> ספרים בעייתיים:
+          </span>
+          <button
+            onClick={() => setProblem(p => p === '*' ? null : '*')}
+            className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition ${
+              problem === '*' ? 'border-red-500 bg-red-600 text-white' : 'border-red-200 bg-white text-red-700 hover:bg-red-100'}`}
+          >
+            כל הבעייתיים ({problemCounts['*'] ?? 0})
+          </button>
+          {problemBooks.map(b => (
+            <button
+              key={b.id}
+              onClick={() => setProblem(p => p === b.id ? null : b.id)}
+              title={b.note ?? undefined}
+              className={`max-w-[260px] truncate rounded-lg border px-2.5 py-1 text-xs transition ${
+                problem === b.id ? 'border-red-500 bg-red-600 text-white' : 'border-red-200 bg-white text-red-700 hover:bg-red-100'}`}
+            >
+              {b.sku ? `${b.sku} · ` : ''}{b.title} ({problemCounts[b.id] ?? 0})
+            </button>
+          ))}
+          {problem && (
+            <button
+              onClick={() => setProblem(null)}
+              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-500 hover:text-slate-800"
+            >
+              <X size={12} /> ביטול הסינון
+            </button>
+          )}
+        </div>
+      )}
+
       {/* ⚠️ בלי overflow-x: הגלילה לרוחב אסורה ונאכפת בלינט */}
       <div className="rounded-2xl border border-slate-200 bg-white">
         <table className="w-full table-fixed">
@@ -305,7 +485,7 @@ export default function OrdersClient({ orders, itemCounts }: {
               >
                 {tc.shown.map(col => (
                   <td key={col.key} className={`px-3 py-2.5 ${tc.cellClass(col)}`}>
-                    {renderCell(col.key, o, itemCounts)}
+                    {renderCell(col.key, o, itemCounts, (problemByOrder[o.id] ?? []).map(id => titleOf[id]))}
                   </td>
                 ))}
               </tr>
@@ -327,8 +507,40 @@ export default function OrdersClient({ orders, itemCounts }: {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function renderCell(key: ColKey, o: BookFairOrder, counts: Record<string, number>) {
+function renderCell(key: ColKey, o: BookFairOrder, counts: Record<string, number>, problems: string[]) {
   switch (key) {
+    case 'city': {
+      const c = cityOf(o)
+      return c
+        ? <div className="min-w-0 truncate text-xs text-slate-700" title={c}>{c}</div>
+        : <span className="text-slate-300">—</span>
+    }
+
+    case 'verify': {
+      const label = verifyLabel(o)
+      // ⚠️ בהזמנה שלא שולמה או בוטלה אין מה לאמת — אפור ולא אדום,
+      // כדי שלא תיראה כעבודה פתוחה.
+      const cls = label === 'אומת'
+        ? 'bg-emerald-50 text-emerald-700'
+        : !isLive(o) ? 'bg-slate-50 text-slate-400'
+        : 'bg-fuchsia-50 text-fuchsia-700'
+      return <span className={`inline-block rounded-md px-2 py-0.5 text-xs font-medium ${cls}`}>{label}</span>
+    }
+
+    case 'print':
+      return (
+        <button
+          type="button"
+          // ⚠️ עוצר את האירוע: השורה כולה מנווטת להזמנה.
+          onClick={e => { e.stopPropagation(); openPrint('notes', [o.id]) }}
+          onKeyDown={e => e.stopPropagation()}
+          title="הפקת תעודת משלוח"
+          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 transition hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700"
+        >
+          <Printer size={13} /> תעודה
+        </button>
+      )
+
     case 'order_number':
       return (
         <Link
@@ -385,7 +597,16 @@ function renderCell(key: ColKey, o: BookFairOrder, counts: Record<string, number
       )
 
     case 'items':
-      return <span className="tabular-nums">{counts[o.id] ?? 0}</span>
+      return (
+        <span className="inline-flex items-center gap-1">
+          <span className="tabular-nums">{counts[o.id] ?? 0}</span>
+          {problems.length > 0 && (
+            <span title={`ספר בעייתי במלאי: ${problems.join(' · ')}`} className="text-red-600">
+              <Flag size={13} />
+            </span>
+          )}
+        </span>
+      )
 
     case 'delivery':
       return (
