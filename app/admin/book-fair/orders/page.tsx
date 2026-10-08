@@ -167,14 +167,32 @@ function serverNow(): number {
   return Date.now()
 }
 
+/** מדידת זמן לשלב — לאבחון האיטיות (08.10). */
+async function timed<T>(marks: string[], label: string, p: Promise<T>): Promise<T> {
+  const t0 = serverNow()
+  const v = await p
+  marks.push(`${label}=${serverNow() - t0}ms`)
+  return v
+}
+
 export default async function BookFairOrdersPage() {
-  await guardPage('book_fair')
+  const t0 = serverNow()
+  const marks: string[] = []
+  await timed(marks, 'guard', guardPage('book_fair'))
   // ⚡ 08.10: הכל במקביל — שום שליפה אינה ממתינה לשליפה אחרת. קודם הספרים
   // וההקלטות חיכו להזמנות ונשלפו במנות טוריות: 5–8 שנ' לטעינת הדף.
   const [orders, problemBooks, { counts, books }, saved] = await Promise.all([
-    getOrders(), getProblemBooks(), getItems(), getSavedRecordings(),
+    timed(marks, 'orders', getOrders()),
+    timed(marks, 'problem', getProblemBooks()),
+    timed(marks, 'items', getItems()),
+    timed(marks, 'recs', getSavedRecordings()),
   ])
   const recGaps = recordingGaps(orders, saved)
+  // 🔍 אבחון: איפה הולך הזמן ומה גודל הנתונים שנשלחים לדפדפן.
+  console.log(
+    `[book-fair/orders] ${marks.join(' ')} total=${serverNow() - t0}ms · ` +
+    `rows=${orders.length} payloadKB≈${Math.round(JSON.stringify({ orders, counts, books, recGaps }).length / 1024)}`,
+  )
 
   return (
     <div className="flex flex-col gap-6">
