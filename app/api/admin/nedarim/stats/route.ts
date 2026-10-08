@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { unstable_cache } from 'next/cache'
 import { getServiceClient, requirePermission } from '@/lib/apiAuth'
 import { getNedarimCreds, getClientsTable, getClientCardFull, type NedarimCreds } from '@/lib/nedarim'
 
@@ -25,123 +24,155 @@ const num = (v: unknown) => {
   return Number.isFinite(n) ? n : 0
 }
 
-// עיבוד מקבילי מוגבל (pool) כדי לא להציף את שרתי נדרים
-async function mapPool<T, R>(items: T[], limit: number, fn: (it: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = []
-  let i = 0
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (i < items.length) {
-      const idx = i++
-      out[idx] = await fn(items[idx])
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 08.10: פתיחת המסך עצרה את כל פעולות הכרטיסים ל-15 דקות.
+//
+// המסך משך כרטיס מלא לכל משפחה (מאות פניות, 5 במקביל) בכל פתיחה, עם מטמון
+// של 90 שניות בלבד. 80 פניות בדקה הפעילו את השומר (lib/nedarimGuard), והוא
+// השהה את ערוץ הכרטיסים — כולל שיוך כרטיסים בטלפון ליולדות ולחגים.
+//
+// עכשיו: הסטטיסטיקות נשמרות במסד (app_settings) ומוצגות מיד; רענון רץ ברקע
+// לכל היותר פעם בשעה, טורי, בקצב של ≤40 פניות בדקה (חצי מתקרת השומר),
+// ונעצר מיד אם השומר עוצר — במקום להמשיך לפנות לערוץ חסום.
+// ─────────────────────────────────────────────────────────────────────────────
+const CACHE_KEY = 'nedarim_card_stats_cache'
+const MAX_AGE_MS = 60 * 60_000
+const GAP_MS = 1_500
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+let refreshing: Promise<void> | null = null
+
+/** האם השגיאה היא עצירה של השומר — אז אין טעם להמשיך. */
+const isGuardStop = (e: unknown) => /נעצרו זמנית|הושהה/.test(e instanceof Error ? e.message : String(e))
+
+// אגרגציית נתוני נדרים (רשימת המשפחות + כרטיס מלא לכל משפחה) — כבדה: פנייה
+// לכל משפחה. ⚠️ רצה רק ברקע (refreshInBackground), לעולם לא בתוך הבקשה.
+async function computeStats() {
+  const creds = await getNedarimCreds()
+  if (!creds) return null
+
+  const t = await getClientsTable(creds as NedarimCreds)
+  const families: Json[] = t.families
+  const tableTotal = num(t.total) // הסכום הכללי המוטען בכל הכרטיסים — ישירות מ-GetClient_Table
+  const tableMeta: Record<string, unknown> = t.meta ?? {}
+
+  // איתור "ארנק כללי" (יתרת המוסד) מתוך שדות התגובה — שדה לא מתועד שעשוי להופיע בשמות שונים
+  let generalWallet: number | null = null
+  let generalWalletKey: string | null = null
+  for (const [k, v] of Object.entries(tableMeta)) {
+    if (['Total', 'Result', 'Message'].includes(k)) continue
+    if (/arnak|wallet|ארנק|mosad.*bal|bal.*mosad|credit|kupa|itra|yitra|balance|יתר/i.test(k)) {
+      const n = num(v)
+      if (Number.isFinite(n) && n !== 0) { generalWallet = n; generalWalletKey = k; break }
     }
-  })
-  await Promise.all(workers)
-  return out
+  }
+  // סכום היתרות לפי עמודת Ytra בטבלת המשפחות (קריאה אחת אמינה)
+  const sumYtra = families.reduce((s, f) => s + num(f.Ytra), 0)
+
+  // משיכת כרטיס מלא לכל משפחה (טעינות + היסטוריה) — טורי ובקצב מבוקר.
+  const cards: { f: Json; card: Json | null }[] = []
+  for (const f of families) {
+    try {
+      cards.push({ f, card: await getClientCardFull(creds as NedarimCreds, String(f.ClientId)) })
+    } catch (e) {
+      // 🔴 השומר עצר — לא שומרים תוצאה חלקית ולא ממשיכים לפנות.
+      if (isGuardStop(e)) throw e
+      cards.push({ f, card: null })
+    }
+    await sleep(GAP_MS)
+  }
+
+  const now = new Date()
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const startWeek = new Date(startToday); startWeek.setDate(startToday.getDate() - ((startToday.getDay() + 7) % 7)) // ראשון
+  const startMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+
+  let remainingFromCards = 0
+  let usedTotal = 0, usedToday = 0, usedWeek = 0, usedMonth = 0
+  let cntToday = 0, cntWeek = 0, cntMonth = 0
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const transactions: any[] = []
+  // מספר הכרטיס המגנטי הפעיל לכל משפחה (לפי ClientId) — להצגה בטבלה
+  const cardByClientId: Record<string, string> = {}
+
+  for (const { f, card } of cards) {
+    if (!card) continue
+    const activeCard = (Array.isArray(card.Cards) ? card.Cards : []).find((c: Json) => !c.RemovedDate)
+    const cardNum = activeCard ? String(activeCard.CardNumber ?? activeCard.MagneticCard ?? '').trim() : ''
+    if (cardNum) cardByClientId[String(f.ClientId)] = cardNum
+    remainingFromCards += num(card.TotalFreeAmount)
+    const history: Json[] = Array.isArray(card.History) ? card.History : []
+    const famName = [card.FamilyName ?? f.FamilyName, card.FirstName ?? f.FirstName].filter(Boolean).join(' ')
+    for (const h of history) {
+      // היסטוריית עסקאות = רק קניות בבית עסק (יש שם חנות) — לא טעינות/פריקות
+      const store = String(h.StoreName ?? h.Store ?? '').trim()
+      if (!store) continue
+      const amt = num(h.Amount)
+      usedTotal += amt
+      const d = parseNedarimDate(h.Date)
+      if (d) {
+        if (d >= startToday) { usedToday += amt; cntToday++ }
+        if (d >= startWeek) { usedWeek += amt; cntWeek++ }
+        if (d >= startMonth) { usedMonth += amt; cntMonth++ }
+      }
+      transactions.push({
+        clientId: f.ClientId, familyName: famName,
+        store, date: h.Date ?? '', ts: d ? d.getTime() : 0,
+        amount: amt, comments: h.Comments ?? '',
+      })
+    }
+  }
+  transactions.sort((a, b) => b.ts - a.ts)
+
+  // יתרה כללית — מקור אמת: Total מטבלת המשפחות, אחרת סכום Ytra, אחרת מהכרטיסים
+  const totalRemaining = tableTotal || sumYtra || remainingFromCards
+  // "סה״כ מוטען בארנקים" = הסכום הזמין כעת בפועל בכל הכרטיסים.
+  // ⚠️ ללא נפילה-לאחור לסכום הטעינות ההיסטוריות: כשפורקים כסף מהמשפחות
+  // היתרה יורדת ל-0 אך הסכום ההיסטורי נשאר — והמסך הציג "7,200 ₪" כאילו
+  // הכסף עדיין שם. 0 הוא ערך תקין.
+  const loadedFinal = remainingFromCards
+
+  return {
+    familiesCount: families.length,
+    totalLoaded: loadedFinal,
+    totalRemaining,
+    tableTotal,
+    sumYtra,
+    generalWallet,        // יתרת ארנק המוסד הכללי (אם נמצאה בתגובת ה-API)
+    generalWalletKey,     // שם השדה שזוהה (לאבחון)
+    tableMeta,            // כל שדות התגובה ברמה העליונה (לאבחון — לאיתור שם השדה הנכון)
+    usedTotal,
+    usedToday, usedWeek, usedMonth,
+    cntToday, cntWeek, cntMonth,
+    transactions,
+    cardByClientId,
+  }
 }
 
-// אגרגציית נתוני נדרים (רשימת המשפחות + כרטיס מלא לכל משפחה) — כבדה: עשרות קריאות HTTP
-// חיצוניות בכל טעינה. ממטמנים ל-90 שניות כדי שטעינות/רענונים חוזרים של מסך הכרטיסים לא
-// יפציצו את שרתי נדרים ולא יחכו לכל הקריאות מחדש. ה-stats אינם דורשים דיוק של שנייה.
-const getCachedNedarimCardStats = unstable_cache(
-  async () => {
-    const creds = await getNedarimCreds()
-    if (!creds) return null
+type Stats = NonNullable<Awaited<ReturnType<typeof computeStats>>>
 
-    const t = await getClientsTable(creds as NedarimCreds)
-    const families: Json[] = t.families
-    const tableTotal = num(t.total) // הסכום הכללי המוטען בכל הכרטיסים — ישירות מ-GetClient_Table
-    const tableMeta: Record<string, unknown> = t.meta ?? {}
+async function readCache(): Promise<{ at: number; stats: Stats } | null> {
+  const db = getServiceClient()
+  if (!db) return null
+  const { data } = await db.from('app_settings').select('value').eq('key', CACHE_KEY).maybeSingle()
+  try { return data?.value ? JSON.parse(String(data.value)) : null } catch { return null }
+}
 
-    // איתור "ארנק כללי" (יתרת המוסד) מתוך שדות התגובה — שדה לא מתועד שעשוי להופיע בשמות שונים
-    let generalWallet: number | null = null
-    let generalWalletKey: string | null = null
-    for (const [k, v] of Object.entries(tableMeta)) {
-      if (['Total', 'Result', 'Message'].includes(k)) continue
-      if (/arnak|wallet|ארנק|mosad.*bal|bal.*mosad|credit|kupa|itra|yitra|balance|יתר/i.test(k)) {
-        const n = num(v)
-        if (Number.isFinite(n) && n !== 0) { generalWallet = n; generalWalletKey = k; break }
-      }
-    }
-    // סכום היתרות לפי עמודת Ytra בטבלת המשפחות (קריאה אחת אמינה)
-    const sumYtra = families.reduce((s, f) => s + num(f.Ytra), 0)
-
-    // משיכת כרטיס מלא לכל משפחה (טעינות + היסטוריה) — pool של 5
-    const cards = await mapPool(families, 5, async (f) => {
-      try { return { f, card: await getClientCardFull(creds as NedarimCreds, String(f.ClientId)) } }
-      catch { return { f, card: null } }
-    })
-
-    const now = new Date()
-    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const startWeek = new Date(startToday); startWeek.setDate(startToday.getDate() - ((startToday.getDay() + 7) % 7)) // ראשון
-    const startMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-
-    let totalLoaded = 0, remainingFromCards = 0
-    let usedTotal = 0, usedToday = 0, usedWeek = 0, usedMonth = 0
-    let cntToday = 0, cntWeek = 0, cntMonth = 0
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const transactions: any[] = []
-    // מספר הכרטיס המגנטי הפעיל לכל משפחה (לפי ClientId) — להצגה בטבלה
-    const cardByClientId: Record<string, string> = {}
-
-    for (const { f, card } of cards) {
-      if (!card) continue
-      const activeCard = (Array.isArray(card.Cards) ? card.Cards : []).find((c: Json) => !c.RemovedDate)
-      const cardNum = activeCard ? String(activeCard.CardNumber ?? activeCard.MagneticCard ?? '').trim() : ''
-      if (cardNum) cardByClientId[String(f.ClientId)] = cardNum
-      remainingFromCards += num(card.TotalFreeAmount)
-      const tlushim: Json[] = Array.isArray(card.Tlushim) ? card.Tlushim : []
-      for (const t of tlushim) totalLoaded += num(t.Amount)
-      const history: Json[] = Array.isArray(card.History) ? card.History : []
-      const famName = [card.FamilyName ?? f.FamilyName, card.FirstName ?? f.FirstName].filter(Boolean).join(' ')
-      for (const h of history) {
-        // היסטוריית עסקאות = רק קניות בבית עסק (יש שם חנות) — לא טעינות/פריקות
-        const store = String(h.StoreName ?? h.Store ?? '').trim()
-        if (!store) continue
-        const amt = num(h.Amount)
-        usedTotal += amt
-        const d = parseNedarimDate(h.Date)
-        if (d) {
-          if (d >= startToday) { usedToday += amt; cntToday++ }
-          if (d >= startWeek) { usedWeek += amt; cntWeek++ }
-          if (d >= startMonth) { usedMonth += amt; cntMonth++ }
-        }
-        transactions.push({
-          clientId: f.ClientId, familyName: famName,
-          store, date: h.Date ?? '', ts: d ? d.getTime() : 0,
-          amount: amt, comments: h.Comments ?? '',
-        })
-      }
-    }
-    transactions.sort((a, b) => b.ts - a.ts)
-
-    // יתרה כללית — מקור אמת: Total מטבלת המשפחות, אחרת סכום Ytra, אחרת מהכרטיסים
-    const totalRemaining = tableTotal || sumYtra || remainingFromCards
-    // "סה״כ מוטען בארנקים" = הסכום הזמין כעת בפועל בכל הכרטיסים.
-    // ⚠️ ללא נפילה-לאחור ל-totalLoaded: זהו סכום כל הטעינות ההיסטוריות,
-    // ולכן כשפורקים כסף מהמשפחות היתרה יורדת ל-0 אך הסכום ההיסטורי נשאר —
-    // והמסך המשיך להציג "7,200 ₪" כאילו הכסף עדיין שם. 0 הוא ערך תקין.
-    const loadedFinal = remainingFromCards
-
-    return {
-      familiesCount: families.length,
-      totalLoaded: loadedFinal,
-      totalRemaining,
-      tableTotal,
-      sumYtra,
-      generalWallet,        // יתרת ארנק המוסד הכללי (אם נמצאה בתגובת ה-API)
-      generalWalletKey,     // שם השדה שזוהה (לאבחון)
-      tableMeta,            // כל שדות התגובה ברמה העליונה (לאבחון — לאיתור שם השדה הנכון)
-      usedTotal,
-      usedToday, usedWeek, usedMonth,
-      cntToday, cntWeek, cntMonth,
-      transactions,
-      cardByClientId,
-    }
-  },
-  ['nedarim-card-stats'],
-  { revalidate: 90 },
-)
+/** רענון ברקע — אחד בכל פעם (single-flight). ⚠️ לעולם לא בתוך הבקשה. */
+function refreshInBackground() {
+  if (refreshing) return
+  refreshing = (async () => {
+    const stats = await computeStats()
+    const db = getServiceClient()
+    if (!stats || !db) return
+    // ⚠️ app_settings.value היא text — חובה stringify.
+    await db.from('app_settings').upsert(
+      { key: CACHE_KEY, value: JSON.stringify({ at: Date.now(), stats }) }, { onConflict: 'key' },
+    )
+    console.log(`[nedarim/stats] רוענן · ${stats.familiesCount} משפחות`)
+  })()
+    .catch(e => console.error('[nedarim/stats] הרענון נעצר:', e instanceof Error ? e.message : e))
+    .finally(() => { refreshing = null })
+}
 
 // מפת ת.ז → פרטי פריקה (תאריך סיום הזכאות) מתוך תיקי היולדות הפעילים — נטענת חי (Supabase),
 // כדי שספירת הימים לפריקה תישאר מדויקת ולא תלויה במטמון נדרים.
@@ -188,19 +219,21 @@ export async function GET() {
   const creds = await getNedarimCreds()
   if (!creds) return NextResponse.json({ configured: false })
 
-  let stats: Awaited<ReturnType<typeof getCachedNedarimCardStats>>
-  try {
-    stats = await getCachedNedarimCardStats()
-  } catch (e) {
-    return NextResponse.json({ configured: true, error: e instanceof Error ? e.message : 'שגיאה' }, { status: 502 })
+  // ⚡ מהמסד, מיד. רענון ברקע רק כשהנתונים ישנים משעה (או חסרים).
+  const cached = await readCache()
+  if (!cached || Date.now() - cached.at > MAX_AGE_MS) refreshInBackground()
+  const stats: Partial<Stats> = cached?.stats ?? {
+    familiesCount: 0, totalLoaded: 0, totalRemaining: 0, tableTotal: 0, sumYtra: 0,
+    generalWallet: null, generalWalletKey: null, tableMeta: {},
+    usedTotal: 0, usedToday: 0, usedWeek: 0, usedMonth: 0, cntToday: 0, cntWeek: 0, cntMonth: 0,
+    transactions: [], cardByClientId: {},
   }
-  if (!stats) return NextResponse.json({ configured: false })
 
   // ספירת ימים לפריקה — חי, לא ממטמון
   const unloadByZeout = await getUnloadByZeout()
 
   return NextResponse.json(
-    { configured: true, ...stats, unloadByZeout },
+    { configured: true, ...stats, unloadByZeout, refreshedAt: cached?.at ?? null, refreshing: !!refreshing },
     { headers: { 'Cache-Control': 'no-store' } },
   )
 }
