@@ -1,9 +1,9 @@
 'use client'
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { ilDate, ilTime } from '@/lib/israelTime'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Search, Globe, Phone, AlertTriangle, Clock, CheckCircle2, Package, Truck, Mic, XCircle, Store, Undo2, Banknote, CreditCard, Printer, MapPinned, UserX, Flag, X } from 'lucide-react'
+import { Search, Globe, Phone, AlertTriangle, Clock, CheckCircle2, Package, Truck, Mic, XCircle, Store, Undo2, Banknote, CreditCard, Printer, MapPinned, UserX, Flag, X, MicOff } from 'lucide-react'
 import type { BookFairOrder, BookFairOrderStatus } from '@/types/bookFair'
 import {
   BOOK_FAIR_STATUS_LABELS, BOOK_FAIR_STATUS_COLORS,
@@ -16,7 +16,7 @@ import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import { saveNavList, stashPrintIds } from '@/lib/bookFairOrderHandoff'
 import { ordersWithProblemBooks } from '@/lib/bookFairProblemBooks'
 
-type ColKey = 'order_number' | 'customer' | 'phone' | 'city' | 'channel' | 'items' | 'delivery' | 'verify' | 'total' | 'payment' | 'status' | 'created' | 'paid_at' | 'print'
+type ColKey = 'order_number' | 'customer' | 'phone' | 'city' | 'channel' | 'items' | 'delivery' | 'verify' | 'recording' | 'total' | 'payment' | 'status' | 'created' | 'paid_at' | 'print'
 
 /** ספר שסומן "בעייתי במלאי" — ראו lib/bookFairProblemBooks. */
 export interface ProblemBookInfo {
@@ -25,6 +25,36 @@ export interface ProblemBookInfo {
   title: string
   note: string | null
 }
+
+/** אילו הקלטות חסרות בהזמנה טלפונית (אין עותק שמתנגן). */
+export interface RecordingGap {
+  name: boolean
+  address: boolean
+}
+
+/**
+ * מצב ההקלטות להצגה ולסינון (בקשת המשתמש 08.10: "לעבוד רק על אלו").
+ *
+ * 🔴 רק חוסר *פתוח*: הקלטת שם חסרה כשהשם עוד לא אומת, הקלטת כתובת חסרה
+ * כשהכתובת עוד לא אושרה (ורק במשלוח). הזמנה שהצוות כבר השלים בה את
+ * הפרטים יוצאת מהרשימה — אחרת הרשימה לא מתרוקנת לעולם.
+ *
+ * ⚠️ הערך הוא התווית המוצגת — המשתמש מסנן לפי מה שהוא רואה.
+ */
+function recordingLabel(o: BookFairOrder, gaps: Record<string, RecordingGap>): string {
+  if (o.channel !== 'phone') return '—'
+  const g = gaps[o.id]
+  if (!g) return 'תקין'
+  const name = g.name && !nameVerified(o)
+  const addr = g.address && addressPending(o)
+  if (name && addr) return 'חסרות שם וכתובת'
+  if (name) return 'חסרה הקלטת שם'
+  if (addr) return 'חסרה הקלטת כתובת'
+  return 'תקין'
+}
+
+const missingRecording = (o: BookFairOrder, gaps: Record<string, RecordingGap>) =>
+  recordingLabel(o, gaps).startsWith('חסר')
 
 /** שם העיר להצגה — ריק באיסוף עצמי ובמכירת דוכן. */
 function cityOf(o: BookFairOrder): string | null {
@@ -99,7 +129,7 @@ const HEAD = 'px-3 py-3 text-xs font-semibold text-slate-500'
 //
 // ⚠️ תאריך מוסתר במסכים צרים: הגלילה לרוחב אסורה ונאכפת בלינט,
 // והטבלה הזו רחבה מטבעה.
-function columnsOf(counts: Record<string, number>): ColDef<ColKey, BookFairOrder>[] {
+function columnsOf(counts: Record<string, number>, gaps: Record<string, RecordingGap>): ColDef<ColKey, BookFairOrder>[] {
   return [
     { key: 'order_number', label: 'מספר', def: true, headClassName: HEAD, weight: 1,
       value: o => o.order_number },
@@ -122,6 +152,9 @@ function columnsOf(counts: Record<string, number>): ColDef<ColKey, BookFairOrder
       value: o => BOOK_FAIR_DELIVERY_LABELS[o.delivery_method] },
     { key: 'verify', label: 'אימות פרטים', def: true, kind: 'enum', filterable: true, headClassName: HEAD,
       value: o => verifyLabel(o) },
+    // 🔴 08.10: סינון "חסרה הקלטה" — לעבוד רק על ההזמנות שההקלטה בהן לא נמצאה.
+    { key: 'recording', label: 'הקלטה', def: true, kind: 'enum', filterable: true, headClassName: HEAD,
+      value: o => recordingLabel(o, gaps) },
     { key: 'total', label: 'סכום', def: true, kind: 'number', headClassName: HEAD,
       value: o => o.total_agorot },
     { key: 'payment', label: 'תשלום', def: true, kind: 'enum', filterable: true, headClassName: HEAD,
@@ -142,12 +175,14 @@ function columnsOf(counts: Record<string, number>): ColDef<ColKey, BookFairOrder
 }
 
 /** כרטיסי הסינון המהיר — מה שהצוות צריך לראות ביום עבודה. */
-const CARDS: { key: BookFairOrderStatus | 'all' | 'needs_address' | 'needs_name'; label: string; icon: typeof Clock; cls: string }[] = [
+const CARDS: { key: BookFairOrderStatus | 'all' | 'needs_address' | 'needs_name' | 'missing_rec'; label: string; icon: typeof Clock; cls: string }[] = [
   { key: 'all',            label: 'הכל',              icon: Package,       cls: 'border-slate-200 text-slate-600' },
   { key: 'paid',           label: 'שולם — לליקוט',     icon: CheckCircle2,  cls: 'border-emerald-200 text-emerald-700' },
   // 🔴 "על מי עוד צריך לעבוד" (בקשת המשתמש 07.10): הזמנות טלפוניות שהשם
   // בהן עדיין רק בהקלטה ובתמלול ולא נשמר במשרד.
   { key: 'needs_name',     label: 'ממתין לאימות שם',   icon: UserX,         cls: 'border-fuchsia-200 text-fuchsia-700' },
+  // 🔴 08.10: הזמנות טלפוניות שההקלטה בהן לא נמצאה ועדיין לא הושלמו ידנית.
+  { key: 'missing_rec',    label: 'חסרה הקלטה',        icon: MicOff,        cls: 'border-rose-200 text-rose-700' },
   { key: 'needs_address',  label: 'ממתין לאימות כתובת', icon: Mic,          cls: 'border-purple-200 text-purple-700' },
   { key: 'picking',        label: 'בליקוט',            icon: Package,       cls: 'border-sky-200 text-sky-700' },
   { key: 'shipped',        label: 'נשלח',              icon: Truck,         cls: 'border-violet-200 text-violet-700' },
@@ -192,12 +227,14 @@ function inCard(o: BookFairOrder, key: string): boolean {
   }
 }
 
-export default function OrdersClient({ orders, itemCounts, orderBooks, problemBooks }: {
+export default function OrdersClient({ orders, itemCounts, orderBooks, problemBooks, recGaps }: {
   orders: BookFairOrder[]
   itemCounts: Record<string, number>
   /** הזמנה ← מזהי הספרים שבה. */
   orderBooks: Record<string, string[]>
   problemBooks: ProblemBookInfo[]
+  /** הזמנה טלפונית ← אילו הקלטות חסרות. */
+  recGaps: Record<string, RecordingGap>
 }) {
   const router = useRouter()
   const [query, setQuery] = useState('')
@@ -230,21 +267,30 @@ export default function OrdersClient({ orders, itemCounts, orderBooks, problemBo
     [problemBooks],
   )
 
-  const COLUMNS = useMemo(() => columnsOf(itemCounts), [itemCounts])
+  const COLUMNS = useMemo(() => columnsOf(itemCounts, recGaps), [itemCounts, recGaps])
+
+  // ⚠️ "חסרה הקלטה" תלוי בנתוני ההקלטות, ולכן אינו ב-inCard (פונקציה טהורה
+  // על ההזמנה בלבד). אותה פונקציה למונה ולסינון — כמו בשאר הכרטיסים.
+  const matchCard = useCallback(
+    (o: BookFairOrder, key: string) => key === 'missing_rec'
+      ? isLive(o) && missingRecording(o, recGaps)
+      : inCard(o, key),
+    [recGaps],
+  )
 
   // ⚠️ המונה והסינון מאותה פונקציה (inCard) — מונה שמחושב בנפרד
   // היה מראה מספר אחד בכרטיס ושורות אחרות בטבלה.
   const counts = useMemo(() => {
     const c: Record<string, number> = {}
-    for (const { key } of CARDS) c[key] = orders.filter(o => inCard(o, key)).length
+    for (const { key } of CARDS) c[key] = orders.filter(o => matchCard(o, key)).length
     return c
-  }, [orders])
+  }, [orders, matchCard])
 
   const filtered = useMemo(() => {
     // ⚠️ המבוטלות וה"ממתינות לתשלום" מוסתרות מ"הכל" ונגישות רק
     // בכרטיס שלהן: שתיהן אינן הזמנות אלא ניסיונות שלא הושלמו,
     // ובערב הפתיחה הן היו רוב השורות והסתירו את מה שצריך טיפול.
-    let rows = orders.filter(o => inCard(o, card))
+    let rows = orders.filter(o => matchCard(o, card))
 
     if (problem) {
       rows = rows.filter(o => {
@@ -262,7 +308,7 @@ export default function OrdersClient({ orders, itemCounts, orderBooks, problemBo
       (o.customer_email ?? '').toLowerCase().includes(q) ||
       (cityOf(o) ?? '').toLowerCase().includes(q)
     )
-  }, [orders, card, query, problem, problemByOrder])
+  }, [orders, card, query, problem, problemByOrder, matchCard])
 
   // 🔴 הסדר חובה: useTableColumns קודם (מסנן וממיין), ורק אז הדפדוף
   // על התוצאה. חיתוך לעמוד לפני סינון היה מציג עמוד ריק על סינון תקין.
@@ -347,7 +393,7 @@ export default function OrdersClient({ orders, itemCounts, orderBooks, problemBo
       {/* ── כרטיסי סינון ── */}
       {/* ⚠️ 11 כרטיסים: ב-lg שתי שורות מלאות כמעט (6+5), ורק במסך רחב
           מאוד כולם בשורה אחת — רוחב קטן יותר היה שובר את התוויות. */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-11">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-12">
         {CARDS.map(({ key, label, icon: Icon, cls }) => {
           const n = counts[key] ?? 0
           const active = card === key
@@ -485,7 +531,7 @@ export default function OrdersClient({ orders, itemCounts, orderBooks, problemBo
               >
                 {tc.shown.map(col => (
                   <td key={col.key} className={`px-3 py-2.5 ${tc.cellClass(col)}`}>
-                    {renderCell(col.key, o, itemCounts, (problemByOrder[o.id] ?? []).map(id => titleOf[id]))}
+                    {renderCell(col.key, o, itemCounts, (problemByOrder[o.id] ?? []).map(id => titleOf[id]), recGaps)}
                   </td>
                 ))}
               </tr>
@@ -507,7 +553,7 @@ export default function OrdersClient({ orders, itemCounts, orderBooks, problemBo
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function renderCell(key: ColKey, o: BookFairOrder, counts: Record<string, number>, problems: string[]) {
+function renderCell(key: ColKey, o: BookFairOrder, counts: Record<string, number>, problems: string[], gaps: Record<string, RecordingGap>) {
   switch (key) {
     case 'city': {
       const c = cityOf(o)
@@ -525,6 +571,18 @@ function renderCell(key: ColKey, o: BookFairOrder, counts: Record<string, number
         : !isLive(o) ? 'bg-slate-50 text-slate-400'
         : 'bg-fuchsia-50 text-fuchsia-700'
       return <span className={`inline-block rounded-md px-2 py-0.5 text-xs font-medium ${cls}`}>{label}</span>
+    }
+
+    case 'recording': {
+      const label = recordingLabel(o, gaps)
+      if (label === '—') return <span className="text-slate-300">—</span>
+      const missing = label.startsWith('חסר')
+      return (
+        <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ${
+          missing ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}`}>
+          {missing && <MicOff size={11} />} {label}
+        </span>
+      )
     }
 
     case 'print':

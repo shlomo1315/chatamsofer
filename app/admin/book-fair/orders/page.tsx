@@ -4,7 +4,7 @@ import { fetchAllRows } from '@/lib/fetchAllRows'
 import PageHeader from '@/components/ui/PageHeader'
 import type { BookFairOrder } from '@/types/bookFair'
 import { PROBLEM_BOOKS_KEY, parseProblemBooks } from '@/lib/bookFairProblemBooks'
-import OrdersClient, { type ProblemBookInfo } from './OrdersClient'
+import OrdersClient, { type ProblemBookInfo, type RecordingGap } from './OrdersClient'
 
 // מסך ההזמנות — הלב של הניהול היומיומי ביריד.
 //
@@ -90,6 +90,40 @@ async function getItems(orderIds: string[]): Promise<{
 }
 
 /**
+ * אילו הזמנות טלפוניות חסרה בהן הקלטה שמורה — שם ו/או כתובת.
+ *
+ * 🔴 08.10: 23 הזמנות הציגו "ההקלטה לא נמצאה", והצוות ביקש לסנן אותן
+ * ולעבוד רק עליהן. "חסרה" = אין עותק אצלנו (storage_path) — רק עותק כזה
+ * באמת מתנגן בכרטיס ההזמנה.
+ *
+ * ⚠️ הזמנה טלפונית *בלי שום* שורת הקלטה נחשבת חסרה בשני הסוגים.
+ */
+async function getRecordingGaps(orders: BookFairOrder[]): Promise<Record<string, RecordingGap>> {
+  const out: Record<string, RecordingGap> = {}
+  const phoneIds = orders.filter(o => o.channel === 'phone').map(o => o.id)
+  if (!phoneIds.length || !isSupabaseConfigured()) return out
+  const supabase = await createClient()
+
+  const has: Record<string, { name: boolean; address: boolean }> = {}
+  for (let i = 0; i < phoneIds.length; i += 200) {
+    const { data } = await supabase
+      .from('book_fair_recordings')
+      .select('order_id, kind, storage_path')
+      .in('order_id', phoneIds.slice(i, i + 200))
+      .in('kind', ['name', 'address'])
+    for (const row of data ?? []) {
+      const h = (has[row.order_id] ??= { name: false, address: false })
+      if (row.storage_path) h[row.kind as 'name' | 'address'] = true
+    }
+  }
+  for (const id of phoneIds) {
+    const h = has[id] ?? { name: false, address: false }
+    out[id] = { name: !h.name, address: !h.address }
+  }
+  return out
+}
+
+/**
  * הספרים שסומנו בעייתיים, עם שמם מהקטלוג.
  *
  * ⚠️ ספר שנמחק מהקטלוג נשאר עם "ספר שנמחק" ולא נעלם: הסימון עדיין
@@ -115,7 +149,10 @@ async function getProblemBooks(): Promise<ProblemBookInfo[]> {
 export default async function BookFairOrdersPage() {
   await guardPage('book_fair')
   const [orders, problemBooks] = await Promise.all([getOrders(), getProblemBooks()])
-  const { counts, books } = await getItems(orders.map(o => o.id))
+  const [{ counts, books }, recGaps] = await Promise.all([
+    getItems(orders.map(o => o.id)),
+    getRecordingGaps(orders),
+  ])
 
   return (
     <div className="flex flex-col gap-6">
@@ -125,6 +162,7 @@ export default async function BookFairOrdersPage() {
         itemCounts={counts}
         orderBooks={books}
         problemBooks={problemBooks}
+        recGaps={recGaps}
       />
     </div>
   )
