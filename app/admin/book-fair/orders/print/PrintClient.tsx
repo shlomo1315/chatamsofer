@@ -315,7 +315,17 @@ function AddressList({ orders, itemsByOrder, cities, setCities }: {
     return [...m.entries()].sort(([a], [b]) => a === NO_CITY ? 1 : b === NO_CITY ? -1 : a.localeCompare(b, 'he'))
   }, [orders])
 
-  const shown = cities.size ? groups.filter(([c]) => cities.has(c)) : groups
+  // 🔢 סדר הרשימה (בקשת המשתמש 08.10): לפי עיר (מסלול חלוקה), או רשימה
+  // אחת לפי מספר הזמנה עולה/יורד — אחרי סינון הערים.
+  const [sort, setSort] = useState<'city' | 'asc' | 'desc'>('city')
+  const byCity = cities.size ? groups.filter(([c]) => cities.has(c)) : groups
+  const shown: [string, Order[]][] = sort === 'city'
+    ? byCity
+    : byCity.length
+      ? [[cities.size ? [...cities].join(' · ') : 'כל הערים', byCity.flatMap(([, l]) => l).sort((a, b) =>
+          (sort === 'asc' ? 1 : -1) * a.order_number.localeCompare(b.order_number, 'he', { numeric: true }))]]
+      : []
+  const flat = sort !== 'city'
   const total = shown.reduce((s, [, l]) => s + l.length, 0)
   // מספור רץ לאורך כל הרשימה — נקודת ההתחלה של כל עיר.
   const starts = shown.reduce<number[]>((acc, _g, i) => [...acc, i ? acc[i - 1] + shown[i - 1][1].length : 0], [])
@@ -351,6 +361,19 @@ function AddressList({ orders, itemsByOrder, cities, setCities }: {
             </button>
           )}
         </div>
+        <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-3">
+          <span className="text-sm font-semibold text-slate-700">סדר:</span>
+          {([['city', 'לפי עיר'], ['asc', 'מספר הזמנה — עולה'], ['desc', 'מספר הזמנה — יורד']] as const).map(([k, label]) => (
+            <button
+              key={k}
+              onClick={() => setSort(k)}
+              className={`rounded-lg border px-2.5 py-1 text-xs transition ${
+                sort === k ? 'border-indigo-500 bg-indigo-600 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <article className="bf-page w-full max-w-[210mm] bg-white p-8 text-slate-900 shadow-md">
@@ -360,7 +383,7 @@ function AddressList({ orders, itemsByOrder, cities, setCities }: {
             <h2 className="text-2xl font-black">רשימת משלוחים</h2>
           </div>
           <p className="text-sm">
-            {total} חבילות · {shown.length} ערים · {today}
+            {total} חבילות · {flat ? byCity.length : shown.length} ערים · {today}
           </p>
         </header>
 
@@ -375,6 +398,7 @@ function AddressList({ orders, itemsByOrder, cities, setCities }: {
                   <th className="w-8 py-1">#</th>
                   <th className="w-24 py-1">הזמנה</th>
                   <th className="w-[22%] py-1">שם</th>
+                  {flat && <th className="w-20 py-1">עיר</th>}
                   <th className="py-1">כתובת</th>
                   <th className="w-28 py-1">טלפון</th>
                   <th className="w-14 py-1 text-center">ספרים</th>
@@ -389,6 +413,7 @@ function AddressList({ orders, itemsByOrder, cities, setCities }: {
                       <td className="py-1.5 tabular-nums text-slate-500">{starts[gi] + i + 1}</td>
                       <td className="py-1.5 font-mono text-xs" dir="ltr">{o.order_number}</td>
                       <td className="py-1.5 font-semibold">{o.customer_name || '—'}</td>
+                      {flat && <td className="py-1.5 font-semibold">{oneOf(o.city)?.name ?? '—'}</td>}
                       <td className="py-1.5 font-semibold">
                         {o.address_text || '—'}
                         {!o.address_confirmed && <span className="mr-1 text-xs font-bold text-red-700">(לא אומתה)</span>}
