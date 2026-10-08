@@ -766,8 +766,13 @@ async function finalizeOrder(orderId: string, cartToken: string, code: string) {
     // 🔴 עדכון מותנה (ביקורת אבטחה 07.10): דיווח כפול או מאוחר לא יחזיר
     // הזמנה שבוטלה / זוכתה / נשלחה למצב "שולם". failed נכלל: מתקשר שכרטיסו
     // נדחה ומקיש כרטיס אחר באותה שיחה — ההזמנה כבר סומנה נכשלה.
-    await supa.from('book_fair_orders').update(patch).eq('id', orderId)
-      .in('status', ['pending_payment', 'failed'])
+    const { data: upd } = await supa.from('book_fair_orders').update(patch).eq('id', orderId)
+      .in('status', ['pending_payment', 'failed']).select('id')
+    // 🔴 כסף שנגבה על הזמנה שכבר בוטלה/זוכתה — לא מסמנים "שולם", אבל חייבים
+    // שמישהו יידע: הלקוח חויב. הרישום ב-book_fair_payments (success) כבר נעשה.
+    if (!upd?.length) {
+      console.error(`[yemot-book-fair] 🔴 תשלום מוצלח על הזמנה שאינה ממתינה לתשלום — לבדוק ולזכות ידנית · order=${orderId}`)
+    }
   } else {
     // ⚠️ רק מהמתנה לתשלום: סירוב שמגיע אחרי הצלחה לא יבטל הזמנה ששולמה.
     await supa.from('book_fair_orders').update({ status: 'failed' }).eq('id', orderId)

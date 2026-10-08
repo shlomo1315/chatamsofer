@@ -30,7 +30,9 @@ export async function POST(request: NextRequest) {
   const note = body.note == null ? null : String(body.note).slice(0, 200)
 
   const { data: book } = await db.from('book_fair_books').select('id, title').eq('id', bookId).maybeSingle()
-  if (!book) return NextResponse.json({ error: 'הספר לא נמצא' }, { status: 404 })
+  // ⚠️ הסרת סימון מותרת גם לספר שנמחק מהקטלוג — אחרת השבב "ספר שנמחק"
+  // נשאר במסך ההזמנות לתמיד, בלי דרך לנקות אותו.
+  if (!book && body.problem) return NextResponse.json({ error: 'הספר לא נמצא' }, { status: 404 })
 
   // ⚠️ קריאה-שינוי-כתיבה ולא עמודה: שני סימונים באותה שנייה בדיוק עלולים
   // לדרוס זה את זה. בשימוש בפועל (אדם אחד, לחיצה ידנית) זה לא קורה, והמחיר
@@ -56,7 +58,7 @@ export async function POST(request: NextRequest) {
     userId: staff.userId,
     action: body.problem ? 'book_fair_problem_mark' : 'book_fair_problem_unmark',
     entityType: 'book_fair_book', entityId: bookId,
-    details: { title: book.title, note },
+    details: { title: book?.title ?? null, note },
   })
 
   return NextResponse.json({ ok: true, problems: next })

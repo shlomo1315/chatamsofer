@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 
 // נתונים להדפסת תעודות משלוח ורשימת כתובות (בקשת המשתמש 07.10).
 //
@@ -33,14 +34,20 @@ export async function POST(request: NextRequest) {
   const items: Record<string, unknown>[] = []
   for (let i = 0; i < ids.length; i += CHUNK) {
     const chunk = ids.slice(i, i + CHUNK)
+    // 🔴 שורות הספרים בדפים (תיקון 08.10): 200 הזמנות × יותר מ-5 ספרים חוצות
+    // את תקרת 1,000 השורות של PostgREST — והתעודות היו מודפסות בלי חלק
+    // מהספרים, בלי שום שגיאה.
     const [o, it] = await Promise.all([
       db.from('book_fair_orders')
         .select('id, order_number, channel, status, customer_name, customer_phone, customer_email, delivery_method, address_text, address_confirmed, items_total_agorot, shipping_agorot, total_agorot, refunded_agorot, payment_method, paid_at, created_at, notes, city:book_fair_cities(id, name)')
         .in('id', chunk),
-      db.from('book_fair_order_items')
-        .select('id, order_id, book_id, title_snapshot, sku_snapshot, volumes_snapshot, unit_price_agorot, quantity, line_total_agorot')
-        .in('order_id', chunk)
-        .order('sku_snapshot'),
+      fetchAllRows<Record<string, unknown>>((from, to) =>
+        db.from('book_fair_order_items')
+          .select('id, order_id, book_id, title_snapshot, sku_snapshot, volumes_snapshot, unit_price_agorot, quantity, line_total_agorot')
+          .in('order_id', chunk)
+          .order('sku_snapshot').order('id')
+          .range(from, to) as unknown as PromiseLike<{ data: Record<string, unknown>[] | null; error: { message: string } | null }>,
+      ).then(r => ({ data: r.rows, error: r.error })),
     ])
     // 🔴 שגיאה בחלק מהמנות = כישלון גלוי. הדפסה חלקית שנראית שלמה
     // פירושה חבילות שלא יוצאות ואיש אינו יודע.

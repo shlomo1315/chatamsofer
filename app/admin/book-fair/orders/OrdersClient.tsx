@@ -26,6 +26,12 @@ export interface ProblemBookInfo {
   note: string | null
 }
 
+/**
+ * גרסאות הדף שכבר הוצגו בסשן הזה ← הרגע (performance.now) שבו הוצגו לראשונה.
+ * ⚠️ ברמת המודול ולא state: חייב לשרוד את פירוק הרכיב בניווט "אחורה".
+ */
+const SEEN_RENDERS = new Map<number, number>()
+
 /** אילו הקלטות חסרות בהזמנה טלפונית (אין עותק שמתנגן). */
 export interface RecordingGap {
   name: boolean
@@ -360,14 +366,23 @@ export default function OrdersClient({ orders, itemCounts, orderBooks, problemBo
   // חזרה בכפתור "אחורה" אחרי אימות שם בכרטיס ההזמנה מציגה את העותק מהמטמון
   // של הנתב — עם המונים והסטטוסים מלפני העדכון. כך גם לשונית שחוזרים אליה.
   //
-  // ⚠️ רק כשהעותק ישן (15 שנ'): רינדור טרי לא מרוענן שוב, ואחרי הרענון
-  // renderedAt חדש — אין לולאה. ⚠️ בלי setState — רק router.refresh.
+  // 🔴 בלי השוואת שעונים בין מכונות (תיקון 08.10): השוואת Date.now() של
+  // הדפדפן ל-renderedAt של השרת נכנסה ללולאת רענון אינסופית כששעון המחשב
+  // הקדים ב-15 שנ' או כשהקו איטי. עכשיו renderedAt משמש *מזהה* בלבד:
+  //   · גרסה שכבר הוצגה בסשן הזה ומוצגת *שוב* = עותק מהמטמון ⇒ רענון.
+  //   · גרסה חדשה (גם זו שהרענון הביא) נרשמת ולא מרועננת ⇒ אין לולאה.
+  //   · חזרה ללשונית — לפי שעון הדפדפן בלבד (performance.now).
+  // ⚠️ בלי setState — רק router.refresh.
   // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     const STALE_MS = 15_000
-    if (Date.now() - renderedAt > STALE_MS) router.refresh()
+    const firstSeen = SEEN_RENDERS.get(renderedAt)
+    if (firstSeen === undefined) SEEN_RENDERS.set(renderedAt, performance.now())
+    else if (performance.now() - firstSeen > STALE_MS) router.refresh()
+
     const onVisible = () => {
-      if (document.visibilityState === 'visible' && Date.now() - renderedAt > STALE_MS) router.refresh()
+      const t = SEEN_RENDERS.get(renderedAt) ?? performance.now()
+      if (document.visibilityState === 'visible' && performance.now() - t > STALE_MS) router.refresh()
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)

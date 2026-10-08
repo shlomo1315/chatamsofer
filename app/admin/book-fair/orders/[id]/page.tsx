@@ -59,7 +59,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   // ── שכנות כרונולוגיות + ספרים בעייתיים ──
   // ⚠️ השכנות הן גיבוי בלבד ל"הבאה/הקודמת": כשנכנסים מהטבלה, הסדר הוא
   // של הטבלה (OrderNav). מדלגים על מבוטלות ועל ממתינות לתשלום — כמו "הכל".
-  const live = '("cancelled","pending_payment")'
+  const live = '("cancelled","pending_payment","failed")'
   const [{ data: newer }, { data: older }, { data: probRow }] = await Promise.all([
     supabase.from('book_fair_orders').select('id').not('status', 'in', live)
       .gt('created_at', o.created_at).order('created_at', { ascending: true }).limit(1),

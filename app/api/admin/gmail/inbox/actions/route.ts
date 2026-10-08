@@ -171,7 +171,17 @@ export async function POST(request: NextRequest) {
   // 🔴 חשבון שנבחר במפורש נבדק *תמיד* (ביקורת אבטחה 07.10): קודם, בקשה עם
   // messageId של הודעה מורשית + accountId של תיבה אחרת עברה את בדיקת
   // ההודעה בלבד — ונשלחה מהתיבה האחרת.
-  if ((body.accountId || (!body.messageId && !body.threadId)) && !(await canUseGmailAccount(db, staff, acc.id))) {
+  //
+  // ⚠️ תיקון 08.10: התשובה נשלחת תמיד עם accountId של התיבה שההודעה הגיעה
+  // אליה. הודעה שנותבה למחלקה (department / original_to) קריאה לצוות
+  // המחלקה, גם כשהתיבה עצמה כללית — ולכן חשבון *זהה* לזה של ההודעה אינו
+  // נבדק בנפרד. רק חשבון אחר מזה של ההודעה דורש הרשאה לתיבה.
+  let mustCheckAccount = !body.messageId && !body.threadId
+  if (body.accountId && !mustCheckAccount) {
+    const own = body.messageId ? await accountFor(db, body.messageId) : null
+    mustCheckAccount = !own || own.id !== acc.id
+  }
+  if (mustCheckAccount && !(await canUseGmailAccount(db, staff, acc.id))) {
     return NextResponse.json({ error: 'אין הרשאה לשלוח מהתיבה הזו' }, { status: 403 })
   }
 

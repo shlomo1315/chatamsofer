@@ -116,8 +116,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (body.delivery_method !== 'shipping' || order.delivery_method !== 'pickup') {
       return NextResponse.json({ error: 'ניתן להעביר רק מאיסוף עצמי למשלוח' }, { status: 400 })
     }
-    if (order.status === 'delivered') {
-      return NextResponse.json({ error: 'ההזמנה כבר נמסרה' }, { status: 400 })
+    // ⚠️ רק הזמנה ששולמה ולא נמסרה — כמו בכרטיס. מבוטלת / נכשלה / ממתינה
+    // לתשלום אינה הזמנה לשלוח (תיקון 08.10: הבדיקה הייתה בממשק בלבד).
+    if (!['paid', 'picking', 'packed'].includes(String(order.status))) {
+      return NextResponse.json({ error: 'ניתן להעביר למשלוח רק הזמנה ששולמה וטרם נמסרה' }, { status: 400 })
     }
     if (!body.city_id || body.address_text === undefined) {
       return NextResponse.json({ error: 'יש לבחור עיר ולהזין כתובת למשלוח' }, { status: 400 })

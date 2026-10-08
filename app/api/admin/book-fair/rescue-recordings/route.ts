@@ -3,6 +3,7 @@ import { requirePermission, forbidden, getServiceClient, serverMisconfigured } f
 import { downloadFileFromYemot } from '@/lib/yemot'
 import { listYemotFolder, timestampOf } from '@/lib/bookFairInquiryAudio'
 import { transcribeHebrew } from '@/lib/elevenStt'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // שחזור הקלטות שם/כתובת בהזמנות הטלפוניות + תמלול (בקשת המשתמש 08.10).
@@ -62,12 +63,17 @@ async function run(apply: boolean) {
   const log: string[] = []
   const r = { name_rescued: 0, addr_rescued: 0, addr_for_staff: 0, extra_recordings: 0, not_found: 0, transcribed: 0 }
 
-  const { data, error } = await db.from('book_fair_recordings')
-    .select('id, order_id, kind, storage_path, transcript, order:book_fair_orders!inner(order_number, created_at, customer_phone, status, channel)')
-    .eq('order.channel', 'phone')
-    .not('order.status', 'in', '(cancelled,pending_payment,failed)')
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  const recs = (data ?? []) as unknown as Rec[]
+  // ⚠️ בדפים (תיקון 08.10): מעל 1,000 שורות — הזמנות × 2 ועוד ההקלטות
+  // הנוספות שהנתיב עצמו מוסיף — שורות היו מדולגות בלי שגיאה.
+  const { rows: recs, error } = await fetchAllRows<Rec>((from, to) =>
+    db.from('book_fair_recordings')
+      .select('id, order_id, kind, storage_path, transcript, order:book_fair_orders!inner(order_number, created_at, customer_phone, status, channel)')
+      .eq('order.channel', 'phone')
+      .not('order.status', 'in', '(cancelled,pending_payment,failed)')
+      .order('id')
+      .range(from, to) as unknown as PromiseLike<{ data: Rec[] | null; error: { message: string } | null }>,
+  )
+  if (error) return NextResponse.json({ error }, { status: 500 })
 
   // ── 1. הקלטות חסרות ──
   const byOrder = new Map<string, Rec[]>()
@@ -78,10 +84,13 @@ async function run(apply: boolean) {
     byOrder.set(x.order_id, list)
   }
 
-  // ⚠️ הזמנה שכבר קיבלה "הקלטות נוספות" מהשחזור — לא מצרפים שוב.
-  const { data: prevNotes } = await db.from('book_fair_recordings')
-    .select('order_id').eq('kind', 'note').like('provider_path', 'ivr2:/Trash/%')
-  const alreadyNoted = new Set((prevNotes ?? []).map(n => n.order_id as string))
+  // ⚠️ הזמנה שהשחזור כבר טיפל בה — כל קובץ שנשמר ב-book-fair/rescued/ (שם,
+  // כתובת או הקלטה נוספת). לא מורידים, מתמללים ומצרפים שוב בכל הרצה.
+  // (תיקון 08.10: קודם נבדקו רק הקלטות נוספות — הזמנה עם קובץ יחיד, שנכנס
+  // כשם, קיבלה אותו שוב כ"הקלטה נוספת" בהרצה השנייה.)
+  const { data: prevRescued } = await db.from('book_fair_recordings')
+    .select('order_id').like('storage_path', 'book-fair/rescued/%')
+  const alreadyNoted = new Set((prevRescued ?? []).map(n => n.order_id as string))
 
   const files: { path: string; ts: number }[] = []
   if (byOrder.size) {
@@ -105,10 +114,13 @@ async function run(apply: boolean) {
     const o = one(missing[0].order)
     const t = Math.floor(new Date(o.created_at).getTime() / 1000)
     const ph = phoneKey(o.customer_phone)
-    const cands = ph.length >= 7
+    // ⚠️ כפילות בין שתי התיקיות (אותה חותמת) נספרת פעם אחת: אחרת "בדיוק שני
+    // קבצים" היה מצמיד לכתובת עותק של הקלטת השם.
+    const seenTs = new Set<number>()
+    const cands = (ph.length >= 7
       ? files.filter(f => f.path.includes(ph) && f.ts >= t - WINDOW_BEFORE && f.ts <= t + WINDOW_AFTER)
           .sort((a, b) => a.ts - b.ts)
-      : []
+      : []).filter(f => (seenTs.has(f.ts) ? false : (seenTs.add(f.ts), true)))
     if (!cands.length) { r.not_found += missing.length; log.push(`${o.order_number} — לא נמצאו קבצים`); continue }
     if (!apply) { log.push(`${o.order_number} — ${cands.length} הקלטות בשיחה · חסרות: ${missing.map(m => m.kind).join('+')}`); continue }
 
@@ -120,7 +132,8 @@ async function run(apply: boolean) {
         if (f.ok && f.data && f.data.byteLength > 1000) { buf = f.data; break }
       }
       if (!buf) continue
-      const storage = `book-fair/rescued/${orderId}/${c.ts}.wav`
+      // ⚠️ שם הקובץ במפתח ולא רק החותמת — שני קבצים מאותה שנייה דרסו זה את זה.
+      const storage = `book-fair/rescued/${orderId}/${c.path.split('/').pop()!.replace(/[^\w.-]/g, '_')}`
       const up = await db.storage.from('documents').upload(storage, buf, { contentType: 'audio/wav', upsert: true })
       if (up.error) continue
       got.push({ path: c.path, storage, text: await transcribeHebrew(buf, { timeoutMs: 30_000 }) })
