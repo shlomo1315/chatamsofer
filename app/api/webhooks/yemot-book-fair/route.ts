@@ -36,6 +36,7 @@ import { getBookFairMessages } from '@/lib/yemotBookFairMessages'
 import { transcribeHebrew } from '@/lib/elevenStt'
 import { PICKUP_CONFIG_KEY, mergePickupConfig, pickupStatus } from '@/lib/bookFairPickup'
 import { archiveInquiryRecording, listYemotFolder } from '@/lib/bookFairInquiryAudio'
+import { hebrewNumbersToDigits } from '@/lib/hebrewNumbers'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -73,6 +74,11 @@ function paramFor(params: Record<string, string>, base: string): string {
  * הערך כאן הוא לתיעוד ולזיהוי הספק ברישום התשלום בלבד.
  */
 const NEDARIM_TERMINAL = '7004562'
+
+/** כתובת מתומללת ← ספרות במקום מספרים במילים (lib/hebrewNumbers). */
+function addrDigits(s: string | null | undefined): string | null {
+  return s ? hebrewNumbersToDigits(s) : null
+}
 
 function db() {
   return getServiceClient()
@@ -611,7 +617,8 @@ async function stashRecording(
       kind,
       provider_path: providerPath,
       storage_path: data ? key : null,
-      transcript: heard ?? transcript ?? null,
+      // 🔢 כתובת נשמרת עם ספרות ("עשרים ושתיים" → 22) — בקשת המשתמש 08.10
+      transcript: kind === 'address' ? addrDigits(heard ?? transcript) : (heard ?? transcript ?? null),
     }, { onConflict: 'call_id,kind' })
     return heard
   } catch (e) {
@@ -662,7 +669,8 @@ async function createOrder(state: IvrState, cartToken: string, phone: string, ca
     delivery_method: state.delivery ?? 'pickup',
     city_id: state.delivery === 'shipping' ? state.city_id : null,
     // ⚠️ בטלפון הכתובת מגיעה מהקלטה, לא מהקלדה.
-    address_text: state.delivery === 'shipping' ? (state.address_transcript ?? null) : null,
+    // 🔢 נשמרת עם ספרות; ההקראה למתקשר בשיחה נשארת מהתמלול המקורי.
+    address_text: state.delivery === 'shipping' ? addrDigits(state.address_transcript) : null,
     // 🔴 מאומתת רק כשהמתקשר שמע את התמלול והקיש 1 (החלטת המשתמש 05.10).
     // בלי תמלול, או כשנגמרו ההקלטות בלי אישור — ממתינה לאימות במשרד.
     address_confirmed: state.delivery === 'shipping' && state.address_caller_confirmed === true,
@@ -694,7 +702,7 @@ async function createOrder(state: IvrState, cartToken: string, phone: string, ca
   // ריק עד כה — ההקלטה הייתה תלויה לגמרי בימות.
   const recs = [
     ...(state.address_recording ? [{ kind: 'address' as const, path: state.address_recording,
-      transcript: state.address_transcript ?? null }] : []),
+      transcript: addrDigits(state.address_transcript) }] : []),
     ...(state.name_recording ? [{ kind: 'name' as const, path: state.name_recording,
       transcript: state.name_transcript ?? null }] : []),
   ]

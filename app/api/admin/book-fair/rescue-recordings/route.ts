@@ -4,6 +4,7 @@ import { downloadFileFromYemot } from '@/lib/yemot'
 import { listYemotFolder, timestampOf } from '@/lib/bookFairInquiryAudio'
 import { transcribeHebrew } from '@/lib/elevenStt'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { hebrewNumbersToDigits } from '@/lib/hebrewNumbers'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // שחזור הקלטות שם/כתובת בהזמנות הטלפוניות + תמלול (בקשת המשתמש 08.10).
@@ -156,7 +157,7 @@ async function run(apply: boolean) {
         const a = got[0]
         used.add(a.path)
         await db.from('book_fair_recordings').update({
-          storage_path: a.storage, provider_path: a.path, transcript: a.text, transcript_source: 'scribe',
+          storage_path: a.storage, provider_path: a.path, transcript: a.text ? hebrewNumbersToDigits(a.text) : null, transcript_source: 'scribe',
         }).eq('id', addrRec.id)
         r.addr_rescued++
       } else {
@@ -185,7 +186,7 @@ async function run(apply: boolean) {
     if (!blob) continue
     const text = await transcribeHebrew(await blob.arrayBuffer(), { timeoutMs: 30_000 })
     if (!text) continue
-    await db.from('book_fair_recordings').update({ transcript: text, transcript_source: 'scribe' }).eq('id', x.id)
+    await db.from('book_fair_recordings').update({ transcript: x.kind === 'address' ? hebrewNumbersToDigits(text) : text, transcript_source: 'scribe' }).eq('id', x.id)
     r.transcribed++
   }
 
