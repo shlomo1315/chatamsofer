@@ -31,7 +31,10 @@ async function getOrders(): Promise<BookFairOrder[]> {
   const { rows, error } = await fetchAllRows<BookFairOrder>((from, to) =>
     supabase
       .from('book_fair_orders')
-      .select('id, order_number, channel, status, customer_name, customer_phone, customer_email, delivery_method, city_id, address_text, address_confirmed, items_total_agorot, shipping_agorot, total_agorot, refunded_agorot, payment_method, paid_at, created_at, updated_at, city:book_fair_cities(id, name)')
+      // ⚡ 08.10: רק מה שהטבלה מציגה, מסננת או מחפשת. ~1MB של שורות נשלח
+      // לדפדפן בכל טעינה, וכתובת/סכומי ביניים/updated_at לא הוצגו כלל.
+      // ⚠️ sold_by נוסף: עמודת הערוץ מציגה אותו, והוא פשוט לא נשלף.
+      .select('id, order_number, channel, status, customer_name, customer_phone, customer_email, delivery_method, address_confirmed, total_agorot, refunded_agorot, payment_method, sold_by, paid_at, created_at, city:book_fair_cities(id, name)')
       .order('created_at', { ascending: false })
       .range(from, to) as unknown as PromiseLike<{ data: BookFairOrder[] | null; error: { message: string } | null }>
   )
@@ -64,27 +67,30 @@ async function getOrders(): Promise<BookFairOrder[]> {
  * ספירת הפריטים לכל הזמנה (לעמודה "ספרים") ומזהי הספרים שבה (לסינון
  * "ספר בעייתי").
  */
-async function getItems(orderIds: string[]): Promise<{
+async function getItems(): Promise<{
   counts: Record<string, number>
   books: Record<string, string[]>
 }> {
   const counts: Record<string, number> = {}
   const books: Record<string, string[]> = {}
-  if (!orderIds.length || !isSupabaseConfigured()) return { counts, books }
+  if (!isSupabaseConfigured()) return { counts, books }
   const supabase = await createClient()
 
-  // ⚠️ שליפה במנות: רשימת in ארוכה מדי נחתכת, וספירה חלקית הייתה
-  // מציגה "0 ספרים" על הזמנות אמיתיות.
-  for (let i = 0; i < orderIds.length; i += 200) {
-    const chunk = orderIds.slice(i, i + 200)
-    const { data } = await supabase
-      .from('book_fair_order_items')
+  // ⚡ 08.10: כל השורות, בדפים מקבילים (fetchAllRows) — ולא במנות לפי מזהי
+  // הזמנות. קודם: 10 שאילתות in טוריות (~1.7 שנ'), ורק *אחרי* שההזמנות
+  // נשלפו. עכשיו ~0.2 שנ', ובמקביל לשליפת ההזמנות.
+  // ⚠️ order('id'): דפדוף בלי סדר קבוע עלול לדלג על שורות או לכפול אותן.
+  type Row = { order_id: string; book_id: string | null; quantity: number }
+  const { rows, error } = await fetchAllRows<Row>((from, to) =>
+    supabase.from('book_fair_order_items')
       .select('order_id, book_id, quantity')
-      .in('order_id', chunk)
-    for (const row of data ?? []) {
-      counts[row.order_id] = (counts[row.order_id] ?? 0) + row.quantity
-      if (row.book_id) (books[row.order_id] ??= []).push(row.book_id)
-    }
+      .order('id')
+      .range(from, to) as unknown as PromiseLike<{ data: Row[] | null; error: { message: string } | null }>
+  )
+  if (error) console.error('[book-fair/orders] items fetch failed:', error)
+  for (const row of rows) {
+    counts[row.order_id] = (counts[row.order_id] ?? 0) + row.quantity
+    if (row.book_id) (books[row.order_id] ??= []).push(row.book_id)
   }
   return { counts, books }
 }
@@ -98,27 +104,37 @@ async function getItems(orderIds: string[]): Promise<{
  *
  * ⚠️ הזמנה טלפונית *בלי שום* שורת הקלטה נחשבת חסרה בשני הסוגים.
  */
-async function getRecordingGaps(orders: BookFairOrder[]): Promise<Record<string, RecordingGap>> {
-  const out: Record<string, RecordingGap> = {}
-  const phoneIds = orders.filter(o => o.channel === 'phone').map(o => o.id)
-  if (!phoneIds.length || !isSupabaseConfigured()) return out
-  const supabase = await createClient()
-
+/** הזמנה ← אילו הקלטות שמורות יש לה. נשלף במקביל להזמנות (ראו למטה). */
+async function getSavedRecordings(): Promise<Record<string, { name: boolean; address: boolean }>> {
   const has: Record<string, { name: boolean; address: boolean }> = {}
-  for (let i = 0; i < phoneIds.length; i += 200) {
-    const { data } = await supabase
-      .from('book_fair_recordings')
+  if (!isSupabaseConfigured()) return has
+  const supabase = await createClient()
+  type Row = { order_id: string | null; kind: string; storage_path: string | null }
+  const { rows, error } = await fetchAllRows<Row>((from, to) =>
+    supabase.from('book_fair_recordings')
       .select('order_id, kind, storage_path')
-      .in('order_id', phoneIds.slice(i, i + 200))
       .in('kind', ['name', 'address'])
-    for (const row of data ?? []) {
-      const h = (has[row.order_id] ??= { name: false, address: false })
-      if (row.storage_path) h[row.kind as 'name' | 'address'] = true
-    }
+      .not('storage_path', 'is', null)
+      .order('id')
+      .range(from, to) as unknown as PromiseLike<{ data: Row[] | null; error: { message: string } | null }>
+  )
+  if (error) console.error('[book-fair/orders] recordings fetch failed:', error)
+  for (const row of rows) {
+    if (!row.order_id) continue
+    const h = (has[row.order_id] ??= { name: false, address: false })
+    h[row.kind as 'name' | 'address'] = true
   }
-  for (const id of phoneIds) {
-    const h = has[id] ?? { name: false, address: false }
-    out[id] = { name: !h.name, address: !h.address }
+  return has
+}
+
+function recordingGaps(
+  orders: BookFairOrder[], saved: Record<string, { name: boolean; address: boolean }>,
+): Record<string, RecordingGap> {
+  const out: Record<string, RecordingGap> = {}
+  for (const o of orders) {
+    if (o.channel !== 'phone') continue
+    const h = saved[o.id] ?? { name: false, address: false }
+    out[o.id] = { name: !h.name, address: !h.address }
   }
   return out
 }
@@ -148,11 +164,12 @@ async function getProblemBooks(): Promise<ProblemBookInfo[]> {
 
 export default async function BookFairOrdersPage() {
   await guardPage('book_fair')
-  const [orders, problemBooks] = await Promise.all([getOrders(), getProblemBooks()])
-  const [{ counts, books }, recGaps] = await Promise.all([
-    getItems(orders.map(o => o.id)),
-    getRecordingGaps(orders),
+  // ⚡ 08.10: הכל במקביל — שום שליפה אינה ממתינה לשליפה אחרת. קודם הספרים
+  // וההקלטות חיכו להזמנות ונשלפו במנות טוריות: 5–8 שנ' לטעינת הדף.
+  const [orders, problemBooks, { counts, books }, saved] = await Promise.all([
+    getOrders(), getProblemBooks(), getItems(), getSavedRecordings(),
   ])
+  const recGaps = recordingGaps(orders, saved)
 
   return (
     <div className="flex flex-col gap-6">
