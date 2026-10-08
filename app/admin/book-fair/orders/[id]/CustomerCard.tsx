@@ -35,6 +35,9 @@ export default function CustomerCard({ order, recordings, cities }: {
   const [error, setError] = useState('')
 
   const shipping = order.delivery_method === 'shipping'
+  // איסוף עצמי ששולם ולא נאסף — ניתן להעביר למשלוח (ראו למטה).
+  const pickupOpen = order.delivery_method === 'pickup' && order.channel !== 'fair' &&
+    !order.picked_up_at && ['paid', 'picking', 'packed'].includes(order.status)
   const nameRec = recordings.find(r => r.kind === 'name')
   const addrRec = recordings.find(r => r.kind === 'address')
   // ⚠️ הקלטה מסוג לא מוכר לעולם אינה מוסתרת בשקט — כך נעלמה פעם הקלטת השם.
@@ -165,6 +168,49 @@ export default function CustomerCard({ order, recordings, cities }: {
               minLen={5}
               disabled={!!busy}
             />
+          )}
+        </Field>
+      )}
+
+      {/* ── איסוף עצמי שלא נאסף → העברה למשלוח (בקשת המשתמש 08.10) ──
+          🔴 היריד נסגר לעונה: ללקוח אין מאיפה לאסוף, ובהזמנת איסוף לא היה
+          שדה כתובת בכלל. ⚠️ לא בדוכן — שם הספרים נמסרו ביד. */}
+      {!shipping && pickupOpen && (
+        <Field
+          label="איסוף עצמי — טרם נאסף"
+          chip={editing === 'address' ? 'edit' : 'warn'}
+          chipText={editing === 'address' ? 'העברה למשלוח' : 'לא נאסף'}
+        >
+          {editing === 'address' ? (
+            <div className="flex flex-col gap-2">
+              <select
+                value={cityId} onChange={e => setCityId(e.target.value)}
+                aria-label="עיר"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="">בחרו עיר</option>
+                {cities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <Editor
+                text={text} setText={setText} rows={2} placeholder="רחוב, מספר בית ודירה"
+                busy={busy === 'address'} disabled={!!busy || text.trim().length < 5 || !cityId}
+                onSave={() => save({ delivery_method: 'shipping', address_text: text, city_id: cityId, address_confirmed: true }, 'address')}
+                onCancel={() => setEditing(null)}
+              />
+              <p className="text-xs text-slate-500">דמי המשלוח לא ייגבו — ההזמנה כבר שולמה.</p>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm text-slate-600">ההזמנה בוצעה לאיסוף עצמי מהדוכן ועדיין לא נאספה.</p>
+              {canEdit && (
+                <button
+                  onClick={() => startEdit('address')}
+                  className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 text-sm font-semibold text-white transition hover:bg-indigo-700"
+                >
+                  <MapPin size={15} /> העברה למשלוח
+                </button>
+              )}
+            </div>
           )}
         </Field>
       )}

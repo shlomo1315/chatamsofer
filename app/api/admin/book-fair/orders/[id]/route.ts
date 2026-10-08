@@ -102,10 +102,34 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
   }
 
+  // ── העברה מאיסוף עצמי למשלוח (בקשת המשתמש 08.10) ──
+  //
+  // 🔴 היריד נסגר לעונה, ו-7 הזמנות איסוף ששולמו לא נאספו — ללקוח אין מאיפה
+  // לאסוף, ובכרטיס לא היה שדה כתובת בכלל. ההמרה מחייבת עיר וכתובת באותה
+  // בקשה: הזמנת משלוח בלי כתובת היא הזמנה שאי אפשר לשלוח.
+  //
+  // ⚠️ דמי המשלוח *אינם* מחושבים מחדש — ההזמנה כבר שולמה, והסכום שנגבה
+  // הוא הסכום (ראו החסימה על עריכת סכומים למטה).
+  // ⚠️ רק לפני מסירה: הזמנה שנאספה כבר יצאה מהדוכן.
+  let deliveryMethod = order.delivery_method
+  if (body.delivery_method !== undefined) {
+    if (body.delivery_method !== 'shipping' || order.delivery_method !== 'pickup') {
+      return NextResponse.json({ error: 'ניתן להעביר רק מאיסוף עצמי למשלוח' }, { status: 400 })
+    }
+    if (order.status === 'delivered') {
+      return NextResponse.json({ error: 'ההזמנה כבר נמסרה' }, { status: 400 })
+    }
+    if (!body.city_id || body.address_text === undefined) {
+      return NextResponse.json({ error: 'יש לבחור עיר ולהזין כתובת למשלוח' }, { status: 400 })
+    }
+    patch.delivery_method = 'shipping'
+    deliveryMethod = 'shipping'
+  }
+
   // ── כתובת שאומתה מההקלטה ──
   if (body.address_text !== undefined) {
     const addr = clean(body.address_text)
-    if (order.delivery_method !== 'shipping') {
+    if (deliveryMethod !== 'shipping') {
       return NextResponse.json({ error: 'הזמנה לאיסוף עצמי אינה כוללת כתובת' }, { status: 400 })
     }
     if (addr.length < 5) {

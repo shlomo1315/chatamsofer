@@ -175,7 +175,7 @@ function columnsOf(counts: Record<string, number>, gaps: Record<string, Recordin
 }
 
 /** כרטיסי הסינון המהיר — מה שהצוות צריך לראות ביום עבודה. */
-const CARDS: { key: BookFairOrderStatus | 'all' | 'needs_address' | 'needs_name' | 'missing_rec'; label: string; icon: typeof Clock; cls: string }[] = [
+const CARDS: { key: BookFairOrderStatus | 'all' | 'needs_address' | 'needs_name' | 'missing_rec' | 'pickup_waiting'; label: string; icon: typeof Clock; cls: string }[] = [
   { key: 'all',            label: 'הכל',              icon: Package,       cls: 'border-slate-200 text-slate-600' },
   { key: 'paid',           label: 'שולם — לליקוט',     icon: CheckCircle2,  cls: 'border-emerald-200 text-emerald-700' },
   // 🔴 "על מי עוד צריך לעבוד" (בקשת המשתמש 07.10): הזמנות טלפוניות שהשם
@@ -184,7 +184,8 @@ const CARDS: { key: BookFairOrderStatus | 'all' | 'needs_address' | 'needs_name'
   // 🔴 08.10: הזמנות טלפוניות שההקלטה בהן לא נמצאה ועדיין לא הושלמו ידנית.
   { key: 'missing_rec',    label: 'חסרה הקלטה',        icon: MicOff,        cls: 'border-rose-200 text-rose-700' },
   { key: 'needs_address',  label: 'ממתין לאימות כתובת', icon: Mic,          cls: 'border-purple-200 text-purple-700' },
-  { key: 'picking',        label: 'בליקוט',            icon: Package,       cls: 'border-sky-200 text-sky-700' },
+  { key: 'pickup_waiting', label: 'איסוף — טרם נאסף',  icon: Store,         cls: 'border-orange-200 text-orange-700' },
+  { key: 'picking',        label: 'בליקוט / נארז',     icon: Package,       cls: 'border-sky-200 text-sky-700' },
   { key: 'shipped',        label: 'נשלח',              icon: Truck,         cls: 'border-violet-200 text-violet-700' },
   // ⚠️ כולל את מכירות הדוכן — הקונה לוקח את הספרים ביד (בקשת המשתמש 05.10).
   { key: 'delivered',      label: 'נמסר',              icon: CheckCircle2,  cls: 'border-teal-200 text-teal-700' },
@@ -193,10 +194,10 @@ const CARDS: { key: BookFairOrderStatus | 'all' | 'needs_address' | 'needs_name'
   // בתוך "הכל" בלי שאפשר היה לסנן ולנקות אותן.
   { key: 'pending_payment', label: 'ממתין לתשלום',     icon: Clock,         cls: 'border-amber-200 text-amber-700' },
   // ⚠️ "זוכה" הופיע בטבלה אך לא ככרטיס, ולכן לא הייתה דרך לסנן לפיו.
-  { key: 'refunded',       label: 'זוכה',              icon: Undo2,         cls: 'border-amber-200 text-amber-700' },
+  { key: 'refunded',       label: 'זוכה (מלא/חלקי)',   icon: Undo2,         cls: 'border-amber-200 text-amber-700' },
   // ⚠️ המבוטלות בכרטיס נפרד ומחוץ ל"הכל": בערב הפתיחה הן היו רוב
   // השורות (ניסיונות שלא הושלמו) והסתירו את ההזמנות שצריך לטפל בהן.
-  { key: 'cancelled',      label: 'בוטל',              icon: XCircle,       cls: 'border-slate-200 text-slate-400' },
+  { key: 'cancelled',      label: 'בוטל / נכשל',       icon: XCircle,       cls: 'border-slate-200 text-slate-400' },
 ]
 
 /**
@@ -211,8 +212,23 @@ const CARDS: { key: BookFairOrderStatus | 'all' | 'needs_address' | 'needs_name'
  */
 function inCard(o: BookFairOrder, key: string): boolean {
   switch (key) {
+    // 🔴 08.10: גם failed מחוץ ל"הכל" — 148 ניסיונות תשלום שנכשלו ניפחו את
+    // המונה ולא הופיעו באף כרטיס אחר. הם בכרטיס "בוטל / נכשל".
     case 'all':
-      return o.status !== 'cancelled' && o.status !== 'pending_payment'
+      return o.status !== 'cancelled' && o.status !== 'pending_payment' && o.status !== 'failed'
+    // 🔴 08.10: איסוף ששולם ולא נאסף (טלפון/אתר) לא הופיע באף כרטיס —
+    // "שולם — לליקוט" הוא משלוחים בלבד ו"נמסר" הוא הדוכן. היריד נסגר,
+    // וההזמנות האלה צריכות טיפול (העברה למשלוח בכרטיס ההזמנה).
+    case 'pickup_waiting':
+      return o.delivery_method === 'pickup' && o.channel !== 'fair' && !o.picked_up_at &&
+        (o.status === 'paid' || o.status === 'picking' || o.status === 'packed')
+    // ⚠️ "נארז" לא היה בשום כרטיס — הזמנה שסומנה ארוזה נעלמה מהמונים.
+    case 'picking':
+      return o.status === 'picking' || o.status === 'packed'
+    case 'refunded':
+      return o.status === 'refunded' || o.status === 'partially_refunded'
+    case 'cancelled':
+      return o.status === 'cancelled' || o.status === 'failed'
     case 'needs_address':
       return addressPending(o) && isLive(o)
     // ⚠️ בלי pending_payment, כמו בכתובת: שיחה שלא הגיעה לתשלום אינה הזמנה.
@@ -428,7 +444,7 @@ export default function OrdersClient({ orders, itemCounts, orderBooks, problemBo
       {/* ── כרטיסי סינון ── */}
       {/* ⚠️ 11 כרטיסים: ב-lg שתי שורות מלאות כמעט (6+5), ורק במסך רחב
           מאוד כולם בשורה אחת — רוחב קטן יותר היה שובר את התוויות. */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-12">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7 2xl:grid-cols-13">
         {CARDS.map(({ key, label, icon: Icon, cls }) => {
           const n = counts[key] ?? 0
           const active = card === key

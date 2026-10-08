@@ -34,7 +34,7 @@ async function getOrders(): Promise<BookFairOrder[]> {
       // ⚡ 08.10: רק מה שהטבלה מציגה, מסננת או מחפשת. ~1MB של שורות נשלח
       // לדפדפן בכל טעינה, וכתובת/סכומי ביניים/updated_at לא הוצגו כלל.
       // ⚠️ sold_by נוסף: עמודת הערוץ מציגה אותו, והוא פשוט לא נשלף.
-      .select('id, order_number, channel, status, customer_name, customer_phone, customer_email, delivery_method, address_confirmed, total_agorot, refunded_agorot, payment_method, sold_by, paid_at, created_at, city:book_fair_cities(id, name)')
+      .select('id, order_number, channel, status, customer_name, customer_phone, customer_email, delivery_method, address_confirmed, total_agorot, refunded_agorot, payment_method, sold_by, picked_up_at, paid_at, created_at, city:book_fair_cities(id, name)')
       .order('created_at', { ascending: false })
       .range(from, to) as unknown as PromiseLike<{ data: BookFairOrder[] | null; error: { message: string } | null }>
   )
