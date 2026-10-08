@@ -162,6 +162,11 @@ async function getProblemBooks(): Promise<ProblemBookInfo[]> {
   }))
 }
 
+/** רגע הרינדור בשרת — כדי שהלקוח יזהה שהוא מציג עותק ישן מהמטמון. */
+function serverNow(): number {
+  return Date.now()
+}
+
 export default async function BookFairOrdersPage() {
   await guardPage('book_fair')
   // ⚡ 08.10: הכל במקביל — שום שליפה אינה ממתינה לשליפה אחרת. קודם הספרים
@@ -180,6 +185,7 @@ export default async function BookFairOrdersPage() {
         orderBooks={books}
         problemBooks={problemBooks}
         recGaps={recGaps}
+        renderedAt={serverNow()}
       />
     </div>
   )

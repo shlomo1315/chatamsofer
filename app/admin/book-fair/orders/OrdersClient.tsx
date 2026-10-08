@@ -227,7 +227,7 @@ function inCard(o: BookFairOrder, key: string): boolean {
   }
 }
 
-export default function OrdersClient({ orders, itemCounts, orderBooks, problemBooks, recGaps }: {
+export default function OrdersClient({ orders, itemCounts, orderBooks, problemBooks, recGaps, renderedAt }: {
   orders: BookFairOrder[]
   itemCounts: Record<string, number>
   /** הזמנה ← מזהי הספרים שבה. */
@@ -235,6 +235,8 @@ export default function OrdersClient({ orders, itemCounts, orderBooks, problemBo
   problemBooks: ProblemBookInfo[]
   /** הזמנה טלפונית ← אילו הקלטות חסרות. */
   recGaps: Record<string, RecordingGap>
+  /** רגע הרינדור בשרת (ms). */
+  renderedAt: number
 }) {
   const router = useRouter()
   const [query, setQuery] = useState('')
@@ -280,17 +282,10 @@ export default function OrdersClient({ orders, itemCounts, orderBooks, problemBo
 
   // ⚠️ המונה והסינון מאותה פונקציה (inCard) — מונה שמחושב בנפרד
   // היה מראה מספר אחד בכרטיס ושורות אחרות בטבלה.
-  const counts = useMemo(() => {
-    const c: Record<string, number> = {}
-    for (const { key } of CARDS) c[key] = orders.filter(o => matchCard(o, key)).length
-    return c
-  }, [orders, matchCard])
-
-  const filtered = useMemo(() => {
-    // ⚠️ המבוטלות וה"ממתינות לתשלום" מוסתרות מ"הכל" ונגישות רק
-    // בכרטיס שלהן: שתיהן אינן הזמנות אלא ניסיונות שלא הושלמו,
-    // ובערב הפתיחה הן היו רוב השורות והסתירו את מה שצריך טיפול.
-    let rows = orders.filter(o => matchCard(o, card))
+  // ── החיפוש והספר הבעייתי — לפני הכרטיס ──
+  // ⚠️ נפרד מהכרטיס כדי שהמונים יחושבו על אותה רשימה (ראו counts למטה).
+  const searched = useMemo(() => {
+    let rows = orders
 
     if (problem) {
       rows = rows.filter(o => {
@@ -308,7 +303,12 @@ export default function OrdersClient({ orders, itemCounts, orderBooks, problemBo
       (o.customer_email ?? '').toLowerCase().includes(q) ||
       (cityOf(o) ?? '').toLowerCase().includes(q)
     )
-  }, [orders, card, query, problem, problemByOrder, matchCard])
+  }, [orders, query, problem, problemByOrder])
+
+  // ⚠️ המבוטלות וה"ממתינות לתשלום" מוסתרות מ"הכל" ונגישות רק
+  // בכרטיס שלהן: שתיהן אינן הזמנות אלא ניסיונות שלא הושלמו,
+  // ובערב הפתיחה הן היו רוב השורות והסתירו את מה שצריך טיפול.
+  const filtered = useMemo(() => searched.filter(o => matchCard(o, card)), [searched, card, matchCard])
 
   // 🔴 הסדר חובה: useTableColumns קודם (מסנן וממיין), ורק אז הדפדוף
   // על התוצאה. חיתוך לעמוד לפני סינון היה מציג עמוד ריק על סינון תקין.
@@ -317,10 +317,45 @@ export default function OrdersClient({ orders, itemCounts, orderBooks, problemBo
   })
   const pg = useTablePagination(tc.rows)
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 מוני הכרטיסים — על אותה רשימה שהטבלה מציגה (08.10: "הקוביות לא
+  // מעודכנות"). קודם נספרו *כל* ההזמנות: סינון לפי עיר, חיפוש או ספר בעייתי
+  // השאירו את המונים על המספרים הכלליים, והכרטיס לא תאם לשורות בטבלה.
+  //
+  // ⚠️ אותה פונקציה (matchCard) למונה ולסינון — מונה שמחושב בנפרד היה
+  // מראה מספר אחד בכרטיס ושורות אחרות בטבלה.
+  // ─────────────────────────────────────────────────────────────────────────
+  const { applyFilters } = tc
+  const counts = useMemo(() => {
+    const base = applyFilters(searched)
+    const c: Record<string, number> = {}
+    for (const { key } of CARDS) c[key] = base.filter(o => matchCard(o, key)).length
+    return c
+  }, [searched, matchCard, applyFilters])
+
   // 🔴 "הבאה/הקודמת" בכרטיס ההזמנה הולכות לפי הסדר שבטבלה — אחרי כרטיס,
   // חיפוש, סינון ומיון. כך עוברים ברצף על "ממתין לאימות שם" למשל.
   // ⚠️ כתיבה לאחסון בלבד, בלי setState — אין כאן סיכון ללולאת רינדור.
   useEffect(() => { saveNavList(tc.rows.map(o => o.id)) }, [tc.rows])
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 נתונים טריים בחזרה לרשימה (08.10: "הקוביות לא מעודכנות").
+  //
+  // חזרה בכפתור "אחורה" אחרי אימות שם בכרטיס ההזמנה מציגה את העותק מהמטמון
+  // של הנתב — עם המונים והסטטוסים מלפני העדכון. כך גם לשונית שחוזרים אליה.
+  //
+  // ⚠️ רק כשהעותק ישן (15 שנ'): רינדור טרי לא מרוענן שוב, ואחרי הרענון
+  // renderedAt חדש — אין לולאה. ⚠️ בלי setState — רק router.refresh.
+  // ─────────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const STALE_MS = 15_000
+    if (Date.now() - renderedAt > STALE_MS) router.refresh()
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && Date.now() - renderedAt > STALE_MS) router.refresh()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [renderedAt, router])
 
   // ⚠️ רשימת הכתובות למשלוחן — רק משלוחים. איסוף עצמי ומכירת דוכן אינם
   // נשלחים, ושורה בלי כתובת ברשימה של שליח היא רעש.

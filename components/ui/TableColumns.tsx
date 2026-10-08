@@ -159,6 +159,8 @@ export interface TableColumns<K extends string, R = never> {
   rows: R[]
   /** שורת המסננים הפעילים. ריקה כשאין — ראו ההערה ב-ActiveFilters. */
   activeFilters: ReactNode
+  /** סינוני העמודות הפעילים על רשימה כלשהי (בלי מיון) — למוני כרטיסים. */
+  applyFilters: (list: readonly R[]) => R[]
 }
 
 export function useTableColumns<K extends string, R = never>(
@@ -340,6 +342,23 @@ export function useTableColumns<K extends string, R = never>(
     return out
   }, [sfMode, sfRows, available, filters, sort, valueOf])
 
+  /**
+   * סינוני העמודות הפעילים, על רשימה כלשהי (בלי מיון).
+   *
+   * ⚠️ למוני כרטיסים מעל הטבלה: מונה שמתעלם מסינון העמודות מראה מספר
+   * אחד בכרטיס ושורות אחרות בטבלה (הזמנות היריד, 08.10).
+   */
+  const applyFilters = useCallback((list: readonly R[]): R[] => {
+    let out = [...list]
+    if (sfMode !== 'client') return out
+    for (const c of available) {
+      const sel = filters[c.key]
+      if (!sel?.length) continue
+      out = filterRows(out, r => valueOf(c, r), new Set(sel))
+    }
+    return out
+  }, [sfMode, available, filters, valueOf])
+
   const th = useCallback((c: ColDef<K, R>, i: number): ReactNode => {
     const sel = new Set(filters[c.key] ?? [])
     return (
@@ -423,5 +442,5 @@ export function useTableColumns<K extends string, R = never>(
     </div>
   )
 
-  return { shown, available, rt, picker, cellClass, headClass, th, rows, activeFilters }
+  return { shown, available, rt, picker, cellClass, headClass, th, rows, activeFilters, applyFilters }
 }
