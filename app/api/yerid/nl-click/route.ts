@@ -17,7 +17,8 @@ const TOKEN = /^[A-Za-z0-9_-]{8,512}$/
 export async function GET(request: NextRequest) {
   const r = request.nextUrl.searchParams.get('r') ?? ''
   const o = request.nextUrl.searchParams.get('o') ?? ''
-  const base = request.nextUrl.origin
+  // 🔴 לא request.nextUrl.origin: מאחורי Railway הוא localhost:8080.
+  const base = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://chasamsofer.co.il').replace(/\/$/, '')
 
   if (!TOKEN.test(o)) return NextResponse.redirect(`${base}/yerid/my-order`)
 
