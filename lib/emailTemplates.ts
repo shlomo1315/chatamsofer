@@ -2544,6 +2544,62 @@ export function bookFairNewsletterEmail(opts: {
   }
 }
 
+// ─── הודעה אישית למזמיני האתר ────────────────────────────────────────────────
+//
+// 🔴 פנייה בשם + הקישור הישיר לכל הזמנה של הלקוח, ואחריהם המלל החופשי.
+//
+// ⚠️ הקישורים עוברים דרך orderUrl שהנתיב בונה (מונה לחיצות) ולא ישירות
+// ל-/yerid/order: כך רואים מי נכנס להזמנה גם כשהתמונות חסומות, ו"נפתח"
+// לפי פיקסל בלבד אינו אמין (Gmail ו-NetFree חוסמים/מטמינים תמונות).
+export function bookFairOrderNoticeEmail(opts: {
+  subject: string
+  name?: string | null
+  body: string
+  orders: { orderNumber: string; totalAgorot: number; url: string }[]
+  pixelUrl?: string
+}): BuiltEmail {
+  const accent = '#0ea5e9'
+  const name = (opts.name ?? '').trim()
+  const greeting = name ? `שלום וברכה להרב ${escapeHtml(name)}` : 'שלום וברכה'
+
+  const cards = opts.orders.map(o => `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 12px;border:1px solid #bae6fd;border-radius:12px;overflow:hidden;">
+      <tr><td style="background:#f0f9ff;padding:13px 16px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td style="color:#0c4a6e;font-size:15px;font-weight:900;">הזמנה מספר ${escapeHtml(o.orderNumber)}</td>
+          <td style="text-align:left;color:#0f172a;font-size:15px;font-weight:900;white-space:nowrap;">${fmtAgorot(o.totalAgorot)}</td>
+        </tr></table>
+        <a href="${escapeHtml(o.url)}"
+           style="display:inline-block;margin-top:10px;background:${accent};color:#fff;font-size:13px;font-weight:700;text-decoration:none;padding:9px 20px;border-radius:8px;">
+          לצפייה בהזמנה
+        </a>
+      </td></tr>
+    </table>`).join('')
+
+  const pixel = opts.pixelUrl
+    ? `<img src="${escapeHtml(opts.pixelUrl)}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0;" />`
+    : ''
+
+  const body = `
+    <h2 style="margin:0 0 10px;color:#0f172a;font-size:20px;font-weight:900;">${greeting}</h2>
+    <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.8;">להלן פרטי ההזמנה שלכם במערכת:</p>
+    ${cards}
+    <div style="margin:22px 0 0;color:#334155;font-size:15px;line-height:1.9;">${richToHtml(opts.body)}</div>
+    ${pixel}`
+
+  return {
+    subject: opts.subject,
+    html: shell({
+      logoUrl: HEICHAL_LOGO_URL,
+      preheader: opts.subject,
+      accent,
+      title: 'היכל החתם סופר',
+      subtitle: 'יריד הספרים',
+      body,
+    }),
+  }
+}
+
 // ─── קישורי המעקב להזמנות ───────────────────────────────────────────────────
 //
 // 🔴 נשלח כשלקוח מבקש את הקישורים לפי מספר הטלפון שלו.

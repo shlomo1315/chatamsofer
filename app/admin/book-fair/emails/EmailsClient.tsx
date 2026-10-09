@@ -4,6 +4,7 @@ import {
   Mail, Search, Send, Loader2, Check, X, Plus,
 } from 'lucide-react'
 import { useCan } from '@/components/StaffPermissions'
+import OrderNoticePanel from './OrderNoticePanel'
 
 // מיילים של היריד: מה נשלח, ושליחה חדשה מכתובת המחלקה
 // (yerid@chasamsofer.info).
@@ -76,6 +77,7 @@ export default function EmailsClient() {
 
   return (
     <div className="flex flex-col gap-4">
+      <OrderNoticePanel />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-slate-900">מיילים</h1>
