@@ -223,3 +223,12 @@ describe('🔴 תיבה ייעודית גוברת על office', () => {
     })).toBe('office@chasamsofer.info')
   })
 })
+
+describe('כינוי זמני s@ → יריד', () => {
+  it('מייל ל-s@ נשמר בתיבת היריד', () => {
+    expect(resolveMailbox({ direct: ['S@chasamsofer.info'] })).toBe('yerid@chasamsofer.info')
+  })
+  it('והמענה האוטומטי יוצא מהיריד', () => {
+    expect(resolveAllMailboxes({ direct: ['s@chasamsofer.info'] })).toEqual(['yerid@chasamsofer.info'])
+  })
+})

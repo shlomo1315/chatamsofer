@@ -35,6 +35,20 @@ function knownBox(addr: string, custom?: string[]): string | null {
   return (custom ?? []).some(c => c.toLowerCase().trim() === a) ? a : null
 }
 
+/**
+ * ⏳ כינויים זמניים: כתובת שכל הדואר שלה נכנס לתיבה אחרת.
+ *
+ * s@ → יריד (09.10, לבקשת המשתמש): פניות היריד הגיעו ל-s@ ונשמרו
+ * "יתומות" בלי תיבה, ואיש לא ראה אותן. ⚠️ זמני — להסיר כשמסתיים
+ * הטיפול בהזמנות היריד.
+ */
+const TEMP_ALIASES: Record<string, string> = {
+  's@chasamsofer.info': 'yerid@chasamsofer.info',
+}
+export function applyAlias(addr: string): string {
+  return TEMP_ALIASES[addr.toLowerCase().trim()] ?? addr
+}
+
 const ORG_DOMAIN = '@chasamsofer.info'
 const COPY_SUBDOMAIN = '.chasamsofer.info'   // כתובת ה-copy של Google dual-delivery
 
@@ -49,8 +63,8 @@ const COPY_SUBDOMAIN = '.chasamsofer.info'   // כתובת ה-copy של Google d
  * ⚠️ ישירים לפני Cc, ובלי כפילויות.
  */
 export function resolveAllMailboxes(input: RouteInput): string[] {
-  const direct = (input.direct ?? []).filter(Boolean)
-  const cc = (input.cc ?? []).filter(Boolean)
+  const direct = (input.direct ?? []).filter(Boolean).map(applyAlias)
+  const cc = (input.cc ?? []).filter(Boolean).map(applyAlias)
   const seen = new Set<string>()
   const out: string[] = []
   for (const a of [...direct, ...cc]) {
@@ -65,8 +79,8 @@ export function resolveAllMailboxes(input: RouteInput): string[] {
 }
 
 export function resolveMailbox(input: RouteInput): string {
-  const direct = (input.direct ?? []).filter(Boolean)
-  const cc = (input.cc ?? []).filter(Boolean)
+  const direct = (input.direct ?? []).filter(Boolean).map(applyAlias)
+  const cc = (input.cc ?? []).filter(Boolean).map(applyAlias)
   const all = [...direct, ...cc]
 
   // (1) תיבה מוכרת בנמען ישיר — הקובע. Cc נבדק רק אם אין אף נמען ישיר מוכר.
