@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react'
 import { ilDate, ilTime } from '@/lib/israelTime'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Search, Globe, Phone, AlertTriangle, Clock, CheckCircle2, Package, Truck, Mic, XCircle, Store, Undo2, Banknote, CreditCard, Printer, MapPinned, UserX, Flag, X, MicOff, FileSpreadsheet } from 'lucide-react'
+import { Search, Globe, Phone, AlertTriangle, Clock, CheckCircle2, Package, Truck, Mic, XCircle, Store, Undo2, Banknote, CreditCard, Printer, MapPinned, UserX, Flag, X, MicOff, FileSpreadsheet, Upload } from 'lucide-react'
 import type { BookFairOrder, BookFairOrderStatus } from '@/types/bookFair'
 import {
   BOOK_FAIR_STATUS_LABELS, BOOK_FAIR_STATUS_COLORS,
@@ -11,6 +11,7 @@ import {
 } from '@/types/bookFair'
 import { fmtAgorot } from '@/lib/bookFairPricing'
 import { downloadXlsx, todayStamp, type XlsxColumn } from '@/lib/downloadXlsx'
+import BulkStatusDialog from './BulkStatusDialog'
 import { useTablePagination } from '@/lib/useTablePagination'
 import Pagination from '@/components/ui/Pagination'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
@@ -397,6 +398,7 @@ export default function OrdersClient({ orders, itemCounts, orderBooks, problemBo
   // בעייתי, סינוני עמודות ומיון) ובאותו סדר. ⚠️ לא pg.rows: הדפדוף אינו
   // סינון, וייצוא של עמוד אחד מתוך כמה נראה כקובץ שלם (ראו 833 מול 62).
   const [exporting, setExporting] = useState(false)
+  const [bulkOpen, setBulkOpen] = useState(false)
   async function exportExcel() {
     setExporting(true)
     try {
@@ -603,6 +605,13 @@ export default function OrdersClient({ orders, itemCounts, orderBooks, problemBo
         >
           <FileSpreadsheet size={15} /> {exporting ? 'מייצא…' : `ייצוא לאקסל (${tc.rows.length})`}
         </button>
+        <button
+          onClick={() => setBulkOpen(true)}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-white px-4 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50"
+        >
+          <Upload size={15} /> עדכון סטטוסים / כתובות מאקסל
+        </button>
+        {bulkOpen && <BulkStatusDialog onClose={() => setBulkOpen(false)} />}
         <span className="text-xs text-slate-400">
           לפי התצוגה הנוכחית · סינון לפי עיר: בעמודה &quot;עיר&quot; או במסך ההדפסה
         </span>
