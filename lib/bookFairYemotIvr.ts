@@ -151,6 +151,8 @@ export type IvrStep =
   // ── שלוחות 2 ו-3 ──
   | 'my_orders'
   | 'record_inquiry'
+  // ── היריד סגור לעונה ──
+  | 'season_menu'      // הודעת הסגירה → 1 השארת הודעה דחופה
   | 'done'
 
 export interface IvrCartItem {
@@ -362,6 +364,8 @@ export const MESSAGE_FALLBACKS: Record<string, string> = {
   ask_sku: 'הקישו את מספר הקטלוג של הספר המבוקש ולאחריו סולמית',
   closed: 'היריד סגור כרגע להזמנות',
   season_closed: 'היריד נסגר לשנה זו',
+  season_urgent: 'שימו לב למקרים דחופים ניתן להשאיר הודעה על ידי הקשה על המקש 1',
+  season_inquiry_intro: 'נא הקליטו בקול ברור את השם והטלפון שלכם ואת תוכן הפנייה ונשתדל לחזור אליכם בהקדם ולסיום הקישו סולמית',
   category_menu: 'לשמיעת הספרים בקטגוריה הקישו את מספרה',
   category_item: 'ל{name} הקישו {code}',
   category_empty: 'אין כרגע ספרים בקטגוריה זו',
@@ -461,6 +465,33 @@ export const MESSAGE_FALLBACKS: Record<string, string> = {
  * ⚠️ messages אופציונלי: בלעדיו נעשה שימוש בברירות המחדל שבקוד, ולכן
  * כשל בשליפת הנוסחים אינו משתיק את השלוחה.
  */
+/**
+ * היריד סגור לעונה: הודעת הסגירה, ואחריה "למקרים דחופים הקישו 1" (10.10).
+ *
+ * 1 ⇒ הקלטת פנייה — אותו שלב record_inquiry בדיוק כמו שלוחה 3, ולכן היא
+ * נשמרת ב-book_fair_inquiries ומופיעה בלשונית הפניות בלי קוד נוסף.
+ * כל דבר אחר (כולל שתיקה) ⇒ ניתוק, כמו קודם.
+ *
+ * ⚠️ ה-route קורא לפונקציה הזו רק כשהשלב *אינו* record_inquiry: אחרי
+ * ההקלטה השיחה ממשיכה דרך nextTurn כדי שהשמירה תהיה זהה לשלוחה 3.
+ */
+export function seasonClosedTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMessages): IvrTurn {
+  const m = (key: string) => msgToken(messages, key)
+  if (state.step === 'season_menu') {
+    if (input.value === '1') {
+      return {
+        state: { ...state, step: 'record_inquiry', attempts: 0 },
+        response: readRecord('bf_inq', [m('season_inquiry_intro')], 120),
+      }
+    }
+    return { state: { ...state, step: 'done' }, response: `${idMessage(m('goodbye'))}&${hangup}` }
+  }
+  return {
+    state: { ...state, step: 'season_menu', attempts: 0 },
+    response: readTap('bf_sc', [m('season_closed'), m('season_urgent')], { max: 1, min: 1, seconds: 8 }),
+  }
+}
+
 export function nextTurn(state: IvrState, input: IvrInput = {}, messages?: IvrMessages): IvrTurn {
   const m = (key: string, vars?: Record<string, string | number>) => msgToken(messages, key, vars)
 

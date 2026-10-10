@@ -29,7 +29,7 @@ import { categoryOrder } from '@/lib/bookFairCatalog'
 import { digitsOnly, matchBookBySku } from '@/lib/bookFairSkuMatch'
 import { BOOK_FAIR_STATUS_LABELS, type BookFairOrderStatus } from '@/types/bookFair'
 import {
-  nextTurn, initialState, attemptVarName, msgToken, ttsClean, type IvrState, type IvrInput,
+  nextTurn, seasonClosedTurn, initialState, attemptVarName, msgToken, ttsClean, type IvrState, type IvrInput,
   addressVarBase, nameVarBase, confirmVarBase,
 } from '@/lib/bookFairYemotIvr'
 import { getBookFairMessages } from '@/lib/yemotBookFairMessages'
@@ -938,20 +938,29 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
     supa.from('app_settings').select('value').eq('key', 'book_fair_season_closed').maybeSingle(),
   ])
 
+  const session = await loadSession(callId, phone)
+  const state = session.state ?? initialState()
+
   // 🔴 "היריד נסגר לשנה זו" גובר על שני המפתחות (07.10).
-  if (String(season?.value ?? '') === 'true') {
-    return yemotText(`id_list_message=${msgToken(messages, 'season_closed')}&go_to_folder=hangup`, callId)
+  //
+  // 10.10: אחרי הודעת הסגירה — "למקרים דחופים הקישו 1" ⇒ הקלטת פנייה.
+  // ⚠️ שלב record_inquiry עובר הלאה ל-nextTurn (ולא נחסם כאן ולא בבדיקת
+  // isOpen): שם ההקלטה נשמרת בדיוק כמו בשלוחה 3, ללשונית הפניות.
+  const seasonClosed = String(season?.value ?? '') === 'true'
+  if (seasonClosed && state.step !== 'record_inquiry') {
+    const turn = seasonClosedTurn(state, { value: paramFor(params, 'bf_sc') }, messages)
+    if (turn.state.step === 'done') await supa.from('book_fair_call_sessions').delete().eq('call_id', callId)
+    else await saveSession(session.id, turn.state)
+    return yemotText(turn.response, callId)
   }
+
   const isOpen =
     String(gate?.value ?? '') === 'true' ||
     String(phoneGate?.value ?? '') === 'true'
 
-  if (!isOpen) {
+  if (!isOpen && !seasonClosed) {
     return yemotText(`id_list_message=${msgToken(messages, 'closed')}&go_to_folder=hangup`, callId)
   }
-
-  const session = await loadSession(callId, phone)
-  const state = session.state ?? initialState()
 
   // ── בונים את ה-input המתאים לשלב הנוכחי ──
   const input: IvrInput = {}

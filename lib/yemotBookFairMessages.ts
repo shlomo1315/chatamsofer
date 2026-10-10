@@ -41,6 +41,9 @@ export const BOOK_FAIR_MESSAGE_META: MsgMeta[] = [
   { key: 'ask_sku', label: 'בקשת מספר קטלוג', defaultText: 'הקישו את מספר הקטלוג של הספר המבוקש ולאחריו סולמית', allowAudio: true },
   { key: 'season_closed', label: 'היריד נסגר לשנה זו', defaultText: 'היריד נסגר לשנה זו', allowAudio: true,
     hint: 'מושמע כשהיריד סגור לעונה (book_fair_season_closed), במקום כל התפריט.' },
+  { key: 'season_urgent', label: 'סגור לעונה — למקרים דחופים הקישו 1', defaultText: 'שימו לב למקרים דחופים ניתן להשאיר הודעה על ידי הקשה על המקש 1', allowAudio: true,
+    hint: 'מושמע מיד אחרי הודעת הסגירה. הקשה על 1 עוברת להקלטת פנייה, שנכנסת ללשונית הפניות.' },
+  { key: 'season_inquiry_intro', label: 'סגור לעונה — בקשת הקלטת הודעה', defaultText: 'נא הקליטו בקול ברור את השם והטלפון שלכם ואת תוכן הפנייה ונשתדל לחזור אליכם בהקדם ולסיום הקישו סולמית', allowAudio: true },
   { key: 'closed', label: 'היריד סגור', defaultText: 'היריד סגור כרגע להזמנות', allowAudio: true,
     hint: 'מוקראת כשהיריד אינו פתוח. 🔴 ודאו שהנוסח נכון לעובדה ולא זמני — הודעה זמנית על הודעת-עובדה בלבלה בעבר אלפי מתקשרים.' },
 
