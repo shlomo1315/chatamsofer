@@ -3,13 +3,14 @@ import { useState, useMemo, useEffect, useCallback } from 'react'
 import { ilDate, ilTime } from '@/lib/israelTime'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Search, Globe, Phone, AlertTriangle, Clock, CheckCircle2, Package, Truck, Mic, XCircle, Store, Undo2, Banknote, CreditCard, Printer, MapPinned, UserX, Flag, X, MicOff } from 'lucide-react'
+import { Search, Globe, Phone, AlertTriangle, Clock, CheckCircle2, Package, Truck, Mic, XCircle, Store, Undo2, Banknote, CreditCard, Printer, MapPinned, UserX, Flag, X, MicOff, FileSpreadsheet } from 'lucide-react'
 import type { BookFairOrder, BookFairOrderStatus } from '@/types/bookFair'
 import {
   BOOK_FAIR_STATUS_LABELS, BOOK_FAIR_STATUS_COLORS,
   BOOK_FAIR_CHANNEL_LABELS, BOOK_FAIR_DELIVERY_LABELS, oneOf,
 } from '@/types/bookFair'
 import { fmtAgorot } from '@/lib/bookFairPricing'
+import { downloadXlsx, todayStamp, type XlsxColumn } from '@/lib/downloadXlsx'
 import { useTablePagination } from '@/lib/useTablePagination'
 import Pagination from '@/components/ui/Pagination'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
@@ -392,6 +393,69 @@ export default function OrdersClient({ orders, itemCounts, orderBooks, problemBo
   // נשלחים, ושורה בלי כתובת ברשימה של שליח היא רעש.
   const shippingRows = useMemo(() => tc.rows.filter(o => o.delivery_method === 'shipping'), [tc.rows])
 
+  // 🔴 ייצוא לאקסל — tc.rows, כלומר בדיוק מה שבטבלה (כרטיס, חיפוש, ספר
+  // בעייתי, סינוני עמודות ומיון) ובאותו סדר. ⚠️ לא pg.rows: הדפדוף אינו
+  // סינון, וייצוא של עמוד אחד מתוך כמה נראה כקובץ שלם (ראו 833 מול 62).
+  const [exporting, setExporting] = useState(false)
+  async function exportExcel() {
+    setExporting(true)
+    try {
+      const columns: XlsxColumn[] = [
+        { header: 'מספר הזמנה', kind: 'id', width: 14 },
+        { header: 'שם המזמין', width: 26 },
+        { header: 'טלפון', kind: 'id', width: 14 },
+        { header: 'מייל', width: 28 },
+        { header: 'ערוץ', width: 10 },
+        { header: 'אופן קבלה', width: 12 },
+        { header: 'עיר', width: 14 },
+        { header: 'כתובת', width: 34 },
+        { header: 'ספרים', kind: 'number', width: 8 },
+        { header: 'סכום ספרים ₪', kind: 'number', width: 12 },
+        { header: 'משלוח ₪', kind: 'number', width: 10 },
+        { header: 'סה"כ ₪', kind: 'number', width: 10 },
+        { header: 'זוכה ₪', kind: 'number', width: 10 },
+        { header: 'אמצעי תשלום', width: 12 },
+        { header: 'סטטוס', width: 14 },
+        { header: 'אימות', width: 16 },
+        { header: 'נוצרה', kind: 'date', width: 16 },
+        { header: 'שולמה', kind: 'date', width: 16 },
+        { header: 'הערות', width: 30 },
+      ]
+      const shekels = (agorot: number | null | undefined) => (agorot ?? 0) / 100
+      const rows = tc.rows.map(o => [
+        o.order_number,
+        o.customer_name ?? '',
+        o.customer_phone ?? '',
+        o.customer_email ?? '',
+        BOOK_FAIR_CHANNEL_LABELS[o.channel] ?? o.channel,
+        BOOK_FAIR_DELIVERY_LABELS[o.delivery_method] ?? o.delivery_method,
+        cityOf(o) ?? '',
+        o.address_text ?? '',
+        itemCounts[o.id] ?? 0,
+        shekels(o.items_total_agorot),
+        shekels(o.shipping_agorot),
+        shekels(o.total_agorot),
+        shekels(o.refunded_agorot),
+        paymentLabel(o) === '—' ? '' : paymentLabel(o),
+        BOOK_FAIR_STATUS_LABELS[o.status] ?? o.status,
+        verifyLabel(o),
+        o.created_at,
+        o.paid_at ?? '',
+        o.notes ?? '',
+      ])
+      await downloadXlsx({
+        filename: `הזמנות יריד הספרים ${todayStamp()}`,
+        sheetName: 'הזמנות',
+        columns,
+        rows,
+      })
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'הייצוא נכשל')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   // 🔴 פילוח לפי אמצעי תשלום — על השורות שבתצוגה (אחרי כרטיס, חיפוש וסינון),
   // כך שסינון "ערוץ: דוכן" מראה בדיוק כמה נכנס במזומן וכמה באשראי.
   const byPayment = useMemo(() => {
@@ -531,6 +595,13 @@ export default function OrdersClient({ orders, itemCounts, orderBooks, problemBo
           className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-white px-4 py-2 text-sm font-medium text-indigo-700 transition hover:bg-indigo-50 disabled:opacity-40"
         >
           <MapPinned size={15} /> רשימת כתובות למשלוחן ({shippingRows.length})
+        </button>
+        <button
+          onClick={exportExcel}
+          disabled={!tc.rows.length || exporting}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-white px-4 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50 disabled:opacity-40"
+        >
+          <FileSpreadsheet size={15} /> {exporting ? 'מייצא…' : `ייצוא לאקסל (${tc.rows.length})`}
         </button>
         <span className="text-xs text-slate-400">
           לפי התצוגה הנוכחית · סינון לפי עיר: בעמודה &quot;עיר&quot; או במסך ההדפסה
