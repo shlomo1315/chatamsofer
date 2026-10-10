@@ -4,6 +4,7 @@ import {
   Phone, Play, Pause, Check, Loader2, MessageSquare, Clock, RotateCcw,
 } from 'lucide-react'
 import { useCan } from '@/components/StaffPermissions'
+import { scrambleBytes, DOC_CIPHER_ID } from '@/lib/docCipher'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // פניות שהושארו בשלוחה הטלפונית של היריד.
@@ -48,15 +49,32 @@ export default function InquiriesClient() {
   // ⚠️ נגן יחיד: השמעת פנייה שנייה עוצרת את הראשונה. בלי זה שתי
   // הקלטות מתנגנות יחד ואי אפשר לשמוע אף אחת.
   const [audio, setAudio] = useState<HTMLAudioElement | null>(null)
-  function play(id: string) {
+  async function play(id: string) {
     audio?.pause()
     if (playing === id) { setPlaying(null); setAudio(null); return }
-    const a = new Audio(`/api/admin/book-fair/inquiries/audio?id=${encodeURIComponent(id)}`)
-    a.onended = () => setPlaying(null)
-    a.onerror = () => { setError('ההקלטה לא נמצאה בימות'); setPlaying(null) }
-    void a.play().catch(() => setError('הדפדפן לא הצליח לנגן את ההקלטה'))
-    setAudio(a)
     setPlaying(id)
+    setError('')
+    try {
+      // ⚠️ JSON מעורבל ולא <audio src>: נטפרי חוסם תגובת קובץ אודיו, והשרת
+      // רואה 200 בזמן שהדפדפן מקבל חסימה. ראו lib/docCipher.
+      const res = await fetch(`/api/admin/book-fair/inquiries/audio?id=${encodeURIComponent(id)}`, { cache: 'no-store' })
+      const payload = await res.json().catch(() => null)
+      if (!res.ok || !payload?.data) throw new Error(payload?.error ?? `ההשמעה נכשלה (${res.status})`)
+      const bin = atob(payload.data)
+      const bytes = new Uint8Array(bin.length)
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+      if (payload.enc === DOC_CIPHER_ID) scrambleBytes(bytes)
+      const url = URL.createObjectURL(new Blob([bytes], { type: payload.contentType || 'audio/wav' }))
+      const a = new Audio(url)
+      const done = () => { URL.revokeObjectURL(url); setPlaying(p => (p === id ? null : p)) }
+      a.onended = done
+      a.onerror = () => { done(); setError('הדפדפן לא הצליח לנגן את ההקלטה') }
+      setAudio(a)
+      await a.play()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'ההשמעה נכשלה')
+      setPlaying(null)
+    }
   }
 
   async function setHandled(id: string, handled: boolean) {
@@ -139,7 +157,7 @@ export default function InquiriesClient() {
                 <div className="flex items-center gap-2">
                   {r.recording && (
                     <button
-                      onClick={() => play(r.id)}
+                      onClick={() => void play(r.id)}
                       className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
                     >
                       {playing === r.id ? <Pause size={15} /> : <Play size={15} />}

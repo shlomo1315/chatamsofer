@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
 import { archiveInquiryRecording, inquiryStorageKey } from '@/lib/bookFairInquiryAudio'
+import { scrambleBytes, DOC_CIPHER_ID } from '@/lib/docCipher'
 
 // הקלטת פנייה להאזנה בדפדפן.
 //
@@ -17,14 +18,19 @@ import { archiveInquiryRecording, inquiryStorageKey } from '@/lib/bookFairInquir
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
+// 🔴 10.10: נתונים מעורבלים ב-JSON ולא תגובת audio/wav. השרת החזיר 200
+// והדפדפן כתב "לא הצליח לנגן": נטפרי חוסם כל תגובה שנראית כקובץ.
+// אותה שיטה כמו play-audio — ראו lib/docCipher.
 function audio(data: ArrayBuffer) {
-  return new NextResponse(data, {
-    headers: {
-      'Content-Type': 'audio/wav',
-      // ⚠️ no-store: ההקלטות אישיות ואין סיבה שיישמרו במטמון של דפדפן
-      // משותף במשרד.
-      'Cache-Control': 'no-store',
-    },
+  const scrambled = scrambleBytes(new Uint8Array(data))
+  return NextResponse.json({
+    contentType: 'audio/wav',
+    enc: DOC_CIPHER_ID,
+    data: Buffer.from(scrambled).toString('base64'),
+  }, {
+    // ⚠️ no-store: ההקלטות אישיות ואין סיבה שיישמרו במטמון של דפדפן
+    // משותף במשרד.
+    headers: { 'Cache-Control': 'no-store' },
   })
 }
 
