@@ -1,5 +1,3 @@
-import { notFound } from 'next/navigation'
-import { requireStaff } from '@/lib/apiAuth'
 import { getData } from '../yerid/getData'
 import { bookFairPreviewToken } from '@/lib/bookFairPreview'
 import FairStore from '../yerid/YeridStore'
@@ -18,10 +16,9 @@ export const dynamic = 'force-dynamic'
 export const metadata = { robots: { index: false, follow: false } }
 
 export default async function FairPreviewPage() {
-  // 🔴 צוות בלבד (ביקורת אבטחה 07.10): "נסתר" אינו הגנה. הנתיב היה פתוח
-  // לכל העולם, וכל מבקר קיבל אסימון שמאפשר להזמין גם כשהיריד סגור לעונה.
-  // ⚠️ notFound ולא הפניה לכניסה — לא חושפים שהנתיב קיים.
-  if (!(await requireStaff())) notFound()
+  // 🔴 פתוח לכולם — החלטת המשתמש 10.10, במודע: קישור קבוע שדרכו לקוחות
+  // מזמינים כרגיל גם כשהיריד סגור. (ביקורת 07.10 הגבילה לצוות — בוטל.)
+  // ⚠️ האסימון עדיין חתום ופג אחרי 12 שעות, ונוצר מחדש בכל טעינת דף.
 
   const { books, cities, tiers, openAt, pickup } = await getData(true)
   return (
