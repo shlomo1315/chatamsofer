@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Phone, Play, Pause, Check, Loader2, MessageSquare, Clock, RotateCcw,
 } from 'lucide-react'
@@ -48,11 +48,25 @@ export default function InquiriesClient() {
 
   // ⚠️ נגן יחיד: השמעת פנייה שנייה עוצרת את הראשונה. בלי זה שתי
   // הקלטות מתנגנות יחד ואי אפשר לשמוע אף אחת.
-  const [audio, setAudio] = useState<HTMLAudioElement | null>(null)
+  // ⚠️ ref ולא state: הנגן משתנה (currentTime) ואינו נתון לרינדור.
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  // 🔴 ההקלטה שטעונה כעת (גם כשהיא מושהית) — הפס נשאר מוצג כדי שאפשר יהיה
+  // לחזור לנקודה ולהמשיך משם. playing = מתנגנת ברגע זה.
+  const [loadedId, setLoadedId] = useState<string | null>(null)
+  const [loadingId, setLoadingId] = useState<string | null>(null)
+  const [pos, setPos] = useState({ t: 0, d: 0 })
+
   async function play(id: string) {
-    audio?.pause()
-    if (playing === id) { setPlaying(null); setAudio(null); return }
-    setPlaying(id)
+    // אותה הקלטה — השהיה/המשך מאותה נקודה, בלי לטעון מחדש.
+    const cur = audioRef.current
+    if (loadedId === id && cur) {
+      if (cur.paused) { void cur.play(); setPlaying(id) }
+      else { cur.pause(); setPlaying(null) }
+      return
+    }
+    audioRef.current?.pause()
+    audioRef.current = null; setLoadedId(null); setPlaying(null); setPos({ t: 0, d: 0 })
+    setLoadingId(id)
     setError('')
     try {
       // ⚠️ JSON מעורבל ולא <audio src>: נטפרי חוסם תגובת קובץ אודיו, והשרת
@@ -66,16 +80,40 @@ export default function InquiriesClient() {
       if (payload.enc === DOC_CIPHER_ID) scrambleBytes(bytes)
       const url = URL.createObjectURL(new Blob([bytes], { type: payload.contentType || 'audio/wav' }))
       const a = new Audio(url)
-      const done = () => { URL.revokeObjectURL(url); setPlaying(p => (p === id ? null : p)) }
-      a.onended = done
-      a.onerror = () => { done(); setError('הדפדפן לא הצליח לנגן את ההקלטה') }
-      setAudio(a)
+      const sync = () => setPos({ t: a.currentTime, d: Number.isFinite(a.duration) ? a.duration : 0 })
+      a.onloadedmetadata = sync
+      a.ontimeupdate = sync
+      // ⚠️ בסוף ההקלטה לא משחררים אותה: הפס נשאר, ואפשר לגרור אחורה ולשמוע שוב.
+      a.onended = () => { sync(); setPlaying(p => (p === id ? null : p)) }
+      a.onerror = () => {
+        URL.revokeObjectURL(url)
+        setPlaying(null); setLoadedId(null)
+        setError('הדפדפן לא הצליח לנגן את ההקלטה')
+      }
+      audioRef.current = a
+      setLoadedId(id)
       await a.play()
+      setPlaying(id)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'ההשמעה נכשלה')
       setPlaying(null)
+    } finally {
+      setLoadingId(null)
     }
   }
+
+  function seek(t: number) {
+    const a = audioRef.current
+    if (!a) return
+    a.currentTime = Math.max(0, Math.min(t, pos.d || t))
+    setPos(p => ({ ...p, t: a.currentTime }))
+  }
+
+  // שחרור הנגן ביציאה מהמסך — אחרת ההקלטה ממשיכה להתנגן ברקע.
+  useEffect(() => {
+    const r = audioRef
+    return () => { r.current?.pause() }
+  }, [])
 
   async function setHandled(id: string, handled: boolean) {
     setBusyId(id)
@@ -160,8 +198,10 @@ export default function InquiriesClient() {
                       onClick={() => void play(r.id)}
                       className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
                     >
-                      {playing === r.id ? <Pause size={15} /> : <Play size={15} />}
-                      {playing === r.id ? 'עצור' : 'האזן'}
+                      {loadingId === r.id
+                        ? <Loader2 size={15} className="animate-spin" />
+                        : playing === r.id ? <Pause size={15} /> : <Play size={15} />}
+                      {playing === r.id ? 'השהה' : loadedId === r.id ? 'המשך' : 'האזן'}
                     </button>
                   )}
                   {canEdit && (
@@ -183,6 +223,38 @@ export default function InquiriesClient() {
                 </div>
               </div>
 
+              {/* ── פס ההתקדמות — גרירה לכל נקודה בהקלטה ── */}
+              {loadedId === r.id && (
+                <div className="mt-3 flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2" dir="ltr">
+                  <button
+                    onClick={() => seek(pos.t - 5)}
+                    className="rounded-md px-1.5 py-0.5 text-xs font-medium text-slate-600 hover:bg-slate-200"
+                    title="5 שניות אחורה"
+                  >
+                    −5
+                  </button>
+                  <span className="w-10 text-right font-mono text-xs tabular-nums text-slate-600">{mmss(pos.t)}</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={pos.d || 0}
+                    step={0.1}
+                    value={Math.min(pos.t, pos.d || 0)}
+                    onChange={e => seek(Number(e.target.value))}
+                    className="h-1.5 flex-1 cursor-pointer accent-slate-900"
+                    aria-label="מיקום בהקלטה"
+                  />
+                  <span className="w-10 font-mono text-xs tabular-nums text-slate-400">{mmss(pos.d)}</span>
+                  <button
+                    onClick={() => seek(pos.t + 5)}
+                    className="rounded-md px-1.5 py-0.5 text-xs font-medium text-slate-600 hover:bg-slate-200"
+                    title="5 שניות קדימה"
+                  >
+                    +5
+                  </button>
+                </div>
+              )}
+
               {r.transcript && (
                 <p className="mt-3 rounded-xl bg-slate-50 px-3.5 py-2.5 text-sm leading-relaxed text-slate-700">
                   {r.transcript}
@@ -198,4 +270,10 @@ export default function InquiriesClient() {
       )}
     </div>
   )
+}
+
+function mmss(sec: number): string {
+  if (!Number.isFinite(sec) || sec < 0) sec = 0
+  const s = Math.floor(sec)
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
