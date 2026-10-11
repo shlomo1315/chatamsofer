@@ -105,6 +105,20 @@ export async function POST(request: NextRequest) {
     payload = { text }
   }
 
+  // 🔴 הצעה זהה שכבר ממתינה — לא נשמרת שוב.
+  // ⚠️ משפחה אחת שלחה 47 פעמים את אותה הוספה, כי לא ראתה שהיא נקלטה
+  // (23.09). כל עותק הוא שורה נוספת בתור של המזכירות. מוחזרת הצלחה —
+  // מבחינת המשפחה הבקשה אכן התקבלה.
+  if (kind !== 'note') {
+    let dup = admin.from('lineage_review_suggestions').select('id')
+      .eq('token', inv.token).eq('kind', kind).eq('status', 'pending')
+    dup = body.nodeId ? dup.eq('node_id', body.nodeId) : dup.is('node_id', null)
+    dup = body.parentId ? dup.eq('parent_id', body.parentId) : dup.is('parent_id', null)
+    dup = proposedName ? dup.eq('proposed_name', proposedName) : dup.is('proposed_name', null)
+    const { data: existing } = await dup.limit(1)
+    if (existing?.length) return NextResponse.json({ ok: true, duplicate: true })
+  }
+
   const { error } = await admin.from('lineage_review_suggestions').insert({
     token: inv.token,
     root_node_id: inv.root_node_id,

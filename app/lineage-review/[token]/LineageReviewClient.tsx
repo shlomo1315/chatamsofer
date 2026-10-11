@@ -176,8 +176,10 @@ export default function LineageReviewClient({ token }: { token: string }) {
       })
       const data = await res.json()
       if (!res.ok || data.ok === false) { setError(data.error || 'ההצעה נכשלה'); return false }
+      // ⚠️ ההודעה נשארת, ולא נעלמת אחרי 4 שניות: ההצעה *אינה* משנה את העץ
+      // מיד, ומי שפספס את ההודעה ראה שדבר לא קרה ושלח שוב — משפחה אחת שלחה
+      // 47 פעמים את אותה הוספה (23.09).
       setSuggestSent(true)
-      setTimeout(() => setSuggestSent(false), 4000)
       return true
     } catch { setError('שגיאת רשת'); return false }
     finally { setBusy(null) }
@@ -210,6 +212,9 @@ export default function LineageReviewClient({ token }: { token: string }) {
       })
       const data = await res.json()
       if (!res.ok || data.ok === false) { setError(data.error || 'הפעולה נכשלה'); return }
+      // 🔴 בקישור משפחתי שינוי שם נכנס לתור אישור (data.queued) — השם בעץ
+      // לא משתנה, ולכן גם לא בתצוגה. ראו api/public/lineage-review.
+      if (data.queued) { setSuggestSent(true); setEditing(null); return }
       // עדכון אופטימי. בדחייה — כל צאצאיו נדחו במפל (data.cascaded), מסמנים את כולם.
       const cascaded: string[] = Array.isArray(data.cascaded) ? data.cascaded : []
       setNodes(ns => ns.map(n => {
@@ -502,7 +507,16 @@ export default function LineageReviewClient({ token }: { token: string }) {
         )}
 
         {error && <div className="mb-4 rounded-xl bg-red-50 border border-red-200 px-4 py-2.5 text-sm text-red-600">{error}</div>}
-        {suggestSent && <div className="mb-4 rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-2.5 text-sm text-emerald-700 flex items-center gap-2"><CheckCircle2 size={15} /> ההצעה נשלחה — היא תיבדק ותאושר על ידי הצוות. תודה!</div>}
+        {/* ⚠️ sticky — נשאר גלוי גם אחרי גלילה, כי הבקשה נשלחת מתוך העץ למטה */}
+        {suggestSent && (
+          <div className="sticky top-2 z-20 mb-4 rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-2.5 text-sm text-emerald-700 flex items-start gap-2 shadow-sm">
+            <CheckCircle2 size={15} className="mt-0.5 shrink-0" />
+            <span className="flex-1">
+              הבקשה התקבלה וממתינה לאישור הצוות. <span className="font-bold">אין צורך לשלוח אותה שוב</span> — השינוי יופיע בעץ אחרי האישור.
+            </span>
+            <button onClick={() => setSuggestSent(false)} className="text-emerald-700/70 hover:text-emerald-900 text-xs font-bold shrink-0">סגירה</button>
+          </div>
+        )}
 
         {/* מתג תצוגה: רשימה / עץ */}
         <div className="mb-3 flex justify-center">

@@ -247,6 +247,33 @@ export async function POST(request: NextRequest) {
     if (!clean) return NextResponse.json({ error: 'שם לא תקין (אותיות עבריות בלבד)' }, { status: 400 })
     if (clean.length > 120) return NextResponse.json({ error: 'השם ארוך מדי' }, { status: 400 })
     update.name = clean; newName = clean
+
+    // ─────────────────────────────────────────────────────────────────────
+    // 🔴 בקישור משפחתי (order) שינוי שם נכנס לתור האישור — לא נכתב לעץ.
+    //
+    // ⚠️ הבאג (עהרנטאל, 23.09): שורש הקישור הוא הצומת *של המשפחה עצמה*.
+    // הם רצו להוסיף את הסבים החסרים, ובמקום זה שינו את שם הצומת שלהם
+    // ל"דוד והינדל שישא" — והשינוי נכתב מיד. הכרטסת הציגה אותם כסבא שלהם,
+    // ובמקביל 47 בקשות "הוספת דור" ישבו בתור ולא נראו — אז ניסו שוב ושוב.
+    // כאן, כמו verify/reject למעלה, מותרות רק פעולות שנכנסות לתור אישור.
+    // ─────────────────────────────────────────────────────────────────────
+    if (inv.mode === 'order') {
+      if (clean === node.name) return NextResponse.json({ ok: true, queued: false, cascaded: [] })
+      const { error: qErr } = await admin.from('lineage_review_suggestions').insert({
+        token: inv.token,
+        root_node_id: inv.root_node_id,
+        kind: 'rename',
+        node_id: nodeId,
+        parent_id: null,
+        proposed_name: clean,
+        relation: null,
+        payload: { previous_name: node.name, source: 'order_link_rename' },
+        reviewer_name: inv.recipient_name,
+        status: 'pending',
+      })
+      if (qErr) return NextResponse.json({ error: qErr.message }, { status: 500 })
+      return NextResponse.json({ ok: true, queued: true, cascaded: [] })
+    }
   } else {
     return NextResponse.json({ error: 'פעולה לא מוכרת' }, { status: 400 })
   }
