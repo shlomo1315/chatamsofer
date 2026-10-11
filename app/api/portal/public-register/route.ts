@@ -499,6 +499,10 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
     gender: isMarried ? 'male' : (gender || null),
     spouse_name: spouse_name ? String(spouse_name).trim() : null,
     spouse_id_number: cleanSpouseId || null,
+    // 🔴 סוג המסמך של האישה — נשמר. עד 11.10 הוא נקרא ונבדק למעלה
+    // (isSpousePassport) אבל לא נכתב לרשומה, ולכן כל 7,438 הנשים במאגר
+    // נשמרו כ"ת"ז" — גם מי שנרשמה בדרכון. הכרטסת הציגה "ת.ז." על דרכון.
+    spouse_doc_type: cleanSpouseId ? (isSpousePassport ? 'passport' : 'id') : 'id',
     spouse_phone: spouse_phone ? String(spouse_phone).trim() : null,
     spouse_birth_date: normalizeDateToISO(spouse_birth_date as string | null | undefined),
     ...sharedFields,
