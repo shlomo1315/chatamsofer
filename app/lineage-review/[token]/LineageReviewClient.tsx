@@ -300,7 +300,7 @@ export default function LineageReviewClient({ token }: { token: string }) {
             <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
             <span>
               {applyResult.applied
-                ? <>סדר הדורות עודכן. הכרטסת שלכם חזרה ל<strong>בדיקה ראשונית</strong> אצל הצוות — אין צורך לשלוח שוב.</>
+                ? <>סדר הדורות החדש התקבל במערכת והועבר לטיפול במזכירות</>
                 : <>הבקשה התקבלה ונשלחה <strong>לאישור הצוות</strong>{applyResult.reason ? <> ({applyResult.reason})</> : null}. אין צורך לשלוח שוב.</>}
             </span>
           </div>
