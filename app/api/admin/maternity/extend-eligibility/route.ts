@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { addWeeks } from 'date-fns'
 import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
+import { recoveryWindowEnd, RECOVERY_WINDOW_DAYS } from '@/lib/maternity'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,13 +49,18 @@ export async function POST(request: NextRequest) {
 
   const defaultEnd = aid.birth_date ? defaultSixWeeksEnd(aid.birth_date) : null
   const previousEnd = aid.six_weeks_end ?? defaultEnd
-  // סוף הזכאות לבית החלמה **כפי שהוא חל כרגע** — הדריסה אם קיימת, אחרת
-  // התאריך של הכרטיס, אחרת החישוב האוטומטי (35 יום).
-  const prevRecoveryEnd = aid.recovery_end_override
-    ?? aid.six_weeks_end
-    ?? (aid.birth_date
-      ? new Date(new Date(aid.birth_date).getTime() + 35 * 86400000).toISOString().split('T')[0]
-      : null)
+  // סוף הזכאות לבית החלמה **כפי שהוא חל כרגע** — recoveryWindowEnd עצמו.
+  //
+  // 🔴 לא "הדריסה ?? six_weeks_end ?? לידה+35".
+  // ⚠️ six_weeks_end נכתב כבר בהרשמה כלידה+42, ולכן הוא כמעט אף פעם אינו
+  // ריק — והשרשרת הייתה מחזירה את תאריך הכרטיס (6 שבועות). בהארכת "כרטיס
+  // בלבד" הערך הזה נכתב כדריסה לבית ההחלמה, כלומר בית ההחלמה היה מוארך
+  // בשקט בשבוע — בדיוק מה שההיקף "כרטיס בלבד" נועד למנוע.
+  const recNow = recoveryWindowEnd(aid)
+  const prevRecoveryEnd = recNow ? recNow.toISOString().split('T')[0] : null
+  const defaultRecoveryEnd = aid.birth_date
+    ? new Date(new Date(aid.birth_date).getTime() + RECOVERY_WINDOW_DAYS * 86400000).toISOString().split('T')[0]
+    : null
 
   let updates: Record<string, unknown>
   let logDetails: Record<string, unknown>
@@ -148,7 +154,8 @@ export async function POST(request: NextRequest) {
     six_weeks_end: updates.six_weeks_end,
     eligibility_extended: updates.eligibility_extended,
     result: action === 'reset'
-      ? { action: 'reset' as const, cardEnd: defaultEnd, recoveryEnd: defaultEnd }
+      // ⚠️ אחרי איפוס בית ההחלמה חוזר ל-5 שבועות, לא לתאריך הכרטיס
+      ? { action: 'reset' as const, cardEnd: defaultEnd, recoveryEnd: defaultRecoveryEnd }
       : {
         action: 'extend' as const,
         scope,

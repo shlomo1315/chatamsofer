@@ -19,7 +19,8 @@ import {
   CalendarClock, Loader2, Check, AlertTriangle, RotateCcw, Info,
   CreditCard, Home, ArrowRight,
 } from 'lucide-react'
-import { format, addWeeks } from 'date-fns'
+import { format, addWeeks, addDays } from 'date-fns'
+import { recoveryWindowEnd, RECOVERY_WINDOW_DAYS } from '@/lib/maternity'
 import { he } from 'date-fns/locale'
 import Modal from '@/components/ui/Modal'
 import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
@@ -61,8 +62,14 @@ export default function ExtendEligibility({
 
   const defaultEnd = aid.birth_date ? toIso(addWeeks(new Date(aid.birth_date), 6)) : ''
   const currentCardEnd = aid.six_weeks_end || defaultEnd
-  // בית ההחלמה: הדריסה אם קיימת, אחרת נגזר מהכרטיס — כמו recoveryWindowEnd.
-  const currentRecoveryEnd = aid.recovery_end_override || currentCardEnd
+  // 🔴 בית ההחלמה — recoveryWindowEnd עצמו, ולא "הדריסה או תאריך הכרטיס".
+  //
+  // ⚠️ הקיצור הקודם הציג לבית ההחלמה את תאריך הכרטיס (6 שבועות) כשאין
+  // דריסה, בזמן שהזכאות בפועל היא 5 שבועות. המזכירה ראתה "6 שבועות
+  // בשניהם", ויולדת שנעלמה מפורטל בית ההחלמה הוצגה כאן כזכאית לעוד שבוע.
+  const recEnd = recoveryWindowEnd(aid)
+  const currentRecoveryEnd = recEnd ? toIso(recEnd) : ''
+  const defaultRecoveryEnd = aid.birth_date ? toIso(addDays(new Date(aid.birth_date), RECOVERY_WINDOW_DAYS)) : ''
   const extended = !!aid.eligibility_extended
 
   const [open, setOpen] = useState(false)
@@ -195,7 +202,8 @@ export default function ExtendEligibility({
           <div className="flex flex-col gap-4">
             {/* המצב הנוכחי — תמיד גלוי */}
             <div className="flex flex-col gap-1.5 rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-sm">
-              <CurrentRow label="ברירת מחדל (6 שבועות)" value={defaultEnd} muted />
+              <CurrentRow label="ברירת מחדל — כרטיס (6 שבועות)" value={defaultEnd} muted />
+              <CurrentRow label="ברירת מחדל — בית החלמה (5 שבועות)" value={defaultRecoveryEnd} muted />
               <CurrentRow label="כרטיס המזון — סיום נוכחי" value={currentCardEnd} highlight={extended} />
               <CurrentRow label="בית החלמה — סיום נוכחי" value={currentRecoveryEnd} highlight={extended} />
             </div>

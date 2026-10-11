@@ -21,7 +21,7 @@ import FeedbackTab from './FeedbackTab'
 import ExtendEligibility from '../ExtendEligibility'
 import RecoveryDaysEditor from '../RecoveryDaysEditor'
 import RecoveryHomeEditor from './RecoveryHomeEditor'
-import { recoveryDaysOf } from '@/lib/maternity'
+import { recoveryDaysOf, cardWindowEnd, recoveryWindowEnd } from '@/lib/maternity'
 import { formatIsraeliId } from '@/lib/validation'
 import { getDocTypes } from '@/lib/serverDocTypes'
 import { docTypeLabel } from '@/lib/docTypes'
@@ -721,20 +721,35 @@ export default async function MaternityDetailPage(
                     initialRecovery={aid.wants_recovery !== false}
                   />
                 </div>
-                {aid.six_weeks_end && (
-                  <p className="text-sm">
-                    <span className="text-slate-500">{aid.eligibility_extended ? 'סיום זכאות: ' : '6 שבועות לאחר הלידה: '}</span>
-                    <span className="ltr-num text-indigo-600 font-medium">{fmtDate(aid.six_weeks_end)}</span>
-                    {aid.eligibility_extended && (
-                      <span className="mr-2 inline-block text-[11px] font-medium px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">הוארך ידנית</span>
-                    )}
-                  </p>
-                )}
+                {/* 🔴 שני תאריכים נפרדים — כרטיס המזון (6 שבועות) ובית ההחלמה
+                    (5 שבועות), כל אחד מהחישוב שלו.
+                    ⚠️ קודם הוצג כאן רק six_weeks_end, והמזכירה הסיקה ממנו גם את
+                    בית ההחלמה — שבוע יותר ממה שהפורטל של בית ההחלמה מכבד. */}
+                {(() => {
+                  const cardEnd = cardWindowEnd(aid)
+                  const recEnd = recoveryWindowEnd(aid)
+                  const daysLeft = (d: Date | null) => d ? differenceInCalendarDays(d, new Date()) : null
+                  // ⚠️ שדות ההיקף והדריסה אינם בטיפוס MaternityAid (נוספו במיגרציה מאוחרת)
+                  const ext = aid as { eligibility_extension_scope?: string | null; recovery_end_override?: string | null }
+                  const rows = [
+                    { label: 'כרטיס מזון', end: cardEnd, extended: !!aid.eligibility_extended && ext.eligibility_extension_scope !== 'recovery' },
+                    { label: 'בית החלמה', end: recEnd, extended: !!ext.recovery_end_override || (!!aid.eligibility_extended && ext.eligibility_extension_scope !== 'card') },
+                  ]
+                  return rows.map(r => r.end && (
+                    <p key={r.label} className="text-sm">
+                      <span className="text-slate-500">{r.label} — עד: </span>
+                      <span className="ltr-num text-indigo-600 font-medium">{fmtDate(r.end.toISOString())}</span>
+                      {(daysLeft(r.end) ?? 0) > 0
+                        ? <span className="mr-2 text-xs text-amber-600">(עוד {daysLeft(r.end)} ימים)</span>
+                        : <span className="mr-2 text-xs text-red-500">(הסתיים)</span>}
+                      {r.extended && (
+                        <span className="mr-2 inline-block text-[11px] font-medium px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">הוארך ידנית</span>
+                      )}
+                    </p>
+                  ))
+                })()}
                 {aid.eligibility_extended && aid.eligibility_extension_reason && (
                   <p className="text-xs text-slate-400">סיבת ההארכה: {aid.eligibility_extension_reason}</p>
-                )}
-                {aid.six_weeks_end && differenceInCalendarDays(new Date(aid.six_weeks_end), new Date()) > 0 && (
-                  <p className="text-sm"><span className="text-slate-500">ימים שנותרו: </span><span className="font-medium text-amber-600">{differenceInCalendarDays(new Date(aid.six_weeks_end), new Date())} ימים</span></p>
                 )}
                 <div className="pt-2">
                   <ExtendEligibility aid={aid} />
