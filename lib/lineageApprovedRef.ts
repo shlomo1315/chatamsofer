@@ -85,7 +85,7 @@ export async function getApprovedRefLookup(db: any): Promise<ApprovedRefLookup> 
 }
 
 /** לאיפוס המטמון אחרי עדכון הטבלה. */
-export function invalidateApprovedRef(): void { _cache = null }
+export function invalidateApprovedRef(): void { _cache = null; _treeCache = null }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 🔴 מפתח ההשוואה ה"רופף" — שם הבעל ושם המשפחה בלבד.
@@ -111,4 +111,84 @@ export function coupleKey(raw: string): string {
   const at = given.findIndex((x, i) => i > 0 && /^ו/.test(x))
   const husband = at > 0 ? given.slice(0, at) : given
   return [...husband, surname].join(' ')
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 בדיקה מלאה לבורר: שם + דור + *הורה*.
+//
+// ⚠️ שם ודור לבדם אינם מספיקים בבורר: "רבי אברהם חנוך וחנה חייטשא פרידמן"
+// הוא דור 3 בקובץ — אבל בנו של רבי צבי יהודה פרידמן, לא של הכתב סופר. בעץ
+// הוא יושב תחת הכתב סופר, ובורר שבודק שם+דור הציע אותו שם כבן (11.10).
+// הצבע בכרטסת נשאר לפי שם+דור (getApprovedRefLookup); הבורר מחמיר, כי מה
+// שנבחר בו נבנה עליו סדר ייחוס שלם.
+//
+// ⚠️ דור 2: ההורה הוא השורש, ושמו בעץ ("מרן החתם סופר זי״ע") שונה מהקובץ
+// ("החתם סופר"). השורש מזוהה לפי מיקום — ראו PublicPortalPage/prefill.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** (שם, דור, שם ההורה בעץ) → האם הצומת יושב בקובץ המאושר בדיוק במקום הזה. */
+export type ApprovedRefTreeLookup = (name: string, generation: number, parentName: string | null) => boolean
+
+interface RefTreeRow { key: string; name: string; generation: number; parent_key: string | null }
+
+/** אותו אדם — שם מנורמל זהה, או בעל + שם משפחה זהים ("ומרת רחל" מול "ורחל"). */
+function sameRefName(a: string, b: string): boolean {
+  if (normalizeName(a) === normalizeName(b)) return true
+  const ka = coupleKey(a)
+  return !!ka && ka === coupleKey(b)
+}
+
+export function buildApprovedRefTree(rows: RefTreeRow[]): ApprovedRefTreeLookup {
+  const byKey = new Map(rows.map(r => [r.key, r]))
+  return (name, generation, parentName) => {
+    const cands = rows.filter(r => r.generation === generation && sameRefName(r.name, name))
+    if (!cands.length) return false
+    if (generation <= 2 || parentName == null) return true
+    return cands.some(r => {
+      const p = r.parent_key ? byKey.get(r.parent_key) : undefined
+      return !!p && sameRefName(p.name, parentName)
+    })
+  }
+}
+
+let _treeCache: { at: number; lookup: ApprovedRefTreeLookup } | null = null
+
+/**
+ * ⚠️ כשל בטעינה (או טבלה ריקה — RLS) מחזיר בודק מתירני: הבורר נופל לסינון
+ * לפי התווית בלבד, כמו לפני התיקון, ולא נתקע מול רשימה ריקה לכולם.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getApprovedRefTree(db: any): Promise<ApprovedRefTreeLookup> {
+  const now = Date.now()
+  if (_treeCache && now - _treeCache.at < TTL_MS) return _treeCache.lookup
+  try {
+    const { data, error } = await db.from('lineage_approved_ref').select('key, name, generation, parent_key')
+    if (error || !Array.isArray(data) || data.length === 0) throw new Error('approved_ref load failed/empty')
+    const lookup = buildApprovedRefTree(data as RefTreeRow[])
+    _treeCache = { at: now, lookup }
+    return lookup
+  } catch (e) {
+    console.error('[approvedRef] טעינת עץ הייחוס המאושר נכשלה — הבורר לפי התווית בלבד:', e)
+    return () => true
+  }
+}
+
+/**
+ * הבודק של הבורר עבור ילדי צומת נתון — האתר וטופס נדרים קוראים לאותה פונקציה,
+ * כדי ששני הבוררים לא יחלקו על אותו דור.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getPickerApproval(db: any, parentId: string | null): Promise<ApprovedRefLookup> {
+  const tree = await getApprovedRefTree(db)
+  let parentName: string | null = null
+  // ⚠️ כשל בשליפת ההורה אינו מפיל את הבורר — נשארת בדיקת שם+דור.
+  if (parentId) {
+    try {
+      const { data } = await db.from('lineage_nodes').select('name').eq('id', parentId).maybeSingle()
+      parentName = data?.name ?? null
+    } catch (e) {
+      console.error('[approvedRef] שליפת שם ההורה נכשלה — בדיקת שם+דור בלבד:', e)
+    }
+  }
+  return (name, generation) => tree(name, generation, parentName)
 }

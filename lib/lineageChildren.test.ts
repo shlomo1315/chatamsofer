@@ -14,7 +14,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // התיקון: להחזיר גם hasPending — "כאן העץ המאושר נגמר, אבל יש המשך
 // שטרם אושר" — כדי שהטופס יידע לפתוח הזנה ידנית במקום להיתקע.
 
-const rows: Record<string, { id: string; name: string; relation: string | null; status: string; parent_id: string | null }[]> = {
+let refRows: { key: string; name: string; generation: number; parent_key: string | null }[] = []
+
+const rows: Record<string, { id: string; name: string; relation: string | null; status: string; parent_id: string | null; generation?: number }[]> = {
   root: [
     { id: 'g2-a', name: 'רבי אברהם שמואל בנימין', relation: 'son', status: 'verified', parent_id: null },
   ],
@@ -25,18 +27,27 @@ const rows: Record<string, { id: string; name: string; relation: string | null; 
   ],
   // עלה אמיתי — אין לו ילדים כלל.
   'real-leaf': [],
+  // 🔴 מסומן verified אך בקובץ המאושר הוא בדור 5 (נכד שהוצג כבן) — 11.10.
+  'wrong-gen': [
+    { id: 'w1', name: 'מרת רויזא גולדשטיין', relation: null, status: 'verified', parent_id: 'wrong-gen', generation: 3 },
+  ],
 }
 
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({
-    from: () => {
+    from: (table: string) => {
       const state: { parent: string | null; status?: string } = { parent: null }
       const builder: Record<string, unknown> = {}
       const chain = () => builder
+      // ריק כברירת מחדל ⇒ הבודק מתירני; הבדיקה האחרונה ממלאת אותו.
+      if (table === 'lineage_approved_ref') {
+        return { select: () => Promise.resolve({ data: refRows, error: null }) }
+      }
       Object.assign(builder, {
         select: chain,
         order: chain,
         limit: chain,
+        maybeSingle: () => Promise.resolve({ data: { name: 'הורה' }, error: null }),
         eq: (col: string, val: string) => {
           if (col === 'status') state.status = val
           if (col === 'parent_id') state.parent = val
@@ -89,5 +100,15 @@ describe('fetchLineageChildren — הבחנה בין עלה אמיתי להמש�
     const r = await fetchLineageChildren('has-pending-only')
     if ('error' in r) throw new Error(r.error)
     expect(JSON.stringify(r)).not.toContain('ממתין')
+  })
+
+  it('🔴 מסומן מאושר אך בדור שגוי בקובץ — מוסתר, ו-hasPending=true (הזנה ידנית)', async () => {
+    refRows = [{ key: 'ג', name: 'מרת רויזא גולדשטיין', generation: 5, parent_key: null }]
+    vi.resetModules()
+    const { fetchLineageChildren } = await import('./lineageChildren')
+    const r = await fetchLineageChildren('wrong-gen')
+    if ('error' in r) throw new Error(r.error)
+    expect(r.children).toEqual([])
+    expect(r.hasPending).toBe(true)
   })
 })

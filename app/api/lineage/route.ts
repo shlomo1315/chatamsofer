@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { getPickerApproval } from '@/lib/lineageApprovedRef'
+import { pickableNodes } from '@/lib/lineageApprovedColor'
 
 export const dynamic = 'force-dynamic'
 
@@ -92,7 +94,10 @@ export async function GET(request: NextRequest) {
     query = parentId ? query.eq('parent_id', parentId) : query.is('parent_id', null)
     const { data, error } = await query
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    nodes = data ?? []
+    // 🔴 ובדורות 2–5 — גם בקובץ המאושר, באותו דור ותחת אותו הורה. התווית לבדה
+    // הציגה בדור 3 נכדים ונינים כבנים (ענף פריי, ברנפלד, גולדגלנץ).
+    // אותה בדיקה בדיוק בטופס נדרים — ראו pickableNodes, getPickerApproval.
+    nodes = pickableNodes((data ?? []) as { name: string; generation: number; status: string | null }[], await getPickerApproval(client, parentId))
   }
 
   // ⚠️ במצב parent_id (רשימת הבחירה לדור הבא), מחזירים גם empty ואת מספר הדור

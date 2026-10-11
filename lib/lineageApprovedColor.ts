@@ -87,3 +87,26 @@ export function deviatingGensByRef(
   }
   return [...new Set(out)].sort((a, b) => a - b)
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 בורר הדורות (טופס הרישום באתר + טופס נדרים) — רק מה שנצבע ירוק.
+//
+// ⚠️ הבאג (11.10): הבורר סינן לפי התווית (status='verified') בלבד. בדור 3
+// תחת הכתב סופר הוצגו 23 שמות — 14 מהם בקובץ המאושר בדור 4–5 (ענף פריי,
+// ברנפלד, גולדגלנץ: נכדים ונינים שהוצגו כבנים) ו-3 שאינם בקובץ כלל. נרשם
+// שבחר מהם בנה סדר ייחוס שגוי בשני דורות, ונראה לו כעובדה מאושרת.
+//
+// 🔴 מקור אמת אחד: אותו genColorByRef שצובע את הכרטסת. צומת שהמזכירות
+// רואה באדום לא יוצע לנרשם כבחירה מאושרת.
+//
+// ⚠️ pending לעולם אינו מוצג — גם אם שמו בקובץ (החלטת המשתמש 16.09).
+// ─────────────────────────────────────────────────────────────────────────────
+export function pickableNodes<T extends { name: string; generation: number; status?: string | null }>(
+  nodes: T[],
+  inRef: (name: string, generation: number) => boolean,
+): T[] {
+  return nodes.filter(n =>
+    (n.status ?? 'verified') === 'verified'
+    && genColorByRef(Number(n.generation), n.name, 'verified', inRef) === 'green',
+  )
+}

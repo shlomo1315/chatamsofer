@@ -2,6 +2,8 @@
 // משותף ל-nedarim-form/lineage-children ו-lineage-roots. מחזיר אך ורק שמות
 // מעץ הדורות (מידע היסטורי מאומת) — לא נתוני מוטבים.
 import { createClient } from '@supabase/supabase-js'
+import { getPickerApproval } from './lineageApprovedRef'
+import { pickableNodes } from './lineageApprovedColor'
 
 function getClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -10,7 +12,7 @@ function getClient() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-interface LineageRow { id: string; name: string; relation: string | null }
+interface LineageRow { id: string; name: string; relation: string | null; generation: number; status: string | null }
 
 export interface LineageChild { nodeId: string; name: string; relation: string | null }
 
@@ -41,7 +43,7 @@ export async function fetchLineageChildren(
 
   let query = client
     .from('lineage_nodes')
-    .select('id,name,relation')
+    .select('id,name,relation,generation,status')
     .eq('status', 'verified')
     .order('generation')
     .order('name')
@@ -51,7 +53,10 @@ export async function fetchLineageChildren(
   const { data, error } = await query
   if (error) return { error: error.message }
 
-  const children = (data as LineageRow[] ?? []).map((n) => ({
+  // 🔴 בדורות 2–5 — גם בקובץ המאושר, באותו דור (כמו בבורר באתר). התווית
+  // לבדה הציגה בדור 3 נכדים ונינים כבנים. גם ההורה נבדק. ראו getPickerApproval.
+  const rows = (data as LineageRow[] | null) ?? []
+  const children = pickableNodes(rows, await getPickerApproval(client, parentId)).map((n) => ({
     nodeId: n.id,
     name: n.name,
     relation: n.relation ?? null,
@@ -60,7 +65,11 @@ export async function fetchLineageChildren(
   // ⚠️ נבדק רק כשאין ילדים מאושרים: זו השאלה היחידה שבה התשובה משנה
   // התנהגות, ואין טעם בשאילתה נוספת כשהבורר ממילא ממשיך לדור הבא.
   let hasPending = false
-  if (children.length === 0 && parentId) {
+  // ⚠️ צומת שסונן (מסומן מאושר אך אינו בקובץ באותו דור) הוא המשך שטרם אושר,
+  // בדיוק כמו pending. בלי זה הטופס רואה "עלה אמיתי" ונעצר במקום לפתוח הזנה ידנית.
+  if (children.length === 0 && rows.length > 0) {
+    hasPending = true
+  } else if (children.length === 0 && parentId) {
     const { data: pending } = await client
       .from('lineage_nodes')
       .select('id')
