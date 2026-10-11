@@ -92,7 +92,10 @@ export default function SendLineageLinkButton({
                 </button>
               )}
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                התיקון שיישלח <strong>אינו נכנס ישירות למאגר</strong> — הוא מגיע לאישור הצוות במסך עץ הדורות.
+                {/* 🔴 תואם את api/public/lineage-review/apply (11.10) — לא לשנות את הנוסח בלי לשנות את ההתנהגות. */}
+                התיקון <strong>נכנס מיד</strong> לסדר הדורות של הצאצא, כאילו נרשם מחדש עם הסדר המתוקן,
+                והכרטסת חוזרת ל<strong>ממתין לאישור ראשוני</strong>.
+                זה קורה רק כש-5 הדורות הראשונים תואמים את סדר הדורות המאושר — אחרת התיקון מגיע לאישור הצוות במסך עץ הדורות.
               </p>
             </div>
             <div className="flex gap-2 p-4 border-t border-slate-100">

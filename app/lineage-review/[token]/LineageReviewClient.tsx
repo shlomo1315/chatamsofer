@@ -16,7 +16,7 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
   pending: { label: 'ממתין', cls: 'bg-amber-100 text-amber-700 border-amber-200' },
   rejected: { label: 'נדחה', cls: 'bg-red-100 text-red-700 border-red-200' },
 }
-import ManualGenerationForm, { ManualAddGate } from '@/components/lineage/ManualGenerationForm'
+import { LineageBuilder, type LineageResult } from '@/components/lineage/LineageBuilder'
 
 const NON_HEBREW = /[^֐-׿ ׳״'"-]/g
 
@@ -41,16 +41,10 @@ export default function LineageReviewClient({ token }: { token: string }) {
   // ההתנהגות הקודמת.
   const [selfNodeId, setSelfNodeId] = useState<string | null>(null)
   const [mode, setMode] = useState<'full' | 'order'>('full')
-  // כל העץ — לבחירת אב אחר בעת תיקון הסדר
-  const [fullTree, setFullTree] = useState<Node[]>([])
-  // הדור שנפתח לתיקון + חיפוש בבורר
-  const [fixGen, setFixGen] = useState<{ node: Node; action: 'replace' | 'insert' } | null>(null)
-  const [pickQuery, setPickQuery] = useState('')
-  const [sentGens, setSentGens] = useState<Set<string>>(new Set())
-  // ⚠️ אותה חלונית חוסמת של הרישום, לפני שהטופס נפתח בכלל. הוספה ידנית של דור
-  // שכבר קיים בעץ היא המקור המרכזי לכפילויות, ובדף התיקון היא לא הייתה קיימת
-  // כלל — כאן דווקא, כשמתקנים שרשרת שגויה, הפיתוי להוסיף במקום לחפש גדול יותר.
-  const [addGate, setAddGate] = useState<Node | null>(null)
+  // ── עורך סדר הדורות (קישור order) — הבורר של הרישום ──
+  const [orderEditing, setOrderEditing] = useState(false)
+  const [orderResult, setOrderResult] = useState<LineageResult | null>(null)
+  const [applyResult, setApplyResult] = useState<{ applied: boolean; reason?: string } | null>(null)
   // ── קישור שפג תוקפו ──
   // 🔴 המצב הנפוץ ביותר בתלונות "לא עובד לי". מסך השגיאה היה מבוי סתום,
   // ולכן יש כאן מסלול לבקשת קישור חדש ישירות מהדף.
@@ -84,61 +78,12 @@ export default function LineageReviewClient({ token }: { token: string }) {
       setChain(data.chain ?? [])
       setSelfNodeId(data.selfNodeId ?? null)
       setMode(data.mode === 'order' ? 'order' : 'full')
-      setFullTree(data.fullTree ?? [])
     } catch { setError('שגיאת רשת') }
     finally { setLoading(false) }
   }, [token])
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load() }, [load])
-
-  // ── תוצאות החיפוש בבורר האב ──
-  // ⚠️ מחייב 2 תווים ומוגבל ל-40 תוצאות: העץ מכיל אלפי צמתים, ורשימה מלאה
-  // הייתה גם חסרת תועלת וגם כבדה לרינדור במכשיר נייד.
-  // ⚠️ רק האחים בדור הזה — כלומר ילדיו של הדור שלפניו בשרשרת.
-  //
-  // קודם הבורר הציג את *כל* העץ בחיפוש חופשי, ואפשר היה לבחור אב מדור אחר
-  // לגמרי — מה שיוצר שרשרת בלתי אפשרית (קפיצת דורות או לולאה). התיקון האמיתי
-  // תמיד נמצא בין הילדים של אותו אב: "אינני צאצא של הבן הזה אלא של אחיו".
-  // כשמתקנים את הדור הראשון שאחרי השורש, האפשרויות הן ילדי השורש.
-  //
-  // 🔴 בשורה של הנמען עצמו מתקנים את *האב* שאליו הוא מחובר, ולכן הדור שמוחלף
-  // הוא הדור שלפניו והמועמדים הם אחיו של האב (ילדי הסבא). בלי ההיסט הזה
-  // הבורר הציע את אחיו של הנמען, ובחירה בהם הייתה תולה אותו תחת אחיו שלו.
-  const anchorIdx = useMemo(() => {
-    if (!fixGen) return -1
-    const idx = chain.findIndex(c => c.id === fixGen.node.id)
-    if (idx < 0) return -1
-    return fixGen.node.id === selfNodeId ? idx - 1 : idx
-  }, [fixGen, chain, selfNodeId])
-
-  // כל האפשרויות בדור, *לפני* הסינון לפי הקלדה — הבסיס למונה ולתיבת החיפוש.
-  const pickAll = useMemo(() => {
-    if (anchorIdx < 0) return []
-    const anchor = chain[anchorIdx]
-    if (!anchor) return []
-    // ההורה בשרשרת: הדור שלפני הדור שמוחלף. בדור הראשון — שורש העץ עצמו.
-    const parentId = anchorIdx > 0 ? chain[anchorIdx - 1].id : (fullTree.find(n => !n.parent_id)?.id ?? null)
-    if (!parentId) return []
-    return fullTree
-      .filter(n => n.parent_id === parentId && n.id !== anchor.id)
-      // ⚠️ מאושרים קודם: הם הזיהוי הבטוח, וברשימה ארוכה כדאי שיהיו בראש.
-      .sort((a, b) => {
-        const av = a.status === 'verified' ? 0 : 1
-        const bv = b.status === 'verified' ? 0 : 1
-        return av !== bv ? av - bv : a.name.localeCompare(b.name, 'he')
-      })
-  }, [fullTree, anchorIdx, chain])
-
-  const pickOptions = useMemo(() => {
-    const q = pickQuery.trim()
-    if (!q) return pickAll
-    // ⚠️ חיפוש סובלני: מתעלם מגרשיים/גרש ומרווחים כפולים, שמופיעים בשמות
-    // ("הגר\"ר", "רבי  משה") ומכשילים התאמה מילולית פשוטה.
-    const norm = (s: string) => s.replace(/["'׳״]/g, '').replace(/\s+/g, ' ').trim()
-    const nq = norm(q)
-    return pickAll.filter(n => norm(n.name).includes(nq))
-  }, [pickQuery, pickAll])
 
   // מיון היררכי — שורש, ואז ילדים בהזחה לפי דור
   const ordered = useMemo(() => {
@@ -182,22 +127,32 @@ export default function LineageReviewClient({ token }: { token: string }) {
     finally { setBusy(null) }
   }
 
-  // 🔴 "זה אני" — הנמען מסמן שהצומת הוא הוא עצמו.
-  //
-  // נשלח כהערה מפורשת ולא כפעולה על העץ: שיוך כרטסת לצומת הוא החלטה עם
-  // השלכות (כל הדורות שמעליו הופכים לייחוס שלו), ואין דרך לאמת מקישור ציבורי
-  // שהאדם שלחץ הוא באמת אותו אדם. המזכירות מאשרת.
-  const markSelf = async (n: Node) => {
-    if (!confirm(`לסמן ש"${n.name}" הוא אתם?\n\nההודעה תישלח למזכירות לאישור, ואחריו הכרטסת שלכם תשויך לרשומה הזאת.`)) return
-    await suggest({ kind: 'note', nodeId: n.id, text: `הנמען מסמן שהוא עצמו הצומת "${n.name}" (דור ${n.generation}) — יש לשייך את כרטסתו לרשומה זו.` })
-  }
-
-  // הסרת דור מהשרשרת — הצעה, לא מחיקה.
-  const askRemove = async (n: Node) => {
-    if (!confirm(`להודיע שהדור "${n.name}" אינו שייך לשרשרת שלכם?\n\nההודעה תישלח למזכירות. הדור לא יימחק מהעץ עד שייבדק.`)) return
-    if (await suggest({ kind: 'note', nodeId: n.id, text: `הנמען מדווח שהדור "${n.name}" (דור ${n.generation}) אינו שייך לשרשרת הייחוס שלו ויש להסירו ממנה.` })) {
-      setSentGens(s => new Set(s).add(n.id))
-    }
+  // שמירת הסדר המתוקן — נכנס מיד, או לתור הצוות (השרת מכריע ומחזיר למה).
+  const submitOrder = async () => {
+    const r = orderResult
+    if (!r?.valid || !r.nodeId) return
+    setBusy('apply'); setError('')
+    try {
+      const anc = r.ancestors
+      const res = await fetch('/api/public/lineage-review/apply', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token,
+          lineage_node_id: r.nodeId,
+          self_is_existing: r.selfIsExisting,
+          lineage_new_nodes: [
+            ...anc.filter(a => a.isNew).map(a => ({ name: a.name, relation: a.relation })),
+            ...(r.selfIsExisting ? [] : [{ name: recipient?.name ?? '', relation: r.selfRelation }]),
+          ],
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.ok === false) { setError(data.error || 'השמירה נכשלה'); return }
+      setApplyResult({ applied: !!data.applied, reason: data.reason })
+      setOrderEditing(false)
+      if (data.applied) await load()
+    } catch { setError('שגיאת רשת') }
+    finally { setBusy(null) }
   }
 
   const act = async (nodeId: string, action: 'verify' | 'reject' | 'rename', name?: string) => {
@@ -297,221 +252,82 @@ export default function LineageReviewClient({ token }: { token: string }) {
           </div>
         )}
 
-        {/* שרשרת הדורות — מהחתם סופר זי"ע ועד אליכם */}
-        {chain.length > 0 && (
+        {/* ── סדר הדורות — מהחתם סופר זי"ע ועד אליכם ──
+            🔴 בקישור תיקון הסדר (order) התיקון נעשה באותו בורר של הרישום, טעון
+            מראש בסדר הקיים: בוחרים דור, השורה מודגשת והבורר מתקדם מיד לדור הבא
+            (11.10, לבקשת המשתמש). כפתורי "החלף דור / דור חסר" לכל שורה הוסרו —
+            הם יצרו בקשות חלקיות שלא תמיד ניתן היה להחיל.
+            התיקון נכנס מיד (api/public/lineage-review/apply) והכרטסת חוזרת
+            ל"ממתין לאישור ראשוני" — אם 5 הדורות הראשונים תקינים. אחרת לתור הצוות. */}
+        {chain.length > 0 && !orderEditing && (
           <div className="mb-4 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
             <div className="text-[11px] font-bold uppercase tracking-wider text-indigo-400 mb-2.5">סדר הדורות הרשום</div>
             <div className="flex flex-col gap-1.5">
               {chain.map((g, i) => (
-                <div key={g.id} className="rounded-xl bg-white border border-indigo-100 overflow-hidden">
-                  <div className="flex items-center gap-2.5 px-3 py-2 flex-wrap">
-                    <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[11px] font-extrabold text-indigo-700">{g.generation}</span>
-                    <span className="flex-1 min-w-[120px] text-sm font-bold text-slate-800">{g.name}</span>
-                    {g.relation && <span className="text-[10px] font-bold text-slate-400">{g.relation === 'son_in_law' ? 'חתן' : 'בן'}</span>}
-                    {/* ⚠️ "האב שלכם" יושב על הדור שלפני הנמען, לא על האחרון.
-                        כשהנרשם עצמו נמצא בשרשרת (selfNodeId), האחרון הוא הוא —
-                        ותיוגו כאב הציג לנמען את שמו שלו כאביו. בקישורים ישנים
-                        אין selfNodeId, ואז האחרון הוא באמת האב. */}
-                    {g.id === selfNodeId
-                      ? <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700">זה אתם</span>
-                      : i === chain.length - (selfNodeId ? 2 : 1) &&
-                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">האב שלכם</span>}
-                    {sentGens.has(g.id) ? (
-                      <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700"><CheckCircle2 size={11} /> נשלח לאישור</span>
-                    ) : (
-                      <div className="flex items-center gap-1.5">
-                        {/* ⚠️ החלפת דור אפשרית מדור 2 ומעלה: דור 1 הוא מרן
-                            החתם סופר זי"ע — שורש העץ, ואין לו אב להחליף. */}
-                        {g.generation > 1 && (
-                          <button onClick={() => { setFixGen({ node: g, action: 'replace' }); setPickQuery(''); setError('') }}
-                            className="rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100">
-                            החלף דור
-                          </button>
-                        )}
-                        <button onClick={() => { setAddGate(g); setPickQuery('') }}
-                          title="חסר דור בין זה לדור שאחריו"
-                          className="rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100">
-                          + דור חסר
-                        </button>
-                        {/* 🔴 "זה אני" — כמו ברישום.
-                            הנמען מזהה את עצמו בשרשרת, ואם המערכת סימנה את הדור
-                            הלא נכון כ"זה אתם" אין לו שום דרך לתקן. בלי זה הוא
-                            נאלץ להסביר את זה במייל חוזר, ובינתיים הכרטסת שלו
-                            מחוברת לצומת של אביו או של בנו.
-                            ⚠️ מדור 5 ומעלה בלבד: אין אדם חי שהוא עצמו דור 2/3/4
-                            לחתם סופר, וסימון שם הוא תמיד טעות שקוטעת את השרשרת
-                            באמצע ומשייכת אותו לאב-קדמון. */}
-                        {g.generation >= 5 && g.id !== selfNodeId && (
-                          <button onClick={() => { void markSelf(g) }} disabled={busy === g.id}
-                            title="זהו שמי — שייכו אותי לרשומה הזאת"
-                            className="inline-flex items-center gap-1 rounded-lg border border-green-300 bg-green-50 px-2 py-1 text-[11px] font-bold text-green-700 hover:bg-green-600 hover:text-white disabled:opacity-50">
-                            <UserPlus size={11} /> זה אני
-                          </button>
-                        )}
-                        {/* מחיקה — רק לדור שהנמען עצמו הוסיף ועדיין ממתין לאישור.
-                            ⚠️ דור מאושר אינו נמחק מכאן: הוא עשוי לשאת תחתיו ענפים
-                            של משפחות אחרות, ומחיקה מקישור ציבורי הייתה מוחקת גם
-                            אותם. גם זו הצעה שעוברת לאישור המזכירות. */}
-                        {g.status !== 'verified' && g.generation > 1 && (
-                          <button onClick={() => { void askRemove(g) }} disabled={busy === g.id}
-                            title="דור זה אינו שייך לשרשרת שלי"
-                            className="rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50">
-                            הסר דור
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* בורר האב החדש / הוספת דור חסר */}
-                  {fixGen?.node.id === g.id && (
-                    <div className="border-t border-indigo-100 bg-slate-50 px-3 py-3">
-                      {fixGen.action === 'replace' ? (
-                        <>
-                          {/* ⚠️ נוסח נפרד לשורה של הנמען עצמו: "במקום <שמך>"
-                              נקרא כאילו מבקשים ממנו להחליף את עצמו. מה שמתקנים
-                              שם הוא האב שאליו הוא מחובר. */}
-                          <p className="mb-1 text-[11px] font-bold text-slate-600">
-                            {g.id === selfNodeId ? (
-                              <>אינכם בנו של <span className="text-rose-600">{chain[i - 1]?.name ?? 'הדור שמעליכם'}</span>? בחרו את האב הנכון מבין ילדיו של{' '}
-                                <span className="text-indigo-700">{chain[i - 2]?.name ?? 'הדור שלפניו'}</span>:</>
-                            ) : (
-                              <>במקום <span className="text-rose-600">{g.name}</span> — בחרו מבין
-                                {i > 0 ? <> ילדיו של <span className="text-indigo-700">{chain[i - 1].name}</span></> : <> צאצאי מרן החתם סופר זי&quot;ע</>}:</>
-                            )}
-                          </p>
-                          {/* ⚠️ בעבר נכתב כאן "רק דורות מאושרים", והרשימה אכן סוננה כך —
-                              אבל רק 3.4% מהעץ מאושר, ולכן אצל 97% מהמשפחות הבורר היה ריק
-                              לגמרי. עכשיו מוצגים גם דורות שטרם אומתו, מסומנים ככאלה. */}
-                          <p className="mb-2 text-[10px] text-slate-400">
-                            הבחירה נשלחת לאישור המשרד ואינה משנה את העץ מיד. דור המסומן
-                            <span className="mx-1 rounded border border-amber-200 bg-amber-50 px-1 text-amber-700">טרם אומת</span>
-                            עדיין ממתין לבדיקה — אפשר לבחור בו.
-                          </p>
-                          {/* תיבת החיפוש רק כשיש הרבה אפשרויות; ברשימה קצרה היא מיותרת.
-                              ⚠️ הסף נבדק מול *כל* האפשרויות ולא מול המסוננות: כשהסינון
-                              מצמצם ל-2 תוצאות התיבה הייתה נעלמת יחד עם הטקסט שהוקלד,
-                              והמשתמש נתקע בלי דרך לנקות אותו. */}
-                          {(pickAll.length > 8 || pickQuery.trim()) && (
-                            <div className="relative mb-2">
-                              <input value={pickQuery} onChange={e => setPickQuery(e.target.value)} autoFocus
-                                placeholder={`סינון מתוך ${pickAll.length.toLocaleString('he-IL')} דורות…`}
-                                className="w-full rounded-lg border border-slate-300 px-3 py-2 pl-8 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                              {pickQuery && (
-                                <button type="button" onClick={() => setPickQuery('')} title="ניקוי"
-                                  className="absolute top-1/2 left-2 -translate-y-1/2 text-slate-400 hover:text-red-600">✕</button>
-                              )}
-                            </div>
-                          )}
-                          {/* ⚠️ הודעה מפורשת כשהרשימה ארוכה — "מאות אנשים" בלי הסבר
-                              נראה כמו תקלה. כאן ברור שזה הדור הנכון וצריך לחפש בו. */}
-                          {pickAll.length > 25 && !pickQuery.trim() && (
-                            <p className="mb-2 rounded-lg bg-slate-50 px-2 py-1.5 text-[10px] text-slate-500">
-                              בדור זה רשומים {pickAll.length.toLocaleString('he-IL')} שמות. מומלץ להקליד
-                              חלק מהשם בתיבה שלמעלה כדי למצוא את המבוקש.
-                            </p>
-                          )}
-                          <div className="max-h-56 overflow-y-auto flex flex-col gap-1">
-                            {pickOptions.length === 0 && (
-                              <p className="py-3 text-center text-[11px] text-slate-400">
-                                {/* ⚠️ שתי הודעות שונות: "לא נמצא בחיפוש" הוא מצב זמין
-                                    לתיקון (לנקות ולנסות שוב), ואילו רשימה ריקה באמת
-                                    מפנה להוספת דור חסר — ולא סתם "לפנות למשרד". */}
-                                {pickQuery.trim()
-                                  ? 'לא נמצאו תוצאות לחיפוש זה — נסו לנקות את התיבה או להקליד חלק אחר מהשם'
-                                  : 'אין דורות אחרים רשומים תחת דור זה. אם הדור שלכם חסר — סגרו חלונית זו ובחרו "הוספת דור חסר".'}
-                              </p>
-                            )}
-                            {pickOptions.map(o => (
-                              <button key={o.id} disabled={busy === g.id}
-                                onClick={async () => {
-                                  // ⚠️ ההצעה היא לשנות את האב של *הדור הבא* אחרי
-                                  // הדור שמוחלף: "במקום X יבוא Y" פירושו שהבן
-                                  // של X צריך להיות תלוי ב-Y.
-                                  //
-                                  // anchorIdx כבר מביא בחשבון את השורה של הנמען
-                                  // עצמו, שבה הדור שמוחלף הוא אביו — ולכן מי
-                                  // שעובר אב הוא הנמען.
-                                  //
-                                  // ⚠️ בקישור ישן בלי selfNodeId, בשורה האחרונה אין
-                                  // "דור הבא" בעץ (הנמען עצמו אינו צומת). העברת g
-                                  // תחת אחיו הייתה שגויה ונדחית בשרת — נשלחת הערה
-                                  // מפורשת למזכירות במקום זאת.
-                                  const target = chain[anchorIdx + 1]
-                                  setBusy(g.id)
-                                  const ok = target
-                                    ? await suggest({ kind: 'reparent', nodeId: target.id, parentId: o.id })
-                                    : await suggest({ kind: 'note', nodeId: g.id, text: `הנמען מבקש להחליף את הדור "${g.name}" (דור ${g.generation}) ב"${o.name}" — אביו הוא "${o.name}".` })
-                                  setBusy(null)
-                                  if (ok) { setSentGens(s => new Set(s).add(g.id)); setFixGen(null) }
-                                }}
-                                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-right text-sm hover:border-indigo-300 hover:bg-indigo-50 disabled:opacity-50">
-                                <span className="font-bold text-slate-800">{o.name}</span>
-                                <span className="mr-2 text-[10px] text-slate-400">דור {o.generation}</span>
-                                {/* ⚠️ סימון גלוי לדור שטרם אומת — הוא בר-בחירה, אבל
-                                    אסור שייראה כעובדה מאושרת. */}
-                                {o.status !== 'verified' && (
-                                  <span className="mr-2 rounded border border-amber-200 bg-amber-50 px-1 text-[10px] text-amber-700">
-                                    טרם אומת
-                                  </span>
-                                )}
-                              </button>
-                            ))}
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <p className="mb-2 text-[11px] font-bold text-slate-600">
-                            הוספת דור חסר אחרי <span className="text-indigo-600">{g.name}</span>:
-                          </p>
-                          {/* 🔴 אותו טופס בדיוק של הרישום, ולא שדה חופשי.
-                              קודם היה כאן שדה שם אחד, בלי אזהרת התארים, בלי
-                              החלונית על השם המלא, ובלי התצוגה "ייכנס לעץ כך".
-                              התוצאה: מי שמתקן דרך הקישור הזה הזין "רבי משה
-                              שליט\"א" כשם — בדיוק מה שהרישום חוסם — והשם נכנס
-                              לעץ בניסוח שאינו ניתן להצלבה. */}
-                          <ManualGenerationForm
-                            generation={g.generation + 1}
-                            submitLabel="שליחה לאישור"
-                            busy={busy === g.id}
-                            onCancel={() => setFixGen(null)}
-                            onSubmit={async v => {
-                              setBusy(g.id)
-                              const ok = await suggest({ kind: 'add_child', parentId: g.id, name: v.name, relation: v.relation })
-                              setBusy(null)
-                              if (ok) { setSentGens(s => new Set(s).add(g.id)); setFixGen(null) }
-                            }}
-                          />
-                        </>
-                      )}
-                      {/* 🔴 השגיאה מוצגת כאן, בתוך הבורר. קודם היא הופיעה מתחת לכל
-                          הקופסה — מחוץ למסך — ולחיצה שנדחתה נראתה כאילו "לא קורה כלום" (11.10). */}
-                      {error && (
-                        <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600">{error}</div>
-                      )}
-                      {fixGen.action === 'replace' && (
-                        <button onClick={() => { setFixGen(null); setError('') }} className="mt-2 text-[11px] text-slate-400 underline">ביטול</button>
-                      )}
-                    </div>
-                  )}
+                <div key={g.id} className="rounded-xl bg-white border border-indigo-100 flex items-center gap-2.5 px-3 py-2 flex-wrap">
+                  <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[11px] font-extrabold text-indigo-700">{g.generation}</span>
+                  <span className="flex-1 min-w-[120px] text-sm font-bold text-slate-800">{g.name}</span>
+                  {g.relation && <span className="text-[10px] font-bold text-slate-400">{g.relation === 'son_in_law' ? 'חתן' : 'בן'}</span>}
+                  {/* ⚠️ "האב שלכם" יושב על הדור שלפני הנמען, לא על האחרון.
+                      כשהנרשם עצמו נמצא בשרשרת (selfNodeId), האחרון הוא הוא —
+                      ותיוגו כאב הציג לנמען את שמו שלו כאביו. בקישורים ישנים
+                      אין selfNodeId, ואז האחרון הוא באמת האב. */}
+                  {g.id === selfNodeId
+                    ? <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700">זה אתם</span>
+                    : i === chain.length - (selfNodeId ? 2 : 1) &&
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">האב שלכם</span>}
                 </div>
               ))}
             </div>
-            {/* ⚠️ אותה חלונית של הרישום, ובאותם שני נוסחים: כשיש דורות ברשימה
-                האזהרה אדומה ומדברת על דחיית הרישום, וכשאין מול מה לבדוק היא
-                ניטרלית. הבחנה זו היא מה שמונע ממנה להפוך לרעש שסוגרים בלי לקרוא. */}
-            {addGate && (
-              <ManualAddGate
-                hasOptions={fullTree.some(n => n.parent_id === addGate.id)}
-                generation={addGate.generation + 1}
-                onCancel={() => setAddGate(null)}
-                onConfirm={() => { setFixGen({ node: addGate, action: 'insert' }); setAddGate(null) }}
-              />
+            {mode === 'order' && !applyResult && (
+              <>
+                <button type="button" onClick={() => { setOrderEditing(true); setError('') }}
+                  className="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-700">
+                  <Pencil size={15} /> תיקון סדר הדורות
+                </button>
+                <p className="mt-2 text-[11px] leading-relaxed text-indigo-500">
+                  נפלה טעות בסדר? לחצו על <strong>תיקון סדר הדורות</strong>, ובנו את הסדר הנכון דור אחר דור — בדיוק כמו ברישום.
+                  התיקון נכנס מיד, והכרטסת שלכם חוזרת לבדיקה ראשונית אצל הצוות.
+                </p>
+              </>
             )}
+          </div>
+        )}
 
-            <p className="mt-2.5 text-[11px] leading-relaxed text-indigo-500">
-              נפלה טעות בסדר? לחצו על <strong>החלף דור</strong> ובחרו את השם הנכון מהעץ, או על <strong>+ דור חסר</strong> אם חסר דור באמצע. לאחר התיקון יועבר לאישור המזכירות.
-            </p>
+        {/* תוצאת התיקון — נכנס מיד, או הועבר לצוות (ונאמר למה) */}
+        {applyResult && (
+          <div className={`mb-4 rounded-2xl border px-4 py-3 text-sm flex items-start gap-2 ${applyResult.applied ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+            <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
+            <span>
+              {applyResult.applied
+                ? <>סדר הדורות עודכן. הכרטסת שלכם חזרה ל<strong>בדיקה ראשונית</strong> אצל הצוות — אין צורך לשלוח שוב.</>
+                : <>הבקשה התקבלה ונשלחה <strong>לאישור הצוות</strong>{applyResult.reason ? <> ({applyResult.reason})</> : null}. אין צורך לשלוח שוב.</>}
+            </span>
+          </div>
+        )}
+
+        {/* העורך — הבורר של הרישום, טעון מראש בסדר הקיים */}
+        {orderEditing && (
+          <div className="mb-4 rounded-2xl border border-indigo-200 bg-white p-4 shadow-sm">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-indigo-400 mb-2.5">תיקון סדר הדורות</div>
+            <LineageBuilder
+              selfName={recipient?.name ?? ''}
+              onChange={setOrderResult}
+              // ⚠️ בלי הנמען עצמו: הבורר מוסיף אותו בסוף ("הוסיפו אותי").
+              prefillChain={chain.filter(c => c.id !== selfNodeId).map(c => ({ generation: c.generation, name: c.name, relation: (c.relation === 'son' || c.relation === 'son_in_law') ? c.relation : null }))}
+            />
+            {error && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600">{error}</div>}
+            <div className="mt-4 flex gap-2">
+              <button type="button" disabled={!orderResult?.valid || busy === 'apply'} onClick={() => { void submitOrder() }}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50">
+                {busy === 'apply' ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} שמירת הסדר המתוקן
+              </button>
+              <button type="button" onClick={() => { setOrderEditing(false); setError('') }}
+                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">ביטול</button>
+            </div>
+            {!orderResult?.valid && (
+              <p className="mt-2 text-[11px] text-slate-500">יש להשלים את הסדר עד אליכם — כולל «הוסיפו אותי» וסימון בן/חתן (או «זה אני»).</p>
+            )}
           </div>
         )}
 
