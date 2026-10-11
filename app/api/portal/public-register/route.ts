@@ -615,8 +615,15 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
         }
         // אישור אוטומטי — שם שנעשה בו שימוש ע"י 10 נרשמים או יותר (מופיע ב-lineage_chain
         // של 10 משפחות) מאושר אוטומטית ומופיע לכולם ברשימת הבחירה.
+        //
+        // 🔴 מושבת (11.10, לבקשת המשתמש — "בינתיים תשבית", הנחיות בהמשך).
+        // העדכון התאים לפי *שם בלבד ובכל העץ* (.eq('name')), בלי הורה ובלי דור,
+        // ובלי צוות — כלומר כל צומת ממתין באותו שם בכל ענף הפך "מאושר" והוצע
+        // בבורר כעובדה. זה סותר את הכלל: מאושר = נבדק ע"י המשרד / בקובץ המאושר.
+        // ⚠️ להפעלה מחדש יש לקבל הנחיה מהמשתמש — לא להחזיר על דעת עצמנו.
+        const AUTO_VERIFY_ENABLED = false
         const AUTO_VERIFY_THRESHOLD = 10
-        for (const nm of [...new Set(newPendingNames)]) {
+        for (const nm of AUTO_VERIFY_ENABLED ? [...new Set(newPendingNames)] : []) {
           try {
             const { count } = await admin.from('beneficiaries')
               .select('id', { count: 'exact', head: true })
