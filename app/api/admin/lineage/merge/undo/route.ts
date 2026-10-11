@@ -71,7 +71,11 @@ export async function POST(request: NextRequest) {
   if (!restored) return NextResponse.json({ error: 'לא נמצא מיזוג לביטול (ייתכן שכבר בוטל)' }, { status: 404 })
 
   const keepId = (first as { keep_id?: string } | null)?.keep_id
-  if (keepId) await recalcGenerations(admin, keepId)
+  // 🔴 מהשורש, לא מ-keep_id שרירותי (12.10): באצוות מפל יש כמה שורדים בענפים
+  // שונים, ו-limit(1) בלי סדר בחר אחד מהם — שאר הענפים נשארו בדורות שגויים.
+  const { data: root } = await admin.from('lineage_nodes').select('id').is('parent_id', null).order('generation').limit(1).maybeSingle()
+  const recalcFrom = (root as { id?: string } | null)?.id ?? keepId
+  if (recalcFrom) await recalcGenerations(admin, recalcFrom)
 
   await logActivity(admin, {
     userId: staff.userId,

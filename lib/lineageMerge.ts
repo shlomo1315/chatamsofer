@@ -319,18 +319,31 @@ async function mergeOne(
   // אם *מישהו* מהקבוצה מאושר, השורד מאושר.
   let absorbedVerified = false
 
+  // 🔴 מצב השורד *לפני* השלב — לביטול מלא (12.10). המיזוג משנה לשורד שם
+  // וסטטוס (קידום ל-verified, שם נבחר), והביטול לא החזיר אותם.
+  const { data: keepBefore } = await db.from('lineage_nodes')
+    .select('name, status').eq('id', keepId).maybeSingle()
+
   for (const mid of mergeIds) {
     // ⚡ שלוש הפעולות הראשונות עצמאיות זו מזו — רצות במקביל (Promise.all) במקום
     // סדרתית. קוראים את הצומת *לפני* המחיקה, ומעבירים ילדים+משפחות ל-keepId.
     // חוסך 2 סבבי רשת לכל צומת במפל.
-    const [{ data: node }, { data: kids }, { data: bens }] = await Promise.all([
+    //
+    // 🔴 select('*') — תמונת מצב *מלאה* (12.10). קודם נשמרו 7 עמודות, והביטול
+    // החזיר צומת בלי ת"ז ובלי פרטי האישור (approval_source/approved_at/by/note).
+    const [{ data: node }, { data: kids }, { data: bens }, refs] = await Promise.all([
       db.from('lineage_nodes')
-        .select('id, name, parent_id, generation, status, relation, notes')
+        .select('*')
         .eq('id', mid).maybeSingle(),
       db.from('lineage_nodes')
         .update({ parent_id: keepId }).eq('parent_id', mid).select('id'),
       db.from('beneficiaries')
         .update({ lineage_node_id: keepId }).eq('lineage_node_id', mid).select('id'),
+      // 🔴 בקשות המשפחות וקישורי השיתוף עוברים לשורד *לפני* המחיקה (12.10).
+      // ⚠️ lineage_review_suggestions.node_id/parent_id ו-lineage_share_invites.
+      // root_node_id מוגדרים ON DELETE CASCADE — מחיקת הצומת הממוזג מחקה
+      // בשקט את בקשות התיקון של המשפחות ואת הקישורים ששלחנו להן.
+      moveNodeRefs(db, mid, keepId),
     ])
 
     children += kids?.length ?? 0
@@ -343,7 +356,9 @@ async function mergeOne(
       batch_id: ctx.batchId,
       keep_id: keepId,
       merged_id: mid,
-      merged_node: node ?? { id: mid },
+      // ⚠️ _refs/_keep_before אינם עמודות — הם נשמרים בתוך ה-JSON לביטול ומוסרים
+      // לפני השחזור (ראו undoMergeBatch).
+      merged_node: { ...(node ?? { id: mid }), _refs: refs, _keep_before: keepBefore ?? null },
       moved_children: (kids ?? []).map(k => k.id),
       moved_beneficiaries: (bens ?? []).map(b => b.id),
       source: ctx.source,
@@ -390,6 +405,22 @@ async function mergeOne(
   }
 
   return { children, beneficiaries }
+}
+
+/** ההפניות לצומת מטבלאות אחרות, שהועברו לשורד — לביטול. */
+export interface MovedRefs { sugg_node: string[]; sugg_parent: string[]; sugg_root: string[]; invites: string[] }
+
+/** העברת הפניות לצומת (בקשות משפחות + קישורי שיתוף) מ-fromId ל-toId. */
+async function moveNodeRefs(db: SupabaseClient, fromId: string, toId: string): Promise<MovedRefs> {
+  const ids = (r: { data: unknown }) => ((r.data as { id?: string; token?: string }[] | null) ?? []).map(x => (x.id ?? x.token) as string)
+  const [a, b, c, d] = await Promise.all([
+    db.from('lineage_review_suggestions').update({ node_id: toId }).eq('node_id', fromId).select('id'),
+    db.from('lineage_review_suggestions').update({ parent_id: toId }).eq('parent_id', fromId).select('id'),
+    db.from('lineage_review_suggestions').update({ root_node_id: toId }).eq('root_node_id', fromId).select('id'),
+    db.from('lineage_share_invites').update({ root_node_id: toId }).eq('root_node_id', fromId).select('token'),
+  ])
+  for (const r of [a, b, c, d]) if (r.error) throw new Error(`העברת הפניות לצומת נכשלה — המיזוג נעצר: ${r.error.message}`)
+  return { sugg_node: ids(a), sugg_parent: ids(b), sugg_root: ids(c), invites: ids(d) }
 }
 
 /** חישוב-מחדש של מספרי הדורות בכל תת-העץ, אחרי שילדים הועברו. */
@@ -541,24 +572,40 @@ export async function mergeWithCascade(
 /** ביטול מיזוג — מחזיר את כל הצמתים של אותה אצווה למקומם. */
 export async function undoMergeBatch(db: SupabaseClient, batchId: string): Promise<number> {
   const { data: rows } = await db.from('lineage_merge_log')
-    .select('id, merged_id, merged_node, moved_children, moved_beneficiaries')
+    .select('id, keep_id, merged_id, merged_node, moved_children, moved_beneficiaries')
     .eq('batch_id', batchId).is('undone_at', null)
     .order('created_at', { ascending: false })   // הפוך לסדר הביצוע
   if (!rows?.length) return 0
 
   let restored = 0
   for (const r of rows) {
-    const node = (r as { merged_node: Record<string, unknown> }).merged_node
-    if (!node?.id) continue
+    const raw = (r as { merged_node: Record<string, unknown> }).merged_node
+    if (!raw?.id) continue
+    // שדות העזר אינם עמודות — מוסרים לפני השחזור.
+    const { _refs, _keep_before, ...node } = raw as Record<string, unknown> & { _refs?: MovedRefs; _keep_before?: { name?: string; status?: string } | null }
     // ⚠️ upsert ולא insert: ריצת ביטול שנקטעה באמצע לא תיפול על "כבר קיים"
     // ותשאיר את שאר השרשרת בלי שחזור.
     const { error } = await db.from('lineage_nodes').upsert(node, { onConflict: 'id' })
     if (error) { console.error('[lineageMerge] שחזור צומת נכשל:', error.message); continue }
 
+    const nodeId = node.id as string
     const kids = (r as { moved_children: string[] }).moved_children ?? []
-    if (kids.length) await db.from('lineage_nodes').update({ parent_id: node.id }).in('id', kids)
+    if (kids.length) await db.from('lineage_nodes').update({ parent_id: nodeId }).in('id', kids)
     const bens = (r as { moved_beneficiaries: string[] }).moved_beneficiaries ?? []
-    if (bens.length) await db.from('beneficiaries').update({ lineage_node_id: node.id }).in('id', bens)
+    if (bens.length) await db.from('beneficiaries').update({ lineage_node_id: nodeId }).in('id', bens)
+    // בקשות המשפחות וקישורי השיתוף — חזרה לצומת המשוחזר (רשומות מ-12.10 ואילך).
+    if (_refs) {
+      if (_refs.sugg_node?.length) await db.from('lineage_review_suggestions').update({ node_id: nodeId }).in('id', _refs.sugg_node)
+      if (_refs.sugg_parent?.length) await db.from('lineage_review_suggestions').update({ parent_id: nodeId }).in('id', _refs.sugg_parent)
+      if (_refs.sugg_root?.length) await db.from('lineage_review_suggestions').update({ root_node_id: nodeId }).in('id', _refs.sugg_root)
+      if (_refs.invites?.length) await db.from('lineage_share_invites').update({ root_node_id: nodeId }).in('token', _refs.invites)
+    }
+    // שם וסטטוס השורד — כפי שהיו לפני השלב. הלולאה הולכת מהמאוחר למוקדם,
+    // ולכן המצב המוקדם ביותר הוא שנכתב אחרון.
+    const keepId = (r as { keep_id?: string }).keep_id
+    if (keepId && _keep_before?.name) {
+      await db.from('lineage_nodes').update({ name: _keep_before.name, status: _keep_before.status ?? 'pending' }).eq('id', keepId)
+    }
 
     await db.from('lineage_merge_log').update({ undone_at: new Date().toISOString() })
       .eq('id', (r as { id: string }).id)
