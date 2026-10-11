@@ -1,7 +1,6 @@
 'use client'
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { Loader2, Check, X, Pencil, GitBranch, CheckCircle2, AlertTriangle, List, Network, UserPlus } from 'lucide-react'
-import LineageTreeSvg from './LineageTreeSvg'
+import { Loader2, Check, X, Pencil, GitBranch, CheckCircle2, AlertTriangle, UserPlus } from 'lucide-react'
 
 interface Node {
   id: string
@@ -29,8 +28,6 @@ export default function LineageReviewClient({ token }: { token: string }) {
   const [busy, setBusy] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
-  const [viewMode, setViewMode] = useState<'list' | 'tree'>('list')
-  const [selectedTreeId, setSelectedTreeId] = useState<string | null>(null)
   // ── הזמנה אישית (נשלחה מכרטסת הצאצא) ──
   // mode='order': הדף ממוקד בתיקון סדר הדורות, ומציג לנמען את פרטיו ואת
   // שרשרת האבות שלו — במקום ענף צאצאים שאינו קשור לשאלה שנשאל.
@@ -273,7 +270,7 @@ export default function LineageReviewClient({ token }: { token: string }) {
 
   return (
     <main dir="rtl" className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-100 px-4 py-8">
-      <div className={`mx-auto ${viewMode === 'tree' ? 'max-w-4xl' : 'max-w-2xl'}`}>
+      <div className="mx-auto max-w-2xl">
         <div className="text-center mb-6">
           <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-100">
             <GitBranch size={28} className="text-indigo-600" />
@@ -326,7 +323,7 @@ export default function LineageReviewClient({ token }: { token: string }) {
                         {/* ⚠️ החלפת דור אפשרית מדור 2 ומעלה: דור 1 הוא מרן
                             החתם סופר זי"ע — שורש העץ, ואין לו אב להחליף. */}
                         {g.generation > 1 && (
-                          <button onClick={() => { setFixGen({ node: g, action: 'replace' }); setPickQuery('') }}
+                          <button onClick={() => { setFixGen({ node: g, action: 'replace' }); setPickQuery(''); setError('') }}
                             className="rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100">
                             החלף דור
                           </button>
@@ -435,9 +432,16 @@ export default function LineageReviewClient({ token }: { token: string }) {
                                   // anchorIdx כבר מביא בחשבון את השורה של הנמען
                                   // עצמו, שבה הדור שמוחלף הוא אביו — ולכן מי
                                   // שעובר אב הוא הנמען.
-                                  const target = chain[anchorIdx + 1] ?? g
+                                  //
+                                  // ⚠️ בקישור ישן בלי selfNodeId, בשורה האחרונה אין
+                                  // "דור הבא" בעץ (הנמען עצמו אינו צומת). העברת g
+                                  // תחת אחיו הייתה שגויה ונדחית בשרת — נשלחת הערה
+                                  // מפורשת למזכירות במקום זאת.
+                                  const target = chain[anchorIdx + 1]
                                   setBusy(g.id)
-                                  const ok = await suggest({ kind: 'reparent', nodeId: target.id, parentId: o.id })
+                                  const ok = target
+                                    ? await suggest({ kind: 'reparent', nodeId: target.id, parentId: o.id })
+                                    : await suggest({ kind: 'note', nodeId: g.id, text: `הנמען מבקש להחליף את הדור "${g.name}" (דור ${g.generation}) ב"${o.name}" — אביו הוא "${o.name}".` })
                                   setBusy(null)
                                   if (ok) { setSentGens(s => new Set(s).add(g.id)); setFixGen(null) }
                                 }}
@@ -480,8 +484,13 @@ export default function LineageReviewClient({ token }: { token: string }) {
                           />
                         </>
                       )}
+                      {/* 🔴 השגיאה מוצגת כאן, בתוך הבורר. קודם היא הופיעה מתחת לכל
+                          הקופסה — מחוץ למסך — ולחיצה שנדחתה נראתה כאילו "לא קורה כלום" (11.10). */}
+                      {error && (
+                        <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600">{error}</div>
+                      )}
                       {fixGen.action === 'replace' && (
-                        <button onClick={() => setFixGen(null)} className="mt-2 text-[11px] text-slate-400 underline">ביטול</button>
+                        <button onClick={() => { setFixGen(null); setError('') }} className="mt-2 text-[11px] text-slate-400 underline">ביטול</button>
                       )}
                     </div>
                   )}
@@ -518,20 +527,11 @@ export default function LineageReviewClient({ token }: { token: string }) {
           </div>
         )}
 
-        {/* מתג תצוגה: רשימה / עץ */}
-        <div className="mb-3 flex justify-center">
-          <div className="inline-flex bg-white border border-slate-200 rounded-xl p-1 gap-1 shadow-sm">
-            {([['list', 'רשימה', List], ['tree', 'עץ', Network]] as const).map(([k, label, Ic]) => (
-              <button key={k} onClick={() => setViewMode(k)}
-                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-sm font-semibold transition-colors ${viewMode === k ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-700'}`}>
-                <Ic size={15} /> {label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* פעולות משותפות לכל צומת (רשימה + עץ) */}
-        {(() => {
+        {/* 🔴 בקישור תיקון סדר הדורות (order) — רק השרשרת שלמעלה, שורה אחרי שורה.
+            מתג "רשימה / עץ" והענף שמתחתיו הוסרו לבקשת המשתמש (11.10): הם הציגו
+            את אותם דורות פעם שנייה, ובלבלו את מי שבא לתקן את הסדר שלו.
+            ⚠️ בקישור "אישור ענף" (full) הרשימה היא התוכן היחיד — נשארת, בלי עץ. */}
+        {mode !== 'order' && (() => {
           const NodeActions = ({ node }: { node: Node }) => {
             const isBusy = busy === node.id
             if (editing === node.id) {
@@ -569,18 +569,13 @@ export default function LineageReviewClient({ token }: { token: string }) {
             }
             return isBusy ? <Loader2 size={16} className="animate-spin text-slate-400" /> : (
               <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap">
-                {/* ⚠️ במצב 'order' (קישור אישי מהכרטסת) מוצגות רק פעולות התיקון.
-                    אישור/דחייה של צמתים *כותבים ישירות לעץ* — פעולה שמתאימה
-                    לבעל ענף שהוזמן לאמת אותו, לא לצאצא שהתבקש לבדוק את סדר
-                    הדורות שלו. תיקון שם והוספת דור נכנסים לתור אישור ממילא. */}
-                {mode !== 'order' && (
-                  <>
-                    <button onClick={() => act(node.id, 'verify')} title="אישור"
-                      className="inline-flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 px-2.5 py-1.5 text-xs font-semibold"><Check size={13} /> אישור</button>
-                    <button onClick={() => act(node.id, 'reject')} title="דחייה"
-                      className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 px-2.5 py-1.5 text-xs font-semibold"><X size={13} /> דחייה</button>
-                  </>
-                )}
+                {/* ⚠️ הרשימה הזו מוצגת רק בקישור "אישור ענף" (full) — בקישור
+                    תיקון הסדר (order) היא הוסרה כולה, ולכן אישור/דחייה, שכותבים
+                    ישירות לעץ, לעולם אינם מגיעים לצאצא שהתבקש לבדוק את סדר דורותיו. */}
+                <button onClick={() => act(node.id, 'verify')} title="אישור"
+                  className="inline-flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 px-2.5 py-1.5 text-xs font-semibold"><Check size={13} /> אישור</button>
+                <button onClick={() => act(node.id, 'reject')} title="דחייה"
+                  className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 px-2.5 py-1.5 text-xs font-semibold"><X size={13} /> דחייה</button>
                 <button onClick={() => { setEditing(node.id); setEditName(node.name) }} title="תיקון שם"
                   className="inline-flex items-center gap-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 px-2.5 py-1.5 text-xs font-semibold"><Pencil size={13} /> תיקון שם</button>
                 {/* הצעת הוספת דור חסר — ממתינה לאישור המנהל */}
@@ -604,34 +599,7 @@ export default function LineageReviewClient({ token }: { token: string }) {
             )
           }
 
-          if (viewMode === 'tree') {
-            // תצוגת עץ ויזואלי (SVG) — כמו עץ הדורות. לחיצה על צומת בוחרת אותו,
-            // ומתחת לעץ מופיע פאנל הפעולות שלו (אישור/דחייה/תיקון) — עריכה חיה.
-            const selectedNode = selectedTreeId ? nodes.find(n => n.id === selectedTreeId) ?? null : null
-            return (
-              <div className="flex flex-col gap-3">
-                <LineageTreeSvg nodes={nodes} rootId={rootId} selectedId={selectedTreeId} onSelect={setSelectedTreeId} />
-                {/* מקרא צבעים */}
-                <div className="flex items-center justify-center gap-4 text-[11px] text-slate-500">
-                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-blue-500" /> מאושר</span>
-                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-orange-500" /> ממתין</span>
-                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-500" /> נדחה</span>
-                </div>
-                {/* פאנל פעולות לצומת הנבחר */}
-                {selectedNode ? (
-                  <div className="rounded-2xl border border-indigo-200 bg-indigo-50/60 shadow-sm px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
-                    {editing === selectedNode.id
-                      ? <NodeActions node={selectedNode} />
-                      : <><NodeLabel node={selectedNode} /><NodeActions node={selectedNode} /></>}
-                  </div>
-                ) : (
-                  <p className="text-center text-xs text-slate-400 py-2">לחצו על שם בעץ כדי לאשר, לדחות או לתקן</p>
-                )}
-              </div>
-            )
-          }
-
-          // תצוגת רשימה (ברירת מחדל) — הזחה לפי דור
+          // תצוגת רשימה — הזחה לפי דור
           return (
             <div className="rounded-2xl border border-slate-200 bg-white shadow-sm divide-y divide-slate-100">
               {ordered.map(({ node, depth }) => (
@@ -645,9 +613,12 @@ export default function LineageReviewClient({ token }: { token: string }) {
           )
         })()}
 
-        <div className="mt-5 flex items-center justify-center gap-2 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
-          <CheckCircle2 size={16} /> כל שינוי נשמר מיד ומתעדכן אצלנו במערכת. תודה על העזרה!
-        </div>
+        {/* ⚠️ רק ב"אישור ענף": בקישור תיקון הסדר התיקון נכנס לתור, ו"נשמר מיד" היה סותר את ההודעה שמעליו. */}
+        {mode !== 'order' && (
+          <div className="mt-5 flex items-center justify-center gap-2 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+            <CheckCircle2 size={16} /> כל שינוי נשמר מיד ומתעדכן אצלנו במערכת. תודה על העזרה!
+          </div>
+        )}
       </div>
     </main>
   )

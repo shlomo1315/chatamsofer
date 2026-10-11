@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { NODE_SELECT, subtreeNodeIds, type TreeNodeRow } from '@/lib/lineageSync'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { isSiblingOfCurrentParent } from '@/lib/lineageReparentRule'
 
 export const dynamic = 'force-dynamic'
 
@@ -70,11 +71,11 @@ export async function POST(request: NextRequest) {
   // זו כל מהות התיקון ("אינני צאצא של הבן הזה אלא של אחיו"), וזו גם ההגבלה
   // שמונעת שרשרת בלתי אפשרית: בחירת אב מדור אחר יוצרת קפיצת דורות או לולאה.
   // נאכף בשרת ולא רק בבורר, כי הבורר הוא ממשק וההגבלה היא כלל.
+  // 🔴 ההשוואה היא להורה של *האב הנוכחי* (הסב), לא לאב עצמו — ראו
+  // lib/lineageReparentRule. בגרסה הקודמת כל בחירה נדחתה כאן (11.10).
   const parentAnywhere = inv.mode === 'order' && kind === 'reparent'
-  const nodeRow = body.nodeId ? nodes.find(n => n.id === body.nodeId) : null
-  const grandparentId = nodeRow?.parent_id ?? null
   const parentOk = parentAnywhere
-    ? (!!body.parentId && nodes.some(n => n.id === body.parentId && (n.parent_id ?? null) === grandparentId))
+    ? (!!body.nodeId && !!body.parentId && isSiblingOfCurrentParent(nodes, body.nodeId, body.parentId))
     : inScope(body.parentId)
   if (!inScope(body.nodeId) || !parentOk) {
     return NextResponse.json(
