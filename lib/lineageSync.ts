@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { fetchAllRows } from './fetchAllRows'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // סנכרון בין עץ הדורות לכרטסות הצאצאים.
@@ -164,13 +165,27 @@ export async function resyncBeneficiaryChains(
   const ids = [...nodeIds]
   if (!ids.length) return 0
 
-  const { data: affected, error } = await db
-    .from('beneficiaries')
-    .select('id, lineage_node_id')
-    .in('lineage_node_id', ids)
-  if (error) {
-    console.error('[lineageSync] load affected beneficiaries:', error.message)
-    return 0
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 בחלקים, ובדפים (12.10).
+  //
+  // ⚠️ הבאג: .in() עם כל מזהי תת-העץ בבת אחת. בענף גדול (אלפי צמתים) ה-URL
+  // חרג מהמגבלה, השרת החזיר 400 ("Bad Request"), והפונקציה החזירה 0 *בשקט*
+  // — כלומר כל עריכה גבוהה בעץ (שינוי שם/אישור/הזזה) לא עדכנה את שרשרות
+  // המשפחות שמתחתיה, בלי שום סימן. וגם בלי דפדוף, ענף עם יותר מ-1000
+  // משפחות היה נחתך בתקרת השורות (ראו lib/fetchAllRows).
+  // ─────────────────────────────────────────────────────────────────────────
+  const CHUNK = 150
+  const affected: { id: string; lineage_node_id: string | null }[] = []
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const part = ids.slice(i, i + CHUNK)
+    const { rows, error } = await fetchAllRows<{ id: string; lineage_node_id: string | null }>((from, to) =>
+      db.from('beneficiaries').select('id, lineage_node_id').in('lineage_node_id', part).range(from, to),
+    )
+    if (error) {
+      console.error('[lineageSync] load affected beneficiaries:', error)
+      return 0
+    }
+    affected.push(...rows)
   }
 
   const map = new Map(nodes.map(n => [n.id, n]))
