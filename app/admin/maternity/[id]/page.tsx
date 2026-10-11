@@ -39,6 +39,7 @@ import { fetchAllRows } from '@/lib/fetchAllRows'
 import { adjacentInBucket, isBucket, BUCKET_LABEL, type MaternityBucket, type AdjacentRow } from '@/lib/maternityBuckets'
 import AdjacentNav from './AdjacentNav'
 import BirthCertificatePreview from './BirthCertificatePreview'
+import DocumentsManager from '@/app/admin/beneficiaries/[id]/DocumentsManager'
 import RecoveryUnlockButton from './RecoveryUnlockButton'
 import LineageTreeToggle from './LineageTreeToggle'
 import LineageChainChips, { type ChainGen } from '@/app/admin/beneficiaries/[id]/LineageChainChips'
@@ -340,6 +341,12 @@ export default async function MaternityDetailPage(
   // ההכרעה היחידה — הכפתור כלל לא מוצג למי שאינו מורשה.
   const canEditBeneficiaries = staff.role === 'admin'
     || roleAllows(staff.role, staff.permissions, 'beneficiaries', 'edit')
+  // 🔴 ניהול המסמכים של הבקשה (הוספה / החלפה / מחיקה) — לכל מי שרשאי לערוך
+  // ביולדות, ולא רק למנהל. בקשת הלידה היא מקום העבודה של המזכירה; כשמשפחה
+  // לא מצליחה להעלות מסמך היא שולחת אותו במייל או בווטסאפ, והמזכירה צריכה
+  // לצרף אותו לבקשה מכאן — בלי לעבור לכרטסת הצאצא.
+  const canEditMaternityDocs = staff.role === 'admin'
+    || roleAllows(staff.role, staff.permissions, 'maternity', 'edit')
   const { id } = await params
   // ⚠️ מאומת מול רשימת הלשוניות ולא מועבר כמות שהוא: ערך שרירותי מהכתובת
   // היה נכנס ישר להשוואת סטטוס ומרוקן את הניווט בלי שום הסבר.
@@ -561,7 +568,11 @@ export default async function MaternityDetailPage(
                   </div>
                 )}
               </div>
-              {(idDocs.length > 0 || aid.birth_certificate_url) && (
+              {canEditMaternityDocs ? (
+                <div className="pt-3 border-t border-slate-100">
+                  <DocumentsManager beneficiaryId={aid.beneficiary_id} beneficiaryName={motherName} />
+                </div>
+              ) : (idDocs.length > 0 || aid.birth_certificate_url) && (
                 <div className="pt-3 border-t border-slate-100">
                   <div className="flex items-center gap-2 mb-2">
                     <FileText size={14} className="text-indigo-500" />
@@ -729,7 +740,10 @@ export default async function MaternityDetailPage(
                   <ExtendEligibility aid={aid} />
                 </div>
               </Card>
-              {aid.birth_certificate_url && (
+              {/* ⚠️ הכרטיס מוצג גם כשאין אישור — למי שרשאי לערוך, כדי שיוכל
+                  לצרף אותו. קודם הכרטיס נעלם כשהשדה ריק, ולא הייתה שום דרך
+                  להוסיף אישור לידה לבקשה שהוגשה בלעדיו. */}
+              {(aid.birth_certificate_url || canEditMaternityDocs) && (
                 <Card>
                   <div className="flex items-center justify-between gap-2 mb-3">
                     <div className="flex items-center gap-2 text-indigo-600">
@@ -738,22 +752,26 @@ export default async function MaternityDetailPage(
                         {aid.is_twins ? 'אישור לידה — תינוק 1' : 'אישור לידה'}
                       </span>
                     </div>
-                    <DownloadDocButton url={aid.birth_certificate_url} docType="אישור לידה" person={motherName} name={aid.birth_certificate_url} variant="button" />
+                    {aid.birth_certificate_url && (
+                      <DownloadDocButton url={aid.birth_certificate_url} docType="אישור לידה" person={motherName} name={aid.birth_certificate_url} variant="button" />
+                    )}
                   </div>
-                  <BirthCertificatePreview aidId={aid.id} beneficiaryId={aid.beneficiary_id} url={aid.birth_certificate_url} person={motherName} />
+                  <BirthCertificatePreview aidId={aid.id} beneficiaryId={aid.beneficiary_id} url={aid.birth_certificate_url ?? ''} person={motherName} canEdit={canEditMaternityDocs} />
                 </Card>
               )}
               {/* אישור לידה שני — רק בתאומים, מסמך נפרד לתינוק השני. */}
-              {aid.is_twins && aid.birth_certificate_url_2 && (
+              {aid.is_twins && (aid.birth_certificate_url_2 || canEditMaternityDocs) && (
                 <Card>
                   <div className="flex items-center justify-between gap-2 mb-3">
                     <div className="flex items-center gap-2 text-violet-600">
                       <FileText size={16} />
                       <span className="text-xs font-semibold text-slate-500 uppercase">אישור לידה — תינוק 2</span>
                     </div>
-                    <DownloadDocButton url={aid.birth_certificate_url_2} docType="אישור לידה" person={motherName} name={aid.birth_certificate_url_2} variant="button" />
+                    {aid.birth_certificate_url_2 && (
+                      <DownloadDocButton url={aid.birth_certificate_url_2} docType="אישור לידה" person={motherName} name={aid.birth_certificate_url_2} variant="button" />
+                    )}
                   </div>
-                  <BirthCertificatePreview aidId={aid.id} beneficiaryId={aid.beneficiary_id} url={aid.birth_certificate_url_2} person={motherName} field="birth_certificate_url_2" />
+                  <BirthCertificatePreview aidId={aid.id} beneficiaryId={aid.beneficiary_id} url={aid.birth_certificate_url_2 ?? ''} person={motherName} field="birth_certificate_url_2" canEdit={canEditMaternityDocs} />
                 </Card>
               )}
               {aid.notes && (

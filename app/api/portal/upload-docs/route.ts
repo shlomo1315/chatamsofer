@@ -3,17 +3,11 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { maybeMarkDocsReturned } from '@/lib/docsReturnCheck'
+import { ALLOWED_UPLOAD_TYPES, uploadExt, uploadFileError } from '@/lib/uploads'
 
 export const dynamic = 'force-dynamic'
 
 const BUCKET = 'documents'
-const MAX_SIZE = 10 * 1024 * 1024 // 10 MB
-
-// סוגי קבצים מותרים בלבד — מסמכים ותמונות. ה-Content-Type נקבע בשרת לפי הסיומת.
-const ALLOWED_TYPES: Record<string, string> = {
-  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
-  heic: 'image/heic', gif: 'image/gif', pdf: 'application/pdf',
-}
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -101,13 +95,17 @@ export async function POST(request: NextRequest) {
 
   for (const { docType, file: singleFile } of fileEntries) {
     if (!singleFile || typeof singleFile === 'string') continue
-    if (singleFile.size > MAX_SIZE) return NextResponse.json({ error: `הקובץ ${singleFile.name} גדול מ-10MB` }, { status: 400 })
-
-    const ext = singleFile.name.split('.').pop()?.toLowerCase() ?? 'jpg'
-    const contentType = ALLOWED_TYPES[ext]
-    if (!contentType) {
-      return NextResponse.json({ error: `סוג הקובץ של ${singleFile.name} אינו נתמך. ניתן להעלות תמונות או PDF בלבד.` }, { status: 400 })
+    // 🔴 אותה בדיקה כמו בלקוח (lib/uploads) — ראו שם את הבאג שנסגר.
+    const rejectReason = uploadFileError(singleFile)
+    if (rejectReason) {
+      // ⚠️ נרשם בלוג: עד כה דחייה כאן לא השאירה שום עקבה, ו-24 כשלונות
+      // בשבוע נראו בלוג ה-HTTP כ"400" בלבד — בלי לדעת אם זה גודל או סוג.
+      console.warn('[upload-docs] נדחה:', { beneficiaryId, docType, name: singleFile.name, type: singleFile.type, size: singleFile.size })
+      return NextResponse.json({ error: rejectReason }, { status: 400 })
     }
+
+    const ext = uploadExt(singleFile.name, singleFile.type)
+    const contentType = ALLOWED_UPLOAD_TYPES[ext]
     const path = `${beneficiaryId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
     const arrayBuffer = await singleFile.arrayBuffer()
 

@@ -7,7 +7,7 @@ import SafeDocImage from '@/components/ui/SafeDocImage'
 import PdfCanvasView from '@/components/ui/PdfCanvasView'
 import { ViewDocButton } from '@/components/ui/DocViewer'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
-import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
+import { UPLOAD_ACCEPT, UPLOAD_HINT, uploadFileError } from '@/lib/uploads'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 
@@ -21,6 +21,7 @@ export default function BirthCertificatePreview({
   url: initialUrl,
   person,
   field = 'birth_certificate_url',
+  canEdit = true,
 }: {
   aidId: string
   beneficiaryId: string
@@ -28,6 +29,8 @@ export default function BirthCertificatePreview({
   person?: string
   /** עמודת היעד בעדכון/מחיקה — birth_certificate_url_2 לאישור השני בתאומים. */
   field?: 'birth_certificate_url' | 'birth_certificate_url_2'
+  /** החלפה / מחיקה / העלאה — רק למי שרשאי לערוך ביולדות. */
+  canEdit?: boolean
 }) {
   const router = useRouter()
   const supabase = createClient()
@@ -38,6 +41,9 @@ export default function BirthCertificatePreview({
   const [busy, setBusy] = useState(false)
 
   const replace = async (file: File) => {
+    const bad = uploadFileError(file)
+    if (bad) { toast.error(bad); return }
+    const hadFile = !!url
     setBusy(true)
     try {
       const safe = file.name.replace(/[^\w.\-]+/g, '_')
@@ -48,7 +54,7 @@ export default function BirthCertificatePreview({
       const { error } = await supabase.from('maternity_aids').update({ [field]: pub.publicUrl }).eq('id', aidId)
       if (error) throw error
       setUrl(pub.publicUrl)
-      toast.success('הקובץ הוחלף בהצלחה')
+      toast.success(hadFile ? 'הקובץ הוחלף בהצלחה' : 'אישור הלידה צורף לבקשה')
       router.refresh()
     } catch (e) {
       toast.error(`שגיאה בהחלפת הקובץ: ${e instanceof Error ? e.message : String(e)}`)
@@ -63,8 +69,12 @@ export default function BirthCertificatePreview({
     try {
       const { error } = await supabase.from('maternity_aids').update({ [field]: null }).eq('id', aidId)
       if (error) throw error
+      // ⚠️ איפוס המצב המקומי: הכרטיס נשאר מוצג (למי שרשאי לערוך) כדי
+      // שאפשר יהיה לצרף אישור חדש, ובלי האיפוס היה מציג את הקובץ שנמחק.
+      setUrl('')
       toast.success('אישור הלידה נמחק')
       router.refresh()
+      setBusy(false)
     } catch (e) {
       toast.error(`שגיאה במחיקה: ${e instanceof Error ? e.message : String(e)}`)
       setBusy(false)
@@ -72,6 +82,27 @@ export default function BirthCertificatePreview({
   }
 
   const btn = 'inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-white/95 shadow-sm border border-slate-200 hover:bg-white transition-colors'
+
+  // ── אין אישור לידה ──
+  // ⚠️ מצב שלא היה קיים: הכרטיס הוצג רק כשיש קובץ, ולכן לבקשה שהוגשה בלי
+  // אישור (או שהאישור נמחק) לא הייתה שום דרך לצרף אותו מהניהול.
+  if (!url) {
+    if (!canEdit) return null
+    return (
+      <div className="relative rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 p-5 flex flex-col items-center gap-2 text-center">
+        <FileText size={26} className="text-slate-400" />
+        <p className="text-sm text-slate-500">לא צורף אישור לידה לבקשה זו</p>
+        <button onClick={() => fileRef.current?.click()} disabled={busy}
+          className="inline-flex items-center gap-1.5 text-sm bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white px-3 py-1.5 rounded-lg transition-colors">
+          {busy ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+          צירוף אישור לידה
+        </button>
+        <span className="text-xs text-slate-400">{UPLOAD_HINT}</span>
+        <input ref={fileRef} type="file" accept={UPLOAD_ACCEPT} className="hidden"
+          onChange={e => { const f = e.target.files?.[0]; if (f) replace(f); if (fileRef.current) fileRef.current.value = '' }} />
+      </div>
+    )
+  }
 
   return (
     <div className="group relative rounded-lg border border-slate-200 overflow-hidden bg-slate-50">
@@ -96,12 +127,16 @@ export default function BirthCertificatePreview({
           <ExternalLink size={13} /> פתח
         </ViewDocButton>
         <DownloadDocButton url={url} docType="אישור לידה" person={person} name={url} variant="button" className="bg-white/95 shadow-sm" />
-        <button onClick={() => fileRef.current?.click()} disabled={busy} title={UPLOAD_HINT} className={`${btn} text-slate-700`}>
-          <Upload size={13} /> החלף
-        </button>
-        <button onClick={remove} disabled={busy} className={`${btn} text-red-600 hover:bg-red-50`}>
-          <Trash2 size={13} /> מחק
-        </button>
+        {canEdit && (
+          <>
+            <button onClick={() => fileRef.current?.click()} disabled={busy} title={UPLOAD_HINT} className={`${btn} text-slate-700`}>
+              <Upload size={13} /> החלף
+            </button>
+            <button onClick={remove} disabled={busy} className={`${btn} text-red-600 hover:bg-red-50`}>
+              <Trash2 size={13} /> מחק
+            </button>
+          </>
+        )}
       </div>
 
       <input ref={fileRef} type="file" accept={UPLOAD_ACCEPT} className="hidden"

@@ -17,7 +17,7 @@ import PdfCanvasView from '@/components/ui/PdfCanvasView'
 import DeadlineCountdown from '@/components/ui/DeadlineCountdown'
 import SignaturePad from '@/components/ui/SignaturePad'
 import { useDocTypes } from '@/lib/useDocTypes'
-import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
+import { UPLOAD_ACCEPT, UPLOAD_HINT, uploadFileError } from '@/lib/uploads'
 import { LOAN_DECLARATIONS, MATERNITY_SUBMIT_DAYS, LOAN_MAX_AMOUNT } from '@/lib/emailRequestForms'
 import { textOf, errorText, type PublicTexts } from '@/lib/publicTexts'
 import { composeLineageName, findTitles, lineageIdentityKey } from '@/lib/lineageNameFormat'
@@ -3019,21 +3019,37 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   }
 
   // ── Birth request ──
-  // העלאת צילומי ת.ז הנדרשים יחד עם הבקשה (בצאצא שטרם אושר). מחזיר false בשגיאה.
+  // העלאת צילומי ת.ז הנדרשים יחד עם הבקשה (בצאצא שטרם אושר).
+  // מחזיר null בהצלחה, או את הודעת השגיאה להצגה.
+  //
+  // 🔴 מחזיר את *הסיבה* ולא true/false.
+  // ⚠️ קודם כל כשל הוצג כ"שגיאה בהעלאת תעודת הזהות. אנא נסה שוב" — גם
+  // כשהקובץ היה מסוג לא נתמך או גדול מדי, וגם כשפג החיבור (401). ניסיון
+  // חוזר לא יכול היה לעזור באף אחד מהמקרים, ובלוג נראו 5 ניסיונות רצופים
+  // מאותה משפחה. עכשיו היא קוראת מה בדיוק לתקן.
+  //
   // forceFresh — מעלה *כל* קובץ שנבחר, גם אם כבר קיים אחד במערכת.
   // ⚠️ בלי זה הקובץ החדש היה נזרק בשקט: התנאי `!existingDocs[d]` דילג על
   // כל מסמך שכבר קיים, ובבקשת הלוואה זו בדיוק המטרה — לדרוס אותו בעדכני.
-  const uploadRequiredIdDocs = async (forceFresh = false): Promise<boolean> => {
-    if (!beneficiary) return false
+  const uploadRequiredIdDocs = async (forceFresh = false): Promise<string | null> => {
+    if (!beneficiary) return 'שגיאה בהעלאת תעודת הזהות. אנא נסו שוב.'
     const fd = new FormData()
     fd.append('beneficiary_id', beneficiary.id)
     let any = false
     for (const d of requiredDocs) {
-      if ((forceFresh || !existingDocs[d]) && docFiles[d]) { fd.append(d, docFiles[d] as File); any = true }
+      if ((forceFresh || !existingDocs[d]) && docFiles[d]) {
+        // בדיקה מקומית לפני השליחה — חוסכת העלאה מלאה שתידחה בסופה
+        const bad = uploadFileError(docFiles[d] as File)
+        if (bad) return `${docLabel(d)}: ${bad}`
+        fd.append(d, docFiles[d] as File); any = true
+      }
     }
-    if (!any) return true
+    if (!any) return null
     const res = await fetch('/api/portal/upload-docs', { method: 'POST', body: fd })
-    if (!res.ok) return false
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      return (data as { error?: string }).error || 'שגיאה בהעלאת תעודת הזהות. אנא נסו שוב.'
+    }
 
     // ── קבצים נוספים לאותה קטגוריה ──
     //
@@ -3050,13 +3066,13 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       if (!((forceFresh || !existingDocs[d]) && docFiles[d])) continue
       for (const xf of extraDocs[d] ?? []) { extras.append(d, xf); anyExtra = true }
     }
-    if (!anyExtra) return true
+    if (!anyExtra) return null
 
     // ⚠️ כשל בקבצים הנוספים אינו מפיל את ההגשה: המסמך העיקרי כבר נשמר,
     // וחסימת הבקשה כאן הייתה מאבדת גם אותו.
     const extraRes = await fetch('/api/portal/upload-docs', { method: 'POST', body: extras })
     if (!extraRes.ok) console.error('[portal] העלאת קבצים נוספים נכשלה')
-    return true
+    return null
   }
   // המסמכים שעדיין חסרים להגשת הבקשה (לא קיימים וגם לא נבחר קובץ)
   // חסרים מבין מסמכי החובה. ת"ז (הבעל/האשה) — כל אחד חובה בנפרד. ספח ת"ז
@@ -3136,8 +3152,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     setLoading(true)
     try {
       // צירוף צילומי ת.ז (בקשה ראשונה לפני אישור)
-      if (needsIdWithRequest && !(await uploadRequiredIdDocs())) {
-        setError('שגיאה בהעלאת תעודת הזהות. אנא נסה שוב.'); setLoading(false); return
+      const idUploadErr = needsIdWithRequest ? await uploadRequiredIdDocs() : null
+      if (idUploadErr) {
+        setError(idUploadErr); setLoading(false); return
       }
       // Upload birth certificate first
       // ⚠️ כשל בהעלאה עוצר את ההגשה. קודם התעלמנו ממנו בשקט (`if (upRes.ok)`)
@@ -3223,8 +3240,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     setError('')
     setLoading(true)
     try {
-      if (needsIdWithRequest && !(await uploadRequiredIdDocs())) {
-        setError('שגיאה בהעלאת תעודת הזהות. אנא נסה שוב.'); setLoading(false); return
+      const idUploadErr = needsIdWithRequest ? await uploadRequiredIdDocs() : null
+      if (idUploadErr) {
+        setError(idUploadErr); setLoading(false); return
       }
       // העלאת מסמך מצורף (הזמנת חתונה — חובה לנישואין; מסמך תומך — לא חובה לשאר) ושיוכו לבקשה
       const documentUrls: { url: string; name: string }[] = []
@@ -3502,8 +3520,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     }
     setError(''); setLoading(true)
     try {
-      if (needsIdWithRequest && !(await uploadRequiredIdDocs())) {
-        setError('שגיאה בהעלאת תעודת הזהות. אנא נסה שוב.'); setLoading(false); return
+      const idUploadErr = needsIdWithRequest ? await uploadRequiredIdDocs() : null
+      if (idUploadErr) {
+        setError(idUploadErr); setLoading(false); return
       }
       // ⚠️ כמו בלידה רגילה — כשל בהעלאה עוצר, ולא נשלח בשקט בלי מסמך
       const fd = new FormData()
@@ -3600,8 +3619,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     try {
       // ⚠️ forceFresh — דורס את הקבצים הקיימים בכרטסת. זו המטרה: מרגע
       // ההגשה הצילומים החדשים הם המעודכנים.
-      if (!(await uploadRequiredIdDocs(true))) {
-        setError('שגיאה בהעלאת צילומי תעודת הזהות. אנא נסו שוב.')
+      const idUploadErr = await uploadRequiredIdDocs(true)
+      if (idUploadErr) {
+        setError(idUploadErr)
         return
       }
 

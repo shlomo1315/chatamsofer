@@ -7,6 +7,7 @@ import { verifyRecoveryPortalToken } from '@/lib/recoveryPortalAuth'
 import { extractUrl } from '@/lib/extractUrl'
 import { RECOVERY_COOKIE_RE } from '@/lib/recoveryCookieShape'
 import { scanReceiptNumber } from '@/lib/receiptOcr'
+import { findFileInHtml, knownPdfUrl } from '@/lib/receiptLinkFile'
 
 export const dynamic = 'force-dynamic'
 
@@ -80,35 +81,6 @@ const looksLikeHtml = (buf: ArrayBuffer) =>
     new TextDecoder('utf-8', { fatal: false }).decode(buf.slice(0, 512)),
   )
 
-// ─────────────────────────────────────────────────────────────────────────────
-// איתור הקובץ בתוך עמוד נחיתה.
-//
-// ⚠️ קישורי הקבלות שנשלחים לבתי ההחלמה הם קודים מקוצרים שמובילים לעמוד צפייה,
-// לא לקובץ עצמו. בלי השלב הזה הנציג מקבל "סוג הקובץ אינו נתמך" על קישור
-// שלגמרי עובד בדפדפן שלו — וזה נראה כמו תקלה שרירותית.
-// ─────────────────────────────────────────────────────────────────────────────
-function findFileInHtml(html: string, base: URL): string | null {
-  const abs = (v: string): string | null => {
-    try { return new URL(v.replace(/&amp;/g, '&').trim(), base).toString() } catch { return null }
-  }
-  const isFile = (v: string) => /\.(pdf|jpe?g|png|webp|gif|heic)(\?|#|$)/i.test(v)
-
-  // 1) קישור/מקור שנראה כמו קובץ — העדיפות הראשונה
-  for (const m of html.matchAll(/(?:href|src|data|content)\s*=\s*["']([^"']+)["']/gi)) {
-    if (isFile(m[1])) { const a = abs(m[1]); if (a) return a }
-  }
-  // 2) כתובת מלאה שנראית כמו קובץ, גם מחוץ לתגית (למשל בתוך JS)
-  const raw = html.match(/https?:\/\/[^\s"'<>]+\.(?:pdf|jpe?g|png|webp|gif|heic)(?:\?[^\s"'<>]*)?/i)
-  if (raw) return raw[0]
-  // 3) הפניה אוטומטית / מסגרת — העמוד עצמו רק עוטף את הקובץ
-  const meta = html.match(/<meta[^>]+http-equiv\s*=\s*["']?refresh["']?[^>]*content\s*=\s*["'][^"']*url=([^"';]+)/i)
-  if (meta) return abs(meta[1])
-  const frame = html.match(/<(?:iframe|embed)[^>]+src\s*=\s*["']([^"']+)["']/i)
-    ?? html.match(/<object[^>]+data\s*=\s*["']([^"']+)["']/i)
-  if (frame) return abs(frame[1])
-  return null
-}
-
 async function fetchLinkedFile(link: string): Promise<FetchedFile | { error: string }> {
   // הנציג מדביק את כל ההודעה — שולפים ממנה את הקישור לפני כל דבר אחר
   let current = extractUrl(link)
@@ -122,6 +94,10 @@ async function fetchLinkedFile(link: string): Promise<FetchedFile | { error: str
     // כולל הפניות. הבדיקה הטקסטואלית לבדה פספסה IPv6 / CGNAT / שמות
     // שמתורגמים לכתובת פנימית (ביקורת אבטחה 05.10).
     if (!(await assertPublicHost(u.hostname))) return { error: 'הקישור אינו נתמך' }
+    // 🔴 מערכת חשבוניות מוכרת — ישר לכתובת ה-PDF, בלי לנחש מתוך העמוד
+    // (ב-EZcount הניחוש הביא את הלוגו — ראו lib/receiptLinkFile).
+    const directPdf = knownPdfUrl(u)
+    if (directPdf && directPdf !== u.toString()) { current = directPdf; continue }
     const key = u.toString()
     if (seen.has(key)) return { error: 'הקישור מפנה במעגל — ודאו שהוא קישור ישיר לקובץ' }
     seen.add(key)
