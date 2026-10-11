@@ -39,6 +39,7 @@ import { fetchAllRows } from '@/lib/fetchAllRows'
 import { adjacentInBucket, isBucket, BUCKET_LABEL, type MaternityBucket, type AdjacentRow } from '@/lib/maternityBuckets'
 import AdjacentNav from './AdjacentNav'
 import BirthCertificatePreview from './BirthCertificatePreview'
+import { isConsecutive } from '@/lib/recoveryRange'
 import DocumentsManager from '@/app/admin/beneficiaries/[id]/DocumentsManager'
 import RecoveryUnlockButton from './RecoveryUnlockButton'
 import LineageTreeToggle from './LineageTreeToggle'
@@ -898,7 +899,14 @@ export default async function MaternityDetailPage(
                 <div className="text-sm mt-2">
                   <span className="text-slate-500">שהתה בפועל: </span>
                   <span className="font-semibold text-slate-700">
-                    {new Date(aid.recovery_stay_from).toLocaleDateString('he-IL')} – {new Date(aid.recovery_stay_to).toLocaleDateString('he-IL')}
+                    {/* ⚠️ ימים שאינם רצופים מוצגים כרשימה — "26.10–30.10"
+                        היה נראה כחמישה ימים כשהיולדת שהתה שניים. */}
+                    {(() => {
+                      const list = (aid as { recovery_stay_dates?: string[] | null }).recovery_stay_dates
+                      return list?.length && !isConsecutive(list)
+                        ? [...list].sort().map(d => new Date(d).toLocaleDateString('he-IL')).join(' · ')
+                        : `${new Date(aid.recovery_stay_from).toLocaleDateString('he-IL')} – ${new Date(aid.recovery_stay_to).toLocaleDateString('he-IL')}`
+                    })()}
                   </span>
                 </div>
               )}

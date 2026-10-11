@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { recoveryRange, shouldJumpMonth } from './recoveryRange'
+import { recoveryRange, shouldJumpMonth, toggleStayDay, datesInRange, isConsecutive } from './recoveryRange'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 🔴 טווח ימי ההחלמה שחוצה חודש.
@@ -59,5 +59,36 @@ describe('shouldJumpMonth — 🔴 קפיצת התצוגה', () => {
   it('תאריך פגום אינו מקפיץ', () => {
     expect(shouldJumpMonth('', new Date(2026, 7, 1))).toBe(false)
     expect(shouldJumpMonth('לא-תאריך', new Date(2026, 7, 1))).toBe(false)
+  })
+})
+
+describe('toggleStayDay — ימים שאינם רצופים', () => {
+  it('לחיצה ראשונה = רצף מלא (ברירת המחדל)', () => {
+    expect(toggleStayDay([], '2026-10-26', 2)).toEqual(['2026-10-26', '2026-10-27'])
+  })
+  it('ביטול יום מסומן', () => {
+    expect(toggleStayDay(['2026-10-26', '2026-10-27'], '2026-10-27', 2)).toEqual(['2026-10-26'])
+  })
+  it('הוספת יום נפרד כשיש מקום בזכאות', () => {
+    expect(toggleStayDay(['2026-10-26'], '2026-10-30', 2)).toEqual(['2026-10-26', '2026-10-30'])
+  })
+  it('לעולם לא יותר מימי הזכאות — כשמלא, מתחילים מחדש מהיום שנלחץ', () => {
+    expect(toggleStayDay(['2026-10-26', '2026-10-30'], '2026-11-02', 2)).toEqual(['2026-11-02', '2026-11-03'])
+  })
+  it('יום שנוסף לפני הקיימים נשמר ממוין', () => {
+    expect(toggleStayDay(['2026-10-26'], '2026-10-20', 4)).toEqual(['2026-10-20', '2026-10-26'])
+  })
+  it('רצף שחוצה חודש', () => {
+    expect(toggleStayDay([], '2026-10-31', 2)).toEqual(['2026-10-31', '2026-11-01'])
+  })
+})
+
+describe('datesInRange / isConsecutive', () => {
+  it('רשומה ישנה (from/to) נפרשת לימים', () => {
+    expect(datesInRange('2026-09-29', '2026-10-02')).toEqual(['2026-09-29', '2026-09-30', '2026-10-01', '2026-10-02'])
+  })
+  it('רצף מול ימים נפרדים', () => {
+    expect(isConsecutive(['2026-10-26', '2026-10-27'])).toBe(true)
+    expect(isConsecutive(['2026-10-26', '2026-10-30'])).toBe(false)
   })
 })

@@ -45,3 +45,58 @@ export function shouldJumpMonth(departureIso: string, viewMonth: Date): boolean 
   if (!Number.isFinite(y) || !Number.isFinite(m)) return false
   return y !== viewMonth.getFullYear() || (m - 1) !== viewMonth.getMonth()
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 ימי שהייה שאינם רצופים (11.10).
+//
+// ברירת המחדל נשארת רצף: לחיצה ראשונה מסמנת את יום ההגעה ואת הימים שאחריו
+// עד מלוא הזכאות. אבל יולדת יכולה לשהות יום אחד, ועוד יום כעבור כמה ימים —
+// ולכן אפשר לבטל יום מסומן וללחוץ על יום אחר במקומו.
+//
+// ⚠️ התקרה לא משתנה: לעולם לא יותר ימים מימי הזכאות.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** כל הימים בטווח, כולל שני הקצוות (לרשומות ישנות שנשמרו כ-from/to בלבד). */
+export function datesInRange(fromIso: string | null | undefined, toIso: string | null | undefined): string[] {
+  if (!fromIso || !toIso) return []
+  const [fy, fm, fd] = fromIso.split('-').map(Number)
+  const [ty, tm, td] = toIso.split('-').map(Number)
+  const from = new Date(fy, fm - 1, fd).getTime()
+  const to = new Date(ty, tm - 1, td).getTime()
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) return []
+  const out: string[] = []
+  // ⚠️ תקרה מגוננת — טווח פגום לא ייצר אלפי ימים
+  for (let t = from; t <= to && out.length < 60; t += DAY_MS) out.push(iso(new Date(t)))
+  return out
+}
+
+/**
+ * לחיצה על יום בלוח.
+ *   • אין סימון            → רצף מלא מהיום שנלחץ (ברירת המחדל)
+ *   • היום כבר מסומן       → מבוטל
+ *   • יש מקום בזכאות       → נוסף כיום נפרד
+ *   • הזכאות מלאה          → מתחילים מחדש: רצף מלא מהיום שנלחץ
+ *
+ * ⚠️ המקרה האחרון שומר על ההתנהגות המוכרת: מי שלוחץ על יום אחר כשהכול
+ * מסומן מתכוון ל"הגיעה ביום אחר", לא ל"הוסף יום" — אין לאן להוסיף.
+ */
+export function toggleStayDay(selected: string[], dayIso: string, maxDays: number): string[] {
+  const max = Math.max(1, Number(maxDays) || 1)
+  const set = [...new Set(selected)].sort()
+  const fullRange = () => { const r = recoveryRange(dayIso, max); return datesInRange(r.from, r.to) }
+  if (set.length === 0) return fullRange()
+  if (set.includes(dayIso)) return set.filter(d => d !== dayIso)
+  if (set.length < max) return [...set, dayIso].sort()
+  return fullRange()
+}
+
+/** האם הימים רצופים — לתצוגה ("26.09–27.09" מול רשימת ימים). */
+export function isConsecutive(dates: string[]): boolean {
+  const s = [...dates].sort()
+  for (let i = 1; i < s.length; i++) {
+    const [ay, am, ad] = s[i - 1].split('-').map(Number)
+    const [by, bm, bd] = s[i].split('-').map(Number)
+    if (Math.round((new Date(by, bm - 1, bd).getTime() - new Date(ay, am - 1, ad).getTime()) / DAY_MS) !== 1) return false
+  }
+  return true
+}

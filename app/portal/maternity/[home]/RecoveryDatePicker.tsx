@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { recoveryRange, shouldJumpMonth } from '@/lib/recoveryRange'
+import { shouldJumpMonth, toggleStayDay, isConsecutive } from '@/lib/recoveryRange'
 import { ChevronRight, ChevronLeft, Check } from 'lucide-react'
 
 // לוח לסימון ימי השהייה בבית ההחלמה — קליל ומהיר.
@@ -13,7 +13,11 @@ import { ChevronRight, ChevronLeft, Check } from 'lucide-react'
 // העזיבה נגזם ליום הנוכחי, ולכן סימון של היום נתן יום בודד — והנציג לא יכול
 // היה לרשום את הזכאות המלאה עד שהימים היו חולפים בפועל.
 //
-// טווח מוחזר כמחרוזות ISO (YYYY-MM-DD): from = יום ראשון, to = יום אחרון.
+// 🔴 מחזיר *רשימת ימים* (ISO, ממוינת) ולא טווח.
+// ברירת המחדל עדיין רצף: לחיצה ראשונה מסמנת את יום ההגעה ואת הימים שאחריו.
+// לחיצה על יום מסומן מבטלת אותו, ולחיצה על יום אחר מוסיפה אותו כיום נפרד —
+// ליולדת ששהתה יום אחד ועוד יום כעבור כמה ימים. ראו toggleStayDay.
+// ⚠️ לעולם לא יותר ימים מ-maxDays.
 
 const DAY_MS = 86400000
 const WINDOW_DAYS = 35   // 5 שבועות אחורה — חלון הזכאות
@@ -29,19 +33,23 @@ function parseISO(s: string): Date { const [y, m, dd] = s.split('-').map(Number)
 
 interface Props {
   maxDays: number                       // מספר ימי הזכאות (2 רגילה / 4 תאומים) — סה"כ תאים לסימון
-  from: string | null                   // יום הגעה נבחר (ISO)
-  to: string | null                     // יום אחרון נבחר (ISO)
-  onChange: (from: string | null, to: string | null) => void
+  dates: string[]                       // הימים שנבחרו (ISO, ממוינים)
+  onChange: (dates: string[]) => void
+  /** היום האחרון בחלון הזכאות (ISO) — תקרה לימים שנוספים ידנית. */
+  lastDay?: string | null
 }
 
-export default function RecoveryDatePicker({ maxDays, from, to, onChange }: Props) {
+export default function RecoveryDatePicker({ maxDays, dates, onChange, lastDay }: Props) {
   const today = startOfDay(new Date())
   const minDate = new Date(today.getTime() - WINDOW_DAYS * DAY_MS)
   // חודש התצוגה — מתחיל מחודש היום, ניתן לדפדף אחורה עד חלון הזכאות
   const [viewMonth, setViewMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1))
 
-  const fromD = from ? parseISO(from) : null
-  const toD = to ? parseISO(to) : null
+  const selected = [...dates].sort()
+  const fromD = selected.length ? parseISO(selected[0]) : null
+  const toD = selected.length ? parseISO(selected[selected.length - 1]) : null
+  // תקרת הימים שנוספים ידנית: סוף חלון הזכאות, ובהיעדרו — 35 יום קדימה
+  const lastD = lastDay ? parseISO(lastDay) : new Date(today.getTime() + WINDOW_DAYS * DAY_MS)
 
   // בניית תאי החודש (כולל ריפוד לתחילת השבוע)
   const firstDow = viewMonth.getDay()
@@ -50,37 +58,36 @@ export default function RecoveryDatePicker({ maxDays, from, to, onChange }: Prop
   for (let i = 0; i < firstDow; i++) cells.push(null)
   for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(viewMonth.getFullYear(), viewMonth.getMonth(), d))
 
-  // ניתן ללחוץ רק על יום הגעה אפשרי: בתוך חלון הזכאות ולא בעתיד.
-  const canPick = (d: Date) => d.getTime() >= minDate.getTime() && d.getTime() <= today.getTime()
-  const isSelected = (d: Date) => {
-    if (!fromD) return false
-    if (!toD) return d.getTime() === fromD.getTime()
-    return d.getTime() >= fromD.getTime() && d.getTime() <= toD.getTime()
+  // ⚠️ יום ההגעה (הלחיצה הראשונה) — לא בעתיד. ימים שנוספים אחריו ידנית
+  // יכולים ליפול גם קדימה, עד סוף חלון הזכאות, וכל יום מסומן ניתן לביטול.
+  const isSelected = (d: Date) => selected.includes(iso(d))
+  const canPick = (d: Date) => {
+    if (isSelected(d)) return true
+    if (d.getTime() < minDate.getTime()) return false
+    if (selected.length === 0 || selected.length >= maxDays) return d.getTime() <= today.getTime()
+    return d.getTime() <= lastD.getTime()
   }
 
   function pickDay(d: Date) {
     if (!canPick(d)) return
-    // לחיצה על יום ההגעה → המערכת מסמנת סה"כ maxDays ימים (כולל יום ההגעה).
-    // זכאות של 2 ימים = 2 תאים בסך הכל (הגעה + יום נוסף), לא 3.
-    // יום העזיבה אינו נגזם ליום הנוכחי — הזכאות נמשכת קדימה גם אם טרם חלפה.
-    const arrival = startOfDay(d)
-    const { from, to } = recoveryRange(iso(arrival), maxDays)
-    onChange(from, to)
+    const next = toggleStayDay(selected, iso(startOfDay(d)), maxDays)
+    onChange(next)
 
-    // 🔴 קפיצה לחודש שבו יום היציאה נמצא.
+    // 🔴 קפיצה לחודש שבו היום האחרון נמצא.
     //
     // ⚠️ ביום האחרון של החודש, היציאה נופלת בחודש הבא — והלוח נשאר על
     // החודש הנוכחי. היולדת רואה תא אחד מסומן ומניחה שהסימון נכשל,
-    // בזמן שהטווח נשמר נכון.
-    if (shouldJumpMonth(to, viewMonth)) {
-      const [y, m] = to.split('-').map(Number)
+    // בזמן שהטווח נשמר נכון. רק כשנוצר רצף חדש — לא בביטול או בהוספה ידנית.
+    const last = next[next.length - 1]
+    if (selected.length === 0 && last && shouldJumpMonth(last, viewMonth)) {
+      const [y, m] = last.split('-').map(Number)
       setViewMonth(new Date(y, m - 1, 1))
     }
   }
 
   // היום המרוחק ביותר שאפשר להגיע אליו בסימון — הגעה היום + מלוא הזכאות.
   // משמש לניווט קדימה, כדי שטווח שנמשך לחודש הבא יהיה גלוי.
-  const maxSelectable = new Date(today.getTime() + (maxDays - 1) * DAY_MS)
+  const maxSelectable = new Date(Math.max(today.getTime() + (maxDays - 1) * DAY_MS, toD?.getTime() ?? 0))
   const monthIdx = (d: Date) => d.getFullYear() * 12 + d.getMonth()
   const canGoBack = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1).getTime() > minDate.getTime()
   const canGoFwd = monthIdx(viewMonth) < monthIdx(maxSelectable)
@@ -90,6 +97,7 @@ export default function RecoveryDatePicker({ maxDays, from, to, onChange }: Prop
       {/* הנחיה */}
       <p className="text-xs text-slate-500 leading-relaxed mb-2 text-center">
         נא סמנו את היום הראשון שבו היולדת הגיעה — המערכת תסמן אוטומטית את שאר הימים בהתאם לזכאות שקיבלה.
+        <span className="block mt-0.5 text-slate-400">שהתה בימים נפרדים? לחצו על יום מסומן כדי לבטל אותו, ועל יום אחר כדי להוסיף אותו.</span>
       </p>
       {/* כותרת חודש + ניווט */}
       <div className="flex items-center justify-between mb-2">
@@ -143,9 +151,14 @@ export default function RecoveryDatePicker({ maxDays, from, to, onChange }: Prop
       <div className="mt-2 pt-2 border-t border-slate-100 text-xs text-slate-500 text-center">
         {fromD && toD ? (
           <span className="font-semibold text-slate-700">
-            {Math.round((toD.getTime() - fromD.getTime()) / DAY_MS) + 1} ימים · {fromD.toLocaleDateString('he-IL')} – {toD.toLocaleDateString('he-IL')}
+            {selected.length} מתוך {maxDays} ימים · {isConsecutive(selected)
+              ? (selected.length > 1 ? `${fromD.toLocaleDateString('he-IL')} – ${toD.toLocaleDateString('he-IL')}` : fromD.toLocaleDateString('he-IL'))
+              : selected.map(x => parseISO(x).toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })).join(' · ')}
             {toD.getTime() > today.getTime() && (
               <span className="block font-normal text-slate-400 mt-0.5">כולל ימי זכאות שטרם חלפו</span>
+            )}
+            {fromD.getTime() > today.getTime() && (
+              <span className="block font-normal text-red-500 mt-0.5">היום הראשון אינו יכול להיות בעתיד</span>
             )}
           </span>
         ) : (

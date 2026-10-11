@@ -1,4 +1,5 @@
 import type { getServiceClient } from '@/lib/apiAuth'
+import { isConsecutive } from '@/lib/recoveryRange'
 import { recoveryDaysOf } from '@/lib/maternity'
 import { DEPARTMENTS } from '@/lib/departments'
 import { shell } from '@/lib/emailTemplates'
@@ -20,6 +21,7 @@ export type AidInfo = {
   is_twins?: boolean | null
   recovery_stay_from?: string | null
   recovery_stay_to?: string | null
+  recovery_stay_dates?: string[] | null
   beneficiary?: BenFull | null
 }
 
@@ -65,7 +67,7 @@ const BEN_FIELDS = 'family_name, full_name, spouse_name, city, address, id_numbe
 // המסלולים מחזירים את אותה משפחה. לכן מסלול אחד מספיק והוא גם הנכון.
 export const GRATITUDE_LETTER_SELECT =
   'id, body, signature, is_anonymous, status, created_at, sent_to_donor_at, sent_to_donor_email, ' +
-  `aid:maternity_aids(birth_date, recovery_home, recovery_eligibility_days, is_twins, recovery_stay_from, recovery_stay_to), ` +
+  `aid:maternity_aids(birth_date, recovery_home, recovery_eligibility_days, is_twins, recovery_stay_from, recovery_stay_to, recovery_stay_dates), ` +
   `letterBen:beneficiaries(${BEN_FIELDS})`
 
 export async function loadGratitudeLetter(db: Db, id: string): Promise<GratitudeLetterRow | null> {
@@ -112,9 +114,14 @@ export function voucherInputFromRow(row: GratitudeLetterRow) {
     recovery_eligibility_days: aid.recovery_eligibility_days, is_twins: aid.is_twins,
   }) : undefined
   // תאריכי שהייה בעברית — רק אם שניהם קיימים (הגנה: אחרת לא מוסיפים לשובר).
-  const stayDatesHe = (aid?.recovery_stay_from && aid?.recovery_stay_to)
-    ? `שהתה בבית ההחלמה מ${toHebrewDate(aid.recovery_stay_from)} עד ${toHebrewDate(aid.recovery_stay_to)}`
-    : undefined
+  // ⚠️ ימים שאינם רצופים — נמנים בשמם. "מ-X עד Y" היה מתאר שהייה רציפה
+  // ארוכה ממה שהייתה בפועל.
+  const stayList = aid?.recovery_stay_dates?.length ? [...aid.recovery_stay_dates].sort() : null
+  const stayDatesHe = stayList && !isConsecutive(stayList)
+    ? `שהתה בבית ההחלמה בימים ${stayList.map(d => toHebrewDate(d)).join(', ')}`
+    : (aid?.recovery_stay_from && aid?.recovery_stay_to)
+      ? `שהתה בבית ההחלמה מ${toHebrewDate(aid.recovery_stay_from)} עד ${toHebrewDate(aid.recovery_stay_to)}`
+      : undefined
   return {
     mode: 'filled' as const,
     body: row.body ?? '',

@@ -8,6 +8,7 @@ import { mailFor } from '@/lib/departments'
 import { recoveryRealizedEmail } from '@/lib/emailTemplates'
 import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { recoveryWindowEnd, RECOVERY_WINDOW_DAYS } from '@/lib/maternity'
+import { datesInRange } from '@/lib/recoveryRange'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,7 +22,7 @@ function getAdminClient() {
 // בית ההחלמה מזין את הסכום שמומש עבור הלידה ושולח לאישור. רק כשסומן "הגיעה".
 export async function POST(request: NextRequest) {
   await ensureEmailTexts()
-  const { home, aidId, amount, nights, receiptNumber, stayFrom, stayTo, receiptUrl } = await request.json()
+  const { home, aidId, amount, nights, receiptNumber, stayFrom, stayTo, stayDates, receiptUrl } = await request.json()
   if (!home || !aidId) return NextResponse.json({ error: 'חסרים פרטים' }, { status: 400 })
   // קישור ישיר לקבלה (חלופה להעלאת קובץ) — נשמר רק אם http/https תקין.
   const linkUrl = typeof receiptUrl === 'string' && /^https?:\/\/\S+$/i.test(receiptUrl.trim())
@@ -39,8 +40,17 @@ export async function POST(request: NextRequest) {
 
   // טווח תאריכי השהייה — חובה, פורמט ISO, ובתוך חלון 5 השבועות האחרונים
   const ISO = /^\d{4}-\d{2}-\d{2}$/
-  const from = typeof stayFrom === 'string' && ISO.test(stayFrom) ? stayFrom : null
-  const to = typeof stayTo === 'string' && ISO.test(stayTo) ? stayTo : null
+  // 🔴 ימי השהייה כרשימה — גם ימים שאינם רצופים (יום אחד, ועוד יום כעבור
+  // כמה ימים). from/to נגזרים ממנה: המוקדם והמאוחר.
+  // ⚠️ בלי רשימה (לקוח ישן שנשאר פתוח בדפדפן) — נשאר הטווח הרצוף כמו קודם.
+  const dayList: string[] | null = Array.isArray(stayDates) && stayDates.length
+    ? [...new Set((stayDates as unknown[]).map(String))].sort()
+    : null
+  if (dayList && (dayList.length > 60 || !dayList.every(d => ISO.test(d)))) {
+    return NextResponse.json({ error: 'תאריכי השהייה אינם תקינים' }, { status: 400 })
+  }
+  const from = dayList ? dayList[0] : (typeof stayFrom === 'string' && ISO.test(stayFrom) ? stayFrom : null)
+  const to = dayList ? dayList[dayList.length - 1] : (typeof stayTo === 'string' && ISO.test(stayTo) ? stayTo : null)
   if (!from || !to) return NextResponse.json({ error: 'יש לסמן את תאריכי השהייה בלוח' }, { status: 400 })
   const fromMs = new Date(from).getTime(), toMs = new Date(to).getTime()
   const todayMs = new Date(new Date().toISOString().slice(0, 10)).getTime()
@@ -61,8 +71,10 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     )
   }
-  // מספר הימים חייב להתאים לטווח (הפרש + 1, כולל יום ההגעה)
-  if (Math.round((toMs - fromMs) / 86400000) + 1 !== nightsNum) {
+  // מספר הימים חייב להתאים למה שסומן: מספר הימים ברשימה, או (בטווח רצוף)
+  // הפרש + 1, כולל יום ההגעה.
+  const markedDays = dayList ? dayList.length : Math.round((toMs - fromMs) / 86400000) + 1
+  if (markedDays !== nightsNum) {
     return NextResponse.json({ error: 'מספר הימים אינו תואם את הטווח שנבחר' }, { status: 400 })
   }
 
@@ -108,6 +120,14 @@ export async function POST(request: NextRequest) {
   if (nightsNum > maxNights) {
     return NextResponse.json({ error: `מספר הלילות המרבי הוא ${maxNights}` }, { status: 400 })
   }
+  // ⚠️ ימים נפרדים מאפשרים יום אחרון רחוק מיום ההגעה — ולכן נבדק גם הוא:
+  // לא אחרי סוף חלון הזכאות (בתוספת רצף ימי הזכאות, כמו בסימון האוטומטי).
+  if (toMs > windowEndMs + (maxNights - 1) * 86400000) {
+    return NextResponse.json(
+      { error: 'אחד מימי השהייה חורג מחלון הזכאות של היולדת' },
+      { status: 400 },
+    )
+  }
   if (aid.recovery_locked) {
     return NextResponse.json({ error: 'הרשומה נעולה — פנה למשרד' }, { status: 403 })
   }
@@ -131,6 +151,7 @@ export async function POST(request: NextRequest) {
     recovery_nights: nightsNum,
     recovery_stay_from: from,
     recovery_stay_to: to,
+    recovery_stay_dates: dayList ?? datesInRange(from, to),
     // ⚠️ נכתב רק כשנשלח ערך. כתיבה של '' הייתה מוחקת מספר קבלה שכבר קיים
     // ברשומות שנקלטו לפני שהשדה הוסר מהטופס.
     ...(receipt ? { recovery_receipt_number: receipt } : {}),

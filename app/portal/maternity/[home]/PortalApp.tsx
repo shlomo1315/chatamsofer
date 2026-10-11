@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { format, differenceInDays } from 'date-fns'
 import { recoveryWindowEnd } from '@/lib/maternity'
+import { datesInRange } from '@/lib/recoveryRange'
 import { babiesOf, babyNameLabel, type AidNameFields } from '@/lib/babyNames'
 import RecoveryDatePicker from './RecoveryDatePicker'
 import PdfCanvasView from '@/components/ui/PdfCanvasView'
@@ -46,6 +47,8 @@ interface Aid {
   recovery_nights?: number | null
   recovery_stay_from?: string | null
   recovery_stay_to?: string | null
+  /** ימי השהייה כרשימה (גם לא רצופים). NULL = רשומה ישנה, הימים הם from..to. */
+  recovery_stay_dates?: string[] | null
   recovery_receipt_number?: string | null
   recovery_receipt_url?: string | null
   recovery_locked?: boolean | null
@@ -321,12 +324,11 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
   const [nightsInput, setNightsInput] = useState<Record<string, string>>(
     () => Object.fromEntries(aids.map(a => [a.id, a.recovery_nights != null ? String(a.recovery_nights) : String(recoveryDays(a))])),
   )
-  // טווח ימי השהייה בבית ההחלמה (נבחר בלוח). from = יום הגעה · to = יום עזיבה.
-  const [stayFrom, setStayFrom] = useState<Record<string, string | null>>(
-    () => Object.fromEntries(aids.map(a => [a.id, a.recovery_stay_from ?? null])),
-  )
-  const [stayTo, setStayTo] = useState<Record<string, string | null>>(
-    () => Object.fromEntries(aids.map(a => [a.id, a.recovery_stay_to ?? null])),
+  // ימי השהייה בבית ההחלמה (נבחרו בלוח) — רשימה, כי הימים אינם בהכרח רצופים.
+  // ⚠️ רשומה ישנה נשמרה כ-from/to בלבד, ונפרשת כאן לרשימת הימים שבטווח.
+  const [stayDates, setStayDates] = useState<Record<string, string[]>>(
+    () => Object.fromEntries(aids.map(a => [a.id,
+      a.recovery_stay_dates?.length ? [...a.recovery_stay_dates].sort() : datesInRange(a.recovery_stay_from, a.recovery_stay_to)])),
   )
   const [savingAmt, setSavingAmt] = useState<string | null>(null)
   const [editingAmt, setEditingAmt] = useState<Record<string, boolean>>({})
@@ -434,7 +436,7 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
     const missing: string[] = []
     const amt = Number(amountInput[aidId])
     if (!(Number.isFinite(amt) && amt > 0)) missing.push('סכום שמומש')
-    if (!stayFrom[aidId] || !stayTo[aidId]) missing.push('תאריכי השהייה בלוח')
+    if (!(stayDates[aidId]?.length)) missing.push('תאריכי השהייה בלוח')
     // מספר הקבלה אינו נדרש עוד — הקבלה עצמה מצורפת והמספר מופיע עליה
     // ⚠️ קישור שהוקלד ועדיין לא יובא נחשב תקין. קודם נבדק receiptUrl בלבד,
     // והוא מתעדכן ב-onBlur של שדה הקישור — אך React מחיל את העדכון *אחרי*
@@ -459,12 +461,11 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
         body: JSON.stringify({
           home, aidId,
           amount: Number(amountInput[aidId]),
-          // מספר הימים נגזר מהטווח שנבחר בלוח (הפרש + 1, כולל יום ההגעה)
-          nights: (stayFrom[aidId] && stayTo[aidId])
-            ? String(Math.round((new Date(stayTo[aidId]!).getTime() - new Date(stayFrom[aidId]!).getTime()) / 86400000) + 1)
-            : nightsInput[aidId],
-          stayFrom: stayFrom[aidId] ?? null,
-          stayTo: stayTo[aidId] ?? null,
+          // מספר הימים = מספר הימים שסומנו בלוח (לא בהכרח רצופים)
+          nights: stayDates[aidId]?.length ? String(stayDates[aidId].length) : nightsInput[aidId],
+          stayDates: stayDates[aidId] ?? [],
+          stayFrom: stayDates[aidId]?.[0] ?? null,
+          stayTo: stayDates[aidId]?.[stayDates[aidId].length - 1] ?? null,
           // קישור ישיר לקבלה (אם הוזן במקום העלאת קובץ) — ה-backend ישמור אותו
           receiptUrl: receiptUrl[aidId] ?? null,
           // מספר הקבלה — מזוהה אוטומטית ונערך ידנית. ⚠️ אינו חובה: הקובץ
@@ -1046,14 +1047,11 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                                 <span className="text-sm font-semibold text-slate-600">ימי השהייה בבית ההחלמה <span className="font-normal text-slate-400">(עד {recoveryDays(aid)} לילות)</span></span>
                                 <RecoveryDatePicker
                                   maxDays={recoveryDays(aid)}
-                                  from={stayFrom[aid.id] ?? null}
-                                  to={stayTo[aid.id] ?? null}
-                                  onChange={(f, t) => {
-                                    setStayFrom(mm => ({ ...mm, [aid.id]: f }))
-                                    setStayTo(mm => ({ ...mm, [aid.id]: t }))
-                                    // מספר הימים = הפרש הימים + 1 (כולל יום ההגעה)
-                                    const n = (f && t) ? String(Math.round((new Date(t).getTime() - new Date(f).getTime()) / 86400000) + 1) : ''
-                                    setNightsInput(mm => ({ ...mm, [aid.id]: n }))
+                                  dates={stayDates[aid.id] ?? []}
+                                  lastDay={(() => { const e = recoveryWindowEnd(aid); return e ? e.toISOString().slice(0, 10) : null })()}
+                                  onChange={ds => {
+                                    setStayDates(mm => ({ ...mm, [aid.id]: ds }))
+                                    setNightsInput(mm => ({ ...mm, [aid.id]: ds.length ? String(ds.length) : '' }))
                                   }}
                                 />
                               </div>
