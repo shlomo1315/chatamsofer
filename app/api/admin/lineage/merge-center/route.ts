@@ -7,6 +7,7 @@ import { invalidateLineageCache } from '@/lib/lineageSync'
 import { logActivity } from '@/lib/activityLog'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { buildClusters, type ClusterNode } from '@/lib/mergeClusters'
+import { lineageIdentityKey } from '@/lib/lineageNameFormat'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -136,7 +137,7 @@ export async function POST(request: NextRequest) {
   // מזויפת (או מסך שהתיישן אחרי מיזוג אחר) הייתה יכולה למזג שני אנשים
   // שאינם קשורים — פעולה שקשה מאוד לשחזר ממנה.
   const { data: rows, error: loadErr } = await admin
-    .from('lineage_nodes').select('id, name, generation, status').in('id', [keepId, ...mergeIds])
+    .from('lineage_nodes').select('id, name, generation, status, parent_id').in('id', [keepId, ...mergeIds])
   if (loadErr) return NextResponse.json({ error: loadErr.message }, { status: 500 })
   if (!rows || rows.length !== mergeIds.length + 1) {
     return NextResponse.json({ error: 'חלק מהצמתים לא נמצאו — רענן את המסך' }, { status: 409 })
@@ -146,6 +147,25 @@ export async function POST(request: NextRequest) {
   const mismatch = rows.find(r => norm(r.name) !== norm(keep.name) || r.generation !== keep.generation)
   if (mismatch) {
     return NextResponse.json({ error: 'הצמתים אינם בעלי שם ודור זהים — רענן את המסך' }, { status: 409 })
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 הורים שונים — רק כשזה "ממש אותו דבר" (החלטת המשתמש 12.10).
+  //
+  // שם ודור זהים תחת הורים *שונים* הם ברוב המקרים שני אנשים: נכד שנקרא על
+  // שם סבו, בענף אחר. מיזוג כזה מעביר משפחות שלמות לייחוס זר, בלי שאיש
+  // ישים לב. מותר רק כשגם ההורים עצמם הם אותו אדם (אותו מפתח זהות) — כלומר
+  // ענף שנרשם פעמיים, והכפילות היא באמת אותה משפחה.
+  // ─────────────────────────────────────────────────────────────────────────
+  const parentIds = [...new Set(rows.map(r => (r as { parent_id: string | null }).parent_id ?? ''))]
+  if (parentIds.length > 1) {
+    const { data: parents } = await admin.from('lineage_nodes').select('id, name').in('id', parentIds.filter(Boolean))
+    const keys = new Set((parents ?? []).map(p => lineageIdentityKey(p.name)))
+    if (parentIds.includes('') || (parents ?? []).length !== parentIds.length || keys.size !== 1) {
+      return NextResponse.json({
+        error: 'הצמתים תלויים תחת הורים שונים — זה כנראה שני אנשים (נכד ע"ש סבו). מיזוג מותר רק כשגם ההורים הם אותו אדם; מזגו קודם את ההורים.',
+      }, { status: 409 })
+    }
   }
 
   // ⚠️ בלי מפל בשום כיוון: המפל מזהה קרבה לפי autoMergeKey (שמסיר תארים),

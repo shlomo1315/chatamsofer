@@ -11,6 +11,7 @@ import DuplicatesPanel from './DuplicatesPanel'
 import TreeHealthPanel from './TreeHealthPanel'
 import CaseCenterPanel from './CaseCenterPanel'
 import SafeMergePanel from './SafeMergePanel'
+import DupReviewPanel from './DupReviewPanel'
 import MergeCenterPanel from './MergeCenterPanel'
 import UnlinkedPanel from './UnlinkedPanel'
 import MergePlanModal, { type PlanResp as MergePlanResp } from './MergePlanModal'
@@ -1886,6 +1887,7 @@ export default function LineagePage() {
   const [showHealth, setShowHealth] = useState(false)
   const [showCases, setShowCases] = useState(false)
   const [showSafeMerge, setShowSafeMerge] = useState(false)
+  const [showDupReview, setShowDupReview] = useState(false)
   const [showMergeCenter, setShowMergeCenter] = useState(false)
   const [showUnlinked, setShowUnlinked] = useState(false)
   // צמתי רפאים — אלה שנוצרו משדה הילדים של כרטסת ולא מאדם שנרשם
@@ -2491,6 +2493,13 @@ export default function LineagePage() {
             style={{ background: showHealth ? '#E11D48' : '#fff', color: showHealth ? '#fff' : '#BE123C', border: '1px solid #FECDD3' }}>
             <Activity size={14} /> {showHealth ? 'סגור בריאות העץ' : 'בריאות העץ'}
           </button>
+          {/* 🔴 סקירת כפילויות (12.10) — הכלל האחד (lib/lineageDupGroups), קבוצה אחרי
+              קבוצה עם מקשי קיצור. רמות C/D ובן/חתן סותרים — מנהל בלבד. */}
+          <button onClick={() => setShowDupReview(s => !s)}
+            className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm"
+            style={{ background: showDupReview ? '#4F46E5' : '#fff', color: showDupReview ? '#fff' : '#4338CA', border: '1px solid #C7D2FE' }}>
+            <GitMerge size={14} /> {showDupReview ? 'סגור סקירת כפילויות' : 'סקירת כפילויות'}
+          </button>
           {/* מיזוג בטוח — שם זהה בדיוק, אותו אב, אותו דור. נפרד במסך מהמיזוג
               הרגיל בכוונה: זו הפעולה היחידה שאפשר להריץ על מאות קבוצות בלי
               לעבור עליהן, וההפרדה מונעת בלבול בין "בוודאות" לבין "מקורב". */}
@@ -2592,6 +2601,7 @@ export default function LineagePage() {
         </div>
       )}
 
+      {showDupReview && <DupReviewPanel onDone={() => { void softRefresh() }} />}
       {showSafeMerge && <SafeMergePanel onDone={() => { void softRefresh() }} />}
       {showMergeCenter && (
         <MergeCenterPanel
