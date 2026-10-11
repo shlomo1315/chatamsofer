@@ -10,6 +10,7 @@ import { Loader2, X, Plus, Check, User, AlertTriangle } from 'lucide-react'
 import TextInput from '@/components/ui/TextInput'
 import { composeLineageName, findTitles, lineageIdentityKey } from '@/lib/lineageNameFormat'
 import { genTone } from '@/lib/lineagePalette'
+import { EARLY_DEPTH } from '@/lib/lineageDeviation'
 
 export interface LineageNode { id: string; name: string; generation: number; parent_id: string | null; status?: string; relation?: 'son' | 'son_in_law' | null }
 
@@ -257,8 +258,15 @@ export function LineageBuilder({ selfName, onChange, prefillChain }: {
   if (loading) return <div className="flex items-center gap-2 text-sm text-slate-400 py-3"><Loader2 size={14} className="animate-spin" /> טוען דורות…</div>
 
   // ⚠️ מי שסימן "זה אני" אינו מוסיף את עצמו שוב — זו בדיוק הכפילות שנמנעה
-  const canAddSelf = chain.length >= 1 && !selfAdded && !selfExistingId
+  // 🔴 הנרשם עצמו לעולם אינו דור 2–5 (12.10): אין אדם חי שהוא נין של החתם סופר.
+  // "הוסיפו אותי" בדור 3 קטע את השרשרת באמצע ותלה את הנרשם על אב-קדמון.
+  const canAddSelf = chain.length + 2 > EARLY_DEPTH && !selfAdded && !selfExistingId
   const lastIsNew = chain.length > 0 && chain[chain.length - 1].isNew
+  // 🔴 דורות 2–5 נבחרים מהרשימה בלבד (12.10) — הם מוגדרים במלואם בקובץ המאושר.
+  // הקלדה ידנית שם יצרה את העותקים הממתינים שזיהמו את העץ (ענף פרידמן: "אברהם
+  // חנוך" ו"שמואל בנימין" הוקלדו שוב ושוב בנוסחים שונים). הקלדה מותרת רק כשאין
+  // ברשימה דבר — מתחת ל-4 הצמתים בקובץ שאין להם ילדים בקובץ.
+  const manualBlocked = chain.length + 2 <= EARLY_DEPTH && options.length > 0 && !lastIsNew
   // הרשימה המוצגת היא דור chain.length + 2 — ו"זה אני" נפתח רק מדור SELF_MIN_GENERATION
   const canMarkSelfHere = chain.length + 2 >= SELF_MIN_GENERATION
 
@@ -432,12 +440,19 @@ export function LineageBuilder({ selfName, onChange, prefillChain }: {
                   </div>
                 </>
               )}
+              {manualBlocked ? (
+                <p className="text-[11px] leading-relaxed text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2">
+                  בדורות 2–5 בוחרים <strong>מהרשימה בלבד</strong> — זהו סדר הדורות המאושר.
+                  אם הדור שלכם אינו מופיע ברשימה, נא לפנות למשרד.
+                </p>
+              ) : (
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={() => { setManualGate(true); setNewErr('') }}
                   className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 border border-amber-300 bg-amber-50 hover:bg-amber-100 rounded-lg px-3 py-1.5 transition-all duration-150">
                   <Plus size={13} /> {lastIsNew || options.length === 0 ? 'הוסיפו את הדור הבא' : 'הדור הבא לא ברשימה — הוסיפו "אחר"'}
                 </button>
               </div>
+              )}
               {canAddSelf && (
                 <div className="mt-4">
                   <button type="button" onClick={() => setSelfAdded(true)}

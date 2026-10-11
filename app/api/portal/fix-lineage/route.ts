@@ -4,6 +4,7 @@ import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { maybeMarkDocsReturned } from '@/lib/docsReturnCheck'
 import { normalizeLineageNodeName, lineageIdentityKey } from '@/lib/lineageNameFormat'
+import { earlyManualBlocked } from '@/lib/lineageFixApply'
 
 export const dynamic = 'force-dynamic'
 
@@ -72,6 +73,10 @@ export async function POST(request: NextRequest) {
   // אותה התנהגות כמו בהרשמה (public-register): שם שכבר מאומת תחת אותו אב
   // ממוחזר במקום ליצור כפילות ממתינה.
   let lastNodeId: string | null = body.lineage_node_id ? String(body.lineage_node_id) : null
+  // 🔴 דורות 2–5 נבחרים מהרשימה בלבד (12.10) — ראו lib/lineageFixApply.
+  if (lastNodeId && Array.isArray(body.lineage_new_nodes) && body.lineage_new_nodes.length && await earlyManualBlocked(admin, lastNodeId)) {
+    return NextResponse.json({ error: 'בדורות 2–5 יש לבחור מהרשימה בלבד. אם הדור שלכם אינו מופיע — נא לפנות למשרד.' }, { status: 400 })
+  }
   try {
     const newNodes = Array.isArray(body.lineage_new_nodes) ? body.lineage_new_nodes : []
     if (lastNodeId && newNodes.length) {

@@ -74,3 +74,21 @@ export async function appendManualGenerations(
   }
   return { lastId: parentId, lastGeneration: gen }
 }
+
+/**
+ * 🔴 שער ההקלדה הידנית בדורות 2–5, בצד השרת (12.10).
+ *
+ * הבורר כבר אינו מאפשר זאת, אבל טופס נדרים החיצוני ובקשות ישנות שולחים
+ * lineage_new_nodes ישירות. הקלדה מתחת לעוגן בדור ≤4 חסומה כשהיה *מה לבחור*
+ * מתחתיו (ילד מאושר שבקובץ) — אחרת מתחת ל-4 הצמתים שאין להם ילדים בקובץ.
+ * מחזיר true = חסום: לא נכתב דבר לעץ, והרישום עצמו ממשיך לבדיקת המשרד.
+ */
+export async function earlyManualBlocked(admin: SupabaseClient, anchorId: string): Promise<boolean> {
+  const { data: anchor } = await admin.from('lineage_nodes').select('id, generation').eq('id', anchorId).maybeSingle()
+  if (!anchor || Number(anchor.generation) + 1 > EARLY_DEPTH) return false
+  const { data: kids } = await admin.from('lineage_nodes').select('id, name, generation, status').eq('parent_id', anchorId).eq('status', 'verified')
+  if (!kids?.length) return false
+  const { getPickerApproval } = await import('./lineageApprovedRef')
+  const { pickableNodes } = await import('./lineageApprovedColor')
+  return pickableNodes(kids as { name: string; generation: number; status: string }[], await getPickerApproval(admin, anchorId)).length > 0
+}

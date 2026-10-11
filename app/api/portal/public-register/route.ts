@@ -19,6 +19,7 @@ import { attachOrphanMailToBeneficiary } from '@/lib/legacyMailSync'
 import { getStreets, isKnownCity } from '@/lib/govData'
 import { registerToOpenDistribution } from '@/lib/holidayDistributions'
 import type { RegisterSource } from '@/lib/distributionSources'
+import { earlyManualBlocked } from '@/lib/lineageFixApply'
 
 export const dynamic = 'force-dynamic'
 
@@ -561,10 +562,21 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
     }
   } catch (e) { console.error('[public-register] attach orphan mail failed:', e) }
 
+  // 🔴 דורות 2–5 נבחרים מהרשימה בלבד (12.10). הקלדה ידנית מתחת לעוגן רדוד, כשהיה
+  // מה לבחור, *אינה נכתבת לעץ* — זה מקור העותקים שזיהמו את דורות 2–5. הרישום
+  // עצמו נשמר (deep_review), והמשרד משייך. ראו lib/lineageFixApply.
+  let earlyBlocked = false
+  try {
+    if (lineage_node_id && Array.isArray(lineage_new_nodes) && lineage_new_nodes.length) {
+      earlyBlocked = await earlyManualBlocked(admin, String(lineage_node_id))
+      if (earlyBlocked) console.warn(`[public-register] הקלדה ידנית בדורות 2–5 תחת ${lineage_node_id} — לא נכתבה לעץ (${cleanId})`)
+    }
+  } catch (e) { console.error('[public-register] earlyManualBlocked failed:', e) }
+
   // הכנסת הדורות שהנרשם הוסיף ידנית (אבות + הנרשם) לעץ הדורות בסטטוס "ממתין לאימות",
   // משורשרים תחת הצומת המאומת שנבחר. הנרשם מקושר לצומת האחרון (מיקומו בעץ).
   try {
-    if (lineage_node_id && Array.isArray(lineage_new_nodes) && lineage_new_nodes.length) {
+    if (!earlyBlocked && lineage_node_id && Array.isArray(lineage_new_nodes) && lineage_new_nodes.length) {
       const { data: sel } = await admin.from('lineage_nodes').select('id, generation').eq('id', String(lineage_node_id)).maybeSingle()
       if (sel) {
         let parentId: string = sel.id
@@ -651,7 +663,8 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
   // שכבר קיבל צומת בבלוק שמעל לא יקבל כפילות.
   // ⚠️ אינו תלוי באישור: הצומת נוצר בסטטוס 'pending', כמו כל צומת שממתין
   // לאימות. האישור נשאר החלטה של הצוות.
-  try {
+  // ⚠️ לא כשההקלדה נחסמה: הנרשם היה נתלה ישירות על העוגן — בדור ≤5.
+  if (!earlyBlocked) try {
     // 🔴 lineage_chain חייב להיכלל. הוא הסימן השני ב-nodeIsSelf — "הנרשם סימן
     // 'זה אני' על צומת קיים שנוסח אחרת" — וזו ההגנה היחידה כשהניסוח בעץ שונה
     // מהשם המחושב (אות אחת בשם האישה מספיקה). בלי השדה הבדיקה נופלת תמיד על

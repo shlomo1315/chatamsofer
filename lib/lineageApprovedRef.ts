@@ -10,11 +10,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { normalizeName, husbandName } from './lineageChainDiff'
+import { sameName as samePerson } from './lineageRefAlign'
 
 /** בודק שם+דור מול הקובץ המאושר. */
 export type ApprovedRefLookup = (name: string, generation: number) => boolean
 
-let _cache: { at: number; keys: Set<string> } | null = null
+let _cache: { at: number; keys: Set<string>; rows: { name: string; generation: number }[] } | null = null
 const TTL_MS = 5 * 60_000
 
 const keyOf = (name: string, generation: number) => `${normalizeName(name)}|${generation}`
@@ -24,10 +25,13 @@ const keyOf = (name: string, generation: number) => `${normalizeName(name)}|${ge
  *
  * 🔴 מוגדר פעם אחת ומשמש גם את הנתיב הממוטמן וגם את נתיב הטעינה.
  */
-const lookupOf = (keys: Set<string>): ApprovedRefLookup => (name, gen) => {
+const lookupOf = (keys: Set<string>, rows: { name: string; generation: number }[] = []): ApprovedRefLookup => (name, gen) => {
   if (keys.has(keyOf(name, gen))) return true
   const h = coupleKey(name)
-  return !!h && keys.has(`h:${h}|${gen}`)
+  if (h && keys.has(`h:${h}|${gen}`)) return true
+  // 🔴 (12.10) אחרי יישור העץ לקובץ, צומת עשוי לשאת את השם *המלא* ("רבי מנחם
+  // זאב ומרת רבקה גרוס") כשבקובץ רק "מרת רבקה גרוס". אותו אדם — לא אדום.
+  return rows.some(r => r.generation === gen && samePerson(r.name, name))
 }
 
 /**
@@ -45,7 +49,7 @@ export async function getApprovedRefLookup(db: any): Promise<ApprovedRefLookup> 
   if (_cache && now - _cache.at < TTL_MS) {
     // ⚠️ אותו בודק בדיוק כמו בנתיב הטעינה — ראו lookupOf. שני עותקים של
     // הכלל היו נפרדים בשקט, ואז הצבע היה תלוי במטמון ולא בנתונים.
-    return lookupOf(_cache.keys)
+    return lookupOf(_cache.keys, _cache.rows)
   }
 
   try {
@@ -76,8 +80,9 @@ export async function getApprovedRefLookup(db: any): Promise<ApprovedRefLookup> 
       const h = coupleKey(r.name)
       if (h) keys.add(`h:${h}|${r.generation}`)
     }
-    _cache = { at: now, keys }
-    return lookupOf(keys)
+    const rows = (data as { name: string; generation: number }[]).map(r => ({ name: r.name, generation: r.generation }))
+    _cache = { at: now, keys, rows }
+    return lookupOf(keys, rows)
   } catch (e) {
     console.error('[approvedRef] טעינת הייחוס המאושר נכשלה — לא נחסם דבר:', e)
     return () => true
@@ -135,7 +140,9 @@ interface RefTreeRow { key: string; name: string; generation: number; parent_key
 function sameRefName(a: string, b: string): boolean {
   if (normalizeName(a) === normalizeName(b)) return true
   const ka = coupleKey(a)
-  return !!ka && ka === coupleKey(b)
+  if (ka && ka === coupleKey(b)) return true
+  // ⚠️ שם מלא מול שם חלקי בקובץ — ראו lookupOf.
+  return samePerson(a, b)
 }
 
 export function buildApprovedRefTree(rows: RefTreeRow[]): ApprovedRefTreeLookup {
