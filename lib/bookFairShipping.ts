@@ -218,7 +218,7 @@ export function tierLabel(t: Pick<BookFairShippingTier, 'min_books' | 'max_books
 // "כמה היה נכנס אילו התעריף המעודכן חל", ולכן גם הזמנה מ-05.10 שנגבתה
 // לפי המחירים של אז מסומנת "חויב חסר".
 
-export type ShippingAuditLabel = 'תקין' | 'חויב חסר' | 'חויב ביתר' | 'לא חויב' | 'איסוף' | 'אין תעריף'
+export type ShippingAuditLabel = 'תקין' | 'חויב חסר' | 'חויב ביתר' | 'לא חויב' | 'איסוף' | 'אין תעריף' | 'ללא תשלום'
 
 export interface ShippingAudit {
   /** המשלוח לפי התעריף הנוכחי. null = אין מדרגה מתאימה. */

@@ -118,6 +118,9 @@ export function filterOrders(
   }
 
   return orders.filter(o => {
+    // ⚠️ הזמנות משרד (משלוח בלי תשלום, 13.10) אינן מכירה — בלי זה הן
+    // נספרות כהזמנות אתר בסטטיסטיקה ומנפחות את מספר ההזמנות.
+    if (o.channel === 'office') return false
     if (statusGroup(o.status) !== f.status) return false
     if (f.channel !== 'all' && o.channel !== f.channel) return false
     if (f.delivery !== 'all' && o.delivery_method !== f.delivery) return false

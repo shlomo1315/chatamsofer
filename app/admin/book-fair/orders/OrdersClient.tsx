@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react'
 import { ilDate, ilTime } from '@/lib/israelTime'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Search, Globe, Phone, AlertTriangle, Clock, CheckCircle2, Package, Truck, Mic, XCircle, Store, Undo2, Banknote, CreditCard, Printer, MapPinned, UserX, Flag, X, MicOff, FileSpreadsheet, Upload } from 'lucide-react'
+import { Search, Globe, Phone, AlertTriangle, Clock, CheckCircle2, Package, Truck, Mic, XCircle, Store, Undo2, Banknote, CreditCard, Printer, MapPinned, UserX, Flag, X, MicOff, FileSpreadsheet, Upload, PackagePlus } from 'lucide-react'
 import type { BookFairOrder, BookFairOrderStatus } from '@/types/bookFair'
 import {
   BOOK_FAIR_STATUS_LABELS, BOOK_FAIR_STATUS_COLORS,
@@ -13,6 +13,7 @@ import { fmtAgorot } from '@/lib/bookFairPricing'
 import { auditShipping, type ShippingAudit, type TierInput } from '@/lib/bookFairShipping'
 import { downloadXlsx, todayStamp, type XlsxColumn } from '@/lib/downloadXlsx'
 import BulkStatusDialog from './BulkStatusDialog'
+import OfficeOrderDialog from './OfficeOrderDialog'
 import { useTablePagination } from '@/lib/useTablePagination'
 import Pagination from '@/components/ui/Pagination'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
@@ -310,6 +311,8 @@ export default function OrdersClient({ orders, itemCounts, orderVolumes, tiers, 
   const audits = useMemo(() => {
     const out: Record<string, ShippingAudit> = {}
     for (const o of orders) {
+      // ⚠️ הזמנת משרד נפתחה בכוונה בלי תשלום — אינה "לא חויב".
+      if (o.channel === 'office') { out[o.id] = { expected: 0, label: 'ללא תשלום' }; continue }
       out[o.id] = auditShipping(o.delivery_method, o.shipping_agorot, orderVolumes[o.id] ?? 0, tiers)
     }
     return out
@@ -421,6 +424,7 @@ export default function OrdersClient({ orders, itemCounts, orderVolumes, tiers, 
   // סינון, וייצוא של עמוד אחד מתוך כמה נראה כקובץ שלם (ראו 833 מול 62).
   const [exporting, setExporting] = useState(false)
   const [bulkOpen, setBulkOpen] = useState(false)
+  const [officeOpen, setOfficeOpen] = useState(false)
   async function exportExcel() {
     setExporting(true)
     try {
@@ -669,6 +673,13 @@ export default function OrdersClient({ orders, itemCounts, orderVolumes, tiers, 
           <Upload size={15} /> עדכון סטטוסים / כתובות מאקסל
         </button>
         {bulkOpen && <BulkStatusDialog onClose={() => setBulkOpen(false)} />}
+        <button
+          onClick={() => setOfficeOpen(true)}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-white px-4 py-2 text-sm font-medium text-indigo-700 transition hover:bg-indigo-50"
+        >
+          <PackagePlus size={15} /> הזמנת משלוח בלי תשלום
+        </button>
+        {officeOpen && <OfficeOrderDialog onClose={() => setOfficeOpen(false)} />}
         <span className="text-xs text-slate-400">
           לפי התצוגה הנוכחית · סינון לפי עיר: בעמודה &quot;עיר&quot; או במסך ההדפסה
         </span>

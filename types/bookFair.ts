@@ -16,7 +16,8 @@
  * ⚠️ 'fair' (דוכן ביריד) היה חסר כאן למרות שהוא קיים במסד ובקוד —
  * ולכן השוואה אליו נחשבה לשגיאת טיפוס. מלאי הדוכן נפרד (stock_fair).
  */
-export type BookFairChannel = 'web' | 'phone' | 'fair'
+/** 'office' = הזמנת משלוח שנפתחה במשרד, בלי תשלום (13.10). */
+export type BookFairChannel = 'web' | 'phone' | 'fair' | 'office'
 
 export type BookFairOrderStatus =
   | 'pending_payment'     // נוצרה, טרם שולמה
@@ -245,6 +246,7 @@ export const BOOK_FAIR_CHANNEL_LABELS: Record<BookFairChannel, string> = {
   web:   'אתר',
   phone: 'טלפון',
   fair:  'דוכן',
+  office: 'משרד',
 }
 
 export const BOOK_FAIR_DELIVERY_LABELS: Record<BookFairDeliveryMethod, string> = {
