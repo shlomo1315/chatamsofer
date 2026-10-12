@@ -63,8 +63,29 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'אין מה לעדכן' }, { status: 400 })
   }
 
-  const { error } = await db.from('book_fair_inquiries').update(patch).eq('id', id)
-  if (error) return NextResponse.json({ error: 'העדכון נכשל' }, { status: 500 })
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 13.10 ("סמן כטופל לא עובד"): 17 מספרים השאירו כמה פניות. סימון
+  // אחת השאיר את התאומה שלה ברשימה — אותו מספר, אותה שורה — ונראה כאילו
+  // הלחיצה לא עשתה דבר. מטפלים במתקשר ולא בהקלטה, ולכן סימון כטופל
+  // תופס את כל הפניות הפתוחות מאותו מספר.
+  // ⚠️ רק בסימון. החזרה לפתוחות והערה — לשורה הבודדת בלבד.
+  // ─────────────────────────────────────────────────────────────────────────
+  let q = db.from('book_fair_inquiries').update(patch)
+  if (body.handled === true && body.note === undefined) {
+    const { data: row } = await db.from('book_fair_inquiries').select('phone').eq('id', id).maybeSingle()
+    if (!row) return NextResponse.json({ error: 'הפנייה לא נמצאה' }, { status: 404 })
+    q = row.phone
+      ? q.eq('phone', row.phone).is('handled_at', null)
+      : q.eq('id', id)
+  } else {
+    q = q.eq('id', id)
+  }
 
-  return NextResponse.json({ ok: true })
+  const { data: updated, error } = await q.select('id')
+  if (error) {
+    console.error('[fair/inquiries] update failed:', error.message)
+    return NextResponse.json({ error: 'העדכון נכשל' }, { status: 500 })
+  }
+
+  return NextResponse.json({ ok: true, ids: (updated ?? []).map(r => r.id) })
 }

@@ -11,6 +11,38 @@ function getClient() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
+/**
+ * אילו מההודעות כבר סומנו "טופל".
+ *
+ * 🔴 13.10: הסימון נשמר כאן אך מעולם לא נקרא בחזרה — אחרי רענון או
+ * מעבר תיקייה הכפתור חזר ל"סמן כטופל", ונראה כאילו הלחיצה לא עבדה.
+ * ⚠️ עד 200 מזהים בבקשה — עמוד רשימה אחד.
+ */
+export async function GET(request: NextRequest) {
+  const staff = await requireMailAccess()
+  if (!staff) return unauthorized()
+
+  const ids = (request.nextUrl.searchParams.get('ids') ?? '')
+    .split(',').map(s => s.trim()).filter(Boolean).slice(0, 200)
+  if (!ids.length) return NextResponse.json({ handled: [] })
+
+  const client = getClient()
+  if (!client) return NextResponse.json({ error: 'server error' }, { status: 500 })
+
+  const { data, error } = await client.from('mail_events')
+    .select('message_id')
+    .eq('event_type', 'handled')
+    .in('message_id', ids)
+  if (error) {
+    console.error('[mail/events] handled fetch failed:', error.message)
+    return NextResponse.json({ error: 'שגיאה בטעינת הסימונים' }, { status: 500 })
+  }
+  return NextResponse.json(
+    { handled: [...new Set((data ?? []).map(r => r.message_id as string))] },
+    { headers: { 'Cache-Control': 'no-store' } },
+  )
+}
+
 export async function POST(request: NextRequest) {
   const staff = await requireMailAccess()
   if (!staff) return unauthorized()

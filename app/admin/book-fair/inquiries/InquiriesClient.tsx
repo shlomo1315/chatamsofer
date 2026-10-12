@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
   Phone, Play, Pause, Check, Loader2, MessageSquare, Clock, RotateCcw,
 } from 'lucide-react'
@@ -45,6 +45,13 @@ export default function InquiriesClient() {
   }, [showAll])
 
   useEffect(() => { void load() }, [load])
+
+  /** מספר ← כמה פניות פתוחות ממנו. */
+  const openPerPhone = useMemo(() => {
+    const c: Record<string, number> = {}
+    for (const r of rows ?? []) if (!r.handled_at) c[r.phone] = (c[r.phone] ?? 0) + 1
+    return c
+  }, [rows])
 
   // ⚠️ נגן יחיד: השמעת פנייה שנייה עוצרת את הראשונה. בלי זה שתי
   // הקלטות מתנגנות יחד ואי אפשר לשמוע אף אחת.
@@ -123,8 +130,18 @@ export default function InquiriesClient() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, handled }),
       })
-      if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error ?? 'העדכון נכשל'); return }
-      await load()
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(d.error ?? 'העדכון נכשל'); return }
+      // ⚠️ עדכון מיידי בלי לחכות לטעינה: השורות שסומנו (כל הפניות מאותו
+      // מספר) נעלמות מיד מרשימת הפתוחות, או מסומנות ב"הצג הכל".
+      const ids = new Set<string>(Array.isArray(d.ids) ? d.ids : [id])
+      const at = handled ? new Date().toISOString() : null
+      setRows(rs => (rs ?? [])
+        .map(r => ids.has(r.id) ? { ...r, handled_at: at } : r)
+        .filter(r => showAll || !r.handled_at))
+      void load()
+    } catch {
+      setError('העדכון נכשל — בדקו את החיבור')
     } finally {
       setBusyId(null)
     }
@@ -187,6 +204,11 @@ export default function InquiriesClient() {
                   >
                     <Phone size={15} className="text-slate-400" /> {r.phone}
                   </a>
+                  {!r.handled_at && (openPerPhone[r.phone] ?? 0) > 1 && (
+                    <span className="mt-0.5 inline-block rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700">
+                      {openPerPhone[r.phone]} פניות מהמספר — סימון כטופל סוגר את כולן
+                    </span>
+                  )}
                   <p className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
                     <Clock size={12} /> {fmt(r.created_at)}
                   </p>

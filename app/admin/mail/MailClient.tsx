@@ -1207,9 +1207,9 @@ export default function MailClient() {
   const recordEvent = useCallback(async (
     msg: ParsedMessage,
     eventType: 'read' | 'handled' | 'replied',
-  ) => {
+  ): Promise<boolean> => {
     try {
-      await fetch('/api/admin/mail/events', {
+      const res = await fetch('/api/admin/mail/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1222,7 +1222,8 @@ export default function MailClient() {
           subject: msg.subject,
         }),
       })
-    } catch { /* silent */ }
+      return res.ok
+    } catch { return false }
   }, [])
 
   // Current user profile — kept in a ref so load() stays stable
@@ -1276,6 +1277,17 @@ export default function MailClient() {
     const msgs: ParsedMessage[] = data.messages ?? []
 
     setMessages(msgs)
+    // 🔴 13.10: סימוני "טופל" נטענים מהשרת. קודם נשמרו רק בזיכרון הדף,
+    // ונעלמו ברענון או במעבר תיקייה.
+    if (msgs.length) {
+      fetch(`/api/admin/mail/events?ids=${msgs.map(m => encodeURIComponent(m.id)).join(',')}`, { cache: 'no-store' })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => {
+          const ids: string[] = d?.handled ?? []
+          if (ids.length) setHandledIds(prev => new Set([...prev, ...ids]))
+        })
+        .catch(() => { /* silent — הסימון הוא תוספת, לא תנאי לתצוגה */ })
+    }
     const effectivePage = data.page ?? pageArg
     setPage(effectivePage)
     pageRef.current = effectivePage
@@ -1405,7 +1417,7 @@ export default function MailClient() {
       setMessages(ms => ms.map(m => m.id === msg.id ? { ...m, isRead: true } : m))
       loadUnreadCounts()
     }
-    recordEvent(msg, 'read')
+    void recordEvent(msg, 'read')
   }
 
   /** סימון כלא-נקרא — כדי לחזור אליו מאוחר יותר, כמו ב-Gmail. */
@@ -1420,9 +1432,15 @@ export default function MailClient() {
     loadUnreadCounts()
   }
 
-  const markHandled = (msg: ParsedMessage) => {
+  // ⚠️ בכישלון השמירה הסימון מבוטל ומוצגת הודעה — "טופל" שלא נשמר
+  // נעלם ברענון הבא, וזה בדיוק מה שנראה כ"הכפתור לא עובד".
+  const markHandled = async (msg: ParsedMessage) => {
     setHandledIds(prev => new Set([...prev, msg.id]))
-    recordEvent(msg, 'handled')
+    const ok = await recordEvent(msg, 'handled')
+    if (!ok) {
+      setHandledIds(prev => { const n = new Set(prev); n.delete(msg.id); return n })
+      window.alert('הסימון כטופל לא נשמר — נסו שוב')
+    }
   }
 
   const trashMessage = async (id: string) => {
@@ -1803,7 +1821,7 @@ export default function MailClient() {
                   <CheckCircle2 size={14} className="text-green-500" /> טופל
                 </span>
               ) : (
-                <button onClick={() => markHandled(selected)}
+                <button onClick={() => void markHandled(selected)}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-green-700 border border-green-300 rounded-lg hover:bg-green-50 transition-colors font-semibold">
                   <CheckCircle2 size={14} /> סמן כטופל
                 </button>
