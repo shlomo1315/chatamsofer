@@ -4,6 +4,7 @@ import { fetchAllRows } from '@/lib/fetchAllRows'
 import PageHeader from '@/components/ui/PageHeader'
 import type { BookFairOrder } from '@/types/bookFair'
 import { PROBLEM_BOOKS_KEY, parseProblemBooks } from '@/lib/bookFairProblemBooks'
+import type { TierInput } from '@/lib/bookFairShipping'
 import OrdersClient, { type ProblemBookInfo, type RecordingGap } from './OrdersClient'
 
 // מסך ההזמנות — הלב של הניהול היומיומי ביריד.
@@ -34,7 +35,10 @@ async function getOrders(): Promise<BookFairOrder[]> {
       // ⚡ 08.10: רק מה שהטבלה מציגה, מסננת או מחפשת. ~1MB של שורות נשלח
       // לדפדפן בכל טעינה, וכתובת/סכומי ביניים/updated_at לא הוצגו כלל.
       // ⚠️ sold_by נוסף: עמודת הערוץ מציגה אותו, והוא פשוט לא נשלף.
-      .select('id, order_number, channel, status, customer_name, customer_phone, customer_email, delivery_method, address_confirmed, total_agorot, refunded_agorot, payment_method, sold_by, picked_up_at, paid_at, created_at, city:book_fair_cities(id, name)')
+      // 🔴 13.10: items_total/shipping/address_text/notes הוחזרו — הייצוא
+      // לאקסל קורא אותם, ומאז הקיצוץ יצאו בו "סכום ספרים", "משלוח",
+      // "כתובת" ו"הערות" ריקים או 0 בלי שום סימן. עמודת המשלוח צריכה אותם.
+      .select('id, order_number, channel, status, customer_name, customer_phone, customer_email, delivery_method, address_confirmed, address_text, notes, items_total_agorot, shipping_agorot, total_agorot, refunded_agorot, payment_method, sold_by, picked_up_at, paid_at, created_at, city:book_fair_cities(id, name)')
       .order('created_at', { ascending: false })
       .range(from, to) as unknown as PromiseLike<{ data: BookFairOrder[] | null; error: { message: string } | null }>
   )
@@ -70,20 +74,26 @@ async function getOrders(): Promise<BookFairOrder[]> {
 async function getItems(): Promise<{
   counts: Record<string, number>
   books: Record<string, string[]>
+  volumes: Record<string, number>
 }> {
   const counts: Record<string, number> = {}
   const books: Record<string, string[]> = {}
-  if (!isSupabaseConfigured()) return { counts, books }
+  const volumes: Record<string, number> = {}
+  if (!isSupabaseConfigured()) return { counts, books, volumes }
   const supabase = await createClient()
 
   // ⚡ 08.10: כל השורות, בדפים מקבילים (fetchAllRows) — ולא במנות לפי מזהי
   // הזמנות. קודם: 10 שאילתות in טוריות (~1.7 שנ'), ורק *אחרי* שההזמנות
   // נשלפו. עכשיו ~0.2 שנ', ובמקביל לשליפת ההזמנות.
   // ⚠️ order('id'): דפדוף בלי סדר קבוע עלול לדלג על שורות או לכפול אותן.
-  type Row = { order_id: string; book_id: string | null; quantity: number }
+  // ⚠️ הכרכים מהקטלוג (book.volumes) ולא מ-volumes_snapshot: בטלפון
+  // ה-snapshot נשמר 1 לכל סט עד 13.10. snapshot רק לספר שנמחק מהקטלוג.
+  // ⚠️ join רבים-לאחד חוזר כאובייקט או כמערך — שתי הצורות נתמכות.
+  type Vol = { volumes: number | null }
+  type Row = { order_id: string; book_id: string | null; quantity: number; volumes_snapshot: number | null; book: Vol | Vol[] | null }
   const { rows, error } = await fetchAllRows<Row>((from, to) =>
     supabase.from('book_fair_order_items')
-      .select('order_id, book_id, quantity')
+      .select('order_id, book_id, quantity, volumes_snapshot, book:book_fair_books(volumes)')
       .order('id')
       .range(from, to) as unknown as PromiseLike<{ data: Row[] | null; error: { message: string } | null }>
   )
@@ -91,8 +101,11 @@ async function getItems(): Promise<{
   for (const row of rows) {
     counts[row.order_id] = (counts[row.order_id] ?? 0) + row.quantity
     if (row.book_id) (books[row.order_id] ??= []).push(row.book_id)
+    const book = Array.isArray(row.book) ? row.book[0] : row.book
+    const v = Math.max(1, Number(book?.volumes ?? row.volumes_snapshot) || 1)
+    volumes[row.order_id] = (volumes[row.order_id] ?? 0) + v * row.quantity
   }
-  return { counts, books }
+  return { counts, books, volumes }
 }
 
 /**
@@ -162,6 +175,15 @@ async function getProblemBooks(): Promise<ProblemBookInfo[]> {
   }))
 }
 
+/** טבלת מדרגות המשלוח הנוכחית — לבקרת המשלוח בטבלה. */
+async function getTiers(): Promise<TierInput[]> {
+  if (!isSupabaseConfigured()) return []
+  const supabase = await createClient()
+  const { data } = await supabase.from('book_fair_shipping_tiers')
+    .select('min_books, max_books, price_agorot, step_volumes, step_agorot')
+  return (data ?? []) as TierInput[]
+}
+
 /** רגע הרינדור בשרת — כדי שהלקוח יזהה שהוא מציג עותק ישן מהמטמון. */
 function serverNow(): number {
   return Date.now()
@@ -181,11 +203,12 @@ export default async function BookFairOrdersPage() {
   await timed(marks, 'guard', guardPage('book_fair'))
   // ⚡ 08.10: הכל במקביל — שום שליפה אינה ממתינה לשליפה אחרת. קודם הספרים
   // וההקלטות חיכו להזמנות ונשלפו במנות טוריות: 5–8 שנ' לטעינת הדף.
-  const [orders, problemBooks, { counts, books }, saved] = await Promise.all([
+  const [orders, problemBooks, { counts, books, volumes }, saved, tiers] = await Promise.all([
     timed(marks, 'orders', getOrders()),
     timed(marks, 'problem', getProblemBooks()),
     timed(marks, 'items', getItems()),
     timed(marks, 'recs', getSavedRecordings()),
+    timed(marks, 'tiers', getTiers()),
   ])
   const recGaps = recordingGaps(orders, saved)
   // 🔍 אבחון: איפה הולך הזמן ומה גודל הנתונים שנשלחים לדפדפן.
@@ -200,6 +223,8 @@ export default async function BookFairOrdersPage() {
       <OrdersClient
         orders={orders}
         itemCounts={counts}
+        orderVolumes={volumes}
+        tiers={tiers}
         orderBooks={books}
         problemBooks={problemBooks}
         recGaps={recGaps}

@@ -10,6 +10,7 @@ import {
   BOOK_FAIR_CHANNEL_LABELS, BOOK_FAIR_DELIVERY_LABELS, oneOf,
 } from '@/types/bookFair'
 import { fmtAgorot } from '@/lib/bookFairPricing'
+import { auditShipping, type ShippingAudit, type TierInput } from '@/lib/bookFairShipping'
 import { downloadXlsx, todayStamp, type XlsxColumn } from '@/lib/downloadXlsx'
 import BulkStatusDialog from './BulkStatusDialog'
 import { useTablePagination } from '@/lib/useTablePagination'
@@ -18,7 +19,7 @@ import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import { saveNavList, stashPrintIds } from '@/lib/bookFairOrderHandoff'
 import { ordersWithProblemBooks } from '@/lib/bookFairProblemBooks'
 
-type ColKey = 'order_number' | 'customer' | 'phone' | 'city' | 'channel' | 'items' | 'delivery' | 'verify' | 'recording' | 'total' | 'payment' | 'status' | 'created' | 'paid_at' | 'print'
+type ColKey = 'order_number' | 'customer' | 'phone' | 'city' | 'channel' | 'items' | 'delivery' | 'verify' | 'recording' | 'total' | 'shipping' | 'payment' | 'status' | 'created' | 'paid_at' | 'print'
 
 /** ספר שסומן "בעייתי במלאי" — ראו lib/bookFairProblemBooks. */
 export interface ProblemBookInfo {
@@ -129,6 +130,9 @@ function paymentLabel(o: BookFairOrder): 'מזומן' | 'אשראי' | '—' {
 
 const HEAD = 'px-3 py-3 text-xs font-semibold text-slate-500'
 
+/** סטטוסים שבהם הכסף נגבה בפועל. */
+const PAID_STATUSES: BookFairOrderStatus[] = ['paid', 'picking', 'packed', 'shipped', 'delivered', 'partially_refunded']
+
 // 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
 // React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
 //
@@ -137,7 +141,7 @@ const HEAD = 'px-3 py-3 text-xs font-semibold text-slate-500'
 //
 // ⚠️ תאריך מוסתר במסכים צרים: הגלילה לרוחב אסורה ונאכפת בלינט,
 // והטבלה הזו רחבה מטבעה.
-function columnsOf(counts: Record<string, number>, gaps: Record<string, RecordingGap>): ColDef<ColKey, BookFairOrder>[] {
+function columnsOf(counts: Record<string, number>, gaps: Record<string, RecordingGap>, audits: Record<string, ShippingAudit>): ColDef<ColKey, BookFairOrder>[] {
   return [
     { key: 'order_number', label: 'מספר', def: true, headClassName: HEAD, weight: 1,
       value: o => o.order_number },
@@ -165,6 +169,11 @@ function columnsOf(counts: Record<string, number>, gaps: Record<string, Recordin
       value: o => recordingLabel(o, gaps) },
     { key: 'total', label: 'סכום', def: true, kind: 'number', headClassName: HEAD,
       value: o => o.total_agorot },
+    // 🔴 13.10 (בקשת המשתמש): כמה נגבה על משלוח, ומה היה נגבה לפי התעריף
+    // הנוכחי. ⚠️ enum ולא number: הסינון הוא לפי מצב הבקרה ("חויב חסר"),
+    // והסכום עצמו מוצג בתא.
+    { key: 'shipping', label: 'משלוח', def: true, kind: 'enum', filterable: true, headClassName: HEAD,
+      value: o => audits[o.id]?.label ?? null },
     { key: 'payment', label: 'תשלום', def: true, kind: 'enum', filterable: true, headClassName: HEAD,
       value: o => paymentLabel(o) },
     { key: 'status', label: 'סטטוס', def: true, kind: 'enum', filterable: true, headClassName: HEAD,
@@ -251,9 +260,13 @@ function inCard(o: BookFairOrder, key: string): boolean {
   }
 }
 
-export default function OrdersClient({ orders, itemCounts, orderBooks, problemBooks, recGaps, renderedAt }: {
+export default function OrdersClient({ orders, itemCounts, orderVolumes, tiers, orderBooks, problemBooks, recGaps, renderedAt }: {
   orders: BookFairOrder[]
   itemCounts: Record<string, number>
+  /** הזמנה ← סך הכרכים האמיתי (מהקטלוג). */
+  orderVolumes: Record<string, number>
+  /** תעריף המשלוח הנוכחי — לבקרת המשלוח. */
+  tiers: TierInput[]
   /** הזמנה ← מזהי הספרים שבה. */
   orderBooks: Record<string, string[]>
   problemBooks: ProblemBookInfo[]
@@ -293,7 +306,16 @@ export default function OrdersClient({ orders, itemCounts, orderBooks, problemBo
     [problemBooks],
   )
 
-  const COLUMNS = useMemo(() => columnsOf(itemCounts, recGaps), [itemCounts, recGaps])
+  // 🔴 בקרת המשלוח (13.10): כל הזמנה מול התעריף הנוכחי לפי הכרכים האמיתיים.
+  const audits = useMemo(() => {
+    const out: Record<string, ShippingAudit> = {}
+    for (const o of orders) {
+      out[o.id] = auditShipping(o.delivery_method, o.shipping_agorot, orderVolumes[o.id] ?? 0, tiers)
+    }
+    return out
+  }, [orders, orderVolumes, tiers])
+
+  const COLUMNS = useMemo(() => columnsOf(itemCounts, recGaps, audits), [itemCounts, recGaps, audits])
 
   // ⚠️ "חסרה הקלטה" תלוי בנתוני ההקלטות, ולכן אינו ב-inCard (פונקציה טהורה
   // על ההזמנה בלבד). אותה פונקציה למונה ולסינון — כמו בשאר הכרטיסים.
@@ -414,6 +436,9 @@ export default function OrdersClient({ orders, itemCounts, orderBooks, problemBo
         { header: 'ספרים', kind: 'number', width: 8 },
         { header: 'סכום ספרים ₪', kind: 'number', width: 12 },
         { header: 'משלוח ₪', kind: 'number', width: 10 },
+        { header: 'כרכים', kind: 'number', width: 8 },
+        { header: 'משלוח לפי תעריף ₪', kind: 'number', width: 14 },
+        { header: 'בקרת משלוח', width: 12 },
         { header: 'סה"כ ₪', kind: 'number', width: 10 },
         { header: 'זוכה ₪', kind: 'number', width: 10 },
         { header: 'אמצעי תשלום', width: 12 },
@@ -436,6 +461,9 @@ export default function OrdersClient({ orders, itemCounts, orderBooks, problemBo
         itemCounts[o.id] ?? 0,
         shekels(o.items_total_agorot),
         shekels(o.shipping_agorot),
+        orderVolumes[o.id] ?? 0,
+        o.delivery_method === 'shipping' ? shekels(audits[o.id]?.expected) : '',
+        o.delivery_method === 'shipping' ? audits[o.id]?.label ?? '' : '',
         shekels(o.total_agorot),
         shekels(o.refunded_agorot),
         paymentLabel(o) === '—' ? '' : paymentLabel(o),
@@ -471,6 +499,21 @@ export default function OrdersClient({ orders, itemCounts, orderBooks, problemBo
     }
     return out
   }, [tc.rows])
+
+  // 🔴 פילוח המשלוח (13.10) — על השורות שבתצוגה ששולמו: כמה מהכסף היה
+  // ספרים, כמה משלוח, וכמה המשלוח היה אילו התעריף הנוכחי חל על כולן.
+  // ⚠️ משלוחים בלבד בסכום התעריף: איסוף אינו נגבה ואינו "חסר".
+  const shipSummary = useMemo(() => {
+    const s = { orders: 0, items: 0, charged: 0, expected: 0 }
+    for (const o of tc.rows) {
+      if (o.delivery_method !== 'shipping' || !PAID_STATUSES.includes(o.status)) continue
+      s.orders++
+      s.items += o.items_total_agorot ?? 0
+      s.charged += o.shipping_agorot ?? 0
+      s.expected += audits[o.id]?.expected ?? o.shipping_agorot ?? 0
+    }
+    return s
+  }, [tc.rows, audits])
 
   const revenue = useMemo(
     // ⚠️ רק הזמנות ששולמו בפועל, בניכוי זיכויים — לא סך ההזמנות.
@@ -566,6 +609,20 @@ export default function OrdersClient({ orders, itemCounts, orderBooks, problemBo
           <span className="inline-flex items-center gap-1"><CreditCard size={14} className="text-sky-600" /> אשראי {fmtAgorot(byPayment.card)}</span>
           <span className="text-xs text-slate-400">(בתצוגה)</span>
         </span>
+        {shipSummary.orders > 0 && (
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-indigo-200 bg-indigo-50/50 px-4 py-2 text-sm text-slate-700">
+            <span className="inline-flex items-center gap-1 font-medium"><Truck size={14} className="text-indigo-600" /> {shipSummary.orders} משלוחים ששולמו</span>
+            <span>ספרים {fmtAgorot(shipSummary.items)}</span>
+            <span>משלוח שנגבה {fmtAgorot(shipSummary.charged)}</span>
+            <span className="text-slate-300">|</span>
+            <span>לפי התעריף {fmtAgorot(shipSummary.expected)}</span>
+            {shipSummary.expected !== shipSummary.charged && (
+              <span className={`font-medium ${shipSummary.expected > shipSummary.charged ? 'text-amber-700' : 'text-sky-700'}`}>
+                פער {fmtAgorot(Math.abs(shipSummary.expected - shipSummary.charged))}
+              </span>
+            )}
+          </span>
+        )}
 
         {/* 🔴 ניקוי דפי סליקה שננטשו — מוצג רק בכרטיס שלהם, כדי שלא
             ייפול בטעות על רשימה אחרת. */}
@@ -677,7 +734,7 @@ export default function OrdersClient({ orders, itemCounts, orderBooks, problemBo
               >
                 {tc.shown.map(col => (
                   <td key={col.key} className={`px-3 py-2.5 ${tc.cellClass(col)}`}>
-                    {renderCell(col.key, o, itemCounts, (problemByOrder[o.id] ?? []).map(id => titleOf[id]), recGaps)}
+                    {renderCell(col.key, o, itemCounts, (problemByOrder[o.id] ?? []).map(id => titleOf[id]), recGaps, audits[o.id])}
                   </td>
                 ))}
               </tr>
@@ -699,7 +756,7 @@ export default function OrdersClient({ orders, itemCounts, orderBooks, problemBo
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function renderCell(key: ColKey, o: BookFairOrder, counts: Record<string, number>, problems: string[], gaps: Record<string, RecordingGap>) {
+function renderCell(key: ColKey, o: BookFairOrder, counts: Record<string, number>, problems: string[], gaps: Record<string, RecordingGap>, audit: ShippingAudit | undefined) {
   switch (key) {
     case 'city': {
       const c = cityOf(o)
@@ -835,6 +892,21 @@ function renderCell(key: ColKey, o: BookFairOrder, counts: Record<string, number
           )}
         </div>
       )
+
+    case 'shipping': {
+      if (o.delivery_method !== 'shipping') return <span className="text-slate-300">—</span>
+      const off = audit && audit.label !== 'תקין'
+      return (
+        <div className="tabular-nums">
+          <span className="font-medium">{fmtAgorot(o.shipping_agorot)}</span>
+          {off && (
+            <div className={`text-xs ${audit.label === 'חויב ביתר' ? 'text-sky-700' : 'text-amber-700'}`}>
+              {audit.label}{audit.expected != null ? ` · תעריף ${fmtAgorot(audit.expected)}` : ''}
+            </div>
+          )}
+        </div>
+      )
+    }
 
     case 'payment': {
       const p = paymentLabel(o)

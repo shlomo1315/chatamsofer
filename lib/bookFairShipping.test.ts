@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolveShippingTier, shippingCost, validateTiers, tierLabel, totalVolumes, type TierInput } from './bookFairShipping'
+import { resolveShippingTier, shippingCost, validateTiers, tierLabel, totalVolumes, auditShipping, type TierInput } from './bookFairShipping'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 🔴 תעריף המשלוח לפי *כמות ספרים* — לא לפי יעד ולא לפי סכום.
@@ -294,5 +294,43 @@ describe('validateTiers — שדות המדרגה הפתוחה', () => {
     ])
     expect(r.ok).toBe(false)
     expect(r.errors.join(' ')).toContain('רק במדרגה הפתוחה')
+  })
+})
+
+// 🔴 התעריף כפי שהוא באתר מ-06.10.
+const LIVE: TierInput[] = [
+  { min_books: 1, max_books: 3, price_agorot: 2500 },
+  { min_books: 4, max_books: 6, price_agorot: 3500 },
+  { min_books: 7, max_books: 12, price_agorot: 4500 },
+  { min_books: 13, max_books: null, price_agorot: 5000, step_volumes: 4, step_agorot: 1000 },
+]
+
+describe('auditShipping — בקרה מול התעריף הנוכחי', () => {
+  it('סט של 6 כרכים שחויב ככרך אחד = חויב חסר', () => {
+    expect(auditShipping('shipping', 2500, 6, LIVE)).toEqual({ expected: 3500, label: 'חויב חסר' })
+  })
+
+  it('13–16 כרכים חויבו 40 לפי המדרגה הישנה (17 ומעלה) = חויב חסר', () => {
+    expect(auditShipping('shipping', 4000, 14, LIVE)).toEqual({ expected: 5000, label: 'חויב חסר' })
+  })
+
+  it('המדרגה הפתוחה: 56 כרכים = 150 ₪, כמו שנגבה באתר ב-10.10', () => {
+    expect(auditShipping('shipping', 15000, 56, LIVE)).toEqual({ expected: 15000, label: 'תקין' })
+  })
+
+  it('משלוח 0 על הזמנת משלוח — "לא חויב" ולא "חויב חסר"', () => {
+    expect(auditShipping('shipping', 0, 7, LIVE).label).toBe('לא חויב')
+  })
+
+  it('חיוב יתר מסומן', () => {
+    expect(auditShipping('shipping', 4500, 3, LIVE).label).toBe('חויב ביתר')
+  })
+
+  it('איסוף עצמי לעולם אינו נבדק מול הטבלה', () => {
+    expect(auditShipping('pickup', 0, 40, LIVE)).toEqual({ expected: 0, label: 'איסוף' })
+  })
+
+  it('אין מדרגות — "אין תעריף" ולא "תקין"', () => {
+    expect(auditShipping('shipping', 2000, 3, []).label).toBe('אין תעריף')
   })
 })

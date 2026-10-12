@@ -366,6 +366,22 @@ async function listCities() {
   }))
 }
 
+/**
+ * מספר הכרכים של כל ספר בעגלה, מהקטלוג.
+ *
+ * 🔴 13.10: עד כאן כל ספר נספר ככרך אחד — "שו״ת חתם סופר" (6 כרכים) חויב
+ * משלוח כמו חוברת. 225 הזמנות טלפוניות חויבו כך.
+ * ⚠️ נשלף מהקטלוג ולא נשמר במצב השיחה: מצב השיחה נשמר כ-JSON, ושינוי צורתו
+ * באמצע עונה שובר שיחות פתוחות.
+ */
+async function volumesByBook(bookIds: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>()
+  if (!bookIds.length) return out
+  const { data } = await db()!.from('book_fair_books').select('id, volumes').in('id', bookIds)
+  for (const b of data ?? []) out.set(String(b.id), Math.max(1, Number(b.volumes) || 1))
+  return out
+}
+
 async function shippingFor(volumeCount: number): Promise<number | null> {
   const supa = db()!
   const { data: tiers } = await supa.from('book_fair_shipping_tiers')
@@ -683,9 +699,13 @@ async function createOrder(state: IvrState, cartToken: string, phone: string, ca
     return null
   }
 
+  // ⚠️ volumes_snapshot — בלעדיו כל סט נשמר ככרך אחד, וסיכום הכרכים
+  // בתעודת המשלוח מציג ארגז קטן מהאמיתי.
+  const vols = await volumesByBook(state.items.map(i => i.book_id))
   await supa.from('book_fair_order_items').insert(
     state.items.map(i => ({
       order_id: order.id, book_id: i.book_id, title_snapshot: i.title, sku_snapshot: i.sku,
+      volumes_snapshot: vols.get(i.book_id) ?? 1,
       unit_price_agorot: i.price_agorot, quantity: i.quantity,
       line_total_agorot: i.price_agorot * i.quantity,
     }))
@@ -1078,7 +1098,8 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
       const city = await findCity(raw)
       input.city = city
       if (city) {
-        const volumes = totalVolumes(state.items.map(i => ({ volumes: 1, quantity: i.quantity })))
+        const vols = await volumesByBook(state.items.map(i => i.book_id))
+        const volumes = totalVolumes(state.items.map(i => ({ volumes: vols.get(i.book_id) ?? 1, quantity: i.quantity })))
         input.shipping_agorot = await shippingFor(volumes)
       }
     }

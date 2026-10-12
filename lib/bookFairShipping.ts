@@ -205,3 +205,40 @@ export function tierLabel(t: Pick<BookFairShippingTier, 'min_books' | 'max_books
   if (t.max_books === t.min_books) return `${t.min_books}`
   return `${t.min_books}-${t.max_books}`
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// בקרת משלוח — האם מה שנגבה תואם לתעריף הנוכחי
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// 🔴 13.10 (בקשת המשתמש): שתי תקלות גבו פחות מהתעריף — בטלפון סט נספר
+// ככרך אחד, ועד 06.10 המדרגה הרביעית התחילה מ-17 במקום מ-13. הבקרה משווה
+// כל הזמנה ל*תעריף הנוכחי* לפי מספר הכרכים האמיתי.
+//
+// ⚠️ ההשוואה לתעריף הנוכחי ולא לתעריף שהיה בתוקף ביום ההזמנה: השאלה היא
+// "כמה היה נכנס אילו התעריף המעודכן חל", ולכן גם הזמנה מ-05.10 שנגבתה
+// לפי המחירים של אז מסומנת "חויב חסר".
+
+export type ShippingAuditLabel = 'תקין' | 'חויב חסר' | 'חויב ביתר' | 'לא חויב' | 'איסוף' | 'אין תעריף'
+
+export interface ShippingAudit {
+  /** המשלוח לפי התעריף הנוכחי. null = אין מדרגה מתאימה. */
+  expected: number | null
+  label: ShippingAuditLabel
+}
+
+export function auditShipping(
+  method: 'pickup' | 'shipping',
+  chargedAgorot: number,
+  volumeCount: number,
+  tiers: TierInput[],
+): ShippingAudit {
+  if (method === 'pickup') return { expected: 0, label: 'איסוף' }
+  const expected = resolveShippingTier(volumeCount, tiers)
+  if (expected === null) return { expected: null, label: 'אין תעריף' }
+  const charged = Math.max(0, Math.round(chargedAgorot || 0))
+  if (charged === expected) return { expected, label: 'תקין' }
+  // ⚠️ "לא חויב" נפרד מ"חויב חסר": משלוח 0 על הזמנת משלוח הוא תקלה מסוג
+  // אחר (שלוש הזמנות מליל הפתיחה), ולא טעות בספירת כרכים.
+  if (charged === 0) return { expected, label: 'לא חויב' }
+  return { expected, label: charged < expected ? 'חויב חסר' : 'חויב ביתר' }
+}
