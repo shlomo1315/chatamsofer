@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutGrid, ShoppingCart, BookOpen, Users, Settings2, ExternalLink, Mail, MessageSquare, Undo2, Store } from 'lucide-react'
+import { LayoutGrid, ShoppingCart, BookOpen, Users, Settings2, ExternalLink, Mail, MessageSquare, Undo2, Store, Inbox } from 'lucide-react'
 
 // סרגל ניווט פנימי של מחלקת היריד.
 //
@@ -55,6 +55,16 @@ export default function BookFairNav() {
           </Link>
         )
       })}
+
+      {/* 🔴 13.10: תיבת yerid@ — קבלה ושליחה מתוך מסך הדואר, מסוננת לתיבת
+          היריד. צוות היריד מורשה לתיבה הזו בלבד (allowed_mailboxes). */}
+      <Link
+        href="/admin/mail?department=yerid"
+        className="-mb-px flex items-center gap-1.5 border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-slate-500 transition hover:border-slate-300 hover:text-slate-800"
+      >
+        <Inbox size={15} />
+        תיבת מייל
+      </Link>
 
       {/* ⚠️ קישור לחנות החיה — הצוות צריך לראות מה הלקוח רואה,
           במיוחד אחרי שינוי מחירים או פתיחת היריד. */}
