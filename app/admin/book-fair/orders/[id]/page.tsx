@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { ilDateTime } from '@/lib/israelTime'
 import { notFound } from 'next/navigation'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, PackageX } from 'lucide-react'
 import { guardPage } from '@/lib/pageGuard'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import PageHeader from '@/components/ui/PageHeader'
@@ -16,6 +16,10 @@ import CustomerCard from './CustomerCard'
 import OrderNav from './OrderNav'
 import ProblemBookToggle from '../../ProblemBookToggle'
 import { PROBLEM_BOOKS_KEY, parseProblemBooks } from '@/lib/bookFairProblemBooks'
+import {
+  ISSUE_TYPE_LABELS, ISSUE_STATUS_LABELS, ISSUE_STATUS_COLORS,
+  type IssueType, type IssueStatus,
+} from '@/lib/bookFairShippingIssues'
 
 // כרטיס הזמנה בודדת.
 
@@ -68,6 +72,14 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     supabase.from('app_settings').select('value').eq('key', PROBLEM_BOOKS_KEY).maybeSingle(),
   ])
   const problems = parseProblemBooks(probRow?.value)
+
+  // תקלות משלוח של ההזמנה — לתצוגה וקישור למסך התקלות.
+  const { data: issues } = await supabase
+    .from('book_fair_shipping_issues')
+    .select('id, issue_type, status, description, created_at')
+    .eq('order_id', id)
+    .order('created_at', { ascending: false })
+  const issuesHref = `/admin/book-fair/issues?order=${o.id}&number=${encodeURIComponent(o.order_number)}`
 
   return (
     <div className="flex flex-col gap-6">
@@ -157,11 +169,42 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         </div>
 
         {/* ── פעולות ── */}
+        <div className="flex flex-col gap-5">
         <OrderPanel
           order={o}
           items={(items ?? []) as BookFairOrderItem[]}
           payments={(payments ?? []) as { id: string; status: string; amount_agorot: number; transaction_id: string | null; created_at: string; error_message: string | null }[]}
         />
+
+        {/* 🔴 תקלות משלוח: מה השתבש בהזמנה הזו, וכניסה לתיעוד תקלה חדשה. */}
+        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 font-semibold text-slate-900">
+              <PackageX size={17} /> תקלות משלוח
+            </h2>
+            <Link href={issuesHref} className="text-sm font-medium text-indigo-600 hover:underline">
+              + תיעוד תקלה
+            </Link>
+          </div>
+          {(issues ?? []).length === 0 ? (
+            <p className="text-sm text-slate-500">לא תועדו תקלות בהזמנה הזו.</p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {(issues ?? []).map(i => (
+                <li key={i.id} className="flex items-start gap-2 text-sm">
+                  <span className={`flex-shrink-0 rounded-md border px-2 py-0.5 text-xs font-medium ${ISSUE_STATUS_COLORS[i.status as IssueStatus]}`}>
+                    {ISSUE_STATUS_LABELS[i.status as IssueStatus]}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="font-medium text-slate-800">{ISSUE_TYPE_LABELS[i.issue_type as IssueType]}</span>
+                    <span className="line-clamp-2 block text-xs text-slate-500">{i.description}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+        </div>
       </div>
     </div>
   )
