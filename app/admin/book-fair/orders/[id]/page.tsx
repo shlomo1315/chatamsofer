@@ -1,7 +1,7 @@
 import Link from 'next/link'
-import { ilDateTime } from '@/lib/israelTime'
+import { ilDateTime, ilDate } from '@/lib/israelTime'
 import { notFound } from 'next/navigation'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, PackageX } from 'lucide-react'
 import { guardPage } from '@/lib/pageGuard'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import PageHeader from '@/components/ui/PageHeader'
@@ -16,6 +16,10 @@ import CustomerCard from './CustomerCard'
 import OrderNav from './OrderNav'
 import ProblemBookToggle from '../../ProblemBookToggle'
 import { PROBLEM_BOOKS_KEY, parseProblemBooks } from '@/lib/bookFairProblemBooks'
+import {
+  ISSUE_TYPE_LABELS, ISSUE_STATUS_LABELS, ISSUE_STATUS_TAG,
+  type IssueType, type IssueStatus,
+} from '@/lib/bookFairShippingIssues'
 
 // כרטיס הזמנה בודדת.
 
@@ -68,6 +72,13 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     supabase.from('app_settings').select('value').eq('key', PROBLEM_BOOKS_KEY).maybeSingle(),
   ])
   const problems = parseProblemBooks(probRow?.value)
+
+  // תקלות משלוח של ההזמנה — לתצוגה וקישור למסך התקלות.
+  const { data: issues } = await supabase
+    .from('book_fair_shipping_issues')
+    .select('id, issue_type, status, description, created_at')
+    .eq('order_id', id)
+    .order('created_at', { ascending: false })
 
   return (
     <div className="flex flex-col gap-6">
@@ -157,11 +168,51 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         </div>
 
         {/* ── פעולות ── */}
+        <div className="flex flex-col gap-5">
         <OrderPanel
           order={o}
           items={(items ?? []) as BookFairOrderItem[]}
           payments={(payments ?? []) as { id: string; status: string; amount_agorot: number; transaction_id: string | null; created_at: string; error_message: string | null }[]}
         />
+
+        {/* 🔴 תקלות משלוח: מה השתבש בהזמנה הזו, וכניסה לתיעוד תקלה חדשה
+            (מוקאפ שאושר 13.10). */}
+        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 font-semibold text-slate-900">
+              <PackageX size={17} /> תקלות משלוח
+            </h2>
+            <Link href={`/admin/book-fair/shipping-issues?new=${o.id}`}
+                  className="rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-[13px] font-semibold text-slate-700 transition hover:bg-slate-100">
+              דווח על תקלה
+            </Link>
+          </div>
+          {(issues ?? []).length === 0 ? (
+            <p className="mt-3 text-sm text-slate-500">אין תקלות במשלוח הזה.</p>
+          ) : (
+            <ul className="mt-2.5 flex flex-col gap-2">
+              {(issues ?? []).map(i => (
+                <li key={i.id}>
+                  <Link href={`/admin/book-fair/shipping-issues?status=all&issue=${i.id}`}
+                        className="flex items-center justify-between gap-2 rounded-xl border border-slate-100 p-2.5 text-sm transition hover:bg-slate-50">
+                    <span className="min-w-0">
+                      <span className="inline-block rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
+                        {ISSUE_TYPE_LABELS[i.issue_type as IssueType]}
+                      </span>
+                      <span className="mr-1.5 text-xs text-slate-500">
+                        נפתח {ilDate(i.created_at)} · &quot;{i.description}&quot;
+                      </span>
+                    </span>
+                    <span className={`flex-shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${ISSUE_STATUS_TAG[i.status as IssueStatus]}`}>
+                      {ISSUE_STATUS_LABELS[i.status as IssueStatus]}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+        </div>
       </div>
     </div>
   )

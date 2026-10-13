@@ -184,6 +184,17 @@ async function getTiers(): Promise<TierInput[]> {
   return (data ?? []) as TierInput[]
 }
 
+/** הזמנות עם תקלת משלוח שלא טופלה — לתגית "תקלה פתוחה" בשורה. */
+async function getOpenIssueOrders(): Promise<string[]> {
+  if (!isSupabaseConfigured()) return []
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('book_fair_shipping_issues')
+    .select('order_id').in('status', ['open', 'in_progress']).limit(1000)
+  // ⚠️ שגיאה (למשל טבלה שטרם נוצרה) לא מפילה את מסך ההזמנות.
+  if (error) { console.error('[book-fair/orders] תקלות משלוח:', error.message); return [] }
+  return [...new Set((data ?? []).map(r => r.order_id as string))]
+}
+
 /** רגע הרינדור בשרת — כדי שהלקוח יזהה שהוא מציג עותק ישן מהמטמון. */
 function serverNow(): number {
   return Date.now()
@@ -203,12 +214,13 @@ export default async function BookFairOrdersPage() {
   await timed(marks, 'guard', guardPage('book_fair'))
   // ⚡ 08.10: הכל במקביל — שום שליפה אינה ממתינה לשליפה אחרת. קודם הספרים
   // וההקלטות חיכו להזמנות ונשלפו במנות טוריות: 5–8 שנ' לטעינת הדף.
-  const [orders, problemBooks, { counts, books, volumes }, saved, tiers] = await Promise.all([
+  const [orders, problemBooks, { counts, books, volumes }, saved, tiers, openIssues] = await Promise.all([
     timed(marks, 'orders', getOrders()),
     timed(marks, 'problem', getProblemBooks()),
     timed(marks, 'items', getItems()),
     timed(marks, 'recs', getSavedRecordings()),
     timed(marks, 'tiers', getTiers()),
+    timed(marks, 'issues', getOpenIssueOrders()),
   ])
   const recGaps = recordingGaps(orders, saved)
   // 🔍 אבחון: איפה הולך הזמן ומה גודל הנתונים שנשלחים לדפדפן.
@@ -228,6 +240,7 @@ export default async function BookFairOrdersPage() {
         orderBooks={books}
         problemBooks={problemBooks}
         recGaps={recGaps}
+        openIssueOrders={openIssues}
         renderedAt={serverNow()}
       />
     </div>
