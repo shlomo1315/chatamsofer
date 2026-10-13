@@ -261,7 +261,7 @@ function inCard(o: BookFairOrder, key: string): boolean {
   }
 }
 
-export default function OrdersClient({ orders, itemCounts, orderVolumes, tiers, orderBooks, problemBooks, recGaps, renderedAt }: {
+export default function OrdersClient({ orders, itemCounts, orderVolumes, tiers, orderBooks, problemBooks, recGaps, openIssueOrders = [], renderedAt }: {
   orders: BookFairOrder[]
   itemCounts: Record<string, number>
   /** הזמנה ← סך הכרכים האמיתי (מהקטלוג). */
@@ -273,6 +273,8 @@ export default function OrdersClient({ orders, itemCounts, orderVolumes, tiers, 
   problemBooks: ProblemBookInfo[]
   /** הזמנה טלפונית ← אילו הקלטות חסרות. */
   recGaps: Record<string, RecordingGap>
+  /** הזמנות עם תקלת משלוח שלא טופלה. */
+  openIssueOrders?: string[]
   /** רגע הרינדור בשרת (ms). */
   renderedAt: number
 }) {
@@ -280,6 +282,7 @@ export default function OrdersClient({ orders, itemCounts, orderVolumes, tiers, 
   const [query, setQuery] = useState('')
   const [card, setCard] = useState<typeof CARDS[number]['key']>('all')
   const [purging, setPurging] = useState(false)
+  const openIssueSet = useMemo(() => new Set(openIssueOrders), [openIssueOrders])
   /** סינון לפי ספר בעייתי: מזהה ספר, '*' = כל הבעייתיים, null = בלי. */
   const [problem, setProblem] = useState<string | null>(null)
 
@@ -745,7 +748,7 @@ export default function OrdersClient({ orders, itemCounts, orderVolumes, tiers, 
               >
                 {tc.shown.map(col => (
                   <td key={col.key} className={`px-3 py-2.5 ${tc.cellClass(col)}`}>
-                    {renderCell(col.key, o, itemCounts, (problemByOrder[o.id] ?? []).map(id => titleOf[id]), recGaps, audits[o.id])}
+                    {renderCell(col.key, o, itemCounts, (problemByOrder[o.id] ?? []).map(id => titleOf[id]), recGaps, audits[o.id], openIssueSet.has(o.id))}
                   </td>
                 ))}
               </tr>
@@ -767,7 +770,7 @@ export default function OrdersClient({ orders, itemCounts, orderVolumes, tiers, 
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function renderCell(key: ColKey, o: BookFairOrder, counts: Record<string, number>, problems: string[], gaps: Record<string, RecordingGap>, audit: ShippingAudit | undefined) {
+function renderCell(key: ColKey, o: BookFairOrder, counts: Record<string, number>, problems: string[], gaps: Record<string, RecordingGap>, audit: ShippingAudit | undefined, openIssue = false) {
   switch (key) {
     case 'city': {
       const c = cityOf(o)
@@ -823,6 +826,12 @@ function renderCell(key: ColKey, o: BookFairOrder, counts: Record<string, number
           className="font-mono text-xs font-semibold text-indigo-700 hover:underline"
         >
           {o.order_number}
+          {/* 🔴 תקלת משלוח שלא טופלה — הצוות רואה אותה כבר בטבלה. */}
+          {openIssue && (
+            <span className="mr-1.5 inline-block whitespace-nowrap rounded-full bg-orange-50 px-2 py-0.5 font-sans text-[11px] font-semibold text-orange-700">
+              תקלה פתוחה
+            </span>
+          )}
         </Link>
       )
 
