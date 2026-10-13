@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import {
   BookOpen, ShoppingCart, Boxes, Settings2, TrendingUp, Mic,
-  AlertTriangle, Package, Globe, Phone, ArrowLeft, CircleDot, Mail, MessageSquare,
+  AlertTriangle, Package, Globe, Phone, ArrowLeft, CircleDot, Mail, MessageSquare, PackageX,
 } from 'lucide-react'
 import { guardPage } from '@/lib/pageGuard'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
@@ -39,11 +39,11 @@ const PAID = ['paid', 'picking', 'packed', 'shipped', 'delivered', 'partially_re
 
 async function getData() {
   if (!isSupabaseConfigured()) {
-    return { orders: [] as OrderRow[], books: [] as BookRow[], open: false, cities: 0, tiers: 0, reminders: 0 }
+    return { orders: [] as OrderRow[], books: [] as BookRow[], open: false, cities: 0, tiers: 0, reminders: 0, openIssues: 0 }
   }
   const supabase = await createClient()
 
-  const [o, b, gate, c, t, rem] = await Promise.all([
+  const [o, b, gate, c, t, rem, iss] = await Promise.all([
     // ⚠️ fetchAllRows: PostgREST קוטע ב-1,000 שורות בשקט, וסיכום על
     // רשימה חתוכה נראה בדיוק כמו סיכום מלא.
     fetchAllRows<OrderRow>((from, to) =>
@@ -62,6 +62,7 @@ async function getData() {
     supabase.from('book_fair_shipping_tiers').select('id', { count: 'exact', head: true }),
     // נרשמים לתזכורת שטרם קיבלו הודעה — רלוונטי רק כשהיריד סגור.
     supabase.from('book_fair_reminders').select('id', { count: 'exact', head: true }).is('notified_at', null),
+    supabase.from('book_fair_shipping_issues').select('id', { count: 'exact', head: true }).in('status', ['open', 'in_progress']),
   ])
 
   return {
@@ -72,12 +73,13 @@ async function getData() {
     cities: c.count ?? 0,
     tiers: t.count ?? 0,
     reminders: rem.count ?? 0,
+    openIssues: iss.count ?? 0,
   }
 }
 
 export default async function BookFairPage() {
   await guardPage('book_fair')
-  const { orders, books, open, cities, tiers, reminders } = await getData()
+  const { orders, books, open, cities, tiers, reminders, openIssues } = await getData()
   // 🔴 האם הסליקה אמיתית. ראו הבאנר למטה — זו הבדיקה החשובה ביותר במסך.
   const mockPay = await isMockPayment()
 
@@ -191,6 +193,19 @@ export default async function BookFairPage() {
             השאירו כתובת מייל בדף ההמתנה ומצפים לעדכון כשהמערכת תיפתח.
           </p>
         </section>
+      )}
+
+      {/* ── תקלות משלוח פתוחות ── */}
+      {openIssues > 0 && (
+        <Link
+          href="/admin/book-fair/shipping-issues"
+          className="flex items-center justify-between gap-3 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-orange-800 transition hover:bg-orange-100"
+        >
+          <span className="flex items-center gap-2 font-semibold">
+            <PackageX size={17} /> {openIssues} תקלות משלוח פתוחות
+          </span>
+          <span className="flex items-center gap-1 text-sm">לטיפול <ArrowLeft size={14} /></span>
+        </Link>
       )}
 
       {/* ── מה חוסם ── */}

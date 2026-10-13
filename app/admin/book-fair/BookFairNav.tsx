@@ -26,7 +26,7 @@ const TABS = [
   { href: '/admin/book-fair/inquiries', label: 'פניות',  icon: MessageSquare },
   // ⚠️ הזיכוי אינו אוטומטי — זו רשימת המשימות של מי שמבצע אותו ידנית.
   { href: '/admin/book-fair/refunds',  label: 'זיכויים', icon: Undo2 },
-  { href: '/admin/book-fair/issues',   label: 'תקלות משלוח', icon: PackageX },
+  { href: '/admin/book-fair/shipping-issues', label: 'תקלות משלוח', icon: PackageX },
   { href: '/admin/book-fair/settings', label: 'הגדרות',  icon: Settings2 },
 ]
 
