@@ -189,6 +189,7 @@ export default function CityStreetPicker({
           <input
             type="text"
             value={streetInput}
+            maxLength={200}
             onChange={e => {
               const v = e.target.value
               setStreetInput(v)
@@ -246,6 +247,7 @@ export default function CityStreetPicker({
         <input
           type="text"
           value={houseNum}
+          maxLength={200}
           onChange={e => {
             const v = e.target.value
             setHouseNum(v)
@@ -265,6 +267,7 @@ export default function CityStreetPicker({
         <input
           type="text"
           value={apartment}
+          maxLength={200}
           onChange={e => {
             const v = e.target.value
             setApartment(v)

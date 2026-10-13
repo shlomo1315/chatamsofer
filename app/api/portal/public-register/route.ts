@@ -172,6 +172,10 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
   }
   {
     const addr = String(address ?? '').trim()
+    // הגבלת אורך לפני כל פירוק: regex על כתובת ארוכה מאוד חוסם את השרת לשניות.
+    if (addr.length > 200) {
+      return NextResponse.json({ error: 'כתובת ארוכה מדי' }, { status: 400 })
+    }
     // רשימת הרחובות הרשמית של העיר (gov_streets) — גם לפירוק הכתובת (רחובות כמו
     // "רח 288" מסתיימים במספר) וגם לאכיפה שהרחוב קיים. כשל בשליפה = fail-open.
     let streets: string[] = []
