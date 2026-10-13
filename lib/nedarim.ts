@@ -18,6 +18,14 @@ type NedarimResponse = { Result?: string; Message?: string; [k: string]: unknown
 
 const isOk = (r: NedarimResponse) => String(r.Result ?? '').toUpperCase() === 'OK'
 
+// בדיקת תקינות בסיסית של אימייל. נדרים דוחה בקשות עם מייל לא תקין
+// וחוסם בכך את הקמת המשפחה — לכן מייל לא תקין פשוט לא נשלח.
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const validEmailOrUndefined = (email?: string | null): string | undefined => {
+  const e = (email ?? '').trim()
+  return EMAIL_REGEX.test(e) ? e : undefined
+}
+
 // שליחת בקשה לנדרים (FORM urlencoded) והחזרת ה-JSON המפוענח
 async function nedarimRequest(
   creds: NedarimCreds,
@@ -84,7 +92,7 @@ export async function saveClientCard(
     Address: [b.address, b.city].filter(Boolean).join(', ') || undefined,
     Phone1: b.phone ?? undefined,
     Phone2: b.phone2 ?? undefined,
-    Email: b.email ?? undefined,
+    Email: validEmailOrUndefined(b.email),
     Comments: 'נוצר/עודכן אוטומטית ממערכת היכל החתם סופר',
   })
   if (!isOk(r)) throw new Error(r.Message || 'כשל בהקמת/עדכון משפחה בנדרים')
