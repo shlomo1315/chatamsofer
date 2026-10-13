@@ -93,9 +93,10 @@ export async function PATCH(request: NextRequest, ctx: Ctx) {
       console.error('[book-fair/shipping-issues] עדכון סטטוס נכשל:', error.message)
       return NextResponse.json({ error: 'העדכון נכשל' }, { status: 500 })
     }
-    await db.from('book_fair_shipping_issue_events').insert({
+    const { error: evErr } = await db.from('book_fair_shipping_issue_events').insert({
       issue_id: id, ...built.event, created_by: staff.userId, author_name: authorName,
     })
+    if (evErr) console.error('[book-fair/shipping-issues] רישום ביומן נכשל:', evErr.message)
     await logActivity(db, {
       userId: staff.userId, action: 'update', entityType: 'book_fair_shipping_issue',
       entityId: id, details: { status: parsed.data.status, resolution: built.event.resolution },
@@ -122,9 +123,10 @@ export async function PATCH(request: NextRequest, ctx: Ctx) {
       console.error('[book-fair/shipping-issues] עריכה נכשלה:', error.message)
       return NextResponse.json({ error: 'העדכון נכשל' }, { status: 500 })
     }
-    await db.from('book_fair_shipping_issue_events').insert({
+    const { error: evErr } = await db.from('book_fair_shipping_issue_events').insert({
       issue_id: id, kind: 'edit', body: 'פרטי התקלה נערכו', created_by: staff.userId, author_name: authorName,
     })
+    if (evErr) console.error('[book-fair/shipping-issues] רישום ביומן נכשל:', evErr.message)
     await logActivity(db, {
       userId: staff.userId, action: 'update', entityType: 'book_fair_shipping_issue',
       entityId: id, details: { edit: true, type: parsed.data.type },

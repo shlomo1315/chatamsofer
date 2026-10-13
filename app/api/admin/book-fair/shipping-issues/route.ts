@@ -111,10 +111,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'שמירת התקלה נכשלה' }, { status: 500 })
   }
 
-  await db.from('book_fair_shipping_issue_events').insert({
+  const { error: evErr } = await db.from('book_fair_shipping_issue_events').insert({
     issue_id: row.id, kind: 'status', from_status: null, to_status: 'open',
     created_by: staff.userId, author_name: await resolveAuthorName(db, staff.userId),
   })
+  if (evErr) console.error('[book-fair/shipping-issues] רישום ביומן נכשל:', evErr.message)
 
   await logActivity(db, {
     userId: staff.userId, action: 'create', entityType: 'book_fair_shipping_issue',

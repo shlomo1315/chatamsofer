@@ -58,10 +58,14 @@ begin
   foreach t in array array['book_fair_shipping_issues', 'book_fair_shipping_issue_events'] loop
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists %I on public.%I', t || '_staff_all', t);
+    execute format('drop policy if exists %I on public.%I', t || '_staff_select', t);
+    -- ⚠️ קריאה בלבד לאנשי צוות: כל כתיבה עוברת דרך ה-API (service role) שבודק הרשאת book_fair,
+    -- והיומן נשאר להוספה בלבד.
     execute format(
-      'create policy %I on public.%I for all using (public.is_staff()) with check (public.is_staff())',
-      t || '_staff_all', t
+      'create policy %I on public.%I for select using (public.is_staff())',
+      t || '_staff_select', t
     );
     execute format('revoke all on public.%I from anon', t);
+    execute format('revoke insert, update, delete on public.%I from authenticated', t);
   end loop;
 end $$;
