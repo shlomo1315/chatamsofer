@@ -17,6 +17,7 @@ import { invalidateLineageCache } from '@/lib/lineageSync'
 import { normalizePhone } from '@/lib/phone'
 import { attachOrphanMailToBeneficiary } from '@/lib/legacyMailSync'
 import { getStreets, isKnownCity } from '@/lib/govData'
+import { splitAddress } from '@/lib/splitAddress'
 import { registerToOpenDistribution } from '@/lib/holidayDistributions'
 import type { RegisterSource } from '@/lib/distributionSources'
 import { earlyManualBlocked } from '@/lib/lineageFixApply'
@@ -171,30 +172,28 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
   }
   {
     const addr = String(address ?? '').trim()
-    const m = addr.match(/^(.+?)\s+(\d[\d/א-ת\s]*)$/)
-    const streetPart = (m ? m[1] : addr).trim()
-    const housePart = (m ? m[2] : '').trim()
-    if (!streetPart || !housePart) {
-      return NextResponse.json({ error: 'יש להזין כתובת מלאה — רחוב ומספר בית' }, { status: 400 })
-    }
-    // אכיפה: הרחוב חייב להיות מתוך רשימת הרחובות הרשמית של אותה עיר (gov_streets).
-    // מונע הזנת מלל חופשי — גם בטופס הציבורי וגם בנדרים (שמנתב לכאן).
+    // רשימת הרחובות הרשמית של העיר (gov_streets) — גם לפירוק הכתובת (רחובות כמו
+    // "רח 288" מסתיימים במספר) וגם לאכיפה שהרחוב קיים. כשל בשליפה = fail-open.
+    let streets: string[] = []
     const adminDb = getAdminClient()
     if (adminDb) {
-      try {
-        const streets = await getStreets(adminDb, String(city).trim())
-        // אם למערכת יש רשימת רחובות לעיר — הרחוב שהוזן חייב להופיע בה (השוואה מנורמלת).
-        if (streets.length > 0) {
-          const norm = (s: string) => s.replace(/\s+/g, ' ').trim()
-          const target = norm(streetPart)
-          if (!streets.some(s => norm(s) === target)) {
-            return NextResponse.json(
-              { error: 'יש לבחור רחוב מתוך הרשימה של העיר. לא ניתן להזין רחוב שאינו קיים.' },
-              { status: 400 },
-            )
-          }
-        }
-      } catch { /* כשל בשליפת רחובות — לא חוסמים את הרישום (fail-open) */ }
+      try { streets = await getStreets(adminDb, String(city).trim()) } catch { /* fail-open */ }
+    }
+    const { street: streetPart, houseNumber: housePart } = splitAddress(addr, streets)
+    if (!streetPart || !/^\d/.test(housePart)) {
+      return NextResponse.json({ error: 'יש להזין כתובת מלאה — רחוב ומספר בית' }, { status: 400 })
+    }
+    // אכיפה: הרחוב חייב להיות מתוך רשימת הרחובות של העיר — מונע מלל חופשי,
+    // גם בטופס הציבורי וגם בנדרים (שמנתב לכאן).
+    if (streets.length > 0) {
+      const norm = (s: string) => s.replace(/\s+/g, ' ').trim()
+      const target = norm(streetPart)
+      if (!streets.some(s => norm(s) === target)) {
+        return NextResponse.json(
+          { error: 'יש לבחור רחוב מתוך הרשימה של העיר. לא ניתן להזין רחוב שאינו קיים.' },
+          { status: 400 },
+        )
+      }
     }
   }
 
