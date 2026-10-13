@@ -171,7 +171,7 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
   }
   {
     const addr = String(address ?? '').trim()
-    const m = addr.match(/^(.*?)\s*(\d[\d/א-ת\s]*)$/)
+    const m = addr.match(/^(.+?)\s+(\d[\d/א-ת\s]*)$/)
     const streetPart = (m ? m[1] : addr).trim()
     const housePart = (m ? m[2] : '').trim()
     if (!streetPart || !housePart) {
