@@ -18,7 +18,7 @@ const _streetsCache = new Map<string, string[]>()
 // Split "רחוב הרצל 12/3" → { street: "רחוב הרצל", houseNumber: "12", apartment: "3" }
 // מספר הדירה (אם קיים) מגיע אחרי "/" בסוף מספר הבית: "12/3".
 function splitAddr(addr: string): { street: string; houseNumber: string; apartment: string } {
-  const m = addr.trim().match(/^(.*?)\s*(\d[\d\-א-ת\s]*)(?:\/([^/]+))?$/)
+  const m = addr.trim().match(/^(.+?)\s+(\d[\d\-א-ת\s]*)(?:\/([^/]+))?$/)
   if (!m) return { street: addr.trim(), houseNumber: '', apartment: '' }
   return { street: m[1].trim(), houseNumber: m[2].trim(), apartment: (m[3] ?? '').trim() }
 }
