@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { Loader2 } from 'lucide-react'
+import { splitAddress } from '@/lib/splitAddress'
 
 const BASE =
   'w-full rounded-lg border px-3 py-2 text-sm text-slate-900 bg-white ' +
@@ -14,14 +15,6 @@ const DIS = 'disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-al
 // של עיר תוצג מיד, בלי קריאת רשת נוספת.
 let _citiesCache: string[] | null = null
 const _streetsCache = new Map<string, string[]>()
-
-// Split "רחוב הרצל 12/3" → { street: "רחוב הרצל", houseNumber: "12", apartment: "3" }
-// מספר הדירה (אם קיים) מגיע אחרי "/" בסוף מספר הבית: "12/3".
-function splitAddr(addr: string): { street: string; houseNumber: string; apartment: string } {
-  const m = addr.trim().match(/^(.+?)\s+(\d[\d\-א-ת\s]*)(?:\/([^/]+))?$/)
-  if (!m) return { street: addr.trim(), houseNumber: '', apartment: '' }
-  return { street: m[1].trim(), houseNumber: m[2].trim(), apartment: (m[3] ?? '').trim() }
-}
 
 interface Props {
   city: string
@@ -52,11 +45,16 @@ export default function CityStreetPicker({
 
   const [streets, setStreets] = useState<string[]>([])
   const [loadingStreets, setLoadingStreets] = useState(false)
-  const { street: initStreet, houseNumber: initNum, apartment: initApt } = splitAddr(address)
+  const { street: initStreet, houseNumber: initNum, apartment: initApt } =
+    splitAddress(address, _streetsCache.get(city) ?? [])
   const [streetInput, setStreetInput] = useState(initStreet)
   const [houseNum, setHouseNum] = useState(initNum)
   const [apartment, setApartment] = useState(initApt)
   const [showStreet, setShowStreet] = useState(false)
+
+  // הכתובת האחרונה שהרכיב עצמו שידר להורה. כשהיא חוזרת אלינו ב-prop אין לפרק
+  // אותה מחדש — השדות כבר נכונים, ופירוק חוזר שובר רחובות כמו "רח 288".
+  const lastEmitted = useRef<string | null>(null)
 
   const cityRef = useRef<HTMLDivElement>(null)
   const streetRef = useRef<HTMLDivElement>(null)
@@ -72,12 +70,14 @@ export default function CityStreetPicker({
 
   // Sync parent → internal when editing existing record
   useEffect(() => { setCityInput(city) }, [city])
+  // פירוק מחדש רק לכתובת שהגיעה מבחוץ; כשרשימת הרחובות נטענת — שוב, לפי הרשימה.
   useEffect(() => {
-    const { street, houseNumber, apartment: apt } = splitAddr(address)
+    if (address === lastEmitted.current) return
+    const { street, houseNumber, apartment: apt } = splitAddress(address, streets)
     setStreetInput(street)
     setHouseNum(houseNumber)
     setApartment(apt)
-  }, [address])
+  }, [address, streets])
 
   // Fetch streets when city is confirmed — עם מטמון (בחירה חוזרת של עיר = מיידי)
   useEffect(() => {
@@ -109,10 +109,11 @@ export default function CityStreetPicker({
   // מלל חופשי שאינו ברשימה משדר כתובת ריקה, כך שוולידציית "רחוב חובה" תעצור.
   function emitAddress(street: string, num: string, apt: string = apartment) {
     const isValid = streets.some(s => norm(s) === norm(street))
-    if (!isValid) { onAddressChange(''); return }
+    if (!isValid) { lastEmitted.current = ''; onAddressChange(''); return }
     // מספר הדירה נספח למספר הבית עם "/": "הרצל 12/3". בלי מספר בית אין דירה.
     const houseWithApt = num.trim() ? (apt.trim() ? `${num.trim()}/${apt.trim()}` : num.trim()) : ''
     const combined = houseWithApt ? `${street.trim()} ${houseWithApt}` : street.trim()
+    lastEmitted.current = combined
     onAddressChange(combined)
   }
 
@@ -164,6 +165,8 @@ export default function CityStreetPicker({
                       setShowCity(false)
                       setStreetInput('')
                       setHouseNum('')
+                      setApartment('')
+                      lastEmitted.current = ''
                       onAddressChange('')
                     }}
                   >
@@ -186,6 +189,7 @@ export default function CityStreetPicker({
           <input
             type="text"
             value={streetInput}
+            maxLength={200}
             onChange={e => {
               const v = e.target.value
               setStreetInput(v)
@@ -243,6 +247,7 @@ export default function CityStreetPicker({
         <input
           type="text"
           value={houseNum}
+          maxLength={200}
           onChange={e => {
             const v = e.target.value
             setHouseNum(v)
@@ -262,6 +267,7 @@ export default function CityStreetPicker({
         <input
           type="text"
           value={apartment}
+          maxLength={200}
           onChange={e => {
             const v = e.target.value
             setApartment(v)
