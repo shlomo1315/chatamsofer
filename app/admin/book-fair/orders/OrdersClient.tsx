@@ -18,7 +18,6 @@ import { useTablePagination } from '@/lib/useTablePagination'
 import Pagination from '@/components/ui/Pagination'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import { saveNavList, stashPrintIds } from '@/lib/bookFairOrderHandoff'
-import { ordersWithProblemBooks } from '@/lib/bookFairProblemBooks'
 
 type ColKey = 'order_number' | 'customer' | 'phone' | 'city' | 'channel' | 'items' | 'delivery' | 'verify' | 'recording' | 'total' | 'shipping' | 'payment' | 'status' | 'created' | 'paid_at' | 'print'
 
@@ -261,15 +260,15 @@ function inCard(o: BookFairOrder, key: string): boolean {
   }
 }
 
-export default function OrdersClient({ orders, itemCounts, orderVolumes, tiers, orderBooks, problemBooks, recGaps, openIssueOrders = [], renderedAt }: {
+export default function OrdersClient({ orders, itemCounts, orderVolumes, tiers, problemByOrder, problemBooks, recGaps, openIssueOrders = [], renderedAt }: {
   orders: BookFairOrder[]
   itemCounts: Record<string, number>
   /** הזמנה ← סך הכרכים האמיתי (מהקטלוג). */
   orderVolumes: Record<string, number>
   /** תעריף המשלוח הנוכחי — לבקרת המשלוח. */
   tiers: TierInput[]
-  /** הזמנה ← מזהי הספרים שבה. */
-  orderBooks: Record<string, string[]>
+  /** הזמנה ← הספרים הבעייתיים שבה (מחושב בשרת). */
+  problemByOrder: Record<string, string[]>
   problemBooks: ProblemBookInfo[]
   /** הזמנה טלפונית ← אילו הקלטות חסרות. */
   recGaps: Record<string, RecordingGap>
@@ -285,12 +284,6 @@ export default function OrdersClient({ orders, itemCounts, orderVolumes, tiers, 
   const openIssueSet = useMemo(() => new Set(openIssueOrders), [openIssueOrders])
   /** סינון לפי ספר בעייתי: מזהה ספר, '*' = כל הבעייתיים, null = בלי. */
   const [problem, setProblem] = useState<string | null>(null)
-
-  // הזמנה ← הספרים הבעייתיים שבה.
-  const problemByOrder = useMemo(
-    () => ordersWithProblemBooks(orderBooks, problemBooks.map(b => b.id)),
-    [orderBooks, problemBooks],
-  )
 
   // ⚠️ המונה בשבב סופר רק הזמנות חיות (כמו "הכל"): הזמנה שבוטלה אינה
   // דורשת טיפול גם אם הספר הבעייתי בתוכה.

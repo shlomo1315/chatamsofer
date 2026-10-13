@@ -3,7 +3,8 @@ import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import PageHeader from '@/components/ui/PageHeader'
 import type { BookFairOrder } from '@/types/bookFair'
-import { PROBLEM_BOOKS_KEY, parseProblemBooks } from '@/lib/bookFairProblemBooks'
+import { PROBLEM_BOOKS_KEY, parseProblemBooks, ordersWithProblemBooks } from '@/lib/bookFairProblemBooks'
+import { aggregateOrderItems, type OrderItemRow } from '@/lib/bookFairOrderItems'
 import type { TierInput } from '@/lib/bookFairShipping'
 import OrdersClient, { type ProblemBookInfo, type RecordingGap } from './OrdersClient'
 
@@ -76,36 +77,34 @@ async function getItems(): Promise<{
   books: Record<string, string[]>
   volumes: Record<string, number>
 }> {
-  const counts: Record<string, number> = {}
-  const books: Record<string, string[]> = {}
-  const volumes: Record<string, number> = {}
-  if (!isSupabaseConfigured()) return { counts, books, volumes }
+  if (!isSupabaseConfigured()) return { counts: {}, books: {}, volumes: {} }
   const supabase = await createClient()
 
   // ⚡ 08.10: כל השורות, בדפים מקבילים (fetchAllRows) — ולא במנות לפי מזהי
   // הזמנות. קודם: 10 שאילתות in טוריות (~1.7 שנ'), ורק *אחרי* שההזמנות
-  // נשלפו. עכשיו ~0.2 שנ', ובמקביל לשליפת ההזמנות.
+  // נשלפו.
+  // ⚡ 13.10: בלי join לקטלוג. book:book_fair_books(volumes) בכל שורה לקח
+  // 7–16 שנ' לפי הלוג — רוב זמן הטעינה. הכרכים נשלפים מהקטלוג בנפרד,
+  // במקביל, ומוצמדים בזיכרון (lib/bookFairOrderItems).
   // ⚠️ order('id'): דפדוף בלי סדר קבוע עלול לדלג על שורות או לכפול אותן.
-  // ⚠️ הכרכים מהקטלוג (book.volumes) ולא מ-volumes_snapshot: בטלפון
-  // ה-snapshot נשמר 1 לכל סט עד 13.10. snapshot רק לספר שנמחק מהקטלוג.
-  // ⚠️ join רבים-לאחד חוזר כאובייקט או כמערך — שתי הצורות נתמכות.
-  type Vol = { volumes: number | null }
-  type Row = { order_id: string; book_id: string | null; quantity: number; volumes_snapshot: number | null; book: Vol | Vol[] | null }
-  const { rows, error } = await fetchAllRows<Row>((from, to) =>
-    supabase.from('book_fair_order_items')
-      .select('order_id, book_id, quantity, volumes_snapshot, book:book_fair_books(volumes)')
-      .order('id')
-      .range(from, to) as unknown as PromiseLike<{ data: Row[] | null; error: { message: string } | null }>
-  )
-  if (error) console.error('[book-fair/orders] items fetch failed:', error)
-  for (const row of rows) {
-    counts[row.order_id] = (counts[row.order_id] ?? 0) + row.quantity
-    if (row.book_id) (books[row.order_id] ??= []).push(row.book_id)
-    const book = Array.isArray(row.book) ? row.book[0] : row.book
-    const v = Math.max(1, Number(book?.volumes ?? row.volumes_snapshot) || 1)
-    volumes[row.order_id] = (volumes[row.order_id] ?? 0) + v * row.quantity
-  }
-  return { counts, books, volumes }
+  type Book = { id: string; volumes: number | null }
+  const [items, catalog] = await Promise.all([
+    fetchAllRows<OrderItemRow>((from, to) =>
+      supabase.from('book_fair_order_items')
+        .select('order_id, book_id, quantity, volumes_snapshot')
+        .order('id')
+        .range(from, to) as unknown as PromiseLike<{ data: OrderItemRow[] | null; error: { message: string } | null }>
+    ),
+    fetchAllRows<Book>((from, to) =>
+      supabase.from('book_fair_books')
+        .select('id, volumes')
+        .order('id')
+        .range(from, to) as unknown as PromiseLike<{ data: Book[] | null; error: { message: string } | null }>
+    ),
+  ])
+  if (items.error) console.error('[book-fair/orders] items fetch failed:', items.error)
+  if (catalog.error) console.error('[book-fair/orders] catalog fetch failed:', catalog.error)
+  return aggregateOrderItems(items.rows, new Map(catalog.rows.map(b => [b.id, b.volumes])))
 }
 
 /**
@@ -223,10 +222,13 @@ export default async function BookFairOrdersPage() {
     timed(marks, 'issues', getOpenIssueOrders()),
   ])
   const recGaps = recordingGaps(orders, saved)
+  // ⚡ 13.10: רק ההזמנות שיש בהן ספר בעייתי, ולא מזהי הספרים של *כל*
+  // הזמנה — אלה היו חלק גדול מהמטען לדפדפן, והלקוח השתמש בהם רק לזה.
+  const problemByOrder = ordersWithProblemBooks(books, problemBooks.map(b => b.id))
   // 🔍 אבחון: איפה הולך הזמן ומה גודל הנתונים שנשלחים לדפדפן.
   console.log(
     `[book-fair/orders] ${marks.join(' ')} total=${serverNow() - t0}ms · ` +
-    `rows=${orders.length} payloadKB≈${Math.round(JSON.stringify({ orders, counts, books, recGaps }).length / 1024)}`,
+    `rows=${orders.length} payloadKB≈${Math.round(JSON.stringify({ orders, counts, volumes, problemByOrder, recGaps }).length / 1024)}`,
   )
 
   return (
@@ -237,7 +239,7 @@ export default async function BookFairOrdersPage() {
         itemCounts={counts}
         orderVolumes={volumes}
         tiers={tiers}
-        orderBooks={books}
+        problemByOrder={problemByOrder}
         problemBooks={problemBooks}
         recGaps={recGaps}
         openIssueOrders={openIssues}
