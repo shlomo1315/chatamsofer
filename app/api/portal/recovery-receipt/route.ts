@@ -7,6 +7,8 @@ import { verifyRecoveryPortalToken } from '@/lib/recoveryPortalAuth'
 import { extractUrl } from '@/lib/extractUrl'
 import { RECOVERY_COOKIE_RE } from '@/lib/recoveryCookieShape'
 import { scanReceiptNumber } from '@/lib/receiptOcr'
+import { storagePath } from '@/lib/docUrl'
+import { scrambleBytes, DOC_CIPHER_ID } from '@/lib/docCipher'
 import { findFileInHtml, knownPdfUrl } from '@/lib/receiptLinkFile'
 
 export const dynamic = 'force-dynamic'
@@ -262,4 +264,46 @@ export async function POST(request: NextRequest) {
     receiptNumber: scan.number,
     receiptConfidence: scan.confidence,
   })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// תצוגה מקדימה של קבלה שהועלתה. הדלי documents פרטי, ולכן הכתובת הציבורית
+// שנשמרת ברשומה מחזירה 400 לדפדפן ("טעינת המסמך נכשלה (400)"). כאן השרת
+// קורא את הקובץ בעצמו, אחרי אימות פורטל ובעלות על הרשומה, ומחזיר אותו
+// כנתונים מעורבלים (כמו /api/files/data).
+// ─────────────────────────────────────────────────────────────────────────────
+export async function GET(request: NextRequest) {
+  const sp = request.nextUrl.searchParams
+  const home = sp.get('home') ?? ''
+  const aidId = sp.get('aidId') ?? ''
+  const u = sp.get('u') ?? ''
+  if (!home || !aidId || !u) return NextResponse.json({ error: 'חסרים פרטים' }, { status: 400 })
+
+  const cookieStore = await cookies()
+  if (!verifyRecoveryPortalToken(cookieStore.get(portalCookieName(home))?.value, home)) {
+    return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  }
+  const admin = getAdminClient()
+  if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
+
+  const { data: aid } = await admin.from('maternity_aids')
+    .select('id, recovery_home, beneficiary_id').eq('id', aidId).maybeSingle()
+  if (!aid || aid.recovery_home !== home) {
+    return NextResponse.json({ error: 'הרשומה לא נמצאה בבית החלמה זה' }, { status: 404 })
+  }
+
+  // 🔒 רק קבצים שבתיקיית היולדת של הרשומה הזו, בלי מעבר תיקיות
+  const path = storagePath(u)
+  if (!path.startsWith(`${aid.beneficiary_id}/`) || path.includes('..')) {
+    return NextResponse.json({ error: 'לא מורשה' }, { status: 403 })
+  }
+  const { data: blob, error } = await admin.storage.from(BUCKET).download(path)
+  if (error || !blob) return NextResponse.json({ error: 'הקובץ לא נמצא' }, { status: 404 })
+  const buf = new Uint8Array(await blob.arrayBuffer())
+  const contentType = blob.type || 'application/octet-stream'
+  scrambleBytes(buf)
+  return NextResponse.json(
+    { contentType, enc: DOC_CIPHER_ID, data: Buffer.from(buf).toString('base64') },
+    { headers: { 'Cache-Control': 'private, no-store' } },
+  )
 }
