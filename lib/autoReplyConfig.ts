@@ -513,7 +513,10 @@ export function defaultAutoReplyMap(): AutoReplyMap {
         title: 'קויטל לציון הקדוש',
         text: 'לשליחת קויטל לציון הקדוש חינם אין כסף מדי שבוע בשבוע.\n' +
               'ניתן למלא קויטל גם בעמדות \'נדרים פלוס\'.',
-        buttons: [{ label: 'שאלות ובירורים', url: 'mailto:k6056157010@gmail.com' }],
+        buttons: [
+          { label: 'למילוי קויטל באתר', url: 'https://chasamsofer.co.il/kvitel' },
+          { label: 'שאלות ובירורים', url: 'mailto:k@chasamsofer.info' },
+        ],
       },
       {
         title: 'הקו הטלפוני "קו ההיכל"',
