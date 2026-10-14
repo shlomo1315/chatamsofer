@@ -30,7 +30,11 @@ export interface SettlementBook {
   author: string | null
   publisher: string | null
 }
-export interface BookSale { book_id: string; qty: number; collected_agorot: number }
+export interface BookSale {
+  book_id: string; qty: number; collected_agorot: number
+  /** פיצול לפי ערוץ, לפי ההזמנות (lib/bookFairSold). */
+  fair?: number; phone?: number; web?: number
+}
 export interface SoldAdjustment { book_id: string; delta: number; amount_agorot: number }
 export interface AuthorPayment {
   id: string
@@ -54,6 +58,8 @@ export interface SettlementRow {
   /** סך ההתאמות הידניות (שלילי = נמכר פחות). */
   adjQty: number
   qty: number
+  /** דוכן (כולל ההתאמה) · טלפון · אתר. סכומם = qty. */
+  byChannel: { fair: number; phone: number; web: number }
   collected: number
   net: number
 }
@@ -112,6 +118,7 @@ export function buildBookRows(
       party: partyOf(b),
       orderedQty, adjQty,
       qty: Math.max(0, orderedQty + adjQty),
+      byChannel: { fair: Number(s?.fair ?? 0) + adjQty, phone: Number(s?.phone ?? 0), web: Number(s?.web ?? 0) },
       collected,
       net: netOf(collected),
     })

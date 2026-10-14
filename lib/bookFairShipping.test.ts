@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolveShippingTier, shippingCost, validateTiers, tierLabel, totalVolumes, auditShipping, type TierInput } from './bookFairShipping'
+import { resolveShippingTier, shippingCost, validateTiers, tierLabel, totalVolumes, auditShipping, agreedShipping, AGREED_SHIPPING_TIERS, type TierInput } from './bookFairShipping'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 🔴 תעריף המשלוח לפי *כמות ספרים* — לא לפי יעד ולא לפי סכום.
@@ -332,5 +332,24 @@ describe('auditShipping — בקרה מול התעריף הנוכחי', () => {
 
   it('אין מדרגות — "אין תעריף" ולא "תקין"', () => {
     expect(auditShipping('shipping', 2000, 3, []).label).toBe('אין תעריף')
+  })
+})
+
+// 🔴 14.10: התעריף המוסכם עם השליחים (משה כהנא). 14 כרכים = 50 ₪, לא 40.
+describe('agreedShipping — 20/30/40 ועוד 10 לכל 4 מעל 12', () => {
+  it.each([
+    [1, 2000], [4, 2000], [5, 3000], [8, 3000], [9, 4000], [12, 4000],
+    [13, 5000], [14, 5000], [16, 5000], [17, 6000], [20, 6000], [21, 7000],
+  ])('%i כרכים', (volumes, agorot) => {
+    expect(agreedShipping(volumes)).toBe(agorot)
+  })
+
+  it('הטבלה המוסכמת תקינה לפי validateTiers', () => {
+    expect(validateTiers(AGREED_SHIPPING_TIERS).ok).toBe(true)
+  })
+
+  it('🔴 מדרגה "13 ומעלה" במחיר 40 נותנת 40 ל-14 כרכים — זו הייתה התקלה', () => {
+    const wrong: TierInput[] = [...AGREED_SHIPPING_TIERS.slice(0, 3), { min_books: 13, max_books: null, price_agorot: 4000, step_volumes: 4, step_agorot: 1000 }]
+    expect(resolveShippingTier(14, wrong)).toBe(4000)
   })
 })

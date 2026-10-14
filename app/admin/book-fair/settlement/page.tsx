@@ -2,6 +2,7 @@ import { guardPage } from '@/lib/pageGuard'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { loadSold } from '@/lib/bookFairSoldData'
 import PageHeader from '@/components/ui/PageHeader'
 import type { AuthorPayment, BookSale, SettlementBook } from '@/lib/bookFairSettlement'
 import SettlementClient, { type AdjustmentLog, type PaymentLog } from './SettlementClient'
@@ -26,12 +27,13 @@ async function load() {
   type Book = SettlementBook & { price_agorot: number }
   type Adj = { id: string; book_id: string; delta: number; amount_agorot: number; reason: string; created_at: string; by: Named }
   type Pay = AuthorPayment & { created_at: string; by: Named }
-  const [books, sales, adj, pays] = await Promise.all([
+  const [books, sold, adj, pays] = await Promise.all([
     fetchAllRows<Book>((from, to) =>
       db.from('book_fair_books').select('id, sku, title, author, publisher, price_agorot')
         .order('id').range(from, to) as unknown as Res<Book>),
-    fetchAllRows<BookSale>((from, to) =>
-      db.rpc('book_fair_book_sales').order('book_id').range(from, to) as unknown as Res<BookSale>),
+    // 🔴 14.10: אותו חישוב כמו בקטלוג (lib/bookFairSold), כולל עותקים שהוחזרו
+    // בזיכוי חלקי, ולא הפונקציה book_fair_book_sales שספרה אותם כנמכרו.
+    loadSold(db, { withAdjustments: false }),
     fetchAllRows<Adj>((from, to) =>
       db.from('book_fair_sold_adjustments')
         .select('id, book_id, delta, amount_agorot, reason, created_at, by:profiles!book_fair_sold_adjustments_created_by_fkey(full_name)')
@@ -44,7 +46,7 @@ async function load() {
   ])
 
   // ⚠️ שגיאה אחת (בד"כ: המיגרציה עוד לא רצה) מוצגת במסך ולא מפילה אותו.
-  const error = books.error ?? sales.error ?? adj.error ?? pays.error
+  const error = books.error ?? sold.error ?? adj.error ?? pays.error
   if (error) console.error('[book-fair/settlement] load failed:', error)
 
   const adjustments: AdjustmentLog[] = adj.rows.map(a => ({
@@ -55,7 +57,10 @@ async function load() {
     id: p.id, payee: p.payee, amount_agorot: p.amount_agorot, method: p.method, paid_on: p.paid_on,
     note: p.note, cancelled_at: p.cancelled_at, created_at: p.created_at, by: nameOf(p.by),
   }))
-  return { books: books.rows, sales: sales.rows, adjustments, payments, error }
+  const sales: BookSale[] = Object.entries(sold.sold).map(([book_id, r]) => ({
+    book_id, qty: r.total, collected_agorot: r.collected, fair: r.fair, phone: r.phone, web: r.web,
+  }))
+  return { books: books.rows, sales, adjustments, payments, error }
 }
 
 export default async function BookFairSettlementPage() {

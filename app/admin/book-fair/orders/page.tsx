@@ -6,7 +6,7 @@ import PageHeader from '@/components/ui/PageHeader'
 import type { BookFairOrder } from '@/types/bookFair'
 import { PROBLEM_BOOKS_KEY, parseProblemBooks, ordersWithProblemBooks } from '@/lib/bookFairProblemBooks'
 import { aggregateOrderItems, totalsToMaps, type OrderItemRow } from '@/lib/bookFairOrderItems'
-import type { TierInput } from '@/lib/bookFairShipping'
+import { AGREED_SHIPPING_TIERS, type TierInput } from '@/lib/bookFairShipping'
 import OrdersClient, { type ProblemBookInfo, type RecordingGap } from './OrdersClient'
 
 // מסך ההזמנות — הלב של הניהול היומיומי ביריד.
@@ -198,13 +198,13 @@ async function getProblemBooks(): Promise<ProblemBookInfo[]> {
   }))
 }
 
-/** טבלת מדרגות המשלוח הנוכחית — לבקרת המשלוח בטבלה. */
+/**
+ * המדרגות לבקרת המשלוח בטבלה.
+ * 🔴 14.10: התעריף המוסכם (20/30/40 ועוד 10 לכל 4 מעל 12) ולא הטבלה שבהגדרות,
+ * שהועלתה זמנית ל-25/35/45 בסוף היריד. ראו AGREED_SHIPPING_TIERS.
+ */
 async function getTiers(): Promise<TierInput[]> {
-  if (!isSupabaseConfigured()) return []
-  const supabase = await db()
-  const { data } = await supabase.from('book_fair_shipping_tiers')
-    .select('min_books, max_books, price_agorot, step_volumes, step_agorot')
-  return (data ?? []) as TierInput[]
+  return AGREED_SHIPPING_TIERS
 }
 
 /** הזמנות עם תקלת משלוח שלא טופלה — לתגית "תקלה פתוחה" בשורה. */
