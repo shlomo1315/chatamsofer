@@ -374,6 +374,17 @@ export async function register() {
     }
     setTimeout(() => { void tickGilyonot(); setInterval(() => { void tickGilyonot() }, MINUTE_MS) }, INITIAL_DELAY_MS)
     console.log('[gilyonot] sender started (every 1m)')
+
+    // משיכת נרשמים מטופס הגיליונות בנדרים פלוס, כל שעה (lib/gilyonotNedarimPull.ts).
+    // בלי הגדרות במסך הניהול — לא עושה כלום.
+    const tickGilyonotPull = async () => {
+      try {
+        const { pullNedarimSubscribers } = await import('@/lib/gilyonotNedarimPull')
+        const res = await pullNedarimSubscribers()
+        if (res.added || res.error) console.log(`[gilyonot] nedarim pull added=${res.added} lastId=${res.lastId}${res.error ? ` error=${res.error}` : ''}`)
+      } catch (err) { console.error('[gilyonot] nedarim pull failed', err) }
+    }
+    setTimeout(() => { void tickGilyonotPull(); setInterval(() => { void tickGilyonotPull() }, 60 * MINUTE_MS) }, 5 * MINUTE_MS)
   }
 
   // ─────────────────────────────────────────────────────────────────────────

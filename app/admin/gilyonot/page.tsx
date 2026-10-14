@@ -4,6 +4,7 @@ import { roleAllows } from '@/lib/permissions'
 import { currentParasha, GILYONOT_FROM_EMAIL, GILYONOT_FROM_NAME } from '@/lib/gilyonot'
 import PageHeader from '@/components/ui/PageHeader'
 import type { UserPermissions } from '@/types'
+import { getPullView, type NedarimPullView } from '@/lib/gilyonotNedarimPull'
 import GilyonotClient, { type IssueView, type SubscriberView } from './GilyonotClient'
 
 // מחלקת גיליונות החתם סופר — רשימת התפוצה, העלאת הגיליון השבועי, שליחה וארכיון.
@@ -18,7 +19,8 @@ const PAGE = 1000
 
 export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const staff = await guardPage('gilyonot')
-  const tab = (await searchParams).tab === 'issues' ? 'issues' : 'subscribers'
+  const rawTab = (await searchParams).tab
+  const tab = rawTab === 'issues' ? 'issues' : rawTab === 'nedarim' ? 'nedarim' : 'subscribers'
   const perms = staff.permissions as UserPermissions
   const can = (a: 'add' | 'edit' | 'delete') => staff.role === 'admin' || roleAllows(staff.role, perms, 'gilyonot', a)
 
@@ -26,6 +28,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   let error: string | null = db ? null : 'השרת אינו מוגדר'
   const subscribers: SubscriberView[] = []
   let issues: IssueView[] = []
+  let nedarim: NedarimPullView | null = null
 
   if (db) {
     for (let offset = 0; ; offset += PAGE) {
@@ -41,6 +44,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
         .order('created_at', { ascending: false }).limit(500),
       db.from('gilyonot_issue_stats').select('*'),
     ])
+    // הגדרות המשיכה מנדרים (בלי המפתח) — רק למי שרשאי לערוך
+    if (can('edit')) nedarim = await getPullView(db)
     const byId = new Map((stats ?? []).map(s => [s.issue_id as string, s]))
     issues = (iss ?? []).map(i => {
       const s = byId.get(i.id)
@@ -57,7 +62,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
       <PageHeader title="גיליונות החתם סופר" subtitle={`רשימת התפוצה והגיליון השבועי · נשלח מ-${GILYONOT_FROM_NAME} <${GILYONOT_FROM_EMAIL}>`} />
       {error && <p role="alert" className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</p>}
       <GilyonotClient
-        tab={tab} subscribers={subscribers} issues={issues} defaultParasha={currentParasha()}
+        tab={tab} subscribers={subscribers} nedarim={nedarim} issues={issues} defaultParasha={currentParasha()}
         canAdd={can('add')} canEdit={can('edit')} canDelete={can('delete')}
       />
     </div>

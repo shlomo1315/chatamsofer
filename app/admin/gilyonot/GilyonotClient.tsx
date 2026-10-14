@@ -6,6 +6,8 @@ import Link from 'next/link'
 import { Copy, Download, Eye, FileText, Plus, Search, Send, Trash2, Upload, X } from 'lucide-react'
 import { downloadXlsx, todayStamp } from '@/lib/downloadXlsx'
 import { defaultSubject } from '@/lib/gilyonotMail'
+import type { NedarimPullView } from '@/lib/gilyonotNedarimPull'
+import NedarimPull from './NedarimPull'
 
 export interface SubscriberView {
   id: string
@@ -55,8 +57,9 @@ async function api(url: string, init?: RequestInit): Promise<Record<string, unkn
 const json = (method: string, body: unknown): RequestInit => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 
 export default function GilyonotClient(props: {
-  tab: 'subscribers' | 'issues'
+  tab: 'subscribers' | 'issues' | 'nedarim'
   subscribers: SubscriberView[]
+  nedarim: NedarimPullView | null
   issues: IssueView[]
   defaultParasha: string
   canAdd: boolean
@@ -67,7 +70,8 @@ export default function GilyonotClient(props: {
   const tabs = [
     { key: 'subscribers', label: `רשימת תפוצה (${active.toLocaleString('he-IL')})` },
     { key: 'issues', label: `גיליונות (${props.issues.length})` },
-  ] as const
+    ...(props.nedarim ? [{ key: 'nedarim', label: 'נדרים פלוס' }] : []),
+  ]
   return (
     <div className="space-y-5">
       <nav className="flex gap-1 border-b border-slate-200" aria-label="לשוניות">
@@ -78,7 +82,9 @@ export default function GilyonotClient(props: {
           >{t.label}</Link>
         ))}
       </nav>
-      {props.tab === 'subscribers'
+      {props.tab === 'nedarim' && props.nedarim
+        ? <NedarimPull view={props.nedarim} />
+        : props.tab !== 'issues'
         ? <Subscribers rows={props.subscribers} canAdd={props.canAdd} canEdit={props.canEdit} canDelete={props.canDelete} />
         : <Issues rows={props.issues} activeCount={active} defaultParasha={props.defaultParasha} canAdd={props.canAdd} canEdit={props.canEdit} canDelete={props.canDelete} />}
     </div>
