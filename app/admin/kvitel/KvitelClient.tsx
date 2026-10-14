@@ -143,14 +143,14 @@ export default function KvitelClient({ rows, filters, canEdit }: { rows: KvitelR
             <li key={r.id} className={`rounded-xl border bg-white p-4 ${selected.has(r.id) ? 'border-[#1B3256] ring-1 ring-[#1B3256]' : 'border-slate-200'}`}>
               <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
                 {canEdit && (
-                  <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} className="mt-1 h-4 w-4" aria-label={`בחירת הבקשה של ${r.contact_name ?? ''}`} />
+                  <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} className="mt-1 h-4 w-4" aria-label={`בחירת הבקשה של ${r.contact_name || dateFmt.format(new Date(r.submitted_at))}`} />
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-slate-900">{r.contact_name || 'ללא שם'}</p>
+                  <p className="font-semibold text-slate-900">{r.contact_name || '—'}</p>
                   <p className="text-sm text-slate-600 break-words">
-                    {r.contact_phone && <span dir="ltr">{r.contact_phone}</span>}
-                    {r.contact_email && <> · <span dir="ltr">{r.contact_email}</span></>}
-                    {' · '}{dateFmt.format(new Date(r.submitted_at))}
+                    {r.contact_phone && <><span dir="ltr">{r.contact_phone}</span> · </>}
+                    {r.contact_email && <><span dir="ltr">{r.contact_email}</span> · </>}
+                    {dateFmt.format(new Date(r.submitted_at))}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-1.5">

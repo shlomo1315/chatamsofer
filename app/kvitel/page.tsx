@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Image from 'next/image'
 import KvitelForm from './KvitelForm'
 
 export const metadata: Metadata = {
@@ -12,6 +13,10 @@ export default function Page() {
     <main dir="rtl" className="min-h-screen bg-slate-50 px-4 py-10">
       <div className="mx-auto w-full max-w-xl">
         <header className="mb-8 text-center">
+          <Image
+            src="/logo-voucher.png" alt="איגוד הצאצאים של רבינו החתם סופר, שע״י היכל החתם סופר"
+            width={900} height={796} priority className="mx-auto mb-5 h-auto w-40 mix-blend-multiply"
+          />
           <h1 className="text-2xl font-bold leading-snug" style={{ color: '#1B3256' }}>
             קוויטל לציון רבינו הקדוש
           </h1>
