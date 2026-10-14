@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     })))
   if (!lines.length) return NextResponse.json({ error: 'אין שמות מאושרים לייצוא בסינון הזה' }, { status: 404 })
 
-  const logoPng = await readFile(path.join(process.cwd(), 'public', 'logo-heichal-email.png')).catch(() => null)
+  const logoPng = await readFile(path.join(process.cwd(), 'public', 'logo-voucher.png')).catch(() => null)
   const bytes = await buildKvitelDocx({ lines, date: new Date(), logoPng })
   const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(new Date())
   return new NextResponse(Buffer.from(bytes), {

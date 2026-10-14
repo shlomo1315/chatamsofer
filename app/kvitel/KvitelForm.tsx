@@ -11,8 +11,6 @@ const input = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 te
 const label = 'mb-1 block text-sm font-medium text-slate-700'
 
 export default function KvitelForm() {
-  const [contactName, setContactName] = useState('')
-  const [phone, setPhone] = useState('')
   const [website, setWebsite] = useState('')
   const [rows, setRows] = useState<Row[]>([emptyRow()])
   const [sending, setSending] = useState(false)
@@ -38,7 +36,7 @@ export default function KvitelForm() {
       const res = await fetch('/api/kvitel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contactName, phone, website, lines: rows }),
+        body: JSON.stringify({ website, lines: rows }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) { setError(data.error || 'השליחה נכשלה. נסו שוב.'); return }
@@ -73,24 +71,11 @@ export default function KvitelForm() {
 
   return (
     <form onSubmit={submit} className="space-y-6" noValidate>
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="mb-4 text-lg font-bold" style={{ color: '#1B3256' }}>פרטי המגיש</h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label htmlFor="contactName" className={label}>שם מלא</label>
-            <input id="contactName" className={input} value={contactName} onChange={e => setContactName(e.target.value)} autoComplete="name" required />
-          </div>
-          <div>
-            <label htmlFor="phone" className={label}>טלפון</label>
-            <input id="phone" className={input} value={phone} onChange={e => setPhone(e.target.value)} inputMode="tel" autoComplete="tel" dir="ltr" required />
-          </div>
-        </div>
-        {/* מלכודת לבוטים — מוסתר מבני אדם */}
-        <div aria-hidden className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
-          <label htmlFor="website">אתר</label>
-          <input id="website" tabIndex={-1} autoComplete="off" value={website} onChange={e => setWebsite(e.target.value)} />
-        </div>
-      </section>
+      {/* מלכודת לבוטים — מוסתר מבני אדם */}
+      <div aria-hidden className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
+        <label htmlFor="website">אתר</label>
+        <input id="website" tabIndex={-1} autoComplete="off" value={website} onChange={e => setWebsite(e.target.value)} />
+      </div>
 
       <section className="space-y-4">
         <h2 className="text-lg font-bold" style={{ color: '#1B3256' }}>שמות ובקשות</h2>
