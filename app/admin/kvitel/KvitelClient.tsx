@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { FileDown, Check, RotateCcw, X, ShieldCheck, BookCheck } from 'lucide-react'
-import { KVITEL_CHANNELS, KVITEL_REQUEST_TYPES, KVITEL_STATUSES, formatLine, type KvitelStatus } from '@/lib/kvitel'
+import { KVITEL_CHANNELS, KVITEL_REQUEST_OPTIONS, KVITEL_STATUSES, formatLine, type KvitelStatus } from '@/lib/kvitel'
 import type { KvitelFilters, KvitelRequestRow } from '@/lib/kvitelQuery'
 
 const STATUS_STYLE: Record<KvitelStatus, string> = {
@@ -105,7 +105,7 @@ export default function KvitelClient({ rows, filters, canEdit }: { rows: KvitelR
         <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">סוג בקשה
           <select name="type" defaultValue={filters.type ?? ''} className={field}>
             <option value="">כל הסוגים</option>
-            {KVITEL_REQUEST_TYPES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+            {KVITEL_REQUEST_OPTIONS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
           </select>
         </label>
         <label className="flex min-w-48 flex-1 flex-col gap-1 text-xs font-medium text-slate-600">חיפוש

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Plus, Trash2, CheckCircle2 } from 'lucide-react'
-import { KVITEL_REQUEST_TYPES, MAX_LINES, formatLine, type KvitelRelation } from '@/lib/kvitel'
+import { KVITEL_REQUEST_OPTIONS, MAX_LINES, formatLine, type KvitelRelation } from '@/lib/kvitel'
 
 interface Row { name: string; relation: KvitelRelation; parentName: string; requestType: string; requestNote: string }
 const emptyRow = (): Row => ({ name: '', relation: 'ben', parentName: '', requestType: '', requestNote: '' })
@@ -127,7 +127,7 @@ export default function KvitelForm() {
                 }}
               >
                 <option value="" disabled>נא בחר את סוג הבקשה</option>
-                {KVITEL_REQUEST_TYPES.map(t => <option key={t.key} value={t.key} className="text-slate-900">{t.label}</option>)}
+                {KVITEL_REQUEST_OPTIONS.map(t => <option key={t.key} value={t.key} className="text-slate-900">{t.label}</option>)}
               </select>
               {missingType.has(i) && <p id={`type-err-${i}`} className="mt-1 text-sm text-rose-700">נא לבחור את סוג הבקשה</p>}
               {r.requestType === 'other' && (
