@@ -20,10 +20,10 @@ export async function POST(request: Request) {
   // מלכודת: שדה מוסתר שאדם לא ממלא. עונים "התקבל" כדי לא ללמד את הבוט.
   if (typeof body.website === 'string' && body.website.trim()) return NextResponse.json({ ok: true })
 
-  const contactName = cleanName(body.contactName)
+  // פרטי המגיש אופציונליים (כרגע הטופס לא שואל עליהם). בלי טלפון אין מגיש מזוהה
+  // ואין שמות שמורים — הבקשה נשמרת בלי requester_id.
+  const contactName = cleanName(body.contactName) || null
   const phone = normalizePhone(body.phone)
-  if (!contactName) return NextResponse.json({ error: 'יש למלא את שם המגיש' }, { status: 400 })
-  if (!phone) return NextResponse.json({ error: 'מספר הטלפון אינו תקין' }, { status: 400 })
 
   const v = validateLines(body.lines)
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })

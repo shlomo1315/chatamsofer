@@ -22,6 +22,8 @@ describe('kvitel', () => {
       .toEqual({ ok: false, error: 'שורה 1: חסר שם האם' })
     expect(validateLines([{ name: 'שרה', relation: 'bat', parentName: 'רחל', requestType: 'other' }]))
       .toEqual({ ok: false, error: 'שורה 1: יש לכתוב את הבקשה' })
+    expect(validateLines([{ name: 'שרה', relation: 'bat', parentName: 'רחל', requestType: '' }]))
+      .toEqual({ ok: false, error: 'שורה 1: נא לבחור את סוג הבקשה' })
     const r = validateLines([{ name: 'מאיר', relation: 'ben', parentName: 'פעשא לאה', requestType: 'refua', requestNote: 'x' }])
     expect(r).toEqual({ ok: true, lines: [{ name: 'מאיר', relation: 'ben', parentName: 'פעשא לאה', requestType: 'refua', requestNote: null }] })
   })

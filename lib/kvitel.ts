@@ -85,7 +85,7 @@ export function validateLine(raw: Record<string, unknown>, index: number): LineR
   if (!name) return { ok: false, error: `שורה ${n}: חסר שם` }
   if (!parentName) return { ok: false, error: `שורה ${n}: חסר שם האם` }
   if (!relation) return { ok: false, error: `שורה ${n}: יש לבחור בן או בת` }
-  if (!isRequestType(requestType)) return { ok: false, error: `שורה ${n}: יש לבחור סוג בקשה` }
+  if (!isRequestType(requestType)) return { ok: false, error: `שורה ${n}: נא לבחור את סוג הבקשה` }
   if (requestType === 'other' && !requestNote) return { ok: false, error: `שורה ${n}: יש לכתוב את הבקשה` }
   return { ok: true, line: { name, relation, parentName, requestType, requestNote: requestType === 'other' ? requestNote : null } }
 }
