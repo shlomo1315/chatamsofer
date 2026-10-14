@@ -334,6 +334,9 @@ function PartyItem({ p, books, priceOf, payments, expanded, canEdit, onToggle, o
                     </td>
                     <td className={`${mtd} text-end ${num}`}>
                       {r.qty}
+                      <div className="whitespace-nowrap text-xs text-slate-500">
+                        דוכן {r.byChannel.fair} · אתר {r.byChannel.web} · טלפון {r.byChannel.phone}
+                      </div>
                       {r.adjQty !== 0 && (
                         <div className="whitespace-nowrap text-xs text-amber-700" title={`לפי ההזמנות ${r.orderedQty}. ההזמנות לא שונו.`}>
                           התאמה ידנית: <span dir="ltr">{r.adjQty > 0 ? '+' : ''}{r.adjQty}</span>

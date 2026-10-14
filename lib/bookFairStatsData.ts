@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { categoryName, type StatOrder, type StatItem } from '@/lib/bookFairStats'
+import { itemsAfterReturns } from '@/lib/bookFairSold'
+import { loadRefundReturns } from '@/lib/bookFairSoldData'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // שליפת הנתונים לסטטיסטיקות היריד (צד שרת).
@@ -31,8 +33,8 @@ export async function loadStatsData(
       if (opts.channel) q = q.eq('channel', opts.channel)
       return q
     }),
-    fetchAllRows<{ id: string; description: string | null }>((from, to) =>
-      db.from('book_fair_books').select('id, description').order('id').range(from, to)),
+    fetchAllRows<{ id: string; title: string; description: string | null }>((from, to) =>
+      db.from('book_fair_books').select('id, title, description').order('id').range(from, to)),
   ])
 
   if (o.error || b.error) return { orders: [], items: [], categoryOf: new Map(), error: o.error ?? b.error }
@@ -58,5 +60,14 @@ export async function loadStatsData(
   }
 
   const categoryOf = new Map(b.rows.map(x => [x.id, categoryName(x.description)]))
-  return { orders, items, categoryOf, error: null }
+
+  // 🔴 14.10: אותו "נמכר" כמו בקטלוג ובהתחשבנות (lib/bookFairSold):
+  //   • עותקים שהוחזרו בזיכוי חלקי יורדים מהפריטים.
+  //   • השם מהקטלוג ולא מההזמנה: הגרפים מקבצים לפי שם, וספר ששמו תוקן
+  //     בקטלוג באמצע היריד הופיע בשתי שורות, כל אחת עם חלק מהמכירות.
+  const titleOf = new Map(b.rows.map(x => [x.id, x.title]))
+  const returns = await loadRefundReturns(db)
+  const fixed = itemsAfterReturns(orders.map(x => ({ id: x.id, order_number: x.order_number ?? null })), items, returns)
+    .map(i => (i.book_id && titleOf.get(i.book_id) ? { ...i, title_snapshot: titleOf.get(i.book_id)! } : i))
+  return { orders, items: fixed, categoryOf, error: null }
 }

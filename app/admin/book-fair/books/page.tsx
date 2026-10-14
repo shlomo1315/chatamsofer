@@ -2,6 +2,7 @@ import { guardPage } from '@/lib/pageGuard'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { getServiceClient } from '@/lib/apiAuth'
+import { loadSold } from '@/lib/bookFairSoldData'
 import PageHeader from '@/components/ui/PageHeader'
 import type { BookFairBook } from '@/types/bookFair'
 import BooksClient from './BooksClient'
@@ -34,66 +35,33 @@ async function getBooks(): Promise<BookFairBook[]> {
   return rows
 }
 
-/**
- * כמה עותקים נמכרו מכל ספר.
- *
- * 🔴 רק הזמנות ששולמו: הזמנה נטושה או שבוטלה אינה מכירה, והעותקים
- * שלה חזרו למלאי. ספירתן הייתה מנפחת את "נמכר" ומקטינה את "מלאי
- * מקורי" המחושב.
- *
- * ⚠️ fetchAllRows: שורות הפריטים חוצות את רף 1,000 מהר הרבה יותר
- * מהקטלוג עצמו — כל ספר בכל הזמנה הוא שורה.
- */
 export type SoldByChannel = Record<string, { fair: number; phone: number; web: number }>
 
-async function getSold(): Promise<{ sold: Record<string, number>; byChannel: SoldByChannel }> {
-  if (!isSupabaseConfigured()) return { sold: {}, byChannel: {} }
-  const supabase = await createClient()
-
-  type Row = { book_id: string; quantity: number; order: { channel: string } | { channel: string }[] | null }
-  // ⚠️ order('id'): דפדוף בלי סדר קבוע עלול לדלג על שורות או לכפול אותן.
-  const { rows } = await fetchAllRows<Row>((from, to) =>
-    supabase
-      .from('book_fair_order_items')
-      .select('book_id, quantity, order:book_fair_orders!inner(status, channel)')
-      .in('order.status', ['paid', 'picking', 'packed', 'shipped', 'delivered'])
-      .order('id')
-      .range(from, to) as never
-  )
-
-  const sold: Record<string, number> = {}
-  // פיצול לפי ערוץ (בקשת המשתמש 05.10): יריד (דוכן) · טלפון · אתר.
-  const byChannel: SoldByChannel = {}
-  for (const r of rows) {
-    if (!r.book_id) continue
-    const q = r.quantity ?? 0
-    sold[r.book_id] = (sold[r.book_id] ?? 0) + q
-    // ⚠️ join של Supabase מגיע כמערך או כאובייקט — שתי הצורות.
-    const ch = (Array.isArray(r.order) ? r.order[0]?.channel : r.order?.channel) ?? ''
-    const slot = (byChannel[r.book_id] ??= { fair: 0, phone: 0, web: 0 })
-    if (ch === 'fair' || ch === 'phone' || ch === 'web') slot[ch] += q
-  }
-  return { sold, byChannel }
-}
-
 /**
- * התאמות ידניות של "נמכר" (דוח ההתחשבנות) — סכום לכל ספר.
+ * כמה עותקים נמכרו מכל ספר, לפי ערוץ, והתאמות "נמכר" הידניות.
  *
- * ⚠️ חלות רק על עמודות "נמכר" ו"ביריד", לא על "מלאי מקורי": ההתאמה לא
- * נגעה במלאי, ולכן נשאר+נמכר-לפי-ההזמנות הוא עדיין המלאי שהתחלנו בו.
- * ⚠️ שגיאה (המיגרציה עוד לא רצה) = בלי התאמות, והקטלוג עובד כרגיל.
+ * 🔴 14.10: מקור אחד עם דוח ההתחשבנות (lib/bookFairSold). קודם המסך הזה
+ * לא ספר הזמנות "זוכה חלקית" ולא הוריד עותקים שהוחזרו, וההתחשבנות ספרה
+ * אחרת — אותו ספר הציג מספר שונה בכל מסך.
+ *
+ * ⚠️ sold כאן הוא לפי ההזמנות, *בלי* ההתאמה: "מלאי מקורי" = נשאר + נמכר
+ * לפי ההזמנות, וההתאמה לא נגעה במלאי. BooksClient מוסיף את ההתאמה לעמודות
+ * "נמכר" ו"ביריד".
  */
-async function getSoldAdjustments(): Promise<Record<string, number>> {
+async function getSold(): Promise<{ sold: Record<string, number>; byChannel: SoldByChannel; adj: Record<string, number> }> {
   const db = getServiceClient()
-  if (!db) return {}
-  type Row = { book_id: string; delta: number }
-  const { rows, error } = await fetchAllRows<Row>((from, to) =>
-    db.from('book_fair_sold_adjustments').select('book_id, delta').order('id').range(from, to) as never
-  )
-  if (error) return {}
-  const out: Record<string, number> = {}
-  for (const r of rows) out[r.book_id] = (out[r.book_id] ?? 0) + r.delta
-  return out
+  if (!db) return { sold: {}, byChannel: {}, adj: {} }
+  const { sold: rows, error } = await loadSold(db)
+  if (error) console.error('[book-fair/books] sold fetch failed:', error)
+  const sold: Record<string, number> = {}
+  const byChannel: SoldByChannel = {}
+  const adj: Record<string, number> = {}
+  for (const [id, r] of Object.entries(rows)) {
+    sold[id] = r.total - r.adj
+    byChannel[id] = { fair: r.fairOrders, phone: r.phone, web: r.web }
+    if (r.adj) adj[id] = r.adj
+  }
+  return { sold, byChannel, adj }
 }
 
 /** ספרים שסומנו בעייתיים במלאי. */
@@ -106,7 +74,7 @@ async function getProblems(): Promise<ProblemBooks> {
 
 export default async function BookFairBooksPage() {
   await guardPage('book_fair')
-  const [books, { sold, byChannel }, problems, soldAdj] = await Promise.all([getBooks(), getSold(), getProblems(), getSoldAdjustments()])
+  const [books, { sold, byChannel, adj: soldAdj }, problems] = await Promise.all([getBooks(), getSold(), getProblems()])
 
   return (
     <div className="flex flex-col gap-6">

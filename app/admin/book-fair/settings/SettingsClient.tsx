@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { Loader2, Plus, Trash2, Check, AlertTriangle, MapPin, Truck, Power, CreditCard, Phone } from 'lucide-react'
 import type { BookFairCity, BookFairShippingTier } from '@/types/bookFair'
 import { fmtAgorot, agorotToShekels } from '@/lib/bookFairPricing'
-import { validateTiers, resolveShippingTier, tierLabel, type TierInput } from '@/lib/bookFairShipping'
+import { validateTiers, resolveShippingTier, tierLabel, agreedShipping, type TierInput } from '@/lib/bookFairShipping'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useCan } from '@/components/StaffPermissions'
 import PaymentSettings from './PaymentSettings'
@@ -509,11 +509,16 @@ export default function SettingsClient({ cities, tiers, open, openAt, mockPay }:
               <Check size={15} /> תצוגה מקדימה
             </p>
             <div className="flex flex-wrap gap-2 text-sm text-emerald-800">
-              {[1, 3, 5, 10, 25].map(n => {
+              {/* ⚠️ 14.10: הדוגמאות של משה, כדי שמדרגה פתוחה במחיר הלא נכון
+                  (13 ומעלה ב-40 במקום 50) תיראה מיד. בכתום: שונה מהתעריף
+                  המוסכם עם השליחים. */}
+              {[4, 8, 12, 13, 14, 16, 17].map(n => {
                 const p = resolveShippingTier(n, parsed)
+                const agreed = agreedShipping(n)
                 return (
-                  <span key={n} className="rounded-lg bg-white/70 px-2.5 py-1">
-                    {n} ספרים → {p === null ? '—' : p === 0 ? 'חינם' : fmtAgorot(p)}
+                  <span key={n} className={`rounded-lg px-2.5 py-1 ${p !== agreed ? 'bg-amber-100 text-amber-900' : 'bg-white/70'}`}
+                    title={p !== agreed && agreed !== null ? `בתעריף המוסכם: ${fmtAgorot(agreed)}` : undefined}>
+                    {n} כרכים → {p === null ? '—' : p === 0 ? 'חינם' : fmtAgorot(p)}
                   </span>
                 )
               })}
