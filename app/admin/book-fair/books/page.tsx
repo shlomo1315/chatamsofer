@@ -1,6 +1,7 @@
 import { guardPage } from '@/lib/pageGuard'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { getServiceClient } from '@/lib/apiAuth'
 import PageHeader from '@/components/ui/PageHeader'
 import type { BookFairBook } from '@/types/bookFair'
 import BooksClient from './BooksClient'
@@ -75,6 +76,26 @@ async function getSold(): Promise<{ sold: Record<string, number>; byChannel: Sol
   return { sold, byChannel }
 }
 
+/**
+ * התאמות ידניות של "נמכר" (דוח ההתחשבנות) — סכום לכל ספר.
+ *
+ * ⚠️ חלות רק על עמודות "נמכר" ו"ביריד", לא על "מלאי מקורי": ההתאמה לא
+ * נגעה במלאי, ולכן נשאר+נמכר-לפי-ההזמנות הוא עדיין המלאי שהתחלנו בו.
+ * ⚠️ שגיאה (המיגרציה עוד לא רצה) = בלי התאמות, והקטלוג עובד כרגיל.
+ */
+async function getSoldAdjustments(): Promise<Record<string, number>> {
+  const db = getServiceClient()
+  if (!db) return {}
+  type Row = { book_id: string; delta: number }
+  const { rows, error } = await fetchAllRows<Row>((from, to) =>
+    db.from('book_fair_sold_adjustments').select('book_id, delta').order('id').range(from, to) as never
+  )
+  if (error) return {}
+  const out: Record<string, number> = {}
+  for (const r of rows) out[r.book_id] = (out[r.book_id] ?? 0) + r.delta
+  return out
+}
+
 /** ספרים שסומנו בעייתיים במלאי. */
 async function getProblems(): Promise<ProblemBooks> {
   if (!isSupabaseConfigured()) return {}
@@ -85,12 +106,12 @@ async function getProblems(): Promise<ProblemBooks> {
 
 export default async function BookFairBooksPage() {
   await guardPage('book_fair')
-  const [books, { sold, byChannel }, problems] = await Promise.all([getBooks(), getSold(), getProblems()])
+  const [books, { sold, byChannel }, problems, soldAdj] = await Promise.all([getBooks(), getSold(), getProblems(), getSoldAdjustments()])
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="קטלוג הספרים" subtitle="ספרים, מחירים ומלאי לשני הערוצים" />
-      <BooksClient books={books} sold={sold} soldBy={byChannel} problems={problems} />
+      <BooksClient books={books} sold={sold} soldBy={byChannel} soldAdj={soldAdj} problems={problems} />
     </div>
   )
 }

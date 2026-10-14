@@ -31,7 +31,7 @@ const HEAD = 'px-3 py-3 text-xs font-semibold text-slate-500'
 // שמגיעה מהשרת ואינה ידועה בזמן טעינת המודול.
 type SoldBy = Record<string, { fair: number; phone: number; web: number }>
 
-function columnsOf(sold: Record<string, number>, soldBy: SoldBy): ColDef<ColKey, BookFairBook>[] {
+function columnsOf(sold: Record<string, number>, soldBy: SoldBy, adj: Record<string, number>): ColDef<ColKey, BookFairBook>[] {
   return [
   { key: 'sku',         label: 'מק"ט',   def: true, headClassName: HEAD, weight: 1, value: b => b.sku },
   { key: 'title',       label: 'שם הספר', def: true, headClassName: HEAD, weight: 3, value: b => b.title },
@@ -46,7 +46,7 @@ function columnsOf(sold: Record<string, number>, soldBy: SoldBy): ColDef<ColKey,
   { key: 'stock_orig', label: 'מלאי מקורי', def: true, kind: 'number', headClassName: HEAD,
     value: b => b.unlimited_stock ? null : (b.stock_total ?? 0) + (sold[b.id] ?? 0) },
   { key: 'sold',       label: 'נמכר',   def: true, kind: 'number', headClassName: HEAD,
-    value: b => sold[b.id] ?? 0 },
+    value: b => (sold[b.id] ?? 0) + (adj[b.id] ?? 0) },
   // פיצול "נמכר" לפי ערוץ (בקשת המשתמש 05.10).
   { key: 'sold_phone', label: 'בטלפון', def: true, kind: 'number', headClassName: HEAD, value: b => soldBy[b.id]?.phone ?? 0 },
   { key: 'sold_web',   label: 'באתר',   def: true, kind: 'number', headClassName: HEAD, value: b => soldBy[b.id]?.web ?? 0 },
@@ -56,18 +56,20 @@ function columnsOf(sold: Record<string, number>, soldBy: SoldBy): ColDef<ColKey,
     // ⚠️ הערך הוא התווית המוצגת ולא בוליאני: המשתמש מסנן לפי מה שהוא רואה
     value: b => b.is_active ? 'פעיל' : 'מוסתר' },
   // ⚠️ בסוף בכוונה — הכי שמאלה בטבלה (בקשת המשתמש 05.10).
-  { key: 'sold_fair',  label: 'ביריד',  def: true, kind: 'number', headClassName: HEAD, value: b => soldBy[b.id]?.fair ?? 0 },
+  { key: 'sold_fair',  label: 'ביריד',  def: true, kind: 'number', headClassName: HEAD, value: b => (soldBy[b.id]?.fair ?? 0) + (adj[b.id] ?? 0) },
   ]
 }
 
 type Tab = 'list' | 'import'
 
-export default function BooksClient({ books, sold = {}, soldBy = {}, problems = {} }: {
+export default function BooksClient({ books, sold = {}, soldBy = {}, soldAdj = {}, problems = {} }: {
   books: BookFairBook[]
   /** כמה עותקים נמכרו מכל ספר, לפי מזהה. */
   sold?: Record<string, number>
   /** אותו "נמכר", מפוצל ליריד/טלפון/אתר. */
   soldBy?: SoldBy
+  /** תיקוני כמות ידניים מדוח ההתחשבנות (ספר ← סך השינוי). לא משנים הזמנות. */
+  soldAdj?: Record<string, number>
   /** ספרים שסומנו בעייתיים במלאי — ראו lib/bookFairProblemBooks. */
   problems?: ProblemBooks
 }) {
@@ -105,7 +107,7 @@ export default function BooksClient({ books, sold = {}, soldBy = {}, problems = 
   // 🔴 הסדר חובה: useTableColumns קודם (מסנן וממיין), ורק אז הדפדוף
   // על התוצאה. חיתוך לעמוד לפני סינון היה מציג עמוד ריק על סינון תקין.
   // ⚠️ mode:'client' חובה — הקטלוג נשלף במלואו לשרת ומסונן בזיכרון.
-  const COLUMNS = useMemo(() => columnsOf(sold, soldBy), [sold, soldBy])
+  const COLUMNS = useMemo(() => columnsOf(sold, soldBy, soldAdj), [sold, soldBy, soldAdj])
   const tc = useTableColumns<ColKey, BookFairBook>('book_fair_books', COLUMNS, {
     sortFilter: { mode: 'client', rows: filtered },
   })
@@ -271,7 +273,7 @@ export default function BooksClient({ books, sold = {}, soldBy = {}, problems = 
                   <tr key={b.id} className={`text-sm hover:bg-slate-50 ${b.is_active ? '' : 'opacity-50'}`}>
                     {tc.shown.map(col => (
                       <td key={col.key} className={`px-3 py-2.5 ${tc.cellClass(col)}`}>
-                        {renderCell(col.key, b, sold, setOrdersOf, soldBy, problems)}
+                        {renderCell(col.key, b, sold, setOrdersOf, soldBy, problems, soldAdj)}
                       </td>
                     ))}
                     <td className="px-3 py-2.5 text-left">
@@ -374,7 +376,12 @@ function renderCell(
   openOrders: (b: BookFairBook) => void,
   soldBy: SoldBy = {},
   problems: ProblemBooks = {},
+  adj: Record<string, number> = {},
 ) {
+  // 🔴 14.10: תיקון כמות ידני (דוח ההתחשבנות) — מוצג בסימון, לא נבלע בשקט.
+  const adjNote = adj[b.id]
+    ? <span className="block text-[11px] text-violet-700" title="תיקון כמות ידני מדוח ההתחשבנות. ההזמנות לא שונו">תיקון {adj[b.id] > 0 ? '+' : ''}{adj[b.id]}</span>
+    : null
   switch (key) {
     case 'sku':
       return <span className="font-mono text-xs text-slate-600">{b.sku}</span>
@@ -405,9 +412,11 @@ function renderCell(
     // ⚠️ המספר הוא כפתור: הצוות צריך לדעת *מי* הזמין, ועד כה היה
     // צריך לחפש ידנית בכל ההזמנות. 0 אינו לחיץ — אין מה לפתוח.
     case 'sold': {
-      const n = sold[b.id] ?? 0
-      if (!n) return <span className="text-sm text-slate-300">0</span>
+      const n = Math.max(0, (sold[b.id] ?? 0) + (adj[b.id] ?? 0))
+      // ⚠️ הכפתור נשאר כל עוד יש הזמנות, גם אם התיקון הוריד ל-0.
+      if (!sold[b.id]) return <span className="text-sm text-slate-300">{n}{adjNote}</span>
       return (
+        <>
         <button
           onClick={() => openOrders(b)}
           title="לחץ כאן לפתיחת רשימת ההזמנות"
@@ -415,14 +424,17 @@ function renderCell(
         >
           {n}
         </button>
+        {adjNote}
+        </>
       )
     }
 
     case 'sold_fair':
     case 'sold_phone':
     case 'sold_web': {
-      const n = soldBy[b.id]?.[key === 'sold_fair' ? 'fair' : key === 'sold_phone' ? 'phone' : 'web'] ?? 0
-      return <span className={`text-sm tabular-nums ${n ? 'font-medium text-slate-800' : 'text-slate-300'}`}>{n}</span>
+      const fair = key === 'sold_fair'
+      const n = Math.max(0, (soldBy[b.id]?.[fair ? 'fair' : key === 'sold_phone' ? 'phone' : 'web'] ?? 0) + (fair ? adj[b.id] ?? 0 : 0))
+      return <span className={`text-sm tabular-nums ${n ? 'font-medium text-slate-800' : 'text-slate-300'}`}>{n}{fair && adjNote}</span>
     }
 
     case 'stock':
