@@ -76,11 +76,15 @@ const FOLLOWUP = 'לטיפול'
  *  שאילתה על אינדקס מקומי היא זולה; 5 שניות אינן מכבידות. */
 const REFRESH_MS = 5_000
 
-export default function GmailInbox() {
+/**
+ * lockDepartment — נעילת המסך לתיבה של מחלקה אחת (תיבת היריד בתוך היריד).
+ * בלי בורר תיבות ובלי "כל התיבות", והשרת מחזיר רק את המחלקה הזו.
+ */
+export default function GmailInbox({ lockDepartment }: { lockDepartment?: string } = {}) {
   const [folder, setFolder] = useState<Folder>('inbox')
   // ⚠️ נשאר כפרמטר סינון (נשלח ל-API ומשמש במונה), אך אין לו יותר בורר
   // במסך — הסינון לפי מחלקה נעשה בבחירת התיבה.
-  const [department] = useState('')
+  const [department] = useState(lockDepartment ?? '')
   const [account, setAccount] = useState('')
   const [activeLabel, setActiveLabel] = useState('')
   const [q, setQ] = useState('')
@@ -158,7 +162,10 @@ export default function GmailInbox() {
       // ב"כל התיבות" הייתה נדרסת בכל רענון.
       if (!didPickDefault.current && !paramsRef.current.account && accs.length) {
         didPickDefault.current = true
-        const office = accs.find(a => /^office@/i.test(a.email)) ?? accs.find(a => a.department === 'main')
+        // ⚠️ במסך נעול נבחרת תיבת המחלקה, לעולם לא office@.
+        const office = lockDepartment
+          ? accs.find(a => a.department === lockDepartment && !a.sync_only)
+          : accs.find(a => /^office@/i.test(a.email)) ?? accs.find(a => a.department === 'main')
         if (office) { setAccount(office.id); setPage(0) }
       }
       setLabels(json.labels ?? [])
@@ -166,7 +173,7 @@ export default function GmailInbox() {
       setFollowupCount(json.followupCount ?? 0)
       setError(null)
     } catch { if (!silent) setError('שגיאת רשת') } finally { if (!silent) setLoading(false) }
-  }, [])
+  }, [lockDepartment])
 
   // ⚠️ הטעינה קוראת את הפרמטרים מה-ref, ולכן חייבת לרוץ *אחרי* שהוא
   // עודכן. ה-effect שמעדכן אותו מוצהר קודם, ו-React מריץ אפקטים בסדר
@@ -438,12 +445,14 @@ export default function GmailInbox() {
             className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:border-indigo-300 disabled:opacity-50">
             {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} רענן
           </button>
-          <Link href="/admin/mail/index-sync"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:border-indigo-300">
-            <Settings size={14} /> סנכרון
-          </Link>
-          {/* ── בורר התיבות, בפינה כמו בגמייל ── */}
-          {workAccounts.length > 0 && (
+          {!lockDepartment && (
+            <Link href="/admin/mail/index-sync"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:border-indigo-300">
+              <Settings size={14} /> סנכרון
+            </Link>
+          )}
+          {/* ── בורר התיבות, בפינה כמו בגמייל. במסך נעול אין בורר. ── */}
+          {!lockDepartment && workAccounts.length > 0 && (
             <div className="relative">
               <button onClick={() => setAccountMenu(o => !o)}
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:border-indigo-300">

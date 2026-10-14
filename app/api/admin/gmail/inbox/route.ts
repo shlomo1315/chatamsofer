@@ -1,6 +1,7 @@
 ﻿import { NextResponse, type NextRequest } from 'next/server'
 import { requireMailAccess, unauthorized, getServiceClient, allowedMailboxKeys } from '@/lib/apiAuth'
 import { canAccessGmailMessage, allowedMailboxEmails } from '@/lib/mailAccess'
+import { scopeInboxToDepartment } from '@/lib/mailboxScope'
 import { getGmailClientForToken, parseMessage, getBody } from '@/lib/gmail'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 
@@ -227,8 +228,9 @@ export async function GET(request: NextRequest) {
   // הייתה מוסיפה סבב רשת לכל רענון, והתוויות ממילא מסונכרנות.
   // מסננים תוויות מערכת (INBOX, SENT, CATEGORY_*) שאינן מעניינות בתצוגה.
   const SYSTEM = /^(INBOX|SENT|DRAFT|SPAM|TRASH|UNREAD|STARRED|IMPORTANT|CHAT|CATEGORY_)/
-  const { data: labelRows } = await db.from('gmail_messages')
-    .select('labels').is('deleted_at', null).limit(2000)
+  let labelQuery = db.from('gmail_messages').select('labels').is('deleted_at', null)
+  if (department) labelQuery = labelQuery.eq('department', department)
+  const { data: labelRows } = await labelQuery.limit(2000)
   const labelCounts: Record<string, number> = {}
   for (const r of (labelRows ?? []) as { labels?: string[] | null }[]) {
     for (const l of r.labels ?? []) {
@@ -304,20 +306,27 @@ export async function GET(request: NextRequest) {
   }
 
   // מונה "לטיפול" — מתגית בפלט.
-  const { count: followupCount } = await db.from('gmail_messages')
+  let followupQuery = db.from('gmail_messages')
     .select('id', { count: 'exact', head: true })
     .is('deleted_at', null).contains('labels', ['לטיפול'])
+  if (department) followupQuery = followupQuery.eq('department', department)
+  const { count: followupCount } = await followupQuery
+
+  // 🔴 מסך נעול למחלקה (תיבת היריד): רק התיבות והמונים שלה יוצאים לדפדפן.
+  const scoped = scopeInboxToDepartment({
+    accounts: accounts ?? [], unreadByDept, unreadByAccount, boxLabels,
+  }, department)
 
   return NextResponse.json({
     messages: data ?? [],
-    boxLabels,
+    boxLabels: scoped.boxLabels,
     total: count ?? 0,
     page,
     pageSize: PAGE_SIZE,
     hasMore: (count ?? 0) > (page + 1) * PAGE_SIZE,
-    unreadByDept,
-    unreadByAccount,
-    accounts: accounts ?? [],
+    unreadByDept: scoped.unreadByDept,
+    unreadByAccount: scoped.unreadByAccount,
+    accounts: scoped.accounts,
     labels,
     followupCount: followupCount ?? 0,
   }, { headers: { 'Cache-Control': 'no-store' } })
