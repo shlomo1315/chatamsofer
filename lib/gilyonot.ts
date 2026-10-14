@@ -42,11 +42,12 @@ export type SubscribeDecision = 'insert' | 'reactivate' | 'update_name' | 'exist
 
 export function decideSubscribe(
   existing: { status: 'active' | 'unsubscribed'; full_name: string | null } | null,
-  input: { source: GilyonotSource; name: string | null },
+  input: { source: GilyonotSource; name: string | null; noReactivate?: boolean },
 ): SubscribeDecision {
   if (!existing) return 'insert'
   if (existing.status === 'unsubscribed') {
-    return input.source === 'web' || input.source === 'nedarim' ? 'reactivate' : 'blocked_unsubscribed'
+    // noReactivate: המשיכה מנדרים קוראת גם הגשות ישנות, ולכן לא מחזירה מי שהסיר את עצמו
+    return !input.noReactivate && (input.source === 'web' || input.source === 'nedarim') ? 'reactivate' : 'blocked_unsubscribed'
   }
   return !existing.full_name && input.name ? 'update_name' : 'exists'
 }
@@ -57,7 +58,7 @@ export type SubscribeResult =
 
 export async function subscribeGilyonot(
   db: SupabaseClient,
-  input: { email: string; name: string | null; source: GilyonotSource; sourceRef?: string | null },
+  input: { email: string; name: string | null; source: GilyonotSource; sourceRef?: string | null; noReactivate?: boolean },
 ): Promise<SubscribeResult> {
   const now = new Date().toISOString()
   const { data: existing, error: readErr } = await db.from('gilyonot_subscribers')
