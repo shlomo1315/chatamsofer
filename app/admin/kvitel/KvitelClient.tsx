@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { FileDown, Check, RotateCcw, X, ShieldCheck } from 'lucide-react'
+import { FileDown, Check, RotateCcw, X, ShieldCheck, BookCheck } from 'lucide-react'
 import { KVITEL_CHANNELS, KVITEL_REQUEST_TYPES, KVITEL_STATUSES, formatLine, type KvitelStatus } from '@/lib/kvitel'
 import type { KvitelFilters, KvitelRequestRow } from '@/lib/kvitelQuery'
 
@@ -43,6 +43,21 @@ export default function KvitelClient({ rows, filters, canEdit }: { rows: KvitelR
     if (n.has(id)) n.delete(id); else n.add(id)
     return n
   })
+
+  // אישור + הוספת שמות הבקשה למילון, כדי שהסוכן יכיר את הכתיב בפעם הבאה.
+  async function approveWithDictionary(r: KvitelRequestRow) {
+    const names = r.kvitel_request_lines.flatMap(l => [l.name, l.parent_name])
+    setBusy(true)
+    try {
+      const res = await fetch('/api/admin/kvitel/dictionary', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ names }),
+      })
+      if (!res.ok) { setMessage((await res.json().catch(() => ({}))).error || 'ההוספה למילון נכשלה'); return }
+    } finally {
+      setBusy(false)
+    }
+    await setStatus([r.id], 'pending')
+  }
 
   async function setStatus(ids: string[], status: KvitelStatus) {
     if (!ids.length) return
@@ -166,16 +181,28 @@ export default function KvitelClient({ rows, filters, canEdit }: { rows: KvitelR
                   </li>
                 ))}
               </ol>
+              {!r.kvitel_request_lines.length && (
+                <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">לא זוהו שמות. יש לקרוא את המקור ולהקליד את השמות בטופס, ואז לבטל בקשה זו.</p>
+              )}
+              {r.note && <p className="mt-2 text-sm text-slate-600">{r.note}</p>}
+              {r.recording_url && (
+                <audio controls preload="none" src={r.recording_url} className="mt-2 w-full" aria-label="ההקלטה של המתקשר" />
+              )}
               {r.raw_text && (
                 <details className="mt-2 text-sm text-slate-600">
                   <summary className="cursor-pointer">המקור (תמלול / מייל)</summary>
                   <p className="mt-1 whitespace-pre-wrap break-words">{r.raw_text}</p>
                 </details>
               )}
-              {canEdit && r.status === 'review' && (
-                <button disabled={busy} onClick={() => setStatus([r.id], 'pending')} className="mt-3 flex items-center gap-1 rounded-lg bg-[#1B3256] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-40">
-                  <ShieldCheck className="h-4 w-4" aria-hidden /> אישור
-                </button>
+              {canEdit && r.status === 'review' && r.kvitel_request_lines.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button disabled={busy} onClick={() => setStatus([r.id], 'pending')} className="flex items-center gap-1 rounded-lg bg-[#1B3256] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-40">
+                    <ShieldCheck className="h-4 w-4" aria-hidden /> אישור
+                  </button>
+                  <button disabled={busy} onClick={() => approveWithDictionary(r)} className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-800 disabled:opacity-40">
+                    <BookCheck className="h-4 w-4" aria-hidden /> אישור והוספת הכתיב למילון
+                  </button>
+                </div>
               )}
             </li>
           ))}

@@ -14,7 +14,7 @@ export interface KvitelLineRow {
 export interface KvitelRequestRow {
   id: string; channel: KvitelChannel; status: KvitelStatus
   contact_name: string | null; contact_phone: string | null; contact_email: string | null
-  raw_text: string | null; note: string | null; submitted_at: string; done_at: string | null
+  raw_text: string | null; recording_url: string | null; note: string | null; submitted_at: string; done_at: string | null
   kvitel_request_lines: KvitelLineRow[]
 }
 
@@ -76,7 +76,7 @@ export async function loadKvitelRequests(db: SupabaseClient, f: KvitelFilters): 
   const pad = (d: string, days: number) => new Date(Date.parse(d + 'T00:00:00Z') + days * 86_400_000).toISOString()
   const { rows, error } = await fetchAllRows<KvitelRequestRow>((from, to) => {
     let q = db.from('kvitel_requests')
-      .select('id, channel, status, contact_name, contact_phone, contact_email, raw_text, note, submitted_at, done_at, kvitel_request_lines(id, position, name, relation, parent_name, request_type, request_note, flagged, flag_reason)')
+      .select('id, channel, status, contact_name, contact_phone, contact_email, raw_text, recording_url, note, submitted_at, done_at, kvitel_request_lines(id, position, name, relation, parent_name, request_type, request_note, flagged, flag_reason)')
       .order('submitted_at', { ascending: false })
     if (f.status === 'open') q = q.in('status', ['review', 'pending'])
     else if (f.status !== 'all') q = q.eq('status', f.status)

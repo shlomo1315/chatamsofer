@@ -61,7 +61,7 @@ describe('kvitelDocx', () => {
 describe('kvitelQuery', () => {
   const row = (over: Partial<KvitelRequestRow>): KvitelRequestRow => ({
     id: 'r', channel: 'web', status: 'pending', contact_name: 'משה כהן', contact_phone: '0501234567', contact_email: null,
-    raw_text: null, note: null, submitted_at: '2026-10-13T22:30:00Z', done_at: null,
+    raw_text: null, recording_url: null, note: null, submitted_at: '2026-10-13T22:30:00Z', done_at: null,
     kvitel_request_lines: [
       { id: 'b', position: 1, name: 'שרה', relation: 'bat', parent_name: 'רחל', request_type: 'zivug', request_note: null, flagged: false, flag_reason: null },
       { id: 'a', position: 0, name: 'מאיר', relation: 'ben', parent_name: 'פעשא לאה', request_type: 'refua', request_note: null, flagged: false, flag_reason: null },
