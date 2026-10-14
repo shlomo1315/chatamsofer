@@ -9,10 +9,10 @@ import SettlementClient, { type AdjustmentLog, type PaymentLog } from './Settlem
 // התחשבנות עם מחברים/מכונים/מו"לים (בקשת שלמה 14.10).
 // החישוב: lib/bookFairSettlement.ts · מיגרציה: 20261014_book_fair_settlement.sql
 //
-// ⚠️ לקוח השירות רק אחרי guardPage — הטבלאות פתוחות ל-service_role בלבד.
+// ⚠️ לקוח השירות רק אחרי guardPage - הטבלאות פתוחות ל-service_role בלבד.
 
 export const dynamic = 'force-dynamic'
-export const metadata = { title: 'התחשבנות — יריד הספרים' }
+export const metadata = { title: 'התחשבנות - יריד הספרים' }
 
 type Res<T> = PromiseLike<{ data: T[] | null; error: { message: string } | null }>
 type Named = { full_name: string | null } | { full_name: string | null }[] | null
@@ -63,7 +63,7 @@ export default async function BookFairSettlementPage() {
   const data = await load()
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="התחשבנות" subtitle='מחברים, מכונים ומו"לים: כמה נגבה, כמה מגיע אחרי 5%, וכמה כבר שולם' />
+      <PageHeader title='התחשבנות עם מחברים ומו"לים' subtitle='סכומים לפי הזמנות פעילות והתאמות כמות. הזמנות מבוטלות לא נספרות. עמלת היריד: 5%.' />
       <SettlementClient {...data} />
     </div>
   )

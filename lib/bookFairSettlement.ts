@@ -12,7 +12,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const SETTLEMENT_REDUCTION = 0.05
-export const NO_PARTY = 'ללא מחבר/מו"ל'
+export const NO_PARTY = 'ללא מחבר / מו"ל'
 
 export const PAYMENT_METHODS = ['transfer', 'check', 'cash', 'other'] as const
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number]
@@ -158,4 +158,18 @@ export function partyStatus(p: Pick<PartyRow, 'party' | 'paid' | 'balance'>): Pa
   if (p.party === NO_PARTY) return 'missing'
   if (p.balance <= 0) return 'paid'
   return p.paid > 0 ? 'partial' : 'unpaid'
+}
+
+/**
+ * יומן התאמות של ספר עם הכמות לפני ואחרי כל שינוי ("122 → 121").
+ * `history` מהחדש לישן, `currentQty` = הכמות בדוח אחרי כל ההתאמות.
+ */
+export function adjustmentTrail<T extends { delta: number }>(currentQty: number, history: T[]): (T & { before: number; after: number })[] {
+  let after = currentQty
+  return history.map(a => {
+    const before = after - a.delta
+    const step = { ...a, before, after }
+    after = before
+    return step
+  })
 }
