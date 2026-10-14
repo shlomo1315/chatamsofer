@@ -23,6 +23,9 @@ const TABS = [
   // ⚠️ מיילים ופניות היו קיימים אך לא הופיעו כאן — אי אפשר היה להגיע
   // אליהם בלי לדעת את הכתובת.
   { href: '/admin/book-fair/emails',   label: 'מיילים',  icon: Mail },
+  // 🔴 14.10: תיבת yerid@ בלבד. קודם הקישור הוביל ל-/admin/mail הכללי,
+  // שנפתח על office@ ואפשר לעבור לכל תיבה במערכת.
+  { href: '/admin/book-fair/mailbox',  label: 'תיבת מייל', icon: Inbox },
   { href: '/admin/book-fair/inquiries', label: 'פניות',  icon: MessageSquare },
   // ⚠️ הזיכוי אינו אוטומטי — זו רשימת המשימות של מי שמבצע אותו ידנית.
   { href: '/admin/book-fair/refunds',  label: 'זיכויים', icon: Undo2 },
@@ -61,15 +64,6 @@ export default function BookFairNav() {
         )
       })}
 
-      {/* 🔴 13.10: תיבת yerid@ — קבלה ושליחה מתוך מסך הדואר, מסוננת לתיבת
-          היריד. צוות היריד מורשה לתיבה הזו בלבד (allowed_mailboxes). */}
-      <Link
-        href="/admin/mail?department=yerid"
-        className="-mb-px flex items-center gap-1.5 border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-slate-500 transition hover:border-slate-300 hover:text-slate-800"
-      >
-        <Inbox size={15} />
-        תיבת מייל
-      </Link>
 
       {/* ⚠️ קישור לחנות החיה — הצוות צריך לראות מה הלקוח רואה,
           במיוחד אחרי שינוי מחירים או פתיחת היריד. */}

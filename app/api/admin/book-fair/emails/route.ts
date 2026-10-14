@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
 import { deliverMail } from '@/lib/sendMail'
-import { mailFor } from '@/lib/departments'
+import { mailFor, DEPARTMENTS } from '@/lib/departments'
 import { emailError, cleanEmail } from '@/lib/emailAddress'
 
 // מיילים של היריד — צפייה ושליחה.
@@ -28,6 +28,9 @@ export async function GET(request: NextRequest) {
     // בהצלחה. בחירתן הפילה את כל המסך ("column does not exist").
     .select('id, to_email, subject, sent_at')
     .eq('department', 'yerid')
+    // 🔴 14.10: גם כתובת התשובה חייבת להיות yerid@ — רק מה שיצא בפועל
+    // מתיבת היריד. ה-.or של החיפוש למטה מתווסף ב-AND לשני התנאים.
+    .eq('reply_to', DEPARTMENTS.yerid.email)
     .order('sent_at', { ascending: false })
     .limit(PAGE)
 
