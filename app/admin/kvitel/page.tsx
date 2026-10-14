@@ -6,7 +6,7 @@ import PageHeader from '@/components/ui/PageHeader'
 import type { UserPermissions } from '@/types'
 import KvitelClient from './KvitelClient'
 
-// מחלקת קוויטלאך — כל הבקשות מכל הערוצים, סינון, סימון "בוצע" וייצוא ל-Word.
+// מחלקת קוויטלאך — כל הבקשות מכל הערוצים, סינון, ייצוא ל-Word עם סימון "נשלח לציון" (ExportDialog).
 // הליבה: lib/kvitel.ts · סינון: lib/kvitelQuery.ts · מיגרציה: 20261014_kvitel.sql
 //
 // ⚠️ לקוח השירות רק אחרי guardPage - הטבלאות פתוחות ל-service_role בלבד.

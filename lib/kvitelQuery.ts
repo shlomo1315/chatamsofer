@@ -18,7 +18,7 @@ export interface KvitelRequestRow {
   kvitel_request_lines: KvitelLineRow[]
 }
 
-// status: 'open' (ברירת מחדל: לבדיקה + ממתין) / 'all' / סטטוס בודד.
+// status: 'open' (ברירת מחדל: כל מה שטרם נשלח לציון — לבדיקה + ממתין) / 'all' / סטטוס בודד.
 export interface KvitelFilters {
   from: string | null; to: string | null
   status: 'open' | 'all' | KvitelStatus
@@ -88,14 +88,19 @@ export async function loadKvitelRequests(db: SupabaseClient, f: KvitelFilters): 
   return { rows: applyKvitelFilters(rows, f), error }
 }
 
-// השורות לקובץ ה-Word: כל הערוצים יחד, רק "ממתין" ו"בוצע", בסדר קבוע —
+// השורות לקובץ ה-Word: כל הערוצים יחד, רק "ממתין לשליחה" ו"נשלח לציון", בסדר קבוע —
 // מהישן לחדש לפי זמן ההגשה, ובזמן זהה לפי מזהה הבקשה; בתוך בקשה לפי סדר השורות.
 // כך ייצוא חוזר של אותו סינון נותן בדיוק את אותו קובץ.
 export function kvitelExportLines(rows: KvitelRequestRow[], ids?: Set<string>): string[] {
   return rows
     .filter(r => (ids?.size ? ids.has(r.id) : true) && (r.status === 'pending' || r.status === 'done'))
     .sort((a, b) => Date.parse(a.submitted_at) - Date.parse(b.submitted_at) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-    .flatMap(r => [...r.kvitel_request_lines].sort((a, b) => a.position - b.position).map(l => formatLine({
-      name: l.name, relation: l.relation, parentName: l.parent_name, requestType: l.request_type, requestNote: l.request_note,
-    })))
+    .flatMap(kvitelRequestLines)
+}
+
+// השורות של בקשה אחת, כפי שייכתבו בקובץ (גם לתצוגה המקדימה בכרטיס).
+export function kvitelRequestLines(r: KvitelRequestRow): string[] {
+  return [...r.kvitel_request_lines].sort((a, b) => a.position - b.position).map(l => formatLine({
+    name: l.name, relation: l.relation, parentName: l.parent_name, requestType: l.request_type, requestNote: l.request_note,
+  }))
 }

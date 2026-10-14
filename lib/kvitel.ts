@@ -29,7 +29,7 @@ export const KVITEL_CHANNELS: Record<KvitelChannel, string> = {
   web: 'לינק', phone: 'טלפון', email: 'מייל', nedarim: 'נדרים פלוס',
 }
 export const KVITEL_STATUSES: Record<KvitelStatus, string> = {
-  review: 'לבדיקה', pending: 'ממתין', done: 'בוצע', cancelled: 'בוטל',
+  review: 'לבדיקה', pending: 'ממתין לשליחה', done: 'נשלח לציון', cancelled: 'בוטל',
 }
 
 export interface KvitelLineInput {

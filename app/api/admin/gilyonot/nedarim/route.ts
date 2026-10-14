@@ -16,6 +16,8 @@ export async function GET() {
   return NextResponse.json(await getPullView(db))
 }
 
+// ⚠️ save ו-sample — מנהל בלבד: שינוי מספר טופס מאפשר למשוך נתונים מטפסים אחרים במוסד.
+// pull נשאר בהרשאת עריכה, כי הוא מושך רק מהטופס שהמנהל הגדיר.
 // POST { mode: 'save', mosadId, apiKey?, tofesId, emailField, nameField, consentField } | { mode: 'sample' } | { mode: 'pull' }
 export async function POST(request: Request) {
   const staff = await requirePermission('gilyonot', 'edit')
@@ -24,6 +26,8 @@ export async function POST(request: Request) {
   if (!db) return serverMisconfigured()
   const body = await request.json().catch(() => null) as Record<string, unknown> | null
   if (!body) return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 })
+
+  if ((body.mode === 'save' || body.mode === 'sample') && staff.role !== 'admin') return forbidden('רק מנהל יכול לשנות את הגדרות החיבור לנדרים')
 
   if (body.mode === 'save') {
     const res = await savePullConfig(db, body)
