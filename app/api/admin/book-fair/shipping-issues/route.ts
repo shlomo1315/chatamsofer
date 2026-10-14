@@ -21,7 +21,7 @@ export const runtime = 'nodejs'
 const SELECT = `
   id, order_id, issue_type, status, resolution, description, reported_via,
   affected_items, created_at, updated_at, resolved_at,
-  order:book_fair_orders(id, order_number, customer_name, customer_phone)
+  order:book_fair_orders(id, order_number, customer_name, customer_phone, city:book_fair_cities(name))
 `
 
 /** GET — ?status=active|open|in_progress|resolved|all · type · from · to · q */
