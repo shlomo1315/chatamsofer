@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import JSZip from 'jszip'
 import { cleanName, normalizePhone, validateLines, formatLine, personKey } from './kvitel'
 import { buildKvitelDocx, shabbatLabel } from './kvitelDocx'
-import { applyKvitelFilters, parseKvitelFilters, type KvitelRequestRow } from './kvitelQuery'
+import { applyKvitelFilters, kvitelExportLines, parseKvitelFilters, type KvitelRequestRow } from './kvitelQuery'
 
 describe('kvitel', () => {
   it('cleanName מסיר ניקוד, סימנים ורווחים כפולים', () => {
@@ -61,7 +61,7 @@ describe('kvitelDocx', () => {
 describe('kvitelQuery', () => {
   const row = (over: Partial<KvitelRequestRow>): KvitelRequestRow => ({
     id: 'r', channel: 'web', status: 'pending', contact_name: 'משה כהן', contact_phone: '0501234567', contact_email: null,
-    raw_text: null, note: null, submitted_at: '2026-10-13T22:30:00Z', done_at: null,
+    raw_text: null, recording_url: null, note: null, submitted_at: '2026-10-13T22:30:00Z', done_at: null,
     kvitel_request_lines: [
       { id: 'b', position: 1, name: 'שרה', relation: 'bat', parent_name: 'רחל', request_type: 'zivug', request_note: null, flagged: false, flag_reason: null },
       { id: 'a', position: 0, name: 'מאיר', relation: 'ben', parent_name: 'פעשא לאה', request_type: 'refua', request_note: null, flagged: false, flag_reason: null },
@@ -86,5 +86,25 @@ describe('kvitelQuery', () => {
     expect(applyKvitelFilters([row({})], parseKvitelFilters({ q: 'פעשא' }))[0].kvitel_request_lines).toHaveLength(1)
     expect(applyKvitelFilters([row({})], parseKvitelFilters({ q: '050-123' }))[0].kvitel_request_lines).toHaveLength(2)
     expect(applyKvitelFilters([row({})], parseKvitelFilters({ q: 'יעקב' }))).toHaveLength(0)
+  })
+
+  it('applyKvitelFilters — בקשה בלי שורות (לא פוענחה) נשארת, אבל לא בסינון לפי סוג', () => {
+    expect(applyKvitelFilters([row({ kvitel_request_lines: [] })], parseKvitelFilters({}))).toHaveLength(1)
+    expect(applyKvitelFilters([row({ kvitel_request_lines: [] })], parseKvitelFilters({ type: 'refua' }))).toHaveLength(0)
+  })
+
+  it('kvitelExportLines — כל הערוצים בקובץ אחד, בסדר קבוע, בלי "לבדיקה" ו"בוטל"', () => {
+    const line = (id: string, name: string, position = 0) => ({ id, position, name, relation: 'ben', parent_name: 'רחל', request_type: 'refua', request_note: null, flagged: false, flag_reason: null })
+    const rows = [
+      row({ id: 'r3', channel: 'phone', submitted_at: '2026-10-14T09:00:00Z', kvitel_request_lines: [line('x', 'ג')] }),
+      row({ id: 'r2', channel: 'email', submitted_at: '2026-10-14T08:00:00Z', kvitel_request_lines: [line('y', 'ב')] }),
+      row({ id: 'r1', channel: 'nedarim', submitted_at: '2026-10-14T08:00:00Z', kvitel_request_lines: [line('z2', 'א2', 1), line('z1', 'א1', 0)] }),
+      row({ id: 'r0', status: 'review', submitted_at: '2026-10-13T08:00:00Z', kvitel_request_lines: [line('w', 'לבדיקה')] }),
+      row({ id: 'r9', status: 'cancelled', submitted_at: '2026-10-13T08:00:00Z', kvitel_request_lines: [line('v', 'בוטל')] }),
+    ]
+    const names = ['א1 בן רחל - לרפואה שלימה', 'א2 בן רחל - לרפואה שלימה', 'ב בן רחל - לרפואה שלימה', 'ג בן רחל - לרפואה שלימה']
+    expect(kvitelExportLines(rows)).toEqual(names)
+    expect(kvitelExportLines([...rows].reverse())).toEqual(names)
+    expect(kvitelExportLines(rows, new Set(['r2', 'r0']))).toEqual(['ב בן רחל - לרפואה שלימה'])
   })
 })

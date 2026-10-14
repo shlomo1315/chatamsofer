@@ -811,6 +811,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  // ── קוויטלאך: מייל ל-k@ מפוענח לשמות ונכנס למסך /admin/kvitel ──
+  // מחוץ ל-isNew (כמו מכתבי הברכה למטה). כפילות נמנעת לפי message-id.
+  // המייל ממשיך לטיפול הרגיל ונשאר גם בתיבה.
+  try {
+    const { isKvitelMailbox, handleKvitelEmail } = await import('@/lib/kvitelEmail')
+    if (isKvitelMailbox([resolvedToEmail, ...candidates])) {
+      const text = (plain && plain.trim()) ? plain : htmlToPlainText(html ?? '')
+      const r = await handleKvitelEmail(admin, { messageId, fromEmail: from.email, fromName: from.name, subject, text })
+      console.log('[resend-inbound] קוויטל:', r)
+    }
+  } catch (e) {
+    console.error('[resend-inbound] kvitel ingest failed:', e)
+  }
+
   // העברת עותק ל-Gmail רק עבור מייל חדש (לא בכפילות/ניסיון חוזר של ה-webhook)
   // ── מענה למכתב ברכה / משוב בית החלמה (plus-addressing) ──
   //
