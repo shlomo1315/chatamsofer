@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { fetchAllRows } from '@/lib/fetchAllRows'
-import { KVITEL_CHANNELS, KVITEL_STATUSES, isRequestType, type KvitelChannel, type KvitelStatus } from '@/lib/kvitel'
+import { KVITEL_CHANNELS, KVITEL_STATUSES, formatLine, isRequestType, type KvitelChannel, type KvitelStatus } from '@/lib/kvitel'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // סינון ושליפה של בקשות הקוויטל — משותף למסך הניהול ולייצוא ה-Word,
@@ -53,6 +53,7 @@ const norm = (s: string | null | undefined) => (s ?? '').replace(/[\s'"׳״-]/g,
 
 // סינון בזיכרון: תאריך מדויק, סוג בקשה וחיפוש חופשי (שם המגיש, טלפון, מייל, שם ושם האם).
 // בסוג בקשה — נשארות רק השורות מהסוג, ובקשה בלי שורות כאלה יורדת.
+// בקשה שהגיעה בלי שורות בכלל (מייל או הקלטה שלא פוענחו) נשארת, כדי שהצוות יראה אותה.
 export function applyKvitelFilters(rows: KvitelRequestRow[], f: KvitelFilters): KvitelRequestRow[] {
   const q = norm(f.q)
   return rows.flatMap(r => {
@@ -65,7 +66,7 @@ export function applyKvitelFilters(rows: KvitelRequestRow[], f: KvitelFilters): 
       const contactHit = [r.contact_name, r.contact_phone, r.contact_email].some(v => norm(v).includes(q))
       if (!contactHit) lines = lines.filter(l => norm(l.name).includes(q) || norm(l.parent_name).includes(q))
     }
-    if (!lines.length) return []
+    if (!lines.length && (r.kvitel_request_lines.length || f.type || q)) return []
     return [{ ...r, kvitel_request_lines: lines }]
   })
 }
@@ -85,4 +86,16 @@ export async function loadKvitelRequests(db: SupabaseClient, f: KvitelFilters): 
     return q.range(from, to) as unknown as PromiseLike<{ data: KvitelRequestRow[] | null; error: { message: string } | null }>
   })
   return { rows: applyKvitelFilters(rows, f), error }
+}
+
+// השורות לקובץ ה-Word: כל הערוצים יחד, רק "ממתין" ו"בוצע", בסדר קבוע —
+// מהישן לחדש לפי זמן ההגשה, ובזמן זהה לפי מזהה הבקשה; בתוך בקשה לפי סדר השורות.
+// כך ייצוא חוזר של אותו סינון נותן בדיוק את אותו קובץ.
+export function kvitelExportLines(rows: KvitelRequestRow[], ids?: Set<string>): string[] {
+  return rows
+    .filter(r => (ids?.size ? ids.has(r.id) : true) && (r.status === 'pending' || r.status === 'done'))
+    .sort((a, b) => Date.parse(a.submitted_at) - Date.parse(b.submitted_at) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .flatMap(r => [...r.kvitel_request_lines].sort((a, b) => a.position - b.position).map(l => formatLine({
+      name: l.name, relation: l.relation, parentName: l.parent_name, requestType: l.request_type, requestNote: l.request_note,
+    })))
 }

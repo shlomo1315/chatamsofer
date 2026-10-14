@@ -2,12 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
-import { formatLine } from '@/lib/kvitel'
 import { buildKvitelDocx } from '@/lib/kvitelDocx'
-import { loadKvitelRequests, parseKvitelFilters } from '@/lib/kvitelQuery'
+import { kvitelExportLines, loadKvitelRequests, parseKvitelFilters } from '@/lib/kvitelQuery'
 
 // ייצוא הקוויטל לקובץ Word — אותו סינון כמו במסך (lib/kvitelQuery).
-// ?ids=a,b — רק הבקשות שסומנו. בלי ids — כל מה שעומד בסינון.
+// ?ids=a,b — רק הבקשות שסומנו. בלי ids — כל מה שעומד בסינון, מכל הערוצים יחד.
 //
 // ⚠️ "לבדיקה" ו"בוטל" לעולם לא נכנסים לקובץ: שם שלא אושר לא מגיע לציון.
 
@@ -29,12 +28,7 @@ export async function GET(request: NextRequest) {
   const { rows, error } = await loadKvitelRequests(db, filters)
   if (error) return NextResponse.json({ error: 'שליפת הבקשות נכשלה' }, { status: 500 })
 
-  const lines = rows
-    .filter(r => (ids.size ? ids.has(r.id) : true) && (r.status === 'pending' || r.status === 'done'))
-    .reverse() // מהישן לחדש, בסדר ההגשה
-    .flatMap(r => r.kvitel_request_lines.map(l => formatLine({
-      name: l.name, relation: l.relation, parentName: l.parent_name, requestType: l.request_type, requestNote: l.request_note,
-    })))
+  const lines = kvitelExportLines(rows, ids)
   if (!lines.length) return NextResponse.json({ error: 'אין שמות מאושרים לייצוא בסינון הזה' }, { status: 404 })
 
   const logoPng = await readFile(path.join(process.cwd(), 'public', 'logo-voucher.png')).catch(() => null)
