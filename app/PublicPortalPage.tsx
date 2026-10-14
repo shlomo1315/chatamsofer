@@ -2561,7 +2561,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         body: JSON.stringify({ beneficiary_id: beneficiary.id, ...birthForm, wants_food_card: wantsFoodCard, wants_recovery: wantsRecovery, card_center_id: wantsFoodCard ? cardCenterId : null, is_twins: isTwins, babies, birth_certificate_url: certUrl, birth_certificate_url_2: certUrl2 || undefined, baby_name_pending: noBabyName }),
       })
       const data = await res.json()
-      if (!res.ok) { setError(data.error || 'שגיאה בשליחת הבקשה'); return }
+      if (!res.ok) { setError(data.error || 'שגיאה בשליחת הבקשה'); setLoading(false); return }
       setRequestType('birth')
       setStep('request-sent')
     } catch {
@@ -2628,7 +2628,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         body: JSON.stringify({ beneficiary_id: beneficiary.id, ...loanForm, document_urls: documentUrls }),
       })
       const data = await res.json()
-      if (!res.ok) { setError(data.error || 'שגיאה בשליחת הבקשה'); return }
+      if (!res.ok) { setError(data.error || 'שגיאה בשליחת הבקשה'); setLoading(false); return }
       setLoanModalOpen(false)
       setLoanWeddingFile(null)
       setRequestType('loan')
@@ -2668,7 +2668,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       fd.append('file', aidFile)
       const res = await fetch(`/api/portal/financial-aid-request${previewCode ? `?preview=${encodeURIComponent(previewCode)}` : ''}`, { method: 'POST', body: fd })
       const data = await res.json()
-      if (!res.ok) { setError(data.error || 'שגיאה בשליחת הבקשה'); return }
+      if (!res.ok) { setError(data.error || 'שגיאה בשליחת הבקשה'); setLoading(false); return }
       setAidModalOpen(false); setAidReason(''); setAidFile(null)
       setRequestType('financial_aid')
       setStep('request-sent')
@@ -2903,7 +2903,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         body: JSON.stringify({ beneficiary_id: beneficiary.id, birth_type: 'silent', birth_date: silentForm.birth_date, recovery_home: silentForm.recovery_home, wants_food_card: wantsFoodCard, wants_recovery: wantsRecovery, card_center_id: wantsFoodCard ? cardCenterId : null, notes: silentForm.notes, birth_certificate_url: certUrl }),
       })
       const data = await res.json()
-      if (!res.ok) { setError(data.error || 'שגיאה בשליחת הבקשה'); return }
+      if (!res.ok) { setError(data.error || 'שגיאה בשליחת הבקשה'); setLoading(false); return }
       setRequestType('birth')
       setStep('request-sent')
     } catch {
