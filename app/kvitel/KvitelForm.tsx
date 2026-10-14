@@ -5,7 +5,7 @@ import { Plus, Trash2, CheckCircle2 } from 'lucide-react'
 import { KVITEL_REQUEST_TYPES, MAX_LINES, formatLine, type KvitelRelation } from '@/lib/kvitel'
 
 interface Row { name: string; relation: KvitelRelation; parentName: string; requestType: string; requestNote: string }
-const emptyRow = (): Row => ({ name: '', relation: 'ben', parentName: '', requestType: 'refua', requestNote: '' })
+const emptyRow = (): Row => ({ name: '', relation: 'ben', parentName: '', requestType: '', requestNote: '' })
 
 const input = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base text-slate-900 focus:border-[#1B3256] focus:outline-none focus:ring-2 focus:ring-[#1B3256]/20'
 const label = 'mb-1 block text-sm font-medium text-slate-700'
@@ -18,12 +18,21 @@ export default function KvitelForm() {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [sent, setSent] = useState<string[] | null>(null)
+  const [missingType, setMissingType] = useState<Set<number>>(new Set())
 
   const update = (i: number, patch: Partial<Row>) => setRows(rs => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)))
+
+  function removeRow(i: number) {
+    setRows(rs => rs.filter((_, j) => j !== i))
+    setMissingType(new Set())
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
+    const missing = new Set(rows.flatMap((r, i) => (r.requestType ? [] : [i])))
+    setMissingType(missing)
+    if (missing.size) { setError('נא לבחור את סוג הבקשה בכל השמות'); return }
     setSending(true)
     try {
       const res = await fetch('/api/kvitel', {
@@ -90,7 +99,7 @@ export default function KvitelForm() {
             <div className="mb-3 flex items-center justify-between">
               <legend className="text-sm font-semibold text-slate-500">שם {i + 1}</legend>
               {rows.length > 1 && (
-                <button type="button" onClick={() => setRows(rs => rs.filter((_, j) => j !== i))} className="flex items-center gap-1 text-sm text-rose-700" aria-label={`הסרת שם ${i + 1}`}>
+                <button type="button" onClick={() => removeRow(i)} className="flex items-center gap-1 text-sm text-rose-700" aria-label={`הסרת שם ${i + 1}`}>
                   <Trash2 className="h-4 w-4" aria-hidden /> הסרה
                 </button>
               )}
@@ -121,9 +130,21 @@ export default function KvitelForm() {
             </div>
             <div className="mt-4">
               <label htmlFor={`type-${i}`} className={label}>הבקשה</label>
-              <select id={`type-${i}`} className={input} value={r.requestType} onChange={e => update(i, { requestType: e.target.value })}>
-                {KVITEL_REQUEST_TYPES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+              <select
+                id={`type-${i}`}
+                className={`${input} ${r.requestType ? '' : 'text-slate-500'} ${missingType.has(i) ? 'border-rose-500' : ''}`}
+                value={r.requestType}
+                aria-invalid={missingType.has(i)}
+                aria-describedby={missingType.has(i) ? `type-err-${i}` : undefined}
+                onChange={e => {
+                  update(i, { requestType: e.target.value })
+                  setMissingType(m => { const next = new Set(m); next.delete(i); return next })
+                }}
+              >
+                <option value="" disabled>נא בחר את סוג הבקשה</option>
+                {KVITEL_REQUEST_TYPES.map(t => <option key={t.key} value={t.key} className="text-slate-900">{t.label}</option>)}
               </select>
+              {missingType.has(i) && <p id={`type-err-${i}`} className="mt-1 text-sm text-rose-700">נא לבחור את סוג הבקשה</p>}
               {r.requestType === 'other' && (
                 <input className={`${input} mt-2`} value={r.requestNote} maxLength={80} onChange={e => update(i, { requestNote: e.target.value })} placeholder="כתבו את הבקשה בקצרה" aria-label="הבקשה" />
               )}
