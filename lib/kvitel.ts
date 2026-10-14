@@ -11,10 +11,13 @@ export const KVITEL_REQUEST_TYPES = [
   { key: 'parnasa',   label: 'פרנסה ברווח' },
   { key: 'zivug',     label: 'זיווג הגון' },
   { key: 'zera',      label: 'זרע של קיימא' },
-  { key: 'hatzlacha', label: 'הצלחה' },
-  { key: 'yeshua',    label: 'ישועה וברכה' },
+  { key: 'hatzlacha', label: 'ברכה והצלחה בכל העניינים' },
+  { key: 'yeshua',    label: 'ברכה והצלחה בכל העניינים' },
   { key: 'other',     label: 'אחר' },
 ] as const
+
+// hatzlacha ו-yeshua קיבלו אותה תווית; ברשימות הבחירה מוצגת פעם אחת.
+export const KVITEL_REQUEST_OPTIONS = KVITEL_REQUEST_TYPES.filter(t => t.key !== 'hatzlacha')
 
 export type KvitelRequestType = typeof KVITEL_REQUEST_TYPES[number]['key']
 export type KvitelRelation = 'ben' | 'bat'
