@@ -10,6 +10,7 @@ import { datesInRange } from '@/lib/recoveryRange'
 import { babiesOf, babyNameLabel, type AidNameFields } from '@/lib/babyNames'
 import RecoveryDatePicker from './RecoveryDatePicker'
 import PdfCanvasView from '@/components/ui/PdfCanvasView'
+import { DOC_CIPHER_ID, scrambleBytes } from '@/lib/docCipher'
 import { extractUrl } from '@/lib/extractUrl'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import { he } from 'date-fns/locale'
@@ -1149,14 +1150,7 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                                     <p className="text-[11px] font-semibold text-emerald-700 px-3 py-1.5 flex items-center gap-1">
                                       <Check size={13} /> הקבלה נשמרה במערכת
                                     </p>
-                                    {/\.pdf(\?|#|$)/i.test(receiptUrl[aid.id] as string) ? (
-                                      <PdfCanvasView url={receiptUrl[aid.id] as string} direct maxPages={1}
-                                        className="w-full max-h-64 overflow-hidden bg-white" />
-                                    ) : (
-                                      // eslint-disable-next-line @next/next/no-img-element
-                                      <img src={receiptUrl[aid.id] as string} alt="קבלה"
-                                        className="w-full max-h-64 object-contain bg-white" />
-                                    )}
+                                    <ReceiptPreview home={home} aidId={aid.id} url={receiptUrl[aid.id] as string} />
                                   </div>
                                 )}
                               </label>
@@ -1199,6 +1193,37 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
 }
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
+// הדלי פרטי, ולכן הקבלה נטענת דרך השרת (אימות פורטל) ולא מהכתובת הציבורית.
+function ReceiptPreview({ home, aidId, url }: { home: string; aidId: string; url: string }) {
+  const api = `/api/portal/recovery-receipt?home=${encodeURIComponent(home)}&aidId=${encodeURIComponent(aidId)}&u=${encodeURIComponent(url)}`
+  const isPdf = /\.pdf(\?|#|$)/i.test(url)
+  const [img, setImg] = useState<{ key: string; src: string; err: boolean } | null>(null)
+  useEffect(() => {
+    if (isPdf) return
+    let alive = true
+    ;(async () => {
+      try {
+        const r = await fetch(api, { credentials: 'same-origin' })
+        const d = await r.json()
+        if (!r.ok || !d.data) throw new Error()
+        const bin = atob(d.data)
+        const bytes = new Uint8Array(bin.length)
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+        if (d.enc === DOC_CIPHER_ID) scrambleBytes(bytes)
+        if (alive) setImg({ key: api, src: URL.createObjectURL(new Blob([bytes], { type: d.contentType })), err: false })
+      } catch {
+        if (alive) setImg({ key: api, src: '', err: true })
+      }
+    })()
+    return () => { alive = false }
+  }, [api, isPdf])
+  if (isPdf) return <PdfCanvasView url={api} asData maxPages={1} className="w-full max-h-64 overflow-hidden bg-white" />
+  if (!img || img.key !== api) return <p className="text-xs text-slate-400 p-4 text-center">טוען את הקבלה...</p>
+  if (img.err) return <p className="text-xs text-slate-500 p-4 text-center">לא ניתן להציג את הקבלה כאן, אך היא נשמרה</p>
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={img.src} alt="קבלה" className="w-full max-h-64 object-contain bg-white" />
+}
+
 export default function PortalApp({ home }: { home: string }) {
   const [state, setState] = useState<'loading' | 'login' | 'data'>('loading')
   const [aids, setAids] = useState<Aid[]>([])
