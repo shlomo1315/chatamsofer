@@ -1,10 +1,11 @@
 import { guardPage } from '@/lib/pageGuard'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
+import { getServiceClient } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import PageHeader from '@/components/ui/PageHeader'
 import type { BookFairOrder } from '@/types/bookFair'
 import { PROBLEM_BOOKS_KEY, parseProblemBooks, ordersWithProblemBooks } from '@/lib/bookFairProblemBooks'
-import { aggregateOrderItems, type OrderItemRow } from '@/lib/bookFairOrderItems'
+import { aggregateOrderItems, totalsToMaps, type OrderItemRow } from '@/lib/bookFairOrderItems'
 import type { TierInput } from '@/lib/bookFairShipping'
 import OrdersClient, { type ProblemBookInfo, type RecordingGap } from './OrdersClient'
 
@@ -16,9 +17,21 @@ import OrdersClient, { type ProblemBookInfo, type RecordingGap } from './OrdersC
 
 export const dynamic = 'force-dynamic'
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ⚡ 14.10: לקוח השירות, אחרי guardPage.
+//
+// עם לקוח המשתמש, מדיניות ה-RLS (public.is_staff()) רצה על *כל שורה*: אלפי
+// פריטים והזמנות = אלפי בדיקות הרשאה, וזה עיקר ה-6 שנ' שבלוג. ההרשאה כבר
+// נבדקה פעם אחת בראש הדף, כמו במסך הלוח (app/admin/dashboard).
+// ⚠️ כל השליפות כאן רצות רק אחרי guardPage — ראו BookFairOrdersPage.
+// ─────────────────────────────────────────────────────────────────────────────
+async function db() {
+  return getServiceClient() ?? await createClient()
+}
+
 async function getOrders(): Promise<BookFairOrder[]> {
   if (!isSupabaseConfigured()) return []
-  const supabase = await createClient()
+  const supabase = await db()
 
   // ⚡ עמודות מפורשות: notes ו-tracking_token אינם מוצגים בטבלה ואין
   // סיבה למשוך אותם לכל שורה.
@@ -78,7 +91,7 @@ async function getItems(): Promise<{
   volumes: Record<string, number>
 }> {
   if (!isSupabaseConfigured()) return { counts: {}, books: {}, volumes: {} }
-  const supabase = await createClient()
+  const supabase = await db()
 
   // ⚡ 08.10: כל השורות, בדפים מקבילים (fetchAllRows) — ולא במנות לפי מזהי
   // הזמנות. קודם: 10 שאילתות in טוריות (~1.7 שנ'), ורק *אחרי* שההזמנות
@@ -87,6 +100,17 @@ async function getItems(): Promise<{
   // 7–16 שנ' לפי הלוג — רוב זמן הטעינה. הכרכים נשלפים מהקטלוג בנפרד,
   // במקביל, ומוצמדים בזיכרון (lib/bookFairOrderItems).
   // ⚠️ order('id'): דפדוף בלי סדר קבוע עלול לדלג על שורות או לכפול אותן.
+  // ⚡ 14.10: קודם הסיכום מהמסד — שורה להזמנה (מיגרציה 20261014).
+  type Total = { order_id: string; items: number; volumes: number; book_ids: string[] | null }
+  const totals = await fetchAllRows<Total>((from, to) =>
+    supabase.rpc('book_fair_order_item_totals')
+      .order('order_id')
+      .range(from, to) as unknown as PromiseLike<{ data: Total[] | null; error: { message: string } | null }>
+  )
+  if (!totals.error) return totalsToMaps(totals.rows)
+  // ⚠️ הפונקציה עדיין לא קיימת (המיגרציה לא רצה) — נופלים לשליפה המלאה.
+  console.warn('[book-fair/orders] item totals rpc unavailable, falling back:', totals.error)
+
   type Book = { id: string; volumes: number | null }
   const [items, catalog] = await Promise.all([
     fetchAllRows<OrderItemRow>((from, to) =>
@@ -120,7 +144,7 @@ async function getItems(): Promise<{
 async function getSavedRecordings(): Promise<Record<string, { name: boolean; address: boolean }>> {
   const has: Record<string, { name: boolean; address: boolean }> = {}
   if (!isSupabaseConfigured()) return has
-  const supabase = await createClient()
+  const supabase = await db()
   type Row = { order_id: string | null; kind: string; storage_path: string | null }
   const { rows, error } = await fetchAllRows<Row>((from, to) =>
     supabase.from('book_fair_recordings')
@@ -159,7 +183,7 @@ function recordingGaps(
  */
 async function getProblemBooks(): Promise<ProblemBookInfo[]> {
   if (!isSupabaseConfigured()) return []
-  const supabase = await createClient()
+  const supabase = await db()
   const { data } = await supabase.from('app_settings').select('value').eq('key', PROBLEM_BOOKS_KEY).maybeSingle()
   const marks = parseProblemBooks(data?.value)
   const ids = Object.keys(marks)
@@ -177,7 +201,7 @@ async function getProblemBooks(): Promise<ProblemBookInfo[]> {
 /** טבלת מדרגות המשלוח הנוכחית — לבקרת המשלוח בטבלה. */
 async function getTiers(): Promise<TierInput[]> {
   if (!isSupabaseConfigured()) return []
-  const supabase = await createClient()
+  const supabase = await db()
   const { data } = await supabase.from('book_fair_shipping_tiers')
     .select('min_books, max_books, price_agorot, step_volumes, step_agorot')
   return (data ?? []) as TierInput[]
@@ -186,7 +210,7 @@ async function getTiers(): Promise<TierInput[]> {
 /** הזמנות עם תקלת משלוח שלא טופלה — לתגית "תקלה פתוחה" בשורה. */
 async function getOpenIssueOrders(): Promise<string[]> {
   if (!isSupabaseConfigured()) return []
-  const supabase = await createClient()
+  const supabase = await db()
   const { data, error } = await supabase.from('book_fair_shipping_issues')
     .select('order_id').in('status', ['open', 'in_progress']).limit(1000)
   // ⚠️ שגיאה (למשל טבלה שטרם נוצרה) לא מפילה את מסך ההזמנות.
