@@ -259,6 +259,7 @@ export default async function DashboardPage() {
     const HOME: Partial<Record<SectionKey, string>> = {
       book_fair:     '/admin/book-fair',
       kvitel:        '/admin/kvitel',
+      gilyonot:      '/admin/gilyonot',
       beneficiaries: '/admin/beneficiaries',
       lineage:       '/admin/lineage',
       loans:         '/admin/loans',
