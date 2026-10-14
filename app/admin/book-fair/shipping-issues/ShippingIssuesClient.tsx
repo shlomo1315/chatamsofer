@@ -24,6 +24,10 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 
 type OrderMini = { id: string; order_number: string; customer_name: string | null; customer_phone: string | null }
+// ⚠️ join רבים-לאחד חוזר כאובייקט או כמערך — שתי הצורות נתמכות.
+type CityRef = { name: string } | { name: string }[] | null
+const cityName = (o: { city?: CityRef } | null) =>
+  (Array.isArray(o?.city) ? o.city[0]?.name : o?.city?.name) || null
 type Row = {
   id: string
   issue_type: IssueType
@@ -32,7 +36,7 @@ type Row = {
   description: string
   created_at: string
   updated_at: string
-  order: OrderMini | null
+  order: (OrderMini & { city?: CityRef }) | null
 }
 type Panel = { kind: 'view'; id: string } | { kind: 'new'; orderId: string } | { kind: 'edit'; id: string } | null
 
@@ -160,7 +164,7 @@ export default function ShippingIssuesClient({ initialFilters, newForOrder, open
           <table className="w-full border-collapse text-sm">
             <thead className="hidden md:table-header-group">
               <tr className="border-b border-slate-200 bg-slate-50 text-right text-xs font-semibold text-slate-500">
-                <th className="px-3 py-2.5">הזמנה</th><th className="px-3 py-2.5">לקוח</th><th className="px-3 py-2.5">סוג</th>
+                <th className="px-3 py-2.5">הזמנה</th><th className="px-3 py-2.5">לקוח</th><th className="px-3 py-2.5">עיר</th><th className="px-3 py-2.5">סוג</th>
                 <th className="px-3 py-2.5">תיאור</th><th className="px-3 py-2.5">סטטוס</th><th className="px-3 py-2.5">נפתח</th>
                 <th className="px-3 py-2.5">עודכן</th>
               </tr>
@@ -186,6 +190,10 @@ export default function ShippingIssuesClient({ initialFilters, newForOrder, open
                     <td className="block px-3 py-1 md:table-cell md:py-[11px]">
                       {r.order?.customer_name || '—'}
                       <div className="text-xs text-slate-500">{r.order?.customer_phone}</div>
+                    </td>
+                    {/* 🔴 14.10: עיר — שלמה ביקש לראות לכל תקלה לאן נשלח המשלוח. */}
+                    <td className="block px-3 py-1 text-slate-700 md:table-cell md:py-[11px]">
+                      {cityName(r.order) ?? '—'}
                     </td>
                     <td className="block px-3 py-1 md:table-cell md:py-[11px]">
                       <span className={`${tag} bg-slate-100 font-medium text-slate-700`}>{ISSUE_TYPE_LABELS[r.issue_type]}</span>

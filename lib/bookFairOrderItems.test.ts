@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { aggregateOrderItems } from './bookFairOrderItems'
+import { aggregateOrderItems, totalsToMaps } from './bookFairOrderItems'
 
 describe('aggregateOrderItems', () => {
   it('סוכם כמות, כרכים וספרים לכל הזמנה', () => {
@@ -23,5 +23,19 @@ describe('aggregateOrderItems', () => {
     )
     expect(out.volumes).toEqual({ o1: 9 })
     expect(out.books).toEqual({ o1: ['gone'] })
+  })
+})
+
+describe('totalsToMaps', () => {
+  it('ממיר את סיכום המסד לאותן מפות', () => {
+    const out = totalsToMaps([
+      { order_id: 'o1', items: 3, volumes: 7, book_ids: ['b1', 'b2'] },
+      { order_id: 'o2', items: 1, volumes: 1, book_ids: null },
+    ])
+    expect(out).toEqual({
+      counts: { o1: 3, o2: 1 },
+      volumes: { o1: 7, o2: 1 },
+      books: { o1: ['b1', 'b2'] },
+    })
   })
 })

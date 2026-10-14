@@ -35,3 +35,20 @@ export function aggregateOrderItems(
   }
   return { counts, books, volumes }
 }
+
+/**
+ * אותן מפות מתוך הסיכום שהמסד כבר חישב (book_fair_order_item_totals).
+ */
+export function totalsToMaps(
+  rows: { order_id: string; items: number; volumes: number; book_ids: string[] | null }[],
+): ReturnType<typeof aggregateOrderItems> {
+  const counts: Record<string, number> = {}
+  const books: Record<string, string[]> = {}
+  const volumes: Record<string, number> = {}
+  for (const r of rows) {
+    counts[r.order_id] = Number(r.items) || 0
+    volumes[r.order_id] = Number(r.volumes) || 0
+    if (r.book_ids?.length) books[r.order_id] = r.book_ids
+  }
+  return { counts, books, volumes }
+}
