@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import JSZip from 'jszip'
 import { cleanName, normalizePhone, validateLines, formatLine, personKey } from './kvitel'
-import { buildKvitelDocx, shabbatLabel } from './kvitelDocx'
+import { buildKvitelDocx, buildKvitelDocumentXml, shabbatLabel } from './kvitelDocx'
 import { applyKvitelFilters, kvitelExportLines, parseKvitelFilters, type KvitelRequestRow } from './kvitelQuery'
 
 describe('kvitel', () => {
@@ -56,6 +56,20 @@ describe('kvitelDocx', () => {
     expect(zip.file('[Content_Types].xml')).toBeTruthy()
     expect(zip.file('word/media/logo.png')).toBeNull()
   })
+
+  it('סדר התגיות לפי סכמת Word — אחרת Word פוסל את הקובץ כפגום', () => {
+    const doc = buildKvitelDocumentXml({ lines: ['א בן ב - לרפואה שלימה'], date: new Date('2026-10-14'), logoPng: new Uint8Array([1]) })
+    // pPr: pBdr לפני bidi, bidi לפני spacing, spacing לפני jc
+    for (const m of doc.matchAll(/<w:pPr>(.*?)<\/w:pPr>/g)) {
+      const order = ['<w:pBdr', '<w:bidi/>', '<w:spacing', '<w:jc'].map(t => m[1].indexOf(t)).filter(i => i >= 0)
+      expect(order).toEqual([...order].sort((a, b) => a - b))
+    }
+    // rPr: rFonts, b, i, sz, u, rtl
+    for (const m of doc.matchAll(/<w:rPr>(.*?)<\/w:rPr>/g)) {
+      const order = ['<w:rFonts', '<w:b/>', '<w:i/>', '<w:sz ', '<w:u ', '<w:rtl/>'].map(t => m[1].indexOf(t)).filter(i => i >= 0)
+      expect(order).toEqual([...order].sort((a, b) => a - b))
+    }
+  })
 })
 
 describe('kvitelQuery', () => {
@@ -106,5 +120,19 @@ describe('kvitelQuery', () => {
     expect(kvitelExportLines(rows)).toEqual(names)
     expect(kvitelExportLines([...rows].reverse())).toEqual(names)
     expect(kvitelExportLines(rows, new Set(['r2', 'r0']))).toEqual(['ב בן רחל - לרפואה שלימה'])
+  })
+})
+
+describe('kvitelDocLayout', () => {
+  it('הקובץ נכתב מאותו מבנה שהתצוגה המקדימה מציגה', async () => {
+    const { kvitelDocLayout } = await import('./kvitelDocLayout')
+    const date = new Date('2026-10-14')
+    const lines = ['א בן ב - לרפואה שלימה', 'ג בת ד']
+    const layout = kvitelDocLayout(lines, date)
+    const xml = buildKvitelDocumentXml({ lines, date })
+    for (const p of [...layout.titles, ...layout.body]) {
+      if (p.run) expect(xml).toContain(p.run.text.replace(/"/g, '&quot;'))
+    }
+    expect(layout.body.filter(p => p.run?.size === 26).map(p => p.run!.text)).toEqual(lines)
   })
 })

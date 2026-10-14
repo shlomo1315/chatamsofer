@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
 import { buildKvitelDocx } from '@/lib/kvitelDocx'
+import { KVITEL_LOGO } from '@/lib/kvitelDocLayout'
 import { kvitelExportLines, loadKvitelRequests, parseKvitelFilters } from '@/lib/kvitelQuery'
 
 // ייצוא הקוויטל לקובץ Word — אותו סינון כמו במסך (lib/kvitelQuery).
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
   const lines = kvitelExportLines(rows, ids)
   if (!lines.length) return NextResponse.json({ error: 'אין שמות מאושרים לייצוא בסינון הזה' }, { status: 404 })
 
-  const logoPng = await readFile(path.join(process.cwd(), 'public', 'logo-voucher.png')).catch(() => null)
+  const logoPng = await readFile(path.join(process.cwd(), 'public', KVITEL_LOGO.file)).catch(() => null)
   const bytes = await buildKvitelDocx({ lines, date: new Date(), logoPng })
   const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(new Date())
   return new NextResponse(Buffer.from(bytes), {

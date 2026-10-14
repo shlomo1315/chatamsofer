@@ -4,7 +4,7 @@ import { logActivity } from '@/lib/activityLog'
 import { KVITEL_STATUSES, type KvitelStatus } from '@/lib/kvitel'
 
 // עדכון סטטוס לבקשה אחת או לכמה יחד (app/admin/kvitel).
-// PATCH { ids: uuid[], status } — "בוצע" רושם מתי ומי; חזרה ממנו מנקה.
+// PATCH { ids: uuid[], status } — "נשלח לציון" (done) רושם מתי ומי; חזרה ממנו מנקה.
 //
 // ⚠️ כל נתיב מגן על עצמו: ה-middleware אינו מכסה /api כלל.
 
