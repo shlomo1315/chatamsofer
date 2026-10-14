@@ -362,6 +362,20 @@ export async function register() {
     console.log('[newsletter] sender started (every 1m)')
   }
 
+  // ── גיליונות החתם סופר — שליחת הגיליון השבועי, כל דקה ──
+  // אותה שיטה כמו הניוזלטר (lib/gilyonotSender.ts). לא שולח בשבת ובחג.
+  if (process.env.GILYONOT_DISABLED !== '1') {
+    const tickGilyonot = async () => {
+      try {
+        const { runGilyonotSender } = await import('@/lib/gilyonotSender')
+        const res = await runGilyonotSender()
+        if (res.sent || res.failed) console.log(`[gilyonot] sent=${res.sent} failed=${res.failed}`)
+      } catch (err) { console.error('[gilyonot] tick failed', err) }
+    }
+    setTimeout(() => { void tickGilyonot(); setInterval(() => { void tickGilyonot() }, MINUTE_MS) }, INITIAL_DELAY_MS)
+    console.log('[gilyonot] sender started (every 1m)')
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // ── פתיחה אוטומטית של היריד — כל דקה ──
   //
