@@ -185,7 +185,10 @@ export default function KvitelClient({ rows, filters, canEdit }: { rows: KvitelR
                 <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">לא זוהו שמות. יש לקרוא את המקור ולהקליד את השמות בטופס, ואז לבטל בקשה זו.</p>
               )}
               {r.note && <p className="mt-2 text-sm text-slate-600">{r.note}</p>}
-              {r.recording_url && (
+              {r.recording_url?.startsWith('yemot:') && (
+                <p className="mt-2 text-sm text-slate-600">ההקלטה שמורה במערכת הטלפון (ימות), בתיקיית ההקלטות לפי מספר המתקשר והשעה.</p>
+              )}
+              {r.recording_url && !r.recording_url.startsWith('yemot:') && (
                 <audio controls preload="none" src={r.recording_url} className="mt-2 w-full" aria-label="ההקלטה של המתקשר" />
               )}
               {r.raw_text && (
