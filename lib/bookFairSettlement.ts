@@ -147,3 +147,15 @@ export function groupByParty(rows: SettlementRow[], payments: AuthorPayment[]): 
   for (const p of map.values()) p.balance = p.net - p.paid
   return [...map.values()].sort((a, b) => b.net - a.net || a.party.localeCompare(b.party, 'he'))
 }
+
+export type PartyStatus = 'missing' | 'paid' | 'partial' | 'unpaid'
+export const PARTY_STATUS_LABELS: Record<PartyStatus, string> = {
+  missing: 'חסר שיוך', paid: 'שולם', partial: 'שולם חלקית', unpaid: 'טרם שולם',
+}
+
+/** מצב התשלום של גורם. "ללא מחבר/מו"ל" תמיד חסר שיוך, כדי שישלימו בקטלוג. */
+export function partyStatus(p: Pick<PartyRow, 'party' | 'paid' | 'balance'>): PartyStatus {
+  if (p.party === NO_PARTY) return 'missing'
+  if (p.balance <= 0) return 'paid'
+  return p.paid > 0 ? 'partial' : 'unpaid'
+}
