@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { netOf, partyOf, buildBookRows, groupByParty, NO_PARTY, type AuthorPayment } from './bookFairSettlement'
+import { netOf, partyOf, buildBookRows, groupByParty, partyStatus, adjustmentTrail, NO_PARTY, type AuthorPayment } from './bookFairSettlement'
 
 const books = [
   { id: 'a', sku: '1', title: 'שו"ת א', author: 'ר׳ משה', publisher: 'מכון חתם סופר' },
@@ -61,5 +61,26 @@ describe('buildBookRows', () => {
     expect(inst.byMethod).toEqual({ transfer: 50000, cash: 7000 })
     expect(parties.find(p => p.party === 'ר׳ משה')).toMatchObject({ books: 1, net: 8550, paid: 0, balance: 8550 })
     expect(parties.find(p => p.party === 'מחבר חדש')).toMatchObject({ books: 0, balance: -1000 })
+  })
+})
+
+describe('partyStatus', () => {
+  it('מצב לפי יתרה ותשלומים', () => {
+    expect(partyStatus({ party: NO_PARTY, paid: 0, balance: 100 })).toBe('missing')
+    expect(partyStatus({ party: 'א', paid: 100, balance: 0 })).toBe('paid')
+    expect(partyStatus({ party: 'א', paid: 200, balance: -100 })).toBe('paid')
+    expect(partyStatus({ party: 'א', paid: 50, balance: 50 })).toBe('partial')
+    expect(partyStatus({ party: 'א', paid: 0, balance: 50 })).toBe('unpaid')
+  })
+})
+
+describe('adjustmentTrail', () => {
+  it('לפני ואחרי לכל התאמה, מהחדשה לישנה', () => {
+    // לפי ההזמנות 123, ירד ל-122 ואחר כך ל-121
+    expect(adjustmentTrail(121, [{ delta: -1 }, { delta: -1 }])).toEqual([
+      { delta: -1, before: 122, after: 121 },
+      { delta: -1, before: 123, after: 122 },
+    ])
+    expect(adjustmentTrail(5, [])).toEqual([])
   })
 })

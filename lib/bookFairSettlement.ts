@@ -12,7 +12,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const SETTLEMENT_REDUCTION = 0.05
-export const NO_PARTY = 'ללא מחבר/מו"ל'
+export const NO_PARTY = 'ללא מחבר / מו"ל'
 
 export const PAYMENT_METHODS = ['transfer', 'check', 'cash', 'other'] as const
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number]
@@ -146,4 +146,30 @@ export function groupByParty(rows: SettlementRow[], payments: AuthorPayment[]): 
   }
   for (const p of map.values()) p.balance = p.net - p.paid
   return [...map.values()].sort((a, b) => b.net - a.net || a.party.localeCompare(b.party, 'he'))
+}
+
+export type PartyStatus = 'missing' | 'paid' | 'partial' | 'unpaid'
+export const PARTY_STATUS_LABELS: Record<PartyStatus, string> = {
+  missing: 'חסר שיוך', paid: 'שולם', partial: 'שולם חלקית', unpaid: 'טרם שולם',
+}
+
+/** מצב התשלום של גורם. "ללא מחבר/מו"ל" תמיד חסר שיוך, כדי שישלימו בקטלוג. */
+export function partyStatus(p: Pick<PartyRow, 'party' | 'paid' | 'balance'>): PartyStatus {
+  if (p.party === NO_PARTY) return 'missing'
+  if (p.balance <= 0) return 'paid'
+  return p.paid > 0 ? 'partial' : 'unpaid'
+}
+
+/**
+ * יומן התאמות של ספר עם הכמות לפני ואחרי כל שינוי ("122 → 121").
+ * `history` מהחדש לישן, `currentQty` = הכמות בדוח אחרי כל ההתאמות.
+ */
+export function adjustmentTrail<T extends { delta: number }>(currentQty: number, history: T[]): (T & { before: number; after: number })[] {
+  let after = currentQty
+  return history.map(a => {
+    const before = after - a.delta
+    const step = { ...a, before, after }
+    after = before
+    return step
+  })
 }
