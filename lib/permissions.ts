@@ -30,6 +30,7 @@ export const ALL_SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'newsletter',      label: 'ניוזלטר' },
   { key: 'mail',            label: 'תיבות דואר' },
   { key: 'book_fair',       label: 'יריד ספרים' },
+  { key: 'kvitel',          label: 'קוויטלאך' },
 ]
 
 export function levelAllows(level: PermissionLevel | undefined, action: PermAction): boolean {

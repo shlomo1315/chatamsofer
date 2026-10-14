@@ -258,6 +258,7 @@ export default async function DashboardPage() {
   if (staff.role !== 'admin') {
     const HOME: Partial<Record<SectionKey, string>> = {
       book_fair:     '/admin/book-fair',
+      kvitel:        '/admin/kvitel',
       beneficiaries: '/admin/beneficiaries',
       lineage:       '/admin/lineage',
       loans:         '/admin/loans',
