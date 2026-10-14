@@ -70,7 +70,7 @@ export default function KvitelForm() {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-6" noValidate>
+    <form onSubmit={submit} className="space-y-4" noValidate>
       {/* מלכודת לבוטים — מוסתר מבני אדם */}
       <div aria-hidden className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
         <label htmlFor="website">אתר</label>
@@ -92,7 +92,7 @@ export default function KvitelForm() {
             <div className="grid gap-4 sm:grid-cols-[1fr_auto_1fr]">
               <div>
                 <label htmlFor={`name-${i}`} className={label}>שם</label>
-                <input id={`name-${i}`} className={input} value={r.name} onChange={e => update(i, { name: e.target.value })} placeholder="מאיר" />
+                <input id={`name-${i}`} className={input} value={r.name} onChange={e => update(i, { name: e.target.value })} placeholder="הזינו את השם הפרטי" />
               </div>
               <div>
                 <span className={label}>בן / בת</span>
@@ -110,7 +110,7 @@ export default function KvitelForm() {
               </div>
               <div>
                 <label htmlFor={`parent-${i}`} className={label}>שם האם</label>
-                <input id={`parent-${i}`} className={input} value={r.parentName} onChange={e => update(i, { parentName: e.target.value })} placeholder="פעשא לאה" />
+                <input id={`parent-${i}`} className={input} value={r.parentName} onChange={e => update(i, { parentName: e.target.value })} placeholder="הזינו את שם האם" />
               </div>
             </div>
             <div className="mt-4">
@@ -148,13 +148,15 @@ export default function KvitelForm() {
 
       {error && <p role="alert" className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</p>}
 
-      <button
-        type="submit" disabled={sending}
-        className="w-full rounded-xl py-3.5 text-lg font-bold text-white disabled:opacity-60"
-        style={{ backgroundColor: '#1B3256' }}
-      >
-        {sending ? 'שולח…' : 'שליחת השמות'}
-      </button>
+      <div className="sticky bottom-0 -mx-4 border-t border-slate-200 bg-slate-50/95 px-4 py-3 backdrop-blur">
+        <button
+          type="submit" disabled={sending}
+          className="w-full rounded-xl py-3.5 text-lg font-bold text-white disabled:opacity-60"
+          style={{ backgroundColor: '#1B3256' }}
+        >
+          {sending ? 'שולח…' : 'שליחת השמות'}
+        </button>
+      </div>
     </form>
   )
 }
