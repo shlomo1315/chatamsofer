@@ -3,11 +3,12 @@
 import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { CheckCircle2, Copy, Download, ExternalLink, Eye, FileSpreadsheet, FileText, FileUp, Inbox, Link2, Loader2, MailCheck, Newspaper, Plus, RefreshCw, Search, Send, ShieldAlert, Trash2, Upload, UserPlus, Users, X } from 'lucide-react'
+import { CheckCircle2, Copy, Download, ExternalLink, Eye, FileSpreadsheet, FileText, FileUp, Inbox, Link2, Loader2, MailCheck, Newspaper, Plus, RefreshCw, Search, Send, ShieldAlert, Trash2, Truck, Upload, UserPlus, Users, X } from 'lucide-react'
 import { downloadXlsx, todayStamp } from '@/lib/downloadXlsx'
 import { defaultSubject } from '@/lib/gilyonotMail'
 import type { NedarimPullView } from '@/lib/gilyonotNedarimPull'
 import NedarimPull from './NedarimPull'
+import Distributors, { type DistributorEventView, type DistributorMessageView, type DistributorSettingsView, type DistributorView } from './Distributors'
 import { Badge, btnDanger, btnGhost, btnPrimary, Card, CardHeader, input, link, Meter, Notice, Stat, StepNum, type Tone } from './ui'
 
 export interface SubscriberView {
@@ -55,9 +56,10 @@ async function api(url: string, init?: RequestInit): Promise<Record<string, unkn
 const json = (method: string, body: unknown): RequestInit => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 
 export default function GilyonotClient(props: {
-  tab: 'subscribers' | 'issues' | 'nedarim'
+  tab: 'subscribers' | 'issues' | 'nedarim' | 'distributors'
   subscribers: SubscriberView[]
   nedarim: NedarimPullView | null
+  distributors: { rows: DistributorView[]; events: DistributorEventView[]; messages: DistributorMessageView[]; settings: DistributorSettingsView } | null
   issues: IssueView[]
   defaultParasha: string
   canAdd: boolean
@@ -68,6 +70,7 @@ export default function GilyonotClient(props: {
   const tabs = [
     { key: 'subscribers', label: 'רשימת תפוצה', count: active, icon: Users },
     { key: 'issues', label: 'גיליונות ושליחה', count: props.issues.length, icon: Newspaper },
+    { key: 'distributors', label: 'מפיצים', count: props.distributors ? props.distributors.rows.filter(r => r.status === 'active').length : null, icon: Truck },
     ...(props.nedarim ? [{ key: 'nedarim', label: 'נדרים פלוס', count: null, icon: RefreshCw }] : []),
   ]
   return (
@@ -91,7 +94,9 @@ export default function GilyonotClient(props: {
         </div>
       </nav>
 
-      {props.tab === 'nedarim' && props.nedarim
+      {props.tab === 'distributors'
+        ? (props.distributors ? <Distributors {...props.distributors} canAdd={props.canAdd} canEdit={props.canEdit} canDelete={props.canDelete} /> : null)
+        : props.tab === 'nedarim' && props.nedarim
         ? <NedarimPull view={props.nedarim} />
         : props.tab !== 'issues'
         ? <Subscribers rows={props.subscribers} canAdd={props.canAdd} canEdit={props.canEdit} canDelete={props.canDelete} />
