@@ -376,3 +376,109 @@ export function planDistributorAction(d: DistributorSnapshot, action: unknown, i
       } }
   }
 }
+
+// ── לוח הגרפים של המפיצים: ערים, כיסוי מסלולים, מצב המערך, מגמה ובעיות ──
+
+export type DistributorIssue = 'noRoute' | 'noQuantity' | 'noPhone' | 'dupPhone' | 'noCity' | 'cityNoRoutes'
+export const ISSUE_LABELS: Record<DistributorIssue, { label: string; hint: string }> = {
+  cityNoRoutes: { label: 'ערים בלי מסלול', hint: 'אף מפיץ בעיר לא שובץ במסלול השליח' },
+  noRoute: { label: 'מפיצים בלי מסלול', hint: 'השליח לא יודע מתי להגיע אליהם' },
+  noPhone: { label: 'בלי טלפון', hint: 'אי אפשר להתקשר ולא להיכנס לממשק המפיץ' },
+  dupPhone: { label: 'טלפון כפול', hint: 'אותו מספר אצל יותר ממפיץ אחד' },
+  noQuantity: { label: 'בלי כמות', hint: 'כמות הגיליונות בשבוע היא 0' },
+  noCity: { label: 'בלי עיר', hint: 'לא ישובצו לשום מסלול' },
+}
+export const ISSUE_ORDER: DistributorIssue[] = ['cityNoRoutes', 'noRoute', 'noPhone', 'dupPhone', 'noQuantity', 'noCity']
+
+export interface DashboardRow {
+  city: string | null
+  quantity: number
+  status: DistributorStatus
+  route: number | null
+  phone: string | null
+  phone2: string | null
+  created_at: string
+  removed_at: string | null
+}
+export interface CityStat extends CitySummary { unrouted: number; coverage: number }
+export interface TrendPoint { month: string; joined: number; removed: number; active: number }
+export interface DistributorDashboard {
+  cities: CityStat[]
+  totals: { active: number; removed: number; quantity: number; routed: number; coverage: number }
+  status: { key: 'routed' | 'unrouted' | 'removed'; label: string; value: number }[]
+  trend: TrendPoint[]
+  issues: Record<DistributorIssue, number>
+  dupPhones: Set<string>
+  citiesNoRoutes: Set<string>
+}
+
+const phoneDigits = (p: string | null) => (p ? p.replace(/\D/g, '') : '')
+const pct = (part: number, whole: number) => (whole ? Math.round((part / whole) * 100) : 0)
+const monthKey = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+
+/** אחוז הכיסוי שממנו עיר נחשבת תקינה (מתחתיו: אזהרה; 0: בעיה). */
+export const COVERAGE_OK = 90
+
+/** כל הנתונים של לוח הגרפים, מחושבים מרשימת המפיצים. המגמה: עד 12 חודשים אחרונים, מהחודש של ההרשמה הראשונה. */
+export function buildDistributorDashboard(rows: DashboardRow[], now: Date = new Date()): DistributorDashboard {
+  const active = rows.filter(r => r.status === 'active')
+  const cities: CityStat[] = summarizeByCity(rows).map(c => ({ ...c, unrouted: c.distributors - c.routed, coverage: pct(c.routed, c.distributors) }))
+  const routed = active.filter(r => r.route).length
+
+  const phoneCount = new Map<string, number>()
+  for (const r of active) {
+    for (const p of new Set([phoneDigits(r.phone), phoneDigits(r.phone2)].filter(Boolean))) phoneCount.set(p, (phoneCount.get(p) ?? 0) + 1)
+  }
+  const dupPhones = new Set([...phoneCount].filter(([, n]) => n > 1).map(([p]) => p))
+  const citiesNoRoutes = new Set(cities.filter(c => c.city !== NO_CITY && !c.routed).map(c => c.city))
+
+  const ctx = { dupPhones, citiesNoRoutes }
+  const issues = Object.fromEntries(ISSUE_ORDER.map(k => [k, k === 'cityNoRoutes' ? citiesNoRoutes.size : active.filter(r => matchesIssue(r, k, ctx)).length])) as Record<DistributorIssue, number>
+
+  // מגמה חודשית: הצטרפו, הוסרו, ופעילים בסוף החודש
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+  const times = rows.map(r => Date.parse(r.created_at)).filter(t => !Number.isNaN(t))
+  const first = times.length ? new Date(Math.min(...times)) : end
+  let start = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), 1))
+  const floor = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - 11, 1))
+  if (start < floor) start = floor
+  if (start > end) start = end
+  const trend: TrendPoint[] = []
+  for (let d = start; d <= end; d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))) {
+    const next = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)
+    const key = monthKey(d)
+    trend.push({
+      month: key,
+      joined: rows.filter(r => r.created_at && monthKey(new Date(r.created_at)) === key).length,
+      removed: rows.filter(r => r.status === 'removed' && r.removed_at && monthKey(new Date(r.removed_at)) === key).length,
+      active: rows.filter(r => Date.parse(r.created_at) < next && !(r.status === 'removed' && r.removed_at && Date.parse(r.removed_at) < next)).length,
+    })
+  }
+
+  return {
+    cities,
+    totals: { active: active.length, removed: rows.length - active.length, quantity: active.reduce((s, r) => s + r.quantity, 0), routed, coverage: pct(routed, active.length) },
+    status: [
+      { key: 'routed', label: 'פעילים במסלול', value: routed },
+      { key: 'unrouted', label: 'פעילים בלי מסלול', value: active.length - routed },
+      { key: 'removed', label: 'הוסרו', value: rows.length - active.length },
+    ],
+    trend,
+    issues,
+    dupPhones,
+    citiesNoRoutes,
+  }
+}
+
+/** האם מפיץ שייך לבעיה (לסינון הטבלה בלחיצה על שורה בבלוק הבעיות). */
+export function matchesIssue(r: Pick<DashboardRow, 'city' | 'quantity' | 'route' | 'phone' | 'phone2'>, issue: DistributorIssue,
+  ctx: Pick<DistributorDashboard, 'dupPhones' | 'citiesNoRoutes'>): boolean {
+  switch (issue) {
+    case 'noRoute': return !r.route
+    case 'noQuantity': return !r.quantity
+    case 'noPhone': return !phoneDigits(r.phone) && !phoneDigits(r.phone2)
+    case 'dupPhone': return [r.phone, r.phone2].some(p => ctx.dupPhones.has(phoneDigits(p)))
+    case 'noCity': return !r.city
+    case 'cityNoRoutes': return !!r.city && ctx.citiesNoRoutes.has(r.city)
+  }
+}
