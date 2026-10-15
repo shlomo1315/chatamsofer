@@ -30,8 +30,6 @@ create table if not exists public.gilyonot_distributors (
   source           text not null default 'manual' check (source in ('manual','import','nedarim','phone')),
   removed_at       timestamptz,
   removed_reason   text,
-  -- עולה בכל ניתוק בכוח (הסרה, החלפת פרטי כניסה) ופוסל את הסשנים הקיימים
-  session_version  integer not null default 1,
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now()
 );
@@ -64,16 +62,18 @@ create index if not exists gilyonot_distributor_events_dist_idx on public.gilyon
 create index if not exists gilyonot_distributor_events_open_idx on public.gilyonot_distributor_events (created_at desc) where status = 'open';
 
 -- ── קודי כניסה חד-פעמיים לממשק המפיץ (נשמר רק hash) ──
+-- הקוד קשור למזהה הכניסה ("phone:05..."), ולא לשורה: אדם אחד יכול להפיץ
+-- בכמה בתי כנסת, והוא רואה את כולם בכניסה אחת.
 create table if not exists public.gilyonot_distributor_codes (
   id               uuid primary key default gen_random_uuid(),
-  distributor_id   uuid not null references public.gilyonot_distributors(id) on delete cascade,
+  login_key        text not null,
   code_hash        text not null,
   attempts         integer not null default 0,
   expires_at       timestamptz not null,
   used_at          timestamptz,
   created_at       timestamptz not null default now()
 );
-create index if not exists gilyonot_distributor_codes_dist_idx on public.gilyonot_distributor_codes (distributor_id, created_at desc);
+create index if not exists gilyonot_distributor_codes_key_idx on public.gilyonot_distributor_codes (login_key, created_at desc);
 
 -- ── הודעות שנשלחו למפיצים (לכולם או לפי עיר) ──
 create table if not exists public.gilyonot_distributor_messages (
