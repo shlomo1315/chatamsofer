@@ -40,6 +40,22 @@ export async function xlsxToImportText(buf: ArrayBuffer): Promise<string> {
   return lines.join('\n')
 }
 
+/** כל גיליון בנפרד, עם שמו (לקבצים שבהם לכל גיליון משמעות, כמו קובץ המסלולים). */
+export async function xlsxToSheets(buf: ArrayBuffer): Promise<{ name: string; rows: string[][] }[]> {
+  const wb = new ExcelJS.Workbook()
+  await wb.xlsx.load(buf)
+  const sheets: { name: string; rows: string[][] }[] = []
+  wb.eachSheet(ws => {
+    const rows: string[][] = []
+    ws.eachRow(row => {
+      // Array.from ממלא תאים ריקים באמצע השורה, כדי שמיקום העמודות יישמר
+      rows.push(Array.from((row.values as ExcelJS.CellValue[]).slice(1), v => cellText(v).replace(/[\t\r\n]+/g, ' ')))
+    })
+    sheets.push({ name: ws.name, rows })
+  })
+  return sheets
+}
+
 export function decodeTextFile(buf: ArrayBuffer): string {
   return new TextDecoder('utf-8').decode(buf).replace(/^﻿/, '')
 }
