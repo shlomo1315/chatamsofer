@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
   const statuses = body?.resend === true ? ['pending', 'send_failed', 'sent', 'answered'] : ['pending', 'send_failed']
 
   const { data: rows, error } = await db.from('book_fair_credits')
-    .select('id, customer_name, phone, email, channel, books, amount_agorot, token, status')
+    .select('id, customer_name, phone, email, channel, books, amount_agorot, token, status, updated_at')
     .in('id', ids).in('status', statuses)
   if (error) return NextResponse.json({ error: 'טעינת הלקוחות נכשלה' }, { status: 422 })
 
@@ -36,8 +36,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'שיחות ימות לא מוגדרות (חסר YEMOT_TOKEN או YEMOT_CREDIT_TEMPLATE_ID)' }, { status: 422 })
   }
 
-  let sent = 0, failed = 0
+  let sent = 0, failed = 0, skipped = ids.length - (rows?.length ?? 0)
   for (const r of rows ?? []) {
+    // תפיסה לפני השליחה: הסטטוס נקבע ל-sent מראש (השלוחה פתוחה רק לזיכוי שנשלח),
+    // וההשוואה ל-updated_at מונעת שליחה כפולה בלחיצה כפולה או כששני מנהלים שולחים יחד.
+    const claimedStatus = r.status === 'pending' || r.status === 'send_failed' ? 'sent' : r.status
+    const now = new Date().toISOString()
+    const { data: claimed } = await db.from('book_fair_credits')
+      .update({ status: claimedStatus, sent_at: now, send_error: null, updated_at: now })
+      .eq('id', r.id).eq('updated_at', r.updated_at).select('id')
+    if (!claimed?.length) { skipped++; continue }
+
     let ok = false, err: string | undefined
     if (r.channel === 'phone') {
       const res = await placeCreditCall(r.phone!)
@@ -48,12 +57,13 @@ export async function POST(request: NextRequest) {
       }), undefined, { transactional: true, department: 'book_fair' })
       ok = res.ok; err = res.error
     }
-    await db.from('book_fair_credits').update(ok
-      ? { status: r.status === 'pending' || r.status === 'send_failed' ? 'sent' : r.status, sent_at: new Date().toISOString(), send_error: null, updated_at: new Date().toISOString() }
-      : { status: 'send_failed', send_error: (err ?? 'שגיאה').slice(0, 200), updated_at: new Date().toISOString() },
-    ).eq('id', r.id)
-    if (ok) sent++; else failed++
+    if (ok) { sent++; continue }
+    failed++
+    // רק אם הלקוח לא התקדם בינתיים (למשל ענה לשיחה שבכל זאת יצאה)
+    await db.from('book_fair_credits')
+      .update({ status: 'send_failed', send_error: (err ?? 'שגיאה').slice(0, 200), updated_at: new Date().toISOString() })
+      .eq('id', r.id).eq('status', claimedStatus)
   }
   await logActivity(db, { userId: staff.userId, action: 'book_fair_credits_send', entityType: 'book_fair_credits', details: { sent, failed } })
-  return NextResponse.json({ sent, failed, skipped: ids.length - (rows?.length ?? 0) })
+  return NextResponse.json({ sent, failed, skipped })
 }

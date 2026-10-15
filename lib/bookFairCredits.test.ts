@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  parseCreditsTable, validateBank, creditPhoneTurn, buildCreditEmailHtml, amountSpoken,
+  parseCreditsTable, validateBank, creditPhoneTurn, buildCreditEmailHtml, amountSpoken, pickPhoneCredit,
   CR_OK, CR_HOLDER, CR_BANK, CR_BRANCH, CR_ACCT, CR_CONFIRM,
 } from './bookFairCredits'
 
@@ -94,5 +94,18 @@ describe('מייל וסכום', () => {
   it('הקראת סכום', () => {
     expect(amountSpoken(100)).toBe('שקל אחד')
     expect(amountSpoken(1250)).toBe('12 שקלים ו-50 אגורות')
+  })
+})
+
+describe('pickPhoneCredit', () => {
+  it('לא פותח זיכוי שעוד לא נשלח או שהשליחה נכשלה', () => {
+    expect(pickPhoneCredit([{ status: 'pending' }, { status: 'send_failed' }])).toBeNull()
+  })
+  it('פותח זיכוי שנשלח או שנענה', () => {
+    expect(pickPhoneCredit([{ id: 1, status: 'pending' }, { id: 2, status: 'sent' }])).toEqual({ credit: { id: 2, status: 'sent' }, open: true })
+    expect(pickPhoneCredit([{ status: 'answered' }])?.open).toBe(true)
+  })
+  it('זיכוי שכבר הוזנו פרטיו מוצג כסגור', () => {
+    expect(pickPhoneCredit([{ status: 'details_entered' }, { status: 'pending' }])).toEqual({ credit: { status: 'details_entered' }, open: false })
   })
 })
