@@ -13,7 +13,7 @@ import {
 // הכללים עצמם (מה כל פעולה עושה) ב-lib/gilyonotDistributors.ts.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const DISTRIBUTOR_COLS = 'id, full_name, phone, phone2, email, id_number, city, address, synagogue, quantity, notes, status, source, removed_at, removed_reason, created_at, updated_at'
+export const DISTRIBUTOR_COLS = 'id, full_name, phone, phone2, email, id_number, city, address, synagogue, quantity, route, notes, status, source, removed_at, removed_reason, created_at, updated_at'
 
 export interface DistributorSettings {
   courier_name: string | null

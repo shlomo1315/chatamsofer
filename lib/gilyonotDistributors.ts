@@ -45,6 +45,7 @@ export type DistributorAction = typeof DISTRIBUTOR_ACTIONS[number]
 
 export const MAX_QUANTITY = 100_000
 export const MAX_IMPORT_DISTRIBUTORS = 5_000
+export const MAX_ROUTE = 9_999
 
 export interface DistributorFields {
   full_name: string
@@ -56,6 +57,8 @@ export interface DistributorFields {
   address: string | null
   synagogue: string | null
   quantity: number
+  /** מספר העצירה של השליח בתוך העיר (מקובץ המסלולים). המסלול = העיר, ממוינת לפי המספר. */
+  route: number | null
   notes: string | null
 }
 
@@ -92,9 +95,45 @@ export function cleanIdNumber(v: unknown): string | null {
   return sum % 10 === 0 && id !== '000000000' ? id : null
 }
 
-/** עיר כמפתח לסיכום ולסינון: רווחים מכווצים, בלי גרשיים מיותרים בקצוות. */
+// כתיבים שונים של אותה עיר → שם אחד, כדי שהסינון, הסיכום והמסלולים לא יתפצלו.
+// המפתח: בלי רווחים, גרשיים ומקפים. עיר שלא ברשימה נשמרת כפי שנכתבה (מנוקה).
+const CITY_ALIASES: [string, string[]][] = [
+  ['ירושלים', ['ירושלים', 'ירושלם', 'ירושליים']],
+  ['בני ברק', ['בניברק', 'בנינרק', 'בניבג', 'בניברך']],
+  ['ביתר עילית', ['ביתר', 'ביתרעילית', 'ביתרעלית']],
+  ['מודיעין עילית', ['מודיעיןעילית', 'מודיעיןעלית', 'קריתספר', 'קרייתספר']],
+  ['בית שמש', ['ביתשמש']],
+  ['אלעד', ['אלעד']],
+  ['אשדוד', ['אשדוד']],
+  ['קרית גת', ['קריתגת', 'קרייתגת']],
+  ['גבעת זאב', ['גבעתזאב']],
+]
+const cityKey = (s: string) => s.replace(/["'`׳״\s\-–]/g, '')
+const CITY_BY_KEY = new Map(CITY_ALIASES.flatMap(([city, keys]) => [city, ...keys].map(k => [cityKey(k), city] as const)))
+
+/** פיצול "ירושלים -קטמון" לעיר ולשכונה. */
+export function splitCityArea(v: unknown): { city: string | null; area: string | null } {
+  const raw = cleanText(String(v ?? '').replace(/^["'\s]+|["'\s]+$/g, ''), 60)
+  if (!raw) return { city: null, area: null }
+  const known = CITY_BY_KEY.get(cityKey(raw))
+  if (known) return { city: known, area: null }
+  const m = raw.match(/^(.+?)\s*(?:\s-|-\s|,|–)\s*(.+)$/)
+  const head = m ? CITY_BY_KEY.get(cityKey(m[1])) : undefined
+  if (head && m) return { city: head, area: cleanText(m[2], 60) }
+  return { city: raw, area: null }
+}
+
+/** עיר כמפתח לסיכום ולסינון: כתיב אחיד לערים המוכרות, רווחים מכווצים, בלי גרשיים בקצוות. */
 export function cleanCity(v: unknown): string | null {
-  return cleanText(String(v ?? '').replace(/^["'\s]+|["'\s]+$/g, ''), 60)
+  return splitCityArea(v).city
+}
+
+/** מספר מסלול: שלם חיובי, ריק → null, אחר → undefined (לא תקין). */
+export function cleanRoute(v: unknown): number | null | undefined {
+  const s = String(v ?? '').trim()
+  if (!s) return null
+  const n = Number(s)
+  return Number.isInteger(n) && n > 0 && n <= MAX_ROUTE ? n : undefined
 }
 
 export function cleanQuantity(v: unknown): number | null {
@@ -129,10 +168,12 @@ export function validateDistributor(input: Record<string, unknown>): { ok: true;
   if (has('id_number') && !id_number) return { ok: false, error: 'מספר ת.ז. לא תקין' }
   const quantity = cleanQuantity(input.quantity)
   if (quantity === null) return { ok: false, error: 'כמות הגיליונות צריכה להיות מספר שלם' }
+  const route = cleanRoute(input.route)
+  if (route === undefined) return { ok: false, error: 'מספר המסלול צריך להיות מספר שלם חיובי' }
   return {
     ok: true,
     value: {
-      full_name, phone, phone2, email, id_number, quantity,
+      full_name, phone, phone2, email, id_number, quantity, route,
       city: cleanCity(input.city),
       address: cleanText(input.address, 160),
       synagogue: cleanText(input.synagogue, 120),
@@ -155,6 +196,7 @@ const HEADER_ALIASES: [ImportField, string[]][] = [
   ['address', ['כתובת', 'רחוב', 'address', 'כתובתלמשלוח']],
   ['synagogue', ['ביתכנסת', 'ביתהכנסת', 'ביכנ', 'בהכנס', 'ביהכנ', 'ביהכנס', 'ביתמדרש', 'synagogue']],
   ['quantity', ['כמות', 'גיליונות', 'גליונות', 'כמותגיליונות', 'כמותגליונות', 'מסגיליונות', 'מספרגיליונות', 'quantity', 'qty']],
+  ['route', ['מסלול', 'מסמסלול', 'מספרמסלול', 'route']],
   ['notes', ['הערות', 'הערה', 'notes']],
 ]
 
@@ -222,16 +264,17 @@ export function parseDistributorTable(table: string[][]): ImportResult {
 }
 
 // ── סיכום: כמה גיליונות בכל עיר ──
-export interface CitySummary { city: string; distributors: number; quantity: number }
+export interface CitySummary { city: string; distributors: number; quantity: number; routed: number }
 export const NO_CITY = 'ללא עיר'
 
-export function summarizeByCity(list: { city: string | null; quantity: number; status: DistributorStatus }[]): CitySummary[] {
+export function summarizeByCity(list: { city: string | null; quantity: number; status: DistributorStatus; route?: number | null }[]): CitySummary[] {
   const by = new Map<string, CitySummary>()
   for (const d of list) {
     if (d.status !== 'active') continue
     const city = d.city || NO_CITY
-    const s = by.get(city) ?? { city, distributors: 0, quantity: 0 }
+    const s = by.get(city) ?? { city, distributors: 0, quantity: 0, routed: 0 }
     s.distributors++
+    if (d.route) s.routed++
     s.quantity += d.quantity
     by.set(city, s)
   }

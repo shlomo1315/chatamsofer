@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, ExternalLink, FileUp, Inbox, Loader2, MapPin, Megaphone, Pencil, Plus, Search, Settings, Trash2, Truck, Undo2, UserMinus, UserPlus, UtensilsCrossed, X } from 'lucide-react'
 import { downloadXlsx, todayStamp } from '@/lib/downloadXlsx'
+import type { BookletReport } from '@/lib/gilyonotDistributorBooklet'
 import {
   CHANNEL_LABELS, EVENT_LABELS, NO_CITY, SOURCE_LABELS, summarizeByCity,
   type AgentWindow, type DistributorFields, type DistributorSource, type DistributorStatus, type EventChannel, type EventKind,
@@ -182,7 +183,8 @@ function DistributorList({ rows, byCity, canAdd, canEdit, canDelete }: {
   const [q, setQ] = useState('')
   const [city, setCity] = useState('')
   const [showRemoved, setShowRemoved] = useState(false)
-  const [panel, setPanel] = useState<'' | 'add' | 'paste'>('')
+  const [noRoute, setNoRoute] = useState(false)
+  const [panel, setPanel] = useState<'' | 'add' | 'paste' | 'booklet'>('')
   const [editing, setEditing] = useState<DistributorView | null>(null)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<Msg>(null)
@@ -193,8 +195,9 @@ function DistributorList({ rows, byCity, canAdd, canEdit, canDelete }: {
     return rows.filter(r =>
       (showRemoved || r.status === 'active') &&
       (!city || (city === NO_CITY ? !r.city : r.city === city)) &&
+      (!noRoute || !r.route) &&
       (!term || [r.full_name, r.phone, r.phone2, r.email, r.synagogue, r.address, r.city].some(v => v?.toLowerCase().includes(term))))
-  }, [rows, q, city, showRemoved])
+  }, [rows, q, city, showRemoved, noRoute])
   const shownQty = shown.filter(r => r.status === 'active').reduce((s, r) => s + r.quantity, 0)
 
   async function run(fn: () => Promise<string>) {
@@ -226,8 +229,8 @@ function DistributorList({ rows, byCity, canAdd, canEdit, canDelete }: {
     downloadXlsx({
       filename: `gilyonot-distributors-${todayStamp()}.xlsx`,
       sheetName: 'מפיצים',
-      columns: ['שם', 'עיר', 'בית כנסת', 'כתובת', 'טלפון', 'טלפון 2', 'מייל', 'כמות', 'סטטוס', 'הערות'].map(header => ({ header })),
-      rows: shown.map(r => [r.full_name, r.city ?? '', r.synagogue ?? '', r.address ?? '', r.phone ?? '', r.phone2 ?? '', r.email ?? '', r.quantity, r.status === 'active' ? 'פעיל' : 'הוסר', r.notes ?? '']),
+      columns: ['שם', 'עיר', 'מסלול', 'בית כנסת', 'כתובת', 'טלפון', 'טלפון 2', 'מייל', 'כמות', 'סטטוס', 'הערות'].map(header => ({ header })),
+      rows: shown.map(r => [r.full_name, r.city ?? '', r.route ?? '', r.synagogue ?? '', r.address ?? '', r.phone ?? '', r.phone2 ?? '', r.email ?? '', r.quantity, r.status === 'active' ? 'פעיל' : 'הוסר', r.notes ?? '']),
     }).catch(e => setMsg({ ok: false, text: e instanceof Error ? e.message : 'הייצוא נכשל' }))
   }
 
@@ -244,6 +247,7 @@ function DistributorList({ rows, byCity, canAdd, canEdit, canDelete }: {
             <button type="button" className={btnPrimary} onClick={() => { setEditing(null); setPanel(panel === 'add' ? '' : 'add') }}><Plus className="h-4 w-4" aria-hidden />מפיץ חדש</button>
             <button type="button" className={btnGhost} disabled={busy} onClick={() => fileRef.current?.click()}><FileUp className="h-4 w-4" aria-hidden />ייבוא מקובץ</button>
             <button type="button" className={btnGhost} onClick={() => setPanel(panel === 'paste' ? '' : 'paste')}>הדבקת רשימה</button>
+            <button type="button" className={btnGhost} onClick={() => { setEditing(null); setPanel(panel === 'booklet' ? '' : 'booklet') }}><FileUp className="h-4 w-4" aria-hidden />חוברת + מסלולים</button>
           </div>
         )}
         <Notice msg={msg} />
@@ -256,6 +260,7 @@ function DistributorList({ rows, byCity, canAdd, canEdit, canDelete }: {
           })} />
         )}
         {panel === 'paste' && <PasteForm busy={busy} onClose={() => setPanel('')} onSubmit={text => importWith(json('POST', { mode: 'import', text }))} />}
+        {panel === 'booklet' && <BookletImport onClose={() => setPanel('')} onDone={text => { setPanel(''); setMsg({ ok: true, text }); router.refresh() }} />}
         {editing && (
           <DistributorForm key={editing.id} initial={editing} busy={busy} canDelete={canDelete} onClose={() => setEditing(null)}
             onSubmit={fields => run(async () => {
@@ -293,6 +298,10 @@ function DistributorList({ rows, byCity, canAdd, canEdit, canDelete }: {
               <input type="checkbox" checked={showRemoved} onChange={e => setShowRemoved(e.target.checked)} className="h-4 w-4 accent-[#1B3256]" />
               כולל שהוסרו
             </label>
+            <label className="flex items-center gap-2 text-sm text-slate-600">
+              <input type="checkbox" checked={noRoute} onChange={e => setNoRoute(e.target.checked)} className="h-4 w-4 accent-[#1B3256]" />
+              בלי מסלול
+            </label>
             <button type="button" className={`${btnGhost} ms-auto`} onClick={exportXlsx} disabled={!shown.length}>ייצוא</button>
           </div>
           <p className="px-4 pt-3 text-xs text-slate-500">{num(shown.length)} מפיצים · {num(shownQty)} גיליונות בשבוע</p>
@@ -304,6 +313,7 @@ function DistributorList({ rows, byCity, canAdd, canEdit, canDelete }: {
                   <tr className="border-b border-slate-100">
                     <th className={th}>מפיץ</th>
                     <th className={`${th} hidden sm:table-cell`}>עיר</th>
+                    <th className={th}>מסלול</th>
                     <th className={`${th} hidden md:table-cell`}>טלפון</th>
                     <th className={th}>כמות</th>
                     {canEdit && <th className={`${th} w-12`}><span className="sr-only">עריכה</span></th>}
@@ -318,6 +328,7 @@ function DistributorList({ rows, byCity, canAdd, canEdit, canDelete }: {
                         <p className="mt-0.5 text-xs text-slate-500 sm:hidden">{r.city ?? NO_CITY}{r.phone ? ` · ${r.phone}` : ''}</p>
                       </td>
                       <td className="hidden px-4 py-3 text-slate-700 sm:table-cell">{r.city ?? '—'}</td>
+                      <td className="px-4 py-3 tabular-nums text-slate-700">{r.route ?? <span className="text-slate-400">—</span>}</td>
                       <td className="hidden px-4 py-3 tabular-nums text-slate-700 md:table-cell" dir="ltr">{r.phone ?? '—'}</td>
                       <td className="px-4 py-3 font-semibold tabular-nums text-slate-900">{num(r.quantity)}</td>
                       {canEdit && (
@@ -341,7 +352,7 @@ function DistributorList({ rows, byCity, canAdd, canEdit, canDelete }: {
       </div>
 
       <Card className="h-fit">
-        <Head icon={<MapPin className="h-5 w-5" aria-hidden />} title="לפי עיר" hint="מפיצים פעילים וגיליונות בשבוע" />
+        <Head icon={<MapPin className="h-5 w-5" aria-hidden />} title="לפי עיר" hint="מפיצים פעילים, עם מסלול, וגיליונות בשבוע" />
         {byCity.length ? (
           <ul className="divide-y divide-slate-100">
             {byCity.map(c => (
@@ -349,7 +360,7 @@ function DistributorList({ rows, byCity, canAdd, canEdit, canDelete }: {
                 <button type="button" onClick={() => setCity(city === c.city ? '' : c.city)}
                   className={`flex w-full items-center justify-between gap-3 px-5 py-2.5 text-start text-sm transition-colors hover:bg-slate-50 ${city === c.city ? 'bg-[#1B3256]/[0.06] font-semibold text-[#1B3256]' : 'text-slate-700'}`}>
                   <span className="truncate">{c.city}</span>
-                  <span className="shrink-0 tabular-nums text-slate-500">{num(c.distributors)} · <b className="text-slate-900">{num(c.quantity)}</b></span>
+                  <span className="shrink-0 tabular-nums text-slate-500">{num(c.distributors)} · <span title="עם מסלול" className={c.routed < c.distributors ? 'text-amber-700' : ''}>{num(c.routed)} במסלול</span> · <b className="text-slate-900">{num(c.quantity)}</b></span>
                 </button>
               </li>
             ))}
@@ -370,6 +381,7 @@ const FIELDS: { key: keyof DistributorFields; label: string; type?: string; dir?
   { key: 'email', label: 'מייל', type: 'email', dir: 'ltr' },
   { key: 'id_number', label: 'תעודת זהות', dir: 'ltr' },
   { key: 'quantity', label: 'כמות גיליונות בשבוע', type: 'number', dir: 'ltr' },
+  { key: 'route', label: 'מספר במסלול השליח', type: 'number', dir: 'ltr' },
   { key: 'notes', label: 'הערות', wide: true },
 ]
 
@@ -436,6 +448,112 @@ function PasteForm({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => 
         <button type="submit" className={btnPrimary} disabled={busy || !text.trim()}>{busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}ייבוא</button>
       </form>
     </Card>
+  )
+}
+
+// ─── ייבוא חוברת ההרשמה + קובץ המסלולים: תצוגה מקדימה, ואז אישור ───────────────
+
+type BookletPreview = { report: BookletReport; inserts: number; updates: number; unchanged: number }
+
+function BookletImport({ onClose, onDone }: { onClose: () => void; onDone: (text: string) => void }) {
+  const [booklet, setBooklet] = useState<File | null>(null)
+  const [routes, setRoutes] = useState<File | null>(null)
+  const [preview, setPreview] = useState<BookletPreview | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  async function send(commit: boolean) {
+    if (!booklet) return
+    const fd = new FormData()
+    fd.append('mode', 'booklet')
+    fd.append('booklet', booklet)
+    if (routes) fd.append('routes', routes)
+    if (commit) fd.append('commit', '1')
+    setBusy(true); setErr('')
+    try {
+      const r = await api('/api/admin/gilyonot/distributors', { method: 'POST', body: fd })
+      if (commit) onDone(`נוספו ${num(Number(r.added ?? 0))} מפיצים, עודכנו ${num(Number(r.updated ?? 0))}${Number(r.unchanged) ? `, ${num(Number(r.unchanged))} כבר היו מעודכנים` : ''}`)
+      else setPreview(r as unknown as BookletPreview)
+    } catch (e) { setErr(e instanceof Error ? e.message : 'הפעולה נכשלה') }
+    finally { setBusy(false) }
+  }
+
+  const pick = (set: (f: File | null) => void) => (e: React.ChangeEvent<HTMLInputElement>) => { set(e.target.files?.[0] ?? null); setPreview(null) }
+  const fileInput = 'block w-full text-sm text-slate-600 file:me-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200'
+
+  return (
+    <Card>
+      <Head title="ייבוא חוברת ההרשמה + מסלולי השליח" hint="קובץ החוברת (כל הנרשמים) וקובץ המסלולים מחוברים לפי הטלפון. קודם רואים מה ייקלט, ורק אחרי אישור זה נכתב.">
+        <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="סגירה"><X className="h-4 w-4" aria-hidden /></button>
+      </Head>
+      <div className="space-y-4 px-5 pb-5">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block space-y-1.5">
+            <span className="text-sm font-medium text-slate-700">קובץ החוברת</span>
+            <input type="file" accept={IMPORT_ACCEPT} className={fileInput} onChange={pick(setBooklet)} />
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-sm font-medium text-slate-700">קובץ המסלולים <span className="font-normal text-slate-500">(לא חובה)</span></span>
+            <input type="file" accept={IMPORT_ACCEPT} className={fileInput} onChange={pick(setRoutes)} />
+          </label>
+        </div>
+        {err && <p role="alert" className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-800">{err}</p>}
+        {preview && <BookletSummary p={preview} />}
+        <div className="flex flex-wrap gap-2">
+          {preview ? (
+            <>
+              <button type="button" className={btnPrimary} disabled={busy || !(preview.inserts + preview.updates)} onClick={() => send(true)}>
+                {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}אישור: להוסיף {num(preview.inserts)} ולעדכן {num(preview.updates)}
+              </button>
+              <button type="button" className={btnGhost} disabled={busy} onClick={() => setPreview(null)}>ביטול</button>
+            </>
+          ) : (
+            <button type="button" className={btnPrimary} disabled={busy || !booklet} onClick={() => send(false)}>
+              {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}בדיקת הקבצים
+            </button>
+          )}
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+function BookletSummary({ p }: { p: BookletPreview }) {
+  const r = p.report
+  const issues: { title: string; items: string[] }[] = [
+    { title: 'לא ייקלטו (חסר שם או טלפון תקין)', items: r.skipped.map(i => `שורה ${i.line}: ${i.name}${i.value ? ` (${i.value})` : ''}${i.note ? ` · ${i.note}` : ''}`) },
+    { title: 'מסלול שלא נמצא לו מפיץ', items: r.route.unmatched.map(i => `${i.sheet} שורה ${i.line}: ${i.name} ${i.phone} · מסלול ${i.route}`) },
+    { title: 'מסלול שמתאים לכמה מפיצים', items: r.route.ambiguous.map(i => `${i.sheet} שורה ${i.line}: ${i.name} · ${i.note}`) },
+    { title: 'מספר מסלול לא תקין', items: r.route.invalid.map(i => `${i.sheet} שורה ${i.line}: ${i.name} · ${i.route}`) },
+    { title: 'שני מסלולים שונים לאותו מפיץ', items: r.route.conflicts.map(i => `${i.sheet} שורה ${i.line}: ${i.name} · ${i.note}`) },
+    { title: 'אותה עצירה לכמה מפיצים', items: r.route.sharedStop.map(s => `${s.city} מסלול ${s.route}: ${s.names.join(', ')}`) },
+    { title: 'בלי כמות (נקלטים עם 0)', items: r.badQuantity.map(i => `שורה ${i.line}: ${i.name}${i.value ? ` (${i.value})` : ''}`) },
+    { title: 'ת.ז. לא תקינה (נשמרת בהערות)', items: r.badId.map(i => `שורה ${i.line}: ${i.name} · ${i.value ?? ''}`) },
+    { title: 'טלפון אחד לכמה הרשמות', items: r.sharedPhone.map(s => `${s.phone}: ${s.names.join(', ')}`) },
+    { title: 'שני טלפונים בתא אחד (פוצלו)', items: r.phoneSplit.map(i => `שורה ${i.line}: ${i.name} · ${i.value ?? ''}`) },
+    { title: 'הרשמה כפולה (נקלטת פעם אחת)', items: r.duplicates.map(i => `שורה ${i.line}: ${i.name}`) },
+    { title: 'כתיב עיר שאוחד', items: r.cityFixed.map(c => `${c.from} ← ${c.to} (${c.count})`) },
+  ].filter(x => x.items.length)
+  const noRoute = r.byCity.filter(c => c.withRoute < c.distributors)
+
+  return (
+    <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat label="הרשמות בחוברת" value={num(r.registrations)} sub={`${num(r.quantityInFile)} גיליונות`} />
+        <Stat label="ייכתבו" value={num(r.written)} sub={`${num(r.quantityWritten)} גיליונות`} />
+        <Stat label="עם מסלול" value={num(r.withRoute)} sub={`מתוך ${num(r.route.rows)} שורות מסלול`} />
+        <Stat label="חדשים · עדכון" value={`${num(p.inserts)} · ${num(p.updates)}`} sub={p.unchanged ? `${num(p.unchanged)} בלי שינוי` : undefined} />
+      </dl>
+      {noRoute.length > 0 && (
+        <p className="text-sm text-slate-700"><b>ערים שחסרים בהן מסלולים:</b> {noRoute.map(c => `${c.city} (${num(c.withRoute)}/${num(c.distributors)})`).join(' · ')}</p>
+      )}
+      {issues.map(x => (
+        <details key={x.title} className="rounded-lg bg-white px-3 py-2 text-sm">
+          <summary className="cursor-pointer font-medium text-slate-800">{x.title} <span className="tabular-nums text-slate-500">({num(x.items.length)})</span></summary>
+          <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto text-xs text-slate-600">{x.items.map((t, i) => <li key={i}>{t}</li>)}</ul>
+        </details>
+      ))}
+    </div>
   )
 }
 

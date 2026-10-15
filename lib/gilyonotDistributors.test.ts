@@ -75,15 +75,15 @@ describe('summarizeByCity', () => {
   it('סופר רק פעילים, ממיין לפי כמות', () => {
     const s = summarizeByCity([
       { city: 'ירושלים', quantity: 10, status: 'active' },
-      { city: 'בני ברק', quantity: 50, status: 'active' },
+      { city: 'בני ברק', quantity: 50, status: 'active', route: 3 },
       { city: 'ירושלים', quantity: 30, status: 'active' },
       { city: 'ירושלים', quantity: 99, status: 'removed' },
       { city: null, quantity: 5, status: 'active' },
     ])
     expect(s).toEqual([
-      { city: 'בני ברק', distributors: 1, quantity: 50 },
-      { city: 'ירושלים', distributors: 2, quantity: 40 },
-      { city: 'ללא עיר', distributors: 1, quantity: 5 },
+      { city: 'בני ברק', distributors: 1, quantity: 50, routed: 1 },
+      { city: 'ירושלים', distributors: 2, quantity: 40, routed: 0 },
+      { city: 'ללא עיר', distributors: 1, quantity: 5, routed: 0 },
     ])
   })
 })
