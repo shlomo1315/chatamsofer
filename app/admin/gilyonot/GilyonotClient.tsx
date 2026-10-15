@@ -3,11 +3,12 @@
 import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { CheckCircle2, Copy, Download, Eye, FileSpreadsheet, FileText, Loader2, Plus, Search, Send, Trash2, Upload, Users, X } from 'lucide-react'
+import { CheckCircle2, Copy, Download, ExternalLink, Eye, FileSpreadsheet, FileText, FileUp, Inbox, Link2, Loader2, MailCheck, Newspaper, Plus, RefreshCw, Search, Send, ShieldAlert, Trash2, Upload, UserPlus, Users, X } from 'lucide-react'
 import { downloadXlsx, todayStamp } from '@/lib/downloadXlsx'
 import { defaultSubject } from '@/lib/gilyonotMail'
 import type { NedarimPullView } from '@/lib/gilyonotNedarimPull'
 import NedarimPull from './NedarimPull'
+import { Badge, btnDanger, btnGhost, btnPrimary, Card, CardHeader, input, link, Meter, Notice, Stat, StepNum, type Tone } from './ui'
 
 export interface SubscriberView {
   id: string
@@ -40,13 +41,10 @@ export interface IssueView {
 }
 
 const SOURCES: Record<SubscriberView['source'], string> = { web: 'אתר', nedarim: 'נדרים פלוס', manual: 'ידני', import: 'ייבוא' }
-const NAVY = '#1B3256'
-const input = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-[#1B3256] focus:outline-none focus:ring-2 focus:ring-[#1B3256]/20'
-const btn = 'inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50'
-const btnPrimary = `${btn} text-white`
-const btnGhost = `${btn} border border-slate-300 bg-white text-slate-700 hover:bg-slate-50`
+const SOURCE_TONE: Record<SubscriberView['source'], Tone> = { web: 'navy', nedarim: 'sky', manual: 'neutral', import: 'neutral' }
 const fmtDate = (s: string | null) => (s ? new Date(s).toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' }) : '—')
 const pct = (n: number, of: number) => (of ? ` (${Math.round((n / of) * 100)}%)` : '')
+const num = (n: number) => n.toLocaleString('he-IL')
 
 async function api(url: string, init?: RequestInit): Promise<Record<string, unknown>> {
   const res = await fetch(url, init)
@@ -68,25 +66,79 @@ export default function GilyonotClient(props: {
 }) {
   const active = props.subscribers.filter(s => s.status === 'active').length
   const tabs = [
-    { key: 'subscribers', label: `רשימת תפוצה (${active.toLocaleString('he-IL')})` },
-    { key: 'issues', label: `גיליונות (${props.issues.length})` },
-    ...(props.nedarim ? [{ key: 'nedarim', label: 'נדרים פלוס' }] : []),
+    { key: 'subscribers', label: 'רשימת תפוצה', count: active, icon: Users },
+    { key: 'issues', label: 'גיליונות ושליחה', count: props.issues.length, icon: Newspaper },
+    ...(props.nedarim ? [{ key: 'nedarim', label: 'נדרים פלוס', count: null, icon: RefreshCw }] : []),
   ]
   return (
-    <div className="space-y-5">
-      <nav className="flex gap-1 border-b border-slate-200" aria-label="לשוניות">
-        {tabs.map(t => (
-          <Link
-            key={t.key} href={`?tab=${t.key}`} scroll={false}
-            className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium ${props.tab === t.key ? 'border-[#1B3256] text-[#1B3256]' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-          >{t.label}</Link>
-        ))}
+    <div className="space-y-6">
+      <Overview subscribers={props.subscribers} active={active} issues={props.issues} />
+
+      <nav aria-label="לשוניות">
+        <div className="flex flex-wrap gap-1 rounded-2xl bg-slate-200/60 p-1 sm:inline-flex">
+          {tabs.map(t => {
+            const on = props.tab === t.key
+            return (
+              <Link
+                key={t.key} href={`?tab=${t.key}`} scroll={false} aria-current={on ? 'page' : undefined}
+                className={`flex min-h-10 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-medium transition-colors duration-150 sm:flex-none ${on ? 'bg-white text-[#1B3256] shadow-sm ring-1 ring-slate-900/5' : 'text-slate-600 hover:text-slate-900'}`}
+              >
+                <t.icon className="h-4 w-4" aria-hidden />{t.label}
+                {t.count !== null && <span className={`rounded-full px-2 py-0.5 text-xs tabular-nums ${on ? 'bg-[#1B3256] text-white' : 'bg-white/70 text-slate-600'}`}>{num(t.count)}</span>}
+              </Link>
+            )
+          })}
+        </div>
       </nav>
+
       {props.tab === 'nedarim' && props.nedarim
         ? <NedarimPull view={props.nedarim} />
         : props.tab !== 'issues'
         ? <Subscribers rows={props.subscribers} canAdd={props.canAdd} canEdit={props.canEdit} canDelete={props.canDelete} />
         : <Issues rows={props.issues} activeCount={active} defaultParasha={props.defaultParasha} canAdd={props.canAdd} canEdit={props.canEdit} canDelete={props.canDelete} />}
+    </div>
+  )
+}
+
+// ─── תמונת מצב בראש העמוד ────────────────────────────────────────────────────
+
+function Overview({ subscribers, active, issues }: { subscribers: SubscriberView[]; active: number; issues: IssueView[] }) {
+  const [now] = useState(() => Date.now())
+  const { recent, removed } = useMemo(() => {
+    const since = now - 30 * 86_400_000
+    return {
+      recent: subscribers.filter(s => s.status === 'active' && new Date(s.created_at).getTime() >= since).length,
+      removed: subscribers.length - active,
+    }
+  }, [subscribers, active, now])
+  const lastSent = issues.find(i => i.status !== 'draft')
+  const draft = issues.find(i => i.status === 'draft')
+
+  return (
+    <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <OverviewTile label="נרשמים פעילים" value={num(active)} sub={removed ? `${num(removed)} הסירו את עצמם` : 'אף אחד לא הסיר את עצמו'} />
+      <OverviewTile label="הצטרפו ב-30 יום" value={num(recent)} sub="מכל המקורות" />
+      <OverviewTile
+        label="גיליון אחרון"
+        value={lastSent ? `פרשת ${lastSent.parasha}` : '—'}
+        sub={lastSent ? (lastSent.status === 'sending' ? 'בשליחה עכשיו' : `נשלח ${fmtDate(lastSent.completed_at ?? lastSent.started_at)}`) : 'עוד לא נשלח גיליון'}
+      />
+      <OverviewTile
+        label={draft ? 'ממתין לשליחה' : 'פתחו את האחרון'}
+        value={draft ? `פרשת ${draft.parasha}` : lastSent ? `${lastSent.sent_count ? Math.round((lastSent.opened_count / lastSent.sent_count) * 100) : 0}%` : '—'}
+        sub={draft ? 'טיוטה מוכנה, בלשונית הגיליונות' : lastSent ? `${num(lastSent.opened_count)} מתוך ${num(lastSent.sent_count)}` : ''}
+        accent={!!draft}
+      />
+    </dl>
+  )
+}
+
+function OverviewTile({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: boolean }) {
+  return (
+    <div className={`rounded-2xl px-4 py-4 sm:px-5 ${accent ? 'bg-[#1B3256] text-white shadow-md shadow-[#1B3256]/20' : 'bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-slate-900/[0.06]'}`}>
+      <dt className={`text-xs font-medium ${accent ? 'text-white/70' : 'text-slate-500'}`}>{label}</dt>
+      <dd className={`mt-1.5 truncate text-xl font-bold tabular-nums sm:text-2xl ${accent ? 'text-white' : 'text-slate-900'}`}>{value}</dd>
+      {sub && <dd className={`mt-1 truncate text-xs ${accent ? 'text-white/75' : 'text-slate-500'}`}>{sub}</dd>}
     </div>
   )
 }
@@ -154,102 +206,144 @@ function Subscribers({ rows, canAdd, canEdit, canDelete }: { rows: SubscriberVie
     }).catch(e => setMsg({ ok: false, text: e instanceof Error ? e.message : 'הייצוא נכשל' }))
   }
 
-  const th = 'px-4 py-3 text-right text-xs font-semibold text-slate-600'
+  const th = 'px-4 py-3 text-right text-xs font-semibold text-slate-500'
+  const filteredOut = rows.length > 0 && !filtered.length
 
   return (
     <div className="space-y-5">
       <input ref={fileRef} type="file" accept={IMPORT_ACCEPT} className="hidden" aria-hidden tabIndex={-1}
         onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) uploadFile(f) }} />
 
-      {canAdd && <UploadCard busy={busy} onPick={pickFile} onFile={uploadFile} onPaste={() => setPanel(panel === 'paste' ? '' : 'paste')} />}
+      <div className={`grid grid-cols-1 gap-4 [&>*]:min-w-0 ${canAdd ? 'lg:grid-cols-3' : ''}`}>
+        {canAdd && <div className="lg:col-span-2"><UploadCard busy={busy} onPick={pickFile} onFile={uploadFile} onPaste={() => setPanel(panel === 'paste' ? '' : 'paste')} /></div>}
+        <Card className="flex flex-col justify-between gap-4 p-5">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1B3256]/[0.07] text-[#1B3256]"><Link2 className="h-5 w-5" aria-hidden /></div>
+            <div className="min-w-0">
+              <h2 className="text-base font-bold text-slate-900">קישור ההרשמה לציבור</h2>
+              <p className="mt-0.5 text-sm text-slate-600">מי שנרשם דרכו נכנס לרשימה מיד.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 rounded-xl bg-slate-50 p-1.5 ring-1 ring-inset ring-slate-900/[0.05]">
+            <span dir="ltr" className="min-w-0 flex-1 truncate px-2 text-right text-sm text-slate-600">{signupUrl}</span>
+            <a href={signupUrl} target="_blank" rel="noreferrer" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-white hover:text-slate-900" aria-label="פתיחת דף ההרשמה">
+              <ExternalLink className="h-4 w-4" aria-hidden />
+            </a>
+            <button type="button" className={`${btnGhost} min-h-9 shrink-0 px-3`} onClick={() => { navigator.clipboard?.writeText(signupUrl); setMsg({ ok: true, text: 'הקישור הועתק' }) }}>
+              <Copy className="h-4 w-4" aria-hidden />העתקה
+            </button>
+          </div>
+        </Card>
+      </div>
+
       {summary && <ImportResult s={summary} onClose={() => setSummary(null)} />}
       {panel === 'paste' && <PasteForm busy={busy} onClose={() => setPanel('')} onSubmit={text => importWith(json('POST', { mode: 'import', text }))} />}
 
-      <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-slate-900">קישור ההרשמה לציבור</p>
-          <p dir="ltr" className="truncate text-right text-sm text-slate-500">{signupUrl}</p>
-        </div>
-        <button type="button" className={`${btnGhost} shrink-0 self-start sm:self-auto`} onClick={() => { navigator.clipboard?.writeText(signupUrl); setMsg({ ok: true, text: 'הקישור הועתק' }) }}>
-          <Copy className="h-4 w-4" aria-hidden />העתקת הקישור
-        </button>
-      </div>
+      <Card className="overflow-hidden">
+        <div className="space-y-4 p-4 sm:p-5">
+          <CardHeader
+            icon={<Users className="h-5 w-5" aria-hidden />}
+            title="הנרשמים"
+            hint={rows.length ? `${num(filtered.length)} מוצגים מתוך ${num(rows.length)}` : 'כאן יופיעו כל מי שנרשם לקבל את הגיליון'}
+          >
+            {canAdd && <button type="button" className={btnPrimary} onClick={() => setPanel(panel === 'add' ? '' : 'add')}><UserPlus className="h-4 w-4" aria-hidden />הוספת נרשם</button>}
+            <button type="button" className={btnGhost} onClick={exportXlsx} disabled={!filtered.length}><Download className="h-4 w-4" aria-hidden />ייצוא לאקסל</button>
+          </CardHeader>
 
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-        <div className="relative lg:flex-1">
-          <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
-          <input className={`${input} pr-9`} placeholder="חיפוש לפי שם או מייל" value={q} onChange={e => setQ(e.target.value)} aria-label="חיפוש" />
-        </div>
-        <div className="grid grid-cols-2 gap-2 lg:flex">
-          <select className={`${field} w-full lg:w-40`} value={source} onChange={e => setSource(e.target.value)} aria-label="מקור">
-            <option value="">כל המקורות</option>
-            {Object.entries(SOURCES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </select>
-          <select className={`${field} w-full lg:w-32`} value={status} onChange={e => setStatus(e.target.value)} aria-label="סטטוס">
-            <option value="active">פעילים</option>
-            <option value="unsubscribed">הוסרו</option>
-            <option value="">הכול</option>
-          </select>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {canAdd && <>
-            <button type="button" className={btnPrimary} style={{ background: NAVY }} onClick={() => setPanel(panel === 'add' ? '' : 'add')}><Plus className="h-4 w-4" aria-hidden />הוספה</button>
-            <button type="button" className={btnGhost} disabled={busy} onClick={pickFile}><Upload className="h-4 w-4" aria-hidden />יבוא</button>
-          </>}
-          <button type="button" className={btnGhost} onClick={exportXlsx} disabled={!filtered.length}><Download className="h-4 w-4" aria-hidden />ייצוא</button>
-        </div>
-      </div>
+          {panel === 'add' && <AddForm busy={busy} onClose={() => setPanel('')} onSubmit={(email, name) => run(async () => {
+            const d = await api('/api/admin/gilyonot/subscribers', json('POST', { mode: 'add', email, name }))
+            const o = d.outcome
+            return o === 'exists' ? 'המייל כבר ברשימה' : o === 'blocked_unsubscribed' ? 'המייל הוסר בעבר לבקשת הנמען, ולכן לא הוחזר. אפשר להחזיר אותו ידנית מסינון "הוסרו".' : 'נוסף לרשימה'
+          })} />}
 
-      {panel === 'add' && <AddForm busy={busy} onClose={() => setPanel('')} onSubmit={(email, name) => run(async () => {
-        const d = await api('/api/admin/gilyonot/subscribers', json('POST', { mode: 'add', email, name }))
-        const o = d.outcome
-        return o === 'exists' ? 'המייל כבר ברשימה' : o === 'blocked_unsubscribed' ? 'המייל הוסר בעבר לבקשת הנמען, ולכן לא הוחזר. אפשר להחזיר אותו ידנית מסינון "הוסרו".' : 'נוסף לרשימה'
-      })} />}
+          {rows.length > 0 && (
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="relative sm:flex-1">
+                <Search className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
+                <input className={`${input} pr-10`} placeholder="חיפוש לפי שם או מייל" value={q} onChange={e => setQ(e.target.value)} aria-label="חיפוש" />
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:flex">
+                <select className={`${field} w-full sm:w-40`} value={source} onChange={e => setSource(e.target.value)} aria-label="מקור">
+                  <option value="">כל המקורות</option>
+                  {Object.entries(SOURCES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+                <select className={`${field} w-full sm:w-32`} value={status} onChange={e => setStatus(e.target.value)} aria-label="סטטוס">
+                  <option value="active">פעילים</option>
+                  <option value="unsubscribed">הוסרו</option>
+                  <option value="">הכול</option>
+                </select>
+              </div>
+            </div>
+          )}
 
-      {msg && <p role="status" className={`rounded-lg px-3 py-2 text-sm ${msg.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-800'}`}>{msg.text}</p>}
-
-      {!rows.length ? (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
-          <Users className="mx-auto h-8 w-8 text-slate-400" aria-hidden />
-          <p className="mt-3 font-semibold text-slate-900">עוד אין נרשמים</p>
-          <p className="mt-1 text-sm text-slate-600">העלו רשימה מקובץ, או שתפו את קישור ההרשמה.</p>
+          <Notice msg={msg} />
         </div>
-      ) : (
-        <div className="space-y-2">
-          <p className="text-sm text-slate-500">{filtered.length.toLocaleString('he-IL')} נרשמים מוצגים</p>
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <table className="w-full table-fixed text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50">
-                <tr>
-                  <th className={`${th} w-[34%] sm:w-[24%]`}>שם</th>
-                  <th className={th}>מייל</th>
-                  <th className={`${th} hidden w-28 sm:table-cell`}>מקור</th>
-                  <th className={`${th} hidden w-36 md:table-cell`}>נרשם</th>
-                  <th className={`${th} w-24`}><span className="sr-only">פעולות</span></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filtered.slice(0, 500).map(r => (
-                  <tr key={r.id} className={r.status === 'unsubscribed' ? 'text-slate-400' : 'text-slate-900'}>
-                    <td className="break-words px-4 py-3">{r.full_name || <span className="text-slate-400">—</span>}</td>
-                    <td className="break-all px-4 py-3 text-right" dir="ltr">{r.email}<span className="block text-xs text-slate-500 sm:hidden" dir="rtl">{SOURCES[r.source]}{r.status === 'unsubscribed' && ' · הוסר'}</span></td>
-                    <td className="hidden px-4 py-3 sm:table-cell">{SOURCES[r.source]}{r.status === 'unsubscribed' && <span className="mr-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">הוסר</span>}</td>
-                    <td className="hidden whitespace-nowrap px-4 py-3 md:table-cell">{fmtDate(r.created_at)}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-left">
-                      {canEdit && (r.status === 'active'
-                        ? <button type="button" disabled={busy} className="text-sm text-slate-600 hover:text-rose-700" onClick={() => setRowStatus(r, 'unsubscribed')}>הסרה</button>
-                        : <button type="button" disabled={busy} className="text-sm text-slate-600 hover:text-emerald-700" onClick={() => setRowStatus(r, 'active')}>החזרה</button>)}
-                      {canDelete && <button type="button" disabled={busy} className="mr-3 text-slate-400 hover:text-rose-700" onClick={() => remove(r)} aria-label={`מחיקת ${r.email}`}><Trash2 className="inline h-4 w-4" /></button>}
-                    </td>
-                  </tr>
-                ))}
-                {!filtered.length && <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-500">אין נרשמים שמתאימים לחיפוש או לסינון</td></tr>}
-              </tbody>
-            </table>
+
+        {!rows.length ? (
+          <div className="border-t border-slate-100 px-6 py-14 text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#1B3256]/[0.07] text-[#1B3256]"><Inbox className="h-7 w-7" aria-hidden /></div>
+            <p className="mt-4 font-bold text-slate-900">עוד אין נרשמים</p>
+            <p className="mx-auto mt-1 max-w-sm text-sm text-slate-600">העלו רשימה מקובץ, חברו את טופס נדרים פלוס, או שתפו את קישור ההרשמה.</p>
           </div>
-          {filtered.length > 500 && <p className="text-xs text-slate-500">מוצגים 500 הראשונים. כדי לראות את כולם, צמצמו בחיפוש או ייצאו לאקסל.</p>}
-        </div>
-      )}
+        ) : (
+          <>
+            <div className="border-t border-slate-100">
+              <table className="w-full table-fixed text-sm">
+                <thead className="bg-slate-50/70">
+                  <tr>
+                    <th className={`${th} w-[40%] sm:w-[28%]`}>שם</th>
+                    <th className={th}>מייל</th>
+                    <th className={`${th} hidden w-32 sm:table-cell`}>מקור</th>
+                    <th className={`${th} hidden w-36 md:table-cell`}>נרשם</th>
+                    <th className={`${th} w-24 sm:w-28`}><span className="sr-only">פעולות</span></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filtered.slice(0, 500).map(r => {
+                    const off = r.status === 'unsubscribed'
+                    return (
+                      <tr key={r.id} className="transition-colors hover:bg-slate-50/60">
+                        <td className="px-4 py-3">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <span className={`hidden h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold sm:flex ${off ? 'bg-slate-100 text-slate-400' : 'bg-[#1B3256]/[0.08] text-[#1B3256]'}`} aria-hidden>
+                              {(r.full_name || r.email).trim().charAt(0).toUpperCase()}
+                            </span>
+                            <span className={`min-w-0 break-words font-medium ${off ? 'text-slate-400' : 'text-slate-900'}`}>{r.full_name || <span className="font-normal text-slate-400">ללא שם</span>}</span>
+                          </div>
+                        </td>
+                        <td className={`break-all px-4 py-3 text-right ${off ? 'text-slate-400' : 'text-slate-700'}`} dir="ltr">
+                          {r.email}
+                          <span className="mt-1 flex flex-wrap gap-1 sm:hidden" dir="rtl"><Badge tone={SOURCE_TONE[r.source]}>{SOURCES[r.source]}</Badge>{off && <Badge tone="rose">הוסר</Badge>}</span>
+                        </td>
+                        <td className="hidden px-4 py-3 sm:table-cell">
+                          <span className="flex flex-wrap gap-1"><Badge tone={SOURCE_TONE[r.source]}>{SOURCES[r.source]}</Badge>{off && <Badge tone="rose">הוסר</Badge>}</span>
+                        </td>
+                        <td className="hidden whitespace-nowrap px-4 py-3 tabular-nums text-slate-500 md:table-cell">{fmtDate(r.created_at)}</td>
+                        <td className="px-2 py-2 text-left sm:px-4">
+                          <div className="flex items-center justify-end gap-1">
+                            {canEdit && (r.status === 'active'
+                              ? <button type="button" disabled={busy} className="min-h-9 rounded-lg px-2.5 text-sm text-slate-600 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50" onClick={() => setRowStatus(r, 'unsubscribed')}>הסרה</button>
+                              : <button type="button" disabled={busy} className="min-h-9 rounded-lg px-2.5 text-sm text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-50" onClick={() => setRowStatus(r, 'active')}>החזרה</button>)}
+                            {canDelete && <button type="button" disabled={busy} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50" onClick={() => remove(r)} aria-label={`מחיקת ${r.email}`}><Trash2 className="h-4 w-4" /></button>}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {filteredOut && (
+              <div className="border-t border-slate-100 px-6 py-10 text-center">
+                <Search className="mx-auto h-6 w-6 text-slate-300" aria-hidden />
+                <p className="mt-2 text-sm text-slate-600">אין נרשמים שמתאימים לחיפוש או לסינון</p>
+                <button type="button" className={`${link} mt-2 text-sm`} onClick={() => { setQ(''); setSource(''); setStatus('') }}>ניקוי הסינון</button>
+              </div>
+            )}
+            {filtered.length > 500 && <p className="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">מוצגים 500 הראשונים. כדי לראות את כולם, צמצמו בחיפוש או ייצאו לאקסל.</p>}
+          </>
+        )}
+      </Card>
     </div>
   )
 }
@@ -271,57 +365,49 @@ function downloadSample() {
 function UploadCard({ busy, onPick, onFile, onPaste }: { busy: boolean; onPick: () => void; onFile: (f: File) => void; onPaste: () => void }) {
   const [over, setOver] = useState(false)
   return (
-    <section
+    <Card
       aria-label="העלאת רשימת תפוצה"
       onDragOver={e => { e.preventDefault(); setOver(true) }}
       onDragLeave={() => setOver(false)}
       onDrop={e => { e.preventDefault(); setOver(false); const f = e.dataTransfer.files?.[0]; if (f && !busy) onFile(f) }}
-      className={`rounded-xl border-2 border-dashed p-5 transition-colors sm:p-6 ${over ? 'border-[#1B3256] bg-[#1B3256]/5' : 'border-slate-300 bg-white'}`}
+      className="h-full p-2"
     >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#1B3256]/10">
-          <FileSpreadsheet className="h-6 w-6 text-[#1B3256]" aria-hidden />
+      <div className={`flex h-full flex-col gap-4 rounded-xl border-2 border-dashed p-4 transition-colors duration-150 sm:flex-row sm:items-center sm:p-5 ${over ? 'border-[#1B3256] bg-[#1B3256]/[0.04]' : 'border-slate-200'}`}>
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#1B3256]/[0.07] text-[#1B3256]">
+          <FileSpreadsheet className="h-6 w-6" aria-hidden />
         </div>
         <div className="min-w-0 flex-1">
-          <h2 className="text-base font-bold text-slate-900">העלאת רשימת תפוצה</h2>
-          <p className="mt-1 text-sm text-slate-600">גררו לכאן קובץ Excel או CSV, או בחרו קובץ. צריך עמודת מייל, ועמודת שם אם יש. מי שכבר ברשימה לא ייכנס פעמיים.</p>
+          <h2 className="text-base font-bold text-slate-900">העלאת רשימה מקובץ</h2>
+          <p className="mt-1 text-sm leading-relaxed text-slate-600">גררו לכאן Excel או CSV עם עמודת מייל (ושם, אם יש). מי שכבר ברשימה לא ייכנס פעמיים.</p>
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-            <button type="button" className="font-medium text-[#1B3256] underline-offset-4 hover:underline" onClick={downloadSample}>הורדת קובץ לדוגמה</button>
-            <button type="button" className="font-medium text-[#1B3256] underline-offset-4 hover:underline" onClick={onPaste}>או הדבקת רשימה</button>
+            <button type="button" className={link} onClick={downloadSample}>קובץ לדוגמה</button>
+            <button type="button" className={link} onClick={onPaste}>הדבקת רשימה</button>
           </div>
         </div>
-        <button type="button" disabled={busy} onClick={onPick} className={`${btnPrimary} justify-center px-5 py-2.5 sm:shrink-0`} style={{ background: NAVY }}>
+        <button type="button" disabled={busy} onClick={onPick} className={`${btnPrimary} sm:shrink-0`}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Upload className="h-4 w-4" aria-hidden />}
           {busy ? 'מעלה...' : 'בחירת קובץ'}
         </button>
       </div>
-    </section>
+    </Card>
   )
 }
 
 function ImportResult({ s, onClose }: { s: ImportSummary; onClose: () => void }) {
-  const items: [string, number, string][] = [
-    ['נקלטו', s.added, 'text-emerald-700'],
-    ['כבר ברשימה', s.exists, 'text-slate-900'],
-    ['הסירו את עצמם בעבר', s.blocked, 'text-slate-900'],
-    ['שורות לא תקינות', s.invalid, s.invalid ? 'text-rose-700' : 'text-slate-900'],
-  ]
   return (
-    <section role="status" className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="flex items-center gap-2 text-sm font-bold text-emerald-900"><CheckCircle2 className="h-4 w-4" aria-hidden />היבוא הסתיים</h2>
-        <button type="button" onClick={onClose} className="text-slate-500 hover:text-slate-800" aria-label="סגירת הסיכום"><X className="h-4 w-4" /></button>
+    <Card role="status" className="p-5">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="flex items-center gap-2 text-base font-bold text-slate-900"><CheckCircle2 className="h-5 w-5 text-emerald-600" aria-hidden />היבוא הסתיים</h2>
+        <button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800" aria-label="סגירת הסיכום"><X className="h-4 w-4" /></button>
       </div>
-      <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {items.map(([k, v, cls]) => (
-          <div key={k} className="flex flex-col-reverse rounded-lg bg-white px-3 py-2">
-            <dt className="text-xs text-slate-600">{k}</dt>
-            <dd className={`text-xl font-bold ${cls}`}>{v.toLocaleString('he-IL')}</dd>
-          </div>
-        ))}
+      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat label="נקלטו" value={num(s.added)} tone="green" />
+        <Stat label="כבר ברשימה" value={num(s.exists)} />
+        <Stat label="הסירו את עצמם בעבר" value={num(s.blocked)} />
+        <Stat label="שורות לא תקינות" value={num(s.invalid)} tone={s.invalid ? 'rose' : undefined} />
       </dl>
-      {s.blocked > 0 && <p className="mt-2 text-xs text-slate-600">מי שהסיר את עצמו מהרשימה לא מוחזר ביבוא. אם צריך, אפשר להחזיר ידנית מסינון &quot;הוסרו&quot;.</p>}
-    </section>
+      {s.blocked > 0 && <p className="mt-3 text-xs text-slate-600">מי שהסיר את עצמו מהרשימה לא מוחזר ביבוא. אם צריך, אפשר להחזיר ידנית מסינון &quot;הוסרו&quot;.</p>}
+    </Card>
   )
 }
 
@@ -329,11 +415,11 @@ function AddForm({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => vo
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
   return (
-    <form className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-[1fr_1fr_auto]" onSubmit={e => { e.preventDefault(); onSubmit(email, name); setEmail(''); setName('') }}>
+    <form className="grid gap-3 rounded-xl bg-slate-50 p-3 ring-1 ring-inset ring-slate-900/[0.05] sm:grid-cols-[1fr_1fr_auto]" onSubmit={e => { e.preventDefault(); onSubmit(email, name); setEmail(''); setName('') }}>
       <input className={input} placeholder="שם (לא חובה)" value={name} onChange={e => setName(e.target.value)} aria-label="שם" />
       <input className={input} type="email" dir="ltr" placeholder="email@example.com" required value={email} onChange={e => setEmail(e.target.value)} aria-label="מייל" />
       <div className="flex gap-2">
-        <button type="submit" disabled={busy || !email.trim()} className={btnPrimary} style={{ background: NAVY }}>הוספה</button>
+        <button type="submit" disabled={busy || !email.trim()} className={`${btnPrimary} flex-1 sm:flex-none`}><Plus className="h-4 w-4" aria-hidden />הוספה</button>
         <button type="button" className={btnGhost} onClick={onClose} aria-label="סגירה"><X className="h-4 w-4" /></button>
       </div>
     </form>
@@ -343,23 +429,25 @@ function AddForm({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => vo
 function PasteForm({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => void; onSubmit: (text: string) => void }) {
   const [text, setText] = useState('')
   return (
-    <form className="space-y-3 rounded-xl border border-slate-200 bg-white p-4" onSubmit={e => { e.preventDefault(); onSubmit(text) }}>
-      <p className="text-sm text-slate-600">הדביקו רשימה מאקסל או מהייצוא של נדרים: שורה לכל נרשם, מייל ושם (בכל סדר, מופרדים בטאב, פסיק או נקודה-פסיק).</p>
-      <textarea className={`${input} h-40 font-mono`} dir="ltr" value={text} onChange={e => setText(e.target.value)} aria-label="רשימה לייבוא" />
-      <div className="flex gap-2">
-        <button type="submit" disabled={busy || !text.trim()} className={btnPrimary} style={{ background: NAVY }}>{busy ? 'מייבא...' : 'יבוא'}</button>
-        <button type="button" className={btnGhost} onClick={onClose}>ביטול</button>
-      </div>
-    </form>
+    <Card className="p-5">
+      <form className="space-y-3" onSubmit={e => { e.preventDefault(); onSubmit(text) }}>
+        <CardHeader icon={<Copy className="h-5 w-5" aria-hidden />} title="הדבקת רשימה" hint="מאקסל או מהייצוא של נדרים: שורה לכל נרשם, מייל ושם בכל סדר, מופרדים בטאב, פסיק או נקודה-פסיק." />
+        <textarea className={`${input} h-40 font-mono`} dir="ltr" value={text} onChange={e => setText(e.target.value)} aria-label="רשימה לייבוא" />
+        <div className="flex gap-2">
+          <button type="submit" disabled={busy || !text.trim()} className={btnPrimary}>{busy ? 'מייבא...' : 'יבוא לרשימה'}</button>
+          <button type="button" className={btnGhost} onClick={onClose}>ביטול</button>
+        </div>
+      </form>
+    </Card>
   )
 }
 
 // ─── גיליונות: העלאה, תצוגה מקדימה, שליחה וארכיון ───────────────────────────
 
-const STATUS: Record<IssueView['status'], { label: string; cls: string }> = {
-  draft: { label: 'טיוטה', cls: 'bg-amber-50 text-amber-800' },
-  sending: { label: 'בשליחה', cls: 'bg-sky-50 text-sky-800' },
-  sent: { label: 'נשלח', cls: 'bg-emerald-50 text-emerald-800' },
+const STATUS: Record<IssueView['status'], { label: string; tone: Tone }> = {
+  draft: { label: 'טיוטה', tone: 'amber' },
+  sending: { label: 'בשליחה', tone: 'sky' },
+  sent: { label: 'נשלח', tone: 'green' },
 }
 
 function Issues({ rows, activeCount, defaultParasha, canAdd, canEdit, canDelete }: {
@@ -368,48 +456,87 @@ function Issues({ rows, activeCount, defaultParasha, canAdd, canEdit, canDelete 
   const [creating, setCreating] = useState(false)
   const [openId, setOpenId] = useState<string | null>(rows.find(r => r.status === 'draft')?.id ?? null)
   const open = rows.find(r => r.id === openId) ?? null
+  const th = 'px-4 py-3 text-right text-xs font-semibold text-slate-500'
 
   return (
     <div className="space-y-5">
-      {canAdd && !creating && (
-        <button type="button" className={btnPrimary} style={{ background: NAVY }} onClick={() => setCreating(true)}>
-          <Plus className="h-4 w-4" aria-hidden />גיליון חדש
-        </button>
+      {!creating && (
+        <Card className="p-5">
+          <CardHeader icon={<Newspaper className="h-5 w-5" aria-hidden />} title="הגיליון השבועי" hint="שלושה צעדים, ואפשר לעצור בכל אחד מהם.">
+            {canAdd && <button type="button" className={btnPrimary} onClick={() => setCreating(true)}><Plus className="h-4 w-4" aria-hidden />גיליון חדש</button>}
+          </CardHeader>
+          <ol className="mt-5 grid gap-3 sm:grid-cols-3">
+            {[
+              ['העלאת הקובץ', 'PDF, Word או תמונה, עם פרשה ונושא למייל.'],
+              ['בדיקה', 'תצוגה מקדימה של המייל, ומייל ניסיון אליכם.'],
+              ['שליחה לכל הרשימה', `${num(activeCount)} נרשמים פעילים. יוצא במנות, לא בשבת ובחג.`],
+            ].map(([t, d], i) => (
+              <li key={t} className="flex gap-3 rounded-xl bg-slate-50/80 p-3.5 ring-1 ring-inset ring-slate-900/[0.04]">
+                <StepNum n={i + 1} />
+                <div><p className="text-sm font-semibold text-slate-900">{t}</p><p className="mt-0.5 text-xs leading-relaxed text-slate-600">{d}</p></div>
+              </li>
+            ))}
+          </ol>
+        </Card>
       )}
       {creating && <NewIssue defaultParasha={defaultParasha} onClose={() => setCreating(false)} onCreated={id => { setCreating(false); setOpenId(id) }} />}
       {open && <IssueDetail key={open.id} issue={open} activeCount={activeCount} canEdit={canEdit} canDelete={canDelete} onClose={() => setOpenId(null)} />}
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-right text-slate-600">
-            <tr>
-              <th className="px-3 py-2 font-medium">גיליון</th><th className="hidden px-3 py-2 font-medium sm:table-cell">פרשה</th>
-              <th className="px-3 py-2 font-medium">נשלח</th><th className="hidden px-3 py-2 font-medium md:table-cell">נמענים</th>
-              <th className="px-3 py-2 font-medium">פתחו</th><th className="px-3 py-2 font-medium">הורידו</th>
-              <th className="hidden px-3 py-2 font-medium md:table-cell">נכשלו</th><th className="px-3 py-2" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {rows.map(r => (
-              <tr key={r.id} className={r.id === openId ? 'bg-slate-50' : ''}>
-                <td className="px-3 py-2 font-medium text-slate-900">{r.title}</td>
-                <td className="hidden px-3 py-2 sm:table-cell">{r.parasha}</td>
-                <td className="px-3 py-2 whitespace-nowrap">
-                  <span className={`rounded px-1.5 py-0.5 text-xs ${STATUS[r.status].cls}`}>{STATUS[r.status].label}</span>
-                  {r.status !== 'draft' && <span className="mr-2 text-slate-600">{fmtDate(r.completed_at ?? r.started_at)}</span>}
-                </td>
-                <td className="hidden px-3 py-2 md:table-cell">{r.status === 'draft' ? '—' : `${r.sent_count}/${r.total_count ?? 0}`}</td>
-                <td className="px-3 py-2">{r.status === 'draft' ? '—' : `${r.opened_count}${pct(r.opened_count, r.sent_count)}`}</td>
-                <td className="px-3 py-2">{r.status === 'draft' ? '—' : `${r.downloaded_count}${pct(r.downloaded_count, r.sent_count)}`}</td>
-                <td className="hidden px-3 py-2 md:table-cell">{r.failed_count || '—'}</td>
-                <td className="px-3 py-2 text-left"><button type="button" className="text-sm font-medium text-[#1B3256] hover:underline" onClick={() => setOpenId(r.id)}>פתיחה</button></td>
-              </tr>
-            ))}
-            {!rows.length && <tr><td colSpan={8} className="px-3 py-8 text-center text-slate-500">עוד לא הועלו גיליונות</td></tr>}
-          </tbody>
-        </table>
-      </div>
-      <p className="text-xs text-slate-500">עמודת &quot;פתחו&quot; נספרת לפי טעינת תמונה במייל, ולכן הוא הערכה: חלק מתוכנות המייל חוסמות תמונות. מי שהוריד את הקובץ נספר גם כמי שפתח.</p>
+      <Card className="overflow-hidden">
+        <div className="p-4 sm:p-5">
+          <CardHeader icon={<FileText className="h-5 w-5" aria-hidden />} title="ארכיון הגיליונות" hint={rows.length ? `${num(rows.length)} גיליונות, מהחדש לישן` : undefined} />
+        </div>
+        {!rows.length ? (
+          <div className="border-t border-slate-100 px-6 py-14 text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#1B3256]/[0.07] text-[#1B3256]"><Newspaper className="h-7 w-7" aria-hidden /></div>
+            <p className="mt-4 font-bold text-slate-900">עוד לא הועלו גיליונות</p>
+            <p className="mx-auto mt-1 max-w-sm text-sm text-slate-600">לחצו &quot;גיליון חדש&quot; כדי להעלות את הגיליון של השבוע.</p>
+          </div>
+        ) : (
+          <div className="border-t border-slate-100">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50/70">
+                <tr>
+                  <th className={th}>פרשה</th>
+                  <th className={th}>סטטוס</th>
+                  <th className={`${th} hidden md:table-cell`}>נמענים</th>
+                  <th className={`${th} hidden sm:table-cell`}>פתחו</th>
+                  <th className={`${th} hidden sm:table-cell`}>הורידו</th>
+                  <th className={`${th} hidden lg:table-cell`}>נכשלו</th>
+                  <th className={th}><span className="sr-only">פעולות</span></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {rows.map(r => {
+                  const draft = r.status === 'draft'
+                  return (
+                    <tr key={r.id} className={`transition-colors ${r.id === openId ? 'bg-[#1B3256]/[0.03]' : 'hover:bg-slate-50/60'}`}>
+                      <td className="px-4 py-3">
+                        <p className="font-semibold text-slate-900">פרשת {r.parasha}</p>
+                        <p className="text-xs text-slate-500">{r.title}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge tone={STATUS[r.status].tone} dot>{STATUS[r.status].label}</Badge>
+                        {!draft && <p className="mt-1 text-xs tabular-nums text-slate-500">{fmtDate(r.completed_at ?? r.started_at)}</p>}
+                      </td>
+                      <td className="hidden px-4 py-3 tabular-nums text-slate-700 md:table-cell">{draft ? '—' : `${num(r.sent_count)} / ${num(r.total_count ?? 0)}`}</td>
+                      <td className="hidden px-4 py-3 sm:table-cell" title={draft ? undefined : `${r.opened_count}${pct(r.opened_count, r.sent_count)}`}>{draft ? '—' : <Meter value={r.opened_count} of={r.sent_count} />}</td>
+                      <td className="hidden px-4 py-3 sm:table-cell" title={draft ? undefined : `${r.downloaded_count}${pct(r.downloaded_count, r.sent_count)}`}>{draft ? '—' : <Meter value={r.downloaded_count} of={r.sent_count} />}</td>
+                      <td className={`hidden px-4 py-3 tabular-nums lg:table-cell ${r.failed_count ? 'text-rose-700' : 'text-slate-400'}`}>{r.failed_count || '—'}</td>
+                      <td className="px-4 py-3 text-left">
+                        <button type="button" className={`${btnGhost} min-h-9 px-3`} onClick={() => setOpenId(r.id)}>
+                          <Eye className="h-4 w-4" aria-hidden />{draft ? 'המשך' : 'פרטים'}
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {rows.length > 0 && <p className="border-t border-slate-100 px-5 py-3 text-xs leading-relaxed text-slate-500">&quot;פתחו&quot; נספר לפי טעינת תמונה במייל, ולכן הוא הערכה: חלק מתוכנות המייל חוסמות תמונות. מי שהוריד את הקובץ נספר גם כמי שפתח.</p>}
+      </Card>
     </div>
   )
 }
@@ -439,33 +566,40 @@ function NewIssue({ defaultParasha, onClose, onCreated }: { defaultParasha: stri
     finally { setBusy(false) }
   }
 
+  const label = 'mb-1.5 block text-sm font-medium text-slate-800'
   return (
-    <form onSubmit={submit} className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
-      <h2 className="text-lg font-bold" style={{ color: NAVY }}>גיליון חדש</h2>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className="block text-sm"><span className="mb-1 block font-medium text-slate-700">פרשה</span>
-          <input className={input} value={parasha} onChange={e => setParasha(e.target.value)} required maxLength={60} />
-          <span className="mt-1 block text-xs text-slate-500">הוצע לפי השבוע הנוכחי. אפשר לשנות.</span>
+    <Card className="p-5 sm:p-6">
+      <form onSubmit={submit} className="space-y-5">
+        <CardHeader icon={<FileUp className="h-5 w-5" aria-hidden />} title="גיליון חדש" hint="אחרי ההעלאה תראו בדיוק איך המייל ייראה, לפני שהוא נשלח למישהו." />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block"><span className={label}>פרשה</span>
+            <input className={input} value={parasha} onChange={e => setParasha(e.target.value)} required maxLength={60} />
+            <span className="mt-1 block text-xs text-slate-500">הוצע לפי השבוע הנוכחי. אפשר לשנות.</span>
+          </label>
+          <label className="block"><span className={label}>שם הגיליון</span>
+            <input className={input} value={title} onChange={e => setTitle(e.target.value)} required maxLength={120} />
+          </label>
+        </div>
+        <label className="block"><span className={label}>נושא המייל</span>
+          <input className={input} value={subject} onChange={e => setSubject(e.target.value)} placeholder={defaultSubject(title, parasha)} maxLength={200} />
+          <span className="mt-1 block text-xs text-slate-500">אם תשאירו ריק, יישלח הנושא שמוצג באפור.</span>
         </label>
-        <label className="block text-sm"><span className="mb-1 block font-medium text-slate-700">שם הגיליון</span>
-          <input className={input} value={title} onChange={e => setTitle(e.target.value)} required maxLength={120} />
+        <label className="block"><span className={label}>פתיח למייל <span className="font-normal text-slate-500">(לא חובה)</span></span>
+          <textarea className={`${input} h-24`} value={intro} onChange={e => setIntro(e.target.value)} maxLength={4000} />
         </label>
-      </div>
-      <label className="block text-sm"><span className="mb-1 block font-medium text-slate-700">נושא המייל</span>
-        <input className={input} value={subject} onChange={e => setSubject(e.target.value)} placeholder={defaultSubject(title, parasha)} maxLength={200} />
-      </label>
-      <label className="block text-sm"><span className="mb-1 block font-medium text-slate-700">פתיח למייל (לא חובה)</span>
-        <textarea className={`${input} h-24`} value={intro} onChange={e => setIntro(e.target.value)} maxLength={4000} />
-      </label>
-      <label className="block text-sm"><span className="mb-1 block font-medium text-slate-700">קובץ הגיליון (PDF, Word או תמונה, עד 25MB)</span>
-        <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={e => setFile(e.target.files?.[0] ?? null)} className="block text-sm" />
-      </label>
-      {err && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800">{err}</p>}
-      <div className="flex gap-2">
-        <button type="submit" disabled={busy} className={btnPrimary} style={{ background: NAVY }}><Upload className="h-4 w-4" aria-hidden />{busy ? 'מעלה...' : 'העלאה והמשך לתצוגה מקדימה'}</button>
-        <button type="button" className={btnGhost} onClick={onClose}>ביטול</button>
-      </div>
-    </form>
+        <label className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors duration-150 focus-within:ring-4 focus-within:ring-[#1B3256]/10 ${file ? 'border-emerald-300 bg-emerald-50/50' : 'border-slate-200 hover:border-[#1B3256]/40 hover:bg-slate-50'}`}>
+          {file ? <CheckCircle2 className="h-7 w-7 text-emerald-600" aria-hidden /> : <Upload className="h-7 w-7 text-[#1B3256]" aria-hidden />}
+          <span className="text-sm font-semibold text-slate-900">{file ? file.name : 'בחירת קובץ הגיליון'}</span>
+          <span className="text-xs text-slate-500">{file ? 'לחצו כדי להחליף' : 'PDF, Word או תמונה, עד 25MB'}</span>
+          <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={e => setFile(e.target.files?.[0] ?? null)} className="sr-only" />
+        </label>
+        {err && <Notice msg={{ ok: false, text: err }} />}
+        <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-5">
+          <button type="submit" disabled={busy} className={btnPrimary}>{busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Upload className="h-4 w-4" aria-hidden />}{busy ? 'מעלה...' : 'העלאה והמשך לתצוגה מקדימה'}</button>
+          <button type="button" className={btnGhost} onClick={onClose}>ביטול</button>
+        </div>
+      </form>
+    </Card>
   )
 }
 
@@ -502,54 +636,66 @@ function IssueDetail({ issue, activeCount, canEdit, canDelete, onClose }: { issu
   }
 
   return (
-    <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold" style={{ color: NAVY }}>{issue.title} · {issue.parasha}</h2>
-          <p className="text-sm text-slate-600">נושא: {issue.subject}</p>
-          <a href={`${base}/file`} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 text-sm text-[#1B3256] hover:underline">
+    <Card className="overflow-hidden">
+      <div className="flex items-start justify-between gap-3 border-b border-slate-100 p-5">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-lg font-bold text-slate-900">פרשת {issue.parasha}</h2>
+            <Badge tone={STATUS[issue.status].tone} dot>{STATUS[issue.status].label}</Badge>
+          </div>
+          <p className="mt-1 text-sm text-slate-600"><span className="text-slate-500">נושא:</span> {issue.subject}</p>
+          <a href={`${base}/file`} target="_blank" rel="noreferrer" className={`${link} mt-1.5 inline-flex items-center gap-1.5 text-sm`}>
             <FileText className="h-4 w-4" aria-hidden />{issue.file_name}
           </a>
         </div>
-        <button type="button" className={btnGhost} onClick={onClose} aria-label="סגירה"><X className="h-4 w-4" /></button>
+        <button type="button" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900" onClick={onClose} aria-label="סגירה"><X className="h-5 w-5" /></button>
       </div>
 
       {!draft && (
-        <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
-          {[
-            ['נמענים', issue.total_count ?? 0], ['נשלחו', issue.sent_count], ['ממתינים', issue.pending_count],
-            ['פתחו', `${issue.opened_count}${pct(issue.opened_count, issue.sent_count)}`],
-            ['הורידו', `${issue.downloaded_count}${pct(issue.downloaded_count, issue.sent_count)}`],
-          ].map(([k, v]) => (
-            <div key={String(k)} className="rounded-lg bg-slate-50 px-3 py-2"><dt className="text-slate-500">{k}</dt><dd className="text-lg font-bold text-slate-900">{v}</dd></div>
-          ))}
+        <dl className="grid grid-cols-2 gap-3 border-b border-slate-100 p-5 sm:grid-cols-5">
+          <Stat label="נמענים" value={num(issue.total_count ?? 0)} />
+          <Stat label="נשלחו" value={num(issue.sent_count)} sub={issue.failed_count ? `${num(issue.failed_count)} נכשלו` : undefined} />
+          <Stat label="ממתינים" value={num(issue.pending_count)} />
+          <Stat label="פתחו" value={num(issue.opened_count)} sub={pct(issue.opened_count, issue.sent_count).trim().replace(/[()]/g, '') || undefined} />
+          <Stat label="הורידו" value={num(issue.downloaded_count)} sub={pct(issue.downloaded_count, issue.sent_count).trim().replace(/[()]/g, '') || undefined} />
         </dl>
       )}
 
-      <div>
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="flex items-center gap-1.5 text-sm font-medium text-slate-700"><Eye className="h-4 w-4" aria-hidden />תצוגה מקדימה של המייל</h3>
-          <button type="button" className="text-xs text-slate-500 hover:underline" onClick={() => setFrameKey(k => k + 1)}>רענון</button>
+      <div className={`grid gap-5 p-5 ${draft && canEdit ? 'lg:grid-cols-[minmax(0,1fr)_340px]' : ''}`}>
+        <div className="min-w-0">
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-800"><Eye className="h-4 w-4" aria-hidden />כך המייל ייראה אצל הנמען</h3>
+            <button type="button" className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-800" onClick={() => setFrameKey(k => k + 1)}><RefreshCw className="h-3.5 w-3.5" aria-hidden />רענון</button>
+          </div>
+          <div className="overflow-hidden rounded-xl bg-slate-100 p-2 ring-1 ring-inset ring-slate-900/[0.05]">
+            <iframe key={frameKey} src={`${base}/preview`} title="תצוגה מקדימה" className="h-[560px] w-full rounded-lg bg-white" />
+          </div>
+          {!(draft && canEdit) && <div className="mt-4"><Notice msg={msg} /></div>}
         </div>
-        <iframe key={frameKey} src={`${base}/preview`} title="תצוגה מקדימה" className="h-[560px] w-full rounded-lg border border-slate-200 bg-slate-50" />
+
+        {draft && canEdit && (
+          <aside className="space-y-4">
+            <div className="rounded-xl bg-slate-50/80 p-4 ring-1 ring-inset ring-slate-900/[0.04]">
+              <div className="flex items-center gap-2.5"><StepNum n={1} /><h3 className="text-sm font-semibold text-slate-900">מייל ניסיון</h3></div>
+              <p className="mt-2 text-xs leading-relaxed text-slate-600">שלחו לעצמכם ובדקו שהכול נראה טוב. בלי כתובת, יישלח למייל שלכם.</p>
+              <input className={`${input} mt-3`} type="email" dir="ltr" placeholder="המייל שלי (ברירת מחדל)" value={testTo} onChange={e => setTestTo(e.target.value)} aria-label="כתובת לניסיון" />
+              <button type="button" disabled={busy} className={`${btnGhost} mt-2 w-full`} onClick={sendTest}><MailCheck className="h-4 w-4" aria-hidden />שליחת ניסיון</button>
+            </div>
+
+            <div className="rounded-xl p-4 ring-1 ring-inset ring-[#1B3256]/15">
+              <div className="flex items-center gap-2.5"><StepNum n={2} /><h3 className="text-sm font-semibold text-slate-900">שליחה לכל הרשימה</h3></div>
+              <p className="mt-2 flex items-start gap-1.5 text-xs leading-relaxed text-slate-600"><ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden />אחרי שליחה אי אפשר לבטל. המיילים יוצאים במנות, לא בשבת ובחג.</p>
+              <button type="button" disabled={busy || !activeCount} className={`${btnPrimary} mt-3 w-full py-2.5`} onClick={sendAll}>
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Send className="h-4 w-4" aria-hidden />}שליחה ל-{num(activeCount)} נרשמים
+              </button>
+            </div>
+
+            <Notice msg={msg} />
+
+            {canDelete && <button type="button" disabled={busy} className={`${btnDanger} w-full`} onClick={remove}><Trash2 className="h-4 w-4" aria-hidden />מחיקת הטיוטה</button>}
+          </aside>
+        )}
       </div>
-
-      {msg && <p role="status" className={`rounded-lg px-3 py-2 text-sm ${msg.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-800'}`}>{msg.text}</p>}
-
-      {draft && canEdit && (
-        <div className="space-y-3 border-t border-slate-100 pt-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <input className={`${input} max-w-xs`} type="email" dir="ltr" placeholder="המייל שלי (ברירת מחדל)" value={testTo} onChange={e => setTestTo(e.target.value)} aria-label="כתובת לניסיון" />
-            <button type="button" disabled={busy} className={btnGhost} onClick={sendTest}><Send className="h-4 w-4" aria-hidden />שליחת ניסיון</button>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" disabled={busy || !activeCount} className={btnPrimary} style={{ background: NAVY }} onClick={sendAll}>
-              <Send className="h-4 w-4" aria-hidden />שליחה ל-{activeCount.toLocaleString('he-IL')} נרשמים
-            </button>
-            {canDelete && <button type="button" disabled={busy} className={`${btnGhost} text-rose-700`} onClick={remove}><Trash2 className="h-4 w-4" aria-hidden />מחיקת הטיוטה</button>}
-          </div>
-        </div>
-      )}
-    </section>
+    </Card>
   )
 }

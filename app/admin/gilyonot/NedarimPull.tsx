@@ -2,17 +2,14 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Download, RefreshCw, Save } from 'lucide-react'
+import { Download, KeyRound, ListChecks, RefreshCw, Save } from 'lucide-react'
 import { detectColumns } from '@/lib/gilyonotDetect'
 import type { NedarimPullView, NedarimRow } from '@/lib/gilyonotNedarimPull'
+import { btnGhost, btnPrimary, Card, CardHeader, input, Notice, Stat, StepNum } from './ui'
 
 // לשונית "נדרים פלוס": הגדרות המשיכה מטופס הגיליונות, בחירת העמודות לפי רשומות לדוגמה,
 // ומשיכה ידנית. המשיכה האוטומטית רצה כל שעה (instrumentation.ts).
 
-const NAVY = '#1B3256'
-const input = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-[#1B3256] focus:outline-none focus:ring-2 focus:ring-[#1B3256]/20'
-const btn = 'inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50'
-const btnGhost = `${btn} border border-slate-300 bg-white text-slate-700 hover:bg-slate-50`
 const FIELDS = [...Array.from({ length: 100 }, (_, i) => `Field${i + 1}`), ...Array.from({ length: 10 }, (_, i) => `Field${i + 1}Max`)]
 const fmtDate = (s: string | null) => (s ? new Date(s).toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' }) : 'עוד לא')
 
@@ -63,76 +60,111 @@ export default function NedarimPull({ view: initial }: { view: NedarimPullView }
 
   const cols = sample ? Object.keys(sample[0] ?? {}).filter(k => /^Field\d/.test(k) && sample.some(r => r[k])) : []
   const st = view.state
+  const connected = view.hasKey && !!view.mosadId && !!view.tofesId
+  const health = st.lastError
+    ? { dot: 'bg-rose-500', title: 'המשיכה האחרונה נכשלה', text: st.lastError }
+    : connected && view.emailField
+    ? { dot: 'bg-emerald-500', title: 'מחובר ופעיל', text: 'המשיכה רצה לבד כל שעה, ונרשמים חדשים נכנסים לרשימת התפוצה.' }
+    : { dot: 'bg-slate-300', title: 'עוד לא מחובר', text: 'מלאו את פרטי הטופס והמפתח, בחרו את עמודת המייל ושמרו.' }
+  const label = 'mb-1.5 block text-sm font-medium text-slate-800'
 
   return (
     <div className="space-y-5">
-      <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
-        <div>
-          <h2 className="text-lg font-bold" style={{ color: NAVY }}>משיכה מטופס הגיליונות בנדרים פלוס</h2>
-          <p className="mt-1 text-sm text-slate-600">כל מי שממלא את הטופס בנדרים נכנס לרשימת התפוצה. המשיכה רצה לבד כל שעה, ואפשר גם להפעיל אותה עכשיו.</p>
+      <Card className="p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="relative mt-1.5 flex h-3 w-3 shrink-0" aria-hidden>
+              {health.dot === 'bg-emerald-500' && <span className="absolute inset-0 animate-ping rounded-full bg-emerald-400 opacity-60 motion-reduce:hidden" />}
+              <span className={`relative h-3 w-3 rounded-full ${health.dot}`} />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-base font-bold text-slate-900">{health.title}</h2>
+              <p className={`mt-0.5 break-words text-sm ${st.lastError ? 'text-rose-800' : 'text-slate-600'}`}>{health.text}</p>
+            </div>
+          </div>
+          <button type="button" onClick={pull} disabled={busy || !view.hasKey} className={`${btnPrimary} sm:shrink-0`}>
+            <RefreshCw className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} aria-hidden />משיכה עכשיו
+          </button>
+        </div>
+        <dl className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Stat label="משיכה אחרונה" value={<span className="text-base">{fmtDate(st.lastRunAt)}</span>} />
+          <Stat label="נקלטו במשיכה האחרונה" value={st.lastAdded.toLocaleString('he-IL')} tone={st.lastAdded ? 'green' : undefined} />
+          <Stat label="נקלטו בסך הכול" value={st.totalAdded.toLocaleString('he-IL')} />
+          <Stat label="רשומה אחרונה שנקראה" value={<span className="text-base">{st.lastId || '—'}</span>} />
+        </dl>
+        {msg && <div className="mt-4"><Notice msg={msg} /></div>}
+      </Card>
+
+      <Card className="p-5 sm:p-6">
+        <div className="flex items-start gap-3">
+          <StepNum n={1} done={connected} />
+          <div className="min-w-0 flex-1">
+            <h2 className="text-base font-bold text-slate-900">חיבור לטופס הגיליונות</h2>
+            <p className="mt-0.5 text-sm text-slate-600">מספר המוסד, מספר הטופס ומפתח API מנדרים פלוס.</p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              <label className="block"><span className={label}>מספר מוסד</span>
+                <input className={input} inputMode="numeric" dir="ltr" maxLength={7} value={f.mosadId} onChange={set('mosadId')} /></label>
+              <label className="block"><span className={label}>מספר טופס</span>
+                <input className={input} inputMode="numeric" dir="ltr" value={f.tofesId} onChange={set('tofesId')} /></label>
+              <label className="block"><span className={`${label} flex items-center gap-1.5`}><KeyRound className="h-3.5 w-3.5 text-slate-500" aria-hidden />מפתח API</span>
+                <input className={input} type="password" dir="ltr" autoComplete="off" value={f.apiKey} onChange={set('apiKey')}
+                  placeholder={view.hasKey ? 'מפתח מוגדר. להחלפה הקלידו חדש' : 'npk_...'} /></label>
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-slate-500">את המפתח יוצרים בנדרים פלוס במסך הגדרות &gt; API &gt; מפתחות API (מספיק מפתח מוגבל עם הרשאת &quot;משיכת רשומות טופס&quot;). אחרי השמירה הוא לא מוצג שוב.</p>
+          </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-3">
-          <label className="block space-y-1 text-sm"><span className="font-medium text-slate-700">מספר מוסד</span>
-            <input className={input} inputMode="numeric" dir="ltr" maxLength={7} value={f.mosadId} onChange={set('mosadId')} /></label>
-          <label className="block space-y-1 text-sm"><span className="font-medium text-slate-700">מספר טופס</span>
-            <input className={input} inputMode="numeric" dir="ltr" value={f.tofesId} onChange={set('tofesId')} /></label>
-          <label className="block space-y-1 text-sm"><span className="font-medium text-slate-700">מפתח API</span>
-            <input className={input} type="password" dir="ltr" autoComplete="off" value={f.apiKey} onChange={set('apiKey')}
-              placeholder={view.hasKey ? 'מפתח מוגדר. להחלפה הקלידו חדש' : 'npk_...'} /></label>
+        <div className="mt-6 flex items-start gap-3 border-t border-slate-100 pt-6">
+          <StepNum n={2} done={!!f.emailField} />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="text-base font-bold text-slate-900">בחירת העמודות</h2>
+                <p className="mt-0.5 text-sm text-slate-600">טענו רשומות לדוגמה, והמייל והשם יזוהו לבד. אפשר לתקן ידנית.</p>
+              </div>
+              <button type="button" onClick={loadSample} disabled={busy || !view.hasKey} className={`${btnGhost} sm:shrink-0`}><Download className="h-4 w-4" aria-hidden />טעינת דוגמה מהטופס</button>
+            </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              {([['emailField', 'עמודת המייל', true], ['nameField', 'עמודת השם', false], ['consentField', 'עמודת אישור קבלת מייל', false]] as const).map(([k, text, req]) => (
+                <label key={k} className="block"><span className={label}>{text}{!req && <span className="font-normal text-slate-500"> (לא חובה)</span>}</span>
+                  <select className={input} dir="ltr" value={f[k]} onChange={set(k)}>
+                    <option value="">{req ? 'בחרו עמודה' : 'אין'}</option>
+                    {FIELDS.map(x => <option key={x} value={x}>{x}{sample?.[0]?.[x] ? ` · ${sample[0][x].slice(0, 30)}` : ''}</option>)}
+                  </select></label>
+              ))}
+            </div>
+            {f.consentField && <p className="mt-2 text-xs text-slate-500">רשומה שבה עמודת האישור ריקה, 0 או &quot;לא&quot; לא תיכנס לרשימה.</p>}
+          </div>
         </div>
-        <p className="text-xs text-slate-500">את המפתח יוצרים בנדרים פלוס במסך הגדרות &gt; API &gt; מפתחות API (מספיק מפתח מוגבל עם הרשאת &quot;משיכת רשומות טופס&quot;). אחרי השמירה הוא לא מוצג שוב.</p>
 
-        <div className="grid gap-4 sm:grid-cols-3">
-          {([['emailField', 'עמודת המייל', true], ['nameField', 'עמודת השם', false], ['consentField', 'עמודת אישור קבלת מייל', false]] as const).map(([k, label, req]) => (
-            <label key={k} className="block space-y-1 text-sm"><span className="font-medium text-slate-700">{label}{!req && <span className="font-normal text-slate-500"> (לא חובה)</span>}</span>
-              <select className={input} dir="ltr" value={f[k]} onChange={set(k)}>
-                <option value="">{req ? 'בחרו עמודה' : 'אין'}</option>
-                {FIELDS.map(x => <option key={x} value={x}>{x}{sample?.[0]?.[x] ? ` · ${sample[0][x].slice(0, 30)}` : ''}</option>)}
-              </select></label>
-          ))}
+        <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-5">
+          <button type="button" onClick={save} disabled={busy} className={btnPrimary}><Save className="h-4 w-4" aria-hidden />שמירת ההגדרות</button>
+          {!view.hasKey && <p className="text-xs text-slate-500">טעינת דוגמה ומשיכה ייפתחו אחרי ששומרים מפתח API.</p>}
         </div>
-        {f.consentField && <p className="text-xs text-slate-500">רשומה שבה עמודת האישור ריקה, 0 או &quot;לא&quot; לא תיכנס לרשימה.</p>}
-
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={save} disabled={busy} className={`${btn} text-white`} style={{ background: NAVY }}><Save size={16} aria-hidden />שמירה</button>
-          <button type="button" onClick={loadSample} disabled={busy || !view.hasKey} className={btnGhost}><Download size={16} aria-hidden />טעינת דוגמה מהטופס</button>
-          <button type="button" onClick={pull} disabled={busy || !view.hasKey} className={btnGhost}><RefreshCw size={16} aria-hidden className={busy ? 'animate-spin' : ''} />משיכה עכשיו</button>
-        </div>
-        {msg && <p role="status" className={`rounded-lg px-4 py-3 text-sm ${msg.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-800'}`}>{msg.text}</p>}
-      </section>
+      </Card>
 
       {sample && sample.length > 0 && (
-        <section className="space-y-2 rounded-xl border border-slate-200 bg-white p-5">
-          <h3 className="font-bold" style={{ color: NAVY }}>הרשומות האחרונות בטופס</h3>
-          <p className="text-sm text-slate-600">מוצגות רק עמודות שיש בהן ערך. אתרו את עמודת המייל ואת עמודת השם, ובחרו אותן למעלה.</p>
-          <ul className="space-y-3">
+        <Card className="p-5">
+          <CardHeader icon={<ListChecks className="h-5 w-5" aria-hidden />} title="הרשומות האחרונות בטופס" hint="מוצגות רק עמודות שיש בהן ערך. אתרו את עמודת המייל ואת עמודת השם, ובחרו אותן למעלה." />
+          <ul className="mt-4 space-y-3">
             {sample.map(r => (
-              <li key={r.ID} className="rounded-lg border border-slate-100 bg-slate-50 p-3">
-                <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-2 lg:grid-cols-3">
-                  {cols.filter(c => r[c]).map(c => (
-                    <div key={c} className="flex min-w-0 gap-2">
-                      <dt className="shrink-0 font-mono text-xs leading-5 text-slate-500" dir="ltr">{c}</dt>
-                      <dd className="min-w-0 break-words" dir="auto">{r[c]}</dd>
-                    </div>
-                  ))}
+              <li key={r.ID} className="rounded-xl bg-slate-50/80 p-3.5 ring-1 ring-inset ring-slate-900/[0.04]">
+                <dl className="grid gap-x-4 gap-y-1.5 text-sm sm:grid-cols-2 lg:grid-cols-3">
+                  {cols.filter(c => r[c]).map(c => {
+                    const picked = c === f.emailField || c === f.nameField
+                    return (
+                      <div key={c} className={`flex min-w-0 gap-2 rounded-md px-1.5 ${picked ? 'bg-[#1B3256]/[0.07]' : ''}`}>
+                        <dt className={`shrink-0 font-mono text-xs leading-5 ${picked ? 'font-semibold text-[#1B3256]' : 'text-slate-500'}`} dir="ltr">{c}</dt>
+                        <dd className="min-w-0 break-words text-slate-800" dir="auto">{r[c]}</dd>
+                      </div>
+                    )
+                  })}
                 </dl>
               </li>
             ))}
           </ul>
-        </section>
+        </Card>
       )}
-
-      <section className="rounded-xl border border-slate-200 bg-white p-5 text-sm">
-        <h3 className="mb-3 font-bold" style={{ color: NAVY }}>מצב המשיכה</h3>
-        <dl className="grid gap-3 sm:grid-cols-4">
-          <div><dt className="text-slate-500">משיכה אחרונה</dt><dd className="font-medium">{fmtDate(st.lastRunAt)}</dd></div>
-          <div><dt className="text-slate-500">נקלטו במשיכה האחרונה</dt><dd className="font-medium">{st.lastAdded.toLocaleString('he-IL')}</dd></div>
-          <div><dt className="text-slate-500">נקלטו בסך הכול</dt><dd className="font-medium">{st.totalAdded.toLocaleString('he-IL')}</dd></div>
-          <div><dt className="text-slate-500">רשומה אחרונה שנקראה</dt><dd className="font-medium">{st.lastId || '—'}</dd></div>
-        </dl>
-        {st.lastError && <p role="alert" className="mt-3 rounded-lg bg-rose-50 px-4 py-3 text-rose-800">שגיאה במשיכה האחרונה: {st.lastError}</p>}
-      </section>
     </div>
   )
 }
