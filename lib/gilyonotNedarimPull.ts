@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getServiceClient } from './apiAuth'
 import { nedarimFetch } from './nedarimFetch'
-import { detectColumns } from './gilyonotDetect'
+import { DETECT_FIELDS, detectColumns } from './gilyonotDetect'
 import { normalizeEmail, cleanSubscriberName, subscribeGilyonot } from './gilyonot'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -20,7 +20,8 @@ const CONFIG_KEY = 'gilyonot_nedarim_config'
 const STATE_KEY = 'gilyonot_nedarim_state'
 const PAGE_SIZE = 500
 const MAX_PAGES_PER_RUN = 40
-export const SAMPLE_FIELDS = Array.from({ length: 15 }, (_, i) => `Field${i + 1}`)
+// כל העמודות: המייל יכול לשבת בכל Field, וזיהוי לפי 15 הראשונות פספס אותו
+export const SAMPLE_FIELDS = DETECT_FIELDS
 
 export interface NedarimPullConfig {
   mosadId: string
@@ -165,7 +166,7 @@ export async function savePullConfig(db: SupabaseClient, input: Partial<NedarimP
   return { ok: true }
 }
 
-/** כמה רשומות אחרונות עם Field1..Field15, כדי לבחור במסך איזו עמודה היא מה. */
+/** כמה רשומות אחרונות עם Field1..Field100, כדי לבחור במסך איזו עמודה היא מה. */
 export async function loadSample(db: SupabaseClient) {
   const c = await getPullConfig(db)
   if (!c.mosadId || !c.apiKey || !c.tofesId) return { ok: false as const, error: 'צריך קודם לשמור מספר מוסד, מפתח ומספר טופס' }
@@ -174,7 +175,9 @@ export async function loadSample(db: SupabaseClient) {
 }
 
 // ── המשיכה עצמה ──
-export interface PullResult { ok: boolean; skipped?: 'not_configured' | 'running'; added: number; exists: number; blocked: number; invalid: number; noConsent: number; lastId: number; error?: string }
+export interface PullResult { ok: boolean; skipped?: 'not_configured' | 'running'; added: number; exists: number; blocked: number; invalid: number; noConsent: number; lastId: number; error?: string; needEmailField?: boolean }
+
+export const NO_EMAIL_COLUMN_ERROR = 'לא הצלחנו לזהות לבד איזו עמודה בטופס היא המייל. בשלב 2 למטה לחצו "טעינת דוגמה מהטופס", בחרו את עמודת המייל ושמרו.'
 
 let running: Promise<PullResult> | null = null
 
@@ -190,17 +193,24 @@ async function doPull(dbArg?: SupabaseClient): Promise<PullResult> {
   if (!db) return { ...out, ok: false, error: 'השרת אינו מוגדר' }
   const c = await getPullConfig(db)
   if (!isReady(c)) return { ...out, ok: false, skipped: 'not_configured' }
+  const state = await getPullState(db)
+  out.lastId = state.lastId
+  // מסיימים לפני המשיכה: שומרים את התוצאה, כדי שתוצג במסך גם אחרי הריצה האוטומטית
+  const finish = async (error: string | null, extra?: Partial<PullResult>): Promise<PullResult> => {
+    await writeJson(db, STATE_KEY, { ...state, lastRunAt: new Date().toISOString(), lastAdded: 0, lastError: error } satisfies NedarimPullState)
+    return error ? { ...out, ...extra, ok: false, error } : out
+  }
   if (!c.emailField) {
+    // זיהוי לפי התוכן של כל העמודות ב-30 הרשומות האחרונות
     const sample = await fetchRows(c, SAMPLE_FIELDS, { lastId: 0, max: 30, desc: true })
-    if (!sample.ok) return { ...out, ok: false, error: sample.error }
+    if (!sample.ok) return finish(sample.error)
+    if (!sample.rows.length) return finish(null)
     const d = detectColumns(sample.rows)
-    if (!d.emailField) return { ...out, ok: false, error: 'לא נמצאה בטופס עמודה עם כתובות מייל. בחרו עמודה ידנית' }
+    if (!d.emailField) return finish(NO_EMAIL_COLUMN_ERROR, { needEmailField: true })
     c.emailField = d.emailField
     if (!c.nameField) c.nameField = d.nameField
     await writeJson(db, CONFIG_KEY, c)
   }
-  const state = await getPullState(db)
-  out.lastId = state.lastId
   const fields = [c.emailField, c.nameField, c.consentField].filter(Boolean)
 
   pages: for (let page = 0; page < MAX_PAGES_PER_RUN; page++) {

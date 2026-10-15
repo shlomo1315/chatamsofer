@@ -13,10 +13,14 @@ import { btnGhost, btnPrimary, Card, CardHeader, input, Notice, Stat, StepNum } 
 const FIELDS = [...Array.from({ length: 100 }, (_, i) => `Field${i + 1}`), ...Array.from({ length: 10 }, (_, i) => `Field${i + 1}Max`)]
 const fmtDate = (s: string | null) => (s ? new Date(s).toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' }) : 'עוד לא')
 
+class ApiError extends Error {
+  constructor(message: string, readonly data: Record<string, unknown>) { super(message) }
+}
+
 async function post(body: unknown): Promise<Record<string, unknown>> {
   const res = await fetch('/api/admin/gilyonot/nedarim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'הפעולה נכשלה')
+  if (!res.ok) throw new ApiError(typeof data.error === 'string' ? data.error : `הפעולה נכשלה (שגיאה ${res.status}). נסו שוב בעוד רגע.`, data)
   return data
 }
 
@@ -29,6 +33,7 @@ export default function NedarimPull({ view: initial }: { view: NedarimPullView }
   })
   const [sample, setSample] = useState<NedarimRow[] | null>(null)
   const [busy, setBusy] = useState(false)
+  const [needEmail, setNeedEmail] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF(p => ({ ...p, [k]: e.target.value }))
 
@@ -52,7 +57,16 @@ export default function NedarimPull({ view: initial }: { view: NedarimPullView }
     return rows.length ? `נטענו ${rows.length} רשומות אחרונות. בחרו למטה איזו עמודה היא המייל ואיזו השם, ושמרו.` : 'בטופס אין עדיין רשומות'
   })
   const pull = () => run(async () => {
-    const d = await post({ mode: 'pull' })
+    let d: Record<string, unknown>
+    try { d = await post({ mode: 'pull' }) } catch (e) {
+      // גם משיכה שנכשלה מעדכנת את המצב (השגיאה האחרונה) ואולי מבקשת לבחור עמודת מייל
+      if (e instanceof ApiError) {
+        if (e.data.view) setView(e.data.view as NedarimPullView)
+        if (e.data.needEmailField) setNeedEmail(true)
+      }
+      throw e
+    }
+    setNeedEmail(false)
     setView(d.view as NedarimPullView); router.refresh()
     const n = (k: string) => Number(d[k] ?? 0)
     return `נקלטו ${n('added')} חדשים · ${n('exists')} כבר ברשימה · ${n('blocked')} הסירו את עצמם בעבר · ${n('invalid')} בלי מייל תקין${n('noConsent') ? ` · ${n('noConsent')} בלי אישור קבלת מייל` : ''}`
@@ -124,10 +138,15 @@ export default function NedarimPull({ view: initial }: { view: NedarimPullView }
               </div>
               <button type="button" onClick={loadSample} disabled={busy || !view.hasKey} className={`${btnGhost} sm:shrink-0`}><Download className="h-4 w-4" aria-hidden />טעינת דוגמה מהטופס</button>
             </div>
+            {needEmail && !f.emailField && (
+              <p role="alert" className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-inset ring-amber-200">
+                המערכת לא זיהתה לבד את עמודת המייל. טענו דוגמה מהטופס, בחרו כאן את העמודה שיש בה כתובות מייל, ושמרו.
+              </p>
+            )}
             <div className="mt-4 grid gap-4 sm:grid-cols-3">
               {([['emailField', 'עמודת המייל', true], ['nameField', 'עמודת השם', false], ['consentField', 'עמודת אישור קבלת מייל', false]] as const).map(([k, text, req]) => (
                 <label key={k} className="block"><span className={label}>{text}{!req && <span className="font-normal text-slate-500"> (לא חובה)</span>}</span>
-                  <select className={input} dir="ltr" value={f[k]} onChange={set(k)}>
+                  <select className={`${input} ${k === 'emailField' && needEmail && !f.emailField ? 'ring-2 ring-amber-400' : ''}`} dir="ltr" value={f[k]} onChange={set(k)}>
                     <option value="">{req ? 'בחרו עמודה' : 'אין'}</option>
                     {FIELDS.map(x => <option key={x} value={x}>{x}{sample?.[0]?.[x] ? ` · ${sample[0][x].slice(0, 30)}` : ''}</option>)}
                   </select></label>
