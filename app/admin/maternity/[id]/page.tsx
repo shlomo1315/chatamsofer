@@ -21,6 +21,7 @@ import FeedbackTab from './FeedbackTab'
 import ExtendEligibility from '../ExtendEligibility'
 import RecoveryDaysEditor from '../RecoveryDaysEditor'
 import RecoveryHomeEditor from './RecoveryHomeEditor'
+import RecoveryExceptionPanel from './RecoveryExceptionPanel'
 import { recoveryDaysOf, cardWindowEnd, recoveryWindowEnd } from '@/lib/maternity'
 import { formatIsraeliId } from '@/lib/validation'
 import { getDocTypes } from '@/lib/serverDocTypes'
@@ -355,6 +356,14 @@ export default async function MaternityDetailPage(
   const bucket: MaternityBucket = isBucket(stRaw) ? stRaw : 'all'
   const aid = await getAid(id)
   const ben = aid?.beneficiary as Beneficiary | undefined
+  // בית החלמה חריג — מוצג ומנוהל רק למנהל. שם מי שאישר: לתצוגה בלבד, כשל לא חוסם.
+  const isAdmin = staff.role === 'admin'
+  let exceptionByName: string | null = null
+  if (isAdmin && aid?.recovery_exception_by) {
+    const supabase = await createClient()
+    const { data: p } = await supabase.from('profiles').select('full_name').eq('id', aid.recovery_exception_by).maybeSingle()
+    exceptionByName = (p as { full_name?: string | null } | null)?.full_name ?? null
+  }
   const typedChain = Array.isArray(ben?.lineage_chain)
     ? (ben.lineage_chain as { generation: number; name: string; relation?: string | null }[])
     : []
@@ -876,6 +885,17 @@ export default async function MaternityDetailPage(
               </div>
               {/* בית ההחלמה — ניתן להחלפה מהירה ישירות מהכרטסת (גם למזכירות) */}
               <RecoveryHomeEditor aidId={aid.id} current={aid.recovery_home ?? null} />
+              {/* בית החלמה חריג (מחוץ לרשימה, תשלום לפי קבלה) — למנהל בלבד */}
+              {isAdmin && (
+                <RecoveryExceptionPanel aidId={aid.id} currentHome={aid.recovery_home ?? null} info={{
+                  active: aid.recovery_exception === true,
+                  note: aid.recovery_exception_note ?? null,
+                  receiptPath: aid.recovery_exception_receipt_path ?? null,
+                  receiptName: aid.recovery_exception_receipt_name ?? null,
+                  byName: exceptionByName,
+                  at: aid.recovery_exception_at ?? null,
+                }} />
+              )}
               {/* ימי זכאות בבית ההחלמה — ניתן לעריכה ידנית (ברירת מחדל: רגילה 2 · תאומים 4) */}
               <div className="mt-3 pt-3 border-t border-slate-100">
                 <div className="mb-2 inline-flex items-center gap-2 text-sm">

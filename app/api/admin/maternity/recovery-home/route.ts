@@ -41,6 +41,13 @@ export async function POST(request: NextRequest) {
     .eq('id', aidId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  // מעבר לבית החלמה רגיל מבטל את סימון האישור החריג (הקבלה נשמרת לתיעוד).
+  // עדכון נפרד ובלי חסימה — כדי שהשינוי הרגיל יעבוד גם לפני הרצת המיגרציה.
+  if (previous !== next) {
+    await admin.from('maternity_aids').update({ recovery_exception: false }).eq('id', aidId)
+      .then(undefined, () => {})
+  }
+
   // רישום בלוג הפעילות (כשל ברישום לא חוסם את הפעולה)
   try {
     await admin.from('activity_log').insert({
