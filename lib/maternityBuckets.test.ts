@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { awaitingFixes, matchesBucket, awaitingInquiryReply, returnedFromInquiry, adjacentInBucket, isBucket, type AdjacentRow } from './maternityBuckets'
+import { awaitingFixes, pickNextPending, matchesBucket, awaitingInquiryReply, returnedFromInquiry, adjacentInBucket, isBucket, type AdjacentRow } from './maternityBuckets'
 
 // ⚠️ מה שנבדק כאן הוא ההסכמה בין הרשימה לניווט. כשהם חלוקים, "הבאה" קופצת
 // ליולדת מלשונית אחרת — וזה בדיוק המצב שהתיקון בא לסגור.
@@ -159,5 +159,26 @@ describe('בירור מול היולדת', () => {
     const a = { status: 'pending', baby_name_pending: true, inquiryLastDirection: 'staff' }
     expect(matchesBucket(a, 'pending_fixes')).toBe(false)
     expect(matchesBucket(a, 'all')).toBe(true)
+  })
+})
+
+describe('pickNextPending — הקפיצה לתיק הבא אחרי אישור', () => {
+  const fixes = { id: 'a', status: 'pending', beneficiary: { eligibility_status: 'docs_pending' } }
+  const name = { id: 'b', status: 'pending', baby_name_pending: true, babies: [] }
+  const inquiry = { id: 'c', status: 'pending', inquiryLastDirection: 'staff' }
+  const ready = { id: 'd', status: 'pending', beneficiary: { eligibility_status: 'approved' } }
+
+  it('מדלג על תיק שממתין להשלמת מסמכים, לתיקון שם או לתשובה לבירור', () => {
+    expect(pickNextPending([fixes, name, inquiry, ready])).toBe('d')
+  })
+
+  it('מחזיר null כשכל התיקים ממתינים ליולדת', () => {
+    expect(pickNextPending([fixes, name, inquiry])).toBeNull()
+  })
+
+  it('ממתין לאישור מנהל: נשאר כמו קודם, רק בירור פתוח מדלג', () => {
+    const deepInquiry = { id: 'e', status: 'deep_review', inquiryLastDirection: 'staff' }
+    const deep = { id: 'f', status: 'deep_review', beneficiary: { eligibility_status: 'docs_pending' } }
+    expect(pickNextPending([deepInquiry, deep])).toBe('f')
   })
 })
