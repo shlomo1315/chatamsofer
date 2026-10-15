@@ -169,6 +169,17 @@ function readRecord(varName: string, tokens: string[]): string {
 }
 const digits = (v: string | undefined) => (v ?? '').replace(/\D/g, '')
 
+// השלוחה מזהה לקוח לפי מספר המתקשר, ולכן פרטי בנק נקלטים רק לזיכוי שכבר יצאה אליו שיחה.
+// זיכוי שעוד לא נשלח (או שהשליחה נכשלה) לא נפתח, כדי שמי שמתחזה למספר לא יקדים את הלקוח.
+export const PHONE_OPEN_STATUSES = ['sent', 'answered'] as const
+
+export function pickPhoneCredit<T extends { status: string }>(rows: T[]): { credit: T; open: boolean } | null {
+  const open = rows.find(r => (PHONE_OPEN_STATUSES as readonly string[]).includes(r.status))
+  if (open) return { credit: open, open: true }
+  const done = rows.find(r => r.status === 'details_entered')
+  return done ? { credit: done, open: false } : null
+}
+
 export function amountSpoken(agorot: number): string {
   const s = Math.floor(agorot / 100), a = agorot % 100
   const shekels = s === 1 ? 'שקל אחד' : `${s} שקלים`
