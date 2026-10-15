@@ -2,15 +2,17 @@
 
 import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Check, ExternalLink, FileUp, Inbox, Loader2, MapPin, Megaphone, Pencil, Plus, Search, Settings, Trash2, Truck, Undo2, UserMinus, UserPlus, UtensilsCrossed, X } from 'lucide-react'
+import { Check, ExternalLink, FileUp, Inbox, Loader2, Megaphone, Pencil, Plus, Search, Settings, Trash2, Truck, Undo2, UserMinus, UserPlus, UtensilsCrossed, X } from 'lucide-react'
 import { downloadXlsx, todayStamp } from '@/lib/downloadXlsx'
 import type { BookletReport } from '@/lib/gilyonotDistributorBooklet'
 import {
-  CHANNEL_LABELS, EVENT_LABELS, NO_CITY, SOURCE_LABELS, summarizeByCity,
+  buildDistributorDashboard, CHANNEL_LABELS, EVENT_LABELS, ISSUE_LABELS, matchesIssue, NO_CITY, SOURCE_LABELS, summarizeByCity,
+  type DistributorIssue,
   type AgentWindow, type DistributorFields, type DistributorSource, type DistributorStatus, type EventChannel, type EventKind,
 } from '@/lib/gilyonotDistributors'
 import { applyColumnView, EMPTY_VIEW, isColumnActive, type ColumnKey, type ColumnView } from '@/lib/gilyonotColumnView'
 import { ColumnHeader } from './ColumnMenu'
+import { DistributorDashboard, type PendingCounts } from './DistributorDashboard'
 import { Badge, btnDanger, btnGhost, btnPrimary, Card, CardHeader, input, link, Notice, Stat, type Tone } from './ui'
 
 // לשונית "מפיצים" באגף הגיליונות: רשימה לפי עיר, פניות מהמפיצים, הודעות והגדרות.
@@ -166,7 +168,11 @@ export default function Distributors(props: {
         </a>
       </div>
 
-      {section === 'list' && <DistributorList rows={props.rows} byCity={byCity} canAdd={props.canAdd} canEdit={props.canEdit} canDelete={props.canDelete} />}
+      {section === 'list' && (
+        <DistributorList rows={props.rows} byCity={byCity} canAdd={props.canAdd} canEdit={props.canEdit} canDelete={props.canDelete}
+          pending={{ requests: props.events.length, hilula: props.hilula.filter(h => h.status === 'pending').length, applications: props.canEdit ? props.applications.length : 0 }}
+          onSection={setSection} />
+      )}
       {section === 'requests' && <Requests events={props.events} canEdit={props.canEdit} />}
       {section === 'hilula' && <Hilula requests={props.hilula} canEdit={props.canEdit} />}
       {section === 'nedarim' && <NedarimApplications applications={props.applications} view={props.nedarim} />}
@@ -178,8 +184,9 @@ export default function Distributors(props: {
 
 // ─── רשימת המפיצים ───────────────────────────────────────────────────────────
 
-function DistributorList({ rows, byCity, canAdd, canEdit, canDelete }: {
+function DistributorList({ rows, byCity, canAdd, canEdit, canDelete, pending, onSection }: {
   rows: DistributorView[]; byCity: ReturnType<typeof summarizeByCity>; canAdd: boolean; canEdit: boolean; canDelete: boolean
+  pending: PendingCounts; onSection: (s: Section) => void
 }) {
   const router = useRouter()
   const [q, setQ] = useState('')
@@ -193,6 +200,10 @@ function DistributorList({ rows, byCity, canAdd, canEdit, canDelete }: {
   const fileRef = useRef<HTMLInputElement>(null)
   const [view, setView] = useState<ColumnView>(EMPTY_VIEW)
   const [openCol, setOpenCol] = useState<ColumnKey | ''>('')
+  const [issue, setIssue] = useState<DistributorIssue | ''>('')
+  const tableRef = useRef<HTMLDivElement>(null)
+  // מחושב מ-rows, ולכן מתעדכן מיד אחרי router.refresh() של עריכה או ייבוא
+  const dash = useMemo(() => buildDistributorDashboard(rows), [rows])
 
   const base = useMemo(() => {
     const term = q.trim().toLowerCase()
@@ -200,8 +211,10 @@ function DistributorList({ rows, byCity, canAdd, canEdit, canDelete }: {
       (showRemoved || r.status === 'active') &&
       (!city || (city === NO_CITY ? !r.city : r.city === city)) &&
       (!noRoute || !r.route) &&
+      (!issue || (r.status === 'active' && matchesIssue(r, issue, dash))) &&
       (!term || [r.full_name, r.phone, r.phone2, r.email, r.synagogue, r.address, r.city].some(v => v?.toLowerCase().includes(term))))
-  }, [rows, q, city, showRemoved, noRoute])
+  }, [rows, q, city, showRemoved, noRoute, issue, dash])
+  const focusTable = () => tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   const shown = useMemo(() => applyColumnView(base, view), [base, view])
   const anyColumn = (['name', 'city', 'route', 'phone', 'quantity'] as const).some(c => isColumnActive(view, c))
   const colProps = (col: ColumnKey) => ({
@@ -246,7 +259,11 @@ function DistributorList({ rows, byCity, canAdd, canEdit, canDelete }: {
   const th = 'px-4 py-3 text-start text-xs font-semibold text-slate-500'
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
+    <div className="space-y-6">
+      <DistributorDashboard dash={dash} pending={pending} onSection={onSection}
+        city={city} onCity={c => { setCity(c); if (c) focusTable() }}
+        issue={issue} onIssue={i => { setIssue(i); if (i) focusTable() }} />
+
       <div className="min-w-0 space-y-4">
         <input ref={fileRef} type="file" accept={IMPORT_ACCEPT} className="hidden" aria-hidden tabIndex={-1}
           onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) uploadFile(f) }} />
@@ -289,6 +306,7 @@ function DistributorList({ rows, byCity, canAdd, canEdit, canDelete }: {
             })} />
         )}
 
+        <div ref={tableRef} className="scroll-mt-4" />
         <Card>
           <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 p-4">
             <label className="relative min-w-48 flex-1">
@@ -311,6 +329,12 @@ function DistributorList({ rows, byCity, canAdd, canEdit, canDelete }: {
               <input type="checkbox" checked={noRoute} onChange={e => setNoRoute(e.target.checked)} className="h-4 w-4 accent-[#1B3256]" />
               בלי מסלול
             </label>
+            {issue && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 py-1 pe-1 ps-3 text-sm font-medium text-amber-900 ring-1 ring-amber-200">
+                {ISSUE_LABELS[issue].label}
+                <button type="button" className="rounded-full p-1 hover:bg-amber-100" aria-label="ביטול הסינון" onClick={() => setIssue('')}><X className="h-3.5 w-3.5" aria-hidden /></button>
+              </span>
+            )}
             <button type="button" className={`${btnGhost} ms-auto`} onClick={exportXlsx} disabled={!shown.length}>ייצוא</button>
           </div>
           <p className="px-4 pt-3 text-xs text-slate-500">
@@ -364,22 +388,6 @@ function DistributorList({ rows, byCity, canAdd, canEdit, canDelete }: {
         </Card>
       </div>
 
-      <Card className="h-fit">
-        <Head icon={<MapPin className="h-5 w-5" aria-hidden />} title="לפי עיר" hint="מפיצים פעילים, עם מסלול, וגיליונות בשבוע" />
-        {byCity.length ? (
-          <ul className="divide-y divide-slate-100">
-            {byCity.map(c => (
-              <li key={c.city}>
-                <button type="button" onClick={() => setCity(city === c.city ? '' : c.city)}
-                  className={`flex w-full items-center justify-between gap-3 px-5 py-2.5 text-start text-sm transition-colors hover:bg-slate-50 ${city === c.city ? 'bg-[#1B3256]/[0.06] font-semibold text-[#1B3256]' : 'text-slate-700'}`}>
-                  <span className="truncate">{c.city}</span>
-                  <span className="shrink-0 tabular-nums text-slate-500">{num(c.distributors)} · <span title="עם מסלול" className={c.routed < c.distributors ? 'text-amber-700' : ''}>{num(c.routed)} במסלול</span> · <b className="text-slate-900">{num(c.quantity)}</b></span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : <p className="px-5 pb-5 text-sm text-slate-500">אין נתונים עדיין</p>}
-      </Card>
     </div>
   )
 }
