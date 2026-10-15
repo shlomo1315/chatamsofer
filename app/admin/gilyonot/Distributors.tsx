@@ -9,6 +9,8 @@ import {
   CHANNEL_LABELS, EVENT_LABELS, NO_CITY, SOURCE_LABELS, summarizeByCity,
   type AgentWindow, type DistributorFields, type DistributorSource, type DistributorStatus, type EventChannel, type EventKind,
 } from '@/lib/gilyonotDistributors'
+import { applyColumnView, EMPTY_VIEW, isColumnActive, type ColumnKey, type ColumnView } from '@/lib/gilyonotColumnView'
+import { ColumnHeader } from './ColumnMenu'
 import { Badge, btnDanger, btnGhost, btnPrimary, Card, CardHeader, input, link, Notice, Stat, type Tone } from './ui'
 
 // לשונית "מפיצים" באגף הגיליונות: רשימה לפי עיר, פניות מהמפיצים, הודעות והגדרות.
@@ -189,8 +191,10 @@ function DistributorList({ rows, byCity, canAdd, canEdit, canDelete }: {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<Msg>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const [view, setView] = useState<ColumnView>(EMPTY_VIEW)
+  const [openCol, setOpenCol] = useState<ColumnKey | ''>('')
 
-  const shown = useMemo(() => {
+  const base = useMemo(() => {
     const term = q.trim().toLowerCase()
     return rows.filter(r =>
       (showRemoved || r.status === 'active') &&
@@ -198,6 +202,11 @@ function DistributorList({ rows, byCity, canAdd, canEdit, canDelete }: {
       (!noRoute || !r.route) &&
       (!term || [r.full_name, r.phone, r.phone2, r.email, r.synagogue, r.address, r.city].some(v => v?.toLowerCase().includes(term))))
   }, [rows, q, city, showRemoved, noRoute])
+  const shown = useMemo(() => applyColumnView(base, view), [base, view])
+  const anyColumn = (['name', 'city', 'route', 'phone', 'quantity'] as const).some(c => isColumnActive(view, c))
+  const colProps = (col: ColumnKey) => ({
+    col, rows: base, view, onChange: setView, open: openCol === col, onOpen: (o: boolean) => setOpenCol(o ? col : ''),
+  })
   const shownQty = shown.filter(r => r.status === 'active').reduce((s, r) => s + r.quantity, 0)
 
   async function run(fn: () => Promise<string>) {
@@ -304,18 +313,21 @@ function DistributorList({ rows, byCity, canAdd, canEdit, canDelete }: {
             </label>
             <button type="button" className={`${btnGhost} ms-auto`} onClick={exportXlsx} disabled={!shown.length}>ייצוא</button>
           </div>
-          <p className="px-4 pt-3 text-xs text-slate-500">{num(shown.length)} מפיצים · {num(shownQty)} גיליונות בשבוע</p>
+          <p className="px-4 pt-3 text-xs text-slate-500">
+            {num(shown.length)} מפיצים · {num(shownQty)} גיליונות בשבוע
+            {anyColumn && <button type="button" className="ms-3 text-[#1B3256] hover:underline" onClick={() => setView(EMPTY_VIEW)}>ניקוי מיון וסינון בעמודות</button>}
+          </p>
 
-          {shown.length ? (
+          {base.length ? (
             <div>
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-100">
-                    <th className={th}>מפיץ</th>
-                    <th className={`${th} hidden sm:table-cell`}>עיר</th>
-                    <th className={th}>מסלול</th>
-                    <th className={`${th} hidden md:table-cell`}>טלפון</th>
-                    <th className={th}>כמות</th>
+                    <ColumnHeader {...colProps('name')} label="מפיץ" />
+                    <ColumnHeader {...colProps('city')} label="עיר" className="hidden sm:table-cell" />
+                    <ColumnHeader {...colProps('route')} label="מסלול" align="end" />
+                    <ColumnHeader {...colProps('phone')} label="טלפון" className="hidden md:table-cell" align="end" />
+                    <ColumnHeader {...colProps('quantity')} label="כמות" align="end" />
                     {canEdit && <th className={`${th} w-12`}><span className="sr-only">עריכה</span></th>}
                   </tr>
                 </thead>
@@ -341,6 +353,7 @@ function DistributorList({ rows, byCity, canAdd, canEdit, canDelete }: {
                       )}
                     </tr>
                   ))}
+                  {!shown.length && <tr><td colSpan={6} className="p-10 text-center text-sm text-slate-500">אין מפיצים שמתאימים לסינון בעמודות</td></tr>}
                 </tbody>
               </table>
               {shown.length > 500 && <p className="p-4 text-center text-xs text-slate-500">מוצגים 500 הראשונים. צמצמו בחיפוש או בעיר.</p>}
