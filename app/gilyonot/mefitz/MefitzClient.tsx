@@ -48,7 +48,11 @@ export default function MefitzClient() {
     } catch { setState('login') }
   }, [])
 
-  useEffect(() => { load() }, [load])
+  // ⚠️ setTimeout(0): הכלל set-state-in-effect מסמן גם טעינה אסינכרונית תקינה
+  useEffect(() => {
+    const t = setTimeout(() => { void load() }, 0)
+    return () => clearTimeout(t)
+  }, [load])
 
   async function logout() {
     await fetch('/api/gilyonot/mefitz/login', { method: 'DELETE' }).catch(() => {})

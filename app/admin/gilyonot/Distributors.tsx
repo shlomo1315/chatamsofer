@@ -121,7 +121,7 @@ export default function Distributors(props: {
         </a>
       </div>
 
-      {section === 'list' && <DistributorList rows={props.rows} byCity={byCity} cities={cities} canAdd={props.canAdd} canEdit={props.canEdit} canDelete={props.canDelete} />}
+      {section === 'list' && <DistributorList rows={props.rows} byCity={byCity} canAdd={props.canAdd} canEdit={props.canEdit} canDelete={props.canDelete} />}
       {section === 'requests' && <Requests events={props.events} canEdit={props.canEdit} />}
       {section === 'broadcast' && <Broadcast cities={cities} rows={active} messages={props.messages} />}
       {section === 'settings' && <SettingsForm settings={props.settings} />}
@@ -131,8 +131,8 @@ export default function Distributors(props: {
 
 // ─── רשימת המפיצים ───────────────────────────────────────────────────────────
 
-function DistributorList({ rows, byCity, cities, canAdd, canEdit, canDelete }: {
-  rows: DistributorView[]; byCity: ReturnType<typeof summarizeByCity>; cities: string[]; canAdd: boolean; canEdit: boolean; canDelete: boolean
+function DistributorList({ rows, byCity, canAdd, canEdit, canDelete }: {
+  rows: DistributorView[]; byCity: ReturnType<typeof summarizeByCity>; canAdd: boolean; canEdit: boolean; canDelete: boolean
 }) {
   const router = useRouter()
   const [q, setQ] = useState('')
@@ -254,7 +254,7 @@ function DistributorList({ rows, byCity, cities, canAdd, canEdit, canDelete }: {
           <p className="px-4 pt-3 text-xs text-slate-500">{num(shown.length)} מפיצים · {num(shownQty)} גיליונות בשבוע</p>
 
           {shown.length ? (
-            <div className="overflow-x-auto">
+            <div>
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-100">
