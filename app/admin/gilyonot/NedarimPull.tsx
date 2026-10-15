@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Download, RefreshCw, Save } from 'lucide-react'
+import { detectColumns } from '@/lib/gilyonotDetect'
 import type { NedarimPullView, NedarimRow } from '@/lib/gilyonotNedarimPull'
 
 // לשונית "נדרים פלוס": הגדרות המשיכה מטופס הגיליונות, בחירת העמודות לפי רשומות לדוגמה,
@@ -49,6 +50,8 @@ export default function NedarimPull({ view: initial }: { view: NedarimPullView }
     const d = await post({ mode: 'sample' })
     const rows = d.rows as NedarimRow[]
     setSample(rows)
+    const d2 = detectColumns(rows)
+    setF(p => ({ ...p, emailField: p.emailField || d2.emailField, nameField: p.nameField || d2.nameField }))
     return rows.length ? `נטענו ${rows.length} רשומות אחרונות. בחרו למטה איזו עמודה היא המייל ואיזו השם, ושמרו.` : 'בטופס אין עדיין רשומות'
   })
   const pull = () => run(async () => {
@@ -94,7 +97,7 @@ export default function NedarimPull({ view: initial }: { view: NedarimPullView }
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={save} disabled={busy} className={`${btn} text-white`} style={{ background: NAVY }}><Save size={16} aria-hidden />שמירה</button>
           <button type="button" onClick={loadSample} disabled={busy || !view.hasKey} className={btnGhost}><Download size={16} aria-hidden />טעינת דוגמה מהטופס</button>
-          <button type="button" onClick={pull} disabled={busy || !view.hasKey || !view.emailField} className={btnGhost}><RefreshCw size={16} aria-hidden className={busy ? 'animate-spin' : ''} />משיכה עכשיו</button>
+          <button type="button" onClick={pull} disabled={busy || !view.hasKey} className={btnGhost}><RefreshCw size={16} aria-hidden className={busy ? 'animate-spin' : ''} />משיכה עכשיו</button>
         </div>
         {msg && <p role="status" className={`rounded-lg px-4 py-3 text-sm ${msg.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-800'}`}>{msg.text}</p>}
       </section>
