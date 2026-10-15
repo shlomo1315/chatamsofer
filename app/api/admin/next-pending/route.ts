@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission } from '@/lib/apiAuth'
+import { pickNextPending, type BucketAid } from '@/lib/maternityBuckets'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,11 +46,16 @@ export async function GET(request: NextRequest) {
   // אינו ניתן לביטוי ב-PostgREST בשאילתה אחת, וריבוי קריאות היה מאט את
   // הקפיצה שאמורה להיות מיידית.
   // ─────────────────────────────────────────────────────────────────────────
-  let q = admin.from(table).select('id').in('status', pendingValues)
-    .order('created_at', { ascending: true }).limit(40)
+  // ליולדות נשלפים גם השדות של "ממתין לתיקונים" (שם / מסמכים) — ראו pickNextPending.
+  const cols = table === 'maternity_aids'
+    ? 'id, status, baby_name, baby_name_pending, babies, beneficiary:beneficiaries(eligibility_status)'
+    : 'id'
+  let q = admin.from(table).select(cols).in('status', pendingValues)
+    .order('created_at', { ascending: true }).limit(100)
   if (currentId) q = q.neq('id', currentId)
   const { data } = await q
-  const ids = (data ?? []).map(r => String((r as { id: string }).id))
+  const rows = (data ?? []) as unknown as (BucketAid & { id: string })[]
+  const ids = rows.map(r => String(r.id))
   if (!ids.length) {
     return NextResponse.json({ id: null }, { headers: { 'Cache-Control': 'no-store' } })
   }
@@ -74,6 +80,6 @@ export async function GET(request: NextRequest) {
   const lastDir = new Map<string, string>()
   for (const m of sorted) if (!lastDir.has(m.aid_id)) lastDir.set(m.aid_id, m.direction)
 
-  const next = ids.find(id => lastDir.get(id) !== 'staff') ?? null
+  const next = pickNextPending(rows.map(r => ({ ...r, inquiryLastDirection: lastDir.get(String(r.id)) ?? null })))
   return NextResponse.json({ id: next }, { headers: { 'Cache-Control': 'no-store' } })
 }

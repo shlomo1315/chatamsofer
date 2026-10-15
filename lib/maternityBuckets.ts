@@ -142,3 +142,17 @@ export function adjacentInBucket(
   }
   return { prevId: prev?.id ?? null, nextId: next?.id ?? null }
 }
+
+/**
+ * הקפיצה האוטומטית לתיק הבא אחרי אישור (/api/admin/next-pending).
+ * rows ממוינים מהוותיק לחדש; מוחזר הראשון שיש מה להכריע בו.
+ *
+ * 🔴 משתמש באותו סינון כמו הלשוניות: תיק 'pending' שממתין לתיקונים (שם / מסמכים)
+ * או לתשובה לבירור אינו "הבא בתור". קודם דילגה הקפיצה רק על בירור, ולכן תיק
+ * שהוחזר להשלמת מסמכים — הוותיק בתור — קפץ שוב ושוב אחרי כל אישור.
+ * תיק 'deep_review' נבחר כמו קודם, ורק בירור פתוח מדלג עליו.
+ */
+export function pickNextPending<T extends BucketAid & { id: string }>(rows: T[]): string | null {
+  const row = rows.find(a => !awaitingInquiryReply(a) && !awaitingFixes(a))
+  return row ? row.id : null
+}
