@@ -29,6 +29,7 @@ const TABS = [
   { href: '/admin/book-fair/inquiries', label: 'פניות',  icon: MessageSquare },
   // ⚠️ הזיכוי אינו אוטומטי — זו רשימת המשימות של מי שמבצע אותו ידנית.
   { href: '/admin/book-fair/refunds',  label: 'זיכויים', icon: Undo2 },
+  { href: '/admin/book-fair/credits', label: 'זיכוי על ספרים חסרים', icon: Undo2 },
   { href: '/admin/book-fair/shipping-issues', label: 'תקלות משלוח', icon: PackageX },
   // 14.10: דמי משלוח לפי עיר, לתשלום לשליחים.
   { href: '/admin/book-fair/shipping-cities', label: 'משלוחים לפי עיר', icon: Truck },
