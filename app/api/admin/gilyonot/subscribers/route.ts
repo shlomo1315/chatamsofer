@@ -2,21 +2,43 @@ import { NextResponse } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
 import { normalizeEmail, cleanSubscriberName, subscribeGilyonot, parseImportText, MAX_IMPORT_ROWS } from '@/lib/gilyonot'
+import { MAX_IMPORT_FILE_BYTES, decodeTextFile, dropHeaderRow, importFileKind, xlsxToImportText } from '@/lib/gilyonotImportFile'
 
 // רשימת התפוצה של הגיליון (app/admin/gilyonot): הוספה ידנית, ייבוא, הסרה/החזרה ומחיקה.
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
+export const runtime = 'nodejs'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const CHUNK = 500
 
-// POST { mode: 'add', email, name } | { mode: 'import', text }
+// קובץ שהועלה (multipart, שדה file) → { mode: 'import', text }, כדי שיעבור באותו מסלול כמו הדבקה.
+async function fileBody(request: Request): Promise<Record<string, unknown> | NextResponse> {
+  const form = await request.formData().catch(() => null)
+  const file = form?.get('file')
+  if (!(file instanceof File)) return NextResponse.json({ error: 'לא נבחר קובץ' }, { status: 400 })
+  const kind = importFileKind(file.name)
+  if (!kind) return NextResponse.json({ error: 'אפשר להעלות קובץ Excel (xlsx) או CSV' }, { status: 400 })
+  if (file.size > MAX_IMPORT_FILE_BYTES) return NextResponse.json({ error: 'הקובץ גדול מדי (עד 5MB)' }, { status: 400 })
+  const buf = await file.arrayBuffer()
+  try {
+    const text = kind === 'xlsx' ? await xlsxToImportText(buf) : decodeTextFile(buf)
+    return { mode: 'import', text: dropHeaderRow(text) }
+  } catch {
+    return NextResponse.json({ error: 'לא הצלחנו לקרוא את הקובץ. שמרו אותו כ-xlsx או CSV ונסו שוב.' }, { status: 400 })
+  }
+}
+
+// POST { mode: 'add', email, name } | { mode: 'import', text } | multipart עם קובץ (file)
 export async function POST(request: Request) {
   const staff = await requirePermission('gilyonot', 'edit')
   if (!staff) return forbidden()
   const db = getServiceClient()
   if (!db) return serverMisconfigured()
-  const body = await request.json().catch(() => null) as Record<string, unknown> | null
+  const isFile = (request.headers.get('content-type') ?? '').startsWith('multipart/form-data')
+  const parsed = isFile ? await fileBody(request) : await request.json().catch(() => null) as Record<string, unknown> | null
+  if (parsed instanceof NextResponse) return parsed
+  const body = parsed
   if (!body) return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 })
 
   if (body.mode === 'add') {
