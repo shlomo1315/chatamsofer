@@ -3,7 +3,7 @@ import { cookies } from 'next/headers'
 import { getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
 import { rateLimit } from '@/lib/rateLimit'
 import { DISTRIBUTOR_COOKIE, loginKey, identityFilter, readSessionToken } from '@/lib/gilyonotDistributorAuth'
-import { runDistributorAction } from '@/lib/gilyonotDistributorServer'
+import { requestHilula, runDistributorAction } from '@/lib/gilyonotDistributorServer'
 
 // ממשק המפיץ: הנתונים שלו (GET) וביצוע פעולה (POST). הזהות רק מהעוגייה החתומה.
 export const dynamic = 'force-dynamic'
@@ -47,7 +47,9 @@ export async function POST(request: Request) {
   const { data: own } = await db.from('gilyonot_distributors').select('id').eq('id', distributorId).eq('status', 'active').or(identityFilter(id)).maybeSingle()
   if (!own) return NextResponse.json({ error: 'אין גישה' }, { status: 403 })
 
-  const res = await runDistributorAction(db, distributorId, body.action, body, 'web')
+  const res = body.action === 'hilula'
+    ? await requestHilula(db, { distributorId, phone: null, guests: body.guests, channel: 'web' })
+    : await runDistributorAction(db, distributorId, body.action, body, 'web')
   if (!res.ok) return NextResponse.json({ error: res.error }, { status: res.status })
   return NextResponse.json({ ok: true, message: res.message })
 }

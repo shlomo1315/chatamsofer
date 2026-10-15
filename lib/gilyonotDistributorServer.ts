@@ -4,7 +4,7 @@ import { deliverMail } from '@/lib/sendMail'
 import { GILYONOT_FROM_EMAIL, GILYONOT_FROM_NAME, normalizeEmail } from '@/lib/gilyonot'
 import { escHtml } from '@/lib/gilyonotMail'
 import {
-  EVENT_LABELS, normalizeAgentHours, planDistributorAction,
+  EVENT_LABELS, cleanText, normalizeAgentHours, planDistributorAction,
   type AgentWindow, type DistributorSnapshot, type EventChannel,
 } from '@/lib/gilyonotDistributors'
 
@@ -162,3 +162,72 @@ export async function sendDistributorBroadcast(db: SupabaseClient, opts: { subje
   })
   return { ok: true, recipients: all.length, sent, failed, skipped }
 }
+
+// ── מהטלפון: הקלטה (תקלה, כתובת חדשה, הודעה כשהנציג לא זמין) ──
+// אין טקסט מוקלד, ולכן הכתובת לא מתעדכנת אוטומטית: האירוע נשאר פתוח עד שהמשרד מעדכן,
+// והשליח מקבל כבר עכשיו את התמלול (אם הופעל בשלוחה).
+export async function recordPhoneMessage(db: SupabaseClient, distributorId: string, purpose: 'issue' | 'address' | 'note', recordingPath: string, transcript: string | null): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { data: d } = await db.from('gilyonot_distributors').select('id, full_name, phone, city, address, synagogue, quantity, status').eq('id', distributorId).maybeSingle()
+  if (!d || d.status !== 'active') return { ok: false, error: 'המפיץ אינו פעיל במערך' }
+  const text = transcript?.trim().slice(0, 1500) || null
+  const details = [text ? `תמלול אוטומטי: ${text}` : 'הודעה מוקלטת (בלי תמלול)', `קובץ ההקלטה בימות: ${recordingPath.slice(0, 300)}`].join('\n')
+  const { error } = await db.from('gilyonot_distributor_events').insert({
+    distributor_id: d.id, channel: 'phone', kind: purpose, details, status: 'open',
+    old_value: purpose === 'address' ? { address: d.address, city: d.city } : null,
+  })
+  if (error) return { ok: false, error: 'השמירה נכשלה' }
+  if (purpose === 'address') {
+    await notifyCourier(db, d as DistRow, 'address', 'הכתובת נמסרה בהקלטה טלפונית. המשרד יאשר אותה בהמשך.', { address: text ?? 'בהקלטה, המשרד יעדכן', city: d.city })
+  }
+  return { ok: true }
+}
+
+// ── סעודת ההילולא: קדימות למפיץ פעיל ──
+export const MAX_HILULA_GUESTS = 50
+
+/**
+ * רושם בקשה להשתתף בסעודה. בקשה ממתינה קיימת לאותו טלפון מתעדכנת (ולא נוצרת כפולה).
+ * ⚠️ הקורא אחראי לוודא שהמפיץ שייך למבקש (סשן באתר / זיהוי בטלפון).
+ */
+export async function requestHilula(db: SupabaseClient, input: { distributorId: string | null; phone: string | null; name?: string | null; guests: unknown; channel: 'web' | 'phone' | 'admin' }): Promise<{ ok: true; message: string; priority: boolean } | { ok: false; error: string; status: number }> {
+  const guests = Number(input.guests)
+  if (!Number.isInteger(guests) || guests < 1 || guests > MAX_HILULA_GUESTS) return { ok: false, error: `מספר המשתתפים צריך להיות בין 1 ל-${MAX_HILULA_GUESTS}`, status: 400 }
+  let d: { id: string; full_name: string; phone: string | null; city: string | null; synagogue: string | null; status: string } | null = null
+  if (input.distributorId) {
+    const { data } = await db.from('gilyonot_distributors').select('id, full_name, phone, city, synagogue, status').eq('id', input.distributorId).maybeSingle()
+    d = data
+  }
+  const phone = input.phone ?? d?.phone ?? null
+  if (!phone && !d) return { ok: false, error: 'חסר מספר טלפון', status: 400 }
+  const priority = d?.status === 'active'
+  const now = new Date().toISOString()
+  const row = {
+    distributor_id: d?.id ?? null, full_name: d?.full_name ?? cleanText(input.name, 120), phone,
+    city: d?.city ?? null, synagogue: d?.synagogue ?? null, guests, channel: input.channel, priority, updated_at: now,
+  }
+
+  const updatePending = async () => {
+    let q = db.from('gilyonot_hilula_requests').update(row).eq('status', 'pending')
+    q = phone ? q.eq('phone', phone) : q.eq('distributor_id', d!.id)
+    const { data } = await q.select('id')
+    return !!data?.length
+  }
+  let saved = await updatePending()
+  if (!saved) {
+    const { error } = await db.from('gilyonot_hilula_requests').insert(row)
+    // 23505: בקשה מקבילה מאותו טלפון נכנסה רגע לפני, ולכן מעדכנים אותה
+    if (error?.code === '23505') saved = await updatePending()
+    else if (error) return { ok: false, error: 'השמירה נכשלה', status: 500 }
+    else saved = true
+  }
+  if (!saved) return { ok: false, error: 'השמירה נכשלה', status: 500 }
+
+  if (d) {
+    await db.from('gilyonot_distributor_events').insert({
+      distributor_id: d.id, channel: input.channel, kind: 'hilula', quantity: guests, status: 'done', handled_at: now,
+      details: `בקשה להשתתף בסעודת ההילולא, ${guests} משתתפים${priority ? ' (קדימות)' : ''}`,
+    })
+  }
+  return { ok: true, priority, message: `נרשמה בקשה ל-${guests} משתתפים בסעודת ההילולא.${priority ? ' כמפיצים, יש לכם קדימות.' : ''} המשרד יאשר את ההשתתפות.` }
+}
+

@@ -91,7 +91,7 @@ export function parseGetJson(text: string): { ok: true; rows: NedarimRow[] } | {
   return { ok: false, error: 'תשובה לא צפויה מנדרים' }
 }
 
-async function fetchRows(c: NedarimPullConfig, fields: string[], opts: { lastId: number; max: number; desc?: boolean }) {
+export async function fetchRows(c: NedarimPullConfig, fields: string[], opts: { lastId: number; max: number; desc?: boolean }) {
   const body = new URLSearchParams({
     Action: 'GetJson', MosadId: c.mosadId, ApiPassword: c.apiKey, TofesId: c.tofesId,
     MaxId: String(opts.max), LastId: String(opts.lastId), GetJsonParam: buildGetJsonParam(fields),
@@ -125,13 +125,13 @@ export function mapRow(row: NedarimRow, c: Pick<NedarimPullConfig, 'emailField' 
 }
 
 // ── שמירה ב-app_settings ──
-async function readJson<T>(db: SupabaseClient, key: string, fallback: T): Promise<T> {
+export async function readJson<T>(db: SupabaseClient, key: string, fallback: T): Promise<T> {
   const { data } = await db.from('app_settings').select('value').eq('key', key).maybeSingle()
   if (!data?.value) return { ...fallback }
   try { return { ...fallback, ...JSON.parse(data.value) } } catch { return { ...fallback } }
 }
 
-async function writeJson(db: SupabaseClient, key: string, value: unknown): Promise<boolean> {
+export async function writeJson(db: SupabaseClient, key: string, value: unknown): Promise<boolean> {
   const { error } = await db.from('app_settings').upsert(
     { key, value: JSON.stringify(value), updated_at: new Date().toISOString() }, { onConflict: 'key' },
   )

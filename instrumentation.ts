@@ -385,6 +385,16 @@ export async function register() {
       } catch (err) { console.error('[gilyonot] nedarim pull failed', err) }
     }
     setTimeout(() => { void tickGilyonotPull(); setInterval(() => { void tickGilyonotPull() }, 60 * MINUTE_MS) }, 5 * MINUTE_MS)
+
+    // הרשמת מפיצים מטופס המפיצים בנדרים פלוס, כל שעה (lib/gilyonotDistributorNedarim.ts).
+    const tickDistributorPull = async () => {
+      try {
+        const { pullNedarimDistributors } = await import('@/lib/gilyonotDistributorNedarim')
+        const res = await pullNedarimDistributors()
+        if (res.added || res.held || res.error) console.log(`[gilyonot] distributors pull added=${res.added} held=${res.held} lastId=${res.lastId}${res.error ? ` error=${res.error}` : ''}`)
+      } catch (err) { console.error('[gilyonot] distributors pull failed', err) }
+    }
+    setTimeout(() => { void tickDistributorPull(); setInterval(() => { void tickDistributorPull() }, 60 * MINUTE_MS) }, 7 * MINUTE_MS)
   }
 
   // ─────────────────────────────────────────────────────────────────────────
