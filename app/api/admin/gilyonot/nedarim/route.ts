@@ -47,7 +47,8 @@ export async function POST(request: Request) {
     if (res.skipped === 'running') return NextResponse.json({ error: 'משיכה כבר רצה עכשיו. נסו שוב בעוד דקה.' }, { status: 409 })
     if (res.skipped === 'not_configured') return NextResponse.json({ error: 'צריך קודם להגדיר מוסד, מפתח, טופס ועמודת מייל' }, { status: 400 })
     await logActivity(db, { userId: staff.userId, action: 'gilyonot_nedarim_pull', entityType: 'gilyonot_subscriber', details: { added: res.added, lastId: res.lastId, error: res.error ?? null } })
-    return NextResponse.json({ ...res, view: await getPullView(db) }, { status: res.ok ? 200 : 502 })
+    // ⚠️ לא 502: הפרוקסי של Railway מחליף גוף של 5xx, וההודעה בעברית לא הגיעה למסך
+    return NextResponse.json({ ...res, view: await getPullView(db) }, { status: res.ok ? 200 : 422 })
   }
 
   return NextResponse.json({ error: 'פעולה לא מוכרת' }, { status: 400 })

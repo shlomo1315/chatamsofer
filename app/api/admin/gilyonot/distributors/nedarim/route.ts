@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     if (res.skipped === 'running') return NextResponse.json({ error: 'משיכה כבר רצה עכשיו. נסו שוב בעוד דקה.' }, { status: 409 })
     if (res.skipped === 'not_configured') return NextResponse.json({ error: 'צריך קודם מוסד ומפתח (בהגדרות הנרשמים), מספר טופס ועמודות שם, טלפון ובית כנסת' }, { status: 400 })
     await logActivity(db, { userId: staff.userId, action: 'gilyonot_distributors_nedarim_pull', entityType: 'gilyonot_distributor', details: { added: res.added, held: res.held, lastId: res.lastId, error: res.error ?? null } })
-    return NextResponse.json({ ...res, view: await getDistNedarimView(db) }, { status: res.ok ? 200 : 502 })
+    return NextResponse.json({ ...res, view: await getDistNedarimView(db) }, { status: res.ok ? 200 : 422 })
   }
 
   return NextResponse.json({ error: 'פעולה לא מוכרת' }, { status: 400 })
