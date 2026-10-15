@@ -35,6 +35,8 @@ const TABS = [
   { href: '/admin/book-fair/shipping-cities', label: 'משלוחים לפי עיר', icon: Truck },
   // 🔴 14.10: התחשבנות עם מחברים/מו"לים — כמה נגבה, 5%, מה שולם.
   { href: '/admin/book-fair/settlement', label: 'התחשבנות', icon: HandCoins },
+  // 15.10: כמה כל מחבר/מכון/מו"ל אמור לקבל לפי מחיר לעותק.
+  { href: '/admin/book-fair/author-payouts', label: 'סכומים למחברים', icon: HandCoins },
   { href: '/admin/book-fair/settings', label: 'הגדרות',  icon: Settings2 },
 ]
 
