@@ -8,7 +8,7 @@ import { downloadXlsx, todayStamp } from '@/lib/downloadXlsx'
 import { defaultSubject } from '@/lib/gilyonotMail'
 import type { NedarimPullView } from '@/lib/gilyonotNedarimPull'
 import NedarimPull from './NedarimPull'
-import Distributors, { type DistributorEventView, type DistributorMessageView, type DistributorSettingsView, type DistributorView } from './Distributors'
+import Distributors from './Distributors'
 import { Badge, btnDanger, btnGhost, btnPrimary, Card, CardHeader, input, link, Meter, Notice, Stat, StepNum, type Tone } from './ui'
 
 export interface SubscriberView {
@@ -59,7 +59,7 @@ export default function GilyonotClient(props: {
   tab: 'subscribers' | 'issues' | 'nedarim' | 'distributors'
   subscribers: SubscriberView[]
   nedarim: NedarimPullView | null
-  distributors: { rows: DistributorView[]; events: DistributorEventView[]; messages: DistributorMessageView[]; settings: DistributorSettingsView } | null
+  distributors: Omit<React.ComponentProps<typeof Distributors>, 'canAdd' | 'canEdit' | 'canDelete'> | null
   issues: IssueView[]
   defaultParasha: string
   canAdd: boolean

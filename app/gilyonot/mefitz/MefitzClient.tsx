@@ -15,13 +15,16 @@ type Msg = { ok: boolean; text: string } | null
 
 const STATUS_LABEL = { open: 'בטיפול', done: 'טופל', rejected: 'נדחה' } as const
 
-const ACTIONS: { key: DistributorAction; title: string; hint: string }[] = [
+type CardAction = DistributorAction | 'hilula'
+
+const ACTIONS: { key: CardAction; title: string; hint: string }[] = [
   { key: 'received', title: 'דיווח קבלה', hint: 'כמה גיליונות הגיעו אליכם השבוע' },
   { key: 'issue', title: 'דיווח על תקלה', hint: 'לא הגיע, הגיע באיחור, נפגע וכדומה' },
   { key: 'increase', title: 'בקשת תוספת', hint: 'צריכים יותר גיליונות' },
   { key: 'decrease', title: 'בקשת הפחתה', hint: 'נשארים גיליונות מיותרים' },
   { key: 'address', title: 'עדכון כתובת', hint: 'עברתם דירה או שהמשלוח צריך להגיע למקום אחר' },
   { key: 'note', title: 'הערה למשרד', hint: 'כל דבר אחר' },
+  { key: 'hilula', title: 'סעודת ההילולא', hint: 'הרשמה לסעודה. למפיצים יש קדימות, והמשרד יאשר את ההשתתפות' },
   { key: 'leave', title: 'הפסקת ההפצה', hint: 'יציאה ממערך המפיצים' },
 ]
 
@@ -144,7 +147,7 @@ function Login({ onDone }: { onDone: () => void }) {
 }
 
 function DistCard({ d, onChanged }: { d: Dist; onChanged: () => void }) {
-  const [action, setAction] = useState<DistributorAction | null>(null)
+  const [action, setAction] = useState<CardAction | null>(null)
   const [quantity, setQuantity] = useState('')
   const [details, setDetails] = useState('')
   const [address, setAddress] = useState('')
@@ -152,7 +155,7 @@ function DistCard({ d, onChanged }: { d: Dist; onChanged: () => void }) {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<Msg>(null)
 
-  function pick(a: DistributorAction) {
+  function pick(a: CardAction) {
     setAction(a === action ? null : a)
     setQuantity(''); setDetails(''); setAddress(''); setCity(''); setMsg(null)
   }
@@ -163,7 +166,7 @@ function DistCard({ d, onChanged }: { d: Dist; onChanged: () => void }) {
     if (action === 'leave' && !confirm('להפסיק את ההפצה ולצאת ממערך המפיצים? השליח יקבל על כך הודעה.')) return
     setBusy(true); setMsg(null)
     try {
-      const r = await call('/api/gilyonot/mefitz', post({ distributorId: d.id, action, quantity, details, address, city }))
+      const r = await call('/api/gilyonot/mefitz', post({ distributorId: d.id, action, quantity, guests: quantity, details, address, city }))
       if (!r.ok) { setMsg({ ok: false, text: errText(r.data, 'השליחה נכשלה. נסו שוב.') }); return }
       setMsg({ ok: true, text: String(r.data.message ?? 'נשלח') })
       setAction(null)
@@ -172,7 +175,7 @@ function DistCard({ d, onChanged }: { d: Dist; onChanged: () => void }) {
     finally { setBusy(false) }
   }
 
-  const needsQty = action === 'received' || action === 'increase' || action === 'decrease'
+  const needsQty = action === 'received' || action === 'increase' || action === 'decrease' || action === 'hilula'
   const current = ACTIONS.find(a => a.key === action)
 
   return (
@@ -203,8 +206,8 @@ function DistCard({ d, onChanged }: { d: Dist; onChanged: () => void }) {
           <p className="text-sm text-slate-600">{current.hint}</p>
           {needsQty && (
             <label className="block">
-              <span className={label}>{action === 'received' ? 'כמה גיליונות התקבלו' : 'הכמות החדשה המבוקשת'}</span>
-              <input className={input} type="number" min={0} inputMode="numeric" value={quantity} onChange={e => setQuantity(e.target.value)} required />
+              <span className={label}>{action === 'received' ? 'כמה גיליונות התקבלו' : action === 'hilula' ? 'כמה משתתפים, כולל אתכם' : 'הכמות החדשה המבוקשת'}</span>
+              <input className={input} type="number" min={action === 'hilula' ? 1 : 0} max={action === 'hilula' ? 50 : undefined} inputMode="numeric" value={quantity} onChange={e => setQuantity(e.target.value)} required />
             </label>
           )}
           {action === 'address' && (
@@ -215,10 +218,10 @@ function DistCard({ d, onChanged }: { d: Dist; onChanged: () => void }) {
                 <input className={input} value={city} onChange={e => setCity(e.target.value)} autoComplete="address-level2" /></label>
             </>
           )}
-          <label className="block">
+          {action !== 'hilula' && <label className="block">
             <span className={label}>{action === 'issue' ? 'תיאור התקלה' : action === 'note' ? 'ההערה' : action === 'leave' ? 'סיבה (לא חובה)' : 'הערה (לא חובה)'}</span>
             <textarea className={input} rows={3} value={details} onChange={e => setDetails(e.target.value)} required={action === 'issue' || action === 'note'} />
-          </label>
+          </label>}
           <button type="submit" className={btnPrimary} disabled={busy}>
             {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}{action === 'leave' ? 'אישור הפסקת ההפצה' : 'שליחה'}
           </button>
