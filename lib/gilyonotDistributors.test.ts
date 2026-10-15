@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   cleanIdNumber, cleanPhone, detectHeader, isAgentAvailable, normalizeAgentHours, normalizeLoginId,
-  parseCsv, parseDistributorTable, summarizeByCity, validateDistributor,
+  parseCsv, parseDistributorTable, planDistributorAction, summarizeByCity, validateDistributor,
 } from './gilyonotDistributors'
 
 describe('נרמול שדות', () => {
@@ -99,5 +99,32 @@ describe('שעות נציג', () => {
   it('דוחה חלון לא תקין', () => {
     expect(normalizeAgentHours([{ day: 7, from: '09:00', to: '10:00' }])).toBeNull()
     expect(normalizeAgentHours([{ day: 1, from: '12:00', to: '10:00' }])).toBeNull()
+  })
+})
+
+describe('planDistributorAction', () => {
+  const d = { id: 'x', quantity: 40, city: 'ירושלים', address: 'רח\' א 1', status: 'active' as const }
+  it('דוחה פעולה לא מוכרת ומפיץ שהוסר', () => {
+    expect(planDistributorAction(d, 'admin_edit', {})).toMatchObject({ ok: false })
+    expect(planDistributorAction({ ...d, status: 'removed' }, 'note', { details: 'x' })).toMatchObject({ ok: false })
+  })
+  it('קבלה: תואם = טופל, הפרש = פתוח', () => {
+    const a = planDistributorAction(d, 'received', { quantity: '40' })
+    const b = planDistributorAction(d, 'received', { quantity: '35' })
+    expect(a.ok && a.plan.event.status).toBe('done')
+    expect(b.ok && b.plan.event.status).toBe('open')
+    expect(planDistributorAction(d, 'received', {})).toMatchObject({ ok: false })
+  })
+  it('תוספת והפחתה לא משנות כמות עד אישור, ובכיוון הנכון בלבד', () => {
+    const a = planDistributorAction(d, 'increase', { quantity: 60 })
+    expect(a.ok && a.plan).toMatchObject({ update: null, event: { quantity: 60, status: 'open' } })
+    expect(planDistributorAction(d, 'increase', { quantity: 30 })).toMatchObject({ ok: false })
+    expect(planDistributorAction(d, 'decrease', { quantity: 50 })).toMatchObject({ ok: false })
+  })
+  it('כתובת והתנתקות מתעדכנות מיד ומודיעות לשליח', () => {
+    const a = planDistributorAction(d, 'address', { address: 'רח\' ב 2' })
+    expect(a.ok && a.plan).toMatchObject({ update: { address: 'רח\' ב 2', city: 'ירושלים' }, notifyCourier: true })
+    const b = planDistributorAction(d, 'leave', {})
+    expect(b.ok && b.plan).toMatchObject({ update: { status: 'removed' }, notifyCourier: true })
   })
 })

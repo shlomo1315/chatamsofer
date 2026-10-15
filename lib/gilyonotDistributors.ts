@@ -268,3 +268,68 @@ export function isAgentAvailable(hours: AgentWindow[], at: Date = new Date()): b
   const { day, time } = israelClock(at)
   return hours.some(w => w.day === day && time >= w.from && time < w.to)
 }
+
+// ── פעולות המפיץ: מה כל פעולה שומרת ומה היא משנה ──
+// אותה פונקציה תשמש גם את ימות המשיח (channel='phone'), כדי שהכללים יהיו אחד.
+export interface DistributorSnapshot { id: string; quantity: number; city: string | null; address: string | null; status: DistributorStatus }
+export interface ActionPlan {
+  event: { kind: EventKind; quantity: number | null; details: string | null; old_value: Record<string, unknown> | null; new_value: Record<string, unknown> | null; status: EventStatus }
+  /** עדכון מיידי לשורת המפיץ (כתובת, התנתקות). שינוי כמות מחכה לאישור המשרד. */
+  update: Record<string, unknown> | null
+  notifyCourier: boolean
+  message: string
+}
+
+export function planDistributorAction(d: DistributorSnapshot, action: unknown, input: Record<string, unknown>): { ok: true; plan: ActionPlan } | { ok: false; error: string } {
+  if (!DISTRIBUTOR_ACTIONS.includes(action as DistributorAction)) return { ok: false, error: 'פעולה לא מוכרת' }
+  if (d.status !== 'active') return { ok: false, error: 'המפיץ כבר אינו פעיל במערך' }
+  const kind = action as DistributorAction
+  const details = cleanNote(input.details, 1000)
+  const ev = (o: Partial<ActionPlan['event']>): ActionPlan['event'] =>
+    ({ kind, quantity: null, details, old_value: null, new_value: null, status: 'open', ...o })
+
+  switch (kind) {
+    case 'issue':
+    case 'note':
+      if (!details) return { ok: false, error: kind === 'issue' ? 'נא לתאר את התקלה' : 'נא לכתוב את ההערה' }
+      return { ok: true, plan: { event: ev({}), update: null, notifyCourier: false, message: 'הפנייה התקבלה. המשרד יטפל בה בהקדם.' } }
+    case 'received': {
+      const q = String(input.quantity ?? '').trim() === '' ? null : cleanQuantity(input.quantity)
+      if (q === null) return { ok: false, error: 'נא להזין כמה גיליונות התקבלו' }
+      // כמות שונה מהמצופה = חוסר או עודף, ולכן נשאר פתוח לטיפול המשרד
+      const match = q === d.quantity
+      return { ok: true, plan: {
+        event: ev({ quantity: q, old_value: { quantity: d.quantity }, status: match ? 'done' : 'open' }),
+        update: null, notifyCourier: false,
+        message: match ? 'תודה! הקבלה נרשמה.' : 'תודה! הקבלה נרשמה, והמשרד יבדוק את ההפרש.',
+      } }
+    }
+    case 'increase':
+    case 'decrease': {
+      const q = String(input.quantity ?? '').trim() === '' ? null : cleanQuantity(input.quantity)
+      if (q === null) return { ok: false, error: 'נא להזין את הכמות החדשה המבוקשת' }
+      if (kind === 'increase' && q <= d.quantity) return { ok: false, error: `בתוספת, הכמות החדשה צריכה להיות יותר מ-${d.quantity}` }
+      if (kind === 'decrease' && q >= d.quantity) return { ok: false, error: `בהפחתה, הכמות החדשה צריכה להיות פחות מ-${d.quantity}` }
+      return { ok: true, plan: {
+        event: ev({ quantity: q, old_value: { quantity: d.quantity }, new_value: { quantity: q } }),
+        update: null, notifyCourier: false, message: 'הבקשה התקבלה. הכמות תתעדכן אחרי אישור המשרד.',
+      } }
+    }
+    case 'address': {
+      const address = cleanText(input.address, 200)
+      if (!address) return { ok: false, error: 'נא להזין את הכתובת החדשה' }
+      const hasCity = String(input.city ?? '').trim() !== ''
+      const city = hasCity ? cleanCity(input.city) : d.city
+      return { ok: true, plan: {
+        event: ev({ old_value: { address: d.address, city: d.city }, new_value: { address, city }, status: 'done' }),
+        update: { address, city }, notifyCourier: true, message: 'הכתובת עודכנה, והשליח קיבל הודעה.',
+      } }
+    }
+    case 'leave':
+      return { ok: true, plan: {
+        event: ev({ old_value: { quantity: d.quantity }, status: 'done' }),
+        update: { status: 'removed', removed_reason: details ? `המפיץ התנתק: ${details}` : 'המפיץ התנתק', removed_at: 'now' },
+        notifyCourier: true, message: 'ההתנתקות נרשמה. תודה רבה על כל ההפצה!',
+      } }
+  }
+}

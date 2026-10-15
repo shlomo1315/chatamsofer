@@ -50,10 +50,11 @@ export const sessionCookieOptions = {
   httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' as const, path: '/', maxAge: SESSION_DAYS * 86_400,
 }
 
-// ── שורות המפיץ לפי המזהה ──
-export function matchIdentity<Q extends { eq: (c: string, v: string) => Q; or: (f: string) => Q }>(q: Q, id: LoginIdentity): Q {
-  if (id.by === 'phone') return q.or(`phone.eq.${id.value},phone2.eq.${id.value}`)
-  return q.eq(id.by, id.value)
+// ── שורות המפיץ לפי המזהה: מסנן ל-.or() ──
+// ⚠️ הערכים כבר מנורמלים (ספרות, או מייל בלי פסיקים וסוגריים), ולכן בטוחים במסנן.
+export function identityFilter(id: LoginIdentity): string {
+  if (id.by === 'phone') return `phone.eq.${id.value},phone2.eq.${id.value}`
+  return `${id.by}.eq.${id.value}`
 }
 
 const codeHash = (key: string, code: string) => signPayload(`gdcode:${key}:${code}`)
