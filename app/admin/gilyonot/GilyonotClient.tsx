@@ -74,8 +74,8 @@ export default function GilyonotClient(props: {
     <div className="space-y-6">
       <Overview subscribers={props.subscribers} active={active} issues={props.issues} />
 
-      <nav className="-mx-1 overflow-x-auto px-1" aria-label="לשוניות">
-        <div className="inline-flex min-w-full gap-1 rounded-2xl bg-slate-200/60 p-1 sm:min-w-0">
+      <nav aria-label="לשוניות">
+        <div className="flex flex-wrap gap-1 rounded-2xl bg-slate-200/60 p-1 sm:inline-flex">
           {tabs.map(t => {
             const on = props.tab === t.key
             return (
@@ -103,13 +103,14 @@ export default function GilyonotClient(props: {
 // ─── תמונת מצב בראש העמוד ────────────────────────────────────────────────────
 
 function Overview({ subscribers, active, issues }: { subscribers: SubscriberView[]; active: number; issues: IssueView[] }) {
+  const [now] = useState(() => Date.now())
   const { recent, removed } = useMemo(() => {
-    const since = Date.now() - 30 * 86_400_000
+    const since = now - 30 * 86_400_000
     return {
       recent: subscribers.filter(s => s.status === 'active' && new Date(s.created_at).getTime() >= since).length,
       removed: subscribers.length - active,
     }
-  }, [subscribers, active])
+  }, [subscribers, active, now])
   const lastSent = issues.find(i => i.status !== 'draft')
   const draft = issues.find(i => i.status === 'draft')
 
@@ -213,7 +214,7 @@ function Subscribers({ rows, canAdd, canEdit, canDelete }: { rows: SubscriberVie
       <input ref={fileRef} type="file" accept={IMPORT_ACCEPT} className="hidden" aria-hidden tabIndex={-1}
         onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) uploadFile(f) }} />
 
-      <div className={`grid gap-4 ${canAdd ? 'lg:grid-cols-3' : ''}`}>
+      <div className={`grid grid-cols-1 gap-4 [&>*]:min-w-0 ${canAdd ? 'lg:grid-cols-3' : ''}`}>
         {canAdd && <div className="lg:col-span-2"><UploadCard busy={busy} onPick={pickFile} onFile={uploadFile} onPaste={() => setPanel(panel === 'paste' ? '' : 'paste')} /></div>}
         <Card className="flex flex-col justify-between gap-4 p-5">
           <div className="flex items-start gap-3">
@@ -286,7 +287,7 @@ function Subscribers({ rows, canAdd, canEdit, canDelete }: { rows: SubscriberVie
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto border-t border-slate-100">
+            <div className="border-t border-slate-100">
               <table className="w-full table-fixed text-sm">
                 <thead className="bg-slate-50/70">
                   <tr>
@@ -492,7 +493,7 @@ function Issues({ rows, activeCount, defaultParasha, canAdd, canEdit, canDelete 
             <p className="mx-auto mt-1 max-w-sm text-sm text-slate-600">לחצו &quot;גיליון חדש&quot; כדי להעלות את הגיליון של השבוע.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto border-t border-slate-100">
+          <div className="border-t border-slate-100">
             <table className="w-full text-sm">
               <thead className="bg-slate-50/70">
                 <tr>
