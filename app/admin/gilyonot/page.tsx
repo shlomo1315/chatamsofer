@@ -6,8 +6,9 @@ import PageHeader from '@/components/ui/PageHeader'
 import type { UserPermissions } from '@/types'
 import { getPullView, type NedarimPullView } from '@/lib/gilyonotNedarimPull'
 import GilyonotClient, { type IssueView, type SubscriberView } from './GilyonotClient'
-import type { DistributorEventView, DistributorMessageView, DistributorView } from './Distributors'
+import type { DistributorApplicationView, DistributorEventView, DistributorMessageView, DistributorView, HilulaRequestView } from './Distributors'
 import { DISTRIBUTOR_COLS, loadDistributorSettings } from '@/lib/gilyonotDistributorServer'
+import { getDistNedarimView, REASON_LABELS, type ApplicationReason } from '@/lib/gilyonotDistributorNedarim'
 
 // מחלקת גיליונות החתם סופר — רשימת התפוצה, העלאת הגיליון השבועי, שליחה וארכיון.
 // ליבה: lib/gilyonot.ts · שליחה: lib/gilyonotSender.ts · מיגרציה: 20261016_gilyonot.sql
@@ -89,14 +90,22 @@ async function loadDistributors(db: NonNullable<ReturnType<typeof getServiceClie
     rows.push(...((data ?? []) as unknown as DistributorView[]))
     if (!data || data.length < PAGE) break
   }
-  const [{ data: ev }, { data: msgs }, settings] = await Promise.all([
+  const [{ data: ev }, { data: msgs }, settings, { data: hil }, { data: apps }, nedarim] = await Promise.all([
     db.from('gilyonot_distributor_events').select('id, distributor_id, kind, channel, quantity, details, status, created_at')
       .eq('status', 'open').order('created_at', { ascending: false }).limit(500),
     db.from('gilyonot_distributor_messages').select('id, subject, city, recipients, sent_count, failed_count, skipped_count, created_at')
       .order('created_at', { ascending: false }).limit(30),
     loadDistributorSettings(db),
+    db.from('gilyonot_hilula_requests').select('id, distributor_id, full_name, phone, city, synagogue, guests, channel, priority, details, status, created_at')
+      .order('priority', { ascending: false }).order('created_at').limit(2000),
+    db.from('gilyonot_distributor_applications').select('id, full_name, phone, email, city, synagogue, address, quantity, reason, conflict_id, created_at')
+      .eq('status', 'pending').order('created_at', { ascending: false }).limit(500),
+    getDistNedarimView(db),
   ])
   const names = new Map(rows.map(r => [r.id, r.full_name]))
   const events = (ev ?? []).map(e => ({ ...e, distributor_name: names.get(e.distributor_id) ?? '—' })) as DistributorEventView[]
-  return { rows, events, messages: (msgs ?? []) as DistributorMessageView[], settings }
+  const hilula = ((hil ?? []) as unknown as HilulaRequestView[]).map(h => ({ ...h, full_name: h.full_name ?? (h.distributor_id ? names.get(h.distributor_id) ?? null : null) }))
+  const applications = ((apps ?? []) as unknown as (Omit<DistributorApplicationView, 'reason_label' | 'conflict_name'> & { reason: ApplicationReason; conflict_id: string | null })[])
+    .map(({ conflict_id, ...a }) => ({ ...a, reason_label: REASON_LABELS[a.reason] ?? a.reason, conflict_name: conflict_id ? names.get(conflict_id) ?? null : null }))
+  return { rows, events, messages: (msgs ?? []) as DistributorMessageView[], settings, hilula, applications, nedarim }
 }

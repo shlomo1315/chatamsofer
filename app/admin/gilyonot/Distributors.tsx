@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Check, ExternalLink, FileUp, Inbox, Loader2, MapPin, Megaphone, Pencil, Plus, Search, Settings, Trash2, Truck, Undo2, UserMinus, X } from 'lucide-react'
+import { Check, ExternalLink, FileUp, Inbox, Loader2, MapPin, Megaphone, Pencil, Plus, Search, Settings, Trash2, Truck, Undo2, UserMinus, UserPlus, UtensilsCrossed, X } from 'lucide-react'
 import { downloadXlsx, todayStamp } from '@/lib/downloadXlsx'
 import {
   CHANNEL_LABELS, EVENT_LABELS, NO_CITY, SOURCE_LABELS, summarizeByCity,
@@ -45,6 +45,43 @@ export interface DistributorMessageView {
   created_at: string
 }
 
+export interface HilulaRequestView {
+  id: string
+  distributor_id: string | null
+  full_name: string | null
+  phone: string | null
+  city: string | null
+  synagogue: string | null
+  guests: number
+  channel: EventChannel
+  priority: boolean
+  details: string | null
+  status: 'pending' | 'approved' | 'rejected'
+  created_at: string
+}
+
+export interface DistributorApplicationView {
+  id: string
+  full_name: string | null
+  phone: string | null
+  email: string | null
+  city: string | null
+  synagogue: string | null
+  address: string | null
+  quantity: number | null
+  reason: string
+  reason_label: string
+  conflict_name: string | null
+  created_at: string
+}
+
+// ההגדרות של טופס המפיצים בנדרים (בלי המפתח: הוא משותף ונשמר בהגדרות הנרשמים)
+export interface DistNedarimView {
+  config: { tofesId: string; nameField: string; phoneField: string; emailField: string; cityField: string; synagogueField: string; addressField: string; quantityField: string }
+  state: { lastId: number; lastRunAt: string | null; lastAdded: number; lastHeld: number; lastError: string | null }
+  connected: boolean
+}
+
 export interface DistributorSettingsView {
   courier_name: string | null
   courier_email: string | null
@@ -69,13 +106,16 @@ const json = (method: string, body: unknown): RequestInit => ({ method, headers:
 const Head = (p: React.ComponentProps<typeof CardHeader>) => <div className="p-5 pb-4"><CardHeader {...p} /></div>
 
 type Msg = { ok: boolean; text: string } | null
-type Section = 'list' | 'requests' | 'broadcast' | 'settings'
+type Section = 'list' | 'requests' | 'hilula' | 'nedarim' | 'broadcast' | 'settings'
 
 export default function Distributors(props: {
   rows: DistributorView[]
   events: DistributorEventView[]
   messages: DistributorMessageView[]
   settings: DistributorSettingsView
+  hilula: HilulaRequestView[]
+  applications: DistributorApplicationView[]
+  nedarim: DistNedarimView
   canAdd: boolean
   canEdit: boolean
   canDelete: boolean
@@ -89,7 +129,9 @@ export default function Distributors(props: {
   const sections: { key: Section; label: string; icon: typeof Inbox; count?: number }[] = [
     { key: 'list', label: 'מפיצים', icon: Truck },
     { key: 'requests', label: 'פניות', icon: Inbox, count: props.events.length },
+    { key: 'hilula', label: 'סעודת ההילולא', icon: UtensilsCrossed, count: props.hilula.filter(h => h.status === 'pending').length },
     ...(props.canEdit ? [
+      { key: 'nedarim' as const, label: 'נרשמים מנדרים', icon: UserPlus, count: props.applications.length },
       { key: 'broadcast' as const, label: 'הודעה למפיצים', icon: Megaphone },
       { key: 'settings' as const, label: 'הגדרות', icon: Settings },
     ] : []),
@@ -123,6 +165,8 @@ export default function Distributors(props: {
 
       {section === 'list' && <DistributorList rows={props.rows} byCity={byCity} canAdd={props.canAdd} canEdit={props.canEdit} canDelete={props.canDelete} />}
       {section === 'requests' && <Requests events={props.events} canEdit={props.canEdit} />}
+      {section === 'hilula' && <Hilula requests={props.hilula} canEdit={props.canEdit} />}
+      {section === 'nedarim' && <NedarimApplications applications={props.applications} view={props.nedarim} />}
       {section === 'broadcast' && <Broadcast cities={cities} rows={active} messages={props.messages} />}
       {section === 'settings' && <SettingsForm settings={props.settings} />}
     </div>
@@ -563,7 +607,7 @@ function SettingsForm({ settings }: { settings: DistributorSettingsView }) {
         </fieldset>
 
         <fieldset className="space-y-3 border-t border-slate-100 pt-5">
-          <legend className="text-sm font-semibold text-slate-900">נציג אנושי (לקו הטלפוני, בשלב הבא)</legend>
+          <legend className="text-sm font-semibold text-slate-900">נציג אנושי בקו הטלפוני</legend>
           <label className="block max-w-xs">
             <span className="mb-1.5 block text-sm font-medium text-slate-700">טלפון הנציג</span>
             <input className={input} type="tel" dir="ltr" value={s.agent_phone} onChange={e => setS({ ...s, agent_phone: e.target.value })} />
@@ -589,5 +633,247 @@ function SettingsForm({ settings }: { settings: DistributorSettingsView }) {
         <button type="submit" className={btnPrimary} disabled={busy}>{busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}שמירה</button>
       </form>
     </Card>
+  )
+}
+
+// ─── סעודת ההילולא ───────────────────────────────────────────────────────────
+
+const HILULA_STATUS: Record<HilulaRequestView['status'], { label: string; tone: Tone }> = {
+  pending: { label: 'ממתין', tone: 'amber' },
+  approved: { label: 'אושר', tone: 'green' },
+  rejected: { label: 'נדחה', tone: 'rose' },
+}
+
+function Hilula({ requests, canEdit }: { requests: HilulaRequestView[]; canEdit: boolean }) {
+  const router = useRouter()
+  const [filter, setFilter] = useState<HilulaRequestView['status'] | 'all'>('pending')
+  const [busy, setBusy] = useState<string | null>(null)
+  const [msg, setMsg] = useState<Msg>(null)
+  // הסדר מגיע מהשרת: קודם מפיצים פעילים (קדימות), ואז לפי זמן הבקשה
+  const shown = filter === 'all' ? requests : requests.filter(r => r.status === filter)
+  const sum = (list: HilulaRequestView[]) => list.reduce((s, r) => s + r.guests, 0)
+  const approved = requests.filter(r => r.status === 'approved')
+  const pending = requests.filter(r => r.status === 'pending')
+
+  async function handle(r: HilulaRequestView, status: HilulaRequestView['status']) {
+    setBusy(r.id); setMsg(null)
+    try {
+      await api('/api/admin/gilyonot/distributors/hilula', json('PATCH', { id: r.id, status }))
+      setMsg({ ok: true, text: `הבקשה של ${r.full_name ?? r.phone ?? 'המבקש'} ${status === 'approved' ? 'אושרה' : status === 'rejected' ? 'נדחתה' : 'הוחזרה להמתנה'}` })
+      router.refresh()
+    } catch (e) { setMsg({ ok: false, text: e instanceof Error ? e.message : 'הפעולה נכשלה' }) }
+    finally { setBusy(null) }
+  }
+
+  function exportXlsx() {
+    downloadXlsx({
+      filename: `gilyonot-hilula-${todayStamp()}.xlsx`,
+      sheetName: 'סעודת ההילולא',
+      columns: ['שם', 'טלפון', 'עיר', 'בית כנסת', 'משתתפים', 'מפיץ (קדימות)', 'ערוץ', 'סטטוס', 'תאריך הבקשה'].map(header => ({ header })),
+      rows: shown.map(r => [r.full_name ?? '', r.phone ?? '', r.city ?? '', r.synagogue ?? '', r.guests, r.priority ? 'כן' : 'לא', CHANNEL_LABELS[r.channel], HILULA_STATUS[r.status].label, fmtDate(r.created_at)]),
+    }).catch(e => setMsg({ ok: false, text: e instanceof Error ? e.message : 'הייצוא נכשל' }))
+  }
+
+  const th = 'px-4 py-3 text-start text-xs font-semibold text-slate-500'
+  const filters: { key: typeof filter; label: string }[] = [
+    { key: 'pending', label: `ממתינים (${num(pending.length)})` },
+    { key: 'approved', label: `אושרו (${num(approved.length)})` },
+    { key: 'rejected', label: 'נדחו' },
+    { key: 'all', label: 'הכול' },
+  ]
+
+  return (
+    <div className="space-y-4">
+      <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Stat label="בקשות ממתינות" value={num(pending.length)} />
+        <Stat label="משתתפים בהמתנה" value={num(sum(pending))} />
+        <Stat label="בקשות שאושרו" value={num(approved.length)} />
+        <Stat label="משתתפים שאושרו" value={num(sum(approved))} />
+      </dl>
+      <Card>
+        <Head icon={<UtensilsCrossed className="h-5 w-5" aria-hidden />} title="בקשות להשתתף בסעודת ההילולא"
+          hint="בקשות מהקו הטלפוני וממשק המפיץ. מפיצים פעילים מקבלים קדימות ומופיעים ראשונים." />
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 pb-4">
+          <div className="flex flex-wrap gap-1">
+            {filters.map(f => (
+              <button key={f.key} type="button" aria-pressed={filter === f.key} onClick={() => setFilter(f.key)}
+                className={`min-h-9 rounded-lg px-3 text-sm font-medium ${filter === f.key ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <button type="button" className={btnGhost} disabled={!shown.length} onClick={exportXlsx}><FileUp className="h-4 w-4 rotate-180" aria-hidden />ייצוא לאקסל</button>
+        </div>
+        <div className="px-5"><Notice msg={msg} /></div>
+        {shown.length ? (
+          <div>
+            <table className="w-full text-sm">
+              <thead className="border-y border-slate-100 bg-slate-50/60">
+                <tr><th className={th}>שם</th><th className={`${th} hidden md:table-cell`}>טלפון</th><th className={`${th} hidden lg:table-cell`}>מקום</th><th className={th}>משתתפים</th><th className={`${th} hidden sm:table-cell`}>סטטוס</th><th className={`${th} hidden xl:table-cell`}>תאריך</th>{canEdit && <th className={th}><span className="sr-only">פעולות</span></th>}</tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {shown.map(r => (
+                  <tr key={r.id} className="align-top">
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium text-slate-900">{r.full_name ?? '—'}</span>
+                        {r.priority && <Badge tone="navy">מפיץ · קדימות</Badge>}
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500 lg:hidden"><span dir="ltr" className="md:hidden">{r.phone ?? ''}</span> {[r.city, r.synagogue].filter(Boolean).join(' · ')}</p>
+                      {r.details && <p className="mt-1 text-xs text-slate-500">{r.details}</p>}
+                    </td>
+                    <td className="hidden px-4 py-3 tabular-nums text-slate-700 md:table-cell" dir="ltr">{r.phone ?? '—'}</td>
+                    <td className="hidden px-4 py-3 text-slate-700 lg:table-cell">{[r.city, r.synagogue].filter(Boolean).join(' · ') || '—'}</td>
+                    <td className="px-4 py-3 font-semibold tabular-nums text-slate-900">{num(r.guests)}</td>
+                    <td className="hidden px-4 py-3 sm:table-cell"><Badge tone={HILULA_STATUS[r.status].tone}>{HILULA_STATUS[r.status].label}</Badge></td>
+                    <td className="hidden px-4 py-3 text-xs text-slate-500 xl:table-cell">{fmtDate(r.created_at)}<br />{CHANNEL_LABELS[r.channel]}</td>
+                    {canEdit && (
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-2">
+                          {r.status === 'pending' ? (<>
+                            <button type="button" className={btnPrimary} disabled={!!busy} onClick={() => handle(r, 'approved')}>
+                              {busy === r.id ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Check className="h-4 w-4" aria-hidden />}אישור
+                            </button>
+                            <button type="button" className={btnGhost} disabled={!!busy} onClick={() => handle(r, 'rejected')}>דחייה</button>
+                          </>) : (
+                            <button type="button" className={btnGhost} disabled={!!busy} onClick={() => handle(r, 'pending')}><Undo2 className="h-4 w-4" aria-hidden />החזרה להמתנה</button>
+                          )}
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : <p className="p-10 text-center text-sm text-slate-500">אין בקשות</p>}
+      </Card>
+    </div>
+  )
+}
+
+// ─── נרשמים מנדרים פלוס ──────────────────────────────────────────────────────
+
+const NEDARIM_FIELDS: { key: Exclude<keyof DistNedarimView['config'], 'tofesId'>; label: string; required?: boolean }[] = [
+  { key: 'nameField', label: 'שם', required: true },
+  { key: 'phoneField', label: 'טלפון', required: true },
+  { key: 'synagogueField', label: 'בית כנסת', required: true },
+  { key: 'cityField', label: 'עיר' },
+  { key: 'addressField', label: 'כתובת למשלוח' },
+  { key: 'quantityField', label: 'כמות גיליונות' },
+  { key: 'emailField', label: 'מייל' },
+]
+
+function NedarimApplications({ applications, view }: { applications: DistributorApplicationView[]; view: DistNedarimView }) {
+  const router = useRouter()
+  const [busy, setBusy] = useState<string | null>(null)
+  const [msg, setMsg] = useState<Msg>(null)
+  const [cfg, setCfg] = useState(view.config)
+  const [sample, setSample] = useState<Record<string, string>[] | null>(null)
+
+  async function run(key: string, fn: () => Promise<string>) {
+    setBusy(key); setMsg(null)
+    try { setMsg({ ok: true, text: await fn() }); router.refresh() }
+    catch (e) { setMsg({ ok: false, text: e instanceof Error ? e.message : 'הפעולה נכשלה' }) }
+    finally { setBusy(null) }
+  }
+
+  const handle = (a: DistributorApplicationView, status: 'approved' | 'dismissed') => run(a.id, async () => {
+    await api('/api/admin/gilyonot/distributors/applications', json('PATCH', { id: a.id, status }))
+    return status === 'approved' ? `${a.full_name} נוסף כמפיץ` : 'הבקשה נדחתה'
+  })
+  const save = (e: React.FormEvent) => { e.preventDefault(); void run('save', async () => { await api('/api/admin/gilyonot/distributors/nedarim', json('POST', { mode: 'save', ...cfg })); return 'ההגדרות נשמרו' }) }
+  const loadSample = () => run('sample', async () => {
+    const res = await api('/api/admin/gilyonot/distributors/nedarim', json('POST', { mode: 'sample' }))
+    setSample(Array.isArray(res.rows) ? res.rows as Record<string, string>[] : [])
+    return 'אלה הרשומות האחרונות בטופס. בחרו מהן את שמות העמודות.'
+  })
+  const pull = () => run('pull', async () => {
+    const res = await api('/api/admin/gilyonot/distributors/nedarim', json('POST', { mode: 'pull' }))
+    return `נוספו ${num(Number(res.added) || 0)} מפיצים, ${num(Number(res.held) || 0)} ממתינים לבדיקה, ${num(Number(res.exists) || 0)} כבר רשומים`
+  })
+
+  const columns = sample?.length ? Object.keys(sample[0]) : []
+  const st = view.state
+
+  return (
+    <div className="space-y-6">
+      <Notice msg={msg} />
+      <Card>
+        <Head icon={<UserPlus className="h-5 w-5" aria-hidden />} title="ממתינים לבדיקה"
+          hint="נרשמים מהטופס בנדרים פלוס שלא נכנסו אוטומטית: יש כבר מפיץ בבית הכנסת, או שחסר פרט חובה. מי שאין לו מפיץ בבית הכנסת נכנס לבד." />
+        {applications.length ? (
+          <ul className="divide-y divide-slate-100">
+            {applications.map(a => (
+              <li key={a.id} className="flex flex-wrap items-start gap-3 px-5 py-4">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone={a.reason === 'synagogue_taken' ? 'amber' : 'rose'}>{a.reason_label}</Badge>
+                    <span className="font-medium text-slate-900">{a.full_name ?? 'ללא שם'}</span>
+                    {a.phone && <span className="text-sm tabular-nums text-slate-600" dir="ltr">{a.phone}</span>}
+                  </div>
+                  <p className="mt-1.5 text-sm text-slate-700">
+                    {[a.city, a.synagogue, a.address].filter(Boolean).join(' · ') || '—'}
+                    {a.quantity !== null && <> · {num(a.quantity)} גיליונות</>}
+                  </p>
+                  {a.conflict_name && <p className="mt-1 text-sm text-amber-800">המפיץ הקיים בבית הכנסת: {a.conflict_name}</p>}
+                  <p className="mt-1 text-xs text-slate-500">{fmtDate(a.created_at)}{a.email && <> · <span dir="ltr">{a.email}</span></>}</p>
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" className={btnPrimary} disabled={!!busy || !a.full_name} onClick={() => handle(a, 'approved')}>
+                    {busy === a.id ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Plus className="h-4 w-4" aria-hidden />}הוספה כמפיץ
+                  </button>
+                  <button type="button" className={btnGhost} disabled={!!busy} onClick={() => handle(a, 'dismissed')}>דחייה</button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : <p className="p-10 text-center text-sm text-slate-500">אין נרשמים שממתינים לבדיקה</p>}
+      </Card>
+
+      <Card>
+        <Head icon={<Settings className="h-5 w-5" aria-hidden />} title="טופס המפיצים בנדרים פלוס"
+          hint="המערכת בודקת את הטופס כל שעה. מספר המוסד והמפתח משותפים למשיכת הנרשמים לגיליונות (לשונית נדרים פלוס)." />
+        <div className="space-y-5 px-5 pb-5">
+          {!view.connected && <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">עדיין לא הוגדרו מספר מוסד ומפתח. הגדירו אותם קודם בלשונית ״נדרים פלוס״.</p>}
+          <p className="text-sm text-slate-600">
+            ריצה אחרונה: {fmtDate(st.lastRunAt)}
+            {st.lastRunAt && <> · נוספו {num(st.lastAdded)} · לבדיקה {num(st.lastHeld)}</>}
+          </p>
+          {st.lastError && <p className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-800">{st.lastError}</p>}
+          <form className="space-y-4" onSubmit={save}>
+            <label className="block max-w-xs">
+              <span className="mb-1.5 block text-sm font-medium text-slate-700">מספר הטופס בנדרים</span>
+              <input className={input} dir="ltr" inputMode="numeric" value={cfg.tofesId} onChange={e => setCfg({ ...cfg, tofesId: e.target.value })} required />
+            </label>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {NEDARIM_FIELDS.map(f => (
+                <label key={f.key} className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-slate-700">עמודת {f.label}{f.required && <span className="text-rose-600"> *</span>}</span>
+                  <input className={input} list="dist-nedarim-columns" value={cfg[f.key]} required={f.required} onChange={e => setCfg({ ...cfg, [f.key]: e.target.value })} />
+                </label>
+              ))}
+            </div>
+            <datalist id="dist-nedarim-columns">{columns.map(c => <option key={c} value={c} />)}</datalist>
+            <div className="flex flex-wrap gap-2">
+              <button type="submit" className={btnPrimary} disabled={!!busy}>{busy === 'save' && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}שמירה</button>
+              <button type="button" className={btnGhost} disabled={!!busy || !view.connected || !view.config.tofesId} onClick={loadSample}>{busy === 'sample' && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}הצגת רשומות לדוגמה</button>
+              <button type="button" className={btnGhost} disabled={!!busy || !view.connected || !view.config.tofesId} onClick={pull}>{busy === 'pull' && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}בדיקה עכשיו</button>
+            </div>
+          </form>
+          {sample && (sample.length ? (
+            <ul className="space-y-2">
+              {sample.map((r, i) => (
+                <li key={i} className="rounded-lg border border-slate-200 p-3">
+                  <dl className="grid gap-x-4 gap-y-1 text-xs sm:grid-cols-2 lg:grid-cols-3">
+                    {columns.map(c => <div key={c} className="flex min-w-0 gap-2"><dt className="shrink-0 font-semibold text-slate-600" dir="ltr">{c}</dt><dd className="min-w-0 break-words text-slate-700">{r[c] || '—'}</dd></div>)}
+                  </dl>
+                </li>
+              ))}
+            </ul>
+          ) : <p className="text-sm text-slate-500">אין עדיין רשומות בטופס</p>)}
+        </div>
+      </Card>
+    </div>
   )
 }
