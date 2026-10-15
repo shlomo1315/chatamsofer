@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getServiceClient } from './apiAuth'
 import { nedarimFetch } from './nedarimFetch'
+import { detectColumns } from './gilyonotDetect'
 import { normalizeEmail, cleanSubscriberName, subscribeGilyonot } from './gilyonot'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -63,7 +64,7 @@ export function validateConfig(c: NedarimPullConfig): string | null {
   return null
 }
 
-export const isReady = (c: NedarimPullConfig) => !!(c.mosadId && c.apiKey && c.tofesId && c.emailField)
+export const isReady = (c: NedarimPullConfig) => !!(c.mosadId && c.apiKey && c.tofesId)
 
 // ── הקריאה לנדרים ──
 /** GetJsonParam: מבקשים רק את העמודות שממופות, כל אחת בשמה. */
@@ -189,6 +190,15 @@ async function doPull(dbArg?: SupabaseClient): Promise<PullResult> {
   if (!db) return { ...out, ok: false, error: 'השרת אינו מוגדר' }
   const c = await getPullConfig(db)
   if (!isReady(c)) return { ...out, ok: false, skipped: 'not_configured' }
+  if (!c.emailField) {
+    const sample = await fetchRows(c, SAMPLE_FIELDS, { lastId: 0, max: 30, desc: true })
+    if (!sample.ok) return { ...out, ok: false, error: sample.error }
+    const d = detectColumns(sample.rows)
+    if (!d.emailField) return { ...out, ok: false, error: 'לא נמצאה בטופס עמודה עם כתובות מייל. בחרו עמודה ידנית' }
+    c.emailField = d.emailField
+    if (!c.nameField) c.nameField = d.nameField
+    await writeJson(db, CONFIG_KEY, c)
+  }
   const state = await getPullState(db)
   out.lastId = state.lastId
   const fields = [c.emailField, c.nameField, c.consentField].filter(Boolean)
