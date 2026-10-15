@@ -323,7 +323,9 @@ export function planBookletWrite(existing: ExistingDistributor[], rows: BookletR
   const updates: { id: string; name: string; patch: Partial<DistributorFields> }[] = []
   let unchanged = 0
 
-  for (const { line: _line, ...r } of rows) {
+  for (const row of rows) {
+    const r: DistributorFields = { ...row }
+    delete (r as Partial<BookletRow>).line
     let e = byKey.get(`${r.phone}|${nameKey(r.full_name)}`)
     if (!e && filePhones.get(r.phone!) === 1) e = byPhone.get(r.phone!)
     if (!e || used.has(e.id)) { inserts.push(r); continue }

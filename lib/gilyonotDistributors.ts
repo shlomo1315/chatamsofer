@@ -264,16 +264,17 @@ export function parseDistributorTable(table: string[][]): ImportResult {
 }
 
 // ── סיכום: כמה גיליונות בכל עיר ──
-export interface CitySummary { city: string; distributors: number; quantity: number }
+export interface CitySummary { city: string; distributors: number; quantity: number; routed: number }
 export const NO_CITY = 'ללא עיר'
 
-export function summarizeByCity(list: { city: string | null; quantity: number; status: DistributorStatus }[]): CitySummary[] {
+export function summarizeByCity(list: { city: string | null; quantity: number; status: DistributorStatus; route?: number | null }[]): CitySummary[] {
   const by = new Map<string, CitySummary>()
   for (const d of list) {
     if (d.status !== 'active') continue
     const city = d.city || NO_CITY
-    const s = by.get(city) ?? { city, distributors: 0, quantity: 0 }
+    const s = by.get(city) ?? { city, distributors: 0, quantity: 0, routed: 0 }
     s.distributors++
+    if (d.route) s.routed++
     s.quantity += d.quantity
     by.set(city, s)
   }

@@ -85,7 +85,7 @@ async function loadDistributors(db: NonNullable<ReturnType<typeof getServiceClie
   const rows: DistributorView[] = []
   for (let offset = 0; ; offset += PAGE) {
     const { data, error } = await db.from('gilyonot_distributors').select(DISTRIBUTOR_COLS)
-      .order('city').order('full_name').range(offset, offset + PAGE - 1)
+      .order('city').order('route', { nullsFirst: false }).order('full_name').range(offset, offset + PAGE - 1)
     if (error) throw error
     rows.push(...((data ?? []) as unknown as DistributorView[]))
     if (!data || data.length < PAGE) break

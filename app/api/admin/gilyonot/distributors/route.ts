@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
-import { MAX_IMPORT_FILE_BYTES, decodeTextFile, importFileKind, xlsxToImportText } from '@/lib/gilyonotImportFile'
+import { MAX_IMPORT_FILE_BYTES, decodeTextFile, importFileKind, xlsxToImportText, xlsxToSheets } from '@/lib/gilyonotImportFile'
+import { buildBookletImport, planBookletWrite, type ExistingDistributor, type Sheet } from '@/lib/gilyonotDistributorBooklet'
 import { MAX_IMPORT_DISTRIBUTORS, cleanText, parseCsv, parseDistributorTable, validateDistributor, type DistributorFields } from '@/lib/gilyonotDistributors'
 import { DISTRIBUTOR_COLS } from '@/lib/gilyonotDistributorServer'
 
@@ -18,8 +19,7 @@ const dupKey = (r: { full_name: string; phone: string | null; city: string | nul
   r.phone ? `p:${r.phone}|${r.synagogue ?? ''}` : `n:${r.full_name}|${r.city ?? ''}`
 
 // קובץ שהועלה (multipart, שדה file) → { mode: 'import', text }. שורת הכותרות נשמרת: לפיה מזהים עמודות.
-async function fileBody(request: Request): Promise<Record<string, unknown> | NextResponse> {
-  const form = await request.formData().catch(() => null)
+async function fileBody(form: FormData | null): Promise<Record<string, unknown> | NextResponse> {
   const file = form?.get('file')
   if (!(file instanceof File)) return NextResponse.json({ error: 'לא נבחר קובץ' }, { status: 400 })
   const kind = importFileKind(file.name)
@@ -33,14 +33,74 @@ async function fileBody(request: Request): Promise<Record<string, unknown> | Nex
   }
 }
 
-// POST { mode: 'add', ...שדות } | { mode: 'import', text } | multipart עם קובץ (file)
+// קובץ אחד מתוך הטופס → גיליונות (xlsx: כל הגיליונות, CSV: גיליון אחד בשם הקובץ)
+async function readSheets(form: FormData, field: string): Promise<Sheet[] | string | null> {
+  const file = form.get(field)
+  if (!(file instanceof File) || !file.size) return null
+  const kind = importFileKind(file.name)
+  if (!kind) return 'אפשר להעלות קובץ Excel (xlsx) או CSV'
+  if (file.size > MAX_IMPORT_FILE_BYTES) return 'הקובץ גדול מדי (עד 5MB)'
+  const buf = await file.arrayBuffer()
+  try {
+    return kind === 'xlsx' ? await xlsxToSheets(buf) : [{ name: file.name.replace(/\.[^.]+$/, ''), rows: parseCsv(decodeTextFile(buf)) }]
+  } catch {
+    return `לא הצלחנו לקרוא את ${file.name}. שמרו אותו כ-xlsx או CSV ונסו שוב.`
+  }
+}
+
+// חוברת ההרשמה + קובץ המסלולים (multipart: booklet, routes, commit).
+// בלי commit — תצוגה מקדימה בלבד, שום דבר לא נכתב. עם commit=1 — חדשים נכנסים, וקיימים מקבלים מסלול ושדות שהיו ריקים.
+async function bookletImport(form: FormData, db: NonNullable<ReturnType<typeof getServiceClient>>, userId: string) {
+  const booklet = await readSheets(form, 'booklet')
+  if (!booklet) return NextResponse.json({ error: 'בחרו את קובץ החוברת' }, { status: 400 })
+  if (typeof booklet === 'string') return NextResponse.json({ error: booklet }, { status: 400 })
+  const routes = await readSheets(form, 'routes')
+  if (typeof routes === 'string') return NextResponse.json({ error: routes }, { status: 400 })
+  const first = booklet.find(s => s.rows.length > 1)
+  if (!first) return NextResponse.json({ error: 'קובץ החוברת ריק' }, { status: 400 })
+  const built = buildBookletImport(first.rows, routes ?? [])
+  if (built.error) return NextResponse.json({ error: built.error }, { status: 400 })
+  if (built.rows.length > MAX_IMPORT_DISTRIBUTORS) return NextResponse.json({ error: `אפשר לייבא עד ${MAX_IMPORT_DISTRIBUTORS.toLocaleString('he-IL')} מפיצים בפעם אחת` }, { status: 400 })
+
+  const existing: ExistingDistributor[] = []
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await db.from('gilyonot_distributors')
+      .select('id, full_name, phone, phone2, email, id_number, city, address, synagogue, quantity, route, notes').order('id').range(offset, offset + 999)
+    if (error) return NextResponse.json({ error: 'טעינת המפיצים הקיימים נכשלה. ייתכן שהמיגרציה 20261020_gilyonot_distributors_route.sql עוד לא הורצה.' }, { status: 500 })
+    existing.push(...((data ?? []) as ExistingDistributor[]))
+    if ((data ?? []).length < 1000) break
+  }
+  const plan = planBookletWrite(existing, built.rows)
+  const summary = { report: built.report, inserts: plan.inserts.length, updates: plan.updates.length, unchanged: plan.unchanged }
+  if (form.get('commit') !== '1') return NextResponse.json({ ok: true, preview: true, ...summary })
+
+  for (let i = 0; i < plan.inserts.length; i += CHUNK) {
+    const { error } = await db.from('gilyonot_distributors').insert(plan.inserts.slice(i, i + CHUNK).map(r => ({ ...r, source: 'import' })))
+    if (error) return NextResponse.json({ error: `הייבוא נעצר אחרי ${i} מפיצים חדשים. אפשר להריץ שוב: מי שכבר נכנס לא יוכפל.` }, { status: 500 })
+  }
+  let updated = 0
+  for (const u of plan.updates) {
+    const { error } = await db.from('gilyonot_distributors').update({ ...u.patch, updated_at: new Date().toISOString() }).eq('id', u.id)
+    if (error) return NextResponse.json({ error: `העדכון נעצר אחרי ${updated} מפיצים קיימים (${u.name}). אפשר להריץ שוב.`, added: plan.inserts.length, updated }, { status: 500 })
+    updated++
+  }
+  const r = built.report
+  await logActivity(db, { userId, action: 'gilyonot_distributor_booklet_import', entityType: 'gilyonot_distributor', details: {
+    added: plan.inserts.length, updated, unchanged: plan.unchanged, registrations: r.registrations, skipped: r.skipped.length, withRoute: r.withRoute, routeUnmatched: r.route.unmatched.length,
+  } })
+  return NextResponse.json({ ok: true, preview: false, ...summary, added: plan.inserts.length, updated })
+}
+
+// POST { mode: 'add', ...שדות } | { mode: 'import', text } | multipart עם קובץ (file) | multipart mode=booklet
 export async function POST(request: Request) {
   const staff = await requirePermission('gilyonot', 'edit')
   if (!staff) return forbidden()
   const db = getServiceClient()
   if (!db) return serverMisconfigured()
   const isFile = (request.headers.get('content-type') ?? '').startsWith('multipart/form-data')
-  const body = isFile ? await fileBody(request) : await request.json().catch(() => null) as Record<string, unknown> | null
+  const form = isFile ? await request.formData().catch(() => null) : null
+  if (form?.get('mode') === 'booklet') return bookletImport(form, db, staff.userId)
+  const body = isFile ? await fileBody(form) : await request.json().catch(() => null) as Record<string, unknown> | null
   if (body instanceof NextResponse) return body
   if (!body || typeof body !== 'object') return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 })
 
