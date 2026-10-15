@@ -190,6 +190,13 @@ export interface MaternityAid {
   weekly_amount: number
   total_weeks: number
   recovery_home?: string
+  // בית החלמה חריג (אישור מנהל, תשלום לפי קבלה) — ראו מיגרציה 20261017
+  recovery_exception?: boolean
+  recovery_exception_note?: string | null
+  recovery_exception_receipt_path?: string | null
+  recovery_exception_receipt_name?: string | null
+  recovery_exception_by?: string | null
+  recovery_exception_at?: string | null
   recovery_from?: string
   recovery_to?: string
   // בחירת ההטבות של היולדת — כרטיס מזון ו/או בית החלמה. ברירת מחדל true
