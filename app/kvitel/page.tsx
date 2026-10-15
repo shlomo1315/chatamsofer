@@ -15,7 +15,7 @@ export default function Page() {
         <header className="mb-4 text-center">
           <Image
             src="/logo-heichal-bw.png" alt="היכל החתם סופר"
-            width={620} height={622} priority className="mx-auto mb-2 h-auto w-20 mix-blend-multiply"
+            width={900} height={903} priority className="mx-auto mb-2 h-auto w-20 mix-blend-multiply"
           />
           <h1 className="text-2xl font-bold leading-snug" style={{ color: '#1B3256' }}>
             קוויטל לציון רבינו הקדוש

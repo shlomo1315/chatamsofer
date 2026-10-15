@@ -167,7 +167,10 @@ export default function KvitelClient({ rows, filters, canEdit }: { rows: KvitelR
       <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} rows={exportRows} exportHref={exportHref} canEdit={canEdit}
         onDone={m => { setExportOpen(false); setMessage(m); setSelected(new Set()); router.refresh() }} />
       <KvitelPreview open={!!previewRow} onClose={() => setPreviewRow(null)} lines={previewRow ? kvitelRequestLines(previewRow) : []}
-        title={previewRow?.contact_name ? `הבקשה של ${previewRow.contact_name} בקובץ` : 'הבקשה בקובץ'} />
+        title={previewRow?.contact_name ? `הבקשה של ${previewRow.contact_name} בקובץ` : 'הבקשה בקובץ'}
+        downloadHref={previewRow && (previewRow.status === 'pending' || previewRow.status === 'done')
+          ? `/api/admin/kvitel/export?status=all&ids=${previewRow.id}` : undefined}
+        downloadNote="אפשר להוריד את הקובץ אחרי שהבקשה מאושרת." />
 
       {rows.length === 0 ? (
         <p className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500">אין בקשות בסינון הזה.</p>

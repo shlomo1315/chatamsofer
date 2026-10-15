@@ -15,7 +15,7 @@ export default function Page() {
         <header className="mb-8 text-center">
           <Image
             src="/logo-heichal-bw.png" alt="היכל החתם סופר"
-            width={620} height={622} priority className="mx-auto mb-5 h-auto w-24 mix-blend-multiply"
+            width={900} height={903} priority className="mx-auto mb-5 h-auto w-24 mix-blend-multiply"
           />
           <p className="text-sm font-medium text-slate-600">גיליונות החתם סופר</p>
           <h1 className="mt-2 text-2xl font-bold leading-snug" style={{ color: '#1B3256' }}>

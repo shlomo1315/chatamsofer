@@ -5,7 +5,7 @@ import { Eye, FileDown, List, Loader2 } from 'lucide-react'
 import Modal from '@/components/ui/Modal'
 import { formatLine } from '@/lib/kvitel'
 import { kvitelExportLines, type KvitelRequestRow } from '@/lib/kvitelQuery'
-import { KvitelSheet } from './KvitelPreview'
+import { KvitelSheet, downloadKvitel } from './KvitelPreview'
 
 // חלונית הייצוא: סיכום של מה שנכנס לקובץ, וסימון "נשלח לציון" לכל בקשה.
 // אחרי "ייצוא" — הקובץ יורד, והבקשות שסומנו עוברות ל"נשלח לציון" (done).
@@ -13,13 +13,6 @@ import { KvitelSheet } from './KvitelPreview'
 // ⚠️ "לבדיקה" לא נכנס לקובץ (כמו בשרת, kvitelExportLines) — רק מוצג כמה נשארו בחוץ.
 
 const dateFmt = new Intl.DateTimeFormat('he-IL', { timeZone: 'Asia/Jerusalem', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })
-
-function fileNameFrom(res: Response): string {
-  const cd = res.headers.get('Content-Disposition') ?? ''
-  const utf = /filename\*=UTF-8''([^;]+)/i.exec(cd)
-  if (utf) return decodeURIComponent(utf[1])
-  return /filename="([^"]+)"/i.exec(cd)?.[1] ?? 'kvitel.docx'
-}
 
 export default function ExportDialog({ open, onClose, rows, exportHref, canEdit, onDone }: {
   open: boolean
@@ -59,16 +52,8 @@ export default function ExportDialog({ open, onClose, rows, exportHref, canEdit,
     setBusy(true)
     setError('')
     try {
-      const res = await fetch(exportHref)
-      if (!res.ok) { setError((await res.json().catch(() => ({}))).error || 'הייצוא נכשל'); return }
-      const url = URL.createObjectURL(await res.blob())
-      const a = document.createElement('a')
-      a.href = url
-      a.download = fileNameFrom(res)
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      setTimeout(() => URL.revokeObjectURL(url), 10_000)
+      const failed = await downloadKvitel(exportHref)
+      if (failed) { setError(failed); return }
 
       const ids = [...marked]
       if (ids.length) {
@@ -129,7 +114,7 @@ export default function ExportDialog({ open, onClose, rows, exportHref, canEdit,
         {!exportable.length ? (
           <p className="py-6 text-center text-slate-500">אין שמות מאושרים לייצוא בסינון הזה.</p>
         ) : preview ? (
-          <KvitelSheet lines={previewLines} />
+          <KvitelSheet lines={previewLines} downloadHref={exportHref} />
         ) : (
           <>
             {canEdit && markable.length > 0 && (

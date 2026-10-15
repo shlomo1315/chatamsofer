@@ -46,5 +46,5 @@ export function kvitelDocLayout(lines: string[], date: Date): KvitelDocLayout {
   }
 }
 
-// הלוגו — אותו לוגו כמו בטופס הציבורי (app/kvitel/page.tsx). רוחב/גובה לשמירת היחס.
-export const KVITEL_LOGO = { file: 'logo-heichal-bw.png', width: 3104, height: 3114 }
+// הלוגו בשחור-לבן — אותו לוגו כמו בטופס הציבורי (app/kvitel/page.tsx). רוחב/גובה לשמירת היחס.
+export const KVITEL_LOGO = { file: 'logo-heichal-bw.png', width: 900, height: 903 }
