@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import {
-  Bar, BarChart, CartesianGrid, Cell, ComposedChart, Legend, Line, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  Bar, BarChart, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
 import { AlertTriangle, BarChart3, CheckCircle2, ChevronLeft, PieChart as PieIcon, Route, TrendingUp } from 'lucide-react'
 import {
@@ -120,7 +120,7 @@ export function DistributorDashboard({ dash, city, onCity, issue, onIssue, pendi
             </ResponsiveContainer>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 px-5 pb-4">
-            <span className="flex gap-3 text-xs text-slate-600"><Dot color={OK} />במסלול<Dot color={WARN} />בלי מסלול</span>
+            <span className="flex gap-3 text-xs text-slate-600"><span className="flex items-center gap-1.5"><Dot color={OK} />במסלול</span><span className="flex items-center gap-1.5"><Dot color={WARN} />בלי מסלול</span></span>
             {more}
           </div>
         </Card>
@@ -132,7 +132,7 @@ export function DistributorDashboard({ dash, city, onCity, issue, onIssue, pendi
           <div className="relative" dir="ltr">
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
-                <Pie data={dash.status} dataKey="value" nameKey="label" innerRadius={62} outerRadius={88} paddingAngle={2} stroke="none" startAngle={90} endAngle={-270}>
+                <Pie isAnimationActive={false} data={dash.status} dataKey="value" nameKey="label" innerRadius={62} outerRadius={88} paddingAngle={2} stroke="none" startAngle={90} endAngle={-270}>
                   {dash.status.map(s => <Cell key={s.key} fill={s.key === 'routed' ? OK : s.key === 'unrouted' ? WARN : '#94a3b8'} />)}
                 </Pie>
                 <Tooltip formatter={(v: unknown, n: unknown) => [num(Number(v)), String(n)]} />
@@ -157,7 +157,7 @@ export function DistributorDashboard({ dash, city, onCity, issue, onIssue, pendi
           <div className="p-5 pb-2">
             <CardHeader icon={<TrendingUp className="h-5 w-5" aria-hidden />} title="מגמה לפי חודש" hint="הצטרפו, הוסרו, וכמה פעילים בסוף כל חודש" />
           </div>
-          <div className="px-2 pb-4" dir="ltr">
+          <div className="px-2" dir="ltr">
             <ResponsiveContainer width="100%" height={260}>
               <ComposedChart data={dash.trend.map(t => ({ ...t, label: monthLabel(t.month) }))} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
                 <CartesianGrid vertical={false} stroke={GRID} />
@@ -165,12 +165,16 @@ export function DistributorDashboard({ dash, city, onCity, issue, onIssue, pendi
                 <YAxis yAxisId="n" orientation="right" tick={TICK} tickFormatter={num} axisLine={false} tickLine={false} width={40} allowDecimals={false} />
                 <YAxis yAxisId="a" orientation="left" hide />
                 <Tooltip formatter={(v: unknown, n: unknown) => [num(Number(v)), String(n)]} />
-                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, direction: 'rtl' }} />
                 <Bar yAxisId="n" dataKey="joined" name="הצטרפו" fill={NAVY} radius={[4, 4, 0, 0]} maxBarSize={28} />
                 <Bar yAxisId="n" dataKey="removed" name="הוסרו" fill={BAD} radius={[4, 4, 0, 0]} maxBarSize={28} />
-                <Line yAxisId="a" dataKey="active" name="פעילים" stroke={OK} strokeWidth={2.5} dot={{ r: 3 }} type="monotone" />
+                <Line isAnimationActive={false} yAxisId="a" dataKey="active" name="פעילים" stroke={OK} strokeWidth={2.5} dot={{ r: 3 }} type="monotone" />
               </ComposedChart>
             </ResponsiveContainer>
+          </div>
+          <div className="flex flex-wrap gap-3 px-5 pb-5 text-xs text-slate-600">
+            <span className="flex items-center gap-1.5"><Dot color={NAVY} />הצטרפו</span>
+            <span className="flex items-center gap-1.5"><Dot color={BAD} />הוסרו</span>
+            <span className="flex items-center gap-1.5"><Dot color={OK} />פעילים</span>
           </div>
         </Card>
       </div>
