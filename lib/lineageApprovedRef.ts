@@ -20,6 +20,28 @@ const TTL_MS = 5 * 60_000
 
 const keyOf = (name: string, generation: number) => `${normalizeName(name)}|${generation}`
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 כינויים מאושרים: אותו אדם שנכתב אחרת בקובץ ובעץ.
+//
+// ⚠️ (15.10, סטפנסקי מאיר 317768463) בקובץ "רבי צבי יהודה קרויס" ובעץ המאושר
+// "רבי צבי הירש יהודה לייב ומרת מרים קרויס" — אותו סבא (אותו אב, אותה אשה).
+// השם בעץ מכיל מילים שאינן בקובץ, ולכן התאמת השמות לא זיהתה אותם, הדור נצבע
+// אדום אצל כל צאצאיו, והבורר הסתיר את הצומת. מוסיפים כאן רק זוגות שהמנהל אישר:
+// התאמה מרחיבה כללית ("צבי" ⊂ "צבי הירש") הייתה מאחדת אנשים שונים.
+// ─────────────────────────────────────────────────────────────────────────────
+const REF_ALIASES: readonly [string, string][] = [
+  ['רבי צבי יהודה קרויס', 'רבי צבי הירש יהודה לייב ומרת מרים קרויס'],
+]
+
+/** האם שני השמות הם כינויים מאושרים של אותו אדם (בכל סדר). */
+export function isApprovedAlias(a: string, b: string): boolean {
+  const na = normalizeName(a), nb = normalizeName(b)
+  return REF_ALIASES.some(([x, y]) => {
+    const nx = normalizeName(x), ny = normalizeName(y)
+    return (na === nx && nb === ny) || (na === ny && nb === nx)
+  })
+}
+
 /**
  * הבודק עצמו — התאמה מלאה, ואם נכשלה: התאמה לפי שם הבעל באותו דור.
  *
@@ -31,7 +53,7 @@ const lookupOf = (keys: Set<string>, rows: { name: string; generation: number }[
   if (h && keys.has(`h:${h}|${gen}`)) return true
   // 🔴 (12.10) אחרי יישור העץ לקובץ, צומת עשוי לשאת את השם *המלא* ("רבי מנחם
   // זאב ומרת רבקה גרוס") כשבקובץ רק "מרת רבקה גרוס". אותו אדם — לא אדום.
-  return rows.some(r => r.generation === gen && samePerson(r.name, name))
+  return rows.some(r => r.generation === gen && (samePerson(r.name, name) || isApprovedAlias(r.name, name)))
 }
 
 /**
@@ -142,7 +164,7 @@ function sameRefName(a: string, b: string): boolean {
   const ka = coupleKey(a)
   if (ka && ka === coupleKey(b)) return true
   // ⚠️ שם מלא מול שם חלקי בקובץ — ראו lookupOf.
-  return samePerson(a, b)
+  return samePerson(a, b) || isApprovedAlias(a, b)
 }
 
 export function buildApprovedRefTree(rows: RefTreeRow[]): ApprovedRefTreeLookup {

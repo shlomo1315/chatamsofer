@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getApprovedRefLookup, invalidateApprovedRef } from './lineageApprovedRef'
+import { getApprovedRefLookup, invalidateApprovedRef, buildApprovedRefTree } from './lineageApprovedRef'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 🔴 "ומרת" מול "ו" — הבאג שחסם אישור יולדות (15.09, לוק אביגיל).
@@ -69,5 +69,35 @@ describe('🔴 התאמה לקובץ המאושר — "ומרת" מול "ו"', (
     invalidateApprovedRef()
     const inRef = await getApprovedRefLookup(fakeDb([]))
     expect(inRef('כל שם', 3)).toBe(true)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 כינוי מאושר (15.10, סטפנסקי מאיר): בקובץ "רבי צבי יהודה קרויס", בעץ
+// "רבי צבי הירש יהודה לייב ומרת מרים קרויס". הדור נצבע אדום והבורר הסתיר אותו.
+// ─────────────────────────────────────────────────────────────────────────────
+const KRAUS_FULL = 'רבי צבי הירש יהודה לייב ומרת מרים קרויס'
+const KRAUS_REF = [
+  { key: 'א', name: 'רבי משה בונים ופרומעט רחל קרויס', generation: 4, parent_key: null },
+  { key: 'ב', name: 'רבי צבי יהודה קרויס', generation: 5, parent_key: 'א' },
+]
+
+describe('🔴 כינוי מאושר — צבי הירש יהודה לייב קרויס', () => {
+  it('הצבע: השם המלא בעץ מתאים לשם שבקובץ (דור 5)', async () => {
+    invalidateApprovedRef()
+    const inRef = await getApprovedRefLookup(fakeDb(KRAUS_REF))
+    expect(inRef(KRAUS_FULL, 5)).toBe(true)
+  })
+
+  it('הבורר: השם המלא מוצע תחת האב הנכון', () => {
+    const tree = buildApprovedRefTree(KRAUS_REF)
+    expect(tree(KRAUS_FULL, 5, 'רבי משה בונים ופרומעט רחל קרויס')).toBe(true)
+  })
+
+  it('הכינוי לא מאחד אנשים אחרים: דור אחר / בן אחר באותו שם משפחה', async () => {
+    invalidateApprovedRef()
+    const inRef = await getApprovedRefLookup(fakeDb(KRAUS_REF))
+    expect(inRef(KRAUS_FULL, 4)).toBe(false)
+    expect(inRef('רבי צבי הירש ומרת מרים קרויס', 5)).toBe(false)
   })
 })
