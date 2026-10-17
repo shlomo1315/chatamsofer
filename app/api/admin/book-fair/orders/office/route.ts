@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
 import { nextOrderNumber } from '@/lib/bookFairCheckout'
 import { signPublicToken } from '@/lib/publicToken'
-import { normalizePhone } from '@/lib/phone'
+import { parseOfficeOrder, type OfficeOrderInput } from '@/lib/bookFairOfficeOrder'
 import { logActivity } from '@/lib/activityLog'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -26,23 +26,10 @@ export async function POST(request: NextRequest) {
   const db = getServiceClient()
   if (!db) return serverMisconfigured()
 
-  const body = await request.json().catch(() => ({})) as {
-    name?: string; phone?: string; email?: string; city_id?: string; address?: string; notes?: string
-  }
-  const name = String(body.name ?? '').trim()
-  const phone = normalizePhone(body.phone)
-  const email = String(body.email ?? '').trim() || null
-  const address = String(body.address ?? '').trim()
-  const cityId = String(body.city_id ?? '').trim()
-  const notes = String(body.notes ?? '').trim() || null
-
-  if (!name) return NextResponse.json({ error: 'חסר שם' }, { status: 400 })
-  if (!phone) return NextResponse.json({ error: 'חסר טלפון' }, { status: 400 })
-  if (!cityId) return NextResponse.json({ error: 'חסרה עיר' }, { status: 400 })
-  if (!address) return NextResponse.json({ error: 'חסרה כתובת' }, { status: 400 })
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return NextResponse.json({ error: 'כתובת המייל אינה תקינה' }, { status: 400 })
-  }
+  const body = await request.json().catch(() => ({})) as OfficeOrderInput
+  const parsed = parseOfficeOrder(body)
+  if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
+  const { name, phone, email, cityId, address, notes } = parsed.value
 
   // ⚠️ העיר מהרשימה הסגורה — אותה רשימה שהמשלוחן עובד לפיה.
   const { data: city } = await db.from('book_fair_cities').select('id').eq('id', cityId).maybeSingle()
