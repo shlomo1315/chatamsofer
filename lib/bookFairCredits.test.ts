@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   parseCreditsTable, validateBank, creditPhoneTurn, buildCreditEmailHtml, amountSpoken, pickPhoneCredit,
-  parseTestSend, TEST_CREDIT,
+  parseTestSend, TEST_CREDIT, normalizeCreditPhone,
   CR_OK, CR_HOLDER, CR_BANK, CR_BRANCH, CR_ACCT, CR_CONFIRM,
 } from './bookFairCredits'
 
@@ -125,5 +125,22 @@ describe('parseTestSend', () => {
   })
   it('נתוני הדוגמה מריצים את פתיחת השיחה', () => {
     expect(creditPhoneTurn({}, TEST_CREDIT).reply).toContain('read=')
+  })
+})
+
+describe('normalizeCreditPhone', () => {
+  it('מחזיר 0 מוביל לכל הצורות', () => {
+    for (const v of [501234567, '501234567', '0501234567', '050-123-4567', '050 123 4567', '972501234567', '+972-50-123-4567', '00972501234567', '501234567.0', 501234567.0]) {
+      expect(normalizeCreditPhone(v)).toBe('0501234567')
+    }
+    expect(normalizeCreditPhone(21234567)).toBe('021234567')
+  })
+  it('דוחה מספר לא תקין', () => {
+    for (const v of ['', '123', '05012345', 'abc', '12345678901']) expect(normalizeCreditPhone(v)).toBeNull()
+  })
+  it('פרסור אקסל קולט טלפון שאיבד 0', () => {
+    const r = parseCreditsTable([head, ['דוד', 501234567, '', 'ספר', 10], ['משה', '521234567', '', 'ספר', 10]])
+    expect(r.errors).toEqual([])
+    expect(r.credits.map(c => c.phone)).toEqual(['0501234567', '0521234567'])
   })
 })

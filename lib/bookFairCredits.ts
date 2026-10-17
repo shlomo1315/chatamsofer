@@ -32,7 +32,7 @@ type Field = keyof typeof HEADER_ALIASES
 const MAX_BOOKS_LEN = 300
 const MAX_AMOUNT_AGOROT = 500_000 // 5,000 ש"ח לזיכוי בודד; מעל זה כנראה טעות בקובץ
 
-const cell = (v: unknown) => String(v ?? '').replace(/[‎‏‪-‮⁦-⁩]/g, '').trim()
+const cell = (v: unknown) => String(v ?? '').replace(/[‏‪-‮⁦-⁩]/g, '').trim()
 
 function fieldOf(header: string): Field | null {
   const h = normalizeHeader(header)
@@ -41,6 +41,15 @@ function fieldOf(header: string): Field | null {
     if (HEADER_ALIASES[f].some(a => normalizeHeader(a) === h)) return f
   }
   return null
+}
+
+/** טלפון מאקסל: מחזיר 0 מוביל שנבלע (מספר או טקסט), ומקבל מקף, רווח, 972 ו-".0" של תא מספרי. */
+export function normalizeCreditPhone(v: unknown): string | null {
+  let d = cell(v).replace(/\.0+$/, '').replace(/\D/g, '')
+  if (d.startsWith('00972')) d = d.slice(5)
+  else if (d.startsWith('972')) d = d.slice(3)
+  if (d && !d.startsWith('0') && (d.length === 8 || d.length === 9)) d = '0' + d
+  return normalizePhone(d)
 }
 
 export function normalizeEmail(v: unknown): string | null {
@@ -76,7 +85,7 @@ export function parseCreditsTable(rows: unknown[][]): {
     const line = i + 1
 
     const rawPhone = get('phone'), rawEmail = get('email')
-    const phone = rawPhone ? normalizePhone(rawPhone) : null
+    const phone = rawPhone ? normalizeCreditPhone(rawPhone) : null
     const email = rawEmail ? normalizeEmail(rawEmail) : null
     if (rawPhone && !phone) { errors.push({ line, message: `טלפון לא תקין: ${rawPhone}` }); continue }
     if (rawEmail && !email) { errors.push({ line, message: `מייל לא תקין: ${rawEmail}` }); continue }
@@ -265,7 +274,7 @@ export function parseTestSend(body: unknown): { email: string | null; phone: str
   if (!rawEmail && !rawPhone) return { error: 'נא להזין מייל או טלפון לבדיקה' }
   const email = rawEmail ? normalizeEmail(rawEmail) : null
   if (rawEmail && !email) return { error: 'כתובת המייל לא תקינה' }
-  const phone = rawPhone ? normalizePhone(rawPhone) : null
+  const phone = rawPhone ? normalizeCreditPhone(rawPhone) : null
   if (rawPhone && !phone) return { error: 'מספר הטלפון לא תקין' }
   return { email, phone }
 }
