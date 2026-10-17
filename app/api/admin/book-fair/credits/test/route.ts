@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
-import { buildCreditEmailHtml, parseTestSend, testSubject, TEST_CALL_ACTION, TEST_CREDIT } from '@/lib/bookFairCredits'
+import {
+  buildCreditEmailHtml, parseTestSend, testSubject, TEST_CALL_ACTION, TEST_CREDIT,
+  TEST_SEND_ACTION, TEST_SEND_WINDOW_MS, TEST_RATE_LIMIT_MESSAGE, isTestSendLimited } from '@/lib/bookFairCredits'
 import { creditCallConfigured, placeCreditCall } from '@/lib/yemotCreditCall'
 import { deliverMail } from '@/lib/sendMail'
 import { logActivity } from '@/lib/activityLog'
@@ -25,6 +27,15 @@ export async function POST(request: NextRequest) {
 
   const input = parseTestSend(await request.json().catch(() => null))
   if ('error' in input) return NextResponse.json({ error: input.error }, { status: 400 })
+
+  // הגבלת קצב לפי משתמש: נספר לפני שליחה בפועל, ונרשם רק כשלא חרגו
+  const since = new Date(Date.now() - TEST_SEND_WINDOW_MS).toISOString()
+  const { count } = await db.from('activity_log').select('id', { count: 'exact', head: true })
+    .eq('user_id', staff.userId).eq('action', TEST_SEND_ACTION).gte('created_at', since)
+  if (isTestSendLimited(count ?? 0)) {
+    return NextResponse.json({ error: TEST_RATE_LIMIT_MESSAGE }, { status: 429 })
+  }
+  await logActivity(db, { userId: staff.userId, action: TEST_SEND_ACTION, entityType: 'book_fair_credits' })
 
   let email: Result | undefined, phone: Result | undefined
   if (input.email) {

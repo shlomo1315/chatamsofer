@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   parseCreditsTable, validateBank, creditPhoneTurn, buildCreditEmailHtml, amountSpoken, pickPhoneCredit, canSaveBank,
-  parseTestSend, TEST_CREDIT, normalizeCreditPhone,
+  parseTestSend, TEST_CREDIT, normalizeCreditPhone, isTestSendLimited,
   CR_OK, CR_HOLDER, CR_BANK, CR_BRANCH, CR_ACCT, CR_CONFIRM,
 } from './bookFairCredits'
 
@@ -150,5 +150,14 @@ describe('canSaveBank', () => {
     expect(canSaveBank('sent')).toBe(true)
     expect(canSaveBank('answered')).toBe(true)
     for (const s of ['pending', 'send_failed', 'details_entered', '']) expect(canSaveBank(s)).toBe(false)
+  })
+})
+
+describe('isTestSendLimited', () => {
+  it('חוסם מהשליחה השישית', () => {
+    expect(isTestSendLimited(0)).toBe(false)
+    expect(isTestSendLimited(4)).toBe(false)
+    expect(isTestSendLimited(5)).toBe(true)
+    expect(isTestSendLimited(9)).toBe(true)
   })
 })

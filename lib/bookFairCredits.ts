@@ -282,3 +282,13 @@ export function parseTestSend(body: unknown): { email: string | null; phone: str
   if (rawPhone && !phone) return { error: 'מספר הטלפון לא תקין' }
   return { email, phone }
 }
+
+// הגבלת קצב לשליחת בדיקה: עד 5 שליחות לכל משתמש בכל 10 דקות (נספרות מ-activity_log)
+export const TEST_SEND_ACTION = 'book_fair_credits_test_send'
+export const TEST_SEND_LIMIT = 5
+export const TEST_SEND_WINDOW_MS = 10 * 60 * 1000
+export const TEST_RATE_LIMIT_MESSAGE = 'שלחת יותר מדי בדיקות, נסה שוב בעוד כמה דקות'
+
+export function isTestSendLimited(recentCount: number): boolean {
+  return recentCount >= TEST_SEND_LIMIT
+}
