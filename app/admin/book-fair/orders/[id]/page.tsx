@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { ilDateTime, ilDate } from '@/lib/israelTime'
 import { notFound } from 'next/navigation'
-import { ArrowRight, PackageX } from 'lucide-react'
+import { ArrowRight, PackageX, BookX } from 'lucide-react'
 import { guardPage } from '@/lib/pageGuard'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import PageHeader from '@/components/ui/PageHeader'
@@ -20,6 +20,10 @@ import {
   ISSUE_TYPE_LABELS, ISSUE_STATUS_LABELS, ISSUE_STATUS_TAG,
   type IssueType, type IssueStatus,
 } from '@/lib/bookFairShippingIssues'
+import { getServiceClient } from '@/lib/apiAuth'
+import { normalizePhone } from '@/lib/kvitel'
+import { refundNote } from '@/lib/bookFairSold'
+import { unsuppliedBooks, CREDIT_STATUS_LABELS, type CreditState, type UnsuppliedCredit } from '@/lib/bookFairUnsupplied'
 
 // כרטיס הזמנה בודדת.
 
@@ -79,6 +83,23 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     .select('id, issue_type, status, description, created_at')
     .eq('order_id', id)
     .order('created_at', { ascending: false })
+
+  // ── ספרים שלא סופקו והאם זוכו ──
+  // ⚠️ book_fair_credits פתוחה ל-service_role בלבד. לא שולפים את עמודות bank_*.
+  const service = getServiceClient()
+  const phone = o.customer_phone ? normalizePhone(o.customer_phone) : null
+  const email = o.customer_email?.trim().toLowerCase() || null
+  const creditCols = 'id, phone, email, books, amount_agorot, status'
+  const [{ data: returns }, { data: byPhone }, { data: byEmail }] = await Promise.all([
+    supabase.from('book_fair_stock_ledger').select('book_id, delta, note')
+      .eq('reason', 'refund').eq('note', refundNote(o.order_number)),
+    service && phone ? service.from('book_fair_credits').select(creditCols).eq('phone', phone) : Promise.resolve({ data: [] }),
+    service && email ? service.from('book_fair_credits').select(creditCols).eq('email', email) : Promise.resolve({ data: [] }),
+  ])
+  const credits = [...new Map([...(byPhone ?? []), ...(byEmail ?? [])].map(c => [c.id, c])).values()] as UnsuppliedCredit[]
+  const unsupplied = unsuppliedBooks(
+    o, (items ?? []) as BookFairOrderItem[], returns ?? [], credits, new Set(Object.keys(problems)),
+  )
 
   return (
     <div className="flex flex-col gap-6">
@@ -165,6 +186,39 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
               </div>
             </dl>
           </section>
+
+          {/* בקשה #60: ספרים שלא סופקו בפועל, והאם בוצע עליהם זיכוי. */}
+          <section className="rounded-2xl border border-slate-200 bg-white p-5">
+            <h2 className="mb-3 flex items-center gap-2 font-semibold text-slate-900">
+              <BookX size={17} /> ספרים שלא סופקו
+            </h2>
+            {unsupplied.lines.length === 0 && unsupplied.otherCredits.length === 0 ? (
+              <p className="text-sm text-slate-500">כל הספרים בהזמנה סופקו.</p>
+            ) : (
+              <ul className="flex flex-col divide-y divide-slate-100 text-sm">
+                {unsupplied.lines.map(l => (
+                  <li key={l.itemId} className="flex items-center justify-between gap-3 py-2.5">
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium text-slate-900" title={l.title}>{l.title}</span>
+                      <span className="text-xs text-slate-500">{l.quantity} עותקים · {l.detail}</span>
+                    </span>
+                    <CreditBadge state={l.state} />
+                  </li>
+                ))}
+                {unsupplied.otherCredits.map(c => (
+                  <li key={c.id} className="flex items-center justify-between gap-3 py-2.5">
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium text-slate-900" title={c.books}>{c.books}</span>
+                      <span className="text-xs text-slate-500">
+                        זיכוי ללקוח {fmtAgorot(c.amount_agorot)} · {CREDIT_STATUS_LABELS[c.status] ?? c.status}
+                      </span>
+                    </span>
+                    <CreditBadge state="in_progress" />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </div>
 
         {/* ── פעולות ── */}
@@ -216,6 +270,17 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       </div>
     </div>
   )
+}
+
+const CREDIT_BADGE: Record<CreditState, [string, string]> = {
+  done: ['זוכה', 'bg-green-50 text-green-800 border-green-200'],
+  in_progress: ['בתהליך זיכוי', 'bg-amber-50 text-amber-800 border-amber-200'],
+  none: ['לא זוכה', 'bg-red-50 text-red-700 border-red-200'],
+}
+
+function CreditBadge({ state }: { state: CreditState }) {
+  const [label, cls] = CREDIT_BADGE[state]
+  return <span className={`flex-shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${cls}`}>{label}</span>
 }
 
 function Row({ label, value, tone }: { label: string; value: string; tone?: 'orange' }) {
