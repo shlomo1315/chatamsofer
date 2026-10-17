@@ -74,8 +74,8 @@ export default function OfficeOrderDialog({ onClose }: { onClose: () => void }) 
             <label className="flex flex-col gap-1 text-sm">שם המקבל *
               <input value={form.name} onChange={set('name')} className={INPUT} required />
             </label>
-            <label className="flex flex-col gap-1 text-sm">טלפון *
-              <input value={form.phone} onChange={set('phone')} className={INPUT} dir="ltr" inputMode="tel" required />
+            <label className="flex flex-col gap-1 text-sm">טלפון{form.email.trim() ? '' : ' *'}
+              <input value={form.phone} onChange={set('phone')} className={INPUT} dir="ltr" inputMode="tel" required={!form.email.trim()} />
             </label>
             <label className="flex flex-col gap-1 text-sm">עיר *
               <select value={form.city_id} onChange={set('city_id')} className={INPUT} required>
@@ -83,7 +83,7 @@ export default function OfficeOrderDialog({ onClose }: { onClose: () => void }) 
                 {cities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </label>
-            <label className="flex flex-col gap-1 text-sm">מייל
+            <label className="flex flex-col gap-1 text-sm">מייל (או טלפון)
               <input value={form.email} onChange={set('email')} className={INPUT} dir="ltr" type="email" />
             </label>
           </div>
