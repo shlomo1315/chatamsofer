@@ -248,3 +248,24 @@ export function buildCreditEmailHtml(opts: { name: string | null; books: string;
 <p style="${p}font-size:14px;color:#64748b;">אנו מתנצלים על אי הנוחות.</p>
 </div>`
 }
+
+// ─── שליחת בדיקה ─────────────────────────────────────────────────────────────
+// המנהל שולח לעצמו מייל ושיחה עם נתוני דוגמה. לא נוגעים ב-book_fair_credits:
+// שיחת בדיקה נרשמת ב-activity_log, והשלוחה מריצה בה את כל השיחה בלי לשמור פרטים.
+
+export const TEST_CALL_ACTION = 'book_fair_credits_test_call'
+export const TEST_CALL_WINDOW_MS = 30 * 60 * 1000
+export const TEST_CREDIT: CreditCallContext = { name: 'לקוח לדוגמה', books: 'ספר לדוגמה', amountAgorot: 4550, alreadyDone: false }
+export const testSubject = `[בדיקה] ${creditSubject}`
+
+export function parseTestSend(body: unknown): { email: string | null; phone: string | null } | { error: string } {
+  const b = (body && typeof body === 'object' ? body : {}) as { email?: unknown; phone?: unknown }
+  const rawEmail = typeof b.email === 'string' ? b.email.trim() : ''
+  const rawPhone = typeof b.phone === 'string' ? b.phone.trim() : ''
+  if (!rawEmail && !rawPhone) return { error: 'נא להזין מייל או טלפון לבדיקה' }
+  const email = rawEmail ? normalizeEmail(rawEmail) : null
+  if (rawEmail && !email) return { error: 'כתובת המייל לא תקינה' }
+  const phone = rawPhone ? normalizePhone(rawPhone) : null
+  if (rawPhone && !phone) return { error: 'מספר הטלפון לא תקין' }
+  return { email, phone }
+}

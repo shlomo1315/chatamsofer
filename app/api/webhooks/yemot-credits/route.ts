@@ -10,7 +10,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { safeEqual } from '@/lib/svix'
 import { normalizePhone } from '@/lib/kvitel'
-import { creditPhoneTurn, pickPhoneCredit, PHONE_OPEN_STATUSES } from '@/lib/bookFairCredits'
+import {
+  creditPhoneTurn, pickPhoneCredit, PHONE_OPEN_STATUSES, TEST_CALL_ACTION, TEST_CALL_WINDOW_MS, TEST_CREDIT,
+} from '@/lib/bookFairCredits'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -49,7 +51,14 @@ async function handle(request: NextRequest) {
     .select('id, customer_name, books, amount_agorot, status')
     .eq('channel', 'phone').eq('phone', phone).order('created_at', { ascending: false }).limit(5)
   const picked = pickPhoneCredit(rows ?? [])
-  if (!picked) return yemotText('id_list_message=t-לא נמצא זיכוי למספר הזה&go_to_folder=hangup')
+  if (!picked) {
+    // שיחת בדיקה של מנהל (נרשמה ב-activity_log בחצי השעה האחרונה): כל השיחה עם נתוני דוגמה, בלי שמירה
+    const { data: test } = await db.from('activity_log').select('id')
+      .eq('action', TEST_CALL_ACTION).contains('details', { phone })
+      .gte('created_at', new Date(Date.now() - TEST_CALL_WINDOW_MS).toISOString()).limit(1)
+    if (test?.length) return yemotText(creditPhoneTurn(params, TEST_CREDIT).reply)
+    return yemotText('id_list_message=t-לא נמצא זיכוי למספר הזה&go_to_folder=hangup')
+  }
 
   const { credit } = picked
   const turn = creditPhoneTurn(params, {
