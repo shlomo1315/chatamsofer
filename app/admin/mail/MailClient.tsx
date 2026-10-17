@@ -1139,7 +1139,7 @@ function MailExtraActions({ msg, folder, labelDefs, onToggleLabel, onCreateLabel
 
 // ─── Main ──────────────────────────────────────────────────────────────────────
 
-export default function MailClient() {
+export default function MailClient({ lockDepartment }: { lockDepartment?: string } = {}) {
   // תיקייה מה-URL (?folder=LEGACY) — כדי שקישור ישיר לארכיון יפתח אותו בפועל.
   // מאומת מול הרשימה המוכרת; ערך זר נופל ל-INBOX.
   const initialFolder = useSearchParams().get('folder') ?? ''
@@ -1170,8 +1170,8 @@ export default function MailClient() {
   const searchRef = useRef('')
   useEffect(() => { searchRef.current = search }, [search])
   const searchParams = useSearchParams()
-  const [activeDepartment, setActiveDepartment] = useState<string | null>(searchParams.get('department'))
-  const activeDepartmentRef = useRef<string | null>(searchParams.get('department'))
+  const [activeDepartment, setActiveDepartment] = useState<string | null>(lockDepartment ?? searchParams.get('department'))
+  const activeDepartmentRef = useRef<string | null>(lockDepartment ?? searchParams.get('department'))
 
   // ספירת מיילים שלא נקראו לפי מחלקה
   const [unreadCounts, setUnreadCounts] = useState<{ byDepartment: Record<string, number>; total: number }>({ byDepartment: {}, total: 0 })
@@ -1379,7 +1379,7 @@ export default function MailClient() {
   // בלי ההשוואה כאן ה-effect כתב את אותו ערך בכל שינוי searchParams,
   // וזה הפעיל את ה-effect של [activeDepartment] שקורא load(folder) —
   // כלומר רינדור נוסף *וטעינת רשת נוספת* על לא כלום.
-  const urlDepartment = searchParams.get('department')
+  const urlDepartment = lockDepartment ?? searchParams.get('department')
   useEffect(() => {
     setActiveDepartment(prev => (prev === urlDepartment ? prev : urlDepartment))
   }, [urlDepartment])
@@ -1527,7 +1527,7 @@ export default function MailClient() {
     ? Object.values(DEPARTMENTS)
     : Object.values(DEPARTMENTS).filter(d => myAllowedKeys.includes(d.key))
   // מציגים בורר תיבות למנהל, או למשתמש מוגבל עם יותר מתיבה אחת
-  const showDeptFilter = myProfile?.role === 'admin' || filterableDepts.length > 1
+  const showDeptFilter = !lockDepartment && (myProfile?.role === 'admin' || filterableDepts.length > 1)
 
   return (
     <div className="flex h-[calc(100vh-120px)] bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
