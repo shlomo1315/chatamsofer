@@ -18,7 +18,39 @@ const shekels = (a: number) => (a / 100).toLocaleString('he-IL', { maximumFracti
 const btn = 'rounded-lg bg-[#1B3256] px-4 py-2 text-sm font-medium text-white disabled:opacity-50'
 const btn2 = 'rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-50'
 
-export default function CreditsClient() {
+interface Bank { holder: string | null; holderRecording: string | null; bank: string | null; branch: string | null; account: string | null }
+
+// פרטי החשבון נטענים מהשרת רק בלחיצה (מנהל בלבד), ונשמרים רק בזיכרון של המסך.
+function BankDetails({ id }: { id: string }) {
+  const [bank, setBank] = useState<Bank | null>(null)
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+  async function show() {
+    setBusy(true); setErr('')
+    const r = await fetch(`/api/admin/book-fair/credits/${id}/bank`, { cache: 'no-store' })
+    const j = await r.json().catch(() => ({}))
+    setBusy(false)
+    if (r.ok) setBank(j); else setErr(j.error ?? 'הטעינה נכשלה')
+  }
+  if (!bank) return (
+    <span className="flex flex-col gap-1">
+      <button className="text-right text-[#1B3256] underline disabled:opacity-50" disabled={busy} onClick={show}>הצג פרטי חשבון</button>
+      {err && <span className="text-xs text-red-700">{err}</span>}
+    </span>
+  )
+  return (
+    <dl className="grid grid-cols-[auto_1fr] gap-x-2 text-xs">
+      <dt className="text-slate-500">בעל החשבון</dt><dd>{bank.holder || (bank.holderRecording ? 'הקלטה (בייצוא)' : '')}</dd>
+      <dt className="text-slate-500">בנק</dt><dd dir="ltr" className="text-right">{bank.bank}</dd>
+      <dt className="text-slate-500">סניף</dt><dd dir="ltr" className="text-right">{bank.branch}</dd>
+      <dt className="text-slate-500">חשבון</dt><dd dir="ltr" className="text-right">{bank.account}</dd>
+      <dd className="col-span-2"><button className="text-slate-600 underline" onClick={() => setBank(null)}>הסתר</button></dd>
+    </dl>
+  )
+}
+
+export default function CreditsClient({ isAdmin = false }: { isAdmin?: boolean }) {
+
   const [credits, setCredits] = useState<Credit[]>([])
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<Preview | null>(null)
@@ -137,7 +169,7 @@ export default function CreditsClient() {
         <p className="text-sm text-slate-600">{Object.entries(STATUS).map(([k, v]) => `${v}: ${counts[k] ?? 0}`).join(' · ')}</p>
         <div className="overflow-auto">
           <table className="w-full text-sm">
-            <thead><tr className="text-right text-slate-500"><th className="p-1"></th><th>לקוח</th><th>ערוץ</th><th>ספרים</th><th>סכום</th><th>סטטוס</th></tr></thead>
+            <thead><tr className="text-right text-slate-500"><th className="p-1"></th><th>לקוח</th><th>ערוץ</th><th>ספרים</th><th>סכום</th><th>סטטוס</th>{isAdmin && <th>פרטי חשבון</th>}</tr></thead>
             <tbody>
               {credits.map(c => (
                 <tr key={c.id} className="border-t border-slate-100">
@@ -146,6 +178,7 @@ export default function CreditsClient() {
                   <td>{c.channel === 'phone' ? 'שיחה' : 'מייל'}</td>
                   <td>{c.books}</td><td>{shekels(c.amount_agorot)}</td>
                   <td>{STATUS[c.status] ?? c.status}{c.send_error ? ` (${c.send_error})` : ''}</td>
+                  {isAdmin && <td>{c.status === 'details_entered' && <BankDetails id={c.id} />}</td>}
                 </tr>
               ))}
             </tbody>

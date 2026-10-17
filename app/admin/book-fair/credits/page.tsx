@@ -7,12 +7,12 @@ import CreditTestSend from './CreditTestSend'
 export const dynamic = 'force-dynamic'
 
 export default async function BookFairCreditsPage() {
-  await guardPage('book_fair')
+  const staff = await guardPage('book_fair')
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="זיכוי על ספרים חסרים" subtitle="העלאת אקסל, שליחה ללקוחות ואיסוף פרטי חשבון" />
       <CreditTestSend />
-      <CreditsClient />
+      <CreditsClient isAdmin={staff.role === 'admin'} />
     </div>
   )
 }

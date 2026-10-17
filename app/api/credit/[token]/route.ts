@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
-import { cleanHolder, validateBank } from '@/lib/bookFairCredits'
+import { cleanHolder, validateBank, BANK_SAVE_STATUSES } from '@/lib/bookFairCredits'
 
 // טופס פרטי חשבון ציבורי בקישור אישי מהמייל. הגישה רק עם הטוקן (48 תווי hex אקראיים),
 // עם הגבלת קצב. לעולם לא מחזיר פרטי בנק, ואינו כותב אותם ללוגים.
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest, { params }: Ctx) {
   if (!data) return NextResponse.json({ error: 'הקישור אינו תקין' }, { status: 404 })
   if (data.status !== 'details_entered' && data.status !== 'answered') {
     await db.from('book_fair_credits').update({ status: 'answered', answered_at: new Date().toISOString() })
-      .eq('token', token).in('status', ['pending', 'sent', 'send_failed'])
+      .eq('token', token).eq('status', 'sent')
   }
   return NextResponse.json({
     name: data.customer_name, books: data.books, amountAgorot: data.amount_agorot, done: data.status === 'details_entered',
@@ -49,12 +49,12 @@ export async function POST(request: NextRequest, { params }: Ctx) {
   const { data, error } = await db.from('book_fair_credits').update({
     status: 'details_entered', details_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     bank_holder: holder, bank_number: bank, bank_branch: branch, bank_account: account,
-  }).eq('token', token).neq('status', 'details_entered').select('id')
+  }).eq('token', token).in('status', [...BANK_SAVE_STATUSES]).select('id')
   if (error) {
     console.error('[credit] שמירה נכשלה', error.code)
     return NextResponse.json({ error: 'השמירה נכשלה, נסו שוב' }, { status: 422 })
   }
-  // ריק = כבר הוזנו פרטים (או שהטוקן לא קיים): לא דורסים פרטים קיימים בקישור.
+  // ריק = כבר הוזנו פרטים, הזיכוי לא נשלח, או שהטוקן לא קיים: לא שומרים ולא דורסים.
   if (!data?.length) return NextResponse.json({ error: 'הפרטים כבר התקבלו, או שהקישור אינו תקין' }, { status: 409 })
   return NextResponse.json({ ok: true }, { headers: NO_STORE })
 }
