@@ -1,12 +1,12 @@
 import { requireStaff } from '@/lib/apiAuth'
 import NoPermission from '@/components/ui/NoPermission'
-import GmailInbox from '@/app/admin/mail/gmail/GmailInbox'
+import MailClient from '@/app/admin/mail/MailClient'
 
-// תיבת yerid@ בתוך היריד.
+// תיבת yerid@ בתוך היריד, נעולה ליריד: בלי בורר תיבות.
 //
-// 🔴 14.10: הלשונית הפנתה למסך הדואר הכללי (/admin/mail), שהתעלם
-// מ-?department=yerid, נפתח על office@ ואפשר לעבור לכל תיבה במערכת.
-// כאן התיבה נעולה ליריד: אין בורר תיבות, והשרת מחזיר רק את yerid.
+// 🔴 18.10: המסך הקודם (GmailInbox) קרא את אינדקס Gmail, ואין בו מיילים של
+// yerid@ כי הם מגיעים דרך Resend ונשמרים ב-inbound_emails / sent_emails.
+// לכן התיבה הייתה ריקה. MailClient קורא את הטבלאות האלה: נכנס ויוצא.
 
 export const dynamic = 'force-dynamic'
 
@@ -14,5 +14,5 @@ export default async function BookFairMailboxPage() {
   if (!(await requireStaff())) {
     return <NoPermission detail="נדרשת הרשאת צוות לצפייה בתיבת הדואר." />
   }
-  return <GmailInbox lockDepartment="yerid" />
+  return <MailClient lockDepartment="yerid" />
 }
