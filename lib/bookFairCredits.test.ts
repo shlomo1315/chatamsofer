@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   parseCreditsTable, validateBank, creditPhoneTurn, buildCreditEmailHtml, amountSpoken, pickPhoneCredit,
+  parseTestSend, TEST_CREDIT,
   CR_OK, CR_HOLDER, CR_BANK, CR_BRANCH, CR_ACCT, CR_CONFIRM,
 } from './bookFairCredits'
 
@@ -107,5 +108,22 @@ describe('pickPhoneCredit', () => {
   })
   it('זיכוי שכבר הוזנו פרטיו מוצג כסגור', () => {
     expect(pickPhoneCredit([{ status: 'details_entered' }, { status: 'pending' }])).toEqual({ credit: { status: 'details_entered' }, open: false })
+  })
+})
+
+describe('parseTestSend', () => {
+  it('מקבל מייל וטלפון ומנרמל אותם', () => {
+    expect(parseTestSend({ email: ' A@B.co ', phone: '050-123-4567' })).toEqual({ email: 'a@b.co', phone: '0501234567' })
+    expect(parseTestSend({ phone: '+972501234567' })).toEqual({ email: null, phone: '0501234567' })
+    expect(parseTestSend({ email: 'a@b.co' })).toEqual({ email: 'a@b.co', phone: null })
+  })
+  it('דוחה קלט ריק או לא תקין', () => {
+    expect(parseTestSend(null)).toHaveProperty('error')
+    expect(parseTestSend({ email: '', phone: '' })).toHaveProperty('error')
+    expect(parseTestSend({ email: 'bad' })).toHaveProperty('error')
+    expect(parseTestSend({ email: 'a@b.co', phone: '123' })).toHaveProperty('error')
+  })
+  it('נתוני הדוגמה מריצים את פתיחת השיחה', () => {
+    expect(creditPhoneTurn({}, TEST_CREDIT).reply).toContain('read=')
   })
 })
