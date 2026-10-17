@@ -182,6 +182,10 @@ const digits = (v: string | undefined) => (v ?? '').replace(/\D/g, '')
 // זיכוי שעוד לא נשלח (או שהשליחה נכשלה) לא נפתח, כדי שמי שמתחזה למספר לא יקדים את הלקוח.
 export const PHONE_OPEN_STATUSES = ['sent', 'answered'] as const
 
+// פרטי בנק נשמרים רק בזיכוי שנשלח ללקוח (שיחה או מייל), בכל נתיבי הכתיבה. גם טריגר במסד אוכף זאת.
+export const BANK_SAVE_STATUSES = PHONE_OPEN_STATUSES
+export const canSaveBank = (status: string) => (BANK_SAVE_STATUSES as readonly string[]).includes(status)
+
 export function pickPhoneCredit<T extends { status: string }>(rows: T[]): { credit: T; open: boolean } | null {
   const open = rows.find(r => (PHONE_OPEN_STATUSES as readonly string[]).includes(r.status))
   if (open) return { credit: open, open: true }

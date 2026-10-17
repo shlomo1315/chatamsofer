@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  parseCreditsTable, validateBank, creditPhoneTurn, buildCreditEmailHtml, amountSpoken, pickPhoneCredit,
+  parseCreditsTable, validateBank, creditPhoneTurn, buildCreditEmailHtml, amountSpoken, pickPhoneCredit, canSaveBank,
   parseTestSend, TEST_CREDIT, normalizeCreditPhone,
   CR_OK, CR_HOLDER, CR_BANK, CR_BRANCH, CR_ACCT, CR_CONFIRM,
 } from './bookFairCredits'
@@ -142,5 +142,13 @@ describe('normalizeCreditPhone', () => {
     const r = parseCreditsTable([head, ['דוד', 501234567, '', 'ספר', 10], ['משה', '521234567', '', 'ספר', 10]])
     expect(r.errors).toEqual([])
     expect(r.credits.map(c => c.phone)).toEqual(['0501234567', '0521234567'])
+  })
+})
+
+describe('canSaveBank', () => {
+  it('שומר פרטי בנק רק בזיכוי שנשלח או שהלקוח ענה עליו', () => {
+    expect(canSaveBank('sent')).toBe(true)
+    expect(canSaveBank('answered')).toBe(true)
+    for (const s of ['pending', 'send_failed', 'details_entered', '']) expect(canSaveBank(s)).toBe(false)
   })
 })
