@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
       { header: 'מייל', key: 'e', width: 28 }, { header: 'ספרים', key: 'b', width: 40 },
       { header: 'סכום', key: 'a', width: 12 },
     ]
+    ws.getColumn('p').numFmt = '@'
     ws.getRow(1).font = { bold: true }
     const buf = await wb.xlsx.writeBuffer()
     return new NextResponse(buf as ArrayBuffer, {
