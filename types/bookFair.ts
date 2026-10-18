@@ -127,6 +127,7 @@ export interface BookFairOrder {
   channel: BookFairChannel
   status: BookFairOrderStatus
   customer_name?: string | null
+  card_last4?: string | null     // 4 ספרות אחרונות של כרטיס האשראי
   customer_phone?: string | null
   customer_email?: string | null
   delivery_method: BookFairDeliveryMethod
