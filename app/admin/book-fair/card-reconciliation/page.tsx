@@ -21,6 +21,12 @@ export const metadata = { title: 'סנכרון אשראי - יריד הספרי�
 
 type OrderRef = { id: string; order_number: string; status: BookFairOrderStatus; total_agorot: number | null }
 
+type FailedOrder = { id: string; order_number: string; total_agorot: number | null; created_at: string }
+
+function fmtDate(v: string) {
+  return new Date(v).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem', dateStyle: 'short', timeStyle: 'short' })
+}
+
 /** השעה נשמרה כפי שהיא באקסל, בלי אזור זמן, ולכן מוצגת כמו שהיא. */
 function fmtLocal(v: string) {
   const [d, t = ''] = v.split(/[T ]/)
@@ -47,6 +53,14 @@ export default async function CardReconciliationPage() {
       .select('id, order_number, status, total_agorot').in('order_number', numbers.slice(i, i + 200))
     orders.push(...((data ?? []) as OrderRef[]))
   }
+  const { rows: failed, error: failedError } = await fetchAllRows<FailedOrder>((from, to) =>
+    db.from('book_fair_orders')
+      .select('id, order_number, total_agorot, created_at')
+      .eq('status', 'failed').eq('payment_method', 'card')
+      .order('created_at', { ascending: false }).range(from, to))
+  const chargedNumbers = new Set(rows.map(r => r.order_number))
+  const failedCharged = failed.filter(o => chargedNumbers.has(o.order_number)).length
+
   const byNumber = new Map(orders.map(o => [o.order_number, o]))
   const statusByNumber = new Map(orders.map(o => [o.order_number, o.status as string]))
 
@@ -76,7 +90,7 @@ export default async function CardReconciliationPage() {
     <div className="flex flex-col gap-6">
       <PageHeader title="סנכרון אשראי" subtitle="חיובי האשראי באקסל של נדרים מול ההזמנות במערכת (סנכרון 18.10.2026)" />
 
-      {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">שגיאה בטעינה: {error}</p>}
+      {(error || failedError) && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">שגיאה בטעינה: {error ?? failedError}</p>}
 
       <dl className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {stats.map(x => (
@@ -115,6 +129,15 @@ export default async function CardReconciliationPage() {
             <OrderLink key="o" no={r.order_number} />, fmtLocal(r.charged_at), fmtAgorot(r.amount_agorot),
             <span key="x" dir="ltr" className="tabular-nums">{r.card_last4}</span>,
             <span key="y" dir="ltr" className="tabular-nums">{r.system_last4}</span>,
+          ])} />
+      </Section>
+
+      <Section title="תשלומים שנכשלו" note={`הזמנות בכרטיס אשראי בסטטוס "נכשל". ${failedCharged} מהן עם חיוב באקסל.`} count={failed.length} alert={failedCharged > 0}>
+        <OrderTable head={['הזמנה', 'תאריך', 'סכום', 'חיוב באקסל']}
+          rows={failed.map(o => [
+            <Link key="o" href={`/admin/book-fair/orders/${o.id}`} className="font-medium text-indigo-700 hover:underline" dir="ltr">{o.order_number}</Link>,
+            fmtDate(o.created_at), fmtAgorot(o.total_agorot),
+            chargedNumbers.has(o.order_number) ? <span key="c" className="font-semibold text-red-700">יש</span> : 'אין',
           ])} />
       </Section>
 
