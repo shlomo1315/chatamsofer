@@ -406,11 +406,16 @@ export default function OrderPanel({ order, items, payments }: {
       </section>
 
       {/* ── היסטוריית תשלומים ── */}
-      {payments.length > 0 && (
+      {(payments.length > 0 || !!order.card_last4) && (
         <section className="rounded-2xl border border-slate-200 bg-white p-5">
           <h2 className="mb-3 flex items-center gap-2 font-semibold text-slate-900">
             <CreditCard size={16} /> תשלומים
           </h2>
+          {order.card_last4 && (
+            <p className="mb-3 text-sm text-slate-700">
+              כרטיס אשראי: <span dir="ltr" className="font-medium tabular-nums">•••• {order.card_last4}</span>
+            </p>
+          )}
           <ul className="flex flex-col gap-2 text-sm">
             {payments.map(p => (
               <li key={p.id} className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2 last:border-0">
