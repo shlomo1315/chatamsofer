@@ -15,6 +15,8 @@ import OrderPanel from './OrderPanel'
 import CustomerCard from './CustomerCard'
 import OrderNav from './OrderNav'
 import ProblemBookToggle from '../../ProblemBookToggle'
+import ItemCreditToggle from './ItemCreditToggle'
+import { creditsAsReturns } from '@/lib/bookFairItemCredits'
 import { PROBLEM_BOOKS_KEY, parseProblemBooks } from '@/lib/bookFairProblemBooks'
 import {
   ISSUE_TYPE_LABELS, ISSUE_STATUS_LABELS, ISSUE_STATUS_TAG,
@@ -90,15 +92,20 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   const phone = o.customer_phone ? normalizePhone(o.customer_phone) : null
   const email = o.customer_email?.trim().toLowerCase() || null
   const creditCols = 'id, phone, email, books, amount_agorot, status'
-  const [{ data: returns }, { data: byPhone }, { data: byEmail }] = await Promise.all([
+  const [{ data: ledger }, { data: byPhone }, { data: byEmail }, { data: marks }] = await Promise.all([
     supabase.from('book_fair_stock_ledger').select('book_id, delta, note')
       .eq('reason', 'refund').eq('note', refundNote(o.order_number)),
     service && phone ? service.from('book_fair_credits').select(creditCols).eq('phone', phone) : Promise.resolve({ data: [] }),
     service && email ? service.from('book_fair_credits').select(creditCols).eq('email', email) : Promise.resolve({ data: [] }),
+    // סימוני "זוכה" ברמת ההזמנה (בלי כסף ובלי מלאי); נספרים כמו זיכוי חלקי
+    service ? service.from('book_fair_item_credits').select('item_id, order_number, book_id, quantity').eq('order_id', id) : Promise.resolve({ data: [] }),
   ])
+  const markList = (marks ?? []) as { item_id: string; order_number: string; book_id: string | null; quantity: number }[]
+  const markByItem = new Map(markList.map(m => [m.item_id, m.quantity]))
+  const returns = [...(ledger ?? []), ...creditsAsReturns(markList)]
   const credits = [...new Map([...(byPhone ?? []), ...(byEmail ?? [])].map(c => [c.id, c])).values()] as UnsuppliedCredit[]
   const unsupplied = unsuppliedBooks(
-    o, (items ?? []) as BookFairOrderItem[], returns ?? [], credits, new Set(Object.keys(problems)),
+    o, (items ?? []) as BookFairOrderItem[], returns, credits, new Set(Object.keys(problems)),
   )
 
   return (
@@ -152,6 +159,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                         <div className="truncate font-medium text-slate-900" title={it.title_snapshot}>
                           {it.title_snapshot}
                         </div>
+                        <ItemCreditToggle orderId={o.id} itemId={it.id} quantity={it.quantity} credited={markByItem.get(it.id) ?? 0} />
                         {/* ⚠️ ספר שנמחק מהקטלוג (book_id ריק) אינו ניתן לסימון. */}
                         {it.book_id && (
                           <ProblemBookToggle
