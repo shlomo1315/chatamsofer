@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { PAID } from '@/lib/bookFairStats'
+import { creditsAsReturns } from '@/lib/bookFairItemCredits'
 import { computeSold, type BookSold, type RefundReturn, type SoldAdjustmentInput, type SoldItem, type SoldOrder } from '@/lib/bookFairSold'
 
 // שליפת הנתונים ל"נמכר" לפי ספר (צד שרת). החישוב: lib/bookFairSold.ts.
@@ -17,7 +18,14 @@ export async function loadRefundReturns(db: SupabaseClient): Promise<RefundRetur
     db.from('book_fair_stock_ledger').select('book_id, delta, note')
       .eq('reason', 'refund').order('id').range(from, to) as unknown as Res<RefundReturn>)
   if (error) console.error('[book-fair/sold] refund ledger:', error)
-  return rows
+  // סימוני "זוכה" ידניים / מאקסל (book_fair_item_credits) נחשבים כמו זיכוי חלקי.
+  // ⚠️ אם המיגרציה עוד לא רצה, השגיאה נרשמת והחישוב ממשיך בלעדיהם.
+  type Mark = { order_number: string; book_id: string | null; quantity: number }
+  const marks = await fetchAllRows<Mark>((from, to) =>
+    db.from('book_fair_item_credits').select('order_number, book_id, quantity')
+      .order('id').range(from, to) as unknown as Res<Mark>)
+  if (marks.error) console.error('[book-fair/sold] item credits:', marks.error)
+  return [...rows, ...creditsAsReturns(marks.rows)]
 }
 
 /**
