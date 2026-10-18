@@ -80,6 +80,12 @@ export function parseItemCreditsTable(rows: unknown[][]): {
   return { credits, errors, missingColumns: [] }
 }
 
+export const UNPAID_ORDER_ERROR = 'ההזמנה אינה בסטטוס ששולם, ולכן אינה נספרת כמכירה'
+
+export function isOrderPaid(status: string): boolean {
+  return (PAID as readonly string[]).includes(status)
+}
+
 export interface CreditOrder { id: string; order_number: string | null; status: string }
 export interface CreditItem { id: string; order_id: string; book_id: string | null; title_snapshot: string; quantity: number }
 export interface MatchedCredit {
@@ -122,7 +128,7 @@ export function matchItemCredits(
     const fail = (reason: string) => unmatched.push({ line: c.line, order_number: c.order_number, book: c.book, reason })
     const order = byNumber.get(c.order_number)
     if (!order) { fail('מספר הזמנה לא נמצא'); continue }
-    if (!(PAID as readonly string[]).includes(order.status)) { fail('ההזמנה אינה בסטטוס ששולם, ולכן אינה נספרת כמכירה'); continue }
+    if (!isOrderPaid(order.status)) { fail(UNPAID_ORDER_ERROR); continue }
     const cand = candidates(itemsByOrder.get(order.id) ?? [], c.book)
     if (!cand.items.length) { fail('שם הספר לא נמצא בהזמנה'); continue }
     if (cand.ambiguous) { fail('השם מתאים לכמה ספרים בהזמנה. כתבו את השם המלא'); continue }

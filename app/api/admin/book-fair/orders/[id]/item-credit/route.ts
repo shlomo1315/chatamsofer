@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
+import { isOrderPaid, UNPAID_ORDER_ERROR } from '@/lib/bookFairItemCredits'
 
 // סימון ידני של ספר שזוכה בשורת הזמנה (POST) וביטולו (DELETE).
 // ברמת מערכת ההזמנות בלבד: בלי כסף ובלי מלאי. ראו lib/bookFairItemCredits.
@@ -32,6 +33,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     db.from('book_fair_order_items').select('id, order_id, book_id, quantity').eq('id', p.itemId).maybeSingle(),
   ])
   if (!order || !item || item.order_id !== order.id) return NextResponse.json({ error: 'השורה לא נמצאה בהזמנה' }, { status: 404 })
+  if (!isOrderPaid(order.status)) return NextResponse.json({ error: UNPAID_ORDER_ERROR }, { status: 400 })
   if (!Number.isInteger(p.quantity) || p.quantity < 1 || p.quantity > item.quantity) {
     return NextResponse.json({ error: `הכמות חייבת להיות בין 1 ל-${item.quantity}` }, { status: 400 })
   }

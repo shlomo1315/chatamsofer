@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { parseItemCreditsTable, matchItemCredits, creditsAsReturns, cleanOrderNumber } from './bookFairItemCredits'
+import { parseItemCreditsTable, matchItemCredits, creditsAsReturns, cleanOrderNumber, isOrderPaid } from './bookFairItemCredits'
+
+describe('isOrderPaid', () => {
+  it('מקבל סטטוסים ששולמו ודוחה אחרים', () => {
+    expect(isOrderPaid('paid')).toBe(true)
+    expect(isOrderPaid('shipped')).toBe(true)
+    expect(isOrderPaid('cancelled')).toBe(false)
+    expect(isOrderPaid('pending')).toBe(false)
+  })
+})
 import { computeSold } from './bookFairSold'
 
 const orders = [
