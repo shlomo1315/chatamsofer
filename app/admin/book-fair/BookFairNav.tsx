@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutGrid, ShoppingCart, BookOpen, Users, Settings2, ExternalLink, Mail, MessageSquare, Undo2, Store, Inbox, PackageX, HandCoins, Truck } from 'lucide-react'
+import { LayoutGrid, ShoppingCart, BookOpen, Users, Settings2, ExternalLink, Mail, MessageSquare, Undo2, Store, Inbox, PackageX, HandCoins, Truck, CreditCard } from 'lucide-react'
 
 // סרגל ניווט פנימי של מחלקת היריד.
 //
@@ -35,6 +35,8 @@ const TABS = [
   { href: '/admin/book-fair/shipping-cities', label: 'משלוחים לפי עיר', icon: Truck },
   // 🔴 14.10: התחשבנות עם מחברים/מו"לים — כמה נגבה, 5%, מה שולם.
   { href: '/admin/book-fair/settlement', label: 'התחשבנות', icon: HandCoins },
+  // 18.10: חיובי האשראי באקסל של נדרים מול ההזמנות.
+  { href: '/admin/book-fair/card-reconciliation', label: 'סנכרון אשראי', icon: CreditCard },
   // 15.10: כמה כל מחבר/מכון/מו"ל אמור לקבל לפי מחיר לעותק.
   { href: '/admin/book-fair/author-payouts', label: 'סכומים למחברים', icon: HandCoins },
   { href: '/admin/book-fair/settings', label: 'הגדרות',  icon: Settings2 },
