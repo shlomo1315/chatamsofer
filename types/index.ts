@@ -40,6 +40,7 @@ export interface Profile {
   mail_label_ids?: string[]
   mail_account?: string
   department?: string | null
+  display_title?: string | null
   mail_only?: boolean
   allowed_mailboxes?: string[]
   created_at: string
