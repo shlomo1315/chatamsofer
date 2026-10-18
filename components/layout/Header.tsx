@@ -49,7 +49,7 @@ export default function Header({ user, title }: HeaderProps) {
           {user && (
             <div className="text-right leading-tight px-1.5 hidden sm:block">
               <p className="text-sm font-semibold text-slate-800 leading-snug">{user.full_name}</p>
-              <p className="text-[11px] text-indigo-500 font-medium leading-snug">{ROLE_LABELS[user.role]}</p>
+              <p className="text-[11px] text-indigo-500 font-medium leading-snug">{user.display_title?.trim() || ROLE_LABELS[user.role]}</p>
             </div>
           )}
           {user && (

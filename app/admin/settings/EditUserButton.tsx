@@ -37,6 +37,7 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
   const [deleting, setDeleting] = useState(false)
 
   const [fullName, setFullName] = useState(profile.full_name)
+  const [displayTitle, setDisplayTitle] = useState(profile.display_title ?? "")
   const [phone, setPhone] = useState(profile.phone ?? '')
   const [role, setRole] = useState<UserRole>(profile.role)
   const [isActive, setIsActive] = useState(profile.is_active)
@@ -74,6 +75,7 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
     setError('')
     setDone(false)
     setFullName(profile.full_name)
+    setDisplayTitle(profile.display_title ?? "")
     setPhone(profile.phone ?? '')
     setRole(profile.role)
     setIsActive(profile.is_active)
@@ -93,7 +95,7 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: profile.id, full_name: fullName, phone, role, is_active: isActive,
+          id: profile.id, full_name: fullName, display_title: displayTitle.trim() || null, phone, role, is_active: isActive,
           permissions: isAdmin ? {} : permissions,
           department: department || null,
           mail_only: isAdmin ? false : mailOnly,
@@ -202,6 +204,12 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-medium text-slate-600">שם מלא <span className="text-red-500">*</span></label>
                   <input value={fullName} onChange={e => setFullName(e.target.value)}
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-slate-600">כותרת תצוגה (מוצגת למעלה, לא משנה הרשאות)</label>
+                  <input value={displayTitle} onChange={e => setDisplayTitle(e.target.value)} maxLength={60} placeholder="למשל: מנהל"
                     className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
 

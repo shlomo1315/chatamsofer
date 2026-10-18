@@ -140,10 +140,10 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'מפתח השירות אינו מוגדר' }, { status: 500 })
   }
 
-  let body: { id?: string; full_name?: string; role?: string; is_active?: boolean; phone?: string; permissions?: Record<string, string>; mail_account?: string | null; mail_label_ids?: string[]; department?: string | null; mail_only?: boolean; allowed_mailboxes?: string[]; password?: string; sendReset?: boolean }
+  let body: { id?: string; full_name?: string; role?: string; is_active?: boolean; phone?: string; permissions?: Record<string, string>; mail_account?: string | null; mail_label_ids?: string[]; department?: string | null; display_title?: string | null; mail_only?: boolean; allowed_mailboxes?: string[]; password?: string; sendReset?: boolean }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
 
-  const { id, full_name, role, is_active, phone, permissions, mail_account, mail_label_ids, department, mail_only, allowed_mailboxes, password, sendReset } = body
+  const { id, full_name, role, is_active, phone, permissions, mail_account, mail_label_ids, department, display_title, mail_only, allowed_mailboxes, password, sendReset } = body
 
   if (!id) return NextResponse.json({ error: 'חסר מזהה משתמש' }, { status: 400 })
   if (role && !VALID_ROLES.includes(role)) return NextResponse.json({ error: 'תפקיד לא תקין' }, { status: 400 })
@@ -176,6 +176,7 @@ export async function PATCH(request: NextRequest) {
   if (mail_account !== undefined) updates.mail_account = mail_account || null
   if (mail_label_ids !== undefined) updates.mail_label_ids = mail_label_ids
   if (department !== undefined) updates.department = department || null
+  if (display_title !== undefined) updates.display_title = display_title ? String(display_title).trim().slice(0, 60) || null : null
   if (mail_only !== undefined) updates.mail_only = !!mail_only
   if (allowed_mailboxes !== undefined) updates.allowed_mailboxes = Array.isArray(allowed_mailboxes) ? allowed_mailboxes : []
 
