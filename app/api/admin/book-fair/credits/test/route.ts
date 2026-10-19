@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
   }
   if (input.phone) {
     if (!creditCallConfigured()) {
-      phone = { ok: false, error: 'שיחות ימות לא מוגדרות (חסר YEMOT_TOKEN או YEMOT_CREDIT_TEMPLATE_ID)' }
+      phone = { ok: false, error: 'שיחות ימות לא מוגדרות (חסר YEMOT_BOOK_FAIR_TOKEN או YEMOT_BOOK_FAIR_CREDIT_TEMPLATE_ID)' }
     } else {
       // נרשם לפני החיוג, כדי שהשלוחה תזהה את הבדיקה כבר כשהשיחה נענית
       await logActivity(db, { userId: staff.userId, action: TEST_CALL_ACTION, entityType: 'book_fair_credits', details: { phone: input.phone } })
