@@ -1,6 +1,7 @@
 import { normalizeHeader } from '@/lib/bookFairImport'
 import { PAID } from '@/lib/bookFairStats'
 import { refundNote, type RefundReturn } from '@/lib/bookFairSold'
+import { creditKey, creditStatusLabel, formatShekels, normalizeCreditPhone, normalizeEmail, safeCell, type CreditChannel } from '@/lib/bookFairCredits'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // יריד ספרים — סימון ספרים שזוכו בהזמנה (ברמת מערכת ההזמנות בלבד).
@@ -157,4 +158,63 @@ export function matchItemCredits(
 /** סימוני הזיכוי כשורות החזרה, כדי שכל חישובי "נמכר" יתייחסו אליהם כמו לזיכוי חלקי. */
 export function creditsAsReturns(rows: { order_number: string; book_id: string | null; quantity: number }[]): RefundReturn[] {
   return rows.map(r => ({ book_id: r.book_id, delta: r.quantity, note: refundNote(r.order_number) }))
+}
+
+// ─── אקסל להעלאה ב"זיכוי על ספרים חסרים" ───────────────────────────────────
+// שורה אחת לכל לקוח, בכותרות שהייבוא של מסך הזיכויים מזהה (parseCreditsTable).
+// "הזמנות" ו"סטטוס זיכוי" לא מוכרות לייבוא ולכן נבלעות בהעלאה.
+
+export interface CreditedLine {
+  order_number: string | null; customer_name: string | null; customer_phone: string | null; customer_email: string | null
+  title: string; quantity: number; unit_price_agorot: number
+}
+export interface ExistingCredit { channel: CreditChannel; phone: string | null; email: string | null; status: string; transferred_at: string | null }
+export interface CreditUploadRow {
+  name: string | null; phone: string | null; email: string | null; channel: CreditChannel | null
+  books: string; amount_agorot: number; orders: string; status: string
+}
+
+export const CREDIT_UPLOAD_HEADERS = ['שם', 'טלפון', 'מייל', 'ספרים', 'סכום', 'ערוץ', 'הזמנות', 'סטטוס זיכוי'] as const
+export const NOT_UPLOADED = 'לא הועלה'
+export const NO_CONTACT = 'חסר טלפון או מייל'
+
+/** מאחד את הספרים שזוכו לשורה לכל לקוח (מייל, ואם אין אז טלפון), עם הסכום המלא והסטטוס של זיכוי קיים. */
+export function buildCreditUploadRows(lines: CreditedLine[], existing: ExistingCredit[]): CreditUploadRow[] {
+  const statusByKey = new Map(existing.map(c => [creditKey(c), creditStatusLabel(c.status, c.transferred_at)]))
+  const groups = new Map<string, { row: CreditUploadRow; books: Map<string, { title: string; qty: number }>; orders: Set<string> }>()
+  for (const l of lines) {
+    const email = normalizeEmail(l.customer_email)
+    const phone = normalizeCreditPhone(l.customer_phone)
+    const channel: CreditChannel | null = email ? 'email' : phone ? 'phone' : null
+    const key = channel ? creditKey({ channel, phone, email }) : `o:${l.order_number}`
+    let g = groups.get(key)
+    if (!g) {
+      g = {
+        row: { name: null, phone, email, channel, books: '', amount_agorot: 0, orders: '', status: channel ? statusByKey.get(key) ?? NOT_UPLOADED : NO_CONTACT },
+        books: new Map(), orders: new Set(),
+      }
+      groups.set(key, g)
+    }
+    g.row.name ||= l.customer_name?.trim() || null
+    g.row.phone ||= phone
+    g.row.amount_agorot += l.unit_price_agorot * l.quantity
+    if (l.order_number) g.orders.add(l.order_number)
+    const t = normTitle(l.title)
+    const b = g.books.get(t) ?? { title: l.title.trim(), qty: 0 }
+    b.qty += l.quantity
+    g.books.set(t, b)
+  }
+  return [...groups.values()].map(({ row, books, orders }) => ({
+    ...row,
+    books: [...books.values()].map(b => (b.qty > 1 ? `${b.title} ×${b.qty}` : b.title)).join(', '),
+    orders: [...orders].join(', '),
+  }))
+}
+
+/** התאים של שורה, לפי הסדר של CREDIT_UPLOAD_HEADERS. */
+export function creditUploadCells(r: CreditUploadRow): (string | number)[] {
+  return [
+    safeCell(r.name), r.phone ?? '', r.email ?? '', safeCell(r.books), Number(formatShekels(r.amount_agorot)),
+    r.channel === 'phone' ? 'טלפון' : r.channel === 'email' ? 'מייל' : '', r.orders, r.status,
+  ]
 }

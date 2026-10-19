@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { parseItemCreditsTable, matchItemCredits, creditsAsReturns, cleanOrderNumber, isOrderPaid } from './bookFairItemCredits'
+import { parseItemCreditsTable, matchItemCredits, creditsAsReturns, cleanOrderNumber, isOrderPaid, buildCreditUploadRows, creditUploadCells, CREDIT_UPLOAD_HEADERS } from './bookFairItemCredits'
+import { parseCreditsTable } from './bookFairCredits'
 
 describe('isOrderPaid', () => {
   it('מקבל סטטוסים ששולמו ודוחה אחרים', () => {
@@ -71,5 +72,37 @@ describe('כניסה לחישוב נמכר', () => {
     expect(s.b1).toMatchObject({ web: 1, returned: 1, collected: 1000 })
     const over = computeSold(soldOrders, soldItems, creditsAsReturns([{ order_number: 'BF-100', book_id: 'b1', quantity: 5 }]), [])
     expect(over.b1.web).toBe(0)
+  })
+})
+
+describe('buildCreditUploadRows', () => {
+  const base = { customer_name: 'כהן', customer_phone: '050-1234567', customer_email: null, unit_price_agorot: 5000 }
+  it('מאחד לפי לקוח: ספרים, כמויות וסכום מלא', () => {
+    const rows = buildCreditUploadRows([
+      { ...base, order_number: '101', title: 'ספר א', quantity: 2 },
+      { ...base, order_number: '102', title: 'ספר ב', quantity: 1, unit_price_agorot: 3550 },
+      { ...base, order_number: '102', title: 'ספר א', quantity: 1 },
+    ], [])
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ phone: '0501234567', email: null, channel: 'phone', books: 'ספר א ×3, ספר ב', amount_agorot: 18550, orders: '101, 102', status: 'לא הועלה' })
+  })
+  it('מייל קודם לטלפון, ולקוחות שונים בשורות נפרדות', () => {
+    const rows = buildCreditUploadRows([
+      { ...base, customer_email: 'A@x.co', order_number: '1', title: 'ס', quantity: 1 },
+      { ...base, customer_phone: '0521111111', order_number: '2', title: 'ס', quantity: 1 },
+    ], [{ channel: 'email', phone: null, email: 'a@x.co', status: 'sent', transferred_at: '2026-10-19' }])
+    expect(rows.map(r => [r.channel, r.email ?? r.phone, r.status])).toEqual([
+      ['email', 'a@x.co', 'הועבר בבנק'], ['phone', '0521111111', 'לא הועלה'],
+    ])
+  })
+  it('הקובץ עובר כמו שהוא בהעלאה של זיכוי על ספרים חסרים', () => {
+    const rows = buildCreditUploadRows([
+      { ...base, order_number: '1', title: 'ספר', quantity: 1 },
+      { ...base, customer_phone: null, customer_email: 'b@x.co', order_number: '2', title: 'ספר', quantity: 1 },
+    ], [])
+    const table = [CREDIT_UPLOAD_HEADERS as readonly unknown[], ...rows.map(creditUploadCells)]
+    const parsed = parseCreditsTable(table as unknown[][])
+    expect(parsed.errors).toEqual([])
+    expect(parsed.credits.map(c => [c.channel, c.amount_agorot, c.books])).toEqual([['phone', 5000, 'ספר'], ['email', 5000, 'ספר']])
   })
 })

@@ -1,9 +1,12 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
+import { useCan } from '@/components/StaffPermissions'
+import { CREDIT_STATUS_LABELS as STATUS, TRANSFERRED_LABEL } from '@/lib/bookFairCredits'
 
 interface Credit {
   id: string; customer_name: string | null; phone: string | null; email: string | null
   channel: 'phone' | 'email'; books: string; amount_agorot: number; status: string; send_error: string | null
+  transferred_at: string | null
 }
 interface Preview {
   summary: { count: number; phone: number; email: number; totalAgorot: number }
@@ -11,14 +14,11 @@ interface Preview {
   errors: { line: number; message: string }[]
 }
 
-const STATUS: Record<string, string> = {
-  pending: 'ממתין לשליחה', sent: 'נשלח', send_failed: 'השליחה נכשלה', answered: 'ענה', details_entered: 'הזין פרטים',
-}
 const shekels = (a: number) => (a / 100).toLocaleString('he-IL', { maximumFractionDigits: 2 })
 const btn = 'rounded-lg bg-[#1B3256] px-4 py-2 text-sm font-medium text-white disabled:opacity-50'
 const btn2 = 'rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-50'
 
-interface Bank { holder: string | null; holderRecording: string | null; bank: string | null; branch: string | null; account: string | null }
+interface Bank { holder: string | null; holderId: string | null; holderRecording: string | null; bank: string | null; branch: string | null; account: string | null }
 
 // פרטי החשבון נטענים מהשרת רק בלחיצה (מנהל בלבד), ונשמרים רק בזיכרון של המסך.
 function BankDetails({ id }: { id: string }) {
@@ -41,6 +41,7 @@ function BankDetails({ id }: { id: string }) {
   return (
     <dl className="grid grid-cols-[auto_1fr] gap-x-2 text-xs">
       <dt className="text-slate-500">בעל החשבון</dt><dd>{bank.holder || (bank.holderRecording ? 'הקלטה (בייצוא)' : '')}</dd>
+      <dt className="text-slate-500">מספר זהות</dt><dd dir="ltr" className="text-right">{bank.holderId}</dd>
       <dt className="text-slate-500">בנק</dt><dd dir="ltr" className="text-right">{bank.bank}</dd>
       <dt className="text-slate-500">סניף</dt><dd dir="ltr" className="text-right">{bank.branch}</dd>
       <dt className="text-slate-500">חשבון</dt><dd dir="ltr" className="text-right">{bank.account}</dd>
@@ -50,6 +51,7 @@ function BankDetails({ id }: { id: string }) {
 }
 
 export default function CreditsClient({ isAdmin = false }: { isAdmin?: boolean }) {
+  const canEdit = useCan('book_fair', 'edit')
 
   const [credits, setCredits] = useState<Credit[]>([])
   const [file, setFile] = useState<File | null>(null)
@@ -101,8 +103,21 @@ export default function CreditsClient({ isAdmin = false }: { isAdmin?: boolean }
     setSelected(new Set()); load()
   }
 
+  async function setTransferred(c: Credit, transferred: boolean) {
+    if (!transferred && !confirm('לבטל את הסימון "הועבר בבנק"?')) return
+    setBusy(true); setMsg(null)
+    const r = await fetch(`/api/admin/book-fair/credits/${c.id}/transfer`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transferred }),
+    })
+    const j = await r.json().catch(() => ({}))
+    setBusy(false)
+    if (r.ok) setCredits(cs => cs.map(x => (x.id === c.id ? { ...x, transferred_at: j.transferredAt } : x)))
+    else setMsg({ ok: false, text: j.error ?? 'השמירה נכשלה' })
+  }
+
   const toggle = (id: string) => setSelected(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const unsent = credits.filter(c => c.status === 'pending' || c.status === 'send_failed').map(c => c.id)
+  const transferred = credits.filter(c => c.transferred_at).length
   const counts = credits.reduce<Record<string, number>>((m, c) => { m[c.status] = (m[c.status] ?? 0) + 1; return m }, {})
 
   return (
@@ -163,13 +178,15 @@ export default function CreditsClient({ isAdmin = false }: { isAdmin?: boolean }
           <div className="flex flex-wrap gap-2">
             <button className={btn} disabled={busy || !unsent.length} onClick={() => send(unsent)}>שליחה לכל מי שלא נשלח ({unsent.length})</button>
             <button className={btn2} disabled={busy || !selected.size} onClick={() => send([...selected], true)}>שליחה חוזרת לנבחרים</button>
-            <a className={btn2} href="/api/admin/book-fair/credits/export">ייצוא פרטי חשבון (מנהל)</a>
+            {isAdmin
+              ? <a className={btn2} href="/api/admin/book-fair/credits/export">הורדת אקסל פרטי חשבון</a>
+              : <span className="self-center text-xs text-slate-500">הורדת פרטי החשבון זמינה למנהל בלבד</span>}
           </div>
         </div>
-        <p className="text-sm text-slate-600">{Object.entries(STATUS).map(([k, v]) => `${v}: ${counts[k] ?? 0}`).join(' · ')}</p>
+        <p className="text-sm text-slate-600">{Object.entries(STATUS).map(([k, v]) => `${v}: ${counts[k] ?? 0}`).join(' · ')} · {TRANSFERRED_LABEL}: {transferred}</p>
         <div className="overflow-auto">
           <table className="w-full text-sm">
-            <thead><tr className="text-right text-slate-500"><th className="p-1"></th><th>לקוח</th><th>ערוץ</th><th>ספרים</th><th>סכום</th><th>סטטוס</th>{isAdmin && <th>פרטי חשבון</th>}</tr></thead>
+            <thead><tr className="text-right text-slate-500"><th className="p-1"></th><th>לקוח</th><th>ערוץ</th><th>ספרים</th><th>סכום</th><th>סטטוס</th><th>{TRANSFERRED_LABEL}</th>{isAdmin && <th>פרטי חשבון</th>}</tr></thead>
             <tbody>
               {credits.map(c => (
                 <tr key={c.id} className="border-t border-slate-100">
@@ -178,6 +195,13 @@ export default function CreditsClient({ isAdmin = false }: { isAdmin?: boolean }
                   <td>{c.channel === 'phone' ? 'שיחה' : 'מייל'}</td>
                   <td>{c.books}</td><td>{shekels(c.amount_agorot)}</td>
                   <td>{STATUS[c.status] ?? c.status}{c.send_error ? ` (${c.send_error})` : ''}</td>
+                  <td>
+                    <label className="flex items-center gap-1.5">
+                      <input type="checkbox" checked={!!c.transferred_at} disabled={!canEdit || busy}
+                        onChange={e => setTransferred(c, e.target.checked)} />
+                      {c.transferred_at ? new Date(c.transferred_at).toLocaleDateString('he-IL') : 'לא'}
+                    </label>
+                  </td>
                   {isAdmin && <td>{c.status === 'details_entered' && <BankDetails id={c.id} />}</td>}
                 </tr>
               ))}

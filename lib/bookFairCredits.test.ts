@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  parseCreditsTable, validateBank, creditPhoneTurn, buildCreditEmailHtml, amountSpoken, pickPhoneCredit, canSaveBank,
+  parseCreditsTable, validateBank, creditPhoneTurn, buildCreditEmailHtml, amountSpoken, pickPhoneCredit, canSaveBank, validateIsraeliId, creditStatusLabel,
   parseTestSend, TEST_CREDIT, normalizeCreditPhone, isTestSendLimited,
   CR_OK, CR_HOLDER, CR_BANK, CR_BRANCH, CR_ACCT, CR_CONFIRM,
 } from './bookFairCredits'
@@ -159,5 +159,33 @@ describe('isTestSendLimited', () => {
     expect(isTestSendLimited(4)).toBe(false)
     expect(isTestSendLimited(5)).toBe(true)
     expect(isTestSendLimited(9)).toBe(true)
+  })
+})
+
+describe('validateIsraeliId', () => {
+  it('מקבל ת"ז תקינה ומשלים אפסים מובילים', () => {
+    expect(validateIsraeliId('123456782')).toBe('123456782')
+    expect(validateIsraeliId('12345678-2')).toBe('123456782')
+    expect(validateIsraeliId('39337423')).toBe('039337423')
+  })
+  it('דוחה ספרת ביקורת שגויה, קצר או ארוך מדי', () => {
+    expect(validateIsraeliId('123456789')).toBeNull()
+    expect(validateIsraeliId('1234')).toBeNull()
+    expect(validateIsraeliId('1234567890')).toBeNull()
+    expect(validateIsraeliId('000000000')).toBeNull()
+    expect(validateIsraeliId('')).toBeNull()
+  })
+})
+
+describe('creditStatusLabel', () => {
+  it('הועבר בבנק גובר על הסטטוס', () => {
+    expect(creditStatusLabel('details_entered', '2026-10-19T10:00:00Z')).toBe('הועבר בבנק')
+    expect(creditStatusLabel('details_entered', null)).toBe('הזין פרטים')
+  })
+})
+
+describe('מייל: מספר זהות', () => {
+  it('המייל מבקש גם מספר זהות', () => {
+    expect(buildCreditEmailHtml({ name: null, books: 'x', amountAgorot: 100, url: 'https://x' })).toContain('מספר הזהות')
   })
 })

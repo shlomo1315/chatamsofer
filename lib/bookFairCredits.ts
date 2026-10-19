@@ -139,6 +139,36 @@ export function validateBank(b: BankInput): string | null {
   return null
 }
 
+/** מספר זהות: 5–9 ספרות עם ספרת ביקורת תקינה. מחזיר 9 ספרות (עם אפסים מובילים) או null. */
+export function validateIsraeliId(v: unknown): string | null {
+  const d = String(v ?? '').replace(/[\s-]/g, '')
+  if (!/^\d{5,9}$/.test(d)) return null
+  const id = d.padStart(9, '0')
+  if (/^0+$/.test(id)) return null
+  let sum = 0
+  for (let i = 0; i < 9; i++) {
+    const n = Number(id[i]) * (i % 2 ? 2 : 1)
+    sum += n > 9 ? n - 9 : n
+  }
+  return sum % 10 === 0 ? id : null
+}
+
+export const CREDIT_STATUS_LABELS: Record<string, string> = {
+  pending: 'ממתין לשליחה', sent: 'נשלח', send_failed: 'השליחה נכשלה', answered: 'ענה', details_entered: 'הזין פרטים',
+}
+export const TRANSFERRED_LABEL = 'הועבר בבנק'
+
+/** סטטוס לתצוגה ולאקסל: "הועבר בבנק" גובר על סטטוס השליחה. */
+export function creditStatusLabel(status: string, transferredAt: string | null): string {
+  return transferredAt ? TRANSFERRED_LABEL : CREDIT_STATUS_LABELS[status] ?? status
+}
+
+/** תא אקסל בטוח: טקסט שמתחיל בתו של נוסחה מקבל ' לפניו, כדי שאקסל לא יריץ אותו. */
+export function safeCell(v: unknown): string {
+  const s = String(v ?? '')
+  return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s
+}
+
 export function cleanHolder(v: unknown): string {
   return String(v ?? '').replace(/[<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 80)
 }
@@ -256,7 +286,7 @@ export function buildCreditEmailHtml(opts: { name: string | null; books: string;
 <p style="${p}">לא הצלחנו לספק לכם את הספרים הבאים מההזמנה שלכם ביריד הספרים של היכל החתם סופר:</p>
 <p style="${p}font-weight:bold;">${esc(opts.books)}</p>
 <p style="${p}">אנו מזכים אתכם בסכום של <b>${formatShekels(opts.amountAgorot)} ש"ח</b>. הזיכוי יועבר לחשבון הבנק שלכם.</p>
-<p style="${p}">כדי שנוכל להעביר את הכסף, נא למלא את פרטי החשבון בטופס המאובטח:</p>
+<p style="${p}">כדי שנוכל להעביר את הכסף, נא למלא את פרטי החשבון ואת מספר הזהות של בעל החשבון בטופס המאובטח:</p>
 <p style="margin:0 0 20px;"><a href="${esc(opts.url)}" style="background:#1B3256;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:16px;display:inline-block;">מילוי פרטי החשבון</a></p>
 <p style="${p}font-size:14px;color:#64748b;">אנו מתנצלים על אי הנוחות.</p>
 </div>`

@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
   const db = getServiceClient()
   if (!db) return serverMisconfigured()
   const { data, error } = await db.from('book_fair_credits')
-    .select('id, customer_name, phone, email, channel, books, amount_agorot, status, send_error, sent_at, answered_at, details_at, created_at')
+    .select('id, customer_name, phone, email, channel, books, amount_agorot, status, send_error, sent_at, answered_at, details_at, transferred_at, created_at')
     .order('created_at', { ascending: false }).limit(5000)
   if (error) return NextResponse.json({ error: 'טעינת הזיכויים נכשלה' }, { status: 422 })
   return NextResponse.json({ credits: data ?? [] })
