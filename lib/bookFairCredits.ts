@@ -223,6 +223,25 @@ export function pickPhoneCredit<T extends { status: string }>(rows: T[]): { cred
   return done ? { credit: done, open: false } : null
 }
 
+/** מאחד את כל הזיכויים הפתוחים של אותו טלפון לשיחה אחת: כל הספרים, סכום כולל, ושמירה לכולם. */
+export function mergePhoneCredits<T extends { customer_name: string | null; books: string; amount_agorot: number; status: string }>(
+  rows: T[],
+): { rows: T[]; ctx: Omit<CreditCallContext, 'alreadyDone'> } | null {
+  const picked = pickPhoneCredit(rows)
+  if (!picked) return null
+  const group = picked.open
+    ? rows.filter(r => (PHONE_OPEN_STATUSES as readonly string[]).includes(r.status))
+    : rows.filter(r => r.status === 'details_entered')
+  return {
+    rows: group,
+    ctx: {
+      name: group.find(r => r.customer_name)?.customer_name ?? null,
+      books: group.map(r => r.books).filter(Boolean).join('. '),
+      amountAgorot: group.reduce((n, r) => n + r.amount_agorot, 0),
+    },
+  }
+}
+
 export function amountSpoken(agorot: number): string {
   const s = Math.floor(agorot / 100), a = agorot % 100
   const shekels = s === 1 ? 'שקל אחד' : `${s} שקלים`
@@ -233,7 +252,12 @@ export function amountSpoken(agorot: number): string {
 /** ימות שולחת בכל פנייה את המשתנים שנאספו, ולכן המצב נגזר מהם (כמו בשלוחת המפיצים). */
 export function creditPhoneTurn(params: Record<string, string>, ctx: CreditCallContext): CreditPhoneTurn {
   const done = (reply: string, action: CreditPhoneAction = null) => ({ reply, action })
-  if (ctx.alreadyDone) return done(say('פרטי החשבון שלכם כבר התקבלו. תודה ושלום'))
+  if (ctx.alreadyDone) {
+    return done(say(
+      `שלום${ctx.name ? ` ${ctx.name}` : ''}, כאן היכל החתם סופר. בגין הספרים שלא סופקו: ${ctx.books}, אנו מזכים אתכם בסכום של ${amountSpoken(ctx.amountAgorot)}.`,
+      'פרטי החשבון שלכם כבר התקבלו, והזיכוי יועבר אליו. תודה ושלום',
+    ))
+  }
 
   const ok = params[CR_OK] ?? ''
   if (!ok) {

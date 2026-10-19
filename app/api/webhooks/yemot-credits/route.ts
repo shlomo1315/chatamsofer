@@ -11,7 +11,7 @@ import { getServiceClient } from '@/lib/apiAuth'
 import { safeEqual } from '@/lib/svix'
 import { normalizePhone } from '@/lib/kvitel'
 import {
-  creditPhoneTurn, pickPhoneCredit, PHONE_OPEN_STATUSES, TEST_CALL_ACTION, TEST_CALL_WINDOW_MS, TEST_CREDIT,
+  creditPhoneTurn, mergePhoneCredits, PHONE_OPEN_STATUSES, TEST_CALL_ACTION, TEST_CALL_WINDOW_MS, TEST_CREDIT,
 } from '@/lib/bookFairCredits'
 
 export const dynamic = 'force-dynamic'
@@ -49,8 +49,8 @@ async function handle(request: NextRequest) {
 
   const { data: rows } = await db.from('book_fair_credits')
     .select('id, customer_name, books, amount_agorot, status')
-    .eq('channel', 'phone').eq('phone', phone).order('created_at', { ascending: false }).limit(5)
-  const picked = pickPhoneCredit(rows ?? [])
+    .eq('phone', phone).order('created_at', { ascending: false }).limit(20)
+  const picked = mergePhoneCredits(rows ?? [])
   if (!picked) {
     // שיחת בדיקה של מנהל (נרשמה ב-activity_log בחצי השעה האחרונה): כל השיחה עם נתוני דוגמה, בלי שמירה
     const { data: test } = await db.from('activity_log').select('id')
@@ -60,24 +60,24 @@ async function handle(request: NextRequest) {
     return yemotText('id_list_message=t-לא נמצא זיכוי למספר הזה&go_to_folder=hangup')
   }
 
-  const { credit } = picked
-  const turn = creditPhoneTurn(params, {
-    name: credit.customer_name, books: credit.books, amountAgorot: credit.amount_agorot, alreadyDone: !picked.open,
-  })
+  // כל הזיכויים של הטלפון נשמעים יחד (שיחה יוצאת או נכנסת), והפרטים נשמרים לכולם
+  const ids = picked.rows.map(r => r.id)
+  const open = picked.rows.some(r => (PHONE_OPEN_STATUSES as readonly string[]).includes(r.status))
+  const turn = creditPhoneTurn(params, { ...picked.ctx, alreadyDone: !open })
 
   const a = turn.action
   if (a?.kind === 'answered') {
     await db.from('book_fair_credits')
       .update({ status: 'answered', answered_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-      .eq('id', credit.id).eq('status', 'sent')
+      .in('id', ids).eq('status', 'sent')
   } else if (a?.kind === 'save') {
     const { data: saved, error } = await db.from('book_fair_credits').update({
       status: 'details_entered', details_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       bank_holder_recording: a.holderRecording.slice(0, 300),
       bank_number: a.bank, bank_branch: a.branch, bank_account: a.account,
-    }).eq('id', credit.id).in('status', [...PHONE_OPEN_STATUSES]).select('id')
+    }).in('id', ids).in('status', [...PHONE_OPEN_STATUSES]).select('id')
     if (error || !saved?.length) {
-      console.error('[yemot-credits] שמירה נכשלה', credit.id, error?.code ?? 'status')
+      console.error('[yemot-credits] שמירה נכשלה', ids, error?.code ?? 'status')
       return yemotText('id_list_message=t-אירעה תקלה בשמירה. נחזור אליכם בשיחה נוספת&go_to_folder=hangup')
     }
   }
