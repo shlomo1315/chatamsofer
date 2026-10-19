@@ -8,7 +8,7 @@ const input = 'w-full rounded-lg border border-slate-300 px-3 py-2.5 text-base t
 export default function CreditForm({ token }: { token: string }) {
   const [info, setInfo] = useState<Info | null>(null)
   const [loadError, setLoadError] = useState('')
-  const [f, setF] = useState({ holder: '', bank: '', branch: '', account: '' })
+  const [f, setF] = useState({ holder: '', holderId: '', bank: '', branch: '', account: '' })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
@@ -48,6 +48,10 @@ export default function CreditForm({ token }: { token: string }) {
       <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">שם בעל החשבון
         <input className={input} value={f.holder} maxLength={80} required autoComplete="off"
           onChange={e => setF({ ...f, holder: e.target.value })} />
+      </label>
+      <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">מספר זהות של בעל החשבון
+        <input className={input} inputMode="numeric" maxLength={9} required autoComplete="off" value={f.holderId}
+          onChange={e => setF({ ...f, holderId: e.target.value.replace(/\D/g, '') })} />
       </label>
       <div className="grid grid-cols-2 gap-3">
         <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">מספר בנק

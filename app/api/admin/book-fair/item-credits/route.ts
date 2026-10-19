@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ExcelJS from 'exceljs'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
-import { parseItemCreditsTable, matchItemCredits, type CreditItem, type CreditOrder } from '@/lib/bookFairItemCredits'
+import { parseItemCreditsTable, matchItemCredits, buildCreditUploadRows, creditUploadCells, CREDIT_UPLOAD_HEADERS, type CreditItem, type CreditOrder } from '@/lib/bookFairItemCredits'
 import { logActivity } from '@/lib/activityLog'
 
 // ספרים שזוכו בהזמנות (ברמת מערכת ההזמנות בלבד, בלי כסף ובלי מלאי):
@@ -38,6 +38,43 @@ export async function GET(request: NextRequest) {
 
   const db = getServiceClient()
   if (!db) return serverMisconfigured()
+
+  // אקסל מוכן להעלאה ב"זיכוי על ספרים חסרים": שורה לכל לקוח עם כל הספרים שזוכו והסכום המלא
+  if (request.nextUrl.searchParams.get('export')) {
+    const [{ data: rows, error: e1 }, { data: existing, error: e2 }] = await Promise.all([
+      db.from('book_fair_item_credits')
+        .select('order_number, quantity, item:book_fair_order_items(title_snapshot, unit_price_agorot), order:book_fair_orders(customer_name, customer_phone, customer_email)')
+        .order('order_number').limit(10000),
+      db.from('book_fair_credits').select('channel, phone, email, status, transferred_at').limit(10000),
+    ])
+    if (e1 || e2) return NextResponse.json({ error: 'הייצוא נכשל' }, { status: 422 })
+    const one = <T,>(v: T | T[] | null): T | null => (Array.isArray(v) ? v[0] ?? null : v)
+    const upload = buildCreditUploadRows((rows ?? []).map(r => {
+      const item = one(r.item), order = one(r.order)
+      return {
+        order_number: r.order_number, quantity: r.quantity,
+        title: item?.title_snapshot ?? '', unit_price_agorot: item?.unit_price_agorot ?? 0,
+        customer_name: order?.customer_name ?? null, customer_phone: order?.customer_phone ?? null, customer_email: order?.customer_email ?? null,
+      }
+    }), existing ?? [])
+
+    const wb = new ExcelJS.Workbook()
+    const ws = wb.addWorksheet('זיכויים', { views: [{ rightToLeft: true }] })
+    const widths = [20, 14, 28, 50, 10, 8, 18, 14]
+    ws.columns = CREDIT_UPLOAD_HEADERS.map((header, i) => ({ header, width: widths[i] }))
+    ws.getColumn(2).numFmt = '@'
+    ws.getRow(1).font = { bold: true }
+    for (const r of upload) ws.addRow(creditUploadCells(r))
+    const buf = await wb.xlsx.writeBuffer()
+    return new NextResponse(buf as ArrayBuffer, {
+      headers: {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent('זיכויים להעלאה.xlsx')}`,
+        'Cache-Control': 'no-store',
+      },
+    })
+  }
+
   const { data, error } = await db.from('book_fair_item_credits')
     .select('id, order_id, order_number, quantity, source, created_at, item:book_fair_order_items(title_snapshot)')
     .order('created_at', { ascending: false }).limit(2000)

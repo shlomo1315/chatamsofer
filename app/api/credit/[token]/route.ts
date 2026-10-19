@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
-import { cleanHolder, validateBank, BANK_SAVE_STATUSES } from '@/lib/bookFairCredits'
+import { cleanHolder, validateBank, validateIsraeliId, BANK_SAVE_STATUSES } from '@/lib/bookFairCredits'
 
 // טופס פרטי חשבון ציבורי בקישור אישי מהמייל. הגישה רק עם הטוקן (48 תווי hex אקראיים),
 // עם הגבלת קצב. לעולם לא מחזיר פרטי בנק, ואינו כותב אותם ללוגים.
@@ -43,12 +43,14 @@ export async function POST(request: NextRequest, { params }: Ctx) {
   const branch = String(body?.branch ?? '').replace(/\D/g, '')
   const account = String(body?.account ?? '').replace(/\D/g, '')
   if (holder.length < 2) return NextResponse.json({ error: 'נא למלא את שם בעל החשבון' }, { status: 400 })
+  const holderId = validateIsraeliId(body?.holderId)
+  if (!holderId) return NextResponse.json({ error: 'מספר הזהות אינו תקין' }, { status: 400 })
   const bad = validateBank({ bank, branch, account })
   if (bad) return NextResponse.json({ error: bad }, { status: 400 })
 
   const { data, error } = await db.from('book_fair_credits').update({
     status: 'details_entered', details_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-    bank_holder: holder, bank_number: bank, bank_branch: branch, bank_account: account,
+    bank_holder: holder, bank_holder_id: holderId, bank_number: bank, bank_branch: branch, bank_account: account,
   }).eq('token', token).in('status', [...BANK_SAVE_STATUSES]).select('id')
   if (error) {
     console.error('[credit] שמירה נכשלה', error.code)

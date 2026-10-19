@@ -92,8 +92,16 @@ export default function ItemCreditsClient() {
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-4">
-        <h2 className="mb-1 text-lg font-bold text-slate-900">ספרים שסומנו כזוכו ({credits.length})</h2>
-        <p className="mb-3 text-sm text-slate-600">סימון ידני וביטול סימון: בכרטיס ההזמנה, ליד שורת הספר.</p>
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-bold text-slate-900">ספרים שסומנו כזוכו ({credits.length})</h2>
+          {credits.length > 0 && (
+            <a className={btn} href="/api/admin/book-fair/item-credits?export=1">הורדת אקסל להעלאה בזיכוי על ספרים חסרים</a>
+          )}
+        </div>
+        <p className="mb-3 text-sm text-slate-600">
+          סימון ידני וביטול סימון: בכרטיס ההזמנה, ליד שורת הספר. באקסל שורה אחת לכל לקוח עם כל הספרים והסכום המלא,
+          ואפשר להעלות אותו כמו שהוא. עמודת &quot;סטטוס זיכוי&quot; מראה אם כבר הועלה, נשלח או הועבר בבנק.
+        </p>
         {credits.length === 0 ? <p className="text-sm text-slate-500">עדיין לא סומנו ספרים.</p> : (
           <table className="w-full text-sm">
             <thead className="border-b border-slate-200 text-xs text-slate-500">

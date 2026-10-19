@@ -20,14 +20,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!db) return serverMisconfigured()
 
   const { data, error } = await db.from('book_fair_credits')
-    .select('bank_holder, bank_holder_recording, bank_number, bank_branch, bank_account')
+    .select('bank_holder, bank_holder_id, bank_holder_recording, bank_number, bank_branch, bank_account')
     .eq('id', id).eq('status', 'details_entered').maybeSingle()
   if (error) return NextResponse.json({ error: 'הטעינה נכשלה' }, { status: 422 })
   if (!data) return NextResponse.json({ error: 'לא הוזנו פרטי חשבון לזיכוי הזה' }, { status: 404 })
 
   await logActivity(db, { userId: staff.userId, action: 'book_fair_credits_bank_view', entityType: 'book_fair_credits', entityId: id })
   return NextResponse.json({
-    holder: data.bank_holder, holderRecording: data.bank_holder_recording,
+    holder: data.bank_holder, holderId: data.bank_holder_id, holderRecording: data.bank_holder_recording,
     bank: data.bank_number, branch: data.bank_branch, account: data.bank_account,
   }, { headers: NO_STORE })
 }
