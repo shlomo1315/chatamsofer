@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  parseCreditsTable, validateBank, creditPhoneTurn, buildCreditEmailHtml, amountSpoken, pickPhoneCredit, canSaveBank, validateIsraeliId, creditStatusLabel,
+  parseCreditsTable, validateBank, creditPhoneTurn, buildCreditEmailHtml, amountSpoken, pickPhoneCredit, mergePhoneCredits, canSaveBank, validateIsraeliId, creditStatusLabel,
   parseTestSend, TEST_CREDIT, normalizeCreditPhone, isTestSendLimited,
   CR_OK, CR_HOLDER, CR_BANK, CR_BRANCH, CR_ACCT, CR_CONFIRM,
 } from './bookFairCredits'
@@ -81,6 +81,25 @@ describe('creditPhoneTurn', () => {
   it('מי שכבר מילא לא נשאל שוב', () => {
     const t = creditPhoneTurn({}, { ...ctx, alreadyDone: true })
     expect(t.action).toBeNull()
+    expect(t.reply).not.toContain('read=')
+  })
+})
+
+describe('mergePhoneCredits', () => {
+  const r = (id: number, status: string, books: string, amount_agorot: number) => ({ id, status, books, amount_agorot, customer_name: 'דני' })
+  it('מאחד כמה זיכויים פתוחים לשיחה אחת', () => {
+    const m = mergePhoneCredits([r(1, 'sent', 'ספר א', 1000), r(2, 'pending', 'ספר ב', 500), r(3, 'answered', 'ספר ג', 250)])
+    expect(m?.rows.map(x => x.id)).toEqual([1, 3])
+    expect(m?.ctx).toEqual({ name: 'דני', books: 'ספר א. ספר ג', amountAgorot: 1250 })
+  })
+  it('לא מזוהה: null', () => {
+    expect(mergePhoneCredits([r(1, 'pending', 'ספר', 100)])).toBeNull()
+    expect(mergePhoneCredits([])).toBeNull()
+  })
+  it('כבר מילא: משמיע סיכום בלי איסוף', () => {
+    const m = mergePhoneCredits([r(1, 'details_entered', 'ספר א', 1000)])!
+    const t = creditPhoneTurn({}, { ...m.ctx, alreadyDone: true })
+    expect(t.reply).toContain('ספר')
     expect(t.reply).not.toContain('read=')
   })
 })
