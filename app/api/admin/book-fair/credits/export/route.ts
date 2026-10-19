@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import ExcelJS from 'exceljs'
-import { requireAdmin, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
+import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
 import { formatShekels, creditStatusLabel, safeCell as safe } from '@/lib/bookFairCredits'
 import { logActivity } from '@/lib/activityLog'
 
-// ייצוא כל הזיכויים עם פרטי החשבון שהוזנו. מנהל בלבד, והייצוא נרשם ביומן (בלי הפרטים עצמם).
+// ייצוא כל הזיכויים עם פרטי החשבון שהוזנו. למי שיש לו הרשאת צפייה ביריד (גם מזכירות), והייצוא נרשם ביומן (בלי הפרטים עצמם).
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -12,7 +12,7 @@ export const runtime = 'nodejs'
 const date = (v: string | null) => (v ? new Date(v).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' }) : '')
 
 export async function GET() {
-  const staff = await requireAdmin()
+  const staff = await requirePermission('book_fair', 'view')
   if (!staff) return forbidden()
   const db = getServiceClient()
   if (!db) return serverMisconfigured()
