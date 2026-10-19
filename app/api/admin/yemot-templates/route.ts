@@ -1,19 +1,21 @@
 // כלי אבחון (אנשי צוות בלבד) — שולף מימות את רשימת תבניות הקמפיין וה-id האמיתי
 // שלהן, כדי לדעת מה לשים ב-YEMOT_OTP_TEMPLATE_ID. קריאה בלבד (GetTemplates) —
 // אינה מוציאה שום שיחה.
-import { NextResponse } from 'next/server'
+// ברירת מחדל: החשבון הכללי (YEMOT_TOKEN). חשבון היריד: /api/admin/yemot-templates?account=bookfair
+import { NextRequest, NextResponse } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
 const YEMOT_API = 'https://www.call2all.co.il/ym/api'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const staff = await requireStaff()
   if (!staff) return NextResponse.json({ error: 'אין הרשאה' }, { status: 401 })
 
-  const token = process.env.YEMOT_TOKEN
-  if (!token) return NextResponse.json({ error: 'YEMOT_TOKEN אינו מוגדר' }, { status: 500 })
+  const tokenName = request.nextUrl.searchParams.get('account') === 'bookfair' ? 'YEMOT_BOOK_FAIR_TOKEN' : 'YEMOT_TOKEN'
+  const token = process.env[tokenName]
+  if (!token) return NextResponse.json({ error: `${tokenName} אינו מוגדר` }, { status: 500 })
 
   const form = new URLSearchParams()
   form.set('token', token)
