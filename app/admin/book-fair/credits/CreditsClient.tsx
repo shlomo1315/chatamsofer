@@ -178,9 +178,7 @@ export default function CreditsClient({ isAdmin = false }: { isAdmin?: boolean }
           <div className="flex flex-wrap gap-2">
             <button className={btn} disabled={busy || !unsent.length} onClick={() => send(unsent)}>שליחה לכל מי שלא נשלח ({unsent.length})</button>
             <button className={btn2} disabled={busy || !selected.size} onClick={() => send([...selected], true)}>שליחה חוזרת לנבחרים</button>
-            {isAdmin
-              ? <a className={btn2} href="/api/admin/book-fair/credits/export">הורדת אקסל פרטי חשבון</a>
-              : <span className="self-center text-xs text-slate-500">הורדת פרטי החשבון זמינה למנהל בלבד</span>}
+            <a className={btn2} href="/api/admin/book-fair/credits/export">הורדת אקסל פרטי חשבון</a>
           </div>
         </div>
         <p className="text-sm text-slate-600">{Object.entries(STATUS).map(([k, v]) => `${v}: ${counts[k] ?? 0}`).join(' · ')} · {TRANSFERRED_LABEL}: {transferred}</p>
