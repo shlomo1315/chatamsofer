@@ -1,17 +1,19 @@
 import { describe, it, expect } from 'vitest'
-import { pickVoiceRecipients, voiceMarkerCovers } from './voiceBroadcast'
+import { pickVoiceRecipientList, voiceMarkerCovers } from './voiceBroadcast'
 
-describe('pickVoiceRecipients', () => {
-  it('מסיר כפילויות, ריקים, לא תקינים וסטטוסים שבוטלו', () => {
-    const r = pickVoiceRecipients([
-      { customer_phone: '052-7101315', status: 'paid' },
-      { customer_phone: '0527101315', status: 'shipped' },
-      { customer_phone: '0501234567', status: 'cancelled' },
-      { customer_phone: '', status: 'paid' },
-      { customer_phone: '123', status: 'paid' },
-      { customer_phone: null, status: 'paid' },
-    ])
-    expect(r).toEqual(['0527101315'])
+describe('pickVoiceRecipientList', () => {
+  const o = (customer_phone: string | null, status: string, delivery_method: string) => ({ customer_phone, status, delivery_method, customer_name: 'א' })
+  it('רק משלוח: איסוף עצמי לא נכנס לרשימה', () => {
+    const r = pickVoiceRecipientList([o('0501111111', 'paid', 'pickup'), o('0502222222', 'paid', 'shipping')])
+    expect(r.map(x => x.phone)).toEqual(['0502222222'])
+  })
+  it('מי שהזמין גם איסוף וגם משלוח נשאר פעם אחת, ומי שרק איסוף לא', () => {
+    const r = pickVoiceRecipientList([o('0501111111', 'paid', 'pickup'), o('050-111-1111', 'shipped', 'shipping'), o('0501111111', 'paid', 'shipping'), o('0503333333', 'paid', 'pickup')])
+    expect(r.map(x => x.phone)).toEqual(['0501111111'])
+  })
+  it('מסיר ריקים, לא תקינים וסטטוסים שבוטלו', () => {
+    const r = pickVoiceRecipientList([o('052-7101315', 'paid', 'shipping'), o('0527101315', 'shipped', 'shipping'), o('0501234567', 'cancelled', 'shipping'), o('', 'paid', 'shipping'), o('123', 'paid', 'shipping'), o(null, 'paid', 'shipping')])
+    expect(r.map(x => x.phone)).toEqual(['0527101315'])
   })
 })
 

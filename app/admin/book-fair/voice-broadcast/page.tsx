@@ -1,9 +1,8 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
 
-type Recipient = { phone: string; name: string; type: 'pickup' | 'shipping' | 'other' }
+type Recipient = { phone: string; name: string }
 const API = '/api/admin/book-fair/voice-broadcast'
-const TYPE_LABEL = { pickup: 'איסוף עצמי', shipping: 'משלוח', other: 'אחר' }
 
 const Card = ({ step, title, children }: { step: number; title: string; children: React.ReactNode }) => (
   <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -26,6 +25,7 @@ export default function VoiceBroadcastPage() {
   const [last, setLast] = useState<{ total: number; dialed: number; at: string } | null>(null)
   const [q, setQ] = useState('')
   const [msg, setMsg] = useState('')
+  const [yemot, setYemot] = useState('')
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -48,6 +48,7 @@ export default function VoiceBroadcastPage() {
     try {
       const r = await fetch(API, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       const d = await r.json().catch(() => ({}))
+      setYemot(d.yemot == null ? '' : JSON.stringify(d.yemot))
       if (!r.ok) { setMsg(d.error ?? 'הפעולה נכשלה'); return null }
       return d
     } finally { setBusy(false) }
@@ -89,9 +90,10 @@ export default function VoiceBroadcastPage() {
         <Card step={2} title="שיחת בדיקה">
           <p className="mb-3 text-sm text-gray-600">{saved?.testPhone ? <>מחייג למספר השמור: <b dir="ltr">{saved.testPhone}</b></> : 'הזינו מספר בשלב 1 ושמרו, כדי לאפשר בדיקה.'}</p>
           <button disabled={busy || dirty || !saved?.testPhone} onClick={async () => { if (await call('POST', { test: true })) setMsg('מחייגים אליך עכשיו') }} className="rounded-lg bg-blue-700 px-4 py-2 font-medium text-white disabled:opacity-50">חייג אליי לבדיקה</button>
+          {yemot && <p dir="ltr" className="mt-3 break-all rounded-lg bg-gray-50 p-2 text-left text-xs text-gray-600">תשובת ימות: {yemot}</p>}
         </Card>
         <Card step={3} title="שליחה לכולם">
-          <p className="mb-3 text-sm text-gray-600">מספרים ייחודיים: <b className="text-base text-gray-900">{count || '...'}</b>{started && ' · שליחה מלאה כבר התחילה'}</p>
+          <p className="mb-3 text-sm text-gray-600">מספרים ייחודיים (הזמנות משלוח בלבד): <b className="text-base text-gray-900">{count || '...'}</b>{started && ' · שליחה מלאה כבר התחילה'}</p>
           <button
             disabled={busy || !count || started || dirty}
             onClick={async () => {
@@ -112,14 +114,14 @@ export default function VoiceBroadcastPage() {
         </div>
         <div className="max-h-[480px] overflow-auto rounded-lg border border-gray-100">
           <table className="w-full text-right text-sm">
-            <thead className="sticky top-0 bg-gray-50 text-gray-600"><tr><th className="p-2">שם</th><th className="p-2">טלפון</th><th className="p-2">סוג</th></tr></thead>
+            <thead className="sticky top-0 bg-gray-50 text-gray-600"><tr><th className="p-2">שם</th><th className="p-2">טלפון</th></tr></thead>
             <tbody>
               {shown.map(r => (
                 <tr key={r.phone} className="border-t border-gray-100">
-                  <td className="p-2">{r.name || '—'}</td><td className="p-2" dir="ltr">{r.phone}</td><td className="p-2">{TYPE_LABEL[r.type]}</td>
+                  <td className="p-2">{r.name || '—'}</td><td className="p-2" dir="ltr">{r.phone}</td>
                 </tr>
               ))}
-              {!shown.length && <tr><td colSpan={3} className="p-4 text-center text-gray-500">לא נמצאו נמענים</td></tr>}
+              {!shown.length && <tr><td colSpan={2} className="p-4 text-center text-gray-500">לא נמצאו נמענים</td></tr>}
             </tbody>
           </table>
         </div>

@@ -10,28 +10,17 @@ export const VOICE_FULL_WINDOW_MS = 4 * 60 * 60 * 1000
 
 export type VoiceMarker = { until: string; phones: string[] | 'all' }
 
-/** מספרים ייחודיים (מנורמלים) מהזמנות ששולמו ולא בוטלו, בלי ריקים ולא תקינים. */
-export function pickVoiceRecipients(rows: { customer_phone: string | null; status?: string }[]): string[] {
-  const seen = new Set<string>()
-  for (const r of rows) {
-    if (r.status && !VOICE_BROADCAST_STATUSES.includes(r.status)) continue
-    const p = normalizePhone(r.customer_phone ?? '')
-    if (p) seen.add(p)
-  }
-  return [...seen]
-}
+export type VoiceRecipient = { phone: string; name: string; }
 
-export type VoiceRecipient = { phone: string; name: string; type: 'pickup' | 'shipping' | 'other' }
-
-/** רשימת נמענים לתצוגה: מספר ייחודי פעם אחת, עם השם וסוג ההזמנה הראשונה שלו. */
+/** נמענים: רק הזמנות משלוח ששולמו ולא בוטלו (איסוף עצמי כבר קיבלו). מספר ייחודי פעם אחת. הרשימה היחידה לספירה, לטבלה ולחיוג. */
 export function pickVoiceRecipientList(rows: { customer_phone: string | null; customer_name?: string | null; delivery_method?: string | null; status?: string }[]): VoiceRecipient[] {
   const seen = new Map<string, VoiceRecipient>()
   for (const r of rows) {
     if (r.status && !VOICE_BROADCAST_STATUSES.includes(r.status)) continue
+    if (r.delivery_method !== 'shipping') continue
     const phone = normalizePhone(r.customer_phone ?? '')
     if (!phone || seen.has(phone)) continue
-    const type = r.delivery_method === 'pickup' ? 'pickup' : r.delivery_method === 'shipping' ? 'shipping' : 'other'
-    seen.set(phone, { phone, name: String(r.customer_name ?? '').trim(), type })
+    seen.set(phone, { phone, name: String(r.customer_name ?? '').trim() })
   }
   return [...seen.values()]
 }
@@ -48,11 +37,12 @@ export function voiceMarkerCovers(raw: string | null | undefined, phone: string,
 const YEMOT_API = 'https://www.call2all.co.il/ym/api'
 
 /** חיוג בחשבון היריד בלבד (YEMOT_BOOK_FAIR_TOKEN). קבוצות של עד 50 מספרים. */
-export async function dialVoiceBroadcast(phones: string[]): Promise<{ ok: boolean; dialed: number; error?: string }> {
+export async function dialVoiceBroadcast(phones: string[]): Promise<{ ok: boolean; dialed: number; error?: string; yemot?: unknown }> {
   const token = process.env.YEMOT_BOOK_FAIR_TOKEN
   const templateId = process.env.YEMOT_BOOK_FAIR_CREDIT_TEMPLATE_ID
   if (!token || !templateId) return { ok: false, dialed: 0, error: 'חשבון ימות של היריד אינו מוגדר' }
   let dialed = 0
+  let yemot: unknown
   for (let i = 0; i < phones.length; i += 50) {
     const chunk = phones.slice(i, i + 50)
     const form = new URLSearchParams()
@@ -63,11 +53,16 @@ export async function dialVoiceBroadcast(phones: string[]): Promise<{ ok: boolea
     try {
       const res = await fetch(`${YEMOT_API}/RunCampaign`, { method: 'POST', body: form })
       const json = await res.json().catch(() => null)
+      yemot = json
+      console.log(`[voice-broadcast] RunCampaign נשלח ל-${chunk.length} מספרים, תבנית ${templateId}, HTTP ${res.status}, תשובת ימות: ${JSON.stringify(json)}`)
       if (!json || (json.responseStatus && json.responseStatus !== 'OK')) {
-        return { ok: false, dialed, error: json ? String(json.message ?? json.responseStatus) : `HTTP ${res.status}` }
+        return { ok: false, dialed, yemot, error: json ? String(json.message ?? json.responseStatus) : `HTTP ${res.status}` }
       }
       dialed += chunk.length
-    } catch (e) { return { ok: false, dialed, error: e instanceof Error ? e.message : String(e) } }
+    } catch (e) {
+      console.error('[voice-broadcast] RunCampaign נכשל:', e instanceof Error ? e.message : e)
+      return { ok: false, dialed, error: e instanceof Error ? e.message : String(e) }
+    }
   }
-  return { ok: true, dialed }
+  return { ok: true, dialed, yemot }
 }
