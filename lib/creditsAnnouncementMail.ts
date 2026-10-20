@@ -1,5 +1,6 @@
 // מייל ההודעה למזמינים (אותו נוסח של הודעת הקול), נשלח מכתובת היריד.
 import { CREDITS_ANNOUNCEMENT_TEXT } from './creditsAnnouncement'
+import { shell, HEICHAL_LOGO_URL } from './emailTemplates'
 
 export const ANNOUNCEMENT_MAIL_SUBJECT = 'הודעה ממערכת הזמנות הספרים - היכל החתם סופר'
 export const ANNOUNCEMENT_MAIL_STATUSES = ['paid', 'picking', 'packed', 'shipped']
@@ -18,9 +19,16 @@ export function pickAnnouncementRecipients(rows: AnnouncementOrderRow[]): string
   return [...seen]
 }
 
-/** HTML בכיוון RTL, פסקה לכל בלוק בנוסח, בלי תוספות. */
+/** HTML במעטפת המיילים הראשית (לוגו היכל החתם סופר), פסקה לכל בלוק בנוסח. */
 export function buildAnnouncementMailHtml(): string {
   const paras = CREDITS_ANNOUNCEMENT_TEXT.split('\n\n')
-    .map(p => `<p style="margin:0 0 16px;">${esc(p)}</p>`).join('')
-  return `<div dir="rtl" style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;padding:24px;font-size:16px;line-height:1.7;color:#111827;text-align:right;">${paras}</div>`
+    .map(p => `<p style="margin:0 0 18px;color:#1e293b;font-size:16px;line-height:1.8;text-align:right;">${esc(p)}</p>`).join('')
+  return shell({
+    logoUrl: HEICHAL_LOGO_URL,
+    preheader: 'הודעה ממערכת הזמנות הספרים',
+    accent: '#0ea5e9',
+    title: 'הודעה ממערכת הזמנות הספרים',
+    subtitle: 'יריד הספרים',
+    body: paras,
+  })
 }
