@@ -69,3 +69,9 @@ export async function announcementToken(): Promise<string | null> {
   // הודעה ישנה עדיפה על שקט בזמן שהחדשה בהפקה
   return cur.audio ? `f-${cur.audio}` : null
 }
+
+/** כמו announcementToken, אבל ממתין לסיום הפקה שהתחילה (לשליחת בדיקה, כדי שהשיחה הראשונה כבר תשמע את ההודעה). */
+export async function ensureAnnouncement(): Promise<void> {
+  await announcementToken()
+  if (building) await building
+}
