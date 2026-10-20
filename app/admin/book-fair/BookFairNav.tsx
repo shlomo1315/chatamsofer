@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutGrid, ShoppingCart, BookOpen, Users, Settings2, ExternalLink, Mail, MessageSquare, Undo2, Store, Inbox, PackageX, HandCoins, Truck, CreditCard } from 'lucide-react'
+import { LayoutGrid, ShoppingCart, BookOpen, Users, Settings2, ExternalLink, Mail, MessageSquare, Undo2, Store, Inbox, PackageX, HandCoins, Truck, CreditCard, Phone } from 'lucide-react'
 
 // סרגל ניווט פנימי של מחלקת היריד.
 //
@@ -24,6 +24,7 @@ const TABS = [
   // אליהם בלי לדעת את הכתובת.
   { href: '/admin/book-fair/emails',   label: 'מיילים',  icon: Mail },
   { href: '/admin/book-fair/announcement-mail', label: 'הודעה למזמינים', icon: Mail },
+  { href: '/admin/book-fair/voice-broadcast', label: 'הודעה קולית', icon: Phone },
   // 🔴 14.10: תיבת yerid@ בלבד. קודם הקישור הוביל ל-/admin/mail הכללי,
   // שנפתח על office@ ואפשר לעבור לכל תיבה במערכת.
   { href: '/admin/book-fair/mailbox',  label: 'תיבת מייל', icon: Inbox },
