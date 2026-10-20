@@ -10,28 +10,17 @@ export const VOICE_FULL_WINDOW_MS = 4 * 60 * 60 * 1000
 
 export type VoiceMarker = { until: string; phones: string[] | 'all' }
 
-/** מספרים ייחודיים (מנורמלים) מהזמנות ששולמו ולא בוטלו, בלי ריקים ולא תקינים. */
-export function pickVoiceRecipients(rows: { customer_phone: string | null; status?: string }[]): string[] {
-  const seen = new Set<string>()
-  for (const r of rows) {
-    if (r.status && !VOICE_BROADCAST_STATUSES.includes(r.status)) continue
-    const p = normalizePhone(r.customer_phone ?? '')
-    if (p) seen.add(p)
-  }
-  return [...seen]
-}
+export type VoiceRecipient = { phone: string; name: string; }
 
-export type VoiceRecipient = { phone: string; name: string; type: 'pickup' | 'shipping' | 'other' }
-
-/** רשימת נמענים לתצוגה: מספר ייחודי פעם אחת, עם השם וסוג ההזמנה הראשונה שלו. */
+/** נמענים: רק הזמנות משלוח ששולמו ולא בוטלו (איסוף עצמי כבר קיבלו). מספר ייחודי פעם אחת. הרשימה היחידה לספירה, לטבלה ולחיוג. */
 export function pickVoiceRecipientList(rows: { customer_phone: string | null; customer_name?: string | null; delivery_method?: string | null; status?: string }[]): VoiceRecipient[] {
   const seen = new Map<string, VoiceRecipient>()
   for (const r of rows) {
     if (r.status && !VOICE_BROADCAST_STATUSES.includes(r.status)) continue
+    if (r.delivery_method !== 'shipping') continue
     const phone = normalizePhone(r.customer_phone ?? '')
     if (!phone || seen.has(phone)) continue
-    const type = r.delivery_method === 'pickup' ? 'pickup' : r.delivery_method === 'shipping' ? 'shipping' : 'other'
-    seen.set(phone, { phone, name: String(r.customer_name ?? '').trim(), type })
+    seen.set(phone, { phone, name: String(r.customer_name ?? '').trim() })
   }
   return [...seen.values()]
 }

@@ -29,6 +29,7 @@ async function loadRecipients(db: NonNullable<ReturnType<typeof getServiceClient
   const { rows } = await fetchAllRows<{ customer_phone: string | null; customer_name: string | null; delivery_method: string | null; status: string }>(
     (from, to) => db.from('book_fair_orders')
       .select('customer_phone, customer_name, delivery_method, status')
+      .eq('delivery_method', 'shipping')
       .in('status', VOICE_BROADCAST_STATUSES)
       .not('customer_phone', 'is', null)
       .order('created_at', { ascending: true })
