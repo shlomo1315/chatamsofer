@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { gilyonFileName } from '@/lib/gilyonotFileName'
 import { getServiceClient } from '@/lib/apiAuth'
 
 // קישור ההורדה שבמייל. רושם הורדה לנמען (וגם פתיחה, אם הפיקסל נחסם),
@@ -25,11 +26,11 @@ export async function GET(_r: Request, { params }: { params: Promise<{ token: st
   const { data: issueId, error } = await db.rpc('gilyonot_track', { p_token: token, p_kind: 'download' })
   if (error || !issueId) return notFound()
 
-  const { data: issue } = await db.from('gilyonot_issues').select('file_path, file_name').eq('id', issueId as string).maybeSingle()
+  const { data: issue } = await db.from('gilyonot_issues').select('file_path, file_name, title, parasha').eq('id', issueId as string).maybeSingle()
   if (!issue?.file_path) return notFound()
 
   const { data: signed } = await db.storage.from('documents')
-    .createSignedUrl(issue.file_path as string, SIGNED_SECONDS, { download: (issue.file_name as string) || true })
+    .createSignedUrl(issue.file_path as string, SIGNED_SECONDS, { download: gilyonFileName(issue as { title: string; parasha: string }, issue.file_name as string) })
   if (!signed?.signedUrl) return notFound()
   return NextResponse.redirect(signed.signedUrl, 302)
 }
