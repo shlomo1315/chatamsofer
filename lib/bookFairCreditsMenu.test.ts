@@ -35,3 +35,11 @@ describe('mainMenuTurn', () => {
     expect(r.reply).not.toContain(CR_OK)
   })
 })
+
+describe('הודעת פתיחה', () => {
+  it('נשמעת בתחילת התפריט לפני האפשרויות, ולא אחרי בחירה', () => {
+    const r = mainMenuTurn({}, null, 'f-rec_x')
+    expect(r.reply).toContain('read=f-rec_x.t-')
+    expect(mainMenuTurn({ [CM_MENU]: '1' }, null, 'f-rec_x').reply).not.toContain('f-rec_x')
+  })
+})

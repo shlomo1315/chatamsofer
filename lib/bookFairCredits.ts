@@ -357,10 +357,10 @@ export const CM_INQ = 'cm_inq'
 export type MenuAction = CreditPhoneAction | { kind: 'inquiry'; recording: string }
 export interface MenuTurn { reply: string; action: MenuAction }
 
-export function mainMenuTurn(params: Record<string, string>, credit: CreditCallContext | null): MenuTurn {
+export function mainMenuTurn(params: Record<string, string>, credit: CreditCallContext | null, announcement: string | null = null): MenuTurn {
   const choice = params[CM_MENU] ?? ''
   if (!choice) {
-    const tokens = [t('שלום, הגעתם להיכל החתם סופר. להשארת פנייה הקישו 1.')]
+    const tokens = [...(announcement ? [announcement] : []), t('להשארת פנייה הקישו 1.')]
     if (credit) tokens.push(t('לשמיעת פרטי הזיכוי שלכם הקישו 2.'))
     return { reply: readKeys(CM_MENU, tokens, credit ? ['1', '2'] : ['1']), action: null }
   }
