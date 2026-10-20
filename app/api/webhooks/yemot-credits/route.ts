@@ -12,6 +12,7 @@ import { safeEqual } from '@/lib/svix'
 import { normalizePhone } from '@/lib/kvitel'
 import { archiveInquiryRecording } from '@/lib/bookFairInquiryAudio'
 import { announcementToken } from '@/lib/creditsAnnouncement'
+import { voiceMarkerCovers, VOICE_BROADCAST_KEY } from '@/lib/voiceBroadcast'
 import { withFallbackFolder } from '@/lib/yemotFallback'
 import {
   type CreditCallContext, mainMenuTurn, mergePhoneCredits, PHONE_OPEN_STATUSES, TEST_CALL_ACTION, TEST_CALL_WINDOW_MS, TEST_CREDIT,
@@ -49,6 +50,15 @@ async function handle(request: NextRequest) {
   if (!db) return yemotText('id_list_message=t-שגיאת שרת&go_to_folder=hangup')
 
   const phone = normalizePhone(params['ApiPhone'] ?? '')
+
+  // שליחה קולית פעילה למספר הזה: משמיעים רק את ההודעה ומנתקים, בלי תפריט
+  if (phone && !params['cm_menu']) {
+    const { data: vb } = await db.from('app_settings').select('value').eq('key', VOICE_BROADCAST_KEY).maybeSingle()
+    if (voiceMarkerCovers(vb?.value, phone)) {
+      const tok = await announcementToken()
+      if (tok) return yemotText(`id_list_message=${tok}&go_to_folder=hangup`)
+    }
+  }
 
   // זיכוי המתקשר (אם יש): קובע אם התפריט כולל את אפשרות 2
   let rows: Awaited<ReturnType<typeof loadRows>> = []
