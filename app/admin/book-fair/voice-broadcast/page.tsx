@@ -25,6 +25,7 @@ export default function VoiceBroadcastPage() {
   const [last, setLast] = useState<{ total: number; dialed: number; at: string } | null>(null)
   const [q, setQ] = useState('')
   const [msg, setMsg] = useState('')
+  const [yemot, setYemot] = useState('')
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -47,6 +48,7 @@ export default function VoiceBroadcastPage() {
     try {
       const r = await fetch(API, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       const d = await r.json().catch(() => ({}))
+      setYemot(d.yemot == null ? '' : JSON.stringify(d.yemot))
       if (!r.ok) { setMsg(d.error ?? 'הפעולה נכשלה'); return null }
       return d
     } finally { setBusy(false) }
@@ -88,6 +90,7 @@ export default function VoiceBroadcastPage() {
         <Card step={2} title="שיחת בדיקה">
           <p className="mb-3 text-sm text-gray-600">{saved?.testPhone ? <>מחייג למספר השמור: <b dir="ltr">{saved.testPhone}</b></> : 'הזינו מספר בשלב 1 ושמרו, כדי לאפשר בדיקה.'}</p>
           <button disabled={busy || dirty || !saved?.testPhone} onClick={async () => { if (await call('POST', { test: true })) setMsg('מחייגים אליך עכשיו') }} className="rounded-lg bg-blue-700 px-4 py-2 font-medium text-white disabled:opacity-50">חייג אליי לבדיקה</button>
+          {yemot && <p dir="ltr" className="mt-3 break-all rounded-lg bg-gray-50 p-2 text-left text-xs text-gray-600">תשובת ימות: {yemot}</p>}
         </Card>
         <Card step={3} title="שליחה לכולם">
           <p className="mb-3 text-sm text-gray-600">מספרים ייחודיים (הזמנות משלוח בלבד): <b className="text-base text-gray-900">{count || '...'}</b>{started && ' · שליחה מלאה כבר התחילה'}</p>

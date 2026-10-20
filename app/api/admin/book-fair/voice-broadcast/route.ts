@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
   if (body?.test) {
     await setMarker(db, { until: new Date(Date.now() + VOICE_TEST_WINDOW_MS).toISOString(), phones: [testPhone!] })
     const res = await dialVoiceBroadcast([testPhone!])
-    return res.ok ? NextResponse.json({ ok: true, test: true }) : NextResponse.json({ error: res.error ?? 'החיוג נכשל' }, { status: 500 })
+    return res.ok ? NextResponse.json({ ok: true, test: true, yemot: res.yemot }) : NextResponse.json({ error: res.error ?? 'החיוג נכשל', yemot: res.yemot }, { status: 500 })
   }
 
   const list = await loadRecipients(db)

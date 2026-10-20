@@ -50,12 +50,16 @@ async function handle(request: NextRequest) {
   if (!db) return yemotText('id_list_message=t-שגיאת שרת&go_to_folder=hangup')
 
   const phone = normalizePhone(params['ApiPhone'] ?? '')
+  if (!phone) console.log(`[yemot-credits] קריאה בלי ApiPhone תקין. מפתחות: ${Object.keys(params).join(',')}`)
 
   // שליחה קולית פעילה למספר הזה: משמיעים רק את ההודעה ומנתקים, בלי תפריט
   if (phone && !params['cm_menu']) {
     const { data: vb } = await db.from('app_settings').select('value').eq('key', VOICE_BROADCAST_KEY).maybeSingle()
-    if (voiceMarkerCovers(vb?.value, phone)) {
+    const covered = voiceMarkerCovers(vb?.value, phone)
+    console.log(`[yemot-credits] שיחה נכנסת ${phone}: שליחה קולית פעילה=${covered}`)
+    if (covered) {
       const tok = await announcementToken()
+      console.log(`[yemot-credits] שליחה קולית ${phone}: משמיעים ${tok ?? 'כלום (אין הקלטה)'}`)
       if (tok) return yemotText(`id_list_message=${tok}&go_to_folder=hangup`)
     }
   }
