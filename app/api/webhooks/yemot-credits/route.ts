@@ -11,6 +11,7 @@ import { getServiceClient } from '@/lib/apiAuth'
 import { safeEqual } from '@/lib/svix'
 import { normalizePhone } from '@/lib/kvitel'
 import { archiveInquiryRecording } from '@/lib/bookFairInquiryAudio'
+import { announcementToken } from '@/lib/creditsAnnouncement'
 import { withFallbackFolder } from '@/lib/yemotFallback'
 import {
   type CreditCallContext, mainMenuTurn, mergePhoneCredits, PHONE_OPEN_STATUSES, TEST_CALL_ACTION, TEST_CALL_WINDOW_MS, TEST_CREDIT,
@@ -65,7 +66,7 @@ async function handle(request: NextRequest) {
     if (test?.length) ctx = TEST_CREDIT
   }
 
-  const turn = mainMenuTurn(params, ctx)
+  const turn = mainMenuTurn(params, ctx, params['cm_menu'] ? null : await announcementToken())
   const a = turn.action
   const ids = picked?.rows.map(r => r.id) ?? []
 
