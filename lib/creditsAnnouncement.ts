@@ -11,10 +11,25 @@ export const CREDITS_ANNOUNCEMENT_TEXT = [
   'שלום וברכה, הודעה ממערכת הזמנות הספרים שעל ידי היכל החתם סופר.',
   'הזמנתכם נשלחה לכתובת שהזנתם בעת ביצוע ההזמנה.',
   'לתשומת לבכם, עשינו כל מאמץ לספק לכל לקוח את מלוא הספרים שהוזמנו. עקב הביקוש הגדול וההזמנות הרבות שהתקבלו במערכת, ייתכן חוסר בספרים מסוימים, ואנו מתנצלים על כך.',
-  'לדיווח על תקלה או חסר בחבילה שקיבלתם, ניתן להשאיר לנו הודעה בטלפון 09-3130924 או בדוא"ל yerid@chasamsofer.info ונחזור אליכם בהקדם.',
-  'שימו לב, המערכת פתוחה לפניות עד ליום שני ט"ו בחשוון בשעה 12 בלילה, לאחמ"כ לא נוכל לתת יותר מענה.',
+  'לדיווח על תקלה או חסר בחבילה שקיבלתם, ניתן להשאיר לנו הודעה בטלפון 09-3130924 או בדואר אלקטרוני yerid@chasamsofer.info ונחזור אליכם בהקדם.',
+  'שימו לב, המערכת פתוחה לפניות עד ליום שני ט"ו בחשוון בשעה 12 בלילה, לאחר מכן לא נוכל לתת יותר מענה.',
   'בברכה, היכל החתם סופר',
 ].join('\n\n')
+
+const DIGITS = ['אפס', 'אחד', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע']
+const LETTERS: Record<string, string> = {
+  a: 'איי', b: 'בי', c: 'סי', d: 'די', e: 'אי', f: 'אף', g: "ג'י", h: "אייץ'", i: 'איי', j: "ג'יי", k: 'קיי', l: 'אל', m: 'אם',
+  n: 'אן', o: 'או', p: 'פי', q: 'קיו', r: 'אר', s: 'אס', t: 'טי', u: 'יו', v: 'וי', w: 'דבליו', x: 'אקס', y: 'וואי', z: 'זד',
+  '@': 'שטרודל', '.': 'נקודה', '_': 'קו תחתון', '-': 'מקף',
+}
+const spellOut = (v: string) => [...v].map(c => /\d/.test(c) ? DIGITS[+c] : (LETTERS[c.toLowerCase()] ?? c)).join(', ')
+
+/** הנוסח להקראה: טלפון ספרה אחרי ספרה וכתובת מייל אות אחרי אות. הנוסח המוצג (מייל) נשאר כמו שהוא. */
+export function spokenAnnouncementText(text: string = CREDITS_ANNOUNCEMENT_TEXT): string {
+  return text
+    .replace(/[\w.-]+@[\w.-]+\.[a-z]+/gi, m => spellOut(m))
+    .replace(/\d[\d-]{5,}\d/g, m => spellOut(m.replace(/-/g, '')))
+}
 
 export const ANNOUNCEMENT_KEY = 'credits_line_announcement'
 
@@ -33,8 +48,8 @@ async function doBuild(): Promise<void> {
   const db = getServiceClient()
   const cfg = await getElevenConfig()
   if (!db || !cfg) return
-  const hash = announcementHash(CREDITS_ANNOUNCEMENT_TEXT, cfg.voiceId)
-  const sp = await generateSpeech(CREDITS_ANNOUNCEMENT_TEXT)
+  const hash = announcementHash(spokenAnnouncementText(), cfg.voiceId)
+  const sp = await generateSpeech(spokenAnnouncementText())
   if (!sp.ok || !sp.audio) { console.error('[credits-announcement] הפקת קול נכשלה:', sp.error); return }
   // חותמת זמן בשם: ימות מחזיקה מטמון לפי שם
   const name = `rec_credits_line_${hash}_${Date.now().toString(36)}`
