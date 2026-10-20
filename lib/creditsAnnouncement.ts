@@ -32,6 +32,36 @@ export function spokenAnnouncementText(text: string = CREDITS_ANNOUNCEMENT_TEXT)
 }
 
 export const ANNOUNCEMENT_KEY = 'credits_line_announcement'
+export const VOICE_CONTENT_KEY = 'voice_broadcast_content'
+
+export type VoiceContent = { text: string; testPhone: string }
+
+/** נוסח ההקלטה ומספר הבדיקה השמורים. נוסח ריק חוזר לברירת המחדל; מספר בדיקה אין לו ברירת מחדל. */
+export function parseVoiceContent(raw: unknown): VoiceContent {
+  let v: unknown = raw
+  if (typeof raw === 'string') { try { v = JSON.parse(raw) } catch { v = null } }
+  const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>
+  const text = typeof o.text === 'string' ? o.text.replace(/\r\n/g, '\n').trim().slice(0, 5000) : ''
+  const testPhone = typeof o.testPhone === 'string' ? o.testPhone.replace(/\D/g, '').slice(0, 15) : ''
+  return { text: text || CREDITS_ANNOUNCEMENT_TEXT, testPhone }
+}
+
+export async function loadVoiceContent(): Promise<VoiceContent> {
+  const db = getServiceClient()
+  if (!db) return parseVoiceContent(null)
+  const { data } = await db.from('app_settings').select('value').eq('key', VOICE_CONTENT_KEY).maybeSingle()
+  return parseVoiceContent(data?.value)
+}
+
+type Saved = { hash?: string; audio?: string; prev?: string }
+
+/** מה להשמיע ומתי להפיק מחדש. ההשוואה על הנוסח המוקרא, אותו נוסח שההפקה מחשבת ממנו את החותמת. */
+export function decideAnnouncement(cur: Saved, text: string, voiceId: string): { token: string | null; needsBuild: boolean } {
+  const want = announcementHash(spokenAnnouncementText(text), voiceId)
+  if (cur.audio && cur.hash === want) return { token: `f-${cur.audio}`, needsBuild: false }
+  // הודעה ישנה עדיפה על שקט בזמן שהחדשה בהפקה
+  return { token: cur.audio ? `f-${cur.audio}` : null, needsBuild: true }
+}
 
 export const announcementHash = (text: string, voiceId: string) =>
   createHash('sha1').update(`${voiceId}\n${text}`).digest('hex').slice(0, 12)
@@ -48,21 +78,25 @@ async function doBuild(): Promise<void> {
   const db = getServiceClient()
   const cfg = await getElevenConfig()
   if (!db || !cfg) return
-  const hash = announcementHash(spokenAnnouncementText(), cfg.voiceId)
-  const sp = await generateSpeech(spokenAnnouncementText())
+  const { text } = await loadVoiceContent()
+  const spoken = spokenAnnouncementText(text)
+  const hash = announcementHash(spoken, cfg.voiceId)
+  const sp = await generateSpeech(spoken)
   if (!sp.ok || !sp.audio) { console.error('[credits-announcement] הפקת קול נכשלה:', sp.error); return }
   // חותמת זמן בשם: ימות מחזיקה מטמון לפי שם
   const name = `rec_credits_line_${hash}_${Date.now().toString(36)}`
   const up = await uploadFileToYemot(bookFairPath(`${name}.mp3`), new Blob([sp.audio], { type: 'audio/mpeg' }), `${name}.mp3`, 'bookFair')
   if (!up.ok) { console.error('[credits-announcement] העלאה לימות נכשלה:', up.error); return }
   const { data: prev } = await db.from('app_settings').select('value').eq('key', ANNOUNCEMENT_KEY).maybeSingle()
+  let old: Saved = {}
+  try { old = prev?.value ? JSON.parse(prev.value) : {} } catch { /* ריק */ }
+  // הקובץ הקודם נשאר עד ההפקה הבאה: שיחה שמנגנת אותו עכשיו לא תיפול. נמחק רק זה שלפניו.
   await db.from('app_settings').upsert(
-    { key: ANNOUNCEMENT_KEY, value: JSON.stringify({ hash, audio: name }), updated_at: new Date().toISOString() },
+    { key: ANNOUNCEMENT_KEY, value: JSON.stringify({ hash, audio: name, prev: old.audio }), updated_at: new Date().toISOString() },
     { onConflict: 'key' },
   )
   try {
-    const old = prev?.value ? (JSON.parse(prev.value).audio as string | undefined) : undefined
-    if (old) await deleteFileFromYemot(bookFairPath(`${old}.mp3`), 'bookFair')
+    if (old.prev) await deleteFileFromYemot(bookFairPath(`${old.prev}.mp3`), 'bookFair')
   } catch { /* ניקוי best-effort */ }
 }
 
@@ -76,13 +110,12 @@ export async function announcementToken(): Promise<string | null> {
   const cfg = await getElevenConfig()
   if (!cfg) return null
   const { data } = await db.from('app_settings').select('value').eq('key', ANNOUNCEMENT_KEY).maybeSingle()
-  let cur: { hash?: string; audio?: string } = {}
+  let cur: Saved = {}
   try { cur = data?.value ? JSON.parse(data.value) : {} } catch { /* ריק */ }
-  const want = announcementHash(CREDITS_ANNOUNCEMENT_TEXT, cfg.voiceId)
-  if (cur.audio && cur.hash === want) return `f-${cur.audio}`
-  void buildAnnouncement()
-  // הודעה ישנה עדיפה על שקט בזמן שהחדשה בהפקה
-  return cur.audio ? `f-${cur.audio}` : null
+  const { text } = await loadVoiceContent()
+  const d = decideAnnouncement(cur, text, cfg.voiceId)
+  if (d.needsBuild) void buildAnnouncement()
+  return d.token
 }
 
 /** כמו announcementToken, אבל ממתין לסיום הפקה שהתחילה (לשליחת בדיקה, כדי שהשיחה הראשונה כבר תשמע את ההודעה). */

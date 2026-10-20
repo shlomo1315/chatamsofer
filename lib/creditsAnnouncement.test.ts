@@ -34,3 +34,28 @@ describe('נוסח מוקרא', () => {
     expect(t).not.toContain('בדוא"ל')
   })
 })
+
+import { decideAnnouncement, parseVoiceContent } from './creditsAnnouncement'
+
+describe('בחירת ההקלטה להשמעה', () => {
+  const hash = announcementHash(spokenAnnouncementText(T), 'v')
+  it('הקלטה עדכנית: משמיעים אותה ולא מפיקים מחדש (לא מוחקים קובץ באמצע שיחה)', () => {
+    expect(decideAnnouncement({ hash, audio: 'rec1' }, T, 'v')).toEqual({ token: 'f-rec1', needsBuild: false })
+  })
+  it('נוסח שהשתנה: ממשיכים להשמיע את הקודם עד שהחדש מוכן', () => {
+    expect(decideAnnouncement({ hash, audio: 'rec1' }, T + ' תוספת', 'v')).toEqual({ token: 'f-rec1', needsBuild: true })
+  })
+  it('אין הקלטה: אין השמעה ומפיקים', () => {
+    expect(decideAnnouncement({}, T, 'v')).toEqual({ token: null, needsBuild: true })
+  })
+})
+
+describe('נוסח ומספר בדיקה שמורים', () => {
+  it('ריק או פגום: נוסח ברירת מחדל, ובלי מספר בדיקה', () => {
+    expect(parseVoiceContent(null)).toEqual({ text: T, testPhone: '' })
+    expect(parseVoiceContent('{bad')).toEqual({ text: T, testPhone: '' })
+  })
+  it('שומר נוסח ומנקה את המספר לספרות', () => {
+    expect(parseVoiceContent(JSON.stringify({ text: ' שלום ', testPhone: '052-710-1315' }))).toEqual({ text: 'שלום', testPhone: '0527101315' })
+  })
+})
