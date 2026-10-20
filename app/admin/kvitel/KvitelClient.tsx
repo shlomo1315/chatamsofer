@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { FileDown, Check, RotateCcw, X, ShieldCheck, BookCheck, Filter, Eye } from 'lucide-react'
+import { FileDown, Check, RotateCcw, X, ShieldCheck, BookCheck, Filter, Eye, Link2 } from 'lucide-react'
 import { KVITEL_CHANNELS, KVITEL_REQUEST_OPTIONS, KVITEL_STATUSES, formatLine, type KvitelStatus } from '@/lib/kvitel'
 import { kvitelRequestLines, type KvitelFilters, type KvitelRequestRow } from '@/lib/kvitelQuery'
 import ExportDialog from './ExportDialog'
@@ -37,6 +37,7 @@ export default function KvitelClient({ rows, filters, canEdit }: { rows: KvitelR
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [exportOpen, setExportOpen] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
   const [previewRow, setPreviewRow] = useState<KvitelRequestRow | null>(null)
 
   const lineCount = useMemo(() => rows.reduce((n, r) => n + r.kvitel_request_lines.length, 0), [rows])
@@ -80,6 +81,16 @@ export default function KvitelClient({ rows, filters, canEdit }: { rows: KvitelR
       router.refresh()
     } finally {
       setBusy(false)
+    }
+  }
+
+  function copyFormLink() {
+    const url = `${window.location.origin}/kvitel`
+    const done = () => { setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2500) }
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(url).then(done).catch(() => window.prompt('העתק את הקישור:', url))
+    } else {
+      window.prompt('העתק את הקישור:', url)
     }
   }
 
@@ -134,8 +145,13 @@ export default function KvitelClient({ rows, filters, canEdit }: { rows: KvitelR
           <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-800"><strong>{lineCount}</strong> שמות</span>
           {reviewCount > 0 && <span className="rounded-full bg-amber-100 px-3 py-1 font-semibold text-amber-900">{reviewCount} לבדיקה</span>}
         </div>
+        <button type="button" onClick={copyFormLink}
+          className="ms-auto flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm">
+          {linkCopied ? <Check className="h-4 w-4" aria-hidden /> : <Link2 className="h-4 w-4" aria-hidden />}
+          {linkCopied ? 'הקישור הועתק' : 'העתק קישור למילוי קוויטלאך'}
+        </button>
         <button type="button" onClick={() => { setMessage(''); setExportOpen(true) }} disabled={!rows.length}
-          className="ms-auto flex items-center gap-2 rounded-lg bg-[#1B3256] px-5 py-2.5 text-sm font-semibold text-white shadow-sm disabled:opacity-40">
+          className="flex items-center gap-2 rounded-lg bg-[#1B3256] px-5 py-2.5 text-sm font-semibold text-white shadow-sm disabled:opacity-40">
           <FileDown className="h-4 w-4" aria-hidden />
           {selected.size ? `ייצוא ${selected.size} שנבחרו` : 'ייצוא'}
         </button>
