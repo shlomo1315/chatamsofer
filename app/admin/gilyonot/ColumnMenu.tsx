@@ -44,7 +44,7 @@ export function ColumnHeader({ col, label, rows, view, onChange, open, onOpen, c
     const text = numeric ? (dir === 'asc' ? 'מהקטן לגדול' : 'מהגדול לקטן') : (dir === 'asc' ? 'מיון א-ב' : 'מיון ב-א')
     return (
       <button type="button" aria-pressed={on}
-        className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-start text-sm ${on ? 'bg-[#1B3256]/10 font-semibold text-[#1B3256]' : 'text-slate-700 hover:bg-slate-50'}`}
+        className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-start text-sm ${on ? 'bg-[#2563eb]/10 font-semibold text-[#2563eb]' : 'text-slate-700 hover:bg-slate-50'}`}
         onClick={() => onChange({ ...view, sort: on ? null : { col, dir } })}>
         <Icon className="h-4 w-4" aria-hidden />{text}
       </button>
@@ -54,7 +54,7 @@ export function ColumnHeader({ col, label, rows, view, onChange, open, onOpen, c
   return (
     <th ref={ref} className={`relative p-0 text-start ${className}`} aria-sort={view.sort?.col === col ? (view.sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
       <button type="button" aria-haspopup="dialog" aria-expanded={open}
-        className={`flex w-full items-center gap-1 px-4 py-3 text-xs font-semibold hover:text-[#1B3256] ${active ? 'text-[#1B3256]' : 'text-slate-500'}`}
+        className={`flex w-full items-center gap-1 px-4 py-3 text-xs font-semibold hover:text-[#2563eb] ${active ? 'text-[#2563eb]' : 'text-slate-500'}`}
         onClick={() => onOpen(!open)}>
         {label}
         {active
@@ -73,7 +73,7 @@ export function ColumnHeader({ col, label, rows, view, onChange, open, onOpen, c
           <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2">
             <button type="button" className="rounded-lg px-2.5 py-1.5 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-40"
               disabled={!active} onClick={() => onChange(clearColumn(view, col))}>נקה</button>
-            <button type="button" className="rounded-lg bg-[#1B3256] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#1B3256]/90"
+            <button type="button" className="rounded-lg bg-[#2563eb] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#2563eb]/90"
               onClick={() => onOpen(false)}>סגור</button>
           </div>
         </div>
@@ -96,7 +96,7 @@ function TextFilter({ col, view, onChange }: { col: 'name' | 'phone'; view: Colu
         <div className="flex gap-1.5">
           {([['+', 'יש טלפון'], ['-', 'בלי טלפון']] as const).map(([k, l]) => (
             <button key={k} type="button" aria-pressed={value === k}
-              className={`flex-1 rounded-lg border px-2 py-1.5 text-sm ${value === k ? 'border-[#1B3256] bg-[#1B3256]/10 font-semibold text-[#1B3256]' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+              className={`flex-1 rounded-lg border px-2 py-1.5 text-sm ${value === k ? 'border-[#2563eb] bg-[#2563eb]/10 font-semibold text-[#2563eb]' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
               onClick={() => set(value === k ? '' : k)}>{l}</button>
           ))}
         </div>
@@ -122,14 +122,14 @@ function ValueFilter({ col, rows, view, onChange }: { col: ValueColumn; rows: Co
   return (
     <div>
       <div className="flex gap-3 px-2.5 pb-1.5 text-xs">
-        <button type="button" className="text-[#1B3256] hover:underline" onClick={() => set(undefined)}>סמן הכול</button>
-        <button type="button" className="text-[#1B3256] hover:underline" onClick={() => set([])}>בטל הכול</button>
+        <button type="button" className="text-[#2563eb] hover:underline" onClick={() => set(undefined)}>סמן הכול</button>
+        <button type="button" className="text-[#2563eb] hover:underline" onClick={() => set([])}>בטל הכול</button>
       </div>
       <ul className="max-h-60 overflow-y-auto overscroll-contain">
         {options.map(o => (
           <li key={o.value}>
             <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-slate-700 hover:bg-slate-50">
-              <input type="checkbox" checked={isOn(o.value)} onChange={() => toggle(o.value)} className="h-4 w-4 accent-[#1B3256]" />
+              <input type="checkbox" checked={isOn(o.value)} onChange={() => toggle(o.value)} className="h-4 w-4 accent-[#2563eb]" />
               <span className="flex-1 truncate">{o.value === EMPTY_VALUE ? EMPTY_LABEL[col] : col === 'city' ? o.value : fmt(Number(o.value))}</span>
               <span className="tabular-nums text-xs text-slate-400">{fmt(o.count)}</span>
             </label>

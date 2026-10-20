@@ -49,7 +49,8 @@ export default async function DashboardLayout({
       />
       <div className="flex flex-col flex-1 overflow-hidden">
         <Header user={profile} />
-        <main className="flex-1 overflow-y-auto">
+        {/* relative: אלמנטים מוסתרים (sr-only) ממוקמים ביחס לאזור הגלילה, ולא מאריכים את הדף ומשאירים לבן מתחת. */}
+        <main className="relative flex-1 overflow-y-auto">
           <div className="p-5 lg:p-6 pb-16 max-w-screen-2xl mx-auto">
             <StaffPermissionsProvider isAdmin={profile?.role === 'admin'} role={profile?.role} permissions={profile?.permissions}>
               {children}

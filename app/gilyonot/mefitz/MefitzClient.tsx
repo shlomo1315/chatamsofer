@@ -4,9 +4,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { Loader2, LogOut } from 'lucide-react'
 import { DISTRIBUTOR_LOGIN_BY, EVENT_LABELS, LOGIN_LABELS, type DistributorAction, type EventKind } from '@/lib/gilyonotDistributors'
 
-const input = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base text-slate-900 focus:border-[#1B3256] focus:outline-none focus:ring-2 focus:ring-[#1B3256]/20'
+const input = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base text-slate-900 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20'
 const label = 'mb-1 block text-sm font-medium text-slate-700'
-const btnPrimary = 'inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#1B3256] px-4 py-3 text-base font-semibold text-white hover:bg-[#142640] disabled:opacity-60'
+const btnPrimary = 'inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#2563eb] px-4 py-3 text-base font-semibold text-white hover:bg-[#142640] disabled:opacity-60'
 const card = 'rounded-2xl border border-slate-200 bg-white p-5 shadow-sm'
 
 interface Dist { id: string; full_name: string; city: string | null; address: string | null; synagogue: string | null; quantity: number }
@@ -184,7 +184,7 @@ function DistCard({ d, onChanged }: { d: Dist; onChanged: () => void }) {
       <div className="mt-3 flex items-end justify-between gap-4 border-b border-slate-100 pb-4">
         <div>
           <p className="text-sm text-slate-600">גיליונות בכל שבוע</p>
-          <p className="text-4xl font-bold" style={{ color: '#1B3256' }}>{d.quantity}</p>
+          <p className="text-4xl font-bold" style={{ color: '#2563eb' }}>{d.quantity}</p>
         </div>
         <div className="text-left text-sm text-slate-600">
           {d.synagogue && <p>{d.synagogue}</p>}
@@ -195,7 +195,7 @@ function DistCard({ d, onChanged }: { d: Dist; onChanged: () => void }) {
       <div className="mt-4 grid grid-cols-2 gap-2">
         {ACTIONS.map(a => (
           <button key={a.key} type="button" onClick={() => pick(a.key)} aria-pressed={action === a.key}
-            className={`rounded-lg border px-3 py-2.5 text-sm font-medium ${action === a.key ? 'border-[#1B3256] bg-[#1B3256]/5 text-[#1B3256]' : 'border-slate-200 text-slate-700 hover:border-slate-300'} ${a.key === 'leave' ? 'col-span-2 text-red-700' : ''}`}>
+            className={`rounded-lg border px-3 py-2.5 text-sm font-medium ${action === a.key ? 'border-[#2563eb] bg-[#2563eb]/5 text-[#2563eb]' : 'border-slate-200 text-slate-700 hover:border-slate-300'} ${a.key === 'leave' ? 'col-span-2 text-red-700' : ''}`}>
             {a.title}
           </button>
         ))}

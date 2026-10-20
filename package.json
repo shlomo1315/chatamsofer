@@ -41,6 +41,7 @@
     "react-hook-form": "^7.76.1",
     "recharts": "^3.8.1",
     "resend": "^6.12.4",
+    "sanitize-html": "^2.18.1",
     "undici": "^7.30.0",
     "zod": "^4.4.3"
   },
@@ -50,6 +51,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/sanitize-html": "^2.16.2",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "tailwindcss": "^4",

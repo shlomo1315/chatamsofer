@@ -172,8 +172,8 @@ export default function NedarimPull({ view: initial }: { view: NedarimPullView }
                   {cols.filter(c => r[c]).map(c => {
                     const picked = c === f.emailField || c === f.nameField
                     return (
-                      <div key={c} className={`flex min-w-0 gap-2 rounded-md px-1.5 ${picked ? 'bg-[#1B3256]/[0.07]' : ''}`}>
-                        <dt className={`shrink-0 font-mono text-xs leading-5 ${picked ? 'font-semibold text-[#1B3256]' : 'text-slate-500'}`} dir="ltr">{c}</dt>
+                      <div key={c} className={`flex min-w-0 gap-2 rounded-md px-1.5 ${picked ? 'bg-[#2563eb]/[0.07]' : ''}`}>
+                        <dt className={`shrink-0 font-mono text-xs leading-5 ${picked ? 'font-semibold text-[#2563eb]' : 'text-slate-500'}`} dir="ltr">{c}</dt>
                         <dd className="min-w-0 break-words text-slate-800" dir="auto">{r[c]}</dd>
                       </div>
                     )

@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
 import { loadIssue } from '@/lib/gilyonotSender'
+import { sanitizeMailHtml } from '@/lib/gilyonotRichHtml'
+import { normalizeDesign } from '@/lib/gilyonotDesign'
 
 // עריכה ומחיקה של גיליון — רק כל עוד הוא טיוטה (לפני שליחה).
 export const dynamic = 'force-dynamic'
@@ -24,6 +26,9 @@ export async function PATCH(request: Request, { params }: Ctx) {
     parasha: str(body.parasha, 60) || issue.parasha,
     subject: str(body.subject, 200) || issue.subject,
     intro: typeof body.intro === 'string' ? (str(body.intro, 4000) || null) : issue.intro,
+    // גוף המייל מהעורך: מנוקה כאן, בשרת, לפי רשימת היתרים.
+    body_html: typeof body.body_html === 'string' ? (sanitizeMailHtml(body.body_html) || null) : issue.body_html,
+    design: body.design !== undefined ? normalizeDesign(body.design) : normalizeDesign(issue.design),
     updated_at: new Date().toISOString(),
   }
   const { error } = await db.from('gilyonot_issues').update(patch).eq('id', issue.id).eq('status', 'draft')

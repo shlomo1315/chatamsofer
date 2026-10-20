@@ -19,7 +19,7 @@ export default function Page() {
             width={900} height={903} priority className="mx-auto mb-5 h-auto w-20 mix-blend-multiply"
           />
           <p className="text-sm font-medium text-slate-600">גיליונות החתם סופר</p>
-          <h1 className="mt-2 text-2xl font-bold leading-snug" style={{ color: '#1B3256' }}>ממשק המפיצים</h1>
+          <h1 className="mt-2 text-2xl font-bold leading-snug" style={{ color: '#2563eb' }}>ממשק המפיצים</h1>
         </header>
         <MefitzClient />
       </div>

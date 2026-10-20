@@ -156,7 +156,7 @@ export default function Distributors(props: {
           {sections.map(s => (
             <button
               key={s.key} type="button" role="tab" aria-selected={section === s.key} onClick={() => setSection(s.key)}
-              className={`flex min-h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors ${section === s.key ? 'bg-[#1B3256] text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+              className={`flex min-h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors ${section === s.key ? 'bg-[#2563eb] text-white' : 'text-slate-600 hover:bg-slate-50'}`}
             >
               <s.icon className="h-4 w-4" aria-hidden />{s.label}
               {!!s.count && <span className={`rounded-full px-1.5 text-xs tabular-nums ${section === s.key ? 'bg-white/20' : 'bg-rose-100 text-rose-700'}`}>{num(s.count)}</span>}
@@ -322,11 +322,11 @@ function DistributorList({ rows, byCity, canAdd, canEdit, canDelete, pending, on
               </select>
             </label>
             <label className="flex items-center gap-2 text-sm text-slate-600">
-              <input type="checkbox" checked={showRemoved} onChange={e => setShowRemoved(e.target.checked)} className="h-4 w-4 accent-[#1B3256]" />
+              <input type="checkbox" checked={showRemoved} onChange={e => setShowRemoved(e.target.checked)} className="h-4 w-4 accent-[#2563eb]" />
               כולל שהוסרו
             </label>
             <label className="flex items-center gap-2 text-sm text-slate-600">
-              <input type="checkbox" checked={noRoute} onChange={e => setNoRoute(e.target.checked)} className="h-4 w-4 accent-[#1B3256]" />
+              <input type="checkbox" checked={noRoute} onChange={e => setNoRoute(e.target.checked)} className="h-4 w-4 accent-[#2563eb]" />
               בלי מסלול
             </label>
             {issue && (
@@ -339,7 +339,7 @@ function DistributorList({ rows, byCity, canAdd, canEdit, canDelete, pending, on
           </div>
           <p className="px-4 pt-3 text-xs text-slate-500">
             {num(shown.length)} מפיצים · {num(shownQty)} גיליונות בשבוע
-            {anyColumn && <button type="button" className="ms-3 text-[#1B3256] hover:underline" onClick={() => setView(EMPTY_VIEW)}>ניקוי מיון וסינון בעמודות</button>}
+            {anyColumn && <button type="button" className="ms-3 text-[#2563eb] hover:underline" onClick={() => setView(EMPTY_VIEW)}>ניקוי מיון וסינון בעמודות</button>}
           </p>
 
           {base.length ? (
@@ -369,7 +369,7 @@ function DistributorList({ rows, byCity, canAdd, canEdit, canDelete, pending, on
                       <td className="px-4 py-3 font-semibold tabular-nums text-slate-900">{num(r.quantity)}</td>
                       {canEdit && (
                         <td className="px-2 py-3">
-                          <button type="button" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-[#1B3256]" aria-label={`עריכת ${r.full_name}`}
+                          <button type="button" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-[#2563eb]" aria-label={`עריכת ${r.full_name}`}
                             onClick={() => { setPanel(''); setEditing(r); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>
                             <Pencil className="h-4 w-4" aria-hidden />
                           </button>

@@ -44,7 +44,7 @@ function removedPage(token: string) {
   return html('הוסרתם מרשימת התפוצה', `<h1 style="margin:0 0 10px;color:#047857;font-size:20px;">הוסרתם מרשימת התפוצה</h1>
     <p style="margin:0 0 24px;color:#64748b;font-size:14px;line-height:1.7;">לא תקבלו עוד את הגיליון השבועי במייל.</p>
     <form method="POST" action="/api/gilyonot/unsubscribe/${token}?resubscribe=1" style="margin:0;">
-      <button type="submit" ${button('הסרתי בטעות, החזירו אותי', '#1B3256', false)}</button>
+      <button type="submit" ${button('הסרתי בטעות, החזירו אותי', '#2563eb', false)}</button>
     </form>`)
 }
 
@@ -53,7 +53,7 @@ export async function GET(_r: NextRequest, { params }: { params: Promise<{ token
   const found = await findSubscriber(token)
   if (!found) return invalid()
   if (found.sub.status === 'unsubscribed') return removedPage(token)
-  return html('הסרה מרשימת התפוצה', `<h1 style="margin:0 0 10px;color:#1B3256;font-size:20px;">להסיר אתכם מקבלת הגיליון?</h1>
+  return html('הסרה מרשימת התפוצה', `<h1 style="margin:0 0 10px;color:#2563eb;font-size:20px;">להסיר אתכם מקבלת הגיליון?</h1>
     <p style="margin:0 0 24px;color:#64748b;font-size:14px;line-height:1.7;">הכתובת <strong dir="ltr" style="color:#334155;">${escHtml(found.sub.email)}</strong> לא תקבל עוד את הגיליון השבועי.</p>
     <form method="POST" action="/api/gilyonot/unsubscribe/${token}?confirm=1" style="margin:0;">
       <button type="submit" ${button('כן, הסירו אותי', '#b91c1c', true)}</button>
