@@ -346,3 +346,31 @@ export const TEST_RATE_LIMIT_MESSAGE = 'שלחת יותר מדי בדיקות, �
 export function isTestSendLimited(recentCount: number): boolean {
   return recentCount >= TEST_SEND_LIMIT
 }
+
+// ─── תפריט ראשי של הקו ───────────────────────────────────────────────────────
+// ה-API של הזיכויים יושב בתפריט הראשי של הקו: כל מתקשר שומע תפריט.
+// 1 = השארת פנייה (לכולם). 2 = זיכויים, רק למי שיש לו זיכוי (או שיחת בדיקה של מנהל).
+
+export const CM_MENU = 'cm_menu'
+export const CM_INQ = 'cm_inq'
+
+export type MenuAction = CreditPhoneAction | { kind: 'inquiry'; recording: string }
+export interface MenuTurn { reply: string; action: MenuAction }
+
+export function mainMenuTurn(params: Record<string, string>, credit: CreditCallContext | null): MenuTurn {
+  const choice = params[CM_MENU] ?? ''
+  if (!choice) {
+    const tokens = [t('שלום, הגעתם להיכל החתם סופר. להשארת פנייה הקישו 1.')]
+    if (credit) tokens.push(t('לשמיעת פרטי הזיכוי שלכם הקישו 2.'))
+    return { reply: readKeys(CM_MENU, tokens, credit ? ['1', '2'] : ['1']), action: null }
+  }
+  if (choice === '1') {
+    const rec = (params[CM_INQ] ?? '').trim()
+    if (!rec) {
+      return { reply: readRecord(CM_INQ, [t('אחרי הצליל אמרו את שמכם, מספר טלפון ותוכן הפנייה, ובסיום הקישו סולמית')]), action: null }
+    }
+    return { reply: say('פנייתכם התקבלה ונחזור אליכם בהקדם. תודה ושלום'), action: { kind: 'inquiry', recording: rec.slice(0, 300) } }
+  }
+  if (choice === '2' && credit) return creditPhoneTurn(params, credit)
+  return { reply: say('הבחירה לא תקינה. תודה ושלום'), action: null }
+}

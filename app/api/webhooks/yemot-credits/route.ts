@@ -10,9 +10,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { safeEqual } from '@/lib/svix'
 import { normalizePhone } from '@/lib/kvitel'
+import { archiveInquiryRecording } from '@/lib/bookFairInquiryAudio'
 import { withFallbackFolder } from '@/lib/yemotFallback'
 import {
-  creditPhoneTurn, mergePhoneCredits, PHONE_OPEN_STATUSES, TEST_CALL_ACTION, TEST_CALL_WINDOW_MS, TEST_CREDIT,
+  type CreditCallContext, mainMenuTurn, mergePhoneCredits, PHONE_OPEN_STATUSES, TEST_CALL_ACTION, TEST_CALL_WINDOW_MS, TEST_CREDIT,
 } from '@/lib/bookFairCredits'
 
 export const dynamic = 'force-dynamic'
@@ -47,32 +48,45 @@ async function handle(request: NextRequest) {
   if (!db) return yemotText('id_list_message=t-שגיאת שרת&go_to_folder=hangup')
 
   const phone = normalizePhone(params['ApiPhone'] ?? '')
-  if (!phone) return yemotText('id_list_message=t-לא זוהה מספר הטלפון. נחזור אליכם בהמשך&go_to_folder=hangup')
 
-  const { data: rows } = await db.from('book_fair_credits')
-    .select('id, customer_name, books, amount_agorot, status')
-    .eq('phone', phone).order('created_at', { ascending: false }).limit(20)
-  const picked = mergePhoneCredits(rows ?? [])
-  if (!picked) {
-    // שיחת בדיקה של מנהל (נרשמה ב-activity_log בחצי השעה האחרונה): כל השיחה עם נתוני דוגמה, בלי שמירה
+  // זיכוי המתקשר (אם יש): קובע אם התפריט כולל את אפשרות 2
+  let rows: Awaited<ReturnType<typeof loadRows>> = []
+  if (phone) rows = await loadRows(db, phone)
+  const picked = mergePhoneCredits(rows)
+  let ctx: CreditCallContext | null = null
+  if (picked) {
+    const open = picked.rows.some(r => (PHONE_OPEN_STATUSES as readonly string[]).includes(r.status))
+    ctx = { ...picked.ctx, alreadyDone: !open }
+  } else if (phone) {
+    // שיחת בדיקה של מנהל (נרשמה ב-activity_log בחצי השעה האחרונה): נתוני דוגמה, בלי שמירה
     const { data: test } = await db.from('activity_log').select('id')
       .eq('action', TEST_CALL_ACTION).contains('details', { phone })
       .gte('created_at', new Date(Date.now() - TEST_CALL_WINDOW_MS).toISOString()).limit(1)
-    if (test?.length) return yemotText(creditPhoneTurn(params, TEST_CREDIT).reply)
-    return yemotText('id_list_message=t-לא נמצא זיכוי למספר הזה&go_to_folder=hangup')
+    if (test?.length) ctx = TEST_CREDIT
   }
 
-  // כל הזיכויים של הטלפון נשמעים יחד (שיחה יוצאת או נכנסת), והפרטים נשמרים לכולם
-  const ids = picked.rows.map(r => r.id)
-  const open = picked.rows.some(r => (PHONE_OPEN_STATUSES as readonly string[]).includes(r.status))
-  const turn = creditPhoneTurn(params, { ...picked.ctx, alreadyDone: !open })
-
+  const turn = mainMenuTurn(params, ctx)
   const a = turn.action
-  if (a?.kind === 'answered') {
+  const ids = picked?.rows.map(r => r.id) ?? []
+
+  if (a?.kind === 'inquiry') {
+    // אותה טבלה ואותו מסך כמו פניות היריד (book_fair_inquiries)
+    const cleanPhone = (params['ApiPhone'] ?? '').replace(/\D/g, '') || 'לא ידוע'
+    const callId = params['ApiCallId'] ?? ''
+    const { data: row, error } = await db.from('book_fair_inquiries').insert({
+      phone: cleanPhone, recording: a.recording, transcript: null, call_id: callId || null,
+    }).select('id').single()
+    if (error) {
+      console.error('[yemot-credits] שמירת הפנייה נכשלה:', error.message)
+      return yemotText('id_list_message=t-לא הצלחנו לשמור את הפנייה. נסו שוב או פנו למשרד&go_to_folder=hangup')
+    }
+    // עותק של ההקלטה לפני שימות דורסת אותה; ברקע, בלי להמתין
+    void archiveInquiryRecording(db, callId || String(row?.id ?? ''), cleanPhone, new Date())
+  } else if (a?.kind === 'answered' && ids.length) {
     await db.from('book_fair_credits')
       .update({ status: 'answered', answered_at: new Date().toISOString(), updated_at: new Date().toISOString() })
       .in('id', ids).eq('status', 'sent')
-  } else if (a?.kind === 'save') {
+  } else if (a?.kind === 'save' && ids.length) {
     const { data: saved, error } = await db.from('book_fair_credits').update({
       status: 'details_entered', details_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       bank_holder_recording: a.holderRecording.slice(0, 300),
@@ -84,4 +98,11 @@ async function handle(request: NextRequest) {
     }
   }
   return yemotText(turn.reply)
+}
+
+async function loadRows(db: NonNullable<ReturnType<typeof getServiceClient>>, phone: string) {
+  const { data } = await db.from('book_fair_credits')
+    .select('id, customer_name, books, amount_agorot, status')
+    .eq('phone', phone).order('created_at', { ascending: false }).limit(20)
+  return data ?? []
 }
