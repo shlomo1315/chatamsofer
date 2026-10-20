@@ -45,7 +45,7 @@ describe('normalizeDesign', () => {
 })
 
 describe('buildGilyonHtml', () => {
-  const base = { title: 'גיליון', parasha: 'נח', downloadUrl: 'https://x.co/d', unsubscribeUrl: 'https://x.co/u' }
+  const base = { title: 'גיליון', parasha: 'נח', unsubscribeUrl: 'https://x.co/u' }
 
   it('מחליף {{שם}} בשם המנוקה, בפתיחה ובגוף', () => {
     const html = buildGilyonHtml({ ...base, name: '<b>משה</b>', bodyHtml: '<p>שלום {{שם}}</p>' })

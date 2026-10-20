@@ -64,7 +64,7 @@ export function IssueAnalytics({ issue, base }: { issue: IssueView; base: string
     { label: 'נשלחו', value: c.sent, of: data.total, hint: `מתוך ${num(data.total)} נמענים`, color: '#94a3b8' },
     { label: 'נמסרו לתיבה', value: c.delivered, of: sent, hint: 'אישור מסירה מ-Resend', color: '#2563eb' },
     { label: 'פתחו', value: c.opened, of: sent, hint: 'הערכה, לפי טעינת תמונה', color: '#0891b2' },
-    { label: 'הורידו את הגיליון', value: c.downloaded, of: sent, hint: 'לחצו על כפתור ההורדה', color: '#059669' },
+    ...(c.downloaded > 0 ? [{ label: 'הורידו (גיליונות ישנים)', value: c.downloaded, of: sent, hint: 'לחצו על קישור ההורדה', color: '#059669' }] : []),
     { label: 'חזרו', value: c.bounced, of: sent, hint: 'כתובת לא קיימת או תיבה מלאה', color: '#e11d48' },
   ] : []
   const fmtT = (t: string) => new Date(t).toLocaleString('he-IL', data?.bucket === 'day'
@@ -87,7 +87,7 @@ export function IssueAnalytics({ issue, base }: { issue: IssueView; base: string
           <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Stat label="נשלחו" value={num(c.sent)} sub={data.pending ? `${num(data.pending)} ממתינים` : `מתוך ${num(data.total)}`} />
             <Stat label="נמסרו" value={num(c.delivered)} sub={`${rate(c.delivered, c.sent)}%`} />
-            <Stat label="פתחו / הורידו" value={`${num(c.opened)} / ${num(c.downloaded)}`} sub={`${rate(c.opened, c.sent)}% · ${rate(c.downloaded, c.sent)}%`} />
+            <Stat label="פתחו" value={num(c.opened)} sub={`${rate(c.opened, c.sent)}%${c.downloaded > 0 ? ` · ${num(c.downloaded)} הורידו` : ''}`} />
             <Stat label="חזרו / ספאם / נכשלו" value={`${num(c.bounced)} / ${num(c.complained)} / ${num(data.failed)}`} tone={c.bounced + c.complained + data.failed ? 'rose' : undefined} sub={`${rate(c.bounced, c.sent)}% חזרו`} />
           </dl>
 
@@ -166,7 +166,7 @@ export function IssuesDashboard({ rows }: { rows: IssueView[] }) {
       <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="נשלחו" value={num(sent)} />
         <Stat label="שיעור פתיחה" value={`${rate(sum('opened_count'), sent)}%`} />
-        <Stat label="שיעור הורדה" value={`${rate(sum('downloaded_count'), sent)}%`} />
+        <Stat label="שיעור מסירה" value={`${rate(sum('delivered_count'), sent)}%`} />
         <Stat label="חזרו" value={num(sum('bounced_count'))} sub={`${rate(sum('bounced_count'), sent)}%`} tone={sum('bounced_count') ? 'rose' : undefined} />
       </dl>
       <div dir="ltr" className="mt-5 h-72">

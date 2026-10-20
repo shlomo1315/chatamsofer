@@ -94,3 +94,30 @@ export function StepNum({ n, done }: { n: number; done?: boolean }) {
     </span>
   )
 }
+
+/** סרגל שלבים אינטראקטיבי. הפעיל בכחול, שהושלמו עם וי, השאר באפור. לחיצה עוברת לכל שלב בכל סדר. */
+export function Stepper({ steps, current, done, onSelect }: { steps: string[]; current: number; done: boolean[]; onSelect: (n: number) => void }) {
+  return (
+    <nav aria-label="שלבי הגיליון" className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-3 py-2.5 backdrop-blur sm:px-5">
+      <ol className="grid grid-cols-3 gap-2">
+        {steps.map((label, i) => {
+          const n = i + 1
+          const active = current === n
+          const isDone = done[i] && !active
+          return (
+            <li key={label}>
+              <button type="button" onClick={() => onSelect(n)} aria-current={active ? 'step' : undefined}
+                className={`flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-2 py-1.5 text-sm font-semibold transition-colors sm:justify-start sm:px-3 ${active ? 'bg-[#2563eb]/[0.08] text-[#2563eb] ring-1 ring-inset ring-[#2563eb]/30' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}>
+                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums ${active ? 'bg-[#2563eb] text-white' : isDone ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                  {isDone ? <CheckCircle2 className="h-4 w-4" aria-hidden /> : n}
+                </span>
+                <span className="hidden truncate sm:inline">{label}</span>
+              </button>
+            </li>
+          )
+        })}
+      </ol>
+      <p className="mt-1.5 text-center text-xs font-semibold text-[#2563eb] sm:hidden">שלב {current}: {steps[current - 1]}</p>
+    </nav>
+  )
+}
