@@ -13,7 +13,7 @@ import { Card, CardHeader } from './ui'
 // לוח הגרפים בראש לשונית "מפיצים". החישובים ב-buildDistributorDashboard (lib/gilyonotDistributors.ts).
 // לחיצה על עיר או על בעיה מסננת את הטבלה שמתחת.
 
-const NAVY = '#1B3256'
+const NAVY = '#2563eb'
 const OK = '#059669'
 const WARN = '#d97706'
 const BAD = '#e11d48'
@@ -60,7 +60,7 @@ export function DistributorDashboard({ dash, city, onCity, issue, onIssue, pendi
   const height = (n: number) => Math.max(160, n * 34 + 30)
   const pick = (c: string) => onCity(city === c ? '' : c)
   const more = dash.cities.length > TOP && (
-    <button type="button" className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-[#1B3256] hover:underline" onClick={() => setShowAll(!showAll)}>
+    <button type="button" className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-[#2563eb] hover:underline" onClick={() => setShowAll(!showAll)}>
       {showAll ? `רק ${TOP} הראשונות` : `כל ${num(dash.cities.length)} הערים`}<ChevronLeft className={`h-4 w-4 ${showAll ? 'rotate-90' : ''}`} aria-hidden />
     </button>
   )
@@ -77,7 +77,7 @@ export function DistributorDashboard({ dash, city, onCity, issue, onIssue, pendi
                 <div role="group" aria-label="מה להציג" className="flex rounded-lg border border-slate-200 p-0.5 text-xs">
                   {([['quantity', 'גיליונות'], ['distributors', 'מפיצים']] as const).map(([k, l]) => (
                     <button key={k} type="button" aria-pressed={metric === k} onClick={() => setMetric(k)}
-                      className={`rounded-md px-2.5 py-1 font-medium ${metric === k ? 'bg-[#1B3256] text-white' : 'text-slate-600 hover:bg-slate-50'}`}>{l}</button>
+                      className={`rounded-md px-2.5 py-1 font-medium ${metric === k ? 'bg-[#2563eb] text-white' : 'text-slate-600 hover:bg-slate-50'}`}>{l}</button>
                   ))}
                 </div>
             </CardHeader>
@@ -194,7 +194,7 @@ function Issues({ dash, issue, onIssue, pending, onSection }: {
   const row = (key: string, label: string, hint: string, n: number, severe: boolean, on: boolean, onClick: () => void) => (
     <li key={key}>
       <button type="button" onClick={onClick} disabled={!n} aria-pressed={on}
-        className={`flex w-full items-center gap-3 px-5 py-2.5 text-start transition-colors enabled:hover:bg-slate-50 ${on ? 'bg-[#1B3256]/[0.06]' : ''}`}>
+        className={`flex w-full items-center gap-3 px-5 py-2.5 text-start transition-colors enabled:hover:bg-slate-50 ${on ? 'bg-[#2563eb]/[0.06]' : ''}`}>
         {n
           ? <span className={`grid h-8 min-w-8 shrink-0 place-items-center rounded-lg px-1.5 text-sm font-bold tabular-nums ${severe ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-800'}`}>{num(n)}</span>
           : <CheckCircle2 className="mx-1.5 h-5 w-5 shrink-0 text-emerald-600" aria-label="תקין" />}

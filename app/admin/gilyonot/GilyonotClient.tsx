@@ -9,6 +9,8 @@ import { defaultSubject } from '@/lib/gilyonotMail'
 import type { NedarimPullView } from '@/lib/gilyonotNedarimPull'
 import NedarimPull from './NedarimPull'
 import Distributors from './Distributors'
+import MailEditor from './MailEditor'
+import { IssueAnalytics, IssuesDashboard } from './IssueAnalytics'
 import { Badge, btnDanger, btnGhost, btnPrimary, Card, CardHeader, input, link, Meter, Notice, Stat, StepNum, type Tone } from './ui'
 
 export interface SubscriberView {
@@ -27,6 +29,8 @@ export interface IssueView {
   parasha: string
   subject: string
   intro: string | null
+  body_html: string | null
+  design: unknown
   file_name: string
   file_size: number | null
   status: 'draft' | 'sending' | 'sent'
@@ -39,6 +43,9 @@ export interface IssueView {
   pending_count: number
   opened_count: number
   downloaded_count: number
+  delivered_count: number
+  bounced_count: number
+  complained_count: number
 }
 
 const SOURCES: Record<SubscriberView['source'], string> = { web: 'אתר', nedarim: 'נדרים פלוס', manual: 'ידני', import: 'ייבוא' }
@@ -84,10 +91,10 @@ export default function GilyonotClient(props: {
             return (
               <Link
                 key={t.key} href={`?tab=${t.key}`} scroll={false} aria-current={on ? 'page' : undefined}
-                className={`flex min-h-10 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-medium transition-colors duration-150 sm:flex-none ${on ? 'bg-white text-[#1B3256] shadow-sm ring-1 ring-slate-900/5' : 'text-slate-600 hover:text-slate-900'}`}
+                className={`flex min-h-10 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-medium transition-colors duration-150 sm:flex-none ${on ? 'bg-white text-[#2563eb] shadow-sm ring-1 ring-slate-900/5' : 'text-slate-600 hover:text-slate-900'}`}
               >
                 <t.icon className="h-4 w-4" aria-hidden />{t.label}
-                {t.count !== null && <span className={`rounded-full px-2 py-0.5 text-xs tabular-nums ${on ? 'bg-[#1B3256] text-white' : 'bg-white/70 text-slate-600'}`}>{num(t.count)}</span>}
+                {t.count !== null && <span className={`rounded-full px-2 py-0.5 text-xs tabular-nums ${on ? 'bg-[#2563eb] text-white' : 'bg-white/70 text-slate-600'}`}>{num(t.count)}</span>}
               </Link>
             )
           })}
@@ -140,7 +147,7 @@ function Overview({ subscribers, active, issues }: { subscribers: SubscriberView
 
 function OverviewTile({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: boolean }) {
   return (
-    <div className={`rounded-2xl px-4 py-4 sm:px-5 ${accent ? 'bg-[#1B3256] text-white shadow-md shadow-[#1B3256]/20' : 'bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-slate-900/[0.06]'}`}>
+    <div className={`rounded-2xl px-4 py-4 sm:px-5 ${accent ? 'bg-[#2563eb] text-white shadow-md shadow-[#2563eb]/20' : 'bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-slate-900/[0.06]'}`}>
       <dt className={`text-xs font-medium ${accent ? 'text-white/70' : 'text-slate-500'}`}>{label}</dt>
       <dd className={`mt-1.5 truncate text-xl font-bold tabular-nums sm:text-2xl ${accent ? 'text-white' : 'text-slate-900'}`}>{value}</dd>
       {sub && <dd className={`mt-1 truncate text-xs ${accent ? 'text-white/75' : 'text-slate-500'}`}>{sub}</dd>}
@@ -223,7 +230,7 @@ function Subscribers({ rows, canAdd, canEdit, canDelete }: { rows: SubscriberVie
         {canAdd && <div className="lg:col-span-2"><UploadCard busy={busy} onPick={pickFile} onFile={uploadFile} onPaste={() => setPanel(panel === 'paste' ? '' : 'paste')} /></div>}
         <Card className="flex flex-col justify-between gap-4 p-5">
           <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1B3256]/[0.07] text-[#1B3256]"><Link2 className="h-5 w-5" aria-hidden /></div>
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#2563eb]/[0.07] text-[#2563eb]"><Link2 className="h-5 w-5" aria-hidden /></div>
             <div className="min-w-0">
               <h2 className="text-base font-bold text-slate-900">קישור ההרשמה לציבור</h2>
               <p className="mt-0.5 text-sm text-slate-600">מי שנרשם דרכו נכנס לרשימה מיד.</p>
@@ -286,7 +293,7 @@ function Subscribers({ rows, canAdd, canEdit, canDelete }: { rows: SubscriberVie
 
         {!rows.length ? (
           <div className="border-t border-slate-100 px-6 py-14 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#1B3256]/[0.07] text-[#1B3256]"><Inbox className="h-7 w-7" aria-hidden /></div>
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#2563eb]/[0.07] text-[#2563eb]"><Inbox className="h-7 w-7" aria-hidden /></div>
             <p className="mt-4 font-bold text-slate-900">עוד אין נרשמים</p>
             <p className="mx-auto mt-1 max-w-sm text-sm text-slate-600">העלו רשימה מקובץ, חברו את טופס נדרים פלוס, או שתפו את קישור ההרשמה.</p>
           </div>
@@ -310,7 +317,7 @@ function Subscribers({ rows, canAdd, canEdit, canDelete }: { rows: SubscriberVie
                       <tr key={r.id} className="transition-colors hover:bg-slate-50/60">
                         <td className="px-4 py-3">
                           <div className="flex min-w-0 items-center gap-3">
-                            <span className={`hidden h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold sm:flex ${off ? 'bg-slate-100 text-slate-400' : 'bg-[#1B3256]/[0.08] text-[#1B3256]'}`} aria-hidden>
+                            <span className={`hidden h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold sm:flex ${off ? 'bg-slate-100 text-slate-400' : 'bg-[#2563eb]/[0.08] text-[#2563eb]'}`} aria-hidden>
                               {(r.full_name || r.email).trim().charAt(0).toUpperCase()}
                             </span>
                             <span className={`min-w-0 break-words font-medium ${off ? 'text-slate-400' : 'text-slate-900'}`}>{r.full_name || <span className="font-normal text-slate-400">ללא שם</span>}</span>
@@ -377,8 +384,8 @@ function UploadCard({ busy, onPick, onFile, onPaste }: { busy: boolean; onPick: 
       onDrop={e => { e.preventDefault(); setOver(false); const f = e.dataTransfer.files?.[0]; if (f && !busy) onFile(f) }}
       className="h-full p-2"
     >
-      <div className={`flex h-full flex-col gap-4 rounded-xl border-2 border-dashed p-4 transition-colors duration-150 sm:flex-row sm:items-center sm:p-5 ${over ? 'border-[#1B3256] bg-[#1B3256]/[0.04]' : 'border-slate-200'}`}>
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#1B3256]/[0.07] text-[#1B3256]">
+      <div className={`flex h-full flex-col gap-4 rounded-xl border-2 border-dashed p-4 transition-colors duration-150 sm:flex-row sm:items-center sm:p-5 ${over ? 'border-[#2563eb] bg-[#2563eb]/[0.04]' : 'border-slate-200'}`}>
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#2563eb]/[0.07] text-[#2563eb]">
           <FileSpreadsheet className="h-6 w-6" aria-hidden />
         </div>
         <div className="min-w-0 flex-1">
@@ -487,13 +494,15 @@ function Issues({ rows, activeCount, defaultParasha, canAdd, canEdit, canDelete 
       {creating && <NewIssue defaultParasha={defaultParasha} onClose={() => setCreating(false)} onCreated={id => { setCreating(false); setOpenId(id) }} />}
       {open && <IssueDetail key={open.id} issue={open} activeCount={activeCount} canEdit={canEdit} canDelete={canDelete} onClose={() => setOpenId(null)} />}
 
+      <IssuesDashboard rows={rows} />
+
       <Card className="overflow-hidden">
         <div className="p-4 sm:p-5">
           <CardHeader icon={<FileText className="h-5 w-5" aria-hidden />} title="ארכיון הגיליונות" hint={rows.length ? `${num(rows.length)} גיליונות, מהחדש לישן` : undefined} />
         </div>
         {!rows.length ? (
           <div className="border-t border-slate-100 px-6 py-14 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#1B3256]/[0.07] text-[#1B3256]"><Newspaper className="h-7 w-7" aria-hidden /></div>
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#2563eb]/[0.07] text-[#2563eb]"><Newspaper className="h-7 w-7" aria-hidden /></div>
             <p className="mt-4 font-bold text-slate-900">עוד לא הועלו גיליונות</p>
             <p className="mx-auto mt-1 max-w-sm text-sm text-slate-600">לחצו &quot;גיליון חדש&quot; כדי להעלות את הגיליון של השבוע.</p>
           </div>
@@ -507,6 +516,7 @@ function Issues({ rows, activeCount, defaultParasha, canAdd, canEdit, canDelete 
                   <th className={`${th} hidden md:table-cell`}>נמענים</th>
                   <th className={`${th} hidden sm:table-cell`}>פתחו</th>
                   <th className={`${th} hidden sm:table-cell`}>הורידו</th>
+                  <th className={`${th} hidden lg:table-cell`}>חזרו</th>
                   <th className={`${th} hidden lg:table-cell`}>נכשלו</th>
                   <th className={th}><span className="sr-only">פעולות</span></th>
                 </tr>
@@ -515,7 +525,7 @@ function Issues({ rows, activeCount, defaultParasha, canAdd, canEdit, canDelete 
                 {rows.map(r => {
                   const draft = r.status === 'draft'
                   return (
-                    <tr key={r.id} className={`transition-colors ${r.id === openId ? 'bg-[#1B3256]/[0.03]' : 'hover:bg-slate-50/60'}`}>
+                    <tr key={r.id} className={`transition-colors ${r.id === openId ? 'bg-[#2563eb]/[0.03]' : 'hover:bg-slate-50/60'}`}>
                       <td className="px-4 py-3">
                         <p className="font-semibold text-slate-900">פרשת {r.parasha}</p>
                         <p className="text-xs text-slate-500">{r.title}</p>
@@ -527,6 +537,7 @@ function Issues({ rows, activeCount, defaultParasha, canAdd, canEdit, canDelete 
                       <td className="hidden px-4 py-3 tabular-nums text-slate-700 md:table-cell">{draft ? '—' : `${num(r.sent_count)} / ${num(r.total_count ?? 0)}`}</td>
                       <td className="hidden px-4 py-3 sm:table-cell" title={draft ? undefined : `${r.opened_count}${pct(r.opened_count, r.sent_count)}`}>{draft ? '—' : <Meter value={r.opened_count} of={r.sent_count} />}</td>
                       <td className="hidden px-4 py-3 sm:table-cell" title={draft ? undefined : `${r.downloaded_count}${pct(r.downloaded_count, r.sent_count)}`}>{draft ? '—' : <Meter value={r.downloaded_count} of={r.sent_count} />}</td>
+                      <td className={`hidden px-4 py-3 tabular-nums lg:table-cell ${r.bounced_count ? 'text-rose-700' : 'text-slate-400'}`}>{r.bounced_count || '—'}</td>
                       <td className={`hidden px-4 py-3 tabular-nums lg:table-cell ${r.failed_count ? 'text-rose-700' : 'text-slate-400'}`}>{r.failed_count || '—'}</td>
                       <td className="px-4 py-3 text-left">
                         <button type="button" className={`${btnGhost} min-h-9 px-3`} onClick={() => setOpenId(r.id)}>
@@ -591,9 +602,10 @@ function NewIssue({ defaultParasha, onClose, onCreated }: { defaultParasha: stri
         </label>
         <label className="block"><span className={label}>פתיח למייל <span className="font-normal text-slate-500">(לא חובה)</span></span>
           <textarea className={`${input} h-24`} value={intro} onChange={e => setIntro(e.target.value)} maxLength={4000} />
+          <span className="mt-1 block text-xs text-slate-500">בשלב הבא תוכלו לעצב את המייל בעורך: טקסט, קישורים, כפתורים, תמונות ותבניות שמורות.</span>
         </label>
-        <label className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors duration-150 focus-within:ring-4 focus-within:ring-[#1B3256]/10 ${file ? 'border-emerald-300 bg-emerald-50/50' : 'border-slate-200 hover:border-[#1B3256]/40 hover:bg-slate-50'}`}>
-          {file ? <CheckCircle2 className="h-7 w-7 text-emerald-600" aria-hidden /> : <Upload className="h-7 w-7 text-[#1B3256]" aria-hidden />}
+        <label className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors duration-150 focus-within:ring-4 focus-within:ring-[#2563eb]/10 ${file ? 'border-emerald-300 bg-emerald-50/50' : 'border-slate-200 hover:border-[#2563eb]/40 hover:bg-slate-50'}`}>
+          {file ? <CheckCircle2 className="h-7 w-7 text-emerald-600" aria-hidden /> : <Upload className="h-7 w-7 text-[#2563eb]" aria-hidden />}
           <span className="text-sm font-semibold text-slate-900">{file ? file.name : 'בחירת קובץ הגיליון'}</span>
           <span className="text-xs text-slate-500">{file ? 'לחצו כדי להחליף' : 'PDF, Word או תמונה, עד 25MB'}</span>
           <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={e => setFile(e.target.files?.[0] ?? null)} className="sr-only" />
@@ -616,10 +628,12 @@ function IssueDetail({ issue, activeCount, canEdit, canDelete, onClose }: { issu
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [frameKey, setFrameKey] = useState(0)
+  const saveRef = useRef<(() => Promise<void>) | null>(null)
+  const editing = draft && canEdit
 
   async function run(fn: () => Promise<string>) {
     setBusy(true); setMsg(null)
-    try { setMsg({ ok: true, text: await fn() }); router.refresh() }
+    try { await saveRef.current?.(); setMsg({ ok: true, text: await fn() }); router.refresh() }
     catch (e) { setMsg({ ok: false, text: e instanceof Error ? e.message : 'הפעולה נכשלה' }) }
     finally { setBusy(false) }
   }
@@ -656,18 +670,11 @@ function IssueDetail({ issue, activeCount, canEdit, canDelete, onClose }: { issu
         <button type="button" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900" onClick={onClose} aria-label="סגירה"><X className="h-5 w-5" /></button>
       </div>
 
-      {!draft && (
-        <dl className="grid grid-cols-2 gap-3 border-b border-slate-100 p-5 sm:grid-cols-5">
-          <Stat label="נמענים" value={num(issue.total_count ?? 0)} />
-          <Stat label="נשלחו" value={num(issue.sent_count)} sub={issue.failed_count ? `${num(issue.failed_count)} נכשלו` : undefined} />
-          <Stat label="ממתינים" value={num(issue.pending_count)} />
-          <Stat label="פתחו" value={num(issue.opened_count)} sub={pct(issue.opened_count, issue.sent_count).trim().replace(/[()]/g, '') || undefined} />
-          <Stat label="הורידו" value={num(issue.downloaded_count)} sub={pct(issue.downloaded_count, issue.sent_count).trim().replace(/[()]/g, '') || undefined} />
-        </dl>
-      )}
+      {!draft && <IssueAnalytics issue={issue} base={base} />}
+      {editing && <MailEditor base={base} issue={issue} saveRef={saveRef} />}
 
-      <div className={`grid gap-5 p-5 ${draft && canEdit ? 'lg:grid-cols-[minmax(0,1fr)_340px]' : ''}`}>
-        <div className="min-w-0">
+      <div className={`grid gap-5 p-5 ${editing ? 'md:grid-cols-2' : ''}`}>
+        {!editing && <div className="min-w-0">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-800"><Eye className="h-4 w-4" aria-hidden />כך המייל ייראה אצל הנמען</h3>
             <button type="button" className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-800" onClick={() => setFrameKey(k => k + 1)}><RefreshCw className="h-3.5 w-3.5" aria-hidden />רענון</button>
@@ -675,11 +682,11 @@ function IssueDetail({ issue, activeCount, canEdit, canDelete, onClose }: { issu
           <div className="overflow-hidden rounded-xl bg-slate-100 p-2 ring-1 ring-inset ring-slate-900/[0.05]">
             <iframe key={frameKey} src={`${base}/preview`} title="תצוגה מקדימה" className="h-[560px] w-full rounded-lg bg-white" />
           </div>
-          {!(draft && canEdit) && <div className="mt-4"><Notice msg={msg} /></div>}
-        </div>
+          <div className="mt-4"><Notice msg={msg} /></div>
+        </div>}
 
-        {draft && canEdit && (
-          <aside className="space-y-4">
+        {editing && (
+          <>
             <div className="rounded-xl bg-slate-50/80 p-4 ring-1 ring-inset ring-slate-900/[0.04]">
               <div className="flex items-center gap-2.5"><StepNum n={1} /><h3 className="text-sm font-semibold text-slate-900">מייל ניסיון</h3></div>
               <p className="mt-2 text-xs leading-relaxed text-slate-600">שלחו לעצמכם ובדקו שהכול נראה טוב. בלי כתובת, יישלח למייל שלכם.</p>
@@ -687,7 +694,7 @@ function IssueDetail({ issue, activeCount, canEdit, canDelete, onClose }: { issu
               <button type="button" disabled={busy} className={`${btnGhost} mt-2 w-full`} onClick={sendTest}><MailCheck className="h-4 w-4" aria-hidden />שליחת ניסיון</button>
             </div>
 
-            <div className="rounded-xl p-4 ring-1 ring-inset ring-[#1B3256]/15">
+            <div className="rounded-xl p-4 ring-1 ring-inset ring-[#2563eb]/15">
               <div className="flex items-center gap-2.5"><StepNum n={2} /><h3 className="text-sm font-semibold text-slate-900">שליחה לכל הרשימה</h3></div>
               <p className="mt-2 flex items-start gap-1.5 text-xs leading-relaxed text-slate-600"><ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden />אחרי שליחה אי אפשר לבטל. המיילים יוצאים במנות, לא בשבת ובחג.</p>
               <button type="button" disabled={busy || !activeCount} className={`${btnPrimary} mt-3 w-full py-2.5`} onClick={sendAll}>
@@ -695,10 +702,13 @@ function IssueDetail({ issue, activeCount, canEdit, canDelete, onClose }: { issu
               </button>
             </div>
 
-            <Notice msg={msg} />
-
-            {canDelete && <button type="button" disabled={busy} className={`${btnDanger} w-full`} onClick={remove}><Trash2 className="h-4 w-4" aria-hidden />מחיקת הטיוטה</button>}
-          </aside>
+            {(msg || canDelete) && (
+              <div className="flex flex-wrap items-start justify-between gap-3 md:col-span-2">
+                <div className="min-w-0 flex-1"><Notice msg={msg} /></div>
+                {canDelete && <button type="button" disabled={busy} className={btnDanger} onClick={remove}><Trash2 className="h-4 w-4" aria-hidden />מחיקת הטיוטה</button>}
+              </div>
+            )}
+          </>
         )}
       </div>
     </Card>

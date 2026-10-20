@@ -44,7 +44,7 @@ export function distributorMailHtml(title: string, body: string, rows: [string, 
 <body style="margin:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;direction:rtl;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;">
-<tr><td style="background:#1B3256;padding:20px 24px;"><h1 style="margin:0;color:#ffffff;font-size:20px;line-height:1.4;">${escHtml(title)}</h1></td></tr>
+<tr><td style="background:#2563eb;padding:20px 24px;"><h1 style="margin:0;color:#ffffff;font-size:20px;line-height:1.4;">${escHtml(title)}</h1></td></tr>
 <tr><td style="padding:24px;">${paras}${table ? `<table role="presentation" cellpadding="0" cellspacing="0">${table}</table>` : ''}</td></tr>
 <tr><td style="padding:14px 24px;background:#f8fafc;color:#94a3b8;font-size:12px;">${escHtml(GILYONOT_FROM_NAME)} · מערך המפיצים</td></tr>
 </table></td></tr></table></body></html>`

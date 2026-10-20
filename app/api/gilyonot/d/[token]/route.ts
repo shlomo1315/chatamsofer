@@ -11,7 +11,7 @@ const SIGNED_SECONDS = 60 * 10
 function notFound() {
   return new NextResponse(
     '<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="robots" content="noindex"/><title>הקובץ לא נמצא</title></head>'
-    + '<body style="font-family:Arial,sans-serif;background:#f8fafc;text-align:center;padding:60px 20px;color:#334155;"><h1 style="color:#1B3256;font-size:20px;">הקובץ לא נמצא</h1><p>ייתכן שהקישור ישן. אפשר לפנות אלינו ונשלח את הגיליון שוב.</p></body></html>',
+    + '<body style="font-family:Arial,sans-serif;background:#f8fafc;text-align:center;padding:60px 20px;color:#334155;"><h1 style="color:#2563eb;font-size:20px;">הקובץ לא נמצא</h1><p>ייתכן שהקישור ישן. אפשר לפנות אלינו ונשלח את הגיליון שוב.</p></body></html>',
     { status: 404, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
   )
 }

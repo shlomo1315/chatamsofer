@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { CheckCircle2 } from 'lucide-react'
 
-const input = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base text-slate-900 focus:border-[#1B3256] focus:outline-none focus:ring-2 focus:ring-[#1B3256]/20'
+const input = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base text-slate-900 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20'
 const label = 'mb-1 block text-sm font-medium text-slate-700'
 
 // בדיקה מהירה בדפדפן בלבד. האימות המלא נעשה בשרת (lib/gilyonot normalizeEmail).
@@ -44,7 +44,7 @@ export default function GilyonotForm() {
     return (
       <section className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm" role="status">
         <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600" aria-hidden />
-        <h2 className="mt-3 text-xl font-bold" style={{ color: '#1B3256' }}>נרשמתם בהצלחה</h2>
+        <h2 className="mt-3 text-xl font-bold" style={{ color: '#2563eb' }}>נרשמתם בהצלחה</h2>
         <p className="mt-2 text-sm leading-relaxed text-slate-600">
           הגיליון הבא יישלח אל <span dir="ltr" className="font-medium text-slate-800">{email.trim()}</span>.
         </p>
@@ -77,7 +77,7 @@ export default function GilyonotForm() {
       <label className="flex cursor-pointer items-start gap-3 text-sm leading-relaxed text-slate-700">
         <input
           type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)}
-          className="mt-0.5 h-5 w-5 shrink-0 rounded border-slate-400 accent-[#1B3256]"
+          className="mt-0.5 h-5 w-5 shrink-0 rounded border-slate-400 accent-[#2563eb]"
         />
         <span>אני מאשר/ת לקבל את הגיליון השבועי ועדכונים מגיליונות החתם סופר במייל. אפשר להסיר את עצמכם בכל עת בקישור שבתחתית כל מייל.</span>
       </label>
@@ -87,7 +87,7 @@ export default function GilyonotForm() {
       <button
         type="submit" disabled={sending}
         className="w-full rounded-lg px-4 py-3 text-base font-bold text-white disabled:opacity-60"
-        style={{ background: '#1B3256' }}
+        style={{ background: '#2563eb' }}
       >
         {sending ? 'שולח...' : 'הרשמה'}
       </button>

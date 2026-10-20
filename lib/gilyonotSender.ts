@@ -4,6 +4,7 @@ import { getServiceClient } from './apiAuth'
 import { isBlockedForMail } from './jewishCalendar'
 import { GILYONOT_FROM_EMAIL, GILYONOT_FROM_NAME } from './gilyonot'
 import { buildGilyonHtml, gilyonotUrls } from './gilyonotMail'
+import { sanitizeMailHtml } from './gilyonotRichHtml'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // שליחת הגיליון השבועי לרשימת התפוצה, באותה שיטה כמו מנוע הניוזלטר
@@ -24,12 +25,17 @@ const PAGE = 1000
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 const from = () => `${GILYONOT_FROM_NAME} <${GILYONOT_FROM_EMAIL}>`
 
+/** שם לדוגמה בתצוגה המקדימה ובמייל הניסיון, במקום {{שם}}. */
+export const SAMPLE_NAME = 'ישראל ישראלי'
+
 export interface IssueRow {
   id: string
   title: string
   parasha: string
   subject: string
   intro: string | null
+  body_html: string | null
+  design: unknown
   file_path: string
   file_name: string
   status: 'draft' | 'sending' | 'sent'
@@ -43,12 +49,23 @@ interface DeliveryRow {
   gilyonot_subscribers: { full_name: string | null; token: string; status: string } | null
 }
 
+// הגוף נשמר נקי, ובכל זאת מנוקה שוב לפני שליחה. זיכרון של האחרון כדי לא לנקות לכל נמען.
+let lastBody = { raw: '', clean: '' }
+function cleanBody(raw: string | null): string {
+  if (!raw) return ''
+  if (lastBody.raw !== raw) lastBody = { raw, clean: sanitizeMailHtml(raw) }
+  return lastBody.clean
+}
+
+type MailFields = Pick<IssueRow, 'title' | 'parasha' | 'intro' | 'body_html' | 'design'>
+
 /** המייל עצמו לנמען אחד. גם התצוגה המקדימה משתמשת בזה (עם טוקנים לדוגמה). */
-export function issueEmail(issue: Pick<IssueRow, 'title' | 'parasha' | 'intro'>, r: { name: string | null; deliveryToken: string; subscriberToken: string | null }) {
+export function issueEmail(issue: MailFields, r: { name: string | null; deliveryToken: string; subscriberToken: string | null }) {
   const unsubscribeUrl = r.subscriberToken ? gilyonotUrls.unsubscribe(r.subscriberToken) : null
   return {
     html: buildGilyonHtml({
       title: issue.title, parasha: issue.parasha, intro: issue.intro, name: r.name,
+      bodyHtml: cleanBody(issue.body_html), design: issue.design,
       downloadUrl: gilyonotUrls.download(r.deliveryToken),
       unsubscribeUrl,
       pixelUrl: gilyonotUrls.pixel(r.deliveryToken),
@@ -63,7 +80,10 @@ export async function sendGilyonTest(db: SupabaseClient, issue: IssueRow, to: st
   if (!apiKey) return { ok: false, error: 'RESEND_API_KEY לא מוגדר בשרת' }
   const { data: signed } = await db.storage.from('documents').createSignedUrl(issue.file_path, 60 * 60 * 24 * 7, { download: issue.file_name })
   if (!signed?.signedUrl) return { ok: false, error: 'הקובץ לא נמצא באחסון' }
-  const html = buildGilyonHtml({ title: issue.title, parasha: issue.parasha, intro: issue.intro, name: null, downloadUrl: signed.signedUrl, unsubscribeUrl: null })
+  const html = buildGilyonHtml({
+    title: issue.title, parasha: issue.parasha, intro: issue.intro, bodyHtml: cleanBody(issue.body_html), design: issue.design,
+    name: SAMPLE_NAME, downloadUrl: signed.signedUrl, unsubscribeUrl: null,
+  })
   const { error } = await new Resend(apiKey).emails.send({ from: from(), to, subject: `[ניסיון] ${issue.subject}`, html })
   if (error) return { ok: false, error: String(error.message ?? error) }
   return { ok: true }

@@ -44,7 +44,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
       if (!data || data.length < PAGE) break
     }
     const [{ data: iss }, { data: stats }] = await Promise.all([
-      db.from('gilyonot_issues').select('id, title, parasha, subject, intro, file_name, file_size, status, total_count, created_at, started_at, completed_at')
+      db.from('gilyonot_issues').select('id, title, parasha, subject, intro, body_html, design, file_name, file_size, status, total_count, created_at, started_at, completed_at')
         .order('created_at', { ascending: false }).limit(500),
       db.from('gilyonot_issue_stats').select('*'),
     ])
@@ -57,6 +57,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
         ...i,
         sent_count: s?.sent_count ?? 0, failed_count: s?.failed_count ?? 0, pending_count: s?.pending_count ?? 0,
         opened_count: s?.opened_count ?? 0, downloaded_count: s?.downloaded_count ?? 0,
+        delivered_count: s?.delivered_count ?? 0, bounced_count: s?.bounced_count ?? 0, complained_count: s?.complained_count ?? 0,
       } as IssueView
     })
 
