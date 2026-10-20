@@ -1,5 +1,6 @@
 'use client'
 
+import { gilyonFileName } from '@/lib/gilyonotFileName'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -674,7 +675,7 @@ function IssueDetail({ issue, activeCount, canEdit, canDelete, onClose }: { issu
           </div>
           <p className="mt-1 text-sm text-slate-600"><span className="text-slate-500">נושא:</span> {issue.subject}</p>
           <a href={`${base}/file`} target="_blank" rel="noreferrer" className={`${link} mt-1.5 inline-flex items-center gap-1.5 text-sm`}>
-            <FileText className="h-4 w-4" aria-hidden />{issue.file_name}
+            <FileText className="h-4 w-4" aria-hidden />{gilyonFileName(issue, issue.file_name)}
           </a>
         </div>
         <button type="button" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900" onClick={onClose} aria-label="סגירה"><X className="h-5 w-5" /></button>
@@ -767,7 +768,7 @@ function FilePanel({ issue, base }: { issue: IssueView; base: string }) {
       <div className="rounded-xl bg-slate-50/80 p-4 ring-1 ring-inset ring-slate-900/[0.04]">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <a href={`${base}/file`} target="_blank" rel="noreferrer" className={`${link} inline-flex items-center gap-1.5 text-sm`}><FileText className="h-4 w-4" aria-hidden />{issue.file_name}</a>
+            <a href={`${base}/file`} target="_blank" rel="noreferrer" className={`${link} inline-flex items-center gap-1.5 text-sm`}><FileText className="h-4 w-4" aria-hidden />{gilyonFileName(issue, issue.file_name)}</a>
             <p className="mt-1 text-sm text-slate-700">גודל הקובץ: <strong className="tabular-nums">{fmtSize(size)}</strong>{issue.compressed && <Badge tone="green">גרסה מכווצת</Badge>}</p>
           </div>
           <div className="flex flex-wrap gap-2">

@@ -1,3 +1,4 @@
+import { gilyonFileName } from './gilyonotFileName'
 import { Resend } from 'resend'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getServiceClient } from './apiAuth'
@@ -60,26 +61,22 @@ function cleanBody(raw: string | null): string {
   return lastBody.clean
 }
 
+export { gilyonFileName } from './gilyonotFileName'
+
 export interface Attachment { filename: string; content: Buffer }
 
-/** שם הקובץ המצורף: שם הגיליון + סיומת הקובץ, בלי תווים אסורים. */
-export function attachmentName(title: string, filePath: string): string {
-  const ext = /\.([a-z0-9]{2,5})$/i.exec(filePath)?.[1]?.toLowerCase() ?? 'pdf'
-  const base = title.replace(/[\\/:*?"<>|\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100) || 'גיליון'
-  return `${base}.${ext}`
-}
 
 /** האם קובץ בגודל הזה נכנס במייל אחד (עם base64). */
 export const fitsInMail = (bytes: number) => Math.ceil(bytes * 4 / 3) <= RESEND_MAX_BYTES
 
-export async function loadAttachment(db: SupabaseClient, issue: Pick<IssueRow, 'title' | 'file_path'>): Promise<{ ok: true; att: Attachment } | { ok: false; error: string }> {
+export async function loadAttachment(db: SupabaseClient, issue: Pick<IssueRow, 'title' | 'parasha' | 'file_path'>): Promise<{ ok: true; att: Attachment } | { ok: false; error: string }> {
   const { data, error } = await db.storage.from('documents').download(issue.file_path)
   if (error || !data) return { ok: false, error: 'הקובץ לא נמצא באחסון' }
   const content = Buffer.from(await data.arrayBuffer())
   if (!fitsInMail(content.length)) {
     return { ok: false, error: `הקובץ גדול מדי למייל (${(content.length / 1048576).toFixed(1)}MB; המגבלה כ-30MB). כווץ את הקובץ או העלה קטן יותר.` }
   }
-  return { ok: true, att: { filename: attachmentName(issue.title, issue.file_path), content } }
+  return { ok: true, att: { filename: gilyonFileName(issue, issue.file_path), content } }
 }
 
 type MailFields = Pick<IssueRow, 'title' | 'parasha' | 'intro' | 'body_html' | 'design'>

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
+import { gilyonFileName } from '@/lib/gilyonotFileName'
 import { defaultSubject } from '@/lib/gilyonotMail'
 
 // גיליון חדש: מעלה את הקובץ לדלי הפרטי documents ויוצר טיוטה.
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
   const id = crypto.randomUUID()
   const path = `gilyonot/${id}/gilyon.${ext}`
   // שם הקובץ שיוצג להורדה: מהשם המקורי, בלי תווים שעלולים לשבור כותרות
-  const fileName = (file.name || `gilyon.${ext}`).replace(/[\\/:*?"<>|\r\n]+/g, ' ').trim().slice(0, 120) || `gilyon.${ext}`
+  const fileName = gilyonFileName({ title, parasha }, file.name || `gilyon.${ext}`)
 
   const { error: upErr } = await db.storage.from('documents')
     .upload(path, Buffer.from(await file.arrayBuffer()), { contentType: file.type, upsert: false })
