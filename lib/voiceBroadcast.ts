@@ -4,7 +4,6 @@
 import { normalizePhone } from './kvitel'
 
 export const VOICE_BROADCAST_KEY = 'voice_broadcast_active'
-export const VOICE_TEST_PHONE = '0527101315'
 export const VOICE_BROADCAST_STATUSES = ['paid', 'picking', 'packed', 'shipped', 'delivered', 'partially_refunded']
 export const VOICE_TEST_WINDOW_MS = 30 * 60 * 1000
 export const VOICE_FULL_WINDOW_MS = 4 * 60 * 60 * 1000
@@ -20,6 +19,21 @@ export function pickVoiceRecipients(rows: { customer_phone: string | null; statu
     if (p) seen.add(p)
   }
   return [...seen]
+}
+
+export type VoiceRecipient = { phone: string; name: string; type: 'pickup' | 'shipping' | 'other' }
+
+/** רשימת נמענים לתצוגה: מספר ייחודי פעם אחת, עם השם וסוג ההזמנה הראשונה שלו. */
+export function pickVoiceRecipientList(rows: { customer_phone: string | null; customer_name?: string | null; delivery_method?: string | null; status?: string }[]): VoiceRecipient[] {
+  const seen = new Map<string, VoiceRecipient>()
+  for (const r of rows) {
+    if (r.status && !VOICE_BROADCAST_STATUSES.includes(r.status)) continue
+    const phone = normalizePhone(r.customer_phone ?? '')
+    if (!phone || seen.has(phone)) continue
+    const type = r.delivery_method === 'pickup' ? 'pickup' : r.delivery_method === 'shipping' ? 'shipping' : 'other'
+    seen.set(phone, { phone, name: String(r.customer_name ?? '').trim(), type })
+  }
+  return [...seen.values()]
 }
 
 /** האם המספר אמור לשמוע את ההודעה לפי סימון השליחה הפעילה. */
