@@ -42,7 +42,8 @@ export async function GET() {
   if (!db) return serverMisconfigured()
   const recipients = await loadRecipients(db)
   const { count } = await db.from('activity_log').select('id', { count: 'exact', head: true }).eq('action', STARTED)
-  return NextResponse.json({ count: recipients.length, alreadyStarted: (count ?? 0) > 0 })
+  const { data: last } = await db.from('activity_log').select('details, created_at').eq('action', SENT).order('created_at', { ascending: false }).limit(1).maybeSingle()
+  return NextResponse.json({ count: recipients.length, alreadyStarted: (count ?? 0) > 0, last: last ? { ...(last.details as object), at: last.created_at } : null })
 }
 
 export async function POST(request: NextRequest) {
