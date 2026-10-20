@@ -19,10 +19,29 @@ export function pickAnnouncementRecipients(rows: AnnouncementOrderRow[]): string
   return [...seen]
 }
 
-/** HTML במעטפת המיילים הראשית (לוגו היכל החתם סופר), פסקה לכל בלוק בנוסח. */
-export function buildAnnouncementMailHtml(): string {
-  const paras = CREDITS_ANNOUNCEMENT_TEXT.split('\n\n')
-    .map(p => `<p style="margin:0 0 18px;color:#1e293b;font-size:16px;line-height:1.8;text-align:right;">${esc(p)}</p>`).join('')
+export const ANNOUNCEMENT_MAIL_KEY = 'announcement_mail_content'
+export const DEFAULT_ANNOUNCEMENT_BODY = CREDITS_ANNOUNCEMENT_TEXT
+
+export type AnnouncementMailContent = { subject: string; body: string }
+
+export const defaultAnnouncementMail = (): AnnouncementMailContent =>
+  ({ subject: ANNOUNCEMENT_MAIL_SUBJECT, body: DEFAULT_ANNOUNCEMENT_BODY })
+
+/** ממיר ערך שנשמר ב-app_settings (או קלט מהמסך) לנוסח תקין; שדה ריק חוזר לברירת המחדל. */
+export function parseAnnouncementMail(raw: unknown): AnnouncementMailContent {
+  let v: unknown = raw
+  if (typeof raw === 'string') { try { v = JSON.parse(raw) } catch { v = null } }
+  const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>
+  const d = defaultAnnouncementMail()
+  const subject = typeof o.subject === 'string' ? o.subject.trim().slice(0, 200) : ''
+  const body = typeof o.body === 'string' ? o.body.replace(/\r\n/g, '\n').trim().slice(0, 5000) : ''
+  return { subject: subject || d.subject, body: body || d.body }
+}
+
+/** HTML במעטפת המיילים הראשית (לוגו היכל החתם סופר), פסקה לכל בלוק בנוסח (שורה ריקה מפרידה). */
+export function buildAnnouncementMailHtml(body: string = DEFAULT_ANNOUNCEMENT_BODY): string {
+  const paras = body.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean)
+    .map(p => `<p style="margin:0 0 18px;color:#1e293b;font-size:16px;line-height:1.8;text-align:right;">${esc(p).replace(/\n/g, '<br>')}</p>`).join('')
   return shell({
     logoUrl: HEICHAL_LOGO_URL,
     preheader: 'הודעה ממערכת הזמנות הספרים',
