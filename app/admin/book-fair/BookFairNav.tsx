@@ -23,6 +23,7 @@ const TABS = [
   // ⚠️ מיילים ופניות היו קיימים אך לא הופיעו כאן — אי אפשר היה להגיע
   // אליהם בלי לדעת את הכתובת.
   { href: '/admin/book-fair/emails',   label: 'מיילים',  icon: Mail },
+  { href: '/admin/book-fair/announcement-mail', label: 'הודעה למזמינים', icon: Mail },
   // 🔴 14.10: תיבת yerid@ בלבד. קודם הקישור הוביל ל-/admin/mail הכללי,
   // שנפתח על office@ ואפשר לעבור לכל תיבה במערכת.
   { href: '/admin/book-fair/mailbox',  label: 'תיבת מייל', icon: Inbox },

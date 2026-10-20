@@ -5,13 +5,14 @@ import { useEffect, useState } from 'react'
 export default function AnnouncementMailPage() {
   const [count, setCount] = useState<number | null>(null)
   const [started, setStarted] = useState(false)
+  const [last, setLast] = useState<{ total: number; sent: number; failed: number; at: string } | null>(null)
   const [test, setTest] = useState('')
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     fetch('/api/admin/book-fair/announcement-mail').then(r => r.json())
-      .then(d => { setCount(d.count ?? null); setStarted(!!d.alreadyStarted) }).catch(() => setMsg('טעינת הספירה נכשלה'))
+      .then(d => { setCount(d.count ?? null); setStarted(!!d.alreadyStarted); setLast(d.last ?? null) }).catch(() => setMsg('טעינת הספירה נכשלה'))
   }, [])
 
   async function post(body: object, ok: (d: Record<string, number>) => string) {
@@ -40,6 +41,7 @@ export default function AnnouncementMailPage() {
           onClick={() => { if (confirm(`לשלוח מייל ל-${count} כתובות?`)) post({ confirm: count }, d => `נשלחו ${d.sent} מתוך ${d.total}, נכשלו ${d.failed}`) }}
           className="rounded bg-blue-700 px-4 py-2 text-white disabled:opacity-50">שלח לכל הנמענים</button>
       </section>
+      {last && <p className="rounded border p-3">שליחה אחרונה ({new Date(last.at).toLocaleString('he-IL')}): נשלחו {last.sent} מתוך {last.total}, נכשלו {last.failed}</p>}
       {msg && <p role="status" className="rounded bg-gray-100 p-3">{msg}</p>}
     </div>
   )
