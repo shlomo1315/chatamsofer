@@ -51,7 +51,7 @@ describe('gilyonot: פרשה ומייל', () => {
     expect(currentParasha(new Date('2026-10-14T10:00:00Z'))).toBe('פרשת נח')
   })
   it('מנטרל HTML בטקסט של המנהל ובשם הנמען', () => {
-    const html = buildGilyonHtml({ title: '<b>x</b>', parasha: 'פרשת נח', intro: 'שורה\n\n<script>', name: '"><img>', downloadUrl: 'https://a/d', unsubscribeUrl: 'https://a/u' })
+    const html = buildGilyonHtml({ title: '<b>x</b>', parasha: 'פרשת נח', intro: 'שורה\n\n<script>', name: '"><img>', unsubscribeUrl: 'https://a/u' })
     expect(html).not.toContain('<script>')
     expect(html).not.toContain('<b>x</b>')
     expect(html).not.toContain('"><img>')

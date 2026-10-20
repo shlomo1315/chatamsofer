@@ -131,7 +131,7 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
   const [uploading, setUploading] = useState(false)
   const [picked, setPicked] = useState<HTMLElement | null>(null)
   const [, bump] = useState(0)
-  const [tab, setTab] = useState<'header' | 'greeting' | 'button' | 'footer' | 'bg'>('header')
+  const [tab, setTab] = useState<'header' | 'greeting' | 'footer' | 'bg'>('header')
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop')
   const [preview, setPreview] = useState('')
   const [state, setState] = useState<SaveState>('saved')
@@ -524,7 +524,7 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
             <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-3 pt-2">
               <div className="flex flex-wrap gap-1" role="tablist" aria-label="חלקי המייל">
                 <Palette className="mx-1 mt-2 h-4 w-4 text-slate-500" aria-hidden />
-                {([['header', 'כותרת'], ['greeting', 'פתיחה'], ['button', 'כפתור הורדה'], ['footer', 'פוטר'], ['bg', 'רקע']] as const).map(([k, l]) => (
+                {([['header', 'כותרת'], ['greeting', 'פתיחה'], ['footer', 'פוטר'], ['bg', 'רקע']] as const).map(([k, l]) => (
                   <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
                     className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${tab === k ? 'border-[#2563eb] text-[#2563eb]' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>{l}</button>
                 ))}
@@ -552,13 +552,6 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
                     <input className={input} value={design.greeting} maxLength={160} onChange={e => set('greeting', e.target.value)} />
                   </Field>
                 )}
-              </>}
-              {tab === 'button' && <>
-                <Toggle label="להציג כפתור הורדת הגיליון" checked={design.showButton} onChange={v => set('showButton', v)} />
-                {design.showButton ? <>
-                  <Field label="טקסט הכפתור"><input className={input} value={design.buttonLabel} maxLength={60} onChange={e => set('buttonLabel', e.target.value)} /></Field>
-                  <ColorField label="צבע הכפתור" value={design.buttonColor} onChange={v => set('buttonColor', v)} />
-                </> : <p className="text-xs text-amber-700">בלי הכפתור, הנמענים לא יוכלו להוריד את הגיליון, ולא נספור הורדות.</p>}
               </>}
               {tab === 'footer' && (
                 <Field label="טקסט הפוטר" hint="קישור הסרה מהרשימה מתווסף תמיד בסוף.">

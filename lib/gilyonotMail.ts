@@ -40,7 +40,8 @@ export function buildGilyonHtml(opts: {
   bodyHtml?: string | null
   design?: unknown
   name?: string | null
-  downloadUrl: string
+  /** קישור הורדה ישן (גיליונות שנשלחו לפני המעבר לקובץ מצורף). בלי קישור אין כפתור. */
+  downloadUrl?: string | null
   unsubscribeUrl: string | null
   pixelUrl?: string | null
 }): string {
@@ -61,7 +62,7 @@ ${d.kicker.trim() ? `<p style="margin:0;color:#dbeafe;font-size:13px;letter-spac
 <h1 style="margin:8px 0 0;color:#ffffff;font-size:22px;line-height:1.4;">${plain(title)}</h1>
 ${sub.trim() ? `<p style="margin:6px 0 0;color:#eff6ff;font-size:16px;">${plain(sub)}</p>` : ''}
 </td></tr>` : ''
-  const button = d.showButton && d.buttonLabel.trim() ? `<tr><td align="center" style="padding:8px 28px 30px;">
+  const button = opts.downloadUrl && d.showButton && d.buttonLabel.trim() ? `<tr><td align="center" style="padding:8px 28px 30px;">
 <a href="${escHtml(opts.downloadUrl)}" style="display:inline-block;background:${d.buttonColor};color:#ffffff;text-decoration:none;font-size:17px;font-weight:bold;padding:14px 34px;border-radius:10px;">${plain(d.buttonLabel)}</a>
 </td></tr>` : ''
 
