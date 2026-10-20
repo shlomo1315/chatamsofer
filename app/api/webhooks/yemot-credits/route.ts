@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { safeEqual } from '@/lib/svix'
 import { normalizePhone } from '@/lib/kvitel'
+import { withFallbackFolder } from '@/lib/yemotFallback'
 import {
   creditPhoneTurn, mergePhoneCredits, PHONE_OPEN_STATUSES, TEST_CALL_ACTION, TEST_CALL_WINDOW_MS, TEST_CREDIT,
 } from '@/lib/bookFairCredits'
@@ -18,6 +19,7 @@ export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 function yemotText(body: string) {
+  body = withFallbackFolder(body, process.env.YEMOT_CREDITS_FALLBACK_FOLDER)
   return new NextResponse(body.endsWith('&') ? body : `${body}&`, {
     headers: { 'Content-Type': 'text/plain; charset=utf-8' },
   })
