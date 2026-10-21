@@ -75,6 +75,7 @@ export default function VoiceBroadcastPage() {
             <input id="vb-phone" dir="ltr" inputMode="tel" value={testPhone} onChange={e => setTestPhone(e.target.value)} placeholder="05X-XXXXXXX" className="w-full rounded-lg border border-gray-300 p-2.5" />
             <div className="flex flex-wrap gap-3">
               <button disabled={busy || !dirty} onClick={() => save({ text, testPhone }, 'נשמר. ההקלטה החדשה תופק בבדיקה הבאה')} className="rounded-lg bg-blue-700 px-4 py-2 font-medium text-white disabled:opacity-50">שמור</button>
+              <a href={`${API}?download=1`} download className="rounded-lg border border-gray-300 px-4 py-2">הורד קובץ שמע (mp3)</a>
               <button disabled={busy || text.trim() === defaults} onClick={() => { if (confirm('לאפס לנוסח המקורי?')) save({ reset: true }, 'הנוסח אופס למקורי') }} className="rounded-lg border border-gray-300 px-4 py-2 disabled:opacity-50">אפס לנוסח המקורי</button>
             </div>
             {dirty && <p className="text-sm text-amber-700">יש שינויים שלא נשמרו. בדיקה ושליחה משתמשות בנוסח השמור.</p>}
