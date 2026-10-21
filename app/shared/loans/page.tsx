@@ -7,7 +7,7 @@ import { matchesLoanStage, LOAN_STAGES, type LoanStage } from '@/lib/loansPortal
 // ── הגדרת עמודות טבלת ההלוואות ──
 // ⚠️ עמודת הסטטוס אינה בבורר: היא נושאת את כפתורי הביצוע/הביטול, והסתרתה
 // משאירה את הפורטל בלי הפעולה שהוא קיים בשבילה. לכן extraCols: 1.
-type LoanColKey = 'name' | 'id_number' | 'address' | 'phone' | 'email' | 'amount' | 'installments'
+type LoanColKey = 'name' | 'id_number' | 'address' | 'phone' | 'email' | 'amount' | 'installments' | 'note'
 
 // 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
 // React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
@@ -25,6 +25,8 @@ const LOAN_COLUMNS: ColDef<LoanColKey, PortalLoan>[] = [
   // 🔴 כמות התשלומים — מוצגת בגדול: זה הנתון שהגורם המבצע צריך מול
   // כל הלוואה, ועד כה הוא היה קיים בנתונים ולא הופיע בשום מקום במסך.
   { key: 'installments', label: 'תשלומים', def: true, kind: 'number', value: l => l.installments || null },
+  // הערת פורטל חופשית (למשל "יש לו כבר הלוואה, לא שולחים שטר") — עריכה בתא.
+  { key: 'note', label: 'הערה', def: true, value: l => l.portal_note || null },
 ]
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -37,6 +39,8 @@ interface PortalLoan {
   purpose?: string
   purpose_details?: string
   notes?: string
+  /** הערת הפורטל — נערכת בתא ונשמרת ב-loans.portal_note. */
+  portal_note?: string | null
   created_at: string
   /** שלב הביניים: השטר נשלח לחתימת המבקש, טרם הופקד. */
   note_sent_at?: string | null
@@ -92,7 +96,7 @@ const haystack = (l: PortalLoan): string => {
     b?.spouse_id_number, digits(b?.spouse_id_number),
     b?.phone, digits(b?.phone),
     b?.city, b?.address, b?.email,
-    l.purpose, l.purpose_details, l.notes,
+    l.purpose, l.purpose_details, l.notes, l.portal_note,
     String(shownAmount(l)),
   ].filter(Boolean).join(' ').toLowerCase()
 }
@@ -103,6 +107,55 @@ const matchesSearch = (l: PortalLoan, q: string): boolean => {
   const hay = haystack(l)
   // ⚠️ כל מילה בנפרד: "כהן 0512" מוצא גם כשהשם והטלפון אינם צמודים.
   return term.split(/\s+/).every(w => hay.includes(w) || hay.includes(w.replace(/\D/g, '')))
+}
+
+// ── הערת פורטל בתא: שמירה ביציאה מהשדה, רק אם הטקסט השתנה ──
+function PortalNoteCell({ loan, onSaved }: { loan: PortalLoan; onSaved: (id: string, note: string | null) => void }) {
+  const [value, setValue] = useState(loan.portal_note ?? '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const last = loan.portal_note ?? ''
+
+  const save = async () => {
+    const next = value.trim()
+    if (next === last.trim()) return
+    setSaving(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/shared/loans/${loan.id}/portal-note`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: next }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        setError(d.error ?? 'השמירה נכשלה')
+        return
+      }
+      onSaved(loan.id, next || null)
+    } catch {
+      setError('שגיאת תקשורת — ההערה לא נשמרה')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <textarea
+        value={value}
+        onChange={e => setValue(e.target.value)}
+        onBlur={save}
+        rows={2}
+        maxLength={500}
+        placeholder="הוסף הערה..."
+        aria-label="הערה להלוואה"
+        className="w-full min-w-[140px] resize-y rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+      />
+      {saving && <span className="text-[10px] text-slate-400">שומר…</span>}
+      {error && <span className="text-[10px] font-medium text-red-600">{error}</span>}
+    </div>
+  )
 }
 
 // ── Password Screen ───────────────────────────────────────────────────────────
@@ -302,6 +355,10 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
 
   useEffect(() => { void loadLoans() }, [loadLoans])
 
+  const handleNoteSaved = (loanId: string, note: string | null) => {
+    setLoans(prev => prev.map(l => l.id === loanId ? { ...l, portal_note: note } : l))
+  }
+
   const handleDone = (loanId: string, disbursedAt: string, disbursedBy: string) => {
     setLoans(prev => prev.map(l =>
       l.id === loanId ? { ...l, disbursed_at: disbursedAt, disbursed_by: disbursedBy } : l,
@@ -429,6 +486,8 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
             </span>
           )
           : <span className="text-slate-300">—</span>
+      case 'note':
+        return <PortalNoteCell key={`${l.id}:${l.portal_note ?? ''}`} loan={l} onSaved={handleNoteSaved} />
     }
   }
 
