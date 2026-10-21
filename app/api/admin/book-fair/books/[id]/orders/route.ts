@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { loadRefundReturns } from '@/lib/bookFairSoldData'
+import { itemsAfterReturns } from '@/lib/bookFairSold'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // מי הזמין ספר מסוים — לרשימה שנפתחת מעמודת "נמכר" בקטלוג.
@@ -74,18 +76,24 @@ export async function GET(
   const one = <T,>(v: T | T[] | null): T | null =>
     Array.isArray(v) ? (v[0] ?? null) : v
 
-  const orders = rows
-    .map(r => {
-      const o = one(r.order)
-      if (!o) return null
+  // ⚠️ אותו חישוב כמו הקטלוג: עותקים שהוחזרו בזיכוי חלקי או סומנו "זוכה" לא נספרים.
+  const returns = await loadRefundReturns(db)
+  const lineRows = rows.flatMap(r => {
+    const o = one(r.order)
+    return o ? [{ r, o, order_id: o.id, book_id: id, quantity: r.quantity, line_total_agorot: r.unit_price_agorot * r.quantity }] : []
+  })
+  const kept = itemsAfterReturns(lineRows.map(l => ({ id: l.o.id, order_number: l.o.order_number })), lineRows, returns)
+
+  const orders = kept
+    .map(({ r, o, quantity, line_total_agorot }) => {
       const city = one(o.city)
       return {
         id: o.id,
         order_number: o.order_number,
         status: o.status,
         channel: o.channel,
-        quantity: r.quantity,
-        line_total_agorot: r.unit_price_agorot * r.quantity,
+        quantity,
+        line_total_agorot,
         customer_name: o.customer_name,
         customer_phone: o.customer_phone,
         customer_email: o.customer_email,
