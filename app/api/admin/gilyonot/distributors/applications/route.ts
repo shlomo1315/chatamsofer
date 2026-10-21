@@ -2,8 +2,10 @@ import { NextResponse } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
 import { createDistributorFrom } from '@/lib/gilyonotDistributorNedarim'
+import { sendJoinApprovedMail } from '@/lib/gilyonotDistributorJoin'
 
-// נרשמים מנדרים שלא נכנסו אוטומטית: הוספה כמפיץ (החלטה ידנית) או דחייה.
+// בקשות הצטרפות: מטופס ההצטרפות (reason='web') ונרשמים מנדרים שלא נכנסו אוטומטית.
+// הוספה כמפיץ (החלטה ידנית) או דחייה. אישור בקשה מהטופס שולח לפונה מייל עם הפרטים.
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
@@ -21,7 +23,7 @@ export async function PATCH(request: Request) {
   if (!id || !status) return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 })
 
   const { data: app } = await db.from('gilyonot_distributor_applications')
-    .select('id, full_name, phone, email, city, synagogue, address, quantity, status').eq('id', id).maybeSingle()
+    .select('id, full_name, phone, email, city, synagogue, address, quantity, notes, reason, status').eq('id', id).maybeSingle()
   if (!app) return NextResponse.json({ error: 'הבקשה לא נמצאה' }, { status: 404 })
   if (app.status !== 'pending') return NextResponse.json({ error: 'הבקשה כבר טופלה' }, { status: 409 })
   if (status === 'approved' && !app.full_name) return NextResponse.json({ error: 'אי אפשר להוסיף מפיץ בלי שם. הוסיפו אותו ידנית ברשימת המפיצים' }, { status: 400 })
@@ -34,15 +36,20 @@ export async function PATCH(request: Request) {
   if (!claimed?.length) return NextResponse.json({ error: 'הבקשה כבר טופלה' }, { status: 409 })
 
   let distributorId: string | null = null
+  let mailed = false
   if (status === 'approved') {
-    const created = await createDistributorFrom(db, app, 'נוסף מנדרים פלוס באישור המשרד')
+    const fromWeb = app.reason === 'web'
+    const created = fromWeb
+      ? await createDistributorFrom(db, app, 'הצטרף מטופס ההצטרפות באישור המשרד', 'web')
+      : await createDistributorFrom(db, app, 'נוסף מנדרים פלוס באישור המשרד')
     if (!created.ok) {
       await db.from('gilyonot_distributor_applications').update({ status: 'pending', handled_by: null, handled_at: null }).eq('id', id)
       return NextResponse.json({ error: created.error }, { status: 500 })
     }
     distributorId = created.id
     await db.from('gilyonot_distributor_applications').update({ distributor_id: distributorId }).eq('id', id)
+    if (fromWeb) mailed = await sendJoinApprovedMail(db, app).catch(() => false)
   }
-  await logActivity(db, { userId: staff.userId, action: 'gilyonot_distributor_application', entityType: 'gilyonot_distributor', details: { id, status, distributorId } })
-  return NextResponse.json({ ok: true, distributorId })
+  await logActivity(db, { userId: staff.userId, action: 'gilyonot_distributor_application', entityType: 'gilyonot_distributor', details: { id, status, distributorId, mailed } })
+  return NextResponse.json({ ok: true, distributorId, mailed })
 }

@@ -188,7 +188,7 @@ function Issues({ dash, issue, onIssue, pending, onSection }: {
   const waiting = [
     { key: 'requests' as const, label: 'פניות פתוחות', hint: 'תקלות ובקשות מהמפיצים', n: pending.requests },
     { key: 'hilula' as const, label: 'סעודת ההילולא', hint: 'בקשות שממתינות לאישור', n: pending.hilula },
-    { key: 'nedarim' as const, label: 'נרשמים מנדרים', hint: 'ממתינים לבדיקה', n: pending.applications },
+    { key: 'nedarim' as const, label: 'בקשות הצטרפות', hint: 'ממתינות לאישור', n: pending.applications },
   ]
   const total = ISSUE_ORDER.reduce((s, k) => s + (dash.issues[k] ? 1 : 0), 0) + waiting.filter(w => w.n).length
   const row = (key: string, label: string, hint: string, n: number, severe: boolean, on: boolean, onClick: () => void) => (

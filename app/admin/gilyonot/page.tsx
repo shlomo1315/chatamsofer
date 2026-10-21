@@ -101,7 +101,7 @@ async function loadDistributors(db: NonNullable<ReturnType<typeof getServiceClie
     loadDistributorSettings(db),
     db.from('gilyonot_hilula_requests').select('id, distributor_id, full_name, phone, city, synagogue, guests, channel, priority, details, status, created_at')
       .order('priority', { ascending: false }).order('created_at').limit(2000),
-    db.from('gilyonot_distributor_applications').select('id, full_name, phone, email, city, synagogue, address, quantity, reason, conflict_id, created_at')
+    db.from('gilyonot_distributor_applications').select('id, full_name, phone, email, city, synagogue, address, quantity, notes, reason, conflict_id, created_at')
       .eq('status', 'pending').order('created_at', { ascending: false }).limit(500),
     getDistNedarimView(db),
   ])
