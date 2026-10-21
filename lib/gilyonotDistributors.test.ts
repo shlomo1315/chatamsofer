@@ -128,3 +128,17 @@ describe('planDistributorAction', () => {
     expect(b.ok && b.plan).toMatchObject({ update: { status: 'removed' }, notifyCourier: true })
   })
 })
+
+describe('טלפון חובה בהוספה ובעריכה', () => {
+  it('בלי טלפון → שגיאה ברורה', () => {
+    expect(validateDistributor({ full_name: 'משה', quantity: '5' }, { requirePhone: true })).toEqual({ ok: false, error: 'חובה למלא מספר טלפון' })
+  })
+  it('טלפון לא תקין → שגיאה, ותקין נשמר', () => {
+    expect(validateDistributor({ full_name: 'משה', phone: '12' }, { requirePhone: true })).toMatchObject({ ok: false, error: 'מספר טלפון לא תקין' })
+    const v = validateDistributor({ full_name: 'משה', phone: '052-1234567' }, { requirePhone: true })
+    expect(v.ok && v.value.phone).toBe('0521234567')
+  })
+  it('בייבוא (בלי דרישה) טלפון עדיין לא חובה', () => {
+    expect(validateDistributor({ full_name: 'משה' }).ok).toBe(true)
+  })
+})

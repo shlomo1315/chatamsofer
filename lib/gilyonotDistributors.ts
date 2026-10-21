@@ -154,11 +154,12 @@ export function normalizeLoginId(by: LoginBy, raw: unknown): string | null {
  * בדיקת שדות מפיץ (הוספה ידנית, עריכה וייבוא). שדה שהוזן ואינו תקין = שגיאה,
  * ולא נשמר בשקט כריק — כך לא נעלם טלפון בגלל ספרה חסרה.
  */
-export function validateDistributor(input: Record<string, unknown>): { ok: true; value: DistributorFields } | { ok: false; error: string } {
+export function validateDistributor(input: Record<string, unknown>, opts: { requirePhone?: boolean } = {}): { ok: true; value: DistributorFields } | { ok: false; error: string } {
   const full_name = cleanText(input.full_name, 80)
   if (!full_name) return { ok: false, error: 'חסר שם' }
   const has = (k: string) => String(input[k] ?? '').trim() !== ''
   const phone = cleanPhone(input.phone)
+  if (opts.requirePhone && !has('phone')) return { ok: false, error: 'חובה למלא מספר טלפון' }
   if (has('phone') && !phone) return { ok: false, error: 'מספר טלפון לא תקין' }
   const phone2 = cleanPhone(input.phone2)
   if (has('phone2') && !phone2) return { ok: false, error: 'מספר טלפון נוסף לא תקין' }

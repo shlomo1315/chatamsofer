@@ -105,7 +105,7 @@ export async function POST(request: Request) {
   if (!body || typeof body !== 'object') return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 })
 
   if (body.mode === 'add') {
-    const v = validateDistributor(body)
+    const v = validateDistributor(body, { requirePhone: true })
     if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })
     const { data, error } = await db.from('gilyonot_distributors').insert({ ...v.value, source: 'manual' }).select(DISTRIBUTOR_COLS).single()
     if (error) return NextResponse.json({ error: 'השמירה נכשלה' }, { status: 500 })
@@ -167,7 +167,7 @@ export async function PATCH(request: Request) {
       ? { status: 'removed', removed_at: now, removed_reason: cleanText(body.reason, 200) ?? 'הוסר במשרד' }
       : { status: 'active', removed_at: null, removed_reason: null }
   } else {
-    const v = validateDistributor((body.fields ?? {}) as Record<string, unknown>)
+    const v = validateDistributor((body.fields ?? {}) as Record<string, unknown>, { requirePhone: true })
     if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })
     update = { ...v.value }
   }
