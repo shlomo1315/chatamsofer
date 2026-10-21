@@ -29,12 +29,13 @@ export interface DistNedarimState { lastId: number; lastRunAt: string | null; la
 const EMPTY_CONFIG: DistNedarimConfig = { tofesId: '', nameField: '', phoneField: '', emailField: '', cityField: '', synagogueField: '', addressField: '', quantityField: '' }
 const EMPTY_STATE: DistNedarimState = { lastId: 0, lastRunAt: null, lastAdded: 0, lastHeld: 0, lastError: null }
 
-export type ApplicationReason = 'synagogue_taken' | 'no_phone' | 'no_synagogue' | 'no_name'
+export type ApplicationReason = 'synagogue_taken' | 'no_phone' | 'no_synagogue' | 'no_name' | 'web'
 export const REASON_LABELS: Record<ApplicationReason, string> = {
   synagogue_taken: 'יש כבר מפיץ בבית הכנסת',
   no_phone: 'חסר טלפון תקין',
   no_synagogue: 'חסר בית כנסת',
   no_name: 'חסר שם',
+  web: 'טופס הצטרפות',
 }
 
 export function validateDistConfig(c: DistNedarimConfig): string | null {
@@ -113,14 +114,16 @@ export async function loadDistSample(db: SupabaseClient) {
 }
 
 /** מפיץ חדש מנדרים, עם אירוע הצטרפות. */
-export async function createDistributorFrom(db: SupabaseClient, v: Omit<MappedDistributor, 'sourceRef'>, note: string): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+export async function createDistributorFrom(
+  db: SupabaseClient, v: Omit<MappedDistributor, 'sourceRef'> & { notes?: string | null }, note: string, source: 'nedarim' | 'web' = 'nedarim',
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const { data, error } = await db.from('gilyonot_distributors').insert({
     full_name: v.full_name, phone: v.phone, email: v.email, city: v.city, synagogue: v.synagogue,
-    address: v.address, quantity: v.quantity ?? 0, source: 'nedarim',
+    address: v.address, quantity: v.quantity ?? 0, notes: v.notes ?? null, source,
   }).select('id').single()
   if (error || !data) return { ok: false, error: 'יצירת המפיץ נכשלה' }
   await db.from('gilyonot_distributor_events').insert({
-    distributor_id: data.id, channel: 'nedarim', kind: 'join', status: 'done', handled_at: new Date().toISOString(), details: note,
+    distributor_id: data.id, channel: source, kind: 'join', status: 'done', handled_at: new Date().toISOString(), details: note,
   })
   return { ok: true, id: data.id }
 }

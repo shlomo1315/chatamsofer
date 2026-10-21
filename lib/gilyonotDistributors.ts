@@ -19,7 +19,7 @@ export const LOGIN_LABELS: Record<LoginBy, { label: string; placeholder: string;
 }
 
 export type DistributorStatus = 'active' | 'removed'
-export type DistributorSource = 'manual' | 'import' | 'nedarim' | 'phone'
+export type DistributorSource = 'manual' | 'import' | 'nedarim' | 'phone' | 'web'
 export type EventKind = 'issue' | 'received' | 'increase' | 'decrease' | 'note' | 'address' | 'leave' | 'join' | 'admin_edit' | 'hilula'
 export type EventChannel = 'web' | 'phone' | 'admin' | 'nedarim'
 export type EventStatus = 'open' | 'done' | 'rejected'
@@ -37,7 +37,7 @@ export const EVENT_LABELS: Record<EventKind, string> = {
   hilula: 'סעודת ההילולא',
 }
 export const CHANNEL_LABELS: Record<EventChannel, string> = { web: 'אתר', phone: 'טלפון', admin: 'משרד', nedarim: 'נדרים פלוס' }
-export const SOURCE_LABELS: Record<DistributorSource, string> = { manual: 'ידני', import: 'ייבוא', nedarim: 'נדרים פלוס', phone: 'טלפון' }
+export const SOURCE_LABELS: Record<DistributorSource, string> = { manual: 'ידני', import: 'ייבוא', nedarim: 'נדרים פלוס', phone: 'טלפון', web: 'טופס הצטרפות' }
 
 // פעולות שהמפיץ עצמו רשאי לבצע (מהאתר, ובהמשך מהטלפון)
 export const DISTRIBUTOR_ACTIONS = ['issue', 'received', 'increase', 'decrease', 'note', 'address', 'leave'] as const

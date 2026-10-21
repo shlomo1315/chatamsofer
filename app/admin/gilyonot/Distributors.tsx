@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Check, ExternalLink, FileUp, Inbox, Loader2, Megaphone, Pencil, Plus, Search, Settings, Trash2, Truck, Undo2, UserMinus, UserPlus, UtensilsCrossed, X } from 'lucide-react'
+import { Check, Copy, ExternalLink, FileUp, Inbox, Loader2, Megaphone, Pencil, Plus, Search, Settings, Trash2, Truck, Undo2, UserMinus, UserPlus, UtensilsCrossed, X } from 'lucide-react'
 import { downloadXlsx, todayStamp } from '@/lib/downloadXlsx'
 import type { BookletReport } from '@/lib/gilyonotDistributorBooklet'
 import {
@@ -74,6 +74,7 @@ export interface DistributorApplicationView {
   synagogue: string | null
   address: string | null
   quantity: number | null
+  notes: string | null
   reason: string
   reason_label: string
   conflict_name: string | null
@@ -136,7 +137,7 @@ export default function Distributors(props: {
     { key: 'requests', label: 'פניות', icon: Inbox, count: props.events.length },
     { key: 'hilula', label: 'סעודת ההילולא', icon: UtensilsCrossed, count: props.hilula.filter(h => h.status === 'pending').length },
     ...(props.canEdit ? [
-      { key: 'nedarim' as const, label: 'נרשמים מנדרים', icon: UserPlus, count: props.applications.length },
+      { key: 'nedarim' as const, label: 'בקשות הצטרפות', icon: UserPlus, count: props.applications.length },
       { key: 'broadcast' as const, label: 'הודעה למפיצים', icon: Megaphone },
       { key: 'settings' as const, label: 'הגדרות', icon: Settings },
     ] : []),
@@ -891,7 +892,7 @@ function Hilula({ requests, canEdit }: { requests: HilulaRequestView[]; canEdit:
   )
 }
 
-// ─── נרשמים מנדרים פלוס ──────────────────────────────────────────────────────
+// ─── בקשות הצטרפות: טופס ההצטרפות ונרשמים מנדרים פלוס ──────────────────────────────────────────────────────
 
 const NEDARIM_FIELDS: { key: Exclude<keyof DistNedarimView['config'], 'tofesId'>; label: string; required?: boolean }[] = [
   { key: 'nameField', label: 'שם', required: true },
@@ -918,8 +919,9 @@ function NedarimApplications({ applications, view }: { applications: Distributor
   }
 
   const handle = (a: DistributorApplicationView, status: 'approved' | 'dismissed') => run(a.id, async () => {
-    await api('/api/admin/gilyonot/distributors/applications', json('PATCH', { id: a.id, status }))
-    return status === 'approved' ? `${a.full_name} נוסף כמפיץ` : 'הבקשה נדחתה'
+    const res = await api('/api/admin/gilyonot/distributors/applications', json('PATCH', { id: a.id, status }))
+    if (status !== 'approved') return 'הבקשה נדחתה'
+    return a.reason === 'web' ? `${a.full_name} נוסף כמפיץ${res.mailed ? ' ונשלח אליו מייל' : ' (המייל לא נשלח)'}` : `${a.full_name} נוסף כמפיץ`
   })
   const save = (e: React.FormEvent) => { e.preventDefault(); void run('save', async () => { await api('/api/admin/gilyonot/distributors/nedarim', json('POST', { mode: 'save', ...cfg })); return 'ההגדרות נשמרו' }) }
   const loadSample = () => run('sample', async () => {
@@ -934,20 +936,34 @@ function NedarimApplications({ applications, view }: { applications: Distributor
 
   const columns = sample?.length ? Object.keys(sample[0]) : []
   const st = view.state
+  const joinUrl = `${(process.env.NEXT_PUBLIC_SITE_URL || 'https://chasamsofer.co.il').replace(/\/$/, '')}/gilyonot/mefitz/join`
+  const copyJoin = () => run('copy', async () => { await navigator.clipboard.writeText(joinUrl); return 'הקישור הועתק' })
 
   return (
     <div className="space-y-6">
       <Notice msg={msg} />
       <Card>
-        <Head icon={<UserPlus className="h-5 w-5" aria-hidden />} title="ממתינים לבדיקה"
-          hint="נרשמים מהטופס בנדרים פלוס שלא נכנסו אוטומטית: יש כבר מפיץ בבית הכנסת, או שחסר פרט חובה. מי שאין לו מפיץ בבית הכנסת נכנס לבד." />
+        <Head icon={<ExternalLink className="h-5 w-5" aria-hidden />} title="קישור ההצטרפות"
+          hint="קישור ציבורי שמאפשר רק להגיש בקשה. הבקשה מופיעה כאן לאישור, ובאישור נשלח לפונה מייל עם כל הפרטים." />
+        <div className="flex flex-wrap items-center gap-2 px-5 pb-5">
+          <code dir="ltr" className="min-w-0 flex-1 truncate rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-800">{joinUrl}</code>
+          <button type="button" className={btnGhost} disabled={!!busy} onClick={copyJoin}><Copy className="h-4 w-4" aria-hidden />העתקה</button>
+          <a href="/gilyonot/mefitz/join" target="_blank" rel="noopener noreferrer" className={`${link} inline-flex items-center gap-1 text-sm`}>
+            פתיחה <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+          </a>
+        </div>
+      </Card>
+
+      <Card>
+        <Head icon={<UserPlus className="h-5 w-5" aria-hidden />} title="ממתינים לאישור"
+          hint="בקשות מטופס ההצטרפות, ונרשמים מנדרים פלוס שלא נכנסו אוטומטית (יש כבר מפיץ בבית הכנסת, או שחסר פרט חובה). אישור בקשה מהטופס שולח לפונה מייל." />
         {applications.length ? (
           <ul className="divide-y divide-slate-100">
             {applications.map(a => (
               <li key={a.id} className="flex flex-wrap items-start gap-3 px-5 py-4">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge tone={a.reason === 'synagogue_taken' ? 'amber' : 'rose'}>{a.reason_label}</Badge>
+                    <Badge tone={a.reason === 'web' ? 'navy' : a.reason === 'synagogue_taken' ? 'amber' : 'rose'}>{a.reason_label}</Badge>
                     <span className="font-medium text-slate-900">{a.full_name ?? 'ללא שם'}</span>
                     {a.phone && <span className="text-sm tabular-nums text-slate-600" dir="ltr">{a.phone}</span>}
                   </div>
@@ -955,6 +971,7 @@ function NedarimApplications({ applications, view }: { applications: Distributor
                     {[a.city, a.synagogue, a.address].filter(Boolean).join(' · ') || '—'}
                     {a.quantity !== null && <> · {num(a.quantity)} גיליונות</>}
                   </p>
+                  {a.notes && <p className="mt-1 whitespace-pre-line text-sm text-slate-700">הערה: {a.notes}</p>}
                   {a.conflict_name && <p className="mt-1 text-sm text-amber-800">המפיץ הקיים בבית הכנסת: {a.conflict_name}</p>}
                   <p className="mt-1 text-xs text-slate-500">{fmtDate(a.created_at)}{a.email && <> · <span dir="ltr">{a.email}</span></>}</p>
                 </div>
@@ -967,7 +984,7 @@ function NedarimApplications({ applications, view }: { applications: Distributor
               </li>
             ))}
           </ul>
-        ) : <p className="p-10 text-center text-sm text-slate-500">אין נרשמים שממתינים לבדיקה</p>}
+        ) : <p className="p-10 text-center text-sm text-slate-500">אין בקשות שממתינות לאישור</p>}
       </Card>
 
       <Card>
