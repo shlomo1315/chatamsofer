@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { decideCardEligibility, type HolidayRecipient } from './holidayCards'
+import { cleanNedarimEmail } from './nedarim'
 import type { ActiveDistribution } from './holidayDistributions'
 
 // ⚠️ זו הבדיקה שמגנה על כסף: שיוך כרטיס למשפחה שלא אושרה נותן לה יתרה שלא
@@ -61,5 +62,17 @@ describe('decideCardEligibility', () => {
     const r = decideCardEligibility(dist, rec({ approval_status: 'on_hold' as unknown as 'approved' }))
     expect(r.allowed).toBe(false)
     if (!r.allowed) expect(r.reason).toBe('not_approved')
+  })
+})
+
+describe('cleanNedarimEmail — מייל לא חובה בהקמת משפחה', () => {
+  it('מייל לא תקין או חסר נשלח ריק', () => {
+    expect(cleanNedarimEmail('e0548508514@.com.il')).toBeUndefined()
+    expect(cleanNedarimEmail('abc')).toBeUndefined()
+    expect(cleanNedarimEmail('')).toBeUndefined()
+    expect(cleanNedarimEmail(null)).toBeUndefined()
+  })
+  it('מייל תקין נשמר', () => {
+    expect(cleanNedarimEmail(' a@b.co.il ')).toBe('a@b.co.il')
   })
 })
