@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     .from('loans')
     // ⚠️ note_sent_at/by — שלב "נשלח שטר" שקודם לביצוע. spouse_name
     // ו-spouse_id_number נוספו לחיפוש: מחפשים גם לפי שם ות"ז של האשה.
-    .select('id, amount, approved_amount, installments, monthly_payment, purpose, purpose_details, status, start_date, notes, note_sent_at, note_sent_by, disbursed_at, disbursed_by, created_at, beneficiary:beneficiaries(full_name, family_name, id_number, city, address, phone, email, spouse_name, spouse_id_number)')
+    .select('id, amount, approved_amount, installments, monthly_payment, purpose, purpose_details, status, start_date, notes, portal_note, note_sent_at, note_sent_by, disbursed_at, disbursed_by, created_at, beneficiary:beneficiaries(full_name, family_name, id_number, city, address, phone, email, spouse_name, spouse_id_number)')
     .in('status', ['approved', 'active'])
     .order('created_at', { ascending: false })
     .range(from, to))
