@@ -398,7 +398,7 @@ const FIELDS: { key: keyof DistributorFields; label: string; type?: string; dir?
   { key: 'city', label: 'עיר' },
   { key: 'synagogue', label: 'בית כנסת' },
   { key: 'address', label: 'כתובת למסירה' },
-  { key: 'phone', label: 'טלפון', type: 'tel', dir: 'ltr' },
+  { key: 'phone', label: 'טלפון', type: 'tel', dir: 'ltr', required: true },
   { key: 'phone2', label: 'טלפון נוסף', type: 'tel', dir: 'ltr' },
   { key: 'email', label: 'מייל', type: 'email', dir: 'ltr' },
   { key: 'id_number', label: 'תעודת זהות', dir: 'ltr' },
