@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Lock, LogIn, LogOut, CreditCard, CheckCircle2, Clock3, Loader2, Calendar, User, RefreshCw, Download, Send, Search, X, RotateCcw } from 'lucide-react'
+import { Lock, LogIn, LogOut, CreditCard, CheckCircle2, Clock3, Loader2, Calendar, User, RefreshCw, Download, Send, Search, X, RotateCcw, Upload } from 'lucide-react'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import { matchesLoanStage, LOAN_STAGES, type LoanStage } from '@/lib/loansPortalFilter'
 
@@ -274,6 +274,90 @@ function DisburseModal({ loan, onClose, onDone }: {
   )
 }
 
+// ── Import Modal ──────────────────────────────────────────────────────────────
+// ייבוא הלוואות שכבר בוצעו: הדבקת תעודות זהות, וההלוואות מסומנות כבוצעו
+// (בלי שטר ובלי שלב המתנה).
+function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const today = new Date().toISOString().slice(0, 10)
+  const [text, setText] = useState('')
+  const [date, setDate] = useState(today)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [result, setResult] = useState<{ imported: number; notFound: string[]; ambiguous: string[] } | null>(null)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+    try {
+      const res = await fetch('/api/shared/loans/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids_text: text, disbursed_at: date }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) setError(d.error ?? 'שגיאה')
+      else { setResult(d); onDone() }
+    } catch {
+      setError('שגיאת תקשורת')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" dir="rtl">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+        <div className="bg-gradient-to-l from-indigo-500 to-violet-600 px-6 py-5">
+          <h2 className="text-white font-bold text-lg">ייבוא הלוואות שבוצעו</h2>
+          <p className="text-indigo-100 text-sm mt-0.5">ההלוואות יסומנו כבוצעו, בלי שטר ובלי המתנה</p>
+        </div>
+        {result ? (
+          <div className="px-6 py-6 flex flex-col gap-3 text-sm">
+            <p className="font-semibold text-emerald-700">סומנו כבוצעו: {result.imported}</p>
+            {result.notFound.length > 0 && (
+              <p className="text-slate-600">לא נמצאה הלוואה ממתינה ({result.notFound.length}): <span dir="ltr">{result.notFound.join(', ')}</span></p>
+            )}
+            {result.ambiguous.length > 0 && (
+              <p className="text-amber-700">יותר מהלוואה אחת ממתינה, לא סומנו ({result.ambiguous.length}): <span dir="ltr">{result.ambiguous.join(', ')}</span></p>
+            )}
+            <button onClick={onClose} className="mt-1 rounded-xl border border-slate-200 text-slate-600 py-2.5 font-medium hover:bg-slate-50">סגור</button>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="px-6 py-6 flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">תעודות זהות של הלווים (אחת בכל שורה)</label>
+              <textarea
+                value={text}
+                onChange={e => setText(e.target.value)}
+                rows={8}
+                dir="ltr"
+                required
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">תאריך ביצוע</label>
+              <input type="date" value={date} onChange={e => setDate(e.target.value)} max={today} required
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800" />
+            </div>
+            {error && <p className="text-xs text-red-600 font-medium bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+            <div className="flex gap-3">
+              <button type="submit" disabled={loading || !text.trim() || !date}
+                className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-indigo-600 text-white font-semibold py-2.5 text-sm hover:opacity-90 disabled:opacity-50">
+                {loading ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+                סמן כבוצעו
+              </button>
+              <button type="button" onClick={onClose}
+                className="px-5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50">ביטול</button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // 🔴 שלבי ההלוואה — מקור אמת ב-lib/loansPortalFilter (עם טסטים).
 type FilterMode = LoanStage
 
@@ -286,6 +370,7 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
   const [search, setSearch] = useState('')
   const [noteSaving, setNoteSaving] = useState<string | null>(null)
   const [undoing, setUndoing] = useState<string | null>(null)
+  const [showImport, setShowImport] = useState(false)
 
   const loadLoans = useCallback(async () => {
     setLoading(true)
@@ -456,6 +541,7 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50" dir="rtl">
+      {showImport && <ImportModal onClose={() => setShowImport(false)} onDone={loadLoans} />}
       {/* Header */}
       <header className="bg-white border-b border-slate-200 shadow-sm">
         <div className="max-w-[1800px] mx-auto px-4 py-4 flex items-center justify-between">
@@ -469,6 +555,13 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowImport(true)}
+              className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-indigo-600 border border-slate-200 hover:border-indigo-300 rounded-lg px-3 py-1.5 transition-colors"
+            >
+              <Upload size={13} />
+              ייבוא שבוצעו
+            </button>
             <button
               onClick={loadLoans}
               className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-indigo-600 border border-slate-200 hover:border-indigo-300 rounded-lg px-3 py-1.5 transition-colors"
