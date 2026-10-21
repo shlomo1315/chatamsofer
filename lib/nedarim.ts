@@ -403,6 +403,15 @@ export async function findClientByZeout(creds: NedarimCreds, zeout: string): Pro
   return match ? String(match.ClientId) : null
 }
 
+/**
+ * מייל הוא לא שדה חובה בנדרים: מייל חסר או לא תקין (למשל `a@.com.il`) נשלח ריק,
+ * כדי שנדרים לא תדחה את הקמת המשפחה ב"המייל שהוזן אינו חוקי".
+ */
+export function cleanNedarimEmail(email?: string | null): string | undefined {
+  const e = String(email ?? '').trim()
+  return /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(e) ? e : undefined
+}
+
 // הקמת/עדכון משפחה בנדרים → מחזיר ClientId (מגיע ב-Message בהצלחה)
 export async function saveClientCard(
   creds: NedarimCreds,
@@ -447,7 +456,7 @@ export async function saveClientCard(
     Address: [b.address, b.city].filter(Boolean).join(', ') || undefined,
     Phone1: b.phone ?? undefined,
     Phone2: b.phone2 ?? undefined,
-    Email: b.email ?? undefined,
+    Email: cleanNedarimEmail(b.email),
     Groupe: groupe || undefined, // קטגוריה בנדרים — ברירת מחדל "לידות"
     Comments: 'נוצר/עודכן אוטומטית ממערכת היכל החתם סופר',
   })
