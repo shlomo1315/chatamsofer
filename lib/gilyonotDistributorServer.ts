@@ -34,10 +34,13 @@ export async function loadDistributorSettings(db: SupabaseClient): Promise<Distr
 
 const from = () => `${GILYONOT_FROM_NAME} <${GILYONOT_FROM_EMAIL}>`
 
-/** מייל פשוט בעיצוב הגיליונות: כותרת, פסקאות, ושורות "תווית: ערך". */
-export function distributorMailHtml(title: string, body: string, rows: [string, string | number | null | undefined][] = []): string {
-  const paras = body.trim() ? body.trim().split(/\n\s*\n/).map(p =>
-    `<p style="margin:0 0 14px;color:#334155;font-size:16px;line-height:1.8;">${escHtml(p.trim()).replace(/\n/g, '<br/>')}</p>`).join('') : ''
+/** מייל פשוט בעיצוב הגיליונות: כותרת, פסקאות, שורות "תווית: ערך", ופסקאות סיום (קישורים נלחצים). */
+export function distributorMailHtml(title: string, body: string, rows: [string, string | number | null | undefined][] = [], outro = ''): string {
+  const toParas = (text: string, margin: string) => text.trim() ? text.trim().split(/\n\s*\n/).map(p =>
+    `<p style="margin:${margin};color:#334155;font-size:16px;line-height:1.8;">${escHtml(p.trim()).replace(/\n/g, '<br/>')
+      .replace(/https?:\/\/[^\s<&]+/g, u => `<a href="${u}" style="color:#2563eb;">${u}</a>`)}</p>`).join('') : ''
+  const paras = toParas(body, '0 0 14px')
+  const end = toParas(outro, '18px 0 0')
   const table = rows.filter(([, v]) => v !== null && v !== undefined && v !== '').map(([k, v]) =>
     `<tr><td style="padding:6px 0;color:#64748b;font-size:14px;white-space:nowrap;vertical-align:top;">${escHtml(k)}</td><td style="padding:6px 12px 6px 0;color:#0f172a;font-size:15px;">${escHtml(String(v))}</td></tr>`).join('')
   return `<!doctype html><html dir="rtl" lang="he"><head><meta charset="utf-8"/><title>${escHtml(title)}</title></head>
@@ -45,7 +48,7 @@ export function distributorMailHtml(title: string, body: string, rows: [string, 
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;">
 <tr><td style="background:#2563eb;padding:20px 24px;"><h1 style="margin:0;color:#ffffff;font-size:20px;line-height:1.4;">${escHtml(title)}</h1></td></tr>
-<tr><td style="padding:24px;">${paras}${table ? `<table role="presentation" cellpadding="0" cellspacing="0">${table}</table>` : ''}</td></tr>
+<tr><td style="padding:24px;">${paras}${table ? `<table role="presentation" cellpadding="0" cellspacing="0">${table}</table>` : ''}${end}</td></tr>
 <tr><td style="padding:14px 24px;background:#f8fafc;color:#94a3b8;font-size:12px;">${escHtml(GILYONOT_FROM_NAME)} · מערך המפיצים</td></tr>
 </table></td></tr></table></body></html>`
 }
