@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
+import { generateSpeech } from '@/lib/elevenTts'
 import { logActivity } from '@/lib/activityLog'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import {
@@ -45,8 +46,19 @@ async function setMarker(db: NonNullable<ReturnType<typeof getServiceClient>>, m
   )
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   if (!(await requirePermission('book_fair', 'view'))) return forbidden()
+  // ?download=1 -> קובץ mp3 של ההקלטה (הנוסח השמור, כפי שמוקרא בקו)
+  if (request.nextUrl.searchParams.get('download') === '1') {
+    const { text } = await loadVoiceContent()
+    const sp = await generateSpeech(spokenAnnouncementText(text))
+    if (!sp.ok || !sp.audio) return NextResponse.json({ error: sp.error ?? 'הפקת הקול נכשלה' }, { status: 502 })
+    return new NextResponse(sp.audio, { headers: {
+      'Content-Type': 'audio/mpeg',
+      'Content-Disposition': 'attachment; filename="voice-announcement.mp3"',
+      'Cache-Control': 'no-store',
+    } })
+  }
   const db = getServiceClient()
   if (!db) return serverMisconfigured()
   const recipients = await loadRecipients(db)
