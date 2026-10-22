@@ -25,7 +25,7 @@ export const dynamic = 'force-dynamic'
 // ⚠️ אינו משתנה בין בקשות באותה מכולה — אחרת כל קריאה הייתה נראית
 // כפריסה חדשה, והבאנר היה מהבהב לנצח.
 // ─────────────────────────────────────────────────────────────────────────────
-const BUILD_ID = process.env.RAILWAY_DEPLOYMENT_ID || `dev-${Date.now()}`
+const BUILD_ID = process.env.RAILWAY_DEPLOYMENT_ID || process.env.APP_BUILD_ID || `dev-${Date.now()}`
 
 export async function GET() {
   return NextResponse.json(

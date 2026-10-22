@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // ב-Docker/AWS בונים עם BUILD_STANDALONE=1. ב-Railway לא מוגדר ולכן אין שינוי.
+  ...(process.env.BUILD_STANDALONE === '1' ? { output: 'standalone' as const } : {}),
   // אופטימיזציית imports — טוענת רק את מה שבשימוש מספריות גדולות (אייקונים/תאריכים/גרפים),
   // במקום לגרור עצים שלמים ל-bundle של כל דף. שיפור גלובלי משמעותי בגודל ה-JS.
   experimental: {

@@ -1,0 +1,77 @@
+name: פריסה ל-AWS (ECS Fargate)
+
+# בכל מיזוג ל-main: בונה image, מעלה ל-ECR ומרענן את שירות ECS (rolling, בלי השבתה).
+# אימות מול AWS דרך OIDC, בלי מפתחות סטטיים.
+# פעיל רק כשמוגדר משתנה הריפו AWS_DEPLOY_ENABLED=true, כדי שלא ייכשל לפני שה-AWS מוקם.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-aws
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+  ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+  ECS_SERVICE: ${{ vars.ECS_SERVICE }}
+  ECS_TASK_FAMILY: ${{ vars.ECS_TASK_FAMILY }}
+
+jobs:
+  deploy:
+    if: ${{ vars.AWS_DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: בנייה והעלאה ל-ECR
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}
+          NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
+        run: |
+          IMAGE="$REGISTRY/$ECR_REPOSITORY:${GITHUB_SHA}"
+          docker build \
+            --build-arg NEXT_PUBLIC_SUPABASE_URL \
+            --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY \
+            --build-arg NEXT_PUBLIC_SITE_URL \
+            --build-arg NEXT_PUBLIC_APP_URL \
+            --build-arg APP_BUILD_ID="${GITHUB_SHA}" \
+            -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: הורדת הגדרת המשימה הנוכחית
+        run: |
+          aws ecs describe-task-definition --task-definition "$ECS_TASK_FAMILY" \
+            --query taskDefinition > task-def.json
+
+      - id: render
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-def.json
+          container-name: app
+          image: ${{ env.IMAGE }}
+
+      - uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
