@@ -114,3 +114,24 @@ YEMOT_WEBHOOK_SECRET
 ```
 
 פירוט מה כל משתנה עושה נמצא ב-`ENV_VARS.md`. משתנים שמתחילים ב-`NEXT_PUBLIC_` נצרבים בבנייה (GitHub Variables), כל השאר בזמן ריצה.
+
+---
+
+## הקמה מהירה עם תבנית אחת (מחליפה את צעדים 2-6 למעלה)
+
+`aws/infrastructure.yml` (CloudFormation) יוצר הכול בלחיצות: ECR, סוד, ECS, ALB, WAF, לוגים, והרשאת OIDC ל-GitHub (בלי מפתחות).
+
+1. בקונסולת AWS (Frankfurt): **Certificate Manager → Request** ל-`chasamsofer.co.il` (אימות DNS). מוסיפים את רשומת ה-CNAME שמוצגת אצל ספק הדומיין. מחכים ל-Issued ומעתיקים את ה-ARN.
+2. **CloudFormation → Create stack → Upload** של `aws/infrastructure.yml`. ממלאים: `CertificateArn`, ה-VPC ברירת המחדל, ושתי תתי-רשתות (באזורי זמינות שונים). השאר ברירת מחדל. אם כבר קיים provider של GitHub בחשבון: `CreateOidcProvider=false` ומזינים את ה-ARN שלו.
+3. **Secrets Manager → `chasamsofer/prod` → Retrieve → Edit**: ממלאים ערכים למשתנים שקיימים ב-Railway. משתנה שלא קיים שם נשאר ריק. **לא למחוק מפתחות** מה-JSON (ECS נכשל אם מפתח חסר).
+4. ב-GitHub: מעבירים את `aws/deploy-aws.yml` ל-`.github/workflows/`, וב-Settings → Secrets and variables → Actions מגדירים לפי Outputs של הסטאק:
+   - Secret `AWS_DEPLOY_ROLE_ARN` = `DeployRoleArn`
+   - Variables: `AWS_DEPLOY_ENABLED=true`, `AWS_REGION=eu-central-1`, `ECR_REPOSITORY=chasamsofer`, `ECS_CLUSTER=chasamsofer`, `ECS_SERVICE=chasamsofer`, `ECS_TASK_FAMILY=chasamsofer`, ועוד ארבעת ה-`NEXT_PUBLIC_*` (Supabase URL, anon key, אתר, אפליקציה).
+5. מריצים את ה-workflow ידנית (Run workflow). אחרי שה-image עלה ל-ECR: CloudFormation → Update stack → `DesiredCount=1`.
+6. בודקים דרך כתובת ה-ALB (`AlbDnsName`) ש-`/api/health` עונה. אחר כך מחליפים DNS של הדומיין (CNAME ל-ALB), ומעדכנים redirect ב-Google, ו-webhooks של Yemot/Resend/Gmail.
+
+### הערות חשובות
+- **משימה אחת בלבד:** `instrumentation.ts` מריץ תזמונים פנימיים (גיבוי, פריקה, סנכרונים). שתי משימות היו מריצות אותם פעמיים. בפריסה יש חפיפה קצרה של דקות, כמו ב-Railway.
+- הקרונים הפנימיים לא דורשים EventBridge. רק מה שרץ ב-Railway כשירות נפרד (`cron-name-reminders`) דורש תזמון חיצוני לקריאת `/api/cron/name-reminders` עם `Authorization: Bearer <CRON_SECRET>`, ויש להעביר לי את הלו"ז שלו.
+- **ה-IP של נדרים:** המשימה יוצאת מ-IP ציבורי שמשתנה. אם נדרים דורשת IP קבוע, צריך NAT Gateway עם Elastic IP (עלות כ-35$ לחודש), או להשאיר את `nedarim-proxy` זמנית אצלם.
+- `APP_BUILD_ID` נקבע ב-Dockerfile, אין למלא אותו בסוד.
