@@ -8,7 +8,7 @@ Description: חתם סופר - תשתית ECS Fargate (ECR, ALB, WAF, סודות
 Parameters:
   GitHubRepo: {Type: String, Default: shlomo1315/chatamsofer}
   DomainName: {Type: String, Default: chasamsofer.co.il}
-  CertificateArn: {Type: String, Description: "ARN של תעודת ACM (באותו אזור) ל-DomainName"}
+  CertificateArn: {Type: String, Default: '', Description: "ריק = HTTP בלבד על כתובת ה-ALB (בדיקה בלי דומיין). עם ARN של תעודת ACM = HTTPS והפניה מ-80"}
   VpcId: {Type: AWS::EC2::VPC::Id, Description: "ה-VPC ברירת המחדל"}
   SubnetIds: {Type: "List<AWS::EC2::Subnet::Id>", Description: "לפחות 2 תתי-רשתות ציבוריות בשני אזורי זמינות"}
   DesiredCount: {Type: Number, Default: 0, Description: "0 בהקמה ראשונה. אחרי שהפריסה הראשונה העלתה image: 1"}
@@ -16,6 +16,7 @@ Parameters:
   ExistingOidcProviderArn: {Type: String, Default: ''}
 
 Conditions:
+  HasCert: !Not [!Equals [!Ref CertificateArn, '']]
   MakeOidc: !Equals [!Ref CreateOidcProvider, 'true']
 
 Resources:
@@ -76,8 +77,8 @@ Resources:
           Essential: true
           PortMappings: [{ContainerPort: 3000}]
           Environment:
-            - {Name: NEXT_PUBLIC_SITE_URL, Value: !Sub "https://${DomainName}"}
-            - {Name: NEXT_PUBLIC_APP_URL, Value: !Sub "https://${DomainName}"}
+            - {Name: NEXT_PUBLIC_SITE_URL, Value: !If [HasCert, !Sub "https://${DomainName}", !Sub "http://${Alb.DNSName}"]}
+            - {Name: NEXT_PUBLIC_APP_URL, Value: !If [HasCert, !Sub "https://${DomainName}", !Sub "http://${Alb.DNSName}"]}
             - {Name: TZ, Value: Asia/Jerusalem}
           LogConfiguration:
             LogDriver: awslogs
@@ -239,7 +240,7 @@ Resources:
   AlbSg:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: ALB - 443 ו-80 (הפניה) בלבד
+      GroupDescription: ALB - 80 ו-443
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - {IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0}
@@ -279,6 +280,7 @@ Resources:
 
   HttpsListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HasCert
     Properties:
       LoadBalancerArn: !Ref Alb
       Port: 443
@@ -293,13 +295,17 @@ Resources:
       LoadBalancerArn: !Ref Alb
       Port: 80
       Protocol: HTTP
+      # עם תעודה: הפניה ל-HTTPS. בלי תעודה (בדיקה): מעביר ישר לאפליקציה ב-HTTP
       DefaultActions:
-        - Type: redirect
-          RedirectConfig: {Protocol: HTTPS, Port: '443', StatusCode: HTTP_301}
+        - !If
+          - HasCert
+          - Type: redirect
+            RedirectConfig: {Protocol: HTTPS, Port: '443', StatusCode: HTTP_301}
+          - {Type: forward, TargetGroupArn: !Ref Tg}
 
   Service:
     Type: AWS::ECS::Service
-    DependsOn: HttpsListener
+    DependsOn: [HttpRedirect, HttpsListener]
     Properties:
       ServiceName: chasamsofer
       Cluster: !Ref Cluster
@@ -383,6 +389,6 @@ Resources:
               - {Effect: Allow, Action: 'iam:PassRole', Resource: [!GetAtt ExecRole.Arn, !GetAtt TaskRole.Arn]}
 
 Outputs:
-  AlbDnsName: {Value: !GetAtt Alb.DNSName, Description: "היעד ל-DNS של הדומיין (CNAME)"}
+  AlbDnsName: {Value: !GetAtt Alb.DNSName, Description: "כתובת הבדיקה (http) והיעד ל-DNS של הדומיין (CNAME)"}
   DeployRoleArn: {Value: !GetAtt DeployRole.Arn, Description: "מדביקים ב-GitHub Secret בשם AWS_DEPLOY_ROLE_ARN"}
   SecretArn: {Value: !Ref AppSecret}
