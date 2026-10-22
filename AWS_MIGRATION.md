@@ -4,7 +4,7 @@ Railway נשאר פעיל ותקין עד שהמעבר מסתיים (`railway.js
 
 ## מה כבר בקוד
 - `Dockerfile` + `.dockerignore`: Next.js standalone, Debian slim (בגלל `@napi-rs/canvas`), משתמש לא-root, healthcheck על `/api/health`.
-- `.github/workflows/deploy-aws.yml`: בכל מיזוג ל-main — build, העלאה ל-ECR, ופריסה ל-ECS (rolling). אימות דרך OIDC, בלי מפתחות. לא רץ עד שמגדירים `AWS_DEPLOY_ENABLED=true`.
+- `aws/deploy-aws.yml` (**להעביר ל-`.github/workflows/deploy-aws.yml`** — הטוקן שלנו חסר הרשאת workflow, ולכן מועבר ידנית בלחיצה ב-GitHub או ע"י מי שיש לו הרשאה): בכל מיזוג ל-main — build, העלאה ל-ECR, ופריסה ל-ECS (rolling). אימות דרך OIDC, בלי מפתחות. לא רץ עד שמגדירים `AWS_DEPLOY_ENABLED=true`.
 - קבצים: הקוד **לא** כותב לדיסק המקומי (קריאה בלבד מ-`public/`; מסמכים נשמרים ב-Supabase). לכן אין צורך ב-S3 כרגע. התיקייה `uploads` בעותק העבודה אינה חלק מהקוד.
 - מזהה גרסה: `APP_BUILD_ID` (ה-SHA של הקומיט) מחליף את `RAILWAY_DEPLOYMENT_ID`.
 
