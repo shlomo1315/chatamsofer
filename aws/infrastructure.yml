@@ -26,7 +26,7 @@ Resources:
       RepositoryName: chasamsofer
       ImageScanningConfiguration: {ScanOnPush: true}
       LifecyclePolicy:
-        LifecyclePolicyText: '{"rules":[{"rulePriority":1,"selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":20},"action":{"type":"expire"}}]}'
+        LifecyclePolicyText: '{"rules":[{"rulePriority":1,"description":"untagged-after-1-day","selection":{"tagStatus":"untagged","countType":"sinceImagePushed","countUnit":"days","countNumber":1},"action":{"type":"expire"}},{"rulePriority":2,"description":"keep-last-10","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}'
 
   # ⚠️ הערכים ריקים בכוונה: ממלאים אותם ב-Secrets Manager (Retrieve/Edit) ולא כאן. אל תשנו את SecretString בתבנית אחרי המילוי.
   AppSecret:
@@ -313,6 +313,9 @@ Resources:
       TaskDefinition: !Ref TaskDef
       DesiredCount: !Ref DesiredCount
       HealthCheckGracePeriodSeconds: 90
+      # תגית Project של הסטאק עוברת גם לשרתים שרצים, כדי שיופיעו בדוח החיוב של הפרויקט
+      EnableECSManagedTags: true
+      PropagateTags: SERVICE
       DeploymentConfiguration:
         MinimumHealthyPercent: 100
         MaximumPercent: 200
