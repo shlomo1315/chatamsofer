@@ -22,7 +22,7 @@ if aws cloudformation describe-stacks --stack-name "$STACK" >/dev/null 2>&1; the
   OIDC=$(aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Parameters[?ParameterKey=='CreateOidcProvider'].ParameterValue" --output text)
 fi
 aws cloudformation deploy --stack-name "$STACK" --template-file /tmp/infrastructure.yml \
-  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM --tags Project="$STACK" \
   --parameter-overrides CertificateArn="$CERT" VpcId="$VPC" SubnetIds="$SUBNETS" DesiredCount="${DESIRED:-0}" CreateOidcProvider="$OIDC"
 
 echo

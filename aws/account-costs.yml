@@ -1,0 +1,66 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "שמירה על העלויות בחשבון: תקציב חודשי עם התראות במייל והתראה על חריגה לא רגילה. מריצים ב-us-east-1 (שירותי החיוב גלובליים)."
+
+Parameters:
+  AlertEmail:
+    Type: String
+    AllowedPattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$'
+    Description: "המייל שמקבל את כל התראות העלות"
+  MonthlyBudgetUsd:
+    Type: Number
+    Default: 60
+    MinValue: 1
+    Description: "תקרת התקציב החודשי בדולרים (ההתראות ב-50%, 80%, 100% ותחזית 100%)"
+  AnomalyThresholdUsd:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    Description: "התראה על חריגה לא רגילה שההשפעה שלה לפחות הסכום הזה בדולרים"
+  ExistingMonitorArn:
+    Type: String
+    Default: ''
+    Description: "ריק = יוצרים מוניטור לפי שירות. אם כבר קיים בחשבון מוניטור כזה (AWS יוצר אחד בחשבונות חדשים), מעבירים את ה-ARN שלו"
+
+Conditions:
+  MakeMonitor: !Equals [!Ref ExistingMonitorArn, '']
+
+Resources:
+  MonthlyBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: monthly-total
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit: {Amount: !Ref MonthlyBudgetUsd, Unit: USD}
+      NotificationsWithSubscribers:
+        - Notification: {NotificationType: ACTUAL, ComparisonOperator: GREATER_THAN, Threshold: 50, ThresholdType: PERCENTAGE}
+          Subscribers: [{SubscriptionType: EMAIL, Address: !Ref AlertEmail}]
+        - Notification: {NotificationType: ACTUAL, ComparisonOperator: GREATER_THAN, Threshold: 80, ThresholdType: PERCENTAGE}
+          Subscribers: [{SubscriptionType: EMAIL, Address: !Ref AlertEmail}]
+        - Notification: {NotificationType: ACTUAL, ComparisonOperator: GREATER_THAN, Threshold: 100, ThresholdType: PERCENTAGE}
+          Subscribers: [{SubscriptionType: EMAIL, Address: !Ref AlertEmail}]
+        # התחזית מתריעה באמצע החודש, לפני שהחריגה קורית בפועל
+        - Notification: {NotificationType: FORECASTED, ComparisonOperator: GREATER_THAN, Threshold: 100, ThresholdType: PERCENTAGE}
+          Subscribers: [{SubscriptionType: EMAIL, Address: !Ref AlertEmail}]
+
+  ServiceMonitor:
+    Type: AWS::CE::AnomalyMonitor
+    Condition: MakeMonitor
+    Properties:
+      MonitorName: services
+      MonitorType: DIMENSIONAL
+      MonitorDimension: SERVICE
+
+  AnomalyAlerts:
+    Type: AWS::CE::AnomalySubscription
+    Properties:
+      SubscriptionName: daily-anomaly-email
+      Frequency: DAILY
+      MonitorArnList: [!If [MakeMonitor, !Ref ServiceMonitor, !Ref ExistingMonitorArn]]
+      Subscribers: [{Type: EMAIL, Address: !Ref AlertEmail}]
+      ThresholdExpression: !Sub '{"Dimensions":{"Key":"ANOMALY_TOTAL_IMPACT_ABSOLUTE","MatchOptions":["GREATER_THAN_OR_EQUAL"],"Values":["${AnomalyThresholdUsd}"]}}'
+
+Outputs:
+  BudgetName: {Value: !Ref MonthlyBudget}
+  AnomalySubscriptionArn: {Value: !Ref AnomalyAlerts}

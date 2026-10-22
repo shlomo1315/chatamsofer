@@ -135,3 +135,6 @@ YEMOT_WEBHOOK_SECRET
 - הקרונים הפנימיים לא דורשים EventBridge. רק מה שרץ ב-Railway כשירות נפרד (`cron-name-reminders`) דורש תזמון חיצוני לקריאת `/api/cron/name-reminders` עם `Authorization: Bearer <CRON_SECRET>`, ויש להעביר לי את הלו"ז שלו.
 - **ה-IP של נדרים:** המשימה יוצאת מ-IP ציבורי שמשתנה. אם נדרים דורשת IP קבוע, צריך NAT Gateway עם Elastic IP (עלות כ-35$ לחודש), או להשאיר את `nedarim-proxy` זמנית אצלם.
 - `APP_BUILD_ID` נקבע ב-Dockerfile, אין למלא אותו בסוד.
+
+## מעטפת לחשבון (תקציב, התראות, אבטחה)
+לפני הקמת פרויקט ראשון מריצים פעם אחת את `aws/account-setup.sh`. המדריך המלא נמצא ב-`aws/ACCOUNT-SETUP.md`.
