@@ -1,0 +1,388 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: חתם סופר - תשתית ECS Fargate (ECR, ALB, WAF, סודות, הרשאת OIDC ל-GitHub)
+
+# פריסה: CloudFormation -> Create stack -> העלאת הקובץ הזה. אזור: eu-central-1.
+# ⚠️ משימה אחת בלבד (DesiredCount=1): instrumentation.ts מריץ תזמונים פנימיים (גיבוי, פריקה, סנכרונים),
+# ושתי משימות היו מריצות אותם פעמיים. כמו ב-Railway.
+
+Parameters:
+  GitHubRepo: {Type: String, Default: shlomo1315/chatamsofer}
+  DomainName: {Type: String, Default: chasamsofer.co.il}
+  CertificateArn: {Type: String, Description: "ARN של תעודת ACM (באותו אזור) ל-DomainName"}
+  VpcId: {Type: AWS::EC2::VPC::Id, Description: "ה-VPC ברירת המחדל"}
+  SubnetIds: {Type: "List<AWS::EC2::Subnet::Id>", Description: "לפחות 2 תתי-רשתות ציבוריות בשני אזורי זמינות"}
+  DesiredCount: {Type: Number, Default: 0, Description: "0 בהקמה ראשונה. אחרי שהפריסה הראשונה העלתה image: 1"}
+  CreateOidcProvider: {Type: String, Default: 'true', AllowedValues: ['true', 'false'], Description: "false אם כבר קיים provider של GitHub בחשבון"}
+  ExistingOidcProviderArn: {Type: String, Default: ''}
+
+Conditions:
+  MakeOidc: !Equals [!Ref CreateOidcProvider, 'true']
+
+Resources:
+  Repo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: chasamsofer
+      ImageScanningConfiguration: {ScanOnPush: true}
+      LifecyclePolicy:
+        LifecyclePolicyText: '{"rules":[{"rulePriority":1,"selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":20},"action":{"type":"expire"}}]}'
+
+  # ⚠️ הערכים ריקים בכוונה: ממלאים אותם ב-Secrets Manager (Retrieve/Edit) ולא כאן. אל תשנו את SecretString בתבנית אחרי המילוי.
+  AppSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: chasamsofer/prod
+      SecretString: '{"ANTHROPIC_API_KEY":"","BOOK_FAIR_AUTO_OPEN_DISABLED":"","BOOK_FAIR_CLEANUP_DISABLED":"","CRON_SECRET":"","DAILY_BACKUP_DISABLED":"","DISTRIBUTIONS_PORTAL_SECRET":"","ELEVENLABS_API_KEY":"","ELEVENLABS_MODEL_ID":"","ELEVENLABS_VOICE_ID":"","GILYONOT_DISABLED":"","GILYONOT_FROM_EMAIL":"","GILYONOT_NEDARIM_TOKEN":"","GMAIL_CLIENT_ID":"","GMAIL_CLIENT_SECRET":"","GMAIL_EMAIL":"","GMAIL_PUBSUB_TOPIC":"","GMAIL_PUSH_TOKEN":"","GMAIL_REDIRECT_URI":"","GMAIL_WATCH_RENEW_DISABLED":"","GOOGLE_DRIVE_BACKUP_FOLDER_ID":"","GOOGLE_SA_KEY":"","GOV_SYNC_DISABLED":"","KVITEL_MAILBOX":"","KVITEL_NEDARIM_TOKEN":"","LEGACY_SYNC_DISABLED":"","LIVE_BALANCES_DISABLED":"","LIVE_BALANCES_ENABLED":"","LOANS_PORTAL_SECRET":"","LOANS_REPORT_DISABLED":"","MAIL_DOMAIN":"","MATERNITY_CARD_RETRY_DISABLED":"","NEDARIM_API_PASSWORD":"","NEDARIM_CREATE_TXN_URL":"","NEDARIM_GUARD_ALERT_TO":"","NEDARIM_HISTORY_URL":"","NEDARIM_HOLIDAY_LIMITED_ID":"","NEDARIM_MATERNITY_LIMITED_ID":"","NEDARIM_MOSAD_ID":"","NEDARIM_PROXY_URL":"","NEWSLETTER_DISABLED":"","NEXTAUTH_SECRET":"","OTP_NONCE_SECRET":"","RABBI_FORM_BLANK_URL":"","RESEND_API_KEY":"","RESEND_WEBHOOK_SECRET":"","RESEND_WEBHOOK_SIGNING_SECRET":"","SCHEDULED_MAIL_DISABLED":"","SUPABASE_SERVICE_ROLE_KEY":"","UNLOAD_EXPIRED_DISABLED":"","VERIFY_FROM_EMAIL":"","VERIFY_FROM_NAME":"","VOICE_REBUILD_DISABLED":"","YEMOT_ANNOUNCE_TEMPLATE_ID":"","YEMOT_API_TOKEN":"","YEMOT_BOOK_FAIR_AUDIO":"","YEMOT_BOOK_FAIR_CALLER_ID":"","YEMOT_BOOK_FAIR_CREDIT_TEMPLATE_ID":"","YEMOT_BOOK_FAIR_EXT":"","YEMOT_BOOK_FAIR_TEXT_ONLY":"","YEMOT_BOOK_FAIR_TOKEN":"","YEMOT_CREDITS_FALLBACK_FOLDER":"","YEMOT_CREDITS_SECRET":"","YEMOT_FOLDER_HOLIDAY":"","YEMOT_FOLDER_IVR_FILES":"","YEMOT_FOLDER_MATERNITY":"","YEMOT_GILYONOT_SECRET":"","YEMOT_HOLIDAY_EXT":"","YEMOT_KVITEL_SECRET":"","YEMOT_MATERNITY_EXT":"","YEMOT_MENU_EXT":"","YEMOT_OTP_CALLER_ID":"","YEMOT_OTP_DIGIT_SEP":"","YEMOT_OTP_TEMPLATE_ID":"","YEMOT_SINGLE_ENDPOINT":"","YEMOT_TOKEN":"","YEMOT_WEBHOOK_SECRET":""}'
+
+  Logs:
+    Type: AWS::Logs::LogGroup
+    Properties: {LogGroupName: /ecs/chasamsofer, RetentionInDays: 30}
+
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties: {ClusterName: chasamsofer}
+
+  ExecRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement: [{Effect: Allow, Principal: {Service: ecs-tasks.amazonaws.com}, Action: 'sts:AssumeRole'}]
+      ManagedPolicyArns: ['arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy']
+      Policies:
+        - PolicyName: read-app-secret
+          PolicyDocument:
+            Statement: [{Effect: Allow, Action: 'secretsmanager:GetSecretValue', Resource: !Ref AppSecret}]
+
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement: [{Effect: Allow, Principal: {Service: ecs-tasks.amazonaws.com}, Action: 'sts:AssumeRole'}]
+
+  TaskDef:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: chasamsofer
+      Cpu: '1024'
+      Memory: '2048'
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      ExecutionRoleArn: !GetAtt ExecRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      ContainerDefinitions:
+        - Name: app
+          # image זמני עד הפריסה הראשונה מ-GitHub
+          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/chasamsofer:latest"
+          Essential: true
+          PortMappings: [{ContainerPort: 3000}]
+          Environment:
+            - {Name: NEXT_PUBLIC_SITE_URL, Value: !Sub "https://${DomainName}"}
+            - {Name: NEXT_PUBLIC_APP_URL, Value: !Sub "https://${DomainName}"}
+            - {Name: TZ, Value: Asia/Jerusalem}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options: {awslogs-group: /ecs/chasamsofer, awslogs-region: !Ref 'AWS::Region', awslogs-stream-prefix: app}
+          Secrets:
+            - Name: ANTHROPIC_API_KEY
+              ValueFrom: !Sub "${AppSecret}:ANTHROPIC_API_KEY::"
+            - Name: BOOK_FAIR_AUTO_OPEN_DISABLED
+              ValueFrom: !Sub "${AppSecret}:BOOK_FAIR_AUTO_OPEN_DISABLED::"
+            - Name: BOOK_FAIR_CLEANUP_DISABLED
+              ValueFrom: !Sub "${AppSecret}:BOOK_FAIR_CLEANUP_DISABLED::"
+            - Name: CRON_SECRET
+              ValueFrom: !Sub "${AppSecret}:CRON_SECRET::"
+            - Name: DAILY_BACKUP_DISABLED
+              ValueFrom: !Sub "${AppSecret}:DAILY_BACKUP_DISABLED::"
+            - Name: DISTRIBUTIONS_PORTAL_SECRET
+              ValueFrom: !Sub "${AppSecret}:DISTRIBUTIONS_PORTAL_SECRET::"
+            - Name: ELEVENLABS_API_KEY
+              ValueFrom: !Sub "${AppSecret}:ELEVENLABS_API_KEY::"
+            - Name: ELEVENLABS_MODEL_ID
+              ValueFrom: !Sub "${AppSecret}:ELEVENLABS_MODEL_ID::"
+            - Name: ELEVENLABS_VOICE_ID
+              ValueFrom: !Sub "${AppSecret}:ELEVENLABS_VOICE_ID::"
+            - Name: GILYONOT_DISABLED
+              ValueFrom: !Sub "${AppSecret}:GILYONOT_DISABLED::"
+            - Name: GILYONOT_FROM_EMAIL
+              ValueFrom: !Sub "${AppSecret}:GILYONOT_FROM_EMAIL::"
+            - Name: GILYONOT_NEDARIM_TOKEN
+              ValueFrom: !Sub "${AppSecret}:GILYONOT_NEDARIM_TOKEN::"
+            - Name: GMAIL_CLIENT_ID
+              ValueFrom: !Sub "${AppSecret}:GMAIL_CLIENT_ID::"
+            - Name: GMAIL_CLIENT_SECRET
+              ValueFrom: !Sub "${AppSecret}:GMAIL_CLIENT_SECRET::"
+            - Name: GMAIL_EMAIL
+              ValueFrom: !Sub "${AppSecret}:GMAIL_EMAIL::"
+            - Name: GMAIL_PUBSUB_TOPIC
+              ValueFrom: !Sub "${AppSecret}:GMAIL_PUBSUB_TOPIC::"
+            - Name: GMAIL_PUSH_TOKEN
+              ValueFrom: !Sub "${AppSecret}:GMAIL_PUSH_TOKEN::"
+            - Name: GMAIL_REDIRECT_URI
+              ValueFrom: !Sub "${AppSecret}:GMAIL_REDIRECT_URI::"
+            - Name: GMAIL_WATCH_RENEW_DISABLED
+              ValueFrom: !Sub "${AppSecret}:GMAIL_WATCH_RENEW_DISABLED::"
+            - Name: GOOGLE_DRIVE_BACKUP_FOLDER_ID
+              ValueFrom: !Sub "${AppSecret}:GOOGLE_DRIVE_BACKUP_FOLDER_ID::"
+            - Name: GOOGLE_SA_KEY
+              ValueFrom: !Sub "${AppSecret}:GOOGLE_SA_KEY::"
+            - Name: GOV_SYNC_DISABLED
+              ValueFrom: !Sub "${AppSecret}:GOV_SYNC_DISABLED::"
+            - Name: KVITEL_MAILBOX
+              ValueFrom: !Sub "${AppSecret}:KVITEL_MAILBOX::"
+            - Name: KVITEL_NEDARIM_TOKEN
+              ValueFrom: !Sub "${AppSecret}:KVITEL_NEDARIM_TOKEN::"
+            - Name: LEGACY_SYNC_DISABLED
+              ValueFrom: !Sub "${AppSecret}:LEGACY_SYNC_DISABLED::"
+            - Name: LIVE_BALANCES_DISABLED
+              ValueFrom: !Sub "${AppSecret}:LIVE_BALANCES_DISABLED::"
+            - Name: LIVE_BALANCES_ENABLED
+              ValueFrom: !Sub "${AppSecret}:LIVE_BALANCES_ENABLED::"
+            - Name: LOANS_PORTAL_SECRET
+              ValueFrom: !Sub "${AppSecret}:LOANS_PORTAL_SECRET::"
+            - Name: LOANS_REPORT_DISABLED
+              ValueFrom: !Sub "${AppSecret}:LOANS_REPORT_DISABLED::"
+            - Name: MAIL_DOMAIN
+              ValueFrom: !Sub "${AppSecret}:MAIL_DOMAIN::"
+            - Name: MATERNITY_CARD_RETRY_DISABLED
+              ValueFrom: !Sub "${AppSecret}:MATERNITY_CARD_RETRY_DISABLED::"
+            - Name: NEDARIM_API_PASSWORD
+              ValueFrom: !Sub "${AppSecret}:NEDARIM_API_PASSWORD::"
+            - Name: NEDARIM_CREATE_TXN_URL
+              ValueFrom: !Sub "${AppSecret}:NEDARIM_CREATE_TXN_URL::"
+            - Name: NEDARIM_GUARD_ALERT_TO
+              ValueFrom: !Sub "${AppSecret}:NEDARIM_GUARD_ALERT_TO::"
+            - Name: NEDARIM_HISTORY_URL
+              ValueFrom: !Sub "${AppSecret}:NEDARIM_HISTORY_URL::"
+            - Name: NEDARIM_HOLIDAY_LIMITED_ID
+              ValueFrom: !Sub "${AppSecret}:NEDARIM_HOLIDAY_LIMITED_ID::"
+            - Name: NEDARIM_MATERNITY_LIMITED_ID
+              ValueFrom: !Sub "${AppSecret}:NEDARIM_MATERNITY_LIMITED_ID::"
+            - Name: NEDARIM_MOSAD_ID
+              ValueFrom: !Sub "${AppSecret}:NEDARIM_MOSAD_ID::"
+            - Name: NEDARIM_PROXY_URL
+              ValueFrom: !Sub "${AppSecret}:NEDARIM_PROXY_URL::"
+            - Name: NEWSLETTER_DISABLED
+              ValueFrom: !Sub "${AppSecret}:NEWSLETTER_DISABLED::"
+            - Name: NEXTAUTH_SECRET
+              ValueFrom: !Sub "${AppSecret}:NEXTAUTH_SECRET::"
+            - Name: OTP_NONCE_SECRET
+              ValueFrom: !Sub "${AppSecret}:OTP_NONCE_SECRET::"
+            - Name: RABBI_FORM_BLANK_URL
+              ValueFrom: !Sub "${AppSecret}:RABBI_FORM_BLANK_URL::"
+            - Name: RESEND_API_KEY
+              ValueFrom: !Sub "${AppSecret}:RESEND_API_KEY::"
+            - Name: RESEND_WEBHOOK_SECRET
+              ValueFrom: !Sub "${AppSecret}:RESEND_WEBHOOK_SECRET::"
+            - Name: RESEND_WEBHOOK_SIGNING_SECRET
+              ValueFrom: !Sub "${AppSecret}:RESEND_WEBHOOK_SIGNING_SECRET::"
+            - Name: SCHEDULED_MAIL_DISABLED
+              ValueFrom: !Sub "${AppSecret}:SCHEDULED_MAIL_DISABLED::"
+            - Name: SUPABASE_SERVICE_ROLE_KEY
+              ValueFrom: !Sub "${AppSecret}:SUPABASE_SERVICE_ROLE_KEY::"
+            - Name: UNLOAD_EXPIRED_DISABLED
+              ValueFrom: !Sub "${AppSecret}:UNLOAD_EXPIRED_DISABLED::"
+            - Name: VERIFY_FROM_EMAIL
+              ValueFrom: !Sub "${AppSecret}:VERIFY_FROM_EMAIL::"
+            - Name: VERIFY_FROM_NAME
+              ValueFrom: !Sub "${AppSecret}:VERIFY_FROM_NAME::"
+            - Name: VOICE_REBUILD_DISABLED
+              ValueFrom: !Sub "${AppSecret}:VOICE_REBUILD_DISABLED::"
+            - Name: YEMOT_ANNOUNCE_TEMPLATE_ID
+              ValueFrom: !Sub "${AppSecret}:YEMOT_ANNOUNCE_TEMPLATE_ID::"
+            - Name: YEMOT_API_TOKEN
+              ValueFrom: !Sub "${AppSecret}:YEMOT_API_TOKEN::"
+            - Name: YEMOT_BOOK_FAIR_AUDIO
+              ValueFrom: !Sub "${AppSecret}:YEMOT_BOOK_FAIR_AUDIO::"
+            - Name: YEMOT_BOOK_FAIR_CALLER_ID
+              ValueFrom: !Sub "${AppSecret}:YEMOT_BOOK_FAIR_CALLER_ID::"
+            - Name: YEMOT_BOOK_FAIR_CREDIT_TEMPLATE_ID
+              ValueFrom: !Sub "${AppSecret}:YEMOT_BOOK_FAIR_CREDIT_TEMPLATE_ID::"
+            - Name: YEMOT_BOOK_FAIR_EXT
+              ValueFrom: !Sub "${AppSecret}:YEMOT_BOOK_FAIR_EXT::"
+            - Name: YEMOT_BOOK_FAIR_TEXT_ONLY
+              ValueFrom: !Sub "${AppSecret}:YEMOT_BOOK_FAIR_TEXT_ONLY::"
+            - Name: YEMOT_BOOK_FAIR_TOKEN
+              ValueFrom: !Sub "${AppSecret}:YEMOT_BOOK_FAIR_TOKEN::"
+            - Name: YEMOT_CREDITS_FALLBACK_FOLDER
+              ValueFrom: !Sub "${AppSecret}:YEMOT_CREDITS_FALLBACK_FOLDER::"
+            - Name: YEMOT_CREDITS_SECRET
+              ValueFrom: !Sub "${AppSecret}:YEMOT_CREDITS_SECRET::"
+            - Name: YEMOT_FOLDER_HOLIDAY
+              ValueFrom: !Sub "${AppSecret}:YEMOT_FOLDER_HOLIDAY::"
+            - Name: YEMOT_FOLDER_IVR_FILES
+              ValueFrom: !Sub "${AppSecret}:YEMOT_FOLDER_IVR_FILES::"
+            - Name: YEMOT_FOLDER_MATERNITY
+              ValueFrom: !Sub "${AppSecret}:YEMOT_FOLDER_MATERNITY::"
+            - Name: YEMOT_GILYONOT_SECRET
+              ValueFrom: !Sub "${AppSecret}:YEMOT_GILYONOT_SECRET::"
+            - Name: YEMOT_HOLIDAY_EXT
+              ValueFrom: !Sub "${AppSecret}:YEMOT_HOLIDAY_EXT::"
+            - Name: YEMOT_KVITEL_SECRET
+              ValueFrom: !Sub "${AppSecret}:YEMOT_KVITEL_SECRET::"
+            - Name: YEMOT_MATERNITY_EXT
+              ValueFrom: !Sub "${AppSecret}:YEMOT_MATERNITY_EXT::"
+            - Name: YEMOT_MENU_EXT
+              ValueFrom: !Sub "${AppSecret}:YEMOT_MENU_EXT::"
+            - Name: YEMOT_OTP_CALLER_ID
+              ValueFrom: !Sub "${AppSecret}:YEMOT_OTP_CALLER_ID::"
+            - Name: YEMOT_OTP_DIGIT_SEP
+              ValueFrom: !Sub "${AppSecret}:YEMOT_OTP_DIGIT_SEP::"
+            - Name: YEMOT_OTP_TEMPLATE_ID
+              ValueFrom: !Sub "${AppSecret}:YEMOT_OTP_TEMPLATE_ID::"
+            - Name: YEMOT_SINGLE_ENDPOINT
+              ValueFrom: !Sub "${AppSecret}:YEMOT_SINGLE_ENDPOINT::"
+            - Name: YEMOT_TOKEN
+              ValueFrom: !Sub "${AppSecret}:YEMOT_TOKEN::"
+            - Name: YEMOT_WEBHOOK_SECRET
+              ValueFrom: !Sub "${AppSecret}:YEMOT_WEBHOOK_SECRET::"
+
+  AlbSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ALB - 443 ו-80 (הפניה) בלבד
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - {IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0}
+        - {IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0}
+
+  TaskSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: משימות - קבלת תעבורה מה-ALB בלבד
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - {IpProtocol: tcp, FromPort: 3000, ToPort: 3000, SourceSecurityGroupId: !Ref AlbSg}
+
+  Alb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Type: application
+      Scheme: internet-facing
+      Subnets: !Ref SubnetIds
+      SecurityGroups: [!Ref AlbSg]
+      LoadBalancerAttributes:
+        - {Key: idle_timeout.timeout_seconds, Value: '120'}
+        - {Key: routing.http.drop_invalid_header_fields.enabled, Value: 'true'}
+
+  Tg:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VpcId
+      Port: 3000
+      Protocol: HTTP
+      TargetType: ip
+      HealthCheckPath: /api/health
+      HealthCheckIntervalSeconds: 15
+      HealthyThresholdCount: 2
+      TargetGroupAttributes:
+        - {Key: deregistration_delay.timeout_seconds, Value: '30'}
+
+  HttpsListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref Alb
+      Port: 443
+      Protocol: HTTPS
+      SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
+      Certificates: [{CertificateArn: !Ref CertificateArn}]
+      DefaultActions: [{Type: forward, TargetGroupArn: !Ref Tg}]
+
+  HttpRedirect:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref Alb
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: redirect
+          RedirectConfig: {Protocol: HTTPS, Port: '443', StatusCode: HTTP_301}
+
+  Service:
+    Type: AWS::ECS::Service
+    DependsOn: HttpsListener
+    Properties:
+      ServiceName: chasamsofer
+      Cluster: !Ref Cluster
+      LaunchType: FARGATE
+      TaskDefinition: !Ref TaskDef
+      DesiredCount: !Ref DesiredCount
+      HealthCheckGracePeriodSeconds: 90
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 100
+        MaximumPercent: 200
+        DeploymentCircuitBreaker: {Enable: true, Rollback: true}
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets: !Ref SubnetIds
+          SecurityGroups: [!Ref TaskSg]
+      LoadBalancers:
+        - {ContainerName: app, ContainerPort: 3000, TargetGroupArn: !Ref Tg}
+
+  # WAF בסיסי. ⚠️ כלל גודל הגוף מוגדר Count: העלאות מסמכים ו-webhooks גדולים מ-8KB.
+  Waf:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Scope: REGIONAL
+      DefaultAction: {Allow: {}}
+      VisibilityConfig: {SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: chasamsofer-waf}
+      Rules:
+        - Name: common
+          Priority: 1
+          OverrideAction: {None: {}}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+              RuleActionOverrides:
+                - {Name: SizeRestrictions_BODY, ActionToUse: {Count: {}}}
+          VisibilityConfig: {SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: common}
+        - Name: rate-limit
+          Priority: 2
+          Action: {Block: {}}
+          Statement:
+            RateBasedStatement: {Limit: 2000, AggregateKeyType: IP}
+          VisibilityConfig: {SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: rate}
+
+  WafAssoc:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn: !Ref Alb
+      WebACLArn: !GetAtt Waf.Arn
+
+  GitHubOidc:
+    Type: AWS::IAM::OIDCProvider
+    Condition: MakeOidc
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+
+  DeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: chasamsofer-deployer
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If [MakeOidc, !Ref GitHubOidc, !Ref ExistingOidcProviderArn]
+            Action: 'sts:AssumeRoleWithWebIdentity'
+            Condition:
+              StringEquals: {'token.actions.githubusercontent.com:aud': sts.amazonaws.com}
+              StringLike: {'token.actions.githubusercontent.com:sub': !Sub "repo:${GitHubRepo}:ref:refs/heads/main"}
+      Policies:
+        - PolicyName: deploy
+          PolicyDocument:
+            Statement:
+              - {Effect: Allow, Action: 'ecr:GetAuthorizationToken', Resource: '*'}
+              - Effect: Allow
+                Action: [ecr:BatchCheckLayerAvailability, ecr:InitiateLayerUpload, ecr:UploadLayerPart, ecr:CompleteLayerUpload, ecr:PutImage, ecr:BatchGetImage]
+                Resource: !GetAtt Repo.Arn
+              - {Effect: Allow, Action: [ecs:DescribeTaskDefinition, ecs:RegisterTaskDefinition], Resource: '*'}
+              - {Effect: Allow, Action: [ecs:UpdateService, ecs:DescribeServices], Resource: !Ref Service}
+              - {Effect: Allow, Action: 'iam:PassRole', Resource: [!GetAtt ExecRole.Arn, !GetAtt TaskRole.Arn]}
+
+Outputs:
+  AlbDnsName: {Value: !GetAtt Alb.DNSName, Description: "היעד ל-DNS של הדומיין (CNAME)"}
+  DeployRoleArn: {Value: !GetAtt DeployRole.Arn, Description: "מדביקים ב-GitHub Secret בשם AWS_DEPLOY_ROLE_ARN"}
+  SecretArn: {Value: !Ref AppSecret}
