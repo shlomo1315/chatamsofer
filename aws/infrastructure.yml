@@ -6,7 +6,8 @@ Description: חתם סופר - תשתית ECS Fargate (ECR, ALB, WAF, סודות
 # ושתי משימות היו מריצות אותם פעמיים. כמו ב-Railway.
 
 Parameters:
-  GitHubRepo: {Type: String, Default: shlomo1315/chatamsofer}
+  ProjectName: {Type: String, Default: chasamsofer, AllowedPattern: "^[a-z][a-z0-9-]{1,30}$", Description: "שם הפרויקט באותיות קטנטנות באנגלית. משמש לשמות כל המשאבים ולתגית Project. לפרויקט נוסף: שם סטאק ושם פרויקט אחרים"}
+  GitHubRepo: {Type: String, Default: shlomo1315/chatamsofer, Description: "owner/repo של הפרויקט. ההרשאה לפריסה מוגבלת לענף main שלו בלבד"}
   DomainName: {Type: String, Default: chasamsofer.co.il}
   CertificateArn: {Type: String, Default: '', Description: "ריק = HTTP בלבד על כתובת ה-ALB (בדיקה בלי דומיין). עם ARN של תעודת ACM = HTTPS והפניה מ-80"}
   VpcId: {Type: AWS::EC2::VPC::Id, Description: "ה-VPC ברירת המחדל"}
@@ -23,7 +24,7 @@ Resources:
   Repo:
     Type: AWS::ECR::Repository
     Properties:
-      RepositoryName: chasamsofer
+      RepositoryName: !Ref ProjectName
       ImageScanningConfiguration: {ScanOnPush: true}
       LifecyclePolicy:
         LifecyclePolicyText: '{"rules":[{"rulePriority":1,"description":"untagged-after-1-day","selection":{"tagStatus":"untagged","countType":"sinceImagePushed","countUnit":"days","countNumber":1},"action":{"type":"expire"}},{"rulePriority":2,"description":"keep-last-10","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}'
@@ -32,16 +33,16 @@ Resources:
   AppSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: chasamsofer/prod
+      Name: !Sub "${ProjectName}/prod"
       SecretString: '{"ANTHROPIC_API_KEY":"","BOOK_FAIR_AUTO_OPEN_DISABLED":"","BOOK_FAIR_CLEANUP_DISABLED":"","CRON_SECRET":"","DAILY_BACKUP_DISABLED":"","DISTRIBUTIONS_PORTAL_SECRET":"","ELEVENLABS_API_KEY":"","ELEVENLABS_MODEL_ID":"","ELEVENLABS_VOICE_ID":"","GILYONOT_DISABLED":"","GILYONOT_FROM_EMAIL":"","GILYONOT_NEDARIM_TOKEN":"","GMAIL_CLIENT_ID":"","GMAIL_CLIENT_SECRET":"","GMAIL_EMAIL":"","GMAIL_PUBSUB_TOPIC":"","GMAIL_PUSH_TOKEN":"","GMAIL_REDIRECT_URI":"","GMAIL_WATCH_RENEW_DISABLED":"","GOOGLE_DRIVE_BACKUP_FOLDER_ID":"","GOOGLE_SA_KEY":"","GOV_SYNC_DISABLED":"","KVITEL_MAILBOX":"","KVITEL_NEDARIM_TOKEN":"","LEGACY_SYNC_DISABLED":"","LIVE_BALANCES_DISABLED":"","LIVE_BALANCES_ENABLED":"","LOANS_PORTAL_SECRET":"","LOANS_REPORT_DISABLED":"","MAIL_DOMAIN":"","MATERNITY_CARD_RETRY_DISABLED":"","NEDARIM_API_PASSWORD":"","NEDARIM_CREATE_TXN_URL":"","NEDARIM_GUARD_ALERT_TO":"","NEDARIM_HISTORY_URL":"","NEDARIM_HOLIDAY_LIMITED_ID":"","NEDARIM_MATERNITY_LIMITED_ID":"","NEDARIM_MOSAD_ID":"","NEDARIM_PROXY_URL":"","NEWSLETTER_DISABLED":"","NEXTAUTH_SECRET":"","OTP_NONCE_SECRET":"","RABBI_FORM_BLANK_URL":"","RESEND_API_KEY":"","RESEND_WEBHOOK_SECRET":"","RESEND_WEBHOOK_SIGNING_SECRET":"","SCHEDULED_MAIL_DISABLED":"","SUPABASE_SERVICE_ROLE_KEY":"","UNLOAD_EXPIRED_DISABLED":"","VERIFY_FROM_EMAIL":"","VERIFY_FROM_NAME":"","VOICE_REBUILD_DISABLED":"","YEMOT_ANNOUNCE_TEMPLATE_ID":"","YEMOT_API_TOKEN":"","YEMOT_BOOK_FAIR_AUDIO":"","YEMOT_BOOK_FAIR_CALLER_ID":"","YEMOT_BOOK_FAIR_CREDIT_TEMPLATE_ID":"","YEMOT_BOOK_FAIR_EXT":"","YEMOT_BOOK_FAIR_TEXT_ONLY":"","YEMOT_BOOK_FAIR_TOKEN":"","YEMOT_CREDITS_FALLBACK_FOLDER":"","YEMOT_CREDITS_SECRET":"","YEMOT_FOLDER_HOLIDAY":"","YEMOT_FOLDER_IVR_FILES":"","YEMOT_FOLDER_MATERNITY":"","YEMOT_GILYONOT_SECRET":"","YEMOT_HOLIDAY_EXT":"","YEMOT_KVITEL_SECRET":"","YEMOT_MATERNITY_EXT":"","YEMOT_MENU_EXT":"","YEMOT_OTP_CALLER_ID":"","YEMOT_OTP_DIGIT_SEP":"","YEMOT_OTP_TEMPLATE_ID":"","YEMOT_SINGLE_ENDPOINT":"","YEMOT_TOKEN":"","YEMOT_WEBHOOK_SECRET":""}'
 
   Logs:
     Type: AWS::Logs::LogGroup
-    Properties: {LogGroupName: /ecs/chasamsofer, RetentionInDays: 30}
+    Properties: {LogGroupName: !Sub "/ecs/${ProjectName}", RetentionInDays: 30}
 
   Cluster:
     Type: AWS::ECS::Cluster
-    Properties: {ClusterName: chasamsofer}
+    Properties: {ClusterName: !Ref ProjectName}
 
   ExecRole:
     Type: AWS::IAM::Role
@@ -63,7 +64,7 @@ Resources:
   TaskDef:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: chasamsofer
+      Family: !Ref ProjectName
       Cpu: '1024'
       Memory: '2048'
       NetworkMode: awsvpc
@@ -73,7 +74,7 @@ Resources:
       ContainerDefinitions:
         - Name: app
           # image זמני עד הפריסה הראשונה מ-GitHub
-          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/chasamsofer:latest"
+          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ProjectName}:latest"
           Essential: true
           PortMappings: [{ContainerPort: 3000}]
           Environment:
@@ -82,7 +83,7 @@ Resources:
             - {Name: TZ, Value: Asia/Jerusalem}
           LogConfiguration:
             LogDriver: awslogs
-            Options: {awslogs-group: /ecs/chasamsofer, awslogs-region: !Ref 'AWS::Region', awslogs-stream-prefix: app}
+            Options: {awslogs-group: !Sub "/ecs/${ProjectName}", awslogs-region: !Ref 'AWS::Region', awslogs-stream-prefix: app}
           Secrets:
             - Name: ANTHROPIC_API_KEY
               ValueFrom: !Sub "${AppSecret}:ANTHROPIC_API_KEY::"
@@ -307,7 +308,7 @@ Resources:
     Type: AWS::ECS::Service
     DependsOn: [HttpRedirect, HttpsListener]
     Properties:
-      ServiceName: chasamsofer
+      ServiceName: !Ref ProjectName
       Cluster: !Ref Cluster
       LaunchType: FARGATE
       TaskDefinition: !Ref TaskDef
@@ -334,7 +335,7 @@ Resources:
     Properties:
       Scope: REGIONAL
       DefaultAction: {Allow: {}}
-      VisibilityConfig: {SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: chasamsofer-waf}
+      VisibilityConfig: {SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: !Sub "${ProjectName}-waf"}
       Rules:
         - Name: common
           Priority: 1
@@ -369,7 +370,7 @@ Resources:
   DeployRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: chasamsofer-deployer
+      RoleName: !Sub "${ProjectName}-deployer"
       AssumeRolePolicyDocument:
         Statement:
           - Effect: Allow
