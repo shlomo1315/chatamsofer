@@ -1,5 +1,5 @@
 ﻿import { NextResponse, type NextRequest } from 'next/server'
-import { getGmailClient } from '@/lib/gmail'
+import { getGmailClient, getGmailClientForToken } from '@/lib/gmail'
 import { requireMailAccess, unauthorized, getServiceClient } from '@/lib/apiAuth'
 import { canAccessGmailMessage } from '@/lib/mailAccess'
 
@@ -56,7 +56,14 @@ export async function GET(request: NextRequest) {
   if (!attachmentId) return NextResponse.json({ error: 'missing attachmentId' }, { status: 400 })
 
   try {
-    const gmail = await getGmailClient()
+    // הצירוף נמשך מהתיבה ששייכת להודעה (למשל y@chasamsofer.info), לא מהתיבה הגלובלית.
+    const { data: msg } = await db.from('gmail_messages')
+      .select('account_id').eq('gmail_message_id', messageId).maybeSingle()
+    const { data: acc } = msg?.account_id
+      ? await db.from('gmail_accounts').select('refresh_token').eq('id', msg.account_id).maybeSingle()
+      : { data: null }
+    const token = (acc as { refresh_token?: string } | null)?.refresh_token
+    const gmail = token ? getGmailClientForToken(token) : await getGmailClient()
     const res = await gmail.users.messages.attachments.get({
       userId: 'me',
       messageId,
