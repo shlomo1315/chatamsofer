@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { sanitizeEmailHtml } from '@/lib/sanitizeEmailHtml'
@@ -892,6 +892,19 @@ function AssignBeneficiaryModal({ messageId, onClose, onAssigned }: {
     </Modal>
   )
 }
+
+// הסניטציה (DOMPurify) יקרה על מיילים גדולים; מבצעים אותה פעם אחת למייל ולא בכל רינדור של המסך.
+const MessageBody = memo(function MessageBody({ body, bodyText, snippet }: { body: string; bodyText?: string | null; snippet?: string | null }) {
+  const safe = useMemo(() => sanitizeEmailHtml(body), [body])
+  if (safe.replace(/<[^>]*>/g, '').trim()) {
+    return <div className="px-6 py-5 text-sm text-slate-800 leading-relaxed" dangerouslySetInnerHTML={{ __html: safe }} />
+  }
+  // נפילה-לאחור: אם ה-HTML ריק לאחר סניטציה — מציגים את גוף הטקסט הגולמי
+  const fallback = (bodyText || snippet || '').trim()
+  return fallback
+    ? <div className="px-6 py-5 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">{fallback}</div>
+    : <div className="px-6 py-10 text-sm text-slate-400 text-center">לא נמצא תוכן בגוף ההודעה.</div>
+})
 
 function BeneficiaryCard({ email }: { email: string }) {
   const [ben, setBen] = useState<Beneficiary | null>(null)
@@ -1860,17 +1873,7 @@ export default function MailClient({ lockDepartment }: { lockDepartment?: string
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            {(() => {
-              const safe = sanitizeEmailHtml(selected.body || '')
-              if (safe.replace(/<[^>]*>/g, '').trim()) {
-                return <div className="px-6 py-5 text-sm text-slate-800 leading-relaxed" dangerouslySetInnerHTML={{ __html: safe }} />
-              }
-              // נפילה-לאחור: אם ה-HTML ריק לאחר סניטציה — מציגים את גוף הטקסט הגולמי
-              const fallback = (selected.bodyText || selected.snippet || '').trim()
-              return fallback
-                ? <div className="px-6 py-5 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">{fallback}</div>
-                : <div className="px-6 py-10 text-sm text-slate-400 text-center">לא נמצא תוכן בגוף ההודעה.</div>
-            })()}
+            <MessageBody body={selected.body || ''} bodyText={selected.bodyText} snippet={selected.snippet} />
             <AttachmentBar attachments={selected.attachments ?? []} messageId={selected.id} senderEmail={selected.fromEmail} />
             {folder === 'INBOX' && <BeneficiaryCard email={selected.fromEmail} />}
           </div>
