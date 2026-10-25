@@ -7,6 +7,7 @@ import type { SectionKey } from '@/types'
 import { readAdvFilters, parseColFilters, SORT_COLUMNS, FILTER_COLUMNS } from '@/lib/listParams'
 import { applyAdvFilters } from '@/lib/beneficiariesList'
 import { BLANK } from '@/lib/tableSort'
+import { addressColumns, addressCells } from '@/lib/exportAddress'
 
 export const dynamic = 'force-dynamic'
 // ⚠️ חובה. exceljs נשען על Buffer ועל zlib של Node ואינו רץ ב-Edge runtime.
@@ -170,64 +171,64 @@ export async function GET(request: NextRequest) {
     columns = [
       { header: 'שם משפחה' }, { header: 'שם פרטי' }, { header: 'ת.ז', kind: 'id' },
       { header: 'בן/בת זוג' }, { header: 'ת.ז בן/זוג', kind: 'id' }, { header: 'מצב משפחתי' },
-      { header: 'טלפון', kind: 'id' }, { header: 'מייל' }, { header: 'עיר' }, { header: 'כתובת' },
+      { header: 'טלפון', kind: 'id' }, { header: 'מייל' }, ...addressColumns(),
       // ⚠️ קהילה וגיל נוספו לקובץ: אפשר לסנן לפיהם, ולכן מי שמייצא חייב
       // לראות אותם בעמודה — אחרת הקובץ אינו מסביר את עצמו.
       { header: 'קהילה' }, { header: 'גיל', kind: 'number' },
       { header: 'מס׳ ילדים', kind: 'number' }, { header: 'סטטוס' }, { header: 'נרשם', kind: 'date' },
     ]
-    rows = (data ?? []).map((b: Row) => [b.family_name, b.full_name, b.id_number, b.spouse_name, b.spouse_id_number, b.marital_status, b.phone, b.email, b.city, b.address, b.community_affiliation, ageOf(b.birth_date), b.children_count, he(b.eligibility_status), dt(b.created_at)])
+    rows = (data ?? []).map((b: Row) => [b.family_name, b.full_name, b.id_number, b.spouse_name, b.spouse_id_number, b.marital_status, b.phone, b.email, ...addressCells(b.city, b.address), b.community_affiliation, ageOf(b.birth_date), b.children_count, he(b.eligibility_status), dt(b.created_at)])
   } else if (type === 'loans') {
     filename = 'הלוואות'
     // ⚠️ בלי טיוטות שממתינות לטופס אישור רב — הן אינן בקשות שהוגשו,
     // וייצואן היה מציג למקבל הקובץ בקשות שלא קיימות.
     const data = await fetchAll<Row>((from, to) => admin.from('loans')
-      .select('amount, approved_amount, installments, monthly_payment, purpose, status, created_at, beneficiary:beneficiaries(family_name, full_name, id_number, phone)')
+      .select('amount, approved_amount, installments, monthly_payment, purpose, status, created_at, beneficiary:beneficiaries(family_name, full_name, id_number, phone, city, address)')
       .neq('status', 'awaiting_rabbi_form')
       .order('created_at', { ascending: false }).range(from, to))
     columns = [
-      { header: 'משפחה' }, { header: 'ת.ז', kind: 'id' }, { header: 'טלפון', kind: 'id' },
+      { header: 'משפחה' }, { header: 'ת.ז', kind: 'id' }, { header: 'טלפון', kind: 'id' }, ...addressColumns(),
       { header: 'סכום מבוקש', kind: 'number' }, { header: 'סכום מאושר', kind: 'number' },
       { header: 'תשלומים', kind: 'number' }, { header: 'תשלום חודשי', kind: 'number' },
       { header: 'מטרה' }, { header: 'סטטוס' }, { header: 'תאריך', kind: 'date' },
     ]
-    rows = (data ?? []).map((l: Row) => [famName(l.beneficiary), l.beneficiary?.id_number, l.beneficiary?.phone, l.amount, l.approved_amount, l.installments, l.monthly_payment, l.purpose, he(l.status), dt(l.created_at)])
+    rows = (data ?? []).map((l: Row) => [famName(l.beneficiary), l.beneficiary?.id_number, l.beneficiary?.phone, ...addressCells(l.beneficiary?.city, l.beneficiary?.address), l.amount, l.approved_amount, l.installments, l.monthly_payment, l.purpose, he(l.status), dt(l.created_at)])
   } else if (type === 'maternity') {
     filename = 'יולדות'
     const data = await fetchAll<Row>((from, to) => admin.from('maternity_aids')
-      .select('birth_date, recovery_home, status, card_status, card_number, created_at, beneficiary:beneficiaries(family_name, full_name, id_number, spouse_name, phone)')
+      .select('birth_date, recovery_home, status, card_status, card_number, created_at, beneficiary:beneficiaries(family_name, full_name, id_number, spouse_name, phone, city, address)')
       .order('created_at', { ascending: false }).range(from, to))
     columns = [
       { header: 'משפחה' }, { header: 'ת.ז', kind: 'id' }, { header: 'שם האשה' },
-      { header: 'טלפון', kind: 'id' }, { header: 'תאריך לידה', kind: 'date' }, { header: 'בית החלמה' },
+      { header: 'טלפון', kind: 'id' }, ...addressColumns(), { header: 'תאריך לידה', kind: 'date' }, { header: 'בית החלמה' },
       { header: 'סטטוס' }, { header: 'סטטוס כרטיס' },
       // ⚠️ מספר כרטיס נשאר טקסט: הוא מזהה, לא כמות. כמספר הוא מאבד אפסים
       // מובילים ומקבל פסיקי אלפים.
       { header: 'מספר כרטיס', kind: 'id' }, { header: 'תאריך', kind: 'date' },
     ]
-    rows = (data ?? []).map((m: Row) => [famName(m.beneficiary), m.beneficiary?.id_number, m.beneficiary?.spouse_name, m.beneficiary?.phone, dt(m.birth_date), m.recovery_home, he(m.status), he(m.card_status), m.card_number, dt(m.created_at)])
+    rows = (data ?? []).map((m: Row) => [famName(m.beneficiary), m.beneficiary?.id_number, m.beneficiary?.spouse_name, m.beneficiary?.phone, ...addressCells(m.beneficiary?.city, m.beneficiary?.address), dt(m.birth_date), m.recovery_home, he(m.status), he(m.card_status), m.card_number, dt(m.created_at)])
   } else if (type === 'financial_aid') {
     filename = 'סיוע-רפואי'
     const data = await fetchAll<Row>((from, to) => admin.from('financial_aid_requests')
-      .select('reason, amount, status, created_at, beneficiary:beneficiaries(family_name, full_name, id_number, phone)')
+      .select('reason, amount, status, created_at, beneficiary:beneficiaries(family_name, full_name, id_number, phone, city, address)')
       .order('created_at', { ascending: false }).range(from, to))
     columns = [
-      { header: 'משפחה' }, { header: 'ת.ז', kind: 'id' }, { header: 'טלפון', kind: 'id' },
+      { header: 'משפחה' }, { header: 'ת.ז', kind: 'id' }, { header: 'טלפון', kind: 'id' }, ...addressColumns(),
       { header: 'סיבה' }, { header: 'סכום', kind: 'number' }, { header: 'סטטוס' },
       { header: 'תאריך', kind: 'date' },
     ]
-    rows = (data ?? []).map((r: Row) => [famName(r.beneficiary), r.beneficiary?.id_number, r.beneficiary?.phone, r.reason, r.amount, he(r.status), dt(r.created_at)])
+    rows = (data ?? []).map((r: Row) => [famName(r.beneficiary), r.beneficiary?.id_number, r.beneficiary?.phone, ...addressCells(r.beneficiary?.city, r.beneficiary?.address), r.reason, r.amount, he(r.status), dt(r.created_at)])
   } else if (type === 'widows') {
     filename = 'אלמנות-ויתומים'
     const data = await fetchAll<Row>((from, to) => admin.from('widow_requests')
-      .select('request_type, description, amount, status, created_at, beneficiary:beneficiaries(family_name, full_name, id_number, phone)')
+      .select('request_type, description, amount, status, created_at, beneficiary:beneficiaries(family_name, full_name, id_number, phone, city, address)')
       .order('created_at', { ascending: false }).range(from, to))
     columns = [
-      { header: 'משפחה' }, { header: 'ת.ז', kind: 'id' }, { header: 'טלפון', kind: 'id' },
+      { header: 'משפחה' }, { header: 'ת.ז', kind: 'id' }, { header: 'טלפון', kind: 'id' }, ...addressColumns(),
       { header: 'סוג בקשה' }, { header: 'תיאור' }, { header: 'סכום', kind: 'number' },
       { header: 'סטטוס' }, { header: 'תאריך', kind: 'date' },
     ]
-    rows = (data ?? []).map((w: Row) => [famName(w.beneficiary), w.beneficiary?.id_number, w.beneficiary?.phone, w.request_type, w.description, w.amount, he(w.status), dt(w.created_at)])
+    rows = (data ?? []).map((w: Row) => [famName(w.beneficiary), w.beneficiary?.id_number, w.beneficiary?.phone, ...addressCells(w.beneficiary?.city, w.beneficiary?.address), w.request_type, w.description, w.amount, he(w.status), dt(w.created_at)])
   } else {
     return NextResponse.json({ error: 'סוג ייצוא לא מוכר' }, { status: 400 })
   }

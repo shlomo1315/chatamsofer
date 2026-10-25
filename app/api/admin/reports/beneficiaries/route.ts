@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { buildXlsx, xlsxHeaders, todayStamp, type Column, type CellValue } from '@/lib/xlsx'
+import { addressCells } from '@/lib/exportAddress'
 import {
   applyFilters, groupCounts,
   type ReportRow, type ReportFilters, type GroupBy,
@@ -177,7 +178,9 @@ const COLUMN_DEFS: Record<string, { col: Column; get: (r: ReportRow) => CellValu
   community:     { col: { header: 'קהילה', kind: 'text', width: 18 }, get: r => r.community },
   generation:    { col: { header: 'דור', kind: 'number', width: 8 }, get: r => r.generation },
   city:          { col: { header: 'עיר', kind: 'text', width: 14 }, get: r => r.city },
-  address:       { col: { header: 'כתובת', kind: 'text', width: 22 }, get: r => r.address },
+  // ⚠️ הכתובת מפוצלת לרחוב ולמספר בית (ראו POST) — 'address' נשאר מפתח הבחירה במסך.
+  street:        { col: { header: 'רחוב', kind: 'text', width: 22 }, get: r => addressCells(r.city, r.address)[1] },
+  houseNumber:   { col: { header: 'מספר בית', kind: 'text', width: 10 }, get: r => addressCells(r.city, r.address)[2] },
   phone:         { col: { header: 'טלפון', kind: 'id', width: 13 }, get: r => r.phone },
   email:         { col: { header: 'אימייל', kind: 'text', width: 26 }, get: r => r.email },
   birthDate:     { col: { header: 'תאריך לידה', kind: 'date', width: 12 }, get: r => r.birthDate || null },
@@ -204,6 +207,7 @@ export async function POST(request: NextRequest) {
     | null
 
   const keys = (body?.columns?.length ? body.columns : DEFAULT_COLUMNS)
+    .flatMap(k => (k === 'address' ? ['street', 'houseNumber'] : [k]))
     .filter(k => k in COLUMN_DEFS)
   if (!keys.length) return NextResponse.json({ error: 'לא נבחרו עמודות' }, { status: 400 })
 

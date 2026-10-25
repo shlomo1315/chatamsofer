@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, Copy, ExternalLink, FileUp, Inbox, Loader2, Megaphone, Pencil, Plus, Search, Settings, Trash2, Truck, Undo2, UserMinus, UserPlus, UtensilsCrossed, X } from 'lucide-react'
 import { downloadXlsx, todayStamp } from '@/lib/downloadXlsx'
+import { addressColumns, addressCells } from '@/lib/exportAddress'
 import type { BookletReport } from '@/lib/gilyonotDistributorBooklet'
 import {
   buildDistributorDashboard, CHANNEL_LABELS, EVENT_LABELS, ISSUE_LABELS, matchesIssue, NO_CITY, SOURCE_LABELS, summarizeByCity,
@@ -252,8 +253,8 @@ function DistributorList({ rows, byCity, canAdd, canEdit, canDelete, pending, on
     downloadXlsx({
       filename: `gilyonot-distributors-${todayStamp()}.xlsx`,
       sheetName: 'מפיצים',
-      columns: ['שם', 'עיר', 'מסלול', 'בית כנסת', 'כתובת', 'טלפון', 'טלפון 2', 'מייל', 'כמות', 'סטטוס', 'הערות'].map(header => ({ header })),
-      rows: shown.map(r => [r.full_name, r.city ?? '', r.route ?? '', r.synagogue ?? '', r.address ?? '', r.phone ?? '', r.phone2 ?? '', r.email ?? '', r.quantity, r.status === 'active' ? 'פעיל' : 'הוסר', r.notes ?? '']),
+      columns: [{ header: 'שם' }, ...addressColumns(), ...['מסלול', 'בית כנסת', 'טלפון', 'טלפון 2', 'מייל', 'כמות', 'סטטוס', 'הערות'].map(header => ({ header }))],
+      rows: shown.map(r => [r.full_name, ...addressCells(r.city, r.address), r.route ?? '', r.synagogue ?? '', r.phone ?? '', r.phone2 ?? '', r.email ?? '', r.quantity, r.status === 'active' ? 'פעיל' : 'הוסר', r.notes ?? '']),
     }).catch(e => setMsg({ ok: false, text: e instanceof Error ? e.message : 'הייצוא נכשל' }))
   }
 

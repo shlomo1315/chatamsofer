@@ -12,6 +12,7 @@ import {
 import { fmtAgorot } from '@/lib/bookFairPricing'
 import { auditShipping, type ShippingAudit, type TierInput } from '@/lib/bookFairShipping'
 import { downloadXlsx, todayStamp, type XlsxColumn } from '@/lib/downloadXlsx'
+import { addressColumns, addressCells } from '@/lib/exportAddress'
 import BulkStatusDialog from './BulkStatusDialog'
 import OfficeOrderDialog from './OfficeOrderDialog'
 import { useTablePagination } from '@/lib/useTablePagination'
@@ -431,8 +432,7 @@ export default function OrdersClient({ orders, itemCounts, orderVolumes, tiers, 
         { header: 'מייל', width: 28 },
         { header: 'ערוץ', width: 10 },
         { header: 'אופן קבלה', width: 12 },
-        { header: 'עיר', width: 14 },
-        { header: 'כתובת', width: 34 },
+        ...addressColumns(),
         { header: 'ספרים', kind: 'number', width: 8 },
         { header: 'סכום ספרים ₪', kind: 'number', width: 12 },
         { header: 'משלוח ₪', kind: 'number', width: 10 },
@@ -456,8 +456,7 @@ export default function OrdersClient({ orders, itemCounts, orderVolumes, tiers, 
         o.customer_email ?? '',
         BOOK_FAIR_CHANNEL_LABELS[o.channel] ?? o.channel,
         BOOK_FAIR_DELIVERY_LABELS[o.delivery_method] ?? o.delivery_method,
-        cityOf(o) ?? '',
-        o.address_text ?? '',
+        ...addressCells(cityOf(o), o.address_text),
         itemCounts[o.id] ?? 0,
         shekels(o.items_total_agorot),
         shekels(o.shipping_agorot),

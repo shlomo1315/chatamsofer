@@ -2,10 +2,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Download, Loader2, FileBarChart } from 'lucide-react'
 import { downloadXlsx, todayStamp, type XlsxColumn } from '@/lib/downloadXlsx'
+import { addressColumns, addressCells } from '@/lib/exportAddress'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 
 type Row = {
-  id: string; motherName: string; motherId: string; city: string; babyName: string
+  id: string; motherName: string; motherId: string; city: string; address?: string; babyName: string
   birthDate: string; status: string; cardStatus: string; cardBalance: number
   recoveryHome: string; arrived: boolean | null
   recoveryAmount: number | null; recoveryAmountStatus: string; recoveryAmountAt: string; recoveryNights: number | null
@@ -101,7 +102,7 @@ export default function ReportBuilder() {
   // והלילות יגיעו לאקסל כמספרים לסכימה, ולא כטקסט. ת"ז נשארת טקסט במפורש
   // כדי לא לאבד אפס מוביל.
   const XLSX_COLUMNS: XlsxColumn[] = [
-    { header: 'שם היולדת' }, { header: 'ת.ז', kind: 'id' }, { header: 'עיר' }, { header: 'תינוק' },
+    { header: 'שם היולדת' }, { header: 'ת.ז', kind: 'id' }, ...addressColumns(), { header: 'תינוק' },
     { header: 'תאריך לידה', kind: 'date' }, { header: 'סטטוס לידה' }, { header: 'בית החלמה' },
     { header: 'הגעה' }, { header: 'סכום שמומש', kind: 'number' }, { header: 'לילות', kind: 'number' },
     { header: 'סטטוס כרטיס' }, { header: 'יתרת כרטיס', kind: 'number' },
@@ -116,7 +117,7 @@ export default function ReportBuilder() {
         sheetName: 'דוח יולדות',
         columns: XLSX_COLUMNS,
         rows: filtered.map(r => [
-          r.motherName, r.motherId, r.city, r.babyName, r.birthDate || null,
+          r.motherName, r.motherId, ...addressCells(r.city, r.address), r.babyName, r.birthDate || null,
           BIRTH_STATUS[r.status] ?? r.status, r.recoveryHome,
           r.arrived === true ? 'הגיעה' : r.arrived === false ? 'לא הגיעה' : '',
           r.recoveryAmount, r.recoveryNights,
