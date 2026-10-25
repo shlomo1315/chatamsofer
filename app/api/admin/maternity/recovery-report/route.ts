@@ -35,6 +35,7 @@ interface AidRow {
     id_number?: string | null
     phone?: string | null
     city?: string | null
+    address?: string | null
   } | null
 }
 
@@ -48,7 +49,7 @@ export async function GET() {
   // הייתה נחתכת בשקט. ראו lib/fetchAllRows.
   const { rows: rawRows, error } = await fetchAllRows<Record<string, unknown>>((from, to) => db
     .from('maternity_aids')
-    .select('id, birth_date, baby_name, recovery_home, recovery_arrived, recovery_arrived_at, recovery_nights, recovery_amount, recovery_receipt_url, status, created_at, beneficiary:beneficiaries(full_name, family_name, spouse_name, id_number, phone, city)')
+    .select('id, birth_date, baby_name, recovery_home, recovery_arrived, recovery_arrived_at, recovery_nights, recovery_amount, recovery_receipt_url, status, created_at, beneficiary:beneficiaries(full_name, family_name, spouse_name, id_number, phone, city, address)')
     .not('recovery_home', 'is', null)
     .order('created_at', { ascending: false })
     .range(from, to))
@@ -94,6 +95,7 @@ export async function GET() {
       id_number: b?.id_number ?? null,
       phone: b?.phone ?? null,
       city: b?.city ?? null,
+      address: b?.address ?? null,
       birth_date: a.birth_date ?? null,
       baby_name: a.baby_name ?? null,
       recovery_home: a.recovery_home ?? null,

@@ -8,6 +8,7 @@ import {
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
 import { downloadXlsx, todayStamp, type XlsxColumn } from '@/lib/downloadXlsx'
+import { addressColumns, addressCells } from '@/lib/exportAddress'
 import { useToast } from '@/components/ui/Toast'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 
@@ -30,6 +31,7 @@ interface Row {
   id_number: string | null
   phone: string | null
   city: string | null
+  address: string | null
   birth_date: string | null
   baby_name: string | null
   recovery_home: string | null
@@ -179,7 +181,7 @@ export default function RecoveryReportPage() {
         { header: 'שם המשפחה', width: 26 },
         { header: 'ת"ז', kind: 'id', width: 14 },
         { header: 'טלפון', kind: 'id', width: 14 },
-        { header: 'עיר', width: 14 },
+        ...addressColumns(),
         { header: 'תאריך לידה', kind: 'date', width: 12 },
         { header: 'שם התינוק', width: 14 },
         { header: 'הגיעה', width: 8 },
@@ -196,7 +198,7 @@ export default function RecoveryReportPage() {
         r.name,
         r.id_number ?? '',
         r.phone ?? '',
-        r.city ?? '',
+        ...addressCells(r.city, r.address),
         r.birth_date ?? '',
         r.baby_name ?? '',
         r.arrived ? 'כן' : 'לא',

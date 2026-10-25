@@ -11,6 +11,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useCan } from '@/components/StaffPermissions'
 import { SOURCE_LABEL, type RegisterSource } from '@/lib/distributionSources'
 import { downloadXlsx, type XlsxColumn } from '@/lib/downloadXlsx'
+import { addressColumns, addressCells } from '@/lib/exportAddress'
 import type { ApprovalStatus } from '@/lib/holidayCards'
 import HolidayRecipientsTable, { type HolidayRow } from './HolidayRecipientsTable'
 import { type CenterOption } from './CenterCellEditor'
@@ -685,7 +686,7 @@ export default function HolidayRegistrations({
   // אינם אפשריים כשהשניים במחרוזת אחת.
   const XLSX_COLUMNS: XlsxColumn[] = [
     { header: 'שם משפחה' }, { header: 'שם פרטי' }, { header: 'ת"ז', kind: 'id' }, { header: 'בן/בת זוג' },
-    { header: 'טלפון', kind: 'id' }, { header: 'מייל' }, { header: 'כתובת' }, { header: 'עיר' },
+    { header: 'טלפון', kind: 'id' }, { header: 'מייל' }, ...addressColumns(),
     { header: 'קהילה' }, { header: 'גיל', kind: 'number' }, { header: 'ילדים', kind: 'number' },
     { header: 'ערוץ' }, { header: 'תאריך רישום', kind: 'date' }, { header: 'סכום מתוכנן', kind: 'number' },
     { header: 'אישור' },
@@ -738,7 +739,7 @@ export default function HolidayRegistrations({
         // (sorted → pg.rows). כל שלב מוקדם יותר מתעלם מחלק מהסינון.
         rows: sorted.map(r => [
           r.family_name || r.name, r.first_name || '', r.id_number, r.spouse_name, r.ben_phone ?? r.phone, r.email,
-          r.address, r.city, r.community, r.age, r.children_count,
+          ...addressCells(r.city, r.address), r.community, r.age, r.children_count,
           SOURCE_LABEL[r.source], r.registered_at, amountPerFamily || null,
           APPROVAL_LABEL[r.approval_status],
           // ⚠️ "טרם נבחר" מפורש ולא תא ריק — כדי שניתן יהיה לסנן עליו.

@@ -20,7 +20,7 @@ export async function GET() {
 
   const { data, error } = await admin
     .from('maternity_aids')
-    .select('id, birth_date, baby_name, status, card_status, card_balance, recovery_home, recovery_arrived, recovery_amount, recovery_amount_status, recovery_amount_at, recovery_nights, created_at, beneficiary:beneficiaries(full_name, family_name, spouse_name, spouse_id_number, id_number, city)')
+    .select('id, birth_date, baby_name, status, card_status, card_balance, recovery_home, recovery_arrived, recovery_amount, recovery_amount_status, recovery_amount_at, recovery_nights, created_at, beneficiary:beneficiaries(full_name, family_name, spouse_name, spouse_id_number, id_number, city, address)')
     .order('birth_date', { ascending: false })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE })
@@ -31,6 +31,7 @@ export async function GET() {
     motherName: [a.beneficiary?.family_name, a.beneficiary?.spouse_name || a.beneficiary?.full_name].filter(Boolean).join(' ') || '—',
     motherId: a.beneficiary?.spouse_id_number ?? a.beneficiary?.id_number ?? '',
     city: a.beneficiary?.city ?? '',
+    address: a.beneficiary?.address ?? '',
     babyName: a.baby_name ?? '',
     birthDate: a.birth_date ?? '',
     status: a.status ?? '',

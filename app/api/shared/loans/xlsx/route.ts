@@ -12,6 +12,7 @@ import { verifyPortalToken, PORTAL_COOKIE } from '@/lib/loansPortalAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { matchesLoanStage, LOAN_STAGES, type LoanStage } from '@/lib/loansPortalFilter'
 import { buildXlsx, xlsxHeaders, todayStamp, type CellValue, type Column } from '@/lib/xlsx'
+import { addressColumns, addressCells } from '@/lib/exportAddress'
 
 export const dynamic = 'force-dynamic'
 // ⚠️ חובה — exceljs אינו רץ ב-Edge runtime.
@@ -40,7 +41,7 @@ const COLUMNS: Column[] = [
   { header: 'שם משפחה' }, { header: 'שם פרטי' },
   // ⚠️ ת"ז וטלפון כטקסט. בגרסת ה-CSV נאלצו לעטוף את הטלפון ב-="05..." רק כדי
   // שאקסל לא יבלע את האפס המוביל; ב-xlsx התא פשוט מוגדר כטקסט.
-  { header: 'ת.ז.', kind: 'id' }, { header: 'רחוב' }, { header: 'עיר' },
+  { header: 'ת.ז.', kind: 'id' }, ...addressColumns(),
   { header: 'טלפון', kind: 'id' }, { header: 'מייל' },
   { header: 'סכום מאושר', kind: 'number' }, { header: 'מספר תשלומים', kind: 'number' },
   { header: 'סטטוס' }, { header: 'תאריך ביצוע', kind: 'date' },
@@ -79,7 +80,7 @@ export async function GET(req: NextRequest) {
   const rows: CellValue[][] = visible.map(l => {
     const b = l.beneficiary
     return [
-      b?.family_name, b?.full_name, b?.id_number, b?.address, b?.city, b?.phone, b?.email,
+      b?.family_name, b?.full_name, b?.id_number, ...addressCells(b?.city, b?.address), b?.phone, b?.email,
       Number(l.approved_amount ?? l.amount) || 0,
       l.installments,
       l.disbursed_at ? 'בוצעה' : (l.note_sent_at ? 'נשלח שטר — ממתין' : 'טרם נשלח שטר'),
