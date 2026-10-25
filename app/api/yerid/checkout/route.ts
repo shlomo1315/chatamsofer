@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { loadAgreedTiers } from '@/lib/bookFairAgreedRates'
 import { getServiceClient } from '@/lib/apiAuth'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { validateCheckout, nextOrderNumber, makeCartToken, type CheckoutItem } from '@/lib/bookFairCheckout'
@@ -6,7 +7,7 @@ import { signPublicToken } from '@/lib/publicToken'
 import { isValidPreviewToken } from '@/lib/bookFairPreview'
 import { PICKUP_CONFIG_KEY, mergePickupConfig, pickupStatus } from '@/lib/bookFairPickup'
 import { getPaymentProvider } from '@/lib/payments'
-import type { TierInput } from '@/lib/bookFairShipping'
+
 
 // צ'קאאוט — יצירת הזמנה, שריון המלאי ופתיחת הסליקה.
 //
@@ -90,10 +91,9 @@ export async function POST(request: NextRequest) {
   }
 
   // ── מדרגות המשלוח והערים ──
-  const [{ data: tiers }, { data: cities }] = await Promise.all([
-    // ⚠️ שדות הקפיצה חובה: בלעדיהם המדרגה הפתוחה נגבית כמחיר קבוע,
-    // והזמנה של 90 כרכים משלמת כמו 14.
-    db.from('book_fair_shipping_tiers').select('min_books, max_books, price_agorot, step_volumes, step_agorot'),
+  // התעריף נקרא מהטבלה שבהגדרות היריד (סכום לכל כרך).
+  const [tiers, { data: cities }] = await Promise.all([
+    loadAgreedTiers(db as never),
     db.from('book_fair_cities').select('id').eq('is_active', true),
   ])
 
@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
       customer_phone: body.customer_phone as string | null,
       customer_email: body.customer_email as string | null,
     },
-    (tiers ?? []) as TierInput[],
+    tiers,
     (cities ?? []).map(c => c.id)
   )
 

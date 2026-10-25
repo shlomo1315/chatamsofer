@@ -8,7 +8,7 @@ import { MAX_RATE_VOLUMES } from '@/lib/bookFairShipping'
 
 const toShekels = (agorot: number) => String(agorot / 100)
 
-export default function AgreedRates({ canEdit, onSaved }: { canEdit: boolean; onSaved?: (rates: number[]) => void }) {
+export default function AgreedRates({ canEdit }: { canEdit: boolean }) {
   const [prices, setPrices] = useState<string[]>([])
   const [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -19,7 +19,7 @@ export default function AgreedRates({ canEdit, onSaved }: { canEdit: boolean; on
     let alive = true
     fetch('/api/admin/book-fair/shipping-rates', { cache: 'no-store' })
       .then(r => r.json())
-      .then(d => { if (alive) { setPrices((d.rates ?? []).map(toShekels)); onSaved?.(d.rates ?? []); setLoaded(true) } })
+      .then(d => { if (alive) { setPrices((d.rates ?? []).map(toShekels)); setLoaded(true) } })
       .catch(() => { if (alive) { setError('הטעינה נכשלה'); setLoaded(true) } })
     return () => { alive = false }
   }, [])
@@ -39,7 +39,6 @@ export default function AgreedRates({ canEdit, onSaved }: { canEdit: boolean; on
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { setError(d.error ?? 'השמירה נכשלה'); return }
       setPrices((d.rates as number[]).map(toShekels))
-      onSaved?.(d.rates)
       setDone(true); setTimeout(() => setDone(false), 3000)
     } catch {
       setError('השמירה נכשלה — בדקו את החיבור')

@@ -19,6 +19,7 @@
 // בין הקשה להקשה. שורה לכל שיחה, נמחקת/מתיישנת ע"י ה-cron הקיים.
 // ─────────────────────────────────────────────────────────────────────────────
 import { NextRequest, NextResponse } from 'next/server'
+import { loadAgreedTiers } from '@/lib/bookFairAgreedRates'
 import { getServiceClient } from '@/lib/apiAuth'
 import { safeEqual } from '@/lib/svix'
 import { downloadFileFromYemot } from '@/lib/yemot'
@@ -383,10 +384,7 @@ async function volumesByBook(bookIds: string[]): Promise<Map<string, number>> {
 }
 
 async function shippingFor(volumeCount: number): Promise<number | null> {
-  const supa = db()!
-  const { data: tiers } = await supa.from('book_fair_shipping_tiers')
-    .select('min_books, max_books, price_agorot, step_volumes, step_agorot')
-  return shippingCost('shipping', volumeCount, (tiers ?? []) as TierInput[])
+  return shippingCost('shipping', volumeCount, await loadAgreedTiers(db()! as never))
 }
 
 /** שריון מלאי לפריט האחרון שנוסף לעגלה — ⚠️ לא לכל העגלה: הפריטים

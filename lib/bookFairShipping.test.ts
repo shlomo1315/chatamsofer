@@ -383,3 +383,18 @@ describe('תעריף מוסכם לפי כרך (טבלה)', () => {
     expect(agreedRatesError([100, 200])).toBeNull()
   })
 })
+
+describe('קופה: המשלוח לפי הטבלה השמורה', () => {
+  it('shippingCost עם מדרגות מהטבלה משקף שינוי בסכום', async () => {
+    const { loadAgreedTiers } = await import('./bookFairAgreedRates')
+    const fakeDb = (value: unknown) => ({
+      from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: value === undefined ? null : { value } }) }) }) }),
+    })
+    const custom = await loadAgreedTiers(fakeDb(JSON.stringify([1100, 2200, 3300])) as never)
+    expect(shippingCost('shipping', 2, custom)).toBe(2200)
+    expect(shippingCost('shipping', 9, custom)).toBe(3300) // מעל הטבלה: הסכום האחרון
+    expect(shippingCost('pickup', 2, custom)).toBe(0)
+    const dflt = await loadAgreedTiers(fakeDb(undefined) as never)
+    expect(shippingCost('shipping', 8, dflt)).toBe(4000)
+  })
+})

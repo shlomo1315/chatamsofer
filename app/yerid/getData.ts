@@ -1,4 +1,5 @@
 import { getServiceClient } from '@/lib/apiAuth'
+import { loadAgreedTiers } from '@/lib/bookFairAgreedRates'
 import { fetchPublicCatalog, type PublicBook } from '@/lib/bookFairCatalog'
 import { PICKUP_CONFIG_KEY, mergePickupConfig, pickupStatus, type PickupConfig } from '@/lib/bookFairPickup'
 
@@ -51,14 +52,10 @@ export async function getData(preview = false) {
   if (!open) return { books: [] as PublicBook[], cities: [], tiers: [], open: false, openAt, pickup: null, seasonClosed: false }
 
   // ── שלב ב: הקטלוג — רק אחרי שהיריד פתוח ──
-  const [{ books }, { data: cities }, { data: tiers }, { data: pickupRow }] = await Promise.all([
+  const [{ books }, { data: cities }, tiers, { data: pickupRow }] = await Promise.all([
     fetchPublicCatalog(db),
     db.from('book_fair_cities').select('id, name').eq('is_active', true).order('sort_order'),
-    // ⚠️ step_volumes/step_agorot נשלפים גם הם: בלעדיהם המדרגה הפתוחה
-    // מוצגת ללקוח כמחיר קבוע, בעוד שהשרת גובה תוספת מדורגת.
-    db.from('book_fair_shipping_tiers')
-      .select('min_books, max_books, price_agorot, step_volumes, step_agorot')
-      .order('min_books'),
+    loadAgreedTiers(db as never),
     db.from('app_settings').select('value').eq('key', PICKUP_CONFIG_KEY).maybeSingle(),
   ])
 
@@ -77,7 +74,7 @@ export async function getData(preview = false) {
   return {
     books,
     cities: (cities ?? []) as PublicCity[],
-    tiers: (tiers ?? []) as PublicTier[],
+    tiers: tiers as PublicTier[],
     open: true,
     openAt,
     pickup,
