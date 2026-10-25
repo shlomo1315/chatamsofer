@@ -11,7 +11,7 @@ import { Loader2, RefreshCw, ChevronRight, ChevronLeft, CheckCircle2, AlertTrian
 import { useToast } from '@/components/ui/Toast'
 import { issueLabel, computeTreeHealth, STATUS_ORDER, type FamilyReview, type ControlSummary, type IssueKind, type ParallelGroup } from '@/lib/lineageControlCenter'
 
-export type ControlTool = 'dupReview' | 'mergeCenter' | 'unlinked' | 'ghosts' | 'selfDups' | 'health' | 'safeMerge'
+export type ControlTool = 'dupReview' | 'mergeCenter' | 'unlinked' | 'ghosts' | 'selfDups' | 'health' | 'safeMerge' | 'generationMerge'
 
 const STATUS_LABEL: Record<string, string> = {
   pending: 'ממתין לאישור ראשוני', deep_review: 'בדיקה מעמיקה', docs_returned: 'מסמכים הוחזרו',
@@ -253,6 +253,8 @@ export default function ControlCenterPanel({ onOpenTool, onLocate, reloadSignal 
             active={filter.issue === 'parallel_dup'} onClick={() => setF({ issue: 'parallel_dup' })} />
           <Counter label="בטוחות למיזוג" value={s.parallel.safeGroups} sub="אותו אב, שם ודור" tone="ok"
             onClick={() => onOpenTool?.('safeMerge')} />
+          <Counter label="מיזוג מדורג" value={s.parallel.safeGroups} sub="דור אחרי דור, באישור" tone="ok"
+            onClick={() => onOpenTool?.('generationMerge')} />
           <Counter label="דורשות החלטה" value={s.parallel.needsDecision} sub={`${s.parallel.multiCard} עם כמה כרטסות`}
             onClick={() => onOpenTool?.('mergeCenter')} />
           <Counter label="יתאחדו (בטוחות)" value={s.parallel.safeRemovable} sub={`עץ: ${s.parallel.treeNodes.toLocaleString('he-IL')} ← ${s.parallel.afterSafe.toLocaleString('he-IL')}`} tone="ok" />
