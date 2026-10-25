@@ -12,7 +12,7 @@ type Row = {
   recoveryAmount: number | null; recoveryAmountStatus: string; recoveryAmountAt: string; recoveryNights: number | null
 }
 
-const BIRTH_STATUS: Record<string, string> = { pending: 'ממתין לאישור', active: 'מאושר', completed: 'הושלם', cancelled: 'בוטל' }
+const BIRTH_STATUS: Record<string, string> = { pending: 'ממתין לאישור', active: 'מאושר', completed: 'הושלם', cancelled: 'בוטל', deep_review: 'בבדיקה מעמיקה' }
 const CARD_STATUS: Record<string, string> = { pending: 'ממתין', approved: 'אושר', awaiting_stock: 'ממתין למלאי', loaded: 'נטען', rejected: 'נדחה' }
 const ils = (n: number) => `₪${(Number(n) || 0).toLocaleString('he-IL')}`
 const fmtD = (d: string) => (d ? new Date(d).toLocaleDateString('he-IL') : '')
