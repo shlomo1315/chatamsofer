@@ -200,8 +200,9 @@
 .lin .tools{grid-template-columns:1fr}
 .lin .demo{display:none}
 .lin .q{display:flex;overflow-x:auto;gap:4px}
+.lin .q>div{display:contents}
 .lin .qg{display:none}
-.lin .qi{flex:0 0 auto;width:auto}
+.lin .qi{flex:0 0 auto;width:auto;white-space:nowrap}
 }
 .lin .flt{position:relative}
 .lin .sres{position:absolute;inset-inline-end:0;top:calc(100% + 6px);width:min(360px,92vw);background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.12);z-index:30;max-height:340px;overflow:auto}
