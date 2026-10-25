@@ -246,7 +246,7 @@ export function auditShipping(
 // התעריף המוסכם עם השליחים — "כמה היה צריך להיגבות"
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// 🔴 14.10 (משה כהנא): 1-4 כרכים 30 ₪, 5-8 30 ₪, 9-12 40 ₪, ומעל 12
+// 🔴 14.10 (משה כהנא): 1-4 כרכים 30 ₪, 5-7 30 ₪, 8-12 40 ₪, ומעל 12
 // עוד 10 ₪ לכל 4 כרכים נוספים או חלק מהם (13-16 = 50, 17-20 = 60).
 // לקראת סוף היריד התעריף באתר הועלה זמנית ל-25/35/45, אבל הבקרה והתשלום
 // לשליחים תמיד לפי התעריף הזה. "כמה נגבה בפועל" הוא shipping_agorot
@@ -256,8 +256,8 @@ export function auditShipping(
 // צריכה להשוות לתעריף שסוכם ולא למה שהוגדר באותו רגע.
 export const AGREED_SHIPPING_TIERS: TierInput[] = [
   { min_books: 1, max_books: 4, price_agorot: 3000 },
-  { min_books: 5, max_books: 8, price_agorot: 3000 },
-  { min_books: 9, max_books: 12, price_agorot: 4000 },
+  { min_books: 5, max_books: 7, price_agorot: 3000 },
+  { min_books: 8, max_books: 12, price_agorot: 4000 },
   { min_books: 13, max_books: null, price_agorot: 5000, step_volumes: 4, step_agorot: 1000 },
 ]
 

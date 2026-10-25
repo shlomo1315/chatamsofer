@@ -200,7 +200,7 @@ async function getProblemBooks(): Promise<ProblemBookInfo[]> {
 
 /**
  * המדרגות לבקרת המשלוח בטבלה.
- * 🔴 14.10: התעריף המוסכם (20/30/40 ועוד 10 לכל 4 מעל 12) ולא הטבלה שבהגדרות,
+ * 🔴 14.10: התעריף המוסכם (30/30/40 ועוד 10 לכל 4 מעל 12) ולא הטבלה שבהגדרות,
  * שהועלתה זמנית ל-25/35/45 בסוף היריד. ראו AGREED_SHIPPING_TIERS.
  */
 async function getTiers(): Promise<TierInput[]> {
