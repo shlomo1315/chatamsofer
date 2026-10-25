@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
-import { requireAdmin, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
+import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
 import { cleanExceptionHome, checkReceipt, receiptDisplayName } from '@/lib/recoveryException'
 
-// בית החלמה חריג (אישור מנהל בלבד): היולדת הולכת למקום שאינו ברשימה, משלמת
+// בית החלמה חריג (מנהל ומזכירות): היולדת הולכת למקום שאינו ברשימה, משלמת
 // ומביאה קבלה. שם המקום נשמר ב-recovery_home ומסומן recovery_exception, והקבלה
 // עולה לדלי הפרטי documents תחת maternity-exception/<aidId>/ (בלי מזהה המוטב
 // בנתיב, ולכן הפורטל לא יכול לגשת אליה). הקובץ לא חובה: אפשר לסמן עכשיו
@@ -12,8 +12,8 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 export async function POST(request: Request) {
-  const staff = await requireAdmin()
-  if (!staff) return forbidden('רק מנהל יכול לאשר בית החלמה חריג')
+  const staff = await requirePermission('maternity', 'edit')
+  if (!staff) return forbidden('אין הרשאה לאשר בית החלמה חריג')
   const db = getServiceClient()
   if (!db) return serverMisconfigured()
 

@@ -356,8 +356,8 @@ export default async function MaternityDetailPage(
   const bucket: MaternityBucket = isBucket(stRaw) ? stRaw : 'all'
   const aid = await getAid(id)
   const ben = aid?.beneficiary as Beneficiary | undefined
-  // בית החלמה חריג — מוצג ומנוהל רק למנהל. שם מי שאישר: לתצוגה בלבד, כשל לא חוסם.
-  const isAdmin = staff.role === 'admin'
+  // בית החלמה חריג — מוצג ומנוהל למנהל ולמזכירות (הרשאת עריכה ביולדות). שם מי שאישר: לתצוגה בלבד, כשל לא חוסם.
+  const isAdmin = canEditMaternityDocs
   let exceptionByName: string | null = null
   if (isAdmin && aid?.recovery_exception_by) {
     const supabase = await createClient()
@@ -885,7 +885,7 @@ export default async function MaternityDetailPage(
               </div>
               {/* בית ההחלמה — ניתן להחלפה מהירה ישירות מהכרטסת (גם למזכירות) */}
               <RecoveryHomeEditor aidId={aid.id} current={aid.recovery_home ?? null} />
-              {/* בית החלמה חריג (מחוץ לרשימה, תשלום לפי קבלה) — למנהל בלבד */}
+              {/* בית החלמה חריג (מחוץ לרשימה, תשלום לפי קבלה) — מנהל ומזכירות */}
               {isAdmin && (
                 <RecoveryExceptionPanel aidId={aid.id} currentHome={aid.recovery_home ?? null} info={{
                   active: aid.recovery_exception === true,
