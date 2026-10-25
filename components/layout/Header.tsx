@@ -28,7 +28,7 @@ export default function Header({ user, title }: HeaderProps) {
   }
 
   return (
-    <header className="h-[60px] bg-white/95 backdrop-blur-sm border-b border-zinc-200/80 flex items-center justify-between px-5 flex-shrink-0 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+    <header className="relative z-30 h-[60px] bg-white/95 backdrop-blur-sm border-b border-zinc-200/80 flex items-center justify-between px-5 flex-shrink-0 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
       <div className="flex items-center gap-3">
         {title && <h1 className="text-base font-semibold text-zinc-800">{title}</h1>}
       </div>
