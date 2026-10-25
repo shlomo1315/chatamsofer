@@ -17,10 +17,7 @@ interface Props {
 interface Item { id: QueueId; label: string; count: number | null; warn?: boolean }
 
 export const QUEUE_TITLES: Record<QueueId, { t: string; why: string }> = {
-<<<<<<< HEAD
   generation: { t: 'מיזוג מדורג', why: 'דור אחרי דור, מלמעלה למטה: תצוגה מקדימה, אישור אחד לכל דור, וביטול אוטומטי אם משהו נכשל. רק קבוצות בטוחות.' },
-=======
->>>>>>> origin/main
   safe: { t: 'מיזוג בטוח', why: 'כפילויות זהות לגמרי מרישום מקביל, בלי סיכון. אפשר למזג בבת אחת.' },
   likely: { t: 'כפילויות בסבירות', why: 'צמתים שנראים כפולים. בודקים כל קבוצה ומחליטים: מזג או לא כפול.' },
   parallel: { t: 'רישום מקביל', why: 'משפחות שונות שהוסיפו את אותם דורות. מרכז המיזוגים מציג את האשכולות ואת תוכנית המיזוג.' },
@@ -40,10 +37,7 @@ export default function TreatTab({ data, counts, queue, trunk, onQueue, onClearT
   const s = counts.summary
   const groups: { g: string; items: Item[] }[] = [
     { g: 'מיזוגים', items: [
-<<<<<<< HEAD
       { id: 'generation', label: 'מיזוג מדורג', count: null },
-=======
->>>>>>> origin/main
       { id: 'safe', label: 'מיזוג בטוח', count: counts.parallelGroups.filter(p => p.safe).length, warn: true },
       { id: 'likely', label: 'כפילויות בסבירות', count: s ? s.dup.groups : null, warn: true },
       { id: 'parallel', label: 'רישום מקביל', count: s ? s.parallel.groups : null, warn: true },

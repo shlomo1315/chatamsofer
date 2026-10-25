@@ -2358,10 +2358,7 @@ export default function LineagePage() {
   }
   const renderQueue = (q: QueueId, ctx: { onLocate: (id: string) => void; onQueue: (q: QueueId) => void }): React.ReactNode => {
     switch (q) {
-<<<<<<< HEAD
       case 'generation': return <GenerationMergePanel onDone={afterMerge} />
-=======
->>>>>>> origin/main
       case 'safe': return <SafeMergePanel onDone={afterMerge} />
       case 'likely': return <DupReviewPanel onDone={afterMerge} />
       case 'parallel': return <MergeCenterPanel onClose={() => ctx.onQueue('safe')} onDone={afterMerge} />
@@ -2372,11 +2369,7 @@ export default function LineagePage() {
       case 'sugg': return <SuggestionsInbox onApplied={afterMerge} />
       case 'fam': return (
         <ControlCenterPanel reloadSignal={controlReload} onLocate={ctx.onLocate}
-<<<<<<< HEAD
           onOpenTool={t => ctx.onQueue(t === 'dupReview' ? 'likely' : t === 'mergeCenter' ? 'parallel' : t === 'safeMerge' ? 'safe' : t === 'generationMerge' ? 'generation'
-=======
-          onOpenTool={t => ctx.onQueue(t === 'dupReview' ? 'likely' : t === 'mergeCenter' ? 'parallel' : t === 'safeMerge' ? 'safe'
->>>>>>> origin/main
             : t === 'unlinked' ? 'unlinked' : t === 'ghosts' ? 'ghost' : t === 'selfDups' ? 'self' : 'audit')} />
       )
       case 'unlinked': return <UnlinkedPanel onDone={() => { void softRefresh() }} />
