@@ -49,6 +49,8 @@ export interface IssueView {
   delivered_count: number
   bounced_count: number
   complained_count: number
+  clicked_count: number
+  unsubscribed_count: number
 }
 
 const SOURCES: Record<SubscriberView['source'], string> = { web: 'אתר', nedarim: 'נדרים פלוס', manual: 'ידני', import: 'ייבוא' }

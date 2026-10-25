@@ -6,10 +6,10 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Activity, BarChart3, Info, Loader2, RefreshCw } from 'lucide-react'
+import { Activity, BarChart3, Download, Info, Loader2, RefreshCw, Search } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { IssueStats, StatKey } from '@/lib/gilyonotStats'
-import { Card, CardHeader, Stat } from './ui'
+import { Badge, Card, CardHeader, Stat, input } from './ui'
 import type { IssueView } from './GilyonotClient'
 
 const num = (n: number) => n.toLocaleString('he-IL')
@@ -21,7 +21,9 @@ export const SERIES: { key: StatKey; label: string; color: string }[] = [
   { key: 'sent', label: 'נשלחו', color: '#94a3b8' },
   { key: 'delivered', label: 'נמסרו', color: '#2563eb' },
   { key: 'opened', label: 'פתחו', color: '#0891b2' },
+  { key: 'clicked', label: 'הקליקו', color: '#7c3aed' },
   { key: 'downloaded', label: 'הורידו', color: '#059669' },
+  { key: 'unsubscribed', label: 'הסירו', color: '#d97706' },
   { key: 'bounced', label: 'חזרו', color: '#e11d48' },
 ]
 
@@ -64,6 +66,8 @@ export function IssueAnalytics({ issue, base }: { issue: IssueView; base: string
     { label: 'נשלחו', value: c.sent, of: data.total, hint: `מתוך ${num(data.total)} נמענים`, color: '#94a3b8' },
     { label: 'נמסרו לתיבה', value: c.delivered, of: sent, hint: 'אישור מסירה מ-Resend', color: '#2563eb' },
     { label: 'פתחו', value: c.opened, of: sent, hint: 'הערכה, לפי טעינת תמונה', color: '#0891b2' },
+    { label: 'הקליקו', value: c.clicked, of: sent, hint: 'לחצו על קישור במייל', color: '#7c3aed' },
+    { label: 'הסירו את עצמם', value: c.unsubscribed, of: sent, hint: 'לחצו על הסרה מהרשימה', color: '#d97706' },
     ...(c.downloaded > 0 ? [{ label: 'הורידו (גיליונות ישנים)', value: c.downloaded, of: sent, hint: 'לחצו על קישור ההורדה', color: '#059669' }] : []),
     { label: 'חזרו', value: c.bounced, of: sent, hint: 'כתובת לא קיימת או תיבה מלאה', color: '#e11d48' },
   ] : []
@@ -89,6 +93,12 @@ export function IssueAnalytics({ issue, base }: { issue: IssueView; base: string
             <Stat label="נמסרו" value={num(c.delivered)} sub={`${rate(c.delivered, c.sent)}%`} />
             <Stat label="פתחו" value={num(c.opened)} sub={`${rate(c.opened, c.sent)}%${c.downloaded > 0 ? ` · ${num(c.downloaded)} הורידו` : ''}`} />
             <Stat label="חזרו / ספאם / נכשלו" value={`${num(c.bounced)} / ${num(c.complained)} / ${num(data.failed)}`} tone={c.bounced + c.complained + data.failed ? 'rose' : undefined} sub={`${rate(c.bounced, c.sent)}% חזרו`} />
+          </dl>
+          <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Stat label="שיעור פתיחה" value={`${rate(c.opened, c.sent)}%`} sub={`${num(c.opened)} נמענים`} />
+            <Stat label="הקליקו" value={num(c.clicked)} sub={`${rate(c.clicked, c.sent)}%`} />
+            <Stat label="הסירו את עצמם" value={num(c.unsubscribed)} sub={`${rate(c.unsubscribed, c.sent)}%`} tone={c.unsubscribed ? 'rose' : undefined} />
+            <Stat label="עוד לא פתחו" value={num(Math.max(0, c.sent - c.opened))} sub={`${rate(Math.max(0, c.sent - c.opened), c.sent)}%`} />
           </dl>
 
           <div className="grid gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
@@ -137,6 +147,7 @@ export function IssueAnalytics({ issue, base }: { issue: IssueView; base: string
           )}
         </>
       )}
+      {c && c.sent > 0 && <Recipients base={base} />}
       {!c && !err && <p className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" aria-hidden />טוען נתונים...</p>}
     </div>
   )
@@ -156,7 +167,7 @@ export function IssuesDashboard({ rows }: { rows: IssueView[] }) {
   const sent = sum('sent_count')
   const chart = done.map(r => ({
     name: r.parasha, sent: r.sent_count, delivered: r.delivered_count, opened: r.opened_count,
-    downloaded: r.downloaded_count, bounced: r.bounced_count,
+    clicked: r.clicked_count, downloaded: r.downloaded_count, unsubscribed: r.unsubscribed_count, bounced: r.bounced_count,
   }))
 
   return (
@@ -167,6 +178,7 @@ export function IssuesDashboard({ rows }: { rows: IssueView[] }) {
         <Stat label="נשלחו" value={num(sent)} />
         <Stat label="שיעור פתיחה" value={`${rate(sum('opened_count'), sent)}%`} />
         <Stat label="שיעור מסירה" value={`${rate(sum('delivered_count'), sent)}%`} />
+        <Stat label="הקליקו / הסירו" value={`${num(sum('clicked_count'))} / ${num(sum('unsubscribed_count'))}`} sub={`${rate(sum('clicked_count'), sent)}% / ${rate(sum('unsubscribed_count'), sent)}%`} />
         <Stat label="חזרו" value={num(sum('bounced_count'))} sub={`${rate(sum('bounced_count'), sent)}%`} tone={sum('bounced_count') ? 'rose' : undefined} />
       </dl>
       <div dir="ltr" className="mt-5 h-72">
@@ -182,5 +194,93 @@ export function IssuesDashboard({ rows }: { rows: IssueView[] }) {
         </ResponsiveContainer>
       </div>
     </Card>
+  )
+}
+
+// ─── פירוט לפי נמען ──────────────────────────────────────────────────────────
+
+interface RecipientRow {
+  email: string; status: 'pending' | 'sent' | 'failed'
+  sent_at: string | null; delivered_at: string | null; opened_at: string | null; open_count: number
+  clicked_at: string | null; click_count: number; bounced_at: string | null; unsubscribed_at: string | null
+}
+
+const RFILTERS = [
+  { key: '', label: 'כולם' }, { key: 'opened', label: 'פתחו' }, { key: 'unopened', label: 'לא פתחו' },
+  { key: 'clicked', label: 'הקליקו' }, { key: 'bounced', label: 'חזרו' }, { key: 'unsubscribed', label: 'הסירו' }, { key: 'failed', label: 'נכשלו' },
+]
+const fmtShort = (s: string | null) => (s ? new Date(s).toLocaleString('he-IL', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }) : '')
+
+function Recipients({ base }: { base: string }) {
+  const [f, setF] = useState('')
+  const [q, setQ] = useState('')
+  const [page, setPage] = useState(0)
+  const [d, setD] = useState<{ rows: RecipientRow[]; total: number; size: number } | null>(null)
+  const [err, setErr] = useState('')
+  const qs = (extra = '') => `f=${f}&q=${encodeURIComponent(q)}${extra}`
+
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`${base}/recipients?${qs(`&page=${page}`)}`, { cache: 'no-store' })
+        const j = await res.json()
+        if (!res.ok) throw new Error(j.error || 'טעינה נכשלה')
+        setD(j); setErr('')
+      } catch (e) { setErr(e instanceof Error ? e.message : 'טעינה נכשלה') }
+    }, q ? 300 : 0)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [base, f, q, page])
+
+  const pages = d ? Math.max(1, Math.ceil(d.total / d.size)) : 1
+  return (
+    <div className="space-y-3 border-t border-slate-100 pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-slate-800">פירוט לפי נמען{d ? ` (${num(d.total)})` : ''}</h3>
+        <a href={`${base}/recipients?${qs('&csv=1')}`} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs text-slate-600 hover:bg-slate-100"><Download className="h-3.5 w-3.5" aria-hidden />ייצוא לאקסל</a>
+      </div>
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label="סינון נמענים">
+        {RFILTERS.map(x => (
+          <button key={x.key} type="button" onClick={() => { setF(x.key); setPage(0) }} aria-pressed={f === x.key}
+            className={`min-h-9 rounded-lg px-3 text-xs font-medium ${f === x.key ? 'bg-[#2563eb] text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>{x.label}</button>
+        ))}
+      </div>
+      <div className="relative">
+        <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
+        <input className={`${input} ps-9`} dir="ltr" placeholder="חיפוש לפי מייל" aria-label="חיפוש לפי מייל" value={q} onChange={e => { setQ(e.target.value); setPage(0) }} />
+      </div>
+      {err && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800">{err}</p>}
+      {d && (d.rows.length ? (
+        <div className="overflow-x-auto rounded-xl ring-1 ring-inset ring-slate-900/[0.06]">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-xs text-slate-500"><tr>
+              <th className="px-3 py-2 text-start font-medium">מייל</th><th className="px-3 py-2 text-start font-medium">מצב</th>
+              <th className="px-3 py-2 text-start font-medium">נפתח</th><th className="px-3 py-2 text-start font-medium">הקליק</th>
+            </tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {d.rows.map(r => (
+                <tr key={r.email}>
+                  <td className="px-3 py-2" dir="ltr">{r.email}</td>
+                  <td className="px-3 py-2"><div className="flex flex-wrap gap-1">
+                    {r.status === 'failed' ? <Badge tone="rose">נכשל</Badge> : r.status === 'pending' ? <Badge>ממתין</Badge>
+                      : r.bounced_at ? <Badge tone="rose">חזר</Badge> : r.delivered_at ? <Badge tone="green">נמסר</Badge> : <Badge>נשלח</Badge>}
+                    {r.unsubscribed_at && <Badge tone="amber">הסיר</Badge>}
+                  </div></td>
+                  <td className="px-3 py-2 tabular-nums text-slate-700">{r.opened_at ? `${fmtShort(r.opened_at)}${r.open_count > 1 ? ` · ${r.open_count}×` : ''}` : '—'}</td>
+                  <td className="px-3 py-2 tabular-nums text-slate-700">{r.clicked_at ? `${fmtShort(r.clicked_at)}${r.click_count > 1 ? ` · ${r.click_count}×` : ''}` : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : <p className="rounded-xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">אין נמענים תואמים.</p>)}
+      {d && pages > 1 && (
+        <div className="flex items-center justify-between text-xs text-slate-600">
+          <button type="button" disabled={page === 0} onClick={() => setPage(p => p - 1)} className="min-h-9 rounded-lg px-3 hover:bg-slate-100 disabled:opacity-40">הקודם</button>
+          <span>עמוד {page + 1} מתוך {pages}</span>
+          <button type="button" disabled={page + 1 >= pages} onClick={() => setPage(p => p + 1)} className="min-h-9 rounded-lg px-3 hover:bg-slate-100 disabled:opacity-40">הבא</button>
+        </div>
+      )}
+    </div>
   )
 }

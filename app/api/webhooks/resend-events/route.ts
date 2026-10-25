@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
   }
 
   // ── גיליונות: מסירה, חזרה וספאם לכל משלוח. פתיחה והורדה נספרות אצלנו (פיקסל וקישור) ──
-  if (!recipient && (type === 'email.delivered' || type === 'email.bounced' || type === 'email.complained')) {
+  if (!recipient && (type === 'email.delivered' || type === 'email.bounced' || type === 'email.complained' || type === 'email.clicked')) {
     await trackGilyonDelivery(db, resendId, type, data)
   }
 
@@ -116,15 +116,17 @@ export async function POST(request: NextRequest) {
 
 async function trackGilyonDelivery(db: SupabaseClient, resendId: string, type: string, data: Record<string, unknown>) {
   const { data: delivery } = await db.from('gilyonot_deliveries')
-    .select('id, subscriber_id').eq('resend_id', resendId).maybeSingle()
+    .select('id, subscriber_id, click_count').eq('resend_id', resendId).maybeSingle()
   if (!delivery) return
   const now = new Date().toISOString()
   const bounceType = String((data.bounce as Record<string, unknown> | undefined)?.type ?? '')
   const patch: Record<string, unknown> =
     type === 'email.delivered' ? { delivered_at: now }
+    : type === 'email.clicked' ? { clicked_at: now, click_count: (delivery.click_count ?? 0) + 1 }
     : type === 'email.bounced' ? { bounced_at: now, bounce_type: bounceType.slice(0, 40) || null }
     : { complained_at: now }
   await db.from('gilyonot_deliveries').update(patch).eq('id', delivery.id)
+  if (type === 'email.clicked') return
 
   // כמו בניוזלטר: כתובת שחזרה לצמיתות או שסימנה ספאם יוצאת מהרשימה, כדי לשמור על הדומיין.
   const hard = type === 'email.complained' || (type === 'email.bounced' && /^(hard|permanent)$/i.test(bounceType))

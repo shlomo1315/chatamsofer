@@ -18,7 +18,7 @@ describe('buildIssueStats', () => {
       row({ status: 'failed' }),
     ]
     const s = buildIssueStats(rows, new Date('2026-10-20T10:15:00Z'))
-    expect(s.counts).toEqual({ sent: 2, delivered: 1, opened: 1, downloaded: 1, bounced: 1, complained: 0 })
+    expect(s.counts).toEqual({ sent: 2, delivered: 1, opened: 1, clicked: 0, downloaded: 1, unsubscribed: 0, bounced: 1, complained: 0 })
     expect(s.failed).toBe(1)
     expect(s.bucket).toBe('hour')
     expect(s.timeline.map(p => p.t)).toEqual(['2026-10-20T08:00:00.000Z', '2026-10-20T09:00:00.000Z', '2026-10-20T10:00:00.000Z'])

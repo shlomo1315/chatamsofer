@@ -11,9 +11,11 @@ export interface DeliveryStatRow {
   downloaded_at: string | null
   bounced_at: string | null
   complained_at: string | null
+  clicked_at?: string | null
+  unsubscribed_at?: string | null
 }
 
-export const STAT_KEYS = ['sent', 'delivered', 'opened', 'downloaded', 'bounced', 'complained'] as const
+export const STAT_KEYS = ['sent', 'delivered', 'opened', 'clicked', 'downloaded', 'unsubscribed', 'bounced', 'complained'] as const
 export type StatKey = typeof STAT_KEYS[number]
 
 export interface IssueStats {
@@ -31,6 +33,7 @@ const DAY = 24 * HOUR
 const COL: Record<StatKey, keyof DeliveryStatRow> = {
   sent: 'sent_at', delivered: 'delivered_at', opened: 'opened_at',
   downloaded: 'downloaded_at', bounced: 'bounced_at', complained: 'complained_at',
+  clicked: 'clicked_at', unsubscribed: 'unsubscribed_at',
 }
 
 export function buildIssueStats(rows: DeliveryStatRow[], now: Date = new Date()): IssueStats {

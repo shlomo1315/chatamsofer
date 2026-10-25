@@ -20,7 +20,7 @@ export async function GET(_r: Request, { params }: Ctx) {
   const rows: DeliveryStatRow[] = []
   for (let offset = 0; ; offset += PAGE) {
     const { data, error } = await db.from('gilyonot_deliveries')
-      .select('status, sent_at, delivered_at, opened_at, downloaded_at, bounced_at, complained_at')
+      .select('status, sent_at, delivered_at, opened_at, downloaded_at, bounced_at, complained_at, clicked_at, unsubscribed_at')
       .eq('issue_id', issue.id).order('id').range(offset, offset + PAGE - 1)
     if (error) return NextResponse.json({ error: 'טעינת הנתונים נכשלה' }, { status: 500 })
     rows.push(...(data as DeliveryStatRow[]))
