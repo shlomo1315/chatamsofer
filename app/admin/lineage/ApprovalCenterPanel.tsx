@@ -14,7 +14,7 @@
 //   · מאושרים  — "מי כבר מאושר": הרשימה המדויקת, כולל מקור האישור.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   Loader2, RefreshCw, Check, X, ShieldCheck, ListChecks, BarChart3, ChevronDown,
   AlertTriangle, ChevronLeft, Search, Users, ExternalLink,
@@ -80,7 +80,12 @@ const STATUS_META: Record<string, { label: string; bg: string; fg: string; ring:
 type Tab = 'overview' | 'queue' | 'approved'
 
 export default function ApprovalCenterPanel() {
-  const toast = useToast()
+  const toastCtx = useToast()
+  // ⚠️ אובייקט ה-toast מתחלף בכל רינדור של הספק. אם load תלוי בו, שגיאת טעינה
+  // מציגה toast, מחליפה אותו, מפעילה את ה-effect שוב, וחוזר חלילה: ספינר לנצח.
+  const toastRef = useRef(toastCtx)
+  useEffect(() => { toastRef.current = toastCtx })
+  const toast = toastCtx
   const [tab, setTab] = useState<Tab>('overview')
   const [summary, setSummary] = useState<Summary | null>(null)
   const [byGeneration, setByGeneration] = useState<GenRow[]>([])
@@ -124,9 +129,9 @@ export default function ApprovalCenterPanel() {
         setPicked(new Set(pend.map(c => c.id)))
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'טעינה נכשלה')
+      toastRef.current.error(e instanceof Error ? e.message : 'טעינה נכשלה')
     } finally { setLoading(false) }
-  }, [toast])
+  }, [])
 
   // ⚠️ טעינה אסינכרונית בעלייה — הכלל מסמן גם את הדפוס התקין הזה.
   // eslint-disable-next-line react-hooks/set-state-in-effect

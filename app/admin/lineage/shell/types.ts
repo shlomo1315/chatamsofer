@@ -3,7 +3,7 @@ import type { ControlSummary, ParallelGroup } from '@/lib/lineageControlCenter'
 export type ShellTab = 'tree' | 'fan' | 'work' | 'set'
 
 export type QueueId =
-  | 'safe' | 'likely' | 'parallel' | 'self' | 'kids'
+  | 'generation' | 'safe' | 'likely' | 'parallel' | 'self' | 'kids'
   | 'approve' | 'requests' | 'sugg' | 'fam'
   | 'unlinked' | 'ghost' | 'audit' | 'cases'
 
