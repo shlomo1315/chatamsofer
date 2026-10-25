@@ -11,6 +11,7 @@ import DuplicatesPanel from './DuplicatesPanel'
 import TreeHealthPanel from './TreeHealthPanel'
 import CaseCenterPanel from './CaseCenterPanel'
 import SafeMergePanel from './SafeMergePanel'
+import GenerationMergePanel from './GenerationMergePanel'
 import DupReviewPanel from './DupReviewPanel'
 import MergeCenterPanel from './MergeCenterPanel'
 import UnlinkedPanel from './UnlinkedPanel'
@@ -2357,6 +2358,7 @@ export default function LineagePage() {
   }
   const renderQueue = (q: QueueId, ctx: { onLocate: (id: string) => void; onQueue: (q: QueueId) => void }): React.ReactNode => {
     switch (q) {
+      case 'generation': return <GenerationMergePanel onDone={afterMerge} />
       case 'safe': return <SafeMergePanel onDone={afterMerge} />
       case 'likely': return <DupReviewPanel onDone={afterMerge} />
       case 'parallel': return <MergeCenterPanel onClose={() => ctx.onQueue('safe')} onDone={afterMerge} />
@@ -2367,7 +2369,7 @@ export default function LineagePage() {
       case 'sugg': return <SuggestionsInbox onApplied={afterMerge} />
       case 'fam': return (
         <ControlCenterPanel reloadSignal={controlReload} onLocate={ctx.onLocate}
-          onOpenTool={t => ctx.onQueue(t === 'dupReview' ? 'likely' : t === 'mergeCenter' ? 'parallel' : t === 'safeMerge' ? 'safe'
+          onOpenTool={t => ctx.onQueue(t === 'dupReview' ? 'likely' : t === 'mergeCenter' ? 'parallel' : t === 'safeMerge' ? 'safe' : t === 'generationMerge' ? 'generation'
             : t === 'unlinked' ? 'unlinked' : t === 'ghosts' ? 'ghost' : t === 'selfDups' ? 'self' : 'audit')} />
       )
       case 'unlinked': return <UnlinkedPanel onDone={() => { void softRefresh() }} />
@@ -2693,6 +2695,7 @@ export default function LineagePage() {
                 if (t === 'dupReview') setShowDupReview(true)
                 else if (t === 'mergeCenter') setShowMergeCenter(true)
                 else if (t === 'safeMerge') setShowSafeMerge(true)
+                else if (t === 'generationMerge') setLegacy(false)
                 else if (t === 'unlinked') setShowUnlinked(true)
                 else if (t === 'ghosts') setShowGhosts(true)
                 else if (t === 'selfDups') setShowSelfDups(true)
