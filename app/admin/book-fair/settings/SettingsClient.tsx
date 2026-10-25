@@ -1,10 +1,8 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, Plus, Trash2, Check, AlertTriangle, MapPin, Truck, Power, CreditCard, Phone } from 'lucide-react'
-import type { BookFairCity, BookFairShippingTier } from '@/types/bookFair'
-import { fmtAgorot, agorotToShekels } from '@/lib/bookFairPricing'
-import { validateTiers, resolveShippingTier, tierLabel, agreedShippingByRates, DEFAULT_AGREED_RATES, type TierInput } from '@/lib/bookFairShipping'
+import { Loader2, Plus, Trash2, AlertTriangle, MapPin, Truck, Power, CreditCard, Phone } from 'lucide-react'
+import type { BookFairCity } from '@/types/bookFair'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useCan } from '@/components/StaffPermissions'
 import PaymentSettings from './PaymentSettings'
@@ -31,7 +29,6 @@ const TABS = [
 
 type TabId = typeof TABS[number]['id']
 
-type TierRow = { min_books: string; max_books: string; price: string; step_volumes: string; step_price: string }
 
 /**
  * ISO → הערך שתגית datetime-local מצפה לו (YYYY-MM-DDTHH:mm), בשעון מקומי.
@@ -47,8 +44,8 @@ function toLocalInput(iso: string | null): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
-export default function SettingsClient({ cities, tiers, open, openAt, mockPay }: {
-  cities: BookFairCity[]; tiers: BookFairShippingTier[]; open: boolean
+export default function SettingsClient({ cities, open, openAt, mockPay }: {
+  cities: BookFairCity[]; open: boolean
   /** מועד הפתיחה האוטומטית (ISO), או null אם לא נקבע. */
   openAt: string | null
   /** הסליקה המחוברת מדומה — פתיחת היריד תתקבל רק אחרי אישור מפורש. */
@@ -58,7 +55,6 @@ export default function SettingsClient({ cities, tiers, open, openAt, mockPay }:
   const { confirm, confirmDialog } = useConfirm()
   const canEdit = useCan('book_fair', 'edit')
   const [tab, setTab] = useState<TabId>('general')
-  const [agreedRates, setAgreedRates] = useState<number[]>(DEFAULT_AGREED_RATES)
   const [phoneTab, setPhoneTab] = useState<'messages' | 'books'>('messages')
 
   const [isOpen, setIsOpen] = useState(open)
@@ -81,31 +77,6 @@ export default function SettingsClient({ cities, tiers, open, openAt, mockPay }:
 
   // ── ערים ──
   const [newCity, setNewCity] = useState({ name: '', phone_code: '' })
-
-  // ── מדרגות ──
-  // ⚠️ אתחול עצל: המרה מאגורות לשקלים בכל רינדור הייתה מאבדת את מה
-  // שהמשתמש הקליד באמצע העריכה.
-  const [rows, setRows] = useState<TierRow[]>(() =>
-    tiers.length
-      ? tiers.map(t => ({
-          min_books: String(t.min_books),
-          max_books: t.max_books === null ? '' : String(t.max_books),
-          price: String(agorotToShekels(t.price_agorot)),
-          step_volumes: t.step_volumes == null ? '' : String(t.step_volumes),
-          step_price: t.step_agorot == null ? '' : String(agorotToShekels(t.step_agorot)),
-        }))
-      : [{ min_books: '1', max_books: '', price: '', step_volumes: '', step_price: '' }]
-  )
-
-  // ולידציה חיה — המשתמש רואה את הבעיה תוך כדי הקלדה ולא אחרי שמירה
-  const parsed: TierInput[] = rows.map(r => ({
-    min_books: Number(r.min_books),
-    max_books: r.max_books.trim() === '' ? null : Number(r.max_books),
-    price_agorot: Math.round((Number(r.price) || 0) * 100),
-    step_volumes: r.step_volumes.trim() === '' ? null : Number(r.step_volumes),
-    step_agorot: r.step_price.trim() === '' ? null : Math.round((Number(r.step_price) || 0) * 100),
-  }))
-  const check = validateTiers(parsed)
 
   async function call(url: string, init: RequestInit, tag: string) {
     setBusy(tag); setError('')
@@ -177,26 +148,6 @@ export default function SettingsClient({ cities, tiers, open, openAt, mockPay }:
     if (!ok) return
     await call(`/api/admin/book-fair/cities?id=${c.id}`, { method: 'DELETE' }, `del-${c.id}`)
   }
-
-  async function saveTiers() {
-    if (!check.ok) return
-    await call('/api/admin/book-fair/shipping-tiers', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        tiers: rows.map(r => ({
-          min_books: Number(r.min_books),
-          max_books: r.max_books.trim() === '' ? null : Number(r.max_books),
-          price: r.price,
-          step_volumes: r.step_volumes.trim() === '' ? null : Number(r.step_volumes),
-          step_price: r.step_price,
-        })),
-      }),
-    }, 'tiers')
-  }
-
-  const setRow = (i: number, k: keyof TierRow, v: string) =>
-    setRows(rs => rs.map((r, j) => j === i ? { ...r, [k]: v } : r))
 
   return (
     <div className="flex flex-col gap-5">
@@ -328,7 +279,7 @@ export default function SettingsClient({ cities, tiers, open, openAt, mockPay }:
 
       {/* ── ערי משלוח ── */}
       <div hidden={tab !== 'shipping'}>
-        <AgreedRates canEdit={canEdit} onSaved={setAgreedRates} />
+        <AgreedRates canEdit={canEdit} />
       </div>
 
       <section hidden={tab !== 'shipping'} className="rounded-2xl border border-slate-200 bg-white p-5">
@@ -423,123 +374,6 @@ export default function SettingsClient({ cities, tiers, open, openAt, mockPay }:
               הוספה
             </button>
           </div>
-        )}
-      </section>
-
-      {/* ── מדרגות משלוח ── */}
-      <section hidden={tab !== 'shipping'} className="rounded-2xl border border-slate-200 bg-white p-5">
-        <h2 className="mb-1 flex items-center gap-2 font-semibold text-slate-900">
-          <Truck size={17} /> תעריף משלוח
-        </h2>
-        <p className="mb-4 text-sm text-slate-500">
-          המחיר נקבע לפי מספר ה<strong>כרכים</strong> בהזמנה — סדרה בת 6 כרכים נספרת כ-6. איסוף עצמי תמיד ללא עלות.
-        </p>
-
-        <div className="mb-3 flex flex-col gap-2">
-          {rows.map((r, i) => (
-            <div key={i} className="flex flex-wrap items-end gap-2">
-              <label className="flex w-24 flex-col gap-1">
-                <span className="text-xs text-slate-500">מ-</span>
-                <input value={r.min_books} onChange={e => setRow(i, 'min_books', e.target.value)}
-                  disabled={!canEdit} dir="ltr" inputMode="numeric"
-                  className="rounded-xl border border-slate-200 px-3 py-2 text-sm" />
-              </label>
-              <label className="flex w-24 flex-col gap-1">
-                <span className="text-xs text-slate-500">עד</span>
-                <input value={r.max_books} onChange={e => setRow(i, 'max_books', e.target.value)}
-                  disabled={!canEdit} dir="ltr" inputMode="numeric" placeholder="ומעלה"
-                  className="rounded-xl border border-slate-200 px-3 py-2 text-sm" />
-              </label>
-              <label className="flex w-28 flex-col gap-1">
-                <span className="text-xs text-slate-500">מחיר ₪</span>
-                <input value={r.price} onChange={e => setRow(i, 'price', e.target.value)}
-                  disabled={!canEdit} dir="ltr" inputMode="decimal"
-                  className="rounded-xl border border-slate-200 px-3 py-2 text-sm" />
-              </label>
-              {/* ⚠️ תוספת מדורגת — רק במדרגה הפתוחה ("ומעלה"). בלעדיה
-                  הזמנה של 90 כרכים משלמת בדיוק כמו הזמנה של 14. */}
-              {r.max_books.trim() === '' && (
-                <>
-                  <span className="pb-2 text-sm text-slate-400">+</span>
-                  <label className="flex w-28 flex-col gap-1">
-                    <span className="text-xs text-slate-500">₪ לכל</span>
-                    <input value={r.step_price} onChange={e => setRow(i, 'step_price', e.target.value)}
-                      disabled={!canEdit} dir="ltr" inputMode="decimal" placeholder="ללא"
-                      className="rounded-xl border border-slate-200 px-3 py-2 text-sm" />
-                  </label>
-                  <label className="flex w-24 flex-col gap-1">
-                    <span className="text-xs text-slate-500">כרכים</span>
-                    <input value={r.step_volumes} onChange={e => setRow(i, 'step_volumes', e.target.value)}
-                      disabled={!canEdit} dir="ltr" inputMode="numeric" placeholder="ללא"
-                      className="rounded-xl border border-slate-200 px-3 py-2 text-sm" />
-                  </label>
-                </>
-              )}
-              <span className="pb-2 text-sm text-slate-400">{tierLabel(parsed[i])} כרכים</span>
-              {canEdit && rows.length > 1 && (
-                <button
-                  onClick={() => setRows(rs => rs.filter((_, j) => j !== i))}
-                  className="mb-1 rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                  title="הסרת מדרגה"
-                >
-                  <Trash2 size={15} />
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {canEdit && (
-          <button
-            onClick={() => setRows(rs => [...rs, { min_books: '', max_books: '', price: '', step_volumes: '', step_price: '' }])}
-            className="mb-4 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
-          >
-            <Plus size={14} /> מדרגה נוספת
-          </button>
-        )}
-
-        {/* 🔴 ולידציה חיה: פער בטבלה אינו מייצר שגיאה — הוא פשוט מונע
-            מהלקוח להשלים הזמנה, בלי שום הסבר על המסך שלו. */}
-        {!check.ok ? (
-          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4">
-            <p className="mb-1 flex items-center gap-1.5 text-sm font-medium text-red-900">
-              <AlertTriangle size={15} /> יש לתקן לפני שמירה
-            </p>
-            <ul className="text-sm text-red-800">
-              {check.errors.map((e, i) => <li key={i}>· {e}</li>)}
-            </ul>
-          </div>
-        ) : (
-          <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-            <p className="mb-2 flex items-center gap-1.5 text-sm font-medium text-emerald-900">
-              <Check size={15} /> תצוגה מקדימה
-            </p>
-            <div className="flex flex-wrap gap-2 text-sm text-emerald-800">
-              {/* ⚠️ 14.10: הדוגמאות של משה, כדי שמדרגה פתוחה במחיר הלא נכון
-                  (13 ומעלה ב-40 במקום 50) תיראה מיד. בכתום: שונה מהתעריף
-                  המוסכם עם השליחים. */}
-              {[4, 8, 12, 13, 14, 16, 17].map(n => {
-                const p = resolveShippingTier(n, parsed)
-                const agreed = agreedShippingByRates(n, agreedRates)
-                return (
-                  <span key={n} className={`rounded-lg px-2.5 py-1 ${p !== agreed ? 'bg-amber-100 text-amber-900' : 'bg-white/70'}`}
-                    title={p !== agreed && agreed !== null ? `בתעריף המוסכם: ${fmtAgorot(agreed)}` : undefined}>
-                    {n} כרכים → {p === null ? '—' : p === 0 ? 'חינם' : fmtAgorot(p)}
-                  </span>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {canEdit && (
-          <button
-            onClick={saveTiers}
-            disabled={!!busy || !check.ok}
-            className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-40"
-          >
-            {busy === 'tiers' ? <Loader2 size={15} className="animate-spin" /> : 'שמירת התעריפים'}
-          </button>
         )}
       </section>
 
