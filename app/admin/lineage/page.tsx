@@ -18,6 +18,7 @@ import MergePlanModal, { type PlanResp as MergePlanResp } from './MergePlanModal
 import FamilyRequestsPanel from './FamilyRequestsPanel'
 import ApprovalCenterPanel from './ApprovalCenterPanel'
 import TreeAuditPanel from './TreeAuditPanel'
+import ControlCenterPanel, { type ControlTool } from './ControlCenterPanel'
 import CleanChildrenPanel from './CleanChildrenPanel'
 import GhostChildrenPanel from './GhostChildrenPanel'
 import SelfDuplicatesPanel from './SelfDuplicatesPanel'
@@ -1760,7 +1761,7 @@ export default function LineagePage() {
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<View>('tree')
   /** אזור העבודה שמעל העץ — אישורים או בקשות משפחות. */
-  const [workTab, setWorkTab] = useState<'approvals' | 'requests' | 'audit'>('approvals')
+  const [workTab, setWorkTab] = useState<'approvals' | 'requests' | 'audit' | 'control'>('approvals')
   const [modal, setModal] = useState<ModalState>(null)
   const [formName, setFormName] = useState('')
   const [formRelation, setFormRelation] = useState<'son' | 'son_in_law' | null>(null)
@@ -1887,6 +1888,7 @@ export default function LineagePage() {
   const [showHealth, setShowHealth] = useState(false)
   const [showCases, setShowCases] = useState(false)
   const [showSafeMerge, setShowSafeMerge] = useState(false)
+  const [controlReload, setControlReload] = useState(0)
   const [showDupReview, setShowDupReview] = useState(false)
   const [showMergeCenter, setShowMergeCenter] = useState(false)
   const [showUnlinked, setShowUnlinked] = useState(false)
@@ -2586,6 +2588,7 @@ export default function LineagePage() {
               { v: 'approvals' as const, l: 'מרכז האישורים' },
               { v: 'requests' as const, l: 'בקשות משפחות' },
               { v: 'audit' as const, l: 'ביקורת תקינות' },
+              { v: 'control' as const, l: 'מרכז בקרה' },
             ]).map(o => (
               <button key={o.v} onClick={() => setWorkTab(o.v)}
                 className={`rounded-lg border px-3 py-1.5 text-xs font-bold transition-all ${
@@ -2598,15 +2601,30 @@ export default function LineagePage() {
           {workTab === 'approvals' && <ApprovalCenterPanel />}
           {workTab === 'requests' && <FamilyRequestsPanel />}
           {workTab === 'audit' && <TreeAuditPanel onLocate={(id) => { setView('tree'); handleLocate([id]) }} />}
+          {workTab === 'control' && (
+            <ControlCenterPanel
+              reloadSignal={controlReload}
+              onLocate={(id) => { setView('tree'); handleLocate([id]) }}
+              onOpenTool={(t: ControlTool) => {
+                if (t === 'dupReview') setShowDupReview(true)
+                else if (t === 'mergeCenter') setShowMergeCenter(true)
+                else if (t === 'safeMerge') setShowSafeMerge(true)
+                else if (t === 'unlinked') setShowUnlinked(true)
+                else if (t === 'ghosts') setShowGhosts(true)
+                else if (t === 'selfDups') setShowSelfDups(true)
+                else setShowHealth(true)
+              }}
+            />
+          )}
         </div>
       )}
 
-      {showDupReview && <DupReviewPanel onDone={() => { void softRefresh() }} />}
-      {showSafeMerge && <SafeMergePanel onDone={() => { void softRefresh() }} />}
+      {showDupReview && <DupReviewPanel onDone={() => { void softRefresh(); setControlReload(n => n + 1) }} />}
+      {showSafeMerge && <SafeMergePanel onDone={() => { void softRefresh(); setControlReload(n => n + 1) }} />}
       {showMergeCenter && (
         <MergeCenterPanel
           onClose={() => setShowMergeCenter(false)}
-          onDone={() => { void softRefresh() }}
+          onDone={() => { void softRefresh(); setControlReload(n => n + 1) }}
         />
       )}
 
