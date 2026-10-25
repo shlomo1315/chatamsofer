@@ -11,6 +11,7 @@ import DuplicatesPanel from './DuplicatesPanel'
 import TreeHealthPanel from './TreeHealthPanel'
 import CaseCenterPanel from './CaseCenterPanel'
 import SafeMergePanel from './SafeMergePanel'
+import GenerationMergePanel from './GenerationMergePanel'
 import DupReviewPanel from './DupReviewPanel'
 import MergeCenterPanel from './MergeCenterPanel'
 import UnlinkedPanel from './UnlinkedPanel'
@@ -1888,6 +1889,7 @@ export default function LineagePage() {
   const [showHealth, setShowHealth] = useState(false)
   const [showCases, setShowCases] = useState(false)
   const [showSafeMerge, setShowSafeMerge] = useState(false)
+  const [showGenMerge, setShowGenMerge] = useState(false)
   const [controlReload, setControlReload] = useState(0)
   const [showDupReview, setShowDupReview] = useState(false)
   const [showMergeCenter, setShowMergeCenter] = useState(false)
@@ -2609,6 +2611,7 @@ export default function LineagePage() {
                 if (t === 'dupReview') setShowDupReview(true)
                 else if (t === 'mergeCenter') setShowMergeCenter(true)
                 else if (t === 'safeMerge') setShowSafeMerge(true)
+                else if (t === 'generationMerge') setShowGenMerge(true)
                 else if (t === 'unlinked') setShowUnlinked(true)
                 else if (t === 'ghosts') setShowGhosts(true)
                 else if (t === 'selfDups') setShowSelfDups(true)
@@ -2621,6 +2624,7 @@ export default function LineagePage() {
 
       {showDupReview && <DupReviewPanel onDone={() => { void softRefresh(); setControlReload(n => n + 1) }} />}
       {showSafeMerge && <SafeMergePanel onDone={() => { void softRefresh(); setControlReload(n => n + 1) }} />}
+      {showGenMerge && <GenerationMergePanel onClose={() => setShowGenMerge(false)} onDone={() => { void softRefresh(); setControlReload(n => n + 1) }} />}
       {showMergeCenter && (
         <MergeCenterPanel
           onClose={() => setShowMergeCenter(false)}
