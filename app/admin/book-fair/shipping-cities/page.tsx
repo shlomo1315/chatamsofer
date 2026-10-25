@@ -61,7 +61,7 @@ export default async function BookFairShippingCitiesPage() {
   const { rows, error } = await load()
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="משלוחים לפי עיר" subtitle='לתשלום לשליחים: לפי התעריף המוסכם 20/30/40 ועוד 10 ₪ לכל 4 כרכים מעל 12, מול מה שנגבה בפועל בכל הזמנה.' />
+      <PageHeader title="משלוחים לפי עיר" subtitle='לתשלום לשליחים: לפי התעריף המוסכם 30/30/40 ועוד 10 ₪ לכל 4 כרכים מעל 12, מול מה שנגבה בפועל בכל הזמנה.' />
       <ShippingCitiesClient rows={rows} error={error} />
     </div>
   )

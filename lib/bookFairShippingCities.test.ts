@@ -25,7 +25,7 @@ describe('דמי משלוח לפי עיר', () => {
   })
 
   it('לפי התעריף המוסכם, ונגבה כפי שנשמר בהזמנה', () => {
-    expect(city('בני ברק')).toMatchObject({ orders: 2, volumes: 13, expected: 6000, charged: 6500, diff: 500 })
+    expect(city('בני ברק')).toMatchObject({ orders: 2, volumes: 13, expected: 7000, charged: 6500, diff: -500 })
     expect(city('ירושלים')).toMatchObject({ orders: 2, officeOrders: 1, volumes: 14, expected: 5000, charged: 4000, diff: -1000 })
     expect(city(NO_CITY)).toMatchObject({ orders: 1, expected: 3000 })
   })
