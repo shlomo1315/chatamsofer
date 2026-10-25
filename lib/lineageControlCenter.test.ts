@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildControlCenter, type ControlBen } from './lineageControlCenter'
+import { buildControlCenter, computeTreeHealth, type ControlBen, type ControlSummary } from './lineageControlCenter'
 import type { DupNode, DupGroup } from './lineageDupGroups'
 
 const node = (id: string, parent: string | null, gen: number, name = id): DupNode =>
@@ -70,5 +70,19 @@ describe('רישום מקביל', () => {
     expect(parallelGroups[0].nodes.find(n => n.id === 'z2')!.levelsBelow).toBe(1)
     expect(families.find(f => f.id === 'f2')!.issues.some(i => i.kind === 'parallel_dup' && i.clusterKey)).toBe(true)
     expect(families.find(f => f.id === 'f3')!.issues.some(i => i.kind === 'parallel_dup')).toBe(false)
+  })
+})
+
+describe('computeTreeHealth', () => {
+  const mk = (families: number, withIssue: number, reviewedOk = 0) => ({
+    families, reviewedOk, byStatus: { pending: { total: families, withIssue, withDup: 0 } },
+  }) as unknown as ControlSummary
+  it('מחשב ציון וגוון', () => {
+    expect(computeTreeHealth(mk(100, 5))).toMatchObject({ score: 95, tone: 'ok', familiesWithIssue: 5 })
+    expect(computeTreeHealth(mk(100, 20)).tone).toBe('warn')
+    expect(computeTreeHealth(mk(100, 50, 25))).toMatchObject({ score: 50, tone: 'bad', reviewedPct: 25 })
+  })
+  it('עץ ריק לא מחלק באפס', () => {
+    expect(computeTreeHealth(mk(0, 0)).score).toBe(100)
   })
 })

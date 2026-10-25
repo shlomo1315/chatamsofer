@@ -348,3 +348,21 @@ export function buildParallel(nodes: ClusterNode[], bens: Pick<ControlBen, 'id' 
     },
   }
 }
+
+export interface TreeHealth {
+  /** 0–100: שיעור המשפחות שאין בהן אף בעיה */
+  score: number
+  tone: 'ok' | 'warn' | 'bad'
+  familiesWithIssue: number
+  /** שיעור המשפחות שסומנו "נבדקה, תקין", 0–100 */
+  reviewedPct: number
+}
+
+/** מד הבריאות של כל העץ, מתוך אותם נתוני מרכז הבקרה. */
+export function computeTreeHealth(s: ControlSummary): TreeHealth {
+  const total = s.families
+  const familiesWithIssue = Math.min(total, Object.values(s.byStatus).reduce((a, b) => a + b.withIssue, 0))
+  const score = total > 0 ? Math.round(((total - familiesWithIssue) / total) * 100) : 100
+  const reviewedPct = total > 0 ? Math.min(100, Math.round((s.reviewedOk / total) * 100)) : 0
+  return { score, tone: score >= 90 ? 'ok' : score >= 70 ? 'warn' : 'bad', familiesWithIssue, reviewedPct }
+}
