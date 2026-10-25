@@ -9,7 +9,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Loader2, RefreshCw, ChevronRight, ChevronLeft, CheckCircle2, AlertTriangle, ExternalLink, Search } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
-import { issueLabel, STATUS_ORDER, type FamilyReview, type ControlSummary, type IssueKind, type ParallelGroup } from '@/lib/lineageControlCenter'
+import { issueLabel, computeTreeHealth, STATUS_ORDER, type FamilyReview, type ControlSummary, type IssueKind, type ParallelGroup } from '@/lib/lineageControlCenter'
 
 export type ControlTool = 'dupReview' | 'mergeCenter' | 'unlinked' | 'ghosts' | 'selfDups' | 'health' | 'safeMerge'
 
@@ -148,12 +148,47 @@ export default function ControlCenterPanel({ onOpenTool, onLocate, reloadSignal 
   if (err && !data) return <div className="p-4 text-sm text-red-700">{err} <button onClick={load} className="underline">נסה שוב</button></div>
   if (!data) return null
   const s = data.summary
+  const health = computeTreeHealth(s)
 
   const setF = (p: Partial<Filter>) => setFilter({ ...EMPTY, ...p })
   const statuses = STATUS_ORDER.filter(k => s.byStatus[k])
 
   return (
     <div className="space-y-4" dir="rtl">
+      {/* ── פס בקרה קבוע: נשאר גלוי בגלילה ── */}
+      <div className="sticky top-0 z-20 -mx-1 rounded-2xl border border-slate-200 bg-white/95 px-3 py-2 shadow-sm backdrop-blur"
+        role="status" aria-label="בריאות העץ">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div className="flex items-center gap-3">
+            <div className={`flex h-12 w-12 items-center justify-center rounded-full border-4 text-sm font-black tabular-nums ${
+              health.tone === 'ok' ? 'border-emerald-600 text-emerald-800' : health.tone === 'warn' ? 'border-amber-500 text-amber-800' : 'border-red-600 text-red-800'
+            }`}>{health.score}</div>
+            <div>
+              <div className="text-sm font-black text-slate-900">בריאות העץ</div>
+              <div className="text-xs text-slate-600">{health.familiesWithIssue.toLocaleString('he-IL')} משפחות עם בעיה מתוך {s.families.toLocaleString('he-IL')}</div>
+            </div>
+          </div>
+          <div className="min-w-[8rem] flex-1">
+            <div className="mb-1 flex justify-between text-[11px] text-slate-600">
+              <span>נבדקו, תקין</span><span className="tabular-nums">{health.reviewedPct}%</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+              <div className="h-full rounded-full bg-emerald-600" style={{ width: `${health.reviewedPct}%` }} />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-1.5 text-xs">
+            {([['כפילויות', s.dup.groups], ['רישום מקביל', s.parallel.groups], ['לא מקושרות', s.unlinked]] as const).map(([l, v]) => (
+              <span key={l} className={`rounded-full px-2.5 py-1 font-bold tabular-nums ${v > 0 ? 'bg-red-50 text-red-800' : 'bg-emerald-50 text-emerald-800'}`}>
+                {l}: {v.toLocaleString('he-IL')}
+              </span>
+            ))}
+          </div>
+          <button onClick={load} aria-label="רענן" className="mr-auto text-slate-500 hover:text-slate-800">
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          </button>
+        </div>
+      </div>
+
       {!data.marksReady && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
           סימון &quot;נבדקה, תקין&quot; עדיין לא פעיל: המיגרציה של העמודות טרם הורצה במסד.
