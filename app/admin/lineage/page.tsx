@@ -26,6 +26,11 @@ import SelfDuplicatesPanel from './SelfDuplicatesPanel'
 import { useToast } from '@/components/ui/Toast'
 import { useCan } from '@/components/StaffPermissions'
 import { buildForest } from '@/lib/lineageForest'
+import LineageShell from './shell/LineageShell'
+import { useShellCounts } from './shell/useShellCounts'
+import { loadSettings, saveSettings, type QueueId, type ShellSettings } from './shell/types'
+import { buildShellData } from '@/lib/lineageShell'
+import SuggestionsInbox from './SuggestionsInbox'
 
 // ─── Types ───
 
@@ -1754,7 +1759,10 @@ type View = 'tree' | 'table'
 
 export default function LineagePage() {
   // 🔴 הדף *מחזיק* את המתג ומספק אותו — הרכיבים שמתחתיו קוראים ממנו.
-  const [actionsOn, setActionsOn] = useState(false)
+  // המסך החדש הוא ברירת המחדל; "תצוגה קלאסית" מחזירה את המסך הישן במלואו.
+  const [legacy, setLegacy] = useState(false)
+  const [actionsState, setActionsOn] = useState(false)
+  const actionsOn = actionsState || !legacy
   const canAdd = useCan('lineage', 'add') && actionsOn
   const canEdit = useCan('lineage', 'edit') && actionsOn
   const canDelete = useCan('lineage', 'delete') && actionsOn
@@ -2319,6 +2327,58 @@ export default function LineagePage() {
     setSaving(false)
   }
 
+  // ── המסך החדש (shell): עטיפה מעל אותה לוגיקה ואותם מודלים, בלי לשנות נתונים ──
+  const [settings, setSettings] = useState<ShellSettings>(() => loadSettings())
+  const shellData = useMemo(() => buildShellData(nodes), [nodes])
+  const shellCounts = useShellCounts(controlReload)
+  const afterMerge = () => { void softRefresh(); setControlReload(n => n + 1) }
+  const updateSettings = (s: ShellSettings) => { setSettings(s); saveSettings(s) }
+  const shellActions = {
+    approve: (n: { id: string; name: string }) => setApprovePrompt({ keepId: n.id, keepName: n.name }),
+    keepPending: async (n: { id: string }) => {
+      await fetch('/api/admin/lineage', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: n.id, status: 'pending' }) })
+      await softRefresh(); setControlReload(c => c + 1)
+    },
+    add: (n: { id: string; name: string }) => { setFormName(''); setFormRelation(null); setModal({ type: 'add', parentId: n.id, parentName: n.name }) },
+    edit: (n: { id: string; name: string }) => {
+      const node = nodes.find(x => x.id === n.id); if (!node) return
+      setFormName(node.name); setFormRelation(node.relation ?? null); setModal({ type: 'edit', node })
+    },
+    remove: (n: { id: string }) => {
+      const node = nodes.find(x => x.id === n.id); if (!node) return
+      setModal({ type: 'delete', node: { ...node, children: buildTree(nodes).find(t => t.id === node.id)?.children ?? [] } })
+    },
+    share: (n: { id: string; name: string }) => setShareNode({ id: n.id, name: n.name }),
+    print: (n: { id: string }) => {
+      const html = buildSubtreePrintHtml(nodes, n.id, settings.printDesc ? 'tree' : 'list')
+      if (!html) { toast.error('לא נמצא הענף להדפסה'); return }
+      const win = window.open('', '_blank')
+      if (!win) { toast.error('הדפדפן חסם את חלון ההדפסה — יש לאשר חלונות קופצים לאתר'); return }
+      win.document.write(html); win.document.close()
+    },
+  }
+  const renderQueue = (q: QueueId, ctx: { onLocate: (id: string) => void; onQueue: (q: QueueId) => void }): React.ReactNode => {
+    switch (q) {
+      case 'safe': return <SafeMergePanel onDone={afterMerge} />
+      case 'likely': return <DupReviewPanel onDone={afterMerge} />
+      case 'parallel': return <MergeCenterPanel onClose={() => ctx.onQueue('safe')} onDone={afterMerge} />
+      case 'self': return <SelfDuplicatesPanel onLocate={ctx.onLocate} onFixed={afterMerge} />
+      case 'kids': return <DuplicatesPanel onDone={afterMerge} onCandidates={handleCandidates} onLocate={ids => { if (ids[0]) ctx.onLocate(ids[0]) }} />
+      case 'approve': return <ApprovalCenterPanel />
+      case 'requests': return <FamilyRequestsPanel />
+      case 'sugg': return <SuggestionsInbox onApplied={afterMerge} />
+      case 'fam': return (
+        <ControlCenterPanel reloadSignal={controlReload} onLocate={ctx.onLocate}
+          onOpenTool={t => ctx.onQueue(t === 'dupReview' ? 'likely' : t === 'mergeCenter' ? 'parallel' : t === 'safeMerge' ? 'safe'
+            : t === 'unlinked' ? 'unlinked' : t === 'ghosts' ? 'ghost' : t === 'selfDups' ? 'self' : 'audit')} />
+      )
+      case 'unlinked': return <UnlinkedPanel onDone={() => { void softRefresh() }} />
+      case 'ghost': return <GhostChildrenPanel onLocate={ctx.onLocate} onFixed={afterMerge} />
+      case 'audit': return (<><TreeAuditPanel onLocate={ctx.onLocate} /><div style={{ marginTop: 16 }}><TreeHealthPanel onLocate={ctx.onLocate} onOpenDuplicates={() => ctx.onQueue('kids')} /></div></>)
+      case 'cases': return <CaseCenterPanel />
+    }
+  }
+
   // ── מסך מלא לענף אחד ──
   // ⚠️ שכבה קבועה ולא שינוי של פריסת אזור הניהול: העטיפה מוסיפה ריפוד, מגבילה
   // ל-1536 וממרכזת, ואין בה שום דרך לוותר על זה לעמוד יחיד. שכבה שמתחילה מתחת
@@ -2401,6 +2461,30 @@ export default function LineagePage() {
     <div dir="rtl">
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
+      {!legacy && !loading && (
+        <LineageShell
+          data={shellData} counts={shellCounts} settings={settings} onSettings={updateSettings}
+          can={{ add: canAdd, edit: canEdit, delete: canDelete }}
+          actions={shellActions} renderQueue={renderQueue}
+          permissions={showPermissions
+            ? <SharePermissionsPanel onClose={() => setShowPermissions(false)} />
+            : <button className="btn" onClick={() => setShowPermissions(true)}>פתח את מרכז ההרשאות</button>}
+          onAddGeneration={() => { setFormName(''); setFormParentId(null); setFormRelation(null); setModal({ type: 'add', parentId: null, parentName: '' }) }}
+          onPrintAll={() => { const r = shellData.root; if (r) shellActions.print(r) }}
+          onLegacy={() => setLegacy(true)}
+        />
+      )}
+      {!legacy && loading && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 320, gap: 12, color: '#0f4c5c' }}>
+          <Loader2 size={24} style={{ animation: 'spin 1s linear infinite' }} />
+          <span style={{ fontSize: 15, fontWeight: 600 }}>טוען נתונים…</span>
+        </div>
+      )}
+      {legacy && (
+        <div className="mb-3"><button onClick={() => setLegacy(false)} className="text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-300 bg-white">חזרה למסך החדש</button></div>
+      )}
+
+      {legacy && (<>
       {/* toolbar */}
       <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
         <div className="flex items-center gap-3 flex-wrap">
@@ -2798,13 +2882,15 @@ export default function LineagePage() {
         </div>
       )}
 
+      </>)}
+
       {/* חלונית ניהול שיתוף ענף — יצירת הזמנות + שליטה מלאה (ביטול הרשאות) */}
       {shareNode && (
         <ShareBranchModal nodeId={shareNode.id} nodeName={shareNode.name} onClose={() => setShareNode(null)} />
       )}
 
       {/* מרכז שליטה מרכזי — טבלת כל הרשאות השיתוף בכל העץ */}
-      {showPermissions && (
+      {legacy && showPermissions && (
         <SharePermissionsPanel onClose={() => setShowPermissions(false)} />
       )}
 
@@ -2814,6 +2900,7 @@ export default function LineagePage() {
           onPick={printFocus} onClose={() => setPrintPick(false)} />
       )}
 
+      {legacy && (<>
       {/* generation legend — clickable filters */}
       {nodes.length > 0 && !loading && !focusNode && (
         <div className="flex gap-2 flex-wrap mb-4">
@@ -2886,6 +2973,8 @@ export default function LineagePage() {
           onDelete={node => setModal({ type: 'delete', node: { ...node, children: buildTree(nodes).find(n => n.id === node.id)?.children ?? [] } })}
         />
       )}
+
+      </>)}
 
       {/* page-level modals (table view) */}
       {modal?.type === 'edit' && (
