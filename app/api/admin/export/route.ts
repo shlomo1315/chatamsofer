@@ -8,6 +8,7 @@ import { readAdvFilters, parseColFilters, SORT_COLUMNS, FILTER_COLUMNS } from '@
 import { applyAdvFilters } from '@/lib/beneficiariesList'
 import { BLANK } from '@/lib/tableSort'
 import { addressColumns, addressCells } from '@/lib/exportAddress'
+import { maternityStatusHe, cardMoneyCells } from '@/lib/maternityExport'
 
 export const dynamic = 'force-dynamic'
 // ⚠️ חובה. exceljs נשען על Buffer ועל zlib של Node ואינו רץ ב-Edge runtime.
@@ -196,17 +197,19 @@ export async function GET(request: NextRequest) {
   } else if (type === 'maternity') {
     filename = 'יולדות'
     const data = await fetchAll<Row>((from, to) => admin.from('maternity_aids')
-      .select('birth_date, recovery_home, status, card_status, card_number, created_at, beneficiary:beneficiaries(family_name, full_name, id_number, spouse_name, phone, city, address)')
+      .select('birth_date, recovery_home, recovery_amount, status, card_status, card_number, card_load_amount, card_unloaded_amount, card_unloaded_at, card_load_error, created_at, beneficiary:beneficiaries(family_name, full_name, id_number, spouse_name, phone, city, address)')
       .order('created_at', { ascending: false }).range(from, to))
     columns = [
       { header: 'משפחה' }, { header: 'ת.ז', kind: 'id' }, { header: 'שם האשה' },
       { header: 'טלפון', kind: 'id' }, ...addressColumns(), { header: 'תאריך לידה', kind: 'date' }, { header: 'בית החלמה' },
+      { header: 'סכום שאושר בבית החלמה', kind: 'number' },
       { header: 'סטטוס' }, { header: 'סטטוס כרטיס' },
+      { header: 'סכום שנטען בכרטיס', kind: 'number' }, { header: 'נוצל בפועל', kind: 'number' }, { header: 'הוחזר בפריקה', kind: 'number' },
       // ⚠️ מספר כרטיס נשאר טקסט: הוא מזהה, לא כמות. כמספר הוא מאבד אפסים
       // מובילים ומקבל פסיקי אלפים.
       { header: 'מספר כרטיס', kind: 'id' }, { header: 'תאריך', kind: 'date' },
     ]
-    rows = (data ?? []).map((m: Row) => [famName(m.beneficiary), m.beneficiary?.id_number, m.beneficiary?.spouse_name, m.beneficiary?.phone, ...addressCells(m.beneficiary?.city, m.beneficiary?.address), dt(m.birth_date), m.recovery_home, he(m.status), he(m.card_status), m.card_number, dt(m.created_at)])
+    rows = (data ?? []).map((m: Row) => [famName(m.beneficiary), m.beneficiary?.id_number, m.beneficiary?.spouse_name, m.beneficiary?.phone, ...addressCells(m.beneficiary?.city, m.beneficiary?.address), dt(m.birth_date), m.recovery_home, m.recovery_amount != null ? Number(m.recovery_amount) : null, maternityStatusHe(m.status), he(m.card_status), ...cardMoneyCells(m), m.card_number, dt(m.created_at)])
   } else if (type === 'financial_aid') {
     filename = 'סיוע-רפואי'
     const data = await fetchAll<Row>((from, to) => admin.from('financial_aid_requests')
