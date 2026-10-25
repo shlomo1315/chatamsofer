@@ -112,6 +112,8 @@ const searchHaystack = (a: MaternityAid) => {
   return [
     motherName(m),
     m?.spouse_id_number,
+    m?.full_name,
+    m?.id_number,
     babyNameLabel(a as AidNameFields).text,
     a.baby_id_number,
     formatDate(a.birth_date),
@@ -134,7 +136,7 @@ const CARD_STATUS_PILL: Record<string, { label: string; cls: string }> = {
 // לפי אותו מפתח. קודם הכותרות היו במערך נפרד מהתאים, וכל הוספת עמודה
 // במקום אחד ושכחה באחר הסיטה את כל השורה.
 type ColKey =
-  | 'mother' | 'wifeId' | 'baby' | 'benefit' | 'babyId' | 'birth'
+  | 'mother' | 'wifeId' | 'husband' | 'husbandId' | 'baby' | 'benefit' | 'babyId' | 'birth'
   | 'recovery' | 'days' | 'arrived' | 'amount' | 'cert' | 'source'
   | 'loadStatus' | 'loadDate' | 'cardLink' | 'liveBalance' | 'spent' | 'status'
 
@@ -161,6 +163,10 @@ const COLUMNS: ColDef<ColKey, MaternityAid>[] = [
     value: a => motherName(a.beneficiary as MotherRef | undefined) },
   { key: 'wifeId', label: 'ת.ז. האישה', def: true, kind: 'number',
     value: a => (a.beneficiary as MotherRef | undefined)?.spouse_id_number ?? null },
+  { key: 'husband', label: 'שם הבעל', def: true,
+    value: a => (a.beneficiary as MotherRef | undefined)?.full_name ?? null },
+  { key: 'husbandId', label: 'ת.ז. הבעל', def: true, kind: 'number',
+    value: a => (a.beneficiary as MotherRef | undefined)?.id_number ?? null },
   { key: 'baby', label: 'שם התינוק', def: true,
     // ⚠️ missing מוצג כמקף — הערך null כדי שירד לסוף המיון ולא ימוין
     // כטקסט "ממתין".
@@ -312,6 +318,8 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
         </span>
       )
       case 'wifeId': return <span className="ltr-num text-xs font-mono text-slate-600">{m?.spouse_id_number ?? '—'}</span>
+      case 'husband': return <span className="text-slate-700">{m?.full_name ?? '—'}</span>
+      case 'husbandId': return <span className="ltr-num text-xs font-mono text-slate-600">{m?.id_number ?? '—'}</span>
       case 'baby': return (
         <span className="inline-flex items-center gap-1.5 flex-wrap text-slate-700">
           {(() => {

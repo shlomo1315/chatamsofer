@@ -45,7 +45,7 @@ async function getMaternityAids(): Promise<MaternityAid[]> {
     fetchAllRows<Record<string, unknown>>((from, to) =>
       runPage(benFields, from, to) as unknown as PromiseLike<{ data: Record<string, unknown>[] | null; error: { message: string } | null }>)
 
-  const BEN_BASE = 'id, full_name, family_name, phone, spouse_name, spouse_id_number, children, children_count, eligibility_status'
+  const BEN_BASE = 'id, full_name, family_name, id_number, phone, spouse_name, spouse_id_number, children, children_count, eligibility_status'
   let { rows: data, error } = await run(`${BEN_BASE}, ${APPROVAL_LABEL_SELECT}`)
   if (error) {
     console.error('[maternity] approval label join failed, retrying without it:', error)
