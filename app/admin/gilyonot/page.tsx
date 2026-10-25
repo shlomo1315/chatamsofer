@@ -60,6 +60,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
         sent_count: s?.sent_count ?? 0, failed_count: s?.failed_count ?? 0, pending_count: s?.pending_count ?? 0,
         opened_count: s?.opened_count ?? 0, downloaded_count: s?.downloaded_count ?? 0,
         delivered_count: s?.delivered_count ?? 0, bounced_count: s?.bounced_count ?? 0, complained_count: s?.complained_count ?? 0,
+        clicked_count: s?.clicked_count ?? 0, unsubscribed_count: s?.unsubscribed_count ?? 0,
       } as IssueView
     })
 

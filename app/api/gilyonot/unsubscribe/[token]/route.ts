@@ -81,6 +81,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (sub.status !== 'unsubscribed') {
     const { error } = await db.from('gilyonot_subscribers')
       .update({ status: 'unsubscribed', unsubscribed_at: now, updated_at: now }).eq('id', sub.id)
+    if (!error) {
+      // שיוך ההסרה לגיליון האחרון שנשלח לנמען, לסטטיסטיקה
+      const { data: last } = await db.from('gilyonot_deliveries').select('id').eq('subscriber_id', sub.id)
+        .eq('status', 'sent').order('sent_at', { ascending: false }).limit(1).maybeSingle()
+      if (last) await db.from('gilyonot_deliveries').update({ unsubscribed_at: now }).eq('id', last.id).is('unsubscribed_at', null)
+    }
     if (error) {
       console.error('[gilyonot] הסרה נכשלה:', error.message)
       return fromPage ? html('אירעה שגיאה', '<h1 style="margin:0;color:#b91c1c;font-size:20px;">ההסרה נכשלה. נסו שוב.</h1>', 500) : NextResponse.json({ ok: false }, { status: 500 })
