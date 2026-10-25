@@ -262,6 +262,62 @@ export const AGREED_SHIPPING_TIERS: TierInput[] = [
 ]
 
 /** המשלוח לפי התעריף המוסכם. 0 כרכים = null (אין מה לשלוח). */
-export function agreedShipping(volumeCount: number): number | null {
+export function agreedShipping(volumeCount: number, rates?: number[]): number | null {
+  if (rates) return agreedShippingByRates(volumeCount, rates)
   return resolveShippingTier(volumeCount, AGREED_SHIPPING_TIERS)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// תעריף מוסכם לפי כרך — טבלה פשוטה שנערכת במסך ההגדרות
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// רשימת סכומים באגורות: האיבר הראשון הוא ההזמנה בת כרך אחד, השני בת שני
+// כרכים וכן הלאה. נשמרת ב-app_settings תחת AGREED_RATES_KEY.
+//
+// ⚠️ מעל הכרך האחרון בטבלה משתמשים בסכום האחרון, והמסך מזהיר על כך.
+
+export const AGREED_RATES_KEY = 'book_fair_agreed_shipping_rates'
+export const MAX_RATE_VOLUMES = 40
+
+/** ברירת המחדל: התעריף הנוכחי לכרכים 1 עד 20 (נגזר מ-AGREED_SHIPPING_TIERS). */
+export const DEFAULT_AGREED_RATES: number[] = Array.from({ length: 20 }, (_, i) =>
+  resolveShippingTier(i + 1, AGREED_SHIPPING_TIERS) ?? 0)
+
+/** המרת הטבלה למדרגות לחישוב: שורה לכל כרך, והאחרונה פתוחה ("ומעלה"). */
+export function ratesToTiers(rates: number[]): TierInput[] {
+  return rates.map((price_agorot, i) => ({
+    min_books: i + 1,
+    max_books: i === rates.length - 1 ? null : i + 1,
+    price_agorot,
+  }))
+}
+
+/** פענוח הערך השמור. כל פגם (לא מספר, שלילי, ריק) = ברירת המחדל. */
+export function parseAgreedRates(raw: unknown): number[] {
+  let v: unknown = raw
+  if (typeof raw === 'string') {
+    try { v = JSON.parse(raw) } catch { return DEFAULT_AGREED_RATES }
+  }
+  if (!Array.isArray(v) || v.length === 0 || v.length > MAX_RATE_VOLUMES) return DEFAULT_AGREED_RATES
+  const out: number[] = []
+  for (const x of v) {
+    if (typeof x !== 'number' || !Number.isFinite(x) || x < 0) return DEFAULT_AGREED_RATES
+    out.push(Math.round(x))
+  }
+  return out
+}
+
+/** בדיקת רשימה שהתקבלה מהמסך. מחזיר הודעת שגיאה או null. */
+export function agreedRatesError(rates: unknown): string | null {
+  if (!Array.isArray(rates) || rates.length === 0) return 'חייבת להיות לפחות שורה אחת'
+  if (rates.length > MAX_RATE_VOLUMES) return `אפשר עד ${MAX_RATE_VOLUMES} כרכים`
+  for (const [i, x] of rates.entries()) {
+    if (typeof x !== 'number' || !Number.isFinite(x) || x < 0) return `סכום לא תקין בכרך ${i + 1}`
+  }
+  return null
+}
+
+/** המשלוח לפי הטבלה. null כשאין כרכים. מעל הטבלה: הסכום האחרון. */
+export function agreedShippingByRates(volumeCount: number, rates: number[]): number | null {
+  return resolveShippingTier(volumeCount, ratesToTiers(rates))
 }

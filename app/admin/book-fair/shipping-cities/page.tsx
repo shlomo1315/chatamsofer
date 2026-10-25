@@ -5,6 +5,7 @@ import { fetchAllRows } from '@/lib/fetchAllRows'
 import PageHeader from '@/components/ui/PageHeader'
 import { PAID } from '@/lib/bookFairStats'
 import { aggregateOrderItems, totalsToMaps, type OrderItemRow } from '@/lib/bookFairOrderItems'
+import { loadAgreedRates } from '@/lib/bookFairAgreedRates'
 import { shippingOrders, type CityOrderInput } from '@/lib/bookFairShippingCities'
 import ShippingCitiesClient from './ShippingCitiesClient'
 
@@ -41,19 +42,20 @@ async function loadVolumes(db: Db): Promise<Record<string, number>> {
 async function load() {
   if (!isSupabaseConfigured()) return { rows: [], error: null as string | null }
   const db = (getServiceClient() ?? await createClient()) as Db
-  const [orders, volumes] = await Promise.all([
+  const [orders, volumes, rates] = await Promise.all([
     fetchAllRows<OrderRow>((from, to) =>
       db.from('book_fair_orders')
         .select('id, order_number, status, channel, delivery_method, shipping_agorot, city:book_fair_cities(name)')
         .eq('delivery_method', 'shipping').in('status', [...PAID])
         .order('order_number').range(from, to) as unknown as Res<OrderRow>),
     loadVolumes(db),
+    loadAgreedRates(db as never),
   ])
   if (orders.error) console.error('[book-fair/shipping-cities] load failed:', orders.error)
   const input: CityOrderInput[] = orders.rows.map(({ city, ...o }) => ({
     ...o, city_name: (Array.isArray(city) ? city[0]?.name : city?.name) ?? null,
   }))
-  return { rows: shippingOrders(input, volumes), error: orders.error }
+  return { rows: shippingOrders(input, volumes, rates), error: orders.error }
 }
 
 export default async function BookFairShippingCitiesPage() {

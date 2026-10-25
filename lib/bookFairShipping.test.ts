@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolveShippingTier, shippingCost, validateTiers, tierLabel, totalVolumes, auditShipping, agreedShipping, AGREED_SHIPPING_TIERS, type TierInput } from './bookFairShipping'
+import { resolveShippingTier, shippingCost, validateTiers, tierLabel, totalVolumes, auditShipping, agreedShipping, AGREED_SHIPPING_TIERS, DEFAULT_AGREED_RATES, agreedShippingByRates, parseAgreedRates, agreedRatesError, type TierInput } from './bookFairShipping'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 🔴 תעריף המשלוח לפי *כמות ספרים* — לא לפי יעד ולא לפי סכום.
@@ -351,5 +351,35 @@ describe('agreedShipping — 30/30/40 ועוד 10 לכל 4 מעל 12', () => {
   it('🔴 מדרגה "13 ומעלה" במחיר 40 נותנת 40 ל-14 כרכים — זו הייתה התקלה', () => {
     const wrong: TierInput[] = [...AGREED_SHIPPING_TIERS.slice(0, 3), { min_books: 13, max_books: null, price_agorot: 4000, step_volumes: 4, step_agorot: 1000 }]
     expect(resolveShippingTier(14, wrong)).toBe(4000)
+  })
+})
+
+describe('תעריף מוסכם לפי כרך (טבלה)', () => {
+  it('ברירת המחדל זהה לתעריף הנוכחי: 1-7 = 30, 8-12 = 40, 13-16 = 50, 17-20 = 60', () => {
+    expect(DEFAULT_AGREED_RATES).toHaveLength(20)
+    for (let v = 1; v <= 20; v++) {
+      expect(agreedShippingByRates(v, DEFAULT_AGREED_RATES)).toBe(agreedShipping(v))
+    }
+  })
+  it('שינוי סכום של כרך אחד משפיע רק עליו', () => {
+    const r = [...DEFAULT_AGREED_RATES]; r[2] = 3500
+    expect(agreedShipping(3, r)).toBe(3500)
+    expect(agreedShipping(2, r)).toBe(3000)
+  })
+  it('מעל הכרך האחרון: הסכום האחרון; 0 כרכים: null', () => {
+    expect(agreedShippingByRates(25, [1000, 2000])).toBe(2000)
+    expect(agreedShippingByRates(0, [1000])).toBeNull()
+  })
+  it('פענוח: פגם = ברירת מחדל, תקין נשמר', () => {
+    expect(parseAgreedRates('oops')).toEqual(DEFAULT_AGREED_RATES)
+    expect(parseAgreedRates('[1,-2]')).toEqual(DEFAULT_AGREED_RATES)
+    expect(parseAgreedRates('[1000,2000]')).toEqual([1000, 2000])
+    expect(parseAgreedRates(null)).toEqual(DEFAULT_AGREED_RATES)
+  })
+  it('ולידציה', () => {
+    expect(agreedRatesError([])).not.toBeNull()
+    expect(agreedRatesError([100, null])).toContain('2')
+    expect(agreedRatesError(Array(41).fill(1))).not.toBeNull()
+    expect(agreedRatesError([100, 200])).toBeNull()
   })
 })

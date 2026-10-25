@@ -4,11 +4,12 @@ import { useRouter } from 'next/navigation'
 import { Loader2, Plus, Trash2, Check, AlertTriangle, MapPin, Truck, Power, CreditCard, Phone } from 'lucide-react'
 import type { BookFairCity, BookFairShippingTier } from '@/types/bookFair'
 import { fmtAgorot, agorotToShekels } from '@/lib/bookFairPricing'
-import { validateTiers, resolveShippingTier, tierLabel, agreedShipping, type TierInput } from '@/lib/bookFairShipping'
+import { validateTiers, resolveShippingTier, tierLabel, agreedShippingByRates, DEFAULT_AGREED_RATES, type TierInput } from '@/lib/bookFairShipping'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useCan } from '@/components/StaffPermissions'
 import PaymentSettings from './PaymentSettings'
 import SellerPassword from './SellerPassword'
+import AgreedRates from './AgreedRates'
 import OfficeContact from './OfficeContact'
 import DashboardAccess from './DashboardAccess'
 import RecordingRescue from './RecordingRescue'
@@ -57,6 +58,7 @@ export default function SettingsClient({ cities, tiers, open, openAt, mockPay }:
   const { confirm, confirmDialog } = useConfirm()
   const canEdit = useCan('book_fair', 'edit')
   const [tab, setTab] = useState<TabId>('general')
+  const [agreedRates, setAgreedRates] = useState<number[]>(DEFAULT_AGREED_RATES)
   const [phoneTab, setPhoneTab] = useState<'messages' | 'books'>('messages')
 
   const [isOpen, setIsOpen] = useState(open)
@@ -325,6 +327,10 @@ export default function SettingsClient({ cities, tiers, open, openAt, mockPay }:
       )}
 
       {/* ── ערי משלוח ── */}
+      <div hidden={tab !== 'shipping'}>
+        <AgreedRates canEdit={canEdit} onSaved={setAgreedRates} />
+      </div>
+
       <section hidden={tab !== 'shipping'} className="rounded-2xl border border-slate-200 bg-white p-5">
         <h2 className="mb-1 flex items-center gap-2 font-semibold text-slate-900">
           <MapPin size={17} /> ערי משלוח
@@ -514,7 +520,7 @@ export default function SettingsClient({ cities, tiers, open, openAt, mockPay }:
                   המוסכם עם השליחים. */}
               {[4, 8, 12, 13, 14, 16, 17].map(n => {
                 const p = resolveShippingTier(n, parsed)
-                const agreed = agreedShipping(n)
+                const agreed = agreedShippingByRates(n, agreedRates)
                 return (
                   <span key={n} className={`rounded-lg px-2.5 py-1 ${p !== agreed ? 'bg-amber-100 text-amber-900' : 'bg-white/70'}`}
                     title={p !== agreed && agreed !== null ? `בתעריף המוסכם: ${fmtAgorot(agreed)}` : undefined}>

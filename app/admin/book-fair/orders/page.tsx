@@ -6,7 +6,8 @@ import PageHeader from '@/components/ui/PageHeader'
 import type { BookFairOrder } from '@/types/bookFair'
 import { PROBLEM_BOOKS_KEY, parseProblemBooks, ordersWithProblemBooks } from '@/lib/bookFairProblemBooks'
 import { aggregateOrderItems, totalsToMaps, type OrderItemRow } from '@/lib/bookFairOrderItems'
-import { AGREED_SHIPPING_TIERS, type TierInput } from '@/lib/bookFairShipping'
+import { ratesToTiers, DEFAULT_AGREED_RATES, type TierInput } from '@/lib/bookFairShipping'
+import { loadAgreedRates } from '@/lib/bookFairAgreedRates'
 import OrdersClient, { type ProblemBookInfo, type RecordingGap } from './OrdersClient'
 
 // מסך ההזמנות — הלב של הניהול היומיומי ביריד.
@@ -201,10 +202,12 @@ async function getProblemBooks(): Promise<ProblemBookInfo[]> {
 /**
  * המדרגות לבקרת המשלוח בטבלה.
  * 🔴 14.10: התעריף המוסכם (30/30/40 ועוד 10 לכל 4 מעל 12) ולא הטבלה שבהגדרות,
- * שהועלתה זמנית ל-25/35/45 בסוף היריד. ראו AGREED_SHIPPING_TIERS.
+ * שהועלתה זמנית ל-25/35/45 בסוף היריד. הסכומים נערכים במסך ההגדרות
+ * (טבלת סכום לכל כרך), ובלי הגדרה שמורה חל התעריף ברירת המחדל.
  */
 async function getTiers(): Promise<TierInput[]> {
-  return AGREED_SHIPPING_TIERS
+  if (!isSupabaseConfigured()) return ratesToTiers(DEFAULT_AGREED_RATES)
+  return ratesToTiers(await loadAgreedRates(await db() as never))
 }
 
 /** הזמנות עם תקלת משלוח שלא טופלה — לתגית "תקלה פתוחה" בשורה. */

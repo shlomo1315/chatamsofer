@@ -45,7 +45,7 @@ export interface CityRow {
 
 export const NO_CITY = 'ללא עיר'
 
-export function shippingOrders(orders: CityOrderInput[], volumes: Record<string, number>): CityOrderRow[] {
+export function shippingOrders(orders: CityOrderInput[], volumes: Record<string, number>, rates?: number[]): CityOrderRow[] {
   return orders
     .filter(o => o.delivery_method === 'shipping' && (PAID as readonly string[]).includes(o.status))
     .map(o => {
@@ -54,7 +54,7 @@ export function shippingOrders(orders: CityOrderInput[], volumes: Record<string,
         ...o,
         city: o.city_name?.trim() || NO_CITY,
         volumes: v,
-        expected: o.channel === 'office' || v <= 0 ? null : agreedShipping(v),
+        expected: o.channel === 'office' || v <= 0 ? null : agreedShipping(v, rates),
         charged: Math.max(0, Math.round(o.shipping_agorot ?? 0)),
       }
     })
