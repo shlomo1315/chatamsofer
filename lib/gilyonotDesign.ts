@@ -14,15 +14,13 @@ export interface MailDesign {
   headerTitle: string
   /** ריק = הפרשה */
   headerSub: string
-  showGreeting: boolean
-  greeting: string
   showButton: boolean
   buttonLabel: string
   buttonColor: string
   footerText: string
 }
 
-/** הטוקן שמוחלף בשם הנמען, בגוף המייל ובפתיחה. */
+/** טוקן שם ישן: אין שמות בשליחה, ולכן הוא מוסר מהגוף של גיליונות ישנים. */
 export const NAME_TOKEN = '{{שם}}'
 
 export const DEFAULT_DESIGN: MailDesign = {
@@ -32,8 +30,6 @@ export const DEFAULT_DESIGN: MailDesign = {
   kicker: 'גיליונות החתם סופר',
   headerTitle: '',
   headerSub: '',
-  showGreeting: true,
-  greeting: `לכבוד ${NAME_TOKEN} שליט"א,`,
   showButton: true,
   buttonLabel: 'להורדת הגיליון',
   buttonColor: SYSTEM_BLUE,
@@ -42,7 +38,7 @@ export const DEFAULT_DESIGN: MailDesign = {
 
 const HEX = /^#[0-9a-f]{6}$/i
 const LIMITS: Partial<Record<keyof MailDesign, number>> = {
-  kicker: 80, headerTitle: 160, headerSub: 120, greeting: 160, buttonLabel: 60, footerText: 600,
+  kicker: 80, headerTitle: 160, headerSub: 120, buttonLabel: 60, footerText: 600,
 }
 
 /** מנקה עיצוב שהגיע מהדפדפן או מהמסד: רק מפתחות מוכרים, צבעי hex ואורך מוגבל. */

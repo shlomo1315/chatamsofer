@@ -46,10 +46,7 @@ export function buildGilyonHtml(opts: {
   pixelUrl?: string | null
 }): string {
   const d = normalizeDesign(opts.design)
-  const name = opts.name?.trim() ? escHtml(opts.name.trim()) : ''
-  const withName = (html: string) => html.split(NAME_TOKEN).join(name)
-  const greeting = d.showGreeting && name && d.greeting.trim()
-    ? `<p style="margin:0 0 14px;color:#334155;font-size:16px;">${withName(plain(d.greeting))}</p>` : ''
+  const withName = (html: string) => html.split(NAME_TOKEN).join('')
   const body = opts.bodyHtml?.trim() ? withName(opts.bodyHtml) : (opts.intro?.trim() ? paragraphs(opts.intro) : '')
   const title = d.headerTitle.trim() || opts.title
   const sub = d.headerSub.trim() || opts.parasha
@@ -79,7 +76,7 @@ ${sub.trim() ? `<p style="margin:6px 0 0;color:#eff6ff;font-size:16px;">${plain(
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e2e8f0;">
 ${header}
 <tr><td style="padding:28px 28px 8px;text-align:right;">
-${greeting}${body}
+${body}
 </td></tr>
 ${button}
 <tr><td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:18px 28px;text-align:center;color:#64748b;font-size:12px;line-height:1.7;">
