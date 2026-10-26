@@ -591,6 +591,18 @@ export async function getClientCardFull(creds: NedarimCreds, clientId: string): 
 export async function getClientCard(creds: NedarimCreds, clientId: string) {
   const r = await nedarimRequest(creds, 'GetClientCard', { ClientId: clientId })
   if (!isOk(r)) return null
-  const total = Number(r.TotalFreeAmount)
-  return { totalFreeAmount: Number.isFinite(total) ? total : null }
+  return { totalFreeAmount: parseNedarimAmount(r.TotalFreeAmount) }
+}
+
+// נדרים מחזירים סכומים כטקסט עם סימן מטבע ("736.49 ₪"); Number() על זה נותן NaN
+export function parseNedarimAmount(v: unknown): number | null {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null
+  const m = String(v ?? '').replace(/,/g, '').match(/-?\d+(\.\d+)?/)
+  return m ? Number(m[0]) : null
+}
+
+// כמו getClientCardFull, אבל מחזיר גם את הודעת השגיאה של נדרים כשהמשיכה נכשלת
+export async function getClientCardResult(creds: NedarimCreds, clientId: string): Promise<{ card: NedarimResponse | null; message: string }> {
+  const r = await nedarimRequest(creds, 'GetClientCard', { ClientId: clientId })
+  return isOk(r) ? { card: r, message: '' } : { card: null, message: String(r.Message ?? r.Result ?? 'ללא הודעה') }
 }
