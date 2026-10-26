@@ -19,6 +19,7 @@ export const dynamic = 'force-dynamic'
 export const metadata = { title: 'גיליונות החתם סופר' }
 
 const PAGE = 1000
+const daysAgoIso = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString()
 
 export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const staff = await guardPage('gilyonot')
@@ -34,22 +35,30 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   let nedarim: NedarimPullView | null = null
   let distributors: GilyonotDistributorsProps | null = null
 
+  let counts = { active: 0, recent: 0, removed: 0 }
+
   if (db) {
-    for (let offset = 0; ; offset += PAGE) {
-      const { data, error: e } = await db.from('gilyonot_subscribers')
-        .select('id, email, full_name, source, status, created_at, unsubscribed_at')
-        .order('created_at', { ascending: false }).range(offset, offset + PAGE - 1)
-      if (e) { error = 'טעינת רשימת התפוצה נכשלה. ייתכן שהמיגרציה 20261016_gilyonot.sql עוד לא הורצה.'; break }
-      subscribers.push(...((data ?? []) as SubscriberView[]))
-      if (!data || data.length < PAGE) break
-    }
-    const [{ data: iss }, { data: stats }] = await Promise.all([
+    // ⚡ הרשימה המלאה (אלפי שורות) נטענת רק בלשונית שמציגה אותה, ובמקביל.
+    // שאר הלשוניות מקבלות רק מונים — בלי 11 סבבי רשת סדרתיים בכל מעבר/רענון.
+    const needList = tab === 'subscribers' || (tab === 'nedarim' && !can('edit'))
+    const since = daysAgoIso(30)
+    const count = (f: (q: any) => any) => // eslint-disable-line @typescript-eslint/no-explicit-any
+      f(db.from('gilyonot_subscribers').select('id', { count: 'exact', head: true })) as PromiseLike<{ count: number | null }>
+    const [active, recent, total, listRows, nedarimView, { data: iss }, { data: stats }] = await Promise.all([
+      count(q => q.eq('status', 'active')),
+      count(q => q.eq('status', 'active').gte('created_at', since)),
+      count(q => q),
+      needList ? loadSubscribers(db) : Promise.resolve(null),
+      // הגדרות המשיכה מנדרים (בלי המפתח) — רק למי שרשאי לערוך
+      can('edit') ? getPullView(db) : Promise.resolve(null),
       db.from('gilyonot_issues').select('id, title, parasha, subject, intro, body_html, design, file_name, file_size, file_path, status, delivery_mode, total_count, created_at, started_at, completed_at')
         .order('created_at', { ascending: false }).limit(500),
       db.from('gilyonot_issue_stats').select('*'),
     ])
-    // הגדרות המשיכה מנדרים (בלי המפתח) — רק למי שרשאי לערוך
-    if (can('edit')) nedarim = await getPullView(db)
+    counts = { active: active.count ?? 0, recent: recent.count ?? 0, removed: (total.count ?? 0) - (active.count ?? 0) }
+    if (listRows === 'error') error = 'טעינת רשימת התפוצה נכשלה. ייתכן שהמיגרציה 20261016_gilyonot.sql עוד לא הורצה.'
+    else if (listRows) subscribers.push(...listRows)
+    nedarim = nedarimView
     const byId = new Map((stats ?? []).map(s => [s.issue_id as string, s]))
     issues = (iss ?? []).map(i => {
       const s = byId.get(i.id)
@@ -76,14 +85,26 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
       <PageHeader title="גיליונות החתם סופר" subtitle={`רשימת התפוצה והגיליון השבועי · נשלח מ-${GILYONOT_FROM_NAME} <${GILYONOT_FROM_EMAIL}>`} />
       {error && <p role="alert" className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</p>}
       <GilyonotClient
-        tab={tab} subscribers={subscribers} nedarim={nedarim} distributors={distributors} issues={issues} defaultParasha={currentParasha()}
+        tab={tab} subscribers={subscribers} counts={counts} nedarim={nedarim} distributors={distributors} issues={issues} defaultParasha={currentParasha()}
         canAdd={can('add')} canEdit={can('edit')} canDelete={can('delete')}
       />
     </div>
   )
 }
 
-type GilyonotDistributorsProps = NonNullable<React.ComponentProps<typeof GilyonotClient>['distributors']>
+// עמודים במקביל: ספירה קודם, ואז כל העמודים יוצאים יחד.
+async function loadSubscribers(db: NonNullable<ReturnType<typeof getServiceClient>>): Promise<SubscriberView[] | 'error'> {
+  const { count } = await db.from('gilyonot_subscribers').select('id', { count: 'exact', head: true })
+  const pages = Math.max(1, Math.ceil((count ?? 0) / PAGE))
+  const res = await Promise.all(Array.from({ length: pages }, (_, i) =>
+    db.from('gilyonot_subscribers')
+      .select('id, email, full_name, source, status, created_at, unsubscribed_at')
+      .order('created_at', { ascending: false }).range(i * PAGE, (i + 1) * PAGE - 1)))
+  if (res.some(r => r.error)) return 'error'
+  return res.flatMap(r => (r.data ?? []) as SubscriberView[])
+}
+
+type GilyonotDistributorsProps =NonNullable<React.ComponentProps<typeof GilyonotClient>['distributors']>
 
 async function loadDistributors(db: NonNullable<ReturnType<typeof getServiceClient>>): Promise<GilyonotDistributorsProps> {
   const rows: DistributorView[] = []

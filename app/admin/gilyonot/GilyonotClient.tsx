@@ -71,6 +71,7 @@ const json = (method: string, body: unknown): RequestInit => ({ method, headers:
 export default function GilyonotClient(props: {
   tab: 'subscribers' | 'issues' | 'nedarim' | 'distributors'
   subscribers: SubscriberView[]
+  counts: { active: number; recent: number; removed: number }
   nedarim: NedarimPullView | null
   distributors: Omit<React.ComponentProps<typeof Distributors>, 'canAdd' | 'canEdit' | 'canDelete'> | null
   issues: IssueView[]
@@ -79,7 +80,7 @@ export default function GilyonotClient(props: {
   canEdit: boolean
   canDelete: boolean
 }) {
-  const active = props.subscribers.filter(s => s.status === 'active').length
+  const active = props.counts.active
   const tabs = [
     { key: 'subscribers', label: 'רשימת תפוצה', count: active, icon: Users },
     { key: 'issues', label: 'גיליונות ושליחה', count: props.issues.length, icon: Newspaper },
@@ -88,7 +89,7 @@ export default function GilyonotClient(props: {
   ]
   return (
     <div className="space-y-6">
-      <Overview subscribers={props.subscribers} active={active} issues={props.issues} />
+      <Overview counts={props.counts} issues={props.issues} />
 
       <nav aria-label="לשוניות">
         <div className="flex flex-wrap gap-1 rounded-2xl bg-slate-200/60 p-1 sm:inline-flex">
@@ -120,15 +121,8 @@ export default function GilyonotClient(props: {
 
 // ─── תמונת מצב בראש העמוד ────────────────────────────────────────────────────
 
-function Overview({ subscribers, active, issues }: { subscribers: SubscriberView[]; active: number; issues: IssueView[] }) {
-  const [now] = useState(() => Date.now())
-  const { recent, removed } = useMemo(() => {
-    const since = now - 30 * 86_400_000
-    return {
-      recent: subscribers.filter(s => s.status === 'active' && new Date(s.created_at).getTime() >= since).length,
-      removed: subscribers.length - active,
-    }
-  }, [subscribers, active, now])
+function Overview({ counts, issues }: { counts: { active: number; recent: number; removed: number }; issues: IssueView[] }) {
+  const { active, recent, removed } = counts
   const lastSent = issues.find(i => i.status !== 'draft')
   const draft = issues.find(i => i.status === 'draft')
 
