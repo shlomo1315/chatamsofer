@@ -20,19 +20,21 @@ import { loadMaternityCardOnApproval } from './maternityCards'
 import { addTlush } from '@/lib/nedarim'
 
 // מסד מדומה עם מצב משותף: ה-UPDATE עם or() הוא נעילה אטומית (סינכרוני, כמו ב-SQL)
-function statefulAdmin() {
+function statefulAdmin(guards = new Set<string>(), initial: Record<string, unknown> = {}) {
   const aid: Record<string, unknown> = {
     id: 'a1', beneficiary_id: 'b1', card_balance: 0, card_load_status: null, card_tlush_id: null,
-    birth_date: null, wants_food_card: true,
+    birth_date: null, wants_food_card: true, ...initial,
   }
   const ben = { id: 'b1', id_number: '1', spouse_id_number: null, nedarim_id: 'c1', email: null }
   const from = (table: string) => {
     let patch: Record<string, unknown> | null = null
     let lock = false
+    let guardInsert: string | null = null
     const q: Record<string, unknown> = {}
     q.select = () => q
     q.eq = () => q
-    q.insert = () => q
+    q.insert = (r: { aid_id?: string }) => { if (table === 'maternity_load_guard') guardInsert = r.aid_id ?? null; return q }
+    q.is = () => q
     q.update = (p: Record<string, unknown>) => { patch = p; return q }
     q.or = () => { lock = true; return q }
     q.maybeSingle = () => Promise.resolve({ data: table === 'maternity_aids' ? { ...aid } : ben })
@@ -47,6 +49,10 @@ function statefulAdmin() {
           return Promise.resolve({ data: [] }).then(res)
         }
         Object.assign(aid, patch)
+      }
+      if (guardInsert) {
+        if (guards.has(guardInsert)) return Promise.resolve({ error: { code: '23505', message: 'dup' } }).then(res)
+        guards.add(guardInsert)
       }
       return Promise.resolve({ data: null }).then(res)
     }
@@ -64,5 +70,14 @@ describe('טעינת כרטיס יולדת: נעילה אטומית', () => {
     ])
     expect(vi.mocked(addTlush)).toHaveBeenCalledTimes(1)
     expect([r1.already, r2.already].filter(Boolean)).toHaveLength(1)
+  })
+
+  it('נעילה שנתקעה (pending ישן) אחרי טעינה שכבר יצאה: החסם בבסיס הנתונים מונע טעינה שנייה', async () => {
+    vi.mocked(addTlush).mockClear()
+    // הטעינה הראשונה נתקעה אחרי שהחסם נלקח; הנעילה בתיק פגה ושוחררה
+    const admin = statefulAdmin(new Set(['a1']), { card_load_status: 'failed' })
+    const r = await loadMaternityCardOnApproval(admin, 'a1')
+    expect(vi.mocked(addTlush)).not.toHaveBeenCalled()
+    expect(r.already).toBe(true)
   })
 })
