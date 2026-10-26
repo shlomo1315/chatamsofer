@@ -20,3 +20,22 @@ describe('centerMonthlyLoad', () => {
     expect(normalizeCallerPhone('0501234567')).toBe('0501234567')
   })
 })
+
+describe('runMonthlyLoad: חריגה אחרי הפנייה לנדרים', () => {
+  it('לא משחרר את החודש (עמום, אולי נטען) ולכן אין טעינה כפולה', async () => {
+    const { vi } = await import('vitest')
+    vi.resetModules()
+    vi.doMock('./nedarim', () => ({
+      getNedarimCreds: async () => ({}), getMaternityLimitedId: async () => null,
+      findClientByZeout: async () => null, saveClientCard: async () => null, setMagneticCard: async () => ({ ok: true }),
+      addTlush: async () => { throw new Error('timeout') },
+    }))
+    const { runMonthlyLoad } = await import('./centerMonthlyLoad')
+    const rpc = vi.fn(async (name: string) => (name === 'reserve_center_monthly_load' ? { data: 'ok', error: null } : { data: null, error: null }))
+    const admin = { rpc, from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }) }) }
+    const r = await runMonthlyLoad(admin as never, { center_id: 'c', center_name: 'מ', nedarim_client_id: '1' } as never)
+    expect(r.result).toBe('error')
+    expect(rpc.mock.calls.map(c => c[0])).not.toContain('release_center_monthly_load')
+    vi.doUnmock('./nedarim')
+  })
+})
