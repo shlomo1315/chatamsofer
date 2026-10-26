@@ -18,6 +18,7 @@ export const MATERNITY_LOAD_AMOUNT = 600
 // שיוך הכרטיס הפיזי/מוקד נעשה בהמשך ידנית. best-effort — לא חוסם את אישור הלידה.
 export async function loadMaternityCardOnApproval(
   admin: SupabaseClient, aidId: string, amount = MATERNITY_LOAD_AMOUNT,
+  opts: { deferLowStockAlert?: boolean } = {},
 ): Promise<{ ok: boolean; notConfigured?: boolean; already?: boolean; awaitingStock?: boolean; notWanted?: boolean; error?: string; clientId?: string | null }> {
   const { data: aid } = await admin
     .from('maternity_aids')
@@ -112,7 +113,9 @@ export async function loadMaternityCardOnApproval(
   }
 
   // ירדנו למלאי נמוך? נשלח התראה (best-effort, לא חוסם)
-  await maybeSendLowStockAlert(admin, remaining)
+  // ⚠️ בחלוקה לממתינות ההתראה נדחית לסוף (processAwaitingStock): אחרת מלאי
+  // שירד 50, 49, ... היה שולח "מלאי נמוך" באמצע החלוקה, לפי מספר שאינו סופי.
+  if (!opts.deferLowStockAlert) await maybeSendLowStockAlert(admin, remaining)
 
   const { data: b } = await admin
     .from('beneficiaries')
@@ -438,7 +441,7 @@ export async function processAwaitingStock(admin: SupabaseClient): Promise<Await
   for (const w of waiting) {
     if (balance <= 0) break
     // loadMaternityCardOnApproval מנכה כרטיס אטומית ומטעין בנדרים. אם אין מלאי → awaitingStock=true.
-    const r = await loadMaternityCardOnApproval(admin, w.id)
+    const r = await loadMaternityCardOnApproval(admin, w.id, undefined, { deferLowStockAlert: true })
     if (r.awaitingStock) break        // המלאי אזל בדיוק כעת — עוצרים
 
     // ⚠️ נדרים לא מוגדר → אף יולדת לא תיטען. קודם הלולאה המשיכה בשקט:
@@ -499,6 +502,9 @@ export async function processAwaitingStock(admin: SupabaseClient): Promise<Await
     }
     balance = await getStockBalance(admin)
   }
+  // התראת מלאי נמוך פעם אחת, לפי המלאי הסופי אחרי החלוקה. קוראים מחדש:
+  // אחרי כשל (continue) המשתנה balance לא מתעדכן.
+  await maybeSendLowStockAlert(admin, await getStockBalance(admin))
   return out
 }
 

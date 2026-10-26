@@ -124,6 +124,13 @@ export default function StockManager() {
     setLoading(false)
   }, [])
 
+  // ⚠️ החלוקה לממתינות רצה בשרת ברקע (כ-4 שניות לכרטיס), ולכן אחרי הוספת
+  // מלאי המסך מתרענן כמה פעמים בדקות הקרובות כדי להראות את ההתקדמות.
+  const followDistribution = useCallback(() => {
+    void load()
+    for (const sec of [10, 30, 60, 120, 240]) setTimeout(() => { void load() }, sec * 1000)
+  }, [load])
+
   // החזרת כרטיס תלוי למלאי — ניכוי שאינו מגובה בלידה מאושרת.
   const returnCard = useCallback(async (row: StrayRow) => {
     setReturning(row.aidId)
@@ -142,8 +149,8 @@ export default function StockManager() {
       }
     } catch (e) { /* ignore */ }
     setReturning(null)
-    await load()
-  }, [load])
+    followDistribution()
+  }, [followDistribution])
 
   // ביטול טעינה של לידה שאינה מאושרת — פורק את הכסף בנדרים, מנתק את הכרטיס
   // המגנטי, מחזיר את הכרטיס למלאי ושולח מייל תיקון למשפחה.
@@ -202,15 +209,13 @@ export default function StockManager() {
         body: JSON.stringify({ runQueue: true }),
       })
       const d = await r.json()
-      // ⚠️ גם כשל מדווח למסך: "0 טופלו" בלי סיבה נראה כמו באג ולא ככשל אמיתי.
-      if (d.notConfigured) setFlash('נדרים אינו מוגדר — לא ניתן להטעין כרטיסים')
-      else if (d.failed > 0) setFlash(`${d.processed} טופלו · ${d.failed} נכשלו — ${(d.errors ?? []).join(' · ') || 'ראה פירוט בכרטסת'}`)
-      else if (d.processed > 0) setFlash(`${d.processed} יולדות טופלו וקיבלו שובר`)
-      else setFlash('אין יולדות לטיפול כרגע')
-      await load()
+      if (!r.ok) setFlash(d.error || 'שגיאה בהרצת התור')
+      // ⚠️ התור רץ ברקע. כשל ליולדת מוצג ליד שמה ברשימת הממתינות.
+      else setFlash(d.alreadyRunning ? 'החלוקה כבר רצה ברקע, והרשימה תתעדכן' : 'החלוקה ליולדות הממתינות מתבצעת ברקע, והרשימה תתעדכן')
+      followDistribution()
     } catch (e) { setFlash('שגיאה בהרצת התור') }
     setRunning(false)
-  }, [load])
+  }, [followDistribution])
   useEffect(() => { const t = setTimeout(() => { void load() }, 0); return () => clearTimeout(t) }, [load])
 
   const low = balance != null && balance <= 5
@@ -656,7 +661,7 @@ export default function StockManager() {
           issued={issuedCards}
           unapprovedCount={unapproved.length}
           onClose={() => setModal(null)}
-          onDone={(msg) => { setModal(null); setFlash(msg); setTimeout(() => setFlash(''), 5000); load() }}
+          onDone={(msg) => { setModal(null); setFlash(msg); setTimeout(() => setFlash(''), 8000); followDistribution() }}
         />
       )}
 
@@ -666,8 +671,7 @@ export default function StockManager() {
           currentBalance={balance ?? 0}
           awaiting={awaiting}
           onClose={() => setModal(null)}
-          onDone={(msg) => { setModal(null); setFlash(msg); setTimeout(() => setFlash(''), 4000); load() }}
-          onRefresh={load}
+          onDone={(msg) => { setModal(null); setFlash(msg); setTimeout(() => setFlash(''), 8000); followDistribution() }}
         />
       )}
     </div>
@@ -719,7 +723,7 @@ function BaselineModal({ currentBalance, issued, unapprovedCount, onClose, onDon
       })
       const d = await r.json()
       if (!r.ok) { setErr(d.error || 'שגיאה'); setBusy(false); return }
-      const extra = d.processed > 0 ? ` · ${d.processed} יולדות ממתינות נטענו` : ''
+      const extra = d.queued ? ' · החלוקה ליולדות הממתינות מתבצעת ברקע, והרשימה תתעדכן' : ''
       onDone(`המלאי נקבע ל-${target} כרטיסים${extra}`)
     } catch (e) { setErr(networkErrorMessage(e)); setBusy(false) }
   }
@@ -825,9 +829,9 @@ function BaselineModal({ currentBalance, issued, unapprovedCount, onClose, onDon
 }
 
 // מודאל הוספת / הורדת מלאי
-function StockMovementModal({ mode, currentBalance, awaiting, onClose, onDone, onRefresh }: {
+function StockMovementModal({ mode, currentBalance, awaiting, onClose, onDone }: {
   mode: 'add' | 'remove'; currentBalance: number; awaiting: number
-  onClose: () => void; onDone: (msg: string) => void; onRefresh: () => void
+  onClose: () => void; onDone: (msg: string) => void
 }) {
   const [qty, setQty] = useState('')
   const [note, setNote] = useState('')
@@ -859,19 +863,9 @@ function StockMovementModal({ mode, currentBalance, awaiting, onClose, onDone, o
       const d = await r.json()
       if (!r.ok) { setErr(d.error || 'שגיאה'); setBusy(false); return }
 
-      // ⚠️ כשל בשיוך לממתינות אינו כשל של הוספת המלאי — המלאי כן נוסף.
-      // מציגים אותו במודאל במקום לסגור עם הודעת הצלחה מטעה.
-      if (isAdd && (d.notConfigured || d.failed > 0)) {
-        const detail = Array.isArray(d.errors) && d.errors.length ? ` (${d.errors[0]})` : ''
-        setErr(d.notConfigured
-          ? `נוספו ${n} כרטיסים, אך השיוך לממתינות נכשל — נדרים אינו מוגדר${detail}`
-          : `נוספו ${n} כרטיסים. ${d.processed} יולדות קיבלו שובר, ${d.failed} נכשלו${detail}`)
-        setBusy(false)
-        onRefresh()
-        return
-      }
-
-      const processedMsg = isAdd && d.processed > 0 ? ` — ${d.processed} יולדות מרשימת ההמתנה קיבלו שובר` : ''
+      // ⚠️ השיוך לממתינות רץ ברקע ולא בתוך הבקשה (נקטע בפסק זמן כשהיו הרבה).
+      // כשל ליולדת מוצג ליד שמה ברשימת הממתינות.
+      const processedMsg = isAdd && d.queued ? ' · החלוקה ליולדות הממתינות מתבצעת ברקע, והרשימה תתעדכן' : ''
       onDone(isAdd ? `נוספו ${n} כרטיסים למלאי${processedMsg}` : `הורדו ${n} כרטיסים מהמלאי`)
     } catch (e) { setErr(networkErrorMessage(e)); setBusy(false) }
   }
