@@ -9,3 +9,12 @@ describe('gilyonFileName', () => {
     expect(gilyonFileName({ title: 'גיליון: "מיוחד"/א', parasha: '' }, 'x.docx')).toBe('גיליון מיוחד א.docx')
   })
 })
+
+describe('attachmentDisposition', () => {
+  it('שם עברי: filename בטוח ו-filename* מקודד כראוי', async () => {
+    const { attachmentDisposition } = await import('./gilyonotFileName')
+    const cd = attachmentDisposition('פרשת וירא.pdf')
+    expect(cd).toBe(`attachment; filename="gilyon.pdf"; filename*=UTF-8''${encodeURIComponent('פרשת וירא.pdf')}`)
+    expect(cd.split('filename="')[1].split('"')[0]).toMatch(/^[\x20-\x7e]+$/)
+  })
+})
