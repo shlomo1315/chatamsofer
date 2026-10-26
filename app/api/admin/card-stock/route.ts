@@ -4,12 +4,20 @@ import { getStockBalance, addStockMovement, setBaselineStock } from '@/lib/cardS
 import { reconcileStock, heldAidIds, approvedCardCoverage, scopedLedger } from '@/lib/cardStockRecon'
 import { getPurchases, validatePurchase } from '@/lib/cardPurchases'
 import { processAwaitingStock } from '@/lib/maternityCards'
+import { startAwaitingStockRun } from '@/lib/awaitingStockRunner'
 import { maybeSendLowStockAlert, resetAlertIfAboveThreshold } from '@/lib/cardStockAlert'
 import { isAwaitingCard, AWAITING_SELECT } from '@/lib/awaitingFilter'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { fetchByIds } from '@/lib/fetchByIds'
 
 export const dynamic = 'force-dynamic'
+
+// ⚠️ החלוקה לממתינות (כ-4 שניות לכרטיס) רצה ברקע ולא בתוך הבקשה: 50 כרטיסים
+// נקטעו בפסק זמן והמסך הציג שגיאה אף שהמלאי נוסף. התשובה חוזרת מיד עם
+// queued=true, והמסך מתרענן כדי להראות את ההתקדמות.
+function distributeInBackground(admin: NonNullable<ReturnType<typeof getServiceClient>>) {
+  return startAwaitingStockRun(() => processAwaitingStock(admin))
+}
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
 // GET: מלאי נוכחי + יומן התנועות האחרונות (לתצוגה אונליין)
@@ -287,13 +295,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: e instanceof Error ? e.message : 'שגיאה' }, { status: 500 })
     }
     // המלאי גדל → יש כרטיסים לממתינות. קטן → אין מה להריץ.
-    let processed = 0
+    let queued = false
     if (result.delta > 0) {
       await resetAlertIfAboveThreshold(admin, result.balance)
-      const res = await processAwaitingStock(admin)
-      processed = res.processed
+      distributeInBackground(admin)
+      queued = true
     }
-    return NextResponse.json({ balance: result.balance, delta: result.delta, processed })
+    return NextResponse.json({ balance: result.balance, delta: result.delta, queued })
   }
 
   // ── החזרת כרטיס תלוי למלאי ──────────────────────────────────────────────
@@ -340,19 +348,15 @@ export async function POST(request: NextRequest) {
     // הכרטיס חזר למלאי → מיד לשחרר ממתינות בתור, כמו בכל הוספת מלאי
     const balance = await getStockBalance(admin)
     await resetAlertIfAboveThreshold(admin, balance)
-    const res = await processAwaitingStock(admin)
-    return NextResponse.json({ balance, processed: res.processed, failed: res.failed, errors: res.errors })
+    distributeInBackground(admin)
+    return NextResponse.json({ balance, queued: true })
   }
 
   // הרצת התור בלבד (delta=0) — לטיפול ביולדות שנתקעו ולא נכנסו לתור,
   // בלי להוסיף מלאי. מאפשר "לשחרר" מצב תקוע מהמסך.
   if (body.runQueue) {
-    const res = await processAwaitingStock(admin)
-    return NextResponse.json({
-      balance: await getStockBalance(admin),
-      processed: res.processed, failed: res.failed,
-      notConfigured: res.notConfigured, errors: res.errors,
-    })
+    const { alreadyRunning } = distributeInBackground(admin)
+    return NextResponse.json({ balance: await getStockBalance(admin), queued: true, alreadyRunning })
   }
 
   const delta = Math.trunc(Number(body.delta))
@@ -377,26 +381,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'שגיאה' }, { status: 500 })
   }
 
-  // הוספת מלאי → שיוך אוטומטי (FIFO) לממתינות + איפוס סמן ההתראה אם חזרנו מעל הסף
-  let processed = 0
-  let failed = 0
-  let notConfigured = false
-  let stockErrors: string[] = []
+  // הוספת מלאי → שיוך אוטומטי (FIFO) לממתינות ברקע + איפוס סמן ההתראה אם חזרנו מעל הסף.
+  // כשל ליולדת נשמר בתיק שלה (card_load_status='failed') ומוצג ברשימת הממתינות.
   if (delta > 0) {
     await resetAlertIfAboveThreshold(admin, balance)
-    const res = await processAwaitingStock(admin)
-    processed = res.processed
-    failed = res.failed
-    notConfigured = res.notConfigured
-    stockErrors = res.errors
-    balance = await getStockBalance(admin) // רענון אחרי השיוך
-  } else {
-    // הורדה ידנית עלולה להוריד אותנו לסף — בדיקת התראה
-    await maybeSendLowStockAlert(admin, balance)
+    distributeInBackground(admin)
+    return NextResponse.json({ balance, queued: true })
   }
-
-  // failed/notConfigured מדווחים למסך — כדי שכשל בשיוך לא ייעלם בשקט
-  return NextResponse.json({ balance, processed, failed, notConfigured, errors: stockErrors })
+  // הורדה ידנית עלולה להוריד אותנו לסף — בדיקת התראה
+  await maybeSendLowStockAlert(admin, balance)
+  return NextResponse.json({ balance })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

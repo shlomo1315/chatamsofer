@@ -139,8 +139,10 @@ export async function unloadAidCard(
       })
       stockReturned = true
       // הכרטיס חזר למלאי → מיד לשחרר יולדת שממתינה בתור
+      // ⚠️ ברקע ובמנעול משותף: פריקה של כמה תיקים ברצף הייתה מריצה כמה חלוקות במקביל
       const { processAwaitingStock } = await import('@/lib/maternityCards')
-      await processAwaitingStock(admin)
+      const { startAwaitingStockRun } = await import('@/lib/awaitingStockRunner')
+      startAwaitingStockRun(() => processAwaitingStock(admin))
     } catch (e) {
       console.error('[unloadAidCard] החזרת הכרטיס למלאי נכשלה:', e instanceof Error ? e.message : e)
     }

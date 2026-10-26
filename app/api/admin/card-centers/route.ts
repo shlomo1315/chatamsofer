@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, requirePermission, forbidden } from '@/lib/apiAuth'
 import { processAwaitingStock } from '@/lib/maternityCards'
+import { startAwaitingStockRun } from '@/lib/awaitingStockRunner'
 import { notifyCenterStockReplenished } from '@/lib/cardVoucherNotify'
 
 export const dynamic = 'force-dynamic'
@@ -76,7 +77,8 @@ export async function POST(request: NextRequest) {
   })
   if (error) return NextResponse.json({ error: error.code === '23505' ? 'מוקד בשם זה כבר קיים' : error.message }, { status: 400 })
   // מלאי חדש נוסף → שיוך אוטומטי של יולדות בתור "ממתין למלאי" ושליחת שובר
-  await processAwaitingStock(admin)
+  // ברקע: חלוקה ארוכה נקטעה בפסק זמן (ראו lib/awaitingStockRunner.ts)
+  startAwaitingStockRun(() => processAwaitingStock(admin))
   return NextResponse.json({ centers: await listCenters(admin) })
 }
 
@@ -98,7 +100,8 @@ export async function PATCH(request: NextRequest) {
   const { error } = await admin.from('card_centers').update(updates).eq('id', id)
   if (error) return NextResponse.json({ error: error.code === '23505' ? 'מוקד בשם זה כבר קיים' : error.message }, { status: 400 })
   // עדכון מלאי (למשל הגדלת כמות) → שיוך אוטומטי (טעינת נדרים) + שליחת שובר כרטיס לממתינים
-  await processAwaitingStock(admin)
+  // ברקע: חלוקה ארוכה נקטעה בפסק זמן (ראו lib/awaitingStockRunner.ts)
+  startAwaitingStockRun(() => processAwaitingStock(admin))
   if (stock !== undefined) await notifyCenterStockReplenished(admin, String(id))
   return NextResponse.json({ centers: await listCenters(admin) })
 }
