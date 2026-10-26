@@ -86,10 +86,14 @@ export async function POST(request: NextRequest) {
   }
 
   const uploaded: { kind: string; url: string; name: string }[] = []
+  const paths: string[] = []
+  // מחיקת קבצים שכבר עלו כשהשמירה נכשלת, כדי שלא יישארו יתומים במאגר
+  const cleanup = async () => { if (paths.length) await admin.storage.from(BUCKET).remove(paths).catch(() => {}) }
   for (const p of prepared) {
     const path = `public-medical/${Date.now()}-${Math.random().toString(36).slice(2)}.${p.ext}`
     const { error } = await admin.storage.from(BUCKET).upload(path, p.buf, { contentType: p.type, upsert: false })
-    if (error) return NextResponse.json({ error: 'שגיאה בהעלאת המסמך' }, { status: 500 })
+    if (error) { await cleanup(); return NextResponse.json({ error: 'שגיאה בהעלאת המסמך' }, { status: 500 }) }
+    paths.push(path)
     uploaded.push({ kind: p.kind, url: admin.storage.from(BUCKET).getPublicUrl(path).data.publicUrl, name: p.name })
   }
 
@@ -110,7 +114,7 @@ export async function POST(request: NextRequest) {
     document_name: firstMedical?.name ?? null,
     status: 'pending',
   }).select('id').single()
-  if (error || !row) return NextResponse.json({ error: 'שגיאה בשמירת הבקשה' }, { status: 500 })
+  if (error || !row) { await cleanup(); return NextResponse.json({ error: 'שגיאה בשמירת הבקשה' }, { status: 500 }) }
 
   if (uploaded.length) {
     await admin.from('financial_aid_documents').insert(
