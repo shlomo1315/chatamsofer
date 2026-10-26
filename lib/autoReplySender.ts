@@ -137,11 +137,11 @@ export async function sendAutoReply(
     // ⚠️ התיבה נשארת במפתח: מייל שהופנה גם ל-office וגם ל-igud אמור
     // לקבל מענה משתיהן, ולכן הן אינן חוסמות זו את זו.
     //
-    // ⚠️ המחיר: פונה ששולח שני מיילים *שונים* לאותה תיבה תוך 10 דקות
-    // יקבל מענה אחד בלבד. זה מקובל — המענה גנרי וזהה בשני המקרים, ומענה
+    // ⚠️ המחיר: פונה ששולח שני מיילים *שונים* לאותה תיבה תוך 2 דקות
+    // יקבל מענה אחד בלבד (חלון קצר של 2 דקות, מספיק לעותקי dual-delivery). זה מקובל — המענה גנרי וזהה בשני המקרים, ומענה
     // כפול מרעיש הרבה יותר ממענה שהושהה.
     const lockKey = `auto_reply:${dept}:${from}`.slice(0, 200)
-    const LOCK_TTL_MS = 10 * 60 * 1000
+    const LOCK_TTL_MS = 2 * 60 * 1000
     const nowMs = Date.now()
     const { data: prevLock } = await db.from('app_settings').select('value').eq('key', lockKey).maybeSingle()
     const prevAt = prevLock?.value ? Date.parse(String(prevLock.value)) : NaN
