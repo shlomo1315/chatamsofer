@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { getNedarimCreds, getClientCard, getClientCardFull, prikatTlush } from '@/lib/nedarim'
+import { getNedarimCreds, getClientCardResult, parseNedarimAmount, prikatTlush } from '@/lib/nedarim'
+import { tlushimOf } from '@/lib/maternityLoadGuard'
 import { logActivity } from '@/lib/activityLog'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -8,8 +9,8 @@ import { logActivity } from '@/lib/activityLog'
 // card_load_status / card_tlush_id של התיק (הם מצביעים על הטעינה שנשמרת).
 //
 // ⚠️ נדרים מורשה רק מכתובות IP מסוימות (שרת האתר), ולכן זה רץ מה-route ולא מבחוץ.
-// ⚠️ אין ביטול חלקי: אם היתרה בכרטיס קטנה מסכום הטעינה, הכסף כבר נוצל (בחלקו)
-// והתיק מדולג ומדווח.
+// ⚠️ פורקים רק את היתרה שנשארה ב-tlush העודף עצמו (FreeAmount); מה שכבר נוצל
+// לא ניתן להחזרה ומדווח בנפרד. ה-tlush התקין לא נוגע.
 // ─────────────────────────────────────────────────────────────────────────────
 export const DUPLICATE_LOADS = [
   { aidPrefix: 'f83b8b1c', clientId: '529031', excess: '4341268', kept: '4341269' },
@@ -25,16 +26,20 @@ export const DUPLICATE_LOADS = [
 export const CANCEL_ACTION = 'maternity_duplicate_load_cancelled'
 const AMOUNT = 600
 
-/** ניתן לבטל טעינה מלאה רק כשהיתרה מכסה אותה. */
-export function canCancelFully(balance: number | null, amount = AMOUNT): boolean {
-  return balance != null && balance >= amount
+/** היתרה שנשארה ב-tlush מסוים לפי Tlushim של GetClientCard, או null אם ה-tlush לא ברשימה. */
+export function tlushRemaining(card: unknown, tlushId: string): number | null {
+  const t = tlushimOf(card).find(x => String(x.TlushId ?? x.Id ?? '').trim() === tlushId)
+  return t ? (parseNedarimAmount(t.FreeAmount) ?? 0) : null
 }
 
 export interface DuplicateRow {
   aidPrefix: string; name: string; clientId: string; excessTlush: string; keptTlush: string
-  balanceBefore: number | null; spentEstimate: number | null
-  status: 'ready' | 'executed' | 'skipped_spent' | 'already_cancelled' | 'mismatch' | 'failed'
-  message?: string; balanceAfter?: number | null; raw?: unknown
+  /** יתרה כוללת בכרטיס לפני / אחרי */
+  balanceBefore: number | null; balanceAfter?: number | null
+  /** מה שנשאר ב-tlush העודף (ניתן לפריקה), ומה שכבר נוצל ממנו (לא ניתן להחזרה) */
+  excessRemaining: number | null; excessSpent: number | null
+  status: 'ready' | 'executed' | 'already_unloaded' | 'already_cancelled' | 'mismatch' | 'failed'
+  message?: string
 }
 
 export async function processDuplicateLoads(
@@ -47,7 +52,7 @@ export async function processDuplicateLoads(
   for (const d of DUPLICATE_LOADS) {
     const row: DuplicateRow = {
       aidPrefix: d.aidPrefix, name: '', clientId: d.clientId, excessTlush: d.excess, keptTlush: d.kept,
-      balanceBefore: null, spentEstimate: null, status: 'ready',
+      balanceBefore: null, excessRemaining: null, excessSpent: null, status: 'ready',
     }
     out.push(row)
     try {
@@ -73,28 +78,29 @@ export async function processDuplicateLoads(
         .eq('action', CANCEL_ACTION).eq('entity_id', aid.id).eq('details->>tlushId', d.excess)
       if (done?.length) { row.status = 'already_cancelled'; continue }
 
-      const card = await getClientCard(creds, d.clientId)
-      row.balanceBefore = card?.totalFreeAmount ?? null
-      if (!opts.execute) row.raw = await getClientCardFull(creds, d.clientId)
-      if (row.balanceBefore == null) { row.status = 'failed'; row.message = 'לא התקבלה יתרה מנדרים'; continue }
-      // הערכה גסה: שתי טעינות של 600 פחות היתרה (מניחה שאין טעינות אחרות במשפחה)
-      row.spentEstimate = Math.max(0, 2 * AMOUNT - row.balanceBefore)
-      if (!canCancelFully(row.balanceBefore)) {
-        row.status = 'skipped_spent'; row.message = `היתרה (${row.balanceBefore}) קטנה מ-${AMOUNT} — הכסף נוצל, לא בוטל`; continue
+      const { card, message } = await getClientCardResult(creds, d.clientId)
+      if (!card) { row.status = 'failed'; row.message = `נדרים לא החזירו את הכרטיס: ${message}`; continue }
+      row.balanceBefore = parseNedarimAmount(card.TotalFreeAmount)
+      row.excessRemaining = tlushRemaining(card, d.excess)
+      if (row.excessRemaining == null) {
+        row.status = 'already_unloaded'; row.message = 'ה-tlush העודף כבר לא ברשימה בנדרים'; continue
       }
+      row.excessSpent = Math.max(0, Math.round((AMOUNT - row.excessRemaining) * 100) / 100)
+      if (row.excessRemaining <= 0) { row.status = 'already_unloaded'; row.message = 'היתרה בטעינה העודפת כבר 0 — אין מה לפרוק'; continue }
       if (!opts.execute) continue
 
       const r = await prikatTlush(creds, d.excess)
       if (!r.ok) { row.status = 'failed'; row.message = r.message; continue }
-      const after = await getClientCard(creds, d.clientId)
-      row.balanceAfter = after?.totalFreeAmount ?? null
-      const dropped = row.balanceAfter != null ? row.balanceBefore - row.balanceAfter : null
+      const after = await getClientCardResult(creds, d.clientId)
+      row.balanceAfter = after.card ? parseNedarimAmount(after.card.TotalFreeAmount) : null
+      const dropped = row.balanceAfter != null && row.balanceBefore != null
+        ? Math.round((row.balanceBefore - row.balanceAfter) * 100) / 100 : null
       row.status = 'executed'
-      if (dropped !== AMOUNT) row.message = `⚠️ היתרה ירדה ב-${dropped} ולא ב-${AMOUNT} — לבדוק בנדרים`
+      if (dropped !== row.excessRemaining) row.message = `⚠️ היתרה ירדה ב-${dropped} ולא ב-${row.excessRemaining} — לבדוק בנדרים`
       await logActivity(admin, {
         action: CANCEL_ACTION, entityType: 'maternity_aid', entityId: aid.id,
         userId: opts.by ?? null,
-        details: { tlushId: d.excess, keptTlush: d.kept, clientId: d.clientId, balanceBefore: row.balanceBefore, balanceAfter: row.balanceAfter, message: r.message, by: opts.by ?? null },
+        details: { tlushId: d.excess, keptTlush: d.kept, clientId: d.clientId, balanceBefore: row.balanceBefore, balanceAfter: row.balanceAfter, cancelled: row.excessRemaining, spent: row.excessSpent, message: r.message, by: opts.by ?? null },
       })
     } catch (e) {
       row.status = 'failed'; row.message = e instanceof Error ? e.message : String(e)
