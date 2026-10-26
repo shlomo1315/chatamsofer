@@ -46,7 +46,10 @@ export async function DELETE(_r: Request, { params }: Ctx) {
   if (issue.status !== 'draft') return NextResponse.json({ error: 'גיליון שנשלח נשאר בארכיון ואי אפשר למחוק אותו' }, { status: 409 })
   const { error } = await db.from('gilyonot_issues').delete().eq('id', issue.id).eq('status', 'draft')
   if (error) return NextResponse.json({ error: 'המחיקה נכשלה' }, { status: 500 })
-  await db.storage.from('documents').remove([...new Set([issue.file_path, issue.file_path.replace(/\/[^/]+(\.\w+)$/, '/gilyon$1'), issue.file_path.replace(/\/[^/]+(\.\w+)$/, '/compressed$1')])])
+  if (issue.file_path) {
+    // כשל במחיקת הקבצים לא עוצר מחיקת טיוטה תקועה
+    await db.storage.from('documents').remove([...new Set([issue.file_path, issue.file_path.replace(/\/[^/]+(\.\w+)$/, '/gilyon$1'), issue.file_path.replace(/\/[^/]+(\.\w+)$/, '/compressed$1')])]).catch(() => null)
+  }
   await logActivity(db, { userId: staff.userId, action: 'gilyonot_issue_delete', entityType: 'gilyonot_issue', entityId: issue.id, details: { title: issue.title } })
   return NextResponse.json({ ok: true })
 }

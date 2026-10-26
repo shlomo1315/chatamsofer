@@ -474,6 +474,20 @@ function Issues({ rows, activeCount, defaultParasha, canAdd, canEdit, canDelete 
   const [creating, setCreating] = useState(false)
   const [openId, setOpenId] = useState<string | null>(rows.find(r => r.status === 'draft')?.id ?? null)
   const open = rows.find(r => r.id === openId) ?? null
+  const router = useRouter()
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [delError, setDelError] = useState<string | null>(null)
+  const removeDraft = async (r: IssueView) => {
+    if (!confirm(`למחוק את הטיוטה של פרשת ${r.parasha} ואת הקובץ?`)) return
+    setDeletingId(r.id); setDelError(null)
+    try {
+      await api(`/api/admin/gilyonot/issues/${r.id}`, { method: 'DELETE' })
+      if (openId === r.id) setOpenId(null)
+      router.refresh()
+    } catch (e) {
+      setDelError(e instanceof Error ? e.message : 'המחיקה נכשלה')
+    } finally { setDeletingId(null) }
+  }
   const th = 'px-4 py-3 text-right text-xs font-semibold text-slate-500'
 
   return (
@@ -530,7 +544,7 @@ function Issues({ rows, activeCount, defaultParasha, canAdd, canEdit, canDelete 
                 {rows.map(r => {
                   const draft = r.status === 'draft'
                   return (
-                    <tr key={r.id} className={`transition-colors ${r.id === openId ? 'bg-[#2563eb]/[0.03]' : 'hover:bg-slate-50/60'}`}>
+                    <tr key={r.id} onClick={() => setOpenId(r.id)} className={`cursor-pointer transition-colors ${r.id === openId ? 'bg-[#2563eb]/[0.03]' : 'hover:bg-slate-50/60'}`}>
                       <td className="px-4 py-3">
                         <p className="font-semibold text-slate-900">פרשת {r.parasha}</p>
                         <p className="text-xs text-slate-500">{r.title}</p>
@@ -544,9 +558,16 @@ function Issues({ rows, activeCount, defaultParasha, canAdd, canEdit, canDelete 
                       <td className={`hidden px-4 py-3 tabular-nums lg:table-cell ${r.bounced_count ? 'text-rose-700' : 'text-slate-400'}`}>{r.bounced_count || '—'}</td>
                       <td className={`hidden px-4 py-3 tabular-nums lg:table-cell ${r.failed_count ? 'text-rose-700' : 'text-slate-400'}`}>{r.failed_count || '—'}</td>
                       <td className="px-4 py-3 text-left">
-                        <button type="button" className={`${btnGhost} min-h-9 px-3`} onClick={() => setOpenId(r.id)}>
-                          <Eye className="h-4 w-4" aria-hidden />{draft ? 'המשך' : 'פרטים'}
-                        </button>
+                        <div className="flex items-center justify-end gap-1">
+                          <button type="button" className={`${btnGhost} min-h-9 px-3`} onClick={e => { e.stopPropagation(); setOpenId(r.id) }}>
+                            <Eye className="h-4 w-4" aria-hidden />{draft ? 'המשך' : 'פרטים'}
+                          </button>
+                          {draft && canDelete && (
+                            <button type="button" disabled={deletingId === r.id} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50" onClick={e => { e.stopPropagation(); removeDraft(r) }} aria-label={`מחיקת הטיוטה של פרשת ${r.parasha}`}>
+                              {deletingId === r.id ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Trash2 className="h-4 w-4" aria-hidden />}
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )
@@ -555,6 +576,7 @@ function Issues({ rows, activeCount, defaultParasha, canAdd, canEdit, canDelete 
             </table>
           </div>
         )}
+        {delError && <p role="alert" className="border-t border-rose-100 bg-rose-50 px-5 py-3 text-sm text-rose-700">{delError}</p>}
         {rows.length > 0 && <p className="border-t border-slate-100 px-5 py-3 text-xs leading-relaxed text-slate-500">&quot;פתחו&quot; נספר לפי טעינת תמונה במייל, ולכן הוא הערכה: חלק מתוכנות המייל חוסמות תמונות. מי שהוריד את הקובץ נספר גם כמי שפתח.</p>}
       </Card>
     </div>
