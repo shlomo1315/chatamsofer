@@ -1,7 +1,5 @@
 import type { Metadata } from 'next'
 import Image from 'next/image'
-import { getServiceClient } from '@/lib/apiAuth'
-import { joinCities } from '@/lib/gilyonotDistributorJoin'
 import JoinForm from './JoinForm'
 
 export const metadata: Metadata = {
@@ -14,8 +12,6 @@ export const dynamic = 'force-dynamic'
 
 // טופס ההצטרפות הציבורי — שליחה ל-/api/gilyonot/mefitz/join, אישור במסך הניהול.
 export default async function Page() {
-  const db = getServiceClient()
-  const cities = db ? await joinCities(db).catch(() => []) : []
   return (
     <main dir="rtl" className="min-h-screen bg-slate-50 px-4 py-10">
       <div className="mx-auto w-full max-w-lg">
@@ -30,7 +26,7 @@ export default async function Page() {
             ממלאים את הפרטים, והבקשה עוברת לאישור במשרד. אחרי האישור יישלח אליכם מייל עם כל הפרטים.
           </p>
         </header>
-        <JoinForm cities={cities} />
+        <JoinForm />
       </div>
     </main>
   )

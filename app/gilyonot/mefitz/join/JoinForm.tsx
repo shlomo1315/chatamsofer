@@ -1,26 +1,31 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import CityStreetPicker from '@/components/ui/CityStreetPicker'
 import { CheckCircle2 } from 'lucide-react'
 
 const input = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base text-slate-900 focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20'
 const label = 'mb-1 block text-sm font-medium text-slate-700'
-const OTHER = '__other__'
 
 // בדיקה מהירה בדפדפן בלבד. האימות המלא נעשה בשרת (validateJoinRequest).
 const looksLikeEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/.test(s.trim())
 const looksLikePhone = (s: string) => /^0\d{8,9}$/.test(s.replace(/\D/g, ''))
 
-export default function JoinForm({ cities }: { cities: string[] }) {
+export default function JoinForm() {
+  const [cities, setCities] = useState<string[]>([])
+  const [addrCity, setAddrCity] = useState('')
+  useEffect(() => {
+    fetch('/api/gov/cities').then(r => r.json()).then(d => setCities(d.cities ?? [])).catch(() => {})
+  }, [])
   const [website, setWebsite] = useState('')
-  const [form, setForm] = useState({ full_name: '', phone: '', email: '', city: '', otherCity: '', synagogue: '', address: '', quantity: '', notes: '' })
+  const [form, setForm] = useState({ full_name: '', phone: '', email: '', city: '', synagogue: '', address: '', quantity: '', notes: '' })
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
 
-  const city = form.city === OTHER || !cities.length ? form.otherCity : form.city
+  const city = form.city
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -28,7 +33,7 @@ export default function JoinForm({ cities }: { cities: string[] }) {
     if (form.full_name.trim().length < 2) { setError('נא להזין שם מלא'); return }
     if (!looksLikePhone(form.phone)) { setError('נא להזין מספר טלפון תקין'); return }
     if (!looksLikeEmail(form.email)) { setError('נא להזין כתובת מייל תקינה'); return }
-    if (!city.trim()) { setError('נא לבחור עיר לחלוקה'); return }
+    if (!cities.includes(city.trim())) { setError('נא לבחור עיר לחלוקה מתוך הרשימה'); return }
     setSending(true)
     try {
       const res = await fetch('/api/gilyonot/mefitz/join', {
@@ -36,7 +41,7 @@ export default function JoinForm({ cities }: { cities: string[] }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           website, full_name: form.full_name, phone: form.phone, email: form.email, city,
-          synagogue: form.synagogue, address: form.address, quantity: form.quantity, notes: form.notes,
+          synagogue: form.synagogue, address: form.address && addrCity ? `${form.address}, ${addrCity}` : form.address, quantity: form.quantity, notes: form.notes,
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -92,19 +97,11 @@ export default function JoinForm({ cities }: { cities: string[] }) {
 
       <div>
         <label htmlFor="j-city" className={label}>עיר לחלוקה <span className="text-rose-700">*</span></label>
-        {cities.length > 0 && (
-          <select id="j-city" className={input} value={form.city} onChange={set('city')} required>
-            <option value="">בחרו עיר</option>
-            {cities.map(c => <option key={c} value={c}>{c}</option>)}
-            <option value={OTHER}>עיר אחרת</option>
-          </select>
-        )}
-        {(form.city === OTHER || !cities.length) && (
-          <input
-            id={cities.length ? 'j-other-city' : 'j-city'} aria-label="שם העיר" placeholder="שם העיר" maxLength={60}
-            className={`${input} ${cities.length ? 'mt-2' : ''}`} value={form.otherCity} onChange={set('otherCity')}
-          />
-        )}
+        <input
+          id="j-city" list="j-cities" className={input} value={form.city} onChange={set('city')}
+          placeholder="התחילו להקליד ובחרו מהרשימה" autoComplete="off" required
+        />
+        <datalist id="j-cities">{cities.map(c => <option key={c} value={c} />)}</datalist>
       </div>
 
       <div className="grid gap-5 sm:grid-cols-2">
@@ -120,7 +117,10 @@ export default function JoinForm({ cities }: { cities: string[] }) {
 
       <div>
         <label htmlFor="j-addr" className={label}>כתובת למשלוח הגיליונות</label>
-        <input id="j-addr" className={input} value={form.address} onChange={set('address')} autoComplete="street-address" maxLength={160} />
+        <CityStreetPicker
+          city={addrCity} address={form.address}
+          onCityChange={setAddrCity} onAddressChange={v => setForm(f => ({ ...f, address: v }))}
+        />
       </div>
 
       <div>
