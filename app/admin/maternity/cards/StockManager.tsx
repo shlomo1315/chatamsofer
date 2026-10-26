@@ -102,6 +102,7 @@ export default function StockManager() {
   const [modal, setModal] = useState<'add' | 'remove' | 'baseline' | 'purchase' | null>(null)
   const [showHistory, setShowHistory] = useState(false)
   const [flash, setFlash] = useState('')
+  const [reconError, setReconError] = useState('')
 
   const load = useCallback(async () => {
     try {
@@ -112,6 +113,7 @@ export default function StockManager() {
       setAwaitingDetails(Array.isArray(d.awaitingDetails) ? d.awaitingDetails : [])
       setLedger(Array.isArray(d.ledger) ? d.ledger : [])
       setRecon(d.recon && typeof d.recon.totalIn === 'number' ? d.recon as Recon : null)
+      setReconError(typeof d.reconError === 'string' ? d.reconError : '')
       setCoverage(d.coverage && typeof d.coverage.total === 'number' ? d.coverage as Coverage : null)
       setSince(Array.isArray(d.sinceCount) ? d.sinceCount as SinceRow[] : [])
       setIssuedCards(typeof d.issuedCards === 'number' ? d.issuedCards : 0)
@@ -294,6 +296,11 @@ export default function StockManager() {
       {/* ── התאמת מלאי: מאיפה הגיע המספר ── */}
       {/* ⚠️ מוצג תמיד ולא רק בפער: זו הדרך היחידה לאמת את המלאי מול מה שהמנהל
           יודע בוודאות — כמה כרטיסים קנה וכמה לידות אישר. */}
+      {!loading && !recon && reconError && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+          {reconError}
+        </div>
+      )}
       {!loading && recon && (
         <div className="rounded-2xl border border-slate-200 bg-white">
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">

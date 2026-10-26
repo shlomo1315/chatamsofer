@@ -7,6 +7,7 @@ import { processAwaitingStock } from '@/lib/maternityCards'
 import { maybeSendLowStockAlert, resetAlertIfAboveThreshold } from '@/lib/cardStockAlert'
 import { isAwaitingCard, AWAITING_SELECT } from '@/lib/awaitingFilter'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { fetchByIds } from '@/lib/fetchByIds'
 
 export const dynamic = 'force-dynamic'
 const NO_STORE = { 'Cache-Control': 'no-store' }
@@ -47,15 +48,16 @@ export async function GET() {
   if (fullErr) console.error('[card-stock] recon ledger query failed:', fullErr)
 
   const heldIds = heldAidIds(fullLedger)
-  const { data: heldAids, error: heldErr } = heldIds.length
-    ? await admin
-        .from('maternity_aids')
-        .select('id, status, card_load_status, beneficiary:beneficiaries(family_name, spouse_name, full_name)')
-        .in('id', heldIds)
-    : { data: [], error: null }
-  if (heldErr) console.error('[card-stock] recon aids query failed:', heldErr.message)
+  const { rows: heldAids, error: heldErr } = await fetchByIds<Record<string, unknown>>(heldIds, chunk => admin
+    .from('maternity_aids')
+    .select('id, status, card_load_status, beneficiary:beneficiaries(family_name, spouse_name, full_name)')
+    .in('id', chunk))
+  if (heldErr) console.error('[card-stock] recon aids query failed:', heldErr)
+  // ⚠️ כשהשליפה נכשלת לא מחשבים התאמה: בלי פרטי הלידות כל כרטיס היה מוצג
+  // בטעות כ"תלוי". עדיף שגיאה גלויה על מספרים שגויים.
+  const reconError = fullErr || heldErr ? 'טעינת נתוני ההתאמה נכשלה, נסו לרענן' : null
 
-  const recon = reconcileStock(fullLedger, (heldAids ?? []).map(a => {
+  const recon = reconError ? null : reconcileStock(fullLedger, heldAids.map(a => {
     const benRaw = (a as Record<string, unknown>).beneficiary
     const ben = (Array.isArray(benRaw) ? benRaw[0] : benRaw) as Record<string, string> | null
     return {
@@ -163,11 +165,11 @@ export async function GET() {
   )] as string[]
   const sinceNames = new Map<string, string>()
   if (sinceIds.length) {
-    const { data: rows } = await admin
+    const { rows } = await fetchByIds<Record<string, unknown>>(sinceIds, chunk => admin
       .from('maternity_aids')
       .select('id, beneficiary:beneficiaries(family_name, spouse_name, full_name)')
-      .in('id', sinceIds)
-    for (const r of rows ?? []) {
+      .in('id', chunk))
+    for (const r of rows) {
       const benRaw = (r as Record<string, unknown>).beneficiary
       const ben = (Array.isArray(benRaw) ? benRaw[0] : benRaw) as Record<string, string> | null
       const nm = [ben?.family_name, ben?.spouse_name || ben?.full_name].filter(Boolean).join(' ')
@@ -218,7 +220,7 @@ export async function GET() {
   return NextResponse.json(
     {
       balance, ledger: ledger ?? [], awaiting: awaitingList.length, awaitingDetails,
-      recon, coverage, sinceCount, loadedNotApproved,
+      recon, reconError, coverage, sinceCount, loadedNotApproved,
       // ⚠️ "כרטיסים שנמסרו" = לידות מאושרות שמחזיקות כרטיס. לא "כל מה שאי פעם
       // נטען": כרטיס טעון בידי לידה שאינה מאושרת הוא תקלה לתיקון, וספירתו
       // כ"נמסר" הייתה מקבעת אותה במלאי במקום להציג אותה לטיפול.
