@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Send, RefreshCw, Check, X, Clock, Loader2, Mail, AlertTriangle, ExternalLink, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { FinancialAidRequest } from '@/types'
+import { finalMessageDraft } from '@/lib/medicalRequest'
 import { FINANCIAL_AID_STATUS_LABELS, FINANCIAL_AID_STATUS_COLORS } from '@/types'
 import Card from '@/components/ui/Card'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
@@ -27,7 +28,15 @@ export default function FinancialAidDetail({ req }: { req: FinancialAidRequest }
   const [amountInput, setAmountInput] = useState('')
 
   // המשפחה חייבת להיות מאושרת במערכת לפני אישור בקשת הסיוע
-  const eligible = req.beneficiary?.eligibility_status === 'approved'
+  // בקשה ציבורית ממי שאינו רשום: אין משפחה לאשר, וההחלטה והסכום מוזנים ידנית
+  const hasBen = !!req.beneficiary_id
+  const isPublic = req.source === 'public'
+  const eligible = !hasBen || req.beneficiary?.eligibility_status === 'approved'
+  const applicantName = req.beneficiary ? ([req.beneficiary.family_name, req.beneficiary.full_name].filter(Boolean).join(' ') || req.beneficiary.full_name) : (req.applicant_name || '')
+  const draft = finalMessageDraft(applicantName, req.status === 'approved', req.amount ?? null)
+  const [subject, setSubject] = useState(draft.subject)
+  const [body, setBody] = useState(draft.body)
+  const [sentFinal, setSentFinal] = useState(!!req.final_message_sent_at)
   const [showBlock, setShowBlock] = useState(!eligible)
 
   const send = async () => {
@@ -39,6 +48,17 @@ export default function FinancialAidDetail({ req }: { req: FinancialAidRequest }
       if (!r.ok) { setErr(d.error || 'שגיאה'); setBusy(null); return }
       router.refresh()
     } catch { setErr('שגיאת רשת') }
+    setBusy(null)
+  }
+  const sendFinal = async () => {
+    if (!(await confirm({ title: 'שליחת הודעה סופית', message: 'לשלוח את ההודעה למבקש?', confirmLabel: 'שליחה' }))) return
+    setBusy('final'); setErr('')
+    try {
+      const r = await fetch('/api/admin/financial-aid/final-message', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: req.id, subject, body }) })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || 'שגיאה')
+      setSentFinal(true); router.refresh()
+    } catch (e) { setErr(e instanceof Error ? e.message : 'שגיאת רשת') }
     setBusy(null)
   }
   const check = async () => {
@@ -106,7 +126,7 @@ export default function FinancialAidDetail({ req }: { req: FinancialAidRequest }
         <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${FINANCIAL_AID_STATUS_COLORS[req.status]}`}>{FINANCIAL_AID_STATUS_LABELS[req.status]}</span>
       </div>
 
-      {!eligible && (
+      {!eligible && hasBen && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex items-start gap-2.5">
           <AlertTriangle size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
           <div className="text-sm text-amber-800">
@@ -125,7 +145,7 @@ export default function FinancialAidDetail({ req }: { req: FinancialAidRequest }
           <dl className="px-4 py-2.5 text-xs text-green-800 divide-y divide-green-100">
             <div className="flex justify-between py-1"><dt className="text-green-600">סכום מאושר</dt><dd className="font-semibold ltr-num">₪{Number(req.amount ?? 0).toLocaleString('he-IL')}</dd></div>
             <div className="flex justify-between py-1"><dt className="text-green-600">התקבל מהגורם המאשר</dt><dd className="font-semibold ltr-num">{fmtDateTime(req.decision_replied_at)}</dd></div>
-            <div className="flex justify-between py-1"><dt className="text-green-600">הודעה למבקש</dt><dd className="font-semibold">נשלחה ✓</dd></div>
+            <div className="flex justify-between py-1"><dt className="text-green-600">הודעה למבקש</dt><dd className="font-semibold">{isPublic ? (sentFinal ? 'נשלחה ✓' : 'טרם נשלחה') : 'נשלחה ✓'}</dd></div>
           </dl>
         </div>
       )}
@@ -134,14 +154,14 @@ export default function FinancialAidDetail({ req }: { req: FinancialAidRequest }
           <div className="px-4 py-3 bg-red-100/60 text-sm font-bold text-red-800">❌ הבקשה נדחתה</div>
           <dl className="px-4 py-2.5 text-xs text-red-800 divide-y divide-red-100">
             <div className="flex justify-between py-1"><dt className="text-red-500">התקבל מהגורם המאשר</dt><dd className="font-semibold ltr-num">{fmtDateTime(req.decision_replied_at)}</dd></div>
-            <div className="flex justify-between py-1"><dt className="text-red-500">הודעה למבקש</dt><dd className="font-semibold">נשלחה ✓</dd></div>
+            <div className="flex justify-between py-1"><dt className="text-red-500">הודעה למבקש</dt><dd className="font-semibold">{isPublic ? (sentFinal ? 'נשלחה ✓' : 'טרם נשלחה') : 'נשלחה ✓'}</dd></div>
           </dl>
         </div>
       )}
 
       {req.status === 'pending' && (
         <>
-          <p className="text-sm text-slate-600">שלח את הבקשה לגורם המאשר במייל. הוא ישיב בסכום לאישור או X לדחייה, והמערכת תעדכן אוטומטית.</p>
+          <p className="text-sm text-slate-600">{isPublic ? 'שלח את הבקשה לגורם המאשר במייל, עם כל הפרטים והמסמכים. את תשובתו תראה כאן, ואת ההחלטה והסכום תזין בעצמך.' : 'שלח את הבקשה לגורם המאשר במייל. הוא ישיב בסכום לאישור או X לדחייה, והמערכת תעדכן אוטומטית.'}</p>
           <button onClick={send} disabled={busy === 'send' || !eligible}
             className="self-start inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl px-5 py-2.5">
             {busy === 'send' ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} שלח לגורם המאשר
@@ -162,12 +182,21 @@ export default function FinancialAidDetail({ req }: { req: FinancialAidRequest }
         </>
       )}
 
+      {/* תשובת הגורם המאשר (בבקשה ציבורית נשמרת כטקסט בלבד) */}
+      {isPublic && req.decision_reply && (
+        <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
+          <p className="text-xs font-semibold text-sky-700 mb-1">תשובת הגורם המאשר · <span className="ltr-num">{fmtDateTime(req.decision_replied_at)}</span></p>
+          <p className="text-sm text-slate-800 whitespace-pre-wrap">{req.decision_reply}</p>
+          <p className="text-xs text-slate-500 mt-1">יש להזין את ההחלטה והסכום ידנית למטה.</p>
+        </div>
+      )}
+
       {err && <p className="text-sm text-red-600">{err}</p>}
 
       {/* עדכון ידני */}
       {canEdit && (
         <div className="mt-2 pt-3 border-t border-slate-100">
-          <p className="text-xs text-slate-400 mb-2">עדכון ידני (במידת הצורך):</p>
+          <p className="text-xs text-slate-400 mb-2">{isPublic ? 'החלטה וסכום (הזנה ידנית):' : 'עדכון ידני (במידת הצורך):'}</p>
           <div className="flex items-center gap-2 flex-wrap">
             <input type="number" min="0" value={amountInput} onChange={e => setAmountInput(e.target.value)} placeholder="סכום" className="w-28 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
             <button onClick={() => setStatus('approved', parseInt(amountInput, 10) || 0)} disabled={!amountInput || busy === 'approved' || !eligible}
@@ -177,6 +206,20 @@ export default function FinancialAidDetail({ req }: { req: FinancialAidRequest }
             <button onClick={() => setStatus('pending')} disabled={busy === 'pending'}
               className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 border border-amber-200 hover:bg-amber-50 rounded-lg px-2.5 py-1.5"><Clock size={13} /> החזר לממתין</button>
           </div>
+        </div>
+      )}
+
+      {/* הודעה סופית למבקש: טיוטה שהמזכיר עורך ושולח ידנית */}
+      {canEdit && isPublic && (req.status === 'approved' || req.status === 'rejected') && (
+        <div className="mt-2 pt-3 border-t border-slate-100 flex flex-col gap-2">
+          <p className="text-xs font-semibold text-slate-600">הודעה סופית למבקש {sentFinal && <span className="text-green-700">· נשלחה ✓</span>}</p>
+          <input value={subject} onChange={e => setSubject(e.target.value)} aria-label="נושא" className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
+          <textarea value={body} onChange={e => setBody(e.target.value)} rows={8} aria-label="תוכן ההודעה" className="rounded-lg border border-slate-300 px-3 py-2 text-sm leading-relaxed" />
+          <button onClick={sendFinal} disabled={busy === 'final' || !(req.applicant_email || req.beneficiary?.email)}
+            className="self-start inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold rounded-xl px-5 py-2">
+            {busy === 'final' ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} {sentFinal ? 'שלח שוב' : 'שלח למבקש'}
+          </button>
+          {!(req.applicant_email || req.beneficiary?.email) && <p className="text-xs text-amber-700">אין כתובת מייל למבקש.</p>}
         </div>
       )}
 

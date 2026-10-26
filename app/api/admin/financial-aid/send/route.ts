@@ -33,27 +33,36 @@ export async function POST(request: NextRequest) {
 
   const { data: req } = await admin
     .from('financial_aid_requests')
-    .select('id, reason, document_url, document_name, beneficiary:beneficiaries(family_name, full_name, id_number, spouse_name, marital_status, phone, city, children_count, eligibility_status)')
+    .select('id, reason, document_url, document_name, is_descendant, applicant_name, applicant_id_number, applicant_phone, applicant_address, applicant_city, requested_amount, beneficiary:beneficiaries(family_name, full_name, id_number, spouse_name, marital_status, phone, city, children_count, eligibility_status)')
     .eq('id', id).maybeSingle()
   if (!req) return NextResponse.json({ error: 'הבקשה לא נמצאה' }, { status: 404 })
 
   // ה-beneficiary עשוי לחזור כאובייקט או כמערך — מנרמלים
   const benRaw = (req as Record<string, unknown>).beneficiary
   const ben = (Array.isArray(benRaw) ? benRaw[0] : benRaw) as (Parameters<typeof financialAidInquiryEmail>[0] & { eligibility_status?: string }) | undefined
-  if (ben?.eligibility_status !== 'approved') return NextResponse.json({ error: 'המשפחה טרם אושרה במערכת. יש לאשר את המשפחה לפני שליחת הבקשה לאישור.' }, { status: 400 })
+  // בקשה ציבורית ממי שאינו רשום (אין beneficiary): אין אישור משפחה לבדוק
+  if (ben && ben.eligibility_status !== 'approved') return NextResponse.json({ error: 'המשפחה טרם אושרה במערכת. יש לאשר את המשפחה לפני שליחת הבקשה לאישור.' }, { status: 400 })
 
   const { data: setting } = await admin.from('app_settings').select('value').eq('key', 'financial_aid_decision_email').maybeSingle()
   const decisionEmail = (setting?.value ?? '').trim()
   if (!decisionEmail) return NextResponse.json({ error: 'לא הוגדר מייל גורם מאשר. הגדר אותו בראש הדף.' }, { status: 400 })
 
-  const mail = financialAidInquiryEmail(ben ?? {}, (req as { reason?: string }).reason)
+  const r = req as unknown as { reason?: string; is_descendant?: boolean; applicant_name?: string; applicant_id_number?: string; applicant_phone?: string; applicant_address?: string; applicant_city?: string; requested_amount?: number }
+  const who = ben ?? { full_name: r.applicant_name, id_number: r.applicant_id_number, phone: r.applicant_phone, city: r.applicant_city }
+  const mail = financialAidInquiryEmail(who, r.reason, {
+    requestedAmount: r.requested_amount, notDescendant: r.is_descendant === false, address: ben ? null : r.applicant_address,
+  })
 
   // צירוף המסמך שהמבקש העלה בבקשה (אם קיים) — הורדה דרך service-role כדי שתעבוד
   // גם כשהדלי פרטי (לא מסתמכים על URL ציבורי).
   const attachments: { filename: string; mimeType: string; contentB64: string }[] = []
-  const docUrl = (req as { document_url?: string }).document_url
-  const docName = (req as { document_name?: string }).document_name
-  if (docUrl) {
+  const { data: extraDocs } = await admin.from('financial_aid_documents').select('kind, file_url, file_name').eq('request_id', id).order('created_at')
+  const docList: { url: string; name?: string | null }[] = extraDocs?.length
+    ? extraDocs.map(d => ({ url: d.file_url, name: d.file_name }))
+    : ((req as { document_url?: string }).document_url ? [{ url: (req as { document_url: string }).document_url, name: (req as { document_name?: string }).document_name }] : [])
+  for (const d of docList) {
+    const docUrl = d.url
+    const docName = d.name
     try {
       const { data: blob } = await admin.storage.from('documents').download(storagePath(docUrl))
       if (blob) {

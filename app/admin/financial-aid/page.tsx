@@ -15,14 +15,14 @@ async function getRequests(): Promise<FinancialAidRequest[]> {
   // בטבלה כלל ונחוצים רק בדף הבקשה הבודדת (/admin/financial-aid/[id]).
   // ⚠️ שתי גרסאות — עם תווית סיבת האישור ובלעדיה, כי ה-join אינו קיים עד
   // שהמיגרציה רצה, והשגיאה כאן זורקת ומפילה את כל המסך.
-  const run = (benFields: string) => supabase
+  const run = (benFields: string, extra = ', applicant_name, applicant_id_number, is_descendant, requested_amount') => supabase
     .from('financial_aid_requests')
     // ⚠️ amount נשלף אף שהוא מוצג רק במאושרות — התא מציג fmtCur(r.amount)
     // לפי r.status, ובלעדיו כל בקשה מאושרת תראה "—" במקום הסכום.
     // ⚠️ id: מפתח השורה, הניווט לדף הבקשה, וגם המחיקה מהטבלה (del()).
     // ⚠️ בנתמך: spouse_name ו-phone הוסרו — name() בונה שם מ-family_name+
     // full_name בלבד, והחיפוש נוגע רק ב-id_number/spouse_id_number.
-    .select(`id, reason, status, amount, created_at, beneficiary:beneficiaries(${benFields})`)
+    .select(`id, reason, status, amount, created_at${extra}, beneficiary:beneficiaries(${benFields})`)
     .order('created_at', { ascending: false })
 
   const BEN_BASE = 'id, full_name, family_name, id_number, spouse_id_number'
@@ -31,6 +31,8 @@ async function getRequests(): Promise<FinancialAidRequest[]> {
     console.error('[financial-aid] approval label join failed, retrying without it:', error)
     ;({ data, error } = await run(BEN_BASE))
   }
+  // המיגרציה של הטופס הציבורי טרם רצה — בלי עמודות המבקש
+  if (error) ({ data, error } = await run(BEN_BASE, ''))
   if (error) throw error
   // ⚡ ה-select מצומצם בכוונה (ראו למעלה) ולכן ה-cast דרך unknown
   return (data ?? []) as unknown as FinancialAidRequest[]

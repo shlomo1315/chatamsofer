@@ -31,13 +31,15 @@ export async function POST(request: NextRequest) {
   if (status === 'approved') {
     const { data: chk } = await admin
       .from('financial_aid_requests')
-      .select('beneficiary:beneficiaries(eligibility_status)')
+      .select('beneficiary_id, beneficiary:beneficiaries(eligibility_status)')
       .eq('id', id).maybeSingle()
     const elig = ((chk as Record<string, unknown> | null)?.beneficiary as { eligibility_status?: string } | undefined)?.eligibility_status
-    if (elig !== 'approved') return NextResponse.json({ error: 'המשפחה טרם אושרה במערכת. יש לאשר את המשפחה תחילה.' }, { status: 400 })
+    // בקשה ציבורית ממי שאינו רשום אין לה משפחה לאשר
+    const hasBen = !!(chk as { beneficiary_id?: string | null } | null)?.beneficiary_id
+    if (hasBen && elig !== 'approved') return NextResponse.json({ error: 'המשפחה טרם אושרה במערכת. יש לאשר את המשפחה תחילה.' }, { status: 400 })
   }
 
-  const { data: prev } = await admin.from('financial_aid_requests').select('status').eq('id', id).maybeSingle()
+  const { data: prev } = await admin.from('financial_aid_requests').select('status, source').eq('id', id).maybeSingle()
 
   const { error } = await admin.from('financial_aid_requests').update({
     status,
@@ -56,7 +58,8 @@ export async function POST(request: NextRequest) {
   })
 
   // הודעה למבקש על החלטה (לא בעת החזרה לממתין)
-  if (status === 'approved' || status === 'rejected') {
+  // בקשה ציבורית: ההודעה הסופית נכתבת ונשלחת ידנית על ידי המזכיר (final-message)
+  if ((prev as { source?: string } | null)?.source !== 'public' && (status === 'approved' || status === 'rejected')) {
     const { data: req } = await admin
       .from('financial_aid_requests')
       .select('beneficiary:beneficiaries(full_name, family_name, email)')

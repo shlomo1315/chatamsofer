@@ -17,6 +17,12 @@ import { approvalLabelOf } from '@/lib/approvalLabel'
 
 type Ben = { full_name?: string; family_name?: string; spouse_name?: string; id_number?: string; spouse_id_number?: string; phone?: string }
 const name = (b?: Ben) => b ? ([b.family_name, b.full_name].filter(Boolean).join(' ') || b.full_name || '—') : '—'
+// בקשה ציבורית ממי שאינו רשום: אין beneficiary, והפרטים בשדות applicant_*
+const reqName = (r: FinancialAidRequest) => r.beneficiary ? name(r.beneficiary as Ben) : (r.applicant_name || '—')
+const reqId = (r: FinancialAidRequest) => {
+  const b = r.beneficiary as Ben | undefined
+  return b?.id_number ?? b?.spouse_id_number ?? r.applicant_id_number ?? null
+}
 const fmtCur = (n?: number | null) => n != null ? `₪${Number(n).toLocaleString('he-IL')}` : '—'
 const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('he-IL') : '—'
 
@@ -31,12 +37,9 @@ type ColKey = 'name' | 'id_number' | 'approval_label' | 'reason' | 'amount' | 's
 const HEAD = 'px-4 py-3 text-xs font-semibold text-slate-500'
 
 const COLUMNS: ColDef<ColKey, FinancialAidRequest>[] = [
-  { key: 'name', label: 'שם', def: true, headClassName: HEAD, value: r => name(r.beneficiary as Ben | undefined) },
+  { key: 'name', label: 'שם', def: true, headClassName: HEAD, value: r => reqName(r) },
   { key: 'id_number', label: 'ת.ז.', def: true, kind: 'number', headClassName: HEAD,
-    value: r => {
-      const b = r.beneficiary as Ben | undefined
-      return b?.id_number ?? b?.spouse_id_number ?? null
-    } },
+    value: r => reqId(r) },
   // ⚠️ עמודה משלה בנוסף לתג שליד השם — ריקה אצל הרוב המוחלט, וזו הכוונה.
   { key: 'approval_label', label: 'סיבת אישור', def: true, kind: 'enum', filterable: true, headClassName: HEAD,
     value: r => approvalLabelOf(r.beneficiary as Ben | undefined) || null },
@@ -157,12 +160,12 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
     if (filter !== 'all' && r.status !== filter) return false
     if (!query.trim()) return true
     const b = r.beneficiary as Ben | undefined
-    return [name(b), b?.id_number, b?.spouse_id_number, r.reason].filter(Boolean).join(' ').toLowerCase().includes(query.trim().toLowerCase())
+    return [reqName(r), b?.id_number, b?.spouse_id_number, r.applicant_id_number, r.reason].filter(Boolean).join(' ').toLowerCase().includes(query.trim().toLowerCase())
   }), [requests, filter, query])
 
   const visible = useMemo(() =>
     applySortMode(filtered, sort,
-      r => name(r.beneficiary as Ben | undefined),
+      r => reqName(r),
       r => r.created_at,
     ), [filtered, sort])
 
@@ -191,13 +194,14 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
     switch (c.key) {
       case 'name': return (
         <span className="inline-flex items-center gap-1.5 flex-wrap font-medium text-slate-800">
-          {name(b)}
+          {reqName(r)}
+          {r.is_descendant === false && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-700">לא צאצא</span>}
           {/* ⚠️ גם ליד השם וגם בעמודה: מי שכיבה את העמודה עדיין צריך לדעת
               שהמבקש אינו צאצא רגיל. */}
           <ApprovalLabelTag label={approvalLabelOf(b)} size="xs" />
         </span>
       )
-      case 'id_number': return <span className="ltr-num font-mono text-xs text-slate-600">{b?.id_number ?? b?.spouse_id_number ?? '—'}</span>
+      case 'id_number': return <span className="ltr-num font-mono text-xs text-slate-600">{reqId(r) ?? '—'}</span>
       case 'approval_label': {
         const lbl = approvalLabelOf(b)
         return lbl ? <ApprovalLabelTag label={lbl} size="xs" /> : <span className="text-slate-300">—</span>
