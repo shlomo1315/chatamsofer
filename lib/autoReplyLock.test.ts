@@ -114,14 +114,14 @@ describe('מענה כפול על אותו מייל', () => {
     expect(sent).toHaveLength(2)
   })
 
-  it('הנעילה פגה אחרי 10 דקות', async () => {
+  it('הנעילה פגה אחרי 2 דקות', async () => {
     const { sendAutoReply } = await load()
     const db = makeDb() as never
 
     await sendAutoReply(db, { fromEmail: 'x@gmail.com', department: 'main' })
     // מזייפים נעילה ישנה
     for (const k of Object.keys(settings)) {
-      settings[k] = new Date(Date.now() - 11 * 60 * 1000).toISOString()
+      settings[k] = new Date(Date.now() - 3 * 60 * 1000).toISOString()
     }
     expect(await sendAutoReply(db, { fromEmail: 'x@gmail.com', department: 'main' })).toBe(true)
     expect(sent).toHaveLength(2)
