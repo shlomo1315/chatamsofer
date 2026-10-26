@@ -24,13 +24,16 @@ import { maybeSendLowStockAlert } from '@/lib/cardStockAlert'
 function fakeAdmin(aids: { id: string }[]) {
   const make = (table: string) => {
     let single = false
+    let claim = false
     const result = () => {
+      if (table === 'maternity_aids' && claim) return [{ id: 'a1' }]
       if (table === 'maternity_aids') return single ? { id: 'a1', beneficiary_id: 'b1' } : aids
       return null
     }
     const q: Record<string, unknown> = {}
     for (const m of ['select', 'eq', 'order', 'update', 'insert', 'in', 'neq', 'not'])
       q[m] = () => q
+    q.or = () => { claim = true; return q }
     q.maybeSingle = () => { single = true; return q }
     q.then = (res: (v: unknown) => unknown) => Promise.resolve({ data: result(), error: null }).then(res)
     return q

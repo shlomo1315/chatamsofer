@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
   // שליפת התיק
   const { data: aid, error: aidErr } = await admin
     .from('maternity_aids')
-    .select('id, beneficiary_id, status, card_balance, card_expires_at, weekly_amount, total_weeks')
+    .select('id, beneficiary_id, status, card_balance, card_expires_at, weekly_amount, total_weeks, card_load_status, card_tlush_id')
     .eq('id', body.aidId)
     .maybeSingle()
   if (aidErr || !aid) return NextResponse.json({ error: 'התיק לא נמצא' }, { status: 404 })
@@ -70,6 +70,12 @@ export async function POST(request: NextRequest) {
   // הטענה מותרת רק לתיק מאושר (ולא לתיק שממתין לאישור)
   if (aid.status !== 'active') {
     return NextResponse.json({ error: 'ניתן להטעין כרטיס רק לתיק יולדת מאושר' }, { status: 400 })
+  }
+
+  // 🔴 לידה אחת = טעינה אחת. תיק שכבר נטען (ולא בוטל) לא נטען שוב, גם לא ידנית:
+  // טעינה כפולה היא כסף אמיתי בנדרים (8 תיקים כאלה נמצאו ב-10.2026).
+  if (aid.card_load_status !== 'unloaded' && (aid.card_load_status === 'loaded' || aid.card_tlush_id)) {
+    return NextResponse.json({ error: 'הכרטיס של הלידה הזו כבר נטען — אי אפשר להטעין פעמיים' }, { status: 409 })
   }
 
   // ⚠️ בלי מלאי אין טעינה — גם במסלול הידני הזה. עד כה המסלול פנה לנדרים
@@ -138,7 +144,7 @@ export async function POST(request: NextRequest) {
   const { data: claimed } = await admin.from('maternity_aids')
     .update({ card_load_status: 'pending', card_load_amount: amount, card_load_error: null, updated_at: new Date().toISOString() })
     .eq('id', aid.id)
-    .or(`card_load_status.is.null,card_load_status.neq.pending,updated_at.lt."${staleBefore}"`)
+    .or(`card_load_status.is.null,card_load_status.in.(idle,failed,unloaded),and(card_load_status.eq.pending,updated_at.lt."${staleBefore}")`)
     .select('id')
   if (!claimed?.length) {
     return NextResponse.json({ error: 'הטענה לכרטיס הזה כבר מתבצעת — המתינו לסיומה' }, { status: 409 })
