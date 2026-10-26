@@ -10,9 +10,9 @@ import DOMPurify from 'dompurify'
 import {
   AlignCenter, AlignLeft, AlignRight, Baseline, Bold, Check, Code2, Eraser, Highlighter, ImagePlus, Italic, LayoutTemplate,
   Link2, List, ListOrdered, Loader2, Minus, Monitor, MousePointerClick, Palette, PilcrowRight, Redo2, RotateCcw, Save,
-  Smartphone, Strikethrough, Trash2, Underline, Undo2, Unlink, UserRound, X,
+  Smartphone, Strikethrough, Trash2, Underline, Undo2, Unlink, X,
 } from 'lucide-react'
-import { DEFAULT_DESIGN, NAME_TOKEN, normalizeDesign, SYSTEM_BLUE, type MailDesign } from '@/lib/gilyonotDesign'
+import { DEFAULT_DESIGN, normalizeDesign, SYSTEM_BLUE, type MailDesign } from '@/lib/gilyonotDesign'
 import { btnDanger, btnGhost, btnPrimary, input } from './ui'
 import type { IssueView } from './GilyonotClient'
 
@@ -131,7 +131,7 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
   const [uploading, setUploading] = useState(false)
   const [picked, setPicked] = useState<HTMLElement | null>(null)
   const [, bump] = useState(0)
-  const [tab, setTab] = useState<'header' | 'greeting' | 'footer' | 'bg'>('header')
+  const [tab, setTab] = useState<'header' | 'footer' | 'bg'>('header')
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop')
   const [preview, setPreview] = useState('')
   const [state, setState] = useState<SaveState>('saved')
@@ -441,7 +441,6 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
                   <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp" className="sr-only" tabIndex={-1} aria-hidden onChange={e => { const f = e.target.files?.[0]; setPop(''); if (f) upload(f) }} />
                 </div>
                 <Tool label="קו מפריד" onClick={() => exec('insertHorizontalRule')}><Minus className="h-4 w-4" /></Tool>
-                <Tool label="הכנסת שם הנמען" onClick={() => insert(NAME_TOKEN)}><UserRound className="h-4 w-4" /></Tool>
                 <Tool label="ניקוי עיצוב" onClick={() => exec('removeFormat')}><Eraser className="h-4 w-4" /></Tool>
                 <Sep />
               </>}
@@ -524,12 +523,12 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
             <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-3 pt-2">
               <div className="flex flex-wrap gap-1" role="tablist" aria-label="חלקי המייל">
                 <Palette className="mx-1 mt-2 h-4 w-4 text-slate-500" aria-hidden />
-                {([['header', 'כותרת'], ['greeting', 'פתיחה'], ['footer', 'פוטר'], ['bg', 'רקע']] as const).map(([k, l]) => (
+                {([['header', 'כותרת'], ['footer', 'פוטר'], ['bg', 'רקע']] as const).map(([k, l]) => (
                   <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
                     className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${tab === k ? 'border-[#2563eb] text-[#2563eb]' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>{l}</button>
                 ))}
               </div>
-              <button type="button" onClick={() => { if (confirm('להחזיר את הכותרת, הפתיחה, הכפתור והפוטר לברירת המחדל?')) setDesign(DEFAULT_DESIGN) }} className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-800">
+              <button type="button" onClick={() => { if (confirm('להחזיר את הכותרת, הכפתור והפוטר לברירת המחדל?')) setDesign(DEFAULT_DESIGN) }} className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-800">
                 <RotateCcw className="h-3.5 w-3.5" aria-hidden />איפוס
               </button>
             </div>
@@ -544,14 +543,6 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
                     <Field label="כותרת משנה" hint="ריק = הפרשה"><input className={input} value={design.headerSub} placeholder={issue.parasha} maxLength={120} onChange={e => set('headerSub', e.target.value)} /></Field>
                   </div>
                 </>}
-              </>}
-              {tab === 'greeting' && <>
-                <Toggle label="להציג שורת פתיחה" checked={design.showGreeting} onChange={v => set('showGreeting', v)} />
-                {design.showGreeting && (
-                  <Field label="שורת הפתיחה" hint={`${NAME_TOKEN} יוחלף בשם של כל נמען. מי שאין לו שם יקבל "לכבוד הנמען".`}>
-                    <input className={input} value={design.greeting} maxLength={160} onChange={e => set('greeting', e.target.value)} />
-                  </Field>
-                )}
               </>}
               {tab === 'footer' && (
                 <Field label="טקסט הפוטר" hint="קישור הסרה מהרשימה מתווסף תמיד בסוף.">
@@ -583,7 +574,7 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
                     className={`mx-auto block h-[720px] rounded-lg bg-white transition-[width] ${device === 'mobile' ? 'w-[390px] max-w-full' : 'w-full'}`} />
                 : <div className="flex h-[720px] items-center justify-center text-sm text-slate-500"><Loader2 className="ml-2 h-4 w-4 animate-spin" aria-hidden />טוען תצוגה...</div>}
             </div>
-            <p className="mt-2 text-xs text-slate-500">כך ייראה אצל נמען בשם &quot;ישראל ישראלי&quot;. השינויים נשמרים אוטומטית.</p>
+            <p className="mt-2 text-xs text-slate-500">כך ייראה המייל אצל הנמען. השינויים נשמרים אוטומטית.</p>
           </div>
         </div>
       </div>

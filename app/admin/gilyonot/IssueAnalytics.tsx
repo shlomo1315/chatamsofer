@@ -139,6 +139,25 @@ export function IssueAnalytics({ issue, base }: { issue: IssueView; base: string
             </div>
           </div>
 
+          {(c.opened > 0 || c.clicked > 0) && (
+            <div className="min-w-0">
+              <p className="mb-1 text-xs font-medium text-slate-500">כניסות לפי שעה ביממה (שעון ישראל)</p>
+              <div dir="ltr" className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={data.byHour} margin={{ top: 6, right: 8, bottom: 0, left: -12 }} barCategoryGap="15%">
+                    <CartesianGrid stroke="#f1f5f9" vertical={false} />
+                    <XAxis dataKey="hour" tickFormatter={h => `${String(h).padStart(2, '0')}:00`} tick={TICK} axisLine={false} tickLine={false} interval={2} />
+                    <YAxis tick={TICK} tickFormatter={num} axisLine={false} tickLine={false} allowDecimals={false} />
+                    <Tooltip cursor={{ fill: '#f8fafc' }} labelFormatter={h => `${String(h).padStart(2, '0')}:00`} formatter={(v: unknown, n: unknown) => [num(Number(v)), String(n)]} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="opened" name="פתחו" fill="#0891b2" radius={[3, 3, 0, 0]} isAnimationActive={false} />
+                    <Bar dataKey="clicked" name="הקליקו" fill="#7c3aed" radius={[3, 3, 0, 0]} isAnimationActive={false} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
           {c.sent > 0 && c.delivered === 0 && c.bounced === 0 && (
             <p className="flex items-start gap-1.5 rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600">
               <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />

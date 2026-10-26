@@ -47,10 +47,9 @@ describe('normalizeDesign', () => {
 describe('buildGilyonHtml', () => {
   const base = { title: 'גיליון', parasha: 'נח', unsubscribeUrl: 'https://x.co/u' }
 
-  it('מחליף {{שם}} בשם המנוקה, בפתיחה ובגוף', () => {
-    const html = buildGilyonHtml({ ...base, name: '<b>משה</b>', bodyHtml: '<p>שלום {{שם}}</p>' })
-    expect(html).toContain('שלום &lt;b&gt;משה&lt;/b&gt;')
-    expect(html).toContain('לכבוד &lt;b&gt;משה&lt;/b&gt; שליט&quot;א')
+  it('בלי שורת "לכבוד", גם כשיש שם, ומסיר {{שם}} ישן מהגוף', () => {
+    const html = buildGilyonHtml({ ...base, name: 'משה', bodyHtml: '<p>שלום {{שם}}</p>' })
+    expect(html).not.toContain('לכבוד')
     expect(html).not.toContain('{{שם}}')
   })
 
