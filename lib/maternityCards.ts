@@ -68,6 +68,24 @@ export async function loadMaternityCardOnApproval(
     })
   }
 
+  // 🔴 נעילה אטומית: שתי קריאות מקבילות (אישור כפול, ניסיון חוזר, שינוי סטטוס)
+  // עברו שתיהן את הבדיקה "כבר נטען" למעלה והטעינו 600 ₪ פעמיים (14.10, 150ms הפרש).
+  // רק קריאה אחת מצליחה להעביר את התיק ל-pending; התנאי בתוך ה-UPDATE עצמו.
+  // pending ישן (קריסה באמצע) משתחרר אחרי 10 דקות, כדי שתיק לא ייתקע לנצח.
+  const staleBefore = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+  const { data: claimed } = await admin.from('maternity_aids')
+    .update({ card_load_status: 'pending', card_load_error: null, updated_at: new Date().toISOString() })
+    .eq('id', aid.id)
+    .or(`card_load_status.is.null,card_load_status.in.(idle,failed,unloaded),and(card_load_status.eq.pending,updated_at.lt."${staleBefore}")`)
+    .select('id')
+  if (!claimed?.length) return { ok: true, already: true } // קריאה אחרת טוענת או כבר טענה
+  // יציאה בלי טעינה (אין מלאי): מחזירים את המצב הקודם כדי שלא יישאר pending
+  const releaseLock = async () => {
+    await admin.from('maternity_aids')
+      .update({ card_load_status: aid.card_load_status ?? null })
+      .eq('id', aid.id)
+  }
+
   // ⚠️ המלאי נבדק לפני הכל — לפני נדרים ולפני כל פנייה חיצונית.
   // אין מלאי → היולדת נכנסת לתור ההמתנה ולא נוגעים בנדרים בכלל.
   // ה-600 ₪ ייטענו רק כשיתחדש המלאי, דרך processAwaitingStock.
@@ -80,6 +98,7 @@ export async function loadMaternityCardOnApproval(
       .update({ card_status: 'awaiting_stock', updated_at: new Date().toISOString() })
       .eq('id', aid.id)
     await logActivity(admin, { action: 'maternity_card_awaiting_stock', entityType: 'maternity_aid', entityId: aid.id, details: { reason: 'no_stock_precheck' } })
+    await releaseLock()
     return { ok: true, awaitingStock: true }
   }
 
@@ -95,6 +114,7 @@ export async function loadMaternityCardOnApproval(
     // אין מלאי כרטיסים — לתור "ממתין למלאי", ללא טעינה בנדרים.
     await admin.from('maternity_aids').update({ card_status: 'awaiting_stock', updated_at: new Date().toISOString() }).eq('id', aid.id)
     await logActivity(admin, { action: 'maternity_card_awaiting_stock', entityType: 'maternity_aid', entityId: aid.id, details: { reason: 'no_stock_on_approval' } })
+    await releaseLock()
     return { ok: true, awaitingStock: true }
   }
 
