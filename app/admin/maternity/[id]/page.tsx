@@ -865,6 +865,36 @@ export default async function MaternityDetailPage(
                       )}
                     </div>
                     {aid.card_loaded_at && <p className="text-xs text-slate-400 mt-1 text-right">נטען בתאריך: <span className="ltr-num">{fmtDate(aid.card_loaded_at)}</span></p>}
+                    {(() => {
+                      const x = aid as { card_load_status?: string | null; card_load_amount?: number | string | null; card_balance?: number | string | null }
+                      const isLoaded = cs === 'loaded' || x.card_load_status === 'loaded'
+                      const notLoaded = !isLoaded && (cs === 'awaiting_stock' || cs === 'approved' || x.card_load_status === 'awaiting_stock' || x.card_load_status === 'unloaded')
+                      if (notLoaded) {
+                        return <p className="mt-2 text-sm font-medium text-orange-700">עדיין לא בוצעה טעינה עקב שאין מלאי כרגע במערכת</p>
+                      }
+                      if (!isLoaded) return null
+                      const loadedAmt = Number(x.card_load_amount)
+                      const balance = x.card_balance == null ? NaN : Number(x.card_balance)
+                      const hasBal = Number.isFinite(balance)
+                      const used = Number.isFinite(loadedAmt) && hasBal ? Math.max(0, loadedAmt - balance) : null
+                      const money = (n: number) => `${n.toLocaleString('he-IL', { maximumFractionDigits: 2 })} ₪`
+                      return (
+                        <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+                          <div className="rounded-lg bg-slate-50 border border-slate-100 px-2 py-2">
+                            <p className="text-xs text-slate-500">סכום הטעינה</p>
+                            <p className="text-sm font-semibold text-slate-800 ltr-num">{Number.isFinite(loadedAmt) ? money(loadedAmt) : '—'}</p>
+                          </div>
+                          <div className="rounded-lg bg-slate-50 border border-slate-100 px-2 py-2">
+                            <p className="text-xs text-slate-500">נוצלו</p>
+                            <p className="text-sm font-semibold text-slate-800 ltr-num">{used != null ? money(used) : '—'}</p>
+                          </div>
+                          <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-2 py-2">
+                            <p className="text-xs text-slate-500">נותרו בארנק</p>
+                            <p className="text-sm font-semibold text-emerald-700 ltr-num">{hasBal ? money(balance) : '—'}</p>
+                          </div>
+                        </div>
+                      )
+                    })()}
                   </>
                 )
               })()}
