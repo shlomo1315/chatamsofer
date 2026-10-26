@@ -19,6 +19,7 @@ import { addDays } from 'date-fns'
 import { getNedarimCreds, setMagneticCard, findClientByZeout, getClientCardFull } from '@/lib/nedarim'
 import { getMaternityMessages, type MaternityMsg, type MaternityMessages } from '@/lib/yemotMaternityMessages'
 import { cardWindowEnd, CARD_WINDOW_DAYS } from '@/lib/maternity'
+import { canLinkMaternityCard } from '@/lib/maternityCardGate'
 
 export const dynamic = 'force-dynamic'
 
@@ -224,7 +225,7 @@ async function findActiveAid(callerPhone: string) {
 
   const { data: allAids, error: aidErr } = await admin
     .from('maternity_aids')
-    .select('id, birth_date, six_weeks_end, card_number, status, card_center_id')
+    .select('id, birth_date, six_weeks_end, card_number, status, card_center_id, card_status, card_load_status, card_tlush_id')
     .eq('beneficiary_id', family.id)
     .order('birth_date', { ascending: false })
     .limit(20)
@@ -331,6 +332,10 @@ export async function handleMaternityCall(params: Record<string, string>): Promi
     }
     if (result.active.status !== 'active') {
       return yemotText([idMessage(tokenOf(M.pending_approval)), goToFolder('hangup')], callId)
+    }
+    // לא נוכה כרטיס מהמלאי — חוסמים גם כאן, לפני שמירת המספר או שיוך בנדרים
+    if (!canLinkMaternityCard(result.active)) {
+      return yemotText([idMessage(tokenOf(M.card_not_allocated)), goToFolder('hangup')], callId)
     }
     const aidId = result.active.id
 
@@ -527,6 +532,16 @@ export async function handleMaternityCall(params: Record<string, string>): Promi
       caller: callerPhone, callId, family_name: familyName, status: active.status ?? null,
     })
     return yemotText([idMessage(tokenOf(M.pending_approval)), goToFolder('hangup')], callId)
+  }
+
+  // לא נוכה לה כרטיס מהמלאי (ממתינה למלאי) — אסור לשייך כרטיס. כרטיס שקיבלה
+  // במוקד בלי שובר אינו שלה, ושיוך שלו לא יטען כסף (ראו lib/maternityCardGate).
+  if (!canLinkMaternityCard(active)) {
+    console.log(`[yemot-maternity] aid ${active.id} has no card allocated (card_status=${active.card_status ?? 'null'}, load=${active.card_load_status ?? 'null'}) — blocked`)
+    await logActivity(admin, 'yemot_card_not_allocated', 'maternity_aid', active.id, {
+      caller: callerPhone, callId, family_name: familyName, card_status: active.card_status ?? null, card_load_status: active.card_load_status ?? null,
+    })
+    return yemotText([idMessage(tokenOf(M.card_not_allocated)), goToFolder('hangup')], callId)
   }
 
   // כרטיס כבר משויך? רק אם הוא *באמת* חובר בהצלחה בנדרים (קיים רישום yemot_card_registered),
