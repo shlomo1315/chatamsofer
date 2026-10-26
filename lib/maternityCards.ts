@@ -3,6 +3,7 @@ import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { maternityCardEmail } from '@/lib/emailTemplates'
 import { getNedarimCreds, findClientByZeout, saveClientCard, addTlush, getClientCard, getMaternityLimitedId, isPassportId } from '@/lib/nedarim'
+import { acquireLoadGuard, confirmLoadGuard, releaseLoadGuard, previousTlushStillActive } from '@/lib/maternityLoadGuard'
 import { logActivity } from '@/lib/activityLog'
 import { consumeOneCard, getStockBalance } from '@/lib/cardStock'
 import { maybeSendLowStockAlert } from '@/lib/cardStockAlert'
@@ -296,6 +297,26 @@ export async function loadMaternityCardOnApproval(
     }
   }
 
+  // 🔴 חסם בבסיס הנתונים (ראו maternityLoadGuard): לפני הפנייה לנדרים.
+  // תיק שנפרק נטען מחדש רק אם הטעינה הקודמת באמת כבר לא פעילה בנדרים.
+  if (unloaded && aid.card_tlush_id) {
+    const still = await previousTlushStillActive(creds, clientId, String(aid.card_tlush_id))
+    if (still !== false) {
+      const err = still ? 'הטעינה הקודמת עדיין פעילה בנדרים — לא נטען שוב' : 'לא ניתן לאמת מול נדרים שהטעינה הקודמת בוטלה — לא נטען שוב'
+      await restoreCard(); await releaseLock()
+      await admin.from('maternity_aids').update({ card_load_error: err }).eq('id', aid.id)
+      await logActivity(admin, { action: 'maternity_card_load_blocked', entityType: 'maternity_aid', entityId: aid.id, details: { reason: 'previous_tlush_active', tlushId: aid.card_tlush_id, still } })
+      return { ok: false, error: err, clientId }
+    }
+    await releaseLoadGuard(admin, aid.id) // הפריקה אומתה: מותר להחזיק חסם חדש
+  }
+  const guard = await acquireLoadGuard(admin, aid.id)
+  if (guard !== 'acquired') {
+    await restoreCard(); await releaseLock()
+    await logActivity(admin, { action: 'maternity_card_load_blocked', entityType: 'maternity_aid', entityId: aid.id, details: { reason: guard === 'held' ? 'guard_held' : 'guard_error' } })
+    return guard === 'held' ? { ok: true, already: true } : { ok: false, error: 'חסם הטעינה לא זמין — לא נטען', clientId }
+  }
+
   try {
     result = await addTlush(creds, clientId, amount, undefined, 'הטענת זכאות יולדת (אישור לידה) — היכל החתם סופר', limitedId)
     if (!result.ok && isUnknownClient(result.message)) {
@@ -306,19 +327,22 @@ export async function loadMaternityCardOnApproval(
       }
     }
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
+    // ⚠️ חריגה באמצע הפנייה = מצב לא ודאי: החסם נשאר, ודרושה בדיקה ידנית בנדרים.
+    const msg = (e instanceof Error ? e.message : String(e)) + ' (לא ודאי אם נטען — לבדוק בנדרים לפני טעינה חוזרת)'
     await restoreCard()
     await admin.from('maternity_aids').update({ card_load_status: 'failed', card_load_error: msg }).eq('id', aid.id)
     await logActivity(admin, { action: 'maternity_card_load_failed', entityType: 'maternity_aid', entityId: aid.id, details: { amount, clientId, error: msg } })
     return { ok: false, error: msg, clientId }
   }
   if (!result.ok) {
+    await releaseLoadGuard(admin, aid.id) // כישלון ודאי (נדרים דחו)
     await restoreCard()
     await admin.from('maternity_aids').update({ card_load_status: 'failed', card_load_error: result.message }).eq('id', aid.id)
     await logActivity(admin, { action: 'maternity_card_load_failed', entityType: 'maternity_aid', entityId: aid.id, details: { amount, clientId, error: result.message } })
     return { ok: false, error: result.message, clientId }
   }
 
+  await confirmLoadGuard(admin, aid.id, result.tlushId)
   // 3) רענון יתרה ועדכון התיק
   let newBalance = (Number(aid.card_balance) || 0) + amount
   try { const card = await getClientCard(creds, clientId); if (card?.totalFreeAmount != null) newBalance = card.totalFreeAmount } catch { /* אומדן */ }

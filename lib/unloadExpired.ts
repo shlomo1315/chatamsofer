@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { getNedarimCreds, prikatTlush, removeMagneticByNumber, getClientCard } from '@/lib/nedarim'
 import { unloadDueDate } from './unloadDueDate'
+import { releaseLoadGuard } from './maternityLoadGuard'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // פריקת טעינה של תיק בודד — משותפת לפריקה האוטומטית (6 שבועות) ולביטול טעינה
@@ -107,6 +108,7 @@ export async function unloadAidCard(
     cardRemoved = true // אין כרטיס לנתק
   }
 
+  await releaseLoadGuard(admin, aid.id) // הפריקה בוצעה: החסם משתחרר לטעינה עתידית
   await admin.from('maternity_aids').update({
     card_load_status: 'unloaded',
     card_unloaded_at: new Date().toISOString(),

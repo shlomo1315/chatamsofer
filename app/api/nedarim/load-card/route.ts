@@ -11,6 +11,7 @@ import {
   getClientCard,
 } from '@/lib/nedarim'
 import { getStockBalance, consumeOneCard } from '@/lib/cardStock'
+import { acquireLoadGuard, confirmLoadGuard, releaseLoadGuard, previousTlushStillActive } from '@/lib/maternityLoadGuard'
 
 export const dynamic = 'force-dynamic'
 
@@ -152,22 +153,38 @@ export async function POST(request: NextRequest) {
 
   const expiration = aid.card_expires_at ? format(new Date(aid.card_expires_at), 'dd/MM/yyyy') : undefined
 
+  // 🔴 חסם בבסיס הנתונים + אימות מול נדרים (ראו maternityLoadGuard)
+  const backOut = async (error: string, reason: string, status: number) => {
+    await admin.from('maternity_aids').update({ card_load_status: aid.card_load_status ?? null, card_load_error: error }).eq('id', aid.id)
+    await logActivity(admin, 'maternity_card_load_blocked', aid.id, { reason, clientId }, staff.userId)
+    return NextResponse.json({ error }, { status })
+  }
+  if (aid.card_load_status === 'unloaded' && aid.card_tlush_id) {
+    const still = await previousTlushStillActive(creds, clientId, String(aid.card_tlush_id))
+    if (still !== false) return backOut(still ? 'הטעינה הקודמת עדיין פעילה בנדרים — לא נטען שוב' : 'לא ניתן לאמת מול נדרים שהטעינה הקודמת בוטלה — לא נטען שוב', 'previous_tlush_active', 409)
+    await releaseLoadGuard(admin, aid.id)
+  }
+  const guard = await acquireLoadGuard(admin, aid.id)
+  if (guard !== 'acquired') return backOut(guard === 'held' ? 'לתיק הזה כבר יש טעינה פעילה או לא ודאית — בדקו בנדרים לפני טעינה חוזרת' : 'חסם הטעינה לא זמין — לא נטען', guard === 'held' ? 'guard_held' : 'guard_error', guard === 'held' ? 409 : 503)
+
   const limitedId = await getMaternityLimitedId()
   let result: Awaited<ReturnType<typeof addTlush>>
   try {
     result = await addTlush(creds, clientId, amount, expiration, 'הטענת כרטיס יולדת ממערכת היכל החתם סופר', limitedId)
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
+    const msg = (e instanceof Error ? e.message : String(e)) + ' (לא ודאי אם נטען — לבדוק בנדרים)'
     await admin.from('maternity_aids').update({ card_load_status: 'failed', card_load_error: msg }).eq('id', aid.id)
     return NextResponse.json({ error: msg, familyCreated, clientId }, { status: 502 })
   }
 
   if (!result.ok) {
+    await releaseLoadGuard(admin, aid.id)
     await admin.from('maternity_aids').update({ card_load_status: 'failed', card_load_error: result.message }).eq('id', aid.id)
     await logActivity(admin, 'maternity_card_load_failed', aid.id, { amount, clientId, message: result.message }, staff.userId)
     return NextResponse.json({ ok: false, error: result.message || 'ההטענה נכשלה', familyCreated, clientId })
   }
 
+  await confirmLoadGuard(admin, aid.id, result.tlushId)
   // רענון יתרה מנדרים (נופל בשקט לאומדן אם נכשל)
   let newBalance = (Number(aid.card_balance) || 0) + amount
   try {
