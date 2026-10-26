@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server'
-import { gilyonFileName } from '@/lib/gilyonotFileName'
+import { attachmentDisposition, gilyonFileName } from '@/lib/gilyonotFileName'
 import { getServiceClient } from '@/lib/apiAuth'
 
 // קישור ההורדה שבמייל. רושם הורדה לנמען (וגם פתיחה, אם הפיקסל נחסם),
-// ומפנה לקישור חתום וזמני לקובץ בדלי הפרטי documents.
+// ומגיש את הקובץ מהדלי הפרטי documents (גיליונות ישנים שנשלחו כקישור).
 export const dynamic = 'force-dynamic'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const SIGNED_SECONDS = 60 * 10
 
 function notFound() {
   return new NextResponse(
@@ -29,8 +28,15 @@ export async function GET(_r: Request, { params }: { params: Promise<{ token: st
   const { data: issue } = await db.from('gilyonot_issues').select('file_path, file_name, title, parasha').eq('id', issueId as string).maybeSingle()
   if (!issue?.file_path) return notFound()
 
-  const { data: signed } = await db.storage.from('documents')
-    .createSignedUrl(issue.file_path as string, SIGNED_SECONDS, { download: gilyonFileName(issue as { title: string; parasha: string }, issue.file_name as string) })
-  if (!signed?.signedUrl) return notFound()
-  return NextResponse.redirect(signed.signedUrl, 302)
+  // הקובץ מוגש מכאן ולא בהפניה לקישור חתום: שם עברי בפרמטר ההורדה של האחסון יוצא מקודד (%D7...).
+  const { data: file } = await db.storage.from('documents').download(issue.file_path as string)
+  if (!file) return notFound()
+  const name = gilyonFileName(issue as { title: string; parasha: string }, issue.file_name as string)
+  return new NextResponse(file.stream(), {
+    headers: {
+      'Content-Type': file.type || 'application/octet-stream',
+      'Content-Disposition': attachmentDisposition(name),
+      'Cache-Control': 'private, no-store',
+    },
+  })
 }

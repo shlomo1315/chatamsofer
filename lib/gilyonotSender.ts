@@ -55,7 +55,7 @@ export interface IssueRow {
   file_path: string
   file_name: string
   status: 'draft' | 'sending' | 'sent'
-  /** 'link' = קישור הורדה שנספר; 'attachment' = גיליונות ישנים עם קובץ מצורף (אין נתוני הורדות) */
+  /** 'attachment' = קובץ מצורף במייל (ברירת מחדל, אין נתוני הורדות); 'link' = גיליונות שנשלחו עם קישור הורדה שנספר */
   delivery_mode?: 'link' | 'attachment'
 }
 
@@ -112,23 +112,22 @@ export function issueEmail(issue: MailFields, r: { deliveryToken: string; subscr
       bodyHtml: cleanBody(issue.body_html), design: issue.design,
       unsubscribeUrl,
       pixelUrl: gilyonotUrls.pixel(r.deliveryToken),
-      downloadUrl: gilyonotUrls.download(r.deliveryToken),
     }),
     unsubscribeUrl,
   }
 }
 
-/** מייל ניסיון לכתובת אחת: כפתור ההורדה מוביל ישר לקובץ (בלי ספירה), בלי פיקסל. */
+/** מייל ניסיון לכתובת אחת: הקובץ מצורף, בלי פיקסל. */
 export async function sendGilyonTest(db: SupabaseClient, issue: IssueRow, to: string): Promise<{ ok: boolean; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) return { ok: false, error: 'RESEND_API_KEY לא מוגדר בשרת' }
-  const file = await checkIssueFile(db, issue)
+  const file = await loadAttachment(db, issue)
   if (!file.ok) return file
   const html = buildGilyonHtml({
     title: issue.title, parasha: issue.parasha, intro: issue.intro, bodyHtml: cleanBody(issue.body_html), design: issue.design,
-    unsubscribeUrl: null, downloadUrl: file.url,
+    unsubscribeUrl: null,
   })
-  const { error } = await new Resend(apiKey).emails.send({ from: from(), to, subject: `[ניסיון] ${issue.subject}`, html, text: htmlToPlainText(html), replyTo: GILYONOT_FROM_EMAIL })
+  const { error } = await new Resend(apiKey).emails.send({ from: from(), to, subject: `[ניסיון] ${issue.subject}`, html, text: htmlToPlainText(html), replyTo: GILYONOT_FROM_EMAIL, attachments: [file.att] })
   if (error) return { ok: false, error: String(error.message ?? error) }
   return { ok: true }
 }
@@ -140,11 +139,12 @@ export async function sendGilyonTest(db: SupabaseClient, issue: IssueRow, to: st
 export async function startIssueSend(db: SupabaseClient, issueId: string): Promise<{ ok: true; total: number } | { ok: false; error: string }> {
   const { data: row } = await db.from('gilyonot_issues').select('title, parasha, file_path, file_name').eq('id', issueId).maybeSingle()
   if (!row) return { ok: false, error: 'הגיליון לא נמצא' }
-  const file = await checkIssueFile(db, row as Pick<IssueRow, 'title' | 'parasha' | 'file_path' | 'file_name'>)
+  // הקובץ מצורף לכל מייל, אז בודקים כבר כאן שהוא קיים ונכנס במייל
+  const file = await loadAttachment(db, row as Pick<IssueRow, 'title' | 'parasha' | 'file_path'>)
   if (!file.ok) return file
   // נעילה אופטימית: רק טיוטה עוברת לשליחה, כך שלחיצה כפולה לא מכפילה
   const { data: claimed, error: claimErr } = await db.from('gilyonot_issues')
-    .update({ status: 'sending', delivery_mode: 'link', started_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .update({ status: 'sending', delivery_mode: 'attachment', started_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq('id', issueId).eq('status', 'draft').select('id').maybeSingle()
   if (claimErr) return { ok: false, error: 'עדכון הגיליון נכשל' }
   if (!claimed) return { ok: false, error: 'הגיליון כבר נשלח או בשליחה' }
@@ -215,7 +215,7 @@ export async function runGilyonotSender(): Promise<{ sent: number; failed: numbe
 async function sendBatches(db: SupabaseClient, resend: Resend, issue: IssueRow): Promise<{ sent: number; failed: number }> {
   let sent = 0, failed = 0
   const deadline = Date.now() + TICK_BUDGET_MS
-  const file = await checkIssueFile(db, issue)
+  const file = await loadAttachment(db, issue)
   if (!file.ok) {
     console.error(`[gilyonot] ${issue.id}: ${file.error}`)
     return { sent, failed }
@@ -245,7 +245,7 @@ async function sendBatches(db: SupabaseClient, resend: Resend, issue: IssueRow):
         })
         try {
           const { data: res, error } = await resend.emails.send({
-            from: from(), to: d.email, subject: issue.subject, html, text: htmlToPlainText(html), replyTo: GILYONOT_FROM_EMAIL,
+            from: from(), to: d.email, subject: issue.subject, html, text: htmlToPlainText(html), replyTo: GILYONOT_FROM_EMAIL, attachments: [file.att],
             headers: unsubscribeUrl
               ? { 'List-Unsubscribe': `<${unsubscribeUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' }
               : undefined,
