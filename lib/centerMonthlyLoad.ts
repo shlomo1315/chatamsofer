@@ -115,11 +115,13 @@ export async function runMonthlyLoad(
   if (reserved !== 'ok') return { result: reserved as LoadResult }
 
   const release = async () => { try { await admin.rpc('release_center_monthly_load', { p_center: acc.center_id, p_month: month }) } catch { /* best-effort */ } }
+  let called = false
   try {
     const creds = await getNedarimCreds()
     if (!creds) { await release(); return { result: 'error', error: 'נדרים לא מוגדר' } }
     const clientId = await ensureClient(acc, creds)
     const limitedId = await getMaternityLimitedId()
+    called = true
     const r = await addTlush(creds, clientId, amount, undefined, `טעינה חודשית למוקד ${acc.center_name} · ${month}`, limitedId)
     if (!r.ok) { await release(); return { result: 'error', error: r.message } }
     // הכסף כבר נטען: אם הסימון נכשל, לא משחררים (היה מאפשר טעינה כפולה); נשאר pending ונראה לאדמין
@@ -127,7 +129,8 @@ export async function runMonthlyLoad(
       .eq('center_id', acc.center_id).eq('month', month)
     return { result: 'loaded' }
   } catch (e) {
-    await release()
+    // חריגה אחרי הפנייה לנדרים היא עמימה (אולי נטען): לא משחררים, כדי שלא תהיה טעינה כפולה
+    if (!called) await release()
     return { result: 'error', error: e instanceof Error ? e.message : 'שגיאה' }
   }
 }
