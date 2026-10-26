@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
-import { issueEmail, loadIssue, SAMPLE_NAME, type IssueRow } from '@/lib/gilyonotSender'
+import { issueEmail, loadIssue, type IssueRow } from '@/lib/gilyonotSender'
 
-// תצוגה מקדימה של המייל בדיוק כפי שיישלח, עם שם לדוגמה. מוצג ב-iframe במסך הגיליון.
+// תצוגה מקדימה של המייל בדיוק כפי שיישלח. מוצג ב-iframe במסך הגיליון.
 export const dynamic = 'force-dynamic'
 
 const SAMPLE = '00000000-0000-0000-0000-000000000000'
@@ -11,7 +11,7 @@ type Ctx = { params: Promise<{ id: string }> }
 
 function render(issue: Pick<IssueRow, 'title' | 'parasha' | 'intro' | 'body_html' | 'design'>) {
   // בלי פיקסל: צפייה בתצוגה המקדימה לא נספרת כפתיחה
-  const { html } = issueEmail(issue, { name: SAMPLE_NAME, deliveryToken: SAMPLE, subscriberToken: SAMPLE })
+  const { html } = issueEmail(issue, { deliveryToken: SAMPLE, subscriberToken: SAMPLE })
   return new NextResponse(html.replace(/<img[^>]*\/api\/gilyonot\/o\/[^>]*>/, ''), {
     headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Frame-Options': 'SAMEORIGIN' },
   })

@@ -26,8 +26,8 @@ export interface IssueStats {
   /** נקודות מצטברות: t = תחילת הדלי (ISO) */
   timeline: ({ t: string } & Record<StatKey, number>)[]
   bucket: 'hour' | 'day'
-  /** פתיחות והקלקות לפי שעה ביממה (שעון ישראל), 24 נקודות */
-  byHour: { hour: number; opened: number; clicked: number }[]
+  /** פתיחות, הקלקות והורדות לפי שעה ביממה (שעון ישראל), 24 נקודות */
+  byHour: { hour: number; opened: number; clicked: number; downloaded: number }[]
 }
 
 const hourFmt = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Jerusalem' })
@@ -59,7 +59,7 @@ export function buildIssueStats(rows: DeliveryStatRow[], now: Date = new Date())
     }
   }
 
-  if (!times.length) return { total: rows.length, pending, failed, counts, timeline: [], bucket: 'hour', byHour: Array.from({ length: 24 }, (_, hour) => ({ hour, opened: 0, clicked: 0 })) }
+  if (!times.length) return { total: rows.length, pending, failed, counts, timeline: [], bucket: 'hour', byHour: Array.from({ length: 24 }, (_, hour) => ({ hour, opened: 0, clicked: 0, downloaded: 0 })) }
 
   const end = Math.max(now.getTime(), ...times.map(x => x.at))
   const bucket = end - first > 3 * DAY ? 'day' : 'hour'
@@ -74,7 +74,7 @@ export function buildIssueStats(rows: DeliveryStatRow[], now: Date = new Date())
     for (const k of STAT_KEYS) run[k] += b[k]
     return { t: new Date(start + i * size).toISOString(), ...run }
   })
-  const byHour = Array.from({ length: 24 }, (_, hour) => ({ hour, opened: 0, clicked: 0 }))
-  for (const { key, at } of times) if (key === 'opened' || key === 'clicked') byHour[israelHour(at)][key]++
+  const byHour = Array.from({ length: 24 }, (_, hour) => ({ hour, opened: 0, clicked: 0, downloaded: 0 }))
+  for (const { key, at } of times) if (key === 'opened' || key === 'clicked' || key === 'downloaded') byHour[israelHour(at)][key]++
   return { total: rows.length, pending, failed, counts, timeline, bucket, byHour }
 }

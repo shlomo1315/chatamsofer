@@ -3,7 +3,7 @@
 // ובטלפון. אותה פונקציה בונה את התצוגה המקדימה, את מייל הניסיון ואת המייל לנמענים.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { NAME_TOKEN, normalizeDesign } from './gilyonotDesign'
+import { DEFAULT_DESIGN, NAME_TOKEN, normalizeDesign } from './gilyonotDesign'
 
 const SITE = (process.env.NEXT_PUBLIC_SITE_URL || 'https://chasamsofer.co.il').replace(/\/$/, '')
 
@@ -59,8 +59,8 @@ ${d.kicker.trim() ? `<p style="margin:0;color:#dbeafe;font-size:13px;letter-spac
 <h1 style="margin:8px 0 0;color:#ffffff;font-size:22px;line-height:1.4;">${plain(title)}</h1>
 ${sub.trim() ? `<p style="margin:6px 0 0;color:#eff6ff;font-size:16px;">${plain(sub)}</p>` : ''}
 </td></tr>` : ''
-  const button = opts.downloadUrl && d.showButton && d.buttonLabel.trim() ? `<tr><td align="center" style="padding:8px 28px 30px;">
-<a href="${escHtml(opts.downloadUrl)}" style="display:inline-block;background:${d.buttonColor};color:#ffffff;text-decoration:none;font-size:17px;font-weight:bold;padding:14px 34px;border-radius:10px;">${plain(d.buttonLabel)}</a>
+  const button = opts.downloadUrl ? `<tr><td align="center" style="padding:8px 28px 30px;">
+<a href="${escHtml(opts.downloadUrl)}" style="display:inline-block;background:${d.buttonColor};color:#ffffff;text-decoration:none;font-size:17px;font-weight:bold;padding:14px 34px;border-radius:10px;">${plain(d.buttonLabel.trim() || DEFAULT_DESIGN.buttonLabel)}</a>
 </td></tr>` : ''
 
   return `<!DOCTYPE html>
