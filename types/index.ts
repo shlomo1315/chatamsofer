@@ -452,7 +452,17 @@ export type FinancialAidStatus = 'pending' | 'awaiting_decision' | 'approved' | 
 
 export interface FinancialAidRequest {
   id: string
-  beneficiary_id: string
+  beneficiary_id?: string | null
+  source?: 'admin' | 'public'
+  is_descendant?: boolean
+  applicant_name?: string | null
+  applicant_id_number?: string | null
+  applicant_phone?: string | null
+  applicant_email?: string | null
+  applicant_address?: string | null
+  applicant_city?: string | null
+  requested_amount?: number | null
+  final_message_sent_at?: string | null
   reason?: string
   document_url?: string
   document_name?: string

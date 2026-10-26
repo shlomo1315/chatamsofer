@@ -943,6 +943,7 @@ export function registrationReceivedEmail(
 export function financialAidInquiryEmail(
   b: { family_name?: string | null; full_name?: string | null; id_number?: string | null; spouse_name?: string | null; marital_status?: string | null; phone?: string | null; city?: string | null; children_count?: number | null },
   reason?: string | null,
+  extra?: { requestedAmount?: number | null; notDescendant?: boolean; address?: string | null },
 ): BuiltEmail {
   // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל").
   const tAid = (k: string) => textFor('financial_aid_inquiry', k)
@@ -955,6 +956,9 @@ export function financialAidInquiryEmail(
     detailRow('טלפון', b.phone),
     detailRow('עיר', b.city),
     detailRow('מספר ילדים', b.children_count != null ? String(b.children_count) : ''),
+    detailRow('כתובת', extra?.address),
+    detailRow('סטטוס', extra?.notDescendant ? 'לא צאצא (אינו רשום במערכת)' : ''),
+    detailRow('סכום מבוקש', extra?.requestedAmount ? `₪${Number(extra.requestedAmount).toLocaleString('he-IL')}` : ''),
   ].join('')
   const body = `
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">בקשת סיוע רפואי</p>

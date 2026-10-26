@@ -10,11 +10,11 @@ import { ensureEmailTexts } from '@/lib/emailTextsStore'
 export const dynamic = 'force-dynamic'
 
 // מחלץ את הטקסט החדש בלבד מתוך תשובת המייל (לפני הציטוט של ההודעה המקורית).
-function cleanReplyText(raw: string): string {
+function cleanReplyText(raw: string, max = 200): string {
   let t = (raw || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&gt;|&lt;|&amp;/g, ' ')
   t = t.split(/On .*wrote:|ביום .*כתב|בתאריך .*מאת|-{3,}\s*Original|מאת:|From:|________/i)[0]
   t = t.split('\n').filter(l => !l.trim().startsWith('>')).join(' ')
-  return t.replace(/\s+/g, ' ').trim().slice(0, 200)
+  return t.replace(/\s+/g, ' ').trim().slice(0, max)
 }
 
 function getAdminClient() {
@@ -49,7 +49,7 @@ export async function POST() {
 
   const { data: reqs } = await admin
     .from('financial_aid_requests')
-    .select('id, gmail_thread_id, gmail_message_id, decision_email, beneficiary:beneficiaries(full_name, family_name, email)')
+    .select('id, source, gmail_thread_id, gmail_message_id, decision_email, beneficiary:beneficiaries(full_name, family_name, email)')
     .eq('status', 'awaiting_decision')
     .not('gmail_thread_id', 'is', null)
   if (!reqs?.length) return NextResponse.json({ ok: true, updated: 0 })
@@ -84,6 +84,17 @@ export async function POST() {
         ?? [...inbound].reverse()[0]
       if (!reply) continue
       const cleaned = cleanReplyText(reply.body || reply.snippet)
+      const repliedAt0 = reply.date ? new Date(reply.date).toISOString() : new Date().toISOString()
+      // בקשה ציבורית: שומרים את תשובת הגורם המאשר בלבד. ההחלטה והסכום מוזנים ידנית ע"י המזכיר.
+      if ((r as { source?: string }).source === 'public') {
+        await admin.from('financial_aid_requests').update({
+          decision_reply: cleanReplyText(reply.body || reply.snippet || '', 1000),
+          decision_replied_at: repliedAt0,
+          updated_at: new Date().toISOString(),
+        }).eq('id', r.id)
+        updated++
+        continue
+      }
       const d = parseDecision(cleaned || reply.snippet)
       if (d.kind === 'none') continue
       const repliedAt = reply.date ? new Date(reply.date).toISOString() : new Date().toISOString()
