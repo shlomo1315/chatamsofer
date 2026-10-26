@@ -24,6 +24,7 @@ const PATHS: Record<string, string> = {
   maternity: '/api/webhooks/yemot-maternity',
   book_fair: '/api/webhooks/yemot-book-fair',
   otp: '/api/webhooks/yemot-otp',
+  center_load: '/api/webhooks/yemot-center-load',
 }
 
 export async function GET(request: NextRequest) {

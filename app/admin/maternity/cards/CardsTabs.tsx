@@ -1,12 +1,13 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Warehouse, CreditCard, PackageOpen } from 'lucide-react'
+import { Warehouse, CreditCard, PackageOpen, CalendarClock } from 'lucide-react'
 import NedarimFamilies from './NedarimFamilies'
 import UnloadsPanel from './UnloadsPanel'
+import CenterMonthlyPanel from './CenterMonthlyPanel'
 import { useIsAdmin } from '@/components/StaffPermissions'
 
 export default function CardsTabs({ internal }: { internal: React.ReactNode }) {
-  const [tab, setTab] = useState<'internal' | 'nedarim' | 'unloads'>('internal')
+  const [tab, setTab] = useState<'internal' | 'nedarim' | 'unloads' | 'monthly'>('internal')
   // 🔒 לשוניות הכסף (מלאי ופריקות) למנהל בלבד — הן חושפות סכומים
   // שחזרו לקופה ומלאי ארגוני. ⚠️ ההסתרה כאן משלימה את הגנת השרת
   // ואינה מחליפה אותה.
@@ -17,6 +18,7 @@ export default function CardsTabs({ internal }: { internal: React.ReactNode }) {
     const p = new URLSearchParams(window.location.search)
     if (p.get('zeout') || p.get('tab') === 'nedarim') setTab('nedarim')
     else if (p.get('tab') === 'unloads' && isAdmin) setTab('unloads')
+    else if (p.get('tab') === 'monthly' && isAdmin) setTab('monthly')
     // ⚠️ מי שאינו מנהל אינו רואה את לשונית המלאי, ולכן ברירת המחדל
     // 'internal' הייתה מציגה לו מסך ריק לגמרי.
     else if (!isAdmin) setTab('nedarim')
@@ -30,6 +32,7 @@ export default function CardsTabs({ internal }: { internal: React.ReactNode }) {
           ...(isAdmin ? [{ id: 'internal' as const, label: 'מוקדי מלאי פנימיים', icon: Warehouse }] : []),
           { id: 'nedarim' as const, label: 'נדרים קארד', icon: CreditCard },
           ...(isAdmin ? [{ id: 'unloads' as const, label: 'פריקות', icon: PackageOpen }] : []),
+          ...(isAdmin ? [{ id: 'monthly' as const, label: 'טעינה חודשית למוקדים', icon: CalendarClock }] : []),
         ]).map(t => {
           const Icon = t.icon
           const active = tab === t.id
@@ -46,6 +49,7 @@ export default function CardsTabs({ internal }: { internal: React.ReactNode }) {
       {isAdmin && <div className={tab === 'internal' ? '' : 'hidden'}>{internal}</div>}
       {tab === 'nedarim' && <NedarimFamilies />}
       {isAdmin && tab === 'unloads' && <UnloadsPanel />}
+      {isAdmin && tab === 'monthly' && <CenterMonthlyPanel />}
     </div>
   )
 }
