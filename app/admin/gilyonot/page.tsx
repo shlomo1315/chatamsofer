@@ -44,7 +44,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
       if (!data || data.length < PAGE) break
     }
     const [{ data: iss }, { data: stats }] = await Promise.all([
-      db.from('gilyonot_issues').select('id, title, parasha, subject, intro, body_html, design, file_name, file_size, file_path, status, total_count, created_at, started_at, completed_at')
+      db.from('gilyonot_issues').select('id, title, parasha, subject, intro, body_html, design, file_name, file_size, file_path, status, delivery_mode, total_count, created_at, started_at, completed_at')
         .order('created_at', { ascending: false }).limit(500),
       db.from('gilyonot_issue_stats').select('*'),
     ])

@@ -62,13 +62,14 @@ export function IssueAnalytics({ issue, base }: { issue: IssueView; base: string
 
   const c = data?.counts
   const sent = c?.sent ?? issue.sent_count
+  const linkMode = issue.delivery_mode === 'link'
   const funnel = c ? [
     { label: 'נשלחו', value: c.sent, of: data.total, hint: `מתוך ${num(data.total)} נמענים`, color: '#94a3b8' },
     { label: 'נמסרו לתיבה', value: c.delivered, of: sent, hint: 'אישור מסירה מ-Resend', color: '#2563eb' },
     { label: 'פתחו', value: c.opened, of: sent, hint: 'הערכה, לפי טעינת תמונה', color: '#0891b2' },
     { label: 'הקליקו', value: c.clicked, of: sent, hint: 'לחצו על קישור במייל', color: '#7c3aed' },
     { label: 'הסירו את עצמם', value: c.unsubscribed, of: sent, hint: 'לחצו על הסרה מהרשימה', color: '#d97706' },
-    ...(c.downloaded > 0 ? [{ label: 'הורידו (גיליונות ישנים)', value: c.downloaded, of: sent, hint: 'לחצו על קישור ההורדה', color: '#059669' }] : []),
+    ...(linkMode || c.downloaded > 0 ? [{ label: 'הורידו את הקובץ', value: c.downloaded, of: sent, hint: 'לחצו על כפתור ההורדה', color: '#059669' }] : []),
     { label: 'חזרו', value: c.bounced, of: sent, hint: 'כתובת לא קיימת או תיבה מלאה', color: '#e11d48' },
   ] : []
   const fmtT = (t: string) => new Date(t).toLocaleString('he-IL', data?.bucket === 'day'
@@ -91,11 +92,12 @@ export function IssueAnalytics({ issue, base }: { issue: IssueView; base: string
           <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Stat label="נשלחו" value={num(c.sent)} sub={data.pending ? `${num(data.pending)} ממתינים` : `מתוך ${num(data.total)}`} />
             <Stat label="נמסרו" value={num(c.delivered)} sub={`${rate(c.delivered, c.sent)}%`} />
-            <Stat label="פתחו" value={num(c.opened)} sub={`${rate(c.opened, c.sent)}%${c.downloaded > 0 ? ` · ${num(c.downloaded)} הורידו` : ''}`} />
+            <Stat label="פתחו" value={num(c.opened)} sub={`${rate(c.opened, c.sent)}%`} />
             <Stat label="חזרו / ספאם / נכשלו" value={`${num(c.bounced)} / ${num(c.complained)} / ${num(data.failed)}`} tone={c.bounced + c.complained + data.failed ? 'rose' : undefined} sub={`${rate(c.bounced, c.sent)}% חזרו`} />
           </dl>
           <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Stat label="שיעור פתיחה" value={`${rate(c.opened, c.sent)}%`} sub={`${num(c.opened)} נמענים`} />
+            <Stat label="הורידו את הקובץ" value={linkMode || c.downloaded > 0 ? num(c.downloaded) : 'אין נתונים'} sub={linkMode || c.downloaded > 0 ? `${rate(c.downloaded, c.sent)}% מהנשלחו` : 'נשלח כקובץ מצורף, לא נספר'} />
             <Stat label="הקליקו" value={num(c.clicked)} sub={`${rate(c.clicked, c.sent)}%`} />
             <Stat label="הסירו את עצמם" value={num(c.unsubscribed)} sub={`${rate(c.unsubscribed, c.sent)}%`} tone={c.unsubscribed ? 'rose' : undefined} />
             <Stat label="עוד לא פתחו" value={num(Math.max(0, c.sent - c.opened))} sub={`${rate(Math.max(0, c.sent - c.opened), c.sent)}%`} />
@@ -139,9 +141,9 @@ export function IssueAnalytics({ issue, base }: { issue: IssueView; base: string
             </div>
           </div>
 
-          {(c.opened > 0 || c.clicked > 0) && (
+          {(c.opened > 0 || c.clicked > 0 || c.downloaded > 0) && (
             <div className="min-w-0">
-              <p className="mb-1 text-xs font-medium text-slate-500">כניסות לפי שעה ביממה (שעון ישראל)</p>
+              <p className="mb-1 text-xs font-medium text-slate-500">כניסות והורדות לפי שעה ביממה (שעון ישראל)</p>
               <div dir="ltr" className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={data.byHour} margin={{ top: 6, right: 8, bottom: 0, left: -12 }} barCategoryGap="15%">
@@ -152,6 +154,7 @@ export function IssueAnalytics({ issue, base }: { issue: IssueView; base: string
                     <Legend wrapperStyle={{ fontSize: 12 }} />
                     <Bar dataKey="opened" name="פתחו" fill="#0891b2" radius={[3, 3, 0, 0]} isAnimationActive={false} />
                     <Bar dataKey="clicked" name="הקליקו" fill="#7c3aed" radius={[3, 3, 0, 0]} isAnimationActive={false} />
+                    {(linkMode || c.downloaded > 0) && <Bar dataKey="downloaded" name="הורידו" fill="#059669" radius={[3, 3, 0, 0]} isAnimationActive={false} />}
                   </BarChart>
                 </ResponsiveContainer>
               </div>

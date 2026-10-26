@@ -46,6 +46,7 @@ export interface IssueView {
   pending_count: number
   opened_count: number
   downloaded_count: number
+  delivery_mode?: 'link' | 'attachment'
   delivered_count: number
   bounced_count: number
   complained_count: number
@@ -599,6 +600,9 @@ function NewIssue({ defaultParasha, onClose, onCreated }: { defaultParasha: stri
             <input className={input} value={title} onChange={e => setTitle(e.target.value)} required maxLength={120} />
           </label>
         </div>
+        <details className="rounded-xl bg-slate-50/80 p-4 ring-1 ring-inset ring-slate-900/[0.04]">
+          <summary className="cursor-pointer text-sm font-medium text-slate-700">אפשרויות מתקדמות (נושא המייל ופתיח)</summary>
+          <div className="mt-4 space-y-4">
         <label className="block"><span className={label}>נושא המייל</span>
           <input className={input} value={subject} onChange={e => setSubject(e.target.value)} placeholder={defaultSubject(title, parasha)} maxLength={200} />
           <span className="mt-1 block text-xs text-slate-500">אם תשאירו ריק, יישלח הנושא שמוצג באפור.</span>
@@ -607,6 +611,8 @@ function NewIssue({ defaultParasha, onClose, onCreated }: { defaultParasha: stri
           <textarea className={`${input} h-24`} value={intro} onChange={e => setIntro(e.target.value)} maxLength={4000} />
           <span className="mt-1 block text-xs text-slate-500">בשלב הבא תוכלו לעצב את המייל בעורך: טקסט, קישורים, כפתורים, תמונות ותבניות שמורות.</span>
         </label>
+          </div>
+        </details>
         <label className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors duration-150 focus-within:ring-4 focus-within:ring-[#2563eb]/10 ${file ? 'border-emerald-300 bg-emerald-50/50' : 'border-slate-200 hover:border-[#2563eb]/40 hover:bg-slate-50'}`}>
           {file ? <CheckCircle2 className="h-7 w-7 text-emerald-600" aria-hidden /> : <Upload className="h-7 w-7 text-[#2563eb]" aria-hidden />}
           <span className="text-sm font-semibold text-slate-900">{file ? file.name : 'בחירת קובץ הגיליון'}</span>
@@ -641,7 +647,6 @@ function IssueDetail({ issue, activeCount, canEdit, canDelete, onClose }: { issu
     const t = setTimeout(() => { if (localStorage.getItem(testedKey)) { setTested(true); setStep(3) } }, 0)
     return () => clearTimeout(t)
   }, [testedKey])
-  const fits = fitsInMail(issue.file_size ?? 0)
 
   async function run(fn: () => Promise<string>) {
     setBusy(true); setMsg(null)
@@ -705,10 +710,9 @@ function IssueDetail({ issue, activeCount, canEdit, canDelete, onClose }: { issu
             {step === 2 && (
               <div className="rounded-xl bg-slate-50/80 p-4 ring-1 ring-inset ring-slate-900/[0.04]">
                 <h3 className="text-sm font-semibold text-slate-900">מייל ניסיון</h3>
-                <p className="mt-2 text-xs leading-relaxed text-slate-600">שלחו לעצמכם ובדקו שהכול נראה טוב, כולל הקובץ המצורף. בלי כתובת, יישלח למייל שלכם.</p>
+                <p className="mt-2 text-xs leading-relaxed text-slate-600">שלחו לעצמכם ובדקו שהכול נראה טוב, כולל כפתור ההורדה. בלי כתובת, יישלח למייל שלכם.</p>
                 <input className={`${input} mt-3`} type="email" dir="ltr" placeholder="המייל שלי (ברירת מחדל)" value={testTo} onChange={e => setTestTo(e.target.value)} aria-label="כתובת לניסיון" />
-                <button type="button" disabled={busy || !fits} className={`${btnGhost} mt-2 w-full`} onClick={sendTest}><MailCheck className="h-4 w-4" aria-hidden />שליחת ניסיון</button>
-                {!fits && <p className="mt-2 text-xs font-medium text-rose-700">הקובץ גדול מדי לצירוף למייל. חזרו לשלב 1 וכווצו אותו.</p>}
+                <button type="button" disabled={busy} className={`${btnGhost} mt-2 w-full`} onClick={sendTest}><MailCheck className="h-4 w-4" aria-hidden />שליחת ניסיון</button>
               </div>
             )}
 
@@ -716,11 +720,10 @@ function IssueDetail({ issue, activeCount, canEdit, canDelete, onClose }: { issu
               <div className="rounded-xl p-4 ring-1 ring-inset ring-[#2563eb]/15">
                 <h3 className="text-sm font-semibold text-slate-900">שליחה לכל הרשימה</h3>
                 {!tested && <p className="mt-2 text-xs font-medium text-amber-700">עוד לא שלחתם מייל ניסיון. מומלץ לעבור קודם לשלב 2.</p>}
-                <p className="mt-2 flex items-start gap-1.5 text-xs leading-relaxed text-slate-600"><ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden />אחרי שליחה אי אפשר לבטל. כל נמען מקבל את הגיליון כקובץ מצורף. המיילים יוצאים לאט, לא בשבת ובחג.</p>
-                <button type="button" disabled={busy || !activeCount || !fits} className={`${btnPrimary} mt-3 w-full py-2.5`} onClick={sendAll}>
+                <p className="mt-2 flex items-start gap-1.5 text-xs leading-relaxed text-slate-600"><ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden />אחרי שליחה אי אפשר לבטל. כל נמען מקבל כפתור להורדת הגיליון. המיילים יוצאים לאט, לא בשבת ובחג.</p>
+                <button type="button" disabled={busy || !activeCount} className={`${btnPrimary} mt-3 w-full py-2.5`} onClick={sendAll}>
                   {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Send className="h-4 w-4" aria-hidden />}שליחה ל-{num(activeCount)} נרשמים
                 </button>
-                {!fits && <p className="mt-2 text-xs font-medium text-rose-700">הקובץ גדול מדי לצירוף למייל. חזרו לשלב 1 וכווצו אותו.</p>}
               </div>
             )}
 
@@ -737,20 +740,14 @@ function IssueDetail({ issue, activeCount, canEdit, canDelete, onClose }: { issu
   )
 }
 
-const MAX_MAIL = 40 * 1024 * 1024
-/** קובץ נכנס במייל אם גודלו אחרי base64 (+33%) עד 40MB */
-const fitsInMail = (bytes: number) => Math.ceil(bytes * 4 / 3) <= MAX_MAIL
 const fmtSize = (b: number) => b >= 1048576 ? `${(b / 1048576).toFixed(1)}MB` : `${Math.max(1, Math.round(b / 1024))}KB`
 
 interface Squeeze { before: number; after: number; savedPct: number; worthIt: boolean; fits: boolean }
 
-/** שלב 1: הקובץ, גודלו, ואזהרה אם הוא קרוב או חורג מהמגבלה, וכיווץ בלי פגיעה באיכות. */
+/** שלב 1: הקובץ וגודלו. כיווץ בלי פגיעה באיכות זמין תחת "אפשרויות מתקדמות". */
 function FilePanel({ issue, base }: { issue: IssueView; base: string }) {
   const router = useRouter()
   const size = issue.file_size ?? 0
-  const withB64 = Math.ceil(size * 4 / 3)
-  const over = withB64 > MAX_MAIL
-  const near = !over && withB64 > MAX_MAIL * 0.75
   const [busy, setBusy] = useState(false)
   const [res, setRes] = useState<Squeeze | null>(null)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
@@ -773,16 +770,17 @@ function FilePanel({ issue, base }: { issue: IssueView; base: string }) {
             <a href={`${base}/file`} target="_blank" rel="noreferrer" className={`${link} inline-flex items-center gap-1.5 text-sm`}><FileText className="h-4 w-4" aria-hidden />{gilyonFileName(issue, issue.file_name)}</a>
             <p className="mt-1 text-sm text-slate-700">גודל הקובץ: <strong className="tabular-nums">{fmtSize(size)}</strong>{issue.compressed && <Badge tone="green">גרסה מכווצת</Badge>}</p>
           </div>
-          <div className="flex flex-wrap gap-2">
+        </div>
+        <p className="mt-3 text-xs leading-relaxed text-slate-600">הקובץ נשלח לנמענים כקישור הורדה, ולכן אין מגבלת גודל של המייל.</p>
+        <details className="mt-3">
+          <summary className="cursor-pointer text-sm font-medium text-slate-700">אפשרויות מתקדמות</summary>
+          <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" disabled={busy} className={btnGhost} onClick={() => act('try')}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Minimize2 className="h-4 w-4" aria-hidden />}כווץ את הקובץ
             </button>
             {issue.compressed && <button type="button" disabled={busy} className={btnGhost} onClick={() => act('revert')}>חזרה למקור</button>}
           </div>
-        </div>
-        <p className="mt-3 text-xs leading-relaxed text-slate-600">הקובץ נשלח כקובץ מצורף בכל מייל. מגבלת המייל כ-40MB כולל קידוד (כ-30MB לקובץ עצמו). הכיווץ לא משנה מידות ולא מוריד רזולוציה.</p>
-        {over && <p role="alert" className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm font-medium text-rose-800">הקובץ חורג מהמגבלה ({fmtSize(withB64)} במייל מול 40MB). אי אפשר לשלוח אותו כקובץ מצורף. נסו לכווץ, ואם זה לא מספיק – יש להעביר את זה למוישי.</p>}
-        {near && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">הקובץ קרוב למגבלה ({fmtSize(withB64)} במייל מול 40MB). כדאי לכווץ.</p>}
+        </details>
       </div>
 
       {res && (
@@ -794,7 +792,6 @@ function FilePanel({ issue, base }: { issue: IssueView; base: string }) {
           </div>
           {res.worthIt ? (
             <>
-              {!res.fits && <p className="mt-3 text-sm font-medium text-rose-800">גם אחרי הכיווץ הקובץ עדיין חורג מהמגבלה, ואי אפשר לשלוח אותו. יש להעביר את זה למוישי.</p>}
               <div className="mt-3 flex flex-wrap gap-2">
                 <button type="button" disabled={busy} className={btnPrimary} onClick={() => act('use')}>להשתמש בגרסה המכווצת</button>
                 <button type="button" disabled={busy} className={btnGhost} onClick={() => setRes(null)}>להשאיר את המקור</button>
@@ -802,7 +799,7 @@ function FilePanel({ issue, base }: { issue: IssueView; base: string }) {
               <p className="mt-2 text-xs text-slate-500">שתי הגרסאות נשמרות עד שתבחרו. אפשר לחזור למקור בכל שלב לפני השליחה.</p>
             </>
           ) : (
-            <p className="mt-3 text-sm text-slate-700">החיסכון זניח ({res.savedPct}%), אז הקובץ לא הוחלף.{!res.fits && ' הקובץ עדיין חורג מהמגבלה, ואי אפשר לשלוח אותו. יש להעביר את זה למוישי.'}</p>
+            <p className="mt-3 text-sm text-slate-700">החיסכון זניח ({res.savedPct}%), אז הקובץ לא הוחלף.</p>
           )}
         </div>
       )}

@@ -27,10 +27,11 @@ describe('buildIssueStats', () => {
   })
 
   it('פתיחות לפי שעה ביממה בשעון ישראל', () => {
-    const s = buildIssueStats([row({ sent_at: '2026-10-20T08:00:00Z', opened_at: '2026-10-20T09:30:00Z', clicked_at: '2026-10-20T21:30:00Z' })], new Date('2026-10-21T00:00:00Z'))
+    const s = buildIssueStats([row({ sent_at: '2026-10-20T08:00:00Z', opened_at: '2026-10-20T09:30:00Z', clicked_at: '2026-10-20T21:30:00Z', downloaded_at: '2026-10-20T09:45:00Z' })], new Date('2026-10-21T00:00:00Z'))
     expect(s.byHour).toHaveLength(24)
     expect(s.byHour[12].opened).toBe(1)
     expect(s.byHour[0].clicked).toBe(1)
+    expect(s.byHour[12].downloaded).toBe(1)
   })
 
   it('אחרי יותר משלושה ימים עובר לדליים של יום', () => {

@@ -12,9 +12,9 @@ import { sanitizeMailHtml } from './gilyonotRichHtml'
 // (lib/newsletter/sender.ts): Resend Batch של עד 100 מיילים, 2 בקשות בשנייה,
 // נעילה נגד ריצה כפולה, והמשך מהשורות שנשארו pending אם השרת נפל באמצע.
 //
-// הגיליון נשלח כקובץ מצורף (attachments), לכן כל נמען מקבל מייל נפרד (Batch של
-// Resend לא תומך בקבצים מצורפים). המעקב: פיקסל פתיחה (/api/gilyonot/o) והאירועים
-// של Resend (נמסר, חזר, ספאם). אין קישור הורדה, ולכן אין מעקב הורדות.
+// הגיליון נשלח כקישור הורדה אישי (/api/gilyonot/d/<טוקן>) ולא כקובץ מצורף, ולכן
+// אפשר לספור הורדות. המעקב: פיקסל פתיחה (/api/gilyonot/o), הקלקות, הורדות
+// והאירועים של Resend (נמסר, חזר, ספאם). אין שמות בשום מקום במייל.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const BATCH_SIZE = 100
@@ -43,6 +43,8 @@ export interface IssueRow {
   file_path: string
   file_name: string
   status: 'draft' | 'sending' | 'sent'
+  /** 'link' = קישור הורדה שנספר; 'attachment' = גיליונות ישנים עם קובץ מצורף (אין נתוני הורדות) */
+  delivery_mode?: 'link' | 'attachment'
 }
 
 interface DeliveryRow {
@@ -66,8 +68,16 @@ export { gilyonFileName } from './gilyonotFileName'
 export interface Attachment { filename: string; content: Buffer }
 
 
-/** האם קובץ בגודל הזה נכנס במייל אחד (עם base64). */
+/** האם קובץ בגודל הזה נכנס במייל אחד (עם base64). נשאר לגיליונות ישנים ולכיווץ. */
 export const fitsInMail = (bytes: number) => Math.ceil(bytes * 4 / 3) <= RESEND_MAX_BYTES
+
+/** בודק שהקובץ קיים באחסון, ומחזיר קישור חתום (7 ימים) למייל הניסיון. */
+export async function checkIssueFile(db: SupabaseClient, issue: Pick<IssueRow, 'title' | 'parasha' | 'file_path' | 'file_name'>): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  const { data, error } = await db.storage.from('documents')
+    .createSignedUrl(issue.file_path, 7 * 24 * 3600, { download: gilyonFileName(issue, issue.file_name) })
+  if (error || !data?.signedUrl) return { ok: false, error: 'הקובץ לא נמצא באחסון' }
+  return { ok: true, url: data.signedUrl }
+}
 
 export async function loadAttachment(db: SupabaseClient, issue: Pick<IssueRow, 'title' | 'parasha' | 'file_path'>): Promise<{ ok: true; att: Attachment } | { ok: false; error: string }> {
   const { data, error } = await db.storage.from('documents').download(issue.file_path)
@@ -82,30 +92,31 @@ export async function loadAttachment(db: SupabaseClient, issue: Pick<IssueRow, '
 type MailFields = Pick<IssueRow, 'title' | 'parasha' | 'intro' | 'body_html' | 'design'>
 
 /** המייל עצמו לנמען אחד. גם התצוגה המקדימה משתמשת בזה (עם טוקנים לדוגמה). */
-export function issueEmail(issue: MailFields, r: { name: string | null; deliveryToken: string; subscriberToken: string | null }) {
+export function issueEmail(issue: MailFields, r: { deliveryToken: string; subscriberToken: string | null }) {
   const unsubscribeUrl = r.subscriberToken ? gilyonotUrls.unsubscribe(r.subscriberToken) : null
   return {
     html: buildGilyonHtml({
-      title: issue.title, parasha: issue.parasha, intro: issue.intro, name: r.name,
+      title: issue.title, parasha: issue.parasha, intro: issue.intro,
       bodyHtml: cleanBody(issue.body_html), design: issue.design,
       unsubscribeUrl,
       pixelUrl: gilyonotUrls.pixel(r.deliveryToken),
+      downloadUrl: gilyonotUrls.download(r.deliveryToken),
     }),
     unsubscribeUrl,
   }
 }
 
-/** מייל ניסיון לכתובת אחת, עם הקובץ מצורף, בלי פיקסל. */
+/** מייל ניסיון לכתובת אחת: כפתור ההורדה מוביל ישר לקובץ (בלי ספירה), בלי פיקסל. */
 export async function sendGilyonTest(db: SupabaseClient, issue: IssueRow, to: string): Promise<{ ok: boolean; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) return { ok: false, error: 'RESEND_API_KEY לא מוגדר בשרת' }
-  const file = await loadAttachment(db, issue)
+  const file = await checkIssueFile(db, issue)
   if (!file.ok) return file
   const html = buildGilyonHtml({
     title: issue.title, parasha: issue.parasha, intro: issue.intro, bodyHtml: cleanBody(issue.body_html), design: issue.design,
-    name: SAMPLE_NAME, unsubscribeUrl: null,
+    unsubscribeUrl: null, downloadUrl: file.url,
   })
-  const { error } = await new Resend(apiKey).emails.send({ from: from(), to, subject: `[ניסיון] ${issue.subject}`, html, attachments: [file.att] })
+  const { error } = await new Resend(apiKey).emails.send({ from: from(), to, subject: `[ניסיון] ${issue.subject}`, html })
   if (error) return { ok: false, error: String(error.message ?? error) }
   return { ok: true }
 }
@@ -115,12 +126,13 @@ export async function sendGilyonTest(db: SupabaseClient, issue: IssueRow, to: st
  * ה-worker ישלח בטיק הקרוב. מחזיר את מספר הנמענים.
  */
 export async function startIssueSend(db: SupabaseClient, issueId: string): Promise<{ ok: true; total: number } | { ok: false; error: string }> {
-  const { data: row } = await db.from('gilyonot_issues').select('file_size').eq('id', issueId).maybeSingle()
+  const { data: row } = await db.from('gilyonot_issues').select('title, parasha, file_path, file_name').eq('id', issueId).maybeSingle()
   if (!row) return { ok: false, error: 'הגיליון לא נמצא' }
-  if (!fitsInMail(Number(row.file_size) || 0)) return { ok: false, error: 'הקובץ גדול מדי לשליחה כקובץ מצורף (מעל כ-30MB). כווץ אותו קודם.' }
+  const file = await checkIssueFile(db, row as Pick<IssueRow, 'title' | 'parasha' | 'file_path' | 'file_name'>)
+  if (!file.ok) return file
   // נעילה אופטימית: רק טיוטה עוברת לשליחה, כך שלחיצה כפולה לא מכפילה
   const { data: claimed, error: claimErr } = await db.from('gilyonot_issues')
-    .update({ status: 'sending', started_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .update({ status: 'sending', delivery_mode: 'link', started_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq('id', issueId).eq('status', 'draft').select('id').maybeSingle()
   if (claimErr) return { ok: false, error: 'עדכון הגיליון נכשל' }
   if (!claimed) return { ok: false, error: 'הגיליון כבר נשלח או בשליחה' }
@@ -191,7 +203,7 @@ export async function runGilyonotSender(): Promise<{ sent: number; failed: numbe
 async function sendBatches(db: SupabaseClient, resend: Resend, issue: IssueRow): Promise<{ sent: number; failed: number }> {
   let sent = 0, failed = 0
   const deadline = Date.now() + TICK_BUDGET_MS
-  const file = await loadAttachment(db, issue)
+  const file = await checkIssueFile(db, issue)
   if (!file.ok) {
     console.error(`[gilyonot] ${issue.id}: ${file.error}`)
     return { sent, failed }
@@ -216,14 +228,12 @@ async function sendBatches(db: SupabaseClient, resend: Resend, issue: IssueRow):
     for (let i = 0; i < batch.length && Date.now() < deadline && !hadFailure; i += 2) {
       const results = await Promise.all(batch.slice(i, i + 2).map(async d => {
         const { html, unsubscribeUrl } = issueEmail(issue, {
-          name: d.gilyonot_subscribers?.full_name ?? null,
           deliveryToken: d.token,
           subscriberToken: d.gilyonot_subscribers?.token ?? null,
         })
         try {
           const { data: res, error } = await resend.emails.send({
             from: from(), to: d.email, subject: issue.subject, html,
-            attachments: [file.att],
             headers: unsubscribeUrl
               ? { 'List-Unsubscribe': `<${unsubscribeUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' }
               : undefined,
