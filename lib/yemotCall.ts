@@ -104,10 +104,23 @@ async function runTtsCall(
       console.error('[yemot RunCampaign TTS] FULL RESPONSE:', JSON.stringify(json), 'HTTP', res.status)
       return { ok: false, error: json ? String(json.message ?? json.responseStatus) : `HTTP ${res.status}` }
     }
+    // לוג אבחון לכל שליחה: הטקסט עם הספרות מוסתרות (הקוד לא נחשף) ותשובת ימות המלאה.
+    console.log('[yemot RunCampaign TTS] sent', JSON.stringify({
+      text: maskDigits(spokenText),
+      textLength: spokenText.length,
+      hasPunctuation: /[.,;]/.test(spokenText),
+      phoneTail: tel.slice(-3),
+      response: json,
+    }))
     return { ok: true }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) }
   }
+}
+
+// מסתיר מילות ספרות ומספרים בטקסט לוג, כדי שהקוד לא ייכתב ללוגים.
+export function maskDigits(text: string): string {
+  return text.split(' ').map(w => (DIGIT_WORDS.includes(w) ? '#' : w)).join(' ').replace(/\d/g, '#')
 }
 
 // שיחה יוצאת שמקריאה למתקשר את קוד הכניסה החד-פעמי. לא מתעד את הקוד.
