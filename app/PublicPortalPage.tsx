@@ -1491,22 +1491,6 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   const [phoneError, setPhoneError] = useState('')
   const [emailError, setEmailError] = useState('')
 
-  // בדיקה בזמן אמת: האם הטלפון כבר בשימוש אצל צאצא אחר. מחזיר true אם תפוס.
-  // ⚠️ נכשל-פתוח: אם הבדיקה נכשלת (רשת) לא חוסמים — האכיפה האמיתית בשרת בהגשה.
-  const checkPhoneTaken = useCallback(async (phone: string): Promise<boolean> => {
-    const digits = phone.replace(/\D/g, '')
-    if (digits.length < 9) return false
-    try {
-      const res = await fetch('/api/portal/phone-availability', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone }),
-      })
-      if (!res.ok) return false
-      const d = await res.json()
-      return !!d.taken
-    } catch { return false }
-  }, [])
-  const PHONE_TAKEN_MSG = 'מספר הנייד הזה כבר רשום במערכת אצל נרשם אחר — יש להזין מספר אחר'
   // אסימוני אימות מייל/טלפון (רישום)
   const [regEmailToken, setRegEmailToken] = useState<string | null>(null)
   const [regPhoneToken, setRegPhoneToken] = useState<string | null>(null)
@@ -4486,7 +4470,6 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                           if (regForm.phone && !validatePhone(regForm.phone)) { setPhoneError('אנא הזן מספר נייד תקין המתחיל ב-05'); return }
                           setPhoneError('')
                           // התרעה מיידית: הטלפון כבר בשימוש אצל צאצא אחר
-                          if (regForm.phone) void checkPhoneTaken(regForm.phone).then(taken => { if (taken) setPhoneError(PHONE_TAKEN_MSG) })
                           // התרעה מיידית על טלפון זהה בין הבעל לאשה
                           if (regForm.phone && regForm.spouse_phone && regForm.phone.replace(/\D/g, '') === regForm.spouse_phone.replace(/\D/g, '')) {
                             setSpousePhoneError('מספר הטלפון של האישה זהה למספר הטלפון של הבעל')
@@ -4498,9 +4481,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                         className={phoneError ? 'border-red-400 focus:ring-red-400' : ''}
                       />
                       {phoneError && <p className="text-xs text-red-600 mt-1">{phoneError}</p>}
-                      <VerifyControl channel="phone" value={regForm.phone} valid={validatePhone(regForm.phone)} onToken={setRegPhoneToken}
-                        blocked={phoneError === PHONE_TAKEN_MSG}
-                        beforeSend={async v => { const taken = await checkPhoneTaken(v); if (taken) setPhoneError(PHONE_TAKEN_MSG); return !taken }} />
+                      <VerifyControl channel="phone" value={regForm.phone} valid={validatePhone(regForm.phone)} onToken={setRegPhoneToken} />
                     </Field>
                   </div>
                   {showSpouseFields && (
@@ -4513,15 +4494,13 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                             const sp = regForm.spouse_phone.trim()
                             if (sp && !validatePhone(sp)) { setSpousePhoneError('אנא הזן מספר נייד תקין המתחיל ב-05') }
                             else if (sp && regForm.phone && sp.replace(/\D/g, '') === regForm.phone.replace(/\D/g, '')) { setSpousePhoneError('מספר הטלפון של האישה זהה למספר הטלפון של הבעל') }
-                            else { setSpousePhoneError(''); if (sp) void checkPhoneTaken(sp).then(taken => { if (taken) setSpousePhoneError(PHONE_TAKEN_MSG) }) }
+                            else { setSpousePhoneError('') }
                           }}
                           placeholder="0500000000" dir="ltr" maxLength={11}
                           className={spousePhoneError ? 'border-red-400 focus:ring-red-400' : ''}
                         />
                         {spousePhoneError && <p className="text-xs text-red-600 mt-1">{spousePhoneError}</p>}
-                        <VerifyControl channel="phone" value={regForm.spouse_phone} valid={validatePhone(regForm.spouse_phone)} onToken={setRegSpousePhoneToken} optionalHint={anyPhoneVerified ? phoneOptionalHint : undefined}
-                          blocked={spousePhoneError === PHONE_TAKEN_MSG}
-                          beforeSend={async v => { const taken = await checkPhoneTaken(v); if (taken) setSpousePhoneError(PHONE_TAKEN_MSG); return !taken }} />
+                        <VerifyControl channel="phone" value={regForm.spouse_phone} valid={validatePhone(regForm.spouse_phone)} onToken={setRegSpousePhoneToken} optionalHint={anyPhoneVerified ? phoneOptionalHint : undefined} />
                       </Field>
                     </div>
                   )}
