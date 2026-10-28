@@ -4,6 +4,7 @@
 // ומחזירה אסימון חתום דרך onToken. כשהערך משתנה — האימות מתבטל (onToken(null)).
 import { useEffect, useRef, useState } from 'react'
 import { Loader2, ShieldCheck, CheckCircle2 } from 'lucide-react'
+import { runGuardedSend } from '@/lib/verifySendGuard'
 
 type Channel = 'email' | 'phone'
 
@@ -11,13 +12,17 @@ type Channel = 'email' | 'phone'
 const fmtLeft = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 
 export default function VerifyControl({
-  channel, value, valid, onToken, optionalHint,
+  channel, value, valid, onToken, optionalHint, beforeSend, blocked,
 }: {
   channel: Channel
   value: string
   valid: boolean            // האם הערך תקין מספיק כדי לשלוח (פורמט מייל/טלפון)
   onToken: (token: string | null) => void
   optionalHint?: string     // טקסט הבהרה: אימות מספר זה אינו חובה (מוצג רק כשלא אומת)
+  // בדיקה מקדימה לפני שליחה (למשל טלפון שכבר רשום). false → לא שולחים; ההורה מציג את השגיאה.
+  beforeSend?: (value: string) => Promise<boolean>
+  // הערך פסול (ההורה כבר מציג שגיאה) — אין שליחה ואין תיבת קוד
+  blocked?: boolean
 }) {
   const [step, setStep] = useState<'idle' | 'sent'>('idle')
   const [code, setCode] = useState('')
@@ -60,6 +65,7 @@ export default function VerifyControl({
   async function send() {
     setError(''); setLoading(true)
     try {
+      if (await runGuardedSend(value.trim(), beforeSend, async () => {}) === 'blocked') { setStep('idle'); setCode(''); return }
       const res = await fetch('/api/portal/verify/send', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ channel, value: value.trim() }),
@@ -122,18 +128,21 @@ export default function VerifyControl({
     )
   }
 
+  // ערך פסול: מוסתרות תיבת הקוד וההודעה "מתקשרים אליך", והכפתור מושבת
+  const showCodeBox = step === 'sent' && !blocked
+
   const sendLabel = channel === 'email' ? 'שליחת קוד אימות למייל' : 'קבלת קוד אימות בשיחה לטלפון'
 
   return (
     <div className="mt-1.5">
-      {step === 'idle' ? (
+      {!showCodeBox ? (
         <>
           {optionalHint && (
             <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 mb-1.5 leading-relaxed">
               {optionalHint}
             </p>
           )}
-          <button type="button" onClick={send} disabled={!valid || !value.trim() || loading || cooldownLeft > 0}
+          <button type="button" onClick={send} disabled={!valid || blocked || !value.trim() || loading || cooldownLeft > 0}
             className="w-full flex items-center justify-center gap-2 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed font-semibold py-2 px-3 rounded-lg transition-colors text-sm">
             {loading ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />}{' '}
             {cooldownLeft > 0 ? `אפשר לשלוח קוד חדש בעוד ${fmtLeft(cooldownLeft)}` : sendLabel}

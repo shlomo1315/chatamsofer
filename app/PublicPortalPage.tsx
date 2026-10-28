@@ -4498,7 +4498,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                         className={phoneError ? 'border-red-400 focus:ring-red-400' : ''}
                       />
                       {phoneError && <p className="text-xs text-red-600 mt-1">{phoneError}</p>}
-                      <VerifyControl channel="phone" value={regForm.phone} valid={validatePhone(regForm.phone)} onToken={setRegPhoneToken} />
+                      <VerifyControl channel="phone" value={regForm.phone} valid={validatePhone(regForm.phone)} onToken={setRegPhoneToken}
+                        blocked={phoneError === PHONE_TAKEN_MSG}
+                        beforeSend={async v => { const taken = await checkPhoneTaken(v); if (taken) setPhoneError(PHONE_TAKEN_MSG); return !taken }} />
                     </Field>
                   </div>
                   {showSpouseFields && (
@@ -4517,7 +4519,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                           className={spousePhoneError ? 'border-red-400 focus:ring-red-400' : ''}
                         />
                         {spousePhoneError && <p className="text-xs text-red-600 mt-1">{spousePhoneError}</p>}
-                        <VerifyControl channel="phone" value={regForm.spouse_phone} valid={validatePhone(regForm.spouse_phone)} onToken={setRegSpousePhoneToken} optionalHint={anyPhoneVerified ? phoneOptionalHint : undefined} />
+                        <VerifyControl channel="phone" value={regForm.spouse_phone} valid={validatePhone(regForm.spouse_phone)} onToken={setRegSpousePhoneToken} optionalHint={anyPhoneVerified ? phoneOptionalHint : undefined}
+                          blocked={spousePhoneError === PHONE_TAKEN_MSG}
+                          beforeSend={async v => { const taken = await checkPhoneTaken(v); if (taken) setSpousePhoneError(PHONE_TAKEN_MSG); return !taken }} />
                       </Field>
                     </div>
                   )}
