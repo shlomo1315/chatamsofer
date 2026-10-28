@@ -961,8 +961,8 @@ export async function handleBookFairCall(params: Record<string, string>): Promis
 
   // 🔴 "היריד נסגר לשנה זו" גובר על שני המפתחות (07.10).
   //
-  // 10.10: אחרי הודעת הסגירה — "למקרים דחופים הקישו 1" ⇒ הקלטת פנייה.
-  // ⚠️ שלב record_inquiry עובר הלאה ל-nextTurn (ולא נחסם כאן ולא בבדיקת
+  // 28.10: הודעת תודה (season_notice) וניתוק — אין יותר השארת פנייה.
+  // ⚠️ שלב record_inquiry (רק משיחה שכבר באמצע הקלטה) עובר ל-nextTurn (ולא נחסם כאן ולא בבדיקת
   // isOpen): שם ההקלטה נשמרת בדיוק כמו בשלוחה 3, ללשונית הפניות.
   const seasonClosed = String(season?.value ?? '') === 'true'
   if (seasonClosed && state.step !== 'record_inquiry') {
