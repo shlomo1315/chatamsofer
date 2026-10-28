@@ -83,7 +83,8 @@ async function runTtsCall(
 ): Promise<{ ok: boolean; notConfigured?: boolean; error?: string }> {
   const token = process.env.YEMOT_TOKEN
   const templateId = process.env.YEMOT_OTP_TEMPLATE_ID
-  const callerId = process.env.YEMOT_OTP_CALLER_ID // אופציונלי — נקבע גם בתבנית
+  // בלי משתנה: מחייג המערכת הראשית (023131325, ה-DID שבחשבון), ולא המחייג שבתבנית 241833 (0772636313)
+  const callerId = process.env.YEMOT_OTP_CALLER_ID || '023131325'
   if (!token || !templateId) return { ok: false, notConfigured: true }
 
   const tel = phone.replace(/\D/g, '')
