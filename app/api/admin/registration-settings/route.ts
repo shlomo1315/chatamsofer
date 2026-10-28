@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
   let body: {
     open?: boolean; regenerate?: boolean; closedMessage?: string
     emailVerificationRequired?: boolean; emailChannelDisabled?: boolean
+    phoneVerificationRequired?: boolean
   }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
 
@@ -60,6 +61,17 @@ export async function POST(request: NextRequest) {
       { onConflict: 'key' },
     )
     console.log(`[registration-settings] אימות מייל ברישום: ${body.emailVerificationRequired ? 'חובה' : 'כבוי'}`)
+  }
+  if (typeof body.phoneVerificationRequired === 'boolean') {
+    await sb.from('app_settings').upsert(
+      {
+        key: 'phone_verification_required',
+        value: body.phoneVerificationRequired ? 'true' : 'false',
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'key' },
+    )
+    console.log(`[registration-settings] אימות טלפון בשיחה ברישום: ${body.phoneVerificationRequired ? 'חובה' : 'כבוי (גיבוי: אימות מייל חובה)'}`)
   }
   if (typeof body.emailChannelDisabled === 'boolean') {
     await sb.from('app_settings').upsert(
