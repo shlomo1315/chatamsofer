@@ -195,3 +195,12 @@ export async function placeAnnouncementCall(
   const t = await runTtsCall(phone, ttsSafe(text))
   return { ...t, mode: 'tts' }
 }
+
+// ⚠️ לבדיקות אבחון בלבד (נתיב אדמין): שיחת TTS עם הטקסט כמו שהוא, בלי ttsSafe,
+// כדי לנסות וריאנטים של פיסוק מול התבנית בימות.
+export function placeRawTtsCall(
+  phone: string,
+  text: string,
+): Promise<{ ok: boolean; notConfigured?: boolean; error?: string }> {
+  return runTtsCall(phone, text)
+}
