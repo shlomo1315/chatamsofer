@@ -25,7 +25,7 @@ export function yemotCallConfigured(): boolean {
 // נקודה מוסרת גם: היא גרמה לימות להשהות ~15ש' לפני ההקראה.
 function ttsSafe(text: string): string {
   return String(text ?? '')
-    .replace(/[.,;\-"'&|=]/g, ' ')
+    .replace(/[.,\-"'&|=]/g, ' ')
     .replace(/[ \t]+/g, ' ')
     .trim()
 }
@@ -56,8 +56,9 @@ const DIGIT_WORDS = ['אפס', 'אחת', 'שתיים', 'שלוש', 'ארבע', '
  * ומתורגם להפסקה. ניתן לשינוי בלי פריסה דרך YEMOT_OTP_DIGIT_SEP (למשל להכפיל
  * ל-";;" להפסקה ארוכה יותר, או לרוקן אם ההקראה נשמעת שבורה).
  */
-// ⚠️ נקודה-פסיק גם היא גרמה לניתוק מיידי (ימות קוטעת בה את ההודעה) — רווח בלבד, בלי משתנה סביבה.
-const DIGIT_SEP = ' '
+// ✅ נקודה-פסיק בין הספרות — הפורמט שעבד בשיחות האימות מ-04.08 עד 27.10 (לפני #399).
+// ניתן לשינוי בלי פריסה דרך YEMOT_OTP_DIGIT_SEP.
+const DIGIT_SEP = process.env.YEMOT_OTP_DIGIT_SEP ?? ' ; '
 
 function digitsSpoken(code: string): string {
   return code.replace(/\D/g, '').split('')
