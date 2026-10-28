@@ -16,7 +16,7 @@ import { LOAN_DECLARATIONS, LOAN_MAX_AMOUNT } from '@/lib/emailRequestForms'
 import {
   findOpenLoan, findDraftAwaitingRabbiForm, openLoanMessageFor, AWAITING_RABBI_FORM,
 } from '@/lib/openLoanGuard'
-import { isDepartmentAccessible, departmentClosedMessage } from '@/lib/departmentGates'
+import { isDepartmentAccessible, closedMessageFor } from '@/lib/departmentGates'
 import { normalizeLoanSource } from '@/lib/loanSubmissionSource'
 
 export const dynamic = 'force-dynamic'
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
   const previewCode = request.nextUrl.searchParams.get('preview')
   if (!(await isDepartmentAccessible('gemach', previewCode))) {
     return NextResponse.json(
-      { error: departmentClosedMessage('gemach'), departmentClosed: true },
+      { error: await closedMessageFor('gemach'), departmentClosed: true },
       { status: 403 },
     )
   }
