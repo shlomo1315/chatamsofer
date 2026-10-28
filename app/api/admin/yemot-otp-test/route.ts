@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
   const build = VARIANTS[String(body.variant ?? 'plain')]
   if (!build) return NextResponse.json({ error: 'וריאנט לא מוכר', variants: Object.keys(VARIANTS) }, { status: 400 })
   const phone = String(body.phone ?? '')
-  const result = await placeRawTtsCall(phone, build())
-  return NextResponse.json({ variant: body.variant ?? 'plain', ...result })
+  const shape = body.shape === 'object' ? 'object' : 'string'
+  const result = await placeRawTtsCall(phone, build(), shape)
+  return NextResponse.json({ variant: body.variant ?? 'plain', shape, ...result })
 }

@@ -79,6 +79,7 @@ export function spokenCode(code: string): string {
 async function runTtsCall(
   phone: string,
   spokenText: string,
+  shape: 'string' | 'object' = 'string',
 ): Promise<{ ok: boolean; notConfigured?: boolean; error?: string }> {
   const token = process.env.YEMOT_TOKEN
   const templateId = process.env.YEMOT_OTP_TEMPLATE_ID
@@ -91,7 +92,9 @@ async function runTtsCall(
   const form = new URLSearchParams()
   form.set('token', token)
   form.set('templateId', templateId)
-  form.set('phones', JSON.stringify({ [tel]: spokenText }))
+  // לפי תיעוד ימות, לכל מספר ב-phones אפשר אובייקט עם השדה text (הטקסט המוקרא);
+  // shape='object' שולח כך, 'string' שולח מחרוזת ישירה (הצורה ההיסטורית).
+  form.set('phones', JSON.stringify({ [tel]: shape === 'object' ? { text: spokenText } : spokenText }))
   form.set('ttsMode', '1')
   form.set('withSMS', '0')
   if (callerId) form.set('callerId', callerId)
@@ -202,6 +205,7 @@ export async function placeAnnouncementCall(
 export function placeRawTtsCall(
   phone: string,
   text: string,
+  shape: 'string' | 'object' = 'string',
 ): Promise<{ ok: boolean; notConfigured?: boolean; error?: string }> {
-  return runTtsCall(phone, text)
+  return runTtsCall(phone, text, shape)
 }
