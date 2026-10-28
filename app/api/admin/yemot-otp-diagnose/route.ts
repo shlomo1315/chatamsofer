@@ -65,6 +65,12 @@ export async function POST(request: NextRequest) {
   }
   const callerId = String(body.callerId ?? process.env.YEMOT_OTP_CALLER_ID ?? '023131325')
   if (callerId) params.callerId = callerId
+  // פרמטרים נוספים ל-RunCampaign לניסוי (למשל playPrivateMsg=1) — בלי לדרוס את הטוקן
+  if (body.extra && typeof body.extra === 'object') {
+    for (const [k, v] of Object.entries(body.extra as Record<string, unknown>)) {
+      if (k !== 'token') params[k] = String(v)
+    }
+  }
 
   const run = await call('RunCampaign', params)
   const j = ('json' in run ? run.json : null) as { campaignId?: unknown; campaign?: { campaignId?: unknown } } | null
