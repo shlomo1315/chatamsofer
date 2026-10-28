@@ -11,7 +11,7 @@ import { ownDocsOnly } from '@/lib/portalDocs'
 import { notifyRejectedRequest } from '@/lib/rejectedRequestMail'
 import { rateLimit } from '@/lib/rateLimit'
 import { LOAN_DECLARATIONS, LOAN_MAX_AMOUNT } from '@/lib/emailRequestForms'
-import { isDepartmentAccessible, departmentClosedMessage } from '@/lib/departmentGates'
+import { isDepartmentAccessible, closedMessageFor } from '@/lib/departmentGates'
 import { findOpenLoan, openLoanMessageFor } from '@/lib/openLoanGuard'
 
 export const dynamic = 'force-dynamic'
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
   // הוא אינו מדלג על אימות, ולידציה או הרשאות — רק על השער עצמו.
   const previewCode = request.nextUrl.searchParams.get('preview')
   if (!(await isDepartmentAccessible('gemach', previewCode))) {
-    return NextResponse.json({ error: departmentClosedMessage('gemach'), departmentClosed: true }, { status: 403 })
+    return NextResponse.json({ error: await closedMessageFor('gemach'), departmentClosed: true }, { status: 403 })
   }
   let body: Record<string, unknown>
   try {

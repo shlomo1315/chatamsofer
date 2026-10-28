@@ -16,6 +16,9 @@ const DEPTS: { key: string; label: string; hint: string; icon: typeof Heart; col
 export default function DepartmentGatesSettings() {
   const [gates, setGates] = useState<Record<string, boolean> | null>(null)
   const [saving, setSaving] = useState<string | null>(null)
+  // פתיחה אוטומטית: תאריך שמור (ISO) לכל מחלקה, והערך שבשדה העריכה (שעון מקומי)
+  const [opensAt, setOpensAt] = useState<Record<string, string>>({})
+  const [draft, setDraft] = useState<Record<string, string>>({})
   // קוד התצוגה המוקדמת — מנהל בלבד (השרת לא מחזיר אותו לאיש צוות רגיל)
   const [previewCode, setPreviewCode] = useState('')
   const [copied, setCopied] = useState(false)
@@ -25,6 +28,7 @@ export default function DepartmentGatesSettings() {
     fetch('/api/admin/department-gates').then(r => r.json())
       .then(d => {
         if (d.gates) setGates(d.gates)
+        if (d.opensAt) setOpensAt(d.opensAt)
         if (typeof d.previewCode === 'string') setPreviewCode(d.previewCode)
       }).catch(() => {})
   }, [])
@@ -42,6 +46,30 @@ export default function DepartmentGatesSettings() {
     setRegen(false)
   }
 
+  // ISO → ערך לשדה datetime-local בשעון המקומי
+  const toLocalInput = (iso: string) => {
+    const dt = new Date(iso)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`
+  }
+
+  const saveOpening = async (dept: string, value: string | null) => {
+    setSaving(dept)
+    try {
+      const r = await fetch('/api/admin/department-gates', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ opens_at: { [dept]: value ? new Date(value).toISOString() : null } }),
+      })
+      const d = await r.json()
+      if (r.ok) {
+        if (d.gates) setGates(d.gates)
+        setOpensAt(d.opensAt ?? {})
+        setDraft(prev => { const n = { ...prev }; delete n[dept]; return n })
+      }
+    } catch { /* שקט */ }
+    setSaving(null)
+  }
+
   const toggle = async (dept: string) => {
     if (!gates) return
     const next = { ...gates, [dept]: !gates[dept] }
@@ -54,7 +82,8 @@ export default function DepartmentGatesSettings() {
       })
       const d = await r.json()
       if (d.gates) setGates(d.gates)
-      else if (!r.ok) setGates(gates) // גלגול אחור
+      if (d.opensAt) setOpensAt(d.opensAt)
+      if (!d.gates && !r.ok) setGates(gates) // גלגול אחור
     } catch { setGates(gates) }
     setSaving(null)
   }
@@ -75,8 +104,11 @@ export default function DepartmentGatesSettings() {
         <div className="space-y-2">
           {DEPTS.map(({ key, label, hint, icon: Icon, color }) => {
             const open = !!gates[key]
+            const saved = opensAt[key]
+            const value = draft[key] ?? (saved ? toLocalInput(saved) : '')
             return (
-              <div key={key} className="flex items-center justify-between py-2.5 px-3 rounded-xl border border-slate-100 hover:bg-slate-50 transition-colors">
+              <div key={key} className="rounded-xl border border-slate-100 hover:bg-slate-50 transition-colors">
+              <div className="flex items-center justify-between py-2.5 px-3">
                 <div className="flex items-center gap-3">
                   <span className={`w-9 h-9 rounded-lg flex items-center justify-center ${color}`}>
                     <Icon size={17} />
@@ -99,6 +131,26 @@ export default function DepartmentGatesSettings() {
                     <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${open ? 'right-0.5' : 'right-5'}`} />
                   </button>
                 </div>
+              </div>
+              {!open && (
+                <div className="flex flex-wrap items-center gap-2 px-3 pb-2.5 pt-0 text-xs text-slate-600">
+                  <label htmlFor={`opens-${key}`}>פתיחה אוטומטית ב:</label>
+                  <input
+                    id={`opens-${key}`} type="datetime-local" value={value}
+                    onChange={e => setDraft(prev => ({ ...prev, [key]: e.target.value }))}
+                    className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs"
+                  />
+                  <button
+                    onClick={() => saveOpening(key, value)}
+                    disabled={!value || saving === key}
+                    className="rounded-lg bg-emerald-600 px-3 py-1 font-bold text-white hover:bg-emerald-700 disabled:opacity-40"
+                  >שמירה</button>
+                  {saved && (
+                    <button onClick={() => saveOpening(key, null)} disabled={saving === key}
+                      className="rounded-lg border border-slate-200 px-3 py-1 text-slate-600 hover:bg-slate-50">ביטול</button>
+                  )}
+                </div>
+              )}
               </div>
             )
           })}
