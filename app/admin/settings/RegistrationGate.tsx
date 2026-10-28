@@ -16,6 +16,8 @@ export default function RegistrationGate() {
   const [msgSaved, setMsgSaved] = useState(false)
   // האם אימות המייל חובה ברישום. null = טרם נטען.
   const [emailReq, setEmailReq] = useState<boolean | null>(null)
+  // האם אימות הטלפון בשיחה חובה ברישום. כבוי = מצב גיבוי (אימות מייל במקומו).
+  const [phoneReq, setPhoneReq] = useState<boolean | null>(null)
   // מצב תקלת דואר — מסתיר מהפורטל כל פעולה שתוצאתה "נשלח לך מייל".
   const [mailOff, setMailOff] = useState<boolean | null>(null)
 
@@ -24,11 +26,12 @@ export default function RegistrationGate() {
     if (typeof d.bypassCode === 'string') setCode(d.bypassCode)
     if (typeof d.closedMessage === 'string') { setMsg(d.closedMessage); setSavedMsg(d.closedMessage) }
     if (typeof d.emailVerificationRequired === 'boolean') setEmailReq(d.emailVerificationRequired)
+    if (typeof d.phoneVerificationRequired === 'boolean') setPhoneReq(d.phoneVerificationRequired)
     if (typeof d.emailChannelDisabled === 'boolean') setMailOff(d.emailChannelDisabled)
   }).catch(() => {})
   useEffect(() => { load() }, [])
 
-  const update = async (payload: { open?: boolean; regenerate?: boolean; closedMessage?: string; emailVerificationRequired?: boolean; emailChannelDisabled?: boolean }) => {
+  const update = async (payload: { open?: boolean; regenerate?: boolean; closedMessage?: string; emailVerificationRequired?: boolean; phoneVerificationRequired?: boolean; emailChannelDisabled?: boolean }) => {
     setSaving(true)
     try {
       const r = await fetch('/api/admin/registration-settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
@@ -37,6 +40,8 @@ export default function RegistrationGate() {
       if (typeof d.bypassCode === 'string') setCode(d.bypassCode)
       if (typeof d.closedMessage === 'string') { setMsg(d.closedMessage); setSavedMsg(d.closedMessage) }
       if (typeof d.emailVerificationRequired === 'boolean') setEmailReq(d.emailVerificationRequired)
+      if (typeof d.phoneVerificationRequired === 'boolean') setPhoneReq(d.phoneVerificationRequired)
+    if (typeof d.phoneVerificationRequired === 'boolean') setPhoneReq(d.phoneVerificationRequired)
       if (typeof d.emailChannelDisabled === 'boolean') setMailOff(d.emailChannelDisabled)
     } catch { /* silent */ }
     setSaving(false)
@@ -80,7 +85,7 @@ export default function RegistrationGate() {
           </p>
           {emailReq === false && (
             <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 mt-1.5 leading-relaxed">
-              ⚠️ אימות הטלפון בשיחה נשאר חובה בכל מקרה — הוא ההגנה שאינה תלויה בדואר.
+              ⚠️ אימות הטלפון בשיחה נשאר חובה, אלא אם כיבית אותו במתג שמתחת (מצב גיבוי).
             </p>
           )}
         </div>
@@ -91,6 +96,31 @@ export default function RegistrationGate() {
           aria-label="הפעל/כבה אימות מייל ברישום"
         >
           <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${emailReq ? 'right-0.5' : 'right-5'}`} />
+        </button>
+      </div>
+
+      {/* אימות הטלפון בשיחה — מתג גיבוי לתקלה בימות */}
+      <div className="flex items-center justify-between py-2.5 px-2 rounded-lg hover:bg-slate-50 transition-colors border-t border-slate-100 pt-3">
+        <div className="pl-3">
+          <p className="text-sm font-medium text-slate-800">אימות טלפון בשיחה חובה ברישום</p>
+          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+            {phoneReq === null ? 'טוען...' : phoneReq
+              ? 'הנרשם חייב לאמת טלפון בקוד שמוקרא בשיחה'
+              : 'מצב גיבוי: אין צורך באימות טלפון, ובמקומו אימות המייל חובה (גם אם המתג שמעליו כבוי).'}
+          </p>
+          {phoneReq === false && (
+            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 mt-1.5 leading-relaxed">
+              ⚠️ להחזיר לחובה ברגע ששיחת האימות חוזרת לעבוד. אל תפעיל יחד עם מצב תקלת דואר, כי אז אין דרך לאמת.
+            </p>
+          )}
+        </div>
+        <button
+          disabled={saving || phoneReq === null}
+          onClick={() => update({ phoneVerificationRequired: !phoneReq })}
+          className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 disabled:opacity-50 ${phoneReq ? 'bg-emerald-500' : 'bg-slate-300'}`}
+          aria-label="הפעל/כבה אימות טלפון בשיחה ברישום"
+        >
+          <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${phoneReq ? 'right-0.5' : 'right-5'}`} />
         </button>
       </div>
 

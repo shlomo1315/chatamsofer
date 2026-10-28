@@ -247,9 +247,9 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
     const norm = normalizePhone(String(phone))
     if (norm) verifiedPhones.push(norm)
   }
-  if (verifiedPhones.length === 0) {
-    return NextResponse.json({ error: 'יש לאמת לפחות מספר טלפון אחד בקוד שיוקרא בשיחה לפני סיום הרישום.' }, { status: 400 })
-  }
+  // *הדרישה* לאמת טלפון נבדקת בהמשך, אחרי טעינת שער ההרשמה: במצב גיבוי
+  // (phone_verification_required כבוי) אימות המייל מחליף אותה.
+  const phoneRequiredError = () => NextResponse.json({ error: 'יש לאמת לפחות מספר טלפון אחד בקוד שיוקרא בשיחה לפני סיום הרישום.' }, { status: 400 })
 
   // 🔴 ת"ז מנורמלת ל-9 ספרות, כולל אפסים מובילים.
   //
@@ -301,9 +301,14 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
     // אימות המייל — נדרש רק כשהמתג בהגדרות דלוק (ברירת המחדל: דלוק).
     // כשהוא כבוי הרישום מסתיים בלי אימות, והנרשם יתבקש לאמת בכניסה הבאה
     // לאזור האישי. אימות הטלפון בשיחה נשאר חובה בכל מצב — הוא נאכף למעלה.
-    if (gate.emailVerificationRequired && !emailTokenValid) {
+    // במצב גיבוי (אימות טלפון כבוי) המייל המאומת הוא ההגנה היחידה, ולכן חובה.
+    if ((gate.emailVerificationRequired || !gate.phoneVerificationRequired) && !emailTokenValid) {
       return NextResponse.json({ error: 'יש לאמת את כתובת המייל בקוד שנשלח אליה לפני סיום הרישום.' }, { status: 400 })
     }
+    if (gate.phoneVerificationRequired && verifiedPhones.length === 0) return phoneRequiredError()
+  } else if (verifiedPhones.length === 0) {
+    // נדרים פלוס — אימות הטלפון נשאר חובה תמיד.
+    return phoneRequiredError()
   }
 
   // ⚠️ נבדקות שתי הצורות: הרשומות שנוצרו לפני הנרמול שמורות בלי האפס

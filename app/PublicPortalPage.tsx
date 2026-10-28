@@ -1687,6 +1687,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // האם אימות המייל חובה לסיום רישום. ⚠️ ברירת המחדל true — אם הבקשה נכשלת
   // עדיף לדרוש אימות מאשר לכבות אותו בשקט בגלל תקלת רשת.
   const [emailVerifyRequired, setEmailVerifyRequired] = useState(true)
+  // מצב גיבוי: כשהוא כבוי אין חובה לאמת טלפון בשיחה, ואימות המייל הופך לחובה.
+  const [phoneVerifyRequired, setPhoneVerifyRequired] = useState(true)
   // מצב תקלת דואר (מתג בהגדרות) — מסתיר כל פעולה שתוצאתה "נשלח לך מייל".
   // ⚠️ ברירת המחדל false: אם הבקשה נכשלת עדיף להציג ערוץ שעובד מאשר להסתיר אותו.
   const [mailChannelOff, setMailChannelOff] = useState(false)
@@ -1697,6 +1699,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       .then(r => r.json()).then(d => {
         setRegistrationOpen(d.open !== false)
         if (typeof d.emailVerificationRequired === 'boolean') setEmailVerifyRequired(d.emailVerificationRequired)
+        if (typeof d.phoneVerificationRequired === 'boolean') setPhoneVerifyRequired(d.phoneVerificationRequired)
         if (typeof d.emailChannelDisabled === 'boolean') setMailChannelOff(d.emailChannelDisabled)
         if (typeof d.closedMessage === 'string' && d.closedMessage.trim()) {
           setRegistrationClosedMessage(d.closedMessage.trim())
@@ -2223,7 +2226,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     // ⚠️ נחסם רק כשהמתג בהגדרות דורש אימות. כשהוא כבוי אפשר לסיים רישום בלי
     // אימות מייל, והנרשם יתבקש לאמת בכניסה הבאה לאזור האישי. השרת אוכף את
     // אותו מתג — כאן רק כדי שהטופס לא יחסום את מה שהשרת מתיר.
-    if (emailVerifyRequired && !regEmailToken) { setError('יש לאמת את כתובת המייל בקוד שנשלח אליה (כפתור "שליחת קוד אימות למייל").'); return }
+    if ((emailVerifyRequired || !phoneVerifyRequired) && !regEmailToken) { setError('יש לאמת את כתובת המייל בקוד שנשלח אליה (כפתור "שליחת קוד אימות למייל").'); return }
     // טלפונים — חייב לפחות אחד ממולא, ולפחות אחד מאומת (המשתמש בוחר אילו לאמת)
     const regPhoneEntries = [
       { value: regForm.phone, token: regPhoneToken },
@@ -2231,7 +2234,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       { value: regForm.phone2, token: regPhone2Token },
     ].filter(p => p.value && p.value.trim())
     if (regPhoneEntries.length === 0) { setError('אנא הזן לפחות מספר טלפון אחד'); return }
-    if (!regPhoneEntries.some(p => p.token)) {
+    if (phoneVerifyRequired && !regPhoneEntries.some(p => p.token)) {
       setError('יש לאמת לפחות מספר טלפון אחד — לחצו על "קבלת קוד אימות בשיחה" ליד אחד הטלפונים.'); return
     }
     if (!regForm.birth_date) { setError('אנא הזן תאריך לידה'); return }
