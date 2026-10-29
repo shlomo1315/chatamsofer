@@ -4484,7 +4484,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800 leading-relaxed mb-4">
                   <p className="font-bold">שימו לב — יש לדייק בפרטי הקשר</p>
                   <p>הקפידו להזין מספר טלפון וכתובת מייל <strong>תקינים</strong>, שכן כל ההודעות והעדכונים יישלחו למספר ולכתובת שתמלאו כאן.</p>
-                  <p className="mt-2"><strong>אימות טלפון:</strong> יש למלא ולאמת <strong>לפחות טלפון אחד</strong>. אימות מספר מאפשר לקבל אליו בעתיד קוד כניסה למערכת — מספר שלא אומת לא יוכל לקבל קוד. ניתן לאמת יותר ממספר אחד.</p>
+                  {phoneVerifyRequired && <p className="mt-2"><strong>אימות טלפון:</strong> יש למלא ולאמת <strong>לפחות טלפון אחד</strong>. אימות מספר מאפשר לקבל אליו בעתיד קוד כניסה למערכת — מספר שלא אומת לא יוכל לקבל קוד. ניתן לאמת יותר ממספר אחד.</p>}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2 sm:col-span-1">
@@ -4506,7 +4506,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                         className={phoneError ? 'border-red-400 focus:ring-red-400' : ''}
                       />
                       {phoneError && <p className="text-xs text-red-600 mt-1">{phoneError}</p>}
-                      <VerifyControl channel="phone" value={regForm.phone} valid={validatePhone(regForm.phone)} onToken={setRegPhoneToken} />
+                      {phoneVerifyRequired && <VerifyControl channel="phone" value={regForm.phone} valid={validatePhone(regForm.phone)} onToken={setRegPhoneToken} />}
                       {!phoneVerifyRequired && (
                         <TextInput type="tel" value={phoneConfirm.phone} onChange={e => setPhoneConfirm(c => ({ ...c, phone: e.target.value }))}
                           placeholder="הזן שוב את הטלפון" aria-label="הזן שוב את הטלפון" dir="ltr" maxLength={11} className="mt-2" />
@@ -4529,7 +4529,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                           className={spousePhoneError ? 'border-red-400 focus:ring-red-400' : ''}
                         />
                         {spousePhoneError && <p className="text-xs text-red-600 mt-1">{spousePhoneError}</p>}
-                        <VerifyControl channel="phone" value={regForm.spouse_phone} valid={validatePhone(regForm.spouse_phone)} onToken={setRegSpousePhoneToken} optionalHint={anyPhoneVerified ? phoneOptionalHint : undefined} />
+                        {phoneVerifyRequired && <VerifyControl channel="phone" value={regForm.spouse_phone} valid={validatePhone(regForm.spouse_phone)} onToken={setRegSpousePhoneToken} optionalHint={anyPhoneVerified ? phoneOptionalHint : undefined} />}
                       {!phoneVerifyRequired && (
                         <TextInput type="tel" value={phoneConfirm.spouse_phone} onChange={e => setPhoneConfirm(c => ({ ...c, spouse_phone: e.target.value }))}
                           placeholder="הזן שוב את הטלפון" aria-label="הזן שוב את הטלפון" dir="ltr" maxLength={11} className="mt-2" />
@@ -4540,7 +4540,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   <div className="col-span-2 sm:col-span-1">
                     <Field label={<EditableText k="reg.phone.extra" />} hint={<EditableText k="reg.optional" />}>
                       <TextInput type="tel" value={regForm.phone2} onChange={setReg('phone2')} placeholder="0500000000 או 025381234" dir="ltr" maxLength={11} />
-                      <VerifyControl channel="phone" value={regForm.phone2} valid={validatePhoneOrLandline(regForm.phone2)} onToken={setRegPhone2Token} optionalHint={anyPhoneVerified ? phoneOptionalHint : undefined} />
+                      {phoneVerifyRequired && <VerifyControl channel="phone" value={regForm.phone2} valid={validatePhoneOrLandline(regForm.phone2)} onToken={setRegPhone2Token} optionalHint={anyPhoneVerified ? phoneOptionalHint : undefined} />}
                       {!phoneVerifyRequired && (
                         <TextInput type="tel" value={phoneConfirm.phone2} onChange={e => setPhoneConfirm(c => ({ ...c, phone2: e.target.value }))}
                           placeholder="הזן שוב את הטלפון" aria-label="הזן שוב את הטלפון" dir="ltr" maxLength={11} className="mt-2" />
