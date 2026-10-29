@@ -48,3 +48,13 @@ export function registrationAllowed(gate: { open: boolean; bypassCode: string },
   if (gate.open) return true
   return !!gate.bypassCode && String(providedCode ?? '') === gate.bypassCode
 }
+
+// הודעה שמוצגת כשכניסה בקוד בשיחה כבויה (המתג phone_verification_required כבוי).
+export const PHONE_LOGIN_OFF_MESSAGE =
+  'כרגע אין אפשרות להיכנס למערכת דרך קוד לטלפון, רק דרך המייל. אנחנו מטפלים בתקלה ותיסדר בזמן הקרוב. עמכם הסליחה.'
+
+// האם מותר לשלוח קוד כניסה בשיחה. המתג של אימות הטלפון ברישום משמש גם
+// לכניסה: כבוי = ערוץ השיחות בתקלה, ולא מוציאים שיחה בכלל.
+export function phoneCodeLoginBlocked(gate: { phoneVerificationRequired: boolean }): string | null {
+  return gate.phoneVerificationRequired ? null : PHONE_LOGIN_OFF_MESSAGE
+}

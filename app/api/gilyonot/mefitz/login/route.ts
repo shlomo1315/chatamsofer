@@ -4,6 +4,7 @@ import { getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
 import { rateLimit, clientIpOrNull } from '@/lib/rateLimit'
 import { deliverMail } from '@/lib/sendMail'
 import { placeCodeCall } from '@/lib/yemotCall'
+import { getRegistrationGate, phoneCodeLoginBlocked } from '@/lib/registrationGate'
 import { GILYONOT_FROM_EMAIL, GILYONOT_FROM_NAME, normalizeEmail } from '@/lib/gilyonot'
 import { distributorMailHtml } from '@/lib/gilyonotDistributorServer'
 import {
@@ -50,6 +51,9 @@ export async function POST(request: Request) {
       sent = r.ok
       if (!r.ok) console.error('[mefitz] code mail failed:', r.error)
     }
+    // מתג אימות הטלפון כבוי = ערוץ השיחות בתקלה: לא מוציאים שיחה, ומסבירים למה.
+    const phoneOff = !sent && phone ? phoneCodeLoginBlocked(await getRegistrationGate(db)) : null
+    if (phoneOff) return NextResponse.json({ error: phoneOff }, { status: 503 })
     if (!sent && phone) {
       const r = await placeCodeCall(phone, issued.code)
       sent = r.ok

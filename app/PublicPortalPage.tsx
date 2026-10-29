@@ -5,6 +5,7 @@ import EmailInput from '@/components/ui/EmailInput'
 import VerifyControl from '@/components/VerifyControl'
 import { childRegisteredSeparatelyMessage, isChildMarried } from '@/lib/childDuplicateMessage'
 import { toSafeDateValue } from '@/lib/safeDateValue'
+import { PHONE_LOGIN_OFF_MESSAGE } from '@/lib/registrationGate'
 import EmailVerifyModal from '@/components/EmailVerifyModal'
 
 // רכיבים כבדים המופיעים רק עמוק בזרימת הרישום (לא במסך הפתיחה id-lookup) — נטענים עצלה
@@ -4061,19 +4062,28 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                       קבלת קוד זמני למייל
                     </button>
                   )}
-                  <button type="button" onClick={handleListPhones} disabled={loading}
-                    className={`flex items-center justify-center gap-2 font-semibold py-3 px-4 rounded-xl transition-all duration-150 text-base ${
-                      mailChannelOff
-                        ? 'bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 text-white shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] disabled:opacity-50'
-                        : 'border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50'
-                    }`}>
-                    <Phone size={18} /> קבלת קוד זמני בשיחה לטלפון
-                  </button>
-                  <p className="text-xs text-slate-400 text-center leading-relaxed">
-                    {mailChannelOff
-                      ? 'הקוד יוקרא בשיחה למספר טלפון מאומת שלך.'
-                      : 'הקוד תקף ל-30 דקות בלבד. הקוד למייל יישלח לכתובת הרשומה במערכת; הקוד בשיחה יוקרא למספר טלפון מאומת שלך.'}
-                  </p>
+                  {/* מתג אימות הטלפון כבוי = ערוץ השיחות בתקלה: במקום הכפתור מסבירים. */}
+                  {phoneVerifyRequired ? (
+                    <>
+                      <button type="button" onClick={handleListPhones} disabled={loading}
+                        className={`flex items-center justify-center gap-2 font-semibold py-3 px-4 rounded-xl transition-all duration-150 text-base ${
+                          mailChannelOff
+                            ? 'bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 text-white shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] disabled:opacity-50'
+                            : 'border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50'
+                        }`}>
+                        <Phone size={18} /> קבלת קוד זמני בשיחה לטלפון
+                      </button>
+                      <p className="text-xs text-slate-400 text-center leading-relaxed">
+                        {mailChannelOff
+                          ? 'הקוד יוקרא בשיחה למספר טלפון מאומת שלך.'
+                          : 'הקוד תקף ל-30 דקות בלבד. הקוד למייל יישלח לכתובת הרשומה במערכת; הקוד בשיחה יוקרא למספר טלפון מאומת שלך.'}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-sm text-amber-800 text-center leading-relaxed">
+                      {PHONE_LOGIN_OFF_MESSAGE}
+                    </p>
+                  )}
                 </div>
                 )
               ) : (
@@ -4092,10 +4102,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                         {loading && <Loader2 size={20} className="animate-spin" />}
                         {loading ? 'שולח...' : 'שליחת קוד למייל'}
                       </button>
-                      <button type="button" onClick={handleListPhones} disabled={loading}
+                      {phoneVerifyRequired && (<button type="button" onClick={handleListPhones} disabled={loading}
                         className="flex items-center justify-center gap-2 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 font-semibold py-2.5 px-4 rounded-xl transition-all duration-150 text-sm">
                         <Phone size={16} /> קבלת קוד זמני בשיחה לטלפון
-                      </button>
+                      </button>)}
                     </>
                   ) : (
                     <form onSubmit={handleSetPassword} className="flex flex-col gap-4">

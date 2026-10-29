@@ -5,6 +5,7 @@ import { generateCode, hashCode } from '@/lib/portalPassword'
 import { normalizeId, resolveBeneficiaryByEnteredId } from '@/lib/portalBeneficiary'
 import { normalizePhone, maskPhone } from '@/lib/phone'
 import { placeCodeCall, yemotCallConfigured } from '@/lib/yemotCall'
+import { getRegistrationGate, phoneCodeLoginBlocked } from '@/lib/registrationGate'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,6 +39,10 @@ export async function POST(request: NextRequest) {
 
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
+
+  // מתג אימות הטלפון כבוי = ערוץ השיחות בתקלה. לא מוציאים שיחה בכלל.
+  const phoneOff = phoneCodeLoginBlocked(await getRegistrationGate(admin))
+  if (phoneOff) return NextResponse.json({ error: phoneOff }, { status: 503 })
 
   const data = await resolveBeneficiaryByEnteredId<{ id: string; phone: string | null; phone2: string | null; spouse_phone: string | null; verified_phones: string[] | null }>(
     admin, idNumber, 'id, phone, phone2, spouse_phone, verified_phones',
