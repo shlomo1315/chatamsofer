@@ -6,7 +6,7 @@ import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { validateIsraeliId, normalizeDateToISO } from '@/lib/validation'
-import { getRegistrationGate, registrationAllowed } from '@/lib/registrationGate'
+import { getRegistrationGate, registrationAllowed, phoneConfirmError } from '@/lib/registrationGate'
 import { childRegisteredSeparatelyMessage, isChildMarried } from '@/lib/childDuplicateMessage'
 import { placeAnnouncementCall } from '@/lib/yemotCall'
 import { getRegistrationCallText, getRegistrationCallAudio } from '@/lib/registrationCallMessage'
@@ -306,6 +306,13 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
       return NextResponse.json({ error: 'יש לאמת את כתובת המייל בקוד שנשלח אליה לפני סיום הרישום.' }, { status: 400 })
     }
     if (gate.phoneVerificationRequired && verifiedPhones.length === 0) return phoneRequiredError()
+    // אימות טלפון כבוי: כל טלפון שהוזן חייב להופיע גם בשדה האישור, ובאותו ערך.
+    const confirmErr = phoneConfirmError(gate, [
+      { label: 'טלפון', value: phone, confirm: body.phone_confirm },
+      { label: 'טלפון האישה', value: spouse_phone, confirm: body.spouse_phone_confirm },
+      { label: 'טלפון נוסף', value: phone2, confirm: body.phone2_confirm },
+    ])
+    if (confirmErr) return NextResponse.json({ error: confirmErr }, { status: 400 })
   } else if (verifiedPhones.length === 0) {
     // נדרים פלוס — אימות הטלפון נשאר חובה תמיד.
     return phoneRequiredError()

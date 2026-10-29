@@ -5,6 +5,7 @@ import EmailInput from '@/components/ui/EmailInput'
 import VerifyControl from '@/components/VerifyControl'
 import { childRegisteredSeparatelyMessage, isChildMarried } from '@/lib/childDuplicateMessage'
 import { toSafeDateValue } from '@/lib/safeDateValue'
+import { PHONE_LOGIN_OFF_MESSAGE, phoneConfirmError } from '@/lib/registrationGate'
 import EmailVerifyModal from '@/components/EmailVerifyModal'
 
 // רכיבים כבדים המופיעים רק עמוק בזרימת הרישום (לא במסך הפתיחה id-lookup) — נטענים עצלה
@@ -1497,6 +1498,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // אסימוני אימות לטלפון האשה והטלפון הנוסף (רב-אימות ברישום)
   const [regSpousePhoneToken, setRegSpousePhoneToken] = useState<string | null>(null)
   const [regPhone2Token, setRegPhone2Token] = useState<string | null>(null)
+  // שדות אישור לטלפונים — בשימוש רק כשאימות הטלפון בשיחה כבוי
+  const [phoneConfirm, setPhoneConfirm] = useState({ phone: '', spouse_phone: '', phone2: '' })
   // אסימוני אימות מייל/טלפון (עריכת פרטים בדשבורד)
   const [editEmailToken, setEditEmailToken] = useState<string | null>(null)
   const [editPhoneToken, setEditPhoneToken] = useState<string | null>(null)
@@ -2234,6 +2237,13 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       { value: regForm.phone2, token: regPhone2Token },
     ].filter(p => p.value && p.value.trim())
     if (regPhoneEntries.length === 0) { setError('אנא הזן לפחות מספר טלפון אחד'); return }
+    // אימות הטלפון כבוי: כל טלפון מוזן פעמיים, והשניים חייבים להיות זהים
+    const confirmErr = phoneConfirmError({ phoneVerificationRequired: phoneVerifyRequired }, [
+      { label: 'טלפון', value: regForm.phone, confirm: phoneConfirm.phone },
+      { label: 'טלפון האישה', value: showSpouseFields ? regForm.spouse_phone : '', confirm: phoneConfirm.spouse_phone },
+      { label: 'טלפון נוסף', value: regForm.phone2, confirm: phoneConfirm.phone2 },
+    ])
+    if (confirmErr) { setError(confirmErr); return }
     if (phoneVerifyRequired && !regPhoneEntries.some(p => p.token)) {
       setError('יש לאמת לפחות מספר טלפון אחד — לחצו על "קבלת קוד אימות בשיחה" ליד אחד הטלפונים.'); return
     }
@@ -2297,6 +2307,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         body: JSON.stringify({
           ...regForm,
           bypass: signupCode,
+          phone_confirm: phoneConfirm.phone,
+          spouse_phone_confirm: showSpouseFields ? phoneConfirm.spouse_phone : '',
+          phone2_confirm: phoneConfirm.phone2,
           email_verify_token: regEmailToken,
           phone_verify_token: regPhoneToken,
           // כל הטלפונים שאומתו (זוגות ערך+אסימון) — נשמרים כמספרים המאומתים
@@ -4061,19 +4074,28 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                       קבלת קוד זמני למייל
                     </button>
                   )}
-                  <button type="button" onClick={handleListPhones} disabled={loading}
-                    className={`flex items-center justify-center gap-2 font-semibold py-3 px-4 rounded-xl transition-all duration-150 text-base ${
-                      mailChannelOff
-                        ? 'bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 text-white shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] disabled:opacity-50'
-                        : 'border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50'
-                    }`}>
-                    <Phone size={18} /> קבלת קוד זמני בשיחה לטלפון
-                  </button>
-                  <p className="text-xs text-slate-400 text-center leading-relaxed">
-                    {mailChannelOff
-                      ? 'הקוד יוקרא בשיחה למספר טלפון מאומת שלך.'
-                      : 'הקוד תקף ל-30 דקות בלבד. הקוד למייל יישלח לכתובת הרשומה במערכת; הקוד בשיחה יוקרא למספר טלפון מאומת שלך.'}
-                  </p>
+                  {/* מתג אימות הטלפון כבוי = ערוץ השיחות בתקלה: במקום הכפתור מסבירים. */}
+                  {phoneVerifyRequired ? (
+                    <>
+                      <button type="button" onClick={handleListPhones} disabled={loading}
+                        className={`flex items-center justify-center gap-2 font-semibold py-3 px-4 rounded-xl transition-all duration-150 text-base ${
+                          mailChannelOff
+                            ? 'bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 text-white shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] disabled:opacity-50'
+                            : 'border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50'
+                        }`}>
+                        <Phone size={18} /> קבלת קוד זמני בשיחה לטלפון
+                      </button>
+                      <p className="text-xs text-slate-400 text-center leading-relaxed">
+                        {mailChannelOff
+                          ? 'הקוד יוקרא בשיחה למספר טלפון מאומת שלך.'
+                          : 'הקוד תקף ל-30 דקות בלבד. הקוד למייל יישלח לכתובת הרשומה במערכת; הקוד בשיחה יוקרא למספר טלפון מאומת שלך.'}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-sm text-amber-800 text-center leading-relaxed">
+                      {PHONE_LOGIN_OFF_MESSAGE}
+                    </p>
+                  )}
                 </div>
                 )
               ) : (
@@ -4092,10 +4114,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                         {loading && <Loader2 size={20} className="animate-spin" />}
                         {loading ? 'שולח...' : 'שליחת קוד למייל'}
                       </button>
-                      <button type="button" onClick={handleListPhones} disabled={loading}
+                      {phoneVerifyRequired && (<button type="button" onClick={handleListPhones} disabled={loading}
                         className="flex items-center justify-center gap-2 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 font-semibold py-2.5 px-4 rounded-xl transition-all duration-150 text-sm">
                         <Phone size={16} /> קבלת קוד זמני בשיחה לטלפון
-                      </button>
+                      </button>)}
                     </>
                   ) : (
                     <form onSubmit={handleSetPassword} className="flex flex-col gap-4">
@@ -4485,6 +4507,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                       />
                       {phoneError && <p className="text-xs text-red-600 mt-1">{phoneError}</p>}
                       <VerifyControl channel="phone" value={regForm.phone} valid={validatePhone(regForm.phone)} onToken={setRegPhoneToken} />
+                      {!phoneVerifyRequired && (
+                        <TextInput type="tel" value={phoneConfirm.phone} onChange={e => setPhoneConfirm(c => ({ ...c, phone: e.target.value }))}
+                          placeholder="הזן שוב את הטלפון" aria-label="הזן שוב את הטלפון" dir="ltr" maxLength={11} className="mt-2" />
+                      )}
                     </Field>
                   </div>
                   {showSpouseFields && (
@@ -4504,6 +4530,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                         />
                         {spousePhoneError && <p className="text-xs text-red-600 mt-1">{spousePhoneError}</p>}
                         <VerifyControl channel="phone" value={regForm.spouse_phone} valid={validatePhone(regForm.spouse_phone)} onToken={setRegSpousePhoneToken} optionalHint={anyPhoneVerified ? phoneOptionalHint : undefined} />
+                      {!phoneVerifyRequired && (
+                        <TextInput type="tel" value={phoneConfirm.spouse_phone} onChange={e => setPhoneConfirm(c => ({ ...c, spouse_phone: e.target.value }))}
+                          placeholder="הזן שוב את הטלפון" aria-label="הזן שוב את הטלפון" dir="ltr" maxLength={11} className="mt-2" />
+                      )}
                       </Field>
                     </div>
                   )}
@@ -4511,6 +4541,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     <Field label={<EditableText k="reg.phone.extra" />} hint={<EditableText k="reg.optional" />}>
                       <TextInput type="tel" value={regForm.phone2} onChange={setReg('phone2')} placeholder="0500000000 או 025381234" dir="ltr" maxLength={11} />
                       <VerifyControl channel="phone" value={regForm.phone2} valid={validatePhoneOrLandline(regForm.phone2)} onToken={setRegPhone2Token} optionalHint={anyPhoneVerified ? phoneOptionalHint : undefined} />
+                      {!phoneVerifyRequired && (
+                        <TextInput type="tel" value={phoneConfirm.phone2} onChange={e => setPhoneConfirm(c => ({ ...c, phone2: e.target.value }))}
+                          placeholder="הזן שוב את הטלפון" aria-label="הזן שוב את הטלפון" dir="ltr" maxLength={11} className="mt-2" />
+                      )}
                     </Field>
                   </div>
                   <div className="col-span-2">

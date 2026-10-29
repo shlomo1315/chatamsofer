@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { normalizePhone } from '@/lib/phone'
 
 // נוסח ברירת המחדל כשההרשמה סגורה ולא הוזנה סיבה מותאמת.
 export const DEFAULT_CLOSED_MESSAGE = 'ההרשמה למערכת סגורה כעת. לפרטים ניתן לפנות למזכירות.'
@@ -47,4 +48,32 @@ export async function getRegistrationGate(admin: SupabaseClient): Promise<{
 export function registrationAllowed(gate: { open: boolean; bypassCode: string }, providedCode: string | null | undefined): boolean {
   if (gate.open) return true
   return !!gate.bypassCode && String(providedCode ?? '') === gate.bypassCode
+}
+
+// הודעה שמוצגת כשכניסה בקוד בשיחה כבויה (המתג phone_verification_required כבוי).
+export const PHONE_LOGIN_OFF_MESSAGE =
+  'כרגע אין אפשרות להיכנס למערכת דרך קוד לטלפון, רק דרך המייל. אנחנו מטפלים בתקלה ותיסדר בזמן הקרוב. עמכם הסליחה.'
+
+// האם מותר לשלוח קוד כניסה בשיחה. המתג של אימות הטלפון ברישום משמש גם
+// לכניסה: כבוי = ערוץ השיחות בתקלה, ולא מוציאים שיחה בכלל.
+export function phoneCodeLoginBlocked(gate: { phoneVerificationRequired: boolean }): string | null {
+  return gate.phoneVerificationRequired ? null : PHONE_LOGIN_OFF_MESSAGE
+}
+
+// מתג אימות הטלפון כבוי = אין קוד בשיחה, ולכן בהרשמה כל טלפון שהוזן מוזן פעמיים
+// (שדה אישור), כדי להקטין טעויות הקלדה. מחזיר הודעת שגיאה, או null כשהכול תקין.
+// מתג דלוק: אין בדיקה (האימות בשיחה הוא ההגנה).
+export function phoneConfirmError(
+  gate: { phoneVerificationRequired: boolean },
+  entries: { label: string; value: unknown; confirm: unknown }[],
+): string | null {
+  if (gate.phoneVerificationRequired) return null
+  for (const e of entries) {
+    const v = normalizePhone(String(e.value ?? ''))
+    if (!v) continue
+    if (normalizePhone(String(e.confirm ?? '')) !== v) {
+      return `${e.label}: המספר שהוזן בשדה האישור אינו זהה. יש להזין את אותו מספר בשני השדות.`
+    }
+  }
+  return null
 }
