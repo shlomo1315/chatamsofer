@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { normalizePhone } from '@/lib/phone'
 
 // נוסח ברירת המחדל כשההרשמה סגורה ולא הוזנה סיבה מותאמת.
 export const DEFAULT_CLOSED_MESSAGE = 'ההרשמה למערכת סגורה כעת. לפרטים ניתן לפנות למזכירות.'
@@ -57,4 +58,22 @@ export const PHONE_LOGIN_OFF_MESSAGE =
 // לכניסה: כבוי = ערוץ השיחות בתקלה, ולא מוציאים שיחה בכלל.
 export function phoneCodeLoginBlocked(gate: { phoneVerificationRequired: boolean }): string | null {
   return gate.phoneVerificationRequired ? null : PHONE_LOGIN_OFF_MESSAGE
+}
+
+// מתג אימות הטלפון כבוי = אין קוד בשיחה, ולכן בהרשמה כל טלפון שהוזן מוזן פעמיים
+// (שדה אישור), כדי להקטין טעויות הקלדה. מחזיר הודעת שגיאה, או null כשהכול תקין.
+// מתג דלוק: אין בדיקה (האימות בשיחה הוא ההגנה).
+export function phoneConfirmError(
+  gate: { phoneVerificationRequired: boolean },
+  entries: { label: string; value: unknown; confirm: unknown }[],
+): string | null {
+  if (gate.phoneVerificationRequired) return null
+  for (const e of entries) {
+    const v = normalizePhone(String(e.value ?? ''))
+    if (!v) continue
+    if (normalizePhone(String(e.confirm ?? '')) !== v) {
+      return `${e.label}: המספר שהוזן בשדה האישור אינו זהה. יש להזין את אותו מספר בשני השדות.`
+    }
+  }
+  return null
 }

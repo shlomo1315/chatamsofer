@@ -102,11 +102,11 @@ export default function RegistrationGate() {
       {/* אימות הטלפון בשיחה — מתג גיבוי לתקלה בימות */}
       <div className="flex items-center justify-between py-2.5 px-2 rounded-lg hover:bg-slate-50 transition-colors border-t border-slate-100 pt-3">
         <div className="pl-3">
-          <p className="text-sm font-medium text-slate-800">אימות טלפון בשיחה חובה ברישום</p>
+          <p className="text-sm font-medium text-slate-800">אימות טלפון בשיחה חובה (רישום והתחברות)</p>
           <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
             {phoneReq === null ? 'טוען...' : phoneReq
               ? 'הנרשם חייב לאמת טלפון בקוד שמוקרא בשיחה'
-              : 'מצב גיבוי: אין צורך באימות טלפון, ובמקומו אימות המייל חובה (גם אם המתג שמעליו כבוי).'}
+              : 'מצב גיבוי: ברישום אין אימות טלפון, כל טלפון מוזן פעמיים ואימות המייל חובה. בהתחברות הכניסה בקוד בשיחה מושבתת.'}
           </p>
           {phoneReq === false && (
             <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 mt-1.5 leading-relaxed">
