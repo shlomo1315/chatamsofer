@@ -5,7 +5,7 @@ import EmailInput from '@/components/ui/EmailInput'
 import VerifyControl from '@/components/VerifyControl'
 import { childRegisteredSeparatelyMessage, isChildMarried } from '@/lib/childDuplicateMessage'
 import { toSafeDateValue } from '@/lib/safeDateValue'
-import { PHONE_LOGIN_OFF_MESSAGE, phoneConfirmError } from '@/lib/registrationGate'
+import { PHONE_LOGIN_OFF_MESSAGE, phoneConfirmError, phoneConfirmMismatch } from '@/lib/registrationGate'
 import EmailVerifyModal from '@/components/EmailVerifyModal'
 
 // רכיבים כבדים המופיעים רק עמוק בזרימת הרישום (לא במסך הפתיחה id-lookup) — נטענים עצלה
@@ -4508,8 +4508,13 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                       {phoneError && <p className="text-xs text-red-600 mt-1">{phoneError}</p>}
                       {phoneVerifyRequired && <VerifyControl channel="phone" value={regForm.phone} valid={validatePhone(regForm.phone)} onToken={setRegPhoneToken} />}
                       {!phoneVerifyRequired && (
-                        <TextInput type="tel" value={phoneConfirm.phone} onChange={e => setPhoneConfirm(c => ({ ...c, phone: e.target.value }))}
-                          placeholder="הזן שוב את הטלפון" aria-label="הזן שוב את הטלפון" dir="ltr" maxLength={11} className="mt-2" />
+                        <>
+                          <TextInput type="tel" value={phoneConfirm.phone} onChange={e => setPhoneConfirm(c => ({ ...c, phone: e.target.value }))}
+                            placeholder="הזן שוב את הטלפון" aria-label="הזן שוב את הטלפון" dir="ltr" maxLength={11}
+                            aria-invalid={phoneConfirmMismatch(regForm.phone, phoneConfirm.phone)}
+                            className={`mt-2 ${phoneConfirmMismatch(regForm.phone, phoneConfirm.phone) ? 'border-red-400 focus:ring-red-400' : ''}`} />
+                          {phoneConfirmMismatch(regForm.phone, phoneConfirm.phone) && <p role="alert" className="text-xs text-red-600 mt-1">המספרים לא תואמים, יש לתקן</p>}
+                        </>
                       )}
                     </Field>
                   </div>
@@ -4531,8 +4536,13 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                         {spousePhoneError && <p className="text-xs text-red-600 mt-1">{spousePhoneError}</p>}
                         {phoneVerifyRequired && <VerifyControl channel="phone" value={regForm.spouse_phone} valid={validatePhone(regForm.spouse_phone)} onToken={setRegSpousePhoneToken} optionalHint={anyPhoneVerified ? phoneOptionalHint : undefined} />}
                       {!phoneVerifyRequired && (
-                        <TextInput type="tel" value={phoneConfirm.spouse_phone} onChange={e => setPhoneConfirm(c => ({ ...c, spouse_phone: e.target.value }))}
-                          placeholder="הזן שוב את הטלפון" aria-label="הזן שוב את הטלפון" dir="ltr" maxLength={11} className="mt-2" />
+                        <>
+                          <TextInput type="tel" value={phoneConfirm.spouse_phone} onChange={e => setPhoneConfirm(c => ({ ...c, spouse_phone: e.target.value }))}
+                            placeholder="הזן שוב את הטלפון" aria-label="הזן שוב את הטלפון" dir="ltr" maxLength={11}
+                            aria-invalid={phoneConfirmMismatch(regForm.spouse_phone, phoneConfirm.spouse_phone)}
+                            className={`mt-2 ${phoneConfirmMismatch(regForm.spouse_phone, phoneConfirm.spouse_phone) ? 'border-red-400 focus:ring-red-400' : ''}`} />
+                          {phoneConfirmMismatch(regForm.spouse_phone, phoneConfirm.spouse_phone) && <p role="alert" className="text-xs text-red-600 mt-1">המספרים לא תואמים, יש לתקן</p>}
+                        </>
                       )}
                       </Field>
                     </div>
@@ -4542,8 +4552,13 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                       <TextInput type="tel" value={regForm.phone2} onChange={setReg('phone2')} placeholder="0500000000 או 025381234" dir="ltr" maxLength={11} />
                       {phoneVerifyRequired && <VerifyControl channel="phone" value={regForm.phone2} valid={validatePhoneOrLandline(regForm.phone2)} onToken={setRegPhone2Token} optionalHint={anyPhoneVerified ? phoneOptionalHint : undefined} />}
                       {!phoneVerifyRequired && (
-                        <TextInput type="tel" value={phoneConfirm.phone2} onChange={e => setPhoneConfirm(c => ({ ...c, phone2: e.target.value }))}
-                          placeholder="הזן שוב את הטלפון" aria-label="הזן שוב את הטלפון" dir="ltr" maxLength={11} className="mt-2" />
+                        <>
+                          <TextInput type="tel" value={phoneConfirm.phone2} onChange={e => setPhoneConfirm(c => ({ ...c, phone2: e.target.value }))}
+                            placeholder="הזן שוב את הטלפון" aria-label="הזן שוב את הטלפון" dir="ltr" maxLength={11}
+                            aria-invalid={phoneConfirmMismatch(regForm.phone2, phoneConfirm.phone2)}
+                            className={`mt-2 ${phoneConfirmMismatch(regForm.phone2, phoneConfirm.phone2) ? 'border-red-400 focus:ring-red-400' : ''}`} />
+                          {phoneConfirmMismatch(regForm.phone2, phoneConfirm.phone2) && <p role="alert" className="text-xs text-red-600 mt-1">המספרים לא תואמים, יש לתקן</p>}
+                        </>
                       )}
                     </Field>
                   </div>
