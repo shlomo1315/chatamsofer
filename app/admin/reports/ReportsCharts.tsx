@@ -17,16 +17,17 @@ export default function ReportsCharts({ byEligibility, byCity }: Props) {
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <Card>
         <h2 className="text-sm font-semibold text-slate-700 mb-4">התפלגות לפי סטטוס זכאות</h2>
-        <ResponsiveContainer width="100%" height={220}>
+        <ResponsiveContainer width="100%" height={260}>
           <PieChart>
             <Pie
               data={byEligibility}
               cx="50%"
-              cy="45%"
+              cy="42%"
               outerRadius={80}
+              minAngle={12}
               paddingAngle={3}
               dataKey="value"
-              label={({ name, value }) => value > 0 ? `${name}: ${value}` : ''}
+              label={({ value }) => (value > 0 ? value : '')}
               labelLine={false}
             >
               {byEligibility.map((_, i) => (
@@ -34,6 +35,7 @@ export default function ReportsCharts({ byEligibility, byCity }: Props) {
               ))}
             </Pie>
             <Tooltip formatter={(value) => [value, 'צאצאים']} />
+            <Legend verticalAlign="bottom" iconType="circle" wrapperStyle={{ fontSize: 12 }} />
           </PieChart>
         </ResponsiveContainer>
       </Card>
@@ -41,7 +43,7 @@ export default function ReportsCharts({ byEligibility, byCity }: Props) {
       <Card>
         <h2 className="text-sm font-semibold text-slate-700 mb-4">צאצאים לפי עיר</h2>
         <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={byCity} layout="vertical" margin={{ top: 0, right: 20, left: 40, bottom: 0 }}>
+          <BarChart data={byCity} layout="vertical" margin={{ top: 0, right: 10, left: 10, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
             <XAxis type="number" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
             <YAxis
@@ -50,7 +52,7 @@ export default function ReportsCharts({ byEligibility, byCity }: Props) {
               tick={{ fontSize: 11, fill: '#64748b' }}
               axisLine={false}
               tickLine={false}
-              width={60}
+              width={110}
             />
             <Tooltip
               contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }}
