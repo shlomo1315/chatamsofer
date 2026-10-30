@@ -63,6 +63,12 @@ export function phoneCodeLoginBlocked(gate: { phoneVerificationRequired: boolean
 // מתג אימות הטלפון כבוי = אין קוד בשיחה, ולכן בהרשמה כל טלפון שהוזן מוזן פעמיים
 // (שדה אישור), כדי להקטין טעויות הקלדה. מחזיר הודעת שגיאה, או null כשהכול תקין.
 // מתג דלוק: אין בדיקה (האימות בשיחה הוא ההגנה).
+// בדיקה חיה לשדה האישור: true כשהשדה לא ריק והוא שונה מהטלפון שמעליו.
+export function phoneConfirmMismatch(value: unknown, confirm: unknown): boolean {
+  const c = normalizePhone(String(confirm ?? ''))
+  return !!c && c !== normalizePhone(String(value ?? ''))
+}
+
 export function phoneConfirmError(
   gate: { phoneVerificationRequired: boolean },
   entries: { label: string; value: unknown; confirm: unknown }[],

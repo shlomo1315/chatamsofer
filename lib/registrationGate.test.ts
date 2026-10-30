@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { getRegistrationGate, phoneCodeLoginBlocked, phoneConfirmError, PHONE_LOGIN_OFF_MESSAGE } from './registrationGate'
+import { getRegistrationGate, phoneCodeLoginBlocked, phoneConfirmError, phoneConfirmMismatch, PHONE_LOGIN_OFF_MESSAGE } from './registrationGate'
 
 const fake = (rows: { key: string; value: unknown }[]) =>
   ({ from: () => ({ select: () => ({ in: async () => ({ data: rows }) }) }) }) as unknown as SupabaseClient
@@ -45,5 +45,16 @@ describe('phoneConfirmError — שדה אישור לטלפון ברישום', ()
   it('מתג כבוי וטלפונים לא תואמים או אישור חסר: שגיאה', () => {
     expect(phoneConfirmError({ phoneVerificationRequired: false }, entries('0527101316'))).toContain('טלפון')
     expect(phoneConfirmError({ phoneVerificationRequired: false }, entries(''))).not.toBeNull()
+  })
+})
+
+describe('phoneConfirmMismatch — התראה חיה בשדה האישור', () => {
+  it('שדה ריק או זהה: אין התראה', () => {
+    expect(phoneConfirmMismatch('0527101315', '')).toBe(false)
+    expect(phoneConfirmMismatch('0527101315', '052-710-1315')).toBe(false)
+  })
+  it('שונה: התראה, גם כשמשנים את הטלפון הראשי', () => {
+    expect(phoneConfirmMismatch('0527101315', '05271315666')).toBe(true)
+    expect(phoneConfirmMismatch('0527101316', '0527101315')).toBe(true)
   })
 })
