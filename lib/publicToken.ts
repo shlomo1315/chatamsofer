@@ -11,7 +11,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 // g = gratitude, s = survey, l = loan inquiry, n = name-fix (תיקון שם התינוק)
 // g=מכתב ברכה · s=שיתוף · l=בירור הלוואה · n=תיקון שם · m=בירור יולדת
 // f=מעקב הזמנה ביריד הספרים
-export type PublicTokenKind = 'g' | 's' | 'l' | 'n' | 'm' | 'f'
+export type PublicTokenKind = 'g' | 's' | 'l' | 'n' | 'm' | 'f' | 'a'
 
 const TTL_MS = 90 * 24 * 60 * 60 * 1000 // 90 יום (ברירת מחדל)
 // תוקף מותאם לכל סוג — תיקון שם תקף 7 ימים בלבד (חלון קצר, מאובטח יותר)
