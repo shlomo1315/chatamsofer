@@ -1,8 +1,8 @@
 'use client'
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { Clock, Check, X, Eye, Search, Layers, CheckCircle2, Minus, MessageSquare } from 'lucide-react'
+import LoanCardModal from './LoanCardModal'
 import { LoanStatusControl, DeleteLoanButton, PILL } from './LoanControls'
 import type { Loan } from '@/types'
 import { format } from 'date-fns'
@@ -102,11 +102,11 @@ const haystack = (l: Loan) => {
 }
 
 export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; repliedIds?: string[] }) {
-  const router = useRouter()
   // ⚠️ נפתח על "ממתין לטיפול" ולא על "הכל": זו העבודה שממתינה, ורשימת
   // הכל דורשת סינון ידני בכל כניסה כדי להגיע אליה.
   const [filter, setFilter] = useState<Filter>('todo')
   const [sub, setSub] = useState<TodoSub>('all')
+  const [openId, setOpenId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SortMode>('newest')
 
@@ -383,7 +383,7 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
                 <tr><td colSpan={20} className="px-4 py-12 text-center text-slate-400">לא נמצאו הלוואות בסינון זה</td></tr>
               ) : visibleRows.map(loan => (
                 <tr key={loan.id}
-                  onClick={() => router.push(`/admin/loans/${loan.id}`)}
+                  onClick={() => setOpenId(loan.id)}
                   className="even:bg-slate-50/50 hover:bg-indigo-50/50 transition-colors cursor-pointer
                              [&>td]:px-4 [&>td]:py-3.5 [&>td]:text-right">
                   {tc.shown.map(c => (
@@ -412,6 +412,11 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
           <Pagination page={pg.page} size={pg.size} total={pg.total} onPage={pg.setPage} onSize={pg.setSize} />
         </div>
       </div>
+      {/* כרטסת קופצת (RecordModal): ניווט בין השורות המסוננות */}
+      {openId && tc.rows.some(x => x.id === openId) && (
+        <LoanCardModal rows={tc.rows} index={tc.rows.findIndex(x => x.id === openId)}
+          onIndex={i => setOpenId(tc.rows[i].id)} onClose={() => setOpenId(null)} />
+      )}
     </div>
   )
 }

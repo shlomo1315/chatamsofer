@@ -13,6 +13,7 @@ import type { MaternityAid } from '@/types'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
+import MaternityCardModal from './MaternityCardModal'
 import { StatusControl, deleteMaternityAid, STATUS_PILL, type MotherRef } from './maternityStatus'
 import { babyNameLabel, type AidNameFields } from '@/lib/babyNames'
 import { matchesBucket, returnedFromInquiry, type MaternityBucket, type BucketAid } from '@/lib/maternityBuckets'
@@ -220,6 +221,7 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
   // ברירת המחדל של הסינון — בלשונית הראשית מתחילים ב"ממתין לאישור" (defaultFilter='pending'),
   // כדי שהמזכירות תראה מיד את מה שדורש טיפול ולא את כל הרשימה.
   const [filter, setFilter] = useState<Filter>(defaultFilter)
+  const [openId, setOpenId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SortMode>('newest')
   // סינון לפי ההטבה שהיולדת ביקשה (כרטיס / הבראה / שתיהן)
@@ -531,7 +533,7 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                   // הסינון אינו נשמר בכתובת של הרשימה עצמה, ולכן הקישור הוא
                   // המקום היחיד שבו הוא עובר הלאה.
                   <tr key={aid.id}
-                    onClick={() => router.push(`/admin/maternity/${aid.id}?st=${filter}`)}
+                    onClick={() => setOpenId(aid.id)}
                     className="hover:bg-indigo-50/50 cursor-pointer transition-colors [&>td]:px-2 [&>td]:py-3">
                     {tc.shown.map(c => (
                       <td key={c.key} className={tc.cellClass(c)}>{cell(c.key, aid, m)}</td>
@@ -560,6 +562,11 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
           <Pagination page={pg.page} size={pg.size} total={pg.total} onPage={pg.setPage} onSize={pg.setSize} />
         </div>
       </div>
+      {/* כרטסת קופצת (RecordModal): ניווט בין השורות המסוננות */}
+      {openId && tc.rows.some(x => x.id === openId) && (
+        <MaternityCardModal rows={tc.rows} index={tc.rows.findIndex(x => x.id === openId)}
+          onIndex={i => setOpenId(tc.rows[i].id)} onClose={() => setOpenId(null)} />
+      )}
     </div>
   )
 }
