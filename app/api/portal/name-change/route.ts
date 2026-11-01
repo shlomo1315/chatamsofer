@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
+import { FULLY_LOCKED_FIELDS } from '@/lib/lockedFields'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,6 +39,11 @@ function cleanName(v: unknown): string {
 export async function POST(request: NextRequest) {
   let body: { beneficiary_id?: string; target?: string; new_name?: string }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
+
+  // ת"ז ודרכון נעולים לגמרי: אין עליהם בקשת שינוי, ולא נוצרת בקשה.
+  if (FULLY_LOCKED_FIELDS.some(k => k in (body as Record<string, unknown>))) {
+    return NextResponse.json({ error: 'ת"ז ודרכון אינם ניתנים לשינוי' }, { status: 400 })
+  }
 
   const benId = String(body.beneficiary_id ?? '')
   // ⚠️ הסשן הוא מקור האמת ולא ה-body: בלי ההשוואה הזו אפשר היה לשלוח

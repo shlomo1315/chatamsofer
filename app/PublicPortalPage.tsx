@@ -27,6 +27,8 @@ import { composeLineageName } from '@/lib/lineageNameFormat'
 import { cleanFixText } from '@/lib/lineageFixRequest'
 import { resolveDeepLinkAction } from '@/lib/deepLinkAction'
 import EditableText, { EditProvider } from './EditableText'
+import PersonalArea from '@/components/portal/PersonalArea'
+import { SCREEN_TARGETS, isPortalScreen } from '@/lib/portalScreens'
 import {
   Search, AlertCircle, Loader2, CheckCircle2, User,
   Baby, CreditCard, Gift, ChevronLeft, Phone, MapPin, Mail, Landmark,
@@ -3057,6 +3059,28 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     // ו-ref אינו מפעיל את ה-effect מחדש — הטוקן היה מגיע אחרי שהבקשה כבר יצאה.
     const inv = params.get('invite')
     if (inv) setInviteToken(inv)
+
+    // קישור חתום מהמייל (/my/...): הנתיב כבר קבע סשן, כאן משחזרים את המנוי ופותחים את המסך.
+    // בלי סשן תקף נשארים בכניסה הרגילה, עם הודעה ידידותית אם הקישור פג.
+    const go = params.get('go')
+    if (isPortalScreen(go)) {
+      const target = SCREEN_TARGETS[go]
+      const link = params.get('link')
+      if (link === 'expired') setError('הקישור במייל פג תוקף. אפשר להיכנס עם קוד זמני ולהמשיך מאותו מקום.')
+      else if (link === 'invalid') setError('הקישור במייל אינו תקין. אפשר להיכנס עם קוד זמני.')
+      fetch('/api/portal/session', { cache: 'no-store' })
+        .then(r => (r.ok ? r.json() : null))
+        .then(d => {
+          if (!d?.ok || !d.beneficiary) return
+          if (target.action) { intendedAction.current = target.action; setArrivedFor(target.action) }
+          setDashTab(target.dashTab)
+          if (target.homeTab) setHomeTab(target.homeTab)
+          if (target.openLineageFix) setLineageFixOpen(true)
+          enterDashboard(d.beneficiary, d.documents ?? {})
+        })
+        .catch(() => {})
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Once the beneficiary reaches their dashboard, jump straight to the intended form
@@ -5262,6 +5286,15 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
 
             {/* ═══ טאב: בית — הפרטים, הייחוס והתזכורות ═══ */}
             {dashTab === 'home' && (<>
+            <PersonalArea
+              beneficiary={beneficiary}
+              docsCount={Object.keys(existingDocs).length}
+              contacts={PORTAL_CONTACTS}
+              onNewRequest={() => setDashTab('requests')}
+              onFixLineage={() => { setHomeTab('lineage'); setLineageFixOpen(true); setLineageFixDone(false); setTimeout(() => document.getElementById('pa-lineage-fix')?.scrollIntoView({ behavior: 'smooth' }), 50) }}
+              onEditDetails={openEditDetails}
+              onOpenDocs={() => setDashTab('docs')}
+            />
             {/* User header */}
             <Card>
               <div className="flex items-center gap-4">
@@ -5409,7 +5442,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   מוצג בממשק הניהול, והמשפחה רואה את השרשרת כפי שהמשרד
                   רואה אותה — כולל היכן היא מסתעפת. */}
               {homeTab === 'lineage' && Array.isArray(beneficiary.lineage_chain) && beneficiary.lineage_chain.length > 0 && (
-                <div className="mt-3">
+                <div id="pa-lineage-fix" className="mt-3 scroll-mt-4">
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <EditableText k="dash.field.lineage" className="text-slate-400 text-xs" />
                     <button type="button" onClick={() => { setLineageFixOpen(o => !o); setLineageFixDone(false) }}

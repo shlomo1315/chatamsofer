@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
+import { requestProgress, type RequestProgress } from '@/lib/requestStages'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,7 +13,7 @@ function getAdminClient() {
 }
 
 type Tone = 'pending' | 'progress' | 'approved' | 'rejected'
-interface MyRequest { id: string; kind: string; kindLabel: string; statusLabel: string; tone: Tone; amount: number | null; created_at: string }
+interface MyRequest { id: string; kind: string; kindLabel: string; statusLabel: string; tone: Tone; amount: number | null; created_at: string; progress: RequestProgress }
 
 const LOAN: Record<string, [string, Tone]> = {
   pending: ['ממתינה לאישור', 'pending'], approved: ['אושרה', 'approved'], active: ['פעילה', 'approved'],
@@ -52,10 +53,10 @@ export async function GET(request: NextRequest) {
   ])
 
   const out: MyRequest[] = []
-  for (const l of loans.data ?? []) { const [statusLabel, tone] = fb(LOAN, l.status); out.push({ id: l.id, kind: 'loan', kindLabel: 'בקשת הלוואה', statusLabel, tone, amount: l.amount ?? null, created_at: l.created_at }) }
-  for (const m of maternity.data ?? []) { const [statusLabel, tone] = fb(MATERNITY, m.status); out.push({ id: m.id, kind: 'maternity', kindLabel: 'בקשת הבראה ליולדת', statusLabel, tone, amount: null, created_at: m.created_at }) }
-  for (const f of finaid.data ?? []) { const [statusLabel, tone] = fb(FINAID, f.status); out.push({ id: f.id, kind: 'financial_aid', kindLabel: 'בקשת סיוע רפואי', statusLabel, tone, amount: f.status === 'approved' ? (f.amount ?? null) : null, created_at: f.created_at }) }
-  for (const w of widow.data ?? []) { const [statusLabel, tone] = fb(WIDOW, w.status); out.push({ id: w.id, kind: 'widow', kindLabel: 'בקשת סיוע', statusLabel, tone, amount: w.amount ?? null, created_at: w.created_at }) }
+  for (const l of loans.data ?? []) { const [statusLabel, tone] = fb(LOAN, l.status); out.push({ id: l.id, kind: 'loan', kindLabel: 'בקשת הלוואה', statusLabel, tone, amount: l.amount ?? null, created_at: l.created_at, progress: requestProgress('loan', l.status, tone) }) }
+  for (const m of maternity.data ?? []) { const [statusLabel, tone] = fb(MATERNITY, m.status); out.push({ id: m.id, kind: 'maternity', kindLabel: 'בקשת הבראה ליולדת', statusLabel, tone, amount: null, created_at: m.created_at, progress: requestProgress('maternity', m.status, tone) }) }
+  for (const f of finaid.data ?? []) { const [statusLabel, tone] = fb(FINAID, f.status); out.push({ id: f.id, kind: 'financial_aid', kindLabel: 'בקשת סיוע רפואי', statusLabel, tone, amount: f.status === 'approved' ? (f.amount ?? null) : null, created_at: f.created_at, progress: requestProgress('financial_aid', f.status, tone) }) }
+  for (const w of widow.data ?? []) { const [statusLabel, tone] = fb(WIDOW, w.status); out.push({ id: w.id, kind: 'widow', kindLabel: 'בקשת סיוע', statusLabel, tone, amount: w.amount ?? null, created_at: w.created_at, progress: requestProgress('widow', w.status, tone) }) }
 
   out.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
   return NextResponse.json({ requests: out }, { headers: { 'Cache-Control': 'no-store' } })
