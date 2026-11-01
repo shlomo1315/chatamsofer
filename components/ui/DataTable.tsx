@@ -37,6 +37,8 @@ interface DataTableProps<T> {
   loading?: boolean
   actions?: (row: T) => ReactNode
   rowHref?: (row: T) => string
+  /** לחיצה על שורה — מחליף את הניווט של rowHref (למשל פתיחת פופאפ). */
+  onRowClick?: (row: T) => void
   // serverMode: הנתונים כבר מסוננים/ממוינים/מפויינים בצד השרת. DataTable רק מרנדר
   // אותם כמו שהם — בלי חיפוש/מיון/pagination פנימיים (אלה מנוהלים ע"י ההורה דרך ה-URL).
   serverMode?: boolean
@@ -74,6 +76,7 @@ export default function DataTable<T extends { id: string }>({
   loading,
   actions,
   rowHref,
+  onRowClick,
   serverMode,
   tableId,
   sortFilter,
@@ -264,8 +267,8 @@ export default function DataTable<T extends { id: string }>({
             ) : (
               paged.map((row) => (
                 <tr key={row.id}
-                  onClick={rowHref ? () => router.push(rowHref(row)) : undefined}
-                  className={`hover:bg-indigo-50/40 transition-colors duration-100 ${rowHref ? 'cursor-pointer' : ''}`}>
+                  onClick={onRowClick ? () => onRowClick(row) : rowHref ? () => router.push(rowHref(row)) : undefined}
+                  className={`hover:bg-indigo-50/40 transition-colors duration-100 ${rowHref || onRowClick ? 'cursor-pointer' : ''}`}>
                   {view.map((col) => (
                     <td key={String(col.key)} className={`px-3 py-3.5 text-slate-700 align-middle ${tableId ? tc.rt.cellClass : "whitespace-nowrap"} ${col.className ?? ''}`}>
                       {col.render

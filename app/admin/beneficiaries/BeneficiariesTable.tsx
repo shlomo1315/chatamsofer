@@ -9,6 +9,7 @@ import { approvalLabelOf } from '@/lib/approvalLabel'
 import SortButtons, { SortMode } from '@/components/ui/SortButtons'
 import Pagination from '@/components/ui/Pagination'
 import QuickEmailModal from '@/components/QuickEmailModal'
+import BeneficiaryCardModal from './BeneficiaryCardModal'
 import SendLineageLinkButton from './SendLineageLinkButton'
 import { useListParams } from '@/lib/useListParams'
 import { type AdvFilters } from '@/lib/listParams'
@@ -72,10 +73,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
     header: 'שם מלא',
     sortable: true,
     render: (row) => (
-      <Link
-        href={`/admin/beneficiaries/${row.id}`}
-        className="flex items-center gap-2.5 group/name"
-      >
+      <div className="flex items-center gap-2.5 group/name">
         <div className="relative flex-shrink-0">
           <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${avatarColor(row.id)}`}>
             {initials(row)}
@@ -87,7 +85,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
         <span className="font-medium text-slate-800 group-hover/name:text-indigo-600">
           {fullName(row)}
         </span>
-      </Link>
+      </div>
     ),
   },
   {
@@ -321,6 +319,7 @@ const MARITAL_OPTIONS: { value: string; label: string }[] = [
 
 export default function BeneficiariesTable({ data, counts, total, page, size, status, sort, marital, email = 'all', col = '', dir = 'asc', colFilters = {}, filterOptions = {}, adv = {}, communities = [], cardKeys, headerAction }: Props) {
   const [emailTarget, setEmailTarget] = useState<{ email: string; name: string } | null>(null)
+  const [openIdx, setOpenIdx] = useState<number | null>(null)
   const { qInput, setSearch, setStatus, setSort, setMarital, setEmail, setSize, setPage, setColSort, setColFilters, setAdv, clearAdv } =
     useListParams({ sortCols: SORT_COLUMNS })
 
@@ -351,15 +350,13 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
               key={c.key}
               title={c.label}
               onClick={() => setStatus(isActive && c.key !== 'all' ? 'all' : c.key)}
-              className={`flex items-center gap-2 rounded-xl border bg-white p-2.5 text-right transition-all ${isActive ? c.active : c.base}`}
+              className={`flex flex-col gap-1 rounded-[14px] border bg-white px-4 py-3.5 text-right transition-colors ${isActive ? 'border-[#14213D] ring-1 ring-[#14213D]' : 'border-[#E7E3DB] hover:border-[#cfc8bb]'}`}
             >
-              <span className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${c.iconCls}`}>
-                <Icon size={16} />
+              <span className="flex items-center gap-2 text-sm font-medium text-[#5F6470]">
+                <Icon size={15} className={c.iconCls.split(' ')[1]} />
+                <span className="truncate">{c.label}</span>
               </span>
-              <span className="flex flex-col min-w-0">
-                <span className="text-xl font-bold text-slate-900 tabular-nums leading-none">{(counts[c.key] ?? 0).toLocaleString('he-IL')}</span>
-                <span className="text-[11px] text-slate-500 mt-0.5 truncate">{c.label}</span>
-              </span>
+              <span className="text-[30px] font-extrabold text-[#14213D] tabular-nums leading-tight">{(counts[c.key] ?? 0).toLocaleString('he-IL')}</span>
             </button>
           )
         })}
@@ -475,7 +472,7 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
         data={data}
         columns={columns}
         tableId="beneficiaries"
-        rowHref={(row) => `/admin/beneficiaries/${row.id}`}
+        onRowClick={(row) => setOpenIdx(data.findIndex((r) => r.id === row.id))}
         serverMode
         // 🔴 serverMode + sortFilter = המיון והסינון רצים במסד. סינון
         // בצד הלקוח היה מסנן 50 שורות מתוך 7,066 ומציג תוצאה שנראית
@@ -490,12 +487,10 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
         emptyMessage={qInput ? 'לא נמצאו תוצאות לחיפוש.' : "לא נמצאו צאצאים. לחץ על 'רישום צאצא חדש' להוספה."}
         actions={(row) => (
           <div className="flex items-center gap-1.5">
-            <Link href={`/admin/beneficiaries/${row.id}`}>
-              <button className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-indigo-600 transition-colors px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50">
-                <Eye size={14} />
-                צפייה
-              </button>
-            </Link>
+            <button onClick={() => setOpenIdx(data.findIndex((r) => r.id === row.id))} className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-indigo-600 transition-colors px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50">
+              <Eye size={14} />
+              כרטסת
+            </button>
             {/* שליחת קישור תיקון סדר הדורות ישירות מהשורה — בלי להיכנס לכרטסת */}
             <span className="inline-flex px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 transition-colors">
               <SendLineageLinkButton beneficiaryId={row.id} name={row.full_name ?? row.family_name ?? ''} email={row.email} variant="icon" />
@@ -505,6 +500,10 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
       />
 
       <Pagination page={page} size={size} total={total} onPage={setPage} onSize={setSize} />
+
+      {openIdx !== null && openIdx >= 0 && data[openIdx] && (
+        <BeneficiaryCardModal rows={data} index={openIdx} onIndex={setOpenIdx} onClose={() => setOpenIdx(null)} />
+      )}
 
       {emailTarget && (
         <QuickEmailModal
