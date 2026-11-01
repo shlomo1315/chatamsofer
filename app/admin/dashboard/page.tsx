@@ -1,9 +1,3 @@
-import {
-  Users, Landmark, Baby, UtensilsCrossed, Gift,
-  HandCoins, Mail, TrendingUp, Clock, AlertCircle, CheckCircle2,
-  ArrowLeft, ArrowUpRight, Download,
-} from 'lucide-react'
-import Link from 'next/link'
 import { unstable_cache } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { getServiceClient, requireStaff } from '@/lib/apiAuth'
@@ -17,7 +11,7 @@ import { isSupabaseConfigured } from '@/lib/supabase/server'
 import { isAwaitingCard, holdsCard, AWAITING_SELECT, type AwaitingAid } from '@/lib/awaitingFilter'
 import { maternityCounts } from '@/lib/maternityCounts'
 import LiveRefresh from '@/components/LiveRefresh'
-import PendingTasksPanel from './PendingTasksPanel'
+import DashboardView from './DashboardView'
 
 interface DashData {
   totalBeneficiaries: number
@@ -201,24 +195,6 @@ const getStats = unstable_cache(
 
 // "20,000 ₪" — סימן המטבע אחרי המספר. Intl עם style:'currency' שם אותו לפני
 // ("₪20,000"), וזה נקרא הפוך בעברית.
-const fmtCur = (n: number) =>
-  `${new Intl.NumberFormat('he-IL', { maximumFractionDigits: 0 }).format(n)} ₪`
-
-// 🔴 ההלוואות מתנהלות בדולרים, לא בשקלים — התקרה היא 10,000$ וכל מסכי
-// הגמ"ח (הרשימה, הכרטסת, פורטל הביצוע) מציגים "$" לפני המספר. הדשבורד
-// היה המקום היחיד שהציג את אותו סכום בדיוק כ-"₪", כלומר אותו נתון בשתי
-// מטבעות בשני מסכים — ומספר תקציבי שנקרא במטבע הלא נכון הוא טעות של
-// פי 3.5 בהערכת החשיפה.
-//
-// ⚠️ פונקציה נפרדת ולא שינוי של fmtCur: הקורא השני שלה הוא הצפי התקציבי
-// של חלוקות החגים, שבאמת מתנהל בשקלים. החלפה במקום הייתה מתקנת מספר אחד
-// ושוברת אחר.
-//
-// ⚠️ הסימן לפני המספר, בשונה מהשקל: כך זה נכתב בכל שאר מסכי ההלוואות,
-// ואחידות חשובה כאן יותר מהעדפת הכיווניות בעברית.
-const fmtUsd = (n: number) =>
-  `$${new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(n)}`
-const fmt = (n: number) => n.toLocaleString('he-IL')
 
 function getGreeting() {
   const h = new Date().getHours()
@@ -312,291 +288,25 @@ export default async function DashboardPage() {
     : 0
 
   return (
-    <div className="flex flex-col gap-8 pb-10">
+    <>
       {/* 🔴 הדשבורד הוא Server Component ולכן היה קפוא עד ריענון ידני.
           מרענן כל 30 שניות, ומיד בחזרה ללשונית. עוצר כשהיא מוסתרת. */}
       <LiveRefresh seconds={30} />
-
-      {/* ── Header ───────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">{getGreeting()}</h1>
-          <p className="text-slate-500 mt-1 text-sm">ברוך הבא ללוח הבקרה של היכל החתם סופר</p>
-        </div>
-        {/* ⚠️ נבדק כמו כל שאר הלוח: הכפתור הוביל למסך הדוחות גם למי שאין
-            לו הרשאת דוחות, והמסך עצמו חסם — כלומר הבטחה שנשברת בלחיצה. */}
-        {can('reports') && (
-        <Link href="/admin/reports"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl font-semibold text-white text-sm
-                     bg-gradient-to-b from-indigo-500 to-indigo-600 ring-1 ring-inset ring-white/15
-                     shadow-[0_1px_2px_rgba(15,23,42,0.18),0_8px_18px_-6px_rgba(79,70,229,0.55)]
-                     transition-all duration-150 hover:from-indigo-500 hover:to-indigo-700 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]">
-          <Download size={15} />
-          הורדת דוחות
-        </Link>
-        )}
-      </div>
-
-      {!isSupabaseConfigured() && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 flex items-center gap-2">
-          <AlertCircle size={16} className="flex-shrink-0" />
-          <span><strong>מצב פיתוח:</strong> Supabase לא מוגדר — מוצגים נתוני אפס.</span>
-        </div>
-      )}
-
-      {/* ── KPI Row ──────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {can('beneficiaries') && (
-          <KpiCard
-            label="משפחות רשומות"
-            value={fmt(s.totalBeneficiaries)}
-            sub={`${fmt(s.newBeneficiariesWeek)} נרשמו השבוע`}
-            subPositive
-            icon={<Users size={18} />}
-            color="indigo"
-            href="/admin/beneficiaries"
-          />
-        )}
-        {can('loans') && (
-          <KpiCard
-            // 🔴 סכום שנמסר בפועל (disbursed_at) ולא סכום התיקים הפעילים:
-            // "כמה כסף באמת יצא" הוא המספר שמחפשים, וסכום הפעילים החמיץ את
-            // מה שאושר, נמסר והושלם.
-            label="סכום ההלוואות בפועל"
-            value={fmtUsd(s.disbursedAmount)}
-            sub={`${fmt(s.loansDisbursed)} קיבלו שטר · ${fmt(s.activeLoans)} פעילות`}
-            icon={<Landmark size={18} />}
-            color="blue"
-            href="/admin/loans"
-          />
-        )}
-        <PendingTasksPanel count={pendingTotal} />
-        {/* "מייל בלבד" רואה את הקובייה מתוקף ההגדרה, כמו בסרגל */}
-        {(can('mail') || staff.mailOnly) && (
-          <KpiCard
-            label="תיבת המייל"
-            value="מייל"
-            sub="דואר נכנס ויוצא"
-            icon={<Mail size={18} />}
-            color="violet"
-            href="/admin/mail"
-          />
-        )}
-      </div>
-
-      {/* ⚠️ משתמש בלי אף הרשאת מחלקה קיבל עמוד ריק שנראה כתקלה במערכת.
-          הודעה מפורשת עדיפה — היא אומרת לו למי לפנות במקום להשאיר אותו
-          מול מסך לבן. */}
-      {!anyDept && (
-        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-600 flex items-center gap-2">
-          <AlertCircle size={16} className="flex-shrink-0 text-slate-400" />
-          <span>לא הוגדרו לך מחלקות להצגה בלוח הבקרה. לפתיחת גישה — פנה למנהל המערכת.</span>
-        </div>
-      )}
-
-      {/* ── Departments ──────────────────────────────────────────── */}
-      {anyDept && (
-      <div>
-        <h2 className="text-base font-semibold text-slate-700 mb-4">אגפי העמותה</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-
-          {can('beneficiaries') && (
-          <DeptCard
-            title="איגוד הצאצאים"
-            icon={<Users size={20} />}
-            href="/admin/beneficiaries"
-            accent="#6366f1"
-            rows={[
-              { label: 'רשומות מאושרות', value: fmt(s.approved), tone: 'success' },
-              { label: 'ממתינות לאישור', value: fmt(s.pending), tone: s.pending > 0 ? 'warning' : 'neutral' },
-              { label: 'בבדיקה מעמיקה', value: fmt(s.deepReview), tone: s.deepReview > 0 ? 'danger' : 'neutral' },
-              { label: 'נרשמו השבוע', value: fmt(s.newBeneficiariesWeek), tone: 'info' },
-            ]}
-          />
-          )}
-
-          {can('loans') && (
-          <DeptCard
-            title="גמ״ח — הלוואות"
-            icon={<Landmark size={20} />}
-            href="/admin/loans"
-            accent="#3b82f6"
-            rows={[
-              { label: 'בקשות לאישור', value: fmt(s.pendingLoans), tone: s.pendingLoans > 0 ? 'warning' : 'neutral' },
-              // ⚠️ "בפיגור" הוסר — לא רלוונטי לגמ"ח הזה (החלטת המשתמש).
-              { label: 'אושרו', value: fmt(s.loansApprovedTotal), tone: 'success' },
-              // 🔴 "קיבלו שטר" = disbursed_at מפורטל הביצוע, ולא סטטוס הבקשה.
-              // אישור ומסירת השטר הם שני אירועים נפרדים, והפער ביניהם הוא
-              // מה שצריך להיראות.
-              { label: 'קיבלו שטר', value: fmt(s.loansDisbursed), tone: 'info' },
-              { label: 'סכום ההלוואות בפועל', value: fmtUsd(s.disbursedAmount), tone: 'info' },
-              { label: 'הלוואות פעילות', value: fmt(s.activeLoans), tone: 'neutral' },
-              // ארכיון: כמה נלקחו בפועל מתוך סך ההלוואות ההיסטוריות.
-              { label: 'ארכיון (מערכת קודמת)', value: `${fmt(s.legacyTakenCount)} / ${fmt(s.legacyCount)}`, tone: 'neutral' },
-            ]}
-          />
-          )}
-
-          {can('maternity') && (
-          <DeptCard
-            title="עזר יולדות"
-            icon={<Baby size={20} />}
-            href="/admin/maternity"
-            accent="#ec4899"
-            rows={[
-              { label: 'בקשות לאישור', value: fmt(s.maternityPending), tone: s.maternityPending > 0 ? 'warning' : 'neutral' },
-              { label: 'בבדיקה מעמיקה', value: fmt(s.maternityDeepReview), tone: s.maternityDeepReview > 0 ? 'danger' : 'neutral' },
-              { label: 'תיקים פעילים', value: fmt(s.maternityActive), tone: 'success' },
-            ]}
-          />
-          )}
-
-          {can('maternity_cards') && (
-          <DeptCard
-            title="כרטיסי מזון יולדות"
-            icon={<UtensilsCrossed size={20} />}
-            href="/admin/maternity/cards"
-            accent="#10b981"
-            /* ⚠️ שלוש השורות מרכיבות משוואה שהמנהל יכול לסגור בעצמו:
-               נקנו − נמסרו = מלאי. קודם הוצג "נמסרו" מספירת לידות פעילות
-               (146), שאינה מתיישבת עם 300 ו-148 — והמנהל ראה שישה כרטיסים
-               נעלמים בלי הסבר. */
-            rows={[
-              { label: 'סך שנקנו', value: live.purchased > 0 ? fmt(live.purchased) : '—', tone: 'neutral' },
-              { label: 'נמסרו', value: delivered == null ? '—' : fmt(delivered), tone: 'success' },
-              { label: 'מלאי נותר', value: fmt(s.cardsRemaining), tone: s.cardsRemaining < 5 ? 'danger' : 'info' },
-              { label: 'ממתינות לכרטיס', value: fmt(s.cardsPending), tone: s.cardsPending > 0 ? 'warning' : 'neutral' },
-            ]}
-          />
-          )}
-
-          {/* ⚠️ חלוקות חגים במקום אלמנות ויתומים: המחלקה הפעילה היא זו שצריכה
-              להיות על הלוח. בשלב הרישום הנתון הקריטי הוא הצפי התקציבי — לפיו
-              נקבע מה אפשר להתחייב, ולכן הוא מוצג ולא רק מספר הנרשמים. */}
-          {can('distributions') && (
-          <DeptCard
-            title="חלוקות חגים"
-            icon={<Gift size={20} />}
-            href="/admin/distributions"
-            accent="#a855f7"
-            rows={s.holidayOpen ? [
-              { label: 'נרשמו לחלוקה', value: fmt(s.holidayRegistered), tone: s.holidayRegistered > 0 ? 'success' : 'neutral' },
-              { label: 'צפי תקציבי', value: fmtCur(s.holidayExpected), tone: 'info' },
-              { label: 'החלוקה הפעילה', value: s.holidayName ?? '—', tone: 'neutral' },
-            ] : [
-              { label: 'רישום פתוח', value: 'אין', tone: 'warning' },
-              { label: 'חלוקות בתכנון', value: fmt(s.distributionsPlanned), tone: 'neutral' },
-            ]}
-          />
-          )}
-
-          {can('financial_aid') && (
-          <DeptCard
-            title="סיוע רפואי"
-            icon={<HandCoins size={20} />}
-            href="/admin/financial-aid"
-            accent="#14b8a6"
-            rows={[
-              { label: 'בקשות חדשות', value: fmt(s.aidPending), tone: s.aidPending > 0 ? 'warning' : 'neutral' },
-              { label: 'נשלחו לאישור', value: fmt(s.aidAwaiting), tone: 'info' },
-              { label: 'אושרו', value: fmt(s.aidApproved), tone: 'success' },
-            ]}
-          />
-          )}
-
-        </div>
-      </div>
-      )}
-
-      {/* ── Footer ───────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 text-xs text-slate-400 px-1">
-        <CheckCircle2 size={13} className="text-emerald-500" />
-        הנתונים מתעדכנים בזמן אמת
-      </div>
-    </div>
-  )
-}
-
-// ── KPI Card ────────────────────────────────────────────────────────────────
-
-const colorMap: Record<string, { bg: string; icon: string; text: string }> = {
-  indigo: { bg: 'bg-indigo-50', icon: 'bg-indigo-600 text-white', text: 'text-indigo-600' },
-  blue:   { bg: 'bg-blue-50',   icon: 'bg-blue-600 text-white',   text: 'text-blue-600'   },
-  amber:  { bg: 'bg-amber-50',  icon: 'bg-amber-500 text-white',  text: 'text-amber-600'  },
-  violet: { bg: 'bg-violet-50', icon: 'bg-violet-600 text-white', text: 'text-violet-600' },
-}
-
-function KpiCard({ label, value, sub, subPositive, subWarning, icon, color, href }: {
-  label: string; value: string; sub: string
-  subPositive?: boolean; subWarning?: boolean
-  icon: React.ReactNode; color: string; href: string
-}) {
-  const c = colorMap[color] ?? colorMap.indigo
-  return (
-    <Link href={href}
-      className={`group relative flex flex-col gap-3 rounded-2xl border border-slate-200/70 ${c.bg} p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_10px_24px_-14px_rgba(15,23,42,0.18)] hover:shadow-[0_4px_12px_rgba(15,23,42,0.08),0_18px_36px_-16px_rgba(79,70,229,0.3)] hover:-translate-y-0.5 transition-all duration-200`}>
-      {/* המספר בולט למעלה; האייקון עובר לשורת התווית מתחתיו */}
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-[13px] text-slate-500 mb-1">{label}</p>
-          <p className="text-2xl font-bold text-slate-900 ltr-num">{value}</p>
-        </div>
-        <ArrowUpRight size={15} className={`${c.text} opacity-0 group-hover:opacity-100 transition-opacity`} />
-      </div>
-      <div className="flex items-center gap-2">
-        <span className={`w-9 h-9 rounded-xl flex items-center justify-center ${c.icon} shadow-sm flex-shrink-0`}>
-          {icon}
-        </span>
-        <p className={`text-xs font-medium ${subWarning ? 'text-amber-600' : subPositive ? 'text-emerald-600' : 'text-slate-400'}`}>
-          {sub}
-        </p>
-      </div>
-    </Link>
-  )
-}
-
-// ── Department Card ──────────────────────────────────────────────────────────
-
-type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral'
-
-const toneClass: Record<Tone, string> = {
-  success: 'text-emerald-600 bg-emerald-50',
-  warning: 'text-amber-600 bg-amber-50',
-  danger:  'text-red-600 bg-red-50',
-  info:    'text-blue-600 bg-blue-50',
-  neutral: 'text-slate-500 bg-slate-50',
-}
-
-function DeptCard({ title, icon, href, accent, rows }: {
-  title: string; icon: React.ReactNode; href: string
-  accent: string
-  rows: { label: string; value: string; tone: Tone }[]
-}) {
-  return (
-    <Link href={href}
-      className="group flex flex-col rounded-2xl border border-slate-200/70 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_10px_24px_-14px_rgba(15,23,42,0.18)] hover:shadow-[0_6px_16px_rgba(15,23,42,0.1),0_22px_44px_-18px_rgba(79,70,229,0.35)] hover:border-indigo-200 hover:-translate-y-0.5 transition-all duration-200 overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-50">
-        <div className="flex items-center gap-3">
-          <span className="w-8 h-8 rounded-lg flex items-center justify-center text-white flex-shrink-0"
-            style={{ backgroundColor: accent }}>
-            {icon}
-          </span>
-          <h3 className="font-semibold text-slate-800 text-[15px]">{title}</h3>
-        </div>
-        <ArrowLeft size={15} className="text-slate-300 group-hover:text-slate-600 transition-colors" />
-      </div>
-      {/* Rows */}
-      <div className="flex flex-col divide-y divide-slate-50 px-5">
-        {rows.map(r => (
-          <div key={r.label} className="flex items-center justify-between py-3">
-            <span className="text-[13px] text-slate-500">{r.label}</span>
-            <span className={`text-sm font-bold ltr-num px-2.5 py-0.5 rounded-full ${toneClass[r.tone]}`}>
-              {r.value}
-            </span>
-          </div>
-        ))}
-      </div>
-    </Link>
+      {!anyDept && <p style={{ padding: 24, textAlign: 'center' }}>לא הוגדרו לך מחלקות. פנה למנהל המערכת.</p>}
+      <DashboardView
+        greeting={getGreeting()}
+        s={s}
+        pendingTotal={pendingTotal}
+        purchased={live.purchased}
+        delivered={delivered}
+        devMode={!isSupabaseConfigured()}
+        // ⚠️ הרשאות מחושבות בשרת: לשונית בלי הרשאה אינה מרונדרת ואין לה נתונים בלקוח
+        can={{
+          beneficiaries: can('beneficiaries'), loans: can('loans'), maternity: can('maternity'),
+          cards: can('maternity_cards'), aid: can('financial_aid'), distributions: can('distributions'),
+          reports: can('reports'),
+        }}
+      />
+    </>
   )
 }
