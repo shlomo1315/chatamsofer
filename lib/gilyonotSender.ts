@@ -106,7 +106,8 @@ type MailFields = Pick<IssueRow, 'title' | 'parasha' | 'intro' | 'body_html' | '
 
 /** המייל עצמו לנמען אחד. גם התצוגה המקדימה משתמשת בזה (עם טוקנים לדוגמה). */
 export function issueEmail(issue: MailFields, r: { deliveryToken: string; subscriberToken: string | null }) {
-  const unsubscribeUrl = r.subscriberToken ? gilyonotUrls.unsubscribe(r.subscriberToken) : null
+  // מנוי רשום מוסר מהרשימה הראשית; נמען מרשימה חיצונית מוסר מכל הרשימות (לפי טוקן המשלוח)
+  const unsubscribeUrl = r.subscriberToken ? gilyonotUrls.unsubscribe(r.subscriberToken) : gilyonotUrls.optout(r.deliveryToken)
   return {
     html: buildGilyonHtml({
       title: issue.title, parasha: issue.parasha, intro: issue.intro,
@@ -237,6 +238,14 @@ async function sendBatches(db: SupabaseClient, resend: Resend, issue: IssueRow):
       batch = batch.filter(d => d.gilyonot_subscribers?.status !== 'unsubscribed')
       if (!batch.length) continue
     }
+    // מי שהסיר את עצמו מכל הרשימות (קישור הסרה של נמען חיצוני או ניוזלטר)
+    const optedOut = await optedOutEmails(db, batch.map(d => d.email))
+    if (optedOut.size) {
+      const skip = batch.filter(d => optedOut.has(d.email.trim().toLowerCase()))
+      await db.from('gilyonot_deliveries').delete().in('id', skip.map(d => d.id))
+      batch = batch.filter(d => !optedOut.has(d.email.trim().toLowerCase()))
+      if (!batch.length) continue
+    }
     if (!batch.length) { await finalize(db, issue.id); break }
 
     let hadFailure = false
@@ -274,6 +283,13 @@ async function sendBatches(db: SupabaseClient, resend: Resend, issue: IssueRow):
     if (hadFailure) break // לא יורים על קיר; ננסה שוב בטיק הבא
   }
   return { sent, failed }
+}
+
+async function optedOutEmails(db: SupabaseClient, emails: string[]): Promise<Set<string>> {
+  const lower = [...new Set(emails.map(e => e.trim().toLowerCase()))]
+  if (!lower.length) return new Set()
+  const { data } = await db.from('unsubscribes').select('email').in('email', lower)
+  return new Set((data ?? []).map((r: { email: string }) => r.email.trim().toLowerCase()))
 }
 
 async function finalize(db: SupabaseClient, issueId: string) {
