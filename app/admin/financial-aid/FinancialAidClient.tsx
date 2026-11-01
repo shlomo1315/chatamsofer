@@ -1,12 +1,13 @@
 'use client'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import StatStrip from '@/components/admin/system/StatStrip'
+import { ListTable } from '@/components/admin/system/ListTable'
+import { SearchBar } from '@/components/admin/system/SearchBar'
 import { useRouter } from 'next/navigation'
 import { Search, RefreshCw, Mail, Check, Eye, Loader2, Plus, X, Upload, Trash2, Layers, Clock } from 'lucide-react'
 import type { FinancialAidRequest, FinancialAidStatus } from '@/types'
 import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
 import { useTablePagination } from '@/lib/useTablePagination'
-import Pagination from '@/components/ui/Pagination'
 import { FINANCIAL_AID_STATUS_LABELS, FINANCIAL_AID_STATUS_COLORS } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
@@ -279,60 +280,22 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
         items={CARD_DEFS.map(c => ({ key: c.key, label: c.label, icon: c.icon, count: counts[c.key] ?? 0 }))}
         onSelect={k => setFilter(filter === k && k !== 'all' ? 'all' : k)} />
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
-        <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between gap-3 flex-wrap">
-          <h2 className="font-semibold text-slate-900">בקשות סיוע</h2>
-          <div className="flex items-center gap-2 flex-wrap">
-            <SortButtons value={sort} onChange={setSort} />
-            <div className="relative w-full sm:w-64">
-              <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
-              <input value={query} onChange={e => setQuery(e.target.value)} placeholder="חיפוש…"
-                className="w-full pr-9 pl-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-200" />
-            </div>
+      <ListTable tc={tc} rows={visibleRows} pg={pg} empty="אין בקשות בסינון זה"
+        onOpen={r => setOpenId(r.id)}
+        renderCell={(c, r) => cell(c, r)}
+        actionsHead=""
+        actions={r => (
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-navy"><Eye size={13} /> פרטים</span>
+            {canEdit && (
+              <button onClick={e => del(e, r.id)} className="text-ink-faint transition-colors hover:text-red-600" title="מחק בקשה"><Trash2 size={14} /></button>
+            )}
           </div>
-        </div>
-        <div className="flex flex-col gap-2 px-5 pt-3">{tc.picker}{tc.activeFilters}</div>
-        {/* ⚠️ בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. */}
-        <div className="w-full px-1 pt-2">
-          <table className="w-full text-sm text-right" style={tc.rt.tableStyle}>
-            <colgroup>{tc.rt.cols}</colgroup>
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50">
-                {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב. */}
-                {tc.shown.map((c, i) => tc.th(c, i))}
-                <th className="px-4 py-3 text-xs font-semibold text-slate-500" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {/* 🔴 נמדד מול tc.rows — הסינון מהכותרת יכול לרוקן את הטבלה
-                  גם כשהחיפוש שמעליה החזיר שורות. */}
-              {tc.rows.length === 0 ? (
-                <tr><td colSpan={tc.shown.length + 1} className="px-4 py-12 text-center text-slate-400">אין בקשות בסינון זה</td></tr>
-              ) : visibleRows.map(r => (
-                <tr key={r.id} onClick={() => setOpenId(r.id)} className="hover:bg-emerald-50/40 cursor-pointer transition-colors">
-                  {tc.shown.map(c => (
-                    <td key={c.key} className={`px-4 py-3 ${tc.cellClass(c)}`}>{cell(c, r)}</td>
-                  ))}
-                  <td className="px-4 py-3 align-top">
-                    <div className="flex items-center gap-3">
-                      <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium"><Eye size={13} /> פרטים</span>
-                      {canEdit && (
-                        <button onClick={e => del(e, r.id)} className="text-slate-300 hover:text-red-500 transition-colors" title="מחק בקשה"><Trash2 size={14} /></button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* דפדוף + בורר גודל עמוד (20/50/100/200) — זהה לכל טבלאות המערכת */}
-        <div className="px-4 py-3 border-t border-slate-100">
-          <Pagination page={pg.page} size={pg.size} total={pg.total} onPage={pg.setPage} onSize={pg.setSize} />
-        </div>
-      </div>
-
+        )}
+        toolbar={<>
+          <SearchBar value={query} onChange={setQuery} />
+          <SortButtons value={sort} onChange={setSort} />
+        </>} />
       {/* כרטסת קופצת (RecordModal): ניווט בין השורות המסוננות */}
       {openId && tc.rows.some(x => x.id === openId) && (
         <AidCardModal rows={tc.rows} index={tc.rows.findIndex(x => x.id === openId)}

@@ -107,7 +107,7 @@ export default function DataTable<T extends { id: string }>({
       weight: c.weight,
       // ⚠️ הריפוד והרקע של הכותרת מגיעים מכאן: tc.th מרנדר את ה-<th>
       // בעצמו, ובלי זה הכותרות היו מאבדות את עיצוב הטבלה.
-      headClassName: `bg-slate-50 px-3 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 ${c.className ?? ''}`,
+      headClassName: `bg-sand px-3 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-sand0 ${c.className ?? ''}`,
     })),
     [columns],
   )
@@ -190,13 +190,13 @@ export default function DataTable<T extends { id: string }>({
     <div className="flex flex-col gap-4">
       {searchable && (
         <div className="relative">
-          <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3.5 text-slate-400 pointer-events-none" />
+          <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3.5 text-ink-faint pointer-events-none" />
           <input
             type="text"
             placeholder={searchPlaceholder}
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-            className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pr-10 pl-4 text-sm text-slate-700 placeholder:text-slate-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-400 transition-shadow"
+            className="w-full rounded-xl border border-line bg-white py-2.5 pr-10 pl-4 text-sm text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-sand0/50 focus:border-gold transition-shadow"
           />
         </div>
       )}
@@ -210,12 +210,12 @@ export default function DataTable<T extends { id: string }>({
 
       {/* 🔴 בלי overflow-x: הכלל במערכת הוא שאין גלילה לרוחב בשום טבלה.
           הגרירה מחלקת מחדש את הרוחב הקיים ואינה מרחיבה מעבר למסך. */}
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="rounded-2xl border border-line bg-white">
         <table className="w-full text-sm text-right border-collapse"
           style={tableId ? tc.rt.tableStyle : undefined}>
           {tableId && <colgroup>{tc.rt.cols}</colgroup>}
           <thead className="sticky top-0 z-10">
-            <tr className="bg-slate-50 border-b-2 border-slate-200">
+            <tr className="bg-sand border-b-2 border-line">
               {view.map((col, i) => {
                 // ── התקן: כותרת עם מיון וסינון, זהה בכל טבלאות המערכת.
                 // tc.th מרנדר <th> משלו (כולל ידית הגרירה), ולכן הוא
@@ -227,7 +227,7 @@ export default function DataTable<T extends { id: string }>({
                 return (
                 <th
                   key={String(col.key)}
-                  className={`bg-slate-50 px-3 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 ${tableId ? "relative" : "whitespace-nowrap"} ${col.className ?? ''} ${(col.sortable && !serverMode) ? 'cursor-pointer hover:text-indigo-600 select-none transition-colors' : ''}`}
+                  className={`bg-sand px-3 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-sand0 ${tableId ? "relative" : "whitespace-nowrap"} ${col.className ?? ''} ${(col.sortable && !serverMode) ? 'cursor-pointer hover:text-navy select-none transition-colors' : ''}`}
                   onClick={() => col.sortable && toggleSort(String(col.key))}
                 >
                   <div className="flex items-center gap-1">
@@ -240,26 +240,26 @@ export default function DataTable<T extends { id: string }>({
                 </th>
                 )
               })}
-              {actions && <th className="w-px whitespace-nowrap bg-slate-50 px-3 py-3.5 text-center text-[11px] font-semibold uppercase tracking-wider text-slate-500">פעולות</th>}
+              {actions && <th className="w-px whitespace-nowrap bg-sand px-3 py-3.5 text-center text-[11px] font-semibold uppercase tracking-wider text-sand0">פעולות</th>}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-line">
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i}>
                   {view.map((col) => (
                     <td key={String(col.key)} className="px-5 py-4">
-                      <div className="h-4 bg-slate-100 rounded-md animate-pulse" />
+                      <div className="h-4 bg-line rounded-md animate-pulse" />
                     </td>
                   ))}
-                  {actions && <td className="px-5 py-4"><div className="h-4 w-16 bg-slate-100 rounded-md animate-pulse mx-auto" /></td>}
+                  {actions && <td className="px-5 py-4"><div className="h-4 w-16 bg-line rounded-md animate-pulse mx-auto" /></td>}
                 </tr>
               ))
             ) : paged.length === 0 ? (
               <tr>
                 <td colSpan={view.length + (actions ? 1 : 0)} className="px-5 py-16 text-center">
-                  <div className="flex flex-col items-center gap-3 text-slate-400">
-                    <Inbox size={36} strokeWidth={1.5} className="text-slate-300" />
+                  <div className="flex flex-col items-center gap-3 text-ink-faint">
+                    <Inbox size={36} strokeWidth={1.5} className="text-line-strong" />
                     <p className="text-sm font-medium">{emptyMessage}</p>
                   </div>
                 </td>
@@ -268,9 +268,9 @@ export default function DataTable<T extends { id: string }>({
               paged.map((row) => (
                 <tr key={row.id}
                   onClick={onRowClick ? () => onRowClick(row) : rowHref ? () => router.push(rowHref(row)) : undefined}
-                  className={`hover:bg-indigo-50/40 transition-colors duration-100 ${rowHref || onRowClick ? 'cursor-pointer' : ''}`}>
+                  className={`hover:bg-sand transition-colors duration-100 ${rowHref || onRowClick ? 'cursor-pointer' : ''}`}>
                   {view.map((col) => (
-                    <td key={String(col.key)} className={`px-3 py-3.5 text-slate-700 align-middle ${tableId ? tc.rt.cellClass : "whitespace-nowrap"} ${col.className ?? ''}`}>
+                    <td key={String(col.key)} className={`px-3 py-3.5 text-ink align-middle ${tableId ? tc.rt.cellClass : "whitespace-nowrap"} ${col.className ?? ''}`}>
                       {col.render
                         ? col.render(row)
                         : String((row as Record<string, unknown>)[String(col.key)] ?? '—')}
@@ -296,15 +296,15 @@ export default function DataTable<T extends { id: string }>({
       </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm text-slate-500">
-          <span className="text-xs text-slate-400">
+        <div className="flex items-center justify-between text-sm text-sand0">
+          <span className="text-xs text-ink-faint">
             מציג {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, sorted.length)} מתוך {sorted.length}
           </span>
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium hover:bg-slate-50 hover:border-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="px-3 py-1.5 rounded-lg border border-line text-xs font-medium hover:bg-sand hover:border-line-strong disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               הקודם
             </button>
@@ -318,15 +318,15 @@ export default function DataTable<T extends { id: string }>({
               }, [])
               .map((p, idx) =>
                 p === 'ellipsis' ? (
-                  <span key={`ellipsis-${idx}`} className="px-1 text-slate-400 text-xs">…</span>
+                  <span key={`ellipsis-${idx}`} className="px-1 text-ink-faint text-xs">…</span>
                 ) : (
                   <button
                     key={p}
                     onClick={() => setPage(p)}
                     className={`min-w-[32px] h-8 px-2.5 rounded-full text-xs font-medium transition-colors ${
                       page === p
-                        ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200'
-                        : 'text-slate-600 hover:bg-slate-100'
+                        ? 'bg-navy text-white'
+                        : 'text-ink-soft hover:bg-line'
                     }`}
                   >
                     {p}
@@ -337,7 +337,7 @@ export default function DataTable<T extends { id: string }>({
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
-              className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium hover:bg-slate-50 hover:border-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="px-3 py-1.5 rounded-lg border border-line text-xs font-medium hover:bg-sand hover:border-line-strong disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               הבא
             </button>

@@ -30,7 +30,7 @@ export default function FamiliesClient({ families }: { families: FamilyWithCount
 
   return (
     <>
-      <SearchBar value={query} onChange={setQuery} placeholder="חיפוש לפי שם משפחה…">
+      <SearchBar card value={query} onChange={setQuery} placeholder="חיפוש לפי שם משפחה…">
         <SortButtons value={sort} onChange={setSort} />
       </SearchBar>
 

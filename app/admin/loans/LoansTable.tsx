@@ -1,8 +1,10 @@
 'use client'
 import { useState, useMemo } from 'react'
 import StatStrip from '@/components/admin/system/StatStrip'
+import { ListTable, rowActionClass } from '@/components/admin/system/ListTable'
+import { SearchBar } from '@/components/admin/system/SearchBar'
 import Link from 'next/link'
-import { Clock, Check, X, Eye, Search, Layers, CheckCircle2, Minus, MessageSquare } from 'lucide-react'
+import { Clock, Check, X, Eye, Layers, CheckCircle2, Minus, MessageSquare } from 'lucide-react'
 import LoanCardModal from './LoanCardModal'
 import { LoanStatusControl, DeleteLoanButton, PILL } from './LoanControls'
 import type { Loan } from '@/types'
@@ -10,7 +12,6 @@ import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
 import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
 import { useTablePagination } from '@/lib/useTablePagination'
-import Pagination from '@/components/ui/Pagination'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import ApprovalLabelTag from '@/components/ui/ApprovalLabelTag'
 import { approvalLabelOf } from '@/lib/approvalLabel'
@@ -295,18 +296,18 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
         onSelect={k => { setSub('all'); setFilter(filter === k && k !== 'all' ? 'all' : k) }} />
 
       {/* Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-        {/* ⚠️ סרגל הכלים זהה למחלקת היולדות: החיפוש ראשון — כלומר בקצה
-            הימני ב-RTL — ואחריו המיון והצ'יפים. מיקום אחיד בין המחלקות
-            הוא מה שמונע חיפוש אחרי שדה החיפוש בכל מסך מחדש. */}
-        <div className="px-5 py-3 border-b border-slate-200 flex items-center gap-3 flex-wrap">
+      <ListTable tc={tc} rows={visibleRows} pg={pg} empty="לא נמצאו הלוואות בסינון זה"
+        onOpen={loan => setOpenId(loan.id)} stopCell={c => stopsNavigation(c.key)}
+        renderCell={(c, loan) => cell(c, loan)}
+        actions={loan => (
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="relative w-full sm:w-64">
-              <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
-              <input type="text" value={query} onChange={e => setQuery(e.target.value)} placeholder="חיפוש חופשי…"
-                className="w-full pr-9 pl-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-colors" />
-            </div>
-            <SortButtons value={sort} onChange={setSort} />
+            <Link href={`/admin/loans/${loan.id}`} className={rowActionClass}><Eye size={14} /> צפייה</Link>
+            <DeleteLoanButton loanId={loan.id} />
+          </div>
+        )}
+        toolbar={<>
+          <SearchBar value={query} onChange={setQuery} />
+          <SortButtons value={sort} onChange={setSort} />
 
             {/* ⚠️ צ'יפים בסגנון דף הצאצאים בדיוק — rounded-full, אינדיגו,
                 וסימון ✓ על הפעיל. מוצגים רק בלשונית "ממתין לטיפול", כי שם
@@ -317,8 +318,8 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
                 <button type="button" onClick={() => setSub('all')}
                   className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
                     sub === 'all'
-                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
-                      : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600'
+                      ? 'bg-navy border-navy text-white'
+                      : 'bg-white border-line-strong text-ink-soft hover:border-gold hover:text-navy'
                   }`}>הכל</button>
                 {([
                   { key: 'fresh', label: 'ממתין לטיפול ראשוני', n: todoCounts.fresh },
@@ -329,74 +330,18 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
                     <button key={o.key} type="button" onClick={() => setSub(o.key)}
                       className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
                         active
-                          ? 'bg-indigo-100 border-indigo-300 text-indigo-700 shadow-sm'
-                          : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600'
+                          ? 'bg-sand border-gold text-navy'
+                          : 'bg-white border-line-strong text-ink-soft hover:border-gold hover:text-navy'
                       }`}>
                       {active && <Check size={11} className="inline -mt-0.5 ml-1" />}
                       {o.label}
-                      <span className={`mr-1.5 tabular-nums ${active ? 'text-indigo-500' : 'text-slate-400'}`}>{o.n}</span>
+                      <span className={`mr-1.5 tabular-nums ${active ? 'text-gold' : 'text-ink-faint'}`}>{o.n}</span>
                     </button>
                   )
                 })}
               </div>
             )}
-          </div>
-        </div>
-        {/* ── בורר העמודות ── */}
-        <div className="flex flex-col gap-2 px-5 py-3 border-b border-slate-200">{tc.picker}{tc.activeFilters}</div>
-
-        {/* ⚠️ בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. */}
-        <div className="w-full">
-          <table className="w-full text-sm text-right" style={tc.rt.tableStyle}>
-            <colgroup>{tc.rt.cols}</colgroup>
-            <thead>
-              <tr className="bg-sand border-b border-slate-200
-                             [&>th]:px-4 [&>th]:py-3.5 [&>th]:text-[11px] [&>th]:font-bold [&>th]:uppercase
-                             [&>th]:tracking-wide [&>th]:text-slate-500 [&>th]:align-middle [&>th]:text-right">
-                {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב.
-                    ⚠️ הריפוד מגיע מ-[&>th] שעל ה-<tr>. */}
-                {tc.shown.map((c, i) => tc.th(c, i))}
-                {/* ⚠️ הידית של "פעולות" היא האחרונה — האינדקס כולל את כל
-                    העמודות הנראות שלפניה. */}
-                <th className="relative">פעולות{tc.rt.handle(tc.shown.length)}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {/* 🔴 נמדד מול tc.rows — הסינון מהכותרת יכול לרוקן את הטבלה
-                  גם כשהחיפוש שמעליה החזיר שורות. */}
-              {tc.rows.length === 0 ? (
-                <tr><td colSpan={20} className="px-4 py-12 text-center text-slate-400">לא נמצאו הלוואות בסינון זה</td></tr>
-              ) : visibleRows.map(loan => (
-                <tr key={loan.id}
-                  onClick={() => setOpenId(loan.id)}
-                  className="even:bg-slate-50/50 hover:bg-indigo-50/50 transition-colors cursor-pointer
-                             [&>td]:px-4 [&>td]:py-3.5 [&>td]:text-right">
-                  {tc.shown.map(c => (
-                    <td key={c.key} className={tc.cellClass(c)}
-                      onClick={stopsNavigation(c.key) ? e => e.stopPropagation() : undefined}>
-                      {cell(c, loan)}
-                    </td>
-                  ))}
-                  <td className={tc.rt.cellClass} onClick={e => e.stopPropagation()}>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Link href={`/admin/loans/${loan.id}`}
-                        className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-indigo-600 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 transition-colors">
-                        <Eye size={14} /> צפייה
-                      </Link>
-                      <DeleteLoanButton loanId={loan.id} />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* דפדוף + בורר גודל עמוד (20/50/100/200) */}
-        <div className="px-4 py-3 border-t border-slate-100">
-          <Pagination page={pg.page} size={pg.size} total={pg.total} onPage={pg.setPage} onSize={pg.setSize} />
-        </div>
-      </div>
+        </>} />
       {/* כרטסת קופצת (RecordModal): ניווט בין השורות המסוננות */}
       {openId && tc.rows.some(x => x.id === openId) && (
         <LoanCardModal rows={tc.rows} index={tc.rows.findIndex(x => x.id === openId)}
