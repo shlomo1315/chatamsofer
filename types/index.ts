@@ -448,13 +448,17 @@ export const WIDOW_SUPPORT_TYPE_LABELS: Record<WidowSupportType, string> = {
 }
 
 // ─── סיוע כספי ───
-export type FinancialAidStatus = 'pending' | 'awaiting_decision' | 'approved' | 'rejected'
+export type FinancialAidStatus = 'pending' | 'inquiry' | 'awaiting_decision' | 'approved' | 'rejected'
 
 export interface FinancialAidRequest {
   id: string
   beneficiary_id?: string | null
   source?: 'admin' | 'public'
   is_descendant?: boolean
+  aid_type?: 'medical' | 'widow' | 'orphans' | null
+  unread?: number
+  relation?: string | null
+  referrer?: string | null
   applicant_name?: string | null
   applicant_id_number?: string | null
   applicant_phone?: string | null
@@ -483,6 +487,7 @@ export interface FinancialAidRequest {
 
 export const FINANCIAL_AID_STATUS_LABELS: Record<FinancialAidStatus, string> = {
   pending: 'ממתין לטיפול',
+  inquiry: 'בבירור',
   awaiting_decision: 'נשלח לגורם מאשר',
   approved: 'מאושר',
   rejected: 'נדחה',
@@ -490,6 +495,7 @@ export const FINANCIAL_AID_STATUS_LABELS: Record<FinancialAidStatus, string> = {
 
 export const FINANCIAL_AID_STATUS_COLORS: Record<FinancialAidStatus, string> = {
   pending: 'bg-amber-100 text-amber-700',
+  inquiry: 'bg-sky-100 text-sky-700',
   awaiting_decision: 'bg-blue-100 text-blue-700',
   approved: 'bg-green-100 text-green-700',
   rejected: 'bg-red-100 text-red-700',

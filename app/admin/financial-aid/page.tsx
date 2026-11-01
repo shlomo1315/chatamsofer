@@ -15,7 +15,7 @@ async function getRequests(): Promise<FinancialAidRequest[]> {
   // בטבלה כלל ונחוצים רק בדף הבקשה הבודדת (/admin/financial-aid/[id]).
   // ⚠️ שתי גרסאות — עם תווית סיבת האישור ובלעדיה, כי ה-join אינו קיים עד
   // שהמיגרציה רצה, והשגיאה כאן זורקת ומפילה את כל המסך.
-  const run = (benFields: string, extra = ', applicant_name, applicant_id_number, is_descendant, requested_amount') => supabase
+  const run = (benFields: string, extra = ', applicant_name, applicant_id_number, is_descendant, requested_amount, beneficiary_id, aid_type, relation, referrer') => supabase
     .from('financial_aid_requests')
     // ⚠️ amount נשלף אף שהוא מוצג רק במאושרות — התא מציג fmtCur(r.amount)
     // לפי r.status, ובלעדיו כל בקשה מאושרת תראה "—" במקום הסכום.
@@ -32,10 +32,17 @@ async function getRequests(): Promise<FinancialAidRequest[]> {
     ;({ data, error } = await run(BEN_BASE))
   }
   // המיגרציה של הטופס הציבורי טרם רצה — בלי עמודות המבקש
+  // המיגרציה של מחלקת סיוע טרם רצה — בלי סוג/קשר/ממליץ
+  if (error) ({ data, error } = await run(BEN_BASE, ', applicant_name, applicant_id_number, is_descendant, requested_amount, beneficiary_id'))
   if (error) ({ data, error } = await run(BEN_BASE, ''))
   if (error) throw error
   // ⚡ ה-select מצומצם בכוונה (ראו למעלה) ולכן ה-cast דרך unknown
-  return (data ?? []) as unknown as FinancialAidRequest[]
+  const rows = (data ?? []) as unknown as FinancialAidRequest[]
+  // הודעות שלא נקראו מהמבקשים (טבלה חדשה; חסרה עד המיגרציה)
+  const { data: msgs } = await supabase.from('aid_messages').select('request_id').eq('source_table', 'financial_aid_requests').eq('direction', 'applicant').eq('is_read', false)
+  const unread = new Map<string, number>()
+  for (const m of (msgs ?? []) as { request_id: string }[]) unread.set(m.request_id, (unread.get(m.request_id) ?? 0) + 1)
+  return rows.map(r => ({ ...r, unread: unread.get(r.id) ?? 0 }))
 }
 
 export default async function FinancialAidPage() {
@@ -43,7 +50,7 @@ export default async function FinancialAidPage() {
   const requests = await getRequests()
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="סיוע רפואי" subtitle="בקשות סיוע ואישור דרך הגורם המאשר">
+      <PageHeader title="מחלקת סיוע" subtitle="סיוע רפואי, אלמנות ויתומים: בקשות, התכתבות ואישור">
         <ExportExcelButton type="financial_aid" />
       </PageHeader>
       <FinancialAidClient requests={requests} />

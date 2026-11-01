@@ -14,6 +14,9 @@ import { useCan, AdminOnly } from '@/components/StaffPermissions'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import ApprovalLabelTag from '@/components/ui/ApprovalLabelTag'
 import { approvalLabelOf } from '@/lib/approvalLabel'
+import Link from 'next/link'
+import { MessageSquare } from 'lucide-react'
+import { AID_TYPE_LABELS, AID_TYPE_PILL, AID_AFFILIATION_LABELS, aidAffiliation } from '@/components/admin/AidTypeLabels'
 
 type Ben = { full_name?: string; family_name?: string; spouse_name?: string; id_number?: string; spouse_id_number?: string; phone?: string }
 const name = (b?: Ben) => b ? ([b.family_name, b.full_name].filter(Boolean).join(' ') || b.full_name || '—') : '—'
@@ -26,7 +29,7 @@ const reqId = (r: FinancialAidRequest) => {
 const fmtCur = (n?: number | null) => n != null ? `₪${Number(n).toLocaleString('he-IL')}` : '—'
 const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('he-IL') : '—'
 
-type ColKey = 'name' | 'id_number' | 'approval_label' | 'reason' | 'amount' | 'status'
+type ColKey = 'name' | 'aid_type' | 'affiliation' | 'id_number' | 'approval_label' | 'reason' | 'amount' | 'status'
 
 // 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
 // React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
@@ -38,6 +41,10 @@ const HEAD = 'px-4 py-3 text-xs font-semibold text-slate-500'
 
 const COLUMNS: ColDef<ColKey, FinancialAidRequest>[] = [
   { key: 'name', label: 'שם', def: true, headClassName: HEAD, value: r => reqName(r) },
+  { key: 'aid_type', label: 'סוג', def: true, kind: 'enum', filterable: true, headClassName: HEAD,
+    value: r => AID_TYPE_LABELS[r.aid_type ?? 'medical'] },
+  { key: 'affiliation', label: 'שיוך', def: true, kind: 'enum', filterable: true, headClassName: HEAD,
+    value: r => AID_AFFILIATION_LABELS[aidAffiliation(r)] },
   { key: 'id_number', label: 'ת.ז.', def: true, kind: 'number', headClassName: HEAD,
     value: r => reqId(r) },
   // ⚠️ עמודה משלה בנוסף לתג שליד השם — ריקה אצל הרוב המוחלט, וזו הכוונה.
@@ -56,6 +63,7 @@ const COLUMNS: ColDef<ColKey, FinancialAidRequest>[] = [
 const CARD_DEFS: { key: FinancialAidStatus | 'all'; label: string; icon: typeof Clock; base: string; active: string; iconCls: string }[] = [
   { key: 'all', label: 'הכל', icon: Layers, base: 'border-slate-200 hover:border-slate-300', active: 'border-slate-400 ring-2 ring-slate-200 bg-slate-50', iconCls: 'bg-slate-100 text-slate-600' },
   { key: 'pending', label: 'ממתין לטיפול', icon: Clock, base: 'border-amber-200 hover:border-amber-300', active: 'border-amber-400 ring-2 ring-amber-200 bg-amber-50', iconCls: 'bg-amber-100 text-amber-700' },
+  { key: 'inquiry', label: 'בבירור', icon: MessageSquare, base: 'border-sky-200 hover:border-sky-300', active: 'border-sky-400 ring-2 ring-sky-200 bg-sky-50', iconCls: 'bg-sky-100 text-sky-700' },
   { key: 'awaiting_decision', label: 'נשלח לגורם מאשר', icon: Mail, base: 'border-blue-200 hover:border-blue-300', active: 'border-blue-400 ring-2 ring-blue-200 bg-blue-50', iconCls: 'bg-blue-100 text-blue-700' },
   { key: 'approved', label: 'מאושר', icon: Check, base: 'border-green-200 hover:border-green-300', active: 'border-green-400 ring-2 ring-green-200 bg-green-50', iconCls: 'bg-green-100 text-green-700' },
   { key: 'rejected', label: 'נדחה', icon: X, base: 'border-red-200 hover:border-red-300', active: 'border-red-400 ring-2 ring-red-200 bg-red-50', iconCls: 'bg-red-100 text-red-700' },
@@ -68,6 +76,7 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
   const canEdit = useCan('financial_aid', 'edit')
   const [filter, setFilter] = useState<FinancialAidStatus | 'all'>('all')
   const [query, setQuery] = useState('')
+  const [chip, setChip] = useState<'all' | 'medical' | 'widow' | 'orphans' | 'registered' | 'unregistered'>('all')
   const [sort, setSort] = useState<SortMode>('newest')
   const [checking, setChecking] = useState(false)
 
@@ -158,10 +167,13 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
 
   const filtered = useMemo(() => requests.filter(r => {
     if (filter !== 'all' && r.status !== filter) return false
+    if (chip === 'registered' && aidAffiliation(r) !== 'registered') return false
+    if (chip === 'unregistered' && aidAffiliation(r) === 'registered') return false
+    if ((chip === 'medical' || chip === 'widow' || chip === 'orphans') && (r.aid_type ?? 'medical') !== chip) return false
     if (!query.trim()) return true
     const b = r.beneficiary as Ben | undefined
     return [reqName(r), b?.id_number, b?.spouse_id_number, r.applicant_id_number, r.reason].filter(Boolean).join(' ').toLowerCase().includes(query.trim().toLowerCase())
-  }), [requests, filter, query])
+  }), [requests, filter, chip, query])
 
   const visible = useMemo(() =>
     applySortMode(filtered, sort,
@@ -195,12 +207,15 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
       case 'name': return (
         <span className="inline-flex items-center gap-1.5 flex-wrap font-medium text-slate-800">
           {reqName(r)}
+          {!!r.unread && <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-700"><MessageSquare size={11} />{r.unread}</span>}
           {r.is_descendant === false && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-700">לא צאצא</span>}
           {/* ⚠️ גם ליד השם וגם בעמודה: מי שכיבה את העמודה עדיין צריך לדעת
               שהמבקש אינו צאצא רגיל. */}
           <ApprovalLabelTag label={approvalLabelOf(b)} size="xs" />
         </span>
       )
+      case 'aid_type': return <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${AID_TYPE_PILL[r.aid_type ?? 'medical']}`}>{AID_TYPE_LABELS[r.aid_type ?? 'medical']}</span>
+      case 'affiliation': return <span className="text-xs text-slate-600">{AID_AFFILIATION_LABELS[aidAffiliation(r)]}</span>
       case 'id_number': return <span className="ltr-num font-mono text-xs text-slate-600">{reqId(r) ?? '—'}</span>
       case 'approval_label': {
         const lbl = approvalLabelOf(b)
@@ -240,8 +255,24 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
         </AdminOnly>
       </div>
 
+      {/* לשוניות המחלקה */}
+      <div className="flex flex-wrap gap-1 border-b border-slate-200">
+        <span className="whitespace-nowrap border-b-2 border-emerald-600 px-4 py-2 text-sm font-semibold text-emerald-700">בקשות</span>
+        <Link href="/admin/widows" className="whitespace-nowrap px-4 py-2 text-sm text-slate-600 hover:text-slate-900">משפחות נתמכות</Link>
+        <Link href="/admin/distributions" className="whitespace-nowrap px-4 py-2 text-sm text-slate-600 hover:text-slate-900">תמיכה חודשית</Link>
+        <Link href="/admin/reports" className="whitespace-nowrap px-4 py-2 text-sm text-slate-600 hover:text-slate-900">דוחות</Link>
+      </div>
+
+      {/* צ'יפים: סוג ושיוך */}
+      <div className="flex flex-wrap gap-2">
+        {([['all', 'הכל'], ['medical', 'סיוע רפואי'], ['widow', 'אלמנה'], ['orphans', 'יתומים'], ['registered', 'צאצאים רשומים'], ['unregistered', 'לא רשומים באיגוד']] as const).map(([k, l]) => (
+          <button key={k} onClick={() => setChip(k)}
+            className={`rounded-full border px-3 py-1 text-xs font-medium ${chip === k ? 'border-slate-800 bg-slate-800 text-white' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}>{l}</button>
+        ))}
+      </div>
+
       {/* קוביות סינון */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {CARD_DEFS.map(c => {
           const Icon = c.icon
           const isActive = filter === c.key
@@ -263,7 +294,7 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
         <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between gap-3 flex-wrap">
-          <h2 className="font-semibold text-slate-900">בקשות סיוע רפואי</h2>
+          <h2 className="font-semibold text-slate-900">בקשות סיוע</h2>
           <div className="flex items-center gap-2 flex-wrap">
             <SortButtons value={sort} onChange={setSort} />
             <div className="relative w-full sm:w-64">

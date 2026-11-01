@@ -5,7 +5,7 @@ import { isDepartmentAccessible, departmentClosedMessage } from '@/lib/departmen
 import { resolveBeneficiaryByEnteredId } from '@/lib/portalBeneficiary'
 import {
   MEDICAL_FILE_TYPES, MEDICAL_MAX_DOCS, MEDICAL_MAX_FILE,
-  fileSignatureMatches, idDigits, validateMedical,
+  fileSignatureMatches, idDigits, parseAidType, validateMedical,
 } from '@/lib/medicalRequest'
 
 export const dynamic = 'force-dynamic'
@@ -50,6 +50,9 @@ export async function POST(request: NextRequest) {
     city: str(form, 'city', 80),
     amount: Number(str(form, 'amount', 12)),
     reason: str(form, 'reason', 3000),
+    aidType: parseAidType(form.get('aid_type')),
+    relation: str(form, 'relation', 80),
+    referrer: str(form, 'referrer', 200),
   }
   const idCards = files(form, 'id_card')
   const medical = files(form, 'medical')
@@ -101,7 +104,10 @@ export async function POST(request: NextRequest) {
   const { data: row, error } = await admin.from('financial_aid_requests').insert({
     beneficiary_id: ben?.id ?? null,
     source: 'public',
-    is_descendant: descendant,
+    is_descendant: descendant && input.relation !== 'not_descendant',
+    aid_type: input.aidType,
+    relation: input.relation || null,
+    referrer: input.referrer || null,
     reason: input.reason,
     requested_amount: input.amount,
     applicant_name: input.fullName || null,
