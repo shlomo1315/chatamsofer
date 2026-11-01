@@ -15,6 +15,7 @@ import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import ApprovalLabelTag from '@/components/ui/ApprovalLabelTag'
 import { approvalLabelOf } from '@/lib/approvalLabel'
 import Link from 'next/link'
+import AidCardModal from './AidCardModal'
 import { MessageSquare } from 'lucide-react'
 import { AID_TYPE_LABELS, AID_TYPE_PILL, AID_AFFILIATION_LABELS, aidAffiliation } from '@/components/admin/AidTypeLabels'
 
@@ -81,6 +82,7 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
   const [checking, setChecking] = useState(false)
 
   // בקשה חדשה מהניהול
+  const [openId, setOpenId] = useState<string | null>(null)
   const [newOpen, setNewOpen] = useState(false)
   const [idInput, setIdInput] = useState('')
   const [found, setFound] = useState<{ id: string; name: string; id_number?: string } | null>(null)
@@ -322,7 +324,7 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
               {tc.rows.length === 0 ? (
                 <tr><td colSpan={tc.shown.length + 1} className="px-4 py-12 text-center text-slate-400">אין בקשות בסינון זה</td></tr>
               ) : visibleRows.map(r => (
-                <tr key={r.id} onClick={() => router.push(`/admin/financial-aid/${r.id}`)} className="hover:bg-emerald-50/40 cursor-pointer transition-colors">
+                <tr key={r.id} onClick={() => setOpenId(r.id)} className="hover:bg-emerald-50/40 cursor-pointer transition-colors">
                   {tc.shown.map(c => (
                     <td key={c.key} className={`px-4 py-3 ${tc.cellClass(c)}`}>{cell(c, r)}</td>
                   ))}
@@ -345,6 +347,12 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
           <Pagination page={pg.page} size={pg.size} total={pg.total} onPage={pg.setPage} onSize={pg.setSize} />
         </div>
       </div>
+
+      {/* כרטסת קופצת (RecordModal): ניווט בין השורות המסוננות */}
+      {openId && tc.rows.some(x => x.id === openId) && (
+        <AidCardModal rows={tc.rows} index={tc.rows.findIndex(x => x.id === openId)}
+          onIndex={i => setOpenId(tc.rows[i].id)} onClose={() => setOpenId(null)} />
+      )}
 
       {/* מודל בקשה חדשה */}
       {newOpen && (
