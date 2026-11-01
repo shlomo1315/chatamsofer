@@ -8,7 +8,7 @@ import { cleanName } from '@/lib/kvitel'
 // subscribeGilyonot, וכך מייל אחד הוא תמיד שורה אחת. מיגרציה: 20261016_gilyonot.sql
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type GilyonotSource = 'web' | 'nedarim' | 'manual' | 'import' | 'email'
+export type GilyonotSource = 'web' | 'nedarim' | 'manual' | 'import' | 'email' | 'descendants'
 
 export const GILYONOT_SOURCES: Record<GilyonotSource, string> = {
   web: 'אתר',
@@ -16,6 +16,7 @@ export const GILYONOT_SOURCES: Record<GilyonotSource, string> = {
   manual: 'ידני',
   import: 'ייבוא',
   email: 'מייל נכנס',
+  descendants: 'צאצאים',
 }
 
 export const GILYONOT_FROM_NAME = 'גיליונות החתם סופר'

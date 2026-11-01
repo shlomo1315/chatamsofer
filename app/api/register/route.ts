@@ -4,6 +4,7 @@ import { verifySignature } from '@/lib/signedToken'
 import { sendEmail, templateRegistrationConfirmed } from '@/lib/email'
 import { mailFor } from '@/lib/departments'
 import { validateIsraeliId } from '@/lib/validation'
+import { addDescendantToMailing } from '@/lib/gilyonotDescendants'
 import { attachOrphanMailToBeneficiary } from '@/lib/legacyMailSync'
 
 function verifyNonce(nonce: string, email: string): boolean {
@@ -150,6 +151,9 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json({ error: 'שגיאה בשמירת הנתונים. אנא נסה שוב.' }, { status: 500 })
   }
+
+  // צירוף אוטומטי לרשימת הדיוור (best-effort, מכבד הסרה קיימת)
+  await addDescendantToMailing(adminClient, { id: insertedBen?.id, email: cleanEmail, full_name: String(full_name) })
 
   // שיוך למפרע: מיילים ישנים של הנרשם שכבר במערכת אך ללא שיוך — לקשר אליו כעת (לא חוסם).
   if (insertedBen?.id) {

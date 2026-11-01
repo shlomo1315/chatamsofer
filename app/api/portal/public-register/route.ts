@@ -20,6 +20,7 @@ import { getStreets, isKnownCity } from '@/lib/govData'
 import { splitAddress } from '@/lib/splitAddress'
 import { registerToOpenDistribution } from '@/lib/holidayDistributions'
 import type { RegisterSource } from '@/lib/distributionSources'
+import { addDescendantToMailing } from '@/lib/gilyonotDescendants'
 import { earlyManualBlocked } from '@/lib/lineageFixApply'
 
 export const dynamic = 'force-dynamic'
@@ -543,6 +544,9 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
     if (error.code === '23505') return NextResponse.json({ error: 'פרטים אלו כבר קיימים במערכת' }, { status: 409 })
     return NextResponse.json({ error: 'שגיאה בשמירת הנתונים. אנא נסה שוב.' }, { status: 500 })
   }
+
+  // צירוף אוטומטי לרשימת הדיוור (best-effort, מכבד הסרה קיימת)
+  await addDescendantToMailing(admin, { email: email ? String(email) : null, full_name: String(full_name ?? '') })
 
   // ── רישום לחלוקת החגים, כחלק מאותה הרשמה ──
   // ⚠️ best-effort ואחרי שהרישום נשמר: כשל כאן לא יבטל הרשמה שהושלמה. אם אין
