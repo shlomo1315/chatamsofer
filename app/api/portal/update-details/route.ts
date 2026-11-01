@@ -7,6 +7,7 @@ import { validateIsraeliId } from '@/lib/validation'
 import { syncMaternityNamesFromChildren } from '@/lib/babyNames'
 import { childRegisteredSeparatelyMessage, isChildMarried } from '@/lib/childDuplicateMessage'
 import { sanitizeChildrenDates } from '@/lib/safeDateValue'
+import { lockedFieldsInBody, LOCKED_FIELDS_MESSAGE } from '@/lib/lockedFields'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,6 +23,9 @@ function getAdminClient() {
 export async function POST(request: NextRequest) {
   let body: Record<string, unknown>
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
+
+  // ⚠️ ת"ז, דרכון ושמות נדחים במפורש (לא מתעלמים בשקט), גם בקריאה ישירה. בקשת שינוי שם: /api/portal/name-change.
+  if (lockedFieldsInBody(body).length > 0) return NextResponse.json({ error: LOCKED_FIELDS_MESSAGE }, { status: 400 })
 
   const { beneficiary_id, phone, phone2, spouse_phone, address, city, email, marital_status,
     email_verify_token, phone_verify_token, phone_tokens, children, children_count } = body

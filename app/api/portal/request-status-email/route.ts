@@ -8,6 +8,8 @@ import { mailFor } from '@/lib/departments'
 import { shell } from '@/lib/emailTemplates'
 import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { maskEmail } from '@/lib/phone'
+import { buildMagicLink } from '@/lib/portalMagicLink'
+import type { PortalScreen } from '@/lib/portalScreens'
 
 export const dynamic = 'force-dynamic'
 
@@ -142,6 +144,15 @@ export async function POST(request: NextRequest) {
       </tr>`
   const detailsHtml = `${detail('שם מלא', fullName)}${detail('ת.ז.', ben.id_number)}${detail('טלפון', ben.phone)}${detail('דוא״ל', ben.email)}${detail('מצב משפחתי', ben.marital_status)}${detail('בן/בת זוג', ben.spouse_name)}${detail('כתובת', [ben.address, ben.city].filter(Boolean).join(', '))}${detail('מספר ילדים', ben.children_count != null ? String(ben.children_count) : '')}`
 
+  // קישורים חתומים (בלי סיסמה, תקפים שבוע) ישר לכל פעולה באזור האישי.
+  // נוצרים רק למייל הרשום של המוטב ולא נרשמים בלוג.
+  const SITE = (process.env.NEXT_PUBLIC_SITE_URL || 'https://chasamsofer.co.il').replace(/\/$/, '')
+  const linkBtn = (label: string, screen: PortalScreen) =>
+    `<a href="${buildMagicLink(SITE, beneficiaryId, screen)}" style="display:inline-block;margin:0 0 8px 8px;padding:10px 16px;border-radius:10px;background:#4338ca;color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;">${label}</a>`
+  const linksHtml = `
+    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">מה אפשר לעשות עכשיו (הקישורים אישיים ותקפים שבוע):</p>
+    <div style="margin:0 0 18px;">${linkBtn('סטטוס הבקשות', 'requests')}${linkBtn('תיקון אילן היוחסין', 'lineage-add')}${linkBtn('עדכון פרטים אישיים', 'details')}${linkBtn('העלאת מסמכים', 'documents-upload')}</div>`
+
   const emailBody = `
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">אזור אישי</p>
     <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${ben.full_name ?? ''},</h2>
@@ -157,6 +168,7 @@ export async function POST(request: NextRequest) {
       </tr></thead>
       <tbody>${rowsHtml}</tbody>
     </table>
+    ${linksHtml}
     ${hasHoliday ? `
     <!-- ⚠️ מוצג רק למי שנרשם בפועל לחלוקת חגים: הודעה על צינתוקים למי
          שלא נרשם היא רעש שמסיח מהמידע שביקש. -->
