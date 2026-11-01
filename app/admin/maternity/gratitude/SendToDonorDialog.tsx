@@ -117,7 +117,7 @@ export default function SendToDonorDialog({ rows, preselected, onClose, onSent }
   const unsentCount = rows.filter(r => !wasSentToDonor(r)).length
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <div className="dlg-backdrop ">
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
         onClick={() => !sending && onClose()} />
 

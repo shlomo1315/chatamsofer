@@ -415,7 +415,7 @@ export default function NedarimFamilies() {
 
       {/* מודאל אישור מחיקה מרובה — מציג את רשימת המשפחות שיימחקו */}
       {confirmingBulk && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl" onClick={() => setConfirmingBulk(false)}>
+        <div className="dlg-backdrop " dir="rtl" onClick={() => setConfirmingBulk(false)}>
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md max-h-[85vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-2 px-5 py-3.5 border-b border-slate-100">
               <AlertTriangle size={18} className="text-rose-600" />
@@ -445,7 +445,7 @@ export default function NedarimFamilies() {
 
       {/* חיווי התקדמות מחיקה מרובה */}
       {bulkDeleting && (
-        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl">
+        <div className="dlg-backdrop " dir="rtl">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm p-6 flex flex-col items-center gap-3">
             <Loader2 size={28} className="animate-spin text-rose-600" />
             <p className="text-sm font-medium text-slate-700">מוחק משפחות… {bulkDeleting.done} מתוך {bulkDeleting.total}</p>
@@ -553,7 +553,7 @@ function FamilyModal({ family, onClose, onChanged }: { family: Family; onClose: 
     .filter((h: Json) => String(h.StoreName ?? h.Store ?? '').trim() !== '')
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl" onClick={onClose}>
+    <div className="dlg-backdrop " dir="rtl" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 flex-shrink-0">
           <div className="flex items-center gap-2 min-w-0">
@@ -740,7 +740,7 @@ function EditFamilyModal({ family, onClose, onSaved }: { family?: Json; onClose:
   }
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl" onClick={onClose}>
+    <div className="dlg-backdrop " dir="rtl" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
           <h2 className="font-bold text-slate-900">{clientId ? 'עריכת משפחה' : 'משפחה חדשה'}</h2>

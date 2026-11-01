@@ -194,7 +194,7 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Logo area with gradient background */}
-      <div className="flex items-center gap-3 px-4 py-5 bg-gradient-to-b from-slate-800 to-slate-900">
+      <div className="flex items-center gap-3 px-4 py-5 bg-navy">
         <LogoBadge />
         <div className="min-w-0">
           <p className="text-sm font-bold text-white leading-tight truncate">היכל החתם סופר</p>
@@ -202,7 +202,7 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
         </div>
       </div>
       {/* Gradient fade separator */}
-      <div className="mx-4 h-px bg-gradient-to-l from-transparent via-indigo-800/60 to-transparent mb-1" />
+      <div className="mx-4 h-px bg-white/10 mb-1" />
 
       <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5">
 
@@ -391,7 +391,7 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
         </>)}
       </nav>
 
-      <div className="mx-4 h-px bg-gradient-to-l from-transparent via-slate-700 to-transparent" />
+      <div className="mx-4 h-px bg-white/10" />
       <div className="px-4 py-4">
         <p className="text-xs text-slate-600 text-center">גרסה 1.0.0</p>
       </div>

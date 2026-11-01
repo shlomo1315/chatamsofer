@@ -229,9 +229,9 @@ export function LoanStatusControl({ loan, advance, familyApproved, variant = 'pi
     <div className="inline-block">
       {/* ── מודל דחייה — הסיבה נשמרת ומוצגת בבקשה הבאה ── */}
       {rejectOpen && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4" dir="rtl">
+        <div className="dlg-backdrop " dir="rtl">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm overflow-hidden">
-            <div className="bg-gradient-to-l from-rose-500 to-red-500 px-6 py-4">
+            <div className="bg-red-700 hover:bg-red-800 px-6 py-4">
               <h2 className="text-white font-bold">דחיית הלוואה</h2>
               <p className="text-red-100 text-xs mt-0.5">הסיבה תוצג בבקשה הבאה של המשפחה</p>
             </div>
@@ -264,9 +264,9 @@ export function LoanStatusControl({ loan, advance, familyApproved, variant = 'pi
       )}
 
       {approveOpen && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4" dir="rtl">
+        <div className="dlg-backdrop " dir="rtl">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm overflow-hidden">
-            <div className="bg-gradient-to-l from-green-500 to-emerald-500 px-6 py-4">
+            <div className="bg-emerald-700 hover:bg-emerald-800 px-6 py-4">
               <h2 className="text-white font-bold">אישור הלוואה</h2>
               <p className="text-emerald-100 text-xs mt-0.5">הזן את הסכום שאושר בפועל</p>
             </div>
@@ -346,7 +346,7 @@ export function LoanStatusControl({ loan, advance, familyApproved, variant = 'pi
 
               <div className="flex gap-3 mt-1">
                 <button onClick={confirmApprove} disabled={saving}
-                  className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-l from-green-500 to-emerald-500 text-white font-semibold py-2.5 text-sm shadow-md shadow-emerald-200 hover:opacity-90 transition-opacity disabled:opacity-50">
+                  className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-semibold py-2.5 text-sm shadow-md shadow-emerald-200 hover:opacity-90 transition-opacity disabled:opacity-50">
                   {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
                   אשר הלוואה
                 </button>
@@ -360,7 +360,7 @@ export function LoanStatusControl({ loan, advance, familyApproved, variant = 'pi
         </div>
       )}
       {showSuccess && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm" dir="rtl">
+        <div className="dlg-backdrop " dir="rtl">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 px-8 py-7 flex flex-col items-center gap-3 max-w-xs text-center">
             <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center">
               <CheckCircle2 size={30} className="text-green-600" />

@@ -41,9 +41,9 @@ export default function Header({ user, title }: HeaderProps) {
         <NotificationBell />
 
         {/* User chip — אחיד, נקי ומודרני: אווטאר עם ראשי תיבות + שם/תפקיד + יציאה */}
-        <div className="flex items-center gap-1 rounded-full bg-gradient-to-b from-white to-slate-50 border border-slate-200/80 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_4px_10px_-6px_rgba(15,23,42,0.12)] ps-1 pe-1 py-1">
+        <div className="flex items-center gap-1 rounded-full bg-paper border border-slate-200/80 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_4px_10px_-6px_rgba(15,23,42,0.12)] ps-1 pe-1 py-1">
           {/* Avatar */}
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0 shadow-[0_3px_8px_-2px_rgba(79,70,229,0.5)]">
+          <div className="w-9 h-9 rounded-full bg-navy flex items-center justify-center text-white text-sm font-bold flex-shrink-0 shadow-[0_3px_8px_-2px_rgba(79,70,229,0.5)]">
             {user?.full_name?.trim().charAt(0) || <User size={16} />}
           </div>
           {user && (

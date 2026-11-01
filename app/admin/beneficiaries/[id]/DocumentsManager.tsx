@@ -324,7 +324,7 @@ export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { b
                 {/* שם הקובץ הגולמי (כפי שהמשתמש קרא לו) לא מוצג — אינו מעניין
                     ולעתים מבלבל. מזהים את המסמך לפי הסוג (התווית) בלבד. */}
                 {doc.uploaded_at && (
-                  <p className="text-[10px] text-slate-400 mt-0.5">🕒 {formatUploaded(doc.uploaded_at)}</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">{formatUploaded(doc.uploaded_at)}</p>
                 )}
               </div>
               <div className="absolute top-1.5 left-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

@@ -457,7 +457,7 @@ export function StatusControl({ aid, advance, variant = 'pill' }: {
     <div className="relative inline-block">
       {/* אזהרת משפחה שטרם אושרה — לפני אישור לידה (מקבילה לבאנר בכרטסת) */}
       {familyWarnOpen && (
-        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/50 p-4" dir="rtl"
+        <div className="dlg-backdrop " dir="rtl"
           onClick={() => setFamilyWarnOpen(false)}>
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="mb-3 flex items-center gap-2.5">
@@ -499,7 +499,7 @@ export function StatusControl({ aid, advance, variant = 'pill' }: {
       )}
       {/* אזהרת אין-מלאי לפני אישור לידה */}
       {stockWarnOpen && (
-        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/50 p-4" dir="rtl"
+        <div className="dlg-backdrop " dir="rtl"
           onClick={() => setStockWarnOpen(false)}>
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="mb-3 flex items-center gap-2.5">
@@ -548,7 +548,7 @@ export function StatusControl({ aid, advance, variant = 'pill' }: {
           נפתחת לפני *כל* יציאה מ"מאושר" כשיש טעינה חיה. אומרת במפורש כמה כסף
           ומאיזה תאריך עומד להתבטל — פעולה כספית לא נעשית בלי שהמזכיר יידע. */}
       {unloadWarn && (
-        <div className="fixed inset-0 z-[96] flex items-center justify-center bg-slate-900/50 p-4" dir="rtl"
+        <div className="dlg-backdrop " dir="rtl"
           onClick={() => setUnloadWarn(null)}>
           <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="bg-amber-500 px-5 py-4 flex items-center gap-2.5">
@@ -578,7 +578,7 @@ export function StatusControl({ aid, advance, variant = 'pill' }: {
             </div>
             <div className="px-5 pb-5 flex flex-col gap-2">
               <button type="button" onClick={proceedAfterUnloadWarn}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-amber-500 to-amber-600 px-4 py-3 text-sm font-bold text-white transition hover:from-amber-600 hover:to-amber-700">
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gold hover:bg-[#A87A1C] px-4 py-3 text-sm font-bold text-white transition hover:from-amber-600 hover:to-amber-700">
                 <Check size={16} /> הבנתי — שנה סטטוס ובטל את הטעינה
               </button>
               <button type="button" onClick={() => setUnloadWarn(null)}
@@ -591,7 +591,7 @@ export function StatusControl({ aid, advance, variant = 'pill' }: {
       )}
 
       {rejectOpen && (
-        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/50 p-4" dir="rtl"
+        <div className="dlg-backdrop " dir="rtl"
           onClick={() => setRejectOpen(false)}>
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="mb-3 flex items-center gap-2.5">
@@ -651,7 +651,7 @@ export function StatusControl({ aid, advance, variant = 'pill' }: {
       )}
       {/* חלונית "בדיקה מעמיקה" ללידה — הסבר למה אין ודאות לאשר (מוצג למנהל) */}
       {deepOpen && (
-        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/50 p-4" dir="rtl"
+        <div className="dlg-backdrop " dir="rtl"
           onClick={() => setDeepOpen(false)}>
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="mb-3 flex items-center gap-2.5">
@@ -695,7 +695,7 @@ export function StatusControl({ aid, advance, variant = 'pill' }: {
         />
       )}
       {showSuccess && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm" dir="rtl">
+        <div className="dlg-backdrop " dir="rtl">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 px-8 py-7 flex flex-col items-center gap-3 max-w-xs text-center">
             <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center">
               <CheckCircle2 size={30} className="text-green-600" />

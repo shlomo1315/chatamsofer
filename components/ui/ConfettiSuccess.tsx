@@ -26,7 +26,7 @@ export default function ConfettiSuccess({
     }))
   )
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
+    <div className="dlg-backdrop ">
       {/* Confetti layer */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         {pieces.map(({ left, delay, duration, size, color, rounded }, i) => {

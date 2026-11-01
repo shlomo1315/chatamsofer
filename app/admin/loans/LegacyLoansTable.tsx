@@ -310,7 +310,7 @@ export default function LegacyLoansTable({ rows }: { rows: LegacyRow[] }) {
           <table className="w-full text-sm text-right" style={tc.rt.tableStyle}>
             <colgroup>{tc.rt.cols}</colgroup>
             <thead>
-              <tr className="bg-gradient-to-b from-slate-50 to-slate-100/60 border-b border-slate-200
+              <tr className="bg-sand border-b border-slate-200
                              [&>th]:px-3 [&>th]:py-3 [&>th]:text-[11px] [&>th]:font-bold [&>th]:uppercase
                              [&>th]:tracking-wide [&>th]:text-slate-500 [&>th]:text-right">
                 {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב.
@@ -391,7 +391,7 @@ function EditDialog({ row, saving, onClose, onSave }: {
   )
 
   return (
-    <div onClick={onClose} className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4">
+    <div onClick={onClose} className="dlg-backdrop ">
       <div onClick={e => e.stopPropagation()}
         className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
         <div className="sticky top-0 bg-white border-b border-slate-100 px-5 py-3.5 flex items-center justify-between">
@@ -497,7 +497,7 @@ function LinkFamilyDialog({ row, onClose, onDone }: {
   }
 
   return (
-    <div onClick={onClose} className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4">
+    <div onClick={onClose} className="dlg-backdrop ">
       <div onClick={e => e.stopPropagation()} className="w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
         <div className="sticky top-0 bg-white border-b border-slate-100 px-5 py-3.5 flex items-center justify-between">
           <div className="min-w-0">

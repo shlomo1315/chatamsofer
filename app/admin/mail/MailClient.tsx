@@ -206,7 +206,7 @@ function ComposeModal({ onClose, replyTo, initialTo, department }: { onClose: ()
 
   if (sentInfo) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="dlg-backdrop ">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col items-center gap-4 px-8 py-10">
           <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
             <CheckCircle2 size={32} className="text-green-600" />
@@ -471,7 +471,7 @@ function ForwardModal({ msg, onClose }: { msg: ParsedMessage; onClose: () => voi
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div className="dlg-backdrop ">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col gap-4 p-6">
         {done ? (
           <div className="flex flex-col items-center gap-3 py-6">
@@ -632,7 +632,7 @@ function AssignAttachmentModal({ attachment, messageId, senderEmail, onClose }: 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" dir="rtl">
+    <div className="dlg-backdrop " dir="rtl">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
         {done ? (
           <div className="text-center py-4">
@@ -1006,7 +1006,7 @@ function BeneficiaryCard({ email }: { email: string }) {
 
       {/* כרטיס הצאצא — פופאפ באותו חלון (במקום כרטיסייה חדשה) */}
       {cardOpen && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl"
+        <div className="dlg-backdrop " dir="rtl"
           onClick={() => setCardOpen(false)}>
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden"
             onClick={e => e.stopPropagation()}>

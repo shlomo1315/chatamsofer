@@ -93,7 +93,7 @@ export default function LineageAssignEditor({
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" dir="rtl"
+        <div className="dlg-backdrop " dir="rtl"
           onClick={() => !saving && setOpen(false)}>
           <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[85vh] overflow-y-auto p-5"
             onClick={e => e.stopPropagation()}>

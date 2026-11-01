@@ -42,7 +42,7 @@ export default function QuickEmailModal({
 
   if (sent) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="dlg-backdrop " onClick={onClose}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col items-center gap-4 px-8 py-10">
           <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
             <CheckCircle2 size={32} className="text-green-600" />

@@ -97,7 +97,7 @@ export default function FinancialAidDetail({ req }: { req: FinancialAidRequest }
     <>
     {/* חלונית חסימה — המשפחה טרם אושרה במערכת */}
     {showBlock && !eligible && (
-      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl">
+      <div className="dlg-backdrop " dir="rtl">
         <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 text-center">
           <div className="w-14 h-14 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <AlertTriangle size={28} className="text-amber-600" />

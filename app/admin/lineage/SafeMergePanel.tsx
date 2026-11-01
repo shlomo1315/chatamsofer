@@ -184,7 +184,7 @@ export default function SafeMergePanel({ onDone }: { onDone: () => void }) {
         המסך פשוט הפסיק להסתובב בלי לומר דבר: המנהל לא ידע אם מוזג משהו, אם
         אפשר להריץ שוב, ומה בכלל קרה. */}
     {result && (
-      <div className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" dir="rtl">
+      <div className="dlg-backdrop " dir="rtl">
         <div className={`bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border-4 ${result.aborted ? 'border-amber-400' : 'border-emerald-500'}`}>
           <div className={`px-5 py-4 flex items-center gap-2.5 ${result.aborted ? 'bg-amber-500' : 'bg-emerald-600'}`}>
             {result.aborted ? <AlertTriangle size={22} className="text-white shrink-0" /> : <CheckCircle2 size={22} className="text-white shrink-0" />}

@@ -56,7 +56,7 @@ export default function EmailVerifyModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-[2px]"
+    <div className="dlg-backdrop -[2px]"
       role="dialog" aria-modal="true" aria-labelledby="email-verify-title">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
         <div className="flex items-start gap-3 px-5 pt-5 pb-3">

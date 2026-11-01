@@ -116,7 +116,7 @@ export default function QuickReview({
   const done = tally.merged + tally.dismissed + tally.skipped
 
   return (
-    <div className="fixed inset-0 z-[90] bg-slate-900/80 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto" dir="rtl">
+    <div className="dlg-backdrop items-start justify-center p-4 overflow-y-auto" dir="rtl">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl my-6 overflow-hidden border-2 border-indigo-300">
         <div className="bg-indigo-600 px-5 py-3 flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2.5">

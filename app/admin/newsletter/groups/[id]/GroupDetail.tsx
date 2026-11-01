@@ -382,7 +382,7 @@ function MemberModal({ groupId, member, onClose, onSaved }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
+    <div className="dlg-backdrop " onClick={onClose}>
       <div dir="rtl" onClick={e => e.stopPropagation()}
         className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-start justify-between gap-3">

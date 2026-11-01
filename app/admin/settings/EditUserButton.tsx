@@ -175,7 +175,7 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4" onClick={close}>
+        <div className="dlg-backdrop " onClick={close}>
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 sticky top-0 bg-white z-10">
               <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">

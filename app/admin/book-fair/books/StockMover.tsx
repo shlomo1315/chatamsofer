@@ -52,7 +52,7 @@ export default function StockMover({ book, onClose, onSaved }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
+    <div className="dlg-backdrop " onClick={onClose}>
       <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <div className="min-w-0">

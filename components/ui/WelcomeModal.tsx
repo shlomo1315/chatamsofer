@@ -101,7 +101,7 @@ export default function WelcomeModal() {
         </button>
 
         {/* Purple header */}
-        <div className="bg-gradient-to-l from-indigo-600 to-violet-600 px-6 pt-8 pb-10 text-center text-white">
+        <div className="bg-navy px-6 pt-8 pb-10 text-center text-white">
           {/* Logo */}
           <div className="w-20 h-20 rounded-xl flex items-center justify-center mx-auto mb-4 overflow-hidden">
             {logoError ? (

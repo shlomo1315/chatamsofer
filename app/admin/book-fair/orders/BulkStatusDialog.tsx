@@ -96,7 +96,7 @@ export default function BulkStatusDialog({ onClose }: { onClose: () => void }) {
   const previewErrors = (plan ?? []).filter(r => r.kind === 'error')
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={() => !busy && onClose()}>
+    <div className="dlg-backdrop " onClick={() => !busy && onClose()}>
       <div className="flex max-h-[92vh] w-full max-w-4xl flex-col rounded-2xl bg-white shadow-xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <h2 className="flex items-center gap-2 font-bold text-slate-900">

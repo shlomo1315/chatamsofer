@@ -503,7 +503,7 @@ export default function LineageBranchView({ nodeId, self }: {
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 8,
                       padding: '10px 12px', borderRadius: 10, background: '#FEF2F2',
                       border: '1.5px solid #FECACA', color: '#991B1B', fontSize: 12.5, lineHeight: 1.6 }}>
-          <span style={{ fontSize: 15, lineHeight: 1 }}>⚠️</span>
+          <span style={{ fontSize: 15, lineHeight: 1, fontWeight: 700 }}>!</span>
           <span>
             <strong>נמצאה לולאה בשרשרת הדורות.</strong> השרשרת המוצגת חלקית ונעצרה
             בנקודת הלולאה. סביר שמיזוג שגוי חיבר אב-קדמון כצאצא של עצמו —
@@ -520,7 +520,7 @@ export default function LineageBranchView({ nodeId, self }: {
               <ArrowRight size={13} /> {branchStack.length > 1 ? 'חזרה לענף הקודם' : 'חזרה לסדר הדורות'}
             </button>
             <span style={{ fontSize: 12, fontWeight: 800, color: '#4C1D95', background: '#EDE9FE', borderRadius: 20, padding: '4px 12px' }}>
-              🌳 אילן היוחסין של {branchRoot.name} · דור {branchRoot.generation}
+              אילן היוחסין של {branchRoot.name} · דור {branchRoot.generation}
             </span>
             {canEdit && (
               <button type="button"
@@ -721,7 +721,7 @@ export default function LineageBranchView({ nodeId, self }: {
                         <button type="button" onClick={() => openBranch(node.id)}
                           title="הצג את הצומת הזה וכל צאצאיו"
                           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, width: '100%', padding: '7px 10px', borderRadius: 10, background: '#7C3AED', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                          🌳 הצג אילן יוחסין של ענף זה
+                          הצג אילן יוחסין של ענף זה
                         </button>
                       )}
 

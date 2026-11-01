@@ -87,7 +87,7 @@ export default function SignaturePad({
   if (!open) return null
 
   return (
-    <div onClick={onCancel} className="fixed inset-0 z-[210] flex items-center justify-center bg-black/60 p-4">
+    <div onClick={onCancel} className="dlg-backdrop ">
       <div onClick={e => e.stopPropagation()} className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden" dir="rtl">
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
           <h3 className="font-bold text-slate-900">חתימה דיגיטלית</h3>

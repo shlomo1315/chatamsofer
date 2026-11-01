@@ -40,7 +40,7 @@ export function ManualAddGate({ hasOptions, generation, onConfirm, onCancel }: {
   onCancel: () => void
 }) {
   return (
-    <div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" dir="rtl">
+    <div className="dlg-backdrop " dir="rtl">
       {hasOptions ? (
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border-2 border-red-300">
           <div className="bg-red-600 px-5 py-4 flex items-center gap-2.5">
@@ -70,7 +70,7 @@ export function ManualAddGate({ hasOptions, generation, onConfirm, onCancel }: {
           </div>
           <div className="px-5 pb-5 flex flex-col gap-2">
             <button type="button" onClick={onConfirm}
-              className="w-full inline-flex items-center justify-center gap-2 text-sm font-bold text-white bg-gradient-to-b from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 rounded-xl px-4 py-3">
+              className="w-full inline-flex items-center justify-center gap-2 text-sm font-bold text-white bg-gold hover:bg-[#A87A1C] rounded-xl px-4 py-3">
               <Check size={16} /> כן, בדקנו — הדור הזה אינו ברשימה, ממשיכים להוספה ידנית
             </button>
             <button type="button" onClick={onCancel}
@@ -97,7 +97,7 @@ export function ManualAddGate({ hasOptions, generation, onConfirm, onCancel }: {
           </div>
           <div className="px-5 pb-5">
             <button type="button" onClick={onConfirm}
-              className="w-full inline-flex items-center justify-center gap-2 text-sm font-bold text-white bg-gradient-to-b from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 rounded-xl px-4 py-3">
+              className="w-full inline-flex items-center justify-center gap-2 text-sm font-bold text-white bg-sand rounded-xl px-4 py-3">
               <Check size={16} /> הבנתי, ממשיכים למילוי הפרטים
             </button>
           </div>
@@ -116,7 +116,7 @@ export function ManualAddGate({ hasOptions, generation, onConfirm, onCancel }: {
  */
 function NameGate({ onClose }: { onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" dir="rtl">
+    <div className="dlg-backdrop " dir="rtl">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border-4 border-red-500">
         <div className="bg-red-600 px-5 py-4 flex items-center gap-2.5">
           <AlertTriangle size={24} className="text-white shrink-0" />
@@ -155,7 +155,7 @@ function NameGate({ onClose }: { onClose: () => void }) {
         </div>
         <div className="px-5 pb-5">
           <button type="button" autoFocus onClick={onClose}
-            className="w-full inline-flex items-center justify-center gap-2 text-base font-black text-white bg-gradient-to-b from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 rounded-xl px-4 py-3.5 shadow-md">
+            className="w-full inline-flex items-center justify-center gap-2 text-base font-black text-white bg-red-700 hover:bg-red-800 rounded-xl px-4 py-3.5 shadow-md">
             <Check size={18} /> הבנתי — אזין את השם המלא במדויק
           </button>
         </div>
@@ -280,7 +280,7 @@ export default function ManualGenerationForm({
 
       <div className="flex gap-2">
         <button type="button" onClick={submit} disabled={busy}
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-gradient-to-b from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 rounded-lg px-4 py-2 disabled:opacity-50">
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-gold hover:bg-[#A87A1C] rounded-lg px-4 py-2 disabled:opacity-50">
           <Check size={12} /> {submitLabel}
         </button>
         <button type="button" onClick={onCancel} disabled={busy}

@@ -137,7 +137,7 @@ export default function StatusControl({ id, status, advance, readOnly }: {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             beneficiaryId: id,
-            body: `❌ הבקשה נדחתה\nהסיבה שנשלחה לצאצא: ${extra.rejection_reason.trim()}`,
+            body: `הבקשה נדחתה\nהסיבה שנשלחה לצאצא: ${extra.rejection_reason.trim()}`,
           }),
         })
           .then(() => window.dispatchEvent(new CustomEvent(NOTES_CHANGED_EVENT)))
@@ -253,7 +253,7 @@ export default function StatusControl({ id, status, advance, readOnly }: {
 
       {/* Rejection modal */}
       {showRejectModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" dir="rtl">
+        <div className="dlg-backdrop " dir="rtl">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center">
@@ -291,7 +291,7 @@ export default function StatusControl({ id, status, advance, readOnly }: {
 
       {/* Deep review modal — הסבר למה היחוס דורש בדיקה מעמיקה (למנהל) */}
       {showDeepModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" dir="rtl">
+        <div className="dlg-backdrop " dir="rtl">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center">
@@ -333,7 +333,7 @@ export default function StatusControl({ id, status, advance, readOnly }: {
 
       {/* Docs pending modal */}
       {showDocsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" dir="rtl">
+        <div className="dlg-backdrop " dir="rtl">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center">
@@ -412,7 +412,7 @@ export default function StatusControl({ id, status, advance, readOnly }: {
           נפתחת רק כשיש אבות שיושפעו, ומציגה את כולם לפי סדר הדורות — מהקדום
           לחדש, כפי שקוראים שרשרת יוחסין. */}
       {chainWarn && (
-        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" dir="rtl"
+        <div className="dlg-backdrop " dir="rtl"
           onClick={() => !saving && setChainWarn(null)}>
           <div className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"
             onClick={e => e.stopPropagation()}>
