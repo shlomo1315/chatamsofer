@@ -12,6 +12,8 @@ import NedarimPull from './NedarimPull'
 import Distributors from './Distributors'
 import MailEditor from './MailEditor'
 import { IssueAnalytics, IssuesDashboard } from './IssueAnalytics'
+import { ArchivePanel, ListPicker, ListsManager, type ListCount } from './Lists'
+import type { GilyonotList } from '@/lib/gilyonotLists'
 import { Badge, btnDanger, btnGhost, btnPrimary, Card, CardHeader, input, link, Meter, Notice, Stat, StepNum, Stepper, type Tone } from './ui'
 
 export interface SubscriberView {
@@ -52,6 +54,9 @@ export interface IssueView {
   complained_count: number
   clicked_count: number
   unsubscribed_count: number
+  archive_published?: boolean
+  archive_topic?: string | null
+  archive_date?: string | null
 }
 
 const SOURCES: Record<SubscriberView['source'], string> = { web: 'אתר', nedarim: 'נדרים פלוס', manual: 'ידני', import: 'ייבוא' }
@@ -69,7 +74,8 @@ async function api(url: string, init?: RequestInit): Promise<Record<string, unkn
 const json = (method: string, body: unknown): RequestInit => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 
 export default function GilyonotClient(props: {
-  tab: 'subscribers' | 'issues' | 'nedarim' | 'distributors'
+  tab: 'subscribers' | 'issues' | 'nedarim' | 'distributors' | 'lists'
+  lists: GilyonotList[]
   subscribers: SubscriberView[]
   counts: { active: number; recent: number; removed: number }
   nedarim: NedarimPullView | null
@@ -84,6 +90,7 @@ export default function GilyonotClient(props: {
   const tabs = [
     { key: 'subscribers', label: 'רשימת תפוצה', count: active, icon: Users },
     { key: 'issues', label: 'גיליונות ושליחה', count: props.issues.length, icon: Newspaper },
+    { key: 'lists', label: 'רשימות תפוצה', count: props.lists.filter(l => l.active).length, icon: Inbox },
     { key: 'distributors', label: 'מפיצים', count: props.distributors ? props.distributors.rows.filter(r => r.status === 'active').length : null, icon: Truck },
     ...(props.nedarim ? [{ key: 'nedarim', label: 'נדרים פלוס', count: null, icon: RefreshCw }] : []),
   ]
@@ -108,13 +115,15 @@ export default function GilyonotClient(props: {
         </div>
       </nav>
 
-      {props.tab === 'distributors'
+      {props.tab === 'lists'
+        ? <ListsManager lists={props.lists} canEdit={props.canEdit} />
+        : props.tab === 'distributors'
         ? (props.distributors ? <Distributors {...props.distributors} canAdd={props.canAdd} canEdit={props.canEdit} canDelete={props.canDelete} /> : null)
         : props.tab === 'nedarim' && props.nedarim
         ? <NedarimPull view={props.nedarim} />
         : props.tab !== 'issues'
         ? <Subscribers rows={props.subscribers} canAdd={props.canAdd} canEdit={props.canEdit} canDelete={props.canDelete} />
-        : <Issues rows={props.issues} activeCount={active} defaultParasha={props.defaultParasha} canAdd={props.canAdd} canEdit={props.canEdit} canDelete={props.canDelete} />}
+        : <Issues rows={props.issues} lists={props.lists} activeCount={active} defaultParasha={props.defaultParasha} canAdd={props.canAdd} canEdit={props.canEdit} canDelete={props.canDelete} />}
     </div>
   )
 }
@@ -462,8 +471,8 @@ const STATUS: Record<IssueView['status'], { label: string; tone: Tone }> = {
   sent: { label: 'נשלח', tone: 'green' },
 }
 
-function Issues({ rows, activeCount, defaultParasha, canAdd, canEdit, canDelete }: {
-  rows: IssueView[]; activeCount: number; defaultParasha: string; canAdd: boolean; canEdit: boolean; canDelete: boolean
+function Issues({ rows, lists, activeCount, defaultParasha, canAdd, canEdit, canDelete }: {
+  rows: IssueView[]; lists: GilyonotList[]; activeCount: number; defaultParasha: string; canAdd: boolean; canEdit: boolean; canDelete: boolean
 }) {
   const [creating, setCreating] = useState(false)
   const [openId, setOpenId] = useState<string | null>(rows.find(r => r.status === 'draft')?.id ?? null)
@@ -506,7 +515,7 @@ function Issues({ rows, activeCount, defaultParasha, canAdd, canEdit, canDelete 
         </Card>
       )}
       {creating && <NewIssue defaultParasha={defaultParasha} onClose={() => setCreating(false)} onCreated={id => { setCreating(false); setOpenId(id) }} />}
-      {open && <IssueDetail key={open.id} issue={open} activeCount={activeCount} canEdit={canEdit} canDelete={canDelete} onClose={() => setOpenId(null)} />}
+      {open && <IssueDetail key={open.id} issue={open} lists={lists} activeCount={activeCount} canEdit={canEdit} canDelete={canDelete} onClose={() => setOpenId(null)} />}
 
       <IssuesDashboard rows={rows} />
 
@@ -645,7 +654,7 @@ function NewIssue({ defaultParasha, onClose, onCreated }: { defaultParasha: stri
   )
 }
 
-function IssueDetail({ issue, activeCount, canEdit, canDelete, onClose }: { issue: IssueView; activeCount: number; canEdit: boolean; canDelete: boolean; onClose: () => void }) {
+function IssueDetail({ issue, lists, canEdit, canDelete, onClose }: { issue: IssueView; lists: GilyonotList[]; activeCount: number; canEdit: boolean; canDelete: boolean; onClose: () => void }) {
   const router = useRouter()
   const base = `/api/admin/gilyonot/issues/${issue.id}`
   const draft = issue.status === 'draft'
@@ -658,6 +667,8 @@ function IssueDetail({ issue, activeCount, canEdit, canDelete, onClose }: { issu
   // שלב התחלתי לפי מצב הגיליון: הקובץ כבר הועלה, אז בדיקה; ואם כבר נשלח ניסיון – שליחה
   const [step, setStep] = useState(2)
   const [tested, setTested] = useState(false)
+  const [picked, setPicked] = useState<string[]>(() => lists.filter(l => l.active && l.preselected).map(l => l.id))
+  const [count, setCount] = useState<ListCount | null>(null)
   const testedKey = `gilyonot-tested-${issue.id}`
   useEffect(() => {
     const t = setTimeout(() => { if (localStorage.getItem(testedKey)) { setTested(true); setStep(3) } }, 0)
@@ -677,9 +688,10 @@ function IssueDetail({ issue, activeCount, canEdit, canDelete, onClose }: { issu
     return `מייל ניסיון נשלח אל ${d.to}`
   })
   const sendAll = () => {
-    if (!confirm(`לשלוח את "${issue.title}" ל-${activeCount.toLocaleString('he-IL')} נרשמים פעילים? אי אפשר לבטל אחרי השליחה.`)) return
+    if (!count?.total) return
+    if (!confirm(`לשלוח את "${issue.title}" ל-${count.total.toLocaleString('he-IL')} נמענים ייחודיים? אי אפשר לבטל אחרי השליחה.`)) return
     run(async () => {
-      const d = await api(`${base}/send`, { method: 'POST' })
+      const d = await api(`${base}/send`, json('POST', { listIds: picked }))
       return `השליחה התחילה ל-${Number(d.total).toLocaleString('he-IL')} נמענים. המיילים יוצאים במנות בדקות הקרובות (לא בשבת ובחג).`
     })
   }
@@ -734,11 +746,12 @@ function IssueDetail({ issue, activeCount, canEdit, canDelete, onClose }: { issu
 
             {step === 3 && (
               <div className="rounded-xl p-4 ring-1 ring-inset ring-[#2563eb]/15">
-                <h3 className="text-sm font-semibold text-slate-900">שליחה לכל הרשימה</h3>
+                <h3 className="text-sm font-semibold text-slate-900">שליחה</h3>
+                <ListPicker lists={lists} selected={picked} onChange={setPicked} onCount={setCount} />
                 {!tested && <p className="mt-2 text-xs font-medium text-amber-700">עוד לא שלחתם מייל ניסיון. מומלץ לעבור קודם לשלב 2.</p>}
                 <p className="mt-2 flex items-start gap-1.5 text-xs leading-relaxed text-slate-600"><ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden />אחרי שליחה אי אפשר לבטל. כל נמען מקבל כפתור להורדת הגיליון. המיילים יוצאים לאט, לא בשבת ובחג.</p>
-                <button type="button" disabled={busy || !activeCount} className={`${btnPrimary} mt-3 w-full py-2.5`} onClick={sendAll}>
-                  {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Send className="h-4 w-4" aria-hidden />}שליחה ל-{num(activeCount)} נרשמים
+                <button type="button" disabled={busy || !count?.total} className={`${btnPrimary} mt-3 w-full py-2.5`} onClick={sendAll}>
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Send className="h-4 w-4" aria-hidden />}שליחה ל-{num(count?.total ?? 0)} נמענים
                 </button>
               </div>
             )}
@@ -751,6 +764,7 @@ function IssueDetail({ issue, activeCount, canEdit, canDelete, onClose }: { issu
             )}
           </>
         )}
+        <ArchivePanel issueId={issue.id} published={!!issue.archive_published} topic={issue.archive_topic ?? null} date={issue.archive_date ?? null} canEdit={canEdit} />
       </div>
     </Card>
   )

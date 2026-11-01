@@ -41,6 +41,13 @@ const nextConfig: NextConfig = {
 
     return [
       { source: "/:path*", headers: security },
+      // ארכיון הגיליונות הציבורי: לא מאונדקס (רק למי שיש קישור), לא ניתן להטמעה, בלי הפניות החוצה
+      { source: "/archive/:path*", headers: [
+        { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
+        { key: "Referrer-Policy", value: "no-referrer" },
+        { key: "X-Frame-Options", value: "DENY" },
+        { key: "Content-Security-Policy", value: "frame-ancestors 'none'; base-uri 'none'; form-action 'none'" },
+      ] },
       // מונע caching של NetFree/דפדפן כדי שפריסות ייראו מיד — ניהול, פורטל בתי החלמה, והדף הציבורי
       { source: "/admin/:path*", headers: noStore },
       { source: "/portal/:path*", headers: noStore },

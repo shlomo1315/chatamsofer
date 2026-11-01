@@ -8,6 +8,7 @@ import { getPullView, type NedarimPullView } from '@/lib/gilyonotNedarimPull'
 import GilyonotClient, { type IssueView, type SubscriberView } from './GilyonotClient'
 import type { DistributorApplicationView, DistributorEventView, DistributorMessageView, DistributorView, HilulaRequestView } from './Distributors'
 import { DISTRIBUTOR_COLS, loadDistributorSettings } from '@/lib/gilyonotDistributorServer'
+import { loadLists, type GilyonotList } from '@/lib/gilyonotLists'
 import { getDistNedarimView, REASON_LABELS, type ApplicationReason } from '@/lib/gilyonotDistributorNedarim'
 
 // מחלקת גיליונות החתם סופר — רשימת התפוצה, העלאת הגיליון השבועי, שליחה וארכיון.
@@ -24,7 +25,7 @@ const daysAgoIso = (d: number) => new Date(Date.now() - d * 86_400_000).toISOStr
 export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const staff = await guardPage('gilyonot')
   const rawTab = (await searchParams).tab
-  const tab = rawTab === 'issues' || rawTab === 'nedarim' || rawTab === 'distributors' ? rawTab : 'subscribers'
+  const tab = rawTab === 'issues' || rawTab === 'nedarim' || rawTab === 'distributors' || rawTab === 'lists' ? rawTab : 'subscribers'
   const perms = staff.permissions as UserPermissions
   const can = (a: 'add' | 'edit' | 'delete') => staff.role === 'admin' || roleAllows(staff.role, perms, 'gilyonot', a)
 
@@ -35,6 +36,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   let nedarim: NedarimPullView | null = null
   let distributors: GilyonotDistributorsProps | null = null
 
+  let lists: GilyonotList[] = []
   let counts = { active: 0, recent: 0, removed: 0 }
 
   if (db) {
@@ -51,10 +53,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
       needList ? loadSubscribers(db) : Promise.resolve(null),
       // הגדרות המשיכה מנדרים (בלי המפתח) — רק למי שרשאי לערוך
       can('edit') ? getPullView(db) : Promise.resolve(null),
-      db.from('gilyonot_issues').select('id, title, parasha, subject, intro, body_html, design, file_name, file_size, file_path, status, delivery_mode, total_count, created_at, started_at, completed_at')
+      db.from('gilyonot_issues').select('id, title, parasha, subject, intro, body_html, design, file_name, file_size, file_path, status, delivery_mode, total_count, created_at, started_at, completed_at, archive_published, archive_topic, archive_date')
         .order('created_at', { ascending: false }).limit(500),
       db.from('gilyonot_issue_stats').select('*'),
     ])
+    lists = await loadLists(db).catch(() => [])
     counts = { active: active.count ?? 0, recent: recent.count ?? 0, removed: (total.count ?? 0) - (active.count ?? 0) }
     if (listRows === 'error') error = 'טעינת רשימת התפוצה נכשלה. ייתכן שהמיגרציה 20261016_gilyonot.sql עוד לא הורצה.'
     else if (listRows) subscribers.push(...listRows)
@@ -85,7 +88,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
       <PageHeader title="גיליונות החתם סופר" subtitle={`רשימת התפוצה והגיליון השבועי · נשלח מ-${GILYONOT_FROM_NAME} <${GILYONOT_FROM_EMAIL}>`} />
       {error && <p role="alert" className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</p>}
       <GilyonotClient
-        tab={tab} subscribers={subscribers} counts={counts} nedarim={nedarim} distributors={distributors} issues={issues} defaultParasha={currentParasha()}
+        tab={tab} lists={lists} subscribers={subscribers} counts={counts} nedarim={nedarim} distributors={distributors} issues={issues} defaultParasha={currentParasha()}
         canAdd={can('add')} canEdit={can('edit')} canDelete={can('delete')}
       />
     </div>

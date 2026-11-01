@@ -17,6 +17,9 @@ export interface MailDesign {
   showButton: boolean
   buttonLabel: string
   buttonColor: string
+  /** כפתור משני שמוביל לארכיון הציבורי */
+  showArchiveButton: boolean
+  archiveButtonLabel: string
   footerText: string
 }
 
@@ -33,12 +36,14 @@ export const DEFAULT_DESIGN: MailDesign = {
   showButton: true,
   buttonLabel: 'להורדת הגיליון',
   buttonColor: SYSTEM_BLUE,
+  showArchiveButton: true,
+  archiveButtonLabel: 'לכל הגיליונות הקודמים',
   footerText: 'קיבלתם מייל זה כי נרשמתם לקבלת הגיליון השבועי של היכל החתם סופר.',
 }
 
 const HEX = /^#[0-9a-f]{6}$/i
 const LIMITS: Partial<Record<keyof MailDesign, number>> = {
-  kicker: 80, headerTitle: 160, headerSub: 120, buttonLabel: 60, footerText: 600,
+  kicker: 80, headerTitle: 160, headerSub: 120, buttonLabel: 60, archiveButtonLabel: 60, footerText: 600,
 }
 
 /** מנקה עיצוב שהגיע מהדפדפן או מהמסד: רק מפתחות מוכרים, צבעי hex ואורך מוגבל. */

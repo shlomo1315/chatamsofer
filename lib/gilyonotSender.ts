@@ -6,6 +6,7 @@ import { isBlockedForMail } from './jewishCalendar'
 import { GILYONOT_FROM_EMAIL, GILYONOT_FROM_NAME } from './gilyonot'
 import { buildGilyonHtml, gilyonotUrls } from './gilyonotMail'
 import { sanitizeMailHtml } from './gilyonotRichHtml'
+import { loadLists, resolveRecipients, type Recipient } from './gilyonotLists'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // שליחת הגיליון השבועי לרשימת התפוצה, באותה שיטה כמו מנוע הניוזלטר
@@ -136,7 +137,7 @@ export async function sendGilyonTest(db: SupabaseClient, issue: IssueRow, to: st
  * מקפיא את הרשימה: שורת משלוח לכל נרשם פעיל, ומעביר את הגיליון ל-'sending'.
  * ה-worker ישלח בטיק הקרוב. מחזיר את מספר הנמענים.
  */
-export async function startIssueSend(db: SupabaseClient, issueId: string): Promise<{ ok: true; total: number } | { ok: false; error: string }> {
+export async function startIssueSend(db: SupabaseClient, issueId: string, listIds?: string[]): Promise<{ ok: true; total: number } | { ok: false; error: string }> {
   const { data: row } = await db.from('gilyonot_issues').select('title, parasha, file_path, file_name').eq('id', issueId).maybeSingle()
   if (!row) return { ok: false, error: 'הגיליון לא נמצא' }
   // הקובץ מצורף לכל מייל, אז בודקים כבר כאן שהוא קיים ונכנס במייל
@@ -149,33 +150,35 @@ export async function startIssueSend(db: SupabaseClient, issueId: string): Promi
   if (claimErr) return { ok: false, error: 'עדכון הגיליון נכשל' }
   if (!claimed) return { ok: false, error: 'הגיליון כבר נשלח או בשליחה' }
 
-  let total = 0
-  for (let offset = 0; ; offset += PAGE) {
-    const { data, error } = await db.from('gilyonot_subscribers').select('id, email')
-      .eq('status', 'active').order('created_at').range(offset, offset + PAGE - 1)
-    if (error) {
-      await db.from('gilyonot_issues').update({ status: 'draft', started_at: null }).eq('id', issueId)
-      return { ok: false, error: 'טעינת רשימת התפוצה נכשלה' }
+  const rollback = async () => {
+    await db.from('gilyonot_deliveries').delete().eq('issue_id', issueId)
+    await db.from('gilyonot_issues').update({ status: 'draft', started_at: null }).eq('id', issueId)
+  }
+  // הרשימות שנבחרו, מאוחדות לפי מייל. בלי בחירה = הרשימה הראשית בלבד (כמו קודם).
+  let recipients: Recipient[]
+  try {
+    const ids = listIds?.length ? listIds : (await loadLists(db)).filter(l => l.kind === 'subscribers').map(l => l.id)
+    recipients = (await resolveRecipients(db, ids)).recipients
+  } catch {
+    await rollback()
+    return { ok: false, error: 'טעינת רשימות התפוצה נכשלה' }
+  }
+
+  const total = recipients.length
+  for (let i = 0; i < total; i += PAGE) {
+    const { error: insErr } = await db.from('gilyonot_deliveries').upsert(
+      recipients.slice(i, i + PAGE).map(r => ({ issue_id: issueId, subscriber_id: r.subscriberId, email: r.email })),
+      { onConflict: 'issue_id,email', ignoreDuplicates: true },
+    )
+    if (insErr) {
+      await rollback()
+      return { ok: false, error: 'הכנת רשימת הנמענים נכשלה' }
     }
-    const rows = data ?? []
-    if (rows.length) {
-      const { error: insErr } = await db.from('gilyonot_deliveries').upsert(
-        rows.map(s => ({ issue_id: issueId, subscriber_id: s.id, email: s.email })),
-        { onConflict: 'issue_id,email', ignoreDuplicates: true },
-      )
-      if (insErr) {
-        await db.from('gilyonot_deliveries').delete().eq('issue_id', issueId)
-        await db.from('gilyonot_issues').update({ status: 'draft', started_at: null }).eq('id', issueId)
-        return { ok: false, error: 'הכנת רשימת הנמענים נכשלה' }
-      }
-      total += rows.length
-    }
-    if (rows.length < PAGE) break
   }
 
   if (!total) {
-    await db.from('gilyonot_issues').update({ status: 'draft', started_at: null }).eq('id', issueId)
-    return { ok: false, error: 'אין נרשמים פעילים ברשימה' }
+    await rollback()
+    return { ok: false, error: 'אין נמענים ברשימות שנבחרו' }
   }
   await db.from('gilyonot_issues').update({ total_count: total }).eq('id', issueId)
   return { ok: true, total }
