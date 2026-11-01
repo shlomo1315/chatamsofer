@@ -155,7 +155,7 @@ export default function PersonalArea({ beneficiary: b, docsCount, contacts, onNe
             <Row k="טלפון" v={b.phone} ltr num />
             <Row k="מייל" v={b.email} ltr />
             <Row k="כתובת" v={b.address} />
-            <p className="hnote"><Lock size={12} aria-hidden="true" />ת״ז לא ניתנת לשינוי. לפניה למשרד: [להשלים כתובת]. שינוי שם באישור המשרד. מייל וטלפון אחרי אימות בקוד.</p>
+            <p className="hnote"><Lock size={12} aria-hidden="true" />ת״ז לא ניתנת לשינוי. המייל שלכם: <bdi dir="ltr">{b.email || '[להשלים]'}</bdi>. שינוי שם באישור המשרד. מייל וטלפון אחרי אימות בקוד.</p>
           </dl>
         </section>
 
