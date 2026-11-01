@@ -1,5 +1,6 @@
 import { displayChain } from '@/lib/lineageDisplayChain'
 import { idDocLabel } from '@/lib/idDocLabel'
+import { getCardUnloadView } from '@/lib/cardUnloadView'
 import { guardPage } from '@/lib/pageGuard'
 import { roleAllows } from '@/lib/permissions'
 import Link from 'next/link'
@@ -835,6 +836,7 @@ export default async function MaternityDetailPage(
                 const endRaw = aid.six_weeks_end
                   ?? (aid.birth_date ? format(new Date(new Date(aid.birth_date).getTime() + 42 * 86400000), 'yyyy-MM-dd') : null)
                 const daysToUnload = endRaw ? differenceInCalendarDays(new Date(endRaw), new Date()) : null
+                const unloadView = getCardUnloadView(aid as Parameters<typeof getCardUnloadView>[0])
                 return (
                   <>
                     <div className="flex items-center gap-2">
@@ -843,7 +845,7 @@ export default async function MaternityDetailPage(
                     </div>
                     {center?.name && <p className="text-sm mt-1"><span className="text-slate-500">מוקד: </span><span className="font-medium text-slate-800">{center.name}</span></p>}
                     {/* מספר כרטיס נדרים — רק אם החיבור אושר; אחרת חיווי שטרם שויך */}
-                    <div className="mt-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+                    {!unloadView && <div className="mt-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
                       {cardNum && cardLinked ? (
                         <>
                           <p className="text-sm"><span className="text-slate-500">מספר כרטיס: </span><span className="font-semibold text-slate-800 ltr-num">{cardNum}</span></p>
@@ -863,11 +865,41 @@ export default async function MaternityDetailPage(
                           )}
                         </>
                       )}
-                    </div>
+                    </div>}
                     {aid.card_loaded_at && <p className="text-xs text-slate-400 mt-1 text-right">נטען בתאריך: <span className="ltr-num">{fmtDate(aid.card_loaded_at)}</span></p>}
                     {(() => {
-                      const x = aid as { card_load_status?: string | null; card_load_amount?: number | string | null; card_balance?: number | string | null }
+                      const x = aid as { card_load_status?: string | null; card_load_amount?: number | string | null; card_balance?: number | string | null; card_unloaded_at?: string | null; card_unloaded_amount?: number | string | null }
+                      const unl = getCardUnloadView(x)
                       const isLoaded = cs === 'loaded' || x.card_load_status === 'loaded'
+                      if (unl) {
+                        const fmtMoney = (n: number) => `${n.toLocaleString('he-IL', { maximumFractionDigits: 2 })} ₪`
+                        return (
+                          <>
+                            <div className="mt-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2">
+                              <p className="text-sm font-semibold text-indigo-900">
+                                {unl.fullySpent
+                                  ? 'הכרטיס נוצל במלואו, לא נפרק סכום'
+                                  : <>הכרטיס נפרק{unl.unloadedAt ? <> בתאריך <span className="ltr-num">{fmtDate(unl.unloadedAt)}</span></> : ''} — סכום שנפרק: {unl.unloadedAmount != null ? <span className="ltr-num">{fmtMoney(unl.unloadedAmount)}</span> : 'הסכום לא ידוע'}</>}
+                              </p>
+                              {unl.fullySpent && unl.unloadedAt && <p className="text-xs text-slate-500 mt-0.5">נסגר בתאריך: <span className="ltr-num">{fmtDate(unl.unloadedAt)}</span></p>}
+                            </div>
+                            <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+                              <div className="rounded-lg bg-slate-50 border border-slate-100 px-2 py-2">
+                                <p className="text-xs text-slate-500">סכום הטעינה</p>
+                                <p className="text-sm font-semibold text-slate-800 ltr-num">{unl.loadedAmount != null ? fmtMoney(unl.loadedAmount) : '—'}</p>
+                              </div>
+                              <div className="rounded-lg bg-slate-50 border border-slate-100 px-2 py-2">
+                                <p className="text-xs text-slate-500">נוצלו</p>
+                                <p className="text-sm font-semibold text-slate-800 ltr-num">{unl.used != null ? fmtMoney(unl.used) : '—'}</p>
+                              </div>
+                              <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-2 py-2">
+                                <p className="text-xs text-slate-500">נותרו בארנק</p>
+                                <p className="text-sm font-semibold text-emerald-700 ltr-num">{fmtMoney(0)}</p>
+                              </div>
+                            </div>
+                          </>
+                        )
+                      }
                       const notLoaded = !isLoaded && (cs === 'awaiting_stock' || cs === 'approved' || x.card_load_status === 'awaiting_stock' || x.card_load_status === 'unloaded')
                       if (notLoaded) {
                         return <p className="mt-2 text-sm font-medium text-orange-700">עדיין לא בוצעה טעינה עקב שאין מלאי כרגע במערכת</p>
