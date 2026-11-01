@@ -705,6 +705,40 @@ export async function POST(request: NextRequest) {
 
     const loanTok = rawHaystack.match(/\+l([A-Za-z0-9_-]{8,})@/i)?.[1]
 
+    // התכתבות מחלקת סיוע — קידומת a. ראו lib/aidInquiry. כשהטוקן נאכל
+    // (Google dual-delivery) נופלים לזיהוי לפי שולח עם בקשה "בבירור".
+    {
+      try {
+        const aidTok = rawHaystack.match(/\+a([A-Za-z0-9_-]{8,})@/i)?.[1]
+        const { verifyReplyToken } = await import('@/lib/publicToken')
+        const aidlib = await import('@/lib/aidInquiry')
+        let target: { source: import('@/lib/aidInquiry').AidSource; id: string } | null = null
+        if (aidTok) {
+          const rid = await verifyReplyToken(admin, aidTok, 'a')
+          if (rid) {
+            const { data: tk } = await admin.from('reply_tokens').select('entity_table').eq('token', aidTok).maybeSingle()
+            const table = String(tk?.entity_table ?? '')
+            if (aidlib.isAidSource(table)) target = { source: table, id: rid }
+          }
+        } else if (/סיוע/.test(subject ?? '')) {
+          target = await aidlib.findAidRequestBySender(admin, from.email)
+        }
+        if (target && aidlib.isAidSource(target.source)) {
+          const { stripQuotedReply } = await import('@/lib/surveyParse')
+          const raw = stripQuotedReply((plain && plain.trim()) ? plain : htmlToPlainText(html ?? ''))
+          const ok = await aidlib.handleAidInquiryReply(admin, target.source, target.id, raw, {
+            messageId: getHeader(data.headers, 'message-id').trim() || undefined,
+            references: (getHeader(data.headers, 'references').trim()
+              || getHeader(data.headers, 'in-reply-to').trim()) || undefined,
+            senderName: from.name || from.email || null,
+          })
+          if (ok) return NextResponse.json({ ok: true, handled: 'aid_inquiry' })
+        }
+      } catch (e) {
+        console.error('[inbound] קליטת התכתבות מחלקת סיוע נכשלה:', e)
+      }
+    }
+
     // בירור יולדות — אותו מנגנון בדיוק, עם קידומת m. ראו lib/maternityInquiry.
     const maternityTok = rawHaystack.match(/\+m([A-Za-z0-9_-]{8,})@/i)?.[1]
     if (maternityTok) {

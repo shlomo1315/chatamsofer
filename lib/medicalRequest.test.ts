@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validateMedical, fileSignatureMatches, finalMessageDraft, type MedicalInput } from './medicalRequest'
+import { validateMedical, parseAidType, fileSignatureMatches, finalMessageDraft, type MedicalInput } from './medicalRequest'
 
 const base: MedicalInput = { idNumber: '123456789', fullName: '', phone: '0501234567', email: '', address: '', city: '', amount: 500, reason: 'ניתוח' }
 
@@ -9,7 +9,7 @@ describe('validateMedical', () => {
   })
   it('לא צאצא: דורש שם, כתובת וצילום ת.ז.', () => {
     expect(validateMedical(base, false, false, 1)).toMatch(/שם מלא/)
-    const full = { ...base, fullName: 'משה כהן', address: 'הרצל 1', city: 'בני ברק' }
+    const full = { ...base, fullName: 'משה כהן', address: 'הרצל 1', city: 'בני ברק', referrer: 'הרב לוי' }
     expect(validateMedical(full, false, false, 1)).toMatch(/תעודת זהות/)
     expect(validateMedical(full, false, true, 1)).toBeNull()
   })
@@ -36,5 +36,22 @@ describe('finalMessageDraft', () => {
   it('מכין נוסח אישור עם הסכום ונוסח דחייה', () => {
     expect(finalMessageDraft('דוד', true, 1500).body).toContain('1,500')
     expect(finalMessageDraft('', false, null).subject).toMatch(/בקשתך/)
+  })
+})
+
+describe('validateMedical — מחלקת סיוע', () => {
+  const ext = { ...base, fullName: 'משה כהן', address: 'הרצל 1', city: 'בני ברק' }
+  it('לא רשום באיגוד: דורש רב או ממליץ', () => {
+    expect(validateMedical(ext, false, true, 1)).toMatch(/רב או ממליץ/)
+    expect(validateMedical({ ...ext, referrer: 'הרב לוי' }, false, true, 1)).toBeNull()
+  })
+  it('אלמנה ויתומים: מסמך רפואי אינו חובה', () => {
+    expect(validateMedical({ ...base, aidType: 'widow' }, true, false, 0)).toBeNull()
+    expect(validateMedical({ ...base, aidType: 'orphans' }, true, false, 0)).toBeNull()
+    expect(validateMedical({ ...base, aidType: 'medical' }, true, false, 0)).toMatch(/מסמך רפואי/)
+  })
+  it('סוג סיוע לא מוכר חוזר לרפואי', () => {
+    expect(parseAidType('x')).toBe('medical')
+    expect(parseAidType('widow')).toBe('widow')
   })
 })

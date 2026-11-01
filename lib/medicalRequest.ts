@@ -8,6 +8,10 @@ export const MEDICAL_FILE_TYPES: Record<string, string> = {
   heic: 'image/heic', gif: 'image/gif', pdf: 'application/pdf',
 }
 
+export type AidType = 'medical' | 'widow' | 'orphans'
+export const AID_TYPES: AidType[] = ['medical', 'widow', 'orphans']
+export const parseAidType = (v: unknown): AidType => AID_TYPES.includes(v as AidType) ? (v as AidType) : 'medical'
+
 export interface MedicalInput {
   idNumber: string
   fullName: string
@@ -17,6 +21,9 @@ export interface MedicalInput {
   city: string
   amount: number
   reason: string
+  aidType?: AidType
+  relation?: string
+  referrer?: string
 }
 
 // descendant = הת"ז נמצאה במאגר. צאצא רשום ממלא פחות שדות; מי שלא רשום ממלא הכול.
@@ -26,11 +33,14 @@ export function validateMedical(i: MedicalInput, descendant: boolean, hasIdCard:
   if (!(i.amount > 0) || i.amount > 1_000_000) return 'יש להזין את הסכום המבוקש'
   if (!/^[\d\-+ ]{7,15}$/.test(i.phone.trim())) return 'יש להזין מספר טלפון תקין'
   if (i.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(i.email.trim())) return 'כתובת המייל אינה תקינה'
-  if (medicalDocs < 1) return 'יש לצרף לפחות מסמך רפואי אחד'
+  // מסמך רפואי נדרש רק בסיוע רפואי; באלמנה ויתומים הוא אופציונלי
+  if ((i.aidType ?? 'medical') === 'medical' && medicalDocs < 1) return 'יש לצרף לפחות מסמך רפואי אחד'
   if (!descendant) {
     if (i.fullName.trim().length < 3) return 'יש להזין שם מלא'
     if (!i.address.trim() || !i.city.trim()) return 'יש להזין כתובת ועיר'
     if (!hasIdCard) return 'יש לצרף צילום תעודת זהות'
+    // מי שלא רשום באיגוד: נדרש רב או ממליץ שמכיר את המשפחה
+    if ((i.referrer ?? '').trim().length < 3) return 'יש לציין שם רב או ממליץ'
   }
   return null
 }
