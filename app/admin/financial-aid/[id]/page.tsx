@@ -11,6 +11,8 @@ import Card from '@/components/ui/Card'
 import FinancialAidDetail from './FinancialAidDetail'
 import { FINANCIAL_AID_STATUS_LABELS } from '@/types'
 import { registrationSourceLabel } from '@/lib/distributionSources'
+import AidInquiryPanel from './AidInquiryPanel'
+import { AID_TYPE_LABELS, AID_TYPE_PILL, AID_AFFILIATION_LABELS, aidAffiliation } from '@/components/admin/AidTypeLabels'
 
 async function getReq(id: string): Promise<FinancialAidRequest | null> {
   if (!isSupabaseConfigured()) return null
@@ -56,11 +58,13 @@ export default async function FinancialAidDetailPage({ params }: { params: Promi
   const b = req.beneficiary as Beneficiary | undefined
   const name = b ? ([b.family_name, b.full_name].filter(Boolean).join(' ') || b.full_name) : (req.applicant_name || '—')
   const idNumber = b?.id_number ?? req.applicant_id_number
+  const affiliation = aidAffiliation(req)
   const { docs, history } = await getExtras(req)
   const money = (n?: number | null) => n != null ? `₪${Number(n).toLocaleString('he-IL')}` : '—'
 
   return (
-    <div className="flex flex-col gap-5 max-w-2xl">
+    <div className="grid max-w-6xl grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
+    <div className="flex min-w-0 flex-col gap-5">
       <div className="flex items-center gap-3">
         <Link href="/admin/financial-aid" className="text-slate-400 hover:text-slate-600"><ArrowRight size={20} /></Link>
         <div className="flex items-center gap-2">
@@ -71,6 +75,16 @@ export default async function FinancialAidDetailPage({ params }: { params: Promi
           </div>
         </div>
       </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${AID_TYPE_PILL[req.aid_type ?? 'medical']}`}>{AID_TYPE_LABELS[req.aid_type ?? 'medical']}</span>
+        <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${affiliation === 'registered' ? 'border border-teal-200 bg-teal-50 text-teal-700' : 'border border-slate-300 bg-slate-100 text-slate-600'}`}>{AID_AFFILIATION_LABELS[affiliation]}</span>
+      </div>
+      {affiliation !== 'registered' && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <b>המבקש לא רשום באיגוד הצאצאים.</b> הבקשה התקבלה כפנייה חיצונית. אפשר לאשר כרגיל, או לשלוח לו קישור הרשמה לאיגוד מתוך ההתכתבות.
+        </div>
+      )}
 
       {/* פרטי המבקש */}
       <Card>
@@ -86,7 +100,9 @@ export default async function FinancialAidDetailPage({ params }: { params: Promi
           {!b && req.applicant_phone && <p><span className="text-slate-500">טלפון: </span><span className="ltr-num">{req.applicant_phone}</span></p>}
           {!b && req.applicant_email && <p><span className="text-slate-500">מייל: </span><span className="ltr-num">{req.applicant_email}</span></p>}
           {!b && (req.applicant_address || req.applicant_city) && <p className="col-span-2"><span className="text-slate-500">כתובת: </span>{[req.applicant_address, req.applicant_city].filter(Boolean).join(', ')}</p>}
-          {req.requested_amount != null && <p><span className="text-slate-500">סכום מבוקש: </span><span className="ltr-num font-semibold">{money(req.requested_amount)}</span></p>}
+          {req.relation && <p><span className="text-slate-500">קשר למשפחה: </span>{req.relation}</p>}
+          {req.referrer && <p className="col-span-2"><span className="text-slate-500">רב / ממליץ: </span>{req.referrer}</p>}
+          {req.requested_amount != null &&<p><span className="text-slate-500">סכום מבוקש: </span><span className="ltr-num font-semibold">{money(req.requested_amount)}</span></p>}
           {b?.phone && <p><span className="text-slate-500">טלפון: </span><span className="ltr-num">{b.phone}</span></p>}
           {(b?.address || b?.city) && <p className="col-span-2"><span className="text-slate-500">כתובת: </span>{[b.address, b.city].filter(Boolean).join(', ')}</p>}
           <p><span className="text-slate-500">מספר ילדים: </span>{b?.children_count ?? 0}</p>
@@ -144,6 +160,8 @@ export default async function FinancialAidDetailPage({ params }: { params: Promi
 
       {/* פאנל זרימת המייל + בקרת סטטוס */}
       <FinancialAidDetail key={`${req.status}-${req.amount ?? 0}`} req={req} />
+    </div>
+    <AidInquiryPanel source="financial_aid_requests" requestId={req.id} hasEmail={!!(req.applicant_email || b?.email)} />
     </div>
   )
 }

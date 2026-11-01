@@ -63,9 +63,8 @@ const MATERNITY_CHILD_ICONS: Record<string, React.ElementType> = {
 
 const navBottom: NavItem[] = [
   { href: '/admin/loans',         label: 'הלוואות',        icon: CreditCard,     section: 'loans' },
-  { href: '/admin/financial-aid', label: 'סיוע רפואי',     icon: HandCoins,      section: 'financial_aid' },
+  { href: '/admin/financial-aid', label: 'מחלקת סיוע',     icon: HandCoins,      section: 'financial_aid' },
   { href: '/admin/distributions', label: 'חלוקות חגים',         icon: Gift,           section: 'distributions' },
-  { href: '/admin/widows',        label: 'אלמנות ויתומים', icon: HeartHandshake, section: 'widows' },
   { href: '/admin/reports',       label: 'דוחות',          icon: BarChart3,      section: 'reports' },
   { href: '/admin/newsletter',    label: 'ניוזלטר',        icon: Send,           section: 'newsletter' },
   { href: '/admin/book-fair',     label: 'יריד ספרים',     icon: BookOpen,       section: 'book_fair' },
@@ -129,7 +128,7 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
         : (department ? [department] : (mailOnly ? [] : null)))
   const visibleDepartments = allowedKeys === null
     ? Object.values(DEPARTMENTS)
-    : Object.values(DEPARTMENTS).filter(d => allowedKeys.includes(d.key))
+    : Object.values(DEPARTMENTS).filter(d => allowedKeys.map(k => k === 'widows' || k === 'medical' ? 'aid' : k).includes(d.key))
 
   // משתמש "מייל בלבד" — פתח אוטומטית את תפריט המייל
   useEffect(() => { if (mailOnly) setMailOpen(true) }, [mailOnly])

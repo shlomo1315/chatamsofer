@@ -18,6 +18,7 @@ function Field({ label, hint, children }: { label: string; hint: string; childre
 
 export default function MedicalForm() {
   const [known, setKnown] = useState<Known>('unknown')
+  const [aidType, setAidType] = useState<'medical' | 'widow' | 'orphans'>('medical')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
@@ -62,6 +63,24 @@ export default function MedicalForm() {
       {/* מלכודת לבוטים */}
       <input type="text" name="website" tabIndex={-1} autoComplete="off" aria-hidden className="hidden" />
 
+      <fieldset>
+        <legend className="mb-1 block text-sm font-semibold text-slate-800">סוג הסיוע</legend>
+        <div className="grid grid-cols-3 gap-2">
+          {([['medical', 'סיוע רפואי'], ['widow', 'אלמנה'], ['orphans', 'יתומים']] as const).map(([k, l]) => (
+            <label key={k} className={`cursor-pointer rounded-lg border px-2 py-2.5 text-center text-sm font-medium ${aidType === k ? 'border-[#1B3256] bg-[#1B3256] text-white' : 'border-slate-300 bg-white text-slate-700'}`}>
+              <input type="radio" name="aid_type" value={k} checked={aidType === k} onChange={() => setAidType(k)} className="sr-only" />{l}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <Field label="הקשר למשפחה" hint="אפשר להגיש גם בלי להיות צאצא של החתם סופר.">
+        <select name="relation" className={input} defaultValue="descendant">
+          <option value="descendant">צאצא של החתם סופר</option>
+          <option value="not_descendant">לא צאצא</option>
+        </select>
+      </Field>
+
       <Field label="תעודת זהות" hint="מספר תעודת הזהות של המבקש, 9 ספרות.">
         <input name="id_number" inputMode="numeric" required className={input} dir="ltr" onBlur={e => checkId(e.target.value)} />
       </Field>
@@ -80,6 +99,9 @@ export default function MedicalForm() {
           <Field label="עיר" hint="עיר המגורים.">
             <input name="city" required className={input} />
           </Field>
+          <Field label="רב או ממליץ" hint="שם רב או אדם מוכר שיכול להמליץ ולאשר את הפרטים.">
+            <input name="referrer" required className={input} />
+          </Field>
           <Field label="צילום תעודת זהות" hint="תמונה או PDF ברורים, כולל הספח. עד 10MB.">
             <input name="id_card" type="file" required accept=".jpg,.jpeg,.png,.webp,.heic,.gif,.pdf" className={input} />
           </Field>
@@ -92,14 +114,14 @@ export default function MedicalForm() {
       <Field label="מייל (לא חובה)" hint="לשליחת הודעה על הבקשה.">
         <input name="email" type="email" className={input} dir="ltr" />
       </Field>
-      <Field label="פירוט הבקשה" hint="מה המצב הרפואי ולמה נדרש הסיוע.">
+      <Field label="פירוט הבקשה" hint={aidType === "medical" ? "מה המצב הרפואי ולמה נדרש הסיוע." : "ספרו על מצב המשפחה ולמה נדרש הסיוע."}>
         <textarea name="reason" required rows={5} maxLength={3000} className={input} />
       </Field>
       <Field label="סכום מבוקש (בשקלים)" hint="הסכום שאתם מבקשים. ההחלטה הסופית נקבעת בבדיקה.">
         <input name="amount" type="number" inputMode="numeric" min={1} required className={input} dir="ltr" />
       </Field>
-      <Field label="מסמכים רפואיים" hint="אפשר לבחור כמה קבצים (עד 6): סיכום רפואי, הפניה או חשבון. תמונה או PDF, עד 10MB לקובץ.">
-        <input name="medical" type="file" required multiple accept=".jpg,.jpeg,.png,.webp,.heic,.gif,.pdf" className={input} />
+      <Field label={aidType === "medical" ? "מסמכים רפואיים" : "מסמכים (לא חובה)"} hint="אפשר לבחור כמה קבצים (עד 6): סיכום רפואי, הפניה או חשבון. תמונה או PDF, עד 10MB לקובץ.">
+        <input name="medical" type="file" required={aidType === "medical"} multiple accept=".jpg,.jpeg,.png,.webp,.heic,.gif,.pdf" className={input} />
       </Field>
 
       {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}

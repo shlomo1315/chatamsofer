@@ -1,7 +1,7 @@
 'use client'
 import { useState, useCallback } from 'react'
 import {
-  Clock, ArrowUpRight, Users, Landmark, Baby,
+  Clock, Users, Landmark, Baby,
   HeartHandshake, HandCoins, X, Loader2, ExternalLink, Trash2, UserPen,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -29,7 +29,7 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' })
 }
 
-export default function PendingTasksPanel({ count }: { count: number }) {
+export default function PendingTasksPanel({ count, segments = [] }: { count: number; segments?: number[] }) {
   const { isAdmin } = useStaffPermissions()   // רק מנהל מלא רשאי להסתיר בקשות מהלוח
   const [open, setOpen] = useState(false)
   const [tasks, setTasks] = useState<PendingTask[]>([])
@@ -78,29 +78,15 @@ export default function PendingTasksPanel({ count }: { count: number }) {
 
   return (
     <>
-      {/* KPI Card — same look as the other KpiCards */}
-      <button
-        onClick={handleOpen}
-        // אותו צל בדיוק כמו KpiCard — קודם היה רק hover:shadow-md, ולכן
-        // הקובייה נראתה שטוחה לצד השכנות שלה.
-        className="group relative flex flex-col gap-3 rounded-2xl border border-slate-200/70 bg-amber-50 p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_10px_24px_-14px_rgba(15,23,42,0.18)] hover:shadow-[0_4px_12px_rgba(15,23,42,0.08),0_18px_36px_-16px_rgba(79,70,229,0.3)] hover:-translate-y-0.5 transition-all duration-200 text-right w-full cursor-pointer"
-      >
-        {/* המספר בולט למעלה; האייקון עובר לשורת התווית מתחתיו */}
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-[13px] text-slate-500 mb-1">ממתינים לטיפול</p>
-            <p className="text-2xl font-bold text-slate-900 ltr-num">{shown}</p>
+      <button onClick={handleOpen} className="card kpi dark" style={{ textAlign: 'right', cursor: 'pointer', font: 'inherit' }}>
+        <div className="l"><Clock />ממתינים לטיפול</div>
+        <div className="v num">{shown}</div>
+        {shown > 0 && segments.some(v => v > 0) && (
+          <div className="seg" aria-hidden>
+            {segments.filter(v => v > 0).map((v, i) => <i key={i} style={{ flex: v, background: ['#B03A3A', '#D9A441', '#B8893A'][i % 3] }} />)}
           </div>
-          <ArrowUpRight size={15} className="text-amber-600 opacity-0 group-hover:opacity-100 transition-opacity" />
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-9 h-9 rounded-xl flex items-center justify-center bg-amber-500 text-white shadow-sm flex-shrink-0">
-            <Clock size={18} />
-          </span>
-          <p className="text-xs font-medium text-amber-600">
-            {shown > 0 ? 'בקשות בכל האגפים' : 'אין בקשות ממתינות'}
-          </p>
-        </div>
+        )}
+        <div className="f">{shown > 0 ? 'בקשות בכל האגפים, לחיצה לרשימה' : 'אין בקשות ממתינות'}</div>
       </button>
 
       {/* Slide-over panel */}

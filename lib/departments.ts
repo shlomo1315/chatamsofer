@@ -8,8 +8,7 @@ export type DepartmentKey =
   | 'igud'          // איגוד הצאצאים (רישום)
   | 'gemach'        // גמ"ח הלוואות
   | 'maternity'     // עזר יולדות
-  | 'widows'        // אלמנות ויתומים
-  | 'medical'       // אגף סיוע רפואי
+  | 'aid'           // מחלקת סיוע (אלמנות, יתומים וסיוע רפואי)
   | 'holidays'      // עזר לחגים
   | 'yerid'         // יריד (תיבת דואר נוספת)
   | 'inbox8'        // תיבה 8
@@ -30,15 +29,26 @@ export interface Department {
   noReply?: boolean
 }
 
+// כתובות ניתנות להגדרה: מחלקת סיוע ב-c@ כברירת מחדל, ועזר לחגים עבר ל-h@.
+export const AID_DEPT_EMAIL = process.env.AID_DEPT_EMAIL || 'c@chasamsofer.info'
+export const HOLIDAYS_DEPT_EMAIL = process.env.HOLIDAYS_DEPT_EMAIL || 'h@chasamsofer.info'
+
+// כתובות ישנות שנוחתות עכשיו במחלקת סיוע.
+export const AID_ALIAS_EMAILS = ['a@chasamsofer.info', 'r@chasamsofer.info']
+
+// המפתחות הישנים widows ו-medical אינם תיבות נפרדות: הם מתורגמים ל-aid.
+export type LegacyAidKey = 'widows' | 'medical'
+export const LEGACY_AID_KEYS: readonly string[] = ['widows', 'medical']
+export const normalizeDepartmentKey = (k: string): string => (LEGACY_AID_KEYS.includes(k) ? 'aid' : k)
+
 export const DEPARTMENTS: Record<DepartmentKey, Department> = {
   main:      { key: 'main',      label: 'משרד ראשי',        email: 'office@chasamsofer.info', color: '#64748b' },
   mailing:   { key: 'mailing',   label: 'דיוור',            email: 'd@chasamsofer.info',      color: '#0d9488' },
   igud:      { key: 'igud',      label: 'איגוד הצאצאים',     email: 'igud@chasamsofer.info',   color: '#6366f1', noReply: true },
   gemach:    { key: 'gemach',    label: 'גמ"ח',             email: 'g@chasamsofer.info',      color: '#10b981' },
   maternity: { key: 'maternity', label: 'עזר יולדות',        email: 'y@chasamsofer.info',      color: '#ec4899' },
-  widows:    { key: 'widows',    label: 'אלמנות ויתומים',    email: 'a@chasamsofer.info',      color: '#8b5cf6' },
-  medical:   { key: 'medical',   label: 'אגף סיוע רפואי',    email: 'r@chasamsofer.info',      color: '#ef4444' },
-  holidays:  { key: 'holidays',  label: 'עזר לחגים',         email: 'c@chasamsofer.info',      color: '#f59e0b' },
+  aid:       { key: 'aid',       label: 'מחלקת סיוע',        email: AID_DEPT_EMAIL,           color: '#8b5cf6' },
+  holidays:  { key: 'holidays',  label: 'עזר לחגים',         email: HOLIDAYS_DEPT_EMAIL,      color: '#f59e0b' },
   yerid:     { key: 'yerid',     label: 'יריד',             email: 'yerid@chasamsofer.info',  color: '#0ea5e9', mailboxOnly: true },
   inbox8:    { key: 'inbox8',    label: 'תיבה 8',           email: '8@chasamsofer.info',      color: '#14b8a6', mailboxOnly: true },
   inbox9:    { key: 'inbox9',    label: 'תיבה 9',           email: '9@chasamsofer.info',      color: '#a855f7', mailboxOnly: true },
@@ -49,6 +59,7 @@ export const DEPARTMENTS: Record<DepartmentKey, Department> = {
 export function departmentByEmail(email?: string | null): Department | null {
   if (!email) return null
   const e = email.toLowerCase().trim()
+  if (AID_ALIAS_EMAILS.includes(e)) return DEPARTMENTS.aid
   return Object.values(DEPARTMENTS).find(d => d.email.toLowerCase() === e) ?? null
 }
 
@@ -58,8 +69,8 @@ export const BRAND_NAME = 'היכל החתם סופר'
 
 // אפשרויות שליחה לפי מחלקה: המייל נשלח מכתובת המחלקה (fromEmail),
 // תשובות חוזרות לאותה כתובת, ושם התצוגה כולל את שם המחלקה.
-export function mailFor(key: DepartmentKey, labelOverride?: string): { fromEmail: string; replyTo: string; fromName: string; department: DepartmentKey } {
-  const dep = DEPARTMENTS[key] ?? DEPARTMENTS.main
+export function mailFor(key: DepartmentKey | LegacyAidKey, labelOverride?: string): { fromEmail: string; replyTo: string; fromName: string; department: DepartmentKey } {
+  const dep = (DEPARTMENTS as Record<string, Department>)[normalizeDepartmentKey(key)] ?? DEPARTMENTS.main
   // ⚠️ labelOverride — כשהפנייה אינה בשם המחלקה אלא בשם *הנושא*.
   //
   // מיילים על סדר היוחסין יצאו בשם "עזר יולדות", כי הם נשלחו מהתיבה שממנה
@@ -91,7 +102,7 @@ export async function mailForAsync(
 ): Promise<{ fromEmail: string; replyTo: string; fromName: string; department: DepartmentKey }> {
   const k = String(key)
   // מחלקה קבועה — הנתיב הרגיל, בלי פנייה למסד.
-  if (DEPARTMENTS[k as DepartmentKey]) return mailFor(k as DepartmentKey, labelOverride)
+  if ((DEPARTMENTS as Record<string, Department>)[normalizeDepartmentKey(k)]) return mailFor(k as DepartmentKey, labelOverride)
 
   if (k.startsWith('custom_') && db) {
     try {

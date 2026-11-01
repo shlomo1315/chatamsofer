@@ -140,13 +140,6 @@ const PORTAL_CONTACTS = [
   { label: 'עזר יולדות',      email: 'y@chasamsofer.info',      color: '#ec4899' },
 ]
 
-// תת-טאבים בכרטיס "בית" — שלושתם עונים על "מי אני במערכת".
-const HOME_TABS = [
-  { key: 'details'  as const, label: 'פרטים אישיים' },
-  { key: 'children' as const, label: 'פרטי הילדים' },
-  { key: 'lineage'  as const, label: 'פרטי הייחוס' },
-]
-
 
 const LOAN_PURPOSES = [
   { value: 'נישואי הבן/הבת' },
@@ -5266,18 +5259,18 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
 
             {/* ── טאבים · דסקטופ ─────────────────────────────────────────
                 ⚠️ מוסתר בנייד — שם הניווט הוא הסרגל התחתון הקבוע. */}
-            <div className="hidden sm:flex flex-wrap items-center gap-1 border-b border-slate-200 -mb-1">
+            <div className="hidden sm:grid grid-cols-4 gap-1 p-1 rounded-2xl bg-[#ECEAE4]">
               {DASH_TABS.map(t => (
                 <button key={t.key} type="button" onClick={() => setDashTab(t.key)}
-                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold whitespace-nowrap border-b-2 transition-colors ${
+                  className={`relative flex items-center justify-center gap-2 min-h-[46px] rounded-xl text-[14.5px] font-bold whitespace-nowrap transition-all ${
                     dashTab === t.key
-                      ? 'text-indigo-600 border-indigo-600'
-                      : 'text-slate-500 border-transparent hover:text-slate-800'
+                      ? 'bg-white text-slate-900 shadow-[0_1px_3px_rgba(0,0,0,.1)]'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}>
-                  <t.icon size={16} />
+                  <t.icon size={18} />
                   {t.label}
                   {t.key === 'home' && hasDashAlert && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    <span className="w-[7px] h-[7px] rounded-full bg-amber-500" />
                   )}
                 </button>
               ))}
@@ -5291,302 +5284,12 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               docsCount={Object.keys(existingDocs).length}
               contacts={PORTAL_CONTACTS}
               onNewRequest={() => setDashTab('requests')}
-              onFixLineage={() => { setHomeTab('lineage'); setLineageFixOpen(true); setLineageFixDone(false); setTimeout(() => document.getElementById('pa-lineage-fix')?.scrollIntoView({ behavior: 'smooth' }), 50) }}
+              onFixLineage={() => document.getElementById('pa-tree')?.scrollIntoView({ behavior: 'smooth' })}
+              emailUnverified={emailVerified === false}
+              onVerifyEmail={() => setShowEmailVerifyModal(true)}
               onEditDetails={openEditDetails}
               onOpenDocs={() => setDashTab('docs')}
             />
-            {/* User header */}
-            <Card>
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 bg-indigo-100 rounded-2xl flex items-center justify-center flex-shrink-0">
-                  <User size={26} className="text-indigo-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h2 className="font-bold text-slate-900 text-lg truncate">{displayName || beneficiary.full_name}</h2>
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    {/* לבקשת הלקוח — לא מציגים שום סטטוס על המסך. הסטטוס נשלח רק למייל. */}
-                    {beneficiary.city && (
-                      <span className="flex items-center gap-1 text-xs text-slate-500">
-                        <MapPin size={11} />{beneficiary.city}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* ── תת-טאבים ─────────────────────────────────────────────
-                  ⚠️ בתוך הכרטיס ולא כטאבים ראשיים: שלושתם עונים על "מי
-                  אני במערכת", והפרדתם לטאבים עליונים הייתה מפזרת שאלה
-                  אחת על פני שלושה מסכים. */}
-              {/* ⚠️ הוגדלו: text-xs עם ריפוד צר נקרא כקישורי משנה ולא
-                  כניווט, ומשתמשים לא הבחינו שיש כאן שלושה מסכים. עכשיו
-                  שורת טאבים מלאה ברוחב הכרטיס, עם מצב פעיל מובלט. */}
-              <div className="mt-4 pt-3 border-t border-slate-100 grid grid-cols-3 gap-1.5">
-                {HOME_TABS.map(t => (
-                  <button key={t.key} type="button" onClick={() => setHomeTab(t.key)}
-                    className={`px-3 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all ${
-                      homeTab === t.key
-                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
-                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200'
-                    }`}>
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Personal details */}
-              {homeTab === 'details' && (
-              <div className="mt-3 flex flex-col gap-3">
-                {/* ── זהות: הבעל ובת הזוג, זה לצד זה ──
-                    ⚠️ הועלו לראש והובלטו. שם בת הזוג והת"ז שלה היו קבורים
-                    מתחת לבלוק המייל שתופס שתי עמודות, כלומר הפרט שמזהה את
-                    המשפחה הופיע אחרי כתובת המייל. */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2.5">
-                    <span className="text-[11px] font-bold text-slate-400 block mb-0.5">
-                      {(beneficiary.marital_status || '').startsWith('נשו') ? 'הבעל' : 'פרטים אישיים'}
-                    </span>
-                    <p className="text-base font-black text-slate-900 leading-tight truncate">
-                      {[beneficiary.family_name, beneficiary.full_name].filter(Boolean).join(' ') || '—'}
-                    </p>
-                    {beneficiary.id_number && (
-                      <p className="text-sm font-bold text-slate-600 mt-0.5" dir="ltr">{beneficiary.id_number}</p>
-                    )}
-                  </div>
-
-                  {(beneficiary.marital_status || '').startsWith('נשו') && beneficiary.spouse_name && (
-                    <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2.5">
-                      <span className="text-[11px] font-bold text-slate-400 block mb-0.5">בת הזוג</span>
-                      <p className="text-base font-black text-slate-900 leading-tight truncate">
-                        {beneficiary.spouse_name}
-                      </p>
-                      {beneficiary.spouse_id_number && (
-                        <p className="text-sm font-bold text-slate-600 mt-0.5" dir="ltr">{beneficiary.spouse_id_number}</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* ── שאר הפרטים ── */}
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
-                  {beneficiary.phone && (
-                    <div><EditableText k="dash.field.phone" className="text-slate-400 text-xs block" /><span className="text-slate-700" dir="ltr">{beneficiary.phone}</span></div>
-                  )}
-                  {beneficiary.marital_status && (
-                    <div><EditableText k="dash.field.marital" className="text-slate-400 text-xs block" /><span className="text-slate-700">{beneficiary.marital_status}</span></div>
-                  )}
-                  {beneficiary.email && (
-                    <div className="col-span-2">
-                      <EditableText k="dash.field.email" className="text-slate-400 text-xs block" />
-                      <span className="text-slate-700 break-all" dir="ltr">{beneficiary.email}</span>
-                      {/* חיווי "לא מאומת" — מוצג כל עוד הכתובת לא אומתה, ומשמש גם
-                          כקיצור לפתיחת חלונית האימות מחדש אחרי שנסגרה. */}
-                      {emailVerified === false && (
-                        <button type="button" onClick={() => setShowEmailVerifyModal(true)}
-                          className="inline-flex items-center gap-1 mr-2 align-middle text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 hover:bg-amber-100 transition-colors">
-                          <AlertCircle size={11} /> לא מאומת · אמת עכשיו
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  {(beneficiary.address || beneficiary.city) && (
-                    <div className="col-span-2"><EditableText k="dash.field.address" className="text-slate-400 text-xs block" /><span className="text-slate-700">{[beneficiary.address, beneficiary.city].filter(Boolean).join(', ')}</span></div>
-                  )}
-                  {beneficiary.children_count != null && (
-                    <div><EditableText k="dash.field.children" className="text-slate-400 text-xs block" /><span className="text-slate-700">{beneficiary.children_count}</span></div>
-                  )}
-                </div>
-              </div>
-              )}
-
-              {/* ── תת-טאב: פרטי הילדים ─────────────────────────────────
-                  ⚠️ ילד שנרשם דרך תיק לידה נושא birth_status. "ממתין
-                  לאישור" מוצג במפורש — משפחה שראתה את הילד ברשימה הניחה
-                  שהלידה כבר אושרה, ולא היא. */}
-              {homeTab === 'children' && (
-                <div className="mt-3">
-                  {Array.isArray(beneficiary.children) && beneficiary.children.length > 0 ? (
-                    <ul className="flex flex-col">
-                      {beneficiary.children.map((ch, i) => (
-                        <li key={i} className="flex items-center gap-3 py-2.5 border-b border-slate-50 last:border-0">
-                          <span className="w-8 h-8 shrink-0 rounded-lg bg-slate-100 flex items-center justify-center">
-                            <Baby size={15} className="text-slate-500" />
-                          </span>
-                          <span className="flex-1 min-w-0">
-                            <span className="block text-sm font-semibold text-slate-800 truncate">
-                              {ch.name || 'ללא שם'}
-                            </span>
-                            <span className="block text-[11px] text-slate-500">
-                              {ch.id_number ? <span dir="ltr">{ch.id_number}</span> : 'ללא ת״ז'}
-                              {ch.birth_date && ` · ${new Date(ch.birth_date).toLocaleDateString('he-IL')}`}
-                            </span>
-                          </span>
-                          {/* ⚠️ birth_status אינו בטיפוס המקומי של הפורטל (הוא
-                              נוסף בכרטסת), אבל כן מגיע מהשרת. */}
-                          {(ch as { birth_status?: string }).birth_status === 'pending' && (
-                            <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 shrink-0">
-                              ממתין לאישור
-                            </span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-sm text-slate-500 py-3">לא רשומים ילדים במערכת.</p>
-                  )}
-                </div>
-              )}
-
-              {/* ── תת-טאב: פרטי הייחוס ─────────────────────────────────
-                  ⚠️ תצוגת עץ ולא רשימה שטוחה: זו אותה צורה שבה הייחוס
-                  מוצג בממשק הניהול, והמשפחה רואה את השרשרת כפי שהמשרד
-                  רואה אותה — כולל היכן היא מסתעפת. */}
-              {homeTab === 'lineage' && Array.isArray(beneficiary.lineage_chain) && beneficiary.lineage_chain.length > 0 && (
-                <div id="pa-lineage-fix" className="mt-3 scroll-mt-4">
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <EditableText k="dash.field.lineage" className="text-slate-400 text-xs" />
-                    <button type="button" onClick={() => { setLineageFixOpen(o => !o); setLineageFixDone(false) }}
-                      className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 border border-indigo-200 rounded-lg px-2.5 py-1 hover:bg-indigo-50 transition-colors">
-                      {lineageFixOpen ? 'סגירה' : 'בקשת תיקון'}
-                    </button>
-                  </div>
-
-                  {/* ⚠️ עץ יורד עם קו מקשר, כמו בממשק הניהול: הקו הוא מה
-                      שהופך רשימה לשרשרת — בלעדיו הדורות נראים כפריטים
-                      נפרדים ולא כרצף שכל אחד בו נגזר מקודמו.
-                      ⚠️ צבע הדור נגזר מ-genTone (lib/lineagePalette) — מקור
-                      האמת היחיד שכל ששת רכיבי העץ בניהול משתמשים בו.
-                      🔴 עד כה נקרא כאן GEN_COLORS, פלטה מקומית באינדיגו-ורוד,
-                      וההערה טענה שזו "אותה פלטה שהעץ בניהול משתמש בה" — לא
-                      נכון. אותו אדם באותו דור נצבע ורוד כאן וזהב בכרטסת. */}
-                  {/* 🔴 הבהרה שהצבע אינו סטטוס.
-                      ⚠️ הגוונים כאן נגזרים מ-genStyle לפי *מספר הדור* בלבד
-                      (סולם זהב→נחושת→ארד), ואינם אומרים דבר על אישור. הגוונים
-                      החמימים של דורות 3-4 נקראו כ"ירוק = מאושר", ומשפחות הסיקו
-                      שהייחוס שלהן נבדק ואושר — בעוד שבפועל רק 3.4% מהעץ מאושר,
-                      ובדורות 6-8 פחות מ-1.5%. הצבע נשאר (הוא מבחין בין דורות),
-                      והמשמעות נאמרת במילים. */}
-                  {/* 🔴 התצוגה מוסתרת בזמן עריכה — מסך אחד ולא שניים.
-                      ⚠️ עד כה השרשרת הקיימת נשארה למעלה וה-LineageBuilder נפתח
-                      מתחתיה, כשהוא ממילא טעון באותם דורות (prefillChain). המשתמש
-                      ראה את אותם שמות פעמיים ולא היה ברור באיזה מהם הוא עורך.
-                      העורך טעון מראש, ולכן שום מידע אינו אובד בהסתרה. */}
-                  {!lineageFixOpen && (
-                  <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mb-2.5 leading-relaxed">
-                    זהו סדר הדורות <span className="font-bold">כפי שהוא רשום אצלנו</span>.
-                    הצבעים מציינים את <span className="font-bold">מספר הדור</span> בלבד — ואינם מעידים על אישור או בדיקה.
-                  </p>
-                  )}
-
-                  {!lineageFixOpen && (
-                  <div className="relative pr-3">
-                    {beneficiary.lineage_chain.map((c, i, arr) => {
-                      const gen = genStyle(i)
-                      const isLast = i === arr.length - 1
-                      return (
-                        <div key={i} className="relative flex items-start gap-3 pb-3 last:pb-0">
-                          {/* הקו המחבר — נעצר בדור האחרון */}
-                          {!isLast && (
-                            <span className="absolute right-[13px] top-7 bottom-0 w-px bg-slate-200" />
-                          )}
-                          <span className="relative z-10 w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-[11px] font-bold tabular-nums border-2 bg-white"
-                            style={{ borderColor: gen.card.borderColor, color: gen.text.color }}>
-                            {i + 1}
-                          </span>
-                          <span className="flex-1 min-w-0 rounded-xl border px-3 py-2" style={gen.card}>
-                            <span className="block text-sm font-bold" style={gen.text}>{c.name}</span>
-                            {(c.relation === 'son' || c.relation === 'son_in_law') && (
-                              <span className="block text-[11px] opacity-70" style={gen.text}>
-                                {c.relation === 'son' ? 'בן' : 'חתן'} של הדור הקודם
-                              </span>
-                            )}
-                            {isLast && (
-                              <span className="block text-[11px] font-semibold text-slate-500 mt-0.5">— זה אתם</span>
-                            )}
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                  )}
-
-                  {/* 🔴 התיקון נקלט מיד ואינו ממתין לאישור.
-                      ⚠️ הטקסטים כאן אמרו "תיבדק במשרד" ו"אינו משתנה מיד"
-                      גם אחרי שהמסלול שונה לקליטה מיידית. התוצאה: המוטב
-                      חשב שלא נשמר, והמזכירות חיפשה תור אישור שאינו קיים. */}
-                  {lineageFixOpen && (
-                    <div className="mt-3 rounded-xl border border-indigo-200 bg-indigo-50/60 p-3 flex flex-col gap-2">
-                      {lineageFixDone ? (
-                        lineageFixApplied ? (
-                          <p className="flex items-center gap-2 text-sm text-green-700">
-                            <CheckCircle2 size={16} className="shrink-0" />
-                            הייחוס עודכן ונשמר. תודה!
-                          </p>
-                        ) : (
-                          // ⚠️ נאמר במפורש שהתיקון *טרם* נכנס: הודעת "נשמר"
-                          // על בקשה שנשארה לטיפול ידני היא בדיוק מה שגרם
-                          // למשפחות לחשוב שהכל תקין בזמן שדבר לא קרה.
-                          <p className="flex items-center gap-2 text-sm text-amber-700">
-                            <CheckCircle2 size={16} className="shrink-0" />
-                            הבקשה התקבלה ותטופל במשרד — הייחוס טרם עודכן.
-                          </p>
-                        )
-                      ) : (
-                        <>
-                          <p className="text-xs text-slate-600 leading-relaxed">
-                            בנו מחדש את סדר הדורות הנכון. השינוי נשמר מיד עם השליחה.
-                          </p>
-
-                          {/* 🔴 עורך הדורות המלא — אותו רכיב שבו מולאו הדורות
-                              בהרשמה. עד כה היה כאן שדה טקסט חופשי בלבד, והמנהל
-                              נדרש לפענח מהמלל מה בדיוק לשנות ולהקליד בעצמו. */}
-                          <div className="rounded-xl border border-slate-200 bg-white p-3">
-                            <LineageBuilder selfName={fixSelfName} onChange={setPortalFixLineage}
-                              prefillChain={Array.isArray(beneficiary.lineage_chain) ? beneficiary.lineage_chain : null} />
-                          </div>
-
-                          {/* ⚠️ הערה חופשית נשארת, כתוספת: היא הדרך היחידה לתאר
-                              בעיה שאינה "שם שגוי בדור מסוים". */}
-                          <label className="text-xs font-bold text-slate-600 mt-1">הערה למשרד (רשות)</label>
-                          <textarea
-                            value={lineageFixText}
-                            onChange={e => setLineageFixText(e.target.value)}
-                            rows={2}
-                            maxLength={1000}
-                            placeholder="הסבר נוסף, אם יש — למשל מקור המידע או ספק לגבי ענף מסוים"
-                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                          />
-                          {lineageFixErr && <p className="text-xs text-red-600">{lineageFixErr}</p>}
-                          {/* 🔴 השליחה אינה נעולה עוד על השלמת השרשרת.
-                              עד כה הכפתור היה disabled עד ש-valid, וכל מי שלא
-                              הצליח להשלים את הדורות (הרוב — רק 1.5% מהעץ מאושר
-                              בדורות העמוקים) לא יכול היה לשלוח *דבר*, גם לא
-                              לתאר את הבעיה במילים. הפנייה פשוט מתה בטופס.
-                              עכשיו: שרשרת מלאה = בקשה מפורשת; אחרת נשלח תיאור
-                              מילולי, שהשרת תומך בו מאז ומעולם (validateFixRequest). */}
-                          <button type="button" onClick={submitLineageFix}
-                            disabled={lineageFixSending || (
-                              !(portalFixLineage?.ancestors ?? []).some(a => a.name?.trim())
-                              && cleanFixText(lineageFixText).length < 10
-                            )}
-                            className="self-start inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-bold rounded-lg px-4 py-2 transition-colors">
-                            {lineageFixSending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-                            שליחת הבקשה
-                          </button>
-                          {!portalFixLineage?.valid && (
-                            <p className="text-[11px] text-slate-500 leading-relaxed">
-                              {cleanFixText(lineageFixText).length >= 10
-                                ? 'השרשרת אינה מלאה — הבקשה תישלח כתיאור מילולי, והמשרד יטפל בה.'
-                                : 'לא מצליחים להשלים את שרשרת הדורות? כתבו בהערה שלמעלה מה צריך לתקן (לפחות 10 תווים) ושלחו כך.'}
-                            </p>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </Card>
 
             {/* הודעת "כבר נרשמתם" + הפניה למייל האיגוד (ללא הצגת סטטוס)
                 ⚠️ הכרטיס כולו מוסתר במצב תקלת דואר: כל מה שהוא מציע מסתיים
@@ -5930,12 +5633,12 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 מכירים מכל אפליקציה.
                 ⚠️ fixed עם safe-area: במכשירים עם סרגל מחוות תחתון, בלי
                 ה-padding הכפתורים נחתכים. */}
-            <nav className="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-slate-200 grid grid-cols-4"
+            <nav className="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-slate-200 grid grid-cols-4 h-16"
               style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
               {DASH_TABS.map(t => (
                 <button key={t.key} type="button" onClick={() => { setDashTab(t.key); window.scrollTo({ top: 0 }) }}
                   className={`relative flex flex-col items-center gap-0.5 py-2.5 text-[11px] font-bold transition-colors ${
-                    dashTab === t.key ? 'text-indigo-600' : 'text-slate-400'
+                    dashTab === t.key ? 'text-[#4338CA]' : 'text-slate-500'
                   }`}>
                   <t.icon size={20} />
                   {t.label}
