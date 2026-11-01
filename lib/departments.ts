@@ -4,6 +4,7 @@
 
 export type DepartmentKey =
   | 'main'          // משרד ראשי
+  | 'mailing'       // דיוור (גיליונות, עדכונים, הרשמה)
   | 'igud'          // איגוד הצאצאים (רישום)
   | 'gemach'        // גמ"ח הלוואות
   | 'maternity'     // עזר יולדות
@@ -31,6 +32,7 @@ export interface Department {
 
 export const DEPARTMENTS: Record<DepartmentKey, Department> = {
   main:      { key: 'main',      label: 'משרד ראשי',        email: 'office@chasamsofer.info', color: '#64748b' },
+  mailing:   { key: 'mailing',   label: 'דיוור',            email: 'd@chasamsofer.info',      color: '#0d9488' },
   igud:      { key: 'igud',      label: 'איגוד הצאצאים',     email: 'igud@chasamsofer.info',   color: '#6366f1', noReply: true },
   gemach:    { key: 'gemach',    label: 'גמ"ח',             email: 'g@chasamsofer.info',      color: '#10b981' },
   maternity: { key: 'maternity', label: 'עזר יולדות',        email: 'y@chasamsofer.info',      color: '#ec4899' },

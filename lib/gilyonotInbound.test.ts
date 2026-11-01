@@ -41,7 +41,7 @@ function fakeDb(subs: Row[] = [], log: Row[] = []) {
 const mk = () => ({ sent: [] as { to: string; subject: string; html: string; unsub: string | null }[] })
 const sender = (m: ReturnType<typeof mk>) => async (to: string, mail: { subject: string; html: string }, unsub: string | null) => { m.sent.push({ to, ...mail, unsub }); return true }
 
-describe('קליטת מייל ל-gilyonot@', () => {
+describe('קליטת מייל ל-d@', () => {
   it('שולח חדש נרשם ומקבל אישור עם כפתור הסרה והודעת "אין להשיב"', async () => {
     const db = fakeDb(); const m = mk()
     const r = await handleGilyonotInbound(db, { fromEmail: 'Moshe@Gmail.com', fromName: 'משה כהן' }, sender(m))

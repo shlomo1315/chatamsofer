@@ -170,7 +170,7 @@ async function sendCampaignBatches(
   campaign: CampaignRow,
 ): Promise<{ sent: number; failed: number }> {
   const resend = new Resend(apiKey)
-  const dept = mailFor((campaign.from_department as DepartmentKey) ?? 'main')
+  const dept = mailFor((campaign.from_department as DepartmentKey) ?? 'mailing')
 
   let sent = 0, failed = 0
 

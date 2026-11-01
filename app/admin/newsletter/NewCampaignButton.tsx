@@ -11,7 +11,7 @@ export default function NewCampaignButton() {
   const toast = useToast()
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
-  const [dept, setDept] = useState('main')
+  const [dept, setDept] = useState('mailing')
   const [busy, setBusy] = useState(false)
 
   async function create() {
