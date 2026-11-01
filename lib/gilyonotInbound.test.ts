@@ -49,9 +49,12 @@ describe('קליטת מייל ל-d@', () => {
     expect(db.tables.gilyonot_subscribers).toHaveLength(1)
     expect(db.tables.gilyonot_subscribers[0]).toMatchObject({ email: 'moshe@gmail.com', source: 'email', full_name: 'משה כהן' })
     expect(m.sent).toHaveLength(1)
-    expect(m.sent[0].html).toContain('שימו לב, הרישום שלכם בוצע בהצלחה')
-    expect(m.sent[0].html).toContain('מעתה, בכל פעם שיישלח גיליון, תקבלו אותו במייל')
-    expect(m.sent[0].html).toContain('מייל זה נשלח ממערכת אוטומטית. תיבת הדואר הזו אינה נקראת כלל')
+    expect(m.sent[0].html).toContain('שים לב: הרשמתך לקבלת עדכונים וגיליונות מהמערכת התקבלה בהצלחה')
+    expect(m.sent[0].html).toContain('מעתה, בכל פעם שיישלח גיליון או עדכון, תקבל אותו במייל')
+    expect(m.sent[0].html).toContain('תיבת מייל זו אינה נקראת כלל, ולכן אין להשיב אליה')
+    expect(m.sent[0].html).toContain('mailto:office@chasamsofer.info')
+    expect(m.sent[0].html).toContain('mailto:igud@chasamsofer.info')
+    expect(m.sent[0].html).toContain('איגוד הצאצאים')
     expect(m.sent[0].html).toContain('הסרה מרשימת התפוצה')
     expect(m.sent[0].html).toContain('/api/gilyonot/unsubscribe/tok-1')
     expect(m.sent[0].html).toContain('Heebo')
@@ -59,13 +62,14 @@ describe('קליטת מייל ל-d@', () => {
     expect(m.sent[0].unsub).toContain('/api/gilyonot/unsubscribe/tok-1')
   })
 
-  it('שולח שכבר רשום לא נוסף שוב ומקבל "אתם כבר רשומים"', async () => {
+  it('שולח שכבר רשום לא נוסף שוב ומקבל "אתה כבר רשום"', async () => {
     const db = fakeDb([{ id: '9', email: 'a@x.com', status: 'active', full_name: 'א', token: 'tok-9' }]); const m = mk()
     const r = await handleGilyonotInbound(db, { fromEmail: 'a@x.com' }, sender(m))
     expect(r).toBe('exists')
     expect(db.tables.gilyonot_subscribers).toHaveLength(1)
-    expect(m.sent[0].html).toContain('שימו לב, אתם כבר רשומים לקבלת גיליונות מהמערכת')
-    expect(m.sent[0].html).toContain('מייל זה נשלח ממערכת אוטומטית')
+    expect(m.sent[0].html).toContain('שים לב: אתה כבר רשום במערכת לקבלת עדכונים')
+    expect(m.sent[0].html).toContain('תיבת מייל זו אינה נקראת כלל')
+    expect(m.sent[0].html).toContain('mailto:igud@chasamsofer.info')
     expect(m.sent[0].html).toContain('/api/gilyonot/unsubscribe/tok-9')
   })
 
@@ -75,11 +79,12 @@ describe('קליטת מייל ל-d@', () => {
     expect(db.tables.gilyonot_subscribers[0].status).toBe('unsubscribed')
     expect(m.sent[0].html).toContain('/gilyonot')
     expect(m.sent[0].html).not.toContain('/api/gilyonot/unsubscribe/')
+    expect(m.sent[0].html).toContain('תיבת מייל זו אינה נקראת כלל')
   })
 
   it('לא משיב להודעות אוטומטיות ולא רושם אותן', async () => {
     const db = fakeDb(); const m = mk()
-    for (const fromEmail of ['mailer-daemon@googlemail.com', 'noreply@shop.com', 'postmaster@x.com', 'bounce-123@x.com', 'office@chasamsofer.info']) {
+    for (const fromEmail of ['mailer-daemon@googlemail.com', 'noreply@shop.com', 'postmaster@x.com', 'bounce-123@x.com', 'office@chasamsofer.info', 'd@chasamsofer.info', 'D@ChasamSofer.info']) {
       expect(await handleGilyonotInbound(db, { fromEmail }, sender(m))).toBe('ignored_auto')
     }
     const headers = [{ name: 'Auto-Submitted', value: 'auto-replied' }]

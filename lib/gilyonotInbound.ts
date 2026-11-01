@@ -18,8 +18,8 @@ export type InboundOutcome =
 
 /** נושא הרישום ביומן המענים, משמש גם לספירת התקרות. */
 export const GILYONOT_REPLY_SUBJECT = {
-  added: 'גיליונות החתם סופר: הרישום בוצע בהצלחה',
-  exists: 'גיליונות החתם סופר: אתם כבר רשומים',
+  added: 'גיליונות החתם סופר: הרשמתך לעדכונים וגיליונות התקבלה בהצלחה',
+  exists: 'גיליונות החתם סופר: אתה כבר רשום לקבלת עדכונים',
   blocked_unsubscribed: 'גיליונות החתם סופר: הרישום הוסר בעבר',
 } as const
 
@@ -75,11 +75,21 @@ function button(href: string, label: string, bg: string): string {
 </td></tr></table>`
 }
 
-const NO_REPLY_TEXT = 'מייל זה נשלח ממערכת אוטומטית. תיבת הדואר הזו אינה נקראת כלל, ולכן אין טעם להשיב או לשלוח אליה הודעות.'
+const NO_REPLY_TEXT = 'שים לב: תיבת מייל זו אינה נקראת כלל, ולכן אין להשיב אליה או לשלוח אליה הודעות.'
+
+// הפניה לכתובות הפעילות, כמו במענה האוטומטי של התיבות (lib/autoReplyConfig.ts)
+export const GILYONOT_CONTACTS = [
+  { label: 'לנושאים כלליים של היכל החתם סופר', email: 'office@chasamsofer.info' },
+  { label: 'לנושאים הקשורים לאיגוד הצאצאים', email: 'igud@chasamsofer.info' },
+] as const
 
 function noReplyBox(): string {
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0 0;"><tr><td style="background:#fef2f2;border:2px solid #fecaca;border-radius:12px;padding:16px 20px;">
-<p style="margin:0;color:#991b1b;font-size:15px;font-weight:900;line-height:1.7;font-family:'Heebo',Arial,sans-serif;text-align:center;">${NO_REPLY_TEXT}</p>
+  const contacts = GILYONOT_CONTACTS.map(c =>
+    `<p style="margin:10px 0 0;color:#334155;font-size:15px;line-height:1.7;font-family:'Heebo',Arial,sans-serif;text-align:center;">${c.label}:<br><a href="mailto:${c.email}" style="color:#1d4ed8;font-weight:700;text-decoration:none;direction:ltr;unicode-bidi:embed;">${c.email}</a></p>`,
+  ).join('')
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0 0;"><tr><td style="background:#fef2f2;border:2px solid #fecaca;border-radius:12px;padding:18px 20px;">
+<p style="margin:0;color:#991b1b;font-size:16px;font-weight:900;line-height:1.7;font-family:'Heebo',Arial,sans-serif;text-align:center;">${NO_REPLY_TEXT}</p>
+<p style="margin:12px 0 0;color:#334155;font-size:15px;font-weight:700;line-height:1.7;font-family:'Heebo',Arial,sans-serif;text-align:center;">לפניות:</p>${contacts}
 </td></tr></table>`
 }
 
@@ -93,16 +103,16 @@ export function buildGilyonotReply(
   const unsub = opts.unsubscribeUrl ? button(opts.unsubscribeUrl, 'הסרה מרשימת התפוצה', '#64748b') : ''
   let title: string, subtitle: string, body: string, accent = GREEN
   if (kind === 'added') {
-    title = 'הרישום בוצע בהצלחה'
+    title = 'הרשמתך התקבלה בהצלחה'
     subtitle = 'גיליונות החתם סופר'
-    body = p(hello) + p('<strong>שימו לב, הרישום שלכם בוצע בהצלחה.</strong>') +
-      p('מעתה, בכל פעם שיישלח גיליון, תקבלו אותו במייל.') + unsub
+    body = p(hello) + p('<strong>שים לב: הרשמתך לקבלת עדכונים וגיליונות מהמערכת התקבלה בהצלחה.</strong>') +
+      p('מעתה, בכל פעם שיישלח גיליון או עדכון, תקבל אותו במייל.') + unsub
   } else if (kind === 'exists') {
-    title = 'אתם כבר רשומים'
+    title = 'אתה כבר רשום'
     subtitle = 'גיליונות החתם סופר'
     accent = BLUE
-    body = p(hello) + p('<strong>שימו לב, אתם כבר רשומים לקבלת גיליונות מהמערכת.</strong>') +
-      p('אין צורך בפעולה נוספת. בכל פעם שיישלח גיליון, תקבלו אותו במייל.') + unsub
+    body = p(hello) + p('<strong>שים לב: אתה כבר רשום במערכת לקבלת עדכונים.</strong>') +
+      p('אין צורך בפעולה נוספת. בכל פעם שיישלח גיליון או עדכון, תקבל אותו במייל.') + unsub
   } else {
     title = 'הרישום הוסר בעבר'
     subtitle = 'גיליונות החתם סופר'
@@ -123,6 +133,8 @@ export const sendReplyViaResend: SendReply = async (to, mail, unsubscribeUrl) =>
   const { error } = await new Resend(apiKey).emails.send({
     from: `${GILYONOT_FROM_NAME} <${GILYONOT_FROM_EMAIL}>`,
     to, subject: mail.subject, html: mail.html, text: htmlToPlainText(mail.html),
+    // ⚠️ תשובה לא חוזרת ל-d@ (שאינה נקראת), אלא למשרד הראשי
+    replyTo: GILYONOT_CONTACTS[0].email,
     headers: {
       'Auto-Submitted': 'auto-replied',
       'X-Auto-Response-Suppress': 'All',
