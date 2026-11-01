@@ -1,7 +1,7 @@
 'use client'
 
-// סקירת האזור האישי לפי מוקאפ b3 שאושר: פתיח נייבי עם פרטי המשפחה, מד השלמת תיק,
-// ארבעה מספרים, בקשות עם שלבים ואילן יוחסין. כל הערכים מנתוני המשתמש.
+// סקירת האזור האישי לפי המוקאפ המלא שאושר: פתיח עם ברכה ומד השלמת תיק, שורת תגיות למה שחסר,
+// שלושה כרטיסי פרטים, ארבעה מספרים, בקשות עם שלבים ואילן יוחסין. כל הערכים מנתוני המשתמש.
 import { useEffect, useMemo, useState } from 'react'
 import { buildLineageFixText } from '@/lib/lineageFixText'
 import { Check, ChevronLeft, Clock, CircleCheck, GitBranch, FileText, Lock, ArrowUpLeft, Plus } from 'lucide-react'
@@ -37,6 +37,8 @@ interface Props {
   onFixLineage: (generation?: number) => void
   onEditDetails: () => void
   onOpenDocs: () => void
+  emailUnverified?: boolean
+  onVerifyEmail?: () => void
 }
 
 type Filter = 'all' | 'open' | 'done'
@@ -66,7 +68,7 @@ function Count({ to, ms = 700, suffix = '' }: { to: number; ms?: number; suffix?
   return <>{useCount(to, ms)}{suffix}</>
 }
 
-export default function PersonalArea({ beneficiary: b, docsCount, contacts, onNewRequest, onFixLineage, onEditDetails, onOpenDocs }: Props) {
+export default function PersonalArea({ beneficiary: b, docsCount, contacts, onNewRequest, onFixLineage, onEditDetails, onOpenDocs, emailUnverified, onVerifyEmail }: Props) {
   const [requests, setRequests] = useState<PortalRequest[] | null>(null)
   const [failed, setFailed] = useState(false)
   const [filter, setFilter] = useState<Filter>('all')
@@ -165,69 +167,66 @@ export default function PersonalArea({ beneficiary: b, docsCount, contacts, onNe
       <div className="bento">
         <section className="hero">
           <div>
-            <div className="mono" aria-hidden="true">{(b.family_name || b.full_name || 'כ').trim().charAt(0)}</div>
             <small>האזור האישי · איגוד הצאצאים</small>
             <h1>שלום,<br /><span>משפחת {b.family_name || b.full_name}</span></h1>
             <p>הפרטים שלכם, אילן היוחסין וכל בקשה ובאיזה שלב היא, במקום אחד.</p>
           </div>
-          <dl className="glass">
-            <div className="grp">המשפחה</div>
-            <Row k="הבעל" v={b.full_name} />
-            <Row k="ת״ז הבעל" v={b.id_number} num locked />
-            <Row k="בת הזוג" v={b.spouse_name} />
-            <Row k="ת״ז האשה" v={b.spouse_id_number} num locked />
-            <div className="grp gap">יצירת קשר</div>
-            <Row k="טלפון" v={b.phone} ltr num />
-            <Row k="מייל" v={b.email} ltr />
-            <Row k="כתובת" v={b.address} />
-            <p className="hnote"><Lock size={12} aria-hidden="true" /><span>ת״ז לא ניתנת לשינוי. המייל שלכם: <bdi dir="ltr">{b.email || '[להשלים]'}</bdi>. שינוי שם באישור המשרד. מייל וטלפון אחרי אימות בקוד.</span></p>
-          </dl>
-        </section>
-
-        <section className="card ring">
-          <div className="ringrow">
-            <svg width="84" height="84" viewBox="0 0 72 72" role="img" aria-label={`התיק מלא ב-${pct} אחוז`}>
-              <circle cx="36" cy="36" r={R} fill="none" stroke="#EEEDE8" strokeWidth="7" />
-              <circle className="p" cx="36" cy="36" r={R} fill="none" stroke={pct === 100 ? '#157347' : '#4338CA'} strokeWidth="7" strokeLinecap="round"
+          <div className="ringbox">
+            <svg width="76" height="76" viewBox="0 0 72 72" role="img" aria-label={`התיק מלא ב-${pct} אחוז`}>
+              <circle cx="36" cy="36" r={R} fill="none" stroke="rgba(255,255,255,.14)" strokeWidth="7" />
+              <circle className="p" cx="36" cy="36" r={R} fill="none" stroke="#D9B26A" strokeWidth="7" strokeLinecap="round"
                 strokeDasharray={C} strokeDashoffset={filled ? C * (1 - pct / 100) : C} transform="rotate(-90 36 36)" />
-              <text x="36" y="41" textAnchor="middle" fontSize="17" fontWeight="900" fill="#16162A">{pctShown}%</text>
+              <text x="36" y="41" textAnchor="middle" fontSize="17" fontWeight="900" fill="#fff">{pctShown}%</text>
             </svg>
             <div>
               <b>השלמת התיק</b>
-              <div className="muted" style={{ fontSize: 13 }}>{missingCount === 0 ? 'התיק מלא. תודה!' : `עוד ${missingCount} פריטים והתיק מלא`}</div>
+              <div>{missingCount === 0 ? 'התיק מלא. תודה!' : `עוד ${missingCount} פריטים והתיק מלא`}</div>
             </div>
           </div>
-          <ul className="mini">
-            <li>
-              <button type="button" onClick={onEditDetails}>
-                <span><i className="d" style={{ background: contactDone === 3 ? '#157347' : '#B26A00' }} />פרטי קשר</span>
-                <span className={`badge ${contactDone === 3 ? 'b-ok' : 'b-amb'} num`}>{contactDone}/3</span>
-              </button>
-            </li>
-            {missItems.map(m => (
-              <li key={m.key}>
-                <button type="button" className="miss" aria-expanded={openMiss === m.key} onClick={() => toggleMiss(m.key)}>
-                  <span><i className="d" style={{ background: '#B26A00' }} />{m.label}</span>
-                  <span className="go">השלמה<ChevronLeft size={14} aria-hidden="true" /></span>
-                </button>
-              </li>
-            ))}
-            {docsCount > 0 && (
-              <li>
-                <button type="button" onClick={onOpenDocs}>
-                  <span><i className="d" style={{ background: '#157347' }} />מסמכים</span>
-                  <span className="badge b-ok num">{docsCount}</span>
-                </button>
-              </li>
-            )}
-          </ul>
+        </section>
+
+        <div className="todo">
+          <span className={`chip ${contactDone === 3 ? 'ok' : ''}`}>
+            {contactDone === 3 ? <Check size={14} aria-hidden="true" /> : null}
+            {contactDone === 3 ? <>פרטי קשר <span className="num">3/3</span></> : <button type="button" onClick={onEditDetails}>פרטי קשר · להשלמה<ChevronLeft size={14} aria-hidden="true" /></button>}
+          </span>
+          {missItems.map(m => (
+            <span key={m.key} className="chip">
+              <button type="button" aria-expanded={openMiss === m.key} onClick={() => toggleMiss(m.key)}>{m.label} · להשלמה<ChevronLeft size={14} aria-hidden="true" /></button>
+            </span>
+          ))}
+          {docsCount > 0 && <span className="chip ok"><Check size={14} aria-hidden="true" />מסמכים <span className="num">{docsCount}</span></span>}
           {openText && (
             <div className="md on" key={openText.key}>
               {openText.text}
               <button type="button" className="link" onClick={openText.fix}>להשלמה עכשיו</button>
             </div>
           )}
+        </div>
+
+        <section className="card info">
+          <div className="phead"><h3 className="h3">הבעל</h3></div>
+          <dl><Row k="שם" v={[b.family_name, b.full_name].filter(Boolean).join(' ')} /><Row k="ת״ז" v={b.id_number} num locked /></dl>
         </section>
+        <section className="card info">
+          <div className="phead"><h3 className="h3">בת הזוג</h3></div>
+          <dl><Row k="שם" v={b.spouse_name} /><Row k="ת״ז" v={b.spouse_id_number} num locked /></dl>
+        </section>
+        <section className="card info">
+          <div className="phead">
+            <h3 className="h3">יצירת קשר</h3>
+            <button type="button" className="link" onClick={onEditDetails}>עדכון</button>
+          </div>
+          <dl>
+            <Row k="טלפון" v={b.phone} ltr num />
+            <Row k="מייל" v={b.email} ltr />
+            <Row k="כתובת" v={b.address} />
+          </dl>
+          {emailUnverified && (
+            <button type="button" className="unv" onClick={onVerifyEmail}>המייל לא מאומת · אימות עכשיו</button>
+          )}
+        </section>
+        <p className="note"><Lock size={12} aria-hidden="true" /><span>ת״ז לא ניתנת לשינוי. המייל שלכם: <bdi dir="ltr">{b.email || '[להשלים]'}</bdi>. שינוי שם באישור המשרד. שינוי מייל וטלפון אחרי אימות בקוד שנשלח אליהם.</span></p>
 
         <button type="button" className="card stat" style={{ ['--c' as string]: '#4338CA' }} onClick={() => { setFilter('open'); scrollTo('pa-requests') }}>
           <span className="arr"><ArrowUpLeft size={16} aria-hidden="true" /></span>
@@ -376,7 +375,6 @@ function Row({ k, v, ltr, num, locked }: { k: string; v?: string; ltr?: boolean;
   )
 }
 
-const DOTS = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22'%3E%3Ccircle cx='1' cy='1' r='1' fill='%23ffffff' fill-opacity='.10'/%3E%3C/svg%3E\")"
 
 const CSS = `
 .pa{--card:#fff;--line:rgba(26,26,46,.08);--ink:#16162A;--mut:#5F6475;--soft:#9CA0AE;--navy:#17153B;--ind:#4338CA;--ind-50:#EEF0FF;--ok:#157347;--ok-50:#E7F5EC;--amb:#B26A00;--amb-50:#FFF3DC;--bord:#8C2F39;--teal:#0F6E78;--teal-50:#E6F2F3;--gold:#D9B26A;--sh:0 1px 1px rgba(20,20,40,.03),0 2px 4px rgba(20,20,40,.03),0 12px 32px -12px rgba(20,20,40,.10);--ease:cubic-bezier(.2,.7,.2,1);font-family:Heebo,system-ui,sans-serif;color:var(--ink);font-size:15px;line-height:1.55}
@@ -402,39 +400,32 @@ const CSS = `
 .pa .bento>*{animation:pa-rise .5s var(--ease) both}
 .pa .bento>*:nth-child(2){animation-delay:.05s}.pa .bento>*:nth-child(3){animation-delay:.1s}.pa .bento>*:nth-child(4){animation-delay:.13s}.pa .bento>*:nth-child(5){animation-delay:.16s}.pa .bento>*:nth-child(6){animation-delay:.19s}.pa .bento>*:nth-child(7){animation-delay:.22s}.pa .bento>*:nth-child(8){animation-delay:.25s}
 @keyframes pa-rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-.pa .hero{grid-column:span 8;position:relative;overflow:hidden;background:var(--navy);color:#fff;border-radius:26px;padding:26px;display:grid;grid-template-columns:1fr 1.3fr;gap:22px;align-items:stretch;isolation:isolate}
-.pa .hero::before{content:"";position:absolute;inset:0;z-index:-1;opacity:.55;background-image:${DOTS};-webkit-mask-image:linear-gradient(to left,#000,transparent 70%);mask-image:linear-gradient(to left,#000,transparent 70%)}
-.pa .hero::after{content:"";position:absolute;width:260px;height:260px;border-radius:50%;border:1px solid rgba(217,178,106,.25);inset-inline-end:-90px;bottom:-120px;z-index:-1;box-shadow:0 0 0 40px rgba(217,178,106,.04),0 0 0 80px rgba(217,178,106,.03)}
-.pa .mono{width:52px;height:52px;border-radius:16px;border:1px solid rgba(217,178,106,.5);color:var(--gold);display:grid;place-items:center;font-weight:900;font-size:24px;margin-bottom:14px}
-.pa .hero small{color:#C7C3F5;font-size:12.5px;font-weight:600}
-.pa .hero h1{margin:2px 0 8px;font-size:clamp(26px,3.4vw,34px);font-weight:900;line-height:1.15}
+.pa .hero{grid-column:1/-1;position:relative;overflow:hidden;background:var(--navy);color:#fff;border-radius:28px;padding:32px;display:grid;grid-template-columns:1fr auto;gap:24px;align-items:center}
+.pa .hero small{color:var(--gold);font-size:13px;font-weight:700}
+.pa .hero h1{margin:4px 0 10px;font-size:clamp(34px,5vw,56px);font-weight:900;line-height:1.05}
 .pa .hero h1 span{color:var(--gold)}
-.pa .hero p{margin:0;color:#CFCDEF;font-size:14px;max-width:30ch}
-.pa .glass{margin:0;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:12px 16px;backdrop-filter:blur(10px)}
-.pa .grp{font-size:11px;font-weight:700;color:var(--gold);padding:2px 0 4px;opacity:.9}
-.pa .grp.gap{margin-top:8px}
-.pa .row{display:grid;grid-template-columns:74px 1fr auto;align-items:center;gap:10px;padding:5px 0;border-top:1px solid rgba(255,255,255,.07);font-size:13.5px;min-height:31px;margin:0}
-.pa .grp+.row{border-top:0}
-.pa .row dt{color:#AFABE6;font-size:12.5px}
-.pa .row dd{margin:0;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pa .row .lk{font-size:11px;color:#EBC2C8;display:inline-flex;gap:3px;align-items:center}
-.pa .hnote{font-size:11.5px;color:#A9A5E4;margin:8px 0 0;display:flex;gap:5px;border-top:1px solid rgba(255,255,255,.07);padding-top:8px}
-.pa .hnote svg{margin-top:2px;flex-shrink:0}
-.pa .ring{grid-column:span 4;padding:22px;display:flex;flex-direction:column;gap:12px}
-.pa .ringrow{display:flex;align-items:center;gap:16px}
-.pa .ringrow circle.p{transition:stroke-dashoffset 1.1s var(--ease)}
-.pa .ringrow b{font-size:16px}
-.pa .mini{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
-.pa .mini button{width:100%;display:flex;justify-content:space-between;align-items:center;border:1px solid transparent;background:none;padding:8px 10px;border-radius:12px;font-size:14px;min-height:42px;text-align:right;transition:background .15s,border-color .15s}
-.pa .mini button:hover{background:#F6F5F1}
-.pa .mini button.miss{background:var(--amb-50);color:#8A5200;font-weight:600}
-.pa .mini button.miss[aria-expanded="true"]{border-color:#F0C877}
-.pa .mini .d{width:8px;height:8px;border-radius:50%;display:inline-block;margin-inline-end:8px}
-.pa .mini .go{display:inline-flex;align-items:center;gap:2px;font-size:13px}
-.pa .mini .go svg{transition:transform .15s}
-.pa .mini button:hover .go svg{transform:translateX(-3px)}
+.pa .hero p{margin:0;color:#CFCDEF;font-size:15px;max-width:42ch}
+.pa .ringbox{display:flex;align-items:center;gap:16px;min-width:260px;border:1px solid rgba(255,255,255,.14);border-radius:20px;padding:18px 20px}
+.pa .ringbox b{display:block;font-size:16px}
+.pa .ringbox div div{font-size:13px;color:#CFCDEF}
+.pa .ringbox circle.p{transition:stroke-dashoffset 1.1s var(--ease)}
+.pa .todo{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.pa .chip{display:inline-flex;align-items:center;gap:5px;border-radius:99px;font-size:13.5px;font-weight:700;background:var(--amb-50);color:#8A5200;border:1px solid #F0C877}
+.pa .chip>button{border:0;background:none;font:inherit;color:inherit;display:inline-flex;align-items:center;gap:4px;padding:8px 14px;min-height:40px}
+.pa .chip.ok{background:var(--ok-50);color:var(--ok);border-color:#BFE1CC;padding:8px 14px;min-height:40px}
+.pa .todo .md{flex-basis:100%}
 .pa .md{font-size:13px;color:var(--mut);background:#FAFAF7;border:1px dashed #E6D2A8;border-radius:12px;padding:10px 12px;animation:pa-rise .25s var(--ease)}
 .pa .md .link{display:block;padding:4px 0 0;min-height:0}
+.pa .info{grid-column:span 4;padding:20px 22px}
+.pa .info dl{margin:0}
+.pa .info .phead{min-height:40px}
+.pa .row{display:grid;grid-template-columns:84px 1fr auto;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line);font-size:14.5px;margin:0}
+.pa .row dt{color:var(--mut);font-size:13px}
+.pa .row dd{margin:0;font-weight:700;min-width:0;overflow-wrap:anywhere}
+.pa .row .lk{font-size:11.5px;color:var(--bord);background:#F8E6E8;border-radius:99px;padding:2px 9px;display:inline-flex;gap:3px;align-items:center;font-weight:700}
+.pa .unv{margin-top:8px;border:1px solid #F0C877;background:var(--amb-50);color:#8A5200;font-weight:700;font-size:12.5px;border-radius:99px;padding:6px 12px}
+.pa .note{grid-column:1/-1;margin:0;display:flex;gap:6px;font-size:13px;color:var(--mut)}
+.pa .note svg{margin-top:3px;flex-shrink:0}
 .pa .stat{grid-column:span 3;padding:18px;text-align:right;position:relative;overflow:hidden;transition:transform .2s var(--ease),box-shadow .2s}
 .pa .stat:hover{transform:translateY(-3px);box-shadow:0 18px 40px -18px rgba(20,20,40,.25)}
 .pa .stat .ic{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;color:var(--c);background:color-mix(in srgb,var(--c) 10%,#fff);margin-bottom:10px}
@@ -446,7 +437,7 @@ const CSS = `
 .pa .stat .sp{display:flex;gap:3px;margin-top:12px;flex-direction:row-reverse}
 .pa .stat .sp i{flex:1;height:4px;border-radius:99px;background:#ECEBE6}
 .pa .stat .sp i.on{background:var(--c)}
-.pa .req-c{grid-column:span 8;padding:22px 24px}
+.pa .req-c{grid-column:1/-1;padding:22px 24px}
 .pa .tree-c{grid-column:1/-1;padding:22px 24px}
 .pa .phead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;flex-wrap:wrap}
 .pa .seg{display:inline-flex;background:#F1F0EC;border-radius:12px;padding:3px;gap:2px}
@@ -512,14 +503,14 @@ const CSS = `
 .pa .help{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-size:13px;display:flex;flex-direction:column;gap:4px}
 .pa .help a{color:var(--ind);font-weight:700;word-break:break-all}
 @media (max-width:920px){
-  .pa .hero,.pa .ring,.pa .req-c,.pa .tree-c{grid-column:1/-1}
+  .pa .info{grid-column:1/-1}
+  .pa .req-c,.pa .tree-c{grid-column:1/-1}
   .pa .stat{grid-column:span 6}
 }
 @media (max-width:560px){
-  .pa .hero{grid-template-columns:1fr;gap:16px;padding:20px;border-radius:22px}
-  .pa .mono{width:44px;height:44px;font-size:20px;margin-bottom:10px}
-  .pa .row{grid-template-columns:66px 1fr auto}
-  .pa .req-c,.pa .tree-c,.pa .ring{padding:16px}
+  .pa .hero{grid-template-columns:1fr;gap:16px;padding:22px;border-radius:24px}
+  .pa .ringbox{min-width:0}
+  .pa .req-c,.pa .tree-c,.pa .info{padding:16px}
   .pa .tree li{padding-inline-start:calc(var(--d) * 12px)}
   .pa .tree.editing .node{flex-wrap:wrap}
   .pa .tree.editing .edit{width:100%;padding-inline-start:52px}
