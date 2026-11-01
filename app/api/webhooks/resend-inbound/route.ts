@@ -406,6 +406,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, ignored: 'foreign-recipient' })
   }
 
+  // ── gilyonot@: כל שולח נרשם לרשימת הגיליונות ומקבל מייל אישור ──
+  // התיבה אינה נקראת, ולכן המייל לא נשמר בדואר הנכנס. רק כשהיא הנמענת היחידה בדומיין
+  // (מייל לתיבה אחרת עם עותק אליה ממשיך בניתוב הרגיל).
+  {
+    const { isGilyonotAddress, handleGilyonotInbound } = await import('@/lib/gilyonotInbound')
+    const orgDirect = directRecipients.filter(isOrgAddr)
+    if (orgDirect.length > 0 && orgDirect.every(isGilyonotAddress)) {
+      const outcome = await handleGilyonotInbound(getAdminClient(), {
+        fromEmail: from.email, fromName: from.name, headers: data.headers,
+        messageId: String(data.message_id ?? data.messageId ?? data.id ?? ''),
+      })
+      console.log('[resend-inbound] gilyonot:', outcome)
+      // שגיאה זמנית מחזירה 500 כדי ש-Resend ינסה שוב; כל תוצאה אחרת סופית.
+      if (outcome === 'error') return NextResponse.json({ error: 'gilyonot failed' }, { status: 500 })
+      return NextResponse.json({ ok: true, routed: 'gilyonot', outcome })
+    }
+  }
+
   const admin = getAdminClient()
 
   const messageId = data.message_id ?? data.messageId ?? data.id ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
