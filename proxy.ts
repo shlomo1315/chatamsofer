@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { escapeLike } from '@/lib/likeEscape'
+import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { NextResponse, type NextRequest } from 'next/server'
 
 function noCache(res: NextResponse) {
@@ -34,6 +35,12 @@ function rememberProfile(userId: string, prof: StaffProfile | null) {
 }
 
 export async function proxy(request: NextRequest) {
+  // ארכיון ציבורי: הגבלת קצב לפי IP, ואין בו שום לוגיקת ניהול או עוגיות
+  if (request.nextUrl.pathname.startsWith('/archive/')) {
+    const ok = rateLimit(`archive:${clientIp(request)}`, 120, 60_000)
+    if (!ok) return new NextResponse('יותר מדי בקשות', { status: 429, headers: { 'Retry-After': '60' } })
+    return NextResponse.next()
+  }
   let response = NextResponse.next({ request })
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
