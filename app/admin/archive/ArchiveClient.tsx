@@ -18,6 +18,7 @@ const mediaUrl = (id: string, download = false) => `${API}/files/${id}/media${do
 const gradient = (type: string): CSSProperties => ({ ['--g' as string]: `linear-gradient(135deg, ${eventTypeColor(type)}, #1e3a8a 90%)` })
 
 type View = 'home' | 'event' | 'upload'
+type DriveJob = { id: string; state: 'running' | 'done' | 'error'; total: number; done: number; failed: number; error: string | null; lastError: string | null }
 type Picked = { file: File; kind: 'image' | 'video'; path: string }
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
@@ -490,11 +491,28 @@ function UploadView({ events, presetEvent, say, driveConnected, onCancel, onDone
   const [busy, setBusy] = useState(false)
   const [prog, setProg] = useState({ done: 0, total: 0, bytes: 0, totalBytes: 0 })
   const [err, setErr] = useState<string | null>(null)
+  const [link, setLink] = useState('')
+  const [checking, setChecking] = useState(false)
+  const [drive, setDrive] = useState<{ url: string; name: string; photos: number; videos: number; bytes: number } | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   const dirInput = useRef<HTMLInputElement>(null)
   const heb = hebrewFromIso(f.event_date)
 
+  const checkLink = async () => {
+    setChecking(true); setErr(null)
+    try {
+      const r = await api<{ name: string; photos: number; videos: number; bytes: number }>(`${API}/import/preview`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: link }),
+      })
+      if (!r.photos && !r.videos) { setErr('לא נמצאו בתיקייה תמונות או סרטונים'); return }
+      setPicked([]); setFolderName(r.name)
+      setDrive({ url: link.trim(), ...r })
+      if (!f.name && !existing) setF(v => ({ ...v, name: r.name }))
+    } catch (e) { setErr((e as Error).message) } finally { setChecking(false) }
+  }
+
   const add = (items: Picked[], folder?: string) => {
+    setDrive(null)
     setPicked(p => [...p, ...items])
     if (folder && !f.name && !existing) { setFolderName(folder); setF(v => ({ ...v, name: folder })) }
   }
@@ -525,8 +543,9 @@ function UploadView({ events, presetEvent, say, driveConnected, onCancel, onDone
   const photos = picked.filter(p => p.kind === 'image').length
   const videos = picked.length - photos
   const totalBytes = picked.reduce((s, p) => s + p.file.size, 0)
-  const step = busy ? 3 : picked.length ? 2 : 1
-  const canSave = driveConnected && !busy && picked.length > 0 && (existing || (f.name.trim() && heb))
+  const hasSource = picked.length > 0 || !!drive
+  const step = busy ? 3 : hasSource ? 2 : 1
+  const canSave = driveConnected && !busy && hasSource && (existing || (f.name.trim() && heb))
 
   const save = async () => {
     setBusy(true); setErr(null)
@@ -537,6 +556,27 @@ function UploadView({ events, presetEvent, say, driveConnected, onCancel, onDone
       })).event
     } catch (e) { setErr((e as Error).message); setBusy(false); return }
 
+    if (drive) {
+      try {
+        const start = await api<{ job: DriveJob }>(`${API}/events/${ev.id}/import`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: drive.url }),
+        })
+        let job = start.job
+        setProg({ done: job.done, total: job.total, bytes: job.done, totalBytes: job.total })
+        while (job.state === 'running') {
+          await new Promise(r => setTimeout(r, 2000))
+          job = (await api<{ job: DriveJob }>(`${API}/events/${ev.id}/import?job=${job.id}`)).job
+          setProg({ done: job.done, total: job.total, bytes: job.done, totalBytes: job.total })
+        }
+        if (job.state === 'error') throw new Error(job.error || 'השאיבה נכשלה')
+        if (job.lastError) setErr(`${job.failed} קבצים נכשלו. לדוגמה: ${job.lastError}`)
+        const imported = job.total - job.failed
+        const r = await api<{ event: ArchiveEvent }>(`${API}/events/${ev.id}/files`, { method: 'PUT' })
+        say(job.failed ? `יובאו ${imported} מתוך ${job.total} קבצים` : job.total ? `יובאו ${imported} קבצים מ-Drive` : 'כל הקבצים כבר קיימים באירוע', job.failed > 0)
+        onDone(r.event)
+      } catch (e) { setErr((e as Error).message); setBusy(false) }
+      return
+    }
     const queue = [...picked]
     let done = 0, bytes = 0, failed = 0
     setProg({ done: 0, total: queue.length, bytes: 0, totalBytes })
@@ -596,6 +636,24 @@ function UploadView({ events, presetEvent, say, driveConnected, onCancel, onDone
           <div style={{ marginTop: 8 }}>
             <button type="button" className="chip" onClick={() => fileInput.current?.click()} disabled={busy}>או בחירת קבצים בודדים</button>
           </div>
+          <div className="field" style={{ marginTop: 16 }}>
+            <label htmlFor="drivelink">או הדבקת קישור לתיקיית Drive</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input id="drivelink" dir="ltr" value={link} onChange={e => setLink(e.target.value)} disabled={busy || checking}
+                placeholder="https://drive.google.com/drive/folders/…"
+                onKeyDown={e => { if (e.key === 'Enter' && link.trim()) void checkLink() }} />
+              <button type="button" className="chip" onClick={checkLink} disabled={busy || checking || !link.trim()}>{checking ? 'בודק…' : 'בדיקה'}</button>
+            </div>
+            <div className="hint">המערכת תשאב את כל התמונות והסרטונים בתיקייה ובתיקיות המשנה שלה, בלי להוריד ולהעלות מחדש. התיקייה צריכה להיות משותפת עם חשבון ה-Drive של המערכת, או פתוחה ל״כל מי שיש לו קישור״.</div>
+          </div>
+          {drive && <>
+            <div className="folder on">
+              <FolderOpen size={20} />
+              <b>{drive.name}</b>
+              <span>{drive.photos} תמונות · {drive.videos} סרטונים · {formatBytes(drive.bytes)} · מ-Drive</span>
+            </div>
+            <button type="button" className="chip" style={{ marginTop: 10 }} onClick={() => { setDrive(null); setLink(''); setFolderName('') }} disabled={busy}>ניקוי הבחירה</button>
+          </>}
           {picked.length > 0 && <>
             <div className="folder on">
               <FolderOpen size={20} />
@@ -629,7 +687,7 @@ function UploadView({ events, presetEvent, say, driveConnected, onCancel, onDone
           </>}
           {busy && (
             <div className="prog on">
-              <div style={{ fontSize: 14, fontWeight: 600 }}>מעלה ל-Drive… נא לא לסגור את המסך עד הסיום</div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>{drive ? 'שואב מ-Drive… אפשר להישאר במסך עד הסיום' : 'מעלה ל-Drive… נא לא לסגור את המסך עד הסיום'}</div>
               <div className="track"><i style={{ width: `${pct}%` }} /></div>
               <div className="t"><span>{prog.done} מתוך {prog.total}</span><span>{pct}%</span></div>
             </div>
