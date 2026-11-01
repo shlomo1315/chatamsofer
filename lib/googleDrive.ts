@@ -284,3 +284,62 @@ export async function deleteBackup(fileId: string): Promise<void> {
   if (!drive) return
   try { await drive.files.delete({ fileId, supportsAllDrives: true }) } catch { /* best-effort */ }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ארכיון (תמונות וסרטונים של אירועים) — אותו חיבור Drive של הגיבוי.
+// הקבצים נשמרים תחת תיקיית "ארכיון" בתוך תיקיית הגיבוי, תיקייה לכל אירוע.
+// ─────────────────────────────────────────────────────────────────────────────
+const ARCHIVE_ROOT_SETTING = 'archive_drive_root_folder'
+
+/** יוצר תיקייה ב-Drive ומחזיר את המזהה שלה. */
+export async function createDriveFolder(name: string, parentId: string): Promise<string> {
+  const drive = await driveClient()
+  if (!drive) throw new Error('Google Drive אינו מחובר')
+  const res = await drive.files.create({
+    requestBody: { name, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] },
+    fields: 'id',
+    supportsAllDrives: true,
+  })
+  if (!res.data.id) throw new Error('יצירת התיקייה ב-Drive נכשלה')
+  return res.data.id
+}
+
+/** תיקיית השורש של הארכיון (נוצרת פעם אחת ונשמרת בהגדרות). */
+export async function ensureArchiveRootFolder(): Promise<string> {
+  const backupFolder = process.env.GOOGLE_DRIVE_BACKUP_FOLDER_ID
+  const admin = getServiceClient()
+  if (!backupFolder || !admin) throw new Error('Google Drive אינו מוגדר')
+  const { data } = await admin.from('app_settings').select('value').eq('key', ARCHIVE_ROOT_SETTING).maybeSingle()
+  if (data?.value) return data.value as string
+  const id = await createDriveFolder('ארכיון', backupFolder)
+  await admin.from('app_settings').upsert({ key: ARCHIVE_ROOT_SETTING, value: id })
+  return id
+}
+
+/** מעלה קובץ מזרם לתיקייה נתונה ב-Drive (resumable, בלי להחזיק את הקובץ בזיכרון). */
+export async function uploadFileStreamToFolder(
+  filename: string, source: AsyncIterable<Buffer | Uint8Array>, mimeType: string, folderId: string,
+): Promise<{ ok: boolean; id?: string; bytes: number; error?: string }> {
+  const oauth = await driveAuth()
+  if (!oauth) return { ok: false, bytes: 0, error: 'Google Drive אינו מחובר' }
+  try {
+    const { token } = await oauth.getAccessToken()
+    if (!token) return { ok: false, bytes: 0, error: 'קבלת אסימון גישה מגוגל נכשלה' }
+    const sessionUrl = await openUploadSession(token, filename, folderId, mimeType, null)
+    return await uploadStreamToSession(sessionUrl, source)
+  } catch (e) {
+    return { ok: false, bytes: 0, error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
+/** קורא קובץ מ-Drive כזרם (להגשה דרך האתר, כך שהדפדפן לא פונה ל-Google). */
+export async function openDriveFileStream(fileId: string): Promise<import('stream').Readable | null> {
+  const drive = await driveClient()
+  if (!drive) return null
+  const res = await drive.files.get(
+    { fileId, alt: 'media', supportsAllDrives: true },
+    { responseType: 'stream' },
+  )
+  return res.data as import('stream').Readable
+}
+
