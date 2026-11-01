@@ -1,10 +1,12 @@
 'use client'
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import StatStrip from '@/components/admin/system/StatStrip'
+import { ListTable } from '@/components/admin/system/ListTable'
+import { SearchBar } from '@/components/admin/system/SearchBar'
 import { useIsAdmin } from '@/components/StaffPermissions'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Clock, Check, X, Baby, Eye, Loader2, Search, FileText, Trash2, AlertTriangle, PencilLine, MessageSquare } from 'lucide-react'
+import { Clock, Check, X, Baby, Eye, Loader2, FileText, Trash2, AlertTriangle, PencilLine, MessageSquare } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { ViewDocButton } from '@/components/ui/DocViewer'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
@@ -20,7 +22,6 @@ import { babyNameLabel, type AidNameFields } from '@/lib/babyNames'
 import { matchesBucket, returnedFromInquiry, type MaternityBucket, type BucketAid } from '@/lib/maternityBuckets'
 import { recoveryDaysOf } from '@/lib/maternity'
 import { useTablePagination } from '@/lib/useTablePagination'
-import Pagination from '@/components/ui/Pagination'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import ApprovalLabelTag from '@/components/ui/ApprovalLabelTag'
 import { approvalLabelOf } from '@/lib/approvalLabel'
@@ -451,102 +452,39 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
       )}
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-        {/* ⚠️ הכותרת "רשימת לידות" הוסרה: היא חזרה על כותרת העמוד ורק דחקה את
-            החיפוש שמאלה. בלעדיה החיפוש יושב בקצה הימני — אותו מקום שבו הוא
-            נמצא בשאר המחלקות ובמסך הצאצאים. */}
-        <div className="px-5 py-3 border-b border-slate-200 flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* חיפוש חופשי — ראשון, כלומר בצד ימין ב-RTL. אותו מיקום כמו
-                בשאר המחלקות ובמסך הצאצאים, כדי שלא יבלבל. */}
-            <div className="relative w-full sm:w-64">
-              <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
-              <input
-                type="text"
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                placeholder="חיפוש חופשי…"
-                className="w-full pr-9 pl-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-colors"
-              />
-            </div>
-            <SortButtons value={sort} onChange={setSort} />
+      <ListTable tc={tc} rows={visibleRows} pg={pg} empty={emptyMessage ?? 'לא נמצאו לידות בסינון זה'}
+        onOpen={aid => setOpenId(aid.id)}
+        renderCell={(c, aid) => cell(c.key, aid, aid.beneficiary as MotherRef | undefined)}
+        actionsHead="פעולות"
+        actions={aid => (
+          <div className="flex flex-nowrap items-center justify-center gap-1">
+            <Link href={`/admin/maternity/${aid.id}`} title="צפייה בתיק" aria-label="צפייה בתיק"
+              className="inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-line text-ink-soft transition-colors hover:border-gold hover:bg-sand hover:text-navy">
+              <Eye size={14} />
+            </Link>
+            <DeleteAidButton aid={aid} />
+          </div>
+        )}
+        toolbar={<>
+          <SearchBar value={query} onChange={setQuery} />
+          <SortButtons value={sort} onChange={setSort} />
             {/* סינון לפי ההטבה שהיולדת ביקשה — אותו עיצוב כמו כפתורי המיון */}
-            <div className="flex items-center gap-0.5 bg-slate-100 rounded-lg p-0.5 flex-shrink-0">
+            <div className="flex items-center gap-0.5 bg-sand rounded-lg p-0.5 flex-shrink-0">
               {BENEFIT_OPTS.map(o => (
                 <button
                   key={o.key}
                   onClick={() => setBenefit(o.key)}
                   className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all whitespace-nowrap ${
                     benefit === o.key
-                      ? 'bg-white text-slate-800 shadow-sm shadow-slate-200'
-                      : 'text-slate-500 hover:text-slate-700'
+                      ? 'bg-white text-navy shadow-sm'
+                      : 'text-ink-soft hover:text-navy'
                   }`}
                 >
                   {o.label}
                 </button>
               ))}
             </div>
-          </div>
-        </div>
-        {/* בורר העמודות — מעל הטבלה */}
-        <div className="flex flex-col gap-2 px-5 py-3 border-b border-slate-100">
-          {tc.picker}{tc.activeFilters}
-        </div>
-        <div className="w-full">
-          {/* ⚠️ בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. הרוחב מחולק
-              בין העמודות המוצגות, והטקסט גולש לשורה נוספת במקום להיחתך. */}
-          <table className="w-full text-sm text-right" style={tc.rt.tableStyle}>
-            <colgroup>{tc.rt.cols}</colgroup>
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 [&>th]:px-2 [&>th]:py-3.5 [&>th]:text-xs [&>th]:font-semibold [&>th]:text-slate-500 [&>th]:align-middle [&>th]:leading-tight">
-                {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב.
-                    ⚠️ הריפוד מגיע מ-[&>th] שעל ה-<tr>. */}
-                {tc.shown.map((c, i) => tc.th(c, i))}
-                <th className="relative text-center">פעולות{tc.rt.handle(tc.shown.length)}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {/* 🔴 נמדד מול tc.rows — הסינון מהכותרת יכול לרוקן את הטבלה
-                  גם כשהחיפוש שמעליה החזיר שורות. */}
-              {tc.rows.length === 0 ? (
-                <tr><td colSpan={tc.shown.length + 1} className="px-4 py-12 text-center text-slate-400">{emptyMessage ?? 'לא נמצאו לידות בסינון זה'}</td></tr>
-              ) : visibleRows.map(aid => {
-                const m = aid.beneficiary as MotherRef | undefined
-                return (
-                  // ⚠️ הלשונית נוסעת בכתובת. בלעדיה הכרטסת אינה יודעת באיזו
-                  // רשימה המזכירות עובדת, ו"הבאה" חוזרת לרוץ על כל הטבלה.
-                  // הסינון אינו נשמר בכתובת של הרשימה עצמה, ולכן הקישור הוא
-                  // המקום היחיד שבו הוא עובר הלאה.
-                  <tr key={aid.id}
-                    onClick={() => setOpenId(aid.id)}
-                    className="hover:bg-indigo-50/50 cursor-pointer transition-colors [&>td]:px-2 [&>td]:py-3">
-                    {tc.shown.map(c => (
-                      <td key={c.key} className={tc.cellClass(c)}>{cell(c.key, aid, m)}</td>
-                    ))}
-                    <td className="align-top text-center" onClick={e => e.stopPropagation()}>
-                      {/* אייקונים קומפקטיים בשורה אחת — עמודה צרה, בלי עומס.
-                          ⚠️ flex-nowrap + flex-shrink-0: בלעדיהם הכפתורים ירדו
-                          שורה או נדחסו כשהעמודה מצטמצמת. */}
-                      <div className="flex flex-nowrap items-center justify-center gap-1">
-                        <Link href={`/admin/maternity/${aid.id}`} title="צפייה בתיק" aria-label="צפייה בתיק"
-                          className="inline-flex items-center justify-center w-7 h-7 flex-shrink-0 text-slate-600 hover:text-indigo-600 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 transition-colors">
-                          <Eye size={14} />
-                        </Link>
-                        <DeleteAidButton aid={aid} />
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {/* דפדוף + בורר גודל עמוד (20/50/100/200) — זהה לכל טבלאות המערכת */}
-        <div className="px-4 py-3 border-t border-slate-100">
-          <Pagination page={pg.page} size={pg.size} total={pg.total} onPage={pg.setPage} onSize={pg.setSize} />
-        </div>
-      </div>
+        </>} />
       {/* כרטסת קופצת (RecordModal): ניווט בין השורות המסוננות */}
       {openId && tc.rows.some(x => x.id === openId) && (
         <MaternityCardModal rows={tc.rows} index={tc.rows.findIndex(x => x.id === openId)}
