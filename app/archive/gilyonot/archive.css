@@ -59,3 +59,14 @@
   .arch .bento{gap:10px}
 }
 @media (prefers-reduced-motion:reduce){.arch *{transition:none!important}}
+
+/* בקשת תיקון מגולש */
+.arch .fix-fab{position:fixed;bottom:20px;inset-inline-start:20px;z-index:30;width:56px;height:56px;border-radius:50%;border:0;background:var(--navy);color:#fff;font-size:32px;line-height:1;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+.arch .fix-back{position:fixed;inset:0;z-index:40;background:rgba(28,26,23,.5);display:flex;align-items:center;justify-content:center;padding:16px}
+.arch .fix-box{background:#fff;border-radius:18px;padding:24px;width:100%;max-width:480px;max-height:92vh;overflow:auto}
+.arch .fix-box h2{margin:0 0 16px;font-size:20px}
+.arch .fix-box label{display:grid;gap:4px;margin-bottom:12px;font-size:14.5px;color:var(--muted)}
+.arch .fix-box input,.arch .fix-box textarea{font:inherit;color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:10px 12px;min-height:44px}
+.arch .fix-trap{position:absolute;inset-inline-start:-9999px;width:1px;height:1px;opacity:0}
+.arch .fix-err{color:#b42318;margin:0 0 12px}
+.arch .fix-row{display:flex;gap:8px}

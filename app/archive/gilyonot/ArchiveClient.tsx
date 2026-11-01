@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import FixRequest from './FixRequest'
 import { CHUMASH_NAMES, filterRows, type ArchiveRow } from '@/lib/gilyonotArchiveView'
 
 export default function ArchiveClient({ rows, fileBase, failed }: { rows: ArchiveRow[]; fileBase: string; failed: boolean }) {
@@ -109,6 +110,7 @@ export default function ArchiveClient({ rows, fileBase, failed }: { rows: Archiv
         </div>
       </main>
 
+      <FixRequest />
       <footer className="pub-foot">דף לקריאה והורדה בלבד · היכל החתם סופר · chasamsofer.co.il</footer>
     </div>
   )

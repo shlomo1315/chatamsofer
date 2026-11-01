@@ -75,6 +75,7 @@ const navBottom: NavItem[] = [
 ]
 
 const bottomItems: { href: string; label: string; icon: React.ElementType }[] = [
+  { href: '/admin/archive-requests', label: 'בקשות תיקון בארכיון', icon: Images },
   { href: '/admin/settings', label: 'הגדרות', icon: Settings },
 ]
 
