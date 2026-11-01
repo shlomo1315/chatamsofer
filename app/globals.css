@@ -236,3 +236,16 @@ th.ltr-num {
   animation: bell-ring 2.4s ease-in-out infinite;
   transform-origin: 50% 15%;
 }
+
+/* רקע אחיד לכל החלוניות הקופצות במערכת: שינוי כאן משנה את כולן */
+.dlg-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgb(14 24 48 / 0.5);
+  backdrop-filter: blur(4px);
+}

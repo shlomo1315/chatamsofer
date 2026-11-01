@@ -515,7 +515,7 @@ function AdjustDialog({ row, price, history, onClose, onDone }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+    <div className="dlg-backdrop " onClick={onClose}>
       <div
         role="dialog" aria-modal="true" aria-labelledby="adjust-title"
         className="max-h-[90vh] w-full max-w-[440px] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"

@@ -153,7 +153,7 @@ export default function EmailsClient() {
 
       {/* ── חלון שליחה ── */}
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={() => !busy && setOpen(false)}>
+        <div className="dlg-backdrop " onClick={() => !busy && setOpen(false)}>
           <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
               <h2 className="font-bold text-slate-900">מייל חדש</h2>

@@ -112,7 +112,7 @@ export default function SendVouchersPanel({ distributionId }: { distributionId: 
       )}
 
       {previewOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+        <div className="dlg-backdrop "
           onClick={() => setPreviewOpen(false)}>
           <div className="flex h-full max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
             onClick={e => e.stopPropagation()}>

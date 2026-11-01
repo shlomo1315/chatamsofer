@@ -350,7 +350,7 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
           <table className="w-full text-sm text-right" style={tc.rt.tableStyle}>
             <colgroup>{tc.rt.cols}</colgroup>
             <thead>
-              <tr className="bg-gradient-to-b from-slate-50 to-slate-100/60 border-b border-slate-200
+              <tr className="bg-sand border-b border-slate-200
                              [&>th]:px-4 [&>th]:py-3.5 [&>th]:text-[11px] [&>th]:font-bold [&>th]:uppercase
                              [&>th]:tracking-wide [&>th]:text-slate-500 [&>th]:align-middle [&>th]:text-right">
                 {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב.

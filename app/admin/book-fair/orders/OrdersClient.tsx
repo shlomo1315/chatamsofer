@@ -862,7 +862,7 @@ function renderCell(key: ColKey, o: BookFairOrder, counts: Record<string, number
               שהמסך יציג זאת אי אפשר להצליב מול הקופה בסוף הערב. */}
           {o.channel === 'fair' && o.payment_method && (
             <span className="text-[11px] text-slate-400">
-              {o.payment_method === 'cash' ? '💵 מזומן' : '💳 אשראי'}
+              {o.payment_method === 'cash' ? 'מזומן' : 'אשראי'}
               {o.sold_by ? ` · ${o.sold_by}` : ''}
             </span>
           )}

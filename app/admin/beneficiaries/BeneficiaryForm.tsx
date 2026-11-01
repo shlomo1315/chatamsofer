@@ -324,7 +324,7 @@ function LineageTreePicker({
             type="text"
             value={tpSearch}
             onChange={e => setTpSearch(e.target.value)}
-            placeholder="🔍 חיפוש שם בשושלת..."
+            placeholder="חיפוש שם בשושלת..."
             style={{ width: '100%', height: 30, borderRadius: 8, border: '1px solid #E2E8F0', padding: '0 10px', fontSize: 12, color: '#334155', outline: 'none', direction: 'rtl', fontFamily: 'inherit', background: '#fff' }}
           />
           {searchResults.length > 0 && (
@@ -912,7 +912,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
 
       {/* ── Success modal (auto-closes after 3s) ── */}
       {savedInfo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
+        <div className="dlg-backdrop ">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-7 w-full max-w-sm mx-4 text-center">
             <div className="w-14 h-14 rounded-full bg-green-100 text-green-600 flex items-center justify-center mx-auto mb-4">
               <CheckCircle2 size={30} />

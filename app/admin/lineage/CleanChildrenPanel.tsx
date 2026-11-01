@@ -111,7 +111,7 @@ export default function CleanChildrenPanel({
   const totalDup = clusters.reduce((s, g) => s + g.length - 1, 0)
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="dlg-backdrop " onClick={onClose}>
       <div dir="rtl" onClick={e => e.stopPropagation()}
         className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
         <div className="flex items-start gap-3 bg-purple-600 px-5 py-4 text-white">

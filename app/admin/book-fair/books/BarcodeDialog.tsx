@@ -33,7 +33,7 @@ export default function BarcodeDialog({ books, busy, onDownload, onClose }: {
   const btn = 'inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 disabled:opacity-50'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" role="dialog" aria-modal="true" aria-label="ברקודים להדפסה">
+    <div className="dlg-backdrop " role="dialog" aria-modal="true" aria-label="ברקודים להדפסה">
       <div className="flex w-full max-w-lg flex-col gap-4 rounded-2xl bg-white p-6 shadow-xl">
         <div className="flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900"><Barcode size={20} /> ברקודים להדפסה</h2>

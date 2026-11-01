@@ -168,7 +168,7 @@ export function DocViewerProvider({ children }: { children: React.ReactNode }) {
         // רקע כהה — לחיצה עליו (מחוץ לקובץ) סוגרת את החלונית
         <div
           onClick={close}
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/75 p-4 sm:p-8 animate-[fadeIn_0.12s_ease-out]"
+          className="dlg-backdrop sm:p-8 animate-[fadeIn_0.12s_ease-out]"
           role="dialog"
           aria-modal="true"
         >

@@ -22,7 +22,7 @@ export default function AdminReviewAlert({ reason, motherName }: {
   const text = (reason ?? '').trim()
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="dlg-backdrop ">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setOpen(false)} />
       <div className="relative w-full max-w-md rounded-2xl border-2 border-amber-300 bg-white p-5 shadow-2xl">
         <div className="mb-3 flex items-start gap-3">

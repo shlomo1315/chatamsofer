@@ -63,7 +63,7 @@ export default function MaternityDocsFixDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/50 p-4" dir="rtl"
+    <div className="dlg-backdrop " dir="rtl"
       onClick={() => { if (!saving) onClose() }}>
       <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}>

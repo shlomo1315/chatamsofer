@@ -546,7 +546,7 @@ export default function LegacyMailSettings() {
           התווית נוצרת ומודבקת ב-Gmail עצמו — לא רק בממשק שלנו. */}
       {picker && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          className="dlg-backdrop "
           onClick={() => !labelBusy && setPicker(null)}
         >
           <div

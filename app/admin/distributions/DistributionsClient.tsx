@@ -61,12 +61,12 @@ export default function DistributionsClient({ distributions, counts = {} }: { di
             <Link key={d.id} href={`/admin/distributions/${d.id}`} className="group">
               <div className="relative overflow-hidden bg-white rounded-2xl border border-slate-200 hover:border-indigo-300 hover:shadow-lg transition-all duration-200 cursor-pointer h-full flex flex-col">
                 {/* פס עליון צבעוני לפי מצב הרישום */}
-                <div className={`h-1 ${d.registration_open ? 'bg-gradient-to-l from-green-400 to-emerald-500' : 'bg-slate-200'}`} />
+                <div className={`h-1 ${d.registration_open ? 'bg-emerald-600' : 'bg-slate-200'}`} />
                 <div className="p-5 flex flex-col gap-4 flex-1">
                   {/* כותרת + סטטוסים */}
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3 min-w-0">
-                      <div className="w-11 h-11 bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
+                      <div className="w-11 h-11 bg-sand rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
                         <Gift size={20} className="text-indigo-600" />
                       </div>
                       <div className="min-w-0">

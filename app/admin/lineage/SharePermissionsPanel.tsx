@@ -185,7 +185,7 @@ export default function SharePermissionsPanel({ onClose }: { onClose: () => void
   }
 
   return (
-    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" dir="rtl" onClick={onClose}>
+    <div className="dlg-backdrop " dir="rtl" onClick={onClose}>
       <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[88vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="border-b border-slate-200 px-5 py-3 flex items-center justify-between">
           <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">

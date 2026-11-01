@@ -93,7 +93,7 @@ export default function QuickChainModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
+    <div className="dlg-backdrop " onClick={onClose}>
       <div dir="rtl" onClick={e => e.stopPropagation()}
         className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
         <div className="mb-3 flex items-start justify-between gap-2">

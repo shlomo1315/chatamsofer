@@ -198,12 +198,12 @@ function DeliveryNote({ order: o, items }: { order: Order; items: Item[] }) {
         {/* ⚠️ מודפס בכוונה: מי שאורז חייב לראות שהכתובת לא אומתה לפני שהחבילה יוצאת. */}
         {shipping && !o.address_confirmed && (
           <p className="mt-3 rounded-lg border-2 border-red-600 px-3 py-1.5 text-base font-bold text-red-700">
-            ⚠ הכתובת טרם אומתה מול ההקלטה — לבדוק לפני משלוח
+            הכתובת טרם אומתה מול ההקלטה — לבדוק לפני משלוח
           </p>
         )}
         {!o.customer_name && (
           <p className="mt-2 rounded-lg border-2 border-red-600 px-3 py-1.5 text-base font-bold text-red-700">
-            ⚠ השם טרם אומת מול ההקלטה
+            השם טרם אומת מול ההקלטה
           </p>
         )}
       </section>

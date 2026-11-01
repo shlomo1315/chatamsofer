@@ -121,7 +121,7 @@ export default function MergeCenterPanel({ onClose, onDone }: { onClose: () => v
   }, [doMerge, next, prev, onClose])
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/45 backdrop-blur-sm flex items-start justify-center overflow-auto p-4" onClick={onClose}>
+    <div className="dlg-backdrop items-start justify-center overflow-auto p-4" onClick={onClose}>
       <div className="w-full max-w-5xl my-6 rounded-2xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
         {/* כותרת + מונים */}
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">

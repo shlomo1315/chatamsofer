@@ -243,7 +243,7 @@ export default function GenerationMergePanel({ onDone, onClose }: { onDone?: () 
 function Modal({ tone, title, icon, children }: { tone: 'ok' | 'warn' | 'bad'; title: string; icon: React.ReactNode; children: React.ReactNode }) {
   const c = tone === 'ok' ? ['border-emerald-500', 'bg-emerald-600'] : tone === 'warn' ? ['border-amber-400', 'bg-amber-600'] : ['border-red-400', 'bg-red-600']
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" dir="rtl" role="dialog" aria-modal="true">
+    <div className="dlg-backdrop " dir="rtl" role="dialog" aria-modal="true">
       <div className={`w-full max-w-lg overflow-hidden rounded-2xl border-4 bg-white shadow-2xl ${c[0]}`}>
         <div className={`flex items-center gap-2.5 px-5 py-4 ${c[1]}`}>
           {icon}

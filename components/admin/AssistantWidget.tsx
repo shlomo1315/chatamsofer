@@ -242,7 +242,7 @@ export default function AssistantWidget() {
             type="button"
             onClick={() => setOpen(true)}
             aria-label="פתיחת עוזר — העוזר החכם"
-            className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-600 text-white shadow-xl shadow-indigo-500/40 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
+            className="relative w-16 h-16 rounded-2xl bg-navy hover:bg-navy-soft text-white shadow-xl  flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
           >
             {/* הילה פועמת — עדינה, לא מסיחה */}
             <span className="absolute inset-0 rounded-2xl bg-indigo-500 opacity-40 animate-ping-slow" />
@@ -260,7 +260,7 @@ export default function AssistantWidget() {
       {open && (
         <div className="fixed bottom-6 left-6 z-40 w-[min(400px,calc(100vw-3rem))] h-[min(560px,calc(100vh-6rem))] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden">
           {/* כותרת */}
-          <div className="bg-gradient-to-l from-indigo-600 to-violet-600 px-4 py-3 flex items-center justify-between">
+          <div className="bg-navy px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2.5 text-white">
               <div className="relative w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
                 <BotMessageSquare size={17} strokeWidth={1.9} />

@@ -122,7 +122,7 @@ export default function BirthCertificatePreview({
       )}
 
       {/* פעולות בריחוף */}
-      <div className="absolute inset-x-0 top-0 flex items-center justify-end gap-1.5 p-2 bg-gradient-to-b from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="absolute inset-x-0 top-0 flex items-center justify-end gap-1.5 p-2 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity">
         <ViewDocButton url={url} className={`${btn} text-indigo-700`}>
           <ExternalLink size={13} /> פתח
         </ViewDocButton>

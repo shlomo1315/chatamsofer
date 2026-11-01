@@ -258,7 +258,7 @@ export default function LineageChainChips({
                 title={`דור ${g.generation} — לחצו לעריכה`}
                 className={`text-xs px-2.5 py-1 rounded-full border transition-all hover:brightness-95 ${STYLE[color]} ${overridden ? 'ring-2 ring-offset-1 ring-slate-300' : ''}`}>
                 <span className={`ml-1 ${GEN_TXT[color]}`}>דור {g.generation}</span>{g.name}{relTag(g.relation)}
-                {color === 'red' && <span className="mr-1">⚠</span>}
+                {color === 'red' && <span className="mr-1">!</span>}
               </button>
 
               {/* תפריט קטן — נפתח בלחיצה על הצ'יפ */}
@@ -307,7 +307,7 @@ export default function LineageChainChips({
 
       {/* בורר צמתים — מודל */}
       {pickerGen != null && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" dir="rtl"
+        <div className="dlg-backdrop " dir="rtl"
           onClick={() => !assigning && setPickerGen(null)}>
           <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md max-h-[80vh] overflow-y-auto p-5"
             onClick={e => e.stopPropagation()}>
@@ -375,7 +375,7 @@ export default function LineageChainChips({
           בדורות סמוכים, ובחירה שגויה דרסה את השרשרת ללא דרך חזרה.
           ───────────────────────────────────────────────────────────────── */}
       {pending && impact && (
-        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4" dir="rtl"
+        <div className="dlg-backdrop " dir="rtl"
           onClick={() => !assigning && setPending(null)}>
           <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[85vh] overflow-y-auto"
             onClick={e => e.stopPropagation()}>

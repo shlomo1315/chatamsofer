@@ -65,7 +65,7 @@ export default function VoucherAfterLoadDialog({
   const realRecipient = testMode ? (testEmail ?? '') : email.trim()
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={onClose}>
+    <div className="dlg-backdrop " onClick={onClose}>
       <div className="flex h-full max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
         onClick={e => e.stopPropagation()}>
 

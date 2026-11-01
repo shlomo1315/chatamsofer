@@ -283,7 +283,7 @@ export default function FeedbackTable({ rows, questions }: { rows: FeedbackRow[]
 
       {/* מודל — כל התשובות המפורטות */}
       {open && (
-        <div className="fixed inset-0 bg-slate-900/40 z-50 flex items-center justify-center p-4" onClick={() => setOpen(null)}>
+        <div className="dlg-backdrop " onClick={() => setOpen(null)}>
           <div
             className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-auto"
             onClick={e => e.stopPropagation()}

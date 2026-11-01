@@ -906,7 +906,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
       {beneficiary.eligibility_status === 'rejected' && (
         <div className="rounded-2xl border-2 border-red-200 bg-red-50 px-5 py-4">
           <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
-            <p className="text-sm font-bold text-red-800">❌ הרישום נדחה</p>
+            <p className="text-sm font-bold text-red-800">הרישום נדחה</p>
             <p className="text-xs text-red-500">
               {(beneficiary as { rejecter?: { full_name?: string } | null }).rejecter?.full_name && (
                 <>נדחה ע״י <span className="font-semibold">{(beneficiary as { rejecter?: { full_name?: string } | null }).rejecter?.full_name}</span></>

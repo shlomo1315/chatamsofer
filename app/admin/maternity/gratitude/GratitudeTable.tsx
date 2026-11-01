@@ -308,7 +308,7 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
       {/* מודל */}
       {open && (
         <div
-          className="fixed inset-0 bg-slate-900/40 z-50 flex items-center justify-center p-4"
+          className="dlg-backdrop "
           onClick={() => setOpen(null)}
         >
           <div

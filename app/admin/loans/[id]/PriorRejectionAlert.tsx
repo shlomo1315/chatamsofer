@@ -46,9 +46,9 @@ export default function PriorRejectionAlert({ loanId, familyName }: { loanId: st
   if (dismissed || rejections.length === 0) return null
 
   return (
-    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl">
+    <div className="dlg-backdrop " dir="rtl">
       <div className="bg-white rounded-2xl shadow-2xl border border-amber-200 w-full max-w-lg overflow-hidden">
-        <div className="bg-gradient-to-l from-amber-500 to-orange-500 px-6 py-4 flex items-center gap-3">
+        <div className="bg-gold hover:bg-[#A87A1C] px-6 py-4 flex items-center gap-3">
           <AlertTriangle size={22} className="text-white flex-shrink-0" />
           <div>
             <h2 className="text-white font-extrabold">שימו לב — בקשה קודמת נדחתה</h2>

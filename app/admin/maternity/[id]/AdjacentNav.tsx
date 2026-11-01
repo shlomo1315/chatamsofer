@@ -74,7 +74,7 @@ export default function AdjacentNav({
       )}
 
       {ended && (
-        <div className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" dir="rtl">
+        <div className="dlg-backdrop " dir="rtl">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border-4 border-emerald-500">
             <div className="bg-emerald-600 px-5 py-4 flex items-center gap-2.5">
               <CheckCircle2 size={22} className="text-white shrink-0" />

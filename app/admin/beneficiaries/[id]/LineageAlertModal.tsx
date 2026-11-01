@@ -33,7 +33,7 @@ export default function LineageAlertModal({ generations, allGens }: {
   if (!open || !generations.length) return null
   const gensText = [...generations].sort((a, b) => a - b).map(g => `דור ${g}`).join(', ')
   return (
-    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" dir="rtl"
+    <div className="dlg-backdrop " dir="rtl"
       onClick={() => setOpen(false)}>
       <div className="relative bg-white rounded-2xl shadow-2xl border-2 border-red-300 w-full max-w-lg p-6 text-center"
         style={{ animation: 'pop-in 0.25s ease-out' }} onClick={e => e.stopPropagation()}>

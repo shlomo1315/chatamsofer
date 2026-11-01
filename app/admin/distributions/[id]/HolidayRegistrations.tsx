@@ -1106,7 +1106,7 @@ export default function HolidayRegistrations({
           🔴 מציג *מראש* מי יידלג ולמה. בלי זה ההפרש בין "סומנו 800"
           ל"נטענו 340" נראה כתקלה, והמנהל מנסה שוב על אותן שורות. */}
       {bulkAction && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+        <div className="dlg-backdrop "
           onClick={() => !bulkBusy && setBulkAction(null)}>
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
             <h4 className="mb-3 text-sm font-extrabold text-slate-900">
@@ -1181,7 +1181,7 @@ export default function HolidayRegistrations({
           🔴 כסף אמיתי בלי דרך חזרה. השם, הסכום והמוקד מוצגים שוב כדי
           שלחיצה בשורה הלא נכונה תיתפס כאן ולא אצל המשפחה. */}
       {confirmLoad && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+        <div className="dlg-backdrop "
           onClick={() => setConfirmLoad(null)}>
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
             <h4 className="mb-3 text-sm font-extrabold text-slate-900">אישור טעינת כרטיס</h4>
