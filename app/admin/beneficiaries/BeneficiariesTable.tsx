@@ -1,5 +1,6 @@
 'use client'
 import { useState, useMemo } from 'react'
+import StatStrip from '@/components/admin/system/StatStrip'
 import Link from 'next/link'
 import { Search, Eye, Phone, Mail, MapPin, Clock, Check, X, Users, FileText, ClipboardCheck, ShieldAlert } from 'lucide-react'
 import DataTable, { Column } from '@/components/ui/DataTable'
@@ -341,26 +342,9 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
       {/* כפתור פעולה (למשל רישום אדם חריג) — בראש הטבלה, מיושר לסוף */}
       {headerAction && <div className="flex justify-end">{headerAction}</div>}
       {/* Status filter cards — ה-counts מגיעים מ-DB (מדויקים על כל הרשומות) */}
-      <div className={`grid grid-cols-2 sm:grid-cols-4 gap-2.5 ${cards.length > 4 ? 'lg:grid-cols-7' : 'lg:grid-cols-4'}`}>
-        {cards.map((c) => {
-          const Icon = c.icon
-          const isActive = activeFilter === c.key
-          return (
-            <button
-              key={c.key}
-              title={c.label}
-              onClick={() => setStatus(isActive && c.key !== 'all' ? 'all' : c.key)}
-              className={`flex flex-col gap-1 rounded-[14px] border bg-white px-4 py-3.5 text-right transition-colors ${isActive ? 'border-[#14213D] ring-1 ring-[#14213D]' : 'border-[#E7E3DB] hover:border-[#cfc8bb]'}`}
-            >
-              <span className="flex items-center gap-2 text-sm font-medium text-[#5F6470]">
-                <Icon size={15} className={c.iconCls.split(' ')[1]} />
-                <span className="truncate">{c.label}</span>
-              </span>
-              <span className="text-[30px] font-extrabold text-[#14213D] tabular-nums leading-tight">{(counts[c.key] ?? 0).toLocaleString('he-IL')}</span>
-            </button>
-          )
-        })}
-      </div>
+      <StatStrip active={activeFilter}
+        items={cards.map(c => ({ key: c.key, label: c.label, icon: c.icon, count: counts[c.key] ?? 0 }))}
+        onSelect={k => setStatus(activeFilter === k && k !== 'all' ? 'all' : k)} />
 
       {/* ── חיפוש ── */}
       {/* 🔴 שורה משלו. קודם הוא חלק משורת flex-wrap אחת יחד עם מצב משפחתי,

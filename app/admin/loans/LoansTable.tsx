@@ -1,5 +1,6 @@
 'use client'
 import { useState, useMemo } from 'react'
+import StatStrip from '@/components/admin/system/StatStrip'
 import Link from 'next/link'
 import { Clock, Check, X, Eye, Search, Layers, CheckCircle2, Minus, MessageSquare } from 'lucide-react'
 import LoanCardModal from './LoanCardModal'
@@ -289,25 +290,9 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
   return (
     <div className="flex flex-col gap-5">
       {/* Filter cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {CARD_DEFS.map(c => {
-          const Icon = c.icon
-          const isActive = filter === c.key
-          return (
-            <button key={c.key}
-              onClick={() => { setSub('all'); setFilter(isActive && c.key !== 'all' ? 'all' : c.key) }}
-              className={`flex items-center gap-3 rounded-xl border bg-white p-3.5 text-right transition-all ${isActive ? c.active : c.base}`}>
-              <span className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${c.iconCls}`}>
-                <Icon size={18} />
-              </span>
-              <span className="flex flex-col min-w-0">
-                <span className="text-2xl font-bold text-slate-900 tabular-nums leading-none">{counts[c.key]}</span>
-                <span className="text-xs text-slate-500 mt-1 truncate">{c.label}</span>
-              </span>
-            </button>
-          )
-        })}
-      </div>
+      <StatStrip active={filter}
+        items={CARD_DEFS.map(c => ({ key: c.key, label: c.label, icon: c.icon, count: counts[c.key] }))}
+        onSelect={k => { setSub('all'); setFilter(filter === k && k !== 'all' ? 'all' : k) }} />
 
       {/* Table */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
