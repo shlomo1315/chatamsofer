@@ -11,6 +11,8 @@ export const gilyonotUrls = {
   download: (token: string) => `${SITE}/api/gilyonot/d/${token}`,
   pixel: (token: string) => `${SITE}/api/gilyonot/o/${token}`,
   unsubscribe: (token: string) => `${SITE}/api/gilyonot/unsubscribe/${token}`,
+  /** הסרה לנמען מרשימה חיצונית (לפי טוקן המשלוח): מכל הרשימות */
+  optout: (token: string) => `${SITE}/api/gilyonot/optout/${token}`,
   signup: () => `${SITE}/gilyonot`,
   archive: () => `${SITE}/archive/gilyonot`,
 }
