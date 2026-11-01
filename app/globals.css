@@ -5,8 +5,22 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-heebo);
 
-  --color-primary: #2563eb;
-  --color-primary-dark: #1d4ed8;
+  /* אסימוני העיצוב של האדמין (v4): נייבי וזהב. שינוי כאן משפיע על כל המערכת. */
+  --color-navy: #14213D;
+  --color-navy-dark: #0E1830;
+  --color-navy-soft: #22345E;
+  --color-gold: #C0912F;
+  --color-gold-soft: #F3E9CF;
+  --color-paper: #FFFDF8;
+  --color-sand: #FBF8F1;
+  --color-line: #E6DFCF;
+  --color-line-strong: #D9CFB9;
+  --color-ink: #1B2338;
+  --color-ink-soft: #6B6352;
+  --color-ink-faint: #958C78;
+
+  --color-primary: #14213D;
+  --color-primary-dark: #0E1830;
   --color-surface: #ffffff;
   --color-surface-alt: #f5f4f8;
   --color-border: #e4e4e7;

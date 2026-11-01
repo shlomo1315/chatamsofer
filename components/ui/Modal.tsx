@@ -54,7 +54,7 @@ export default function Modal({ open, onClose, title, children, size = 'md', foo
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        className="absolute inset-0 bg-navy-dark/45 backdrop-blur-sm"
         onClick={onClose}
       />
       <div
@@ -63,21 +63,21 @@ export default function Modal({ open, onClose, title, children, size = 'md', foo
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className={`relative w-full ${sizeClasses[size]} bg-white rounded-xl shadow-xl flex flex-col max-h-[90vh] outline-none`}
+        className={`relative w-full ${sizeClasses[size]} bg-paper rounded-[14px] border border-line shadow-2xl flex flex-col max-h-[90vh] outline-none`}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b-2 border-gold/60">
+          <h2 className="text-lg font-bold text-navy">{title}</h2>
           <button
             onClick={onClose}
             aria-label="סגור"
-            className="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+            className="rounded-lg p-1.5 text-ink-faint hover:text-navy hover:bg-sand transition-colors"
           >
             <X size={18} />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-4">{children}</div>
         {footer && (
-          <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 rounded-b-xl">
+          <div className="px-6 py-4 border-t border-line bg-sand rounded-b-[14px]">
             {footer}
           </div>
         )}

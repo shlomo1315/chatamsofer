@@ -10,14 +10,8 @@ export interface TabDef {
   content: ReactNode
 }
 
-const ACCENTS: Record<string, { active: string; idle: string }> = {
-  indigo:  { active: 'bg-indigo-600 text-white border-indigo-600',   idle: 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-100' },
-  emerald: { active: 'bg-emerald-600 text-white border-emerald-600', idle: 'bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100' },
-  violet:  { active: 'bg-violet-600 text-white border-violet-600',   idle: 'bg-violet-50 text-violet-700 border-violet-100 hover:bg-violet-100' },
-  amber:   { active: 'bg-amber-500 text-white border-amber-500',     idle: 'bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-100' },
-  sky:     { active: 'bg-sky-600 text-white border-sky-600',         idle: 'bg-sky-50 text-sky-700 border-sky-100 hover:bg-sky-100' },
-  rose:    { active: 'bg-rose-600 text-white border-rose-600',       idle: 'bg-rose-50 text-rose-700 border-rose-100 hover:bg-rose-100' },
-}
+// לשוניות v4: צבע אחד לכולן (נייבי פעיל, בז' לא פעיל). שדה accent נשמר לתאימות בלבד.
+const TAB = { active: 'bg-navy text-white border-navy', idle: 'bg-paper text-ink-soft border-line hover:bg-sand hover:text-navy' }
 
 export default function Tabs({ tabs, param = 'tab' }: { tabs: TabDef[]; param?: string }) {
   const pathname = usePathname()
@@ -44,11 +38,11 @@ export default function Tabs({ tabs, param = 'tab' }: { tabs: TabDef[]; param?: 
           py-1/-my-1 נותנים מקום ל-ring של הפוקוס. */}
       <div className="-mx-1 -my-1 flex flex-wrap gap-2 px-1 py-1">
         {tabs.map(t => {
-          const a = ACCENTS[t.accent ?? 'indigo']
+          const a = TAB
           const isActive = t.key === active
           return (
             <button key={t.key} onClick={() => select(t.key)}
-              className={`inline-flex items-center gap-1.5 whitespace-nowrap px-3.5 py-2 rounded-xl text-sm font-medium border transition-colors ${isActive ? a.active : a.idle}`}>
+              className={`inline-flex items-center gap-1.5 whitespace-nowrap px-3.5 py-2 rounded-[9px] text-sm font-semibold border transition-colors ${isActive ? a.active : a.idle}`}>
               {t.icon}{t.label}
             </button>
           )

@@ -3,17 +3,17 @@ import { EligibilityStatus, LoanStatus, MaternityStatus, DistributionStatus } fr
 type Status = EligibilityStatus | LoanStatus | MaternityStatus | DistributionStatus | string
 
 const statusConfig: Record<string, { label: string; classes: string; dotColor: string }> = {
-  pending:      { label: 'ממתין',                    classes: 'bg-amber-50 text-amber-700 border-amber-200',     dotColor: 'bg-amber-500' },
-  approved:     { label: 'מאושר',                    classes: 'bg-emerald-50 text-emerald-700 border-emerald-200', dotColor: 'bg-emerald-500' },
-  rejected:     { label: 'נדחה',                     classes: 'bg-red-50 text-red-700 border-red-200',           dotColor: 'bg-red-500' },
-  review:       { label: 'ממתין לאישור מסמכים',       classes: 'bg-violet-50 text-violet-700 border-violet-200', dotColor: 'bg-violet-500' },
-  docs_pending: { label: 'השלמת מסמכים',              classes: 'bg-blue-50 text-blue-700 border-blue-200',       dotColor: 'bg-blue-500' },
-  docs_returned: { label: 'הוחזר תיקון — לבדיקה',      classes: 'bg-teal-50 text-teal-700 border-teal-200',       dotColor: 'bg-teal-500' },
-  active:       { label: 'פעיל',                     classes: 'bg-emerald-50 text-emerald-700 border-emerald-200', dotColor: 'bg-emerald-500' },
-  completed:    { label: 'הושלם',                    classes: 'bg-zinc-100 text-zinc-600 border-zinc-200',       dotColor: 'bg-zinc-400' },
-  cancelled:    { label: 'בוטל',                     classes: 'bg-red-50 text-red-700 border-red-200',           dotColor: 'bg-red-500' },
-  defaulted:    { label: 'בפיגור',                   classes: 'bg-orange-50 text-orange-700 border-orange-200',  dotColor: 'bg-orange-500' },
-  planning:     { label: 'בתכנון',                   classes: 'bg-purple-50 text-purple-700 border-purple-200',  dotColor: 'bg-purple-500' },
+  pending:      { label: 'ממתין',                    classes: 'bg-[#FBF1D6] text-[#7A5A12] border-[#EBD9A6]',     dotColor: 'bg-amber-500' },
+  approved:     { label: 'מאושר',                    classes: 'bg-[#E0EFE4] text-[#22663A] border-[#BFDDC8]', dotColor: 'bg-emerald-500' },
+  rejected:     { label: 'נדחה',                     classes: 'bg-[#F8E3E1] text-[#8E2B22] border-[#EBC1BC]',           dotColor: 'bg-red-500' },
+  review:       { label: 'ממתין לאישור מסמכים',       classes: 'bg-[#E3E8F4] text-[#243B73] border-[#C5CFE6]', dotColor: 'bg-violet-500' },
+  docs_pending: { label: 'השלמת מסמכים',              classes: 'bg-[#E3E8F4] text-[#243B73] border-[#C5CFE6]',       dotColor: 'bg-blue-500' },
+  docs_returned: { label: 'הוחזר תיקון — לבדיקה',      classes: 'bg-[#E3E8F4] text-[#243B73] border-[#C5CFE6]',       dotColor: 'bg-teal-500' },
+  active:       { label: 'פעיל',                     classes: 'bg-[#E0EFE4] text-[#22663A] border-[#BFDDC8]', dotColor: 'bg-emerald-500' },
+  completed:    { label: 'הושלם',                    classes: 'bg-sand text-ink-soft border-line',       dotColor: 'bg-zinc-400' },
+  cancelled:    { label: 'בוטל',                     classes: 'bg-[#F8E3E1] text-[#8E2B22] border-[#EBC1BC]',           dotColor: 'bg-red-500' },
+  defaulted:    { label: 'בפיגור',                   classes: 'bg-[#FBE9D6] text-[#8A4A12] border-[#EBCBA6]',  dotColor: 'bg-orange-500' },
+  planning:     { label: 'בתכנון',                   classes: 'bg-[#E3E8F4] text-[#243B73] border-[#C5CFE6]',  dotColor: 'bg-purple-500' },
 }
 
 interface StatusBadgeProps {
@@ -25,7 +25,7 @@ interface StatusBadgeProps {
 export default function StatusBadge({ status, customLabel, size = 'md' }: StatusBadgeProps) {
   const config = statusConfig[status] ?? {
     label: status,
-    classes: 'bg-zinc-100 text-zinc-600 border-zinc-200',
+    classes: 'bg-sand text-ink-soft border-line',
     dotColor: 'bg-zinc-400',
   }
 

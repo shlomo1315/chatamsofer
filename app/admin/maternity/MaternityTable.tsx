@@ -1,5 +1,6 @@
 'use client'
 import { useState, useMemo, useEffect, useCallback } from 'react'
+import StatStrip from '@/components/admin/system/StatStrip'
 import { useIsAdmin } from '@/components/StaffPermissions'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -444,25 +445,9 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
     <div className="flex flex-col gap-5">
       {/* Filter cards — 6 כרטיסים → 6 עמודות במסך רחב, מצומצמים כדי שייכנסו בשורה אחת */}
       {!hideFilters && (
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-        {CARD_DEFS.map(c => {
-          const Icon = c.icon
-          const isActive = filter === c.key
-          return (
-            <button key={c.key}
-              onClick={() => setFilter(isActive && c.key !== 'all' ? 'all' : c.key)}
-              className={`flex items-center gap-2 rounded-xl border bg-white p-2.5 text-right transition-all ${isActive ? c.active : c.base}`}>
-              <span className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${c.iconCls}`}>
-                <Icon size={15} />
-              </span>
-              <span className="flex flex-col min-w-0">
-                <span className="text-xl font-bold text-slate-900 tabular-nums leading-none">{counts[c.key]}</span>
-                <span className="text-[11px] text-slate-500 mt-0.5 truncate">{c.label}</span>
-              </span>
-            </button>
-          )
-        })}
-      </div>
+      <StatStrip active={filter}
+        items={CARD_DEFS.map(c => ({ key: c.key, label: c.label, icon: c.icon, count: counts[c.key] }))}
+        onSelect={k => setFilter(filter === k && k !== 'all' ? 'all' : k)} />
       )}
 
       {/* Table */}
