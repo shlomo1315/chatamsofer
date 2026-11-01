@@ -71,6 +71,11 @@ export default function PersonalArea({ beneficiary: b, docsCount, contacts, onNe
   const [filter, setFilter] = useState<Filter>('all')
   const [filled, setFilled] = useState(false)
   const [openMiss, setOpenMiss] = useState<string | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [ans, setAns] = useState<Record<number, { ok: boolean; name: string; note: string }>>({})
+  const [sending, setSending] = useState(false)
+  const [sendErr, setSendErr] = useState('')
+  const [sent, setSent] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -117,6 +122,28 @@ export default function PersonalArea({ beneficiary: b, docsCount, contacts, onNe
     return { generation: i + 1, name: g?.name, gap: !g }
   })
   const gapCount = treeRows.filter(r => r.gap).length
+
+  // בקשת תיקון לאילן: סימון לכל דור, ושליחה אחת כטקסט למשרד (ממתין לאישור, לא משנה את העץ)
+  const fixes = treeRows.filter(r => ans[r.generation]?.ok === false)
+  const fixCount = fixes.length
+  const okCount = treeRows.filter(r => ans[r.generation]?.ok === true).length
+  const canSend = fixCount > 0 && fixes.every(r => ans[r.generation].name.trim().length > 0)
+  const cancelEdit = () => { setEditing(false); setAns({}); setSendErr('') }
+  const sendFix = async () => {
+    setSending(true); setSendErr('')
+    const text = fixes.map(r => {
+      const a = ans[r.generation]
+      return `דור ${r.generation}: ${r.name ? `במקום "${r.name}" ` : ''}השם הנכון "${a.name.trim()}"${a.note.trim() ? ` (${a.note.trim()})` : ''}`
+    }).join('\n')
+    try {
+      const res = await fetch('/api/portal/lineage-fix', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setSendErr(d.error ?? 'שליחת הבקשה נכשלה'); return }
+      setEditing(false); setAns({}); setSent(true)
+    } catch { setSendErr('שליחת הבקשה נכשלה') } finally { setSending(false) }
+  }
 
   const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
   const toggleMiss = (k: string) => setOpenMiss(o => (o === k ? null : k))
@@ -279,21 +306,54 @@ export default function PersonalArea({ beneficiary: b, docsCount, contacts, onNe
         <section id="pa-tree" className="card tree-c">
           <div className="phead">
             <h3 className="h3">אילן היוחסין</h3>
-            <button type="button" className="link" onClick={() => onFixLineage()}>{chain.length > 0 ? 'בקשת תיקון' : 'הוספה'}</button>
+            {!editing && (
+              <button type="button" className="link" onClick={() => { if (treeRows.length === 0) onFixLineage(); else { setEditing(true); setSent(false) } }}>
+                {chain.length > 0 ? 'בקשת תיקון' : 'הוספה'}
+              </button>
+            )}
           </div>
           {lineageNeedsFix && <p className="warn">המשרד ביקש לתקן את האילן. אפשר לעשות זאת כאן.</p>}
+          {sent && <p className="doneb" role="status">הבקשה נשלחה לאישור המשרד. אפשר לעקוב אחריה ב&quot;הבקשות שלי&quot;.</p>}
+          {editing && <p className="hintb">סמנו לכל דור &quot;נכון&quot; או &quot;לתקן&quot;. אפשר לתקן כמה דורות באותה בקשה, ובסוף שולחים הכל יחד.</p>}
           {treeRows.length === 0 ? (
             <p className="muted">עדיין לא נוסף אילן. [להשלים]</p>
           ) : (
-            <ol className="tree">
-              {treeRows.map(g => (
-                <li key={g.generation} className={g.gap ? 'gap' : ''}>
-                  <span className="av">{g.generation}</span>
-                  <span><small>דור {g.generation}</small><b>{g.gap ? 'חסר דור' : g.name || '[להשלים]'}</b></span>
-                  <button type="button" className="link" onClick={() => onFixLineage(g.generation)}>{g.gap ? 'הוספה' : 'תיקון'}</button>
-                </li>
-              ))}
+            <ol className={`tree${editing ? ' editing' : ''}`}>
+              {treeRows.map((g, i) => {
+                const a = ans[g.generation]
+                return (
+                  <li key={g.generation} className={g.gap ? 'gap' : i === 0 ? 'root' : ''} style={{ ['--d' as string]: i }}>
+                    <div className="node">
+                      <span className="av">{i === 0 && !g.gap ? 'א' : g.generation}</span>
+                      <span className="tx"><small>דור {g.generation}</small><b>{g.gap ? 'חסר דור' : g.name || '[להשלים]'}</b></span>
+                      {editing ? (
+                        <span className="edit">
+                          <button type="button" className={`mini y${a?.ok === true ? ' sel' : ''}`} onClick={() => setAns(p => ({ ...p, [g.generation]: { ok: true, name: '', note: '' } }))}><Check size={13} />נכון</button>
+                          <button type="button" className={`mini n${a?.ok === false ? ' sel' : ''}`} onClick={() => setAns(p => ({ ...p, [g.generation]: { ok: false, name: p[g.generation]?.name ?? '', note: p[g.generation]?.note ?? '' } }))}>{g.gap ? 'להוסיף' : 'לתקן'}</button>
+                        </span>
+                      ) : (
+                        <span className="st">{g.gap ? <><Clock size={13} />לא מלא</> : <><Check size={13} />מאושר</>}</span>
+                      )}
+                    </div>
+                    {editing && a?.ok === false && (
+                      <div className="fx">
+                        <label>השם הנכון<input value={a.name} onChange={e => setAns(p => ({ ...p, [g.generation]: { ...a, name: e.target.value } }))} placeholder="השם המלא כפי שצריך להופיע" autoFocus /></label>
+                        <label>הערה למשרד (לא חובה)<input value={a.note} onChange={e => setAns(p => ({ ...p, [g.generation]: { ...a, note: e.target.value } }))} placeholder="מקור או הסבר קצר" /></label>
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
             </ol>
+          )}
+          {editing && (
+            <div className="ebar">
+              <div className="c">בבקשה: <b>{fixCount}</b> תיקונים · <b>{okCount}</b> אושרו{sendErr && <span className="errb"> · {sendErr}</span>}</div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button type="button" className="ghost" onClick={cancelEdit}>ביטול</button>
+                <button type="button" className="send" disabled={!canSend || sending} onClick={sendFix}>{sending ? 'שולח…' : 'שליחה לאישור'}</button>
+              </div>
+            </div>
           )}
           {contacts.length > 0 && (
             <div className="help">
@@ -322,7 +382,7 @@ function Row({ k, v, ltr, num, locked }: { k: string; v?: string; ltr?: boolean;
 const DOTS = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22'%3E%3Ccircle cx='1' cy='1' r='1' fill='%23ffffff' fill-opacity='.10'/%3E%3C/svg%3E\")"
 
 const CSS = `
-.pa{--card:#fff;--line:rgba(26,26,46,.08);--ink:#16162A;--mut:#5F6475;--soft:#9CA0AE;--navy:#17153B;--ind:#4338CA;--ind-50:#EEF0FF;--ok:#157347;--ok-50:#E7F5EC;--amb:#B26A00;--amb-50:#FFF3DC;--bord:#8C2F39;--teal:#0F6E78;--gold:#D9B26A;--sh:0 1px 1px rgba(20,20,40,.03),0 2px 4px rgba(20,20,40,.03),0 12px 32px -12px rgba(20,20,40,.10);--ease:cubic-bezier(.2,.7,.2,1);font-family:Heebo,system-ui,sans-serif;color:var(--ink);font-size:15px;line-height:1.55}
+.pa{--card:#fff;--line:rgba(26,26,46,.08);--ink:#16162A;--mut:#5F6475;--soft:#9CA0AE;--navy:#17153B;--ind:#4338CA;--ind-50:#EEF0FF;--ok:#157347;--ok-50:#E7F5EC;--amb:#B26A00;--amb-50:#FFF3DC;--bord:#8C2F39;--teal:#0F6E78;--teal-50:#E6F2F3;--gold:#D9B26A;--sh:0 1px 1px rgba(20,20,40,.03),0 2px 4px rgba(20,20,40,.03),0 12px 32px -12px rgba(20,20,40,.10);--ease:cubic-bezier(.2,.7,.2,1);font-family:Heebo,system-ui,sans-serif;color:var(--ink);font-size:15px;line-height:1.55}
 .pa *{box-sizing:border-box}
 .pa button{font-family:inherit;cursor:pointer;color:inherit}
 .pa .num{font-variant-numeric:tabular-nums}
@@ -390,7 +450,7 @@ const CSS = `
 .pa .stat .sp i{flex:1;height:4px;border-radius:99px;background:#ECEBE6}
 .pa .stat .sp i.on{background:var(--c)}
 .pa .req-c{grid-column:span 8;padding:22px 24px}
-.pa .tree-c{grid-column:span 4;padding:22px}
+.pa .tree-c{grid-column:1/-1;padding:22px 24px}
 .pa .phead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;flex-wrap:wrap}
 .pa .seg{display:inline-flex;background:#F1F0EC;border-radius:12px;padding:3px;gap:2px}
 .pa .seg button{border:0;background:none;font-size:12.5px;font-weight:700;color:var(--mut);padding:6px 12px;border-radius:9px;min-height:32px}
@@ -414,14 +474,39 @@ const CSS = `
 .pa .nx b{color:var(--ink)}
 .pa .warn{font-size:12.5px;color:#8A5200;background:var(--amb-50);border-radius:12px;padding:8px 12px;margin:0 0 8px}
 .pa .tree{list-style:none;margin:0;padding:0}
-.pa .tree li{display:flex;align-items:center;gap:10px;padding:7px 0;position:relative}
-.pa .tree li:not(:last-child)::before{content:"";position:absolute;inset-inline-start:15px;top:38px;bottom:-8px;width:2px;background:#E2E6EE}
-.pa .av{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;font-weight:800;font-size:12px;background:color-mix(in srgb,var(--teal) 10%,#fff);color:var(--teal);flex-shrink:0;z-index:1}
-.pa .tree li.gap .av{background:var(--amb-50);color:var(--amb);border:1px dashed #E8BE6E}
-.pa .tree small{display:block;font-size:11.5px;color:var(--soft)}
-.pa .tree b{font-size:14.5px}
-.pa .tree .link{margin-inline-start:auto}
-.pa .tree li.gap b{color:var(--amb);font-weight:600}
+.pa .tree li{position:relative;padding-inline-start:calc(var(--d) * 26px)}
+.pa .tree .node{position:relative;display:flex;align-items:center;gap:12px;padding:8px 10px;border-radius:16px;margin-bottom:6px;border:1px solid transparent;transition:background .15s}
+.pa .tree li:not(:first-child) .node::before{content:"";position:absolute;inset-inline-start:-12px;top:-14px;width:12px;height:36px;border-inline-start:2px solid #D8D6CF;border-bottom:2px solid #D8D6CF;border-end-start-radius:12px}
+.pa .tree .node:hover{background:#F6F5F1}
+.pa .av{width:40px;height:40px;border-radius:13px;display:grid;place-items:center;font-weight:800;font-size:13px;background:var(--teal-50);color:var(--teal);flex-shrink:0;transition:transform .2s cubic-bezier(.2,.7,.2,1)}
+.pa .tree .node:hover .av{transform:scale(1.06)}
+.pa .tree li.root .av{background:var(--navy);color:var(--gold);width:46px;height:46px}
+.pa .tree li.gap .av{background:var(--amb-50);color:var(--amb);border:1.5px dashed #E8BE6E}
+.pa .tree .tx{min-width:0;flex:1}
+.pa .tree small{display:block;font-size:11.5px;color:var(--soft);font-weight:600}
+.pa .tree b{font-size:15px;line-height:1.35}
+.pa .tree li.gap b{color:#8A5200;font-weight:600}
+.pa .tree .st{font-size:11.5px;font-weight:700;color:var(--ok);display:flex;align-items:center;gap:4px;white-space:nowrap}
+.pa .tree li.gap .st{color:var(--amb)}
+.pa .tree .edit{display:flex;gap:6px}
+.pa .tree.editing .node{background:#FBFAF7;border-color:var(--line)}
+.pa .mini{border:1.5px solid var(--line);background:#fff;border-radius:10px;font-size:12.5px;font-weight:700;padding:6px 10px;min-height:36px;display:inline-flex;align-items:center;gap:4px}
+.pa .mini.y.sel{border-color:var(--ok);background:var(--ok-50);color:var(--ok)}
+.pa .mini.n.sel{border-color:var(--amb);background:var(--amb-50);color:#8A5200}
+.pa .fx{display:flex;flex-direction:column;gap:8px;margin:0 0 10px;padding-inline-start:52px}
+.pa .fx label{font-size:12.5px;font-weight:700;color:var(--mut);display:flex;flex-direction:column;gap:5px}
+.pa .fx input{border:1px solid #DAD8D1;border-radius:12px;padding:10px 12px;font-size:15px;background:#fff;min-height:44px;font-weight:500;font-family:inherit}
+.pa .fx input:focus{outline:2px solid var(--ind);outline-offset:0;border-color:transparent}
+.pa .hintb{font-size:13px;background:var(--ind-50);color:#2F2896;border-radius:12px;padding:10px 12px;margin:0 0 12px}
+.pa .doneb{font-size:13.5px;background:var(--ok-50);color:var(--ok);border-radius:12px;padding:10px 12px;margin:0 0 12px;font-weight:600}
+.pa .errb{font-size:12.5px;color:#B42318;margin:0 0 8px}
+.pa .ebar{position:sticky;bottom:12px;margin-top:16px;background:var(--navy);color:#fff;border-radius:16px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;box-shadow:0 18px 40px -16px rgba(23,21,59,.6)}
+.pa .ebar .c{font-size:13.5px;color:#CFCDEF}
+.pa .ebar .c b{color:#fff;font-variant-numeric:tabular-nums}
+.pa .ebar button{border:0;border-radius:12px;font-weight:700;font-size:14px;padding:10px 16px;min-height:44px;font-family:inherit}
+.pa .ebar .send{background:var(--gold);color:var(--navy)}
+.pa .ebar .send:disabled{opacity:.4}
+.pa .ebar .ghost{background:rgba(255,255,255,.1);color:#fff}
 .pa .help{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-size:13px;display:flex;flex-direction:column;gap:4px}
 .pa .help a{color:var(--ind);font-weight:700;word-break:break-all}
 @media (max-width:920px){
@@ -433,6 +518,10 @@ const CSS = `
   .pa .mono{width:44px;height:44px;font-size:20px;margin-bottom:10px}
   .pa .row{grid-template-columns:66px 1fr auto}
   .pa .req-c,.pa .tree-c,.pa .ring{padding:16px}
+  .pa .tree li{padding-inline-start:calc(var(--d) * 12px)}
+  .pa .tree.editing .node{flex-wrap:wrap}
+  .pa .tree.editing .edit{width:100%;padding-inline-start:52px}
+  .pa .fx{padding-inline-start:0}
   .pa .stat{padding:14px}
   .pa .stat .n{font-size:26px}
 }
