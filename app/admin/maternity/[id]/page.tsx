@@ -1,5 +1,6 @@
 import { displayChain } from '@/lib/lineageDisplayChain'
 import { idDocLabel } from '@/lib/idDocLabel'
+import CardActivity from './CardActivity'
 import { getCardUnloadView } from '@/lib/cardUnloadView'
 import { guardPage } from '@/lib/pageGuard'
 import { roleAllows } from '@/lib/permissions'
@@ -927,6 +928,7 @@ export default async function MaternityDetailPage(
                         </div>
                       )
                     })()}
+                    {isAdmin && (unloadView || cs === 'loaded' || (aid as { card_load_status?: string | null }).card_load_status === 'loaded') && <CardActivity aidId={aid.id} />}
                   </>
                 )
               })()}
