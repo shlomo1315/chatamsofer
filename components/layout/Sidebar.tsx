@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, GitBranch, Baby, CreditCard, Gift,
   BarChart3, Settings, Menu, X, Building2, Trees, HeartHandshake,
-  Mail, ChevronDown, ChevronUp, UtensilsCrossed, HandCoins, Heart, Send, Star, ShieldAlert, PhoneCall, BookOpen, ScrollText, Newspaper,
+  Mail, ChevronDown, ChevronUp, UtensilsCrossed, HandCoins, Heart, Send, Star, ShieldAlert, PhoneCall, BookOpen, ScrollText, Newspaper, Images,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { UserPermissions, SectionKey, UserRole } from '@/types'
@@ -71,6 +71,7 @@ const navBottom: NavItem[] = [
   { href: '/admin/book-fair',     label: 'יריד ספרים',     icon: BookOpen,       section: 'book_fair' },
   { href: '/admin/kvitel',        label: 'קוויטלאך',       icon: ScrollText,     section: 'kvitel' },
   { href: '/admin/gilyonot',      label: 'גיליונות החתם סופר', icon: Newspaper,  section: 'gilyonot' },
+  { href: '/admin/archive',       label: 'ארכיון',         icon: Images,         section: 'archive' },
 ]
 
 const bottomItems: { href: string; label: string; icon: React.ElementType }[] = [
