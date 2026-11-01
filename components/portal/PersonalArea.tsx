@@ -47,11 +47,11 @@ const C = 2 * Math.PI * R
 function useCount(to: number, ms: number) {
   const [v, setV] = useState(0)
   useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setV(to); return }
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     let raf = 0
     const t0 = performance.now()
     const f = (t: number) => {
-      const p = Math.min(1, (t - t0) / ms)
+      const p = reduce ? 1 : Math.min(1, (t - t0) / ms)
       setV(Math.round(to * (1 - Math.pow(1 - p, 3))))
       if (p < 1) raf = requestAnimationFrame(f)
     }
