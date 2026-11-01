@@ -159,7 +159,7 @@ export default function FinancialAidDetail({ req }: { req: FinancialAidRequest }
         </div>
       )}
 
-      {req.status === 'pending' && (
+      {(req.status === 'pending' || req.status === 'inquiry') && (
         <>
           <p className="text-sm text-slate-600">{isPublic ? 'שלח את הבקשה לגורם המאשר במייל, עם כל הפרטים והמסמכים. את תשובתו תראה כאן, ואת ההחלטה והסכום תזין בעצמך.' : 'שלח את הבקשה לגורם המאשר במייל. הוא ישיב בסכום לאישור או X לדחייה, והמערכת תעדכן אוטומטית.'}</p>
           <button onClick={send} disabled={busy === 'send' || !eligible}
