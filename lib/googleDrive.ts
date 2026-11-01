@@ -343,3 +343,84 @@ export async function openDriveFileStream(fileId: string): Promise<import('strea
   return res.data as import('stream').Readable
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ייבוא תיקייה קיימת מ-Drive לארכיון (הדבקת קישור).
+// ─────────────────────────────────────────────────────────────────────────────
+export interface DriveMedia {
+  id: string; name: string; mime: string; size: number | null
+  width: number | null; height: number | null; durationSec: number | null
+}
+
+/** שגיאת גישה לתיקייה, עם הודעה בעברית שאפשר להציג כמו שהיא. */
+export class DriveAccessError extends Error {}
+
+const FOLDER_MIME = 'application/vnd.google-apps.folder'
+const MAX_DEPTH = 10
+const MAX_FILES = 20000
+
+function accessError(e: unknown): DriveAccessError {
+  const code = (e as { code?: number; response?: { status?: number } })?.code ?? (e as { response?: { status?: number } })?.response?.status
+  if (code === 404 || code === 403 || code === 401) {
+    return new DriveAccessError('אין הרשאה לתיקייה, או שהיא לא קיימת. יש לשתף את התיקייה עם חשבון ה-Drive של המערכת, או להגדיר אותה "כל מי שיש לו קישור".')
+  }
+  return new DriveAccessError('קריאת התיקייה מ-Drive נכשלה, נסה שוב בעוד רגע')
+}
+
+/** כל התמונות והסרטונים בתיקייה ובתיקיות המשנה שלה. */
+export async function listDriveFolderMedia(
+  folderId: string, isMedia: (name: string, mime: string) => boolean,
+): Promise<{ name: string; files: DriveMedia[] }> {
+  const drive = await driveClient()
+  if (!drive) throw new DriveAccessError('Google Drive אינו מחובר')
+  let rootName = ''
+  try {
+    const r = await drive.files.get({ fileId: folderId, fields: 'id,name,mimeType', supportsAllDrives: true })
+    if (r.data.mimeType !== FOLDER_MIME) throw new DriveAccessError('הקישור אינו של תיקייה')
+    rootName = r.data.name ?? ''
+  } catch (e) {
+    throw e instanceof DriveAccessError ? e : accessError(e)
+  }
+  const files: DriveMedia[] = []
+  const queue: { id: string; depth: number }[] = [{ id: folderId, depth: 0 }]
+  try {
+    while (queue.length) {
+      const cur = queue.shift()!
+      let pageToken: string | undefined
+      do {
+        const res = await drive.files.list({
+          q: `'${cur.id}' in parents and trashed=false`,
+          fields: 'nextPageToken,files(id,name,mimeType,size,imageMediaMetadata(width,height),videoMediaMetadata(width,height,durationMillis))',
+          pageSize: 1000, pageToken, supportsAllDrives: true, includeItemsFromAllDrives: true,
+        })
+        for (const f of res.data.files ?? []) {
+          if (!f.id || !f.name) continue
+          if (f.mimeType === FOLDER_MIME) { if (cur.depth < MAX_DEPTH) queue.push({ id: f.id, depth: cur.depth + 1 }); continue }
+          if (!isMedia(f.name, f.mimeType ?? '')) continue
+          files.push({
+            id: f.id, name: f.name, mime: f.mimeType ?? '', size: f.size ? Number(f.size) : null,
+            width: f.imageMediaMetadata?.width ?? f.videoMediaMetadata?.width ?? null,
+            height: f.imageMediaMetadata?.height ?? f.videoMediaMetadata?.height ?? null,
+            durationSec: f.videoMediaMetadata?.durationMillis ? Math.round(Number(f.videoMediaMetadata.durationMillis) / 1000) : null,
+          })
+          if (files.length >= MAX_FILES) throw new DriveAccessError(`בתיקייה יותר מ-${MAX_FILES} קבצים. יש לייבא אותה בחלקים`)
+        }
+        pageToken = res.data.nextPageToken ?? undefined
+      } while (pageToken)
+    }
+  } catch (e) {
+    throw e instanceof DriveAccessError ? e : accessError(e)
+  }
+  return { name: rootName, files }
+}
+
+/** מעתיק קובץ בתוך Drive (בלי להוריד), לתיקיית האירוע. מחזיר את המזהה החדש. */
+export async function copyDriveFile(fileId: string, name: string, folderId: string): Promise<string> {
+  const drive = await driveClient()
+  if (!drive) throw new Error('Google Drive אינו מחובר')
+  const res = await drive.files.copy({
+    fileId, requestBody: { name, parents: [folderId] }, fields: 'id', supportsAllDrives: true,
+  })
+  if (!res.data.id) throw new Error('העתקת הקובץ ב-Drive נכשלה')
+  return res.data.id
+}
