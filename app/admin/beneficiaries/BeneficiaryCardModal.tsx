@@ -36,6 +36,7 @@ export default function BeneficiaryCardModal({ rows, index, onIndex, onClose }: 
   onClose: () => void
 }) {
   const b = rows[index]
+  const [now] = useState(() => Date.now())
   const [loaded, setLoaded] = useState<{ id: string; data: Extra; log: Log[] } | null>(null)
   const ready = loaded && loaded.id === b.id ? loaded : null
 
@@ -56,35 +57,53 @@ export default function BeneficiaryCardModal({ rows, index, onIndex, onClose }: 
   const chain = [...(ready?.data.lineage_chain ?? [])].sort((x, y) => x.generation - y.generation)
   const href = `/admin/beneficiaries/${b.id}`
   const loading = <Empty>טוען…</Empty>
+  const days = Math.max(0, Math.floor((now - new Date(b.created_at).getTime()) / 86400000))
+  const checks = [
+    { label: 'ת״ז הוזנה', ok: !!b.id_number },
+    { label: 'שרשרת יוחסין מולאה', ok: chain.length > 0 },
+    { label: 'טלפון', ok: !!b.phone },
+    { label: 'מייל מאומת', ok: !!b.email_verified_at },
+  ]
+  const chainNames = chain.map((c) => (c.relation === 'son_in_law' ? `${c.name} (חתן)` : c.name))
 
   return (
     <RecordModal
       kind="צאצא"
+      crumb={`צאצאים / תיק ${b.id.slice(0, 8)}`}
       title={fullName(b)}
-      subtitle={[b.city, b.marital_status].filter(Boolean).join(' · ') || undefined}
-      statusLabel={ELIGIBILITY_LABELS[status as keyof typeof ELIGIBILITY_LABELS] ?? status}
-      statusTone={TONE[status] ?? 'wait'}
-      summary={[
-        { label: 'ת״ז', value: b.id_number || '—' },
+      meta={[
+        { label: 'ת״ז', value: b.id_number || '—', ltr: true },
         { label: 'נרשם', value: fmt(b.created_at) },
         { label: 'אופן רישום', value: registrationSourceLabel(b.registration_source) || '—' },
-        { label: 'ילדים', value: String(b.children_count ?? 0) },
       ]}
-      steps={{ labels: STEPS, current: STEP_OF[status] ?? 1, rejected: status === 'rejected' }}
+      statusLabel={ELIGIBILITY_LABELS[status as keyof typeof ELIGIBILITY_LABELS] ?? status}
+      statusTone={TONE[status] ?? 'wait'}
+      stampDate={fmt(b.created_at)}
+      facts={[
+        { label: 'תיק', value: `#${b.id.slice(0, 6)}`, ltr: true },
+        { label: 'ילדים', value: String(b.children_count ?? 0) },
+        { label: 'דור', value: chain.length ? String(chain.length) : '—' },
+        { label: 'ימים בטיפול', value: String(days) },
+      ]}
+      readiness={checks}
+      steps={{ labels: STEPS, current: STEP_OF[status] ?? 1, rejected: status === 'rejected', dates: [fmt(b.created_at)] }}
       sections={[
         { title: 'פרטים אישיים', fields: [
           { label: 'שם מלא', value: fullName(b), lock: 'שינוי בבקשה' },
-          { label: 'ת״ז', value: b.id_number, ltr: true, lock: 'נעול' },
+          { label: 'ת״ז', value: b.id_number, ltr: true, copy: true, lock: 'נעול' },
           { label: 'מצב משפחתי', value: b.marital_status },
+          { label: 'בן/בת זוג', value: b.spouse_name },
         ] },
         { title: 'יצירת קשר', fields: [
-          { label: 'טלפון', value: b.phone, ltr: true },
-          { label: 'מייל', value: b.email, ltr: true },
+          { label: 'טלפון', value: b.phone, ltr: true, copy: true },
+          { label: 'מייל', value: b.email, ltr: true, copy: true },
           { label: 'עיר', value: b.city },
+          { label: 'כתובת', value: b.address },
         ] },
-        { title: 'בת זוג', fields: [
-          { label: 'שם', value: b.spouse_name },
-          { label: 'ת״ז', value: b.spouse_id_number, ltr: true },
+        { title: 'ייחוס ומשפחה', wide: true, fields: [
+          { label: 'שרשרת ייחוס', full: true, chain: chainNames, value: !ready ? 'טוען…' : undefined },
+          { label: 'ת״ז בן/בת זוג', value: b.spouse_id_number, ltr: true },
+          { label: 'מספר ילדים', value: String(b.children_count ?? 0) },
         ] },
       ]}
       note={{ title: 'הערת משרד', text: (ready?.data.notes ?? b.notes ?? '').trim() }}
@@ -92,11 +111,6 @@ export default function BeneficiaryCardModal({ rows, index, onIndex, onClose }: 
         { key: 'children', label: 'ילדים', count: b.children_count ?? 0, content: !ready ? loading : children.length === 0 ? <Empty>אין פרטי ילדים</Empty> : (
           <div className="mt-4 flex flex-wrap gap-2">
             {children.map((c, i) => <span key={i} className="rounded-full border border-[#E6DFCF] bg-white px-3 py-1 text-[13px] text-[#1B2338]">{c.name || '[להשלים]'}</span>)}
-          </div>
-        ) },
-        { key: 'lineage', label: 'שרשרת יוחסין', content: !ready ? loading : chain.length === 0 ? <Empty>לא נקבעה שרשרת</Empty> : (
-          <div className="mt-4 flex flex-wrap items-center gap-2 text-sm font-medium text-[#14213D]">
-            {chain.map((c, i) => <span key={i} className="flex items-center gap-2">{i > 0 && <span className="text-[#C0912F]">‹</span>}{c.name}</span>)}
           </div>
         ) },
         { key: 'history', label: 'היסטוריה', content: !ready ? loading : ready.log.length === 0 ? <Empty>אין פעולות מתועדות</Empty> : (
