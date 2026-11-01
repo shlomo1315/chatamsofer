@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
   const { data, error } = await db.from('campaigns').insert({
     name,
     subject: String(payload.subject ?? name).slice(0, 200),
-    from_department: String(payload.from_department ?? 'main'),
+    from_department: String(payload.from_department ?? 'mailing'),
     created_by: ctx?.userId ?? null,
   }).select('id').single()
 

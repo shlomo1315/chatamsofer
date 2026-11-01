@@ -114,7 +114,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     unsubscribeUrl: unsubUrl,
   })
 
-  const dept = mailFor((campaign.from_department as DepartmentKey) ?? 'main')
+  const dept = mailFor((campaign.from_department as DepartmentKey) ?? 'mailing')
   const res = await deliverMail(
     to,
     `[בדיקה] ${applyMerge(campaign.subject, merged, false)}`,
