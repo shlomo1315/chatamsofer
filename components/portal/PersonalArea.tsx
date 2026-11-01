@@ -3,6 +3,7 @@
 // סקירת האזור האישי לפי מוקאפ b3 שאושר: פתיח נייבי עם פרטי המשפחה, מד השלמת תיק,
 // ארבעה מספרים, בקשות עם שלבים ואילן יוחסין. כל הערכים מנתוני המשתמש.
 import { useEffect, useMemo, useState } from 'react'
+import { buildLineageFixText } from '@/lib/lineageFixText'
 import { Check, ChevronLeft, Clock, CircleCheck, GitBranch, FileText, Lock, ArrowUpLeft, Plus } from 'lucide-react'
 import { REQUEST_STAGES, type RequestProgress } from '@/lib/requestStages'
 
@@ -23,7 +24,7 @@ export interface PersonalAreaBeneficiary {
   address?: string
   spouse_name?: string
   children?: unknown[]
-  lineage_chain?: { generation: number; name: string }[]
+  lineage_chain?: { generation: number; name: string; relation?: 'son' | 'son_in_law' | null }[]
   lineage_fix_required?: boolean
   lineage_fixed_at?: string | null
 }
@@ -72,7 +73,7 @@ export default function PersonalArea({ beneficiary: b, docsCount, contacts, onNe
   const [filled, setFilled] = useState(false)
   const [openMiss, setOpenMiss] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
-  const [ans, setAns] = useState<Record<number, { ok: boolean; name: string; note: string }>>({})
+  const [ans, setAns] = useState<Record<number, { ok: boolean; name: string; note: string; rel: string }>>({})
   const [sending, setSending] = useState(false)
   const [sendErr, setSendErr] = useState('')
   const [sent, setSent] = useState(false)
@@ -119,7 +120,7 @@ export default function PersonalArea({ beneficiary: b, docsCount, contacts, onNe
   const maxGen = chain.length ? chain[chain.length - 1].generation : 0
   const treeRows = Array.from({ length: maxGen }, (_, i) => {
     const g = chain.find(x => x.generation === i + 1)
-    return { generation: i + 1, name: g?.name, gap: !g }
+    return { generation: i + 1, name: g?.name, gap: !g, rel: g?.relation === 'son' ? 'בן' : g?.relation === 'son_in_law' ? 'חתן' : '' }
   })
   const gapCount = treeRows.filter(r => r.gap).length
 
@@ -131,10 +132,7 @@ export default function PersonalArea({ beneficiary: b, docsCount, contacts, onNe
   const cancelEdit = () => { setEditing(false); setAns({}); setSendErr('') }
   const sendFix = async () => {
     setSending(true); setSendErr('')
-    const text = fixes.map(r => {
-      const a = ans[r.generation]
-      return `דור ${r.generation}: ${r.name ? `במקום "${r.name}" ` : ''}השם הנכון "${a.name.trim()}"${a.note.trim() ? ` (${a.note.trim()})` : ''}`
-    }).join('\n')
+    const text = buildLineageFixText(fixes, ans)
     try {
       const res = await fetch('/api/portal/lineage-fix', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }),
@@ -182,7 +180,7 @@ export default function PersonalArea({ beneficiary: b, docsCount, contacts, onNe
             <Row k="טלפון" v={b.phone} ltr num />
             <Row k="מייל" v={b.email} ltr />
             <Row k="כתובת" v={b.address} />
-            <p className="hnote"><Lock size={12} aria-hidden="true" />ת״ז לא ניתנת לשינוי. המייל שלכם: <bdi dir="ltr">{b.email || '[להשלים]'}</bdi>. שינוי שם באישור המשרד. מייל וטלפון אחרי אימות בקוד.</p>
+            <p className="hnote"><Lock size={12} aria-hidden="true" /><span>ת״ז לא ניתנת לשינוי. המייל שלכם: <bdi dir="ltr">{b.email || '[להשלים]'}</bdi>. שינוי שם באישור המשרד. מייל וטלפון אחרי אימות בקוד.</span></p>
           </dl>
         </section>
 
@@ -322,22 +320,21 @@ export default function PersonalArea({ beneficiary: b, docsCount, contacts, onNe
               {treeRows.map((g, i) => {
                 const a = ans[g.generation]
                 return (
-                  <li key={g.generation} className={g.gap ? 'gap' : i === 0 ? 'root' : ''} style={{ ['--d' as string]: i }}>
+                  <li key={g.generation} className={`g${i % 5}${g.gap ? ' gap' : i === 0 ? ' root' : ''}${i === treeRows.length - 1 && !g.gap ? ' me' : ''}`} style={{ ['--d' as string]: i }}>
                     <div className="node">
                       <span className="av">{i === 0 && !g.gap ? 'א' : g.generation}</span>
-                      <span className="tx"><small>דור {g.generation}</small><b>{g.gap ? 'חסר דור' : g.name || '[להשלים]'}</b></span>
+                      <span className="tx"><small>דור {g.generation}</small><b>{g.gap ? 'חסר דור' : g.name || '[להשלים]'}{g.rel && !g.gap && <span className="rel">{g.rel}</span>}</b></span>
                       {editing ? (
                         <span className="edit">
-                          <button type="button" className={`mini y${a?.ok === true ? ' sel' : ''}`} onClick={() => setAns(p => ({ ...p, [g.generation]: { ok: true, name: '', note: '' } }))}><Check size={13} />נכון</button>
-                          <button type="button" className={`mini n${a?.ok === false ? ' sel' : ''}`} onClick={() => setAns(p => ({ ...p, [g.generation]: { ok: false, name: p[g.generation]?.name ?? '', note: p[g.generation]?.note ?? '' } }))}>{g.gap ? 'להוסיף' : 'לתקן'}</button>
+                          <button type="button" className={`mini y${a?.ok === true ? ' sel' : ''}`} onClick={() => setAns(p => ({ ...p, [g.generation]: { ok: true, name: '', note: '', rel: '' } }))}><Check size={13} />נכון</button>
+                          <button type="button" className={`mini n${a?.ok === false ? ' sel' : ''}`} onClick={() => setAns(p => ({ ...p, [g.generation]: { ok: false, name: p[g.generation]?.name ?? '', note: p[g.generation]?.note ?? '', rel: p[g.generation]?.rel ?? g.rel } }))}>{g.gap ? 'להוסיף' : 'לתקן'}</button>
                         </span>
-                      ) : (
-                        <span className="st">{g.gap ? <><Clock size={13} />לא מלא</> : <><Check size={13} />מאושר</>}</span>
-                      )}
+                      ) : null}
                     </div>
                     {editing && a?.ok === false && (
                       <div className="fx">
                         <label>השם הנכון<input value={a.name} onChange={e => setAns(p => ({ ...p, [g.generation]: { ...a, name: e.target.value } }))} placeholder="השם המלא כפי שצריך להופיע" autoFocus /></label>
+                        <label>בן או חתן<input value={a.rel} onChange={e => setAns(p => ({ ...p, [g.generation]: { ...a, rel: e.target.value } }))} placeholder="בן / חתן" /></label>
                         <label>הערה למשרד (לא חובה)<input value={a.note} onChange={e => setAns(p => ({ ...p, [g.generation]: { ...a, note: e.target.value } }))} placeholder="מקור או הסבר קצר" /></label>
                       </div>
                     )}
@@ -477,19 +474,24 @@ const CSS = `
 .pa .tree li{position:relative;padding-inline-start:calc(var(--d) * 26px)}
 .pa .tree .node{position:relative;display:flex;align-items:center;gap:12px;padding:8px 10px;border-radius:16px;margin-bottom:6px;border:1px solid transparent;transition:background .15s}
 .pa .tree li:not(:first-child) .node::before{content:"";position:absolute;inset-inline-start:-12px;top:-14px;width:12px;height:36px;border-inline-start:2px solid #D8D6CF;border-bottom:2px solid #D8D6CF;border-end-start-radius:12px}
-.pa .tree .node:hover{background:#F6F5F1}
-.pa .av{width:40px;height:40px;border-radius:13px;display:grid;place-items:center;font-weight:800;font-size:13px;background:var(--teal-50);color:var(--teal);flex-shrink:0;transition:transform .2s cubic-bezier(.2,.7,.2,1)}
+.pa .tree .node:hover{filter:brightness(.97)}
+.pa .av{width:40px;height:40px;border-radius:13px;display:grid;place-items:center;font-weight:800;font-size:13px;background:#fff;color:var(--teal);flex-shrink:0;transition:transform .2s cubic-bezier(.2,.7,.2,1)}
 .pa .tree .node:hover .av{transform:scale(1.06)}
 .pa .tree li.root .av{background:var(--navy);color:var(--gold);width:46px;height:46px}
-.pa .tree li.gap .av{background:var(--amb-50);color:var(--amb);border:1.5px dashed #E8BE6E}
+.pa .tree li.gap .av{background:#fff;color:var(--amb);border:1.5px dashed #E8BE6E}
 .pa .tree .tx{min-width:0;flex:1}
 .pa .tree small{display:block;font-size:11.5px;color:var(--soft);font-weight:600}
 .pa .tree b{font-size:15px;line-height:1.35}
 .pa .tree li.gap b{color:#8A5200;font-weight:600}
-.pa .tree .st{font-size:11.5px;font-weight:700;color:var(--ok);display:flex;align-items:center;gap:4px;white-space:nowrap}
-.pa .tree li.gap .st{color:var(--amb)}
+.pa .tree li.g0 .node{background:#E9E6F7}
+.pa .tree li.g1 .node{background:#E3EEF4}
+.pa .tree li.g2 .node{background:#E4F1EA}
+.pa .tree li.g3 .node{background:#F6EEDC}
+.pa .tree li.g4 .node{background:#EDE6F2}
+.pa .tree .node{border-color:rgba(23,21,59,.06)}
+.pa .tree li.me .av{background:var(--ind);color:#fff}
+.pa .tree .rel{display:inline-block;font-size:11.5px;font-weight:700;border-radius:99px;padding:1px 10px;margin-inline-start:8px;background:#fff;color:var(--navy);border:1px solid rgba(23,21,59,.15);vertical-align:middle}
 .pa .tree .edit{display:flex;gap:6px}
-.pa .tree.editing .node{background:#FBFAF7;border-color:var(--line)}
 .pa .mini{border:1.5px solid var(--line);background:#fff;border-radius:10px;font-size:12.5px;font-weight:700;padding:6px 10px;min-height:36px;display:inline-flex;align-items:center;gap:4px}
 .pa .mini.y.sel{border-color:var(--ok);background:var(--ok-50);color:var(--ok)}
 .pa .mini.n.sel{border-color:var(--amb);background:var(--amb-50);color:#8A5200}
