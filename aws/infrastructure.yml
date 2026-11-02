@@ -8,7 +8,8 @@ Description: חתם סופר - תשתית ECS Fargate (ECR, סודות, הרשא
 Parameters:
   ProjectName: {Type: String, Default: chasamsofer, AllowedPattern: "^[a-z][a-z0-9-]{1,30}$", Description: "שם הפרויקט באותיות קטנטנות באנגלית. משמש לשמות כל המשאבים ולתגית Project. לפרויקט נוסף: שם סטאק ושם פרויקט אחרים"}
   GitHubRepo: {Type: String, Default: shlomo1315/chatamsofer, Description: "owner/repo של הפרויקט. ההרשאה לפריסה מוגבלת לענף main שלו בלבד"}
-  DomainName: {Type: String, Default: chasamsofer.co.il}
+  DomainName: {Type: String, Default: aws.chasamsofer.co.il, Description: "הכתובת שהאתר עונה בה. תת-דומיין זמני (aws.chasamsofer.co.il) או הדומיין הסופי"}
+  CreateDnsZone: {Type: String, Default: 'false', AllowedValues: ['true', 'false'], Description: "false = מצב ביניים: ה-DNS נשאר אצל הרשם, בלי אזור Route 53. true = מעבר סופי: נוצר אזור והרשומות בו (ומחליפים שרתי שמות)"}
   CertificateArn: {Type: String, AllowedPattern: "^arn:aws:acm:[a-z0-9-]+:[0-9]+:certificate/[a-f0-9-]+$", Description: "ARN של תעודת ACM שכבר הונפקה לדומיין (cloudshell-setup.sh מנפיק ומחכה לה). HTTPS בלבד"}
   CertValidationName: {Type: String, Default: '', Description: "שם רשומת ה-CNAME של אימות התעודה, כדי שהחידוש האוטומטי ימשיך לעבוד גם אחרי החלפת שרתי השמות"}
   CertValidationValue: {Type: String, Default: '', Description: "ערך רשומת האימות"}
@@ -22,6 +23,8 @@ Parameters:
 
 Conditions:
   HasCertValidation: !Not [!Equals [!Ref CertValidationName, '']]
+  MakeZone: !Equals [!Ref CreateDnsZone, 'true']
+  MakeCertRecord: !And [!Condition MakeZone, !Condition HasCertValidation]
   MakeOidc: !Equals [!Ref CreateOidcProvider, 'true']
 
 Resources:
@@ -372,30 +375,24 @@ Resources:
       ResourceArn: !Ref Alb
       WebACLArn: !GetAtt Waf.Arn
 
-  # אזור DNS ב-Route 53. עד שמחליפים את שרתי השמות אצל הרשם הוא לא משפיע על האתר החי
+  # אזור DNS ב-Route 53, רק במעבר סופי (CreateDnsZone=true). עד שמחליפים את שרתי השמות אצל הרשם הוא לא משפיע על האתר החי
   Zone:
     Type: AWS::Route53::HostedZone
+    Condition: MakeZone
     Properties: {Name: !Ref DomainName}
 
   SiteRecord:
     Type: AWS::Route53::RecordSet
+    Condition: MakeZone
     Properties:
       HostedZoneId: !Ref Zone
       Name: !Ref DomainName
       Type: A
       AliasTarget: {DNSName: !GetAtt Alb.DNSName, HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID, EvaluateTargetHealth: true}
 
-  SiteRecordV6:
-    Type: AWS::Route53::RecordSet
-    Properties:
-      HostedZoneId: !Ref Zone
-      Name: !Ref DomainName
-      Type: AAAA
-      AliasTarget: {DNSName: !GetAtt Alb.DNSName, HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID, EvaluateTargetHealth: true}
-
   CertValidationRecord:
     Type: AWS::Route53::RecordSet
-    Condition: HasCertValidation
+    Condition: MakeCertRecord
     Properties:
       HostedZoneId: !Ref Zone
       Name: !Ref CertValidationName
@@ -437,6 +434,6 @@ Resources:
 
 Outputs:
   AlbDnsName: {Value: !GetAtt Alb.DNSName, Description: "כתובת המאזן. בדיקה לפני המעבר: curl -k -H 'Host: <הדומיין>' https://<הכתובת>/api/health"}
-  NameServers: {Value: !Join [', ', !GetAtt Zone.NameServers], Description: "שרתי השמות להחלפה אצל הרשם (שלב אחרון, אחרי בדיקה)"}
+  NameServers: {Condition: MakeZone, Value: !Join [', ', !GetAtt Zone.NameServers], Description: "שרתי השמות להחלפה אצל הרשם (שלב אחרון, אחרי בדיקה)"}
   DeployRoleArn: {Value: !GetAtt DeployRole.Arn, Description: "מדביקים ב-GitHub Secret בשם AWS_DEPLOY_ROLE_ARN"}
   SecretArn: {Value: !Ref AppSecret}

@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
-# הקמת פרויקט ב-AWS (ECS Fargate + ALB + WAF + Route 53) מתבנית אחת. מדביקים ב-CloudShell (Frankfurt). בלי מפתחות.
-# ברירת המחדל היא חתם סופר. לפרויקט אחר: PROJECT=<שם> REPO=<owner/repo> DOMAIN=<דומיין> bash cloudshell-setup.sh
+# הקמת פרויקט ב-AWS (ECS Fargate + ALB + WAF) מתבנית אחת. מדביקים ב-CloudShell (Frankfurt). בלי מפתחות.
+# ברירת המחדל היא חתם סופר במצב ביניים: תת-דומיין זמני (aws.chasamsofer.co.il), ה-DNS נשאר אצל הרשם ובלי אזור Route 53.
+# מעבר סופי לדומיין המלא: DOMAIN=chasamsofer.co.il CREATE_ZONE=true bash cloudshell-setup.sh (ואז מחליפים שרתי שמות, ראו המדריך).
+# לפרויקט אחר: PROJECT=<שם> REPO=<owner/repo> DOMAIN=<דומיין> bash cloudshell-setup.sh
 # שרת קטן כברירת מחדל (CPU=512 MEMORY=1024). להגדלה: CPU=1024 MEMORY=2048. בהרצה חוזרת חובה לציין את הגודל שוב, אחרת חוזר לברירת המחדל.
 # תעודת HTTPS (ACM) מונפקת כאן באימות DNS. אם היא עוד לא אומתה, הסקריפט מדפיס רשומה להוספה אצל הרשם הנוכחי ומחכה.
 set -euo pipefail
 export AWS_DEFAULT_REGION=eu-central-1
 PROJECT="${PROJECT:-chasamsofer}"
 REPO="${REPO:-shlomo1315/chatamsofer}"
-DOMAIN="${DOMAIN:-chasamsofer.co.il}"
+DOMAIN="${DOMAIN:-aws.chasamsofer.co.il}"
+CREATE_ZONE="${CREATE_ZONE:-false}"
+[[ "$CREATE_ZONE" == "true" || "$CREATE_ZONE" == "false" ]] || { echo "CREATE_ZONE חייב להיות true או false"; exit 1; }
 STACK="${STACK:-$PROJECT}"
 [[ "$PROJECT" =~ ^[a-z][a-z0-9-]{1,30}$ ]] || { echo "PROJECT חייב להיות אותיות קטנות באנגלית, ספרות ומקף"; exit 1; }
 
@@ -31,7 +35,7 @@ VAL_VALUE=$(aws acm describe-certificate --certificate-arn "$CERT" --query "Cert
 STATUS=$(aws acm describe-certificate --certificate-arn "$CERT" --query "Certificate.Status" --output text)
 if [[ "$STATUS" != "ISSUED" ]]; then
   echo
-  echo "צריך להוסיף אצל הרשם הנוכחי (domainthenet.com, ניהול DNS של $DOMAIN) רשומה אחת:"
+  echo "צריך להוסיף אצל הרשם הנוכחי (domainthenet.com, ניהול DNS של chasamsofer.co.il) רשומה אחת:"
   echo "  סוג:  CNAME"
   echo "  שם:   $VAL_NAME"
   echo "  ערך:  $VAL_VALUE"
@@ -57,7 +61,7 @@ fi
 [[ "$EXISTING_OIDC" == "None" ]] && EXISTING_OIDC=""
 aws cloudformation deploy --stack-name "$STACK" --template-file /tmp/infrastructure.yml \
   --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM --tags Project="$PROJECT" \
-  --parameter-overrides ProjectName="$PROJECT" GitHubRepo="$REPO" DomainName="$DOMAIN" CertificateArn="$CERT" \
+  --parameter-overrides ProjectName="$PROJECT" GitHubRepo="$REPO" DomainName="$DOMAIN" CreateDnsZone="$CREATE_ZONE" CertificateArn="$CERT" \
     CertValidationName="$VAL_NAME" CertValidationValue="$VAL_VALUE" \
     VpcId="$VPC" SubnetIds="$SUBNETS" DesiredCount="${DESIRED:-0}" TaskCpu="${CPU:-512}" TaskMemory="${MEMORY:-1024}" CreateOidcProvider="$OIDC" ExistingOidcProviderArn="$EXISTING_OIDC"
 
@@ -66,8 +70,17 @@ echo "== סיום. תוצאות (אין בהן סודות):"
 aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Outputs[].[OutputKey,OutputValue]" --output text
 ALB=$(aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Outputs[?OutputKey=='AlbDnsName'].OutputValue" --output text)
 echo
-echo "בדיקה לפני החלפת שרתי השמות: curl -sk -H 'Host: $DOMAIN' https://$ALB/api/health"
+if [[ "$CREATE_ZONE" == "true" ]]; then
+  echo "מעבר סופי: מעתיקים את כל רשומות ה-DNS הקיימות ל-Route 53, ורק אז מחליפים שרתי שמות אצל הרשם (NameServers למעלה)."
+else
+  echo "מצב ביניים. צריך להוסיף אצל הרשם (domainthenet.com) רשומה שנייה, שמפנה את התת-דומיין למאזן:"
+  echo "  סוג:  CNAME"
+  echo "  שם:   $DOMAIN"
+  echo "  ערך:  $ALB"
+  echo "בדיקה מיידית (גם לפני הוספת הרשומה): curl -sk -H 'Host: $DOMAIN' https://$ALB/api/health"
+  echo "הדומיין הראשי והמייל לא משתנים."
+fi
 echo "שלבים הבאים: 1) מזינים את משתני הסביבה בסוד $PROJECT/prod (Secrets Manager)"
 echo "             2) מריצים ב-GitHub את הפריסה (העלאת image), ואז שוב כאן עם DESIRED=1 (שרת אחד בלבד, בגלל התזמונים הפנימיים)"
-echo "             3) בודקים את /api/health, ורק אז מחליפים שרתי שמות אצל הרשם (NameServers למעלה)"
+echo "             3) בודקים את https://$DOMAIN/api/health"
 echo "פירוט מלא: aws/MIGRATE-CHASAMSOFER.md"
