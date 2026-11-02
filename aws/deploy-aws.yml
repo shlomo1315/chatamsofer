@@ -55,6 +55,9 @@ jobs:
             --build-arg APP_BUILD_ID="${GITHUB_SHA}" \
             -t "$IMAGE" .
           docker push "$IMAGE"
+          # גם latest: הגדרת המשימה של CloudFormation מצביעה עליו, כדי שהרצה חוזרת של cloudshell-setup.sh לא תעלה שרת בלי image
+          docker tag "$IMAGE" "$REGISTRY/$ECR_REPOSITORY:latest"
+          docker push "$REGISTRY/$ECR_REPOSITORY:latest"
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
 
       - name: הורדת הגדרת המשימה הנוכחית

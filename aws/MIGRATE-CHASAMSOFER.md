@@ -3,6 +3,21 @@
 Railway ממשיך לשרת את האתר עד שלב 9. עד אז אפשר לעצור בכל צעד בלי נזק.
 סימון: **[אתה]** פעולה שלך בקונסולה או ב-GitHub. **[אוטומטי]** מתבצע בסקריפט.
 
+## עלות חודשית (פרנקפורט, הערכה לפי מחירון 2026)
+| רכיב | ליבה, 2GB (ברירת מחדל) | חצי ליבה, 1GB (`CPU=512 MEMORY=1024`) |
+|---|---|---|
+| שרת Fargate אחד, פועל כל הזמן | 41$ | 21$ |
+| מאזן עומסים (ALB) | 25$ | 25$ |
+| כתובות IPv4 ציבוריות (ALB ושרת, 4 כתובות) | 15$ | 15$ |
+| WAF (חוקים ובקשות) | 8$ | 8$ |
+| GuardDuty, CloudTrail, לוגים, ECR, סוד | 5-8$ | 5-8$ |
+| **סה"כ** | **בערך 95$** | **בערך 75$** |
+
+- העלות של ה-ALB, הכתובות וה-WAF מתחילה כבר בשלב 3, גם בלי שרת. זה בערך 1.6$ ליום.
+- תעבורה יוצאת עד 100GB בחודש לא עולה כסף.
+- חיסכון נוסף: Compute Savings Plan לשנה מוריד בערך 20% מהשרת. כדאי רק אחרי חודש יציב.
+- תקציב של 40$ ישלח התראות כבר בשבוע הראשון. מעדכנים אותו לפי הגודל שנבחר: `ALERT_EMAIL=... BUDGET=100 bash account-setup.sh`.
+
 ## שלב 1: חשבון ו-root [אתה]
 פותחים חשבון, מפעילים אימות דו-שלבי ל-root, יוצרים משתמש יומיומי ונכנסים איתו. בדיוק לפי `aws/ACCOUNT-SETUP.md`, שלבים 1 ו-2.
 
@@ -10,7 +25,7 @@ Railway ממשיך לשרת את האתר עד שלב 9. עד אז אפשר לע
 ב-CloudShell באזור Frankfurt:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/shlomo1315/chatamsofer/main/aws/account-setup.sh -o account-setup.sh
-ALERT_EMAIL=המייל-שלך@example.com BUDGET=60 bash account-setup.sh
+ALERT_EMAIL=המייל-שלך@example.com BUDGET=40 bash account-setup.sh
 ```
 מאשרים במייל את "Subscription Confirmation". לא מריצים שוב לפרויקטים נוספים.
 
@@ -21,6 +36,7 @@ bash cloudshell-setup.sh
 ```
 - נוצר סטאק `chasamsofer` עם תגית `Project=chasamsofer`: ECR, ECS, ALB, WAF, לוגים (30 יום), סוד, והרשאת פריסה מ-GitHub בלי מפתחות.
 - `DesiredCount=0`: עדיין אין שרת, כי אין תמונה.
+- גודל השרת: ברירת המחדל היא ליבה ו-2GB. לחצי ליבה ו-1GB: `CPU=512 MEMORY=1024 bash cloudshell-setup.sh`, ואת אותם ערכים מוסיפים גם בכל הרצה חוזרת (שלבים 7 ו-8).
 - בסוף מודפסים `AlbDnsName` ו-`DeployRoleArn`. שומרים אותם.
 
 ## שלב 4: משתני הסביבה בסוד [אתה]
