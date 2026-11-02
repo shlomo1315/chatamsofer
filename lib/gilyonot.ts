@@ -19,7 +19,7 @@ export const GILYONOT_SOURCES: Record<GilyonotSource, string> = {
   descendants: 'צאצאים',
 }
 
-export const GILYONOT_FROM_NAME = 'גיליונות החתם סופר'
+export const GILYONOT_FROM_NAME = 'היכל החתם סופר'
 export const GILYONOT_FROM_EMAIL = process.env.GILYONOT_FROM_EMAIL || 'd@chasamsofer.info'
 
 const EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]{2,}$/
