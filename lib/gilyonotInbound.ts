@@ -79,8 +79,16 @@ function button(href: string, label: string, bg: string): string {
 
 // הפניה לכתובות הפעילות, כמו במענה האוטומטי של התיבות (lib/autoReplyConfig.ts)
 export const GILYONOT_CONTACTS = [
-  { label: 'לנושאים כלליים של היכל החתם סופר', email: 'office@chasamsofer.info' },
-  { label: 'לנושאים הקשורים לאיגוד הצאצאים', email: 'igud@chasamsofer.info' },
+  {
+    label: 'לנושאים כלליים של היכל החתם סופר',
+    desc: 'כגון: אגף הוצאה לאור, מדור לחידודי, בתורתו רשת שיעורי החת"ס, חלוקת הש"ס, מבחנים עולם הבא, קויטל לציון הקדוש, קו הטלפוני "ההיכל"',
+    email: 'office@chasamsofer.info',
+  },
+  {
+    label: 'לנושאים הקשורים לאיגוד הצאצאים',
+    desc: 'כגון: עזר ליולדות, גמ"ח הלוואות לנכדי החת"ס, אגף סיוע לאלמנות ויתומים, עזר לחגים.',
+    email: 'igud@chasamsofer.info',
+  },
 ] as const
 
 /** מקור הטקסטים: ברירת מחדל המטמון; לתצוגה מקדימה מועבר טיוטה. */
@@ -95,12 +103,12 @@ const REPLY_ID: Record<ReplyKind, string> = {
 const SHARED_ID = 'gilyonot_reply_shared'
 
 /** הכתובות לפניות כפי שנערכו (JSON); נפילה לברירת המחדל אם הערך פגום. מערך ריק מסיר את הבלוק. */
-export function gilyonotContacts(get: TextGetter = textFor): { label: string; email: string }[] {
+export function gilyonotContacts(get: TextGetter = textFor): { label: string; desc: string; email: string }[] {
   try {
     const arr = JSON.parse(get(SHARED_ID, 'contacts'))
     if (Array.isArray(arr)) {
       return arr
-        .map(c => ({ label: String(c?.label ?? '').trim(), email: String(c?.email ?? '').trim() }))
+        .map(c => ({ label: String(c?.label ?? '').trim(), desc: String(c?.desc ?? '').trim(), email: String(c?.email ?? '').trim() }))
         .filter(c => /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/.test(c.email))
     }
   } catch { /* ברירת המחדל */ }
@@ -109,11 +117,11 @@ export function gilyonotContacts(get: TextGetter = textFor): { label: string; em
 
 function noReplyBox(get: TextGetter): string {
   const contacts = gilyonotContacts(get).map(c =>
-    `<p style="margin:10px 0 0;color:#334155;font-size:15px;line-height:1.7;font-family:'Heebo',Arial,sans-serif;text-align:center;">${c.label ? `${escHtml(c.label)}:<br>` : ''}<a href="mailto:${escHtml(c.email)}" style="color:#1d4ed8;font-weight:700;text-decoration:none;direction:ltr;unicode-bidi:embed;">${escHtml(c.email)}</a></p>`,
+    `<p style="margin:10px 0 0;color:#334155;font-size:15px;line-height:1.7;font-family:'Heebo',Arial,sans-serif;text-align:center;">${c.label ? `${escHtml(c.label)}:<br>` : ''}${c.desc ? `${escHtml(c.desc)}<br>` : ''}יש לפנות לכתובת מייל: <a href="mailto:${escHtml(c.email)}" style="color:#1d4ed8;font-weight:700;text-decoration:none;direction:ltr;unicode-bidi:embed;">${escHtml(c.email)}</a></p>`,
   ).join('')
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0 0;"><tr><td style="background:#fef2f2;border:2px solid #fecaca;border-radius:12px;padding:18px 20px;">
 <p style="margin:0;color:#991b1b;font-size:16px;font-weight:900;line-height:1.7;font-family:'Heebo',Arial,sans-serif;text-align:center;">${escHtml(get(SHARED_ID, 'noreply'))}</p>
-${contacts ? `<p style="margin:12px 0 0;color:#334155;font-size:15px;font-weight:700;line-height:1.7;font-family:'Heebo',Arial,sans-serif;text-align:center;">לפניות:</p>${contacts}` : ''}
+${contacts}
 </td></tr></table>`
 }
 

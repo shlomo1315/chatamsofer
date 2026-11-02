@@ -12,7 +12,7 @@ interface Field { key: string; label: string; default: string; multiline?: boole
 interface Spec { id: string; title: string; fields: Field[] }
 type Texts = Record<string, Record<string, string>>
 type Previews = Record<string, { subject: string; html: string }>
-interface Contact { label: string; email: string }
+interface Contact { label: string; desc?: string; email: string }
 
 const TABS = [
   { key: 'added', id: 'gilyonot_reply_added', label: 'נרשם עכשיו' },
@@ -189,6 +189,9 @@ export default function GilyonotReplyEditor() {
                 <div key={i} className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
                   <input value={c.label} placeholder="במה הכתובת עוסקת"
                     onChange={e => setContacts(contacts.map((x, j) => j === i ? { ...x, label: e.target.value } : x))}
+                    className={inputCls} />
+                  <input value={c.desc ?? ''} placeholder="כגון: ..."
+                    onChange={e => setContacts(contacts.map((x, j) => j === i ? { ...x, desc: e.target.value } : x))}
                     className={inputCls} />
                   <input value={c.email} placeholder="name@example.com" dir="ltr"
                     onChange={e => setContacts(contacts.map((x, j) => j === i ? { ...x, email: e.target.value } : x))}

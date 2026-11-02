@@ -140,6 +140,18 @@ describe('עריכת המענה (טקסטים ערוכים)', () => {
     expect(m.html).not.toContain('office@chasamsofer.info')
     expect(m.html).not.toContain('לא-מייל')
   })
+  it('ברירת המחדל כוללת תיאור נושאים וניסוח "יש לפנות לכתובת מייל" בשלושת המענים', () => {
+    for (const k of ['added', 'exists', 'blocked_unsubscribed'] as const) {
+      const h = buildGilyonotReply(k, { unsubscribeUrl: null, texts: {} }).html
+      expect(h).toContain('לנושאים כלליים של היכל החתם סופר:')
+      expect(h).toContain('כגון: אגף הוצאה לאור, מדור לחידודי')
+      expect(h).toContain('קו הטלפוני "ההיכל"'.replace(/"/g, '&quot;'))
+      expect(h).toContain('יש לפנות לכתובת מייל: <a href="mailto:office@chasamsofer.info"')
+      expect(h).toContain('לנושאים הקשורים לאיגוד הצאצאים:')
+      expect(h).toContain('עזר לחגים.')
+      expect(h).toContain('mailto:igud@chasamsofer.info')
+    }
+  })
   it('מערך כתובות ריק מסיר את בלוק הפניות, ובלי ערכים חוזרים לנוסח המקורי', () => {
     const empty = buildGilyonotReply('exists', { unsubscribeUrl: null, texts: { gilyonot_reply_shared: { contacts: '[]' } } })
     expect(empty.html).not.toContain('לפניות:')
