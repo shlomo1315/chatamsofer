@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import RichTextArea from '@/components/ui/RichTextArea'
+import GilyonotReplyEditor from './GilyonotReplyEditor'
 import {
   Loader2, Save, Eye, ChevronDown, Check, AlertCircle, Plus, Trash2, Mail, Clock, Ban, FileText,
   GripVertical, ChevronUp } from 'lucide-react'
@@ -295,6 +296,11 @@ export default function AutoReplySettings() {
                 </label>
               </div>
 
+              {isOpen && dept.key === 'mailing' && (
+                <div className="border-t border-slate-100 p-4">
+                  <GilyonotReplyEditor />
+                </div>
+              )}
               {isOpen && (
                 <div className="border-t border-slate-100 p-4 flex flex-col lg:flex-row gap-5">
                   {/* ── עריכה ── */}
@@ -481,11 +487,13 @@ const MODES: { key: AutoReplyMode; label: string; hint: string; icon: typeof Clo
     active: 'bg-emerald-50 border-emerald-400 text-emerald-800' },
 ]
 
-function ModePicker({ mode, onChange }: { mode: AutoReplyMode; onChange: (m: AutoReplyMode) => void }) {
+function ModePicker({ mode, onChange }: {
+  mode: AutoReplyMode; onChange: (m: AutoReplyMode) => void
+}) {
   return (
     <div>
       <label className="block text-xs font-bold text-slate-600 mb-1.5">מה נשלח לפונים</label>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid gap-2 grid-cols-3">
         {MODES.map(m => {
           const on = mode === m.key
           const Icon = m.icon

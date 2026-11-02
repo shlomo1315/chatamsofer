@@ -5,6 +5,8 @@ import { shouldSkipAutoReply, isAutoSubmittedMail } from '@/lib/maintenanceReply
 import { GILYONOT_FROM_EMAIL, GILYONOT_FROM_NAME, normalizeEmail, cleanSubscriberName, subscribeGilyonot } from '@/lib/gilyonot'
 import { gilyonotUrls, escHtml } from '@/lib/gilyonotMail'
 import { htmlToPlainText } from '@/lib/gilyonotSender'
+import { textOf, type EmailTexts } from '@/lib/emailCatalog'
+import { ensureEmailTexts, textFor } from '@/lib/emailTextsStore'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // קליטת מייל נכנס ל-d@: כל שולח נרשם לרשימת התפוצה ומקבל מייל אישור.
@@ -75,53 +77,73 @@ function button(href: string, label: string, bg: string): string {
 </td></tr></table>`
 }
 
-const NO_REPLY_TEXT = 'שים לב: תיבת מייל זו אינה נקראת כלל, ולכן אין להשיב אליה או לשלוח אליה הודעות.'
-
 // הפניה לכתובות הפעילות, כמו במענה האוטומטי של התיבות (lib/autoReplyConfig.ts)
 export const GILYONOT_CONTACTS = [
   { label: 'לנושאים כלליים של היכל החתם סופר', email: 'office@chasamsofer.info' },
   { label: 'לנושאים הקשורים לאיגוד הצאצאים', email: 'igud@chasamsofer.info' },
 ] as const
 
-function noReplyBox(): string {
-  const contacts = GILYONOT_CONTACTS.map(c =>
-    `<p style="margin:10px 0 0;color:#334155;font-size:15px;line-height:1.7;font-family:'Heebo',Arial,sans-serif;text-align:center;">${c.label}:<br><a href="mailto:${c.email}" style="color:#1d4ed8;font-weight:700;text-decoration:none;direction:ltr;unicode-bidi:embed;">${c.email}</a></p>`,
+/** מקור הטקסטים: ברירת מחדל המטמון; לתצוגה מקדימה מועבר טיוטה. */
+type TextGetter = (emailId: string, fieldKey: string) => string
+type ReplyKind = 'added' | 'exists' | 'blocked_unsubscribed'
+export const GILYONOT_REPLY_IDS = ['gilyonot_reply_added', 'gilyonot_reply_exists', 'gilyonot_reply_blocked', 'gilyonot_reply_shared'] as const
+const REPLY_ID: Record<ReplyKind, string> = {
+  added: 'gilyonot_reply_added',
+  exists: 'gilyonot_reply_exists',
+  blocked_unsubscribed: 'gilyonot_reply_blocked',
+}
+const SHARED_ID = 'gilyonot_reply_shared'
+
+/** הכתובות לפניות כפי שנערכו (JSON); נפילה לברירת המחדל אם הערך פגום. מערך ריק מסיר את הבלוק. */
+export function gilyonotContacts(get: TextGetter = textFor): { label: string; email: string }[] {
+  try {
+    const arr = JSON.parse(get(SHARED_ID, 'contacts'))
+    if (Array.isArray(arr)) {
+      return arr
+        .map(c => ({ label: String(c?.label ?? '').trim(), email: String(c?.email ?? '').trim() }))
+        .filter(c => /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/.test(c.email))
+    }
+  } catch { /* ברירת המחדל */ }
+  return GILYONOT_CONTACTS.map(c => ({ ...c }))
+}
+
+function noReplyBox(get: TextGetter): string {
+  const contacts = gilyonotContacts(get).map(c =>
+    `<p style="margin:10px 0 0;color:#334155;font-size:15px;line-height:1.7;font-family:'Heebo',Arial,sans-serif;text-align:center;">${c.label ? `${escHtml(c.label)}:<br>` : ''}<a href="mailto:${escHtml(c.email)}" style="color:#1d4ed8;font-weight:700;text-decoration:none;direction:ltr;unicode-bidi:embed;">${escHtml(c.email)}</a></p>`,
   ).join('')
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0 0;"><tr><td style="background:#fef2f2;border:2px solid #fecaca;border-radius:12px;padding:18px 20px;">
-<p style="margin:0;color:#991b1b;font-size:16px;font-weight:900;line-height:1.7;font-family:'Heebo',Arial,sans-serif;text-align:center;">${NO_REPLY_TEXT}</p>
-<p style="margin:12px 0 0;color:#334155;font-size:15px;font-weight:700;line-height:1.7;font-family:'Heebo',Arial,sans-serif;text-align:center;">לפניות:</p>${contacts}
+<p style="margin:0;color:#991b1b;font-size:16px;font-weight:900;line-height:1.7;font-family:'Heebo',Arial,sans-serif;text-align:center;">${escHtml(get(SHARED_ID, 'noreply'))}</p>
+${contacts ? `<p style="margin:12px 0 0;color:#334155;font-size:15px;font-weight:700;line-height:1.7;font-family:'Heebo',Arial,sans-serif;text-align:center;">לפניות:</p>${contacts}` : ''}
 </td></tr></table>`
 }
 
 const p = (t: string) => `<p style="margin:0 0 16px;color:#334155;font-size:16px;line-height:1.8;font-family:'Heebo',Arial,sans-serif;text-align:center;">${t}</p>`
 
+/** טקסט חופשי: מקוטע לפסקאות בשורה ריקה, ושורה בודדת הופכת ל-<br>. */
+function paragraphs(t: string): string {
+  return t.split(/\n\s*\n/).map(x => x.trim()).filter(Boolean).map(x => p(escHtml(x).replace(/\n/g, '<br>'))).join('')
+}
+
+/**
+ * ⚠️ קורא את הטקסטים הערוכים מהמטמון (textFor). מי שקורא לה חייב לקרוא קודם ל-ensureEmailTexts().
+ * נושא היומן (GILYONOT_REPLY_SUBJECT) נשאר קבוע, כדי שהתקרות לא יישברו כשעורכים את הנושא.
+ */
 export function buildGilyonotReply(
-  kind: 'added' | 'exists' | 'blocked_unsubscribed',
-  opts: { name?: string | null; unsubscribeUrl?: string | null },
+  kind: ReplyKind,
+  opts: { name?: string | null; unsubscribeUrl?: string | null; texts?: EmailTexts },
 ): { subject: string; html: string } {
-  const hello = opts.name ? `שלום ${escHtml(opts.name)},` : 'שלום רב,'
-  const unsub = opts.unsubscribeUrl ? button(opts.unsubscribeUrl, 'הסרה מרשימת התפוצה', '#64748b') : ''
-  let title: string, subtitle: string, body: string, accent = GREEN
-  if (kind === 'added') {
-    title = 'הרשמתך התקבלה בהצלחה'
-    subtitle = 'גיליונות החתם סופר'
-    body = p(hello) + p('<strong>שים לב: הרשמתך לקבלת עדכונים וגיליונות מהמערכת התקבלה בהצלחה.</strong>') +
-      p('מעתה, בכל פעם שיישלח גיליון או עדכון, תקבל אותו במייל.') + unsub
-  } else if (kind === 'exists') {
-    title = 'אתה כבר רשום'
-    subtitle = 'גיליונות החתם סופר'
-    accent = BLUE
-    body = p(hello) + p('<strong>שים לב: אתה כבר רשום במערכת לקבלת עדכונים.</strong>') +
-      p('אין צורך בפעולה נוספת. בכל פעם שיישלח גיליון או עדכון, תקבל אותו במייל.') + unsub
-  } else {
-    title = 'הרישום הוסר בעבר'
-    subtitle = 'גיליונות החתם סופר'
-    accent = BLUE
-    body = p(hello) + p('<strong>כתובת המייל הזו הוסרה בעבר מרשימת התפוצה של הגיליונות.</strong>') +
-      p('כדי להצטרף מחדש, היכנסו לדף ההרשמה ומלאו את הפרטים.') + button(gilyonotUrls.signup(), 'הצטרפות מחדש', GREEN)
-  }
-  const html = shell({ preheader: NO_REPLY_TEXT, accent, title, subtitle, body: body + noReplyBox() })
-  return { subject: GILYONOT_REPLY_SUBJECT[kind], html }
+  const get: TextGetter = opts.texts ? (id, k) => textOf(opts.texts, id, k) : textFor
+  const t = (key: string) => get(REPLY_ID[kind], key)
+  const hello = escHtml(t('hello').replace('{{שם}}', opts.name ? opts.name : 'רב'))
+  const lead = escHtml(t('lead'))
+  const btnLabel = escHtml(t('btn'))
+  const accent = kind === 'added' ? GREEN : BLUE
+  const action = kind === 'blocked_unsubscribed'
+    ? button(gilyonotUrls.signup(), btnLabel, GREEN)
+    : opts.unsubscribeUrl ? button(opts.unsubscribeUrl, btnLabel, '#64748b') : ''
+  const body = p(hello) + p(`<strong>${lead}</strong>`) + paragraphs(t('text')) + action
+  const html = shell({ preheader: get(SHARED_ID, 'noreply'), accent, title: t('title'), subtitle: t('subtitle'), body: body + noReplyBox(get) })
+  return { subject: t('subject'), html }
 }
 
 // ── שליחה ──
@@ -189,8 +211,10 @@ export async function handleGilyonotInbound(
     const { data } = await db.from('gilyonot_subscribers').select('token').eq('email', email).maybeSingle()
     unsubscribeUrl = data?.token ? gilyonotUrls.unsubscribe(String(data.token)) : null
   }
+  await ensureEmailTexts()
   const mail = buildGilyonotReply(kind, { name, unsubscribeUrl })
   if (!(await send(email, mail, unsubscribeUrl))) return 'error'
-  await db.from('auto_reply_log').insert({ to_email: email, subject: mail.subject })
+  // נושא קבוע ביומן (לא הנושא הערוך), כדי שספירת התקרות תמשיך לעבוד
+  await db.from('auto_reply_log').insert({ to_email: email, subject: GILYONOT_REPLY_SUBJECT[kind] })
   return kind
 }
