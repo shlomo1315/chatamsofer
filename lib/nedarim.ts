@@ -403,6 +403,17 @@ export async function findClientByZeout(creds: NedarimCreds, zeout: string): Pro
   return match ? String(match.ClientId) : null
 }
 
+// חיפוש משפחה לפי מזהה צד ג' (טקסט חופשי, גם אותיות) → ClientId או null
+export async function findClientByTsad3(creds: NedarimCreds, value: string): Promise<string | null> {
+  const want = String(value ?? '').trim().toLowerCase()
+  if (!want) return null
+  const { families } = await getClientsTable(creds)
+  const match = families.find(row =>
+    Object.entries(row).some(([k, v]) => /tsad3/i.test(k) && String(v ?? '').trim().toLowerCase() === want),
+  )
+  return match ? String(match.ClientId) : null
+}
+
 /**
  * מייל הוא לא שדה חובה בנדרים: מייל חסר או לא תקין (למשל `a@.com.il`) נשלח ריק,
  * כדי שנדרים לא תדחה את הקמת המשפחה ב"המייל שהוזן אינו חוקי".
