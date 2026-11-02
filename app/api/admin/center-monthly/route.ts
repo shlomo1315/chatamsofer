@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireAdmin, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
-import { CENTER_LOAD_AMOUNT_KEY, getLoadAmount, israelMonth, normalizeCallerPhone } from '@/lib/centerMonthlyLoad'
+import { CENTER_LOAD_AMOUNT_KEY, getLoadAmount, israelMonth, normalizeCallerPhone, refreshMonthBalances } from '@/lib/centerMonthlyLoad'
 
 export const dynamic = 'force-dynamic'
 const NO_STORE = { 'Cache-Control': 'no-store' }
@@ -13,10 +13,11 @@ export async function GET() {
   const admin = getServiceClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500, headers: NO_STORE })
   const month = israelMonth()
+  await refreshMonthBalances(admin, month).catch(() => {})
   const [centers, cards, loads, amount] = await Promise.all([
     admin.from('card_centers').select('id, name').eq('is_active', true).order('name'),
     admin.from('center_monthly_cards').select('center_id, phone, card_number, id_number, card_linked_at'),
-    admin.from('center_monthly_loads').select('center_id, month, amount, status, loaded_at, created_at').order('month', { ascending: false }).limit(500),
+    admin.from('center_monthly_loads').select('center_id, month, amount, status, loaded_at, created_at, balance, balance_at').order('month', { ascending: false }).limit(500),
     getLoadAmount(admin),
   ])
   if (centers.error) return NextResponse.json({ error: centers.error.message }, { status: 500, headers: NO_STORE })
@@ -62,7 +63,7 @@ export async function PATCH(request: NextRequest) {
     updates.phone = phone || null
   }
   if (body.id_number !== undefined) {
-    const id = String(body.id_number).replace(/\D/g, '')
+    const id = String(body.id_number).trim().slice(0, 40)
     updates.id_number = id || null
   }
   if (body.clear_card) {

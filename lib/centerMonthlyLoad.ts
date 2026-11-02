@@ -3,7 +3,7 @@
 // הטעינה מנכה כרטיס מהמלאי הגלובלי (אותה נעילה כמו consume_card_stock).
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
-  getNedarimCreds, getMaternityLimitedId, findClientByZeout, saveClientCard, setMagneticCard, addTlush,
+  getNedarimCreds, getMaternityLimitedId, findClientByTsad3, getClientCard, saveClientCard, setMagneticCard, addTlush,
 } from '@/lib/nedarim'
 
 export const CENTER_LOAD_AMOUNT_KEY = 'center_monthly_amount'
@@ -75,8 +75,9 @@ export async function isLoadedThisMonth(admin: SupabaseClient, centerId: string,
 async function ensureClient(acc: CenterAccount, creds: NonNullable<Awaited<ReturnType<typeof getNedarimCreds>>>): Promise<string> {
   if (acc.nedarim_client_id) return acc.nedarim_client_id
   let id: string | null = null
-  if (acc.id_number) id = await findClientByZeout(creds, acc.id_number).catch(() => null)
-  if (!id) id = await saveClientCard(creds, { full_name: acc.center_name, family_name: 'מוקד', id_number: acc.id_number, phone: acc.phone }, null, 'מוקדים')
+  // id_number הוא מזהה צד ג' (טקסט חופשי) ונשמר בנדרים בשדה Tsad3Id
+  if (acc.id_number) id = await findClientByTsad3(creds, acc.id_number).catch(() => null)
+  if (!id) id = await saveClientCard(creds, { full_name: acc.center_name, family_name: 'מוקד', id_number: acc.id_number, id_type: 'passport', phone: acc.phone }, null, 'מוקדים')
   if (!id) throw new Error('לא הצלחנו להקים את המוקד בנדרים')
   return id
 }
@@ -125,7 +126,7 @@ export async function runMonthlyLoad(
     const r = await addTlush(creds, clientId, amount, undefined, `טעינה חודשית למוקד ${acc.center_name} · ${month}`, limitedId)
     if (!r.ok) { await release(); return { result: 'error', error: r.message } }
     // הכסף כבר נטען: אם הסימון נכשל, לא משחררים (היה מאפשר טעינה כפולה); נשאר pending ונראה לאדמין
-    await admin.from('center_monthly_loads').update({ status: 'loaded', tlush_id: r.tlushId, loaded_at: new Date().toISOString() })
+    await admin.from('center_monthly_loads').update({ status: 'loaded', tlush_id: r.tlushId, loaded_at: new Date().toISOString(), balance: amount, balance_at: new Date().toISOString() })
       .eq('center_id', acc.center_id).eq('month', month)
     return { result: 'loaded' }
   } catch (e) {
@@ -133,4 +134,27 @@ export async function runMonthlyLoad(
     if (!called) await release()
     return { result: 'error', error: e instanceof Error ? e.message : 'שגיאה' }
   }
+}
+
+/**
+ * רענון יתרות מנדרים לחודש הנוכחי, לכל מוקד שנטען החודש ויש לו כרטיס בנדרים.
+ * נדרים מחזירה יתרה כוללת לכרטיס; כיוון שיש טעינה אחת בחודש, זו היתרה של הטעינה.
+ * בחודשים קודמים נשארת היתרה האחרונה שנרשמה לאותו חודש.
+ */
+export async function refreshMonthBalances(admin: SupabaseClient, month: string): Promise<void> {
+  const creds = await getNedarimCreds()
+  if (!creds) return
+  const [{ data: cards }, { data: loads }] = await Promise.all([
+    admin.from('center_monthly_cards').select('center_id, nedarim_client_id').not('nedarim_client_id', 'is', null),
+    admin.from('center_monthly_loads').select('center_id').eq('month', month).eq('status', 'loaded'),
+  ])
+  const loaded = new Set((loads ?? []).map((l) => l.center_id))
+  await Promise.all((cards ?? []).filter((c) => loaded.has(c.center_id)).map(async (c) => {
+    try {
+      const r = await getClientCard(creds, c.nedarim_client_id as string)
+      if (!r) return
+      await admin.from('center_monthly_loads').update({ balance: r.totalFreeAmount, balance_at: new Date().toISOString() })
+        .eq('center_id', c.center_id).eq('month', month)
+    } catch { /* היתרה הישנה נשארת */ }
+  }))
 }
