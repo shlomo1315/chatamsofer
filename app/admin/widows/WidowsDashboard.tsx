@@ -1,11 +1,13 @@
 'use client'
 import { useState, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
-import { Search, MapPin, Baby, FolderOpen, Wallet, CalendarClock, ChevronLeft, Clock, Loader2 } from 'lucide-react'
+import { FolderOpen, Clock } from 'lucide-react'
 import { Beneficiary, WidowRequest, WidowSupportPayment } from '@/types'
 import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
 import { useTablePagination } from '@/lib/useTablePagination'
-import Pagination from '@/components/ui/Pagination'
+import StatStrip from '@/components/admin/system/StatStrip'
+import { ListTable } from '@/components/admin/system/ListTable'
+import { SearchBar } from '@/components/admin/system/SearchBar'
+import WidowCardModal from './WidowCardModal'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import ApprovalLabelTag from '@/components/ui/ApprovalLabelTag'
 import { approvalLabelOf } from '@/lib/approvalLabel'
@@ -44,7 +46,8 @@ const COLUMNS: ColDef<ColKey, Beneficiary>[] = [
 export default function WidowsDashboard({
   widows, requests, payments,
 }: { widows: Beneficiary[]; requests: WidowRequest[]; payments: WidowSupportPayment[] }) {
-  const router = useRouter()
+  const [openIdx, setOpenIdx] = useState<number | null>(null)
+  const [onlyPending, setOnlyPending] = useState(false)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SortMode>('newest')
 
@@ -66,16 +69,11 @@ export default function WidowsDashboard({
   const monthlySupport = useMemo(() => widows.reduce((s, w) => s + Number(w.monthly_support || 0), 0), [widows])
   const pendingTotal = useMemo(() => requests.filter(r => r.status === 'pending').length, [requests])
 
-  const tiles = [
-    { label: 'תיקי משפחות', value: String(widows.length), icon: FolderOpen, color: 'bg-purple-50 text-purple-600' },
-    { label: 'סך תמיכות כללי', value: fmtCur(totalSupport), icon: Wallet, color: 'bg-emerald-50 text-emerald-600' },
-    { label: 'סך תמיכות חודשי', value: fmtCur(monthlySupport), icon: CalendarClock, color: 'bg-blue-50 text-blue-600' },
-  ]
-
   const filtered = useMemo(() => widows.filter(w => {
+    if (onlyPending && !pendingByFamily[w.id]) return false
     if (!query.trim()) return true
     return [fullName(w), w.id_number, w.city].filter(Boolean).join(' ').toLowerCase().includes(query.trim().toLowerCase())
-  }), [widows, query])
+  }), [widows, query, onlyPending, pendingByFamily])
 
   const visible = useMemo(() =>
     applySortMode(filtered, sort,
@@ -114,103 +112,57 @@ export default function WidowsDashboard({
   const pg = useTablePagination(tc.rows)
   const visibleRows = pg.rows
 
-  const cell = (c: ColDef<ColKey>, w: Beneficiary) => {
+  const cell = (c: ColDef<ColKey, Beneficiary>, w: Beneficiary) => {
     switch (c.key) {
       case 'name': {
         const pend = pendingByFamily[w.id] ?? 0
         return (
-          <span className="flex items-center gap-2 flex-wrap font-medium text-slate-800">
+          <span className="flex items-center gap-2 flex-wrap font-semibold text-ink">
             {fullName(w)}
-            {pend > 0 && <span className="text-[10px] font-semibold bg-amber-100 text-amber-700 rounded-full px-2 py-0.5">{pend} בקשות</span>}
+            {pend > 0 && <span className="text-[10px] font-semibold bg-gold-soft text-navy rounded-full px-2 py-0.5">{pend} בקשות</span>}
             {/* ⚠️ גם ליד השם וגם בעמודה: מי שכיבה את העמודה עדיין צריך לדעת
                 שהמשפחה אינה צאצא רגיל. */}
             <ApprovalLabelTag label={approvalLabelOf(w)} size="xs" />
           </span>
         )
       }
-      case 'id_number': return <span className="font-mono text-xs text-slate-500 ltr-num">{w.id_number}</span>
+      case 'id_number': return <span className="text-xs text-ink-soft ltr-num">{w.id_number}</span>
       case 'approval_label': {
         const lbl = approvalLabelOf(w)
-        return lbl ? <ApprovalLabelTag label={lbl} size="xs" /> : <span className="text-slate-300">—</span>
+        return lbl ? <ApprovalLabelTag label={lbl} size="xs" /> : <span className="text-ink-faint">—</span>
       }
-      case 'city': return w.city ? <span className="flex items-center gap-1 text-slate-600"><MapPin size={12} className="shrink-0" />{w.city}</span> : <span className="text-slate-600">—</span>
-      case 'children': return <span className="inline-flex items-center gap-1 text-slate-600"><Baby size={13} className="shrink-0" />{w.children_count ?? 0}</span>
-      case 'monthly': return <span className="text-blue-700 font-medium ltr-num">{w.monthly_support ? fmtCur(Number(w.monthly_support)) : '—'}</span>
-      case 'total': return <span className="text-emerald-700 font-bold ltr-num">{totalsByFamily[w.id] ? fmtCur(totalsByFamily[w.id]) : '—'}</span>
+      case 'city': return <span className="text-ink-soft">{w.city || '—'}</span>
+      case 'children': return <span className="text-ink-soft tabular-nums">{w.children_count ?? 0}</span>
+      case 'monthly': return <span className="text-ink font-medium ltr-num">{w.monthly_support ? fmtCur(Number(w.monthly_support)) : '—'}</span>
+      case 'total': return <span className="text-navy font-bold ltr-num">{totalsByFamily[w.id] ? fmtCur(totalsByFamily[w.id]) : '—'}</span>
     }
   }
 
   return (
     <div className="flex flex-col gap-4">
-      {/* שלוש סטטיסטיקות */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {tiles.map(t => (
-          <div key={t.label} className="bg-white rounded-2xl border border-slate-200 p-5 flex items-center gap-4 shadow-sm">
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${t.color}`}>
-              <t.icon size={22} />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-900 ltr-num">{t.value}</p>
-              <p className="text-xs text-slate-500 mt-0.5">{t.label}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {pendingTotal > 0 && (
-        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-sm text-amber-800">
-          <Clock size={15} /> {pendingTotal} בקשות ממתינות לטיפול — מסומנות בתיקים הרלוונטיים למטה.
-        </div>
+      <StatStrip active={onlyPending ? 'pending' : 'all'}
+        onSelect={k => setOnlyPending(k === 'pending' && !onlyPending)}
+        items={[
+          { key: 'all', label: 'תיקי משפחות', count: widows.length, icon: FolderOpen },
+          { key: 'pending', label: 'בקשות ממתינות', count: pendingTotal, icon: Clock },
+        ]} />
+      <p className="text-sm text-ink-soft">
+        סך תמיכות כללי <b className="text-navy tabular-nums">{fmtCur(totalSupport)}</b>
+        <span className="mx-2 text-ink-faint">·</span>
+        סך תמיכות חודשי <b className="text-navy tabular-nums">{fmtCur(monthlySupport)}</b>
+      </p>
+      <ListTable tc={tc} rows={visibleRows} pg={pg} empty="אין תיקים"
+        onOpen={w => setOpenIdx(tc.rows.findIndex(x => x.id === w.id))}
+        renderCell={cell}
+        toolbar={<>
+          <h2 className="ml-auto font-bold text-navy">תיקי משפחות</h2>
+          <SortButtons value={sort} onChange={setSort} />
+          <SearchBar value={query} onChange={setQuery} placeholder="חיפוש לפי שם / ת.ז / עיר…" />
+        </>} />
+      {openIdx !== null && tc.rows[openIdx] && (
+        <WidowCardModal rows={tc.rows} index={openIdx} onIndex={setOpenIdx} onClose={() => setOpenIdx(null)}
+          payments={payments} requests={requests} />
       )}
-
-      {/* רשימת תיקי המשפחות */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
-        <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between gap-3 flex-wrap">
-          <h2 className="font-semibold text-slate-900">תיקי משפחות</h2>
-          <div className="flex items-center gap-2 flex-wrap">
-            <SortButtons value={sort} onChange={setSort} />
-            <div className="relative w-full sm:w-56">
-              <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
-              <input value={query} onChange={e => setQuery(e.target.value)} placeholder="חיפוש לפי שם / ת.ז / עיר…"
-                className="w-full pr-9 pl-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-purple-200" />
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-col gap-2 px-5 pt-3">{tc.picker}{tc.activeFilters}</div>
-        {/* ⚠️ בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. */}
-        <div className="w-full px-1 pt-2">
-          <table className="w-full text-sm text-right" style={tc.rt.tableStyle}>
-            <colgroup>{tc.rt.cols}</colgroup>
-            <thead className="bg-slate-50 text-xs text-slate-500 uppercase tracking-wide">
-              <tr>
-                {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב. */}
-                {tc.shown.map((c, i) => tc.th(c, i))}
-                <th className="px-4 py-3 w-10" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {/* 🔴 נמדד מול tc.rows — הסינון מהכותרת יכול לרוקן את הטבלה
-                  גם כשהחיפוש שמעליה החזיר שורות. */}
-              {tc.rows.length === 0 && (
-                <tr><td colSpan={tc.shown.length + 1} className="text-center py-10 text-slate-400">אין תיקים</td></tr>
-              )}
-              {visibleRows.map(w => (
-                <tr key={w.id} onClick={() => router.push(`/admin/widows/${w.id}`)} className="hover:bg-purple-50/40 cursor-pointer transition-colors">
-                  {tc.shown.map(c => (
-                    <td key={c.key} className={`px-4 py-3 ${tc.cellClass(c)}`}>{cell(c, w)}</td>
-                  ))}
-                  <td className="px-4 py-3 text-slate-300 align-top"><ChevronLeft size={16} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* דפדוף + בורר גודל עמוד (20/50/100/200) — זהה לכל טבלאות המערכת */}
-        <div className="px-4 py-3 border-t border-slate-100">
-          <Pagination page={pg.page} size={pg.size} total={pg.total} onPage={pg.setPage} onSize={pg.setSize} />
-        </div>
-      </div>
     </div>
   )
 }
