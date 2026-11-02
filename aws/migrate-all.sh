@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # העברה מלאה של chasamsofer ל-AWS בפקודה אחת (CloudShell, Frankfurt). במקור (Supabase/Railway) קריאה בלבד, והדומיין הראשי לא נוגעים בו.
 #   bash <(curl -fsSL "https://raw.githubusercontent.com/shlomo1315/chatamsofer/main/aws/migrate-all.sh?$(date +%s)")
-# שלבים: 1 עדכון סטאק  2 סוד המקור (שואל פעם אחת, בלי הד)  3 מפתחות  4 הרמת Supabase  5 העתקת מסד  6 העתקת קבצים
+# שלבים: 1 עדכון סטאק  2 סוד המקור (שואל פעם אחת, בלי הד)  3 מפתחות  4 תפקידי מסד והעתקת מסד  5 הרמת Supabase  6 העתקת קבצים
 #        7 בנייה מחדש עם המפתח החדש  8 הרמת האתר ובדיקת בריאות. אפשר להריץ שוב: שלבים שהושלמו מדולגים או נעשים בטוחים לחזרה.
-# הדוח (טבלאות, שורות, קבצים; מקור מול יעד) מודפס בשלבים 5 ו-6, ובסוף שורת סיכום.
+# מסד שכבר הועתק לא מועתק שוב. RECOPY_DB=1 מעתיק מחדש מהמקור (מחליף את מה שביעד).
+# הדוח (טבלאות, שורות, קבצים; מקור מול יעד) מודפס בשלבים 4 ו-6, ובסוף שורת סיכום.
 set -euo pipefail
 export AWS_DEFAULT_REGION=eu-central-1
 P=${PROJECT:-chasamsofer}; STACK=${STACK:-$P}; RAW=https://raw.githubusercontent.com/shlomo1315/chatamsofer/main/aws
@@ -21,20 +22,28 @@ setup 0 0
 
 step "2/8 סוד המקור"
 if [ -z "$(secret_field supabase-src password)" ]; then run_remote fill-src-secret.sh; else echo "כבר מולא"; fi
+# הכתובת הישירה db.<ref>.supabase.co עונה רק ב-IPv6, ומשימת ההעתקה ב-AWS לא מגיעה אליה. צריך את ה-Session pooler
+if [[ "$(secret_field supabase-src host)" =~ ^db\..*\.supabase\.co$ ]]; then
+  echo "נשמרה הכתובת הישירה (IPv6 בלבד). מזינים את ה-Session pooler: Supabase > Connect > Session pooler"
+  echo "host: aws-...pooler.supabase.com   user: postgres.<מזהה הפרויקט>   password: אותה סיסמה"
+  run_remote fill-src-secret.sh
+fi
 
-step "3/8 מפתחות JWT וסיסמאות תפקידים (בלי הדפסה)"
+step "3/8 מפתחות JWT, סיסמאות תפקידים ותעודת CA (בלי הדפסה)"
 run_remote supabase-keys.sh
 
-step "4/8 הרמת PostgREST, Auth, Storage"
+step "4/8 תפקידי מסד והעתקת מסד (דוח שורות לכל טבלה)"
+# לפני הרמת Supabase: PostgREST ו-Auth מתחברים עם התפקידים שנוצרים כאן, ו-Auth ממשיך מהסכמה auth שהועתקה
+run_remote copy-from-supabase.sh STEP=db | tee /tmp/report-db.txt
+
+step "5/8 הרמת PostgREST, Auth, Storage"
 setup 0 1
-aws ecs wait services-stable --cluster "$P" --services "$P-supabase"
+diag() { echo "$1. שגיאות אחרונות מהלוג /ecs/$P-supabase:"; aws logs tail "/ecs/$P-supabase" --since 15m 2>/dev/null | grep -iE 'error|fatal|fail' | tail -15 || true; exit 1; }
+aws ecs wait services-stable --cluster "$P" --services "$P-supabase" || diag "השירות $P-supabase לא התייצב"
 for i in $(seq 1 30); do
   c=$(curl -sk -o /dev/null -w '%{http_code}' "https://$DOMAIN/auth/v1/health" || true); [ "$c" = 200 ] && break; sleep 10
 done
-echo "auth health: $c"; [ "$c" = 200 ] || { echo "שירות Auth לא עלה. לוג: /ecs/$P-supabase"; exit 1; }
-
-step "5/8 העתקת מסד (דוח שורות לכל טבלה)"
-run_remote copy-from-supabase.sh STEP=db | tee /tmp/report-db.txt
+echo "auth health: $c"; [ "$c" = 200 ] || diag "שירות Auth לא עלה"
 
 step "6/8 העתקת קבצים (דוח לכל bucket)"
 run_remote copy-from-supabase.sh STEP=files | tee /tmp/report-files.txt
