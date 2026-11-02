@@ -837,7 +837,10 @@ export const EMAIL_CATALOG: EmailSpec[] = [
       // JSON: מערך של { label, email }. "[]" מסיר את בלוק הפניות.
       {
         key: 'contacts', label: 'כתובות לפניות', multiline: true,
-        default: '[{"label":"לנושאים כלליים של היכל החתם סופר","email":"office@chasamsofer.info"},{"label":"לנושאים הקשורים לאיגוד הצאצאים","email":"igud@chasamsofer.info"}]',
+        default: JSON.stringify([
+          { label: 'לנושאים כלליים של היכל החתם סופר', desc: 'כגון: אגף הוצאה לאור, מדור לחידודי, בתורתו רשת שיעורי החת"ס, חלוקת הש"ס, מבחנים עולם הבא, קויטל לציון הקדוש, קו הטלפוני "ההיכל"', email: 'office@chasamsofer.info' },
+          { label: 'לנושאים הקשורים לאיגוד הצאצאים', desc: 'כגון: עזר ליולדות, גמ"ח הלוואות לנכדי החת"ס, אגף סיוע לאלמנות ויתומים, עזר לחגים.', email: 'igud@chasamsofer.info' },
+        ]),
       },
     ],
   },
