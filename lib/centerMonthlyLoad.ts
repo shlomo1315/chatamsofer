@@ -3,7 +3,7 @@
 // הטעינה מנכה כרטיס מהמלאי הגלובלי (אותה נעילה כמו consume_card_stock).
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
-  getNedarimCreds, getMaternityLimitedId, findClientByTsad3, getClientCard, saveClientCard, setMagneticCard, addTlush,
+  getNedarimCreds, getMaternityLimitedId, findClientByTsad3, getClientCard, getClientCardFull, getClientsTable, saveClientCard, setMagneticCard, addTlush,
 } from '@/lib/nedarim'
 
 export const CENTER_LOAD_AMOUNT_KEY = 'center_monthly_amount'
@@ -157,4 +157,59 @@ export async function refreshMonthBalances(admin: SupabaseClient, month: string)
         .eq('center_id', c.center_id).eq('month', month)
     } catch { /* היתרה הישנה נשארת */ }
   }))
+}
+
+export type NedarimLinkState = 'linked' | 'none' | 'multiple' | 'no_phone' | 'error'
+
+/** כל ה-ClientId (ייחודיים) שבטבלת הלקוחות שאחד משדות הטלפון שלהם שווה לטלפון המוזן. */
+export function findFamiliesByPhone(families: Record<string, unknown>[], phone: string): Record<string, unknown>[] {
+  if (!phone) return []
+  const seen = new Set<string>()
+  return families.filter((row) => {
+    const hit = Object.entries(row).some(([k, v]) => /phone|tel|mobile|cell/i.test(k) && normalizeCallerPhone(String(v ?? '')) === phone)
+    const id = String(row.ClientId ?? '')
+    if (!hit || !id || seen.has(id)) return false
+    seen.add(id)
+    return true
+  })
+}
+
+/**
+ * משיכה אוטומטית מנדרים: לכל מוקד עם טלפון ובלי קישור, מחפש משפחה לפי הטלפון.
+ * נמצאה אחת → נשמרים nedarim_client_id, מזהה צד ג' (id_number) והכרטיס המשויך.
+ * כמה משפחות באותו טלפון → לא בוחרים בניחוש. לא מקימים משפחה חדשה.
+ */
+export async function syncCentersFromNedarim(admin: SupabaseClient): Promise<Record<string, NedarimLinkState>> {
+  const out: Record<string, NedarimLinkState> = {}
+  const { data: cards } = await admin.from('center_monthly_cards').select('center_id, phone, nedarim_client_id')
+  const pending = (cards ?? []).filter((c) => !c.nedarim_client_id)
+  for (const c of cards ?? []) out[c.center_id] = c.nedarim_client_id ? 'linked' : (c.phone ? 'none' : 'no_phone')
+  const withPhone = pending.filter((c) => c.phone)
+  if (withPhone.length === 0) return out
+  const creds = await getNedarimCreds()
+  if (!creds) { for (const c of withPhone) out[c.center_id] = 'error'; return out }
+  let families: Record<string, unknown>[]
+  try { families = (await getClientsTable(creds)).families } catch { for (const c of withPhone) out[c.center_id] = 'error'; return out }
+  for (const c of withPhone) {
+    const found = findFamiliesByPhone(families, c.phone as string)
+    if (found.length === 0) continue
+    if (found.length > 1) { out[c.center_id] = 'multiple'; continue }
+    const row = found[0]
+    const tsad3Key = Object.keys(row).find((k) => /tsad3/i.test(k))
+    const tsad3 = tsad3Key ? String(row[tsad3Key] ?? '').trim() : ''
+    let card: string | null = null
+    try {
+      const full = await getClientCardFull(creds, String(row.ClientId))
+      const list = Array.isArray((full as { Cards?: unknown } | null)?.Cards) ? (full as { Cards: Record<string, unknown>[] }).Cards : []
+      const live = list.find((x) => !x.RemovedDate)
+      const num = live ? String(live.MagneticCard ?? live.CardNumber ?? '').replace(/\D/g, '') : ''
+      card = num || null
+    } catch { /* הכרטיס יושלם בשיחה */ }
+    const { error } = await admin.from('center_monthly_cards').update({
+      nedarim_client_id: String(row.ClientId), id_number: tsad3 || null, card_number: card,
+      card_linked_at: card ? new Date().toISOString() : null, updated_at: new Date().toISOString(),
+    }).eq('center_id', c.center_id)
+    out[c.center_id] = error ? 'error' : 'linked'
+  }
+  return out
 }
