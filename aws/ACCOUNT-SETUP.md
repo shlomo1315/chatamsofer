@@ -20,10 +20,10 @@
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/shlomo1315/chatamsofer/main/aws/account-setup.sh -o account-setup.sh
-ALERT_EMAIL=המייל-שלך@example.com BUDGET=60 bash account-setup.sh
+ALERT_EMAIL=המייל-שלך@example.com BUDGET=40 bash account-setup.sh
 ```
 
-- `BUDGET` הוא התקציב החודשי בדולרים. ההערכה לחתם סופר היא שרת Fargate אחד, ALB, WAF, לוגים ו-ECR, בסביבות 45-60$ בחודש.
+- `BUDGET` הוא התקציב החודשי בדולרים. הערכת העלות המלאה לחתם סופר נמצאת ב-`MIGRATE-CHASAMSOFER.md`, בסעיף "עלות חודשית".
 - `ANOMALY` (רשות, ברירת מחדל 10) הוא הסכום המינימלי שבו חריגה לא רגילה שולחת מייל.
 - הסקריפט בטוח להרצה חוזרת, למשל לשינוי התקציב: `ALERT_EMAIL=... BUDGET=100 bash account-setup.sh`.
 - **אחרי ההרצה:** מאשרים במייל את ההודעה "AWS Notification - Subscription Confirmation". בלי האישור התראות האבטחה לא יגיעו.
