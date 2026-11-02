@@ -21,6 +21,8 @@ export function ListTable<K extends string, R extends { id: string | number }>({
   onOpen,
   stopCell,
   empty,
+  leadHead,
+  leadCell,
 }: {
   tc: TableColumns<K, R>
   /** השורות של העמוד הנוכחי (אחרי דפדוף) */
@@ -34,8 +36,12 @@ export function ListTable<K extends string, R extends { id: string | number }>({
   /** עמודות שהלחיצה בהן לא פותחת את הכרטסת (כפתורים בתוך התא) */
   stopCell?: (c: ColDef<K, R>) => boolean
   empty: string
+  /** עמודה פותחת (למשל צ׳קבוקס בחירה): כותרת ותא. שניהם יחד או בלי */
+  leadHead?: ReactNode
+  leadCell?: (row: R) => ReactNode
 }) {
-  const extra = actions ? 1 : 0
+  const lead = leadHead !== undefined && leadCell ? 1 : 0
+  const extra = (actions ? 1 : 0) + lead
   return (
     <div className="overflow-hidden rounded-xl border border-line bg-paper">
       <div className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-3">{toolbar}</div>
@@ -49,8 +55,9 @@ export function ListTable<K extends string, R extends { id: string | number }>({
           <colgroup>{tc.rt.cols}</colgroup>
           <thead>
             <tr className="border-b border-line bg-sand [&>th]:px-3 [&>th]:py-3.5 [&>th]:text-right [&>th]:align-middle [&>th]:text-[11px] [&>th]:font-bold [&>th]:tracking-wide [&>th]:text-ink-soft">
-              {tc.shown.map((c, i) => tc.th(c, i))}
-              {actions && <th className="relative">{actionsHead}{tc.rt.handle(tc.shown.length)}</th>}
+              {lead === 1 && <th className="w-10">{leadHead}</th>}
+              {tc.shown.map((c, i) => tc.th(c, i + lead))}
+              {actions && <th className="relative">{actionsHead}{tc.rt.handle(tc.shown.length + lead)}</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
@@ -60,6 +67,7 @@ export function ListTable<K extends string, R extends { id: string | number }>({
             ) : (
               rows.map(row => (
                 <ListRow key={row.id} onClick={onOpen ? () => onOpen(row) : undefined}>
+                  {lead === 1 && <td className="align-top" onClick={e => e.stopPropagation()}>{leadCell!(row)}</td>}
                   {tc.shown.map(c => (
                     <td key={c.key} className={tc.cellClass(c)} onClick={stopCell?.(c) ? e => e.stopPropagation() : undefined}>{renderCell(c, row)}</td>
                   ))}

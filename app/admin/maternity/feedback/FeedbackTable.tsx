@@ -6,6 +6,9 @@ import { useRouter } from 'next/navigation'
 import { Star, Globe, Mail, X, Home, MessageSquare, Trash2, Loader2 } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
+import { useTablePagination } from '@/lib/useTablePagination'
+import { ListTable } from '@/components/admin/system/ListTable'
+import { SearchBar } from '@/components/admin/system/SearchBar'
 
 export interface SurveyQuestion {
   id: string
@@ -98,6 +101,12 @@ export default function FeedbackTable({ rows, questions }: { rows: FeedbackRow[]
   const toast = useToast()
   const [open, setOpen] = useState<FeedbackRow | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const filtered = useMemo(() => {
+    const q = query.trim()
+    if (!q) return rows
+    return rows.filter(r => [motherName(r), r.recovery_home, r.free_text].some(v => v?.includes(q)))
+  }, [rows, query])
 
   /** מחיקת משוב. אחרי המחיקה הקישור חוזר להיות פעיל והיולדת תוכל למלא מחדש. */
   async function remove(id: string, name: string) {
@@ -148,8 +157,9 @@ export default function FeedbackTable({ rows, questions }: { rows: FeedbackRow[]
   // ⚠️ mode:'client' — כל המשובים מגיעים כ-prop, אין דפדוף בשרת.
   const tc = useTableColumns<ColKey, FeedbackRow>('maternity-feedback', COLUMNS, {
     extraCols: 1,
-    sortFilter: { mode: 'client', rows },
+    sortFilter: { mode: 'client', rows: filtered },
   })
+  const pg = useTablePagination(tc.rows)
 
   // תוכן התא לפי מפתח העמודה
   const cell = (key: ColKey, row: FeedbackRow) => {
@@ -235,51 +245,31 @@ export default function FeedbackTable({ rows, questions }: { rows: FeedbackRow[]
         })}
       </div>
 
-      {/* בורר העמודות — מעל הטבלה */}
-      <div className="mb-3 flex flex-col gap-2">{tc.picker}{tc.activeFilters}</div>
-
-      {/* טבלת התשובות — ⚠️ בלי overflow-x: אין גלילה לרוחב בשום טבלה. */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-        <table className="w-full text-sm" style={tc.rt.tableStyle}>
-          <colgroup>{tc.rt.cols}</colgroup>
-          <thead className="bg-slate-50 border-b border-slate-200">
-            <tr className="text-right text-xs text-slate-500">
-              {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב. */}
-              {tc.shown.map((c, i) => tc.th(c, i))}
-              <th className="relative w-12">{tc.rt.handle(tc.shown.length)}</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {/* 🔴 tc.rows ולא rows — אחרת המיון והסינון בכותרת לא היו
-                משפיעים על מה שמוצג בפועל. */}
-            {tc.rows.map(row => {
-              return (
-                <tr key={row.id} onClick={() => setOpen(row)} className="hover:bg-slate-50 cursor-pointer transition">
-                  {tc.shown.map(c => (
-                    <td key={c.key} className={`px-4 py-3 ${tc.cellClass(c)}`}>{cell(c.key, row)}</td>
-                  ))}
-
-                  {/* מחיקה — עוצר את ה-propagation כדי שלא ייפתח המודל */}
-                  <td className="px-2 py-3 align-top" onClick={e => e.stopPropagation()}>
-                    {deleting === row.id ? (
-                      <Loader2 size={15} className="animate-spin text-slate-400" />
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => remove(row.id, motherName(row))}
-                        title="מחיקת המשוב"
-                        className="rounded-lg p-1.5 text-slate-300 transition hover:bg-rose-50 hover:text-rose-600"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+      <ListTable
+        tc={tc}
+        rows={pg.rows}
+        pg={pg}
+        empty="אין משובים"
+        onOpen={setOpen}
+        renderCell={(c, row) => cell(c.key, row)}
+        toolbar={<>
+          <h2 className="ml-auto font-bold text-navy">משובים ({rows.length})</h2>
+          <SearchBar value={query} onChange={setQuery} placeholder="חיפוש לפי שם / בית החלמה / הערות…" />
+        </>}
+        actions={row => deleting === row.id ? (
+          <Loader2 size={15} className="animate-spin text-ink-faint" />
+        ) : (
+          <button
+            type="button"
+            onClick={() => remove(row.id, motherName(row))}
+            title="מחיקת המשוב"
+            className="rounded-lg p-1.5 text-ink-faint transition hover:bg-rose-50 hover:text-rose-600"
+          >
+            <Trash2 size={15} />
+          </button>
+        )}
+        actionsHead=""
+      />
 
       {/* מודל — כל התשובות המפורטות */}
       {open && (
