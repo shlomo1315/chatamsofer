@@ -10,7 +10,7 @@ import type { ColDef, TableColumns } from '@/components/ui/TableColumns'
 
 type Pg = { page: number; size: number; total: number; setPage: (p: number) => void; setSize: (s: number) => void }
 
-export function ListTable<K extends string, R extends { id: string | number }>({
+export function ListTable<K extends string, R extends object>({
   tc,
   rows,
   pg,
@@ -23,6 +23,7 @@ export function ListTable<K extends string, R extends { id: string | number }>({
   empty,
   leadHead,
   leadCell,
+  rowKey,
 }: {
   tc: TableColumns<K, R>
   /** השורות של העמוד הנוכחי (אחרי דפדוף) */
@@ -39,6 +40,8 @@ export function ListTable<K extends string, R extends { id: string | number }>({
   /** עמודה פותחת (למשל צ׳קבוקס בחירה): כותרת ותא. שניהם יחד או בלי */
   leadHead?: ReactNode
   leadCell?: (row: R) => ReactNode
+  /** מפתח שורה כשאין לה שדה id */
+  rowKey?: (row: R) => string | number
 }) {
   const lead = leadHead !== undefined && leadCell ? 1 : 0
   const extra = (actions ? 1 : 0) + lead
@@ -66,7 +69,7 @@ export function ListTable<K extends string, R extends { id: string | number }>({
               <tr><td colSpan={tc.shown.length + extra} className="px-4 py-12 text-center text-ink-faint">{empty}</td></tr>
             ) : (
               rows.map(row => (
-                <ListRow key={row.id} onClick={onOpen ? () => onOpen(row) : undefined}>
+                <ListRow key={rowKey ? rowKey(row) : (row as { id: string | number }).id} onClick={onOpen ? () => onOpen(row) : undefined}>
                   {lead === 1 && <td className="align-top" onClick={e => e.stopPropagation()}>{leadCell!(row)}</td>}
                   {tc.shown.map(c => (
                     <td key={c.key} className={tc.cellClass(c)} onClick={stopCell?.(c) ? e => e.stopPropagation() : undefined}>{renderCell(c, row)}</td>
