@@ -251,7 +251,7 @@ Resources:
   AlbSg:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: ALB - 443 וגם 80 להפניה ל-HTTPS
+      GroupDescription: ALB ingress 443 and 80
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - {IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0}
@@ -260,7 +260,7 @@ Resources:
   TaskSg:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: משימות - קבלת תעבורה מה-ALB בלבד
+      GroupDescription: Tasks ingress from ALB only
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - {IpProtocol: tcp, FromPort: 3000, ToPort: 3000, SourceSecurityGroupId: !Ref AlbSg}
