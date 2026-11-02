@@ -20,7 +20,7 @@
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/shlomo1315/chatamsofer/main/aws/account-setup.sh -o account-setup.sh
-ALERT_EMAIL=המייל-שלך@example.com BUDGET=40 bash account-setup.sh
+ALERT_EMAIL=המייל-שלך@example.com BUDGET=80 bash account-setup.sh
 ```
 
 - `BUDGET` הוא התקציב החודשי בדולרים. הערכת העלות המלאה לחתם סופר נמצאת ב-`MIGRATE-CHASAMSOFER.md`, בסעיף "עלות חודשית".
