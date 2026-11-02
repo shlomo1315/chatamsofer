@@ -55,6 +55,18 @@ echo "== 4/4 יצירת/עדכון הסטאק (5-10 דקות)"
 OIDC=true
 EXISTING_OIDC=$(aws iam list-open-id-connect-providers --query "OpenIDConnectProviderList[?contains(Arn,'token.actions.githubusercontent.com')].Arn | [0]" --output text)
 if [[ "$EXISTING_OIDC" != "None" && -n "$EXISTING_OIDC" ]]; then OIDC=false; fi
+# מחסנית שנכשלה בהקמה ראשונה נשארת ב-ROLLBACK_COMPLETE ואי אפשר לעדכן אותה: מוחקים רק במצב הזה (הסוד ב-Secrets Manager לא נמחק)
+STACK_STATE=$(aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].StackStatus" --output text 2>/dev/null || true)
+if [[ "$STACK_STATE" == "ROLLBACK_COMPLETE" ]]; then
+  echo "המחסנית $STACK במצב ROLLBACK_COMPLETE (הקמה שנכשלה). סיבת הכשל:"
+  aws cloudformation describe-stack-events --stack-name "$STACK" --query "StackEvents[?contains(ResourceStatus,'FAILED')].[LogicalResourceId,ResourceStatusReason]" --output text || true
+  echo "מוחק את המחסנית כדי להקים מחדש."
+  aws cloudformation delete-stack --stack-name "$STACK"
+  aws cloudformation wait stack-delete-complete --stack-name "$STACK"
+  OIDC=true
+  EXISTING_OIDC=$(aws iam list-open-id-connect-providers --query "OpenIDConnectProviderList[?contains(Arn,'token.actions.githubusercontent.com')].Arn | [0]" --output text)
+  if [[ "$EXISTING_OIDC" != "None" && -n "$EXISTING_OIDC" ]]; then OIDC=false; fi
+fi
 if aws cloudformation describe-stacks --stack-name "$STACK" >/dev/null 2>&1; then
   # בעדכון חוזר שומרים את הערך שהסטאק נוצר איתו
   OIDC=$(aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Parameters[?ParameterKey=='CreateOidcProvider'].ParameterValue" --output text)
@@ -65,7 +77,11 @@ aws cloudformation deploy --stack-name "$STACK" --template-file /tmp/infrastruct
   --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM --tags Project="$PROJECT" \
   --parameter-overrides ProjectName="$PROJECT" GitHubRepo="$REPO" DomainName="$DOMAIN" CreateDnsZone="$CREATE_ZONE" CertificateArn="$CERT_PARAM" \
     CertValidationName="$VAL_NAME" CertValidationValue="$VAL_VALUE" \
-    VpcId="$VPC" SubnetIds="$SUBNETS" DesiredCount="${DESIRED:-0}" TaskCpu="${CPU:-512}" TaskMemory="${MEMORY:-1024}" CreateOidcProvider="$OIDC" ExistingOidcProviderArn="$EXISTING_OIDC"
+    VpcId="$VPC" SubnetIds="$SUBNETS" DesiredCount="${DESIRED:-0}" TaskCpu="${CPU:-512}" TaskMemory="${MEMORY:-1024}" CreateOidcProvider="$OIDC" ExistingOidcProviderArn="$EXISTING_OIDC" || {
+  echo "ההקמה נכשלה. סיבת הכשל:"
+  aws cloudformation describe-stack-events --stack-name "$STACK" --query "StackEvents[?contains(ResourceStatus,'FAILED')].[LogicalResourceId,ResourceStatusReason]" --output text || true
+  exit 1
+}
 
 echo
 echo "== סיום. תוצאות (אין בהן סודות):"
