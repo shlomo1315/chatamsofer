@@ -144,7 +144,7 @@ export default function EditLoanPage({ params }: { params: Promise<{ id: string 
       {borrower && (
         <div className="bg-white rounded-xl border border-slate-200 p-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm font-bold flex-shrink-0">
+            <span className="w-9 h-9 rounded-full bg-gold-soft text-navy flex items-center justify-center text-sm font-bold flex-shrink-0">
               {borrower.name.charAt(0) || '?'}
             </span>
             <div>
@@ -162,7 +162,7 @@ export default function EditLoanPage({ params }: { params: Promise<{ id: string 
         <div className="grid grid-cols-2 gap-2">
           {LOAN_PURPOSES.map(p => (
             <button key={p} type="button" onClick={() => { setPurpose(p); clearErr('purpose') }}
-              className={`text-sm px-3 py-2 rounded-lg border font-medium transition-colors ${purpose === p ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
+              className={`text-sm px-3 py-2 rounded-lg border font-medium transition-colors ${purpose === p ? 'bg-navy border-navy text-white' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
               {p}
             </button>
           ))}
@@ -172,7 +172,7 @@ export default function EditLoanPage({ params }: { params: Promise<{ id: string 
           <div className="flex flex-col gap-1.5 mt-1">
             <label className="text-xs font-medium text-slate-600">פירוט מטרת ההלוואה <span className="text-red-500">*</span></label>
             <textarea value={purposeDetails} onChange={e => { setPurposeDetails(e.target.value); clearErr('purposeDetails') }} rows={2}
-              className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 resize-none ${fieldErrors.purposeDetails ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`} />
+              className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 resize-none ${fieldErrors.purposeDetails ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-navy-soft'}`} />
             {fieldErrors.purposeDetails && <p className="text-xs text-red-600">{fieldErrors.purposeDetails}</p>}
           </div>
         )}
@@ -183,20 +183,20 @@ export default function EditLoanPage({ params }: { params: Promise<{ id: string 
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-slate-600">סכום ההלוואה המבוקש ($) <span className="text-red-500">*</span></label>
           <input type="text" inputMode="numeric" value={amount} onChange={e => { const v = e.target.value.replace(/\D/g, ''); setAmount(v); clearErr('amount') }}
-            className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left ${fieldErrors.amount ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`} dir="ltr" />
+            className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left ${fieldErrors.amount ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-navy-soft'}`} dir="ltr" />
           <p className="text-[11px] text-slate-400">ללא תקרה · ההלוואה והתשלום מתבצעים בשקלים לפי ערך מטבע דולר ($)</p>
           {fieldErrors.amount && <p className="text-xs text-red-600">{fieldErrors.amount}</p>}
         </div>
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-slate-600">סכום שאושר בפועל ($)</label>
           <input type="text" inputMode="numeric" value={approvedAmount} onChange={e => { const v = e.target.value.replace(/\D/g, ''); setApprovedAmount(v) }}
-            className="rounded-lg border border-slate-300 focus:ring-indigo-500 px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left" dir="ltr" placeholder="ריק = כסכום המבוקש" />
+            className="rounded-lg border border-slate-300 focus:ring-navy-soft px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left" dir="ltr" placeholder="ריק = כסכום המבוקש" />
           <p className="text-[11px] text-slate-400">הסכום שמוצג בפורטל הביצוע</p>
         </div>
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-slate-600">מספר תשלומים להחזר <span className="text-red-500">*</span></label>
           <input type="text" inputMode="numeric" value={installments} onChange={e => { const v = e.target.value.replace(/\D/g, ''); setInstallments(v); clearErr('installments') }}
-            className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left ${fieldErrors.installments ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`} dir="ltr" />
+            className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left ${fieldErrors.installments ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-navy-soft'}`} dir="ltr" />
           <p className="text-[11px] text-slate-400">ללא תקרה</p>
           {fieldErrors.installments && <p className="text-xs text-red-600">{fieldErrors.installments}</p>}
         </div>
@@ -208,7 +208,7 @@ export default function EditLoanPage({ params }: { params: Promise<{ id: string 
         <p className="text-xs text-slate-500">יש לצרף: <strong>אישור רב</strong> (חובה), וכן מומלץ הזמנה / מסמכים רפואיים / כל מסמך אחר. עד {MAX_FILES} קבצים — PDF, מסמך או תמונה. גודל מרבי לקובץ: {MAX_FILE_MB}MB.</p>
         {docs.map((d, i) => (
           <div key={`d${i}`} className="flex items-center gap-2 text-sm bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700">
-            <FileText size={14} className="text-indigo-500 flex-shrink-0" />
+            <FileText size={14} className="text-navy-soft flex-shrink-0" />
             <ViewDocButton url={d.url} className="truncate flex-1 hover:underline">{d.name || `מסמך ${i + 1}`}</ViewDocButton>
             <DownloadDocButton url={d.url} docType={(d.name || `מסמך ${i + 1}`).replace(/\.[^.\s]+$/, '')} person={borrower?.name} name={d.name || d.url} variant="icon" />
             <button type="button" onClick={() => setDocs(prev => prev.filter((_, idx) => idx !== i))} className="text-slate-400 hover:text-red-500"><X size={14} /></button>
@@ -224,7 +224,7 @@ export default function EditLoanPage({ params }: { params: Promise<{ id: string 
         <input type="file" ref={fileRef} className="hidden" multiple accept="image/*,.pdf,.doc,.docx" onChange={e => addFiles(e.target.files)} />
         {docs.length + newFiles.length < MAX_FILES && (
           <button type="button" onClick={() => fileRef.current?.click()}
-            className={`flex items-center justify-center gap-2 border-2 border-dashed rounded-lg px-4 py-3 text-sm transition-colors ${fieldErrors.files ? 'border-red-400 text-red-500' : 'border-slate-300 text-slate-500 hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-600'}`}>
+            className={`flex items-center justify-center gap-2 border-2 border-dashed rounded-lg px-4 py-3 text-sm transition-colors ${fieldErrors.files ? 'border-red-400 text-red-500' : 'border-slate-300 text-slate-500 hover:border-gold hover:bg-sand hover:text-navy'}`}>
             <Upload size={16} /> הוספת קובץ
           </button>
         )}
@@ -237,8 +237,8 @@ export default function EditLoanPage({ params }: { params: Promise<{ id: string 
         <div className="flex flex-col gap-2 mt-1">
           {DECLARATION_OPTIONS.map(opt => (
             <button key={opt} type="button" onClick={() => { setDeclaration(opt); clearErr('declaration') }}
-              className={`text-right rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors flex items-center gap-2 ${declaration === opt ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-200 text-slate-800' : 'border-slate-200 text-slate-600 hover:border-indigo-300 hover:bg-slate-50'}`}>
-              <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${declaration === opt ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`} />
+              className={`text-right rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors flex items-center gap-2 ${declaration === opt ? 'border-navy-soft bg-sand ring-1 ring-line text-slate-800' : 'border-slate-200 text-slate-600 hover:border-line-strong hover:bg-slate-50'}`}>
+              <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${declaration === opt ? 'border-navy bg-navy' : 'border-slate-300'}`} />
               {opt}
             </button>
           ))}
@@ -250,14 +250,14 @@ export default function EditLoanPage({ params }: { params: Promise<{ id: string 
       <div className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-2">
         <label className="text-sm font-semibold text-slate-700">הערות</label>
         <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft resize-none" />
       </div>
 
       {saveError && <div className="flex items-center gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3"><AlertTriangle size={14} /> {saveError}</div>}
       <div className="flex gap-3 justify-end">
         <Link href={`/admin/loans/${id}`} className="px-4 py-2 rounded-lg border border-slate-300 text-sm text-slate-600 hover:bg-slate-50 transition-colors">ביטול</Link>
         <button onClick={handleSave} disabled={saving}
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors">
+          className="flex items-center gap-2 bg-navy hover:bg-navy-dark disabled:bg-line-strong text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors">
           {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} שמירה
         </button>
       </div>

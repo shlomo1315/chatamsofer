@@ -95,7 +95,7 @@ export default function StaffActivityReport() {
   const presetBtn = (p: Preset, label: string) => (
     <button
       onClick={() => setPreset(p)}
-      className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${preset === p ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+      className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${preset === p ? 'bg-navy text-white border-navy' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
     >{label}</button>
   )
 
@@ -121,7 +121,7 @@ export default function StaffActivityReport() {
             <label className="block text-[11px] text-slate-500 mb-1">עד תאריך</label>
             <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="text-sm rounded-lg border border-slate-200 px-2 py-1.5" />
           </div>
-          <button onClick={load} className="text-xs px-3 py-2 rounded-lg bg-indigo-600 text-white">הצג</button>
+          <button onClick={load} className="text-xs px-3 py-2 rounded-lg bg-navy text-white">הצג</button>
         </div>
       )}
 
@@ -158,7 +158,7 @@ export default function StaffActivityReport() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0">
-                    <span className="inline-flex items-center gap-1 text-xs text-indigo-700"><FileText size={13} /> {r.requests}</span>
+                    <span className="inline-flex items-center gap-1 text-xs text-navy-dark"><FileText size={13} /> {r.requests}</span>
                     <span className="inline-flex items-center gap-1 text-xs text-emerald-700"><Mail size={13} /> {r.emails}</span>
                   </div>
                 </button>
@@ -172,16 +172,16 @@ export default function StaffActivityReport() {
                       const content = (
                         <>
                           <div className="flex items-center gap-2 min-w-0">
-                            {it.kind === 'email' ? <Mail size={12} className="text-emerald-500 flex-shrink-0" /> : <FileText size={12} className="text-indigo-500 flex-shrink-0" />}
+                            {it.kind === 'email' ? <Mail size={12} className="text-emerald-500 flex-shrink-0" /> : <FileText size={12} className="text-navy-soft flex-shrink-0" />}
                             <span className="text-slate-700 flex-shrink-0">{ACTION_LABEL[it.action] ?? it.action}</span>
                             {it.detail && <span className="text-slate-400 truncate">— {it.detail}</span>}
-                            {href && <ExternalLink size={11} className="text-indigo-400 flex-shrink-0" />}
+                            {href && <ExternalLink size={11} className="text-gold flex-shrink-0" />}
                           </div>
                           <span className="text-slate-400 flex-shrink-0 ltr-num">{fmtDateTime(it.at)}</span>
                         </>
                       )
                       return href ? (
-                        <Link key={i} href={href} className="flex items-center justify-between gap-2 px-3 py-2 text-xs hover:bg-indigo-50/60 transition-colors">
+                        <Link key={i} href={href} className="flex items-center justify-between gap-2 px-3 py-2 text-xs hover:bg-sand/60 transition-colors">
                           {content}
                         </Link>
                       ) : (

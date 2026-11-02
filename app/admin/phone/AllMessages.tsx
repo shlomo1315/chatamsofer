@@ -278,7 +278,7 @@ export default function AllMessages() {
                 {row.audio ? (
                   <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
                     row.audio.startsWith('tts_')
-                      ? 'bg-violet-50 text-violet-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                      ? 'bg-sand text-navy-dark' : 'bg-emerald-50 text-emerald-700'}`}>
                     {row.audio.startsWith('tts_') ? <Volume2 size={9} /> : <Mic size={9} />}
                     {row.audio.startsWith('tts_') ? 'קול טבעי' : 'הקלטה אנושית'}
                   </span>
@@ -291,7 +291,7 @@ export default function AllMessages() {
                 )}
                 {(row.meta.placeholders ?? []).map(p => (
                   <span key={p} dir="ltr"
-                    className="rounded bg-indigo-50 px-1.5 py-0.5 font-mono text-[10px] font-bold text-indigo-700">
+                    className="rounded bg-sand px-1.5 py-0.5 font-mono text-[10px] font-bold text-navy-dark">
                     {`{${p}}`}
                   </span>
                 ))}
@@ -338,7 +338,7 @@ export default function AllMessages() {
                 {row.meta.allowAudio && row.draft.trim() && !/\{[^}]+\}/.test(row.draft) && (
                   <button type="button" disabled={busy === id}
                     onClick={() => void regenerate(row)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300 px-3 py-1.5 text-[11.5px] font-bold text-violet-700 hover:bg-violet-50 disabled:opacity-50">
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-line-strong px-3 py-1.5 text-[11.5px] font-bold text-navy-dark hover:bg-sand disabled:opacity-50">
                     {busy === id ? <Loader2 size={12} className="animate-spin" /> : <Volume2 size={12} />}
                     יצירת קול מחדש
                   </button>

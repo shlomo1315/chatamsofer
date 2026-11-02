@@ -439,12 +439,12 @@ export default function LegacyMailSettings() {
 
               {/* יעד הייבוא — לאיזו כתובת Gmail המיילים מוזרקים. עד כה השדה נשמר
                   אך לא הוצג, והמשתמש לא ידע לאן הוגדר הייבוא. */}
-              <div className="mb-3 flex items-center gap-2 rounded-lg bg-indigo-50/60 border border-indigo-100 px-3 py-2">
-                <ArrowLeftRight size={14} className="text-indigo-500 flex-shrink-0" />
+              <div className="mb-3 flex items-center gap-2 rounded-lg bg-sand/60 border border-gold-soft px-3 py-2">
+                <ArrowLeftRight size={14} className="text-navy-soft flex-shrink-0" />
                 <div className="min-w-0">
                   <span className="text-xs text-slate-500">יעד ייבוא ל-Gmail: </span>
                   {box.importTargetEmail ? (
-                    <span className="text-xs font-mono font-semibold text-indigo-700 ltr-num" dir="ltr">{box.importTargetEmail}</span>
+                    <span className="text-xs font-mono font-semibold text-navy-dark ltr-num" dir="ltr">{box.importTargetEmail}</span>
                   ) : (
                     <span className="text-xs text-slate-400">כתובת המחלקה (ברירת מחדל)</span>
                   )}
@@ -457,7 +457,7 @@ export default function LegacyMailSettings() {
                   <div className="flex items-center gap-1 text-xs text-slate-400 mb-0.5">
                     <Building2 size={12} /> מחלקה
                   </div>
-                  <div className="font-semibold text-indigo-700">{box.departmentLabel}</div>
+                  <div className="font-semibold text-navy-dark">{box.departmentLabel}</div>
                 </div>
                 <div>
                   <div className="flex items-center gap-1 text-xs text-slate-400 mb-0.5">
@@ -532,7 +532,7 @@ export default function LegacyMailSettings() {
           ההסבר הזה, מי שחיבר תיבה חיפש אותם בדואר הנכנס והסיק שהחיבור נכשל. */}
       <p className="text-xs text-slate-500 leading-relaxed bg-slate-50 border border-slate-200 rounded-xl p-3">
         <strong className="text-slate-700">היכן רואים את המיילים?</strong> מיילים מתיבה מחוברת
-        מופיעים בתיקיית <Link href="/admin/mail?folder=LEGACY" className="text-indigo-600 hover:underline font-semibold">ארכיון מייל קודם</Link> —
+        מופיעים בתיקיית <Link href="/admin/mail?folder=LEGACY" className="text-navy hover:underline font-semibold">ארכיון מייל קודם</Link> —
         ולא בדואר הנכנס, שמציג רק מיילים שנקלטו ישירות לכתובות המערכת.
       </p>
 

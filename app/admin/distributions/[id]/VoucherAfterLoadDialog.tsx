@@ -114,7 +114,7 @@ export default function VoucherAfterLoadDialog({
                 </label>
                 <input value={email} onChange={e => setEmail(e.target.value)} type="email" dir="ltr"
                   placeholder="לא הוזנה כתובת" disabled={sent}
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-left text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-50" />
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-left text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold-soft disabled:bg-slate-50" />
                 {testMode && (
                   <p className="mt-1 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11px] leading-relaxed text-amber-900">
                     🧪 מצב בדיקה — {realRecipient
@@ -130,7 +130,7 @@ export default function VoucherAfterLoadDialog({
         <div className="flex items-center gap-2 border-t border-slate-200 px-4 py-3">
           {target.centerName && !sent && (
             <button type="button" onClick={send} disabled={sending || !email.trim() || (testMode && !testEmail)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-extrabold text-white hover:bg-indigo-700 disabled:opacity-40">
+              className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-4 py-2 text-xs font-extrabold text-white hover:bg-navy-dark disabled:opacity-40">
               {sending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
               שליחת השובר במייל
             </button>

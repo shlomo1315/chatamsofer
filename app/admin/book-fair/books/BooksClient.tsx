@@ -234,7 +234,7 @@ export default function BooksClient({ books, sold = {}, soldBy = {}, soldAdj = {
                 value={query}
                 onChange={e => setQuery(e.target.value)}
                 placeholder="חיפוש לפי מק״ט, שם או מחבר…"
-                className="w-full rounded-xl border border-slate-200 py-2 pr-9 pl-3 text-sm outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+                className="w-full rounded-xl border border-slate-200 py-2 pr-9 pl-3 text-sm outline-none focus:border-line-strong focus:ring-2 focus:ring-gold-soft"
               />
             </div>
             {tc.picker}
@@ -251,7 +251,7 @@ export default function BooksClient({ books, sold = {}, soldBy = {}, soldAdj = {
             {canAdd && (
               <button
                 onClick={() => setCreating(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-4 py-2 text-sm font-medium text-white transition hover:bg-navy-dark"
               >
                 <Plus size={16} /> ספר חדש
               </button>
@@ -380,7 +380,7 @@ function renderCell(
 ) {
   // 🔴 14.10: תיקון כמות ידני (דוח ההתחשבנות) — מוצג בסימון, לא נבלע בשקט.
   const adjNote = adj[b.id]
-    ? <span className="block text-[11px] text-violet-700" title="תיקון כמות ידני מדוח ההתחשבנות. ההזמנות לא שונו">תיקון {adj[b.id] > 0 ? '+' : ''}{adj[b.id]}</span>
+    ? <span className="block text-[11px] text-navy-dark" title="תיקון כמות ידני מדוח ההתחשבנות. ההזמנות לא שונו">תיקון {adj[b.id] > 0 ? '+' : ''}{adj[b.id]}</span>
     : null
   switch (key) {
     case 'sku':
@@ -466,7 +466,7 @@ function SummaryCard({ icon: Icon, label, value, tone }: {
 }) {
   const tones = {
     slate:   'bg-slate-100 text-slate-600',
-    indigo:  'bg-indigo-50 text-indigo-600',
+    indigo:  'bg-sand text-navy',
     emerald: 'bg-emerald-50 text-emerald-600',
   }
   return (
@@ -487,7 +487,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
     <button
       onClick={onClick}
       className={`px-4 py-2.5 text-sm font-medium transition border-b-2 -mb-px ${
-        active ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+        active ? 'border-navy text-navy-dark' : 'border-transparent text-slate-500 hover:text-slate-700'
       }`}
     >
       {children}

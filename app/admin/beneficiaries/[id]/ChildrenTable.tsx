@@ -77,7 +77,7 @@ export default function ChildrenTable({ kids }: { kids: KidRow[] }) {
             {k.birth_status === 'approved' && <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-800">לידה מאושרת</span>}
             {k.birth_cert_url && (
               <ViewDocButton url={k.birth_cert_url} name="אישור לידה"
-                className="inline-flex items-center justify-center w-6 h-6 rounded-full text-indigo-600 hover:bg-indigo-50 border border-indigo-200 transition-colors"><FileText size={13} /></ViewDocButton>
+                className="inline-flex items-center justify-center w-6 h-6 rounded-full text-navy hover:bg-sand border border-line transition-colors"><FileText size={13} /></ViewDocButton>
             )}
             {k.marital_label
               ? <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${k.marital_status === 'married' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{k.marital_label}</span>

@@ -58,13 +58,13 @@ export default function OfficeContact({ canEdit }: { canEdit: boolean }) {
             טלפון המשרד
             <input value={phone} onChange={e => setPhone(e.target.value)} disabled={!canEdit}
               dir="ltr" inputMode="tel" placeholder="למשל 03-1234567"
-              className="rounded-xl border border-slate-300 px-3 py-2.5 text-base outline-none focus:border-indigo-400 disabled:bg-slate-50" />
+              className="rounded-xl border border-slate-300 px-3 py-2.5 text-base outline-none focus:border-gold disabled:bg-slate-50" />
           </label>
           <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
             מייל המשרד
             <input value={email} onChange={e => setEmail(e.target.value)} disabled={!canEdit}
               dir="ltr" inputMode="email"
-              className="rounded-xl border border-slate-300 px-3 py-2.5 text-base outline-none focus:border-indigo-400 disabled:bg-slate-50" />
+              className="rounded-xl border border-slate-300 px-3 py-2.5 text-base outline-none focus:border-gold disabled:bg-slate-50" />
           </label>
           {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
           {canEdit && (

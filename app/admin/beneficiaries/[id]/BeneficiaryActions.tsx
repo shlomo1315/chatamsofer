@@ -40,7 +40,7 @@ export default function BeneficiaryActions({ id, name }: { id: string; name: str
     <div className="flex items-center gap-2">
       {canEdit && (
         <Link href={`/admin/beneficiaries/${id}/edit`}>
-          <button className="flex items-center gap-1.5 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-3 py-1.5 transition-colors">
+          <button className="flex items-center gap-1.5 text-sm text-white bg-navy hover:bg-navy-dark rounded-lg px-3 py-1.5 transition-colors">
             <Edit size={14} />
             עריכה
           </button>

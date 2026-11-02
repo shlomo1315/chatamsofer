@@ -165,7 +165,7 @@ function Card({ r, busy, canEdit, onToggle }: {
           {r.order && (
             <Link
               href={`/admin/book-fair/orders/${r.order.id}`}
-              className="text-sm font-medium text-indigo-600 hover:underline"
+              className="text-sm font-medium text-navy hover:underline"
             >
               הזמנה {r.order.order_number}
             </Link>
@@ -180,7 +180,7 @@ function Card({ r, busy, canEdit, onToggle }: {
         <div className="mt-1 flex flex-wrap items-center gap-3 text-xs">
           {r.order?.customer_phone && (
             <a href={`tel:${r.order.customer_phone}`}
-               className="inline-flex items-center gap-1 text-indigo-600 hover:underline">
+               className="inline-flex items-center gap-1 text-navy hover:underline">
               <Phone size={12} /> {r.order.customer_phone}
             </a>
           )}

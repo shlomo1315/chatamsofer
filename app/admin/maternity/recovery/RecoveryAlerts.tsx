@@ -24,7 +24,7 @@ export default function RecoveryAlerts({ events }: { events: RecoveryEvent[] }) 
   return (
     <div className="fixed bottom-4 left-4 z-50 w-80 max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden" dir="rtl"
       style={{ animation: 'pop-in 0.25s ease-out' }}>
-      <div className="bg-indigo-600 text-white px-4 py-3 flex items-center justify-between">
+      <div className="bg-navy text-white px-4 py-3 flex items-center justify-between">
         <span className="font-bold text-sm flex items-center gap-2"><Bell size={16} /> עדכונים חדשים ({show.length})</span>
         <button onClick={() => setShow([])} className="text-white/70 hover:text-white" aria-label="סגור"><X size={16} /></button>
       </div>

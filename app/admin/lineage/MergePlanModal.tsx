@@ -45,9 +45,9 @@ export default function MergePlanModal({
       style={{ position: 'fixed', inset: 0, zIndex: 96, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <div onClick={e => e.stopPropagation()}
         style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 620, maxHeight: '88vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.35)', overflow: 'hidden' }}>
-        <div style={{ background: '#F5F3FF', borderBottom: '2px solid #DDD6FE', padding: '14px 18px' }}>
-          <div style={{ fontSize: 15.5, fontWeight: 800, color: '#5B21B6' }}>אישור מיזוג — כך זה ייראה</div>
-          <div style={{ fontSize: 12, color: '#7C3AED', marginTop: 3 }}>
+        <div style={{ background: '#FBF8F1', borderBottom: '2px solid #E6DFCF', padding: '14px 18px' }}>
+          <div style={{ fontSize: 15.5, fontWeight: 800, color: '#0E1830' }}>אישור מיזוג — כך זה ייראה</div>
+          <div style={{ fontSize: 12, color: '#14213D', marginTop: 3 }}>
             {data.totalMerged} צמתים ימוזגו · {data.generations.length} דורות
             {data.generations.length > 0 && ` (${Math.min(...data.generations)}–${Math.max(...data.generations)})`}
           </div>
@@ -58,19 +58,19 @@ export default function MergePlanModal({
           <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, background: '#FAF5FF', border: '1.5px solid #E9D5FF', borderRadius: 12, padding: '10px 13px', cursor: planning ? 'default' : 'pointer' }}>
             <input type="checkbox" checked={upApprox} disabled={planning}
               onChange={e => onToggleApprox(e.target.checked)}
-              style={{ width: 16, height: 16, accentColor: '#7C3AED', cursor: 'pointer', marginTop: 2 }} />
-            <span style={{ fontSize: 12.5, color: '#4C1D95', fontWeight: 700 }}>
+              style={{ width: 16, height: 16, accentColor: '#14213D', cursor: 'pointer', marginTop: 2 }} />
+            <span style={{ fontSize: 12.5, color: '#0E1830', fontWeight: 700 }}>
               למזג גם את הדורות שמעל כשהניסוח שונה
-              <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#7C3AED', marginTop: 3, lineHeight: 1.5 }}>
+              <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#14213D', marginTop: 3, lineHeight: 1.5 }}>
                 אם אלו אותו אדם — גם אבותיהם אותו אדם, גם אם נרשמו בניסוח אחר. הניסוח המפורט הוא שיישאר, וניתן לערוך אותו כאן.
               </span>
             </span>
           </label>
           {data.steps.map(s => (
             <div key={s.keepId}
-              style={{ border: `1.5px solid ${s.direction === 'requested' ? '#7C3AED' : '#E2E8F0'}`, borderRadius: 12, padding: '11px 13px', background: s.direction === 'requested' ? '#FAF5FF' : '#fff' }}>
+              style={{ border: `1.5px solid ${s.direction === 'requested' ? '#14213D' : '#E2E8F0'}`, borderRadius: 12, padding: '11px 13px', background: s.direction === 'requested' ? '#FAF5FF' : '#fff' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 10, fontWeight: 800, color: '#7C3AED', background: '#F5F3FF', border: '1px solid #DDD6FE', borderRadius: 20, padding: '1px 7px' }}>דור {s.generation}</span>
+                <span style={{ fontSize: 10, fontWeight: 800, color: '#14213D', background: '#FBF8F1', border: '1px solid #E6DFCF', borderRadius: 20, padding: '1px 7px' }}>דור {s.generation}</span>
                 <span style={{ fontSize: 10, fontWeight: 700, color: '#64748B' }}>{DIR_LABEL[s.direction]}</span>
                 <span style={{ fontSize: 11.5, color: '#475569' }}>· {s.count} צמתים → 1</span>
                 {!s.needsNameChoice && (
@@ -85,8 +85,8 @@ export default function MergePlanModal({
                   const on = names[s.keepId] === nm
                   return (
                     <button key={nm} type="button" onClick={() => onNameChange(s.keepId, nm)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, textAlign: 'right', background: on ? '#FAF5FF' : '#fff', border: `2px solid ${on ? '#7C3AED' : '#E2E8F0'}`, borderRadius: 9, padding: '7px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>
-                      <span style={{ width: 13, height: 13, borderRadius: '50%', border: `2px solid ${on ? '#7C3AED' : '#CBD5E1'}`, background: on ? '#7C3AED' : '#fff', flexShrink: 0 }} />
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, textAlign: 'right', background: on ? '#FAF5FF' : '#fff', border: `2px solid ${on ? '#14213D' : '#E2E8F0'}`, borderRadius: 9, padding: '7px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                      <span style={{ width: 13, height: 13, borderRadius: '50%', border: `2px solid ${on ? '#14213D' : '#CBD5E1'}`, background: on ? '#14213D' : '#fff', flexShrink: 0 }} />
                       <span style={{ fontSize: 12.5, fontWeight: 700, color: '#0F172A' }}>{nm}</span>
                     </button>
                   )
@@ -120,7 +120,7 @@ export default function MergePlanModal({
 
         <div style={{ display: 'flex', gap: 8, padding: 16, borderTop: '1px solid #E2E8F0' }}>
           <button type="button" disabled={busy} onClick={onConfirm}
-            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 11, padding: '11px 0', fontSize: 13.5, fontWeight: 800, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1, fontFamily: 'inherit' }}>
+            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#14213D', color: '#fff', border: 'none', borderRadius: 11, padding: '11px 0', fontSize: 13.5, fontWeight: 800, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1, fontFamily: 'inherit' }}>
             {busy ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Check size={14} />}
             בצע מיזוג
           </button>

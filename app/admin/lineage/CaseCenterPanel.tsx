@@ -205,8 +205,8 @@ export default function CaseCenterPanel() {
           <button key={v} type="button" onClick={() => { setFilter(v); setFocusIdx(null) }}
             className={`rounded-xl px-3 py-1.5 text-xs font-bold border transition-colors ${
               filter === v
-                ? 'bg-indigo-600 text-white border-indigo-600'
-                : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'
+                ? 'bg-navy text-white border-navy'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-line-strong'
             }`}>
             {label}
           </button>
@@ -304,7 +304,7 @@ function CaseTable({ cases, saving, onOpen, onDecide }: {
                 </td>
                 <td className="px-3 py-2.5">
                   <button type="button" onClick={() => onOpen(c)}
-                    className="text-right font-bold text-slate-800 hover:text-indigo-700 hover:underline">
+                    className="text-right font-bold text-slate-800 hover:text-navy-dark hover:underline">
                     {c.title}
                   </button>
                   <div className="mt-0.5 flex items-center gap-1.5">
@@ -393,7 +393,7 @@ function FocusView({ c, index, total, note, onNote, saving, onDecide, onStep }: 
         )}
 
         {/* לאן ללכת מכאן — המרכז מחליט, הכלים מתקנים */}
-        <p className="mt-3 rounded-lg bg-indigo-50 px-3 py-2 text-[11px] font-medium text-indigo-800">
+        <p className="mt-3 rounded-lg bg-sand px-3 py-2 text-[11px] font-medium text-navy-dark">
           {KIND_TOOL[c.kind]}
         </p>
 
@@ -420,7 +420,7 @@ function FocusView({ c, index, total, note, onNote, saving, onDecide, onStep }: 
                 )}
               </div>
               <a href={`/admin/lineage?focus=${n.id}`} target="_blank" rel="noopener noreferrer"
-                className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:underline">
+                className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-navy hover:underline">
                 <ExternalLink size={10} /> פתח בעץ
               </a>
             </div>
@@ -434,7 +434,7 @@ function FocusView({ c, index, total, note, onNote, saving, onDecide, onStep }: 
           </label>
           <input value={note} onChange={e => onNote(e.target.value)}
             placeholder="למשל: בדקתי מול המשרד — שני אחים שונים"
-            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100" />
+            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-line-strong focus:outline-none focus:ring-2 focus:ring-gold-soft" />
         </div>
 
         <div className="mt-3">

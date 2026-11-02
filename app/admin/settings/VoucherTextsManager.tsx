@@ -91,7 +91,7 @@ export default function VoucherTextsManager() {
       <div className="flex gap-1.5 border-b border-slate-200">
         {VOUCHER_TEXT_GROUPS.map(g => (
           <button key={g.id} type="button" onClick={() => setActiveTab(g.id)}
-            className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-colors ${activeTab === g.id ? 'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-500' : 'text-slate-500 hover:text-slate-700'}`}>
+            className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-colors ${activeTab === g.id ? 'bg-sand text-navy-dark border-b-2 border-navy-soft' : 'text-slate-500 hover:text-slate-700'}`}>
             <FileText size={13} className="inline ml-1.5" />{g.title}
           </button>
         ))}
@@ -104,9 +104,9 @@ export default function VoucherTextsManager() {
             const val = draft[f.key] ?? ''
             const edited = val.trim() && val !== f.default
             return (
-              <div key={f.key} className={`rounded-xl border p-3 ${edited ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-200'}`}>
+              <div key={f.key} className={`rounded-xl border p-3 ${edited ? 'border-line bg-sand/30' : 'border-slate-200'}`}>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-semibold text-slate-600">{f.label}{edited && <span className="mr-1.5 text-[10px] text-indigo-500">(נערך)</span>}</label>
+                  <label className="text-xs font-semibold text-slate-600">{f.label}{edited && <span className="mr-1.5 text-[10px] text-navy-soft">(נערך)</span>}</label>
                   {edited && (
                     <button type="button" onClick={() => resetField(f.key)} title="החזרה לברירת המחדל"
                       className="text-slate-400 hover:text-slate-600"><RotateCcw size={12} /></button>
@@ -115,11 +115,11 @@ export default function VoucherTextsManager() {
                 {f.multiline ? (
                   <textarea value={val} rows={3} placeholder={f.default}
                     onChange={e => setDraft(d => ({ ...d, [f.key]: e.target.value }))}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm resize-none focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm resize-none focus:border-gold focus:outline-none focus:ring-2 focus:ring-line" />
                 ) : (
                   <input value={val} placeholder={f.default}
                     onChange={e => setDraft(d => ({ ...d, [f.key]: e.target.value }))}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-line" />
                 )}
               </div>
             )
@@ -146,13 +146,13 @@ export default function VoucherTextsManager() {
 
       {/* סרגל שמירה */}
       {dirty && (
-        <div className="sticky bottom-4 flex items-center justify-between gap-3 rounded-xl border border-indigo-200 bg-white shadow-lg px-4 py-3">
+        <div className="sticky bottom-4 flex items-center justify-between gap-3 rounded-xl border border-line bg-white shadow-lg px-4 py-3">
           <span className="text-sm text-slate-600">יש שינויים שלא נשמרו</span>
           <div className="flex items-center gap-2">
             <button type="button" onClick={() => setDraft(saved)} disabled={saving}
               className="text-sm text-slate-600 px-3 py-1.5 rounded-lg hover:bg-slate-50">ביטול</button>
             <button type="button" onClick={save} disabled={saving}
-              className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50">
+              className="inline-flex items-center gap-1.5 bg-navy hover:bg-navy-dark text-white text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50">
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} שמירה
             </button>
           </div>

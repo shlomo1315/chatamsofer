@@ -266,7 +266,7 @@ export default function YemotMainMenuSettings() {
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2.5">
               {audio ? (
                 <span className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold ${
-                  isGenerated(audio) ? 'bg-violet-100 text-violet-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                  isGenerated(audio) ? 'bg-gold-soft text-navy-dark' : 'bg-emerald-100 text-emerald-700'}`}>
                   {isGenerated(audio) ? <Volume2 size={11} /> : <Mic size={11} />}
                   {isGenerated(audio) ? 'קול שנוצר' : 'הקלטה אנושית'}
                   <code className="font-mono opacity-70">{audio}</code>
@@ -298,7 +298,7 @@ export default function YemotMainMenuSettings() {
                 onClick={() => void generateVoice(m.key)}
                 disabled={busy || !canGenerate}
                 title={!canGenerate && hasPlaceholder(value) ? 'הודעה עם {משתנה} אינה יכולה להיות קובץ קול קבוע' : undefined}
-                className="inline-flex items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2 py-1 text-[11px] font-bold text-violet-700 hover:bg-violet-100 disabled:opacity-50"
+                className="inline-flex items-center gap-1 rounded-lg border border-line bg-sand px-2 py-1 text-[11px] font-bold text-navy-dark hover:bg-gold-soft disabled:opacity-50"
               >
                 {busy ? <Loader2 size={11} className="animate-spin" /> : <Wand2 size={11} />}
                 יצירת קול

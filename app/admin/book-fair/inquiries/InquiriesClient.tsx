@@ -200,7 +200,7 @@ export default function InquiriesClient() {
                 <div className="min-w-0">
                   <a
                     href={`tel:${r.phone}`}
-                    className="flex items-center gap-1.5 font-mono text-base font-bold text-slate-900 hover:text-indigo-600"
+                    className="flex items-center gap-1.5 font-mono text-base font-bold text-slate-900 hover:text-navy"
                   >
                     <Phone size={15} className="text-slate-400" /> {r.phone}
                   </a>

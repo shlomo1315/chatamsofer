@@ -41,7 +41,7 @@ export default function DistributionsClient({ distributions, counts = {} }: { di
         <div className="relative flex-1 min-w-48">
           <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
           <input value={query} onChange={e => setQuery(e.target.value)} placeholder="חיפוש לפי שם, חג, תיאור…"
-            className="w-full pr-9 pl-3 py-2 text-sm rounded-xl border border-slate-200 bg-white text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-colors shadow-sm" />
+            className="w-full pr-9 pl-3 py-2 text-sm rounded-xl border border-slate-200 bg-white text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-line focus:border-line-strong transition-colors shadow-sm" />
         </div>
       </div>
 
@@ -59,7 +59,7 @@ export default function DistributionsClient({ distributions, counts = {} }: { di
             const expected = d.amount_per_family != null ? registered * Number(d.amount_per_family) : null
             return (
             <Link key={d.id} href={`/admin/distributions/${d.id}`} className="group">
-              <div className="relative overflow-hidden bg-white rounded-2xl border border-slate-200 hover:border-indigo-300 hover:shadow-lg transition-all duration-200 cursor-pointer h-full flex flex-col">
+              <div className="relative overflow-hidden bg-white rounded-2xl border border-slate-200 hover:border-line-strong hover:shadow-lg transition-all duration-200 cursor-pointer h-full flex flex-col">
                 {/* פס עליון צבעוני לפי מצב הרישום */}
                 <div className={`h-1 ${d.registration_open ? 'bg-emerald-600' : 'bg-slate-200'}`} />
                 <div className="p-5 flex flex-col gap-4 flex-1">
@@ -67,7 +67,7 @@ export default function DistributionsClient({ distributions, counts = {} }: { di
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3 min-w-0">
                       <div className="w-11 h-11 bg-sand rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
-                        <Gift size={20} className="text-indigo-600" />
+                        <Gift size={20} className="text-navy" />
                       </div>
                       <div className="min-w-0">
                         <h3 className="font-bold text-slate-900 flex items-center gap-2 flex-wrap">
@@ -77,17 +77,17 @@ export default function DistributionsClient({ distributions, counts = {} }: { di
                         {d.holiday && <p className="text-xs text-slate-500 mt-0.5">{d.holiday}</p>}
                       </div>
                     </div>
-                    <ChevronLeft size={18} className="text-slate-300 group-hover:text-indigo-400 group-hover:-translate-x-0.5 transition-all flex-shrink-0 mt-1" />
+                    <ChevronLeft size={18} className="text-slate-300 group-hover:text-gold group-hover:-translate-x-0.5 transition-all flex-shrink-0 mt-1" />
                   </div>
 
                   {/* מונה נרשמים חי — בולט */}
                   <div className="flex items-stretch gap-3">
-                    <div className={`flex-1 rounded-xl border p-3 ${registered > 0 ? 'bg-indigo-50 border-indigo-100' : 'bg-slate-50 border-slate-100'}`}>
-                      <div className="flex items-center gap-1.5 text-indigo-600 mb-0.5">
+                    <div className={`flex-1 rounded-xl border p-3 ${registered > 0 ? 'bg-sand border-gold-soft' : 'bg-slate-50 border-slate-100'}`}>
+                      <div className="flex items-center gap-1.5 text-navy mb-0.5">
                         <Users size={14} />
                         <span className="text-[11px] font-bold text-slate-500">נרשמו</span>
                       </div>
-                      <p className={`text-2xl font-extrabold ltr-num ${registered > 0 ? 'text-indigo-700' : 'text-slate-400'}`}>
+                      <p className={`text-2xl font-extrabold ltr-num ${registered > 0 ? 'text-navy-dark' : 'text-slate-400'}`}>
                         {registered.toLocaleString('he-IL')}
                       </p>
                     </div>

@@ -22,7 +22,7 @@ export default function CollapsibleMailThread({
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between gap-3 px-5 py-4 hover:bg-slate-50 transition-colors"
       >
-        <span className="flex items-center gap-2 text-indigo-600">
+        <span className="flex items-center gap-2 text-navy">
           <Mail size={16} />
           <span className="text-xs font-semibold text-slate-500 uppercase">תכתובות מייל</span>
           <span className="text-xs text-slate-400 ltr-num" dir="ltr">{email}</span>

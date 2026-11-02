@@ -24,7 +24,7 @@ function readNav(): string | null {
   try { return sessionStorage.getItem(NAV_KEY) } catch { return null }
 }
 
-const BTN = 'inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50'
+const BTN = 'inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:border-line-strong hover:bg-sand'
 const OFF = 'inline-flex items-center gap-1 rounded-lg border border-slate-100 bg-slate-50 px-3 py-1.5 text-sm text-slate-300'
 
 export default function OrderNav({ id, fallbackPrev, fallbackNext }: {
@@ -59,7 +59,7 @@ export default function OrderNav({ id, fallbackPrev, fallbackNext }: {
         href={`/admin/book-fair/orders/print?mode=notes&id=${id}`}
         target="_blank"
         rel="noopener"
-        className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-indigo-700"
+        className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-1.5 text-sm font-medium text-white transition hover:bg-navy-dark"
       >
         <Printer size={14} /> תעודת משלוח
       </a>

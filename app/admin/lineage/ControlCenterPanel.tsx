@@ -263,7 +263,7 @@ export default function ControlCenterPanel({ onOpenTool, onLocate, reloadSignal 
         <p className="mt-1 text-[11px] text-slate-500">
           אותו שם בדיוק באותו דור, גם תחת הורים שונים — לא נחשבים אנשים שונים. אותם אשכולות של מרכז המיזוגים.
         </p>
-        <button onClick={() => setShowPar(v => !v)} className="mt-1 text-xs font-bold text-violet-700 underline">
+        <button onClick={() => setShowPar(v => !v)} className="mt-1 text-xs font-bold text-navy-dark underline">
           {showPar ? 'הסתר קבוצות' : 'הצג קבוצות (הגדולות ראשונות)'}
         </button>
         {showPar && (
@@ -277,7 +277,7 @@ export default function ControlCenterPanel({ onOpenTool, onLocate, reloadSignal 
                     {g.safe ? 'בטוח למיזוג' : g.risk === 'multi_card' ? 'כמה כרטסות, דורש החלטה' : 'הורים שונים, דורש בדיקה'}
                   </span>
                   <button onClick={() => onOpenTool?.(g.safe ? 'safeMerge' : 'mergeCenter')}
-                    className="mr-auto text-xs font-bold text-violet-700 underline">
+                    className="mr-auto text-xs font-bold text-navy-dark underline">
                     {g.safe ? 'מיזוג בטוח' : 'מרכז מיזוגים / תכנית מיזוג'}
                   </button>
                 </div>
@@ -374,7 +374,7 @@ export default function ControlCenterPanel({ onOpenTool, onLocate, reloadSignal 
                       {i.detail && <span className="text-xs text-slate-600">{i.detail}</span>}
                       {i.adminOnly && !data.isAdmin && <span className="text-[11px] text-slate-500">(מנהל בלבד)</span>}
                       {t && onOpenTool && (
-                        <button onClick={() => onOpenTool(t.tool)} className="mr-auto text-xs font-bold text-violet-700 underline">
+                        <button onClick={() => onOpenTool(t.tool)} className="mr-auto text-xs font-bold text-navy-dark underline">
                           פתח: {t.label}
                         </button>
                       )}

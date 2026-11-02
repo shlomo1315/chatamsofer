@@ -187,7 +187,7 @@ export default function LegacyLoansTable({ rows }: { rows: LegacyRow[] }) {
         )
         if (canEdit) return (
           <button type="button" onClick={() => setLinking(r)}
-            className="inline-flex items-center gap-1 rounded-lg border border-dashed border-slate-300 px-2 py-1 text-[10px] font-bold text-slate-500 hover:border-indigo-400 hover:text-indigo-600 transition">
+            className="inline-flex items-center gap-1 rounded-lg border border-dashed border-slate-300 px-2 py-1 text-[10px] font-bold text-slate-500 hover:border-gold hover:text-navy transition">
             <UserPlus size={10} /> שייך
           </button>
         )
@@ -235,7 +235,7 @@ export default function LegacyLoansTable({ rows }: { rows: LegacyRow[] }) {
 
   const chip = (on: boolean) =>
     `rounded-full border px-3 py-1 text-[11px] font-bold transition ${
-      on ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+      on ? 'bg-navy text-white border-navy' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
     }`
 
   return (
@@ -245,7 +245,7 @@ export default function LegacyLoansTable({ rows }: { rows: LegacyRow[] }) {
           כדי לראות מי הם הוא בדיוק החיכוך שהסינון נועד לפתור. */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <button type="button" onClick={() => setFilter('all')}
-          className={`rounded-2xl border p-4 text-right transition ${filter === 'all' ? 'border-indigo-400 ring-2 ring-indigo-200 bg-indigo-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+          className={`rounded-2xl border p-4 text-right transition ${filter === 'all' ? 'border-gold ring-2 ring-line bg-sand' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
           <p className="text-[11px] font-bold text-slate-400">סה״כ הלוואות</p>
           <p className="text-2xl font-extrabold text-slate-800 tabular-nums">{rows.length.toLocaleString('he-IL')}</p>
         </button>
@@ -284,7 +284,7 @@ export default function LegacyLoansTable({ rows }: { rows: LegacyRow[] }) {
           <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
           <input value={query} onChange={e => setQuery(e.target.value)}
             placeholder="חיפוש בשם, ת״ז, מספר תיק, עיר, טלפון…"
-            className="w-full pr-9 pl-3 py-2 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+            className="w-full pr-9 pl-3 py-2 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-line" />
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button className={chip(filter === 'all')} onClick={() => setFilter('all')}>הכל ({rows.length})</button>
@@ -326,7 +326,7 @@ export default function LegacyLoansTable({ rows }: { rows: LegacyRow[] }) {
               {tc.rows.length === 0 ? (
                 <tr><td colSpan={20} className="px-4 py-12 text-center text-slate-400">לא נמצאו רשומות</td></tr>
               ) : visible.map(r => (
-                <tr key={r.id} className="even:bg-slate-50/50 hover:bg-indigo-50/40 transition-colors
+                <tr key={r.id} className="even:bg-slate-50/50 hover:bg-sand/40 transition-colors
                                           [&>td]:px-3 [&>td]:py-3">
                   {tc.shown.map(c => (
                     <td key={c.key} className={tc.cellClass(c)}>{cell(c, r)}</td>
@@ -335,7 +335,7 @@ export default function LegacyLoansTable({ rows }: { rows: LegacyRow[] }) {
                     {canEdit && (
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <button type="button" onClick={() => setEditing(r)}
-                          className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-indigo-600 px-2 py-1 rounded-lg border border-slate-200 hover:border-indigo-300 transition">
+                          className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-navy px-2 py-1 rounded-lg border border-slate-200 hover:border-line-strong transition">
                           <Pencil size={12} /> עריכה
                         </button>
                         <button type="button" onClick={() => void remove(r)} disabled={deletingId === r.id}
@@ -385,7 +385,7 @@ function EditDialog({ row, saving, onClose, onSave }: {
     <label className="flex flex-col gap-1">
       <span className="text-[11px] font-bold text-slate-500">{label}</span>
       <input value={String(form[k] ?? '')} onChange={e => set(k, e.target.value)}
-        className="rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-indigo-400" />
+        className="rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-gold" />
       {hint && <span className="text-[10px] text-slate-400">{hint}</span>}
     </label>
   )
@@ -428,7 +428,7 @@ function EditDialog({ row, saving, onClose, onSave }: {
             ביטול
           </button>
           <button onClick={() => onSave(form)} disabled={saving}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50">
+            className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-4 py-2 text-sm font-bold text-white hover:bg-navy-dark disabled:opacity-50">
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
             שמירה
           </button>
@@ -521,8 +521,8 @@ function LinkFamilyDialog({ row, onClose, onDone }: {
             <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input autoFocus value={q} onChange={e => setQ(e.target.value)}
               placeholder="חיפוש משפחה בשם, ת״ז או טלפון…"
-              className="w-full rounded-xl border border-slate-200 py-2.5 pr-10 pl-3 text-sm outline-none focus:border-indigo-400" />
-            {searching && <Loader2 size={16} className="absolute left-3 top-1/2 -translate-y-1/2 animate-spin text-indigo-500" />}
+              className="w-full rounded-xl border border-slate-200 py-2.5 pr-10 pl-3 text-sm outline-none focus:border-gold" />
+            {searching && <Loader2 size={16} className="absolute left-3 top-1/2 -translate-y-1/2 animate-spin text-navy-soft" />}
           </div>
 
           <div className="flex flex-col gap-1.5 max-h-[45vh] overflow-y-auto">
@@ -531,7 +531,7 @@ function LinkFamilyDialog({ row, onClose, onDone }: {
               <p className="py-6 text-center text-sm text-slate-500">לא נמצאה משפחה מתאימה</p>
             )}
             {results.map(b => (
-              <div key={b.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2.5 hover:border-indigo-300 transition">
+              <div key={b.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2.5 hover:border-line-strong transition">
                 <div className="min-w-0 flex flex-col">
                   <span className="text-sm font-bold text-slate-800 truncate">{b.name || '—'}</span>
                   <span className="text-[11px] text-slate-500 truncate ltr-num">
@@ -539,7 +539,7 @@ function LinkFamilyDialog({ row, onClose, onDone }: {
                   </span>
                 </div>
                 <button type="button" onClick={() => void link(b.id_number, b.name)} disabled={busy !== null}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-indigo-700 disabled:opacity-50 flex-shrink-0">
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-1.5 text-[11px] font-bold text-white hover:bg-navy-dark disabled:opacity-50 flex-shrink-0">
                   {busy === String(b.id_number ?? '').replace(/\D/g, '') ? <Loader2 size={12} className="animate-spin" /> : <Link2 size={12} />}
                   שייך
                 </button>

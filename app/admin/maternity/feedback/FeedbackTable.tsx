@@ -29,7 +29,7 @@ export interface FeedbackRow {
 
 const SOURCE_META: Record<string, { label: string; icon: typeof Globe; color: string }> = {
   web: { label: 'טופס באתר', icon: Globe, color: 'text-sky-600 bg-sky-50' },
-  email: { label: 'תשובה במייל', icon: Mail, color: 'text-violet-600 bg-violet-50' },
+  email: { label: 'תשובה במייל', icon: Mail, color: 'text-navy bg-sand' },
 }
 
 /** צבע לפי הסקאלה: 8+ ירוק · 6–8 ענבר · מתחת ל-6 אדום */
@@ -367,7 +367,7 @@ export default function FeedbackTable({ rows, questions }: { rows: FeedbackRow[]
               <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
                 {open.maternity_aid_id ? (
                   <a href={`/admin/maternity/${open.maternity_aid_id}`}
-                     className="text-xs font-semibold text-indigo-600 hover:underline">
+                     className="text-xs font-semibold text-navy hover:underline">
                     לכרטסת הלידה ←
                   </a>
                 ) : <span />}

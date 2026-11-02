@@ -17,7 +17,7 @@ export default function LineageReliabilityPanel({ beneficiaryId }: { beneficiary
     <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <ShieldCheck size={16} className="text-indigo-500" />
+          <ShieldCheck size={16} className="text-navy-soft" />
           <span className="text-sm font-semibold text-slate-700">סקירת יוחסין דרך הסוכן</span>
           <span className="text-[11px] text-slate-400">(סקירה בלבד)</span>
         </div>
@@ -32,7 +32,7 @@ export default function LineageReliabilityPanel({ beneficiaryId }: { beneficiary
             </button>
           )}
           <button onClick={doRun} disabled={loading}
-            className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg px-3.5 py-1.5">
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-navy hover:bg-navy-dark disabled:opacity-50 rounded-lg px-3.5 py-1.5">
             {loading ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
             {res ? 'סקירה מחדש' : 'סקור יוחסין'}
           </button>

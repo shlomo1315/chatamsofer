@@ -54,14 +54,14 @@ export default function LoansPortalEmailButton() {
             <label className="text-xs font-medium text-slate-600">כתובת מייל לשליחה</label>
             <input type="email" value={email} onChange={e => { setEmail(e.target.value); setErr('') }}
               placeholder="name@example.com" dir="ltr"
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-navy-soft" />
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-slate-600">סיסמה לפורטל (לפחות 8 תווים)</label>
             <div className="relative">
               <input type={showPw ? 'text' : 'password'} value={password} onChange={e => { setPassword(e.target.value); setErr('') }}
                 placeholder="הסיסמה שתוגדר" dir="ltr" autoComplete="new-password"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 pl-9 text-sm text-left focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 pl-9 text-sm text-left focus:outline-none focus:ring-2 focus:ring-navy-soft" />
               <button type="button" onClick={() => setShowPw(v => !v)}
                 className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
                 {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
@@ -72,7 +72,7 @@ export default function LoansPortalEmailButton() {
           <div className="flex items-center justify-end gap-2 pt-1">
             <button onClick={() => setOpen(false)} className="px-4 py-2 rounded-lg border border-slate-300 text-sm text-slate-600 hover:bg-slate-50">ביטול</button>
             <button onClick={submit} disabled={sending || sent}
-              className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white text-sm font-medium rounded-lg px-5 py-2 transition-colors">
+              className="inline-flex items-center gap-1.5 bg-navy hover:bg-navy-dark disabled:bg-line-strong text-white text-sm font-medium rounded-lg px-5 py-2 transition-colors">
               {sending ? <Loader2 size={15} className="animate-spin" /> : sent ? <Check size={15} /> : <Send size={15} />}
               {sent ? 'נשלח!' : 'שלח את הפורטל'}
             </button>

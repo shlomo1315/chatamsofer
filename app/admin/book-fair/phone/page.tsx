@@ -26,7 +26,7 @@ export default async function BookFairPhonePage() {
       />
       <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
         המסך הזה זמין גם תחת{' '}
-        <a href="/admin/book-fair/settings" className="font-semibold text-indigo-700 underline">
+        <a href="/admin/book-fair/settings" className="font-semibold text-navy-dark underline">
           הגדרות → שלוחה טלפונית
         </a>
         .

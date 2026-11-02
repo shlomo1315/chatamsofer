@@ -337,7 +337,7 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
               ? <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300">⏳ {nm.text}</span>
               : <span>{nm.text}</span>
           })()}
-          {aid.is_twins && <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700" title="לידת תאומים"><Baby size={10} /> תאומים</span>}
+          {aid.is_twins && <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-gold-soft text-navy-dark" title="לידת תאומים"><Baby size={10} /> תאומים</span>}
         </span>
       )
       case 'benefit': {
@@ -371,7 +371,7 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
           <span className="inline-flex items-center gap-1" title="צפייה באישור הלידה" onClick={e => e.stopPropagation()}>
             {/* אייקונים קומפקטיים (בלי טקסט) — נשארים בשורה אחת בעמודה צרה */}
             <ViewDocButton url={aid.birth_certificate_url}
-              className="inline-flex items-center justify-center w-7 h-7 text-indigo-600 hover:text-indigo-700 rounded-lg border border-indigo-200 hover:bg-indigo-50 transition-colors">
+              className="inline-flex items-center justify-center w-7 h-7 text-navy hover:text-navy-dark rounded-lg border border-line hover:bg-sand transition-colors">
               <FileText size={14} />
             </ViewDocButton>
             <DownloadDocButton url={aid.birth_certificate_url} docType="אישור לידה" person={motherName(m)} name={aid.birth_certificate_url} variant="icon" />
@@ -379,7 +379,7 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
         ) : <span className="text-slate-300">—</span>
       case 'source': {
         const src = (aid as { source?: string | null }).source
-        if (src === 'portal') return <span className="inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">האתר</span>
+        if (src === 'portal') return <span className="inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded-full bg-sand text-navy-dark">האתר</span>
         if (src === 'email') return <span className="inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700">מייל</span>
         if (src === 'admin') return <span className="inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">הזנה ידנית</span>
         return <span className="text-[11px] text-slate-400">—</span>

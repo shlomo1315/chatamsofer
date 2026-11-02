@@ -116,9 +116,9 @@ export default function ElevenLabsStudio() {
   return (
     <div className="flex flex-col gap-4">
       {/* פאנל הגדרות ElevenLabs */}
-      <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3">
+      <div className="rounded-xl border border-gold-soft bg-sand/40 p-3">
         <div className="flex items-center gap-1.5 mb-2">
-          <Volume2 size={15} className="text-indigo-600" />
+          <Volume2 size={15} className="text-navy" />
           <span className="text-xs font-semibold text-slate-700">קול נוירוני (ElevenLabs)</span>
           {hasKey
             ? <span className="text-[11px] bg-emerald-50 text-emerald-700 rounded-full px-2 py-0.5">מחובר</span>
@@ -129,12 +129,12 @@ export default function ElevenLabsStudio() {
             <label className="block text-[11px] text-slate-500 mb-1 flex items-center gap-1"><KeyRound size={11} /> מפתח API {hasKey && '(הזן רק להחלפה)'}</label>
             <input type="password" value={apiKeyInput} onChange={e => setApiKeyInput(e.target.value)}
               placeholder={hasKey ? '••••••••••••' : 'מפתח ElevenLabs'} dir="ltr"
-              className="w-full text-sm rounded-lg border border-slate-200 px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+              className="w-full text-sm rounded-lg border border-slate-200 px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-line-strong" />
           </div>
           <div className="flex-1 min-w-[160px]">
             <label className="block text-[11px] text-slate-500 mb-1">קול</label>
             <select value={voiceId} onChange={e => setVoiceId(e.target.value)} disabled={!voices.length}
-              className="w-full text-sm rounded-lg border border-slate-200 px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 disabled:bg-slate-50 disabled:text-slate-400">
+              className="w-full text-sm rounded-lg border border-slate-200 px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-line-strong disabled:bg-slate-50 disabled:text-slate-400">
               {!voiceId && <option value="">{voices.length ? 'בחר קול' : 'הזן מפתח כדי לטעון קולות'}</option>}
               {voices.map(v => <option key={v.voiceId} value={v.voiceId}>{v.name}</option>)}
             </select>
@@ -160,7 +160,7 @@ export default function ElevenLabsStudio() {
           </div>
         )}
         <p className="text-[11px] text-slate-500 mt-2">
-          <span className="inline-flex items-center bg-indigo-100 text-indigo-700 rounded-full px-2 py-0.5 font-medium">🇮🇱 עברית</span>
+          <span className="inline-flex items-center bg-gold-soft text-navy-dark rounded-full px-2 py-0.5 font-medium">🇮🇱 עברית</span>
           {' '}מנוע Eleven v3. אם המבטא נשמע אנגלי — בחר קול עברי.
         </p>
       </div>
@@ -170,7 +170,7 @@ export default function ElevenLabsStudio() {
         <label className="block text-xs font-semibold text-slate-700 mb-1.5">טקסט חופשי ליצירת קול</label>
         <textarea value={text} onChange={e => setText(e.target.value)} rows={5} dir="rtl"
           placeholder="כתבו כאן כל טקסט, האזינו לו והורידו כקובץ MP3…"
-          className="w-full text-sm rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-y" />
+          className="w-full text-sm rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-line-strong resize-y" />
         <div className="flex items-center justify-between mt-1">
           <span className="text-[11px] text-slate-400">{text.length} תווים · עד 600 להשמעה</span>
         </div>

@@ -73,7 +73,7 @@ export default function MailStatsPage() {
           {RANGES.map(r => (
             <button key={r.value} onClick={() => setRange(r.value)}
               className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
-                range === r.value ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-800'
+                range === r.value ? 'bg-navy text-white' : 'text-slate-500 hover:text-slate-800'
               }`}>
               {r.label}
             </button>
@@ -91,7 +91,7 @@ export default function MailStatsPage() {
           {/* KPI tiles */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <Tile icon={Mail}         label="נכנסו למערכת" value={stats.totals.total}     color="bg-slate-500" />
-            <Tile icon={Eye}          label="נקראו"         value={stats.totals.read}      color="bg-indigo-500" />
+            <Tile icon={Eye}          label="נקראו"         value={stats.totals.read}      color="bg-navy-soft" />
             <Tile icon={CheckCircle2} label="טופלו"         value={stats.totals.handled}   color="bg-green-500" />
             <Tile icon={AlertCircle}  label="ממתינים לטיפול" value={stats.totals.unhandled} color="bg-amber-500" />
           </div>

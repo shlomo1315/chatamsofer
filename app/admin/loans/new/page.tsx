@@ -177,7 +177,7 @@ export default function NewLoanPage() {
       {/* ── Step 1: Beneficiary lookup ── */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-4">
         <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-          <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center">1</span>
+          <span className="w-6 h-6 rounded-full bg-gold-soft text-navy-dark text-xs font-bold flex items-center justify-center">1</span>
           איתור הצאצא
         </h2>
         <div className="flex gap-2">
@@ -187,11 +187,11 @@ export default function NewLoanPage() {
             onChange={e => setIdInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && lookupBeneficiary()}
             placeholder="תעודת זהות של הבעל או של האישה"
-            className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-left ltr-num"
+            className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft text-left ltr-num"
             dir="ltr"
           />
           <button onClick={lookupBeneficiary} disabled={looking || !idInput.trim()}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+            className="flex items-center gap-2 bg-navy hover:bg-navy-dark disabled:bg-line-strong text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
             {looking ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
             חיפוש
           </button>
@@ -234,7 +234,7 @@ export default function NewLoanPage() {
           {/* Purpose */}
           <div className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-3">
             <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center">2</span>
+              <span className="w-6 h-6 rounded-full bg-gold-soft text-navy-dark text-xs font-bold flex items-center justify-center">2</span>
               מטרת ההלוואה <span className="text-red-500">*</span>
             </h2>
             <div className="flex flex-col gap-2">
@@ -242,10 +242,10 @@ export default function NewLoanPage() {
                 <button key={p.value} type="button"
                   onClick={() => { setPurpose(p.value); clearErr('purpose') }}
                   className={`text-right rounded-lg border px-3 py-2.5 transition-colors ${
-                    purpose === p.value ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-200' : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'
+                    purpose === p.value ? 'border-navy-soft bg-sand ring-1 ring-line' : 'border-slate-200 hover:border-line-strong hover:bg-slate-50'
                   }`}>
                   <div className="flex items-center gap-2">
-                    <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${purpose === p.value ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`} />
+                    <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${purpose === p.value ? 'border-navy bg-navy' : 'border-slate-300'}`} />
                     <span className="text-sm font-medium text-slate-800">{p.value}</span>
                   </div>
                   {p.desc && <p className="text-xs text-slate-500 mt-1 pr-6">{p.desc}</p>}
@@ -264,7 +264,7 @@ export default function NewLoanPage() {
                   onChange={e => { setPurposeDetails(e.target.value); clearErr('purposeDetails') }}
                   rows={2}
                   placeholder="פרטו את מטרת ההלוואה"
-                  className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 resize-none ${fieldErrors.purposeDetails ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`}
+                  className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 resize-none ${fieldErrors.purposeDetails ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-navy-soft'}`}
                 />
                 {fieldErrors.purposeDetails && <p className="text-xs text-red-600">{fieldErrors.purposeDetails}</p>}
               </div>
@@ -274,7 +274,7 @@ export default function NewLoanPage() {
           {/* Amount + installments */}
           <div className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-4">
             <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center">3</span>
+              <span className="w-6 h-6 rounded-full bg-gold-soft text-navy-dark text-xs font-bold flex items-center justify-center">3</span>
               סכום ותשלומים
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -283,7 +283,7 @@ export default function NewLoanPage() {
                 <input type="text" inputMode="numeric" value={amount}
                   onChange={e => { const v = e.target.value.replace(/\D/g, ''); setAmount(v); clearErr('amount') }}
                   placeholder="0"
-                  className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left ${fieldErrors.amount ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`}
+                  className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left ${fieldErrors.amount ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-navy-soft'}`}
                   dir="ltr" />
                 <p className="text-[11px] text-slate-400">ללא תקרה · ההלוואה והתשלום מתבצעים בשקלים לפי ערך מטבע דולר ($)</p>
                 {fieldErrors.amount && <p className="text-xs text-red-600">{fieldErrors.amount}</p>}
@@ -293,7 +293,7 @@ export default function NewLoanPage() {
                 <input type="text" inputMode="numeric" value={installments}
                   onChange={e => { const v = e.target.value.replace(/\D/g, ''); setInstallments(v); clearErr('installments') }}
                   placeholder="בחר/י מספר תשלומים"
-                  className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left ${fieldErrors.installments ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`}
+                  className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left ${fieldErrors.installments ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-navy-soft'}`}
                   dir="ltr" />
                 <p className="text-[11px] text-slate-400">ללא תקרה</p>
                 {fieldErrors.installments && <p className="text-xs text-red-600">{fieldErrors.installments}</p>}
@@ -304,7 +304,7 @@ export default function NewLoanPage() {
           {/* Documents */}
           <div className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-3">
             <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center">4</span>
+              <span className="w-6 h-6 rounded-full bg-gold-soft text-navy-dark text-xs font-bold flex items-center justify-center">4</span>
               צירוף מסמכים <span className="text-red-500">*</span>
             </h2>
             <p className="text-xs text-slate-500">יש לצרף: <strong>אישור רב</strong> (חובה), וכן מומלץ הזמנה / מסמכים רפואיים / כל מסמך אחר. עד {MAX_FILES} קבצים — PDF, מסמך או תמונה. גודל מרבי לקובץ: {MAX_FILE_MB}MB.</p>
@@ -314,7 +314,7 @@ export default function NewLoanPage() {
               <div className="flex flex-col gap-2">
                 {files.map((f, i) => (
                   <div key={i} className="flex items-center gap-2 text-sm bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700">
-                    <FileText size={14} className="text-indigo-500 flex-shrink-0" />
+                    <FileText size={14} className="text-navy-soft flex-shrink-0" />
                     <span className="truncate flex-1">{f.name}</span>
                     <button type="button" onClick={() => removeFile(i)} className="text-slate-400 hover:text-red-500 flex-shrink-0"><X size={14} /></button>
                   </div>
@@ -323,7 +323,7 @@ export default function NewLoanPage() {
             )}
             {files.length < MAX_FILES && (
               <button type="button" onClick={() => fileRef.current?.click()}
-                className={`flex items-center justify-center gap-2 border-2 border-dashed rounded-lg px-4 py-3 text-sm transition-colors ${fieldErrors.files ? 'border-red-400 text-red-500 hover:bg-red-50' : 'border-slate-300 text-slate-500 hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-600'}`}>
+                className={`flex items-center justify-center gap-2 border-2 border-dashed rounded-lg px-4 py-3 text-sm transition-colors ${fieldErrors.files ? 'border-red-400 text-red-500 hover:bg-red-50' : 'border-slate-300 text-slate-500 hover:border-gold hover:bg-sand hover:text-navy'}`}>
                 <Upload size={16} /> הוספת קובץ
               </button>
             )}
@@ -333,7 +333,7 @@ export default function NewLoanPage() {
           {/* Declaration */}
           <div className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-2">
             <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center">5</span>
+              <span className="w-6 h-6 rounded-full bg-gold-soft text-navy-dark text-xs font-bold flex items-center justify-center">5</span>
               הצהרה <span className="text-red-500">*</span>
             </h2>
             <label className="text-xs font-medium text-slate-600">האם פנית בעבר לגמ״ח חתם סופר לבקשת הלוואה?</label>
@@ -342,9 +342,9 @@ export default function NewLoanPage() {
                 <button key={opt} type="button"
                   onClick={() => { setDeclaration(opt); clearErr('declaration') }}
                   className={`text-right rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors flex items-center gap-2 ${
-                    declaration === opt ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-200 text-slate-800' : 'border-slate-200 text-slate-600 hover:border-indigo-300 hover:bg-slate-50'
+                    declaration === opt ? 'border-navy-soft bg-sand ring-1 ring-line text-slate-800' : 'border-slate-200 text-slate-600 hover:border-line-strong hover:bg-slate-50'
                   }`}>
-                  <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${declaration === opt ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`} />
+                  <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${declaration === opt ? 'border-navy bg-navy' : 'border-slate-300'}`} />
                   {opt}
                 </button>
               ))}
@@ -356,7 +356,7 @@ export default function NewLoanPage() {
           <div className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-2">
             <label className="text-sm font-semibold text-slate-700">הערות</label>
             <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft resize-none" />
           </div>
 
           {saveError && (
@@ -367,7 +367,7 @@ export default function NewLoanPage() {
           <div className="flex gap-3 justify-end">
             <Link href="/admin/loans" className="px-4 py-2 rounded-lg border border-slate-300 text-sm text-slate-600 hover:bg-slate-50 transition-colors">ביטול</Link>
             <button onClick={handleSubmit} disabled={saving}
-              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors">
+              className="flex items-center gap-2 bg-navy hover:bg-navy-dark disabled:bg-line-strong text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors">
               {saving ? <Loader2 size={15} className="animate-spin" /> : <CreditCard size={15} />}
               הגשת בקשה
             </button>

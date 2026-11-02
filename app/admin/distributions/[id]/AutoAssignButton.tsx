@@ -96,7 +96,7 @@ export default function AutoAssignButton({
   return (
     <>
       <button type="button" onClick={openModal}
-        className="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-violet-700">
+        className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-3.5 py-2 text-xs font-bold text-white hover:bg-navy-dark">
         <MapPin size={14} /> שיבוץ אוטומטי למוקד
       </button>
 
@@ -134,7 +134,7 @@ export default function AutoAssignButton({
             </p>
 
             {/* 🔴 התווית — הסיבה שאפשר להריץ את זה בלי לאבד מידע. */}
-            <p className="rounded-xl bg-violet-50 px-3 py-2 text-[12px] leading-relaxed text-violet-900">
+            <p className="rounded-xl bg-sand px-3 py-2 text-[12px] leading-relaxed text-navy-dark">
               כל שיבוץ יסומן <strong>&quot;שובץ אוטומטית&quot;</strong> ויישאר מסומן כך —
               כדי שתמיד יהיה אפשר לדעת מי בחר בעצמו ומי שובץ על ידינו אחרי המועד.
             </p>
@@ -158,7 +158,7 @@ export default function AutoAssignButton({
                       <tr key={c.centerId}>
                         <td className="px-3 py-2 font-bold text-slate-800">{c.centerName}</td>
                         <td className="px-3 py-2 text-center">
-                          <span className="rounded-lg bg-violet-100 px-2 py-0.5 text-xs font-extrabold text-violet-800 ltr-num">
+                          <span className="rounded-lg bg-gold-soft px-2 py-0.5 text-xs font-extrabold text-navy-dark ltr-num">
                             +{c.count}
                           </span>
                         </td>
@@ -194,7 +194,7 @@ export default function AutoAssignButton({
               <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
                 <input type="checkbox" checked={includeExtended}
                   onChange={e => toggleExtended(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 accent-violet-600" />
+                  className="mt-0.5 h-4 w-4 accent-navy" />
                 <span className="text-[12px] leading-relaxed text-slate-700">
                   לשבץ גם את מי שהמועד המוארך שלו עדיין פתוח
                   {preview.skippedStillOpen > 0 && !includeExtended && (

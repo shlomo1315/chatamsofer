@@ -111,7 +111,7 @@ export default function AddRecipientDialog({
   return (
     <>
       <button type="button" onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 px-3.5 py-2 text-xs font-bold text-white transition">
+        className="inline-flex items-center gap-1.5 rounded-xl bg-navy hover:bg-navy-dark px-3.5 py-2 text-xs font-bold text-white transition">
         <UserPlus size={14} /> הוספה ידנית
       </button>
 
@@ -131,10 +131,10 @@ export default function AddRecipientDialog({
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="חיפוש לפי שם, טלפון או תעודת זהות..."
-              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pr-10 pl-3 text-sm outline-none focus:border-indigo-400"
+              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pr-10 pl-3 text-sm outline-none focus:border-gold"
             />
             {searching && (
-              <Loader2 size={16} className="absolute left-3 top-1/2 -translate-y-1/2 animate-spin text-indigo-500" />
+              <Loader2 size={16} className="absolute left-3 top-1/2 -translate-y-1/2 animate-spin text-navy-soft" />
             )}
           </div>
 
@@ -157,7 +157,7 @@ export default function AddRecipientDialog({
               const already = existingIds.has(String(b.id))
               return (
                 <div key={b.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 hover:border-indigo-300 transition">
+                  className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 hover:border-line-strong transition">
                   <div className="min-w-0 flex flex-col">
                     <span className="text-sm font-bold text-slate-800 truncate">{b.name || '—'}</span>
                     <span className="text-[11px] text-slate-500 truncate">
@@ -177,7 +177,7 @@ export default function AddRecipientDialog({
                     </span>
                   ) : (
                     <button type="button" onClick={() => add(b)} disabled={addingId !== null}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 text-[11px] font-bold text-white transition disabled:opacity-50 flex-shrink-0">
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-navy hover:bg-navy-dark px-3 py-1.5 text-[11px] font-bold text-white transition disabled:opacity-50 flex-shrink-0">
                       {addingId === b.id ? <Loader2 size={12} className="animate-spin" /> : <UserPlus size={12} />}
                       הוספה
                     </button>

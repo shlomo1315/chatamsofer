@@ -15,8 +15,8 @@ import ApprovalLabelTag, { type ApprovalLabel } from '@/components/ui/ApprovalLa
 const COLORS = ['slate', 'indigo', 'emerald', 'amber', 'rose', 'sky', 'violet'] as const
 
 const SWATCH: Record<string, string> = {
-  slate: 'bg-slate-400', indigo: 'bg-indigo-500', emerald: 'bg-emerald-500',
-  amber: 'bg-amber-500', rose: 'bg-rose-500', sky: 'bg-sky-500', violet: 'bg-violet-500',
+  slate: 'bg-slate-400', indigo: 'bg-navy-soft', emerald: 'bg-emerald-500',
+  amber: 'bg-amber-500', rose: 'bg-rose-500', sky: 'bg-sky-500', violet: 'bg-navy-soft',
 }
 
 interface LabelRow extends ApprovalLabel { count?: number }
@@ -87,7 +87,7 @@ export default function ApprovalLabelsPanel() {
       <button type="button" onClick={() => setOpen(o => !o)}
         className="flex w-full items-center justify-between gap-3 px-5 py-3.5 text-right transition hover:bg-slate-50">
         <div className="flex items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-sand text-navy">
             <Tag size={17} />
           </span>
           <div>
@@ -109,14 +109,14 @@ export default function ApprovalLabelsPanel() {
               <input value={name} onChange={e => setName(e.target.value)}
                 placeholder="למשל: משפחת שטרן"
                 onKeyDown={e => { if (e.key === 'Enter') void create() }}
-                className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400" />
+                className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-gold" />
             </label>
             <label className="flex flex-col gap-1.5 flex-[2] min-w-[200px]">
               <span className="text-xs font-bold text-slate-500">הסבר (לא חובה)</span>
               <input value={notes} onChange={e => setNotes(e.target.value)}
                 placeholder="קרובי משפחה שאושרו בהחלטת ההנהלה"
                 onKeyDown={e => { if (e.key === 'Enter') void create() }}
-                className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400" />
+                className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-gold" />
             </label>
             <div className="flex items-center gap-1.5 pb-2">
               {COLORS.map(c => (
@@ -130,7 +130,7 @@ export default function ApprovalLabelsPanel() {
               ))}
             </div>
             <button type="button" onClick={() => void create()} disabled={busy || !name.trim()}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-indigo-700 disabled:opacity-50">
+              className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-4 py-2.5 text-xs font-bold text-white transition hover:bg-navy-dark disabled:opacity-50">
               {busy ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
               הוספה
             </button>

@@ -82,7 +82,7 @@ export default function BeneficiaryNotesChat({ beneficiaryId }: { beneficiaryId:
   return (
     <div className="flex flex-col rounded-2xl border border-slate-200 bg-white overflow-hidden">
       <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 bg-slate-50/60">
-        <MessageSquare size={16} className="text-indigo-500" />
+        <MessageSquare size={16} className="text-navy-soft" />
         <h2 className="text-sm font-bold text-slate-900">יומן הערות המשפחה</h2>
         <span className="text-xs text-slate-400">({notes.length})</span>
       </div>
@@ -101,7 +101,7 @@ export default function BeneficiaryNotesChat({ beneficiaryId }: { beneficiaryId:
             return (
               <div key={n.id} className={`flex flex-col max-w-[85%] ${mine ? 'self-start items-start' : 'self-start items-start'}`}>
                 <div className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
-                  mine ? 'bg-indigo-50 border border-indigo-100 text-slate-800' : 'bg-slate-50 border border-slate-200 text-slate-800'
+                  mine ? 'bg-sand border border-gold-soft text-slate-800' : 'bg-slate-50 border border-slate-200 text-slate-800'
                 }`}>
                   {n.body}
                 </div>
@@ -129,10 +129,10 @@ export default function BeneficiaryNotesChat({ beneficiaryId }: { beneficiaryId:
             onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send() } }}
             placeholder="הוסיפו הערה על המשפחה… (Ctrl+Enter לשליחה)"
             rows={2}
-            className="flex-1 resize-none rounded-xl border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            className="flex-1 resize-none rounded-xl border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gold"
           />
           <button type="button" onClick={send} disabled={sending || !input.trim()}
-            className="flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-semibold text-sm rounded-xl px-4 py-2.5 transition-colors">
+            className="flex items-center justify-center gap-1.5 bg-navy hover:bg-navy-dark disabled:bg-line-strong text-white font-semibold text-sm rounded-xl px-4 py-2.5 transition-colors">
             {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
             שלח
           </button>

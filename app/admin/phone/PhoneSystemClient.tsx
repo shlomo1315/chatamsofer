@@ -29,7 +29,7 @@ const KIND_LABEL: Record<string, string> = {
   menu: 'תפריט', input: 'קליטת הקשה', action: 'פעולה', readout: 'הקראה',
 }
 const KIND_STYLE: Record<string, string> = {
-  menu: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  menu: 'bg-sand text-navy-dark border-line',
   input: 'bg-amber-50 text-amber-700 border-amber-200',
   action: 'bg-slate-100 text-slate-600 border-slate-200',
   readout: 'bg-teal-50 text-teal-700 border-teal-200',
@@ -127,8 +127,8 @@ function ExtCard({ ext, onOpen }: { ext: IvrExtension; onOpen: () => void }) {
         </div>
       ) : (
         <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${
-          ext.outbound ? 'bg-violet-50' : 'bg-teal-50'}`}>
-          <Icon size={16} className={ext.outbound ? 'text-violet-600' : 'text-teal-600'} />
+          ext.outbound ? 'bg-sand' : 'bg-teal-50'}`}>
+          <Icon size={16} className={ext.outbound ? 'text-navy' : 'text-teal-600'} />
         </div>
       )}
       <div className="min-w-0 flex-1">
@@ -275,7 +275,7 @@ export default function PhoneSystemClient() {
         {/* 🔴 מופרד במכוון — ראו ההערה בראש הקובץ. */}
         <section className="flex flex-col gap-2">
           <h2 className="flex items-center gap-1.5 text-[13px] font-extrabold text-slate-700">
-            <PhoneOutgoing size={14} className="text-violet-600" /> שיחות יוצאות — מה שאנחנו מחייגים
+            <PhoneOutgoing size={14} className="text-navy" /> שיחות יוצאות — מה שאנחנו מחייגים
           </h2>
           <p className="-mt-1 mb-1 text-[11.5px] leading-relaxed text-slate-500">
             אלה אינם חלק מהתפריט: המשפחה אינה מחייגת אלינו אלא מקבלת מאיתנו שיחה.
@@ -320,7 +320,7 @@ export default function PhoneSystemClient() {
       <div className="rounded-2xl border border-slate-200 bg-white p-4">
         <div className="flex items-center gap-2">
           {ext.outbound
-            ? <PhoneOutgoing size={17} className="text-violet-600" />
+            ? <PhoneOutgoing size={17} className="text-navy" />
             : <Phone size={17} className="text-teal-600" />}
           <h2 className="text-base font-extrabold text-slate-900">{ext.title}</h2>
         </div>

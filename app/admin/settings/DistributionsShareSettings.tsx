@@ -8,7 +8,7 @@ function CopyButton({ text }: { text: string }) {
     <button
       onClick={() => { navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) }) }}
       title="העתק"
-      className="text-slate-400 hover:text-indigo-600 transition-colors"
+      className="text-slate-400 hover:text-navy transition-colors"
     >
       {copied ? <CheckCircle2 size={14} className="text-emerald-500" /> : <Copy size={14} />}
     </button>
@@ -51,8 +51,8 @@ export default function DistributionsShareSettings() {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-center gap-2.5">
-        <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center">
-          <ShieldCheck size={16} className="text-indigo-500" />
+        <div className="w-8 h-8 bg-sand rounded-lg flex items-center justify-center">
+          <ShieldCheck size={16} className="text-navy-soft" />
         </div>
         <div>
           <h2 className="text-sm font-semibold text-slate-700">שיתוף חלוקות חגים — תצוגה בלבד</h2>
@@ -68,7 +68,7 @@ export default function DistributionsShareSettings() {
         <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
           <span dir="ltr" className="text-xs text-slate-700 font-mono flex-1 truncate">{portalUrl || '/shared/distributions'}</span>
           {portalUrl && <CopyButton text={portalUrl} />}
-          <a href="/shared/distributions" target="_blank" rel="noopener noreferrer" title="פתח דף שיתוף" className="text-slate-400 hover:text-indigo-600 transition-colors">
+          <a href="/shared/distributions" target="_blank" rel="noopener noreferrer" title="פתח דף שיתוף" className="text-slate-400 hover:text-navy transition-colors">
             <ExternalLink size={14} />
           </a>
         </div>
@@ -83,13 +83,13 @@ export default function DistributionsShareSettings() {
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-slate-600">{hasPassword ? 'סיסמה חדשה' : 'הגדר סיסמה'}</label>
             <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="לפחות 8 תווים"
-              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition-shadow" />
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-navy-soft/40 focus:border-gold transition-shadow" />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-slate-600">אימות סיסמה</label>
             <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="הזן שוב..."
               className={`w-full rounded-lg border bg-slate-50 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-shadow ${
-                confirm && confirm !== password ? 'border-red-300 focus:ring-red-300/40' : 'border-slate-200 focus:ring-indigo-500/40 focus:border-indigo-400'}`} />
+                confirm && confirm !== password ? 'border-red-300 focus:ring-red-300/40' : 'border-slate-200 focus:ring-navy-soft/40 focus:border-gold'}`} />
           </div>
         </div>
 
@@ -104,7 +104,7 @@ export default function DistributionsShareSettings() {
         </p>
 
         <button type="submit" disabled={saving || !password || !confirm}
-          className="self-start flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 shadow-sm shadow-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+          className="self-start flex items-center gap-2 rounded-lg bg-navy hover:bg-navy-dark text-white text-xs font-semibold px-4 py-2 shadow-sm shadow-line disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
           {saving ? <Loader2 size={13} className="animate-spin" /> : <Lock size={13} />}
           שמור סיסמה
         </button>

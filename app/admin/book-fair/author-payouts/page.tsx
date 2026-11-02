@@ -33,7 +33,7 @@ export default async function AuthorPayoutsPage() {
           <div className={`text-2xl font-bold text-slate-900 ${num}`}>{fmtAgorot(p.totalAgorot)}</div>
         </div>
         <a href="/api/admin/book-fair/author-payouts/export"
-          className="inline-flex min-h-10 items-center gap-2 rounded-[10px] bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
+          className="inline-flex min-h-10 items-center gap-2 rounded-[10px] bg-navy px-4 py-2 text-sm font-semibold text-white hover:bg-navy-dark">
           <Download className="h-4 w-4" /> הורדה לאקסל
         </a>
       </div>

@@ -35,7 +35,7 @@ export interface GratitudeRow {
 
 const SOURCE_META = {
   web:   { label: 'טופס',  icon: Globe,     color: 'text-sky-600 bg-sky-50' },
-  email: { label: 'מייל',  icon: Mail,      color: 'text-violet-600 bg-violet-50' },
+  email: { label: 'מייל',  icon: Mail,      color: 'text-navy bg-sand' },
   scan:  { label: 'סריקה', icon: FileImage, color: 'text-amber-600 bg-amber-50' },
 } as const
 

@@ -107,7 +107,7 @@ export default function SendAccountSettings() {
 
       <button
         onClick={() => { window.location.href = '/api/auth/gmail-send' }}
-        className="w-full sm:w-auto flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+        className="w-full sm:w-auto flex items-center justify-center gap-2 bg-navy hover:bg-navy-dark text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
       >
         <Plus size={15} /> הוספת חשבון שליחה
       </button>

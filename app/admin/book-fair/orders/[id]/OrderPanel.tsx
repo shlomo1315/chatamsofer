@@ -212,7 +212,7 @@ export default function OrderPanel({ order, items, payments }: {
                 key={s}
                 onClick={() => patch({ status: s }, `st-${s}`)}
                 disabled={!canEdit || !!busy}
-                className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50 disabled:opacity-50"
+                className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-700 transition hover:border-line-strong hover:bg-sand disabled:opacity-50"
               >
                 <span>{order.status === 'delivered' && s === 'paid' ? 'ביטול המסירה (חזרה לממתין לאיסוף)' : BOOK_FAIR_STATUS_LABELS[s]}</span>
                 {busy === `st-${s}` && <Loader2 size={14} className="animate-spin" />}
@@ -377,7 +377,7 @@ export default function OrderPanel({ order, items, payments }: {
             <button
               onClick={() => void resendConfirmation()}
               disabled={busy === 'resend'}
-              className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-sm font-medium text-white transition hover:bg-navy-dark disabled:opacity-50"
             >
               {busy === 'resend'
                 ? <><Loader2 size={14} className="animate-spin" /> שולח…</>

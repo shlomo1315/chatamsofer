@@ -164,7 +164,7 @@ export default function AssistantLearning() {
                       type="button"
                       onClick={() => analyze(f)}
                       disabled={analyzing === f.id}
-                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-violet-800 bg-violet-100 border border-violet-300 rounded-lg px-2.5 py-1 hover:bg-violet-200 transition-colors disabled:opacity-50"
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-navy-dark bg-gold-soft border border-line-strong rounded-lg px-2.5 py-1 hover:bg-line transition-colors disabled:opacity-50"
                     >
                       {analyzing === f.id
                         ? <><Loader2 size={11} className="animate-spin" /> מנתח…</>
@@ -186,9 +186,9 @@ export default function AssistantLearning() {
       )}
 
       {/* הוספת ידע */}
-      <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-4 flex flex-col gap-2.5">
+      <div className="rounded-xl border border-line bg-sand/50 p-4 flex flex-col gap-2.5">
         <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
-          <BrainCircuit size={15} className="text-indigo-600" />
+          <BrainCircuit size={15} className="text-navy" />
           למד את העוזר משהו חדש
         </h3>
 
@@ -202,11 +202,11 @@ export default function AssistantLearning() {
 
         {/* מה ה-AI הבין — מוצג כדי שתדע על מה ההצעה מבוססת */}
         {suggestion && (
-          <div className="flex items-start gap-2 text-xs bg-violet-50 border border-violet-200 rounded-lg px-2.5 py-2">
-            <Sparkles size={13} className="text-violet-600 fill-current shrink-0 mt-0.5" />
+          <div className="flex items-start gap-2 text-xs bg-sand border border-line rounded-lg px-2.5 py-2">
+            <Sparkles size={13} className="text-navy fill-current shrink-0 mt-0.5" />
             <div className="min-w-0">
-              <p className="font-semibold text-violet-900 mb-0.5">הניתוח:</p>
-              <p className="text-violet-800 leading-relaxed">{suggestion.reason}</p>
+              <p className="font-semibold text-navy-dark mb-0.5">הניתוח:</p>
+              <p className="text-navy-dark leading-relaxed">{suggestion.reason}</p>
             </div>
           </div>
         )}
@@ -216,14 +216,14 @@ export default function AssistantLearning() {
           onChange={e => setAdding(e.target.value)}
           placeholder='לדוגמה: "כשמישהו שואל על תיק — הכוונה לבקשה." או: "בקשות הלוואה מעל 20,000 ₪ דורשות אישור מיוחד."'
           rows={2}
-          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400"
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-navy-soft/40 focus:border-gold"
         />
 
         <button
           type="button"
           onClick={() => addKnowledge(adding, source || undefined)}
           disabled={busy || !adding.trim()}
-          className="self-start inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-3.5 py-2 rounded-lg transition-colors disabled:opacity-40"
+          className="self-start inline-flex items-center gap-1.5 bg-navy hover:bg-navy-dark text-white text-sm font-semibold px-3.5 py-2 rounded-lg transition-colors disabled:opacity-40"
         >
           {busy ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
           הוסף לזיכרון

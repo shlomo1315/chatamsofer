@@ -115,7 +115,7 @@ export default function AdminError({
   if (retrying) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-3 text-center px-4">
-        <Loader2 size={26} className="animate-spin text-indigo-600" />
+        <Loader2 size={26} className="animate-spin text-navy" />
         <p className="text-sm font-medium text-slate-500">רגע, טוענים את הנתונים מחדש…</p>
       </div>
     )
@@ -139,7 +139,7 @@ export default function AdminError({
       </div>
       <button
         onClick={() => { router.refresh(); reset() }}
-        className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
+        className="inline-flex items-center gap-2 rounded-lg bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy-dark transition-colors"
       >
         <RotateCcw size={16} />
         נסה שוב

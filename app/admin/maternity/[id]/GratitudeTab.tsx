@@ -206,9 +206,9 @@ function JobRow({ title, job, busy, disabled, onSend }: {
         type="button"
         onClick={onSend}
         disabled={disabled}
-        className="flex-shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-white
-                   px-3.5 py-2 text-xs font-bold text-indigo-700 transition
-                   hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed"
+        className="flex-shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-line bg-white
+                   px-3.5 py-2 text-xs font-bold text-navy-dark transition
+                   hover:bg-sand disabled:opacity-40 disabled:cursor-not-allowed"
       >
         {busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
         {busy ? 'שולח…' : sent ? 'שליחה חוזרת' : 'שלח עכשיו'}

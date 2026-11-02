@@ -240,7 +240,7 @@ export default function RabbiFormSettingsPage() {
   }
 
   const cur = layout ? (layout[active] as FieldPos) : null
-  const btn = 'inline-flex items-center justify-center w-9 h-9 rounded-lg border border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-700 transition-colors'
+  const btn = 'inline-flex items-center justify-center w-9 h-9 rounded-lg border border-slate-200 bg-white text-slate-600 hover:border-line-strong hover:text-navy-dark transition-colors'
 
   return (
     <div className="space-y-5">
@@ -254,7 +254,7 @@ export default function RabbiFormSettingsPage() {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => setPreviewKey(k => k + 1)}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:border-indigo-300">
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:border-line-strong">
             <RefreshCw size={14} /> רענן תצוגה
           </button>
           <button onClick={reset} disabled={saving}
@@ -266,7 +266,7 @@ export default function RabbiFormSettingsPage() {
               אבד — עבודה עדינה שקשה לשחזר. */}
           <button onClick={save} disabled={saving || !layout || !dirty}
             className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-extrabold text-white transition-colors disabled:opacity-50 ${
-              dirty ? 'bg-amber-500 hover:bg-amber-600 animate-save-pulse' : 'bg-indigo-600 hover:bg-indigo-700'
+              dirty ? 'bg-amber-500 hover:bg-amber-600 animate-save-pulse' : 'bg-navy hover:bg-navy-dark'
             }`}>
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             {dirty ? 'שמור שינויים' : 'נשמר'}
@@ -291,7 +291,7 @@ export default function RabbiFormSettingsPage() {
                 {FIELDS.map(f => (
                   <button key={f.key} onClick={() => setActive(f.key)}
                     className={`w-full text-right px-4 py-2.5 text-xs font-bold transition-colors ${
-                      active === f.key ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'
+                      active === f.key ? 'bg-sand text-navy-dark' : 'text-slate-600 hover:bg-slate-50'
                     }`}>
                     {f.label}
                   </button>
@@ -308,12 +308,12 @@ export default function RabbiFormSettingsPage() {
                 {/* ⚠️ הזזה קבוצתית — כשהבלאנק מתחלף כל התוכן צריך לזוז
                     באותו היסט. בלי זה צריך להזיז 15 שדות אחד-אחד ולשמור
                     על המרווחים ביניהם ידנית, מה שנשבר על טעות אחת. */}
-                <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-2 cursor-pointer hover:border-indigo-300 transition-colors">
+                <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-2 cursor-pointer hover:border-line-strong transition-colors">
                   <input
                     type="checkbox"
                     checked={moveAll}
                     onChange={e => setMoveAll(e.target.checked)}
-                    className="accent-indigo-600"
+                    className="accent-navy"
                   />
                   <span className="text-[11px] font-bold text-slate-700 leading-tight">
                     הזז את כל השדות יחד
@@ -373,10 +373,10 @@ export default function RabbiFormSettingsPage() {
           <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
             <div className="border-b border-slate-100 px-4 py-3 flex items-center justify-between gap-2">
               <span className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
-                <FileText size={15} className="text-indigo-600" /> תצוגה מקדימה
+                <FileText size={15} className="text-navy" /> תצוגה מקדימה
               </span>
               <span className="text-[11px] text-slate-400 flex items-center gap-1.5">
-                {rendering && <Loader2 size={11} className="animate-spin text-indigo-500" />}
+                {rendering && <Loader2 size={11} className="animate-spin text-navy-soft" />}
                 נתוני דוגמה · מתעדכן חי
               </span>
             </div>
@@ -417,10 +417,10 @@ export default function RabbiFormSettingsPage() {
                     title={`${f.label} — גררו למיקום הרצוי`}
                     className={`absolute -translate-y-1/2 rounded px-1.5 py-0.5 text-[9px] font-bold whitespace-nowrap transition-colors ${
                       isDragging
-                        ? 'bg-indigo-600 text-white ring-2 ring-indigo-300 cursor-grabbing z-20'
+                        ? 'bg-navy text-white ring-2 ring-line-strong cursor-grabbing z-20'
                         : isActive
-                          ? 'bg-indigo-500/85 text-white ring-1 ring-indigo-300 cursor-grab z-10'
-                          : 'bg-slate-900/25 text-white hover:bg-indigo-500/70 cursor-grab'
+                          ? 'bg-navy-soft/85 text-white ring-1 ring-line-strong cursor-grab z-10'
+                          : 'bg-slate-900/25 text-white hover:bg-navy-soft/70 cursor-grab'
                     }`}
                     style={{
                       // ⚠️ right ולא left: השדות מיושרים לימין ב-PDF,

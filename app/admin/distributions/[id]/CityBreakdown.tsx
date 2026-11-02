@@ -65,7 +65,7 @@ export default function CityBreakdown({
               onClick={() => setSort('count')}
               title="מיון לפי כמות הנרשמים"
               className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] transition-colors ${
-                sort === 'count' ? 'bg-white text-indigo-600 font-bold shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                sort === 'count' ? 'bg-white text-navy font-bold shadow-sm' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
               <ArrowDownWideNarrow size={11} /> כמות
@@ -75,7 +75,7 @@ export default function CityBreakdown({
               onClick={() => setSort('alpha')}
               title="מיון לפי א-ב של שם העיר"
               className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] transition-colors ${
-                sort === 'alpha' ? 'bg-white text-indigo-600 font-bold shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                sort === 'alpha' ? 'bg-white text-navy font-bold shadow-sm' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
               <ArrowDownAZ size={11} /> א-ב
@@ -101,22 +101,22 @@ export default function CityBreakdown({
               onClick={() => onSelect(isOn ? 'all' : name)}
               title={`${name} · ${n} נרשמים (${share}%)`}
               className={`group grid grid-cols-[minmax(70px,110px)_1fr_auto] items-center gap-2 rounded-lg px-1.5 py-1 text-right transition-colors ${
-                isOn ? 'bg-indigo-50' : 'hover:bg-slate-50'
+                isOn ? 'bg-sand' : 'hover:bg-slate-50'
               }`}
             >
-              <span className={`truncate text-[11px] ${isOn ? 'font-bold text-indigo-700' : 'text-slate-600'}`}>
+              <span className={`truncate text-[11px] ${isOn ? 'font-bold text-navy-dark' : 'text-slate-600'}`}>
                 {name}
               </span>
               {/* המסילה עצמה — דקה מאוד, בלי מסגרת */}
               <span className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
                 <span
                   className={`block h-full rounded-full transition-all ${
-                    isOn ? 'bg-indigo-500' : 'bg-indigo-200 group-hover:bg-indigo-300'
+                    isOn ? 'bg-navy-soft' : 'bg-line group-hover:bg-line-strong'
                   }`}
                   style={{ width: `${Math.max(pct, 2)}%` }}
                 />
               </span>
-              <span className={`tabular-nums text-[11px] ${isOn ? 'font-bold text-indigo-700' : 'text-slate-500'}`}>
+              <span className={`tabular-nums text-[11px] ${isOn ? 'font-bold text-navy-dark' : 'text-slate-500'}`}>
                 {n.toLocaleString('he-IL')}
               </span>
             </button>
@@ -128,7 +128,7 @@ export default function CityBreakdown({
         <button
           type="button"
           onClick={() => setExpanded(e => !e)}
-          className="inline-flex items-center justify-center gap-1 text-[11px] font-medium text-slate-400 hover:text-indigo-600 transition-colors"
+          className="inline-flex items-center justify-center gap-1 text-[11px] font-medium text-slate-400 hover:text-navy transition-colors"
         >
           <ChevronDown size={12} className={expanded ? 'rotate-180 transition-transform' : 'transition-transform'} />
           {expanded ? 'הצגה מצומצמת' : `עוד ${cities.length - TOP_N} ערים`}

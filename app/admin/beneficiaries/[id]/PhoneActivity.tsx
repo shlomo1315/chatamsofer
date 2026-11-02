@@ -28,7 +28,7 @@ function iconFor(r: Row) {
   if (r.isError) return { Icon: XCircle, cls: 'bg-red-50 text-red-600' }
   if (r.action === 'yemot_phone_not_found') return { Icon: PhoneOff, cls: 'bg-slate-100 text-slate-500' }
   if (r.action === 'yemot_no_active_birth') return { Icon: AlertCircle, cls: 'bg-amber-50 text-amber-600' }
-  return { Icon: Phone, cls: 'bg-indigo-50 text-indigo-600' }
+  return { Icon: Phone, cls: 'bg-sand text-navy' }
 }
 
 export default function PhoneActivity({ beneficiaryId }: { beneficiaryId: string }) {
@@ -55,7 +55,7 @@ export default function PhoneActivity({ beneficiaryId }: { beneficiaryId: string
   return (
     <Card padding="none">
       <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
-        <Phone size={16} className="text-indigo-500" />
+        <Phone size={16} className="text-navy-soft" />
         <h2 className="text-xs font-semibold text-slate-500 uppercase">היסטוריית פעילות בטלפון (שלוחת ימות)</h2>
       </div>
       <div className="divide-y divide-slate-100">

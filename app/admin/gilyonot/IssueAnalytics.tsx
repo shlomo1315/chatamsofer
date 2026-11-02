@@ -21,7 +21,7 @@ export const SERIES: { key: StatKey; label: string; color: string }[] = [
   { key: 'sent', label: 'נשלחו', color: '#94a3b8' },
   { key: 'delivered', label: 'נמסרו', color: '#2563eb' },
   { key: 'opened', label: 'פתחו', color: '#0891b2' },
-  { key: 'clicked', label: 'הקליקו', color: '#7c3aed' },
+  { key: 'clicked', label: 'הקליקו', color: '#14213D' },
   { key: 'downloaded', label: 'הורידו', color: '#059669' },
   { key: 'unsubscribed', label: 'הסירו', color: '#d97706' },
   { key: 'bounced', label: 'חזרו', color: '#e11d48' },
@@ -67,7 +67,7 @@ export function IssueAnalytics({ issue, base }: { issue: IssueView; base: string
     { label: 'נשלחו', value: c.sent, of: data.total, hint: `מתוך ${num(data.total)} נמענים`, color: '#94a3b8' },
     { label: 'נמסרו לתיבה', value: c.delivered, of: sent, hint: 'אישור מסירה מ-Resend', color: '#2563eb' },
     { label: 'פתחו', value: c.opened, of: sent, hint: 'הערכה, לפי טעינת תמונה', color: '#0891b2' },
-    { label: 'הקליקו', value: c.clicked, of: sent, hint: 'לחצו על קישור במייל', color: '#7c3aed' },
+    { label: 'הקליקו', value: c.clicked, of: sent, hint: 'לחצו על קישור במייל', color: '#14213D' },
     { label: 'הסירו את עצמם', value: c.unsubscribed, of: sent, hint: 'לחצו על הסרה מהרשימה', color: '#d97706' },
     ...(linkMode || c.downloaded > 0 ? [{ label: 'הורידו את הקובץ', value: c.downloaded, of: sent, hint: 'לחצו על כפתור ההורדה', color: '#059669' }] : []),
     { label: 'חזרו', value: c.bounced, of: sent, hint: 'כתובת לא קיימת או תיבה מלאה', color: '#e11d48' },
@@ -153,7 +153,7 @@ export function IssueAnalytics({ issue, base }: { issue: IssueView; base: string
                     <Tooltip cursor={{ fill: '#f8fafc' }} labelFormatter={h => `${String(h).padStart(2, '0')}:00`} formatter={(v: unknown, n: unknown) => [num(Number(v)), String(n)]} />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
                     <Bar dataKey="opened" name="פתחו" fill="#0891b2" radius={[3, 3, 0, 0]} isAnimationActive={false} />
-                    <Bar dataKey="clicked" name="הקליקו" fill="#7c3aed" radius={[3, 3, 0, 0]} isAnimationActive={false} />
+                    <Bar dataKey="clicked" name="הקליקו" fill="#14213D" radius={[3, 3, 0, 0]} isAnimationActive={false} />
                     {(linkMode || c.downloaded > 0) && <Bar dataKey="downloaded" name="הורידו" fill="#059669" radius={[3, 3, 0, 0]} isAnimationActive={false} />}
                   </BarChart>
                 </ResponsiveContainer>

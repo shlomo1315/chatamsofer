@@ -243,7 +243,7 @@ export default function CardsTable({ aids }: { aids: MaternityAid[] }) {
         return (
           <div className="flex flex-col items-start gap-1">
             {countdown ? <span className={`inline-block text-[13px] font-semibold px-2.5 py-1 rounded-full ${countdown.cls}`}>{countdown.text}</span> : <span className="text-slate-300">—</span>}
-            {aid.eligibility_extended && <span className="inline-block text-[11px] font-medium px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">הוארך ידנית</span>}
+            {aid.eligibility_extended && <span className="inline-block text-[11px] font-medium px-2 py-0.5 rounded-full bg-gold-soft text-navy-dark">הוארך ידנית</span>}
           </div>
         )
       }

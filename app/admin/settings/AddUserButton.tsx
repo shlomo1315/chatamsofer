@@ -98,7 +98,7 @@ export default function AddUserButton() {
   return (
     <>
       <button onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium">
+        className="inline-flex items-center gap-1 text-xs text-navy hover:text-navy-dark font-medium">
         <UserPlus size={14} /> הוסף משתמש
       </button>
 
@@ -106,7 +106,7 @@ export default function AddUserButton() {
         <div className="dlg-backdrop " onClick={close}>
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200">
-              <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2"><UserPlus size={16} className="text-indigo-500" /> הוסף משתמש חדש למערכת</h3>
+              <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2"><UserPlus size={16} className="text-navy-soft" /> הוסף משתמש חדש למערכת</h3>
               <button onClick={close} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
             </div>
 
@@ -120,7 +120,7 @@ export default function AddUserButton() {
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-medium text-slate-600">שם מלא <span className="text-red-500">*</span></label>
                   <input value={fullName} onChange={e => setFullName(e.target.value)}
-                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft" />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-medium text-slate-600">אימייל <span className="text-red-500">*</span></label>
@@ -141,7 +141,7 @@ export default function AddUserButton() {
                   <div className="grid grid-cols-2 gap-2">
                     {ROLES.map(r => (
                       <button key={r} type="button" onClick={() => setRole(r)}
-                        className={`py-2 rounded-lg border text-sm font-medium transition-colors ${role === r ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
+                        className={`py-2 rounded-lg border text-sm font-medium transition-colors ${role === r ? 'bg-navy border-navy text-white' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
                         {ROLE_LABELS[r]}
                       </button>
                     ))}
@@ -190,7 +190,7 @@ export default function AddUserButton() {
                 )}
 
                 {isAdmin && (
-                  <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-xs text-indigo-700">
+                  <div className="rounded-xl border border-gold-soft bg-sand px-4 py-3 text-xs text-navy-dark">
                     מנהל מערכת — גישה מלאה לכל המחלקות ללא הגבלה
                   </div>
                 )}
@@ -204,7 +204,7 @@ export default function AddUserButton() {
                       <select
                         value={mailAccount}
                         onChange={e => setMailAccount(e.target.value)}
-                        className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                        className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft bg-white"
                       >
                         <option value="">ללא</option>
                         {mailAccounts.map(acc => (
@@ -226,7 +226,7 @@ export default function AddUserButton() {
                                     e.target.checked ? [...new Set([...prev, l.id])] : prev.filter(id => id !== l.id)
                                   )
                                 }}
-                                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                className="rounded border-slate-300 text-navy focus:ring-navy-soft"
                               />
                               <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: l.color }} />
                               {l.name}
@@ -250,7 +250,7 @@ export default function AddUserButton() {
                 <div className="flex gap-2 justify-end mt-1">
                   <button onClick={close} disabled={saving} className="px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50">ביטול</button>
                   <button onClick={submit} disabled={saving || !fullName.trim() || !email.trim()}
-                    className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                    className="flex items-center gap-1.5 bg-navy hover:bg-navy-dark disabled:bg-line-strong text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
                     {saving ? <Loader2 size={15} className="animate-spin" /> : <UserPlus size={15} />} צור משתמש
                   </button>
                 </div>

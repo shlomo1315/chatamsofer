@@ -308,7 +308,7 @@ export default async function BookFairPage() {
               </li>
             ))}
           </ul>
-          <Link href="/admin/book-fair/books" className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:underline">
+          <Link href="/admin/book-fair/books" className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-navy hover:underline">
             לניהול המלאי <ArrowLeft size={14} />
           </Link>
         </section>
@@ -319,7 +319,7 @@ export default async function BookFairPage() {
         <section className="rounded-2xl border border-slate-200 bg-white p-5">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-semibold text-slate-900">הזמנות אחרונות</h2>
-            <Link href="/admin/book-fair/orders" className="text-sm font-medium text-indigo-600 hover:underline">
+            <Link href="/admin/book-fair/orders" className="text-sm font-medium text-navy hover:underline">
               לכל ההזמנות
             </Link>
           </div>
@@ -365,10 +365,10 @@ export default async function BookFairPage() {
 
 const TONES = {
   emerald: 'bg-emerald-50 text-emerald-600',
-  indigo:  'bg-indigo-50 text-indigo-600',
+  indigo:  'bg-sand text-navy',
   sky:     'bg-sky-50 text-sky-600',
-  violet:  'bg-violet-50 text-violet-600',
-  purple:  'bg-purple-50 text-purple-600',
+  violet:  'bg-sand text-navy',
+  purple:  'bg-sand text-navy',
   red:     'bg-red-50 text-red-600',
 } as const
 
@@ -429,9 +429,9 @@ function Shortcut({ href, icon: Icon, label }: { href: string; icon: React.Eleme
   return (
     <Link
       href={href}
-      className="group flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-indigo-300 hover:text-indigo-700"
+      className="group flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-line-strong hover:text-navy-dark"
     >
-      <Icon size={16} className="text-slate-400 transition group-hover:text-indigo-500" />
+      <Icon size={16} className="text-slate-400 transition group-hover:text-navy-soft" />
       {label}
     </Link>
   )

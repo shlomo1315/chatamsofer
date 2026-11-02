@@ -51,7 +51,7 @@ export default function BeneficiaryNameEditor({
         <button
           type="button"
           onClick={() => { setFamily(familyName); setFull(fullName); setError(''); setEditing(true) }}
-          className="text-slate-400 hover:text-indigo-600 transition-colors"
+          className="text-slate-400 hover:text-navy transition-colors"
           title="עריכת השם"
         >
           <Pencil size={14} />
@@ -91,14 +91,14 @@ export default function BeneficiaryNameEditor({
           onChange={e => setFamily(e.target.value)}
           placeholder="שם משפחה"
           disabled={saving}
-          className="w-32 rounded-lg border border-slate-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none disabled:bg-slate-50"
+          className="w-32 rounded-lg border border-slate-300 px-2 py-1 text-sm focus:border-navy-soft focus:outline-none disabled:bg-slate-50"
         />
         <input
           value={full}
           onChange={e => setFull(e.target.value)}
           placeholder="שם פרטי"
           disabled={saving}
-          className="w-32 rounded-lg border border-slate-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none disabled:bg-slate-50"
+          className="w-32 rounded-lg border border-slate-300 px-2 py-1 text-sm focus:border-navy-soft focus:outline-none disabled:bg-slate-50"
         />
         <button
           type="button" onClick={save} disabled={saving}

@@ -120,7 +120,7 @@ export default function NameChangeAlert() {
           לעמודה צרה והשמות נחתכו. */}
       <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl overflow-hidden">
         <div className="flex items-center gap-2.5 border-b border-slate-100 px-5 py-4">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-sand text-navy">
             <UserPen size={17} />
           </span>
           <div className="min-w-0 flex-1">
@@ -191,7 +191,7 @@ export default function NameChangeAlert() {
                       .sort((a, b) => a.generation - b.generation)
                       .map((g, i) => (
                         <li key={`${g.generation}-${i}`} className="flex items-start gap-2 text-[11.5px] leading-snug">
-                          <span className="mt-px flex h-4 w-4 flex-shrink-0 items-center justify-center rounded bg-indigo-50 text-[9px] font-bold text-indigo-600">
+                          <span className="mt-px flex h-4 w-4 flex-shrink-0 items-center justify-center rounded bg-sand text-[9px] font-bold text-navy">
                             {g.generation}
                           </span>
                           <span className="min-w-0 flex-1 font-medium text-slate-700">{g.name}</span>
@@ -212,7 +212,7 @@ export default function NameChangeAlert() {
 
               {/* קישור לכרטסת — לכל מה שלא נכנס לכאן */}
               <a href={`/admin/beneficiaries/${r.beneficiary_id}`} target="_blank" rel="noopener noreferrer"
-                className="mt-2 inline-block text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 hover:underline">
+                className="mt-2 inline-block text-[11px] font-semibold text-navy hover:text-navy-dark hover:underline">
                 פתיחת הכרטסת המלאה ↗
               </a>
               <div className="mt-2.5 flex items-center gap-2">

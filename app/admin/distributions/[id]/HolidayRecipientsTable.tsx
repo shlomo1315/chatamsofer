@@ -255,7 +255,7 @@ export default function HolidayRecipientsTable({
         return (
           <span className="inline-flex items-center gap-1.5 flex-wrap font-semibold text-slate-800">
             {r.beneficiary_id && canEdit
-              ? <Link href={`/admin/beneficiaries/${r.beneficiary_id}`} className="hover:text-indigo-700 hover:underline">
+              ? <Link href={`/admin/beneficiaries/${r.beneficiary_id}`} className="hover:text-navy-dark hover:underline">
                   {r.family_name || r.name}
                 </Link>
               : (r.family_name || r.name)}
@@ -432,7 +432,7 @@ export default function HolidayRecipientsTable({
               {canEdit && (
                 <th className="w-8">
                   <input type="checkbox" checked={!!allShownSelected} onChange={() => toggleAllShown?.()}
-                    className="h-4 w-4 accent-indigo-600" aria-label="סימון כל המוצגים" />
+                    className="h-4 w-4 accent-navy" aria-label="סימון כל המוצגים" />
                 </th>
               )}
               {/* 🔴 tc.th ולא <th> ידני: זה מה שמביא את תפריט המיון
@@ -442,11 +442,11 @@ export default function HolidayRecipientsTable({
           </thead>
           <tbody className="divide-y divide-slate-100">
             {visibleRows.map(r => (
-              <tr key={r.id} onClick={e => { if (!(e.target as HTMLElement).closest('button,a,input,select,textarea,label')) setOpenIdx(visibleRows.indexOf(r)) }} className="cursor-pointer hover:bg-indigo-50/40 align-middle [&>td]:px-2.5 [&>td]:py-2 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0">
+              <tr key={r.id} onClick={e => { if (!(e.target as HTMLElement).closest('button,a,input,select,textarea,label')) setOpenIdx(visibleRows.indexOf(r)) }} className="cursor-pointer hover:bg-sand/40 align-middle [&>td]:px-2.5 [&>td]:py-2 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0">
                 {canEdit && (
                   <td className="w-8">
                     <input type="checkbox" checked={!!selected?.has(r.id)} onChange={() => toggleRow?.(r.id)}
-                      className="h-4 w-4 accent-indigo-600" aria-label={`סימון ${r.name}`} />
+                      className="h-4 w-4 accent-navy" aria-label={`סימון ${r.name}`} />
                   </td>
                 )}
                 {shown.map(c => (

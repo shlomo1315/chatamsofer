@@ -129,7 +129,7 @@ export default function BackupSettings() {
           ⚠️ עד כה הגיבוי השתמש תמיד בחשבון הדואר, ולא היה כתוב בשום מקום לאן
           הקבצים עולים. עכשיו זה מוצג, וניתן לחבר חשבון נפרד. */}
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex flex-wrap items-center gap-2">
-        <AtSign size={15} className="text-indigo-500 shrink-0" />
+        <AtSign size={15} className="text-navy-soft shrink-0" />
         <div className="flex-1 min-w-[180px]">
           <p className="text-[12px] font-bold text-slate-700">חשבון הגיבוי</p>
           <p className="text-[11px] text-slate-500 leading-relaxed">
@@ -141,7 +141,7 @@ export default function BackupSettings() {
           </p>
         </div>
         <a href="/api/auth/gmail?target=backup"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-[11px] font-bold text-indigo-700 hover:bg-indigo-50">
+          className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-[11px] font-bold text-navy-dark hover:bg-sand">
           <LogIn size={13} /> {account?.dedicated ? 'החלף חשבון' : 'בחר חשבון אחר לגיבוי'}
         </a>
         {account?.dedicated && (

@@ -10,7 +10,7 @@ interface Props {
   byCity: { name: string; value: number }[]
 }
 
-const COLORS = ['#6366f1', '#22c55e', '#ef4444', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6']
+const COLORS = ['#14213D', '#22c55e', '#ef4444', '#3b82f6', '#f59e0b', '#14213D', '#ec4899', '#14b8a6']
 
 export default function ReportsCharts({ byEligibility, byCity }: Props) {
   return (
@@ -57,7 +57,7 @@ export default function ReportsCharts({ byEligibility, byCity }: Props) {
             <Tooltip
               contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }}
             />
-            <Bar dataKey="value" fill="#6366f1" radius={[0, 4, 4, 0]} name="צאצאים" />
+            <Bar dataKey="value" fill="#14213D" radius={[0, 4, 4, 0]} name="צאצאים" />
           </BarChart>
         </ResponsiveContainer>
       </Card>

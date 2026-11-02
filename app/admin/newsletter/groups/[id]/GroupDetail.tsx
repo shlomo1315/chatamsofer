@@ -137,7 +137,7 @@ export default function GroupDetail({ groupId, initialName }: { groupId: string;
 
       {/* כותרת */}
       <div className="mb-5 flex items-center gap-2.5">
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-600 text-white">
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-navy text-white">
           <Users size={20} />
         </div>
         <div>
@@ -163,14 +163,14 @@ export default function GroupDetail({ groupId, initialName }: { groupId: string;
                 onChange={e => setQ(e.target.value)}
                 placeholder="חיפוש לפי שם, מייל, עיר או טלפון…"
                 className="w-full rounded-xl border border-slate-300 py-2 pr-9 pl-3 text-sm
-                           focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                           focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold-soft"
               />
             </div>
             <button
               type="button"
               onClick={() => setAdding(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2
-                         text-sm font-bold text-white transition hover:bg-indigo-700"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-4 py-2
+                         text-sm font-bold text-white transition hover:bg-navy-dark"
             >
               <Plus size={15} /> הוספת חבר
             </button>
@@ -329,7 +329,7 @@ function TabButton({ active, onClick, icon, label }: {
       onClick={onClick}
       className={`-mb-px inline-flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-semibold transition ${
         active
-          ? 'border-indigo-600 text-indigo-700'
+          ? 'border-navy text-navy-dark'
           : 'border-transparent text-slate-500 hover:text-slate-700'
       }`}
     >
@@ -409,8 +409,8 @@ function MemberModal({ groupId, member, onClose, onSaved }: {
 
         <div className="mt-5 flex justify-start gap-2 border-t border-slate-100 pt-4">
           <button type="button" onClick={save} disabled={saving || !email.trim()}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2.5
-                       text-sm font-bold text-white transition hover:bg-indigo-700 disabled:opacity-40">
+            className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-5 py-2.5
+                       text-sm font-bold text-white transition hover:bg-navy-dark disabled:opacity-40">
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
             {isNew ? 'הוספה' : 'שמירה'}
           </button>
@@ -439,7 +439,7 @@ function Field({ label, value, onChange, type = 'text', autoFocus, placeholder }
         placeholder={placeholder}
         onChange={e => onChange(e.target.value)}
         className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm
-                   focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                   focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold-soft"
       />
     </div>
   )

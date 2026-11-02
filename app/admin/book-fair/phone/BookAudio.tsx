@@ -534,7 +534,7 @@ export default function BookAudio() {
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder="חיפוש לפי שם או מק״ט"
-            className="w-full rounded-xl border border-slate-200 py-2 pr-10 pl-3 text-sm outline-none focus:border-indigo-400"
+            className="w-full rounded-xl border border-slate-200 py-2 pr-10 pl-3 text-sm outline-none focus:border-gold"
           />
         </div>
 
@@ -553,7 +553,7 @@ export default function BookAudio() {
                 {(b.publisher?.trim() || b.description?.trim()) && (
                   <span className="truncate text-xs text-slate-400">
                     {b.description?.trim() && (
-                      <span className="text-indigo-400">{b.description.trim()}</span>
+                      <span className="text-gold">{b.description.trim()}</span>
                     )}
                     {b.description?.trim() && b.publisher?.trim() && ' · '}
                     {b.publisher?.trim()}
@@ -603,7 +603,7 @@ function RowActions({ busy, playing, onPlay, onGenerate, onUpload, onRemove }: {
   onRemove?: () => void
 }) {
   if (busy) {
-    return <Loader2 size={16} className="mx-2 flex-shrink-0 animate-spin text-indigo-500" />
+    return <Loader2 size={16} className="mx-2 flex-shrink-0 animate-spin text-navy-soft" />
   }
   return (
     <div className="flex flex-shrink-0 items-center gap-1">
@@ -636,7 +636,7 @@ function IconBtn({ children, title, onClick, danger }: {
       className={`flex h-8 w-8 items-center justify-center rounded-lg border transition ${
         danger
           ? 'border-rose-200 text-rose-500 hover:bg-rose-50'
-          : 'border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-indigo-600'
+          : 'border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-navy'
       }`}
     >
       {children}

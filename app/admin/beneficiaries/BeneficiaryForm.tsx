@@ -305,7 +305,7 @@ function LineageTreePicker({
   }
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '20px 0', color: '#7C3AED' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '20px 0', color: '#14213D' }}>
       <Loader2 size={16} className="animate-spin" />
       <span style={{ fontSize: 13 }}>טוען עץ דורות...</span>
     </div>
@@ -347,9 +347,9 @@ function LineageTreePicker({
           )}
         </div>
         <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
-          <button type="button" onClick={() => setZoom(z => Math.min(2.5, z + 0.1))} style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366F1', fontWeight: 700 }}>+</button>
+          <button type="button" onClick={() => setZoom(z => Math.min(2.5, z + 0.1))} style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#14213D', fontWeight: 700 }}>+</button>
           <button type="button" onClick={() => { setZoom(0.65); didCenter.current = false }} style={{ height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 10, cursor: 'pointer', padding: '0 7px', color: '#64748B', fontWeight: 600 }}>{Math.round(zoom * 100)}%</button>
-          <button type="button" onClick={() => setZoom(z => Math.max(0.5, z - 0.1))} style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366F1', fontWeight: 700 }}>−</button>
+          <button type="button" onClick={() => setZoom(z => Math.max(0.5, z - 0.1))} style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#14213D', fontWeight: 700 }}>−</button>
         </div>
       </div>
 
@@ -361,7 +361,7 @@ function LineageTreePicker({
           overflow: 'auto',
           overflowAnchor: 'none',
           borderRadius: 14,
-          background: 'linear-gradient(180deg,#FCFCFF 0%,#F7F5FF 100%)',
+          background: '#FBF8F1',
           border: '1.5px solid #E8E0F5',
           height: 380,
           cursor: 'grab',
@@ -476,7 +476,7 @@ function Section({ title, icon: Icon, children }: {
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-5">
       <div className="flex items-center gap-2 mb-4">
-        <Icon size={16} className="text-indigo-500" />
+        <Icon size={16} className="text-navy-soft" />
         <h3 className="text-sm font-semibold text-slate-700">{title}</h3>
       </div>
       {children}
@@ -504,7 +504,7 @@ function Field({ label, required, error, children }: {
 function FInput({ className = '', ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
-      className={`rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent placeholder:text-slate-400 w-full ${className}`}
+      className={`rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-navy-soft focus:border-transparent placeholder:text-slate-400 w-full ${className}`}
       {...props}
     />
   )
@@ -543,8 +543,8 @@ function DocTypeField({
           onClick={() => onDocType('id')}
           className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
             docType === 'id'
-              ? 'bg-indigo-600 text-white border-indigo-600'
-              : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400 hover:bg-indigo-50'
+              ? 'bg-navy text-white border-navy'
+              : 'bg-white text-slate-700 border-slate-300 hover:border-gold hover:bg-sand'
           }`}
         >
           תעודת זהות
@@ -554,8 +554,8 @@ function DocTypeField({
           onClick={() => onDocType('passport')}
           className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
             docType === 'passport'
-              ? 'bg-indigo-600 text-white border-indigo-600'
-              : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400 hover:bg-indigo-50'
+              ? 'bg-navy text-white border-navy'
+              : 'bg-white text-slate-700 border-slate-300 hover:border-gold hover:bg-sand'
           }`}
         >
           דרכון
@@ -961,8 +961,8 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
               onClick={() => setForm(f => ({ ...f, marital_status: opt }))}
               className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
                 form.marital_status === opt
-                  ? 'bg-indigo-600 text-white border-indigo-600'
-                  : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400 hover:bg-indigo-50'
+                  ? 'bg-navy text-white border-navy'
+                  : 'bg-white text-slate-700 border-slate-300 hover:border-gold hover:bg-sand'
               }`}
             >
               {opt}
@@ -1161,12 +1161,12 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
           const ancestors = [...lineagePath, ...manualLineage.map(s => s.trim()).filter(Boolean)]
           const selfName = [form.family_name, form.full_name].filter(Boolean).join(' ').trim()
           return (
-            <div className="flex items-center gap-1 flex-wrap mb-3 p-2.5 bg-indigo-50 rounded-lg border border-indigo-100">
-              <span className="text-xs text-indigo-600 font-medium ml-1">שרשרת הדורות:</span>
+            <div className="flex items-center gap-1 flex-wrap mb-3 p-2.5 bg-sand rounded-lg border border-gold-soft">
+              <span className="text-xs text-navy font-medium ml-1">שרשרת הדורות:</span>
               {ancestors.map((name, i) => (
                 <span key={i} className="flex items-center gap-1">
-                  {i > 0 && <ChevronLeft size={11} className="text-indigo-300" />}
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                  {i > 0 && <ChevronLeft size={11} className="text-line-strong" />}
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-gold-soft text-navy-dark">
                     {name}
                   </span>
                 </span>
@@ -1229,7 +1229,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-slate-600">הורה בעץ (הדור שמעליו)</label>
                 <select value={suggestParentId} onChange={e => setSuggestParentId(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-navy-soft focus:border-transparent">
                   <option value="">— בחר הורה —</option>
                   {allLineageNodes
                     .slice().sort((a, b) => a.generation - b.generation || a.name.localeCompare(b.name, 'he'))
@@ -1290,7 +1290,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
             <button
               type="button"
               onClick={() => setManualLineage(prev => [...prev, ''])}
-              className="mt-3 flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-800 border border-indigo-200 hover:border-indigo-400 rounded-lg px-3 py-1.5 transition-colors"
+              className="mt-3 flex items-center gap-1.5 text-xs font-medium text-navy hover:text-navy-dark border border-line hover:border-gold rounded-lg px-3 py-1.5 transition-colors"
             >
               <Plus size={14} />
               הוסף דור {lineagePath.length + 1 + manualLineage.length}
@@ -1307,7 +1307,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
           onChange={set('notes')}
           rows={3}
           placeholder="הערות נוספות..."
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-navy-soft resize-none"
         />
       </Section>
 

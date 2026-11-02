@@ -18,7 +18,7 @@ const STYLES: Record<string, string> = {
   rejected:     'bg-red-100 text-red-800 hover:bg-red-200 border-red-200',
   docs_pending: 'bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200',
   docs_returned: 'bg-teal-100 text-teal-800 hover:bg-teal-200 border-teal-200',
-  review:       'bg-violet-100 text-violet-800 hover:bg-violet-200 border-violet-200',
+  review:       'bg-gold-soft text-navy-dark hover:bg-line border-line',
   deep_review:  'bg-orange-100 text-orange-800 hover:bg-orange-200 border-orange-300',
 }
 
@@ -358,10 +358,10 @@ export default function StatusControl({ id, status, advance, readOnly }: {
               })}
             </div>
             {/* תיקון עץ הדורות — חלק ממעגל התיקונים: הצאצא יידרש לבנות מחדש את השרשרת בפורטל */}
-            <div className={`rounded-lg border mb-3 transition-colors ${lineageFix ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200'}`}>
-              <label className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer text-sm ${lineageFix ? 'text-indigo-800 font-medium' : 'text-slate-600 hover:bg-slate-50'}`}>
+            <div className={`rounded-lg border mb-3 transition-colors ${lineageFix ? 'border-line-strong bg-sand' : 'border-slate-200'}`}>
+              <label className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer text-sm ${lineageFix ? 'text-navy-dark font-medium' : 'text-slate-600 hover:bg-slate-50'}`}>
                 <input type="checkbox" checked={lineageFix} onChange={() => setLineageFix(v => !v)}
-                  className="w-4 h-4 accent-indigo-600" />
+                  className="w-4 h-4 accent-navy" />
                 עץ הדורות דרוש תיקון
               </label>
               {lineageFix && (
@@ -371,9 +371,9 @@ export default function StatusControl({ id, status, advance, readOnly }: {
                     onChange={e => setLineageFixNote(e.target.value)}
                     placeholder="מה לא תקין בדורות? (חובה — יוצג לצאצא במייל ובפורטל)..."
                     rows={2}
-                    className="w-full rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+                    className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gold resize-none"
                   />
-                  <p className="text-[11px] text-indigo-600 mt-1">הצאצא יתבקש לבנות מחדש את שרשרת הדורות שלו באזור האישי.</p>
+                  <p className="text-[11px] text-navy mt-1">הצאצא יתבקש לבנות מחדש את שרשרת הדורות שלו באזור האישי.</p>
                 </div>
               )}
             </div>
@@ -431,10 +431,10 @@ export default function StatusControl({ id, status, advance, readOnly }: {
             <ol className="mb-4 overflow-hidden rounded-xl border border-slate-200">
               {chainWarn.map((s, i) => (
                 <li key={s.id}
-                  className={`flex items-center gap-2 px-3 py-2 text-[12.5px] ${i % 2 ? 'bg-slate-50/60' : 'bg-white'} ${s.isSelf ? 'font-bold text-indigo-800' : 'text-slate-700'}`}>
+                  className={`flex items-center gap-2 px-3 py-2 text-[12.5px] ${i % 2 ? 'bg-slate-50/60' : 'bg-white'} ${s.isSelf ? 'font-bold text-navy-dark' : 'text-slate-700'}`}>
                   <span className="w-14 shrink-0 text-[11px] text-slate-400">דור {s.generation}</span>
                   <span className="min-w-0 flex-1 truncate">{s.name}</span>
-                  {s.isSelf && <span className="shrink-0 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700">הצאצא הזה</span>}
+                  {s.isSelf && <span className="shrink-0 rounded-full bg-gold-soft px-2 py-0.5 text-[10px] font-bold text-navy-dark">הצאצא הזה</span>}
                 </li>
               ))}
             </ol>

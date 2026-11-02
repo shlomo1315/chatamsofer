@@ -417,7 +417,7 @@ export default function GmailInbox({ lockDepartment }: { lockDepartment?: string
 
   const navBtn = (active: boolean) =>
     `w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-bold transition-colors text-right ${
-      active ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+      active ? 'bg-navy text-white' : 'text-slate-600 hover:bg-slate-100'
     }`
 
   return (
@@ -428,13 +428,13 @@ export default function GmailInbox({ lockDepartment }: { lockDepartment?: string
           {/* 🔴 שם התיבה הפעילה — לא "תיבת Gmail" גנרי. כשמחוברות כמה
               תיבות, בלי השם אי אפשר לדעת באיזו צופים ומאיזו תישלח תשובה. */}
           <h1 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
-            <Mail size={20} className="text-indigo-600" />
+            <Mail size={20} className="text-navy" />
             <span dir="ltr" className="truncate">{activeAccount?.email ?? 'כל התיבות'}</span>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
             {activeAccount ? (deptLabel(activeAccount.department) ?? 'תיבת דואר') : `${workAccounts.length} תיבות`}
             {' · '}{total.toLocaleString('he-IL')} הודעות
-            {totalUnread > 0 && <> · <strong className="text-indigo-600">{totalUnread}</strong> לא נקראו</>}
+            {totalUnread > 0 && <> · <strong className="text-navy">{totalUnread}</strong> לא נקראו</>}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -442,12 +442,12 @@ export default function GmailInbox({ lockDepartment }: { lockDepartment?: string
           {/* ⚠️ "אימייל חדש" עבר לראש הסרגל הצדדי (מעל "דואר נכנס"), כמו
               בג'ימייל. הוסר מכאן כדי לא להופיע פעמיים. */}
           <button onClick={() => { setPage(0); void load() }} disabled={loading}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:border-indigo-300 disabled:opacity-50">
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:border-line-strong disabled:opacity-50">
             {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} רענן
           </button>
           {!lockDepartment && (
             <Link href="/admin/mail/index-sync"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:border-indigo-300">
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:border-line-strong">
               <Settings size={14} /> סנכרון
             </Link>
           )}
@@ -455,7 +455,7 @@ export default function GmailInbox({ lockDepartment }: { lockDepartment?: string
           {!lockDepartment && workAccounts.length > 0 && (
             <div className="relative">
               <button onClick={() => setAccountMenu(o => !o)}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:border-indigo-300">
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:border-line-strong">
                 <span className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-extrabold text-white"
                   style={{ backgroundColor: deptColor(activeAccount?.department) }}>
                   {(activeAccount?.email ?? 'A').slice(0, 1).toUpperCase()}
@@ -471,7 +471,7 @@ export default function GmailInbox({ lockDepartment }: { lockDepartment?: string
                   <div className="fixed inset-0 z-30" onClick={() => setAccountMenu(false)} />
                   <div className="absolute left-0 mt-1.5 z-40 w-72 rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden">
                     <button onClick={() => { setAccount(''); setAccountMenu(false); setPage(0); setSelected(null) }}
-                      className={`w-full text-right px-3 py-2.5 hover:bg-slate-50 border-b border-slate-100 ${!account ? 'bg-indigo-50' : ''}`}>
+                      className={`w-full text-right px-3 py-2.5 hover:bg-slate-50 border-b border-slate-100 ${!account ? 'bg-sand' : ''}`}>
                       <p className="text-xs font-bold text-slate-800">כל התיבות</p>
                       <p className="text-[11px] text-slate-400">{workAccounts.length} תיבות מחוברות</p>
                     </button>
@@ -480,7 +480,7 @@ export default function GmailInbox({ lockDepartment }: { lockDepartment?: string
                       return (
                         <button key={a.id}
                           onClick={() => { setAccount(a.id); setAccountMenu(false); setPage(0); setSelected(null) }}
-                          className={`w-full text-right px-3 py-2.5 hover:bg-slate-50 border-b border-slate-50 last:border-0 flex items-center gap-2.5 ${account === a.id ? 'bg-indigo-50' : ''}`}>
+                          className={`w-full text-right px-3 py-2.5 hover:bg-slate-50 border-b border-slate-50 last:border-0 flex items-center gap-2.5 ${account === a.id ? 'bg-sand' : ''}`}>
                           <span className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-extrabold text-white flex-shrink-0"
                             style={{ backgroundColor: deptColor(a.department) }}>
                             {a.email.slice(0, 1).toUpperCase()}
@@ -489,12 +489,12 @@ export default function GmailInbox({ lockDepartment }: { lockDepartment?: string
                             <p dir="ltr" className="text-xs font-bold text-slate-800 truncate text-right">{a.email}</p>
                             <p className="text-[11px] text-slate-400">{deptLabel(a.department) ?? a.label ?? '—'}</p>
                           </span>
-                          {n > 0 && <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 rounded-full px-1.5">{n}</span>}
+                          {n > 0 && <span className="text-[10px] font-bold bg-gold-soft text-navy-dark rounded-full px-1.5">{n}</span>}
                         </button>
                       )
                     })}
                     <Link href="/admin/settings/connect-mailbox"
-                      className="block px-3 py-2.5 text-xs font-bold text-indigo-600 hover:bg-indigo-50 border-t border-slate-100">
+                      className="block px-3 py-2.5 text-xs font-bold text-navy hover:bg-sand border-t border-slate-100">
                       + חבר תיבה נוספת
                     </Link>
                   </div>
@@ -521,7 +521,7 @@ export default function GmailInbox({ lockDepartment }: { lockDepartment?: string
               זו הפעולה שמתחילים ממנה, ומקומה לפני רשימת התיקיות ולא
               מוסתר בין כפתורי הכותרת. */}
           <button onClick={startNew}
-            className="w-full mb-2 inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-3 py-2.5 text-[13px] font-extrabold text-white shadow-sm hover:bg-indigo-700 transition-colors">
+            className="w-full mb-2 inline-flex items-center justify-center gap-2 rounded-xl bg-navy px-3 py-2.5 text-[13px] font-extrabold text-white shadow-sm hover:bg-navy-dark transition-colors">
             <PenSquare size={15} /> אימייל חדש
           </button>
           <nav className="space-y-0.5">
@@ -545,7 +545,7 @@ export default function GmailInbox({ lockDepartment }: { lockDepartment?: string
                 <span className="flex-1">{f.label}</span>
                 {f.badge > 0 && (
                   <span className={`text-[10px] font-bold rounded-full px-1.5 ${
-                    folder === f.key ? 'bg-white/25' : 'bg-indigo-100 text-indigo-700'}`}>
+                    folder === f.key ? 'bg-white/25' : 'bg-gold-soft text-navy-dark'}`}>
                     {f.badge}
                   </span>
                 )}
@@ -617,7 +617,7 @@ export default function GmailInbox({ lockDepartment }: { lockDepartment?: string
             <form onSubmit={e => { e.preventDefault(); setSearch(q); setPage(0) }} className="relative">
               <Search size={14} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
               <input value={q} onChange={e => setQ(e.target.value)} placeholder="חיפוש…"
-                className="w-full pr-9 pl-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+                className="w-full pr-9 pl-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-line" />
               {search && (
                 <button type="button" onClick={() => { setQ(''); setSearch(''); setPage(0) }}
                   className="absolute top-1/2 -translate-y-1/2 left-2 text-slate-400 hover:text-slate-600"><X size={14} /></button>
@@ -644,11 +644,11 @@ export default function GmailInbox({ lockDepartment }: { lockDepartment?: string
             <>
               {/* ── סרגל פעולות קבוצתי — מופיע רק כשיש בחירה, כמו בג'ימייל ── */}
               {picked.size > 0 && (
-                <div className="flex items-center gap-1 border-b border-slate-100 bg-indigo-50/60 px-3 py-2">
-                  <span className="text-[11px] font-extrabold text-indigo-800">
+                <div className="flex items-center gap-1 border-b border-slate-100 bg-sand/60 px-3 py-2">
+                  <span className="text-[11px] font-extrabold text-navy-dark">
                     {picked.size} נבחרו
                   </span>
-                  <span className="w-px h-4 bg-indigo-200 mx-1" />
+                  <span className="w-px h-4 bg-line mx-1" />
                   {([
                     { icon: MailOpen, label: 'סימון כנקרא', action: 'mark-read' },
                     { icon: Mail, label: 'סימון כלא נקרא', action: 'mark-unread' },
@@ -658,7 +658,7 @@ export default function GmailInbox({ lockDepartment }: { lockDepartment?: string
                   ] as const).map(b => (
                     <button key={b.action} type="button" disabled={acting} title={b.label}
                       onClick={() => void actOnPicked(b.action)}
-                      className="p-1.5 rounded-lg text-slate-600 hover:bg-white hover:text-indigo-700 disabled:opacity-50 transition-colors">
+                      className="p-1.5 rounded-lg text-slate-600 hover:bg-white hover:text-navy-dark disabled:opacity-50 transition-colors">
                       <b.icon size={14} />
                     </button>
                   ))}
@@ -689,8 +689,8 @@ export default function GmailInbox({ lockDepartment }: { lockDepartment?: string
                       })
                     }}
                     className={`w-full text-right px-4 py-3 transition-colors ${
-                      selected?.gmail_message_id === m.gmail_message_id ? 'bg-indigo-50' :
-                      m.is_unread ? 'bg-indigo-50/30 hover:bg-indigo-50/60' : 'hover:bg-slate-50'
+                      selected?.gmail_message_id === m.gmail_message_id ? 'bg-sand' :
+                      m.is_unread ? 'bg-sand/30 hover:bg-sand/60' : 'hover:bg-slate-50'
                     }`}>
                     <div className="flex items-start justify-between gap-2 mb-0.5">
                       <span className="flex items-center gap-1.5 min-w-0">
@@ -709,8 +709,8 @@ export default function GmailInbox({ lockDepartment }: { lockDepartment?: string
                           }}
                           className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center cursor-pointer transition-colors ${
                             picked.has(m.gmail_message_id)
-                              ? 'bg-indigo-600 border-indigo-600 text-white'
-                              : 'border-slate-300 hover:border-indigo-400'
+                              ? 'bg-navy border-navy text-white'
+                              : 'border-slate-300 hover:border-gold'
                           }`}>
                           {picked.has(m.gmail_message_id) && <Check size={11} strokeWidth={3} />}
                         </span>
@@ -723,7 +723,7 @@ export default function GmailInbox({ lockDepartment }: { lockDepartment?: string
                           <Star size={12}
                             className={isStarred(m) ? 'text-amber-400 fill-amber-400' : 'text-slate-300 hover:text-amber-400'} />
                         </span>
-                        {m.is_unread && <span className="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0" />}
+                        {m.is_unread && <span className="w-2 h-2 rounded-full bg-navy-soft flex-shrink-0" />}
                         {isFollowup(m) && <Flag size={11} className="text-amber-500 flex-shrink-0" />}
                         <span className={`truncate text-[13px] ${m.is_unread ? 'font-extrabold text-slate-900' : 'font-medium text-slate-600'}`}>
                           {m.from_name || m.from_email || 'ללא שולח'}
@@ -751,10 +751,10 @@ export default function GmailInbox({ lockDepartment }: { lockDepartment?: string
               {(page > 0 || hasMore) && (
                 <div className="border-t border-slate-100 px-4 py-2.5 flex items-center justify-between">
                   <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
-                    className="text-xs font-bold text-slate-500 hover:text-indigo-700 disabled:opacity-30">הקודם</button>
+                    className="text-xs font-bold text-slate-500 hover:text-navy-dark disabled:opacity-30">הקודם</button>
                   <span className="text-[11px] text-slate-400">עמוד {page + 1}</span>
                   <button onClick={() => setPage(p => p + 1)} disabled={!hasMore}
-                    className="text-xs font-bold text-slate-500 hover:text-indigo-700 disabled:opacity-30">הבא</button>
+                    className="text-xs font-bold text-slate-500 hover:text-navy-dark disabled:opacity-30">הבא</button>
                 </div>
               )}
             </>
@@ -773,11 +773,11 @@ export default function GmailInbox({ lockDepartment }: { lockDepartment?: string
               {/* סרגל פעולות */}
               <div className="border-b border-slate-100 px-4 py-2.5 flex items-center gap-1.5 flex-wrap">
                 <button onClick={startReply} disabled={acting}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50">
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-1.5 text-xs font-bold text-white hover:bg-navy-dark disabled:opacity-50">
                   <Reply size={13} /> השב
                 </button>
                 <button onClick={() => act(selected.is_unread ? 'mark-read' : 'mark-unread')} disabled={acting}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:border-indigo-300 disabled:opacity-50">
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:border-line-strong disabled:opacity-50">
                   {selected.is_unread ? <><Check size={13} /> סמן כנקרא</> : <><Circle size={13} /> סמן כלא נקרא</>}
                 </button>
                 <button onClick={() => act(isFollowup(selected) ? 'unfollowup' : 'followup')} disabled={acting}
@@ -787,7 +787,7 @@ export default function GmailInbox({ lockDepartment }: { lockDepartment?: string
                   <Flag size={13} /> {isFollowup(selected) ? 'הוסר מטיפול' : 'לטיפול'}
                 </button>
                 <button onClick={() => act('archive')} disabled={acting}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:border-indigo-300 disabled:opacity-50">
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:border-line-strong disabled:opacity-50">
                   <Archive size={13} /> ארכב
                 </button>
                 <button onClick={() => { if (confirm('להעביר את ההודעה לאשפה בגמייל?')) act('trash') }} disabled={acting}
@@ -829,7 +829,7 @@ export default function GmailInbox({ lockDepartment }: { lockDepartment?: string
                   {attachments.map((a, i) => (
                     <a key={i} target="_blank" rel="noopener noreferrer"
                       href={`/api/admin/gmail/attachment?messageId=${encodeURIComponent(selected.gmail_message_id)}&attachmentId=${encodeURIComponent(a.attachmentId ?? '')}&filename=${encodeURIComponent(a.filename ?? `קובץ ${i + 1}`)}&mimeType=${encodeURIComponent(a.mimeType ?? 'application/octet-stream')}${a.inlineData ? `&inlineData=${encodeURIComponent(a.inlineData)}` : ''}`}
-                      className="rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-600 hover:bg-indigo-100 hover:text-indigo-700">
+                      className="rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-600 hover:bg-gold-soft hover:text-navy-dark">
                       {a.filename ?? `קובץ ${i + 1}`}
                     </a>
                   ))}
@@ -852,7 +852,7 @@ export default function GmailInbox({ lockDepartment }: { lockDepartment?: string
                     className="w-full min-h-[420px] rounded-xl border border-slate-100 bg-white"
                     srcDoc={`<!doctype html><html dir="rtl"><head><meta charset="utf-8">
                       <style>body{font-family:system-ui,'Segoe UI',Arial,sans-serif;font-size:14px;color:#334155;padding:14px;margin:0;line-height:1.6;word-break:break-word}
-                      img{max-width:100%;height:auto}table{max-width:100%}a{color:#4f46e5}</style>
+                      img{max-width:100%;height:auto}table{max-width:100%}a{color:#14213D}</style>
                       </head><body>${body || '<p style="color:#94a3b8">(ההודעה ריקה)</p>'}</body></html>`}
                   />
                 )}

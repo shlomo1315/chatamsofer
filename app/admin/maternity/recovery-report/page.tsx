@@ -293,7 +293,7 @@ export default function RecoveryReportPage() {
             {homes.map(h => (
               <button key={h.home} onClick={() => setHomeFilter(f => f === h.home ? '' : h.home)}
                 className={`w-full px-5 py-3 flex items-center justify-between gap-3 flex-wrap text-right transition-colors ${
-                  homeFilter === h.home ? 'bg-indigo-50' : 'hover:bg-slate-50'
+                  homeFilter === h.home ? 'bg-sand' : 'hover:bg-slate-50'
                 }`}>
                 <span className="font-bold text-slate-800">{h.home}</span>
                 <div className="flex items-center gap-2 text-[11px] flex-wrap">
@@ -321,7 +321,7 @@ export default function RecoveryReportPage() {
         <div className="relative flex-1 min-w-48">
           <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="חיפוש בשם, ת״ז, טלפון, עיר…"
-            className="w-full pr-9 pl-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+            className="w-full pr-9 pl-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-line" />
         </div>
         {(homeFilter || stateFilter) && (
           <button onClick={() => { setHomeFilter(''); setStateFilter('') }}

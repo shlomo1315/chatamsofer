@@ -161,7 +161,7 @@ export default function SettingsClient({ cities, open, openAt, mockPay }: {
             onClick={() => setTab(id)}
             className={`-mb-px flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium transition ${
               tab === id
-                ? 'border-indigo-600 text-indigo-700'
+                ? 'border-navy text-navy-dark'
                 : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800'
             }`}
           >
@@ -266,7 +266,7 @@ export default function SettingsClient({ cities, open, openAt, mockPay }: {
                 key={id}
                 onClick={() => setPhoneTab(id)}
                 className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition ${
-                  phoneTab === id ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                  phoneTab === id ? 'bg-white text-navy-dark shadow-sm' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 {label}
@@ -353,7 +353,7 @@ export default function SettingsClient({ cities, open, openAt, mockPay }: {
                 value={newCity.name}
                 onChange={e => setNewCity(c => ({ ...c, name: e.target.value }))}
                 onKeyDown={e => { if (e.key === 'Enter') addCity() }}
-                className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-300"
+                className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-line-strong"
               />
             </label>
             <label className="flex w-32 flex-col gap-1">
@@ -362,13 +362,13 @@ export default function SettingsClient({ cities, open, openAt, mockPay }: {
                 value={newCity.phone_code}
                 onChange={e => setNewCity(c => ({ ...c, phone_code: e.target.value }))}
                 dir="ltr" inputMode="numeric"
-                className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-300"
+                className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-line-strong"
               />
             </label>
             <button
               onClick={addCity}
               disabled={!!busy || !newCity.name.trim()}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-4 py-2 text-sm font-medium text-white transition hover:bg-navy-dark disabled:opacity-40"
             >
               {busy === 'add-city' ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
               הוספה

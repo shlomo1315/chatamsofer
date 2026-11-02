@@ -111,7 +111,7 @@ export default function CardCentersManager() {
                     <div className="flex items-center gap-1">
                       {canEdit && (
                         <button onClick={() => { setErr(''); setModal({ id: c.id, name: c.name, city: c.city ?? '', address: c.address ?? '', pickup_days: c.pickup_days ?? '', pickup_hours: c.pickup_hours ?? '' }) }}
-                          className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg p-1.5"><Pencil size={16} /></button>
+                          className="text-slate-400 hover:text-navy hover:bg-sand rounded-lg p-1.5"><Pencil size={16} /></button>
                       )}
                       {canDelete && (
                         <button onClick={() => remove(c)} className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg p-1.5"><Trash2 size={16} /></button>

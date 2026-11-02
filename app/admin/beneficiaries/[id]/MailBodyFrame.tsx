@@ -32,7 +32,7 @@ export default function MailBodyFrame({ html }: { html: string | null }) {
         html,body{margin:0;padding:0;font-family:system-ui,'Segoe UI',Arial,sans-serif;
           font-size:14px;line-height:1.6;color:#1e293b;word-break:break-word;}
         img{max-width:100%;height:auto;}
-        a{color:#4f46e5;}
+        a{color:#14213D;}
         table{max-width:100%;}
       </style></head><body>${body}</body></html>`
   }, [isClient, html])

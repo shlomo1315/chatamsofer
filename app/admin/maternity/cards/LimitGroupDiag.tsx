@@ -31,7 +31,7 @@ export default function LimitGroupDiag() {
   return (
     <div className="mt-5 pt-5 border-t border-slate-100" dir="rtl">
       <div className="flex items-center gap-2 mb-1">
-        <Layers size={16} className="text-violet-600" />
+        <Layers size={16} className="text-navy" />
         <h3 className="text-sm font-semibold text-slate-700">אבחון קבוצת הגבלת חנויות</h3>
       </div>
       <p className="text-xs text-slate-400 mb-3">זיהוי המזהה המדויק של קבוצת ״עזר יולדות אוכל מוכן״ לשיוך טעינת ה-600 ₪ — קריאה בלבד (לא מבצע שום פעולה בנדרים)</p>
@@ -41,10 +41,10 @@ export default function LimitGroupDiag() {
           <label className="text-xs text-slate-500">ת״ז משפחה (לא חובה — לבדיקת מבנה הטעינות)</label>
           <input value={zeout} onChange={e => setZeout(e.target.value.replace(/\D/g, ''))}
             placeholder="ת״ז של משפחה עם טעינה מוגבלת קיימת" dir="ltr" inputMode="numeric"
-            className="w-64 px-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-violet-200" />
+            className="w-64 px-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-line" />
         </div>
         <button onClick={run} disabled={loading}
-          className="inline-flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors">
+          className="inline-flex items-center gap-1.5 bg-navy hover:bg-navy-dark disabled:opacity-60 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors">
           {loading ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />} בדיקה
         </button>
       </div>

@@ -254,8 +254,8 @@ function buildSubtreePrintHtml(all: LineageNode[], rootId: string, mode: PrintMo
   body > ul > li::before, body > ul > li::after { display: none; }
   .row { display: flex; align-items: center; gap: 7px; padding: 3px 0; }
   .mark { width: 13px; height: 13px; border: 1.2px solid #94A3B8; border-radius: 3px; flex: 0 0 auto; }
-  .gen { font-size: 9.5px; font-weight: 700; color: #7C3AED; background: #F5F3FF;
-         border: 1px solid #DDD6FE; border-radius: 20px; padding: 1px 6px; white-space: nowrap; }
+  .gen { font-size: 9.5px; font-weight: 700; color: #14213D; background: #FBF8F1;
+         border: 1px solid #E6DFCF; border-radius: 20px; padding: 1px 6px; white-space: nowrap; }
   .name { font-size: 13.5px; font-weight: 600; }
   .rel { font-size: 9.5px; font-weight: 700; color: #1E40AF; background: #EFF6FF;
          border: 1px solid #BFDBFE; border-radius: 20px; padding: 1px 6px; }
@@ -264,7 +264,7 @@ function buildSubtreePrintHtml(all: LineageNode[], rootId: string, mode: PrintMo
   .st.ok   { color: #166534; background: #F0FDF4; border: 1px solid #BBF7D0; }
   .st.pend { color: #92400E; background: #FFFBEB; border: 1px solid #FDE68A; }
   .st.rej  { color: #991B1B; background: #FEF2F2; border: 1px solid #FECACA; }
-  .d0 > .row .name { font-size: 16px; font-weight: 800; color: #5B21B6; }`
+  .d0 > .row .name { font-size: 16px; font-weight: 800; color: #0E1830; }`
 
   // ⚠️ הקו האופקי נמתח מ-66px מכל צד ולא בשיטת ::before/::after על הילד
   // הראשון/האחרון. השיטה ההיא תלויה בכך שהילד הראשון הוא הימני — נכון ב-RTL
@@ -280,27 +280,27 @@ function buildSubtreePrintHtml(all: LineageNode[], rootId: string, mode: PrintMo
   .tree li { position: relative; padding: 0 6px; list-style: none; break-inside: avoid; }
   /* קו אנכי מהצומת אל הקו האופקי של ילדיו */
   .tree ul::before {
-    content: ""; position: absolute; top: 0; left: 50%; height: 24px; border-left: 1.5px solid #C4B5FD;
+    content: ""; position: absolute; top: 0; left: 50%; height: 24px; border-left: 1.5px solid #E6DFCF;
   }
   /* הקו האופקי — ממרכז הילד הראשון עד מרכז האחרון */
   .tree ul::after {
-    content: ""; position: absolute; top: 24px; left: ${LI_W / 2}px; right: ${LI_W / 2}px; border-top: 1.5px solid #C4B5FD;
+    content: ""; position: absolute; top: 24px; left: ${LI_W / 2}px; right: ${LI_W / 2}px; border-top: 1.5px solid #E6DFCF;
   }
   .tree > ul::before, .tree > ul::after { display: none; }
   /* קו אנכי מהקו האופקי אל הצומת */
   .tree li::before {
-    content: ""; position: absolute; top: -24px; left: 50%; height: 24px; border-left: 1.5px solid #C4B5FD;
+    content: ""; position: absolute; top: -24px; left: 50%; height: 24px; border-left: 1.5px solid #E6DFCF;
   }
   .tree > ul > li::before { display: none; }
   .tree .nd { position: relative; display: inline-block; width: ${NODE_W}px; vertical-align: top;
-              border: 1.5px solid #DDD6FE; border-radius: 10px; background: #FAF5FF;
+              border: 1.5px solid #E6DFCF; border-radius: 10px; background: #FAF5FF;
               padding: 7px 5px; }
   .tree .nd.law { background: #FFFBEB; border-color: #FDE68A; }
-  .tree .nd.root { background: #7C3AED; border-color: #6D28D9; }
+  .tree .nd.root { background: #14213D; border-color: #14213D; }
   .tree .nd.root .nm { color: #fff; }
-  .tree .nd.root .mt { color: #DDD6FE; }
+  .tree .nd.root .mt { color: #E6DFCF; }
   .tree .nm { font-size: 11.5px; font-weight: 700; line-height: 1.25; }
-  .tree .mt { font-size: 8.5px; font-weight: 600; color: #7C3AED; margin-top: 2px; }
+  .tree .mt { font-size: 8.5px; font-weight: 600; color: #14213D; margin-top: 2px; }
   .tree .nd.law .mt { color: #92400E; }
   /* תגיות בן/חתן וסטטוס */
   .tree .bd { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; margin-top: 4px; }
@@ -327,8 +327,8 @@ function buildSubtreePrintHtml(all: LineageNode[], rootId: string, mode: PrintMo
   @page { size: A4 ${mode === 'tree' ? 'landscape' : 'portrait'}; margin: 12mm 10mm; }
   * { box-sizing: border-box; }
   body { font-family: "Segoe UI", Arial, sans-serif; direction: rtl; color: #0F172A; margin: 0; }
-  header { border-bottom: 3px solid #7C3AED; padding-bottom: 10px; margin-bottom: 14px; }
-  h1 { font-size: 21px; margin: 0 0 4px; color: #5B21B6; }
+  header { border-bottom: 3px solid #14213D; padding-bottom: 10px; margin-bottom: 14px; }
+  h1 { font-size: 21px; margin: 0 0 4px; color: #0E1830; }
   .sub { font-size: 12px; color: #64748B; }
   .note { background: #FEF3C7; border: 1px solid #FCD34D; border-radius: 8px;
           padding: 9px 12px; font-size: 12px; margin-bottom: 16px; color: #78350F; }
@@ -339,7 +339,7 @@ function buildSubtreePrintHtml(all: LineageNode[], rootId: string, mode: PrintMo
   .canvas { zoom: ${scale}; }
   @media print { .noprint { display: none !important; } }
   .noprint { text-align: center; margin: 0 0 14px; }
-  .noprint button { font: inherit; font-size: 14px; font-weight: 700; color: #fff; background: #7C3AED;
+  .noprint button { font: inherit; font-size: 14px; font-weight: 700; color: #fff; background: #14213D;
                     border: none; border-radius: 10px; padding: 10px 22px; cursor: pointer; }
 ${mode === 'tree' ? treeCss : listCss}
 </style></head><body>
@@ -426,7 +426,7 @@ function PrintPicker({ title, count, onPick, onClose }: {
         ]).map(o => (
           <button key={o.m} onClick={() => onPick(o.m)}
             style={{ display: 'flex', alignItems: 'flex-start', gap: 12, width: '100%', textAlign: 'right', background: '#fff', border: '2px solid #E2E8F0', borderRadius: 14, padding: '13px 15px', marginBottom: 10, cursor: 'pointer', fontFamily: 'inherit' }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = '#A78BFA'; e.currentTarget.style.background = '#FAF5FF' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#14213D'; e.currentTarget.style.background = '#FAF5FF' }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = '#E2E8F0'; e.currentTarget.style.background = '#fff' }}>
             <span style={{ fontSize: 24, lineHeight: 1 }}>{o.icon}</span>
             <span style={{ flex: 1 }}>
@@ -905,12 +905,12 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
 
   if (!nodes.length) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 320, gap: 18, color: '#94A3B8' }}>
-      <div style={{ width: 72, height: 72, borderRadius: 20, background: 'linear-gradient(135deg,#F5F0FF,#EFF6FF)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px dashed #C4B5FD' }}>
-        <Users size={30} style={{ color: '#7C3AED', opacity: 0.5 }} />
+      <div style={{ width: 72, height: 72, borderRadius: 20, background: '#FBF8F1', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px dashed #E6DFCF' }}>
+        <Users size={30} style={{ color: '#14213D', opacity: 0.5 }} />
       </div>
       <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: '#64748B' }}>אין צמתים בעץ עדיין</p>
       {canAdd && (
-        <button onClick={() => { setFormName(''); setModal({ type: 'add', parentId: null, parentName: '' }) }} style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'linear-gradient(135deg,#7C3AED,#5B21B6)', color: '#fff', border: 'none', borderRadius: 12, padding: '11px 22px', fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 16px rgba(124,58,237,0.4)' }}>
+        <button onClick={() => { setFormName(''); setModal({ type: 'add', parentId: null, parentName: '' }) }} style={{ display: 'flex', alignItems: 'center', gap: 7, background: '#14213D', color: '#fff', border: 'none', borderRadius: 12, padding: '11px 22px', fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 16px rgba(124,58,237,0.4)' }}>
           <Plus size={16} /> הוסף שורש ראשון
         </button>
       )}
@@ -955,14 +955,14 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
 
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           {selected && (
-            <button onClick={() => setSelected(null)} style={{ display: 'flex', alignItems: 'center', gap: 5, height: 28, borderRadius: 8, border: '1.5px solid #7C3AED44', background: '#F5F0FF', color: '#7C3AED', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: '0 10px' }}>
+            <button onClick={() => setSelected(null)} style={{ display: 'flex', alignItems: 'center', gap: 5, height: 28, borderRadius: 8, border: '1.5px solid #14213D44', background: '#F5F0FF', color: '#14213D', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: '0 10px' }}>
               <X size={12} /> נקה בחירה
             </button>
           )}
           <button onClick={fitToScreen} style={{ height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 11, cursor: 'pointer', padding: '0 8px', color: '#64748B', fontWeight: 600 }}>⊡ התאם</button>
-          <button onClick={() => setZoom(z => Math.min(2.5, z + 0.1))} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED', fontWeight: 700 }}>+</button>
+          <button onClick={() => setZoom(z => Math.min(2.5, z + 0.1))} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#14213D', fontWeight: 700 }}>+</button>
           <button onClick={() => { setZoom(1); didCenter.current = false }} style={{ height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 11, cursor: 'pointer', padding: '0 8px', color: '#64748B', fontWeight: 600 }}>{Math.round(zoom * 100)}%</button>
-          <button onClick={() => setZoom(z => Math.max(0.1, z - 0.1))} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED', fontWeight: 700 }}>−</button>
+          <button onClick={() => setZoom(z => Math.max(0.1, z - 0.1))} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#14213D', fontWeight: 700 }}>−</button>
         </div>
       </div>
 
@@ -1096,12 +1096,12 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                       // הוצא מהמיזוג — טבעת אפורה דקה, בלי הבלטה
                       ? `0 0 0 2px #fff, 0 0 0 4px #94A3B8, 0 4px 14px rgba(100,116,139,0.3)`
                       : inLocate
-                      ? `0 0 0 3px #fff, 0 0 0 7px #7C3AED, 0 14px 36px rgba(124,58,237,0.55)`
+                      ? `0 0 0 3px #fff, 0 0 0 7px #14213D, 0 14px 36px rgba(124,58,237,0.55)`
                       : isSel
                         ? `0 0 0 3px #fff, 0 0 0 5.5px ${p.ring}, 0 12px 32px ${p.shadow}`
                         // מועמד מהסריקה — טבעת דקה, מסמנת בלי להשתלט על המסך
                         : inScan
-                          ? `0 0 0 2.5px #fff, 0 0 0 4.5px #A78BFA, 0 6px 20px rgba(124,58,237,0.35)`
+                          ? `0 0 0 2.5px #fff, 0 0 0 4.5px #14213D, 0 6px 20px rgba(124,58,237,0.35)`
                           : `0 4px 18px ${p.shadow}`,
                   border: nodeStatus === 'verified' ? 'none' : `${Math.max(2, 2.5 * zoom)}px dashed #fff`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1129,7 +1129,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                     ⚠️ מועמד מהסריקה מקבל תג משלו ("מועמד למיזוג"), כי הוא נמצא
                     גם על התאמה מקורבת שהזיהוי המקומי (שם זהה בדיוק) לא תופס. */}
                 {(isDup || inScan) && zoom >= 0.5 && (
-                  <div style={{ position: 'absolute', bottom: -10 * zoom, left: '50%', transform: 'translateX(-50%)', background: inScan ? '#7C3AED' : '#9333EA', color: '#fff', fontSize: Math.max(7, 8 * zoom), fontWeight: 800, padding: `${1 * zoom}px ${7 * zoom}px`, borderRadius: 20, border: '1.5px solid #fff', whiteSpace: 'nowrap', zIndex: 26 }}>
+                  <div style={{ position: 'absolute', bottom: -10 * zoom, left: '50%', transform: 'translateX(-50%)', background: inScan ? '#14213D' : '#14213D', color: '#fff', fontSize: Math.max(7, 8 * zoom), fontWeight: 800, padding: `${1 * zoom}px ${7 * zoom}px`, borderRadius: 20, border: '1.5px solid #fff', whiteSpace: 'nowrap', zIndex: 26 }}>
                     {inScan ? 'מועמד למיזוג' : 'כפול'}
                   </div>
                 )}
@@ -1325,7 +1325,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                         n.name.trim().replace(/\s+/g, ' ') === nm).length
                       return (
                         <button onClick={() => onMergeGroup(pos.node.id)} title="קיצור: מזג אוטומטית את כל הכפילויות בעלות שם זהה באותו גזע"
-                          style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%', justifyContent: 'center', padding: '7px 12px', borderRadius: 10, background: '#9333EA', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit' }}>
+                          style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%', justifyContent: 'center', padding: '7px 12px', borderRadius: 10, background: '#14213D', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit' }}>
                           ⚯ {gs > 1 ? `מזג את כל ה-${gs} הכפולים` : 'מזג מיד'}
                         </button>
                       )
@@ -1401,7 +1401,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                         title={fullMode
                           ? 'החלף את הענף שעליו עובדים — הצומת הזה וכל צאצאיו'
                           : 'הצג רק את הענף הזה — הצומת וכל צאצאיו, למסך עבודה נקי'}
-                        style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%', justifyContent: 'center', padding: '7px 12px', borderRadius: 10, background: '#7C3AED', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                        style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%', justifyContent: 'center', padding: '7px 12px', borderRadius: 10, background: '#14213D', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                         {fullMode ? '🎯 החלף את הענף לכאן' : '🌳 הצג אילן צאצאים של דור זה'}
                       </button>
                     )}
@@ -1411,7 +1411,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                     {pos.node.children.length > 0 && !fullMode && (
                       <button onClick={() => window.open(`/admin/lineage?focus=${pos.node.id}&full=1`, '_blank', 'noopener')}
                         title="פתח את הענף במסך מלא, בלשונית נפרדת"
-                        style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%', justifyContent: 'center', padding: '7px 12px', borderRadius: 10, background: '#fff', color: '#5B21B6', border: '1.5px solid #DDD6FE', cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                        style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%', justifyContent: 'center', padding: '7px 12px', borderRadius: 10, background: '#fff', color: '#0E1830', border: '1.5px solid #E6DFCF', cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                         <ExternalLink size={12} /> פתח במסך מלא בלשונית חדשה
                       </button>
                     )}
@@ -1528,7 +1528,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
             {modal.node.parent_id && <RelationPicker value={formRelation} onChange={setFormRelation} />}
             {saveErr && <span style={{ color: '#DC2626', fontSize: 13 }}>{saveErr}</span>}
             <div style={{ display: 'flex', gap: 8 }}>
-              {canEdit && <MBtn label="שמור" color="#7C3AED" onClick={handleSave} loading={saving} />}
+              {canEdit && <MBtn label="שמור" color="#14213D" onClick={handleSave} loading={saving} />}
               <MBtn label="ביטול" color="#94A3B8" onClick={close} />
             </div>
           </div>
@@ -1682,7 +1682,7 @@ function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, on
           onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
           {mergeMode && (
             <input type="checkbox" checked={mergeSel.has(node.id)} onChange={() => onToggleMerge(node.id)}
-              style={{ width: 16, height: 16, accentColor: '#9333EA', cursor: 'pointer', flexShrink: 0 }} />
+              style={{ width: 16, height: 16, accentColor: '#14213D', cursor: 'pointer', flexShrink: 0 }} />
           )}
           <div style={{ width: depth * 22, flexShrink: 0 }} />
           <button onClick={() => toggle(node.id)} style={{ width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', background: hasChildren ? p.light : 'none', border: 'none', cursor: hasChildren ? 'pointer' : 'default', color: p.ring, flexShrink: 0, borderRadius: 6 }}>
@@ -1709,7 +1709,7 @@ function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, on
               כפתור אחד דיסקרטי שנפתח בלחיצה — אותן פעולות בדיוק, בלי הרעש. */}
           <div style={{ display: 'flex', gap: 5, flexShrink: 0, position: 'relative' }}>
             {isDup && !mergeMode && (
-              <button onClick={() => onMergeGroup(node.id)} title="מזג כפילים (אותו גזע)" style={{ width: 26, height: 26, borderRadius: 7, background: '#F3E8FF', border: '1.5px solid #E9D5FF', color: '#9333EA', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>⚯</button>
+              <button onClick={() => onMergeGroup(node.id)} title="מזג כפילים (אותו גזע)" style={{ width: 26, height: 26, borderRadius: 7, background: '#F3E8FF', border: '1.5px solid #E9D5FF', color: '#14213D', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>⚯</button>
             )}
             {(canAdd || canEdit || canDelete) && (
               <button
@@ -1736,13 +1736,13 @@ function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, on
   }
 
   return (
-    <div style={{ borderRadius: 18, border: '1.5px solid #E8E0F5', overflow: 'hidden', background: '#fff', boxShadow: '0 4px 24px rgba(109,40,217,0.06)', width: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'center', padding: '10px 18px', background: 'linear-gradient(135deg,#F8F6FF,#F0EDFF)', borderBottom: '1px solid #E8E0F5', direction: 'rtl', gap: 8 }}>
+    <div style={{ borderRadius: 18, border: '1.5px solid #E6DFCF', overflow: 'hidden', background: '#fff', boxShadow: '0 4px 24px rgba(109,40,217,0.06)', width: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'center', padding: '10px 18px', background: '#FBF8F1', borderBottom: '1px solid #E6DFCF', direction: 'rtl', gap: 8 }}>
         <div style={{ width: 22, flexShrink: 0 }} />
         <div style={{ width: 14, flexShrink: 0 }} />
-        <span style={{ flex: 1, fontSize: 12, fontWeight: 800, color: '#7C3AED', letterSpacing: '0.04em', minWidth: 0 }}>שם</span>
-        <span style={{ width: 80, textAlign: 'center', fontSize: 12, fontWeight: 800, color: '#7C3AED', flexShrink: 0 }}>דור</span>
-        <span style={{ minWidth: 56, textAlign: 'center', fontSize: 12, fontWeight: 800, color: '#7C3AED', flexShrink: 0 }}>ילדים</span>
+        <span style={{ flex: 1, fontSize: 12, fontWeight: 800, color: '#14213D', letterSpacing: '0.04em', minWidth: 0 }}>שם</span>
+        <span style={{ width: 80, textAlign: 'center', fontSize: 12, fontWeight: 800, color: '#14213D', flexShrink: 0 }}>דור</span>
+        <span style={{ minWidth: 56, textAlign: 'center', fontSize: 12, fontWeight: 800, color: '#14213D', flexShrink: 0 }}>ילדים</span>
         <span style={{ width: 96, flexShrink: 0 }} />
       </div>
       {roots.length === 0
@@ -2389,41 +2389,41 @@ export default function LineagePage() {
       <div className="fixed inset-0 top-[60px] lg:right-56 z-40 flex flex-col bg-white" dir="rtl">
         <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
-        <div className="flex items-center gap-2 flex-wrap border-b border-violet-200 bg-violet-50/70 px-4 py-2">
+        <div className="flex items-center gap-2 flex-wrap border-b border-line bg-sand/70 px-4 py-2">
           <span className="text-base">🌳</span>
           {/* שביל הניווט — בלי זה, אחרי שלוש צלילות אין דרך לדעת איפה אתה
               בעץ, וצריך לצאת ולהתחיל מחדש. כל דור לחיץ וקופץ אליו. */}
           <div className="flex items-center gap-1 flex-wrap min-w-0 flex-1 text-[11px]">
             {focusTrail.map((n, i) => (
               <span key={n.id} className="flex items-center gap-1">
-                {i > 0 && <ChevronLeft size={11} className="text-violet-300 shrink-0" />}
+                {i > 0 && <ChevronLeft size={11} className="text-line-strong shrink-0" />}
                 {i === focusTrail.length - 1 ? (
-                  <strong className="text-violet-900 text-[13px]">{n.name}</strong>
+                  <strong className="text-navy-dark text-[13px]">{n.name}</strong>
                 ) : (
                   <button onClick={() => { setFocusId(n.id); setAnchor(a => ({ id: n.id, n: (a?.n ?? 0) + 1 })) }}
                     title={`חזרה לענף של ${n.name}`}
-                    className="max-w-[160px] truncate rounded px-1 text-violet-600 hover:bg-violet-100 hover:text-violet-900">
+                    className="max-w-[160px] truncate rounded px-1 text-navy hover:bg-gold-soft hover:text-navy-dark">
                     {n.name}
                   </button>
                 )}
               </span>
             ))}
           </div>
-          <span className="text-[11px] font-bold text-violet-700 whitespace-nowrap">
+          <span className="text-[11px] font-bold text-navy-dark whitespace-nowrap">
             דור {focusNode.generation} · {(visibleNodes.length - 1).toLocaleString('he-IL')} צאצאים
           </span>
           <button onClick={() => setPrintPick(true)}
-            className="flex items-center gap-1.5 rounded-lg border border-violet-200 bg-white px-3 py-1.5 text-xs font-bold text-violet-800 hover:bg-violet-50">
+            className="flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-bold text-navy-dark hover:bg-sand">
             <Printer size={13} /> הדפסה
           </button>
           {canEdit && (
             <button onClick={() => setShareNode({ id: focusNode.id, name: focusNode.name })}
-              className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50">
+              className="flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-bold text-navy-dark hover:bg-sand">
               <Link2 size={13} /> שתף ענף
             </button>
           )}
           <button onClick={() => setFullScreen(false)} title="יציאה ממסך מלא (Esc)"
-            className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-700">
+            className="flex items-center gap-1.5 rounded-lg bg-navy px-3 py-1.5 text-xs font-bold text-white hover:bg-navy-dark">
             <X size={13} /> צא ממסך מלא
           </button>
         </div>
@@ -2526,7 +2526,7 @@ export default function LineagePage() {
                 <button onClick={toggleDupFilter}
                   title="הצג רק שמות כפולים (באותו גזע) · לחיצה נוספת לביטול"
                   className="text-xs px-2.5 py-1 rounded-full font-bold transition-all"
-                  style={{ background: dupFilter ? '#9333EA' : '#F3E8FF', color: dupFilter ? '#fff' : '#7C2D92', border: `2px solid ${dupFilter ? '#9333EA' : '#E9D5FF'}`, cursor: 'pointer' }}>
+                  style={{ background: dupFilter ? '#14213D' : '#F3E8FF', color: dupFilter ? '#fff' : '#7C2D92', border: `2px solid ${dupFilter ? '#14213D' : '#E9D5FF'}`, cursor: 'pointer' }}>
                   ⚠ {dupNameCount} שמות כפולים
                 </button>
               )}
@@ -2537,7 +2537,7 @@ export default function LineagePage() {
           <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
             {(['tree', 'table'] as View[]).map(v => (
               <button key={v} onClick={() => setView(v)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${view === v ? 'bg-white shadow-sm text-violet-700' : 'text-gray-400 hover:text-gray-600'}`}>
+                className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${view === v ? 'bg-white shadow-sm text-navy-dark' : 'text-gray-400 hover:text-gray-600'}`}>
                 {v === 'tree' ? '🌳 עץ' : '📋 טבלה'}
               </button>
             ))}
@@ -2553,7 +2553,7 @@ export default function LineagePage() {
             {actionsOn ? '🔓 פעולות גלויות' : '🔒 הצג פעולות'}
           </button>
           <button onClick={loadAll} disabled={loading} title="רענן"
-            className="w-9 h-9 rounded-xl bg-white border border-gray-200 text-violet-600 flex items-center justify-center hover:bg-violet-50 transition-colors disabled:opacity-50">
+            className="w-9 h-9 rounded-xl bg-white border border-gray-200 text-navy flex items-center justify-center hover:bg-sand transition-colors disabled:opacity-50">
             <RefreshCw size={14} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
           </button>
           {/* מרכז המיזוגים — סריקה של כל העץ. זה הכלי לעבודה בהיקף; המיזוג
@@ -2567,12 +2567,12 @@ export default function LineagePage() {
               כאן הכול במקום אחד, וההכרעה נשמרת. */}
           <button onClick={() => setShowCases(s => !s)}
             className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm"
-            style={{ background: showCases ? '#4F46E5' : '#fff', color: showCases ? '#fff' : '#4338CA', border: '1px solid #C7D2FE' }}>
+            style={{ background: showCases ? '#14213D' : '#fff', color: showCases ? '#fff' : '#4338CA', border: '1px solid #C7D2FE' }}>
             <ClipboardCheck size={14} /> {showCases ? 'סגור מרכז בקרה' : 'מרכז בקרה'}
           </button>
           <button onClick={() => { setShowDups(s => !s); if (mergeMode) exitMerge() }}
             className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm"
-            style={{ background: showDups ? '#7C3AED' : '#fff', color: showDups ? '#fff' : '#5B21B6', border: '1px solid #DDD6FE' }}>
+            style={{ background: showDups ? '#14213D' : '#fff', color: showDups ? '#fff' : '#0E1830', border: '1px solid #E6DFCF' }}>
             <Users size={14} /> {showDups ? 'סגור מרכז מיזוגים' : 'מרכז מיזוגים'}
           </button>
           {/* בריאות העץ — אבחון מלא של הבלאגן: יתומים, ריבוי-ילדים חריג, ת"ז כפולות */}
@@ -2585,7 +2585,7 @@ export default function LineagePage() {
               קבוצה עם מקשי קיצור. רמות C/D ובן/חתן סותרים — מנהל בלבד. */}
           <button onClick={() => setShowDupReview(s => !s)}
             className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm"
-            style={{ background: showDupReview ? '#4F46E5' : '#fff', color: showDupReview ? '#fff' : '#4338CA', border: '1px solid #C7D2FE' }}>
+            style={{ background: showDupReview ? '#14213D' : '#fff', color: showDupReview ? '#fff' : '#4338CA', border: '1px solid #C7D2FE' }}>
             <GitMerge size={14} /> {showDupReview ? 'סגור סקירת כפילויות' : 'סקירת כפילויות'}
           </button>
           {/* מיזוג בטוח — שם זהה בדיוק, אותו אב, אותו דור. נפרד במסך מהמיזוג
@@ -2636,7 +2636,7 @@ export default function LineagePage() {
           </button>
           <button onClick={() => (mergeMode ? exitMerge() : enterMerge())}
             className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm"
-            style={{ background: mergeMode ? '#9333EA' : '#fff', color: mergeMode ? '#fff' : '#7C2D92', border: '1px solid #E9D5FF' }}>
+            style={{ background: mergeMode ? '#14213D' : '#fff', color: mergeMode ? '#fff' : '#7C2D92', border: '1px solid #E9D5FF' }}>
             {mergeMode ? 'סיום מיזוג' : '⚯ מזג ידנית'}
           </button>
           {/* מרכז שליטה בכל הרשאות שיתוף העץ — כל הקישורים שנשלחו, למי/מתי, וביטול */}
@@ -2650,7 +2650,7 @@ export default function LineagePage() {
           {canAdd && (
             <button
               onClick={() => { setFormName(''); setFormParentId(null); setModal({ type: 'add', parentId: null, parentName: '' }) }}
-              className="flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm">
+              className="flex items-center gap-1.5 bg-navy hover:bg-navy-dark text-white text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm">
               <Plus size={14} /> הוסף דור חדש
             </button>
           )}
@@ -2776,12 +2776,12 @@ export default function LineagePage() {
         const active = review.ids.filter(id => !review.excluded.has(id))
         const canMerge = active.length >= 2 && active.includes(review.keepId)
         return (
-          <div style={{ background: '#F5F3FF', border: '2px solid #C4B5FD', borderRadius: 12, padding: '10px 14px', marginBottom: 12 }}>
+          <div style={{ background: '#FBF8F1', border: '2px solid #E6DFCF', borderRadius: 12, padding: '10px 14px', marginBottom: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <span style={{ background: '#7C3AED', color: '#fff', borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 800 }}>
+              <span style={{ background: '#14213D', color: '#fff', borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 800 }}>
                 קבוצה {review.index + 1}/{review.total}
               </span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#5B21B6', whiteSpace: 'nowrap' }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#0E1830', whiteSpace: 'nowrap' }}>
                 {active.length} צמתים יתמזגו אל:
                 {review.excluded.size > 0 && <span style={{ color: '#B45309', fontWeight: 600 }}> ({review.excluded.size} הוצאו)</span>}
               </span>
@@ -2806,11 +2806,11 @@ export default function LineagePage() {
                   void mergeByIds(review.keepId, ids, { [review.keepId]: review.finalName }, true)
                     .then(() => { setReview(null); setLocateIds(new Set()); setReviewDone(info) })
                 }}
-                style={{ background: (!canMerge || merging) ? '#C4B5FD' : '#7C3AED', color: '#fff', border: 'none', borderRadius: 9, padding: '6px 15px', fontSize: 12.5, fontWeight: 800, cursor: (!canMerge || merging) ? 'default' : 'pointer', fontFamily: 'inherit' }}>
+                style={{ background: (!canMerge || merging) ? '#E6DFCF' : '#14213D', color: '#fff', border: 'none', borderRadius: 9, padding: '6px 15px', fontSize: 12.5, fontWeight: 800, cursor: (!canMerge || merging) ? 'default' : 'pointer', fontFamily: 'inherit' }}>
                 {merging ? 'ממזג…' : `⚯ מזג ${active.length} צמתים`}
               </button>
             </div>
-            <p style={{ margin: '7px 0 0', fontSize: 11, color: '#7C3AED', lineHeight: 1.6 }}>
+            <p style={{ margin: '7px 0 0', fontSize: 11, color: '#14213D', lineHeight: 1.6 }}>
               הצמתים מסומנים בעץ. <strong>לחיצה על כרטיס מוציאה אותו מהמיזוג</strong> (ולחיצה חוזרת מחזירה) — כך אפשר להשאיר בחוץ מי שאינו אותו אדם.
             </p>
           </div>
@@ -2836,13 +2836,13 @@ export default function LineagePage() {
       {/* ⚠️ באנר יציאה מהדגשת הקבוצה: ההדגשה מעמעמת את כל שאר העץ, ובלי דרך
           יציאה ברורה המשתמש נתקע עם מסך חיוור בלי להבין למה. */}
       {!review && locateIds.size > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#F5F3FF', border: '2px solid #DDD6FE', borderRadius: 12, padding: '9px 14px', marginBottom: 12, flexWrap: 'wrap' }}>
-          <MapPin size={15} color="#7C3AED" />
-          <span style={{ flex: 1, minWidth: 180, fontSize: 13, fontWeight: 700, color: '#5B21B6' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#FBF8F1', border: '2px solid #E6DFCF', borderRadius: 12, padding: '9px 14px', marginBottom: 12, flexWrap: 'wrap' }}>
+          <MapPin size={15} color="#14213D" />
+          <span style={{ flex: 1, minWidth: 180, fontSize: 13, fontWeight: 700, color: '#0E1830' }}>
             מוצגת קבוצת מיזוג מסומנת ({locateIds.size} צמתים) — שאר העץ מעומעם
           </span>
           <button onClick={() => setLocateIds(new Set())}
-            style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 9, padding: '6px 13px', fontSize: 12.5, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#14213D', color: '#fff', border: 'none', borderRadius: 9, padding: '6px 13px', fontSize: 12.5, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
             <X size={13} /> הצג את כל העץ
           </button>
         </div>
@@ -2852,20 +2852,20 @@ export default function LineagePage() {
       {focusNode && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
-          background: 'linear-gradient(90deg,#F5F3FF,#FFF)', border: '2px solid #DDD6FE',
+          background: 'linear-gradient(90deg,#FBF8F1,#FFF)', border: '2px solid #E6DFCF',
           borderRadius: 14, padding: '11px 16px', marginBottom: 14,
         }}>
           <span style={{ fontSize: 20 }}>🌳</span>
           <div style={{ flex: 1, minWidth: 200 }}>
-            <div style={{ fontSize: 14, fontWeight: 800, color: '#5B21B6' }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: '#0E1830' }}>
               אילן הצאצאים של {focusNode.name}
             </div>
-            <div style={{ fontSize: 11.5, color: '#7C3AED' }}>
+            <div style={{ fontSize: 11.5, color: '#14213D' }}>
               דור {focusNode.generation} · {visibleNodes.length - 1} צאצאים · מוצג הענף הזה בלבד
             </div>
           </div>
           <button onClick={() => setPrintPick(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#fff', color: '#5B21B6', border: '1.5px solid #DDD6FE', borderRadius: 11, padding: '8px 15px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#fff', color: '#0E1830', border: '1.5px solid #E6DFCF', borderRadius: 11, padding: '8px 15px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
             <Printer size={14} /> הדפסה / PDF
           </button>
           {canEdit && (
@@ -2875,7 +2875,7 @@ export default function LineagePage() {
             </button>
           )}
           <button onClick={() => setFocusId(null)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 11, padding: '8px 15px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#14213D', color: '#fff', border: 'none', borderRadius: 11, padding: '8px 15px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
             <X size={14} /> חזרה לעץ המלא
           </button>
         </div>
@@ -2932,7 +2932,7 @@ export default function LineagePage() {
 
       {/* content */}
       {loading ? (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 320, gap: 12, color: '#7C3AED' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 320, gap: 12, color: '#14213D' }}>
           <Loader2 size={24} style={{ animation: 'spin 1s linear infinite' }} />
           <span style={{ fontSize: 15, fontWeight: 600 }}>טוען נתונים…</span>
         </div>
@@ -2983,7 +2983,7 @@ export default function LineagePage() {
             {modal.node.parent_id && <RelationPicker value={formRelation} onChange={setFormRelation} />}
             {saveErr && <span style={{ color: '#DC2626', fontSize: 13 }}>{saveErr}</span>}
             <div style={{ display: 'flex', gap: 8 }}>
-              {canEdit && <MBtn label="שמור" color="#7C3AED" onClick={handleSave} loading={saving} />}
+              {canEdit && <MBtn label="שמור" color="#14213D" onClick={handleSave} loading={saving} />}
               <MBtn label="ביטול" color="#94A3B8" onClick={close} />
             </div>
           </div>
@@ -3107,7 +3107,7 @@ export default function LineagePage() {
       {/* באנר הדרכה במצב מיזוג */}
       {mergeMode && mergeSel.size === 0 && (
         <div style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 120, background: '#FAF5FF', border: '1.5px solid #E9D5FF', color: '#7C2D92', borderRadius: 14, padding: '10px 18px', fontSize: 13, fontWeight: 700, boxShadow: '0 8px 24px rgba(124,58,237,0.18)' }}>
-          מצב מיזוג: סמן 2 צמתים או יותר (אותו אדם) · קיצור: <kbd style={{ background: '#fff', border: '1px solid #E9D5FF', borderRadius: 5, padding: '1px 6px', fontFamily: 'inherit', fontWeight: 800 }}>Ctrl</kbd> + לחיצה על כרטיס · <button onClick={exitMerge} style={{ color: '#9333EA', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit' }}>סיום</button>
+          מצב מיזוג: סמן 2 צמתים או יותר (אותו אדם) · קיצור: <kbd style={{ background: '#fff', border: '1px solid #E9D5FF', borderRadius: 5, padding: '1px 6px', fontFamily: 'inherit', fontWeight: 800 }}>Ctrl</kbd> + לחיצה על כרטיס · <button onClick={exitMerge} style={{ color: '#14213D', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit' }}>סיום</button>
         </div>
       )}
 
@@ -3141,12 +3141,12 @@ export default function LineagePage() {
               placeholder={fullestSelName}
               style={{ flex: 1, minWidth: 220, padding: '7px 12px', borderRadius: 10, border: '1.5px solid #E2E8F0', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', color: '#0F172A' }} />
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#475569', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-              <input type="checkbox" checked={mergeUpApprox} onChange={e => setMergeUpApprox(e.target.checked)} style={{ width: 15, height: 15, accentColor: '#9333EA', cursor: 'pointer' }} />
+              <input type="checkbox" checked={mergeUpApprox} onChange={e => setMergeUpApprox(e.target.checked)} style={{ width: 15, height: 15, accentColor: '#14213D', cursor: 'pointer' }} />
               מזג גם את האבות שמעל
             </label>
             <button onClick={() => void handleMerge(effectiveKeepId ? { [effectiveKeepId]: (quickName.trim() || fullestSelName) } : undefined)}
               disabled={mergeSel.size < 2 || merging}
-              style={{ background: (mergeSel.size < 2 || merging) ? '#C4B5FD' : '#9333EA', color: '#fff', border: 'none', borderRadius: 11, padding: '9px 18px', fontSize: 13, fontWeight: 800, cursor: (mergeSel.size < 2 || merging) ? 'default' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+              style={{ background: (mergeSel.size < 2 || merging) ? '#E6DFCF' : '#14213D', color: '#fff', border: 'none', borderRadius: 11, padding: '9px 18px', fontSize: 13, fontWeight: 800, cursor: (mergeSel.size < 2 || merging) ? 'default' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
               {merging ? 'ממזג…' : `⚯ מזג ${mergeSel.size} צמתים`}
             </button>
             <button onClick={() => setMergeConfirm(true)} disabled={mergeSel.size < 2}
@@ -3167,10 +3167,10 @@ export default function LineagePage() {
             </p>
             {/* מיזוג הדורות שמעל — מה שמונע את זנב האבות הכפולים אחרי כל מיזוג */}
             <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#334155', cursor: 'pointer', background: '#FAF5FF', border: '1px solid #E9D5FF', borderRadius: 11, padding: '10px 14px' }}>
-              <input type="checkbox" checked={mergeUpApprox} onChange={e => setMergeUpApprox(e.target.checked)} style={{ width: 16, height: 16, accentColor: '#9333EA', cursor: 'pointer', marginTop: 2 }} />
+              <input type="checkbox" checked={mergeUpApprox} onChange={e => setMergeUpApprox(e.target.checked)} style={{ width: 16, height: 16, accentColor: '#14213D', cursor: 'pointer', marginTop: 2 }} />
               <span>
                 למזג גם את הדורות שמעל — <strong>גם כשהניסוח שונה</strong>
-                <span style={{ display: 'block', fontSize: 11.5, color: '#7E22CE', marginTop: 3, lineHeight: 1.5 }}>
+                <span style={{ display: 'block', fontSize: 11.5, color: '#14213D', marginTop: 3, lineHeight: 1.5 }}>
                   אם אלו אותו אדם, גם אבותיהם אותו אדם. כך &quot;שמואל בנימין שישא&quot; ו&quot;רבי שמואל בנימין ומרת חיה ליבא שישא&quot; ימוזגו יחד — והניסוח המפורט הוא שיישאר.
                 </span>
               </span>
@@ -3183,7 +3183,7 @@ export default function LineagePage() {
                   המפורט לכל דור). זו הדרך המהירה שהמנהל ביקש — לחיצה אחת וזהו. */}
               <MBtn label="מזג מיד" color="#16A34A" onClick={() => handleMerge()} loading={merging} />
               {/* "תצוגה מקדימה" — למי שרוצה לראות ולבחור שם לכל דור לפני הביצוע. */}
-              <MBtn label="תצוגה מקדימה" color="#9333EA" onClick={() => openManualPlan()} loading={manualPlanning} />
+              <MBtn label="תצוגה מקדימה" color="#14213D" onClick={() => openManualPlan()} loading={manualPlanning} />
               <MBtn label="ביטול" color="#94A3B8" onClick={() => setMergeConfirm(false)} />
             </div>
           </div>

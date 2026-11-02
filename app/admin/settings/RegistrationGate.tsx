@@ -188,16 +188,16 @@ export default function RegistrationGate() {
       )}
 
       {/* קישור סודי לטסטים — עוקף את הסגירה */}
-      <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-3">
-        <p className="text-xs font-semibold text-indigo-800 mb-1.5">קישור פרטי לטסטים (עוקף סגירה)</p>
-        <p className="text-[11px] text-indigo-600/80 mb-2 leading-relaxed">
+      <div className="rounded-xl border border-gold-soft bg-sand/60 p-3">
+        <p className="text-xs font-semibold text-navy-dark mb-1.5">קישור פרטי לטסטים (עוקף סגירה)</p>
+        <p className="text-[11px] text-navy/80 mb-2 leading-relaxed">
           גם כשההרשמה סגורה לקהל — דרך הקישור הזה תוכל להירשם לצורך בדיקות. אל תשתף אותו בפומבי.
         </p>
         <div className="flex items-center gap-2">
           <input readOnly value={testLink} dir="ltr"
-            className="flex-1 text-xs bg-white border border-indigo-200 rounded-lg px-2.5 py-2 text-slate-700 truncate" />
+            className="flex-1 text-xs bg-white border border-line rounded-lg px-2.5 py-2 text-slate-700 truncate" />
           <button onClick={copy} disabled={!testLink}
-            className="flex items-center gap-1 text-xs font-semibold text-indigo-700 bg-white border border-indigo-200 rounded-lg px-2.5 py-2 hover:bg-indigo-50 disabled:opacity-50">
+            className="flex items-center gap-1 text-xs font-semibold text-navy-dark bg-white border border-line rounded-lg px-2.5 py-2 hover:bg-sand disabled:opacity-50">
             {copied ? <Check size={13} /> : <Copy size={13} />}{copied ? 'הועתק' : 'העתק'}
           </button>
           <button onClick={() => update({ regenerate: true })} disabled={saving}

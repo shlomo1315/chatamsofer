@@ -107,7 +107,7 @@ export default function ImportPanel({ canImport, onDone }: { canImport: boolean;
         <button
           type="button"
           onClick={() => { window.location.href = '/api/admin/book-fair/books/import' }}
-          className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-medium text-indigo-700 transition hover:bg-indigo-100"
+          className="inline-flex items-center gap-2 rounded-xl border border-line bg-sand px-4 py-2.5 text-sm font-medium text-navy-dark transition hover:bg-gold-soft"
         >
           <Download size={16} /> הורדת תבנית אקסל
         </button>
@@ -121,7 +121,7 @@ export default function ImportPanel({ canImport, onDone }: { canImport: boolean;
                 title={h.hint}
                 className={`rounded-lg px-2.5 py-1 text-xs ${
                   h.required
-                    ? 'bg-indigo-100 font-medium text-indigo-800'
+                    ? 'bg-gold-soft font-medium text-navy-dark'
                     : 'bg-white text-slate-500 border border-slate-200'
                 }`}
               >
@@ -153,7 +153,7 @@ export default function ImportPanel({ canImport, onDone }: { canImport: boolean;
             <button
               onClick={() => send(false)}
               disabled={busy}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy-dark disabled:opacity-50"
             >
               {busy ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
               בדיקת הקובץ

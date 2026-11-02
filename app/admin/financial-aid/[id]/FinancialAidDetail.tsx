@@ -111,7 +111,7 @@ export default function FinancialAidDetail({ req }: { req: FinancialAidRequest }
           </p>
           <div className="flex flex-col gap-2">
             <Link href={`/admin/beneficiaries/${req.beneficiary_id}`}
-              className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-xl text-sm">
+              className="flex items-center justify-center gap-2 bg-navy hover:bg-navy-dark text-white font-semibold py-2.5 rounded-xl text-sm">
               <ExternalLink size={16} /> מעבר לכרטיס המשפחה לאישור
             </Link>
             <button onClick={() => setShowBlock(false)} className="text-slate-500 hover:text-slate-700 py-2 text-sm">סגירה</button>

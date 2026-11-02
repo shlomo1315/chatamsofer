@@ -162,7 +162,7 @@ export default function LineageNodeBackfill() {
                 צור צומת ל-{he(stats.buildable)} נרשמים
               </Button>
               {progress && (
-                <span className="text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg px-2.5 py-1.5">
+                <span className="text-xs font-semibold text-navy-dark bg-sand border border-line rounded-lg px-2.5 py-1.5">
                   {progress}
                 </span>
               )}
@@ -229,7 +229,7 @@ function Box({ label, value, sub, tone }: {
     green: 'border-green-100 bg-green-50 text-green-800',
     amber: 'border-amber-200 bg-amber-50 text-amber-900',
     red: 'border-red-200 bg-red-50 text-red-800',
-    indigo: 'border-indigo-200 bg-indigo-50 text-indigo-800',
+    indigo: 'border-line bg-sand text-navy-dark',
   }
   return (
     <div className={`rounded-xl border p-3 ${tones[tone]}`}>

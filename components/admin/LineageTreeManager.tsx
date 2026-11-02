@@ -147,7 +147,7 @@ function NodeRow({
           <button onClick={startEdit} className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700" title="ערוך">
             <Pencil size={14} />
           </button>
-          <button onClick={() => onAddChild(node.id, node.name)} className="p-1.5 rounded-lg text-indigo-600 hover:bg-indigo-50" title="הוסף צאצא">
+          <button onClick={() => onAddChild(node.id, node.name)} className="p-1.5 rounded-lg text-navy hover:bg-sand" title="הוסף צאצא">
             <Plus size={14} />
           </button>
           <button onClick={() => onDelete(node.id, node.name)} className="p-1.5 rounded-lg text-red-500 hover:bg-red-50" title="מחק">
@@ -194,7 +194,7 @@ function NodeRow({
             <button
               onClick={saveEdit}
               disabled={savingEdit}
-              className="flex items-center gap-1.5 text-sm bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white px-3 py-1.5 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 text-sm bg-navy hover:bg-navy-dark disabled:bg-gold text-white px-3 py-1.5 rounded-lg transition-colors"
             >
               {savingEdit ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
               שמור
@@ -333,7 +333,7 @@ export default function LineageTreeManager() {
         </div>
         <button
           onClick={openAddRoot}
-          className="flex items-center gap-1.5 text-sm bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg transition-colors"
+          className="flex items-center gap-1.5 text-sm bg-navy hover:bg-navy-dark text-white px-3 py-1.5 rounded-lg transition-colors"
         >
           <Plus size={14} />
           הוסף שורש
@@ -341,13 +341,13 @@ export default function LineageTreeManager() {
       </div>
 
       <p className="text-xs text-slate-500 -mt-1">
-        לחץ על שם כדי לערוך שם / הערות / להעביר להורה אחר · <Plus size={11} className="inline -mt-0.5 text-indigo-600" /> צאצא · <Trash2 size={11} className="inline -mt-0.5 text-red-500" /> מחיקה
+        לחץ על שם כדי לערוך שם / הערות / להעביר להורה אחר · <Plus size={11} className="inline -mt-0.5 text-navy" /> צאצא · <Trash2 size={11} className="inline -mt-0.5 text-red-500" /> מחיקה
       </p>
 
       {showForm && (
-        <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 flex flex-col gap-3">
+        <div className="bg-sand border border-line rounded-xl p-4 flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-indigo-800">
+            <p className="text-sm font-medium text-navy-dark">
               {formParentId ? `הוסף צאצא של: ${formParentName}` : 'הוסף שורש חדש'}
             </p>
             <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
@@ -355,18 +355,18 @@ export default function LineageTreeManager() {
           <input
             type="text" value={formName} onChange={e => setFormName(e.target.value)}
             placeholder="שם (למשל: רבי אברהם שמואל בנימין סופר)"
-            className="rounded-lg border border-indigo-200 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            className="rounded-lg border border-line px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gold"
             autoFocus onKeyDown={e => e.key === 'Enter' && handleSave()}
           />
           <input
             type="text" value={formNotes} onChange={e => setFormNotes(e.target.value)}
             placeholder="הערות (אופציונלי)"
-            className="rounded-lg border border-indigo-200 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            className="rounded-lg border border-line px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gold"
           />
           {error && <p className="text-xs text-red-600">{error}</p>}
           <div className="flex gap-2">
             <button onClick={handleSave} disabled={saving}
-              className="flex items-center gap-1.5 text-sm bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white px-3 py-1.5 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 text-sm bg-navy hover:bg-navy-dark disabled:bg-gold text-white px-3 py-1.5 rounded-lg transition-colors"
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
               שמור

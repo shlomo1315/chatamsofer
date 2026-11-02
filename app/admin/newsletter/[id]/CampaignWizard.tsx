@@ -100,7 +100,7 @@ export default function CampaignWizard({ campaign: initial }: { campaign: Campai
           onChange={e => patch('name', e.target.value)}
           className="w-full max-w-md rounded-lg border border-transparent bg-transparent px-2 py-1
                      text-2xl font-bold text-slate-800 hover:border-slate-200
-                     focus:border-indigo-300 focus:bg-white focus:outline-none"
+                     focus:border-line-strong focus:bg-white focus:outline-none"
         />
         <button
           onClick={() => save()}
@@ -126,7 +126,7 @@ export default function CampaignWizard({ campaign: initial }: { campaign: Campai
               onClick={() => setStep(i)}
               className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5
                           text-sm font-semibold transition ${
-                active ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                active ? 'border-navy-soft bg-sand text-navy-dark'
                 : done ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                 : 'border-slate-200 bg-white text-slate-400 hover:bg-slate-50'
               }`}
@@ -163,7 +163,7 @@ export default function CampaignWizard({ campaign: initial }: { campaign: Campai
               onChange={e => patch('subject', e.target.value)}
               placeholder="למשל: {{שם_משפחה}}, עדכון חשוב לקראת החג"
               className="mb-4 w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm
-                         focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                         focus:border-gold focus:outline-none focus:ring-2 focus:ring-line"
             />
 
             <label className="mb-1.5 block text-sm font-semibold text-slate-700">
@@ -173,7 +173,7 @@ export default function CampaignWizard({ campaign: initial }: { campaign: Campai
               value={c.preheader ?? ''}
               onChange={e => patch('preheader', e.target.value)}
               className="mb-4 w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm
-                         focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                         focus:border-gold focus:outline-none focus:ring-2 focus:ring-line"
             />
 
             <label className="mb-1.5 block text-sm font-semibold text-slate-700">נשלח מטעם</label>
@@ -181,7 +181,7 @@ export default function CampaignWizard({ campaign: initial }: { campaign: Campai
               value={c.from_department}
               onChange={e => patch('from_department', e.target.value)}
               className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm
-                         focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                         focus:border-gold focus:outline-none focus:ring-2 focus:ring-line"
             >
               {Object.values(DEPARTMENTS).map(d => (
                 <option key={d.key} value={d.key}>{d.label} · {d.email}</option>
@@ -225,8 +225,8 @@ export default function CampaignWizard({ campaign: initial }: { campaign: Campai
         {step < STEPS.length - 1 && (
           <button
             onClick={next}
-            className="rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-bold text-white
-                       transition hover:bg-indigo-700"
+            className="rounded-xl bg-navy px-6 py-2.5 text-sm font-bold text-white
+                       transition hover:bg-navy-dark"
           >
             הבא
           </button>
@@ -334,13 +334,13 @@ function PreviewStep({ campaignId, onSave, dirty }: {
             onChange={e => setTestTo(e.target.value)}
             placeholder="your@email.com"
             className="flex-1 rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm
-                       focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                       focus:border-gold focus:outline-none focus:ring-2 focus:ring-line"
           />
           <button
             onClick={sendTest}
             disabled={sendingTest}
-            className="rounded-xl border border-indigo-200 bg-white px-5 py-2.5 text-sm font-bold
-                       text-indigo-700 transition hover:bg-indigo-50 disabled:opacity-40"
+            className="rounded-xl border border-line bg-white px-5 py-2.5 text-sm font-bold
+                       text-navy-dark transition hover:bg-sand disabled:opacity-40"
           >
             {sendingTest ? <Loader2 size={15} className="animate-spin" /> : 'שליחת בדיקה'}
           </button>
@@ -415,12 +415,12 @@ function SendStep({ campaignId, onSave, onSent }: {
         השליחה מתבצעת ברקע. אפשר לעצור אותה באמצע בכל רגע.
       </p>
 
-      <div className="mb-5 rounded-2xl border-2 border-indigo-100 bg-indigo-50 p-5 text-center">
-        <div className="mb-1 text-xs font-semibold text-indigo-600">עומד להישלח אל</div>
-        <div className="text-4xl font-black text-indigo-900">
+      <div className="mb-5 rounded-2xl border-2 border-gold-soft bg-sand p-5 text-center">
+        <div className="mb-1 text-xs font-semibold text-navy">עומד להישלח אל</div>
+        <div className="text-4xl font-black text-navy-dark">
           {count === null ? '…' : count.toLocaleString('he-IL')}
         </div>
-        <div className="mt-1 text-xs text-indigo-600">נמענים</div>
+        <div className="mt-1 text-xs text-navy">נמענים</div>
       </div>
 
       {count === 0 && (
@@ -439,7 +439,7 @@ function SendStep({ campaignId, onSave, onSent }: {
             onClick={() => setWhen('now')}
             className={`rounded-xl border p-3 text-right transition ${
               when === 'now'
-                ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-200'
+                ? 'border-navy-soft bg-sand ring-1 ring-line'
                 : 'border-slate-200 hover:bg-slate-50'
             }`}
           >
@@ -451,7 +451,7 @@ function SendStep({ campaignId, onSave, onSent }: {
             onClick={() => setWhen('later')}
             className={`rounded-xl border p-3 text-right transition ${
               when === 'later'
-                ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-200'
+                ? 'border-navy-soft bg-sand ring-1 ring-line'
                 : 'border-slate-200 hover:bg-slate-50'
             }`}
           >
@@ -489,8 +489,8 @@ function SendStep({ campaignId, onSave, onSent }: {
       <button
         onClick={send}
         disabled={!canSend || sending}
-        className="w-full rounded-xl bg-indigo-600 py-3.5 text-sm font-bold text-white transition
-                   hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+        className="w-full rounded-xl bg-navy py-3.5 text-sm font-bold text-white transition
+                   hover:bg-navy-dark disabled:cursor-not-allowed disabled:opacity-40"
       >
         {sending
           ? <><Loader2 size={16} className="ml-2 inline animate-spin" /> {when === 'later' ? 'מתזמן…' : 'מתחיל שליחה…'}</>

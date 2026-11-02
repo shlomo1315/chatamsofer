@@ -254,7 +254,7 @@ export default function NewMaternityPage() {
       {/* ── Step 1: Mother lookup ───────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-4">
         <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-          <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center">1</span>
+          <span className="w-6 h-6 rounded-full bg-gold-soft text-navy-dark text-xs font-bold flex items-center justify-center">1</span>
           פרטי האם (יולדת)
         </h2>
 
@@ -265,13 +265,13 @@ export default function NewMaternityPage() {
             onChange={e => setIdInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && lookupMother()}
             placeholder="הכנס מספר תעודת זהות של האישה (היולדת)"
-            className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-left ltr-num"
+            className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft text-left ltr-num"
             dir="ltr"
           />
           <button
             onClick={lookupMother}
             disabled={looking || !idInput.trim()}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            className="flex items-center gap-2 bg-navy hover:bg-navy-dark disabled:bg-line-strong text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
           >
             {looking ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
             חיפוש
@@ -303,7 +303,7 @@ export default function NewMaternityPage() {
                     </span>
                   )}
                   <Link href={`/admin/beneficiaries/${mother.id}`}
-                    className="text-xs text-indigo-600 hover:text-indigo-700 underline inline-flex items-center gap-1 mt-1 w-fit">
+                    className="text-xs text-navy hover:text-navy-dark underline inline-flex items-center gap-1 mt-1 w-fit">
                     <ExternalLink size={11} /> פתיחת כרטסת המשפחה
                   </Link>
                 </div>
@@ -347,7 +347,7 @@ export default function NewMaternityPage() {
       {mother && (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className="px-5 py-3 border-b border-slate-100 flex items-center gap-2">
-            <GitBranch size={15} className="text-indigo-500" />
+            <GitBranch size={15} className="text-navy-soft" />
             <span className="text-sm font-semibold text-slate-700">עץ הדורות</span>
           </div>
           <div className="h-64 overflow-hidden">
@@ -361,7 +361,7 @@ export default function NewMaternityPage() {
         <>
           <div className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-4">
             <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center">2</span>
+              <span className="w-6 h-6 rounded-full bg-gold-soft text-navy-dark text-xs font-bold flex items-center justify-center">2</span>
               פרטי התינוק
             </h2>
 
@@ -371,15 +371,15 @@ export default function NewMaternityPage() {
               <div className="flex gap-2">
                 {([[false, 'לידה רגילה'], [true, 'לידת תאומים']] as const).map(([val, label]) => (
                   <button key={String(val)} type="button" onClick={() => setIsTwins(val)}
-                    className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${isTwins === val ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
+                    className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${isTwins === val ? 'bg-navy border-navy text-white' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
                     {label}
                   </button>
                 ))}
               </div>
-              {isTwins && <p className="text-xs text-indigo-600">לידת תאומים — יש למלא את פרטי שני התינוקות. זכאות בית ההחלמה: 4 ימים.</p>}
+              {isTwins && <p className="text-xs text-navy">לידת תאומים — יש למלא את פרטי שני התינוקות. זכאות בית ההחלמה: 4 ימים.</p>}
             </div>
 
-            {isTwins && <div className="text-sm font-semibold text-indigo-700">תינוק ראשון</div>}
+            {isTwins && <div className="text-sm font-semibold text-navy-dark">תינוק ראשון</div>}
 
             {/* Baby name (+ "עדיין אין שם" — כמו בטופס הציבורי) */}
             <div className="flex flex-col gap-2">
@@ -389,11 +389,11 @@ export default function NewMaternityPage() {
                 disabled={noBabyName}
                 onChange={e => { setBabyName(e.target.value); clearErr('babyName') }}
                 placeholder={noBabyName ? 'יושלם בהמשך' : 'שם פרטי של התינוק/ת'}
-                className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${noBabyName ? 'opacity-50 bg-slate-50 cursor-not-allowed ' : ''}${fieldErrors.babyName ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`}
+                className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${noBabyName ? 'opacity-50 bg-slate-50 cursor-not-allowed ' : ''}${fieldErrors.babyName ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-navy-soft'}`}
               />
               <button type="button"
                 onClick={() => { const next = !noBabyName; setNoBabyName(next); if (next) { setBabyName(''); clearErr('babyName') } }}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors w-fit ${noBabyName ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-indigo-200 text-indigo-600 hover:bg-indigo-50'}`}>
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors w-fit ${noBabyName ? 'bg-navy border-navy text-white' : 'bg-white border-line text-navy hover:bg-sand'}`}>
                 {noBabyName ? <Check size={13} /> : <Baby size={13} />}
                 {noBabyName ? 'יושלם בהמשך' : 'עדיין אין שם'}
               </button>
@@ -406,7 +406,7 @@ export default function NewMaternityPage() {
               <div className="flex gap-2">
                 {(['id', 'passport'] as const).map(t => (
                   <button key={t} onClick={() => { setBabyIdType(t); clearErr('babyIdNumber') }}
-                    className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${babyIdType === t ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
+                    className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${babyIdType === t ? 'bg-navy border-navy text-white' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
                     {t === 'id' ? 'תעודת זהות' : 'דרכון'}
                   </button>
                 ))}
@@ -415,7 +415,7 @@ export default function NewMaternityPage() {
                 type="text" value={babyIdNumber}
                 onChange={e => { setBabyIdNumber(e.target.value); clearErr('babyIdNumber') }}
                 placeholder={babyIdType === 'id' ? 'מספר תעודת זהות תינוק' : 'מספר דרכון תינוק'}
-                className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left ${fieldErrors.babyIdNumber ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`}
+                className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left ${fieldErrors.babyIdNumber ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-navy-soft'}`}
                 dir="ltr"
               />
               {fieldErrors.babyIdNumber && <p className="text-xs text-red-600">{fieldErrors.babyIdNumber}</p>}
@@ -437,18 +437,18 @@ export default function NewMaternityPage() {
 
             {/* ── תינוק שני — רק בלידת תאומים ─────────────────────────────── */}
             {isTwins && (
-              <div className="flex flex-col gap-4 rounded-xl border border-indigo-100 bg-indigo-50/40 p-4">
-                <div className="text-sm font-semibold text-indigo-700 flex items-center gap-1.5"><Baby size={15} /> תינוק שני</div>
+              <div className="flex flex-col gap-4 rounded-xl border border-gold-soft bg-sand/40 p-4">
+                <div className="text-sm font-semibold text-navy-dark flex items-center gap-1.5"><Baby size={15} /> תינוק שני</div>
                 {/* Name */}
                 <div className="flex flex-col gap-2">
                   <label className="text-xs font-medium text-slate-600">שם התינוק {!noBaby2Name && <span className="text-red-500">*</span>}</label>
                   <input type="text" value={baby2Name} disabled={noBaby2Name}
                     onChange={e => { setBaby2Name(e.target.value); clearErr('baby2Name') }}
                     placeholder={noBaby2Name ? 'יושלם בהמשך' : 'שם פרטי של התינוק/ת'}
-                    className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${noBaby2Name ? 'opacity-50 bg-slate-50 cursor-not-allowed ' : ''}${fieldErrors.baby2Name ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`} />
+                    className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${noBaby2Name ? 'opacity-50 bg-slate-50 cursor-not-allowed ' : ''}${fieldErrors.baby2Name ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-navy-soft'}`} />
                   <button type="button"
                     onClick={() => { const next = !noBaby2Name; setNoBaby2Name(next); if (next) { setBaby2Name(''); clearErr('baby2Name') } }}
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors w-fit ${noBaby2Name ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-indigo-200 text-indigo-600 hover:bg-indigo-50'}`}>
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors w-fit ${noBaby2Name ? 'bg-navy border-navy text-white' : 'bg-white border-line text-navy hover:bg-sand'}`}>
                     {noBaby2Name ? <Check size={13} /> : <Baby size={13} />}
                     {noBaby2Name ? 'יושלם בהמשך' : 'עדיין אין שם'}
                   </button>
@@ -460,7 +460,7 @@ export default function NewMaternityPage() {
                   <div className="flex gap-2">
                     {(['id', 'passport'] as const).map(t => (
                       <button key={t} onClick={() => { setBaby2IdType(t); clearErr('baby2IdNumber') }}
-                        className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${baby2IdType === t ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
+                        className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${baby2IdType === t ? 'bg-navy border-navy text-white' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
                         {t === 'id' ? 'תעודת זהות' : 'דרכון'}
                       </button>
                     ))}
@@ -468,7 +468,7 @@ export default function NewMaternityPage() {
                   <input type="text" value={baby2IdNumber}
                     onChange={e => { setBaby2IdNumber(e.target.value); clearErr('baby2IdNumber') }}
                     placeholder={baby2IdType === 'id' ? 'מספר תעודת זהות תינוק' : 'מספר דרכון תינוק'}
-                    className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left ${fieldErrors.baby2IdNumber ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`}
+                    className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left ${fieldErrors.baby2IdNumber ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-navy-soft'}`}
                     dir="ltr" />
                   {fieldErrors.baby2IdNumber && <p className="text-xs text-red-600">{fieldErrors.baby2IdNumber}</p>}
                 </div>
@@ -494,7 +494,7 @@ export default function NewMaternityPage() {
               <HebrewDatePicker value={babyBirthDate} onChange={iso => { setBabyBirthDate(iso); clearErr('babyBirthDate') }} maxToday />
               {fieldErrors.babyBirthDate && <p className="text-xs text-red-600">{fieldErrors.babyBirthDate}</p>}
               {babyBirthDate && (
-                <div className="flex items-center gap-2 text-xs bg-indigo-50 text-indigo-700 rounded-lg px-3 py-2 border border-indigo-100">
+                <div className="flex items-center gap-2 text-xs bg-sand text-navy-dark rounded-lg px-3 py-2 border border-gold-soft">
                   <Baby size={13} />
                   סיום 6 שבועות (תאריך יעד): <span className="font-bold mr-1">{sixWeeksEnd(babyBirthDate)}</span>
                 </div>
@@ -507,7 +507,7 @@ export default function NewMaternityPage() {
               <div className="flex gap-2">
                 {recoveryHomes.map(h => (
                   <button key={h} onClick={() => { setRecoveryHome(recoveryHome === h ? '' : h); clearErr('recoveryHome') }}
-                    className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${recoveryHome === h ? 'bg-indigo-600 border-indigo-600 text-white' : `${fieldErrors.recoveryHome ? 'border-red-400' : 'border-slate-300'} text-slate-600 hover:bg-slate-50`}`}>
+                    className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${recoveryHome === h ? 'bg-navy border-navy text-white' : `${fieldErrors.recoveryHome ? 'border-red-400' : 'border-slate-300'} text-slate-600 hover:bg-slate-50`}`}>
                     {h}
                   </button>
                 ))}
@@ -525,7 +525,7 @@ export default function NewMaternityPage() {
                   <input type="text" inputMode="numeric" value={recoveryDaysOverride}
                     onChange={e => setRecoveryDaysOverride(e.target.value.replace(/\D/g, ''))}
                     placeholder={String(defaultRecoveryDays(isTwins))}
-                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ltr-num text-left"
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft ltr-num text-left"
                     dir="ltr" />
                   <p className="text-[11px] text-slate-500">
                     ריק = ברירת המחדל ({defaultRecoveryDays(isTwins)} ימים{isTwins ? ' — תאומים' : ''}). ניתן להזין כל מספר.
@@ -537,7 +537,7 @@ export default function NewMaternityPage() {
                   <input type="text" inputMode="numeric" value={cardLoadAmount}
                     onChange={e => setCardLoadAmount(e.target.value.replace(/\D/g, ''))}
                     placeholder="0"
-                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ltr-num text-left"
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft ltr-num text-left"
                     dir="ltr" />
                   <p className="text-[11px] text-slate-500">
                     סכום כולל, ללא תקרה. יוצג כברירת מחדל במסך הטענת הכרטיס — ההטענה עצמה נעשית שם.
@@ -551,7 +551,7 @@ export default function NewMaternityPage() {
               <label className="text-xs font-medium text-slate-600">הערות <span className="font-normal text-slate-400">(לא חובה)</span></label>
               <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
                 placeholder="כל מידע רלוונטי נוסף..."
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft resize-none" />
             </div>
 
             {/* Birth certificate */}
@@ -568,7 +568,7 @@ export default function NewMaternityPage() {
                 </div>
               ) : (
                 <button onClick={() => fileRef.current?.click()}
-                  className={`flex items-center justify-center gap-2 border-2 border-dashed rounded-lg px-4 py-4 text-sm transition-colors ${fieldErrors.certFile ? 'border-red-400 text-red-500 hover:bg-red-50' : 'border-slate-300 text-slate-500 hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-600'}`}>
+                  className={`flex items-center justify-center gap-2 border-2 border-dashed rounded-lg px-4 py-4 text-sm transition-colors ${fieldErrors.certFile ? 'border-red-400 text-red-500 hover:bg-red-50' : 'border-slate-300 text-slate-500 hover:border-gold hover:bg-sand hover:text-navy'}`}>
                   <Upload size={16} />
                   לחץ להעלאת קובץ
                 </button>
@@ -592,7 +592,7 @@ export default function NewMaternityPage() {
               ביטול
             </Link>
             <button onClick={handleSubmit} disabled={saving || !babyBirthDate}
-              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors">
+              className="flex items-center gap-2 bg-navy hover:bg-navy-dark disabled:bg-line-strong text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors">
               {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
               פתח תיק יולדת
             </button>

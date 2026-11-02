@@ -79,7 +79,7 @@ export default function SellerPassword() {
               onChange={e => setPw(e.target.value)}
               placeholder={configured ? 'סיסמה חדשה' : 'בחרו סיסמה'}
               dir="ltr"
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-line-strong focus:ring-2 focus:ring-gold-soft"
             />
             <input
               type="password"
@@ -88,7 +88,7 @@ export default function SellerPassword() {
               onKeyDown={e => { if (e.key === 'Enter' && pw && pw2) void save() }}
               placeholder="אימות הסיסמה"
               dir="ltr"
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-line-strong focus:ring-2 focus:ring-gold-soft"
             />
 
             {error && <p className="text-sm text-red-600">{error}</p>}
@@ -97,7 +97,7 @@ export default function SellerPassword() {
               <button
                 onClick={save}
                 disabled={busy || !pw || !pw2}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy-dark disabled:opacity-40"
               >
                 {busy ? <Loader2 size={15} className="animate-spin" /> : done ? <Check size={15} /> : null}
                 {done ? 'נשמרה' : configured ? 'החלפת הסיסמה' : 'שמירת הסיסמה'}
@@ -106,7 +106,7 @@ export default function SellerPassword() {
                 href="/yerid/seller"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-sm text-indigo-600 hover:underline"
+                className="inline-flex items-center gap-1 text-sm text-navy hover:underline"
               >
                 אזור המוכרים <ExternalLink size={13} />
               </a>

@@ -19,7 +19,7 @@ import type { IssueView } from './GilyonotClient'
 interface Template { id: string; name: string; subject: string | null; body_html: string | null; design: unknown; updated_at: string }
 type SaveState = 'saved' | 'dirty' | 'saving' | 'error'
 
-const SWATCHES = ['#0f172a', '#334155', '#64748b', SYSTEM_BLUE, '#1d4ed8', '#0891b2', '#059669', '#ca8a04', '#ea580c', '#e11d48', '#7c3aed', '#ffffff']
+const SWATCHES = ['#0f172a', '#334155', '#64748b', SYSTEM_BLUE, '#1d4ed8', '#0891b2', '#059669', '#ca8a04', '#ea580c', '#e11d48', '#14213D', '#ffffff']
 const HILITES = ['#fef08a', '#bbf7d0', '#bfdbfe', '#fbcfe8', '#fed7aa', '#e2e8f0']
 const FONTS = [['Arial', 'אריאל'], ['David', 'דוד'], ['Frank Ruehl CLM, David, serif', 'פרנק רוהל'], ['Tahoma', 'טהומה'], ['Georgia, serif', 'ג׳ורג׳יה']]
 const SIZES = [['2', 'קטן'], ['3', 'רגיל'], ['4', 'בינוני'], ['5', 'גדול'], ['6', 'גדול מאוד']]

@@ -231,7 +231,7 @@ export default function CampaignStats({ campaign }: { campaign: Campaign }) {
                     {r.opened ? <span className="font-bold text-emerald-600">{r.openCount}</span> : '—'}
                   </td>
                   <td className="px-4 py-2.5 text-slate-600">
-                    {r.clicked ? <span className="font-bold text-indigo-600">{r.clickCount}</span> : '—'}
+                    {r.clicked ? <span className="font-bold text-navy">{r.clickCount}</span> : '—'}
                   </td>
                 </tr>
               ))}
@@ -254,7 +254,7 @@ export default function CampaignStats({ campaign }: { campaign: Campaign }) {
                 {stats.links.map(l => (
                   <tr key={l.url} className="hover:bg-slate-50">
                     <td className="max-w-lg truncate px-4 py-2.5 font-mono text-xs text-slate-600">{l.url}</td>
-                    <td className="px-4 py-2.5 font-bold text-indigo-600">{l.count}</td>
+                    <td className="px-4 py-2.5 font-bold text-navy">{l.count}</td>
                   </tr>
                 ))}
               </tbody>
@@ -309,7 +309,7 @@ function Metric({ icon, label, value, total, accent = 'slate' }: {
   const colors = {
     slate: 'text-slate-800',
     emerald: 'text-emerald-600',
-    indigo: 'text-indigo-600',
+    indigo: 'text-navy',
     rose: 'text-rose-600',
   }
   return (

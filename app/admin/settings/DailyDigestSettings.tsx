@@ -84,7 +84,7 @@ export default function DailyDigestSettings() {
       {/* ── הפעלה ── */}
       <div className="flex items-start justify-between gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3.5">
         <div className="flex items-start gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sand text-navy">
             <CalendarClock size={17} />
           </span>
           <div>
@@ -99,7 +99,7 @@ export default function DailyDigestSettings() {
           </div>
         </div>
         <button type="button" onClick={() => setEnabled(!enabled)}
-          className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${enabled ? 'bg-indigo-600' : 'bg-slate-300'}`}
+          className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${enabled ? 'bg-navy' : 'bg-slate-300'}`}
           aria-pressed={enabled} aria-label="הפעלת הסיכום היומי">
           <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${enabled ? 'right-0.5' : 'right-[22px]'}`} />
         </button>
@@ -112,9 +112,9 @@ export default function DailyDigestSettings() {
           <input value={newEmail} onChange={e => setNewEmail(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addEmail() } }}
             placeholder="הוספת כתובת מייל…" dir="ltr"
-            className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm text-right outline-none focus:border-indigo-400" />
+            className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm text-right outline-none focus:border-gold" />
           <button type="button" onClick={addEmail}
-            className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:border-indigo-300 hover:text-indigo-600 transition">
+            className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:border-line-strong hover:text-navy transition">
             <Plus size={13} /> הוספה
           </button>
         </div>
@@ -146,14 +146,14 @@ export default function DailyDigestSettings() {
         <div className="flex flex-wrap items-center gap-2">
           <input value={testEmail} onChange={e => setTestEmail(e.target.value)}
             placeholder="כתובת לבדיקה…" dir="ltr"
-            className="flex-1 min-w-48 rounded-xl border border-slate-200 px-3 py-2 text-sm text-right outline-none focus:border-indigo-400" />
+            className="flex-1 min-w-48 rounded-xl border border-slate-200 px-3 py-2 text-sm text-right outline-none focus:border-gold" />
           <button type="button" onClick={() => void send('test')} disabled={sending !== null}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:border-indigo-300 hover:text-indigo-600 transition disabled:opacity-50">
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:border-line-strong hover:text-navy transition disabled:opacity-50">
             {sending === 'test' ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
             שליחה לבדיקה
           </button>
           <button type="button" onClick={() => void send('all')} disabled={sending !== null || emails.length === 0}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-indigo-700 transition disabled:opacity-50">
+            className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-3.5 py-2 text-xs font-bold text-white hover:bg-navy-dark transition disabled:opacity-50">
             {sending === 'all' ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
             שליחה לכל הנמענים
           </button>

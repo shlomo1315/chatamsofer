@@ -41,8 +41,8 @@ export default async function FamilyFilePage({ params }: { params: Promise<{ id:
     <div className="flex flex-col gap-5 max-w-3xl">
       <div className="flex items-center gap-3">
         <Link href="/admin/widows" className="text-slate-400 hover:text-slate-600"><ArrowRight size={20} /></Link>
-        <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-          <HeartHandshake size={18} className="text-purple-600" />
+        <div className="w-10 h-10 bg-gold-soft rounded-xl flex items-center justify-center">
+          <HeartHandshake size={18} className="text-navy" />
         </div>
         <div>
           <h1 className="text-xl font-bold text-slate-900">תיק משפחת {name}</h1>

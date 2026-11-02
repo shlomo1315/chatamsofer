@@ -63,7 +63,7 @@ export default function ShippingCitiesClient({ rows, error }: { rows: CityOrderR
       <div className="flex flex-wrap items-end gap-x-8 gap-y-3 rounded-2xl border border-slate-200 bg-white p-5">
         <div><div className="text-xs text-slate-500">משלוחים</div><div className={`text-2xl font-bold ${num}`}>{total.orders}</div></div>
         <div><div className="text-xs text-slate-500">כרכים</div><div className={`text-2xl font-bold ${num}`}>{total.volumes}</div></div>
-        <div><div className="text-xs text-slate-500">לשליחים לפי התעריף</div><div className={`text-2xl font-bold text-indigo-700 ${num}`}>{fmtAgorot(total.expected)}</div></div>
+        <div><div className="text-xs text-slate-500">לשליחים לפי התעריף</div><div className={`text-2xl font-bold text-navy-dark ${num}`}>{fmtAgorot(total.expected)}</div></div>
         <div><div className="text-xs text-slate-500">נגבה מהלקוחות</div><div className={`text-2xl font-bold ${num}`}>{fmtAgorot(total.charged)}</div></div>
         <div><div className="text-xs text-slate-500">הפרש</div><div className={`text-2xl font-bold ${num}`}><Diff v={total.diff} /></div></div>
         <div className="ms-auto flex flex-wrap gap-2">
@@ -107,7 +107,7 @@ export default function ShippingCitiesClient({ rows, error }: { rows: CityOrderR
                       <ul className="grid gap-1 text-sm sm:grid-cols-2">
                         {rows.filter(r => r.city === c.city).map(r => (
                           <li key={r.id} className="flex flex-wrap items-center gap-x-3">
-                            <a href={`/admin/book-fair/orders/${r.id}`} className={`font-medium text-indigo-700 hover:underline ${num}`}>{r.order_number}</a>
+                            <a href={`/admin/book-fair/orders/${r.id}`} className={`font-medium text-navy-dark hover:underline ${num}`}>{r.order_number}</a>
                             <span className={`text-slate-600 ${num}`}>{r.volumes} כרכים</span>
                             <span className={num}>{r.expected == null ? 'משרד' : fmtAgorot(r.expected)}</span>
                             <span className={`text-slate-500 ${num}`}>נגבה {fmtAgorot(r.charged)}</span>

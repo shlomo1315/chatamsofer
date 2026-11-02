@@ -188,7 +188,7 @@ export default function MergeCenterPanel({ onClose, onDone }: { onClose: () => v
                   {RISK[cluster.risk].label}
                 </span>
                 {!cluster.sameParent && (
-                  <span className="rounded-lg border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] font-bold text-violet-700">
+                  <span className="rounded-lg border border-line bg-sand px-2 py-0.5 text-[11px] font-bold text-navy-dark">
                     תחת אבות שונים
                   </span>
                 )}

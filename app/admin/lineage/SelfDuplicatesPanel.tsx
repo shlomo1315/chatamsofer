@@ -323,7 +323,7 @@ export default function SelfDuplicatesPanel({ onLocate, onFixed }: {
                           <td className="max-w-[180px] truncate px-3 py-2 text-slate-800">{r.benName}</td>
                           <td className="px-3 py-2">
                             <button onClick={() => onLocate(r.dupNodeId)}
-                              className="text-right text-xs text-slate-600 hover:text-violet-700">
+                              className="text-right text-xs text-slate-600 hover:text-navy-dark">
                               דור {r.dupGeneration} · {r.dupNodeName}
                             </button>
                           </td>

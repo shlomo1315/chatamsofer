@@ -125,7 +125,7 @@ export default function EmailDomainFixPanel() {
             </button>
             {data && (data.unfixableCount ?? 0) > 0 && (
               <button type="button" onClick={exportCsv}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-bold text-slate-600 transition hover:border-indigo-300 hover:text-indigo-600">
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-bold text-slate-600 transition hover:border-line-strong hover:text-navy">
                 <Download size={13} /> ייצוא {data.unfixableCount} לתיקון ידני
               </button>
             )}
@@ -177,7 +177,7 @@ export default function EmailDomainFixPanel() {
                     </span>
                     <button type="button"
                       onClick={() => setExpanded(expanded === g.fromDomain ? null : g.fromDomain)}
-                      className="text-[11px] font-bold text-slate-500 hover:text-indigo-600">
+                      className="text-[11px] font-bold text-slate-500 hover:text-navy">
                       {expanded === g.fromDomain ? 'הסתרה' : 'הצגת השמות'}
                     </button>
                     <button type="button" onClick={() => void apply(g.fromDomain)} disabled={!!applying}
@@ -204,7 +204,7 @@ export default function EmailDomainFixPanel() {
 
               {data.fixable > 0 && (
                 <button type="button" onClick={() => void apply()} disabled={!!applying}
-                  className="inline-flex items-center gap-1.5 self-start rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-indigo-700 disabled:opacity-50">
+                  className="inline-flex items-center gap-1.5 self-start rounded-xl bg-navy px-4 py-2.5 text-xs font-bold text-white transition hover:bg-navy-dark disabled:opacity-50">
                   {applying === 'all' ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
                   תיקון כל {data.fixable} הכתובות
                 </button>

@@ -78,7 +78,7 @@ export default function ShareBranchModal({ nodeId, nodeName, onClose }: { nodeId
     <div className="dlg-backdrop " dir="rtl" onClick={onClose}>
       <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="sticky top-0 bg-white border-b border-slate-200 px-5 py-3 flex items-center justify-between z-10">
-          <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2"><Link2 size={16} className="text-indigo-500" /> שיתוף ענף — {nodeName}</h2>
+          <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2"><Link2 size={16} className="text-navy-soft" /> שיתוף ענף — {nodeName}</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
         </div>
 
@@ -91,12 +91,12 @@ export default function ShareBranchModal({ nodeId, nodeName, onClose }: { nodeId
           {/* יצירת הזמנה */}
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 flex flex-col gap-2.5">
             <input value={name} onChange={e => setName(e.target.value)} placeholder="שם המקבל (לא חובה)"
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft" />
             <input value={email} onChange={e => { setEmail(e.target.value); if (err) setErr('') }} type="email" dir="ltr"
               placeholder="כתובת מייל" onKeyDown={e => e.key === 'Enter' && create()}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-navy-soft" />
             <button onClick={create} disabled={sending || !email.trim()}
-              className="inline-flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors">
+              className="inline-flex items-center justify-center gap-1.5 bg-navy hover:bg-navy-dark disabled:opacity-50 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors">
               {sending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />} שליחת קישור במייל
             </button>
             {err && <p className="text-xs text-red-600">{err}</p>}

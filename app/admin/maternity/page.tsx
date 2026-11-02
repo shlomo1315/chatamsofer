@@ -132,7 +132,7 @@ export default async function MaternityPage() {
         {/* ⚠️ דוח נפרד מהייצוא הרגיל: הייצוא מחזיר את status הבקשה, שאינו
             אומר אם היולדת מימשה בפועל בית החלמה. */}
         <Link href="/admin/maternity/recovery-report"
-          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-600 hover:border-indigo-300 hover:text-indigo-700 transition-colors">
+          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-600 hover:border-line-strong hover:text-navy-dark transition-colors">
           <Home size={14} /> מימוש בתי החלמה
         </Link>
         {/* ⚠️ תיקים שטעינת הכרטיס בהם נכשלה אינם מנסים שוב מעצמם — הם
