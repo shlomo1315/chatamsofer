@@ -7,6 +7,7 @@ import { Loader2, Save, CheckCircle2, Clock, CircleDashed } from 'lucide-react'
 interface Load { month: string; amount: number; status: string; loaded_at: string | null; created_at: string; balance: number | null }
 interface Row {
   id: string; name: string; phone: string; id_number: string; card_number: string | null
+  nedarim: 'linked' | 'none' | 'multiple' | 'no_phone' | 'error'
   thisMonth: 'none' | 'pending' | 'loaded'; history: Load[]
 }
 interface Data { month: string; amount: number; centers: Row[] }
@@ -24,7 +25,7 @@ export default function CenterMonthlyPanel() {
   const [data, setData] = useState<Data | null>(null)
   const [err, setErr] = useState('')
   const [msg, setMsg] = useState('')
-  const [edits, setEdits] = useState<Record<string, { phone: string; id_number: string }>>({})
+  const [edits, setEdits] = useState<Record<string, string>>({})
   const [amount, setAmount] = useState('')
   const [busy, setBusy] = useState('')
   const [open, setOpen] = useState('')
@@ -36,7 +37,7 @@ export default function CenterMonthlyPanel() {
       const d = await r.json()
       if (!r.ok) throw new Error(d.error || 'שגיאה בטעינה')
       setData(d); setAmount(String(d.amount)); setErr('')
-      setEdits(Object.fromEntries((d.centers as Row[]).map((c) => [c.id, { phone: c.phone, id_number: c.id_number }])))
+      setEdits(Object.fromEntries((d.centers as Row[]).map((c) => [c.id, c.phone])))
     } catch (e) { setErr(e instanceof Error ? e.message : 'שגיאה') }
   }, [])
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -111,24 +112,29 @@ export default function CenterMonthlyPanel() {
 
       <div className="flex flex-col gap-3">
         {data.centers.map((c) => {
-          const e = edits[c.id] ?? { phone: '', id_number: '' }
-          const dirty = e.phone !== c.phone || e.id_number !== c.id_number
+          const e = edits[c.id] ?? ''
+          const dirty = e !== c.phone
           return (
             <div key={c.id} className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col gap-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="font-semibold text-slate-800">{c.name}</h3>
                 <StatusBadge s={c.thisMonth} />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
                 <div>
                   <label className="block text-xs text-slate-500 mb-1">טלפון מורשה (ריק = הסרה)</label>
-                  <input className={input} dir="ltr" inputMode="tel" value={e.phone} placeholder="05XXXXXXXX"
-                    onChange={(ev) => setEdits({ ...edits, [c.id]: { ...e, phone: ev.target.value } })} />
+                  <input className={input} dir="ltr" inputMode="tel" value={e} placeholder="05XXXXXXXX"
+                    onChange={(ev) => setEdits({ ...edits, [c.id]: ev.target.value })} />
                 </div>
                 <div>
                   <label className="block text-xs text-slate-500 mb-1">מזהה צד ג' (נדרים)</label>
-                  <input className={input} dir="ltr" value={e.id_number}
-                    onChange={(ev) => setEdits({ ...edits, [c.id]: { ...e, id_number: ev.target.value } })} />
+                  <div className="h-[38px] flex items-center text-sm">
+                    {c.nedarim === 'linked' ? <span dir="ltr" className="text-slate-700">{c.id_number || 'אין מזהה צד ג\' בכרטסת'}</span>
+                      : c.nedarim === 'multiple' ? <span className="text-amber-700">כמה משפחות באותו טלפון, נדרש טיפול ידני</span>
+                      : c.nedarim === 'none' ? <span className="text-slate-500">לא נמצאה משפחה בנדרים</span>
+                      : c.nedarim === 'error' ? <span className="text-red-600">שגיאה במשיכה מנדרים</span>
+                      : <span className="text-slate-400">יש להזין טלפון</span>}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs text-slate-500 mb-1">כרטיס משויך</label>
@@ -145,7 +151,7 @@ export default function CenterMonthlyPanel() {
                 <button className="text-sm text-slate-600 underline" onClick={() => setOpen(open === c.id ? '' : c.id)}>
                   היסטוריית טעינות ({c.history.length})
                 </button>
-                <button disabled={!dirty || busy === c.id} onClick={() => patch(c.id, { center_id: c.id, phone: e.phone, id_number: e.id_number }, 'נשמר')}
+                <button disabled={!dirty || busy === c.id} onClick={() => patch(c.id, { center_id: c.id, phone: e }, 'נשמר')}
                   className="inline-flex items-center gap-1.5 bg-emerald-600 text-white rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-40">
                   {busy === c.id ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} שמירה
                 </button>
