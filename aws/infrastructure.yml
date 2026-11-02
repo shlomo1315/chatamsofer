@@ -15,6 +15,7 @@ Parameters:
   TaskCpu: {Type: String, Default: '1024', AllowedValues: ['512', '1024', '2048'], Description: "מעבד לשרת: 512 = חצי ליבה, 1024 = ליבה. משפיע ישירות על העלות"}
   TaskMemory: {Type: String, Default: '2048', AllowedValues: ['1024', '2048', '3072', '4096'], Description: "זיכרון ב-MB. 512 מעבד מאפשר עד 4096, 1024 מאפשר 2048 ומעלה"}
   EdgeMode: {Type: String, Default: tunnel, AllowedValues: [tunnel, alb], Description: "tunnel = בלי ALB ובלי WAF: Cloudflare Tunnel (חינמי) מלפנים, השרת בלי שום פורט פתוח, בערך 30$ בחודש. alb = מאזן עומסים + WAF, בערך 75$ בחודש. המעבר ביניהם הוא עדכון של אותו סטאק"}
+  CloudflaredVersion: {Type: String, Default: 2026.10.7, AllowedPattern: "^[0-9][0-9.]+$", Description: "גרסה מקובעת של cloudflared. מעדכנים ידנית, לא latest"}
   DesiredCount: {Type: Number, Default: 0, Description: "0 בהקמה ראשונה. אחרי שהפריסה הראשונה העלתה image: 1"}
   CreateOidcProvider: {Type: String, Default: 'true', AllowedValues: ['true', 'false'], Description: "false אם כבר קיים provider של GitHub בחשבון"}
   ExistingOidcProviderArn: {Type: String, Default: ''}
@@ -248,7 +249,7 @@ Resources:
         - !If
           - UseTunnel
           - Name: cloudflared
-            Image: cloudflare/cloudflared:latest
+            Image: !Sub "cloudflare/cloudflared:${CloudflaredVersion}"
             Essential: true
             Command: [tunnel, --no-autoupdate, run]
             LogConfiguration:
