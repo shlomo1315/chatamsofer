@@ -39,10 +39,12 @@ if [[ "$STATUS" != "ISSUED" ]]; then
   echo "  סוג:  CNAME"
   echo "  שם:   $VAL_NAME"
   echo "  ערך:  $VAL_VALUE"
-  echo "הסקריפט מחכה עד 30 דקות לאימות. אפשר להוסיף את הרשומה עכשיו, בלי לעצור אותו."
-  aws acm wait certificate-validated --certificate-arn "$CERT" || { echo "התעודה עוד לא אומתה. מוסיפים את הרשומה ומריצים שוב את אותה פקודה."; exit 1; }
+  echo "ההקמה ממשיכה בלי לחכות: עד שהתעודה תאומת האתר יעלה על HTTP זמני (מאחורי WAF). אחרי האימות מריצים שוב את אותה פקודה והוא עובר ל-HTTPS."
+  CERT_PARAM=""
+else
+  CERT_PARAM="$CERT"
+  echo "התעודה פעילה: $CERT"
 fi
-echo "התעודה פעילה: $CERT"
 
 echo "== 3/4 הורדת התבנית"
 curl -fsSL https://raw.githubusercontent.com/shlomo1315/chatamsofer/main/aws/infrastructure.yml -o /tmp/infrastructure.yml
@@ -61,7 +63,7 @@ fi
 [[ "$EXISTING_OIDC" == "None" ]] && EXISTING_OIDC=""
 aws cloudformation deploy --stack-name "$STACK" --template-file /tmp/infrastructure.yml \
   --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM --tags Project="$PROJECT" \
-  --parameter-overrides ProjectName="$PROJECT" GitHubRepo="$REPO" DomainName="$DOMAIN" CreateDnsZone="$CREATE_ZONE" CertificateArn="$CERT" \
+  --parameter-overrides ProjectName="$PROJECT" GitHubRepo="$REPO" DomainName="$DOMAIN" CreateDnsZone="$CREATE_ZONE" CertificateArn="$CERT_PARAM" \
     CertValidationName="$VAL_NAME" CertValidationValue="$VAL_VALUE" \
     VpcId="$VPC" SubnetIds="$SUBNETS" DesiredCount="${DESIRED:-0}" TaskCpu="${CPU:-512}" TaskMemory="${MEMORY:-1024}" CreateOidcProvider="$OIDC" ExistingOidcProviderArn="$EXISTING_OIDC"
 
@@ -77,7 +79,9 @@ else
   echo "  סוג:  CNAME"
   echo "  שם:   $DOMAIN"
   echo "  ערך:  $ALB"
-  echo "בדיקה מיידית (גם לפני הוספת הרשומה): curl -sk -H 'Host: $DOMAIN' https://$ALB/api/health"
+  SCHEME=https; [[ -z "$CERT_PARAM" ]] && SCHEME=http
+  echo "בדיקה מיידית (גם לפני הוספת הרשומה): curl -sk -H 'Host: $DOMAIN' $SCHEME://$ALB/api/health"
+  [[ -z "$CERT_PARAM" ]] && echo "הערה: התעודה עוד לא אומתה, והאתר על HTTP זמני. אחרי שהרשומה בענן האפור (DNS only) מאומתת, מריצים שוב את אותה פקודה כדי לעבור ל-HTTPS."
   echo "הדומיין הראשי והמייל לא משתנים."
 fi
 echo "שלבים הבאים: 1) מזינים את משתני הסביבה בסוד $PROJECT/prod (Secrets Manager)"

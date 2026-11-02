@@ -10,7 +10,7 @@ Parameters:
   GitHubRepo: {Type: String, Default: shlomo1315/chatamsofer, Description: "owner/repo של הפרויקט. ההרשאה לפריסה מוגבלת לענף main שלו בלבד"}
   DomainName: {Type: String, Default: aws.chasamsofer.co.il, Description: "הכתובת שהאתר עונה בה. תת-דומיין זמני (aws.chasamsofer.co.il) או הדומיין הסופי"}
   CreateDnsZone: {Type: String, Default: 'false', AllowedValues: ['true', 'false'], Description: "false = מצב ביניים: ה-DNS נשאר אצל הרשם, בלי אזור Route 53. true = מעבר סופי: נוצר אזור והרשומות בו (ומחליפים שרתי שמות)"}
-  CertificateArn: {Type: String, AllowedPattern: "^arn:aws:acm:[a-z0-9-]+:[0-9]+:certificate/[a-f0-9-]+$", Description: "ARN של תעודת ACM שכבר הונפקה לדומיין (cloudshell-setup.sh מנפיק ומחכה לה). HTTPS בלבד"}
+  CertificateArn: {Type: String, Default: '', AllowedPattern: "^(arn:aws:acm:[a-z0-9-]+:[0-9]+:certificate/[a-f0-9-]+)?$", Description: "ARN של תעודת ACM שהונפקה לדומיין. ריק = מצב זמני על HTTP עד שהתעודה מאומתת, ואז מריצים שוב עם ARN"}
   CertValidationName: {Type: String, Default: '', Description: "שם רשומת ה-CNAME של אימות התעודה, כדי שהחידוש האוטומטי ימשיך לעבוד גם אחרי החלפת שרתי השמות"}
   CertValidationValue: {Type: String, Default: '', Description: "ערך רשומת האימות"}
   VpcId: {Type: AWS::EC2::VPC::Id, Description: "ה-VPC ברירת המחדל"}
@@ -22,6 +22,7 @@ Parameters:
   ExistingOidcProviderArn: {Type: String, Default: ''}
 
 Conditions:
+  HasCert: !Not [!Equals [!Ref CertificateArn, '']]
   HasCertValidation: !Not [!Equals [!Ref CertValidationName, '']]
   MakeZone: !Equals [!Ref CreateDnsZone, 'true']
   MakeCertRecord: !And [!Condition MakeZone, !Condition HasCertValidation]
@@ -290,6 +291,7 @@ Resources:
 
   HttpsListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HasCert
     Properties:
       LoadBalancerArn: !Ref Alb
       Port: 443
@@ -304,13 +306,16 @@ Resources:
       LoadBalancerArn: !Ref Alb
       Port: 80
       Protocol: HTTP
+      # עם תעודה: הפניה ל-HTTPS. בלי תעודה (מצב זמני): העברה ישירה לשרת
       DefaultActions:
-        - Type: redirect
-          RedirectConfig: {Protocol: HTTPS, Port: '443', StatusCode: HTTP_301}
+        - !If
+          - HasCert
+          - {Type: redirect, RedirectConfig: {Protocol: HTTPS, Port: '443', StatusCode: HTTP_301}}
+          - {Type: forward, TargetGroupArn: !Ref Tg}
 
   Service:
     Type: AWS::ECS::Service
-    DependsOn: [HttpRedirect, HttpsListener]
+    DependsOn: [HttpRedirect]
     Properties:
       ServiceName: !Ref ProjectName
       Cluster: !Ref Cluster
