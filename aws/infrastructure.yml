@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: חתם סופר - תשתית ECS Fargate (ECR, ALB, WAF, סודות, הרשאת OIDC ל-GitHub)
+Description: חתם סופר - תשתית ECS Fargate (ECR, סודות, הרשאת OIDC ל-GitHub, ועוד Cloudflare Tunnel או ALB עם WAF)
 
 # פריסה: CloudFormation -> Create stack -> העלאת הקובץ הזה. אזור: eu-central-1.
 # ⚠️ משימה אחת בלבד (DesiredCount=1): instrumentation.ts מריץ תזמונים פנימיים (גיבוי, פריקה, סנכרונים),
@@ -14,12 +14,17 @@ Parameters:
   SubnetIds: {Type: "List<AWS::EC2::Subnet::Id>", Description: "לפחות 2 תתי-רשתות ציבוריות בשני אזורי זמינות"}
   TaskCpu: {Type: String, Default: '1024', AllowedValues: ['512', '1024', '2048'], Description: "מעבד לשרת: 512 = חצי ליבה, 1024 = ליבה. משפיע ישירות על העלות"}
   TaskMemory: {Type: String, Default: '2048', AllowedValues: ['1024', '2048', '3072', '4096'], Description: "זיכרון ב-MB. 512 מעבד מאפשר עד 4096, 1024 מאפשר 2048 ומעלה"}
+  EdgeMode: {Type: String, Default: tunnel, AllowedValues: [tunnel, alb], Description: "tunnel = בלי ALB ובלי WAF: Cloudflare Tunnel (חינמי) מלפנים, השרת בלי שום פורט פתוח, בערך 30$ בחודש. alb = מאזן עומסים + WAF, בערך 75$ בחודש. המעבר ביניהם הוא עדכון של אותו סטאק"}
   DesiredCount: {Type: Number, Default: 0, Description: "0 בהקמה ראשונה. אחרי שהפריסה הראשונה העלתה image: 1"}
   CreateOidcProvider: {Type: String, Default: 'true', AllowedValues: ['true', 'false'], Description: "false אם כבר קיים provider של GitHub בחשבון"}
   ExistingOidcProviderArn: {Type: String, Default: ''}
 
 Conditions:
   HasCert: !Not [!Equals [!Ref CertificateArn, '']]
+  UseAlb: !Equals [!Ref EdgeMode, alb]
+  UseTunnel: !Equals [!Ref EdgeMode, tunnel]
+  AlbHasCert: !And [!Condition UseAlb, !Condition HasCert]
+  SiteHttps: !Or [!Condition HasCert, !Condition UseTunnel]
   MakeOidc: !Equals [!Ref CreateOidcProvider, 'true']
 
 Resources:
@@ -36,7 +41,7 @@ Resources:
     Type: AWS::SecretsManager::Secret
     Properties:
       Name: !Sub "${ProjectName}/prod"
-      SecretString: '{"ANTHROPIC_API_KEY":"","BOOK_FAIR_AUTO_OPEN_DISABLED":"","BOOK_FAIR_CLEANUP_DISABLED":"","CRON_SECRET":"","DAILY_BACKUP_DISABLED":"","DISTRIBUTIONS_PORTAL_SECRET":"","ELEVENLABS_API_KEY":"","ELEVENLABS_MODEL_ID":"","ELEVENLABS_VOICE_ID":"","GILYONOT_DISABLED":"","GILYONOT_FROM_EMAIL":"","GILYONOT_NEDARIM_TOKEN":"","GMAIL_CLIENT_ID":"","GMAIL_CLIENT_SECRET":"","GMAIL_EMAIL":"","GMAIL_PUBSUB_TOPIC":"","GMAIL_PUSH_TOKEN":"","GMAIL_REDIRECT_URI":"","GMAIL_WATCH_RENEW_DISABLED":"","GOOGLE_DRIVE_BACKUP_FOLDER_ID":"","GOOGLE_SA_KEY":"","GOV_SYNC_DISABLED":"","KVITEL_MAILBOX":"","KVITEL_NEDARIM_TOKEN":"","LEGACY_SYNC_DISABLED":"","LIVE_BALANCES_DISABLED":"","LIVE_BALANCES_ENABLED":"","LOANS_PORTAL_SECRET":"","LOANS_REPORT_DISABLED":"","MAIL_DOMAIN":"","MATERNITY_CARD_RETRY_DISABLED":"","NEDARIM_API_PASSWORD":"","NEDARIM_CREATE_TXN_URL":"","NEDARIM_GUARD_ALERT_TO":"","NEDARIM_HISTORY_URL":"","NEDARIM_HOLIDAY_LIMITED_ID":"","NEDARIM_MATERNITY_LIMITED_ID":"","NEDARIM_MOSAD_ID":"","NEDARIM_PROXY_URL":"","NEWSLETTER_DISABLED":"","NEXTAUTH_SECRET":"","OTP_NONCE_SECRET":"","RABBI_FORM_BLANK_URL":"","RESEND_API_KEY":"","RESEND_WEBHOOK_SECRET":"","RESEND_WEBHOOK_SIGNING_SECRET":"","SCHEDULED_MAIL_DISABLED":"","SUPABASE_SERVICE_ROLE_KEY":"","UNLOAD_EXPIRED_DISABLED":"","VERIFY_FROM_EMAIL":"","VERIFY_FROM_NAME":"","VOICE_REBUILD_DISABLED":"","YEMOT_ANNOUNCE_TEMPLATE_ID":"","YEMOT_API_TOKEN":"","YEMOT_BOOK_FAIR_AUDIO":"","YEMOT_BOOK_FAIR_CALLER_ID":"","YEMOT_BOOK_FAIR_CREDIT_TEMPLATE_ID":"","YEMOT_BOOK_FAIR_EXT":"","YEMOT_BOOK_FAIR_TEXT_ONLY":"","YEMOT_BOOK_FAIR_TOKEN":"","YEMOT_CREDITS_FALLBACK_FOLDER":"","YEMOT_CREDITS_SECRET":"","YEMOT_FOLDER_HOLIDAY":"","YEMOT_FOLDER_IVR_FILES":"","YEMOT_FOLDER_MATERNITY":"","YEMOT_GILYONOT_SECRET":"","YEMOT_HOLIDAY_EXT":"","YEMOT_KVITEL_SECRET":"","YEMOT_MATERNITY_EXT":"","YEMOT_MENU_EXT":"","YEMOT_OTP_CALLER_ID":"","YEMOT_OTP_DIGIT_SEP":"","YEMOT_OTP_TEMPLATE_ID":"","YEMOT_SINGLE_ENDPOINT":"","YEMOT_TOKEN":"","YEMOT_WEBHOOK_SECRET":""}'
+      SecretString: '{"ANTHROPIC_API_KEY":"","BOOK_FAIR_AUTO_OPEN_DISABLED":"","BOOK_FAIR_CLEANUP_DISABLED":"","CLOUDFLARE_TUNNEL_TOKEN":"","CRON_SECRET":"","DAILY_BACKUP_DISABLED":"","DISTRIBUTIONS_PORTAL_SECRET":"","ELEVENLABS_API_KEY":"","ELEVENLABS_MODEL_ID":"","ELEVENLABS_VOICE_ID":"","GILYONOT_DISABLED":"","GILYONOT_FROM_EMAIL":"","GILYONOT_NEDARIM_TOKEN":"","GMAIL_CLIENT_ID":"","GMAIL_CLIENT_SECRET":"","GMAIL_EMAIL":"","GMAIL_PUBSUB_TOPIC":"","GMAIL_PUSH_TOKEN":"","GMAIL_REDIRECT_URI":"","GMAIL_WATCH_RENEW_DISABLED":"","GOOGLE_DRIVE_BACKUP_FOLDER_ID":"","GOOGLE_SA_KEY":"","GOV_SYNC_DISABLED":"","KVITEL_MAILBOX":"","KVITEL_NEDARIM_TOKEN":"","LEGACY_SYNC_DISABLED":"","LIVE_BALANCES_DISABLED":"","LIVE_BALANCES_ENABLED":"","LOANS_PORTAL_SECRET":"","LOANS_REPORT_DISABLED":"","MAIL_DOMAIN":"","MATERNITY_CARD_RETRY_DISABLED":"","NEDARIM_API_PASSWORD":"","NEDARIM_CREATE_TXN_URL":"","NEDARIM_GUARD_ALERT_TO":"","NEDARIM_HISTORY_URL":"","NEDARIM_HOLIDAY_LIMITED_ID":"","NEDARIM_MATERNITY_LIMITED_ID":"","NEDARIM_MOSAD_ID":"","NEDARIM_PROXY_URL":"","NEWSLETTER_DISABLED":"","NEXTAUTH_SECRET":"","OTP_NONCE_SECRET":"","RABBI_FORM_BLANK_URL":"","RESEND_API_KEY":"","RESEND_WEBHOOK_SECRET":"","RESEND_WEBHOOK_SIGNING_SECRET":"","SCHEDULED_MAIL_DISABLED":"","SUPABASE_SERVICE_ROLE_KEY":"","UNLOAD_EXPIRED_DISABLED":"","VERIFY_FROM_EMAIL":"","VERIFY_FROM_NAME":"","VOICE_REBUILD_DISABLED":"","YEMOT_ANNOUNCE_TEMPLATE_ID":"","YEMOT_API_TOKEN":"","YEMOT_BOOK_FAIR_AUDIO":"","YEMOT_BOOK_FAIR_CALLER_ID":"","YEMOT_BOOK_FAIR_CREDIT_TEMPLATE_ID":"","YEMOT_BOOK_FAIR_EXT":"","YEMOT_BOOK_FAIR_TEXT_ONLY":"","YEMOT_BOOK_FAIR_TOKEN":"","YEMOT_CREDITS_FALLBACK_FOLDER":"","YEMOT_CREDITS_SECRET":"","YEMOT_FOLDER_HOLIDAY":"","YEMOT_FOLDER_IVR_FILES":"","YEMOT_FOLDER_MATERNITY":"","YEMOT_GILYONOT_SECRET":"","YEMOT_HOLIDAY_EXT":"","YEMOT_KVITEL_SECRET":"","YEMOT_MATERNITY_EXT":"","YEMOT_MENU_EXT":"","YEMOT_OTP_CALLER_ID":"","YEMOT_OTP_DIGIT_SEP":"","YEMOT_OTP_TEMPLATE_ID":"","YEMOT_SINGLE_ENDPOINT":"","YEMOT_TOKEN":"","YEMOT_WEBHOOK_SECRET":""}'
 
   Logs:
     Type: AWS::Logs::LogGroup
@@ -80,8 +85,8 @@ Resources:
           Essential: true
           PortMappings: [{ContainerPort: 3000}]
           Environment:
-            - {Name: NEXT_PUBLIC_SITE_URL, Value: !If [HasCert, !Sub "https://${DomainName}", !Sub "http://${Alb.DNSName}"]}
-            - {Name: NEXT_PUBLIC_APP_URL, Value: !If [HasCert, !Sub "https://${DomainName}", !Sub "http://${Alb.DNSName}"]}
+            - {Name: NEXT_PUBLIC_SITE_URL, Value: !If [SiteHttps, !Sub "https://${DomainName}", !Sub "http://${Alb.DNSName}"]}
+            - {Name: NEXT_PUBLIC_APP_URL, Value: !If [SiteHttps, !Sub "https://${DomainName}", !Sub "http://${Alb.DNSName}"]}
             - {Name: TZ, Value: Asia/Jerusalem}
           LogConfiguration:
             LogDriver: awslogs
@@ -239,8 +244,23 @@ Resources:
               ValueFrom: !Sub "${AppSecret}:YEMOT_TOKEN::"
             - Name: YEMOT_WEBHOOK_SECRET
               ValueFrom: !Sub "${AppSecret}:YEMOT_WEBHOOK_SECRET::"
+        # Cloudflare Tunnel: חיבור יוצא בלבד אל Cloudflare, בלי פורט פתוח בשרת. כתובת היעד מוגדרת בלוח של Cloudflare: http://localhost:3000
+        - !If
+          - UseTunnel
+          - Name: cloudflared
+            Image: cloudflare/cloudflared:latest
+            Essential: true
+            Command: [tunnel, --no-autoupdate, run]
+            LogConfiguration:
+              LogDriver: awslogs
+              Options: {awslogs-group: !Sub "/ecs/${ProjectName}", awslogs-region: !Ref 'AWS::Region', awslogs-stream-prefix: cloudflared}
+            Secrets:
+              - Name: TUNNEL_TOKEN
+                ValueFrom: !Sub "${AppSecret}:CLOUDFLARE_TUNNEL_TOKEN::"
+          - !Ref AWS::NoValue
 
   AlbSg:
+    Condition: UseAlb
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: ALB - 80 ו-443
@@ -254,10 +274,14 @@ Resources:
     Properties:
       GroupDescription: משימות - קבלת תעבורה מה-ALB בלבד
       VpcId: !Ref VpcId
-      SecurityGroupIngress:
-        - {IpProtocol: tcp, FromPort: 3000, ToPort: 3000, SourceSecurityGroupId: !Ref AlbSg}
+      # במצב tunnel אין כלל כניסה בכלל: השרת רק יוצר חיבור החוצה אל Cloudflare
+      SecurityGroupIngress: !If
+        - UseAlb
+        - [{IpProtocol: tcp, FromPort: 3000, ToPort: 3000, SourceSecurityGroupId: !Ref AlbSg}]
+        - !Ref AWS::NoValue
 
   Alb:
+    Condition: UseAlb
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Type: application
@@ -269,6 +293,7 @@ Resources:
         - {Key: routing.http.drop_invalid_header_fields.enabled, Value: 'true'}
 
   Tg:
+    Condition: UseAlb
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       VpcId: !Ref VpcId
@@ -283,7 +308,7 @@ Resources:
 
   HttpsListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: HasCert
+    Condition: AlbHasCert
     Properties:
       LoadBalancerArn: !Ref Alb
       Port: 443
@@ -293,6 +318,7 @@ Resources:
       DefaultActions: [{Type: forward, TargetGroupArn: !Ref Tg}]
 
   HttpRedirect:
+    Condition: UseAlb
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       LoadBalancerArn: !Ref Alb
@@ -315,7 +341,7 @@ Resources:
       LaunchType: FARGATE
       TaskDefinition: !Ref TaskDef
       DesiredCount: !Ref DesiredCount
-      HealthCheckGracePeriodSeconds: 90
+      HealthCheckGracePeriodSeconds: !If [UseAlb, 90, !Ref AWS::NoValue]
       # תגית Project של הסטאק עוברת גם לשרתים שרצים, כדי שיופיעו בדוח החיוב של הפרויקט
       EnableECSManagedTags: true
       PropagateTags: SERVICE
@@ -328,11 +354,14 @@ Resources:
           AssignPublicIp: ENABLED
           Subnets: !Ref SubnetIds
           SecurityGroups: [!Ref TaskSg]
-      LoadBalancers:
-        - {ContainerName: app, ContainerPort: 3000, TargetGroupArn: !Ref Tg}
+      LoadBalancers: !If
+        - UseAlb
+        - [{ContainerName: app, ContainerPort: 3000, TargetGroupArn: !Ref Tg}]
+        - !Ref AWS::NoValue
 
   # WAF בסיסי. ⚠️ כלל גודל הגוף מוגדר Count: העלאות מסמכים ו-webhooks גדולים מ-8KB.
   Waf:
+    Condition: UseAlb
     Type: AWS::WAFv2::WebACL
     Properties:
       Scope: REGIONAL
@@ -357,6 +386,7 @@ Resources:
           VisibilityConfig: {SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: rate}
 
   WafAssoc:
+    Condition: UseAlb
     Type: AWS::WAFv2::WebACLAssociation
     Properties:
       ResourceArn: !Ref Alb
@@ -395,6 +425,6 @@ Resources:
               - {Effect: Allow, Action: 'iam:PassRole', Resource: [!GetAtt ExecRole.Arn, !GetAtt TaskRole.Arn]}
 
 Outputs:
-  AlbDnsName: {Value: !GetAtt Alb.DNSName, Description: "כתובת הבדיקה (http) והיעד ל-DNS של הדומיין (CNAME)"}
+  AlbDnsName: {Condition: UseAlb, Value: !GetAtt Alb.DNSName, Description: "כתובת הבדיקה (http) והיעד ל-DNS של הדומיין (CNAME)"}
   DeployRoleArn: {Value: !GetAtt DeployRole.Arn, Description: "מדביקים ב-GitHub Secret בשם AWS_DEPLOY_ROLE_ARN"}
   SecretArn: {Value: !Ref AppSecret}
