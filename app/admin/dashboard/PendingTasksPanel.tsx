@@ -17,10 +17,10 @@ interface PendingTask {
 }
 
 const typeConfig: Record<PendingTask['type'], { label: string; icon: React.ElementType; color: string }> = {
-  beneficiary:   { label: 'צאצאים',         icon: Users,          color: 'text-indigo-600 bg-indigo-50' },
+  beneficiary:   { label: 'צאצאים',         icon: Users,          color: 'text-navy bg-sand' },
   loan:          { label: 'הלוואות',         icon: Landmark,       color: 'text-blue-600 bg-blue-50' },
   maternity:     { label: 'יולדות',          icon: Baby,           color: 'text-pink-600 bg-pink-50' },
-  widow:         { label: 'אלמנות ויתומים',  icon: HeartHandshake, color: 'text-violet-600 bg-violet-50' },
+  widow:         { label: 'אלמנות ויתומים',  icon: HeartHandshake, color: 'text-navy bg-sand' },
   financial_aid: { label: 'סיוע רפואי',     icon: HandCoins,      color: 'text-teal-600 bg-teal-50' },
   name_change:   { label: 'תיקון שם',        icon: UserPen,        color: 'text-amber-600 bg-amber-50' },
 }

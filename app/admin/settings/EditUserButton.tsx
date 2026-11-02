@@ -169,7 +169,7 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
   return (
     <>
       <button onClick={() => setOpen(true)}
-        className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+        className="p-1.5 rounded-lg text-slate-400 hover:text-navy hover:bg-sand transition-colors"
         title="עריכת משתמש">
         <Pencil size={14} />
       </button>
@@ -179,7 +179,7 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 sticky top-0 bg-white z-10">
               <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-                <Pencil size={15} className="text-indigo-500" /> עריכת משתמש
+                <Pencil size={15} className="text-navy-soft" /> עריכת משתמש
               </h3>
               <button onClick={close} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
             </div>
@@ -204,20 +204,20 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-medium text-slate-600">שם מלא <span className="text-red-500">*</span></label>
                   <input value={fullName} onChange={e => setFullName(e.target.value)}
-                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft" />
                 </div>
 
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-medium text-slate-600">כותרת תצוגה (מוצגת למעלה, לא משנה הרשאות)</label>
                   <input value={displayTitle} onChange={e => setDisplayTitle(e.target.value)} maxLength={60} placeholder="למשל: מנהל"
-                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft" />
                 </div>
 
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-medium text-slate-600">טלפון</label>
                   <input value={phone} onChange={e => setPhone(e.target.value)}
                     placeholder="05X-XXXXXXX" dir="ltr"
-                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-navy-soft" />
                 </div>
 
                 {/* Role */}
@@ -226,7 +226,7 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
                   <div className="grid grid-cols-2 gap-2">
                     {ROLES.map(r => (
                       <button key={r} type="button" onClick={() => setRole(r)}
-                        className={`py-2 rounded-lg border text-sm font-medium transition-colors ${role === r ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
+                        className={`py-2 rounded-lg border text-sm font-medium transition-colors ${role === r ? 'bg-navy border-navy text-white' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
                         {ROLE_LABELS[r]}
                       </button>
                     ))}
@@ -276,7 +276,7 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
                 )}
 
                 {isAdmin && (
-                  <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-xs text-indigo-700">
+                  <div className="rounded-xl border border-gold-soft bg-sand px-4 py-3 text-xs text-navy-dark">
                     מנהל מערכת — גישה מלאה לכל המחלקות ללא הגבלה
                   </div>
                 )}
@@ -287,7 +287,7 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
                   <select
                     value={department}
                     onChange={e => setDepartment(e.target.value)}
-                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft bg-white"
                   >
                     <option value="">ללא שיוך</option>
                     {Object.values(DEPARTMENTS).filter(d => !d.mailboxOnly).map(d => (
@@ -304,7 +304,7 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
                   <div className="flex flex-col gap-2 rounded-xl border border-slate-200 p-3">
                     <label className="flex items-center justify-between cursor-pointer">
                       <span className="text-xs font-semibold text-slate-700">מייל בלבד — גישה רק ללשונית המייל</span>
-                      <input type="checkbox" checked={mailOnly} onChange={e => setMailOnly(e.target.checked)} className="w-4 h-4 accent-indigo-600" />
+                      <input type="checkbox" checked={mailOnly} onChange={e => setMailOnly(e.target.checked)} className="w-4 h-4 accent-navy" />
                     </label>
                     <p className="text-[11px] text-slate-400">כשמסומן, המשתמש נכנס ורואה אך ורק את המייל — ורק את התיבות שתבחר למטה.</p>
                     <div className="flex flex-col gap-1.5 pt-1 border-t border-slate-100">
@@ -312,7 +312,7 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
                       <div className="grid grid-cols-2 gap-1 max-h-44 overflow-y-auto">
                         {Object.values(DEPARTMENTS).map(d => (
                           <label key={d.key} className="flex items-center gap-2 px-2 py-1.5 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50">
-                            <input type="checkbox" checked={allowedMailboxes.includes(d.key)} onChange={() => toggleMailbox(d.key)} className="w-3.5 h-3.5 accent-indigo-600" />
+                            <input type="checkbox" checked={allowedMailboxes.includes(d.key)} onChange={() => toggleMailbox(d.key)} className="w-3.5 h-3.5 accent-navy" />
                             <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: d.color }} />
                             <span className="text-xs text-slate-700 truncate" title={d.email}>{d.label}</span>
                           </label>
@@ -327,7 +327,7 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
                 <div className="flex items-center justify-between py-2 border border-slate-200 rounded-lg px-3">
                   <span className="text-sm text-slate-700">משתמש פעיל</span>
                   <button type="button" onClick={() => setIsActive(v => !v)}
-                    className={`relative w-10 h-5 rounded-full transition-colors ${isActive ? 'bg-indigo-500' : 'bg-slate-300'}`}>
+                    className={`relative w-10 h-5 rounded-full transition-colors ${isActive ? 'bg-navy-soft' : 'bg-slate-300'}`}>
                     <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${isActive ? 'left-5' : 'left-0.5'}`} />
                   </button>
                 </div>
@@ -341,15 +341,15 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
                       value={newPassword}
                       onChange={e => { setNewPassword(e.target.value); setPwMsg(null) }}
                       placeholder="סיסמה חדשה (לפחות 6 תווים)"
-                      className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                      className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gold"
                     />
                     <button type="button" onClick={updatePassword} disabled={pwBusy || newPassword.length < 6}
-                      className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white text-xs font-medium whitespace-nowrap">
+                      className="px-3 py-2 rounded-lg bg-navy hover:bg-navy-dark disabled:bg-line-strong text-white text-xs font-medium whitespace-nowrap">
                       {pwBusy ? <Loader2 size={13} className="animate-spin" /> : 'עדכן סיסמה'}
                     </button>
                   </div>
                   <button type="button" onClick={sendResetEmail} disabled={pwBusy}
-                    className="self-start text-xs font-medium text-indigo-600 hover:text-indigo-800 underline disabled:opacity-50">
+                    className="self-start text-xs font-medium text-navy hover:text-navy-dark underline disabled:opacity-50">
                     שלח למשתמש מייל לאיפוס סיסמה
                   </button>
                   {pwMsg && (
@@ -390,7 +390,7 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
                         ביטול
                       </button>
                       <button onClick={submit} disabled={saving || !fullName.trim()}
-                        className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                        className="flex items-center gap-1.5 bg-navy hover:bg-navy-dark disabled:bg-line-strong text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
                         {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
                         שמור שינויים
                       </button>

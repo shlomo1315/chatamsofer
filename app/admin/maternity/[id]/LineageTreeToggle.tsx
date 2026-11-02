@@ -13,7 +13,7 @@ export default function LineageTreeToggle({ nodeId }: { nodeId: string }) {
     <button
       type="button"
       onClick={() => setOpen(true)}
-      className="inline-flex items-center gap-1.5 text-xs font-medium text-violet-700 border border-violet-200 hover:bg-violet-50 rounded-lg px-3 py-1.5 transition-colors"
+      className="inline-flex items-center gap-1.5 text-xs font-medium text-navy-dark border border-line hover:bg-sand rounded-lg px-3 py-1.5 transition-colors"
     >
       <GitBranch size={13} /> הצג עץ שושלת מלא
     </button>

@@ -125,7 +125,7 @@ export default function EmailTextsManager() {
           href="/api/admin/email-catalog-pdf"
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 self-start rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-3.5 py-2 text-sm font-semibold transition-colors"
+          className="inline-flex items-center gap-2 self-start rounded-lg border border-line bg-sand text-navy-dark hover:bg-gold-soft px-3.5 py-2 text-sm font-semibold transition-colors"
         >
           <Download size={15} /> צפייה בנוסחים (טקסט)
         </a>
@@ -155,7 +155,7 @@ export default function EmailTextsManager() {
 
         return (
           <div key={group} className="flex flex-col gap-2">
-            <h3 className="text-sm font-bold text-slate-800 border-r-4 border-indigo-400 pr-2.5 mt-2">
+            <h3 className="text-sm font-bold text-slate-800 border-r-4 border-gold pr-2.5 mt-2">
               {GROUP_LABELS[group]}
             </h3>
 
@@ -205,14 +205,14 @@ export default function EmailTextsManager() {
                                   value={val}
                                   onChange={e => setField(spec.id, f.key, e.target.value)}
                                   rows={3}
-                                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 resize-y"
+                                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-navy-soft/40 focus:border-gold resize-y"
                                 />
                               ) : (
                                 <input
                                   type="text"
                                   value={val}
                                   onChange={e => setField(spec.id, f.key, e.target.value)}
-                                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400"
+                                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-navy-soft/40 focus:border-gold"
                                 />
                               )}
                             </div>
@@ -289,7 +289,7 @@ export default function EmailTextsManager() {
               type="button"
               onClick={save}
               disabled={saving}
-              className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50 shadow-sm"
+              className="inline-flex items-center gap-2 bg-navy hover:bg-navy-dark text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50 shadow-sm"
             >
               {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
               שמור שינויים

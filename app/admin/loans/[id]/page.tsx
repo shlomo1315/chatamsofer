@@ -259,7 +259,7 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
             הדעת, ובראש הדף הם הוצגו עוד לפני שנקרא דבר. */}
         <div className="flex items-center gap-2">
           <Link href={`/admin/loans/${loan.id}/edit`}>
-            <button className="flex items-center gap-1.5 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-3 py-1.5 transition-colors">
+            <button className="flex items-center gap-1.5 text-sm text-white bg-navy hover:bg-navy-dark rounded-lg px-3 py-1.5 transition-colors">
               <Edit size={14} /> עריכה
             </button>
           </Link>
@@ -288,7 +288,7 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
 
           {/* 1 · סיכום המשפחה */}
           <section className="flex flex-col gap-2">
-            <div className="flex items-center gap-2 text-violet-600">
+            <div className="flex items-center gap-2 text-navy">
               <Users size={16} />
               <h2 className="text-sm font-bold text-slate-700">סיכום המשפחה</h2>
             </div>
@@ -297,7 +297,7 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
 
           {/* 2 · פרטי הלוואה + הערות */}
           <section className="flex flex-col gap-4">
-            <div className="flex items-center gap-2 text-indigo-600 border-t border-slate-200 pt-5">
+            <div className="flex items-center gap-2 text-navy border-t border-slate-200 pt-5">
               <CreditCard size={16} />
               <h2 className="text-sm font-bold text-slate-700">פרטי הלוואה</h2>
             </div>
@@ -410,7 +410,7 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
 
               {idDocs.length > 0 && (
                 <Card>
-                  <div className="flex items-center gap-2 text-indigo-600 mb-3">
+                  <div className="flex items-center gap-2 text-navy mb-3">
                     <FileText size={16} />
                     <span className="text-xs font-semibold text-slate-500 uppercase">תעודות זהות</span>
                   </div>
@@ -519,7 +519,7 @@ function LoanDocCard({ label, url, person, gallery, index, pages = 1, className 
     {/* ⚠️ הגלריה מועברת גם מכאן: בלעדיה הת"ז נפתחת כמסמך בודד והחצים
         נעלמים — המזכיר נאלץ לסגור ולפתוח כל מסמך בנפרד. */}
     <ViewDocButton url={url} name={label} gallery={gallery} index={index}
-       className="flex flex-col gap-2 p-2 border border-slate-200 rounded-xl bg-white hover:border-indigo-300 hover:shadow-sm transition-all group">
+       className="flex flex-col gap-2 p-2 border border-slate-200 rounded-xl bg-white hover:border-line-strong hover:shadow-sm transition-all group">
       {isImage ? (
         <SafeDocImage path={url} name={label} alt={label} className={`w-full ${imgClass} object-contain rounded-lg bg-slate-50`} />
       ) : isPdf ? (
@@ -530,10 +530,10 @@ function LoanDocCard({ label, url, person, gallery, index, pages = 1, className 
           <FileText size={28} className="text-slate-400" />
         </div>
       )}
-      <span className="text-xs font-medium text-slate-600 group-hover:text-indigo-600 flex items-center justify-center gap-1 text-center">
+      <span className="text-xs font-medium text-slate-600 group-hover:text-navy flex items-center justify-center gap-1 text-center">
         <span className="truncate" title={label}>{label}</span>
         {/* ⚠️ "2 עמודים" — הכרטיס מייצג את המסמך כולו. */}
-        {pages > 1 && <span className="flex-shrink-0 text-indigo-500">· {pages} עמודים</span>}
+        {pages > 1 && <span className="flex-shrink-0 text-navy-soft">· {pages} עמודים</span>}
         <ExternalLink size={11} className="flex-shrink-0" />
       </span>
     </ViewDocButton>

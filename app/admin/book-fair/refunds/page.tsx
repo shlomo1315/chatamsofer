@@ -47,7 +47,7 @@ export default async function BookFairRefundsPage({
             href={t.key === 'open' ? '/admin/book-fair/refunds' : `/admin/book-fair/refunds?tab=${t.key}`}
             className={`rounded-full border px-4 py-1.5 text-sm font-medium transition ${
               t.key === active
-                ? 'border-indigo-600 bg-indigo-600 text-white'
+                ? 'border-navy bg-navy text-white'
                 : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800'
             }`}
           >

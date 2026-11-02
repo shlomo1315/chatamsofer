@@ -429,7 +429,7 @@ export default function StockManager() {
                   <div className="mt-2 flex flex-col gap-1.5">
                     {coverage.missing.map(m => (
                       <button key={m.aidId} type="button" onClick={() => router.push(`/admin/maternity/${m.aidId}`)}
-                        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-right hover:border-indigo-300">
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-right hover:border-line-strong">
                         <span className="block text-[12px] font-bold text-slate-800">{m.name}</span>
                         <span className="block text-[11px] text-slate-500">{m.reason}</span>
                       </button>
@@ -447,7 +447,7 @@ export default function StockManager() {
                 </button>
               )}
               <button type="button" onClick={() => setShowRecon(s => !s)}
-                className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 underline decoration-dotted underline-offset-2">
+                className="text-xs font-semibold text-navy hover:text-navy-dark underline decoration-dotted underline-offset-2">
                 {showRecon ? 'הסתר פילוח' : 'פילוח מלא'}
               </button>
             </div>
@@ -484,7 +484,7 @@ export default function StockManager() {
                     <button type="button" onClick={() => router.push(`/admin/maternity/${s.aidId}`)}
                       className="text-right min-w-0 flex-1 group">
                       <span className="flex items-center gap-1.5">
-                        <span className="text-[13px] font-bold text-slate-800 group-hover:text-indigo-700">{s.name}</span>
+                        <span className="text-[13px] font-bold text-slate-800 group-hover:text-navy-dark">{s.name}</span>
                         <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">{s.statusLabel}</span>
                         {s.cards > 1 && (
                           <span className="ltr-num rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">{s.cards} כרטיסים</span>
@@ -758,7 +758,7 @@ function BaselineModal({ currentBalance, issued, unapprovedCount, onClose, onDon
           ]).map(o => (
             <button key={o.key} type="button" onClick={() => setMode(o.key)}
               className={`flex-1 rounded-xl border px-3 py-2 text-right transition-colors ${
-                mode === o.key ? 'border-indigo-400 bg-indigo-50 ring-2 ring-indigo-100' : 'border-slate-200 hover:border-slate-300'}`}>
+                mode === o.key ? 'border-gold bg-sand ring-2 ring-gold-soft' : 'border-slate-200 hover:border-slate-300'}`}>
               <span className="block text-[12px] font-bold text-slate-800">{o.label}</span>
               <span className="mt-0.5 block text-[10px] leading-snug text-slate-500">{o.hint}</span>
             </button>
@@ -769,11 +769,11 @@ function BaselineModal({ currentBalance, issued, unapprovedCount, onClose, onDon
           {mode === 'drawer' ? 'מספר הכרטיסים שנמצאו בספירה' : 'סך הכרטיסים שנקנו'}
         </label>
         <input value={qty} onChange={e => setQty(e.target.value)} inputMode="numeric" dir="ltr" placeholder="300"
-          className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-left text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" />
+          className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-left text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold-soft" />
 
         <label className="mb-1.5 mt-3 block text-xs font-bold text-slate-600">הערה (לא חובה)</label>
         <input value={note} onChange={e => setNote(e.target.value)} placeholder="למשל: ספירה לאחר סיום הבדיקות"
-          className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" />
+          className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold-soft" />
 
         <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-[12px] leading-relaxed text-slate-600">
           <div className="flex justify-between"><span>מלאי מחושב כרגע</span><span className="ltr-num font-bold">{currentBalance}</span></div>

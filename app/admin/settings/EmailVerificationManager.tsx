@@ -258,7 +258,7 @@ export default function EmailVerificationManager() {
       {stats && (
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
           <div className="flex items-center gap-2 mb-2">
-            <MailCheck size={15} className="text-indigo-500" />
+            <MailCheck size={15} className="text-navy-soft" />
             <p className="text-xs font-bold text-slate-700">קצב ההתקדמות</p>
           </div>
           <div className="h-2 w-full rounded-full bg-slate-200 overflow-hidden">
@@ -321,20 +321,20 @@ export default function EmailVerificationManager() {
 
       {/* ── מונה חי בזמן שליחה ── */}
       {progress && (
-        <div className="rounded-xl border-2 border-indigo-300 bg-indigo-50 p-3">
+        <div className="rounded-xl border-2 border-line-strong bg-sand p-3">
           <div className="flex items-center justify-between gap-2 mb-2">
-            <p className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
+            <p className="text-xs font-bold text-navy-dark flex items-center gap-1.5">
               <Loader2 size={14} className="animate-spin" /> שולח…
             </p>
-            <p className="text-sm font-black text-indigo-800 ltr-num" dir="ltr">
+            <p className="text-sm font-black text-navy-dark ltr-num" dir="ltr">
               {he(progress.sent)} / {he(progress.total)}
             </p>
           </div>
-          <div className="h-2.5 w-full rounded-full bg-indigo-200 overflow-hidden">
-            <div className="h-full rounded-full bg-indigo-600 transition-all duration-200"
+          <div className="h-2.5 w-full rounded-full bg-line overflow-hidden">
+            <div className="h-full rounded-full bg-navy transition-all duration-200"
               style={{ width: `${progress.total ? Math.round(((progress.sent + progress.failed) / progress.total) * 100) : 0}%` }} />
           </div>
-          <div className="mt-1.5 flex flex-wrap gap-x-4 text-[11px] text-indigo-800">
+          <div className="mt-1.5 flex flex-wrap gap-x-4 text-[11px] text-navy-dark">
             <span>נשלחו: <strong>{he(progress.sent)}</strong></span>
             {progress.failed > 0 && <span className="text-red-700">נכשלו: <strong>{he(progress.failed)}</strong></span>}
             <span>נותרו: <strong>{he(Math.max(0, progress.total - progress.sent - progress.failed))}</strong></span>

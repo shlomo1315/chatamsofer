@@ -8,7 +8,7 @@ function CopyButton({ text }: { text: string }) {
     <button
       onClick={() => { navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) }) }}
       title="העתק"
-      className="text-slate-400 hover:text-indigo-600 transition-colors"
+      className="text-slate-400 hover:text-navy transition-colors"
     >
       {copied ? <CheckCircle2 size={14} className="text-emerald-500" /> : <Copy size={14} />}
     </button>
@@ -142,8 +142,8 @@ export default function LoansPortalSettings() {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-center gap-2.5">
-        <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center">
-          <Lock size={16} className="text-indigo-500" />
+        <div className="w-8 h-8 bg-sand rounded-lg flex items-center justify-center">
+          <Lock size={16} className="text-navy-soft" />
         </div>
         <h2 className="text-sm font-semibold text-slate-700">פורטל הלוואות — שיתוף חיצוני</h2>
       </div>
@@ -154,7 +154,7 @@ export default function LoansPortalSettings() {
         <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
           <span dir="ltr" className="text-xs text-slate-700 font-mono flex-1 truncate">{portalUrl || '/shared/loans'}</span>
           {portalUrl && <CopyButton text={portalUrl} />}
-          <a href="/shared/loans" target="_blank" rel="noopener noreferrer" title="פתח פורטל" className="text-slate-400 hover:text-indigo-600 transition-colors">
+          <a href="/shared/loans" target="_blank" rel="noopener noreferrer" title="פתח פורטל" className="text-slate-400 hover:text-navy transition-colors">
             <ExternalLink size={14} />
           </a>
         </div>
@@ -216,7 +216,7 @@ export default function LoansPortalSettings() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               placeholder="לפחות 8 תווים"
-              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 transition-shadow"
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-navy-soft/40 focus:border-gold transition-shadow"
             />
           </div>
           <div className="flex flex-col gap-1">
@@ -227,7 +227,7 @@ export default function LoansPortalSettings() {
               onChange={e => setConfirm(e.target.value)}
               placeholder="הזן שוב..."
               className={`w-full rounded-lg border bg-slate-50 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-shadow ${
-                confirm && confirm !== password ? 'border-red-300 focus:ring-red-300/40' : 'border-slate-200 focus:ring-indigo-500/40 focus:border-indigo-400'
+                confirm && confirm !== password ? 'border-red-300 focus:ring-red-300/40' : 'border-slate-200 focus:ring-navy-soft/40 focus:border-gold'
               }`}
             />
           </div>
@@ -243,7 +243,7 @@ export default function LoansPortalSettings() {
         <button
           type="submit"
           disabled={saving || !password || !confirm}
-          className="self-start flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 shadow-sm shadow-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="self-start flex items-center gap-2 rounded-lg bg-navy hover:bg-navy-dark text-white text-xs font-semibold px-4 py-2 shadow-sm shadow-line disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {saving ? <Loader2 size={13} className="animate-spin" /> : <Lock size={13} />}
           שמור סיסמה
@@ -253,8 +253,8 @@ export default function LoansPortalSettings() {
       {/* Weekly report email */}
       <div className="border-t border-slate-100 pt-5 flex flex-col gap-3">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-violet-50 rounded-lg flex items-center justify-center">
-            <Mail size={16} className="text-violet-500" />
+          <div className="w-8 h-8 bg-sand rounded-lg flex items-center justify-center">
+            <Mail size={16} className="text-navy-soft" />
           </div>
           <div>
             <h3 className="text-sm font-semibold text-slate-700">דוח שבועי במייל</h3>
@@ -270,7 +270,7 @@ export default function LoansPortalSettings() {
             value={reportEmail}
             onChange={e => setReportEmail(e.target.value)}
             placeholder="name@example.com (ריק = ללא דוח)"
-            className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 text-left placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-400 transition-shadow"
+            className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 text-left placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-navy-soft/40 focus:border-gold transition-shadow"
           />
         </div>
 
@@ -285,7 +285,7 @@ export default function LoansPortalSettings() {
           <button
             onClick={saveEmail}
             disabled={savingEmail}
-            className="flex items-center gap-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold px-4 py-2 shadow-sm shadow-violet-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-2 rounded-lg bg-navy hover:bg-navy-dark text-white text-xs font-semibold px-4 py-2 shadow-sm shadow-line disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {savingEmail ? <Loader2 size={13} className="animate-spin" /> : <Mail size={13} />}
             שמור כתובת
@@ -320,7 +320,7 @@ export default function LoansPortalSettings() {
           דרך להגיע אליו בלי לדעת את הכתובת בעל-פה. */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-3">
         <div className="flex items-center gap-2">
-          <FileSignature size={16} className="text-indigo-600" />
+          <FileSignature size={16} className="text-navy" />
           <h3 className="font-bold text-slate-900 text-sm">טופס אישור רב</h3>
         </div>
         <p className="text-xs text-slate-500 leading-relaxed">
@@ -329,7 +329,7 @@ export default function LoansPortalSettings() {
         </p>
         <a
           href="/admin/settings/rabbi-form"
-          className="self-start flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 shadow-sm shadow-indigo-200 transition-colors"
+          className="self-start flex items-center gap-2 rounded-lg bg-navy hover:bg-navy-dark text-white text-xs font-semibold px-4 py-2 shadow-sm shadow-line transition-colors"
         >
           <FileSignature size={13} /> עריכת הטופס
         </a>

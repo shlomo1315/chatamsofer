@@ -159,8 +159,8 @@ export default async function DistributionDetailPage({ params }: { params: Promi
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-start gap-3">
           <Link href="/admin/distributions" className="text-slate-400 hover:text-slate-600 mt-1"><ArrowRight size={20} /></Link>
-          <div className="w-11 h-11 rounded-2xl bg-indigo-50 flex items-center justify-center flex-shrink-0">
-            <Gift size={20} className="text-indigo-600" />
+          <div className="w-11 h-11 rounded-2xl bg-sand flex items-center justify-center flex-shrink-0">
+            <Gift size={20} className="text-navy" />
           </div>
           <div>
             <h1 className="text-xl font-extrabold text-slate-900 flex items-center gap-2 flex-wrap">
@@ -176,7 +176,7 @@ export default async function DistributionDetailPage({ params }: { params: Promi
           </div>
         </div>
         <Link href={`/admin/distributions/${d.id}/edit`}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-600 hover:border-indigo-300 hover:text-indigo-700">
+          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-600 hover:border-line-strong hover:text-navy-dark">
           <Pencil size={14} /> עריכת החלוקה
         </Link>
       </div>

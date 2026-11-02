@@ -562,7 +562,7 @@ function FamilyModal({ family, onClose, onChanged }: { family: Family; onClose: 
             <span className="text-xs text-slate-400">#{family.ClientId}</span>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => setEditing(true)} className="text-slate-400 hover:text-indigo-600" title="עריכת פרטים"><Pencil size={17} /></button>
+            <button onClick={() => setEditing(true)} className="text-slate-400 hover:text-navy" title="עריכת פרטים"><Pencil size={17} /></button>
             <button onClick={del} disabled={busy === 'del'} className="text-slate-400 hover:text-red-600" title="מחיקת משפחה">{busy === 'del' ? <Loader2 size={17} className="animate-spin" /> : <Trash2 size={17} />}</button>
             <button onClick={onClose} className="text-slate-400 hover:text-slate-700"><X size={20} /></button>
           </div>
@@ -808,7 +808,7 @@ function UnloadCell({ info }: { info?: UnloadInfo }) {
         {label}
       </span>
       {info.extended && (
-        <span className="inline-block text-[11px] font-medium px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700" title={info.reason || 'הזכאות הוארכה ידנית'}>הוארך</span>
+        <span className="inline-block text-[11px] font-medium px-2 py-0.5 rounded-full bg-gold-soft text-navy-dark" title={info.reason || 'הזכאות הוארכה ידנית'}>הוארך</span>
       )}
     </span>
   )
@@ -817,7 +817,7 @@ function UnloadCell({ info }: { info?: UnloadInfo }) {
 const STAT_COLORS: Record<string, string> = {
   emerald: 'bg-emerald-50 border-emerald-100 text-emerald-700',
   rose: 'bg-rose-50 border-rose-100 text-rose-700',
-  indigo: 'bg-indigo-50 border-indigo-100 text-indigo-700',
+  indigo: 'bg-sand border-gold-soft text-navy-dark',
   slate: 'bg-slate-50 border-slate-100 text-slate-700',
 }
 function StatCard({ icon: Icon, color, label, value, loading }: { icon: typeof Wallet; color: string; label: string; value: string; loading?: boolean }) {

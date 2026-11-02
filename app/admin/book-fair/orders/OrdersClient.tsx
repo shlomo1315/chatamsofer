@@ -202,10 +202,10 @@ const CARDS: { key: BookFairOrderStatus | 'all' | 'needs_address' | 'needs_name'
   { key: 'needs_name',     label: 'ממתין לאימות שם',   icon: UserX,         cls: 'border-fuchsia-200 text-fuchsia-700' },
   // 🔴 08.10: הזמנות טלפוניות שההקלטה בהן לא נמצאה ועדיין לא הושלמו ידנית.
   { key: 'missing_rec',    label: 'חסרה הקלטה',        icon: MicOff,        cls: 'border-rose-200 text-rose-700' },
-  { key: 'needs_address',  label: 'ממתין לאימות כתובת', icon: Mic,          cls: 'border-purple-200 text-purple-700' },
+  { key: 'needs_address',  label: 'ממתין לאימות כתובת', icon: Mic,          cls: 'border-line text-navy-dark' },
   { key: 'pickup_waiting', label: 'איסוף — טרם נאסף',  icon: Store,         cls: 'border-orange-200 text-orange-700' },
   { key: 'picking',        label: 'בליקוט / נארז',     icon: Package,       cls: 'border-sky-200 text-sky-700' },
-  { key: 'shipped',        label: 'נשלח',              icon: Truck,         cls: 'border-violet-200 text-violet-700' },
+  { key: 'shipped',        label: 'נשלח',              icon: Truck,         cls: 'border-line text-navy-dark' },
   // ⚠️ כולל את מכירות הדוכן — הקונה לוקח את הספרים ביד (בקשת המשתמש 05.10).
   { key: 'delivered',      label: 'נמסר',              icon: CheckCircle2,  cls: 'border-teal-200 text-teal-700' },
   { key: 'payment_mismatch', label: 'אי-התאמה בסכום',  icon: AlertTriangle, cls: 'border-red-200 text-red-700' },
@@ -596,7 +596,7 @@ export default function OrdersClient({ orders, itemCounts, orderVolumes, tiers, 
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder="חיפוש לפי מספר הזמנה, שם, טלפון או אימייל…"
-            className="w-full rounded-xl border border-slate-200 py-2 pr-9 pl-3 text-sm outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+            className="w-full rounded-xl border border-slate-200 py-2 pr-9 pl-3 text-sm outline-none focus:border-line-strong focus:ring-2 focus:ring-gold-soft"
           />
         </div>
         {tc.picker}
@@ -611,8 +611,8 @@ export default function OrdersClient({ orders, itemCounts, orderVolumes, tiers, 
           <span className="text-xs text-slate-400">(בתצוגה)</span>
         </span>
         {shipSummary.orders > 0 && (
-          <span className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-indigo-200 bg-indigo-50/50 px-4 py-2 text-sm text-slate-700">
-            <span className="inline-flex items-center gap-1 font-medium"><Truck size={14} className="text-indigo-600" /> {shipSummary.orders} משלוחים ששולמו</span>
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-line bg-sand/50 px-4 py-2 text-sm text-slate-700">
+            <span className="inline-flex items-center gap-1 font-medium"><Truck size={14} className="text-navy" /> {shipSummary.orders} משלוחים ששולמו</span>
             <span>ספרים {fmtAgorot(shipSummary.items)}</span>
             <span>משלוח שנגבה {fmtAgorot(shipSummary.charged)}</span>
             <span className="text-slate-300">|</span>
@@ -645,14 +645,14 @@ export default function OrdersClient({ orders, itemCounts, orderVolumes, tiers, 
         <button
           onClick={() => openPrint('notes', tc.rows.map(o => o.id))}
           disabled={!tc.rows.length}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-40"
+          className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-4 py-2 text-sm font-medium text-white transition hover:bg-navy-dark disabled:opacity-40"
         >
           <Printer size={15} /> הדפסת כל תעודות המשלוח ({tc.rows.length})
         </button>
         <button
           onClick={() => openPrint('addresses', shippingRows.map(o => o.id))}
           disabled={!shippingRows.length}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-white px-4 py-2 text-sm font-medium text-indigo-700 transition hover:bg-indigo-50 disabled:opacity-40"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-white px-4 py-2 text-sm font-medium text-navy-dark transition hover:bg-sand disabled:opacity-40"
         >
           <MapPinned size={15} /> רשימת כתובות למשלוחן ({shippingRows.length})
         </button>
@@ -672,7 +672,7 @@ export default function OrdersClient({ orders, itemCounts, orderVolumes, tiers, 
         {bulkOpen && <BulkStatusDialog onClose={() => setBulkOpen(false)} />}
         <button
           onClick={() => setOfficeOpen(true)}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-white px-4 py-2 text-sm font-medium text-indigo-700 transition hover:bg-indigo-50"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-white px-4 py-2 text-sm font-medium text-navy-dark transition hover:bg-sand"
         >
           <PackagePlus size={15} /> הזמנת משלוח בלי תשלום
         </button>
@@ -773,7 +773,7 @@ function renderCell(key: ColKey, o: BookFairOrder, counts: Record<string, number
           onClick={e => { e.stopPropagation(); openPrint('notes', [o.id]) }}
           onKeyDown={e => e.stopPropagation()}
           title="הפקת תעודת משלוח"
-          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 transition hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700"
+          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 transition hover:border-line-strong hover:bg-sand hover:text-navy-dark"
         >
           <Printer size={13} /> תעודה
         </button>
@@ -786,7 +786,7 @@ function renderCell(key: ColKey, o: BookFairOrder, counts: Record<string, number
           // ⚠️ עוצר את האירוע: השורה כולה כבר מנווטת לאותו יעד, ובלי
           // זה הניווט קורה פעמיים.
           onClick={e => e.stopPropagation()}
-          className="font-mono text-xs font-semibold text-indigo-700 hover:underline"
+          className="font-mono text-xs font-semibold text-navy-dark hover:underline"
         >
           {o.order_number}
           {/* 🔴 תקלת משלוח שלא טופלה — הצוות רואה אותה כבר בטבלה. */}
@@ -813,7 +813,7 @@ function renderCell(key: ColKey, o: BookFairOrder, counts: Record<string, number
             href={`tel:${o.customer_phone}`}
             onClick={e => e.stopPropagation()}
             dir="ltr"
-            className="font-mono text-xs text-slate-600 hover:text-indigo-700 hover:underline"
+            className="font-mono text-xs text-slate-600 hover:text-navy-dark hover:underline"
           >
             {o.customer_phone}
           </a>
@@ -859,7 +859,7 @@ function renderCell(key: ColKey, o: BookFairOrder, counts: Record<string, number
           {/* 🔴 התג הזה הוא התור שהמשרד עובד לפיו: הזמנה טלפונית
               למשלוח שהכתובת בה עדיין לא הוקלדה מההקלטה. */}
           {o.delivery_method === 'shipping' && !o.address_confirmed && (
-            <span className="mt-0.5 inline-flex items-center gap-1 rounded bg-purple-50 px-1.5 py-0.5 text-[11px] font-medium text-purple-700">
+            <span className="mt-0.5 inline-flex items-center gap-1 rounded bg-sand px-1.5 py-0.5 text-[11px] font-medium text-navy-dark">
               <Mic size={10} /> כתובת בהקלטה
             </span>
           )}

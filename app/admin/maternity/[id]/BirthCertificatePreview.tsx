@@ -93,7 +93,7 @@ export default function BirthCertificatePreview({
         <FileText size={26} className="text-slate-400" />
         <p className="text-sm text-slate-500">לא צורף אישור לידה לבקשה זו</p>
         <button onClick={() => fileRef.current?.click()} disabled={busy}
-          className="inline-flex items-center gap-1.5 text-sm bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white px-3 py-1.5 rounded-lg transition-colors">
+          className="inline-flex items-center gap-1.5 text-sm bg-navy hover:bg-navy-dark disabled:bg-gold text-white px-3 py-1.5 rounded-lg transition-colors">
           {busy ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
           צירוף אישור לידה
         </button>
@@ -116,14 +116,14 @@ export default function BirthCertificatePreview({
           <PdfCanvasView url={url} name="אישור לידה" maxPages={1} className="w-full" />
         </div>
       ) : (
-        <ViewDocButton url={url} className="h-40 flex flex-col items-center justify-center text-slate-400 gap-2 hover:text-indigo-500">
+        <ViewDocButton url={url} className="h-40 flex flex-col items-center justify-center text-slate-400 gap-2 hover:text-navy-soft">
           <FileText size={28} /> <span className="text-xs">פתח את הקובץ</span>
         </ViewDocButton>
       )}
 
       {/* פעולות בריחוף */}
       <div className="absolute inset-x-0 top-0 flex items-center justify-end gap-1.5 p-2 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity">
-        <ViewDocButton url={url} className={`${btn} text-indigo-700`}>
+        <ViewDocButton url={url} className={`${btn} text-navy-dark`}>
           <ExternalLink size={13} /> פתח
         </ViewDocButton>
         <DownloadDocButton url={url} docType="אישור לידה" person={person} name={url} variant="button" className="bg-white/95 shadow-sm" />
@@ -144,7 +144,7 @@ export default function BirthCertificatePreview({
 
       {busy && (
         <div className="absolute inset-0 bg-white/60 flex items-center justify-center">
-          <Loader2 size={22} className="animate-spin text-indigo-500" />
+          <Loader2 size={22} className="animate-spin text-navy-soft" />
         </div>
       )}
       {confirmDialog}

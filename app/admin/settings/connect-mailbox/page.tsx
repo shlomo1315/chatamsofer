@@ -16,7 +16,7 @@ export default function ConnectMailboxPage() {
   const [labels, setLabels] = useState<MailLabel[]>([])
   const [labelChoice, setLabelChoice] = useState<string>('')      // id של תווית קיימת, או '__new__'
   const [newLabelName, setNewLabelName] = useState('')
-  const [newLabelColor, setNewLabelColor] = useState('#6366f1')
+  const [newLabelColor, setNewLabelColor] = useState('#14213D')
 
   const departments = Object.values(DEPARTMENTS)
 
@@ -48,8 +48,8 @@ export default function ConnectMailboxPage() {
 
       <div className="bg-white rounded-2xl border border-slate-200 p-6">
         <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
-            <Mail size={20} className="text-indigo-600" />
+          <div className="w-10 h-10 rounded-xl bg-sand flex items-center justify-center">
+            <Mail size={20} className="text-navy" />
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-800">חיבור תיבת מייל</h1>
@@ -74,8 +74,8 @@ export default function ConnectMailboxPage() {
               onClick={() => setDepartment(d.key)}
               className={`text-right rounded-xl border px-3.5 py-3 transition-colors ${
                 department === d.key
-                  ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-200'
-                  : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'
+                  ? 'border-navy-soft bg-sand ring-1 ring-line'
+                  : 'border-slate-200 hover:border-line-strong hover:bg-slate-50'
               }`}
             >
               <div className="flex items-center gap-2">
@@ -100,7 +100,7 @@ export default function ConnectMailboxPage() {
           onChange={e => setLabel(e.target.value.slice(0, 60))}
           placeholder="למשל: מייל הודעות ישן"
           className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm mb-5
-                     focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+                     focus:outline-none focus:ring-2 focus:ring-line focus:border-gold"
         />
 
         {/* תווית התיבה — כל מייל שייקלט יסומן בה אוטומטית */}
@@ -111,7 +111,7 @@ export default function ConnectMailboxPage() {
           value={labelChoice}
           onChange={e => setLabelChoice(e.target.value)}
           className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm mb-3
-                     focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+                     focus:outline-none focus:ring-2 focus:ring-line focus:border-gold"
         >
           <option value="">ללא תווית</option>
           {labels.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
@@ -126,7 +126,7 @@ export default function ConnectMailboxPage() {
               onChange={e => setNewLabelName(e.target.value.slice(0, 60))}
               placeholder="שם התווית החדשה"
               className="flex-1 rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm
-                         focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+                         focus:outline-none focus:ring-2 focus:ring-line focus:border-gold"
             />
             <input
               type="color"
@@ -143,8 +143,8 @@ export default function ConnectMailboxPage() {
           type="button"
           onClick={connect}
           disabled={!department || (labelChoice === '__new__' && !newLabelName.trim())}
-          className="w-full rounded-xl bg-indigo-600 text-white py-3 text-sm font-bold
-                     hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed
+          className="w-full rounded-xl bg-navy text-white py-3 text-sm font-bold
+                     hover:bg-navy-dark disabled:opacity-40 disabled:cursor-not-allowed
                      transition flex items-center justify-center gap-2"
         >
           <Link2 size={16} />

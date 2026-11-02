@@ -51,12 +51,12 @@ export default function SendLineageLinkButton({
         <button type="button"
           onClick={e => { e.stopPropagation(); e.preventDefault(); setOpen(true) }}
           title="שליחת קישור לתיקון סדר הדורות"
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-indigo-600 transition-colors">
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-navy transition-colors">
           <GitBranch size={14} /> דורות
         </button>
       ) : (
         <button type="button" onClick={() => setOpen(true)}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3.5 py-2 text-sm font-bold text-indigo-700 hover:bg-indigo-100 transition-colors">
+          className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-sand px-3.5 py-2 text-sm font-bold text-navy-dark hover:bg-gold-soft transition-colors">
           <GitBranch size={15} /> שלח תיקון דורות
         </button>
       )}
@@ -66,28 +66,28 @@ export default function SendLineageLinkButton({
           onClick={e => { e.stopPropagation(); if (!busy) setOpen(false) }}>
           <div dir="rtl" onClick={e => e.stopPropagation()}
             className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden">
-            <div className="bg-indigo-600 px-5 py-4 text-white flex items-start gap-3">
+            <div className="bg-navy px-5 py-4 text-white flex items-start gap-3">
               <GitBranch size={20} className="flex-shrink-0 mt-0.5" />
               <div className="flex-1">
                 <p className="font-bold text-base">שליחת קישור לתיקון סדר הדורות</p>
-                <p className="text-indigo-100 text-xs mt-1 leading-relaxed">
+                <p className="text-gold-soft text-xs mt-1 leading-relaxed">
                   {name ? `${name} ` : ''}יקבל/ו קישור אישי שבו יופיעו הפרטים ושרשרת הדורות, עם אפשרות לתקן את הסדר.
                 </p>
               </div>
-              <button onClick={() => setOpen(false)} className="text-indigo-200 hover:text-white"><X size={18} /></button>
+              <button onClick={() => setOpen(false)} className="text-line hover:text-white"><X size={18} /></button>
             </div>
             <div className="p-5 space-y-3">
               <label className="block text-xs font-semibold text-slate-600">כתובת מייל</label>
               <input value={addr} onChange={e => setAddr(e.target.value)} type="email" dir="ltr"
                 placeholder="name@example.com"
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-300 text-sm" />
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-line-strong text-sm" />
               {!email && (
                 <p className="text-[11px] text-amber-600">לצאצא זה אין מייל שמור בכרטסת — יש להזין כתובת.</p>
               )}
               {err && <p className="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">{err}</p>}
               {link && (
                 <button onClick={() => { void navigator.clipboard?.writeText(link); toast.success('הקישור הועתק') }}
-                  className="w-full flex items-center justify-center gap-2 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-xl px-3 py-2.5 hover:bg-indigo-100">
+                  className="w-full flex items-center justify-center gap-2 text-xs font-bold text-navy-dark bg-sand border border-line rounded-xl px-3 py-2.5 hover:bg-gold-soft">
                   <Copy size={13} /> העתקת הקישור
                 </button>
               )}
@@ -102,7 +102,7 @@ export default function SendLineageLinkButton({
               <button onClick={() => setOpen(false)} disabled={busy}
                 className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 disabled:opacity-40">ביטול</button>
               <button onClick={send} disabled={busy || !addr.trim()}
-                className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm disabled:opacity-40 inline-flex items-center justify-center gap-1.5">
+                className="flex-1 py-2.5 rounded-xl bg-navy hover:bg-navy-dark text-white font-bold text-sm disabled:opacity-40 inline-flex items-center justify-center gap-1.5">
                 {busy ? '...' : <><Check size={15} /> שלח קישור</>}
               </button>
             </div>

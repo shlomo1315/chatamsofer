@@ -22,7 +22,7 @@ export default function RecoveryUnlockButton({ aidId }: { aidId: string }) {
   if (done) return <span className="text-xs font-medium text-emerald-600">נפתח לעריכה ✓</span>
   return (
     <button onClick={unlock} disabled={busy}
-      className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 border border-indigo-200 rounded-lg px-3 py-1.5 hover:bg-indigo-50 disabled:opacity-40">
+      className="inline-flex items-center gap-1.5 text-xs font-semibold text-navy border border-line rounded-lg px-3 py-1.5 hover:bg-sand disabled:opacity-40">
       <Unlock size={13} /> {busy ? 'פותח…' : 'פתח לעריכה'}
     </button>
   )

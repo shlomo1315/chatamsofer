@@ -258,8 +258,8 @@ export default function IndexSyncPage() {
       {/* מצב כללי */}
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-indigo-50 flex items-center justify-center">
-            <Database size={19} className="text-indigo-600" />
+          <div className="w-11 h-11 rounded-xl bg-sand flex items-center justify-center">
+            <Database size={19} className="text-navy" />
           </div>
           <div>
             <p className="text-2xl font-black text-slate-900 ltr-num">{indexedTotal.toLocaleString('he-IL')}</p>
@@ -292,7 +292,7 @@ export default function IndexSyncPage() {
       <button
         onClick={() => run()}
         disabled={!!syncing || !accounts.length}
-        className="w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-5 py-3.5 text-sm font-extrabold text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-sm"
+        className="w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-navy px-5 py-3.5 text-sm font-extrabold text-white hover:bg-navy-dark disabled:opacity-50 transition-colors shadow-sm"
       >
         {syncing === 'all'
           ? <><Loader2 size={17} className="animate-spin" /> מסנכרן את כל התיבות… (עשוי לקחת מספר דקות)</>
@@ -363,7 +363,7 @@ export default function IndexSyncPage() {
                 </div>
                 {!r.error && (
                   <div className="flex items-center gap-3 text-xs">
-                    <span className="rounded-full bg-indigo-50 border border-indigo-100 px-2.5 py-1 font-bold text-indigo-700">
+                    <span className="rounded-full bg-sand border border-gold-soft px-2.5 py-1 font-bold text-navy-dark">
                       {r.upserted.toLocaleString('he-IL')} נקלטו
                     </span>
                     {r.touched > 0 && (
@@ -393,7 +393,7 @@ export default function IndexSyncPage() {
           <span className="font-extrabold text-slate-900">התיבות לפי מחלקה</span>
           <Link
             href="/admin/settings/connect-mailbox"
-            className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-extrabold text-white hover:bg-indigo-700 transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-3.5 py-2 text-xs font-extrabold text-white hover:bg-navy-dark transition-colors"
           >
             <Plus size={14} /> חבר תיבה חדשה
           </Link>
@@ -412,7 +412,7 @@ export default function IndexSyncPage() {
             </p>
             <Link
               href="/admin/settings/connect-mailbox"
-              className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-extrabold text-white hover:bg-indigo-700"
+              className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-navy px-4 py-2 text-xs font-extrabold text-white hover:bg-navy-dark"
             >
               <Plus size={14} /> חבר תיבה ראשונה
             </Link>
@@ -444,10 +444,10 @@ export default function IndexSyncPage() {
                                 }}
                                 placeholder="שם התיבה"
                                 maxLength={60}
-                                className="rounded-lg border border-indigo-300 px-2 py-1 text-sm font-bold text-slate-800 outline-none focus:border-indigo-500"
+                                className="rounded-lg border border-line-strong px-2 py-1 text-sm font-bold text-slate-800 outline-none focus:border-navy-soft"
                               />
                               <button type="button" onClick={() => void saveLabel(a)} disabled={acctBusy === a.id}
-                                className="rounded-lg bg-indigo-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-40">
+                                className="rounded-lg bg-navy px-2.5 py-1 text-xs font-bold text-white hover:bg-navy-dark disabled:opacity-40">
                                 {acctBusy === a.id ? <Loader2 size={13} className="animate-spin" /> : 'שמור'}
                               </button>
                               <button type="button" onClick={() => setEditingId(null)}
@@ -461,7 +461,7 @@ export default function IndexSyncPage() {
                               <span className={`font-bold ${a.label ? 'text-slate-800' : 'text-slate-400 italic'}`}>
                                 {a.label || 'ללא שם'}
                               </span>
-                              <Pencil size={11} className="text-slate-300 group-hover:text-indigo-500 transition-colors" />
+                              <Pencil size={11} className="text-slate-300 group-hover:text-navy-soft transition-colors" />
                             </button>
                           )}
                           <p dir="ltr" className={`truncate text-right text-xs ${a.is_active === false ? 'text-slate-400 line-through' : 'text-slate-500'}`}>
@@ -490,7 +490,7 @@ export default function IndexSyncPage() {
                             onClick={() => run(a.id)}
                             disabled={!!syncing || a.is_active === false}
                             title={a.is_active === false ? 'תיבה מושבתת' : 'סנכרן תיבה זו'}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:border-indigo-300 hover:text-indigo-700 disabled:opacity-40 transition-colors"
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:border-line-strong hover:text-navy-dark disabled:opacity-40 transition-colors"
                           >
                             {syncing === a.id
                               ? <><Loader2 size={13} className="animate-spin" /> מסנכרן…</>

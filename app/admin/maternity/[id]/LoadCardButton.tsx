@@ -62,7 +62,7 @@ export default function LoadCardButton({ aid }: { aid: MaternityAid }) {
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="סכום הטענה"
-            className="w-full pr-7 pl-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-slate-50 text-slate-700 ltr-num text-left focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300"
+            className="w-full pr-7 pl-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-slate-50 text-slate-700 ltr-num text-left focus:outline-none focus:ring-2 focus:ring-line focus:border-line-strong"
           />
         </div>
         <button

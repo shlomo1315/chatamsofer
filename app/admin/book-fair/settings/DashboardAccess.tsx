@@ -116,10 +116,10 @@ export default function DashboardAccess({ canEdit }: { canEdit: boolean }) {
               <input type="password" value={pw} onChange={e => setPw(e.target.value)} dir="ltr" autoComplete="new-password"
                 placeholder={info.configured ? 'סיסמה חדשה (8 תווים לפחות)' : 'בחרו סיסמה (8 תווים לפחות)'}
                 aria-label="סיסמה חדשה"
-                className="rounded-xl border border-slate-300 px-3 py-2.5 text-base outline-none focus:border-indigo-400" />
+                className="rounded-xl border border-slate-300 px-3 py-2.5 text-base outline-none focus:border-gold" />
               <input type="password" value={pw2} onChange={e => setPw2(e.target.value)} dir="ltr" autoComplete="new-password"
                 placeholder="הקלידו שוב לאימות" aria-label="אימות סיסמה"
-                className="rounded-xl border border-slate-300 px-3 py-2.5 text-base outline-none focus:border-indigo-400" />
+                className="rounded-xl border border-slate-300 px-3 py-2.5 text-base outline-none focus:border-gold" />
               <button onClick={savePassword} disabled={!!busy || !pw}
                 className="flex items-center justify-center gap-2 rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
                 {busy === 'password' && <Loader2 size={15} className="animate-spin" />}

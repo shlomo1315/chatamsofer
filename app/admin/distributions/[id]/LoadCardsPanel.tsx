@@ -226,9 +226,9 @@ export default function LoadCardsPanel({ distributionId }: { distributionId: str
           🔴 פעולה נפרדת מהטעינה: אפשר לטעון היום ולהודיע מחר, ואפשר
           להריץ שוב אחרי טעינה נוספת בלי לצנתק שנית את מי שכבר קיבל.
           ⚠️ אין שוברים — ההודעה הזו היא כל מה שהמשפחה מקבלת. */}
-      <div className="mt-4 flex flex-col gap-2.5 rounded-xl border border-indigo-200 bg-white p-3.5">
+      <div className="mt-4 flex flex-col gap-2.5 rounded-xl border border-line bg-white p-3.5">
         <div>
-          <h4 className="flex items-center gap-1.5 text-[13px] font-extrabold text-indigo-900">
+          <h4 className="flex items-center gap-1.5 text-[13px] font-extrabold text-navy-dark">
             <Bell size={14} /> הודעה שהכרטיס מוכן
           </h4>
           <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
@@ -239,8 +239,8 @@ export default function LoadCardsPanel({ distributionId }: { distributionId: str
         </div>
 
         {notifyScope ? (
-          <div className="rounded-lg border border-indigo-200 bg-indigo-50/60 p-3">
-            <p className="text-sm font-bold text-indigo-900">
+          <div className="rounded-lg border border-line bg-sand/60 p-3">
+            <p className="text-sm font-bold text-navy-dark">
               {fmt(notifyScope.phone)} צינתוקים · {fmt(notifyScope.email)} מיילים
             </p>
             <ul className="mt-1 flex flex-col gap-0.5 text-[11px] text-slate-600">
@@ -272,7 +272,7 @@ export default function LoadCardsPanel({ distributionId }: { distributionId: str
             {(notifyScope.phone + notifyScope.email) > 0 ? (
               <div className="mt-2.5 flex items-center gap-2">
                 <button type="button" disabled={notifyBusy} onClick={() => void runNotify()}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-extrabold text-white hover:bg-indigo-700 disabled:opacity-40">
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-4 py-2 text-xs font-extrabold text-white hover:bg-navy-dark disabled:opacity-40">
                   {notifyBusy ? <Loader2 size={13} className="animate-spin" /> : <Bell size={13} />}
                   שלח עכשיו
                 </button>
@@ -285,7 +285,7 @@ export default function LoadCardsPanel({ distributionId }: { distributionId: str
           </div>
         ) : (
           <button type="button" disabled={notifyBusy} onClick={() => void checkNotify()}
-            className="inline-flex w-fit items-center gap-1.5 rounded-xl border border-indigo-300 bg-white px-3 py-2 text-xs font-bold text-indigo-800 hover:bg-indigo-50 disabled:opacity-40">
+            className="inline-flex w-fit items-center gap-1.5 rounded-xl border border-line-strong bg-white px-3 py-2 text-xs font-bold text-navy-dark hover:bg-sand disabled:opacity-40">
             {notifyBusy ? <Loader2 size={13} className="animate-spin" /> : <Bell size={13} />}
             בדיקה לפני שליחה
           </button>

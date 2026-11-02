@@ -71,7 +71,7 @@ export default async function CardReconciliationPage() {
   const OrderLink = ({ no }: { no: string }) => {
     const o = byNumber.get(no)
     return o
-      ? <Link href={`/admin/book-fair/orders/${o.id}`} className="font-medium text-indigo-700 hover:underline" dir="ltr">{no}</Link>
+      ? <Link href={`/admin/book-fair/orders/${o.id}`} className="font-medium text-navy-dark hover:underline" dir="ltr">{no}</Link>
       : <span className="font-medium text-slate-500" dir="ltr">{no}</span>
   }
   const Status = ({ no }: { no: string }) => {
@@ -135,7 +135,7 @@ export default async function CardReconciliationPage() {
       <Section title="תשלומים שנכשלו" note={`הזמנות בכרטיס אשראי בסטטוס "נכשל". ${failedCharged} מהן עם חיוב באקסל.`} count={failed.length} alert={failedCharged > 0}>
         <OrderTable head={['הזמנה', 'תאריך', 'סכום', 'חיוב באקסל']}
           rows={failed.map(o => [
-            <Link key="o" href={`/admin/book-fair/orders/${o.id}`} className="font-medium text-indigo-700 hover:underline" dir="ltr">{o.order_number}</Link>,
+            <Link key="o" href={`/admin/book-fair/orders/${o.id}`} className="font-medium text-navy-dark hover:underline" dir="ltr">{o.order_number}</Link>,
             fmtDate(o.created_at), fmtAgorot(o.total_agorot),
             chargedNumbers.has(o.order_number) ? <span key="c" className="font-semibold text-red-700">יש</span> : 'אין',
           ])} />

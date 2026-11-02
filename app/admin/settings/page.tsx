@@ -102,7 +102,7 @@ export default async function SettingsPage() {
 
       <div className="flex flex-col gap-3">
         {/* Supabase connection */}
-        <Collapsible title="חיבור Supabase" icon={<Database size={16} className="text-indigo-500" />}>
+        <Collapsible title="חיבור Supabase" icon={<Database size={16} className="text-navy-soft" />}>
           <div className={`rounded-xl p-4 text-sm ${isSupabaseConfigured() ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>
             {isSupabaseConfigured() ? (
               <div>
@@ -119,7 +119,7 @@ export default async function SettingsPage() {
         </Collapsible>
 
         {/* Users table */}
-        <Collapsible title={`משתמשי מערכת (${profiles.length})`} icon={<Users size={16} className="text-indigo-500" />} headerRight={<AddUserButton />}>
+        <Collapsible title={`משתמשי מערכת (${profiles.length})`} icon={<Users size={16} className="text-navy-soft" />} headerRight={<AddUserButton />}>
           {profiles.length === 0 ? (
             <div className="py-6 text-center text-slate-400 text-sm">
               {isSupabaseConfigured() ? 'לא נמצאו משתמשים' : 'חיבור Supabase נדרש לצפייה במשתמשים'}
@@ -129,7 +129,7 @@ export default async function SettingsPage() {
               {profiles.map((p) => (
                 <div key={p.id} className="px-1 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors">
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 text-sm font-bold flex-shrink-0">
+                    <div className="w-9 h-9 bg-gold-soft rounded-full flex items-center justify-center text-navy-dark text-sm font-bold flex-shrink-0">
                       {p.full_name.charAt(0)}
                     </div>
                     <div>
@@ -138,7 +138,7 @@ export default async function SettingsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs bg-indigo-50 text-indigo-700 rounded-full px-2.5 py-0.5 font-medium">
+                    <span className="text-xs bg-sand text-navy-dark rounded-full px-2.5 py-0.5 font-medium">
                       {ROLE_LABELS[p.role]}
                     </span>
                     <div className={`w-2 h-2 rounded-full ${p.is_active ? 'bg-green-500' : 'bg-slate-300'}`} />
@@ -151,7 +151,7 @@ export default async function SettingsPage() {
         </Collapsible>
 
         {/* Lineage tree */}
-        <Collapsible title="שיוך שושלת — עץ הדורות" icon={<GitBranch size={16} className="text-violet-500" />}>
+        <Collapsible title="שיוך שושלת — עץ הדורות" icon={<GitBranch size={16} className="text-navy-soft" />}>
           <LineageTreeManager />
         </Collapsible>
 
@@ -181,7 +181,7 @@ export default async function SettingsPage() {
         </Collapsible>
 
         {/* תיקון ניתוב מיילים ישנים (שנתקעו במשרד ראשי) */}
-        <Collapsible title="תיקון ניתוב מיילים ישנים" icon={<Wrench size={16} className="text-indigo-500" />}>
+        <Collapsible title="תיקון ניתוב מיילים ישנים" icon={<Wrench size={16} className="text-navy-soft" />}>
           <RebuildRoutingButton />
         </Collapsible>
 
@@ -196,12 +196,12 @@ export default async function SettingsPage() {
         </Collapsible>
 
         {/* עריכת הטקסטים של כל המיילים היוצאים */}
-        <Collapsible title="הודעות מייל" icon={<Mail size={16} className="text-violet-500" />}>
+        <Collapsible title="הודעות מייל" icon={<Mail size={16} className="text-navy-soft" />}>
           <EmailTextsManager />
         </Collapsible>
 
         {/* Email templates — קבצים מצורפים לתבניות (לא טקסטים) */}
-        <Collapsible title="קבצים מצורפים לתבניות" icon={<Mail size={16} className="text-indigo-500" />}>
+        <Collapsible title="קבצים מצורפים לתבניות" icon={<Mail size={16} className="text-navy-soft" />}>
           <EmailTemplatesManager />
         </Collapsible>
 
@@ -211,7 +211,7 @@ export default async function SettingsPage() {
         </Collapsible>
 
         {/* איזו תיבה מוצגת בלשונית מייל ואיזו רק נאספת לארכיון */}
-        <Collapsible title="תצוגת תיבות המייל" icon={<Inbox size={16} className="text-indigo-500" />}>
+        <Collapsible title="תצוגת תיבות המייל" icon={<Inbox size={16} className="text-navy-soft" />}>
           <MailboxDisplaySettings />
         </Collapsible>
 
@@ -257,7 +257,7 @@ export default async function SettingsPage() {
         </Collapsible>
 
         {/* שיתוף חלוקות חגים — דף תצוגה בלבד מוגן בסיסמה */}
-        <Collapsible title="שיתוף חלוקות חגים (תצוגה בלבד)" icon={<Gift size={16} className="text-indigo-500" />}>
+        <Collapsible title="שיתוף חלוקות חגים (תצוגה בלבד)" icon={<Gift size={16} className="text-navy-soft" />}>
           <DistributionsShareSettings />
         </Collapsible>
 
@@ -281,7 +281,7 @@ export default async function SettingsPage() {
         </Collapsible>
 
         {/* אולפן ElevenLabs — יצירת קול מטקסט חופשי, בלי שיוך */}
-        <Collapsible title="אולפן קול — טקסט חופשי (ElevenLabs)" icon={<Sparkles size={16} className="text-indigo-500" />}>
+        <Collapsible title="אולפן קול — טקסט חופשי (ElevenLabs)" icon={<Sparkles size={16} className="text-navy-soft" />}>
           <ElevenLabsStudio />
         </Collapsible>
 
@@ -291,7 +291,7 @@ export default async function SettingsPage() {
         </Collapsible>
 
         {/* אימות כתובות מייל — מי אימת, מי לא, ושליחת בקשה לאמת */}
-        <Collapsible title="אימות כתובות מייל" icon={<MailWarning size={16} className="text-indigo-500" />}>
+        <Collapsible title="אימות כתובות מייל" icon={<MailWarning size={16} className="text-navy-soft" />}>
           <EmailVerificationManager />
           {/* תיקון שגיאות כתיב — לפני שליחת בקשות אימות: אין טעם לשלוח
               בקשה לכתובת שהדומיין בה שגוי. */}
@@ -309,7 +309,7 @@ export default async function SettingsPage() {
           <OtpRolloutSettings />
         </Collapsible>
 
-        <Collapsible title="סיכום יומי למנהל (מייל)" icon={<CalendarClock size={16} className="text-indigo-600" />}>
+        <Collapsible title="סיכום יומי למנהל (מייל)" icon={<CalendarClock size={16} className="text-navy" />}>
           <DailyDigestSettings />
         </Collapsible>
 
@@ -323,7 +323,7 @@ export default async function SettingsPage() {
             אלה היו *אותם רכיבים* בשני נתיבים, ולכן לא היה לזה מקור אמת. */}
 
         {/* Public registration gate */}
-        <Collapsible title="הרשמה ציבורית" icon={<UserPlus size={16} className="text-indigo-500" />}>
+        <Collapsible title="הרשמה ציבורית" icon={<UserPlus size={16} className="text-navy-soft" />}>
           <RegistrationGate />
         </Collapsible>
 
@@ -338,7 +338,7 @@ export default async function SettingsPage() {
         </Collapsible>
 
         {/* Notifications */}
-        <Collapsible title="הגדרות התראות" icon={<Bell size={16} className="text-indigo-500" />}>
+        <Collapsible title="הגדרות התראות" icon={<Bell size={16} className="text-navy-soft" />}>
           <div className="space-y-1">
             {[
               { label: 'תזכורת תפוגת כרטיס יולדת', desc: '7 ימים לפני תפוגה' },
@@ -351,7 +351,7 @@ export default async function SettingsPage() {
                   <p className="text-sm font-medium text-slate-800">{label}</p>
                   <p className="text-xs text-slate-500 mt-0.5">{desc}</p>
                 </div>
-                <button className="relative w-10 h-5 bg-indigo-500 rounded-full transition-colors flex-shrink-0">
+                <button className="relative w-10 h-5 bg-navy-soft rounded-full transition-colors flex-shrink-0">
                   <span className="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow-sm translate-x-5 transition-transform" />
                 </button>
               </div>

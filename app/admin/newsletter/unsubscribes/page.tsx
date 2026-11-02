@@ -10,7 +10,7 @@ export default function UnsubscribesPage() {
       <Link
         href="/admin/newsletter"
         className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500
-                   transition hover:text-indigo-600"
+                   transition hover:text-navy"
       >
         <ArrowRight size={16} />
         חזרה לקמפיינים

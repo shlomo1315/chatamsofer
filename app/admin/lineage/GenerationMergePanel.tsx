@@ -131,22 +131,22 @@ export default function GenerationMergePanel({ onDone, onClose }: { onDone?: () 
           )}
           <div className="mt-4 flex gap-2">
             <button type="button" autoFocus onClick={() => { setResult(null); void scan() }}
-              className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-violet-700 px-4 py-3 text-sm font-black text-white hover:bg-violet-800">
+              className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-navy-dark px-4 py-3 text-sm font-black text-white hover:bg-navy-dark">
               <RefreshCw size={16} /> רענן והצג את הדור הבא
             </button>
           </div>
         </Modal>
       )}
 
-      <section className="mb-4 rounded-2xl border-2 border-violet-200 bg-white p-4 sm:p-5" dir="rtl">
+      <section className="mb-4 rounded-2xl border-2 border-line bg-white p-4 sm:p-5" dir="rtl">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Layers size={18} className="text-violet-700" />
+            <Layers size={18} className="text-navy-dark" />
             <h2 className="text-base font-black text-slate-800">מיזוג מדורג: דור אחרי דור</h2>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={scan} disabled={loading || running}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-white px-3 py-1.5 text-sm font-bold text-violet-700 hover:bg-violet-50 disabled:opacity-50">
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-sm font-bold text-navy-dark hover:bg-sand disabled:opacity-50">
               {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} רענן
             </button>
             {onClose && (
@@ -172,8 +172,8 @@ export default function GenerationMergePanel({ onDone, onClose }: { onDone?: () 
 
         {plan && gen !== null && totals && (
           <>
-            <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-violet-50 px-4 py-3">
-              <span className="text-lg font-black text-violet-900">דור {gen}</span>
+            <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-sand px-4 py-3">
+              <span className="text-lg font-black text-navy-dark">דור {gen}</span>
               <span className="text-sm text-slate-700">{he(plan.groups.length)} קבוצות · {he(totals.removed)} יימחקו · {he(totals.children)} ילדים ו-{he(totals.families)} כרטסות יועברו</span>
               {plan.upcoming.length > 0 && (
                 <span className="text-xs text-slate-500">אחר כך: {plan.upcoming.map(u => `דור ${u.generation} (${u.groups})`).join(' · ')}</span>
@@ -217,7 +217,7 @@ export default function GenerationMergePanel({ onDone, onClose }: { onDone?: () 
             </div>
 
             <button type="button" onClick={() => setConfirming(true)} disabled={running || loading}
-              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-violet-700 px-4 py-3 text-sm font-black text-white hover:bg-violet-800 disabled:opacity-50 sm:w-auto">
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-navy-dark px-4 py-3 text-sm font-black text-white hover:bg-navy-dark disabled:opacity-50 sm:w-auto">
               {running ? <><Loader2 size={16} className="animate-spin" /> ממזג את דור {gen}…</> : <>מזג את דור {gen}</>}
             </button>
           </>

@@ -117,8 +117,8 @@ export default function QuickReview({
 
   return (
     <div className="dlg-backdrop items-start justify-center p-4 overflow-y-auto" dir="rtl">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl my-6 overflow-hidden border-2 border-indigo-300">
-        <div className="bg-indigo-600 px-5 py-3 flex items-center justify-between gap-3 flex-wrap">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl my-6 overflow-hidden border-2 border-line-strong">
+        <div className="bg-navy px-5 py-3 flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2.5">
             <h3 className="text-base font-black text-white">סקירה מהירה — {levelLabel}</h3>
             <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-bold text-white">
@@ -129,7 +129,7 @@ export default function QuickReview({
         </div>
 
         <div className="h-1 bg-slate-100">
-          <div className="h-full bg-indigo-500 transition-all" style={{ width: `${total ? (done / total) * 100 : 0}%` }} />
+          <div className="h-full bg-navy-soft transition-all" style={{ width: `${total ? (done / total) * 100 : 0}%` }} />
         </div>
 
         {!g ? (
@@ -144,14 +144,14 @@ export default function QuickReview({
                 מה שדילגתם עליו לא הוכרע — הוא יופיע שוב בסריקה הבאה.
               </p>
             )}
-            <button onClick={onClose} className="mt-5 block mx-auto rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-indigo-700">
+            <button onClick={onClose} className="mt-5 block mx-auto rounded-xl bg-navy px-5 py-2.5 text-sm font-bold text-white hover:bg-navy-dark">
               סגירה ורענון
             </button>
           </div>
         ) : (
           <div className="px-5 py-4">
             <div className="flex items-center gap-2 flex-wrap mb-2 text-[11px]">
-              <span className="rounded-full bg-indigo-50 border border-indigo-200 px-2 py-0.5 font-bold text-indigo-700">דור {g.generation}</span>
+              <span className="rounded-full bg-sand border border-line px-2 py-0.5 font-bold text-navy-dark">דור {g.generation}</span>
               <span className="text-slate-500">תחת: <strong className="text-slate-700">{g.parentName}</strong></span>
               <button onClick={() => onLocate(g.nodes.map(n => n.id))}
                 className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-0.5 font-bold text-slate-600 hover:bg-slate-50">
@@ -180,7 +180,7 @@ export default function QuickReview({
               {[...new Set(g.nodes.map(n => n.name.trim()))].map(nm => (
                 <button key={nm} onClick={() => setTyped(nm)}
                   className={`rounded-lg border-2 px-2.5 py-1 text-xs font-bold transition-colors ${
-                    name.trim() === nm ? 'border-indigo-500 bg-indigo-50 text-indigo-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                    name.trim() === nm ? 'border-navy-soft bg-sand text-navy-dark' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
                   {nm}
                 </button>
               ))}
@@ -188,11 +188,11 @@ export default function QuickReview({
             <input value={name} onChange={e => setTyped(e.target.value)}
               onFocus={() => { nameFocused.current = true }} onBlur={() => { nameFocused.current = false }}
               placeholder="או הזן ניסוח אחר…"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-gold" />
 
             <div className="flex flex-wrap items-center gap-2">
               <button onClick={() => void doMerge()} disabled={busy}
-                className="flex-1 min-w-[160px] inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white hover:bg-indigo-700 disabled:opacity-50">
+                className="flex-1 min-w-[160px] inline-flex items-center justify-center gap-2 rounded-xl bg-navy px-4 py-3 text-sm font-black text-white hover:bg-navy-dark disabled:opacity-50">
                 {busy ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} מזג — אותו אדם
               </button>
               <button onClick={() => void doDismiss()} disabled={busy}

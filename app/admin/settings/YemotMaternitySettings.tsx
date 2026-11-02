@@ -305,9 +305,9 @@ export default function YemotMaternitySettings() {
   return (
     <div>
       {/* פאנל קול נוירוני (ElevenLabs) */}
-      <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3 mb-4">
+      <div className="rounded-xl border border-gold-soft bg-sand/40 p-3 mb-4">
         <div className="flex items-center gap-1.5 mb-2">
-          <Volume2 size={15} className="text-indigo-600" />
+          <Volume2 size={15} className="text-navy" />
           <span className="text-xs font-semibold text-slate-700">קול נוירוני טבעי (ElevenLabs)</span>
           {hasKey ? (
             <span className="text-[11px] bg-emerald-50 text-emerald-700 rounded-full px-2 py-0.5">מחובר</span>
@@ -323,7 +323,7 @@ export default function YemotMaternitySettings() {
               value={apiKeyInput}
               onChange={(e) => setApiKeyInput(e.target.value)}
               placeholder={hasKey ? '••••••••••••' : 'מפתח ElevenLabs'}
-              className="w-full text-sm rounded-lg border border-slate-200 px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              className="w-full text-sm rounded-lg border border-slate-200 px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-line-strong"
               dir="ltr"
             />
           </div>
@@ -333,7 +333,7 @@ export default function YemotMaternitySettings() {
               value={voiceId}
               onChange={(e) => setVoiceId(e.target.value)}
               disabled={!voices.length}
-              className="w-full text-sm rounded-lg border border-slate-200 px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 disabled:bg-slate-50 disabled:text-slate-400"
+              className="w-full text-sm rounded-lg border border-slate-200 px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-line-strong disabled:bg-slate-50 disabled:text-slate-400"
             >
               {!voiceId && <option value="">{voices.length ? 'בחר קול' : 'הזן מפתח כדי לטעון קולות'}</option>}
               {voices.map((v) => (
@@ -362,7 +362,7 @@ export default function YemotMaternitySettings() {
         )}
 
         <p className="text-[11px] text-slate-500 mt-2 flex items-center gap-1.5 flex-wrap">
-          <span className="inline-flex items-center bg-indigo-100 text-indigo-700 rounded-full px-2 py-0.5 font-medium">🇮🇱 עברית</span>
+          <span className="inline-flex items-center bg-gold-soft text-navy-dark rounded-full px-2 py-0.5 font-medium">🇮🇱 עברית</span>
           הקול נוצר עם מנוע Eleven v3 (התמיכה הטובה ביותר בעברית), עם נפילה-לאחור אוטומטית. אם המבטא נשמע אנגלי — הקול שנבחר הוא קול אנגלי; בחר/י קול עברי והשווה עם כפתור ההשמעה.
         </p>
         {hasKey && voiceId && (
@@ -424,7 +424,7 @@ export default function YemotMaternitySettings() {
                     )}
                     {msg.audio ? (
                       generated ? (
-                        <span className="inline-flex items-center gap-1 text-[11px] bg-indigo-50 text-indigo-700 rounded-full px-2 py-0.5">
+                        <span className="inline-flex items-center gap-1 text-[11px] bg-sand text-navy-dark rounded-full px-2 py-0.5">
                           <Volume2 size={11} /> קול נוירוני טבעי
                         </span>
                       ) : (
@@ -445,7 +445,7 @@ export default function YemotMaternitySettings() {
                   onChange={(e) => setText(m.key, e.target.value)}
                   rows={2}
                   dir="rtl"
-                  className="w-full text-sm rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-y"
+                  className="w-full text-sm rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-line-strong resize-y"
                   placeholder={m.defaultText}
                 />
                 {msg.audio && (

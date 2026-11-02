@@ -26,8 +26,8 @@ const PHASE_HINT: Record<PickupPhase, string> = {
 
 /** תא עריכה בטבלה — נראה כטקסט עד שנוגעים בו. */
 const CELL = 'rounded-lg border border-transparent bg-transparent px-2 py-1.5 text-[13px] text-slate-800 ' +
-  'hover:border-slate-200 hover:bg-slate-50 focus:border-indigo-300 focus:bg-white focus:outline-none ' +
-  'focus:ring-2 focus:ring-indigo-100 placeholder:text-slate-300'
+  'hover:border-slate-200 hover:bg-slate-50 focus:border-line-strong focus:bg-white focus:outline-none ' +
+  'focus:ring-2 focus:ring-gold-soft placeholder:text-slate-300'
 
 interface Center {
   id: string; city: string; name: string; region: string
@@ -411,7 +411,7 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
   if (centers === null && !opened) {
     return (
       <button type="button" onClick={open}
-        className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-300 bg-white px-3 py-2 text-xs font-bold text-indigo-800 hover:bg-indigo-50">
+        className="inline-flex items-center gap-1.5 rounded-xl border border-line-strong bg-white px-3 py-2 text-xs font-bold text-navy-dark hover:bg-sand">
         <MapPin size={13} /> הצג מוקדים ופילוח
       </button>
     )
@@ -582,8 +582,8 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
                     title="האם המוקד מוצע לבחירה בשלב הרישום"
                     className={`w-28 shrink-0 rounded-lg px-2 py-1.5 text-[11px] font-bold transition ${
                       isOpen
-                        ? 'border border-indigo-300 bg-indigo-50 text-indigo-700'
-                        : 'border border-slate-300 bg-white text-slate-500 hover:border-indigo-300'
+                        ? 'border border-line-strong bg-sand text-navy-dark'
+                        : 'border border-slate-300 bg-white text-slate-500 hover:border-line-strong'
                     }`}>
                     {busy === c.id ? '…' : isOpen ? 'בחירה: פתוח' : 'בחירה: סגור'}
                   </button>
@@ -684,7 +684,7 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
                           className={`shrink-0 rounded-lg border bg-white px-2.5 py-1 text-[10.5px] font-bold transition disabled:opacity-40 ${
                             phase === 'ended'
                               ? 'border-rose-300 text-rose-700 hover:bg-rose-50'
-                              : 'border-slate-300 text-slate-600 hover:border-violet-300 hover:text-violet-700'}`}>
+                              : 'border-slate-300 text-slate-600 hover:border-line-strong hover:text-navy-dark'}`}>
                           {preview === `msg-${c.id}` ? '…' : '▶ השמע'}
                         </button>
                       )}
@@ -692,7 +692,7 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
                         כקובץ אחד — היא נקראת בקול המערכת. "הסתיימה" קבועה. */}
                     <a href="/admin/phone" target="_blank" rel="noopener"
                       title="עריכת הנוסח וההקלטה במערכת הטלפונית"
-                      className="shrink-0 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[10.5px] font-bold text-slate-600 transition hover:border-violet-300 hover:text-violet-700">
+                      className="shrink-0 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[10.5px] font-bold text-slate-600 transition hover:border-line-strong hover:text-navy-dark">
                       ערוך נוסח
                     </a>
                   </div>
@@ -716,7 +716,7 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
                       <button type="button" disabled={preview === c.id || !spokenCenterDetails(d)}
                         onClick={() => void playPreview(c.id, spokenCenterDetails(d))}
                         title="השמעה — כך זה יישמע"
-                        className="shrink-0 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[10.5px] font-bold text-slate-600 transition hover:border-violet-300 hover:text-violet-700 disabled:opacity-40">
+                        className="shrink-0 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[10.5px] font-bold text-slate-600 transition hover:border-line-strong hover:text-navy-dark disabled:opacity-40">
                         {preview === c.id ? '…' : '▶ השמע'}
                       </button>
                     )}
@@ -725,7 +725,7 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
                   <button type="button" disabled={busy === `rec-${c.id}` || !spokenCenterDetails(d)}
                     onClick={() => void generateVoice(c.id)}
                     title="יצירת הקראה בקול טבעי מהשם, הכתובת והשעות"
-                    className="shrink-0 rounded-lg border border-violet-300 bg-violet-50 px-2.5 py-1 text-[10.5px] font-bold text-violet-700 transition hover:bg-violet-100 disabled:opacity-40">
+                    className="shrink-0 rounded-lg border border-line-strong bg-sand px-2.5 py-1 text-[10.5px] font-bold text-navy-dark transition hover:bg-gold-soft disabled:opacity-40">
                     {busy === `rec-${c.id}` ? 'מייצר…' : c.audio_file ? 'יצירה מחדש' : 'יצירת קול טבעי'}
                   </button>
 

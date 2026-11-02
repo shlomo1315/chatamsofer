@@ -271,7 +271,7 @@ export default function BookEditor({ book, onClose, onSaved }: {
                       הסרת התמונה
                     </button>
                   )}
-                  {imgBusy && <span className="text-xs text-indigo-600">מעלה…</span>}
+                  {imgBusy && <span className="text-xs text-navy">מעלה…</span>}
                 </div>
               </div>
             </div>
@@ -299,7 +299,7 @@ export default function BookEditor({ book, onClose, onSaved }: {
           <button
             onClick={save}
             disabled={saving}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-5 py-2 text-sm font-medium text-white transition hover:bg-navy-dark disabled:opacity-50"
           >
             {saving && <Loader2 size={15} className="animate-spin" />}
             {isNew ? 'הוספה' : 'שמירה'}
@@ -310,7 +310,7 @@ export default function BookEditor({ book, onClose, onSaved }: {
   )
 }
 
-const INPUT = 'w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100'
+const INPUT = 'w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-line-strong focus:ring-2 focus:ring-gold-soft'
 
 function Field({ label, required, hint, className, children }: {
   label: string; required?: boolean; hint?: string; className?: string; children: React.ReactNode

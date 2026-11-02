@@ -159,13 +159,13 @@ export default function RegistrationCallSettings() {
         onChange={e => setText(e.target.value)}
         rows={5}
         dir="rtl"
-        className="w-full text-sm rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-y"
+        className="w-full text-sm rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-line-strong resize-y"
       />
 
       {/* חיווי מצב הקול הנוכחי של השיחה */}
       <div>
         {audioConfigured ? (
-          <span className="inline-flex items-center gap-1.5 text-[12px] bg-indigo-50 text-indigo-700 rounded-full px-2.5 py-1">
+          <span className="inline-flex items-center gap-1.5 text-[12px] bg-sand text-navy-dark rounded-full px-2.5 py-1">
             <Volume2 size={13} /> השיחה מנגנת הקלטה דרך קמפיין ימות
           </span>
         ) : (
@@ -223,13 +223,13 @@ export default function RegistrationCallSettings() {
         </div>
       )}
       {/* בדיקת שיחה למספר שלך — שיחה אחת בלבד למספר שתזין */}
-      <div className="rounded-lg border border-indigo-100 bg-indigo-50/40 px-3 py-2.5 flex flex-col gap-2">
+      <div className="rounded-lg border border-gold-soft bg-sand/40 px-3 py-2.5 flex flex-col gap-2">
         <p className="text-[11px] font-semibold text-slate-600 flex items-center gap-1.5"><PhoneCall size={12} /> בדיקת שיחה (למספר שלך בלבד)</p>
         <div className="flex items-stretch gap-2">
           <input value={testPhone} onChange={e => setTestPhone(e.target.value)} placeholder="0500000000" dir="ltr"
-            className="flex-1 min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+            className="flex-1 min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-line-strong" />
           <button type="button" onClick={testCall} disabled={testing}
-            className="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-semibold px-4 rounded-lg text-sm">
+            className="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 bg-navy hover:bg-navy-dark disabled:bg-line-strong text-white font-semibold px-4 rounded-lg text-sm">
             {testing ? <Loader2 size={14} className="animate-spin" /> : <PhoneCall size={14} />} התקשר אליי לבדיקה
           </button>
         </div>

@@ -36,8 +36,8 @@ export default function NewCampaignButton() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold
-                   text-white transition hover:bg-indigo-700"
+        className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-4 py-2.5 text-sm font-bold
+                   text-white transition hover:bg-navy-dark"
       >
         <Plus size={16} /> קמפיין חדש
       </button>
@@ -57,7 +57,7 @@ export default function NewCampaignButton() {
               onKeyDown={e => e.key === 'Enter' && create()}
               placeholder="למשל: עדכון לקראת החגים"
               className="mb-4 w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm
-                         focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                         focus:border-gold focus:outline-none focus:ring-2 focus:ring-line"
             />
 
             <label className="mb-1.5 block text-sm font-semibold text-slate-700">נשלח מטעם</label>
@@ -65,7 +65,7 @@ export default function NewCampaignButton() {
               value={dept}
               onChange={e => setDept(e.target.value)}
               className="mb-5 w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm
-                         focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                         focus:border-gold focus:outline-none focus:ring-2 focus:ring-line"
             >
               {Object.values(DEPARTMENTS).map(d => (
                 <option key={d.key} value={d.key}>{d.label}</option>
@@ -76,8 +76,8 @@ export default function NewCampaignButton() {
               <button
                 onClick={create}
                 disabled={busy || !name.trim()}
-                className="flex-1 rounded-xl bg-indigo-600 py-2.5 text-sm font-bold text-white
-                           transition hover:bg-indigo-700 disabled:opacity-40"
+                className="flex-1 rounded-xl bg-navy py-2.5 text-sm font-bold text-white
+                           transition hover:bg-navy-dark disabled:opacity-40"
               >
                 {busy ? <Loader2 size={16} className="mx-auto animate-spin" /> : 'יצירה'}
               </button>

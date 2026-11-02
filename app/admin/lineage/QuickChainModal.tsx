@@ -98,7 +98,7 @@ export default function QuickChainModal({
         className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
         <div className="mb-3 flex items-start justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gold-soft text-navy-dark">
               <GitBranch size={16} />
             </span>
             <h3 className="text-base font-bold text-slate-800">סדר הדורות</h3>
@@ -106,7 +106,7 @@ export default function QuickChainModal({
           <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"><X size={18} /></button>
         </div>
 
-        {loading && <div className="flex justify-center py-10"><Loader2 size={22} className="animate-spin text-indigo-500" /></div>}
+        {loading && <div className="flex justify-center py-10"><Loader2 size={22} className="animate-spin text-navy-soft" /></div>}
 
         {!loading && d && (
           <>
@@ -168,9 +168,9 @@ export default function QuickChainModal({
 
             {/* כפילות בעץ עצמו */}
             {d.nodeSiblingDup > 0 && (
-              <div className="mb-3 flex items-start gap-1.5 rounded-xl border border-purple-200 bg-purple-50 px-2.5 py-2">
-                <Copy size={12} className="mt-0.5 flex-shrink-0 text-purple-600" />
-                <p className="text-[11px] leading-relaxed text-purple-800">
+              <div className="mb-3 flex items-start gap-1.5 rounded-xl border border-line bg-sand px-2.5 py-2">
+                <Copy size={12} className="mt-0.5 flex-shrink-0 text-navy" />
+                <p className="text-[11px] leading-relaxed text-navy-dark">
                   בעץ קיימים <b>{d.nodeSiblingDup}</b> צמתים נוספים באותו שם תחת אותו אב —
                   כלומר הצומת עצמו כפול וטעון מיזוג.
                 </p>

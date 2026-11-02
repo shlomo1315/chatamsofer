@@ -133,7 +133,7 @@ export default function AudienceClient({ members, optedOut }: {
             key={key}
             onClick={() => setTab(key)}
             className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition ${
-              tab === key ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+              tab === key ? 'border-navy text-navy-dark' : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >
             <Icon size={14} /> {label}
@@ -149,7 +149,7 @@ export default function AudienceClient({ members, optedOut }: {
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="חיפוש לפי מייל או שם…"
-              className="w-full rounded-xl border border-slate-200 py-2 pr-9 pl-3 text-sm outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+              className="w-full rounded-xl border border-slate-200 py-2 pr-9 pl-3 text-sm outline-none focus:border-line-strong focus:ring-2 focus:ring-gold-soft"
             />
             {tc.picker}
             {tc.activeFilters}
@@ -215,7 +215,7 @@ function renderCell(key: ColKey, m: AudienceMember) {
     case 'source':
       return (
         <span className={`inline-block rounded-md border px-2 py-0.5 text-xs font-medium ${
-          m.source === 'both' ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+          m.source === 'both' ? 'border-line bg-sand text-navy-dark'
             : m.source === 'customer' ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
             : 'border-slate-200 bg-slate-50 text-slate-600'
         }`}>
@@ -309,7 +309,7 @@ function SendNewsletter({ canEdit, members }: { canEdit: boolean; members: Audie
           onChange={e => setSubject(e.target.value)}
           disabled={!canEdit}
           maxLength={200}
-          className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-300"
+          className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-line-strong"
         />
       </label>
 
@@ -320,7 +320,7 @@ function SendNewsletter({ canEdit, members }: { canEdit: boolean; members: Audie
           onChange={e => setMessage(e.target.value)}
           disabled={!canEdit}
           rows={8}
-          className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-300 resize-none"
+          className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-line-strong resize-none"
         />
       </label>
 
@@ -333,7 +333,7 @@ function SendNewsletter({ canEdit, members }: { canEdit: boolean; members: Audie
               onClick={() => setAudience(o.key)}
               disabled={!canEdit}
               className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
-                audience === o.key ? 'border-indigo-300 bg-indigo-50 text-indigo-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                audience === o.key ? 'border-line-strong bg-sand text-navy-dark' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
               }`}
             >
               {o.label}
@@ -351,7 +351,7 @@ function SendNewsletter({ canEdit, members }: { canEdit: boolean; members: Audie
             onChange={e => setTestTo(e.target.value)}
             dir="ltr"
             placeholder="you@example.com"
-            className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-300"
+            className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-line-strong"
           />
         </label>
         <button
@@ -374,7 +374,7 @@ function SendNewsletter({ canEdit, members }: { canEdit: boolean; members: Audie
         <button
           onClick={send}
           disabled={!!busy || !subject.trim() || !message.trim() || !recipientCount}
-          className="self-start rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-40"
+          className="self-start rounded-xl bg-navy px-5 py-2.5 text-sm font-medium text-white transition hover:bg-navy-dark disabled:opacity-40"
         >
           {busy === 'send' ? <Loader2 size={15} className="animate-spin" /> : `שליחה ל-${recipientCount} נמענים`}
         </button>

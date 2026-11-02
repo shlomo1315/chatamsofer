@@ -45,7 +45,7 @@ export default function AdjacentNav({
   // ⚠️ text-sm ו-px-3 py-1.5 — בדיוק כשאר כפתורי הכותרת (HDR_BTN).
   // קודם היה text-xs ו-px-2.5, והקבוצה נראתה נמוכה וקטנה משכניה.
   const btn = 'flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors'
-  const live = 'text-slate-600 hover:bg-indigo-50 hover:text-indigo-700'
+  const live = 'text-slate-600 hover:bg-sand hover:text-navy-dark'
   const dead = 'text-slate-300'
 
   return (
@@ -68,7 +68,7 @@ export default function AdjacentNav({
       {/* תג הנעילה — בלעדיו אין שום סימן שהניווט מוגבל, ו"אין עוד יולדות"
           נראה כמו תקלה במקום כמו סוף הרשימה שבה עובדים. */}
       {locked && (
-        <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-200 px-2 py-0.5 text-[10px] font-bold text-indigo-700">
+        <span className="inline-flex items-center gap-1 rounded-full bg-sand border border-line px-2 py-0.5 text-[10px] font-bold text-navy-dark">
           <ListFilter size={11} /> {bucketLabel}
         </span>
       )}

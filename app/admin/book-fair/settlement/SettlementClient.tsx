@@ -33,10 +33,10 @@ export type PaymentLog = AuthorPayment & { created_at: string; by: string | null
 type Filter = 'all' | 'open' | 'paid'
 type View = 'report' | 'log'
 
-const field = 'w-full min-h-10 rounded-[10px] border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-400 focus:outline-none'
+const field = 'w-full min-h-10 rounded-[10px] border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-gold focus:outline-none'
 const num = 'tabular-nums'
 const btn = 'inline-flex min-h-10 items-center justify-center gap-1.5 rounded-[10px] border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-50'
-const primary = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-[10px] bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50'
+const primary = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-[10px] bg-navy px-4 py-2 text-sm font-semibold text-white hover:bg-navy-dark disabled:opacity-50'
 // עמודות שורת הגורם בדסקטופ (כמו במוקאפ): שם · עותקים · נגבה · אחרי 5% · שולם · יתרה · מצב
 const grid = 'md:grid md:grid-cols-[2.2fr_.8fr_1.1fr_1.1fr_1.1fr_1.1fr_1fr] md:items-center md:gap-2'
 
@@ -327,7 +327,7 @@ function PartyItem({ p, books, priceOf, payments, expanded, canEdit, onToggle, o
                       {r.title}
                       {canEdit && (
                         <button onClick={() => onAdjust(r)}
-                                className="mt-0.5 flex items-center gap-1 text-xs font-medium text-indigo-700 hover:underline">
+                                className="mt-0.5 flex items-center gap-1 text-xs font-medium text-navy-dark hover:underline">
                           <SlidersHorizontal size={12} /> עדכון כמות
                         </button>
                       )}
@@ -407,9 +407,9 @@ function Cell({ label, value, cls = '' }: { label: string; value: string; cls?: 
 
 function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className={`rounded-xl border p-4 ${accent ? 'border-indigo-200 bg-[#fafaff]' : 'border-slate-200 bg-white'}`}>
+    <div className={`rounded-xl border p-4 ${accent ? 'border-line bg-[#fafaff]' : 'border-slate-200 bg-white'}`}>
       <div className="text-[13px] text-slate-600">{label}</div>
-      <div className={`mt-1 text-2xl font-bold tabular-nums ${accent ? 'text-indigo-700' : 'text-slate-900'}`}>{value}</div>
+      <div className={`mt-1 text-2xl font-bold tabular-nums ${accent ? 'text-navy-dark' : 'text-slate-900'}`}>{value}</div>
     </div>
   )
 }

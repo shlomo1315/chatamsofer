@@ -128,13 +128,13 @@ export default function FamilySummary({ loanId, section = 'all' }: { loanId: str
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Users size={16} className="text-indigo-600" />
+            <Users size={16} className="text-navy" />
             <h3 className="font-semibold text-slate-900 text-sm">סיכום המשפחה</h3>
           </div>
           {/* מעבר לכרטסת המלאה */}
           <Link
             href={`/admin/beneficiaries/${b.id}`}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg px-2.5 py-1.5 hover:bg-indigo-100 transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-navy-dark bg-sand border border-line rounded-lg px-2.5 py-1.5 hover:bg-gold-soft transition-colors"
           >
             לכרטסת המלאה <ArrowLeft size={13} />
           </Link>
@@ -153,7 +153,7 @@ export default function FamilySummary({ loanId, section = 'all' }: { loanId: str
         <div className="px-4 pb-4 grid grid-cols-3 gap-2">
           {[
             { label: 'סה״כ ילדים', value: children.total, color: 'bg-slate-50 text-slate-800 border-slate-200' },
-            { label: 'נשואים', value: children.married, color: 'bg-violet-50 text-violet-800 border-violet-200' },
+            { label: 'נשואים', value: children.married, color: 'bg-sand text-navy-dark border-line' },
             { label: 'בבית', value: children.atHome, color: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
           ].map(c => (
             <div key={c.label} className={`rounded-xl border px-3 py-2.5 text-center ${c.color}`}>
@@ -166,11 +166,11 @@ export default function FamilySummary({ loanId, section = 'all' }: { loanId: str
         {/* סדר הדורות */}
         {lineage.length > 0 && (
           <div className="px-4 pb-4">
-            <div className="flex items-start gap-2 bg-violet-50/60 border border-violet-100 rounded-xl px-3 py-2.5">
-              <GitBranch size={14} className="text-violet-600 shrink-0 mt-0.5" />
+            <div className="flex items-start gap-2 bg-sand/60 border border-gold-soft rounded-xl px-3 py-2.5">
+              <GitBranch size={14} className="text-navy shrink-0 mt-0.5" />
               <div className="min-w-0">
-                <p className="text-[11px] text-violet-700 font-semibold mb-0.5">סדר הדורות</p>
-                <p className="text-xs text-violet-900 leading-relaxed">{lineage.join(' ← ')}</p>
+                <p className="text-[11px] text-navy-dark font-semibold mb-0.5">סדר הדורות</p>
+                <p className="text-xs text-navy-dark leading-relaxed">{lineage.join(' ← ')}</p>
               </div>
             </div>
           </div>

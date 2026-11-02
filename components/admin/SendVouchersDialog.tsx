@@ -60,7 +60,7 @@ export default function SendVouchersDialog({ open, aidId, plan, onDone }: Props)
           <button
             onClick={send}
             disabled={sending}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60 transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white hover:bg-navy-dark disabled:opacity-60 transition-colors"
           >
             {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
             {sending ? 'שולח…' : 'שלח ליולדת'}
@@ -69,7 +69,7 @@ export default function SendVouchersDialog({ open, aidId, plan, onDone }: Props)
       }
     >
       <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-600">
+        <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-gold-soft text-navy">
           <Mail size={17} />
         </div>
         <div className="flex-1">

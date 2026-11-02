@@ -230,14 +230,14 @@ function ComposeModal({ onClose, replyTo, initialTo, department }: { onClose: ()
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-[#0D1730]/45 backdrop-blur-[9px] p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col" style={{ maxHeight: '90vh' }}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
           <div className="flex flex-col gap-0.5">
             <h3 className="font-semibold text-slate-900">{replyTo ? 'השב למייל' : 'מייל חדש'}</h3>
             {department && DEPARTMENTS[department as DepartmentKey] && (
               <span className="text-xs text-slate-500">
-                נשלח מטעם <span className="font-medium text-indigo-600">{DEPARTMENTS[department as DepartmentKey].label}</span>
+                נשלח מטעם <span className="font-medium text-navy">{DEPARTMENTS[department as DepartmentKey].label}</span>
                 <span className="text-slate-400"> · תשובות אל {DEPARTMENTS[department as DepartmentKey].email}</span>
               </span>
             )}
@@ -252,8 +252,8 @@ function ComposeModal({ onClose, replyTo, initialTo, department }: { onClose: ()
             <span className="text-xs font-medium text-slate-500">אל:</span>
 
             {locked && to ? (
-              <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-xl px-3 py-2">
-                <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700 flex-shrink-0">
+              <div className="flex items-center gap-2 bg-sand border border-line rounded-xl px-3 py-2">
+                <div className="w-7 h-7 rounded-full bg-gold-soft flex items-center justify-center text-xs font-bold text-navy-dark flex-shrink-0">
                   {(toName || to).charAt(0).toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -264,7 +264,7 @@ function ComposeModal({ onClose, replyTo, initialTo, department }: { onClose: ()
               </div>
             ) : (
               <div className="relative">
-                <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-2 focus-within:border-indigo-400">
+                <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-2 focus-within:border-gold">
                   {searching
                     ? <Loader2 size={14} className="animate-spin text-slate-400 flex-shrink-0" />
                     : <Search size={14} className="text-slate-400 flex-shrink-0" />}
@@ -284,10 +284,10 @@ function ComposeModal({ onClose, replyTo, initialTo, department }: { onClose: ()
                   <div className="absolute z-10 top-full right-0 left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
                     {suggestions.map(s => (
                       <button key={s.id} type="button"
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-right hover:bg-indigo-50"
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-right hover:bg-sand"
                         onMouseDown={e => { e.preventDefault(); selectBeneficiary(s.name, s.email) }}
                       >
-                        <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700 flex-shrink-0">
+                        <div className="w-7 h-7 rounded-full bg-gold-soft flex items-center justify-center text-xs font-bold text-navy-dark flex-shrink-0">
                           {s.name.charAt(0)}
                         </div>
                         <div className="min-w-0 text-right flex-1">
@@ -337,7 +337,7 @@ function ComposeModal({ onClose, replyTo, initialTo, department }: { onClose: ()
                     <p className="text-xs text-slate-400 text-center py-3">אין טמפלטים. ניתן להעלות בהגדרות.</p>
                   ) : templates.map(t => (
                     <button key={t.id} type="button" onMouseDown={e => { e.preventDefault(); setTplPicked(prev => prev.some(p => p.url === t.file_url) ? prev : [...prev, { url: t.file_url, filename: t.file_name, mimeType: t.mime_type }]); setShowTpl(false) }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-right text-sm hover:bg-indigo-50">
+                      className="w-full flex items-center gap-2 px-3 py-2 text-right text-sm hover:bg-sand">
                       <FileText size={14} className="text-slate-400 flex-shrink-0" />
                       <span className="truncate">{t.name}</span>
                     </button>
@@ -377,9 +377,9 @@ function ComposeModal({ onClose, replyTo, initialTo, department }: { onClose: ()
                 </span>
               ))}
               {tplPicked.map((t, i) => (
-                <span key={`t${i}`} className="inline-flex items-center gap-1.5 bg-indigo-50 text-indigo-700 rounded-lg px-2.5 py-1 text-xs">
+                <span key={`t${i}`} className="inline-flex items-center gap-1.5 bg-sand text-navy-dark rounded-lg px-2.5 py-1 text-xs">
                   <FileText size={12} /> <span className="truncate max-w-[140px]">{t.filename}</span>
-                  <button onClick={() => setTplPicked(prev => prev.filter((_, j) => j !== i))} className="text-indigo-400 hover:text-red-500"><X size={12} /></button>
+                  <button onClick={() => setTplPicked(prev => prev.filter((_, j) => j !== i))} className="text-gold hover:text-red-500"><X size={12} /></button>
                 </span>
               ))}
             </div>
@@ -391,7 +391,7 @@ function ComposeModal({ onClose, replyTo, initialTo, department }: { onClose: ()
           <div className="flex items-center gap-2">
             <button type="button" onClick={() => setShowSchedule(s => !s)}
               title="תזמון שליחה"
-              className={`flex items-center gap-1.5 px-2.5 py-2 text-sm rounded-lg border transition-colors ${scheduleAt ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+              className={`flex items-center gap-1.5 px-2.5 py-2 text-sm rounded-lg border transition-colors ${scheduleAt ? 'border-line-strong bg-sand text-navy-dark' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
               <Clock size={15} />
               {scheduleAt ? new Date(scheduleAt).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'תזמון'}
             </button>
@@ -399,7 +399,7 @@ function ComposeModal({ onClose, replyTo, initialTo, department }: { onClose: ()
               <div className="flex items-center gap-1">
                 <input type="datetime-local" value={scheduleAt} min={new Date(Date.now() + 5 * 60000).toISOString().slice(0, 16)}
                   onChange={e => setScheduleAt(e.target.value)}
-                  className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-indigo-400" />
+                  className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-gold" />
                 {scheduleAt && <button type="button" onClick={() => { setScheduleAt(''); setShowSchedule(false) }} className="text-slate-400 hover:text-red-500"><X size={14} /></button>}
               </div>
             )}
@@ -409,7 +409,7 @@ function ComposeModal({ onClose, replyTo, initialTo, department }: { onClose: ()
             <button
               onClick={send}
               disabled={sending || !canSend}
-              className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-2 px-5 py-2 bg-navy text-white text-sm font-medium rounded-lg hover:bg-navy-dark disabled:opacity-50 transition-colors"
             >
               {sending ? <Loader2 size={15} className="animate-spin" /> : (scheduleAt ? <Clock size={15} /> : <Send size={15} />)}
               {scheduleAt ? 'תזמן שליחה' : 'שלח'}
@@ -497,7 +497,7 @@ function ForwardModal({ msg, onClose }: { msg: ParsedMessage; onClose: () => voi
               <label className="text-xs font-medium text-slate-600">העבר אל כתובת מייל:</label>
               <input type="email" dir="ltr" value={to} onChange={e => { setTo(e.target.value); setError('') }}
                 placeholder="name@example.com"
-                className="border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-400" />
+                className="border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gold" />
               {/* מילוי מהיר של כתובות פנימיות */}
               <div className="flex flex-wrap gap-1 mt-1">
                 {Object.values(DEPARTMENTS).map(dep => (
@@ -522,7 +522,7 @@ function ForwardModal({ msg, onClose }: { msg: ParsedMessage; onClose: () => voi
             <div className="flex items-center justify-end gap-2">
               <button onClick={onClose} className="px-4 py-2 text-sm text-slate-500">ביטול</button>
               <button onClick={forward} disabled={sending || !to.trim()}
-                className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+                className="flex items-center gap-1.5 px-4 py-2 bg-navy text-white text-sm font-medium rounded-lg hover:bg-navy-dark disabled:opacity-50">
                 {sending ? <Loader2 size={14} className="animate-spin" /> : <Forward size={14} />}
                 העבר
               </button>
@@ -639,13 +639,13 @@ function AssignAttachmentModal({ attachment, messageId, senderEmail, onClose }: 
             <CheckCircle2 size={40} className="mx-auto text-green-500 mb-3" />
             <p className="font-bold text-slate-900">הקובץ שויך בהצלחה!</p>
             <p className="text-sm text-slate-500 mt-1">הקובץ נשמר בתיקיית המסמכים של הצאצא.</p>
-            <button onClick={onClose} className="mt-4 px-5 py-2 bg-indigo-600 text-white rounded-xl text-sm font-medium">סגור</button>
+            <button onClick={onClose} className="mt-4 px-5 py-2 bg-navy text-white rounded-xl text-sm font-medium">סגור</button>
           </div>
         ) : (
           <>
             <div className="flex items-center gap-3 mb-5">
-              <div className="w-9 h-9 rounded-xl bg-indigo-100 flex items-center justify-center flex-shrink-0">
-                <FolderOpen size={18} className="text-indigo-600" />
+              <div className="w-9 h-9 rounded-xl bg-gold-soft flex items-center justify-center flex-shrink-0">
+                <FolderOpen size={18} className="text-navy" />
               </div>
               <div>
                 <h2 className="text-base font-bold text-slate-900">שייך קובץ לצאצא</h2>
@@ -657,7 +657,7 @@ function AssignAttachmentModal({ attachment, messageId, senderEmail, onClose }: 
               <div>
                 <label className="text-xs font-semibold text-slate-600 block mb-1">סוג מסמך</label>
                 <select value={docType} onChange={e => setDocType(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft">
                   {docTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </div>
@@ -676,7 +676,7 @@ function AssignAttachmentModal({ attachment, messageId, senderEmail, onClose }: 
                       <span className="text-[11px] text-green-700 bg-green-100 rounded-full px-2 py-0.5 flex-shrink-0">זוהה לפי המייל</span>
                     </div>
                     <button onClick={() => { setAutoMatched(false); setSelected(null) }}
-                      className="text-xs text-slate-500 hover:text-indigo-600 flex-shrink-0">שנה</button>
+                      className="text-xs text-slate-500 hover:text-navy flex-shrink-0">שנה</button>
                   </div>
                 </div>
               ) : (
@@ -685,7 +685,7 @@ function AssignAttachmentModal({ attachment, messageId, senderEmail, onClose }: 
                   <input value={selected ? selected.full_name : query}
                     onChange={e => { setSelected(null); setQuery(e.target.value) }}
                     placeholder="שם, ת.ז. או מייל..."
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft" />
                   {results.length > 0 && !selected && (
                     <ul className="absolute z-10 top-full mt-1 left-0 right-0 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
                       {results.map(r => (
@@ -703,7 +703,7 @@ function AssignAttachmentModal({ attachment, messageId, senderEmail, onClose }: 
             <div className="flex gap-2 mt-5 justify-end">
               <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">ביטול</button>
               <button disabled={!selected || saving} onClick={save}
-                className="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1.5">
+                className="px-4 py-2 text-sm rounded-lg bg-navy text-white hover:bg-navy-dark disabled:opacity-50 flex items-center gap-1.5">
                 {saving && <Loader2 size={13} className="animate-spin" />}
                 שמור
               </button>
@@ -752,12 +752,12 @@ function AttachmentBar({ attachments, messageId, senderEmail }: { attachments: A
                     endpoint אחר ונשארת בקישור רגיל. */}
                 {att.url ? (
                   <button type="button" onClick={() => { openDocInNewTab(att.url!, att.filename).catch(() => {}) }}
-                    className="p-0.5 text-slate-400 hover:text-indigo-600 transition-colors" title="צפה">
+                    className="p-0.5 text-slate-400 hover:text-navy transition-colors" title="צפה">
                     <ExternalLink size={13} />
                   </button>
                 ) : (
                   <a href={href} target="_blank" rel="noopener noreferrer"
-                    className="p-0.5 text-slate-400 hover:text-indigo-600 transition-colors" title="צפה">
+                    className="p-0.5 text-slate-400 hover:text-navy transition-colors" title="צפה">
                     <ExternalLink size={13} />
                   </a>
                 )}
@@ -851,7 +851,7 @@ function AssignBeneficiaryModal({ messageId, onClose, onAssigned }: {
     <Modal open onClose={onClose} title="שייך מייל ללקוח" size="md">
       <div className="flex flex-col gap-3">
         <div className="relative">
-          <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-2 focus-within:border-indigo-400">
+          <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-2 focus-within:border-gold">
             {searching
               ? <Loader2 size={14} className="animate-spin text-slate-400 flex-shrink-0" />
               : <Search size={14} className="text-slate-400 flex-shrink-0" />}
@@ -874,8 +874,8 @@ function AssignBeneficiaryModal({ messageId, onClose, onAssigned }: {
           {results.map(r => (
             <button key={r.id} type="button" disabled={saving}
               onClick={() => assign(r.id)}
-              className="w-full flex items-center gap-3 px-3 py-2.5 text-right rounded-lg border border-slate-100 hover:bg-indigo-50 hover:border-indigo-200 disabled:opacity-50">
-              <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700 flex-shrink-0">
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-right rounded-lg border border-slate-100 hover:bg-sand hover:border-line disabled:opacity-50">
+              <div className="w-8 h-8 rounded-full bg-gold-soft flex items-center justify-center text-xs font-bold text-navy-dark flex-shrink-0">
                 {(r.family_name || r.full_name || '?').charAt(0)}
               </div>
               <div className="min-w-0 text-right flex-1">
@@ -884,7 +884,7 @@ function AssignBeneficiaryModal({ messageId, onClose, onAssigned }: {
                   {[r.phone, r.city].filter(Boolean).join(' · ') || r.email || ''}
                 </p>
               </div>
-              {saving && <Loader2 size={14} className="animate-spin text-indigo-500 flex-shrink-0" />}
+              {saving && <Loader2 size={14} className="animate-spin text-navy-soft flex-shrink-0" />}
             </button>
           ))}
         </div>
@@ -934,14 +934,14 @@ function BeneficiaryCard({ email }: { email: string }) {
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">צאצא מזוהה</span>
         <button type="button" onClick={() => setCardOpen(true)}
-          className="flex items-center gap-1 text-xs text-indigo-600 hover:underline">
+          className="flex items-center gap-1 text-xs text-navy hover:underline">
           פתח כרטיס <ExternalLink size={11} />
         </button>
       </div>
 
       {/* Name + avatar */}
       <div className="flex items-center gap-3">
-        <div className="w-11 h-11 rounded-full bg-indigo-100 flex items-center justify-center font-bold text-indigo-700 text-base flex-shrink-0">
+        <div className="w-11 h-11 rounded-full bg-gold-soft flex items-center justify-center font-bold text-navy-dark text-base flex-shrink-0">
           {name.charAt(0)}
         </div>
         <div className="min-w-0">
@@ -1014,7 +1014,7 @@ function BeneficiaryCard({ email }: { email: string }) {
               <h2 className="font-bold text-slate-900 text-sm">כרטיס צאצא — {name}</h2>
               <div className="flex items-center gap-3">
                 <Link href={`/admin/beneficiaries/${ben.id}`} target="_blank"
-                  className="flex items-center gap-1 text-xs text-indigo-600 hover:underline">
+                  className="flex items-center gap-1 text-xs text-navy hover:underline">
                   פתח בעמוד מלא <ExternalLink size={11} />
                 </Link>
                 <button type="button" onClick={() => setCardOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
@@ -1099,9 +1099,9 @@ function MailExtraActions({ msg, folder, labelDefs, onToggleLabel, onCreateLabel
             <div className="flex items-center gap-1 mt-1 pt-2 border-t border-slate-100">
               <input value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="תווית חדשה..."
                 onKeyDown={async e => { if (e.key === 'Enter') { const id = await onCreateLabel(newLabel); if (id) { onToggleLabel(msg, id); setNewLabel('') } } }}
-                className="flex-1 border border-slate-200 rounded-lg px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-indigo-400" />
+                className="flex-1 border border-slate-200 rounded-lg px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-gold" />
               <button onClick={async () => { const id = await onCreateLabel(newLabel); if (id) { onToggleLabel(msg, id); setNewLabel('') } }}
-                title="צור תווית" className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"><Plus size={13} /></button>
+                title="צור תווית" className="p-1.5 bg-navy text-white rounded-lg hover:bg-navy-dark"><Plus size={13} /></button>
             </div>
           </div>
         )}
@@ -1484,7 +1484,7 @@ export default function MailClient({ lockDepartment }: { lockDepartment?: string
   const createLabel = async (name: string): Promise<string | null> => {
     const trimmed = name.trim()
     if (!trimmed) return null
-    const palette = ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#ef4444', '#0ea5e9', '#8b5cf6', '#14b8a6']
+    const palette = ['#14213D', '#ec4899', '#10b981', '#f59e0b', '#ef4444', '#0ea5e9', '#14213D', '#14b8a6']
     const color = palette[labelDefs.length % palette.length]
     try {
       const res = await fetch('/api/admin/mail/labels', { method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1551,17 +1551,17 @@ export default function MailClient({ lockDepartment }: { lockDepartment?: string
         {/* Account header */}
         <div className="px-4 pt-4 pb-3 border-b border-slate-200 bg-white">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center flex-shrink-0 shadow-sm">
+            <div className="w-9 h-9 rounded-xl bg-navy flex items-center justify-center flex-shrink-0 shadow-sm">
               <Mail size={16} className="text-white" />
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-bold text-slate-800 truncate leading-tight">{headerLabel}</p>
-              <p className="text-[11px] text-indigo-500 truncate font-medium">{headerEmail}</p>
+              <p className="text-[11px] text-navy-soft truncate font-medium">{headerEmail}</p>
             </div>
           </div>
           <button
             onClick={() => { setCompose(true); setReplyMsg(undefined) }}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 transition-colors shadow-sm"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-navy text-white text-sm font-semibold rounded-xl hover:bg-navy-dark transition-colors shadow-sm"
           >
             <PenSquare size={15} />
             מייל חדש
@@ -1572,7 +1572,7 @@ export default function MailClient({ lockDepartment }: { lockDepartment?: string
         <nav className="px-2 py-2 border-b border-slate-100">
           {FOLDER_ITEMS.map(({ key, label, icon: Icon }) => (
             <button key={key} onClick={() => { setFolder(key); setSelected(null) }}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors text-right ${folder === key ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}>
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors text-right ${folder === key ? 'bg-gold-soft text-navy-dark' : 'text-slate-600 hover:bg-slate-100'}`}>
               <Icon size={16} className="flex-shrink-0" />
               {label}
             </button>
@@ -1585,10 +1585,10 @@ export default function MailClient({ lockDepartment }: { lockDepartment?: string
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest px-2 pb-1.5">{myProfile?.role === 'admin' ? 'מחלקות' : 'התיבות שלי'}</p>
             <button onClick={() => setActiveDepartment(null)}
               className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors text-right mb-0.5
-                ${!activeDepartment ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}>
+                ${!activeDepartment ? 'bg-gold-soft text-navy-dark' : 'text-slate-600 hover:bg-slate-100'}`}>
               <span className="flex-1 truncate">{myProfile?.role === 'admin' ? 'כל המחלקות' : 'כל התיבות שלי'}</span>
               {unreadCounts.total > 0 && (
-                <span className="text-[10px] font-bold bg-indigo-600 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center flex-shrink-0">
+                <span className="text-[10px] font-bold bg-navy text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center flex-shrink-0">
                   {unreadCounts.total}
                 </span>
               )}
@@ -1598,7 +1598,7 @@ export default function MailClient({ lockDepartment }: { lockDepartment?: string
               return (
                 <button key={d.key} onClick={() => setActiveDepartment(d.key)}
                   className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors text-right
-                    ${activeDepartment === d.key ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}>
+                    ${activeDepartment === d.key ? 'bg-gold-soft text-navy-dark' : 'text-slate-600 hover:bg-slate-100'}`}>
                   <span className="truncate flex-1">{d.label}</span>
                   {cnt > 0 && (
                     <span className="text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center flex-shrink-0 text-white"
@@ -1647,11 +1647,11 @@ export default function MailClient({ lockDepartment }: { lockDepartment?: string
             {/* "הכל" — בלי זה תיבה שזה עתה סונכרנה נראית ריקה כשכל מייליה שויכו
                 ללקוח, כי ברירת המחדל מציגה "לא משויכים" בלבד. */}
             <button type="button" onClick={() => setLegacySub('all')}
-              className={legacySub === 'all' ? 'font-bold text-indigo-600' : 'text-slate-500 hover:text-slate-700'}>הכל</button>
+              className={legacySub === 'all' ? 'font-bold text-navy' : 'text-slate-500 hover:text-slate-700'}>הכל</button>
             <button type="button" onClick={() => setLegacySub('unassigned')}
-              className={legacySub === 'unassigned' ? 'font-bold text-indigo-600' : 'text-slate-500 hover:text-slate-700'}>לא משויכים</button>
+              className={legacySub === 'unassigned' ? 'font-bold text-navy' : 'text-slate-500 hover:text-slate-700'}>לא משויכים</button>
             <button type="button" onClick={() => setLegacySub('assigned')}
-              className={legacySub === 'assigned' ? 'font-bold text-indigo-600' : 'text-slate-500 hover:text-slate-700'}>משויכים</button>
+              className={legacySub === 'assigned' ? 'font-bold text-navy' : 'text-slate-500 hover:text-slate-700'}>משויכים</button>
           </div>
         )}
 
@@ -1687,8 +1687,8 @@ export default function MailClient({ lockDepartment }: { lockDepartment?: string
                 return (
                   <div key={msg.id}
                     className={`group flex items-stretch border-b border-slate-100 transition-colors
-                      ${selected?.id === msg.id ? 'bg-indigo-50 border-r-2 border-r-indigo-500'
-                        : !msg.isRead ? 'bg-indigo-50/40 hover:bg-indigo-50/70'
+                      ${selected?.id === msg.id ? 'bg-sand border-r-2 border-r-navy-soft'
+                        : !msg.isRead ? 'bg-sand/40 hover:bg-sand/70'
                         : 'hover:bg-slate-50'}`}>
                     {/* ⚠️ הכפתור עצמו הוא ה-flex: התאריך יושב כעמודה אחות
                         לתוכן ההודעה, ולא בתוך שורת השולח. קודם הוא היה
@@ -1699,7 +1699,7 @@ export default function MailClient({ lockDepartment }: { lockDepartment?: string
                       <span className="flex-1 min-w-0 block">
                       <div className="flex items-start gap-2 mb-0.5">
                         <span className="flex items-center gap-2 min-w-0">
-                          {!msg.isRead && <span className="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0" title="לא נקרא" />}
+                          {!msg.isRead && <span className="w-2 h-2 rounded-full bg-navy-soft flex-shrink-0" title="לא נקרא" />}
                           <span className={`text-sm truncate leading-tight ${!msg.isRead ? 'font-bold text-slate-900' : 'font-normal text-slate-500'}`}>
                             {folder === 'SENT'
                               ? (emailToInfo[msg.toEmail]
@@ -1726,7 +1726,7 @@ export default function MailClient({ lockDepartment }: { lockDepartment?: string
                         )}
                         {/* מועד תזמון */}
                         {folder === 'SCHEDULED' && msg.scheduledAt && (
-                          <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 flex-shrink-0" title="יישלח במועד">
+                          <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold px-1.5 py-0.5 rounded-full bg-gold-soft text-navy-dark flex-shrink-0" title="יישלח במועד">
                             <Clock size={10} /> {formatDate(msg.scheduledAt)}
                           </span>
                         )}
@@ -1751,7 +1751,7 @@ export default function MailClient({ lockDepartment }: { lockDepartment?: string
                           ⚠️ title עם התאריך והשעה המלאים: התצוגה מקוצרת
                           (רק שעה להיום, יום בשבוע לשבוע האחרון), ולעיתים
                           צריך לדעת את התאריך המדויק בלי לפתוח את ההודעה. */}
-                      <span className={`shrink-0 text-xs tabular-nums leading-tight whitespace-nowrap pt-0.5 ${!msg.isRead ? 'text-indigo-600 font-bold' : 'text-slate-400'}`}
+                      <span className={`shrink-0 text-xs tabular-nums leading-tight whitespace-nowrap pt-0.5 ${!msg.isRead ? 'text-navy font-bold' : 'text-slate-400'}`}
                         title={fullDateTime(msg.date)}>
                         {formatDate(msg.date)}
                       </span>
@@ -1761,7 +1761,7 @@ export default function MailClient({ lockDepartment }: { lockDepartment?: string
                       {folder === 'LEGACY' && !msg.beneficiaryId && (
                         <button
                           onClick={e => { e.stopPropagation(); setAssigningMsgId(msg.id) }}
-                          className="p-1 text-slate-400 hover:text-indigo-600 rounded transition-colors"
+                          className="p-1 text-slate-400 hover:text-navy rounded transition-colors"
                           title="שייך ללקוח">
                           <UserPlus size={14} />
                         </button>
@@ -1797,7 +1797,7 @@ export default function MailClient({ lockDepartment }: { lockDepartment?: string
                 {emailToInfo[selected.fromEmail] ? (
                   <>
                     <Link href={`/admin/beneficiaries/${emailToInfo[selected.fromEmail].id}`} target="_blank"
-                      className="text-sm font-semibold text-indigo-700 hover:underline">
+                      className="text-sm font-semibold text-navy-dark hover:underline">
                       {emailToInfo[selected.fromEmail].name}
                     </Link>
                     <span className="text-xs text-slate-400">{selected.fromEmail}</span>
@@ -1840,7 +1840,7 @@ export default function MailClient({ lockDepartment }: { lockDepartment?: string
                 </button>
               )}
               <button onClick={() => { setReplyMsg(selected); setCompose(true) }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors">
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-navy border border-line rounded-lg hover:bg-sand transition-colors">
                 <Reply size={14} /> השב
               </button>
               {/* סימון כלא-נקרא — כמו ב-Gmail, כדי לחזור אליו אחר כך */}
@@ -1855,7 +1855,7 @@ export default function MailClient({ lockDepartment }: { lockDepartment?: string
               </button>
               {folder === 'LEGACY' && !selected.beneficiaryId && (
                 <button onClick={() => setAssigningMsgId(selected.id)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors">
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-navy border border-line rounded-lg hover:bg-sand transition-colors">
                   <UserPlus size={14} /> שייך ללקוח
                 </button>
               )}

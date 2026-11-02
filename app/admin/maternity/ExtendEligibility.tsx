@@ -145,8 +145,8 @@ export default function ExtendEligibility({
           onClick={openModal}
           title="הארכת זכאות"
           className={variant === 'icon'
-            ? 'inline-flex items-center gap-1 text-xs font-medium text-indigo-700 border border-indigo-200 hover:bg-indigo-50 rounded-lg px-2.5 py-1.5 transition-colors'
-            : 'flex items-center gap-1.5 text-sm text-indigo-700 border border-indigo-200 hover:bg-indigo-50 rounded-lg px-3 py-1.5 transition-colors'}
+            ? 'inline-flex items-center gap-1 text-xs font-medium text-navy-dark border border-line hover:bg-sand rounded-lg px-2.5 py-1.5 transition-colors'
+            : 'flex items-center gap-1.5 text-sm text-navy-dark border border-line hover:bg-sand rounded-lg px-3 py-1.5 transition-colors'}
         >
           <CalendarClock size={variant === 'icon' ? 13 : 14} /> הארכת זכאות
         </button>
@@ -219,18 +219,18 @@ export default function ExtendEligibility({
                       onClick={() => setScope(s.key)}
                       className={`flex items-center gap-3 rounded-xl border-2 p-3 text-right transition-colors ${
                         scope === s.key
-                          ? 'border-indigo-400 bg-indigo-50'
-                          : 'border-slate-200 hover:border-indigo-200'
+                          ? 'border-gold bg-sand'
+                          : 'border-slate-200 hover:border-line'
                       }`}
                     >
-                      <s.Icon size={18} className={scope === s.key ? 'text-indigo-600' : 'text-slate-400'} />
+                      <s.Icon size={18} className={scope === s.key ? 'text-navy' : 'text-slate-400'} />
                       <span className="min-w-0 flex-1">
-                        <span className={`block text-sm font-bold ${scope === s.key ? 'text-indigo-900' : 'text-slate-700'}`}>
+                        <span className={`block text-sm font-bold ${scope === s.key ? 'text-navy-dark' : 'text-slate-700'}`}>
                           {s.label}
                         </span>
                         <span className="block text-[11px] text-slate-500">{s.hint}</span>
                       </span>
-                      {scope === s.key && <Check size={16} className="text-indigo-600" />}
+                      {scope === s.key && <Check size={16} className="text-navy" />}
                     </button>
                   ))}
                 </div>
@@ -262,7 +262,7 @@ export default function ExtendEligibility({
                   ) : <span />}
                   <button
                     onClick={() => setStep('dates')}
-                    className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+                    className="flex items-center gap-1.5 rounded-lg bg-navy px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-navy-dark"
                   >
                     המשך <ArrowRight size={15} />
                   </button>
@@ -301,7 +301,7 @@ export default function ExtendEligibility({
                     onChange={e => setReason(e.target.value)}
                     rows={2}
                     placeholder="לדוגמה: אשפוז ממושך, מקרה חריג שאושר…"
-                    className="resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft"
                   />
                 </div>
 
@@ -321,7 +321,7 @@ export default function ExtendEligibility({
                   <button
                     onClick={() => submit('extend')}
                     disabled={saving !== null || !canFinish}
-                    className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-6 py-2 text-sm font-bold text-white transition-colors hover:bg-indigo-700 disabled:bg-indigo-300"
+                    className="flex items-center gap-1.5 rounded-lg bg-navy px-6 py-2 text-sm font-bold text-white transition-colors hover:bg-navy-dark disabled:bg-line-strong"
                   >
                     {saving === 'extend' ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
                     סיימתי
@@ -344,7 +344,7 @@ function CurrentRow({ label, value, muted, highlight }: {
   return (
     <div className="flex items-center justify-between gap-2">
       <span className="text-slate-500">{label}:</span>
-      <span className={`text-left ${muted ? 'font-medium text-slate-600' : highlight ? 'font-semibold text-indigo-700' : 'font-semibold text-slate-800'}`}>
+      <span className={`text-left ${muted ? 'font-medium text-slate-600' : highlight ? 'font-semibold text-navy-dark' : 'font-semibold text-slate-800'}`}>
         <span className="ltr-num">{fmt(value)}</span>
         {toHebrewDate(value) && (
           <span className="block text-[11px] font-normal text-slate-400">{toHebrewDate(value)}</span>
@@ -361,7 +361,7 @@ function ChoiceChip({ active, onClick, label }: {
     <button
       onClick={onClick}
       className={`rounded-lg border-2 px-3 py-2 text-xs font-bold transition-colors ${
-        active ? 'border-indigo-400 bg-indigo-50 text-indigo-800' : 'border-slate-200 text-slate-600 hover:border-indigo-200'
+        active ? 'border-gold bg-sand text-navy-dark' : 'border-slate-200 text-slate-600 hover:border-line'
       }`}
     >
       {label}

@@ -17,7 +17,7 @@ const ROLE_OPTIONS = [
 ]
 
 const ROLE_COLORS: Record<UserRole, string> = {
-  admin: 'bg-purple-50 text-purple-700',
+  admin: 'bg-sand text-navy-dark',
   secretary: 'bg-blue-50 text-blue-700',
   reviewer: 'bg-green-50 text-green-700',
   collections: 'bg-orange-50 text-orange-700',
@@ -111,14 +111,14 @@ export default function UsersManager({ initialProfiles, isConfigured }: Props) {
     <>
       <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Users size={16} className="text-indigo-500" />
+          <Users size={16} className="text-navy-soft" />
           <h2 className="text-sm font-semibold text-slate-700">משתמשי מערכת</h2>
           <span className="text-xs bg-slate-100 text-slate-500 rounded-full px-2 py-0.5">{profiles.length}</span>
         </div>
         {isConfigured && (
           <button
             onClick={() => setShowAdd(true)}
-            className="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1"
+            className="text-xs text-navy hover:text-navy-dark font-medium flex items-center gap-1"
           >
             + הוסף משתמש
           </button>
@@ -134,7 +134,7 @@ export default function UsersManager({ initialProfiles, isConfigured }: Props) {
           {profiles.map((p) => (
             <div key={p.id} className="px-5 py-3 flex items-center justify-between hover:bg-slate-50">
               <div className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${p.is_active ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${p.is_active ? 'bg-gold-soft text-navy' : 'bg-slate-100 text-slate-400'}`}>
                   {p.full_name.charAt(0)}
                 </div>
                 <div>
@@ -213,7 +213,7 @@ export default function UsersManager({ initialProfiles, isConfigured }: Props) {
               form="add-user-form"
               type="submit"
               disabled={submitting}
-              className="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium disabled:opacity-50 transition-colors"
+              className="px-4 py-2 text-sm bg-navy hover:bg-navy-dark text-white rounded-lg font-medium disabled:opacity-50 transition-colors"
             >
               {submitting ? 'שולח הזמנה...' : 'שלח הזמנה'}
             </button>

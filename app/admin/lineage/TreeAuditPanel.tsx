@@ -71,7 +71,7 @@ export default function TreeAuditPanel({ onLocate }: { onLocate?: (id: string) =
   const active = summary.find(s => s.kind === kind)
 
   if (loading) {
-    return <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-indigo-500" /></div>
+    return <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-navy-soft" /></div>
   }
 
   return (
@@ -108,7 +108,7 @@ export default function TreeAuditPanel({ onLocate }: { onLocate?: (id: string) =
           const on = kind === s.kind
           return (
             <button key={s.kind} onClick={() => setKind(on ? null : s.kind)}
-              className={`rounded-xl border p-3 text-right transition-all ${on ? 'ring-2 ring-indigo-300' : ''}`}
+              className={`rounded-xl border p-3 text-right transition-all ${on ? 'ring-2 ring-line-strong' : ''}`}
               style={{ background: c.bg, borderColor: c.border }}>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-bold" style={{ color: c.fg }}>{s.title}</span>
@@ -149,7 +149,7 @@ export default function TreeAuditPanel({ onLocate }: { onLocate?: (id: string) =
                 </span>
                 {onLocate && (
                   <button onClick={() => onLocate(f.nodeId)}
-                    className="flex-shrink-0 rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-500 hover:border-indigo-300 hover:text-indigo-600">
+                    className="flex-shrink-0 rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-500 hover:border-line-strong hover:text-navy">
                     הצג בעץ
                   </button>
                 )}

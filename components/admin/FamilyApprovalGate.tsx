@@ -62,7 +62,7 @@ export default function FamilyApprovalGate({ beneficiary, compact }: { beneficia
       <div className="p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-xs font-semibold text-amber-700 uppercase">כרטסת המשפחה — לבדיקה ואישור</h3>
-          <Link href={`/admin/beneficiaries/${beneficiary.id}`} className="text-xs text-indigo-600 hover:text-indigo-700 inline-flex items-center gap-1">
+          <Link href={`/admin/beneficiaries/${beneficiary.id}`} className="text-xs text-navy hover:text-navy-dark inline-flex items-center gap-1">
             לכרטסת המלאה <ExternalLink size={12} />
           </Link>
         </div>

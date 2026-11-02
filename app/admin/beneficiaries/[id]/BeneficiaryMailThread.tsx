@@ -47,9 +47,9 @@ function ComposePane({ toEmail, toName, replyTo, onSent, onCancel }: {
   }
 
   return (
-    <div className="border border-indigo-200 rounded-xl bg-white overflow-hidden shadow-sm">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-indigo-50">
-        <span className="text-sm font-medium text-indigo-700">
+    <div className="border border-line rounded-xl bg-white overflow-hidden shadow-sm">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-sand">
+        <span className="text-sm font-medium text-navy-dark">
           {replyTo ? `השב: ${replyTo.subject}` : `מייל חדש → ${toName}`}
         </span>
         <button onClick={onCancel} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
@@ -70,7 +70,7 @@ function ComposePane({ toEmail, toName, replyTo, onSent, onCancel }: {
         <button
           onClick={send}
           disabled={sending || !subject}
-          className="flex items-center gap-1.5 px-4 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+          className="flex items-center gap-1.5 px-4 py-1.5 bg-navy text-white text-sm font-medium rounded-lg hover:bg-navy-dark disabled:opacity-50 transition-colors"
         >
           {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
           שלח
@@ -128,7 +128,7 @@ export default function BeneficiaryMailThread({ email, name }: Props) {
       <div className="flex flex-col items-center justify-center py-16 gap-3">
         <Mail size={36} className="text-slate-300" />
         <p className="text-sm text-slate-500">Gmail לא מחובר</p>
-        <a href="/api/auth/gmail" className="text-sm text-indigo-600 hover:underline">חבר Gmail</a>
+        <a href="/api/auth/gmail" className="text-sm text-navy hover:underline">חבר Gmail</a>
       </div>
     )
   }
@@ -149,7 +149,7 @@ export default function BeneficiaryMailThread({ email, name }: Props) {
           <div className="flex items-center gap-2">
             <button
               onClick={() => { setReplyTo(selected); setComposing(true) }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-navy border border-line rounded-lg hover:bg-sand transition-colors"
             >
               <Reply size={13} /> השב
             </button>
@@ -208,7 +208,7 @@ export default function BeneficiaryMailThread({ email, name }: Props) {
         </div>
         <button
           onClick={() => { setReplyTo(undefined); setComposing(true) }}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-navy text-white text-sm font-medium rounded-lg hover:bg-navy-dark transition-colors"
         >
           <PenSquare size={14} />
           מייל חדש
@@ -234,7 +234,7 @@ export default function BeneficiaryMailThread({ email, name }: Props) {
             >
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold
-                  ${msg.fromEmail === email ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                  ${msg.fromEmail === email ? 'bg-gold-soft text-navy-dark' : 'bg-emerald-100 text-emerald-700'}`}>
                   {msg.fromEmail === email ? name.charAt(0) : 'מ'}
                 </div>
                 <div className="min-w-0 flex-1 text-right">
@@ -248,7 +248,7 @@ export default function BeneficiaryMailThread({ email, name }: Props) {
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <span className="text-[11px] text-slate-400">{formatDate(msg.date)}</span>
-                {!msg.isRead && <span className="w-2 h-2 rounded-full bg-indigo-500" />}
+                {!msg.isRead && <span className="w-2 h-2 rounded-full bg-navy-soft" />}
                 <ChevronRight size={14} className="text-slate-300 group-hover:text-slate-500 transition-colors" />
               </div>
             </button>

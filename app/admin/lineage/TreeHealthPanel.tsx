@@ -152,7 +152,7 @@ export default function TreeHealthPanel({ onLocate, onOpenDuplicates }: {
                   <div key={b.id}
                     className="rounded-lg border border-red-200 bg-white px-3 py-2 flex flex-wrap items-center gap-x-3 gap-y-1">
                     <button onClick={() => onLocate(b.id)}
-                      className="font-bold text-slate-800 hover:text-indigo-700 hover:underline text-right">
+                      className="font-bold text-slate-800 hover:text-navy-dark hover:underline text-right">
                       {b.name}
                     </button>
                     <span className="text-xs text-slate-500">דור {b.generation ?? '—'}</span>
@@ -299,7 +299,7 @@ export default function TreeHealthPanel({ onLocate, onOpenDuplicates }: {
                   <div className="flex flex-col gap-1 pr-2">
                     {d.owners.map((o, i) => (
                       <button key={i} onClick={() => window.open(`/admin/beneficiaries/${o.benId}`, '_blank')}
-                        className="text-right text-xs text-slate-600 hover:text-indigo-600 flex items-center gap-1.5">
+                        className="text-right text-xs text-slate-600 hover:text-navy flex items-center gap-1.5">
                         <span className="text-slate-400">({o.field})</span> {o.name}
                         <ChevronLeft size={12} className="text-slate-300" />
                       </button>

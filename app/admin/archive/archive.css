@@ -1,5 +1,5 @@
 /* ארכיון — מוקאפ v2, מוגבל ל-.arc */
-.arc{--bg:#f5f4f8;--surface:#fff;--border:#e4e4e7;--text:#18181b;--muted:#5f5f69;--accent:#4f46e5;--accent-2:#4338ca;--accent-soft:#eef2ff;--side:#0f172a;--ok:#16a34a;--r:16px;--ease:cubic-bezier(.2,.8,.2,1);font-size:15px;line-height:1.55;color:var(--text)}
+.arc{--bg:#f5f4f8;--surface:#fff;--border:#e4e4e7;--text:#18181b;--muted:#5f5f69;--accent:#14213D;--accent-2:#4338ca;--accent-soft:#eef2ff;--side:#0f172a;--ok:#16a34a;--r:16px;--ease:cubic-bezier(.2,.8,.2,1);font-size:15px;line-height:1.55;color:var(--text)}
 .arc *{box-sizing:border-box}
 .arc button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
 .arc button:focus-visible,.arc input:focus-visible,.arc textarea:focus-visible{outline:2px solid #818cf8;outline-offset:2px}

@@ -40,7 +40,7 @@ type Row = {
 }
 type Panel = { kind: 'view'; id: string } | { kind: 'new'; orderId: string } | { kind: 'edit'; id: string } | null
 
-const field = 'rounded-lg border border-slate-200 bg-white px-2.5 py-[7px] text-[13px] text-slate-900 focus:border-indigo-400 focus:outline-none'
+const field = 'rounded-lg border border-slate-200 bg-white px-2.5 py-[7px] text-[13px] text-slate-900 focus:border-gold focus:outline-none'
 const btnDark = 'rounded-lg bg-slate-900 px-3.5 py-2 text-[13px] font-semibold text-white transition hover:bg-slate-700 disabled:opacity-50'
 const btnLine = 'rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-[13px] font-semibold text-slate-700 transition hover:bg-slate-100 disabled:opacity-50'
 const tag = 'inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold'
@@ -138,7 +138,7 @@ export default function ShippingIssuesClient({ initialFilters, newForOrder, open
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="חיפוש: מספר הזמנה, שם או טלפון"
                className={`${field} min-w-[200px] flex-1`} />
         {dirty && (
-          <button onClick={clear} className="text-[13px] text-indigo-600 hover:underline">נקה מסננים</button>
+          <button onClick={clear} className="text-[13px] text-navy hover:underline">נקה מסננים</button>
         )}
       </div>
 
@@ -153,7 +153,7 @@ export default function ShippingIssuesClient({ initialFilters, newForOrder, open
         <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">
           {dirty ? (
             <>לא נמצאו תקלות לפי הסינון.<br />
-              <button onClick={clear} className="mt-1 text-[13px] text-indigo-600 hover:underline">נקה מסננים</button></>
+              <button onClick={clear} className="mt-1 text-[13px] text-navy hover:underline">נקה מסננים</button></>
           ) : (
             <><b className="text-base text-slate-900">אין תקלות פתוחות 🎉</b><br />כל המשלוחים בטיפול או טופלו.</>
           )}
@@ -182,7 +182,7 @@ export default function ShippingIssuesClient({ initialFilters, newForOrder, open
                     <td className="block px-3 py-1 md:table-cell md:py-[11px]">
                       {r.order && (
                         <Link href={`/admin/book-fair/orders/${r.order.id}`} onClick={e => e.stopPropagation()}
-                              className="font-mono font-semibold text-indigo-700 hover:underline">
+                              className="font-mono font-semibold text-navy-dark hover:underline">
                           {r.order.order_number}
                         </Link>
                       )}
@@ -225,7 +225,7 @@ export default function ShippingIssuesClient({ initialFilters, newForOrder, open
       {/* ── חלונית צד ── */}
       {panel && (
         <>
-          <div className="fixed inset-0 z-40 bg-slate-900/35" onClick={() => setPanel(null)} />
+          <div className="fixed inset-0 z-40 bg-[#0D1730]/45 backdrop-blur-[9px]" onClick={() => setPanel(null)} />
           <aside className="fixed bottom-0 left-0 top-0 z-50 w-full overflow-y-auto bg-white p-5 shadow-2xl sm:w-[440px]">
             <button onClick={() => setPanel(null)} aria-label="סגירה" className="float-left text-slate-500 hover:text-slate-800">
               <X size={22} />
@@ -332,7 +332,7 @@ function IssueDetails({ id, canEdit, onEdit, onChanged }: {
       <div className="text-xs text-slate-500">
         הזמנה{' '}
         {r.order && (
-          <Link href={`/admin/book-fair/orders/${r.order.id}`} className="font-mono font-semibold text-indigo-700 hover:underline">
+          <Link href={`/admin/book-fair/orders/${r.order.id}`} className="font-mono font-semibold text-navy-dark hover:underline">
             {r.order.order_number}
           </Link>
         )}
@@ -400,7 +400,7 @@ function IssueDetails({ id, canEdit, onEdit, onChanged }: {
             </select>
             {resolution === 'refunded' && (
               <div className="mt-1 text-xs text-slate-500">
-                &quot;זיכוי כספי&quot; לא מזכה בעצמו — <Link href="/admin/book-fair/refunds" className="text-indigo-600 hover:underline">למסך הזיכויים</Link>
+                &quot;זיכוי כספי&quot; לא מזכה בעצמו — <Link href="/admin/book-fair/refunds" className="text-navy hover:underline">למסך הזיכויים</Link>
               </div>
             )}
             {r.status !== 'resolved' && canEdit && (
@@ -432,7 +432,7 @@ function IssueDetails({ id, canEdit, onEdit, onChanged }: {
         <ul className="m-0 list-none p-0">
           {events.map(e => (
             <li key={e.id} className="relative border-s-2 border-slate-200 pb-3 ps-3">
-              <span className={`absolute -start-[6px] top-[3px] h-2.5 w-2.5 rounded-full ${e.kind === 'status' ? 'bg-indigo-500' : 'bg-slate-300'}`} />
+              <span className={`absolute -start-[6px] top-[3px] h-2.5 w-2.5 rounded-full ${e.kind === 'status' ? 'bg-navy-soft' : 'bg-slate-300'}`} />
               <div className="whitespace-pre-wrap">
                 {e.kind === 'status' ? statusEventText(e) : e.kind === 'note' ? `"${e.body}"` : e.body}
               </div>
@@ -580,12 +580,12 @@ function IssueForm({ orderId, editId, onCancel, onSaved }: {
       {order ? (
         <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 px-2.5 py-2 text-[13px]">
           <span>
-            <span className="font-mono font-semibold text-indigo-700">{order.order_number}</span>
+            <span className="font-mono font-semibold text-navy-dark">{order.order_number}</span>
             {' · '}{order.customer_name || '—'}
             {order.customer_phone && <span className="text-xs text-slate-500"> · {order.customer_phone}</span>}
           </span>
           {!editId && (
-            <button onClick={() => { setOrder(null); setItems({}) }} className="text-xs text-indigo-600 hover:underline">החלף</button>
+            <button onClick={() => { setOrder(null); setItems({}) }} className="text-xs text-navy hover:underline">החלף</button>
           )}
         </div>
       ) : (
@@ -598,7 +598,7 @@ function IssueForm({ orderId, editId, onCancel, onSaved }: {
                 <li key={o.id}>
                   <button onClick={() => { setOrder(o); setResults([]) }}
                           className="w-full px-2.5 py-2 text-right text-[13px] hover:bg-slate-50">
-                    <span className="font-mono font-semibold text-indigo-700">{o.order_number}</span>
+                    <span className="font-mono font-semibold text-navy-dark">{o.order_number}</span>
                     {' · '}{o.customer_name || '—'}
                     <span className="text-xs text-slate-500"> · {o.customer_phone}</span>
                   </button>

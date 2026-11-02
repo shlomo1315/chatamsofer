@@ -206,7 +206,7 @@ export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { b
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
-        <Paperclip size={16} className="text-indigo-500" />
+        <Paperclip size={16} className="text-navy-soft" />
         <h2 className="text-xs font-semibold text-slate-500 uppercase">קבצים מצורפים</h2>
         <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{docs.length}</span>
       </div>
@@ -216,7 +216,7 @@ export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { b
         <select
           value={docType}
           onChange={(e) => setDocType(e.target.value)}
-          className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold"
         >
           {DOC_TYPES.map((t) => (
             <option key={t.value} value={t.value}>{t.label}</option>
@@ -233,7 +233,7 @@ export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { b
         <button
           onClick={() => fileRef.current?.click()}
           disabled={uploading}
-          className="inline-flex items-center gap-1.5 text-sm bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white px-3 py-1.5 rounded-lg transition-colors"
+          className="inline-flex items-center gap-1.5 text-sm bg-navy hover:bg-navy-dark disabled:bg-gold text-white px-3 py-1.5 rounded-lg transition-colors"
         >
           {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
           העלה צילום
@@ -298,7 +298,7 @@ export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { b
                 </ViewDocButton>
               )}
               <div className="p-2">
-                <p className="text-[11px] font-medium text-indigo-700 bg-indigo-50 inline-block px-1.5 py-0.5 rounded">
+                <p className="text-[11px] font-medium text-navy-dark bg-sand inline-block px-1.5 py-0.5 rounded">
                   {typeLabel(doc.doc_type)}
                   {/* 🔴 מספר העמודים במסמך.
                       ⚠️ ת"ז דו-צדדית וספח מרובה עמודים מועלים כשני קבצים
@@ -306,7 +306,7 @@ export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { b
                       ככפילות; עכשיו זה כרטיס אחד, והמונה אומר כמה עמודים
                       יש בו. */}
                   {pages > 1 && (
-                    <span className="mr-1 text-indigo-500">· {pages} עמודים</span>
+                    <span className="mr-1 text-navy-soft">· {pages} עמודים</span>
                   )}
                 </p>
                 {/* 🔴 שם התינוק ותאריך הלידה על אישור הלידה.
@@ -330,7 +330,7 @@ export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { b
               <div className="absolute top-1.5 left-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <ViewDocButton
                   url={doc.file_url}
-                  className="p-1.5 rounded-lg bg-white/90 text-slate-600 hover:text-indigo-600 shadow-sm"
+                  className="p-1.5 rounded-lg bg-white/90 text-slate-600 hover:text-navy shadow-sm"
                 >
                   <ExternalLink size={13} />
                 </ViewDocButton>

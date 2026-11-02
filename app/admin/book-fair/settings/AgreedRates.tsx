@@ -62,7 +62,7 @@ export default function AgreedRates({ canEdit }: { canEdit: boolean }) {
           <ul className="grid grid-cols-2 gap-2">
             {prices.map((p, i) => (
               <li key={i}>
-                <label className="flex items-center justify-between gap-2 rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 focus-within:border-indigo-400">
+                <label className="flex items-center justify-between gap-2 rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 focus-within:border-gold">
                   <span>{i + 1} {i === 0 ? 'כרך' : 'כרכים'}</span>
                   <span className="flex items-center gap-1">
                     <input value={p} onChange={e => setAt(i, e.target.value)} disabled={!canEdit}

@@ -109,7 +109,7 @@ export default function HolidayCentersManager() {
     </div>
   }
 
-  const field = 'w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200'
+  const field = 'w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-line'
 
   return (
     <div className="flex flex-col gap-4">
@@ -128,14 +128,14 @@ export default function HolidayCentersManager() {
           <span className="flex-shrink-0 text-xs text-slate-400">{filtered.length}</span>
         </div>
         <button type="button" onClick={() => { setEditing(''); setForm(EMPTY); setErr('') }}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-700">
+          className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-3 py-2 text-xs font-bold text-white hover:bg-navy-dark">
           <Plus size={14} /> מוקד חדש
         </button>
       </div>
 
       {editing !== null && (
-        <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4">
-          <h4 className="mb-3 text-sm font-extrabold text-indigo-900">
+        <div className="rounded-xl border border-line bg-sand/60 p-4">
+          <h4 className="mb-3 text-sm font-extrabold text-navy-dark">
             {editing ? 'עריכת מוקד' : 'מוקד חדש'}
           </h4>
           <div className="grid gap-2 sm:grid-cols-2">
@@ -183,7 +183,7 @@ export default function HolidayCentersManager() {
           </div>
           <div className="mt-3 flex items-center gap-2">
             <button type="button" onClick={save} disabled={busy}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40">
+              className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40">
               {busy ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} שמירה
             </button>
             <button type="button" onClick={() => { setEditing(null); setErr('') }}
@@ -195,7 +195,7 @@ export default function HolidayCentersManager() {
       {(Object.keys(REGIONS) as RegionKey[]).map(rk => byRegion[rk]?.length ? (
         <div key={rk}>
           <h4 className="mb-2 flex items-center gap-1.5 text-xs font-extrabold text-slate-700">
-            <MapPin size={13} className="text-indigo-600" /> {REGIONS[rk]} ({byRegion[rk].length})
+            <MapPin size={13} className="text-navy" /> {REGIONS[rk]} ({byRegion[rk].length})
           </h4>
           <div className="flex flex-col gap-1.5">
             {byRegion[rk].map(c => (
@@ -215,7 +215,7 @@ export default function HolidayCentersManager() {
                 </div>
                 <button type="button" title="עריכה"
                   onClick={() => { setEditing(c.id); setForm({ ...c }); setErr('') }}
-                  className="rounded-lg border border-slate-200 p-1.5 text-slate-500 hover:border-indigo-300 hover:text-indigo-700">
+                  className="rounded-lg border border-slate-200 p-1.5 text-slate-500 hover:border-line-strong hover:text-navy-dark">
                   <Pencil size={13} />
                 </button>
                 <button type="button" title="מחיקה" onClick={() => remove(c)} disabled={busy}

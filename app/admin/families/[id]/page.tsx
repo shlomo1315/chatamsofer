@@ -52,7 +52,7 @@ export default async function FamilyDetailPage({ params }: { params: Promise<{ i
             <p className="text-sm text-slate-500">{family.beneficiaries.length} חברי משפחה</p>
           </div>
         </div>
-        <button className="flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800 border border-indigo-300 hover:border-indigo-500 rounded-lg px-3 py-1.5 transition-colors">
+        <button className="flex items-center gap-1.5 text-sm text-navy hover:text-navy-dark border border-line-strong hover:border-navy-soft rounded-lg px-3 py-1.5 transition-colors">
           <Plus size={14} />
           הוסף חבר
         </button>
@@ -66,7 +66,7 @@ export default async function FamilyDetailPage({ params }: { params: Promise<{ i
 
       <Card padding="none">
         <div className="px-5 py-3 border-b border-slate-200 flex items-center gap-2">
-          <Users size={16} className="text-indigo-500" />
+          <Users size={16} className="text-navy-soft" />
           <h2 className="text-sm font-semibold text-slate-700">חברי משפחה</h2>
         </div>
         {family.beneficiaries.length === 0 ? (
@@ -78,11 +78,11 @@ export default async function FamilyDetailPage({ params }: { params: Promise<{ i
             {family.beneficiaries.map((b) => (
               <div key={b.id} className="px-5 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 text-xs font-bold flex-shrink-0">
+                  <div className="w-8 h-8 bg-gold-soft rounded-full flex items-center justify-center text-navy text-xs font-bold flex-shrink-0">
                     {b.full_name.charAt(0)}
                   </div>
                   <div>
-                    <Link href={`/admin/beneficiaries/${b.id}`} className="text-sm font-medium text-slate-800 hover:text-indigo-600">
+                    <Link href={`/admin/beneficiaries/${b.id}`} className="text-sm font-medium text-slate-800 hover:text-navy">
                       {b.full_name}
                     </Link>
                     <p className="text-xs text-slate-400 ltr-num">{b.id_number}</p>

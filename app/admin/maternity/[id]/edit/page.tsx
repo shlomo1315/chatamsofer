@@ -290,7 +290,7 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
                   setBabyNames(prev => prev.map((n, j) => (j === i ? e.target.value : n)))
                   clearErr('babyName')
                 }}
-                className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 disabled:bg-slate-50 disabled:text-slate-400 ${fieldErrors.babyName ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`} />
+                className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 disabled:bg-slate-50 disabled:text-slate-400 ${fieldErrors.babyName ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-navy-soft'}`} />
             </div>
           ))}
           {/* כפתור "עדיין אין שם" — שומר את הדגל ולא טקסט בשדה */}
@@ -310,14 +310,14 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
           <div className="flex gap-2">
             {(['id', 'passport'] as const).map(t => (
               <button key={t} onClick={() => { setBabyIdType(t); clearErr('babyIdNumber') }}
-                className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${babyIdType === t ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
+                className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${babyIdType === t ? 'bg-navy border-navy text-white' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
                 {t === 'id' ? 'תעודת זהות' : 'דרכון'}
               </button>
             ))}
           </div>
           <input type="text" value={babyIdNumber}
             onChange={e => { setBabyIdNumber(e.target.value); clearErr('babyIdNumber') }}
-            className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left ${fieldErrors.babyIdNumber ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`}
+            className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left ${fieldErrors.babyIdNumber ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-navy-soft'}`}
             dir="ltr" />
           {fieldErrors.babyIdNumber && <p className="text-xs text-red-600">{fieldErrors.babyIdNumber}</p>}
         </div>
@@ -342,9 +342,9 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
           <HebrewDatePicker value={babyBirthDate} onChange={iso => { setBabyBirthDate(iso); clearErr('babyBirthDate') }} maxToday />
           {fieldErrors.babyBirthDate && <p className="text-xs text-red-600">{fieldErrors.babyBirthDate}</p>}
           {babyBirthDate && (
-            <div className="flex items-center gap-2 text-xs bg-indigo-50 text-indigo-700 rounded-lg px-3 py-2 border border-indigo-100">
+            <div className="flex items-center gap-2 text-xs bg-sand text-navy-dark rounded-lg px-3 py-2 border border-gold-soft">
               <Baby size={13} /> 6 שבועות לאחר הלידה: <span className="font-bold mr-1">{sixWeeksEnd(babyBirthDate)}</span>
-              {eligibilityExtended && <span className="mr-1 text-indigo-500">— הזכאות הוארכה ידנית (תאריך הסיום נשמר בנפרד)</span>}
+              {eligibilityExtended && <span className="mr-1 text-navy-soft">— הזכאות הוארכה ידנית (תאריך הסיום נשמר בנפרד)</span>}
             </div>
           )}
         </div>
@@ -355,7 +355,7 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
           <div className="flex gap-2">
             {RECOVERY_HOMES.map(h => (
               <button key={h} onClick={() => { setRecoveryHome(recoveryHome === h ? '' : h); clearErr('recoveryHome') }}
-                className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${recoveryHome === h ? 'bg-indigo-600 border-indigo-600 text-white' : `${fieldErrors.recoveryHome ? 'border-red-400' : 'border-slate-300'} text-slate-600 hover:bg-slate-50`}`}>
+                className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${recoveryHome === h ? 'bg-navy border-navy text-white' : `${fieldErrors.recoveryHome ? 'border-red-400' : 'border-slate-300'} text-slate-600 hover:bg-slate-50`}`}>
                 {h}
               </button>
             ))}
@@ -379,11 +379,11 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
             <div className="flex items-center gap-3">
               {certUrl && (
                 <button type="button" onClick={() => { openDocInNewTab(certUrl).catch(() => {}) }}
-                  className="text-xs text-indigo-600 hover:underline">צפייה בקובץ הנוכחי</button>
+                  className="text-xs text-navy hover:underline">צפייה בקובץ הנוכחי</button>
               )}
               {certUrl && <DownloadDocButton url={certUrl} docType="אישור לידה" name={certUrl} variant="button" />}
               <button onClick={() => fileRef.current?.click()}
-                className="flex items-center justify-center gap-2 border-2 border-dashed rounded-lg px-4 py-2.5 text-sm border-slate-300 text-slate-500 hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors">
+                className="flex items-center justify-center gap-2 border-2 border-dashed rounded-lg px-4 py-2.5 text-sm border-slate-300 text-slate-500 hover:border-gold hover:bg-sand hover:text-navy transition-colors">
                 <Upload size={16} /> {certUrl ? 'החלפת הקובץ' : 'העלאת קובץ'}
               </button>
             </div>
@@ -401,7 +401,7 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
         <Link href={`/admin/maternity/${id}`}
           className="px-4 py-2 rounded-lg border border-slate-300 text-sm text-slate-600 hover:bg-slate-50 transition-colors">ביטול</Link>
         <button onClick={handleSave} disabled={saving}
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors">
+          className="flex items-center gap-2 bg-navy hover:bg-navy-dark disabled:bg-line-strong text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors">
           {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} שמירה
         </button>
       </div>

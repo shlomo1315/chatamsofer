@@ -347,19 +347,19 @@ export default function IvrBuilder() {
 
       {/* ── כתובת הווהבוק ── */}
       {/* 🔴 בלי הכתובת הזו בימות, שום דבר כאן אינו פעיל. לכן היא ראשונה. */}
-      <div className="rounded-xl border-2 border-indigo-200 bg-indigo-50/60 p-4">
-        <h4 className="flex items-center gap-1.5 text-sm font-black text-indigo-900">
+      <div className="rounded-xl border-2 border-line bg-sand/60 p-4">
+        <h4 className="flex items-center gap-1.5 text-sm font-black text-navy-dark">
           <Phone size={15} /> כתובת ה-API להדבקה בימות
         </h4>
-        <p className="mt-1 text-xs leading-relaxed text-indigo-800">
+        <p className="mt-1 text-xs leading-relaxed text-navy-dark">
           בהגדרות השלוחה בימות: סוג השלוחה <strong>API</strong>, ובשדה הכתובת הדביקו:
         </p>
         <div className="mt-2 flex items-center gap-2">
-          <code dir="ltr" className="flex-1 overflow-x-auto rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs text-slate-700">
+          <code dir="ltr" className="flex-1 overflow-x-auto rounded-lg border border-line bg-white px-3 py-2 text-xs text-slate-700">
             {data.webhookUrl}
           </code>
           <button onClick={copyUrl}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-700">
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-xs font-bold text-white hover:bg-navy-dark">
             {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? 'הועתק' : 'העתק'}
           </button>
         </div>
@@ -379,11 +379,11 @@ export default function IvrBuilder() {
             תקלה שאי אפשר לאבחן בלי הכפתור הזה. */}
         <div className="mt-2.5 flex flex-wrap items-center gap-2">
           <button type="button" disabled={verifying} onClick={() => void verifyAudio()}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50 disabled:opacity-50">
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line-strong bg-white px-3 py-1.5 text-xs font-bold text-navy-dark hover:bg-sand disabled:opacity-50">
             {verifying ? <Loader2 size={12} className="animate-spin" /> : <Volume2 size={12} />}
             בדיקת קבצי הקול
           </button>
-          <span className="text-[11px] text-indigo-800">
+          <span className="text-[11px] text-navy-dark">
             מוודא שכל הודעה מצביעה על קובץ שקיים בימות. הפניה שבורה = שלוחה אילמת.
           </span>
         </div>
@@ -465,7 +465,7 @@ export default function IvrBuilder() {
                       "voicemail_email". הכותרת הייתה מראה 'סוג אחר'
                       לכל 24 הסוגים, ואי אפשר היה להבחין ביניהם ברשימה. */}
                   {node.type === 'raw' && node.yemotType && (
-                    <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">
+                    <span className="rounded-full bg-sand px-2 py-0.5 text-[10px] font-bold text-navy-dark">
                       {yemotTypeByKey(node.yemotType)?.label ?? node.yemotType}
                     </span>
                   )}
@@ -659,7 +659,7 @@ export default function IvrBuilder() {
                   <div className="flex flex-wrap items-center gap-2">
                     <button onClick={() => void genVoice(node.id, 'prompt')}
                       disabled={voiceFor === node.id}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300 bg-white px-3 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-50 disabled:opacity-50">
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-line-strong bg-white px-3 py-1.5 text-xs font-semibold text-navy-dark hover:bg-sand disabled:opacity-50">
                       {voiceFor === node.id ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
                       יצירת קול נוירוני
                     </button>
@@ -907,7 +907,7 @@ export default function IvrBuilder() {
                           </span>
                         </span>
                         <button onClick={() => addNode(node.id)}
-                          className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800">
+                          className="inline-flex items-center gap-1 text-xs font-bold text-navy hover:text-navy-dark">
                           <Plus size={12} /> שלוחה חדשה תחת התפריט
                         </button>
                       </div>

@@ -16,7 +16,7 @@ export default function LineageReliabilityHeaderButton({ beneficiaryId }: { bene
   return (
     <>
       <button onClick={openAndRun}
-        className="flex items-center gap-1.5 text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg px-3 py-1.5 transition-colors">
+        className="flex items-center gap-1.5 text-sm font-medium text-navy-dark bg-sand hover:bg-gold-soft border border-line rounded-lg px-3 py-1.5 transition-colors">
         <ShieldCheck size={14} /> בדוק אמינות (AI)
       </button>
 
@@ -25,7 +25,7 @@ export default function LineageReliabilityHeaderButton({ beneficiaryId }: { bene
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 sticky top-0 bg-white">
               <div className="flex items-center gap-2">
-                <ShieldCheck size={17} className="text-indigo-500" />
+                <ShieldCheck size={17} className="text-navy-soft" />
                 <h3 className="font-bold text-slate-900">סקירת יוחסין דרך הסוכן</h3>
                 <span className="text-[11px] text-slate-400">(סקירה בלבד)</span>
               </div>
@@ -37,7 +37,7 @@ export default function LineageReliabilityHeaderButton({ beneficiaryId }: { bene
               {res && <ReliabilityView res={res} />}
               {res && (
                 <button onClick={run} disabled={loading}
-                  className="mt-4 w-full inline-flex items-center justify-center gap-1.5 text-sm font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg py-2">
+                  className="mt-4 w-full inline-flex items-center justify-center gap-1.5 text-sm font-semibold text-navy-dark bg-sand hover:bg-gold-soft rounded-lg py-2">
                   <ShieldCheck size={14} /> סקירה מחדש
                 </button>
               )}

@@ -478,7 +478,7 @@ export default function LineageBranchView({ nodeId, self }: {
     : (mergeSelNodes.find(n => (n.status ?? 'verified') === 'verified')?.id ?? mergeSelNodes[0]?.id ?? null)
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '20px 0', color: '#7C3AED' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '20px 0', color: '#14213D' }}>
       <Loader2 size={16} className="animate-spin" /><span style={{ fontSize: 13 }}>טוען עץ דורות...</span>
     </div>
   )
@@ -516,16 +516,16 @@ export default function LineageBranchView({ nodeId, self }: {
         {branchRoot ? (
           <>
             <button type="button" onClick={backBranch}
-              style={{ display: 'flex', alignItems: 'center', gap: 5, height: 28, padding: '0 10px', borderRadius: 9, border: '1.5px solid #DDD6FE', background: '#F5F3FF', color: '#6D28D9', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+              style={{ display: 'flex', alignItems: 'center', gap: 5, height: 28, padding: '0 10px', borderRadius: 9, border: '1.5px solid #E6DFCF', background: '#FBF8F1', color: '#14213D', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
               <ArrowRight size={13} /> {branchStack.length > 1 ? 'חזרה לענף הקודם' : 'חזרה לסדר הדורות'}
             </button>
-            <span style={{ fontSize: 12, fontWeight: 800, color: '#4C1D95', background: '#EDE9FE', borderRadius: 20, padding: '4px 12px' }}>
+            <span style={{ fontSize: 12, fontWeight: 800, color: '#0E1830', background: '#EDE9FE', borderRadius: 20, padding: '4px 12px' }}>
               אילן היוחסין של {branchRoot.name} · דור {branchRoot.generation}
             </span>
             {canEdit && (
               <button type="button"
                 onClick={() => { setMergeMode(m => !m); setMergeSel(new Set()); setKeepId(null) }}
-                style={{ height: 28, padding: '0 10px', borderRadius: 9, border: `1.5px solid ${mergeMode ? '#9333EA' : '#E2E8F0'}`, background: mergeMode ? '#9333EA' : '#fff', color: mergeMode ? '#fff' : '#7C3AED', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+                style={{ height: 28, padding: '0 10px', borderRadius: 9, border: `1.5px solid ${mergeMode ? '#14213D' : '#E2E8F0'}`, background: mergeMode ? '#14213D' : '#fff', color: mergeMode ? '#fff' : '#14213D', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
                 {mergeMode ? 'סיום מיזוג' : '⚯ מזג ידנית'}
               </button>
             )}
@@ -540,9 +540,9 @@ export default function LineageBranchView({ nodeId, self }: {
           </span>
         )}
         <div style={{ display: 'flex', gap: 5, marginRight: 'auto' }}>
-          <button type="button" onClick={() => setZoom(z => Math.min(2.5, z + 0.1))} style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366F1', fontWeight: 700 }}>+</button>
+          <button type="button" onClick={() => setZoom(z => Math.min(2.5, z + 0.1))} style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#14213D', fontWeight: 700 }}>+</button>
           <button type="button" onClick={() => { setZoom(0.8); didCenter.current = false }} style={{ height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 10, cursor: 'pointer', padding: '0 7px', color: '#64748B', fontWeight: 600 }}>{Math.round(zoom * 100)}%</button>
-          <button type="button" onClick={() => setZoom(z => Math.max(0.35, z - 0.1))} style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366F1', fontWeight: 700 }}>−</button>
+          <button type="button" onClick={() => setZoom(z => Math.max(0.35, z - 0.1))} style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#14213D', fontWeight: 700 }}>−</button>
         </div>
       </div>
 
@@ -642,7 +642,7 @@ export default function LineageBranchView({ nodeId, self }: {
                   background: relOverlay + p.bg,
                   border: st === 'verified' ? 'none' : `${Math.max(1.5, 2 * zoom)}px dashed #fff`,
                   boxShadow: selForMerge
-                    ? '0 0 0 3px #fff, 0 0 0 6px #9333EA, 0 12px 32px rgba(147,51,234,0.4)'
+                    ? '0 0 0 3px #fff, 0 0 0 6px #14213D, 0 12px 32px rgba(147,51,234,0.4)'
                     : isTarget
                       ? `0 0 0 3px #fff, 0 0 0 5.5px ${p.ring}, 0 12px 32px ${p.shadow}`
                       : branchRootId && onChain
@@ -669,7 +669,7 @@ export default function LineageBranchView({ nodeId, self }: {
                 {isDup && (
                   <div style={{
                     position: 'absolute', top: -11 * zoom, left: 20 * zoom,
-                    background: '#F3E8FF', color: '#7E22CE', border: '1.5px solid #D8B4FE',
+                    background: '#F3E8FF', color: '#14213D', border: '1.5px solid #D8B4FE',
                     fontSize: Math.max(7, 8.5 * zoom), fontWeight: 900, padding: `${1 * zoom}px ${6 * zoom}px`,
                     borderRadius: 20, whiteSpace: 'nowrap', zIndex: 24,
                   }}>כפול ×{dupGroup.length}</div>
@@ -720,7 +720,7 @@ export default function LineageBranchView({ nodeId, self }: {
                       {kids > 0 && node.id !== branchRootId && (
                         <button type="button" onClick={() => openBranch(node.id)}
                           title="הצג את הצומת הזה וכל צאצאיו"
-                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, width: '100%', padding: '7px 10px', borderRadius: 10, background: '#7C3AED', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, width: '100%', padding: '7px 10px', borderRadius: 10, background: '#14213D', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                           הצג אילן יוחסין של ענף זה
                         </button>
                       )}
@@ -730,7 +730,7 @@ export default function LineageBranchView({ nodeId, self }: {
                         <button type="button"
                           onClick={() => { setSaveErr(''); setModal({ type: 'merge', keep: node, others: dupGroup.filter(n => n.id !== node.id) }) }}
                           title="מזג את הכפילויות של שם זה תחת אותו אב"
-                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, width: '100%', padding: '7px 10px', borderRadius: 10, background: '#9333EA', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit' }}>
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, width: '100%', padding: '7px 10px', borderRadius: 10, background: '#14213D', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit' }}>
                           ⚯ מזג כפילים ({dupGroup.length})
                         </button>
                       )}
@@ -739,7 +739,7 @@ export default function LineageBranchView({ nodeId, self }: {
                       {canEdit && branchRootId && (
                         <button type="button"
                           onClick={() => { setMergeMode(true); setMergeSel(new Set([node.id])); setKeepId(node.id); setPinned(null); setHovered(null) }}
-                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, width: '100%', padding: '6px 10px', borderRadius: 10, background: '#FAF5FF', color: '#7E22CE', border: '1.5px solid #E9D5FF', cursor: 'pointer', fontSize: 11.5, fontWeight: 800, fontFamily: 'inherit' }}>
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, width: '100%', padding: '6px 10px', borderRadius: 10, background: '#FAF5FF', color: '#14213D', border: '1.5px solid #E9D5FF', cursor: 'pointer', fontSize: 11.5, fontWeight: 800, fontFamily: 'inherit' }}>
                           ⚯ מיזוג ידני מצומת זה
                         </button>
                       )}
@@ -857,7 +857,7 @@ export default function LineageBranchView({ nodeId, self }: {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
             {mergeSelNodes.map(n => (
               <button key={n.id} type="button" onClick={() => setKeepId(n.id)}
-                style={{ padding: '5px 10px', borderRadius: 9, fontSize: 11.5, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', border: `1.5px solid ${effectiveKeepId === n.id ? '#9333EA' : '#E2E8F0'}`, background: effectiveKeepId === n.id ? '#9333EA' : '#fff', color: effectiveKeepId === n.id ? '#fff' : '#475569' }}>
+                style={{ padding: '5px 10px', borderRadius: 9, fontSize: 11.5, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', border: `1.5px solid ${effectiveKeepId === n.id ? '#14213D' : '#E2E8F0'}`, background: effectiveKeepId === n.id ? '#14213D' : '#fff', color: effectiveKeepId === n.id ? '#fff' : '#475569' }}>
                 {effectiveKeepId === n.id ? '★ ' : ''}{n.name}
               </button>
             ))}
@@ -869,7 +869,7 @@ export default function LineageBranchView({ nodeId, self }: {
                 if (!keep) return
                 setSaveErr(''); setModal({ type: 'merge', keep, others: mergeSelNodes.filter(n => n.id !== keep.id) })
               }}
-              style={{ background: mergeSel.size < 2 ? '#E9D5FF' : '#9333EA', color: '#fff', border: 'none', borderRadius: 10, padding: '7px 16px', fontSize: 12, fontWeight: 800, cursor: mergeSel.size < 2 ? 'default' : 'pointer', fontFamily: 'inherit' }}>
+              style={{ background: mergeSel.size < 2 ? '#E9D5FF' : '#14213D', color: '#fff', border: 'none', borderRadius: 10, padding: '7px 16px', fontSize: 12, fontWeight: 800, cursor: mergeSel.size < 2 ? 'default' : 'pointer', fontFamily: 'inherit' }}>
               בצע מיזוג
             </button>
             <button type="button" onClick={() => { setMergeSel(new Set()); setKeepId(null) }}
@@ -891,7 +891,7 @@ export default function LineageBranchView({ nodeId, self }: {
         footer={
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-start' }}>
             <button type="button" onClick={() => { void saveEdit() }} disabled={saving || !formName.trim()}
-              style={{ background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 10, padding: '8px 18px', fontSize: 13, fontWeight: 800, cursor: saving ? 'default' : 'pointer', opacity: saving || !formName.trim() ? 0.6 : 1, fontFamily: 'inherit' }}>שמירה</button>
+              style={{ background: '#14213D', color: '#fff', border: 'none', borderRadius: 10, padding: '8px 18px', fontSize: 13, fontWeight: 800, cursor: saving ? 'default' : 'pointer', opacity: saving || !formName.trim() ? 0.6 : 1, fontFamily: 'inherit' }}>שמירה</button>
             <button type="button" onClick={closeModal} style={{ background: '#F1F5F9', color: '#475569', border: 'none', borderRadius: 10, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>ביטול</button>
           </div>
         }>
@@ -964,7 +964,7 @@ export default function LineageBranchView({ nodeId, self }: {
         footer={
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-start' }}>
             <button type="button" onClick={() => { void doMerge() }} disabled={saving}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#9333EA', color: '#fff', border: 'none', borderRadius: 10, padding: '8px 18px', fontSize: 13, fontWeight: 800, cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.6 : 1, fontFamily: 'inherit' }}>
+              style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#14213D', color: '#fff', border: 'none', borderRadius: 10, padding: '8px 18px', fontSize: 13, fontWeight: 800, cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.6 : 1, fontFamily: 'inherit' }}>
               {saving && <Loader2 size={13} className="animate-spin" />} מזג
             </button>
             <button type="button" onClick={closeModal} style={{ background: '#F1F5F9', color: '#475569', border: 'none', borderRadius: 10, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>ביטול</button>
@@ -980,10 +980,10 @@ export default function LineageBranchView({ nodeId, self }: {
             </ul>
             <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, background: '#FAF5FF', border: '1.5px solid #E9D5FF', borderRadius: 11, padding: '9px 12px', cursor: 'pointer', margin: '0 0 10px' }}>
               <input type="checkbox" checked={mergeUpApprox} onChange={e => setMergeUpApprox(e.target.checked)}
-                style={{ width: 16, height: 16, accentColor: '#9333EA', cursor: 'pointer', marginTop: 2 }} />
-              <span style={{ fontSize: 12.5, fontWeight: 700, color: '#4C1D95' }}>
+                style={{ width: 16, height: 16, accentColor: '#14213D', cursor: 'pointer', marginTop: 2 }} />
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: '#0E1830' }}>
                 למזג גם את הדורות שמעל כשהניסוח שונה
-                <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#7C3AED', marginTop: 3, lineHeight: 1.5 }}>
+                <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#14213D', marginTop: 3, lineHeight: 1.5 }}>
                   אם אלו אותו אדם — גם אבותיהם אותו אדם. הניסוח המפורט הוא שיישאר.
                 </span>
               </span>

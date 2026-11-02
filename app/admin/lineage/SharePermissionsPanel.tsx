@@ -54,7 +54,7 @@ const fmt = (s?: string | null) => s ? new Date(s).toLocaleString('he-IL', { day
 const actionLabel = (a: ActivityItem) => {
   if (a.action === 'lineage_node_family_verified') return { text: 'אישר', cls: 'text-green-700 bg-green-50 border-green-200' }
   if (a.action === 'lineage_node_family_rejected') return { text: 'דחה', cls: 'text-red-700 bg-red-50 border-red-200' }
-  return { text: 'תיקן שם', cls: 'text-indigo-700 bg-indigo-50 border-indigo-200' }
+  return { text: 'תיקן שם', cls: 'text-navy-dark bg-sand border-line' }
 }
 
 // מרכז שליטה בכל הרשאות שיתוף עץ הדורות. כל שורה ניתנת להרחבה כדי לראות בדיוק
@@ -140,7 +140,7 @@ export default function SharePermissionsPanel({ onClose }: { onClose: () => void
       case 'branch':
         return (
           <div className="flex items-start gap-1.5">
-            <GitBranch size={13} className="mt-0.5 shrink-0 text-violet-400" />
+            <GitBranch size={13} className="mt-0.5 shrink-0 text-gold" />
             <span className="font-medium text-slate-800">{i.node_name ?? '—'}</span>
             {i.node_generation != null && <span className="text-[11px] text-slate-400">דור {i.node_generation}</span>}
           </div>
@@ -189,7 +189,7 @@ export default function SharePermissionsPanel({ onClose }: { onClose: () => void
       <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[88vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="border-b border-slate-200 px-5 py-3 flex items-center justify-between">
           <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-            <ShieldCheck size={17} className="text-indigo-500" /> הרשאות שיתוף עץ הדורות
+            <ShieldCheck size={17} className="text-navy-soft" /> הרשאות שיתוף עץ הדורות
             <span className="text-xs font-normal text-slate-400">({activeCount} פעילות · {invites.length} סה״כ)</span>
           </h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
@@ -198,7 +198,7 @@ export default function SharePermissionsPanel({ onClose }: { onClose: () => void
         <div className="px-5 py-2.5 border-b border-slate-100 flex items-center gap-2">
           {([['all', 'הכל'], ['active', 'פעילות'], ['revoked', 'מבוטלות / פגו']] as const).map(([k, label]) => (
             <button key={k} onClick={() => setStatusFilter(k)}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${statusFilter === k ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+              className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${statusFilter === k ? 'bg-navy border-navy text-white' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
               {label}
             </button>
           ))}
@@ -239,7 +239,7 @@ export default function SharePermissionsPanel({ onClose }: { onClose: () => void
                   const acts = activity[i.token] ?? []
                   return (
                     <Fragment key={i.token}>
-                      <tr className={`${st === 'active' ? '' : 'opacity-60'} ${isOpen ? 'bg-indigo-50/40' : 'hover:bg-slate-50'} cursor-pointer align-top`} onClick={() => toggleExpand(i.token)}>
+                      <tr className={`${st === 'active' ? '' : 'opacity-60'} ${isOpen ? 'bg-sand/40' : 'hover:bg-slate-50'} cursor-pointer align-top`} onClick={() => toggleExpand(i.token)}>
                         <td className="px-4 py-2.5 text-slate-400">{isOpen ? <ChevronDown size={15} /> : <ChevronLeft size={15} />}</td>
                         {tc.shown.map(c => (
                           <td key={c.key} className={`px-4 py-2.5 ${tc.cellClass(c)}`}>{cell(c, i)}</td>

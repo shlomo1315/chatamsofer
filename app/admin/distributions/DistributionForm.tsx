@@ -95,7 +95,7 @@ export default function DistributionForm({ initial }: { initial?: DistributionFo
     } catch { setErr('שגיאת רשת'); setSaving(false) }
   }
 
-  const field = 'w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100'
+  const field = 'w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold-soft'
 
   return (
     <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5">
@@ -182,7 +182,7 @@ export default function DistributionForm({ initial }: { initial?: DistributionFo
 
       <div className="flex gap-2">
         <button type="button" onClick={submit} disabled={saving}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50">
+          className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-5 py-2.5 text-sm font-bold text-white hover:bg-navy-dark disabled:opacity-50">
           {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
           {isEdit ? 'שמירת שינויים' : 'יצירת החלוקה'}
         </button>

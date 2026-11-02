@@ -634,7 +634,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
   ) : (
     <Card>
       <div className="flex items-center gap-2 mb-3">
-        <GitBranch size={16} className="text-violet-500" />
+        <GitBranch size={16} className="text-navy-soft" />
         <h2 className="text-xs font-semibold text-slate-500 uppercase">שיוך שושלת — עץ הדורות</h2>
       </div>
 
@@ -851,7 +851,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
             <div className="mt-4 pt-3 border-t border-slate-100">
               <h3 className="text-xs font-semibold text-slate-500 mb-2">רשום/ה לקבלת עדכונים שוטפים בנושאים</h3>
               <ul className="flex flex-wrap gap-1.5">
-                {pb.update_topics.map((t, i) => <li key={i} className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full px-2.5 py-1">{t}</li>)}
+                {pb.update_topics.map((t, i) => <li key={i} className="text-xs bg-sand text-navy-dark border border-gold-soft rounded-full px-2.5 py-1">{t}</li>)}
               </ul>
             </div>
           )}

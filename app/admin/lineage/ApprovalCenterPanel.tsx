@@ -241,7 +241,7 @@ export default function ApprovalCenterPanel() {
     ? Math.round((summary.verified / summary.total) * 100) : 0
 
   if (loading && !summary) {
-    return <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-indigo-500" /></div>
+    return <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-navy-soft" /></div>
   }
 
   return (
@@ -274,7 +274,7 @@ export default function ApprovalCenterPanel() {
           return (
             <button key={o.v} onClick={() => { setTab(o.v); closeFocus() }}
               className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all ${
-                tab === o.v ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-200 bg-white text-slate-500 hover:border-indigo-300'
+                tab === o.v ? 'border-navy bg-navy text-white' : 'border-slate-200 bg-white text-slate-500 hover:border-line-strong'
               }`}>
               <Icon size={13} /> {o.l}
             </button>
@@ -386,7 +386,7 @@ export default function ApprovalCenterPanel() {
 
                     <button onClick={() => { setTab('queue'); openParent(t.id) }}
                       title="פתח את הדור הזה לאישור"
-                      className="min-w-0 flex-1 truncate text-right text-[12px] text-slate-700 hover:text-indigo-600">
+                      className="min-w-0 flex-1 truncate text-right text-[12px] text-slate-700 hover:text-navy">
                       {t.name}
                     </button>
 
@@ -475,7 +475,7 @@ export default function ApprovalCenterPanel() {
           )}
           {queue.map(r => (
             <button key={r.parentId} onClick={() => openParent(r.parentId)}
-              className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-right transition-all hover:border-indigo-300 hover:shadow-sm">
+              className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-right transition-all hover:border-line-strong hover:shadow-sm">
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-bold text-slate-800">{r.parentName}</span>
                 <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-slate-500">
@@ -510,7 +510,7 @@ export default function ApprovalCenterPanel() {
                     <span key={t.id} className="flex items-center gap-1">
                       {i > 0 && <span className="text-slate-300">›</span>}
                       <button onClick={() => openParent(t.id)}
-                        className="rounded px-1 py-0.5 hover:bg-slate-100 hover:text-indigo-600">
+                        className="rounded px-1 py-0.5 hover:bg-slate-100 hover:text-navy">
                         {t.name}
                       </button>
                     </span>
@@ -559,14 +559,14 @@ export default function ApprovalCenterPanel() {
                   <label
                     className={`flex flex-1 cursor-pointer items-center gap-2.5 rounded-lg border px-2.5 transition-all ${
                       child ? 'py-2' : 'py-1.5'
-                    } ${on ? 'border-indigo-300 bg-indigo-50/60' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                    } ${on ? 'border-line-strong bg-sand/60' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
                     <input type="checkbox" checked={on}
                       onChange={() => setPicked(prev => {
                         const n = new Set(prev)
                         if (n.has(c.id)) n.delete(c.id); else n.add(c.id)
                         return n
                       })}
-                      className="h-4 w-4 flex-shrink-0 accent-indigo-600" />
+                      className="h-4 w-4 flex-shrink-0 accent-navy" />
                     <span className="min-w-0 flex-1">
                       <span className={`block truncate text-slate-800 ${child ? 'text-sm font-medium' : 'text-[12px]'}`}>
                         {c.name}
@@ -584,7 +584,7 @@ export default function ApprovalCenterPanel() {
                     {c.childCount > 0 && (
                       <button onClick={e => { e.preventDefault(); openParent(c.id) }}
                         title="פתח את הדור הזה"
-                        className="flex-shrink-0 rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-500 hover:border-indigo-300 hover:text-indigo-600">
+                        className="flex-shrink-0 rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-500 hover:border-line-strong hover:text-navy">
                         פתח
                       </button>
                     )}
@@ -598,7 +598,7 @@ export default function ApprovalCenterPanel() {
 
           <input value={note} onChange={e => setNote(e.target.value)}
             placeholder="על סמך מה אושר? (נשמר בתיעוד — לא חובה)"
-            className="mb-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+            className="mb-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-line-strong" />
 
           <div className="flex flex-wrap items-center gap-2">
             <button disabled={busy || !picked.size}
@@ -633,7 +633,7 @@ export default function ApprovalCenterPanel() {
             <Search size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input value={q} onChange={e => setQ(e.target.value)}
               placeholder="חיפוש בשם או בשם האב…"
-              className="w-full rounded-xl border border-slate-200 py-2 pr-9 pl-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+              className="w-full rounded-xl border border-slate-200 py-2 pr-9 pl-3 text-sm focus:outline-none focus:ring-2 focus:ring-line-strong" />
           </div>
           <p className="text-[11px] text-slate-500">
             {filteredApproved.length.toLocaleString('he-IL')} צמתים מאושרים

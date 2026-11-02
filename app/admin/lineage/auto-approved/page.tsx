@@ -180,7 +180,7 @@ export default function AutoApprovedPage() {
           <input value={q} onChange={e => setQ(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') setSearch(q) }}
             placeholder="חיפוש בשם, ת״ז, עיר… (Enter)"
-            className="w-full pr-9 pl-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+            className="w-full pr-9 pl-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-line" />
         </div>
       </div>
 
@@ -243,7 +243,7 @@ export default function AutoApprovedPage() {
                         className="h-4 w-4 accent-amber-600" aria-label={`סימון ${r.name}`} />
                     </td>
                     <td className="font-bold text-slate-800">
-                      <Link href={`/admin/beneficiaries/${r.id}`} className="hover:text-indigo-700 hover:underline">
+                      <Link href={`/admin/beneficiaries/${r.id}`} className="hover:text-navy-dark hover:underline">
                         {r.name}
                       </Link>
                     </td>

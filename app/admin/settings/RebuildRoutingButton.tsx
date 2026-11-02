@@ -88,12 +88,12 @@ export default function RebuildRoutingButton() {
           <Check size={15} /> כל המיילים מנותבים נכון — אין מה לתקן
         </p>
       ) : (
-        <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 flex flex-col gap-3">
-          <h4 className="text-sm font-bold text-indigo-900 flex items-center gap-1.5">
+        <div className="rounded-xl border border-line bg-sand p-4 flex flex-col gap-3">
+          <h4 className="text-sm font-bold text-navy-dark flex items-center gap-1.5">
             <AlertTriangle size={15} /> {toFix} מיילים ישויכו מחדש
           </h4>
 
-          <div className="flex flex-col gap-1 text-sm text-indigo-900">
+          <div className="flex flex-col gap-1 text-sm text-navy-dark">
             {Object.entries(data.פילוח).sort((a, b) => b[1] - a[1]).map(([move, n]) => (
               <div key={move} className="flex items-center justify-between bg-white/60 rounded-lg px-2.5 py-1.5">
                 <span dir="ltr" className="text-xs">{move}</span>
@@ -104,7 +104,7 @@ export default function RebuildRoutingButton() {
 
           {data.דוגמאות.length > 0 && (
             <details className="text-xs">
-              <summary className="cursor-pointer text-indigo-800 font-medium">הצג דוגמאות</summary>
+              <summary className="cursor-pointer text-navy-dark font-medium">הצג דוגמאות</summary>
               <div className="mt-2 flex flex-col gap-1">
                 {data.דוגמאות.slice(0, 15).map((d, i) => (
                   <div key={i} className="bg-white/70 rounded-lg px-2.5 py-1.5">
@@ -118,16 +118,16 @@ export default function RebuildRoutingButton() {
 
           {!confirming ? (
             <button onClick={() => setConfirming(true)}
-              className="self-start inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+              className="self-start inline-flex items-center gap-1.5 bg-navy hover:bg-navy-dark text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
               <Wrench size={14} /> תקן את הניתוב
             </button>
           ) : (
-            <div className="flex items-center gap-2 bg-white border border-indigo-300 rounded-lg p-3">
+            <div className="flex items-center gap-2 bg-white border border-line-strong rounded-lg p-3">
               <p className="text-sm text-slate-700 flex-1">{toFix} מיילים ישויכו מחדש. להמשיך?</p>
               <button onClick={() => setConfirming(false)} disabled={running}
                 className="text-sm text-slate-600 px-3 py-1.5 rounded-lg hover:bg-slate-50">ביטול</button>
               <button onClick={run} disabled={running}
-                className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-3.5 py-1.5 rounded-lg disabled:opacity-50">
+                className="inline-flex items-center gap-1.5 bg-navy hover:bg-navy-dark text-white text-sm font-semibold px-3.5 py-1.5 rounded-lg disabled:opacity-50">
                 {running ? <Loader2 size={13} className="animate-spin" /> : <Wrench size={13} />} כן, תקן
               </button>
             </div>

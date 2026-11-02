@@ -128,7 +128,7 @@ const TONES: Record<string, string> = {
   rose: 'border-rose-200 bg-rose-50 text-rose-900',
   blue: 'border-blue-200 bg-blue-50 text-blue-900',
   orange: 'border-orange-200 bg-orange-50 text-orange-900',
-  violet: 'border-violet-200 bg-violet-50 text-violet-900',
+  violet: 'border-line bg-sand text-navy-dark',
 }
 
 function Block({ tone, icon, title, meta, body, stale }: {

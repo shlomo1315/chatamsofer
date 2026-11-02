@@ -241,15 +241,15 @@ export default function DuplicatesPanel({
   return (
     <div style={{ background: '#fff', border: '2px solid #E9D5FF', borderRadius: 18, padding: 18, marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
-        <Users size={18} color="#7C3AED" />
+        <Users size={18} color="#14213D" />
         <div style={{ flex: 1, minWidth: 200 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: '#5B21B6' }}>מרכז המיזוגים</div>
-          <div style={{ fontSize: 11.5, color: '#7C3AED' }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: '#0E1830' }}>מרכז המיזוגים</div>
+          <div style={{ fontSize: 11.5, color: '#14213D' }}>
             כל מיזוג גורר אוטומטית את הדורות שמעליו ומתחתיו
           </div>
         </div>
         <button onClick={() => { void scan(); void loadUndo() }} disabled={loading}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#fff', color: '#5B21B6', border: '1.5px solid #DDD6FE', borderRadius: 10, padding: '7px 13px', fontSize: 12.5, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+          style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#fff', color: '#0E1830', border: '1.5px solid #E6DFCF', borderRadius: 10, padding: '7px 13px', fontSize: 12.5, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
           <RefreshCw size={13} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} /> סרוק מחדש
         </button>
       </div>
@@ -287,7 +287,7 @@ export default function DuplicatesPanel({
             ולמצוא את המקום מחדש אחרי שהיא מתעדכנת. כאן אין ניווט בכלל. */}
         {shown.length > 0 && (
           <button onClick={() => setQuick(shown)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#4F46E5', color: '#fff', border: 'none', borderRadius: 9, padding: '6px 13px', fontSize: 12.5, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#14213D', color: '#fff', border: 'none', borderRadius: 9, padding: '6px 13px', fontSize: 12.5, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
             <Zap size={13} /> סקירה מהירה ({shown.length.toLocaleString('he-IL')})
           </button>
         )}
@@ -309,7 +309,7 @@ export default function DuplicatesPanel({
       )}
 
       {loading ? (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 30, color: '#7C3AED' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 30, color: '#14213D' }}>
           <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> סורק את העץ…
         </div>
       ) : !shown.length ? (
@@ -323,7 +323,7 @@ export default function DuplicatesPanel({
             const on = sel.has(key)
             return (
               <div key={key}
-                style={{ border: `1.5px solid ${on ? '#7C3AED' : LEVEL_UI[g.level].border}`, background: on ? '#FAF5FF' : '#fff', borderRadius: 13, padding: '11px 13px' }}>
+                style={{ border: `1.5px solid ${on ? '#14213D' : LEVEL_UI[g.level].border}`, background: on ? '#FAF5FF' : '#fff', borderRadius: 13, padding: '11px 13px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
                   {g.level === 'exact' && (
                     <input type="checkbox" checked={on}
@@ -332,9 +332,9 @@ export default function DuplicatesPanel({
                         if (x.has(key)) x.delete(key); else x.add(key)
                         return x
                       })}
-                      style={{ width: 16, height: 16, accentColor: '#7C3AED', cursor: 'pointer' }} />
+                      style={{ width: 16, height: 16, accentColor: '#14213D', cursor: 'pointer' }} />
                   )}
-                  <span style={{ fontSize: 10, fontWeight: 800, color: '#7C3AED', background: '#F5F3FF', border: '1px solid #DDD6FE', borderRadius: 20, padding: '1px 7px' }}>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: '#14213D', background: '#FBF8F1', border: '1px solid #E6DFCF', borderRadius: 20, padding: '1px 7px' }}>
                     דור {g.generation}
                   </span>
                   <span style={{ fontSize: 11.5, color: '#64748B' }}>תחת: {g.parentName}</span>
@@ -351,7 +351,7 @@ export default function DuplicatesPanel({
                         <span>{relTxt(n.relation)}</span>
                         <span>· {statusTxt(n.status)}</span>
                         <span>· {n.children} ילדים</span>
-                        {n.families > 0 && <span style={{ color: '#7C3AED', fontWeight: 700 }}>· {n.families} משפחות רשומות</span>}
+                        {n.families > 0 && <span style={{ color: '#14213D', fontWeight: 700 }}>· {n.families} משפחות רשומות</span>}
                       </div>
                     </div>
                   ))}
@@ -360,14 +360,14 @@ export default function DuplicatesPanel({
                 <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
                   <button onClick={() => void openPlan(g)}
                     disabled={busy === key || planning === key}
-                    style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 9, padding: '6px 13px', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#14213D', color: '#fff', border: 'none', borderRadius: 9, padding: '6px 13px', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
                     {busy === key ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Check size={12} />}
                     מזג — אותו אדם
                   </button>
                   {/* ⚠️ "הצג בעץ" לפני ההכרעה ולא אחריה: ההקשר במפה — מי האב,
                       מה יש מסביב — הוא לעיתים מה שמכריע אם אלה אותו אדם. */}
                   <button onClick={() => onLocate(g.nodes.map(n => n.id))} disabled={busy === key}
-                    style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#fff', color: '#5B21B6', border: '1.5px solid #DDD6FE', borderRadius: 9, padding: '6px 13px', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#fff', color: '#0E1830', border: '1.5px solid #E6DFCF', borderRadius: 9, padding: '6px 13px', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
                     <MapPin size={12} /> הצג בעץ
                   </button>
                   <button onClick={() => void notDuplicate(g)} disabled={busy === key}

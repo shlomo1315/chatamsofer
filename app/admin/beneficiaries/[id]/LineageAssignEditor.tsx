@@ -88,7 +88,7 @@ export default function LineageAssignEditor({
   return (
     <>
       <button type="button" onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-800 border border-indigo-200 hover:border-indigo-300 rounded-lg px-3 py-1.5 transition-colors">
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-navy hover:text-navy-dark border border-line hover:border-line-strong rounded-lg px-3 py-1.5 transition-colors">
         <GitBranch size={13} /> שנה שיוך לעץ
       </button>
 
@@ -100,7 +100,7 @@ export default function LineageAssignEditor({
             <button type="button" onClick={() => setOpen(false)} disabled={saving}
               className="absolute top-4 left-4 text-slate-400 hover:text-slate-600"><X size={18} /></button>
             <h2 className="text-base font-bold text-slate-900 mb-1 flex items-center gap-2">
-              <GitBranch size={17} className="text-indigo-600" /> שיוך הצאצא לעץ הדורות
+              <GitBranch size={17} className="text-navy" /> שיוך הצאצא לעץ הדורות
             </h2>
             <p className="text-xs text-slate-500 mb-4">חפשו את הצומת בעץ שאליו הצאצא משתייך. השרשרת המלאה תיגזר אוטומטית.</p>
 
@@ -109,7 +109,7 @@ export default function LineageAssignEditor({
               <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input value={q} onChange={e => { setQ(e.target.value); setPicked(null) }}
                 placeholder="חיפוש לפי שם…" autoFocus
-                className="w-full rounded-xl border border-slate-300 pr-9 pl-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                className="w-full rounded-xl border border-slate-300 pr-9 pl-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft" />
             </div>
 
             {loading && <div className="flex items-center gap-2 text-slate-500 text-sm py-4"><Loader2 size={15} className="animate-spin" /> טוען את עץ הדורות…</div>}
@@ -122,8 +122,8 @@ export default function LineageAssignEditor({
                   <p className="text-sm text-slate-400 py-3 text-center">לא נמצאו צמתים תואמים</p>
                 ) : results.map(n => (
                   <button key={n.id} type="button" onClick={() => setPicked(n)}
-                    className={`flex items-center justify-between text-right rounded-lg border px-3 py-2 text-sm transition-colors hover:border-indigo-300 hover:bg-indigo-50 ${
-                      n.id === currentNodeId ? 'border-indigo-300 bg-indigo-50/50' : 'border-slate-200'
+                    className={`flex items-center justify-between text-right rounded-lg border px-3 py-2 text-sm transition-colors hover:border-line-strong hover:bg-sand ${
+                      n.id === currentNodeId ? 'border-line-strong bg-sand/50' : 'border-slate-200'
                     }`}>
                     <span className="font-medium text-slate-800">{n.name}</span>
                     <span className="text-xs text-slate-400">דור {n.generation}{n.id === currentNodeId ? ' · נוכחי' : ''}</span>
@@ -135,8 +135,8 @@ export default function LineageAssignEditor({
             {/* תצוגה מקדימה של השרשרת שתיווצר */}
             {picked && (
               <div className="flex flex-col gap-3">
-                <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3">
-                  <p className="text-xs font-semibold text-indigo-900 mb-2">השרשרת שתיווצר:</p>
+                <div className="rounded-xl border border-line bg-sand p-3">
+                  <p className="text-xs font-semibold text-navy-dark mb-2">השרשרת שתיווצר:</p>
                   <div className="flex items-center gap-1 flex-wrap">
                     {previewChain.map((c, i) => (
                       <span key={c.id} className="flex items-center gap-1">
@@ -156,7 +156,7 @@ export default function LineageAssignEditor({
                   <button type="button" onClick={() => setPicked(null)} disabled={saving}
                     className="text-sm text-slate-600 px-3 py-2 rounded-lg hover:bg-slate-50">חזרה לחיפוש</button>
                   <button type="button" onClick={save} disabled={saving}
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50">
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 bg-navy hover:bg-navy-dark text-white text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50">
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} שמור שיוך
                   </button>
                 </div>

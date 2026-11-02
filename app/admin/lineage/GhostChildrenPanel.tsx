@@ -213,7 +213,7 @@ export default function GhostChildrenPanel({ onLocate, onFixed }: {
         return (
           <>
             <button onClick={() => onLocate(r.nodeId)}
-              className="text-right font-medium text-slate-800 hover:text-violet-700">
+              className="text-right font-medium text-slate-800 hover:text-navy-dark">
               {r.nodeName || '(ללא שם)'}
             </button>
             <span className={`mr-1.5 rounded-full border px-1.5 py-0.5 text-[9px] font-bold ${st.cls}`}>{st.txt}</span>
@@ -336,7 +336,7 @@ export default function GhostChildrenPanel({ onLocate, onFixed }: {
                           <tr key={r.nodeId} className="hover:bg-slate-50">
                             <td className="px-3 py-2">
                               <button onClick={() => onLocate(r.nodeId)}
-                                className="text-right font-medium text-slate-800 hover:text-violet-700">
+                                className="text-right font-medium text-slate-800 hover:text-navy-dark">
                                 {r.nodeName || '(ללא שם)'}
                               </button>
                             </td>
@@ -453,7 +453,7 @@ export default function GhostChildrenPanel({ onLocate, onFixed }: {
                               ))}
                               <td className="px-3 py-2 align-top">
                                 <button onClick={() => onLocate(r.nodeId)}
-                                  className="inline-flex items-center gap-1 px-2 py-1 text-xs text-slate-500 hover:text-violet-700">
+                                  className="inline-flex items-center gap-1 px-2 py-1 text-xs text-slate-500 hover:text-navy-dark">
                                   <Search size={12} /> בעץ
                                 </button>
                                 {r.parentBenId && (
@@ -464,7 +464,7 @@ export default function GhostChildrenPanel({ onLocate, onFixed }: {
                                 )}
                                 {r.cardBenId && (
                                   <a href={`/admin/beneficiaries/${r.cardBenId}`} target="_blank" rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 px-2 py-1 text-xs text-indigo-600 hover:text-indigo-800">
+                                    className="inline-flex items-center gap-1 px-2 py-1 text-xs text-navy hover:text-navy-dark">
                                     <ExternalLink size={12} /> הכרטסת שלו
                                   </a>
                                 )}

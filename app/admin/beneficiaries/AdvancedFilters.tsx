@@ -43,10 +43,10 @@ const KIDS_PRESETS: { label: string; min?: number; max?: number }[] = [
 // לסימון בתוך קבוצה — בדיוק כמו ההבחנה בסרגל מצב משפחתי.
 // ─────────────────────────────────────────────────────────────────────────────
 const CHIP = 'px-3 py-1.5 rounded-full text-xs font-medium border transition-all'
-const CHIP_ON = 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
-const CHIP_PICK = 'bg-indigo-100 border-indigo-300 text-indigo-700 shadow-sm'
-const CHIP_OFF = 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600'
-const FIELD = 'px-2.5 py-1.5 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300'
+const CHIP_ON = 'bg-navy border-navy text-white shadow-sm'
+const CHIP_PICK = 'bg-gold-soft border-line-strong text-navy-dark shadow-sm'
+const CHIP_OFF = 'bg-white border-slate-200 text-slate-500 hover:border-line-strong hover:text-navy'
+const FIELD = 'px-2.5 py-1.5 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-line-strong focus:border-line-strong'
 
 /**
  * שורת סינון אחת: תווית ברוחב קבוע מימין, והפקדים אחריה.

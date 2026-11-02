@@ -7,7 +7,7 @@ export const AID_TYPE_LABELS: Record<string, string> = {
 
 export const AID_TYPE_PILL: Record<string, string> = {
   medical: 'bg-red-50 text-red-700',
-  widow: 'bg-violet-50 text-violet-700',
+  widow: 'bg-sand text-navy-dark',
   orphans: 'bg-blue-50 text-blue-700',
 }
 

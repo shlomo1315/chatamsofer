@@ -115,7 +115,7 @@ export default function ApprovedRefPage() {
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={`rounded-xl border px-4 py-2 text-sm font-bold transition-all ${
-              tab === t.key ? 'border-indigo-300 bg-indigo-50 text-indigo-800 ring-2 ring-indigo-100'
+              tab === t.key ? 'border-line-strong bg-sand text-navy-dark ring-2 ring-gold-soft'
                             : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'}`}>
             {t.label} <span className={`mr-1 tabular-nums ${t.cls}`}>{t.n.toLocaleString('he-IL')}</span>
           </button>
@@ -128,8 +128,8 @@ export default function ApprovedRefPage() {
         {[null, 1, 2, 3, 4, 5].map(g => (
           <button key={String(g)} onClick={() => setGen(g)}
             className={`rounded-full border px-3 py-1 text-xs font-bold transition-all ${
-              gen === g ? 'border-indigo-400 bg-indigo-600 text-white'
-                        : 'border-slate-200 bg-white text-slate-500 hover:border-indigo-300'}`}>
+              gen === g ? 'border-gold bg-navy text-white'
+                        : 'border-slate-200 bg-white text-slate-500 hover:border-line-strong'}`}>
             {g === null ? 'הכל' : g}
             {g !== null && data.byGen[g] && (
               <span className="mr-1 opacity-70">({data.byGen[g].approved})</span>
@@ -139,7 +139,7 @@ export default function ApprovedRefPage() {
         <div className="relative mr-auto">
           <Search size={14} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="חיפוש שם…"
-            className="w-56 rounded-lg border border-slate-200 py-1.5 pr-8 pl-2 text-sm focus:border-indigo-300 focus:outline-none" />
+            className="w-56 rounded-lg border border-slate-200 py-1.5 pr-8 pl-2 text-sm focus:border-line-strong focus:outline-none" />
         </div>
       </div>
 
@@ -155,7 +155,7 @@ export default function ApprovedRefPage() {
             ? <p className="py-10 text-center text-sm text-slate-400">אין תוצאות</p>
             : refRows.map(r => (
               <div key={r.key} className="flex items-center gap-3 border-b border-slate-50 px-4 py-2 text-sm last:border-0 hover:bg-slate-50">
-                <span className="w-12 shrink-0 text-center font-bold text-indigo-600 tabular-nums">{r.generation}</span>
+                <span className="w-12 shrink-0 text-center font-bold text-navy tabular-nums">{r.generation}</span>
                 <span className="flex-1 font-semibold text-slate-800">{r.name}</span>
                 <span className="flex-1 text-slate-500">{r.parent_key ?? '—'}</span>
               </div>

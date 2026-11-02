@@ -54,7 +54,7 @@ export default function RecordingRescue({ canEdit }: { canEdit: boolean }) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5">
       <h2 className="mb-1 flex items-center gap-2 font-semibold text-slate-900">
-        <AudioLines size={17} className="text-indigo-600" /> שחזור הקלטות ותמלול
+        <AudioLines size={17} className="text-navy" /> שחזור הקלטות ותמלול
       </h2>
       <p className="mb-3 text-sm text-slate-500">
         מאתר בימות הקלטות שם וכתובת שחסרות בהזמנות הטלפוניות, ומתמלל כל הקלטה שאין לה תמלול.
@@ -63,7 +63,7 @@ export default function RecordingRescue({ canEdit }: { canEdit: boolean }) {
       <button
         onClick={() => void run()}
         disabled={!canEdit || busy}
-        className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50"
+        className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-4 py-2 text-sm font-medium text-white transition hover:bg-navy-dark disabled:opacity-50"
       >
         {busy ? <><Loader2 size={15} className="animate-spin" /> סבב {round} — עשוי לקחת כמה דקות…</> : 'הפעלת השחזור'}
       </button>

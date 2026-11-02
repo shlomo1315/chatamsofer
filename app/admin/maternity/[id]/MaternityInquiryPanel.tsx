@@ -165,12 +165,12 @@ export default function MaternityInquiryPanel({ aidId, motherName, hasEmail }: {
             <>
               {/* ⚠️ תיקון סדר הדורות הוא הסיבה הנפוצה ביותר לבירור בתיק
                   שממתין לאישור, ולכן הקישור זמין בלחיצה ולא דורש ניסוח. */}
-              <label className="mb-2 flex cursor-pointer items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5">
+              <label className="mb-2 flex cursor-pointer items-center gap-2 rounded-lg border border-line bg-sand px-2.5 py-1.5">
                 <input type="checkbox" checked={withLineage}
                   onChange={e => setWithLineage(e.target.checked)}
-                  className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600" />
-                <GitBranch size={13} className="text-indigo-600" />
-                <span className="text-xs font-medium text-indigo-800">צרף קישור לתיקון סדר הדורות</span>
+                  className="h-3.5 w-3.5 rounded border-slate-300 text-navy" />
+                <GitBranch size={13} className="text-navy" />
+                <span className="text-xs font-medium text-navy-dark">צרף קישור לתיקון סדר הדורות</span>
               </label>
 
               <div className="flex items-end gap-2">

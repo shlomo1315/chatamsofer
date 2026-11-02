@@ -105,10 +105,10 @@ export default function FailedCardsPage() {
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-1.5 mb-1">
-            <CreditCard size={14} className="text-indigo-600" />
+            <CreditCard size={14} className="text-navy" />
             <span className="text-[11px] font-bold text-slate-500">מתוכם על רקע דרכון</span>
           </div>
-          <p className="text-2xl font-black text-indigo-700 ltr-num">{passportCount.toLocaleString('he-IL')}</p>
+          <p className="text-2xl font-black text-navy-dark ltr-num">{passportCount.toLocaleString('he-IL')}</p>
         </div>
       </div>
 
@@ -118,13 +118,13 @@ export default function FailedCardsPage() {
         <div className="flex items-center gap-2 flex-wrap">
           {passportCount > 0 && (
             <button onClick={() => run('passport')} disabled={running}
-              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-extrabold text-white hover:bg-indigo-700 disabled:opacity-50">
+              className="inline-flex items-center gap-2 rounded-xl bg-navy px-4 py-2.5 text-sm font-extrabold text-white hover:bg-navy-dark disabled:opacity-50">
               {running ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
               הרץ מחדש — תיקי דרכון ({passportCount})
             </button>
           )}
           <button onClick={() => run()} disabled={running}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 hover:border-indigo-300 hover:text-indigo-700 disabled:opacity-50">
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 hover:border-line-strong hover:text-navy-dark disabled:opacity-50">
             {running ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
             הרץ מחדש הכל ({items.length})
           </button>
@@ -178,7 +178,7 @@ export default function FailedCardsPage() {
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div className="min-w-0">
                     <Link href={`/admin/maternity/${a.id}`}
-                      className="font-bold text-slate-800 hover:text-indigo-700 hover:underline">
+                      className="font-bold text-slate-800 hover:text-navy-dark hover:underline">
                       {a.name}
                     </Link>
                     {a.id_number && (
@@ -191,7 +191,7 @@ export default function FailedCardsPage() {
                     )}
                   </div>
                   {a.passportRelated && (
-                    <span className="rounded-full bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 text-[10px] font-bold text-indigo-700 flex-shrink-0">
+                    <span className="rounded-full bg-sand border border-line px-2.5 py-0.5 text-[10px] font-bold text-navy-dark flex-shrink-0">
                       דרכון
                     </span>
                   )}

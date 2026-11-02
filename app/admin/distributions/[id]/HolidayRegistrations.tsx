@@ -759,12 +759,12 @@ export default function HolidayRegistrations({
   }
 
   const chip = (active: boolean) =>
-    `px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors ${active ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`
+    `px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors ${active ? 'bg-navy text-white border-navy' : 'bg-white text-slate-600 border-slate-200 hover:border-line-strong'}`
 
   // שורת מונה לחיצה בכרטיסי הפילוח. הסימון הפעיל אינו קישוט: בלעדיו הלחיצה
   // מסננת טבלה שנמצאת הרחק למטה, והמסך נראה כאילו לא הגיב.
   const statRow = (active: boolean) =>
-    `flex w-full items-center justify-between rounded-lg px-2 py-1 text-right transition-colors ${active ? 'bg-indigo-50 ring-1 ring-indigo-300' : 'hover:bg-slate-50'}`
+    `flex w-full items-center justify-between rounded-lg px-2 py-1 text-right transition-colors ${active ? 'bg-sand ring-1 ring-line-strong' : 'hover:bg-slate-50'}`
 
   return (
     <div className="flex flex-col gap-5">
@@ -781,13 +781,13 @@ export default function HolidayRegistrations({
 
       {/* ── מונים חיים: נרשמים וצפי תקציבי ── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        <div className="rounded-2xl border-2 border-indigo-200 bg-indigo-50 p-5">
-          <div className="flex items-center gap-2 text-indigo-700 mb-1"><Users size={16} /><span className="text-xs font-bold">נרשמו</span></div>
+        <div className="rounded-2xl border-2 border-line bg-sand p-5">
+          <div className="flex items-center gap-2 text-navy-dark mb-1"><Users size={16} /><span className="text-xs font-bold">נרשמו</span></div>
           {/* ⚠️ totalCount ולא rows.length: הרשימה נטענת בהדרגה,
               והמונה חייב להיות נכון מהרגע הראשון. */}
-          <p className="text-3xl font-extrabold text-indigo-900 ltr-num">{(totalCount ?? allRows.length).toLocaleString('he-IL')}</p>
+          <p className="text-3xl font-extrabold text-navy-dark ltr-num">{(totalCount ?? allRows.length).toLocaleString('he-IL')}</p>
           {loadingRest && (
-            <p className="text-[11px] text-indigo-600 mt-1">טוען את הרשימה המלאה…</p>
+            <p className="text-[11px] text-navy mt-1">טוען את הרשימה המלאה…</p>
           )}
         </div>
         <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-5">
@@ -906,7 +906,7 @@ export default function HolidayRegistrations({
             לחיצה על הכותרת פותחת את רשימת הצ'יפים; כשמסונן, הבחירה מוצגת גם סגור. */}
         <div className="flex items-start gap-2 flex-wrap">
           <button type="button" onClick={() => setCommunityOpen(o => !o)}
-            className="text-[11px] font-bold text-slate-500 hover:text-indigo-600 inline-flex items-center gap-1 shrink-0 pt-1">
+            className="text-[11px] font-bold text-slate-500 hover:text-navy inline-flex items-center gap-1 shrink-0 pt-1">
             קהילה{community !== 'all' ? `: ${community}` : ` (${communities.length})`} <span className="text-slate-400">{communityOpen ? '▲' : '▼'}</span>
           </button>
           {communityOpen ? (
@@ -941,7 +941,7 @@ export default function HolidayRegistrations({
         <div className="relative flex-1 min-w-56">
           <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
           <input value={query} onChange={e => setQuery(e.target.value)} placeholder="חיפוש בשם, ת״ז, טלפון, מייל, כתובת…"
-            className="w-full pr-9 pl-3 py-2 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+            className="w-full pr-9 pl-3 py-2 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-line" />
         </div>
         <span className="text-xs font-bold text-slate-500">
           מוצגים {filtered.length.toLocaleString('he-IL')} · {fmtCur(expectedFiltered)}
@@ -1039,11 +1039,11 @@ export default function HolidayRegistrations({
       )}
 
       {canEdit && selected.size > 0 && (
-        <div className="flex items-center gap-3 flex-wrap rounded-2xl border-2 border-indigo-200 bg-indigo-50 px-4 py-3">
-          <span className="text-[13px] font-bold text-indigo-900">{/* ⚠️ הסימון חוצה עמודים: "סימון הכל" מסמן את כל התוצאות המסוננות, לא רק את השורות שבעמוד הנוכחי. בלי לומר זאת, מונה של 800 מול 50 שורות על המסך נראה כתקלה. */}
+        <div className="flex items-center gap-3 flex-wrap rounded-2xl border-2 border-line bg-sand px-4 py-3">
+          <span className="text-[13px] font-bold text-navy-dark">{/* ⚠️ הסימון חוצה עמודים: "סימון הכל" מסמן את כל התוצאות המסוננות, לא רק את השורות שבעמוד הנוכחי. בלי לומר זאת, מונה של 800 מול 50 שורות על המסך נראה כתקלה. */}
             סומנו {selected.size}
             {selected.size > paged.length && (
-              <span className="mr-1.5 font-medium text-indigo-600">(כולל עמודים אחרים)</span>
+              <span className="mr-1.5 font-medium text-navy">(כולל עמודים אחרים)</span>
             )}
           </span>
           <button type="button" disabled={busyId === 'bulk'}
@@ -1073,12 +1073,12 @@ export default function HolidayRegistrations({
           <button type="button" disabled={bulkBusy || voucherScope.eligible.length === 0}
             onClick={() => setBulkAction('voucher')}
             title={voucherScope.eligible.length === 0 ? 'אין בסימון מי שבחר מוקד ויש לו מייל' : undefined}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-40">
+            className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-3.5 py-2 text-xs font-bold text-white hover:bg-navy-dark disabled:opacity-40">
             <MapPin size={13} /> שליחת שוברים ({voucherScope.eligible.length})
           </button>
           <button type="button" onClick={() => setSelected(new Set())}
             className="text-xs font-bold text-slate-500 hover:text-slate-700">ביטול הסימון</button>
-          <span className="text-[11.5px] text-indigo-700">אישור פותח למשפחה את שיוך הכרטיס בשלוחה הטלפונית ובממשק</span>
+          <span className="text-[11.5px] text-navy-dark">אישור פותח למשפחה את שיוך הכרטיס בשלוחה הטלפונית ובממשק</span>
         </div>
       )}
 
@@ -1143,7 +1143,7 @@ export default function HolidayRegistrations({
             ) : (
               <>
                 <p className="text-xs text-slate-600">
-                  יישלחו <strong className="text-indigo-800">{voucherScope.eligible.length}</strong> שוברים במייל.
+                  יישלחו <strong className="text-navy-dark">{voucherScope.eligible.length}</strong> שוברים במייל.
                 </p>
                 <ul className="my-3 flex flex-col gap-0.5 text-[11px] text-slate-500">
                   {voucherScope.noCenter > 0 && <li className="text-amber-700">· {voucherScope.noCenter} טרם בחרו מוקד — אין להם שובר</li>}
@@ -1165,7 +1165,7 @@ export default function HolidayRegistrations({
               <button type="button" disabled={bulkBusy}
                 onClick={() => void (bulkAction === 'load' ? runBulkLoad() : runBulkVoucher())}
                 className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-extrabold text-white disabled:opacity-40 ${
-                  bulkAction === 'load' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+                  bulkAction === 'load' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-navy hover:bg-navy-dark'}`}>
                 {bulkBusy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} אישור
               </button>
               <button type="button" disabled={bulkBusy} onClick={() => setBulkAction(null)}

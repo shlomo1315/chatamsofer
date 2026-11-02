@@ -159,7 +159,7 @@ export default function AutoReplySettings() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-            <Mail size={18} className="text-indigo-600" /> מענה אוטומטי לתיבות המייל
+            <Mail size={18} className="text-navy" /> מענה אוטומטי לתיבות המייל
           </h2>
           <p className="text-sm text-slate-500 mt-1 leading-relaxed">
             לכל תיבה נוסח משלה. המענה נשלח לכל פונה — בלי קשר לתוכן המייל ובלי בדיקה אם הוא רשום.
@@ -172,16 +172,16 @@ export default function AutoReplySettings() {
               <label className="text-xs font-medium text-slate-600">שם התיבה</label>
               <input value={newLabel} onChange={e => setNewLabel(e.target.value)}
                 placeholder="לדוגמה: תרומות"
-                className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft" />
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-slate-600">כתובת המייל</label>
               <input value={newEmail} onChange={e => setNewEmail(e.target.value)}
                 placeholder="name@chasamsofer.info" dir="ltr"
-                className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm text-left focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm text-left focus:outline-none focus:ring-2 focus:ring-navy-soft" />
             </div>
             <button onClick={addMailbox} disabled={addingBox}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-60 transition-colors">
+              className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-1.5 text-sm font-bold text-white hover:bg-navy-dark disabled:opacity-60 transition-colors">
               {addingBox ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} הוסף תיבה
             </button>
           </div>
@@ -190,7 +190,7 @@ export default function AutoReplySettings() {
           {okMsg && <span className="text-sm text-emerald-600 font-bold flex items-center gap-1"><Check size={15} /> {okMsg}</span>}
           {dirty && (
             <button onClick={save} disabled={saving}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 disabled:opacity-60">
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-navy text-white text-sm font-bold hover:bg-navy-dark disabled:opacity-60">
               {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} שמירה
             </button>
           )}
@@ -215,8 +215,8 @@ export default function AutoReplySettings() {
               <AlertCircle size={16} /> יש שינויים שלא נשמרו
             </span>
             <button onClick={save} disabled={saving}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-bold
-                         hover:bg-indigo-700 disabled:opacity-60 shadow-lg shrink-0">
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-navy text-white text-sm font-bold
+                         hover:bg-navy-dark disabled:opacity-60 shadow-lg shrink-0">
               {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} שמירה
             </button>
           </div>
@@ -357,14 +357,14 @@ export default function AutoReplySettings() {
 
                     <Field label="שורת הנושא">
                       <input value={s.subject} onChange={e => patch(dept.key, { subject: e.target.value })}
-                        className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:border-indigo-400 outline-none" />
+                        className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:border-gold outline-none" />
                     </Field>
 
                     <Field label="כותרת ראשית">
                       <input value={s.title ?? ''}
                         onChange={e => patch(dept.key, { title: e.target.value })}
                         placeholder={AUTO_REPLY_DEFAULT_TITLE}
-                        className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:border-indigo-400 outline-none" />
+                        className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:border-gold outline-none" />
                       <p className="text-[11.5px] text-slate-400 mt-1">
                         הכיתוב הגדול בראש המייל. ריק — יוצג &quot;{AUTO_REPLY_DEFAULT_TITLE}&quot;.
                       </p>
@@ -373,7 +373,7 @@ export default function AutoReplySettings() {
                     <Field label="פסקת פתיחה">
                       <RichTextArea value={s.message} rows={5}
                         onChange={v => patch(dept.key, { message: v })}
-                        className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm leading-relaxed focus:border-indigo-400 outline-none resize-y" />
+                        className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm leading-relaxed focus:border-gold outline-none resize-y" />
                     </Field>
 
                     <ButtonsEditor
@@ -387,7 +387,7 @@ export default function AutoReplySettings() {
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-xs font-bold text-slate-600">סעיפים</span>
                         <button onClick={() => patch(dept.key, { sections: [...s.sections, { title: '', text: '', buttons: [] }] })}
-                          className="flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-700">
+                          className="flex items-center gap-1 text-xs font-bold text-navy hover:text-navy-dark">
                           <Plus size={13} /> הוספת סעיף
                         </button>
                       </div>
@@ -415,14 +415,14 @@ export default function AutoReplySettings() {
                     <Field label="הערת סיום" hint="מוצגת בתיבה מודגשת בתחתית המייל">
                       <RichTextArea value={s.footnote} rows={2}
                         onChange={v => patch(dept.key, { footnote: v })}
-                        className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm leading-relaxed focus:border-indigo-400 outline-none resize-y" />
+                        className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm leading-relaxed focus:border-gold outline-none resize-y" />
                     </Field>
 
                     <Field label='הודעת "אין להשיב"' hint="הבלוק האדום בתחתית המייל">
                       <RichTextArea value={s.noReplyNotice ?? ''} rows={3}
                         onChange={v => patch(dept.key, { noReplyNotice: v })}
                         placeholder={AUTO_REPLY_DEFAULT_NO_REPLY}
-                        className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm leading-relaxed focus:border-indigo-400 outline-none resize-y" />
+                        className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm leading-relaxed focus:border-gold outline-none resize-y" />
                       <p className="text-[11.5px] text-slate-400 mt-1">
                         השורה הראשונה היא הכותרת המודגשת. ריק — יוצג הנוסח הרגיל.
                         לתיבה שבה כן קוראים תשובות: הקלידו רווח בודד והבלוק לא יוצג כלל.
@@ -432,7 +432,7 @@ export default function AutoReplySettings() {
                     <Field label="מכסה שבועית לפונה" hint="בולם מפני לולאת מיילים — מומלץ להשאיר על 10">
                       <input type="number" min={1} max={100} value={s.weeklyCap}
                         onChange={e => patch(dept.key, { weeklyCap: Number(e.target.value) || 10 })}
-                        className="w-24 px-3 py-2 rounded-lg border border-slate-200 text-sm focus:border-indigo-400 outline-none" />
+                        className="w-24 px-3 py-2 rounded-lg border border-slate-200 text-sm focus:border-gold outline-none" />
                     </Field>
                   </div>
 
@@ -579,7 +579,7 @@ function ButtonsEditor({ label, hint, buttons, onChange }: {
             )}
           </div>
           <button onClick={() => onChange([...buttons, { label: '', url: '' }])}
-            className="flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-700">
+            className="flex items-center gap-1 text-xs font-bold text-navy hover:text-navy-dark">
             <Plus size={13} /> הוספה
           </button>
         </div>
@@ -590,10 +590,10 @@ function ButtonsEditor({ label, hint, buttons, onChange }: {
           <div key={i} className="flex items-center gap-1.5">
             <input value={b.label} placeholder="טקסט הכפתור"
               onChange={e => { const a = [...buttons]; a[i] = { ...b, label: e.target.value }; onChange(a) }}
-              className="w-1/3 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs focus:border-indigo-400 outline-none" />
+              className="w-1/3 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs focus:border-gold outline-none" />
             <input value={b.url} placeholder="https://… או mailto:…" dir="ltr"
               onChange={e => { const a = [...buttons]; a[i] = { ...b, url: e.target.value }; onChange(a) }}
-              className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs focus:border-indigo-400 outline-none" />
+              className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs focus:border-gold outline-none" />
             <button onClick={() => onChange(buttons.filter((_, j) => j !== i))}
               className="p-1.5 text-slate-400 hover:text-red-500 shrink-0"><Trash2 size={14} /></button>
           </div>
@@ -645,7 +645,7 @@ function SectionEditor({ section, index, total, onChange, onMove, onRemove }: {
         if (Number.isFinite(from)) onMove(from, index)
       }}
       className={`border rounded-xl p-3 bg-slate-50/60 flex flex-col gap-2 transition-colors ${
-        dragOver ? 'border-indigo-400 bg-indigo-50/70' : 'border-slate-200'
+        dragOver ? 'border-gold bg-sand/70' : 'border-slate-200'
       }`}
     >
       <div className="flex items-center gap-1.5">
@@ -655,18 +655,18 @@ function SectionEditor({ section, index, total, onChange, onMove, onRemove }: {
         <span className="text-[10px] font-bold text-slate-400 tabular-nums shrink-0">{index + 1}</span>
         <input value={section.title} placeholder="כותרת הסעיף"
           onChange={e => onChange({ ...section, title: e.target.value })}
-          className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm font-bold focus:border-indigo-400 outline-none" />
+          className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm font-bold focus:border-gold outline-none" />
         <button type="button" onClick={() => onMove(index, index - 1)} disabled={index === 0}
           title="העברה למעלה"
-          className="p-1 text-slate-400 hover:text-indigo-600 disabled:opacity-25 shrink-0"><ChevronUp size={14} /></button>
+          className="p-1 text-slate-400 hover:text-navy disabled:opacity-25 shrink-0"><ChevronUp size={14} /></button>
         <button type="button" onClick={() => onMove(index, index + 1)} disabled={index === total - 1}
           title="העברה למטה"
-          className="p-1 text-slate-400 hover:text-indigo-600 disabled:opacity-25 shrink-0"><ChevronDown size={14} /></button>
+          className="p-1 text-slate-400 hover:text-navy disabled:opacity-25 shrink-0"><ChevronDown size={14} /></button>
         <button onClick={onRemove} className="p-1.5 text-slate-400 hover:text-red-500 shrink-0"><Trash2 size={14} /></button>
       </div>
       <RichTextArea value={section.text} rows={2} placeholder="תיאור"
         onChange={v => onChange({ ...section, text: v })}
-        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs leading-relaxed focus:border-indigo-400 outline-none resize-y" />
+        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs leading-relaxed focus:border-gold outline-none resize-y" />
       <ButtonsEditor label="קישורים" buttons={section.buttons}
         onChange={b => onChange({ ...section, buttons: b })} />
     </div>

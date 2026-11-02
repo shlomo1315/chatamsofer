@@ -299,7 +299,7 @@ export default function ComposeDialog({
   const tbBtn = 'p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4"
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-[#0D1730]/45 backdrop-blur-[9px] p-0 sm:p-4"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="w-full sm:max-w-3xl bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
 
@@ -317,7 +317,7 @@ export default function ComposeDialog({
               <label className="hidden sm:flex items-center gap-1.5">
                 <span className="text-[11px] font-bold text-slate-400">מאת</span>
                 <select value={fromId ?? ''} onChange={e => onFromChange?.(e.target.value)} dir="ltr"
-                  className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-200">
+                  className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-line">
                   {accounts!.map(a => <option key={a.id} value={a.id}>{a.email}</option>)}
                 </select>
               </label>
@@ -351,7 +351,7 @@ export default function ComposeDialog({
                   // ⚠️ dir="rtl" ולא ltr: השדה מקבל גם שם וגם ת"ז בעברית,
                   // ו-ltr דחף את הטקסט ואת ה-placeholder לצד שמאל.
                   dir="rtl" placeholder="שם, ת״ז או כתובת מייל"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-line" />
                 {searching && (
                   <Loader2 size={14} className="absolute top-1/2 -translate-y-1/2 left-3 animate-spin text-slate-400" />
                 )}
@@ -382,7 +382,7 @@ export default function ComposeDialog({
                 <span className="w-12 flex-shrink-0 text-right text-[11px] font-bold text-slate-500">עותק</span>
                 <input value={cc} onChange={e => setCc(e.target.value)} dir="ltr"
                   placeholder="כתובות מופרדות בפסיק"
-                  className="flex-1 rounded-xl border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+                  className="flex-1 rounded-xl border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-line" />
                 <button type="button" onClick={() => { setShowCc(false); setCc('') }}
                   className="text-slate-400 hover:text-slate-600"><X size={14} /></button>
               </div>
@@ -392,7 +392,7 @@ export default function ComposeDialog({
                 <span className="w-12 flex-shrink-0 text-right text-[11px] font-bold text-slate-500">מוסתר</span>
                 <input value={bcc} onChange={e => setBcc(e.target.value)} dir="ltr"
                   placeholder="כתובות מופרדות בפסיק"
-                  className="flex-1 rounded-xl border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+                  className="flex-1 rounded-xl border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-line" />
                 <button type="button" onClick={() => { setShowBcc(false); setBcc('') }}
                   className="text-slate-400 hover:text-slate-600"><X size={14} /></button>
               </div>
@@ -415,7 +415,7 @@ export default function ComposeDialog({
                           e.preventDefault()
                           if (c.email) { setTo(c.email); setShowContacts(false); setContactQ('') }
                         }}
-                        className="w-full text-right px-3 py-2 hover:bg-indigo-50 disabled:opacity-40 transition-colors border-b border-slate-50 last:border-0">
+                        className="w-full text-right px-3 py-2 hover:bg-sand disabled:opacity-40 transition-colors border-b border-slate-50 last:border-0">
                         <p className="text-xs font-bold text-slate-800">
                           {name}
                           {c.id_number && <span className="mr-1.5 font-normal text-slate-400 ltr-num">· {c.id_number}</span>}
@@ -433,7 +433,7 @@ export default function ComposeDialog({
 
           <div className="px-5 pb-2">
             <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="נושא"
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-line" />
           </div>
 
           {/* סרגל עיצוב */}
@@ -491,28 +491,28 @@ export default function ComposeDialog({
 
           {/* פאנל הקישור — בתוך החלון, עם טקסט וכתובת בנפרד */}
           {linkOpen && (
-            <div dir="rtl" className="mx-5 mb-1 rounded-xl border border-indigo-200 bg-indigo-50/60 p-3">
+            <div dir="rtl" className="mx-5 mb-1 rounded-xl border border-line bg-sand/60 p-3">
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-2">
-                  <span className="w-16 flex-shrink-0 text-[11px] font-bold text-indigo-900">טקסט להצגה</span>
+                  <span className="w-16 flex-shrink-0 text-[11px] font-bold text-navy-dark">טקסט להצגה</span>
                   <input
                     value={linkText}
                     onChange={e => setLinkText(e.target.value)}
                     placeholder="לחצו כאן"
-                    className="flex-1 rounded-lg border border-indigo-200 bg-white px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+                    className="flex-1 rounded-lg border border-line bg-white px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-line" />
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="w-16 flex-shrink-0 text-[11px] font-bold text-indigo-900">כתובת</span>
+                  <span className="w-16 flex-shrink-0 text-[11px] font-bold text-navy-dark">כתובת</span>
                   <input
                     value={linkUrl}
                     onChange={e => setLinkUrl(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); applyLink() } }}
                     dir="ltr" placeholder="https://example.com"
-                    className="flex-1 rounded-lg border border-indigo-200 bg-white px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+                    className="flex-1 rounded-lg border border-line bg-white px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-line" />
                 </div>
                 <div className="flex items-center gap-2">
                   <button type="button" onClick={applyLink} disabled={!linkUrl.trim()}
-                    className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40">
+                    className="rounded-lg bg-navy px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40">
                     הוסף קישור
                   </button>
                   <button type="button"
@@ -529,7 +529,7 @@ export default function ComposeDialog({
               שולט בתוכן. */}
           <div ref={editorRef} contentEditable suppressContentEditableWarning dir="rtl"
             onInput={() => setBodyTick(t => t + 1)}
-            className="mx-5 my-3 min-h-[220px] rounded-xl border border-slate-200 px-3 py-2.5 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-indigo-200 overflow-y-auto"
+            className="mx-5 my-3 min-h-[220px] rounded-xl border border-slate-200 px-3 py-2.5 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-line overflow-y-auto"
           />
 
           {/* צירופים */}
@@ -572,7 +572,7 @@ export default function ComposeDialog({
                 <button key={p.key} type="button"
                   onClick={() => { setScheduledAt(toLocalValue(p.when)); setError(null) }}
                   className={`flex items-center justify-between px-3 py-2.5 text-right transition hover:bg-slate-50 ${
-                    scheduledAt === toLocalValue(p.when) ? 'bg-indigo-50' : ''
+                    scheduledAt === toLocalValue(p.when) ? 'bg-sand' : ''
                   }`}>
                   <span className="text-xs font-bold text-slate-700">{p.label}</span>
                   <span className="text-xs text-slate-400">{p.sub}</span>
@@ -586,7 +586,7 @@ export default function ComposeDialog({
                   type="datetime-local"
                   value={scheduledAt}
                   onChange={e => { setScheduledAt(e.target.value); setError(null) }}
-                  className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+                  className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-line" />
               </div>
             </div>
           </div>
@@ -610,7 +610,7 @@ export default function ComposeDialog({
             )}
             <button onClick={onClose} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600">ביטול</button>
             <button onClick={submit} disabled={sending || !to.trim()}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2 text-xs font-extrabold text-white hover:bg-indigo-700 disabled:opacity-50">
+              className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-5 py-2 text-xs font-extrabold text-white hover:bg-navy-dark disabled:opacity-50">
               {sending ? <Loader2 size={14} className="animate-spin" />
                 : (showSchedule && scheduledAt) ? <Clock size={14} /> : <Send size={14} />}
               {(showSchedule && scheduledAt) ? 'תזמן שליחה' : 'שלח'}

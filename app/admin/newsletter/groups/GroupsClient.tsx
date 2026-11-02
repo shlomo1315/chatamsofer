@@ -97,8 +97,8 @@ export default function GroupsClient() {
         <button
           type="button"
           onClick={() => setShowCreate(true)}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5
-                     text-sm font-bold text-white transition hover:bg-indigo-700"
+          className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-4 py-2.5
+                     text-sm font-bold text-white transition hover:bg-navy-dark"
         >
           <Plus size={16} /> קבוצה חדשה
         </button>
@@ -116,8 +116,8 @@ export default function GroupsClient() {
           <button
             type="button"
             onClick={() => setShowCreate(true)}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5
-                       text-sm font-bold text-white transition hover:bg-indigo-700"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-4 py-2.5
+                       text-sm font-bold text-white transition hover:bg-navy-dark"
           >
             <Plus size={16} /> קבוצה חדשה
           </button>
@@ -154,8 +154,8 @@ export default function GroupsClient() {
                               if (e.key === 'Enter') rename(g.id)
                               if (e.key === 'Escape') setEditId(null)
                             }}
-                            className="w-56 rounded-lg border border-indigo-300 px-2.5 py-1.5 text-sm
-                                       focus:border-indigo-500 focus:outline-none"
+                            className="w-56 rounded-lg border border-line-strong px-2.5 py-1.5 text-sm
+                                       focus:border-navy-soft focus:outline-none"
                           />
                           <button type="button" onClick={() => rename(g.id)}
                             className="rounded-lg p-1.5 text-emerald-600 hover:bg-emerald-50" title="שמור">
@@ -281,7 +281,7 @@ function CreateGroupModal({ onClose, onCreated }: {
           onKeyDown={e => e.key === 'Enter' && !file && create()}
           placeholder="לדוגמה: תורמים · ירושלים"
           className="mb-4 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm
-                     focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                     focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold-soft"
         />
 
         <div className="mb-4 rounded-xl border border-dashed border-slate-300 p-3">
@@ -315,8 +315,8 @@ function CreateGroupModal({ onClose, onCreated }: {
 
         <div className="flex justify-start gap-2 border-t border-slate-100 pt-4">
           <button type="button" onClick={create} disabled={saving || !name.trim()}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2.5
-                       text-sm font-bold text-white transition hover:bg-indigo-700 disabled:opacity-40">
+            className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-5 py-2.5
+                       text-sm font-bold text-white transition hover:bg-navy-dark disabled:opacity-40">
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
             {saving ? 'יוצר…' : 'צור קבוצה'}
           </button>

@@ -21,7 +21,7 @@ export default function DailyChart({ data }: { data: DayPoint[] }) {
           formatter={(v, name) => [v, name === 'read' ? 'נקראו' : name === 'handled' ? 'טופלו' : 'נענו']}
         />
         <Legend formatter={(v) => v === 'read' ? 'נקראו' : v === 'handled' ? 'טופלו' : 'נענו'} wrapperStyle={{ fontSize: 13 }} />
-        <Bar dataKey="read"    fill="#6366f1" radius={[4,4,0,0]} />
+        <Bar dataKey="read"    fill="#14213D" radius={[4,4,0,0]} />
         <Bar dataKey="handled" fill="#22c55e" radius={[4,4,0,0]} />
         <Bar dataKey="replied" fill="#f59e0b" radius={[4,4,0,0]} />
       </BarChart>

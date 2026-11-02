@@ -22,7 +22,7 @@ import { registrationSourceLabel, registrationSourceOf } from '@/lib/distributio
 // תווית סטטוס מלאה לטבלה
 const STATUS_CHIP: Record<string, string> = {
   pending:      'bg-amber-100 text-amber-800 ring-amber-200',
-  review:       'bg-violet-100 text-violet-800 ring-violet-200',
+  review:       'bg-gold-soft text-navy-dark ring-line',
   docs_pending: 'bg-blue-100 text-blue-800 ring-blue-200',
   docs_returned: 'bg-teal-100 text-teal-800 ring-teal-200',
   deep_review:  'bg-orange-100 text-orange-800 ring-orange-300',
@@ -44,12 +44,12 @@ const initials = (row: Beneficiary) => {
 }
 
 const AVATAR_COLORS = [
-  'bg-indigo-100 text-indigo-700',
+  'bg-gold-soft text-navy-dark',
   'bg-sky-100 text-sky-700',
   'bg-emerald-100 text-emerald-700',
   'bg-amber-100 text-amber-700',
   'bg-rose-100 text-rose-700',
-  'bg-violet-100 text-violet-700',
+  'bg-gold-soft text-navy-dark',
   'bg-teal-100 text-teal-700',
 ]
 const avatarColor = (id: string) => {
@@ -84,7 +84,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
             <span className="absolute -bottom-0.5 -left-0.5 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-white" />
           )}
         </div>
-        <span className="font-medium text-slate-800 group-hover/name:text-indigo-600">
+        <span className="font-medium text-slate-800 group-hover/name:text-navy">
           {fullName(row)}
         </span>
       </div>
@@ -241,8 +241,8 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
     render: (row) => {
       const src = registrationSourceOf(row.registration_source)
       const tint =
-        src === 'nedarim' ? 'bg-violet-50 text-violet-700'
-        : src === 'portal' ? 'bg-indigo-50 text-indigo-700'
+        src === 'nedarim' ? 'bg-sand text-navy-dark'
+        : src === 'portal' ? 'bg-sand text-navy-dark'
         : src === 'phone' ? 'bg-teal-50 text-teal-700'
         : src === 'email' ? 'bg-sky-50 text-sky-700'
         : src === 'admin' ? 'bg-slate-100 text-slate-600'
@@ -374,7 +374,7 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
                 <button type="button" onClick={() => setMarital('all')}
                   className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
                     selected.length === 0
-                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                      ? 'bg-navy border-navy text-white shadow-sm'
                       : 'bg-white border-line text-slate-500 hover:border-gold hover:text-navy'
                   }`}>הכל</button>
                 {MARITAL_OPTIONS.map((o) => {
@@ -383,7 +383,7 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
                     <button key={o.value} type="button" onClick={() => toggle(o.value)}
                       className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
                         active
-                          ? 'bg-indigo-100 border-indigo-300 text-indigo-700 shadow-sm'
+                          ? 'bg-gold-soft border-line-strong text-navy-dark shadow-sm'
                           : 'bg-white border-line text-slate-500 hover:border-gold hover:text-navy'
                       }`}>
                       {active && <Check size={11} className="inline -mt-0.5 ml-1" />}
@@ -417,7 +417,7 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
               <button key={o.v} type="button" onClick={() => setEmail(o.v)}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
                   email === o.v
-                    ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                    ? 'bg-navy border-navy text-white shadow-sm'
                     : 'bg-white border-line text-slate-500 hover:border-gold hover:text-navy'
                 }`}>{o.l}</button>
             ))}
@@ -463,12 +463,12 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
         emptyMessage={qInput ? 'לא נמצאו תוצאות לחיפוש.' : "לא נמצאו צאצאים. לחץ על 'רישום צאצא חדש' להוספה."}
         actions={(row) => (
           <div className="flex items-center gap-1.5">
-            <button onClick={() => setOpenIdx(data.findIndex((r) => r.id === row.id))} className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-soft hover:text-navy transition-colors px-2.5 py-1.5 rounded-lg border border-line hover:border-gold hover:bg-indigo-50">
+            <button onClick={() => setOpenIdx(data.findIndex((r) => r.id === row.id))} className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-soft hover:text-navy transition-colors px-2.5 py-1.5 rounded-lg border border-line hover:border-gold hover:bg-sand">
               <Eye size={14} />
               כרטסת
             </button>
             {/* שליחת קישור תיקון סדר הדורות ישירות מהשורה — בלי להיכנס לכרטסת */}
-            <span className="inline-flex px-2.5 py-1.5 rounded-lg border border-line hover:border-gold hover:bg-indigo-50 transition-colors">
+            <span className="inline-flex px-2.5 py-1.5 rounded-lg border border-line hover:border-gold hover:bg-sand transition-colors">
               <SendLineageLinkButton beneficiaryId={row.id} name={row.full_name ?? row.family_name ?? ''} email={row.email} variant="icon" />
             </span>
           </div>

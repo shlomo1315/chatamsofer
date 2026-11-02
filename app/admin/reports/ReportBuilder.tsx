@@ -152,17 +152,17 @@ export default function ReportBuilder() {
     }
   }
 
-  const selCls = 'rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300'
+  const selCls = 'rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-line-strong'
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">
-          <FileBarChart size={18} className="text-indigo-600" />
+          <FileBarChart size={18} className="text-navy" />
           <h2 className="font-semibold text-slate-900">בונה דוחות — יולדות</h2>
         </div>
         <button onClick={() => void exportExcel()} disabled={loading || exporting || filtered.length === 0}
-          className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2 rounded-lg">
+          className="inline-flex items-center gap-2 bg-navy hover:bg-navy-dark disabled:opacity-40 text-white text-sm font-semibold px-4 py-2 rounded-lg">
           {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} הורד דוח (אקסל)
         </button>
       </div>
@@ -193,7 +193,7 @@ export default function ReportBuilder() {
         <label className="flex flex-col gap-1 text-xs text-slate-500">סכום עד
           <input value={maxAmount} onChange={e => setMaxAmount(e.target.value.replace(/[^\d.]/g, ''))} inputMode="decimal" className={selCls} dir="ltr" /></label>
         <label className="flex items-center gap-2 text-sm text-slate-600 self-end pb-2">
-          <input type="checkbox" checked={onlyBilled} onChange={e => setOnlyBilled(e.target.checked)} className="w-4 h-4 accent-indigo-600" />
+          <input type="checkbox" checked={onlyBilled} onChange={e => setOnlyBilled(e.target.checked)} className="w-4 h-4 accent-navy" />
           רק עם חיוב שבוצע
         </label>
       </div>
@@ -203,7 +203,7 @@ export default function ReportBuilder() {
         {[
           { label: 'מספר יולדות', value: String(totals.count), cls: 'text-slate-700 bg-slate-50 border-slate-100' },
           { label: 'סה״כ חויב', value: ils(totals.amount), cls: 'text-emerald-700 bg-emerald-50 border-emerald-100' },
-          { label: 'סה״כ לילות', value: totals.nights.toLocaleString('he-IL'), cls: 'text-indigo-700 bg-indigo-50 border-indigo-100' },
+          { label: 'סה״כ לילות', value: totals.nights.toLocaleString('he-IL'), cls: 'text-navy-dark bg-sand border-gold-soft' },
           { label: 'יתרת כרטיסים', value: ils(totals.balance), cls: 'text-amber-700 bg-amber-50 border-amber-100' },
         ].map(s => (
           <div key={s.label} className={`rounded-xl border px-4 py-3 ${s.cls}`}>

@@ -30,7 +30,7 @@ const chainKey = (c?: { name: string; relation: string | null }[] | null) =>
 const relLabel = (r: string | null) => r === 'son_in_law' ? 'חתן' : r === 'son' ? 'בן' : ''
 
 const KIND_META = {
-  rename: { icon: Pencil, label: 'תיקון שם', color: '#7C3AED' },
+  rename: { icon: Pencil, label: 'תיקון שם', color: '#14213D' },
   add_child: { icon: UserPlus, label: 'הוספת דור', color: '#059669' },
   reparent: { icon: GitBranch, label: 'שינוי שיוך', color: '#D97706' },
   note: { icon: MessageSquare, label: 'הערה', color: '#0891B2' },

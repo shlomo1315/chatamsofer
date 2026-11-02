@@ -15,7 +15,7 @@ import './archive.css'
 const API = '/api/admin/archive'
 const thumbUrl = (id: string) => `${API}/files/${id}/thumb`
 const mediaUrl = (id: string, download = false) => `${API}/files/${id}/media${download ? '?download=1' : ''}`
-const gradient = (type: string): CSSProperties => ({ ['--g' as string]: `linear-gradient(135deg, ${eventTypeColor(type)}, #1e3a8a 90%)` })
+const gradient = (type: string): CSSProperties => ({ ['--g' as string]: `linear-gradient(135deg, ${eventTypeColor(type)}, #14213D 90%)` })
 
 type View = 'home' | 'event' | 'upload'
 type DriveJob = { id: string; state: 'running' | 'done' | 'error'; total: number; done: number; failed: number; error: string | null; lastError: string | null }

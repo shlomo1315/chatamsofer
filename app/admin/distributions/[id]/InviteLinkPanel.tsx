@@ -105,7 +105,7 @@ export default function InviteLinkPanel({ distributionId, canEdit }: { distribut
     <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="border-b border-slate-100 px-5 py-4">
         <h2 className="font-extrabold text-slate-900 flex items-center gap-2">
-          <LinkIcon size={17} className="text-indigo-600" /> קישור רישום עם תוקף
+          <LinkIcon size={17} className="text-navy" /> קישור רישום עם תוקף
         </h2>
         <p className="text-xs text-slate-500 mt-1 leading-relaxed">
           קישור אחד שנשלח לכל מי שצריך. הוא פותח את הרישום <strong className="text-slate-700">רק בפורטל</strong> ו
@@ -120,16 +120,16 @@ export default function InviteLinkPanel({ distributionId, canEdit }: { distribut
           <div className="flex items-center gap-2 flex-wrap">
             {PRESETS.map(p => (
               <button key={p.days} disabled={creating} onClick={() => create({ days: p.days })}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-indigo-300 hover:text-indigo-700 disabled:opacity-50 transition-colors">
+                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-line-strong hover:text-navy-dark disabled:opacity-50 transition-colors">
                 {p.label}
               </button>
             ))}
             <div className="flex items-center gap-1.5 mr-1">
               <input type="datetime-local" value={customDate} onChange={e => setCustomDate(e.target.value)}
-                className="rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+                className="rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-line" />
               <button disabled={creating || !customDate}
                 onClick={() => create({ expires_at: new Date(customDate).toISOString() })}
-                className="inline-flex items-center gap-1 rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-40 transition-colors">
+                className="inline-flex items-center gap-1 rounded-xl bg-navy px-3 py-1.5 text-xs font-bold text-white hover:bg-navy-dark disabled:opacity-40 transition-colors">
                 {creating ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />} צור
               </button>
             </div>
@@ -166,7 +166,7 @@ export default function InviteLinkPanel({ distributionId, canEdit }: { distribut
                     {inv.url}
                   </code>
                   <button onClick={() => copy(inv.url, inv.token)}
-                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:border-indigo-300 hover:text-indigo-700 flex-shrink-0 transition-colors">
+                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:border-line-strong hover:text-navy-dark flex-shrink-0 transition-colors">
                     {copied === inv.token ? <><Check size={13} className="text-green-600" /> הועתק</> : <><Copy size={13} /> העתק</>}
                   </button>
                   {canEdit && (

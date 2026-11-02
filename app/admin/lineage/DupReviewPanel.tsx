@@ -130,10 +130,10 @@ export default function DupReviewPanel({ onDone }: { onDone?: () => void }) {
   ]
 
   return (
-    <div dir="rtl" className="mb-4 rounded-2xl border border-indigo-200 bg-white p-4 shadow-sm">
+    <div dir="rtl" className="mb-4 rounded-2xl border border-line bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
         <div>
-          <h3 className="text-base font-bold text-slate-800 flex items-center gap-2"><GitMerge size={17} className="text-indigo-600" /> סקירת כפילויות — קבוצה אחרי קבוצה</h3>
+          <h3 className="text-base font-bold text-slate-800 flex items-center gap-2"><GitMerge size={17} className="text-navy" /> סקירת כפילויות — קבוצה אחרי קבוצה</h3>
           <p className="text-[11px] text-slate-500 mt-0.5">
             אחים (אותו הורה) עם אותו בעל ושם משפחה. מקשים: <b>Enter</b> מיזוג · <b>N</b> לא כפול · <b>S</b> דלג · <b>Z</b> ביטול המיזוג האחרון
           </p>
@@ -148,7 +148,7 @@ export default function DupReviewPanel({ onDone }: { onDone?: () => void }) {
       <div className="flex flex-wrap gap-1.5 mb-3">
         {chips.map(c => (
           <button key={c.k} type="button" onClick={() => { setFilter(c.k); setIdx(0) }}
-            className={`rounded-full border px-3 py-1 text-xs font-semibold ${filter === c.k ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'}`}>
+            className={`rounded-full border px-3 py-1 text-xs font-semibold ${filter === c.k ? 'bg-navy text-white border-navy' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'}`}>
             {c.l} <span className="opacity-75">({he(c.n)})</span>
           </button>
         ))}
@@ -173,10 +173,10 @@ export default function DupReviewPanel({ onDone }: { onDone?: () => void }) {
               const keep = n.id === keepId
               return (
                 <button key={n.id} type="button" onClick={() => setKeepId(n.id)}
-                  className={`text-right rounded-xl border-2 p-3 transition-colors ${keep ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                  className={`text-right rounded-xl border-2 p-3 transition-colors ${keep ? 'border-navy-soft bg-sand' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
                   <div className="flex items-start justify-between gap-2">
                     <span className="text-sm font-bold text-slate-800">{n.name}</span>
-                    {keep && <span className="shrink-0 rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-bold text-white">נשאר</span>}
+                    {keep && <span className="shrink-0 rounded-full bg-navy px-2 py-0.5 text-[10px] font-bold text-white">נשאר</span>}
                   </div>
                   <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-slate-500">
                     <span>{n.status === 'verified' ? '✓ מאושר' : 'ממתין'}</span>
@@ -188,7 +188,7 @@ export default function DupReviewPanel({ onDone }: { onDone?: () => void }) {
                     <div className="mt-1 text-[10px] text-slate-400 leading-relaxed">ילדים: {n.childNames.join(' · ')}{n.children > n.childNames.length ? ' …' : ''}</div>
                   )}
                   <span onClick={e => { e.stopPropagation(); setName(n.name) }}
-                    className="mt-1.5 inline-block text-[10px] font-semibold text-indigo-600 hover:underline cursor-pointer">השתמש בשם הזה</span>
+                    className="mt-1.5 inline-block text-[10px] font-semibold text-navy hover:underline cursor-pointer">השתמש בשם הזה</span>
                 </button>
               )
             })}
@@ -197,7 +197,7 @@ export default function DupReviewPanel({ onDone }: { onDone?: () => void }) {
           <label className="mt-3 block">
             <span className="text-[11px] font-bold text-slate-600">השם שיישאר (המלא, עם האישה):</span>
             <input value={name} onChange={e => setName(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft" />
           </label>
 
           {!cur.canDecide && (

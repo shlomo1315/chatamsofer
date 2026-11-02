@@ -73,9 +73,9 @@ export default function RecoveryBillingSummary({ aids }: { aids: MaternityAid[] 
           <p className="text-xs text-slate-500 mb-1">סה״כ חויב</p>
           <p className="text-xl font-bold text-emerald-700">{ils(totalAmount)}</p>
         </div>
-        <div className="rounded-xl bg-indigo-50 border border-indigo-100 px-4 py-3">
+        <div className="rounded-xl bg-sand border border-gold-soft px-4 py-3">
           <p className="text-xs text-slate-500 mb-1">סה״כ לילות</p>
-          <p className="text-xl font-bold text-indigo-700">{totalNights.toLocaleString('he-IL')}</p>
+          <p className="text-xl font-bold text-navy-dark">{totalNights.toLocaleString('he-IL')}</p>
         </div>
         <div className="rounded-xl bg-slate-50 border border-slate-100 px-4 py-3">
           <p className="text-xs text-slate-500 mb-1">מספר יולדות</p>

@@ -273,7 +273,7 @@ export default function GatesPanel({
               </span>
             )}
             <a href="#tools-centers"
-              className="mr-auto text-[11px] font-bold text-indigo-600 underline-offset-2 hover:underline">
+              className="mr-auto text-[11px] font-bold text-navy underline-offset-2 hover:underline">
               לניהול המוקדים ←
             </a>
           </div>
@@ -327,7 +327,7 @@ export default function GatesPanel({
                 { centers_deadline: draft ? new Date(draft).toISOString() : null },
                 'deadline',
               )}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50">
+              className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-1.5 text-xs font-bold text-white hover:bg-navy-dark disabled:opacity-50">
               {busy === 'deadline' ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
               שמור מועד
             </button>
@@ -347,15 +347,15 @@ export default function GatesPanel({
           🔴 משפחה שנוספה ידנית נרשמת מאוחר בהגדרה — היא פספסה את הרישום
           הרגיל — ולכן המועד הכללי חולף עליה לפני שהספיקה לבחור. */}
       {canEdit && (
-        <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50/50 p-3.5">
-          <p className="flex items-center gap-1.5 text-[11px] font-bold text-violet-700">
-            <CalendarClock size={13} className="text-violet-400" /> מועד מוארך — למי שנוסף ידנית
+        <div className="mt-3 rounded-xl border border-line bg-sand/50 p-3.5">
+          <p className="flex items-center gap-1.5 text-[11px] font-bold text-navy-dark">
+            <CalendarClock size={13} className="text-gold" /> מועד מוארך — למי שנוסף ידנית
           </p>
 
           <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
             חל אוטומטית על כל מי שנוסף בהזנה ידנית, ובנוסף על משפחות שתסמנו
             בטבלה. {extCount && (
-              <span className="font-bold text-violet-800">
+              <span className="font-bold text-navy-dark">
                 כרגע {extCount.total} בקבוצה
                 {extCount.pending > 0 && `, מהם ${extCount.pending} טרם בחרו`}.
               </span>
@@ -376,13 +376,13 @@ export default function GatesPanel({
 
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <input type="datetime-local" value={extDraft} onChange={e => setExtDraft(e.target.value)}
-              className="rounded-lg border border-violet-300 bg-white px-2.5 py-1.5 text-xs text-slate-700" />
+              className="rounded-lg border border-line-strong bg-white px-2.5 py-1.5 text-xs text-slate-700" />
             <button type="button" disabled={busy === 'ext'}
               onClick={() => void post(
                 { centers_deadline_extended: extDraft ? new Date(extDraft).toISOString() : null },
                 'ext',
               )}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-700 disabled:opacity-50">
+              className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-1.5 text-xs font-bold text-white hover:bg-navy-dark disabled:opacity-50">
               {busy === 'ext' ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
               שמור הארכה
             </button>

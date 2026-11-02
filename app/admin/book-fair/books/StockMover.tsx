@@ -90,7 +90,7 @@ export default function StockMover({ book, onClose, onSaved }: {
                   value={delta}
                   onChange={e => setDelta(e.target.value.replace(/\D/g, ''))}
                   dir="ltr" inputMode="numeric"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-line-strong focus:ring-2 focus:ring-gold-soft"
                 />
                 <span className="text-xs text-slate-400">
                   אחרי השינוי: {Math.max(0, current + sign * (Number(delta) || 0))}
@@ -103,7 +103,7 @@ export default function StockMover({ book, onClose, onSaved }: {
                   value={note}
                   onChange={e => setNote(e.target.value)}
                   placeholder="למשל: קבלת משלוח מההוצאה"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-line-strong focus:ring-2 focus:ring-gold-soft"
                 />
                 <span className="text-xs text-slate-400">נרשמת ביומן התנועות</span>
               </label>
@@ -118,7 +118,7 @@ export default function StockMover({ book, onClose, onSaved }: {
           <button
             onClick={submit}
             disabled={busy || book.unlimited_stock}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-5 py-2 text-sm font-medium text-white hover:bg-navy-dark disabled:opacity-50"
           >
             {busy && <Loader2 size={15} className="animate-spin" />}
             אישור
@@ -136,7 +136,7 @@ function ChoiceButton({ active, onClick, icon: Icon, children }: {
     <button
       onClick={onClick}
       className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-sm transition ${
-        active ? 'border-indigo-300 bg-indigo-50 font-medium text-indigo-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+        active ? 'border-line-strong bg-sand font-medium text-navy-dark' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
       }`}
     >
       <Icon size={15} /> {children}

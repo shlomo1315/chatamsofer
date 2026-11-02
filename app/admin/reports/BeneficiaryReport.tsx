@@ -136,7 +136,7 @@ export default function BeneficiaryReport() {
 
   const chip = (active: boolean) =>
     `rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
-      active ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300 bg-white text-slate-600 hover:border-indigo-400'
+      active ? 'border-navy bg-navy text-white' : 'border-slate-300 bg-white text-slate-600 hover:border-gold'
     }`
 
   const hasFilters = !!branch || Object.values(filters).some(v => Array.isArray(v) ? v.length > 0 : v != null)
@@ -170,7 +170,7 @@ export default function BeneficiaryReport() {
       <div className="flex flex-col gap-4 p-4">
         {/* ── המונה ── */}
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-lg bg-indigo-50 px-3 py-1.5 text-sm font-bold text-indigo-700">
+          <span className="rounded-lg bg-sand px-3 py-1.5 text-sm font-bold text-navy-dark">
             {loading ? '…' : `${(data?.total ?? 0).toLocaleString('he-IL')} משפחות`}
           </span>
           {data && data.total !== data.totalAll && (
@@ -202,7 +202,7 @@ export default function BeneficiaryReport() {
               ] as const).map(([k, label]) => (
                 <button key={k} type="button" onClick={() => setTab(k)}
                   className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                    tab === k ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                    tab === k ? 'bg-navy text-white' : 'text-slate-600 hover:bg-slate-100'
                   }`}>
                   {label}
                 </button>
@@ -216,12 +216,12 @@ export default function BeneficiaryReport() {
                   בחרו אדם מהעץ כדי לקבל את <strong>כל הצאצאים תחתיו</strong>, בכל הדורות.
                 </p>
                 {branch && (
-                  <div className="flex items-center justify-between gap-2 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-2">
-                    <span className="text-sm font-semibold text-indigo-900">
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-line-strong bg-sand px-3 py-2">
+                    <span className="text-sm font-semibold text-navy-dark">
                       {branches.find(b => b.id === branch)?.name ?? 'ענף נבחר'}
                     </span>
                     <button onClick={() => setBranch('')}
-                      className="inline-flex items-center gap-1 text-xs font-medium text-indigo-700 hover:underline">
+                      className="inline-flex items-center gap-1 text-xs font-medium text-navy-dark hover:underline">
                       <X size={12} /> בטל בחירה
                     </button>
                   </div>
@@ -229,7 +229,7 @@ export default function BeneficiaryReport() {
                 <input
                   value={branchQuery} onChange={e => setBranchQuery(e.target.value)}
                   placeholder="חיפוש שם בעץ…"
-                  className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft"
                 />
                 {/* ⚠️ מוגבל ל-80 תוצאות: הרשימה מכילה מאות צמתים, והצגת
                     כולן הפכה את המסך לאיטי ובלתי קריא. */}
@@ -241,11 +241,11 @@ export default function BeneficiaryReport() {
                       <button key={b.id} type="button" onClick={() => setBranch(b.id)}
                         className={`rounded-lg border px-2.5 py-1.5 text-right text-xs transition-colors ${
                           branch === b.id
-                            ? 'border-indigo-600 bg-indigo-600 text-white'
-                            : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-400'
+                            ? 'border-navy bg-navy text-white'
+                            : 'border-slate-200 bg-white text-slate-700 hover:border-gold'
                         }`}>
                         <span className="font-medium">{b.name}</span>
-                        <span className={`mr-2 ${branch === b.id ? 'text-indigo-100' : 'text-slate-400'}`}>
+                        <span className={`mr-2 ${branch === b.id ? 'text-gold-soft' : 'text-slate-400'}`}>
                           דור {b.generation}
                           {b.parentName ? ` · בן/בת של ${b.parentName}` : ''}
                         </span>
@@ -393,7 +393,7 @@ function Range({ min, max, onMin, onMax }: {
   min?: number | null; max?: number | null
   onMin: (v: string) => void; onMax: (v: string) => void
 }) {
-  const cls = 'w-20 rounded-lg border border-slate-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500'
+  const cls = 'w-20 rounded-lg border border-slate-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft'
   return (
     <div className="flex items-center gap-2 text-sm text-slate-500">
       <span>מ־</span>
@@ -418,7 +418,7 @@ function ChipList({ values, selected, onToggle, chip }: {
     <div className="flex flex-col gap-1.5">
       <input
         value={q} onChange={e => setQ(e.target.value)} placeholder="חיפוש…"
-        className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-navy-soft"
       />
       <div className="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto">
         {selected.map(v => (

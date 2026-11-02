@@ -82,7 +82,7 @@ export default function OtpRolloutSettings() {
       <div className="flex flex-wrap items-center gap-3">
         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
           <p className="text-[11px] font-bold text-slate-400">דרך Resend</p>
-          <p className="text-2xl font-extrabold text-indigo-700 tabular-nums">{saved}%</p>
+          <p className="text-2xl font-extrabold text-navy-dark tabular-nums">{saved}%</p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
           <p className="text-[11px] font-bold text-slate-400">דרך Gmail</p>
@@ -109,15 +109,15 @@ export default function OtpRolloutSettings() {
             <button key={s} type="button" onClick={() => setPercent(s)}
               className={`rounded-xl border px-3.5 py-2 text-xs font-bold transition ${
                 percent === s
-                  ? 'border-indigo-600 bg-indigo-600 text-white'
-                  : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-300'
+                  ? 'border-navy bg-navy text-white'
+                  : 'border-slate-200 bg-white text-slate-600 hover:border-line-strong'
               }`}>
               {s}%
             </button>
           ))}
           <input type="number" min={0} max={100} value={percent}
             onChange={e => setPercent(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
-            className="w-20 rounded-xl border border-slate-200 px-3 py-2 text-xs text-center outline-none focus:border-indigo-400" />
+            className="w-20 rounded-xl border border-slate-200 px-3 py-2 text-xs text-center outline-none focus:border-gold" />
         </div>
         {/* ⚠️ נאמר במפורש: אותו אדם תמיד באותו ערוץ. בלי זה נראה כאילו
             ההגרלה אקראית וכל שליחה עשויה ליפול אחרת. */}
@@ -142,11 +142,11 @@ export default function OtpRolloutSettings() {
                 <span className="relative h-2 w-full overflow-hidden rounded-full bg-slate-100">
                   <span className="absolute inset-y-0 right-0 rounded-full bg-slate-300"
                     style={{ width: `${(d.total / maxDay) * 100}%` }} />
-                  <span className="absolute inset-y-0 right-0 rounded-full bg-indigo-500"
+                  <span className="absolute inset-y-0 right-0 rounded-full bg-navy-soft"
                     style={{ width: `${(d.resend / maxDay) * 100}%` }} />
                 </span>
                 <span className="text-[10px] tabular-nums text-slate-500">
-                  <b className="text-indigo-700">{d.resend}</b> / {d.total}
+                  <b className="text-navy-dark">{d.resend}</b> / {d.total}
                 </span>
               </div>
             ))}

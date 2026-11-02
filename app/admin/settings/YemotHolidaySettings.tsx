@@ -272,7 +272,7 @@ export default function YemotHolidaySettings() {
               <Type size={14} className="text-slate-400" />
               <span className="text-[13px] font-bold text-slate-800">{m.label}</span>
               {(m.placeholders ?? []).map(p => (
-                <code key={p} className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10.5px] font-bold text-indigo-700" dir="ltr">{`{${p}}`}</code>
+                <code key={p} className="rounded bg-sand px-1.5 py-0.5 text-[10.5px] font-bold text-navy-dark" dir="ltr">{`{${p}}`}</code>
               ))}
             </div>
             <textarea
@@ -314,7 +314,7 @@ export default function YemotHolidaySettings() {
                 {messages[m.key]?.audio ? (
                   <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${
                     messages[m.key]?.audio?.startsWith('tts_')
-                      ? 'bg-indigo-50 text-indigo-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                      ? 'bg-sand text-navy-dark' : 'bg-emerald-50 text-emerald-700'}`}>
                     {messages[m.key]?.audio?.startsWith('tts_')
                       ? <><Volume2 size={11} /> קול טבעי</>
                       : <><Mic size={11} /> הקלטה אנושית</>}
@@ -338,7 +338,7 @@ export default function YemotHolidaySettings() {
                 </button>
                 <button type="button" disabled={busyKey === m.key}
                   onClick={() => void generateVoice(m.key, value)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-300 px-2.5 py-1.5 text-[11.5px] font-bold text-indigo-700 hover:bg-indigo-50 disabled:opacity-60">
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-line-strong px-2.5 py-1.5 text-[11.5px] font-bold text-navy-dark hover:bg-sand disabled:opacity-60">
                   {busyKey === m.key ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
                   יצירת קול טבעי
                 </button>

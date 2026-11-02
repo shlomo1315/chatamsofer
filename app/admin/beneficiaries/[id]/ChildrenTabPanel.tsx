@@ -100,7 +100,7 @@ export default function ChildrenTabPanel({ beneficiaryId, rows, registered, tota
           {canEdit && !editing && (
             <button
               onClick={startEdit}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-50 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line-strong bg-white px-3 py-1.5 text-xs font-medium text-navy-dark hover:bg-sand transition-colors"
             >
               <Pencil size={13} /> עריכה
             </button>

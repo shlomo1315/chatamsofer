@@ -45,7 +45,7 @@ export default function DocTypesManager() {
   return (
     <div>
       <div className="flex items-center gap-2 mb-1">
-        <FileText size={18} className="text-indigo-500" />
+        <FileText size={18} className="text-navy-soft" />
         <h2 className="text-sm font-semibold text-slate-700">סוגי מסמכים</h2>
       </div>
       <p className="text-xs text-slate-500 mb-4">
@@ -77,10 +77,10 @@ export default function DocTypesManager() {
           onChange={e => setNewLabel(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && add()}
           placeholder="שם סוג מסמך חדש..."
-          className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gold"
         />
         <button onClick={add} disabled={busy || !newLabel.trim()}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
+          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-navy text-white text-sm font-medium hover:bg-navy-dark disabled:opacity-50">
           {busy ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
           הוסף
         </button>

@@ -73,7 +73,7 @@ export default function BookOrdersDialog({ book, onClose }: {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4 sm:p-8"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[#0D1730]/45 backdrop-blur-[9px] p-4 sm:p-8"
       onClick={onClose}
     >
       <div
@@ -135,7 +135,7 @@ export default function BookOrdersDialog({ book, onClose }: {
                         <td className="py-3 pl-3">
                           <Link
                             href={`/admin/book-fair/orders/${r.id}`}
-                            className="inline-flex items-center gap-1 font-medium text-indigo-600 hover:underline"
+                            className="inline-flex items-center gap-1 font-medium text-navy hover:underline"
                           >
                             {r.order_number}
                             <ExternalLink size={12} />
@@ -151,7 +151,7 @@ export default function BookOrdersDialog({ book, onClose }: {
                         <td className="py-3 pl-3">
                           <div className="text-slate-800">{r.customer_name || '—'}</div>
                           {r.customer_phone && (
-                            <a href={`tel:${r.customer_phone}`} className="text-xs text-indigo-600 hover:underline">
+                            <a href={`tel:${r.customer_phone}`} className="text-xs text-navy hover:underline">
                               {r.customer_phone}
                             </a>
                           )}

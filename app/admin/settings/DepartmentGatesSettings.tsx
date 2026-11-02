@@ -7,7 +7,7 @@ const DEPTS: { key: string; label: string; hint: string; icon: typeof Heart; col
   { key: 'maternity',     label: 'עזר יולדות',       hint: 'בקשות הבראה וכרטיס מזון ליולדות', icon: Heart,       color: 'text-pink-600 bg-pink-50' },
   { key: 'gemach',        label: 'גמ"ח הלוואות',     hint: 'בקשות הלוואה',                     icon: Landmark,    color: 'text-emerald-600 bg-emerald-50' },
   { key: 'financial_aid', label: 'סיוע רפואי',        hint: 'בקשות סיוע כספי/רפואי',            icon: Stethoscope, color: 'text-sky-600 bg-sky-50' },
-  { key: 'widows',        label: 'אלמנות ויתומים',    hint: 'בקשות תמיכה לאלמנות ויתומים',      icon: HandHeart,   color: 'text-violet-600 bg-violet-50' },
+  { key: 'widows',        label: 'אלמנות ויתומים',    hint: 'בקשות תמיכה לאלמנות ויתומים',      icon: HandHeart,   color: 'text-navy bg-sand' },
   // ⚠️ מתג-אב: סגירה כאן מכבה את חלוקות החגים בכל הערוצים — פורטל, מייל,
   // שלוחה טלפונית וטופס נדרים — גם אם קיימת חלוקה שהרישום אליה פתוח.
   { key: 'holidays',      label: 'חלוקות חגים',      hint: 'סגירה כאן מכבה את הרישום בכל הערוצים, גם אם חלוקה פתוחה', icon: Gift, color: 'text-teal-600 bg-teal-50' },

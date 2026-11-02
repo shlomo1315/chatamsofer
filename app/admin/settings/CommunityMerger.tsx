@@ -145,7 +145,7 @@ export default function CommunityMerger() {
       {/* ── סיכום ── */}
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="rounded-full bg-indigo-100 px-2 py-0.5 font-semibold text-indigo-700">
+          <span className="rounded-full bg-gold-soft px-2 py-0.5 font-semibold text-navy-dark">
             {data.items.length} שמות שונים
           </span>
           <span className="rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-800">
@@ -184,7 +184,7 @@ export default function CommunityMerger() {
                   </span>
                   <button
                     type="button" onClick={() => selectAll(g)}
-                    className="text-xs font-medium text-indigo-600 hover:underline"
+                    className="text-xs font-medium text-navy hover:underline"
                   >
                     סמן הכל
                   </button>
@@ -196,14 +196,14 @@ export default function CommunityMerger() {
                       key={m.name}
                       className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${
                         sel.has(m.name)
-                          ? 'border-indigo-400 bg-indigo-100 text-indigo-800'
-                          : 'border-slate-300 bg-white text-slate-600 hover:border-indigo-300'
+                          ? 'border-gold bg-gold-soft text-navy-dark'
+                          : 'border-slate-300 bg-white text-slate-600 hover:border-line-strong'
                       }`}
                     >
                       <input
                         type="checkbox" checked={sel.has(m.name)}
                         onChange={() => toggle(g.suggestedName, m.name)}
-                        className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600"
+                        className="h-3.5 w-3.5 rounded border-slate-300 text-navy"
                       />
                       {m.name} <span className="text-slate-400">({m.count})</span>
                     </label>
@@ -216,7 +216,7 @@ export default function CommunityMerger() {
                     <input
                       value={target[g.suggestedName] ?? g.suggestedName}
                       onChange={e => setTarget(p => ({ ...p, [g.suggestedName]: e.target.value }))}
-                      className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft"
                     />
                   </div>
                   <button
@@ -227,7 +227,7 @@ export default function CommunityMerger() {
                   </button>
                   <button
                     onClick={() => merge(g, false)} disabled={busy !== null || sel.size < 2}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-1.5 text-xs font-semibold text-white hover:bg-navy-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     {busy === g.suggestedName ? <Loader2 size={13} className="animate-spin" /> : <Merge size={13} />}
                     מזג

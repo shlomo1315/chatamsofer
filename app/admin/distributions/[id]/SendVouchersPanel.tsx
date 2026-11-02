@@ -58,8 +58,8 @@ export default function SendVouchersPanel({ distributionId }: { distributionId: 
   }
 
   return (
-    <div className="rounded-2xl border-2 border-indigo-200 bg-indigo-50/50 p-4">
-      <h3 className="mb-1 flex items-center gap-1.5 text-sm font-extrabold text-indigo-900">
+    <div className="rounded-2xl border-2 border-line bg-sand/50 p-4">
+      <h3 className="mb-1 flex items-center gap-1.5 text-sm font-extrabold text-navy-dark">
         <FileText size={15} /> שוברי החלוקה
       </h3>
       <p className="mb-3 text-[11px] text-slate-500">
@@ -72,7 +72,7 @@ export default function SendVouchersPanel({ distributionId }: { distributionId: 
         {/* ⚠️ חלונית ולא כרטיסייה חדשה — ראו HolidayVoucherSettings.
             עריכת המלל עצמה נמצאת בהגדרות, כי היא כללית לכל החלוקות. */}
         <button type="button" onClick={() => setPreviewOpen(true)}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-300 bg-white px-3 py-2 text-xs font-bold text-indigo-800 hover:bg-indigo-50">
+          className="inline-flex items-center gap-1.5 rounded-xl border border-line-strong bg-white px-3 py-2 text-xs font-bold text-navy-dark hover:bg-sand">
           <Eye size={13} /> תצוגה מקדימה של השובר
         </button>
         <button type="button" onClick={check} disabled={busy}
@@ -83,9 +83,9 @@ export default function SendVouchersPanel({ distributionId }: { distributionId: 
       </div>
 
       {stats && (
-        <div className="mt-3 rounded-xl border border-indigo-300 bg-white p-3.5">
+        <div className="mt-3 rounded-xl border border-line-strong bg-white p-3.5">
           <p className="text-sm text-slate-700">
-            יישלחו <strong className="text-indigo-800">{fmt(stats.sendable)}</strong> שוברים
+            יישלחו <strong className="text-navy-dark">{fmt(stats.sendable)}</strong> שוברים
           </p>
           <ul className="my-2 flex flex-col gap-0.5 text-[11px] text-slate-500">
             <li>· {fmt(stats.withCenter)} משפחות בחרו מוקד</li>
@@ -98,7 +98,7 @@ export default function SendVouchersPanel({ distributionId }: { distributionId: 
           {stats.sendable > 0 ? (
             <div className="flex items-center gap-2">
               <button type="button" onClick={send} disabled={busy}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-extrabold text-white hover:bg-indigo-700 disabled:opacity-40">
+                className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-4 py-2 text-xs font-extrabold text-white hover:bg-navy-dark disabled:opacity-40">
                 {busy ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
                 שלח {fmt(stats.sendable)} שוברים
               </button>

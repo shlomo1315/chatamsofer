@@ -153,8 +153,8 @@ export default function UnsubscribesTable() {
                     onClick={() => restore(r.email)}
                     disabled={isBusy}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5
-                               text-xs font-semibold text-slate-600 transition hover:border-indigo-300
-                               hover:bg-indigo-50 hover:text-indigo-700 disabled:opacity-40"
+                               text-xs font-semibold text-slate-600 transition hover:border-line-strong
+                               hover:bg-sand hover:text-navy-dark disabled:opacity-40"
                   >
                     {isBusy
                       ? <Loader2 size={13} className="animate-spin" />

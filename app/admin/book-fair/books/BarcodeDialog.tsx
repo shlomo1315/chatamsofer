@@ -59,7 +59,7 @@ export default function BarcodeDialog({ books, busy, onDownload, onClose }: {
             ספר
             <input list="barcode-books" value={query} onChange={e => setQuery(e.target.value)}
               placeholder="הקלידו שם ספר או מק״ט"
-              className="min-h-[44px] rounded-xl border border-slate-300 px-3 text-base font-normal outline-none focus:border-indigo-400" />
+              className="min-h-[44px] rounded-xl border border-slate-300 px-3 text-base font-normal outline-none focus:border-gold" />
             <datalist id="barcode-books">
               {active.map(b => <option key={b.sku} value={b.title}>{b.sku}</option>)}
             </datalist>
@@ -91,7 +91,7 @@ export default function BarcodeDialog({ books, busy, onDownload, onClose }: {
             ספר
             <input list="barcode-books" value={stQuery} onChange={e => setStQuery(e.target.value)}
               placeholder="הקלידו שם ספר או מק״ט"
-              className="min-h-[44px] rounded-xl border border-slate-300 px-3 text-base font-normal outline-none focus:border-indigo-400" />
+              className="min-h-[44px] rounded-xl border border-slate-300 px-3 text-base font-normal outline-none focus:border-gold" />
           </label>
           <div className="flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2 text-sm text-slate-700">

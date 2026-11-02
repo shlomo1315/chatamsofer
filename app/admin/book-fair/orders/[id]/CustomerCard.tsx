@@ -205,7 +205,7 @@ export default function CustomerCard({ order, recordings, cities }: {
               {canEdit && (
                 <button
                   onClick={() => startEdit('address')}
-                  className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 text-sm font-semibold text-white transition hover:bg-indigo-700"
+                  className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg bg-navy px-3.5 text-sm font-semibold text-white transition hover:bg-navy-dark"
                 >
                   <MapPin size={15} /> העברה למשלוח
                 </button>
@@ -231,12 +231,12 @@ export default function CustomerCard({ order, recordings, cities }: {
       <dl className="grid grid-cols-1 gap-3 border-t border-slate-200 bg-slate-50/70 px-5 py-4 text-sm sm:grid-cols-2">
         <Info icon={Phone} label="טלפון">
           {order.customer_phone
-            ? <a href={`tel:${order.customer_phone}`} dir="ltr" className="font-mono text-indigo-700 hover:underline">{order.customer_phone}</a>
+            ? <a href={`tel:${order.customer_phone}`} dir="ltr" className="font-mono text-navy-dark hover:underline">{order.customer_phone}</a>
             : '—'}
         </Info>
         <Info icon={Mail} label="אימייל">
           {order.customer_email
-            ? <a href={`mailto:${order.customer_email}`} dir="ltr" className="break-all text-indigo-700 hover:underline">{order.customer_email}</a>
+            ? <a href={`mailto:${order.customer_email}`} dir="ltr" className="break-all text-navy-dark hover:underline">{order.customer_email}</a>
             : '—'}
         </Info>
         <Info icon={Calendar} label="שולם">{order.paid_at ? ilDateTime(order.paid_at) : 'טרם'}</Info>
@@ -254,7 +254,7 @@ function Field({ label, chip, chipText, children }: {
 }) {
   const cls = chip === 'ok' ? 'bg-emerald-50 text-emerald-700'
     : chip === 'warn' ? 'bg-amber-50 text-amber-700'
-    : 'bg-indigo-50 text-indigo-700'
+    : 'bg-sand text-navy-dark'
   return (
     <div className="flex flex-col gap-2.5 border-b border-slate-100 px-5 py-4 last:border-b-0">
       <div className="flex items-center justify-between gap-2">
@@ -271,7 +271,7 @@ function SavedRow({ value, canEdit, onEdit }: { value: string; canEdit: boolean;
     <div className="flex items-baseline justify-between gap-3">
       <p className="min-w-0 break-words text-base font-semibold text-slate-900">{value}</p>
       {canEdit && (
-        <button onClick={onEdit} className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-indigo-700 hover:underline">
+        <button onClick={onEdit} className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-navy-dark hover:underline">
           <Pencil size={13} /> עריכה
         </button>
       )}
@@ -341,12 +341,12 @@ function Editor({ text, setText, rows, placeholder, busy, disabled, onSave, onCa
       <textarea
         value={text} onChange={e => setText(e.target.value)}
         rows={rows} autoFocus placeholder={placeholder} aria-label={placeholder}
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
+        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-gold"
       />
       <div className="flex gap-2">
         <button
           onClick={onSave} disabled={disabled}
-          className="inline-flex min-h-[38px] flex-1 items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-40"
+          className="inline-flex min-h-[38px] flex-1 items-center justify-center gap-1.5 rounded-lg bg-navy px-3.5 text-sm font-semibold text-white transition hover:bg-navy-dark disabled:opacity-40"
         >
           {busy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
           שמירה ואישור

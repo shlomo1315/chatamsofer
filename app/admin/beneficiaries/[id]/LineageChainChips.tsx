@@ -266,8 +266,8 @@ export default function LineageChainChips({
                 <div className="absolute z-30 top-full mt-1 right-0 bg-white rounded-xl shadow-lg border border-slate-200 py-1 w-44 text-right"
                   onMouseLeave={() => setMenuGen(null)}>
                   <button type="button" onClick={() => { setPickerGen(g.generation); setQ(''); setErr('') }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-700 hover:bg-indigo-50 transition-colors">
-                    <GitBranch size={13} className="text-indigo-500" /> בחר צומת אחר לדור זה
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-700 hover:bg-sand transition-colors">
+                    <GitBranch size={13} className="text-navy-soft" /> בחר צומת אחר לדור זה
                   </button>
                   <button type="button" onClick={() => cycle(g)}
                     className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 transition-colors">
@@ -314,7 +314,7 @@ export default function LineageChainChips({
             <button type="button" onClick={() => setPickerGen(null)} disabled={assigning}
               className="absolute top-4 left-4 text-slate-400 hover:text-slate-600"><X size={18} /></button>
             <h2 className="text-sm font-bold text-slate-900 mb-1 flex items-center gap-2">
-              <GitBranch size={16} className="text-indigo-600" /> בחירת צומת לדור {pickerGen}
+              <GitBranch size={16} className="text-navy" /> בחירת צומת לדור {pickerGen}
             </h2>
             <p className="text-xs text-slate-500 mb-3">בחרו צומת מאומת מדור {pickerGen}. השרשרת המלאה תיגזר אוטומטית מהצומת עד השורש.</p>
 
@@ -334,7 +334,7 @@ export default function LineageChainChips({
             <div className="relative mb-3">
               <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input value={q} onChange={e => setQ(e.target.value)} placeholder="חיפוש לפי שם…" autoFocus
-                className="w-full rounded-xl border border-slate-300 pr-9 pl-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                className="w-full rounded-xl border border-slate-300 pr-9 pl-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft" />
             </div>
 
             {err && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-2">{err}</p>}
@@ -350,7 +350,7 @@ export default function LineageChainChips({
                 </p>
               ) : pickerOptions.map(n => (
                 <button key={n.id} type="button" onClick={() => { setPending(n); setErr('') }} disabled={assigning}
-                  className="flex items-center justify-between text-right rounded-lg border border-slate-200 px-3 py-2 text-sm hover:border-indigo-300 hover:bg-indigo-50 transition-colors disabled:opacity-50">
+                  className="flex items-center justify-between text-right rounded-lg border border-slate-200 px-3 py-2 text-sm hover:border-line-strong hover:bg-sand transition-colors disabled:opacity-50">
                   <span className="font-medium text-slate-800">
                     {n.name}
                     {/* ⚠️ הסטטוס גלוי: מאז שגם ממתינים מוצעים, צריך לדעת שהצומת
@@ -359,7 +359,7 @@ export default function LineageChainChips({
                       <span className="mr-2 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">ממתין</span>
                     )}
                   </span>
-                  {assigning ? <Loader2 size={13} className="animate-spin text-slate-400" /> : <Check size={14} className="text-indigo-400" />}
+                  {assigning ? <Loader2 size={13} className="animate-spin text-slate-400" /> : <Check size={14} className="text-gold" />}
                 </button>
               ))}
             </div>
@@ -391,8 +391,8 @@ export default function LineageChainChips({
 
             <div className="px-5 py-4 space-y-3">
               {/* מה נבחר */}
-              <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3">
-                <p className="text-xs text-indigo-900 leading-relaxed">
+              <div className="rounded-xl border border-line bg-sand px-4 py-3">
+                <p className="text-xs text-navy-dark leading-relaxed">
                   דור {pickerGen} ישתנה
                   {impact.cur ? <> מ־<b className="font-bold">{impact.cur.name}</b></> : null}
                   {' '}ל־<b className="font-bold">{pending.name}</b>
@@ -450,7 +450,7 @@ export default function LineageChainChips({
                 ביטול
               </button>
               <button type="button" onClick={() => assign(pending.id)} disabled={assigning}
-                className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 transition-colors disabled:opacity-50">
+                className="inline-flex items-center gap-2 rounded-lg bg-navy px-4 py-2 text-sm font-bold text-white hover:bg-navy-dark transition-colors disabled:opacity-50">
                 {assigning && <Loader2 size={13} className="animate-spin" />}
                 אשרו את השינוי
               </button>

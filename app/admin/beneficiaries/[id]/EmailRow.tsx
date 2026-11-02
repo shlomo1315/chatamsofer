@@ -100,7 +100,7 @@ export default function EmailRow({
             autoFocus
             disabled={saving}
             placeholder="name@example.com"
-            className="flex-1 rounded-lg border border-indigo-300 px-2 py-1 text-sm text-slate-900 text-left focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
+            className="flex-1 rounded-lg border border-line-strong px-2 py-1 text-sm text-slate-900 text-left focus:outline-none focus:ring-2 focus:ring-navy-soft disabled:opacity-60"
           />
           <button
             onClick={save} disabled={saving} title="שמור"
@@ -139,14 +139,14 @@ export default function EmailRow({
                 <>
                   <button
                     type="button" onClick={startEdit} title="תיקון הכתובת"
-                    className="rounded p-1 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
+                    className="rounded p-1 text-slate-400 hover:bg-sand hover:text-navy transition-colors"
                   >
                     <Pencil size={12} />
                   </button>
                   <button
                     type="button" onClick={sendVerification} disabled={sending}
                     title="שליחת בקשת אימות לכתובת זו"
-                    className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-60 transition-colors"
+                    className="inline-flex items-center gap-1 rounded-full border border-line bg-sand px-2 py-0.5 text-[10px] font-semibold text-navy-dark hover:bg-gold-soft disabled:opacity-60 transition-colors"
                   >
                     {sending ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />}
                     {sending ? 'שולח…' : 'שלח בקשת אימות'}
@@ -160,7 +160,7 @@ export default function EmailRow({
             onClick={() => setOpen(true)}
             title="שליחת מייל מתוך המערכת"
             dir="ltr"
-            className="text-sm text-indigo-600 hover:underline ltr-num text-left inline-flex items-center gap-1.5"
+            className="text-sm text-navy hover:underline ltr-num text-left inline-flex items-center gap-1.5"
           >
             <Mail size={13} className="flex-shrink-0" />
             {email}
@@ -171,7 +171,7 @@ export default function EmailRow({
           {canEdit && (
             <button
               type="button" onClick={startEdit}
-              className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:underline"
+              className="inline-flex items-center gap-1 text-xs font-medium text-navy hover:underline"
             >
               <Pencil size={11} /> הוסף כתובת
             </button>

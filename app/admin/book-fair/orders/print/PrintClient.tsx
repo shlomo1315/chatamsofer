@@ -116,7 +116,7 @@ export default function PrintClient({ mode, id, stashKey, autoPrint }: {
       <button
         onClick={() => window.print()}
         disabled={!orders?.length}
-        className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-40"
+        className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy-dark disabled:opacity-40"
       >
         <Printer size={15} /> הדפסה
       </button>
@@ -350,7 +350,7 @@ function AddressList({ orders, itemsByOrder, cities, setCities }: {
               key={c}
               onClick={() => toggle(c)}
               className={`rounded-lg border px-2.5 py-1 text-xs transition ${
-                cities.has(c) ? 'border-indigo-500 bg-indigo-600 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}
+                cities.has(c) ? 'border-navy-soft bg-navy text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}
             >
               {c} ({list.length})
             </button>
@@ -368,7 +368,7 @@ function AddressList({ orders, itemsByOrder, cities, setCities }: {
               key={k}
               onClick={() => setSort(k)}
               className={`rounded-lg border px-2.5 py-1 text-xs transition ${
-                sort === k ? 'border-indigo-500 bg-indigo-600 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}
+                sort === k ? 'border-navy-soft bg-navy text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}
             >
               {label}
             </button>

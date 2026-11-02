@@ -101,7 +101,7 @@ export default function TransactionsPanel({ distributionId }: { distributionId: 
       {/* ── עסקאות ── */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4">
         <h3 className="mb-1 flex items-center gap-1.5 text-sm font-extrabold text-slate-800">
-          <Receipt size={15} className="text-indigo-600" /> היסטוריית עסקאות
+          <Receipt size={15} className="text-navy" /> היסטוריית עסקאות
         </h3>
         <p className="mb-3 text-[11px] text-slate-500">
           קניות בבתי עסק בלבד — טעינות ופריקות אינן עסקאות.
@@ -113,7 +113,7 @@ export default function TransactionsPanel({ distributionId }: { distributionId: 
             {busy === 'load' ? <Loader2 size={13} className="inline animate-spin" /> : null} הצג עסקאות
           </button>
           <button type="button" onClick={sync} disabled={!!busy}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-300 bg-white px-3 py-2 text-xs font-bold text-indigo-800 hover:bg-indigo-50 disabled:opacity-40">
+            className="inline-flex items-center gap-1.5 rounded-xl border border-line-strong bg-white px-3 py-2 text-xs font-bold text-navy-dark hover:bg-sand disabled:opacity-40">
             {busy === 'sync' ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
             סנכרון מנדרים
           </button>

@@ -81,7 +81,7 @@ export default function FamilyFile({ widow, requests, payments }: { widow: Benef
       <Card>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-xs font-semibold text-slate-500 uppercase">פרטי המשפחה</h2>
-          <Link href={`/admin/beneficiaries/${widow.id}`} className="text-xs text-indigo-600 hover:text-indigo-700 inline-flex items-center gap-1">
+          <Link href={`/admin/beneficiaries/${widow.id}`} className="text-xs text-navy hover:text-navy-dark inline-flex items-center gap-1">
             לכרטיס המלא <ExternalLink size={12} />
           </Link>
         </div>
@@ -201,7 +201,7 @@ export default function FamilyFile({ widow, requests, payments }: { widow: Benef
               <div key={r.id} className="py-3 flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs bg-purple-50 text-purple-700 rounded-full px-2 py-0.5">{WIDOW_REQUEST_TYPE_LABELS[r.request_type]}</span>
+                    <span className="text-xs bg-sand text-navy-dark rounded-full px-2 py-0.5">{WIDOW_REQUEST_TYPE_LABELS[r.request_type]}</span>
                     <span className={`text-xs font-medium rounded-full px-2 py-0.5 ${WIDOW_REQUEST_STATUS_COLORS[r.status]}`}>{WIDOW_REQUEST_STATUS_LABELS[r.status]}</span>
                     {r.amount ? <span className="text-xs font-bold text-slate-700 ltr-num">{fmtCur(Number(r.amount))}</span> : null}
                     <span className="text-xs text-slate-400 ltr-num">{fmtDate(r.created_at)}</span>

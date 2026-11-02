@@ -114,21 +114,21 @@ export default function CleanChildrenPanel({
     <div className="dlg-backdrop " onClick={onClose}>
       <div dir="rtl" onClick={e => e.stopPropagation()}
         className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-        <div className="flex items-start gap-3 bg-purple-600 px-5 py-4 text-white">
+        <div className="flex items-start gap-3 bg-navy px-5 py-4 text-white">
           <div className="flex-1">
             <p className="text-base font-bold">ניקוי כפילויות — {parentName}</p>
-            <p className="mt-1 text-xs text-purple-100">
+            <p className="mt-1 text-xs text-gold-soft">
               {children.length} ילדים · נמצאו {clusters.length} קבוצות כפילות ({totalDup} צמתים מיותרים)
             </p>
           </div>
-          <button onClick={onClose} className="text-purple-200 hover:text-white"><X size={18} /></button>
+          <button onClick={onClose} className="text-line hover:text-white"><X size={18} /></button>
         </div>
 
         <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-2.5">
           <span className="text-[11px] font-bold text-slate-500">רגישות:</span>
           {([['strong', 'בטוח'], ['possible', 'כולל מקורב']] as const).map(([k, label]) => (
             <button key={k} onClick={() => setMinLevel(k)}
-              className={`rounded-full border px-3 py-1 text-[11px] font-bold transition-colors ${minLevel === k ? 'border-purple-300 bg-purple-100 text-purple-700' : 'border-slate-200 bg-white text-slate-500 hover:border-purple-200'}`}>
+              className={`rounded-full border px-3 py-1 text-[11px] font-bold transition-colors ${minLevel === k ? 'border-line-strong bg-gold-soft text-navy-dark' : 'border-slate-200 bg-white text-slate-500 hover:border-line'}`}>
               {label}
             </button>
           ))}
@@ -149,7 +149,7 @@ export default function CleanChildrenPanel({
         {/* מיזוג כל האשכולות בלחיצה אחת — הפתרון לצומת עם עשרות כפילויות,
             שבו מיזוג אשכול-אחר-אשכול הוא עשרות לחיצות. */}
         {onMergeAll && clusters.length > 1 && (
-          <div className="flex items-center gap-2 border-b border-purple-100 bg-purple-50 px-5 py-2.5">
+          <div className="flex items-center gap-2 border-b border-gold-soft bg-sand px-5 py-2.5">
             <button disabled={!!busyId}
               onClick={() => {
                 const all = clusters.map(g => {
@@ -161,10 +161,10 @@ export default function CleanChildrenPanel({
                 setDone(s => { const n = new Set(s); clusters.forEach(g => n.add(g.map(x => x.id).sort().join('|'))); return n })
                 onMergeAll(all)
               }}
-              className="rounded-lg bg-purple-700 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-purple-800 disabled:opacity-50">
+              className="rounded-lg bg-navy-dark px-3.5 py-1.5 text-xs font-bold text-white hover:bg-navy-dark disabled:opacity-50">
               ⚯ מזג את כל {clusters.length} הקבוצות ({totalDup} צמתים)
             </button>
-            <span className="text-[10px] text-purple-600">כל קבוצה ממוזגת לצומת המסומן ★ — עברו על הרשימה לפני</span>
+            <span className="text-[10px] text-navy">כל קבוצה ממוזגת לצומת המסומן ★ — עברו על הרשימה לפני</span>
           </div>
         )}
 
@@ -184,7 +184,7 @@ export default function CleanChildrenPanel({
                 return (
                   <div key={key} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <div className="mb-2 flex items-center justify-between gap-2">
-                      <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-bold text-purple-700">{g.length} כפילויות</span>
+                      <span className="rounded-full bg-gold-soft px-2 py-0.5 text-[10px] font-bold text-navy-dark">{g.length} כפילויות</span>
                       <div className="flex-1" />
                       {/* 👁 בדיקה על העץ — סוגר את הפאנל, צובע את האשכול על
                           העץ עצמו ומאפשר להוציא צמתים בלחיצה לפני המיזוג.
@@ -196,7 +196,7 @@ export default function CleanChildrenPanel({
                             ids: g.map(x => x.id), keepId: keep.id, finalName,
                             index: clusters.indexOf(g), total: clusters.length,
                           })}
-                          className="inline-flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100">
+                          className="inline-flex items-center gap-1 rounded-lg border border-line bg-sand px-2.5 py-1.5 text-xs font-bold text-navy-dark hover:bg-gold-soft">
                           👁 בדוק בעץ
                         </button>
                       )}
@@ -209,7 +209,7 @@ export default function CleanChildrenPanel({
                           // נראתה כאילו לא קרה כלום — הקבוצה פשוט נעלמה.
                           setMerged(m => [...m, `${g.length} צמתים → ${finalName}`])
                         }}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-purple-700 disabled:opacity-50">
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-1.5 text-xs font-bold text-white hover:bg-navy-dark disabled:opacity-50">
                         {isBusy ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} מזג
                       </button>
                     </div>
@@ -229,19 +229,19 @@ export default function CleanChildrenPanel({
                     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                       <span className="text-[10px] text-slate-400">שם סופי:</span>
                       <button onClick={() => setNameOpen(o => o === key ? null : key)}
-                        className="text-[11px] font-semibold text-indigo-700 underline decoration-dotted hover:text-indigo-900 text-right">
+                        className="text-[11px] font-semibold text-navy-dark underline decoration-dotted hover:text-navy-dark text-right">
                         {finalName}
                       </button>
                       <span className="text-[10px] text-slate-300">(לחצו לשינוי)</span>
                     </div>
                     {nameOpen === key && (
-                      <div className="mt-1.5 max-h-40 overflow-y-auto rounded-lg border border-indigo-100 bg-white p-1.5">
+                      <div className="mt-1.5 max-h-40 overflow-y-auto rounded-lg border border-gold-soft bg-white p-1.5">
                         {[...new Set(g.map(n => n.name.trim().replace(/\s+/g, ' ')))]
                           .sort((a, b) => a.localeCompare(b, 'he'))
                           .map(nm => (
                             <button key={nm}
                               onClick={() => { setChosenName(c => ({ ...c, [key]: nm })); setNameOpen(null) }}
-                              className={`block w-full rounded px-2 py-1 text-right text-[11px] hover:bg-indigo-50 ${nm === finalName ? 'font-bold text-indigo-700' : 'text-slate-600'}`}>
+                              className={`block w-full rounded px-2 py-1 text-right text-[11px] hover:bg-sand ${nm === finalName ? 'font-bold text-navy-dark' : 'text-slate-600'}`}>
                               {nm === finalName ? '✓ ' : ''}{nm}
                             </button>
                           ))}

@@ -100,7 +100,7 @@ export default function AssignLabelPanel({ people }: { people: Person[] }) {
             <span className="text-xs font-bold text-slate-500">איזו תווית</span>
             <select value={labelId} onChange={e => setLabelId(e.target.value)}
               disabled={!labels.length}
-              className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-400">
+              className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-gold disabled:bg-slate-50 disabled:text-slate-400">
               <option value="">
                 {labels.length ? '— בחרו תווית —' : 'אין תוויות — צרו אחת בפאנל שמעל'}
               </option>
@@ -113,12 +113,12 @@ export default function AssignLabelPanel({ people }: { people: Person[] }) {
             <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input value={q} onChange={e => setQ(e.target.value)}
               placeholder="חיפוש בשם, ת״ז, עיר או טלפון…"
-              className="w-full rounded-xl border border-slate-200 py-2 pr-9 pl-3 text-sm outline-none focus:border-indigo-400" />
+              className="w-full rounded-xl border border-slate-200 py-2 pr-9 pl-3 text-sm outline-none focus:border-gold" />
           </div>
 
           <div className="flex items-center gap-2 text-[11px]">
             <button type="button" onClick={() => setPicked(new Set(filtered.map(p => p.id)))}
-              className="rounded-lg border border-slate-200 px-2.5 py-1 font-bold text-slate-600 hover:border-indigo-300 hover:text-indigo-600 transition">
+              className="rounded-lg border border-slate-200 px-2.5 py-1 font-bold text-slate-600 hover:border-line-strong hover:text-navy transition">
               סימון כל המוצגים ({filtered.length})
             </button>
             {picked.size > 0 && (
@@ -139,10 +139,10 @@ export default function AssignLabelPanel({ people }: { people: Person[] }) {
               return (
                 <button key={p.id} type="button" onClick={() => toggle(p.id)}
                   className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 text-right transition ${
-                    on ? 'border-indigo-300 bg-indigo-50' : 'border-transparent hover:bg-slate-50'
+                    on ? 'border-line-strong bg-sand' : 'border-transparent hover:bg-slate-50'
                   }`}>
                   <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                    on ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300 bg-white'
+                    on ? 'border-navy bg-navy text-white' : 'border-slate-300 bg-white'
                   }`}>
                     {on && <Check size={11} />}
                   </span>
@@ -163,7 +163,7 @@ export default function AssignLabelPanel({ people }: { people: Person[] }) {
 
           <div className="flex items-center gap-2">
             <button type="button" onClick={() => void apply(false)} disabled={busy || !picked.size || !labelId}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-indigo-700 disabled:opacity-50">
+              className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-4 py-2.5 text-xs font-bold text-white transition hover:bg-navy-dark disabled:opacity-50">
               {busy ? <Loader2 size={13} className="animate-spin" /> : <Tag size={13} />}
               שיוך {picked.size > 0 ? `${picked.size} נבחרים` : ''}
             </button>

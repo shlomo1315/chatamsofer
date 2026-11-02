@@ -537,7 +537,7 @@ export default async function MaternityDetailPage(
           content: (
             <Card className="flex flex-col gap-4">
               <div className="flex items-center justify-end">
-                <Link href={`/admin/beneficiaries/${ben.id}`} className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800">
+                <Link href={`/admin/beneficiaries/${ben.id}`} className="inline-flex items-center gap-1 text-xs font-medium text-navy hover:text-navy-dark">
                   לכרטסת המלאה <ExternalLink size={13} />
                 </Link>
               </div>
@@ -587,7 +587,7 @@ export default async function MaternityDetailPage(
               ) : (idDocs.length > 0 || aid.birth_certificate_url) && (
                 <div className="pt-3 border-t border-slate-100">
                   <div className="flex items-center gap-2 mb-2">
-                    <FileText size={14} className="text-indigo-500" />
+                    <FileText size={14} className="text-navy-soft" />
                     <span className="text-xs font-semibold text-slate-500 uppercase">מסמכים</span>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
@@ -618,7 +618,7 @@ export default async function MaternityDetailPage(
               {(lineagePath.length > 0 || lineageManual.length > 0 || ben.lineage_node_id) && (
                 <div className="pt-3 border-t border-slate-100">
                   <div className="flex items-center gap-2 mb-2">
-                    <GitBranch size={14} className="text-violet-500" />
+                    <GitBranch size={14} className="text-navy-soft" />
                     <span className="text-xs font-semibold text-slate-500 uppercase">סדר הדורות</span>
                   </div>
                   {/* צ'יפים צבועים לפי סטטוס (ירוק=מאומת / אדום=סוטה / כתום=נוסף)
@@ -685,11 +685,11 @@ export default async function MaternityDetailPage(
           content: (
             <div className="flex flex-col gap-4">
               <Card className="flex flex-col gap-1">
-                <div className="flex items-center gap-2 text-indigo-600 mb-2">
+                <div className="flex items-center gap-2 text-navy mb-2">
                   <Baby size={16} />
                   <span className="text-xs font-semibold text-slate-500 uppercase">{aid.is_twins ? 'פרטי התאומים' : 'פרטי התינוק'}</span>
                   {aid.is_twins && (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gold-soft text-navy-dark">
                       <Baby size={11} /> לידת תאומים
                     </span>
                   )}
@@ -701,7 +701,7 @@ export default async function MaternityDetailPage(
                     : [{ name: aid.baby_name, gender: aid.baby_gender, id_type: aid.baby_id_type, id_number: aid.baby_id_number }]
                   return babies.map((b, i) => (
                     <div key={i} className={i > 0 ? 'mt-3 pt-3 border-t border-slate-100' : ''}>
-                      {aid.is_twins && <p className="text-xs font-semibold text-indigo-600 mb-1">תינוק {i + 1}</p>}
+                      {aid.is_twins && <p className="text-xs font-semibold text-navy mb-1">תינוק {i + 1}</p>}
                       <p className="text-sm flex items-center gap-2 flex-wrap"><span className="text-slate-500">שם התינוק: </span>
                         {b.name
                           ? <span className="font-medium text-slate-800">{b.name}</span>
@@ -750,12 +750,12 @@ export default async function MaternityDetailPage(
                   return rows.map(r => r.end && (
                     <p key={r.label} className="text-sm">
                       <span className="text-slate-500">{r.label} — עד: </span>
-                      <span className="ltr-num text-indigo-600 font-medium">{fmtDate(r.end.toISOString())}</span>
+                      <span className="ltr-num text-navy font-medium">{fmtDate(r.end.toISOString())}</span>
                       {(daysLeft(r.end) ?? 0) > 0
                         ? <span className="mr-2 text-xs text-amber-600">(עוד {daysLeft(r.end)} ימים)</span>
                         : <span className="mr-2 text-xs text-red-500">(הסתיים)</span>}
                       {r.extended && (
-                        <span className="mr-2 inline-block text-[11px] font-medium px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">הוארך ידנית</span>
+                        <span className="mr-2 inline-block text-[11px] font-medium px-2 py-0.5 rounded-full bg-gold-soft text-navy-dark">הוארך ידנית</span>
                       )}
                     </p>
                   ))
@@ -773,7 +773,7 @@ export default async function MaternityDetailPage(
               {(aid.birth_certificate_url || canEditMaternityDocs) && (
                 <Card>
                   <div className="flex items-center justify-between gap-2 mb-3">
-                    <div className="flex items-center gap-2 text-indigo-600">
+                    <div className="flex items-center gap-2 text-navy">
                       <FileText size={16} />
                       <span className="text-xs font-semibold text-slate-500 uppercase">
                         {aid.is_twins ? 'אישור לידה — תינוק 1' : 'אישור לידה'}
@@ -790,7 +790,7 @@ export default async function MaternityDetailPage(
               {aid.is_twins && (aid.birth_certificate_url_2 || canEditMaternityDocs) && (
                 <Card>
                   <div className="flex items-center justify-between gap-2 mb-3">
-                    <div className="flex items-center gap-2 text-violet-600">
+                    <div className="flex items-center gap-2 text-navy">
                       <FileText size={16} />
                       <span className="text-xs font-semibold text-slate-500 uppercase">אישור לידה — תינוק 2</span>
                     </div>
@@ -876,8 +876,8 @@ export default async function MaternityDetailPage(
                         const fmtMoney = (n: number) => `${n.toLocaleString('he-IL', { maximumFractionDigits: 2 })} ₪`
                         return (
                           <>
-                            <div className="mt-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2">
-                              <p className="text-sm font-semibold text-indigo-900">
+                            <div className="mt-2 rounded-lg border border-line bg-sand px-3 py-2">
+                              <p className="text-sm font-semibold text-navy-dark">
                                 {unl.fullySpent
                                   ? 'הכרטיס נוצל במלואו, לא נפרק סכום'
                                   : <>הכרטיס נפרק{unl.unloadedAt ? <> בתאריך <span className="ltr-num">{fmtDate(unl.unloadedAt)}</span></> : ''} — סכום שנפרק: {unl.unloadedAmount != null ? <span className="ltr-num">{fmtMoney(unl.unloadedAmount)}</span> : 'הסכום לא ידוע'}</>}
@@ -943,7 +943,7 @@ export default async function MaternityDetailPage(
           key: 'recovery', label: 'בית החלמה', accent: 'sky' as const, icon: <Home size={15} />,
           content: (
             <Card>
-              <div className="flex items-center gap-2 text-indigo-600 mb-3">
+              <div className="flex items-center gap-2 text-navy mb-3">
                 <Home size={16} />
                 <span className="text-xs font-semibold text-slate-500 uppercase">בית החלמה</span>
               </div>
@@ -967,7 +967,7 @@ export default async function MaternityDetailPage(
                   <span className="inline-flex items-center gap-1 text-sm font-bold px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-800">
                     {recoveryDaysOf(aid)} ימים
                   </span>
-                  {aid.is_twins && <span className="text-xs text-indigo-600">(לידת תאומים)</span>}
+                  {aid.is_twins && <span className="text-xs text-navy">(לידת תאומים)</span>}
                 </div>
                 <RecoveryDaysEditor aid={aid} />
               </div>
@@ -1115,7 +1115,7 @@ function DocCard({ label, url, person }: { label: string; url?: string; person?:
   return (
     <div className="flex flex-col gap-1.5">
       <ViewDocButton url={url}
-         className="flex flex-col gap-2 p-2 border border-slate-200 rounded-xl bg-white hover:border-indigo-300 hover:shadow-sm transition-all group text-center">
+         className="flex flex-col gap-2 p-2 border border-slate-200 rounded-xl bg-white hover:border-line-strong hover:shadow-sm transition-all group text-center">
         {isImage ? (
           <SafeDocImage path={url} name={label} alt={label} className="w-full h-28 object-cover rounded-lg bg-slate-100" />
         ) : isPdf ? (
@@ -1126,7 +1126,7 @@ function DocCard({ label, url, person }: { label: string; url?: string; person?:
             <FileText size={24} className="text-slate-400" />
           </div>
         )}
-        <span className="text-[11px] font-medium text-slate-600 group-hover:text-indigo-600 flex items-center justify-center gap-1">
+        <span className="text-[11px] font-medium text-slate-600 group-hover:text-navy flex items-center justify-center gap-1">
           {label} <ExternalLink size={10} />
         </span>
       </ViewDocButton>

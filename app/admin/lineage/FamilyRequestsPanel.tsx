@@ -67,7 +67,7 @@ const STATE_BAR: Record<string, string> = {
   open: '#cbd5e1',
   in_progress: '#3b82f6',
   waiting_family: '#f59e0b',
-  later: '#a855f7',
+  later: '#14213D',
   approved: '#059669',
   rejected: '#64748b',
 }
@@ -188,7 +188,7 @@ export default function FamilyRequestsPanel() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 size={24} className="animate-spin text-indigo-500" />
+        <Loader2 size={24} className="animate-spin text-navy-soft" />
       </div>
     )
   }
@@ -198,7 +198,7 @@ export default function FamilyRequestsPanel() {
       {/* ── כותרת + מונים ── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold-soft text-navy-dark">
             <Inbox size={18} />
           </span>
           <div>
@@ -220,7 +220,7 @@ export default function FamilyRequestsPanel() {
             { k: 'open', label: 'ממתינות', v: summary.open, c: '#64748b' },
             { k: 'in_progress', label: 'בטיפול', v: summary.inProgress, c: '#3b82f6' },
             { k: 'waiting_family', label: 'ממתין למשפחה', v: summary.waitingFamily, c: '#f59e0b' },
-            { k: 'later', label: 'להמשך', v: summary.later, c: '#a855f7' },
+            { k: 'later', label: 'להמשך', v: summary.later, c: '#14213D' },
             { k: 'done', label: 'טופלו', v: summary.done, c: '#059669' },
           ]).map(s => (
             <div key={s.k} className="rounded-xl border border-slate-200 bg-white p-2.5">
@@ -253,8 +253,8 @@ export default function FamilyRequestsPanel() {
           <button key={o.v} onClick={() => { setFilter(o.v); setFocusIdx(null) }}
             className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-all ${
               filter === o.v
-                ? 'border-indigo-600 bg-indigo-600 text-white'
-                : 'border-slate-200 bg-white text-slate-500 hover:border-indigo-300'
+                ? 'border-navy bg-navy text-white'
+                : 'border-slate-200 bg-white text-slate-500 hover:border-line-strong'
             }`}>{o.l}</button>
         ))}
         <span className="flex-1" />
@@ -300,7 +300,7 @@ export default function FamilyRequestsPanel() {
             const d = r.diff
             return (
               <button key={r.id} onClick={() => setFocusIdx(i)}
-                className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-right transition-all hover:border-indigo-300 hover:shadow-sm">
+                className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-right transition-all hover:border-line-strong hover:shadow-sm">
                 <span className="h-8 w-1 flex-shrink-0 rounded-full" style={{ background: STATE_BAR[st] ?? '#cbd5e1' }} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-bold text-slate-800">
@@ -437,7 +437,7 @@ function RequestCard({
         value={note} onChange={e => setNote(e.target.value)}
         placeholder="הערה פנימית — מה בדקתי, מה חסר…"
         rows={2}
-        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300"
+        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-line-strong"
       />
 
       {/* ── הכרעה ── */}
@@ -468,8 +468,8 @@ function RequestCard({
             <button key={o.v} onClick={() => onAct(r, 'state', { workState: o.v, staffNote: note })} disabled={saving}
               className={`rounded-full border px-2.5 py-1.5 text-[11px] transition-all ${
                 r.workState === o.v
-                  ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                  : 'border-slate-200 bg-white text-slate-500 hover:border-indigo-300'
+                  ? 'border-navy-soft bg-sand text-navy-dark'
+                  : 'border-slate-200 bg-white text-slate-500 hover:border-line-strong'
               }`}>{o.l}</button>
           ))}
         </div>

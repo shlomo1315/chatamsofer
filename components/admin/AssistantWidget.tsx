@@ -234,7 +234,7 @@ export default function AssistantWidget() {
           {/* התיאור — מופיע במעבר עכבר */}
           <div className="absolute bottom-1/2 translate-y-1/2 left-full ml-3 whitespace-nowrap opacity-0 translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200 pointer-events-none">
             <div className="bg-slate-900 text-white text-[13px] font-medium rounded-xl px-3.5 py-2.5 shadow-xl">
-              לחצו כאן לפתיחת <span className="font-bold text-indigo-300">עוזר</span> — העוזר החכם שלי
+              לחצו כאן לפתיחת <span className="font-bold text-line-strong">עוזר</span> — העוזר החכם שלי
             </div>
           </div>
 
@@ -245,7 +245,7 @@ export default function AssistantWidget() {
             className="relative w-16 h-16 rounded-2xl bg-navy hover:bg-navy-soft text-white shadow-xl  flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
           >
             {/* הילה פועמת — עדינה, לא מסיחה */}
-            <span className="absolute inset-0 rounded-2xl bg-indigo-500 opacity-40 animate-ping-slow" />
+            <span className="absolute inset-0 rounded-2xl bg-navy-soft opacity-40 animate-ping-slow" />
             <BotMessageSquare size={27} className="relative z-10" strokeWidth={1.9} />
 
             {/* ניצוץ בפינה — הסימן המוסכם ל-AI. בלעדיו האייקון נקרא כ"צ'אט" סתם. */}
@@ -271,7 +271,7 @@ export default function AssistantWidget() {
                   עוזר
                   <span className="text-[9px] font-bold bg-white/20 rounded px-1.5 py-0.5 tracking-wide">AI</span>
                 </p>
-                <p className="text-indigo-200 text-[11px]">שאל אותי על המערכת</p>
+                <p className="text-line text-[11px]">שאל אותי על המערכת</p>
               </div>
             </div>
             <div className="flex items-center gap-0.5">
@@ -300,7 +300,7 @@ export default function AssistantWidget() {
               <div className="flex flex-col gap-2.5">
                 {/* ברכת פתיחה — מוצגת מיד, כמו הודעה ראשונה בשיחה */}
                 <div className="self-end max-w-[90%] bg-white border border-slate-200 rounded-2xl rounded-bl-md px-3.5 py-3 text-sm leading-relaxed text-slate-800">
-                  שלום, שמי <span className="font-bold text-indigo-700">עוזר</span> ואני אשמח לעזור לך.
+                  שלום, שמי <span className="font-bold text-navy-dark">עוזר</span> ואני אשמח לעזור לך.
                   <br />
                   במה היית רוצה להתמקד כרגע?
                 </div>
@@ -310,7 +310,7 @@ export default function AssistantWidget() {
                   <button
                     key={s}
                     onClick={() => send(s)}
-                    className="text-right text-sm text-indigo-700 bg-white border border-indigo-100 rounded-xl px-3 py-2.5 hover:border-indigo-300 hover:bg-indigo-50/50 transition-colors"
+                    className="text-right text-sm text-navy-dark bg-white border border-gold-soft rounded-xl px-3 py-2.5 hover:border-line-strong hover:bg-sand/50 transition-colors"
                   >
                     {s}
                   </button>
@@ -328,7 +328,7 @@ export default function AssistantWidget() {
                   <div
                     className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words ${
                       m.role === 'user'
-                        ? 'bg-indigo-600 text-white rounded-br-md'
+                        ? 'bg-navy text-white rounded-br-md'
                         : 'bg-white border border-slate-200 text-slate-800 rounded-bl-md'
                     }`}
                   >
@@ -340,7 +340,7 @@ export default function AssistantWidget() {
                     <a
                       key={j}
                       href={l.href}
-                      className="inline-flex items-center justify-between gap-2 bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-xl px-3 py-2 text-[13px] font-semibold hover:bg-indigo-100 hover:border-indigo-300 transition-colors"
+                      className="inline-flex items-center justify-between gap-2 bg-sand border border-line text-navy-dark rounded-xl px-3 py-2 text-[13px] font-semibold hover:bg-gold-soft hover:border-line-strong transition-colors"
                     >
                       <span className="truncate">{l.label}</span>
                       <ArrowLeft size={14} className="shrink-0" />
@@ -353,7 +353,7 @@ export default function AssistantWidget() {
             {/* מה העוזר עושה כרגע — במקום ספינר מת */}
             {busy && (
               <div className="self-end flex items-center gap-2 bg-white border border-slate-200 rounded-2xl rounded-bl-md px-3.5 py-2.5 max-w-[90%]">
-                <Loader2 size={14} className="animate-spin text-indigo-500 shrink-0" />
+                <Loader2 size={14} className="animate-spin text-navy-soft shrink-0" />
                 <span className="text-sm text-slate-500">
                   {activity || 'עוזר עובד…'}
                   {/* ⚠️ שאלה שממתינה בתור נאמרת במפורש: בלי זה מי שהקליד
@@ -388,12 +388,12 @@ export default function AssistantWidget() {
               // ⚠️ אינו disabled בזמן תשובה: שאלת המשך נכנסת לתור ונשלחת
               // כשהתשובה הנוכחית מסתיימת. חסימת השדה בלעה שאלות בשקט.
               placeholder={busy ? 'אפשר לכתוב שאלה נוספת…' : 'שאל שאלה על המערכת...'}
-              className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 focus:bg-white transition-all"
+              className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft/40 focus:border-gold focus:bg-white transition-all"
             />
             <button
               type="submit"
               disabled={!input.trim()}
-              className="w-10 h-10 shrink-0 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-10 h-10 shrink-0 rounded-xl bg-navy hover:bg-navy-dark text-white flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Send size={16} />
             </button>

@@ -85,7 +85,7 @@ export default function MailboxDisplaySettings() {
   const row = (b: Mailbox) => {
     const isBusy = busy === b.id
     return (
-      <div key={b.id} className={`rounded-xl border p-3.5 ${b.sync_only ? 'border-slate-200 bg-slate-50' : 'border-indigo-200 bg-white'} ${isBusy ? 'opacity-60' : ''}`}>
+      <div key={b.id} className={`rounded-xl border p-3.5 ${b.sync_only ? 'border-slate-200 bg-slate-50' : 'border-line bg-white'} ${isBusy ? 'opacity-60' : ''}`}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
             <p dir="ltr" className="truncate text-right text-sm font-bold text-slate-800">{b.email}</p>
@@ -100,8 +100,8 @@ export default function MailboxDisplaySettings() {
             onClick={() => patch(b.id, { sync_only: !b.sync_only })}
             className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${
               b.sync_only
-                ? 'border border-slate-300 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-700'
-                : 'border border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                ? 'border border-slate-300 bg-white text-slate-600 hover:border-line-strong hover:text-navy-dark'
+                : 'border border-line-strong bg-sand text-navy-dark hover:bg-gold-soft'
             }`}>
             {b.sync_only ? <><Archive size={13} /> סנכרון בלבד</> : <><Mail size={13} /> מוצגת במייל</>}
           </button>
@@ -126,7 +126,7 @@ export default function MailboxDisplaySettings() {
                   if (e.target.value === '__new__') { setCreatingFor(b.id); setNewName(''); return }
                   patch(b.id, { label_id: e.target.value || null })
                 }}
-                className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-200">
+                className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-line">
                 <option value="">— ללא תווית —</option>
                 {labels.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                 <option value="__new__">+ תווית חדשה…</option>
@@ -142,12 +142,12 @@ export default function MailboxDisplaySettings() {
                   value={newName}
                   onChange={e => setNewName(e.target.value)}
                   placeholder="שם התווית החדשה"
-                  className="flex-1 min-w-40 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+                  className="flex-1 min-w-40 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-line" />
                 <button
                   type="button"
                   disabled={!newName.trim() || isBusy}
                   onClick={() => patch(b.id, { newLabelName: newName.trim() })}
-                  className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40">
+                  className="rounded-lg bg-navy px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40">
                   צור ושייך
                 </button>
                 <button type="button" onClick={() => { setCreatingFor(null); setNewName('') }}
@@ -171,7 +171,7 @@ export default function MailboxDisplaySettings() {
       {shown.length > 0 && (
         <div>
           <h4 className="mb-2 flex items-center gap-1.5 text-xs font-extrabold text-slate-700">
-            <Mail size={13} className="text-indigo-600" /> מוצגות בלשונית מייל ({shown.length})
+            <Mail size={13} className="text-navy" /> מוצגות בלשונית מייל ({shown.length})
           </h4>
           <div className="flex flex-col gap-2">{shown.map(row)}</div>
         </div>

@@ -167,24 +167,24 @@ export default function CenterListsButton({ distributionId }: { distributionId: 
             {/* ── הורדות מרוכזות ── */}
             <div className="grid gap-2 sm:grid-cols-3">
               <button type="button" onClick={() => download('all=1')}
-                className="flex flex-col items-center gap-1.5 rounded-xl border-2 border-indigo-200 bg-indigo-50 px-3 py-3 text-center hover:border-indigo-300">
-                <FileText size={18} className="text-indigo-600" />
-                <span className="text-xs font-extrabold text-indigo-900">כל המוקדים</span>
-                <span className="text-[10px] leading-tight text-indigo-700">
+                className="flex flex-col items-center gap-1.5 rounded-xl border-2 border-line bg-sand px-3 py-3 text-center hover:border-line-strong">
+                <FileText size={18} className="text-navy" />
+                <span className="text-xs font-extrabold text-navy-dark">כל המוקדים</span>
+                <span className="text-[10px] leading-tight text-navy-dark">
                   קובץ אחד להדפסה
                 </span>
               </button>
 
               <button type="button" disabled={busy !== null}
                 onClick={() => void downloadEachSeparately()}
-                className="flex flex-col items-center gap-1.5 rounded-xl border-2 border-violet-200 bg-violet-50 px-3 py-3 text-center hover:border-violet-300 disabled:opacity-60">
+                className="flex flex-col items-center gap-1.5 rounded-xl border-2 border-line bg-sand px-3 py-3 text-center hover:border-line-strong disabled:opacity-60">
                 {busy === 'each'
-                  ? <Loader2 size={18} className="animate-spin text-violet-600" />
-                  : <FileArchive size={18} className="text-violet-600" />}
-                <span className="text-xs font-extrabold text-violet-900">
+                  ? <Loader2 size={18} className="animate-spin text-navy" />
+                  : <FileArchive size={18} className="text-navy" />}
+                <span className="text-xs font-extrabold text-navy-dark">
                   {busy === 'each' ? 'מוריד…' : 'קובץ לכל מוקד'}
                 </span>
-                <span className="text-[10px] leading-tight text-violet-700">
+                <span className="text-[10px] leading-tight text-navy-dark">
                   {centers.length} קבצים נפרדים
                 </span>
               </button>

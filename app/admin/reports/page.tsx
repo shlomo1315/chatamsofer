@@ -78,10 +78,10 @@ export default async function ReportsPage() {
       {/* KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'סה״כ צאצאים', value: data.beneficiaries.length, color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100' },
+          { label: 'סה״כ צאצאים', value: data.beneficiaries.length, color: 'text-navy', bg: 'bg-sand', border: 'border-gold-soft' },
           { label: 'צאצאים מאושרים', value: data.beneficiaries.filter((b: { eligibility_status: string }) => b.eligibility_status === 'approved').length, color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-100' },
           { label: 'סכום הלוואות כולל', value: fmtLoanAmount(totalLoanAmount), color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100' },
-          { label: 'הלוואות פעילות', value: fmtLoanAmount(activeLoanAmount), color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-100' },
+          { label: 'הלוואות פעילות', value: fmtLoanAmount(activeLoanAmount), color: 'text-navy', bg: 'bg-sand', border: 'border-gold-soft' },
         ].map(({ label, value, color, bg, border }) => (
           <div key={label} className={`${bg} rounded-xl p-5 text-center border ${border} shadow-sm`}>
             <p className={`text-xl font-bold ltr-num ${color}`}>{value}</p>

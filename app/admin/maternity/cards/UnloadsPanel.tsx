@@ -144,7 +144,7 @@ export default function UnloadsPanel() {
               : summary.moneyReleased === 0 && summary.total > 0
                 ? 'כל הכרטיסים נוצלו במלואם'
                 : undefined}
-            color="text-indigo-700" bg="bg-indigo-50" border="border-indigo-100" />
+            color="text-navy-dark" bg="bg-sand" border="border-gold-soft" />
           {/* 🔴 ההבחנה החשובה: כרטיס ש"נוצל במלואו" אינו כשל — המשפחה
               השתמשה בכסף, ואין מה לפרוק. */}
           <Stat icon={<Baby size={16} />} label="נוצלו במלואם" value={String(summary.spentCount)}
@@ -228,7 +228,7 @@ export default function UnloadsPanel() {
                   <td className="px-3 py-2">
                     <span className="font-medium text-slate-800">{r.motherName}</span>
                     {r.silent && (
-                      <span className="mr-1.5 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700">
+                      <span className="mr-1.5 rounded-full bg-gold-soft px-1.5 py-0.5 text-[10px] font-medium text-navy-dark">
                         לידה שקטה
                       </span>
                     )}
@@ -259,7 +259,7 @@ export default function UnloadsPanel() {
                       היסטוריות שקדמו לעמודה — אפס הוא נתון, וכאן אין נתון. */}
                   <td className="px-3 py-2">
                     {r.returnedAmount != null ? (
-                      <span className={r.returnedAmount > 0 ? 'font-bold text-indigo-700' : 'text-slate-400'}>
+                      <span className={r.returnedAmount > 0 ? 'font-bold text-navy-dark' : 'text-slate-400'}>
                         {ils(r.returnedAmount)}
                       </span>
                     ) : (
@@ -279,7 +279,7 @@ export default function UnloadsPanel() {
                   </td>
                   <td className="px-3 py-2">
                     <Link href={`/admin/maternity/${r.aidId}`}
-                      className="inline-flex items-center gap-1 text-indigo-600 hover:underline">
+                      className="inline-flex items-center gap-1 text-navy hover:underline">
                       <ExternalLink size={12} /> לתיק
                     </Link>
                   </td>

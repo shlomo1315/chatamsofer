@@ -187,32 +187,32 @@ export default function RecoveryHomeLinks({ homes }: { homes: { name: string; av
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Link2 size={16} className="text-indigo-500" />
+          <Link2 size={16} className="text-navy-soft" />
           <h2 className="text-sm font-semibold text-slate-700">פורטל בתי החלמה</h2>
         </div>
         <button onClick={() => { setAdding(a => !a); setAddError('') }}
-          className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800">
+          className="inline-flex items-center gap-1 text-xs font-medium text-navy hover:text-navy-dark">
           <Plus size={14} /> הוסף בית החלמה
         </button>
       </div>
 
       {adding && (
-        <div className="px-5 py-3 border-b border-slate-100 bg-indigo-50/40 flex items-center gap-2 flex-wrap">
+        <div className="px-5 py-3 border-b border-slate-100 bg-sand/40 flex items-center gap-2 flex-wrap">
           <input
             value={newHome}
             onChange={e => { setNewHome(e.target.value); setAddError('') }}
             onKeyDown={e => e.key === 'Enter' && addHome()}
             placeholder="שם בית החלמה חדש"
-            className="flex-1 min-w-[180px] rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="flex-1 min-w-[180px] rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft"
             autoFocus
           />
           <select value={newAvail} onChange={e => setNewAvail(e.target.value)}
-            className="rounded-lg border border-slate-300 px-2 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="rounded-lg border border-slate-300 px-2 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy-soft"
             title="זמינות בית ההחלמה">
             {AVAIL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
           <button onClick={addHome} disabled={addingSaving || !newHome.trim()}
-            className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors">
+            className="inline-flex items-center gap-1.5 bg-navy hover:bg-navy-dark disabled:bg-line-strong text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors">
             {addingSaving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} שמור
           </button>
           <button onClick={() => { setAdding(false); setNewHome(''); setAddError('') }}
@@ -231,7 +231,7 @@ export default function RecoveryHomeLinks({ homes }: { homes: { name: string; av
                   <span className="text-sm font-medium text-slate-800">{home}</span>
                   {/* זמינות — לכלל / שקטה / גם וגם */}
                   <select value={availMap[home] ?? 'regular'} onChange={e => saveAvailability(home, e.target.value)}
-                    className="text-[11px] rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    className="text-[11px] rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-slate-600 focus:outline-none focus:ring-2 focus:ring-gold"
                     title="זמינות בית ההחלמה">
                     {AVAIL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
@@ -261,7 +261,7 @@ export default function RecoveryHomeLinks({ homes }: { homes: { name: string; av
                     className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
                       copied === home
                         ? 'bg-green-50 border-green-300 text-green-700'
-                        : 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
+                        : 'bg-sand border-line text-navy-dark hover:bg-gold-soft'
                     }`}>
                     {copied === home ? <><Check size={13} /> הועתק!</> : <><Link2 size={13} /> העתק קישור</>}
                   </button>
@@ -300,7 +300,7 @@ export default function RecoveryHomeLinks({ homes }: { homes: { name: string; av
                     spellCheck={false}
                     data-1p-ignore
                     data-lpignore="true"
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 pl-9 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 pl-9 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft"
                     onKeyDown={e => e.key === 'Enter' && savePassword(home)}
                   />
                   <button type="button" onClick={() => setShowPw(v => !v)}
@@ -309,7 +309,7 @@ export default function RecoveryHomeLinks({ homes }: { homes: { name: string; av
                   </button>
                 </div>
                 <button onClick={() => savePassword(home)} disabled={saving || !pw}
-                  className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors">
+                  className="inline-flex items-center gap-1.5 bg-navy hover:bg-navy-dark disabled:bg-line-strong text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors">
                   {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
                   שמור
                 </button>
@@ -328,7 +328,7 @@ export default function RecoveryHomeLinks({ homes }: { homes: { name: string; av
                   onKeyDown={e => e.key === 'Enter' && saveEmail(home)}
                   placeholder="כתובת מייל לדיווחים (לא חובה)"
                   dir="ltr"
-                  className={`w-full rounded-lg border px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 ${emailErr === home ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`}
+                  className={`w-full rounded-lg border px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 ${emailErr === home ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-navy-soft'}`}
                 />
               </div>
               <button onClick={() => saveEmail(home)} disabled={emailSaving === home}
@@ -337,7 +337,7 @@ export default function RecoveryHomeLinks({ homes }: { homes: { name: string; av
               </button>
               {canEdit && (
                 <button onClick={() => openSend(home)}
-                  className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg border border-line text-navy-dark bg-sand hover:bg-gold-soft transition-colors"
                   title="שליחת קישור וסיסמה לפורטל במייל">
                   <Send size={13} /> שלח פורטל למייל
                 </button>
@@ -368,14 +368,14 @@ export default function RecoveryHomeLinks({ homes }: { homes: { name: string; av
             <label className="text-xs font-medium text-slate-600">כתובת מייל לשליחה</label>
             <input type="email" value={sendEmail} onChange={e => { setSendEmail(e.target.value); setSendErr('') }}
               placeholder="name@example.com" dir="ltr"
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-navy-soft" />
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-slate-600">סיסמה לפורטל (לפחות 10 תווים)</label>
             <div className="relative">
               <input type={sendShowPw ? 'text' : 'password'} value={sendPw} onChange={e => { setSendPw(e.target.value); setSendErr('') }}
                 placeholder="הסיסמה שתוגדר" dir="ltr" autoComplete="new-password" data-1p-ignore data-lpignore="true"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 pl-9 text-sm text-left focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 pl-9 text-sm text-left focus:outline-none focus:ring-2 focus:ring-navy-soft" />
               <button type="button" onClick={() => setSendShowPw(v => !v)}
                 className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
                 {sendShowPw ? <EyeOff size={15} /> : <Eye size={15} />}
@@ -386,7 +386,7 @@ export default function RecoveryHomeLinks({ homes }: { homes: { name: string; av
           <div className="flex items-center justify-end gap-2 pt-1">
             <button onClick={() => setSendHome(null)} className="px-4 py-2 rounded-lg border border-slate-300 text-sm text-slate-600 hover:bg-slate-50">ביטול</button>
             <button onClick={submitSend} disabled={sendSaving || sendDone}
-              className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white text-sm font-medium rounded-lg px-5 py-2 transition-colors">
+              className="inline-flex items-center gap-1.5 bg-navy hover:bg-navy-dark disabled:bg-line-strong text-white text-sm font-medium rounded-lg px-5 py-2 transition-colors">
               {sendSaving ? <Loader2 size={15} className="animate-spin" /> : sendDone ? <Check size={15} /> : <Send size={15} />}
               {sendDone ? 'נשלח!' : 'שלח את הפורטל'}
             </button>
