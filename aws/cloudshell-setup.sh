@@ -77,7 +77,7 @@ aws cloudformation deploy --stack-name "$STACK" --template-file /tmp/infrastruct
   --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM --tags Project="$PROJECT" \
   --parameter-overrides ProjectName="$PROJECT" GitHubRepo="$REPO" DomainName="$DOMAIN" CreateDnsZone="$CREATE_ZONE" CertificateArn="$CERT_PARAM" \
     CertValidationName="$VAL_NAME" CertValidationValue="$VAL_VALUE" \
-    VpcId="$VPC" SubnetIds="$SUBNETS" DesiredCount="${DESIRED:-0}" TaskCpu="${CPU:-512}" TaskMemory="${MEMORY:-1024}" CreateOidcProvider="$OIDC" ExistingOidcProviderArn="$EXISTING_OIDC" || {
+    VpcId="$VPC" SubnetIds="$SUBNETS" DesiredCount="${DESIRED:-0}" SupaDesiredCount="${SUPA:-0}" TaskCpu="${CPU:-512}" TaskMemory="${MEMORY:-1024}" CreateOidcProvider="$OIDC" ExistingOidcProviderArn="$EXISTING_OIDC" || {
   echo "ההקמה נכשלה. סיבת הכשל:"
   aws cloudformation describe-stack-events --stack-name "$STACK" --query "StackEvents[?contains(ResourceStatus,'FAILED')].[LogicalResourceId,ResourceStatusReason]" --output text || true
   exit 1
