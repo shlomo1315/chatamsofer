@@ -3,7 +3,7 @@
 // הטעינה מנכה כרטיס מהמלאי הגלובלי (אותה נעילה כמו consume_card_stock).
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
-  getNedarimCreds, getMaternityLimitedId, findClientByZeout, saveClientCard, setMagneticCard, addTlush,
+  getNedarimCreds, getMaternityLimitedId, findClientByTsad3, getClientCard, getClientCardFull, getClientsTable, saveClientCard, setMagneticCard, addTlush,
 } from '@/lib/nedarim'
 
 export const CENTER_LOAD_AMOUNT_KEY = 'center_monthly_amount'
@@ -75,8 +75,9 @@ export async function isLoadedThisMonth(admin: SupabaseClient, centerId: string,
 async function ensureClient(acc: CenterAccount, creds: NonNullable<Awaited<ReturnType<typeof getNedarimCreds>>>): Promise<string> {
   if (acc.nedarim_client_id) return acc.nedarim_client_id
   let id: string | null = null
-  if (acc.id_number) id = await findClientByZeout(creds, acc.id_number).catch(() => null)
-  if (!id) id = await saveClientCard(creds, { full_name: acc.center_name, family_name: 'מוקד', id_number: acc.id_number, phone: acc.phone }, null, 'מוקדים')
+  // id_number הוא מזהה צד ג' (טקסט חופשי) ונשמר בנדרים בשדה Tsad3Id
+  if (acc.id_number) id = await findClientByTsad3(creds, acc.id_number).catch(() => null)
+  if (!id) id = await saveClientCard(creds, { full_name: acc.center_name, family_name: 'מוקד', id_number: acc.id_number, id_type: 'passport', phone: acc.phone }, null, 'מוקדים')
   if (!id) throw new Error('לא הצלחנו להקים את המוקד בנדרים')
   return id
 }
@@ -125,7 +126,7 @@ export async function runMonthlyLoad(
     const r = await addTlush(creds, clientId, amount, undefined, `טעינה חודשית למוקד ${acc.center_name} · ${month}`, limitedId)
     if (!r.ok) { await release(); return { result: 'error', error: r.message } }
     // הכסף כבר נטען: אם הסימון נכשל, לא משחררים (היה מאפשר טעינה כפולה); נשאר pending ונראה לאדמין
-    await admin.from('center_monthly_loads').update({ status: 'loaded', tlush_id: r.tlushId, loaded_at: new Date().toISOString() })
+    await admin.from('center_monthly_loads').update({ status: 'loaded', tlush_id: r.tlushId, loaded_at: new Date().toISOString(), balance: amount, balance_at: new Date().toISOString() })
       .eq('center_id', acc.center_id).eq('month', month)
     return { result: 'loaded' }
   } catch (e) {
@@ -133,4 +134,82 @@ export async function runMonthlyLoad(
     if (!called) await release()
     return { result: 'error', error: e instanceof Error ? e.message : 'שגיאה' }
   }
+}
+
+/**
+ * רענון יתרות מנדרים לחודש הנוכחי, לכל מוקד שנטען החודש ויש לו כרטיס בנדרים.
+ * נדרים מחזירה יתרה כוללת לכרטיס; כיוון שיש טעינה אחת בחודש, זו היתרה של הטעינה.
+ * בחודשים קודמים נשארת היתרה האחרונה שנרשמה לאותו חודש.
+ */
+export async function refreshMonthBalances(admin: SupabaseClient, month: string): Promise<void> {
+  const creds = await getNedarimCreds()
+  if (!creds) return
+  const [{ data: cards }, { data: loads }] = await Promise.all([
+    admin.from('center_monthly_cards').select('center_id, nedarim_client_id').not('nedarim_client_id', 'is', null),
+    admin.from('center_monthly_loads').select('center_id').eq('month', month).eq('status', 'loaded'),
+  ])
+  const loaded = new Set((loads ?? []).map((l) => l.center_id))
+  await Promise.all((cards ?? []).filter((c) => loaded.has(c.center_id)).map(async (c) => {
+    try {
+      const r = await getClientCard(creds, c.nedarim_client_id as string)
+      if (!r) return
+      await admin.from('center_monthly_loads').update({ balance: r.totalFreeAmount, balance_at: new Date().toISOString() })
+        .eq('center_id', c.center_id).eq('month', month)
+    } catch { /* היתרה הישנה נשארת */ }
+  }))
+}
+
+export type NedarimLinkState = 'linked' | 'none' | 'multiple' | 'no_phone' | 'error'
+
+/** כל ה-ClientId (ייחודיים) שבטבלת הלקוחות שאחד משדות הטלפון שלהם שווה לטלפון המוזן. */
+export function findFamiliesByPhone(families: Record<string, unknown>[], phone: string): Record<string, unknown>[] {
+  if (!phone) return []
+  const seen = new Set<string>()
+  return families.filter((row) => {
+    const hit = Object.entries(row).some(([k, v]) => /phone|tel|mobile|cell/i.test(k) && normalizeCallerPhone(String(v ?? '')) === phone)
+    const id = String(row.ClientId ?? '')
+    if (!hit || !id || seen.has(id)) return false
+    seen.add(id)
+    return true
+  })
+}
+
+/**
+ * משיכה אוטומטית מנדרים: לכל מוקד עם טלפון ובלי קישור, מחפש משפחה לפי הטלפון.
+ * נמצאה אחת → נשמרים nedarim_client_id, מזהה צד ג' (id_number) והכרטיס המשויך.
+ * כמה משפחות באותו טלפון → לא בוחרים בניחוש. לא מקימים משפחה חדשה.
+ */
+export async function syncCentersFromNedarim(admin: SupabaseClient): Promise<Record<string, NedarimLinkState>> {
+  const out: Record<string, NedarimLinkState> = {}
+  const { data: cards } = await admin.from('center_monthly_cards').select('center_id, phone, nedarim_client_id')
+  const pending = (cards ?? []).filter((c) => !c.nedarim_client_id)
+  for (const c of cards ?? []) out[c.center_id] = c.nedarim_client_id ? 'linked' : (c.phone ? 'none' : 'no_phone')
+  const withPhone = pending.filter((c) => c.phone)
+  if (withPhone.length === 0) return out
+  const creds = await getNedarimCreds()
+  if (!creds) { for (const c of withPhone) out[c.center_id] = 'error'; return out }
+  let families: Record<string, unknown>[]
+  try { families = (await getClientsTable(creds)).families } catch { for (const c of withPhone) out[c.center_id] = 'error'; return out }
+  for (const c of withPhone) {
+    const found = findFamiliesByPhone(families, c.phone as string)
+    if (found.length === 0) continue
+    if (found.length > 1) { out[c.center_id] = 'multiple'; continue }
+    const row = found[0]
+    const tsad3Key = Object.keys(row).find((k) => /tsad3/i.test(k))
+    const tsad3 = tsad3Key ? String(row[tsad3Key] ?? '').trim() : ''
+    let card: string | null = null
+    try {
+      const full = await getClientCardFull(creds, String(row.ClientId))
+      const list = Array.isArray((full as { Cards?: unknown } | null)?.Cards) ? (full as { Cards: Record<string, unknown>[] }).Cards : []
+      const live = list.find((x) => !x.RemovedDate)
+      const num = live ? String(live.MagneticCard ?? live.CardNumber ?? '').replace(/\D/g, '') : ''
+      card = num || null
+    } catch { /* הכרטיס יושלם בשיחה */ }
+    const { error } = await admin.from('center_monthly_cards').update({
+      nedarim_client_id: String(row.ClientId), id_number: tsad3 || null, card_number: card,
+      card_linked_at: card ? new Date().toISOString() : null, updated_at: new Date().toISOString(),
+    }).eq('center_id', c.center_id)
+    out[c.center_id] = error ? 'error' : 'linked'
+  }
+  return out
 }

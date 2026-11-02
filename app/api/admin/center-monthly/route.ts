@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireAdmin, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
-import { CENTER_LOAD_AMOUNT_KEY, getLoadAmount, israelMonth, normalizeCallerPhone } from '@/lib/centerMonthlyLoad'
+import { CENTER_LOAD_AMOUNT_KEY, getLoadAmount, israelMonth, normalizeCallerPhone, refreshMonthBalances, syncCentersFromNedarim } from '@/lib/centerMonthlyLoad'
 
 export const dynamic = 'force-dynamic'
 const NO_STORE = { 'Cache-Control': 'no-store' }
@@ -13,10 +13,12 @@ export async function GET() {
   const admin = getServiceClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500, headers: NO_STORE })
   const month = israelMonth()
+  const link = await syncCentersFromNedarim(admin).catch(() => ({} as Awaited<ReturnType<typeof syncCentersFromNedarim>>))
+  await refreshMonthBalances(admin, month).catch(() => {})
   const [centers, cards, loads, amount] = await Promise.all([
     admin.from('card_centers').select('id, name').eq('is_active', true).order('name'),
     admin.from('center_monthly_cards').select('center_id, phone, card_number, id_number, card_linked_at'),
-    admin.from('center_monthly_loads').select('center_id, month, amount, status, loaded_at, created_at').order('month', { ascending: false }).limit(500),
+    admin.from('center_monthly_loads').select('center_id, month, amount, status, loaded_at, created_at, balance, balance_at').order('month', { ascending: false }).limit(500),
     getLoadAmount(admin),
   ])
   if (centers.error) return NextResponse.json({ error: centers.error.message }, { status: 500, headers: NO_STORE })
@@ -28,6 +30,7 @@ export async function GET() {
     return {
       id: c.id, name: c.name,
       phone: card?.phone ?? '', id_number: card?.id_number ?? '', card_number: card?.card_number ?? null,
+      nedarim: link[c.id] ?? 'no_phone',
       thisMonth: cur ? cur.status : 'none',
       history,
     }
@@ -35,7 +38,7 @@ export async function GET() {
   return NextResponse.json({ month, amount, centers: rows }, { headers: NO_STORE })
 }
 
-// עדכון טלפון מורשה / ת.ז. / ניקוי כרטיס (center_id) או סכום הטעינה (amount)
+// עדכון טלפון מורשה / ניקוי כרטיס (center_id) או סכום הטעינה (amount)
 export async function PATCH(request: NextRequest) {
   const staff = await requireAdmin()
   if (!staff) return forbidden()
@@ -60,10 +63,14 @@ export async function PATCH(request: NextRequest) {
     const phone = normalizeCallerPhone(String(body.phone))
     if (phone && !PHONE_RE.test(phone)) return NextResponse.json({ error: 'מספר טלפון לא תקין' }, { status: 400 })
     updates.phone = phone || null
-  }
-  if (body.id_number !== undefined) {
-    const id = String(body.id_number).replace(/\D/g, '')
-    updates.id_number = id || null
+    // שינוי טלפון: מנקים את הקישור הישן, והמשיכה מנדרים תרוץ מחדש בכניסה הבאה למסך
+    const { data: prev } = await admin.from('center_monthly_cards').select('phone').eq('center_id', centerId).maybeSingle()
+    if ((prev?.phone ?? null) !== (phone || null)) {
+      updates.nedarim_client_id = null
+      updates.id_number = null
+      updates.card_number = null
+      updates.card_linked_at = null
+    }
   }
   if (body.clear_card) {
     updates.card_number = null
