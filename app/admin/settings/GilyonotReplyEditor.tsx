@@ -4,7 +4,7 @@ import { Loader2, Save, Eye, Check, AlertCircle, Plus, Trash2 } from 'lucide-rea
 
 // ─────────────────────────────────────────────────────────────────────────────
 // עריכת מייל ההרשמה לגיליונות (d@), בתוך תיבת "דיוור" במסך המענה האוטומטי.
-// שלוש לשוניות (נרשם עכשיו / כבר רשום / הוסר בעבר) ובלוק משותף.
+// שרטוט קצר, שלוש שורות נפתחות לעריכה (נרשם עכשיו / כבר רשום / הוסר בעבר) ובלוק משותף.
 // התצוגה המקדימה נבנית בשרת מאותה פונקציה ששולחת בפועל, וניתנת ב-iframe מבודד.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -28,7 +28,7 @@ export default function GilyonotReplyEditor() {
   const [savedTexts, setSavedTexts] = useState<Texts>({})
   const [draft, setDraft] = useState<Texts>({})
   const [previews, setPreviews] = useState<Previews>({})
-  const [tab, setTab] = useState<(typeof TABS)[number]['key']>('added')
+  const [tab, setTab] = useState<(typeof TABS)[number]['key'] | null>('added')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
@@ -84,7 +84,7 @@ export default function GilyonotReplyEditor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft, specs])
 
-  const preview = previews[tab]
+  const preview = previews[tab ?? 'added']
   useEffect(() => {
     const doc = frameRef.current?.contentDocument
     if (!doc || !preview) return
@@ -111,8 +111,6 @@ export default function GilyonotReplyEditor() {
   }
 
   if (loading) return <div className="py-10 flex justify-center text-slate-400"><Loader2 size={18} className="animate-spin" /></div>
-  const cur = TABS.find(t => t.key === tab)!
-  const curSpec = spec(cur.id)
   const shared = spec(SHARED)
   const noreply = shared?.fields.find(f => f.key === 'noreply')
 
@@ -124,40 +122,55 @@ export default function GilyonotReplyEditor() {
           העיצוב קבוע, ואפשר לערוך את הטקסטים. תיבת המייל עצמה אינה נקראת, ולכן הפניות מופנות לכתובות למטה.
         </p>
 
-        <div role="tablist" className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-slate-100">
-          {TABS.map(t => (
-            <button key={t.key} role="tab" aria-selected={tab === t.key} onClick={() => setTab(t.key)}
-              className={`rounded-lg px-2 py-2 text-xs font-bold transition-colors ${
-                tab === t.key ? 'bg-white text-navy shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-              {t.label}
-            </button>
+        <div className="flex items-center gap-2 flex-wrap text-xs text-slate-600 p-3 rounded-lg border border-dashed border-slate-200">
+          {['מגיע מייל ל-d@', 'נבדק אם השולח כבר ברשימה', 'נשלח אחד משלושה מיילים'].map((t, i) => (
+            <span key={t} className="inline-flex items-center gap-2">
+              {i > 0 && <span className="text-slate-300">←</span>}
+              <em className="not-italic font-bold bg-slate-50 border border-slate-200 rounded-md px-2 py-0.5">{t}</em>
+            </span>
           ))}
         </div>
 
-        {curSpec && (
-          <div className="flex flex-col gap-3">
-            {curSpec.fields.map(f => (
-              <div key={f.key}>
-                <label className="block text-xs font-bold text-slate-600 mb-1">{f.label}</label>
-                {f.key === 'hello' && (
-                  <p className="text-[11px] text-slate-400 mb-1.5">
-                    <span dir="ltr" className="font-bold">{'{{שם}}'}</span> מוחלף בשם הפונה אוטומטית, ובלי שם יוצג &quot;רב&quot;.
-                  </p>
-                )}
-                {f.multiline ? (
-                  <textarea rows={3} value={value(cur.id, f)} onChange={e => set(cur.id, f.key, e.target.value)}
-                    className={`${inputCls} leading-relaxed resize-y`} />
-                ) : (
-                  <input value={value(cur.id, f)} onChange={e => set(cur.id, f.key, e.target.value)} className={inputCls} />
+        <div className="rounded-lg border border-slate-200 overflow-hidden divide-y divide-slate-200">
+          {TABS.map(t => {
+            const isOpen = tab === t.key
+            const tSpec = spec(t.id)
+            return (
+              <div key={t.key}>
+                <button type="button" aria-expanded={isOpen} onClick={() => setTab(isOpen ? null : t.key)}
+                  className={`w-full grid grid-cols-[auto_1fr_auto] gap-3 items-center p-3 text-right min-h-14 hover:bg-slate-50 ${isOpen ? 'bg-slate-50' : 'bg-white'}`}>
+                  <span className="text-[11px] font-black text-white bg-navy rounded-md px-2 py-0.5 whitespace-nowrap">{t.label}</span>
+                  <span className="min-w-0 text-xs text-slate-500 truncate">{previews[t.key]?.subject ?? ''}</span>
+                  <span className="text-xs font-bold text-navy">{isOpen ? 'סגור' : 'עריכה'}</span>
+                </button>
+                {isOpen && tSpec && (
+                  <div className="flex flex-col gap-3 px-3 pb-4 pt-1 bg-slate-50">
+                    {tSpec.fields.map(f => (
+                      <div key={f.key}>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">{f.label}</label>
+                        {f.key === 'hello' && (
+                          <p className="text-[11px] text-slate-400 mb-1.5">
+                            <span dir="ltr" className="font-bold">{'{{שם}}'}</span> מוחלף בשם הפונה אוטומטית, ובלי שם יוצג &quot;רב&quot;.
+                          </p>
+                        )}
+                        {f.multiline ? (
+                          <textarea rows={3} value={value(t.id, f)} onChange={e => set(t.id, f.key, e.target.value)}
+                            className={`${inputCls} leading-relaxed resize-y`} />
+                        ) : (
+                          <input value={value(t.id, f)} onChange={e => set(t.id, f.key, e.target.value)} className={inputCls} />
+                        )}
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => resetTab(t.id)}
+                      className="self-start text-[11px] font-bold text-slate-500 hover:text-slate-700 underline">
+                      החזר את המייל לנוסח המקורי
+                    </button>
+                  </div>
                 )}
               </div>
-            ))}
-            <button type="button" onClick={() => resetTab(cur.id)}
-              className="self-start text-[11px] font-bold text-slate-500 hover:text-slate-700 underline">
-              החזר את הלשונית לנוסח המקורי
-            </button>
-          </div>
-        )}
+            )
+          })}
+        </div>
 
         {/* ── בלוק משותף לשלושת המיילים ── */}
         <div className="rounded-xl border border-red-200 bg-red-50/40 p-3 flex flex-col gap-3">

@@ -29,8 +29,6 @@ export default function AutoReplySettings() {
   const [err, setErr] = useState('')
   const [okMsg, setOkMsg] = useState('')
   const [openKey, setOpenKey] = useState<string | null>(null)
-  // מצב רביעי בבורר של תיבת "דיוור": עריכת מייל ההרשמה לגיליונות (d@). מצב תצוגה בלבד, לא AutoReplyMode.
-  const [gilyView, setGilyView] = useState(false)
   const frameRef = useRef<HTMLIFrameElement>(null)
   // 🔴 הוספת תיבה חדשה: DEPARTMENTS קבוע בקוד, ובלי זה כתובת חדשה
   // חייבה שינוי קוד ופריסה כדי לקבל מענה אוטומטי.
@@ -298,20 +296,18 @@ export default function AutoReplySettings() {
                 </label>
               </div>
 
-              {isOpen && dept.key === 'mailing' && gilyView ? (
-                <div className="border-t border-slate-100 p-4 flex flex-col gap-4">
-                  <ModePicker mode={s.mode} onChange={m => { setGilyView(false); patch(dept.key, { mode: m }) }}
-                    gilyonot={{ active: true, onSelect: () => setGilyView(true) }} />
+              {isOpen && dept.key === 'mailing' && (
+                <div className="border-t border-slate-100 p-4">
                   <GilyonotReplyEditor />
                 </div>
-              ) : isOpen && (
+              )}
+              {isOpen && (
                 <div className="border-t border-slate-100 p-4 flex flex-col lg:flex-row gap-5">
                   {/* ── עריכה ── */}
                   <div className="flex-1 min-w-0 flex flex-col gap-4">
                     {/* ⚠️ הבורר ראשון: הוא קובע *מה* נשלח, וכל שדות העריכה
                         שמתחתיו נקראים אחרת לפי הבחירה בו. */}
-                    <ModePicker mode={s.mode} onChange={m => patch(dept.key, { mode: m })}
-                      gilyonot={dept.key === 'mailing' ? { active: false, onSelect: () => setGilyView(true) } : undefined} />
+                    <ModePicker mode={s.mode} onChange={m => patch(dept.key, { mode: m })} />
 
                     {/* ── ההודעה הזמנית ── */}
                     {/* ⚠️ מוצגת תמיד, גם במצב 'מלא': היא נשמרת במקביל ולא
@@ -491,17 +487,15 @@ const MODES: { key: AutoReplyMode; label: string; hint: string; icon: typeof Clo
     active: 'bg-emerald-50 border-emerald-400 text-emerald-800' },
 ]
 
-function ModePicker({ mode, onChange, gilyonot }: {
+function ModePicker({ mode, onChange }: {
   mode: AutoReplyMode; onChange: (m: AutoReplyMode) => void
-  /** תיבת "דיוור" בלבד: אפשרות רביעית, עריכת מייל ההרשמה לגיליונות. */
-  gilyonot?: { active: boolean; onSelect: () => void }
 }) {
   return (
     <div>
       <label className="block text-xs font-bold text-slate-600 mb-1.5">מה נשלח לפונים</label>
-      <div className={`grid gap-2 ${gilyonot ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
+      <div className="grid gap-2 grid-cols-3">
         {MODES.map(m => {
-          const on = !gilyonot?.active && mode === m.key
+          const on = mode === m.key
           const Icon = m.icon
           return (
             <button key={m.key} type="button" onClick={() => onChange(m.key)}
@@ -514,15 +508,6 @@ function ModePicker({ mode, onChange, gilyonot }: {
             </button>
           )
         })}
-        {gilyonot && (
-          <button type="button" onClick={gilyonot.onSelect} aria-pressed={gilyonot.active}
-            className={`flex flex-col items-center gap-1 rounded-xl border-2 px-2 py-2.5 transition-colors ${
-              gilyonot.active ? 'bg-teal-50 border-teal-400 text-teal-800' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`}>
-            <Mail size={16} className="shrink-0" />
-            <span className="text-xs font-bold leading-tight text-center">מענה הרשמה לגיליונות</span>
-            <span className="text-[10px] leading-tight text-center opacity-70">נוסח המייל שנשלח ל-d@</span>
-          </button>
-        )}
       </div>
     </div>
   )
