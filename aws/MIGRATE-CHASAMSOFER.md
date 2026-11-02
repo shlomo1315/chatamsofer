@@ -59,7 +59,7 @@ Secrets Manager (Frankfurt) > `chasamsofer/prod` > Retrieve secret value > Edit.
 - `NEDARIM_PROXY_URL`: משאירים כפי שהוא ב-Railway כל עוד `nedarim-proxy` שם.
 
 ## שלב 5: חיבור GitHub לפריסה אוטומטית [אתה]
-1. מעבירים את `aws/deploy-aws.yml` ל-`.github/workflows/deploy-aws.yml`. בגיטהאב: Add file > Create new file, שם `.github/workflows/deploy-aws.yml`, מדביקים את התוכן ועושים commit ל-`main`. (לסוכנים אין הרשאה לכתוב לשם.)
+1. מעבירים את `aws/deploy-aws.yml` ל-`.github/workflows/deploy-aws.yml` (אין לסוכנים הרשאה לכתוב לשם; לא פועל עד ש-`AWS_DEPLOY_ENABLED=true`). את הסוד ממלאים בפקודה אחת: `bash <(curl -fsSL "https://raw.githubusercontent.com/shlomo1315/chatamsofer/main/aws/fill-secret.sh?$(date +%s)")` ומדביקים את ה-Raw Editor של Railway.
 2. Settings > Secrets and variables > Actions:
    - **Secret** `AWS_DEPLOY_ROLE_ARN` = הערך `DeployRoleArn` משלב 3.
    - **Variables:**
