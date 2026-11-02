@@ -1,0 +1,29 @@
+-- רץ על ה-RDS (כ-dbadmin) לפני ההעתקה. הסיסמאות מגיעות כמשתני psql (-v), לא נכתבות בקובץ.
+create schema if not exists extensions;
+create extension if not exists pgcrypto with schema extensions;
+create extension if not exists "uuid-ossp" with schema extensions;
+create extension if not exists pg_trgm with schema extensions;
+create extension if not exists unaccent with schema extensions;
+create extension if not exists citext with schema extensions;
+do $$ begin
+  if not exists (select from pg_roles where rolname='anon') then create role anon nologin noinherit; end if;
+  if not exists (select from pg_roles where rolname='authenticated') then create role authenticated nologin noinherit; end if;
+  if not exists (select from pg_roles where rolname='service_role') then create role service_role nologin noinherit bypassrls; end if;
+  if not exists (select from pg_roles where rolname='authenticator') then create role authenticator noinherit login; end if;
+  if not exists (select from pg_roles where rolname='supabase_auth_admin') then create role supabase_auth_admin noinherit login createrole; end if;
+  if not exists (select from pg_roles where rolname='supabase_storage_admin') then create role supabase_storage_admin noinherit login createrole; end if;
+end $$;
+alter role authenticator password :'AUTHENTICATOR_PW';
+alter role supabase_auth_admin password :'AUTH_ADMIN_PW';
+alter role supabase_storage_admin password :'STORAGE_ADMIN_PW';
+grant anon, authenticated, service_role to authenticator;
+grant anon, authenticated, service_role, supabase_auth_admin, supabase_storage_admin to dbadmin;
+create schema if not exists auth authorization supabase_auth_admin;
+create schema if not exists storage authorization supabase_storage_admin;
+grant usage on schema public, extensions to anon, authenticated, service_role;
+grant usage on schema auth to service_role, supabase_storage_admin;
+grant usage, create on schema public to supabase_storage_admin;
+alter database app set search_path to public, extensions;
+alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
+alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
+alter default privileges in schema public grant all on functions to anon, authenticated, service_role;

@@ -13,7 +13,9 @@ TASK=$(aws ecs describe-task-definition --task-definition "$P" --query 'taskDefi
 SRC=$(aws secretsmanager describe-secret --secret-id "$P/supabase-src" --query ARN --output text)
 APP=$(aws secretsmanager describe-secret --secret-id "$P/prod" --query ARN --output text)
 SUBS=$(aws ec2 describe-subnets --filters Name=default-for-az,Values=true --query 'Subnets[].SubnetId' --output text | tr '\t' ',')
-SB_URL=$(aws ecs describe-task-definition --task-definition "$P" --query "taskDefinition.containerDefinitions[0].environment[?name=='NEXT_PUBLIC_SUPABASE_URL'].value" --output text)
+SB_URL=${SRC_SUPABASE_URL:-https://$(aws secretsmanager get-secret-value --secret-id "$P/supabase-src" --query SecretString --output text | jq -r .host | sed -E 's/^db\.//; s/\.supabase\.co$//').supabase.co}
+GW=$(aws secretsmanager describe-secret --secret-id "$P/supabase-gw" --query ARN --output text)
+DOMAIN=${DOMAIN:-$(aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Parameters[?ParameterKey=='DomainName'].ParameterValue" --output text)}
 aws logs create-log-group --log-group-name "/ecs/$P-copy" 2>/dev/null || true
 
 run() { # name image command-json environment-json secrets-json
@@ -31,13 +33,14 @@ run() { # name image command-json environment-json secrets-json
 }
 
 if [ "$STEP" != files ]; then
+  INIT=$(jq -Rs . < <(curl -fsSL "https://raw.githubusercontent.com/shlomo1315/chatamsofer/main/aws/supabase-init.sql"))
   CMD=$(jq -Rs . < <(curl -fsSL "https://raw.githubusercontent.com/shlomo1315/chatamsofer/main/aws/copy-db.sh"))
-  run db postgres:17 "$CMD" "[{\"name\":\"DST_HOST\",\"value\":\"$DBH\"},{\"name\":\"SCHEMAS\",\"value\":\"${SCHEMAS:-public}\"}]" \
-    "[{\"name\":\"SRC_HOST\",\"valueFrom\":\"$SRC:host::\"},{\"name\":\"SRC_USER\",\"valueFrom\":\"$SRC:user::\"},{\"name\":\"SRC_PASS\",\"valueFrom\":\"$SRC:password::\"},{\"name\":\"DST_USER\",\"valueFrom\":\"$DBS:username::\"},{\"name\":\"DST_PASS\",\"valueFrom\":\"$DBS:password::\"}]"
+  run db postgres:17 "$CMD" "[{\"name\":\"DST_HOST\",\"value\":\"$DBH\"},{\"name\":\"SCHEMAS\",\"value\":\"${SCHEMAS:-public auth}\"},{\"name\":\"INIT_SQL\",\"value\":$INIT}]" \
+    "[{\"name\":\"SRC_HOST\",\"valueFrom\":\"$SRC:host::\"},{\"name\":\"SRC_USER\",\"valueFrom\":\"$SRC:user::\"},{\"name\":\"SRC_PASS\",\"valueFrom\":\"$SRC:password::\"},{\"name\":\"DST_USER\",\"valueFrom\":\"$DBS:username::\"},{\"name\":\"DST_PASS\",\"valueFrom\":\"$DBS:password::\"},{\"name\":\"AUTHENTICATOR_PW\",\"valueFrom\":\"$GW:authenticator_pw::\"},{\"name\":\"AUTH_ADMIN_PW\",\"valueFrom\":\"$GW:auth_admin_pw::\"},{\"name\":\"STORAGE_ADMIN_PW\",\"valueFrom\":\"$GW:storage_admin_pw::\"}]"
 fi
 if [ "$STEP" != db ]; then
   JS=$(curl -fsSL "https://raw.githubusercontent.com/shlomo1315/chatamsofer/main/aws/copy-files.mjs" | base64 -w0)
-  run files node:22-slim "$(jq -Rn --arg js "$JS" '"mkdir /w && cd /w && npm i --silent @aws-sdk/client-s3 && echo \($js) | base64 -d > c.mjs && node c.mjs"')" \
-    "[{\"name\":\"SUPABASE_URL\",\"value\":\"$SB_URL\"},{\"name\":\"FILES_BUCKET\",\"value\":\"$BKT\"}]" \
-    "[{\"name\":\"SUPABASE_SERVICE_ROLE_KEY\",\"valueFrom\":\"$APP:SUPABASE_SERVICE_ROLE_KEY::\"}]"
+  run files node:22-slim "$(jq -Rn --arg js "$JS" '"echo \($js) | base64 -d > c.mjs && node c.mjs"')" \
+    "[{\"name\":\"SUPABASE_URL\",\"value\":\"$SB_URL\"},{\"name\":\"DST_URL\",\"value\":\"https://$DOMAIN\"}]" \
+    "[{\"name\":\"SUPABASE_SERVICE_ROLE_KEY\",\"valueFrom\":\"$APP:SUPABASE_SERVICE_ROLE_KEY::\"},{\"name\":\"DST_KEY\",\"valueFrom\":\"$GW:service_key::\"}]"
 fi
