@@ -19,6 +19,7 @@ Parameters:
   TaskMemory: {Type: String, Default: '1024', AllowedValues: ['1024', '2048', '3072', '4096'], Description: "זיכרון ב-MB. 512 מעבד מאפשר עד 4096, 1024 מאפשר 2048 ומעלה"}
   DbInstanceClass: {Type: String, Default: db.t4g.medium, Description: "גודל מופע המסד"}
   DbStorageGb: {Type: Number, Default: 50, MinValue: 20, Description: "אחסון התחלתי ב-GB (גדל אוטומטית עד 200)"}
+  SupaDesiredCount: {Type: Number, Default: 0, Description: "0 עד שהמסד החדש מולא ונוצר הסוד supabase-gw. אז 1"}
   DesiredCount: {Type: Number, Default: 0, Description: "0 בהקמה ראשונה. אחרי שהפריסה הראשונה העלתה image: 1"}
   CreateOidcProvider: {Type: String, Default: 'true', AllowedValues: ['true', 'false'], Description: "false אם כבר קיים provider של GitHub בחשבון"}
   ExistingOidcProviderArn: {Type: String, Default: ''}
@@ -75,7 +76,7 @@ Resources:
       Policies:
         - PolicyName: read-app-secret
           PolicyDocument:
-            Statement: [{Effect: Allow, Action: 'secretsmanager:GetSecretValue', Resource: [!Ref AppSecret, !Ref SrcSecret, !GetAtt Db.MasterUserSecret.SecretArn]}]
+            Statement: [{Effect: Allow, Action: 'secretsmanager:GetSecretValue', Resource: [!Ref AppSecret, !Ref SrcSecret, !Ref SupaSecret, !GetAtt Db.MasterUserSecret.SecretArn]}]
 
   TaskRole:
     Type: AWS::IAM::Role
@@ -109,6 +110,7 @@ Resources:
             - {Name: NEXT_PUBLIC_SITE_URL, Value: !Sub "https://${DomainName}"}
             - {Name: NEXT_PUBLIC_APP_URL, Value: !Sub "https://${DomainName}"}
             - {Name: TZ, Value: Asia/Jerusalem}
+            - {Name: NEXT_PUBLIC_SUPABASE_URL, Value: !Sub "https://${DomainName}"}
           LogConfiguration:
             LogDriver: awslogs
             Options: {awslogs-group: !Sub "/ecs/${ProjectName}", awslogs-region: !Ref 'AWS::Region', awslogs-stream-prefix: app}
@@ -208,7 +210,7 @@ Resources:
             - Name: SCHEDULED_MAIL_DISABLED
               ValueFrom: !Sub "${AppSecret}:SCHEDULED_MAIL_DISABLED::"
             - Name: SUPABASE_SERVICE_ROLE_KEY
-              ValueFrom: !Sub "${AppSecret}:SUPABASE_SERVICE_ROLE_KEY::"
+              ValueFrom: !Sub "${SupaSecret}:service_key::"
             - Name: UNLOAD_EXPIRED_DISABLED
               ValueFrom: !Sub "${AppSecret}:UNLOAD_EXPIRED_DISABLED::"
             - Name: VERIFY_FROM_EMAIL
@@ -431,6 +433,181 @@ Resources:
           SecurityGroups: [!Ref TaskSg]
       LoadBalancers: [{ContainerName: app, ContainerPort: 3000, TargetGroupArn: !Ref Tg}]
 
+  # --- רכיבי Supabase עצמאיים (PostgREST, Auth, Storage) מאחורי nginx, על אותו דומיין: /rest/v1 /auth/v1 /storage/v1 ---
+  # הסוד מתמלא עם aws/supabase-keys.sh (מפתחות JWT וסיסמאות תפקידי המסד נוצרים שם, לא עוברים בצ'אט)
+  SupaSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Name: !Sub "${ProjectName}/supabase-gw"
+      SecretString: '{"jwt_secret":"","anon_key":"","service_key":"","authenticator_pw":"","auth_admin_pw":"","storage_admin_pw":"","rest_url":"","auth_url":"","storage_url":""}'
+      Tags: [{Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
+
+  SupaLogs:
+    Type: AWS::Logs::LogGroup
+    Properties: {LogGroupName: !Sub "/ecs/${ProjectName}-supabase", RetentionInDays: 30}
+
+  SupaSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Supabase gateway from ALB only
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - {IpProtocol: tcp, FromPort: 8000, ToPort: 8000, SourceSecurityGroupId: !Ref AlbSg}
+      Tags: [{Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
+
+  SupaDbIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties: {GroupId: !Ref DbSg, IpProtocol: tcp, FromPort: 5432, ToPort: 5432, SourceSecurityGroupId: !Ref SupaSg}
+
+  SupaTaskDef:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${ProjectName}-supabase"
+      Cpu: '1024'
+      Memory: '2048'
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      ExecutionRoleArn: !GetAtt ExecRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      ContainerDefinitions:
+        - Name: gateway
+          Image: nginx:1.27-alpine
+          Essential: true
+          PortMappings: [{ContainerPort: 8000}]
+          EntryPoint: [sh, -c]
+          Command:
+            - |
+              cat > /etc/nginx/conf.d/default.conf <<'CONF'
+              server {
+                listen 8000;
+                client_max_body_size 100m;
+                proxy_read_timeout 300s;
+                proxy_set_header Host $http_host;
+                proxy_set_header X-Forwarded-Proto https;
+                proxy_set_header X-Forwarded-For $http_x_forwarded_for;
+                location = /health { return 200 'ok'; }
+                location /rest/v1/ { proxy_pass http://127.0.0.1:3001/; }
+                location /auth/v1/ { proxy_pass http://127.0.0.1:9999/; }
+                location /storage/v1/ { proxy_pass http://127.0.0.1:5000/; }
+              }
+              CONF
+              exec nginx -g 'daemon off;'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options: {awslogs-group: !Ref SupaLogs, awslogs-region: !Ref 'AWS::Region', awslogs-stream-prefix: gateway}
+        - Name: postgrest
+          Image: postgrest/postgrest:v13.0.8
+          Essential: true
+          Environment:
+            - {Name: PGRST_DB_SCHEMAS, Value: public}
+            - {Name: PGRST_DB_ANON_ROLE, Value: anon}
+            - {Name: PGRST_SERVER_PORT, Value: '3001'}
+            - {Name: PGRST_DB_POOL, Value: '10'}
+          Secrets:
+            - {Name: PGRST_DB_URI, ValueFrom: !Sub "${SupaSecret}:rest_url::"}
+            - {Name: PGRST_JWT_SECRET, ValueFrom: !Sub "${SupaSecret}:jwt_secret::"}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options: {awslogs-group: !Ref SupaLogs, awslogs-region: !Ref 'AWS::Region', awslogs-stream-prefix: postgrest}
+        - Name: auth
+          Image: supabase/auth:v2.197.0
+          Essential: true
+          Environment:
+            - {Name: GOTRUE_API_HOST, Value: 0.0.0.0}
+            - {Name: GOTRUE_API_PORT, Value: '9999'}
+            - {Name: API_EXTERNAL_URL, Value: !Sub "https://${DomainName}/auth/v1"}
+            - {Name: GOTRUE_SITE_URL, Value: !Sub "https://${DomainName}"}
+            - {Name: GOTRUE_URI_ALLOW_LIST, Value: !Sub "https://${DomainName}/**"}
+            - {Name: GOTRUE_DB_DRIVER, Value: postgres}
+            - {Name: GOTRUE_JWT_EXP, Value: '3600'}
+            - {Name: GOTRUE_JWT_AUD, Value: authenticated}
+            - {Name: GOTRUE_JWT_DEFAULT_GROUP_NAME, Value: authenticated}
+            - {Name: GOTRUE_DISABLE_SIGNUP, Value: 'true'}
+            - {Name: GOTRUE_MAILER_AUTOCONFIRM, Value: 'false'}
+            - {Name: GOTRUE_SMTP_HOST, Value: smtp.resend.com}
+            - {Name: GOTRUE_SMTP_PORT, Value: '465'}
+            - {Name: GOTRUE_SMTP_USER, Value: resend}
+            - {Name: GOTRUE_SMTP_SENDER_NAME, Value: חתם סופר}
+          Secrets:
+            - {Name: GOTRUE_DB_DATABASE_URL, ValueFrom: !Sub "${SupaSecret}:auth_url::"}
+            - {Name: GOTRUE_JWT_SECRET, ValueFrom: !Sub "${SupaSecret}:jwt_secret::"}
+            - {Name: GOTRUE_SMTP_PASS, ValueFrom: !Sub "${AppSecret}:RESEND_API_KEY::"}
+            - {Name: GOTRUE_SMTP_ADMIN_EMAIL, ValueFrom: !Sub "${AppSecret}:VERIFY_FROM_EMAIL::"}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options: {awslogs-group: !Ref SupaLogs, awslogs-region: !Ref 'AWS::Region', awslogs-stream-prefix: auth}
+        - Name: storage
+          Image: supabase/storage-api:v1.88.0
+          Essential: true
+          Environment:
+            - {Name: SERVER_PORT, Value: '5000'}
+            - {Name: STORAGE_BACKEND, Value: s3}
+            - {Name: STORAGE_S3_BUCKET, Value: !Ref FilesBucket}
+            - {Name: STORAGE_S3_REGION, Value: !Ref 'AWS::Region'}
+            - {Name: REGION, Value: !Ref 'AWS::Region'}
+            - {Name: TENANT_ID, Value: chasamsofer}
+            - {Name: IS_MULTITENANT, Value: 'false'}
+            - {Name: DB_INSTALL_ROLES, Value: 'false'}
+            - {Name: POSTGREST_URL, Value: 'http://127.0.0.1:3001'}
+            - {Name: FILE_SIZE_LIMIT, Value: '104857600'}
+          Secrets:
+            - {Name: DATABASE_URL, ValueFrom: !Sub "${SupaSecret}:storage_url::"}
+            - {Name: AUTH_JWT_SECRET, ValueFrom: !Sub "${SupaSecret}:jwt_secret::"}
+            - {Name: ANON_KEY, ValueFrom: !Sub "${SupaSecret}:anon_key::"}
+            - {Name: SERVICE_KEY, ValueFrom: !Sub "${SupaSecret}:service_key::"}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options: {awslogs-group: !Ref SupaLogs, awslogs-region: !Ref 'AWS::Region', awslogs-stream-prefix: storage}
+
+  SupaTg:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Condition: HasCert
+    Properties:
+      VpcId: !Ref VpcId
+      Port: 8000
+      Protocol: HTTP
+      TargetType: ip
+      HealthCheckPath: /health
+      HealthCheckIntervalSeconds: 15
+      HealthyThresholdCount: 2
+      TargetGroupAttributes:
+        - {Key: deregistration_delay.timeout_seconds, Value: '30'}
+
+  SupaRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Condition: HasCert
+    Properties:
+      ListenerArn: !Ref HttpsListener
+      Priority: 10
+      Conditions: [{Field: path-pattern, Values: ['/rest/v1/*', '/auth/v1/*', '/storage/v1/*']}]
+      Actions: [{Type: forward, TargetGroupArn: !Ref SupaTg}]
+
+  SupaService:
+    Type: AWS::ECS::Service
+    Condition: HasCert
+    DependsOn: [SupaRule]
+    Properties:
+      ServiceName: !Sub "${ProjectName}-supabase"
+      Cluster: !Ref Cluster
+      LaunchType: FARGATE
+      TaskDefinition: !Ref SupaTaskDef
+      DesiredCount: !Ref SupaDesiredCount
+      HealthCheckGracePeriodSeconds: 120
+      EnableECSManagedTags: true
+      PropagateTags: SERVICE
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 100
+        MaximumPercent: 200
+        DeploymentCircuitBreaker: {Enable: true, Rollback: true}
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets: !Ref SubnetIds
+          SecurityGroups: [!Ref SupaSg]
+      LoadBalancers: [{ContainerName: gateway, ContainerPort: 8000, TargetGroupArn: !Ref SupaTg}]
+
   # WAF בסיסי. ⚠️ כלל גודל הגוף מוגדר Count: העלאות מסמכים ו-webhooks גדולים מ-8KB.
   Waf:
     Type: AWS::WAFv2::WebACL
@@ -538,5 +715,6 @@ Outputs:
   SecretArn: {Value: !Ref AppSecret}
   DbEndpoint: {Value: !GetAtt Db.Endpoint.Address}
   DbSecretArn: {Value: !GetAtt Db.MasterUserSecret.SecretArn, Description: "סיסמת המסד החדש (מנוהלת, לא מודפסת)"}
+  SupaSecretArn: {Value: !Ref SupaSecret}
   FilesBucketName: {Value: !Ref FilesBucket}
   CopySgId: {Value: !Ref CopySg}
