@@ -2,7 +2,7 @@
 # העתקה מ-Supabase (קריאה בלבד) אל RDS ו-S3 ב-AWS, כמשימת ECS חד-פעמית בתוך ה-VPC, ודוח השוואה בסוף.
 #   bash <(curl -fsSL "https://raw.githubusercontent.com/shlomo1315/chatamsofer/main/aws/copy-from-supabase.sh?$(date +%s)")
 # דורש: הסטאק עם RDS ו-S3 (ממוזג ל-main), והסוד chasamsofer/supabase-src ממולא (fill-src-secret.sh).
-# אין כתיבה, מחיקה או שינוי במקור. SCHEMAS=public (ברירת מחדל). STEP=db|files|both
+# אין כתיבה, מחיקה או שינוי במקור. SCHEMAS="public auth" (ברירת מחדל). STEP=db|files|both. RECOPY_DB=1 מעתיק שוב מסד שכבר הועתק
 set -euo pipefail
 R=eu-central-1; P=${PROJECT:-chasamsofer}; STACK=${STACK:-$P}; STEP=${STEP:-both}
 export AWS_DEFAULT_REGION=$R
@@ -13,7 +13,11 @@ TASK=$(aws ecs describe-task-definition --task-definition "$P" --query 'taskDefi
 SRC=$(aws secretsmanager describe-secret --secret-id "$P/supabase-src" --query ARN --output text)
 APP=$(aws secretsmanager describe-secret --secret-id "$P/prod" --query ARN --output text)
 SUBS=$(aws ec2 describe-subnets --filters Name=default-for-az,Values=true --query 'Subnets[].SubnetId' --output text | tr '\t' ',')
-SB_URL=${SRC_SUPABASE_URL:-https://$(aws secretsmanager get-secret-value --secret-id "$P/supabase-src" --query SecretString --output text | jq -r .host | sed -E 's/^db\.//; s/\.supabase\.co$//').supabase.co}
+# מזהה הפרויקט ב-Supabase: מהמשתמש של ה-pooler (postgres.<ref>) או מהכתובת הישירה (db.<ref>.supabase.co)
+REF=$(aws secretsmanager get-secret-value --secret-id "$P/supabase-src" --query SecretString --output text \
+  | jq -r '((.user // "") | capture("^postgres\\.(?<r>[a-z0-9]+)$").r) // ((.host // "") | capture("^db\\.(?<r>[a-z0-9]+)\\.supabase\\.co$").r) // empty')
+SB_URL=${SRC_SUPABASE_URL:-https://$REF.supabase.co}
+[ "$SB_URL" != https://.supabase.co ] || { echo "לא זוהה מזהה הפרויקט ב-Supabase מהסוד supabase-src. SRC_SUPABASE_URL=https://<ref>.supabase.co"; exit 1; }
 GW=$(aws secretsmanager describe-secret --secret-id "$P/supabase-gw" --query ARN --output text)
 DOMAIN=${DOMAIN:-$(aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Parameters[?ParameterKey=='DomainName'].ParameterValue" --output text)}
 aws logs create-log-group --log-group-name "/ecs/$P-copy" 2>/dev/null || true
@@ -35,7 +39,7 @@ run() { # name image command-json environment-json secrets-json
 if [ "$STEP" != files ]; then
   INIT=$(jq -Rs . < <(curl -fsSL "https://raw.githubusercontent.com/shlomo1315/chatamsofer/main/aws/supabase-init.sql"))
   CMD=$(jq -Rs . < <(curl -fsSL "https://raw.githubusercontent.com/shlomo1315/chatamsofer/main/aws/copy-db.sh"))
-  run db postgres:17 "$CMD" "[{\"name\":\"DST_HOST\",\"value\":\"$DBH\"},{\"name\":\"SCHEMAS\",\"value\":\"${SCHEMAS:-public auth}\"},{\"name\":\"INIT_SQL\",\"value\":$INIT}]" \
+  run db postgres:17 "$CMD" "[{\"name\":\"DST_HOST\",\"value\":\"$DBH\"},{\"name\":\"SCHEMAS\",\"value\":\"${SCHEMAS:-public auth}\"},{\"name\":\"RECOPY_DB\",\"value\":\"${RECOPY_DB:-}\"},{\"name\":\"INIT_SQL\",\"value\":$INIT}]" \
     "[{\"name\":\"SRC_HOST\",\"valueFrom\":\"$SRC:host::\"},{\"name\":\"SRC_USER\",\"valueFrom\":\"$SRC:user::\"},{\"name\":\"SRC_PASS\",\"valueFrom\":\"$SRC:password::\"},{\"name\":\"DST_USER\",\"valueFrom\":\"$DBS:username::\"},{\"name\":\"DST_PASS\",\"valueFrom\":\"$DBS:password::\"},{\"name\":\"AUTHENTICATOR_PW\",\"valueFrom\":\"$GW:authenticator_pw::\"},{\"name\":\"AUTH_ADMIN_PW\",\"valueFrom\":\"$GW:auth_admin_pw::\"},{\"name\":\"STORAGE_ADMIN_PW\",\"valueFrom\":\"$GW:storage_admin_pw::\"}]"
 fi
 if [ "$STEP" != db ]; then
