@@ -14,7 +14,7 @@ export default function PageHeader({ title, subtitle, children }: PageHeaderProp
         <div className="flex items-stretch gap-3 min-w-0">
           <div className="w-[3px] self-stretch rounded-full bg-gold flex-shrink-0" />
           <div className="min-w-0">
-            <h1 className="text-[1.65rem] font-bold text-navy leading-tight tracking-tight">{title}</h1>
+            <h1 className="text-[2.25rem] font-black text-navy leading-none">{title}</h1>
             {subtitle && <p className="text-sm text-ink-soft mt-0.5">{subtitle}</p>}
           </div>
         </div>

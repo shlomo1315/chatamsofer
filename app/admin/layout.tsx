@@ -33,7 +33,7 @@ export default async function DashboardLayout({
 
   return (
     <ToastProvider>
-    <div className="flex h-screen overflow-hidden bg-slate-50">
+    <div className="admin-shell flex h-screen overflow-hidden bg-[#f7f3ea]">
       {/* 🔴 עדכון גרסה — באמצע פריסה או אחריה. ראו DeployBanner. */}
       <DeployBanner />
       <WelcomeModal />
