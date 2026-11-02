@@ -17,6 +17,8 @@ Parameters:
   SubnetIds: {Type: "List<AWS::EC2::Subnet::Id>", Description: "שתי תתי-רשתות ציבוריות בשני אזורי זמינות (המאזן והשרת)"}
   TaskCpu: {Type: String, Default: '512', AllowedValues: ['512', '1024', '2048'], Description: "מעבד לשרת: 512 = חצי ליבה, 1024 = ליבה. משפיע ישירות על העלות"}
   TaskMemory: {Type: String, Default: '1024', AllowedValues: ['1024', '2048', '3072', '4096'], Description: "זיכרון ב-MB. 512 מעבד מאפשר עד 4096, 1024 מאפשר 2048 ומעלה"}
+  DbInstanceClass: {Type: String, Default: db.t4g.medium, Description: "גודל מופע המסד"}
+  DbStorageGb: {Type: Number, Default: 50, MinValue: 20, Description: "אחסון התחלתי ב-GB (גדל אוטומטית עד 200)"}
   DesiredCount: {Type: Number, Default: 0, Description: "0 בהקמה ראשונה. אחרי שהפריסה הראשונה העלתה image: 1"}
   CreateOidcProvider: {Type: String, Default: 'true', AllowedValues: ['true', 'false'], Description: "false אם כבר קיים provider של GitHub בחשבון"}
   ExistingOidcProviderArn: {Type: String, Default: ''}
@@ -46,6 +48,16 @@ Resources:
       Name: !Sub "${ProjectName}/prod"
       SecretString: '{"ANTHROPIC_API_KEY":"","BOOK_FAIR_AUTO_OPEN_DISABLED":"","BOOK_FAIR_CLEANUP_DISABLED":"","CRON_SECRET":"","DAILY_BACKUP_DISABLED":"","DISTRIBUTIONS_PORTAL_SECRET":"","ELEVENLABS_API_KEY":"","ELEVENLABS_MODEL_ID":"","ELEVENLABS_VOICE_ID":"","GILYONOT_DISABLED":"","GILYONOT_FROM_EMAIL":"","GILYONOT_NEDARIM_TOKEN":"","GMAIL_CLIENT_ID":"","GMAIL_CLIENT_SECRET":"","GMAIL_EMAIL":"","GMAIL_PUBSUB_TOPIC":"","GMAIL_PUSH_TOKEN":"","GMAIL_REDIRECT_URI":"","GMAIL_WATCH_RENEW_DISABLED":"","GOOGLE_DRIVE_BACKUP_FOLDER_ID":"","GOOGLE_SA_KEY":"","GOV_SYNC_DISABLED":"","KVITEL_MAILBOX":"","KVITEL_NEDARIM_TOKEN":"","LEGACY_SYNC_DISABLED":"","LIVE_BALANCES_DISABLED":"","LIVE_BALANCES_ENABLED":"","LOANS_PORTAL_SECRET":"","LOANS_REPORT_DISABLED":"","MAIL_DOMAIN":"","MATERNITY_CARD_RETRY_DISABLED":"","NEDARIM_API_PASSWORD":"","NEDARIM_CREATE_TXN_URL":"","NEDARIM_GUARD_ALERT_TO":"","NEDARIM_HISTORY_URL":"","NEDARIM_HOLIDAY_LIMITED_ID":"","NEDARIM_MATERNITY_LIMITED_ID":"","NEDARIM_MOSAD_ID":"","NEDARIM_PROXY_URL":"","NEWSLETTER_DISABLED":"","NEXTAUTH_SECRET":"","OTP_NONCE_SECRET":"","RABBI_FORM_BLANK_URL":"","RESEND_API_KEY":"","RESEND_WEBHOOK_SECRET":"","RESEND_WEBHOOK_SIGNING_SECRET":"","SCHEDULED_MAIL_DISABLED":"","SUPABASE_SERVICE_ROLE_KEY":"","UNLOAD_EXPIRED_DISABLED":"","VERIFY_FROM_EMAIL":"","VERIFY_FROM_NAME":"","VOICE_REBUILD_DISABLED":"","YEMOT_ANNOUNCE_TEMPLATE_ID":"","YEMOT_API_TOKEN":"","YEMOT_BOOK_FAIR_AUDIO":"","YEMOT_BOOK_FAIR_CALLER_ID":"","YEMOT_BOOK_FAIR_CREDIT_TEMPLATE_ID":"","YEMOT_BOOK_FAIR_EXT":"","YEMOT_BOOK_FAIR_TEXT_ONLY":"","YEMOT_BOOK_FAIR_TOKEN":"","YEMOT_CREDITS_FALLBACK_FOLDER":"","YEMOT_CREDITS_SECRET":"","YEMOT_FOLDER_HOLIDAY":"","YEMOT_FOLDER_IVR_FILES":"","YEMOT_FOLDER_MATERNITY":"","YEMOT_GILYONOT_SECRET":"","YEMOT_HOLIDAY_EXT":"","YEMOT_KVITEL_SECRET":"","YEMOT_MATERNITY_EXT":"","YEMOT_MENU_EXT":"","YEMOT_OTP_CALLER_ID":"","YEMOT_OTP_DIGIT_SEP":"","YEMOT_OTP_TEMPLATE_ID":"","YEMOT_SINGLE_ENDPOINT":"","YEMOT_TOKEN":"","YEMOT_WEBHOOK_SECRET":""}'
 
+  # פרטי החיבור לקריאה בלבד מ-Supabase (host/user/password). ממלאים עם aws/fill-src-secret.sh בלי הדפסה
+  SrcSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Name: !Sub "${ProjectName}/supabase-src"
+      SecretString: '{"host":"","user":"","password":""}'
+      Tags: [{Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
+
   Logs:
     Type: AWS::Logs::LogGroup
     Properties: {LogGroupName: !Sub "/ecs/${ProjectName}", RetentionInDays: 30}
@@ -63,13 +75,19 @@ Resources:
       Policies:
         - PolicyName: read-app-secret
           PolicyDocument:
-            Statement: [{Effect: Allow, Action: 'secretsmanager:GetSecretValue', Resource: !Ref AppSecret}]
+            Statement: [{Effect: Allow, Action: 'secretsmanager:GetSecretValue', Resource: [!Ref AppSecret, !Ref SrcSecret, !GetAtt Db.MasterUserSecret.SecretArn]}]
 
   TaskRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
         Statement: [{Effect: Allow, Principal: {Service: ecs-tasks.amazonaws.com}, Action: 'sts:AssumeRole'}]
+      Policies:
+        - PolicyName: files-bucket
+          PolicyDocument:
+            Statement:
+              - {Effect: Allow, Action: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'], Resource: !Sub "${FilesBucket.Arn}/*"}
+              - {Effect: Allow, Action: 's3:ListBucket', Resource: !GetAtt FilesBucket.Arn}
 
   TaskDef:
     Type: AWS::ECS::TaskDefinition
@@ -265,6 +283,82 @@ Resources:
       SecurityGroupIngress:
         - {IpProtocol: tcp, FromPort: 3000, ToPort: 3000, SourceSecurityGroupId: !Ref AlbSg}
 
+  # --- מסד ואחסון קבצים פרטיים (יעד ההעתקה מ-Supabase) ---
+  CopySg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Copy job (outbound only, no ingress)
+      VpcId: !Ref VpcId
+      Tags: [{Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
+
+  DbSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Postgres from app tasks and copy job only
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - {IpProtocol: tcp, FromPort: 5432, ToPort: 5432, SourceSecurityGroupId: !Ref TaskSg}
+        - {IpProtocol: tcp, FromPort: 5432, ToPort: 5432, SourceSecurityGroupId: !Ref CopySg}
+      Tags: [{Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
+
+  DbSubnets:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: !Sub "${ProjectName} db"
+      SubnetIds: !Ref SubnetIds
+      Tags: [{Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
+
+  # הסיסמה נוצרת ומנוהלת ע"י RDS ב-Secrets Manager (לא עוברת בצ'אט ולא בתבנית)
+  Db:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub "${ProjectName}-db"
+      Engine: postgres
+      EngineVersion: '17'
+      DBInstanceClass: !Ref DbInstanceClass
+      AllocatedStorage: !Ref DbStorageGb
+      MaxAllocatedStorage: 200
+      StorageType: gp3
+      StorageEncrypted: true
+      DBName: app
+      MasterUsername: dbadmin
+      ManageMasterUserPassword: true
+      PubliclyAccessible: false
+      MultiAZ: false
+      DBSubnetGroupName: !Ref DbSubnets
+      VPCSecurityGroups: [!Ref DbSg]
+      BackupRetentionPeriod: 14
+      DeletionProtection: true
+      CopyTagsToSnapshot: true
+      EnablePerformanceInsights: false
+      AutoMinorVersionUpgrade: true
+      Tags: [{Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
+
+  FilesBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub "${ProjectName}-files-${AWS::AccountId}"
+      PublicAccessBlockConfiguration: {BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true}
+      OwnershipControls: {Rules: [{ObjectOwnership: BucketOwnerEnforced}]}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration: [{BucketKeyEnabled: true, ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}}]
+      VersioningConfiguration: {Status: Enabled}
+      LifecycleConfiguration:
+        Rules: [{Id: old-versions, Status: Enabled, NoncurrentVersionExpiration: {NoncurrentDays: 90}}]
+      Tags: [{Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
+
+  FilesBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FilesBucket
+      PolicyDocument:
+        Statement:
+          - {Sid: TlsOnly, Effect: Deny, Principal: '*', Action: 's3:*', Resource: [!GetAtt FilesBucket.Arn, !Sub "${FilesBucket.Arn}/*"], Condition: {Bool: {'aws:SecureTransport': 'false'}}}
+
   Alb:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -442,3 +536,7 @@ Outputs:
   NameServers: {Condition: MakeZone, Value: !Join [', ', !GetAtt Zone.NameServers], Description: "שרתי השמות להחלפה אצל הרשם (שלב אחרון, אחרי בדיקה)"}
   DeployRoleArn: {Value: !GetAtt DeployRole.Arn, Description: "מדביקים ב-GitHub Secret בשם AWS_DEPLOY_ROLE_ARN"}
   SecretArn: {Value: !Ref AppSecret}
+  DbEndpoint: {Value: !GetAtt Db.Endpoint.Address}
+  DbSecretArn: {Value: !GetAtt Db.MasterUserSecret.SecretArn, Description: "סיסמת המסד החדש (מנוהלת, לא מודפסת)"}
+  FilesBucketName: {Value: !Ref FilesBucket}
+  CopySgId: {Value: !Ref CopySg}
