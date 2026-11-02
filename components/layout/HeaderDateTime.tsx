@@ -127,8 +127,8 @@ export default function HeaderDateTime() {
     <div className="hidden md:flex items-center gap-3 text-xs">
       {nz && (
         <>
-          <span className="inline-flex items-center gap-1.5 text-slate-700 font-semibold tabular-nums">
-            <nz.Icon size={13} className="text-indigo-500" />
+          <span className="inline-flex items-center gap-1.5 text-navy font-semibold tabular-nums">
+            <nz.Icon size={13} className="text-gold" />
             <span>{nz.name}</span>
             <span className="ltr-num">{nzTime}</span>
             <span className="font-normal text-slate-500">({nzRemaining})</span>
@@ -136,12 +136,12 @@ export default function HeaderDateTime() {
           <span className="h-3.5 w-px bg-slate-200" />
         </>
       )}
-      <span className="inline-flex items-center gap-1 text-slate-700 font-semibold tabular-nums">
-        <Clock size={13} className="text-indigo-500" /> {time}
+      <span className="inline-flex items-center gap-1 text-navy font-semibold tabular-nums">
+        <Clock size={13} className="text-gold" /> {time}
       </span>
       <span className="h-3.5 w-px bg-slate-200" />
       <span className="inline-flex items-center gap-1.5 text-slate-600">
-        <CalendarDays size={13} className="text-indigo-500" />
+        <CalendarDays size={13} className="text-gold" />
         {hebrew && <span>{hebrew}</span>}
         <span className="text-slate-300">·</span>
         <span className="ltr-num">{greg}</span>
@@ -149,8 +149,8 @@ export default function HeaderDateTime() {
       {parsha && (
         <>
           <span className="h-3.5 w-px bg-slate-200" />
-          <span className="inline-flex items-center gap-1 text-indigo-700 font-medium">
-            <BookOpen size={13} className="text-indigo-500" /> {parsha}
+          <span className="inline-flex items-center gap-1 text-[#8a6316] font-medium">
+            <BookOpen size={13} className="text-gold" /> {parsha}
           </span>
         </>
       )}

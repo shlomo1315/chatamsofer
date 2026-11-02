@@ -249,3 +249,38 @@ th.ltr-num {
   background: rgb(14 24 48 / 0.5);
   backdrop-filter: blur(4px);
 }
+
+/* ───────── תבנית מערכת הניהול (admin-shell) ─────────
+   מקור יחיד לאחידות: שורת טבלה 52px, שדות וכפתורים 40px, כפתור ראשי נייבי,
+   בלי סגול/ירוק לכפתורי פעולה. שינוי כאן משפיע על כל מסכי האדמין יחד,
+   כולל מחלקה חדשה שתיווסף. */
+.admin-shell { --row: 52px; --ctl: 40px; }
+.admin-shell table thead th {
+  height: 42px; background: #faf6ec; color: var(--color-ink-soft, #6b6352);
+  font-size: 12px; font-weight: 500; border-bottom: 1px solid var(--color-line, #e6dfcf);
+}
+.admin-shell table tbody td { height: var(--row); }
+.admin-shell table tbody tr:hover { background-color: #fbf6ea; }
+.admin-shell input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
+.admin-shell select { min-height: var(--ctl); }
+.admin-shell input[type='checkbox'] { accent-color: var(--color-navy, #14213d); }
+.admin-shell button.bg-indigo-600, .admin-shell a.bg-indigo-600,
+.admin-shell button.bg-violet-600, .admin-shell a.bg-violet-600,
+.admin-shell button.bg-purple-600, .admin-shell a.bg-purple-600,
+.admin-shell button.bg-emerald-600, .admin-shell a.bg-emerald-600,
+.admin-shell button.bg-green-600, .admin-shell a.bg-green-600,
+.admin-shell button.bg-emerald-700, .admin-shell a.bg-emerald-700,
+.admin-shell button.bg-slate-900, .admin-shell a.bg-slate-900,
+.admin-shell button.bg-slate-800, .admin-shell a.bg-slate-800 {
+  background-color: var(--color-navy, #14213d); color: #fff;
+}
+.admin-shell button.bg-indigo-600:hover, .admin-shell a.bg-indigo-600:hover,
+.admin-shell button.bg-violet-600:hover, .admin-shell button.bg-emerald-600:hover,
+.admin-shell a.bg-emerald-600:hover, .admin-shell button.bg-green-600:hover,
+.admin-shell button.bg-slate-900:hover, .admin-shell a.bg-slate-900:hover {
+  background-color: #22345e;
+}
+.admin-shell .text-indigo-600, .admin-shell .text-indigo-700,
+.admin-shell .text-violet-600, .admin-shell .text-purple-600 { color: #8a6316; }
+.admin-shell .bg-indigo-50, .admin-shell .bg-violet-50, .admin-shell .bg-purple-50 { background-color: #f4e9cf; }
+.admin-shell .border-indigo-200, .admin-shell .border-violet-200 { border-color: #e3c98a; }
