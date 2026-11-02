@@ -435,6 +435,7 @@ Resources:
 
   # --- רכיבי Supabase עצמאיים (PostgREST, Auth, Storage) מאחורי nginx, על אותו דומיין: /rest/v1 /auth/v1 /storage/v1 ---
   # הסוד מתמלא עם aws/supabase-keys.sh (מפתחות JWT וסיסמאות תפקידי המסד נוצרים שם, לא עוברים בצ'אט)
+  # השדה rds_ca (תעודת ה-CA של RDS ל-Storage) נוסף בסקריפט. לא משנים כאן את SecretString: שינוי ידרוס את הסוד הקיים
   SupaSecret:
     Type: AWS::SecretsManager::Secret
     DeletionPolicy: Retain
@@ -554,6 +555,7 @@ Resources:
             - {Name: FILE_SIZE_LIMIT, Value: '104857600'}
           Secrets:
             - {Name: DATABASE_URL, ValueFrom: !Sub "${SupaSecret}:storage_url::"}
+            - {Name: DATABASE_SSL_ROOT_CERT, ValueFrom: !Sub "${SupaSecret}:rds_ca::"}
             - {Name: AUTH_JWT_SECRET, ValueFrom: !Sub "${SupaSecret}:jwt_secret::"}
             - {Name: ANON_KEY, ValueFrom: !Sub "${SupaSecret}:anon_key::"}
             - {Name: SERVICE_KEY, ValueFrom: !Sub "${SupaSecret}:service_key::"}
