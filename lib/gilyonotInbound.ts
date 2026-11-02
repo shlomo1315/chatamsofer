@@ -218,3 +218,12 @@ export async function handleGilyonotInbound(
   await db.from('auto_reply_log').insert({ to_email: email, subject: GILYONOT_REPLY_SUBJECT[kind] })
   return kind
 }
+
+/** כתובת ההעתקה של Resend (copy@in.chasamsofer.info) מצורפת לכל מייל נכנס, ואינה נמען אמיתי. */
+const COPY_ADDRESS_RE = /@in\.chasamsofer\.info$/i
+
+/** האם המייל נועד ל-d@ בלבד: כל הנמענים הישירים בדומיין הארגון הם d@, בלי לספור את כתובת ההעתקה. */
+export function isGilyonotOnlyRecipient(direct: string[], isOrgAddr: (a: string) => boolean): boolean {
+  const org = direct.filter(a => isOrgAddr(a) && !COPY_ADDRESS_RE.test(a.trim()))
+  return org.length > 0 && org.every(isGilyonotAddress)
+}

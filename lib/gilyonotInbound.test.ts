@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 vi.mock('@/lib/emailTextsStore', async () => { const { textOf } = await import('@/lib/emailCatalog'); return { textFor: (id: string, k: string) => textOf({}, id, k), ensureEmailTexts: async () => {} } })
 
-import { handleGilyonotInbound, buildGilyonotReply, gilyonotContacts, isAutomatedInbound, isSpoofedSender, SENDER_DAILY_CAP } from './gilyonotInbound'
+import { handleGilyonotInbound, isGilyonotOnlyRecipient, buildGilyonotReply, gilyonotContacts, isAutomatedInbound, isSpoofedSender, SENDER_DAILY_CAP } from './gilyonotInbound'
 
 type Row = Record<string, unknown>
 
@@ -151,5 +151,21 @@ describe('עריכת המענה (טקסטים ערוכים)', () => {
     const db = fakeDb(); const m = mk()
     await handleGilyonotInbound(db, { fromEmail: 'a@x.com' }, sender(m))
     expect(String(db.tables.auto_reply_log[0].subject)).toMatch(/^גיליונות החתם סופר:/)
+  })
+})
+
+describe('isGilyonotOnlyRecipient', () => {
+  const isOrg = (a: string) => /(@|\.)(chasamsofer\.info|chasamsofer\.co\.il)$/i.test(a)
+  it('נמענים כמו שמגיעים מ-Resend: כתובת ההעתקה לא נספרת', () => {
+    expect(isGilyonotOnlyRecipient(['copy@in.chasamsofer.info', 'd@chasamsofer.info'], isOrg)).toBe(true)
+  })
+  it('מייל ל-d@ בלבד', () => {
+    expect(isGilyonotOnlyRecipient(['d@chasamsofer.info'], isOrg)).toBe(true)
+  })
+  it('תיבה אחרת עם עותק ל-d@ ממשיכה בניתוב הרגיל', () => {
+    expect(isGilyonotOnlyRecipient(['copy@in.chasamsofer.info', 'office@chasamsofer.info', 'd@chasamsofer.info'], isOrg)).toBe(false)
+  })
+  it('רק כתובת ההעתקה, בלי d@', () => {
+    expect(isGilyonotOnlyRecipient(['copy@in.chasamsofer.info'], isOrg)).toBe(false)
   })
 })

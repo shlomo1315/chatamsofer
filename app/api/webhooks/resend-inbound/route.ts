@@ -410,9 +410,8 @@ export async function POST(request: NextRequest) {
   // התיבה אינה נקראת, ולכן המייל לא נשמר בדואר הנכנס. רק כשהיא הנמענת היחידה בדומיין
   // (מייל לתיבה אחרת עם עותק אליה ממשיך בניתוב הרגיל).
   {
-    const { isGilyonotAddress, handleGilyonotInbound } = await import('@/lib/gilyonotInbound')
-    const orgDirect = directRecipients.filter(isOrgAddr)
-    if (orgDirect.length > 0 && orgDirect.every(isGilyonotAddress)) {
+    const { isGilyonotOnlyRecipient, handleGilyonotInbound } = await import('@/lib/gilyonotInbound')
+    if (isGilyonotOnlyRecipient(directRecipients, isOrgAddr)) {
       const outcome = await handleGilyonotInbound(getAdminClient(), {
         fromEmail: from.email, fromName: from.name, headers: data.headers,
         messageId: String(data.message_id ?? data.messageId ?? data.id ?? ''),
