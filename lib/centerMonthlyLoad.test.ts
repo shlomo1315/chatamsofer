@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { israelMonth, parseAmount, normalizeCallerPhone } from './centerMonthlyLoad'
+import { israelMonth, parseAmount, normalizeCallerPhone, findFamiliesByPhone } from './centerMonthlyLoad'
 
 describe('centerMonthlyLoad', () => {
   it('חודש לפי שעון ישראל, לא UTC', () => {
@@ -27,7 +27,7 @@ describe('runMonthlyLoad: חריגה אחרי הפנייה לנדרים', () => 
     vi.resetModules()
     vi.doMock('./nedarim', () => ({
       getNedarimCreds: async () => ({}), getMaternityLimitedId: async () => null,
-      findClientByZeout: async () => null, saveClientCard: async () => null, setMagneticCard: async () => ({ ok: true }),
+      findClientByTsad3: async () => null, saveClientCard: async () => null, setMagneticCard: async () => ({ ok: true }),
       addTlush: async () => { throw new Error('timeout') },
     }))
     const { runMonthlyLoad } = await import('./centerMonthlyLoad')
@@ -37,5 +37,23 @@ describe('runMonthlyLoad: חריגה אחרי הפנייה לנדרים', () => 
     expect(r.result).toBe('error')
     expect(rpc.mock.calls.map(c => c[0])).not.toContain('release_center_monthly_load')
     vi.doUnmock('./nedarim')
+  })
+})
+
+describe('findFamiliesByPhone', () => {
+  const fam = [
+    { ClientId: 1, Phone1: '050-123-4567', Phone2: '' },
+    { ClientId: 2, Phone1: '', Phone2: '972501234567' },
+    { ClientId: 3, Phone1: '0529999999' },
+  ]
+  it('נמצאה משפחה אחת (כולל נרמול ושדה Phone2)', () => {
+    expect(findFamiliesByPhone(fam, '0529999999').map((f) => f.ClientId)).toEqual([3])
+  })
+  it('לא נמצאה', () => {
+    expect(findFamiliesByPhone(fam, '0541111111')).toEqual([])
+    expect(findFamiliesByPhone(fam, '')).toEqual([])
+  })
+  it('כפילות: שתי משפחות באותו טלפון', () => {
+    expect(findFamiliesByPhone(fam, '0501234567').map((f) => f.ClientId)).toEqual([1, 2])
   })
 })
