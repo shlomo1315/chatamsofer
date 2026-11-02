@@ -25,6 +25,7 @@ import { useTablePagination } from '@/lib/useTablePagination'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import ApprovalLabelTag from '@/components/ui/ApprovalLabelTag'
 import { approvalLabelOf } from '@/lib/approvalLabel'
+import { dayKey, inApprovalRange, countByApprovalDay } from '@/lib/approvalDates'
 
 const formatDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yy', { locale: he }) : '—'
 
@@ -139,7 +140,7 @@ const CARD_STATUS_PILL: Record<string, { label: string; cls: string }> = {
 // לפי אותו מפתח. קודם הכותרות היו במערך נפרד מהתאים, וכל הוספת עמודה
 // במקום אחד ושכחה באחר הסיטה את כל השורה.
 type ColKey =
-  | 'mother' | 'wifeId' | 'husband' | 'husbandId' | 'baby' | 'benefit' | 'babyId' | 'birth'
+  | 'mother' | 'wifeId' | 'husband' | 'husbandId' | 'baby' | 'benefit' | 'babyId' | 'birth' | 'approvedAt'
   | 'recovery' | 'days' | 'arrived' | 'amount' | 'cert' | 'source'
   | 'loadStatus' | 'loadDate' | 'cardLink' | 'liveBalance' | 'spent' | 'status'
 
@@ -183,6 +184,7 @@ const COLUMNS: ColDef<ColKey, MaternityAid>[] = [
   // ⚠️ ממוין לפי התאריך הגולמי ולא לפי התווית: תאריך מפורמט ממוין
   // אלפביתית ולא כרונולוגית.
   { key: 'birth', label: 'תאריך לידה', def: true, kind: 'date', value: a => a.birth_date ?? null },
+  { key: 'approvedAt', label: 'תאריך אישור', def: true, kind: 'date', value: a => a.approved_at ?? null },
   { key: 'recovery', label: 'בית החלמה', def: true, kind: 'enum', filterable: true, value: a => a.recovery_home ?? null },
   { key: 'days', label: 'ימי זכאות', def: true, align: 'center', kind: 'number', value: a => recoveryDaysOf(a) },
   { key: 'arrived', label: 'הגעה', def: true, kind: 'enum', filterable: true,
@@ -228,6 +230,10 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
   const [sort, setSort] = useState<SortMode>('newest')
   // סינון לפי ההטבה שהיולדת ביקשה (כרטיס / הבראה / שתיהן)
   const [benefit, setBenefit] = useState<BenefitFilter>('all')
+  // סינון לפי טווח תאריכי אישור (YYYY-MM-DD, שעון ישראל)
+  const [apFrom, setApFrom] = useState('')
+  const [apTo, setApTo] = useState('')
+  const setRange = (f: string, t: string) => { setApFrom(f); setApTo(t); if (f || t) setFilter('all') }
 
   // ⚡ רענון בחזרה ללשונית בלבד — הוסר הפולינג התקופתי (כל 90ש'): כל refresh
   // מריץ מחדש את כל טעינת מסך היולדות (כל ה-maternity_aids + joins), ובכל טאב
@@ -250,9 +256,14 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return data.filter(a =>
-      matchesFilter(a, filter) && matchesBenefit(a, benefit) && (q === '' || searchHaystack(a).includes(q))
+      matchesFilter(a, filter) && matchesBenefit(a, benefit) && inApprovalRange(a.approved_at, apFrom, apTo) && (q === '' || searchHaystack(a).includes(q))
     )
-  }, [data, filter, benefit, query])
+  }, [data, filter, benefit, query, apFrom, apTo])
+
+  // כמה אושרו בכל יום, בטווח שנבחר, בלי קשר לכרטיס הסטטוס שנבחר
+  const daily = useMemo(
+    () => countByApprovalDay(data.filter(a => inApprovalRange(a.approved_at, apFrom, apTo))), [data, apFrom, apTo])
+  const todayKey = dayKey(new Date().toISOString())
 
   const visible = useMemo(() =>
     applySortMode(filtered, sort,
@@ -349,6 +360,7 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
       }
       case 'babyId': return <span className="ltr-num text-xs font-mono text-slate-600">{aid.baby_id_number ?? '—'}</span>
       case 'birth': return <span className="ltr-num text-slate-600">{formatDate(aid.birth_date)}</span>
+      case 'approvedAt': return <span className="ltr-num text-slate-600">{aid.approved_at ? formatDate(aid.approved_at) : '—'}</span>
       case 'recovery': return <span className="text-slate-600">{aid.recovery_home ?? '—'}</span>
       case 'days': return <span className="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-sky-100 text-sky-800" title="ימי זכאות בבית ההחלמה">{recoveryDaysOf(aid)}</span>
       case 'arrived':
@@ -450,6 +462,35 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
         items={CARD_DEFS.map(c => ({ key: c.key, label: c.label, icon: c.icon, count: counts[c.key] }))}
         onSelect={k => setFilter(filter === k && k !== 'all' ? 'all' : k)} />
       )}
+
+      {/* תאריכי אישור: סינון לפי טווח וסיכום יומי של כמה אושרו */}
+      <div className="rounded-xl border border-line bg-white p-3 flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-ink-soft">
+          <span className="font-bold text-navy-dark">אושרו בין</span>
+          <input type="date" value={apFrom} onChange={e => setRange(e.target.value, apTo)} aria-label="מתאריך אישור"
+            className="h-10 rounded-lg border border-line bg-white px-2 text-sm text-navy-dark" />
+          <span>עד</span>
+          <input type="date" value={apTo} onChange={e => setRange(apFrom, e.target.value)} aria-label="עד תאריך אישור"
+            className="h-10 rounded-lg border border-line bg-white px-2 text-sm text-navy-dark" />
+          {(apFrom || apTo) && (
+            <button onClick={() => setRange('', '')} className="h-10 rounded-lg px-3 font-medium text-navy hover:bg-sand">נקה</button>
+          )}
+          <span className="me-auto">
+            אושרו היום: <b className="text-navy-dark">{daily.find(d => d.day === todayKey)?.count ?? 0}</b>
+            {(apFrom || apTo) && <> · בטווח: <b className="text-navy-dark">{daily.reduce((s, d) => s + d.count, 0)}</b></>}
+          </span>
+        </div>
+        {daily.length > 0 && (
+          <div className="flex flex-wrap gap-1.5" aria-label="אושרו בכל יום">
+            {daily.slice(0, 14).map(d => (
+              <button key={d.day} onClick={() => setRange(d.day, d.day)} title="סינון ליום זה"
+                className={`rounded-lg border px-2.5 py-1 text-xs transition-colors ${apFrom === d.day && apTo === d.day ? 'border-gold bg-sand text-navy-dark' : 'border-line text-ink-soft hover:border-gold'}`}>
+                <span className="ltr-num">{d.day.slice(8)}/{d.day.slice(5, 7)}</span> · <b className="text-navy-dark">{d.count}</b>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Table */}
       <ListTable tc={tc} rows={visibleRows} pg={pg} empty={emptyMessage ?? 'לא נמצאו לידות בסינון זה'}

@@ -62,6 +62,10 @@ export async function POST(request: NextRequest) {
     approved_by: staff.userId,
     updated_at: new Date().toISOString(),
   }
+  // תאריך אישור הלידה נשמר ברגע המעבר ל"מאושרת" (לא בחזרה מ"הושלמה")
+  if (type === 'maternity' && status === 'active' && fromStatus !== 'active' && fromStatus !== 'completed') {
+    update.approved_at = update.updated_at
+  }
   const allowed = EXTRA_ALLOWED[type] ?? []
   for (const [k, v] of Object.entries(body.extra ?? {})) {
     if (allowed.includes(k)) update[k] = v
