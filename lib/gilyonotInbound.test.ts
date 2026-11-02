@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-vi.mock('@/lib/emailTextsStore', () => ({ textFor: (_k: string, d: string) => d, ensureEmailTexts: async () => {} }))
+vi.mock('@/lib/emailTextsStore', async () => { const { textOf } = await import('@/lib/emailCatalog'); return { textFor: (id: string, k: string) => textOf({}, id, k), ensureEmailTexts: async () => {} } })
 
-import { handleGilyonotInbound, buildGilyonotReply, isAutomatedInbound, isSpoofedSender, SENDER_DAILY_CAP } from './gilyonotInbound'
+import { handleGilyonotInbound, buildGilyonotReply, gilyonotContacts, isAutomatedInbound, isSpoofedSender, SENDER_DAILY_CAP } from './gilyonotInbound'
 
 type Row = Record<string, unknown>
 
@@ -125,5 +125,31 @@ describe('עזרי הקליטה', () => {
   })
   it('קישור ההסרה מופיע רק כשיש טוקן', () => {
     expect(buildGilyonotReply('added', { unsubscribeUrl: null }).html).not.toContain('הסרה מרשימת התפוצה')
+  })
+})
+
+describe('עריכת המענה (טקסטים ערוכים)', () => {
+  const texts = {
+    gilyonot_reply_added: { subject: 'נושא חדש', title: 'ברוכים הבאים', lead: 'נרשמת מצוין.', text: 'פסקה א\n\nפסקה ב', btn: 'להסרה', hello: 'היי {{שם}},' },
+    gilyonot_reply_shared: { noreply: 'אין להשיב לכאן.', contacts: '[{"label":"למשרד","email":"x@y.com"},{"label":"רע","email":"לא-מייל"}]' },
+  }
+  it('משתמש בטקסטים הערוכים ובשם הפונה, ומסנן כתובות לא תקינות', () => {
+    const m = buildGilyonotReply('added', { name: 'דוד', unsubscribeUrl: 'https://u/1', texts })
+    expect(m.subject).toBe('נושא חדש')
+    for (const t of ['ברוכים הבאים', 'נרשמת מצוין.', 'פסקה א', 'פסקה ב', 'להסרה', 'היי דוד,', 'אין להשיב לכאן.', 'mailto:x@y.com']) expect(m.html).toContain(t)
+    expect(m.html).not.toContain('office@chasamsofer.info')
+    expect(m.html).not.toContain('לא-מייל')
+  })
+  it('מערך כתובות ריק מסיר את בלוק הפניות, ובלי ערכים חוזרים לנוסח המקורי', () => {
+    const empty = buildGilyonotReply('exists', { unsubscribeUrl: null, texts: { gilyonot_reply_shared: { contacts: '[]' } } })
+    expect(empty.html).not.toContain('לפניות:')
+    expect(empty.html).toContain('אתה כבר רשום')
+    expect(empty.html).toContain('שלום רב,')
+    expect(gilyonotContacts()).toHaveLength(2)
+  })
+  it('הנושא הערוך לא משנה את נושא היומן (תקרות)', async () => {
+    const db = fakeDb(); const m = mk()
+    await handleGilyonotInbound(db, { fromEmail: 'a@x.com' }, sender(m))
+    expect(String(db.tables.auto_reply_log[0].subject)).toMatch(/^גיליונות החתם סופר:/)
   })
 })

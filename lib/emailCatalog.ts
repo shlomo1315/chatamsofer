@@ -797,6 +797,50 @@ export const EMAIL_CATALOG: EmailSpec[] = [
       { key: 'footnote', label: 'הערה בתחתית', default: 'אם הכתובת הזו אינה שלך, או שאינך מעוניין/ת לקבל אלינו הודעות — נא להשיב למייל זה ונעדכן.', multiline: true },
     ],
   },
+  // ── מענה d@ (הרשמה לגיליונות): נערך במסך המענה האוטומטי, בתיבת "דיוור" ──
+  ...([
+    ['gilyonot_reply_added', 'רישום לגיליונות: נרשם עכשיו', 'שולח חדש כתב ל-d@ ונרשם לרשימה',
+      'גיליונות החתם סופר: הרשמתך לעדכונים וגיליונות התקבלה בהצלחה', 'הרשמתך התקבלה בהצלחה',
+      'שים לב: הרשמתך לקבלת עדכונים וגיליונות מהמערכת התקבלה בהצלחה.',
+      'מעתה, בכל פעם שיישלח גיליון או עדכון, תקבל אותו במייל.', 'הסרה מרשימת התפוצה'],
+    ['gilyonot_reply_exists', 'רישום לגיליונות: כבר רשום', 'שולח שכבר ברשימה כתב ל-d@',
+      'גיליונות החתם סופר: אתה כבר רשום לקבלת עדכונים', 'אתה כבר רשום',
+      'שים לב: אתה כבר רשום במערכת לקבלת עדכונים.',
+      'אין צורך בפעולה נוספת. בכל פעם שיישלח גיליון או עדכון, תקבל אותו במייל.', 'הסרה מרשימת התפוצה'],
+    ['gilyonot_reply_blocked', 'רישום לגיליונות: הוסר בעבר', 'שולח שהסיר את עצמו בעבר כתב ל-d@ (לא נרשם מחדש)',
+      'גיליונות החתם סופר: הרישום הוסר בעבר', 'הרישום הוסר בעבר',
+      'כתובת המייל הזו הוסרה בעבר מרשימת התפוצה של הגיליונות.',
+      'כדי להצטרף מחדש, היכנסו לדף ההרשמה ומלאו את הפרטים.', 'הצטרפות מחדש'],
+  ] as const).map(([id, title, trigger, subject, head, lead, text, btn]): EmailSpec => ({
+    id, group: 'auto_reply', title, trigger, recipient: 'השולח', department: 'mailing',
+    wired: false, // נערך בעורך הייעודי, לא במסך "הודעות מייל"
+    fields: [
+      { key: 'subject', label: 'שורת הנושא', default: subject },
+      { key: 'title', label: 'כותרת ראשית', default: head },
+      { key: 'subtitle', label: 'שורה מתחת לכותרת', default: 'גיליונות החתם סופר' },
+      { key: 'hello', label: 'פנייה', default: 'שלום {{שם}},', vars: ['{{שם}}'] },
+      { key: 'lead', label: 'משפט מודגש', default: lead, multiline: true },
+      { key: 'text', label: 'המשך הטקסט', default: text, multiline: true },
+      { key: 'btn', label: 'טקסט הכפתור', default: btn },
+    ],
+  })),
+  {
+    id: 'gilyonot_reply_shared',
+    group: 'auto_reply',
+    title: 'רישום לגיליונות: בלוק משותף',
+    trigger: 'תחתית שלושת מיילי ההרשמה לגיליונות',
+    recipient: 'השולח',
+    department: 'mailing',
+    wired: false,
+    fields: [
+      { key: 'noreply', label: 'הודעת "אין להשיב"', default: 'שים לב: תיבת מייל זו אינה נקראת כלל, ולכן אין להשיב אליה או לשלוח אליה הודעות.', multiline: true },
+      // JSON: מערך של { label, email }. "[]" מסיר את בלוק הפניות.
+      {
+        key: 'contacts', label: 'כתובות לפניות', multiline: true,
+        default: '[{"label":"לנושאים כלליים של היכל החתם סופר","email":"office@chasamsofer.info"},{"label":"לנושאים הקשורים לאיגוד הצאצאים","email":"igud@chasamsofer.info"}]',
+      },
+    ],
+  },
 ]
 
 /** מפתח ה-app_settings שבו נשמרות העריכות. */
