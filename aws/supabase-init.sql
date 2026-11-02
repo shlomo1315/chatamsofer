@@ -6,6 +6,7 @@ create extension if not exists pg_trgm with schema extensions;
 create extension if not exists unaccent with schema extensions;
 create extension if not exists citext with schema extensions;
 do $$ begin
+  if not exists (select from pg_roles where rolname='postgres') then create role postgres nologin; end if;
   if not exists (select from pg_roles where rolname='anon') then create role anon nologin noinherit; end if;
   if not exists (select from pg_roles where rolname='authenticated') then create role authenticated nologin noinherit; end if;
   if not exists (select from pg_roles where rolname='service_role') then create role service_role nologin noinherit bypassrls; end if;
