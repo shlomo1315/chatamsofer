@@ -173,6 +173,7 @@ export interface MaternityAid {
   birth_certificate_url_2?: string
   // תאריך סיום הזכאות האפקטיבי (ברירת מחדל: לידה + 6 שבועות; ניתן להארכה ידנית)
   six_weeks_end?: string
+  approved_at?: string | null
   // הארכת זכאות ידנית — חורגת מ-6 השבועות במקרים חריגים
   eligibility_extended?: boolean
   eligibility_extended_at?: string
