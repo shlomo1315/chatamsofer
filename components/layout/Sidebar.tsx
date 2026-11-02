@@ -12,15 +12,10 @@ import { sectionVisible } from '@/lib/permissions'
 import { DEPARTMENTS } from '@/lib/departments'
 
 function LogoBadge() {
-  const [error, setError] = useState(false)
   return (
-    <div className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden">
-      {error ? (
-        <Building2 size={18} className="text-indigo-600" />
-      ) : (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src="/logo.png" alt="היכל החתם סופר" className="w-full h-full object-contain" onError={() => setError(true)} />
-      )}
+    <div className="relative flex-shrink-0 w-10 h-10 rounded-full border-[1.5px] border-gold flex items-center justify-center font-black text-[19px] text-gold">
+      <span className="absolute inset-[3px] rounded-full border border-dashed border-gold/45" />
+      כ
     </div>
   )
 }
@@ -179,11 +174,11 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
       <Link key={href} href={href} onClick={() => setMobileOpen(false)}
         className={`relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all
           ${active
-            ? 'bg-indigo-600/90 text-white shadow-lg shadow-indigo-500/25 ring-1 ring-indigo-400/30'
-            : 'text-slate-300 hover:text-white hover:bg-white/10'
+            ? 'bg-[#f7f3ea] text-navy font-bold'
+            : 'text-[#d9d4c6] hover:text-white hover:bg-[#1c2b4d]'
           }`}>
         {active && (
-          <span className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-indigo-300 rounded-full" />
+          <span className="absolute right-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-gold rounded-full" />
         )}
         <Icon size={18} className="flex-shrink-0" />
         <span>{label}</span>
@@ -194,11 +189,11 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Logo area with gradient background */}
-      <div className="flex items-center gap-3 px-4 py-5 bg-navy">
+      <div className="flex items-center gap-3 px-[18px] py-5">
         <LogoBadge />
         <div className="min-w-0">
           <p className="text-sm font-bold text-white leading-tight truncate">היכל החתם סופר</p>
-          <p className="text-xs text-slate-400 truncate">תוכנת ניהול</p>
+          <p className="text-xs text-[#8f9ab5] truncate">תוכנת ניהול</p>
         </div>
       </div>
       {/* Gradient fade separator */}
@@ -208,7 +203,7 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
 
         {!mailOnly && (<>
         {/* Section: ניווט ראשי */}
-        <p className="px-3 pt-1 pb-2 text-[11px] font-semibold uppercase tracking-widest text-slate-500">ראשי</p>
+        <p className="px-3 pt-1 pb-2 text-[11px] font-medium tracking-widest text-[#6f7a96]">ראשי</p>
         {topVisible.map(renderLink)}
         {/* אישורים חריגים — admin-only. אנשים שאושרו ידנית (אינם צאצאים). */}
         {isAdmin && renderLink({ href: '/admin/special-approvals', label: 'אישורים חריגים', icon: ShieldAlert })}
@@ -218,11 +213,11 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
           <div className="pt-0.5">
             <div className={`relative flex items-center rounded-lg transition-all
                 ${maternityRootActive
-                  ? 'bg-indigo-600/90 text-white shadow-lg shadow-indigo-500/25 ring-1 ring-indigo-400/30'
-                  : 'text-slate-300 hover:text-white hover:bg-white/10'
+                  ? 'bg-[#f7f3ea] text-navy font-bold'
+                  : 'text-[#d9d4c6] hover:text-white hover:bg-[#1c2b4d]'
                 }`}>
               {maternityRootActive && (
-                <span className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-indigo-300 rounded-full" />
+                <span className="absolute right-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-gold rounded-full" />
               )}
               <Link href="/admin/maternity" onClick={() => { setMobileOpen(false); setMaternityOpen(true) }}
                 className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium flex-1 min-w-0">
@@ -234,7 +229,7 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
               </button>
             </div>
             {maternityOpen && (
-              <div className="mt-1 mr-4 border-r border-slate-700/60 pr-2 flex flex-col gap-0.5">
+              <div className="mt-1 mr-4 border-r border-white/10 pr-2 flex flex-col gap-0.5">
                 {maternityVisible.map(child => {
                   const active = childActive(child.href)
                   const Icon = MATERNITY_CHILD_ICONS[child.href] ?? Baby
@@ -242,8 +237,8 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
                     <Link key={child.href} href={child.href} onClick={() => setMobileOpen(false)}
                       className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all
                         ${active
-                          ? 'bg-indigo-500/80 text-white shadow-sm shadow-indigo-500/20'
-                          : 'text-slate-400 hover:text-white hover:bg-white/10'
+                          ? 'bg-[#f7f3ea] text-navy font-bold'
+                          : 'text-[#8f9ab5] hover:text-white hover:bg-[#1c2b4d]'
                         }`}>
                       <Icon size={15} className="flex-shrink-0" />
                       <span>{child.label}</span>
@@ -257,8 +252,8 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
 
         {/* Section divider: שירותים */}
         <div className="pt-3 pb-1">
-          <div className="mx-1 h-px bg-slate-800 mb-2" />
-          <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">שירותים</p>
+          <div className="mx-1 h-px bg-white/10 mb-2" />
+          <p className="px-3 pb-1.5 text-[11px] font-medium tracking-widest text-[#6f7a96]">שירותים</p>
         </div>
         {bottomVisible.map(renderLink)}
 
@@ -284,12 +279,12 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
             onClick={() => setMailOpen(o => !o)}
             className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all
               ${mailActive
-                ? 'bg-indigo-600/90 text-white shadow-lg shadow-indigo-500/25 ring-1 ring-indigo-400/30'
-                : 'text-slate-300 hover:text-white hover:bg-white/10'
+                ? 'bg-[#f7f3ea] text-navy font-bold'
+                : 'text-[#d9d4c6] hover:text-white hover:bg-[#1c2b4d]'
               }`}
           >
             {mailActive && (
-              <span className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-indigo-300 rounded-full" />
+              <span className="absolute right-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-gold rounded-full" />
             )}
             <Mail size={18} className="flex-shrink-0" />
             {/* ⚠️ מסומן במפורש כ"Resend" לאורך תקופת המעבר: שני מסלולי דואר
@@ -297,7 +292,7 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
                 לדעת באיזה מהם צופים — וכל השוואה ביניהם חסרת ערך. */}
             <span className="flex-1 text-right">מייל Resend</span>
             {unreadCounts.total > 0 && (
-              <span className="text-[10px] font-bold bg-red-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center flex-shrink-0">
+              <span className="text-[10px] font-bold bg-gold text-navy rounded-full px-1.5 py-0.5 min-w-[18px] text-center flex-shrink-0">
                 {unreadCounts.total}
               </span>
             )}
@@ -307,7 +302,7 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
           </button>
 
           {mailOpen && (
-            <div className="mt-1 mr-4 border-r border-slate-700/60 pr-2 flex flex-col gap-0.5">
+            <div className="mt-1 mr-4 border-r border-white/10 pr-2 flex flex-col gap-0.5">
               {visibleDepartments.map(dep => {
                 const cnt = unreadCounts.byDepartment[dep.key] ?? 0
                 return (
@@ -316,11 +311,11 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
                   href={`/admin/mail?department=${dep.key}`}
                   onClick={() => setMobileOpen(false)}
                   className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all
-                    ${mailActive ? 'text-slate-200 hover:bg-white/10' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}
+                    ${mailActive ? 'text-[#d9d4c6] hover:bg-white/10' : 'text-[#8f9ab5] hover:text-white hover:bg-[#1c2b4d]'}`}
                 >
                   <div className="flex flex-col flex-1 min-w-0">
-                    <span className="font-medium text-slate-200 leading-tight">{dep.label}</span>
-                    <span className="text-[10px] text-slate-500 truncate">{dep.email}</span>
+                    <span className="font-medium text-[#d9d4c6] leading-tight">{dep.label}</span>
+                    <span className="text-[10px] text-[#6f7a96] truncate">{dep.email}</span>
                   </div>
                   {cnt > 0 && (
                     <span className="text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center flex-shrink-0 text-white"
@@ -347,12 +342,12 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
             onClick={() => setMobileOpen(false)}
             className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all
               ${gmailActive
-                ? 'bg-indigo-600/90 text-white shadow-lg shadow-indigo-500/25 ring-1 ring-indigo-400/30'
-                : 'text-slate-300 hover:text-white hover:bg-white/10'
+                ? 'bg-[#f7f3ea] text-navy font-bold'
+                : 'text-[#d9d4c6] hover:text-white hover:bg-[#1c2b4d]'
               }`}
           >
             {gmailActive && (
-              <span className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-indigo-300 rounded-full" />
+              <span className="absolute right-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-gold rounded-full" />
             )}
             <Mail size={18} className="flex-shrink-0" />
             {/* ⚠️ "מייל" ולא "מייל Gmail": זהו מסלול המייל של המערכת, ושם
@@ -366,8 +361,8 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
         {/* Section divider: מערכת */}
         {!mailOnly && (<>
         <div className="pt-3 pb-1">
-          <div className="mx-1 h-px bg-slate-800 mb-2" />
-          <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">מערכת</p>
+          <div className="mx-1 h-px bg-white/10 mb-2" />
+          <p className="px-3 pb-1.5 text-[11px] font-medium tracking-widest text-[#6f7a96]">מערכת</p>
         </div>
 
         {/* Bottom items (הגדרות) — מנהל ראשי בלבד */}
@@ -377,11 +372,11 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
             <Link key={href} href={href} onClick={() => setMobileOpen(false)}
               className={`relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all
                 ${active
-                  ? 'bg-indigo-600/90 text-white shadow-lg shadow-indigo-500/25 ring-1 ring-indigo-400/30'
-                  : 'text-slate-300 hover:text-white hover:bg-white/10'
+                  ? 'bg-[#f7f3ea] text-navy font-bold'
+                  : 'text-[#d9d4c6] hover:text-white hover:bg-[#1c2b4d]'
                 }`}>
               {active && (
-                <span className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-indigo-300 rounded-full" />
+                <span className="absolute right-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-gold rounded-full" />
               )}
               <Icon size={18} className="flex-shrink-0" />
               <span>{label}</span>
@@ -393,27 +388,27 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
 
       <div className="mx-4 h-px bg-white/10" />
       <div className="px-4 py-4">
-        <p className="text-xs text-slate-600 text-center">גרסה 1.0.0</p>
+        <p className="text-xs text-[#6f7a96] text-center">גרסה 1.0.0</p>
       </div>
     </div>
   )
 
   return (
     <>
-      <aside className="hidden lg:flex flex-col w-56 bg-slate-900 flex-shrink-0">
+      <aside className="hidden lg:flex flex-col w-[248px] bg-navy flex-shrink-0">
         <SidebarContent />
       </aside>
 
       <button onClick={() => setMobileOpen(true)}
-        className="lg:hidden fixed bottom-4 left-4 z-40 bg-indigo-600 text-white p-3 rounded-full shadow-lg">
+        className="lg:hidden fixed bottom-4 left-4 z-40 bg-navy text-gold p-3 rounded-full shadow-lg">
         <Menu size={20} />
       </button>
 
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-50 flex">
           <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)} />
-          <aside className="relative w-56 bg-slate-900 flex flex-col">
-            <button onClick={() => setMobileOpen(false)} className="absolute top-4 left-4 text-slate-400 hover:text-white">
+          <aside className="relative w-[248px] bg-navy flex flex-col">
+            <button onClick={() => setMobileOpen(false)} className="absolute top-4 left-4 text-[#8f9ab5] hover:text-white">
               <X size={20} />
             </button>
             <SidebarContent />
