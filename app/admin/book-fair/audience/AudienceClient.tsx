@@ -6,7 +6,8 @@ import type { AudienceMember, AudienceSource } from '@/lib/bookFairAudience'
 import { AUDIENCE_SOURCE_LABELS } from '@/lib/bookFairAudience'
 import { fmtAgorot } from '@/lib/bookFairPricing'
 import { useTablePagination } from '@/lib/useTablePagination'
-import Pagination from '@/components/ui/Pagination'
+import { ListTable } from '@/components/admin/system/ListTable'
+import { SearchBar } from '@/components/admin/system/SearchBar'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useCan } from '@/components/StaffPermissions'
@@ -143,60 +144,25 @@ export default function AudienceClient({ members, optedOut }: {
 
       {tab === 'list' && (
         <>
-          <div className="relative max-w-md">
-            <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder="חיפוש לפי מייל או שם…"
-              className="w-full rounded-xl border border-slate-200 py-2 pr-9 pl-3 text-sm outline-none focus:border-line-strong focus:ring-2 focus:ring-gold-soft"
-            />
-            {tc.picker}
-            {tc.activeFilters}
-          </div>
-
-          {/* ⚠️ בלי overflow-x: הגלילה לרוחב אסורה ונאכפת בלינט */}
-          <div className="rounded-2xl border border-slate-200 bg-white">
-            <table className="w-full table-fixed">
-              <thead className="border-b border-slate-200 bg-slate-50">
-                <tr>
-                  {tc.shown.map((c, i) => tc.th(c, i))}
-                  <th className={HEAD}></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {pg.rows.map(m => (
-                  <tr key={m.email} className="text-sm transition hover:bg-slate-50">
-                    {tc.shown.map(col => (
-                      <td key={col.key} className={`px-3 py-2.5 ${tc.cellClass(col)}`}>
-                        {renderCell(col.key, m)}
-                      </td>
-                    ))}
-                    <td className="px-3 py-2.5 text-left">
-                      {canEdit && (
-                        <button
-                          onClick={() => removeMember(m.email)}
-                          disabled={busyEmail === m.email}
-                          className="rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
-                          title="הסרה מהרשימה"
-                        >
-                          {busyEmail === m.email ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-                {!pg.rows.length && (
-                  <tr>
-                    <td colSpan={tc.shown.length + 1} className="px-4 py-12 text-center text-sm text-slate-400">
-                      {members.length ? 'אין תוצאות בסינון זה' : 'רשימת התפוצה ריקה'}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-            <Pagination page={pg.page} size={pg.size} total={pg.total} onPage={pg.setPage} onSize={pg.setSize} />
-          </div>
+          <ListTable
+            tc={tc}
+            rows={pg.rows}
+            pg={pg}
+            rowKey={m => m.email}
+            empty={members.length ? 'אין תוצאות בסינון זה' : 'רשימת התפוצה ריקה'}
+            toolbar={<SearchBar value={query} onChange={setQuery} placeholder="חיפוש לפי מייל או שם…" />}
+            renderCell={(c, m) => renderCell(c.key, m)}
+            actions={canEdit ? m => (
+              <button
+                onClick={() => removeMember(m.email)}
+                disabled={busyEmail === m.email}
+                className="rounded-lg p-1.5 text-ink-faint transition hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                title="הסרה מהרשימה"
+              >
+                {busyEmail === m.email ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              </button>
+            ) : undefined}
+          />
         </>
       )}
 

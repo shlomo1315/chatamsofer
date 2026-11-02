@@ -1,11 +1,12 @@
 'use client'
 import { useState, useMemo, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, Plus, Pencil, Trash2, Loader2, BookOpen, Globe, Phone, Package, Barcode, Image as ImageIcon } from 'lucide-react'
+import { Plus, Pencil, Trash2, Loader2, BookOpen, Globe, Phone, Package, Barcode, Image as ImageIcon } from 'lucide-react'
 import type { BookFairBook } from '@/types/bookFair'
 import { fmtAgorot } from '@/lib/bookFairPricing'
 import { useTablePagination } from '@/lib/useTablePagination'
-import Pagination from '@/components/ui/Pagination'
+import { ListTable } from '@/components/admin/system/ListTable'
+import { SearchBar } from '@/components/admin/system/SearchBar'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useCan } from '@/components/StaffPermissions'
@@ -227,18 +228,15 @@ export default function BooksClient({ books, sold = {}, soldBy = {}, soldAdj = {
         <ImportPanel canImport={canAdd} onDone={() => { setTab('list'); router.refresh() }} />
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative flex-1 min-w-[220px]">
-              <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                placeholder="חיפוש לפי מק״ט, שם או מחבר…"
-                className="w-full rounded-xl border border-slate-200 py-2 pr-9 pl-3 text-sm outline-none focus:border-line-strong focus:ring-2 focus:ring-gold-soft"
-              />
-            </div>
-            {tc.picker}
-            {tc.activeFilters}
+          <ListTable
+            tc={tc}
+            rows={pg.rows}
+            pg={pg}
+            empty={books.length ? 'לא נמצאו ספרים התואמים לחיפוש' : 'הקטלוג ריק — הוסיפו ספר או ייבאו מאקסל'}
+            actionsHead="פעולות"
+            toolbar={
+              <>
+                <SearchBar value={query} onChange={setQuery} placeholder="חיפוש לפי מק״ט, שם או מחבר…" />
             <button
               onClick={() => setBarcodeOpen(true)}
               disabled={downloadingBarcodes}
@@ -256,28 +254,15 @@ export default function BooksClient({ books, sold = {}, soldBy = {}, soldAdj = {
                 <Plus size={16} /> ספר חדש
               </button>
             )}
-          </div>
-
-          {/* ⚠️ בלי overflow-x: הגלילה לרוחב אסורה ונאכפת בלינט.
-              עמודות משניות מוסתרות במסכים צרים דרך hidden xl:table-cell. */}
-          <div className="rounded-2xl border border-slate-200 bg-white">
-            <table className="w-full table-fixed">
-              <thead className="border-b border-slate-200 bg-slate-50">
-                <tr>
-                  {tc.shown.map((c, i) => tc.th(c, i))}
-                  <th className={`${HEAD} w-40 text-left`}>פעולות</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {pg.rows.map(b => (
-                  <tr key={b.id} className={`text-sm hover:bg-slate-50 ${b.is_active ? '' : 'opacity-50'}`}>
-                    {tc.shown.map(col => (
-                      <td key={col.key} className={`px-3 py-2.5 ${tc.cellClass(col)}`}>
-                        {renderCell(col.key, b, sold, setOrdersOf, soldBy, problems, soldAdj)}
-                      </td>
-                    ))}
-                    <td className="px-3 py-2.5 text-left">
-                      <div className="flex items-center justify-end gap-1">
+              </>
+            }
+            renderCell={(c, b) => (
+              <span className={b.is_active ? '' : 'opacity-50'}>
+                {renderCell(c.key, b, sold, setOrdersOf, soldBy, problems, soldAdj)}
+              </span>
+            )}
+            actions={b => (
+              <div className="flex items-center justify-end gap-1">
                         {/* 🔴 סימון ספר בעייתי — מסך ההזמנות מסנן את כל ההזמנות שהוא בתוכן. */}
                         <ProblemBookToggle bookId={b.id} problem={b.id in problems} note={problems[b.id]?.note} compact />
                         {/* ⚠️ "העברת מלאי בין ערוצים" הוסרה: מאז איחוד
@@ -327,20 +312,8 @@ export default function BooksClient({ books, sold = {}, soldBy = {}, soldAdj = {
                           </>
                         )}
                       </div>
-                    </td>
-                  </tr>
-                ))}
-                {!pg.rows.length && (
-                  <tr>
-                    <td colSpan={tc.shown.length + 1} className="px-4 py-12 text-center text-sm text-slate-400">
-                      {books.length ? 'לא נמצאו ספרים התואמים לחיפוש' : 'הקטלוג ריק — הוסיפו ספר או ייבאו מאקסל'}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-            <Pagination page={pg.page} size={pg.size} total={pg.total} onPage={pg.setPage} onSize={pg.setSize} />
-          </div>
+            )}
+          />
         </>
       )}
 

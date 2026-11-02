@@ -7,7 +7,8 @@ import { validateIsraeliId } from '@/lib/validation'
 import { useToast } from '@/components/ui/Toast'
 import { useCan } from '@/components/StaffPermissions'
 import { useTablePagination } from '@/lib/useTablePagination'
-import Pagination from '@/components/ui/Pagination'
+import { ListTable, rowActionClass } from '@/components/admin/system/ListTable'
+import { SearchBar } from '@/components/admin/system/SearchBar'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -147,7 +148,6 @@ export default function LegacyLoansTable({ rows }: { rows: LegacyRow[] }) {
   // ורק אז נחתך לעמוד — ראו lib/useTablePagination.
   // ⚠️ החיתוך אחרון — אחרי המיון והסינון מהכותרת.
   const pg = useTablePagination(tc.rows)
-  const visible = pg.rows
 
   // ── תוכן התא לפי עמודה ──
   const cell = (c: ColDef<ColKey>, r: LegacyRow) => {
@@ -278,14 +278,15 @@ export default function LegacyLoansTable({ rows }: { rows: LegacyRow[] }) {
         </button>
       </div>
 
-      {/* ── חיפוש וסינון ── */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-56">
-          <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
-          <input value={query} onChange={e => setQuery(e.target.value)}
-            placeholder="חיפוש בשם, ת״ז, מספר תיק, עיר, טלפון…"
-            className="w-full pr-9 pl-3 py-2 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-line" />
-        </div>
+      <ListTable
+        tc={tc}
+        rows={pg.rows}
+        pg={pg}
+        empty="לא נמצאו רשומות"
+        renderCell={cell}
+        toolbar={
+          <>
+            <SearchBar value={query} onChange={setQuery} placeholder="חיפוש בשם, ת״ז, מספר תיק, עיר, טלפון…" />
         <div className="flex items-center gap-2 flex-wrap">
           <button className={chip(filter === 'all')} onClick={() => setFilter('all')}>הכל ({rows.length})</button>
           <button className={chip(filter === 'taken')} onClick={() => setFilter('taken')}>נלקחו ({stats.taken})</button>
@@ -299,63 +300,20 @@ export default function LegacyLoansTable({ rows }: { rows: LegacyRow[] }) {
             </button>
           )}
         </div>
-      </div>
-
-      {/* ── הטבלה ── */}
-      <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-        <div className="flex flex-col gap-2 px-4 py-3 border-b border-slate-200">{tc.picker}{tc.activeFilters}</div>
-
-        {/* 🔴 בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. */}
-        <div className="w-full">
-          <table className="w-full text-sm text-right" style={tc.rt.tableStyle}>
-            <colgroup>{tc.rt.cols}</colgroup>
-            <thead>
-              <tr className="bg-sand border-b border-slate-200
-                             [&>th]:px-3 [&>th]:py-3 [&>th]:text-[11px] [&>th]:font-bold [&>th]:uppercase
-                             [&>th]:tracking-wide [&>th]:text-slate-500 [&>th]:text-right">
-                {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב.
-                    ⚠️ הריפוד מגיע מ-[&>th] שעל ה-<tr>. */}
-                {tc.shown.map((c, i) => tc.th(c, i))}
-                {/* ⚠️ עמודת הפעולות אחרונה — האינדקס שלה הוא מספר העמודות הנראות. */}
-                <th className="relative">{tc.rt.handle(tc.shown.length)}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {/* 🔴 נמדד מול tc.rows — הסינון מהכותרת יכול לרוקן את הטבלה
-                  גם כשהחיפוש שמעליה החזיר שורות. */}
-              {tc.rows.length === 0 ? (
-                <tr><td colSpan={20} className="px-4 py-12 text-center text-slate-400">לא נמצאו רשומות</td></tr>
-              ) : visible.map(r => (
-                <tr key={r.id} className="even:bg-slate-50/50 hover:bg-sand/40 transition-colors
-                                          [&>td]:px-3 [&>td]:py-3">
-                  {tc.shown.map(c => (
-                    <td key={c.key} className={tc.cellClass(c)}>{cell(c, r)}</td>
-                  ))}
-                  <td className={tc.rt.cellClass}>
-                    {canEdit && (
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <button type="button" onClick={() => setEditing(r)}
-                          className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-navy px-2 py-1 rounded-lg border border-slate-200 hover:border-line-strong transition">
-                          <Pencil size={12} /> עריכה
-                        </button>
-                        <button type="button" onClick={() => void remove(r)} disabled={deletingId === r.id}
-                          className="inline-flex items-center text-xs text-slate-400 hover:text-rose-600 px-2 py-1 rounded-lg border border-slate-200 hover:border-rose-300 transition disabled:opacity-50">
-                          {deletingId === r.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* דפדוף + בורר גודל עמוד (20/50/100/200) — זהה לכל טבלאות המערכת */}
-        <div className="px-4 py-3 border-t border-slate-100">
-          <Pagination page={pg.page} size={pg.size} total={pg.total} onPage={pg.setPage} onSize={pg.setSize} />
-        </div>
-      </div>
+          </>
+        }
+        actions={canEdit ? r => (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button type="button" onClick={() => setEditing(r)} className={rowActionClass}>
+              <Pencil size={12} /> עריכה
+            </button>
+            <button type="button" onClick={() => void remove(r)} disabled={deletingId === r.id}
+              className={`${rowActionClass} disabled:opacity-50`}>
+              {deletingId === r.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+            </button>
+          </div>
+        ) : undefined}
+      />
 
       {editing && (
         <EditDialog row={editing} saving={saving}
