@@ -8,6 +8,8 @@ import { wasSentToDonor, SENT_LABEL, type SentFilter } from '@/lib/gratitudeBatc
 import SafeDocImage from '@/components/ui/SafeDocImage'
 import { openDocInNewTab } from '@/lib/docBlob'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
+import { useTablePagination } from '@/lib/useTablePagination'
+import { ListTable, rowActionClass } from '@/components/admin/system/ListTable'
 
 export interface GratitudeRow {
   id: string
@@ -119,6 +121,7 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
   //
   // 🔴 נגזר מ-tc.rows ולא מ-filtered: הסינון מהכותרת הוא דרך *נוספת*
   // שבה שורה נעלמת מהמסך, וברכה שאינה לפני המשתמש לא תישלח לנדיב.
+  const pg = useTablePagination(tc.rows)
   const selectableIds = tc.rows.map(r => r.id)
 
   // 🔴 בחירה שנעלמה מהמסך אינה נשלחת.
@@ -239,71 +242,43 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
         </button>
       </div>
 
-      {/* בורר העמודות — מעל הטבלה */}
-      <div className="mb-3 flex flex-col gap-2">{tc.picker}{tc.activeFilters}</div>
-
-      {/* טבלה — ⚠️ בלי overflow-x: אין גלילה לרוחב בשום טבלה. */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-        <table className="w-full text-sm" style={tc.rt.tableStyle}>
-          <colgroup>{tc.rt.cols}</colgroup>
-          <thead className="bg-slate-50 border-b border-slate-200">
-            <tr className="text-right text-xs text-slate-500">
-              <th className="px-3 py-3 w-10">
-                <input
-                  type="checkbox"
-                  checked={selectableIds.length > 0 && visibleSelected.length === selectableIds.length}
-                  onChange={toggleAll}
-                  disabled={selectableIds.length === 0}
-                  title="בחר הכל (מאושרים)"
-                  className="accent-pink-600 cursor-pointer disabled:cursor-not-allowed"
-                />
-              </th>
-              {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב.
-                  ⚠️ האינדקס לידית מוסט ב-1 בגלל עמודת הצ׳קבוקס שלפניה. */}
-              {tc.shown.map((c, i) => tc.th(c, i + 1))}
-              <th className="relative px-4 py-3 font-semibold">{tc.rt.handle(tc.shown.length + 1)}</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {/* 🔴 tc.rows ולא filtered — אחרת המיון והסינון בכותרת לא היו
-                משפיעים על מה שמוצג בפועל, והבחירה (selectableIds) הייתה
-                מתייחסת לשורות שאינן על המסך. */}
-            {tc.rows.map(row => {
-              return (
-                <tr
-                  key={row.id}
-                  onClick={() => { setOpen(row); setPdf(null) }}
-                  className="hover:bg-slate-50 cursor-pointer transition"
-                >
-                  <td className="px-3 py-3 align-top" onClick={e => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      checked={selected.has(row.id)}
-                      onChange={() => toggleSelect(row.id)}
-                      className="accent-pink-600 cursor-pointer"
-                    />
-                  </td>
-                  {tc.shown.map(c => (
-                    <td key={c.key} className={`px-4 py-3 ${tc.cellClass(c)}`}>{cell(c.key, row)}</td>
-                  ))}
-                  <td className="px-4 py-3 align-top" onClick={e => e.stopPropagation()}>
-                    {(
-                      <button
-                        onClick={() => openSend([row.id])}
-                        title="שליחת הברכה לנדיב במייל"
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold
-                                   bg-white border border-pink-200 text-pink-600 hover:bg-pink-50 transition"
-                      >
-                        <Send size={13} /> שלח
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+      <ListTable
+        tc={tc}
+        rows={pg.rows}
+        pg={pg}
+        empty="אין ברכות"
+        onOpen={row => { setOpen(row); setPdf(null) }}
+        renderCell={(c, row) => cell(c.key, row)}
+        toolbar={<h2 className="font-bold text-navy">ברכות הודיה ({tc.rows.length})</h2>}
+        leadHead={
+          <input
+            type="checkbox"
+            checked={selectableIds.length > 0 && visibleSelected.length === selectableIds.length}
+            onChange={toggleAll}
+            disabled={selectableIds.length === 0}
+            title="בחר הכל"
+            className="cursor-pointer disabled:cursor-not-allowed"
+          />
+        }
+        leadCell={row => (
+          <input
+            type="checkbox"
+            checked={selected.has(row.id)}
+            onChange={() => toggleSelect(row.id)}
+            className="cursor-pointer"
+          />
+        )}
+        actionsHead=""
+        actions={row => (
+          <button
+            onClick={() => openSend([row.id])}
+            title="שליחת הברכה לנדיב במייל"
+            className={rowActionClass}
+          >
+            <Send size={13} /> שלח
+          </button>
+        )}
+      />
 
       {/* מודל */}
       {open && (

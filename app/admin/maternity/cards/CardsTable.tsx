@@ -7,6 +7,9 @@ import type { MaternityAid, CardCenter, CardStatus } from '@/types'
 import ExtendEligibility from '../ExtendEligibility'
 import { useCan } from '@/components/StaffPermissions'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
+import { useTablePagination } from '@/lib/useTablePagination'
+import { ListTable } from '@/components/admin/system/ListTable'
+import { SearchBar } from '@/components/admin/system/SearchBar'
 import { joinOne } from '@/lib/joinOne'
 
 const STATUS_META: Record<CardStatus, { label: string; cls: string }> = {
@@ -165,6 +168,7 @@ export default function CardsTable({ aids }: { aids: MaternityAid[] }) {
     extraCols: 1,
     sortFilter: { mode: 'client', rows: filtered },
   })
+  const pg = useTablePagination(tc.rows)
 
   // תוכן התא לפי מפתח העמודה
   const cell = (key: ColKey, aid: MaternityAid) => {
@@ -250,68 +254,10 @@ export default function CardsTable({ aids }: { aids: MaternityAid[] }) {
     }
   }
 
-  return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
-      <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <CreditCard size={18} className="text-emerald-600" />
-          <h2 className="font-semibold text-slate-900">בקשות כרטיס מזון</h2>
-        </div>
-        <div className="relative w-full sm:w-64">
-          <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
-          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="חיפוש…"
-            className="w-full pr-9 pl-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-200" />
-        </div>
-      </div>
-
-      {/* filters */}
-      <div className="flex gap-2 flex-wrap px-5 py-3 border-b border-slate-100">
-        {FILTERS.map(f => (
-          <button key={f.key} onClick={() => setFilter(f.key)}
-            className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${filter === f.key ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300'}`}>
-            {f.label} <span className="opacity-70">{counts[f.key] ?? 0}</span>
-          </button>
-        ))}
-      </div>
-
-      {noStock && (
-        <div className="mx-5 mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
-          ⚠️ אין מלאי כרטיסים פנוי כעת. ניתן לאשר את היולדת ל<strong>רשימת המתנה</strong> — ברגע שיתחדש המלאי היא תשויך אוטומטית ותקבל שובר במייל, ללא צורך בפעולה נוספת.
-        </div>
-      )}
-      {err && <p className="px-5 mt-3 text-sm text-red-600">{err}</p>}
-
-      {/* בורר העמודות — מעל הטבלה */}
-      <div className="flex flex-col gap-2 px-5 py-3">{tc.picker}{tc.activeFilters}</div>
-
-      {/* ⚠️ בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. */}
-      <div className="w-full">
-        <table className="w-full text-[16px] text-right border-collapse" style={tc.rt.tableStyle}>
-          <colgroup>{tc.rt.cols}</colgroup>
-          <thead>
-            <tr className="border-b-2 border-slate-200 bg-slate-50 text-[15px] font-bold text-slate-600 [&>th]:px-5 [&>th]:py-4 [&>th]:font-bold [&>th]:text-right [&>th]:border-l [&>th]:border-slate-200 [&>th:last-child]:border-l-0">
-              {/* כותרת אחידה לכל המערכת — מיון, סינון וגרירת רוחב.
-                  ⚠️ הריפוד מגיע מ-[&>th] שעל ה-<tr>, ולכן אין צורך
-                  ב-headClassName כאן. */}
-              {tc.shown.map((c, i) => tc.th(c, i))}
-              <th className="relative">פעולות{tc.rt.handle(tc.shown.length)}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {/* 🔴 tc.rows ולא filtered — אחרת המיון והסינון בכותרת לא היו
-                משפיעים על מה שמוצג בפועל. */}
-            {tc.rows.length === 0 ? (
-              <tr><td colSpan={tc.shown.length + 1} className="px-5 py-12 text-center text-slate-400">אין בקשות בסינון זה</td></tr>
-            ) : tc.rows.map(aid => {
-              const s = (aid.card_status ?? 'pending') as CardStatus
-              const busy = busyId === aid.id
-              return (
-                <tr key={aid.id} onClick={() => router.push(`/admin/maternity/${aid.id}`)}
-                  className="border-b border-slate-100 hover:bg-emerald-50/40 transition-colors cursor-pointer [&>td]:px-5 [&>td]:py-4 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0">
-                  {tc.shown.map(c => (
-                    <td key={c.key} className={tc.cellClass(c)}>{cell(c.key, aid)}</td>
-                  ))}
-                  <td className="align-top" onClick={e => e.stopPropagation()}>
+  const renderActions = (aid: MaternityAid) => {
+    const s = (aid.card_status ?? "pending") as CardStatus
+    const busy = busyId === aid.id
+    return (<>
                     {busy ? (
                       <Loader2 size={15} className="animate-spin text-slate-400" />
                     ) : !canEdit ? (
@@ -356,13 +302,40 @@ export default function CardsTable({ aids }: { aids: MaternityAid[] }) {
                         <ExtendEligibility aid={aid} variant="icon" onDone={() => router.refresh()} />
                       </div>
                     )}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+    </>)
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex gap-2 flex-wrap ">
+        {FILTERS.map(f => (
+          <button key={f.key} onClick={() => setFilter(f.key)}
+            className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${filter === f.key ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300'}`}>
+            {f.label} <span className="opacity-70">{counts[f.key] ?? 0}</span>
+          </button>
+        ))}
       </div>
+
+      {noStock && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+          ⚠️ אין מלאי כרטיסים פנוי כעת. ניתן לאשר את היולדת ל<strong>רשימת המתנה</strong> — ברגע שיתחדש המלאי היא תשויך אוטומטית ותקבל שובר במייל, ללא צורך בפעולה נוספת.
+        </div>
+      )}
+      {err && <p className="text-sm text-red-600">{err}</p>}
+
+      <ListTable
+        tc={tc}
+        rows={pg.rows}
+        pg={pg}
+        empty="אין בקשות בסינון זה"
+        onOpen={aid => router.push(`/admin/maternity/${aid.id}`)}
+        renderCell={(c, aid) => cell(c.key, aid)}
+        actions={renderActions}
+        toolbar={<>
+          <h2 className="ml-auto font-bold text-navy">בקשות כרטיס מזון</h2>
+          <SearchBar value={query} onChange={setQuery} placeholder="חיפוש…" />
+        </>}
+      />
     </div>
   )
 }
