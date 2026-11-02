@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # מעטפת לחשבון AWS: תקציב, התראות עלות, יומן פעולות, זיהוי פריצות והקשחות בסיס. מריצים פעם אחת ב-CloudShell. בלי מפתחות.
-# שימוש: ALERT_EMAIL=you@example.com BUDGET=60 bash account-setup.sh
+# שימוש: ALERT_EMAIL=you@example.com BUDGET=40 bash account-setup.sh
 # הרצה חוזרת בטוחה: מעדכנת את אותם סטאקים (למשל לשינוי התקציב).
 set -euo pipefail
 REGION=eu-central-1

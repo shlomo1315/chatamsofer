@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # הקמת פרויקט ב-AWS (ECS Fargate) מתבנית אחת. מדביקים ב-CloudShell (Frankfurt). בלי מפתחות.
 # ברירת המחדל היא חתם סופר. לפרויקט אחר: PROJECT=<שם> REPO=<owner/repo> DOMAIN=<דומיין> bash cloudshell-setup.sh
+# גודל השרת: CPU=512 MEMORY=1024 (ברירת מחדל 1024/2048). בהרצה חוזרת חובה לציין אותו שוב, אחרת חוזר לברירת המחדל.
 # מצב בדיקה: בלי CERT, HTTP על כתובת ה-ALB. מעבר ל-HTTPS: מריצים שוב עם CERT=<arn של תעודה> (אותו סטאק, עדכון בלבד).
 set -euo pipefail
 export AWS_DEFAULT_REGION=eu-central-1
@@ -34,7 +35,7 @@ fi
 aws cloudformation deploy --stack-name "$STACK" --template-file /tmp/infrastructure.yml \
   --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM --tags Project="$PROJECT" \
   --parameter-overrides ProjectName="$PROJECT" GitHubRepo="$REPO" DomainName="$DOMAIN" CertificateArn="$CERT" \
-    VpcId="$VPC" SubnetIds="$SUBNETS" DesiredCount="${DESIRED:-0}" CreateOidcProvider="$OIDC" ExistingOidcProviderArn="$EXISTING_OIDC"
+    VpcId="$VPC" SubnetIds="$SUBNETS" DesiredCount="${DESIRED:-0}" TaskCpu="${CPU:-1024}" TaskMemory="${MEMORY:-2048}" CreateOidcProvider="$OIDC" ExistingOidcProviderArn="$EXISTING_OIDC"
 
 echo
 echo "== סיום. תוצאות (אין בהן סודות):"

@@ -12,6 +12,8 @@ Parameters:
   CertificateArn: {Type: String, Default: '', Description: "ריק = HTTP בלבד על כתובת ה-ALB (בדיקה בלי דומיין). עם ARN של תעודת ACM = HTTPS והפניה מ-80"}
   VpcId: {Type: AWS::EC2::VPC::Id, Description: "ה-VPC ברירת המחדל"}
   SubnetIds: {Type: "List<AWS::EC2::Subnet::Id>", Description: "לפחות 2 תתי-רשתות ציבוריות בשני אזורי זמינות"}
+  TaskCpu: {Type: String, Default: '1024', AllowedValues: ['512', '1024', '2048'], Description: "מעבד לשרת: 512 = חצי ליבה, 1024 = ליבה. משפיע ישירות על העלות"}
+  TaskMemory: {Type: String, Default: '2048', AllowedValues: ['1024', '2048', '3072', '4096'], Description: "זיכרון ב-MB. 512 מעבד מאפשר עד 4096, 1024 מאפשר 2048 ומעלה"}
   DesiredCount: {Type: Number, Default: 0, Description: "0 בהקמה ראשונה. אחרי שהפריסה הראשונה העלתה image: 1"}
   CreateOidcProvider: {Type: String, Default: 'true', AllowedValues: ['true', 'false'], Description: "false אם כבר קיים provider של GitHub בחשבון"}
   ExistingOidcProviderArn: {Type: String, Default: ''}
@@ -65,8 +67,8 @@ Resources:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: !Ref ProjectName
-      Cpu: '1024'
-      Memory: '2048'
+      Cpu: !Ref TaskCpu
+      Memory: !Ref TaskMemory
       NetworkMode: awsvpc
       RequiresCompatibilities: [FARGATE]
       ExecutionRoleArn: !GetAtt ExecRole.Arn
