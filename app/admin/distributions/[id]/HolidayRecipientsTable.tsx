@@ -11,12 +11,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Monitor, Phone, Mail, CreditCard, Pencil, Check, X, Loader2, Wallet } from 'lucide-react'
 import { SOURCE_LABEL, type RegisterSource } from '@/lib/distributionSources'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import { useIncrementalRows } from '@/lib/useIncrementalRows'
+import RegistrationCardModal from './RegistrationCardModal'
 import CenterCellEditor, { type CenterOption } from './CenterCellEditor'
 import { useResizableColumns } from '@/components/ui/ResizableTable'
 import ApprovalLabelTag, { type ApprovalLabel } from '@/components/ui/ApprovalLabelTag'
@@ -237,6 +238,7 @@ export default function HolidayRecipientsTable({
   }, [rowsSig])
 
   // במצב מדופדף החיתוך לעמוד קורה *אחרי* המיון והסינון, לא לפניהם.
+  const [openIdx, setOpenIdx] = useState<number | null>(null)
   const visibleRows = paginated ? (pageSlice ? pageSlice(tc.rows) : tc.rows) : incRows
   const sentinelRef = incSentinel
   const hasMore = paginated ? false : incHasMore
@@ -440,7 +442,7 @@ export default function HolidayRecipientsTable({
           </thead>
           <tbody className="divide-y divide-slate-100">
             {visibleRows.map(r => (
-              <tr key={r.id} className="hover:bg-indigo-50/40 align-middle [&>td]:px-2.5 [&>td]:py-2 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0">
+              <tr key={r.id} onClick={e => { if (!(e.target as HTMLElement).closest('button,a,input,select,textarea,label')) setOpenIdx(visibleRows.indexOf(r)) }} className="cursor-pointer hover:bg-indigo-50/40 align-middle [&>td]:px-2.5 [&>td]:py-2 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0">
                 {canEdit && (
                   <td className="w-8">
                     <input type="checkbox" checked={!!selected?.has(r.id)} onChange={() => toggleRow?.(r.id)}
@@ -466,6 +468,10 @@ export default function HolidayRecipientsTable({
           </tbody>
         </table>
       </div>
+      {openIdx !== null && visibleRows[openIdx] && (
+        <RegistrationCardModal rows={visibleRows} index={openIdx} onIndex={setOpenIdx}
+          onClose={() => setOpenIdx(null)} amount={amountPerFamily} />
+      )}
     </div>
   )
 }

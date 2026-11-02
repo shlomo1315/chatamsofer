@@ -16,7 +16,8 @@ import { addressColumns, addressCells } from '@/lib/exportAddress'
 import BulkStatusDialog from './BulkStatusDialog'
 import OfficeOrderDialog from './OfficeOrderDialog'
 import { useTablePagination } from '@/lib/useTablePagination'
-import Pagination from '@/components/ui/Pagination'
+import { ListTable } from '@/components/admin/system/ListTable'
+import OrderCardModal from './OrderCardModal'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import { saveNavList, stashPrintIds } from '@/lib/bookFairOrderHandoff'
 
@@ -279,6 +280,7 @@ export default function OrdersClient({ orders, itemCounts, orderVolumes, tiers, 
   renderedAt: number
 }) {
   const router = useRouter()
+  const [openIdx, setOpenIdx] = useState<number | null>(null)
   const [query, setQuery] = useState('')
   const [card, setCard] = useState<typeof CARDS[number]['key']>('all')
   const [purging, setPurging] = useState(false)
@@ -717,45 +719,14 @@ export default function OrdersClient({ orders, itemCounts, orderVolumes, tiers, 
         </div>
       )}
 
-      {/* ⚠️ בלי overflow-x: הגלילה לרוחב אסורה ונאכפת בלינט */}
-      <div className="rounded-2xl border border-slate-200 bg-white">
-        <table className="w-full table-fixed">
-          <thead className="border-b border-slate-200 bg-slate-50">
-            <tr>{tc.shown.map((c, i) => tc.th(c, i))}</tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {pg.rows.map(o => (
-              // 🔴 כל השורה לחיצה ופותחת את ההזמנה — קודם רק מספר
-              // ההזמנה היה קישור, והמשתמש לחץ על השורה ולא קרה דבר.
-              // ⚠️ נגיש מהמקלדת (role + tabIndex + Enter) ולא רק בעכבר.
-              <tr
-                key={o.id}
-                role="link"
-                tabIndex={0}
-                onClick={() => router.push(`/admin/book-fair/orders/${o.id}`)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') router.push(`/admin/book-fair/orders/${o.id}`)
-                }}
-                className="cursor-pointer text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
-              >
-                {tc.shown.map(col => (
-                  <td key={col.key} className={`px-3 py-2.5 ${tc.cellClass(col)}`}>
-                    {renderCell(col.key, o, itemCounts, (problemByOrder[o.id] ?? []).map(id => titleOf[id]), recGaps, audits[o.id], openIssueSet.has(o.id))}
-                  </td>
-                ))}
-              </tr>
-            ))}
-            {!pg.rows.length && (
-              <tr>
-                <td colSpan={tc.shown.length} className="px-4 py-12 text-center text-sm text-slate-400">
-                  {orders.length ? 'אין הזמנות בסינון זה' : 'טרם התקבלו הזמנות'}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-        <Pagination page={pg.page} size={pg.size} total={pg.total} onPage={pg.setPage} onSize={pg.setSize} />
-      </div>
+      <ListTable tc={tc} rows={pg.rows} pg={pg}
+        empty={orders.length ? 'אין הזמנות בסינון זה' : 'טרם התקבלו הזמנות'}
+        onOpen={o => setOpenIdx(tc.rows.findIndex(x => x.id === o.id))}
+        toolbar={<h2 className="font-bold text-navy">הזמנות</h2>}
+        renderCell={(c, o) => renderCell(c.key, o, itemCounts, (problemByOrder[o.id] ?? []).map(id => titleOf[id]), recGaps, audits[o.id], openIssueSet.has(o.id))} />
+      {openIdx !== null && tc.rows[openIdx] && (
+        <OrderCardModal rows={tc.rows} index={openIdx} onIndex={setOpenIdx} onClose={() => setOpenIdx(null)} />
+      )}
     </div>
   )
 }
