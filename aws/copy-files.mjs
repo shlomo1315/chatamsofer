@@ -42,11 +42,14 @@ for (const b of buckets) {
   // הרצה חוזרת מדלגת על קבצים שכבר הועתקו
   const done = new Set((await listAll(DST, b.name)).map(f => f.path))
   const todo = files.filter(f => !done.has(f.path))
+  console.log(`PROGRESS ${b.name} 0/${todo.length} (0%) | דולגו ${files.length - todo.length} שכבר הועתקו`)
   for (let i = 0; i < todo.length; i += 6) {
     await Promise.all(todo.slice(i, i + 6).map(async f => {
       const body = Buffer.from(await (await ok(SRC, `/storage/v1/object/${b.name}/${enc(f.path)}`)).arrayBuffer())
       await ok(DST, `/storage/v1/object/${b.name}/${enc(f.path)}`, { method: 'POST', headers: { 'content-type': f.type || 'application/octet-stream', 'x-upsert': 'true' }, body })
     }))
+    const d = Math.min(i + 6, todo.length)
+    console.log(`PROGRESS ${b.name} ${d}/${todo.length} (${Math.round(d * 100 / todo.length)}%)`)
   }
   const n = (await listAll(DST, b.name)).length
   const m = files.length === n ? 'ok' : 'DIFF'
