@@ -10,6 +10,9 @@ export AWS_DEFAULT_REGION=eu-central-1
 P=${PROJECT:-chasamsofer}; STACK=${STACK:-$P}; RAW=https://raw.githubusercontent.com/shlomo1315/chatamsofer/main/aws
 DOMAIN=${DOMAIN:-aws.chasamsofer.co.il}
 step() { echo; echo "== $*"; }
+# שתי הרצות במקביל (למשל בשתי לשוניות CloudShell) מכבות זו לזו את Supabase באמצע העתקת הקבצים. רק הרצה אחת בכל רגע
+exec 9>"${TMPDIR:-/tmp}/$P-migrate-all.lock"
+flock -n 9 || { echo "הרצה אחרת של הסקריפט כבר פועלת (אולי בלשונית אחרת). ממתינים שתסתיים ולא מריצים שוב."; exit 1; }
 param() { aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Parameters[?ParameterKey=='$1'].ParameterValue" --output text 2>/dev/null || true; }
 secret_field() { aws secretsmanager get-secret-value --secret-id "$P/$1" --query SecretString --output text | jq -r ".$2 // empty"; }
 run_remote() { local f=$1; shift; env "$@" bash <(curl -fsSL "$RAW/$f?$(date +%s)"); }
