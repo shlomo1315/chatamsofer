@@ -172,13 +172,15 @@ export function useTableColumns<K extends string, R = never>(
     filter?: (c: ColDef<K, R>) => boolean
     /** עמודות נוספות שאינן בבורר (צ׳קבוקס, פעולות) — נספרות לגרירה. */
     extraCols?: number
+    /** משקל כל עמודה נוספת (ברירת מחדל 0.8). */
+    extraWeight?: number
     /** תוספת למזהה כשאותה טבלה מוצגת בשני מצבים (עריכה מול צפייה). */
     idSuffix?: string
     /** מיון וסינון מהכותרת. ⚠️ חובה לציין mode — ראו SortFilterOpts. */
     sortFilter?: SortFilterOpts<K, R>
   },
 ): TableColumns<K, R> {
-  const { filter, extraCols = 0, idSuffix = '', sortFilter } = opts ?? {}
+  const { filter, extraCols = 0, extraWeight = 0.8, idSuffix = '', sortFilter } = opts ?? {}
 
   const available = useMemo(
     () => (filter ? columns.filter(filter) : columns),
@@ -227,8 +229,8 @@ export function useTableColumns<K extends string, R = never>(
   // ⚠️ משקלי העמודות המוצגות + משקל לכל עמודה נוספת (פעולות/צ׳קבוקס).
   // עמודת הפעולות צרה יחסית ולכן 0.8 ולא 1.
   const weights = useMemo(
-    () => [...shown.map(c => c.weight ?? 1), ...Array(extraCols).fill(0.8)],
-    [shown, extraCols],
+    () => [...shown.map(c => c.weight ?? 1), ...Array(extraCols).fill(extraWeight)],
+    [shown, extraCols, extraWeight],
   )
 
   const rt = useResizableColumns(
