@@ -78,7 +78,14 @@ if [[ -z "${EXTRA_PARAMS:-}" ]]; then
   CUR_IPS=$(aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Parameters[?ParameterKey=='AdminAllowedIps'].ParameterValue" --output text 2>/dev/null || true)
   [[ -n "$CUR_IPS" && "$CUR_IPS" != None ]] && EXTRA_PARAMS="AdminAllowedIps=$CUR_IPS"
 fi
-aws cloudformation deploy --stack-name "$STACK" --template-file /tmp/infrastructure.yml \
+# התבנית מעל 51,200 בתים, ולכן CloudFormation דורש להעלות אותה דרך S3. משתמשים בקט cf-templates הקיים (פרטי, ללא עלות), ואם אין יוצרים אחד חסום לציבור
+TPL_BUCKET=$(aws s3api list-buckets --query "Buckets[?starts_with(Name,'cf-templates-') && ends_with(Name,'-$AWS_DEFAULT_REGION')].Name | [0]" --output text)
+if [[ -z "$TPL_BUCKET" || "$TPL_BUCKET" == None ]]; then
+  TPL_BUCKET="cf-templates-$(aws sts get-caller-identity --query Account --output text)-$AWS_DEFAULT_REGION"
+  aws s3api create-bucket --bucket "$TPL_BUCKET" --create-bucket-configuration LocationConstraint="$AWS_DEFAULT_REGION" >/dev/null
+  aws s3api put-public-access-block --bucket "$TPL_BUCKET" --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+fi
+aws cloudformation deploy --stack-name "$STACK" --template-file /tmp/infrastructure.yml --s3-bucket "$TPL_BUCKET" \
   --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM --tags Project="$PROJECT" \
   --parameter-overrides ProjectName="$PROJECT" GitHubRepo="$REPO" DomainName="$DOMAIN" CreateDnsZone="$CREATE_ZONE" CertificateArn="$CERT_PARAM" \
     CertValidationName="$VAL_NAME" CertValidationValue="$VAL_VALUE" \
