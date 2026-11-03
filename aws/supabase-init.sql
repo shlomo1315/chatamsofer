@@ -18,6 +18,7 @@ alter role authenticator password :'AUTHENTICATOR_PW';
 alter role supabase_auth_admin password :'AUTH_ADMIN_PW';
 alter role supabase_storage_admin password :'STORAGE_ADMIN_PW';
 grant anon, authenticated, service_role to authenticator;
+grant anon, authenticated, service_role to supabase_storage_admin;
 grant anon, authenticated, service_role, supabase_auth_admin, supabase_storage_admin to dbadmin;
 create schema if not exists auth authorization supabase_auth_admin;
 create schema if not exists storage authorization supabase_storage_admin;
