@@ -662,8 +662,18 @@ Resources:
         - Name: rate-limit
           Priority: 2
           Action: {Block: {}}
+          # העלאות ל-Storage (מחייבות מפתח) לא נספרות: copy-files מעלה עשרות אלפי קבצים מ-IP אחד, וההגבלה חסמה אותו ב-403
           Statement:
-            RateBasedStatement: {Limit: 2000, AggregateKeyType: IP}
+            RateBasedStatement:
+              Limit: 2000
+              AggregateKeyType: IP
+              ScopeDownStatement:
+                NotStatement:
+                  Statement:
+                    AndStatement:
+                      Statements:
+                        - ByteMatchStatement: {SearchString: /storage/v1/object/, FieldToMatch: {UriPath: {}}, PositionalConstraint: STARTS_WITH, TextTransformations: [{Priority: 0, Type: NONE}]}
+                        - ByteMatchStatement: {SearchString: POST, FieldToMatch: {Method: {}}, PositionalConstraint: EXACTLY, TextTransformations: [{Priority: 0, Type: NONE}]}
           VisibilityConfig: {SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: rate}
 
   WafAssoc:

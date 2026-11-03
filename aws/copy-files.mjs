@@ -3,16 +3,16 @@
 const SRC = { base: process.env.SUPABASE_URL.replace(/\/$/, ''), key: process.env.SUPABASE_SERVICE_ROLE_KEY }
 const DST = { base: process.env.DST_URL.replace(/\/$/, ''), key: process.env.DST_KEY }
 const call = (e, u, o = {}) => fetch(e.base + u, { ...o, headers: { apikey: e.key, Authorization: `Bearer ${e.key}`, ...o.headers } })
-// ניסיון חוזר (עד 5 פעמים, המתנה גדלה) על 403/429/5xx ושגיאות רשת: חסימה רגעית של ה-WAF או עומס לא צריכים להפיל העתקה של אלפי קבצים
+// ניסיון חוזר (עד 6 פעמים, המתנה גדלה עד דקה, בסך הכול כ-3 דקות) על 403/429/5xx ושגיאות רשת: חסימה רגעית של ה-WAF או עומס לא צריכים להפיל העתקה של אלפי קבצים
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 const retryable = s => s === 403 || s === 429 || s >= 500
 const ok = async (e, u, o) => {
   for (let i = 1; ; i++) {
     let r, err
     try { r = await call(e, u, o); if (r.ok) return r; err = new Error(`${r.status} ${u} ${(await r.text()).slice(0, 200)}`) } catch (x) { err = x }
-    if (i >= 5 || (r && !retryable(r.status))) throw err
+    if (i >= 6 || (r && !retryable(r.status))) throw err
     console.log(`RETRY ${i} ${u} ${err.message.slice(0, 80)}`)
-    await sleep(1000 * 2 ** i)
+    await sleep(Math.min(60000, 5000 * 2 ** i))
   }
 }
 const json = { 'content-type': 'application/json' }
@@ -37,6 +37,7 @@ const buckets = await (await ok(SRC, '/storage/v1/bucket')).json()
 const have = new Set((await (await ok(DST, '/storage/v1/bucket')).json()).map(b => b.name))
 console.log('REPORT bucket|source_files|dest_files|match')
 let bad = 0
+const failed = []
 for (const b of buckets) {
   if (!have.has(b.name)) {
     await ok(DST, '/storage/v1/bucket', { method: 'POST', headers: json, body: JSON.stringify({ id: b.id, name: b.name, public: b.public, file_size_limit: b.file_size_limit, allowed_mime_types: b.allowed_mime_types }) })
@@ -50,8 +51,11 @@ for (const b of buckets) {
   console.log(`PROGRESS ${b.name} 0/${todo.length} (0%) | דולגו ${files.length - todo.length} שכבר הועתקו`)
   for (let i = 0; i < todo.length; i += 6) {
     await Promise.all(todo.slice(i, i + 6).map(async f => {
-      const body = Buffer.from(await (await ok(SRC, `/storage/v1/object/${b.name}/${enc(f.path)}`)).arrayBuffer())
-      await ok(DST, `/storage/v1/object/${b.name}/${enc(f.path)}`, { method: 'POST', headers: { 'content-type': f.type || 'application/octet-stream', 'x-upsert': 'true' }, body })
+      // קובץ שנכשל אחרי כל הניסיונות לא עוצר את השאר: נרשם ב-FAILED בסוף הדוח וההעתקה מסתיימת בשגיאה
+      try {
+        const body = Buffer.from(await (await ok(SRC, `/storage/v1/object/${b.name}/${enc(f.path)}`)).arrayBuffer())
+        await ok(DST, `/storage/v1/object/${b.name}/${enc(f.path)}`, { method: 'POST', headers: { 'content-type': f.type || 'application/octet-stream', 'x-upsert': 'true' }, body })
+      } catch (x) { failed.push(`${b.name}/${f.path}`); console.log(`SKIP ${b.name}/${f.path} ${String(x.message).slice(0, 80)}`) }
     }))
     const d = Math.min(i + 6, todo.length)
     console.log(`PROGRESS ${b.name} ${d}/${todo.length} (${Math.round(d * 100 / todo.length)}%)`)
@@ -61,4 +65,6 @@ for (const b of buckets) {
   if (m !== 'ok') bad++
   console.log(`REPORT ${b.name}|${files.length}|${n}|${m}`)
 }
-if (bad) process.exit(1)
+for (const p of failed) console.log(`FAILED ${p}`)
+if (failed.length) console.log(`FAILED_COUNT ${failed.length} (הרצה חוזרת תעתיק רק אותם)`)
+if (bad || failed.length) process.exit(1)

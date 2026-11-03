@@ -35,7 +35,7 @@ run() { # name image command-json environment-json secrets-json
     sleep 15
     st=$(aws ecs describe-tasks --cluster "$P" --tasks "$arn" --query 'tasks[0].lastStatus' --output text)
     # התקדמות חיה: השורה האחרונה של PROGRESS או RETRY מהלוג, על אותה שורה במסך
-    l=$(aws logs get-log-events --log-group-name "/ecs/$P-copy" --log-stream-name "$1/c/$id" --limit 200 --query 'events[].message' --output text 2>/dev/null | tr '\t' '\n' | grep -E '^(PROGRESS|RETRY|SCAN)' | tail -1 || true)
+    l=$(aws logs get-log-events --log-group-name "/ecs/$P-copy" --log-stream-name "$1/c/$id" --limit 200 --query 'events[].message' --output text 2>/dev/null | tr '\t' '\n' | grep -E '^(PROGRESS|RETRY|SCAN|SKIP)' | tail -1 || true)
     [ -z "$l" ] || printf '\r\033[K%s' "$l"
   done
   echo
