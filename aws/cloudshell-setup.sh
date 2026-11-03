@@ -73,11 +73,12 @@ if aws cloudformation describe-stacks --stack-name "$STACK" >/dev/null 2>&1; the
   EXISTING_OIDC=$(aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Parameters[?ParameterKey=='ExistingOidcProviderArn'].ParameterValue" --output text)
 fi
 [[ "$EXISTING_OIDC" == "None" ]] && EXISTING_OIDC=""
-# שומרים את הכתובות המורשות לניהול מחו"ל גם בהרצות שלא קובעות אותן (admin-geo.sh עם ADMIN_IPS קובע, כל שאר הסקריפטים משאירים את הקיים)
-if [[ -z "${EXTRA_PARAMS:-}" ]]; then
-  CUR_IPS=$(aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Parameters[?ParameterKey=='AdminAllowedIps'].ParameterValue" --output text 2>/dev/null || true)
-  [[ -n "$CUR_IPS" && "$CUR_IPS" != None ]] && EXTRA_PARAMS="AdminAllowedIps=$CUR_IPS"
-fi
+# פרמטרים שנקבעים בסקריפטים ייעודיים (admin-geo.sh, cost-cap.sh) נשמרים מהסטאק בהרצות שלא קובעות אותם
+for K in AdminAllowedIps CostCapUsd CostAlertEmail; do
+  [[ " ${EXTRA_PARAMS:-} " == *" $K="* || "${EXTRA_PARAMS:-}" == "$K="* ]] && continue
+  CUR=$(aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Parameters[?ParameterKey=='$K'].ParameterValue" --output text 2>/dev/null || true)
+  [[ -n "$CUR" && "$CUR" != None ]] && EXTRA_PARAMS="${EXTRA_PARAMS:-} $K=$CUR"
+done
 # התבנית מעל 51,200 בתים, ולכן CloudFormation דורש להעלות אותה דרך S3. משתמשים בקט cf-templates הקיים (פרטי, ללא עלות), ואם אין יוצרים אחד חסום לציבור
 TPL_BUCKET=$(aws s3api list-buckets --query "Buckets[?starts_with(Name,'cf-templates-') && ends_with(Name,'-$AWS_DEFAULT_REGION')].Name | [0]" --output text)
 if [[ -z "$TPL_BUCKET" || "$TPL_BUCKET" == None ]]; then
