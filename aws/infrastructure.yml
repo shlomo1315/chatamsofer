@@ -344,6 +344,11 @@ Resources:
           Fn::Base64: !Sub |
             #!/bin/bash
             set -euo pipefail
+            # 512MB זיכרון לא מספיקים להתקנת squid (dnf נהרג), לכן קודם swap של 1GB
+            if ! swapon --show | grep -q swapfile; then
+              [ -f /swapfile ] || { fallocate -l 1G /swapfile; chmod 600 /swapfile; mkswap /swapfile; }
+              swapon /swapfile
+            fi
             dnf install -y squid httpd-tools
             S=$(aws secretsmanager get-secret-value --region ${AWS::Region} --secret-id ${NedarimProxySecret} --query SecretString --output text)
             U=$(echo "$S" | sed -n 's/.*"user":"\([^"]*\)".*/\1/p'); P=$(echo "$S" | sed -n 's/.*"password":"\([^"]*\)".*/\1/p')
