@@ -18,13 +18,16 @@ const ok = async (e, u, o) => {
 const json = { 'content-type': 'application/json' }
 const enc = p => p.split('/').map(encodeURIComponent).join('/')
 
-async function listAll(e, bucket, prefix = '') {
+async function listAll(e, bucket, label, prefix = '', cnt = { n: 0, next: 1000 }) {
   const out = []
   for (let offset = 0; ; offset += 1000) {
     const rows = await (await ok(e, `/storage/v1/object/list/${bucket}`, { method: 'POST', headers: json, body: JSON.stringify({ prefix, limit: 1000, offset }) })).json()
     for (const r of rows) {
-      if (r.id === null) out.push(...await listAll(e, bucket, `${prefix}${r.name}/`))
-      else out.push({ path: `${prefix}${r.name}`, type: r.metadata?.mimetype })
+      if (r.id === null) out.push(...await listAll(e, bucket, label, `${prefix}${r.name}/`, cnt))
+      else {
+        out.push({ path: `${prefix}${r.name}`, type: r.metadata?.mimetype })
+        if (++cnt.n >= cnt.next) { console.log(`SCAN ${bucket} ${label}: ${cnt.n} קבצים נמצאו`); cnt.next += 1000 }
+      }
     }
     if (rows.length < 1000) return out
   }
@@ -38,9 +41,11 @@ for (const b of buckets) {
   if (!have.has(b.name)) {
     await ok(DST, '/storage/v1/bucket', { method: 'POST', headers: json, body: JSON.stringify({ id: b.id, name: b.name, public: b.public, file_size_limit: b.file_size_limit, allowed_mime_types: b.allowed_mime_types }) })
   }
-  const files = await listAll(SRC, b.name)
+  console.log(`SCAN ${b.name} מתחיל`)
+  const [files, dst] = await Promise.all([listAll(SRC, b.name, "מקור"), listAll(DST, b.name, "יעד")])
+  console.log(`SCAN ${b.name} הסתיים: מקור ${files.length}, יעד ${dst.length}`)
   // הרצה חוזרת מדלגת על קבצים שכבר הועתקו
-  const done = new Set((await listAll(DST, b.name)).map(f => f.path))
+  const done = new Set(dst.map(f => f.path))
   const todo = files.filter(f => !done.has(f.path))
   console.log(`PROGRESS ${b.name} 0/${todo.length} (0%) | דולגו ${files.length - todo.length} שכבר הועתקו`)
   for (let i = 0; i < todo.length; i += 6) {
@@ -51,7 +56,7 @@ for (const b of buckets) {
     const d = Math.min(i + 6, todo.length)
     console.log(`PROGRESS ${b.name} ${d}/${todo.length} (${Math.round(d * 100 / todo.length)}%)`)
   }
-  const n = (await listAll(DST, b.name)).length
+  const n = (await listAll(DST, b.name, "יעד")).length
   const m = files.length === n ? 'ok' : 'DIFF'
   if (m !== 'ok') bad++
   console.log(`REPORT ${b.name}|${files.length}|${n}|${m}`)
