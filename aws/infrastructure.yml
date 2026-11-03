@@ -531,11 +531,16 @@ Resources:
             - {Name: GOTRUE_SMTP_PORT, Value: '465'}
             - {Name: GOTRUE_SMTP_USER, Value: resend}
             - {Name: GOTRUE_SMTP_SENDER_NAME, Value: חתם סופר}
+            # כניסה עם Google: Client ID ו-Secret ב-supabase-gw (aws/google-login.sh). ב-Google Cloud חובה להוסיף את ה-Redirect URI הזה
+            - {Name: GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI, Value: !Sub "https://${DomainName}/auth/v1/callback"}
           Secrets:
             - {Name: GOTRUE_DB_DATABASE_URL, ValueFrom: !Sub "${SupaSecret}:auth_url::"}
             - {Name: GOTRUE_JWT_SECRET, ValueFrom: !Sub "${SupaSecret}:jwt_secret::"}
             - {Name: GOTRUE_SMTP_PASS, ValueFrom: !Sub "${AppSecret}:RESEND_API_KEY::"}
             - {Name: GOTRUE_SMTP_ADMIN_EMAIL, ValueFrom: !Sub "${AppSecret}:VERIFY_FROM_EMAIL::"}
+            - {Name: GOTRUE_EXTERNAL_GOOGLE_ENABLED, ValueFrom: !Sub "${SupaSecret}:google_enabled::"}
+            - {Name: GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID, ValueFrom: !Sub "${SupaSecret}:google_client_id::"}
+            - {Name: GOTRUE_EXTERNAL_GOOGLE_SECRET, ValueFrom: !Sub "${SupaSecret}:google_secret::"}
           LogConfiguration:
             LogDriver: awslogs
             Options: {awslogs-group: !Ref SupaLogs, awslogs-region: !Ref 'AWS::Region', awslogs-stream-prefix: auth}

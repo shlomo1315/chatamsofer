@@ -25,8 +25,10 @@ else
   echo "המפתחות כבר קיימים ונשמרו (FORCE=1 להחלפה, יבטל את ההתחברויות הקיימות)"
 fi
 # storage_url עם sslmode=require: ההצפנה חובה בכל החיבורים, והאימות מול ה-CA של RDS (NODE_EXTRA_CA_CERTS בקונטיינר)
+# שדות Google חייבים להתקיים, כי ECS לא מרים משימה עם שדה סוד חסר. כבוי עד שממלאים ב-aws/google-login.sh
 aws secretsmanager put-secret-value --secret-id "$P/supabase-gw" --secret-string "$(jq --arg h "$DBH" --arg ca "$CA" '
   .rds_ca=$ca
+  | .google_enabled //= "false" | .google_client_id //= "none" | .google_secret //= "none"
   | .rest_url="postgres://authenticator:\(.authenticator_pw)@\($h):5432/app?sslmode=require"
   | .auth_url="postgres://supabase_auth_admin:\(.auth_admin_pw)@\($h):5432/app?sslmode=require&search_path=auth"
   | .storage_url="postgres://supabase_storage_admin:\(.storage_admin_pw)@\($h):5432/app?sslmode=require"' <<<"$CUR")" >/dev/null
