@@ -23,6 +23,8 @@ Parameters:
   DesiredCount: {Type: Number, Default: 0, Description: "0 בהקמה ראשונה. אחרי שהפריסה הראשונה העלתה image: 1"}
   CreateOidcProvider: {Type: String, Default: 'true', AllowedValues: ['true', 'false'], Description: "false אם כבר קיים provider של GitHub בחשבון"}
   ExistingOidcProviderArn: {Type: String, Default: ''}
+  PrivateCidrA: {Type: String, Default: 172.31.200.0/24, Description: "רשת פרטית א (חייבת להיות פנויה ב-VPC)"}
+  PrivateCidrB: {Type: String, Default: 172.31.201.0/24, Description: "רשת פרטית ב"}
 
 Conditions:
   HasCert: !Not [!Equals [!Ref CertificateArn, '']]
@@ -409,9 +411,72 @@ Resources:
           - {Type: redirect, RedirectConfig: {Protocol: HTTPS, Port: '443', StatusCode: HTTP_301}}
           - {Type: forward, TargetGroupArn: !Ref Tg}
 
+  # --- יציאה לאינטרנט עם כתובת קבועה (NAT Gateway + Elastic IP) ---
+  # השרתים ברשתות פרטיות בלי כתובת ציבורית, וכל פנייה החוצה (נדרים, Resend, Gmail, ECR, Secrets) יוצאת מכתובת אחת קבועה: NatIp.
+  # ה-NAT יחיד (באזור הראשון) כדי לשמור על העלות. S3 עובר דרך Gateway Endpoint חינמי ולא דרך ה-NAT.
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VpcId
+      CidrBlock: !Ref PrivateCidrA
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags: [{Key: Name, Value: !Sub "${ProjectName}-private-a"}, {Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VpcId
+      CidrBlock: !Ref PrivateCidrB
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags: [{Key: Name, Value: !Sub "${ProjectName}-private-b"}, {Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
+
+  NatEip:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags: [{Key: Name, Value: !Sub "${ProjectName}-nat"}, {Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
+
+  Nat:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEip.AllocationId
+      SubnetId: !Select [0, !Ref SubnetIds]
+      Tags: [{Key: Name, Value: !Sub "${ProjectName}-nat"}, {Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
+
+  PrivateRt:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VpcId
+      Tags: [{Key: Name, Value: !Sub "${ProjectName}-private"}, {Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
+
+  PrivateDefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRt
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref Nat
+
+  PrivateRtAssocA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref PrivateSubnetA, RouteTableId: !Ref PrivateRt}
+
+  PrivateRtAssocB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref PrivateSubnetB, RouteTableId: !Ref PrivateRt}
+
+  S3Endpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VpcId
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
+      VpcEndpointType: Gateway
+      RouteTableIds: [!Ref PrivateRt]
+
   Service:
     Type: AWS::ECS::Service
-    DependsOn: [HttpRedirect]
+    DependsOn: [HttpRedirect, PrivateDefaultRoute, PrivateRtAssocA, PrivateRtAssocB]
     Properties:
       ServiceName: !Ref ProjectName
       Cluster: !Ref Cluster
@@ -428,8 +493,8 @@ Resources:
         DeploymentCircuitBreaker: {Enable: true, Rollback: true}
       NetworkConfiguration:
         AwsvpcConfiguration:
-          AssignPublicIp: ENABLED
-          Subnets: !Ref SubnetIds
+          AssignPublicIp: DISABLED
+          Subnets: [!Ref PrivateSubnetA, !Ref PrivateSubnetB]
           SecurityGroups: [!Ref TaskSg]
       LoadBalancers: [{ContainerName: app, ContainerPort: 3000, TargetGroupArn: !Ref Tg}]
 
@@ -597,7 +662,7 @@ Resources:
   SupaService:
     Type: AWS::ECS::Service
     Condition: HasCert
-    DependsOn: [SupaRule]
+    DependsOn: [SupaRule, PrivateDefaultRoute, PrivateRtAssocA, PrivateRtAssocB]
     Properties:
       ServiceName: !Sub "${ProjectName}-supabase"
       Cluster: !Ref Cluster
@@ -613,8 +678,8 @@ Resources:
         DeploymentCircuitBreaker: {Enable: true, Rollback: true}
       NetworkConfiguration:
         AwsvpcConfiguration:
-          AssignPublicIp: ENABLED
-          Subnets: !Ref SubnetIds
+          AssignPublicIp: DISABLED
+          Subnets: [!Ref PrivateSubnetA, !Ref PrivateSubnetB]
           SecurityGroups: [!Ref SupaSg]
       LoadBalancers: [{ContainerName: gateway, ContainerPort: 8000, TargetGroupArn: !Ref SupaTg}]
 
@@ -754,3 +819,4 @@ Outputs:
   SupaSecretArn: {Value: !Ref SupaSecret}
   FilesBucketName: {Value: !Ref FilesBucket}
   CopySgId: {Value: !Ref CopySg}
+  NatIp: {Value: !Ref NatEip, Description: "הכתובת הקבועה של כל היציאות מהשרתים. להוסיף ברשימה המורשית בנדרים פלוס (עוד > מפתחות API)"}
