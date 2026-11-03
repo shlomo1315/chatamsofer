@@ -15,6 +15,7 @@ Parameters:
   CertValidationValue: {Type: String, Default: '', Description: "ערך רשומת האימות"}
   VpcId: {Type: AWS::EC2::VPC::Id, Description: "ה-VPC ברירת המחדל"}
   SubnetIds: {Type: "List<AWS::EC2::Subnet::Id>", Description: "שתי תתי-רשתות ציבוריות בשני אזורי זמינות (המאזן והשרת)"}
+  ProxyAmiId: {Type: "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>", Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64, Description: "תמונת Amazon Linux 2023 (ARM) לשרת הביניים של נדרים"}
   TaskCpu: {Type: String, Default: '512', AllowedValues: ['512', '1024', '2048'], Description: "מעבד לשרת: 512 = חצי ליבה, 1024 = ליבה. משפיע ישירות על העלות"}
   TaskMemory: {Type: String, Default: '1024', AllowedValues: ['1024', '2048', '3072', '4096'], Description: "זיכרון ב-MB. 512 מעבד מאפשר עד 4096, 1024 מאפשר 2048 ומעלה"}
   DbInstanceClass: {Type: String, Default: db.t4g.medium, Description: "גודל מופע המסד"}
@@ -23,8 +24,6 @@ Parameters:
   DesiredCount: {Type: Number, Default: 0, Description: "0 בהקמה ראשונה. אחרי שהפריסה הראשונה העלתה image: 1"}
   CreateOidcProvider: {Type: String, Default: 'true', AllowedValues: ['true', 'false'], Description: "false אם כבר קיים provider של GitHub בחשבון"}
   ExistingOidcProviderArn: {Type: String, Default: ''}
-  PrivateCidrA: {Type: String, Default: 172.31.200.0/24, Description: "רשת פרטית א (חייבת להיות פנויה ב-VPC)"}
-  PrivateCidrB: {Type: String, Default: 172.31.201.0/24, Description: "רשת פרטית ב"}
 
 Conditions:
   HasCert: !Not [!Equals [!Ref CertificateArn, '']]
@@ -287,6 +286,101 @@ Resources:
       SecurityGroupIngress:
         - {IpProtocol: tcp, FromPort: 3000, ToPort: 3000, SourceSecurityGroupId: !Ref AlbSg}
 
+  # --- שרת ביניים קטן (squid) עם כתובת קבועה, רק לפניות לנדרים פלוס ---
+  # האתר ממשיך לצאת כרגיל. רק הפניות ל-matara.pro עוברות דרך השרת הזה (NEDARIM_PROXY_URL), ולכן רק הכתובת שלו (NedarimProxyIp) מוסיפים בנדרים.
+  # הכניסה אליו רק משרתי האתר (קבוצת TaskSg, דרך הכתובת הפרטית) ועם שם משתמש וסיסמה מ-Secrets Manager. היעדים מוגבלים ל-matara.pro.
+  NedarimProxySecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${ProjectName}/nedarim-proxy"
+      GenerateSecretString:
+        SecretStringTemplate: '{"user":"nedarim"}'
+        GenerateStringKey: password
+        PasswordLength: 40
+        ExcludePunctuation: true
+      Tags: [{Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
+
+  NedarimProxySg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Nedarim proxy, ingress 3128 from site tasks only
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - {IpProtocol: tcp, FromPort: 3128, ToPort: 3128, SourceSecurityGroupId: !Ref TaskSg}
+      Tags: [{Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
+
+  NedarimProxyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement: [{Effect: Allow, Principal: {Service: ec2.amazonaws.com}, Action: 'sts:AssumeRole'}]
+      ManagedPolicyArns: ['arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore']
+      Policies:
+        - PolicyName: read-proxy-secret
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement: [{Effect: Allow, Action: 'secretsmanager:GetSecretValue', Resource: !Ref NedarimProxySecret}]
+      Tags: [{Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
+
+  NedarimProxyProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: {Roles: [!Ref NedarimProxyRole]}
+
+  NedarimProxyLt:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        ImageId: !Ref ProxyAmiId
+        InstanceType: t4g.nano
+        IamInstanceProfile: {Arn: !GetAtt NedarimProxyProfile.Arn}
+        MetadataOptions: {HttpTokens: required, HttpPutResponseHopLimit: 2}
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs: {VolumeSize: 8, VolumeType: gp3, Encrypted: true}
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            set -euo pipefail
+            dnf install -y squid httpd-tools
+            S=$(aws secretsmanager get-secret-value --region ${AWS::Region} --secret-id ${NedarimProxySecret} --query SecretString --output text)
+            U=$(echo "$S" | sed -n 's/.*"user":"\([^"]*\)".*/\1/p'); P=$(echo "$S" | sed -n 's/.*"password":"\([^"]*\)".*/\1/p')
+            htpasswd -bc /etc/squid/passwd "$U" "$P"; chown root:squid /etc/squid/passwd; chmod 640 /etc/squid/passwd
+            cat > /etc/squid/squid.conf <<'CONF'
+            http_port 3128
+            auth_param basic program /usr/lib64/squid/basic_ncsa_auth /etc/squid/passwd
+            auth_param basic realm nedarim-proxy
+            acl authed proxy_auth REQUIRED
+            acl dests dstdomain .matara.pro checkip.amazonaws.com
+            acl SSL_ports port 443
+            acl Safe_ports port 80 443
+            acl CONNECT method CONNECT
+            http_access deny !Safe_ports
+            http_access deny CONNECT !SSL_ports
+            http_access allow authed dests
+            http_access deny all
+            cache deny all
+            forwarded_for delete
+            via off
+            CONF
+            printf "#!/bin/bash\ncurl -s -m 20 -x http://%s:%s@127.0.0.1:3128 https://checkip.amazonaws.com\n" "$U" "$P" > /usr/local/bin/proxy-check; chmod 700 /usr/local/bin/proxy-check
+            systemctl enable --now squid
+
+  NedarimProxy:
+    Type: AWS::EC2::Instance
+    Properties:
+      LaunchTemplate: {LaunchTemplateId: !Ref NedarimProxyLt, Version: !GetAtt NedarimProxyLt.LatestVersionNumber}
+      SubnetId: !Select [0, !Ref SubnetIds]
+      SecurityGroupIds: [!Ref NedarimProxySg]
+      Tags: [{Key: Name, Value: !Sub "${ProjectName}-nedarim-proxy"}, {Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
+
+  NedarimProxyEip:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref NedarimProxy
+      Tags: [{Key: Name, Value: !Sub "${ProjectName}-nedarim-proxy"}, {Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
+
   # --- מסד ואחסון קבצים פרטיים (יעד ההעתקה מ-Supabase) ---
   CopySg:
     Type: AWS::EC2::SecurityGroup
@@ -411,72 +505,9 @@ Resources:
           - {Type: redirect, RedirectConfig: {Protocol: HTTPS, Port: '443', StatusCode: HTTP_301}}
           - {Type: forward, TargetGroupArn: !Ref Tg}
 
-  # --- יציאה לאינטרנט עם כתובת קבועה (NAT Gateway + Elastic IP) ---
-  # השרתים ברשתות פרטיות בלי כתובת ציבורית, וכל פנייה החוצה (נדרים, Resend, Gmail, ECR, Secrets) יוצאת מכתובת אחת קבועה: NatIp.
-  # ה-NAT יחיד (באזור הראשון) כדי לשמור על העלות. S3 עובר דרך Gateway Endpoint חינמי ולא דרך ה-NAT.
-  PrivateSubnetA:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VpcId
-      CidrBlock: !Ref PrivateCidrA
-      AvailabilityZone: !Select [0, !GetAZs '']
-      MapPublicIpOnLaunch: false
-      Tags: [{Key: Name, Value: !Sub "${ProjectName}-private-a"}, {Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
-
-  PrivateSubnetB:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VpcId
-      CidrBlock: !Ref PrivateCidrB
-      AvailabilityZone: !Select [1, !GetAZs '']
-      MapPublicIpOnLaunch: false
-      Tags: [{Key: Name, Value: !Sub "${ProjectName}-private-b"}, {Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
-
-  NatEip:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-      Tags: [{Key: Name, Value: !Sub "${ProjectName}-nat"}, {Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
-
-  Nat:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NatEip.AllocationId
-      SubnetId: !Select [0, !Ref SubnetIds]
-      Tags: [{Key: Name, Value: !Sub "${ProjectName}-nat"}, {Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
-
-  PrivateRt:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VpcId
-      Tags: [{Key: Name, Value: !Sub "${ProjectName}-private"}, {Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
-
-  PrivateDefaultRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRt
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref Nat
-
-  PrivateRtAssocA:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties: {SubnetId: !Ref PrivateSubnetA, RouteTableId: !Ref PrivateRt}
-
-  PrivateRtAssocB:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties: {SubnetId: !Ref PrivateSubnetB, RouteTableId: !Ref PrivateRt}
-
-  S3Endpoint:
-    Type: AWS::EC2::VPCEndpoint
-    Properties:
-      VpcId: !Ref VpcId
-      ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
-      VpcEndpointType: Gateway
-      RouteTableIds: [!Ref PrivateRt]
-
   Service:
     Type: AWS::ECS::Service
-    DependsOn: [HttpRedirect, PrivateDefaultRoute, PrivateRtAssocA, PrivateRtAssocB]
+    DependsOn: [HttpRedirect]
     Properties:
       ServiceName: !Ref ProjectName
       Cluster: !Ref Cluster
@@ -493,8 +524,8 @@ Resources:
         DeploymentCircuitBreaker: {Enable: true, Rollback: true}
       NetworkConfiguration:
         AwsvpcConfiguration:
-          AssignPublicIp: DISABLED
-          Subnets: [!Ref PrivateSubnetA, !Ref PrivateSubnetB]
+          AssignPublicIp: ENABLED
+          Subnets: !Ref SubnetIds
           SecurityGroups: [!Ref TaskSg]
       LoadBalancers: [{ContainerName: app, ContainerPort: 3000, TargetGroupArn: !Ref Tg}]
 
@@ -662,7 +693,7 @@ Resources:
   SupaService:
     Type: AWS::ECS::Service
     Condition: HasCert
-    DependsOn: [SupaRule, PrivateDefaultRoute, PrivateRtAssocA, PrivateRtAssocB]
+    DependsOn: [SupaRule]
     Properties:
       ServiceName: !Sub "${ProjectName}-supabase"
       Cluster: !Ref Cluster
@@ -678,8 +709,8 @@ Resources:
         DeploymentCircuitBreaker: {Enable: true, Rollback: true}
       NetworkConfiguration:
         AwsvpcConfiguration:
-          AssignPublicIp: DISABLED
-          Subnets: [!Ref PrivateSubnetA, !Ref PrivateSubnetB]
+          AssignPublicIp: ENABLED
+          Subnets: !Ref SubnetIds
           SecurityGroups: [!Ref SupaSg]
       LoadBalancers: [{ContainerName: gateway, ContainerPort: 8000, TargetGroupArn: !Ref SupaTg}]
 
@@ -819,4 +850,7 @@ Outputs:
   SupaSecretArn: {Value: !Ref SupaSecret}
   FilesBucketName: {Value: !Ref FilesBucket}
   CopySgId: {Value: !Ref CopySg}
-  NatIp: {Value: !Ref NatEip, Description: "הכתובת הקבועה של כל היציאות מהשרתים. להוסיף ברשימה המורשית בנדרים פלוס (עוד > מפתחות API)"}
+  NedarimProxyIp: {Value: !Ref NedarimProxyEip, Description: "הכתובת הקבועה לנדרים פלוס (עוד > מפתחות API)"}
+  NedarimProxyPrivateIp: {Value: !GetAtt NedarimProxy.PrivateIp}
+  NedarimProxySecretArn: {Value: !Ref NedarimProxySecret}
+  NedarimProxyId: {Value: !Ref NedarimProxy}
