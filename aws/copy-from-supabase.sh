@@ -29,9 +29,17 @@ run() { # name image command-json environment-json secrets-json
     --query taskDefinition.taskDefinitionArn --output text)
   local arn; arn=$(aws ecs run-task --cluster "$P" --launch-type FARGATE --task-definition "$td" \
     --network-configuration "awsvpcConfiguration={subnets=[$SUBS],securityGroups=[$SG],assignPublicIp=ENABLED}" --query 'tasks[0].taskArn' --output text)
-  echo "משימה $1 רצה..."; aws ecs wait tasks-stopped --cluster "$P" --tasks "$arn"
+  echo "משימה $1 רצה..."
+  local id=${arn##*/} st=
+  while [ "$st" != STOPPED ]; do
+    sleep 15
+    st=$(aws ecs describe-tasks --cluster "$P" --tasks "$arn" --query 'tasks[0].lastStatus' --output text)
+    # התקדמות חיה: השורה האחרונה של PROGRESS או RETRY מהלוג, על אותה שורה במסך
+    l=$(aws logs get-log-events --log-group-name "/ecs/$P-copy" --log-stream-name "$1/c/$id" --limit 200 --query 'events[].message' --output text 2>/dev/null | tr '\t' '\n' | grep -E '^(PROGRESS|RETRY)' | tail -1 || true)
+    [ -z "$l" ] || printf '\r\033[K%s' "$l"
+  done
+  echo
   local code; code=$(aws ecs describe-tasks --cluster "$P" --tasks "$arn" --query 'tasks[0].containers[0].exitCode' --output text)
-  local id=${arn##*/}
   aws logs get-log-events --log-group-name "/ecs/$P-copy" --log-stream-name "$1/c/$id" --query 'events[].message' --output text | tr '\t' '\n' | grep '^REPORT' | column -t -s'|' || true
   [ "$code" = 0 ] || { echo "נכשל ($code). לוג: /ecs/$P-copy"; exit 1; }
 }
