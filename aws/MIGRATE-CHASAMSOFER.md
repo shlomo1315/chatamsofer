@@ -58,6 +58,11 @@ Secrets Manager (Frankfurt) > `chasamsofer/prod` > Retrieve secret value > Edit.
 - אל תשלח אותם בצ'אט. מעתיקים ישירות מ-Railway לקונסולה.
 - `NEDARIM_PROXY_URL`: משאירים כפי שהוא ב-Railway כל עוד `nedarim-proxy` שם.
 
+### טכנוליין (המערכת הטלפונית החדשה)
+- `bash <(curl -fsSL "https://raw.githubusercontent.com/shlomo1315/chatamsofer/main/aws/technoline-secrets.sh?$(date +%s)")`: יוצר סוד נתיב אקראי לכל מערכת, ומבקש מפתח API (מוסתר), מספר, מספר יוצא ונתיבי השלוחות. בסוף מדפיס את כתובות ה-webhook לפאנל של טכנוליין.
+- ברירת המחדל: המערכת הראשית בלבד. לכל המערכות: `SYSTEMS="MAIN YERID DISTRIBUTORS"`.
+- `cloudshell-setup.sh` מוסיף לסוד כל מפתח חדש מהתבנית כריק לפני העדכון, כדי שהשרת לא ייפול על מפתח חסר.
+
 ## שלב 5: חיבור GitHub לפריסה אוטומטית [אתה]
 1. מעבירים את `aws/deploy-aws.yml` ל-`.github/workflows/deploy-aws.yml` (אין לסוכנים הרשאה לכתוב לשם; לא פועל עד ש-`AWS_DEPLOY_ENABLED=true`). את הסוד ממלאים בפקודה אחת: `bash <(curl -fsSL "https://raw.githubusercontent.com/shlomo1315/chatamsofer/main/aws/fill-secret.sh?$(date +%s)")` ומדביקים את ה-Raw Editor של Railway.
 2. Settings > Secrets and variables > Actions:

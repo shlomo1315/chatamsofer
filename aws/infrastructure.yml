@@ -216,6 +216,36 @@ Resources:
               ValueFrom: !Sub "${AppSecret}:SCHEDULED_MAIL_DISABLED::"
             - Name: SUPABASE_SERVICE_ROLE_KEY
               ValueFrom: !Sub "${SupaSecret}:service_key::"
+            - Name: TECHNOLINE_MAIN_API_KEY
+              ValueFrom: !Sub "${AppSecret}:TECHNOLINE_MAIN_API_KEY::"
+            - Name: TECHNOLINE_MAIN_CALLER_ID
+              ValueFrom: !Sub "${AppSecret}:TECHNOLINE_MAIN_CALLER_ID::"
+            - Name: TECHNOLINE_MAIN_NUMBER
+              ValueFrom: !Sub "${AppSecret}:TECHNOLINE_MAIN_NUMBER::"
+            - Name: TECHNOLINE_MAIN_SECRET
+              ValueFrom: !Sub "${AppSecret}:TECHNOLINE_MAIN_SECRET::"
+            - Name: TECHNOLINE_YERID_API_KEY
+              ValueFrom: !Sub "${AppSecret}:TECHNOLINE_YERID_API_KEY::"
+            - Name: TECHNOLINE_YERID_CALLER_ID
+              ValueFrom: !Sub "${AppSecret}:TECHNOLINE_YERID_CALLER_ID::"
+            - Name: TECHNOLINE_YERID_NUMBER
+              ValueFrom: !Sub "${AppSecret}:TECHNOLINE_YERID_NUMBER::"
+            - Name: TECHNOLINE_YERID_SECRET
+              ValueFrom: !Sub "${AppSecret}:TECHNOLINE_YERID_SECRET::"
+            - Name: TECHNOLINE_DISTRIBUTORS_API_KEY
+              ValueFrom: !Sub "${AppSecret}:TECHNOLINE_DISTRIBUTORS_API_KEY::"
+            - Name: TECHNOLINE_DISTRIBUTORS_CALLER_ID
+              ValueFrom: !Sub "${AppSecret}:TECHNOLINE_DISTRIBUTORS_CALLER_ID::"
+            - Name: TECHNOLINE_DISTRIBUTORS_NUMBER
+              ValueFrom: !Sub "${AppSecret}:TECHNOLINE_DISTRIBUTORS_NUMBER::"
+            - Name: TECHNOLINE_DISTRIBUTORS_SECRET
+              ValueFrom: !Sub "${AppSecret}:TECHNOLINE_DISTRIBUTORS_SECRET::"
+            - Name: TECHNOLINE_MAIN_EXT_HOLIDAYS
+              ValueFrom: !Sub "${AppSecret}:TECHNOLINE_MAIN_EXT_HOLIDAYS::"
+            - Name: TECHNOLINE_MAIN_EXT_MATERNITY
+              ValueFrom: !Sub "${AppSecret}:TECHNOLINE_MAIN_EXT_MATERNITY::"
+            - Name: TECHNOLINE_MAIN_EXT_MENU
+              ValueFrom: !Sub "${AppSecret}:TECHNOLINE_MAIN_EXT_MENU::"
             - Name: UNLOAD_EXPIRED_DISABLED
               ValueFrom: !Sub "${AppSecret}:UNLOAD_EXPIRED_DISABLED::"
             - Name: VERIFY_FROM_EMAIL

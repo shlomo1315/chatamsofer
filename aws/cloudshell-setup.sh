@@ -79,6 +79,19 @@ for K in AdminAllowedIps CostCapUsd CostAlertEmail; do
   CUR=$(aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Parameters[?ParameterKey=='$K'].ParameterValue" --output text 2>/dev/null || true)
   [[ -n "$CUR" && "$CUR" != None ]] && EXTRA_PARAMS="${EXTRA_PARAMS:-} $K=$CUR"
 done
+# SecretString בתבנית חל רק ביצירה. משתנה חדש בתבנית (ValueFrom) שחסר בסוד הקיים מפיל את הפעלת השרת,
+# ולכן מוסיפים לסוד כל מפתח חסר כריק. מיזוג בלבד: ערך קיים לא נדרס ולא מודפס
+APP_SECRET="$PROJECT/prod"
+if CUR_SECRET=$(aws secretsmanager get-secret-value --secret-id "$APP_SECRET" --query SecretString --output text 2>/dev/null); then
+  WANT=$(grep -o '\${AppSecret}:[A-Za-z0-9_]*::' /tmp/infrastructure.yml | sed 's/.*AppSecret}:\(.*\)::/\1/' | sort -u | jq -R . | jq -s .)
+  MISSING=$(jq -r --argjson want "$WANT" '. as $c | $want | map(. as $k | select(($c | has($k)) | not)) | join(" ")' <<<"$CUR_SECRET")
+  if [[ -n "$MISSING" ]]; then
+    echo "מוסיף לסוד $APP_SECRET מפתחות חדשים (ריקים): $MISSING"
+    aws secretsmanager put-secret-value --secret-id "$APP_SECRET" \
+      --secret-string "$(jq --argjson want "$WANT" '. as $c | reduce $want[] as $k ($c; if has($k) then . else .[$k]="" end)' <<<"$CUR_SECRET")" >/dev/null
+  fi
+  unset CUR_SECRET
+fi
 # התבנית מעל 51,200 בתים, ולכן CloudFormation דורש להעלות אותה דרך S3. משתמשים בקט cf-templates הקיים (פרטי, ללא עלות), ואם אין יוצרים אחד חסום לציבור
 TPL_BUCKET=$(aws s3api list-buckets --query "Buckets[?starts_with(Name,'cf-templates-') && ends_with(Name,'-$AWS_DEFAULT_REGION')].Name | [0]" --output text)
 if [[ -z "$TPL_BUCKET" || "$TPL_BUCKET" == None ]]; then
