@@ -24,11 +24,11 @@ if [ -z "$(jq -r '.jwt_secret // empty' <<<"$CUR")" ] || [ "${FORCE:-}" = 1 ]; t
 else
   echo "המפתחות כבר קיימים ונשמרו (FORCE=1 להחלפה, יבטל את ההתחברויות הקיימות)"
 fi
-# ב-storage_url אין sslmode: הוא דורס ב-node-pg את התעודה שמגיעה מ-DATABASE_SSL_ROOT_CERT
+# storage_url עם sslmode=require: ההצפנה חובה בכל החיבורים, והאימות מול ה-CA של RDS (NODE_EXTRA_CA_CERTS בקונטיינר)
 aws secretsmanager put-secret-value --secret-id "$P/supabase-gw" --secret-string "$(jq --arg h "$DBH" --arg ca "$CA" '
   .rds_ca=$ca
   | .rest_url="postgres://authenticator:\(.authenticator_pw)@\($h):5432/app?sslmode=require"
   | .auth_url="postgres://supabase_auth_admin:\(.auth_admin_pw)@\($h):5432/app?sslmode=require&search_path=auth"
-  | .storage_url="postgres://supabase_storage_admin:\(.storage_admin_pw)@\($h):5432/app"' <<<"$CUR")" >/dev/null
+  | .storage_url="postgres://supabase_storage_admin:\(.storage_admin_pw)@\($h):5432/app?sslmode=require"' <<<"$CUR")" >/dev/null
 unset CUR
 echo "נשמר ב-$P/supabase-gw (בלי הדפסה)"

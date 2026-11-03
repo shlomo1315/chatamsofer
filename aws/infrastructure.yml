@@ -541,6 +541,9 @@ Resources:
             Options: {awslogs-group: !Ref SupaLogs, awslogs-region: !Ref 'AWS::Region', awslogs-stream-prefix: auth}
         - Name: storage
           Image: supabase/storage-api:v1.88.0
+          # תעודת ה-CA של RDS נטענת לתהליך (NODE_EXTRA_CA_CERTS) כדי שכל החיבורים, כולל המיגרציות, יוצפנו ויאומתו במלואם
+          EntryPoint: [sh, -c]
+          Command: ['printf "%s" "$DATABASE_SSL_ROOT_CERT" > /tmp/rds-ca.pem; export NODE_EXTRA_CA_CERTS=/tmp/rds-ca.pem; exec docker-entrypoint.sh node dist/start/server.js']
           Essential: true
           Environment:
             - {Name: SERVER_PORT, Value: '5000'}
