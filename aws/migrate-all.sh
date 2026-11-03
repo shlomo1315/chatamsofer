@@ -16,6 +16,16 @@ run_remote() { local f=$1; shift; env "$@" bash <(curl -fsSL "$RAW/$f?$(date +%s
 CPU=$(param TaskCpu); MEM=$(param TaskMemory); CPU=${CPU:-512}; MEM=${MEM:-1024}
 setup() { run_remote cloudshell-setup.sh DOMAIN="$DOMAIN" CPU="$CPU" MEMORY="$MEM" DESIRED="$1" SUPA="$2" >/tmp/setup.log 2>&1 || { tail -30 /tmp/setup.log; exit 1; }; }
 
+# עדכון סטאק פתוח מריצה קודמת (למשל Supabase שנופל ב-ECS) חוסם עדכון חדש: מכבים את השירות וממתינים שהעדכון ייסגר
+stack_status() { aws cloudformation describe-stacks --stack-name "$STACK" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || true; }
+if [[ "$(stack_status)" == *_IN_PROGRESS ]]; then
+  echo "נמצא עדכון פתוח בסטאק ($(stack_status)). מכבים את $P-supabase וממתינים שייסגר"
+  aws ecs update-service --cluster "$P" --service "$P-supabase" --desired-count 0 >/dev/null 2>&1 || true
+  for i in $(seq 1 60); do [[ "$(stack_status)" == *_IN_PROGRESS ]] || break; sleep 15; done
+  echo "מצב הסטאק: $(stack_status)"
+  [[ "$(stack_status)" != *_IN_PROGRESS ]] || { echo "העדכון עדיין פתוח אחרי 15 דקות. מריצים שוב מאוחר יותר"; exit 1; }
+fi
+
 step "1/8 עדכון הסטאק (שרת האתר כבוי, Supabase כבוי)"
 setup 0 0
 [ -n "$(param CertificateArn)" ] || { echo "התעודה עוד לא אומתה. מוסיפים את רשומת ה-CNAME שהודפסה בהרצה (tail /tmp/setup.log) ומריצים שוב."; tail -15 /tmp/setup.log; exit 1; }
