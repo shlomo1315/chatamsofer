@@ -11,6 +11,7 @@ Parameters:
   DomainName: {Type: String, Default: aws.chasamsofer.co.il, Description: "הכתובת שהאתר עונה בה. תת-דומיין זמני (aws.chasamsofer.co.il) או הדומיין הסופי"}
   CreateDnsZone: {Type: String, Default: 'false', AllowedValues: ['true', 'false'], Description: "false = מצב ביניים: ה-DNS נשאר אצל הרשם, בלי אזור Route 53. true = מעבר סופי: נוצר אזור והרשומות בו (ומחליפים שרתי שמות)"}
   CertificateArn: {Type: String, Default: '', AllowedPattern: "^(arn:aws:acm:[a-z0-9-]+:[0-9]+:certificate/[a-f0-9-]+)?$", Description: "ARN של תעודת ACM שהונפקה לדומיין. ריק = מצב זמני על HTTP עד שהתעודה מאומתת, ואז מריצים שוב עם ARN"}
+  ExtraCertificateArn: {Type: String, Default: '', AllowedPattern: "^(arn:aws:acm:[a-z0-9-]+:[0-9]+:certificate/[a-f0-9-]+)?$", Description: "תעודת ACM נוספת על ה-listener של 443 (למשל aws.chasamsofer.co.il). התעודה הראשית נשארת ברירת המחדל. ריק = בלי תעודה נוספת"}
   CertValidationName: {Type: String, Default: '', Description: "שם רשומת ה-CNAME של אימות התעודה, כדי שהחידוש האוטומטי ימשיך לעבוד גם אחרי החלפת שרתי השמות"}
   CertValidationValue: {Type: String, Default: '', Description: "ערך רשומת האימות"}
   VpcId: {Type: AWS::EC2::VPC::Id, Description: "ה-VPC ברירת המחדל"}
@@ -31,6 +32,7 @@ Parameters:
 Conditions:
   HasAdminIps: !Not [!Equals [!Join ['', !Ref AdminAllowedIps], '']]
   HasCert: !Not [!Equals [!Ref CertificateArn, '']]
+  HasExtraCert: !And [!Condition HasCert, !Not [!Equals [!Ref ExtraCertificateArn, '']]]
   HasCertValidation: !Not [!Equals [!Ref CertValidationName, '']]
   MakeZone: !Equals [!Ref CreateDnsZone, 'true']
   MakeCertRecord: !And [!Condition MakeZone, !Condition HasCertValidation]
@@ -536,6 +538,13 @@ Resources:
       SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
       Certificates: [{CertificateArn: !Ref CertificateArn}]
       DefaultActions: [{Type: forward, TargetGroupArn: !Ref Tg}]
+
+  ExtraListenerCertificate:
+    Type: AWS::ElasticLoadBalancingV2::ListenerCertificate
+    Condition: HasExtraCert
+    Properties:
+      ListenerArn: !Ref HttpsListener
+      Certificates: [{CertificateArn: !Ref ExtraCertificateArn}]
 
   HttpRedirect:
     Type: AWS::ElasticLoadBalancingV2::Listener
