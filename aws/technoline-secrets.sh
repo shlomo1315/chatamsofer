@@ -21,6 +21,11 @@ ask() { # ask <מפתח> <שאלה> [hidden]
 }
 state() { [[ -n "$(get "$1")" ]] && echo "קיים" || echo "ריק"; }
 
+echo "== חשבון (משותף לכל המערכות)"
+ask TECHNOLINE_ACCOUNT_KEY "מפתח חשבון טכנוליין ($(state TECHNOLINE_ACCOUNT_KEY), Enter = בלי שינוי)" hidden
+ask TECHNOLINE_MONTHLY_CAP "תקרה חודשית לרכישת מספרים בש\"ח ($(state TECHNOLINE_MONTHLY_CAP), ריק = אין רכישה)"
+ask TECHNOLINE_OUTBOUND_ENABLED "שיחות יוצאות true/false (רק אחרי שה-IP אושר בטכנוליין) ($(state TECHNOLINE_OUTBOUND_ENABLED))"
+
 for S in $SYSTEMS; do
   [[ "$S" =~ ^(MAIN|YERID|DISTRIBUTORS)$ ]] || { echo "מערכת לא מוכרת: $S"; exit 1; }
   P="TECHNOLINE_$S"

@@ -40,6 +40,11 @@ const response = z.discriminatedUnion('type', [
     fileName: z.string().min(1).optional(), saveFolder: z.number().int().positive().optional(),
     maskLog: z.boolean().optional(), files: files.min(1).optional(), ...common,
   }).strict().refine((r) => r.min === undefined || r.max === undefined || r.min <= r.max, 'min > max'),
+  z.object({
+    type: z.literal('simpleRouting'), name: varName, dialPhone: z.string().regex(/^\d{7,15}$/),
+    ringSec: z.number().int().positive().optional(), endCall: z.enum(['yes', 'no']).optional(),
+    displayNumber: z.string().optional(), ...common,
+  }).strict(),
   z.object({ type: z.literal('goTo'), goTo: z.string().min(1), ...common }).strict(),
   z.object({ type: z.literal('hangup'), ...common }).strict(),
 ])

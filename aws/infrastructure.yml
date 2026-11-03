@@ -246,6 +246,12 @@ Resources:
               ValueFrom: !Sub "${AppSecret}:TECHNOLINE_MAIN_EXT_MATERNITY::"
             - Name: TECHNOLINE_MAIN_EXT_MENU
               ValueFrom: !Sub "${AppSecret}:TECHNOLINE_MAIN_EXT_MENU::"
+            - Name: TECHNOLINE_ACCOUNT_KEY
+              ValueFrom: !Sub "${AppSecret}:TECHNOLINE_ACCOUNT_KEY::"
+            - Name: TECHNOLINE_MONTHLY_CAP
+              ValueFrom: !Sub "${AppSecret}:TECHNOLINE_MONTHLY_CAP::"
+            - Name: TECHNOLINE_OUTBOUND_ENABLED
+              ValueFrom: !Sub "${AppSecret}:TECHNOLINE_OUTBOUND_ENABLED::"
             - Name: UNLOAD_EXPIRED_DISABLED
               ValueFrom: !Sub "${AppSecret}:UNLOAD_EXPIRED_DISABLED::"
             - Name: VERIFY_FROM_EMAIL

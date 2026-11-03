@@ -14,8 +14,6 @@ export const SYSTEM_EXTS: Record<TelephonySystemId, { ext: string; label: string
   ],
   yerid: [
     { ext: 'menu', label: 'תפריט יריד הספרים', digit: '' },
-    { ext: 'orders', label: 'מצב הזמנה', digit: '1' },
-    { ext: 'inquiry', label: 'פנייה לשירות', digit: '2' },
   ],
   distributors: [
     { ext: 'menu', label: 'תפריט מפיצים', digit: '' },
