@@ -61,7 +61,9 @@ for (const b of buckets) {
     console.log(`PROGRESS ${b.name} ${d}/${todo.length} (${Math.round(d * 100 / todo.length)}%)`)
   }
   const n = (await listAll(DST, b.name, "יעד")).length
-  const m = files.length === n ? 'ok' : 'DIFF'
+  // קובץ עודף ביעד אינו כשל (האתר החי ממשיך לקבל קבצים); רק קובץ חסר הוא DIFF.
+  // todo הוא מה שהועתק עכשיו, ולכן כשל בהעתקה נבדק לפי failed.
+  const m = n >= files.length && !failed.some(p => p.startsWith(`${b.name}/`)) ? 'ok' : 'DIFF'
   if (m !== 'ok') bad++
   console.log(`REPORT ${b.name}|${files.length}|${n}|${m}`)
 }
