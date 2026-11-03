@@ -106,6 +106,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   },
   {
     key: 'spouse_name',
+    def: false,
     weight: 1.35,
     kind: 'text',
     value: (row) => row.spouse_name ?? null,
@@ -183,6 +184,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   },
   {
     key: 'marital_status',
+    def: false,
     weight: 1.05,
     kind: 'enum',
     filterable: true,
@@ -229,6 +231,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   },
   {
     key: 'registration_source',
+    def: false,
     weight: 1.15,
     kind: 'enum',
     filterable: true,
@@ -448,6 +451,7 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
         data={data}
         columns={columns}
         tableId="beneficiaries"
+        actionsWeight={1.7}
         onRowClick={(row) => setOpenIdx(data.findIndex((r) => r.id === row.id))}
         serverMode
         // 🔴 serverMode + sortFilter = המיון והסינון רצים במסד. סינון

@@ -25,6 +25,8 @@ export interface Column<T> {
   formatValue?: (raw: string) => string
   /** משקל יחסי לרוחב העמודה (ברירת מחדל 1). ראו ColDef.weight. */
   weight?: number
+  /** false = מוסתרת כברירת מחדל (אפשר להציג מבורר העמודות). */
+  def?: boolean
 }
 
 interface DataTableProps<T> {
@@ -36,6 +38,8 @@ interface DataTableProps<T> {
   emptyMessage?: string
   loading?: boolean
   actions?: (row: T) => ReactNode
+  /** משקל רוחב עמודת הפעולות (ברירת מחדל 0.8). */
+  actionsWeight?: number
   rowHref?: (row: T) => string
   /** לחיצה על שורה — מחליף את הניווט של rowHref (למשל פתיחת פופאפ). */
   onRowClick?: (row: T) => void
@@ -75,6 +79,7 @@ export default function DataTable<T extends { id: string }>({
   emptyMessage = 'אין נתונים להצגה',
   loading,
   actions,
+  actionsWeight,
   rowHref,
   onRowClick,
   serverMode,
@@ -95,7 +100,7 @@ export default function DataTable<T extends { id: string }>({
     () => columns.map(c => ({
       key: String(c.key),
       label: c.header,
-      def: true,
+      def: c.def !== false,
       kind: c.kind,
       // ⚠️ sortable כאן משמר את הכוונה המקורית של הצרכן (שם/טלפון/מייל
       // סומנו sortable:false), אבל ב-serverMode המיון עובר למסד ולכן
@@ -130,6 +135,7 @@ export default function DataTable<T extends { id: string }>({
 
   const tc = useTableColumns<string, T>(tableId ?? "", colDefs, {
     extraCols: actions ? 1 : 0,
+    extraWeight: actionsWeight,
     sortFilter: sfOpts,
   })
   const view = tableId
@@ -270,7 +276,7 @@ export default function DataTable<T extends { id: string }>({
                   onClick={onRowClick ? () => onRowClick(row) : rowHref ? () => router.push(rowHref(row)) : undefined}
                   className={`hover:bg-sand transition-colors duration-100 ${rowHref || onRowClick ? 'cursor-pointer' : ''}`}>
                   {view.map((col) => (
-                    <td key={String(col.key)} className={`px-3 py-3.5 text-ink align-middle ${tableId ? tc.rt.cellClass : "whitespace-nowrap"} ${col.className ?? ''}`}>
+                    <td key={String(col.key)} className={`px-3 py-4 text-ink align-middle ${tableId ? tc.rt.cellClass : "whitespace-nowrap"} ${col.className ?? ''}`}>
                       {col.render
                         ? col.render(row)
                         : String((row as Record<string, unknown>)[String(col.key)] ?? '—')}
