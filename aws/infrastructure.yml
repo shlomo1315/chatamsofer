@@ -15,6 +15,7 @@ Parameters:
   CertValidationValue: {Type: String, Default: '', Description: "ערך רשומת האימות"}
   VpcId: {Type: AWS::EC2::VPC::Id, Description: "ה-VPC ברירת המחדל"}
   SubnetIds: {Type: "List<AWS::EC2::Subnet::Id>", Description: "שתי תתי-רשתות ציבוריות בשני אזורי זמינות (המאזן והשרת)"}
+  AdminAllowedIps: {Type: CommaDelimitedList, Default: "", Description: "כתובות IPv4 מורשות לניהול מחוץ לישראל, בפורמט 1.2.3.4/32 ומופרדות בפסיק. ריק = ישראל בלבד"}
   CostCapUsd: {Type: Number, Default: 60, Description: "תקרת עלות חודשית בדולרים. בחציית ה-100% נחסמת יצירת משאבים חדשים בתשלום"}
   CostAlertEmail: {Type: String, Default: s0527101315@gmail.com, Description: "מייל להתראות עלות"}
   ProxyAmiId: {Type: "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>", Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64, Description: "תמונת Amazon Linux 2023 (ARM) לשרת הביניים של נדרים"}
@@ -28,6 +29,7 @@ Parameters:
   ExistingOidcProviderArn: {Type: String, Default: ''}
 
 Conditions:
+  HasAdminIps: !Not [!Equals [!Join ['', !Ref AdminAllowedIps], '']]
   HasCert: !Not [!Equals [!Ref CertificateArn, '']]
   HasCertValidation: !Not [!Equals [!Ref CertValidationName, '']]
   MakeZone: !Equals [!Ref CreateDnsZone, 'true']
@@ -716,6 +718,15 @@ Resources:
           SecurityGroups: [!Ref SupaSg]
       LoadBalancers: [{ContainerName: gateway, ContainerPort: 8000, TargetGroupArn: !Ref SupaTg}]
 
+  # כתובות מורשות לניהול מחוץ לישראל (למשל בנסיעה). ריק = ישראל בלבד. מעדכנים עם aws/admin-geo.sh
+  AdminAllowedIpSet:
+    Type: AWS::WAFv2::IPSet
+    Properties:
+      Scope: REGIONAL
+      IPAddressVersion: IPV4
+      Addresses: !If [HasAdminIps, !Ref AdminAllowedIps, []]
+      Tags: [{Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
+
   # WAF בסיסי. ⚠️ כלל גודל הגוף מוגדר Count: העלאות מסמכים ו-webhooks גדולים מ-8KB.
   Waf:
     Type: AWS::WAFv2::WebACL
@@ -724,6 +735,43 @@ Resources:
       DefaultAction: {Allow: {}}
       VisibilityConfig: {SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: !Sub "${ProjectName}-waf"}
       Rules:
+        # מערכת הניהול רק מישראל: /admin, /yerid-admin ו-/api/admin נחסמים לכל מי שלא מגיע מכתובת ישראלית או מכתובת ברשימה AdminAllowedIps.
+        # כל נתיבי /api/admin דורשים סשן של צוות ואין בהם קריאות משירותים חיצוניים. webhooks, נדרים, ימות, cron, Google ו-Supabase (/auth/v1) לא בנתיבים האלה ולא מושפעים
+        - Name: admin-israel-only
+          Priority: 0
+          Action: {Block: {}}
+          Statement:
+            AndStatement:
+              Statements:
+                - OrStatement:
+                    Statements:
+                      - ByteMatchStatement: {SearchString: /admin, FieldToMatch: {UriPath: {}}, PositionalConstraint: STARTS_WITH, TextTransformations: [{Priority: 0, Type: URL_DECODE}, {Priority: 1, Type: LOWERCASE}]}
+                      - ByteMatchStatement: {SearchString: /yerid-admin, FieldToMatch: {UriPath: {}}, PositionalConstraint: STARTS_WITH, TextTransformations: [{Priority: 0, Type: URL_DECODE}, {Priority: 1, Type: LOWERCASE}]}
+                      - ByteMatchStatement: {SearchString: /api/admin, FieldToMatch: {UriPath: {}}, PositionalConstraint: STARTS_WITH, TextTransformations: [{Priority: 0, Type: URL_DECODE}, {Priority: 1, Type: LOWERCASE}]}
+                - NotStatement:
+                    Statement:
+                      GeoMatchStatement: {CountryCodes: [IL]}
+                - NotStatement:
+                    Statement:
+                      IPSetReferenceStatement: {Arn: !GetAtt AdminAllowedIpSet.Arn}
+          VisibilityConfig: {SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: admin-geo}
+        # הגבלת קצב נמוכה על הכניסה וקודי האימות (בנוסף להגבלה שבקוד): 100 בקשות ל-5 דקות לכל כתובת
+        - Name: login-rate-limit
+          Priority: 5
+          Action: {Block: {}}
+          Statement:
+            RateBasedStatement:
+              Limit: 100
+              AggregateKeyType: IP
+              ScopeDownStatement:
+                OrStatement:
+                  Statements:
+                    - ByteMatchStatement: {SearchString: /login, FieldToMatch: {UriPath: {}}, PositionalConstraint: STARTS_WITH, TextTransformations: [{Priority: 0, Type: LOWERCASE}]}
+                    - ByteMatchStatement: {SearchString: /api/send-otp, FieldToMatch: {UriPath: {}}, PositionalConstraint: STARTS_WITH, TextTransformations: [{Priority: 0, Type: LOWERCASE}]}
+                    - ByteMatchStatement: {SearchString: /api/verify-otp, FieldToMatch: {UriPath: {}}, PositionalConstraint: STARTS_WITH, TextTransformations: [{Priority: 0, Type: LOWERCASE}]}
+                    - ByteMatchStatement: {SearchString: /auth/v1/otp, FieldToMatch: {UriPath: {}}, PositionalConstraint: STARTS_WITH, TextTransformations: [{Priority: 0, Type: LOWERCASE}]}
+                    - ByteMatchStatement: {SearchString: /auth/v1/verify, FieldToMatch: {UriPath: {}}, PositionalConstraint: STARTS_WITH, TextTransformations: [{Priority: 0, Type: LOWERCASE}]}
+          VisibilityConfig: {SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: login-rate}
         - Name: common
           Priority: 1
           OverrideAction: {None: {}}
