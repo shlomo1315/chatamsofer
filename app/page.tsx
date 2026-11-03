@@ -2,6 +2,8 @@ import Script from 'next/script'
 import { loadPublicTexts } from '@/lib/publicTextsStore'
 import PublicPortalPage from './PublicPortalPage'
 import PortalErrorBoundary from '@/components/ui/PortalErrorBoundary'
+import MaintenanceNotice from '@/components/MaintenanceNotice'
+import { maintenanceOn } from '@/lib/maintenance'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // עטיפת שרת דקה לממשק הציבורי.
@@ -17,6 +19,7 @@ export const dynamic = 'force-dynamic'
 const GA_MEASUREMENT_ID = 'G-87874818HK'
 
 export default async function Page() {
+  if (maintenanceOn()) return <MaintenanceNotice />
   const texts = await loadPublicTexts()
   return (
     <>
