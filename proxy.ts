@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { escapeLike } from '@/lib/likeEscape'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { NextResponse, type NextRequest } from 'next/server'
+import { maintenanceOn, isMaintenanceBlockedApi, MAINTENANCE_MESSAGE } from '@/lib/maintenance'
 
 function noCache(res: NextResponse) {
   // Stop NetFree / browser from serving stale admin pages (incl. cached 404s).
@@ -35,6 +36,16 @@ function rememberProfile(userId: string, prof: StaffProfile | null) {
 }
 
 export async function proxy(request: NextRequest) {
+  // מצב תחזוקה: כניסה, הרשמה ואימות מחזירים 503 גם מצד השרת (לא רק הסתרה בממשק)
+  if (request.nextUrl.pathname.startsWith('/api/')) {
+    if (maintenanceOn() && isMaintenanceBlockedApi(request.nextUrl.pathname)) {
+      return NextResponse.json(
+        { error: MAINTENANCE_MESSAGE, maintenance: true },
+        { status: 503, headers: { 'Retry-After': '3600', 'Cache-Control': 'no-store' } },
+      )
+    }
+    return NextResponse.next()
+  }
   // ארכיון ציבורי: הגבלת קצב לפי IP, ואין בו שום לוגיקת ניהול או עוגיות
   if (request.nextUrl.pathname.startsWith('/archive/')) {
     const ok = rateLimit(`archive:${clientIp(request)}`, 120, 60_000)
@@ -154,5 +165,15 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api|.*\\.svg$).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|api|.*\\.svg$).*)',
+    // נתיבי API של כניסה, הרשמה ואימות (למצב תחזוקה)
+    '/api/portal/auth/:path*',
+    '/api/portal/login',
+    '/api/portal/public-register',
+    '/api/portal/verify/:path*',
+    '/api/portal/verify-email',
+    '/api/portal/lookup',
+    '/api/register',
+  ],
 }
