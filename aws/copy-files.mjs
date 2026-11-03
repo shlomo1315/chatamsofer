@@ -3,7 +3,18 @@
 const SRC = { base: process.env.SUPABASE_URL.replace(/\/$/, ''), key: process.env.SUPABASE_SERVICE_ROLE_KEY }
 const DST = { base: process.env.DST_URL.replace(/\/$/, ''), key: process.env.DST_KEY }
 const call = (e, u, o = {}) => fetch(e.base + u, { ...o, headers: { apikey: e.key, Authorization: `Bearer ${e.key}`, ...o.headers } })
-const ok = async (e, u, o) => { const r = await call(e, u, o); if (!r.ok) throw new Error(`${r.status} ${u} ${(await r.text()).slice(0, 200)}`); return r }
+// ניסיון חוזר (עד 5 פעמים, המתנה גדלה) על 403/429/5xx ושגיאות רשת: חסימה רגעית של ה-WAF או עומס לא צריכים להפיל העתקה של אלפי קבצים
+const sleep = ms => new Promise(r => setTimeout(r, ms))
+const retryable = s => s === 403 || s === 429 || s >= 500
+const ok = async (e, u, o) => {
+  for (let i = 1; ; i++) {
+    let r, err
+    try { r = await call(e, u, o); if (r.ok) return r; err = new Error(`${r.status} ${u} ${(await r.text()).slice(0, 200)}`) } catch (x) { err = x }
+    if (i >= 5 || (r && !retryable(r.status))) throw err
+    console.log(`RETRY ${i} ${u} ${err.message.slice(0, 80)}`)
+    await sleep(1000 * 2 ** i)
+  }
+}
 const json = { 'content-type': 'application/json' }
 const enc = p => p.split('/').map(encodeURIComponent).join('/')
 
@@ -28,8 +39,11 @@ for (const b of buckets) {
     await ok(DST, '/storage/v1/bucket', { method: 'POST', headers: json, body: JSON.stringify({ id: b.id, name: b.name, public: b.public, file_size_limit: b.file_size_limit, allowed_mime_types: b.allowed_mime_types }) })
   }
   const files = await listAll(SRC, b.name)
-  for (let i = 0; i < files.length; i += 6) {
-    await Promise.all(files.slice(i, i + 6).map(async f => {
+  // הרצה חוזרת מדלגת על קבצים שכבר הועתקו
+  const done = new Set((await listAll(DST, b.name)).map(f => f.path))
+  const todo = files.filter(f => !done.has(f.path))
+  for (let i = 0; i < todo.length; i += 6) {
+    await Promise.all(todo.slice(i, i + 6).map(async f => {
       const body = Buffer.from(await (await ok(SRC, `/storage/v1/object/${b.name}/${enc(f.path)}`)).arrayBuffer())
       await ok(DST, `/storage/v1/object/${b.name}/${enc(f.path)}`, { method: 'POST', headers: { 'content-type': f.type || 'application/octet-stream', 'x-upsert': 'true' }, body })
     }))
