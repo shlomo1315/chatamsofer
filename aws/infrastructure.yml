@@ -15,6 +15,8 @@ Parameters:
   CertValidationValue: {Type: String, Default: '', Description: "ערך רשומת האימות"}
   VpcId: {Type: AWS::EC2::VPC::Id, Description: "ה-VPC ברירת המחדל"}
   SubnetIds: {Type: "List<AWS::EC2::Subnet::Id>", Description: "שתי תתי-רשתות ציבוריות בשני אזורי זמינות (המאזן והשרת)"}
+  CostCapUsd: {Type: Number, Default: 60, Description: "תקרת עלות חודשית בדולרים. בחציית ה-100% נחסמת יצירת משאבים חדשים בתשלום"}
+  CostAlertEmail: {Type: String, Default: s0527101315@gmail.com, Description: "מייל להתראות עלות"}
   ProxyAmiId: {Type: "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>", Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64, Description: "תמונת Amazon Linux 2023 (ARM) לשרת הביניים של נדרים"}
   TaskCpu: {Type: String, Default: '512', AllowedValues: ['512', '1024', '2048'], Description: "מעבד לשרת: 512 = חצי ליבה, 1024 = ליבה. משפיע ישירות על העלות"}
   TaskMemory: {Type: String, Default: '1024', AllowedValues: ['1024', '2048', '3072', '4096'], Description: "זיכרון ב-MB. 512 מעבד מאפשר עד 4096, 1024 מאפשר 2048 ומעלה"}
@@ -839,6 +841,73 @@ Resources:
               - {Effect: Allow, Action: [ecs:DescribeTaskDefinition, ecs:RegisterTaskDefinition], Resource: '*'}
               - {Effect: Allow, Action: [ecs:UpdateService, ecs:DescribeServices], Resource: !Ref Service}
               - {Effect: Allow, Action: 'iam:PassRole', Resource: [!GetAtt ExecRole.Arn, !GetAtt TaskRole.Arn]}
+
+  # --- תקרת עלות: בחציית ה-100% של התקציב החודשי מוצמדת מדיניות שחוסמת יצירת משאבים חדשים בתשלום ---
+  # לא מכבה שום דבר שרץ, לא מוחקת ולא חוסמת עדכון שירותים, תמונות, סודות או כתיבה ל-S3. מוצמדת למשתמש kav-terraform ולתפקיד הפריסה.
+  CostCapPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: חסימת יצירת משאבים בתשלום אחרי חציית תקרת העלות
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Deny
+            Action:
+              - ec2:RunInstances
+              - ec2:CreateNatGateway
+              - ec2:AllocateAddress
+              - ec2:CreateVolume
+              - rds:CreateDBInstance
+              - rds:CreateDBCluster
+              - rds:CreateDBInstanceReadReplica
+              - rds:ModifyDBInstance
+              - elasticloadbalancing:CreateLoadBalancer
+              - elasticache:Create*
+              - es:CreateDomain
+              - redshift:CreateCluster
+            Resource: '*'
+
+  CostCapBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub "${ProjectName}-cost-cap"
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit: {Amount: !Ref CostCapUsd, Unit: USD}
+
+  CostCapActionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement: [{Effect: Allow, Principal: {Service: budgets.amazonaws.com}, Action: 'sts:AssumeRole'}]
+      Policies:
+        - PolicyName: attach-cap-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [iam:AttachUserPolicy, iam:DetachUserPolicy, iam:AttachRolePolicy, iam:DetachRolePolicy]
+                Resource: '*'
+                Condition: {ArnEquals: {'iam:PolicyARN': !Ref CostCapPolicy}}
+      Tags: [{Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
+
+  CostCapAction:
+    Type: AWS::Budgets::BudgetsAction
+    Properties:
+      BudgetName: !Ref CostCapBudget
+      ActionType: APPLY_IAM_POLICY
+      NotificationType: ACTUAL
+      ApprovalModel: AUTOMATIC
+      ActionThreshold: {Type: PERCENTAGE, Value: 100}
+      ExecutionRoleArn: !GetAtt CostCapActionRole.Arn
+      Definition:
+        IamActionDefinition:
+          PolicyArn: !Ref CostCapPolicy
+          Users: [kav-terraform]
+          Roles: [!Ref DeployRole]
+      Subscribers: [{Type: EMAIL, Address: !Ref CostAlertEmail}]
 
 Outputs:
   AlbDnsName: {Value: !GetAtt Alb.DNSName, Description: "כתובת המאזן. בדיקה לפני המעבר: curl -k -H 'Host: <הדומיין>' https://<הכתובת>/api/health"}
