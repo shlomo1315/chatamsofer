@@ -753,6 +753,7 @@ Resources:
                       - ByteMatchStatement: {SearchString: /admin, FieldToMatch: {UriPath: {}}, PositionalConstraint: STARTS_WITH, TextTransformations: [{Priority: 0, Type: URL_DECODE}, {Priority: 1, Type: LOWERCASE}]}
                       - ByteMatchStatement: {SearchString: /yerid-admin, FieldToMatch: {UriPath: {}}, PositionalConstraint: STARTS_WITH, TextTransformations: [{Priority: 0, Type: URL_DECODE}, {Priority: 1, Type: LOWERCASE}]}
                       - ByteMatchStatement: {SearchString: /api/admin, FieldToMatch: {UriPath: {}}, PositionalConstraint: STARTS_WITH, TextTransformations: [{Priority: 0, Type: URL_DECODE}, {Priority: 1, Type: LOWERCASE}]}
+                      - ByteMatchStatement: {SearchString: /yerid101315, FieldToMatch: {UriPath: {}}, PositionalConstraint: STARTS_WITH, TextTransformations: [{Priority: 0, Type: URL_DECODE}, {Priority: 1, Type: LOWERCASE}]}
                 - NotStatement:
                     Statement:
                       GeoMatchStatement: {CountryCodes: [IL]}

@@ -73,6 +73,11 @@ if aws cloudformation describe-stacks --stack-name "$STACK" >/dev/null 2>&1; the
   EXISTING_OIDC=$(aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Parameters[?ParameterKey=='ExistingOidcProviderArn'].ParameterValue" --output text)
 fi
 [[ "$EXISTING_OIDC" == "None" ]] && EXISTING_OIDC=""
+# שומרים את הכתובות המורשות לניהול מחו"ל גם בהרצות שלא קובעות אותן (admin-geo.sh עם ADMIN_IPS קובע, כל שאר הסקריפטים משאירים את הקיים)
+if [[ -z "${EXTRA_PARAMS:-}" ]]; then
+  CUR_IPS=$(aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Parameters[?ParameterKey=='AdminAllowedIps'].ParameterValue" --output text 2>/dev/null || true)
+  [[ -n "$CUR_IPS" && "$CUR_IPS" != None ]] && EXTRA_PARAMS="AdminAllowedIps=$CUR_IPS"
+fi
 aws cloudformation deploy --stack-name "$STACK" --template-file /tmp/infrastructure.yml \
   --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM --tags Project="$PROJECT" \
   --parameter-overrides ProjectName="$PROJECT" GitHubRepo="$REPO" DomainName="$DOMAIN" CreateDnsZone="$CREATE_ZONE" CertificateArn="$CERT_PARAM" \
