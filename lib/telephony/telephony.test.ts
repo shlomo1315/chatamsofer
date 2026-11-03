@@ -11,6 +11,7 @@ vi.mock('./otpLookup', () => ({ takePendingCode: (...a: unknown[]) => take(...a)
 
 import { dispatch } from './index'
 import { verifyRequest, sharedSecretSystems } from './systems'
+import { validateResult } from './schema'
 
 const ENV = ['MAIN', 'YERID', 'DISTRIBUTORS']
 beforeEach(() => {
@@ -118,5 +119,35 @@ describe('OTP', () => {
     take.mockResolvedValueOnce({ kind: 'ok', code: '987654' })
     await call()
     expect(JSON.stringify(log.mock.calls)).not.toContain('987654')
+  })
+})
+
+describe('שלוחות שהועברו מימות', () => {
+  it('קוויטלאך: בלי שמות שמורים מקליטים; הקלטה נשמרת', async () => {
+    const { kvitelTurn } = await import('./main/kvitel')
+    expect(validateResult(kvitelTurn({}, []).result).ok).toBe(true)
+    const t = kvitelTurn({ PATH_kv_rec: '/x.wav' }, [])
+    expect(t.action).toEqual({ kind: 'recording', path: '/x.wav' })
+    expect(kvitelTurn({ kv_confirm: '1' }, [{ name: 'א' } as never]).action).toEqual({ kind: 'saved' })
+  })
+  it('טעינת מוקד: כרטיס רגיש ואישור לפני שיוך', async () => {
+    const { centerTurn } = await import('./main/centerLoad')
+    const ask = centerTurn({}, { cardNumber: null, loadedThisMonth: false }).result as { maskLog?: boolean; post?: boolean }
+    expect(ask.maskLog).toBe(true); expect(ask.post).toBe(true)
+    const card = '1234567812345678'
+    const conf = centerTurn({ center_card: card }, { cardNumber: null, loadedThisMonth: false })
+    expect(validateResult(conf.result).ok).toBe(true)
+    expect(centerTurn({ center_card: card, center_confirm: '1' }, { cardNumber: null, loadedThisMonth: false }).link).toBe(card)
+    expect(centerTurn({ center_go: '1' }, { cardNumber: card, loadedThisMonth: false }).load).toBe(true)
+  })
+  it('זיכויי יריד: סיום ללא פרטי בנק; שמירה אחרי אישור', async () => {
+    const { creditTurn } = await import('./yerid/credits')
+    const ctx = { name: 'ר', books: 'ספר', amountAgorot: 5000, alreadyDone: false }
+    expect(creditTurn({}, ctx).action).toEqual({ kind: 'answered' })
+    const full = { cr_ok: '1', PATH_cr_holder: '/h', cr_bank: '12', cr_branch: '600', cr_acct: '123456', cr_confirm: '1' }
+    const r = creditTurn(full, ctx)
+    expect(r.action?.kind).toBe('save')
+    const ask = creditTurn({ cr_ok: '1', PATH_cr_holder: '/h' }, ctx).result as { maskLog?: boolean; post?: boolean }
+    expect(ask.maskLog && ask.post).toBe(true)
   })
 })
