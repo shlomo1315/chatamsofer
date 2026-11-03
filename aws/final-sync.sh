@@ -21,7 +21,7 @@ code() { curl -sk -m 15 --resolve "$DOMAIN:443:$ALB_IP" -o /dev/null -w '%{http_
 
 S=$(aws cloudformation describe-stacks --stack-name "$STACK" --query 'Stacks[0].StackStatus' --output text)
 [[ "$S" != *_IN_PROGRESS ]] || { echo "הסטאק באמצע עדכון ($S). ממתינים ומריצים שוב."; exit 1; }
-[ "$(code /api/health)" = 200 ] && [ "$(code /auth/v1/health)" = 200 ] || { echo "המאזן ב-AWS לא עונה 200 ב-HTTPS על /api/health ו-/auth/v1/health עבור $DOMAIN. כנראה התעודה עוד לא אומתה (cloudshell-setup.sh שוב), או שהאתר כבוי. לא מתחילים."; exit 1; }
+[ "$(code /api/health)" = 200 ] || { echo "המאזן ב-AWS לא עונה 200 ב-HTTPS על /api/health עבור $DOMAIN. כנראה התעודה עוד לא אומתה (cloudshell-setup.sh שוב), או שהאתר כבוי. לא מתחילים."; exit 1; }
 echo "האתר הזמני https://$DOMAIN יורד לכמה דקות. המסד ב-AWS יוחלף כולו בעותק טרי מהמקור."
 if [ "${YES:-}" != 1 ]; then read -rp "להמשיך? (כן/לא) " A; [ "$A" = כן ] || { echo "בוטל"; exit 1; }; fi
 
