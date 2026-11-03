@@ -22,6 +22,18 @@ const PREFIX: Record<TelephonySystemId, string> = {
   distributors: 'TECHNOLINE_DISTRIBUTORS',
 }
 
+/** חשבון טכנוליין אחד לכל המערכות: מפתח חשבון, תקרה חודשית ודגל הפעלת שיחות יוצאות. */
+export function accountConfig() {
+  const cap = Number(process.env.TECHNOLINE_MONTHLY_CAP)
+  return {
+    accountKey: process.env.TECHNOLINE_ACCOUNT_KEY?.trim() || null,
+    /** תקרה חודשית (בש"ח) לרכישת מספרים; 0 או חסר = אין רכישה */
+    monthlyCap: Number.isFinite(cap) && cap > 0 ? cap : 0,
+    /** שיחות יוצאות כבויות עד שה-IP של השרת מאושר בטכנוליין */
+    outboundEnabled: process.env.TECHNOLINE_OUTBOUND_ENABLED === 'true',
+  }
+}
+
 export type SystemConfig = {
   id: TelephonySystemId
   label: string
