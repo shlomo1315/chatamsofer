@@ -22,11 +22,14 @@ export type TlCommon = {
   removeParams?: string[]
 }
 
+type YesNo = 'yes' | 'no'
+
 export type TlResponse = TlCommon & (
   | { type: 'simpleMessage'; files: TlFile[] }
   | { type: 'simpleMenu'; name: string; enabledKeys: string; times?: number; timeout?: number; errorReturn?: string; files?: TlFile[] }
   | { type: 'getDTMF'; name: string; max: number; min?: number; timeout?: number; skipKey?: string; skipValue?: string; confirmType?: 'number' | 'digits' | 'no'; maskLog?: boolean; files?: TlFile[] }
-  | { type: 'record'; name: string; max?: number; min?: number; confirm?: 'confirmOnly' | 'ful' | 'no'; fileName?: string; saveFolder?: number; maskLog?: boolean; files?: TlFile[] }
+  | { type: 'record'; name: string; max?: number; min?: number; confirm?: 'confirmOnly' | 'ful' | 'no'; fileName?: string; saveFolder?: number; maskLog?: boolean; hangupSave?: 'yes' | 'no'; sttSoft?: boolean; files?: TlFile[] }
+  | { type: 'creditCard'; name: string; sum?: number; sumChangeable?: YesNo; cvv?: YesNo; tz?: YesNo; payments?: number; category?: string; terminal?: string; noSum?: YesNo; noSuccess?: YesNo; noConfirmation?: YesNo; noFailExit?: YesNo; fixed?: YesNo; files?: TlFile[] }
   | { type: 'simpleRouting'; name: string; dialPhone: string; ringSec?: number; endCall?: 'yes' | 'no'; displayNumber?: string }
   | { type: 'goTo'; goTo: string }
   | { type: 'hangup' }

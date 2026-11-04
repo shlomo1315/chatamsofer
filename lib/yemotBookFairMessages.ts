@@ -10,6 +10,8 @@
 import { getServiceClient } from '@/lib/apiAuth'
 
 export const BOOK_FAIR_MSG_KEY = 'yemot_book_fair_messages'
+/** הודעות היריד במערכת טכנוליין — מפתח נפרד, כדי שעריכה באחת לא תשנה את השנייה. */
+export const TECHNOLINE_YERID_MSG_KEY = 'technoline_yerid_messages'
 
 export type BookFairMsg = { text: string; audio?: string | null }
 export type BookFairMessages = Record<string, BookFairMsg>
@@ -194,12 +196,12 @@ export function defaultMessages(): BookFairMessages {
  * ⚠️ המיזוג הוא על ברירות המחדל ולא על מה שנשמר: הודעה שנוספה לקוד
  * ואינה במסד מקבלת את ברירת המחדל שלה, במקום להיעלם מהשלוחה.
  */
-export async function getBookFairMessages(): Promise<BookFairMessages> {
+export async function getBookFairMessages(settingKey: string = BOOK_FAIR_MSG_KEY): Promise<BookFairMessages> {
   const merged = defaultMessages()
   const admin = getServiceClient()
   if (!admin) return merged
 
-  const { data } = await admin.from('app_settings').select('value').eq('key', BOOK_FAIR_MSG_KEY).maybeSingle()
+  const { data } = await admin.from('app_settings').select('value').eq('key', settingKey).maybeSingle()
   if (data?.value) {
     try {
       // 🔴 app_settings.value היא עמודת text — הערך נשמר כ-JSON מסודרת.
@@ -217,11 +219,11 @@ export async function getBookFairMessages(): Promise<BookFairMessages> {
   return merged
 }
 
-export async function saveBookFairMessages(input: BookFairMessages): Promise<boolean> {
+export async function saveBookFairMessages(input: BookFairMessages, settingKey: string = BOOK_FAIR_MSG_KEY): Promise<boolean> {
   const admin = getServiceClient()
   if (!admin) return false
 
-  const current = await getBookFairMessages()
+  const current = await getBookFairMessages(settingKey)
   for (const key of Object.keys(current)) {
     const i = input[key]
     if (!i) continue
@@ -241,17 +243,25 @@ export async function saveBookFairMessages(input: BookFairMessages): Promise<boo
   const { error } = await admin.from('app_settings').upsert(
     // ⚠️ JSON.stringify חובה — שמירת אובייקט גולמי לעמודת text נכשלת
     // בשקט ומאחסנת "[object Object]".
-    { key: BOOK_FAIR_MSG_KEY, value: JSON.stringify(current), updated_at: new Date().toISOString() },
+    { key: settingKey, value: JSON.stringify(current), updated_at: new Date().toISOString() },
     { onConflict: 'key' },
   )
   return !error
 }
 
 /** עדכון/מחיקת קובץ הקלטה להודעה בודדת (audio=null מסיר). */
-export async function setBookFairMessageAudio(key: string, audio: string | null): Promise<boolean> {
+export async function setBookFairMessageAudio(key: string, audio: string | null, settingKey: string = BOOK_FAIR_MSG_KEY): Promise<boolean> {
   if (!META_BY_KEY.get(key)?.allowAudio) return false
-  const msgs = await getBookFairMessages()
+  const msgs = await getBookFairMessages(settingKey)
   if (!msgs[key]) return false
   msgs[key] = { ...msgs[key], audio }
-  return saveBookFairMessages(msgs)
+  // ⚠️ נכתב ישירות ולא דרך saveBookFairMessages: שם audio=null מתפרש כ'לא נשלח'
+  // ונשמר הקובץ הקודם, כך שאי אפשר היה להסיר הקלטה.
+  const admin = getServiceClient()
+  if (!admin) return false
+  const { error } = await admin.from('app_settings').upsert(
+    { key: settingKey, value: JSON.stringify(msgs), updated_at: new Date().toISOString() },
+    { onConflict: 'key' },
+  )
+  return !error
 }
