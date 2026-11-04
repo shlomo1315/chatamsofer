@@ -1,35 +1,12 @@
-// שיחה יוצאת דרך ימות המשיח — מקריאה למתקשר קוד כניסה חד-פעמי (TTS). צד-שרת בלבד.
-//
-// ⚠️ בטיחות: השיחה מתבצעת אך ורק כשמוגדר YEMOT_OTP_TEMPLATE_ID. כל עוד אינו מוגדר —
-// yemotCallConfigured() מחזיר false ו-placeCodeCall לא יוצר שום שיחה.
-//
-// מנגנון: RunCampaign על תבנית *נקייה* (בלי הודעה כללית, maxDialAttempts=1) עם
-// ttsMode=1 והקוד כטקסט אישי ב-phones. כך מוקרא רק הקוד, שיחה אחת, בלי חזרות:
-//   • templateId = YEMOT_OTP_TEMPLATE_ID — תבנית ללא הודעה ועם ניסיון חיוג אחד.
-//   • ttsMode=1 — מקריא את הטקסט האישי כ-TTS (בלי זה השיחה מתנתקת בלי הקראה).
-//   • phones = { "<מספר>": "<קוד להקראה>" } — אובייקט JSON, ערך = הטקסט האישי.
-// אם התבנית כוללת הודעה כללית — היא תושמע לפני הקוד; לכן יש להשתמש בתבנית ריקה.
+// שיחות יוצאות (קוד כניסה, הודעות): רק דרך טכנוליין. צד-שרת בלבד.
+// שם הקובץ נשאר מטעמי תאימות; ימות המשיח כבר לא קיימת ואין נפילה אליה.
 
-import { callConfigured as tlCallConfigured, placeCodeCall as tlPlaceCodeCall } from '@/lib/telephony/client'
+import { callConfigured as tlCallConfigured, placeCodeCall as tlPlaceCodeCall, placeTextCall } from '@/lib/telephony/client'
 
-const YEMOT_API = 'https://www.call2all.co.il/ym/api'
-
+// ימות המשיח כבר לא קיימת: כל השיחות היוצאות עוברות רק דרך טכנוליין (lib/telephony/client.ts).
+// כשל שם מוחזר למי שקרא, בלי נפילה לשום מערכת אחרת.
 export function yemotCallConfigured(): boolean {
-  return tlCallConfigured('main') || (!!process.env.YEMOT_TOKEN && !!process.env.YEMOT_OTP_TEMPLATE_ID)
-}
-
-// טקסט בטוח להקראה בשיחה יוצאת.
-//
-// ⚠️ הפסיק מוסר — ואינו רק "לא מועיל" אלא מזיק: ימות מפצלת את הטקסט האישי
-// בפסיקים למשתני התבנית, ותבנית עם משתנה אחד מקריאה רק את מה שלפני הפסיק
-// הראשון. טקסט עם פסיק פירושו הודעה קטועה וניתוק. ההאטה נעשית במילים
-// (ראו spokenCode) ולא בפיסוק.
-// נקודה מוסרת גם: היא גרמה לימות להשהות ~15ש' לפני ההקראה.
-function ttsSafe(text: string): string {
-  return String(text ?? '')
-    .replace(/[.,\-"'&|=]/g, ' ')
-    .replace(/[ \t]+/g, ' ')
-    .trim()
+  return tlCallConfigured('main')
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -76,55 +53,6 @@ export function spokenCode(code: string): string {
   return `שלום הקוד שלכם הוא ${spoken} ואני חוזר שנית ${spoken}`
 }
 
-// מבצע שיחה יוצאת יחידה שמקריאה טקסט TTS כלשהו. לעולם לא זורק.
-// מחזיר { ok, error? }. אם לא מוגדר — { ok:false, notConfigured:true }.
-async function runTtsCall(
-  phone: string,
-  spokenText: string,
-  shape: 'string' | 'object' = 'string',
-): Promise<{ ok: boolean; notConfigured?: boolean; error?: string }> {
-  const token = process.env.YEMOT_TOKEN
-  const templateId = process.env.YEMOT_OTP_TEMPLATE_ID
-  // בלי משתנה: מחייג המערכת הראשית (023131325, ה-DID שבחשבון), ולא המחייג שבתבנית 241833 (0772636313)
-  const callerId = process.env.YEMOT_OTP_CALLER_ID || '023131325'
-  if (!token || !templateId) return { ok: false, notConfigured: true }
-
-  const tel = phone.replace(/\D/g, '')
-  if (tel.length < 9) return { ok: false, error: 'מספר טלפון לא תקין' }
-
-  const form = new URLSearchParams()
-  form.set('token', token)
-  form.set('templateId', templateId)
-  // לפי תיעוד ימות, לכל מספר ב-phones אפשר אובייקט עם השדה text (הטקסט המוקרא);
-  // shape='object' שולח כך, 'string' שולח מחרוזת ישירה (הצורה ההיסטורית).
-  form.set('phones', JSON.stringify({ [tel]: shape === 'object' ? { text: spokenText } : spokenText }))
-  form.set('ttsMode', '1')
-  form.set('withSMS', '0')
-  if (callerId) form.set('callerId', callerId)
-
-  try {
-    const res = await fetch(`${YEMOT_API}/RunCampaign`, { method: 'POST', body: form })
-    const json = await res.json().catch(() => null)
-    if (!json || (json.responseStatus && json.responseStatus !== 'OK')) {
-      // ⚠️ לוג דיאגנוסטי מלא — "General error" מימות אינו אומר למה. חושפים את כל
-      // התשובה כדי לדעת אם זו מכסה/תבנית/פרמטר. להסרה אחרי האבחון.
-      console.error('[yemot RunCampaign TTS] FULL RESPONSE:', JSON.stringify(json), 'HTTP', res.status)
-      return { ok: false, error: json ? String(json.message ?? json.responseStatus) : `HTTP ${res.status}` }
-    }
-    // לוג אבחון לכל שליחה: הטקסט עם הספרות מוסתרות (הקוד לא נחשף) ותשובת ימות המלאה.
-    console.log('[yemot RunCampaign TTS] sent', JSON.stringify({
-      text: maskDigits(spokenText),
-      textLength: spokenText.length,
-      hasPunctuation: /[.,;]/.test(spokenText),
-      phoneTail: tel.slice(-3),
-      response: json,
-    }))
-    return { ok: true }
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) }
-  }
-}
-
 // מסתיר מילות ספרות ומספרים בטקסט לוג, כדי שהקוד לא ייכתב ללוגים.
 export function maskDigits(text: string): string {
   return text.split(' ').map(w => (DIGIT_WORDS.includes(w) ? '#' : w)).join(' ').replace(/\d/g, '#')
@@ -135,86 +63,37 @@ export async function placeCodeCall(
   phone: string,
   code: string,
 ): Promise<{ ok: boolean; notConfigured?: boolean; error?: string }> {
-  // טכנוליין קודם (כשהשיחות היוצאות שלה מופעלות); כשל שם — נופלים לימות ולא משאירים משתמש בלי קוד.
-  if (tlCallConfigured('main')) {
-    const r = await tlPlaceCodeCall('main', phone, code)
-    if (r.ok) return r
-    console.error('[otp-call] technoline failed, falling back to yemot:', r.error)
-  }
-  // ⚠️ ttsSafe גם כאן, למרות ש-spokenCode אינו מייצר פיסוק: זו רשת ביטחון
-  // מפני עריכה עתידית שתחזיר פסיק לטקסט — פסיק אחד קוטע את ההודעה ומנתק.
-  return runTtsCall(phone, ttsSafe(spokenCode(code)))
+  const r = await tlPlaceCodeCall('main', phone, code)
+  if (!r.ok && !r.notConfigured) console.error('[otp-call] technoline failed:', r.error)
+  return r
 }
 
-// שיחה יוצאת שמנגנת קובץ מוקלט (קול טבעי) דרך תבנית קמפיין ייעודית שמנגנת קובץ.
-// דורש YEMOT_ANNOUNCE_TEMPLATE_ID (תבנית בימות שמנגנת את קובץ ההודעה שהועלה).
-async function runFileCall(phone: string): Promise<{ ok: boolean; notConfigured?: boolean; error?: string }> {
-  const token = process.env.YEMOT_TOKEN
-  const templateId = process.env.YEMOT_ANNOUNCE_TEMPLATE_ID
-  const callerId = process.env.YEMOT_OTP_CALLER_ID
-  if (!token || !templateId) return { ok: false, notConfigured: true }
-  const tel = phone.replace(/\D/g, '')
-  if (tel.length < 9) return { ok: false, error: 'מספר טלפון לא תקין' }
-
-  const form = new URLSearchParams()
-  form.set('token', token)
-  form.set('templateId', templateId)
-  form.set('phones', JSON.stringify({ [tel]: '' })) // התבנית מנגנת את הקובץ; אין טקסט אישי
-  form.set('withSMS', '0')
-  if (callerId) form.set('callerId', callerId)
-  try {
-    const res = await fetch(`${YEMOT_API}/RunCampaign`, { method: 'POST', body: form })
-    const json = await res.json().catch(() => null)
-    if (!json || (json.responseStatus && json.responseStatus !== 'OK')) {
-      return { ok: false, error: json ? String(json.message ?? json.responseStatus) : `HTTP ${res.status}` }
-    }
-    return { ok: true }
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) }
-  }
-}
-
-/**
- * שיחה יוצאת שמקריאה טקסט חופשי ב-TTS — בלי נפילה-לאחור לקמפיין קובץ.
- *
- * ⚠️ בשימוש להודעות שהתוכן שלהן משתנה (למשל אישור בקשה לחלוקת חגים).
- * placeAnnouncementCall מנגן את ההקלטה של *אישור הרישום* כשמוגדרת תבנית קובץ,
- * ולכן שימוש בו כאן היה משמיע למשפחה הודעה על נושא אחר לגמרי.
- */
+/** שיחה יוצאת שמקריאה טקסט חופשי ב-TTS (למשל אישור בקשה לחלוקת חגים). */
 export async function placeTtsCall(
   phone: string,
   text: string,
 ): Promise<{ ok: boolean; notConfigured?: boolean; error?: string }> {
-  return runTtsCall(phone, ttsSafe(text))
+  const r = await placeTextCall('main', phone, text)
+  if (!r.ok && !r.notConfigured) console.error('[tts-call] technoline failed:', r.error)
+  return r
 }
 
-// שיחה יוצאת שמקריאה הודעה כללית (למשל אישור קליטת רישום).
-// אם הוגדרה תבנית קמפיין שמנגנת קובץ (YEMOT_ANNOUNCE_TEMPLATE_ID) — מפעילים אותה
-// (מנגנת את ההקלטה הטבעית). אם הקמפיין נכשל (לא חויג) — נפילה-לאחור ל-TTS כדי שבכל
-// מקרה תצא שיחה אחת. מחזיר גם mode/error לאבחון.
+/** הקראת הודעה כללית (למשל אישור קליטת רישום). ההקלטה הישנה של ימות בוטלה: תמיד TTS. */
 export async function placeAnnouncementCall(
   phone: string,
   text: string,
   _opts: { audioFile?: string | null } = {},
 ): Promise<{ ok: boolean; notConfigured?: boolean; error?: string; mode?: 'file' | 'tts' }> {
   void _opts
-  if (process.env.YEMOT_ANNOUNCE_TEMPLATE_ID) {
-    const r = await runFileCall(phone)
-    if (r.ok) return { ...r, mode: 'file' }
-    // קמפיין הקובץ החזיר שגיאה → לא בוצע חיוג; מנסים TTS (שיחה אחת בלבד).
-    const t = await runTtsCall(phone, ttsSafe(text))
-    return { ok: t.ok, notConfigured: t.notConfigured, mode: 'tts', error: `קמפיין הקובץ נכשל: ${r.error}${t.ok ? ' — בוצעה שיחת TTS במקום' : `; גם TTS נכשל: ${t.error}`}` }
-  }
-  const t = await runTtsCall(phone, ttsSafe(text))
-  return { ...t, mode: 'tts' }
+  return { ...(await placeTtsCall(phone, text)), mode: 'tts' }
 }
 
-// ⚠️ לבדיקות אבחון בלבד (נתיב אדמין): שיחת TTS עם הטקסט כמו שהוא, בלי ttsSafe,
-// כדי לנסות וריאנטים של פיסוק מול התבנית בימות.
+// לבדיקות אבחון בלבד (נתיב אדמין): הטקסט כמו שהוא. הפרמטר shape נשאר לתאימות.
 export function placeRawTtsCall(
   phone: string,
   text: string,
-  shape: 'string' | 'object' = 'string',
+  _shape: 'string' | 'object' = 'string',
 ): Promise<{ ok: boolean; notConfigured?: boolean; error?: string }> {
-  return runTtsCall(phone, text, shape)
+  void _shape
+  return placeTtsCall(phone, text)
 }
