@@ -28,6 +28,9 @@ fi
 # תעודה נוספת על ה-listener (aws.$DOMAIN), אם קיימת ופעילה, כדי שהרצה חוזרת לא תסיר אותה
 EXTRA_CERT=$(aws acm list-certificates --certificate-statuses ISSUED --query "CertificateSummaryList[?DomainName=='aws.$DOMAIN'].CertificateArn | [0]" --output text)
 [[ "$EXTRA_CERT" == "None" ]] && EXTRA_CERT=""
+# מרחב שמות פנימי קיים (Cloud Map) לא נוצר שוב: יצירה כפולה נכשלת ב-ConflictingDomainExists ומגלגלת את הסטאק לאחור
+NS_ID=$(aws servicediscovery list-namespaces --query "Namespaces[?Name=='$PROJECT.internal'].Id | [0]" --output text 2>/dev/null || true)
+[[ "$NS_ID" == "None" ]] && NS_ID=""
 VAL_NAME=""; VAL_VALUE=""
 for _ in 1 2 3 4 5 6 7 8 9 10; do
   VAL_NAME=$(aws acm describe-certificate --certificate-arn "$CERT" --query "Certificate.DomainValidationOptions[0].ResourceRecord.Name" --output text)
@@ -105,7 +108,7 @@ fi
 aws cloudformation deploy --stack-name "$STACK" --template-file /tmp/infrastructure.yml --s3-bucket "$TPL_BUCKET" \
   --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM --tags Project="$PROJECT" \
   --parameter-overrides ProjectName="$PROJECT" GitHubRepo="$REPO" DomainName="$DOMAIN" CreateDnsZone="$CREATE_ZONE" CertificateArn="$CERT_PARAM" \
-    ExtraCertificateArn="$EXTRA_CERT" CertValidationName="$VAL_NAME" CertValidationValue="$VAL_VALUE" \
+    ExtraCertificateArn="$EXTRA_CERT" InternalNamespaceId="${NS_ID:-}" CertValidationName="$VAL_NAME" CertValidationValue="$VAL_VALUE" \
     VpcId="$VPC" SubnetIds="$SUBNETS" DesiredCount="${DESIRED:-0}" SupaDesiredCount="${SUPA:-0}" TaskCpu="${CPU:-512}" TaskMemory="${MEMORY:-1024}" CreateOidcProvider="$OIDC" ExistingOidcProviderArn="$EXISTING_OIDC" ${EXTRA_PARAMS:-} || {
   echo "ההקמה נכשלה. סיבת הכשל:"
   aws cloudformation describe-stack-events --stack-name "$STACK" --query "StackEvents[?contains(ResourceStatus,'FAILED')].[LogicalResourceId,ResourceStatusReason]" --output text || true

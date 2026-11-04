@@ -5,7 +5,7 @@
 # מרים את האתר מחדש, ובודק דרך השרת שהפנייה לנדרים יוצאת מהכתובת הקבועה. בסוף מדפיס את הכתובת להוספה בנדרים.
 set -euo pipefail
 export AWS_DEFAULT_REGION=eu-central-1
-P=${PROJECT:-chasamsofer}; STACK=${STACK:-$P}; DOMAIN=${DOMAIN:-aws.chasamsofer.co.il}
+P=${PROJECT:-chasamsofer}; STACK=${STACK:-$P}
 RAW=https://raw.githubusercontent.com/shlomo1315/chatamsofer/main/aws
 param() { aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Parameters[?ParameterKey=='$1'].ParameterValue" --output text; }
 out() { aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text; }
@@ -13,9 +13,12 @@ count() { aws ecs describe-services --cluster "$P" --services "$1" --query 'serv
 [[ "$(aws cloudformation describe-stacks --stack-name "$STACK" --query 'Stacks[0].StackStatus' --output text)" != *_IN_PROGRESS ]] \
   || { echo "הסטאק באמצע עדכון. מחכים שיסתיים ומריצים שוב"; exit 1; }
 
-echo "== עדכון הסטאק (כמה דקות)"
+# הדומיין ומצב ה-DNS נשמרים כמו שהם בסטאק. ברירת מחדל אחרת (aws.chasamsofer.co.il) מחליפה את התעודה הראשית ומפילה את האתר
+DOMAIN=${DOMAIN:-$(param DomainName)}; CREATE_ZONE=${CREATE_ZONE:-$(param CreateDnsZone)}
+[[ -n "$DOMAIN" && "$DOMAIN" != None ]] || { echo "לא נמצא DomainName בסטאק"; exit 1; }
+echo "== עדכון הסטאק (כמה דקות) | דומיין: $DOMAIN | אזור DNS: $CREATE_ZONE"
 CPU=$(param TaskCpu); MEM=$(param TaskMemory)
-env DOMAIN="$DOMAIN" CPU="${CPU:-512}" MEMORY="${MEM:-1024}" DESIRED="$(count "$P")" SUPA="$(count "$P-supabase")" \
+env DOMAIN="$DOMAIN" CREATE_ZONE="$CREATE_ZONE"CPU="${CPU:-512}" MEMORY="${MEM:-1024}" DESIRED="$(count "$P")" SUPA="$(count "$P-supabase")" \
   bash <(curl -fsSL "$RAW/cloudshell-setup.sh?$(date +%s)") >/tmp/nedarim-proxy-setup.log 2>&1 || { tail -30 /tmp/nedarim-proxy-setup.log; exit 1; }
 
 IP=$(out NedarimProxyIp); PRIV=$(out NedarimProxyPrivateIp); IID=$(out NedarimProxyId); PS=$(out NedarimProxySecretArn)
