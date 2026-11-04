@@ -10,10 +10,12 @@
 //   • phones = { "<מספר>": "<קוד להקראה>" } — אובייקט JSON, ערך = הטקסט האישי.
 // אם התבנית כוללת הודעה כללית — היא תושמע לפני הקוד; לכן יש להשתמש בתבנית ריקה.
 
+import { callConfigured as tlCallConfigured, placeCodeCall as tlPlaceCodeCall } from '@/lib/telephony/client'
+
 const YEMOT_API = 'https://www.call2all.co.il/ym/api'
 
 export function yemotCallConfigured(): boolean {
-  return !!process.env.YEMOT_TOKEN && !!process.env.YEMOT_OTP_TEMPLATE_ID
+  return tlCallConfigured('main') || (!!process.env.YEMOT_TOKEN && !!process.env.YEMOT_OTP_TEMPLATE_ID)
 }
 
 // טקסט בטוח להקראה בשיחה יוצאת.
@@ -129,10 +131,16 @@ export function maskDigits(text: string): string {
 }
 
 // שיחה יוצאת שמקריאה למתקשר את קוד הכניסה החד-פעמי. לא מתעד את הקוד.
-export function placeCodeCall(
+export async function placeCodeCall(
   phone: string,
   code: string,
 ): Promise<{ ok: boolean; notConfigured?: boolean; error?: string }> {
+  // טכנוליין קודם (כשהשיחות היוצאות שלה מופעלות); כשל שם — נופלים לימות ולא משאירים משתמש בלי קוד.
+  if (tlCallConfigured('main')) {
+    const r = await tlPlaceCodeCall('main', phone, code)
+    if (r.ok) return r
+    console.error('[otp-call] technoline failed, falling back to yemot:', r.error)
+  }
   // ⚠️ ttsSafe גם כאן, למרות ש-spokenCode אינו מייצר פיסוק: זו רשת ביטחון
   // מפני עריכה עתידית שתחזיר פסיק לטקסט — פסיק אחד קוטע את ההודעה ומנתק.
   return runTtsCall(phone, ttsSafe(spokenCode(code)))
