@@ -18,6 +18,7 @@ const common = {
   addParams: z.record(z.string(), z.string()).optional(),
   removeParams: z.array(z.string().min(1)).optional(),
 }
+const yesNo = z.enum(['yes', 'no'])
 const varName = z.string().regex(/^[A-Za-z][A-Za-z0-9_]*$/)
 
 const response = z.discriminatedUnion('type', [
@@ -38,8 +39,16 @@ const response = z.discriminatedUnion('type', [
     type: z.literal('record'), name: varName, max: z.number().int().positive().optional(),
     min: z.number().int().positive().optional(), confirm: z.enum(['confirmOnly', 'ful', 'no']).optional(),
     fileName: z.string().min(1).optional(), saveFolder: z.number().int().positive().optional(),
-    maskLog: z.boolean().optional(), files: files.min(1).optional(), ...common,
+    maskLog: z.boolean().optional(), hangupSave: yesNo.optional(), sttSoft: z.boolean().optional(),
+    files: files.min(1).optional(), ...common,
   }).strict().refine((r) => r.min === undefined || r.max === undefined || r.min <= r.max, 'min > max'),
+  z.object({
+    type: z.literal('creditCard'), name: varName, sum: z.number().positive().optional(),
+    sumChangeable: yesNo.optional(), cvv: yesNo.optional(), tz: yesNo.optional(),
+    payments: z.number().int().positive().optional(), category: z.string().optional(), terminal: z.string().regex(/^\d+$/).optional(),
+    noSum: yesNo.optional(), noSuccess: yesNo.optional(), noConfirmation: yesNo.optional(),
+    noFailExit: yesNo.optional(), fixed: yesNo.optional(), files: files.min(1).optional(), ...common,
+  }).strict(),
   z.object({
     type: z.literal('simpleRouting'), name: varName, dialPhone: z.string().regex(/^\d{7,15}$/),
     ringSec: z.number().int().positive().optional(), endCall: z.enum(['yes', 'no']).optional(),

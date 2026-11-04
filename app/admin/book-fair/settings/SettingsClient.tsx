@@ -12,6 +12,7 @@ import OfficeContact from './OfficeContact'
 import DashboardAccess from './DashboardAccess'
 import RecordingRescue from './RecordingRescue'
 import PhoneMessages from '../phone/PhoneMessages'
+import TechnolineYerid from '../phone/TechnolineYerid'
 import BookAudio from '../phone/BookAudio'
 
 // הגדרות היריד: מתג פתיחה, ערי משלוח, תעריפים, תשלום ושלוחה טלפונית.
@@ -55,7 +56,7 @@ export default function SettingsClient({ cities, open, openAt, mockPay }: {
   const { confirm, confirmDialog } = useConfirm()
   const canEdit = useCan('book_fair', 'edit')
   const [tab, setTab] = useState<TabId>('general')
-  const [phoneTab, setPhoneTab] = useState<'messages' | 'books'>('messages')
+  const [phoneTab, setPhoneTab] = useState<'technoline' | 'messages' | 'books'>('technoline')
 
   const [isOpen, setIsOpen] = useState(open)
   const [busy, setBusy] = useState<string | null>(null)
@@ -261,7 +262,7 @@ export default function SettingsClient({ cities, open, openAt, mockPay }: {
               והקלטות התוכן (111 ספרים + 9 קטגוריות). שונים במהותם —
               אלה נערכים פעם אחת, ואלה משתנים עם הקטלוג. */}
           <nav className="flex gap-1 rounded-xl bg-slate-100 p-1">
-            {([['messages', 'נוסחי המערכת'], ['books', 'הקלטות ספרים וקטגוריות']] as const).map(([id, label]) => (
+            {([['technoline', 'מערכת טכנוליין'], ['messages', 'נוסחי ימות (ישן)'], ['books', 'הקלטות ספרים וקטגוריות']] as const).map(([id, label]) => (
               <button
                 key={id}
                 onClick={() => setPhoneTab(id)}
@@ -273,7 +274,7 @@ export default function SettingsClient({ cities, open, openAt, mockPay }: {
               </button>
             ))}
           </nav>
-          {phoneTab === 'messages' ? <PhoneMessages /> : <BookAudio />}
+          {phoneTab === 'technoline' ? <TechnolineYerid canEdit={canEdit} /> : phoneTab === 'messages' ? <PhoneMessages /> : <BookAudio />}
         </div>
       )}
 
