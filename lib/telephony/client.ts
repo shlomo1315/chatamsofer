@@ -40,3 +40,20 @@ export async function placeCodeCall(system: TelephonySystemId, phone: string, co
   })
   return res.ok ? { ok: true } : { ok: false, error: res.error }
 }
+
+/** מקריא טקסט חופשי בשיחה קולית (TTS). לשיחות יוצאות שאינן קוד אימות. */
+export async function placeTextCall(system: TelephonySystemId, phone: string, text: string): Promise<CallResult> {
+  const cfg = getSystem(system)
+  if (!cfg.apiKey || !accountConfig().outboundEnabled) return { ok: false, notConfigured: true }
+  const to = localPhone(phone)
+  if (!to) return { ok: false, error: 'מספר טלפון לא תקין' }
+  const audioText = text.replace(/[,\-"'&|=]/g, ' ').replace(/\s+/g, ' ').trim()
+  if (!audioText) return { ok: false, error: 'אין טקסט להקראה' }
+  const res = await campaignApi(system, 'campaignRun', {
+    phones: [to],
+    audioText,
+    ...(cfg.callerId ? { callId: cfg.callerId } : {}),
+    callLength: 60, dialRetries: 1, betweenRetries: 5,
+  })
+  return res.ok ? { ok: true } : { ok: false, error: res.error }
+}

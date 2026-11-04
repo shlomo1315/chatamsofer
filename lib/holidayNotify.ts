@@ -126,7 +126,7 @@ export async function notifyHolidayApproved(
         tried.add(p)
         const c = await placeTtsCall(p, approvalCallText(distName))
         if (c.ok) { res.phoneCalled = true; break }
-        if (c.notConfigured) { lastErr = 'ימות אינו מוגדר'; break }
+        if (c.notConfigured) { lastErr = 'טכנוליין אינו מוגדר'; break }
         lastErr = c.error ?? 'החיוג נכשל'
       }
       if (!res.phoneCalled) {
