@@ -96,6 +96,16 @@ describe('תפריט ראשי', () => {
   it('מקש 2 — מפעיל ישירות את מטפל היולדות', async () => {
     expect(JSON.stringify((await call({ menuChoice: '2' })).body)).toContain('יולדות')
   })
+  it('הבקשה כפי שהגיעה מטכנוליין בשיחה אמיתית (NEW, PBXnum/PBXdid) — מקבלת את התפריט', async () => {
+    process.env.TECHNOLINE_MAIN_NUMBER = '0765674241'
+    const r = await call({
+      PBXcallId: '6fe7511a', PBXcallStatus: 'NEW', PBXcallType: '', PBXnum: '0765674241',
+      PBXdid: '0765674241', PBXphone: '0527101315', PBXextensionId: '13638', PBXextensionPath: '/',
+    })
+    expect(r.status).toBe(200)
+    expect(r.body).toMatchObject({ type: 'simpleMenu', name: 'menuChoice', enabledKeys: '1,2,9' })
+    expect(validateResult(r.body).ok).toBe(true)
+  })
   it('ERROR (פג זמן) — חוזר לתפריט', async () => {
     expect((await call({ menuChoice: 'ERROR' })).body).toMatchObject({ type: 'simpleMenu' })
   })
