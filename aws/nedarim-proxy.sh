@@ -18,7 +18,7 @@ DOMAIN=${DOMAIN:-$(param DomainName)}; CREATE_ZONE=${CREATE_ZONE:-$(param Create
 [[ -n "$DOMAIN" && "$DOMAIN" != None ]] || { echo "לא נמצא DomainName בסטאק"; exit 1; }
 echo "== עדכון הסטאק (כמה דקות) | דומיין: $DOMAIN | אזור DNS: $CREATE_ZONE"
 CPU=$(param TaskCpu); MEM=$(param TaskMemory)
-env DOMAIN="$DOMAIN" CREATE_ZONE="$CREATE_ZONE"CPU="${CPU:-512}" MEMORY="${MEM:-1024}" DESIRED="$(count "$P")" SUPA="$(count "$P-supabase")" \
+env DOMAIN="$DOMAIN" CREATE_ZONE="$CREATE_ZONE" CPU="${CPU:-512}" MEMORY="${MEM:-1024}" DESIRED="$(count "$P")" SUPA="$(count "$P-supabase")" \
   bash <(curl -fsSL "$RAW/cloudshell-setup.sh?$(date +%s)") >/tmp/nedarim-proxy-setup.log 2>&1 || { tail -30 /tmp/nedarim-proxy-setup.log; exit 1; }
 
 IP=$(out NedarimProxyIp); PRIV=$(out NedarimProxyPrivateIp); IID=$(out NedarimProxyId); PS=$(out NedarimProxySecretArn)
