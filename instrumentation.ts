@@ -20,6 +20,10 @@ function israelParts() {
 export async function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return
 
+  // קריאות Supabase מצד השרת לכתובת הפנימית (אם הוגדרה) — עוקף DNS ציבורי
+  const { installInternalSupabaseFetch } = await import('@/lib/supabase/internalFetch')
+  installInternalSupabaseFetch()
+
   // טקסטי המיילים הערוכים — נטענים למטמון בעליית התהליך, כדי שתבניות המייל
   // (שהן סינכרוניות) יוכלו לקרוא אותם. גם בפיתוח, כדי שההתנהגות זהה.
   try {
