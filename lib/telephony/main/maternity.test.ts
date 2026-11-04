@@ -51,7 +51,6 @@ beforeEach(() => {
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.spyOn(console, 'error').mockImplementation(() => {})
   process.env.TECHNOLINE_MAIN_SECRET = 'main-secret-1'
-  delete process.env.TECHNOLINE_MAIN_EXT_MENU
   data.findActiveAid.mockResolvedValue(active())
   data.isCardRegistered.mockResolvedValue(false)
   data.markPickedUp.mockResolvedValue({ centerName: 'בני ברק', firstTime: true })
@@ -72,11 +71,6 @@ describe('יולדות — זיהוי', () => {
     expect(text(r)).toContain('המספר לא נמצא')
     expect(last(r)).toEqual({ type: 'hangup' })
     expect(data.logActivity).toHaveBeenCalledWith('yemot_phone_not_found', 'phone', null, expect.objectContaining({ channel: 'technoline' }))
-  })
-  it('מספר לא קיים עם תפריט מוגדר — חזרה לתפריט', async () => {
-    process.env.TECHNOLINE_MAIN_EXT_MENU = '/'
-    data.findActiveAid.mockResolvedValue({ kind: 'notFound' })
-    expect(last(await call())).toEqual({ type: 'goTo', goTo: '/' })
   })
   it.each([
     [{ kind: 'noBirth', familyId: 'f1', familyName: 'כהן' }, 'אין לידה פעילה'],

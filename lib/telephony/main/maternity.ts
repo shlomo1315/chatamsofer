@@ -10,7 +10,7 @@
 import { getNedarimCreds, setMagneticCard, findClientByZeout, getClientCardFull } from '@/lib/nedarim'
 import { getMaternityMessages, type MaternityMessages } from '@/lib/yemotMaternityMessages'
 import { canLinkMaternityCard } from '@/lib/maternityCardGate'
-import { askDigits, digits, fill, goTo, goodbye, hangup, menu } from '../modules'
+import { askDigits, digits, fill, goodbye, hangup, menu } from '../modules'
 import { normalizePhone } from '../shared/phone'
 import type { TlFile, TlHandler, TlResponse, TlResult } from '../types'
 import {
@@ -93,8 +93,7 @@ export const maternity: TlHandler = async ({ phone, callId, params }) => {
   // ── שלב 1: זיהוי ──
   if (found.kind === 'notFound') {
     await logActivity('yemot_phone_not_found', 'phone', null, { caller, callId, channel: CHANNEL, note: 'מספר לא קיים במערכת' })
-    const menuPath = process.env.TECHNOLINE_MAIN_EXT_MENU?.trim()
-    return menuPath ? [{ type: 'simpleMessage', files: files('not_found') }, goTo(menuPath)] : end('not_found')
+    return end('not_found')
   }
   if (found.kind === 'noBirth') {
     await logActivity('yemot_no_active_birth', 'beneficiary', found.familyId, {

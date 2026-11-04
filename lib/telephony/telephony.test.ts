@@ -6,6 +6,8 @@ vi.mock('@/lib/yemotMainMenu', () => ({
     notice: { text: 'אין הודעות' }, invalid: { text: 'הקשה שגויה' },
   }),
 }))
+vi.mock('./main/holidays', () => ({ holidays: async () => ({ type: 'simpleMessage', files: [{ text: 'חגים' }] }) }))
+vi.mock('./main/maternity', () => ({ maternity: async () => ({ type: 'simpleMessage', files: [{ text: 'יולדות' }] }) }))
 const take = vi.fn()
 vi.mock('./otpLookup', () => ({ takePendingCode: (...a: unknown[]) => take(...a) }))
 
@@ -23,7 +25,6 @@ beforeEach(() => {
 })
 afterEach(() => {
   for (const e of ENV) for (const k of ['SECRET', 'NUMBER']) delete process.env[`TECHNOLINE_${e}_${k}`]
-  delete process.env.TECHNOLINE_MAIN_EXT_HOLIDAYS
   vi.restoreAllMocks()
 })
 
@@ -89,13 +90,11 @@ describe('תפריט ראשי', () => {
     const r = await call({ menuChoice: '9' })
     expect(Array.isArray(r.body) && r.body.at(-1)).toEqual({ type: 'hangup' })
   })
-  it('מקש 1 עם יעד מוגדר — goTo', async () => {
-    process.env.TECHNOLINE_MAIN_EXT_HOLIDAYS = '/holidays'
-    expect((await call({ menuChoice: '1' })).body).toEqual({ type: 'goTo', goTo: '/holidays' })
+  it('מקש 1 — מפעיל ישירות את מטפל החגים', async () => {
+    expect(JSON.stringify((await call({ menuChoice: '1' })).body)).toContain('חגים')
   })
-  it('מקש 1 בלי יעד — הודעה וניתוק (לא קורס)', async () => {
-    const r = await call({ menuChoice: '1' })
-    expect(Array.isArray(r.body) && r.body.at(-1)).toEqual({ type: 'hangup' })
+  it('מקש 2 — מפעיל ישירות את מטפל היולדות', async () => {
+    expect(JSON.stringify((await call({ menuChoice: '2' })).body)).toContain('יולדות')
   })
   it('ERROR (פג זמן) — חוזר לתפריט', async () => {
     expect((await call({ menuChoice: 'ERROR' })).body).toMatchObject({ type: 'simpleMenu' })
