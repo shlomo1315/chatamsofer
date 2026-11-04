@@ -860,6 +860,8 @@ Resources:
               Name: AWSManagedRulesCommonRuleSet
               RuleActionOverrides:
                 - {Name: SizeRestrictions_BODY, ActionToUse: {Count: {}}}
+                # המרכזיה של טכנוליין שולחת בלי User-Agent. הכלל רק מסמן, והחסימה נעשית ב-no-user-agent (חוץ מה-webhook של טכנוליין)
+                - {Name: NoUserAgent_HEADER, ActionToUse: {Count: {}}}
               # העלאות קבצים ל-Storage (POST/PUT/PATCH ל-/storage/v1/object/): תוכן הקובץ נקרא כטקסט ונחסם ב-CrossSiteScripting_BODY. שאר הבקשות נבדקות כרגיל
               ScopeDownStatement:
                 NotStatement:
@@ -877,6 +879,18 @@ Resources:
                               - ByteMatchStatement: {SearchString: PUT, FieldToMatch: {Method: {}}, PositionalConstraint: EXACTLY, TextTransformations: [{Priority: 0, Type: NONE}]}
                               - ByteMatchStatement: {SearchString: PATCH, FieldToMatch: {Method: {}}, PositionalConstraint: EXACTLY, TextTransformations: [{Priority: 0, Type: NONE}]}
           VisibilityConfig: {SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: common}
+        # בקשה בלי User-Agent נחסמת כמו קודם, חוץ מ-webhook של טכנוליין (מאומת בסוד שבנתיב). בלי החריגה כל שיחה נכנסת נענתה "שגיאה בביצוע הפעולה"
+        - Name: no-user-agent
+          Priority: 6
+          Action: {Block: {}}
+          Statement:
+            AndStatement:
+              Statements:
+                - LabelMatchStatement: {Scope: LABEL, Key: "awswaf:managed:aws:core-rule-set:NoUserAgent_Header"}
+                - NotStatement:
+                    Statement:
+                      ByteMatchStatement: {SearchString: /api/webhooks/technoline/, FieldToMatch: {UriPath: {}}, PositionalConstraint: STARTS_WITH, TextTransformations: [{Priority: 0, Type: NONE}]}
+          VisibilityConfig: {SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: no-user-agent}
         - Name: known-bad-inputs
           Priority: 3
           OverrideAction: {None: {}}
