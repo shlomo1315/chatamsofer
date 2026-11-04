@@ -14,7 +14,7 @@ if(!g.RuleActionOverrides.some(o=>o.Name==="NoUserAgent_HEADER")) g.RuleActionOv
 if(!a.Rules.some(r=>r.Name==="no-user-agent")) a.Rules.push({Name:"no-user-agent",Priority:6,Action:{Block:{}},
   Statement:{AndStatement:{Statements:[
     {LabelMatchStatement:{Scope:"LABEL",Key:"awswaf:managed:aws:core-rule-set:NoUserAgent_Header"}},
-    {NotStatement:{Statement:{ByteMatchStatement:{SearchString:"/api/webhooks/technoline/",FieldToMatch:{UriPath:{}},PositionalConstraint:"STARTS_WITH",TextTransformations:[{Priority:0,Type:"NONE"}]}}}}]}},
+    {NotStatement:{Statement:{ByteMatchStatement:{SearchString:Buffer.from("/api/webhooks/technoline/").toString("base64"),FieldToMatch:{UriPath:{}},PositionalConstraint:"STARTS_WITH",TextTransformations:[{Priority:0,Type:"NONE"}]}}}}]}},
   VisibilityConfig:{SampledRequestsEnabled:true,CloudWatchMetricsEnabled:true,MetricName:"no-user-agent"}})
 const out={Name:a.Name,Scope:"REGIONAL",Id:a.Id,DefaultAction:a.DefaultAction,Rules:a.Rules,VisibilityConfig:a.VisibilityConfig,LockToken:j.LockToken}
 for (const k of ["Description","CustomResponseBodies","CaptchaConfig","ChallengeConfig","TokenDomains","AssociationConfig"]) if (a[k]) out[k]=a[k]
