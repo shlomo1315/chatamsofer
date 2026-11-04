@@ -12,6 +12,7 @@ Parameters:
   CreateDnsZone: {Type: String, Default: 'false', AllowedValues: ['true', 'false'], Description: "false = מצב ביניים: ה-DNS נשאר אצל הרשם, בלי אזור Route 53. true = מעבר סופי: נוצר אזור והרשומות בו (ומחליפים שרתי שמות)"}
   CertificateArn: {Type: String, Default: '', AllowedPattern: "^(arn:aws:acm:[a-z0-9-]+:[0-9]+:certificate/[a-f0-9-]+)?$", Description: "ARN של תעודת ACM שהונפקה לדומיין. ריק = מצב זמני על HTTP עד שהתעודה מאומתת, ואז מריצים שוב עם ARN"}
   ExtraCertificateArn: {Type: String, Default: '', AllowedPattern: "^(arn:aws:acm:[a-z0-9-]+:[0-9]+:certificate/[a-f0-9-]+)?$", Description: "תעודת ACM נוספת על ה-listener של 443 (למשל aws.chasamsofer.co.il). התעודה הראשית נשארת ברירת המחדל. ריק = בלי תעודה נוספת"}
+  InternalNamespaceId: {Type: String, Default: '', AllowedPattern: "^(ns-[a-z0-9]+)?$", Description: "מזהה מרחב שמות פנימי (Cloud Map) קיים בשם PROJECT.internal. ריק = הסטאק יוצר חדש. אם כבר קיים אחד ב-VPC חובה למסור אותו, אחרת היצירה נכשלת (ConflictingDomainExists)"}
   CertValidationName: {Type: String, Default: '', Description: "שם רשומת ה-CNAME של אימות התעודה, כדי שהחידוש האוטומטי ימשיך לעבוד גם אחרי החלפת שרתי השמות"}
   CertValidationValue: {Type: String, Default: '', Description: "ערך רשומת האימות"}
   VpcId: {Type: AWS::EC2::VPC::Id, Description: "ה-VPC ברירת המחדל"}
@@ -33,6 +34,8 @@ Conditions:
   HasAdminIps: !Not [!Equals [!Join ['', !Ref AdminAllowedIps], '']]
   HasCert: !Not [!Equals [!Ref CertificateArn, '']]
   HasExtraCert: !And [!Condition HasCert, !Not [!Equals [!Ref ExtraCertificateArn, '']]]
+  UseExistingNamespace: !Not [!Equals [!Ref InternalNamespaceId, '']]
+  CreateNamespace: !And [!Condition HasCert, !Not [!Condition UseExistingNamespace]]
   HasCertValidation: !Not [!Equals [!Ref CertValidationName, '']]
   MakeZone: !Equals [!Ref CreateDnsZone, 'true']
   MakeCertRecord: !And [!Condition MakeZone, !Condition HasCertValidation]
@@ -617,7 +620,7 @@ Resources:
 
   InternalNamespace:
     Type: AWS::ServiceDiscovery::PrivateDnsNamespace
-    Condition: HasCert
+    Condition: CreateNamespace
     Properties:
       Name: !Sub "${ProjectName}.internal"
       Vpc: !Ref VpcId
@@ -627,7 +630,7 @@ Resources:
     Condition: HasCert
     Properties:
       Name: supabase
-      NamespaceId: !GetAtt InternalNamespace.Id
+      NamespaceId: !If [UseExistingNamespace, !Ref InternalNamespaceId, !GetAtt InternalNamespace.Id]
       DnsConfig:
         RoutingPolicy: MULTIVALUE
         DnsRecords: [{Type: A, TTL: 10}]
