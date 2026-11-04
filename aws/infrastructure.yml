@@ -118,6 +118,8 @@ Resources:
             - {Name: NEXT_PUBLIC_APP_URL, Value: !Sub "https://${DomainName}"}
             - {Name: TZ, Value: Asia/Jerusalem}
             - {Name: NEXT_PUBLIC_SUPABASE_URL, Value: !Sub "https://${DomainName}"}
+            # כתובת פנימית (Cloud Map) לקריאות Supabase מצד השרת בלבד, כדי לעקוף DNS ציבורי. הדפדפן נשאר על הכתובת הציבורית
+            - {Name: SUPABASE_INTERNAL_URL, Value: !If [HasCert, !Sub "http://supabase.${ProjectName}.internal:8000", '']}
           LogConfiguration:
             LogDriver: awslogs
             Options: {awslogs-group: !Sub "/ecs/${ProjectName}", awslogs-region: !Ref 'AWS::Region', awslogs-stream-prefix: app}
@@ -608,6 +610,28 @@ Resources:
         - {IpProtocol: tcp, FromPort: 8000, ToPort: 8000, SourceSecurityGroupId: !Ref AlbSg}
       Tags: [{Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
 
+  SupaFromAppIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: HasCert
+    Properties: {GroupId: !Ref SupaSg, IpProtocol: tcp, FromPort: 8000, ToPort: 8000, SourceSecurityGroupId: !Ref TaskSg, Description: "קריאות Supabase פנימיות משרת האפליקציה"}
+
+  InternalNamespace:
+    Type: AWS::ServiceDiscovery::PrivateDnsNamespace
+    Condition: HasCert
+    Properties:
+      Name: !Sub "${ProjectName}.internal"
+      Vpc: !Ref VpcId
+
+  SupaDiscovery:
+    Type: AWS::ServiceDiscovery::Service
+    Condition: HasCert
+    Properties:
+      Name: supabase
+      NamespaceId: !GetAtt InternalNamespace.Id
+      DnsConfig:
+        RoutingPolicy: MULTIVALUE
+        DnsRecords: [{Type: A, TTL: 10}]
+
   SupaDbIngress:
     Type: AWS::EC2::SecurityGroupIngress
     Properties: {GroupId: !Ref DbSg, IpProtocol: tcp, FromPort: 5432, ToPort: 5432, SourceSecurityGroupId: !Ref SupaSg}
@@ -767,6 +791,7 @@ Resources:
           Subnets: !Ref SubnetIds
           SecurityGroups: [!Ref SupaSg]
       LoadBalancers: [{ContainerName: gateway, ContainerPort: 8000, TargetGroupArn: !Ref SupaTg}]
+      ServiceRegistries: [{RegistryArn: !GetAtt SupaDiscovery.Arn}]
 
   # כתובות מורשות לניהול מחוץ לישראל (למשל בנסיעה). ריק = ישראל בלבד. מעדכנים עם aws/admin-geo.sh
   AdminAllowedIpSet:
