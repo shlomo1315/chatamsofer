@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { fetchByIds } from './fetchByIds'
+import { fetchByIds, IDS_CHUNK_SIZE } from './fetchByIds'
 
 const ids = Array.from({ length: 250 }, (_, i) => `id${i}`)
 
@@ -20,6 +20,16 @@ describe('fetchByIds', () => {
       return { data: c, error: null }
     }, 100)
     expect(error).toBe('fetch failed')
+  })
+  it('ברירת המחדל: קבוצות של 30 לכל היותר (מגבלת השער של Supabase)', async () => {
+    const sizes: number[] = []
+    await fetchByIds<string>(ids, async c => {
+      sizes.push(c.length)
+      return { data: c, error: null }
+    })
+    expect(IDS_CHUNK_SIZE).toBe(30)
+    expect(Math.max(...sizes)).toBe(30)
+    expect(sizes).toHaveLength(9)
   })
   it('רשימה ריקה', async () => {
     const r = await fetchByIds<string>([], async () => ({ data: [], error: null }))
