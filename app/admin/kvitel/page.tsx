@@ -20,7 +20,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   const staff = await guardPage('kvitel')
   const filters = parseKvitelFilters(await searchParams)
   const db = getServiceClient()
-  const { rows, error } = db ? await loadKvitelRequests(db, filters) : { rows: [], error: 'השרת אינו מוגדר' }
+  const { rows, error } = db ? await loadKvitelRequests(db, { ...filters, status: 'all' }) : { rows: [], error: 'השרת אינו מוגדר' }
   const canEdit = staff.role === 'admin' || roleAllows(staff.role, staff.permissions as UserPermissions, 'kvitel', 'edit')
   const nedarimView = db && canEdit ? await getKvitelPullView(db).catch(() => null) : null
 
@@ -29,7 +29,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
       <PageHeader title="קוויטלאך" subtitle="שמות ובקשות לתפילה בציון — מכל הערוצים" />
       {error && <p role="alert" className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</p>}
       {nedarimView && <KvitelNedarim view={nedarimView} isAdmin={staff.role === 'admin'} />}
-      <KvitelClient rows={rows} filters={filters} canEdit={canEdit} />
+      <KvitelClient allRows={rows} filters={filters} canEdit={canEdit} isAdmin={staff.role === 'admin'} />
     </div>
   )
 }
