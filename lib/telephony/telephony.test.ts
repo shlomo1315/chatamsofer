@@ -12,7 +12,7 @@ const take = vi.fn()
 vi.mock('./otpLookup', () => ({ takePendingCode: (...a: unknown[]) => take(...a) }))
 
 import { dispatch } from './index'
-import { verifyRequest, sharedSecretSystems } from './systems'
+import { verifyRequest, sharedSecretSystems, checkRequest, normalizePhone } from './systems'
 import { validateResult } from './schema'
 
 const ENV = ['MAIN', 'YERID', 'DISTRIBUTORS']
@@ -51,6 +51,21 @@ describe('הפרדה בין שלוש המערכות', () => {
     expect(verifyRequest('main', 'main-secret-1', '0772222222')).toBe(false)
     expect(verifyRequest('main', 'main-secret-1', '0771111111')).toBe(true)
     delete process.env.TECHNOLINE_MAIN_NUMBER
+  })
+  it('מספר בפורמט בינלאומי מתקבל (972 / +972 / 0)', () => {
+    process.env.TECHNOLINE_MAIN_NUMBER = '0237666363'
+    expect(normalizePhone('+972-2-3766636-3')).toBe('237666363')
+    for (const n of ['972237666363', '+972237666363', '0237666363', '237666363'])
+      expect(verifyRequest('main', 'main-secret-1', n)).toBe(true)
+    expect(verifyRequest('main', 'main-secret-1', '972237666364')).toBe(false)
+  })
+  it('סיבת הדחייה מבחינה בין סוד שגוי למספר לא תואם', () => {
+    process.env.TECHNOLINE_MAIN_NUMBER = '0237666363'
+    expect(checkRequest('main', 'wrong', '0237666363')).toBe('bad-secret')
+    expect(checkRequest('main', 'main-secret-1', '0771111111')).toBe('number-mismatch')
+    expect(checkRequest('main', 'main-secret-1', '0237666363')).toBeNull()
+    delete process.env.TECHNOLINE_YERID_SECRET
+    expect(checkRequest('yerid', 'x')).toBe('no-secret')
   })
 })
 
