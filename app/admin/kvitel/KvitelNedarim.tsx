@@ -88,6 +88,12 @@ export default function KvitelNedarim({ view: initial, isAdmin }: { view: Kvitel
     return `נקלטו ${n('added')} בקשות חדשות${n('review') ? ` (${n('review')} לבדיקה)` : ''} · ${n('exists')} כבר היו · ${n('empty')} בלי שמות`
   })
 
+  const reprocess = () => run(async () => {
+    const d = await post({ mode: 'reprocess' })
+    router.refresh()
+    return `נבדקו ${d.checked} בקשות בלי שמות: ${d.fixed} הושלמו · ${d.stillEmpty} עדיין בלי שמות · ${d.missing} לא נמצאו בנדרים`
+  })
+
   const st = view.state
   const connected = view.hasKey && !!view.mosadId && !!view.tofesId
   const mapped = !!(view.textField || view.lines.length)
@@ -120,6 +126,15 @@ export default function KvitelNedarim({ view: initial, isAdmin }: { view: Kvitel
           <Stat label="נקלטו בסך הכול" value={st.totalAdded.toLocaleString('he-IL')} />
           <Stat label="הגשה אחרונה שנקראה" value={<span className="text-base">{st.lastId || '—'}</span>} />
         </dl>
+
+        {isAdmin && connected && (
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button type="button" onClick={() => void reprocess()} disabled={busy} className={btnGhost}>
+              <RefreshCw className="h-4 w-4" aria-hidden />עיבוד מחדש של בקשות בלי שמות
+            </button>
+            <span className="text-sm text-slate-600">מושך שוב את הגשות נדרים שנקלטו ריקות ומשלים אותן, בלי ליצור כפילויות.</span>
+          </div>
+        )}
 
         {isAdmin && (
           <div className="mt-6 space-y-6 border-t border-slate-100 pt-6">

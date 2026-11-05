@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
-import { getKvitelPullView, saveKvitelPullConfig, loadKvitelSample, pullKvitelFromNedarim } from '@/lib/kvitelNedarimPull'
+import { getKvitelPullView, saveKvitelPullConfig, loadKvitelSample, pullKvitelFromNedarim, reprocessKvitelFromNedarim } from '@/lib/kvitelNedarimPull'
 
 // משיכת הגשות קוויטל מטופס בנדרים פלוס (lib/kvitelNedarimPull.ts).
 // ⚠️ המפתח נכנס כאן ולא יוצא: GET מחזיר רק hasKey.
@@ -18,7 +18,7 @@ export async function GET() {
 
 // ⚠️ save ו-sample — מנהל בלבד: שינוי מספר טופס מאפשר למשוך נתונים מטפסים אחרים במוסד.
 // pull נשאר בהרשאת עריכה, כי הוא מושך רק מהטופס שהמנהל הגדיר.
-// POST { mode: 'save', mosadId, apiKey?, tofesId, contactField, phoneField, emailField, textField, lines } | { mode: 'sample' } | { mode: 'pull' }
+// POST { mode: 'save', mosadId, apiKey?, tofesId, contactField, phoneField, emailField, textField, lines } | { mode: 'sample' } | { mode: 'pull' } | { mode: 'reprocess' } (מנהל בלבד)
 export async function POST(request: Request) {
   const staff = await requirePermission('kvitel', 'edit')
   if (!staff) return forbidden()
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null) as Record<string, unknown> | null
   if (!body) return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 })
 
-  if ((body.mode === 'save' || body.mode === 'sample') && staff.role !== 'admin') return forbidden('רק מנהל יכול לשנות את הגדרות החיבור לנדרים')
+  if ((body.mode === 'save' || body.mode === 'sample' || body.mode === 'reprocess') && staff.role !== 'admin') return forbidden('רק מנהל יכול לשנות את הגדרות החיבור לנדרים')
 
   if (body.mode === 'save') {
     const res = await saveKvitelPullConfig(db, body)
@@ -49,6 +49,12 @@ export async function POST(request: Request) {
     await logActivity(db, { userId: staff.userId, action: 'kvitel_nedarim_pull', entityType: 'kvitel_request', details: { added: res.added, lastId: res.lastId, error: res.error ?? null } })
     // ⚠️ לא 502: הפרוקסי מחליף גוף של 5xx, וההודעה בעברית לא מגיעה למסך
     return NextResponse.json({ ...res, view: await getKvitelPullView(db) }, { status: res.ok ? 200 : 422 })
+  }
+
+  if (body.mode === 'reprocess') {
+    const res = await reprocessKvitelFromNedarim(db)
+    await logActivity(db, { userId: staff.userId, action: 'kvitel_nedarim_reprocess', entityType: 'kvitel_request', details: { checked: res.checked, fixed: res.fixed, error: res.error ?? null } })
+    return NextResponse.json(res, { status: res.ok ? 200 : 422 })
   }
 
   return NextResponse.json({ error: 'פעולה לא מוכרת' }, { status: 400 })
