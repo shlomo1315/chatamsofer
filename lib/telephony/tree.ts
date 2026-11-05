@@ -6,14 +6,19 @@ import type { TelephonySystemId } from './types'
 
 /** שלוחות ה-webhook של כל מערכת (השם הוא החלק האחרון בכתובת). */
 export const SYSTEM_EXTS: Record<TelephonySystemId, { ext: string; label: string; digit: string }[]> = {
+  // המקשים כמו בתפריט הראשי בפועל (lib/telephony/main/menu): 1 חגים, 2 יולדות.
+  // קוויטלאך וטעינת מוקדים הן שלוחות ישירות (בלי מקש), וקוד אימות הוא שיחה יוצאת.
   main: [
     { ext: 'menu', label: 'תפריט ראשי', digit: '' },
-    { ext: 'maternity', label: 'יולדות', digit: '1' },
-    { ext: 'holidays', label: 'חגים', digit: '2' },
-    { ext: 'otp', label: 'קוד אימות', digit: '3' },
+    { ext: 'holidays', label: 'חגים', digit: '1' },
+    { ext: 'maternity', label: 'יולדות', digit: '2' },
+    { ext: 'otp', label: 'קוד אימות', digit: '' },
+    { ext: 'kvitel', label: 'קוויטלאך', digit: '' },
+    { ext: 'center-load', label: 'טעינת מוקדים', digit: '' },
   ],
   yerid: [
     { ext: 'menu', label: 'תפריט יריד הספרים', digit: '' },
+    { ext: 'credits', label: 'זיכויים', digit: '' },
   ],
   distributors: [
     { ext: 'menu', label: 'תפריט מפיצים', digit: '' },
