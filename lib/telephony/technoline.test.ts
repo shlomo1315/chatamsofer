@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { ivrApi, campaignApi, accountApi } from './interaction'
-import { applyTree, webhookUrl, uploadRecording } from './tree'
+import { applyTree, webhookUrl, uploadRecording, SYSTEM_EXTS } from './tree'
 import { withinCap, buyNumber } from './account'
 import { placeCodeCall, localPhone } from './client'
 
@@ -46,9 +46,9 @@ describe('עץ שלוחות והקלטות', () => {
     expect(webhookUrl('https://x.il/', 'yerid', 'abc', 'menu')).toBe('https://x.il/api/webhooks/technoline/yerid/abc/menu')
   })
   it('בונה שלוחה לכל רשומה ושולח extensionSet', async () => {
-    reply({ status: 'OK' }); reply({ status: 'OK' }); reply({ status: 'OK' }); reply({ status: 'OK' })
+    for (let i = 0; i < SYSTEM_EXTS.main.length; i++) reply({ status: 'OK' })
     const steps = await applyTree('main', '7', 'https://x.il')
-    expect(steps).toHaveLength(4)
+    expect(steps).toHaveLength(SYSTEM_EXTS.main.length)
     expect(steps.every((s) => s.ok)).toBe(true)
     expect(String(fetchMock.mock.calls[0][0])).toContain('action=extensionSet')
   })
