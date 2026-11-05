@@ -139,7 +139,12 @@ export async function writeJson(db: SupabaseClient, key: string, value: unknown)
   return !error
 }
 
-export const getPullConfig = (db: SupabaseClient) => readJson(db, CONFIG_KEY, EMPTY_CONFIG)
+// טופס ההרשמה לגיליונות בנדרים פלוס; ברירת מחדל כשלא הוגדר טופס במסך
+export const DEFAULT_TOFES_ID = '3345'
+export const getPullConfig = async (db: SupabaseClient) => {
+  const c = await readJson(db, CONFIG_KEY, EMPTY_CONFIG)
+  return { ...c, tofesId: c.tofesId || DEFAULT_TOFES_ID }
+}
 export const getPullState = (db: SupabaseClient) => readJson(db, STATE_KEY, EMPTY_STATE)
 
 export async function getPullView(db: SupabaseClient): Promise<NedarimPullView> {
