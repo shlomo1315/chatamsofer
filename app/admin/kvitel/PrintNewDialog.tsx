@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { Check, Loader2 } from 'lucide-react'
 import Modal from '@/components/ui/Modal'
 import { kvitelExportLines, type KvitelRequestRow } from '@/lib/kvitelQuery'
+import { pendingForPrint } from '@/lib/kvitelView'
 import { KvitelSheet } from './KvitelPreview'
 
 // הדפסת הקוויטלאך החדשים: כל הבקשות שבסטטוס "ממתין לשליחה" (חדשות שאושרו ועוד לא נשלחו).
@@ -19,7 +20,7 @@ export default function PrintNewDialog({ open, onClose, rows, canEdit, onDone }:
 }) {
   // ה-id-ים והשורות נקבעים יחד, כדי שהסימון יתאים בדיוק למה שהודפס
   const printed = useMemo(() => {
-    const list = rows.filter(r => r.status === 'pending' && r.kvitel_request_lines.length)
+    const list = pendingForPrint(rows)
     return { ids: list.map(r => r.id), lines: kvitelExportLines(list) }
   }, [rows])
   const [asked, setAsked] = useState(false)

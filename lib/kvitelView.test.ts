@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { countByStatus, hebrewDay, parseRawFields, reviewReason } from './kvitelView'
+import { countByStatus, hebrewDay, parseRawFields, pendingForPrint, reviewReason } from './kvitelView'
+import { kvitelExportLines, type KvitelRequestRow } from './kvitelQuery'
 
 const line = (o: Partial<{ name: string; parent_name: string; flagged: boolean; flag_reason: string | null }> = {}) =>
   ({ id: '1', position: 0, name: 'משה', relation: 'ben', parent_name: 'שרה', request_type: 'refua', request_note: null, flagged: false, flag_reason: null, ...o })
@@ -27,4 +28,17 @@ describe('parseRawFields', () => {
   it('שדות', () => expect(parseRawFields('Field1: דוד\nField2: 050\n\nFieldX:')).toEqual([{ key: 'Field1', value: 'דוד' }, { key: 'Field2', value: '050' }]))
   it('טקסט חופשי', () => expect(parseRawFields('שלום רב')).toEqual([]))
   it('ריק', () => expect(parseRawFields(null)).toEqual([]))
+})
+
+describe('pendingForPrint', () => {
+  const row = (id: string, status: string, lines = [line()]) =>
+    ({ id, status, submitted_at: '2026-11-05T08:00:00Z', kvitel_request_lines: lines }) as unknown as KvitelRequestRow
+  const rows = [row('a', 'pending'), row('b', 'done'), row('c', 'review'), row('d', 'pending', []), row('e', 'pending')]
+
+  it('רק ממתינות עם שמות', () => expect(pendingForPrint(rows).map(r => r.id)).toEqual(['a', 'e']))
+  it('המזהים לסימון תואמים בדיוק לשורות שהודפסו', () => {
+    const list = pendingForPrint(rows)
+    expect(kvitelExportLines(list)).toHaveLength(list.length)
+  })
+  it('אין חדשות: רשימה ריקה', () => expect(pendingForPrint([row('b', 'done')])).toEqual([]))
 })
