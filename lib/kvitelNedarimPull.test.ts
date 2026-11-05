@@ -6,7 +6,7 @@ const ingestKvitel = vi.fn()
 vi.mock('./gilyonotNedarimPull', async orig => ({ ...(await orig<typeof import('./gilyonotNedarimPull')>()), fetchRows: (...a: unknown[]) => fetchRows(...a) }))
 vi.mock('./kvitelIngest', () => ({ ingestKvitel: (...a: unknown[]) => ingestKvitel(...a) }))
 
-import { getKvitelPullView, mapKvitelRow, pullKvitelFromNedarim, saveKvitelPullConfig, validateKvitelConfig, type KvitelNedarimConfig } from './kvitelNedarimPull'
+import { autoKvitelBody, configFields, getKvitelPullView, mapKvitelRow, pullKvitelFromNedarim, saveKvitelPullConfig, validateKvitelConfig, type KvitelNedarimConfig } from './kvitelNedarimPull'
 
 // מסד מדומה: רק app_settings
 function fakeDb(init: Record<string, unknown> = {}) {
@@ -128,5 +128,27 @@ describe('kvitelNedarimPull: המשיכה', () => {
     const r = await pullKvitelFromNedarim(fakeDb())
     expect(r.skipped).toBe('not_configured')
     expect(fetchRows).not.toHaveBeenCalled()
+  })
+
+  it('בלי בחירת עמודות: מושך את כל העמודות ומזהה מייל, טלפון ושמות לבד', async () => {
+    const auto = { ...base, contactField: '', phoneField: '', emailField: '', textField: '', lines: [] }
+    expect(configFields(auto)).toHaveLength(100)
+    const db = fakeDb({ kvitel_nedarim_config: auto })
+    fetchRows.mockResolvedValueOnce({ ok: true, rows: [
+      { ID: '5', Field1: 'דוד כהן', Field2: '050-1234567', Field3: 'a@b.co', Field4: 'יעקב בן מרים - רפואה', Field5: '18' },
+    ] })
+    ingestKvitel.mockResolvedValueOnce({ ok: true, requestId: 'a', status: 'pending' })
+    const r = await pullKvitelFromNedarim(db)
+    expect(r).toMatchObject({ ok: true, added: 1, lastId: 5 })
+    const p = ingestKvitel.mock.calls[0][1]
+    expect(p).toMatchObject({ sourceRef: 'nedarim-form:5', email: 'a@b.co' })
+    expect(JSON.stringify(p)).toContain('יעקב')
+  })
+})
+
+describe('kvitelNedarimPull: זיהוי אוטומטי', () => {
+  it('מזהה מייל, טלפון וטקסט עם בן/בת, ומתעלם משאר העמודות', () => {
+    expect(autoKvitelBody({ ID: '1', Field1: 'שלום', Field2: '0501234567', Field3: 'x@y.com', Field4: 'שרה בת רחל', Field7: 'משה בן לאה' }))
+      .toEqual({ ClientName: '', Phone: '0501234567', Mail: 'x@y.com', Comments: 'שרה בת רחל\nמשה בן לאה' })
   })
 })

@@ -69,6 +69,15 @@ export default function KvitelNedarim({ view: initial, isAdmin }: { view: Kvitel
   const loadSample = () => run(async () => {
     const rows = (await post({ mode: 'sample' })).rows as NedarimRow[]
     setSample(rows)
+    // ניחוש ראשוני לתפריטים הריקים: מייל, טלפון, ועמודה עם "בן"/"בת" כטקסט חופשי
+    const guess = (test: (v: string) => boolean) =>
+      Object.keys(rows[0] ?? {}).find(k => /^Field\d/.test(k) && rows.some(r => test(String(r[k] ?? '').trim()))) ?? ''
+    setF(p => ({
+      ...p,
+      emailField: p.emailField || guess(v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)),
+      phoneField: p.phoneField || guess(v => /^\+?[\d\s-]{9,15}$/.test(v)),
+      textField: p.textField || (lines.some(l => l.name) ? '' : guess(v => /(?:^|\s)(?:בן|בת)\s+\S/.test(v))),
+    }))
     return rows.length ? `נטענו ${rows.length} הגשות אחרונות. בחרו למטה איזו עמודה היא מה, ושמרו.` : 'נדרים לא החזיר הגשות. שלחו הגשה אחת לבדיקה דרך הטופס (עם כל השדות מלאים) ולחצו שוב, או ודאו שמספר הטופס נכון. בינתיים אפשר לבחור עמודות ידנית: Field1, Field2 וכן הלאה לפי סדר השדות בטופס.'
   })
   const pull = () => run(async () => {
@@ -84,8 +93,8 @@ export default function KvitelNedarim({ view: initial, isAdmin }: { view: Kvitel
   const mapped = !!(view.textField || view.lines.length)
   const health = st.lastError
     ? { dot: 'bg-rose-500', title: 'המשיכה האחרונה מנדרים נכשלה', text: st.lastError }
-    : connected && mapped
-    ? { dot: 'bg-emerald-500', title: 'מחובר לטופס בנדרים פלוס', text: 'המשיכה רצה לבד כל שעה, וכל הגשה חדשה נכנסת לרשימה למטה.' }
+    : connected
+    ? { dot: 'bg-emerald-500', title: 'מחובר לטופס בנדרים פלוס', text: mapped ? 'המשיכה רצה לבד כל שעה, וכל הגשה חדשה נכנסת לרשימה למטה.' : 'המשיכה רצה לבד כל שעה, והעמודות מזוהות אוטומטית (מייל, טלפון ושמות עם "בן"/"בת"). אפשר לדייק בבחירת העמודות.' }
     : { dot: 'bg-slate-300', title: 'טופס נדרים פלוס עוד לא מחובר', text: isAdmin ? 'פתחו כאן, מלאו את פרטי הטופס והמפתח ובחרו את העמודות.' : 'מנהל צריך להגדיר את החיבור.' }
   const cols = sample ? Object.keys(sample[0] ?? {}).filter(k => /^Field\d/.test(k) && sample.some(r => r[k])) : []
 
@@ -100,7 +109,7 @@ export default function KvitelNedarim({ view: initial, isAdmin }: { view: Kvitel
               <p className={`mt-0.5 break-words text-sm ${st.lastError ? 'text-rose-800' : 'text-slate-600'}`}>{health.text}</p>
             </div>
           </div>
-          <button type="button" onClick={e => { e.preventDefault(); void pull() }} disabled={busy || !connected || !mapped} className={`${btnPrimary} sm:shrink-0`}>
+          <button type="button" onClick={e => { e.preventDefault(); void pull() }} disabled={busy || !connected} className={`${btnPrimary} sm:shrink-0`}>
             <RefreshCw className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} aria-hidden />משיכה עכשיו
           </button>
         </summary>

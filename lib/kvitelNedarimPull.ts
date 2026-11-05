@@ -71,8 +71,32 @@ export function validateKvitelConfig(c: KvitelNedarimConfig): string | null {
 
 const isMapped = (c: KvitelNedarimConfig) => !!(c.textField || c.lines.length)
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const PHONE_RE = /^\+?[\d\s-]{9,15}$/
+const NAME_LINE_RE = /(?:^|\s)(?:בן|בת)\s+\S/
+
+/**
+ * בלי בחירת עמודות: כל עמודה שנראית כמו מייל או טלפון נלקחת ככזו,
+ * וכל עמודה עם "בן" או "בת" נכנסת לטקסט החופשי. כך "משיכה עכשיו" עובדת מיד.
+ */
+export function autoKvitelBody(row: NedarimRow): Record<string, string> {
+  const body: Record<string, string> = { ClientName: '', Phone: '', Mail: '', Comments: '' }
+  const free: string[] = []
+  for (const [k, raw] of Object.entries(row)) {
+    if (!/^Field\d/.test(k)) continue
+    const v = str(raw)
+    if (!v) continue
+    if (!body.Mail && EMAIL_RE.test(v)) body.Mail = v
+    else if (!body.Phone && PHONE_RE.test(v)) body.Phone = v
+    else if (NAME_LINE_RE.test(v)) free.push(v)
+  }
+  body.Comments = free.join('\n')
+  return body
+}
+
 /** כל העמודות שצריך לבקש מנדרים, בלי כפילויות. */
 export function configFields(c: KvitelNedarimConfig): string[] {
+  if (!isMapped(c)) return [...SAMPLE_FIELDS]
   const all = [c.contactField, c.phoneField, c.emailField, c.textField, ...c.lines.flatMap(l => [l.name, l.mother, l.relation, l.request])]
   return [...new Set(all.filter(isFieldName))]
 }
@@ -83,6 +107,11 @@ export function configFields(c: KvitelNedarimConfig): string[] {
  * שורה שאין לה עמודת שם האם (שם מלא בשדה אחד, "משה בן שרה") עוברת לפענוח כטקסט חופשי.
  */
 export function mapKvitelRow(row: NedarimRow, c: KvitelNedarimConfig): ParsedNedarimKvitel {
+  if (!isMapped(c)) {
+    const p = parseNedarimKvitel(autoKvitelBody(row))
+    p.sourceRef = row.ID ? `nedarim-form:${row.ID}` : null
+    return p
+  }
   const get = (f: string) => (f ? str(row[f]) : '')
   const body: Record<string, string> = { ClientName: get(c.contactField), Phone: get(c.phoneField), Mail: get(c.emailField) }
   const free = [get(c.textField)]
@@ -176,7 +205,7 @@ async function doPull(dbArg?: SupabaseClient): Promise<KvitelPullResult> {
   const db = dbArg ?? getServiceClient()
   if (!db) return { ...out, ok: false, error: 'השרת אינו מוגדר' }
   const c = await getReadyConfig(db)
-  if (!c || !isMapped(c)) return { ...out, ok: false, skipped: 'not_configured' }
+  if (!c) return { ...out, ok: false, skipped: 'not_configured' }
   const state = await getKvitelPullState(db)
   out.lastId = state.lastId
   const fields = configFields(c)
