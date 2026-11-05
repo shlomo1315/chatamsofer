@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import VoiceButton from './VoiceButton'
 import { SOURCE_API, type MessageSource } from '@/lib/telephony/catalog'
 
 export type Meta = { key: string; label: string; defaultText: string; allowAudio?: boolean; placeholders?: string[]; hint?: string }
@@ -55,6 +56,7 @@ export default function MessageList({ source, data, onSaved, only }: {
         {dirty && <button className="btn ghost" onClick={() => setDraft({})}>ביטול</button>}
         {note && <span className={`chip ${note.ok ? 'ok' : 'bad'}`}>{note.text}</span>}
       </div>
+      {source !== 'bookfair' && <VoiceButton />}
       <p className="hint">הקלטה מחליפה שלוחה שלמה, ומועלית בלשונית «חיבור ובנייה». הקלטה נפרדת לכל נוסח עדיין לא נתמכת בטכנוליין [להשלים].</p>
     </div>
   )
