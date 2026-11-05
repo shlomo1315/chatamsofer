@@ -6,6 +6,7 @@ import {
   MATERNITY_MESSAGE_META,
   type MaternityMessages,
 } from '@/lib/maternityPhoneMessages'
+import { syncMainVoice } from '@/lib/telephony/voiceFiles'
 
 export const dynamic = 'force-dynamic'
 const NO_STORE = { 'Cache-Control': 'no-store' }
@@ -32,5 +33,7 @@ export async function POST(request: NextRequest) {
 
   const ok = await saveMaternityMessages(body.messages)
   if (!ok) return NextResponse.json({ error: 'שגיאה בשמירה' }, { status: 500 })
+  // קובץ קול חדש לנוסח ששונה (ברקע; כשל לא משפיע על השמירה, והשיחה נופלת לטקסט)
+  void syncMainVoice().catch(() => {})
   return NextResponse.json({ ok: true, messages: await getMaternityMessages() })
 }

@@ -4,6 +4,7 @@
 // הקודם, ולכן כל שגיאה הופכת להודעה וניתוק.
 import { goodbye, hangup } from './modules'
 import { checkRequest, isSystemId, type RejectReason } from './systems'
+import { applyVoice } from './voiceFiles'
 import { validateResult } from './schema'
 import type { TelephonySystemId, TlHandler, TlParams, TlResult } from './types'
 
@@ -59,7 +60,7 @@ export async function dispatch(
       console.error(`[telephony:${system}/${ext}] תשובה לא תקינה: ${v.error}`)
       return { status: 200, body: goodbye("אירעה שגיאה אנא נסו שוב מאוחר יותר") }
     }
-    return { status: 200, body }
+    return { status: 200, body: system === 'main' ? await applyVoice(body) : body }
   } catch (e) {
     console.error(`[telephony:${system}/${ext}]`, e instanceof Error ? e.message : e)
     return { status: 200, body: goodbye("אירעה שגיאה אנא נסו שוב מאוחר יותר") }

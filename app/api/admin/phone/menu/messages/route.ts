@@ -4,6 +4,7 @@ import {
   getMainMenuMessages, saveMainMenuMessages,
   MAIN_MENU_MESSAGE_META, type MainMenuMessages,
 } from '@/lib/mainMenuPhone'
+import { syncMainVoice } from '@/lib/telephony/voiceFiles'
 
 export const dynamic = 'force-dynamic'
 const NO_STORE = { 'Cache-Control': 'no-store' }
@@ -46,5 +47,7 @@ export async function POST(request: NextRequest) {
 
   const ok = await saveMainMenuMessages(body.messages)
   if (!ok) return NextResponse.json({ error: 'שגיאה בשמירה' }, { status: 500 })
+  // קובץ קול חדש לנוסח ששונה (ברקע; כשל לא משפיע על השמירה, והשיחה נופלת לטקסט)
+  void syncMainVoice().catch(() => {})
   return NextResponse.json({ ok: true, messages: await getMainMenuMessages() })
 }
