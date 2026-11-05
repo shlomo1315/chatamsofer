@@ -7,6 +7,7 @@ import { getServiceClient } from '@/lib/apiAuth'
 import { createBackupArchive, backupFilename } from '@/lib/backupArchive'
 import { uploadBackupStream, listBackups, deleteBackup, driveReady } from '@/lib/googleDrive'
 import { deliverMail } from '@/lib/sendMail'
+import { acquireBackupLock, releaseBackupLock } from '@/lib/backupLock'
 
 const REPORT_TO = 'office@chasamsofer.info'
 const ISRAEL_TZ = 'Asia/Jerusalem'
@@ -30,7 +31,7 @@ export interface BackupResult {
 
 // בדיקה זולה: האם הגיבוי של היום כבר בוצע (שורה יחידה מ-app_settings).
 // משמש את ה-scheduler ל-catch-up — לרוץ גם מחוץ לחלון חצות אם דילגנו על היום
-// (למשל deploy שנפל בדיוק על חצות). זול מספיק להרצה כל שעה.
+// (למשל deploy שנפל בדיוק על חלון ההרצה). זול מספיק להרצה כל שעה.
 export async function backupDoneToday(): Promise<boolean> {
   const admin = getServiceClient()
   if (!admin) return true // בלי admin ממילא לא נגבה — לא לגרום לניסיונות חוזרים
@@ -55,6 +56,10 @@ export async function runDailyBackup(force = false): Promise<BackupResult> {
     const { data: ran } = await admin.from('app_settings').select('value').eq('key', 'backup_last_run_date').maybeSingle()
     if (ran?.value === today) return { ok: true, skipped: true }
   }
+
+  // נעילה אטומית: הגיבוי נמשך 20-40 דקות והסימון נכתב רק בסופו, ולכן בלי נעילה
+  // כל הפעלה מחדש (פריסה) או מכונה שנייה הייתה מתחילה גיבוי כפול.
+  if (!(await acquireBackupLock(admin, now))) return { ok: true, skipped: true }
 
   try {
     // ⚠️ הגיבוי נבנה ונשלח כזרם, ולא נאסף ל-Buffer. שיא הזיכרון הוא מנה אחת
@@ -94,6 +99,8 @@ export async function runDailyBackup(force = false): Promise<BackupResult> {
       `<div dir="rtl" style="font-family:'Heebo',Arial,sans-serif">הגיבוי היומי (worker פנימי) נכשל: ${msg}</div>`,
       undefined, { fromEmail: REPORT_TO, replyTo: REPORT_TO, skipLog: true }).catch(() => {})
     return { ok: false, error: msg }
+  } finally {
+    await releaseBackupLock(admin)
   }
 }
 
@@ -117,7 +124,7 @@ export async function checkBackupFreshness(): Promise<void> {
   const { data } = await admin.from('app_settings').select('value').eq('key', 'backup_last_run_date').maybeSingle()
   const last = data?.value ?? null
   const today = dayKey(new Date())
-  // הגיבוי היומי אמור לרוץ בחצות ולעדכן ל-today. אם הערך אינו של היום ולא של אתמול — התראה.
+  // הגיבוי היומי אמור לרוץ ב-05:00 ולעדכן ל-today. אם הערך אינו של היום ולא של אתמול — התראה.
   const yesterday = dayKey(new Date(Date.now() - 86400000))
   if (last !== today && last !== yesterday) {
     await alertOnce(admin, 'stale', `שים לב: לא בוצע גיבוי יומי מאז ${last ?? '(אין רשומה)'}. יש לבדוק את חיבור Google Drive בהגדרות.`)
