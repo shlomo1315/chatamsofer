@@ -92,7 +92,7 @@ export function parseGetJson(text: string): { ok: true; rows: NedarimRow[] } | {
   return { ok: false, error: 'תשובה לא צפויה מנדרים' }
 }
 
-export async function fetchRows(c: NedarimPullConfig, fields: string[], opts: { lastId: number; max: number; desc?: boolean }) {
+export async function fetchRows(c: Pick<NedarimPullConfig, 'mosadId' | 'apiKey' | 'tofesId'>, fields: string[], opts: { lastId: number; max: number; desc?: boolean }) {
   const body = new URLSearchParams({
     Action: 'GetJson', MosadId: c.mosadId, ApiPassword: c.apiKey, TofesId: c.tofesId,
     MaxId: String(opts.max), LastId: String(opts.lastId), GetJsonParam: buildGetJsonParam(fields),

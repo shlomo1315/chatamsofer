@@ -4,7 +4,9 @@ import { roleAllows } from '@/lib/permissions'
 import { loadKvitelRequests, parseKvitelFilters } from '@/lib/kvitelQuery'
 import PageHeader from '@/components/ui/PageHeader'
 import type { UserPermissions } from '@/types'
+import { getKvitelPullView } from '@/lib/kvitelNedarimPull'
 import KvitelClient from './KvitelClient'
+import KvitelNedarim from './KvitelNedarim'
 
 // מחלקת קוויטלאך — כל הבקשות מכל הערוצים, סינון, ייצוא ל-Word עם סימון "נשלח לציון" (ExportDialog).
 // הליבה: lib/kvitel.ts · סינון: lib/kvitelQuery.ts · מיגרציה: 20261014_kvitel.sql
@@ -20,11 +22,13 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   const db = getServiceClient()
   const { rows, error } = db ? await loadKvitelRequests(db, filters) : { rows: [], error: 'השרת אינו מוגדר' }
   const canEdit = staff.role === 'admin' || roleAllows(staff.role, staff.permissions as UserPermissions, 'kvitel', 'edit')
+  const nedarimView = db && canEdit ? await getKvitelPullView(db).catch(() => null) : null
 
   return (
     <div className="space-y-6">
       <PageHeader title="קוויטלאך" subtitle="שמות ובקשות לתפילה בציון — מכל הערוצים" />
       {error && <p role="alert" className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</p>}
+      {nedarimView && <KvitelNedarim view={nedarimView} isAdmin={staff.role === 'admin'} />}
       <KvitelClient rows={rows} filters={filters} canEdit={canEdit} />
     </div>
   )

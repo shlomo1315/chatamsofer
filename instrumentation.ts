@@ -399,6 +399,17 @@ export async function register() {
       } catch (err) { console.error('[gilyonot] distributors pull failed', err) }
     }
     setTimeout(() => { void tickDistributorPull(); setInterval(() => { void tickDistributorPull() }, 60 * MINUTE_MS) }, 7 * MINUTE_MS)
+
+    // משיכת בקשות קוויטל מטופס הקוויטל בנדרים פלוס, כל שעה (lib/kvitelNedarimPull.ts).
+    // בלי הגדרות במסך הקוויטלאך — לא עושה כלום.
+    const tickKvitelPull = async () => {
+      try {
+        const { pullKvitelFromNedarim } = await import('@/lib/kvitelNedarimPull')
+        const res = await pullKvitelFromNedarim()
+        if (res.added || res.error) console.log(`[kvitel] nedarim pull added=${res.added} review=${res.review} lastId=${res.lastId}${res.error ? ` error=${res.error}` : ''}`)
+      } catch (err) { console.error('[kvitel] nedarim pull failed', err) }
+    }
+    setTimeout(() => { void tickKvitelPull(); setInterval(() => { void tickKvitelPull() }, 60 * MINUTE_MS) }, 9 * MINUTE_MS)
   }
 
   // ─────────────────────────────────────────────────────────────────────────

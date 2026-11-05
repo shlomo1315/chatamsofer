@@ -20,11 +20,39 @@ export function isKvitelMailbox(recipients: string[]): boolean {
   return recipients.some(r => r.toLowerCase() === KVITEL_MAILBOX)
 }
 
+// קוויטלאך מגיעים בפועל גם לתיבות אחרות (m@, office@) עם "קויטל" בנושא.
+// תשובה או העברה (Re:/Fwd:/השב) היא שרשור, לא בקשה חדשה.
+const KVITEL_SUBJECT = /קו?ויטל|kvit(e|i)l/i
+const REPLY_SUBJECT = /^\s*(re|fw|fwd|aw|tr|השב|תשובה|הועבר)\s*:/i
+export function isKvitelSubject(subject: string): boolean {
+  return KVITEL_SUBJECT.test(subject) && !REPLY_SUBJECT.test(subject)
+}
+
+// איך זוהה מייל קוויטל: לפי התיבה k@ (כל מייל נקלט), או לפי הנושא בתיבה אחרת
+// (נקלט רק אם נמצא בו שם, כדי ששאלה כללית לא תיכנס כבקשה). מייל מכתובת הארגון עצמו לא נקלט לפי הנושא.
+export function detectKvitelEmail(m: {
+  recipients: string[]; subject: string; fromEmail: string; isOrgAddr: (a: string) => boolean
+}): 'mailbox' | 'subject' | null {
+  if (isKvitelMailbox(m.recipients)) return 'mailbox'
+  if (isKvitelSubject(m.subject) && !m.isOrgAddr(m.fromEmail.toLowerCase())) return 'subject'
+  return null
+}
+
+// גוף שהגיע מ-HTML נשאר לפעמים עם &quot; ו-&#39;, ואז לרפו&quot;ש לא מזוהה.
+export function decodeEntities(text: string): string {
+  return text
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+}
+
 const TYPE_WORDS: [KvitelRequestType, RegExp][] = [
-  ['refua', /רפו(א|ו)ה|רפו"ש|רפוש|לרפו|בריאות/],
+  ['refua', /רפו(א|ו)ה|רפו"ש|רפוש|רפ"ש|לרפו|בריאות/],
   ['parnasa', /פרנס/],
-  ['zivug', /זיווג|זווג|שידוך/],
-  ['zera', /זרע של קיימא|זש"ק|זחו"ק|פרי בטן|ילדים/],
+  // כולל קיצורים: זיווה"ג (זיווג הגון), זוו"ה.
+  ['zivug', /זיווג|זווג|זיווה"?ג|זווה"?ג|זוו"ה|שידוך/],
+  ['zera', /זרע של קיימא|זרעא חייא|זש"ק|זשק|זחו"ק|זחוק|פרי בטן|ילדים/],
   ['hatzlacha', /הצלח/],
   ['yeshua', /ישוע|ברכה/],
 ]
@@ -39,12 +67,12 @@ export function guessRequestType(text: string): { requestType: KvitelRequestType
 
 // "שם בן/בת שם-האם [- בקשה]". שם האם נגמר במפריד, או במילת בקשה מוכרת (לרפואה, שיזכה).
 // ⚠️ לא "כל מילה שמתחילה ב-ל": "פעשא לאה" היה נחתך ל"פעשא".
-const LINE_RE = /^(.+?)\s+(בן|בת|ב"ר|בר)\s+(.+?)(?:\s*[-–—:,]\s*(.+)|\s+((?:ל|ש|ל?ה)(?:רפו|פרנס|זיווג|זווג|שידוך|זרע|הצלח|ישוע|ברכה|בריאות|יזכה|תזכה|שלום)\S*.*))?$/
+const LINE_RE = /^(.+?)\s+(בן|בת|ב"ר|בר)\s+(.+?)(?:\s*[-–—:,]\s*(.+)|\s+((?:ל|ש|ל?ה)(?:רפו|רפ"ש|פרנס|זיווג|זווג|זיווה|זווה|זוו"ה|שידוך|זרע|זש"ק|זשק|זחו"ק|הצלח|ישוע|ברכה|בריאות|יזכה|תזכה|שלום)\S*.*))?$/
 
 // שורות התוכן: עד החתימה או הציטוט של מייל קודם, בלי מספור ותבליטים.
 function bodyLines(text: string): string[] {
   const out: string[] = []
-  for (const raw of text.slice(0, MAX_TEXT).split(/\r?\n/)) {
+  for (const raw of decodeEntities(text).slice(0, MAX_TEXT).split(/\r?\n/)) {
     const line = raw.trim()
     if (/^(--|__|On .+wrote:|ב.+כתב|-----Original|נשלח מ)/.test(line)) break
     if (!line || line.startsWith('>')) continue
@@ -86,9 +114,13 @@ export function parseKvitelEmailText(subject: string, text: string): ParsedKvite
         requestType: req?.requestType ?? 'yeshua', requestNote: req?.requestNote ?? null,
       }, out.lines.length)
       if (!v.ok) { out.leftover.push(part); continue }
+      // "נתן בן שרה מלכה לתפילה בציון": המשפט נבלע בשם האם. נשאר ל-AI ומסומן.
+      const longParent = m[3].trim().split(/\s+/).length > 3
+      if (longParent) out.leftover.push(part)
       out.lines.push(v.line)
       out.flags.push(
-        !req ? 'לא צוין סוג בקשה (הונח "ישועה וברכה")'
+        longParent ? 'שם האם ארוך, ייתכן שנבלע בו טקסט'
+        : !req ? 'לא צוין סוג בקשה (הונח "ישועה וברכה")'
           : m[2] === 'ב"ר' || m[2] === 'בר' ? 'בן או בת? (נכתב ב"ר)'
             : req.requestType === 'other' ? 'בקשה חופשית מהמייל' : null,
       )
@@ -126,10 +158,12 @@ ${text.slice(0, MAX_TEXT)}`,
   return { lines, flags }
 }
 
-// נקרא מ-webhook של Resend לכל מייל שנשלח ל-k@. בטוח לקריאה חוזרת (sourceRef = message-id).
+// נקרא מ-webhook של Resend לכל מייל קוויטל (ראו detectKvitelEmail). בטוח לקריאה חוזרת (sourceRef = message-id).
+// requireLines: מייל שזוהה לפי הנושא בלבד נקלט רק אם נמצא בו שם.
 export async function handleKvitelEmail(db: SupabaseClient, m: {
-  messageId: string; fromEmail: string; fromName: string | null; subject: string; text: string
-}): Promise<{ ok: boolean; requestId?: string; status?: string }> {
+  messageId: string; fromEmail: string; fromName: string | null; subject: string; text: string; requireLines?: boolean
+}): Promise<{ ok: boolean; requestId?: string; status?: string; skipped?: string }> {
+  m = { ...m, subject: decodeEntities(m.subject), text: decodeEntities(m.text) }
   const { count } = await db.from('kvitel_requests').select('id', { count: 'exact', head: true })
     .eq('channel', 'email').eq('source_ref', m.messageId)
   if (count) return { ok: true }
@@ -142,6 +176,7 @@ export async function handleKvitelEmail(db: SupabaseClient, m: {
     if (ai && ai.lines.length >= parsed.lines.length) { parsed = ai; note = 'פוענח מהמייל ב-AI' }
     else if (leftover.length) note = `נשארו ${leftover.length} שורות שלא פוענחו — יש לבדוק את המקור`
   }
+  if (m.requireLines && !parsed.lines.length) return { ok: true, skipped: 'no-names' }
 
   const res = await ingestKvitel(db, {
     channel: 'email',

@@ -863,13 +863,17 @@ export async function POST(request: NextRequest) {
   }
 
   // ── קוויטלאך: מייל ל-k@ מפוענח לשמות ונכנס למסך /admin/kvitel ──
-  // מחוץ ל-isNew (כמו מכתבי הברכה למטה). כפילות נמנעת לפי message-id.
+  // גם מייל עם "קויטל" בנושא בכל תיבה אחרת (בפועל הם מגיעים ל-m@ ול-office@), אבל רק אם נמצא בו שם.
+  // מחוץ ל-isNew (כמו מכתבי הברכה למטה). כפילות נמנעת לפי message-id, גם כשאותו מייל נשלח לכמה תיבות.
   // המייל ממשיך לטיפול הרגיל ונשאר גם בתיבה.
   try {
-    const { isKvitelMailbox, handleKvitelEmail } = await import('@/lib/kvitelEmail')
-    if (isKvitelMailbox([resolvedToEmail, ...candidates])) {
+    const { detectKvitelEmail, handleKvitelEmail } = await import('@/lib/kvitelEmail')
+    const kvitelBy = detectKvitelEmail({ recipients: [resolvedToEmail, ...candidates], subject, fromEmail: from.email, isOrgAddr })
+    if (kvitelBy) {
       const text = (plain && plain.trim()) ? plain : htmlToPlainText(html ?? '')
-      const r = await handleKvitelEmail(admin, { messageId, fromEmail: from.email, fromName: from.name, subject, text })
+      const r = await handleKvitelEmail(admin, {
+        messageId, fromEmail: from.email, fromName: from.name, subject, text, requireLines: kvitelBy === 'subject',
+      })
       console.log('[resend-inbound] קוויטל:', r)
     }
   } catch (e) {
