@@ -3,10 +3,9 @@ import { requirePermission, forbidden, getServiceClient, serverMisconfigured } f
 import {
   buildCreditEmailHtml, parseTestSend, testSubject, TEST_CALL_ACTION, TEST_CREDIT,
   TEST_SEND_ACTION, TEST_SEND_WINDOW_MS, TEST_RATE_LIMIT_MESSAGE, isTestSendLimited } from '@/lib/bookFairCredits'
-import { creditCallConfigured, placeCreditCall } from '@/lib/yemotCreditCall'
+import { creditCallConfigured, placeCreditCall } from '@/lib/bookFairCreditCall'
 import { deliverMail } from '@/lib/sendMail'
 import { logActivity } from '@/lib/activityLog'
-import { ensureAnnouncement } from '@/lib/creditsAnnouncement'
 
 // שליחת בדיקה של הזיכויים: מייל ושיחה עם נתוני דוגמה לכתובת ולטלפון שהמנהל מזין.
 // לא קוראים ולא כותבים ל-book_fair_credits. שיחת הבדיקה נרשמת ב-activity_log,
@@ -49,12 +48,10 @@ export async function POST(request: NextRequest) {
   }
   if (input.phone) {
     if (!creditCallConfigured()) {
-      phone = { ok: false, error: 'שיחות ימות לא מוגדרות (חסר YEMOT_BOOK_FAIR_TOKEN או YEMOT_BOOK_FAIR_CREDIT_TEMPLATE_ID)' }
+      phone = { ok: false, error: 'שיחות יוצאות של היריד בטכנוליין לא מוגדרות (חסר TECHNOLINE_YERID_API_KEY או TECHNOLINE_OUTBOUND_ENABLED)' }
     } else {
       // נרשם לפני החיוג, כדי שהשלוחה תזהה את הבדיקה כבר כשהשיחה נענית
       await logActivity(db, { userId: staff.userId, action: TEST_CALL_ACTION, entityType: 'book_fair_credits', details: { phone: input.phone } })
-      // מפיק את הודעת הפתיחה לפני החיוג, כדי שגם השיחה הראשונה תשמע אותה
-      await ensureAnnouncement().catch(() => {})
       const res = await placeCreditCall(input.phone)
       phone = { ok: res.ok, error: res.ok ? undefined : (res.error ?? 'השיחה נכשלה') }
     }

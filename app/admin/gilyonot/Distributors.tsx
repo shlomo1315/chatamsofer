@@ -706,7 +706,7 @@ function Broadcast({ cities, rows, messages }: { cities: string[]; rows: Distrib
   )
 }
 
-// ─── הגדרות: שליח, ונציג טלפוני (לשלב ימות המשיח) ────────────────────────────
+// ─── הגדרות: שליח, ונציג טלפוני (לשלב המרכזיה) ────────────────────────────
 
 function SettingsForm({ settings }: { settings: DistributorSettingsView }) {
   const router = useRouter()

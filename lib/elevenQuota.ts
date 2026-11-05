@@ -31,7 +31,7 @@ export function describeElevenError(status: number, errText: string): string {
 
   if (QUOTA_RE.test(raw) || status === 429) {
     return 'נגמרה מכסת ההמרות ב-ElevenLabs — יש לטעון קרדיטים בחשבון, '
-      + 'ועד אז ההודעה תושמע בקול הממוחשב של ימות'
+      + 'ועד אז ההודעה תושמע בקול הממוחשב של המרכזיה'
   }
 
   if (status === 0) {

@@ -4,7 +4,7 @@ import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { generateCode, hashCode } from '@/lib/portalPassword'
 import { normalizeId, resolveBeneficiaryByEnteredId } from '@/lib/portalBeneficiary'
 import { normalizePhone, maskPhone } from '@/lib/phone'
-import { placeCodeCall, yemotCallConfigured } from '@/lib/yemotCall'
+import { placeCodeCall, phoneCallConfigured } from '@/lib/phoneCall'
 import { getRegistrationGate, phoneCodeLoginBlocked } from '@/lib/registrationGate'
 
 export const dynamic = 'force-dynamic'
@@ -19,7 +19,7 @@ function getAdminClient() {
 // סדר קבוע — כדי שהאינדקס יהיה יציב בין שלב הרשימה לשלב השליחה
 const PHONE_FIELDS = ['phone', 'phone2', 'spouse_phone'] as const
 
-// כניסה לפורטל באמצעות קוד טלפוני (צינתוק ימות).
+// כניסה לפורטל באמצעות קוד טלפוני (צינתוק המרכזיה).
 //   שלב 1: { idType, id }                 → מחזיר רשימת מספרים ממוסכים לבחירה
 //   שלב 2: { idType, id, phoneIndex }     → מצלצל למספר הנבחר ומקריא קוד חד-פעמי
 export async function POST(request: NextRequest) {
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'מספר תעודת זהות לא תקין' }, { status: 400 })
   }
 
-  if (!yemotCallConfigured()) {
+  if (!phoneCallConfigured()) {
     return NextResponse.json({ error: 'כניסה טלפונית אינה זמינה כרגע. אנא היכנס עם סיסמה.' }, { status: 503 })
   }
 

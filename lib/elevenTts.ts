@@ -1,6 +1,6 @@
 // אינטגרציה עם ElevenLabs ליצירת קול נוירוני טבעי (Text-to-Speech) בעברית.
 // מודול צד-שרת בלבד. המפתח, מזהה הקול והמודל נשמרים ב-app_settings (מפתח 'elevenlabs_tts')
-// עם נפילה-לאחור ל-ENV. הקול שנוצר מועלה לימות ומושמע בשיחה במקום ה-TTS הרובוטי.
+// עם נפילה-לאחור ל-ENV. הקול שנוצר מועלה למרכזיה ומושמע בשיחה במקום ה-TTS הרובוטי.
 // תיעוד: https://elevenlabs.io/docs/api-reference/text-to-speech
 import { getServiceClient } from '@/lib/apiAuth'
 import { describeElevenError } from './elevenQuota'
@@ -65,7 +65,7 @@ export async function saveElevenConfig(input: { apiKey?: string; voiceId?: strin
   // 🔴 הקול השתנה ⇒ כל ההקלטות הקיימות מיושנות.
   //
   // ⚠️ החלפת הקול משפיעה רק על הקלטות *חדשות*. כל קובץ MP3 שכבר הועלה
-  // לימות ממשיך להתנגן בקול הישן, ואין שום מסך שמראה זאת — המנהל מחליף
+  // למרכזיה ממשיך להתנגן בקול הישן, ואין שום מסך שמראה זאת — המנהל מחליף
   // קול, שומע "נשמר בהצלחה", ובטלפון נשמעים שני קולות שונים לסירוגין.
   //
   // נרשמת כאן חותמת בלבד; היצירה עצמה רצה ברקע (voiceRebuildQueue), כי
@@ -159,13 +159,13 @@ async function getElevenStatusKey(): Promise<string> {
   return process.env.ELEVENLABS_API_KEY ?? ''
 }
 
-// יצירת דיבור מטקסט. מחזיר MP3 (ArrayBuffer). ימות ממירה אותו לפורמט הניגון שלה.
+// יצירת דיבור מטקסט. מחזיר MP3 (ArrayBuffer). המרכזיה ממירה אותו לפורמט הניגון שלה.
 // voiceId אופציונלי — לאודישן של קול שעדיין לא נשמר כברירת מחדל.
 /**
  * עוטף PCM גולמי בכותרת WAV תקנית.
  *
  * 🔴 ElevenLabs מחזיר `pcm_8000` בלי כותרת, וקובץ כזה אינו מתנגן
- * בשום נגן — כולל ימות. 44 הבתים כאן הם מה שהופך אותו לקובץ.
+ * בשום נגן — כולל המרכזיה. 44 הבתים כאן הם מה שהופך אותו לקובץ.
  */
 export function pcmToWav(pcm: ArrayBuffer, sampleRate = 8000): ArrayBuffer {
   const data = new Uint8Array(pcm)
@@ -211,7 +211,7 @@ export async function generateSpeech(
       const reqBody: Record<string, unknown> = { text: clean, model_id: modelId }
       if (o?.withSettings) reqBody.voice_settings = { stability: 0.5, similarity_boost: 0.75, style: 0, use_speaker_boost: true }
       if (o?.languageCode) reqBody.language_code = o.languageCode
-      // 🔴 פורמט היעד נקבע מבחוץ: ימות המשיח מנגנת PCM 8kHz מונו
+      // 🔴 פורמט היעד נקבע מבחוץ: המרכזיה מנגנת PCM 8kHz מונו
       // בלבד. קובץ ב-44.1kHz נשמר אצלה, מופיע ברשימת התיקייה וניתן
       // להורדה — אבל אינו מתנגן, והשיחה נופלת בלי שום שגיאה בצד שלנו.
       const fmt = o?.outputFormat ?? 'mp3_44100_128'

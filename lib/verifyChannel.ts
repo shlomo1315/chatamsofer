@@ -7,7 +7,7 @@ import { getServiceClient } from '@/lib/apiAuth'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { generateCode, hashCode, verifyCode } from '@/lib/portalPassword'
 import { sendTransactionalMail } from '@/lib/transactionalMail'
-import { placeCodeCall, yemotCallConfigured } from '@/lib/yemotCall'
+import { placeCodeCall, phoneCallConfigured } from '@/lib/phoneCall'
 import { createVerifyToken, normalizeVerifyValue, type VerifyChannel } from '@/lib/verifyToken'
 import { verifyCodeEmail } from '@/lib/emailTemplates'
 
@@ -134,13 +134,13 @@ export async function sendVerifyCode(
     }
   }
 
-  if (channel === 'phone' && !yemotCallConfigured()) {
+  if (channel === 'phone' && !phoneCallConfigured()) {
     return { status: 503, body: { error: 'אימות טלפוני אינו זמין כעת. אנא נסו שוב מאוחר יותר.' } }
   }
 
   const code = generateCode()
   const hash = await hashCode(code)
-  // ⚠️ באימות טלפון נשמר גם הקוד הגלוי. הוובהוק של ימות מקריא לפי מספר
+  // ⚠️ באימות טלפון נשמר גם הקוד הגלוי. הוובהוק של המרכזיה מקריא לפי מספר
   // המתקשר: בכניסה הקוד נשלף מ-portal_phone_code_plain בטבלת המוטבים, אך
   // בהרשמה ובטופס נדרים אין עדיין רשומה שם — ובלי זה אין מה להקריא.
   // נמחק מיד עם ההקראה (חד-פעמי); ה-hash נשאר לאימות.

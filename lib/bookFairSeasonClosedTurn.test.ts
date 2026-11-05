@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { seasonClosedTurn, initialState, MESSAGE_FALLBACKS } from './bookFairYemotIvr'
+import { seasonClosedTurn, initialState, MESSAGE_FALLBACKS } from './bookFairPhoneFlow'
 
 // 28.10: היריד סגור לעונה ⇒ הודעת תודה וניתוק, בלי אפשרות להשאיר פנייה.
 

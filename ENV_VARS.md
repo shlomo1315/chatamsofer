@@ -13,7 +13,6 @@
 | `OTP_NONCE_SECRET` | חתימת קודי אימות (OTP) וסשן הפורטל הציבורי | `openssl rand -hex 32` |
 | `LOANS_PORTAL_SECRET` | סשן פורטל ההלוואות המשותף | `openssl rand -hex 32` |
 | `CRON_SECRET` | הגנת המשימות המתוזמנות (גיבוי, סנכרון) | `openssl rand -hex 32` — **נכשל-סגור**: בלעדיו ה-cron חסום |
-| `YEMOT_WEBHOOK_SECRET` | הגנת שלוחות הטלפון של ימות | ⚠️ **חובה גם להוסיף `?ApiToken=<הערך>` לכתובת ה-Webhook בימות** — אחרת השלוחה פתוחה |
 | `RESEND_WEBHOOK_SECRET` | הגנת webhook של מייל נכנס (Resend) | להגדיר גם בצד Resend |
 
 ---
@@ -33,15 +32,16 @@
 | `NEXT_PUBLIC_SITE_URL` | `https://chasamsofer.co.il` |
 | `NEXT_PUBLIC_APP_URL` | `https://chasamsofer.co.il` |
 
-## ☎️ 4. ימות המשיח (טלפוניה)
+## ☎️ 4. טכנוליין (טלפוניה)
 
 | משתנה | תיאור |
 |---|---|
-| `YEMOT_TOKEN` | טוקן API של ימות (לשיחות יוצאות/קמפיינים) |
-| `YEMOT_OTP_TEMPLATE_ID` | תבנית קמפיין להקראת קוד כניסה (TTS) |
-| `YEMOT_OTP_CALLER_ID` | מספר DID שיוצג בשיחה היוצאת |
-| `YEMOT_ANNOUNCE_TEMPLATE_ID` | תבנית שמנגנת הקלטה טבעית (הודעת רישום) = `317067` |
-| `YEMOT_WEBHOOK_SECRET` | ראה סעיף 1 |
+| `TECHNOLINE_MAIN_SECRET` | סוד ה-webhook של המרכזיה הראשית |
+| `TECHNOLINE_MAIN_API_KEY` | מפתח API לשיחות יוצאות מהמרכזיה הראשית |
+| `TECHNOLINE_MAIN_NUMBER` | מספר המרכזיה הראשית |
+| `TECHNOLINE_OUTBOUND_ENABLED` | הפעלת שיחות יוצאות (קוד אימות, שיחת רישום) |
+| `TECHNOLINE_YERID_SECRET` · `TECHNOLINE_YERID_API_KEY` · `TECHNOLINE_YERID_NUMBER` | מערכת היריד (נפרדת לגמרי) |
+| `HOLIDAY_PHONE_EXT` | (רשות) שלוחת החגים שמוקראת בהודעות |
 
 ## 💳 5. נדרים קארד
 
@@ -87,6 +87,5 @@
 ## ✅ צ'קליסט לפני go-live
 1. כל המשתנים בסעיפים 1–6 מוגדרים.
 2. הסודות בסעיף 1 הם ערכים אקראיים חזקים (32 בייט), לא ברירת מחדל.
-3. `YEMOT_WEBHOOK_SECRET` — הוגדר **גם** בכתובת ה-Webhook בימות (`?ApiToken=...`).
-4. Cron יומי לגיבוי מוגדר עם `?secret=<CRON_SECRET>`.
-5. גיבוי ידני נבדק ("גבה עכשיו ל-Drive") ועובד.
+3. Cron יומי לגיבוי מוגדר עם `?secret=<CRON_SECRET>`.
+4. גיבוי ידני נבדק ("גבה עכשיו ל-Drive") ועובד.

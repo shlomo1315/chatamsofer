@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
     .in('audience', [noticeAudience(bookId, 'email'), noticeAudience(bookId, 'phone')])
     .order('created_at', { ascending: false })
 
-  const { yemotCallConfigured } = await import('@/lib/yemotCall')
+  const { phoneCallConfigured } = await import('@/lib/phoneCall')
   const view = (t: NoticeTarget) => ({ key: t.key, name: t.name, orders: t.orders.map(o => o.orderNumber) })
 
   return NextResponse.json({
@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
     pendingPhone: scope.phone.map(view),
     noContact: scope.noContact,
     history: (history ?? []).map(h => ({ ...h, channel: String(h.audience).endsWith(':phone') ? 'phone' : 'email' })),
-    callConfigured: yemotCallConfigured(),
+    callConfigured: phoneCallConfigured(),
   })
 }
 
@@ -105,10 +105,10 @@ export async function POST(request: NextRequest) {
   const { deliverMail } = await import('@/lib/sendMail')
   const { mailFor } = await import('@/lib/departments')
   const { bookFairOrderNoticeEmail } = await import('@/lib/emailTemplates')
-  const { placeTtsCall, yemotCallConfigured } = await import('@/lib/yemotCall')
+  const { placeTtsCall, phoneCallConfigured } = await import('@/lib/phoneCall')
 
-  if (channel === 'phone' && !yemotCallConfigured()) {
-    return NextResponse.json({ error: 'שיחות יוצאות בימות אינן מוגדרות בשרת (YEMOT_OTP_TEMPLATE_ID)' }, { status: 400 })
+  if (channel === 'phone' && !phoneCallConfigured()) {
+    return NextResponse.json({ error: 'שיחות יוצאות בטכנוליין לא מוגדרות בשרת (חסר TECHNOLINE_MAIN_API_KEY או TECHNOLINE_OUTBOUND_ENABLED)' }, { status: 400 })
   }
 
   // 🔴 לא request.nextUrl.origin: מאחורי Railway הוא localhost:8080.
@@ -201,7 +201,7 @@ export async function POST(request: NextRequest) {
         res = await deliverMail(t.key, mail.subject, mail.html, undefined, { ...mailFor('yerid'), transactional: true })
       } else {
         res = await placeTtsCall(t.key, message)
-        // ⚠️ השהיה קצרה: עשרות שיחות בשנייה מול ימות מחזירות שגיאות זמניות.
+        // ⚠️ השהיה קצרה: עשרות שיחות בשנייה מול המרכזיה מחזירות שגיאות זמניות.
         await new Promise(r => setTimeout(r, 150))
       }
     } catch (e) {

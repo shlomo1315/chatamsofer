@@ -1,9 +1,9 @@
 // גישה לנתונים של שלוחת החגים — מופרד מהשיחה כדי שאפשר יהיה לבדוק את כל המסלולים.
-// השאילתות זהות לשלוחת ימות (app/api/webhooks/yemot-holiday), שנשארת עד שהמעבר ייבדק.
+// השאילתות זהות לשלוחה הקודמת, שהוסרה.
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getServiceClient } from '@/lib/apiAuth'
 import { digitsOnly, idOrFilter, sameId } from '@/lib/idLookup'
-import { isKnownPhone } from '@/lib/yemotCardIdentity'
+import { isKnownPhone } from '@/lib/cardIdentity'
 import { loadOpenCenters } from '@/lib/holidayCenterIvr'
 import { ensureCenterOpening } from '@/lib/centerOpeningRow'
 import { runLoadBatch, type LoadTarget, type LoadSummary } from '@/lib/holidayCardLoad'

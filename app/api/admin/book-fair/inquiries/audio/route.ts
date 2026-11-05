@@ -1,26 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
-import { archiveInquiryRecording, inquiryStorageKey } from '@/lib/bookFairInquiryAudio'
+import { inquiryStorageKey } from '@/lib/bookFairInquiryAudio'
 import { scrambleBytes, DOC_CIPHER_ID } from '@/lib/docCipher'
 
 // הקלטת פנייה להאזנה בדפדפן.
 //
-// 🔴 מוגש דרך השרת ולא בקישור ישיר: כתובת ההורדה של ימות דורשת את
-// YEMOT_TOKEN, וקישור שכולל אותו היה חושף את מפתח המערכת בכל דף.
-//
-// 🔴 הקובץ נמצא לפי נתוני הפנייה במסד ולא לפי פרמטר: קבלת path מהלקוח
-// הייתה מאפשרת לקרוא *כל* קובץ בחשבון ימות.
-//
-// 🔴 08.10: קודם נבנה כאן נתיב מהעמודה recording — "120/9.wav", זהה לכל
-// הפניות ואינו נתיב בכלל — ונוסף לו .wav שני. כל ניסיון החזיר 404 והמסך
-// הציג "הדפדפן לא הצליח לנגן". ראו lib/bookFairInquiryAudio.
+// 🔴 מוגש דרך השרת ולא בקישור ישיר: ההקלטה מכילה פרטים אישיים, ולכן
+// נתיב מוגן בהרשאת צוות. הקובץ נמצא לפי נתוני הפנייה במסד ולא לפי פרמטר.
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 // 🔴 10.10: נתונים מעורבלים ב-JSON ולא תגובת audio/wav. השרת החזיר 200
 // והדפדפן כתב "לא הצליח לנגן": נטפרי חוסם כל תגובה שנראית כקובץ.
-// אותה שיטה כמו play-audio — ראו lib/docCipher.
+// ראו lib/docCipher.
 function audio(data: ArrayBuffer) {
   const scrambled = scrambleBytes(new Uint8Array(data))
   return NextResponse.json({
@@ -51,17 +44,9 @@ export async function GET(request: NextRequest) {
   // ⚠️ פנייה בלי call_id (ישנה) — המזהה שלה משמש כמפתח העותק.
   const callId = String(row.call_id || row.id)
 
-  // 1. העותק שלנו — נשמר בסיום השיחה או בהשמעה קודמת.
   const { data: blob } = await db.storage.from('documents').download(inquiryStorageKey(callId))
   if (blob) return audio(await blob.arrayBuffer())
 
-  // 2. סל המיחזור של ימות — לפי הטלפון והזמן. נמצא ⇒ נשמר עותק לפעם הבאה.
-  const data = await archiveInquiryRecording(db, callId, String(row.phone ?? ''), new Date(row.created_at))
-  if (data) return audio(data)
-
   console.error(`[fair/inquiries/audio] ההקלטה לא נמצאה · פנייה ${id}`)
-  return NextResponse.json(
-    { error: 'ההקלטה כבר לא נמצאת בימות (נמחקה מסל המיחזור)' },
-    { status: 404 },
-  )
+  return NextResponse.json({ error: 'ההקלטה לא נמצאה' }, { status: 404 })
 }

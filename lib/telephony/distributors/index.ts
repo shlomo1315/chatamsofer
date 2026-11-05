@@ -1,4 +1,4 @@
-// שלוחת המפיצים בטכנוליין: טוענת את המפיץ לפי הטלפון ומבצעת את הפעולה, באותם כללים כמו בימות והאתר.
+// שלוחת המפיצים בטכנוליין: טוענת את המפיץ לפי הטלפון ומבצעת את הפעולה, באותם כללים כמו במרכזיה והאתר.
 import { getServiceClient } from '@/lib/apiAuth'
 import { normalizePhone } from '@/lib/kvitel'
 import { isAgentAvailable } from '@/lib/gilyonotDistributors'

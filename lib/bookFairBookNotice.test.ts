@@ -45,7 +45,7 @@ describe('עזרים', () => {
     expect(cleanEmail('x@y')).toBeNull()
   })
 
-  it('טקסט הטלפון בלי פסיקים ובלי נקודות (ימות קוטעת בהם)', () => {
+  it('טקסט הטלפון בלי פסיקים ובלי נקודות (המרכזיה קוטעת בהם)', () => {
     const t = DEFAULT_PHONE_MESSAGE('חוט המשולש "מהדורה"')
     expect(t).not.toMatch(/[.,"]/)
     expect(t).toContain('חוט המשולש')

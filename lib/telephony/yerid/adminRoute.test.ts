@@ -1,4 +1,4 @@
-// ה-API של לשונית טכנוליין בממשק היריד: הרשאות, ולידציה, והפרדה מוחלטת ממפתחות ימות.
+// ה-API של לשונית טכנוליין בממשק היריד: הרשאות, ולידציה, והפרדה מוחלטת ממפתחות המרכזיה.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
@@ -26,7 +26,7 @@ vi.mock('@/lib/telephony/admin', () => ({
 }))
 
 const route = await import('@/app/api/admin/book-fair/technoline/route')
-const { BOOK_FAIR_MSG_KEY, TECHNOLINE_YERID_MSG_KEY, BOOK_FAIR_MESSAGE_META } = await import('@/lib/yemotBookFairMessages')
+const { BOOK_FAIR_MSG_KEY, TECHNOLINE_YERID_MSG_KEY, BOOK_FAIR_MESSAGE_META } = await import('@/lib/bookFairPhoneMessages')
 
 const post = (body: object) => route.POST(new NextRequest('http://x/api', { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json' } }))
 const tl = () => JSON.parse(store.get(TECHNOLINE_YERID_MSG_KEY) ?? '{}')
@@ -58,7 +58,7 @@ describe('API טכנוליין של היריד', () => {
     expect(store.size).toBe(0)
   })
 
-  it('שמירת נוסח נכתבת רק למפתח של טכנוליין, ולא נוגעת בנוסחי ימות', async () => {
+  it('שמירת נוסח נכתבת רק למפתח של טכנוליין, ולא נוגעת בנוסחי המרכזיה', async () => {
     store.set(BOOK_FAIR_MSG_KEY, JSON.stringify({ [audioKey]: { text: 'ישן', audio: 'rec_old' } }))
     const res = await post({ action: 'messages', messages: { [audioKey]: { text: 'נוסח חדש', audio: 'injected' } } })
     expect(res.status).toBe(200)
@@ -72,8 +72,8 @@ describe('API טכנוליין של היריד', () => {
     expect(store.has(TECHNOLINE_YERID_MSG_KEY)).toBe(false)
   })
 
-  it('העתקת נוסחים קודמים מעתיקה טקסט בלבד, בלי הקלטות של ימות', async () => {
-    store.set(BOOK_FAIR_MSG_KEY, JSON.stringify({ [audioKey]: { text: 'מהמסד', audio: 'rec_yemot' } }))
+  it('העתקת נוסחים קודמים מעתיקה טקסט בלבד, בלי הקלטות של המרכזיה', async () => {
+    store.set(BOOK_FAIR_MSG_KEY, JSON.stringify({ [audioKey]: { text: 'מהמסד', audio: 'rec_old' } }))
     expect((await post({ action: 'import' })).status).toBe(200)
     expect(tl()[audioKey]).toEqual({ text: 'מהמסד', audio: null })
   })

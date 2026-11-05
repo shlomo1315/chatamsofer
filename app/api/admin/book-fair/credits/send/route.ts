@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
 import { buildCreditEmailHtml, creditSubject } from '@/lib/bookFairCredits'
-import { creditCallConfigured, placeCreditCall } from '@/lib/yemotCreditCall'
+import { creditCallConfigured, placeCreditCall } from '@/lib/bookFairCreditCall'
 import { deliverMail } from '@/lib/sendMail'
 import { logActivity } from '@/lib/activityLog'
 
-// שליחת הזיכויים: שיחת ימות ללקוחות הטלפון, מייל עם קישור אישי ללקוחות האתר.
+// שליחת הזיכויים: שיחה בטכנוליין ללקוחות הטלפון, מייל עם קישור אישי ללקוחות האתר.
 // נשלח רק למי שעוד לא נשלח (או שהשליחה נכשלה); שליחה חוזרת למי ששלח כבר דורשת resend=true.
 
 export const dynamic = 'force-dynamic'
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
 
   const hasPhone = (rows ?? []).some(r => r.channel === 'phone')
   if (hasPhone && !creditCallConfigured()) {
-    return NextResponse.json({ error: 'שיחות ימות לא מוגדרות (חסר YEMOT_BOOK_FAIR_TOKEN או YEMOT_BOOK_FAIR_CREDIT_TEMPLATE_ID)' }, { status: 422 })
+    return NextResponse.json({ error: 'שיחות יוצאות של היריד בטכנוליין לא מוגדרות (חסר TECHNOLINE_YERID_API_KEY או TECHNOLINE_OUTBOUND_ENABLED)' }, { status: 422 })
   }
 
   let sent = 0, failed = 0, skipped = ids.length - (rows?.length ?? 0)

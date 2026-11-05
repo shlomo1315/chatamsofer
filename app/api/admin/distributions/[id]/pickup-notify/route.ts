@@ -4,7 +4,7 @@ import { fetchAllRows } from '@/lib/fetchAllRows'
 import { logActivity } from '@/lib/activityLog'
 import { scopeNotify, type NotifyCandidate } from '@/lib/pickupNotify'
 import { pickupPhoneText, pickupEmailText } from '@/lib/pickupMessages'
-import { placeTtsCall, yemotCallConfigured } from '@/lib/yemotCall'
+import { placeTtsCall, phoneCallConfigured } from '@/lib/phoneCall'
 import { deliverMail } from '@/lib/sendMail'
 
 export const dynamic = 'force-dynamic'
@@ -97,9 +97,9 @@ export async function GET(_request: NextRequest, ctx: { params: Promise<{ id: st
     phone: scope.phone.length,
     email: scope.email.length,
     skipped: scope.skipped,
-    // ⚠️ נאמר מראש: בלי הגדרת ימות הצינתוק לא יצא, והמנהל יחשוב
+    // ⚠️ נאמר מראש: בלי הגדרת המרכזיה הצינתוק לא יצא, והמנהל יחשוב
     // שההודעה נשלחה.
-    callConfigured: yemotCallConfigured(),
+    callConfigured: phoneCallConfigured(),
   })
 }
 
@@ -148,7 +148,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
         const r = await placeTtsCall(t.phone!, pickupPhoneText(label(t.id)))
         if (r.ok) { calls++; notified.add(t.id) } else failed++
       } catch { failed++ }
-      // ⚠️ השהיה קצרה: עשרות שיחות בשנייה מול ימות מחזירות שגיאות
+      // ⚠️ השהיה קצרה: עשרות שיחות בשנייה מול המרכזיה מחזירות שגיאות
       // זמניות, ואז ההודעה פשוט לא יוצאת.
       await new Promise(r => setTimeout(r, 120))
     }

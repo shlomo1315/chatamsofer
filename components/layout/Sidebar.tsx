@@ -262,7 +262,6 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
             דורשת מיגרציה לכל המשתמשים הקיימים, וזו ממילא עבודת מנהל —
             שינוי הודעה כאן נשמע מיד לכל מי שמחייג. אותו דפוס כמו
             "אישורים חריגים". */}
-        {isAdmin && renderLink({ href: '/admin/phone', label: 'מערכת טלפונית', icon: PhoneCall })}
         {isAdmin && renderLink({ href: '/admin/technoline', label: 'מרכזיה טלפונית', icon: PhoneCall })}
         </>)}
 

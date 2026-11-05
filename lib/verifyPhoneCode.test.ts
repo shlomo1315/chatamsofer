@@ -2,11 +2,11 @@ import { describe, it, expect } from 'vitest'
 import { normalizePhone } from './phone'
 
 // אימות טלפון בהרשמה: הקוד נשמר ב-app_settings תחת verify:phone:<טלפון מנורמל>,
-// והוובהוק של ימות קורא אותו משם. הבדיקה מקבעת את שתי ההנחות שעליהן זה עומד.
+// והוובהוק של המרכזיה קורא אותו משם. הבדיקה מקבעת את שתי ההנחות שעליהן זה עומד.
 describe('קוד אימות טלפון בהרשמה', () => {
   it('שני הצדדים מנרמלים את המספר לאותו מפתח', () => {
     // הטופס שומר לפי normalizeVerifyValue → normalizePhone.
-    // הוובהוק קורא לפי normalizePhone על ApiPhone של ימות.
+    // הוובהוק קורא לפי normalizePhone על ApiPhone של המרכזיה.
     // אם השניים יתפצלו — הקוד יישמר במפתח אחד וייקרא מאחר, וההקראה תיכשל.
     const variants = ['0527101315', '052-710-1315', '972527101315', '00972527101315']
     const keys = variants.map(v => `verify:phone:${normalizePhone(v)}`)

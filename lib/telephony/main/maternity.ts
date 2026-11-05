@@ -4,11 +4,11 @@
 // ⚠️ שם משתנה חדש לכל ניסיון (card1, ok1, card2, ok2...): ערך ישן שנשאר ב-REQUEST
 // לא יכול "לדלג" בשמנו על שלב, ואין צורך לסמוך על סדר הביצוע של removeParams.
 //
-// הלוגיקה זהה לשלוחת ימות (app/api/webhooks/yemot-maternity), שנשארת עד שהמעבר ייבדק.
-// פעולות הרישום נשארות באותם שמות (yemot_card_registered וכו') — כך המסכים, הדוחות
+// הלוגיקה זהה לשלוחה הקודמת, שהוסרה.
+// פעולות הרישום נשארות באותם שמות (phone_card_registered וכו') — כך המסכים, הדוחות
 // ובדיקת "כרטיס כבר משויך" עובדים על שתי המרכזיות יחד.
 import { getNedarimCreds, setMagneticCard, findClientByZeout, getClientCardFull } from '@/lib/nedarim'
-import { getMaternityMessages, type MaternityMessages } from '@/lib/yemotMaternityMessages'
+import { getMaternityMessages, type MaternityMessages } from '@/lib/maternityPhoneMessages'
 import { canLinkMaternityCard } from '@/lib/maternityCardGate'
 import { askDigits, digits, fill, goodbye, hangup, menu } from '../modules'
 import { normalizePhone } from '../shared/phone'
@@ -92,11 +92,11 @@ export const maternity: TlHandler = async ({ phone, callId, params }) => {
 
   // ── שלב 1: זיהוי ──
   if (found.kind === 'notFound') {
-    await logActivity('yemot_phone_not_found', 'phone', null, { caller, callId, channel: CHANNEL, note: 'מספר לא קיים במערכת' })
+    await logActivity('phone_phone_not_found', 'phone', null, { caller, callId, channel: CHANNEL, note: 'מספר לא קיים במערכת' })
     return end('not_found')
   }
   if (found.kind === 'noBirth') {
-    await logActivity('yemot_no_active_birth', 'beneficiary', found.familyId, {
+    await logActivity('phone_no_active_birth', 'beneficiary', found.familyId, {
       caller, callId, channel: CHANNEL, beneficiary_id: found.familyId, family_name: found.familyName,
     })
     return end('no_birth')
@@ -104,12 +104,12 @@ export const maternity: TlHandler = async ({ phone, callId, params }) => {
 
   const { aid, familyName } = found
   if (aid.status !== 'active') {
-    await logActivity('yemot_pending_approval', 'maternity_aid', aid.id, { caller, callId, channel: CHANNEL, family_name: familyName, status: aid.status })
+    await logActivity('phone_pending_approval', 'maternity_aid', aid.id, { caller, callId, channel: CHANNEL, family_name: familyName, status: aid.status })
     return end('pending_approval')
   }
   // לא נוכה לה כרטיס מהמלאי — כרטיס שקיבלה בלי שובר אינו שלה (ראו lib/maternityCardGate).
   if (!canLinkMaternityCard(aid)) {
-    await logActivity('yemot_card_not_allocated', 'maternity_aid', aid.id, {
+    await logActivity('phone_card_not_allocated', 'maternity_aid', aid.id, {
       caller, callId, channel: CHANNEL, family_name: familyName, card_status: aid.card_status, card_load_status: aid.card_load_status,
     })
     return end('card_not_allocated')
@@ -118,7 +118,7 @@ export const maternity: TlHandler = async ({ phone, callId, params }) => {
   const existing = String(aid.card_number ?? '').trim()
   if (existing) {
     if (await isCardRegistered(aid.id)) {
-      await logActivity('yemot_card_already_linked', 'maternity_aid', aid.id, { caller, callId, channel: CHANNEL, family_name: familyName, card_number_last4: existing.slice(-4) })
+      await logActivity('phone_card_already_linked', 'maternity_aid', aid.id, { caller, callId, channel: CHANNEL, family_name: familyName, card_number_last4: existing.slice(-4) })
       return end('card_already_linked', { card: digits(existing) })
     }
     // מספר תקוע מהקלדה שלא הושלמה — מנקים כדי לאפשר חיבור מחדש
@@ -159,7 +159,7 @@ async function doLink({ aid, family, familyName, card, caller, callId, end }: Li
     } catch (e) { console.error('[telephony:main/maternity] findClientByZeout failed', e) }
   }
   if (!nedarimId) {
-    await logActivity('yemot_error', 'maternity_aid', aid.id, { caller, callId, channel: CHANNEL, family_name: familyName, error: 'אין nedarim_id למשפחה (גם לא נמצא לפי ת"ז)' })
+    await logActivity('phone_error', 'maternity_aid', aid.id, { caller, callId, channel: CHANNEL, family_name: familyName, error: 'אין nedarim_id למשפחה (גם לא נמצא לפי ת"ז)' })
     return end('not_in_nedarim')
   }
 
@@ -189,7 +189,7 @@ async function doLink({ aid, family, familyName, card, caller, callId, end }: Li
   const already = !ok && (isAlreadyMsg(msg) || (await cardLinkedInNedarim(creds, nedarimId, card)))
   if (!ok && !already) {
     console.error(`[telephony:main/maternity] setMagneticCard failed: ${msg}`)
-    await logActivity('yemot_error', 'maternity_aid', aid.id, {
+    await logActivity('phone_error', 'maternity_aid', aid.id, {
       caller, callId, channel: CHANNEL, family_name: familyName, error: msg, card_number_last4: card.slice(-4), nedarim_id: nedarimId,
     })
     await saveLinkError(aid.id, `שיוך כרטיס בטלפון נכשל — תגובת נדרים: ${msg}`)
@@ -198,7 +198,7 @@ async function doLink({ aid, family, familyName, card, caller, callId, end }: Li
 
   const { centerName, firstTime } = await markPickedUp(aid, card)
   if (firstTime) {
-    await logActivity('yemot_card_registered', 'maternity_aid', aid.id, {
+    await logActivity('phone_card_registered', 'maternity_aid', aid.id, {
       caller, callId, channel: CHANNEL, family_name: familyName, card_number_last4: card.slice(-4), nedarim_id: nedarimId, center: centerName,
     })
     try {

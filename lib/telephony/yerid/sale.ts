@@ -1,16 +1,16 @@
 // שיחת יריד הספרים בטכנוליין: הזמנה, מעקב הזמנות, פנייה מוקלטת, משלוח/איסוף ותשלום בכרטיס.
-// אותה זרימה בדיוק כמו בימות (lib/bookFairYemotIvr), עם מקור נתונים ונוסחים נפרדים לגמרי.
-// 🔴 אין כאן שום קריאה לימות: הקלטות יורדות מטכנוליין במפתח של מערכת היריד בלבד.
+// אותה זרימה בדיוק כמו במרכזיה (lib/bookFairPhoneFlow), עם מקור נתונים ונוסחים נפרדים לגמרי.
+// 🔴 אין כאן שום קריאה למרכזיה: הקלטות יורדות מטכנוליין במפתח של מערכת היריד בלבד.
 import { getServiceClient } from '@/lib/apiAuth'
-import { getBookFairMessages, TECHNOLINE_YERID_MSG_KEY } from '@/lib/yemotBookFairMessages'
+import { getBookFairMessages, TECHNOLINE_YERID_MSG_KEY } from '@/lib/bookFairPhoneMessages'
 import {
   addressVarBase, attemptVarName, confirmVarBase, initialState, msgToken, nameVarBase, nextTurn, seasonClosedTurn,
   type IvrInput,
-} from '@/lib/bookFairYemotIvr'
+} from '@/lib/bookFairPhoneFlow'
 import { totalVolumes } from '@/lib/bookFairShipping'
 import { goodbye } from '../modules'
 import type { TlHandler, TlParams, TlResponse } from '../types'
-import { cleanParams, yemotToTl } from './yemotToTl'
+import { cleanParams, flowToTl } from './flowToTl'
 import {
   createOrder, deleteSession, finalizeOrder, findBook, findBookById, findCity, listBooks, listCategories, listCities,
   listMyOrders, loadSession, pickupAvailable, reserveLastItem, reserveLastPreview, saveInquiry, saveSession,
@@ -81,7 +81,7 @@ export const yeridSale: TlHandler = async (ctx) => {
   const seq = state.tl_seq ?? 0
   const next = seq + 1
   const p = cleanParams(ctx.params, seq)
-  const reply = (response: string) => yemotToTl(response, next)
+  const reply = (response: string) => flowToTl(response, next)
 
   if (seasonClosed && state.step !== 'record_inquiry') {
     const turn = seasonClosedTurn(state, { value: paramFor(p, 'bf_sc') }, messages)

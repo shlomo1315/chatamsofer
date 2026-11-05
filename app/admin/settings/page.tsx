@@ -263,19 +263,19 @@ export default async function SettingsPage() {
 
         {/* ── המערכת הטלפונית — עברה למסך משלה ────────────────────────────
             🔴 הפאנל שישב כאן הוסר, ולא הוקטן: הוא הציג בונה שלוחות שני,
-            מקביל לזה שב-/admin/phone. שני מסכים שנראים זהים ורק אחד מהם
+            מקביל לזה שב-/admin/technoline. שני מסכים שנראים זהים ורק אחד מהם
             מתוחזק — המנהל ערך במסך המת ולא הבין למה שום דבר לא השתנה.
             ⚠️ נשארת הפניה ולא הסרה שקטה: מי שהתרגל להיכנס לכאן חייב
             לדעת לאן ללכת, אחרת הוא מחפש מסך שנעלם. */}
-        <Collapsible title="מערכת טלפונית (ימות המשיח)" icon={<Phone size={16} className="text-teal-500" />}>
+        <Collapsible title="מרכזיה טלפונית (טכנוליין)" icon={<Phone size={16} className="text-teal-500" />}>
           <div className="flex flex-col gap-3 rounded-2xl border border-teal-200 bg-teal-50/40 p-4">
             <p className="text-[13px] leading-relaxed text-teal-900">
-              ניהול המערכת הטלפונית עבר למסך ייעודי: השלוחות, ההודעות, ההקלטות,
-              יומן השיחות והחיבור לימות — הכל במקום אחד.
+              ניהול המרכזיה עבר למסך ייעודי: השלוחות, הנוסחים, ההקלטות,
+              יומן השיחות והחיבור לטכנוליין — הכל במקום אחד.
             </p>
-            <a href="/admin/phone"
+            <a href="/admin/technoline"
               className="inline-flex w-fit items-center gap-1.5 rounded-xl bg-teal-600 px-4 py-2 text-xs font-extrabold text-white hover:bg-teal-700">
-              <Phone size={13} /> מעבר למערכת הטלפונית
+              <Phone size={13} /> מעבר למרכזיה הטלפונית
             </a>
           </div>
         </Collapsible>
@@ -319,7 +319,7 @@ export default async function SettingsPage() {
         </Collapsible>
 
         {/* ⚠️ הקלטת הודעת הרישום ויומן השיחות הוסרו מכאן — שניהם מוצגים
-            ב-/admin/phone (השלוחה "הודעה כללית" והטאב "יומן שיחות").
+            ב-/admin/technoline (לשונית "יומן שיחות").
             אלה היו *אותם רכיבים* בשני נתיבים, ולכן לא היה לזה מקור אמת. */}
 
         {/* Public registration gate */}

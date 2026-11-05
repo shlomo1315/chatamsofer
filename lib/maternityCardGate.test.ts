@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { canLinkMaternityCard } from './maternityCardGate'
-import { MATERNITY_MESSAGE_META } from './yemotMaternityMessages'
+import { MATERNITY_MESSAGE_META } from './maternityPhoneMessages'
 
 describe('canLinkMaternityCard — שיוך כרטיס רק למי שנוכה לה כרטיס', () => {
   it('ממתינה למלאי — חסומה', () => {
@@ -31,7 +31,7 @@ describe('canLinkMaternityCard — שיוך כרטיס רק למי שנוכה ל
     expect(canLinkMaternityCard({ card_status: 'loaded', card_load_status: null, card_tlush_id: 'T1' })).toBe(true)
   })
 
-  it('יש הודעה חדשה לחסומה, בלי תווים שמשבשים את ימות', () => {
+  it('יש הודעה חדשה לחסומה, בלי תווים שמשבשים את המרכזיה', () => {
     const m = MATERNITY_MESSAGE_META.find((x) => x.key === 'card_not_allocated')
     expect(m).toBeDefined()
     expect(m!.defaultText).not.toMatch(/[.\-"'&|]/)

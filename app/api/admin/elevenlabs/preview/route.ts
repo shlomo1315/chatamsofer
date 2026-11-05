@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 
 const MAX_CHARS = 600 // השמעה מקדימה — מספיק להאזנה, חוסך עלות
 
-// POST { text, voiceId? } — מייצר אודיו ומחזיר אותו ישירות (audio/mpeg) ללא העלאה לימות
+// POST { text, voiceId? } — מייצר אודיו ומחזיר אותו ישירות (audio/mpeg) ללא העלאה למרכזיה
 export async function POST(request: NextRequest) {
   if (!(await requireStaff(['admin']))) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
 

@@ -178,13 +178,13 @@ export default function BookNoticePanel() {
           >
             {!preview.callConfigured && (
               <p className="flex items-center gap-1.5 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
-                <AlertTriangle size={15} /> שיחות יוצאות בימות אינן מוגדרות בשרת, ולכן לא תצא שיחה
+                <AlertTriangle size={15} /> שיחות יוצאות בטכנוליין לא מוגדרות בשרת, ולכן לא תצא שיחה
               </p>
             )}
             <label className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-slate-700">הטקסט להקראה</span>
               <textarea value={phoneMsg} onChange={e => setPhoneMsg(e.target.value)} rows={4} className={INPUT} />
-              <span className="text-xs text-slate-400">פסיקים ונקודות מוסרים לפני ההקראה (ימות קוטעת בהם). להפסקה קצרה כתבו ;</span>
+              <span className="text-xs text-slate-400">פסיקים ונקודות מוסרים לפני ההקראה (הם קוטעים את ההקראה). להפסקה קצרה כתבו ;</span>
             </label>
             {canSend && (
               <Actions

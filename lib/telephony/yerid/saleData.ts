@@ -1,15 +1,15 @@
 // נתוני השיחה של היריד בטכנוליין: עגלה, ספרים, הזמנות, פניות והקלטות.
 //
-// 🔴 הפרדה מוחלטת מימות: אין כאן אף קריאה ל-lib/yemot ולא לטוקן שלה.
+// 🔴 הפרדה מוחלטת: אין כאן אף קריאה למערכת טלפון אחרת ולא לטוקן שלה.
 // הקלטות יורדות מטכנוליין במפתח של מערכת היריד בלבד (getSystem('yerid')).
 // הטבלאות (ספרים, מלאי, הזמנות, פניות) משותפות במכוון — יריד אחד, ערוץ
 // טלפוני חדש — ולכן ההזמנות מופיעות באותו מסך הזמנות.
 //
 // ⚠️ מזהה השיחה נשמר עם הקידומת tl:yerid: כדי ששיחת טכנוליין לא תתנגש
-// לעולם בשיחה ישנה של ימות באותה טבלה.
+// לעולם בשיחה ישנה של המרכזיה באותה טבלה.
 //
-// רוב הפונקציות הועתקו מ-app/api/webhooks/yemot-book-fair/route.ts (שאינו
-// משתנה), בלי ההורדות מימות ובלי שמות הקבצים של הקלטות הספרים בימות.
+// רוב הפונקציות הועתקו מהשלוחה הקודמת של היריד (שאינו
+// משתנה), בלי ההורדות מהמרכזיה ובלי שמות הקבצים של הקלטות הספרים במרכזיה.
 import { loadAgreedTiers } from '@/lib/bookFairAgreedRates'
 import { getServiceClient } from '@/lib/apiAuth'
 import { nextOrderNumber, makeCartToken } from '@/lib/bookFairCheckout'
@@ -18,20 +18,20 @@ import { fetchAllRows } from '@/lib/fetchAllRows'
 import { categoryOrder } from '@/lib/bookFairCatalog'
 import { digitsOnly, matchBookBySku } from '@/lib/bookFairSkuMatch'
 import { BOOK_FAIR_STATUS_LABELS, type BookFairOrderStatus } from '@/types/bookFair'
-import { initialState, ttsClean, type IvrState } from '@/lib/bookFairYemotIvr'
+import { initialState, ttsClean, type IvrState } from '@/lib/bookFairPhoneFlow'
 import { transcribeHebrew } from '@/lib/elevenStt'
 import { PICKUP_CONFIG_KEY, mergePickupConfig, pickupStatus } from '@/lib/bookFairPickup'
 import { inquiryStorageKey } from '@/lib/bookFairInquiryAudio'
 import { hebrewNumbersToDigits } from '@/lib/hebrewNumbers'
 import { getSystem } from '../systems'
 
-/** מסוף נדרים של היריד בשיחה (ברירת מחדל: המסוף שהיה מוגדר בימות). */
+/** מסוף נדרים של היריד בשיחה (ברירת מחדל: המסוף שהיה מוגדר במרכזיה). */
 export function yeridTerminal(): string {
   const t = process.env.TECHNOLINE_YERID_NEDARIM_TERMINAL?.trim()
   return t && /^\d+$/.test(t) ? t : '7004562'
 }
 
-/** מזהה שיחה בטבלאות היריד — עם קידומת, כדי שלא יתנגש בשיחות ימות. */
+/** מזהה שיחה בטבלאות היריד — עם קידומת, כדי שלא יתנגש בשיחות המרכזיה. */
 export function yeridCallId(pbxCallId: string): string {
   return `tl:yerid:${pbxCallId}`
 }
@@ -198,7 +198,7 @@ export async function findBook(sku: string) {
   if (!digits) return null
 
   const supa = db()!
-  // 🔴 audio_name מוחזר null: הקלטות הספרים שמורות בימות, ובטכנוליין שם הספר מוקרא ב-TTS.
+  // 🔴 audio_name מוחזר null: הקלטות הספרים שמורות במרכזיה, ובטכנוליין שם הספר מוקרא ב-TTS.
   const { rows } = await fetchAllRows<{
     id: string; sku: string; title: string; price_agorot: number
     stock_total: number | null; unlimited_stock: boolean | null
@@ -234,7 +234,7 @@ export async function findBookById(id: string) {
   return {
     id: data.id, sku: data.sku, title: data.title, price_agorot: data.price_agorot,
     in_stock: data.unlimited_stock === true || (data.stock_total ?? 0) > 0,
-    // 🔴 כמו ב-listBooks: ההקלטות בימות, ולכן TTS.
+    // 🔴 כמו ב-listBooks: ההקלטות במרכזיה, ולכן TTS.
     audio_name: null,
   }
 }
@@ -303,7 +303,7 @@ export async function listBooks(category: string | null) {
     .map(b => ({
     id: b.id, sku: b.sku, title: b.title, price_agorot: b.price_agorot,
     in_stock: b.unlimited_stock === true || (b.stock_total ?? 0) > 0,
-    // 🔴 הקלטות הספרים הקיימות שמורות בימות ולא בטכנוליין, ולכן כאן שם הספר מוקרא ב-TTS.
+    // 🔴 הקלטות הספרים הקיימות שמורות במרכזיה ולא בטכנוליין, ולכן כאן שם הספר מוקרא ב-TTS.
     audio_name: null,
   }))
 }
@@ -332,7 +332,7 @@ export async function listMyOrders(phone: string) {
   const digits = String(phone ?? '').replace(/\D/g, '')
   if (!digits) return []
 
-  // 🔴 ימות מעבירה את המספר בכמה צורות: "0533157835", "533157835"
+  // 🔴 המרכזיה מעבירה את המספר בכמה צורות: "0533157835", "533157835"
   // (בלי האפס המוביל) ולעיתים עם קידומת "972". השוואה לצורה אחת
   // בלבד החזירה "לא נמצאו הזמנות" ללקוח שהזמין באמת.
   const local = digits.replace(/^972/, '')
@@ -353,7 +353,7 @@ export async function listMyOrders(phone: string) {
     total_agorot: o.total_agorot as number,
     statusCode: o.status as string,
     // ⚠️ ttsClean על התווית: "אי-התאמה" מכיל מקף, שהוא תו מפריד
-    // בתחביר הטוקנים של ימות ושובר את ההודעה כולה.
+    // בתחביר הטוקנים של המרכזיה ושובר את ההודעה כולה.
     status: ttsClean(
       BOOK_FAIR_STATUS_LABELS[o.status as BookFairOrderStatus] ?? 'בטיפול',
     ),
@@ -495,9 +495,9 @@ export async function createOrder(state: IvrState, cartToken: string, phone: str
   // ⚠️ ההקלטות (כתובת/שם) משויכות להזמנה כאן — עד עכשיו היו שייכות רק
   // ל-call_id, וכרטיס ההזמנה לא היה מוצא אותן בלי השיוך המפורש הזה.
   //
-  // 🔴 וגם מועתקות לאחסון שלנו: ימות מוחקת הקלטות ישנות, והקלטת
+  // 🔴 וגם מועתקות לאחסון שלנו: המרכזיה מוחקת הקלטות ישנות, והקלטת
   // הכתובת היא לעיתים המקור היחיד לכתובת המשלוח. storage_path נשאר
-  // ריק עד כה — ההקלטה הייתה תלויה לגמרי בימות.
+  // ריק עד כה — ההקלטה הייתה תלויה לגמרי במרכזיה.
   const recs = [
     ...(state.address_recording ? [{ kind: 'address' as const, path: state.address_recording,
       transcript: addrDigits(state.address_transcript) }] : []),
@@ -507,7 +507,7 @@ export async function createOrder(state: IvrState, cartToken: string, phone: str
 
   // 🔴 הגיבוי שנעשה בזמן ההקלטה הוא מקור האמת.
   //
-  // ⚠️ archiveRecording כאן כבר מאחר: הקובץ בימות נדרס מזמן (נתיב
+  // ⚠️ archiveRecording כאן כבר מאחר: הקובץ במרכזיה נדרס מזמן (נתיב
   // קבוע לכל השיחות). הוא נשאר רק כנפילה-אחורה להזמנות שהתחילו לפני
   // התיקון, ואם יש גיבוי מהשיחה — הוא מנצח תמיד.
   const { data: stashed } = await supa.from('book_fair_call_recordings')

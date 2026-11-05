@@ -1,5 +1,5 @@
-// שליפה חד-פעמית של קוד אימות ממתין להקראה בטלפון. זהה ללוגיקה של yemot-otp,
-// בלי תלות בפרוטוקול של ימות.
+// שליפה חד-פעמית של קוד אימות ממתין להקראה בטלפון. זהה ללוגיקה של שלוחת הקוד הקודמת,
+// בלי תלות בפרוטוקול של המרכזיה.
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { normalizePhone } from '@/lib/phone'
 

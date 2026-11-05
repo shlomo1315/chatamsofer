@@ -1353,7 +1353,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   const [authRejectReason, setAuthRejectReason] = useState('')
   const [authCodeSent, setAuthCodeSent] = useState(false)
   const [authIsSetup, setAuthIsSetup] = useState(false)
-  // כניסה עם קוד בשיחה טלפונית (צינתוק ימות)
+  // כניסה עם קוד בשיחה טלפונית (צינתוק המרכזיה)
   const [phoneStep, setPhoneStep] = useState<'' | 'choose' | 'code'>('')
   const [authPhones, setAuthPhones] = useState<{ index: number; hint: string }[]>([])
   const [authPhoneHint, setAuthPhoneHint] = useState('')
@@ -2005,7 +2005,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     setLoading(false)
   }
 
-  // ── כניסה עם קוד בשיחה טלפונית (צינתוק ימות) ──
+  // ── כניסה עם קוד בשיחה טלפונית (צינתוק המרכזיה) ──
   const handleListPhones = async () => {
     if (!pendingAuth) return
     setError(''); setLoading(true)
