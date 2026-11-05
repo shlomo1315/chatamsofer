@@ -6,6 +6,7 @@ import {
   HOLIDAY_MESSAGE_META,
   type HolidayMessages,
 } from '@/lib/holidayPhoneMessages'
+import { syncMainVoice } from '@/lib/telephony/voiceFiles'
 
 export const dynamic = 'force-dynamic'
 const NO_STORE = { 'Cache-Control': 'no-store' }
@@ -37,5 +38,7 @@ export async function POST(request: NextRequest) {
 
   const ok = await saveHolidayMessages(body.messages)
   if (!ok) return NextResponse.json({ error: 'שגיאה בשמירה' }, { status: 500 })
+  // קובץ קול חדש לנוסח ששונה (ברקע; כשל לא משפיע על השמירה, והשיחה נופלת לטקסט)
+  void syncMainVoice().catch(() => {})
   return NextResponse.json({ ok: true, messages: await getHolidayMessages() })
 }

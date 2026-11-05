@@ -175,3 +175,15 @@ describe('שלוחות שהועברו מהמרכזיה', () => {
     expect(ask.maskLog && ask.post).toBe(true)
   })
 })
+
+describe('קול משובט להודעות קבועות', () => {
+  it('constantSegments משאיר רק את הקבוע', async () => {
+    const { constantSegments } = await import('./voiceFiles')
+    expect(constantSegments('הקשתם {card} לאישור הקישו 1')).toEqual(['הקשתם', 'לאישור הקישו 1'])
+  })
+  it('applyVoice נופל לטקסט כשאין מסד', async () => {
+    const { applyVoice } = await import('./voiceFiles')
+    const r = { type: 'simpleMessage' as const, files: [{ text: 'שלום' }] }
+    expect(await applyVoice(r)).toEqual(r)
+  })
+})
