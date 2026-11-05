@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireAdmin, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
+import { getCenterLimitedId, saveCenterLimitedId } from '@/lib/nedarim'
 import { CENTER_LOAD_AMOUNT_KEY, getLoadAmount, israelMonth, normalizeCallerPhone, refreshMonthBalances, syncCentersFromNedarim } from '@/lib/centerMonthlyLoad'
 
 export const dynamic = 'force-dynamic'
@@ -18,7 +19,7 @@ export async function GET() {
   const [centers, cards, loads, amount] = await Promise.all([
     admin.from('card_centers').select('id, name').eq('is_active', true).order('name'),
     admin.from('center_monthly_cards').select('center_id, phone, card_number, id_number, card_linked_at'),
-    admin.from('center_monthly_loads').select('center_id, month, amount, status, loaded_at, created_at, balance, balance_at').order('month', { ascending: false }).limit(500),
+    admin.from('center_monthly_loads').select('center_id, month, amount, status, loaded_at, created_at, balance, balance_at, expires_at').order('month', { ascending: false }).limit(500),
     getLoadAmount(admin),
   ])
   if (centers.error) return NextResponse.json({ error: centers.error.message }, { status: 500, headers: NO_STORE })
@@ -35,7 +36,7 @@ export async function GET() {
       history,
     }
   })
-  return NextResponse.json({ month, amount, centers: rows }, { headers: NO_STORE })
+  return NextResponse.json({ month, amount, limitedId: (await getCenterLimitedId()) ?? '', centers: rows }, { headers: NO_STORE })
 }
 
 // עדכון טלפון מורשה / ניקוי כרטיס (center_id) או סכום הטעינה (amount)
@@ -52,6 +53,14 @@ export async function PATCH(request: NextRequest) {
     const { error } = await admin.from('app_settings').upsert({ key: CENTER_LOAD_AMOUNT_KEY, value: JSON.stringify(n), updated_at: new Date().toISOString() })
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
     await logActivity(admin, { userId: staff.userId, action: 'center_monthly_amount', details: { amount: n } })
+    return NextResponse.json({ ok: true })
+  }
+
+  if (body.limitedId !== undefined) {
+    const id = String(body.limitedId).trim()
+    if (id && !/^\d{1,10}$/.test(id)) return NextResponse.json({ error: 'מזהה קבוצה אמור להיות מספר' }, { status: 400 })
+    if (!(await saveCenterLimitedId(id))) return NextResponse.json({ error: 'שגיאה בשמירה' }, { status: 500 })
+    await logActivity(admin, { userId: staff.userId, action: 'center_monthly_limited_id', details: { limitedId: id || null } })
     return NextResponse.json({ ok: true })
   }
 

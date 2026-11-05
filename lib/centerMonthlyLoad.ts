@@ -3,11 +3,27 @@
 // הטעינה מנכה כרטיס מהמלאי הגלובלי (אותה נעילה כמו consume_card_stock).
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
-  getNedarimCreds, getMaternityLimitedId, findClientByTsad3, getClientCard, getClientCardFull, getClientsTable, saveClientCard, setMagneticCard, addTlush,
+  getNedarimCreds, getCenterLimitedId, findClientByTsad3, getClientCard, getClientCardFull, getClientsTable, saveClientCard, setMagneticCard, addTlush,
 } from '@/lib/nedarim'
 
 export const CENTER_LOAD_AMOUNT_KEY = 'center_monthly_amount'
 export const CENTER_LOAD_DEFAULT_AMOUNT = 600
+/** תוקף הטעינה בחודשים מיום הטעינה. */
+export const CENTER_LOAD_VALID_MONTHS = 2
+
+/** תאריך התוקף (YYYY-MM-DD) לפי שעון ישראל: חודשיים מיום הטעינה, מקוצר ליום האחרון בחודש היעד. */
+export function loadExpiry(now: Date = new Date(), months = CENTER_LOAD_VALID_MONTHS): string {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now)
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value)
+  const total = get('year') * 12 + (get('month') - 1) + months
+  const y = Math.floor(total / 12)
+  const m = total % 12
+  const day = Math.min(get('day'), new Date(Date.UTC(y, m + 1, 0)).getUTCDate())
+  return `${y}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+/** YYYY-MM-DD → dd/MM/yyyy (הפורמט של נדרים). */
+export const toNedarimDate = (iso: string): string => iso.split('-').reverse().join('/')
 
 /** החודש הנוכחי לפי שעון ישראל, בפורמט YYYY-MM. */
 export function israelMonth(now: Date = new Date()): string {
@@ -121,12 +137,14 @@ export async function runMonthlyLoad(
     const creds = await getNedarimCreds()
     if (!creds) { await release(); return { result: 'error', error: 'נדרים לא מוגדר' } }
     const clientId = await ensureClient(acc, creds)
-    const limitedId = await getMaternityLimitedId()
+    // קבוצה נפרדת למוקדים: לא הקבוצה של היולדות, ובלי הגבלת חנויות. התוקף חודשיים.
+    const limitedId = await getCenterLimitedId()
+    const expiresAt = loadExpiry(now)
     called = true
-    const r = await addTlush(creds, clientId, amount, undefined, `טעינה חודשית למוקד ${acc.center_name} · ${month}`, limitedId)
+    const r = await addTlush(creds, clientId, amount, toNedarimDate(expiresAt), `טעינה חודשית למוקד ${acc.center_name} · ${month}`, limitedId)
     if (!r.ok) { await release(); return { result: 'error', error: r.message } }
     // הכסף כבר נטען: אם הסימון נכשל, לא משחררים (היה מאפשר טעינה כפולה); נשאר pending ונראה לאדמין
-    await admin.from('center_monthly_loads').update({ status: 'loaded', tlush_id: r.tlushId, loaded_at: new Date().toISOString(), balance: amount, balance_at: new Date().toISOString() })
+    await admin.from('center_monthly_loads').update({ status: 'loaded', tlush_id: r.tlushId, expires_at: expiresAt, loaded_at: new Date().toISOString(), balance: amount, balance_at: new Date().toISOString() })
       .eq('center_id', acc.center_id).eq('month', month)
     return { result: 'loaded' }
   } catch (e) {
