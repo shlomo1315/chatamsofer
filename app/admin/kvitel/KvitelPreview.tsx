@@ -63,7 +63,24 @@ export async function downloadKvitel(href: string): Promise<string | null> {
 }
 
 // הדפסה של הדף בלבד: עותק שלו ב-iframe נסתר, ברוחב A4 מלא (210mm = 595pt, אז pt() בגודל אמיתי).
-function printSheet(page: HTMLElement, onAfter?: () => void) {
+// הלוגו מוטמע כ-data URI, כך שהוא לא תלוי בנתיב או בטעינה מחדש בתוך חלון ההדפסה.
+async function inlineImages(root: HTMLElement) {
+  await Promise.all([...root.querySelectorAll('img')].map(async img => {
+    try {
+      const blob = await (await fetch(img.src)).blob()
+      img.src = await new Promise<string>((ok, no) => {
+        const r = new FileReader()
+        r.onload = () => ok(String(r.result))
+        r.onerror = () => no(r.error)
+        r.readAsDataURL(blob)
+      })
+    } catch { /* נשאר הנתיב המקורי */ }
+  }))
+}
+
+async function printSheet(page: HTMLElement, onAfter?: () => void) {
+  const copy = page.cloneNode(true) as HTMLElement
+  await inlineImages(copy)
   const frame = document.createElement('iframe')
   frame.setAttribute('aria-hidden', 'true')
   frame.style.cssText = 'position:fixed;inset-inline-start:0;bottom:0;width:0;height:0;border:0'
@@ -78,7 +95,7 @@ function printSheet(page: HTMLElement, onAfter?: () => void) {
     + '<style>@page{size:A4;margin:0}html,body{margin:0;background:#fff}'
     + '.kvitel-print{container-type:inline-size;width:210mm}'
     + '.kvitel-print>div{max-width:none!important;width:100%!important;box-shadow:none!important;aspect-ratio:auto!important}</style>'
-    + `</head><body><div class="kvitel-print">${page.outerHTML}</div></body></html>`)
+    + `</head><body><div class="kvitel-print">${copy.outerHTML}</div></body></html>`)
   doc.close()
   let done = false
   const go = () => {
