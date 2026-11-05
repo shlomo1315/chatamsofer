@@ -19,7 +19,9 @@ export const NEDARIM_FORMS_URL = 'https://matara.pro/nedarimplus/Forms/Manage.as
 const CONFIG_KEY = 'gilyonot_nedarim_config'
 const STATE_KEY = 'gilyonot_nedarim_state'
 const PAGE_SIZE = 500
-const MAX_PAGES_PER_RUN = 40
+// משיכה ראשונה של טופס גדול: ממשיכים עד סוף הרשומות, ועוצרים רק לפי זמן (המסך מוגבל ל-300 שניות). הריצה הבאה ממשיכה מאותו מקום.
+const MAX_PAGES_PER_RUN = 2000
+const RUN_BUDGET_MS = 240_000
 // כל העמודות: המייל יכול לשבת בכל Field, וזיהוי לפי 15 הראשונות פספס אותו
 export const SAMPLE_FIELDS = DETECT_FIELDS
 
@@ -36,6 +38,7 @@ export interface NedarimPullState {
   lastId: number
   lastRunAt: string | null
   lastAdded: number
+  lastRead?: number
   totalAdded: number
   lastError: string | null
 }
@@ -97,7 +100,8 @@ export async function fetchRows(c: Pick<NedarimPullConfig, 'mosadId' | 'apiKey' 
     Action: 'GetJson', MosadId: c.mosadId, ApiPassword: c.apiKey, TofesId: c.tofesId,
     MaxId: String(opts.max), LastId: String(opts.lastId), GetJsonParam: buildGetJsonParam(fields),
   })
-  if (opts.desc) body.set('Order', 'Desc')
+  // ב-Desc ה-LastId הוא גבול עליון, ו-0 מחזיר ריק: בלי גבול משאירים את השדה ריק
+  if (opts.desc) { body.set('Order', 'Desc'); if (!opts.lastId) body.delete('LastId') }
   let res: Response
   try {
     res = await nedarimFetch(NEDARIM_FORMS_URL, {
@@ -180,20 +184,21 @@ export async function loadSample(db: SupabaseClient) {
 }
 
 // ── המשיכה עצמה ──
-export interface PullResult { ok: boolean; skipped?: 'not_configured' | 'running'; added: number; exists: number; blocked: number; invalid: number; noConsent: number; lastId: number; error?: string; needEmailField?: boolean }
+export const EMPTY_FORM_ERROR = 'הטופס לא החזיר אף רשומה. בדוק שמספר הטופס, מספר המוסד והמפתח נכונים ושיש בטופס הגשות.'
+export interface PullResult { ok: boolean; skipped?: 'not_configured' | 'running'; added: number; exists: number; blocked: number; invalid: number; noConsent: number; read: number; more?: boolean; lastId: number; error?: string; needEmailField?: boolean }
 
 export const NO_EMAIL_COLUMN_ERROR = 'לא הצלחנו לזהות לבד איזו עמודה בטופס היא המייל. בשלב 2 למטה לחצו "טעינת דוגמה מהטופס", בחרו את עמודת המייל ושמרו.'
 
 let running: Promise<PullResult> | null = null
 
 export function pullNedarimSubscribers(dbArg?: SupabaseClient): Promise<PullResult> {
-  if (running) return Promise.resolve({ ok: false, skipped: 'running', added: 0, exists: 0, blocked: 0, invalid: 0, noConsent: 0, lastId: 0 })
+  if (running) return Promise.resolve({ ok: false, skipped: 'running', added: 0, exists: 0, blocked: 0, invalid: 0, noConsent: 0, read: 0, lastId: 0 })
   running = doPull(dbArg).finally(() => { running = null })
   return running
 }
 
 async function doPull(dbArg?: SupabaseClient): Promise<PullResult> {
-  const out: PullResult = { ok: true, added: 0, exists: 0, blocked: 0, invalid: 0, noConsent: 0, lastId: 0 }
+  const out: PullResult = { ok: true, added: 0, exists: 0, blocked: 0, invalid: 0, noConsent: 0, read: 0, lastId: 0 }
   const db = dbArg ?? getServiceClient()
   if (!db) return { ...out, ok: false, error: 'השרת אינו מוגדר' }
   const c = await getPullConfig(db)
@@ -207,9 +212,10 @@ async function doPull(dbArg?: SupabaseClient): Promise<PullResult> {
   }
   if (!c.emailField) {
     // זיהוי לפי התוכן של כל העמודות ב-30 הרשומות האחרונות
-    const sample = await fetchRows(c, SAMPLE_FIELDS, { lastId: 0, max: 30, desc: true })
+    let sample = await fetchRows(c, SAMPLE_FIELDS, { lastId: 0, max: 30, desc: true })
+    if (sample.ok && !sample.rows.length) sample = await fetchRows(c, SAMPLE_FIELDS, { lastId: 0, max: 30 })
     if (!sample.ok) return finish(sample.error)
-    if (!sample.rows.length) return finish(null)
+    if (!sample.rows.length) return finish(EMPTY_FORM_ERROR)
     const d = detectColumns(sample.rows)
     if (!d.emailField) return finish(NO_EMAIL_COLUMN_ERROR, { needEmailField: true })
     c.emailField = d.emailField
@@ -218,9 +224,12 @@ async function doPull(dbArg?: SupabaseClient): Promise<PullResult> {
   }
   const fields = [c.emailField, c.nameField, c.consentField].filter(Boolean)
 
+  const startedAt = Date.now()
   pages: for (let page = 0; page < MAX_PAGES_PER_RUN; page++) {
+    if (page > 0 && Date.now() - startedAt > RUN_BUDGET_MS) { out.more = true; break }
     const res = await fetchRows(c, fields, { lastId: out.lastId, max: PAGE_SIZE })
     if (!res.ok) { out.ok = false; out.error = res.error; break }
+    out.read += res.rows.length
     const rows = res.rows.map(r => ({ r, id: Number(r.ID) })).filter(x => x.id > out.lastId).sort((a, b) => a.id - b.id)
     if (!rows.length) break
     for (const { r, id } of rows) {
@@ -241,7 +250,7 @@ async function doPull(dbArg?: SupabaseClient): Promise<PullResult> {
 
   await writeJson(db, STATE_KEY, {
     lastId: out.lastId, lastRunAt: new Date().toISOString(), lastAdded: out.added,
-    totalAdded: state.totalAdded + out.added, lastError: out.error ?? null,
+    totalAdded: state.totalAdded + out.added, lastRead: out.read, lastError: out.error ?? null,
   } satisfies NedarimPullState)
   return out
 }

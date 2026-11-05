@@ -5,6 +5,7 @@ import { getServiceClient, verifyCronSecret } from '@/lib/apiAuth'
 import { createBackupArchive, backupFilename } from '@/lib/backupArchive'
 import { uploadBackupStream, listBackups, deleteBackup, driveReady } from '@/lib/googleDrive'
 import { deliverMail } from '@/lib/sendMail'
+import { acquireBackupLock, releaseBackupLock } from '@/lib/backupLock'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -49,6 +50,11 @@ export async function GET(request: NextRequest) {
     if (ran?.value === today) {
       return NextResponse.json({ ok: true, skipped: true, reason: 'כבר בוצע גיבוי היום', date: today })
     }
+  }
+
+  // נעילה אטומית נגד גיבוי מקביל (גם עם force)
+  if (!(await acquireBackupLock(admin, now))) {
+    return NextResponse.json({ ok: true, skipped: true, reason: 'גיבוי אחר כבר רץ', date: today })
   }
 
   try {
@@ -102,5 +108,7 @@ export async function GET(request: NextRequest) {
       `<div dir="rtl" style="font-family:'Heebo',Arial,sans-serif">הגיבוי היומי נכשל: ${msg}</div>`,
       undefined, { fromEmail: REPORT_TO, replyTo: REPORT_TO, skipLog: true }).catch(() => {})
     return NextResponse.json({ ok: false, error: msg }, { status: 500 })
+  } finally {
+    await releaseBackupLock(admin)
   }
 }

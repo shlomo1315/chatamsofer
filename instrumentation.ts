@@ -175,7 +175,7 @@ export async function register() {
       setTimeout(() => { void refreshBalances(); setInterval(() => { void refreshBalances() }, HOURLY_MS) }, INITIAL_DELAY_MS)
       console.log('[live-balances] hourly Nedarim balance refresh started')
     }
-    console.log('[unload-expired] daily midnight (Israel) scheduler started')
+    console.log('[unload-expired] daily 05:00 (Israel) scheduler started')
   }
 
   // ── שומר-סף על הפריקה — כל שעה, תמיד, גם כש-UNLOAD_EXPIRED_DISABLED דלוק ──
@@ -321,26 +321,28 @@ export async function register() {
     console.log('[gmail-watch-renew] hourly scheduler started')
   }
 
-  // ── גיבוי יומי מלא ל-Google Drive — מדי יום בחצות שעון ישראל ──
+  // ── גיבוי יומי מלא ל-Google Drive — מדי יום ב-05:00 שעון ישראל ──
   // ⚠️ החליף את שירות ה-curl החיצוני שנשבר בשקט (curl parse error) ולא גיבה
   // 6 ימים בלי שאיש ידע. worker פנימי עמיד + התראת מייל אם עבר יום בלי גיבוי.
   // ה-worker אידמפוטנטי (גיבוי אחד ליום). להשבתה: DAILY_BACKUP_DISABLED=1.
   if (process.env.DAILY_BACKUP_DISABLED !== '1') {
+    const BACKUP_HOUR = 5
     let lastBackupCheckDate = ''
     const checkBackup = async () => {
       const { date, hour } = israelParts()
       if (date === lastBackupCheckDate) return
       try {
         const { runDailyBackup, checkBackupFreshness, backupDoneToday } = await import('@/lib/dailyBackup')
-        // חלון חצות (שעה 0) — הרצה רגילה. מחוץ לחלון — catch-up: רק אם
-        // הגיבוי של היום עוד לא בוצע (למשל deploy שנפל בדיוק על חצות
-        // "בלע" את חלון ההרצה). runDailyBackup אידמפוטנטי, אז אין כפילות.
-        if (hour !== 0 && (await backupDoneToday())) return
+        // לפני 05:00 לא מריצים. בשעה 5 — הרצה רגילה. אחריה — catch-up: רק אם
+        // הגיבוי של היום עוד לא בוצע (למשל deploy שנפל בדיוק על חלון ההרצה).
+        // runDailyBackup אידמפוטנטי ונעול (backup_lock), אז אין כפילות.
+        if (hour < BACKUP_HOUR) return
+        if (hour !== BACKUP_HOUR && (await backupDoneToday())) return
         const res = await runDailyBackup()
         // מעדכנים את סמן היום רק כשהצליח/דולג — כך אחרי כשל, ה-catch-up
         // (ההרצה בעוד שעה) ינסה שוב באותו יום במקום להיכנע עד מחר.
         if (res.ok) lastBackupCheckDate = date
-        console.log(`[daily-backup] ${hour === 0 ? 'daily' : 'catch-up'} run · ok=${res.ok}` + (res.skipped ? ' (skipped)' : '') + (res.filename ? ` file=${res.filename} ${res.sizeMB}MB` : '') + (res.error ? ` error=${res.error}` : ''))
+        console.log(`[daily-backup] ${hour === BACKUP_HOUR ? 'daily' : 'catch-up'} run · ok=${res.ok}` + (res.skipped ? ' (skipped)' : '') + (res.filename ? ` file=${res.filename} ${res.sizeMB}MB` : '') + (res.error ? ` error=${res.error}` : ''))
         // שומר סף — מתריע אם משום מה הגיבוי לא התעדכן
         await checkBackupFreshness()
       } catch (err) { console.error('[daily-backup] daily run failed', err) }
