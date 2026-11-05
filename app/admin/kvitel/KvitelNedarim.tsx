@@ -69,7 +69,7 @@ export default function KvitelNedarim({ view: initial, isAdmin }: { view: Kvitel
   const loadSample = () => run(async () => {
     const rows = (await post({ mode: 'sample' })).rows as NedarimRow[]
     setSample(rows)
-    return rows.length ? `נטענו ${rows.length} הגשות אחרונות. בחרו למטה איזו עמודה היא מה, ושמרו.` : 'בטופס אין עדיין הגשות'
+    return rows.length ? `נטענו ${rows.length} הגשות אחרונות. בחרו למטה איזו עמודה היא מה, ושמרו.` : 'נדרים לא החזיר הגשות. שלחו הגשה אחת לבדיקה דרך הטופס (עם כל השדות מלאים) ולחצו שוב, או ודאו שמספר הטופס נכון. בינתיים אפשר לבחור עמודות ידנית: Field1, Field2 וכן הלאה לפי סדר השדות בטופס.'
   })
   const pull = () => run(async () => {
     const d = await post({ mode: 'pull' })

@@ -154,7 +154,9 @@ export async function saveKvitelPullConfig(db: SupabaseClient, input: Partial<Kv
 export async function loadKvitelSample(db: SupabaseClient) {
   const c = await getReadyConfig(db)
   if (!c) return { ok: false as const, error: 'צריך קודם לשמור מספר מוסד, מפתח ומספר טופס' }
-  const res = await fetchRows(c, SAMPLE_FIELDS, { lastId: 0, max: 5, desc: true })
+  let res = await fetchRows(c, SAMPLE_FIELDS, { lastId: 0, max: 5, desc: true })
+  // נדרים לא תמיד מכבד סדר יורד: אם חזר ריק, מנסים גם בסדר רגיל
+  if (res.ok && !res.rows.length) res = await fetchRows(c, SAMPLE_FIELDS, { lastId: 0, max: 5 })
   return res.ok ? { ok: true as const, rows: res.rows } : res
 }
 
