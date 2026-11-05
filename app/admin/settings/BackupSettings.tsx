@@ -109,7 +109,7 @@ export default function BackupSettings() {
     <div className="flex flex-col gap-3">
       <p className="text-xs text-slate-500 leading-relaxed">
         גיבוי מלא = כל בסיס הנתונים (כל הטבלאות) + כל הקבצים המצורפים, בקובץ ZIP אחד.
-        גיבוי אוטומטי רץ כל לילה ב-00:00 ל-Google Drive. הניקוי של הגיבויים הישנים מתבצע
+        גיבוי אוטומטי רץ כל יום ב-05:00 לפנות בוקר ל-Google Drive. הניקוי של הגיבויים הישנים מתבצע
         אוטומטית פעם בחודש — נשמר רק החודש האחרון (תמיד לפחות 7 האחרונים).
       </p>
 
