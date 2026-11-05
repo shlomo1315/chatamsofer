@@ -514,17 +514,33 @@ export async function processAwaitingStock(admin: SupabaseClient): Promise<Await
       // ⚠️ הכסף כבר נטען בנדרים בעבר, ולכן אין טעינה חוזרת ואין ניכוי
       // כרטיס נוסף — הכרטיס שלה כבר נוכה אז. כאן רק משלימים את מה שלא
       // הושלם: ניקוי הסטטוס ושליחת השובר שלא יצא.
-      const v = await sendCardVoucher(admin, w.id, null)
-      if (!v.ok) {
-        out.failed++
-        out.errors.push(v.error || 'שליחת השובר נכשלה')
-        continue   // לא מסמנים 'issued' — אחרת השובר לא יישלח שוב לעולם
-      }
-      await admin.from('maternity_aids').update({
+      //
+      // 🔴 השובר נשלח פעם אחת בלבד. קודם נשלח מייל בכל ריצה: תיק שהחסם שלו
+      // תפוס (טעינה לא ודאית, card_load_status='failed') נשאר בתור לנצח, חוזר
+      // כל שעה כ-already, והיולדת קיבלה מייל שובר כל שעה (4-5.11.2026).
+      // card_status='loaded' + 'issued' = המסלול הזה כבר שלח לה שובר.
+      // הסימון נתפס אטומית *לפני* השליחה, כדי ששתי ריצות מקבילות (התזמון
+      // השעתי והוספת מלאי) לא ישלחו שתיהן. שליחה חוזרת — רק ידנית מהמסך.
+      if (w.card_status === 'loaded' && w.card_voucher_status === 'issued') continue
+      const { data: mine } = await admin.from('maternity_aids').update({
         card_status: 'loaded',
         card_voucher_status: 'issued',
         updated_at: new Date().toISOString(),
       }).eq('id', w.id)
+        .or('card_status.is.null,card_status.neq.loaded,card_voucher_status.is.null,card_voucher_status.neq.issued')
+        .select('id')
+      if (!mine?.length) continue   // ריצה אחרת כבר שלחה
+      const v = await sendCardVoucher(admin, w.id, null)
+      if (!v.ok) {
+        // מחזירים את הסימון — אחרת השובר לא יישלח שוב לעולם
+        await admin.from('maternity_aids').update({
+          card_status: w.card_status ?? null,
+          card_voucher_status: w.card_voucher_status ?? null,
+        }).eq('id', w.id)
+        out.failed++
+        out.errors.push(v.error || 'שליחת השובר נכשלה')
+        continue
+      }
       out.processed++
       continue
     }
