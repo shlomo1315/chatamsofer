@@ -6,10 +6,10 @@ import type { TelephonySystemId } from './types'
 /** מקור הנוסחים הניתנים לעריכה (נתיב ה-API שלהם). שלוחה בלי מקור = הנוסח כתוב בקוד. */
 export type MessageSource = 'menu' | 'holiday' | 'maternity' | 'bookfair'
 export const SOURCE_API: Record<MessageSource, string> = {
-  menu: '/api/admin/yemot-menu',
-  holiday: '/api/admin/yemot-holiday',
-  maternity: '/api/admin/yemot-maternity',
-  bookfair: '/api/admin/yemot-book-fair',
+  menu: '/api/admin/phone/menu',
+  holiday: '/api/admin/phone/holiday',
+  maternity: '/api/admin/phone/maternity',
+  bookfair: '/api/admin/phone/book-fair',
 }
 
 export type ExtInfo = {

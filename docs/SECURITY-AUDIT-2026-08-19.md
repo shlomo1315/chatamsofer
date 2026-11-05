@@ -180,7 +180,7 @@ const orExpr = childIds.flatMap(id => [`id_number.eq.${id}`, ...]).join(',')
 דלי פרטי, SVG/HTML מחוץ לרשימת ההיתר, חסימת `..`.
 
 **Webhooks** — כולם מאומתים ונכשלים-סגור: חתימת Svix ב-Resend,
-`timingSafeEqual` בימות, טוקן ב-gmail-push.
+`timingSafeEqual` במרכזיה, טוקן ב-gmail-push.
 
 **XSS** — `dangerouslySetInnerHTML` יחיד, מוזן מ-`sanitizeEmailHtml`
 (DOMPurify עם `FORBID_TAGS`). כרטסת המוטב עברה ל-iframe מבודד.

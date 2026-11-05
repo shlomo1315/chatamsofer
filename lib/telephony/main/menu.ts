@@ -2,7 +2,7 @@
 // בחירה 1 = חגים, 2 = יולדות: מטפלים פנימיים באותה כתובת, בלי שלוחות בטכנוליין.
 // הפרמטרים מצטברים בשיחה, ולכן menuChoice ממשיך לנתב לאותו מטפל בבקשות הבאות.
 // ההודעות נערכות במסך הניהול (app_settings, אותו מפתח של התפריט הקיים).
-import { getMainMenuMessages } from '@/lib/yemotMainMenu'
+import { getMainMenuMessages } from '@/lib/mainMenuPhone'
 import { say, menu, goodbye, message } from '../modules'
 import type { TlHandler } from '../types'
 import { holidays } from './holidays'

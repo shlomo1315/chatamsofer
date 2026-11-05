@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { spokenCode } from './yemotCall'
+import { spokenCode } from './phoneCall'
 
-// ⚠️ הנקודה '.' היא מפריד הטוקנים של id_list_message בימות. טקסט הקראה
+// ⚠️ הנקודה '.' היא מפריד הטוקנים של id_list_message במרכזיה. טקסט הקראה
 // שמכיל נקודות מפוצל שם לטוקנים נפרדים ("t-קוד הכניסה שלך הוא אחת",
 // "שתיים", …) — שברים שאינם טוקנים חוקיים, והתוצאה "שגיאה בהקראה".
-// הבדיקות מקבעות את מה שנשלח בפועל לימות.
+// הבדיקות מקבעות את מה שנשלח בפועל למרכזיה.
 
-// עותק מדויק של הלוגיקה ב-app/api/webhooks/yemot-otp/route.ts.
+// עותק מדויק של הלוגיקה בשלוחת הקוד.
 // ⚠️ אם משנים שם — לעדכן גם כאן, אחרת הבדיקות מקבעות התנהגות ישנה.
 const TTS_INVALID = /[.,\-"'&|=]/g
 const tts = (t: string) => String(t ?? '').replace(TTS_INVALID, ' ').replace(/\s+/g, ' ').trim()
@@ -22,7 +22,7 @@ function slowTokens(text: string): string {
   for (const w of words) {
     if (DIGIT_SET.has(w)) {
       flush()
-      // בין שתי ספרות — טוקני-פסיק נפרדים (הפסקה מובטחת מימות בין טוקנים)
+      // בין שתי ספרות — טוקני-פסיק נפרדים (הפסקה מובטחת מהמרכזיה בין טוקנים)
       for (let i = 0; i < PAUSE_TOKENS_BETWEEN_DIGITS; i++) tokens.push('t-,')
       tokens.push(`t-${w}${DIGIT_TAIL}`)
       lastWasDigit = true
@@ -32,9 +32,9 @@ function slowTokens(text: string): string {
   return tokens.join('.')
 }
 
-describe('הקראת קוד OTP בימות', () => {
+describe('הקראת קוד OTP במרכזיה', () => {
   it('אין נקודות בתוך הטקסט עצמו — רק כמפריד בין טוקנים', () => {
-    // ⚠️ הנקודה חוקית *בין* טוקנים, אך אסורה בתוך טקסט הודעה (תיעוד ימות).
+    // ⚠️ הנקודה חוקית *בין* טוקנים, אך אסורה בתוך טקסט הודעה (תיעוד המרכזיה).
     const out = slowTokens(spokenCode('123456'))
     for (const token of out.split('.')) {
       expect(token.startsWith('t-')).toBe(true)
@@ -43,8 +43,8 @@ describe('הקראת קוד OTP בימות', () => {
   })
 
   it('כל ספרה היא הודעה נפרדת — הפסקה מלאה ביניהן', () => {
-    // זה מנגנון ההאטה: ימות עוצרת בין הודעה להודעה, + פסיק בסוף כל ספרה
-    // להפסקה קצרה נוספת (כמו yemot-maternity).
+    // זה מנגנון ההאטה: המרכזיה עוצרת בין הודעה להודעה, + פסיק בסוף כל ספרה
+    // להפסקה קצרה נוספת (כמו שלוחת היולדות).
     const out = slowTokens(spokenCode('123456'))
     const tokens = out.split('.')
     for (const w of ['אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש']) {
@@ -84,7 +84,7 @@ describe('הקראת קוד OTP בימות', () => {
     expect(prefix.length).toBeGreaterThanOrEqual(4)
   })
 
-  it('גוף התשובה לימות נשאר פרמטר יחיד ותקין', () => {
+  it('גוף התשובה למרכזיה נשאר פרמטר יחיד ותקין', () => {
     const body = `id_list_message=${slowTokens(spokenCode('123456'))}&go_to_folder=hangup&`
     // בדיוק שני פרמטרים — & נוסף היה מפצל את הפקודה
     expect(body.split('&').filter(Boolean)).toHaveLength(2)
@@ -99,14 +99,14 @@ describe('הקראת קוד OTP בימות', () => {
 // כאן היא פיסוק בתוך הטקסט — ולכן הפסיקים חייבים לשרוד את הניקוי.
 // ─────────────────────────────────────────────────────────────────────────────
 describe('הקראת קוד בשיחה יוצאת', () => {
-  // עותק מדויק של ttsSafe ב-lib/yemotCall.ts
+  // עותק מדויק של ttsSafe בקוד הטלפוניה
   const ttsSafe = (t: string) => String(t ?? '')
     .replace(/[.,\-"'&|=]/g, ' ')
     .replace(/[ \t]+/g, ' ')
     .trim()
 
   it('אין פסיק — פסיק קוטע את ההודעה ומנתק את השיחה', () => {
-    // ⚠️ תקלה חיה שהייתה: ימות מפצלת את הטקסט האישי בפסיקים למשתני התבנית,
+    // ⚠️ תקלה חיה שהייתה: המרכזיה מפצלת את הטקסט האישי בפסיקים למשתני התבנית,
     // ותבנית עם משתנה אחד מקריאה רק את מה שלפני הפסיק הראשון. השיחה הקריאה
     // "הקוד שלכם הוא" והתנתקה.
     const out = spokenCode('907162')
@@ -114,7 +114,7 @@ describe('הקראת קוד בשיחה יוצאת', () => {
     expect(ttsSafe(out)).not.toContain(',')
   })
 
-  it('אין נקודה — ימות משהה ~15 שניות לפניה', () => {
+  it('אין נקודה — המרכזיה משהה ~15 שניות לפניה', () => {
     expect(spokenCode('907162')).not.toContain('.')
   })
 

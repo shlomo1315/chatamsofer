@@ -1,7 +1,7 @@
 import { normalizeHeader } from '@/lib/bookFairImport'
 import { shekelsToAgorot } from '@/lib/bookFairPricing'
 import { normalizePhone } from '@/lib/kvitel'
-import { ttsClean } from '@/lib/bookFairYemotIvr'
+import { ttsClean } from '@/lib/bookFairPhoneFlow'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // יריד ספרים — זיכויים ללקוחות שלא קיבלו ספרים.
@@ -173,7 +173,7 @@ export function cleanHolder(v: unknown): string {
   return String(v ?? '').replace(/[<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 80)
 }
 
-// ─── שיחת ימות ───────────────────────────────────────────────────────────────
+// ─── שיחת המרכזיה ───────────────────────────────────────────────────────────────
 
 export const CR_OK = 'cr_ok'
 export const CR_HOLDER = 'cr_holder'
@@ -249,7 +249,7 @@ export function amountSpoken(agorot: number): string {
   return a ? `${shekels} ו-${a} אגורות` : shekels
 }
 
-/** ימות שולחת בכל פנייה את המשתנים שנאספו, ולכן המצב נגזר מהם (כמו בשלוחת המפיצים). */
+/** המרכזיה שולחת בכל פנייה את המשתנים שנאספו, ולכן המצב נגזר מהם (כמו בשלוחת המפיצים). */
 export function creditPhoneTurn(params: Record<string, string>, ctx: CreditCallContext): CreditPhoneTurn {
   const done = (reply: string, action: CreditPhoneAction = null) => ({ reply, action })
   if (ctx.alreadyDone) {

@@ -3,7 +3,7 @@ import { normalizePhone } from '@/lib/phone'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // גיליונות החתם סופר — מערך המפיצים: כללים טהורים (בלי מסד), כדי שהמסך,
-// ממשק המפיץ ובהמשך ימות המשיח יעבדו לפי אותם כללים. מיגרציה: 20261018_gilyonot_distributors.sql
+// ממשק המפיץ ובהמשך המרכזיה יעבדו לפי אותם כללים. מיגרציה: 20261018_gilyonot_distributors.sql
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── איך מפיץ מזדהה בממשק שלו ──
@@ -282,7 +282,7 @@ export function summarizeByCity(list: { city: string | null; quantity: number; s
   return [...by.values()].sort((a, b) => b.quantity - a.quantity || a.city.localeCompare(b.city, 'he'))
 }
 
-// ── שעות נציג אנושי (לשלוחה בימות המשיח) ──
+// ── שעות נציג אנושי (לשלוחה במרכזיה) ──
 export interface AgentWindow { day: number; from: string; to: string }
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/
 
@@ -314,7 +314,7 @@ export function isAgentAvailable(hours: AgentWindow[], at: Date = new Date()): b
 }
 
 // ── פעולות המפיץ: מה כל פעולה שומרת ומה היא משנה ──
-// אותה פונקציה תשמש גם את ימות המשיח (channel='phone'), כדי שהכללים יהיו אחד.
+// אותה פונקציה תשמש גם את המרכזיה (channel='phone'), כדי שהכללים יהיו אחד.
 export interface DistributorSnapshot { id: string; quantity: number; city: string | null; address: string | null; status: DistributorStatus }
 export interface ActionPlan {
   event: { kind: EventKind; quantity: number | null; details: string | null; old_value: Record<string, unknown> | null; new_value: Record<string, unknown> | null; status: EventStatus }

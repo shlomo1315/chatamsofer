@@ -15,7 +15,7 @@ import { getServiceClient } from '@/lib/apiAuth'
 import { holidayApprovedEmail } from '@/lib/emailTemplates'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
-import { placeTtsCall } from '@/lib/yemotCall'
+import { placeTtsCall } from '@/lib/phoneCall'
 
 export interface NotifyOptions {
   email?: boolean
@@ -83,7 +83,7 @@ export async function notifyHolidayApproved(
   const { data } = await db.from('distribution_recipients').select(SELECT).in('id', ids)
   const rows = (data ?? []) as unknown as Row[]
 
-  const phoneExt = (process.env.YEMOT_HOLIDAY_EXT || '').trim() || null
+  const phoneExt = (process.env.HOLIDAY_PHONE_EXT || '').trim() || null
 
   for (const r of rows) {
     const b = r.beneficiary

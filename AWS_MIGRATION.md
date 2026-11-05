@@ -24,7 +24,7 @@ Railway נשאר פעיל ותקין עד שהמעבר מסתיים (`railway.js
 
 ## מעבר
 1. פריסה ראשונה ובדיקה על כתובת ה-ALB הזמנית (צ'קליסט בסוף `RAILWAY_MIGRATION.md`, שלב 7).
-2. עדכון `NEXT_PUBLIC_SITE_URL`, ‏`NEXT_PUBLIC_APP_URL`, ‏`GMAIL_REDIRECT_URI` ו-redirect ב-Google Cloud, ו-webhooks של Yemot/Resend/Gmail PubSub לדומיין.
+2. עדכון `NEXT_PUBLIC_SITE_URL`, ‏`NEXT_PUBLIC_APP_URL`, ‏`GMAIL_REDIRECT_URI` ו-redirect ב-Google Cloud, ו-webhooks של טכנוליין/Resend/Gmail PubSub לדומיין.
 3. החלפת DNS של `chasamsofer.co.il` ל-ALB (TTL נמוך מראש).
 4. Railway נשאר כגיבוי כמה ימים, ואז מכבים.
 
@@ -87,30 +87,6 @@ UNLOAD_EXPIRED_DISABLED
 VERIFY_FROM_EMAIL
 VERIFY_FROM_NAME
 VOICE_REBUILD_DISABLED
-YEMOT_ANNOUNCE_TEMPLATE_ID
-YEMOT_API_TOKEN
-YEMOT_BOOK_FAIR_AUDIO
-YEMOT_BOOK_FAIR_CALLER_ID
-YEMOT_BOOK_FAIR_CREDIT_TEMPLATE_ID
-YEMOT_BOOK_FAIR_EXT
-YEMOT_BOOK_FAIR_TEXT_ONLY
-YEMOT_BOOK_FAIR_TOKEN
-YEMOT_CREDITS_FALLBACK_FOLDER
-YEMOT_CREDITS_SECRET
-YEMOT_FOLDER_HOLIDAY
-YEMOT_FOLDER_IVR_FILES
-YEMOT_FOLDER_MATERNITY
-YEMOT_GILYONOT_SECRET
-YEMOT_HOLIDAY_EXT
-YEMOT_KVITEL_SECRET
-YEMOT_MATERNITY_EXT
-YEMOT_MENU_EXT
-YEMOT_OTP_CALLER_ID
-YEMOT_OTP_DIGIT_SEP
-YEMOT_OTP_TEMPLATE_ID
-YEMOT_SINGLE_ENDPOINT
-YEMOT_TOKEN
-YEMOT_WEBHOOK_SECRET
 ```
 
 פירוט מה כל משתנה עושה נמצא ב-`ENV_VARS.md`. משתנים שמתחילים ב-`NEXT_PUBLIC_` נצרבים בבנייה (GitHub Variables), כל השאר בזמן ריצה.
@@ -128,7 +104,7 @@ YEMOT_WEBHOOK_SECRET
    - Secret `AWS_DEPLOY_ROLE_ARN` = `DeployRoleArn`
    - Variables: `AWS_DEPLOY_ENABLED=true`, `AWS_REGION=eu-central-1`, `ECR_REPOSITORY=chasamsofer`, `ECS_CLUSTER=chasamsofer`, `ECS_SERVICE=chasamsofer`, `ECS_TASK_FAMILY=chasamsofer`, ועוד ארבעת ה-`NEXT_PUBLIC_*` (Supabase URL, anon key, אתר, אפליקציה).
 5. מריצים את ה-workflow ידנית (Run workflow). אחרי שה-image עלה ל-ECR: CloudFormation → Update stack → `DesiredCount=1`.
-6. בודקים דרך כתובת ה-ALB (`AlbDnsName`) ש-`/api/health` עונה. אחר כך מחליפים DNS של הדומיין (CNAME ל-ALB), ומעדכנים redirect ב-Google, ו-webhooks של Yemot/Resend/Gmail.
+6. בודקים דרך כתובת ה-ALB (`AlbDnsName`) ש-`/api/health` עונה. אחר כך מחליפים DNS של הדומיין (CNAME ל-ALB), ומעדכנים redirect ב-Google, ו-webhooks של טכנוליין/Resend/Gmail.
 
 ### הערות חשובות
 - **משימה אחת בלבד:** `instrumentation.ts` מריץ תזמונים פנימיים (גיבוי, פריקה, סנכרונים). שתי משימות היו מריצות אותם פעמיים. בפריסה יש חפיפה קצרה של דקות, כמו ב-Railway.

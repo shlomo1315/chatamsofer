@@ -25,7 +25,7 @@ vi.mock('./saleData', async (orig) => ({
   },
   deleteSession: async (callId: string) => { sessions.delete(callId) },
 }))
-vi.mock('@/lib/yemotBookFairMessages', () => ({
+vi.mock('@/lib/bookFairPhoneMessages', () => ({
   TECHNOLINE_YERID_MSG_KEY: 'technoline_yerid_messages',
   getBookFairMessages: async (key: string) => { msgKeys.push(key); return {} },
 }))
@@ -174,17 +174,5 @@ describe('יריד בטכנוליין: פנייה, שערים ונוסחים', (
   it('הסוד של המערכת הראשית לא פותח את היריד', async () => {
     const r = await dispatch('yerid', 'main-secret-1', 'menu', pbx())
     expect(r.status).not.toBe(200)
-  })
-})
-
-describe('הפרדה מימות המשיח', () => {
-  it('קבצי היריד בטכנוליין לא נוגעים בקוד או בטוקן של ימות', async () => {
-    const { readFileSync, readdirSync } = await import('node:fs')
-    const dir = new URL('.', import.meta.url).pathname
-    for (const file of readdirSync(dir).filter((n) => n.endsWith('.ts') && !n.endsWith('.test.ts'))) {
-      const src = readFileSync(dir + file, 'utf8')
-      expect(src, file).not.toMatch(/from '@\/lib\/yemot(?!BookFairMessages)/)
-      expect(src, file).not.toMatch(/downloadFileFromYemot|archiveInquiryRecording|listYemotFolder|yemotToken|YEMOT_/)
-    }
   })
 })

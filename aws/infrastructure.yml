@@ -57,7 +57,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       Name: !Sub "${ProjectName}/prod"
-      SecretString: '{"ANTHROPIC_API_KEY":"","BOOK_FAIR_AUTO_OPEN_DISABLED":"","BOOK_FAIR_CLEANUP_DISABLED":"","CRON_SECRET":"","DAILY_BACKUP_DISABLED":"","DISTRIBUTIONS_PORTAL_SECRET":"","ELEVENLABS_API_KEY":"","ELEVENLABS_MODEL_ID":"","ELEVENLABS_VOICE_ID":"","GILYONOT_DISABLED":"","GILYONOT_FROM_EMAIL":"","GILYONOT_NEDARIM_TOKEN":"","GMAIL_CLIENT_ID":"","GMAIL_CLIENT_SECRET":"","GMAIL_EMAIL":"","GMAIL_PUBSUB_TOPIC":"","GMAIL_PUSH_TOKEN":"","GMAIL_REDIRECT_URI":"","GMAIL_WATCH_RENEW_DISABLED":"","GOOGLE_DRIVE_BACKUP_FOLDER_ID":"","GOOGLE_SA_KEY":"","GOV_SYNC_DISABLED":"","KVITEL_MAILBOX":"","KVITEL_NEDARIM_TOKEN":"","LEGACY_SYNC_DISABLED":"","LIVE_BALANCES_DISABLED":"","LIVE_BALANCES_ENABLED":"","LOANS_PORTAL_SECRET":"","LOANS_REPORT_DISABLED":"","MAIL_DOMAIN":"","MATERNITY_CARD_RETRY_DISABLED":"","NEDARIM_API_PASSWORD":"","NEDARIM_CREATE_TXN_URL":"","NEDARIM_GUARD_ALERT_TO":"","NEDARIM_HISTORY_URL":"","NEDARIM_HOLIDAY_LIMITED_ID":"","NEDARIM_MATERNITY_LIMITED_ID":"","NEDARIM_MOSAD_ID":"","NEDARIM_PROXY_URL":"","NEWSLETTER_DISABLED":"","NEXTAUTH_SECRET":"","OTP_NONCE_SECRET":"","RABBI_FORM_BLANK_URL":"","RESEND_API_KEY":"","RESEND_WEBHOOK_SECRET":"","RESEND_WEBHOOK_SIGNING_SECRET":"","SCHEDULED_MAIL_DISABLED":"","SUPABASE_SERVICE_ROLE_KEY":"","UNLOAD_EXPIRED_DISABLED":"","VERIFY_FROM_EMAIL":"","VERIFY_FROM_NAME":"","VOICE_REBUILD_DISABLED":"","YEMOT_ANNOUNCE_TEMPLATE_ID":"","YEMOT_API_TOKEN":"","YEMOT_BOOK_FAIR_AUDIO":"","YEMOT_BOOK_FAIR_CALLER_ID":"","YEMOT_BOOK_FAIR_CREDIT_TEMPLATE_ID":"","YEMOT_BOOK_FAIR_EXT":"","YEMOT_BOOK_FAIR_TEXT_ONLY":"","YEMOT_BOOK_FAIR_TOKEN":"","YEMOT_CREDITS_FALLBACK_FOLDER":"","YEMOT_CREDITS_SECRET":"","YEMOT_FOLDER_HOLIDAY":"","YEMOT_FOLDER_IVR_FILES":"","YEMOT_FOLDER_MATERNITY":"","YEMOT_GILYONOT_SECRET":"","YEMOT_HOLIDAY_EXT":"","YEMOT_KVITEL_SECRET":"","YEMOT_MATERNITY_EXT":"","YEMOT_MENU_EXT":"","YEMOT_OTP_CALLER_ID":"","YEMOT_OTP_DIGIT_SEP":"","YEMOT_OTP_TEMPLATE_ID":"","YEMOT_SINGLE_ENDPOINT":"","YEMOT_TOKEN":"","YEMOT_WEBHOOK_SECRET":""}'
+      SecretString: '{"ANTHROPIC_API_KEY":"","BOOK_FAIR_AUTO_OPEN_DISABLED":"","BOOK_FAIR_CLEANUP_DISABLED":"","CRON_SECRET":"","DAILY_BACKUP_DISABLED":"","DISTRIBUTIONS_PORTAL_SECRET":"","ELEVENLABS_API_KEY":"","ELEVENLABS_MODEL_ID":"","ELEVENLABS_VOICE_ID":"","GILYONOT_DISABLED":"","GILYONOT_FROM_EMAIL":"","GILYONOT_NEDARIM_TOKEN":"","GMAIL_CLIENT_ID":"","GMAIL_CLIENT_SECRET":"","GMAIL_EMAIL":"","GMAIL_PUBSUB_TOPIC":"","GMAIL_PUSH_TOKEN":"","GMAIL_REDIRECT_URI":"","GMAIL_WATCH_RENEW_DISABLED":"","GOOGLE_DRIVE_BACKUP_FOLDER_ID":"","GOOGLE_SA_KEY":"","GOV_SYNC_DISABLED":"","KVITEL_MAILBOX":"","KVITEL_NEDARIM_TOKEN":"","LEGACY_SYNC_DISABLED":"","LIVE_BALANCES_DISABLED":"","LIVE_BALANCES_ENABLED":"","LOANS_PORTAL_SECRET":"","LOANS_REPORT_DISABLED":"","MAIL_DOMAIN":"","MATERNITY_CARD_RETRY_DISABLED":"","NEDARIM_API_PASSWORD":"","NEDARIM_CREATE_TXN_URL":"","NEDARIM_GUARD_ALERT_TO":"","NEDARIM_HISTORY_URL":"","NEDARIM_HOLIDAY_LIMITED_ID":"","NEDARIM_MATERNITY_LIMITED_ID":"","NEDARIM_MOSAD_ID":"","NEDARIM_PROXY_URL":"","NEWSLETTER_DISABLED":"","NEXTAUTH_SECRET":"","OTP_NONCE_SECRET":"","RABBI_FORM_BLANK_URL":"","RESEND_API_KEY":"","RESEND_WEBHOOK_SECRET":"","RESEND_WEBHOOK_SIGNING_SECRET":"","SCHEDULED_MAIL_DISABLED":"","SUPABASE_SERVICE_ROLE_KEY":"","UNLOAD_EXPIRED_DISABLED":"","VERIFY_FROM_EMAIL":"","VERIFY_FROM_NAME":"","VOICE_REBUILD_DISABLED":""}'
 
   # פרטי החיבור לקריאה בלבד מ-Supabase (host/user/password). ממלאים עם aws/fill-src-secret.sh בלי הדפסה
   SrcSecret:
@@ -267,54 +267,6 @@ Resources:
               ValueFrom: !Sub "${AppSecret}:VERIFY_FROM_NAME::"
             - Name: VOICE_REBUILD_DISABLED
               ValueFrom: !Sub "${AppSecret}:VOICE_REBUILD_DISABLED::"
-            - Name: YEMOT_ANNOUNCE_TEMPLATE_ID
-              ValueFrom: !Sub "${AppSecret}:YEMOT_ANNOUNCE_TEMPLATE_ID::"
-            - Name: YEMOT_API_TOKEN
-              ValueFrom: !Sub "${AppSecret}:YEMOT_API_TOKEN::"
-            - Name: YEMOT_BOOK_FAIR_AUDIO
-              ValueFrom: !Sub "${AppSecret}:YEMOT_BOOK_FAIR_AUDIO::"
-            - Name: YEMOT_BOOK_FAIR_CALLER_ID
-              ValueFrom: !Sub "${AppSecret}:YEMOT_BOOK_FAIR_CALLER_ID::"
-            - Name: YEMOT_BOOK_FAIR_CREDIT_TEMPLATE_ID
-              ValueFrom: !Sub "${AppSecret}:YEMOT_BOOK_FAIR_CREDIT_TEMPLATE_ID::"
-            - Name: YEMOT_BOOK_FAIR_EXT
-              ValueFrom: !Sub "${AppSecret}:YEMOT_BOOK_FAIR_EXT::"
-            - Name: YEMOT_BOOK_FAIR_TEXT_ONLY
-              ValueFrom: !Sub "${AppSecret}:YEMOT_BOOK_FAIR_TEXT_ONLY::"
-            - Name: YEMOT_BOOK_FAIR_TOKEN
-              ValueFrom: !Sub "${AppSecret}:YEMOT_BOOK_FAIR_TOKEN::"
-            - Name: YEMOT_CREDITS_FALLBACK_FOLDER
-              ValueFrom: !Sub "${AppSecret}:YEMOT_CREDITS_FALLBACK_FOLDER::"
-            - Name: YEMOT_CREDITS_SECRET
-              ValueFrom: !Sub "${AppSecret}:YEMOT_CREDITS_SECRET::"
-            - Name: YEMOT_FOLDER_HOLIDAY
-              ValueFrom: !Sub "${AppSecret}:YEMOT_FOLDER_HOLIDAY::"
-            - Name: YEMOT_FOLDER_IVR_FILES
-              ValueFrom: !Sub "${AppSecret}:YEMOT_FOLDER_IVR_FILES::"
-            - Name: YEMOT_FOLDER_MATERNITY
-              ValueFrom: !Sub "${AppSecret}:YEMOT_FOLDER_MATERNITY::"
-            - Name: YEMOT_GILYONOT_SECRET
-              ValueFrom: !Sub "${AppSecret}:YEMOT_GILYONOT_SECRET::"
-            - Name: YEMOT_HOLIDAY_EXT
-              ValueFrom: !Sub "${AppSecret}:YEMOT_HOLIDAY_EXT::"
-            - Name: YEMOT_KVITEL_SECRET
-              ValueFrom: !Sub "${AppSecret}:YEMOT_KVITEL_SECRET::"
-            - Name: YEMOT_MATERNITY_EXT
-              ValueFrom: !Sub "${AppSecret}:YEMOT_MATERNITY_EXT::"
-            - Name: YEMOT_MENU_EXT
-              ValueFrom: !Sub "${AppSecret}:YEMOT_MENU_EXT::"
-            - Name: YEMOT_OTP_CALLER_ID
-              ValueFrom: !Sub "${AppSecret}:YEMOT_OTP_CALLER_ID::"
-            - Name: YEMOT_OTP_DIGIT_SEP
-              ValueFrom: !Sub "${AppSecret}:YEMOT_OTP_DIGIT_SEP::"
-            - Name: YEMOT_OTP_TEMPLATE_ID
-              ValueFrom: !Sub "${AppSecret}:YEMOT_OTP_TEMPLATE_ID::"
-            - Name: YEMOT_SINGLE_ENDPOINT
-              ValueFrom: !Sub "${AppSecret}:YEMOT_SINGLE_ENDPOINT::"
-            - Name: YEMOT_TOKEN
-              ValueFrom: !Sub "${AppSecret}:YEMOT_TOKEN::"
-            - Name: YEMOT_WEBHOOK_SECRET
-              ValueFrom: !Sub "${AppSecret}:YEMOT_WEBHOOK_SECRET::"
 
   AlbSg:
     Type: AWS::EC2::SecurityGroup
@@ -814,7 +766,7 @@ Resources:
       VisibilityConfig: {SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: !Sub "${ProjectName}-waf"}
       Rules:
         # מערכת הניהול רק מישראל: /admin, /yerid-admin ו-/api/admin נחסמים לכל מי שלא מגיע מכתובת ישראלית או מכתובת ברשימה AdminAllowedIps.
-        # כל נתיבי /api/admin דורשים סשן של צוות ואין בהם קריאות משירותים חיצוניים. webhooks, נדרים, ימות, cron, Google ו-Supabase (/auth/v1) לא בנתיבים האלה ולא מושפעים
+        # כל נתיבי /api/admin דורשים סשן של צוות ואין בהם קריאות משירותים חיצוניים. webhooks, נדרים, המרכזיה, cron, Google ו-Supabase (/auth/v1) לא בנתיבים האלה ולא מושפעים
         - Name: admin-israel-only
           Priority: 0
           Action: {Block: {}}

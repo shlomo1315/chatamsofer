@@ -4,10 +4,10 @@ import { systemStatus, applyTree, maskedUrls, uploadRecording, callConfigured } 
 import {
   BOOK_FAIR_MESSAGE_META, BOOK_FAIR_MSG_KEY, TECHNOLINE_YERID_MSG_KEY,
   getBookFairMessages, saveBookFairMessages, setBookFairMessageAudio, type BookFairMessages,
-} from '@/lib/yemotBookFairMessages'
+} from '@/lib/bookFairPhoneMessages'
 
 // המערכת הטלפונית של יריד הספרים בטכנוליין: מצב, שלוחה, נוסחים והקלטות.
-// 🔴 עובד רק מול מערכת yerid ומפתח הנוסחים שלה. אין כאן שום קריאה לימות.
+// 🔴 עובד רק מול מערכת yerid ומפתח הנוסחים שלה. אין כאן שום קריאה למרכזיה.
 export const dynamic = 'force-dynamic'
 
 const SITE = () => (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://chasamsofer.co.il').replace(/\/$/, '')
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(await snapshot())
   }
   if (body.action === 'import') {
-    // העתקת הנוסחים הכתובים מהמסד בלבד. הקלטות של ימות לא קיימות בטכנוליין ולכן לא מועתקות.
+    // העתקת הנוסחים הכתובים מהמסד בלבד. הקלטות של המרכזיה לא קיימות בטכנוליין ולכן לא מועתקות.
     const old = await getBookFairMessages(BOOK_FAIR_MSG_KEY)
     if (!(await saveBookFairMessages(textsOnly(old), TECHNOLINE_YERID_MSG_KEY))) return bad('שגיאה בהעתקה', 500)
     return NextResponse.json(await snapshot())

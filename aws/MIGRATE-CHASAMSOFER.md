@@ -88,8 +88,8 @@ DESIRED=1 bash cloudshell-setup.sh
 ```
 - **שרת אחד בלבד, תמיד.** `instrumentation.ts` מריץ תזמונים פנימיים (גיבוי, פריקה, סנכרונים), ושתי משימות היו מריצות אותם פעמיים. אל תעלה את `DesiredCount` מעל 1.
 - בודקים לפני המעבר, בלי להחליף DNS (הפקודה מודפסת בסוף הסקריפט): `curl -sk -H 'Host: aws.chasamsofer.co.il' https://<AlbDnsName>/api/health` (מצופה 200). אחרי שהוספת את ה-CNAME השני, האתר נפתח ישירות בדפדפן ב-`https://aws.chasamsofer.co.il`.
-- **כתובות שנעולות על הדומיין הראשי** (יעבדו רק אחרי המעבר הסופי): `GMAIL_REDIRECT_URI` בסוד ובגוגל קלאוד, כתובות callback של Yemot, Resend (webhook) ו-Gmail PubSub. בזמן הביניים הן ממשיכות להצביע ל-Railway, וזה בכוונה: הן לא משתנות עד המעבר. התחברות Gmail ובדיקות webhook באתר הזמני לא ייבדקו מלא עד אז.
-- הקוד עצמו לא נעול: הוא קורא `NEXT_PUBLIC_SITE_URL` / `NEXT_PUBLIC_APP_URL` ויש רק ברירות מחדל ל-`https://chasamsofer.co.il` (למשל `Distributors.tsx`, `PhoneSystemClient.tsx`, `lineage-review/renew`, `yemot-book-fair/setup`, `scripts/trigger-*.mjs`).
+- **כתובות שנעולות על הדומיין הראשי** (יעבדו רק אחרי המעבר הסופי): `GMAIL_REDIRECT_URI` בסוד ובגוגל קלאוד, כתובות ה-webhook של טכנוליין, Resend (webhook) ו-Gmail PubSub. בזמן הביניים הן ממשיכות להצביע ל-Railway, וזה בכוונה: הן לא משתנות עד המעבר. התחברות Gmail ובדיקות webhook באתר הזמני לא ייבדקו מלא עד אז.
+- הקוד עצמו לא נעול: הוא קורא `NEXT_PUBLIC_SITE_URL` / `NEXT_PUBLIC_APP_URL` ויש רק ברירות מחדל ל-`https://chasamsofer.co.il` (למשל `Distributors.tsx`, `PhoneSystemClient.tsx`, `lineage-review/renew`, `scripts/trigger-*.mjs`).
 - בזמן הבדיקה שני השרתים (Railway ו-AWS) מריצים תזמונים. כדי לא להכפיל גיבויים ושליחות, לפני בדיקה ארוכה מפעילים באחד מהם את משתני ה-`*_DISABLED` מהרשימה בסוד (למשל `DAILY_BACKUP_DISABLED=true` ב-AWS) ומסירים אותם ביום המעבר.
 
 ## שלב 8: מעבר סופי של הדומיין הראשי ל-Route 53 [אתה, רק אחרי שהכול נבדק]
@@ -106,7 +106,7 @@ DOMAIN=chasamsofer.co.il CREATE_ZONE=true DESIRED=1 bash cloudshell-setup.sh
 
 **ב. מורידים TTL.** יום לפני, ב-domainthenet.com מורידים TTL של הרשומות ל-300 שניות.
 
-**ג. משתנים ו-Webhooks.** מעדכנים ב-Secrets Manager את `GMAIL_REDIRECT_URI` (ובהתאם ב-Google Cloud), ובודקים שכתובות Yemot, Resend ו-Gmail PubSub מצביעות לדומיין.
+**ג. משתנים ו-Webhooks.** מעדכנים ב-Secrets Manager את `GMAIL_REDIRECT_URI` (ובהתאם ב-Google Cloud), ובודקים שכתובות טכנוליין, Resend ו-Gmail PubSub מצביעות לדומיין.
 
 **ד. החלפת שרתי השמות, צעד אחרי צעד:**
 1. ב-AWS: Route 53 > Hosted zones > `chasamsofer.co.il`. מעתיקים את ארבעת הערכים בשורת ה-NS (או מהפלט `NameServers` של הסקריפט). הם נראים כמו `ns-123.awsdns-45.com`.

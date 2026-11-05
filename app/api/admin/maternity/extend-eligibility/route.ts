@@ -15,7 +15,7 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 // הארכת/איפוס זכאות יולדת באופן ידני.
 //   action = 'extend' → קובע תאריך סיום זכאות חדש (חורג מ-6 השבועות), endDate חובה.
 //   action = 'reset'  → חוזר לברירת המחדל (לידה + 6 שבועות) ומבטל את ההארכה הידנית.
-// six_weeks_end הוא תאריך הסיום האפקטיבי שכל הלוגיקה (פריקה אוטומטית, פורטל, ימות) נשענת עליו.
+// six_weeks_end הוא תאריך הסיום האפקטיבי שכל הלוגיקה (פריקה אוטומטית, פורטל, המרכזיה) נשענת עליו.
 export async function POST(request: NextRequest) {
   const staff = await requirePermission('maternity', 'edit')
   if (!staff) return forbidden()

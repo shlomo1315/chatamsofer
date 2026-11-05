@@ -1,16 +1,16 @@
 // שלוחת החגים: תפריט → זכאות (1) · המוקד שנבחר (2) · חיבור כרטיס בנדרים (3) · בחירת מוקד (4, לא מוכרז).
-// טיימאאוט בתפריט = מסלול הרישום לחלוקה הפתוחה (כמו בימות).
+// טיימאאוט בתפריט = מסלול הרישום לחלוקה הפתוחה (כמו במרכזיה).
 // חסר-מצב: השלב נקבע לפי הערכים שחזרו מהמרכזיה (ה-REQUEST מצטבר לאורך השיחה).
 //
-// ⚠️ שם משתנה חדש לכל ניסיון (collect_id, collect_id2...) — אותם שמות כמו בימות,
+// ⚠️ שם משתנה חדש לכל ניסיון (collect_id, collect_id2...) — אותם שמות כמו במרכזיה,
 // כך שהלוגיקה, ההודעות והנוסחים זהים לחלוטין בשתי המרכזיות.
 //
-// הלוגיקה זהה לשלוחת ימות (app/api/webhooks/yemot-holiday), שנשארת עד שהמעבר ייבדק.
+// הלוגיקה זהה לשלוחה הקודמת, שהוסרה.
 // ההודעות נערכות באותו מסך ניהול (getHolidayMessages). בשלב זה TTS בלבד — הקלטות בהמשך.
-import { getHolidayMessages, type HolidayMessages } from '@/lib/yemotHolidayMessages'
+import { getHolidayMessages, type HolidayMessages } from '@/lib/holidayPhoneMessages'
 import { getOpenDistribution, registerToOpenDistribution } from '@/lib/holidayDistributions'
 import { linkHolidayCard } from '@/lib/holidayCards'
-import { resolveCardFamily } from '@/lib/yemotCardIdentity'
+import { resolveCardFamily } from '@/lib/cardIdentity'
 import { digitsOnly } from '@/lib/idLookup'
 import { recipientDeadlineState, formatCountdown } from '@/lib/centerDeadline'
 import { pickupPhaseOf } from '@/lib/centerPickupPhase'

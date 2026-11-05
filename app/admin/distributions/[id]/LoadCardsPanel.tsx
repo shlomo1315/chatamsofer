@@ -263,7 +263,7 @@ export default function LoadCardsPanel({ distributionId }: { distributionId: str
                 </li>
               )}
             </ul>
-            {/* ⚠️ נאמר מראש: בלי הגדרת ימות הצינתוק לא יֵצא כלל. */}
+            {/* ⚠️ נאמר מראש: בלי הגדרת המרכזיה הצינתוק לא יֵצא כלל. */}
             {!notifyScope.callConfigured && notifyScope.phone > 0 && (
               <p className="mt-2 rounded-lg bg-amber-100 px-2.5 py-1.5 text-[11px] font-semibold text-amber-900">
                 חיבור השיחות היוצאות אינו מוגדר — יישלחו מיילים בלבד.

@@ -1,7 +1,7 @@
 'use client'
 
 // המערכת הטלפונית של היריד בטכנוליין: מצב החיבור, בניית השלוחה, ועריכת הנוסחים וההקלטות.
-// 🔴 נפרד לגמרי מנוסחי ימות (PhoneMessages): מפתח נוסחים, מפתח API ושלוחה של היריד בלבד.
+// 🔴 נפרד לגמרי מנוסחי המרכזיה (PhoneMessages): מפתח נוסחים, מפתח API ושלוחה של היריד בלבד.
 import { useEffect, useMemo, useState } from 'react'
 import { Loader2, Check, X, Hammer, Upload, Trash2, Copy, Search, Save } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'

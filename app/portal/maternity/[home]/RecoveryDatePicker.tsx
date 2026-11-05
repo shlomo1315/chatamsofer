@@ -114,7 +114,7 @@ export default function RecoveryDatePicker({ maxDays, dates, onChange, lastDay }
         </button>
       </div>
 
-      {/* ימות השבוע */}
+      {/* ימי השבוע */}
       <div className="grid grid-cols-7 gap-1 mb-1">
         {HE_DOW.map(d => <div key={d} className="text-center text-[11px] font-semibold text-slate-400 py-1">{d}</div>)}
       </div>

@@ -99,7 +99,7 @@ export default function RegistrationGate() {
         </button>
       </div>
 
-      {/* אימות הטלפון בשיחה — מתג גיבוי לתקלה בימות */}
+      {/* אימות הטלפון בשיחה — מתג גיבוי לתקלה במרכזיה */}
       <div className="flex items-center justify-between py-2.5 px-2 rounded-lg hover:bg-slate-50 transition-colors border-t border-slate-100 pt-3">
         <div className="pl-3">
           <p className="text-sm font-medium text-slate-800">אימות טלפון בשיחה חובה (רישום והתחברות)</p>

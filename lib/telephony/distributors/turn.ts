@@ -1,5 +1,5 @@
 // שלוחת המפיצים של הגיליונות בטכנוליין — לוגיקה טהורה (בלי מסד). כל פנייה היא צעד אחד;
-// המצב נגזר מהמשתנים שהמרכזיה מצרפת (שם המודול = שם המשתנה), כמו בימות.
+// המצב נגזר מהמשתנים שהמרכזיה מצרפת (שם המודול = שם המשתנה), כמו במרכזיה.
 import { askDigits, goodbye, menu, message, say } from '../modules'
 import type { TlParams, TlResult } from '../types'
 import type { PhoneContext, PhoneDistributor, RecordingPurpose, DistributorPhoneAction } from '@/lib/gilyonotDistributorPhone'

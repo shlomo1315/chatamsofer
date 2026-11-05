@@ -5,25 +5,25 @@ export const dynamic = 'force-dynamic'
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
 const ACTION_LABELS: Record<string, string> = {
-  yemot_card_registered: 'כרטיס נדרים חובר בהצלחה',
-  yemot_card_already_set: 'כרטיס כבר רשום — בקשת עדכון',
-  yemot_no_active_birth: 'אין לידה פעילה',
-  yemot_phone_not_found: 'טלפון לא מזוהה',
-  yemot_error: 'שגיאה בשיוך הכרטיס',
+  phone_card_registered: 'כרטיס נדרים חובר בהצלחה',
+  phone_card_already_set: 'כרטיס כבר רשום — בקשת עדכון',
+  phone_no_active_birth: 'אין לידה פעילה',
+  phone_phone_not_found: 'טלפון לא מזוהה',
+  phone_error: 'שגיאה בשיוך הכרטיס',
 }
 
-// היסטוריית פעילות טלפון (שלוחת ימות) עבור צאצא מסוים.
+// היסטוריית פעילות טלפון (שלוחת המרכזיה) עבור צאצא מסוים.
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!(await requirePermission('beneficiaries', 'view'))) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403, headers: NO_STORE })
   const { id } = await params
   const admin = getServiceClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500, headers: NO_STORE })
 
-  // פעולות ימות המקושרות לצאצא — דרך entity_id (beneficiary) או details.beneficiary_id (maternity_aid)
+  // פעולות המרכזיה המקושרות לצאצא — דרך entity_id (beneficiary) או details.beneficiary_id (maternity_aid)
   const { data, error } = await admin
     .from('activity_log')
     .select('id, action, entity_type, entity_id, details, created_at')
-    .like('action', 'yemot_%')
+    .like('action', 'phone_%')
     .or(`entity_id.eq.${id},details->>beneficiary_id.eq.${id}`)
     .order('created_at', { ascending: false })
     .limit(200)
@@ -36,8 +36,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       id: r.id,
       action: r.action,
       actionLabel: ACTION_LABELS[r.action] ?? r.action,
-      ok: r.action === 'yemot_card_registered',
-      isError: r.action === 'yemot_error',
+      ok: r.action === 'phone_card_registered',
+      isError: r.action === 'phone_error',
       caller: (d.caller as string) ?? null,
       callId: (d.callId as string) ?? null,
       cardLast4: (d.card_number_last4 as string) ?? null,

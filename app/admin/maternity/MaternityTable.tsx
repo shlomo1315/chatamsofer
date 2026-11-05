@@ -444,7 +444,7 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
         )
       }
       case 'cardLink':
-        // שיוך כרטיס בפועל — נקבע רק כשהמשפחה חיברה כרטיס בשיחת ימות (card_picked_up_at)
+        // שיוך כרטיס בפועל — נקבע רק כשהמשפחה חיברה כרטיס בשיחת המרכזיה (card_picked_up_at)
         return aid.card_picked_up_at ? (
           <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-800"><Check size={12} /> שויך</span>
         ) : (

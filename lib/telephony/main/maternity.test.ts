@@ -12,7 +12,7 @@ const { data, ned, cancelReminders } = vi.hoisted(() => ({
 vi.mock('./maternityData', () => data)
 vi.mock('@/lib/nedarim', () => ned)
 vi.mock('@/lib/scheduledMail', () => ({ cancelCardPickupReminders: cancelReminders }))
-vi.mock('@/lib/yemotMaternityMessages', () => ({
+vi.mock('@/lib/maternityPhoneMessages', () => ({
   getMaternityMessages: async () => Object.fromEntries(Object.entries({
     identify: 'שלום משפחת {name}', welcome: 'ברוכה הבאה', ask_card: 'הקישי את מספר הכרטיס',
     card_length: 'מספר הכרטיס צריך 16 ספרות', card_readback: 'הקשת {card} לאישור 1 לתיקון 2',
@@ -70,7 +70,7 @@ describe('יולדות — זיהוי', () => {
     const r = await call()
     expect(text(r)).toContain('המספר לא נמצא')
     expect(last(r)).toEqual({ type: 'hangup' })
-    expect(data.logActivity).toHaveBeenCalledWith('yemot_phone_not_found', 'phone', null, expect.objectContaining({ channel: 'technoline' }))
+    expect(data.logActivity).toHaveBeenCalledWith('phone_phone_not_found', 'phone', null, expect.objectContaining({ channel: 'technoline' }))
   })
   it.each([
     [{ kind: 'noBirth', familyId: 'f1', familyName: 'כהן' }, 'אין לידה פעילה'],
@@ -143,7 +143,7 @@ describe('יולדות — שיוך בנדרים', () => {
     const r = await call({ card1: CARD, ok1: '1' })
     expect(ned.setMagneticCard).toHaveBeenCalledWith(expect.anything(), 'N1', CARD, { timeoutMs: 12000 })
     expect(data.markPickedUp).toHaveBeenCalled()
-    expect(data.logActivity).toHaveBeenCalledWith('yemot_card_registered', 'maternity_aid', 'a1', expect.objectContaining({ card_number_last4: '5678' }))
+    expect(data.logActivity).toHaveBeenCalledWith('phone_card_registered', 'maternity_aid', 'a1', expect.objectContaining({ card_number_last4: '5678' }))
     expect(cancelReminders).toHaveBeenCalledWith('a1')
     expect(text(r)).toContain('שויך במוקד בני ברק')
     expect(last(r)).toEqual({ type: 'hangup' })

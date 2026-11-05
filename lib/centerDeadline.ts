@@ -62,7 +62,7 @@ export function formatCountdown(ms: number): string {
   if (!shown.length) return ''
   if (shown.length === 1) return shown[0]
   // ⚠️ מקף רק לפני ספרה ("ו-3 שעות"). לפני מילה הוא שגוי — "ושעה אחת",
-  // לא "ו-שעה אחת" — וגם נקרא שגוי ב-TTS של ימות.
+  // לא "ו-שעה אחת" — וגם נקרא שגוי ב-TTS של המרכזיה.
   const sep = /^[0-9]/.test(shown[1]) ? 'ו-' : 'ו'
   return `${shown[0]} ${sep}${shown[1]}`
 }

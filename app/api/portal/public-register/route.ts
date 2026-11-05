@@ -8,8 +8,8 @@ import { mailFor } from '@/lib/departments'
 import { validateIsraeliId, normalizeDateToISO } from '@/lib/validation'
 import { getRegistrationGate, registrationAllowed, phoneConfirmError } from '@/lib/registrationGate'
 import { childRegisteredSeparatelyMessage, isChildMarried } from '@/lib/childDuplicateMessage'
-import { placeAnnouncementCall } from '@/lib/yemotCall'
-import { getRegistrationCallText, getRegistrationCallAudio } from '@/lib/registrationCallMessage'
+import { placeTtsCall } from '@/lib/phoneCall'
+import { getRegistrationCallText } from '@/lib/registrationCallMessage'
 import { verifyVerifyToken } from '@/lib/verifyToken'
 import { buildDraftLinks } from '@/lib/emailRequestIntake'
 import { normalizeLineageNodeName, lineageIdentityKey } from '@/lib/lineageNameFormat'
@@ -739,12 +739,12 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
   }
 
   // שיחה טלפונית יוצאת (לא-חוסמת): הקראת אישור קליטת הרישום למספר של הנרשם.
-  // אם ימות אינו מוגדר — placeAnnouncementCall מחזיר notConfigured ולא מבצע שיחה.
+  // אם טכנוליין לא מוגדר — placeTtsCall מחזיר notConfigured ולא מבצע שיחה.
   if (phone) {
     // הטקסט ניתן לעריכה מדף ההגדרות (registration_call_message). הכתובת מוקראת
     // בעברית מדוברת ואז אות-אות באנגלית — לפי הנוסח השמור.
-    Promise.all([getRegistrationCallText(), getRegistrationCallAudio()])
-      .then(([text, audio]) => placeAnnouncementCall(String(phone), text, { audioFile: audio }))
+    getRegistrationCallText()
+      .then((text) => placeTtsCall(String(phone), text))
       .then((r) => {
         if (r && !r.ok && !r.notConfigured) console.error('[public-register] announcement call failed:', r.error)
       })

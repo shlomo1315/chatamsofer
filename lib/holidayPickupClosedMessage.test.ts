@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { pickupClosedMessageKey } from './holidayPickupClosedMessage'
-import { HOLIDAY_MESSAGE_META } from './yemotHolidayMessages'
+import { HOLIDAY_MESSAGE_META } from './holidayPhoneMessages'
 
 describe('הודעת סגירת חלוקת הכרטיסים', () => {
   it('שער פתוח → אין הודעת סגירה', () => {

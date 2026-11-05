@@ -209,7 +209,7 @@ export default function HebrewDatePicker({ value, onChange, maxToday = true, yea
 
           {view === 'days' && (
             <>
-              {/* ימות השבוע */}
+              {/* ימי השבוע */}
               <div className="grid grid-cols-7 mb-1">
                 {WEEKDAYS.map(d => <div key={d} className="text-center text-[11px] font-semibold text-slate-400 py-1">{d}</div>)}
               </div>

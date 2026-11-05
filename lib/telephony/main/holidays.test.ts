@@ -14,7 +14,7 @@ const { data, dist, cards } = vi.hoisted(() => ({
 vi.mock('./holidaysData', async (orig) => ({ ...(await orig<typeof import('./holidaysData')>()), ...data }))
 vi.mock('@/lib/holidayDistributions', () => dist)
 vi.mock('@/lib/holidayCards', () => cards)
-vi.mock('@/lib/yemotHolidayMessages', () => ({
+vi.mock('@/lib/holidayPhoneMessages', () => ({
   getHolidayMessages: async () => Object.fromEntries(Object.entries({
     main_menu: 'תפריט ראשי', ask_id: 'הקישו תעודת זהות', id_invalid: 'מספר שגוי', not_found: 'לא נמצאתם',
     closed: 'אין חלוקה פתוחה', not_eligible: 'אינכם זכאים', already: '{name} כבר רשומים ל{distribution}',

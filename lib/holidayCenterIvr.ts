@@ -13,7 +13,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { evaluatePick, groupByRegion, centerLabel, REGIONS, type CenterRow, type RegionKey } from './holidayCenterPick'
 import { citiesByNumber, findCityByNumber } from './holidayCityMenu'
 
-/** משתנה נפרד לכל שלב — קריאה חוזרת של משתנה מלא יוצרת לולאה בימות. */
+/** משתנה נפרד לכל שלב — קריאה חוזרת של משתנה מלא יוצרת לולאה במרכזיה. */
 export const CENTER_VARS = {
   region: 'c_region',
   city: 'c_city',
@@ -31,7 +31,7 @@ export interface CenterIvrDeps {
 }
 
 export interface IvrStep {
-  /** פקודות ימות להחזרה. */
+  /** פקודות המרכזיה להחזרה. */
   commands: string[]
   /** האם השיחה הסתיימה (לצורך תיעוד בלבד). */
   done?: boolean

@@ -1,6 +1,6 @@
 // הודעת השיחה הטלפונית לאחר רישום — טקסט הניתן לעריכה מדף ההגדרות.
 // נשמר ב-app_settings תחת המפתח registration_call_message. השיחה היוצאת
-// (placeAnnouncementCall) מקריאה את הטקסט הזה ב-TTS.
+// (placeTtsCall) מקריאה את הטקסט הזה ב-TTS.
 import { getServiceClient } from '@/lib/apiAuth'
 
 export const REG_CALL_MSG_KEY = 'registration_call_message'
@@ -23,26 +23,6 @@ export async function saveRegistrationCallText(text: string): Promise<boolean> {
   const value = String(text ?? '').trim() || DEFAULT_REG_CALL_TEXT
   const { error } = await admin.from('app_settings').upsert(
     { key: REG_CALL_MSG_KEY, value, updated_at: new Date().toISOString() }, { onConflict: 'key' },
-  )
-  return !error
-}
-
-// קובץ קול טבעי (ElevenLabs) שהועלה לימות — שם הקובץ היחסי בשלוחה. null = אין (TTS).
-export const REG_CALL_AUDIO_KEY = 'registration_call_audio'
-
-export async function getRegistrationCallAudio(): Promise<string | null> {
-  const admin = getServiceClient()
-  if (!admin) return null
-  const { data } = await admin.from('app_settings').select('value').eq('key', REG_CALL_AUDIO_KEY).maybeSingle()
-  const a = (data?.value ?? '').trim()
-  return a || null
-}
-
-export async function setRegistrationCallAudio(audio: string | null): Promise<boolean> {
-  const admin = getServiceClient()
-  if (!admin) return false
-  const { error } = await admin.from('app_settings').upsert(
-    { key: REG_CALL_AUDIO_KEY, value: audio ?? '', updated_at: new Date().toISOString() }, { onConflict: 'key' },
   )
   return !error
 }

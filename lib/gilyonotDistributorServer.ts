@@ -173,7 +173,7 @@ export async function recordPhoneMessage(db: SupabaseClient, distributorId: stri
   const { data: d } = await db.from('gilyonot_distributors').select('id, full_name, phone, city, address, synagogue, quantity, status').eq('id', distributorId).maybeSingle()
   if (!d || d.status !== 'active') return { ok: false, error: 'המפיץ אינו פעיל במערך' }
   const text = transcript?.trim().slice(0, 1500) || null
-  const details = [text ? `תמלול אוטומטי: ${text}` : 'הודעה מוקלטת (בלי תמלול)', `קובץ ההקלטה בימות: ${recordingPath.slice(0, 300)}`].join('\n')
+  const details = [text ? `תמלול אוטומטי: ${text}` : 'הודעה מוקלטת (בלי תמלול)', `קובץ ההקלטה: ${recordingPath.slice(0, 300)}`].join('\n')
   const { error } = await db.from('gilyonot_distributor_events').insert({
     distributor_id: d.id, channel: 'phone', kind: purpose, details, status: 'open',
     old_value: purpose === 'address' ? { address: d.address, city: d.city } : null,

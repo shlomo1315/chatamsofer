@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-vi.mock('@/lib/yemotMainMenu', () => ({
+vi.mock('@/lib/mainMenuPhone', () => ({
   getMainMenuMessages: async () => ({
     welcome: { text: 'ברוכים הבאים' }, menu: { text: 'לחגים 1, ליולדות 2, להודעות 9' },
     notice: { text: 'אין הודעות' }, invalid: { text: 'הקשה שגויה' },
@@ -131,7 +131,7 @@ describe('OTP', () => {
   })
 })
 
-describe('שלוחות שהועברו מימות', () => {
+describe('שלוחות שהועברו מהמרכזיה', () => {
   it('קוויטלאך: בלי שמות שמורים מקליטים; הקלטה נשמרת', async () => {
     const { kvitelTurn } = await import('./main/kvitel')
     expect(validateResult(kvitelTurn({}, []).result).ok).toBe(true)

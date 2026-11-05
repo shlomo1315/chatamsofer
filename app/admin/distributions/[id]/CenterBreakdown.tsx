@@ -34,7 +34,7 @@ interface Center {
   capacity: number | null; is_active: boolean
   // ⚠️ נשלפים ממילא ב-COLS — הם מה שהמשפחה רואה בשובר ובטלפון.
   address?: string | null; phone?: string | null; hours?: string | null
-  /** שם קובץ ההקלטה בימות. ריק = פרטי המוקד ייקראו ב-TTS מהשדות. */
+  /** שם קובץ ההקלטה במרכזיה. ריק = פרטי המוקד ייקראו ב-TTS מהשדות. */
   audio_file?: string | null
 }
 
@@ -253,46 +253,7 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
     } catch { setErr('שגיאת רשת') } finally { setBusy(null) }
   }
 
-  /**
-   * העלאת הקלטה אנושית לפרטי המוקד.
-   *
-   * ⚠️ ההקלטה מחליפה את *הקול* ולא את התוכן: מוקד בלי הקלטה עדיין
-   * נשמע נכון, בהקראה מאותם שדות. לכן זו תוספת ולא דרישה.
-   */
-  async function uploadRecording(id: string, file: File) {
-    setBusy(`rec-${id}`); setErr('')
-    try {
-      const fd = new FormData()
-      fd.append('center_id', id)
-      fd.append('file', file)
-      const res = await fetch('/api/admin/holiday-centers/recording', { method: 'POST', body: fd })
-      const d = await res.json().catch(() => ({}))
-      if (!res.ok) { setErr(d.error ?? 'ההעלאה נכשלה'); return }
-      setCenters(cs => cs?.map(c => (c.id === id ? { ...c, audio_file: d.audio_file } : c)) ?? cs)
-    } catch { setErr('שגיאת רשת — ההקלטה לא הועלתה') } finally { setBusy(null) }
-  }
-
-  /**
-   * יצירת הקראה בקול טבעי (ElevenLabs) מפרטי המוקד.
-   *
-   * ⚠️ הטקסט נבנה בשרת מהשדות השמורים ולא נשלח מכאן: אחרת אפשר היה
-   * לייצר הקלטה שאינה תואמת למה שרשום בטבלה ומודפס בשובר.
-   */
-  async function generateVoice(id: string) {
-    setBusy(`rec-${id}`); setErr('')
-    try {
-      const res = await fetch('/api/admin/holiday-centers/recording', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ center_id: id }),
-      })
-      const d = await res.json().catch(() => ({}))
-      if (!res.ok) { setErr(d.error ?? 'יצירת הקול נכשלה'); return }
-      setCenters(cs => cs?.map(c => (c.id === id ? { ...c, audio_file: d.audio_file } : c)) ?? cs)
-    } catch { setErr('שגיאת רשת — הקול לא נוצר') } finally { setBusy(null) }
-  }
-
-  /** השמעה מקדימה — בלי לייצר קובץ בימות. */
+  /** השמעה מקדימה — בלי לייצר קובץ במרכזיה. */
   /**
    * יצירת ההשמעה — ומסירתה לנגן.
    *
@@ -315,17 +276,6 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
       // וכך נשארת שליטה אחת במקום שני נגנים שמתנגשים.
       setPlayer({ id, src: `data:${d.mime || 'audio/mpeg'};base64,${d.audio}` })
     } catch { setErr('שגיאה בהשמעה') } finally { setPreview(null) }
-  }
-
-  /** הסרת ההקלטה — הפרטים חוזרים להיקרא מהשדות. */
-  async function removeRecording(id: string) {
-    setBusy(`rec-${id}`); setErr('')
-    try {
-      const res = await fetch(`/api/admin/holiday-centers/recording?center_id=${encodeURIComponent(id)}`,
-        { method: 'DELETE' })
-      if (!res.ok) { setErr((await res.json()).error ?? 'ההסרה נכשלה'); return }
-      setCenters(cs => cs?.map(c => (c.id === id ? { ...c, audio_file: null } : c)) ?? cs)
-    } catch { setErr('שגיאת רשת') } finally { setBusy(null) }
   }
 
   /**
@@ -690,8 +640,8 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
                       )}
                     {/* ⚠️ "טרם החל" מכילה את שם המוקד ולכן אינה ניתנת להקלטה
                         כקובץ אחד — היא נקראת בקול המערכת. "הסתיימה" קבועה. */}
-                    <a href="/admin/phone" target="_blank" rel="noopener"
-                      title="עריכת הנוסח וההקלטה במערכת הטלפונית"
+                    <a href="/admin/technoline" target="_blank" rel="noopener"
+                      title="עריכת הנוסח במרכזיה הטלפונית"
                       className="shrink-0 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[10.5px] font-bold text-slate-600 transition hover:border-line-strong hover:text-navy-dark">
                       ערוך נוסח
                     </a>
@@ -703,9 +653,7 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
                 <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-1.5">
                   <Volume2 size={12} className="shrink-0 text-slate-400" />
                   <span className="min-w-[12rem] flex-1 text-[11px] leading-snug text-slate-500">
-                    {c.audio_file
-                      ? <span className="font-bold text-teal-700">מושמעת הקלטה שהוכנה</span>
-                      : (spokenCenterDetails(d) || <span className="text-slate-300">אין מה להשמיע — חסרים פרטים</span>)}
+                    {spokenCenterDetails(d) || <span className="text-slate-300">אין מה להשמיע — חסרים פרטים</span>}
                   </span>
 
                   {player?.id === c.id
@@ -721,32 +669,6 @@ export default function CenterBreakdown({ distributionId }: { distributionId: st
                       </button>
                     )}
 
-                  {/* 🔴 אותו קול טבעי (ElevenLabs) שכבר משמש את שאר השלוחה. */}
-                  <button type="button" disabled={busy === `rec-${c.id}` || !spokenCenterDetails(d)}
-                    onClick={() => void generateVoice(c.id)}
-                    title="יצירת הקראה בקול טבעי מהשם, הכתובת והשעות"
-                    className="shrink-0 rounded-lg border border-line-strong bg-sand px-2.5 py-1 text-[10.5px] font-bold text-navy-dark transition hover:bg-gold-soft disabled:opacity-40">
-                    {busy === `rec-${c.id}` ? 'מייצר…' : c.audio_file ? 'יצירה מחדש' : 'יצירת קול טבעי'}
-                  </button>
-
-                  <label className="shrink-0 cursor-pointer rounded-lg border border-teal-300 bg-teal-50 px-2.5 py-1 text-[10.5px] font-bold text-teal-700 transition hover:bg-teal-100">
-                    {busy === `rec-${c.id}` ? 'מעלה…' : 'העלה קובץ'}
-                    <input type="file" accept="audio/*" className="hidden"
-                      onChange={e => {
-                        const f = e.target.files?.[0]
-                        e.target.value = ''
-                        if (f) void uploadRecording(c.id, f)
-                      }} />
-                  </label>
-
-                  {c.audio_file && (
-                    <button type="button" disabled={busy === `rec-${c.id}`}
-                      onClick={() => void removeRecording(c.id)}
-                      title="הסרת ההקלטה — הפרטים ייקראו מהשדות"
-                      className="shrink-0 rounded-lg border border-slate-300 bg-white px-2 py-1 text-[10.5px] font-bold text-slate-500 transition hover:border-rose-300 hover:text-rose-700">
-                      הסר
-                    </button>
-                  )}
                 </div>
               </div>
             )

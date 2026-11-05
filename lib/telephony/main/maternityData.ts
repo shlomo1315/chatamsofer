@@ -1,5 +1,5 @@
 // גישה לנתונים של שלוחת היולדות — מופרד מהשיחה כדי שאפשר יהיה לבדוק את כל המסלולים.
-// הלוגיקה זהה לשלוחת ימות (app/api/webhooks/yemot-maternity), שנשארת עד שהמעבר ייבדק.
+// הלוגיקה זהה לשלוחה הקודמת, שהוסרה.
 import { addDays } from 'date-fns'
 import { getServiceClient } from '@/lib/apiAuth'
 import { cardWindowEnd, CARD_WINDOW_DAYS } from '@/lib/maternity'
@@ -46,10 +46,10 @@ export async function findActiveAid(callerPhone: string): Promise<Lookup> {
   return { kind: 'active', family, aid, familyName }
 }
 
-/** חובר בפועל בנדרים (יש רישום yemot_card_registered), ולא רק נשמר מספר בהקלדה שלא הושלמה. */
+/** חובר בפועל בנדרים (יש רישום phone_card_registered), ולא רק נשמר מספר בהקלדה שלא הושלמה. */
 export async function isCardRegistered(aidId: string): Promise<boolean> {
   const { data } = await db().from('activity_log').select('id')
-    .eq('action', 'yemot_card_registered').eq('entity_id', aidId).limit(1)
+    .eq('action', 'phone_card_registered').eq('entity_id', aidId).limit(1)
   return Array.isArray(data) && data.length > 0
 }
 

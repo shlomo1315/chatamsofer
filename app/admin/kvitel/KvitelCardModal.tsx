@@ -27,7 +27,7 @@ export default function KvitelCardModal({ rows, index, onIndex, onClose, canEdit
   const r = rows[index]
   const lines = r.kvitel_request_lines
   const flagged = lines.filter(l => l.flagged).length
-  const yemot = r.recording_url?.startsWith('yemot:')
+  const playable = !!r.recording_url && /^(https?:|\/)/.test(r.recording_url)
   return (
     <RecordModal
       kind="בקשת קוויטל"
@@ -73,8 +73,8 @@ export default function KvitelCardModal({ rows, index, onIndex, onClose, canEdit
         ) },
         { key: 'source', label: 'מקור והקלטה', content: (
           <div className="space-y-3 text-sm text-ink-soft">
-            {yemot && <p>ההקלטה שמורה במערכת הטלפון (ימות), בתיקיית ההקלטות לפי מספר המתקשר והשעה.</p>}
-            {r.recording_url && !yemot && <audio controls preload="none" src={r.recording_url} className="w-full" aria-label="ההקלטה של המתקשר" />}
+            {r.recording_url && !playable && <p>ההקלטה נשמרה במערכת הטלפון הקודמת ואינה זמינה להשמעה כאן.</p>}
+            {playable && <audio controls preload="none" src={r.recording_url ?? undefined} className="w-full" aria-label="ההקלטה של המתקשר" />}
             {r.raw_text ? <p className="whitespace-pre-wrap break-words">{r.raw_text}</p> : !r.recording_url && <p className="text-ink-faint">אין מקור שמור</p>}
           </div>
         ) },
