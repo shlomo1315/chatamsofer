@@ -63,7 +63,7 @@ export async function downloadKvitel(href: string): Promise<string | null> {
 }
 
 // הדפסה של הדף בלבד: עותק שלו ב-iframe נסתר, ברוחב A4 מלא (210mm = 595pt, אז pt() בגודל אמיתי).
-function printSheet(page: HTMLElement) {
+function printSheet(page: HTMLElement, onAfter?: () => void) {
   const frame = document.createElement('iframe')
   frame.setAttribute('aria-hidden', 'true')
   frame.style.cssText = 'position:fixed;inset-inline-start:0;bottom:0;width:0;height:0;border:0'
@@ -71,6 +71,7 @@ function printSheet(page: HTMLElement) {
   const doc = frame.contentDocument
   const win = frame.contentWindow
   if (!doc || !win) { frame.remove(); return }
+  if (onAfter) win.addEventListener('afterprint', onAfter, { once: true })
   const styles = [...document.querySelectorAll('link[rel="stylesheet"], style')].map(n => n.outerHTML).join('')
   doc.open()
   doc.write(`<!doctype html><html dir="rtl" lang="he"><head><base href="${location.origin}/">${styles}`
@@ -96,11 +97,13 @@ function printSheet(page: HTMLElement) {
 }
 
 // downloadHref — נתיב הייצוא לכפתור "הורדה". בלי נתיב, downloadNote מסביר למה אין הורדה.
-export function KvitelSheet({ lines, date = new Date(), downloadHref, downloadNote }: {
+export function KvitelSheet({ lines, date = new Date(), downloadHref, downloadNote, onPrinted }: {
   lines: string[]
   date?: Date
   downloadHref?: string
   downloadNote?: string
+  // נקרא אחרי שחלון ההדפסה נסגר (הדפסה או ביטול)
+  onPrinted?: () => void
 }) {
   const layout = kvitelDocLayout(lines, date)
   const pageRef = useRef<HTMLDivElement>(null)
@@ -138,7 +141,7 @@ export function KvitelSheet({ lines, date = new Date(), downloadHref, downloadNo
           {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Download className="h-4 w-4" aria-hidden />}
           הורדה
         </button>
-        <button type="button" onClick={() => pageRef.current && printSheet(pageRef.current)}
+        <button type="button" onClick={() => pageRef.current && printSheet(pageRef.current, onPrinted)}
           className="flex items-center justify-center gap-2 rounded-lg border border-[#1B3256]/40 bg-white px-6 py-2.5 text-sm font-semibold text-[#1B3256]">
           <Printer className="h-4 w-4" aria-hidden />
           הדפסה
