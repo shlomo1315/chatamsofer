@@ -379,16 +379,22 @@ export async function register() {
     setTimeout(() => { void tickGilyonot(); setInterval(() => { void tickGilyonot() }, MINUTE_MS) }, INITIAL_DELAY_MS)
     console.log('[gilyonot] sender started (every 1m)')
 
-    // משיכת נרשמים מטופס הגיליונות בנדרים פלוס, כל שעה (lib/gilyonotNedarimPull.ts).
+    // משיכת נרשמים מטופס הגיליונות בנדרים פלוס, כל לילה ב-02:00 שעון ישראל (lib/gilyonotNedarimPull.ts).
+    // בודק כל 20 דקות מה השעה בישראל, ולכן לא תלוי באזור הזמן של השרת.
     // בלי הגדרות במסך הניהול — לא עושה כלום.
+    let lastGilyonotPullDate = ''
     const tickGilyonotPull = async () => {
       try {
+        const { isGilyonotPullDue } = await import('@/lib/gilyonotPullSchedule')
+        const { due, date } = isGilyonotPullDue(new Date(), lastGilyonotPullDate)
+        if (!due) return
+        lastGilyonotPullDate = date
         const { pullNedarimSubscribers } = await import('@/lib/gilyonotNedarimPull')
         const res = await pullNedarimSubscribers()
-        if (res.added || res.error) console.log(`[gilyonot] nedarim pull added=${res.added} lastId=${res.lastId}${res.error ? ` error=${res.error}` : ''}`)
+        console.log(`[gilyonot] nedarim daily pull added=${res.added} lastId=${res.lastId}${res.error ? ` error=${res.error}` : ''}`)
       } catch (err) { console.error('[gilyonot] nedarim pull failed', err) }
     }
-    setTimeout(() => { void tickGilyonotPull(); setInterval(() => { void tickGilyonotPull() }, 60 * MINUTE_MS) }, 5 * MINUTE_MS)
+    setTimeout(() => { void tickGilyonotPull(); setInterval(() => { void tickGilyonotPull() }, 20 * MINUTE_MS) }, 5 * MINUTE_MS)
 
     // הרשמת מפיצים מטופס המפיצים בנדרים פלוס, כל שעה (lib/gilyonotDistributorNedarim.ts).
     const tickDistributorPull = async () => {

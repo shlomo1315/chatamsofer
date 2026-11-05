@@ -8,7 +8,7 @@ import type { NedarimPullView, NedarimRow } from '@/lib/gilyonotNedarimPull'
 import { btnGhost, btnPrimary, Card, CardHeader, input, Notice, Stat, StepNum } from './ui'
 
 // לשונית "נדרים פלוס": הגדרות המשיכה מטופס הגיליונות, בחירת העמודות לפי רשומות לדוגמה,
-// ומשיכה ידנית. המשיכה האוטומטית רצה כל שעה (instrumentation.ts).
+// ומשיכה ידנית. המשיכה האוטומטית רצה כל לילה ב-02:00 שעון ישראל (instrumentation.ts).
 
 const FIELDS = [...Array.from({ length: 100 }, (_, i) => `Field${i + 1}`), ...Array.from({ length: 10 }, (_, i) => `Field${i + 1}Max`)]
 const fmtDate = (s: string | null) => (s ? new Date(s).toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' }) : 'עוד לא')
@@ -78,7 +78,7 @@ export default function NedarimPull({ view: initial }: { view: NedarimPullView }
   const health = st.lastError
     ? { dot: 'bg-rose-500', title: 'המשיכה האחרונה נכשלה', text: st.lastError }
     : connected && view.emailField
-    ? { dot: 'bg-emerald-500', title: 'מחובר ופעיל', text: 'המשיכה רצה לבד כל שעה, ונרשמים חדשים נכנסים לרשימת התפוצה.' }
+    ? { dot: 'bg-emerald-500', title: 'מחובר ופעיל', text: 'המשיכה רצה לבד כל לילה ב-02:00, ונרשמים חדשים נכנסים לרשימת התפוצה.' }
     : { dot: 'bg-slate-300', title: 'עוד לא מחובר', text: 'מלאו את פרטי הטופס והמפתח, בחרו את עמודת המייל ושמרו.' }
   const label = 'mb-1.5 block text-sm font-medium text-slate-800'
 
