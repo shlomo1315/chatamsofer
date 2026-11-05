@@ -8,7 +8,7 @@ import { kvitelRequestLines, type KvitelFilters, type KvitelLineRow, type Kvitel
 import { ListTable } from '@/components/admin/system/ListTable'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import { useTablePagination } from '@/lib/useTablePagination'
-import { countByStatus, hebrewDay, lineMissing, reviewReason } from '@/lib/kvitelView'
+import { countByStatus, hebrewDay, reviewReason } from '@/lib/kvitelView'
 import KvitelCardModal from './KvitelCardModal'
 import ExportDialog from './ExportDialog'
 import PrintNewDialog from './PrintNewDialog'
@@ -36,13 +36,13 @@ type ColKey = 'status' | 'channel' | 'date' | 'contact' | 'phone' | 'email' | 'n
 const personOf = (l: KvitelLineRow) => `${l.name} ${l.relation === 'bat' ? 'בת' : 'בן'} ${l.parent_name}`.trim()
 const requestsOf = (r: KvitelRequestRow) => [...new Set(r.kvitel_request_lines.map(l => (l.request_type === 'other' ? l.request_note || 'אחר' : requestTypeLabel(l.request_type))))].join(', ')
 const COLUMNS: ColDef<ColKey, KvitelRequestRow>[] = [
-  { key: 'status', label: 'סטטוס', def: true, kind: 'enum', filterable: true, value: r => KVITEL_STATUSES[r.status] },
-  { key: 'contact', label: 'מגיש', def: true, value: r => r.contact_name || null },
-  { key: 'phone', label: 'טלפון', def: true, value: r => r.contact_phone },
-  { key: 'names', label: 'שמות (שם, בן/בת, שם האם)', def: true, value: r => r.kvitel_request_lines.map(personOf).join(' · ') || null },
+  { key: 'names', label: 'שמות', def: true, value: r => r.kvitel_request_lines.map(personOf).join(' · ') || null },
   { key: 'request', label: 'בקשה', def: true, value: r => requestsOf(r) || null },
   { key: 'date', label: 'הוגשה', def: true, value: r => r.submitted_at },
   { key: 'channel', label: 'ערוץ', def: true, kind: 'enum', filterable: true, value: r => KVITEL_CHANNELS[r.channel] },
+  { key: 'status', label: 'סטטוס', def: true, kind: 'enum', filterable: true, value: r => KVITEL_STATUSES[r.status] },
+  { key: 'contact', label: 'מגיש', def: false, value: r => r.contact_name || null },
+  { key: 'phone', label: 'טלפון', def: false, value: r => r.contact_phone },
   { key: 'email', label: 'מייל', def: false, value: r => r.contact_email },
   { key: 'count', label: 'מס׳ שמות', def: false, kind: 'number', value: r => r.kvitel_request_lines.length },
 ]
@@ -60,10 +60,9 @@ function MobileCards({ rows, onOpen }: { rows: KvitelRequestRow[]; onOpen: (r: K
         <li key={r.id}>
           <button type="button" onClick={() => onOpen(r)} className={`grid w-full gap-2 rounded-xl border border-line bg-white p-4 text-start ${r.status === 'review' ? 'border-s-[3px] border-s-[#C0912F]' : ''}`}>
             <span className="flex items-start justify-between gap-2">
-              <span className="min-w-0"><span className="block font-medium text-ink">{r.contact_name || 'מגיש לא ידוע'}</span>{r.contact_phone && <span dir="ltr" className="block text-end text-xs text-ink-soft">{r.contact_phone}</span>}</span>
-              <StatusPill status={r.status} />
+              <span className="min-w-0 flex-1"><NamesCell r={r} /></span>
+              <StatusCell r={r} />
             </span>
-            <NamesCell r={r} />
             <span className="flex items-center justify-between text-xs text-ink-faint"><span>{dateFmt.format(new Date(r.submitted_at))} · {hebrewDay(r.submitted_at)}</span><ChevronLeft className="h-4 w-4" aria-hidden /></span>
           </button>
         </li>
@@ -84,27 +83,44 @@ function filtersToQuery(f: KvitelFilters, extra: Record<string, string> = {}): s
   return p.toString()
 }
 
-// עד שלושה שמות בתא, והשאר בספירה. הכרטסת מציגה הכול.
-function NamesCell({ r }: { r: KvitelRequestRow }) {
+// עד שלושה שמות בתא, והשאר בספירה. בלי אזהרות: הסיבה בתגית הסטטוס וההסבר המלא בכרטסת.
+function NamesCell({ r, onReprocess }: { r: KvitelRequestRow; onReprocess?: () => void }) {
   const ls = r.kvitel_request_lines
-  const reason = r.status === 'review' ? reviewReason(r) : null
-  if (!ls.length) return <span className="text-xs font-semibold text-[#8A5A00]">⚠ לא נקלטו שמות{reason && reason !== 'לא נקלטו שמות' ? ` · ${reason}` : ''}</span>
+  if (!ls.length) return (
+    <div className="flex items-center gap-3 text-sm text-ink-faint">
+      <span>לא נקלטו שמות</span>
+      {onReprocess && (
+        <button type="button" onClick={e => { e.stopPropagation(); onReprocess() }}
+          className="flex items-center gap-1.5 rounded-lg border border-[#C0912F] bg-white px-2.5 py-1 text-xs font-semibold text-navy">
+          <RefreshCw className="h-3.5 w-3.5" aria-hidden /> עיבוד מחדש
+        </button>
+      )}
+    </div>
+  )
   return (
     <div className="min-w-48 space-y-0.5 text-ink">
-      {ls.slice(0, 2).map(l => (
-        <div key={l.id} className={`break-words ${lineMissing(l) ? 'font-medium text-[#8A5A00]' : ''}`}>{lineMissing(l) && '⚠ '}{personOf(l)}</div>
-      ))}
-      {ls.length > 2 && <div className="text-xs text-ink-faint">ועוד {ls.length - 2} שמות</div>}
-      {reason && <div className="text-xs font-semibold text-[#8A5A00]">{reason}</div>}
+      {ls.slice(0, 3).map(l => <div key={l.id} className="break-words">{personOf(l)}</div>)}
+      {ls.length > 3 && <div className="text-xs text-ink-faint">ועוד {ls.length - 3}</div>}
     </div>
   )
 }
 
-// מגיש: שם, ומתחתיו טלפון ומייל. פס זהב בצד לבקשה שדורשת בדיקה.
+// סטטוס עם תגית סיבה קצרה אחת לבקשה שדורשת בדיקה.
+function StatusCell({ r }: { r: KvitelRequestRow }) {
+  const reason = r.status === 'review' ? reviewReason(r) : null
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <StatusPill status={r.status} />
+      {reason && <span className="rounded bg-[#FBEFD2] px-1.5 py-0.5 text-[11px] font-medium text-[#8A5A00]">{reason}</span>}
+    </div>
+  )
+}
+
+// מגיש (עמודה אופציונלית): שם, ומתחתיו טלפון ומייל.
 function ContactCell({ r }: { r: KvitelRequestRow }) {
   return (
-    <div className={`-my-3 -ms-3 min-w-36 px-3 py-3 ${r.status === 'review' ? 'border-s-[3px] border-[#C0912F]' : ''}`}>
-      <div className="font-medium text-ink">{r.contact_name || 'מגיש לא ידוע'}</div>
+    <div className="min-w-36">
+      <div className="font-medium text-ink">{r.contact_name || '—'}</div>
       {r.contact_phone && <div dir="ltr" className="text-end text-xs tabular-nums text-ink-soft">{r.contact_phone}</div>}
       {r.contact_email && <div dir="ltr" className="break-all text-end text-xs text-ink-faint">{r.contact_email}</div>}
     </div>
@@ -332,13 +348,13 @@ export default function KvitelClient({ allRows, filters, canEdit, isAdmin }: { a
         toolbar={<h2 className="font-bold text-navy">בקשות קוויטל <span className="text-sm font-normal text-ink-faint">· {rows.length} בקשות · {lineCount} שמות</span></h2>}
         renderCell={(c, r) => {
           switch (c.key) {
-            case 'status': return <StatusPill status={r.status} />
+            case 'status': return <StatusCell r={r} />
             case 'channel': return <span className="text-ink-soft">{KVITEL_CHANNELS[r.channel]}</span>
             case 'date': return <DateCell iso={r.submitted_at} />
             case 'contact': return <ContactCell r={r} />
             case 'phone': return <span dir="ltr" className="tabular-nums text-ink-soft">{r.contact_phone || '—'}</span>
             case 'email': return <span dir="ltr" className="break-all text-ink-soft">{r.contact_email || '—'}</span>
-            case 'names': return <NamesCell r={r} />
+            case 'names': return <NamesCell r={r} onReprocess={isAdmin && !busy ? () => void reprocess() : undefined} />
             case 'request': return requestsOf(r) ? <span className="inline-block rounded-full bg-sand px-2.5 py-0.5 text-xs text-navy">{requestsOf(r)}</span> : <span className="text-ink-faint">—</span>
             case 'count': return <span className="tabular-nums text-ink-soft">{r.kvitel_request_lines.length}</span>
           }
