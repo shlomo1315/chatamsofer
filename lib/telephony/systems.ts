@@ -77,18 +77,30 @@ export function sharedSecretSystems(): TelephonySystemId[] {
   return [...seen.values()].filter((l) => l.length > 1).flat()
 }
 
+/** מספר טלפון לצורך השוואה: ספרות בלבד, בלי קידומת 972 ובלי 0 מוביל (0237666363 = 972237666363). */
+export function normalizePhone(v: string): string {
+  return v.replace(/\D/g, '').replace(/^972/, '').replace(/^0+/, '')
+}
+
+/** הסיבה לדחיית בקשה (ללוג, בלי ערכים). */
+export type RejectReason = 'no-secret' | 'shared-secret' | 'bad-secret' | 'number-mismatch'
+
 /**
  * אימות בקשה נכנסת: הסוד שבנתיב חייב להתאים לסוד של *אותה* מערכת בלבד.
- * סוד חסר, או סוד משותף לכמה מערכות — נדחה.
+ * סוד חסר, או סוד משותף לכמה מערכות — נדחה. מחזיר את סיבת הדחייה, או null כשהבקשה תקינה.
  */
-export function verifyRequest(id: TelephonySystemId, secret: string, pbxNumber?: string): boolean {
+export function checkRequest(id: TelephonySystemId, secret: string, pbxNumber?: string): RejectReason | null {
   const cfg = getSystem(id)
-  if (!cfg.secret) return false
-  if (sharedSecretSystems().includes(id)) return false
-  if (!safeEqual(secret, cfg.secret)) return false
+  if (!cfg.secret) return 'no-secret'
+  if (sharedSecretSystems().includes(id)) return 'shared-secret'
+  if (!safeEqual(secret, cfg.secret)) return 'bad-secret'
   // אם הוגדר מספר למערכת והמרכזיה שלחה PBXdid — חייבים להתאים (מונע ערבוב בין מספרים)
-  if (cfg.number && pbxNumber && pbxNumber.replace(/\D/g, '') !== cfg.number.replace(/\D/g, '')) return false
-  return true
+  if (cfg.number && pbxNumber && normalizePhone(pbxNumber) !== normalizePhone(cfg.number)) return 'number-mismatch'
+  return null
+}
+
+export function verifyRequest(id: TelephonySystemId, secret: string, pbxNumber?: string): boolean {
+  return checkRequest(id, secret, pbxNumber) === null
 }
 
 /** מה מוגדר ומה חסר — להצגה במסך הניהול (בלי לחשוף ערכים). */
