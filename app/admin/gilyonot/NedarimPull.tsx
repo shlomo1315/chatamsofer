@@ -69,7 +69,7 @@ export default function NedarimPull({ view: initial }: { view: NedarimPullView }
     setNeedEmail(false)
     setView(d.view as NedarimPullView); router.refresh()
     const n = (k: string) => Number(d[k] ?? 0)
-    return `נקלטו ${n('added')} חדשים · ${n('exists')} כבר ברשימה · ${n('blocked')} הסירו את עצמם בעבר · ${n('invalid')} בלי מייל תקין${n('noConsent') ? ` · ${n('noConsent')} בלי אישור קבלת מייל` : ''}`
+    return `נשלפו ${n('read').toLocaleString('he-IL')} רשומות מהטופס${d.more ? ' (ממשיך בריצה הבאה)' : ''} · נקלטו ${n('added')} חדשים · ${n('exists')} כבר ברשימה · ${n('blocked')} הסירו את עצמם בעבר · ${n('invalid')} בלי מייל תקין${n('noConsent') ? ` · ${n('noConsent')} בלי אישור קבלת מייל` : ''}`
   })
 
   const cols = sample ? Object.keys(sample[0] ?? {}).filter(k => /^Field\d/.test(k) && sample.some(r => r[k])) : []
@@ -104,6 +104,7 @@ export default function NedarimPull({ view: initial }: { view: NedarimPullView }
           <Stat label="משיכה אחרונה" value={<span className="text-base">{fmtDate(st.lastRunAt)}</span>} />
           <Stat label="נקלטו במשיכה האחרונה" value={st.lastAdded.toLocaleString('he-IL')} tone={st.lastAdded ? 'green' : undefined} />
           <Stat label="נקלטו בסך הכול" value={st.totalAdded.toLocaleString('he-IL')} />
+          <Stat label="נשלפו מהטופס במשיכה האחרונה" value={(st.lastRead ?? 0).toLocaleString('he-IL')} />
           <Stat label="רשומה אחרונה שנקראה" value={<span className="text-base">{st.lastId || '—'}</span>} />
         </dl>
         {msg && <div className="mt-4"><Notice msg={msg} /></div>}
