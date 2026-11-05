@@ -22,6 +22,8 @@ export type NedarimCreds = { mosadId: string; apiPassword: string }
 // הכתיבה ממזגת (patch) כדי לא לדרוס שדות שלא נמסרו — למשל שמירת קוד ה-API לא מוחקת את מזהה קבוצת ההגבלה.
 type NedarimStoredSettings = {
   mosadId?: string; apiPassword?: string; maternityLimitedId?: string
+  // קבוצת הגבלת חנויות למוקדים (ריק = בלי הגבלת חנויות)
+  centerLimitedId?: string
   // ── חלוקות חגים ──
   // ⚠️ הרשאה נפרדת בכוונה: החגים והיולדות הם שני תקציבים ושתי קבוצות הגבלת
   // חנויות, ולעיתים שני מוסדות בנדרים. שימוש בהרשאה אחת לשניהם היה מקשר טעינת
@@ -68,6 +70,17 @@ export async function getMaternityLimitedId(): Promise<string> {
   if (s.maternityLimitedId && String(s.maternityLimitedId).trim()) return String(s.maternityLimitedId).trim()
   const env = process.env.NEDARIM_MATERNITY_LIMITED_ID
   return (env && env.trim()) || MATERNITY_LIMITED_ID_DEFAULT
+}
+
+// קבוצת "הגבלת חנויות" לטעינה חודשית למוקדים. ריק = אין LimitedId בטעינה, כלומר בלי הגבלת חנויות.
+export async function getCenterLimitedId(): Promise<string | undefined> {
+  const s = await readNedarimSettings()
+  const v = s.centerLimitedId ? String(s.centerLimitedId).trim() : ''
+  return v || undefined
+}
+
+export async function saveCenterLimitedId(limitedId: string): Promise<boolean> {
+  return writeNedarimSettings({ centerLimitedId: String(limitedId).trim() })
 }
 
 export async function saveMaternityLimitedId(limitedId: string): Promise<boolean> {

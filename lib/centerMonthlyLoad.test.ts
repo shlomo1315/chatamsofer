@@ -21,12 +21,25 @@ describe('centerMonthlyLoad', () => {
   })
 })
 
+describe('loadExpiry: תוקף חודשיים', () => {
+  it('חודשיים קדימה לפי שעון ישראל', async () => {
+    const { loadExpiry, toNedarimDate } = await import('./centerMonthlyLoad')
+    expect(loadExpiry(new Date('2026-11-05T10:00:00Z'))).toBe('2027-01-05')
+    expect(toNedarimDate('2027-01-05')).toBe('05/01/2027')
+  })
+  it('קיצור ליום האחרון בחודש היעד, וחציית שנה', async () => {
+    const { loadExpiry } = await import('./centerMonthlyLoad')
+    expect(loadExpiry(new Date('2026-12-31T10:00:00Z'))).toBe('2027-02-28')
+    expect(loadExpiry(new Date('2026-10-31T22:30:00Z'))).toBe('2027-01-01')
+  })
+})
+
 describe('runMonthlyLoad: חריגה אחרי הפנייה לנדרים', () => {
   it('לא משחרר את החודש (עמום, אולי נטען) ולכן אין טעינה כפולה', async () => {
     const { vi } = await import('vitest')
     vi.resetModules()
     vi.doMock('./nedarim', () => ({
-      getNedarimCreds: async () => ({}), getMaternityLimitedId: async () => null,
+      getNedarimCreds: async () => ({}), getCenterLimitedId: async () => undefined,
       findClientByTsad3: async () => null, saveClientCard: async () => null, setMagneticCard: async () => ({ ok: true }),
       addTlush: async () => { throw new Error('timeout') },
     }))

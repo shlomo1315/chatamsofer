@@ -8,7 +8,7 @@ import type { NedarimPullView, NedarimRow } from '@/lib/gilyonotNedarimPull'
 import { btnGhost, btnPrimary, Card, CardHeader, input, Notice, Stat, StepNum } from './ui'
 
 // לשונית "נדרים פלוס": הגדרות המשיכה מטופס הגיליונות, בחירת העמודות לפי רשומות לדוגמה,
-// ומשיכה ידנית. המשיכה האוטומטית רצה כל יום ב-02:00 שעון ישראל (instrumentation.ts).
+// ומשיכה ידנית. המשיכה האוטומטית רצה כל לילה ב-02:00 שעון ישראל (instrumentation.ts).
 
 const FIELDS = [...Array.from({ length: 100 }, (_, i) => `Field${i + 1}`), ...Array.from({ length: 10 }, (_, i) => `Field${i + 1}Max`)]
 const fmtDate = (s: string | null) => (s ? new Date(s).toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' }) : 'עוד לא')

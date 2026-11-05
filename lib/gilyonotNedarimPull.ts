@@ -18,9 +18,6 @@ import { normalizeEmail, cleanSubscriberName, subscribeGilyonot } from './gilyon
 export const NEDARIM_FORMS_URL = 'https://matara.pro/nedarimplus/Forms/Manage.aspx'
 const CONFIG_KEY = 'gilyonot_nedarim_config'
 const STATE_KEY = 'gilyonot_nedarim_state'
-// טופס ההרשמה לגיליונות בנדרים פלוס; ברירת מחדל כשלא הוגדר טופס במסך
-export const DEFAULT_TOFES_ID = '3345'
-export const DAILY_PULL_HOUR = 2 // שעון ישראל
 const PAGE_SIZE = 500
 const MAX_PAGES_PER_RUN = 40
 // כל העמודות: המייל יכול לשבת בכל Field, וזיהוי לפי 15 הראשונות פספס אותו
@@ -142,19 +139,11 @@ export async function writeJson(db: SupabaseClient, key: string, value: unknown)
   return !error
 }
 
+// טופס ההרשמה לגיליונות בנדרים פלוס; ברירת מחדל כשלא הוגדר טופס במסך
+export const DEFAULT_TOFES_ID = '3345'
 export const getPullConfig = async (db: SupabaseClient) => {
   const c = await readJson(db, CONFIG_KEY, EMPTY_CONFIG)
   return { ...c, tofesId: c.tofesId || DEFAULT_TOFES_ID }
-}
-
-/** האם הגיע זמן המשיכה היומית: מ-02:00 בשעון ישראל, פעם אחת ביום. מחזיר את תאריך היום (ישראל) או null. */
-export function dailyPullDue(now: Date, lastDate: string, hour = DAILY_PULL_HOUR): string | null {
-  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false,
-  }).formatToParts(now).map(x => [x.type, x.value]))
-  const date = `${p.year}-${p.month}-${p.day}`
-  // בחצות הפורמט עלול להחזיר "24"
-  return Number(p.hour) % 24 >= hour && date !== lastDate ? date : null
 }
 export const getPullState = (db: SupabaseClient) => readJson(db, STATE_KEY, EMPTY_STATE)
 
