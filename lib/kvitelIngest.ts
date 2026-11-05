@@ -127,3 +127,35 @@ export async function ingestKvitel(db: SupabaseClient, s: KvitelSubmission): Pro
 
   return { ok: true, requestId: req.id as string, status }
 }
+
+/**
+ * עיבוד מחדש של בקשה קיימת שנקלטה בלי שמות: מעדכן את פרטי הפונה והמקור ומוסיף את השורות,
+ * בלי ליצור בקשה חדשה. הסטטוס מחושב מחדש רק אם הבקשה עדיין "לבדיקה" או "ממתין".
+ */
+export async function reprocessKvitelRequest(db: SupabaseClient, requestId: string, s: KvitelSubmission): Promise<{ ok: true; status: KvitelStatus; lines: number } | { ok: false; error: string }> {
+  const { data: cur } = await db.from('kvitel_requests').select('id, status').eq('id', requestId).maybeSingle()
+  if (!cur) return { ok: false, error: 'הבקשה לא נמצאה' }
+  const requesterId = await findOrCreateRequester(db, s)
+  const flags = await flagLines(db, s)
+  const flagged = flags.filter(Boolean).length
+  let status = cur.status as KvitelStatus
+  if (status === 'review' || status === 'pending') status = flagged || !s.lines.length ? 'review' : 'pending'
+  const patch: Record<string, unknown> = { status, raw_text: s.rawText ?? null }
+  if (requesterId) patch.requester_id = requesterId
+  if (s.contactName) patch.contact_name = s.contactName
+  if (s.phone) patch.contact_phone = s.phone
+  if (s.email) patch.contact_email = s.email.toLowerCase()
+  if (flagged) patch.note = `סוכן האחידות סימן ${flagged} שורות לבדיקה`
+  if (s.lines.length) {
+    const { error: linesErr } = await db.from('kvitel_request_lines').insert(s.lines.map((l, i) => ({
+      request_id: requestId, position: i,
+      name: l.name, relation: l.relation, parent_name: l.parentName,
+      request_type: l.requestType, request_note: l.requestNote ?? null,
+      flagged: !!flags[i], flag_reason: flags[i] ?? null,
+    })))
+    if (linesErr) { console.error('[kvitel] reprocess lines failed:', linesErr); return { ok: false, error: 'שמירת השמות נכשלה' } }
+  }
+  const { error } = await db.from('kvitel_requests').update(patch).eq('id', requestId)
+  if (error) { console.error('[kvitel] reprocess update failed:', error); return { ok: false, error: 'עדכון הבקשה נכשל' } }
+  return { ok: true, status, lines: s.lines.length }
+}

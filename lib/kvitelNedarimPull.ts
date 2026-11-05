@@ -1,8 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getServiceClient } from './apiAuth'
-import { MAX_LINES } from './kvitel'
+import { KVITEL_REQUEST_TYPES, MAX_LINES } from './kvitel'
 import { parseKvitelEmailText } from './kvitelEmail'
-import { ingestKvitel } from './kvitelIngest'
+import { ingestKvitel, reprocessKvitelRequest } from './kvitelIngest'
 import { parseNedarimKvitel, type ParsedNedarimKvitel } from './kvitelNedarim'
 import { SAMPLE_FIELDS, fetchRows, getPullConfig, isFieldName, readJson, writeJson, type NedarimRow } from './gilyonotNedarimPull'
 
@@ -74,24 +74,89 @@ const isMapped = (c: KvitelNedarimConfig) => !!(c.textField || c.lines.length)
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const PHONE_RE = /^\+?[\d\s-]{9,15}$/
 const NAME_LINE_RE = /(?:^|\s)(?:בן|בת)\s+\S/
+const RELATION_RE = /^(?:בן|בת|ב"ר|זכר|נקבה)$/
+const NAME_RE = /^[\p{L}'"׳״\s.-]{2,40}$/u
+const REQUEST_RE = /^(?:[לש]|ל?ה)?(?:רפוא|רפו|פרנס|זיווג|זווג|שידוך|זרע|הצלח|בריאות|ישוע)|^ברכה\s+ו|^אחר$/
+const requestLike = (v: string) => REQUEST_RE.test(v) || KVITEL_REQUEST_TYPES.some(t => t.label === v || t.key === v)
+
+type Tok = { kind: 'name' | 'relation' | 'request'; v: string }
 
 /**
- * בלי בחירת עמודות: כל עמודה שנראית כמו מייל או טלפון נלקחת ככזו,
- * וכל עמודה עם "בן" או "בת" נכנסת לטקסט החופשי. כך "משיכה עכשיו" עובדת מיד.
+ * בלי בחירת עמודות: עוברים על כל העמודות לפי הסדר, ומסווגים כל ערך לפי תוכנו:
+ * מייל, טלפון, בן/בת, בקשה (תווית או מילת מפתח) ושם. הערכים הללו מצטברים לשורות:
+ * שם ← (בן/בת) ← שם האם ← בקשה. אם יש עוד שם בראש (המגיש), הוא נלקח ככזה.
+ * שורה מלאה ("משה בן שרה") וטקסט ארוך נכנסים לטקסט החופשי, והרשומה המלאה נשמרת ב-rawText.
  */
 export function autoKvitelBody(row: NedarimRow): Record<string, string> {
   const body: Record<string, string> = { ClientName: '', Phone: '', Mail: '', Comments: '' }
   const free: string[] = []
-  for (const [k, raw] of Object.entries(row)) {
-    if (!/^Field\d/.test(k)) continue
-    const v = str(raw)
+  const toks: Tok[] = []
+  const keys = Object.keys(row).filter(k => /^Field\d/.test(k)).sort((a, b) => parseInt(a.slice(5)) - parseInt(b.slice(5)))
+  for (const k of keys) {
+    const v = str(row[k])
     if (!v) continue
-    if (!body.Mail && EMAIL_RE.test(v)) body.Mail = v
-    else if (!body.Phone && PHONE_RE.test(v)) body.Phone = v
-    else if (NAME_LINE_RE.test(v)) free.push(v)
+    if (EMAIL_RE.test(v)) { if (!body.Mail) body.Mail = v }
+    else if (PHONE_RE.test(v)) { if (!body.Phone) body.Phone = v }
+    else if (RELATION_RE.test(v)) toks.push({ kind: 'relation', v })
+    else if (requestLike(v)) toks.push({ kind: 'request', v })
+    else if (NAME_LINE_RE.test(v) || v.length > 40) free.push(v)
+    else if (NAME_RE.test(v)) toks.push({ kind: 'name', v })
   }
+
+  // המגיש: שם נוסף לפני שורת השמות הראשונה
+  const firstRel = toks.findIndex(t => t.kind === 'relation')
+  const head = toks.slice(0, firstRel === -1 ? toks.length : firstRel)
+  const namesBefore = head.filter(t => t.kind === 'name').length
+  const afterRel = firstRel === -1 ? undefined : toks[firstRel + 1]
+  const hasContact = firstRel === -1 ? namesBefore % 2 === 1 && namesBefore >= 3 : namesBefore >= 3 || (namesBefore === 2 && afterRel?.kind === 'name')
+  if (hasContact) { const i = toks.findIndex(t => t.kind === 'name'); body.ClientName = toks[i].v; toks.splice(i, 1) }
+
+  type Cur = { name?: string; mother?: string; relation?: string; request?: string }
+  const lines: Cur[] = []
+  let cur: Cur = {}
+  const flush = () => { if (cur.name) lines.push(cur); cur = {} }
+  for (const t of toks) {
+    if (t.kind === 'name') {
+      if (cur.request || (cur.name && cur.mother)) flush()
+      if (!cur.name) cur.name = t.v; else cur.mother = t.v
+    } else if (t.kind === 'relation') {
+      if (cur.relation) flush()
+      cur.relation = t.v
+    } else {
+      if (cur.request) flush()
+      cur.request = t.v
+    }
+  }
+  flush()
+  lines.slice(0, MAX_LINES).forEach((l, i) => {
+    const n = i + 1
+    Object.assign(body, { [`name${n}`]: l.name ?? '', [`mother${n}`]: l.mother ?? '', [`relation${n}`]: l.relation ?? '', [`request${n}`]: l.request ?? '' })
+  })
   body.Comments = free.join('\n')
   return body
+}
+
+/** מה שנשמר כמקור: כל העמודות של הרשומה כמו שנדרים החזירו, כדי שאפשר יהיה לראות ולעבד מחדש. */
+export function rawRowText(row: NedarimRow): string {
+  return Object.entries(row)
+    .filter(([k, v]) => str(v) && !/token|password|secret|card|cvv/i.test(k))
+    .map(([k, v]) => `${k}: ${str(v)}`).join('\n').slice(0, 6000)
+}
+
+/** מפענח גוף שנבנה מהרשומה; טקסט חופשי שלא נקלט כשורות מובנות מפוענח ומתווסף. */
+function parseBody(body: Record<string, string>, row: NedarimRow): ParsedNedarimKvitel {
+  const structured = Object.keys(body).some(k => /^name\d+$/.test(k) && body[k])
+  const p = parseNedarimKvitel(body)
+  // parseNedarimKvitel מפענח טקסט חופשי רק כשאין שורות מובנות. כאן יש גם וגם, אז מוסיפים אותו.
+  if (structured && p.freeText) {
+    const extra = parseKvitelEmailText('', p.freeText)
+    extra.lines.forEach((line, i) => {
+      if (p.lines.length < MAX_LINES) { p.lines.push(line); p.flags.push(extra.flags[i]) }
+    })
+  }
+  p.sourceRef = row.ID ? `nedarim-form:${row.ID}` : null
+  p.rawText = rawRowText(row)
+  return p
 }
 
 /** כל העמודות שצריך לבקש מנדרים, בלי כפילויות. */
@@ -108,9 +173,7 @@ export function configFields(c: KvitelNedarimConfig): string[] {
  */
 export function mapKvitelRow(row: NedarimRow, c: KvitelNedarimConfig): ParsedNedarimKvitel {
   if (!isMapped(c)) {
-    const p = parseNedarimKvitel(autoKvitelBody(row))
-    p.sourceRef = row.ID ? `nedarim-form:${row.ID}` : null
-    return p
+    return parseBody(autoKvitelBody(row), row)
   }
   const get = (f: string) => (f ? str(row[f]) : '')
   const body: Record<string, string> = { ClientName: get(c.contactField), Phone: get(c.phoneField), Mail: get(c.emailField) }
@@ -124,16 +187,7 @@ export function mapKvitelRow(row: NedarimRow, c: KvitelNedarimConfig): ParsedNed
     Object.assign(body, { [`name${n}`]: name, [`mother${n}`]: get(l.mother), [`relation${n}`]: get(l.relation), [`request${n}`]: get(l.request) })
   }
   body.Comments = free.filter(Boolean).join('\n')
-  const p = parseNedarimKvitel(body)
-  // parseNedarimKvitel מפענח טקסט חופשי רק כשאין שורות מובנות. כאן יש גם וגם, אז מוסיפים אותו.
-  if (n && p.freeText) {
-    const extra = parseKvitelEmailText('', p.freeText)
-    extra.lines.forEach((line, i) => {
-      if (p.lines.length < MAX_LINES) { p.lines.push(line); p.flags.push(extra.flags[i]) }
-    })
-  }
-  p.sourceRef = row.ID ? `nedarim-form:${row.ID}` : null
-  return p
+  return parseBody(body, row)
 }
 
 // ── קריאה ושמירה ──
@@ -237,5 +291,46 @@ async function doPull(dbArg?: SupabaseClient): Promise<KvitelPullResult> {
     lastId: out.lastId, lastRunAt: new Date().toISOString(), lastAdded: out.added,
     totalAdded: state.totalAdded + out.added, lastError: out.error ?? null,
   } satisfies KvitelNedarimState)
+  return out
+}
+
+// ── עיבוד מחדש ──
+const MAX_REPROCESS = 100
+
+export interface KvitelReprocessResult { ok: boolean; checked: number; fixed: number; stillEmpty: number; missing: number; error?: string }
+
+/**
+ * בקשות מנדרים שנקלטו בלי שמות: מושך שוב את הרשומה לפי ה-ID שלה, מפענח במנגנון העדכני
+ * ומשלים את הבקשה הקיימת. אין קליטה כפולה. עד 100 בקשות בהרצה.
+ */
+export async function reprocessKvitelFromNedarim(dbArg?: SupabaseClient): Promise<KvitelReprocessResult> {
+  const out: KvitelReprocessResult = { ok: true, checked: 0, fixed: 0, stillEmpty: 0, missing: 0 }
+  const db = dbArg ?? getServiceClient()
+  if (!db) return { ...out, ok: false, error: 'השרת אינו מוגדר' }
+  const c = await getReadyConfig(db)
+  if (!c) return { ...out, ok: false, error: 'צריך קודם להגדיר מוסד, מפתח וטופס' }
+  const { data, error } = await db.from('kvitel_requests')
+    .select('id, source_ref, kvitel_request_lines(id)').eq('channel', 'nedarim').like('source_ref', 'nedarim-form:%')
+    .order('submitted_at', { ascending: false }).limit(1000)
+  if (error) return { ...out, ok: false, error: 'קריאת הבקשות נכשלה' }
+  const empties = ((data ?? []) as unknown as { id: string; source_ref: string; kvitel_request_lines: unknown[] }[])
+    .filter(r => !r.kvitel_request_lines?.length).slice(0, MAX_REPROCESS)
+  const fields = configFields(c)
+  for (const r of empties) {
+    const id = Number(r.source_ref.slice('nedarim-form:'.length))
+    if (!Number.isFinite(id) || id < 1) continue
+    out.checked++
+    const res = await fetchRows(c, fields, { lastId: id - 1, max: 1 })
+    if (!res.ok) { out.ok = false; out.error = res.error; break }
+    const row = res.rows.find(x => Number(x.ID) === id)
+    if (!row) { out.missing++; continue }
+    const p = mapKvitelRow(row, c)
+    const s = await reprocessKvitelRequest(db, r.id, {
+      channel: 'nedarim', phone: p.phone, email: p.email, contactName: p.contactName,
+      lines: p.lines, lineFlags: p.flags, rawText: p.rawText, sourceRef: p.sourceRef,
+    })
+    if (!s.ok) { out.ok = false; out.error = s.error; break }
+    if (s.lines) out.fixed++; else out.stillEmpty++
+  }
   return out
 }

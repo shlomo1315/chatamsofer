@@ -3,8 +3,8 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { FileDown, Check, RotateCcw, X, Filter, Link2 } from 'lucide-react'
-import { KVITEL_CHANNELS, KVITEL_REQUEST_OPTIONS, KVITEL_STATUSES, type KvitelStatus } from '@/lib/kvitel'
-import { kvitelRequestLines, type KvitelFilters, type KvitelRequestRow } from '@/lib/kvitelQuery'
+import { KVITEL_CHANNELS, KVITEL_REQUEST_OPTIONS, KVITEL_STATUSES, requestTypeLabel, type KvitelStatus } from '@/lib/kvitel'
+import { kvitelRequestLines, type KvitelFilters, type KvitelLineRow, type KvitelRequestRow } from '@/lib/kvitelQuery'
 import { ListTable } from '@/components/admin/system/ListTable'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import { useTablePagination } from '@/lib/useTablePagination'
@@ -19,18 +19,24 @@ const STATUS_STYLE: Record<KvitelStatus, string> = {
   cancelled: 'bg-line text-ink-soft',
 }
 
-type ColKey = 'status' | 'channel' | 'date' | 'contact' | 'names'
+type ColKey = 'status' | 'channel' | 'date' | 'contact' | 'phone' | 'email' | 'names' | 'request' | 'count'
+const personOf = (l: KvitelLineRow) => `${l.name} ${l.relation === 'bat' ? 'בת' : 'בן'} ${l.parent_name}`.trim()
+const requestsOf = (r: KvitelRequestRow) => [...new Set(r.kvitel_request_lines.map(l => (l.request_type === 'other' ? l.request_note || 'אחר' : requestTypeLabel(l.request_type))))].join(', ')
 const COLUMNS: ColDef<ColKey, KvitelRequestRow>[] = [
   { key: 'status', label: 'סטטוס', def: true, kind: 'enum', filterable: true, value: r => KVITEL_STATUSES[r.status] },
-  { key: 'channel', label: 'ערוץ', def: true, kind: 'enum', filterable: true, value: r => KVITEL_CHANNELS[r.channel] },
+  { key: 'contact', label: 'מגיש', def: true, value: r => r.contact_name || null },
+  { key: 'phone', label: 'טלפון', def: true, value: r => r.contact_phone },
+  { key: 'names', label: 'שמות (שם, בן/בת, שם האם)', def: true, value: r => r.kvitel_request_lines.map(personOf).join(' · ') || null },
+  { key: 'request', label: 'בקשה', def: true, value: r => requestsOf(r) || null },
   { key: 'date', label: 'הוגשה', def: true, value: r => r.submitted_at },
-  { key: 'contact', label: 'מגיש', def: true, value: r => r.contact_name || r.contact_phone || null },
-  { key: 'names', label: 'שמות', def: true, kind: 'number', value: r => r.kvitel_request_lines.length },
+  { key: 'channel', label: 'ערוץ', def: true, kind: 'enum', filterable: true, value: r => KVITEL_CHANNELS[r.channel] },
+  { key: 'email', label: 'מייל', def: false, value: r => r.contact_email },
+  { key: 'count', label: 'מס׳ שמות', def: false, kind: 'number', value: r => r.kvitel_request_lines.length },
 ]
 
 const field = 'w-full rounded-lg border border-line-strong bg-white px-3 py-2 text-sm text-ink'
 const label = 'flex min-w-0 flex-col gap-1 text-xs font-medium text-ink-soft'
-const dateFmt = new Intl.DateTimeFormat('he-IL', { timeZone: 'Asia/Jerusalem', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })
+const dateFmt = new Intl.DateTimeFormat('he-IL', { timeZone: 'Asia/Jerusalem', day: 'numeric', month: 'numeric', year: '2-digit', hour: '2-digit', minute: '2-digit' })
 
 function filtersToQuery(f: KvitelFilters, extra: Record<string, string> = {}): string {
   const p = new URLSearchParams()
@@ -42,6 +48,20 @@ function filtersToQuery(f: KvitelFilters, extra: Record<string, string> = {}): s
   if (f.q) p.set('q', f.q)
   for (const [k, v] of Object.entries(extra)) p.set(k, v)
   return p.toString()
+}
+
+// עד שלושה שמות בתא, והשאר בספירה. הכרטסת מציגה הכול.
+function NamesCell({ r }: { r: KvitelRequestRow }) {
+  const ls = r.kvitel_request_lines
+  if (!ls.length) return <span className="rounded bg-gold-soft px-1.5 py-0.5 text-xs text-navy">לא זוהו שמות</span>
+  return (
+    <div className="min-w-48 space-y-0.5 text-ink">
+      {ls.slice(0, 3).map(l => (
+        <div key={l.id} className="break-words">{personOf(l)}{l.flagged && <span className="ms-1.5 rounded bg-gold-soft px-1 text-xs text-navy">לבדיקה</span>}</div>
+      ))}
+      {ls.length > 3 && <div className="text-xs text-ink-faint">ועוד {ls.length - 3}</div>}
+    </div>
+  )
 }
 
 export default function KvitelClient({ rows, filters, canEdit }: { rows: KvitelRequestRow[]; filters: KvitelFilters; canEdit: boolean }) {
@@ -212,8 +232,12 @@ export default function KvitelClient({ rows, filters, canEdit }: { rows: KvitelR
             case 'status': return <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLE[r.status]}`}>{KVITEL_STATUSES[r.status]}</span>
             case 'channel': return <span className="text-ink-soft">{KVITEL_CHANNELS[r.channel]}</span>
             case 'date': return <span className="tabular-nums text-ink-soft">{dateFmt.format(new Date(r.submitted_at))}</span>
-            case 'contact': return <span className="font-medium text-ink">{r.contact_name || r.contact_phone || '—'}</span>
-            case 'names': return <span className="tabular-nums text-ink-soft">{r.kvitel_request_lines.length}{r.kvitel_request_lines.some(l => l.flagged) ? ' · לבדיקה' : ''}</span>
+            case 'contact': return <span className="font-medium text-ink">{r.contact_name || '—'}</span>
+            case 'phone': return <span dir="ltr" className="tabular-nums text-ink-soft">{r.contact_phone || '—'}</span>
+            case 'email': return <span dir="ltr" className="break-all text-ink-soft">{r.contact_email || '—'}</span>
+            case 'names': return <NamesCell r={r} />
+            case 'request': return <span className="text-ink-soft">{requestsOf(r) || '—'}</span>
+            case 'count': return <span className="tabular-nums text-ink-soft">{r.kvitel_request_lines.length}</span>
           }
         }}
         actions={canEdit ? r => (

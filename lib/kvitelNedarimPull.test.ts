@@ -3,10 +3,11 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 const fetchRows = vi.fn()
 const ingestKvitel = vi.fn()
+const reprocessKvitelRequest = vi.fn()
 vi.mock('./gilyonotNedarimPull', async orig => ({ ...(await orig<typeof import('./gilyonotNedarimPull')>()), fetchRows: (...a: unknown[]) => fetchRows(...a) }))
-vi.mock('./kvitelIngest', () => ({ ingestKvitel: (...a: unknown[]) => ingestKvitel(...a) }))
+vi.mock('./kvitelIngest', () => ({ ingestKvitel: (...a: unknown[]) => ingestKvitel(...a), reprocessKvitelRequest: (...a: unknown[]) => reprocessKvitelRequest(...a) }))
 
-import { autoKvitelBody, configFields, getKvitelPullView, mapKvitelRow, pullKvitelFromNedarim, saveKvitelPullConfig, validateKvitelConfig, type KvitelNedarimConfig } from './kvitelNedarimPull'
+import { autoKvitelBody, rawRowText, reprocessKvitelFromNedarim, configFields, getKvitelPullView, mapKvitelRow, pullKvitelFromNedarim, saveKvitelPullConfig, validateKvitelConfig, type KvitelNedarimConfig } from './kvitelNedarimPull'
 
 // מסד מדומה: רק app_settings
 function fakeDb(init: Record<string, unknown> = {}) {
@@ -149,6 +150,35 @@ describe('kvitelNedarimPull: המשיכה', () => {
 describe('kvitelNedarimPull: זיהוי אוטומטי', () => {
   it('מזהה מייל, טלפון וטקסט עם בן/בת, ומתעלם משאר העמודות', () => {
     expect(autoKvitelBody({ ID: '1', Field1: 'שלום', Field2: '0501234567', Field3: 'x@y.com', Field4: 'שרה בת רחל', Field7: 'משה בן לאה' }))
-      .toEqual({ ClientName: '', Phone: '0501234567', Mail: 'x@y.com', Comments: 'שרה בת רחל\nמשה בן לאה' })
+      .toMatchObject({ Phone: '0501234567', Mail: 'x@y.com', Comments: 'שרה בת רחל\nמשה בן לאה' })
+  })
+
+  it('עמודות נפרדות של שם, בן/בת, שם האם ובקשה, והמגיש מזוהה', () => {
+    const b = autoKvitelBody({ ID: '9', Field1: 'דוד לוי', Field2: '052-1112233', Field3: 'd@l.co', Field4: 'יוסף', Field5: 'בן', Field6: 'רחל', Field7: 'רפואה שלמה' })
+    expect(b).toMatchObject({ Phone: '052-1112233', Mail: 'd@l.co', name1: expect.any(String) })
+    const p = mapKvitelRow({ ID: '9', Field1: 'יוסף', Field2: 'בן', Field3: 'רחל', Field4: 'רפואה שלמה', Field5: '0521112233' }, { ...base, textField: '', contactField: '', phoneField: '', emailField: '', lines: [] })
+    expect(p.lines[0]).toMatchObject({ name: 'יוסף', relation: 'ben', parentName: 'רחל' })
+    expect(p.phone).toBe('0521112233')
+  })
+
+  it('שומר את כל השורה הגולמית ללא סודות', () => {
+    const t = rawRowText({ ID: '3', Field1: 'א', Field2: '', Token: 'secret', Field3: 'ב' })
+    expect(t).toContain('Field1: א')
+    expect(t).toContain('Field3: ב')
+    expect(t).not.toContain('secret')
+  })
+})
+
+describe('kvitelNedarimPull: עיבוד מחדש', () => {
+  function reDb(rows: { id: string; source_ref: string }[]) {
+    const q = { select: () => q, eq: () => q, like: () => q, order: () => q, limit: async () => ({ data: rows, error: null }) } as Record<string, unknown>
+    return Object.assign(fakeDb({ kvitel_nedarim_config: base }), { from: (t: string) => (t === 'kvitel_requests' ? q : fakeDb({ kvitel_nedarim_config: base }).from()) }) as unknown as SupabaseClient
+  }
+  beforeEach(() => { fetchRows.mockReset(); reprocessKvitelRequest.mockReset() })
+
+  it('בלי הגדרת חיבור מחזיר שגיאה ולא נוגע בבקשות', async () => {
+    const r = await reprocessKvitelFromNedarim(fakeDb())
+    expect(r.ok).toBe(false)
+    expect(reprocessKvitelRequest).not.toHaveBeenCalled()
   })
 })
