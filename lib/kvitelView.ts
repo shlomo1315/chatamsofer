@@ -50,3 +50,8 @@ export function parseRawFields(raw: string | null | undefined): { key: string; v
   }
   return out
 }
+
+// הבקשות להדפסת "קוויטלאך חדשים": רק ממתינות לשליחה ועם שמות. אלה גם המזהים שיסומנו "נשלח לציון".
+export function pendingForPrint(rows: KvitelRequestRow[]): KvitelRequestRow[] {
+  return rows.filter(r => r.status === 'pending' && r.kvitel_request_lines.length > 0)
+}
