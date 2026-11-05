@@ -3,7 +3,7 @@
 // ⚠️ חוק ברזל: תמיד מחזירים JSON תקין. JSON לא תקין מחזיר את המתקשר לתפריט
 // הקודם, ולכן כל שגיאה הופכת להודעה וניתוק.
 import { goodbye, hangup } from './modules'
-import { isSystemId, verifyRequest } from './systems'
+import { checkRequest, isSystemId, type RejectReason } from './systems'
 import { validateResult } from './schema'
 import type { TelephonySystemId, TlHandler, TlParams, TlResult } from './types'
 
@@ -17,6 +17,16 @@ export function register(system: TelephonySystemId, ext: string, handler: TlHand
 
 export type DispatchResult = { status: number; body: TlResult }
 
+const REJECT_LABELS: Record<RejectReason, string> = {
+  'no-secret': 'לא הוגדר סוד למערכת',
+  'shared-secret': 'סוד משותף לכמה מערכות',
+  'bad-secret': 'סוד שגוי בכתובת',
+  'number-mismatch': 'המספר שהמרכזיה שלחה לא תואם למספר המערכת',
+}
+
+/** שלוש ספרות אחרונות בלבד — לזיהוי בלוג בלי לחשוף מספר מלא. */
+const tail = (v?: string) => (v ?? '').replace(/\D/g, '').slice(-3) || '?'
+
 const NOT_FOUND: DispatchResult = { status: 404, body: hangup() }
 
 export async function dispatch(
@@ -24,8 +34,10 @@ export async function dispatch(
 ): Promise<DispatchResult> {
   if (!isSystemId(systemParam)) return NOT_FOUND
   const system = systemParam
-  if (!verifyRequest(system, secret, params.PBXdid)) {
-    console.warn(`[telephony:${system}] בקשה נדחתה (סוד שגוי או חסר)`)
+  const reject = checkRequest(system, secret, params.PBXdid)
+  if (reject) {
+    const num = reject === 'number-mismatch' ? ` (PBXdid מסתיים ב-${tail(params.PBXdid)})` : ''
+    console.warn(`[telephony:${system}] בקשה נדחתה: ${REJECT_LABELS[reject]}${num}`)
     return NOT_FOUND
   }
   // אחרי ניתוק מגיעה פנייה נוספת עם PBXcallStatus=HANGUP — אין למי לענות, ואסור
