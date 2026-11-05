@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { FileDown, Check, RotateCcw, X, Filter, Link2, AlertTriangle, ChevronLeft, RefreshCw } from 'lucide-react'
+import { FileDown, Printer, Check, RotateCcw, X, Filter, Link2, AlertTriangle, ChevronLeft, RefreshCw } from 'lucide-react'
 import { KVITEL_CHANNELS, KVITEL_REQUEST_OPTIONS, KVITEL_STATUSES, requestTypeLabel, type KvitelStatus } from '@/lib/kvitel'
 import { kvitelRequestLines, type KvitelFilters, type KvitelLineRow, type KvitelRequestRow } from '@/lib/kvitelQuery'
 import { ListTable } from '@/components/admin/system/ListTable'
@@ -11,6 +11,7 @@ import { useTablePagination } from '@/lib/useTablePagination'
 import { countByStatus, hebrewDay, lineMissing, reviewReason } from '@/lib/kvitelView'
 import KvitelCardModal from './KvitelCardModal'
 import ExportDialog from './ExportDialog'
+import PrintNewDialog from './PrintNewDialog'
 import KvitelPreview from './KvitelPreview'
 
 // כל סטטוס: צבע רקע וטקסט של הגלולה + צבע הנקודה
@@ -128,6 +129,7 @@ export default function KvitelClient({ allRows, filters, canEdit, isAdmin }: { a
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [exportOpen, setExportOpen] = useState(false)
+  const [printOpen, setPrintOpen] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
   const [previewRow, setPreviewRow] = useState<KvitelRequestRow | null>(null)
   const [openIdx, setOpenIdx] = useState<number | null>(null)
@@ -284,6 +286,11 @@ export default function KvitelClient({ allRows, filters, canEdit, isAdmin }: { a
           <FileDown className="h-4 w-4" aria-hidden />
           {selected.size ? `ייצוא ${selected.size} שנבחרו` : 'ייצוא'}
         </button>
+        <button type="button" onClick={() => { setMessage(''); setPrintOpen(true) }} disabled={!counts.pending}
+          className="flex items-center gap-2 rounded-lg border border-navy bg-white px-5 py-2.5 text-sm font-semibold text-navy shadow-sm disabled:opacity-40">
+          <Printer className="h-4 w-4" aria-hidden />
+          הדפסת קוויטלאך חדשים
+        </button>
       </div>
 
       {canEdit && rows.length > 0 && (
@@ -311,6 +318,8 @@ export default function KvitelClient({ allRows, filters, canEdit, isAdmin }: { a
 
       <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} rows={exportRows} exportHref={exportHref} canEdit={canEdit}
         onDone={m => { setExportOpen(false); setMessage(m); setSelected(new Set()); router.refresh() }} />
+      <PrintNewDialog open={printOpen} onClose={() => setPrintOpen(false)} rows={allRows} canEdit={canEdit}
+        onDone={m => { setPrintOpen(false); setMessage(m); router.refresh() }} />
       <KvitelPreview open={!!previewRow} onClose={() => setPreviewRow(null)} lines={previewRow ? kvitelRequestLines(previewRow) : []}
         title={previewRow?.contact_name ? `הבקשה של ${previewRow.contact_name} בקובץ` : 'הבקשה בקובץ'}
         downloadHref={previewRow && (previewRow.status === 'pending' || previewRow.status === 'done')
