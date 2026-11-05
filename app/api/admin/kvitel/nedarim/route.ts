@@ -45,7 +45,7 @@ export async function POST(request: Request) {
   if (body.mode === 'pull') {
     const res = await pullKvitelFromNedarim(db)
     if (res.skipped === 'running') return NextResponse.json({ error: 'משיכה כבר רצה עכשיו. נסו שוב בעוד דקה.' }, { status: 409 })
-    if (res.skipped === 'not_configured') return NextResponse.json({ error: 'צריך קודם להגדיר מוסד, מפתח, טופס ולפחות עמודת שמות אחת' }, { status: 400 })
+    if (res.skipped === 'not_configured') return NextResponse.json({ error: 'צריך קודם להגדיר מוסד, מפתח וטופס' }, { status: 400 })
     await logActivity(db, { userId: staff.userId, action: 'kvitel_nedarim_pull', entityType: 'kvitel_request', details: { added: res.added, lastId: res.lastId, error: res.error ?? null } })
     // ⚠️ לא 502: הפרוקסי מחליף גוף של 5xx, וההודעה בעברית לא מגיעה למסך
     return NextResponse.json({ ...res, view: await getKvitelPullView(db) }, { status: res.ok ? 200 : 422 })
