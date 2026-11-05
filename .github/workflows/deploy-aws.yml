@@ -24,6 +24,18 @@ env:
   ECS_TASK_FAMILY: ${{ vars.ECS_TASK_FAMILY }}
 
 jobs:
+  # בדיקת טיפוסים במקביל לפריסה (בבנייה עצמה היא מדולגת)
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+
   deploy:
     if: ${{ vars.AWS_DEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-latest
@@ -38,27 +50,28 @@ jobs:
       - id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      - uses: docker/setup-buildx-action@v3
+
+      # מטמון שכבות ב-GitHub: npm ci וקומפילציה נטענים מהמטמון כשלא השתנו
       - name: בנייה והעלאה ל-ECR
-        env:
-          REGISTRY: ${{ steps.ecr.outputs.registry }}
-          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}
-          NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
-        run: |
-          IMAGE="$REGISTRY/$ECR_REPOSITORY:${GITHUB_SHA}"
-          docker build \
-            --build-arg NEXT_PUBLIC_SUPABASE_URL \
-            --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY \
-            --build-arg NEXT_PUBLIC_SITE_URL \
-            --build-arg NEXT_PUBLIC_APP_URL \
-            --build-arg APP_BUILD_ID="${GITHUB_SHA}" \
-            -t "$IMAGE" .
-          docker push "$IMAGE"
-          # גם latest: הגדרת המשימה של CloudFormation מצביעה עליו, כדי שהרצה חוזרת של cloudshell-setup.sh לא תעלה שרת בלי image
-          docker tag "$IMAGE" "$REGISTRY/$ECR_REPOSITORY:latest"
-          docker push "$REGISTRY/$ECR_REPOSITORY:latest"
-          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+          build-args: |
+            NEXT_PUBLIC_SUPABASE_URL=${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+            NEXT_PUBLIC_SITE_URL=${{ vars.NEXT_PUBLIC_SITE_URL }}
+            NEXT_PUBLIC_APP_URL=${{ vars.NEXT_PUBLIC_APP_URL }}
+            APP_BUILD_ID=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: קביעת ה-image לפריסה
+        run: echo "IMAGE=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}" >> "$GITHUB_ENV"
 
       - name: הורדת הגדרת המשימה הנוכחית
         run: |
