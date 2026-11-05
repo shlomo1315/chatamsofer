@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Check, Loader2 } from 'lucide-react'
+import { Check, FileText, Loader2 } from 'lucide-react'
 import Modal from '@/components/ui/Modal'
 import { kvitelExportLines, type KvitelRequestRow } from '@/lib/kvitelQuery'
 import { pendingForPrint } from '@/lib/kvitelView'
@@ -26,12 +26,41 @@ export default function PrintNewDialog({ open, onClose, rows, canEdit, onDone }:
   const [asked, setAsked] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [downloading, setDownloading] = useState<'pdf' | 'docx' | null>(null)
 
   function close() {
     if (busy) return
     setAsked(false)
     setError('')
     onClose()
+  }
+
+  // הורדה לא משנה סטטוס — רק ההדפסה שואלת "לסמן כנשלחו?"
+  async function download(format: 'pdf' | 'docx') {
+    setDownloading(format)
+    setError('')
+    try {
+      const res = await fetch('/api/admin/kvitel/print-file', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: printed.ids, format }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setError(data.error || 'ההורדה נכשלה')
+        return
+      }
+      const url = URL.createObjectURL(await res.blob())
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'kvitel.' + format
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch {
+      setError('ההורדה נכשלה. בדוק את החיבור ונסה שוב.')
+    } finally {
+      setDownloading(null)
+    }
   }
 
   async function mark() {
@@ -60,6 +89,15 @@ export default function PrintNewDialog({ open, onClose, rows, canEdit, onDone }:
         ) : (
           <>
             <p className="text-sm text-slate-700">{`${printed.ids.length} בקשות חדשות, ${printed.lines.length} שמות. לחיצה על "הדפסה" פותחת את חלון ההדפסה.`}</p>
+            <div className="flex flex-wrap gap-2">
+              {(['pdf', 'docx'] as const).map(f => (
+                <button key={f} type="button" onClick={() => download(f)} disabled={downloading !== null} className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-40">
+                  {downloading === f ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <FileText className="h-4 w-4" aria-hidden />}
+                  {f === 'pdf' ? 'הורדת PDF' : 'הורדת Word'}
+                </button>
+              ))}
+            </div>
+            {!asked && error && <p role="alert" className="text-sm text-rose-800">{error}</p>}
             <KvitelSheet lines={printed.lines} onPrinted={() => setAsked(true)} />
           </>
         )}
