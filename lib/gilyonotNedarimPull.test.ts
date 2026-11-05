@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseGetJson, mapRow, buildGetJsonParam, validateConfig, isFieldName } from './gilyonotNedarimPull'
+import { dailyPullDue, parseGetJson, mapRow, buildGetJsonParam, validateConfig, isFieldName } from './gilyonotNedarimPull'
 import { decideSubscribe } from './gilyonot'
 
 const cfg = { emailField: 'Field9', nameField: 'Field7', consentField: '' }
@@ -72,5 +72,21 @@ describe('gilyonot נדרים: הגדרות', () => {
     expect(validateConfig({ ...ok, mosadId: '123' })).toMatch(/7 ספרות/)
     expect(validateConfig({ ...ok, apiKey: 'abc' })).toMatch(/npk_/)
     expect(validateConfig({ ...ok, emailField: 'Email' })).toMatch(/עמודה/)
+  })
+})
+
+describe('gilyonot נדרים: משיכה יומית ב-02:00 שעון ישראל', () => {
+  it('חורף (UTC+2): 02:00 ישראל = 00:00 UTC', () => {
+    expect(dailyPullDue(new Date('2026-12-10T00:30:00Z'), '')).toBe('2026-12-10')
+    expect(dailyPullDue(new Date('2026-12-09T23:30:00Z'), '')).toBeNull() // 01:30
+  })
+  it('קיץ (UTC+3): 02:00 ישראל = 23:00 UTC ביום הקודם', () => {
+    expect(dailyPullDue(new Date('2026-07-10T23:10:00Z'), '')).toBe('2026-07-11')
+    expect(dailyPullDue(new Date('2026-07-10T22:30:00Z'), '')).toBeNull() // 01:30
+  })
+  it('פעם אחת ביום, ומשלימה אחרי כשל באותו יום', () => {
+    expect(dailyPullDue(new Date('2026-12-10T01:30:00Z'), '2026-12-10')).toBeNull()
+    expect(dailyPullDue(new Date('2026-12-10T05:00:00Z'), '')).toBe('2026-12-10')
+    expect(dailyPullDue(new Date('2026-12-11T00:10:00Z'), '2026-12-10')).toBe('2026-12-11')
   })
 })
