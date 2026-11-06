@@ -29,7 +29,7 @@ export const VOUCHER_TEXT_GROUPS: VoucherTextGroup[] = [
       { key: 'card.centers_note', label: 'הערת מוקדים', default: 'תוכלו לבחור בכל מוקד לקבלת הכרטיס.' },
       { key: 'card.activation_title', label: 'כותרת הפעלה', default: 'הפעלת הכרטיס — חובה לפני השימוש!' },
       { key: 'card.activation_line', label: 'שורת הפעלה', default: 'לאחר קבלת הכרטיס, חובה להפעילו בהתקשרות למוקד:' },
-      { key: 'card.activation_phone', label: 'טלפון הפעלה', default: 'להפעלה חייגו: 02-3131325 שלוחה 1' },
+      { key: 'card.activation_phone', label: 'טלפון הפעלה', default: 'להפעלה חייגו: 02-376-6363 שלוחה 1' },
       { key: 'card.validity', label: 'הערת תוקף', multiline: true,
         default: 'הכרטיס בתוקף עד 6 שבועות מהלידה, ורק לרכישת מזון מוכן ליולדת ובני ביתה. השובר אישי ואינו ניתן להעברה.' },
       // 🔴 רשימת החנויות המכבדות את הכרטיס משתנה מפעם לפעם. יולדת שקנתה
