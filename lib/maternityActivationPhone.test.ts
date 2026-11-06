@@ -20,3 +20,11 @@ describe('חובת שובר באיסוף', () => {
     expect(html).toContain('אין אפשרות לאסוף את הכרטיס במוקדים ללא הצגת השובר שקיבלתם במייל, ללא שובר לא יינתן כרטיס.')
   })
 })
+
+import { readFileSync } from 'fs'
+describe('המספר הישן לא נשאר בטקסטים שמוצגים למשתמש', () => {
+  it.each(['app/PublicPortalPage.tsx', 'app/api/portal/request-status-email/route.ts', 'lib/holidayVoucher.ts', 'lib/publicTextsReview.ts', 'lib/maternityVoucher.ts', 'lib/voucherTextsCatalog.ts'])('%s', f => {
+    const s = readFileSync(f, 'utf8')
+    expect(s).not.toMatch(/02-?3131325|02-313-1325|023131325/)
+  })
+})

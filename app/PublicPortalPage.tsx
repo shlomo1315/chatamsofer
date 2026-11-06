@@ -3907,7 +3907,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-3 text-center text-sm text-green-700 leading-relaxed">
                       <EditableText k="auth.call.incoming" as="p" className="font-semibold mb-1" />
                       <p>
-                        המספר המתקשר: <span className="font-semibold ltr-num" dir="ltr">02-3131325</span>
+                        המספר המתקשר: <span className="font-black ltr-num" dir="ltr">02-376-6363</span> <span className="font-bold text-red-700">(שימו לב! המספר הוחלף)</span>
                         {authPhoneHint && <> · אל <span className="font-semibold ltr-num">{authPhoneHint}</span></>}
                       </p>
                       <p className="mt-1 text-green-600">
