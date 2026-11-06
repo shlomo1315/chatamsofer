@@ -6,7 +6,7 @@ import { getPurchases, validatePurchase } from '@/lib/cardPurchases'
 import { processAwaitingStock } from '@/lib/maternityCards'
 import { startAwaitingStockRun } from '@/lib/awaitingStockRunner'
 import { maybeSendLowStockAlert, resetAlertIfAboveThreshold } from '@/lib/cardStockAlert'
-import { isAwaitingCard, AWAITING_SELECT } from '@/lib/awaitingFilter'
+import { isAwaitingCard, AWAITING_SELECT, type AwaitingAid } from '@/lib/awaitingFilter'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { fetchByIds } from '@/lib/fetchByIds'
 
@@ -120,11 +120,15 @@ export async function GET() {
   // ⚠️ הסינון מיובא מ-isAwaitingCard ואינו משוכפל כאן: כשהיה עותק מקומי הוא
   // נשאר בלי wants_food_card, ספר יולדת שהתור מדלג עליה, והציג "1 ממתינה"
   // שלא ירדה לעולם מול מלאי מלא.
-  const { data: awaitingRows, error: awaitingErr } = await admin
-    .from('maternity_aids')
-    .select(`id, ${AWAITING_SELECT}, card_load_error, created_at, beneficiary:beneficiaries(family_name, spouse_name, full_name)`)
-    .eq('status', 'active')
-  if (awaitingErr) console.error('[card-stock] awaiting query failed:', awaitingErr.message)
+  // 🔴 בדפים: השרת חותך כל תשובה ל-1000 שורות, ומעבר לזה המונה והכיסוי שיקרו.
+  const { rows: awaitingRows, error: awaitingErr } = await fetchAllRows<Record<string, unknown> & AwaitingAid & { id: string; card_load_error?: string | null; beneficiary?: unknown }>((from, to) =>
+    admin
+      .from('maternity_aids')
+      .select(`id, ${AWAITING_SELECT}, card_load_error, created_at, beneficiary:beneficiaries(family_name, spouse_name, full_name)`)
+      .eq('status', 'active')
+      .order('id', { ascending: true })
+      .range(from, to))
+  if (awaitingErr) console.error('[card-stock] awaiting query failed:', awaitingErr)
   const awaitingList = (awaitingRows ?? []).filter(isAwaitingCard)
 
   // ⚠️ מספר יבש ("1 יולדת ממתינה") אינו ניתן לבירור: אי אפשר לדעת מי ולמה,
