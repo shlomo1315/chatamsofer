@@ -1304,6 +1304,9 @@ export function loanRejectedEmail(opts: {
 // ─── אישור כרטיס מזון ליולדת (שובר) ───────────────────────────────────────────
 // בלוק "הפעלת הכרטיס" — הוראה מודגשת המשותפת למיילי הכרטיס. חובה להפעיל את הכרטיס דרך המוקד
 // הטלפוני, ורק ממספרי הטלפון המעודכנים במערכת. אם נמסרו מספרים — הם מוצגים במפורש (בכיוון LTR).
+/** מספר המוקד הטלפוני להפעלת הכרטיס (הוחלף מ-02-3131325). */
+export const CARD_ACTIVATION_PHONE = '02-376-6363'
+
 function cardActivationNotice(phones?: (string | null | undefined)[]): string {
   const list = [...new Set((phones ?? []).map(p => String(p ?? '').trim()).filter(Boolean))]
   const numbersLine = list.length
@@ -1317,9 +1320,10 @@ function cardActivationNotice(phones?: (string | null | undefined)[]): string {
   return `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
       <tr><td style="background:#fef2f2;border:1px solid #fca5a5;border-radius:12px;padding:16px 20px;">
+        <p style="margin:0 0 10px;background:#b91c1c;color:#ffffff;border-radius:8px;padding:8px 12px;font-size:15px;font-weight:900;line-height:1.7;">שימו לב: מספר הטלפון הוחלף! המספר החדש: <span dir="ltr" style="unicode-bidi:embed;">${CARD_ACTIVATION_PHONE}</span></p>
         <p style="margin:0 0 6px;color:#b91c1c;font-size:15px;font-weight:900;">הפעלת הכרטיס — חובה לפני השימוש!</p>
         <p style="margin:0;color:#7f1d1d;font-size:14px;line-height:1.8;">
-          לאחר קבלת הכרטיס מהמוקד, יש להפעילו בהתקשרות למוקד הטלפוני <strong style="direction:ltr;unicode-bidi:embed;">02-3131325</strong> שלוחה <strong>1</strong>, ולפעול לפי ההנחיות.
+          לאחר קבלת הכרטיס מהמוקד, יש להפעילו בהתקשרות למוקד הטלפוני <strong style="direction:ltr;unicode-bidi:embed;">${CARD_ACTIVATION_PHONE}</strong> שלוחה <strong>1</strong>, ולפעול לפי ההנחיות.
         </p>
         ${numbersLine}
       </td></tr>

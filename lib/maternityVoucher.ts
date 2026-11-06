@@ -403,7 +403,7 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
 
     // טקסטים מקוצרים — כדי שהבלוק לא יגלוש מהמסגרת
     const lineA = 'לאחר קבלת הכרטיס, חובה להפעילו בהתקשרות למוקד:'
-    const lineMoked = 'להפעלה חייגו: 02-3131325 שלוחה 1'
+    const lineMoked = 'להפעלה חייגו: 02-376-6363 שלוחה 1'
     const lineB = uniqPhones.length
       ? 'הזיהוי אוטומטי לפי הטלפון שבמערכת — ההפעלה רק מהמספרים:'
       : 'הזיהוי אוטומטי לפי הטלפון שבמערכת — ההפעלה רק ממספרים אלו.'
