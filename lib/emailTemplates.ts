@@ -1307,6 +1307,9 @@ export function loanRejectedEmail(opts: {
 /** מספר המוקד הטלפוני להפעלת הכרטיס (הוחלף מ-02-3131325). */
 export const CARD_ACTIVATION_PHONE = '02-376-6363'
 
+/** חובה להציג שובר באיסוף הכרטיס. */
+export const CARD_VOUCHER_REQUIRED_NOTICE = 'אין אפשרות לאסוף את הכרטיס במוקדים ללא הצגת השובר שקיבלתם במייל, ללא שובר לא יינתן כרטיס.'
+
 function cardActivationNotice(phones?: (string | null | undefined)[]): string {
   const list = [...new Set((phones ?? []).map(p => String(p ?? '').trim()).filter(Boolean))]
   const numbersLine = list.length
@@ -1321,6 +1324,7 @@ function cardActivationNotice(phones?: (string | null | undefined)[]): string {
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
       <tr><td style="background:#fef2f2;border:1px solid #fca5a5;border-radius:12px;padding:16px 20px;">
         <p style="margin:0 0 10px;background:#b91c1c;color:#ffffff;border-radius:8px;padding:8px 12px;font-size:15px;font-weight:900;line-height:1.7;">שימו לב: מספר הטלפון הוחלף! המספר החדש: <span dir="ltr" style="unicode-bidi:embed;">${CARD_ACTIVATION_PHONE}</span></p>
+        <p style="margin:0 0 10px;color:#7f1d1d;font-size:15px;font-weight:900;line-height:1.8;background:#ffffff;border:2px solid #b91c1c;border-radius:8px;padding:8px 12px;">${CARD_VOUCHER_REQUIRED_NOTICE}</p>
         <p style="margin:0 0 6px;color:#b91c1c;font-size:15px;font-weight:900;">הפעלת הכרטיס — חובה לפני השימוש!</p>
         <p style="margin:0;color:#7f1d1d;font-size:14px;line-height:1.8;">
           לאחר קבלת הכרטיס מהמוקד, יש להפעילו בהתקשרות למוקד הטלפוני <strong style="direction:ltr;unicode-bidi:embed;">${CARD_ACTIVATION_PHONE}</strong> שלוחה <strong>1</strong>, ולפעול לפי ההנחיות.
