@@ -349,7 +349,7 @@ export async function buildHolidayVoucher(data: HolidayVoucherData): Promise<Uin
   {
     const lines = [
       'לאחר קבלת הכרטיס, חובה להפעילו בהתקשרות למוקד:',
-      'להפעלה חייגו: 02-3131325 שלוחה 1',
+      'להפעלה חייגו: 02-376-6363 שלוחה 1',
       'הזיהוי אוטומטי לפי הטלפון שבמערכת — ההפעלה רק מהמספרים:',
     ]
     const uniq = [...new Set((data.phones ?? []).map(p => String(p ?? '').trim()).filter(Boolean))]

@@ -180,7 +180,7 @@ export async function POST(request: NextRequest) {
         </p>
         <p style="margin:0;color:#78350f;font-size:14px;line-height:1.8;">
           להרשמה חייגו עכשיו
-          <a href="tel:023131325" style="color:#b45309;font-weight:800;text-decoration:none;font-size:16px;" dir="ltr">02-313-1325</a>
+          <a href="tel:023766363" style="color:#b45309;font-weight:900;text-decoration:none;font-size:16px;" dir="ltr">02-376-6363</a> <strong style="color:#b91c1c;">(שימו לב! המספר הוחלף)</strong>
           <span style="font-weight:800;">שלוחה 9</span>
         </p>
       </td></tr>
