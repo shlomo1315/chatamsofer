@@ -44,7 +44,7 @@ function fakeDb(row: Row) {
       return [{ ...row }]
     }
     const q: Record<string, unknown> = {}
-    for (const m of ['select', 'eq', 'order', 'in', 'neq', 'not', 'is', 'insert']) q[m] = () => q
+    for (const m of ['select', 'eq', 'order', 'in', 'neq', 'not', 'is', 'insert', 'range']) q[m] = () => q
     q.update = (p: Row) => { patch = p; return q }
     q.or = (s: string) => { orStr = s; return q }
     q.maybeSingle = () => { single = true; return q }

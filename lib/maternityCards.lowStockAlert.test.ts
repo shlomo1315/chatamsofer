@@ -31,7 +31,7 @@ function fakeAdmin(aids: { id: string }[]) {
       return null
     }
     const q: Record<string, unknown> = {}
-    for (const m of ['select', 'eq', 'order', 'update', 'insert', 'in', 'neq', 'not'])
+    for (const m of ['select', 'eq', 'order', 'update', 'insert', 'in', 'neq', 'not', 'range'])
       q[m] = () => q
     q.or = () => { claim = true; return q }
     q.maybeSingle = () => { single = true; return q }

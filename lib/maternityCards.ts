@@ -7,7 +7,8 @@ import { acquireLoadGuard, confirmLoadGuard, releaseLoadGuard, previousTlushStil
 import { logActivity } from '@/lib/activityLog'
 import { consumeOneCard, getStockBalance } from '@/lib/cardStock'
 import { maybeSendLowStockAlert } from '@/lib/cardStockAlert'
-import { isAwaitingCard, AWAITING_SELECT } from '@/lib/awaitingFilter'
+import { isAwaitingCard, AWAITING_SELECT, type AwaitingAid } from '@/lib/awaitingFilter'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 import { reviveLookupOrder, isUnknownClient } from '@/lib/holidayClientCreate'
 
 // סכום הטעינה הקבוע ליולדת בעת אישור הלידה
@@ -467,11 +468,19 @@ export async function processAwaitingStock(admin: SupabaseClient): Promise<Await
   // ⚠️ לא מסתפקים בסימון awaiting_stock: יולדות שאושרו אך נתקעו בסטטוס אחר
   // (pending/approved) מעולם לא נכנסו לתור, ולכן לא קיבלו כרטיס ולא שובר
   // גם אחרי חידוש מלאי. נסרקות כאן כל הלידות המאושרות שטרם נטענו בפועל.
-  const { data: candidates } = await admin
-    .from('maternity_aids')
-    .select(`id, ${AWAITING_SELECT}`)
-    .eq('status', 'active')
-    .order('updated_at', { ascending: true }) // ותיקות קודם (FIFO)
+  // 🔴 בדפים (fetchAllRows) ולא בשאילתה אחת: השרת חותך כל תשובה ל-1000 שורות.
+  // כשהלידות הפעילות עברו את ה-1000, המיון מהוותיקה לחדשה השאיר את החדשות
+  // מחוץ לתשובה, ו-38 יולדות לא נטענו מול מלאי של 250 (5-6.11.2026).
+  // ⚠️ id כמיון משני: בלעדיו סדר שורות עם אותו updated_at אינו יציב בין דפים.
+  const { rows: candidates, error: candErr } = await fetchAllRows<AwaitingAid & { id: string }>((from, to) =>
+    admin
+      .from('maternity_aids')
+      .select(`id, ${AWAITING_SELECT}`)
+      .eq('status', 'active')
+      .order('updated_at', { ascending: true }) // ותיקות קודם (FIFO)
+      .order('id', { ascending: true })
+      .range(from, to))
+  if (candErr) console.error('[processAwaitingStock] שליפת הלידות נכשלה:', candErr)
 
   // ⚠️ לידה מאושרת (status='active') שטרם נטענה — היא ממתינה לכרטיס, נקודה.
   // סינון לפי card_status פספס יולדות שנתקעו ב-'pending' ומעולם לא סומנו
@@ -479,7 +488,7 @@ export async function processAwaitingStock(admin: SupabaseClient): Promise<Await
   // החריגים: לידה שקטה (אין לה כרטיס), מי שנדחתה ידנית, ומי שלא ביקשה
   // כרטיס מזון כלל (wants_food_card=false) — לא נטעין לה כרטיס. undefined
   // (בקשות ישנות) = ביקשה, לתאימות לאחור.
-  const waiting = (candidates ?? []).filter(isAwaitingCard)
+  const waiting = candidates.filter(isAwaitingCard)
   if (!waiting.length) return out
 
   for (const w of waiting) {
