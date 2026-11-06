@@ -13,3 +13,10 @@ describe('מספר הפעלת הכרטיס במייל השובר', () => {
     expect(html).not.toContain('3131325')
   })
 })
+
+describe('חובת שובר באיסוף', () => {
+  it('ההודעה מופיעה בגוף המייל', () => {
+    const html = (maternityCardEmail({ full_name: 'שרה לוי' }, { centerName: 'מוקד א' }) as any).html as string
+    expect(html).toContain('אין אפשרות לאסוף את הכרטיס במוקדים ללא הצגת השובר שקיבלתם במייל, ללא שובר לא יינתן כרטיס.')
+  })
+})
