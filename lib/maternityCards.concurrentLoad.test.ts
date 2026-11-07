@@ -19,7 +19,7 @@ vi.mock('./scheduledMail', () => ({ scheduleCardPickupReminders: vi.fn(async () 
 import { loadMaternityCardOnApproval } from './maternityCards'
 import { addTlush } from '@/lib/nedarim'
 
-// מסד מדומה עם מצב משותף: ה-UPDATE עם or() הוא נעילה אטומית (סינכרוני, כמו ב-SQL)
+// מסד מדומה עם מצב משותף: ה-UPDATE ל-pending הוא נעילה אטומית (סינכרוני, כמו ב-SQL)
 function statefulAdmin(guards = new Set<string>(), initial: Record<string, unknown> = {}) {
   const aid: Record<string, unknown> = {
     id: 'a1', beneficiary_id: 'b1', card_balance: 0, card_load_status: null, card_tlush_id: null,
@@ -35,8 +35,8 @@ function statefulAdmin(guards = new Set<string>(), initial: Record<string, unkno
     q.eq = () => q
     q.insert = (r: { aid_id?: string }) => { if (table === 'maternity_load_guard') guardInsert = r.aid_id ?? null; return q }
     q.is = () => q
-    q.update = (p: Record<string, unknown>) => { patch = p; return q }
-    q.or = () => { lock = true; return q }
+    q.update = (p: Record<string, unknown>) => { patch = p; if (p.card_load_status === 'pending') lock = true; return q }
+    q.lt = () => q
     q.maybeSingle = () => Promise.resolve({ data: table === 'maternity_aids' ? { ...aid } : ben })
     q.then = (res: (v: unknown) => unknown) => {
       if (table === 'maternity_aids' && patch) {
