@@ -35,7 +35,7 @@ const INFO: Omit<ExtInfo, 'name'>[] = [
     keys: [['1', 'אישור מספר הכרטיס'], ['2', 'תיקון מספר הכרטיס']] },
   { sys: 'main', ext: 'otp', how: 'שיחה יוצאת', what: 'מקריאה קוד אימות לנרשם', keys: [] },
   { sys: 'main', ext: 'kvitel', how: 'שלוחה ישירה', what: 'קליטת קוויטלאך בהקלדה', keys: [] },
-  { sys: 'main', ext: 'center-load', how: 'שלוחה ישירה', what: 'טעינת כרטיסי מוקדים', keys: [] },
+  { sys: 'main', ext: 'center-load', how: 'תפריט ראשי · טלפון של מוקד מורשה', what: 'טעינת כרטיסי מוקדים', keys: [] },
   { sys: 'yerid', ext: 'menu', how: 'כל שיחה נכנסת', what: 'מכירה בטלפון: הזמנה חדשה, קיימת, שירות לקוחות', source: 'bookfair',
     keys: [['1', 'הזמנה חדשה'], ['2', 'הזמנה קיימת'], ['3', 'שירות לקוחות']] },
   { sys: 'yerid', ext: 'credits', how: 'שלוחה ישירה', what: 'זיכויים', keys: [] },
@@ -62,8 +62,9 @@ export const MAP: Record<TelephonySystemId, { root: MapNode; direct: string[] }>
         { nm: 'זיהוי לפי הטלפון', step: true }, { nm: 'חיבור כרטיס 16 ספרות', step: true },
       ] },
       { k: '9', nm: 'הודעה כללית', tp: 'ואז ניתוק', step: true },
+      { nm: 'מוקד מורשה', tp: 'זיהוי לפי טלפון, בלי תפריט', ext: 'main/center-load' },
     ] },
-    direct: ['main/otp', 'main/kvitel', 'main/center-load'],
+    direct: ['main/otp', 'main/kvitel'],
   },
   yerid: {
     root: { nm: 'תפריט מכירה', tp: 'כל שיחה נכנסת', ext: 'yerid/menu', kids: [
