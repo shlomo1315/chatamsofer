@@ -94,6 +94,69 @@ const PILL = {
 
 const HEADS: [string, boolean][] = [['מוקד', false], ['טלפון מורשה', false], ["צד ג' (נדרים)", true], ['כרטיס', false], ['סכום', true], ['חודש טעינה', true], ['סטטוס', false], ['יתרה', false], ['תוקף', true], ['', false]]
 type Filter = 'all' | 'loaded' | 'none' | 'nocard'
+type View = 'month' | 'grid'
+const GRID_MONTHS = 6
+// חודש לפי מיקום (0 = החדש): בנייד 2, בטאבלט 4, במסך רחב 6
+const COL = (i: number) => (i < 2 ? '' : i < 4 ? 'hidden sm:table-cell' : 'hidden lg:table-cell')
+
+// טבלת כל החודשים: מוקד בכל שורה, חודש בכל עמודה (החדש מימין), ובכל תא סטטוס, סכום ויתרה.
+function MonthGrid({ rows, month, onOpen }: { rows: Row[]; month: string; onOpen: (id: string) => void }) {
+  const [page, setPage] = useState(0)
+  const all = monthRange([month, ...rows.flatMap((c) => c.history.map((h) => h.month))], month)
+  const months = all.slice(page * GRID_MONTHS, (page + 1) * GRID_MONTHS)
+  const pages = Math.ceil(all.length / GRID_MONTHS)
+  const sum = (k: string) => {
+    const l = rows.map((c) => c.history.find((h) => h.month === k)).filter((h) => h?.status === 'loaded')
+    return { n: l.length, total: l.reduce((a, h) => a + (h?.amount ?? 0), 0) }
+  }
+  const nav = 'px-2.5 py-1 rounded-md border border-[#D9CFB9] bg-white text-[13px] disabled:opacity-40'
+  return (
+    <div>
+      {pages > 1 && (
+        <div className="flex items-center justify-end gap-2 px-3 py-2 border-b border-[#EFEBE2] text-[13px] text-[#6B6352]">
+          <button className={nav} disabled={page === 0} onClick={() => setPage(page - 1)}>חודשים חדשים יותר</button>
+          <button className={nav} disabled={page >= pages - 1} onClick={() => setPage(page + 1)}>חודשים קודמים</button>
+        </div>
+      )}
+      <table className="w-full table-fixed text-sm">
+        <thead className="text-right">
+          <tr className="bg-[#14213D] text-white">
+            <th className="w-[38%] sm:w-[24%] lg:w-[18%] px-3 py-2 font-medium">מוקד</th>
+            {months.map((k, i) => <th key={k} className={`${COL(i)} px-2 py-2 font-medium`}>{monthName(k)}{k === month && <span className="block text-[11px] font-normal text-[#E5C77F]">החודש</span>}</th>)}
+          </tr>
+          <tr className="bg-[#F6F1E6] text-[12px] text-[#6B6352]">
+            <th className="px-3 py-1.5 font-medium">נטענו</th>
+            {months.map((k, i) => { const s = sum(k); return (
+              <th key={k} className={`${COL(i)} px-2 py-1.5 font-medium tabular-nums`}><b className="text-[#1B2338]">{s.n}/{rows.length}</b><span className="block">{ils(s.total)}</span></th>
+            ) })}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((c) => (
+            <tr key={c.id} className="cursor-pointer hover:bg-[#FFFDF8]" onClick={() => onOpen(c.id)}>
+              <td className="border-t border-[#EFEBE2] px-3 py-2 font-bold break-words">{c.name}</td>
+              {months.map((k, i) => {
+                const h = c.history.find((x) => x.month === k)
+                const ok = h?.status === 'loaded'
+                return (
+                  <td key={k} className={`${COL(i)} border-t border-[#EFEBE2] px-2 py-2 ${ok ? 'bg-emerald-50/60' : ''}`}>
+                    {ok ? (
+                      <><div className="font-bold text-emerald-800 tabular-nums">{ils(h!.amount)}</div>
+                        <div className="text-[11px] text-[#6B6352] tabular-nums">{h!.balance == null ? fmt(h!.loaded_at ?? h!.created_at) : `יתרה ${ils(h!.balance)}`}</div></>
+                    ) : h ? <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-[#F7E7C6] text-[#8A5A12]">בטיפול</span>
+                      : k === month ? <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-[#EFEBE2] text-[#6B6352]">ממתין</span>
+                      : <span className="text-xs text-[#9A3B2E]">לא נטען</span>}
+                  </td>
+                )
+              })}
+            </tr>
+          ))}
+          {rows.length === 0 && <tr><td colSpan={months.length + 1} className="px-3 py-8 text-center text-[#6B6352]">אין מוקדים מתאימים</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  )
+}
 
 export default function CenterMonthlyPanel() {
   const [data, setData] = useState<Data | null>(null)
@@ -106,6 +169,7 @@ export default function CenterMonthlyPanel() {
   const [open, setOpen] = useState('')
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
+  const [view, setView] = useState<View>('month')
 
   const load = useCallback(async () => {
     try {
@@ -183,6 +247,12 @@ export default function CenterMonthlyPanel() {
 
       <div className="bg-white border border-[#E6DFCF] rounded-lg overflow-hidden">
         <div className="flex flex-wrap items-center gap-2 p-3 border-b border-[#E6DFCF]">
+          <div className="flex rounded-md border border-[#D9CFB9] overflow-hidden" role="tablist">
+            {([['month', 'החודש הנוכחי'], ['grid', 'כל החודשים']] as [View, string][]).map(([k, l]) => (
+              <button key={k} role="tab" aria-selected={view === k} onClick={() => setView(k)}
+                className={`px-3 py-1.5 text-sm font-medium ${view === k ? 'bg-[#14213D] text-white' : 'bg-white text-[#1B2338]'}`}>{l}</button>
+            ))}
+          </div>
           <div className="relative">
             <Search size={14} className="absolute top-2.5 start-2.5 text-[#958C78]" />
             <input className={input + ' ps-8 w-56'} placeholder="חיפוש מוקד, טלפון או צד ג'" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -193,7 +263,7 @@ export default function CenterMonthlyPanel() {
           ))}
           <span className="text-xs text-[#6B6352] me-auto">{shown.length} מוקדים</span>
         </div>
-        <div>
+        {view === 'grid' ? <MonthGrid rows={shown.map((x) => x.c)} month={data.month} onOpen={setOpen} /> : <div>
           <table className="w-full text-sm">
             <thead className="bg-[#14213D] text-white text-right">
               <tr>{HEADS.map(([h, hide]) => <th key={h} className={`px-3 py-2 font-medium whitespace-nowrap ${hide ? 'hidden xl:table-cell' : ''}`}>{h}</th>)}</tr>
@@ -244,7 +314,7 @@ export default function CenterMonthlyPanel() {
               {shown.length === 0 && <tr><td colSpan={10} className="px-3 py-8 text-center text-[#6B6352]">אין מוקדים מתאימים</td></tr>}
             </tbody>
           </table>
-        </div>
+        </div>}
       </div>
       {open && data.centers.find((c) => c.id === open) && (
         <HistoryModal c={data.centers.find((c) => c.id === open)!} month={data.month} onClose={() => setOpen('')} />
