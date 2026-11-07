@@ -6,7 +6,7 @@ vi.mock('@/lib/centerMonthlyLoad', async (orig) => ({
   ...(await orig<typeof import('@/lib/centerMonthlyLoad')>()),
   findCenterByPhone: (...a: unknown[]) => find(...a),
 }))
-vi.mock('@/lib/mainMenuPhone', () => ({ getMainMenuMessages: async () => ({ menu: { text: 'תפריט' } }) }))
+vi.mock('@/lib/mainMenuPhone', () => ({ getMainMenuMessages: async () => ({ menu: { text: 'תפריט' }, centerMenu: { text: 'הודעת מוקד' } }) }))
 vi.mock('./centerLoad', async (orig) => ({
   ...(await orig<typeof import('./centerLoad')>()),
   centerLoad: async () => ({ type: 'simpleMessage', files: [{ text: 'טעינת מוקד' }] }),
@@ -21,25 +21,39 @@ const text = (r: unknown) => JSON.stringify(r)
 
 beforeEach(() => { find.mockReset(); vi.spyOn(console, 'log').mockImplementation(() => {}) })
 
-describe('תפריט ראשי: ניתוב מוקדים לטעינה החודשית', () => {
-  it('טלפון של מוקד מורשה עובר ישר לטעינה', async () => {
+describe('תפריט ראשי: מקש 3 למוקד מורשה', () => {
+  it('מוקד מורשה שומע את הודעת המוקד ומקש 3 פעיל', async () => {
     find.mockResolvedValue({ center_id: 'x' })
-    expect(text(await mainMenu(ctx()))).toContain('טעינת מוקד')
+    const r = text(await mainMenu(ctx()))
+    expect(r).toContain('הודעת מוקד')
+    expect(r).toContain('1,2,3,9')
     expect(find).toHaveBeenCalledWith(expect.anything(), '0501234567')
   })
-  it('מתקשר רגיל מקבל את התפריט', async () => {
+  it('מתקשר רגיל: תפריט רגיל בלי מקש 3', async () => {
     find.mockResolvedValue(null)
-    expect(text(await mainMenu(ctx()))).toContain('menuChoice')
+    const r = text(await mainMenu(ctx()))
+    expect(r).not.toContain('הודעת מוקד')
+    expect(r).toContain('1,2,9')
   })
-  it('באמצע טעינה (פרמטר של מוקד) ממשיכים בטעינה בלי לחפש שוב', async () => {
-    expect(text(await mainMenu(ctx({ center_go: '1' })))).toContain('טעינת מוקד')
+  it('מוקד שהקיש 3 עובר לטעינה', async () => {
+    find.mockResolvedValue({ center_id: 'x' })
+    expect(text(await mainMenu(ctx({ menuChoice: '3' })))).toContain('טעינת מוקד')
+  })
+  it('מי שאינו מוקד והקיש 3 מקבל הקשה שגויה ותפריט רגיל', async () => {
+    find.mockResolvedValue(null)
+    const r = text(await mainMenu(ctx({ menuChoice: '3' })))
+    expect(r).not.toContain('טעינת מוקד')
+    expect(r).toContain('1,2,9')
+  })
+  it('באמצע טעינה ממשיכים בלי לחפש שוב', async () => {
+    expect(text(await mainMenu(ctx({ menuChoice: '3', center_go: '1' })))).toContain('טעינת מוקד')
     expect(find).not.toHaveBeenCalled()
   })
   it('תקלה במסד: התפריט הרגיל', async () => {
     find.mockRejectedValue(new Error('db'))
-    expect(text(await mainMenu(ctx()))).toContain('menuChoice')
+    expect(text(await mainMenu(ctx()))).toContain('1,2,9')
   })
-  it('אחרי בחירה בתפריט לא בודקים מוקד', async () => {
+  it('בחירה 2 לא בודקת מוקד', async () => {
     expect(text(await mainMenu(ctx({ menuChoice: '2' })))).toContain('יולדות')
     expect(find).not.toHaveBeenCalled()
   })
