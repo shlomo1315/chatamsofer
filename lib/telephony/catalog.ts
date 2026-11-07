@@ -27,15 +27,15 @@ export const SYSTEM_LABELS: Record<TelephonySystemId, string> = {
 }
 
 const INFO: Omit<ExtInfo, 'name'>[] = [
-  { sys: 'main', ext: 'menu', how: 'כל שיחה נכנסת', what: 'ברכה ותפריט: 1 חגים, 2 יולדות, 9 הודעה כללית', source: 'menu',
-    keys: [['1', 'חלוקות חגים'], ['2', 'יולדות'], ['9', 'הודעה כללית ואז ניתוק'], ['שגוי', 'חזרה על התפריט']] },
+  { sys: 'main', ext: 'menu', how: 'כל שיחה נכנסת', what: 'ברכה ותפריט: 1 חגים, 2 יולדות, 9 הודעה כללית. מוקד מורשה שומע גם 3 לטעינה', source: 'menu',
+    keys: [['1', 'חלוקות חגים'], ['2', 'יולדות'], ['3', 'טעינת מוקד (רק למוקד מורשה)'], ['9', 'הודעה כללית ואז ניתוק'], ['שגוי', 'חזרה על התפריט']] },
   { sys: 'main', ext: 'holidays', how: 'תפריט ראשי · 1', what: 'זכאות, המוקד שנבחר, חיבור כרטיס, רישום', source: 'holiday',
     keys: [['1', 'בדיקת זכאות'], ['2', 'שמיעת המוקד שנבחר'], ['3', 'חיבור כרטיס נדרים'], ['4', 'בחירת מוקד (לא מוכרז בתפריט)']] },
   { sys: 'main', ext: 'maternity', how: 'תפריט ראשי · 2', what: 'זיהוי לפי טלפון, כרטיס 16 ספרות, אישור, מוקד', source: 'maternity',
     keys: [['1', 'אישור מספר הכרטיס'], ['2', 'תיקון מספר הכרטיס']] },
   { sys: 'main', ext: 'otp', how: 'שיחה יוצאת', what: 'מקריאה קוד אימות לנרשם', keys: [] },
   { sys: 'main', ext: 'kvitel', how: 'שלוחה ישירה', what: 'קליטת קוויטלאך בהקלדה', keys: [] },
-  { sys: 'main', ext: 'center-load', how: 'שלוחה ישירה', what: 'טעינת כרטיסי מוקדים', keys: [] },
+  { sys: 'main', ext: 'center-load', how: 'תפריט ראשי · 3 (רק לטלפון של מוקד מורשה)', what: 'טעינת כרטיסי מוקדים', keys: [] },
   { sys: 'yerid', ext: 'menu', how: 'כל שיחה נכנסת', what: 'מכירה בטלפון: הזמנה חדשה, קיימת, שירות לקוחות', source: 'bookfair',
     keys: [['1', 'הזמנה חדשה'], ['2', 'הזמנה קיימת'], ['3', 'שירות לקוחות']] },
   { sys: 'yerid', ext: 'credits', how: 'שלוחה ישירה', what: 'זיכויים', keys: [] },
@@ -62,8 +62,9 @@ export const MAP: Record<TelephonySystemId, { root: MapNode; direct: string[] }>
         { nm: 'זיהוי לפי הטלפון', step: true }, { nm: 'חיבור כרטיס 16 ספרות', step: true },
       ] },
       { k: '9', nm: 'הודעה כללית', tp: 'ואז ניתוק', step: true },
+      { k: '3', nm: 'טעינת מוקד', tp: 'רק לטלפון של מוקד מורשה', ext: 'main/center-load' },
     ] },
-    direct: ['main/otp', 'main/kvitel', 'main/center-load'],
+    direct: ['main/otp', 'main/kvitel'],
   },
   yerid: {
     root: { nm: 'תפריט מכירה', tp: 'כל שיחה נכנסת', ext: 'yerid/menu', kids: [

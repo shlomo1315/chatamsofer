@@ -14,7 +14,7 @@ export const SYSTEM_EXTS: Record<TelephonySystemId, { ext: string; label: string
     { ext: 'maternity', label: 'יולדות', digit: '2' },
     { ext: 'otp', label: 'קוד אימות', digit: '' },
     { ext: 'kvitel', label: 'קוויטלאך', digit: '' },
-    { ext: 'center-load', label: 'טעינת מוקדים', digit: '' },
+    { ext: 'center-load', label: 'טעינת מוקדים', digit: '' }, // מהתפריט הראשי, מקש 3 לטלפון של מוקד מורשה
   ],
   yerid: [
     { ext: 'menu', label: 'תפריט יריד הספרים', digit: '' },
