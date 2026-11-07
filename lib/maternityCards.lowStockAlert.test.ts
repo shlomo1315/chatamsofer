@@ -31,9 +31,9 @@ function fakeAdmin(aids: { id: string }[]) {
       return null
     }
     const q: Record<string, unknown> = {}
-    for (const m of ['select', 'eq', 'order', 'update', 'insert', 'in', 'neq', 'not', 'range'])
+    for (const m of ['select', 'eq', 'order', 'insert', 'in', 'neq', 'not', 'range', 'is', 'lt'])
       q[m] = () => q
-    q.or = () => { claim = true; return q }
+    q.update = (p: Record<string, unknown>) => { if (p.card_load_status === 'pending') claim = true; return q }
     q.maybeSingle = () => { single = true; return q }
     q.then = (res: (v: unknown) => unknown) => Promise.resolve({ data: result(), error: null }).then(res)
     return q

@@ -23,32 +23,35 @@ import { deliverMail } from '@/lib/sendMail'
 type Row = Record<string, unknown>
 
 // מסד מדומה עם תיק אחד ששומר מצב בין הריצות. הטעינה תמיד מחזירה already:
-// תפיסת הטעינה (or על card_load_status) נכשלת — כמו תיק שהחסם שלו תפוס.
-function fakeDb(row: Row) {
+// תפיסת הטעינה (pending) נכשלת — כמו תיק שהחסם שלו תפוס. מסנני eq/is של
+// העדכון נבדקים מול השורה, ו-PATCH עם or() נדחה כמו ב-PostgREST 13.
+function fakeDb(row: Row, opts: { failUpdate?: boolean } = {}) {
   const from = (table: string) => {
     let patch: Row | null = null
     let orStr = ''
     let single = false
-    const run = () => {
-      if (table !== 'maternity_aids') return null
+    const filters: [string, unknown][] = []
+    const run = (): { data: unknown; error: { message: string } | null } => {
+      if (table !== 'maternity_aids') return { data: null, error: null }
       if (patch) {
-        if (orStr.includes('card_load_status')) return []
-        if (orStr) {
-          const free = row.card_status !== 'loaded' || row.card_voucher_status !== 'issued'
-          if (!free) return []
-        }
+        if (orStr) return { data: null, error: { message: 'column maternity_aids.card_status does not exist' } }
+        if (opts.failUpdate) return { data: null, error: { message: 'db down' } }
+        if (patch.card_load_status === 'pending') return { data: [], error: null }
+        if (!filters.every(([c, v]) => (row[c] ?? null) === v)) return { data: [], error: null }
         Object.assign(row, patch)
-        return [{ id: row.id }]
+        return { data: [{ id: row.id }], error: null }
       }
-      if (single) return { ...row, beneficiary: { full_name: 'כהן', email: 'm@example.com' } }
-      return [{ ...row }]
+      if (single) return { data: { ...row, beneficiary: { full_name: 'כהן', email: 'm@example.com' } }, error: null }
+      return { data: [{ ...row }], error: null }
     }
     const q: Record<string, unknown> = {}
-    for (const m of ['select', 'eq', 'order', 'in', 'neq', 'not', 'is', 'insert', 'range']) q[m] = () => q
+    for (const m of ['select', 'order', 'in', 'neq', 'not', 'insert', 'range', 'lt']) q[m] = () => q
+    q.eq = (c: string, v: unknown) => { if (patch && c !== 'id') filters.push([c, v]); return q }
+    q.is = (c: string, v: unknown) => { if (patch) filters.push([c, v]); return q }
     q.update = (p: Row) => { patch = p; return q }
     q.or = (s: string) => { orStr = s; return q }
     q.maybeSingle = () => { single = true; return q }
-    q.then = (res: (v: unknown) => unknown) => Promise.resolve({ data: run(), error: null }).then(res)
+    q.then = (res: (v: unknown) => unknown) => Promise.resolve(run()).then(res)
     return q
   }
   return { from } as never
@@ -96,5 +99,18 @@ describe('שובר כרטיס בניסיון החוזר — פעם אחת בלב
     const second = await processAwaitingStock(db)
     expect(second.processed).toBe(1)
     expect(deliverMail).toHaveBeenCalledTimes(2)
+  })
+})
+
+// 🔴 7.11.2026: עדכון שנדחה במסד נבלע ונספר כ-"כבר נטען", ו-38 יולדות
+// נשארו בתור בשקט. שגיאה חייבת להיספר ככשל ולהופיע בדוח.
+describe('שגיאת מסד בנעילה — כשל גלוי, לא דילוג שקט', () => {
+  it('הסבב סופר כשל, מדווח את השגיאה ולא שולח מייל', async () => {
+    const row = { ...stuckAid(), card_voucher_status: null }
+    const r = await processAwaitingStock(fakeDb(row, { failUpdate: true }))
+    expect(r.failed).toBe(1)
+    expect(r.processed).toBe(0)
+    expect(r.errors.join(' ')).toContain('db down')
+    expect(deliverMail).not.toHaveBeenCalled()
   })
 })

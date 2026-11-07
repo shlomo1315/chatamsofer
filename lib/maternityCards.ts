@@ -9,6 +9,7 @@ import { consumeOneCard, getStockBalance } from '@/lib/cardStock'
 import { maybeSendLowStockAlert } from '@/lib/cardStockAlert'
 import { isAwaitingCard, AWAITING_SELECT, type AwaitingAid } from '@/lib/awaitingFilter'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { claimCardLoad } from '@/lib/cardLoadClaim'
 import { reviveLookupOrder, isUnknownClient } from '@/lib/holidayClientCreate'
 
 // סכום הטעינה הקבוע ליולדת בעת אישור הלידה
@@ -74,13 +75,12 @@ export async function loadMaternityCardOnApproval(
   // עברו שתיהן את הבדיקה "כבר נטען" למעלה והטעינו 600 ₪ פעמיים (14.10, 150ms הפרש).
   // רק קריאה אחת מצליחה להעביר את התיק ל-pending; התנאי בתוך ה-UPDATE עצמו.
   // pending ישן (קריסה באמצע) משתחרר אחרי 10 דקות, כדי שתיק לא ייתקע לנצח.
-  const staleBefore = new Date(Date.now() - 10 * 60 * 1000).toISOString()
-  const { data: claimed } = await admin.from('maternity_aids')
-    .update({ card_load_status: 'pending', card_load_error: null, updated_at: new Date().toISOString() })
-    .eq('id', aid.id)
-    .or(`card_load_status.is.null,card_load_status.in.(idle,failed,unloaded),and(card_load_status.eq.pending,updated_at.lt."${staleBefore}")`)
-    .select('id')
-  if (!claimed?.length) return { ok: true, already: true } // קריאה אחרת טוענת או כבר טענה
+  const claim = await claimCardLoad(admin, aid.id, aid.card_load_status, { card_load_error: null, updated_at: new Date().toISOString() })
+  if (claim.error) {
+    console.error(`[loadMaternityCard] aid=${aid.id} נעילת הטעינה נכשלה:`, claim.error)
+    return { ok: false, error: `נעילת הטעינה נכשלה: ${claim.error}` }
+  }
+  if (!claim.claimed) return { ok: true, already: true } // קריאה אחרת טוענת או כבר טענה
   // יציאה בלי טעינה (אין מלאי): מחזירים את המצב הקודם כדי שלא יישאר pending
   const releaseLock = async () => {
     await admin.from('maternity_aids')
@@ -531,13 +531,21 @@ export async function processAwaitingStock(admin: SupabaseClient): Promise<Await
       // הסימון נתפס אטומית *לפני* השליחה, כדי ששתי ריצות מקבילות (התזמון
       // השעתי והוספת מלאי) לא ישלחו שתיהן. שליחה חוזרת — רק ידנית מהמסך.
       if (w.card_status === 'loaded' && w.card_voucher_status === 'issued') continue
-      const { data: mine } = await admin.from('maternity_aids').update({
+      // התנאי: הסימון עדיין כפי שנקרא. בלי or() — ראו cardLoadClaim.ts.
+      let mark = admin.from('maternity_aids').update({
         card_status: 'loaded',
         card_voucher_status: 'issued',
         updated_at: new Date().toISOString(),
       }).eq('id', w.id)
-        .or('card_status.is.null,card_status.neq.loaded,card_voucher_status.is.null,card_voucher_status.neq.issued')
-        .select('id')
+      mark = w.card_status == null ? mark.is('card_status', null) : mark.eq('card_status', w.card_status)
+      mark = w.card_voucher_status == null ? mark.is('card_voucher_status', null) : mark.eq('card_voucher_status', w.card_voucher_status)
+      const { data: mine, error: markErr } = await mark.select('id')
+      if (markErr) {
+        out.failed++
+        console.error(`[processAwaitingStock] aid=${w.id} סימון השובר נכשל:`, markErr.message)
+        out.errors.push(`סימון השובר נכשל: ${markErr.message} (תיק ${String(w.id).slice(0, 8)})`)
+        continue
+      }
       if (!mine?.length) continue   // ריצה אחרת כבר שלחה
       const v = await sendCardVoucher(admin, w.id, null)
       if (!v.ok) {

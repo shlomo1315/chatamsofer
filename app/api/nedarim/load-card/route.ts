@@ -11,6 +11,7 @@ import {
   getClientCard,
 } from '@/lib/nedarim'
 import { getStockBalance, consumeOneCard } from '@/lib/cardStock'
+import { claimCardLoad } from '@/lib/cardLoadClaim'
 import { acquireLoadGuard, confirmLoadGuard, releaseLoadGuard, previousTlushStillActive } from '@/lib/maternityLoadGuard'
 
 export const dynamic = 'force-dynamic'
@@ -141,13 +142,9 @@ export async function POST(request: NextRequest) {
   // ⚠️ טעינה חוזרת *מכוונת* אחרי שהראשונה הסתיימה עדיין אפשרית (הכפתור
   // מוצג גם אחרי טעינה). נעילת pending ישנה (קריסה באמצע) משתחררת אחרי
   // 10 דקות, כדי שתיק לא ייתקע לנצח.
-  const staleBefore = new Date(Date.now() - 10 * 60 * 1000).toISOString()
-  const { data: claimed } = await admin.from('maternity_aids')
-    .update({ card_load_status: 'pending', card_load_amount: amount, card_load_error: null, updated_at: new Date().toISOString() })
-    .eq('id', aid.id)
-    .or(`card_load_status.is.null,card_load_status.in.(idle,failed,unloaded),and(card_load_status.eq.pending,updated_at.lt."${staleBefore}")`)
-    .select('id')
-  if (!claimed?.length) {
+  const claim = await claimCardLoad(admin, aid.id, aid.card_load_status, { card_load_amount: amount, card_load_error: null, updated_at: new Date().toISOString() })
+  if (claim.error) return NextResponse.json({ error: `נעילת הטעינה נכשלה: ${claim.error}` }, { status: 500 })
+  if (!claim.claimed) {
     return NextResponse.json({ error: 'הטענה לכרטיס הזה כבר מתבצעת — המתינו לסיומה' }, { status: 409 })
   }
 
