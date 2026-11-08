@@ -13,10 +13,8 @@ import { DEPARTMENTS } from '@/lib/departments'
 
 function LogoBadge() {
   return (
-    <div className="relative flex-shrink-0 w-10 h-10 rounded-full border-[1.5px] border-gold flex items-center justify-center font-black text-[19px] text-gold">
-      <span className="absolute inset-[3px] rounded-full border border-dashed border-gold/45" />
-      כ
-    </div>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src="/logo.png" alt="איגוד הצאצאים" className="flex-shrink-0 w-11 h-10 object-contain" />
   )
 }
 
