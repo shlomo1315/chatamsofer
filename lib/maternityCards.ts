@@ -3,7 +3,7 @@ import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { maternityCardEmail } from '@/lib/emailTemplates'
 import { getNedarimCreds, findClientByZeout, saveClientCard, addTlush, getClientCard, getMaternityLimitedId, isPassportId } from '@/lib/nedarim'
-import { NedarimGuardError } from '@/lib/nedarimGuard'
+import { NedarimGuardError, GUARD_PAUSED_MESSAGE } from '@/lib/nedarimGuard'
 import { acquireLoadGuard, confirmLoadGuard, releaseLoadGuard, previousTlushStillActive } from '@/lib/maternityLoadGuard'
 import { logActivity } from '@/lib/activityLog'
 import { consumeOneCard, getStockBalance } from '@/lib/cardStock'
@@ -26,7 +26,7 @@ export async function loadMaternityCardOnApproval(
 ): Promise<{ ok: boolean; notConfigured?: boolean; already?: boolean; awaitingStock?: boolean; notWanted?: boolean; guardPaused?: boolean; error?: string; clientId?: string | null }> {
   const { data: aid } = await admin
     .from('maternity_aids')
-    .select('id, beneficiary_id, card_balance, card_load_status, card_tlush_id, birth_date, wants_food_card')
+    .select('id, beneficiary_id, card_balance, card_load_status, card_load_error, card_tlush_id, birth_date, wants_food_card')
     .eq('id', aidId).maybeSingle()
   if (!aid) return { ok: false, error: 'התיק לא נמצא' }
 
@@ -312,7 +312,13 @@ export async function loadMaternityCardOnApproval(
     }
     await releaseLoadGuard(admin, aid.id) // הפריקה אומתה: מותר להחזיק חסם חדש
   }
-  const guard = await acquireLoadGuard(admin, aid.id)
+  let guard = await acquireLoadGuard(admin, aid.id)
+  // ריפוי: תיקים שהשומר עצר לפני התיקון נשארו עם חסם תפוס ו"לא ודאי".
+  // הפנייה לא יצאה לנדרים (השגיאה נזרקת לפני השליחה), ולכן בטוח לשחרר.
+  if (guard === 'held' && String(aid.card_load_error ?? '').startsWith(GUARD_PAUSED_MESSAGE)) {
+    await releaseLoadGuard(admin, aid.id)
+    guard = await acquireLoadGuard(admin, aid.id)
+  }
   if (guard !== 'acquired') {
     await restoreCard(); await releaseLock()
     await logActivity(admin, { action: 'maternity_card_load_blocked', entityType: 'maternity_aid', entityId: aid.id, details: { reason: guard === 'held' ? 'guard_held' : 'guard_error' } })

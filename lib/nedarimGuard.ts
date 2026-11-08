@@ -127,6 +127,8 @@ export function opKeyOf(mosad: string, action: string, params: Record<string, st
   return id ? `${mosad}:${action}:${id}` : null
 }
 
+export const GUARD_PAUSED_MESSAGE = 'הפניות לנדרים נעצרו זמנית כדי למנוע עומס. נסו שוב בעוד כמה דקות או פנו למשרד'
+
 export class NedarimGuardError extends Error {
   constructor(message: string) {
     super(message)
@@ -259,7 +261,7 @@ export async function guardBeforeNedarim(channel: GuardChannel, opKey: string | 
       'הפנייה הזו נחסמה ולא נשלחה לנדרים. שאר הפעולות ממשיכות כרגיל.',
     ])
   }
-  throw new NedarimGuardError('הפניות לנדרים נעצרו זמנית כדי למנוע עומס. נסו שוב בעוד כמה דקות או פנו למשרד')
+  throw new NedarimGuardError(GUARD_PAUSED_MESSAGE)
 }
 
 /** אחרי כל פנייה לנדרים — הצלחה או כשל (כולל חסימה / אין הרשאה / רשת). */
