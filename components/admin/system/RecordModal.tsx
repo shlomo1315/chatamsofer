@@ -18,7 +18,7 @@ export type RecordField = {
 }
 export type RecordSection = { title: string; fields: RecordField[]; wide?: boolean }
 export type RecordTab = { key: string; label: string; count?: number; content: ReactNode }
-export type RecordFact = { label: string; value: string; ltr?: boolean }
+export type RecordFact = { label: string; value: string; ltr?: boolean; hl?: boolean }
 export type RecordSteps = { labels: string[]; current: number; rejected?: boolean; dates?: (string | undefined)[] }
 export type RecordCheck = { label: string; ok: boolean; onAsk?: () => void }
 
@@ -96,6 +96,8 @@ export default function RecordModal(props: {
   tabs?: RecordTab[]
   // לשונית ראשית נוספת בצד הפרטים (למשל כרטיסים); כשיש, מוצג פס לשוניות מעל הפרטים
   mainTab?: { label: string; content: ReactNode }
+  // מצב סקירה אחת: בלי לשוניות. מסמך חי בצד, קובייה ראשית (כרטיס) ליד, ושאר הסעיפים בקוביות; below מוצג מתחת
+  overview?: { doc: ReactNode; main: ReactNode; below?: ReactNode }
   actions?: ReactNode
   kind: string
   index: number
@@ -103,7 +105,7 @@ export default function RecordModal(props: {
   onIndex: (i: number) => void
   onClose: () => void
 }) {
-  const { title, meta, statusLabel, statusTone, stampDate, crumb, facts, readiness, steps, sections, note, tabs, mainTab, actions, kind, index, total, onIndex, onClose } = props
+  const { title, meta, statusLabel, statusTone, stampDate, crumb, facts, readiness, steps, sections, note, tabs, mainTab, overview, actions, kind, index, total, onIndex, onClose } = props
   const [tab, setTab] = useState(0)
   const [view, setView] = useState(0)
   const [prevIndex, setPrevIndex] = useState(index)
@@ -127,6 +129,18 @@ export default function RecordModal(props: {
   const tone = TONE[statusTone]
   const done = readiness?.filter((c) => c.ok).length ?? 0
   const missing = (readiness?.length ?? 0) - done
+
+
+  const renderSection = (sec: RecordSection, i: number, cls = '') => (
+    <section key={sec.title} className={`rounded-xl border border-[#E6DFCF] bg-[#FFFDF8] px-5 pb-2 pt-1 shadow-[0_1px_2px_rgba(20,33,61,.05),0_8px_24px_rgba(20,33,61,.06)] ${cls || (sec.wide ? 'md:col-span-full' : '')}`}>
+      <h3 className="flex items-baseline gap-2.5 border-b-[1.5px] border-[#14213D] pb-2.5 pt-3.5 text-[15px] font-bold text-[#14213D]">
+        <em className="text-[22px] font-black not-italic leading-none tabular-nums text-[#C0912F]">{i + 1}</em>{sec.title}
+      </h3>
+      <div className={`grid grid-cols-1 gap-x-7 ${sec.wide ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+        {sec.fields.map((f) => <Field key={f.label} f={f} />)}
+      </div>
+    </section>
+  )
 
   return (
     <div
@@ -205,9 +219,9 @@ export default function RecordModal(props: {
           {(facts?.length || readiness?.length) ? (
             <div className="grid flex-none grid-cols-2 border-b border-[#E6DFCF] bg-[#FFFDF8] md:flex">
               {facts?.map((f, i) => (
-                <div key={i} className="min-w-0 flex-1 border-b border-[#EFE9DC] px-3.5 py-2.5 md:border-b-0 md:border-l md:px-6 md:pb-[13px] md:pt-3.5 md:last:border-l-0">
+                <div key={i} className={`min-w-0 flex-1 border-b border-[#EFE9DC] px-3.5 py-2.5 md:border-b-0 md:border-l md:px-6 md:pb-[13px] md:pt-3.5 md:last:border-l-0 ${f.hl ? 'bg-[#FFF8E6]' : ''}`}>
                   <small className="block text-xs text-[#6B6352]">{f.label}</small>
-                  <b dir={f.ltr ? 'ltr' : undefined} className={`block truncate text-[22px] font-black leading-[1.15] tabular-nums text-[#14213D] md:text-[30px] ${f.ltr ? 'text-right' : ''}`}>{f.value}</b>
+                  <b dir={f.ltr ? 'ltr' : undefined} className={`block truncate text-[22px] font-black leading-[1.15] tabular-nums md:text-[30px] ${f.hl ? 'text-[#8A6316]' : 'text-[#14213D]'} ${f.ltr ? 'text-right' : ''}`}>{f.value}</b>
                 </div>
               ))}
               {readiness && readiness.length > 0 && (
@@ -223,6 +237,38 @@ export default function RecordModal(props: {
             </div>
           ) : null}
 
+          {overview ? (
+            <div className="grid min-h-0 flex-1 content-start gap-3 bg-[#F7F3EA] p-3 md:gap-4 md:overflow-auto md:p-5">
+              {readiness && readiness.length > 0 && (
+                <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2.5 rounded-[10px] border border-[#E8D4A2] border-r-4 border-r-[#C0912F] bg-[#FFF9EA] px-4 py-3">
+                  <b className="whitespace-nowrap text-[13px] font-bold text-[#8A6316]">לפני אישור</b>
+                  <ul className="flex flex-1 flex-wrap gap-1.5">
+                    {readiness.map((c) => c.ok ? (
+                      <li key={c.label} className="flex items-center gap-1.5 px-1.5 text-[13px] text-[#958C78]"><Check size={14} strokeWidth={2.6} className="text-[#2E7A47]" />{c.label}</li>
+                    ) : (
+                      <li key={c.label} className="flex min-h-8 items-center gap-1.5 rounded-2xl border border-[#E6DFCF] bg-white py-0 pl-1 pr-2.5 text-[13px]">
+                        {c.label}
+                        {c.onAsk && <button type="button" onClick={c.onAsk} className="min-h-[26px] rounded-[13px] bg-[#F4E9CF] px-2.5 text-xs font-medium text-[#8A6316] hover:bg-[#ECD9A8]">בקש</button>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-12 md:gap-4">
+                <div className="min-w-0 md:col-span-4 md:row-span-2">{overview.doc}</div>
+                {overview.main}
+                {sections.slice(0, 2).map((sec, i) => renderSection(sec, i, 'md:col-span-4'))}
+                {sections.slice(2).map((sec, i) => renderSection(sec, i + 2, 'md:col-span-full'))}
+              </div>
+              {note && note.text && (
+                <div className="relative whitespace-pre-line rounded-[10px] border border-[#EFDCAE] bg-[#FFF8E6] px-4 py-3.5 text-[13.5px] leading-[1.6] text-[#5C4512]">
+                  <span aria-hidden className="absolute -top-px right-5 h-[7px] w-[46px] rounded-b-[3px] bg-[#E8D29C]" />
+                  <b>{note.title}:</b> {note.text}
+                </div>
+              )}
+              {overview.below}
+            </div>
+          ) : (
           <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[1fr_390px] max-lg:md:grid-cols-[1fr_330px]">
             <div className="grid content-start gap-3 bg-[#F7F3EA] p-3 md:grid-cols-2 md:gap-4 md:overflow-auto md:px-6 md:pb-7 md:pt-5">
               {mainTab && (
@@ -250,16 +296,7 @@ export default function RecordModal(props: {
                 </div>
               )}
 
-              {sections.map((sec, i) => (
-                <section key={sec.title} className={`rounded-xl border border-[#E6DFCF] bg-[#FFFDF8] px-5 pb-2 pt-1 shadow-[0_1px_2px_rgba(20,33,61,.05),0_8px_24px_rgba(20,33,61,.06)] ${sec.wide ? 'md:col-span-full' : ''}`}>
-                  <h3 className="flex items-baseline gap-2.5 border-b-[1.5px] border-[#14213D] pb-2.5 pt-3.5 text-[15px] font-bold text-[#14213D]">
-                    <em className="text-[22px] font-black not-italic leading-none tabular-nums text-[#C0912F]">{i + 1}</em>{sec.title}
-                  </h3>
-                  <div className={`grid grid-cols-1 gap-x-7 ${sec.wide ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
-                    {sec.fields.map((f) => <Field key={f.label} f={f} />)}
-                  </div>
-                </section>
-              ))}
+              {sections.map((sec, i) => renderSection(sec, i))}
 
               {note && note.text && (
                 <div className="relative whitespace-pre-line rounded-[10px] border border-[#EFDCAE] bg-[#FFF8E6] px-4 py-3.5 text-[13.5px] leading-[1.6] text-[#5C4512] md:col-span-full">
@@ -287,6 +324,7 @@ export default function RecordModal(props: {
               )}
             </aside>
           </div>
+          )}
         </div>
 
         <div className="flex min-h-[70px] flex-none flex-wrap items-center gap-2 border-t border-[#E6DFCF] bg-[#FFFDF8] px-3 py-3 max-md:sticky max-md:bottom-0 md:px-6">
