@@ -1,8 +1,7 @@
 'use client'
 import { LogOut, User } from 'lucide-react'
 import NotificationBell from './NotificationBell'
-import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
+import SessionGuard, { signOutEverywhere } from './SessionGuard'
 import { Profile, ROLE_LABELS } from '@/types'
 import dynamic from 'next/dynamic'
 
@@ -16,16 +15,8 @@ interface HeaderProps {
 }
 
 export default function Header({ user, title }: HeaderProps) {
-  const router = useRouter()
-  const supabase = createClient()
-
-  const handleSignOut = async () => {
-    // ניתוק גם מסשני פורטל בתי ההחלמה שנפתחו בכניסה מהירה (עוגיות ph_)
-    await fetch('/api/admin/portal-logout-all', { method: 'POST' }).catch(() => {})
-    await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
-  }
+  // יציאה: גם עוגיות פורטל בתי ההחלמה (ph_) ועוגיית הפעילות, ושידור ללשוניות האחרות
+  const handleSignOut = () => signOutEverywhere('manual')
 
   return (
     <header className="relative z-30 h-[60px] bg-[#f7f3ea] border-b border-[#e6dfcf] flex items-center justify-between px-6 flex-shrink-0">
@@ -53,13 +44,17 @@ export default function Header({ user, title }: HeaderProps) {
             </div>
           )}
           {user && (
-            <button
-              onClick={handleSignOut}
-              className="p-2 rounded-full text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors flex-shrink-0"
-              title="יציאה"
-            >
-              <LogOut size={16} />
-            </button>
+            <div className="flex flex-col items-center flex-shrink-0 pe-1">
+              <button
+                onClick={handleSignOut}
+                className="p-1.5 rounded-full text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                title="יציאה"
+              >
+                <LogOut size={16} />
+              </button>
+              {/* מחובר עוד X שעות + חלון "האם אתה עדיין כאן?" */}
+              <SessionGuard />
+            </div>
           )}
         </div>
       </div>
