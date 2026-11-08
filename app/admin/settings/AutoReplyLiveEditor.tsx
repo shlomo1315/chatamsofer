@@ -2,7 +2,7 @@
 /* eslint-disable react-hooks/refs -- היסטוריית הביטול נשמרת ב-ref בכוונה (bump מרנדר מחדש); הפונקציות העוטפות נקראות בזמן רינדור רק כדי להעביר handlers */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
-  X, Save, Loader2, Undo2, Redo2, Monitor, Smartphone, Eye, Pencil, Send, Check, Plus, Trash2,
+  X, Save, Heading, AlignRight, RectangleHorizontal, LayoutTemplate, TriangleAlert, Loader2, Undo2, Redo2, Monitor, Smartphone, Eye, Pencil, Send, Check, Plus, Trash2,
   ChevronDown, ChevronUp, GripVertical, Mail, Clock, Ban, FileText, Link2, SlidersHorizontal,
   AlertCircle, PanelBottomOpen,
 } from 'lucide-react'
@@ -65,25 +65,41 @@ function RichView({ text, empty }: { text: string; empty: string }) {
   )
 }
 
+function RibbonGroup({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col items-center border-l border-[#E3DED3] px-1.5 last:border-l-0">
+      <div className="flex flex-wrap items-center gap-0.5">{children}</div>
+      <span className="mt-0.5 text-[10px] text-slate-400">{label}</span>
+    </div>
+  )
+}
+
+function RibbonBtn({ icon: Icon, label, onClick, disabled, on }: { icon: typeof Clock; label: string; onClick: () => void; disabled?: boolean; on?: boolean }) {
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} aria-pressed={on}
+      className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-bold disabled:opacity-30 ${on ? 'bg-[#F6EBCB] text-[#142036]' : 'text-slate-700 hover:bg-slate-50'}`}>
+      <Icon size={15} /> {label}
+    </button>
+  )
+}
+
 export default function AutoReplyLiveEditor({
-  dept, depts, config, s, dirty, saving, onPatch, onSwitchDept, onSave, onClose,
+  dept, config, s, dirty, saving, onPatch, onSave, boxBar,
 }: {
   dept: LiveEditorDept
-  depts: LiveEditorDept[]
   config: AutoReplyMap
   s: Settings
   dirty: boolean
   saving: boolean
   onPatch: (changes: Partial<Settings>) => void
-  onSwitchDept: (key: string) => void
   onSave: () => void
-  onClose: () => void
+  boxBar: ReactNode
 }) {
   const [sel, setSel] = useState<Sel>(null)
   const [device, setDevice] = useState<'desktop' | 'phone'>('desktop')
   const [view, setView] = useState<'edit' | 'preview'>('edit')
   const [drawer, setDrawer] = useState(false)
-  const [open, setOpen] = useState({ structure: true, add: true, box: false })
+  const [tab, setTab] = useState<'props' | 'structure' | 'add' | 'box'>('props')
   const [, bump] = useState(0)
   const [toast, setToast] = useState<{ ok: boolean; text: string } | null>(null)
   const [testing, setTesting] = useState(false)
@@ -191,6 +207,7 @@ export default function AutoReplyLiveEditor({
   // ── פעולות על המבנה ──
   const select = (id: Sel, scroll = false) => {
     setSel(id)
+    if (id) setTab('props')
     if (scroll && id) {
       requestAnimationFrame(() => document.getElementById(`blk-${id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }))
     }
@@ -352,16 +369,8 @@ export default function AutoReplyLiveEditor({
     return <p className="text-xs text-slate-600 leading-relaxed">סמנו טקסט ולחצו ״הדגשה״ או ״קישור״ מעל השדה.</p>
   }
 
-  const Section = ({ id, title, icon, children }: { id: 'structure' | 'add' | 'box'; title: string; icon: ReactNode; children: ReactNode }) => (
-    <div className="border-b border-[#E3DED3]">
-      <button type="button" onClick={() => setOpen(o => ({ ...o, [id]: !o[id] }))}
-        className="w-full flex items-center gap-2 px-4 py-3 text-right text-sm font-black text-[#142036]">
-        <span className="text-[#C0912F]">{icon}</span>{title}
-        <ChevronDown size={15} className={`mr-auto text-slate-400 transition-transform ${open[id] ? 'rotate-180' : ''}`} />
-      </button>
-      {open[id] && <div className="px-4 pb-4">{children}</div>}
-    </div>
-  )
+  const Section = ({ id, children }: { id: 'structure' | 'add' | 'box'; title: string; icon: ReactNode; children: ReactNode }) =>
+    tab === id ? <div key={id} className="p-4">{children}</div> : null
 
   const structRow = (id: string, label: string, sub?: string, extra?: { drag?: number }) => (
     <div key={id}
@@ -391,14 +400,41 @@ export default function AutoReplyLiveEditor({
 
   const panel = (
     <div className="flex flex-col">
-      {/* מאפיינים — דבוקים למעלה */}
-      <div className="sticky top-0 z-10 border-b border-[#E3DED3] bg-[#F6EBCB] px-4 py-3">
+      {/* מונים */}
+      <div className="grid grid-cols-4 border-b border-[#E3DED3]">
+        {[
+          [s.sections.length, 'סעיפים', false],
+          [s.buttons.length + s.sections.reduce((n, x) => n + x.buttons.length, 0), 'כפתורים', false],
+          [noUrl, 'חסרי כתובת', noUrl > 0],
+          [wordCount, 'מילים', false],
+        ].map(([n, l, warn]) => (
+          <div key={String(l)} className="border-l border-[#E3DED3] py-3 text-center last:border-l-0">
+            <div className={`text-xl font-black ${warn ? 'text-amber-700' : 'text-[#142036]'}`}>{n}</div>
+            <div className="text-[11px] text-slate-500">{l}</div>
+          </div>
+        ))}
+      </div>
+      {/* לשוניות */}
+      <div className="sticky top-0 z-10 grid grid-cols-4 border-b border-[#E3DED3] bg-white">
+        {([
+          ['props', 'מאפיינים', SlidersHorizontal],
+          ['structure', 'מבנה', FileText],
+          ['add', 'הוספה', Plus],
+          ['box', 'תיבה', Mail],
+        ] as const).map(([k, l, Icon]) => (
+          <button key={k} type="button" onClick={() => setTab(k)} aria-pressed={tab === k}
+            className={`flex flex-col items-center gap-1 border-b-2 py-2.5 text-xs font-bold ${tab === k ? 'border-[#C0912F] text-[#142036]' : 'border-transparent text-slate-500'}`}>
+            <Icon size={15} /> {l}
+          </button>
+        ))}
+      </div>
+      {tab === 'props' && <div className="px-4 py-3">
         <div className="mb-2 flex items-center gap-2 text-xs font-black text-[#142036]">
           <SlidersHorizontal size={14} className="text-[#C0912F]" />
           {sel ? 'מאפייני הבלוק' : 'מאפיינים'}
         </div>
         {Props()}
-      </div>
+      </div>}
 
       {Section({
         id: 'structure', title: 'מבנה המייל', icon: <FileText size={15} />,
@@ -455,10 +491,12 @@ export default function AutoReplyLiveEditor({
         children: (
           <div className="flex flex-col gap-3">
             <div>
-              <label className="mb-1 block text-[11px] font-bold text-slate-600">תיבה</label>
-              <select value={dept.key} onChange={e => onSwitchDept(e.target.value)} className={field}>
-                {depts.filter(d => d.key !== 'mailing').map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
-              </select>
+              <label className="mb-1 block text-[11px] font-bold text-slate-600">נושא המענה הראשי</label>
+              <input value={s.subject ?? ''} onChange={e => change({ subject: e.target.value }, 'subject')} className={field} />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-bold text-slate-600">נושא ההודעה הזמנית</label>
+              <input value={s.tempSubject ?? ''} onChange={e => change({ tempSubject: e.target.value }, 'subject')} className={field} />
             </div>
             <div>
               <label className="mb-1 block text-[11px] font-bold text-slate-600">מה נשלח לפונים</label>
@@ -555,7 +593,7 @@ export default function AutoReplyLiveEditor({
       {view === 'preview' ? (
         <div className="overflow-hidden rounded-2xl border border-[#E3DED3] bg-white">
           {preview
-            ? <iframe ref={frameRef} title="תצוגה מקדימה" sandbox="" className="h-[calc(100vh-230px)] min-h-[420px] w-full bg-white" />
+            ? <iframe ref={frameRef} title="תצוגה מקדימה" sandbox="" className="h-[calc(100vh-330px)] min-h-[420px] w-full bg-white" />
             : <div className="flex h-72 items-center justify-center text-slate-400"><Loader2 size={18} className="animate-spin" /></div>}
         </div>
       ) : s.mode === 'off' ? (
@@ -654,59 +692,60 @@ export default function AutoReplyLiveEditor({
   const iconBtn = 'inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#E3DED3] bg-white text-slate-600 hover:text-[#14213D] disabled:opacity-30'
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-[#F4F1EA]" dir="rtl" role="dialog" aria-label="עורך המענה האוטומטי">
-      {/* פס עליון */}
+    <div className="flex h-[calc(100vh-120px)] min-h-[620px] flex-col overflow-hidden rounded-2xl border border-[#E3DED3] bg-[#F4F1EA]" dir="rtl" aria-label="עורך המענה האוטומטי">
+      {boxBar}
+      {/* פס עליון: מצב, בדיקה ושמירה */}
       <header className="flex flex-wrap items-center gap-2 border-b border-[#E3DED3] bg-white px-3 py-2">
-        <button type="button" onClick={onClose} className={iconBtn} title="סגירה"><X size={16} /></button>
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: dept.color }} />
-          <span className="truncate text-sm font-black text-[#142036]">{dept.label}</span>
-        </div>
-
-        <div className="mr-2 hidden items-center rounded-lg border border-[#E3DED3] bg-[#F4F1EA] p-0.5 sm:flex">
+        <div className="flex items-center rounded-lg border border-[#E3DED3] bg-[#F4F1EA] p-0.5">
           {MODES.map(m => (
             <button key={m.key} type="button" onClick={() => change({ mode: m.key })} aria-pressed={s.mode === m.key}
-              className={`rounded-md px-2.5 py-1 text-xs font-bold ${s.mode === m.key ? 'bg-[#14213D] text-white' : 'text-slate-600'}`}>
+              className={`rounded-md px-3 py-1.5 text-xs font-bold ${s.mode === m.key ? 'bg-white text-[#142036] shadow-sm' : 'text-slate-600'}`}>
               {m.label}
             </button>
           ))}
         </div>
-
-        <div className="mr-auto flex items-center gap-1.5">
-          <button type="button" onClick={undo} disabled={!past.current.length} className={iconBtn} title="ביטול (Ctrl+Z)"><Undo2 size={15} /></button>
-          <button type="button" onClick={redo} disabled={!future.current.length} className={iconBtn} title="חזרה (Ctrl+Y)"><Redo2 size={15} /></button>
-          <button type="button" onClick={() => setView(v => v === 'edit' ? 'preview' : 'edit')}
-            className={`${iconBtn} w-auto gap-1 px-2 text-xs font-bold`} title="תצוגה אמיתית כפי שתישלח">
-            {view === 'edit' ? <><Eye size={14} /> תצוגה</> : <><Pencil size={14} /> עריכה</>}
-          </button>
-          <div className="flex items-center rounded-lg border border-[#E3DED3] bg-white p-0.5">
-            <button type="button" aria-pressed={device === 'desktop'} onClick={() => setDevice('desktop')} title="מחשב"
-              className={`rounded-md p-1.5 ${device === 'desktop' ? 'bg-[#F6EBCB] text-[#142036]' : 'text-slate-500'}`}><Monitor size={14} /></button>
-            <button type="button" aria-pressed={device === 'phone'} onClick={() => setDevice('phone')} title="טלפון"
-              className={`rounded-md p-1.5 ${device === 'phone' ? 'bg-[#F6EBCB] text-[#142036]' : 'text-slate-500'}`}><Smartphone size={14} /></button>
-          </div>
-          <button type="button" onClick={testSend} disabled={testing}
-            className={`${iconBtn} w-auto gap-1 px-2 text-xs font-bold`} title="שליחת המייל הזה אליך לבדיקה">
-            {testing ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-            <span className="hidden md:inline">מייל בדיקה אליי</span>
-          </button>
-          <span className={`hidden text-xs font-bold md:inline ${dirty ? 'text-amber-700' : 'text-emerald-700'}`}>
+        {toast && <span className={`text-xs font-bold ${toast.ok ? 'text-emerald-700' : 'text-red-600'}`}>{toast.text}</span>}
+        <div className="mr-auto flex items-center gap-2">
+          <span className={`text-xs font-bold ${dirty ? 'text-amber-700' : 'text-emerald-700'}`}>
             {dirty ? 'יש שינויים' : <span className="inline-flex items-center gap-1"><Check size={13} /> נשמר</span>}
           </span>
+          <button type="button" onClick={testSend} disabled={testing}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#E3DED3] bg-white px-3 text-xs font-bold text-[#142036]" title="שליחת המייל הזה אליך לבדיקה">
+            {testing ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} מייל בדיקה אליי
+          </button>
           <button type="button" onClick={onSave} disabled={saving || !dirty}
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#14213D] px-3 text-xs font-bold text-white hover:bg-[#0E1830] disabled:opacity-50" title="שמירה (Ctrl+S)">
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#14213D] px-4 text-xs font-bold text-white hover:bg-[#0E1830] disabled:opacity-50" title="שמירה (Ctrl+S)">
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} שמירה
           </button>
         </div>
       </header>
 
-      {/* מונים */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-[#E3DED3] bg-white/70 px-4 py-1.5 text-[11px] text-slate-500">
-        <span>{s.sections.length} סעיפים</span>
-        <span>{s.buttons.length + s.sections.reduce((n, x) => n + x.buttons.length, 0)} כפתורים</span>
-        <span className={noUrl ? 'font-bold text-amber-700' : ''}>{noUrl} בלי כתובת</span>
-        <span>{wordCount} מילים</span>
-        {toast && <span className={`mr-auto font-bold ${toast.ok ? 'text-emerald-700' : 'text-red-600'}`}>{toast.text}</span>}
+      {/* סרגל כלים */}
+      <div className="flex flex-wrap items-stretch gap-x-1 gap-y-2 border-b border-[#E3DED3] bg-white px-2 py-1.5">
+        {!isTemp && !isOff && (
+          <RibbonGroup label="הוספה">
+            <RibbonBtn icon={Heading} label="כותרת" onClick={() => select('title', true)} />
+            <RibbonBtn icon={AlignRight} label="פסקה" onClick={() => select('message', true)} />
+            <RibbonBtn icon={RectangleHorizontal} label="כפתור" onClick={() => addGeneralButton()} />
+            <RibbonBtn icon={LayoutTemplate} label="סעיף" onClick={() => addSection()} />
+            <RibbonBtn icon={TriangleAlert} label="הערה" onClick={() => select('footnote', true)} />
+          </RibbonGroup>
+        )}
+        <RibbonGroup label="עריכה">
+          <RibbonBtn icon={Undo2} label="ביטול" onClick={undo} disabled={!past.current.length} />
+          <RibbonBtn icon={Redo2} label="חזרה" onClick={redo} disabled={!future.current.length} />
+        </RibbonGroup>
+        {!isTemp && !isOff && (
+          <RibbonGroup label="מוכן מראש">
+            <RibbonBtn icon={FileText} label="כפתורי הגשה" onClick={() => setTab('add')} />
+          </RibbonGroup>
+        )}
+        <RibbonGroup label="תצוגה">
+          <RibbonBtn icon={Monitor} label="מחשב" on={device === 'desktop'} onClick={() => setDevice('desktop')} />
+          <RibbonBtn icon={Smartphone} label="טלפון" on={device === 'phone'} onClick={() => setDevice('phone')} />
+          <RibbonBtn icon={view === 'edit' ? Eye : Pencil} label={view === 'edit' ? 'כפי שיישלח' : 'עריכה'}
+            on={view === 'preview'} onClick={() => setView(v => v === 'edit' ? 'preview' : 'edit')} />
+        </RibbonGroup>
       </div>
 
       <div className="flex min-h-0 flex-1">
