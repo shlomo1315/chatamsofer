@@ -3,6 +3,7 @@ import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
 import { getAutoReplyConfig, saveAutoReplyConfig, normalizeConfig, type AutoReplyMap } from '@/lib/autoReplyConfig'
 import { renderAutoReply } from '@/lib/autoReplySender'
 import { DEPARTMENTS, type DepartmentKey } from '@/lib/departments'
+import { sendEmail } from '@/lib/email'
 import { loadCustomMailboxes, saveCustomMailboxes, asDepartment } from '@/lib/customMailboxes'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  let body: { config?: unknown; preview?: unknown }
+  let body: { config?: unknown; preview?: unknown; testSend?: unknown }
   try { body = await request.json() } catch {
     return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 })
   }
@@ -55,6 +56,20 @@ export async function POST(request: NextRequest) {
     if (!settings) return NextResponse.json({ error: 'תיבה לא מוכרת' }, { status: 400 })
     const mail = renderAutoReply(dept, settings)
     return NextResponse.json({ subject: mail.subject, html: mail.html })
+  }
+
+  // ── מייל בדיקה — אל המשתמש המחובר בלבד ──
+  // ⚠️ הנמען נלקח מהסשן ולא מהבקשה: אחרת הראוט היה מאפשר לשלוח מייל
+  // מהמערכת לכתובת כלשהי.
+  if (body.testSend) {
+    const dept = String((body.testSend as { department?: string }).department ?? 'main') as DepartmentKey
+    const settings = normalizeConfig((body.config ?? {}) as Record<string, unknown>)[dept]
+    if (!settings) return NextResponse.json({ error: 'תיבה לא מוכרת' }, { status: 400 })
+    if (!ctx.email) return NextResponse.json({ error: 'לא נמצאה כתובת מייל למשתמש' }, { status: 400 })
+    const mail = renderAutoReply(dept, settings)
+    const res = await sendEmail({ to: ctx.email, subject: `[בדיקה] ${mail.subject}`, html: mail.html })
+    if (!res.ok) return NextResponse.json({ error: 'שליחת מייל הבדיקה נכשלה' }, { status: 502 })
+    return NextResponse.json({ ok: true, to: ctx.email })
   }
 
   // ⚠️ הניקוי כולו ב-normalizeConfig (בתוך saveAutoReplyConfig): כתובות
