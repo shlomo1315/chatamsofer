@@ -268,7 +268,8 @@ export default function NedarimFamilies() {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Stats grid */}
+      {/* 🔒 סיכומים כלליים — למנהל בלבד; מזכירות רואה רק משפחה וכרטיס */}
+      {isAdmin && <>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard icon={Wallet} color="emerald" label="סה״כ מוטען בארנקים"
           value={ils(stats?.totalLoaded ?? total ?? 0)} loading={statsLoading} />
@@ -286,6 +287,7 @@ export default function NedarimFamilies() {
         <PeriodCard label="נוצל השבוע" amount={ils(stats?.usedWeek ?? 0)} count={stats?.cntWeek ?? 0} loading={statsLoading} />
         <PeriodCard label="נוצל החודש" amount={ils(stats?.usedMonth ?? 0)} count={stats?.cntMonth ?? 0} loading={statsLoading} />
       </div>
+      </>}
 
       {/* View toggle + actions */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200">
