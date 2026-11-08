@@ -18,6 +18,7 @@ vi.mock('./scheduledMail', () => ({ scheduleCardPickupReminders: vi.fn(async () 
 
 import { loadMaternityCardOnApproval } from './maternityCards'
 import { addTlush } from '@/lib/nedarim'
+import { NedarimGuardError } from '@/lib/nedarimGuard'
 
 // מסד מדומה עם מצב משותף: ה-UPDATE ל-pending הוא נעילה אטומית (סינכרוני, כמו ב-SQL)
 function statefulAdmin(guards = new Set<string>(), initial: Record<string, unknown> = {}) {
@@ -30,12 +31,13 @@ function statefulAdmin(guards = new Set<string>(), initial: Record<string, unkno
     let patch: Record<string, unknown> | null = null
     let lock = false
     let guardInsert: string | null = null
+    let guardRelease = false
     const q: Record<string, unknown> = {}
     q.select = () => q
     q.eq = () => q
     q.insert = (r: { aid_id?: string }) => { if (table === 'maternity_load_guard') guardInsert = r.aid_id ?? null; return q }
     q.is = () => q
-    q.update = (p: Record<string, unknown>) => { patch = p; if (p.card_load_status === 'pending') lock = true; return q }
+    q.update = (p: Record<string, unknown>) => { if (table === 'maternity_load_guard' && p.released_at) guardRelease = true; patch = p; if (p.card_load_status === 'pending') lock = true; return q }
     q.lt = () => q
     q.maybeSingle = () => Promise.resolve({ data: table === 'maternity_aids' ? { ...aid } : ben })
     q.then = (res: (v: unknown) => unknown) => {
@@ -50,6 +52,7 @@ function statefulAdmin(guards = new Set<string>(), initial: Record<string, unkno
         }
         Object.assign(aid, patch)
       }
+      if (guardRelease) guards.delete('a1')
       if (guardInsert) {
         if (guards.has(guardInsert)) return Promise.resolve({ error: { code: '23505', message: 'dup' } }).then(res)
         guards.add(guardInsert)
@@ -79,5 +82,22 @@ describe('טעינת כרטיס יולדת: נעילה אטומית', () => {
     const r = await loadMaternityCardOnApproval(admin, 'a1')
     expect(vi.mocked(addTlush)).not.toHaveBeenCalled()
     expect(r.already).toBe(true)
+  })
+
+  it('עצירה של השומר לפני הפנייה היא כישלון ודאי: החסם משתחרר והסבב הבא טוען באמת', async () => {
+    vi.mocked(addTlush).mockClear()
+    const guards = new Set<string>()
+    const admin = statefulAdmin(guards)
+    vi.mocked(addTlush).mockRejectedValueOnce(new NedarimGuardError('הפניות לנדרים נעצרו זמנית'))
+    const r1 = await loadMaternityCardOnApproval(admin, 'a1')
+    expect(r1.ok).toBe(false)
+    expect(r1.guardPaused).toBe(true)
+    expect(r1.error).not.toMatch(/לא ודאי/)
+    expect(guards.has('a1')).toBe(false)
+    // הסבב הבא: נטען בפועל ולא מסומן "כבר נטען" (שהיה שולח שובר בלי כסף)
+    const r2 = await loadMaternityCardOnApproval(admin, 'a1')
+    expect(r2.ok).toBe(true)
+    expect(r2.already).toBeFalsy()
+    expect(vi.mocked(addTlush)).toHaveBeenCalledTimes(2)
   })
 })
