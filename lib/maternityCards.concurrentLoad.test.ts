@@ -100,4 +100,16 @@ describe('טעינת כרטיס יולדת: נעילה אטומית', () => {
     expect(r2.already).toBeFalsy()
     expect(vi.mocked(addTlush)).toHaveBeenCalledTimes(2)
   })
+
+  it('ריפוי: תיק שנעצר על ידי השומר לפני התיקון (חסם תפוס, "לא ודאי") נטען בסבב הבא', async () => {
+    vi.mocked(addTlush).mockClear()
+    const admin = statefulAdmin(new Set(['a1']), {
+      card_load_status: 'failed',
+      card_load_error: 'הפניות לנדרים נעצרו זמנית כדי למנוע עומס. נסו שוב בעוד כמה דקות או פנו למשרד (לא ודאי אם נטען — לבדוק בנדרים לפני טעינה חוזרת)',
+    })
+    const r = await loadMaternityCardOnApproval(admin, 'a1')
+    expect(r.ok).toBe(true)
+    expect(r.already).toBeFalsy()
+    expect(vi.mocked(addTlush)).toHaveBeenCalledTimes(1)
+  })
 })
