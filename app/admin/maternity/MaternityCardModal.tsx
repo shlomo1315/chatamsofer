@@ -9,6 +9,7 @@ import { useConfirm } from '@/components/ui/ConfirmDialog'
 import type { MaternityAid } from '@/types'
 import { babyNameLabel, type AidNameFields } from '@/lib/babyNames'
 import { STATUS_PILL, type MotherRef } from './maternityStatus'
+import MaternityCardsTab from './MaternityCardsTab'
 import RecordModal, { modalBtn, type RecordTone } from '@/components/admin/system/RecordModal'
 
 // כרטסת לידה: הגדרות בלבד, התצוגה ב-RecordModal המשותף.
@@ -29,6 +30,23 @@ const motherName =(m?: MotherRef) => {
   if (!m) return '—'
   if (m.spouse_name) return [m.family_name, m.spouse_name].filter(Boolean).join(' ')
   return [m.family_name, m.full_name].filter(Boolean).join(' ') || '—'
+}
+
+// מסמך מוצג ישר בעמודה (תמונה או PDF), עם קישור לפתיחה בחלון חדש
+function LiveDoc({ url, label }: { url: string; label: string }) {
+  const pdf = /\.pdf(\?|#|$)/i.test(url)
+  return (
+    <div className="overflow-hidden rounded-[10px] border border-[#E6DFCF]">
+      <div className="flex items-center justify-between gap-2 bg-[#F4F1E8] px-2.5 py-2 text-sm font-semibold text-[#14213D]">
+        {label}
+        <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md border border-[#D9CFB9] bg-white px-2 py-0.5 text-xs font-medium">פתח בחלון חדש <ExternalLink size={12} /></a>
+      </div>
+      {pdf
+        ? <iframe src={url} title={label} className="h-[420px] w-full bg-white" />
+        // eslint-disable-next-line @next/next/no-img-element
+        : <img src={url} alt={label} className="max-h-[520px] w-full bg-white object-contain" />}
+    </div>
+  )
 }
 
 export default function MaternityCardModal({ rows, index, onIndex, onClose }: {
@@ -136,11 +154,12 @@ export default function MaternityCardModal({ rows, index, onIndex, onClose }: {
         ] },
       ]}
       note={{ title: 'הערת משרד', text: (merged.notes ?? '').trim() }}
+      mainTab={{ label: 'כרטיסים', content: <MaternityCardsTab aid={merged} /> }}
       tabs={[
         { key: 'docs', label: 'מסמכים', count: (cert ? 1 : 0) + (cert2 ? 1 : 0), content: !cert && !cert2 ? <p className="mt-4 text-sm text-[#6B6352]">לא צורף אישור לידה</p> : (
-          <div className="mt-4 flex flex-wrap gap-2">
-            {cert && <a href={cert} target="_blank" rel="noreferrer" className={modalBtn.ghost}><ExternalLink size={16} />אישור לידה</a>}
-            {cert2 && <a href={cert2} target="_blank" rel="noreferrer" className={modalBtn.ghost}><ExternalLink size={16} />אישור לידה, תינוק שני</a>}
+          <div className="mt-4 flex flex-col gap-3">
+            {cert && <LiveDoc url={cert} label="אישור לידה" />}
+            {cert2 && <LiveDoc url={cert2} label="אישור לידה, תינוק שני" />}
           </div>
         ) },
         ...(fixList.length ? [{ key: 'fixes', label: 'תיקונים', count: fixList.length, content: (

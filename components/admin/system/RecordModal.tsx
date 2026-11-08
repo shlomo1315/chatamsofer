@@ -94,6 +94,8 @@ export default function RecordModal(props: {
   sections: RecordSection[]
   note?: { title: string; text: string }
   tabs?: RecordTab[]
+  // לשונית ראשית נוספת בצד הפרטים (למשל כרטיסים); כשיש, מוצג פס לשוניות מעל הפרטים
+  mainTab?: { label: string; content: ReactNode }
   actions?: ReactNode
   kind: string
   index: number
@@ -101,10 +103,11 @@ export default function RecordModal(props: {
   onIndex: (i: number) => void
   onClose: () => void
 }) {
-  const { title, meta, statusLabel, statusTone, stampDate, crumb, facts, readiness, steps, sections, note, tabs, actions, kind, index, total, onIndex, onClose } = props
+  const { title, meta, statusLabel, statusTone, stampDate, crumb, facts, readiness, steps, sections, note, tabs, mainTab, actions, kind, index, total, onIndex, onClose } = props
   const [tab, setTab] = useState(0)
+  const [view, setView] = useState(0)
   const [prevIndex, setPrevIndex] = useState(index)
-  if (prevIndex !== index) { setPrevIndex(index); setTab(0) }
+  if (prevIndex !== index) { setPrevIndex(index); setTab(0); setView(0) }
 
   useEffect(() => {
     const go = (s: number) => onIndex((index + s + total) % total)
@@ -222,6 +225,15 @@ export default function RecordModal(props: {
 
           <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[1fr_390px] max-lg:md:grid-cols-[1fr_330px]">
             <div className="grid content-start gap-3 bg-[#F7F3EA] p-3 md:grid-cols-2 md:gap-4 md:overflow-auto md:px-6 md:pb-7 md:pt-5">
+              {mainTab && (
+                <div role="tablist" className="flex border-b border-[#E6DFCF] md:col-span-full">
+                  {['פרטי התיק', mainTab.label].map((l, i) => (
+                    <button key={l} role="tab" aria-selected={view === i} onClick={() => setView(i)}
+                      className={`-mb-px min-h-[44px] px-5 text-sm border-b-[3px] ${view === i ? 'border-[#C0912F] font-bold text-[#14213D]' : 'border-transparent text-[#6B6352]'}`}>{l}</button>
+                  ))}
+                </div>
+              )}
+              {mainTab && view === 1 ? <div className="md:col-span-full">{mainTab.content}</div> : <>
               {readiness && readiness.length > 0 && (
                 <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2.5 rounded-[10px] border border-[#E8D4A2] border-r-4 border-r-[#C0912F] bg-[#FFF9EA] px-4 py-3 md:col-span-full">
                   <b className="whitespace-nowrap text-[13px] font-bold text-[#8A6316]">לפני אישור</b>
@@ -255,6 +267,7 @@ export default function RecordModal(props: {
                   <b>{note.title}:</b> {note.text}
                 </div>
               )}
+              </>}
             </div>
 
             <aside className="flex min-h-[60vh] flex-col border-t border-[#E6DFCF] bg-[#FFFDF8] md:min-h-0 md:overflow-hidden md:border-r md:border-t-0">
