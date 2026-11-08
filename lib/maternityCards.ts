@@ -10,6 +10,7 @@ import { consumeOneCard, getStockBalance } from '@/lib/cardStock'
 import { maybeSendLowStockAlert } from '@/lib/cardStockAlert'
 import { isAwaitingCard, AWAITING_SELECT, type AwaitingAid } from '@/lib/awaitingFilter'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { createLoadPacer } from '@/lib/loadPacer'
 import { claimCardLoad } from '@/lib/cardLoadClaim'
 import { reviveLookupOrder, isUnknownClient } from '@/lib/holidayClientCreate'
 
@@ -507,6 +508,8 @@ export async function processAwaitingStock(admin: SupabaseClient): Promise<Await
   const waiting = candidates.filter(isAwaitingCard)
   if (!waiting.length) return out
 
+  // קבוצות קטנות עם הפסקה, כדי לא לעבור את תקרת השומר (lib/loadPacer.ts)
+  const afterLoad = createLoadPacer()
   for (const w of waiting) {
     if (balance <= 0) break
     // loadMaternityCardOnApproval מנכה כרטיס אטומית ומטעין בנדרים. אם אין מלאי → awaitingStock=true.
@@ -587,6 +590,7 @@ export async function processAwaitingStock(admin: SupabaseClient): Promise<Await
     }
 
     // הטעינה הצליחה → הכרטיס נוכה, שולחים שובר
+    await afterLoad()
     const voucher = await sendCardVoucher(admin, w.id, null)
     // ⚠️ הכרטיס כבר נוכה והוטען. אם השובר לא נשלח — היולדת לא יודעת שיש לה
     // כרטיס. נספר ככשל כדי שהמסך יציג זאת, ולא ידווח על הצלחה שקרית.
