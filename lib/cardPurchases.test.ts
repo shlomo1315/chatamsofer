@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { sumPurchases, validatePurchase } from './cardPurchases'
+import { sumPurchases, validatePurchase, unrecordedRestocks } from './cardPurchases'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // "סך הכרטיסים שנקנו" נכשל שלוש פעמים כשנגזר מיומן התנועות: 0 (הרכישה
@@ -62,5 +62,32 @@ describe('validatePurchase', () => {
     expect(validatePurchase(-5, '2026-07-22', today)).toMatch(/כמות/)
     expect(validatePurchase(1.5, '2026-07-22', today)).toMatch(/כמות/)
     expect(validatePurchase('הרבה', '2026-07-22', today)).toMatch(/כמות/)
+  })
+})
+
+describe('unrecordedRestocks', () => {
+  const ledger = [
+    { delta: 300, reason: 'restock', aid_id: null, created_at: '2026-07-28T09:55:00Z' },
+    { delta: 1, reason: 'baseline', aid_id: null, created_at: '2026-08-27T09:18:00Z' },
+    { delta: -1, reason: 'birth_approval', aid_id: 'a1', created_at: '2026-09-01T10:00:00Z' },
+    { delta: 1, reason: 'adjust', aid_id: 'a1', created_at: '2026-09-02T10:00:00Z' },
+    { delta: 300, reason: 'restock', aid_id: null, created_at: '2026-09-10T12:52:00Z' },
+  ]
+
+  it('מזהה את 300 הכרטיסים של 10/09 שנכנסו למלאי ולא נרשמו כרכישה', () => {
+    const r = unrecordedRestocks(ledger, [{ quantity: 300, purchased_on: '2026-07-22' }])
+    expect(r).toEqual({ cards: 300, dates: ['2026-09-10'] })
+  })
+
+  it('אין התראה כשהרכישה נרשמה', () => {
+    const r = unrecordedRestocks(ledger, [
+      { quantity: 300, purchased_on: '2026-07-22' },
+      { quantity: 300, purchased_on: '2026-09-10' },
+    ])
+    expect(r).toBeNull()
+  })
+
+  it('הוספות לפני ספירת המלאי אינן נספרות — הספירה כבר כוללת אותן', () => {
+    expect(unrecordedRestocks(ledger.slice(0, 4), [])).toBeNull()
   })
 })
