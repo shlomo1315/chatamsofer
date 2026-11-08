@@ -2,6 +2,9 @@ import { createServerClient } from '@supabase/ssr'
 import { escapeLike } from '@/lib/likeEscape'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { NextResponse, type NextRequest } from 'next/server'
+import {
+  evaluateSession, authTimeFromAccessToken, readSeenCookie, makeSeenCookie, SEEN_COOKIE, SEEN_COOKIE_OPTIONS,
+} from '@/lib/sessionPolicy'
 import { maintenanceOn, isMaintenanceBlockedApi, MAINTENANCE_MESSAGE } from '@/lib/maintenance'
 
 function noCache(res: NextResponse) {
@@ -158,6 +161,31 @@ export async function proxy(request: NextRequest) {
     // יוזרים "מייל בלבד": חסומים מכל המערכת חוץ מלשונית המייל.
     if (!isMailPath && prof.mail_only === true && prof.role !== 'admin') {
       return NextResponse.redirect(new URL('/admin/mail', request.url))
+    }
+
+    // מדיניות הסשן: תוקף מוחלט של 8 שעות מהכניסה, וניתוק על חוסר פעילות.
+    // נאכפת כאן בשרת, כך שדפדפן שנשאר פתוח (או קוד שנעקף בו) לא משאיר סשן חי.
+    let accessToken: string | undefined
+    try { accessToken = (await supabase.auth.getSession()).data.session?.access_token } catch { /* best-effort */ }
+    const now = Date.now()
+    const verdict = evaluateSession({
+      now,
+      authAt: authTimeFromAccessToken(accessToken),
+      seenAt: readSeenCookie(request.cookies.get(SEEN_COOKIE)?.value, user.id),
+    })
+    if (!verdict.ok) {
+      // scope local: מבטל בשרת האימות רק את הסשן הזה, לא מחשבים אחרים של אותו משתמש
+      try { await supabase.auth.signOut({ scope: 'local' }) } catch { /* העוגיות נמחקות בכל מקרה */ }
+      const out = NextResponse.redirect(new URL(`/login?reason=${verdict.reason}`, request.url))
+      response.cookies.getAll().forEach(c => out.cookies.set(c))
+      for (const c of request.cookies.getAll()) {
+        if (c.name.startsWith('sb-') || c.name.startsWith('ph_')) out.cookies.set(c.name, '', { path: '/', maxAge: 0 })
+      }
+      out.cookies.set(SEEN_COOKIE, '', { path: '/', maxAge: 0 })
+      return noCache(out)
+    }
+    if (verdict.refreshSeen) {
+      response.cookies.set(SEEN_COOKIE, makeSeenCookie(user.id, now), SEEN_COOKIE_OPTIONS)
     }
   }
 

@@ -23,6 +23,8 @@ export default function LoginPage() {
   // זמין (תקלה אצל גוגל, שינוי הגדרות OAuth, חסימת נטפרי). בלעדיה, תקלה אחת
   // בצד שלישי נועלת את כל הצוות מחוץ למערכת עד לפריסה מחודשת.
   const [recovery, setRecovery] = useState(false)
+  // ניתוק אוטומטי (?reason=) — הסבר ניטרלי, לא שגיאה
+  const [notice, setNotice] = useState('')
 
   const isPlaceholder =
     process.env.NEXT_PUBLIC_SUPABASE_URL === 'https://placeholder.supabase.co'
@@ -34,6 +36,9 @@ export default function LoginPage() {
     const err = params.get('error')
     if (err === 'unauthorized') setDeniedEmail(params.get('denied') ?? '')
     else if (err === 'auth') setError('ההתחברות נכשלה. נסה שוב.')
+    const reason = params.get('reason')
+    if (reason === 'idle') setNotice('נותקת מהמערכת אחרי זמן ללא פעילות. אפשר להיכנס שוב.')
+    else if (reason === 'expired') setNotice('תוקף החיבור (8 שעות) הסתיים. אפשר להיכנס שוב.')
   }, [])
 
   // סגירת הפופאפ מחזירה למסך כניסה נקי: הכתובת מנוקה מ-error/denied כדי
@@ -162,6 +167,13 @@ export default function LoginPage() {
             </svg>
             {googleLoading ? 'מתחבר...' : 'כניסה עם Google'}
           </button>
+
+          {notice && !error && (
+            <div role="status" className="mt-5 flex items-center gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+              <AlertCircle size={15} className="flex-shrink-0" />
+              {notice}
+            </div>
+          )}
 
           {/* שגיאה שאינה חוסר הרשאה (חוסר הרשאה מוצג בפופאפ) */}
           {error && (

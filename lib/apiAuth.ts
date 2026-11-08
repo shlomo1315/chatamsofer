@@ -7,6 +7,7 @@ import { cache } from 'react'
 import { NextResponse } from 'next/server'
 import type { SectionKey, Profile } from '@/types'
 import { roleAllows, type PermAction } from '@/lib/permissions'
+import { evaluateSession, authTimeFromAccessToken, readSeenCookie, SEEN_COOKIE } from '@/lib/sessionPolicy'
 
 // תשתית אימות אחידה לכל נתיבי ה-API.
 // ה-middleware (proxy.ts) אינו מכסה את /api — לכן כל נתיב חייב לאמת בעצמו דרך הקובץ הזה.
@@ -55,7 +56,7 @@ export function getServiceClient(): SupabaseClient | null {
 // ⚠️ getUser עטוף ב-try: כשל רענון מחזיר "אין משתמש" (401 מסודר) במקום לזרוק
 // שגיאה שמפילה את הבקשה. משתמש שאיבד סשן צריך לראות מסך התחברות, לא מסך
 // שגיאה אדום.
-const getSessionUser = cache(async () => {
+const getSessionState = cache(async () => {
   const cookieStore = await cookies()
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -69,12 +70,33 @@ const getSessionUser = cache(async () => {
   )
   try {
     const { data: { user } } = await supabase.auth.getUser()
-    return user
+    if (!user) return { user: null, verdict: null }
+    // מדיניות הסשן (תוקף 8 שעות + חוסר פעילות) — ראו lib/sessionPolicy.ts.
+    // getSession קורא מהעוגיות בלבד, אחרי שאותו טוקן כבר אומת ב-getUser.
+    const { data: { session } } = await supabase.auth.getSession()
+    const verdict = evaluateSession({
+      now: Date.now(),
+      authAt: authTimeFromAccessToken(session?.access_token),
+      seenAt: readSeenCookie(cookieStore.get(SEEN_COOKIE)?.value, user.id),
+    })
+    return { user, verdict }
   } catch (e) {
     console.error('[apiAuth] getUser נכשל:', e instanceof Error ? e.message : e)
-    return null
+    return { user: null, verdict: null }
   }
 })
+
+// סשן שעבר את מדיניות הזמן (8 שעות / חוסר פעילות) נחשב כמנותק גם ב-API,
+// ולא רק במסכים — אחרת לשונית פתוחה ממשיכה לשלוף נתונים אחרי הניתוק.
+const getSessionUser = cache(async () => {
+  const { user, verdict } = await getSessionState()
+  return user && verdict?.ok ? user : null
+})
+
+/** מצב הסשן הגולמי — לנתיב /api/auth/session בלבד. */
+export async function getSessionStatus() {
+  return getSessionState()
+}
 
 // ⚡ שליפת הפרופיל, ממוזגת לכל בקשה.
 //
