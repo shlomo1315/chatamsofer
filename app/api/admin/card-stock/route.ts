@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { requireAdmin, requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { getStockBalance, addStockMovement, setBaselineStock } from '@/lib/cardStock'
 import { reconcileStock, heldAidIds, approvedCardCoverage, scopedLedger } from '@/lib/cardStockRecon'
-import { getPurchases, validatePurchase } from '@/lib/cardPurchases'
+import { getPurchases, validatePurchase, unrecordedRestocks } from '@/lib/cardPurchases'
 import { processAwaitingStock } from '@/lib/maternityCards'
 import { startAwaitingStockRun } from '@/lib/awaitingStockRunner'
 import { maybeSendLowStockAlert, resetAlertIfAboveThreshold } from '@/lib/cardStockAlert'
@@ -268,6 +268,8 @@ export async function GET() {
       // יומן התנועות אינו יומן רכישות, ואין בו סימן ודאי שמבחין ביניהם.
       purchasedCards: purchases.totalPurchased,
       purchases: purchases.purchases,
+      // כרטיסים שנכנסו למלאי ולא נרשמו כרכישה — "נקנו" ו"נמסרו" חסרים אותם
+      unrecorded: unrecordedRestocks(fullLedger, purchases.purchases),
     },
     { headers: NO_STORE },
   )

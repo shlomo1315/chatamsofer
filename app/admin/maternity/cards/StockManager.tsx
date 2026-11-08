@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { Package, Plus, Minus, Loader2, X, History, AlertTriangle, CheckCircle2, Clock, RefreshCw, ClipboardCheck } from 'lucide-react'
 import { useStaffPermissions } from '@/components/StaffPermissions'
 import { networkErrorMessage } from '@/lib/networkErrorMessage'
+import LoadJournal from './LoadJournal'
 
 type LedgerRow = {
   id: string
@@ -92,6 +93,7 @@ export default function StockManager() {
   // ספירה. עכשיו רכישה היא אירוע מתועד עם תאריך.
   const [purchasedCards, setPurchasedCards] = useState(0)
   const [purchases, setPurchases] = useState<Purchase[]>([])
+  const [unrecorded, setUnrecorded] = useState<{ cards: number; dates: string[] } | null>(null)
   const [showPurchases, setShowPurchases] = useState(false)
   const [unapproved, setUnapproved] = useState<UnapprovedLoad[]>([])
   const [fixingAll, setFixingAll] = useState(false)
@@ -119,6 +121,7 @@ export default function StockManager() {
       setIssuedCards(typeof d.issuedCards === 'number' ? d.issuedCards : 0)
       setPurchasedCards(typeof d.purchasedCards === 'number' ? d.purchasedCards : 0)
       setPurchases(Array.isArray(d.purchases) ? d.purchases as Purchase[] : [])
+      setUnrecorded(d.unrecorded && typeof d.unrecorded.cards === 'number' ? d.unrecorded : null)
       setUnapproved(Array.isArray(d.loadedNotApproved) ? d.loadedNotApproved as UnapprovedLoad[] : [])
     } catch (e) { /* ignore */ }
     setLoading(false)
@@ -337,6 +340,28 @@ export default function StockManager() {
               <span className="text-slate-500">במלאי</span>
               <strong className="ltr-num text-base text-emerald-700">{recon.balance}</strong>
             </div>
+
+            {/* ⚠️ "נקנו" נקרא מטבלת הרכישות, והוספת מלאי אינה רושמת רכישה.
+                כך 300 הכרטיסים של 10/09 נכנסו למלאי והמסך הציג "נקנו 300,
+                נמסרו 76" במקום 600 ו-376. מציגים את הפער ומציעים לרשום. */}
+            {unrecorded && (
+              <div className="w-full flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5">
+                <p className="flex items-center gap-1.5 text-[12px] font-bold text-amber-800">
+                  <AlertTriangle size={14} className="shrink-0" />
+                  <span>
+                    <span className="ltr-num">{unrecorded.cards}</span> כרטיסים נכנסו למלאי
+                    {' '}(<span className="ltr-num">{unrecorded.dates.map(d => new Date(d).toLocaleDateString('he-IL')).join(', ')}</span>)
+                    {' '}ולא נרשמו כרכישה — לכן &quot;נקנו&quot; ו&quot;נמסרו&quot; חסרים אותם.
+                  </span>
+                </p>
+                {canEdit && (
+                  <button type="button" onClick={() => setModal('purchase')}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-slate-900">
+                    <Plus size={12} /> רשום רכישה
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* ── פירוט הרכישות ──────────────────────────────────────────
                 ⚠️ המספר "נקנו" נכשל שלוש פעמים כשנגזר מיומן התנועות, ולכן
@@ -644,6 +669,8 @@ export default function StockManager() {
           </div>
         )}
       </div>
+
+      <LoadJournal />
 
       {modal === 'purchase' && (
         <PurchaseModal

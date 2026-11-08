@@ -72,3 +72,39 @@ export function validatePurchase(quantity: unknown, purchasedOn: unknown, today:
   if (purchasedOn > today) return 'תאריך הרכישה אינו יכול להיות עתידי'
   return null
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// כרטיסים שנכנסו למלאי ולא נרשמו כרכישה.
+//
+// ⚠️ "נקנו" נקרא מטבלת הרכישות, אבל הוספת מלאי (restock) אינה רושמת רכישה.
+// כך ב-10/09/2026 נכנסו 300 כרטיסים ("הטענה 180 אלף") והמסך המשיך להציג
+// "נקנו 300" ו"נמסרו 76", כשבפועל נקנו 600 ונמסרו 376.
+// ההשוואה נעשית רק מאז ספירת המלאי האחרונה: הספירה קובעת את המלאי מחדש,
+// וכל מה שנכנס לפניה כבר כלול בה.
+// ─────────────────────────────────────────────────────────────────────────────
+export interface UnrecordedStock {
+  /** כמה כרטיסים נכנסו למלאי מעבר לרכישות הרשומות */
+  cards: number
+  /** תאריכי ההוספות (YYYY-MM-DD) */
+  dates: string[]
+}
+
+export function unrecordedRestocks(
+  ledger: readonly { delta: number; reason: string | null; aid_id?: string | null; created_at?: string | null }[],
+  purchases: readonly { quantity?: number | null; purchased_on: string }[],
+): UnrecordedStock | null {
+  let baselineAt = ''
+  for (const r of ledger) {
+    if (r.reason === 'baseline' && r.created_at && r.created_at > baselineAt) baselineAt = r.created_at
+  }
+  const sinceDay = baselineAt.slice(0, 10)
+  const restocks = ledger.filter(r =>
+    r.reason === 'restock' && !r.aid_id && r.delta > 0 && (r.created_at ?? '') > baselineAt)
+  const entered = restocks.reduce((s, r) => s + r.delta, 0)
+  const recorded = sumPurchases(purchases.filter(p => p.purchased_on >= sinceDay))
+  if (entered <= recorded) return null
+  return {
+    cards: entered - recorded,
+    dates: [...new Set(restocks.map(r => (r.created_at ?? '').slice(0, 10)))],
+  }
+}
