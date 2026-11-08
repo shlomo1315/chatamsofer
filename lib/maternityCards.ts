@@ -3,6 +3,7 @@ import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { maternityCardEmail } from '@/lib/emailTemplates'
 import { getNedarimCreds, findClientByZeout, saveClientCard, addTlush, getClientCard, getMaternityLimitedId, isPassportId } from '@/lib/nedarim'
+import { NedarimGuardError } from '@/lib/nedarimGuard'
 import { acquireLoadGuard, confirmLoadGuard, releaseLoadGuard, previousTlushStillActive } from '@/lib/maternityLoadGuard'
 import { logActivity } from '@/lib/activityLog'
 import { consumeOneCard, getStockBalance } from '@/lib/cardStock'
@@ -22,7 +23,7 @@ export const MATERNITY_LOAD_AMOUNT = 600
 export async function loadMaternityCardOnApproval(
   admin: SupabaseClient, aidId: string, amount = MATERNITY_LOAD_AMOUNT,
   opts: { deferLowStockAlert?: boolean } = {},
-): Promise<{ ok: boolean; notConfigured?: boolean; already?: boolean; awaitingStock?: boolean; notWanted?: boolean; error?: string; clientId?: string | null }> {
+): Promise<{ ok: boolean; notConfigured?: boolean; already?: boolean; awaitingStock?: boolean; notWanted?: boolean; guardPaused?: boolean; error?: string; clientId?: string | null }> {
   const { data: aid } = await admin
     .from('maternity_aids')
     .select('id, beneficiary_id, card_balance, card_load_status, card_tlush_id, birth_date, wants_food_card')
@@ -328,6 +329,15 @@ export async function loadMaternityCardOnApproval(
       }
     }
   } catch (e) {
+    // 🔴 השומר עצר *לפני* שהפנייה יצאה לנדרים — כישלון ודאי, לא "לא ודאי".
+    // קודם זה נרשם כמצב לא ודאי והחסם נשאר. בסבב הבא החסם התפוס נקרא
+    // "כבר נטען", והיולדת קיבלה שובר בלי שהכרטיס נטען (7.11.2026, 12 תיקים).
+    if (e instanceof NedarimGuardError) {
+      await releaseLoadGuard(admin, aid.id)
+      await restoreCard()
+      await admin.from('maternity_aids').update({ card_load_status: 'failed', card_load_error: e.message }).eq('id', aid.id)
+      return { ok: false, guardPaused: true, error: e.message, clientId }
+    }
     // ⚠️ חריגה באמצע הפנייה = מצב לא ודאי: החסם נשאר, ודרושה בדיקה ידנית בנדרים.
     const msg = (e instanceof Error ? e.message : String(e)) + ' (לא ודאי אם נטען — לבדוק בנדרים לפני טעינה חוזרת)'
     await restoreCard()
@@ -502,6 +512,14 @@ export async function processAwaitingStock(admin: SupabaseClient): Promise<Await
     if (r.notConfigured) {
       out.notConfigured = true
       out.errors.push('נדרים אינו מוגדר — לא ניתן להטעין כרטיסים')
+      break
+    }
+
+    // ⚠️ השומר השהה את הפניות לנדרים: כל השאר ייכשלו גם הם. עוצרים,
+    // והן ייטענו בסבב הבא.
+    if (r.guardPaused) {
+      out.failed++
+      out.errors.push(`${r.error} (תיק ${String(w.id).slice(0, 8)})`)
       break
     }
 
