@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import GilyonotReplyEditor from './GilyonotReplyEditor'
 import AutoReplyLiveEditor from './AutoReplyLiveEditor'
-import { Loader2, Save, ChevronDown, Check, AlertCircle, Plus, Trash2, Mail, Clock, Ban, Pencil } from 'lucide-react'
+import { Loader2, Save, Check, AlertCircle, Plus, Trash2, Mail, Clock, Ban } from 'lucide-react'
 import type { AutoReplyMap, AutoReplySettings as Settings } from '@/lib/autoReplyConfig'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -23,7 +23,7 @@ export default function AutoReplySettings() {
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
   const [okMsg, setOkMsg] = useState('')
-  const [openKey, setOpenKey] = useState<string | null>(null)
+  const [showAdd, setShowAdd] = useState(false)
   const [editing, setEditing] = useState<string | null>(null)
   // 🔴 הוספת תיבה חדשה: DEPARTMENTS קבוע בקוד, ובלי זה כתובת חדשה
   // חייבה שינוי קוד ופריסה כדי לקבל מענה אוטומטי.
@@ -118,184 +118,104 @@ export default function AutoReplySettings() {
     }
   }
 
-  return (
-    <div className={`flex flex-col gap-4 ${dirty ? "pb-28" : ""}`}>
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-            <Mail size={18} className="text-navy" /> מענה אוטומטי לתיבות המייל
-          </h2>
-          <p className="text-sm text-slate-500 mt-1 leading-relaxed">
-            לכל תיבה נוסח משלה. המענה נשלח לכל פונה — בלי קשר לתוכן המייל ובלי בדיקה אם הוא רשום.
-          </p>
+  const settingsOf = (key: string): Settings => {
+    // 🔴 תיבה חדשה עדיין לא קיימת ב-draft. ברירת המחדל חייבת לכלול את כל
+    // המערכים, אחרת s.sections.map קורס על תיבה שלא נשמרה.
+    const raw = draft[key as keyof AutoReplyMap] as Settings | undefined
+    return {
+      ...({ enabled: false } as Settings),
+      ...raw,
+      sections: Array.isArray(raw?.sections) ? raw.sections : [],
+      buttons: Array.isArray(raw?.buttons) ? raw.buttons : [],
+    }
+  }
 
-          {/* 🔴 הוספת תיבה חדשה. עד כה רשימת התיבות הייתה קבועה בקוד,
-              וכתובת חדשה חייבה שינוי קוד ופריסה כדי לקבל מענה אוטומטי. */}
-          <div className="mt-3 flex flex-wrap items-end gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-slate-600">שם התיבה</label>
-              <input value={newLabel} onChange={e => setNewLabel(e.target.value)}
-                placeholder="לדוגמה: תרומות"
-                className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft" />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-slate-600">כתובת המייל</label>
-              <input value={newEmail} onChange={e => setNewEmail(e.target.value)}
-                placeholder="name@chasamsofer.info" dir="ltr"
-                className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm text-left focus:outline-none focus:ring-2 focus:ring-navy-soft" />
-            </div>
-            <button onClick={addMailbox} disabled={addingBox}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-1.5 text-sm font-bold text-white hover:bg-navy-dark disabled:opacity-60 transition-colors">
-              {addingBox ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} הוסף תיבה
-            </button>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {okMsg && <span className="text-sm text-emerald-600 font-bold flex items-center gap-1"><Check size={15} /> {okMsg}</span>}
-          {dirty && (
-            <button onClick={save} disabled={saving}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-navy text-white text-sm font-bold hover:bg-navy-dark disabled:opacity-60">
-              {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} שמירה
-            </button>
-          )}
-        </div>
-      </div>
+  const activeKey = depts.some(d => d.key === editing) ? editing! : depts.find(d => d.key !== 'mailing')?.key ?? depts[0]?.key
+  const dept = depts.find(d => d.key === activeKey)
+  const s = dept ? settingsOf(dept.key) : null
 
-      {/* ── סרגל שמירה צף ──────────────────────────────────────────────
-          🔴 כפתור השמירה ישב בראש הדף בלבד. הנוסחים ארוכים, והמנהל
-          שערך שדה בתחתית לא ראה אותו כלל — ערך, יצא, והשינוי אבד.
-
-          ⚠️ מופיע רק כשיש שינוי שלא נשמר, ונעלם מיד אחרי השמירה: סרגל
-          קבוע היה מכסה תוכן גם כשאין מה לשמור.
-
-          ⚠️ ההבהוב פועם ברקע ולא מסתיר טקסט — animate-pulse על העטיפה
-          היה מרצד את הכיתוב עצמו וקשה לקריאה. */}
-      {dirty && (
-        <div className="fixed bottom-0 inset-x-0 z-50 px-4 pb-4 pt-3 pointer-events-none">
-          <div className="mx-auto max-w-3xl pointer-events-auto flex items-center justify-between gap-3
-                          rounded-2xl border-2 border-amber-300 bg-white shadow-2xl px-4 py-3
-                          animate-[pulse_2s_ease-in-out_infinite]">
-            <span className="flex items-center gap-2 text-sm font-bold text-amber-700">
-              <AlertCircle size={16} /> יש שינויים שלא נשמרו
-            </span>
-            <button onClick={save} disabled={saving}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-navy text-white text-sm font-bold
-                         hover:bg-navy-dark disabled:opacity-60 shadow-lg shrink-0">
-              {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} שמירה
-            </button>
-          </div>
-        </div>
-      )}
-
-      {err && (
-        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
-          <AlertCircle size={16} /> {err}
-        </div>
-      )}
-
-      <div className="flex flex-col gap-2">
-        {depts.map(dept => {
-          // 🔴 תיבה חדשה אינה קיימת עדיין ב-draft, ו-`if (!s) return null`
-          // היה מסתיר אותה לגמרי — המשתמש היה מוסיף תיבה ולא רואה אותה.
-          // ברירת מחדל כבויה: היא מופיעה ברשימה, ומקבלת הגדרות ברגע
-          // שנוגעים בה.
-          // 🔴 ברירת המחדל חייבת לכלול את *כל* המערכים.
-          //
-          // ⚠️ קודם היא הייתה { enabled: false } בלבד, ו-s.sections.map
-          // בהמשך קרס על תיבה חדשה שטרם נשמרה:
-          // "Cannot read properties of undefined (reading 'map')".
-          // התיבה נוספה, המסך קרס, והמשתמש לא ידע למה.
-          const raw = draft[dept.key as keyof AutoReplyMap] as Settings | undefined
-          const s: Settings = {
-            ...({ enabled: false } as Settings),
-            ...raw,
-            sections: Array.isArray(raw?.sections) ? raw.sections : [],
-            buttons: Array.isArray(raw?.buttons) ? raw.buttons : [],
-          }
-          const isOpen = openKey === dept.key
-
+  // ── בורר התיבות: כל התיבות, עם מתג פעיל/כבוי, הסרה והוספה ──
+  const boxBar = (
+    <div className="flex flex-col gap-2 border-b border-[#E3DED3] bg-white px-3 py-2">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {depts.map(d => {
+          const ds = settingsOf(d.key)
+          const on = d.key === activeKey
           return (
-            <div key={dept.key} className="border border-slate-200 rounded-2xl overflow-hidden bg-white">
-              {/* כותרת התיבה */}
-              <div className="flex items-center gap-3 px-4 py-3">
-                <span className="w-3 h-3 rounded-full shrink-0" style={{ background: dept.color }} />
-                {/* ⚠️ הסרה מוצעת רק לתיבות שנוספו מהממשק — המחלקות
-                    הקבועות מקודדות בקוד ומחיקתן כאן לא הייתה עושה דבר. */}
-                {dept.custom && (
-                  <button onClick={() => removeMailbox(dept.email, dept.label)}
-                    title="הסרת התיבה"
-                    className="shrink-0 rounded-lg p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors">
-                    <Trash2 size={13} />
-                  </button>
-                )}
-                <button onClick={() => setOpenKey(isOpen ? null : dept.key)}
-                  className="flex items-center gap-2 flex-1 min-w-0 text-right">
-                  <span className="font-bold text-slate-900 truncate">{dept.label}</span>
-                  <span className="text-xs text-slate-400 truncate hidden sm:inline">{dept.email}</span>
-                  <ChevronDown size={16} className={`text-slate-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-                </button>
-                {/* ⚠️ תווית המצב מוצגת בשורה הסגורה: רשימת התיבות היא המקום
-                    שבו בודקים "מה שולחים כרגע", ובלי התווית היה צריך לפתוח
-                    כל תיבה בנפרד כדי לגלות שהיא על נוסח זמני. */}
-                {s.enabled && s.mode === 'temp' && (
-                  <span className="hidden sm:flex items-center gap-1 shrink-0 text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-300 rounded-full px-2 py-0.5">
-                    <Clock size={10} /> זמני
-                  </span>
-                )}
-                {s.enabled && s.mode === 'off' && (
-                  <span className="hidden sm:flex items-center gap-1 shrink-0 text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-300 rounded-full px-2 py-0.5">
-                    <Ban size={10} /> ללא מענה
-                  </span>
-                )}
-                <label className="flex items-center gap-2 shrink-0 cursor-pointer">
-                  <span className={`text-xs font-bold ${s.enabled ? 'text-emerald-600' : 'text-slate-400'}`}>
-                    {s.enabled ? 'פעיל' : 'כבוי'}
-                  </span>
-                  <input type="checkbox" checked={s.enabled}
-                    onChange={e => patch(dept.key, { enabled: e.target.checked })}
-                    className="w-9 h-5 appearance-none rounded-full bg-slate-300 checked:bg-emerald-500 relative cursor-pointer transition-colors
-                               before:content-[''] before:absolute before:top-0.5 before:right-0.5 before:w-4 before:h-4 before:bg-white before:rounded-full
-                               before:transition-transform checked:before:-translate-x-4" />
-                </label>
-              </div>
-
-              {isOpen && dept.key === 'mailing' && (
-                <div className="border-t border-slate-100 p-4">
-                  <GilyonotReplyEditor />
-                </div>
-              )}
-              {isOpen && dept.key !== "mailing" && (
-                <div className="border-t border-slate-100 p-4">
-                  <button onClick={() => setEditing(dept.key)}
-                    className="inline-flex items-center gap-2 rounded-xl bg-navy px-4 py-2.5 text-sm font-bold text-white hover:bg-navy-dark transition-colors">
-                    <Pencil size={15} /> פתיחת העורך החי
-                  </button>
-                  <p className="mt-2 text-xs text-slate-400">עורכים את המייל עצמו במקום, עם פאנל כלים, תצוגת מחשב וטלפון ומייל בדיקה.</p>
-                </div>
+            <div key={d.key}
+              className={`flex shrink-0 items-center gap-2 rounded-xl border px-2.5 py-1.5 ${on ? 'border-[#C0912F] bg-[#F6EBCB]' : 'border-[#E3DED3] bg-white'}`}>
+              <button type="button" onClick={() => setEditing(d.key)} className="flex items-center gap-1.5 text-right" title={d.email}>
+                <span className="h-2.5 w-2.5 rounded-full" style={{ background: d.color }} />
+                <span className="text-sm font-bold text-[#142036]">{d.label}</span>
+                {ds.enabled && ds.mode === 'temp' && <Clock size={12} className="text-amber-700" />}
+                {ds.enabled && ds.mode === 'off' && <Ban size={12} className="text-slate-500" />}
+              </button>
+              <input type="checkbox" checked={ds.enabled} aria-label={`${d.label} פעיל`}
+                title={ds.enabled ? 'פעיל' : 'כבוי'}
+                onChange={e => patch(d.key, { enabled: e.target.checked })}
+                className="relative h-4 w-7 cursor-pointer appearance-none rounded-full bg-slate-300 transition-colors checked:bg-emerald-500
+                           before:absolute before:right-0.5 before:top-0.5 before:h-3 before:w-3 before:rounded-full before:bg-white before:content-['']
+                           before:transition-transform checked:before:-translate-x-3" />
+              {/* ⚠️ הסרה רק לתיבות שנוספו מהממשק — הקבועות מקודדות בקוד. */}
+              {d.custom && (
+                <button type="button" onClick={() => removeMailbox(d.email, d.label)} title="הסרת התיבה"
+                  className="rounded p-0.5 text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={12} /></button>
               )}
             </div>
           )
         })}
+        <button type="button" onClick={() => setShowAdd(v => !v)}
+          className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-dashed border-[#C0912F] px-2.5 py-1.5 text-xs font-bold text-[#142036]">
+          <Plus size={13} /> הוספת תיבה
+        </button>
+      </div>
+      {showAdd && (
+        <div className="flex flex-wrap items-end gap-2 rounded-xl border border-[#E3DED3] bg-[#FBFAF6] p-2">
+          <input value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="שם התיבה, לדוגמה: תרומות"
+            className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm" />
+          <input value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="name@chasamsofer.info" dir="ltr"
+            className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-left text-sm" />
+          <button type="button" onClick={addMailbox} disabled={addingBox}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-1.5 text-sm font-bold text-white disabled:opacity-60">
+            {addingBox ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} הוסף
+          </button>
+        </div>
+      )}
+      {(err || okMsg) && (
+        <div className={`flex items-center gap-1.5 text-xs font-bold ${err ? 'text-red-600' : 'text-emerald-700'}`}>
+          {err ? <AlertCircle size={13} /> : <Check size={13} />} {err || okMsg}
+        </div>
+      )}
+    </div>
+  )
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <h2 className="flex items-center gap-2 text-lg font-black text-slate-900">
+          <Mail size={18} className="text-navy" /> מענה אוטומטי לתיבות המייל
+        </h2>
+        <p className="mt-1 text-sm text-slate-500">לכל תיבה נוסח משלה. לוחצים על כל חלק במייל ועורכים אותו במקום.</p>
       </div>
 
-      {editing && (() => {
-        const dept = depts.find(d => d.key === editing)
-        if (!dept) return null
-        const raw = draft[dept.key as keyof AutoReplyMap] as Settings | undefined
-        const s: Settings = {
-          ...({ enabled: false } as Settings),
-          ...raw,
-          sections: Array.isArray(raw?.sections) ? raw.sections : [],
-          buttons: Array.isArray(raw?.buttons) ? raw.buttons : [],
-        }
-        return (
-          <AutoReplyLiveEditor dept={dept} depts={depts} config={draft} s={s} dirty={dirty} saving={saving}
-            onPatch={changes => patch(dept.key, changes)}
-            onSwitchDept={setEditing}
-            onSave={save}
-            onClose={() => setEditing(null)} />
-        )
-      })()}
+      {dept && s && dept.key !== 'mailing' && (
+        <AutoReplyLiveEditor dept={dept} config={draft} s={s} dirty={dirty} saving={saving}
+          onPatch={changes => patch(dept.key, changes)} onSave={save} boxBar={boxBar} />
+      )}
+      {dept?.key === 'mailing' && (
+        <div className="overflow-hidden rounded-2xl border border-[#E3DED3] bg-white">
+          {boxBar}
+          <div className="p-4"><GilyonotReplyEditor /></div>
+          {dirty && (
+            <div className="flex justify-end border-t border-[#E3DED3] p-3">
+              <button onClick={save} disabled={saving}
+                className="flex items-center gap-2 rounded-xl bg-navy px-4 py-2 text-sm font-bold text-white disabled:opacity-60">
+                {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} שמירה
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
