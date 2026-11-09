@@ -1249,6 +1249,71 @@ function WidowPortal({ beneficiary, onBack }: { beneficiary: FoundBeneficiary; o
 
 // ─── Main page ───
 
+// ─────────────────────────────────────────────────────────────────────────────
+// מסך הכניסה (id-lookup) — גרסה א׳ · מלוטש מהמוקאפ שאושר.
+// הכול תחת .hp-root כדי לא לדלוף לשאר המסכים.
+// ─────────────────────────────────────────────────────────────────────────────
+const HP_CSS = `
+.hp-root{--bg:#F6F5F1;--surface:#FFFFFF;--ink:#111A36;--ink-2:#4A5270;--ink-3:#7C8299;--line:#E6E3DA;--line-2:#D9D5CA;--act:#3E3BC4;--act-2:#2F2BA8;--gold:#B8913A;--gold-soft:#FBF4E2;--gold-ink:#7A5A14;--ok:#1F7A55;--r1:12px;--r2:22px;--t1:13px;--t2:15px;--t3:17px;--t5:30px;--t6:40px;--ease:cubic-bezier(.2,.8,.2,1);background:var(--bg);color:var(--ink);position:relative;overflow:hidden;isolation:isolate;-webkit-font-smoothing:antialiased}
+.hp-root .hp-halo{position:absolute;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(42rem 30rem at 85% -5%,rgba(110,106,235,.16),transparent 70%),radial-gradient(38rem 30rem at 0% 105%,rgba(240,190,120,.22),transparent 70%),radial-gradient(30rem 22rem at 10% 20%,rgba(150,200,235,.10),transparent 70%)}
+.hp-root .hp-halo::after{content:"";position:absolute;inset:0;opacity:.035;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.hp-root>header{border-bottom:1px solid rgba(17,26,54,.06);background:rgba(255,255,255,.55);backdrop-filter:blur(12px) saturate(1.2);box-shadow:none}
+.hp-root>header>div{max-width:none;padding:16px 32px}
+.hp-root>header h1{font-size:var(--t3);font-weight:700;color:var(--ink)}
+.hp-root>header img{width:40px;height:40px}
+.hp-root .hp-main{flex:1;display:flex;align-items:center;justify-content:center;padding:56px 24px 64px;width:100%}
+.hp-root .hp-col{width:100%;max-width:448px}
+.hp-root .hp-head{text-align:center;margin-bottom:32px}
+.hp-root .hp-seal{width:96px;height:96px;margin:0 auto 20px;border-radius:50%;padding:6px;background:#fff;box-shadow:0 0 0 1px rgba(184,145,58,.35),0 0 0 7px rgba(255,255,255,.7),0 0 0 8px rgba(184,145,58,.18),0 18px 36px -16px rgba(17,26,54,.35)}
+.hp-root .hp-seal img{width:100%;height:100%;object-fit:contain;display:block}
+.hp-root .hp-eyebrow{font-size:var(--t1);font-weight:600;letter-spacing:.04em;color:var(--gold-ink)}
+.hp-root .hp-h1{font-size:var(--t6);font-weight:800;letter-spacing:-.01em;line-height:1.15;margin:6px 0 10px;text-wrap:balance;color:var(--ink)}
+.hp-root .hp-sub{color:var(--ink-2);font-size:var(--t3)}
+.hp-root .hp-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r2);padding:32px;box-shadow:0 1px 0 rgba(255,255,255,.8) inset,0 1px 2px rgba(17,26,54,.04),0 24px 48px -24px rgba(40,38,120,.18)}
+.hp-root .hp-notice{text-wrap:balance;display:flex;gap:10px;align-items:flex-start;background:var(--gold-soft);border:1px solid #EEDDB0;color:var(--gold-ink);border-radius:var(--r1);padding:12px 14px;font-size:var(--t1);font-weight:600;line-height:1.5;margin-bottom:24px}
+.hp-root .hp-notice svg{flex:none;margin-top:2px}
+.hp-root .hp-seg{display:grid;grid-template-columns:1fr 1fr;background:#F0EEE8;border-radius:999px;padding:4px;gap:4px;position:relative}
+.hp-root .hp-seg button{border:0;background:transparent;border-radius:999px;min-height:44px;font-weight:600;font-size:var(--t2);color:var(--ink-2);cursor:pointer;position:relative;z-index:1;transition:color .2s var(--ease);font-family:inherit}
+.hp-root .hp-seg button[aria-selected=true]{color:var(--ink)}
+.hp-root .hp-pill{position:absolute;top:4px;bottom:4px;inset-inline-start:4px;width:calc(50% - 6px);background:#fff;border-radius:999px;box-shadow:0 1px 2px rgba(17,26,54,.08),0 4px 12px -4px rgba(17,26,54,.12);transition:transform .25s var(--ease)}
+.hp-root .hp-seg[data-v=passport] .hp-pill{transform:translateX(calc(-100% - 4px))}
+.hp-root .hp-lbl{display:flex;justify-content:space-between;align-items:baseline;font-weight:600;font-size:var(--t2);margin:24px 0 8px}
+.hp-root .hp-lbl small{font-weight:500;color:var(--ink-3);font-size:var(--t1);font-variant-numeric:tabular-nums}
+.hp-root .hp-req{color:#C2410C;margin-inline-start:2px}
+.hp-root .hp-inp{width:100%;height:58px;border:1px solid var(--line-2);border-radius:14px;background:#FCFCFA;text-align:center;font-size:22px;font-weight:600;font-family:inherit;font-variant-numeric:tabular-nums;direction:ltr;padding:0 16px;transition:border-color .15s,box-shadow .15s,background .15s;color:var(--ink)}
+.hp-root .hp-inp.hp-num{letter-spacing:.32em}
+.hp-root .hp-inp.hp-pass{letter-spacing:.08em}
+.hp-root .hp-inp::placeholder{color:#C3C6D2;font-weight:500}
+.hp-root .hp-inp:hover{border-color:#C8C3B6}
+.hp-root .hp-inp:focus{outline:0;border-color:var(--act);background:#fff;box-shadow:0 0 0 4px rgba(62,59,196,.12)}
+.hp-root .hp-hint{font-size:var(--t1);color:var(--ink-3);margin-top:8px}
+.hp-root .hp-err{margin-top:16px}
+.hp-root .hp-go{width:100%;min-height:56px;margin-top:24px;border:0;border-radius:14px;cursor:pointer;color:#fff;font-weight:700;font-size:var(--t3);font-family:inherit;display:flex;align-items:center;justify-content:center;gap:10px;background:linear-gradient(180deg,#4A47D2,var(--act-2));box-shadow:0 1px 0 rgba(255,255,255,.25) inset,0 10px 24px -10px rgba(47,43,168,.55);transition:transform .15s var(--ease),box-shadow .2s,filter .2s}
+.hp-root .hp-go:hover{filter:brightness(1.06);box-shadow:0 1px 0 rgba(255,255,255,.25) inset,0 14px 28px -10px rgba(47,43,168,.6)}
+.hp-root .hp-go:active{transform:scale(.985)}
+.hp-root .hp-go:disabled{opacity:.7;cursor:default}
+.hp-root .hp-go svg{transition:transform .2s var(--ease)}
+.hp-root .hp-go:hover svg{transform:translateX(-3px)}
+.hp-root .hp-trust{display:flex;justify-content:center;align-items:center;gap:6px;color:var(--ink-3);font-size:var(--t1);margin-top:20px}
+.hp-root .hp-trust svg{color:var(--ok)}
+.hp-root>footer{background:transparent;border-top:1px solid rgba(17,26,54,.06);padding:20px}
+.hp-root>footer p,.hp-root>footer a{font-size:var(--t1);color:var(--ink-3)}
+.hp-root>footer a{color:var(--ink);font-weight:700}
+.hp-root :focus-visible{outline:2px solid var(--act);outline-offset:3px}
+@media (max-width:520px){
+.hp-root>header>div{padding:12px 16px}
+.hp-root>header h1{font-size:var(--t2)}
+.hp-root>header img{width:34px;height:34px}
+.hp-root .hp-main{padding:32px 16px 40px;align-items:flex-start}
+.hp-root .hp-card{padding:20px;border-radius:20px}
+.hp-root .hp-h1{font-size:var(--t5)}
+.hp-root .hp-sub{font-size:var(--t2)}
+.hp-root .hp-seal{width:80px;height:80px}
+.hp-root .hp-inp{font-size:20px}
+}
+@media (prefers-reduced-motion:reduce){.hp-root *{transition:none!important;animation:none!important}}
+`
+
 export default function PublicPortalPage({ texts, editMode, onTextChange, forceStep }: {
   texts?: PublicTexts
   /** מצב עריכה חיה — נדלק רק כשמנהל פותח את האתר דרך /edit. */
@@ -3726,7 +3791,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
 
   return (
     <EditProvider editing={!!editMode} texts={texts ?? {}} setKey={(k, v) => onTextChange?.(k, v)}>
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-100" dir="rtl">
+    <div className={`min-h-screen flex flex-col ${step === 'id-lookup' ? 'hp-root' : 'bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-100'}`} dir="rtl">
+      {step === 'id-lookup' && (<><style>{HP_CSS}</style><div className="hp-halo" /></>)}
 
       {/* חלון הצהרת ייחוס — לפני בחירת סדר הדורות (טופס ציבורי) */}
       {declModalOpen && (
@@ -3903,72 +3969,72 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         </div>
       </header>
 
-      <main className={`mx-auto px-4 py-8 ${step === 'dashboard' ? 'max-w-2xl lg:max-w-[1200px]' : 'max-w-2xl'}`}>
+      <main className={step === 'id-lookup' ? 'hp-main' : `mx-auto px-4 py-8 ${step === 'dashboard' ? 'max-w-2xl lg:max-w-[1200px]' : 'max-w-2xl'}`}>
 
-        {/* ─── Step: ID Lookup ─── */}
+        {/* ─── Step: ID Lookup ─── (גרסה א׳ · מלוטש — סגנון תחת .hp-root) */}
         {step === 'id-lookup' && (
-          <div className="flex flex-col gap-6">
-            <div className="text-center">
-              <div className="w-20 h-20 rounded-2xl overflow-hidden mx-auto mb-4">
-                <img src="/logo.png" alt="לוגו" className="w-full h-full object-contain" />
+          <div className="hp-col">
+            <div className="hp-head">
+              <div className="hp-seal">
+                <img src="/logo.png" alt="לוגו" />
               </div>
-              <EditableText k="welcome.title" as="h2" className="text-2xl font-bold text-slate-900 mb-2" />
+              <EditableText k="welcome.eyebrow" as="div" className="hp-eyebrow" />
+              <EditableText k="welcome.title" as="h2" className="hp-h1" />
+              <EditableText k="welcome.sub" as="p" className="hp-sub" />
             </div>
 
-            <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl px-4 py-3 text-center">
-              <EditableText k="welcome.notice" as="p" className="text-sm font-bold text-amber-900 leading-relaxed" />
-            </div>
+            <div className="hp-card">
+              <div className="hp-notice">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="M12 8v5M12 16h.01" /></svg>
+                <EditableText k="welcome.notice" as="span" />
+              </div>
 
-            <Card>
-              <form onSubmit={handleLookup} className="flex flex-col gap-4">
-                {/* doc-type toggle */}
-                <div className="flex rounded-xl border border-slate-200 overflow-hidden">
+              <form onSubmit={handleLookup}>
+                <div className="hp-seg" role="tablist" data-v={docType}>
+                  <span className="hp-pill" />
                   {([['id', 'welcome.tab.id'], ['passport', 'welcome.tab.passport']] as const).map(([v, tk]) => (
-                    <button key={v} type="button"
+                    <button key={v} type="button" role="tab" aria-selected={docType === v}
                       onClick={() => { setDocType(v); setIdInput(''); setError('') }}
-                      className={`flex-1 py-2 text-sm font-medium transition-all duration-150 ${docType === v ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-indigo-50'}`}
                     ><EditableText k={tk} /></button>
                   ))}
                 </div>
 
+                <label className="hp-lbl" htmlFor="hp-id-input">
+                  <span>
+                    <EditableText k={docType === 'id' ? 'welcome.id.label' : 'welcome.passport.label'} />
+                    <span className="hp-req">*</span>
+                  </span>
+                  <small style={{ visibility: docType === 'id' ? 'visible' : 'hidden' }}>{idInput.length}/9</small>
+                </label>
                 {docType === 'id' ? (
-                  <Field label={<EditableText k="welcome.id.label" />} required hint={<EditableText k="welcome.id.hint" />}>
-                    <TextInput
-                      value={idInput}
-                      onChange={e => setIdInput(e.target.value.replace(/\D/g, ''))}
-                      placeholder="000000000"
-                      inputMode="numeric"
-                      maxLength={9}
-                      dir="ltr"
-                      autoComplete="off"
-                      className="text-center text-lg font-semibold tracking-widest"
-                    />
-                  </Field>
+                  <input id="hp-id-input" className="hp-inp hp-num"
+                    value={idInput}
+                    onChange={e => setIdInput(e.target.value.replace(/\D/g, ''))}
+                    placeholder="000000000" inputMode="numeric" maxLength={9} dir="ltr" autoComplete="off" />
                 ) : (
-                  <Field label={<EditableText k="welcome.passport.label" />} required>
-                    <TextInput
-                      value={idInput}
-                      onChange={e => setIdInput(e.target.value.toUpperCase())}
-                      placeholder="12345678"
-                      dir="ltr"
-                      autoComplete="off"
-                      className="text-center text-lg font-semibold tracking-widest"
-                    />
-                  </Field>
+                  <input id="hp-id-input" className="hp-inp hp-pass"
+                    value={idInput}
+                    onChange={e => setIdInput(e.target.value.toUpperCase())}
+                    placeholder="12345678" dir="ltr" autoComplete="off" />
                 )}
+                <p className="hp-hint">
+                  {docType === 'id' ? <EditableText k="welcome.id.hint" /> : 'כפי שמופיע בדרכון, באותיות לטיניות ובספרות'}
+                </p>
 
-                {error && <ErrorBox message={error} />}
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-150 text-base"
-                >
-                  {loading ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />}
+                {error && <div className="hp-err"><ErrorBox message={error} /></div>}
+                <button type="submit" disabled={loading} className="hp-go">
                   {loading ? t('welcome.submitting') : <EditableText k="welcome.submit" />}
+                  {loading
+                    ? <Loader2 size={18} className="animate-spin" />
+                    : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6" /></svg>}
                 </button>
               </form>
-            </Card>
+            </div>
 
+            <p className="hp-trust">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+              <EditableText k="welcome.footer" />
+            </p>
           </div>
         )}
 
@@ -7227,10 +7293,12 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
           </Card>
         )}
 
-        <p className="text-center text-xs text-slate-400 mt-6 flex items-center justify-center gap-1">
-          <Mail size={11} />
-          <EditableText k="welcome.footer" />
-        </p>
+        {step !== 'id-lookup' && (
+          <p className="text-center text-xs text-slate-400 mt-6 flex items-center justify-center gap-1">
+            <Mail size={11} />
+            <EditableText k="welcome.footer" />
+          </p>
+        )}
       </main>
 
       {/* קרדיט — מוצמד לתחתית הדף (mt-auto דוחף אותו למטה כשהתוכן קצר) */}
