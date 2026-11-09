@@ -1,8 +1,8 @@
 // מפעיל את הגיבוי היומי ע"י קריאה ל-endpoint /api/cron/backup.
-// מיועד לריצה כ-Railway Cron Service (npm run backup:trigger).
+// מיועד לריצה כ-שירות תזמון (npm run backup:trigger).
 // ה-endpoint אידמפוטנטי (גיבוי אחד ליום), ולכן ריצה כפולה לא מזיקה.
 //
-// משתני סביבה נדרשים (מוגדרים ב-Railway):
+// משתני סביבה נדרשים (מוגדרים בשרת):
 //   CRON_SECRET  — זהה לערך שבשירות ה-web (אימות ה-endpoint)
 //   BACKUP_URL   — כתובת הבסיס (ברירת מחדל https://chasamsofer.co.il)
 

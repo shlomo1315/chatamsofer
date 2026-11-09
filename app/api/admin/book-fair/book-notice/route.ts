@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'שיחות יוצאות בטכנוליין לא מוגדרות בשרת (חסר TECHNOLINE_MAIN_API_KEY או TECHNOLINE_OUTBOUND_ENABLED)' }, { status: 400 })
   }
 
-  // 🔴 לא request.nextUrl.origin: מאחורי Railway הוא localhost:8080.
+  // 🔴 לא request.nextUrl.origin: מאחורי ה-proxy הוא localhost:8080.
   const base = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://chasamsofer.co.il').replace(/\/$/, '')
   const buildMail = (t: NoticeTarget, recipientId: string | null) => bookFairOrderNoticeEmail({
     subject,

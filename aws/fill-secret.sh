@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# מילוי הסוד chasamsofer/prod מתוך הדבקה של משתני Railway. מריצים ב-CloudShell (פרנקפורט):
+# מילוי הסוד chasamsofer/prod מתוך הדבקה של משתני הסביבה של השרת הישן. מריצים ב-CloudShell (פרנקפורט):
 #   bash <(curl -fsSL "https://raw.githubusercontent.com/shlomo1315/chatamsofer/main/aws/fill-secret.sh?$(date +%s)")
-# ב-Railway: השירות chatamsofer > Variables > Raw Editor > מעתיקים הכול, מדביקים כאן, ואז Enter ו-Ctrl+D.
+# בשרת: השירות chatamsofer > Variables > Raw Editor > מעתיקים הכול, מדביקים כאן, ואז Enter ו-Ctrl+D.
 # הערכים לא נשמרים בקובץ ולא מודפסים. מודפסים רק שמות. מפתח שלא הודבק נשאר כמו שהוא בסוד.
 set -euo pipefail
 export AWS_DEFAULT_REGION=eu-central-1

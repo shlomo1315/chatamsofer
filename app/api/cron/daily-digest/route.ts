@@ -13,7 +13,7 @@ export const maxDuration = 120
 // סיכום יומי אוטומטי — רץ בחצות שעון ישראל.
 //
 // הרצה: GET עם ?token=<CRON_SECRET> או Authorization: Bearer.
-// ב-Railway: Cron Service בביטוי `0 0 * * *` עם TZ=Asia/Jerusalem.
+// בשרת: Cron Service בביטוי `0 0 * * *` עם TZ=Asia/Jerusalem.
 //
 // 🔴 לא נשלח בשבתות ובחגים — isBlockedForMail היא אותה פונקציה שכל מיילי
 // המערכת עוברים דרכה. מימוש מקומי היה נפרד ממנה בעדכון הראשון של לוח

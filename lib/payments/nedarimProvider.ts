@@ -193,7 +193,7 @@ export class NedarimPaymentProvider implements PaymentProvider {
     //   "כתובת היעד: https://localhost:8080/api/yerid/payment-callback
     //    Unable to connect to the remote server"
     // הסיבה: returnUrl נבנה מ-request.nextUrl.origin, ומאחורי ה-proxy
-    // של Railway זה מחזיר את הכתובת הפנימית (localhost:8080) ולא את
+    // של השרת זה מחזיר את הכתובת הפנימית (localhost:8080) ולא את
     // הדומיין הציבורי. נדרים ניסתה לפנות לעצמה, התשלום נגבה בפועל,
     // וההזמנה נשארה "ממתינה לתשלום" — כסף שנגבה בלי שהמערכת יודעת.
     //

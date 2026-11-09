@@ -1,12 +1,12 @@
 # מעבר ל-AWS (ECS Fargate) — מדריך הקמה
 
-Railway נשאר פעיל ותקין עד שהמעבר מסתיים (`railway.json` לא נגע). הבנייה ל-AWS מופעלת רק עם `BUILD_STANDALONE=1` (ה-Dockerfile מגדיר זאת).
+השרת הישן נשאר פעיל ותקין עד שהמעבר מסתיים. הבנייה ל-AWS מופעלת רק עם `BUILD_STANDALONE=1` (ה-Dockerfile מגדיר זאת).
 
 ## מה כבר בקוד
 - `Dockerfile` + `.dockerignore`: Next.js standalone, Debian slim (בגלל `@napi-rs/canvas`), משתמש לא-root, healthcheck על `/api/health`.
 - `aws/deploy-aws.yml` (**להעביר ל-`.github/workflows/deploy-aws.yml`** — הטוקן שלנו חסר הרשאת workflow, ולכן מועבר ידנית בלחיצה ב-GitHub או ע"י מי שיש לו הרשאה): בכל מיזוג ל-main — build, העלאה ל-ECR, ופריסה ל-ECS (rolling). אימות דרך OIDC, בלי מפתחות. לא רץ עד שמגדירים `AWS_DEPLOY_ENABLED=true`.
 - קבצים: הקוד **לא** כותב לדיסק המקומי (קריאה בלבד מ-`public/`; מסמכים נשמרים ב-Supabase). לכן אין צורך ב-S3 כרגע. התיקייה `uploads` בעותק העבודה אינה חלק מהקוד.
-- מזהה גרסה: `APP_BUILD_ID` (ה-SHA של הקומיט) מחליף את `RAILWAY_DEPLOYMENT_ID`.
+- מזהה גרסה: `APP_BUILD_ID` (ה-SHA של הקומיט) הוא מזהה הגרסה.
 
 ## צעדי הקמה (פעם אחת, בקונסולת AWS)
 1. חשבון AWS + MFA על המשתמש הראשי. אזור מומלץ: `eu-central-1` או `il-central-1`.
@@ -19,14 +19,14 @@ Railway נשאר פעיל ותקין עד שהמעבר מסתיים (`railway.js
    - Secret: `AWS_DEPLOY_ROLE_ARN`
    - Variables: `AWS_DEPLOY_ENABLED=true`, `AWS_REGION`, `ECR_REPOSITORY`, `ECS_CLUSTER`, `ECS_SERVICE`, `ECS_TASK_FAMILY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_APP_URL`
 8. **קרונים (EventBridge Scheduler)** — קריאת HTTPS עם `?secret=<CRON_SECRET>` (או כותרת, לפי הנתיב) ל:
-   `/api/cron/backup`, `/api/cron/book-fair-cleanup`, `/api/cron/daily-digest`, `/api/cron/gov-sync`, `/api/cron/holiday-load-audit`, `/api/cron/name-reminders`, `/api/cron/nedarim-groups`, `/api/nedarim/unload-expired`. התדירויות כמו ב-Railway (שירות `cron-name-reminders` ושאר שירותי ה-curl).
-9. **נדרים proxy**: אם נדרים דורשת IP קבוע — NAT Gateway עם Elastic IP לשירות, או להשאיר את `nedarim-proxy` זמנית ב-Railway ולהצביע אליו דרך `NEDARIM_PROXY_URL`.
+   `/api/cron/backup`, `/api/cron/book-fair-cleanup`, `/api/cron/daily-digest`, `/api/cron/gov-sync`, `/api/cron/holiday-load-audit`, `/api/cron/name-reminders`, `/api/cron/nedarim-groups`, `/api/nedarim/unload-expired`. התדירויות כמו בשרת הישן (שירות `cron-name-reminders` ושאר שירותי ה-curl).
+9. **נדרים proxy**: אם נדרים דורשת IP קבוע — NAT Gateway עם Elastic IP לשירות, או להשאיר את `nedarim-proxy` זמנית בשרת הישן ולהצביע אליו דרך `NEDARIM_PROXY_URL`.
 
 ## מעבר
-1. פריסה ראשונה ובדיקה על כתובת ה-ALB הזמנית (צ'קליסט בסוף `RAILWAY_MIGRATION.md`, שלב 7).
+1. פריסה ראשונה ובדיקה על כתובת ה-ALB הזמנית.
 2. עדכון `NEXT_PUBLIC_SITE_URL`, ‏`NEXT_PUBLIC_APP_URL`, ‏`GMAIL_REDIRECT_URI` ו-redirect ב-Google Cloud, ו-webhooks של טכנוליין/Resend/Gmail PubSub לדומיין.
 3. החלפת DNS של `chasamsofer.co.il` ל-ALB (TTL נמוך מראש).
-4. Railway נשאר כגיבוי כמה ימים, ואז מכבים.
+4. השרת הישן נשאר כגיבוי כמה ימים, ואז מכבים.
 
 ## משתני סביבה (שמות בלבד; מי שסודי — ב-Secrets Manager)
 ```
@@ -99,7 +99,7 @@ VOICE_REBUILD_DISABLED
 
 1. בקונסולת AWS (Frankfurt): **Certificate Manager → Request** ל-`chasamsofer.co.il` (אימות DNS). מוסיפים את רשומת ה-CNAME שמוצגת אצל ספק הדומיין. מחכים ל-Issued ומעתיקים את ה-ARN.
 2. **CloudFormation → Create stack → Upload** של `aws/infrastructure.yml`. ממלאים: `CertificateArn`, ה-VPC ברירת המחדל, ושתי תתי-רשתות (באזורי זמינות שונים). השאר ברירת מחדל. אם כבר קיים provider של GitHub בחשבון: `CreateOidcProvider=false` ומזינים את ה-ARN שלו.
-3. **Secrets Manager → `chasamsofer/prod` → Retrieve → Edit**: ממלאים ערכים למשתנים שקיימים ב-Railway. משתנה שלא קיים שם נשאר ריק. **לא למחוק מפתחות** מה-JSON (ECS נכשל אם מפתח חסר).
+3. **Secrets Manager → `chasamsofer/prod` → Retrieve → Edit**: ממלאים ערכים למשתנים שקיימים בשרת הישן. משתנה שלא קיים שם נשאר ריק. **לא למחוק מפתחות** מה-JSON (ECS נכשל אם מפתח חסר).
 4. ב-GitHub: מעבירים את `aws/deploy-aws.yml` ל-`.github/workflows/`, וב-Settings → Secrets and variables → Actions מגדירים לפי Outputs של הסטאק:
    - Secret `AWS_DEPLOY_ROLE_ARN` = `DeployRoleArn`
    - Variables: `AWS_DEPLOY_ENABLED=true`, `AWS_REGION=eu-central-1`, `ECR_REPOSITORY=chasamsofer`, `ECS_CLUSTER=chasamsofer`, `ECS_SERVICE=chasamsofer`, `ECS_TASK_FAMILY=chasamsofer`, ועוד ארבעת ה-`NEXT_PUBLIC_*` (Supabase URL, anon key, אתר, אפליקציה).
@@ -107,8 +107,8 @@ VOICE_REBUILD_DISABLED
 6. בודקים דרך כתובת ה-ALB (`AlbDnsName`) ש-`/api/health` עונה. אחר כך מחליפים DNS של הדומיין (CNAME ל-ALB), ומעדכנים redirect ב-Google, ו-webhooks של טכנוליין/Resend/Gmail.
 
 ### הערות חשובות
-- **משימה אחת בלבד:** `instrumentation.ts` מריץ תזמונים פנימיים (גיבוי, פריקה, סנכרונים). שתי משימות היו מריצות אותם פעמיים. בפריסה יש חפיפה קצרה של דקות, כמו ב-Railway.
-- הקרונים הפנימיים לא דורשים EventBridge. רק מה שרץ ב-Railway כשירות נפרד (`cron-name-reminders`) דורש תזמון חיצוני לקריאת `/api/cron/name-reminders` עם `Authorization: Bearer <CRON_SECRET>`, ויש להעביר לי את הלו"ז שלו.
+- **משימה אחת בלבד:** `instrumentation.ts` מריץ תזמונים פנימיים (גיבוי, פריקה, סנכרונים). שתי משימות היו מריצות אותם פעמיים. בפריסה יש חפיפה קצרה של דקות, כמו בשרת הישן.
+- הקרונים הפנימיים לא דורשים EventBridge. רק מה שרץ בשרת הישן כשירות נפרד (`cron-name-reminders`) דורש תזמון חיצוני לקריאת `/api/cron/name-reminders` עם `Authorization: Bearer <CRON_SECRET>`, ויש להעביר לי את הלו"ז שלו.
 - **ה-IP של נדרים:** המשימה יוצאת מ-IP ציבורי שמשתנה. אם נדרים דורשת IP קבוע, צריך NAT Gateway עם Elastic IP (עלות כ-35$ לחודש), או להשאיר את `nedarim-proxy` זמנית אצלם.
 - `APP_BUILD_ID` נקבע ב-Dockerfile, אין למלא אותו בסוד.
 

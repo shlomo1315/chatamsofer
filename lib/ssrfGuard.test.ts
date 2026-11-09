@@ -11,7 +11,7 @@ describe('🔴 isPrivateIp', () => {
     expect(isPrivateIp('::ffff:7f00:1')).toBe(true)
     expect(isPrivateIp('[::ffff:127.0.0.1]')).toBe(true)
   })
-  it('🔴 IPv6 פנימי (Railway fd00::/8, link-local, loopback)', () => {
+  it('🔴 IPv6 פנימי (fd00::/8, link-local, loopback)', () => {
     expect(isPrivateIp('fd12:3456::1')).toBe(true)
     expect(isPrivateIp('fe80::1')).toBe(true)
     expect(isPrivateIp('::1')).toBe(true)
@@ -28,7 +28,7 @@ describe('🔴 isPrivateIp', () => {
 describe('assertPublicHost', () => {
   it('🔴 שמות פנימיים נחסמים בלי DNS', async () => {
     expect(await assertPublicHost('localhost')).toBe(false)
-    expect(await assertPublicHost('web.railway.internal')).toBe(false)
+    expect(await assertPublicHost('web.internal')).toBe(false)
     expect(await assertPublicHost('[::ffff:7f00:1]')).toBe(false)
   })
 })

@@ -518,7 +518,7 @@ export async function cancelScheduledEmail(key: EntityKey): Promise<void> {
 
 /**
  * ה-worker. נקרא כל שעה מ-instrumentation.ts.
- * מוגן ב-advisory lock — אם Railway מריץ שתי מכונות, רק אחת שולחת.
+ * מוגן ב-advisory lock — אם השרת הישן מריץ שתי מכונות, רק אחת שולחת.
  */
 export async function runScheduledMail(): Promise<{ sent: number; failed: number; skipped: number }> {
   const db = admin()
@@ -586,7 +586,7 @@ Supabase לא חושף `pg_try_advisory_lock` דרך REST כברירת מחדל.
 
 ```sql
 -- עטיפות ל-advisory lock, כדי שה-worker יוכל לקרוא להן דרך RPC.
--- מונע ריצה כפולה כשיש יותר ממכונה אחת (Railway).
+-- מונע ריצה כפולה כשיש יותר ממכונה אחת (השרת הישן).
 create or replace function public.pg_try_advisory_lock(key bigint)
 returns boolean language sql security definer as $$
   select pg_try_advisory_lock(key);

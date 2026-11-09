@@ -241,7 +241,7 @@ export async function getCities(admin: SupabaseClient): Promise<string[]> {
   if (stale && !citySyncInFlight && Date.now() - lastCitySyncAttempt > STALE_MS) {
     lastCitySyncAttempt = Date.now()
     citySyncInFlight = true
-    // רענון לא-חוסם (Railway — שרת מתמשך): הבקשה הנוכחית מקבלת את הרשימה הקיימת מיד
+    // רענון לא-חוסם (שרת מתמשך): הבקשה הנוכחית מקבלת את הרשימה הקיימת מיד
     void syncCities(admin).catch(() => {}).finally(() => { citySyncInFlight = false })
   }
   return rows.map(r => r.name as string)

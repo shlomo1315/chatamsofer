@@ -33,7 +33,7 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
-# vercel (לא בשימוש — הפריסה מתבצעת ב-Railway)
+# vercel (לא בשימוש — הפריסה מתבצעת בשרת)
 .vercel
 
 # typescript

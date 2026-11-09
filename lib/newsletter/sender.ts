@@ -65,7 +65,7 @@ export async function runCampaignSender(): Promise<{ sent: number; failed: numbe
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) { console.error('[newsletter] RESEND_API_KEY חסר'); return empty }
 
-  // מנעול — אם Railway מריץ שתי מכונות, רק אחת שולחת
+  // מנעול — אם השרת מריץ שתי מכונות, רק אחת שולחת
   const { data: gotLock } = await db.rpc('try_worker_lock', { p_key: LOCK_KEY })
   if (gotLock === false) return empty
 
