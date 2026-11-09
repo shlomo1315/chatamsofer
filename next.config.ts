@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // בבנייה ב-Docker בדיקת הטיפוסים רצה בג׳וב נפרד במקביל ב-GitHub (SKIP_TYPECHECK=1)
   typescript: { ignoreBuildErrors: process.env.SKIP_TYPECHECK === "1" },
-  // ב-Docker/AWS בונים עם BUILD_STANDALONE=1. ב-Railway לא מוגדר ולכן אין שינוי.
+  // ב-Docker/AWS בונים עם BUILD_STANDALONE=1. בשרת לא מוגדר ולכן אין שינוי.
   ...(process.env.BUILD_STANDALONE === '1' ? { output: 'standalone' as const } : {}),
   // אופטימיזציית imports — טוענת רק את מה שבשימוש מספריות גדולות (אייקונים/תאריכים/גרפים),
   // במקום לגרור עצים שלמים ל-bundle של כל דף. שיפור גלובלי משמעותי בגודל ה-JS.

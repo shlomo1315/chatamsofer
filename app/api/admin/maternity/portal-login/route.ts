@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 // רגילה, כך שהיא מתנתקת אוטומטית עם התנתקות הצוות (ראה portal-logout-all).
 export async function GET(request: NextRequest) {
   const home = request.nextUrl.searchParams.get('home')
-  // מאחורי proxy (Railway) ה-origin הפנימי הוא localhost — משתמשים בכתובת הציבורית
+  // מאחורי proxy ה-origin הפנימי הוא localhost — משתמשים בכתובת הציבורית
   // המוגדרת, בעקביות עם שאר המערכת, ורק כ-fallback ב-origin.
   const origin = (
     process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin

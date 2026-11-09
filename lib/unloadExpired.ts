@@ -286,7 +286,7 @@ export async function runUnloadExpired(): Promise<{ ok: boolean; processed: numb
 // ─────────────────────────────────────────────────────────────────────────────
 // שומר-סף: מתריע אם הפריקה היומית לא רצה בהצלחה יותר מיום.
 //
-// 🔴 נוסף אחרי שהמשתנה UNLOAD_EXPIRED_DISABLED הודלק ב-Railway (כנראה
+// 🔴 נוסף אחרי שהמשתנה UNLOAD_EXPIRED_DISABLED הודלק בשרת (כנראה
 // לצורך ניפוי תקלה אחרת) ונשאר דלוק שבועיים בלי שאיש שם לב — 9 יולדות
 // עברו שישה שבועות ונשארו עם 600 ₪ נעולים בכרטיס, בשקט מוחלט. אותו
 // דפוס בדיוק כמו checkBackupFreshness (lib/dailyBackup.ts): הדגל עצמו
@@ -330,7 +330,7 @@ export async function checkUnloadFreshness(): Promise<void> {
     `<div dir="rtl" style="font-family:'Heebo',Arial,sans-serif">
       <p>הפריקה האוטומטית של כרטיסי יולדות (בתום 6 שבועות) לא רצה בהצלחה מאז <b>${last ?? '(אין רישום)'}</b>.</p>
       <p>${dueCount ?? 0} תיקים ממתינים כרגע לפריקה.</p>
-      <p>יש לבדוק את המשתנה <code>UNLOAD_EXPIRED_DISABLED</code> בהגדרות הפריסה (Railway), ואת מסך המלאי → פריקות.</p>
+      <p>יש לבדוק את המשתנה <code>UNLOAD_EXPIRED_DISABLED</code> בהגדרות הפריסה, ואת מסך המלאי → פריקות.</p>
     </div>`,
     undefined, { fromEmail: REPORT_TO, replyTo: REPORT_TO, skipLog: true },
   ).catch(() => {})

@@ -38,7 +38,7 @@ alter table public.scheduled_emails enable row level security;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- עטיפות ל-advisory lock, כדי שה-worker יוכל לנעול דרך RPC.
--- מונע ריצה כפולה ושליחה כפולה כשרצות שתי מכונות (Railway).
+-- מונע ריצה כפולה ושליחה כפולה כשרצות שתי מכונות.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 create or replace function public.try_worker_lock(p_key bigint)

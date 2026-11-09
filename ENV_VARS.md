@@ -1,4 +1,4 @@
-# משתני סביבה — היכל החתם סופר (Railway → Variables)
+# משתני סביבה — היכל החתם סופר (AWS Secrets Manager)
 
 מסמך מלא של **כל** משתני הסביבה. יש להגדיר את כל המסומנים "חובה" לפני עלייה לאוויר.
 ליצירת ערך סודי אקראי חזק, הריצו במחשב:  `openssl rand -hex 32`
@@ -78,9 +78,9 @@
 | `ELEVENLABS_VOICE_ID` | מזהה הקול |
 | `ELEVENLABS_MODEL_ID` | מזהה המודל |
 
-## ⚙️ 9. אוטומטי (Railway מגדיר לבד)
+## ⚙️ 9. אוטומטי
 
-`RAILWAY_PUBLIC_DOMAIN` · `NODE_ENV`
+`NODE_ENV`
 
 ---
 

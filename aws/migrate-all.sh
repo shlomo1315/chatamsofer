@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# העברה מלאה של chasamsofer ל-AWS בפקודה אחת (CloudShell, Frankfurt). במקור (Supabase/Railway) קריאה בלבד, והדומיין הראשי לא נוגעים בו.
+# העברה מלאה של chasamsofer ל-AWS בפקודה אחת (CloudShell, Frankfurt). במקור (Supabase) קריאה בלבד, והדומיין הראשי לא נוגעים בו.
 #   bash <(curl -fsSL "https://raw.githubusercontent.com/shlomo1315/chatamsofer/main/aws/migrate-all.sh?$(date +%s)")
 # שלבים: 1 עדכון סטאק  2 סוד המקור (שואל פעם אחת, בלי הד)  3 מפתחות  4 תפקידי מסד והעתקת מסד  5 הרמת Supabase  6 העתקת קבצים
 #        7 בנייה מחדש עם המפתח החדש  8 הרמת האתר ובדיקת בריאות. אפשר להריץ שוב: שלבים שהושלמו מדולגים או נעשים בטוחים לחזרה.

@@ -4,13 +4,13 @@
 # מה זה עושה: מכבה את האתר ו-Supabase ב-AWS (רק האתר הזמני נופל), מעתיק מחדש את המסד כולו (public ו-auth, תמונת מצב אחת),
 # מעלה את Supabase ומעתיק רק קבצים חדשים, מעלה את האתר ובודק בריאות. הסטאק (CloudFormation) לא משתנה והדומיין הראשי לא נוגעים בו.
 # מה שנכתב ב-AWS מאז ההעתקה הקודמת (בדיקות על האתר הזמני) נמחק: זה כוונה, כי כל הנתונים האמיתיים עדיין נכתבים במקור.
-# להריץ ממש לפני ההחלפה, ולהחליף שרתי שמות מיד אחרי. YES=1 מדלג על שאלת האישור. DOMAIN (ברירת מחדל: הדומיין של הסטאק) נבדק ישירות מול המאזן, גם כשה-DNS עדיין מצביע ל-Railway. דורש שהתעודה של הדומיין כבר אומתה.
+# להריץ ממש לפני ההחלפה, ולהחליף שרתי שמות מיד אחרי. YES=1 מדלג על שאלת האישור. DOMAIN (ברירת מחדל: הדומיין של הסטאק) נבדק ישירות מול המאזן, גם כשה-DNS עדיין מצביע לשרת הישן. דורש שהתעודה של הדומיין כבר אומתה.
 set -euo pipefail
 export AWS_DEFAULT_REGION=eu-central-1
 P=${PROJECT:-chasamsofer}; STACK=${STACK:-$P}; RAW=https://raw.githubusercontent.com/shlomo1315/chatamsofer/main/aws
 out() { aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text; }
 DOMAIN=${DOMAIN:-$(aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Parameters[?ParameterKey=='DomainName'].ParameterValue" --output text)}
-# הדומיין עדיין מצביע ל-Railway, ולכן פונים למאזן ישירות עם שם הדומיין (--resolve), וגם משימת ההעתקה מקבלת ALB_HOST
+# הדומיין עדיין מצביע לשרת הישן, ולכן פונים למאזן ישירות עם שם הדומיין (--resolve), וגם משימת ההעתקה מקבלת ALB_HOST
 ALB_HOST=$(out AlbDnsName); ALB_IP=$(getent ahostsv4 "$ALB_HOST" | head -1 | cut -d' ' -f1)
 step() { echo; echo "== $*"; }
 exec 9>"${TMPDIR:-/tmp}/$P-final-sync.lock"

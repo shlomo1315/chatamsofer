@@ -45,7 +45,7 @@ Workspace — **במקביל למערכת ולגמרי בלי קשר אליה**.
    הוסף את ה-Client ID עם ה-scope: `https://www.googleapis.com/auth/gmail.insert`
    (או `gmail.modify` אם נרצה גם לתייג).
 4. הורד את מפתח ה-JSON של ה-Service Account → נשמר כמשתנה סביבה
-   `GOOGLE_SA_KEY` ב-Railway.
+   `GOOGLE_SA_KEY` בשרת הישן.
 
 ## מודל הנתונים (מיגרציה — מריץ המשתמש ידנית)
 
@@ -112,6 +112,6 @@ create index if not exists inbound_emails_gmail_import
 
 ## תלות והגדרה שאתה צריך לספק
 1. Service Account + Domain-wide delegation ב-Google Admin (מלווה שלב-שלב).
-2. `GOOGLE_SA_KEY` (JSON) כמשתנה סביבה ב-Railway.
+2. `GOOGLE_SA_KEY` (JSON) כמשתנה סביבה בשרת הישן.
 3. הרצת מיגרציית ה-tracking.
 בלי (1)+(2) אי אפשר לכתוב לתיבות — זו דרישת קדם חיצונית.

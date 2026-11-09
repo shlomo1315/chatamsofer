@@ -2,7 +2,7 @@
 // ממיר את אקסל ההלוואות הישנות לקובץ SQL מוכן להדבקה ב-Supabase SQL Editor.
 //
 // חלופה ל-import-legacy-loans.mjs למי שאין לו מפתחות Supabase מקומיים
-// (אין .env.local — המפתחות יושבים ב-Railway בלבד).
+// (אין .env.local — המפתחות יושבים בשרת בלבד).
 //
 // הרצה:
 //   node scripts/legacy-loans-to-sql.mjs "שטרות חתם סופר_202608171741.xlsx"

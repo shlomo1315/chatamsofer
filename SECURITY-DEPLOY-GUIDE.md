@@ -27,7 +27,7 @@ select count(*) from widow_support_payments;   -- אמור: 0
 
 ## שלב 2 — פרוס את הקוד
 
-אחרי ה-migration, מזג את ה-PR ל-main → Railway פורס אוטומטית.
+אחרי ה-migration, מזג את ה-PR ל-main → הפריסה ל-AWS רצה אוטומטית.
 
 תיקוני הקוד:
 - **פורטל הלוואות** (`shared/loans/auth`) — rate-limit + `secure` cookie

@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // שומר-סף על דגלי ההשבתה (*_DISABLED) של המתזמן הפנימי (instrumentation.ts).
 //
-// 🔴 נוסף בעקבות תקלה: UNLOAD_EXPIRED_DISABLED הודלק ב-Railway (כנראה
+// 🔴 נוסף בעקבות תקלה: UNLOAD_EXPIRED_DISABLED הודלק בשרת (כנראה
 // לניפוי תקלה אחרת) ונשאר דלוק שבועיים בלי שאיש שם לב — כי אין שום
 // מקום שמראה אילו דגלים דולקים כרגע. כל דגל דומה (LIVE_BALANCES_DISABLED,
 // DAILY_BACKUP_DISABLED וכו') חשוף לאותה תקלה בדיוק: קל להדליק לבדיקה
@@ -52,7 +52,7 @@ export async function checkSchedulerFlags(): Promise<void> {
   const { deliverMail } = await import('@/lib/sendMail')
   await deliverMail(REPORT_TO, `⚠️ ${on.length} מתזמנים כבויים`,
     `<div dir="rtl" style="font-family:'Heebo',Arial,sans-serif">
-      <p>המשתנים הבאים מכבים היום משימות רקע קבועות (Railway → Variables):</p>
+      <p>המשתנים הבאים מכבים היום משימות רקע קבועות (משתני הסביבה):</p>
       <ul>${on.map(f => `<li><code>${f}</code></li>`).join('')}</ul>
       <p>אם ההשבתה זמנית (למשל לניפוי תקלה) — יש לוודא שהיא מוסרת. תזכורת זו חוזרת פעם בשבוע כל עוד הדגל דלוק.</p>
     </div>`,

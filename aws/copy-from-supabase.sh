@@ -52,7 +52,7 @@ if [ "$STEP" != files ]; then
 fi
 if [ "$STEP" != db ]; then
   JS=$(curl -fsSL "https://raw.githubusercontent.com/shlomo1315/chatamsofer/main/aws/copy-files.mjs" | base64 -w0)
-  # ALB_HOST: מצביעים את הדומיין למאזן ב-AWS מתוך המשימה (לפני החלפת ה-DNS הוא עדיין מצביע ל-Railway)
+  # ALB_HOST: מצביעים את הדומיין למאזן ב-AWS מתוך המשימה (לפני החלפת ה-DNS הוא עדיין מצביע לשרת הישן)
   PRE=""; [ -z "${ALB_HOST:-}" ] || PRE="echo \"\$(getent ahostsv4 $ALB_HOST | head -1 | cut -d' ' -f1) $DOMAIN\" >> /etc/hosts && "
   run files node:22-slim "$(jq -Rn --arg js "$JS" --arg pre "$PRE" '"\($pre)echo \($js) | base64 -d > c.mjs && node c.mjs"')" \
     "[{\"name\":\"SUPABASE_URL\",\"value\":\"$SB_URL\"},{\"name\":\"DST_URL\",\"value\":\"https://$DOMAIN\"}]" \

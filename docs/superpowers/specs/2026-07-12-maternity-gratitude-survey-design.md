@@ -98,7 +98,7 @@ export async function runScheduledMail(): Promise<{ sent: number; failed: number
 
 **רישום ב-`instrumentation.ts`:** בדיקה שעתית, kill-switch `SCHEDULED_MAIL_DISABLED=1`, לפי דפוס `runUnloadExpired` הקיים.
 
-**מנעול ריצה כפולה:** Railway עשוי להריץ יותר ממכונה אחת. ה-worker לוקח `pg_try_advisory_lock` בתחילת הריצה ומשחרר בסוף. אם המנעול תפוס — יוצא מיד. (זהו גם תיקון של באג קיים בכל ה-workers האחרים, אבל מחוץ לסקופ כאן.)
+**מנעול ריצה כפולה:** השרת הישן עשוי להריץ יותר ממכונה אחת. ה-worker לוקח `pg_try_advisory_lock` בתחילת הריצה ומשחרר בסוף. אם המנעול תפוס — יוצא מיד. (זהו גם תיקון של באג קיים בכל ה-workers האחרים, אבל מחוץ לסקופ כאן.)
 
 ### 2.4 מוטבת ללא כתובת מייל
 

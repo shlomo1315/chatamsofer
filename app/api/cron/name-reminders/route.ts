@@ -15,7 +15,7 @@ export const maxDuration = 300
 // תזכורת שבועית להשלמת שם התינוק — רצה בימי ראשון.
 //
 // הרצה: GET עם ?token=<CRON_SECRET> או Authorization: Bearer.
-// ב-Railway: Cron Service בביטוי `0 9 * * 0` עם TZ=Asia/Jerusalem.
+// בשרת: Cron Service בביטוי `0 9 * * 0` עם TZ=Asia/Jerusalem.
 //
 // 🔴 רק תיקים שהיולדת סימנה בהם "עדיין אין שם" ושחסר בהם שם בפועל.
 // כללי הבחירה כולם ב-lib/nameFixReminder (מודול טהור ובדוק).
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
   const dryRun = request.nextUrl.searchParams.get('dry') === '1'
 
   // 🔴 שתי דרכי גישה, ובכוונה שונות:
-  //   • CRON_SECRET — לריצה האוטומטית מ-Railway (אין שם משתמש מחובר).
+  //   • CRON_SECRET — לריצה האוטומטית מהשרת (אין שם משתמש מחובר).
   //   • צוות מחובר — רק לבדיקה היבשה, כדי שאפשר יהיה לפתוח את הכתובת
   //     בדפדפן ולראות מי היה מקבל בלי להחזיק את הסוד ביד.
   //
