@@ -37,17 +37,19 @@ export const PUBLIC_TEXT_GROUPS: PublicTextGroup[] = [
   {
     title: 'מסך פתיחה — זיהוי',
     entries: [
-      { key: 'welcome.title', fallback: 'ברוכים הבאים', hint: 'הכותרת הראשית' },
+      { key: 'welcome.eyebrow', fallback: 'איגוד הצאצאים · היכל החתם סופר', hint: 'שורה קטנה מעל הכותרת' },
+      { key: 'welcome.title', fallback: 'כניסה לאזור האישי', hint: 'הכותרת הראשית' },
+      { key: 'welcome.sub', fallback: 'הזינו מספר זהות, ונמשיך מכאן.', hint: 'שורת משנה מתחת לכותרת' },
       {
         key: 'welcome.notice',
         fallback: 'לעת עתה הרישום לאיגוד הצאצאים הוא לתושבי ארץ הקודש בלבד',
-        hint: 'הודעת ההדגשה הצהובה',
+        hint: 'ההודעה בתוך הכרטיס',
         multiline: true,
       },
       { key: 'welcome.tab.id', fallback: 'תעודת זהות', hint: 'לשונית ת"ז' },
       { key: 'welcome.tab.passport', fallback: 'דרכון', hint: 'לשונית דרכון' },
       { key: 'welcome.id.label', fallback: 'מספר תעודת זהות', hint: 'תווית שדה ת"ז' },
-      { key: 'welcome.id.hint', fallback: 'הזן 9 ספרות כולל ספרת ביקורת', hint: 'שורת העזרה מתחת לת"ז' },
+      { key: 'welcome.id.hint', fallback: '9 ספרות, כולל ספרת ביקורת', hint: 'שורת העזרה מתחת לת"ז' },
       { key: 'welcome.passport.label', fallback: 'מספר דרכון', hint: 'תווית שדה הדרכון' },
       { key: 'welcome.submit', fallback: 'כניסה למערכת', hint: 'כפתור הכניסה' },
       { key: 'welcome.submitting', fallback: 'מחפש...', hint: 'הכפתור בזמן חיפוש' },
