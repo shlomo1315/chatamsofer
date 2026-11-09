@@ -15,19 +15,23 @@ import { maternity } from './maternity'
 const CENTER_PARAMS = [CL_CARD, CL_CONFIRM, CL_GO]
 const NOT_CENTER = 'המספר שממנו התקשרתם אינו רשום כמוקד מורשה לטעינה. לרישום המספר פנו למזכירות'
 
-/** המתקשר הוא מוקד פעיל עם טלפון מורשה? תקלה במסד = לא (ממשיכים לתפריט הרגיל). */
-async function isCenterCaller(raw: string): Promise<boolean> {
+/** המתקשר הוא מוקד פעיל עם טלפון מורשה? מחזיר את שם המוקד ('' אם אין שם), או null. תקלה במסד = null (ממשיכים לתפריט הרגיל). */
+async function centerCallerName(raw: string): Promise<string | null> {
   const phone = normalizeCallerPhone(raw)
   const db = phone ? getServiceClient() : null
-  if (!db) return false
-  try { return !!(await findCenterByPhone(db, phone)) } catch { return false }
+  if (!db) return null
+  try {
+    const acc = await findCenterByPhone(db, phone)
+    return acc ? (acc.center_name ?? '').trim() : null
+  } catch { return null }
 }
 
 export const mainMenu: TlHandler = async (ctx) => {
   const choice = ctx.params.menuChoice
   const midLoad = CENTER_PARAMS.some((k) => ctx.params[k] != null)
   // מקש 3 (או באמצע טעינה) מיועד רק למוקד מורשה; מי שאינו כזה שומע שהמספר אינו רשום
-  const isCenter = midLoad || !choice || choice === 'ERROR' || choice === '3' ? midLoad || await isCenterCaller(ctx.phone) : false
+  const centerName = !midLoad && (!choice || choice === 'ERROR' || choice === '3') ? await centerCallerName(ctx.phone) : null
+  const isCenter = midLoad || centerName !== null
   if (isCenter && (midLoad || choice === '3')) return centerLoad(ctx)
 
   const m = await getMainMenuMessages()
@@ -36,7 +40,7 @@ export const mainMenu: TlHandler = async (ctx) => {
   // ולא "הקשה שגויה", והניסיון נרשם בלוג כדי שאפשר יהיה לרשום את המספר.
   const keys = ['1', '2', '3', '9']
   const menuFiles = (...head: string[]) => say(...head, text('menu'), ...(isCenter ? [text('centerMenu')] : []))
-  if (!choice || choice === 'ERROR') return menu('menuChoice', keys, menuFiles(text('welcome')))
+  if (!choice || choice === 'ERROR') return menu('menuChoice', keys, menuFiles(...(centerName ? [`שלום ${centerName}`] : []), text('welcome')))
   if (choice === '9') return goodbye(text('notice'))
   if (choice === '1') return holidays(ctx)
   if (choice === '2') return maternity(ctx)
