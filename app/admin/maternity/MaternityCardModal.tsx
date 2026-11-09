@@ -10,6 +10,9 @@ import type { MaternityAid } from '@/types'
 import { babyNameLabel, type AidNameFields } from '@/lib/babyNames'
 import { STATUS_PILL, type MotherRef } from './maternityStatus'
 import { useCardActivity, CardPanel, CardHistory, money, cardStatusKey } from './MaternityCardsTab'
+import SafeDocImage from '@/components/ui/SafeDocImage'
+import PdfCanvasView from '@/components/ui/PdfCanvasView'
+import { loadDocBlob, openDocInNewTab, downloadDocViaData } from '@/lib/docBlob'
 import RecordModal, { modalBtn, type RecordTone } from '@/components/admin/system/RecordModal'
 
 // כרטסת לידה: הגדרות בלבד, התצוגה ב-RecordModal המשותף.
@@ -34,12 +37,25 @@ const motherName =(m?: MotherRef) => {
 
 // מסמך חי במסך: תמונה או PDF ישר בקובייה, עם הגדלה, סיבוב, הורדה ופתיחה בחלון חדש
 // ⚠️ אין זיהוי טקסט במסמך, ולכן ההתאמה לשדות התיק מוצגת בשורה מתחת ולא כסימון על המסמך
+// טעינת המסמך דרך ערוץ הנתונים (הדלי פרטי, כתובת ציבורית ישירה מחזירה NoSuchBucket); מזהה כשל לפני ההצגה
+function useDocStatus(url: string): 'loading' | 'ok' | 'error' {
+  const [st, setSt] = useState<{ url: string; v: 'ok' | 'error' } | null>(null)
+  useEffect(() => {
+    if (!url) return
+    let alive = true
+    loadDocBlob(url).then(() => alive && setSt({ url, v: 'ok' })).catch(() => alive && setSt({ url, v: 'error' }))
+    return () => { alive = false }
+  }, [url])
+  return st && st.url === url ? st.v : 'loading'
+}
+
 function LiveDoc({ docs, matches }: { docs: { url: string; label: string }[]; matches: { label: string; value: string }[] }) {
   const [page, setPage] = useState(0)
   const [zoom, setZoom] = useState(1)
   const [rot, setRot] = useState(0)
   const cur = docs[Math.min(page, docs.length - 1)]
   const btn = 'grid h-9 w-9 place-items-center rounded-md border border-[#D9CFB9] bg-white text-[#14213D] hover:border-[#14213D] disabled:opacity-40'
+  const status = useDocStatus(cur?.url ?? '')
   if (!cur) return <section className="rounded-xl border border-[#E6DFCF] bg-[#FFFDF8] p-5 text-sm text-[#6B6352]">לא צורף אישור לידה</section>
   const pdf = /\.pdf(\?|#|$)/i.test(cur.url)
   const turn = rot % 180 !== 0
@@ -50,14 +66,23 @@ function LiveDoc({ docs, matches }: { docs: { url: string; label: string }[]; ma
         <button type="button" className={btn} title="הקטנה" aria-label="הקטנה" disabled={pdf || zoom <= 0.5} onClick={() => setZoom(z => Math.max(0.5, z - 0.25))}><ZoomOut size={16} /></button>
         <button type="button" className={btn} title="הגדלה" aria-label="הגדלה" disabled={pdf || zoom >= 3} onClick={() => setZoom(z => Math.min(3, z + 0.25))}><ZoomIn size={16} /></button>
         <button type="button" className={btn} title="סיבוב" aria-label="סיבוב" disabled={pdf} onClick={() => setRot(r => (r + 90) % 360)}><RotateCw size={16} /></button>
-        <a className={btn} title="הורדה" aria-label="הורדה" href={cur.url} download target="_blank" rel="noreferrer"><Download size={16} /></a>
-        <a className={btn} title="פתיחה בחלון חדש" aria-label="פתיחה בחלון חדש" href={cur.url} target="_blank" rel="noreferrer"><ExternalLink size={16} /></a>
+        <button type="button" className={btn} title="הורדה" aria-label="הורדה" onClick={() => { downloadDocViaData(cur.url).catch(() => {}) }}><Download size={16} /></button>
+        <button type="button" className={btn} title="פתיחה בחלון חדש" aria-label="פתיחה בחלון חדש" onClick={() => { openDocInNewTab(cur.url).catch(() => {}) }}><ExternalLink size={16} /></button>
       </div>
       <div className="min-h-[380px] flex-1 overflow-auto bg-[#EFEBDD] p-2">
-        {pdf
-          ? <iframe src={cur.url} title={cur.label} className="h-[520px] w-full rounded bg-white" />
-          // eslint-disable-next-line @next/next/no-img-element
-          : <img src={cur.url} alt={cur.label} style={{ width: `${zoom * 100}%`, maxWidth: 'none', transform: `rotate(${rot}deg)`, margin: turn ? '12% 0' : undefined }} className="mx-auto block rounded bg-white transition-transform" />}
+        {status === 'loading' && <p className="py-16 text-center text-sm text-[#6B6352]">טוען מסמך…</p>}
+        {status === 'error' && (
+          <div className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm font-medium text-[#8A2B2B]">לא הצלחנו להציג את המסמך כאן</p>
+            <button type="button" onClick={() => { openDocInNewTab(cur.url).catch(() => {}) }}
+              className="rounded-md border border-[#14213D] bg-white px-3 py-1.5 text-sm font-bold text-[#14213D] hover:bg-[#F4F1E8]">פתח בחלון חדש</button>
+          </div>
+        )}
+        {status === 'ok' && (pdf
+          ? <PdfCanvasView url={cur.url} className="w-full rounded bg-white" />
+          : <div style={{ width: `${zoom * 100}%`, transform: `rotate(${rot}deg)`, margin: turn ? '12% 0' : undefined }} className="mx-auto transition-transform">
+              <SafeDocImage path={cur.url} alt={cur.label} className="block w-full rounded bg-white" />
+            </div>)}
       </div>
       {docs.length > 1 && (
         <div className="flex items-center gap-2 border-t border-[#E6DFCF] px-2.5 py-2">
