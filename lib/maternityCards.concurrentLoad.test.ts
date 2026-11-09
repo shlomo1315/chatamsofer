@@ -81,7 +81,8 @@ describe('טעינת כרטיס יולדת: נעילה אטומית', () => {
     const admin = statefulAdmin(new Set(['a1']), { card_load_status: 'failed' })
     const r = await loadMaternityCardOnApproval(admin, 'a1')
     expect(vi.mocked(addTlush)).not.toHaveBeenCalled()
-    expect(r.already).toBe(true)
+    expect(r.ok).toBe(false) // לא "כבר נטען": אין אישור לטעינה, נדרש אימות בנדרים
+    expect(r.already).toBeUndefined()
   })
 
   it('עצירה של השומר לפני הפנייה היא כישלון ודאי: החסם משתחרר והסבב הבא טוען באמת', async () => {

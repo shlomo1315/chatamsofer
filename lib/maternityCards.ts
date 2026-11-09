@@ -323,7 +323,16 @@ export async function loadMaternityCardOnApproval(
   if (guard !== 'acquired') {
     await restoreCard(); await releaseLock()
     await logActivity(admin, { action: 'maternity_card_load_blocked', entityType: 'maternity_aid', entityId: aid.id, details: { reason: guard === 'held' ? 'guard_held' : 'guard_error' } })
-    return guard === 'held' ? { ok: true, already: true } : { ok: false, error: 'חסם הטעינה לא זמין — לא נטען', clientId }
+    if (guard === 'held') {
+      // 🔴 חסם תפוס בלי טעינה מאושרת (אין card_tlush_id — אחרת היינו יוצאים מוקדם למעלה)
+      // אינו "כבר נטען". החזרת הצלחה כאן השאירה יולדות עם card_load_status='failed',
+      // בלי שגיאה ובלי כרטיס, והמערכת הטלפונית השמיעה "לא מזהה" (7.11, 12 תיקים).
+      // לא משחררים אוטומטית: ייתכן שהפנייה לנדרים יצאה. נדרש אימות מול נדרים.
+      const err = 'קיים חסם טעינה תפוס בלי טעינה מאושרת — יש לאמת בנדרים אם נטענו 600 ₪ לפני שחרור החסם'
+      await admin.from('maternity_aids').update({ card_load_status: 'failed', card_load_error: err, updated_at: new Date().toISOString() }).eq('id', aid.id)
+      return { ok: false, error: err, clientId }
+    }
+    return { ok: false, error: 'חסם הטעינה לא זמין — לא נטען', clientId }
   }
 
   try {
