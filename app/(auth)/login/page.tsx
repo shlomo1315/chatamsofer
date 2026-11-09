@@ -139,9 +139,9 @@ export default function LoginPage() {
       <div className="relative flex w-full max-w-[440px] flex-col items-center text-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/logo-heichal.png"
+          src="/logo.png"
           alt="לוגו איגוד הצאצאים"
-          className="h-[88px] w-[88px] object-contain drop-shadow-[0_8px_24px_rgba(0,0,0,.35)] sm:h-28 sm:w-28"
+          className="h-[104px] w-auto object-contain drop-shadow-[0_0_28px_rgba(192,145,47,.35)] sm:h-32"
         />
         <p className="mt-6 text-xs font-medium tracking-[.06em] text-[#d9b35e]">איגוד הצאצאים</p>
         <h1 className="mt-2 text-balance text-[31px] font-black leading-[1.1] sm:text-[39px]">היכל החתם סופר</h1>
