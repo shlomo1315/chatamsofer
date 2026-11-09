@@ -66,9 +66,6 @@ ${sub.trim() ? `<p style="margin:6px 0 0;color:#eff6ff;font-size:16px;">${plain(
 <a href="${escHtml(opts.downloadUrl)}" style="display:inline-block;background:${d.buttonColor};color:#ffffff;text-decoration:none;font-size:17px;font-weight:bold;padding:14px 34px;border-radius:10px;">${plain(d.buttonLabel.trim() || DEFAULT_DESIGN.buttonLabel)}</a>
 </td></tr>` : ''
 
-  const archiveButton = d.showArchiveButton ? `<tr><td align="center" style="padding:${opts.downloadUrl ? '0' : '8px'} 28px 28px;">
-<a href="${escHtml(gilyonotUrls.archive())}" style="display:inline-block;color:${d.buttonColor};text-decoration:none;font-size:15px;font-weight:bold;padding:11px 26px;border-radius:10px;border:2px solid ${d.buttonColor};">${plain(d.archiveButtonLabel.trim() || DEFAULT_DESIGN.archiveButtonLabel)}</a>
-</td></tr>` : ''
 
   return `<!DOCTYPE html>
 <html dir="rtl" lang="he">
@@ -86,7 +83,6 @@ ${header}
 ${body}
 </td></tr>
 ${button}
-${archiveButton}
 <tr><td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:18px 28px;text-align:center;color:#64748b;font-size:12px;line-height:1.7;">
 ${d.footerText.trim() ? `${plain(d.footerText)}<br/>` : ''}${unsub}
 </td></tr>

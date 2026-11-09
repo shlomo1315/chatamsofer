@@ -425,7 +425,7 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
                   </Pop>
                 </div>
                 <Tool label="הסרת קישור" onClick={() => exec('unlink')}><Unlink className="h-4 w-4" /></Tool>
-                <Tool label="כפתור" onClick={() => openPop('button')} active={pop === 'button'}><MousePointerClick className="h-4 w-4" /></Tool>
+                <button type="button" onClick={() => openPop("button")} className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold ${pop === "button" ? "bg-blue-600 text-white" : "bg-blue-50 text-blue-700 hover:bg-blue-100"}`}><MousePointerClick className="h-4 w-4" aria-hidden />הוסף כפתור</button>
                 <div className="relative">
                   <Tool label="תמונה" onClick={() => openPop('image')} active={pop === 'image'}>{uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}</Tool>
                   <Pop open={pop === 'image'}>
@@ -570,7 +570,7 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
             </div>
             <div className="overflow-hidden rounded-xl bg-slate-100 p-2 ring-1 ring-inset ring-slate-900/[0.05]">
               {preview
-                ? <iframe srcDoc={preview} sandbox="allow-popups allow-popups-to-escape-sandbox" title="תצוגה חיה של המייל"
+                ? <iframe srcDoc={preview} sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" title="תצוגה חיה של המייל"
                     className={`mx-auto block h-[720px] rounded-lg bg-white transition-[width] ${device === 'mobile' ? 'w-[390px] max-w-full' : 'w-full'}`} />
                 : <div className="flex h-[720px] items-center justify-center text-sm text-slate-500"><Loader2 className="ml-2 h-4 w-4 animate-spin" aria-hidden />טוען תצוגה...</div>}
             </div>
