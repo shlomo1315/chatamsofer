@@ -325,6 +325,10 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
   const idVariants = Array.from(new Set(
     isPassport ? [cleanId] : [cleanId, cleanId.replace(/^0+/, '')].filter(Boolean),
   ))
+  // מי שנמחק מהאיגוד בבקשתו לא יכול להירשם מחדש.
+  const { data: removed } = await admin.from('removed_members')
+    .select('id_number').in('id_number', idVariants).limit(1).maybeSingle()
+  if (removed) return NextResponse.json({ error: 'לא ניתן להירשם: פרטים אלה נמחקו מהאיגוד ואין אפשרות הרשמה מחדש. לבירור פנו למזכירות.' }, { status: 403 })
   const { data: existing } = await admin.from('beneficiaries')
     .select('id').in('id_number', idVariants).limit(1).maybeSingle()
   if (existing) return NextResponse.json({ error: 'תעודת זהות זו כבר רשומה במערכת' }, { status: 409 })
