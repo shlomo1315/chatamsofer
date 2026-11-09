@@ -284,3 +284,5 @@ th.ltr-num {
 .admin-shell .text-violet-600, .admin-shell .text-purple-600 { color: #8a6316; }
 .admin-shell .bg-indigo-50, .admin-shell .bg-violet-50, .admin-shell .bg-purple-50 { background-color: #f4e9cf; }
 .admin-shell .border-indigo-200, .admin-shell .border-violet-200 { border-color: #e3c98a; }
+
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } }
