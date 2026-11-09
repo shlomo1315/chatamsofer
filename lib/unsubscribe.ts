@@ -1,3 +1,4 @@
+import { fetchAllRows } from './fetchAllRows'
 import { createHmac, timingSafeEqual } from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
@@ -79,6 +80,9 @@ export async function addUnsubscribe(
  * מי שכאן לעולם לא ייכנס לקמפיין. לא ניתן לעקוף.
  */
 export async function suppressionSet(db: SupabaseClient): Promise<Set<string>> {
-  const { data } = await db.from('unsubscribes').select('email')
-  return new Set((data ?? []).map(r => String(r.email).toLowerCase().trim()))
+  // fetchAllRows: PostgREST קוטע ב-1,000 שורות בשקט, ומוסר שנחתך היה מקבל דיוור
+  const { rows } = await fetchAllRows<{ email: string }>(
+    (from, to) => db.from('unsubscribes').select('email').order('email').range(from, to) as unknown as PromiseLike<{ data: { email: string }[] | null; error: { message: string } | null }>
+  )
+  return new Set(rows.map(r => String(r.email).toLowerCase().trim()))
 }
