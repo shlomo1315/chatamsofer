@@ -50,13 +50,14 @@ Resources:
             Statement: [{Effect: Allow, Action: 'events:InvokeApiDestination', Resource: [!GetAtt DailyDigestDestination.Arn, !GetAtt NameRemindersDestination.Arn]}]
       Tags: [{Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
 
+  # מושבת (9.11.2026) לבקשת שלמה: הסיכום היומי בוטל. להפעלה מחדש: State: ENABLED.
   # יומי 21:00 UTC. הראוט עצמו מדלג בשבת ובחג.
   DailyDigestRule:
     Type: AWS::Events::Rule
     Properties:
       Name: !Sub "${ProjectName}-daily-digest"
       ScheduleExpression: cron(0 21 * * ? *)
-      State: ENABLED
+      State: DISABLED
       Targets:
         - Id: daily-digest
           Arn: !GetAtt DailyDigestDestination.Arn
