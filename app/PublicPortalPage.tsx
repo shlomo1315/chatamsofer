@@ -3805,7 +3805,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 py-8">
+      <main className={`mx-auto px-4 py-8 ${step === 'dashboard' ? 'max-w-2xl lg:max-w-[1200px]' : 'max-w-2xl'}`}>
 
         {/* ─── Step: ID Lookup ─── */}
         {step === 'id-lookup' && (

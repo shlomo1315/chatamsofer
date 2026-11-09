@@ -605,6 +605,15 @@ const CSS = `
 .pa .gone h2{font-size:var(--t5);font-weight:900}
 .pa .gone p{margin:var(--s2) 0 var(--s5)}
 .pa .errb{font-size:12.5px;color:#B42318;margin-top:var(--s2)}
+@media (min-width:821px){
+  .pa .grid1{grid-template-columns:2fr 1fr 1fr 1fr}
+  .pa .grid1 .tile.main{grid-column:auto;flex-direction:column;align-items:stretch;flex-wrap:nowrap}
+  .pa .grid1 .tile.main b{flex:none;margin-top:auto}
+  #pa-family{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);column-gap:var(--s5);align-items:start}
+  #pa-family>.sec-head,#pa-family>.unv,#pa-family>.note{grid-column:1/-1}
+  #pa-family .contact{grid-template-columns:1fr 1fr;margin-top:var(--s3);padding:var(--s4);border:1px solid var(--line-2);border-radius:var(--r1)}
+  #pa-family .contact div:nth-child(2){grid-column:1/-1}
+}
 @media (max-width:820px){
   .pa .wrap{grid-template-columns:1fr;gap:var(--s3)}
   .pa .side{position:static;padding:var(--s4);gap:var(--s3)}
