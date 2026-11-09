@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
   const { mailFor } = await import('@/lib/departments')
   const { bookFairOrderNoticeEmail } = await import('@/lib/emailTemplates')
 
-  // 🔴 לא request.nextUrl.origin: מאחורי Railway הוא localhost:8080.
+  // 🔴 לא request.nextUrl.origin: מאחורי ה-proxy הוא localhost:8080.
   const base = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://chasamsofer.co.il').replace(/\/$/, '')
   const groups = await loadGroups(db)
   if (!groups.length) return NextResponse.json({ error: 'לא נמצאו הזמנות אתר פעילות' }, { status: 400 })

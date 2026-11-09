@@ -27,7 +27,7 @@
 -- ⚠️ idempotent בכוונה: ה-UPDATE על השריונים הוא גם הבורר וגם הנעילה
 -- (status='held' יורד ל-'expired' באותה פקודה), ולכן ריצה שנייה במקביל לא
 -- תמצא דבר. 🔴 מה שאסור הוא select ואז update נפרד — שם החלון אמיתי
--- וההחזרה תהיה כפולה. Railway מריץ cron בחפיפה בזמן פריסה.
+-- וההחזרה תהיה כפולה. השרת מריץ cron בחפיפה בזמן פריסה.
 create or replace function public.book_fair_expire_reservations(
   p_book_ids uuid[] default null
 ) returns integer

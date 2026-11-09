@@ -5,7 +5,7 @@ import { verifyCronSecret } from './apiAuth'
 // 🔴 אימות הסוד של משימות ה-cron.
 //
 // הבאג שזה תופס: התיעוד בכל ה-cron אומר `?token=`, וכך הוגדרו השירותים
-// ב-Railway — אבל הקוד קרא `?secret=` בלבד. כל הרצה דרך פרמטר בכתובת
+// בשרת — אבל הקוד קרא `?secret=` בלבד. כל הרצה דרך פרמטר בכתובת
 // נדחתה ב-401, והכשל שקט: ל-cron אין מי שיקרא את תשובתו, ולכן משימה
 // שלא רצה מעולם נראית בדיוק כמו משימה שהצליחה.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -18,7 +18,7 @@ beforeEach(() => { process.env.CRON_SECRET = SECRET })
 afterEach(() => { delete process.env.CRON_SECRET })
 
 describe('verifyCronSecret — שמות הפרמטר', () => {
-  it('מקבל ?token= (השם שבתיעוד ובהגדרת Railway)', () => {
+  it('מקבל ?token= (השם שבתיעוד ובהגדרת התזמון)', () => {
     expect(verifyCronSecret(req(`https://x.dev/api/cron/x?token=${SECRET}`))).toBe(true)
   })
 

@@ -84,9 +84,8 @@ function randomId(): string {
 
 export function buildRawEmail(opts: BuildOptions): string {
   const { from, fromName, to, subject, html, replyTo, inReplyTo, trackingToken, attachments } = opts
-  // בסיס הכתובת לפיקסל המעקב — נגזר מ-env (Railway/אחר). אם לא מוגדר — לא מזריקים פיקסל שבור.
-  const railway = process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : ''
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || railway || '').replace(/\/$/, '')
+  // בסיס הכתובת לפיקסל המעקב — נגזר מ-env (סביבה). אם לא מוגדר — לא מזריקים פיקסל שבור.
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '')
   const pixel = (trackingToken && appUrl)
     ? `<img src="${appUrl}/api/track/open?t=${trackingToken}" width="1" height="1" style="display:none;border:0;" alt="" />`
     : ''

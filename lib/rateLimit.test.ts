@@ -87,7 +87,7 @@ describe('clientIpOrNull — IP חסר', () => {
     expect(clientIpOrNull(req({ 'x-real-ip': '8.8.8.8' }))).toBe('8.8.8.8')
   })
 
-  // 🔴 ביקורת 07.10: ב-Railway הערך האחרון ב-XFF הוא כתובת תשתית —
+  // 🔴 ביקורת 07.10: בשרת הערך האחרון ב-XFF הוא כתובת תשתית —
   // בלי העדפת x-real-ip כל הפונים דרך אותו צומת חלקו מונה אחד.
   it('x-real-ip גובר על השרשרת — הערך האחרון בה הוא תשתית', () => {
     expect(clientIpOrNull(req({

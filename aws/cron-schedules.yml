@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: חתם סופר - תזמוני EventBridge (היו שירותי cron ב-Railway). סטאק נפרד, לא נוגע בסטאק הראשי.
+Description: חתם סופר - תזמוני EventBridge (היו שירותי cron בשרת). סטאק נפרד, לא נוגע בסטאק הראשי.
 
 # פריסה: aws cloudformation deploy --stack-name chasamsofer-cron --template-file aws/cron-schedules.yml --capabilities CAPABILITY_IAM
 # תזכורת השמות פעילה באישור מפורש של שלמה (9.11.2026), ראשון 09:00 UTC. משלוח ראשון: 15.11.

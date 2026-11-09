@@ -3,7 +3,7 @@ Description: חתם סופר - תשתית ECS Fargate (ECR, סודות, הרשא
 
 # פריסה: CloudFormation -> Create stack -> העלאת הקובץ הזה. אזור: eu-central-1.
 # ⚠️ משימה אחת בלבד (DesiredCount=1): instrumentation.ts מריץ תזמונים פנימיים (גיבוי, פריקה, סנכרונים),
-# ושתי משימות היו מריצות אותם פעמיים. כמו ב-Railway.
+# ושתי משימות היו מריצות אותם פעמיים. כמו בשרת.
 
 Parameters:
   ProjectName: {Type: String, Default: chasamsofer, AllowedPattern: "^[a-z][a-z0-9-]{1,30}$", Description: "שם הפרויקט באותיות קטנטנות באנגלית. משמש לשמות כל המשאבים ולתגית Project. לפרויקט נוסף: שם סטאק ושם פרויקט אחרים"}

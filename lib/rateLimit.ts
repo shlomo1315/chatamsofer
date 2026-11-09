@@ -63,7 +63,7 @@ export function __resetRateLimits() {
  * `X-Forwarded-For: <מספר אקראי>` בכל בקשה כדי שכל בקשה תיספר כפונה חדש.
  * זה נטרל בפועל את ההגנה מפני סריקת מאגר ומפני ניחוש קודים.
  *
- * הערך האחרון נוסף ע"י ה-proxy שלנו (Railway) ואינו ניתן לזיוף מבחוץ:
+ * הערך האחרון נוסף ע"י ה-proxy שלנו ואינו ניתן לזיוף מבחוץ:
  * גם אם הלקוח שולח כותרת משלו, ה-proxy מוסיף אחריה את הכתובת האמיתית.
  *
  * ⚠️ אם בעתיד תתווסף שכבת proxy נוספת (CDN), יש לספור אחורה בהתאם —
@@ -71,7 +71,7 @@ export function __resetRateLimits() {
  */
 export function clientIpOrNull(request: Request): string | null {
   // 🔴 x-real-ip קודם (ביקורת אבטחה 07.10). מדידה חיה ב-05.10 (ראו
-  // lib/payments/callbackSource): ב-Railway הערך האחרון ב-x-forwarded-for
+  // lib/payments/callbackSource): בשרת הערך האחרון ב-x-forwarded-for
   // הוא כתובת *תשתית* (79.127.178.82), ולא הלקוח — כך שכל הפונים דרך אותו
   // צומת נספרו כפונה אחד: תוקף אחד יכול היה לנעול את הקופה ואת כניסת
   // המוכרים לכולם. x-real-ip נקבע ע"י ה-proxy, וזיוף שלו מבחוץ נדרס.

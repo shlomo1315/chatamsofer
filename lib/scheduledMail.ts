@@ -164,7 +164,7 @@ export async function cancelScheduledEmail(key: EntityKey): Promise<void> {
 
 /**
  * ה-worker. נקרא כל שעה מ-instrumentation.ts.
- * מוגן ב-advisory lock — אם Railway מריץ שתי מכונות, רק אחת שולחת.
+ * מוגן ב-advisory lock — אם השרת מריץ שתי מכונות, רק אחת שולחת.
  */
 export async function runScheduledMail(): Promise<{ sent: number; failed: number; skipped: number }> {
   const empty = { sent: 0, failed: 0, skipped: 0 }
