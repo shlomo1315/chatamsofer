@@ -7,6 +7,7 @@ import { childRegisteredSeparatelyMessage, isChildMarried } from '@/lib/childDup
 import { toSafeDateValue } from '@/lib/safeDateValue'
 import { PHONE_LOGIN_OFF_MESSAGE, phoneConfirmError, phoneConfirmMismatch } from '@/lib/registrationGate'
 import EmailVerifyModal from '@/components/EmailVerifyModal'
+import { fetchWithRetry, CONNECTION_LOST_MESSAGE } from '@/lib/fetchRetry'
 
 // רכיבים כבדים המופיעים רק עמוק בזרימת הרישום (לא במסך הפתיחה id-lookup) — נטענים עצלה
 // כדי לא להיכנס לבאנדל הראשוני של הדף הציבורי. HebrewDatePicker טוען את @hebcal/core הכבד.
@@ -2401,7 +2402,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       }
     }
     if (!any) return null
-    const res = await fetch('/api/portal/upload-docs', { method: 'POST', body: fd })
+    const res = await fetchWithRetry('/api/portal/upload-docs', { method: 'POST', body: fd })
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
       return (data as { error?: string }).error || 'שגיאה בהעלאת תעודת הזהות. אנא נסו שוב.'
@@ -2521,7 +2522,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       fd.append('file', birthCertFile)
       fd.append('beneficiary_id', beneficiary.id)
       fd.append('doc_type', 'birth_cert')
-      const upRes = await fetch('/api/portal/upload-docs', { method: 'POST', body: fd })
+      const upRes = await fetchWithRetry('/api/portal/upload-docs', { method: 'POST', body: fd })
       const upData = await upRes.json().catch(() => ({}))
       const certUrl = upRes.ok ? (upData.url ?? '') : ''
       if (!certUrl) {
@@ -2536,7 +2537,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         fd2.append('file', birthCertFile2)
         fd2.append('beneficiary_id', beneficiary.id)
         fd2.append('doc_type', 'birth_cert')
-        const upRes2 = await fetch('/api/portal/upload-docs', { method: 'POST', body: fd2 })
+        const upRes2 = await fetchWithRetry('/api/portal/upload-docs', { method: 'POST', body: fd2 })
         const upData2 = await upRes2.json().catch(() => ({}))
         certUrl2 = upRes2.ok ? (upData2.url ?? '') : ''
         if (!certUrl2) {
@@ -2550,7 +2551,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         { name: birthForm.baby_name, gender: birthForm.baby_gender, id_type: birthForm.baby_id_type, id_number: birthForm.baby_id_number },
         ...(isTwins ? [{ name: baby2.baby_name, gender: baby2.baby_gender, id_type: baby2.baby_id_type, id_number: baby2.baby_id_number }] : []),
       ]
-      const res = await fetch(`/api/portal/birth-request${previewCode ? `?preview=${encodeURIComponent(previewCode)}` : ''}`, {
+      const res = await fetchWithRetry(`/api/portal/birth-request${previewCode ? `?preview=${encodeURIComponent(previewCode)}` : ''}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ beneficiary_id: beneficiary.id, ...birthForm, wants_food_card: wantsFoodCard, wants_recovery: wantsRecovery, card_center_id: wantsFoodCard ? cardCenterId : null, is_twins: isTwins, babies, birth_certificate_url: certUrl, birth_certificate_url_2: certUrl2 || undefined, baby_name_pending: noBabyName }),
@@ -2560,7 +2561,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       setRequestType('birth')
       setStep('request-sent')
     } catch {
-      setError('שגיאת רשת. אנא נסה שוב.')
+      setError(CONNECTION_LOST_MESSAGE)
     }
     setLoading(false)
   }
@@ -2885,7 +2886,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       fd.append('file', birthCertFile)
       fd.append('beneficiary_id', beneficiary.id)
       fd.append('doc_type', 'birth_cert')
-      const upRes = await fetch('/api/portal/upload-docs', { method: 'POST', body: fd })
+      const upRes = await fetchWithRetry('/api/portal/upload-docs', { method: 'POST', body: fd })
       const upData = await upRes.json().catch(() => ({}))
       const certUrl = upRes.ok ? (upData.url ?? '') : ''
       if (!certUrl) {
@@ -2893,7 +2894,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         setLoading(false); return
       }
 
-      const res = await fetch(`/api/portal/birth-request${previewCode ? `?preview=${encodeURIComponent(previewCode)}` : ''}`, {
+      const res = await fetchWithRetry(`/api/portal/birth-request${previewCode ? `?preview=${encodeURIComponent(previewCode)}` : ''}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ beneficiary_id: beneficiary.id, birth_type: 'silent', birth_date: silentForm.birth_date, recovery_home: silentForm.recovery_home, wants_food_card: wantsFoodCard, wants_recovery: wantsRecovery, card_center_id: wantsFoodCard ? cardCenterId : null, notes: silentForm.notes, birth_certificate_url: certUrl }),
       })
@@ -2902,7 +2903,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       setRequestType('birth')
       setStep('request-sent')
     } catch {
-      setError('שגיאת רשת. אנא נסה שוב.')
+      setError(CONNECTION_LOST_MESSAGE)
     }
     setLoading(false)
   }
