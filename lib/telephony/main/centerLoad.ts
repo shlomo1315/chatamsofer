@@ -16,7 +16,7 @@ export const CL_GO = 'center_go'
 const hello = (name?: string) => (name?.trim() ? `שלום ${name.trim()}` : 'שלום')
 
 const askCard = (lead = '', name?: string): TlResult => ({
-  ...askDigits(CL_CARD, CARD_DIGITS, say(lead, `${hello(name)}. הטלפון שלך מזוהה. הקש את מספר הכרטיס בן 16 ספרות`), { min: CARD_DIGITS, maskLog: true, post: true }),
+  ...askDigits(CL_CARD, CARD_DIGITS, say(lead, `${hello(name)}. הטלפון שלך מזוהה. הקש את מספר הכרטיס בן 16 ספרות`), { min: 1, maskLog: true, post: true }),
   removeParams: [CL_CONFIRM],
 })
 
@@ -49,7 +49,7 @@ export function centerTurn(p: Record<string, string>, state: { cardNumber: strin
   return { result: goodbye(), link, load: true }
 }
 
-export const centerLoad: TlHandler = async ({ phone: raw, params }) => {
+export const centerLoad: TlHandler = async ({ phone: raw, params, callId }) => {
   const phone = normalizeCallerPhone(raw)
   if (!phone) return goodbye('שגיאה במספר המתקשר')
   const db = getServiceClient()
@@ -58,6 +58,7 @@ export const centerLoad: TlHandler = async ({ phone: raw, params }) => {
   try { acc = await findCenterByPhone(db, phone) } catch { return goodbye('שגיאה במערכת. נסו שוב מאוחר יותר') }
   if (!acc) return goodbye('המספר שממנו התקשרת אינו מורשה לטעינה')
 
+  console.log('[telephony:main/center-load] callId=' + (callId ?? '') + ' center=' + acc.center_id + ' card=' + (acc.card_number ? 'linked' : 'none') + ' params=' + Object.keys(params).join(','))
   const month = israelMonth()
   // הכרטיס שנשמר עכשיו עוד לא ב-acc, ולכן בודקים מצב חודש רק אחרי השיוך
   const first = centerTurn(params, { cardNumber: acc.card_number, loadedThisMonth: false, name: acc.center_name })
