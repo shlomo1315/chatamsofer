@@ -34,7 +34,7 @@ import {
   Search, AlertCircle, Loader2, CheckCircle2, User,
   Baby, CreditCard, Gift, ChevronLeft, Phone, MapPin, Mail, Landmark,
   Users, GitBranch, Heart, ArrowRight, Clock, Shield, Plus, Trash2, Check, X, Upload, FileText, HandCoins,
-  Home, ClipboardList, Send, Lock,
+  Send, Lock,
 } from 'lucide-react'
 import NameChangeRequest from '@/components/portal/NameChangeRequest'
 
@@ -194,24 +194,8 @@ const PD_CSS = `
 `
 const MARRIED_STATUSES = ['נשואים']
 
-// ─────────────────────────────────────────────────────────────────────────────
-// טאבים של האזור האישי.
-//
-// ⚠️ ארבעה ולא חמישה: "צור קשר" הוא בפועל רשימת כתובות מייל קצרה, ולא
-// הצדיק טאב משלו — הוא יושב בתחתית "בית". חמישה טאבים גם צופפו את הסרגל
-// התחתון בנייד עד שהתוויות נחתכו.
-//
-// ⚠️ הסדר הוא סדר השימוש: מה שהמשפחה נכנסת לראות (פרטים, תזכורות),
-// אחריו מצב הבקשות, ולבסוף מה שנוגעים בו לעיתים רחוקות.
-// ─────────────────────────────────────────────────────────────────────────────
-const DASH_TABS = [
-  { key: 'home'     as const, label: 'בית',     icon: Home },
-  { key: 'requests' as const, label: 'בקשות',   icon: ClipboardList },
-  { key: 'docs'     as const, label: 'מסמכים',  icon: FileText },
-  { key: 'contact'  as const, label: 'צור קשר', icon: Mail },
-]
 
-// כתובות המחלקות בטאב "צור קשר".
+// כתובות המחלקות בסעיף "צור קשר".
 // ⚠️ igud אינה כאן: היא תיבת מענה אוטומטי שאיש אינו קורא בה, והצגתה
 // כדרך ליצירת קשר הייתה שולחת אנשים להמתין לתשובה שלא תגיע.
 const PORTAL_CONTACTS = [
@@ -1395,21 +1379,6 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // שהוא מתחיל למלא. קודם הוא גילה זאת רק בסוף, ונדרש לחזור בכניסה
   // נפרדת — ורבים לא חזרו.
   const [loanIntroModal, setLoanIntroModal] = useState(false)
-
-  // ── טאבים של האזור האישי ────────────────────────────────────────────────
-  //
-  // ⚠️ האזור האישי היה עמוד גלילה אחד ארוך: פרטים, ייחוס, בקשות, מסמכים
-  // וקישורים — הכל בעמודה אחת. בנייד המשתמש גלגל הרבה כדי להגיע לפעולה,
-  // ולא היה מקום להוסיף בו מידע בלי להאריך עוד.
-  //
-  // ⚠️ 'home' הוא ברירת המחדל ולא 'requests': הפרטים והייחוס הם מה
-  // שהמשפחה נכנסת לראות, והתזכורות הפעילות חייבות להופיע בכניסה.
-  const [dashTab, setDashTab] = useState<'home' | 'requests' | 'docs' | 'contact'>('home')
-
-  // תת-טאבים בתוך "בית" — הפרטים, הילדים והייחוס.
-  // ⚠️ הכרטיס היחיד היה ארוך מדי: פרטים אישיים, רשימת ילדים ושרשרת
-  // דורות זה מתחת לזה דחקו את כל השאר מתחת לקו הקיפול בנייד.
-  const [homeTab, setHomeTab] = useState<'details' | 'children' | 'lineage'>('details')
 
   // בקשת תיקון סדר הדורות — ראו lib/lineageFixRequest.
   const [lineageFixOpen, setLineageFixOpen] = useState(false)
@@ -2845,7 +2814,6 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // ⚠️ נקודת ההתראה על טאב "בית": יש פעולה שהמשרד ממתין לה. בלעדיה
   // המשפחה עוברת לטאב אחר ולא רואה שביקשו ממנה משהו — וזו בדיוק
   // הסיבה שהתזכורות יושבות ב"בית" ולא בטאב נפרד.
-  const hasDashAlert = isDocsPending || !isApproved
 
   // Which documents are required — secretary's checklist takes priority, else by marital status
   // ת"ז + ספח כשני קבצים נפרדים לכל בן זוג — הספח (הדף הנלווה, שבו מופיעים
@@ -3199,8 +3167,6 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         .then(d => {
           if (!d?.ok || !d.beneficiary) return
           if (target.action) { intendedAction.current = target.action; setArrivedFor(target.action) }
-          setDashTab(target.dashTab)
-          if (target.homeTab) setHomeTab(target.homeTab)
           if (target.openLineageFix) setLineageFixOpen(true)
           enterDashboard(d.beneficiary, d.documents ?? {})
         })
@@ -5388,30 +5354,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         )}
 
         {step === 'dashboard' && beneficiary && !isRejected && (
-          <div className="flex flex-col gap-4 pb-20 lg:pb-0">
-
-            {/* ── טאבים · דסקטופ ─────────────────────────────────────────
-                ⚠️ מוסתר בנייד — שם הניווט הוא הסרגל התחתון הקבוע. */}
-            <div className="hidden sm:grid grid-cols-4 gap-1 p-1 rounded-2xl bg-[#ECEAE4]">
-              {DASH_TABS.map(t => (
-                <button key={t.key} type="button" onClick={() => setDashTab(t.key)}
-                  className={`relative flex items-center justify-center gap-2 min-h-[46px] rounded-xl text-[14.5px] font-bold whitespace-nowrap transition-all ${
-                    dashTab === t.key
-                      ? 'bg-white text-slate-900 shadow-[0_1px_3px_rgba(0,0,0,.1)]'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}>
-                  <t.icon size={18} />
-                  {t.label}
-                  {t.key === 'home' && hasDashAlert && (
-                    <span className="w-[7px] h-[7px] rounded-full bg-amber-500" />
-                  )}
-                </button>
-              ))}
-            </div>
+          <div className="flex flex-col gap-4">
 
 
-            {/* ═══ טאב: בית — הפרטים, הייחוס והתזכורות ═══ */}
-            {dashTab === 'home' && (<>
+
             <PersonalArea
               beneficiary={beneficiary}
               docsCount={Object.keys(existingDocs).length}
@@ -5433,50 +5379,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               emailUnverified={emailVerified === false}
               onVerifyEmail={() => setShowEmailVerifyModal(true)}
               onEditDetails={openEditDetails}
-              onOpenDocs={() => setDashTab('docs')}
+              onOpenDocs={() => document.getElementById('pa-docs')?.scrollIntoView({ behavior: 'smooth' })}
             />
 
-            {/* הודעת "כבר נרשמתם" + הפניה למייל האיגוד (ללא הצגת סטטוס)
-                ⚠️ הכרטיס כולו מוסתר במצב תקלת דואר: כל מה שהוא מציע מסתיים
-                ב"נשלח לך מייל", וכשהמסירה מתעכבת זה מבוי סתום. כפתורי הבקשות
-                שמתחת אינם תלויים בדואר וממשיכים לעבוד. */}
-            {!mailChannelOff && (
-            <Card>
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <CheckCircle2 size={20} className="text-indigo-600" />
-                </div>
-                <div className="flex-1">
-                  <EditableText k="already.title" as="p" className="font-bold text-slate-900 mb-1" />
-                  <p className="text-sm text-slate-600 leading-relaxed">
-                    לפי המידע במערכת אתם נמנים עם רשומי <span className="font-semibold">איגוד הצאצאים</span>.
-                    כדי להגיש בקשות לסיוע בעת שמחה, לגמ״ח ולשאר ההטבות — שלחו מייל לכתובת{' '}
-                    <a href={igudMailto} className="font-semibold text-indigo-600 break-all">igud@chasamsofer.info</a>,
-                    או קבלו כעת קישור ישירות למייל שלכם:
-                  </p>
-
-                  {benefitsSentTo ? (
-                    <div className="mt-3 flex items-start gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700">
-                      <CheckCircle2 size={16} className="flex-shrink-0 mt-0.5" />
-                      <span>מייל עם רשימת ההטבות וקישורי הבקשות נשלח לכתובת הרשומה על שמכם (<span dir="ltr">{benefitsSentTo}</span>). בדקו את תיבת הדואר (כולל ספאם).</span>
-                    </div>
-                  ) : (
-                    <>
-                      <button
-                        onClick={sendBenefitsLink}
-                        disabled={benefitsSending}
-                        className="mt-3 w-full flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:opacity-50 text-white font-semibold rounded-xl px-4 py-3 transition-all duration-150 text-sm"
-                      >
-                        {benefitsSending ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />}
-                        <EditableText k="already.benefits" />
-                      </button>
-                      {benefitsErr && <p className="text-xs text-red-600 mt-2">{benefitsErr}</p>}
-                    </>
-                  )}
-                </div>
-              </div>
-            </Card>
-            )}
 
             {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</div>}
 
@@ -5517,51 +5422,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               </div>
             )}
 
-            </>)}
 
-            {/* ═══ טאב: בקשות — מצב הבקשות והקישורים להגשה ═══ */}
-            {dashTab === 'requests' && (<>
-            {/* הודעת "כבר נרשמתם" + הפניה למייל האיגוד (ללא הצגת סטטוס)
-                ⚠️ הכרטיס כולו מוסתר במצב תקלת דואר: כל מה שהוא מציע מסתיים
-                ב"נשלח לך מייל", וכשהמסירה מתעכבת זה מבוי סתום. כפתורי הבקשות
-                שמתחת אינם תלויים בדואר וממשיכים לעבוד. */}
-            {!mailChannelOff && (
-            <Card>
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <CheckCircle2 size={20} className="text-indigo-600" />
-                </div>
-                <div className="flex-1">
-                  <EditableText k="already.title" as="p" className="font-bold text-slate-900 mb-1" />
-                  <p className="text-sm text-slate-600 leading-relaxed">
-                    לפי המידע במערכת אתם נמנים עם רשומי <span className="font-semibold">איגוד הצאצאים</span>.
-                    כדי להגיש בקשות לסיוע בעת שמחה, לגמ״ח ולשאר ההטבות — שלחו מייל לכתובת{' '}
-                    <a href={igudMailto} className="font-semibold text-indigo-600 break-all">igud@chasamsofer.info</a>,
-                    או קבלו כעת קישור ישירות למייל שלכם:
-                  </p>
-
-                  {benefitsSentTo ? (
-                    <div className="mt-3 flex items-start gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700">
-                      <CheckCircle2 size={16} className="flex-shrink-0 mt-0.5" />
-                      <span>מייל עם רשימת ההטבות וקישורי הבקשות נשלח לכתובת הרשומה על שמכם (<span dir="ltr">{benefitsSentTo}</span>). בדקו את תיבת הדואר (כולל ספאם).</span>
-                    </div>
-                  ) : (
-                    <>
-                      <button
-                        onClick={sendBenefitsLink}
-                        disabled={benefitsSending}
-                        className="mt-3 w-full flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:opacity-50 text-white font-semibold rounded-xl px-4 py-3 transition-all duration-150 text-sm"
-                      >
-                        {benefitsSending ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />}
-                        <EditableText k="already.benefits" />
-                      </button>
-                      {benefitsErr && <p className="text-xs text-red-600 mt-2">{benefitsErr}</p>}
-                    </>
-                  )}
-                </div>
-              </div>
-            </Card>
-            )}
 
             {/* סטטוס הבקשות — נשלח למייל הרשום במערכת (לא מוצג כאן, לשמירה על פרטיות)
                 ⚠️ מוסתר במצב תקלת דואר, מאותה סיבה: הפעולה היחידה כאן היא
@@ -5593,10 +5454,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
             </Card>
             )}
 
-            </>)}
-
-            {/* ═══ טאב: מסמכים — השלמה, עדכון פרטים ותיקון דורות ═══ */}
-            {dashTab === 'docs' && (<>
+            <div id="pa-docs" className="-mt-4" />
             {/* צאצא במעגל תיקונים (docs_pending) — כניסה מהדשבורד למסך ההשלמה/תיקון דורות.
                 הבלוק הכללי למטה מוסתר ב-docs_pending, ובלי הכרטיס הזה הצאצא היה תלוי
                 אך ורק בקישור מהמייל (?action=docs) — ואם סגר אותו, נתקע. */}
@@ -5739,13 +5597,11 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               </div>
             )}
 
-            </>)}
 
-            {/* ═══ טאב: צור קשר ═══
+            {/* ═══ סעיף: צור קשר ═══
                 ⚠️ רשימת כתובות ולא טופס פנייה: התיבות נקראות בידי אנשי
                 המשרד, ומענה מגיע אליהן. טופס באתר היה מוסיף ערוץ שלישי
                 שאיש אינו עוקב אחריו. */}
-            {dashTab === 'contact' && (
               <Card>
                 <div className="flex items-center gap-2 mb-3">
                   <Mail size={16} className="text-indigo-500" />
@@ -5764,7 +5620,6 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   ))}
                 </div>
               </Card>
-            )}
 
             <div className="text-center pt-2">
               <p className="text-xs text-slate-400">
@@ -5772,27 +5627,6 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               </p>
             </div>
 
-            {/* ── סרגל ניווט תחתון · נייד ────────────────────────────────
-                ⚠️ בתחתית ולא בראש: בנייד האגודל מגיע לתחתית המסך בנוחות,
-                וניווט בראש דורש להזיז את כף היד. זו גם התבנית שהמשתמשים
-                מכירים מכל אפליקציה.
-                ⚠️ fixed עם safe-area: במכשירים עם סרגל מחוות תחתון, בלי
-                ה-padding הכפתורים נחתכים. */}
-            <nav className="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-slate-200 grid grid-cols-4 h-16"
-              style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
-              {DASH_TABS.map(t => (
-                <button key={t.key} type="button" onClick={() => { setDashTab(t.key); window.scrollTo({ top: 0 }) }}
-                  className={`relative flex flex-col items-center gap-0.5 py-2.5 text-[11px] font-bold transition-colors ${
-                    dashTab === t.key ? 'text-[#4338CA]' : 'text-slate-500'
-                  }`}>
-                  <t.icon size={20} />
-                  {t.label}
-                  {t.key === 'home' && hasDashAlert && (
-                    <span className="absolute top-1.5 left-[calc(50%-14px)] w-1.5 h-1.5 rounded-full bg-amber-500" />
-                  )}
-                </button>
-              ))}
-            </nav>
           </div>
         )}
 
