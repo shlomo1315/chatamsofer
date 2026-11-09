@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
         await ensureEmailTexts()
         const mail = type === 'loan'
           ? loanApprovedEmail(ben, req as unknown as { amount?: number; approved_amount?: number | null; installments?: number; monthly_payment?: number; purpose?: string })
-          : birthApprovedEmail(ben, req as unknown as { baby_name?: string; baby_gender?: string; birth_date?: string; recovery_home?: string }, { centers, serial, phones: benPhones, cardInStock })
+          : birthApprovedEmail(ben, req as unknown as { baby_name?: string; baby_gender?: string; birth_date?: string; recovery_home?: string }, { centers, serial, phones: benPhones, cardInStock, wantsCard: birth.wants_food_card !== false, wantsRecovery: birth.wants_recovery !== false })
 
         // אישור לידה → תמיד שובר כרטיס מזון (גם בלידה שקטה). שובר הבראה — רק בלידה רגילה.
         let attachments: MailAttachment[] | undefined
