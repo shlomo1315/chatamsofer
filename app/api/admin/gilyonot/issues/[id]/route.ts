@@ -50,6 +50,7 @@ export async function DELETE(_r: Request, { params }: Ctx) {
     // כשל במחיקת הקבצים לא עוצר מחיקת טיוטה תקועה
     await db.storage.from('documents').remove([...new Set([issue.file_path, issue.file_path.replace(/\/[^/]+(\.\w+)$/, '/gilyon$1'), issue.file_path.replace(/\/[^/]+(\.\w+)$/, '/compressed$1')])]).catch(() => null)
   }
+  if (issue.file2_path) await db.storage.from('documents').remove([issue.file2_path]).catch(() => null)
   await logActivity(db, { userId: staff.userId, action: 'gilyonot_issue_delete', entityType: 'gilyonot_issue', entityId: issue.id, details: { title: issue.title } })
   return NextResponse.json({ ok: true })
 }
