@@ -814,6 +814,8 @@ Resources:
                 - {Name: SizeRestrictions_BODY, ActionToUse: {Count: {}}}
                 # המרכזיה של טכנוליין שולחת בלי User-Agent. הכלל רק מסמן, והחסימה נעשית ב-no-user-agent (חוץ מה-webhook של טכנוליין)
                 - {Name: NoUserAgent_HEADER, ActionToUse: {Count: {}}}
+                # עורך מייל הגיליונות שולח HTML. הכלל רק מסמן, והחסימה נעשית ב-xss-body (חוץ מ-/api/admin/gilyonot/)
+                - {Name: CrossSiteScripting_BODY, ActionToUse: {Count: {}}}
               # העלאות קבצים ל-Storage (POST/PUT/PATCH ל-/storage/v1/object/): תוכן הקובץ נקרא כטקסט ונחסם ב-CrossSiteScripting_BODY. שאר הבקשות נבדקות כרגיל
               ScopeDownStatement:
                 NotStatement:
@@ -843,6 +845,18 @@ Resources:
                     Statement:
                       ByteMatchStatement: {SearchString: /api/webhooks/technoline/, FieldToMatch: {UriPath: {}}, PositionalConstraint: STARTS_WITH, TextTransformations: [{Priority: 0, Type: NONE}]}
           VisibilityConfig: {SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: no-user-agent}
+        # XSS בגוף הבקשה נחסם כמו קודם, חוץ מעורך מייל הגיליונות (מנהל מחובר, מישראל בלבד, והשרת מנקה את ה-HTML)
+        - Name: xss-body
+          Priority: 7
+          Action: {Block: {}}
+          Statement:
+            AndStatement:
+              Statements:
+                - LabelMatchStatement: {Scope: LABEL, Key: "awswaf:managed:aws:core-rule-set:CrossSiteScripting_Body"}
+                - NotStatement:
+                    Statement:
+                      ByteMatchStatement: {SearchString: /api/admin/gilyonot/, FieldToMatch: {UriPath: {}}, PositionalConstraint: STARTS_WITH, TextTransformations: [{Priority: 0, Type: NONE}]}
+          VisibilityConfig: {SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: xss-body}
         - Name: known-bad-inputs
           Priority: 3
           OverrideAction: {None: {}}
