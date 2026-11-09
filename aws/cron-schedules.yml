@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: חתם סופר - תזמוני EventBridge (היו שירותי cron ב-Railway). סטאק נפרד, לא נוגע בסטאק הראשי.
+
+# פריסה: aws cloudformation deploy --stack-name chasamsofer-cron --template-file aws/cron-schedules.yml --capabilities CAPABILITY_IAM
+# ⚠️ תזכורת השמות מושבתת בכוונה. אסור להפעיל בלי אישור מפורש של שלמה.
+
+Parameters:
+  ProjectName: {Type: String, Default: chasamsofer}
+  AppSecretArn: {Type: String, Description: "ARN של הסוד chasamsofer/prod (ממנו נלקח CRON_SECRET)"}
+
+Resources:
+  CronConnection:
+    Type: AWS::Events::Connection
+    Properties:
+      Name: !Sub "${ProjectName}-cron"
+      AuthorizationType: API_KEY
+      AuthParameters:
+        ApiKeyAuthParameters:
+          ApiKeyName: Authorization
+          ApiKeyValue: !Sub "Bearer {{resolve:secretsmanager:${AppSecretArn}:SecretString:CRON_SECRET}}"
+
+  DailyDigestDestination:
+    Type: AWS::Events::ApiDestination
+    Properties:
+      Name: !Sub "${ProjectName}-daily-digest"
+      ConnectionArn: !GetAtt CronConnection.Arn
+      HttpMethod: GET
+      InvocationEndpoint: https://chasamsofer.co.il/api/cron/daily-digest
+      InvocationRateLimitPerSecond: 1
+
+  NameRemindersDestination:
+    Type: AWS::Events::ApiDestination
+    Properties:
+      Name: !Sub "${ProjectName}-name-reminders"
+      ConnectionArn: !GetAtt CronConnection.Arn
+      HttpMethod: GET
+      InvocationEndpoint: https://chasamsofer.co.il/api/cron/name-reminders
+      InvocationRateLimitPerSecond: 1
+
+  CronInvokeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement: [{Effect: Allow, Principal: {Service: events.amazonaws.com}, Action: 'sts:AssumeRole'}]
+      Policies:
+        - PolicyName: invoke-api-destinations
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement: [{Effect: Allow, Action: 'events:InvokeApiDestination', Resource: [!GetAtt DailyDigestDestination.Arn, !GetAtt NameRemindersDestination.Arn]}]
+      Tags: [{Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
+
+  # יומי 21:00 UTC. הראוט עצמו מדלג בשבת ובחג.
+  DailyDigestRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${ProjectName}-daily-digest"
+      ScheduleExpression: cron(0 21 * * ? *)
+      State: ENABLED
+      Targets:
+        - Id: daily-digest
+          Arn: !GetAtt DailyDigestDestination.Arn
+          RoleArn: !GetAtt CronInvokeRole.Arn
+          RetryPolicy: {MaximumRetryAttempts: 2, MaximumEventAgeInSeconds: 3600}
+
+  # ⚠️ מושבת בכוונה: 155 נמענים עם "טרם נשלחה". אסור להפעיל בלי אישור מפורש של שלמה.
+  NameRemindersRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${ProjectName}-name-reminders"
+      ScheduleExpression: cron(0 9 ? * SUN *)
+      State: DISABLED
+      Targets:
+        - Id: name-reminders
+          Arn: !GetAtt NameRemindersDestination.Arn
+          RoleArn: !GetAtt CronInvokeRole.Arn
+          RetryPolicy: {MaximumRetryAttempts: 0, MaximumEventAgeInSeconds: 3600}
+
