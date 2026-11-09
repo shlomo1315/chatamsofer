@@ -6,23 +6,21 @@ export type PortalScreen =
   | 'documents' | 'documents-upload' | 'new-request' | 'new-holiday'
 
 export interface ScreenTarget {
-  dashTab: 'home' | 'requests' | 'docs' | 'contact'
-  homeTab?: 'details' | 'children' | 'lineage'
   action?: 'birth' | 'loan' | 'docs' | 'aid' | 'details' | 'holiday'
   openLineageFix?: boolean
 }
 
 export const SCREEN_TARGETS: Record<PortalScreen, ScreenTarget> = {
-  'home':             { dashTab: 'home' },
-  'requests':         { dashTab: 'requests' },
-  'lineage':          { dashTab: 'home', homeTab: 'lineage' },
-  'lineage-add':      { dashTab: 'home', homeTab: 'lineage', openLineageFix: true },
-  'details':          { dashTab: 'home', homeTab: 'details' },
-  'details-children': { dashTab: 'home', homeTab: 'children' },
-  'documents':        { dashTab: 'docs' },
-  'documents-upload': { dashTab: 'docs', action: 'docs' },
-  'new-request':      { dashTab: 'requests' },
-  'new-holiday':      { dashTab: 'requests', action: 'holiday' },
+  'home':             {},
+  'requests':         {},
+  'lineage':          {},
+  'lineage-add':      { openLineageFix: true },
+  'details':          {},
+  'details-children': {},
+  'documents':        {},
+  'documents-upload': { action: 'docs' },
+  'new-request':      {},
+  'new-holiday':      { action: 'holiday' },
 }
 
 const PATHS: Array<[string, PortalScreen]> = [
