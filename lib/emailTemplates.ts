@@ -1103,8 +1103,13 @@ export type FoodCardCenter = { name: string; city?: string | null; address?: str
 export function birthApprovedEmail(
   b: RequestApprovedBeneficiary,
   birth: { baby_name?: string | null; baby_gender?: string | null; birth_date?: string | null; recovery_home?: string | null },
-  opts: { centers?: FoodCardCenter[]; serial?: string | null; phones?: (string | null | undefined)[]; cardInStock?: boolean } = {},
+  opts: { centers?: FoodCardCenter[]; serial?: string | null; phones?: (string | null | undefined)[]; cardInStock?: boolean; wantsCard?: boolean; wantsRecovery?: boolean } = {},
 ): BuiltEmail {
+  // סוג הבקשה: כרטיס מזון ו/או בית החלמה. ברירת מחדל true לשניהם (בקשות ישנות).
+  const wantsCard = opts.wantsCard !== false
+  const wantsRecovery = opts.wantsRecovery !== false
+  const foodOnly = wantsCard && !wantsRecovery
+  const recoveryOnly = wantsRecovery && !wantsCard
   // כשאין מלאי כרטיסים — לא מצרפים שובר כרטיס ולא מציגים בלוק כרטיס/מוקדים. במקום זאת
   // מוצגת הודעה שהכרטיס יישלח כשיתחדש המלאי. ברירת מחדל true (תאימות אחורה).
   const cardInStock = opts.cardInStock !== false
@@ -1120,7 +1125,7 @@ export function birthApprovedEmail(
     detailRow(nameLabel, birth.baby_name),
     detailRow('מין', genderLabel),
     detailRow('תאריך הלידה', birth.birth_date),
-    detailRow('בית החלמה', birth.recovery_home),
+    wantsRecovery ? detailRow('בית החלמה', birth.recovery_home) : '',
   ].join('')
   const benRows = [
     detailRow('שם מלא', fullName),
@@ -1147,7 +1152,7 @@ export function birthApprovedEmail(
     ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:14px 0 0;border:1px solid #fcd34d;border-radius:10px;overflow:hidden;background:#ffffff;">${centerRows}</table>`
     : ''
   // בלוק כרטיס המזון — רק כשיש מלאי. אחרת מציגים הודעת "אין כרגע מלאי".
-  const foodCardBlock = cardInStock ? `
+  const foodCardBlock = !wantsCard ? '' : cardInStock ? `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
       <tr><td style="background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;padding:16px 20px;">
         <p style="margin:0 0 6px;color:#b45309;font-size:15px;font-weight:900;">${T('card_title')}</p>
@@ -1174,20 +1179,14 @@ export function birthApprovedEmail(
         </p>
       </td></tr>
     </table>`
-  const body = `
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
-      <tr><td style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:14px 18px;text-align:center;">
-        <p style="margin:0;color:#3730a3;font-size:15px;font-weight:900;line-height:1.7;">${T('vouchers_title')}</p>
-        <p style="margin:4px 0 0;color:#4338ca;font-size:13px;line-height:1.7;">${cardInStock ? T('vouchers_note') : T('vouchers_note_no_stock')}</p>
-      </td></tr>
-    </table>
-    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">${T('kicker')}</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetMrs(b.family_name, b.spouse_name || b.full_name)} ${T('heading_suffix')} </h2>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
-      <tr><td style="background:#fdf2f8;border-right:4px solid #db2777;border-radius:0 12px 12px 0;padding:16px 20px;">
-        <p style="margin:0;color:#be185d;font-size:15px;font-weight:800;">${T('approved_note')}</p>
-      </td></tr>
-    </table>
+  const voucherNote = foodOnly
+    ? (cardInStock ? 'הדפיסו את השובר והביאו אותו למוקד לצורך מימוש ההטבה.' : 'שובר כרטיס המזון יישלח אליכם בהמשך למייל.')
+    : recoveryOnly ? 'הדפיסו את שובר ההבראה והביאו אותו לבית ההחלמה לצורך מימוש ההטבה.'
+    : cardInStock ? T('vouchers_note') : T('vouchers_note_no_stock')
+  const approvedNote = foodOnly ? 'בקשתך לכרטיס מזון אושרה, מזל טוב!' : T('approved_note')
+  const headingSuffix = foodOnly ? 'בקשת כרטיס המזון אושרה' : T('heading_suffix')
+  // "להמשך התהליך" עוסק רק בבית החלמה — מוצג רק כשהבקשה כוללת בית החלמה
+  const nextBlock = wantsRecovery ? `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
       <tr><td style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:16px 20px;">
         <p style="margin:0;color:#1e40af;font-size:15px;font-weight:800;">${T('next_title')}</p>
@@ -1195,7 +1194,22 @@ export function birthApprovedEmail(
           ${t('next_text').replace(/\{בית_החלמה\}/g, birth.recovery_home ? ` — <strong>${birth.recovery_home}</strong>` : '')}
         </p>
       </td></tr>
+    </table>` : ''
+  const body = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+      <tr><td style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:14px 18px;text-align:center;">
+        <p style="margin:0;color:#3730a3;font-size:15px;font-weight:900;line-height:1.7;">${T('vouchers_title')}</p>
+        <p style="margin:4px 0 0;color:#4338ca;font-size:13px;line-height:1.7;">${voucherNote}</p>
+      </td></tr>
     </table>
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">${T('kicker')}</p>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetMrs(b.family_name, b.spouse_name || b.full_name)} ${headingSuffix} </h2>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
+      <tr><td style="background:#fdf2f8;border-right:4px solid #db2777;border-radius:0 12px 12px 0;padding:16px 20px;">
+        <p style="margin:0;color:#be185d;font-size:15px;font-weight:800;">${approvedNote}</p>
+      </td></tr>
+    </table>
+    ${nextBlock}
     ${foodCardBlock}
     <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">${T('birth_details_title')}</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${birthRows}</table>
@@ -1203,8 +1217,8 @@ export function birthApprovedEmail(
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${benRows}</table>
   `
   return {
-    subject: t('subject'),
-    html: shell({ preheader: t('preheader'), accent: '#db2777', title: t('title'), subtitle: t('subtitle'), body }),
+    subject: foodOnly ? 'בקשת כרטיס המזון אושרה — היכל החתם סופר' : t('subject'),
+    html: shell({ preheader: foodOnly ? 'בקשתך לכרטיס מזון אושרה.' : t('preheader'), accent: '#db2777', title: foodOnly ? 'בקשת כרטיס המזון אושרה' : t('title'), subtitle: t('subtitle'), body }),
   }
 }
 
