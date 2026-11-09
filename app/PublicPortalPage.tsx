@@ -2555,8 +2555,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ beneficiary_id: beneficiary.id, ...birthForm, wants_food_card: wantsFoodCard, wants_recovery: wantsRecovery, card_center_id: wantsFoodCard ? cardCenterId : null, is_twins: isTwins, babies, birth_certificate_url: certUrl, birth_certificate_url_2: certUrl2 || undefined, baby_name_pending: noBabyName }),
       })
-      const data = await res.json()
-      if (!res.ok) { setError(data.error || 'שגיאה בשליחת הבקשה'); setLoading(false); return }
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(data.error || `שגיאה בשליחת הבקשה (קוד ${res.status}). אנא נסה שוב או פנה למשרד.`); setLoading(false); return }
       setRequestType('birth')
       setStep('request-sent')
     } catch {
@@ -2897,8 +2897,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ beneficiary_id: beneficiary.id, birth_type: 'silent', birth_date: silentForm.birth_date, recovery_home: silentForm.recovery_home, wants_food_card: wantsFoodCard, wants_recovery: wantsRecovery, card_center_id: wantsFoodCard ? cardCenterId : null, notes: silentForm.notes, birth_certificate_url: certUrl }),
       })
-      const data = await res.json()
-      if (!res.ok) { setError(data.error || 'שגיאה בשליחת הבקשה'); setLoading(false); return }
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(data.error || `שגיאה בשליחת הבקשה (קוד ${res.status}). אנא נסה שוב או פנה למשרד.`); setLoading(false); return }
       setRequestType('birth')
       setStep('request-sent')
     } catch {
