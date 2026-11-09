@@ -133,18 +133,16 @@ export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { b
     setMismatch(warns[0] ?? '')
     try {
       for (const file of Array.from(files)) {
-        const ext = file.name.split('.').pop()
-        const path = `${beneficiaryId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
-        const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, { upsert: false })
-        if (upErr) throw upErr
-        const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path)
-        const { error: insErr } = await supabase.from('documents').insert({
-          beneficiary_id: beneficiaryId,
-          doc_type: docType,
-          file_url: pub.publicUrl,
-          file_name: file.name,
-        })
-        if (insErr) throw insErr
+        // ⚠️ העלאה דרך השרת: העלאה ישירה מהדפדפן נחסמה ב-RLS.
+        const fd = new FormData()
+        fd.append('file', file)
+        fd.append('beneficiaryId', String(beneficiaryId))
+        fd.append('docType', docType)
+        const res = await fetch('/api/admin/beneficiaries/upload-document', { method: 'POST', body: fd })
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}))
+          throw new Error(j.error || `HTTP ${res.status}`)
+        }
       }
       await load()
     } catch (err: unknown) {
