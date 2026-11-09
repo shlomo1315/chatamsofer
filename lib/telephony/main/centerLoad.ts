@@ -42,7 +42,7 @@ export function centerTurn(p: Record<string, string>, state: { cardNumber: strin
   }
   if (state.loadedThisMonth) return { result: goodbye('שים לב, החודש הזה כבר הועברה לך הטעינה'), link }
   if ((p[CL_GO] ?? '').trim() !== '1') {
-    return { result: menu(CL_GO, ['1'], [...say(lead), ...cardFiles('מספר הכרטיס שלך הוא', card, 'לביצוע טעינה של החודש הנוכחי הקישו 1')]), link }
+    return { result: menu(CL_GO, ['1'], [...say(lead), ...cardFiles('מספר הכרטיס שלך הוא', card, 'לביצוע טעינה של החודש הנוכחי הקישו 1')], { timeout: 7 }), link }
   }
   return { result: goodbye(), link, load: true }
 }

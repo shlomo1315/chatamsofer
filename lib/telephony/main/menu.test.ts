@@ -29,21 +29,23 @@ describe('תפריט ראשי: מקש 3 למוקד מורשה', () => {
     expect(r).toContain('1,2,3,9')
     expect(find).toHaveBeenCalledWith(expect.anything(), '0501234567')
   })
-  it('מתקשר רגיל: תפריט רגיל בלי מקש 3', async () => {
+  it('מתקשר רגיל: לא שומע את הודעת המוקד', async () => {
     find.mockResolvedValue(null)
     const r = text(await mainMenu(ctx()))
     expect(r).not.toContain('הודעת מוקד')
-    expect(r).toContain('1,2,9')
   })
   it('מוקד שהקיש 3 עובר לטעינה', async () => {
     find.mockResolvedValue({ center_id: 'x' })
     expect(text(await mainMenu(ctx({ menuChoice: '3' })))).toContain('טעינת מוקד')
   })
-  it('מי שאינו מוקד והקיש 3 מקבל הקשה שגויה ותפריט רגיל', async () => {
+  it('מי שאינו רשום כמוקד והקיש 3 שומע שהמספר אינו רשום, והניסיון נרשם בלוג', async () => {
     find.mockResolvedValue(null)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const r = text(await mainMenu(ctx({ menuChoice: '3' })))
     expect(r).not.toContain('טעינת מוקד')
-    expect(r).toContain('1,2,9')
+    expect(r).toContain('אינו רשום כמוקד מורשה')
+    expect(r).toContain('menuChoice')
+    expect(warn).toHaveBeenCalledWith(expect.any(String), '0501234567')
   })
   it('באמצע טעינה ממשיכים בלי לחפש שוב', async () => {
     expect(text(await mainMenu(ctx({ menuChoice: '3', center_go: '1' })))).toContain('טעינת מוקד')
@@ -51,7 +53,7 @@ describe('תפריט ראשי: מקש 3 למוקד מורשה', () => {
   })
   it('תקלה במסד: התפריט הרגיל', async () => {
     find.mockRejectedValue(new Error('db'))
-    expect(text(await mainMenu(ctx()))).toContain('1,2,9')
+    expect(text(await mainMenu(ctx()))).not.toContain('הודעת מוקד')
   })
   it('בחירה 2 לא בודקת מוקד', async () => {
     expect(text(await mainMenu(ctx({ menuChoice: '2' })))).toContain('יולדות')

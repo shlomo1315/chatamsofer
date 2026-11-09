@@ -97,9 +97,9 @@ describe('dispatch', () => {
 
 describe('תפריט ראשי', () => {
   const call = (params: Record<string, string>) => dispatch('main', 'main-secret-1', 'menu', params)
-  it('פתיחה: ברכה ותפריט עם מקשים 1,2,9', async () => {
+  it('פתיחה: ברכה ותפריט עם מקשים 1,2,3,9 (3 פתוח לכולם, מושמע רק למוקד)', async () => {
     const r = await call({ PBXphone: '0501234567' })
-    expect(r.body).toMatchObject({ type: 'simpleMenu', name: 'menuChoice', enabledKeys: '1,2,9' })
+    expect(r.body).toMatchObject({ type: 'simpleMenu', name: 'menuChoice', enabledKeys: '1,2,3,9' })
   })
   it('מקש 9 — הודעה וניתוק', async () => {
     const r = await call({ menuChoice: '9' })
@@ -118,7 +118,7 @@ describe('תפריט ראשי', () => {
       PBXdid: '0765674241', PBXphone: '0527101315', PBXextensionId: '13638', PBXextensionPath: '/',
     })
     expect(r.status).toBe(200)
-    expect(r.body).toMatchObject({ type: 'simpleMenu', name: 'menuChoice', enabledKeys: '1,2,9' })
+    expect(r.body).toMatchObject({ type: 'simpleMenu', name: 'menuChoice', enabledKeys: '1,2,3,9' })
     expect(validateResult(r.body).ok).toBe(true)
   })
   it('ERROR (פג זמן) — חוזר לתפריט', async () => {
