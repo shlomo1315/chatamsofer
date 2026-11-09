@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: חתם סופר - תזמוני EventBridge (היו שירותי cron ב-Railway). סטאק נפרד, לא נוגע בסטאק הראשי.
 
 # פריסה: aws cloudformation deploy --stack-name chasamsofer-cron --template-file aws/cron-schedules.yml --capabilities CAPABILITY_IAM
-# ⚠️ תזכורת השמות מושבתת בכוונה. אסור להפעיל בלי אישור מפורש של שלמה.
+# תזכורת השמות פעילה באישור מפורש של שלמה (9.11.2026), ראשון 09:00 UTC. משלוח ראשון: 15.11.
 
 Parameters:
   ProjectName: {Type: String, Default: chasamsofer}
@@ -69,7 +69,7 @@ Resources:
     Properties:
       Name: !Sub "${ProjectName}-name-reminders"
       ScheduleExpression: cron(0 9 ? * SUN *)
-      State: DISABLED
+      State: ENABLED
       Targets:
         - Id: name-reminders
           Arn: !GetAtt NameRemindersDestination.Arn
