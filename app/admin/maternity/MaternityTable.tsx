@@ -19,7 +19,7 @@ import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButton
 import MaternityCardModal from './MaternityCardModal'
 import { StatusControl, deleteMaternityAid, STATUS_PILL, type MotherRef } from './maternityStatus'
 import { babyNameLabel, type AidNameFields } from '@/lib/babyNames'
-import { matchesBucket, returnedFromInquiry, type MaternityBucket, type BucketAid } from '@/lib/maternityBuckets'
+import { matchesBucket, returnedFromInquiry, awaitingInquiryReply, awaitingFixes, BUCKET_LABEL, type MaternityBucket, type BucketAid } from '@/lib/maternityBuckets'
 import { recoveryDaysOf } from '@/lib/maternity'
 import { useTablePagination } from '@/lib/useTablePagination'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
@@ -217,7 +217,14 @@ const COLUMNS: ColDef<ColKey, MaternityAid>[] = [
   { key: 'cardLink', label: 'שיוך כרטיס', def: true, kind: 'enum', filterable: true,
     value: a => a.card_picked_up_at ? 'שויך' : 'לא שויך' },
   { key: 'status', label: 'סטטוס', def: true, kind: 'enum', filterable: true,
-    value: a => STATUS_PILL[a.status]?.label ?? null },
+    // ⚠️ אותן קבוצות כמו הכרטיסים למעלה (matchesBucket), אחרת הבורר סופר 'ממתין לאישור'
+    // כולל מי שממתין לתיקונים / לתשובת יולדת, והמספרים לא מסתדרים עם הכרטיסים.
+    value: a => {
+      if (awaitingInquiryReply(a as BucketAid)) return 'ממתין לתשובת היולדת'
+      if (a.status === 'deep_review') return BUCKET_LABEL.deep_review
+      if (awaitingFixes(a as BucketAid)) return BUCKET_LABEL.pending_fixes
+      return STATUS_PILL[a.status]?.label ?? null
+    } },
 ]
 
 export default function MaternityTable({ data, showCard, showArrived, hideFilters, emptyMessage, defaultFilter = 'all' }: { data: MaternityAid[]; showCard?: boolean; showArrived?: boolean; hideFilters?: boolean; emptyMessage?: string; defaultFilter?: Filter }) {
