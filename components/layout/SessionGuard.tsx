@@ -1,8 +1,8 @@
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Clock, LogOut } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { RETURN_KEY, LOGGED_OUT_AT_KEY, sanitizeReturnTo, ringOffset, isLowCountdown } from '@/lib/returnTo'
 
 // ─── שומר הסשן של מסכי הניהול ─────────────────────────────────────────────────
 // • אחרי 30 דקות בלי עכבר/מקלדת: חלון "האם אתה עדיין כאן?" עם מונה של 120
@@ -20,11 +20,21 @@ type Reason = 'manual' | 'idle' | 'expired'
 
 /** יציאה מלאה: עוגיות השרת, סשן Supabase, ושידור ללשוניות האחרות. */
 export async function signOutEverywhere(reason: Reason) {
+  if (reason !== 'manual') {
+    try { localStorage.setItem(LOGGED_OUT_AT_KEY, String(Date.now())) } catch { /* מצב פרטי */ }
+  }
   try { localStorage.setItem(LOGOUT_KEY, String(Date.now())) } catch { /* מצב פרטי */ }
   await fetch('/api/auth/session', { method: 'DELETE' }).catch(() => {})
   // יציאה ידנית מנתקת את כל הסשנים (כמו קודם); ניתוק אוטומטי — רק את המחשב הזה.
   await createClient().auth.signOut(reason === 'manual' ? undefined : { scope: 'local' }).catch(() => {})
   window.location.href = reason === 'manual' ? '/login' : `/login?reason=${reason}`
+}
+
+/** שומר את הדף הפתוח, כדי שאחרי כניסה חוזרת נחזור אליו. */
+function saveReturnTo() {
+  const p = sanitizeReturnTo(window.location.pathname + window.location.search)
+  if (!p) return
+  try { localStorage.setItem(RETURN_KEY, p) } catch { /* מצב פרטי */ }
 }
 
 function readSharedActivity(): number {
@@ -81,6 +91,7 @@ export default function SessionGuard() {
 
   const markActive = useCallback((t: number) => {
     lastActivity.current = t
+    saveReturnTo()
     pendingPing.current = true
     if (t - lastShared.current > 5000) {
       lastShared.current = t
@@ -161,6 +172,7 @@ export default function SessionGuard() {
   }
 
   const secondsLeft = Math.max(0, Math.ceil((deadline - now) / 1000))
+  const low = isLowCountdown(secondsLeft)
 
   return (
     <>
@@ -174,40 +186,51 @@ export default function SessionGuard() {
       )}
       {prompt && typeof document !== 'undefined' && createPortal(
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-navy/60 p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0e1830]/75 p-4"
           role="alertdialog"
           aria-modal="true"
           aria-labelledby="session-guard-title"
           aria-describedby="session-guard-desc"
           dir="rtl"
         >
-          <div className="w-full max-w-sm rounded-2xl bg-[#fffdf8] p-6 shadow-2xl text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-navy text-gold">
-              <Clock size={22} aria-hidden />
+          <div className="relative w-full max-w-[380px] rounded-[14px] bg-[#fffdf8] p-8 text-center shadow-[0_30px_70px_-20px_rgba(0,0,0,.5)]">
+            <div className="pointer-events-none absolute inset-[6px] rounded-[10px] border border-[#e6dfcf]" aria-hidden />
+            <div className="relative mx-auto h-[132px] w-[132px]">
+              <svg viewBox="0 0 140 140" className="h-full w-full -rotate-90" aria-hidden>
+                <circle cx="70" cy="70" r="62" fill="none" strokeWidth="6" stroke="#f3e9cf" />
+                <circle
+                  cx="70" cy="70" r="62" fill="none" strokeWidth="6" strokeLinecap="round"
+                  stroke={low ? '#b4442c' : '#14213d'}
+                  strokeDasharray="389.6"
+                  strokeDashoffset={ringOffset(secondsLeft, promptMs / 1000)}
+                  style={{ transition: 'stroke-dashoffset 1s linear, stroke .3s' }}
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <b className={`text-[49px] font-extrabold leading-none tabular-nums ${low ? 'text-[#b4442c]' : 'text-navy'}`} aria-live="polite">{secondsLeft}</b>
+                <small className="text-xs text-[#958c78]">שניות</small>
+              </div>
             </div>
-            <h2 id="session-guard-title" className="text-lg font-bold text-navy">האם אתה עדיין כאן?</h2>
-            <p id="session-guard-desc" className="mt-2 text-sm text-slate-600">
-              לא הייתה פעילות במערכת 30 דקות. מטעמי אבטחה תנותק בעוד
+            <h2 id="session-guard-title" className="relative mt-4 text-[25px] font-extrabold text-[#1b2338]">האם אתה עדיין כאן?</h2>
+            <p id="session-guard-desc" className="relative mt-2 text-sm text-[#6b6352]">
+              30 דקות בלי פעילות. מטעמי אבטחה המערכת תנתק אותך כשהטבעת תיסגר.
             </p>
-            <p className="mt-3 text-4xl font-bold text-navy tabular-nums" aria-live="polite">{secondsLeft}</p>
-            <p className="text-xs text-slate-500">שניות</p>
-            <div className="mt-6 flex flex-col gap-2">
+            <div className="relative mt-6 flex flex-col gap-2">
               <button
                 type="button"
                 autoFocus
                 disabled={busy}
                 onClick={stay}
-                className="w-full rounded-xl bg-navy px-4 py-3 text-sm font-semibold text-white hover:bg-navy/90 disabled:opacity-60"
+                className="min-h-12 w-full rounded-[10px] bg-navy px-4 font-bold text-white transition hover:bg-[#22345e] active:scale-[.98] disabled:opacity-60"
               >
                 אני כאן, המשך
               </button>
               <button
                 type="button"
                 onClick={() => leave('manual')}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#e6dfcf] px-4 py-3 text-sm font-medium text-slate-700 hover:bg-rose-50 hover:text-rose-700"
+                className="min-h-11 w-full rounded-[10px] border border-[#e6dfcf] px-4 font-medium text-[#6b6352] transition hover:border-[#e8c4bb] hover:bg-[#fdf3f0] hover:text-[#9b3a24]"
               >
-                <LogOut size={15} aria-hidden />
-                התנתק
+                התנתק עכשיו
               </button>
             </div>
           </div>
