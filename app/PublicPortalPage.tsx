@@ -5283,7 +5283,19 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               beneficiary={beneficiary}
               docsCount={Object.keys(existingDocs).length}
               contacts={PORTAL_CONTACTS}
-              onNewRequest={() => setDashTab('requests')}
+              openDepartments={[
+                ...(gateAllows('maternity') && canRequestBirth ? ['maternity' as const] : []),
+                ...(gateAllows('gemach') ? ['gemach' as const] : []),
+                ...(gateAllows('financial_aid') ? ['financial_aid' as const] : []),
+                ...(holiday?.open && !holiday.registered ? ['holidays' as const] : []),
+              ]}
+              onStartRequest={(k) => {
+                if (k === 'maternity') goToBirthForm()
+                else if (k === 'gemach') goToLoanForm()
+                else if (k === 'financial_aid') goToAidForm()
+                else registerHoliday()
+              }}
+              onDeleted={backToHome}
               onFixLineage={() => document.getElementById('pa-tree')?.scrollIntoView({ behavior: 'smooth' })}
               emailUnverified={emailVerified === false}
               onVerifyEmail={() => setShowEmailVerifyModal(true)}
