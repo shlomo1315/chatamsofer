@@ -353,9 +353,8 @@ export function sanitizeSections(input: unknown): AutoReplySection[] {
 
 /** טקסט חופשי → HTML בטוח. מנטרל *ואז* ממיר שורות. */
 function textToHtml(s: string): string {
-  // ⚠️ הסדר קריטי: ניטרול לפני המרת השורות. ההפך היה מאפשר להזריק HTML
-  // דרך הנוסח שנערך במסך ההגדרות.
-  return escapeHtml(s.trim()).replace(/\r?\n/g, '<br/>')
+  // ⚠️ richToHtml מנטרל לפני ההמרה (סימון עיצוב, קישורי https/mailto בלבד).
+  return richToHtml(s)
 }
 
 function renderButtons(buttons: AutoReplyButton[], accent: string, small = false): string {
@@ -380,14 +379,14 @@ export function buildAutoReplyBody(
   accent: string,
 ): string {
   const intro = settings.message.trim()
-    ? `<p style="margin:0 0 20px;color:#334155;font-size:15px;line-height:1.9;">${textToHtml(settings.message)}</p>`
+    ? `<div style="margin:0 0 20px;color:#334155;font-size:15px;line-height:1.9;">${textToHtml(settings.message)}</div>`
     : ''
 
   const sections = (settings.sections ?? []).map(s => `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 14px;">
       <tr><td style="background:#f8fafc;border-right:4px solid ${accent};border-radius:0 12px 12px 0;padding:16px 20px;">
-        ${s.title ? `<p style="margin:0 0 8px;color:#0f172a;font-size:16px;font-weight:900;line-height:1.6;">${textToHtml(s.title)}</p>` : ''}
-        ${s.text ? `<p style="margin:0;color:#475569;font-size:14px;line-height:1.9;">${textToHtml(s.text)}</p>` : ''}
+        ${s.title ? `<div style="margin:0 0 8px;color:#0f172a;font-size:16px;font-weight:900;line-height:1.6;">${textToHtml(s.title)}</div>` : ''}
+        ${s.text ? `<div style="margin:0;color:#475569;font-size:14px;line-height:1.9;">${textToHtml(s.text)}</div>` : ''}
         ${renderButtons(s.buttons, accent, true)}
       </td></tr>
     </table>`).join('')
@@ -395,7 +394,7 @@ export function buildAutoReplyBody(
   const footnote = (settings.footnote ?? '').trim() ? `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0 0;">
       <tr><td style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:14px 18px;">
-        <p style="margin:0;color:#92400e;font-size:13px;line-height:1.8;">${textToHtml(settings.footnote ?? '')}</p>
+        <div style="margin:0;color:#92400e;font-size:13px;line-height:1.8;">${textToHtml(settings.footnote ?? '')}</div>
       </td></tr>
     </table>` : ''
 
