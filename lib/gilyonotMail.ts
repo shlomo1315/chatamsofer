@@ -54,7 +54,7 @@ export function buildGilyonHtml(opts: {
   const title = d.headerTitle.trim() || opts.title
   const sub = d.headerSub.trim() || opts.parasha
   const unsub = opts.unsubscribeUrl
-    ? `<a href="${escHtml(opts.unsubscribeUrl)}" style="color:#64748b;">להסרה מרשימת התפוצה</a>`
+    ? `להסרה מרשימת התפוצה <a href="${escHtml(opts.unsubscribeUrl)}" style="color:#64748b;">לחצו כאן</a>`
     : ''
   const pixel = opts.pixelUrl ? `<img src="${escHtml(opts.pixelUrl)}" width="1" height="1" alt="" style="display:block;border:0;width:1px;height:1px;"/>` : ''
   const header = d.showHeader ? `<tr><td style="background:${d.headerColor};padding:26px 28px;text-align:center;">

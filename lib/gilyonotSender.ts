@@ -148,7 +148,7 @@ export async function sendGilyonTest(db: SupabaseClient, issue: IssueRow, to: st
   if (!file.ok) return file
   const html = buildGilyonHtml({
     title: issue.title, parasha: issue.parasha, intro: issue.intro, bodyHtml: cleanBody(issue.body_html), design: issue.design,
-    unsubscribeUrl: null,
+    unsubscribeUrl: await testUnsubscribeUrl(db, to),
   })
   const { error } = await new Resend(apiKey).emails.send({ from: from(), to, subject: `[ניסיון] ${issue.subject}`, html, text: htmlToPlainText(html), replyTo: GILYONOT_FROM_EMAIL, attachments: file.atts })
   if (error) return { ok: false, error: String(error.message ?? error) }
@@ -328,4 +328,17 @@ export async function loadIssue(db: SupabaseClient, id: string): Promise<IssueRo
   if (!ISSUE_ID_RE.test(id)) return null
   const { data } = await db.from('gilyonot_issues').select('*').eq('id', id).maybeSingle()
   return (data as IssueRow | null) ?? null
+}
+
+/** טוקן לדוגמה למייל ניסיון לכתובת שאינה ברשימות. הקישור מוביל ל"קישור לא תקין" ולא מסיר אף אחד. */
+export const SAMPLE_UNSUBSCRIBE_TOKEN = '00000000-0000-0000-0000-000000000000'
+
+/** קישור ההסרה במייל הניסיון: הקישור האמיתי של הנמען אם הוא מנוי או קיבל גיליון, אחרת לדוגמה. */
+async function testUnsubscribeUrl(db: SupabaseClient, to: string): Promise<string> {
+  const email = to.trim().toLowerCase()
+  const { data: sub } = await db.from('gilyonot_subscribers').select('token').eq('email', email).maybeSingle()
+  if (sub?.token) return gilyonotUrls.unsubscribe(sub.token as string)
+  const { data: del } = await db.from('gilyonot_deliveries').select('token').eq('email', email).limit(1).maybeSingle()
+  if (del?.token) return gilyonotUrls.optout(del.token as string)
+  return gilyonotUrls.unsubscribe(SAMPLE_UNSUBSCRIBE_TOKEN)
 }

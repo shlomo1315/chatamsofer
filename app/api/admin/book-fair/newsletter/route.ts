@@ -4,6 +4,7 @@ import { logActivity } from '@/lib/activityLog'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { buildAudience, type ReminderRow, type OrderRow } from '@/lib/bookFairAudience'
 import { signUnsubscribe } from '@/lib/bookFairUnsubscribe'
+import { suppressionSet } from '@/lib/unsubscribe'
 
 // שליחת ניוזלטר לרשימת התפוצה של היריד.
 //
@@ -180,9 +181,9 @@ async function loadAudience(
   )
 
   // 🔴 מי שביקש לצאת יוצא לפני כל חישוב אחר — כולל אם הוא גם רוכש.
-  const optedOut = new Set(
-    reminders.filter(r => r.unsubscribed_at).map(r => String(r.email).trim().toLowerCase())
-  )
+  // כולל מי שהוסר מכל המערכת (unsubscribes, למשל מקישור בתחתית הגיליון).
+  const optedOut = await suppressionSet(db)
+  for (const r of reminders) if (r.unsubscribed_at) optedOut.add(String(r.email).trim().toLowerCase())
 
   const members = buildAudience(
     reminders.filter(r => !r.unsubscribed_at),
