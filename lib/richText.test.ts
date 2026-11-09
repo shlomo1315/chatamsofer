@@ -116,3 +116,55 @@ describe('parseRich', () => {
     expect(parseRich('א**ב**ג').map(t => t.kind)).toEqual(['text', 'bold', 'text'])
   })
 })
+
+describe('עיצוב מורחב', () => {
+  it('נטוי, קו תחתון וקו חוצה', () => {
+    expect(richToHtml('{i}א{/i}')).toBe('<span style="font-style:italic">א</span>')
+    expect(richToHtml('{u}א{/u}')).toContain('text-decoration:underline')
+    expect(richToHtml('{s}א{/s}')).toContain('line-through')
+  })
+
+  it('כתב עילי ותחתי', () => {
+    expect(richToHtml('{sup}2{/sup}')).toContain('<sup>2</sup>')
+    expect(richToHtml('{sub}2{/sub}')).toContain('<sub>2</sub>')
+  })
+
+  it('צבע, סימון וגודל תקינים', () => {
+    const out = richToHtml('{color=#c00}{bg=#ffff00}{size=20}א{/size}{/bg}{/color}')
+    expect(out).toContain('color:#c00')
+    expect(out).toContain('background-color:#ffff00')
+    expect(out).toContain('font-size:20px')
+  })
+
+  it('🔴 צבע וגודל לא תקינים לא נכנסים ל-style', () => {
+    const out = richToHtml('{color=red;x}א{/color}{color=url(x)}ב{/color}{size=999}ג{/size}{color=#c00"onload=1}ד{/color}')
+    expect(out).not.toContain('url(')
+    expect(out).not.toContain('font-size')
+    expect(out).not.toContain('color:#c00')
+    expect(out).not.toContain('red')
+  })
+
+  it('🔴 HTML בתוך עיצוב מנוטרל', () => {
+    expect(richToHtml('{i}<script>x</script>{/i}')).not.toContain('<script>')
+  })
+
+  it('עיצוב משתלב עם הדגשה וקישור', () => {
+    const out = richToHtml('{i}**ב** [ק](https://a.co){/i}')
+    expect(out).toContain('<strong>ב</strong>')
+    expect(out).toContain('href="https://a.co"')
+  })
+
+  it('יישור ורשימה', () => {
+    expect(richToHtml('{center}שלום')).toBe('<div style="text-align:center">שלום</div>')
+    expect(richToHtml('א\n{li}ב\nג')).toBe('א<div style="padding-right:18px">• ב</div>ג')
+  })
+
+  it('סגירה בלי פתיחה נשארת טקסט, ועיצוב לא חוצה שורות', () => {
+    expect(richToHtml('א{/i}')).toBe('א{/i}')
+    expect(richToHtml('{i}א\nב')).toBe('<span style="font-style:italic">א</span><br/>ב')
+  })
+
+  it('plain: בלי תגיות, רשימה עם תבליט', () => {
+    expect(richToPlain('{center}{i}א{/i}\n{li}ב')).toBe('א\n• ב')
+  })
+})

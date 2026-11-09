@@ -7,6 +7,8 @@ import {
   AlertCircle, PanelBottomOpen,
 } from 'lucide-react'
 import RichTextArea from '@/components/ui/RichTextArea'
+import RichFormatPanel, { FormatContext, type FormatCtl } from '@/components/ui/RichFormatPanel'
+import { richToHtml } from '@/lib/richText'
 import {
   REQUEST_MAILTO_PRESETS, AUTO_REPLY_DEFAULT_TITLE, AUTO_REPLY_DEFAULT_NO_REPLY, MAX_BUTTONS, MAX_SECTIONS,
 } from '@/lib/autoReplyConfig'
@@ -46,23 +48,10 @@ function moveItem<T>(arr: T[], from: number, to: number): T[] {
   return next
 }
 
-/** תצוגת סימון עשיר כאלמנטי React — בלי dangerouslySetInnerHTML. */
+/** תצוגת סימון עשיר. ⚠️ ה-HTML מגיע מ-richToHtml, שמנטרל הכול לפני ההמרה. */
 function RichView({ text, empty }: { text: string; empty: string }) {
   if (!text.trim()) return <span className="text-slate-400">{empty}</span>
-  const parts = text.split(/(\*\*[^*\n]+\*\*|\[[^\]\n]+\]\([^)\n]*\))/g)
-  return (
-    <>
-      {parts.map((p, i) => {
-        const b = /^\*\*([^*\n]+)\*\*$/.exec(p)
-        if (b) return <strong key={i}>{b[1]}</strong>
-        const l = /^\[([^\]\n]+)\]\(([^)\n]*)\)$/.exec(p)
-        if (l && URL_OK.test(l[2].trim())) {
-          return <span key={i} className="underline" style={{ color: '#4f46e5' }}>{l[1]}</span>
-        }
-        return <span key={i}>{p}</span>
-      })}
-    </>
-  )
+  return <span dangerouslySetInnerHTML={{ __html: richToHtml(text) }} />
 }
 
 function RibbonGroup({ label, children }: { label: string; children: ReactNode }) {
@@ -99,6 +88,7 @@ export default function AutoReplyLiveEditor({
   const [device, setDevice] = useState<'desktop' | 'phone'>('desktop')
   const [view, setView] = useState<'edit' | 'preview'>('edit')
   const [drawer, setDrawer] = useState(false)
+  const [fmt, setFmt] = useState<FormatCtl | null>(null)
   const [tab, setTab] = useState<'props' | 'structure' | 'add' | 'box'>('props')
   const [, bump] = useState(0)
   const [toast, setToast] = useState<{ ok: boolean; text: string } | null>(null)
@@ -428,6 +418,7 @@ export default function AutoReplyLiveEditor({
           </button>
         ))}
       </div>
+      {fmt && <div className="px-4 pt-3"><RichFormatPanel /></div>}
       {tab === 'props' && <div className="px-4 py-3">
         <div className="mb-2 flex items-center gap-2 text-xs font-black text-[#142036]">
           <SlidersHorizontal size={14} className="text-[#C0912F]" />
@@ -691,7 +682,13 @@ export default function AutoReplyLiveEditor({
 
   const iconBtn = 'inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#E3DED3] bg-white text-slate-600 hover:text-[#14213D] disabled:opacity-30'
 
+  const bridge = {
+    ctl: fmt, report: setFmt,
+    openPanel: () => { setTab('props'); if (typeof window !== 'undefined' && window.innerWidth < 1024) setDrawer(true) },
+  }
+
   return (
+    <FormatContext.Provider value={bridge}>
     <div className="flex h-[calc(100vh-120px)] min-h-[620px] flex-col overflow-hidden rounded-2xl border border-[#E3DED3] bg-[#F4F1EA]" dir="rtl" aria-label="עורך המענה האוטומטי">
       {boxBar}
       {/* פס עליון: מצב, בדיקה ושמירה */}
@@ -773,5 +770,6 @@ export default function AutoReplyLiveEditor({
         </div>
       )}
     </div>
+    </FormatContext.Provider>
   )
 }
