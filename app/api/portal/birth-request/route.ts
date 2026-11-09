@@ -389,6 +389,7 @@ export async function POST(request: NextRequest) {
   })
 
   if (error) {
+    console.error('[birth-request] שמירת הבקשה נכשלה', error.code, error.message)
     return NextResponse.json({ error: 'שגיאה בשמירת הבקשה. אנא נסה שוב.' }, { status: 500 })
   }
 
