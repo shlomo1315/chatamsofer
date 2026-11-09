@@ -315,7 +315,9 @@ export default function PersonalArea({ beneficiary: b, docsCount, contacts, open
           <section id="pa-tree" className="card sec tree-c">
             <div className="sec-head">
               <h2 className="h2">אילן היוחסין</h2>
-              {!editing && <button type="button" className="link" onClick={openTreeEdit}>{chain.length > 0 ? 'בקשת תיקון' : 'הוספה'}</button>}
+              {!editing && (chain.length > 0
+                ? <button type="button" className="fixcta" onClick={openTreeEdit}>במידה ודרוש תיקון — לחצו כאן</button>
+                : <button type="button" className="link" onClick={openTreeEdit}>הוספה</button>)}
             </div>
             {lineageNeedsFix && <p className="warn">המשרד ביקש לתקן את האילן. אפשר לעשות זאת כאן.</p>}
             {sent && <p className="doneb" role="status">הבקשה נשלחה לאישור המשרד. אפשר לעקוב אחריה ב&quot;הבקשות שלי&quot;.</p>}
@@ -484,6 +486,9 @@ const CSS = `
 .pa .btn-del:disabled{background:#E2D3D4;color:#9A7D80;cursor:not-allowed;transform:none}
 .pa .link{border:0;background:none;padding:var(--s2) 0;font-weight:700;font-size:var(--t2);color:var(--navy-2);min-height:44px;display:inline-flex;align-items:center;gap:6px}
 .pa .link:hover{text-decoration:underline;text-underline-offset:3px}
+.pa .fixcta{border:1.5px solid var(--gold);background:var(--gold-50);color:var(--amb);border-radius:99px;padding:0 var(--s4);min-height:44px;font-weight:800;font-size:var(--t2);display:inline-flex;align-items:center;cursor:pointer;animation:fixpulse 1.8s ease-in-out infinite}
+.pa .fixcta:hover{background:var(--gold-2)}
+@keyframes fixpulse{0%,100%{box-shadow:0 0 0 0 rgba(201,162,90,.7);background:var(--gold-50)}50%{box-shadow:0 0 0 8px rgba(201,162,90,0);background:var(--gold-2)}}
 .pa .lk{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;color:var(--soft)}
 .pa .danger-btn{border:1px solid transparent;background:none;color:var(--bord);font-weight:700;font-size:var(--t2);display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 var(--s3);border-radius:var(--r1)}
 .pa .danger-btn:hover{background:var(--bord-50);border-color:#EBCFD1}
