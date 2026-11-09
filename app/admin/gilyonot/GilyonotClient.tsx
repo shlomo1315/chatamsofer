@@ -36,6 +36,9 @@ export interface IssueView {
   design: unknown
   file_name: string
   file_size: number | null
+  /** קובץ שני ("היכלות"), אם הועלה */
+  file2_name?: string | null
+  file2_size?: number | null
   /** הקובץ שנשלח הוא הגרסה המכווצת */
   compressed: boolean
   status: 'draft' | 'sending' | 'sent'
@@ -593,6 +596,7 @@ function NewIssue({ defaultParasha, onClose, onCreated }: { defaultParasha: stri
   const [subject, setSubject] = useState('')
   const [intro, setIntro] = useState('')
   const [file, setFile] = useState<File | null>(null)
+  const [file2, setFile2] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
@@ -601,7 +605,7 @@ function NewIssue({ defaultParasha, onClose, onCreated }: { defaultParasha: stri
     if (!file) { setErr('בחרו את קובץ הגיליון'); return }
     setBusy(true); setErr('')
     const fd = new FormData()
-    fd.set('file', file); fd.set('title', title); fd.set('parasha', parasha); fd.set('intro', intro)
+    fd.set('file', file); if (file2) fd.set('file2', file2); fd.set('title', title); fd.set('parasha', parasha); fd.set('intro', intro)
     fd.set('subject', subject.trim() || defaultSubject(title, parasha))
     try {
       const d = await api('/api/admin/gilyonot/issues', { method: 'POST', body: fd })
@@ -638,12 +642,10 @@ function NewIssue({ defaultParasha, onClose, onCreated }: { defaultParasha: stri
         </label>
           </div>
         </details>
-        <label className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors duration-150 focus-within:ring-4 focus-within:ring-[#2563eb]/10 ${file ? 'border-emerald-300 bg-emerald-50/50' : 'border-slate-200 hover:border-[#2563eb]/40 hover:bg-slate-50'}`}>
-          {file ? <CheckCircle2 className="h-7 w-7 text-emerald-600" aria-hidden /> : <Upload className="h-7 w-7 text-[#2563eb]" aria-hidden />}
-          <span className="text-sm font-semibold text-slate-900">{file ? file.name : 'בחירת קובץ הגיליון'}</span>
-          <span className="text-xs text-slate-500">{file ? 'לחצו כדי להחליף' : 'PDF, Word או תמונה, עד 25MB'}</span>
-          <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={e => setFile(e.target.files?.[0] ?? null)} className="sr-only" />
-        </label>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FileBox title="גיליון הפרשה" required file={file} onChange={setFile} />
+          <FileBox title="היכלות" file={file2} onChange={setFile2} />
+        </div>
         {err && <Notice msg={{ ok: false, text: err }} />}
         <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-5">
           <button type="submit" disabled={busy} className={btnPrimary}>{busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Upload className="h-4 w-4" aria-hidden />}{busy ? 'מעלה...' : 'העלאה והמשך לתצוגה מקדימה'}</button>
@@ -651,6 +653,18 @@ function NewIssue({ defaultParasha, onClose, onCreated }: { defaultParasha: stri
         </div>
       </form>
     </Card>
+  )
+}
+
+/** תיבת העלאת קובץ אחד. "היכלות" אופציונלי, גיליון הפרשה חובה. */
+function FileBox({ title, required, file, onChange }: { title: string; required?: boolean; file: File | null; onChange: (f: File | null) => void }) {
+  return (
+    <label className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors duration-150 focus-within:ring-4 focus-within:ring-[#2563eb]/10 ${file ? 'border-emerald-300 bg-emerald-50/50' : 'border-slate-200 hover:border-[#2563eb]/40 hover:bg-slate-50'}`}>
+      {file ? <CheckCircle2 className="h-7 w-7 text-emerald-600" aria-hidden /> : <Upload className="h-7 w-7 text-[#2563eb]" aria-hidden />}
+      <span className="text-sm font-semibold text-slate-900">{title} <span className="font-normal text-slate-500">{required ? '(חובה)' : '(לא חובה)'}</span></span>
+      <span className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-xs text-slate-500">{file ? `${file.name} · לחצו כדי להחליף` : 'PDF, Word או תמונה, עד 25MB'}</span>
+      <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={e => onChange(e.target.files?.[0] ?? null)} className="sr-only" />
+    </label>
   )
 }
 
@@ -709,9 +723,16 @@ function IssueDetail({ issue, lists, canEdit, canDelete, onClose }: { issue: Iss
             <Badge tone={STATUS[issue.status].tone} dot>{STATUS[issue.status].label}</Badge>
           </div>
           <p className="mt-1 text-sm text-slate-600"><span className="text-slate-500">נושא:</span> {issue.subject}</p>
-          <a href={`${base}/file`} target="_blank" rel="noreferrer" className={`${link} mt-1.5 inline-flex items-center gap-1.5 text-sm`}>
-            <FileText className="h-4 w-4" aria-hidden />{gilyonFileName(issue, issue.file_name)}
-          </a>
+          <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+            <a href={`${base}/file`} target="_blank" rel="noreferrer" className={`${link} inline-flex items-center gap-1.5 text-sm`}>
+              <FileText className="h-4 w-4" aria-hidden />{gilyonFileName(issue, issue.file_name)}
+            </a>
+            {issue.file2_name && (
+              <a href={`${base}/file?n=2`} target="_blank" rel="noreferrer" className={`${link} inline-flex items-center gap-1.5 text-sm`}>
+                <FileText className="h-4 w-4" aria-hidden />{issue.file2_name}
+              </a>
+            )}
+          </div>
         </div>
         <button type="button" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900" onClick={onClose} aria-label="סגירה"><X className="h-5 w-5" /></button>
       </div>
@@ -748,6 +769,11 @@ function IssueDetail({ issue, lists, canEdit, canDelete, onClose }: { issue: Iss
               <div className="rounded-xl p-4 ring-1 ring-inset ring-[#2563eb]/15">
                 <h3 className="text-sm font-semibold text-slate-900">שליחה</h3>
                 <ListPicker lists={lists} selected={picked} onChange={setPicked} onCount={setCount} />
+                <dl className="mt-3 space-y-1 rounded-lg bg-slate-50 p-3 text-sm ring-1 ring-inset ring-slate-900/[0.04]">
+                  <div className="flex gap-2"><dt className="text-slate-500">נמענים:</dt><dd className="font-medium text-slate-900">{count ? num(count.total) : '...'}</dd></div>
+                  <div className="flex gap-2"><dt className="text-slate-500">נושא:</dt><dd className="min-w-0 font-medium text-slate-900">{issue.subject}</dd></div>
+                  <div className="flex gap-2"><dt className="text-slate-500">קבצים מצורפים:</dt><dd className="min-w-0 font-medium text-slate-900">{[gilyonFileName(issue, issue.file_name), issue.file2_name].filter(Boolean).join(' · ')}</dd></div>
+                </dl>
                 {!tested && <p className="mt-2 text-xs font-medium text-amber-700">עוד לא שלחתם מייל ניסיון. מומלץ לעבור קודם לשלב 2.</p>}
                 <p className="mt-2 flex items-start gap-1.5 text-xs leading-relaxed text-slate-600"><ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden />אחרי שליחה אי אפשר לבטל. כל נמען מקבל כפתור להורדת הגיליון. המיילים יוצאים לאט, לא בשבת ובחג.</p>
                 <button type="button" disabled={busy || !count?.total} className={`${btnPrimary} mt-3 w-full py-2.5`} onClick={sendAll}>
