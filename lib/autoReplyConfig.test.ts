@@ -538,3 +538,18 @@ describe('🔴 תיבות מייל מותאמות', () => {
     expect(Array.isArray(out.custom_x?.buttons)).toBe(true)
   })
 })
+
+describe('עיצוב טקסט במייל שנשלח', () => {
+  it('הסימון מוצג כעיצוב, וקישור javascript: נחסם', async () => {
+    const { buildAutoReplyBody } = await import('./autoReplyConfig')
+    const html = buildAutoReplyBody({
+      message: '{color=#C0912F}**זהב**{/color} {i}נטוי{/i}\n{ol}אחד\n{ol}שניים\n[רע](javascript:alert(1))',
+      buttons: [],
+    }, '#14213D')
+    expect(html).toContain('color:#C0912F')
+    expect(html).toContain('font-style:italic')
+    expect(html).toContain('1. אחד')
+    expect(html).toContain('2. שניים')
+    expect(html).not.toMatch(/href="javascript/i)
+  })
+})
