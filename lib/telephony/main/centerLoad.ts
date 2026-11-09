@@ -13,8 +13,10 @@ export const CL_CARD = 'center_card'
 export const CL_CONFIRM = 'center_confirm'
 export const CL_GO = 'center_go'
 
-const askCard = (lead = ''): TlResult => ({
-  ...askDigits(CL_CARD, CARD_DIGITS, say(lead, 'שלום. הטלפון שלך מזוהה. הקש את מספר הכרטיס בן 16 ספרות'), { min: CARD_DIGITS, maskLog: true, post: true }),
+const hello = (name?: string) => (name?.trim() ? `שלום ${name.trim()}` : 'שלום')
+
+const askCard = (lead = '', name?: string): TlResult => ({
+  ...askDigits(CL_CARD, CARD_DIGITS, say(lead, `${hello(name)}. הטלפון שלך מזוהה. הקש את מספר הכרטיס בן 16 ספרות`), { min: CARD_DIGITS, maskLog: true, post: true }),
   removeParams: [CL_CONFIRM],
 })
 
@@ -23,26 +25,26 @@ const cardFiles = (pre: string, card: string, post: string): TlFile[] => fill(`$
 export type CenterTurn = { result: TlResult; link?: string; load?: boolean }
 
 /** לוגיקה טהורה: מה לומר והאם לשייך כרטיס / לבצע טעינה, לפי הפרמטרים והמצב. */
-export function centerTurn(p: Record<string, string>, state: { cardNumber: string | null; loadedThisMonth: boolean }): CenterTurn {
+export function centerTurn(p: Record<string, string>, state: { cardNumber: string | null; loadedThisMonth: boolean; name?: string }): CenterTurn {
   let card = state.cardNumber
   let lead = ''
   let link: string | undefined
   if (!card) {
     const typed = (p[CL_CARD] ?? '').replace(/\D/g, '')
-    if (!typed) return { result: askCard() }
-    if (typed.length !== CARD_DIGITS) return { result: { ...askCard('מספר הכרטיס חייב להכיל 16 ספרות'), removeParams: [CL_CARD, CL_CONFIRM] } }
+    if (!typed) return { result: askCard('', state.name) }
+    if (typed.length !== CARD_DIGITS) return { result: { ...askCard('מספר הכרטיס חייב להכיל 16 ספרות', state.name), removeParams: [CL_CARD, CL_CONFIRM] } }
     const confirm = (p[CL_CONFIRM] ?? '').trim()
     if (!confirm) {
       return { result: menu(CL_CONFIRM, ['1', '2'], cardFiles('הכרטיס שהקשת הוא', typed, 'לאישור הקישו 1, לתיקון הקישו 2'), { times: 2 }) }
     }
-    if (confirm !== '1') return { result: { ...askCard(), removeParams: [CL_CARD, CL_CONFIRM] } }
+    if (confirm !== '1') return { result: { ...askCard('', state.name), removeParams: [CL_CARD, CL_CONFIRM] } }
     card = typed
     link = typed
     lead = 'הכרטיס נשמר'
   }
   if (state.loadedThisMonth) return { result: goodbye('שים לב, החודש הזה כבר הועברה לך הטעינה'), link }
   if ((p[CL_GO] ?? '').trim() !== '1') {
-    return { result: menu(CL_GO, ['1'], [...say(lead), ...cardFiles('מספר הכרטיס שלך הוא', card, 'לביצוע טעינה של החודש הנוכחי הקישו 1')], { timeout: 7 }), link }
+    return { result: menu(CL_GO, ['1'], [...say(lead || hello(state.name)), ...cardFiles('מספר הכרטיס שלך הוא', card, 'לביצוע טעינה של החודש הנוכחי הקישו 1')], { timeout: 7 }), link }
   }
   return { result: goodbye(), link, load: true }
 }
@@ -58,14 +60,14 @@ export const centerLoad: TlHandler = async ({ phone: raw, params }) => {
 
   const month = israelMonth()
   // הכרטיס שנשמר עכשיו עוד לא ב-acc, ולכן בודקים מצב חודש רק אחרי השיוך
-  const first = centerTurn(params, { cardNumber: acc.card_number, loadedThisMonth: false })
+  const first = centerTurn(params, { cardNumber: acc.card_number, loadedThisMonth: false, name: acc.center_name })
   if (first.link) {
     const linked = await linkCenterCard(db, acc, first.link)
     if (!linked.ok) { console.error('[telephony:main/center-load] שיוך כרטיס נכשל:', linked.error); return goodbye('לא הצלחנו לשייך את הכרטיס. פנו למזכירות') }
     acc = { ...acc, card_number: first.link }
   }
   const loaded = await isLoadedThisMonth(db, acc.center_id, month)
-  const turn = loaded ? centerTurn(params, { cardNumber: acc.card_number, loadedThisMonth: true }) : first
+  const turn = loaded ? centerTurn(params, { cardNumber: acc.card_number, loadedThisMonth: true, name: acc.center_name }) : first
   if (!turn.load) {
     // אחרי שיוך: מסירים את הכרטיס מהפרמטרים (לא נשאר ב-REQUEST)
     return first.link && !Array.isArray(turn.result) ? { ...turn.result, removeParams: [CL_CARD, CL_CONFIRM] } : turn.result

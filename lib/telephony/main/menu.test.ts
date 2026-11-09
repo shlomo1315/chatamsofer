@@ -21,6 +21,19 @@ const text = (r: unknown) => JSON.stringify(r)
 
 beforeEach(() => { find.mockReset(); vi.spyOn(console, 'log').mockImplementation(() => {}) })
 
+describe('תפריט ראשי: הקראת שם המוקד', () => {
+  it('מוקד מזוהה שומע את שמו לפני התפריט', async () => {
+    find.mockResolvedValue({ center_id: 'x', center_name: 'מוקד בני ברק' })
+    expect(text(await mainMenu(ctx()))).toContain('שלום מוקד בני ברק')
+  })
+  it('שם ריק: ממשיכים בלי הקראה', async () => {
+    find.mockResolvedValue({ center_id: 'x', center_name: '  ' })
+    const r = text(await mainMenu(ctx()))
+    expect(r).not.toContain('שלום')
+    expect(r).toContain('הודעת מוקד')
+  })
+})
+
 describe('תפריט ראשי: מקש 3 למוקד מורשה', () => {
   it('מוקד מורשה שומע את הודעת המוקד ומקש 3 פעיל', async () => {
     find.mockResolvedValue({ center_id: 'x' })

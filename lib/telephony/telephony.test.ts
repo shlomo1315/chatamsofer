@@ -163,6 +163,10 @@ describe('שלוחות שהועברו מהמרכזיה', () => {
     expect(validateResult(conf.result).ok).toBe(true)
     expect(centerTurn({ center_card: card, center_confirm: '1' }, { cardNumber: null, loadedThisMonth: false }).link).toBe(card)
     expect(centerTurn({ center_go: '1' }, { cardNumber: card, loadedThisMonth: false }).load).toBe(true)
+    const named = { cardNumber: null, loadedThisMonth: false, name: 'מוקד צפון' }
+    expect(JSON.stringify(centerTurn({}, named).result)).toContain('שלום מוקד צפון')
+    expect(JSON.stringify(centerTurn({}, { ...named, cardNumber: card }).result)).toContain('שלום מוקד צפון')
+    expect(JSON.stringify(centerTurn({}, { ...named, name: ' ' }).result)).not.toContain('שלום  ')
   })
   it('זיכויי יריד: סיום ללא פרטי בנק; שמירה אחרי אישור', async () => {
     const { creditTurn } = await import('./yerid/credits')
