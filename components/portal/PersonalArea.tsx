@@ -494,6 +494,7 @@ const CSS = `
 .pa .danger-btn:hover{background:var(--bord-50);border-color:#EBCFD1}
 .pa .sec{padding:var(--s5)}
 .pa .sec-head{display:flex;justify-content:space-between;align-items:center;gap:var(--s3)}
+.pa .tree-c .sec-head{margin-bottom:var(--s4);flex-wrap:wrap}
 .pa .wrap{display:grid;grid-template-columns:276px minmax(0,1fr);gap:var(--s5);align-items:start}
 .pa .wrap>*{min-width:0}
 .pa .side{position:sticky;top:72px;padding:var(--s5);display:flex;flex-direction:column;gap:var(--s4)}
@@ -528,11 +529,13 @@ const CSS = `
 .pa .tile .ic{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:#fff;border:1px solid var(--line-2);color:var(--navy)}
 .pa .tile b{font-size:var(--t3);font-weight:800;margin-top:auto;line-height:1.3}
 .pa .tile small{font-size:var(--t1);color:var(--mut);line-height:1.4}
-.pa .tile.main{background:var(--navy);border-color:var(--navy);color:#fff;padding:var(--s5)}
+.pa .tile.main{height:auto;gap:var(--s3);background:var(--navy);border-color:var(--navy);color:#fff;padding:var(--s5)}
 .pa .tile.main:hover{background:var(--navy-2)}
 .pa .tile.main .ic{background:var(--gold);border:0;color:var(--navy);width:44px;height:44px}
 .pa .tile.main b{font-size:var(--t5);font-weight:900}
-.pa .deps{display:flex;flex-wrap:wrap;gap:4px}
+.pa .deps{display:flex;flex-wrap:wrap;align-items:flex-start;align-content:flex-start;gap:6px}
+.pa .tile.main>*{flex-shrink:0;min-width:0}
+.pa .tile.main b{overflow-wrap:anywhere}
 .pa .deps span{font-size:11.5px;font-weight:700;border:1px solid rgba(231,207,156,.45);color:var(--gold-2);border-radius:99px;padding:2px 8px}
 .pa .req-head{display:flex;justify-content:space-between;align-items:center;gap:var(--s3);flex-wrap:wrap}
 .pa .filters{display:inline-flex;gap:2px;background:#F1EFE8;border-radius:var(--r1);padding:3px}
