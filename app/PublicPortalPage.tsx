@@ -34,7 +34,7 @@ import {
   Search, AlertCircle, Loader2, CheckCircle2, User,
   Baby, CreditCard, Gift, ChevronLeft, Phone, MapPin, Mail, Landmark,
   Users, GitBranch, Heart, ArrowRight, Clock, Shield, Plus, Trash2, Check, X, Upload, FileText, HandCoins,
-  Home, ClipboardList, Send,
+  Home, ClipboardList, Send, Lock,
 } from 'lucide-react'
 import NameChangeRequest from '@/components/portal/NameChangeRequest'
 
@@ -113,6 +113,85 @@ const MARITAL_OPTIONS = [
 ]
 // תחת "אחר" — כל מצבי המשפחה שאינם "נשואים"
 const OTHER_MARITAL_OPTIONS = MARITAL_OPTIONS.filter(o => o.value !== 'נשואים')
+
+// הודעת "נשמר" לפי השורה שנשמרה
+const PD_SAVED: Record<string, string> = {
+  phone: 'טלפון הבעל עודכן ונשמר.', spouse_phone: 'טלפון האשה עודכן ונשמר.', phone2: 'הטלפון הנוסף עודכן ונשמר.',
+  email: 'המייל עודכן ונשמר.', address: 'הכתובת עודכנה ונשמרה.', marital: 'מצב משפחתי עודכן ונשמר.',
+}
+
+// עיצוב חלונית "הפרטים שלכם" — לפי המוקאפ המאושר (כיוון ג׳)
+const PD_CSS = `
+.pd-stage{--navy:#17153B;--ink:#17162B;--mut:#5D6170;--soft:#8A8D9B;--line:#E3E0D6;--line-2:#EEEBE3;--fill:#F8F7F3;--ind:#4338CA;--ind-50:#EEF0FF;--ok:#1F7A4D;--ok-50:#E7F4EC;--amb:#93590A;--amb-50:#FDF2DE;
+  --t1:12px;--t2:13.5px;--t3:15px;--t5:21px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;--s6:32px;--r1:10px;--r2:18px;
+  position:fixed;inset:0;z-index:70;display:flex;justify-content:center;align-items:center;padding:16px;background:rgba(23,21,59,.42);
+  font-family:Heebo,system-ui,sans-serif;color:var(--ink);font-size:var(--t3);line-height:1.55}
+.pd-stage *{box-sizing:border-box}
+.pd-stage .ltr{direction:ltr;unicode-bidi:isolate}
+.pd-stage .num{font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.pd-modal{background:#fff;border-radius:var(--r2);box-shadow:0 30px 80px -20px rgba(23,21,59,.45),0 0 0 1px rgba(23,21,59,.06);width:100%;max-width:720px;display:flex;flex-direction:column;max-height:calc(100vh - 32px);overflow:hidden}
+.pd-head{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--s4);padding:var(--s5) var(--s6) var(--s4);border-bottom:1px solid var(--line-2)}
+.pd-head h2{margin:0;font-size:var(--t5);font-weight:800;line-height:1.25}
+.pd-head p{margin:2px 0 0;font-size:var(--t2);color:var(--mut)}
+.pd-x{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:#fff;display:grid;place-items:center;color:var(--mut);flex-shrink:0;cursor:pointer}
+.pd-x:hover{background:var(--fill);color:var(--ink)}
+.pd-body{overflow-y:auto;flex:1}
+.pd-foot{display:flex;align-items:center;gap:var(--s3);padding:var(--s4) var(--s6);border-top:1px solid var(--line-2);background:#FCFBF8}
+.pd-foot .note{font-size:var(--t1);color:var(--soft);margin-inline-end:auto}
+.pd-stage .btn{min-height:44px;border-radius:12px;padding:0 var(--s5);font-weight:700;border:1px solid transparent;display:inline-flex;align-items:center;justify-content:center;gap:var(--s2);cursor:pointer;font-family:inherit;font-size:inherit;transition:transform .15s ease-out,background .15s ease-out}
+.pd-stage .btn:active{transform:scale(.98)}
+.pd-stage .btn:disabled{opacity:.6;cursor:default}
+.pd-stage .btn-pri{background:var(--navy);color:#fff}
+.pd-stage .btn-pri:hover{background:#26215F}
+.pd-stage .btn-ghost{background:#fff;border-color:var(--line);color:var(--mut)}
+.pd-stage .btn-ghost:hover{color:var(--ink);border-color:#CFCBBE}
+.pd-stage button:focus-visible,.pd-stage input:focus-visible,.pd-stage select:focus-visible{outline:2px solid var(--ind);outline-offset:2px}
+.pd-stage .rows{padding:var(--s2) var(--s6) var(--s5)}
+.pd-stage .grp{margin-top:var(--s5)}
+.pd-stage .grp:first-child{margin-top:var(--s3)}
+.pd-stage .grp h5{margin:0 0 var(--s2);font-size:var(--t1);font-weight:700;color:var(--soft);letter-spacing:.04em}
+.pd-stage .list{border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.pd-stage .row{display:grid;grid-template-columns:150px 1fr auto;gap:var(--s4);align-items:center;min-height:58px;padding:var(--s2) var(--s4);border-top:1px solid var(--line-2)}
+.pd-stage .list > :first-child{border-top:0}
+.pd-stage .row .k{font-size:var(--t2);color:var(--mut)}
+.pd-stage .row .v{font-weight:600;display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap;min-width:0}
+.pd-stage .row .v.empty{color:var(--soft);font-weight:400}
+.pd-stage .row .act{display:flex;gap:var(--s2);align-items:center}
+.pd-stage .row.edit{background:#FBFAFF;box-shadow:inset -3px 0 0 var(--ind);grid-template-columns:150px 1fr;align-items:start;padding-block:var(--s4)}
+.pd-stage .row.edit .k{padding-top:12px;color:var(--ink);font-weight:700}
+.pd-stage .row.edit .ed{display:flex;flex-direction:column;gap:var(--s3);min-width:0}
+.pd-stage .row.edit .bar{display:flex;gap:var(--s2);justify-content:flex-start;flex-wrap:wrap}
+.pd-stage .row.edit .btn{min-height:40px;padding:0 var(--s4);font-size:var(--t2)}
+.pd-stage .row.edit input:not([type=checkbox]):not([type=radio]),.pd-stage .row.edit select{min-height:46px;border:1px solid #D9D5C9;border-radius:var(--r1);background:#fff;padding:0 var(--s3);font-family:inherit}
+.pd-stage .row.edit input:focus,.pd-stage .row.edit select:focus{outline:none;border-color:var(--ind);box-shadow:0 0 0 3px var(--ind-50)}
+.pd-stage .ebtn{border:1px solid var(--line);background:#fff;min-height:36px;padding:0 var(--s3);border-radius:9px;font-size:var(--t2);font-weight:600;color:var(--ink);cursor:pointer;font-family:inherit}
+.pd-stage .ebtn:hover{border-color:#CFCBBE;background:var(--fill)}
+.pd-stage .lock{display:inline-flex;align-items:center;gap:4px;font-size:var(--t1);color:var(--soft)}
+.pd-stage .chip{display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 10px;border-radius:99px;font-size:var(--t1);font-weight:700;white-space:nowrap}
+.pd-stage .chip-ok{background:var(--ok-50);color:var(--ok)}
+.pd-stage .saved{display:flex;align-items:center;gap:var(--s2);margin:var(--s4) var(--s6) 0;padding:var(--s2) var(--s3);background:var(--ok-50);color:var(--ok);border-radius:var(--r1);font-size:var(--t2);font-weight:600}
+.pd-ok{display:flex;align-items:center;gap:4px;margin:0;font-size:var(--t2);color:var(--ok);font-weight:600}
+.pd-err{font-size:var(--t2);color:#B42318;background:#FEF3F2;border:1px solid #FECDCA;border-radius:var(--r1);padding:var(--s2) var(--s3)}
+.pd-namefix{padding:var(--s3) var(--s4);border-top:1px solid var(--line-2);background:var(--fill)}
+.pd-del{margin-inline-start:auto;color:#A33}
+@media (max-width:700px){
+  .pd-stage{padding:0;align-items:stretch}
+  .pd-modal{border-radius:var(--r2) var(--r2) 0 0;max-height:none;margin-top:var(--s5)}
+  .pd-head{padding:var(--s4) var(--s4) var(--s3)}
+  .pd-head h2{font-size:19px}
+  .pd-foot{padding:var(--s3) var(--s4)}
+  .pd-foot .note{display:none}
+  .pd-stage .rows{padding:var(--s2) var(--s4) var(--s5)}
+  .pd-stage .row{grid-template-columns:1fr auto;gap:2px var(--s3)}
+  .pd-stage .row .k{grid-column:1;font-size:var(--t1)}
+  .pd-stage .row .v{grid-column:1}
+  .pd-stage .row .act{grid-column:2;grid-row:1 / span 2}
+  .pd-stage .row.edit{grid-template-columns:1fr}
+  .pd-stage .row.edit .k{padding-top:0}
+  .pd-stage .saved{margin:var(--s3) var(--s4) 0}
+}
+@media (prefers-reduced-motion:reduce){.pd-stage *{transition:none!important}}
+`
 const MARRIED_STATUSES = ['נשואים']
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1737,12 +1816,14 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   const [editChildren, setEditChildren] = useState<ChildEntry[]>([])
   const [editChildIdErrors, setEditChildIdErrors] = useState<Record<number, string>>({})
   const [editSaving, setEditSaving] = useState(false)
+  const [editRow, setEditRow] = useState<string | null>(null)
+  const [savedMsg, setSavedMsg] = useState('')
   // האם מספר טלפון כבר מאומת עבור הנרשם (מתוך verified_phones)
   const isVerifiedPhone = (v: string) => {
     const n = (v ?? '').replace(/\D/g, '')
     return n.length >= 9 && (beneficiary?.verified_phones ?? []).some(x => (x ?? '').replace(/\D/g, '') === n)
   }
-  const openEditDetails = () => {
+  const pdReset = () => {
     if (!beneficiary) return
     setEditForm({
       phone: beneficiary.phone ?? '', phone2: beneficiary.phone2 ?? '', spouse_phone: beneficiary.spouse_phone ?? '',
@@ -1758,9 +1839,14 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     })))
     setEditChildIdErrors({})
     setEditEmailToken(null); setEditPhoneToken(null); setEditSpousePhoneToken(null); setEditPhone2Token(null)
-    setError(''); setEditOpen(true)
+    setError('')
   }
-  const handleUpdateDetails = async () => {
+  const openEditDetails = () => {
+    if (!beneficiary) return
+    pdReset(); setEditRow(null); setSavedMsg(''); setEditOpen(true)
+  }
+  const handleUpdateDetails = async (opts?: { children?: ChildEntry[] }) => {
+    const kids = opts?.children ?? editChildren
     if (!beneficiary) return
     // שינוי מייל/טלפון מחייב אימות הערך החדש
     const emailChanged = (editForm.email ?? '').trim().toLowerCase() !== (beneficiary.email ?? '').trim().toLowerCase()
@@ -1785,8 +1871,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       }
     }
     // אימות פרטי הילדים — כל ילד שמולא חייב שם + תעודת זהות תקינה
-    for (let i = 0; i < editChildren.length; i++) {
-      const c = editChildren[i]
+    for (let i = 0; i < kids.length; i++) {
+      const c = kids[i]
       const passport = c.id_doc_type === 'passport'
       const cid = passport ? (c.id_number || '').trim() : (c.id_number || '').replace(/\D/g, '')
       // ⚠️ שם *אינו* חובה: ילד שנפתח מבקשת לידה וטרם נקרא בשם הוא מצב תקין,
@@ -1809,7 +1895,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       ].filter(p => p.value && p.value.trim() && p.token)
       // מסננים רק שורות ריקות. ילד בלי שם *נשמר* — הוא רשומה אמיתית שממתינה
       // להשלמת שם, לא רשומה פגומה שיש למחוק.
-      const childrenPayload = editChildren.filter(c => c.id_number).map(c => ({
+      const childrenPayload = kids.filter(c => c.id_number).map(c => ({
         name: c.name, id_number: c.id_number, gender: c.gender, birth_date: c.birth_date, marital_status: c.marital_status,
         id_doc_type: c.id_doc_type ?? 'id',
       }))
@@ -1820,10 +1906,56 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'שגיאה בעדכון'); setEditSaving(false); return }
-      setBeneficiary(b => b ? { ...b, ...editForm, children: childrenPayload, children_count: childrenPayload.length } : b)
-      setEditOpen(false)
+      // מספרים שאומתו עכשיו נרשמים כמאומתים מקומית; האסימונים חד-פעמיים ולכן מתאפסים
+      const newlyVerified = phoneTokens.map(p => p.value.trim())
+      setBeneficiary(b => b ? { ...b, ...editForm, children: childrenPayload, children_count: childrenPayload.length,
+        verified_phones: [...(b.verified_phones ?? []), ...newlyVerified] } : b)
+      setEditEmailToken(null); setEditPhoneToken(null); setEditSpousePhoneToken(null); setEditPhone2Token(null)
+      setEditChildren(kids.filter(c => c.id_number).map(c => ({ ...c, existing: true })))
+      setEditChildIdErrors({})
+      setSavedMsg(PD_SAVED[editRow ?? ''] ?? 'השינוי נשמר.')
+      setEditRow(null)
     } catch { setError('שגיאת רשת') }
     setEditSaving(false)
+  }
+
+  // ─── עזרים לחלונית "הפרטים שלכם" (עריכה בשורה) ───
+  const pdStart = (key: string) => { pdReset(); setEditRow(key); setSavedMsg('') }
+  const pdBar = (extra?: React.ReactNode) => (
+    <>
+      {error && <div className="pd-err" role="alert">{error}</div>}
+      <div className="bar">
+        <button type="button" className="btn btn-pri" disabled={editSaving} onClick={() => handleUpdateDetails()}>
+          {editSaving ? <Loader2 size={16} className="animate-spin" /> : null}שמירה
+        </button>
+        <button type="button" className="btn btn-ghost" disabled={editSaving} onClick={() => { pdReset(); setEditRow(null) }}>ביטול</button>
+        {extra}
+      </div>
+    </>
+  )
+  const pdPhoneRow = (
+    key: 'phone' | 'spouse_phone' | 'phone2', label: string,
+    setToken: (t: string | null) => void, token: string | null, valid: (v: string) => boolean,
+  ) => {
+    const val = editForm[key]
+    const verified = Boolean(val) && isVerifiedPhone(val)
+    if (editRow !== key) return (
+      <div className="row" key={key}><span className="k">{label}</span>
+        {val
+          ? <span className="v"><span className="ltr num">{val}</span>{verified && <span className="chip chip-ok"><Check size={14} />מאומת</span>}</span>
+          : <span className="v empty">לא הוזן</span>}
+        <span className="act"><button className="ebtn" type="button" onClick={() => pdStart(key)}>{val ? 'עריכה' : 'הוספה'}</button></span></div>
+    )
+    return (
+      <div className="row edit" key={key}><span className="k">{label}</span>
+        <div className="ed">
+          <TextInput value={val} onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))} dir="ltr" inputMode="tel" aria-label={label} />
+          {val && valid(val) && verified && token === null
+            ? <p className="pd-ok"><CheckCircle2 size={14} /> מספר מאומת</p>
+            : <VerifyControl channel="phone" value={val} valid={valid(val)} onToken={setToken} />}
+          {pdBar()}
+        </div></div>
+    )
   }
 
   const setReg = (k: keyof typeof regForm) =>
@@ -6985,122 +7117,120 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         </div>
       )}
 
-      {/* ─── עדכון פרטים (משפחה מאושרת) ─── */}
+      {/* ─── עדכון פרטים (משפחה מאושרת) — סיכום ועריכה בשורה ─── */}
         {editOpen && beneficiary && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl">
-            <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md max-h-[90vh] overflow-y-auto">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-                <div className="flex items-center gap-2">
-                  <User size={20} className="text-indigo-600" />
-                  <h2 className="font-bold text-slate-900">עדכון פרטים אישיים</h2>
-                </div>
-                <button type="button" onClick={() => { setEditOpen(false); setError('') }} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+          <div className="pd-stage" dir="rtl" role="presentation">
+            <style>{PD_CSS}</style>
+            <div className="pd-modal" role="dialog" aria-labelledby="pd-title">
+              <div className="pd-head">
+                <div><h2 id="pd-title">הפרטים שלכם</h2><p>לחצו "עריכה" ליד מה שצריך לשנות. כל שורה נשמרת לבד.</p></div>
+                <button type="button" className="pd-x" aria-label="סגירה" onClick={() => { setEditOpen(false); setEditRow(null); setError('') }}><X size={18} /></button>
               </div>
-              <div className="p-6 flex flex-col gap-4">
-                {/* קריאה בלבד — לא ניתן לשינוי */}
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
-                  <p><span className="text-slate-400 text-xs block">שם</span>{[beneficiary.family_name, beneficiary.full_name].filter(Boolean).join(' ')}</p>
-                  <p><span className="text-slate-400 text-xs block">ת.ז (לא ניתן לשינוי)</span><span className="ltr-num">{beneficiary.id_number ?? '—'}</span></p>
-                  {beneficiary.spouse_name && <p><span className="text-slate-400 text-xs block">בן/בת זוג</span>{beneficiary.spouse_name}</p>}
-                  {beneficiary.spouse_id_number && <p><span className="text-slate-400 text-xs block">ת.ז בן/זוג (לא ניתן לשינוי)</span><span className="ltr-num">{beneficiary.spouse_id_number}</span></p>}
-                </div>
-
-                {/* 🔴 תיקון שם — טעון אישור הנהלה ולכן רכיב נפרד: כל שאר
-                    השדות נשמרים מיד, וערבוב שדה שממתין לאישור ביניהם היה
-                    יוצר טופס שחציו נשמר וחציו לא. */}
-                <NameChangeRequest
-                  beneficiaryId={String(beneficiary.id)}
-                  currentName={beneficiary.full_name ?? ''}
-                  spouseName={beneficiary.spouse_name}
-                  hasSpouse={Boolean(beneficiary.spouse_name)}
-                />
-
-                <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-                  אימות טלפון מאפשר לקבל אליו קוד כניסה בעתיד. ניתן לאמת כאן טלפון שעדיין לא אומת.
-                </div>
-                <Field label="טלפון בעל">
-                  <TextInput value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} dir="ltr" inputMode="tel" />
-                  {editForm.phone && validatePhone(editForm.phone) && isVerifiedPhone(editForm.phone) && editPhoneToken === null ? (
-                    <p className="mt-1.5 flex items-center gap-1 text-xs text-green-700"><CheckCircle2 size={13} /> מספר מאומת</p>
-                  ) : (
-                    <VerifyControl channel="phone" value={editForm.phone} valid={validatePhone(editForm.phone)} onToken={setEditPhoneToken} />
-                  )}
-                </Field>
-                <Field label="טלפון אשה" hint="לא חובה">
-                  <TextInput value={editForm.spouse_phone} onChange={e => setEditForm(f => ({ ...f, spouse_phone: e.target.value }))} dir="ltr" inputMode="tel" />
-                  {editForm.spouse_phone && validatePhone(editForm.spouse_phone) && isVerifiedPhone(editForm.spouse_phone) && editSpousePhoneToken === null ? (
-                    <p className="mt-1.5 flex items-center gap-1 text-xs text-green-700"><CheckCircle2 size={13} /> מספר מאומת</p>
-                  ) : (
-                    <VerifyControl channel="phone" value={editForm.spouse_phone} valid={validatePhone(editForm.spouse_phone)} onToken={setEditSpousePhoneToken} />
-                  )}
-                </Field>
-                <Field label="טלפון נוסף" hint="לא חובה">
-                  <TextInput value={editForm.phone2} onChange={e => setEditForm(f => ({ ...f, phone2: e.target.value }))} dir="ltr" inputMode="tel" />
-                  {editForm.phone2 && validatePhoneOrLandline(editForm.phone2) && isVerifiedPhone(editForm.phone2) && editPhone2Token === null ? (
-                    <p className="mt-1.5 flex items-center gap-1 text-xs text-green-700"><CheckCircle2 size={13} /> מספר מאומת</p>
-                  ) : (
-                    <VerifyControl channel="phone" value={editForm.phone2} valid={validatePhoneOrLandline(editForm.phone2)} onToken={setEditPhone2Token} />
-                  )}
-                </Field>
-                <Field label="מייל">
-                  <TextInput value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} dir="ltr" inputMode="email" />
-                  {(editForm.email ?? '').trim().toLowerCase() !== (beneficiary.email ?? '').trim().toLowerCase() && (
-                    <VerifyControl channel="email" value={editForm.email} valid={validateEmail(editForm.email)} onToken={setEditEmailToken} />
-                  )}
-                </Field>
-                <CityStreetPicker
-                  city={editForm.city}
-                  address={editForm.address}
-                  onCityChange={v => setEditForm(f => ({ ...f, city: v }))}
-                  onAddressChange={v => setEditForm(f => ({ ...f, address: v }))}
-                />
-                <Field label="מצב משפחתי">
-                  <SelectInput value={editForm.marital_status} onChange={e => setEditForm(f => ({ ...f, marital_status: e.target.value }))}>
-                    <option value="">בחר…</option>
-                    {MARITAL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </SelectInput>
-                </Field>
-
-                {/* ─── מספר ילדים / פרטי הילדים ─── */}
-                <div className="border-t border-slate-100 pt-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Users size={16} className="text-indigo-600" />
-                    <h3 className="text-sm font-semibold text-slate-900">מספר ילדים / פרטי הילדים</h3>
-                  </div>
-                  <Field label={<EditableText k="reg.children.count" />}>
-                    <TextInput
-                      type="number" min="0" max="20" inputMode="numeric" placeholder="0" className="w-28"
-                      value={editChildren.length === 0 ? '' : String(editChildren.length)}
-                      onChange={e => {
-                        const n = Math.max(0, Math.min(20, parseInt(e.target.value || '0', 10) || 0))
-                        setEditChildren(cs => n > cs.length
-                          ? [...cs, ...Array.from({ length: n - cs.length }, emptyChild)]
-                          : cs.slice(0, n))
-                      }}
-                    />
-                  </Field>
-
-                  <div className="flex flex-col gap-3 mt-3">
-                    {editChildren.map((child, idx) => (
-                      <div key={idx} className="border border-slate-200 rounded-xl p-4 bg-slate-50">
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                            ילד {idx + 1}
-                            {child.existing && !child.name.trim() && (
-                              <span className="text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-200 rounded-full px-2 py-0.5">
-                                חסר שם — נא להשלים
-                              </span>
-                            )}
-                          </span>
-                          <button type="button"
-                            onClick={() => {
-                              setEditChildren(cs => cs.filter((_, i) => i !== idx))
-                              setEditChildIdErrors(er => { const n = { ...er }; delete n[idx]; return n })
-                            }}
-                            className="text-red-400 hover:text-red-600 p-1 rounded-lg hover:bg-red-50 transition-all duration-150">
-                            <Trash2 size={14} />
-                          </button>
+              <div className="pd-body">
+                {savedMsg && <div className="saved" role="status"><Check size={16} />{savedMsg}</div>}
+                <div className="rows">
+                  <div className="grp"><h5>זהות</h5>
+                    <div className="list">
+                      <div className="row locked"><span className="k">שם</span><span className="v">{[beneficiary.family_name, beneficiary.full_name].filter(Boolean).join(' ')}</span>
+                        <span className="act"><button className="ebtn" type="button" onClick={() => setEditRow(editRow === 'name' ? null : 'name')}>בקשת תיקון</button></span></div>
+                      {editRow === 'name' && (
+                        <div className="pd-namefix">
+                          {/* 🔴 תיקון שם — טעון אישור הנהלה ולכן רכיב נפרד: שאר השדות נשמרים מיד */}
+                          <NameChangeRequest
+                            beneficiaryId={String(beneficiary.id)}
+                            currentName={beneficiary.full_name ?? ''}
+                            spouseName={beneficiary.spouse_name}
+                            hasSpouse={Boolean(beneficiary.spouse_name)}
+                          />
                         </div>
+                      )}
+                      <div className="row locked"><span className="k">ת.ז</span><span className="v"><span className="ltr num">{beneficiary.id_number ?? '—'}</span></span><span className="act"><span className="lock"><Lock size={12} />קבוע</span></span></div>
+                      {beneficiary.spouse_name && (
+                        <div className="row locked"><span className="k">בן/בת זוג</span><span className="v">{beneficiary.spouse_name}{beneficiary.spouse_id_number && <> · <span className="ltr num">{beneficiary.spouse_id_number}</span></>}</span><span className="act"><span className="lock"><Lock size={12} />קבוע</span></span></div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grp"><h5>יצירת קשר</h5>
+                    <div className="list">
+                      {pdPhoneRow('phone', 'טלפון בעל', setEditPhoneToken, editPhoneToken, validatePhone)}
+                      {pdPhoneRow('spouse_phone', 'טלפון אשה', setEditSpousePhoneToken, editSpousePhoneToken, validatePhone)}
+                      {pdPhoneRow('phone2', 'טלפון נוסף', setEditPhone2Token, editPhone2Token, validatePhoneOrLandline)}
+                      {editRow === 'email' ? (
+                        <div className="row edit"><span className="k">מייל</span>
+                          <div className="ed">
+                            <TextInput value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} dir="ltr" inputMode="email" aria-label="מייל" />
+                            {(editForm.email ?? '').trim().toLowerCase() !== (beneficiary.email ?? '').trim().toLowerCase() && (
+                              <VerifyControl channel="email" value={editForm.email} valid={validateEmail(editForm.email)} onToken={setEditEmailToken} />
+                            )}
+                            {pdBar()}
+                          </div></div>
+                      ) : (
+                        <div className="row"><span className="k">מייל</span>
+                          {editForm.email
+                            ? <span className="v"><span className="ltr">{editForm.email}</span></span>
+                            : <span className="v empty">לא הוזן</span>}
+                          <span className="act"><button className="ebtn" type="button" onClick={() => pdStart('email')}>{editForm.email ? 'עריכה' : 'הוספה'}</button></span></div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grp"><h5>בית</h5>
+                    <div className="list">
+                      {editRow === 'address' ? (
+                        <div className="row edit"><span className="k">כתובת</span>
+                          <div className="ed">
+                            <CityStreetPicker
+                              city={editForm.city}
+                              address={editForm.address}
+                              onCityChange={v => setEditForm(f => ({ ...f, city: v }))}
+                              onAddressChange={v => setEditForm(f => ({ ...f, address: v }))}
+                            />
+                            {pdBar()}
+                          </div></div>
+                      ) : (
+                        <div className="row"><span className="k">כתובת</span>
+                          {[editForm.address, editForm.city].filter(Boolean).length
+                            ? <span className="v">{[editForm.address, editForm.city].filter(Boolean).join(', ')}</span>
+                            : <span className="v empty">לא הוזנה</span>}
+                          <span className="act"><button className="ebtn" type="button" onClick={() => pdStart('address')}>עריכה</button></span></div>
+                      )}
+                      {editRow === 'marital' ? (
+                        <div className="row edit"><span className="k">מצב משפחתי</span>
+                          <div className="ed">
+                            <SelectInput value={editForm.marital_status} onChange={e => setEditForm(f => ({ ...f, marital_status: e.target.value }))} aria-label="מצב משפחתי">
+                              <option value="">בחר…</option>
+                              {MARITAL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            </SelectInput>
+                            {pdBar()}
+                          </div></div>
+                      ) : (
+                        <div className="row"><span className="k">מצב משפחתי</span>
+                          {editForm.marital_status
+                            ? <span className="v">{editForm.marital_status}</span>
+                            : <span className="v empty">לא צוין</span>}
+                          <span className="act"><button className="ebtn" type="button" onClick={() => pdStart('marital')}>עריכה</button></span></div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grp"><h5>ילדים · {editChildren.filter(c => c.existing).length}</h5>
+                    <div className="list">
+                      {editChildren.map((child, idx) => {
+                        const missingName = child.existing && !child.name.trim()
+                        const maritalLabel = child.gender ? maritalFor(child.gender).find(m => m.v === child.marital_status)?.l : undefined
+                        if (editRow !== `child-${idx}`) return (
+                          <div className="row" key={idx}>
+                            <span className="k" style={missingName ? { color: 'var(--amb)', fontWeight: 700 } : undefined}>{missingName ? `ילד ${idx + 1} · חסר שם` : (child.name || `ילד ${idx + 1}`)}</span>
+                            <span className="v" style={{ fontWeight: 400 }}><span className="ltr num">{child.id_number || '—'}</span>{maritalLabel ? <>· {maritalLabel}</> : child.gender ? <>· {child.gender === 'male' ? 'בן' : 'בת'}</> : null}</span>
+                            <span className="act"><button className="ebtn" type="button" onClick={() => pdStart(`child-${idx}`)}
+                              style={missingName ? { borderColor: '#EBC98A', background: 'var(--amb-50)' } : undefined}>{missingName ? 'השלמת שם' : 'עריכה'}</button></span>
+                          </div>
+                        )
+                        return (
+                          <div className="row edit" key={idx}>
+                            <span className="k">{child.name || `ילד ${idx + 1}`}</span>
+                            <div className="ed">
                         <div className="grid grid-cols-2 gap-3">
                           <div className="col-span-2 sm:col-span-1">
                             <Field label={childNameLabel(child.gender)}>
@@ -7202,20 +7332,34 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                           </div>
                           )}
                         </div>
-                      </div>
-                    ))}
-                    <button type="button" onClick={() => setEditChildren(cs => [...cs, emptyChild()])}
-                      className="flex items-center justify-center gap-2 border-2 border-dashed border-indigo-200 text-indigo-600 hover:border-indigo-400 hover:bg-indigo-50 font-medium py-2.5 rounded-xl text-sm transition-all duration-150">
-                      <Plus size={16} /> הוסף ילד/ה
-                    </button>
+                              {pdBar(
+                                <button type="button" className="btn btn-ghost pd-del" disabled={editSaving}
+                                  onClick={() => {
+                                    if (child.existing && !window.confirm('למחוק את הילד/ה מהרשימה?')) return
+                                    const rest = editChildren.filter((_, i) => i !== idx)
+                                    setEditChildIdErrors({})
+                                    if (!child.existing) { setEditChildren(rest); setEditRow(null); setError(''); return }
+                                    handleUpdateDetails({ children: rest })
+                                  }}><Trash2 size={14} />הסרה</button>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                      {!(editRow ?? '').startsWith('child-') && (
+                        <div className="row"><span className="k" /><span className="v empty" />
+                          <span className="act"><button className="ebtn" type="button" onClick={() => {
+                            const n = (beneficiary.children ?? []).length
+                            pdReset(); setEditChildren(cs => [...cs, emptyChild()]); setEditRow(`child-${n}`); setSavedMsg('')
+                          }}>+ הוספת ילד</button></span></div>
+                      )}
+                    </div>
                   </div>
                 </div>
-
-                {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{error}</div>}
-                <button onClick={handleUpdateDetails} disabled={editSaving}
-                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:bg-indigo-400 text-white font-semibold py-3 rounded-xl">
-                  {editSaving ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />} שמירת השינויים
-                </button>
+              </div>
+              <div className="pd-foot">
+                <span className="note">אין צורך בשמירה כללית. כל שינוי נשמר בשורה שלו.</span>
+                <button type="button" className="btn btn-ghost" onClick={() => { setEditOpen(false); setEditRow(null); setError('') }}>סגירה</button>
               </div>
             </div>
           </div>
