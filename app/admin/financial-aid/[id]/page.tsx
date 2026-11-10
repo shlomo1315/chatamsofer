@@ -70,7 +70,7 @@ export default async function FinancialAidDetailPage({ params }: { params: Promi
         <div className="flex items-center gap-2">
           <HandCoins size={18} className="text-emerald-600" />
           <div>
-            <h1 className="text-xl font-bold text-slate-900">{name}{req.is_descendant === false && <span className="mr-2 rounded-full bg-orange-100 px-2 py-0.5 align-middle text-xs font-semibold text-orange-700">לא צאצא</span>}</h1>
+            <h1 className="text-xl font-bold text-slate-900">{name}{!req.beneficiary_id && <span className="mr-2 rounded-full bg-slate-200 px-2 py-0.5 align-middle text-xs font-semibold text-slate-700">לא רשום באיגוד</span>}{req.is_descendant === false && <span className="mr-2 rounded-full bg-orange-100 px-2 py-0.5 align-middle text-xs font-semibold text-orange-700">לא צאצא</span>}</h1>
             <p className="text-sm text-slate-500 ltr-num">{idNumber}</p>
           </div>
         </div>
@@ -100,6 +100,12 @@ export default async function FinancialAidDetailPage({ params }: { params: Promi
           {!b && req.applicant_phone && <p><span className="text-slate-500">טלפון: </span><span className="ltr-num">{req.applicant_phone}</span></p>}
           {!b && req.applicant_email && <p><span className="text-slate-500">מייל: </span><span className="ltr-num">{req.applicant_email}</span></p>}
           {!b && (req.applicant_address || req.applicant_city) && <p className="col-span-2"><span className="text-slate-500">כתובת: </span>{[req.applicant_address, req.applicant_city].filter(Boolean).join(', ')}</p>}
+          {!b && (() => {
+            const d = (req as { applicant_details?: Record<string, string | number | null> | null }).applicant_details
+            if (!d) return null
+            const rows: [string, string | number | null | undefined][] = [['טלפון נוסף', d.phone2], ['תאריך לידה', d.birth_date], ['מין', d.gender === 'male' ? 'זכר' : d.gender === 'female' ? 'נקבה' : null], ['מצב משפחתי', d.marital_status], ['מספר ילדים', d.children_count], ['בן/בת זוג', d.spouse_name], ['ת.ז. בן/בת זוג', d.spouse_id_number]]
+            return rows.filter(([, v]) => v !== null && v !== undefined && v !== '').map(([l, v]) => <p key={l}><span className="text-slate-500">{l}: </span>{v}</p>)
+          })()}
           {req.relation && <p><span className="text-slate-500">קשר למשפחה: </span>{req.relation}</p>}
           {req.referrer && <p className="col-span-2"><span className="text-slate-500">רב / ממליץ: </span>{req.referrer}</p>}
           {req.requested_amount != null &&<p><span className="text-slate-500">סכום מבוקש: </span><span className="ltr-num font-semibold">{money(req.requested_amount)}</span></p>}

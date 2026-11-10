@@ -212,6 +212,7 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
         <span className="inline-flex items-center gap-1.5 flex-wrap font-medium text-slate-800">
           {reqName(r)}
           {!!r.unread && <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-700"><MessageSquare size={11} />{r.unread}</span>}
+          {!r.beneficiary && !r.beneficiary_id && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-700">לא רשום באיגוד</span>}
           {r.is_descendant === false && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-700">לא צאצא</span>}
           {/* ⚠️ גם ליד השם וגם בעמודה: מי שכיבה את העמודה עדיין צריך לדעת
               שהמבקש אינו צאצא רגיל. */}

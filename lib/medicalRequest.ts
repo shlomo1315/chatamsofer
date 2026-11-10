@@ -1,3 +1,5 @@
+import { validateIsraeliId } from '@/lib/validation'
+
 // טופס סיוע רפואי ציבורי: אימות קלט, בדיקת קבצים וטיוטת ההודעה למבקש.
 
 export const MEDICAL_MAX_FILE = 10 * 1024 * 1024
@@ -12,6 +14,9 @@ export type AidType = 'medical' | 'widow' | 'orphans'
 export const AID_TYPES: AidType[] = ['medical', 'widow', 'orphans']
 export const parseAidType = (v: unknown): AidType => AID_TYPES.includes(v as AidType) ? (v as AidType) : 'medical'
 
+export const GENDERS = ['male', 'female']
+export const MARITAL_STATUSES = ['נשואים', 'רווק/ה', 'אלמן/ה', 'גרוש/ה']
+
 export interface MedicalInput {
   idNumber: string
   fullName: string
@@ -24,6 +29,14 @@ export interface MedicalInput {
   aidType?: AidType
   relation?: string
   referrer?: string
+  // פרטים נוספים של מי שלא רשום, כמו ברישום לאיגוד
+  phone2?: string
+  birthDate?: string
+  gender?: string
+  maritalStatus?: string
+  childrenCount?: number
+  spouseName?: string
+  spouseId?: string
 }
 
 // descendant = הת"ז נמצאה במאגר. צאצא רשום ממלא פחות שדות; מי שלא רשום ממלא הכול.
@@ -37,6 +50,12 @@ export function validateMedical(i: MedicalInput, descendant: boolean, hasIdCard:
   if ((i.aidType ?? 'medical') === 'medical' && medicalDocs < 1) return 'יש לצרף לפחות מסמך רפואי אחד'
   if (!descendant) {
     if (i.fullName.trim().length < 3) return 'יש להזין שם מלא'
+    if (!validateIsraeliId(idDigits(i.idNumber))) return 'מספר תעודת זהות לא תקין'
+    if (!i.email.trim()) return 'יש להזין כתובת מייל'
+    if (!i.birthDate || !/^\d{4}-\d{2}-\d{2}$/.test(i.birthDate) || Number.isNaN(Date.parse(i.birthDate)) || i.birthDate > new Date().toISOString().slice(0, 10)) return 'יש להזין תאריך לידה תקין'
+    if (!i.gender || !GENDERS.includes(i.gender)) return 'יש לבחור מין'
+    if (!i.maritalStatus || !MARITAL_STATUSES.includes(i.maritalStatus)) return 'יש לבחור מצב משפחתי'
+    if (i.spouseId && !validateIsraeliId(idDigits(i.spouseId))) return 'תעודת הזהות של בן/בת הזוג אינה תקינה'
     if (!i.address.trim() || !i.city.trim()) return 'יש להזין כתובת ועיר'
     if (!hasIdCard) return 'יש לצרף צילום תעודת זהות'
     // מי שלא רשום באיגוד: נדרש רב או ממליץ שמכיר את המשפחה

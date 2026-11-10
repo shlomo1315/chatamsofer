@@ -53,6 +53,13 @@ export async function POST(request: NextRequest) {
     aidType: parseAidType(form.get('aid_type')),
     relation: str(form, 'relation', 80),
     referrer: str(form, 'referrer', 200),
+    phone2: str(form, 'phone2', 20),
+    birthDate: str(form, 'birth_date', 10),
+    gender: str(form, 'gender', 10),
+    maritalStatus: str(form, 'marital_status', 20),
+    childrenCount: Math.min(40, Math.max(0, Math.trunc(Number(str(form, 'children_count', 3)) || 0))),
+    spouseName: str(form, 'spouse_name', 120),
+    spouseId: idDigits(form.get('spouse_id_number')).slice(0, 9),
   }
   const idCards = files(form, 'id_card')
   const medical = files(form, 'medical')
@@ -73,6 +80,14 @@ export async function POST(request: NextRequest) {
 
   const err = validateMedical(input, descendant, idCards.length === 1, medical.length)
   if (err) return NextResponse.json({ error: err }, { status: 400 })
+
+  // עיר: אותה אכיפה כמו ברישום לאיגוד (רק עיר מהמאגר הרשמי)
+  if (!descendant) {
+    const { isKnownCity } = await import('@/lib/govData')
+    if (!(await isKnownCity(admin, input.city))) {
+      return NextResponse.json({ error: 'יש לבחור עיר מתוך הרשימה.' }, { status: 400 })
+    }
+  }
 
   // בדיקת קבצים: סיומת מותרת, גודל, ותוכן אמיתי שתואם את הסיומת
   const prepared: { kind: 'id_card' | 'medical'; name: string; ext: string; type: string; buf: ArrayBuffer }[] = []
@@ -116,6 +131,15 @@ export async function POST(request: NextRequest) {
     applicant_email: input.email || null,
     applicant_address: input.address || null,
     applicant_city: input.city || null,
+    applicant_details: descendant ? null : {
+      phone2: input.phone2 || null,
+      birth_date: input.birthDate,
+      gender: input.gender,
+      marital_status: input.maritalStatus,
+      children_count: input.childrenCount,
+      spouse_name: input.spouseName || null,
+      spouse_id_number: input.spouseId || null,
+    },
     document_url: firstMedical?.url ?? null,
     document_name: firstMedical?.name ?? null,
     status: 'pending',
