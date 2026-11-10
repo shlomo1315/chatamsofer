@@ -6,6 +6,7 @@ import { departmentByEmail, departmentByEmailAsync, BRAND_NAME } from '@/lib/dep
 import { sendAutoReply } from '@/lib/autoReplySender'
 import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { handleEmailRequest, isRequestSubject, isRequestMailFor, effectiveRequestSubject } from '@/lib/emailRequestIntake'
+import { shouldForwardToGmail } from '@/lib/mailForwardPolicy'
 import { resolveMailbox } from '@/lib/mailRouting'
 import { verifySvixSignature, hasSvixHeaders, safeEqual } from '@/lib/svix'
 
@@ -1022,13 +1023,18 @@ export async function POST(request: NextRequest) {
 
   const isNew = (insertedRows?.length ?? 0) > 0
   if (isNew) {
-    try {
-      await maybeForwardToGmail(admin, {
-        fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject,
-        html: html ?? null, plain: plain ?? null, attachments,
-      })
-    } catch (e) {
-      console.error('[resend-inbound] gmail forward error:', e instanceof Error ? e.message : String(e))
+    // ⚠️ מייל בקשה (לידה / הלוואה / סיוע) לא מועבר ל-Gmail: הבקשה נשמרת בתיבת
+    // האיגוד והמערכת קולטת אותה משם (handleEmailRequest). עותק ב-Gmail האישי
+    // הוא ערוץ שני מיותר שהופיע שם כמייל חדש.
+    if (shouldForwardToGmail(requestSubject)) {
+      try {
+        await maybeForwardToGmail(admin, {
+          fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject,
+          html: html ?? null, plain: plain ?? null, attachments,
+        })
+      } catch (e) {
+        console.error('[resend-inbound] gmail forward error:', e instanceof Error ? e.message : String(e))
+      }
     }
     // ⚠️ המענה האוטומטי אינו כאן אלא בסוף הטיפול, מחוץ ל-isNew.
     // אותה תקלה כבר תוקנה כאן פעמיים (ניתוב מכתבי הברכה, קליטת בקשות
