@@ -35,3 +35,11 @@ describe('הגשת בקשה ציבורית', () => {
     expect(paths).toHaveLength(1)
   })
 })
+
+describe('קישור /medical/new', () => {
+  it('עמוד הקישור קיים ומציג את הטופס למגיש לא רשום', async () => {
+    const mod = await import('@/app/medical/new/page')
+    expect(typeof mod.default).toBe('function')
+    expect(mod.metadata.title).toMatch(/אינו רשום/)
+  })
+})

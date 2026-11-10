@@ -17,8 +17,8 @@ function Field({ label, hint, children }: { label: string; hint: string; childre
   )
 }
 
-export default function MedicalForm() {
-  const [known, setKnown] = useState<Known>('unknown')
+export default function MedicalForm({ unregistered = false }: { unregistered?: boolean }) {
+  const [known, setKnown] = useState<Known>(unregistered ? 'no' : 'unknown')
   const [aidType, setAidType] = useState<'medical' | 'widow' | 'orphans'>('medical')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -30,7 +30,7 @@ export default function MedicalForm() {
   // בודק רק אם המספר רשום (בלי פרטים אישיים), כדי לדעת אילו שדות להציג
   async function checkId(raw: string) {
     const id = raw.replace(/\D/g, '')
-    if (id.length < 5 || id === lastId.current) return
+    if (unregistered || id.length < 5 || id === lastId.current) return
     lastId.current = id
     try {
       const r = await fetch(`/api/portal/lookup?id=${id}`)
@@ -91,7 +91,7 @@ export default function MedicalForm() {
       {known === 'no' && (
         <>
           <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
-            מספר זה אינו רשום אצלנו, לכן נבקש כמה פרטים נוספים.
+            {unregistered ? 'הטופס מיועד למי שאינו רשום באיגוד הצאצאים, ולכן נבקש את כל הפרטים האישיים.' : 'מספר זה אינו רשום אצלנו, לכן נבקש כמה פרטים נוספים.'}
           </p>
           <Field label="שם מלא" hint="שם פרטי ושם משפחה, כפי שמופיע בתעודת הזהות.">
             <input name="full_name" required className={input} />
