@@ -103,13 +103,13 @@ describe('ניתוב בקשות', () => {
     expect(box).toBe('igud@chasamsofer.info')
   })
 
-  it('בקשה שנשלחה לתיבה מוכרת — התיבה גוברת', () => {
-    // אם המשתמש שלח במפורש לתיבה, מכבדים אותה.
+  it('בקשה שנשלחה ישירות לתיבת מחלקה (y@) — נשמרת באיגוד', () => {
+    // הבקשה נשלפת ומטופלת אוטומטית, ולא צריכה לשבת בתיבה של המחלקה.
     const box = resolveMailbox({
-      direct: ['g@chasamsofer.info'],
+      direct: ['y@chasamsofer.info'],
       isRequest: true,
     })
-    expect(box).toBe('g@chasamsofer.info')
+    expect(box).toBe('igud@chasamsofer.info')
   })
 })
 
