@@ -37,6 +37,15 @@ Resources:
       InvocationEndpoint: https://chasamsofer.co.il/api/cron/name-reminders
       InvocationRateLimitPerSecond: 1
 
+  CenterMonthlyLoadDestination:
+    Type: AWS::Events::ApiDestination
+    Properties:
+      Name: !Sub "${ProjectName}-center-monthly-load"
+      ConnectionArn: !GetAtt CronConnection.Arn
+      HttpMethod: GET
+      InvocationEndpoint: https://chasamsofer.co.il/api/cron/center-monthly-load
+      InvocationRateLimitPerSecond: 1
+
   CronInvokeRole:
     Type: AWS::IAM::Role
     Properties:
@@ -47,7 +56,7 @@ Resources:
         - PolicyName: invoke-api-destinations
           PolicyDocument:
             Version: '2012-10-17'
-            Statement: [{Effect: Allow, Action: 'events:InvokeApiDestination', Resource: [!GetAtt DailyDigestDestination.Arn, !GetAtt NameRemindersDestination.Arn]}]
+            Statement: [{Effect: Allow, Action: 'events:InvokeApiDestination', Resource: [!GetAtt DailyDigestDestination.Arn, !GetAtt NameRemindersDestination.Arn, !GetAtt CenterMonthlyLoadDestination.Arn]}]
       Tags: [{Key: Project, Value: !Ref ProjectName}, {Key: Owner, Value: shlomo}]
 
   # מושבת (9.11.2026) לבקשת שלמה: הסיכום היומי בוטל. להפעלה מחדש: State: ENABLED.
@@ -77,3 +86,15 @@ Resources:
           RoleArn: !GetAtt CronInvokeRole.Arn
           RetryPolicy: {MaximumRetryAttempts: 0, MaximumEventAgeInSeconds: 3600}
 
+  # טעינה חודשית למוקדים: ב-1 לכל חודש, 00:30 UTC (02:30/03:30 בישראל, כבר 1 בחודש). ריצה חוזרת באותו חודש בטוחה.
+  CenterMonthlyLoadRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${ProjectName}-center-monthly-load"
+      ScheduleExpression: cron(30 0 1 * ? *)
+      State: ENABLED
+      Targets:
+        - Id: center-monthly-load
+          Arn: !GetAtt CenterMonthlyLoadDestination.Arn
+          RoleArn: !GetAtt CronInvokeRole.Arn
+          RetryPolicy: {MaximumRetryAttempts: 2, MaximumEventAgeInSeconds: 3600}
