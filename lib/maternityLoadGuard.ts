@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getClientCardFull, type NedarimCreds } from '@/lib/nedarim'
+import { alert } from '@/lib/nedarimGuard'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // חסם בבסיס הנתונים: לכל תיק יולדת שורה פעילה אחת לכל היותר (אינדקס ייחודי
@@ -44,4 +45,25 @@ export async function previousTlushStillActive(
     if (!card) return null
     return tlushimOf(card).some(t => String(t.Id ?? t.TlushId ?? '').trim() === String(tlushId).trim())
   } catch { return null }
+}
+
+/** חסם שמוחזק יותר מזה בלי טעינה מאושרת (tlush_id) נחשב תקוע. */
+export const STUCK_GUARD_AFTER_MS = 10 * 60_000
+
+/**
+ * מתריע (במנגנון ההתראות של שומר נדרים, פעם בשעה) על חסמים פעילים שאין להם
+ * tlush_id מעבר לסף. מחזיר את מזהי התיקים התקועים.
+ */
+export async function alertStuckLoadGuards(admin: SupabaseClient, now = Date.now()): Promise<string[]> {
+  const cutoff = new Date(now - STUCK_GUARD_AFTER_MS).toISOString()
+  const { data, error } = await admin.from('maternity_load_guard').select('aid_id, created_at')
+    .is('released_at', null).is('tlush_id', null).lt('created_at', cutoff)
+  if (error || !data?.length) return []
+  const ids = data.map(r => String(r.aid_id))
+  await alert('stuck-load-guard', `חסם טעינת יולדת תקוע (${ids.length})`, [
+    `יש ${ids.length} חסמי טעינה שמוחזקים יותר מ-${STUCK_GUARD_AFTER_MS / 60_000} דקות בלי טעינה מאושרת בנדרים.`,
+    `תיקים: ${ids.join(', ')}`,
+    'הטעינה לא תנסה שוב עד שהחסם ישוחרר. יש לבדוק בנדרים אם נוצר תלוש לפני שמשחררים.',
+  ])
+  return ids
 }

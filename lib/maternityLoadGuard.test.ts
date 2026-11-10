@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
 vi.mock('@/lib/nedarim', () => ({ getClientCardFull: vi.fn() }))
-import { acquireLoadGuard, tlushimOf, previousTlushStillActive } from './maternityLoadGuard'
+vi.mock('@/lib/nedarimGuard', () => ({ alert: vi.fn() }))
+import { acquireLoadGuard, tlushimOf, previousTlushStillActive, alertStuckLoadGuards } from './maternityLoadGuard'
+import { alert } from '@/lib/nedarimGuard'
 import { getClientCardFull } from '@/lib/nedarim'
 
 // מדמה אינדקס ייחודי חלקי: שורה פעילה אחת לכל aid
@@ -36,5 +38,24 @@ describe('חסם טעינה כפולה', () => {
     expect(await previousTlushStillActive({} as never, 'c', '55')).toBe(false)
     vi.mocked(getClientCardFull).mockResolvedValueOnce(null)
     expect(await previousTlushStillActive({} as never, 'c', '55')).toBeNull()
+  })
+})
+
+describe('התראה על חסם תקוע', () => {
+  const dbWith = (rows: unknown[]) => ({ from: () => {
+    const q: Record<string, unknown> = {}
+    q.select = () => q; q.is = () => q
+    q.lt = async () => ({ data: rows, error: null })
+    return q
+  } }) as never
+  it('חסם ישן בלי tlush ⇒ נשלחת התראה עם התיק', async () => {
+    const ids = await alertStuckLoadGuards(dbWith([{ aid_id: 'a1', created_at: 'x' }]))
+    expect(ids).toEqual(['a1'])
+    expect(alert).toHaveBeenCalledTimes(1)
+  })
+  it('אין חסמים תקועים ⇒ אין התראה', async () => {
+    vi.mocked(alert).mockClear()
+    expect(await alertStuckLoadGuards(dbWith([]))).toEqual([])
+    expect(alert).not.toHaveBeenCalled()
   })
 })
