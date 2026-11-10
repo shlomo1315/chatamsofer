@@ -77,12 +77,16 @@ export default function MedicalForm({ unregistered = false }: { unregistered?: b
         </div>
       </fieldset>
 
-      <Field label="הקשר למשפחה" hint="אפשר להגיש גם בלי להיות צאצא של החתם סופר.">
-        <select name="relation" className={input} defaultValue="descendant">
-          <option value="descendant">צאצא של החתם סופר</option>
-          <option value="not_descendant">לא צאצא</option>
-        </select>
-      </Field>
+      {unregistered ? (
+        <input type="hidden" name="relation" value="not_descendant" />
+      ) : (
+        <Field label="הקשר למשפחה" hint="אפשר להגיש גם בלי להיות צאצא של החתם סופר.">
+          <select name="relation" className={input} defaultValue="descendant">
+            <option value="descendant">צאצא של החתם סופר</option>
+            <option value="not_descendant">לא צאצא</option>
+          </select>
+        </Field>
+      )}
 
       <Field label="תעודת זהות" hint="מספר תעודת הזהות של המבקש, 9 ספרות.">
         <input name="id_number" inputMode="numeric" required className={input} dir="ltr" onBlur={e => checkId(e.target.value)} />
