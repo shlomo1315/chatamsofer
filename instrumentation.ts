@@ -258,6 +258,8 @@ export async function register() {
         const { getServiceClient } = await import('@/lib/apiAuth')
         const admin = getServiceClient()
         if (!admin) return
+        const { alertStuckLoadGuards } = await import('@/lib/maternityLoadGuard')
+        await alertStuckLoadGuards(admin)
         const { processAwaitingStock } = await import('@/lib/maternityCards')
         const res = await processAwaitingStock(admin)
         if (res.processed || res.failed || res.notConfigured) {

@@ -208,7 +208,7 @@ async function persist() {
 }
 
 /** מייל התראה — לכל היותר פעם בשעה לכל (ערוץ + סוג). */
-async function alert(dedupeKey: string, subject: string, lines: string[]) {
+export async function alert(dedupeKey: string, subject: string, lines: string[]) {
   const now = Date.now()
   const last = Date.parse(persisted.lastAlert?.[dedupeKey] ?? '')
   if (Number.isFinite(last) && now - last < 60 * 60_000) return
