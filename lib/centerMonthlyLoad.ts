@@ -98,14 +98,30 @@ async function ensureClient(acc: CenterAccount, creds: NonNullable<Awaited<Retur
   return id
 }
 
+/** הכרטיס כבר משויך למוקד אחר? (בדיקה מקומית לפני כל פנייה לנדרים) */
+export async function isCardTakenByOtherCenter(admin: SupabaseClient, centerId: string, card: string): Promise<boolean> {
+  const { data } = await admin.from('center_monthly_cards').select('center_id').eq('card_number', card).neq('center_id', centerId).limit(1)
+  return (data ?? []).length > 0
+}
+
+/** הכרטיס כבר מחובר ללקוח הזה בנדרים (קריאה בלבד)? מכסה ניתוק באמצע שיוך קודם: נדרים שמר והמסד לא. */
+async function cardAlreadyOnClient(creds: NonNullable<Awaited<ReturnType<typeof getNedarimCreds>>>, clientId: string, card: string): Promise<boolean> {
+  try {
+    const full = await getClientCardFull(creds, clientId)
+    const cards = Array.isArray((full as { Cards?: unknown } | null)?.Cards) ? ((full as { Cards: Record<string, unknown>[] }).Cards) : []
+    return cards.some(c => !c.RemovedDate && [c.MagneticCard, c.CardNumber].some(v => String(v ?? '').replace(/\D/g, '') === card))
+  } catch { return false }
+}
+
 /** שיוך הכרטיס פעם אחת: מחבר בנדרים ורק אז שומר. */
-export async function linkCenterCard(admin: SupabaseClient, acc: CenterAccount, card: string): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function linkCenterCard(admin: SupabaseClient, acc: CenterAccount, card: string): Promise<{ ok: true } | { ok: false; error: string; taken?: boolean }> {
+  if (await isCardTakenByOtherCenter(admin, acc.center_id, card)) return { ok: false, error: 'הכרטיס כבר משויך למוקד אחר', taken: true }
   const creds = await getNedarimCreds()
   if (!creds) return { ok: false, error: 'נדרים לא מוגדר' }
   try {
     const clientId = await ensureClient(acc, creds)
     const r = await setMagneticCard(creds, clientId, card)
-    if (!r.ok) return { ok: false, error: r.message || 'שיוך הכרטיס בנדרים נכשל' }
+    if (!r.ok && !(await cardAlreadyOnClient(creds, clientId, card))) return { ok: false, error: r.message || 'שיוך הכרטיס בנדרים נכשל' }
     const { error } = await admin.from('center_monthly_cards').update({
       card_number: card, nedarim_client_id: clientId, card_linked_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     }).eq('center_id', acc.center_id)
@@ -114,6 +130,21 @@ export async function linkCenterCard(admin: SupabaseClient, acc: CenterAccount, 
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'שגיאה' }
   }
+}
+
+/** יתרת הכרטיס בנדרים באגורות (קריאה בלבד). null כשאין כרטיס, נדרים לא מגיב או התשובה לא תקינה. */
+export async function getCenterBalanceAgorot(acc: Pick<CenterAccount, 'nedarim_client_id'>, timeoutMs = 4000): Promise<number | null> {
+  if (!acc.nedarim_client_id) return null
+  try {
+    const creds = await getNedarimCreds()
+    if (!creds) return null
+    const r = await Promise.race([
+      getClientCard(creds, acc.nedarim_client_id),
+      new Promise<null>(res => setTimeout(() => res(null), timeoutMs)),
+    ])
+    if (!r || r.totalFreeAmount == null || r.totalFreeAmount < 0) return null
+    return Math.round(r.totalFreeAmount * 100)
+  } catch { return null }
 }
 
 export type LoadResult = 'loaded' | 'already' | 'busy' | 'no_stock' | 'error'
