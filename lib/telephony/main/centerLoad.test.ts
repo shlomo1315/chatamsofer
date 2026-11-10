@@ -41,26 +41,52 @@ describe('שיוך ראשון של כרטיס', () => {
     expect(linkCenterCard).not.toHaveBeenCalled()
   })
   it('מספר קצר נדחה', async () => {
-    expect(text(await run({ center_card: '123' }))).toContain('16 ספרות')
+    expect(text(await run({ center_card1: '123' }))).toContain('16 ספרות')
     expect(linkCenterCard).not.toHaveBeenCalled()
   })
   it('לפני אישור לא משייך (ניתוק באמצע לא משאיר שיוך)', async () => {
-    await run({ center_card: CARD })
+    await run({ center_card1: CARD })
     expect(linkCenterCard).not.toHaveBeenCalled()
   })
   it('אישור 1 משייך פעם אחת', async () => {
-    await run({ center_card: CARD, center_confirm: '1' })
+    await run({ center_card1: CARD, center_confirm1: '1' })
     expect(linkCenterCard).toHaveBeenCalledTimes(1)
   })
   it('כרטיס שכבר משויך למוקד אחר: הודעה ברורה, בלי טעינה', async () => {
     state.link = { ok: false, error: 'x', taken: true }
-    const r = await run({ center_card: CARD, center_confirm: '1' })
+    const r = await run({ center_card1: CARD, center_confirm1: '1' })
     expect(text(r)).toContain('משויך למוקד אחר')
     expect(runMonthlyLoad).not.toHaveBeenCalled()
   })
   it('כשל בשיוך (נדרים): פנו למזכירות', async () => {
     state.link = { ok: false, error: 'נדרים' }
-    expect(text(await run({ center_card: CARD, center_confirm: '1' }))).toContain('פנו למזכירות')
+    expect(text(await run({ center_card1: CARD, center_confirm1: '1' }))).toContain('פנו למזכירות')
+  })
+})
+
+describe('אישור הכרטיס בשיחה אמיתית (באג: האישור לא הגיע לשרת)', () => {
+  it('אף תשובה לא שולחת removeParams שמוחק את משתנה האישור', async () => {
+    const { centerTurn, CENTER_PARAMS } = await import('./centerLoad')
+    const st = { cardNumber: null, loadedThisMonth: false }
+    const steps = [{}, { center_card1: '123' }, { center_card1: CARD }, { center_card1: CARD, center_confirm1: '2' }, { center_card1: CARD, center_confirm1: '2', center_card2: CARD }]
+    for (const p of steps) {
+      const r = centerTurn(p, st).result as { removeParams?: string[] }
+      expect(r.removeParams ?? []).toEqual([])
+    }
+    expect(CENTER_PARAMS).toContain('center_confirm1')
+  })
+  it('תיקון (2) פותח ניסיון חדש בשמות חדשים, ואישור בו משייך', async () => {
+    const { centerTurn } = await import('./centerLoad')
+    const st = { cardNumber: null, loadedThisMonth: false }
+    expect(JSON.stringify(centerTurn({ center_card1: CARD, center_confirm1: '2' }, st).result)).toContain('center_card2')
+    const other = '9999888877776666'
+    expect(JSON.stringify(centerTurn({ center_card1: CARD, center_confirm1: '2', center_card2: other }, st).result)).toContain('center_confirm2')
+    expect(centerTurn({ center_card1: CARD, center_confirm1: '2', center_card2: other, center_confirm2: '1' }, st).link).toBe(other)
+  })
+  it('אחרי 3 ניסיונות: סיום מנומס', async () => {
+    const { centerTurn } = await import('./centerLoad')
+    const p = { center_card1: '1', center_card2: '1', center_card3: '1' }
+    expect(JSON.stringify(centerTurn(p, { cardNumber: null, loadedThisMonth: false }).result)).toContain('יותר מדי ניסיונות')
   })
 })
 

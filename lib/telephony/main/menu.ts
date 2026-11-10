@@ -8,11 +8,10 @@ import { findCenterByPhone, normalizeCallerPhone } from '@/lib/centerMonthlyLoad
 import { getMainMenuMessages } from '@/lib/mainMenuPhone'
 import { say, menu, goodbye, message } from '../modules'
 import type { TlHandler } from '../types'
-import { CL_CARD, CL_CONFIRM, CL_GO, centerLoad } from './centerLoad'
+import { CENTER_PARAMS, centerLoad } from './centerLoad'
 import { holidays } from './holidays'
 import { maternity } from './maternity'
 
-const CENTER_PARAMS = [CL_CARD, CL_CONFIRM, CL_GO]
 const NOT_CENTER = 'המספר שממנו התקשרתם אינו רשום כמוקד מורשה לטעינה. לרישום המספר פנו למזכירות'
 
 /** המתקשר הוא מוקד פעיל עם טלפון מורשה? מחזיר את שם המוקד ('' אם אין שם), או null. תקלה במסד = null (ממשיכים לתפריט הרגיל). */
