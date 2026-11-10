@@ -9,8 +9,8 @@ describe('validateMedical', () => {
   })
   it('לא צאצא: דורש שם, כתובת וצילום ת.ז.', () => {
     expect(validateMedical(base, false, false, 1)).toMatch(/שם מלא/)
-    const full = { ...base, fullName: 'משה כהן', address: 'הרצל 1', city: 'בני ברק', referrer: 'הרב לוי' }
-    expect(validateMedical(full, false, false, 1)).toMatch(/תעודת זהות/)
+    const full = { ...base, idNumber: '123456782', email: 'a@b.co', birthDate: '1980-05-01', gender: 'male', maritalStatus: 'נשואים', fullName: 'משה כהן', address: 'הרצל 1', city: 'בני ברק', referrer: 'הרב לוי' }
+    expect(validateMedical(full, false, false, 1)).toMatch(/צילום תעודת זהות/)
     expect(validateMedical(full, false, true, 1)).toBeNull()
   })
   it('דורש מסמך רפואי וסכום חיובי', () => {
@@ -40,7 +40,7 @@ describe('finalMessageDraft', () => {
 })
 
 describe('validateMedical — מחלקת סיוע', () => {
-  const ext = { ...base, fullName: 'משה כהן', address: 'הרצל 1', city: 'בני ברק' }
+  const ext = { ...base, idNumber: '123456782', email: 'a@b.co', birthDate: '1980-05-01', gender: 'male', maritalStatus: 'נשואים', fullName: 'משה כהן', address: 'הרצל 1', city: 'בני ברק' }
   it('לא רשום באיגוד: דורש רב או ממליץ', () => {
     expect(validateMedical(ext, false, true, 1)).toMatch(/רב או ממליץ/)
     expect(validateMedical({ ...ext, referrer: 'הרב לוי' }, false, true, 1)).toBeNull()
@@ -53,5 +53,23 @@ describe('validateMedical — מחלקת סיוע', () => {
   it('סוג סיוע לא מוכר חוזר לרפואי', () => {
     expect(parseAidType('x')).toBe('medical')
     expect(parseAidType('widow')).toBe('widow')
+  })
+})
+
+describe('מגיש שלא רשום באיגוד: פרטים מלאים', () => {
+  const base = { idNumber: '123456782', fullName: 'ישראל ישראלי', phone: '0501234567', email: 'a@b.co', address: 'הרצל 1', city: 'בני ברק', amount: 500, reason: 'סיבה', aidType: 'medical' as const, referrer: 'הרב כהן', birthDate: '1980-05-01', gender: 'male', maritalStatus: 'נשואים' }
+  it('מקבל בקשה מלאה', () => expect(validateMedical(base, false, true, 1)).toBeNull())
+  it('דורש מייל, תאריך לידה, מין ומצב משפחתי', () => {
+    expect(validateMedical({ ...base, email: '' }, false, true, 1)).toBeTruthy()
+    expect(validateMedical({ ...base, birthDate: '' }, false, true, 1)).toBeTruthy()
+    expect(validateMedical({ ...base, gender: '' }, false, true, 1)).toBeTruthy()
+    expect(validateMedical({ ...base, maritalStatus: '' }, false, true, 1)).toBeTruthy()
+  })
+  it('דוחה ת.ז. עם ספרת ביקורת שגויה ות.ז. בן זוג שגויה', () => {
+    expect(validateMedical({ ...base, idNumber: '123456789' }, false, true, 1)).toBeTruthy()
+    expect(validateMedical({ ...base, spouseId: '111' }, false, true, 1)).toBeTruthy()
+  })
+  it('רשום באיגוד לא נדרש לפרטים הנוספים (רגרסיה)', () => {
+    expect(validateMedical({ ...base, email: '', birthDate: '', gender: '', maritalStatus: '', idNumber: '12345' }, true, false, 1)).toBeNull()
   })
 })

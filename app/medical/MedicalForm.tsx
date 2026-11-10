@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import CityStreetPicker from '@/components/ui/CityStreetPicker'
 
 type Known = 'unknown' | 'yes' | 'no'
 
@@ -22,6 +23,8 @@ export default function MedicalForm() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
+  const [city, setCity] = useState('')
+  const [address, setAddress] = useState('')
   const lastId = useRef('')
 
   // בודק רק אם המספר רשום (בלי פרטים אישיים), כדי לדעת אילו שדות להציג
@@ -93,11 +96,39 @@ export default function MedicalForm() {
           <Field label="שם מלא" hint="שם פרטי ושם משפחה, כפי שמופיע בתעודת הזהות.">
             <input name="full_name" required className={input} />
           </Field>
-          <Field label="כתובת" hint="רחוב ומספר בית.">
-            <input name="address" required className={input} />
+          <Field label="תאריך לידה" hint="תאריך הלידה של המבקש.">
+            <input name="birth_date" type="date" required className={input} dir="ltr" />
           </Field>
-          <Field label="עיר" hint="עיר המגורים.">
-            <input name="city" required className={input} />
+          <Field label="מין" hint="מין המבקש.">
+            <select name="gender" required defaultValue="" className={input}>
+              <option value="" disabled>בחרו</option>
+              <option value="male">זכר</option>
+              <option value="female">נקבה</option>
+            </select>
+          </Field>
+          <Field label="מצב משפחתי" hint="מצב משפחתי נוכחי.">
+            <select name="marital_status" required defaultValue="" className={input}>
+              <option value="" disabled>בחרו</option>
+              {['נשואים', 'רווק/ה', 'אלמן/ה', 'גרוש/ה'].map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </Field>
+          <Field label="מספר ילדים" hint="כולל ילדים בוגרים.">
+            <input name="children_count" type="number" inputMode="numeric" min={0} max={40} defaultValue={0} className={input} dir="ltr" />
+          </Field>
+          <Field label="שם בן/בת הזוג (לא חובה)" hint="אם יש.">
+            <input name="spouse_name" className={input} />
+          </Field>
+          <Field label="ת.ז. בן/בת הזוג (לא חובה)" hint="9 ספרות.">
+            <input name="spouse_id_number" inputMode="numeric" className={input} dir="ltr" />
+          </Field>
+          <div>
+            <span className="mb-1 block text-sm font-semibold text-slate-800">כתובת מגורים</span>
+            <CityStreetPicker city={city} address={address} onCityChange={setCity} onAddressChange={setAddress} cityRequired addressRequired />
+            <input type="hidden" name="city" value={city} />
+            <input type="hidden" name="address" value={address} />
+          </div>
+          <Field label="טלפון נוסף (לא חובה)" hint="מספר נוסף ליצירת קשר.">
+            <input name="phone2" type="tel" className={input} dir="ltr" />
           </Field>
           <Field label="רב או ממליץ" hint="שם רב או אדם מוכר שיכול להמליץ ולאשר את הפרטים.">
             <input name="referrer" required className={input} />
@@ -111,8 +142,8 @@ export default function MedicalForm() {
       <Field label="טלפון" hint="מספר שנוכל לחזור אליו.">
         <input name="phone" type="tel" required className={input} dir="ltr" />
       </Field>
-      <Field label="מייל (לא חובה)" hint="לשליחת הודעה על הבקשה.">
-        <input name="email" type="email" className={input} dir="ltr" />
+      <Field label={known === 'no' ? 'מייל' : 'מייל (לא חובה)'} hint="לשליחת הודעה על הבקשה.">
+        <input name="email" type="email" required={known === 'no'} className={input} dir="ltr" />
       </Field>
       <Field label="פירוט הבקשה" hint={aidType === "medical" ? "מה המצב הרפואי ולמה נדרש הסיוע." : "ספרו על מצב המשפחה ולמה נדרש הסיוע."}>
         <textarea name="reason" required rows={5} maxLength={3000} className={input} />
