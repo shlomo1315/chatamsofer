@@ -83,6 +83,11 @@ export function resolveMailbox(input: RouteInput): string {
   const cc = (input.cc ?? []).filter(Boolean).map(applyAlias)
   const all = [...direct, ...cc]
 
+  // (0) בקשה — תמיד לאיגוד, גם כשנשלחה ישירות לתיבת מחלקה (למשל y@) או
+  //     הגיעה דרך כתובת ה-copy. המערכת שולפת ומטפלת בה בעצמה, ואין לה
+  //     מקום בתיבה האישית של מחלקה.
+  if (input.isRequest) return 'igud@chasamsofer.info'
+
   // (1) תיבה מוכרת בנמען ישיר — הקובע. Cc נבדק רק אם אין אף נמען ישיר מוכר.
   //
   // 🔴 תיבה *ייעודית* גוברת על office, גם כשהיא מופיעה אחריה ברשימה.
@@ -101,10 +106,6 @@ export function resolveMailbox(input: RouteInput): string {
     list.find(a => knownBox(a, input.customEmails))
   const knownDept = pick(direct) ?? pick(cc)
   if (knownDept) return knownDept
-
-  // (2) בקשה — תמיד לאיגוד, גם כשהגיעה דרך כתובת ה-copy.
-  //     בלי זה היא נופלת ל"משרד ראשי" ומייל הדחייה לא נשלח.
-  if (input.isRequest) return 'igud@chasamsofer.info'
 
   // (3) כתובת ארגונית אמיתית שטרם הוגדרה כתיבה — נשמרת תחת עצמה,
   //     ולא נזרקת ל-office.
