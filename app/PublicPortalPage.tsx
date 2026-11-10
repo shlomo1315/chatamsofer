@@ -1296,6 +1296,27 @@ const HP_CSS = `
 .hp-root .hp-go:hover svg{transform:translateX(-3px)}
 .hp-root .hp-trust{display:flex;justify-content:center;align-items:center;gap:6px;color:var(--ink-3);font-size:var(--t1);margin-top:20px}
 .hp-root .hp-trust svg{color:var(--ok)}
+.hp-root .hp-flow{flex-direction:column;gap:20px}
+.hp-root .hp-flow>*{width:100%;max-width:448px}
+.hp-root .hp-flow button svg{flex:none}
+.hp-root .hp-flow{font-family:inherit}
+.hp-root .hp-flow h2{color:var(--ink);letter-spacing:-.01em}
+.hp-root .hp-flow>div>.text-center:first-child>div:first-child{width:96px;height:96px;margin:0 auto 20px;border-radius:50%;padding:6px;background:#fff;box-shadow:0 0 0 1px rgba(184,145,58,.35),0 0 0 7px rgba(255,255,255,.7),0 0 0 8px rgba(184,145,58,.18),0 18px 36px -16px rgba(17,26,54,.35)}
+.hp-root .hp-flow>div>.text-center:first-child h2{font-size:var(--t5);font-weight:800;line-height:1.15}
+.hp-root .hp-flow .rounded-2xl.bg-white{border:1px solid var(--line);border-radius:var(--r2);padding:32px;box-shadow:0 1px 0 rgba(255,255,255,.8) inset,0 1px 2px rgba(17,26,54,.04),0 24px 48px -24px rgba(40,38,120,.18)}
+.hp-root .hp-flow button[class*="bg-gradient-to-b"]{width:100%;min-height:56px;border:0;border-radius:14px;font-size:var(--t3);font-weight:700;color:#fff;background:linear-gradient(180deg,#4A47D2,var(--act-2));box-shadow:0 1px 0 rgba(255,255,255,.25) inset,0 10px 24px -10px rgba(47,43,168,.55);transform:none}
+.hp-root .hp-flow button[class*="bg-gradient-to-b"]:hover{filter:brightness(1.06);transform:none}
+.hp-root .hp-flow button[class*="bg-gradient-to-b"]:disabled{opacity:.7}
+.hp-root .hp-flow button.hp-sec{background:#fff;color:var(--act-2);border:1px solid var(--line-2);box-shadow:none;min-height:50px;font-size:var(--t2);font-weight:600;filter:none}
+.hp-root .hp-flow button.hp-sec:hover{background:#F6F5FF;border-color:var(--act);filter:none}
+.hp-root .hp-flow button[class*="border-indigo-200"]{border-color:var(--line-2);color:var(--act-2);border-radius:14px;min-height:50px;background:#fff}
+.hp-root .hp-flow button[class*="border-indigo-200"]:hover{background:#F6F5FF;border-color:var(--act)}
+.hp-root .hp-flow input{border-color:var(--line-2);border-radius:14px;background:#FCFCFA;min-height:52px}
+.hp-root .hp-flow input:focus{outline:0;border-color:var(--act);background:#fff;box-shadow:0 0 0 4px rgba(62,59,196,.12)}
+.hp-root .hp-flow .bg-indigo-100{background:#EEF0FF}
+.hp-root .hp-flow .text-indigo-600,.hp-root .hp-flow .text-indigo-800{color:var(--act-2)}
+.hp-root .hp-flow .bg-amber-50{background:var(--gold-soft);border-color:#EEDDB0}
+.hp-root .hp-flow .text-amber-700,.hp-root .hp-flow .text-amber-800{color:var(--gold-ink)}
 .hp-root>footer{background:transparent;border-top:1px solid rgba(17,26,54,.06);padding:20px}
 .hp-root>footer p,.hp-root>footer a{font-size:var(--t1);color:var(--ink-3)}
 .hp-root>footer a{color:var(--ink);font-weight:700}
@@ -2919,6 +2940,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // עד כה נדרש אישור לידה בלבד, ולכן משפחה מאושרת הגישה בקשה בלי שום מסמך
   // מזהה והמסמכים נאספו ידנית מחוץ למערכת. אותו כלל שכבר חל על הלוואות.
   const isBirthRequest = step === 'new-birth' || step === 'new-silent-birth'
+  // שלבי הכניסה שלפני האזור האישי — כולם בעיצוב א׳ · מלוטש
+  const hpShell = step === 'id-lookup' || step === 'portal-auth' || step === 'not-found' || step === 'found-as-child'
   const needsIdWithRequest = !!beneficiary
     && (!isApproved || isBirthRequest)
     && requiredDocs.some(d => !existingDocs[d])
@@ -3791,8 +3814,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
 
   return (
     <EditProvider editing={!!editMode} texts={texts ?? {}} setKey={(k, v) => onTextChange?.(k, v)}>
-    <div className={`min-h-screen flex flex-col ${step === 'id-lookup' ? 'hp-root' : 'bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-100'}`} dir="rtl">
-      {step === 'id-lookup' && (<><style>{HP_CSS}</style><div className="hp-halo" /></>)}
+    <div className={`min-h-screen flex flex-col ${hpShell ? 'hp-root' : 'bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-100'}`} dir="rtl">
+      {hpShell && (<><style>{HP_CSS}</style><div className="hp-halo" /></>)}
 
       {/* חלון הצהרת ייחוס — לפני בחירת סדר הדורות (טופס ציבורי) */}
       {declModalOpen && (
@@ -3969,7 +3992,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         </div>
       </header>
 
-      <main className={step === 'id-lookup' ? 'hp-main' : `mx-auto px-4 py-8 ${step === 'dashboard' ? 'max-w-2xl lg:max-w-[1200px]' : 'max-w-2xl'}`}>
+      <main className={step === 'id-lookup' ? 'hp-main' : hpShell ? 'hp-main hp-flow' : `mx-auto px-4 py-8 ${step === 'dashboard' ? 'max-w-2xl lg:max-w-[1200px]' : 'max-w-2xl'}`}>
 
         {/* ─── Step: ID Lookup ─── (גרסה א׳ · מלוטש — סגנון תחת .hp-root) */}
         {step === 'id-lookup' && (
@@ -4179,7 +4202,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   ) : (
                     <>
                       <button type="button" onClick={sendBenefitsLink} disabled={benefitsSending}
-                        className="w-full flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:opacity-50 text-white font-semibold rounded-xl px-4 py-3 transition-all duration-150 text-sm">
+                        className="hp-sec w-full flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:opacity-50 text-white font-semibold rounded-xl px-4 py-3 transition-all duration-150 text-sm">
                         {benefitsSending ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />}
                         <EditableText k="already.benefits" />
                       </button>
