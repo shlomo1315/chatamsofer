@@ -27,6 +27,8 @@ const files = (f: FormData, k: string) =>
 const json = (f: FormData, k: string) => { try { return JSON.parse(str(f, k, 20000)) } catch { return null } }
 
 const EXTRA_DOC = 'מסמך נוסף'
+const SIGNATURE_DOC = 'חתימת המגיש'
+const SIGNATURE_MAX = 1024 * 1024
 const MEDICAL_DOCS = ['סיכום רפואי או מכתב רופא', 'הצעת מחיר או חשבונית לטיפול']
 
 // מסמכים מהאשף: doc_<i> עם doc_label_<i> מתוך רשימת המסמכים של הסיבה. התווית נבדקת בשרת.
@@ -91,14 +93,24 @@ export async function POST(request: NextRequest) {
   // האשף החדש שולח מסמכים לפי תווית; הטופס הישן שלח id_card ו-medical
   const wizard = labeledDocs(form, input.aidType)
   if (!wizard) return NextResponse.json({ error: 'סוג מסמך לא מוכר' }, { status: 400 })
+  // הצהרת פרטיות וחתימה על המסך: חובה בכל הגשה מהאשף
+  if (str(form, 'privacy_consent') !== '1') {
+    return NextResponse.json({ error: 'יש לאשר את ההצהרה ואת מדיניות הפרטיות.' }, { status: 400 })
+  }
+  const signature = files(form, 'signature')[0]
+  if (!signature || signature.size > SIGNATURE_MAX
+    || !fileSignatureMatches('png', new Uint8Array(await signature.slice(0, 16).arrayBuffer()))) {
+    return NextResponse.json({ error: 'יש לחתום על הבקשה.' }, { status: 400 })
+  }
   const all = [
     ...wizard,
+    { f: new File([signature], 'signature.png', { type: 'image/png' }), kind: 'other' as const, label: SIGNATURE_DOC },
     ...files(form, 'id_card').map(f => ({ f, kind: 'id_card' as const, label: ID_CARD_DOC })),
     ...files(form, 'medical').map(f => ({ f, kind: 'medical' as const, label: '' })),
   ]
   const idCount = all.filter(d => d.kind === 'id_card').length
   const medicalCount = all.filter(d => d.kind === 'medical').length
-  if (idCount > 1 || all.length > MEDICAL_MAX_DOCS + 4) {
+  if (idCount > 1 || all.length > MEDICAL_MAX_DOCS + 5) {
     return NextResponse.json({ error: 'יותר מדי מסמכים בבקשה אחת' }, { status: 400 })
   }
   if (input.idNumber.length >= 5 && !rateLimit(`medical-submit-id:${input.idNumber}`, 3, 24 * 60 * 60 * 1000)) {

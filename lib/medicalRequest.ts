@@ -15,7 +15,7 @@ export const AID_TYPES: AidType[] = ['medical', 'widow', 'orphans', 'econ', 'oth
 export const parseAidType = (v: unknown): AidType => AID_TYPES.includes(v as AidType) ? (v as AidType) : 'medical'
 
 export const GENDERS = ['male', 'female']
-export const MARITAL_STATUSES = ['נשואים', 'רווק/ה', 'אלמן/ה', 'גרוש/ה']
+export const MARITAL_STATUSES = ['נשואים', 'גרוש', 'גרושה', 'אלמן', 'אלמנה']
 
 export interface MedicalInput {
   idNumber: string

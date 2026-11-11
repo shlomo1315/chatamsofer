@@ -281,3 +281,32 @@
 .aidui .tabs button.on{color:var(--navy);font-weight:700;border-bottom-color:var(--gold)}
 .aidui .mgrline button{border:0;background:none;padding:0;color:var(--navy-3);font-weight:500;text-decoration:underline}
 @media (max-width:600px){.aidui .mlist{display:flex}}
+/* טופס בקשת סיוע: שאלת פתיחה, כניסה, אימות שדות, חתימה וחלוניות */
+.aidui .pub-grid>*{min-width:0}
+.aidui .ferr{display:block;color:var(--no);font-size:var(--t-xs);font-weight:700;margin-top:4px}
+.aidui .inp[aria-invalid=true]{border-color:var(--no);box-shadow:inset 0 0 0 1px var(--no)}
+.aidui .notice{margin:0 0 var(--s5);padding:var(--s3) var(--s4);border:1px solid var(--gold);border-inline-start-width:4px;border-radius:var(--r1);background:#FBF6E9;font-weight:700;font-size:var(--t-sm)}
+.aidui .seg{display:flex;flex-wrap:wrap;gap:var(--s2)}
+.aidui .seg button{border:1px solid var(--line);background:#fff;border-radius:var(--r1);padding:var(--s2) var(--s4);font-size:var(--t-sm);color:var(--ink);min-height:40px}
+.aidui .seg button[aria-pressed=true]{background:var(--navy);border-color:var(--navy);color:#fff;font-weight:700}
+.aidui .seg button:disabled{opacity:.6}
+.aidui .login-row{display:flex;gap:var(--s3);align-items:end;flex-wrap:wrap}
+.aidui .login-row .field{flex:1;min-width:200px}
+.aidui .reasons.gate{grid-template-columns:1fr 1fr;margin-top:var(--s5)}
+.aidui .reasons.gate .reason{min-height:96px;padding:var(--s4)}
+.aidui .reasons.gate .reason b{font-size:var(--t-lg)}
+.aidui .reasons.gate .reason:hover{border-color:var(--navy)}
+.aidui .signpad{position:relative;border:1.5px dashed var(--line);border-radius:var(--r1);background:#fff}
+.aidui .signpad canvas{display:block;width:100%;height:160px;touch-action:none;cursor:crosshair;border-radius:var(--r1)}
+.aidui .signclear{position:absolute;top:var(--s2);inset-inline-start:var(--s2);border:1px solid var(--line);background:#fff;border-radius:var(--r1);padding:2px var(--s3);font-size:var(--t-xs);color:var(--muted)}
+.aidui .modal-b{padding:var(--s6);overflow:auto}
+.aidui .modal-b h2{font-size:var(--t-xl);font-weight:900;margin:0 0 var(--s4)}
+.aidui .modal-b p{margin:0 0 var(--s3);line-height:1.7}
+.aidui .modal-no b{font-size:var(--t-xl);color:var(--navy)}
+.aidui .modal-a{display:flex;gap:var(--s3);margin-top:var(--s5);flex-wrap:wrap}
+.aidui .drawer[role=dialog]{width:min(560px,calc(100% - 24px))}
+@media (max-width:600px){
+.aidui .reasons.gate{grid-template-columns:1fr}
+.aidui .modal-b{padding:var(--s5)}
+.aidui .login-row .btn{width:100%}
+}
