@@ -42,3 +42,21 @@ describe('מייל אישור לידה לפי סוג הבקשה', () => {
     expect(m.html).toContain('מזל טוב')
   })
 })
+
+describe('מייל אישור לידה כשאין מלאי כרטיסים', () => {
+  const noStock = (o: { wantsCard: boolean; wantsRecovery: boolean }) =>
+    birthApprovedEmail(ben as never, birth, { centers, cardInStock: false, ...o })
+  const text = (html: string) => html.replace(/<[^>]+>/g, ' ')
+
+  it('לא ביקשה כרטיס: אין שום אזכור של כרטיס מזון או "יישלח בהמשך"', () => {
+    const m = noStock({ wantsCard: false, wantsRecovery: true })
+    expect(text(m.html)).not.toContain('כרטיס')
+    expect(text(m.html)).not.toContain('יישלח')
+    expect(m.html).toContain('שובר ההבראה')
+    expect(m.html).toContain('טלזסטון')
+  })
+  it('ביקשה כרטיס: ממשיך להופיע "יישלח בהמשך"', () => {
+    const m = noStock({ wantsCard: true, wantsRecovery: true })
+    expect(m.html).toContain('כרטיס מזון — יישלח בהמשך')
+  })
+})
