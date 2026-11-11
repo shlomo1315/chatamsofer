@@ -124,11 +124,6 @@ export interface LinkCardResult {
   error?: string
 }
 
-// נדרים מנסח "הכרטיס כבר משויך למשפחה זו" בכמה דרכים — זיהוי רחב בכוונה, כי
-// המשמעות זהה: המטרה הושגה.
-const isAlreadyMsg = (m: string) =>
-  /משפחה\s*זו|כבר\s*(מוגדר|מוגד|משוי|משויך)|(מוגדר|משויך|משוי)\S*\s*למשפחה/.test(m)
-
 /**
  * שיוך כרטיס בנדרים + שמירה על שורת הנרשם.
  *
@@ -313,7 +308,7 @@ export async function linkHolidayCard(
 
   if (!ok) {
     // ייתכן שנדרים כן קישר והחזיר שגיאה — מאמתים בשליפה חוזרת לפני דיווח כשל
-    ok = isAlreadyMsg(message) || await cardLinkedInNedarim(creds, nedarimId, digits)
+    ok = await cardLinkedInNedarim(creds, nedarimId, digits)
   }
   if (!ok) {
     console.error(`[holidayCards] setMagneticCard failed: ${message}`)

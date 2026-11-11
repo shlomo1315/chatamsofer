@@ -186,7 +186,8 @@ async function doLink({ aid, family, familyName, card, caller, callId, end }: Li
   }
 
   // נדרים לעיתים משייך ומחזיר שגיאה — "כבר משויך" או כרטיס שמופיע אצלם = הצלחה.
-  const already = !ok && (isAlreadyMsg(msg) || (await cardLinkedInNedarim(creds, nedarimId, card)))
+  // 🔴 הודעת "כבר משויך" לבדה אינה הוכחה (ייתכן שהכרטיס אצל משפחה אחרת, והודעת "אין כרטיסים למשפחה זו" אף היא תואמת) — רק אימות מול נדרים.
+  const already = !ok && (await cardLinkedInNedarim(creds, nedarimId, card))
   if (!ok && !already) {
     console.error(`[telephony:main/maternity] setMagneticCard failed: ${msg}`)
     await logActivity('phone_error', 'maternity_aid', aid.id, {
@@ -209,8 +210,6 @@ async function doLink({ aid, family, familyName, card, caller, callId, end }: Li
   console.log(`[telephony:main/maternity] card linked aid=${aid.id} firstTime=${firstTime} already=${already}`)
   return end('link_success', { center: centerName })
 }
-
-const isAlreadyMsg = (m: string) => /משפחה\s*זו|כבר\s*(מוגדר|מוגד|משוי|משויך)|(מוגדר|משויך|משוי)\S*\s*למשפחה/.test(m)
 
 async function cardLinkedInNedarim(creds: NonNullable<Awaited<ReturnType<typeof getNedarimCreds>>>, clientId: string, card: string) {
   try {
