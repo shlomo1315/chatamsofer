@@ -4,8 +4,8 @@ import { requirePermission, forbidden } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
-import { financialAidDecisionEmail } from '@/lib/emailTemplates'
-import { ensureEmailTexts } from '@/lib/emailTextsStore'
+import { financialAidApplicantEmail } from '@/lib/emailTemplates'
+import { aidPersonName, type AidRowForMail } from '@/lib/aidDepartmentV2'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,61 +16,94 @@ function getAdminClient() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-// עדכון ידני של החלטה (אישור עם סכום / דחייה / החזרה לממתין) + הודעה למבקש.
+const STATUSES = ['approved', 'rejected', 'pending', 'inquiry'] as const
+
+// המזכירות שומרת סטטוס (או רק הערה פנימית). בסטטוס סופי נשלח מייל למגיש.
 export async function POST(request: NextRequest) {
-  await ensureEmailTexts()
   const staff = await requirePermission('financial_aid', 'edit')
   if (!staff) return forbidden()
-  const { id, status, amount } = await request.json()
-  if (!id || !['approved', 'rejected', 'pending'].includes(status)) return NextResponse.json({ error: 'נתונים חסרים' }, { status: 400 })
+  const body = await request.json().catch(() => ({}))
+  const id = String(body.id ?? '')
+  if (!id) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
 
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  // לא ניתן לאשר בקשת סיוע למשפחה שטרם אושרה במערכת
-  if (status === 'approved') {
-    const { data: chk } = await admin
-      .from('financial_aid_requests')
-      .select('beneficiary_id, beneficiary:beneficiaries(eligibility_status)')
-      .eq('id', id).maybeSingle()
-    const elig = ((chk as Record<string, unknown> | null)?.beneficiary as { eligibility_status?: string } | undefined)?.eligibility_status
-    // בקשה ציבורית ממי שאינו רשום אין לה משפחה לאשר
-    const hasBen = !!(chk as { beneficiary_id?: string | null } | null)?.beneficiary_id
-    if (hasBen && elig !== 'approved') return NextResponse.json({ error: 'המשפחה טרם אושרה במערכת. יש לאשר את המשפחה תחילה.' }, { status: 400 })
+  // שמירת הערת המזכירות בלבד
+  if (body.status === undefined && typeof body.notes === 'string') {
+    const { error } = await admin.from('financial_aid_requests').update({ notes: body.notes.slice(0, 2000), updated_at: new Date().toISOString() }).eq('id', id)
+    if (error) return NextResponse.json({ error: 'שגיאה בשמירה' }, { status: 500 })
+    return NextResponse.json({ ok: true })
   }
 
-  const { data: prev } = await admin.from('financial_aid_requests').select('status, source').eq('id', id).maybeSingle()
+  const status = body.status as (typeof STATUSES)[number]
+  if (!STATUSES.includes(status)) return NextResponse.json({ error: 'סטטוס לא חוקי' }, { status: 400 })
+  const amount = status === 'approved' ? Math.round(Number(body.amount)) : null
+  if (status === 'approved' && !(amount && amount > 0 && amount < 10_000_000)) return NextResponse.json({ error: 'יש להזין סכום מאושר' }, { status: 400 })
+  const note = String(body.note ?? '').trim().slice(0, 1000)
 
-  const { error } = await admin.from('financial_aid_requests').update({
-    status,
-    amount: status === 'approved' ? (Number(amount) || 0) : null,
-    reviewed_by: staff.userId,
-    updated_at: new Date().toISOString(),
-  }).eq('id', id)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  const { data: req } = await admin
+    .from('financial_aid_requests')
+    .select('*, beneficiary:beneficiaries(full_name, family_name, email, marital_status, eligibility_status)')
+    .eq('id', id).maybeSingle()
+  if (!req) return NextResponse.json({ error: 'הבקשה לא נמצאה' }, { status: 404 })
+  const r = req as Record<string, unknown> & { status?: string; beneficiary_id?: string | null; applicant_email?: string | null; aid_type?: string | null; request_no?: number | null; applicant_details?: { marital_status?: string } | null }
+  const benRaw = r.beneficiary
+  const ben = (Array.isArray(benRaw) ? benRaw[0] : benRaw) as { full_name?: string; family_name?: string; email?: string; marital_status?: string; eligibility_status?: string } | undefined
+
+  if (status === 'approved' && r.beneficiary_id && ben?.eligibility_status !== 'approved') {
+    return NextResponse.json({ error: 'המשפחה טרם אושרה במערכת. יש לאשר את המשפחה תחילה.' }, { status: 400 })
+  }
+
+  const final = status === 'approved' || status === 'rejected'
+  const buildMail = () => {
+    const marital = ben?.marital_status ?? r.applicant_details?.marital_status ?? ''
+    return financialAidApplicantEmail({
+      name: aidPersonName({ ...(r as unknown as AidRowForMail), beneficiary: ben ?? null }),
+      female: /אלמנה|גרושה/.test(marital) || r.aid_type === 'widow',
+      requestNo: r.request_no ?? null,
+      approved: status === 'approved',
+      amount,
+      note,
+      medical: r.aid_type === 'medical',
+    })
+  }
+  // תצוגה מקדימה של המייל למגיש, בלי לשמור ובלי לשלוח
+  if (body.preview) {
+    if (!final) return NextResponse.json({ error: 'אין מייל בסטטוס הזה' }, { status: 400 })
+    return NextResponse.json({ ok: true, ...buildMail() })
+  }
+  const now = new Date().toISOString()
+  const update: Record<string, unknown> = { status, amount, reviewed_by: staff.userId, updated_at: now }
+  if (final) update.decision_note = note || null
+  let { error } = await admin.from('financial_aid_requests').update(update).eq('id', id)
+  if (error && 'decision_note' in update) {
+    // לפני המיגרציה אין עמודת decision_note
+    delete update.decision_note
+    ;({ error } = await admin.from('financial_aid_requests').update(update).eq('id', id))
+  }
+  if (error) return NextResponse.json({ error: 'שגיאה בשמירה' }, { status: 500 })
 
   await logActivity(admin, {
     userId: staff.userId,
     action: 'financial_aid_decided',
     entityType: 'financial_aid_request',
-    entityId: String(id),
-    details: { from: (prev as { status?: string } | null)?.status ?? null, to: status, amount: status === 'approved' ? (Number(amount) || 0) : null },
+    entityId: id,
+    details: { from: r.status ?? null, to: status, amount },
   })
 
-  // הודעה למבקש על החלטה (לא בעת החזרה לממתין)
-  // בקשה ציבורית: ההודעה הסופית נכתבת ונשלחת ידנית על ידי המזכיר (final-message)
-  if ((prev as { source?: string } | null)?.source !== 'public' && (status === 'approved' || status === 'rejected')) {
-    const { data: req } = await admin
-      .from('financial_aid_requests')
-      .select('beneficiary:beneficiaries(full_name, family_name, email)')
-      .eq('id', id).maybeSingle()
-    const ben = (req as Record<string, unknown> | null)?.beneficiary as { full_name?: string; family_name?: string; email?: string } | undefined
-    if (ben?.email) {
-      const name = [ben.family_name, ben.full_name].filter(Boolean).join(' ') || ben.full_name || ''
-      const mail = financialAidDecisionEmail(name, status === 'approved', status === 'approved' ? Number(amount) || 0 : null)
-      deliverMail(ben.email, mail.subject, mail.html, undefined, mailFor('medical')).catch(() => {})
+  let mailed = false
+  if (final) {
+    const to = String(r.applicant_email || ben?.email || '').trim()
+    if (to) {
+      const mail = buildMail()
+      try {
+        await deliverMail(to, mail.subject, mail.html, undefined, mailFor('medical'))
+        await admin.from('financial_aid_requests').update({ final_message_sent_at: new Date().toISOString() }).eq('id', id)
+        mailed = true
+      } catch { /* ההחלטה נשמרה גם אם המייל נכשל */ }
     }
   }
 
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({ ok: true, mailed })
 }

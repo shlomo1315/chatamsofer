@@ -3,12 +3,16 @@ export const AID_TYPE_LABELS: Record<string, string> = {
   medical: 'סיוע רפואי',
   widow: 'אלמנה',
   orphans: 'יתומים',
+  econ: 'מצוקה כלכלית',
+  other: 'אחר',
 }
 
 export const AID_TYPE_PILL: Record<string, string> = {
   medical: 'bg-red-50 text-red-700',
   widow: 'bg-sand text-navy-dark',
   orphans: 'bg-blue-50 text-blue-700',
+  econ: 'bg-amber-50 text-amber-800',
+  other: 'bg-gray-100 text-gray-700',
 }
 
 export type AidAffiliation = 'registered' | 'unregistered_descendant' | 'external'

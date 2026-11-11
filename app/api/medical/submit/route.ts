@@ -3,6 +3,8 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { isDepartmentAccessible, departmentClosedMessage } from '@/lib/departmentGates'
 import { resolveBeneficiaryByEnteredId } from '@/lib/portalBeneficiary'
+import { getPortalBeneficiaryId } from '@/lib/portalSession'
+import { NEED, ID_CARD_DOC, sanitizeFamily, sanitizeIncome } from '@/lib/aidDepartmentV2'
 import {
   MEDICAL_FILE_TYPES, MEDICAL_MAX_DOCS, MEDICAL_MAX_FILE,
   fileSignatureMatches, idDigits, parseAidType, validateMedical,
@@ -22,6 +24,24 @@ function getAdminClient() {
 const str = (f: FormData, k: string, max = 300) => String(f.get(k) ?? '').trim().slice(0, max)
 const files = (f: FormData, k: string) =>
   f.getAll(k).filter((x): x is File => typeof x !== 'string' && x.size > 0)
+const json = (f: FormData, k: string) => { try { return JSON.parse(str(f, k, 20000)) } catch { return null } }
+
+const EXTRA_DOC = 'מסמך נוסף'
+const MEDICAL_DOCS = ['סיכום רפואי או מכתב רופא', 'הצעת מחיר או חשבונית לטיפול']
+
+// מסמכים מהאשף: doc_<i> עם doc_label_<i> מתוך רשימת המסמכים של הסיבה. התווית נבדקת בשרת.
+function labeledDocs(f: FormData, aidType: keyof typeof NEED) {
+  const allowed = [...NEED[aidType], EXTRA_DOC]
+  const out: { f: File; kind: 'id_card' | 'medical' | 'other'; label: string }[] = []
+  for (let i = 0; i < 12; i++) {
+    const file = files(f, `doc_${i}`)[0]
+    if (!file) continue
+    const label = str(f, `doc_label_${i}`, 80)
+    if (!allowed.includes(label)) return null
+    out.push({ f: file, label, kind: label === ID_CARD_DOC ? 'id_card' : MEDICAL_DOCS.includes(label) ? 'medical' : 'other' })
+  }
+  return out
+}
 
 // הגשת בקשת סיוע רפואי מהטופס הציבורי. המבקש מקבל רק אישור קבלה, בלי שום מידע על הרשומות.
 export async function POST(request: NextRequest) {
@@ -61,24 +81,37 @@ export async function POST(request: NextRequest) {
     spouseName: str(form, 'spouse_name', 120),
     spouseId: idDigits(form.get('spouse_id_number')).slice(0, 9),
   }
-  const idCards = files(form, 'id_card')
-  const medical = files(form, 'medical')
-  const all = [...idCards.map(f => ({ f, kind: 'id_card' as const })), ...medical.map(f => ({ f, kind: 'medical' as const }))]
+  // צאצא שנכנס לאזור האישי: הזיהוי לפי הסשן, לא לפי מה שנשלח בטופס
+  const portalId = getPortalBeneficiaryId(request)
+  const portalBen = portalId
+    ? (await admin.from('beneficiaries').select('id, id_number').eq('id', portalId).maybeSingle()).data as { id: string; id_number: string | null } | null
+    : null
+  if (portalBen?.id_number) input.idNumber = idDigits(portalBen.id_number)
 
-  if (idCards.length > 1 || medical.length > MEDICAL_MAX_DOCS) {
-    return NextResponse.json({ error: `ניתן לצרף עד ${MEDICAL_MAX_DOCS} מסמכים רפואיים וצילום ת.ז. אחד` }, { status: 400 })
+  // האשף החדש שולח מסמכים לפי תווית; הטופס הישן שלח id_card ו-medical
+  const wizard = labeledDocs(form, input.aidType)
+  if (!wizard) return NextResponse.json({ error: 'סוג מסמך לא מוכר' }, { status: 400 })
+  const all = [
+    ...wizard,
+    ...files(form, 'id_card').map(f => ({ f, kind: 'id_card' as const, label: ID_CARD_DOC })),
+    ...files(form, 'medical').map(f => ({ f, kind: 'medical' as const, label: '' })),
+  ]
+  const idCount = all.filter(d => d.kind === 'id_card').length
+  const medicalCount = all.filter(d => d.kind === 'medical').length
+  if (idCount > 1 || all.length > MEDICAL_MAX_DOCS + 4) {
+    return NextResponse.json({ error: 'יותר מדי מסמכים בבקשה אחת' }, { status: 400 })
   }
   if (input.idNumber.length >= 5 && !rateLimit(`medical-submit-id:${input.idNumber}`, 3, 24 * 60 * 60 * 1000)) {
     return NextResponse.json({ error: 'כבר נשלחו בקשות עבור מספר זה. נסה שוב מחר.' }, { status: 429 })
   }
 
   // זיהוי בשרת בלבד — הלקוח לא קובע אם הוא צאצא
-  const ben = input.idNumber.length >= 5
+  const ben = portalBen ?? (input.idNumber.length >= 5
     ? await resolveBeneficiaryByEnteredId<{ id: string }>(admin, input.idNumber, 'id')
-    : null
+    : null)
   const descendant = !!ben
 
-  const err = validateMedical(input, descendant, idCards.length === 1, medical.length)
+  const err = validateMedical(input, descendant, idCount === 1, medicalCount)
   if (err) return NextResponse.json({ error: err }, { status: 400 })
 
   // עיר: אותה אכיפה כמו ברישום לאיגוד (רק עיר מהמאגר הרשמי)
@@ -90,8 +123,8 @@ export async function POST(request: NextRequest) {
   }
 
   // בדיקת קבצים: סיומת מותרת, גודל, ותוכן אמיתי שתואם את הסיומת
-  const prepared: { kind: 'id_card' | 'medical'; name: string; ext: string; type: string; buf: ArrayBuffer }[] = []
-  for (const { f, kind } of all) {
+  const prepared: { kind: 'id_card' | 'medical' | 'other'; label: string; name: string; ext: string; type: string; buf: ArrayBuffer }[] = []
+  for (const { f, kind, label } of all) {
     const ext = f.name.split('.').pop()?.toLowerCase() ?? ''
     const type = MEDICAL_FILE_TYPES[ext]
     if (!type) return NextResponse.json({ error: 'סוג הקובץ אינו נתמך. ניתן להעלות תמונות או PDF בלבד.' }, { status: 400 })
@@ -100,10 +133,10 @@ export async function POST(request: NextRequest) {
     if (!fileSignatureMatches(ext, new Uint8Array(buf.slice(0, 16)))) {
       return NextResponse.json({ error: 'תוכן הקובץ אינו תואם לסוגו. נא להעלות תמונה או PDF תקינים.' }, { status: 400 })
     }
-    prepared.push({ kind, name: f.name.slice(0, 120), ext, type, buf })
+    prepared.push({ kind, label, name: f.name.slice(0, 120), ext, type, buf })
   }
 
-  const uploaded: { kind: string; url: string; name: string }[] = []
+  const uploaded: { kind: string; label: string; url: string; name: string }[] = []
   const paths: string[] = []
   // מחיקת קבצים שכבר עלו כשהשמירה נכשלת, כדי שלא יישארו יתומים במאגר
   const cleanup = async () => { if (paths.length) await admin.storage.from(BUCKET).remove(paths).catch(() => {}) }
@@ -112,11 +145,13 @@ export async function POST(request: NextRequest) {
     const { error } = await admin.storage.from(BUCKET).upload(path, p.buf, { contentType: p.type, upsert: false })
     if (error) { await cleanup(); return NextResponse.json({ error: 'שגיאה בהעלאת המסמך' }, { status: 500 }) }
     paths.push(path)
-    uploaded.push({ kind: p.kind, url: admin.storage.from(BUCKET).getPublicUrl(path).data.publicUrl, name: p.name })
+    uploaded.push({ kind: p.kind, label: p.label, url: admin.storage.from(BUCKET).getPublicUrl(path).data.publicUrl, name: p.name })
   }
 
   const firstMedical = uploaded.find(u => u.kind === 'medical')
-  const { data: row, error } = await admin.from('financial_aid_requests').insert({
+  const family = sanitizeFamily(json(form, 'family'))
+  const income = form.has('income') ? sanitizeIncome(json(form, 'income')) : null
+  const fields = {
     beneficiary_id: ben?.id ?? null,
     source: 'public',
     is_descendant: descendant && input.relation !== 'not_descendant',
@@ -143,14 +178,20 @@ export async function POST(request: NextRequest) {
     document_url: firstMedical?.url ?? null,
     document_name: firstMedical?.name ?? null,
     status: 'pending',
-  }).select('id').single()
-  if (error || !row) { await cleanup(); return NextResponse.json({ error: 'שגיאה בשמירת הבקשה' }, { status: 500 }) }
+  }
+  // לפני שהמיגרציה רצה אין עמודות family/income/request_no: שומרים בלעדיהן
+  let res = await admin.from('financial_aid_requests')
+    .insert({ ...fields, family: family.wife || family.kids.length ? family : null, income })
+    .select('id, request_no').single()
+  if (res.error) res = await admin.from('financial_aid_requests').insert(fields).select('id').single() as typeof res
+  const row = res.data
+  if (res.error || !row) { await cleanup(); return NextResponse.json({ error: 'שגיאה בשמירת הבקשה' }, { status: 500 }) }
 
   if (uploaded.length) {
-    await admin.from('financial_aid_documents').insert(
-      uploaded.map(u => ({ request_id: row.id, kind: u.kind, file_url: u.url, file_name: u.name })),
-    )
+    const docs = uploaded.map(u => ({ request_id: row.id, kind: u.kind, label: u.label || null, file_url: u.url, file_name: u.name }))
+    const { error: de } = await admin.from('financial_aid_documents').insert(docs)
+    if (de) await admin.from('financial_aid_documents').insert(docs.map(({ label: _l, ...d }) => ({ ...d, kind: d.kind === 'other' ? 'medical' : d.kind })))
   }
 
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({ ok: true, requestNo: row.request_no ?? null })
 }

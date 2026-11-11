@@ -1,365 +1,472 @@
 'use client'
-import { useState, useEffect, useMemo, useCallback } from 'react'
-import StatStrip from '@/components/admin/system/StatStrip'
-import { ListTable } from '@/components/admin/system/ListTable'
-import { SearchBar } from '@/components/admin/system/SearchBar'
-import { useRouter } from 'next/navigation'
-import { Search, RefreshCw, Mail, Check, Eye, Loader2, Plus, X, Upload, Trash2, Layers, Clock } from 'lucide-react'
-import type { FinancialAidRequest, FinancialAidStatus } from '@/types'
-import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
-import { useTablePagination } from '@/lib/useTablePagination'
-import { FINANCIAL_AID_STATUS_LABELS, FINANCIAL_AID_STATUS_COLORS } from '@/types'
-import { createClient } from '@/lib/supabase/client'
-import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
-import { useConfirm } from '@/components/ui/ConfirmDialog'
-import { useCan, AdminOnly } from '@/components/StaffPermissions'
-import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
-import ApprovalLabelTag from '@/components/ui/ApprovalLabelTag'
-import { approvalLabelOf } from '@/lib/approvalLabel'
+
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import AidCardModal from './AidCardModal'
-import { MessageSquare } from 'lucide-react'
-import { AID_TYPE_LABELS, AID_TYPE_PILL, AID_AFFILIATION_LABELS, aidAffiliation } from '@/components/admin/AidTypeLabels'
+import { useRouter } from 'next/navigation'
+import AidIcon from '@/components/admin/AidIcon'
+import {
+  ST, STH, ST_ORDER, REASONS, REASON_LABEL, NEED, isOptionalDoc, displayStatus, parseManagerReply,
+  asFamily, asIncome, totalIncome, souls, perCapita, ageFrom, fmtMoney, fmtDate, fmtShort, fmtDateTime,
+  sourceLabel, findPrevious, prevText, aidPersonName,
+  type AidRowForMail, type AidReason, type DisplayStatus,
+} from '@/lib/aidDepartmentV2'
 
-type Ben = { full_name?: string; family_name?: string; spouse_name?: string; id_number?: string; spouse_id_number?: string; phone?: string }
-const name = (b?: Ben) => b ? ([b.family_name, b.full_name].filter(Boolean).join(' ') || b.full_name || '—') : '—'
-// בקשה ציבורית ממי שאינו רשום: אין beneficiary, והפרטים בשדות applicant_*
-const reqName = (r: FinancialAidRequest) => r.beneficiary ? name(r.beneficiary as Ben) : (r.applicant_name || '—')
-const reqId = (r: FinancialAidRequest) => {
-  const b = r.beneficiary as Ben | undefined
-  return b?.id_number ?? b?.spouse_id_number ?? r.applicant_id_number ?? null
+export type AidRow = AidRowForMail & {
+  status: string
+  request_no?: number | null
+  amount?: number | null
+  decision_reply?: string | null
+  decision_replied_at?: string | null
+  sent_to_decision_at?: string | null
+  reminder_sent_at?: string | null
+  final_message_sent_at?: string | null
+  decision_note?: string | null
+  applicant_phone?: string | null
+  applicant_email?: string | null
+  beneficiary?: (NonNullable<AidRowForMail['beneficiary']> & { phone?: string | null; email?: string | null; marital_status?: string | null }) | null
+  documents?: { label?: string | null; kind?: string | null; file_url?: string | null; file_name?: string | null }[]
 }
-const fmtCur = (n?: number | null) => n != null ? `₪${Number(n).toLocaleString('he-IL')}` : '—'
-const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('he-IL') : '—'
 
-type ColKey = 'name' | 'aid_type' | 'affiliation' | 'id_number' | 'approval_label' | 'reason' | 'amount' | 'status'
+type Src = 'registered' | 'link' | 'prev'
 
-// 🔴 value() חובה בכל עמודה שמרנדרת JSX — בלעדיה המיון עובד על אובייקט
-// React ומחזיר סדר אקראי שנראה בדיוק כמו מיון תקין.
-// ⚠️ שם/ת.ז./סיבת הבקשה — מיון בלבד (ערך ייחודי כמעט לכל שורה).
-// סיבת אישור והסטטוס הן קבוצות ערכים סגורות ← גם סינון.
-// ⚠️ headClassName נושא את הריפוד: <th> נבנה בתוך TableHeadMenu, וריפוד
-// שנכתב בצרכן לא היה מגיע אליו.
-const HEAD = 'px-4 py-3 text-xs font-semibold text-slate-500'
+const post = async (url: string, body: unknown) => {
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  const d = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(d.error || 'הפעולה נכשלה')
+  return d
+}
 
-const COLUMNS: ColDef<ColKey, FinancialAidRequest>[] = [
-  { key: 'name', label: 'שם', def: true, headClassName: HEAD, value: r => reqName(r) },
-  { key: 'aid_type', label: 'סוג', def: true, kind: 'enum', filterable: true, headClassName: HEAD,
-    value: r => AID_TYPE_LABELS[r.aid_type ?? 'medical'] },
-  { key: 'affiliation', label: 'שיוך', def: true, kind: 'enum', filterable: true, headClassName: HEAD,
-    value: r => AID_AFFILIATION_LABELS[aidAffiliation(r)] },
-  { key: 'id_number', label: 'ת.ז.', def: true, kind: 'number', headClassName: HEAD,
-    value: r => reqId(r) },
-  // ⚠️ עמודה משלה בנוסף לתג שליד השם — ריקה אצל הרוב המוחלט, וזו הכוונה.
-  { key: 'approval_label', label: 'סיבת אישור', def: true, kind: 'enum', filterable: true, headClassName: HEAD,
-    value: r => approvalLabelOf(r.beneficiary as Ben | undefined) || null },
-  { key: 'reason', label: 'סיבת הבקשה', def: true, headClassName: HEAD, value: r => r.reason ?? null },
-  // ⚠️ הסכום מוצג רק כשאושר, ולכן גם ממוין כך — null (ולא 0) בכל השאר,
-  // אחרת בקשה שטרם אושרה הייתה ממוינת כאפס שקלים.
-  { key: 'amount', label: 'סכום מאושר', def: true, kind: 'number', headClassName: HEAD,
-    value: r => r.status === 'approved' ? r.amount ?? null : null },
-  { key: 'status', label: 'סטטוס', def: true, kind: 'enum', filterable: true, headClassName: HEAD,
-    // ⚠️ הערך הוא התווית המוצגת ולא הקוד: המשתמש מסנן לפי מה שהוא רואה.
-    value: r => FINANCIAL_AID_STATUS_LABELS[r.status] },
-]
+const Pill = ({ st }: { st: DisplayStatus }) => <span className={`pill st-${st}`}>{ST[st]}</span>
+const PrevTag = ({ text }: { text: string | null }) => text
+  ? <span className="prev" title={text}><AidIcon name="hist" size={12} />הגיש בעבר</span>
+  : null
 
-const CARD_DEFS: { key: FinancialAidStatus | 'all'; label: string; icon: typeof Clock; base: string; active: string; iconCls: string }[] = [
-  { key: 'all', label: 'הכל', icon: Layers, base: 'border-slate-200 hover:border-slate-300', active: 'border-slate-400 ring-2 ring-slate-200 bg-slate-50', iconCls: 'bg-slate-100 text-slate-600' },
-  { key: 'pending', label: 'ממתין לטיפול', icon: Clock, base: 'border-amber-200 hover:border-amber-300', active: 'border-amber-400 ring-2 ring-amber-200 bg-amber-50', iconCls: 'bg-amber-100 text-amber-700' },
-  { key: 'inquiry', label: 'בבירור', icon: MessageSquare, base: 'border-sky-200 hover:border-sky-300', active: 'border-sky-400 ring-2 ring-sky-200 bg-sky-50', iconCls: 'bg-sky-100 text-sky-700' },
-  { key: 'awaiting_decision', label: 'נשלח לגורם מאשר', icon: Mail, base: 'border-blue-200 hover:border-blue-300', active: 'border-blue-400 ring-2 ring-blue-200 bg-blue-50', iconCls: 'bg-blue-100 text-blue-700' },
-  { key: 'approved', label: 'מאושר', icon: Check, base: 'border-green-200 hover:border-green-300', active: 'border-green-400 ring-2 ring-green-200 bg-green-50', iconCls: 'bg-green-100 text-green-700' },
-  { key: 'rejected', label: 'נדחה', icon: X, base: 'border-red-200 hover:border-red-300', active: 'border-red-400 ring-2 ring-red-200 bg-red-50', iconCls: 'bg-red-100 text-red-700' },
-]
+const no = (r: AidRow) => r.request_no ?? '—'
 
-export default function FinancialAidClient({ requests }: { requests: FinancialAidRequest[] }) {
+// שורת משנה בטבלה: מה צריך לדעת על הבקשה במבט אחד
+function subLine(r: AidRow, st: DisplayStatus) {
+  if (st === 'back') return `תשובה התקבלה ${fmtDateTime(r.decision_replied_at)}`
+  if (st === 'approved' && r.amount) return `אושר ${fmtMoney(r.amount)}`
+  if (st === 'inquiry') return 'חסר מסמך או פרט'
+  return ''
+}
+
+export default function FinancialAidClient({ requests }: { requests: AidRow[] }) {
   const router = useRouter()
-  const supabase = createClient()
-  const { confirm, confirmDialog } = useConfirm()
-  const canEdit = useCan('financial_aid', 'edit')
-  const [filter, setFilter] = useState<FinancialAidStatus | 'all'>('all')
-  const [query, setQuery] = useState('')
-  const [chip, setChip] = useState<'all' | 'medical' | 'widow' | 'orphans' | 'registered' | 'unregistered'>('all')
-  const [sort, setSort] = useState<SortMode>('newest')
-  const [checking, setChecking] = useState(false)
+  const [fil, setFil] = useState<DisplayStatus | 'all'>('all')
+  const [q, setQ] = useState('')
+  const [reason, setReason] = useState<AidReason | ''>('')
+  const [src, setSrc] = useState<Src | null>(null)
+  const [cur, setCur] = useState<string | null>(null)
+  const [mgrEmail, setMgrEmail] = useState('')
+  const [editMgr, setEditMgr] = useState(false)
+  const [copied, setCopied] = useState(false)
 
-  // בקשה חדשה מהניהול
-  const [openId, setOpenId] = useState<string | null>(null)
-  const [newOpen, setNewOpen] = useState(false)
-  const [idInput, setIdInput] = useState('')
-  const [found, setFound] = useState<{ id: string; name: string; id_number?: string } | null>(null)
-  const [lookupErr, setLookupErr] = useState('')
-  const [looking, setLooking] = useState(false)
-  const [newReason, setNewReason] = useState('')
-  const [newFile, setNewFile] = useState<File | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [saveErr, setSaveErr] = useState('')
-
-  const lookup = async () => {
-    const raw = idInput.trim()
-    if (!raw) return
-    setLooking(true); setLookupErr(''); setFound(null)
-    try {
-      const digits = raw.replace(/\D/g, '')
-      const variants = Array.from(new Set([raw, digits].filter(Boolean)))
-      const orFilter = variants.flatMap(v => [`id_number.eq.${v}`, `spouse_id_number.eq.${v}`]).join(',')
-      const { data } = await supabase.from('beneficiaries').select('id, full_name, family_name, id_number').or(orFilter).maybeSingle()
-      if (!data) setLookupErr('לא נמצא נתמך עם ת.ז זו')
-      else setFound({ id: data.id, name: [data.family_name, data.full_name].filter(Boolean).join(' '), id_number: data.id_number })
-    } catch { setLookupErr('שגיאת רשת') }
-    setLooking(false)
-  }
-
-  // מחיקת בקשה מהטבלה
-  const del = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation()
-    if (!(await confirm({ title: 'מחיקת בקשת סיוע', message: 'למחוק בקשת סיוע זו? הפעולה אינה הפיכה.', confirmLabel: 'מחיקה', danger: true }))) return
-    try { await supabase.from('financial_aid_requests').delete().eq('id', id); router.refresh() }
-    catch { /* ignore */ }
-  }
-
-  const resetNew = () => { setNewOpen(false); setIdInput(''); setFound(null); setLookupErr(''); setNewReason(''); setNewFile(null); setSaveErr('') }
-
-  const submitNew = async () => {
-    if (!found) { setSaveErr('יש לבחור נתמך'); return }
-    if (!newReason.trim()) { setSaveErr('יש לפרט את סיבת הבקשה'); return }
-    setSaving(true); setSaveErr('')
-    try {
-      const fd = new FormData()
-      fd.append('beneficiary_id', found.id)
-      fd.append('reason', newReason.trim())
-      if (newFile) fd.append('file', newFile)
-      const r = await fetch('/api/admin/financial-aid/create', { method: 'POST', body: fd })
-      const d = await r.json()
-      if (!r.ok) { setSaveErr(d.error || 'שגיאה'); setSaving(false); return }
-      resetNew(); router.refresh()
-    } catch { setSaveErr('שגיאת רשת') }
-    setSaving(false)
-  }
-
-  // הגדרת מייל הגורם המאשר
-  const [decisionEmail, setDecisionEmail] = useState('')
-  const [emailInput, setEmailInput] = useState('')
-  const [savingEmail, setSavingEmail] = useState(false)
   useEffect(() => {
-    fetch('/api/admin/financial-aid/decision-email').then(r => r.json()).then(d => { setDecisionEmail(d.email ?? ''); setEmailInput(d.email ?? '') }).catch(() => {})
-  }, [])
-  const saveEmail = async () => {
-    setSavingEmail(true)
-    const r = await fetch('/api/admin/financial-aid/decision-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: emailInput }) })
-    if (r.ok) setDecisionEmail(emailInput.trim())
-    setSavingEmail(false)
-  }
-
-  // שליפת תשובות אוטומטית בכניסה + כפתור ידני
-  const checkReplies = useCallback(async (silent: boolean) => {
-    if (!silent) setChecking(true)
-    try {
-      const r = await fetch('/api/admin/financial-aid/check-replies', { method: 'POST' })
-      const d = await r.json()
-      if (d.updated > 0) router.refresh()
-    } catch { /* ignore */ }
-    if (!silent) setChecking(false)
+    fetch('/api/admin/financial-aid/decision-email').then(r => r.json()).then(d => setMgrEmail(d.email ?? '')).catch(() => {})
+    // תשובות המנהל נקלטות בשקט בכניסה למסך; ההחלטה עצמה נשמרת רק בלחיצה
+    fetch('/api/admin/financial-aid/check-replies', { method: 'POST' })
+      .then(r => r.json()).then(d => { if (d.updated > 0) router.refresh() }).catch(() => {})
   }, [router])
-  useEffect(() => { checkReplies(true) }, [checkReplies])
+
+  const prevOf = useMemo(() => {
+    const m = new Map<string, string | null>()
+    for (const r of requests) { const p = findPrevious(r, requests); m.set(r.id, p ? prevText(p) : null) }
+    return m
+  }, [requests])
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: requests.length }
-    for (const r of requests) c[r.status] = (c[r.status] ?? 0) + 1
+    const c = Object.fromEntries(ST_ORDER.map(k => [k, 0])) as Record<DisplayStatus, number>
+    for (const r of requests) c[displayStatus(r)]++
     return c
   }, [requests])
 
-  const filtered = useMemo(() => requests.filter(r => {
-    if (filter !== 'all' && r.status !== filter) return false
-    if (chip === 'registered' && aidAffiliation(r) !== 'registered') return false
-    if (chip === 'unregistered' && aidAffiliation(r) === 'registered') return false
-    if ((chip === 'medical' || chip === 'widow' || chip === 'orphans') && (r.aid_type ?? 'medical') !== chip) return false
-    if (!query.trim()) return true
-    const b = r.beneficiary as Ben | undefined
-    return [reqName(r), b?.id_number, b?.spouse_id_number, r.applicant_id_number, r.reason].filter(Boolean).join(' ').toLowerCase().includes(query.trim().toLowerCase())
-  }), [requests, filter, chip, query])
+  const list = useMemo(() => {
+    const needle = q.trim()
+    const digits = needle.replace(/\D/g, '')
+    return requests.filter(r => {
+      if (fil !== 'all' && displayStatus(r) !== fil) return false
+      if (reason && r.aid_type !== reason) return false
+      if (src === 'registered' && !r.beneficiary_id) return false
+      if (src === 'link' && r.beneficiary_id) return false
+      if (src === 'prev' && !prevOf.get(r.id)) return false
+      if (!needle) return true
+      if (aidPersonName(r).includes(needle)) return true
+      if (digits && String(r.request_no ?? '').includes(digits)) return true
+      const idn = String(r.beneficiary?.id_number || r.applicant_id_number || '')
+      return !!digits && digits.length >= 4 && idn.includes(digits)
+    })
+  }, [requests, fil, reason, src, q, prevOf])
 
-  const visible = useMemo(() =>
-    applySortMode(filtered, sort,
-      r => reqName(r),
-      r => r.created_at,
-    ), [filtered, sort])
+  const open = requests.find(r => r.id === cur) ?? null
 
-  // ⚡ גלילה אינסופית — במקום לרנדר את כל הבקשות המסוננות בבת אחת. שום בקשה
-  // לא נחתכת: המנה הבאה נטענת בגלילה, והמונה למטה מראה כמה מוצגות מתוך הכל.
-  // דפדוף אחיד: 50 בברירת מחדל, בורר עד 200. החיפוש רץ על כל הרשימה
-  // ורק אז נחתך לעמוד — ראו lib/useTablePagination.
-  // ⚠️ extraCols=1 — עמודת הפעולות ("פרטים"/מחיקה) אינה בבורר אך נספרת לגרירה.
-  // היא האחרונה, ולכן האינדקסים של עמודות הבורר נשארים 0..n-1.
-  //
-  // 🔴 סדר השרשרת: visible (חיפוש וסינון המסך) → tc.rows (מיון וסינון
-  // מהכותרת) → pg.rows (חיתוך לעמוד). אילו ה-hook היה מקבל את pg.rows,
-  // הסינון מהכותרת היה חל על 50 השורות שכבר על המסך בלבד.
-  // ⚠️ mode:'client' — כל הבקשות מגיעות כ-prop, אין דפדוף בשרת.
-  const tc = useTableColumns<ColKey, FinancialAidRequest>('financial-aid', COLUMNS, {
-    extraCols: 1,
-    sortFilter: { mode: 'client', rows: visible },
-  })
-
-  // ⚠️ החיתוך אחרון — אחרי המיון והסינון מהכותרת.
-  const pg = useTablePagination(tc.rows)
-  const visibleRows = pg.rows
-
-  const cell = (c: ColDef<ColKey>, r: FinancialAidRequest) => {
-    const b = r.beneficiary as Ben | undefined
-    switch (c.key) {
-      case 'name': return (
-        <span className="inline-flex items-center gap-1.5 flex-wrap font-medium text-slate-800">
-          {reqName(r)}
-          {!!r.unread && <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-700"><MessageSquare size={11} />{r.unread}</span>}
-          {!r.beneficiary && !r.beneficiary_id && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-700">לא רשום באיגוד</span>}
-          {r.is_descendant === false && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-700">לא צאצא</span>}
-          {/* ⚠️ גם ליד השם וגם בעמודה: מי שכיבה את העמודה עדיין צריך לדעת
-              שהמבקש אינו צאצא רגיל. */}
-          <ApprovalLabelTag label={approvalLabelOf(b)} size="xs" />
-        </span>
-      )
-      case 'aid_type': return <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${AID_TYPE_PILL[r.aid_type ?? 'medical']}`}>{AID_TYPE_LABELS[r.aid_type ?? 'medical']}</span>
-      case 'affiliation': return <span className="text-xs text-slate-600">{AID_AFFILIATION_LABELS[aidAffiliation(r)]}</span>
-      case 'id_number': return <span className="ltr-num font-mono text-xs text-slate-600">{reqId(r) ?? '—'}</span>
-      case 'approval_label': {
-        const lbl = approvalLabelOf(b)
-        return lbl ? <ApprovalLabelTag label={lbl} size="xs" /> : <span className="text-slate-300">—</span>
-      }
-      case 'reason': return <span className="text-slate-600">{r.reason ?? '—'}</span>
-      case 'amount': return <span className="font-bold text-slate-800 ltr-num">{r.status === 'approved' ? fmtCur(r.amount) : '—'}</span>
-      case 'status': return <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${FINANCIAL_AID_STATUS_COLORS[r.status]}`}>{FINANCIAL_AID_STATUS_LABELS[r.status]}</span>
-    }
+  const copyLink = async () => {
+    await navigator.clipboard.writeText(`${location.origin}/medical/new`).catch(() => {})
+    setCopied(true); setTimeout(() => setCopied(false), 1800)
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* הגדרת מייל גורם מאשר */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex items-center gap-3 flex-wrap">
-        <Mail size={16} className="text-emerald-600 flex-shrink-0" />
-        <span className="text-sm font-semibold text-slate-700">מייל הגורם המאשר:</span>
-        <input value={emailInput} onChange={e => setEmailInput(e.target.value)} dir="ltr" placeholder="decision@example.com"
-          className="flex-1 min-w-[200px] rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <button onClick={saveEmail} disabled={savingEmail || emailInput.trim() === decisionEmail}
-          className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg px-4 py-2">
-          {savingEmail ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} שמור
-        </button>
+    <>
+      <div className="ph">
+        <div><h1>מחלקת סיוע</h1><p>בקשות סיוע מצאצאים רשומים ומפונים מהקישור</p></div>
+        <div className="acts">
+          <button className="btn" onClick={copyLink}><AidIcon name="link" />{copied ? 'הקישור הועתק' : 'העתק קישור להגשה'}</button>
+          <a className="btn" href="/api/admin/export?type=financial_aid"><AidIcon name="dl" />ייצוא לאקסל</a>
+        </div>
       </div>
 
-      {/* פעולות */}
-      <div className="flex items-center justify-end gap-2 flex-wrap">
-        <button onClick={() => checkReplies(false)} disabled={checking}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 border border-emerald-200 hover:bg-emerald-50 rounded-lg px-3 py-2">
-          {checking ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} בדוק תשובות
-        </button>
-        <AdminOnly>
-          <button onClick={() => { resetNew(); setNewOpen(true) }}
-            className="inline-flex items-center gap-1.5 text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2">
-            <Plus size={14} /> בקשה חדשה
+      {/* "משפחות נתמכות" הוסתר: הכול מנוהל כאן, באגף הסיוע */}
+      <nav className="tabs">
+        <a className="on" aria-current="page">בקשות</a>
+        <Link href="/admin/distributions">תמיכה חודשית</Link>
+        <Link href="/admin/reports">דוחות</Link>
+        <button onClick={() => setEditMgr(true)}>הגדרות</button>
+      </nav>
+      <div className="mgrline">
+        <AidIcon name="mail" />
+        {mgrEmail
+          ? <>בקשות שמועברות לאישור נשלחות אל <span className="ltr">{mgrEmail}</span> · </>
+          : <>עוד לא הוגדר מייל המנהל · </>}
+        <button onClick={() => setEditMgr(true)}>שינוי בהגדרות</button>
+      </div>
+
+      <div className="counters">
+        {ST_ORDER.map(k => (
+          <button key={k} className={`ctr st-${k} ${k === 'back' ? 'hot' : ''}`} style={k === 'back' ? undefined : { background: 'var(--card)' }}
+            aria-pressed={fil === k} onClick={() => setFil(fil === k ? 'all' : k)}>
+            <span className="lbl">{ST[k]}</span><span className="v">{counts[k]}</span><span className="h">{STH[k]}</span>
           </button>
-        </AdminOnly>
-      </div>
-
-      {/* לשוניות המחלקה */}
-      <div className="flex flex-wrap gap-1 border-b border-slate-200">
-        <span className="whitespace-nowrap border-b-2 border-emerald-600 px-4 py-2 text-sm font-semibold text-emerald-700">בקשות</span>
-        <Link href="/admin/widows" className="whitespace-nowrap px-4 py-2 text-sm text-slate-600 hover:text-slate-900">משפחות נתמכות</Link>
-        <Link href="/admin/distributions" className="whitespace-nowrap px-4 py-2 text-sm text-slate-600 hover:text-slate-900">תמיכה חודשית</Link>
-        <Link href="/admin/reports" className="whitespace-nowrap px-4 py-2 text-sm text-slate-600 hover:text-slate-900">דוחות</Link>
-      </div>
-
-      {/* צ'יפים: סוג ושיוך */}
-      <div className="flex flex-wrap gap-2">
-        {([['all', 'הכל'], ['medical', 'סיוע רפואי'], ['widow', 'אלמנה'], ['orphans', 'יתומים'], ['registered', 'צאצאים רשומים'], ['unregistered', 'לא רשומים באיגוד']] as const).map(([k, l]) => (
-          <button key={k} onClick={() => setChip(k)}
-            className={`rounded-full border px-3 py-1 text-xs font-medium ${chip === k ? 'border-slate-800 bg-slate-800 text-white' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}>{l}</button>
         ))}
       </div>
 
-      {/* קוביות סינון */}
-      <StatStrip active={filter}
-        items={CARD_DEFS.map(c => ({ key: c.key, label: c.label, icon: c.icon, count: counts[c.key] ?? 0 }))}
-        onSelect={k => setFilter(filter === k && k !== 'all' ? 'all' : k)} />
+      <div className="bar">
+        <div className="search"><AidIcon name="search" /><input className="inp" placeholder="שם, תעודת זהות או מספר בקשה" value={q} onChange={e => setQ(e.target.value)} /></div>
+        <select className="chip" aria-label="סיבה" value={reason} onChange={e => setReason(e.target.value as AidReason | '')}>
+          <option value="">כל הסיבות</option>
+          {REASONS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+        </select>
+        {([['registered', 'צאצא רשום'], ['link', 'מהקישור'], ['prev', 'הגיש בעבר']] as [Src, string][]).map(([k, l]) => (
+          <button key={k} className="chip" aria-pressed={src === k} onClick={() => setSrc(src === k ? null : k)}>{l}</button>
+        ))}
+      </div>
 
-      <ListTable tc={tc} rows={visibleRows} pg={pg} empty="אין בקשות בסינון זה"
-        onOpen={r => setOpenId(r.id)}
-        renderCell={(c, r) => cell(c, r)}
-        actionsHead=""
-        actions={r => (
-          <div className="flex items-center gap-3">
-            <span className="inline-flex items-center gap-1 text-xs font-medium text-navy"><Eye size={13} /> פרטים</span>
-            {canEdit && (
-              <button onClick={e => del(e, r.id)} className="text-ink-faint transition-colors hover:text-red-600" title="מחק בקשה"><Trash2 size={14} /></button>
-            )}
+      <div className="tablewrap">
+        <table className="t">
+          <thead><tr><th>מס׳</th><th>שם</th><th>סיבה</th><th>מקור</th><th>הוגשה</th><th>סכום מבוקש</th><th>סטטוס</th></tr></thead>
+          <tbody>
+            {list.map(r => {
+              const st = displayStatus(r)
+              return (
+                <tr key={r.id} className={r.id === cur ? 'sel' : ''} onClick={() => setCur(r.id)} style={{ cursor: 'pointer' }}>
+                  <td className="id">{no(r)}</td>
+                  <td className="nm"><b>{aidPersonName(r) || 'ללא שם'} <PrevTag text={prevOf.get(r.id) ?? null} /></b><small>{subLine(r, st)}</small></td>
+                  <td>{REASON_LABEL[r.aid_type ?? ''] ?? 'סיוע'}</td>
+                  <td>{sourceLabel(r)}</td>
+                  <td className="num">{fmtShort(r.created_at)}</td>
+                  <td className="amt">{r.requested_amount ? fmtMoney(r.requested_amount) : '—'}</td>
+                  <td><Pill st={st} /></td>
+                </tr>
+              )
+            })}
+            {list.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--faint)', padding: 32 }}>אין בקשות להצגה</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <div className="mlist">
+        {list.map(r => {
+          const st = displayStatus(r)
+          return (
+            <button key={r.id} className={`qi ${r.id === cur ? 'sel' : ''}`} onClick={() => setCur(r.id)}>
+              <b>{aidPersonName(r) || 'ללא שם'}</b>
+              <span className="amt">{r.requested_amount ? fmtMoney(r.requested_amount) : ''}</span>
+              <span className="meta"><Pill st={st} /><span>{REASON_LABEL[r.aid_type ?? ''] ?? 'סיוע'}</span><span>·</span><span className="num">{fmtShort(r.created_at)}</span><PrevTag text={prevOf.get(r.id) ?? null} /></span>
+              {st === 'back' && <span className="snip">המנהל: &quot;{r.decision_reply}&quot;</span>}
+            </button>
+          )
+        })}
+      </div>
+
+      {open && <Card key={open.id} r={open} prev={prevOf.get(open.id) ?? null} onClose={() => setCur(null)} onDone={() => router.refresh()} />}
+      {editMgr && <ManagerEmail value={mgrEmail} onClose={() => setEditMgr(false)} onSaved={v => { setMgrEmail(v); setEditMgr(false) }} />}
+    </>
+  )
+}
+
+// חלון במרכז המסך עם טשטוש מאחור; נסגר בלחיצה בחוץ או ב-Escape
+function Modal({ label, onClose, width, children }: { label: string; onClose: () => void; width?: number; children: React.ReactNode }) {
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', k)
+    return () => window.removeEventListener('keydown', k)
+  }, [onClose])
+  return (
+    <>
+      <div className="scrim" onClick={onClose} style={width ? { zIndex: 40 } : undefined} />
+      <aside className="drawer" role="dialog" aria-modal="true" aria-label={label} style={width ? { width: `min(${width}px, calc(100% - 24px))`, zIndex: 41 } : undefined}>
+        {children}
+      </aside>
+    </>
+  )
+}
+
+function ManagerEmail({ value, onClose, onSaved }: { value: string; onClose: () => void; onSaved: (v: string) => void }) {
+  const [v, setV] = useState(value)
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+  const save = async () => {
+    setBusy(true); setErr('')
+    try { await post('/api/admin/financial-aid/decision-email', { email: v }); onSaved(v.trim()) } catch (e) { setErr((e as Error).message) }
+    setBusy(false)
+  }
+  return (
+    <Modal label="מייל המנהל" onClose={onClose} width={460}>
+      <div className="card-h">
+        <div className="top"><b>הגדרות</b><button className="x" aria-label="סגירה" onClick={onClose}><AidIcon name="x" /></button></div>
+        <h2>מייל המנהל</h2>
+      </div>
+      <div className="card-b">
+        <div className="field" style={{ marginBottom: 12 }}>
+          <label>בקשות שמועברות לאישור יישלחו לכתובת</label>
+          <input className="inp ltr" dir="ltr" type="email" value={v} onChange={e => setV(e.target.value)} />
+        </div>
+        {err && <p className="note" style={{ color: 'var(--no)' }}>{err}</p>}
+        <div className="act" style={{ border: 0, padding: 0 }}><div className="row">
+          <button className="btn pri" disabled={busy} onClick={save}>{busy ? 'שומר…' : 'שמירה'}</button>
+          <button className="btn" onClick={onClose}>ביטול</button>
+        </div></div>
+      </div>
+    </Modal>
+  )
+}
+
+function MailPreview({ mail, onClose }: { mail: { subject: string; html: string }; onClose: () => void }) {
+  return (
+    <Modal label="תצוגת מייל" onClose={onClose} width={720}>
+      <div className="card-h">
+        <div className="top"><b>תצוגת המייל</b><button className="x" aria-label="סגירה" onClick={onClose}><AidIcon name="x" /></button></div>
+        <h2 style={{ fontSize: 18 }}>{mail.subject}</h2>
+      </div>
+      <div className="card-b" style={{ padding: 0 }}>
+        <iframe title="תצוגת המייל" srcDoc={mail.html} sandbox="" style={{ width: '100%', height: '65vh', border: 0, background: '#fff' }} />
+      </div>
+    </Modal>
+  )
+}
+
+function Card({ r, prev, onClose, onDone }: { r: AidRow; prev: string | null; onClose: () => void; onDone: () => void }) {
+  const router = useRouter()
+  const st = displayStatus(r)
+  const guess = parseManagerReply(r.decision_reply)
+  const [choice, setChoice] = useState<'approved' | 'rejected' | null>(guess.decision)
+  const [amount, setAmount] = useState(guess.amount ? String(guess.amount) : r.requested_amount ? String(r.requested_amount) : '')
+  const [note, setNote] = useState('')
+  const [notes, setNotes] = useState(r.notes ?? '')
+  const [busy, setBusy] = useState('')
+  const [err, setErr] = useState('')
+  const [mail, setMail] = useState<{ subject: string; html: string } | null>(null)
+
+  const run = async (key: string, fn: () => Promise<void>) => {
+    setBusy(key); setErr('')
+    try { await fn() } catch (e) { setErr((e as Error).message) }
+    setBusy('')
+  }
+  const decisionBody = () => ({ id: r.id, status: choice, amount: choice === 'approved' ? Number(amount.replace(/\D/g, '')) : null, note })
+  const validDecision = () => {
+    if (!choice) throw new Error('בחרו מאושר או לא מאושר')
+    if (choice === 'approved' && !(Number(amount.replace(/\D/g, '')) > 0)) throw new Error('הזינו את הסכום שאושר')
+  }
+
+  const b = r.beneficiary
+  const fam = asFamily(r.family)
+  const inc = asIncome(r.income)
+  const det = (r.applicant_details ?? {}) as Record<string, unknown>
+  const kids = fam?.kids ?? []
+  const docs = r.documents ?? []
+  const have = new Set(docs.map(d => d.label).filter(Boolean))
+  const missing = have.size && r.aid_type && r.aid_type in NEED
+    ? NEED[r.aid_type as AidReason].filter(l => !isOptionalDoc(l) && !have.has(l))
+    : []
+  const fromLink = !r.beneficiary_id
+
+  const personal: [string, string | null | undefined, string?][] = [
+    ['תעודת זהות', b?.id_number || r.applicant_id_number, 'num'],
+    ['תאריך לידה', fmtDate(b?.birth_date || r.applicant_birth_date || String(det.birth_date ?? '')), 'num'],
+    ['טלפון', b?.phone || r.applicant_phone, 'ltr'],
+    ['מייל', b?.email || r.applicant_email, 'ltr'],
+    ['מצב משפחתי', b?.marital_status || String(det.marital_status ?? '')],
+    ['כתובת', [b?.address ?? r.applicant_address, b?.city ?? r.applicant_city].filter(Boolean).join(', ')],
+  ]
+  const incRows: [string, number][] = inc ? ([
+    [['הבעל', inc.husbandJob].filter(Boolean).join(' · '), inc.husband],
+    [['האישה', inc.wifeJob].filter(Boolean).join(' · '), inc.wife],
+    ['קצבאות', inc.benefits],
+    ['הכנסה אחרת', inc.other],
+    ['שכר דירה', -inc.rent],
+    ['חובות פתוחים', -inc.debts],
+  ] as [string, number][]).filter(([, v]) => v) : []
+  const money = (n: number) => (n < 0 ? `−${fmtMoney(-n)}` : fmtMoney(n))
+
+  const timeline: [string | null | undefined, string][] = [
+    [r.created_at, r.source === 'office' ? 'נוספה במשרד' : fromLink ? 'הוגשה מהקישור הייחודי' : 'הוגשה מהאזור האישי'],
+    [r.sent_to_decision_at, 'הועברה לאישור המנהל'],
+    [r.reminder_sent_at, 'נשלחה תזכורת למנהל'],
+    [r.decision_replied_at, 'תשובת המנהל התקבלה במייל'],
+    [r.final_message_sent_at, 'נשלח מייל למגיש'],
+  ]
+
+  let action: React.ReactNode
+  if (st === 'back') {
+    action = (
+      <div className="act" style={{ borderColor: '#EBC3A6' }}>
+        <h4><AidIcon name="back" style={{ color: 'var(--back)' }} />חזר מהמנהל · עדכנו את הסטטוס</h4>
+        <div className="letter"><div className="from"><span>תשובת המנהל במייל</span><span className="num">{fmtDateTime(r.decision_replied_at)}</span></div><q>{r.decision_reply}</q></div>
+        <p className="guess">
+          המערכת זיהתה: {guess.decision === 'approved'
+            ? <b style={{ color: 'var(--ok)' }}>מאושר{guess.amount ? ` · ${fmtMoney(guess.amount)}` : ''}</b>
+            : guess.decision === 'rejected' ? <b style={{ color: 'var(--no)' }}>לא מאושר</b> : <b>לא ברור, בחרו ידנית</b>}. ההחלטה נשמרת רק כשתלחצו.
+        </p>
+        <div className="decide">
+          <button className="opt ok" aria-pressed={choice === 'approved'} onClick={() => setChoice('approved')}><AidIcon name="check" />מאושר</button>
+          <button className="opt no" aria-pressed={choice === 'rejected'} onClick={() => setChoice('rejected')}><AidIcon name="x" />לא מאושר</button>
+        </div>
+        {choice === 'approved' ? (
+          <div className="amtrow">
+            <div className="field"><label>סכום שאושר</label><input className="inp num" inputMode="numeric" value={amount} onChange={e => setAmount(e.target.value)} /></div>
+            <div className="field"><label>הערה למגיש (תופיע במייל)</label><input className="inp" value={note} onChange={e => setNote(e.target.value)} placeholder="למשל: הסכום יועבר בשני תשלומים" /></div>
           </div>
-        )}
-        toolbar={<>
-          <SearchBar value={query} onChange={setQuery} />
-          <SortButtons value={sort} onChange={setSort} />
-        </>} />
-      {/* כרטסת קופצת (RecordModal): ניווט בין השורות המסוננות */}
-      {openId && tc.rows.some(x => x.id === openId) && (
-        <AidCardModal rows={tc.rows} index={tc.rows.findIndex(x => x.id === openId)}
-          onIndex={i => setOpenId(tc.rows[i].id)} onClose={() => setOpenId(null)} />
-      )}
+        ) : choice === 'rejected' ? (
+          <div className="field" style={{ marginBottom: 12 }}><label>הערה למגיש (תופיע במייל)</label><input className="inp" value={note} onChange={e => setNote(e.target.value)} placeholder="למשל: אם יחול שינוי במצב, אפשר להגיש בקשה חדשה." /></div>
+        ) : null}
+        <div className="row">
+          <button className="btn pri lg" disabled={!!busy} onClick={() => run('save', async () => { validDecision(); await post('/api/admin/financial-aid/decide', decisionBody()); onDone() })}>
+            <AidIcon name="send" />{busy === 'save' ? 'שומר ושולח…' : 'שמור ושלח מייל למגיש'}
+          </button>
+          <button className="btn" disabled={!!busy} onClick={() => run('pv', async () => { validDecision(); setMail(await post('/api/admin/financial-aid/decide', { ...decisionBody(), preview: true })) })}>תצוגה מקדימה של המייל</button>
+        </div>
+      </div>
+    )
+  } else if (st === 'pending' || st === 'inquiry') {
+    action = (
+      <div className="act">
+        <h4>מה עושים עם הבקשה?</h4>
+        <div className="row">
+          <button className="btn gold lg" disabled={!!busy} onClick={() => run('send', async () => { await post('/api/admin/financial-aid/send', { id: r.id }); onDone() })}>
+            <AidIcon name="send" />{busy === 'send' ? 'שולח…' : 'העבר לאישור המנהל'}
+          </button>
+          <button className="btn lg" disabled={!!busy} onClick={() => run('inq', async () => {
+            if (r.status !== 'inquiry') await post('/api/admin/financial-aid/decide', { id: r.id, status: 'inquiry' })
+            router.push(`/admin/financial-aid/${r.id}`)
+          })}>בקש השלמת מסמכים</button>
+        </div>
+        <p className="note"><AidIcon name="mail" />המנהל יקבל מייל מתומצת עם כל פרטי הבקשה והמסמכים.</p>
+      </div>
+    )
+  } else if (st === 'manager') {
+    action = (
+      <div className="act">
+        <h4><AidIcon name="mail" style={{ color: 'var(--mgr)' }} />נשלח למנהל{r.sent_to_decision_at ? ` ב-${fmtDateTime(r.sent_to_decision_at)}` : ''} · ממתין לתשובה</h4>
+        <div className="row">
+          <button className="btn" disabled={!!busy} onClick={() => run('rem', async () => { await post('/api/admin/financial-aid/send', { id: r.id, remind: true }); onDone() })}>
+            {busy === 'rem' ? 'שולח…' : r.reminder_sent_at ? `שלח תזכורת נוספת (נשלחה ${fmtShort(r.reminder_sent_at)})` : 'שלח תזכורת למנהל'}
+          </button>
+          <button className="btn" disabled={!!busy} onClick={() => run('mv', async () => { setMail(await post('/api/admin/financial-aid/send', { id: r.id, preview: true })) })}>הצג את המייל שנשלח</button>
+        </div>
+      </div>
+    )
+  } else {
+    action = (
+      <div className="act">
+        <h4><Pill st={st} /> {st === 'approved' && r.amount ? `אושר ${fmtMoney(r.amount)}` : ''}</h4>
+        <p className="note" style={{ margin: 0 }}>
+          <AidIcon name={r.final_message_sent_at ? 'check' : 'x'} />{r.final_message_sent_at ? 'מייל נשלח למגיש.' : 'המייל למגיש לא נשלח.'}
+          {r.decision_note ? ` הערה: ${r.decision_note}` : ''}
+        </p>
+      </div>
+    )
+  }
 
-      {/* מודל בקשה חדשה */}
-      {newOpen && (
-        <div className="dlg-backdrop " dir="rtl">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-              <h2 className="font-bold text-slate-900">בקשת סיוע רפואי חדשה</h2>
-              <button onClick={resetNew} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
-            </div>
-            <div className="p-6 flex flex-col gap-4">
-              {/* בחירת נתמך לפי ת.ז */}
-              <div>
-                <label className="text-sm font-medium text-slate-700 mb-1 block">תעודת זהות של הנתמך <span className="text-red-500">*</span></label>
-                <div className="flex gap-2">
-                  <input value={idInput} onChange={e => { setIdInput(e.target.value); setFound(null) }} onKeyDown={e => e.key === 'Enter' && lookup()}
-                    dir="ltr" placeholder="ת.ז (בעל/אישה)" className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm ltr-num" />
-                  <button onClick={lookup} disabled={looking || !idInput.trim()}
-                    className="inline-flex items-center gap-1 bg-slate-700 hover:bg-slate-800 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-3 py-2">
-                    {looking ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} חפש
-                  </button>
-                </div>
-                {lookupErr && <p className="text-xs text-red-600 mt-1">{lookupErr}</p>}
-                {found && <p className="text-sm text-green-700 mt-1.5 flex items-center gap-1"><Check size={14} /> {found.name} <span className="text-slate-400 ltr-num">({found.id_number})</span></p>}
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-slate-700 mb-1 block">סיבת הבקשה <span className="text-red-500">*</span></label>
-                <textarea value={newReason} onChange={e => setNewReason(e.target.value)} rows={4}
-                  placeholder="פרטו את המקרה, הצורך והעלויות. אם רפואי — אבחנה/טיפול/עלות בקצרה."
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-slate-700 mb-1 block">מסמך מצורף (לא חובה)</label>
-                {newFile ? (
-                  <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2.5">
-                    <span className="text-sm text-green-700 flex items-center gap-2 min-w-0"><Check size={14} className="flex-shrink-0" /><span className="truncate">{newFile.name}</span></span>
-                    <button type="button" onClick={() => setNewFile(null)} className="text-red-400 hover:text-red-600"><X size={14} /></button>
-                  </div>
-                ) : (
-                  <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-300 rounded-lg px-3 py-3 text-sm text-slate-500 cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/40">
-                    <Upload size={16} /> העלאת מסמך
-                    <input type="file" accept={UPLOAD_ACCEPT} className="hidden" onChange={e => setNewFile(e.target.files?.[0] ?? null)} />
-                  </label>
-                )}
-                <p className="text-xs text-slate-400 mt-1">{UPLOAD_HINT}</p>
-              </div>
-
-              {saveErr && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{saveErr}</div>}
-              <button onClick={submitNew} disabled={saving}
-                className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-semibold py-3 rounded-xl">
-                {saving ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />} צור בקשה
-              </button>
-            </div>
+  return (
+    <>
+      <Modal label="כרטסת בקשה" onClose={mail ? () => setMail(null) : onClose}>
+        <div className="card-h">
+          <div className="top">
+            <Pill st={st} />
+            <span className="num" style={{ color: 'var(--faint)', fontSize: 13 }}>בקשה {no(r)}</span>
+            <button className="x" aria-label="סגירה" onClick={onClose}><AidIcon name="x" /></button>
+          </div>
+          <h2>{aidPersonName(r) || 'ללא שם'}</h2>
+          <div className="m">
+            <span>{REASON_LABEL[r.aid_type ?? ''] ?? 'סיוע'}</span>
+            <span>{sourceLabel(r)}</span>
+            <span>הוגשה <span className="num">{fmtDate(r.created_at)}</span></span>
+            {r.requested_amount ? <span>מבוקש <b className="num" style={{ color: 'var(--ink)' }}>{fmtMoney(r.requested_amount)}</b></span> : null}
           </div>
         </div>
-      )}
-      {confirmDialog}
-    </div>
+        <div className="card-b">
+          {prev && (
+            <div className="internal"><AidIcon name="hist" /><div>
+              <b>כבר הגיש בקשה: {prev}</b>
+              <div className="lk"><AidIcon name="lock" size={12} /> פנימי · המגיש לא רואה את זה</div>
+            </div></div>
+          )}
+          {action}
+          {err && <p className="note" role="alert" style={{ color: 'var(--no)', marginTop: -8 }}>{err}</p>}
+
+          <div className="blk"><h5>פרטים אישיים</h5><div className="kv">
+            {personal.map(([l, v, c]) => <div key={l}><span>{l}</span><b className={c} dir={c === 'ltr' ? 'ltr' : undefined}>{v || '—'}</b></div>)}
+          </div></div>
+
+          {fam?.wife?.name && (
+            <div className="blk"><h5>האישה</h5><div className="kv">
+              <div><span>שם</span><b>{fam.wife.name}</b></div>
+              <div><span>תעודת זהות</span><b className="num">{fam.wife.id || '—'}</b></div>
+              <div><span>תאריך לידה</span><b className="num">{fmtDate(fam.wife.birth) || '—'}</b></div>
+            </div></div>
+          )}
+
+          {kids.length > 0 && (
+            <div className="blk"><h5>ילדים · {kids.length}</h5><table className="mini"><tbody>
+              <tr><th>שם</th><th>גיל</th><th>מצב</th></tr>
+              {kids.slice(0, 4).map((k, i) => <tr key={i}><td>{k.name}</td><td className="num">{ageFrom(k.birth) ?? '—'}</td><td>{k.status}</td></tr>)}
+              {kids.length > 4 && <tr><td colSpan={3} style={{ color: 'var(--faint)' }}>ועוד {kids.length - 4} ילדים</td></tr>}
+            </tbody></table></div>
+          )}
+
+          {inc && (
+            <div className="blk"><h5>הכנסות והוצאות בחודש</h5>
+              {incRows.length > 0 && <table className="mini"><tbody>{incRows.map(([l, v]) => <tr key={l}><td>{l}</td><td className="num">{money(v)}</td></tr>)}</tbody></table>}
+              <div className="money">
+                <div><small>סה״כ הכנסות</small><span className="big num">{fmtMoney(totalIncome(inc))}</span></div>
+                <div><small>לנפש ({souls(fam)} נפשות)</small><span className="big num">{fmtMoney(perCapita(inc, fam))}</span></div>
+              </div>
+            </div>
+          )}
+
+          {r.reason && <div className="blk"><h5>הסיבה</h5><p style={{ margin: 0, fontSize: 'var(--t-sm)', whiteSpace: 'pre-wrap' }}>&quot;{r.reason}&quot;</p></div>}
+
+          <div className="blk"><h5>מסמכים · {docs.length}</h5><div className="files">
+            {docs.map((d, i) => <a key={i} className="file" href={d.file_url ?? '#'} target="_blank" rel="noreferrer"><AidIcon name="file" />{d.label || d.file_name || 'מסמך'}</a>)}
+            {missing.map(l => <span key={l} className="file miss"><AidIcon name="x" />{l} · חסר</span>)}
+            {docs.length === 0 && missing.length === 0 && <span style={{ color: 'var(--faint)', fontSize: 'var(--t-sm)' }}>לא צורפו מסמכים</span>}
+          </div></div>
+
+          <div className="blk"><h5>הערה פנימית</h5>
+            <textarea className="inp" rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="רק הצוות רואה את זה" style={{ width: '100%', resize: 'vertical' }} />
+            {notes !== (r.notes ?? '') && (
+              <button className="btn" style={{ marginTop: 8 }} disabled={!!busy} onClick={() => run('notes', async () => { await post('/api/admin/financial-aid/decide', { id: r.id, notes }); onDone() })}>
+                {busy === 'notes' ? 'שומר…' : 'שמירת הערה'}
+              </button>
+            )}
+          </div>
+
+          <div className="blk"><h5>מה קרה עם הבקשה</h5><ul className="tl">
+            {timeline.filter(([t]) => t).map(([t, l]) => <li key={l}><time>{fmtDateTime(t)}</time><span>{l}</span></li>)}
+          </ul></div>
+
+          <p className="note" style={{ margin: 0 }}><Link href={`/admin/financial-aid/${r.id}`}>לדף הבקשה המלא (התכתבות ומחיקה)</Link></p>
+        </div>
+      </Modal>
+      {mail && <MailPreview mail={mail} onClose={() => setMail(null)} />}
+    </>
   )
 }

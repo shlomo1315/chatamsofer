@@ -456,7 +456,12 @@ export interface FinancialAidRequest {
   beneficiary_id?: string | null
   source?: 'admin' | 'public'
   is_descendant?: boolean
-  aid_type?: 'medical' | 'widow' | 'orphans' | null
+  aid_type?: 'medical' | 'widow' | 'orphans' | 'econ' | 'other' | null
+  request_no?: number | null
+  family?: unknown
+  income?: unknown
+  decision_note?: string | null
+  reminder_sent_at?: string | null
   unread?: number
   relation?: string | null
   referrer?: string | null

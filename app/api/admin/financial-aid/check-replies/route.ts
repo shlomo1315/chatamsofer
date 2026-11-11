@@ -2,10 +2,6 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
 import { getGmailClient, parseMessage } from '@/lib/gmail'
-import { deliverMail } from '@/lib/sendMail'
-import { mailFor } from '@/lib/departments'
-import { financialAidDecisionEmail } from '@/lib/emailTemplates'
-import { ensureEmailTexts } from '@/lib/emailTextsStore'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,32 +20,14 @@ function getAdminClient() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-// מפענח את תוכן התשובה (הטקסט החדש בלבד, לפני הציטוט):
-// מספר → מאושר + סכום · X → נדחה · אחרת → ללא הכרעה.
-function parseDecision(raw: string): { kind: 'approved'; amount: number } | { kind: 'rejected' } | { kind: 'none' } {
-  let t = (raw || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ')
-  // חיתוך הציטוט של ההודעה המקורית (שמכיל ת.ז/טלפון — לא לפענח משם)
-  t = t.split(/On .*wrote:|ביום .*כתב|-{3,}\s*Original|מאת:|From:|________/i)[0]
-  t = t.split('\n').filter(l => !l.trim().startsWith('>')).join(' ')
-  const head = t.slice(0, 300)
-  const numMatch = head.replace(/[,₪]/g, '').match(/\d{1,7}/)
-  if (numMatch) {
-    const amount = parseInt(numMatch[0], 10)
-    if (amount > 0) return { kind: 'approved', amount }
-  }
-  if (/(^|\s)x(\s|$|\.)/i.test(head) || /לא\s*מאושר|נדח|לא לאשר|דחה/i.test(head)) return { kind: 'rejected' }
-  return { kind: 'none' }
-}
-
 export async function POST() {
-  await ensureEmailTexts()
   if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
   const { data: reqs } = await admin
     .from('financial_aid_requests')
-    .select('id, source, gmail_thread_id, gmail_message_id, decision_email, beneficiary:beneficiaries(full_name, family_name, email)')
+    .select('id, gmail_thread_id, gmail_message_id, decision_email, decision_reply')
     .eq('status', 'awaiting_decision')
     .not('gmail_thread_id', 'is', null)
   if (!reqs?.length) return NextResponse.json({ ok: true, updated: 0 })
@@ -83,37 +61,15 @@ export async function POST() {
       const reply = (decision ? [...inbound].reverse().find(m => m.fromEmail.toLowerCase() === decision) : undefined)
         ?? [...inbound].reverse()[0]
       if (!reply) continue
-      const cleaned = cleanReplyText(reply.body || reply.snippet)
       const repliedAt0 = reply.date ? new Date(reply.date).toISOString() : new Date().toISOString()
-      // בקשה ציבורית: שומרים את תשובת הגורם המאשר בלבד. ההחלטה והסכום מוזנים ידנית ע"י המזכיר.
-      if ((r as { source?: string }).source === 'public') {
-        await admin.from('financial_aid_requests').update({
-          decision_reply: cleanReplyText(reply.body || reply.snippet || '', 1000),
-          decision_replied_at: repliedAt0,
-          updated_at: new Date().toISOString(),
-        }).eq('id', r.id)
-        updated++
-        continue
-      }
-      const d = parseDecision(cleaned || reply.snippet)
-      if (d.kind === 'none') continue
-      const repliedAt = reply.date ? new Date(reply.date).toISOString() : new Date().toISOString()
+      // שומרים רק את תשובת המנהל. ההחלטה והסכום נשמרים ידנית על ידי המזכירות.
+      if ((r as { decision_reply?: string | null }).decision_reply) continue
       await admin.from('financial_aid_requests').update({
-        status: d.kind === 'approved' ? 'approved' : 'rejected',
-        amount: d.kind === 'approved' ? d.amount : null,
-        decision_reply: cleaned.slice(0, 200),
-        decision_replied_at: repliedAt,
+        decision_reply: cleanReplyText(reply.body || reply.snippet || '', 1000),
+        decision_replied_at: repliedAt0,
         updated_at: new Date().toISOString(),
       }).eq('id', r.id)
       updated++
-
-      // הודעת החלטה למבקש
-      const ben = (r as Record<string, unknown>).beneficiary as { full_name?: string; family_name?: string; email?: string } | undefined
-      if (ben?.email) {
-        const name = [ben.family_name, ben.full_name].filter(Boolean).join(' ') || ben.full_name || ''
-        const mail = financialAidDecisionEmail(name, d.kind === 'approved', d.kind === 'approved' ? d.amount : null)
-        deliverMail(ben.email, mail.subject, mail.html, undefined, mailFor('medical')).catch(() => {})
-      }
     } catch { /* ממשיכים לבקשה הבאה */ }
   }
 
