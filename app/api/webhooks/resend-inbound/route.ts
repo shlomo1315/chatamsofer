@@ -407,6 +407,50 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, ignored: 'foreign-recipient' })
   }
 
+  // ── t@: הפניה ישירה לג'ימייל האישי של המנהל, בלי שמירה במערכת ──
+  const PERSONAL_FORWARD: Record<string, string> = { 't@chasamsofer.info': '4363773@gmail.com' }
+  {
+    const hit = directRecipients.map(a => a.toLowerCase().trim()).find(a => PERSONAL_FORWARD[a])
+    const fromLc = (from.email || '').toLowerCase()
+    if (hit && !fromLc.endsWith('@chasamsofer.info')) {
+      const rid = String(data.email_id ?? data.emailId ?? data.id ?? '').trim()
+      let fHtml: string | null = null
+      let fText: string | null = null
+      const fAtts: MailAttachment[] = []
+      if (rid && process.env.RESEND_API_KEY) {
+        const resend = new Resend(process.env.RESEND_API_KEY)
+        let got = await resend.emails.receiving.get(rid)
+        if (!got.data?.html && !got.data?.text && !got.error) {
+          await new Promise(r => setTimeout(r, 1500))
+          got = await resend.emails.receiving.get(rid)
+        }
+        fHtml = got.data?.html ?? null
+        fText = got.data?.text ?? null
+        if (got.data && Array.isArray(got.data.attachments) && got.data.attachments.length) {
+          try {
+            const list = await resend.emails.receiving.attachments.list({ emailId: rid })
+            for (const a of list.data?.data ?? []) {
+              const built = await urlToAttachment(a.download_url, a.filename ?? 'attachment')
+              if (built) fAtts.push(built)
+            }
+          } catch (e) {
+            console.error('[resend-inbound] t@ attachments failed:', e instanceof Error ? e.message : String(e))
+          }
+        }
+      }
+      const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      const bodyHtml = fHtml?.trim() ? fHtml : `<pre style="white-space:pre-wrap;font-family:inherit;">${esc(fText ?? '')}</pre>`
+      await deliverMail(PERSONAL_FORWARD[hit], subject || '(ללא נושא)', bodyHtml, fAtts.length ? fAtts : undefined, {
+        fromName: `${BRAND_NAME} · התקבל ב-${hit}`,
+        fromEmail: hit,
+        replyTo: from.email,
+        skipLog: true,
+      })
+      console.log('[resend-inbound] t@ הופנה ישירות למייל האישי')
+      return NextResponse.json({ ok: true, routed: 'personal-forward' })
+    }
+  }
+
   // ── d@: כל שולח נרשם לרשימת הגיליונות ומקבל מייל אישור ──
   // התיבה אינה נקראת, ולכן המייל לא נשמר בדואר הנכנס. רק כשהיא הנמענת היחידה בדומיין
   // (מייל לתיבה אחרת עם עותק אליה ממשיך בניתוב הרגיל).
