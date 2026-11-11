@@ -88,13 +88,16 @@ export async function isLoadedThisMonth(admin: SupabaseClient, centerId: string,
 }
 
 /** מאתר/מקים את הלקוח של המוקד בנדרים. */
-async function ensureClient(acc: CenterAccount, creds: NonNullable<Awaited<ReturnType<typeof getNedarimCreds>>>): Promise<string> {
+export async function ensureClient(
+  admin: SupabaseClient, acc: CenterAccount, creds: NonNullable<Awaited<ReturnType<typeof getNedarimCreds>>>,
+): Promise<string> {
   if (acc.nedarim_client_id) return acc.nedarim_client_id
-  let id: string | null = null
-  // id_number הוא מזהה צד ג' (טקסט חופשי) ונשמר בנדרים בשדה Tsad3Id
-  if (acc.id_number) id = await findClientByTsad3(creds, acc.id_number).catch(() => null)
-  if (!id) id = await saveClientCard(creds, { full_name: acc.center_name, family_name: 'מוקד', id_number: acc.id_number, id_type: 'passport', phone: acc.phone }, null, 'מוקדים')
+  // מזהה צד ג' (Tsad3Id) קבוע למוקד: ריצה חוזרת (למשל אחרי קריסה לפני השמירה) מוצאת את הלקוח ולא מקימה כפילות
+  const tsad3 = acc.id_number || `center-${acc.center_id}`
+  let id: string | null = await findClientByTsad3(creds, tsad3).catch(() => null)
+  if (!id) id = await saveClientCard(creds, { full_name: acc.center_name, family_name: 'מוקד', id_number: tsad3, id_type: 'passport', phone: acc.phone }, null, 'מוקדים')
   if (!id) throw new Error('לא הצלחנו להקים את המוקד בנדרים')
+  await admin.from('center_monthly_cards').update({ nedarim_client_id: id, id_number: tsad3, updated_at: new Date().toISOString() }).eq('center_id', acc.center_id)
   return id
 }
 
@@ -119,7 +122,7 @@ export async function linkCenterCard(admin: SupabaseClient, acc: CenterAccount, 
   const creds = await getNedarimCreds()
   if (!creds) return { ok: false, error: 'נדרים לא מוגדר' }
   try {
-    const clientId = await ensureClient(acc, creds)
+    const clientId = await ensureClient(admin, acc, creds)
     const r = await setMagneticCard(creds, clientId, card)
     if (!r.ok && !(await cardAlreadyOnClient(creds, clientId, card))) return { ok: false, error: r.message || 'שיוך הכרטיס בנדרים נכשל' }
     const { error } = await admin.from('center_monthly_cards').update({
@@ -155,7 +158,7 @@ export type LoadResult = 'loaded' | 'already' | 'busy' | 'no_stock' | 'error'
  */
 export async function runMonthlyLoad(
   admin: SupabaseClient, acc: CenterAccount, now: Date = new Date(),
-): Promise<{ result: LoadResult; error?: string }> {
+): Promise<{ result: LoadResult; error?: string; amount?: number; expiresAt?: string }> {
   const month = israelMonth(now)
   const amount = await getLoadAmount(admin)
   const { data: reserved, error: rErr } = await admin.rpc('reserve_center_monthly_load', { p_center: acc.center_id, p_month: month, p_amount: amount })
@@ -167,7 +170,7 @@ export async function runMonthlyLoad(
   try {
     const creds = await getNedarimCreds()
     if (!creds) { await release(); return { result: 'error', error: 'נדרים לא מוגדר' } }
-    const clientId = await ensureClient(acc, creds)
+    const clientId = await ensureClient(admin, acc, creds)
     // קבוצה נפרדת למוקדים: לא הקבוצה של היולדות, ובלי הגבלת חנויות. התוקף חודשיים.
     const limitedId = await getCenterLimitedId()
     const expiresAt = loadExpiry(now)
@@ -177,7 +180,7 @@ export async function runMonthlyLoad(
     // הכסף כבר נטען: אם הסימון נכשל, לא משחררים (היה מאפשר טעינה כפולה); נשאר pending ונראה לאדמין
     await admin.from('center_monthly_loads').update({ status: 'loaded', tlush_id: r.tlushId, expires_at: expiresAt, loaded_at: new Date().toISOString(), balance: amount, balance_at: new Date().toISOString() })
       .eq('center_id', acc.center_id).eq('month', month)
-    return { result: 'loaded' }
+    return { result: 'loaded', amount, expiresAt }
   } catch (e) {
     // חריגה אחרי הפנייה לנדרים היא עמימה (אולי נטען): לא משחררים, כדי שלא תהיה טעינה כפולה
     if (!called) await release()
