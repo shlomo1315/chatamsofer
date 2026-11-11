@@ -25,7 +25,7 @@ const daysAgoIso = (d: number) => new Date(Date.now() - d * 86_400_000).toISOStr
 export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const staff = await guardPage('gilyonot')
   const rawTab = (await searchParams).tab
-  const tab = rawTab === 'issues' || rawTab === 'nedarim' || rawTab === 'distributors' || rawTab === 'lists' ? rawTab : 'subscribers'
+  const tab = rawTab === 'issues' || rawTab === 'sends' || rawTab === 'nedarim' || rawTab === 'distributors' || rawTab === 'lists' ? rawTab : 'subscribers'
   const perms = staff.permissions as UserPermissions
   const can = (a: 'add' | 'edit' | 'delete') => staff.role === 'admin' || roleAllows(staff.role, perms, 'gilyonot', a)
 
@@ -53,7 +53,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
       needList ? loadSubscribers(db) : Promise.resolve(null),
       // הגדרות המשיכה מנדרים (בלי המפתח) — רק למי שרשאי לערוך
       can('edit') ? getPullView(db) : Promise.resolve(null),
-      db.from('gilyonot_issues').select('id, title, parasha, subject, intro, body_html, design, file_name, file_size, file_path, file2_name, file2_size, status, delivery_mode, total_count, created_at, started_at, completed_at, archive_published, archive_topic, archive_date')
+      db.from('gilyonot_issues').select('id, title, parasha, subject, intro, body_html, design, file_name, file_size, file_path, file2_name, file2_size, status, scheduled_at, schedule_error, delivery_mode, total_count, created_at, started_at, completed_at, archive_published, archive_topic, archive_date')
         .order('created_at', { ascending: false }).limit(500),
       db.from('gilyonot_issue_stats').select('*'),
     ])

@@ -12,6 +12,7 @@ import NedarimPull from './NedarimPull'
 import Distributors from './Distributors'
 import MailEditor from './MailEditor'
 import { IssueAnalytics, IssuesDashboard } from './IssueAnalytics'
+import { LinkClicks, SchedulePanel, SendsManager } from './SendsManager'
 import { ArchivePanel, ListPicker, ListsManager, type ListCount } from './Lists'
 import type { GilyonotList } from '@/lib/gilyonotLists'
 import { Badge, btnDanger, btnGhost, btnPrimary, Card, CardHeader, input, link, Meter, Notice, Stat, StepNum, Stepper, type Tone } from './ui'
@@ -41,7 +42,9 @@ export interface IssueView {
   file2_size?: number | null
   /** הקובץ שנשלח הוא הגרסה המכווצת */
   compressed: boolean
-  status: 'draft' | 'sending' | 'sent'
+  status: 'draft' | 'scheduled' | 'sending' | 'sent'
+  scheduled_at?: string | null
+  schedule_error?: string | null
   total_count: number | null
   created_at: string
   started_at: string | null
@@ -77,7 +80,7 @@ async function api(url: string, init?: RequestInit): Promise<Record<string, unkn
 const json = (method: string, body: unknown): RequestInit => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 
 export default function GilyonotClient(props: {
-  tab: 'subscribers' | 'issues' | 'nedarim' | 'distributors' | 'lists'
+  tab: 'subscribers' | 'issues' | 'sends' | 'nedarim' | 'distributors' | 'lists'
   lists: GilyonotList[]
   subscribers: SubscriberView[]
   counts: { active: number; recent: number; removed: number }
@@ -93,6 +96,7 @@ export default function GilyonotClient(props: {
   const tabs = [
     { key: 'subscribers', label: 'רשימת תפוצה', count: active, icon: Users },
     { key: 'issues', label: 'גיליונות ושליחה', count: props.issues.length, icon: Newspaper },
+    { key: 'sends', label: 'שליחות', count: props.issues.filter(i => i.status !== 'draft').length, icon: Send },
     { key: 'lists', label: 'רשימות תפוצה', count: props.lists.filter(l => l.active).length, icon: Inbox },
     { key: 'distributors', label: 'מפיצים', count: props.distributors ? props.distributors.rows.filter(r => r.status === 'active').length : null, icon: Truck },
     ...(props.nedarim ? [{ key: 'nedarim', label: 'נדרים פלוס', count: null, icon: RefreshCw }] : []),
@@ -124,6 +128,8 @@ export default function GilyonotClient(props: {
         ? (props.distributors ? <Distributors {...props.distributors} canAdd={props.canAdd} canEdit={props.canEdit} canDelete={props.canDelete} /> : null)
         : props.tab === 'nedarim' && props.nedarim
         ? <NedarimPull view={props.nedarim} />
+        : props.tab === 'sends'
+        ? <SendsManager rows={props.issues} />
         : props.tab !== 'issues'
         ? <Subscribers rows={props.subscribers} canAdd={props.canAdd} canEdit={props.canEdit} canDelete={props.canDelete} />
         : <Issues rows={props.issues} lists={props.lists} activeCount={active} defaultParasha={props.defaultParasha} canAdd={props.canAdd} canEdit={props.canEdit} canDelete={props.canDelete} />}
@@ -470,6 +476,7 @@ function PasteForm({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => 
 
 const STATUS: Record<IssueView['status'], { label: string; tone: Tone }> = {
   draft: { label: 'טיוטה', tone: 'amber' },
+  scheduled: { label: 'מתוזמן', tone: 'navy' },
   sending: { label: 'בשליחה', tone: 'sky' },
   sent: { label: 'נשלח', tone: 'green' },
 }
@@ -737,7 +744,9 @@ function IssueDetail({ issue, lists, canEdit, canDelete, onClose }: { issue: Iss
         <button type="button" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900" onClick={onClose} aria-label="סגירה"><X className="h-5 w-5" /></button>
       </div>
 
-      {!draft && <IssueAnalytics issue={issue} base={base} />}
+      {!draft && issue.status !== 'scheduled' && <IssueAnalytics issue={issue} base={base} />}
+      {!draft && issue.status !== 'scheduled' && <LinkClicks issueId={issue.id} />}
+      {issue.status === 'scheduled' && <div className="p-5 pb-0"><SchedulePanel issue={issue} listIds={picked} canEdit={canEdit} /></div>}
       {editing && <Stepper steps={['העלאת הקובץ', 'בדיקה', 'שליחה לכל הרשימה']} current={step} done={[true, tested, false]} onSelect={setStep} />}
       {editing && step === 1 && <FilePanel issue={issue} base={base} />}
       {editing && <div className={step === 2 ? '' : 'hidden'}><MailEditor base={base} issue={issue} saveRef={saveRef} /></div>}
@@ -779,6 +788,7 @@ function IssueDetail({ issue, lists, canEdit, canDelete, onClose }: { issue: Iss
                 <button type="button" disabled={busy || !count?.total} className={`${btnPrimary} mt-3 w-full py-2.5`} onClick={sendAll}>
                   {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Send className="h-4 w-4" aria-hidden />}שליחה ל-{num(count?.total ?? 0)} נמענים
                 </button>
+                {canEdit && <div className="mt-3"><SchedulePanel issue={issue} listIds={picked} canEdit={canEdit} /></div>}
               </div>
             )}
 

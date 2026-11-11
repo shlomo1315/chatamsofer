@@ -58,7 +58,7 @@ export interface IssueRow {
   /** קובץ שני ("היכלות"), לא חובה */
   file2_path?: string | null
   file2_name?: string | null
-  status: 'draft' | 'sending' | 'sent'
+  status: 'draft' | 'scheduled' | 'sending' | 'sent'
   /** 'attachment' = קובץ מצורף במייל (ברירת מחדל, אין נתוני הורדות); 'link' = גיליונות שנשלחו עם קישור הורדה שנספר */
   delivery_mode?: 'link' | 'attachment'
 }
@@ -159,7 +159,7 @@ export async function sendGilyonTest(db: SupabaseClient, issue: IssueRow, to: st
  * מקפיא את הרשימה: שורת משלוח לכל נרשם פעיל, ומעביר את הגיליון ל-'sending'.
  * ה-worker ישלח בטיק הקרוב. מחזיר את מספר הנמענים.
  */
-export async function startIssueSend(db: SupabaseClient, issueId: string, listIds?: string[]): Promise<{ ok: true; total: number } | { ok: false; error: string }> {
+export async function startIssueSend(db: SupabaseClient, issueId: string, listIds?: string[], from: 'draft' | 'scheduled' = 'draft'): Promise<{ ok: true; total: number } | { ok: false; error: string }> {
   const { data: row } = await db.from('gilyonot_issues').select('title, parasha, file_path, file_name, file2_path').eq('id', issueId).maybeSingle()
   if (!row) return { ok: false, error: 'הגיליון לא נמצא' }
   // הקובץ מצורף לכל מייל, אז בודקים כבר כאן שהוא קיים ונכנס במייל
@@ -168,13 +168,13 @@ export async function startIssueSend(db: SupabaseClient, issueId: string, listId
   // נעילה אופטימית: רק טיוטה עוברת לשליחה, כך שלחיצה כפולה לא מכפילה
   const { data: claimed, error: claimErr } = await db.from('gilyonot_issues')
     .update({ status: 'sending', delivery_mode: 'attachment', started_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-    .eq('id', issueId).eq('status', 'draft').select('id').maybeSingle()
+    .eq('id', issueId).eq('status', from).select('id').maybeSingle()
   if (claimErr) return { ok: false, error: 'עדכון הגיליון נכשל' }
   if (!claimed) return { ok: false, error: 'הגיליון כבר נשלח או בשליחה' }
 
   const rollback = async () => {
     await db.from('gilyonot_deliveries').delete().eq('issue_id', issueId)
-    await db.from('gilyonot_issues').update({ status: 'draft', started_at: null }).eq('id', issueId)
+    await db.from('gilyonot_issues').update({ status: 'draft', started_at: null, scheduled_at: null, scheduled_list_ids: null }).eq('id', issueId)
   }
   // הרשימות שנבחרו, מאוחדות לפי מייל. בלי בחירה = הרשימה הראשית בלבד (כמו קודם).
   let recipients: Recipient[]
@@ -206,6 +206,26 @@ export async function startIssueSend(db: SupabaseClient, issueId: string, listId
   return { ok: true, total }
 }
 
+/** בדיקה בזמן התזמון שהקובץ קיים ונכנס במייל (אותה בדיקה כמו בשליחה). */
+export async function checkScheduleReady(db: SupabaseClient, issueId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { data: row } = await db.from('gilyonot_issues').select('title, parasha, file_path, file_name, file2_path').eq('id', issueId).maybeSingle()
+  if (!row) return { ok: false, error: 'הגיליון לא נמצא' }
+  const file = await loadAttachments(db, row as Pick<IssueRow, 'title' | 'parasha' | 'file_path' | 'file2_path'>)
+  return file.ok ? { ok: true } : file
+}
+
+/** גיליונות מתוזמנים שהגיע זמנם עוברים ל-'sending' (אותו מסלול כמו שליחה ידנית). כישלון חוזר לטיוטה עם הסבר. */
+async function promoteDueScheduled(db: SupabaseClient): Promise<void> {
+  const { data: due } = await db.from('gilyonot_issues').select('id, scheduled_list_ids').eq('status', 'scheduled').lte('scheduled_at', new Date().toISOString()).order('scheduled_at').limit(5)
+  for (const d of due ?? []) {
+    const ids = Array.isArray(d.scheduled_list_ids) ? d.scheduled_list_ids.filter((x: unknown): x is string => typeof x === 'string') : undefined
+    const r = await startIssueSend(db, d.id, ids, 'scheduled')
+    if (!r.ok && r.error !== 'הגיליון כבר נשלח או בשליחה') {
+      await db.from('gilyonot_issues').update({ schedule_error: `השליחה המתוזמנת נכשלה: ${r.error}` }).eq('id', d.id)
+    }
+  }
+}
+
 /** ה-worker. נקרא כל דקה מ-instrumentation.ts. */
 export async function runGilyonotSender(): Promise<{ sent: number; failed: number }> {
   const empty = { sent: 0, failed: 0 }
@@ -215,6 +235,8 @@ export async function runGilyonotSender(): Promise<{ sent: number; failed: numbe
   if (!db) return empty
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) return empty
+
+  await promoteDueScheduled(db)
 
   const { data: issues } = await db.from('gilyonot_issues').select('*').eq('status', 'sending').order('started_at')
   if (!issues?.length) return empty
