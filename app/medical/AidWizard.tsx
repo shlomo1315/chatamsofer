@@ -251,7 +251,7 @@ export default function AidWizard({ who, prefill }: { who?: string; prefill?: Ai
     <div className="aidui" dir="rtl" style={{ minHeight: '100vh' }}>
       <header className="pub-head">
         <div className="in">
-          <div className="mark">ח</div>
+          <img src="/logo-heichal.png" alt="היכל החתם סופר" style={{ height: 44, width: "auto" }} />
           <div>
             <div className="t1">איגוד צאצאי החתם סופר</div>
             <div className="t2">מחלקת סיוע</div>
