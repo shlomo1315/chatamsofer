@@ -159,9 +159,9 @@ describe('שלוחות שהועברו מהמרכזיה', () => {
     const ask = centerTurn({}, { cardNumber: null, loadedThisMonth: false }).result as { maskLog?: boolean; post?: boolean }
     expect(ask.maskLog).toBe(true); expect(ask.post).toBe(true)
     const card = '1234567812345678'
-    const conf = centerTurn({ center_card: card }, { cardNumber: null, loadedThisMonth: false })
+    const conf = centerTurn({ center_card1: card }, { cardNumber: null, loadedThisMonth: false })
     expect(validateResult(conf.result).ok).toBe(true)
-    expect(centerTurn({ center_card: card, center_confirm: '1' }, { cardNumber: null, loadedThisMonth: false }).link).toBe(card)
+    expect(centerTurn({ center_card1: card, center_confirm1: '1' }, { cardNumber: null, loadedThisMonth: false }).link).toBe(card)
     expect(centerTurn({ center_go: '1' }, { cardNumber: card, loadedThisMonth: false }).load).toBe(true)
     const named = { cardNumber: null, loadedThisMonth: false, name: 'מוקד צפון' }
     expect(JSON.stringify(centerTurn({}, named).result)).toContain('שלום מוקד צפון')

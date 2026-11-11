@@ -10,16 +10,25 @@ import { askDigits, digits, fill, goodbye, menu, say } from '../modules'
 import type { TlFile, TlHandler, TlResult } from '../types'
 
 export const CARD_DIGITS = 16
-export const CL_CARD = 'center_card'
-export const CL_CONFIRM = 'center_confirm'
+export const MAX_ATTEMPTS = 3
 export const CL_GO = 'center_go'
+// ⚠️ שם משתנה חדש לכל ניסיון (center_card1, center_confirm1, center_card2...), כמו בשלוחת היולדות.
+// removeParams של טכנוליין מחק את center_confirm גם מהתשובה של המתקשר, ולכן האישור (1) לא הגיע לשרת.
+export const cardVar = (n: number) => `center_card${n}`
+export const confirmVar = (n: number) => `center_confirm${n}`
+/** כל המשתנים של שלוחת המוקדים (לזיהוי "באמצע טעינה" בתפריט הראשי). */
+export const CENTER_PARAMS = [...Array.from({ length: MAX_ATTEMPTS }, (_, i) => [cardVar(i + 1), confirmVar(i + 1)]).flat(), CL_GO]
 
 const hello = (name?: string) => (name?.trim() ? `שלום ${name.trim()}` : 'שלום')
 
-const askCard = (lead = '', name?: string): TlResult => ({
-  ...askDigits(CL_CARD, CARD_DIGITS, say(lead, `${hello(name)}. הטלפון שלך מזוהה. הקש את מספר הכרטיס בן 16 ספרות`), { min: 1, maskLog: true, post: true }),
-  removeParams: [CL_CONFIRM],
-})
+const askCard = (n: number, lead = '', name?: string): TlResult =>
+  askDigits(cardVar(n), CARD_DIGITS, say(lead, `${hello(name)}. הטלפון שלך מזוהה. הקש את מספר הכרטיס בן 16 ספרות`), { min: 1, maskLog: true, post: true })
+
+/** הניסיון האחרון שבו הוקש כרטיס (0 = עוד לא הוקש). */
+const lastAttempt = (p: Record<string, string>) => {
+  for (let n = MAX_ATTEMPTS; n >= 1; n--) if ((p[cardVar(n)] ?? '').trim()) return n
+  return 0
+}
 
 /** משפט היתרה להקראה; ריק כשאין יתרה ידועה (נדרים לא הגיב), כדי שהשיחה תמשיך בלעדיה. */
 export const balanceSentence = (agorot: number | null | undefined): string =>
@@ -36,14 +45,18 @@ export function centerTurn(p: Record<string, string>, state: { cardNumber: strin
   let lead = ''
   let link: string | undefined
   if (!card) {
-    const typed = (p[CL_CARD] ?? '').replace(/\D/g, '')
-    if (!typed) return { result: askCard('', state.name) }
-    if (typed.length !== CARD_DIGITS) return { result: { ...askCard('מספר הכרטיס חייב להכיל 16 ספרות', state.name), removeParams: [CL_CARD, CL_CONFIRM] } }
-    const confirm = (p[CL_CONFIRM] ?? '').trim()
+    const n = lastAttempt(p)
+    if (!n) return { result: askCard(1, '', state.name) }
+    const retry = (lead: string): CenterTurn => ({
+      result: n < MAX_ATTEMPTS ? askCard(n + 1, lead, state.name) : goodbye('יותר מדי ניסיונות. נסו שוב מאוחר יותר או פנו למזכירות'),
+    })
+    const typed = (p[cardVar(n)] ?? '').replace(/\D/g, '')
+    if (typed.length !== CARD_DIGITS) return retry('מספר הכרטיס חייב להכיל 16 ספרות')
+    const confirm = (p[confirmVar(n)] ?? '').trim()
     if (!confirm) {
-      return { result: menu(CL_CONFIRM, ['1', '2'], cardFiles('הכרטיס שהקשת הוא', typed, 'לאישור הקישו 1, לתיקון הקישו 2'), { times: 2 }) }
+      return { result: menu(confirmVar(n), ['1', '2'], cardFiles('הכרטיס שהקשת הוא', typed, 'לאישור הקישו 1, לתיקון הקישו 2'), { times: 2, timeout: 7 }) }
     }
-    if (confirm !== '1') return { result: { ...askCard('', state.name), removeParams: [CL_CARD, CL_CONFIRM] } }
+    if (confirm !== '1') return retry('')
     card = typed
     link = typed
     lead = 'הכרטיס נשמר'
@@ -80,7 +93,7 @@ export const centerLoad: TlHandler = async ({ phone: raw, params, callId }) => {
   const turn = loaded || balanceAgorot != null ? centerTurn(params, { cardNumber: acc.card_number, loadedThisMonth: loaded, name: acc.center_name, balanceAgorot }) : first
   if (!turn.load) {
     // אחרי שיוך: מסירים את הכרטיס מהפרמטרים (לא נשאר ב-REQUEST)
-    return first.link && !Array.isArray(turn.result) ? { ...turn.result, removeParams: [CL_CARD, CL_CONFIRM] } : turn.result
+    return first.link && !Array.isArray(turn.result) ? { ...turn.result, removeParams: Array.from({ length: MAX_ATTEMPTS }, (_, i) => cardVar(i + 1)) } : turn.result
   }
 
   const { result, error } = await runMonthlyLoad(db, acc)
