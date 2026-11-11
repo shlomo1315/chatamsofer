@@ -255,6 +255,8 @@ export async function register() {
   if (process.env.MATERNITY_CARD_RETRY_DISABLED !== '1') {
     const tickCards = async () => {
       try {
+        const { setNextCardRunAt } = await import('@/lib/cardRoundTimer')
+        setNextCardRunAt(Date.now() + HOURLY_MS)
         const { getServiceClient } = await import('@/lib/apiAuth')
         const admin = getServiceClient()
         if (!admin) return
@@ -269,6 +271,7 @@ export async function register() {
         }
       } catch (err) { console.error('[maternity-cards] retry tick failed', err) }
     }
+    void import('@/lib/cardRoundTimer').then(m => m.setNextCardRunAt(Date.now() + INITIAL_DELAY_MS))
     setTimeout(() => { void tickCards(); setInterval(() => { void tickCards() }, HOURLY_MS) }, INITIAL_DELAY_MS)
     console.log('[maternity-cards] hourly retry scheduler started')
   }

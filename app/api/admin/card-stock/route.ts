@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
+import { getNextCardRunAt } from '@/lib/cardRoundTimer'
 import { requireAdmin, requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { getStockBalance, addStockMovement, setBaselineStock } from '@/lib/cardStock'
 import { reconcileStock, heldAidIds, approvedCardCoverage, scopedLedger } from '@/lib/cardStockRecon'
@@ -143,9 +144,10 @@ export async function GET() {
       id: a.id as string,
       name,
       failed,
+      queued: !failed && balance > 0,
       reason: failed
         ? (a.card_load_error || 'ההטענה נכשלה')
-        : (balance > 0 ? 'בתור — תיטען בסבב הקרוב' : 'אין מלאי כרטיסים'),
+        : (balance > 0 ? 'הטעינה תתבצע בסבב השעתי הקרוב' : 'אין מלאי כרטיסים'),
     }
   })
 
@@ -231,7 +233,7 @@ export async function GET() {
 
   return NextResponse.json(
     {
-      balance, ledger: ledger ?? [], awaiting: awaitingList.length, awaitingDetails,
+      balance, nextCardRunAt: getNextCardRunAt(), ledger: ledger ?? [], awaiting: awaitingList.length, awaitingDetails,
       recon, reconError, coverage, sinceCount, loadedNotApproved,
       // ⚠️ "כרטיסים שנמסרו" = לידות מאושרות שמחזיקות כרטיס. לא "כל מה שאי פעם
       // נטען": כרטיס טעון בידי לידה שאינה מאושרת הוא תקלה לתיקון, וספירתו
