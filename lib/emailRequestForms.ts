@@ -697,3 +697,11 @@ export function validateRequest(type: ReqType, values: Record<string, string>, c
   if (errors.length) return { ok: false, errors }
   return { ok: true, data }
 }
+
+// ── האם הגוף הוא תבנית בקשה שהוגשה? ─────────────────────────────────────────
+// 🔴 "הבקשה לא נקלטה" נשלחה על כל מייל שהנושא שלו נראה כבקשה (למשל "לידה")
+// ואין בו ת"ז — גם כשזה מייל רגיל ולא הגשת תבנית. התבנית מזוהה לפי התוויות
+// שלה בגוף: לפחות שתי תוויות מוכרות = הוגשה תבנית (גם אם השדות ריקים).
+export function looksLikeSubmittedDraft(type: ReqType, body: string, ctx: Ctx): boolean {
+  return Object.keys(parseDraft(type, body, ctx)).length >= 2
+}

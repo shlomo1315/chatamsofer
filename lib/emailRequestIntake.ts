@@ -39,7 +39,7 @@ async function rabbiFormAttachment(): Promise<MailAttachment[] | undefined> {
   }
 }
 import {
-  detectReqType, detectReqTypeForMailbox, SUBJECT_PREFIX, attachmentsFor, parseDraft, validateRequest,
+  detectReqType, detectReqTypeForMailbox, SUBJECT_PREFIX, attachmentsFor, parseDraft, validateRequest, looksLikeSubmittedDraft,
   draftMailto, IGUD_MAILBOX, type ReqType,
 } from './emailRequestForms'
 import { isDepartmentOpen, departmentClosedMessage, type GatedDepartment } from './departmentGates'
@@ -341,6 +341,12 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
   const idM = String(msg.subject).match(/\d{9}/)
   const generic = await loadCtx(admin, type, true)
   if (!idM) {
+    // 🔴 בלי ת"ז ובלי תבנית בגוף — זה מייל רגיל ולא הגשה. לא שולחים
+    // "הבקשה לא נקלטה"; false = המייל נשאר בתיבה כפנייה רגילה.
+    if (!looksLikeSubmittedDraft(type, msg.body, generic)) {
+      console.log(`[emailRequestIntake] נושא נראה כבקשה אך אין תבנית בגוף — לא נשלחת דחייה (from=${from})`)
+      return false
+    }
     await reject(from, '', type, ['לא צוינה תעודת זהות מלאה (9 ספרות) בשורת הנושא'], '<ת.ז>', generic)
     return true
   }
