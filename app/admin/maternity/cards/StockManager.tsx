@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { secondsUntil, formatCountdown } from '@/lib/cardRoundTimer'
 import { Package, Plus, Minus, Loader2, X, History, AlertTriangle, CheckCircle2, Clock, RefreshCw, ClipboardCheck } from 'lucide-react'
 import { useStaffPermissions } from '@/components/StaffPermissions'
 import { networkErrorMessage } from '@/lib/networkErrorMessage'
@@ -16,7 +17,7 @@ type LedgerRow = {
 }
 
 // יולדת שממתינה לכרטיס — עם שם וסיבה, כדי שהמונה יהיה בר-בירור ולא מספר סתום
-type AwaitingRow = { id: string; name: string; failed: boolean; reason: string }
+type AwaitingRow = { id: string; name: string; failed: boolean; reason: string; queued?: boolean }
 
 // ── התאמת המלאי ────────────────────────────────────────────────────────────
 // ⚠️ "הכנסתי 300, אישרתי 48, למה נשארו 247?" — שאלה שאין עליה תשובה במסך שמציג
@@ -80,6 +81,9 @@ export default function StockManager() {
   const [awaiting, setAwaiting] = useState(0)
   const [awaitingDetails, setAwaitingDetails] = useState<AwaitingRow[]>([])
   const [showAwaiting, setShowAwaiting] = useState(false)
+  // זמן הסבב השעתי הבא (מהשרת) וספירה לאחור חיה
+  const [nextRunAt, setNextRunAt] = useState<number | null>(null)
+  const [now, setNow] = useState(() => Date.now())
   const [running, setRunning] = useState(false)
   const [ledger, setLedger] = useState<LedgerRow[]>([])
   const [recon, setRecon] = useState<Recon | null>(null)
@@ -111,6 +115,7 @@ export default function StockManager() {
       const r = await fetch('/api/admin/card-stock', { cache: 'no-store' })
       const d = await r.json()
       setBalance(typeof d.balance === 'number' ? d.balance : 0)
+      setNextRunAt(typeof d.nextCardRunAt === 'number' ? d.nextCardRunAt : null)
       setAwaiting(typeof d.awaiting === 'number' ? d.awaiting : 0)
       setAwaitingDetails(Array.isArray(d.awaitingDetails) ? d.awaitingDetails : [])
       setLedger(Array.isArray(d.ledger) ? d.ledger : [])
@@ -221,6 +226,20 @@ export default function StockManager() {
   }, [followDistribution])
   useEffect(() => { const t = setTimeout(() => { void load() }, 0); return () => clearTimeout(t) }, [load])
 
+  const countdown = secondsUntil(nextRunAt, now)
+  const hasQueued = awaitingDetails.some(a => a.queued)
+  useEffect(() => {
+    if (!hasQueued || nextRunAt == null) return
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [hasQueued, nextRunAt])
+  // כשהספירה הגיעה ל-0 הסבב רץ: טוענים מחדש מהשרת עד שמגיע זמן חדש
+  useEffect(() => {
+    if (!hasQueued || countdown !== 0) return
+    const t = setInterval(() => { void load() }, 10000)
+    return () => clearInterval(t)
+  }, [hasQueued, countdown, load])
+
   const low = balance != null && balance <= 5
 
   return (
@@ -272,6 +291,7 @@ export default function StockManager() {
                       <span className="block text-xs font-bold text-slate-800">{a.name}</span>
                       <span className={`block text-[11px] mt-0.5 ${a.failed ? 'text-rose-600 font-semibold' : 'text-slate-500'}`}>
                         {a.failed ? '⚠️ ' : ''}{a.reason}
+                        {a.queued && countdown != null && countdown > 0 && <>. הזמן שנותר עד לטעינה: <span className="ltr-num">{formatCountdown(countdown)}</span></>}
                       </span>
                     </button>
                   ))}
