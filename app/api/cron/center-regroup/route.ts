@@ -42,13 +42,14 @@ export async function GET(request: NextRequest) {
       if (!card || card.nedarim_client_id !== t.privateClient || load?.status !== 'loaded' || !load.tlush_id || !priv) { row.stopped = 'מצב לא צפוי'; continue }
       if (!apply) continue
       if (Number(sp.get(`expect_${t.key}`)) !== priv.totalFreeAmount) { row.stopped = 'היתרה שונה מהצפוי'; continue }
-      if (priv.totalFreeAmount < load.amount) { row.stopped = 'היתרה קטנה מהטעינה (נעשה שימוש)'; continue }
-
-      const un = await prikatTlush(creds, load.tlush_id)
-      row.unload = un
-      if (!un.ok) { row.stopped = 'ביטול הטעינה נכשל'; continue }
-      const after = await getClientCard(creds, t.privateClient)
-      row.privateBalanceAfter = after?.totalFreeAmount ?? null
+      // resume=1: התלוש כבר בוטל בנדרים בריצה קודמת (נעצרה אחרי הביטול); expect_<מוקד> = היתרה הנוכחית (0) ולא מבטלים שוב
+      if (sp.get('resume') !== '1') {
+        if (priv.totalFreeAmount < load.amount) { row.stopped = 'היתרה קטנה מהטעינה (נעשה שימוש)'; continue }
+        const un = await prikatTlush(creds, load.tlush_id)
+        row.unload = un
+        if (!un.ok) { row.stopped = 'ביטול הטעינה נכשל'; continue }
+        try { row.privateBalanceAfter = (await getClientCard(creds, t.privateClient))?.totalFreeAmount ?? null } catch { row.stopped = 'התלוש בוטל; להמשיך בריצה נוספת עם resume=1'; continue }
+      } else if (priv.totalFreeAmount !== 0) { row.stopped = 'resume: היתרה הנוכחית לא 0'; continue }
 
       // מכאן הטעינה הישנה בוטלה: מנתקים את המוקד מהלקוח הפרטי (הכרטיס נשאר רשום כמו שהוא)
       await db.from('card_centers').update({ name: t.name }).eq('id', t.id)
