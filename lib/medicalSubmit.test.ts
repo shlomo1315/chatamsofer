@@ -26,7 +26,7 @@ describe('הגשת בקשה ציבורית', () => {
     form.set('amount', '1000')
     form.set('reason', 'צריך סיוע לטיפול רפואי')
     form.append('medical', new File([new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 1, 2, 3])], 'a.pdf'))
-    const req = { nextUrl: new URL('http://x/api/medical/submit'), headers: new Headers({ 'x-forwarded-for': '9.9.9.9' }), formData: async () => form } as never
+    const req = { nextUrl: new URL('http://x/api/medical/submit'), headers: new Headers({ 'x-forwarded-for': '9.9.9.9' }), cookies: { get: () => undefined }, formData: async () => form } as never
     const res = await POST(req)
     expect(res.status).toBe(500)
     expect(upload).toHaveBeenCalledTimes(1)
@@ -37,9 +37,9 @@ describe('הגשת בקשה ציבורית', () => {
 })
 
 describe('קישור /medical/new', () => {
-  it('עמוד הקישור קיים ומציג את הטופס למגיש לא רשום', async () => {
+  it('עמוד הקישור קיים ומציג את הטופס בלי כניסה', async () => {
     const mod = await import('@/app/medical/new/page')
     expect(typeof mod.default).toBe('function')
-    expect(mod.metadata.title).toMatch(/אינו רשום/)
+    expect(mod.metadata.title).toMatch(/בקשת סיוע/)
   })
 })

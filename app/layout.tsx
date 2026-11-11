@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Heebo } from 'next/font/google'
 import './globals.css'
+import './aidui.css'
 import { DocViewerProvider } from '@/components/ui/DocViewer'
 
 const heebo = Heebo({

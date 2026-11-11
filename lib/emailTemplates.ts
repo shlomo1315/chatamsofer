@@ -2726,3 +2726,92 @@ export function bookFairTrackingLinksEmail(opts: {
     }),
   }
 }
+
+// ─── מחלקת סיוע: מייל למנהל ומייל למגיש, לפי העיצוב המאושר ──────────────────────
+export interface AidManagerMailData {
+  requestNo: number | string | null
+  name: string
+  sourceLabel: string
+  idMasked: string
+  age: number | null
+  requested: number | null
+  reasonLabel: string
+  story: string
+  referrer?: string | null
+  previous?: string | null
+  wife?: string | null
+  kidsLine?: string | null
+  address?: string | null
+  income?: { label: string; value: string }[]
+  perCapitaLine?: string | null
+  docNames: string[]
+  secretaryNote?: string | null
+  reminder?: boolean
+}
+
+const AID_FROM = 'מחלקת הסיוע · איגוד צאצאי החתם סופר'
+const aidRow = (k: string, v: string) =>
+  `<tr><td style="padding:6px 0;color:#64748b;font-size:13px;width:110px;vertical-align:top;">${escapeHtml(k)}</td><td style="padding:6px 0;color:#0f172a;font-size:14px;">${v}</td></tr>`
+const aidH = (t: string) => `<p style="margin:20px 0 6px;color:#1e2a4a;font-size:13px;font-weight:800;">${escapeHtml(t)}</p>`
+const aidMoney = (n: number | null | undefined) => `${Math.round(Number(n ?? 0)).toLocaleString('en-US')} ₪`
+
+export function financialAidManagerEmail(d: AidManagerMailData): BuiltEmail {
+  const no = d.requestNo ? String(d.requestNo) : ''
+  const subject = `${d.reminder ? 'תזכורת: ' : ''}בקשת סיוע${no ? ` ${no}` : ''} · ${d.name} · ${d.reasonLabel}${d.requested ? ` · ${aidMoney(d.requested)}` : ''}`
+  const fam = [d.wife ? aidRow('אשתו', escapeHtml(d.wife)) : '', d.kidsLine ? aidRow('ילדים', escapeHtml(d.kidsLine)) : '', d.address ? aidRow('כתובת', escapeHtml(d.address)) : ''].join('')
+  const inc = (d.income ?? []).map(r => aidRow(r.label, escapeHtml(r.value))).join('') + (d.perCapitaLine ? aidRow('לנפש', `<b>${escapeHtml(d.perCapitaLine)}</b>`) : '')
+  const body = `
+    ${d.reminder ? `<p style="margin:0 0 14px;background:#fef3c7;border-radius:10px;padding:10px 14px;color:#92400e;font-size:14px;">תזכורת: הבקשה עדיין ממתינה לתשובתך.</p>` : ''}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 14px;border-bottom:1px solid #e5e7eb;"><tr>
+      <td style="padding:0 0 14px;"><p style="margin:0;color:#0f172a;font-size:20px;font-weight:900;">${escapeHtml(d.name)}</p>
+        <p style="margin:4px 0 0;color:#64748b;font-size:13px;">${escapeHtml(d.sourceLabel)} · ת.ז. <span dir="ltr">${escapeHtml(d.idMasked)}</span>${d.age != null ? ` · בן ${d.age}` : ''}</p></td>
+      <td style="padding:0 0 14px;text-align:left;"><p style="margin:0;color:#64748b;font-size:12px;">סכום מבוקש</p><p style="margin:2px 0 0;color:#0f172a;font-size:22px;font-weight:900;" dir="ltr">${d.requested ? aidMoney(d.requested) : '—'}</p></td>
+    </tr></table>
+    ${d.previous ? `<p style="margin:0 0 14px;background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:10px 14px;color:#9a3412;font-size:14px;"><b>הגיש בעבר:</b> ${escapeHtml(d.previous)}</p>` : ''}
+    ${aidH('הבקשה')}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      ${aidRow('סיבה', escapeHtml(d.reasonLabel))}
+      ${d.story ? aidRow('פירוט המבקש', `"${escapeHtml(d.story)}"`) : ''}
+      ${d.referrer ? aidRow('רב ממליץ', escapeHtml(d.referrer)) : ''}
+    </table>
+    ${fam ? `${aidH('המשפחה')}<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${fam}</table>` : ''}
+    ${inc ? `${aidH('הכנסות בחודש')}<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${inc}</table>` : ''}
+    ${aidH(`מסמכים מצורפים (${d.docNames.length})`)}
+    <p style="margin:0;color:#334155;font-size:13px;">${d.docNames.length ? d.docNames.map(escapeHtml).join(' · ') : 'אין'}</p>
+    ${d.secretaryNote ? `${aidH('הערת המזכירות')}<p style="margin:0;color:#334155;font-size:13px;line-height:1.7;">${escapeHtml(d.secretaryNote)}</p>` : ''}
+    <div style="margin:22px 0 0;background:#f1f5f9;border-radius:12px;padding:14px 18px;color:#1e2a4a;font-size:14px;line-height:1.8;">
+      <b>איך עונים: משיבים למייל הזה ("השב").</b><br>
+      לאישור: <b>מאושר</b> והסכום, למשל <b>מאושר 6000</b><br>
+      לדחייה: <b>לא מאושר</b><br>
+      אפשר להוסיף הערה למזכירות באותה תשובה.
+    </div>`
+  return {
+    subject,
+    html: shell({ preheader: subject, accent: '#1e2a4a', title: `בקשת סיוע${no ? ` ${no}` : ''}`, subtitle: AID_FROM, body }),
+  }
+}
+
+// למגיש: אישור עם סכום והערה, או דחייה בניסוח מכבד. בלי בקשות קודמות ובלי ציטוט המנהל.
+export function financialAidApplicantEmail(o: { name: string; female?: boolean; requestNo: number | string | null; approved: boolean; amount?: number | null; note?: string | null; medical?: boolean }): BuiltEmail {
+  const no = o.requestNo ? ` · בקשה ${o.requestNo}` : ''
+  const to = o.name.trim() ? (o.female ? `לכבוד מרת ${escapeHtml(o.name)} תחי׳,` : `לכבוד ר׳ ${escapeHtml(o.name)} שליט"א,`) : 'שלום וברכה,'
+  const p = (t: string) => `<p style="margin:0 0 14px;color:#334155;font-size:15px;line-height:1.8;">${t}</p>`
+  const wish = o.medical ? p('מאחלים רפואה שלמה, ובשורות טובות.') : p('בברכת בשורות טובות.')
+  const sign = `<p style="margin:22px 0 0;padding-top:14px;border-top:1px solid #e5e7eb;color:#64748b;font-size:13px;">${AID_FROM}</p>`
+  const body = o.approved ? `
+    ${p(to)}
+    <p style="margin:0 0 14px;color:#047857;font-size:22px;font-weight:900;">בקשתך אושרה.</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;"><tr><td style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:14px;padding:16px 22px;text-align:center;">
+      <p style="margin:0;color:#065f46;font-size:13px;">סכום הסיוע</p>
+      <p style="margin:6px 0 0;color:#047857;font-size:30px;font-weight:900;" dir="ltr">${aidMoney(o.amount)}</p>
+    </td></tr></table>
+    ${o.note?.trim() ? p(escapeHtml(o.note.trim())) : ''}
+    ${wish}${sign}` : `
+    ${p(to)}
+    <p style="margin:0 0 14px;color:#0f172a;font-size:20px;font-weight:800;">הבקשה נבדקה בעיון.</p>
+    ${p('לצערנו, בשלב זה לא נוכל להיענות לבקשה. אם יחול שינוי במצב, אפשר להגיש בקשה חדשה בכל עת.')}
+    ${o.note?.trim() ? p(escapeHtml(o.note.trim())) : ''}
+    ${wish}${sign}`
+  const subject = o.approved ? `בקשת הסיוע שלך אושרה${no}` : `תשובה לבקשת הסיוע שלך${no}`
+  return { subject, html: shell({ preheader: subject, accent: o.approved ? '#10b981' : '#1e2a4a', title: o.approved ? 'בקשתך אושרה' : 'תשובה לבקשתך', subtitle: AID_FROM, body }) }
+}

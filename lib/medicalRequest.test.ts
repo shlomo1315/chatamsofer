@@ -41,8 +41,8 @@ describe('finalMessageDraft', () => {
 
 describe('validateMedical — מחלקת סיוע', () => {
   const ext = { ...base, idNumber: '123456782', email: 'a@b.co', birthDate: '1980-05-01', gender: 'male', maritalStatus: 'נשואים', fullName: 'משה כהן', address: 'הרצל 1', city: 'בני ברק' }
-  it('לא רשום באיגוד: דורש רב או ממליץ', () => {
-    expect(validateMedical(ext, false, true, 1)).toMatch(/רב או ממליץ/)
+  it('לא רשום באיגוד: רב או ממליץ אינו חובה', () => {
+    expect(validateMedical(ext, false, true, 1)).toBeNull()
     expect(validateMedical({ ...ext, referrer: 'הרב לוי' }, false, true, 1)).toBeNull()
   })
   it('אלמנה ויתומים: מסמך רפואי אינו חובה', () => {
@@ -59,10 +59,10 @@ describe('validateMedical — מחלקת סיוע', () => {
 describe('מגיש שלא רשום באיגוד: פרטים מלאים', () => {
   const base = { idNumber: '123456782', fullName: 'ישראל ישראלי', phone: '0501234567', email: 'a@b.co', address: 'הרצל 1', city: 'בני ברק', amount: 500, reason: 'סיבה', aidType: 'medical' as const, referrer: 'הרב כהן', birthDate: '1980-05-01', gender: 'male', maritalStatus: 'נשואים' }
   it('מקבל בקשה מלאה', () => expect(validateMedical(base, false, true, 1)).toBeNull())
-  it('דורש מייל, תאריך לידה, מין ומצב משפחתי', () => {
+  it('דורש מייל, תאריך לידה ומצב משפחתי; מין אינו חובה', () => {
     expect(validateMedical({ ...base, email: '' }, false, true, 1)).toBeTruthy()
     expect(validateMedical({ ...base, birthDate: '' }, false, true, 1)).toBeTruthy()
-    expect(validateMedical({ ...base, gender: '' }, false, true, 1)).toBeTruthy()
+    expect(validateMedical({ ...base, gender: '' }, false, true, 1)).toBeNull()
     expect(validateMedical({ ...base, maritalStatus: '' }, false, true, 1)).toBeTruthy()
   })
   it('דוחה ת.ז. עם ספרת ביקורת שגויה ות.ז. בן זוג שגויה', () => {
