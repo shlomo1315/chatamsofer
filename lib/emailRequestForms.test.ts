@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { detectReqType, parseDraft } from './emailRequestForms'
+import { detectReqType, parseDraft, buildDraftBody, looksLikeSubmittedDraft } from './emailRequestForms'
 
 // הקשר מינימלי לבדיקות — כמו שה-webhook בונה אותו
 const ctx = {
@@ -87,5 +87,21 @@ describe('parseDraft — הנקודתיים אינן קריטיות', () => {
   it('שדה ריק מוחזר כמחרוזת ריקה, לא undefined', () => {
     const body = 'הערות: '
     expect(parseDraft('birth', body, ctx).notes).toBe('')
+  })
+})
+
+describe('looksLikeSubmittedDraft — דחייה רק על תבנית שהוגשה', () => {
+  it('מייל "לידה" רגיל בלי תבנית — לא נחשב הגשה (לא נשלחת דחייה)', () => {
+    const body = 'שלום, רציתי לשאול מתי יגיע הכרטיס אחרי הלידה?\nתודה רבה'
+    expect(looksLikeSubmittedDraft('birth', body, ctx)).toBe(false)
+  })
+
+  it('גוף ריק — לא נחשב הגשה', () => {
+    expect(looksLikeSubmittedDraft('birth', '', ctx)).toBe(false)
+  })
+
+  it('תבנית בקשת לידה (גם בלי ת"ז תקינה) — נחשבת הגשה ותידחה', () => {
+    const body = buildDraftBody('birth', '', ctx)
+    expect(looksLikeSubmittedDraft('birth', body, ctx)).toBe(true)
   })
 })
