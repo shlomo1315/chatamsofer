@@ -29,6 +29,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
+  // הסיכום היומי בוטל לבקשת שלמה (11.11.2026) — לא נשלח יותר, בלי קשר להגדרות.
+  console.log('[daily-digest] מבוטל — לא נשלח')
+  return NextResponse.json({ ok: true, skipped: 'cancelled' })
+
+  // eslint-disable-next-line no-unreachable
   const now = new Date()
   if (isBlockedForMail(now)) {
     console.log('[daily-digest] דילוג — שבת/חג')
