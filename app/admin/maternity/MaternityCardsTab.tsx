@@ -83,7 +83,7 @@ function buildTimeline(aid: MaternityAid, loads: Load[]): TlItem[] {
 }
 
 // קובייה ראשית: כרטיס פיזי, יתרה, התראה, פרטי הכרטיס וציר זמן
-export function CardPanel({ aid, data, state, centerName, voucher, holder, onRetry, retrying }: {
+export function CardPanel({ aid, data, state, centerName, voucher, holder, onRetry, retrying, onRelink, relinking }: {
   aid: MaternityAid
   data: CardData | null
   state: CardState
@@ -92,6 +92,8 @@ export function CardPanel({ aid, data, state, centerName, voucher, holder, onRet
   holder: string
   onRetry?: () => void
   retrying?: boolean
+  onRelink?: () => void
+  relinking?: boolean
 }) {
   const key = cardStatusKey(aid)
   const st = STATUS[key] ?? STATUS.idle
@@ -111,6 +113,18 @@ export function CardPanel({ aid, data, state, centerName, voucher, holder, onRet
         <div className="mt-3 rounded-[10px] border border-[#E7B9B3] border-r-4 border-r-[#B04A3E] bg-[#FBEDEB] px-4 py-3 text-sm text-[#7A241B]">
           <b className="block">הטעינה נכשלה</b>
           {aid.card_load_error || 'לא נרשמה סיבה'}
+        </div>
+      )}
+      {key !== 'failed' && aid.card_number && aid.card_load_error?.includes('שיוך כרטיס') && (
+        <div className="mt-3 rounded-[10px] border border-[#E7B9B3] border-r-4 border-r-[#B04A3E] bg-[#FBEDEB] px-4 py-3 text-sm text-[#7A241B]">
+          <b className="block">הכסף נטען, אבל שיוך הכרטיס נכשל</b>
+          {aid.card_load_error}
+          {onRelink && (
+            <button type="button" onClick={onRelink} disabled={relinking}
+              className="mt-2 block rounded-md border border-[#14213D] bg-white px-3 py-1.5 text-sm font-bold text-[#14213D] hover:bg-[#F4F1E8] disabled:opacity-50">
+              {relinking ? 'מתקן שיוך...' : 'תיקון שיוך כרטיס'}
+            </button>
+          )}
         </div>
       )}
       {key === 'awaiting' && (

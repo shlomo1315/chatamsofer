@@ -144,6 +144,7 @@ export default function MaternityCardModal({ rows, index, onIndex, onClose }: {
   const [now] = useState(() => Date.now())
   const [reloadKey, setReloadKey] = useState(0)
   const [retrying, setRetrying] = useState(false)
+  const [relinking, setRelinking] = useState(false)
   const [centers, setCenters] = useState<Record<string, string>>({})
   const [loaded, setLoaded] = useState<{ id: string; data: Extra } | null>(null)
   const ready = loaded && loaded.id === a.id ? loaded.data : null
@@ -204,6 +205,21 @@ export default function MaternityCardModal({ rows, index, onIndex, onClose }: {
       setReloadKey(k => k + 1)
     } catch (e) { toast.error(e instanceof Error ? e.message : 'הטעינה נכשלה') }
     finally { setRetrying(false) }
+  }
+
+  // תיקון שיוך כרטיס: לקוח לפי ת"ז, שיוך ואימות בכרטסת נדרים
+  const relinkCard = async () => {
+    setRelinking(true)
+    try {
+      const res = await fetch('/api/admin/maternity/relink-card', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ aidId: a.id }) })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || 'התיקון נכשל')
+      if (d.status === 'linked') toast.success('הכרטיס שויך ואומת בנדרים')
+      else if (d.status === 'taken') toast.error('הכרטיס לא נקלט בנדרים (ייתכן שהוא תפוס אצל משפחה אחרת). לא שונה דבר')
+      else toast.error(d.error || 'התיקון נכשל')
+      setReloadKey(k => k + 1)
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'התיקון נכשל') }
+    finally { setRelinking(false) }
   }
 
   // "בקש": שליחת קישור ייחודי ליולדת במייל להשלמת שם התינוק (אותה פעולה של הכרטסת המלאה).
@@ -280,7 +296,8 @@ export default function MaternityCardModal({ rows, index, onIndex, onClose }: {
         main: <CardPanel aid={merged} data={activity.data} state={activity.state}
           centerName={merged.card_center_id ? (centers[merged.card_center_id] ?? null) : null}
           voucher={voucher} holder={motherName(m)}
-          onRetry={canRetry ? retryLoad : undefined} retrying={retrying} />,
+          onRetry={canRetry ? retryLoad : undefined} retrying={retrying}
+          onRelink={canEdit ? relinkCard : undefined} relinking={relinking} />,
         below: <>
           <CardHistory data={activity.data} state={activity.state} />
           {fixList.length > 0 && <FixesList list={fixList} />}
