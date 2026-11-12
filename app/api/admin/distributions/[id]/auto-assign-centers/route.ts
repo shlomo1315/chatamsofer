@@ -148,8 +148,8 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   const now = new Date().toISOString()
   for (const [centerId, ids] of byCenter) {
     // ⚠️ במנות: רשימת מזהים ארוכה מדי נחתכת בשקט ב-PostgREST.
-    for (let i = 0; i < ids.length; i += 200) {
-      const chunk = ids.slice(i, i + 200)
+    for (let i = 0; i < ids.length; i += 50) {
+      const chunk = ids.slice(i, i + 50)
       const { data, error } = await db.from('distribution_recipients')
         .update({ center_id: centerId, center_source: 'auto', center_chosen_at: now })
         .in('id', chunk)

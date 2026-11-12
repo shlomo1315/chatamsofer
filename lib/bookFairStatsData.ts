@@ -49,8 +49,8 @@ export async function loadStatsData(
   // ⚠️ פריטים רק של ההזמנות שנשלפו — בקבוצות, כדי לא לחרוג מאורך ה-URL.
   const ids = orders.map(x => x.id)
   const items: StatItem[] = []
-  for (let i = 0; i < ids.length; i += 200) {
-    const chunk = ids.slice(i, i + 200)
+  for (let i = 0; i < ids.length; i += 50) {
+    const chunk = ids.slice(i, i + 50)
     const r = await fetchAllRows<StatItem>((from, to) =>
       db.from('book_fair_order_items')
         .select('order_id, book_id, title_snapshot, quantity, line_total_agorot')
