@@ -1,6 +1,5 @@
 'use client'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Loader2 } from 'lucide-react'
 import {
   WINDOW_GENS, classifyLines, normForMatch, type ApprovedTreeNode,
 } from '@/lib/lineageApprovedTree'
@@ -48,11 +47,25 @@ export default function ApprovedTreePage() {
   const toastSeq = useRef(0)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
-  const apply = (d: { nodes: Node[]; maxGen: number; from: number }) => { setNodes(d.nodes); setMaxGen(d.maxGen); setFrom(d.from) }
+  // ⚡ stale-while-revalidate: מציגים מיד את הנתונים האחרונים (sessionStorage) ומרעננים ברקע.
+  const CK = (f: number) => `approved-tree:${f}`
+  const remember = (d: { nodes: Node[]; maxGen: number; from: number }) => {
+    try { sessionStorage.setItem(CK(d.from), JSON.stringify(d)) } catch { /* מכסה מלאה — לא קריטי */ }
+  }
+  const apply = (d: { nodes: Node[]; maxGen: number; from: number }) => { setNodes(d.nodes); setMaxGen(d.maxGen); setFrom(d.from); remember(d) }
   const goTo = useCallback((f: number) => {
+    try {
+      const c = sessionStorage.getItem(CK(f))
+      if (c) {
+        const d = JSON.parse(c)
+        // אסינכרוני בכוונה: setState סינכרוני בתוך אפקט גורם לרינדור כפול.
+        queueMicrotask(() => { setNodes(d.nodes); setMaxGen(d.maxGen); setFrom(d.from); setGen(0); setCol(new Set()) })
+      }
+    } catch { /* אין מטמון */ }
     fetch(`${API}?from=${f}`).then(r => r.json()).then(d => {
       if (d.error) { setErr(d.error); return }
       setNodes(d.nodes); setMaxGen(d.maxGen); setFrom(d.from); setGen(0); setCol(new Set())
+      try { sessionStorage.setItem(CK(d.from), JSON.stringify(d)) } catch { /* ignore */ }
     }).catch(() => setErr('שגיאה בטעינת העץ'))
   }, [])
   useEffect(() => { goTo(1) }, [goTo])
@@ -168,7 +181,18 @@ export default function ApprovedTreePage() {
 
   if (err && !nodes) return <div className="p-8 text-center text-rose-600">{err}</div>
   if (!nodes) {
-    return <div className="flex items-center justify-center py-24 text-slate-400 gap-2"><Loader2 className="animate-spin" size={18} /> טוען…</div>
+    return (
+      <div className="p-6 animate-pulse" aria-busy="true" aria-label="טוען את העץ">
+        <div className="flex gap-10">
+          {[0, 1, 2, 3, 4].map(c => (
+            <div key={c} className="flex flex-col gap-4" style={{ width: 188 }}>
+              <div className="h-6 rounded bg-slate-200" />
+              {Array.from({ length: Math.max(1, 5 - c) }, (_, i) => <div key={i} className="h-[70px] rounded-lg bg-slate-100" />)}
+            </div>
+          ))}
+        </div>
+      </div>
+    )
   }
 
   // ── פריסת העץ ──

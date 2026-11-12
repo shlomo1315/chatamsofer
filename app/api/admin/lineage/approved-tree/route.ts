@@ -25,8 +25,27 @@ export const dynamic = 'force-dynamic'
 const KEY_PREFIX = 'tree:'
 
 interface NodeRow { id: string; name: string; generation: number; parent_id: string | null }
+type Db = NonNullable<ReturnType<typeof getServiceClient>>
 
-async function load(db: NonNullable<ReturnType<typeof getServiceClient>>) {
+type Loaded = { nodes: NodeRow[]; refs: RefRowLite[]; tree: ApprovedTreeNode[] }
+
+// ⚡ מטמון קצר בזיכרון ל-GET (הטעינה היא עמודים רבים מהמסד). כתיבות טוענות תמיד מחדש
+// (approveNodes משנה את העץ במקום) ומנקות את המטמון; ה-POST מחזיר ללקוח נתונים טריים.
+const CACHE_MS = 60_000
+let _loaded: { at: number; data: Loaded } | null = null
+let _inflight: Promise<Loaded> | null = null
+const bustCache = () => { _loaded = null; _inflight = null }
+
+async function loadCached(db: Db): Promise<Loaded> {
+  if (_loaded && Date.now() - _loaded.at < CACHE_MS) return _loaded.data
+  if (!_inflight) {
+    _inflight = load(db).then(d => { _loaded = { at: Date.now(), data: d }; return d })
+      .finally(() => { _inflight = null })
+  }
+  return _inflight
+}
+
+async function load(db: Db): Promise<Loaded> {
   const [{ rows: nodes }, { rows: refs }] = await Promise.all([
     fetchAllRows<NodeRow>((from, to) => db.from('lineage_nodes')
       .select('id, name, generation, parent_id')
@@ -54,11 +73,11 @@ export async function GET(req: NextRequest) {
   if (!staff) return forbidden()
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
-  const { tree } = await load(db)
+  const { tree } = await loadCached(db)
   return NextResponse.json(windowOf(tree, Number(new URL(req.url).searchParams.get('from') ?? 1)))
 }
 
-type Db = NonNullable<ReturnType<typeof getServiceClient>>
+
 
 /** מאשר צמתים קיימים לפי הסדר (דור עולה): ילד רק אחרי שאביו מאושר. */
 async function approveNodes(
@@ -106,7 +125,7 @@ export async function POST(req: NextRequest) {
       const { refs, tree } = await load(db)
       const res = await approveNodes(db, ids, tree, refs)
       if (res.approved.length) {
-        invalidateApprovedRef(); invalidateLineageCache()
+        bustCache(); invalidateApprovedRef(); invalidateLineageCache()
         await logActivity(db as never, {
           userId: staff.userId, action: 'lineage_approved_add', entityType: 'lineage_approved_ref',
           details: { mode: 'approve', nodeIds: res.approved.map(a => a.id) },
@@ -150,7 +169,7 @@ export async function POST(req: NextRequest) {
       }
       const res = await approveNodes(db, idsToApprove, tree, refs)
       if (created.length || res.approved.length) {
-        invalidateApprovedRef(); invalidateLineageCache()
+        bustCache(); invalidateApprovedRef(); invalidateLineageCache()
         await logActivity(db as never, {
           userId: staff.userId, action: 'lineage_approved_add', entityType: 'lineage_approved_ref',
           details: { mode: 'add', generation, parentId, created, nodeIds: res.approved.map(a => a.id), needsReview: red },
@@ -181,7 +200,7 @@ export async function POST(req: NextRequest) {
         const { error: de } = await db.from('lineage_nodes').delete().eq('id', id)
         if (!de) removed.push(id)
       }
-      invalidateApprovedRef(); invalidateLineageCache()
+      bustCache(); invalidateApprovedRef(); invalidateLineageCache()
       await logActivity(db as never, {
         userId: staff.userId, action: 'lineage_approved_undo', entityType: 'lineage_approved_ref',
         details: { keys, removedNodes: removed },
