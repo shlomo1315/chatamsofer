@@ -1,10 +1,10 @@
 'use client'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import {
   LayoutDashboard, Users, GitBranch, Baby, CreditCard, Gift,
   BarChart3, Settings, Menu, X, Building2, Trees, HeartHandshake,
-  Mail, ChevronDown, ChevronUp, UtensilsCrossed, HandCoins, Heart, Send, Star, ShieldAlert, PhoneCall, BookOpen, ScrollText, Newspaper, Images,
+  Mail, ChevronDown, ChevronUp, UtensilsCrossed, HandCoins, Heart, Send, Star, ShieldAlert, PhoneCall, BookOpen, ScrollText, Newspaper, Images, ClipboardList, Landmark,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { UserPermissions, SectionKey, UserRole } from '@/types'
@@ -78,9 +78,11 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
   mailOnlyFlag?: boolean; allowedMailboxes?: string[] | null; department?: string | null
 }) {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [mailOpen, setMailOpen] = useState(pathname.startsWith('/admin/mail'))
   const [maternityOpen, setMaternityOpen] = useState(pathname.startsWith('/admin/maternity'))
+  const [kvitelOpen, setKvitelOpen] = useState(pathname.startsWith('/admin/kvitel'))
   const [unreadCounts, setUnreadCounts] = useState<{ byDepartment: Record<string, number>; total: number }>({ byDepartment: {}, total: 0 })
 
   useEffect(() => {
@@ -184,6 +186,45 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
     )
   }
 
+  // קוויטלאך: אקורדיון בלשוניות (בקשות / מייל / נדרים), באותה תבנית של יולדות
+  const kvitelTab = searchParams.get('tab') ?? 'requests'
+  const kvitelOnPage = pathname.startsWith('/admin/kvitel')
+  const kvitelChildren = [
+    { tab: 'requests', label: 'בקשות', icon: ClipboardList, badge: 0 },
+    { tab: 'mail', label: 'מייל', icon: Mail, badge: unreadCounts.byDepartment.kvitel ?? 0 },
+    { tab: 'nedarim', label: 'נדרים', icon: Landmark, badge: 0 },
+  ]
+  const renderKvitel = () => (
+    <div key="kvitel" className="pt-0.5">
+      <div className={`relative flex items-center rounded-lg transition-all ${kvitelOnPage ? 'bg-[#f7f3ea] text-navy font-bold' : 'text-[#d9d4c6] hover:text-white hover:bg-[#1c2b4d]'}`}>
+        {kvitelOnPage && <span className="absolute right-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-gold rounded-full" />}
+        <Link href="/admin/kvitel" onClick={() => { setMobileOpen(false); setKvitelOpen(true) }}
+          className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium flex-1 min-w-0">
+          <ScrollText size={18} className="flex-shrink-0" />
+          <span>קוויטלאך</span>
+        </Link>
+        <button onClick={() => setKvitelOpen(o => !o)} className="px-3 py-2.5 opacity-70 hover:opacity-100" aria-label="פתח/סגור">
+          {kvitelOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </button>
+      </div>
+      {kvitelOpen && (
+        <div className="mt-1 mr-4 border-r border-white/10 pr-2 flex flex-col gap-0.5">
+          {kvitelChildren.map(c => {
+            const active = kvitelOnPage && kvitelTab === c.tab
+            return (
+              <Link key={c.tab} href={`/admin/kvitel?tab=${c.tab}`} onClick={() => setMobileOpen(false)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${active ? 'bg-[#f7f3ea] text-navy font-bold' : 'text-[#8f9ab5] hover:text-white hover:bg-[#1c2b4d]'}`}>
+                <c.icon size={15} className="flex-shrink-0" />
+                <span className="flex-1">{c.label}</span>
+                {c.badge > 0 && <span className="text-[10px] font-bold bg-gold text-navy rounded-full px-1.5 py-0.5 min-w-[18px] text-center">{c.badge}</span>}
+              </Link>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Logo area with gradient background */}
@@ -253,7 +294,7 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
           <div className="mx-1 h-px bg-white/10 mb-2" />
           <p className="px-3 pb-1.5 text-[11px] font-medium tracking-widest text-[#6f7a96]">שירותים</p>
         </div>
-        {bottomVisible.map(renderLink)}
+        {bottomVisible.map(item => item.section === 'kvitel' ? renderKvitel() : renderLink(item))}
 
         {/* ── מערכת טלפונית ──
             ⚠️ למנהלים בלבד ולא לפי SectionKey: הוספת מפתח הרשאה חדש הייתה

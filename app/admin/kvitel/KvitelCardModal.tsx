@@ -1,8 +1,9 @@
 'use client'
-import { Check, ShieldCheck, BookCheck, X, Eye, FileDown, RotateCcw } from 'lucide-react'
+import { useState } from 'react'
+import { Check, BookCheck, X, Eye, FileDown, RotateCcw, Pencil } from 'lucide-react'
 import { KVITEL_CHANNELS, KVITEL_STATUSES, type KvitelStatus } from '@/lib/kvitel'
 import type { KvitelRequestRow } from '@/lib/kvitelQuery'
-import { hebrewDay, parseRawFields, reviewReason } from '@/lib/kvitelView'
+import { hebrewDay, parseRawFields } from '@/lib/kvitelView'
 import KvitelLinesEditor from './KvitelLinesEditor'
 import RecordModal, { modalBtn, type RecordTone } from '@/components/admin/system/RecordModal'
 
@@ -10,12 +11,12 @@ import RecordModal, { modalBtn, type RecordTone } from '@/components/admin/syste
 // ⚠️ אין בטבלאות הקוויטל שרשור הודעות, ולכן לא נבנה כאן.
 // הפעולות (שינוי סטטוס, אישור עם מילון) מגיעות מהרשימה ורצות דרך אותם נתיבי שרת.
 
-const TONE: Record<KvitelStatus, RecordTone> = { review: 'chk', pending: 'wait', done: 'ok', cancelled: 'no' }
-const STEP_OF: Record<KvitelStatus, number> = { review: 0, pending: 1, done: 2, cancelled: 2 }
-const STEPS = ['לבדיקה', 'ממתין לשליחה', 'נשלח לציון']
+const TONE: Record<KvitelStatus, RecordTone> = { review: 'wait', pending: 'wait', done: 'ok', cancelled: 'no' }
+const STEP_OF: Record<KvitelStatus, number> = { review: 0, pending: 0, done: 1, cancelled: 1 }
+const STEPS = ['ממתין לשליחה', 'נשלח לציון']
 const fmt = (d?: string | null) => (d ? new Date(d).toLocaleDateString('he-IL') : '—')
 
-export default function KvitelCardModal({ rows, index, onIndex, onClose, canEdit, busy, setStatus, approveWithDictionary, onPreview, onSaved }: {
+export default function KvitelCardModal({ rows, index, onIndex, onClose, canEdit, busy, setStatus, approveWithDictionary, onPreview, onSaved, startEditing }: {
   rows: KvitelRequestRow[]
   index: number
   onIndex: (i: number) => void
@@ -26,11 +27,11 @@ export default function KvitelCardModal({ rows, index, onIndex, onClose, canEdit
   approveWithDictionary: (r: KvitelRequestRow) => void
   onPreview: (r: KvitelRequestRow) => void
   onSaved: (msg: string) => void
+  startEditing: boolean
 }) {
+  const [editing, setEditing] = useState(startEditing)
   const r = rows[index]
   const lines = r.kvitel_request_lines
-  const flagged = lines.filter(l => l.flagged).length
-  const reason = r.status === 'review' ? reviewReason(r) : null
   const rawFields = parseRawFields(r.raw_text)
   const playable = !!r.recording_url && /^(https?:|\/)/.test(r.recording_url)
   return (
@@ -43,18 +44,16 @@ export default function KvitelCardModal({ rows, index, onIndex, onClose, canEdit
         { label: 'ערוץ', value: KVITEL_CHANNELS[r.channel] },
         ...(r.contact_phone ? [{ label: 'טלפון', value: r.contact_phone, ltr: true }] : []),
       ]}
-      statusLabel={KVITEL_STATUSES[r.status]}
+      statusLabel={KVITEL_STATUSES[r.status === 'review' ? 'pending' : r.status]}
       statusTone={TONE[r.status]}
       stampDate={`${fmt(r.submitted_at)} · ${hebrewDay(r.submitted_at)}`}
       facts={[
         { label: 'שמות', value: String(lines.length) },
-        { label: 'לבדיקה', value: String(flagged) },
         { label: 'הוגשה', value: fmt(r.submitted_at) },
         { label: 'נשלחה לציון', value: fmt(r.done_at) },
       ]}
       readiness={[
         { label: 'זוהו שמות', ok: lines.length > 0 },
-        { label: 'ללא סימוני בדיקה', ok: flagged === 0 },
       ]}
       steps={{ labels: STEPS, current: STEP_OF[r.status], rejected: r.status === 'cancelled' }}
       sections={[{ title: 'פרטי המגיש', fields: [
@@ -63,10 +62,10 @@ export default function KvitelCardModal({ rows, index, onIndex, onClose, canEdit
         { label: 'מייל', value: r.contact_email, ltr: true, copy: true },
         { label: 'ערוץ', value: KVITEL_CHANNELS[r.channel] },
       ] }]}
-      note={reason || r.note ? { title: reason ? 'למה לבדיקה' : 'הערה', text: [reason, r.note].filter(Boolean).join(' · ') } : undefined}
+      note={r.note ? { title: 'הערה', text: r.note } : undefined}
       tabs={[
         { key: 'names', label: 'שמות', count: lines.length, content: (
-          <KvitelLinesEditor key={`${r.id}:${lines.map(l => l.id).join()}`} requestId={r.id} lines={lines} editable={canEdit && r.status === 'review'} onSaved={onSaved} />
+          <KvitelLinesEditor key={`${r.id}:${editing}:${lines.map(l => l.id).join()}`} requestId={r.id} lines={lines} editable={canEdit && editing} onSaved={onSaved} />
         ) },
         { key: 'source', label: 'מה שנכתב בטופס', content: (
           <div className="space-y-3 text-sm text-ink-soft">
@@ -85,18 +84,20 @@ export default function KvitelCardModal({ rows, index, onIndex, onClose, canEdit
         {lines.length > 0 && (
           <button type="button" className={modalBtn.ghost} onClick={() => onPreview(r)}><Eye size={14} /> תצוגה בקובץ</button>
         )}
-        {canEdit && r.status === 'review' && lines.length > 0 && (<>
-          <button type="button" disabled={busy} className={modalBtn.primary} onClick={() => setStatus([r.id], 'pending')}><ShieldCheck size={14} /> אישור והעברה לשליחה</button>
+        {canEdit && (
+          <button type="button" className={modalBtn.ghost} onClick={() => setEditing(e => !e)}><Pencil size={14} /> {editing ? 'סיום עריכה' : 'עריכה'}</button>
+        )}
+        {canEdit && r.status !== 'cancelled' && r.status !== 'done' && lines.length > 0 && (
           <button type="button" disabled={busy} className={modalBtn.ghost} onClick={() => approveWithDictionary(r)}><BookCheck size={14} /> אישור והוספה למילון</button>
-        </>)}
-        {canEdit && r.status === 'pending' && (
+        )}
+        {canEdit && (r.status === 'pending' || r.status === 'review') && (
           <button type="button" disabled={busy} className={modalBtn.primary} onClick={() => setStatus([r.id], 'done')}><Check size={14} /> נשלח לציון</button>
         )}
         {r.status === 'done' && (
           <a href={`/api/admin/kvitel/export?status=all&ids=${r.id}`} className={modalBtn.ghost}><FileDown size={14} /> הורדת הקובץ</a>
         )}
         {canEdit && r.status === 'cancelled' && (
-          <button type="button" disabled={busy} className={modalBtn.ghost} onClick={() => setStatus([r.id], 'review')}><RotateCcw size={14} /> שחזור הבקשה</button>
+          <button type="button" disabled={busy} className={modalBtn.ghost} onClick={() => setStatus([r.id], 'pending')}><RotateCcw size={14} /> שחזור הבקשה</button>
         )}
         {canEdit && r.status !== 'cancelled' && r.status !== 'done' && (
           <button type="button" disabled={busy} className={modalBtn.ghost} onClick={() => setStatus([r.id], 'cancelled')}><X size={14} /> ביטול הבקשה</button>

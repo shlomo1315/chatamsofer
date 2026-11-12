@@ -93,7 +93,7 @@ export async function loadKvitelRequests(db: SupabaseClient, f: KvitelFilters): 
 // כך ייצוא חוזר של אותו סינון נותן בדיוק את אותו קובץ.
 export function kvitelExportLines(rows: KvitelRequestRow[], ids?: Set<string>): string[] {
   return rows
-    .filter(r => (ids?.size ? ids.has(r.id) : true) && (r.status === 'pending' || r.status === 'done'))
+    .filter(r => (ids?.size ? ids.has(r.id) : true) && (r.status === 'review' || r.status === 'pending' || r.status === 'done'))
     .sort((a, b) => Date.parse(a.submitted_at) - Date.parse(b.submitted_at) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     .flatMap(kvitelRequestLines)
 }

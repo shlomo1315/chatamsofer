@@ -1,5 +1,4 @@
 export const KVITEL_TABS = [
-  { key: 'overview', label: 'סקירה' },
   { key: 'requests', label: 'בקשות' },
   { key: 'mail', label: 'מייל' },
   { key: 'nedarim', label: 'נדרים' },
@@ -9,5 +8,5 @@ export type KvitelTabKey = (typeof KVITEL_TABS)[number]['key']
 
 export function parseKvitelTab(v: string | string[] | undefined): KvitelTabKey {
   const s = Array.isArray(v) ? v[0] : v
-  return KVITEL_TABS.some(t => t.key === s) ? (s as KvitelTabKey) : 'overview'
+  return KVITEL_TABS.some(t => t.key === s) ? (s as KvitelTabKey) : 'requests'
 }
