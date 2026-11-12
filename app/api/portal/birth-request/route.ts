@@ -24,7 +24,7 @@ const SILENT_BIRTH_COOLDOWN_MONTHS = 6
 // 🔴 משפחה שמזוהה בדרכון — מרווח מינימלי בין בקשות לידה (חודשים).
 // ⚠️ אין מספר זיהוי יציב לנולד, ולכן בדיקת הכפילות לפי baby_id_number
 // אינה מגינה. 10 חודשים הוא פרק הזמן המינימלי הסביר בין לידות.
-const PASSPORT_COOLDOWN_MONTHS = 10
+const PASSPORT_COOLDOWN_MONTHS = 6
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -229,17 +229,18 @@ export async function POST(request: NextRequest) {
   // בקשות באותו יום. מגבילים להגשה אחת כל 6 חודשים (עד פעמיים בשנה).
   // בקשה שנדחתה (cancelled) אינה נספרת, בעקביות עם בדיקת הכפילות.
   // ─────────────────────────────────────────────────────────────────────────
-  // 🔴 אותו צינון חל על משפחה שמזוהה בדרכון — 10 חודשים.
+  // 🔴 אותו צינון חל על משפחה או נולד שמזוהים בדרכון — 6 חודשים.
   //
   // ⚠️ למי שאין ת"ז ישראלית אין מספר יציב לנולד, ולכן בדיקת הכפילות לפי
   // baby_id_number אינה מגינה: משפחת לוק (15.09) הגישה ארבע בקשות על
   // אותו תינוק והקלידה בכל פעם מספר אחר — פעמיים את מספרי ההורים עצמם.
   // כל בקשה נראתה כתינוק חדש, ואחת מהן אושרה וכרטיס נטען.
   //
-  // ⚠️ 10 חודשים ולא 6: זהו פרק הזמן המינימלי הסביר בין לידות, ולכן
+  // ⚠️ חצי שנה: מרווח מינימלי בין הגשות, ולכן
   // בקשה שנייה בתוכו היא כמעט תמיד כפילות ולא לידה חדשה.
   // ─────────────────────────────────────────────────────────────────────────
-  const isPassportFamily = ben.id_doc_type === 'passport' || ben.spouse_doc_type === 'passport'
+  // גם כשהנולד מזוהה בדרכון (אף שההורים בת"ז) אין לו מספר יציב, ולכן אותו צינון.
+  const isPassportFamily = ben.id_doc_type === 'passport' || ben.spouse_doc_type === 'passport' || normBabies.some(b => b.id_type === 'passport')
   if (isSilent || isPassportFamily) {
     const months = isSilent ? SILENT_BIRTH_COOLDOWN_MONTHS : PASSPORT_COOLDOWN_MONTHS
     const since = new Date()
