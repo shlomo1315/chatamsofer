@@ -1675,11 +1675,11 @@ export function gratitudeRequestEmail(opts: {
       : textFor('gratitude_request', 'subject'),
     html: shell({
       preheader: opts.isReminder
-        ? 'עדיין נשמח לכמה מילות ברכה לנדיב שסייע לכם'
-        : 'נשמח לכמה מילות ברכה לנדיב שסייע לכם',
+        ? 'עדיין נשמח לכמה מילות ברכה להעוסקים במלאכת הקודש בהנהלת היכל החתם סופר'
+        : 'נשמח לכמה מילות ברכה להעוסקים במלאכת הקודש בהנהלת היכל החתם סופר',
       accent: '#C69D2D',
       title: 'דברי ברכה',
-      subtitle: 'הכרת הטוב לנדיב',
+      subtitle: 'הכרת הטוב',
       body,
     }),
   }
