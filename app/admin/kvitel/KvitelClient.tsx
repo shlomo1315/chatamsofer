@@ -9,6 +9,7 @@ import { ListTable } from '@/components/admin/system/ListTable'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import { useTablePagination } from '@/lib/useTablePagination'
 import { countByStatus, hebrewDay, reviewReason } from '@/lib/kvitelView'
+import StatStrip from '@/components/admin/system/StatStrip'
 import KvitelCardModal from './KvitelCardModal'
 import ExportDialog from './ExportDialog'
 import PrintNewDialog from './PrintNewDialog'
@@ -265,19 +266,8 @@ export default function KvitelClient({ allRows, filters, canEdit, isAdmin }: { a
         </div>
       </form>
 
-      <div role="tablist" aria-label="סינון לפי סטטוס" className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-        {TABS.map(t => {
-          const on = tab === t.key
-          const gold = t.key === 'review'
-          return (
-            <button key={t.key} type="button" role="tab" aria-selected={on} onClick={() => { setTab(t.key); setSelected(new Set()) }}
-              className={`rounded-xl border px-4 py-3 text-start transition-colors ${on ? (gold ? 'border-[#C0912F] bg-[#F3E9CF]' : 'border-navy bg-navy text-white') : 'border-line bg-white hover:bg-sand'}`}>
-              <div className={`text-[13px] ${on && !gold ? 'text-white/80' : 'text-ink-soft'}`}>{t.label}</div>
-              <div className={`text-2xl font-bold tabular-nums ${on ? (gold ? 'text-navy' : 'text-white') : gold && counts.review ? 'text-[#8A5A00]' : 'text-navy'}`}>{counts[t.key]}</div>
-            </button>
-          )
-        })}
-      </div>
+      <StatStrip<Tab> active={tab} onSelect={k => { setTab(k); setSelected(new Set()) }}
+        items={TABS.map(t => ({ key: t.key, label: t.label, count: counts[t.key] }))} />
 
       {emptyCount > 0 && (
         <div role="status" className="flex flex-wrap items-center gap-3 rounded-xl border border-[#C0912F]/40 bg-[#F3E9CF] px-4 py-3 text-sm text-navy">
