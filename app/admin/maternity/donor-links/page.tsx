@@ -25,7 +25,11 @@ export default function DonorLinksPage() {
     else toast.error('טעינת הקישורים נכשלה')
     setLoading(false)
   }, [toast])
-  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    let alive = true
+    const t = setTimeout(() => { if (alive) void load() }, 0)
+    return () => { alive = false; clearTimeout(t) }
+  }, [load])
 
   const urlOf = (t: string) => `${window.location.origin}/donor-report/${t}`
 
@@ -83,8 +87,8 @@ export default function DonorLinksPage() {
         </button>
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-        <table className="w-full text-right text-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white">
+        <table className="w-full table-fixed text-right text-sm">
           <thead className="bg-slate-50 text-slate-600">
             <tr><th className="px-4 py-3">שם</th><th className="px-4 py-3">בית החלמה</th><th className="px-4 py-3">נוצר</th><th className="px-4 py-3">שימוש אחרון</th><th className="px-4 py-3">מצב</th><th className="px-4 py-3" /></tr>
           </thead>

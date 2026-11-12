@@ -34,7 +34,11 @@ export default function DonorReportView({ token }: { token: string }) {
     setLoading(false)
   }, [token, from, to, home])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    let alive = true
+    const t = setTimeout(() => { if (alive) void load() }, 0)
+    return () => { alive = false; clearTimeout(t) }
+  }, [load])
 
   const field = 'h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-[#1B3256] focus:outline-none'
 
@@ -101,18 +105,18 @@ export default function DonorReportView({ token }: { token: string }) {
               </section>
             )}
 
-            <section className={`overflow-x-auto rounded-2xl border border-slate-200 bg-white ${loading ? 'opacity-60' : ''}`}>
-              <table className="w-full text-right text-sm">
+            <section className={`rounded-2xl border border-slate-200 bg-white ${loading ? 'opacity-60' : ''}`}>
+              <table className="w-full table-fixed text-right text-sm">
                 <thead className="bg-slate-50 text-slate-600">
-                  <tr><th className="px-4 py-3">שם היולדת</th><th className="px-4 py-3">בית החלמה</th><th className="px-4 py-3">תאריך</th><th className="px-4 py-3">סכום</th></tr>
+                  <tr><th className="px-2 py-3 sm:px-4">שם היולדת</th><th className="px-2 py-3 sm:px-4">בית החלמה</th><th className="px-2 py-3 sm:px-4">תאריך</th><th className="px-2 py-3 sm:px-4">סכום</th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {data.rows.map((r, i) => (
                     <tr key={i}>
-                      <td className="px-4 py-3 text-slate-800">{r.name}</td>
-                      <td className="px-4 py-3 text-slate-600">{r.home}</td>
-                      <td className="px-4 py-3 text-slate-600">{heDate(r.date)}</td>
-                      <td className="px-4 py-3 font-medium text-slate-800">{nis(r.amount)}</td>
+                      <td className="px-2 py-3 sm:px-4 text-slate-800">{r.name}</td>
+                      <td className="px-2 py-3 sm:px-4 text-slate-600">{r.home}</td>
+                      <td className="px-2 py-3 sm:px-4 text-slate-600">{heDate(r.date)}</td>
+                      <td className="px-2 py-3 sm:px-4 font-medium text-slate-800">{nis(r.amount)}</td>
                     </tr>
                   ))}
                   {data.rows.length === 0 && (
