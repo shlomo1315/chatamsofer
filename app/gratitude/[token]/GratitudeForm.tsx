@@ -77,7 +77,7 @@ export default function GratitudeForm({ token }: { token: string }) {
             {done ? 'תודה רבה!' : 'כבר קיבלנו את מכתבכם'}
           </h1>
           <p className="text-slate-500 text-sm leading-relaxed">
-            דברי הברכה התקבלו אצלנו, ואנו נדאג להעבירם לנדיב.
+            דברי הברכה התקבלו אצלנו, ואנו נדאג להעבירם להעוסקים במלאכת הקודש בהנהלת היכל החתם סופר.
             <br />
             תבורכו מן השמים.
           </p>
@@ -95,13 +95,13 @@ export default function GratitudeForm({ token }: { token: string }) {
         <div className="text-center mb-6">
           <h1 className="text-3xl font-bold mb-2" style={{ color: NAVY }}>דברי ברכה</h1>
           <div className="w-16 h-0.5 mx-auto mb-3" style={{ background: GOLD }} />
-          <p className="text-slate-500 text-sm">הכרת הטוב לנדיב שסייע</p>
+          <p className="text-slate-500 text-sm">הכרת הטוב להעוסקים במלאכת הקודש בהנהלת היכל החתם סופר</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
           <p className="text-slate-600 text-sm leading-relaxed mb-6">
-            הסיוע שקיבלתם התאפשר בזכות נדיב לב שבחר לתמוך בכם — בעילום שם.
-            כאן אפשר לכתוב לו כמה מילות ברכה והכרת הטוב.
+            הסיוע שקיבלתם התאפשר בזכות תורמים שבחרו לתמוך בכם — בעילום שם.
+            כאן אפשר לכתוב כמה מילות ברכה והכרת הטוב.
           </p>
 
           {/* הברכה */}
@@ -112,7 +112,7 @@ export default function GratitudeForm({ token }: { token: string }) {
             value={body}
             onChange={e => setBody(e.target.value.slice(0, MAX_CHARS))}
             rows={9}
-            placeholder="לכבוד הנדיב היקר…"
+            placeholder="לכבוד העוסקים במלאכת הקודש בהנהלת היכל החתם סופר…"
             className="w-full rounded-xl border border-slate-300 p-4 text-[15px] leading-relaxed
                        focus:outline-none focus:ring-2 focus:border-transparent resize-y"
             style={{ '--tw-ring-color': GOLD } as React.CSSProperties}

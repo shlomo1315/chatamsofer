@@ -151,7 +151,7 @@ export function motherEmail(row: GratitudeLetterRow | null): string {
 export function donorEmailHtml(row: GratitudeLetterRow | null): string {
   const motherName = motherDisplayName(row)
   const body = `
-    <p style="margin:0 0 16px;color:#334155;font-size:16px;line-height:1.9;">לכבוד הנדיב היקר,</p>
+    <p style="margin:0 0 16px;color:#334155;font-size:16px;line-height:1.9;">שלום וברכה,</p>
     <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.9;">
       בשמחה רבה אנו מעבירים אליך מכתב ברכה והכרת הטוב שהתקבל
       ${motherName ? `ממשפחת <strong>${motherName}</strong>` : 'מאחת המשפחות'},
