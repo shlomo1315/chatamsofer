@@ -1,10 +1,8 @@
 import { guardPage } from '@/lib/pageGuard'
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
-import { ArrowRight } from 'lucide-react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
-import BeneficiaryForm from '../../BeneficiaryForm'
-import DocumentsManager from '../DocumentsManager'
+import { registrationSourceLabel } from '@/lib/distributionSources'
+import BeneficiaryEditSheet from './BeneficiaryEditSheet'
 
 async function getBeneficiary(id: string) {
   if (!isSupabaseConfigured()) return null
@@ -37,7 +35,11 @@ export default async function EditBeneficiaryPage({ params }: { params: Promise<
         spouse_id_number: b.spouse_id_number ?? '',
         spouse_doc_type: (b.spouse_doc_type === 'passport' ? 'passport' : 'id') as 'id' | 'passport',
         spouse_birth_date: b.spouse_birth_date ?? '',
-        children_count: String(b.children_count ?? 0),
+        spouse_phone: b.spouse_phone ?? '',
+        community_affiliation: b.community_affiliation ?? '',
+        is_special: !!b.is_special,
+        created_at: b.created_at ?? '',
+        registration_source: registrationSourceLabel(b.registration_source) ?? '',
         notes: b.notes ?? '',
         lineage_node_id: b.lineage_node_id ?? '',
         lineage_manual: Array.isArray(b.lineage_manual) ? (b.lineage_manual as string[]) : [],
@@ -66,30 +68,6 @@ export default async function EditBeneficiaryPage({ params }: { params: Promise<
       }
     : undefined
 
-  return (
-    <div className="flex flex-col gap-5 max-w-5xl">
-      <div className="flex items-center gap-3">
-        <Link href={`/admin/beneficiaries/${id}`} className="text-slate-400 hover:text-slate-600">
-          <ArrowRight size={20} />
-        </Link>
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">עריכת צאצא</h1>
-          {b && (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-slate-500">
-              <span className="font-medium text-slate-700">{[b.family_name, b.full_name].filter(Boolean).join(' ')}</span>
-              {b.id_number && <span>· ת.ז. {b.id_number}</span>}
-              {b.spouse_name && <span>· בן/בת זוג: {b.spouse_name}</span>}
-              {b.marital_status && <span>· {b.marital_status}</span>}
-              {b.phone && <span>· {b.phone}</span>}
-              {typeof b.children_count === 'number' && <span>· {b.children_count} ילדים</span>}
-            </div>
-          )}
-        </div>
-      </div>
-      <BeneficiaryForm beneficiaryId={id} defaultValues={defaultValues} />
-      <div className="bg-white rounded-2xl border border-slate-200 p-5">
-        <DocumentsManager beneficiaryId={id} beneficiaryName={[b.family_name, b.full_name].filter(Boolean).join(' ')} />
-      </div>
-    </div>
-  )
+  if (!defaultValues) notFound()
+  return <BeneficiaryEditSheet beneficiaryId={id} defaults={defaultValues} />
 }

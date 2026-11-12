@@ -113,7 +113,7 @@ function buildNodePath(nodeId: string, allNodes: LineageNode[]): string[] {
   return path
 }
 
-function LineageTreePicker({
+export function LineageTreePicker({
   initialNodeId,
   onSelect,
   selfName,
