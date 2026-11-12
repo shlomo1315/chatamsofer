@@ -7,10 +7,11 @@ import type { UserPermissions } from '@/types'
 import { getKvitelPullView } from '@/lib/kvitelNedarimPull'
 import MailClient from '@/app/admin/mail/MailClient'
 import KvitelClient from './KvitelClient'
+import KvitelTabs from './KvitelTabs'
 import KvitelNedarim from './KvitelNedarim'
 import { parseKvitelTab, type KvitelTabKey } from './kvitelTabs'
 
-// מחלקת קוויטלאך — לשוניות (בתפריט הצד): בקשות · מייל (תיבת k@ בלבד) · נדרים.
+// מחלקת קוויטלאך — לשוניות (שורה בראש המסך): בקשות · מייל (תיבת k@ בלבד) · נדרים.
 // הליבה: lib/kvitel.ts · סינון: lib/kvitelQuery.ts · מיגרציה: 20261014_kvitel.sql
 //
 // ⚠️ לקוח השירות רק אחרי guardPage - הטבלאות פתוחות ל-service_role בלבד.
@@ -35,9 +36,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   return (
     <div className="space-y-6">
       {tab !== 'requests' && <PageHeader title={tab === 'mail' ? 'קוויטלאך · מייל' : 'קוויטלאך · נדרים'} subtitle="שמות ובקשות לתפילה בציון, מכל הערוצים" />}
+      {tab !== 'requests' && <KvitelTabs active={tab} />}
       {error && <p role="alert" className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</p>}
 
-      {tab === 'requests' && <KvitelClient allRows={rows} filters={filters} canEdit={canEdit} />}
+      {tab === 'requests' && <KvitelClient allRows={rows} filters={filters} canEdit={canEdit} tabs={<KvitelTabs active={tab} />} />}
       {tab === 'mail' && <MailClient lockDepartment="kvitel" />}
       {tab === 'nedarim' && (nedarimView
         ? <KvitelNedarim view={nedarimView} isAdmin={staff.role === 'admin'} />
