@@ -6,7 +6,7 @@ import { loadApprovedRows, resolveDonorLink, effectiveFilter, filterRows, summar
 
 export const dynamic = 'force-dynamic'
 
-// נקודת קצה ציבורית לקריאה בלבד: מעקב אשראי לנדיב (ראו lib/donorReport).
+// נקודת קצה ציבורית לקריאה בלבד: דוח יולדות לנדיב (ראו lib/donorReport).
 // הגישה רק עם טוקן תקף שלא בוטל; הטוקן מגביל גם את בית ההחלמה.
 const HEADERS = { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' }
 

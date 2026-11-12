@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { ArrowRight, Copy, Ban, Loader2, Plus, KeyRound } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 
-// ניהול קישורי מעקב אשראי לנדיב (דף ציבורי לקריאה בלבד: /donor-report/<טוקן>).
+// ניהול קישורי דוח יולדות לנדיב (דף ציבורי לקריאה בלבד: /donor-report/<טוקן>).
 interface DonorLinkRow {
   id: string; token: string; label: string; recovery_home: string | null
   has_password: boolean; created_at: string; revoked_at: string | null; last_used_at: string | null
@@ -80,7 +80,7 @@ export default function DonorLinksPage() {
         <Link href="/admin/maternity" className="inline-flex items-center gap-1 text-xs font-bold text-slate-500 hover:text-navy-dark">
           <ArrowRight size={14} /> יולדות
         </Link>
-        <h1 className="mt-2 text-xl font-bold text-navy-dark">קישורי נדיב – מעקב אשראי</h1>
+        <h1 className="mt-2 text-xl font-bold text-navy-dark">קישורי נדיב – דוח יולדות</h1>
         <p className="text-sm text-slate-500">קישור לקריאה בלבד ומוגן בסיסמה: יולדות שאושרו לפי בית החלמה, תאריכים וסכומים. אפשר לנעול לבית החלמה אחד ולבטל בכל רגע.</p>
       </div>
 

@@ -44,7 +44,7 @@ function PasswordScreen({ token, onAuth }: { token: string; onAuth: () => void }
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/25 ring-1 ring-white/30 mb-4">
               <Lock size={28} className="text-white" />
             </div>
-            <h1 className="relative text-xl font-extrabold text-white">מעקב אשראי</h1>
+            <h1 className="relative text-xl font-extrabold text-white">דוח יולדות</h1>
             <p className="relative text-sm mt-1 text-white/75">שעל ידי היכל החתם סופר</p>
           </div>
           <form onSubmit={submit} className="px-8 py-7 flex flex-col gap-5">
@@ -125,7 +125,7 @@ export default function DonorReportView({ token }: { token: string }) {
   return (
     <main dir="rtl" className={`min-h-screen ${PAGE_BG} pb-10`}>
       <header className="px-4 py-8 text-center" style={{ background: `linear-gradient(160deg, ${BRAND.goldDeep}, ${BRAND.gold} 60%, #9a7a2e)` }}>
-        <h1 className="text-2xl font-extrabold text-white">מעקב אשראי – יולדות שאושרו</h1>
+        <h1 className="text-2xl font-extrabold text-white">דוח יולדות</h1>
         <p className="mt-1 text-sm text-white/80">{data.label}{data.lockedHome ? ` · ${data.lockedHome}` : ''}</p>
       </header>
 
