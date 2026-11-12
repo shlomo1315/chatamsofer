@@ -11,6 +11,7 @@ export type DepartmentKey =
   | 'aid'           // מחלקת סיוע (אלמנות, יתומים וסיוע רפואי)
   | 'holidays'      // עזר לחגים
   | 'yerid'         // יריד (תיבת דואר נוספת)
+  | 'kvitel'        // קוויטלאך (k@, תיבת דואר נוספת)
   | 'inbox8'        // תיבה 8
   | 'inbox9'        // תיבה 9
   | 'inbox10'       // תיבה 10
@@ -50,6 +51,7 @@ export const DEPARTMENTS: Record<DepartmentKey, Department> = {
   aid:       { key: 'aid',       label: 'מחלקת סיוע',        email: AID_DEPT_EMAIL,           color: '#8b5cf6' },
   holidays:  { key: 'holidays',  label: 'עזר לחגים',         email: HOLIDAYS_DEPT_EMAIL,      color: '#f59e0b' },
   yerid:     { key: 'yerid',     label: 'יריד',             email: 'yerid@chasamsofer.info',  color: '#0ea5e9', mailboxOnly: true },
+  kvitel:    { key: 'kvitel',    label: 'קוויטלאך',          email: 'k@chasamsofer.info',      color: '#b45309', mailboxOnly: true },
   inbox8:    { key: 'inbox8',    label: 'תיבה 8',           email: '8@chasamsofer.info',      color: '#14b8a6', mailboxOnly: true },
   inbox9:    { key: 'inbox9',    label: 'תיבה 9',           email: '9@chasamsofer.info',      color: '#a855f7', mailboxOnly: true },
   inbox10:   { key: 'inbox10',   label: 'תיבה 10',          email: '10@chasamsofer.info',     color: '#f97316', mailboxOnly: true },

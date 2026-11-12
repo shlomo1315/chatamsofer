@@ -26,3 +26,28 @@ describe('scopeInboxToDepartment', () => {
     expect(scopeInboxToDepartment(data, '')).toBe(data)
   })
 })
+
+describe('תיבת הקוויטלאך', () => {
+  const withK = {
+    ...data,
+    accounts: [...data.accounts, { id: 'a4', email: 'k@chasamsofer.info', department: 'kvitel' }],
+    unreadByDept: { ...data.unreadByDept, kvitel: 3 },
+    unreadByAccount: { ...data.unreadByAccount, a4: 3 },
+    boxLabels: [...data.boxLabels, { id: 'l2', account: 'a4', department: 'kvitel' }],
+  }
+
+  it('נעול לקוויטלאך: אין office, יריד, גמ"ח או מונים שלהם', () => {
+    const s = scopeInboxToDepartment(withK, 'kvitel')
+    expect(s.accounts.map(a => a.email)).toEqual(['k@chasamsofer.info'])
+    expect(s.unreadByDept).toEqual({ kvitel: 3 })
+    expect(s.unreadByAccount).toEqual({ a4: 3 })
+    expect(s.boxLabels.map(b => b.account)).toEqual(['a4'])
+    expect(JSON.stringify(s)).not.toMatch(/office@|yerid@|gemach@/)
+  })
+
+  it('k@ מזוהה כמחלקת kvitel (שליחה ונכנס)', async () => {
+    const { departmentByEmail, mailFor } = await import('./departments')
+    expect(departmentByEmail('K@chasamsofer.info')?.key).toBe('kvitel')
+    expect(mailFor('kvitel').fromEmail).toBe('k@chasamsofer.info')
+  })
+})

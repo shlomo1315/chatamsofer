@@ -233,6 +233,7 @@ export default function KvitelClient({ allRows, filters, canEdit, isAdmin }: { a
   return (
     <div className="space-y-5">
       <form method="get" className="rounded-xl border border-line bg-white p-4 sm:p-5">
+        <input type="hidden" name="tab" value="requests" />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <label className={label}>ערוץ
             <select name="channel" defaultValue={filters.channel ?? ''} className={field}>
@@ -257,7 +258,7 @@ export default function KvitelClient({ allRows, filters, canEdit, isAdmin }: { a
           </label>
         </div>
         <div className="mt-4 flex items-center justify-end gap-3">
-          {filtersActive && <a href="/admin/kvitel" className="text-sm text-ink-soft underline-offset-4 hover:underline">ניקוי הסינון</a>}
+          {filtersActive && <a href="/admin/kvitel?tab=requests" className="text-sm text-ink-soft underline-offset-4 hover:underline">ניקוי הסינון</a>}
           <button type="submit" className="flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white">
             <Filter className="h-4 w-4" aria-hidden /> סינון
           </button>
