@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 
 // ⚠️ הטוקן בכתובת: בלי אינדוקס ובלי העברת הכתובת הלאה ב-Referer.
 export const metadata: Metadata = {
-  title: 'מעקב אשראי – יולדות שאושרו',
+  title: 'דוח יולדות',
   description: 'דוח יולדות שאושרו לפי בית החלמה, תאריכים וסכומים',
   robots: { index: false, follow: false },
   referrer: 'no-referrer',

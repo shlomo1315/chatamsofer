@@ -5,7 +5,7 @@ import { hashDonorPassword, validateDonorPassword } from '@/lib/donorReportAuth'
 
 export const dynamic = 'force-dynamic'
 
-// ניהול קישורי מעקב אשראי לנדיב: רשימה, יצירה וביטול.
+// ניהול קישורי דוח יולדות לנדיב: רשימה, יצירה וביטול.
 const COLS = 'id, token, label, recovery_home, created_at, created_by, revoked_at, last_used_at'
 
 // ⚠️ ה-hash לעולם לא יוצא ללקוח: מחזירים רק has_password.
