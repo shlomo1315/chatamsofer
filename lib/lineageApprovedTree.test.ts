@@ -57,3 +57,18 @@ describe('computeApproved', () => {
     expect(refKeyOf(raw[1], 'מרן החתם סופר זי"ע', refs)).toBe('b')
   })
 })
+
+describe('דורות עמוקים (מעבר ל-5)', () => {
+  const deep = [
+    N('a5', 'רבי אלעזר סופר', 5, null, true),
+    N('a6', 'רבי דוד סופר', 6, 'a5', false),
+    N('a7', 'רבי נתן סופר', 7, 'a6', false),
+  ]
+  const m = new Map(deep.map(n => [n.id, n]))
+  it('דור 6 ניתן לאישור כשאביו מאושר', () => expect(canApprove(m.get('a6')!, m)).toBe(true))
+  it('דור 7 חסום עד שאביו (דור 6) מאושר', () => expect(canApprove(m.get('a7')!, m)).toBe(false))
+  it('סיווג בדור 6: קיים וממתין → found, שם חדש → new', () => {
+    expect(classifyLines(['רבי דוד סופר'], deep, 6, 'a5')[0]).toMatchObject({ kind: 'found', nodeId: 'a6' })
+    expect(classifyLines(['רבי שמעון סופר'], deep, 6, 'a5')[0]!.kind).toBe('new')
+  })
+})
