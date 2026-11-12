@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { FileDown, Printer, Check, RotateCcw, X, Filter, Link2, ChevronLeft, Search, CalendarDays, Pencil } from 'lucide-react'
 import { KVITEL_CHANNELS, KVITEL_REQUEST_OPTIONS, KVITEL_STATUSES, requestTypeLabel, type KvitelStatus } from '@/lib/kvitel'
@@ -127,7 +127,7 @@ const CHANNEL_SEG: { key: string; label: string }[] = [
   { key: '', label: 'הכול' }, { key: 'web', label: 'לינק' }, { key: 'phone', label: 'טלפון' }, { key: 'email', label: 'מייל' }, { key: 'nedarim', label: 'נדרים' },
 ]
 
-export default function KvitelClient({ allRows, filters, canEdit }: { allRows: KvitelRequestRow[]; filters: KvitelFilters; canEdit: boolean }) {
+export default function KvitelClient({ allRows, filters, canEdit, tabs }: { allRows: KvitelRequestRow[]; filters: KvitelFilters; canEdit: boolean; tabs?: ReactNode }) {
   const router = useRouter()
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
@@ -222,6 +222,8 @@ export default function KvitelClient({ allRows, filters, canEdit }: { allRows: K
           </button>
         </div>
       </div>
+
+      {tabs}
 
       <div>
         <div className="grid grid-cols-1 items-stretch rounded-[14px] border border-line bg-white sm:grid-cols-[1fr_auto_1fr]">
