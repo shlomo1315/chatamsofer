@@ -5,12 +5,15 @@ import { validateLines } from '@/lib/kvitel'
 
 // תיקון שמות של בקשה (הכרטסת ב-app/admin/kvitel).
 // PUT { id, lines: [{ name, relation, parentName, requestType, requestNote }] } — מחליף את שורות הבקשה בשורות המתוקנות.
-// הסטטוס לא משתנה כאן: אישור נעשה בנפרד.
+// אפשר לצרף contact { name, phone, email } לעדכון פרטי המגיש. הסטטוס לא משתנה כאן.
 //
 // ⚠️ כל נתיב מגן על עצמו: ה-middleware אינו מכסה /api כלל.
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
+
+const clean = (v: unknown, max: number): string | null | undefined =>
+  v === undefined ? undefined : typeof v === 'string' && v.trim().length <= max ? v.trim() || null : undefined
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -28,6 +31,15 @@ export async function PUT(request: NextRequest) {
   if (!id) return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 })
   const v = validateLines(body.lines)
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })
+
+  let contact: Record<string, string | null> | null = null
+  if (body.contact !== undefined) {
+    const c = body.contact as Record<string, unknown> | null
+    if (!c || typeof c !== 'object') return NextResponse.json({ error: 'פרטי מגיש שגויים' }, { status: 400 })
+    const name = clean(c.name, 120), phone = clean(c.phone, 40), email = clean(c.email, 200)
+    if (name === undefined || phone === undefined || email === undefined) return NextResponse.json({ error: 'פרטי מגיש שגויים' }, { status: 400 })
+    contact = { contact_name: name, contact_phone: phone, contact_email: email }
+  }
 
   const { data: req } = await db.from('kvitel_requests').select('id').eq('id', id).maybeSingle()
   if (!req) return NextResponse.json({ error: 'הבקשה לא נמצאה' }, { status: 404 })
@@ -51,9 +63,17 @@ export async function PUT(request: NextRequest) {
     }
   }
 
+  if (contact) {
+    const { error: cErr } = await db.from('kvitel_requests').update(contact).eq('id', id)
+    if (cErr) {
+      console.error('[kvitel] contact edit failed:', cErr)
+      return NextResponse.json({ error: 'השמות נשמרו, אך פרטי המגיש לא' }, { status: 500 })
+    }
+  }
+
   await logActivity(db, {
     userId: staff.userId, action: 'kvitel_lines_edit', entityType: 'kvitel_request', entityId: id,
-    details: { lines: v.lines.length, replaced: oldIds.length },
+    details: { lines: v.lines.length, replaced: oldIds.length, contact: !!contact },
   })
   return NextResponse.json({ ok: true, lines: v.lines.length })
 }

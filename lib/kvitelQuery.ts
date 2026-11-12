@@ -88,7 +88,7 @@ export async function loadKvitelRequests(db: SupabaseClient, f: KvitelFilters): 
   return { rows: applyKvitelFilters(rows, f), error }
 }
 
-// השורות לקובץ ה-Word: כל הערוצים יחד, רק "ממתין לשליחה" ו"נשלח לציון", בסדר קבוע —
+// השורות לקובץ ה-Word: כל הערוצים יחד, רק "לא נשלח" ו"נשלח לציון", בסדר קבוע —
 // מהישן לחדש לפי זמן ההגשה, ובזמן זהה לפי מזהה הבקשה; בתוך בקשה לפי סדר השורות.
 // כך ייצוא חוזר של אותו סינון נותן בדיוק את אותו קובץ.
 export function kvitelExportLines(rows: KvitelRequestRow[], ids?: Set<string>): string[] {

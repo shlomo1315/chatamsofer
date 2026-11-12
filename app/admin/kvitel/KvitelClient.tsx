@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { FileDown, Printer, Check, RotateCcw, X, Filter, Link2, AlertTriangle, ChevronLeft, RefreshCw, Search, CalendarDays, Pencil } from 'lucide-react'
+import { FileDown, Printer, Check, RotateCcw, X, Filter, Link2, ChevronLeft, Search, CalendarDays, Pencil } from 'lucide-react'
 import { KVITEL_CHANNELS, KVITEL_REQUEST_OPTIONS, KVITEL_STATUSES, requestTypeLabel, type KvitelStatus } from '@/lib/kvitel'
 import { kvitelRequestLines, type KvitelFilters, type KvitelLineRow, type KvitelRequestRow } from '@/lib/kvitelQuery'
 import { ListTable } from '@/components/admin/system/ListTable'
@@ -61,7 +61,7 @@ function MobileCards({ rows, canEdit, onOpen }: { rows: KvitelRequestRow[]; canE
             </span>
             <span className="flex items-center justify-between text-xs text-ink-faint"><span>{KVITEL_CHANNELS[r.channel]} · {r.contact_name || 'מגיש לא ידוע'} · {dateFmt.format(new Date(r.submitted_at))}</span><ChevronLeft className="h-4 w-4" aria-hidden /></span>
           </button>
-          {canEdit && <button type="button" onClick={() => onOpen(r, true)} className="mt-1 flex items-center gap-1 rounded-lg border border-line bg-white px-2.5 py-1 text-xs font-semibold text-navy"><Pencil className="h-3.5 w-3.5" aria-hidden /> עריכה</button>}
+          {canEdit && <button type="button" onClick={() => onOpen(r, true)} aria-label="עריכה" className="mt-1 grid h-9 w-9 place-items-center rounded-[10px] border border-line bg-white text-navy"><Pencil className="h-4 w-4" aria-hidden /></button>}
         </li>
       ))}
     </ul>
@@ -81,19 +81,9 @@ function filtersToQuery(f: KvitelFilters, extra: Record<string, string> = {}): s
 }
 
 // עד שלושה שמות בתא, והשאר בספירה. בלי אזהרות: הסיבה בתגית הסטטוס וההסבר המלא בכרטסת.
-function NamesCell({ r, onReprocess }: { r: KvitelRequestRow; onReprocess?: () => void }) {
+function NamesCell({ r }: { r: KvitelRequestRow }) {
   const ls = r.kvitel_request_lines
-  if (!ls.length) return (
-    <div className="flex items-center gap-3 text-sm text-ink-faint">
-      <span>לא נקלטו שמות</span>
-      {onReprocess && (
-        <button type="button" onClick={e => { e.stopPropagation(); onReprocess() }}
-          className="flex items-center gap-1.5 rounded-lg border border-[#C0912F] bg-white px-2.5 py-1 text-xs font-semibold text-navy">
-          <RefreshCw className="h-3.5 w-3.5" aria-hidden /> עיבוד מחדש
-        </button>
-      )}
-    </div>
-  )
+  if (!ls.length) return <span className="text-sm text-ink-faint">לא נקלטו שמות</span>
   return (
     <div className="min-w-48 space-y-0.5 text-ink">
       {ls.slice(0, 3).map(l => <div key={l.id} className="break-words">{personOf(l)}</div>)}
@@ -137,7 +127,7 @@ const CHANNEL_SEG: { key: string; label: string }[] = [
   { key: '', label: 'הכול' }, { key: 'web', label: 'לינק' }, { key: 'phone', label: 'טלפון' }, { key: 'email', label: 'מייל' }, { key: 'nedarim', label: 'נדרים' },
 ]
 
-export default function KvitelClient({ allRows, filters, canEdit, isAdmin }: { allRows: KvitelRequestRow[]; filters: KvitelFilters; canEdit: boolean; isAdmin: boolean }) {
+export default function KvitelClient({ allRows, filters, canEdit }: { allRows: KvitelRequestRow[]; filters: KvitelFilters; canEdit: boolean }) {
   const router = useRouter()
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
@@ -152,7 +142,7 @@ export default function KvitelClient({ allRows, filters, canEdit, isAdmin }: { a
   const [q, setQ] = useState(filters.q ?? '')
   const [channel, setChannel] = useState<string>(filters.channel ?? '')
   const [type, setType] = useState<string>(filters.type ?? '')
-  // הלשונית הראשונה: מה שנבחר בכתובת, ובברירת מחדל "ממתין לשליחה" (לא נשלח).
+  // הלשונית הראשונה: מה שנבחר בכתובת, ובברירת מחדל "לא נשלח".
   const [tab, setTab] = useState<Tab>(filters.status === 'open' || filters.status === 'review' ? 'pending' : filters.status)
 
   // חיפוש, ערוץ וסוג מסוננים בדפדפן; התאריכים דרך הכתובת (השרת).
@@ -168,14 +158,12 @@ export default function KvitelClient({ allRows, filters, canEdit, isAdmin }: { a
   }, [allRows, q, channel, type])
   const counts = useMemo(() => countByStatus(scoped), [scoped])
   const rows = useMemo(() => (tab === 'all' ? scoped : scoped.filter(r => r.status === tab)), [scoped, tab])
-  const emptyCount = allRows.filter(r => r.status !== 'cancelled' && r.status !== 'done' && !r.kvitel_request_lines.length).length
   const tc = useTableColumns<ColKey, KvitelRequestRow>('kvitel', COLUMNS, { sortFilter: { mode: 'client', rows } })
   const pg = useTablePagination(tc.rows)
 
   const stageLines = (st: KvitelStatus) => scoped.filter(r => r.status === st).reduce((n, r) => n + r.kvitel_request_lines.length, 0)
   const lineCount = useMemo(() => rows.reduce((n, r) => n + r.kvitel_request_lines.length, 0), [rows])
-  const allSelected = rows.length > 0 && selected.size === rows.length
-  const tabTitle = tab === 'all' ? 'כל הבקשות' : tab === 'pending' ? 'ממתין לשליחה' : tab === 'done' ? 'נשלח לציון' : 'בוטלו'
+  const tabTitle = tab === 'all' ? 'כל הבקשות' : tab === 'pending' ? 'לא נשלח' : tab === 'done' ? 'נשלח לציון' : 'בוטלו'
 
   const toggle = (id: string) => setSelected(s => {
     const n = new Set(s)
@@ -184,21 +172,6 @@ export default function KvitelClient({ allRows, filters, canEdit, isAdmin }: { a
   })
   const openRow = (r: KvitelRequestRow, editing = false) => { setOpenEditing(editing); setOpenIdx(tc.rows.findIndex(x => x.id === r.id)) }
   const pickTab = (t: Tab) => { setTab(t); setSelected(new Set()) }
-
-  // אישור + הוספת שמות הבקשה למילון, כדי שהסוכן יכיר את הכתיב בפעם הבאה.
-  async function approveWithDictionary(r: KvitelRequestRow) {
-    const names = r.kvitel_request_lines.flatMap(l => [l.name, l.parent_name])
-    setBusy(true)
-    try {
-      const res = await fetch('/api/admin/kvitel/dictionary', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ names }),
-      })
-      if (!res.ok) { setMessage((await res.json().catch(() => ({}))).error || 'ההוספה למילון נכשלה'); return }
-    } finally {
-      setBusy(false)
-    }
-    await setStatus([r.id], 'pending')
-  }
 
   async function setStatus(ids: string[], status: KvitelStatus) {
     if (!ids.length) return
@@ -212,22 +185,6 @@ export default function KvitelClient({ allRows, filters, canEdit, isAdmin }: { a
       if (!res.ok) { setMessage(data.error || 'העדכון נכשל'); return }
       setMessage(`עודכנו ${data.updated} בקשות ל"${KVITEL_STATUSES[status]}"`)
       setSelected(new Set())
-      router.refresh()
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function reprocess() {
-    setBusy(true)
-    setMessage('')
-    try {
-      const res = await fetch('/api/admin/kvitel/nedarim', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'reprocess' }),
-      })
-      const d = await res.json().catch(() => ({}))
-      if (!res.ok) { setMessage(d.error || 'העיבוד מחדש נכשל'); return }
-      setMessage(`נבדקו ${d.checked} בקשות בלי שמות: ${d.fixed} הושלמו · ${d.stillEmpty} עדיין בלי שמות · ${d.missing} לא נמצאו בנדרים`)
       router.refresh()
     } finally {
       setBusy(false)
@@ -269,7 +226,7 @@ export default function KvitelClient({ allRows, filters, canEdit, isAdmin }: { a
       <div>
         <div className="grid grid-cols-1 items-stretch rounded-[14px] border border-line bg-white sm:grid-cols-[1fr_auto_1fr]">
           <div role="button" tabIndex={0} onClick={() => pickTab('pending')} onKeyDown={e => { if (e.key === 'Enter') pickTab('pending') }} className={`${stageCls(tab === 'pending')} cursor-pointer`}>
-            <span className="flex items-center gap-2 text-sm font-semibold text-ink-soft"><span className="h-[9px] w-[9px] rounded-full bg-[#2C4A7A]" />ממתין לשליחה<span className="text-[11px] text-ink-faint">שלב 1</span></span>
+            <span className="flex items-center gap-2 text-sm font-semibold text-ink-soft"><span className="h-[9px] w-[9px] rounded-full bg-[#2C4A7A]" />לא נשלח<span className="text-[11px] text-ink-faint">שלב 1</span></span>
             <b className="text-[44px] font-extrabold leading-none tabular-nums text-navy">{counts.pending}</b>
             <p className="min-h-5 text-[13px] text-ink-soft">{stageLines('pending')} שמות מוכנים לקובץ.</p>
             <button type="button" disabled={!counts.pending} onClick={e => { e.stopPropagation(); setMessage(''); setPrintOpen(true) }} className={`${btnPri} mt-auto`}>
@@ -328,18 +285,6 @@ export default function KvitelClient({ allRows, filters, canEdit, isAdmin }: { a
         )}
       </div>
 
-      {emptyCount > 0 && (
-        <div role="status" className="flex flex-wrap items-center gap-3 rounded-[14px] border border-[#EBD9AE] bg-[#FBEFD2] px-4 py-3 text-sm text-navy">
-          <AlertTriangle className="h-[18px] w-[18px] shrink-0 text-[#8A5A00]" aria-hidden />
-          <span><b>{emptyCount} בקשות נקלטו בלי שמות.</b>{isAdmin ? ' אפשר לעבד אותן מחדש מנדרים.' : ''}</span>
-          {isAdmin && (
-            <button type="button" onClick={() => void reprocess()} disabled={busy} className={`${btnSec} ms-auto`}>
-              <RefreshCw className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} aria-hidden /> עיבוד מחדש
-            </button>
-          )}
-        </div>
-      )}
-
       {message && <p role="status" className="rounded-lg bg-sand px-4 py-2.5 text-sm text-navy">{message}</p>}
 
       <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} rows={exportRows} exportHref={exportHref} canEdit={canEdit}
@@ -360,7 +305,7 @@ export default function KvitelClient({ allRows, filters, canEdit, isAdmin }: { a
               <Check className="h-4 w-4" aria-hidden /> סימון כנשלח לציון
             </button>
             <button disabled={busy} onClick={() => setStatus(ids, 'pending')} className="flex h-9 items-center gap-2 rounded-[10px] border border-white/25 px-3 text-[13px] font-semibold disabled:opacity-40">
-              <RotateCcw className="h-4 w-4" aria-hidden /> החזרה לממתין
+              <RotateCcw className="h-4 w-4" aria-hidden /> החזרה ללא נשלח
             </button>
             <button disabled={busy} onClick={() => setStatus(ids, 'cancelled')} className="flex h-9 items-center gap-2 rounded-[10px] border border-white/25 px-3 text-[13px] font-semibold disabled:opacity-40">
               <X className="h-4 w-4" aria-hidden /> ביטול
@@ -380,7 +325,7 @@ export default function KvitelClient({ allRows, filters, canEdit, isAdmin }: { a
                 case 'contact': return <ContactCell r={r} />
                 case 'phone': return <span dir="ltr" className="tabular-nums text-ink-soft">{r.contact_phone || '—'}</span>
                 case 'email': return <span dir="ltr" className="break-all text-ink-soft">{r.contact_email || '—'}</span>
-                case 'names': return <NamesCell r={r} onReprocess={isAdmin && !busy ? () => void reprocess() : undefined} />
+                case 'names': return <NamesCell r={r} />
                 case 'request': return requestsOf(r) ? <span className="inline-block rounded-full bg-sand px-2.5 py-0.5 text-xs text-navy">{requestsOf(r)}</span> : <span className="text-ink-faint">—</span>
                 case 'count': return <span className="tabular-nums text-ink-soft">{r.kvitel_request_lines.length}</span>
               }
@@ -390,20 +335,20 @@ export default function KvitelClient({ allRows, filters, canEdit, isAdmin }: { a
                 {canEdit && <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} className="h-4 w-4"
                   aria-label={`בחירת הבקשה של ${r.contact_name || dateFmt.format(new Date(r.submitted_at))}`} />}
                 {canEdit && (
-                  <button type="button" onClick={() => openRow(r, true)} className="flex items-center gap-1 rounded-lg border border-line px-2 py-1 text-xs font-semibold text-navy hover:border-[#cfc8bb]"
+                  <button type="button" onClick={() => openRow(r, true)} className="grid h-9 w-9 place-items-center rounded-[10px] border border-line bg-white text-navy hover:border-[#cfc8bb]"
                     aria-label={`עריכת הבקשה של ${r.contact_name || dateFmt.format(new Date(r.submitted_at))}`}>
-                    <Pencil className="h-3.5 w-3.5" aria-hidden /> עריכה
+                    <Pencil className="h-4 w-4" aria-hidden />
                   </button>
                 )}
               </div>
             )}
-            actionsHead="בחירה ועריכה" />
+            actionsHead="" />
         </div>
       </div>
       <MobileCards rows={pg.rows} canEdit={canEdit} onOpen={(r, editing) => openRow(r, editing)} />
       {openIdx !== null && tc.rows[openIdx] && (
         <KvitelCardModal rows={tc.rows} index={openIdx} onIndex={i => { setOpenIdx(i); setOpenEditing(false) }} onClose={() => setOpenIdx(null)} startEditing={openEditing}
-          canEdit={canEdit} busy={busy} setStatus={setStatus} approveWithDictionary={approveWithDictionary} onPreview={setPreviewRow}
+          canEdit={canEdit} busy={busy} setStatus={setStatus} onPreview={setPreviewRow}
           onSaved={m => { setMessage(m); router.refresh() }} />
       )}
     </div>
