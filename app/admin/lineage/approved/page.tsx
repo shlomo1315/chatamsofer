@@ -1,216 +1,351 @@
 'use client'
-import { useEffect, useState, useMemo } from 'react'
-import Link from 'next/link'
-import { Loader2, Search, ArrowRight, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Loader2 } from 'lucide-react'
+import {
+  MAX_APPROVED_GEN, classifyLines, normForMatch, type ApprovedTreeNode,
+} from '@/lib/lineageApprovedTree'
+import { APPROVED_CSS } from './approved.css'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// הייחוס המאושר — 5 הדורות הראשונים כפי שהם באקסל הרשמי.
-//
-// 🔴 עד היום לא הייתה שום דרך לראות את הטבלה הזו. היא יושבת במסד מאז 25.08,
-// אף מסך אינו מציג אותה, ואף בדיקה אינה משווה מולה — ולכן 51 צמתים סומנו
-// 'verified' ידנית בעץ וצבועים ירוק בלי שהם מופיעים בקובץ בכלל.
-//
-// ⚠️ המקרה שחשף זאת: "רבי יהושע צבי גולדגלנץ" יושב בעץ כבן של הכתב סופר
-// (דור 3). בקובץ המאושר הוא דור 5, דרך דויטש — נין ולא בן.
+// המאושרים בעץ — עץ חזותי של 5 הדורות הראשונים, בדיוק לפי המוקאפ שאושר.
+// "מאושר" = שורה ב-lineage_approved_ref; השרת מאמת מחדש כל אישור ("אב לפני ילד").
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface RefRow { key: string; name: string; generation: number; parent_key: string | null }
-interface Mismatch {
-  id: string; name: string; treeGeneration: number; treeParent: string | null
-  approvedGeneration: number | null; approvedParent: string | null
-  kind: 'wrong_generation' | 'not_in_reference'
-}
-interface Missing { name: string; generation: number; parent: string | null }
-interface Data {
-  reference: RefRow[]; mismatches: Mismatch[]; missing: Missing[]
-  byGen: Record<number, { approved: number; verifiedInTree: number }>
-  totals: { reference: number; mismatches: number; missing: number }
+type Node = ApprovedTreeNode
+const API = '/api/admin/lineage/approved-tree'
+const GENS = [1, 2, 3, 4, 5]
+
+const pl = (n: number, one: string, many: string) => (n === 1 ? one : `${n} ${many}`)
+const split = (n: string) => { const i = n.indexOf(' · '); return i < 0 ? { t: n, s: '' } : { t: n.slice(i + 3), s: n.slice(0, i) } }
+const short = (n: string) => split(n).t
+
+function Hl({ text, q }: { text: string; q: string }) {
+  const k = q.trim()
+  if (!k || !text.includes(k)) return <>{text}</>
+  const parts = text.split(k)
+  return <>{parts.map((p, i) => <span key={i}>{p}{i < parts.length - 1 && <mark>{k}</mark>}</span>)}</>
 }
 
-type Tab = 'reference' | 'mismatches' | 'missing'
+function hasIn(kids: Map<string, Node[]>, n: Node, f: (x: Node) => boolean): boolean {
+  return f(n) || (kids.get(n.id) ?? []).some(k => hasIn(kids, k, f))
+}
 
-export default function ApprovedRefPage() {
-  const [data, setData] = useState<Data | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<Tab>('reference')
-  const [gen, setGen] = useState<number | null>(null)
+interface Undo { keys: string[]; created: string[] }
+
+export default function ApprovedTreePage() {
+  const [nodes, setNodes] = useState<Node[] | null>(null)
+  const [err, setErr] = useState('')
+  const [gen, setGen] = useState(0)
+  const [col, setCol] = useState<Set<string>>(new Set())
+  const [onlyPend, setOnlyPend] = useState(false)
   const [q, setQ] = useState('')
+  const [mobile, setMobile] = useState(false)
+  const [flash, setFlash] = useState<string[]>([])
+  const [toast, setToast] = useState<{ msg: string; undo: Undo; id: number } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [modal, setModal] = useState<{ g: number; p: string | null; text: string } | null>(null)
+  const toastSeq = useRef(0)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => {
-    fetch('/api/admin/lineage/approved-ref')
-      .then(r => r.json())
-      .then(d => setData(d.error ? null : d))
-      .catch(() => setData(null))
-      .finally(() => setLoading(false))
+    fetch(API).then(r => r.json()).then(d => d.error ? setErr(d.error) : setNodes(d.nodes))
+      .catch(() => setErr('שגיאה בטעינת העץ'))
+  }, [])
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width:720px)')
+    const f = () => setMobile(mq.matches)
+    f(); mq.addEventListener('change', f)
+    return () => mq.removeEventListener('change', f)
   }, [])
 
-  const norm = (s: string) => s.replace(/["'׳״]/g, '').toLowerCase()
+  const byId = useMemo(() => new Map((nodes ?? []).map(n => [n.id, n])), [nodes])
+  const kids = useMemo(() => {
+    const m = new Map<string, Node[]>()
+    for (const n of nodes ?? []) if (n.parent_id) { const l = m.get(n.parent_id); if (l) l.push(n); else m.set(n.parent_id, [n]) }
+    return m
+  }, [nodes])
+  const root = useMemo(() => (nodes ?? []).find(n => !n.parent_id), [nodes])
+  const blocked = useCallback((n: Node) => !n.ok && !!n.parent_id && !byId.get(n.parent_id)?.ok, [byId])
+  const stOf = (n: Node) => n.ok ? 'ok' : blocked(n) ? 'blk' : 'pend'
 
-  const refRows = useMemo(() => {
-    if (!data) return []
-    return data.reference.filter(r =>
-      (gen === null || r.generation === gen) &&
-      (!q.trim() || norm(r.name).includes(norm(q)) || norm(r.parent_key ?? '').includes(norm(q))))
-  }, [data, gen, q])
+  const nq = q.trim() ? normForMatch(q) : ''
+  const has = useCallback((n: Node, f: (x: Node) => boolean) => hasIn(kids, n, f), [kids])
+  const visible = useCallback((n: Node) =>
+    (!onlyPend || has(n, y => !y.ok)) && (!nq || has(n, y => normForMatch(y.name).includes(nq))), [onlyPend, nq, has])
+  const visKids = useCallback((n: Node) => col.has(n.id) ? [] : (kids.get(n.id) ?? []).filter(visible), [col, kids, visible])
 
-  const misRows = useMemo(() => {
-    if (!data) return []
-    return data.mismatches.filter(m =>
-      (gen === null || m.treeGeneration === gen) &&
-      (!q.trim() || norm(m.name).includes(norm(q))))
-  }, [data, gen, q])
-
-  const missRows = useMemo(() => {
-    if (!data) return []
-    return data.missing.filter(m =>
-      (gen === null || m.generation === gen) &&
-      (!q.trim() || norm(m.name).includes(norm(q))))
-  }, [data, gen, q])
-
-  if (loading) {
-    return <div className="flex items-center justify-center py-24 text-slate-400 gap-2">
-      <Loader2 className="animate-spin" size={18} /> טוען…
-    </div>
-  }
-  if (!data) {
-    return <div className="p-8 text-center text-rose-600">שגיאה בטעינת הייחוס המאושר</div>
+  const stats = (g: number) => {
+    const a = (nodes ?? []).filter(x => x.generation === g)
+    return { ok: a.filter(x => x.ok).length, pend: a.filter(x => !x.ok).length }
   }
 
-  const TABS: { key: Tab; label: string; n: number; cls: string }[] = [
-    { key: 'reference', label: 'הייחוס המאושר', n: data.totals.reference, cls: 'text-emerald-700' },
-    { key: 'mismatches', label: 'ירוק בעץ — לא בקובץ', n: data.totals.mismatches, cls: 'text-rose-700' },
-    { key: 'missing', label: 'בקובץ — חסר בעץ', n: data.totals.missing, cls: 'text-amber-700' },
-  ]
+  const showToast = (msg: string, undo: Undo) => {
+    clearTimeout(toastTimer.current)
+    setToast({ msg, undo, id: ++toastSeq.current })
+    toastTimer.current = setTimeout(() => setToast(null), 10000)
+  }
+  const flashNow = (ids: string[]) => { setFlash(ids); setTimeout(() => setFlash([]), 1500) }
+
+  async function post(body: Record<string, unknown>) {
+    setBusy(true)
+    try {
+      const r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const d = await r.json()
+      if (!r.ok) { setErr(d.error || 'הפעולה נכשלה'); setTimeout(() => setErr(''), 5000); return null }
+      return d
+    } catch { setErr('הפעולה נכשלה'); setTimeout(() => setErr(''), 5000); return null }
+    finally { setBusy(false) }
+  }
+
+  async function approve(ids: string[]) {
+    ids = ids.filter(id => { const x = byId.get(id); return x && !x.ok && !blocked(x) })
+    if (!ids.length || busy) return
+    const d = await post({ action: 'approve', ids })
+    if (!d) return
+    setNodes(d.nodes); flashNow(d.approved.map((a: { id: string }) => a.id))
+    if (d.approved.length) {
+      const first = byId.get(d.approved[0].id)
+      showToast(d.approved.length === 1 ? `אושר: ${short(first?.name ?? '')}` : `אושרו ${d.approved.length} שמות`,
+        { keys: d.approved.map((a: { key: string }) => a.key), created: [] })
+    }
+  }
+
+  async function undo() {
+    if (!toast || busy) return
+    const d = await post({ action: 'undo', keys: toast.undo.keys, created: toast.undo.created })
+    setToast(null)
+    if (d) setNodes(d.nodes)
+  }
+
+  // ── חלון הוספה ──
+  const parentsOf = (g: number) => (nodes ?? []).filter(x => x.generation === g - 1 && x.ok)
+  const openModal = (o: { g?: number; p?: string } = {}) => {
+    const g = Math.min(Math.max(o.g ?? (gen > 1 ? gen : 3), 2), MAX_APPROVED_GEN)
+    const ps = parentsOf(g)
+    setModal({ g, p: o.p ?? ps[0]?.id ?? null, text: '' })
+  }
+  const lines = modal ? modal.text.split('\n').map(s => s.trim()).filter(Boolean) : []
+  const results = useMemo(
+    () => modal && nodes ? classifyLines(lines, nodes, modal.g, modal.p) : [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [modal?.text, modal?.g, modal?.p, nodes])
+  const cnt = { found: 0, new: 0, red: 0, skip: 0 }
+  results.forEach(r => { if (r) cnt[r.kind]++ })
+  const canAdd = cnt.found + cnt.new
+
+  async function confirmAdd() {
+    if (!modal || !modal.p || !canAdd || busy) return
+    const d = await post({ action: 'add', generation: modal.g, parentId: modal.p, names: lines })
+    if (!d) return
+    const g = modal.g, p = modal.p
+    setModal(null); setGen(g); setNodes(d.nodes)
+    setCol(s => { const n = new Set(s); n.delete(p); return n })
+    const ids = d.approved.map((a: { id: string }) => a.id)
+    flashNow(ids)
+    if (ids.length) showToast(`${ids.length === 1 ? 'נוסף שם אחד' : `נוספו ${ids.length} שמות`} לדור ${g}`,
+      { keys: d.approved.map((a: { key: string }) => a.key), created: d.created })
+  }
+
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (modal) {
+        if (e.key === 'Escape') setModal(null)
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); confirmAdd() }
+        return
+      }
+      if ((e.target as HTMLElement).matches('input,textarea,select')) return
+      if (e.key === 'n' || e.key === 'N' || e.key === 'מ') { e.preventDefault(); openModal() }
+    }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  })
+
+  if (err && !nodes) return <div className="p-8 text-center text-rose-600">{err}</div>
+  if (!nodes || !root) {
+    return <div className="flex items-center justify-center py-24 text-slate-400 gap-2"><Loader2 className="animate-spin" size={18} /> טוען…</div>
+  }
+
+  // ── פריסת העץ ──
+  const cw = mobile ? 164 : 188, gap = mobile ? 30 : 40, rh = mobile ? 82 : 84, top = 58, ch = rh - 14
+  const pos: Record<string, number> = {}
+  let row = 0
+  const place = (x: Node) => {
+    const vk = visKids(x)
+    if (!vk.length) pos[x.id] = row++
+    else { vk.forEach(place); pos[x.id] = mobile ? pos[vk[0].id] : (pos[vk[0].id] + pos[vk[vk.length - 1].id]) / 2 }
+  }
+  if (visible(root)) place(root)
+  const W = 5 * cw + 4 * gap, H = top + Math.max(row, 1) * rh + 8
+  const rx = (g: number) => (g - 1) * (cw + gap)
+  const cy = (id: string) => top + pos[id] * rh + rh / 2
+
+  const pend = nodes.filter(x => !x.ok).length
+  const genPend = gen ? nodes.filter(x => x.generation === gen && !x.ok && !blocked(x)) : []
+
+  const act = (x: Node, s: string) => {
+    if (s === 'pend') return <button className="ap" onClick={() => approve([x.id])} disabled={busy}>אישור</button>
+    if (s === 'ok' && x.generation < MAX_APPROVED_GEN) {
+      return <button className="ad" onClick={() => openModal({ g: x.generation + 1, p: x.id })}
+        aria-label={`הוספת צאצא מאושר תחת ${short(x.name)}`}>+ צאצא</button>
+    }
+    return null
+  }
+
+  const paths: React.ReactNode[] = []
+  const cards: React.ReactNode[] = []
+  for (const id of Object.keys(pos)) {
+    const x = byId.get(id)!, s = stOf(x), { t, s: sub } = split(x.name)
+    const ksAll = (kids.get(id) ?? []).filter(visible), c = col.has(id), nk = (kids.get(id) ?? []).length
+    if (x.parent_id && pos[x.parent_id] !== undefined) {
+      const pl_ = W - rx(x.generation - 1) - cw, mid = pl_ - gap / 2, crx = W - rx(x.generation)
+      const py = cy(x.parent_id), y = cy(id), r = Math.min(6, Math.abs(y - py) / 2), dir = y > py ? 1 : -1
+      const d = Math.abs(y - py) < 1 ? `M${pl_} ${py}H${crx}`
+        : `M${pl_} ${py}H${mid + r}Q${mid} ${py} ${mid} ${py + dir * r}V${y - dir * r}Q${mid} ${y} ${mid - r} ${y}H${crx}`
+      paths.push(<path key={id} d={d} fill="none" stroke={s === 'ok' ? '#B9B09F' : s === 'pend' ? '#D9A94F' : '#CFC6B5'}
+        strokeWidth={1.5} strokeDasharray={s === 'ok' ? undefined : '4 3'} />)
+    }
+    cards.push(
+      <div key={id} className={`tn ${s}${x.parent_id ? '' : ' root'}${flash.includes(id) ? ' flash' : ''}`}
+        style={{ right: rx(x.generation), top: top + pos[id] * rh + 7, width: cw, height: ch }}>
+        <div className={`t${sub ? ' one' : ''}`}><Hl text={t} q={q} /></div>
+        {sub && <div className="s"><Hl text={sub} q={q} /></div>}
+        <div className="ft">
+          {s === 'pend' ? <>בעץ · לא מאושר{act(x, s)}</>
+            : s === 'blk' ? 'מחכה לאישור האב'
+            : <>{nk ? pl(nk, 'ילד אחד', 'ילדים') : 'מאושר'}{act(x, s)}</>}
+        </div>
+        {ksAll.length > 0 && (
+          <button className={`tg${c ? ' c' : ''}`} aria-expanded={!c} aria-label={`${c ? 'פתיחת' : 'סגירת'} הענף`}
+            onClick={() => setCol(p => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n })}>
+            {c ? `+${ksAll.length}` : '−'}
+          </button>
+        )}
+      </div>)
+  }
+
+  const emptyMsg = onlyPend
+    ? 'כל הענפים מאושרים. אפשר להוסיף שמות חדשים בכפתור "הוספת מאושרים".'
+    : 'לא נמצא שם כזה בעץ. אפשר להוסיף אותו בכפתור "הוספת מאושרים".'
+
+  const modalParents = modal ? parentsOf(modal.g) : []
 
   return (
-    <div dir="rtl" className="flex flex-col gap-5 max-w-6xl">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">הייחוס המאושר</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            5 הדורות הראשונים לפי האקסל הרשמי — מקור האמת לאישור ייחוס
-          </p>
+    <div className="apv" dir="rtl">
+      <style>{APPROVED_CSS}</style>
+
+      <div className="head">
+        <div className="grow">
+          <h1>המאושרים בעץ</h1>
+          <p>חמשת הדורות של הקובץ המאושר. מי שמאושר כאן נצבע ירוק בכל כרטסת.</p>
         </div>
-        <Link href="/admin/lineage"
-          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">
-          <ArrowRight size={15} /> לעץ הדורות
-        </Link>
+        <button className="btn pri" onClick={() => openModal()}>+ הוספת מאושרים <kbd>N</kbd></button>
       </div>
 
-      {/* ⚠️ הפער מוצג ראשון: זו הסיבה שהמסך נבנה. */}
-      {data.totals.mismatches > 0 && (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
-          <p className="flex items-center gap-2 text-sm font-bold text-rose-800">
-            <AlertTriangle size={16} />
-            {data.totals.mismatches} צמתים מסומנים מאושר בעץ ואינם בקובץ המאושר
-          </p>
-          <p className="mt-1 text-xs text-rose-700 leading-relaxed">
-            הם מוצגים ירוק אף שאינם חלק מהייחוס הרשמי. עד שיוכרעו — אין להסתמך על הצבע.
-          </p>
-        </div>
-      )}
+      <div className="tiles">
+        {GENS.map(g => {
+          const s = stats(g), t = s.ok + s.pend
+          return (
+            <button key={g} className={`tile${gen === g ? ' on' : ''}`} aria-pressed={gen === g} onClick={() => setGen(gen === g ? 0 : g)}>
+              <span className="g">דור {g}</span>
+              <span className="n num">{s.ok}<small>מאושרים</small></span>
+              <span className={`st${s.pend ? '' : ' done'}`}>{s.pend ? pl(s.pend, 'ממתין אחד', 'ממתינים') : 'הכול מאושר'}</span>
+              <span className="bar"><i style={{ width: `${t ? s.ok / t * 100 : 0}%` }} /></span>
+            </button>
+          )
+        })}
+      </div>
 
-      {/* לשוניות */}
-      <div className="flex flex-wrap gap-2">
-        {TABS.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            className={`rounded-xl border px-4 py-2 text-sm font-bold transition-all ${
-              tab === t.key ? 'border-line-strong bg-sand text-navy-dark ring-2 ring-gold-soft'
-                            : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'}`}>
-            {t.label} <span className={`mr-1 tabular-nums ${t.cls}`}>{t.n.toLocaleString('he-IL')}</span>
+      <div className="tools">
+        <label className="search">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="7" cy="7" r="4.5" /><path d="m14 14-3.5-3.5" /></svg>
+          <input type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="חיפוש שם בעץ" aria-label="חיפוש שם" />
+        </label>
+        <label className="chk"><input type="checkbox" checked={onlyPend} onChange={e => setOnlyPend(e.target.checked)} />רק ענפים עם ממתינים</label>
+        <div className="legend">
+          <span><i className="lg ok" />מאושר</span><span><i className="lg pend" />בעץ, לא מאושר</span><span><i className="lg blk" />מחכה לאב</span>
+        </div>
+      </div>
+
+      <div className="tbar">
+        <span><b>{pl(pend, 'ממתין אחד', 'ממתינים')}</b> במסגרת מקווקוות. &quot;אישור&quot; בכרטיס, או &quot;+ צאצא&quot; להוספה.</span>
+        <span className="hint">גוללים הצידה לדורות הבאים ←</span>
+        {genPend.length > 0 && (
+          <button className="btn gh" disabled={busy} onClick={() => approve(genPend.map(x => x.id))}>
+            אישור {genPend.length === 1 ? 'הממתין' : `כל ${genPend.length} הממתינים`} בדור {gen}
           </button>
-        ))}
+        )}
       </div>
-
-      {/* סינון לפי דור + חיפוש */}
-      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3">
-        <span className="text-xs font-bold text-slate-500">דור:</span>
-        {[null, 1, 2, 3, 4, 5].map(g => (
-          <button key={String(g)} onClick={() => setGen(g)}
-            className={`rounded-full border px-3 py-1 text-xs font-bold transition-all ${
-              gen === g ? 'border-gold bg-navy text-white'
-                        : 'border-slate-200 bg-white text-slate-500 hover:border-line-strong'}`}>
-            {g === null ? 'הכל' : g}
-            {g !== null && data.byGen[g] && (
-              <span className="mr-1 opacity-70">({data.byGen[g].approved})</span>
-            )}
-          </button>
-        ))}
-        <div className="relative mr-auto">
-          <Search size={14} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="חיפוש שם…"
-            className="w-56 rounded-lg border border-slate-200 py-1.5 pr-8 pl-2 text-sm focus:border-line-strong focus:outline-none" />
-        </div>
-      </div>
-
-      {/* ── הייחוס המאושר ── */}
-      {tab === 'reference' && (
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-          <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-bold text-slate-500">
-            <span className="w-12 shrink-0 text-center">דור</span>
-            <span className="flex-1">שם</span>
-            <span className="flex-1">האב לפי הקובץ</span>
+      <div className="tw">
+        {row ? (
+          <div className="tree" style={{ width: W, height: H }}>
+            {GENS.map(g => {
+              const s = stats(g)
+              return (
+                <div key={g} className={`band${gen === g ? ' on' : ''}`} style={{ right: rx(g) - gap / 2 + 4, width: cw + gap - 8 }}>
+                  <button className="bh" onClick={() => setGen(gen === g ? 0 : g)}>
+                    <b>דור {g}</b>
+                    <small className="num">{s.ok} מאושרים{s.pend > 0 && <> · <em>{s.pend} ממתינים</em></>}</small>
+                  </button>
+                </div>
+              )
+            })}
+            <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>{paths}</svg>
+            {cards}
           </div>
-          {refRows.length === 0
-            ? <p className="py-10 text-center text-sm text-slate-400">אין תוצאות</p>
-            : refRows.map(r => (
-              <div key={r.key} className="flex items-center gap-3 border-b border-slate-50 px-4 py-2 text-sm last:border-0 hover:bg-slate-50">
-                <span className="w-12 shrink-0 text-center font-bold text-navy tabular-nums">{r.generation}</span>
-                <span className="flex-1 font-semibold text-slate-800">{r.name}</span>
-                <span className="flex-1 text-slate-500">{r.parent_key ?? '—'}</span>
-              </div>
-            ))}
+        ) : <div className="empty"><b>אין כאן תוצאות</b>{emptyMsg}</div>}
+      </div>
+
+      {err && <div className="apv-toast" role="alert"><span>{err}</span></div>}
+
+      {modal && (
+        <div className="apv-ov" onClick={e => { if (e.target === e.currentTarget) setModal(null) }}>
+          <div className="md" role="dialog" aria-modal="true" aria-labelledby="apv-mt">
+            <header>
+              <div><h2 id="apv-mt">הוספת מאושרים</h2><p>שם בכל שורה. אפשר להדביק רשימה שלמה.</p></div>
+              <button className="x" aria-label="סגירה" onClick={() => setModal(null)}>×</button>
+            </header>
+            <div className="fr">
+              <label className="fl">דור
+                <select value={modal.g} onChange={e => {
+                  const g = +e.target.value
+                  setModal({ ...modal, g, p: parentsOf(g)[0]?.id ?? null })
+                }}>
+                  {GENS.slice(1).map(g => <option key={g} value={g}>דור {g}</option>)}
+                </select>
+              </label>
+              <label className="fl">תחת האב
+                <select value={modal.p ?? ''} onChange={e => setModal({ ...modal, p: e.target.value })}>
+                  {modalParents.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+                </select>
+              </label>
+            </div>
+            <label className="fl">שמות
+              <textarea autoFocus value={modal.text} onChange={e => setModal({ ...modal, text: e.target.value })}
+                placeholder={'רבי יואל סופר\nרבי מאיר סופר'} />
+            </label>
+            <div className="pv">
+              <h3>מה יקרה לכל שם</h3>
+              {lines.length ? lines.map((l, i) => {
+                const r = results[i]
+                return r ? <div key={i} className="pr"><span>{l}</span><span className={`pill ${r.kind}`}>{r.label}</span></div> : null
+              }) : <div className="pr"><span style={{ color: '#767C8A', fontWeight: 400 }}>התצוגה תופיע כאן אחרי שתכתוב או תדביק שמות.</span></div>}
+            </div>
+            <footer>
+              <span className="sum">{lines.length
+                ? [cnt.found && `${cnt.found} יאושרו`, cnt.new && `${cnt.new} חדשים`, cnt.red && `${cnt.red} לבדיקה, לא ייכנסו`, cnt.skip && `${cnt.skip} ידולגו`].filter(Boolean).join(' · ')
+                : 'Ctrl+Enter לאישור'}</span>
+              <button className="btn gh" onClick={() => setModal(null)}>ביטול</button>
+              <button className="btn pri" disabled={!canAdd || !modal.p || busy} onClick={confirmAdd}>
+                {canAdd ? `אישור ${canAdd === 1 ? 'שם אחד' : `${canAdd} שמות`} לדור ${modal.g}` : 'אין מה לאשר'}
+              </button>
+            </footer>
+          </div>
         </div>
       )}
 
-      {/* ── ירוק בעץ אך לא בקובץ ── */}
-      {tab === 'mismatches' && (
-        <div className="overflow-hidden rounded-2xl border border-rose-200 bg-white">
-          {misRows.length === 0
-            ? <p className="flex items-center justify-center gap-2 py-10 text-sm text-emerald-600">
-                <CheckCircle2 size={16} /> אין פערים
-              </p>
-            : misRows.map(m => (
-              <div key={m.id} className="border-b border-rose-50 px-4 py-3 text-sm last:border-0 hover:bg-rose-50/40">
-                <div className="flex items-center gap-2">
-                  <span className="rounded-md bg-rose-100 px-2 py-0.5 text-[11px] font-bold text-rose-700">
-                    דור {m.treeGeneration} בעץ
-                  </span>
-                  <span className="font-bold text-slate-800">{m.name}</span>
-                  {m.kind === 'wrong_generation' && m.approvedGeneration && (
-                    <span className="rounded-md bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">
-                      בקובץ: דור {m.approvedGeneration}
-                    </span>
-                  )}
-                  {m.kind === 'not_in_reference' && (
-                    <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">
-                      אינו בקובץ כלל
-                    </span>
-                  )}
-                </div>
-                <div className="mt-1 flex flex-wrap gap-x-6 gap-y-0.5 text-xs text-slate-500">
-                  <span>האב בעץ: <b className="text-slate-700">{m.treeParent ?? '—'}</b></span>
-                  {m.approvedParent && <span>האב בקובץ: <b className="text-emerald-700">{m.approvedParent}</b></span>}
-                </div>
-              </div>
-            ))}
-        </div>
-      )}
-
-      {/* ── בקובץ אך חסר בעץ ── */}
-      {tab === 'missing' && (
-        <div className="overflow-hidden rounded-2xl border border-amber-200 bg-white">
-          {missRows.length === 0
-            ? <p className="flex items-center justify-center gap-2 py-10 text-sm text-emerald-600">
-                <CheckCircle2 size={16} /> הכול קיים בעץ
-              </p>
-            : missRows.map((m, i) => (
-              <div key={`${m.name}-${i}`} className="flex items-center gap-3 border-b border-amber-50 px-4 py-2 text-sm last:border-0">
-                <span className="w-12 shrink-0 text-center font-bold text-amber-600 tabular-nums">{m.generation}</span>
-                <span className="flex-1 font-semibold text-slate-800">{m.name}</span>
-                <span className="flex-1 text-slate-500">{m.parent ?? '—'}</span>
-              </div>
-            ))}
+      {toast && (
+        <div className="apv-toast" key={toast.id}>
+          <span>{toast.msg}</span><button onClick={undo}>ביטול</button><i />
         </div>
       )}
     </div>
