@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Plus, Baby, Home, AlertTriangle } from 'lucide-react'
+import { Plus, Baby, Home, AlertTriangle, Link2 } from 'lucide-react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { MaternityAid } from '@/types'
 import Button from '@/components/ui/Button'
@@ -134,6 +134,10 @@ export default async function MaternityPage() {
         <Link href="/admin/maternity/recovery-report"
           className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-600 hover:border-line-strong hover:text-navy-dark transition-colors">
           <Home size={14} /> מימוש בתי החלמה
+        </Link>
+        <Link href="/admin/maternity/donor-links"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-600 hover:border-line-strong hover:text-navy-dark transition-colors">
+          <Link2 size={14} /> קישורי נדיב
         </Link>
         {/* ⚠️ תיקים שטעינת הכרטיס בהם נכשלה אינם מנסים שוב מעצמם — הם
             תקועים ב-failed עד שמישהו מריץ אותם. בלי כפתור, יולדת נשארת
