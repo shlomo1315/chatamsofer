@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
+import { DONOR_COOKIE, verifyDonorSession } from '@/lib/donorReportAuth'
 import { loadApprovedRows, resolveDonorLink, effectiveFilter, filterRows, summarize } from '@/lib/donorReport'
 
 export const dynamic = 'force-dynamic'
@@ -21,6 +22,14 @@ export async function GET(request: NextRequest) {
   const sp = request.nextUrl.searchParams
   const link = await resolveDonorLink(db, sp.get('t'))
   if (!link) return NextResponse.json({ error: 'הקישור אינו תקין או שבוטל' }, { status: 404, headers: HEADERS })
+
+  // 🔴 בלי סיסמה שהוגדרה ובלי cookie תקף של הקישור הזה — אין נתונים.
+  if (!link.password_hash) {
+    return NextResponse.json({ error: 'הקישור טרם הופעל. פנו למשרד לקבלת סיסמה.', inactive: true }, { status: 403, headers: HEADERS })
+  }
+  if (!verifyDonorSession(request.cookies.get(DONOR_COOKIE)?.value, link.id, link.password_hash)) {
+    return NextResponse.json({ error: 'נדרשת סיסמה', needsPassword: true }, { status: 401, headers: HEADERS })
+  }
 
   let all
   try { all = await loadApprovedRows(db) } catch (e) {
