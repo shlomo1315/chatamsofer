@@ -1,6 +1,7 @@
 'use client'
 import { useMemo, useState, useEffect } from 'react'
-import { Loader2, LogOut, RefreshCw, X, Search } from 'lucide-react'
+import { Loader2, LogOut, RefreshCw, X, Search, ShoppingBag, CreditCard } from 'lucide-react'
+import FoodCardsTab from './FoodCardsTab'
 import { fmtAgorot } from '@/lib/bookFairPricing'
 import {
   computeStats, filterOrders, bookDetail, DEFAULT_FILTERS, CHANNELS, CHANNEL_LABELS,
@@ -36,6 +37,7 @@ export default function DashboardClient() {
   const [detailBook, setDetailBook] = useState('')
   const [detailQuery, setDetailQuery] = useState('')
   const [refreshing, setRefreshing] = useState(false)
+  const [tab, setTab] = useState<'orders' | 'cards'>('orders')
   const [now, setNow] = useState(() => Date.now())
   const set = <K extends keyof StatFilters>(k: K, v: StatFilters[K]) => setF(p => ({ ...p, [k]: v }))
 
@@ -107,8 +109,29 @@ export default function DashboardClient() {
     void reload()
   }
 
+  const NAV = [
+    { id: 'orders' as const, label: 'הזמנות', Icon: ShoppingBag },
+    { id: 'cards' as const, label: 'כרטיסי מזון', Icon: CreditCard },
+  ]
+
   return (
-    <div className="min-h-screen bg-[#F4F1EA] text-[#14213D]">
+    <div className="min-h-screen bg-[#F4F1EA] text-[#14213D] md:flex">
+      {/* ── תפריט צד (בצד ימין; במובייל פס עליון) ── */}
+      <aside className="flex gap-1 bg-[#0E182E] px-3 py-2 md:sticky md:top-0 md:h-screen md:w-56 md:flex-shrink-0 md:flex-col md:gap-2 md:px-4 md:py-6">
+        <div className="hidden items-center gap-3 px-2 pb-5 md:flex">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#F4F1EA] p-1">
+            <img src="/logo-heichal.png" alt="היכל החתם סופר" className="h-full w-full object-contain" />
+          </span>
+          <span className="text-sm font-bold leading-tight text-[#F4F1EA]">היכל<br />החתם סופר</span>
+        </div>
+        {NAV.map(({ id, label, Icon }) => (
+          <button key={id} onClick={() => setTab(id)} aria-current={tab === id ? 'page' : undefined}
+            className={`flex min-h-[44px] flex-1 items-center justify-center gap-2.5 rounded-xl px-3 text-[15px] font-semibold md:flex-none md:justify-start ${tab === id ? 'bg-[#B8862B] text-[#14213D]' : 'text-[#C9CFDB] hover:bg-white/10'}`}>
+            <Icon size={18} /> {label}
+          </button>
+        ))}
+      </aside>
+      <div className="min-w-0 flex-1">
       {/* ── כותרת וסינון ── */}
       <header className="bg-[#14213D] px-4 pt-5 text-[#F4F1EA] sm:px-10">
         <div className="mx-auto flex max-w-[1360px] flex-wrap items-center justify-between gap-4">
@@ -119,8 +142,8 @@ export default function DashboardClient() {
               <img src="/logo-heichal.png" alt="היכל החתם סופר" className="h-full w-full object-contain" />
             </span>
             <div>
-              <h1 className="text-2xl font-bold leading-tight sm:text-[28px]">ניהול היריד</h1>
-              <p className="mt-0.5 text-sm text-[#C9CFDB]">יריד הספרים · היכל החתם סופר</p>
+              <h1 className="text-2xl font-bold leading-tight sm:text-[28px]">{tab === 'orders' ? 'ניהול היריד' : 'כרטיסי מזון'}</h1>
+              <p className="mt-0.5 text-sm text-[#C9CFDB]">{tab === 'orders' ? 'יריד הספרים · היכל החתם סופר' : 'מחלקת יולדות · היכל החתם סופר'}</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2.5">
@@ -138,6 +161,7 @@ export default function DashboardClient() {
           </div>
         </div>
 
+        {tab === 'orders' ? (
         <div className="mx-auto mt-5 flex max-w-[1360px] flex-wrap items-end gap-3 pb-5">
           <Field label="תקופה">
             <Pills<Period> dark value={f.period} onChange={v => set('period', v)} options={[
@@ -195,8 +219,12 @@ export default function DashboardClient() {
             </select>
           </Field>
         </div>
+        ) : <div className="pb-5" />}
       </header>
 
+      {tab === 'cards' ? (
+        <main className="mx-auto max-w-[1360px] px-4 py-6 sm:px-10"><FoodCardsTab /></main>
+      ) : (
       <main className="mx-auto flex max-w-[1360px] flex-col gap-5 px-4 py-6 sm:px-10">
         {f.book && f.book !== 'all' && (
           <p className="flex flex-wrap items-center gap-2 rounded-xl bg-[#B8862B]/15 px-4 py-3 text-[15px] font-semibold">
@@ -386,6 +414,8 @@ export default function DashboardClient() {
 
         <p className="text-center text-[13px] text-[#5B6475]">מוצגות הזמנות ששולמו בלבד · מספרים בלבד — ללא שמות, טלפונים או כתובות של לקוחות</p>
       </main>
+      )}
+      </div>
     </div>
   )
 }
