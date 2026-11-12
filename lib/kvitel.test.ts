@@ -107,7 +107,7 @@ describe('kvitelQuery', () => {
     expect(applyKvitelFilters([row({ kvitel_request_lines: [] })], parseKvitelFilters({ type: 'refua' }))).toHaveLength(0)
   })
 
-  it('kvitelExportLines — כל הערוצים בקובץ אחד, בסדר קבוע, בלי "לבדיקה" ו"בוטל"', () => {
+  it('kvitelExportLines — כל הערוצים בקובץ אחד, בסדר קבוע, כולל בקשות שנקלטו בלי שמות/לבדיקה (מוצגות כ"לא נשלח"), בלי "בוטל"', () => {
     const line = (id: string, name: string, position = 0) => ({ id, position, name, relation: 'ben', parent_name: 'רחל', request_type: 'refua', request_note: null, flagged: false, flag_reason: null })
     const rows = [
       row({ id: 'r3', channel: 'phone', submitted_at: '2026-10-14T09:00:00Z', kvitel_request_lines: [line('x', 'ג')] }),
@@ -116,10 +116,10 @@ describe('kvitelQuery', () => {
       row({ id: 'r0', status: 'review', submitted_at: '2026-10-13T08:00:00Z', kvitel_request_lines: [line('w', 'לבדיקה')] }),
       row({ id: 'r9', status: 'cancelled', submitted_at: '2026-10-13T08:00:00Z', kvitel_request_lines: [line('v', 'בוטל')] }),
     ]
-    const names = ['א1 בן רחל - לרפואה שלימה', 'א2 בן רחל - לרפואה שלימה', 'ב בן רחל - לרפואה שלימה', 'ג בן רחל - לרפואה שלימה']
+    const names = ['לבדיקה בן רחל - לרפואה שלימה', 'א1 בן רחל - לרפואה שלימה', 'א2 בן רחל - לרפואה שלימה', 'ב בן רחל - לרפואה שלימה', 'ג בן רחל - לרפואה שלימה']
     expect(kvitelExportLines(rows)).toEqual(names)
     expect(kvitelExportLines([...rows].reverse())).toEqual(names)
-    expect(kvitelExportLines(rows, new Set(['r2', 'r0']))).toEqual(['ב בן רחל - לרפואה שלימה'])
+    expect(kvitelExportLines(rows, new Set(['r2', 'r0']))).toEqual(['לבדיקה בן רחל - לרפואה שלימה', 'ב בן רחל - לרפואה שלימה'])
   })
 })
 

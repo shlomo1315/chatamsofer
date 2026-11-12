@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { Check, BookCheck, X, Eye, FileDown, RotateCcw, Pencil } from 'lucide-react'
+import { Check, X, Eye, FileDown, RotateCcw, Pencil } from 'lucide-react'
 import { KVITEL_CHANNELS, KVITEL_STATUSES, type KvitelStatus } from '@/lib/kvitel'
 import type { KvitelRequestRow } from '@/lib/kvitelQuery'
 import { hebrewDay, parseRawFields } from '@/lib/kvitelView'
@@ -9,14 +9,14 @@ import RecordModal, { modalBtn, type RecordTone } from '@/components/admin/syste
 
 // כרטסת בקשת קוויטל: הגדרות בלבד, התצוגה ב-RecordModal המשותף.
 // ⚠️ אין בטבלאות הקוויטל שרשור הודעות, ולכן לא נבנה כאן.
-// הפעולות (שינוי סטטוס, אישור עם מילון) מגיעות מהרשימה ורצות דרך אותם נתיבי שרת.
+// הפעולות (שינוי סטטוס) מגיעות מהרשימה ורצות דרך אותם נתיבי שרת.
 
 const TONE: Record<KvitelStatus, RecordTone> = { review: 'wait', pending: 'wait', done: 'ok', cancelled: 'no' }
 const STEP_OF: Record<KvitelStatus, number> = { review: 0, pending: 0, done: 1, cancelled: 1 }
-const STEPS = ['ממתין לשליחה', 'נשלח לציון']
+const STEPS = ['לא נשלח', 'נשלח לציון']
 const fmt = (d?: string | null) => (d ? new Date(d).toLocaleDateString('he-IL') : '—')
 
-export default function KvitelCardModal({ rows, index, onIndex, onClose, canEdit, busy, setStatus, approveWithDictionary, onPreview, onSaved, startEditing }: {
+export default function KvitelCardModal({ rows, index, onIndex, onClose, canEdit, busy, setStatus, onPreview, onSaved, startEditing }: {
   rows: KvitelRequestRow[]
   index: number
   onIndex: (i: number) => void
@@ -24,7 +24,6 @@ export default function KvitelCardModal({ rows, index, onIndex, onClose, canEdit
   canEdit: boolean
   busy: boolean
   setStatus: (ids: string[], status: KvitelStatus) => void
-  approveWithDictionary: (r: KvitelRequestRow) => void
   onPreview: (r: KvitelRequestRow) => void
   onSaved: (msg: string) => void
   startEditing: boolean
@@ -65,7 +64,7 @@ export default function KvitelCardModal({ rows, index, onIndex, onClose, canEdit
       note={r.note ? { title: 'הערה', text: r.note } : undefined}
       tabs={[
         { key: 'names', label: 'שמות', count: lines.length, content: (
-          <KvitelLinesEditor key={`${r.id}:${editing}:${lines.map(l => l.id).join()}`} requestId={r.id} lines={lines} editable={canEdit && editing} onSaved={onSaved} />
+          <KvitelLinesEditor key={`${r.id}:${editing}:${lines.map(l => l.id).join()}`} requestId={r.id} lines={lines} contact={{ name: r.contact_name, phone: r.contact_phone, email: r.contact_email }} onCancel={() => setEditing(false)} editable={canEdit && editing} onSaved={onSaved} />
         ) },
         { key: 'source', label: 'מה שנכתב בטופס', content: (
           <div className="space-y-3 text-sm text-ink-soft">
@@ -85,13 +84,10 @@ export default function KvitelCardModal({ rows, index, onIndex, onClose, canEdit
           <button type="button" className={modalBtn.ghost} onClick={() => onPreview(r)}><Eye size={14} /> תצוגה בקובץ</button>
         )}
         {canEdit && (
-          <button type="button" className={modalBtn.ghost} onClick={() => setEditing(e => !e)}><Pencil size={14} /> {editing ? 'סיום עריכה' : 'עריכה'}</button>
-        )}
-        {canEdit && r.status !== 'cancelled' && r.status !== 'done' && lines.length > 0 && (
-          <button type="button" disabled={busy} className={modalBtn.ghost} onClick={() => approveWithDictionary(r)}><BookCheck size={14} /> אישור והוספה למילון</button>
+          <button type="button" className={modalBtn.ghost} disabled={editing} onClick={() => setEditing(true)}><Pencil size={14} /> עריכה</button>
         )}
         {canEdit && (r.status === 'pending' || r.status === 'review') && (
-          <button type="button" disabled={busy} className={modalBtn.primary} onClick={() => setStatus([r.id], 'done')}><Check size={14} /> נשלח לציון</button>
+          <button type="button" disabled={busy} className={modalBtn.primary} onClick={() => setStatus([r.id], 'done')}><Check size={14} /> סימון כנשלח לציון</button>
         )}
         {r.status === 'done' && (
           <a href={`/api/admin/kvitel/export?status=all&ids=${r.id}`} className={modalBtn.ghost}><FileDown size={14} /> הורדת הקובץ</a>

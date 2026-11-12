@@ -37,7 +37,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
       {tab !== 'requests' && <PageHeader title={tab === 'mail' ? 'קוויטלאך · מייל' : 'קוויטלאך · נדרים'} subtitle="שמות ובקשות לתפילה בציון, מכל הערוצים" />}
       {error && <p role="alert" className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</p>}
 
-      {tab === 'requests' && <KvitelClient allRows={rows} filters={filters} canEdit={canEdit} isAdmin={staff.role === 'admin'} />}
+      {tab === 'requests' && <KvitelClient allRows={rows} filters={filters} canEdit={canEdit} />}
       {tab === 'mail' && <MailClient lockDepartment="kvitel" />}
       {tab === 'nedarim' && (nedarimView
         ? <KvitelNedarim view={nedarimView} isAdmin={staff.role === 'admin'} />
