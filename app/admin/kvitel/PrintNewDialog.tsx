@@ -7,7 +7,7 @@ import { kvitelExportLines, type KvitelRequestRow } from '@/lib/kvitelQuery'
 import { pendingForPrint } from '@/lib/kvitelView'
 import { KvitelSheet } from './KvitelPreview'
 
-// הדפסת הקוויטלאך החדשים: כל הבקשות שבסטטוס "ממתין לשליחה" (חדשות שאושרו ועוד לא נשלחו).
+// הדפסת הקוויטלאך החדשים: כל הבקשות שבסטטוס "לא נשלח" (חדשות שאושרו ועוד לא נשלחו).
 // אחרי סגירת חלון ההדפסה נשאלת השאלה "לסמן כנשלחו?", ו"כן" מעביר ל"נשלח לציון"
 // רק את המזהים שהודפסו בפועל — כך שההדפסה הבאה תכלול רק בקשות חדשות.
 

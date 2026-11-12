@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   }
   if (format !== 'pdf' && format !== 'docx') return NextResponse.json({ error: 'פורמט לא נתמך' }, { status: 400 })
 
-  // רק "ממתין לשליחה" — כמו ההדפסה
+  // רק "לא נשלח" — כמו ההדפסה
   const { rows, error } = await loadKvitelRequests(db, parseKvitelFilters({ status: 'pending' }))
   if (error) return NextResponse.json({ error: 'טעינת הבקשות נכשלה' }, { status: 500 })
   const lines = kvitelExportLines(rows.filter(r => r.status === 'pending'), new Set<string>(ids))
