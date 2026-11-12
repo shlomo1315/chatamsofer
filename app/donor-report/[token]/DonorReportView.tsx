@@ -18,29 +18,52 @@ export default function DonorReportView({ token }: { token: string }) {
   const [home, setHome] = useState('')
   const [data, setData] = useState<Report | null>(null)
   const [error, setError] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [password, setPassword] = useState('') // הסיסמה שהוזנה בשדה
+  const [secret, setSecret] = useState('') // הסיסמה שאומתה, נשמרת בזיכרון בלבד
+  const [authError, setAuthError] = useState('')
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (pw: string) => {
     setLoading(true)
-    const qs = new URLSearchParams({ t: token })
-    if (from) qs.set('from', from)
-    if (to) qs.set('to', to)
-    if (home) qs.set('home', home)
     try {
-      const res = await fetch(`/api/donor-report?${qs}`, { cache: 'no-store' })
+      const res = await fetch('/api/donor-report', {
+        method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ t: token, password: pw, from, to, home }),
+      })
       const json = await res.json()
-      if (!res.ok) { setError(json.error || 'שגיאה בטעינה'); setData(null) } else { setError(''); setData(json) }
-    } catch { setError('שגיאת רשת, נסו שוב') }
+      if (res.status === 401 || res.status === 429) { setSecret(''); setData(null); setAuthError(json.error || 'שגיאה'); }
+      else if (!res.ok) { setError(json.error || 'שגיאה בטעינה'); setData(null) }
+      else { setError(''); setAuthError(''); setSecret(pw); setData(json) }
+    } catch { setAuthError('שגיאת רשת, נסו שוב') }
     setLoading(false)
   }, [token, from, to, home])
 
+  // לאחר הכניסה, שינוי מסנן טוען מחדש עם הסיסמה שאומתה.
   useEffect(() => {
-    let alive = true
-    const t = setTimeout(() => { if (alive) void load() }, 0)
-    return () => { alive = false; clearTimeout(t) }
-  }, [load])
+    if (!secret) return
+    const t = setTimeout(() => { void load(secret) }, 0)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [from, to, home])
 
   const field = 'h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-[#1B3256] focus:outline-none'
+
+  if (!secret && !(error && !data)) {
+    return (
+      <main dir="rtl" className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+        <form onSubmit={e => { e.preventDefault(); if (password) void load(password) }}
+          className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-8">
+          <h1 className="text-xl font-bold text-[#1B3256]">מעקב אשראי</h1>
+          <p className="mt-2 text-sm text-slate-600">להצגת הנתונים יש להזין את הסיסמה שנמסרה לכם.</p>
+          <label className="mt-5 block text-sm font-medium text-slate-700">סיסמה
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} autoFocus autoComplete="current-password" className={`${field} mt-1`} />
+          </label>
+          {authError && <p role="alert" className="mt-3 text-sm font-medium text-rose-600">{authError}</p>}
+          <button type="submit" disabled={loading || !password} className="mt-5 h-11 w-full rounded-xl bg-[#1B3256] text-sm font-bold text-white disabled:opacity-50">{loading ? 'בודק…' : 'כניסה'}</button>
+        </form>
+      </main>
+    )
+  }
 
   if (error && !data) {
     return (

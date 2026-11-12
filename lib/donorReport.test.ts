@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   cleanDate, effectiveFilter, filterRows, summarize, generateDonorToken,
-  isWellFormedDonorToken, resolveDonorLink, type DonorRow,
+  isWellFormedDonorToken, resolveDonorLink, checkDonorPassword, hashDonorPassword, validatePasswordInput, type DonorRow,
 } from './donorReport'
 
 const r = (o: Partial<DonorRow>): DonorRow => ({ id: 'x', name: 'כהן שרה', home: 'טלזסטון', date: '2026-05-10', amount: 1000, ...o })
@@ -76,5 +76,41 @@ describe('filterRows + summarize', () => {
     expect(s.count).toBe(3)
     expect(s.amount).toBe(3800)
     expect(s.homes).toEqual([{ home: 'טלזסטון', count: 3, amount: 3800 }])
+  })
+})
+
+describe('סיסמה לקישור', () => {
+  const now = new Date('2026-11-12T10:00:00Z')
+  const mk = async (extra = {}) => ({ password_hash: await hashDonorPassword('secret1'), failed_attempts: 0, locked_until: null as string | null, ...extra })
+
+  it('סיסמה נכונה מתקבלת ומאפסת מונה', async () => {
+    const res = await checkDonorPassword(await mk({ failed_attempts: 3 }), 'secret1', now)
+    expect(res.status).toBe('ok')
+  })
+  it('סיסמה שגויה נדחית ומגדילה מונה', async () => {
+    const res = await checkDonorPassword(await mk({ failed_attempts: 1 }), 'nope', now)
+    expect(res).toMatchObject({ status: 'wrong', patch: { failed_attempts: 2, locked_until: null } })
+  })
+  it('ללא סיסמה או קלט לא תקין נדחים', async () => {
+    expect((await checkDonorPassword({ password_hash: null }, 'x', now)).status).toBe('no_password')
+    expect((await checkDonorPassword(await mk(), undefined, now)).status).toBe('wrong')
+    expect((await checkDonorPassword(await mk(), 'x'.repeat(500), now)).status).toBe('wrong')
+  })
+  it('נעילה אחרי 5 כשלונות, וגם סיסמה נכונה נדחית בזמן הנעילה', async () => {
+    const res = await checkDonorPassword(await mk({ failed_attempts: 4 }), 'bad', now)
+    expect(res.status).toBe('wrong')
+    const lock = (res as { patch: { locked_until: string | null } }).patch.locked_until
+    expect(lock).toBe(new Date(now.getTime() + 15 * 60_000).toISOString())
+    const locked = await checkDonorPassword(await mk({ locked_until: lock }), 'secret1', now)
+    expect(locked).toMatchObject({ status: 'locked', retryAfterSec: 900 })
+  })
+  it('אחרי שהנעילה פגה אפשר להיכנס שוב', async () => {
+    const past = new Date(now.getTime() - 1000).toISOString()
+    expect((await checkDonorPassword(await mk({ locked_until: past }), 'secret1', now)).status).toBe('ok')
+  })
+  it('אימות אורך סיסמה', () => {
+    expect(validatePasswordInput('123')).not.toBeNull()
+    expect(validatePasswordInput(undefined)).not.toBeNull()
+    expect(validatePasswordInput('123456')).toBeNull()
   })
 })

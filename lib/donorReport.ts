@@ -1,4 +1,5 @@
 import { randomBytes } from 'crypto'
+import bcrypt from 'bcryptjs'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 
@@ -34,6 +35,9 @@ export interface DonorLink {
   label: string
   recovery_home: string | null
   revoked_at: string | null
+  password_hash?: string | null
+  failed_attempts?: number | null
+  locked_until?: string | null
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
@@ -135,10 +139,55 @@ export async function resolveDonorLink(db: SupabaseClient, token: unknown): Prom
   if (!isWellFormedDonorToken(token)) return null
   const { data } = await db
     .from('donor_report_links')
-    .select('id, token, label, recovery_home, revoked_at')
+    .select('id, token, label, recovery_home, revoked_at, password_hash, failed_attempts, locked_until')
     .eq('token', token)
     .maybeSingle()
   const link = data as DonorLink | null
   if (!link || link.revoked_at) return null
   return link
+}
+
+// ─── סיסמה לקישור ────────────────────────────────────────────────────────────
+export const MAX_FAILED_ATTEMPTS = 5
+export const LOCK_MINUTES = 15
+export const MIN_PASSWORD_LENGTH = 6
+export const MAX_PASSWORD_LENGTH = 100
+
+export function validatePasswordInput(p: unknown): string | null {
+  if (typeof p !== 'string' || p.length < MIN_PASSWORD_LENGTH) return `הסיסמה חייבת להכיל לפחות ${MIN_PASSWORD_LENGTH} תווים`
+  if (p.length > MAX_PASSWORD_LENGTH) return 'הסיסמה ארוכה מדי'
+  return null
+}
+
+export function hashDonorPassword(plain: string): Promise<string> {
+  return bcrypt.hash(plain, 12)
+}
+
+export type PasswordCheck =
+  | { status: 'ok'; patch: { failed_attempts: number; locked_until: null } }
+  | { status: 'wrong'; patch: { failed_attempts: number; locked_until: string | null } }
+  | { status: 'locked'; retryAfterSec: number }
+  | { status: 'no_password' }
+
+/**
+ * בודק סיסמה מול הקישור. לוגיקה טהורה: מחזיר גם מה לעדכן במסד.
+ * אחרי MAX_FAILED_ATTEMPTS כשלונות רצופים הקישור ננעל ל-LOCK_MINUTES דקות, וגם סיסמה נכונה נדחית בזמן הנעילה.
+ */
+export async function checkDonorPassword(
+  link: Pick<DonorLink, 'password_hash' | 'failed_attempts' | 'locked_until'>,
+  password: unknown,
+  now: Date = new Date(),
+): Promise<PasswordCheck> {
+  if (!link.password_hash) return { status: 'no_password' }
+  const lockedUntil = link.locked_until ? new Date(link.locked_until).getTime() : 0
+  if (lockedUntil > now.getTime()) {
+    return { status: 'locked', retryAfterSec: Math.ceil((lockedUntil - now.getTime()) / 1000) }
+  }
+  const failedBefore = lockedUntil ? 0 : (link.failed_attempts ?? 0) // נעילה שפגה מאפסת את המונה
+  const ok = typeof password === 'string' && password.length <= MAX_PASSWORD_LENGTH
+    && await bcrypt.compare(password, link.password_hash)
+  if (ok) return { status: 'ok', patch: { failed_attempts: 0, locked_until: null } }
+  const failed = failedBefore + 1
+  const lock = failed >= MAX_FAILED_ATTEMPTS ? new Date(now.getTime() + LOCK_MINUTES * 60_000).toISOString() : null
+  return { status: 'wrong', patch: { failed_attempts: lock ? 0 : failed, locked_until: lock } }
 }
