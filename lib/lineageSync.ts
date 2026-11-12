@@ -174,7 +174,7 @@ export async function resyncBeneficiaryChains(
   // המשפחות שמתחתיה, בלי שום סימן. וגם בלי דפדוף, ענף עם יותר מ-1000
   // משפחות היה נחתך בתקרת השורות (ראו lib/fetchAllRows).
   // ─────────────────────────────────────────────────────────────────────────
-  const CHUNK = 150
+  const CHUNK = 50
   const affected: { id: string; lineage_node_id: string | null }[] = []
   for (let i = 0; i < ids.length; i += CHUNK) {
     const part = ids.slice(i, i + CHUNK)

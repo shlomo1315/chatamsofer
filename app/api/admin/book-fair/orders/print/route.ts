@@ -14,7 +14,7 @@ export const runtime = 'nodejs'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const MAX = 3000
-const CHUNK = 200
+const CHUNK = 50
 
 export async function POST(request: NextRequest) {
   if (!(await requirePermission('book_fair', 'view'))) return forbidden()
