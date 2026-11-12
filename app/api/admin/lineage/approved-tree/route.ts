@@ -5,17 +5,17 @@ import { invalidateLineageCache } from '@/lib/lineageSync'
 import { invalidateApprovedRef } from '@/lib/lineageApprovedRef'
 import { logActivity } from '@/lib/activityLog'
 import {
-  MAX_APPROVED_GEN, computeApproved, classifyLines, refKeyOf,
+  MAX_GEN_LIMIT, WINDOW_GENS, computeApproved, classifyLines, refKeyOf,
   type ApprovedTreeNode, type RefRowLite,
 } from '@/lib/lineageApprovedTree'
 
 export const dynamic = 'force-dynamic'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// מסך "המאושרים בעץ" — 5 הדורות הראשונים.
+// מסך "המאושרים בעץ" — כל הדורות, בחלונות של 5 (פרמטר from).
 //
 // "מאושר" = שורה ב-lineage_approved_ref (מקור האמת לצבע הירוק בכל הכרטסות).
-// GET   — הצמתים של דורות 1–5 (בלי נדחים) עם סימון מאושר/ממתין.
+// GET   — חלון של 5 דורות (בלי נדחים) עם סימון מאושר/ממתין.
 // POST  — approve (אישור צמתים קיימים) | add (הדבקת שמות) | undo (ביטול).
 //
 // ⚠️ השרת מאמת מחדש כל סיווג וכל "אב לפני ילד": מה שהדפדפן ראה אינו מחייב.
@@ -30,20 +30,32 @@ async function load(db: NonNullable<ReturnType<typeof getServiceClient>>) {
   const [{ rows: nodes }, { rows: refs }] = await Promise.all([
     fetchAllRows<NodeRow>((from, to) => db.from('lineage_nodes')
       .select('id, name, generation, parent_id')
-      .lte('generation', MAX_APPROVED_GEN).neq('status', 'rejected').order('id').range(from, to)),
+      .neq('status', 'rejected').order('id').range(from, to)),
     fetchAllRows<RefRowLite>((from, to) => db.from('lineage_approved_ref')
       .select('key, name, generation, parent_key').order('key').range(from, to)),
   ])
   return { nodes, refs, tree: computeApproved(nodes, refs) }
 }
 
-export async function GET() {
+/** חלון של WINDOW_GENS דורות; העמודה הראשונה (כשאינה דור 1) מנותקת מהאב ומסומנת parent_ok. */
+function windowOf(tree: ApprovedTreeNode[], from: number) {
+  const byId = new Map(tree.map(n => [n.id, n]))
+  const maxGen = tree.reduce((m, n) => Math.max(m, n.generation), 1)
+  const f = Number.isInteger(from) ? Math.min(Math.max(from, 1), Math.max(maxGen, 1)) : 1
+  const nodes = tree.filter(n => n.generation >= f && n.generation < f + WINDOW_GENS).map(n =>
+    n.generation === f && f > 1
+      ? { ...n, parent_id: null, parent_ok: n.parent_id ? !!byId.get(n.parent_id)?.ok : true }
+      : n)
+  return { nodes, maxGen, from: f }
+}
+
+export async function GET(req: NextRequest) {
   const staff = await requirePermission('lineage', 'view')
   if (!staff) return forbidden()
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
   const { tree } = await load(db)
-  return NextResponse.json({ nodes: tree })
+  return NextResponse.json(windowOf(tree, Number(new URL(req.url).searchParams.get('from') ?? 1)))
 }
 
 type Db = NonNullable<ReturnType<typeof getServiceClient>>
@@ -61,7 +73,7 @@ async function approveNodes(
   const wanted = [...new Set(ids)].map(id => byId.get(id))
   for (const n of wanted.filter((x): x is ApprovedTreeNode => !!x).sort((a, b) => a.generation - b.generation)) {
     const parent = n.parent_id ? byId.get(n.parent_id) : undefined
-    if (n.generation < 2 || n.generation > MAX_APPROVED_GEN) { skipped.push({ id: n.id, reason: 'דור לא מתאים' }); continue }
+    if (n.generation < 2) { skipped.push({ id: n.id, reason: 'דור לא מתאים' }); continue }
     if (n.ok) { skipped.push({ id: n.id, reason: 'כבר מאושר' }); continue }
     if (!parent || !parent.ok) { skipped.push({ id: n.id, reason: 'האב עדיין לא מאושר' }); continue }
     const parentKey = refKeyOf(parent, parent.parent_id ? (byId.get(parent.parent_id)?.name ?? null) : null, live)
@@ -100,14 +112,14 @@ export async function POST(req: NextRequest) {
           details: { mode: 'approve', nodeIds: res.approved.map(a => a.id) },
         })
       }
-      return NextResponse.json({ ...res, nodes: (await load(db)).tree })
+      return NextResponse.json({ ...res, ...windowOf((await load(db)).tree, Number(body.from ?? 1)) })
     }
 
     if (body.action === 'add') {
       const generation = Number(body.generation)
       const parentId = typeof body.parentId === 'string' ? body.parentId : null
       const names = Array.isArray(body.names) ? body.names.filter((x): x is string => typeof x === 'string').slice(0, 200) : []
-      if (!Number.isInteger(generation) || generation < 2 || generation > MAX_APPROVED_GEN || !parentId || !names.length) {
+      if (!Number.isInteger(generation) || generation < 2 || generation > MAX_GEN_LIMIT || !parentId || !names.length) {
         return NextResponse.json({ error: 'דור, אב ושמות חובה' }, { status: 400 })
       }
       const { refs, tree } = await load(db)
@@ -144,7 +156,7 @@ export async function POST(req: NextRequest) {
           details: { mode: 'add', generation, parentId, created, nodeIds: res.approved.map(a => a.id), needsReview: red },
         })
       }
-      return NextResponse.json({ ...res, created, red, nodes: (await load(db)).tree })
+      return NextResponse.json({ ...res, created, red, ...windowOf((await load(db)).tree, Number(body.from ?? 1)) })
     }
 
     if (body.action === 'undo') {
@@ -174,7 +186,7 @@ export async function POST(req: NextRequest) {
         userId: staff.userId, action: 'lineage_approved_undo', entityType: 'lineage_approved_ref',
         details: { keys, removedNodes: removed },
       })
-      return NextResponse.json({ ok: true, nodes: (await load(db)).tree })
+      return NextResponse.json({ ok: true, ...windowOf((await load(db)).tree, Number(body.from ?? 1)) })
     }
 
     return NextResponse.json({ error: 'פעולה לא מוכרת' }, { status: 400 })

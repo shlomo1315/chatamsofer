@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import {
-  MAX_APPROVED_GEN, classifyLines, normForMatch, type ApprovedTreeNode,
+  WINDOW_GENS, classifyLines, normForMatch, type ApprovedTreeNode,
 } from '@/lib/lineageApprovedTree'
 import { APPROVED_CSS } from './approved.css'
 
@@ -13,7 +13,6 @@ import { APPROVED_CSS } from './approved.css'
 
 type Node = ApprovedTreeNode
 const API = '/api/admin/lineage/approved-tree'
-const GENS = [1, 2, 3, 4, 5]
 
 const pl = (n: number, one: string, many: string) => (n === 1 ? one : `${n} ${many}`)
 const split = (n: string) => { const i = n.indexOf(' · '); return i < 0 ? { t: n, s: '' } : { t: n.slice(i + 3), s: n.slice(0, i) } }
@@ -36,6 +35,8 @@ export default function ApprovedTreePage() {
   const [nodes, setNodes] = useState<Node[] | null>(null)
   const [err, setErr] = useState('')
   const [gen, setGen] = useState(0)
+  const [from, setFrom] = useState(1)
+  const [maxGen, setMaxGen] = useState(1)
   const [col, setCol] = useState<Set<string>>(new Set())
   const [onlyPend, setOnlyPend] = useState(false)
   const [q, setQ] = useState('')
@@ -47,10 +48,14 @@ export default function ApprovedTreePage() {
   const toastSeq = useRef(0)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
-  useEffect(() => {
-    fetch(API).then(r => r.json()).then(d => d.error ? setErr(d.error) : setNodes(d.nodes))
-      .catch(() => setErr('שגיאה בטעינת העץ'))
+  const apply = (d: { nodes: Node[]; maxGen: number; from: number }) => { setNodes(d.nodes); setMaxGen(d.maxGen); setFrom(d.from) }
+  const goTo = useCallback((f: number) => {
+    fetch(`${API}?from=${f}`).then(r => r.json()).then(d => {
+      if (d.error) { setErr(d.error); return }
+      setNodes(d.nodes); setMaxGen(d.maxGen); setFrom(d.from); setGen(0); setCol(new Set())
+    }).catch(() => setErr('שגיאה בטעינת העץ'))
   }, [])
+  useEffect(() => { goTo(1) }, [goTo])
   useEffect(() => {
     const mq = window.matchMedia('(max-width:720px)')
     const f = () => setMobile(mq.matches)
@@ -64,8 +69,8 @@ export default function ApprovedTreePage() {
     for (const n of nodes ?? []) if (n.parent_id) { const l = m.get(n.parent_id); if (l) l.push(n); else m.set(n.parent_id, [n]) }
     return m
   }, [nodes])
-  const root = useMemo(() => (nodes ?? []).find(n => !n.parent_id), [nodes])
-  const blocked = useCallback((n: Node) => !n.ok && !!n.parent_id && !byId.get(n.parent_id)?.ok, [byId])
+  const roots = useMemo(() => (nodes ?? []).filter(n => !n.parent_id), [nodes])
+  const blocked = useCallback((n: Node) => !n.ok && (n.parent_id ? !byId.get(n.parent_id)?.ok : n.parent_ok === false), [byId])
   const stOf = (n: Node) => n.ok ? 'ok' : blocked(n) ? 'blk' : 'pend'
 
   const nq = q.trim() ? normForMatch(q) : ''
@@ -89,7 +94,7 @@ export default function ApprovedTreePage() {
   async function post(body: Record<string, unknown>) {
     setBusy(true)
     try {
-      const r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from, ...body }) })
       const d = await r.json()
       if (!r.ok) { setErr(d.error || 'הפעולה נכשלה'); setTimeout(() => setErr(''), 5000); return null }
       return d
@@ -102,7 +107,7 @@ export default function ApprovedTreePage() {
     if (!ids.length || busy) return
     const d = await post({ action: 'approve', ids })
     if (!d) return
-    setNodes(d.nodes); flashNow(d.approved.map((a: { id: string }) => a.id))
+    apply(d); flashNow(d.approved.map((a: { id: string }) => a.id))
     if (d.approved.length) {
       const first = byId.get(d.approved[0].id)
       showToast(d.approved.length === 1 ? `אושר: ${short(first?.name ?? '')}` : `אושרו ${d.approved.length} שמות`,
@@ -114,13 +119,13 @@ export default function ApprovedTreePage() {
     if (!toast || busy) return
     const d = await post({ action: 'undo', keys: toast.undo.keys, created: toast.undo.created })
     setToast(null)
-    if (d) setNodes(d.nodes)
+    if (d) apply(d)
   }
 
   // ── חלון הוספה ──
   const parentsOf = (g: number) => (nodes ?? []).filter(x => x.generation === g - 1 && x.ok)
   const openModal = (o: { g?: number; p?: string } = {}) => {
-    const g = Math.min(Math.max(o.g ?? (gen > 1 ? gen : 3), 2), MAX_APPROVED_GEN)
+    const g = Math.min(Math.max(o.g ?? (gen > 1 ? gen : from + 2), 2), maxGen + 1)
     const ps = parentsOf(g)
     setModal({ g, p: o.p ?? ps[0]?.id ?? null, text: '' })
   }
@@ -135,10 +140,11 @@ export default function ApprovedTreePage() {
 
   async function confirmAdd() {
     if (!modal || !modal.p || !canAdd || busy) return
-    const d = await post({ action: 'add', generation: modal.g, parentId: modal.p, names: lines })
+    const nf = Math.max(from, modal.g - WINDOW_GENS + 1)
+    const d = await post({ action: 'add', generation: modal.g, parentId: modal.p, names: lines, from: nf })
     if (!d) return
     const g = modal.g, p = modal.p
-    setModal(null); setGen(g); setNodes(d.nodes)
+    setModal(null); setGen(g); apply(d)
     setCol(s => { const n = new Set(s); n.delete(p); return n })
     const ids = d.approved.map((a: { id: string }) => a.id)
     flashNow(ids)
@@ -161,7 +167,7 @@ export default function ApprovedTreePage() {
   })
 
   if (err && !nodes) return <div className="p-8 text-center text-rose-600">{err}</div>
-  if (!nodes || !root) {
+  if (!nodes) {
     return <div className="flex items-center justify-center py-24 text-slate-400 gap-2"><Loader2 className="animate-spin" size={18} /> טוען…</div>
   }
 
@@ -174,9 +180,10 @@ export default function ApprovedTreePage() {
     if (!vk.length) pos[x.id] = row++
     else { vk.forEach(place); pos[x.id] = mobile ? pos[vk[0].id] : (pos[vk[0].id] + pos[vk[vk.length - 1].id]) / 2 }
   }
-  if (visible(root)) place(root)
-  const W = 5 * cw + 4 * gap, H = top + Math.max(row, 1) * rh + 8
-  const rx = (g: number) => (g - 1) * (cw + gap)
+  roots.filter(visible).forEach(place)
+  const cols = Array.from({ length: WINDOW_GENS }, (_, i) => from + i).filter(g => g <= maxGen)
+  const W = cols.length * cw + (cols.length - 1) * gap, H = top + Math.max(row, 1) * rh + 8
+  const rx = (g: number) => (g - from) * (cw + gap)
   const cy = (id: string) => top + pos[id] * rh + rh / 2
 
   const pend = nodes.filter(x => !x.ok).length
@@ -184,7 +191,7 @@ export default function ApprovedTreePage() {
 
   const act = (x: Node, s: string) => {
     if (s === 'pend') return <button className="ap" onClick={() => approve([x.id])} disabled={busy}>אישור</button>
-    if (s === 'ok' && x.generation < MAX_APPROVED_GEN) {
+    if (s === 'ok') {
       return <button className="ad" onClick={() => openModal({ g: x.generation + 1, p: x.id })}
         aria-label={`הוספת צאצא מאושר תחת ${short(x.name)}`}>+ צאצא</button>
     }
@@ -205,7 +212,7 @@ export default function ApprovedTreePage() {
         strokeWidth={1.5} strokeDasharray={s === 'ok' ? undefined : '4 3'} />)
     }
     cards.push(
-      <div key={id} className={`tn ${s}${x.parent_id ? '' : ' root'}${flash.includes(id) ? ' flash' : ''}`}
+      <div key={id} className={`tn ${s}${x.generation === 1 ? ' root' : ''}${flash.includes(id) ? ' flash' : ''}`}
         style={{ right: rx(x.generation), top: top + pos[id] * rh + 7, width: cw, height: ch }}>
         <div className={`t${sub ? ' one' : ''}`}><Hl text={t} q={q} /></div>
         {sub && <div className="s"><Hl text={sub} q={q} /></div>}
@@ -242,7 +249,7 @@ export default function ApprovedTreePage() {
       </div>
 
       <div className="tiles">
-        {GENS.map(g => {
+        {cols.map(g => {
           const s = stats(g), t = s.ok + s.pend
           return (
             <button key={g} className={`tile${gen === g ? ' on' : ''}`} aria-pressed={gen === g} onClick={() => setGen(gen === g ? 0 : g)}>
@@ -268,6 +275,8 @@ export default function ApprovedTreePage() {
 
       <div className="tbar">
         <span><b>{pl(pend, 'ממתין אחד', 'ממתינים')}</b> במסגרת מקווקוות. &quot;אישור&quot; בכרטיס, או &quot;+ צאצא&quot; להוספה.</span>
+        {from > 1 && <button className="btn gh" onClick={() => goTo(Math.max(1, from - WINDOW_GENS + 1))}>→ חזרה לדורות {Math.max(1, from - WINDOW_GENS + 1)}–{from}</button>}
+        {from + WINDOW_GENS - 1 < maxGen && <button className="btn gh" onClick={() => goTo(from + WINDOW_GENS - 1)}>המשך לדורות הבאים ←</button>}
         <span className="hint">גוללים הצידה לדורות הבאים ←</span>
         {genPend.length > 0 && (
           <button className="btn gh" disabled={busy} onClick={() => approve(genPend.map(x => x.id))}>
@@ -278,7 +287,7 @@ export default function ApprovedTreePage() {
       <div className="tw">
         {row ? (
           <div className="tree" style={{ width: W, height: H }}>
-            {GENS.map(g => {
+            {cols.map(g => {
               const s = stats(g)
               return (
                 <div key={g} className={`band${gen === g ? ' on' : ''}`} style={{ right: rx(g) - gap / 2 + 4, width: cw + gap - 8 }}>
@@ -310,7 +319,7 @@ export default function ApprovedTreePage() {
                   const g = +e.target.value
                   setModal({ ...modal, g, p: parentsOf(g)[0]?.id ?? null })
                 }}>
-                  {GENS.slice(1).map(g => <option key={g} value={g}>דור {g}</option>)}
+                  {Array.from({ length: WINDOW_GENS }, (_, i) => Math.max(2, from + 1) + i).filter(g => g <= maxGen + 1).map(g => <option key={g} value={g}>דור {g}</option>)}
                 </select>
               </label>
               <label className="fl">תחת האב

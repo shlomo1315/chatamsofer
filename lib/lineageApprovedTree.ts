@@ -8,7 +8,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { coupleKey, buildApprovedRefTree } from './lineageApprovedRef'
 
-export const MAX_APPROVED_GEN = 5
+/** כמה דורות מוצגים בחלון אחד (העץ נטען בחלקים). */
+export const WINDOW_GENS = 5
+/** תקרת שפיות לדור שאפשר להוסיף. */
+export const MAX_GEN_LIMIT = 80
 
 export interface ApprovedTreeNode {
   id: string
@@ -16,6 +19,8 @@ export interface ApprovedTreeNode {
   generation: number
   parent_id: string | null
   ok: boolean
+  /** רק בעמודה הראשונה של חלון שאינו מתחיל בדור 1: האב מחוץ לחלון, וזה מצבו. */
+  parent_ok?: boolean
 }
 
 /** נרמול השוואה — כמו במוקאפ שאושר: בלי תארים, "זי"ע" ופיסוק. */
