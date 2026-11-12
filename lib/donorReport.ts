@@ -34,6 +34,7 @@ export interface DonorLink {
   label: string
   recovery_home: string | null
   revoked_at: string | null
+  password_hash: string | null
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
@@ -135,7 +136,7 @@ export async function resolveDonorLink(db: SupabaseClient, token: unknown): Prom
   if (!isWellFormedDonorToken(token)) return null
   const { data } = await db
     .from('donor_report_links')
-    .select('id, token, label, recovery_home, revoked_at')
+    .select('id, token, label, recovery_home, revoked_at, password_hash')
     .eq('token', token)
     .maybeSingle()
   const link = data as DonorLink | null
