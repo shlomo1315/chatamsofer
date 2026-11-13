@@ -370,6 +370,8 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
   const benEmail = (ben.email || '').trim().toLowerCase()
   if (!benEmail || benEmail !== from) {
     console.warn(`[emailRequest] שולח שאינו תואם לרשומה — ת"ז ${idNumber}, from=${from}`)
+    // 🔴 מייל רגיל (בלי טופס שמולא בגוף) לא מקבל דחייה — נשאר בתיבה כפנייה.
+    if (!looksLikeSubmittedDraft(type, msg.body, generic)) return false
     // הודעה גנרית בלבד: לא חושפים אם הת"ז קיימת ולא שום פרט מהרשומה.
     await reject(from, '', type, [
       'לא ניתן לאמת את הבקשה מכתובת מייל זו. יש לשלוח מהכתובת הרשומה במערכת, או להגיש דרך המערכת הדיגיטלית.',
