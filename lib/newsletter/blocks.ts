@@ -133,10 +133,23 @@ export function buildCampaignHtml(opts: {
   rawHtml?: string
   mode: 'blocks' | 'html'
   unsubscribeUrl: string
+  /** מחלקת השולח — קובעת איזו כתובת תתווסף לאנשי הקשר */
+  fromDepartment?: string
 }): string {
   const body = opts.mode === 'html'
     ? (opts.rawHtml ?? '')
     : renderBlocks(opts.blocks ?? [])
+
+  const contactUrl = `${SITE}/api/newsletter-contact?d=${encodeURIComponent(opts.fromDepartment ?? 'mailing')}`
+  const contactButton = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0 0;">
+      <tr><td style="text-align:center;">
+        <a href="${contactUrl}" style="display:inline-block;background:${NAVY};color:#ffffff;text-decoration:none;
+           font-weight:700;font-size:14px;padding:12px 24px;border-radius:10px;">
+          הוסיפו את הכתובת המייל שלנו לאנשי קשר שלכם
+        </a>
+      </td></tr>
+    </table>`
 
   // פוטר ההסרה — חובה חוקית בכל דיוור
   const footer = `
@@ -151,7 +164,7 @@ export function buildCampaignHtml(opts: {
       </td></tr>
     </table>`
 
-  return newsletterShell(opts.preheader ?? '', body + footer)
+  return newsletterShell(opts.preheader ?? '', body + contactButton + footer)
 }
 
 // מעטפת ייעודית לניוזלטר.
