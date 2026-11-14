@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { DONOR_COOKIE, verifyDonorSession } from '@/lib/donorReportAuth'
-import { loadApprovedRows, resolveDonorLink, effectiveFilter, filterRows, summarize } from '@/lib/donorReport'
+import { loadApprovedRows, resolveDonorLink, effectiveFilter, filterRows, summarize, digitsQuery } from '@/lib/donorReport'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,6 +43,9 @@ export async function GET(request: NextRequest) {
   const filter = effectiveFilter(link, { from: sp.get('from'), to: sp.get('to'), home: sp.get('home') })
   const rows = filterRows(scope, filter)
 
+  const digits = digitsQuery(sp.get('q') ?? '')
+  const idMatches = digits ? rows.filter(r => r.idNumber.includes(digits)).map(r => r.id) : []
+
   void db.from('donor_report_links').update({ last_used_at: new Date().toISOString() }).eq('id', link.id)
 
   return NextResponse.json({
@@ -50,6 +53,9 @@ export async function GET(request: NextRequest) {
     lockedHome,
     homes: [...new Set(scope.map(r => r.home))].sort((a, b) => a.localeCompare(b, 'he')),
     summary: summarize(rows),
-    rows: rows.map(({ name, home, date, amount, note }) => ({ name, home, date, amount, note })),
+    // 🔴 הת.ז. המלאה לא יוצאת: רק מזהי השורות שמתאימות לחיפוש (ארבע ספרות לפחות).
+    idMatches,
+    rows: rows.map(({ id, name, home, date, amount, note, city, community, kind, nights, eligibleNights, arrived, idLast4 }) =>
+      ({ id, name, home, date, amount, note, city, community, kind, nights, eligibleNights, arrived, idLast4 })),
   }, { headers: HEADERS })
 }
