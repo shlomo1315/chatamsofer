@@ -9,7 +9,7 @@ interface Report {
   lockedHome: string | null
   homes: string[]
   summary: { count: number; amount: number; homes: { home: string; count: number; amount: number }[] }
-  rows: { name: string; home: string; date: string; amount: number }[]
+  rows: { name: string; home: string; date: string; amount: number; note?: string | null }[]
 }
 
 const nis = (n: number) => `₪${Math.round(n).toLocaleString('he-IL')}`
@@ -260,8 +260,10 @@ export default function DonorReportView({ token }: { token: string }) {
                     <p className="truncate font-semibold text-[#14213D]">{r.name}</p>
                     <p className="truncate text-sm text-[#5B6475]">{r.home}</p>
                   </div>
-                  <div className="shrink-0 text-left">
-                    <p className="font-bold tabular-nums text-[#14213D]">{nis(r.amount)}</p>
+                  <div className={r.note ? 'max-w-[55%] text-left' : 'shrink-0 text-left'}>
+                    {r.note
+                      ? <p className="text-sm text-[#5B6475]">{r.note}</p>
+                      : <p className="font-bold tabular-nums text-[#14213D]">{nis(r.amount)}</p>}
                     <p className="text-xs tabular-nums text-[#7A8294]">{heDate(r.date)}</p>
                   </div>
                 </li>

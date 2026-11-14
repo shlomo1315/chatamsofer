@@ -20,6 +20,19 @@ export interface DonorRow {
   /** YYYY-MM-DD, או ריק אם אין תאריך. */
   date: string
   amount: number
+  /** הסבר לשורה בלי סכום (במקום ₪0), או null כשיש סכום. */
+  note: string | null
+}
+
+/**
+ * שורה בלי סכום לא מוצגת כ-₪0. כל השורות בדוח ביקשו בית החלמה (recovery_home),
+ * ולכן: הגיעה בלי סכום שהוזן → הסכום טרם הוזן; אחרת → טרם מימשה את הזכות.
+ */
+export function amountNote(amount: number, arrived: boolean): string | null {
+  if (amount > 0) return null
+  return arrived
+    ? 'היולדת הגיעה לבית ההחלמה, הסכום טרם הוזן'
+    : 'היולדת עדיין לא מימשה את הזכות שלה בבית ההחלמה, אמורה להגיע בימים הקרובים'
 }
 
 export interface DonorFilter {
@@ -99,7 +112,7 @@ export function summarize(rows: DonorRow[]) {
 export async function loadApprovedRows(db: SupabaseClient): Promise<DonorRow[]> {
   const { rows: aids, error } = await fetchAllRows<Record<string, unknown>>((from, to) => db
     .from('maternity_aids')
-    .select('id, birth_date, recovery_home, recovery_arrived_at, recovery_amount, beneficiary:beneficiaries(full_name, family_name, spouse_name)')
+    .select('id, birth_date, recovery_home, recovery_arrived, recovery_arrived_at, recovery_amount, beneficiary:beneficiaries(full_name, family_name, spouse_name)')
     .eq('status', 'active')
     .not('recovery_home', 'is', null)
     .range(from, to))
@@ -126,7 +139,7 @@ export async function loadApprovedRows(db: SupabaseClient): Promise<DonorRow[]> 
     const b = a.beneficiary as { full_name?: string | null; family_name?: string | null; spouse_name?: string | null } | null
     const name = [b?.family_name, b?.full_name || b?.spouse_name].filter(Boolean).join(' ') || '—'
     const date = String(a.recovery_arrived_at ?? a.birth_date ?? '').slice(0, 10)
-    out.push({ id: String(a.id), name, home, date: DATE_RE.test(date) ? date : '', amount })
+    out.push({ id: String(a.id), name, home, date: DATE_RE.test(date) ? date : '', amount, note: amountNote(amount, a.recovery_arrived === true) })
   }
   return out.sort((x, y) => x.date.localeCompare(y.date))
 }
