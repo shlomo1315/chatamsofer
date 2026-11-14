@@ -94,3 +94,16 @@ describe('עזרים', () => {
     expect(m[m.length - 1]).toBe('11/26')
   })
 })
+
+describe('סינון לפי תאריך', () => {
+  const rows = [
+    { id: 'a', date: '2026-09-01' }, { id: 'b', date: '2026-09-15' }, { id: 'c', date: '2026-10-01' }, { id: 'd', date: '' },
+  ] as never[]
+  const ids = (p: Partial<ViewFilter>) => filterView(rows, f(p), new Set()).map((r: { id: string }) => r.id).join('')
+  it('טווח כולל קצוות, ושורה בלי תאריך נופלת', () => {
+    expect(ids({ from: '2026-09-01', to: '2026-09-15' })).toBe('ab')
+    expect(ids({ from: '2026-09-16' })).toBe('c')
+    expect(ids({ to: '2026-09-01' })).toBe('a')
+    expect(ids({})).toBe('abcd')
+  })
+})
