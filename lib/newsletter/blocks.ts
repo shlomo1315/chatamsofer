@@ -155,7 +155,7 @@ export function buildCampaignHtml(opts: {
       <tr><td style="text-align:center;">
         <a href="${opts.fromEmail ? googleContactUrl : contactUrl}" style="display:inline-block;background:${NAVY};color:#ffffff;text-decoration:none;
            font-weight:700;font-size:14px;padding:12px 24px;border-radius:10px;">
-          הוסיפו את הכתובת המייל שלנו לאנשי קשר שלכם
+          לחצו כאן להוסיף את הכתובת המייל שלנו לאנשי קשר שלכם
         </a>
         <p style="margin:10px 0 0;font-size:12px;">
           <a href="${contactUrl}" style="color:#64748b;text-decoration:underline;">לא משתמשים ב-Gmail? הורידו כרטיס איש קשר</a>

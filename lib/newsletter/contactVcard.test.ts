@@ -29,6 +29,7 @@ describe('קישור Google Contacts', () => {
       fromDepartment: 'mailing', fromEmail: 'a@b.co', fromName: 'שם',
     })
     expect(html).toContain('contacts.google.com/new?givenname=')
+    expect(html).toContain('לחצו כאן להוסיף את הכתובת המייל שלנו לאנשי קשר שלכם')
     expect(html).toContain('/api/newsletter-contact?d=mailing')
   })
 })
