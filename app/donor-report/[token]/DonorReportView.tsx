@@ -108,7 +108,7 @@ function RowView({ r }: { r: DonorRow }) {
         <div className="meta num">{r.home} · {r.city} · {r.community} · ת״ז <span className="ltr">{'••••' + r.idLast4}</span> · {date}</div>
         {multi ? (
           <div className="fest">{dots(r.kind === 2 ? 2 : 3)}<span>
-            <b>מזל טוב{r.kind === 2 ? ' כפול' : ' משולש'}! {KIND_LABEL[r.kind - 1]} · <span className="num">{nightsN}</span> לילות</b>{actual ? ' בבית ההחלמה' : ' זכאית'}
+            <b>{KIND_LABEL[r.kind - 1]} · <span className="num">{nightsN}</span> לילות</b>{actual ? ' בבית ההחלמה' : ' זכאית'}
           </span></div>
         ) : actual
           ? <div className="nt"><b className="num">{nightsN}</b> לילות בפועל בבית ההחלמה</div>
@@ -228,7 +228,7 @@ export default function DonorReportView({ token }: { token: string }) {
   const shell = (children: React.ReactNode) => (
     <div className="dr-root" data-theme={theme} dir="rtl" style={{ minHeight: '100vh' }}>
       <div className="bar">
-        <div><b>דוח יולדות לנדיב</b></div>
+        <div><b>דוח יולדות</b></div>
         <span className="seg">
           <button aria-pressed={theme === 'dark'} onClick={() => setTheme('dark')}>כהה</button>
           <button aria-pressed={theme === 'light'} onClick={() => setTheme('light')}>בהיר</button>
@@ -309,7 +309,7 @@ export default function DonorReportView({ token }: { token: string }) {
     <>
       <div id="tip" ref={tip} />
       <div className="report">
-        <div className="top"><div className="mark">ח</div><div><h1>דוח יולדות</h1><p>היכל החתם סופר · לנדיב</p></div><span className="live"><i />מתעדכן חי</span></div>
+        <div className="top"><div className="mark">ח</div><div><h1>דוח יולדות</h1><p>היכל החתם סופר</p></div><span className="live"><i />מתעדכן חי</span></div>
         <div className="grid">
           <section className="tile game" aria-label="יולדות שהצטברו עד היום">
             <div className="gtop">
