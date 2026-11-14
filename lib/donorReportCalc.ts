@@ -15,9 +15,12 @@ export interface ViewFilter {
   month: string
   birth: string
   state: string
+  /** טווח תאריכים (YYYY-MM-DD), כולל הקצוות; ריק = בלי הגבלה. */
+  from: string
+  to: string
 }
 
-export const EMPTY_FILTER: ViewFilter = { q: '', city: '', comm: '', home: '', month: '', birth: '', state: '' }
+export const EMPTY_FILTER: ViewFilter = { q: '', city: '', comm: '', home: '', month: '', birth: '', state: '', from: '', to: '' }
 
 export const BIRTH_LABELS = ['רגילה', 'תאומים', 'שלישייה'] as const
 export const STATE_LABELS = ['מומש', 'ממתינה'] as const
@@ -53,6 +56,11 @@ export function matchesQuery(r: DonorRow, q: string, idMatches: ReadonlySet<stri
 /** האם השורה עוברת את כל הסינונים, חוץ מהממד שב-skip (לספירת הצ'יפים). */
 export function matches(r: DonorRow, f: ViewFilter, idMatches: ReadonlySet<string>, skip?: DimKey | 'q'): boolean {
   if (skip !== 'q' && !matchesQuery(r, f.q, idMatches)) return false
+  if (f.from || f.to) {
+    if (!r.date) return false
+    if (f.from && r.date < f.from) return false
+    if (f.to && r.date > f.to) return false
+  }
   for (const k of DIM_KEYS) {
     if (k !== skip && f[k] && VALUE[k](r) !== f[k]) return false
   }

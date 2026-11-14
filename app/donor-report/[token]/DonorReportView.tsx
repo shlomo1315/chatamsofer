@@ -308,7 +308,10 @@ export default function DonorReportView({ token }: { token: string }) {
   const mx = Math.max(1, ...monthGroups.map(g => g.amount))
   const pk = Math.max(0, ...monthGroups.map(g => g.amount))
   const filtered = isFiltered(F)
-  const dimCount = CHIP_DIMS.filter(k => F[k]).length
+  const dateOn = !!(F.from || F.to)
+  const dimCount = CHIP_DIMS.filter(k => F[k]).length + (dateOn ? 1 : 0)
+  const heDate = (d: string) => d.split('-').reverse().join('.')
+  const dateTag = dateOn ? `${F.from ? 'מ-' + heDate(F.from) : ''}${F.from && F.to ? ' ' : ''}${F.to ? 'עד ' + heDate(F.to) : ''}` : ''
   const left = R.length - shown
   const avg = T.paid ? (T.nights / T.paid).toFixed(1) : ''
   const range = rangeText(all)
@@ -364,6 +367,7 @@ export default function DonorReportView({ token }: { token: string }) {
               {CHIP_DIMS.filter(k => F[k]).map(k => (
                 <button key={k} className="tg" onClick={() => toggle(k, F[k])} aria-label={`הסרת הסינון ${DIM_LABELS[k]}: ${F[k]}`}>{DIM_LABELS[k]}: {F[k]} <span aria-hidden>×</span></button>
               ))}
+              {dateOn && <button className="tg" onClick={() => { setF(f => ({ ...f, from: '', to: '' })); setShown(10) }} aria-label={`הסרת סינון התאריכים: ${dateTag}`}>תאריך: {dateTag} <span aria-hidden>×</span></button>}
               <span className="chk">{ok ? '✓ הסכומים מסתכמים' : '⚠ אי התאמה בסכומים'}</span>
             </div>
           </section>
@@ -373,6 +377,11 @@ export default function DonorReportView({ token }: { token: string }) {
               <div className="dlg" role="dialog" aria-modal="true" aria-label="חיפוש מתקדם" onClick={e => e.stopPropagation()}>
                 <div className="dh"><h2>חיפוש מתקדם</h2><button className="x" onClick={() => setAdvOpen(false)} aria-label="סגירה">×</button></div>
                 <div className="db">
+                  <div className="chips dts">
+                    <span className="cl">תאריך</span>
+                    <label className="dt">מתאריך<input type="date" value={F.from} max={F.to || undefined} onChange={e => { setF(f => ({ ...f, from: e.target.value })); setShown(10) }} /></label>
+                    <label className="dt">עד תאריך<input type="date" value={F.to} min={F.from || undefined} onChange={e => { setF(f => ({ ...f, to: e.target.value })); setShown(10) }} /></label>
+                  </div>
                   {CHIP_DIMS.map(k => {
                     const { vals, hidden } = chipValues(k)
                     return (
