@@ -50,6 +50,6 @@ export async function GET(request: NextRequest) {
     lockedHome,
     homes: [...new Set(scope.map(r => r.home))].sort((a, b) => a.localeCompare(b, 'he')),
     summary: summarize(rows),
-    rows: rows.map(({ name, home, date, amount }) => ({ name, home, date, amount })),
+    rows: rows.map(({ name, home, date, amount, note }) => ({ name, home, date, amount, note })),
   }, { headers: HEADERS })
 }

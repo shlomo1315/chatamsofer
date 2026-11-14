@@ -2,9 +2,10 @@ import { describe, it, expect } from 'vitest'
 import {
   cleanDate, effectiveFilter, filterRows, summarize, generateDonorToken,
   isWellFormedDonorToken, resolveDonorLink, type DonorRow,
+  amountNote,
 } from './donorReport'
 
-const r = (o: Partial<DonorRow>): DonorRow => ({ id: 'x', name: 'כהן שרה', home: 'טלזסטון', date: '2026-05-10', amount: 1000, ...o })
+const r = (o: Partial<DonorRow>): DonorRow => ({ id: 'x', name: 'כהן שרה', home: 'טלזסטון', date: '2026-05-10', amount: 1000, note: null, ...o })
 
 describe('טוקן', () => {
   it('נוצר באורך ובתווים תקינים וייחודי', () => {
@@ -76,5 +77,22 @@ describe('filterRows + summarize', () => {
     expect(s.count).toBe(3)
     expect(s.amount).toBe(3800)
     expect(s.homes).toEqual([{ home: 'טלזסטון', count: 3, amount: 3800 }])
+  })
+})
+
+describe('amountNote', () => {
+  it('יש סכום: בלי הערה', () => {
+    expect(amountNote(1500, false)).toBeNull()
+    expect(amountNote(1500, true)).toBeNull()
+  })
+  it('בלי סכום ועוד לא הגיעה: טרם מימשה', () => {
+    expect(amountNote(0, false)).toContain('עדיין לא מימשה')
+  })
+  it('בלי סכום אבל הגיעה: הסכום טרם הוזן', () => {
+    expect(amountNote(0, true)).toContain('טרם הוזן')
+  })
+  it('הערה לא משנה סיכומים', () => {
+    const rows = [r({ id: '1', amount: 0, note: 'x' }), r({ id: '2', amount: 500 })]
+    expect(summarize(rows)).toMatchObject({ count: 2, amount: 500 })
   })
 })
