@@ -187,8 +187,11 @@ async function doLink({ aid, family, familyName, card, caller, callId, end }: Li
 
   // נדרים לעיתים משייך ומחזיר שגיאה — "כבר משויך" או כרטיס שמופיע אצלם = הצלחה.
   // 🔴 הודעת "כבר משויך" לבדה אינה הוכחה (ייתכן שהכרטיס אצל משפחה אחרת, והודעת "אין כרטיסים למשפחה זו" אף היא תואמת) — רק אימות מול נדרים.
-  const already = !ok && (await cardLinkedInNedarim(creds, nedarimId, card))
-  if (!ok && !already) {
+  // 🔴 גם כש-נדרים החזיר הצלחה מאמתים בכרטסת: "הצלחה" שלא נרשמה בפועל השאירה יולדות בלי כרטיס מגנטי.
+  const verified = await cardLinkedInNedarim(creds, nedarimId, card)
+  const already = !ok && verified
+  if (!verified) {
+    if (ok) msg = 'נדרים אישר, אבל הכרטיס לא מופיע בכרטסת הלקוח'
     console.error(`[telephony:main/maternity] setMagneticCard failed: ${msg}`)
     await logActivity('phone_error', 'maternity_aid', aid.id, {
       caller, callId, channel: CHANNEL, family_name: familyName, error: msg, card_number_last4: card.slice(-4), nedarim_id: nedarimId,
