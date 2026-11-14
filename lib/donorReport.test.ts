@@ -5,7 +5,7 @@ import {
   amountNote,
 } from './donorReport'
 
-const r = (o: Partial<DonorRow>): DonorRow => ({ id: 'x', name: 'כהן שרה', home: 'טלזסטון', date: '2026-05-10', amount: 1000, note: null, ...o })
+const r = (o: Partial<DonorRow>): DonorRow => ({ id: 'x', city: 'בני ברק', community: 'לא צוין', kind: 1, nights: 2, eligibleNights: 2, arrived: false, idLast4: '1234', name: 'כהן שרה', home: 'טלזסטון', date: '2026-05-10', amount: 1000, note: null, ...o })
 
 describe('טוקן', () => {
   it('נוצר באורך ובתווים תקינים וייחודי', () => {
