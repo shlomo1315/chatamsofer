@@ -31,6 +31,11 @@ export function SchedulePanel({ issue, listIds, canEdit }: { issue: IssueView; l
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const base = `/api/admin/gilyonot/issues/${issue.id}/schedule`
+  const [datePart, timePart = ''] = at.split('T')
+  const when = datePart && timePart ? new Date(at) : null
+  const preview = when && !Number.isNaN(when.getTime())
+    ? `${when.toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}, ${timePart}`
+    : ''
 
   async function run(fn: () => Promise<string>) {
     setBusy(true); setMsg(null)
@@ -53,17 +58,25 @@ export function SchedulePanel({ issue, listIds, canEdit }: { issue: IssueView; l
       {scheduled && <p className="mt-1 text-sm text-slate-700">יוצא לדרך ב-<b>{fmt(issue.scheduled_at)}</b>. עד אז אפשר לשנות את הזמן או לבטל.</p>}
       {!scheduled && issue.schedule_error && <p className="mt-1 text-sm font-medium text-rose-700">{issue.schedule_error}</p>}
       {canEdit && (
-        <div className="mt-3 flex flex-wrap items-end gap-2">
-          <label className="min-w-0 flex-1 text-xs text-slate-500">תאריך ושעה
-            <input type="datetime-local" className={`${input} mt-1`} value={at} onChange={e => setAt(e.target.value)} />
-          </label>
-          <button type="button" disabled={busy || !at} className={btnPrimary} onClick={save}>
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CalendarClock className="h-4 w-4" aria-hidden />}{scheduled ? 'עדכון זמן' : 'תזמון'}
-          </button>
-          {scheduled && <button type="button" disabled={busy} className={btnDanger} onClick={cancel}>ביטול התזמון</button>}
+        <div className="mt-3 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <label className="min-w-0 text-xs text-slate-500">תאריך
+              <input type="date" className={`${input} mt-1`} value={datePart} onChange={e => setAt(`${e.target.value}T${timePart || '09:00'}`)} />
+            </label>
+            <label className="min-w-0 text-xs text-slate-500">שעה
+              <input type="time" className={`${input} mt-1`} value={timePart} onChange={e => setAt(`${datePart}T${e.target.value}`)} />
+            </label>
+          </div>
+          {preview && <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">תשלח ב: <b>{preview}</b></p>}
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" disabled={busy || !preview} className={btnPrimary} onClick={save}>
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CalendarClock className="h-4 w-4" aria-hidden />}{scheduled ? 'עדכון זמן' : 'תזמון'}
+            </button>
+            {scheduled && <button type="button" disabled={busy} className={btnDanger} onClick={cancel}>ביטול התזמון</button>}
+          </div>
         </div>
       )}
-      {!scheduled && <p className="mt-2 text-xs text-slate-500">הנמענים נקבעים ברשימות שנבחרו למעלה, ומתעדכנים לפי הרשימה ברגע השליחה.</p>}
+      {!scheduled && <p className="mt-2 text-xs text-slate-500">הנמענים נקבעים ברשימות שנבחרו למעלה, ומתעדכנים לפי הרשימה ברגע השליחה. לא נשלח בשבת ובחג.</p>}
       <div className="mt-2"><Notice msg={msg} /></div>
     </div>
   )
