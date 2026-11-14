@@ -135,19 +135,26 @@ export function buildCampaignHtml(opts: {
   unsubscribeUrl: string
   /** מחלקת השולח — קובעת איזו כתובת תתווסף לאנשי הקשר */
   fromDepartment?: string
+  /** כתובת ושם השולח למילוי טופס "איש קשר חדש" של Google */
+  fromEmail?: string
+  fromName?: string
 }): string {
   const body = opts.mode === 'html'
     ? (opts.rawHtml ?? '')
     : renderBlocks(opts.blocks ?? [])
 
   const contactUrl = `${SITE}/api/newsletter-contact?d=${encodeURIComponent(opts.fromDepartment ?? 'mailing')}`
+  const googleContactUrl = `https://contacts.google.com/new?email=${encodeURIComponent(opts.fromEmail ?? '')}&first_name=${encodeURIComponent(opts.fromName ?? '')}`
   const contactButton = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0 0;">
       <tr><td style="text-align:center;">
-        <a href="${contactUrl}" style="display:inline-block;background:${NAVY};color:#ffffff;text-decoration:none;
+        <a href="${opts.fromEmail ? googleContactUrl : contactUrl}" style="display:inline-block;background:${NAVY};color:#ffffff;text-decoration:none;
            font-weight:700;font-size:14px;padding:12px 24px;border-radius:10px;">
           הוסיפו את הכתובת המייל שלנו לאנשי קשר שלכם
         </a>
+        <p style="margin:10px 0 0;font-size:12px;">
+          <a href="${contactUrl}" style="color:#64748b;text-decoration:underline;">לא משתמשים ב-Gmail? הורידו כרטיס איש קשר</a>
+        </p>
       </td></tr>
     </table>`
 
