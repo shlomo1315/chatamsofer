@@ -4,7 +4,7 @@ vi.mock('@/lib/apiAuth', () => ({ getServiceClient: vi.fn() }))
 import { getServiceClient } from '@/lib/apiAuth'
 import { NextRequest } from 'next/server'
 import { GET } from '@/app/api/donor-report/route'
-import { POST as AUTH } from '@/app/api/donor-report/auth/route'
+import { POST as AUTH, DELETE as LOGOUT } from '@/app/api/donor-report/auth/route'
 import {
   hashDonorPassword, checkDonorPassword, issueDonorSession, verifyDonorSession, validateDonorPassword, DONOR_COOKIE,
 } from './donorReportAuth'
@@ -44,7 +44,8 @@ describe('סיסמת קישור הנדיב', () => {
     expect(verifyDonorSession(c, 'L1', 'hashA', 2000)).toBe(true)
     expect(verifyDonorSession(c, 'L2', 'hashA', 2000)).toBe(false)
     expect(verifyDonorSession(c, 'L1', 'hashB', 2000)).toBe(false)
-    expect(verifyDonorSession(c, 'L1', 'hashA', 1000 + 13 * 3600_000)).toBe(false)
+    expect(verifyDonorSession(c, 'L1', 'hashA', 1000 + 29 * 60_000)).toBe(true)
+    expect(verifyDonorSession(c, 'L1', 'hashA', 1000 + 31 * 60_000)).toBe(false)
     expect(verifyDonorSession(undefined, 'L1', 'hashA')).toBe(false)
     expect(verifyDonorSession(c, 'L1', null)).toBe(false)
   })
@@ -92,5 +93,20 @@ describe('/api/donor-report/auth', () => {
     expect(ok.headers.get('set-cookie')).toContain(`${DONOR_COOKIE}=`)
     vi.mocked(getServiceClient).mockReturnValue(fakeDb({ id: 'L9', token: TOKEN, label: 'x', recovery_home: null, revoked_at: null, password_hash: null }) as never)
     expect((await AUTH(post('secret1'))).status).toBe(403)
+  })
+  it('התנתקות: ה-cookie נמחק (maxAge 0) ובנתיב הנכון', async () => {
+    const res = await LOGOUT()
+    expect(res.status).toBe(200)
+    const c = res.cookies.get(DONOR_COOKIE)
+    expect(c?.value).toBe('')
+    expect(c?.maxAge).toBe(0)
+    expect(c?.path).toBe('/api/donor-report')
+  })
+  it('כניסה מוצלחת קובעת cookie ל-30 דקות', async () => {
+    vi.mocked(getServiceClient).mockReturnValue(fakeDb({ id: 'L1', token: TOKEN, label: 'x', recovery_home: null, revoked_at: null, password_hash: await hashDonorPassword('abcd1234') }) as never)
+    const r = new NextRequest('http://localhost/api/donor-report/auth', { method: 'POST', body: JSON.stringify({ t: TOKEN, password: 'abcd1234' }) })
+    const res = await AUTH(r)
+    expect(res.status).toBe(200)
+    expect(res.cookies.get(DONOR_COOKIE)?.maxAge).toBe(1800)
   })
 })

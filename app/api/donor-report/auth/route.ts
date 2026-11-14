@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { resolveDonorLink } from '@/lib/donorReport'
-import { checkDonorPassword, issueDonorSession, DONOR_COOKIE, DONOR_SESSION_HOURS } from '@/lib/donorReportAuth'
+import { checkDonorPassword, issueDonorSession, DONOR_COOKIE, DONOR_SESSION_MINUTES } from '@/lib/donorReportAuth'
 
 export const dynamic = 'force-dynamic'
 const HEADERS = { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' }
@@ -33,7 +33,17 @@ export async function POST(request: NextRequest) {
   const res = NextResponse.json({ ok: true }, { headers: HEADERS })
   res.cookies.set(DONOR_COOKIE, issueDonorSession(link.id, link.password_hash), {
     httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict',
-    path: '/api/donor-report', maxAge: DONOR_SESSION_HOURS * 3600,
+    path: '/api/donor-report', maxAge: DONOR_SESSION_MINUTES * 60,
+  })
+  return res
+}
+
+// התנתקות: מוחק את ה-cookie באותם מאפיינים שבהם נקבע.
+export async function DELETE() {
+  const res = NextResponse.json({ ok: true }, { headers: HEADERS })
+  res.cookies.set(DONOR_COOKIE, '', {
+    httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict',
+    path: '/api/donor-report', maxAge: 0,
   })
   return res
 }

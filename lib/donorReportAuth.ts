@@ -8,7 +8,7 @@ import { createHmac, timingSafeEqual } from 'crypto'
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const DONOR_COOKIE = 'donor_report_session'
-export const DONOR_SESSION_HOURS = 12
+export const DONOR_SESSION_MINUTES = 30
 export const DONOR_MIN_PASSWORD = 6
 export const DONOR_MAX_PASSWORD = 100
 
@@ -36,7 +36,7 @@ function sign(linkId: string, exp: number, hash: string) {
 }
 
 export function issueDonorSession(linkId: string, hash: string, now = Date.now()): string {
-  const exp = now + DONOR_SESSION_HOURS * 3600_000
+  const exp = now + DONOR_SESSION_MINUTES * 60_000
   return `${linkId}.${exp}.${sign(linkId, exp, hash)}`
 }
 
