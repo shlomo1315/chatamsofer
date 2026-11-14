@@ -131,6 +131,14 @@ export default function DonorReportView({ token }: { token: string }) {
   const [idMatches, setIdMatches] = useState<ReadonlySet<string>>(new Set())
   const [pos, setPos] = useState<number | null>(null)
   const [playing, setPlaying] = useState(false)
+  const [advOpen, setAdvOpen] = useState(false)
+
+  useEffect(() => {
+    if (!advOpen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setAdvOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [advOpen])
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
   const posRef = useRef(0)
   const tip = useRef<HTMLDivElement>(null)
@@ -224,14 +232,21 @@ export default function DonorReportView({ token }: { token: string }) {
 
   const toggle = (k: DimKey, v: string) => { setF(f => ({ ...f, [k]: f[k] === v ? '' : v })); setShown(10) }
   const clear = () => { setF(EMPTY_FILTER); setShown(10) }
+  const logout = async () => {
+    try { await fetch('/api/donor-report/auth', { method: 'DELETE' }) } catch { /* גם אם נכשל, מחזירים למסך הסיסמה */ }
+    setData(null); setAdvOpen(false); setF(EMPTY_FILTER); setState('password')
+  }
 
   const shell = (children: React.ReactNode) => (
     <div className="dr-root" data-theme={theme} dir="rtl" style={{ minHeight: '100vh' }}>
       <div className="bar">
         <div><b>דוח יולדות</b></div>
+        <span className="barr">
         <span className="seg">
           <button aria-pressed={theme === 'dark'} onClick={() => setTheme('dark')}>כהה</button>
           <button aria-pressed={theme === 'light'} onClick={() => setTheme('light')}>בהיר</button>
+        </span>
+        {state === 'ok' && <button className="lo" onClick={() => void logout()}>התנתקות</button>}
         </span>
       </div>
       <main className="wrap"><div className="glow" />{children}</main>
@@ -293,6 +308,7 @@ export default function DonorReportView({ token }: { token: string }) {
   const mx = Math.max(1, ...monthGroups.map(g => g.amount))
   const pk = Math.max(0, ...monthGroups.map(g => g.amount))
   const filtered = isFiltered(F)
+  const dimCount = CHIP_DIMS.filter(k => F[k]).length
   const left = R.length - shown
   const avg = T.paid ? (T.nights / T.paid).toFixed(1) : ''
   const range = rangeText(all)
@@ -337,34 +353,49 @@ export default function DonorReportView({ token }: { token: string }) {
           </section>
 
           <section className="tile f" aria-label="חיפוש וסינון">
-            <div className="fh"><h2>חיפוש וסינון</h2>
-              <div className="sum">
-                {filtered
-                  ? <><span>מוצגות <b className="num">{fmt(R.length)}</b> מתוך <span className="num">{fmt(all.length)}</span></span><button className="clr" onClick={clear}>ניקוי הסינון</button></>
-                  : <span>מוצגות כל היולדות</span>}
-                <span className="chk">{ok ? '✓ כל הסכומים מסתכמים זה בזה' : '⚠ אי התאמה בסכומים'}</span>
-              </div>
+            <div className="fbar">
+              <div className="q"><input type="search" placeholder="חיפוש לפי שם או מספר זהות" aria-label="חיפוש לפי שם או מספר זהות" autoComplete="off"
+                value={F.q} onChange={e => { setF(f => ({ ...f, q: e.target.value })); setShown(10) }} /></div>
+              <button className="adv" onClick={() => setAdvOpen(true)} aria-haspopup="dialog">חיפוש מתקדם{dimCount > 0 && <span className="cnt num">{dimCount}</span>}</button>
+              {filtered && <button className="clr" onClick={clear}>ניקוי</button>}
             </div>
-            <div className="q"><input type="search" placeholder="חיפוש לפי שם או מספר זהות" aria-label="חיפוש לפי שם או מספר זהות" autoComplete="off"
-              value={F.q} onChange={e => { setF(f => ({ ...f, q: e.target.value })); setShown(10) }} /></div>
-            <div>
-              {CHIP_DIMS.map(k => {
-                const { vals, hidden } = chipValues(k)
-                return (
-                  <div className="chips" key={k}>
-                    <span className="cl">{DIM_LABELS[k]}</span>
-                    <button className={`chip${F[k] ? '' : ' on'}`} onClick={() => toggle(k, F[k])}>הכול</button>
-                    {vals.map(v => (
-                      <button key={v} className={`chip${F[k] === v ? ' on' : ''}`} onClick={() => toggle(k, v)}>
-                        {v}<small className="num">{all.filter(r => matches(r, F, idMatches, k) && dimValue(r, k) === v).length}</small>
-                      </button>
-                    ))}
-                    {hidden > 0 && <button className="chip" onClick={() => setExpanded(e => [...e, k])}>עוד<small className="num">{hidden}</small></button>}
-                  </div>
-                )
-              })}
+            <div className="fsum">
+              <span>{filtered ? <>מוצגות <b className="num">{fmt(R.length)}</b> מתוך <span className="num">{fmt(all.length)}</span></> : 'מוצגות כל היולדות'}</span>
+              {CHIP_DIMS.filter(k => F[k]).map(k => (
+                <button key={k} className="tg" onClick={() => toggle(k, F[k])} aria-label={`הסרת הסינון ${DIM_LABELS[k]}: ${F[k]}`}>{DIM_LABELS[k]}: {F[k]} <span aria-hidden>×</span></button>
+              ))}
+              <span className="chk">{ok ? '✓ הסכומים מסתכמים' : '⚠ אי התאמה בסכומים'}</span>
             </div>
           </section>
+
+          {advOpen && (
+            <div className="modal" onClick={() => setAdvOpen(false)}>
+              <div className="dlg" role="dialog" aria-modal="true" aria-label="חיפוש מתקדם" onClick={e => e.stopPropagation()}>
+                <div className="dh"><h2>חיפוש מתקדם</h2><button className="x" onClick={() => setAdvOpen(false)} aria-label="סגירה">×</button></div>
+                <div className="db">
+                  {CHIP_DIMS.map(k => {
+                    const { vals, hidden } = chipValues(k)
+                    return (
+                      <div className="chips" key={k}>
+                        <span className="cl">{DIM_LABELS[k]}</span>
+                        <button className={`chip${F[k] ? '' : ' on'}`} onClick={() => toggle(k, F[k])}>הכול</button>
+                        {vals.map(v => (
+                          <button key={v} className={`chip${F[k] === v ? ' on' : ''}`} onClick={() => toggle(k, v)}>
+                            {v}<small className="num">{all.filter(r => matches(r, F, idMatches, k) && dimValue(r, k) === v).length}</small>
+                          </button>
+                        ))}
+                        {hidden > 0 && <button className="chip" onClick={() => setExpanded(e => [...e, k])}>עוד<small className="num">{hidden}</small></button>}
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="df">
+                  {filtered && <button className="clr" onClick={clear}>ניקוי הכול</button>}
+                  <button className="go" onClick={() => setAdvOpen(false)}>החל · <span className="num">{fmt(R.length)}</span> יולדות</button>
+                </div>
+              </div>
+            </div>
+          )}
 
           <section className="tile hero">
             <div>
