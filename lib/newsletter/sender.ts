@@ -207,6 +207,8 @@ async function sendCampaignBatches(
         mode: campaign.content_mode,
         unsubscribeUrl: unsubUrl,
         fromDepartment: dept.department,
+        fromEmail: dept.fromEmail,
+        fromName: dept.fromName,
       })
 
       return {
