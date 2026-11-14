@@ -50,6 +50,11 @@ function safeUrl(url: unknown): string {
   return escapeAttr(s)
 }
 
+/** קישור שפותח "איש קשר חדש" ב-Google עם שם וכתובת ממולאים */
+export function googleContactLink(name: string, email: string): string {
+  return `https://contacts.google.com/new?givenname=${encodeURIComponent(name)}&email=${encodeURIComponent(email)}`
+}
+
 /**
  * רינדור בלוק בודד ל-HTML של מייל.
  * `content` עשוי להכיל HTML בסיסי (bold/italic/link) שהעורך מייצר — הוא מנוקה
@@ -144,7 +149,7 @@ export function buildCampaignHtml(opts: {
     : renderBlocks(opts.blocks ?? [])
 
   const contactUrl = `${SITE}/api/newsletter-contact?d=${encodeURIComponent(opts.fromDepartment ?? 'mailing')}`
-  const googleContactUrl = `https://contacts.google.com/new?email=${encodeURIComponent(opts.fromEmail ?? '')}&first_name=${encodeURIComponent(opts.fromName ?? '')}`
+  const googleContactUrl = googleContactLink(opts.fromName ?? '', opts.fromEmail ?? '')
   const contactButton = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0 0;">
       <tr><td style="text-align:center;">
