@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Plus, Baby, Home, AlertTriangle, Link2, ShieldCheck } from 'lucide-react'
+import { Plus, Baby, Home, AlertTriangle, Link2 } from 'lucide-react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { MaternityAid } from '@/types'
 import Button from '@/components/ui/Button'
@@ -146,10 +146,6 @@ export default async function MaternityPage() {
           <Link href="/admin/maternity/failed-cards"
             className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2 text-xs font-bold text-amber-700 hover:border-amber-400 transition-colors">
             <AlertTriangle size={14} /> כרטיסים שנכשלו
-          </Link>
-          <Link href="/admin/maternity/verify-cards"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-600 hover:border-line-strong hover:text-navy-dark transition-colors">
-            <ShieldCheck size={14} /> בדיקת כרטיסים מול נדרים
           </Link>
         </Can>
         <ExportExcelButton type="maternity" />
