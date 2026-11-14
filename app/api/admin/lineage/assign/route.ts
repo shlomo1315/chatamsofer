@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { attachGenerationsBelow } from '@/lib/lineageAssignBelow'
+import { invalidateLineageCache } from '@/lib/lineageSync'
 
 export const dynamic = 'force-dynamic'
 
@@ -79,11 +81,23 @@ export async function POST(request: NextRequest) {
       .sort((a, b) => a.generation - b.generation)
   }
 
-  // lineage_node_id: אם נשמרו דורות מתחת (הצומת אינו העלה) — משאירים את הקיים,
-  // כי ה-leaf האמיתי עמוק יותר. אחרת הצומת שנבחר הוא העלה.
-  const hasBelow = chain.some(e => e.generation > cutGen)
-  const update: Record<string, unknown> = { lineage_chain: chain }
-  if (!hasBelow) update.lineage_node_id = nodeId
+  // lineage_node_id: אם נשמרו דורות מתחת לדור שתוקן — מחברים אותם בעץ תחת הצומת
+  // החדש ומשייכים לעלה שלהם. ⚠️ קודם נשאר העלה הישן, והכרטסת (שקוראת את המסלול
+  // בעץ) ו-lineageSync החזירו את הסדר הישן אחרי רענון. אחרת הצומת שנבחר הוא העלה.
+  const hasBelow = chain.some(e => e.generation > chosen.generation)
+  let leafId = nodeId
+  if (hasBelow) {
+    try {
+      const attached = await attachGenerationsBelow(db, chosen, chain)
+      leafId = attached.leafId
+      chain = [...upChain, ...attached.below]
+      invalidateLineageCache()
+    } catch (e) {
+      console.error('[lineage/assign] חיבור הדורות שמתחת נכשל:', e instanceof Error ? e.message : e)
+      return NextResponse.json({ error: 'חיבור הדורות שמתחת לדור שתוקן נכשל' }, { status: 500 })
+    }
+  }
+  const update: Record<string, unknown> = { lineage_chain: chain, lineage_node_id: leafId }
 
   // ── החזרת סטטוס מ-deep_review ל-pending כשתוקנו 5 הדורות הראשונים ──
   // צאצא נכנס ל-deep_review כי נגע ב-5 הדורות הראשונים. ברגע שכל דור ≤5
@@ -124,7 +138,7 @@ export async function POST(request: NextRequest) {
       prev_chain: b?.lineage_chain ?? null,
       prev_node_id: b?.lineage_node_id ?? null,
       prev_eligibility: b?.eligibility_status ?? null,
-      new_node_id: nodeId,
+      new_node_id: leafId,
       at_generation: cutGen,
       changed_by: staff.userId,
     })
