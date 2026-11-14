@@ -56,6 +56,7 @@ beforeEach(() => {
   data.markPickedUp.mockResolvedValue({ centerName: 'בני ברק', firstTime: true })
   ned.getNedarimCreds.mockResolvedValue({ mosad: 'm', apiPassword: 'p' })
   ned.setMagneticCard.mockResolvedValue({ ok: true, message: '' })
+  ned.getClientCardFull.mockResolvedValue({ Cards: [{ MagneticCard: CARD, RemovedDate: null }] })
 })
 
 describe('יולדות — זיהוי', () => {
@@ -179,6 +180,7 @@ describe('יולדות — שיוך בנדרים', () => {
   })
   it('"כבר משויך" מנדרים — נחשב הצלחה', async () => {
     ned.setMagneticCard.mockResolvedValue({ ok: false, message: 'הכרטיס כבר משויך למשפחה זו' })
+    ned.getClientCardFull.mockResolvedValue({ Cards: [{ MagneticCard: CARD, RemovedDate: null }] })
     expect(text(await call({ card1: CARD, ok1: '1' }))).toContain('שויך במוקד')
   })
   it('הכרטיס מופיע אצל נדרים למרות שגיאה — נחשב הצלחה', async () => {
@@ -192,6 +194,14 @@ describe('יולדות — שיוך בנדרים', () => {
     const r = await call({ card1: CARD, ok1: '1' })
     expect(text(r)).toContain('הסיבה כרטיס חסום')
     expect(data.saveLinkError).toHaveBeenCalledWith('a1', expect.stringContaining('כרטיס חסום'))
+    expect(data.markPickedUp).not.toHaveBeenCalled()
+  })
+  it('נדרים אישר הצלחה אבל הכרטיס לא בכרטסת — נכשל, בלי איסוף', async () => {
+    ned.setMagneticCard.mockResolvedValue({ ok: true, message: '' })
+    ned.getClientCardFull.mockResolvedValue({ Cards: [] })
+    const r = await call({ card1: CARD, ok1: '1' })
+    expect(text(r)).toContain('הפעולה נכשלה')
+    expect(data.saveLinkError).toHaveBeenCalled()
     expect(data.markPickedUp).not.toHaveBeenCalled()
   })
   it('נדרים לא מוגדר — תקלה במערכת', async () => {
