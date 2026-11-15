@@ -33,6 +33,7 @@ export const ALL_SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'kvitel',          label: 'קוויטלאך' },
   { key: 'gilyonot',        label: 'גיליונות החתם סופר' },
   { key: 'archive',         label: 'ארכיון' },
+  { key: 'matchmaker_grants', label: 'מלגות שדכנים' },
 ]
 
 export function levelAllows(level: PermissionLevel | undefined, action: PermAction): boolean {

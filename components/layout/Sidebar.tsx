@@ -205,7 +205,7 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
         {topVisible.map(renderLink)}
         {/* אישורים חריגים — admin-only. אנשים שאושרו ידנית (אינם צאצאים). */}
         {isAdmin && renderLink({ href: '/admin/special-approvals', label: 'אישורים חריגים', icon: ShieldAlert })}
-        {isAdmin && renderLink({ href: '/admin/matchmaker-grants', label: 'מלגות שדכנים', icon: Handshake })}
+        {canSee('matchmaker_grants') && renderLink({ href: '/admin/matchmaker-grants', label: 'מלגות שדכנים', icon: Handshake })}
 
         {/* Maternity accordion */}
         {maternityVisible.length > 0 && (
