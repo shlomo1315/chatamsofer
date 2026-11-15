@@ -243,3 +243,4 @@
 .dr-root .ptip .t{font-weight:700;margin-bottom:4px}
 .dr-root .ptip .s{border-top:1px solid rgba(128,128,128,.35);margin-top:4px;padding-top:4px;font-weight:700}
 @media(max-width:599px){.dr-root .per{padding:var(--s-4)}.dr-root .per .dates input[type=date]{min-width:0;width:100%}.dr-root .per .dates{width:100%}.dr-root .per .dates label{flex:1}}
+.dr-root .per>h3:first-child{font-size:16px;font-weight:800;color:var(--tx);margin-bottom:var(--s-4)}
