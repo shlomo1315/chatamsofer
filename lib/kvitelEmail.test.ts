@@ -24,11 +24,11 @@ describe('kvitelEmail', () => {
     expect(p.leftover).toEqual([])
   })
 
-  it('בקשה כללית מהנושא, ובלי בקשה בכלל — מסומן', () => {
+  it('בקשה כללית מהנושא, ובלי בקשה בכלל — נשאר בלי בקשה', () => {
     expect(parseKvitelEmailText('לרפואה שלמה', 'יעקב בן מרים').lines[0].requestType).toBe('refua')
     const none = parseKvitelEmailText('שמות', 'יעקב בן מרים')
-    expect(none.lines[0].requestType).toBe('yeshua')
-    expect(none.flags[0]).toContain('לא צוין סוג בקשה')
+    expect(none.lines[0].requestType).toBe('')
+    expect(none.flags[0]).toBeNull()
   })
 
   it('כמה שמות בשורה אחת, וטקסט שלא פוענח נשמר ב-leftover', () => {

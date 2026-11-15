@@ -2,13 +2,14 @@ import { guardPage } from '@/lib/pageGuard'
 import { roleAllows } from '@/lib/permissions'
 import BeneficiaryNameEditor from '@/components/admin/BeneficiaryNameEditor'
 import Link from 'next/link'
-import { ArrowRight, CreditCard, FileText, Edit, CheckCircle2, Clock, ExternalLink, Users, MessageSquare, Banknote } from 'lucide-react'
+import { ArrowRight, ChevronLeft, ChevronRight, CreditCard, FileText, Edit, CheckCircle2, Clock, ExternalLink, Users, MessageSquare, Banknote } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Loan } from '@/types'
 import { docViewUrl } from '@/lib/docUrl'
 import { docTypeLabel } from '@/lib/docTypes'
 import { loanSourceLabel } from '@/lib/loanSubmissionSource'
+import { loanSiblings } from '@/lib/loanSiblings'
 import LoanDecisionPanel from './LoanDecisionPanel'
 import { ViewDocButton } from '@/components/ui/DocViewer'
 import DocThumb from '@/components/ui/DocThumb'
@@ -78,6 +79,19 @@ async function getBeneficiaryDocs(beneficiaryId: string): Promise<{ doc_type: st
   return (data ?? []).filter(d => d.file_url)
 }
 
+// מזהי התיקים שממתינים לטיפול (הוגשו או בבירור), מהישן לחדש — הסדר של הניווט בין תיקים.
+async function getOpenLoanIds(): Promise<string[]> {
+  if (!isSupabaseConfigured()) return []
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('loans')
+    .select('id')
+    .in('status', ['pending', 'inquiry'])
+    .order('created_at', { ascending: true })
+    .limit(1000)
+  return (data ?? []).map(r => String(r.id))
+}
+
 const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yyyy', { locale: he }) : '—'
 const fmtCur = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('he-IL')}`
 
@@ -91,6 +105,8 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
   const loan = await getLoan(id)
   const beneficiaryId = (loan?.beneficiary as { id?: string } | undefined)?.id
   const famDocs = beneficiaryId ? await getBeneficiaryDocs(beneficiaryId) : []
+  // "הקודם / הבא" בין התיקים שממתינים: דילוג בלי לטפל בתיק הנוכחי.
+  const siblings = loan ? loanSiblings(await getOpenLoanIds(), loan.id) : { prev: null, next: null }
 
   if (!loan && isSupabaseConfigured()) notFound()
 
@@ -258,6 +274,21 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
             פעולה — אחד בראש ואחד בתחתית — הכפילו את הסיכון להכרעה בהיסח
             הדעת, ובראש הדף הם הוצגו עוד לפני שנקרא דבר. */}
         <div className="flex items-center gap-2">
+          {/* ⚠️ ניווט בלבד: לא משנה סטטוס ולא דורש החלטה, כדי לדלג ולחזור אחר כך. */}
+          {(siblings.prev || siblings.next) && (
+            <nav aria-label="ניווט בין תיקים" className="flex items-center gap-1">
+              {siblings.prev && (
+                <Link href={`/admin/loans/${siblings.prev}`} className="flex items-center gap-1 rounded-lg border border-line-strong bg-white px-2.5 py-1.5 text-sm text-ink-soft hover:border-gold hover:text-navy">
+                  <ChevronRight size={14} aria-hidden /> קודם
+                </Link>
+              )}
+              {siblings.next && (
+                <Link href={`/admin/loans/${siblings.next}`} className="flex items-center gap-1 rounded-lg border border-line-strong bg-white px-2.5 py-1.5 text-sm text-ink-soft hover:border-gold hover:text-navy">
+                  הבא <ChevronLeft size={14} aria-hidden />
+                </Link>
+              )}
+            </nav>
+          )}
           <Link href={`/admin/loans/${loan.id}/edit`}>
             <button className="flex items-center gap-1.5 text-sm text-white bg-navy hover:bg-navy-dark rounded-lg px-3 py-1.5 transition-colors">
               <Edit size={14} /> עריכה

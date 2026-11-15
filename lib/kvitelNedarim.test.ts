@@ -14,8 +14,8 @@ describe('kvitelNedarim', () => {
 
   it('שדות שטוחים ממוספרים; חסר בן/בת או בקשה — מסומן', () => {
     const p = parseNedarimKvitel({ name1: 'שרה', mother1: 'רחל', relation1: 'bat', request1: 'zivug', name2: 'דוד', mother2: 'חנה' })
-    expect(p.lines.map(l => [l.name, l.relation, l.requestType])).toEqual([['שרה', 'bat', 'zivug'], ['דוד', 'ben', 'yeshua']])
-    expect(p.flags).toEqual([null, 'חסר בטופס נדרים: בן או בת, סוג בקשה'])
+    expect(p.lines.map(l => [l.name, l.relation, l.requestType])).toEqual([['שרה', 'bat', 'zivug'], ['דוד', 'ben', '']])
+    expect(p.flags).toEqual([null, 'חסר בטופס נדרים: בן או בת'])
   })
 
   it('טקסט חופשי בהערות מפוענח כמו מייל, ושדות רגישים לא נשמרים במקור', () => {

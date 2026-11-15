@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { personKey, type KvitelChannel, type KvitelLineInput, type KvitelStatus } from '@/lib/kvitel'
-import { aiNoteFlags, loadReviewContext, reviewLines } from '@/lib/kvitelReview'
+import { aiNoteFlags, dropDuplicateLines, loadReviewContext, reviewLines } from '@/lib/kvitelReview'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // קליטת הגשת קוויטל — נקודת כניסה אחת לכל הערוצים.
@@ -29,11 +29,16 @@ export interface KvitelSubmission {
   lineFlags?: (string | null)[]
 }
 
-async function flagLines(db: SupabaseClient, s: KvitelSubmission): Promise<(string | null)[]> {
-  if (!s.lines.length) return []
-  const [ctx, ai] = await Promise.all([loadReviewContext(db), aiNoteFlags(s.lines)])
-  const rules = reviewLines(s.lines, ctx)
-  return s.lines.map((_, i) => [s.lineFlags?.[i], rules[i], ai[i]].filter(Boolean).join(' · ') || null)
+// מוחק כפילויות (אותם שם ושם אם באותו מחזור שליחה) ואז מסמן את השאר. מחזיר את השורות שנשארו.
+async function prepareLines(db: SupabaseClient, s: KvitelSubmission): Promise<{ lines: KvitelLineInput[]; flags: (string | null)[]; dropped: number }> {
+  if (!s.lines.length) return { lines: [], flags: [], dropped: 0 }
+  const ctx = await loadReviewContext(db)
+  const { kept, keptIndexes, dropped } = dropDuplicateLines(s.lines, ctx.pendingKeys)
+  if (!kept.length) return { lines: [], flags: [], dropped }
+  const ai = await aiNoteFlags(kept)
+  const rules = reviewLines(kept, ctx)
+  const flags = kept.map((_, i) => [s.lineFlags?.[keptIndexes[i]], rules[i], ai[i]].filter(Boolean).join(' · ') || null)
+  return { lines: kept, flags, dropped }
 }
 
 async function findOrCreateRequester(db: SupabaseClient, s: KvitelSubmission): Promise<string | null> {
@@ -68,11 +73,15 @@ export async function ingestKvitel(db: SupabaseClient, s: KvitelSubmission): Pro
   }
 
   const requesterId = await findOrCreateRequester(db, s)
-  const flags = await flagLines(db, s)
+  const prep = await prepareLines(db, s)
+  const flags = prep.flags
+  const lines = prep.lines
   const flagged = flags.filter(Boolean).length
+  const allDuplicates = prep.dropped > 0 && !lines.length
   let status: KvitelStatus = s.status ?? 'pending'
-  if (status === 'pending' && (flagged || !s.lines.length)) status = 'review'
-  const note = [s.note, flagged ? `סוכן האחידות סימן ${flagged} שורות לבדיקה` : null].filter(Boolean).join(' · ') || null
+  if (allDuplicates) status = 'cancelled'
+  else if (status === 'pending' && (flagged || !lines.length)) status = 'review'
+  const note = [s.note, prep.dropped ? (allDuplicates ? 'כל השמות כבר ממתינים לשליחה, הבקשה בוטלה' : `נמחקו ${prep.dropped} כפילויות`) : null, flagged ? `סוכן האחידות סימן ${flagged} שורות לבדיקה` : null].filter(Boolean).join(' · ') || null
 
   const { data: req, error } = await db.from('kvitel_requests').insert({
     requester_id: requesterId,
@@ -96,7 +105,7 @@ export async function ingestKvitel(db: SupabaseClient, s: KvitelSubmission): Pro
     return { ok: false, error: 'שמירת הבקשה נכשלה' }
   }
 
-  const { error: linesErr } = s.lines.length ? await db.from('kvitel_request_lines').insert(s.lines.map((l, i) => ({
+  const { error: linesErr } = lines.length ? await db.from('kvitel_request_lines').insert(lines.map((l, i) => ({
     request_id: req.id, position: i,
     name: l.name, relation: l.relation, parent_name: l.parentName,
     request_type: l.requestType, request_note: l.requestNote ?? null,
@@ -109,10 +118,10 @@ export async function ingestKvitel(db: SupabaseClient, s: KvitelSubmission): Pro
   }
 
   // שמות שמורים: אותו אדם (שם+בן/בת+הורה) מתעדכן ולא משתכפל.
-  if (requesterId && s.lines.length) {
+  if (requesterId && lines.length) {
     const now = new Date().toISOString()
     const seen = new Set<string>()
-    const rows = s.lines.flatMap(l => {
+    const rows = lines.flatMap(l => {
       const key = personKey(l)
       if (seen.has(key)) return []
       seen.add(key)
@@ -136,18 +145,21 @@ export async function reprocessKvitelRequest(db: SupabaseClient, requestId: stri
   const { data: cur } = await db.from('kvitel_requests').select('id, status').eq('id', requestId).maybeSingle()
   if (!cur) return { ok: false, error: 'הבקשה לא נמצאה' }
   const requesterId = await findOrCreateRequester(db, s)
-  const flags = await flagLines(db, s)
+  const prep = await prepareLines(db, s)
+  const flags = prep.flags
+  const lines = prep.lines
   const flagged = flags.filter(Boolean).length
   let status = cur.status as KvitelStatus
-  if (status === 'review' || status === 'pending') status = flagged || !s.lines.length ? 'review' : 'pending'
+  if (status === 'review' || status === 'pending') status = flagged || !lines.length ? 'review' : 'pending'
   const patch: Record<string, unknown> = { status, raw_text: s.rawText ?? null }
   if (requesterId) patch.requester_id = requesterId
   if (s.contactName) patch.contact_name = s.contactName
   if (s.phone) patch.contact_phone = s.phone
   if (s.email) patch.contact_email = s.email.toLowerCase()
+  if (prep.dropped) patch.note = `נמחקו ${prep.dropped} כפילויות`
   if (flagged) patch.note = `סוכן האחידות סימן ${flagged} שורות לבדיקה`
-  if (s.lines.length) {
-    const { error: linesErr } = await db.from('kvitel_request_lines').insert(s.lines.map((l, i) => ({
+  if (lines.length) {
+    const { error: linesErr } = await db.from('kvitel_request_lines').insert(lines.map((l, i) => ({
       request_id: requestId, position: i,
       name: l.name, relation: l.relation, parent_name: l.parentName,
       request_type: l.requestType, request_note: l.requestNote ?? null,
@@ -157,5 +169,5 @@ export async function reprocessKvitelRequest(db: SupabaseClient, requestId: stri
   }
   const { error } = await db.from('kvitel_requests').update(patch).eq('id', requestId)
   if (error) { console.error('[kvitel] reprocess update failed:', error); return { ok: false, error: 'עדכון הבקשה נכשל' } }
-  return { ok: true, status, lines: s.lines.length }
+  return { ok: true, status, lines: lines.length }
 }

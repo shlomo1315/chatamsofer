@@ -42,6 +42,23 @@ export function withinOneEdit(a: string, b: string): boolean {
 export interface ReviewContext {
   dictionary: string[]       // שמות מאושרים (מילה אחת או שם מלא)
   recentKeys: Set<string>    // personKey של שמות שהוגשו בימים האחרונים
+  pendingKeys?: Set<string>  // personKey של שמות בבקשות שעוד לא נשלחו (מחזור השליחה הנוכחי)
+}
+
+// מחיקת כפילויות אוטומטית: אותו שם + בן/בת + שם אם, בתוך אותה הגשה או מול שמות שממתינים
+// לשליחה (לבדיקה / לא נשלח). נשארת השורה הראשונה. כפילות מול מחזור שכבר נשלח לא נמחקת, רק מסומנת.
+export function dropDuplicateLines<T extends { name: string; relation: string; parentName: string }>(
+  lines: T[], pendingKeys: Set<string> = new Set(),
+): { kept: T[]; keptIndexes: number[]; dropped: number } {
+  const seen = new Set<string>()
+  const kept: T[] = [], keptIndexes: number[] = []
+  lines.forEach((l, i) => {
+    const key = personKey(l)
+    if (seen.has(key) || pendingKeys.has(key)) return
+    seen.add(key)
+    kept.push(l); keptIndexes.push(i)
+  })
+  return { kept, keptIndexes, dropped: lines.length - kept.length }
 }
 
 function spellingHint(text: string, approved: Set<string>, approvedList: string[]): string | null {
@@ -86,19 +103,25 @@ export function reviewLines(lines: KvitelLineInput[], ctx: ReviewContext): (stri
 // טוען את ההקשר מהמסד. ⚠️ נכשל-שקט: תקלה בשליפה לא חוסמת קליטה — רק בלי סימון.
 export async function loadReviewContext(db: SupabaseClient): Promise<ReviewContext> {
   const since = new Date(Date.now() - RECENT_DAYS * 86_400_000).toISOString()
-  const [dict, recent] = await Promise.all([
+  const [dict, recent, pending] = await Promise.all([
     db.from('kvitel_name_dictionary').select('name').limit(5000),
     db.from('kvitel_request_lines')
       .select('name, relation, parent_name, kvitel_requests!inner(status)')
       .gte('created_at', since)
       .neq('kvitel_requests.status', 'cancelled')
       .limit(5000),
+    db.from('kvitel_request_lines')
+      .select('name, relation, parent_name, kvitel_requests!inner(status)')
+      .in('kvitel_requests.status', ['review', 'pending'])
+      .limit(10000),
   ])
+  if (pending.error) console.error('[kvitel-review] pending load failed:', pending.error.message)
   if (dict.error) console.error('[kvitel-review] dictionary load failed:', dict.error.message)
   if (recent.error) console.error('[kvitel-review] recent load failed:', recent.error.message)
   return {
     dictionary: (dict.data ?? []).map(r => String(r.name)),
     recentKeys: new Set((recent.data ?? []).map(r => personKey({ name: r.name, relation: r.relation, parentName: r.parent_name }))),
+    pendingKeys: new Set((pending.data ?? []).map(r => personKey({ name: r.name, relation: r.relation, parentName: r.parent_name }))),
   }
 }
 

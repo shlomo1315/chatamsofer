@@ -43,7 +43,7 @@ export default function KvitelCardModal({ rows, index, onIndex, onClose, canEdit
         { label: 'ערוץ', value: KVITEL_CHANNELS[r.channel] },
         ...(r.contact_phone ? [{ label: 'טלפון', value: r.contact_phone, ltr: true }] : []),
       ]}
-      statusLabel={KVITEL_STATUSES[r.status === 'review' ? 'pending' : r.status]}
+      statusLabel={KVITEL_STATUSES[r.needsReview ? 'review' : r.status === 'review' ? 'pending' : r.status]}
       statusTone={TONE[r.status]}
       stampDate={`${fmt(r.submitted_at)} · ${hebrewDay(r.submitted_at)}`}
       facts={[

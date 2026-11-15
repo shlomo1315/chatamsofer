@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { personKey, type KvitelLineInput } from './kvitel'
-import { RECENT_DAYS, reviewLines, withinOneEdit } from './kvitelReview'
+import { RECENT_DAYS, dropDuplicateLines, reviewLines, withinOneEdit } from './kvitelReview'
 
 const l = (name: string, parentName = 'רחל', over: Partial<KvitelLineInput> = {}): KvitelLineInput =>
   ({ name, relation: 'ben', parentName, requestType: 'refua', requestNote: null, ...over })
@@ -38,5 +38,22 @@ describe('kvitelReview', () => {
 
   it('כמה סיבות מחוברות', () => {
     expect(reviewLines([l('Meir'), l('Meir')], ctx())[1]).toBe('כפילות באותה הגשה · שם לא בעברית')
+  })
+})
+
+describe('dropDuplicateLines', () => {
+  it('מוחק כפילות באותה הגשה ומשאיר את הראשונה', () => {
+    const r = dropDuplicateLines([l('משה'), l('דוד'), l('משה')])
+    expect(r.kept.map(x => x.name)).toEqual(['משה', 'דוד'])
+    expect(r.keptIndexes).toEqual([0, 1])
+    expect(r.dropped).toBe(1)
+  })
+  it('שם אחר או שם אם אחר אינם כפילות', () => {
+    expect(dropDuplicateLines([l('משה', 'רחל'), l('משה', 'לאה')]).dropped).toBe(0)
+  })
+  it('מוחק מול שם שכבר ממתין לשליחה', () => {
+    const r = dropDuplicateLines([l('משה'), l('דוד')], new Set([personKey(l('משה'))]))
+    expect(r.kept.map(x => x.name)).toEqual(['דוד'])
+    expect(r.dropped).toBe(1)
   })
 })

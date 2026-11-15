@@ -36,7 +36,7 @@ export interface KvitelLineInput {
   name: string
   relation: KvitelRelation
   parentName: string
-  requestType: KvitelRequestType
+  requestType: KvitelRequestType | ''   // '' = לא צוינה בקשה (תקין, בלי השלמה אוטומטית)
   requestNote?: string | null
 }
 
@@ -78,7 +78,10 @@ export function normalizePhone(v: unknown): string | null {
 
 export type LineResult = { ok: true; line: KvitelLineInput } | { ok: false; error: string }
 
-export function validateLine(raw: Record<string, unknown>, index: number): LineResult {
+// optionalRequest: סוג בקשה ריק תקין (מייל, נדרים פלוס, עריכת צוות). optionalParent: שם אם חסר נקלט ומסומן.
+export interface LineOptions { optionalRequest?: boolean; optionalParent?: boolean }
+
+export function validateLine(raw: Record<string, unknown>, index: number, opts: LineOptions = {}): LineResult {
   const n = index + 1
   const name = cleanName(raw.name)
   const parentName = cleanName(raw.parentName)
@@ -86,21 +89,22 @@ export function validateLine(raw: Record<string, unknown>, index: number): LineR
   const requestType = raw.requestType
   const requestNote = cleanNote(raw.requestNote)
   if (!name) return { ok: false, error: `שורה ${n}: חסר שם` }
-  if (!parentName) return { ok: false, error: `שורה ${n}: חסר שם האם` }
+  if (!parentName && !opts.optionalParent) return { ok: false, error: `שורה ${n}: חסר שם האם` }
   if (!relation) return { ok: false, error: `שורה ${n}: יש לבחור בן או בת` }
-  if (!isRequestType(requestType)) return { ok: false, error: `שורה ${n}: נא לבחור את סוג הבקשה` }
+  const noRequest = !!opts.optionalRequest && (requestType === '' || requestType == null)
+  if (!noRequest && !isRequestType(requestType)) return { ok: false, error: `שורה ${n}: נא לבחור את סוג הבקשה` }
   if (requestType === 'other' && !requestNote) return { ok: false, error: `שורה ${n}: יש לכתוב את הבקשה` }
-  return { ok: true, line: { name, relation, parentName, requestType, requestNote: requestType === 'other' ? requestNote : null } }
+  return { ok: true, line: { name, relation, parentName, requestType: noRequest ? '' : requestType as KvitelRequestType, requestNote: requestType === 'other' ? requestNote : null } }
 }
 
-export function validateLines(raw: unknown): { ok: true; lines: KvitelLineInput[] } | { ok: false; error: string } {
+export function validateLines(raw: unknown, opts: LineOptions = {}): { ok: true; lines: KvitelLineInput[] } | { ok: false; error: string } {
   if (!Array.isArray(raw) || raw.length === 0) return { ok: false, error: 'יש להוסיף לפחות שם אחד' }
   if (raw.length > MAX_LINES) return { ok: false, error: `אפשר עד ${MAX_LINES} שמות בהגשה אחת` }
   const lines: KvitelLineInput[] = []
   for (let i = 0; i < raw.length; i++) {
     const item = raw[i]
     if (!item || typeof item !== 'object') return { ok: false, error: `שורה ${i + 1}: לא תקינה` }
-    const r = validateLine(item as Record<string, unknown>, i)
+    const r = validateLine(item as Record<string, unknown>, i, opts)
     if (!r.ok) return r
     lines.push(r.line)
   }
