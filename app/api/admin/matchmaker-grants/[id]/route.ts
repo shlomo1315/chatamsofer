@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireAdmin, getServiceClient, forbidden } from '@/lib/apiAuth'
+import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
 import { logAudit } from '@/lib/matchmaker/adminData'
 import { decryptValue } from '@/lib/matchmaker/crypto'
 import { verifyGrandchild } from '@/lib/matchmaker/grandchildCheck'
@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 
 // פעולות על בקשה: approve / reject / paid / amount / recheck. כל פעולה נרשמת ביומן.
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const staff = await requireAdmin()
+  const staff = await requirePermission('matchmaker_grants', 'edit')
   if (!staff) return forbidden()
   const { id } = await params
   let body: { action?: string; amount?: unknown; reason?: unknown }
@@ -75,7 +75,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
 // יומן הבקשה: מי עשה מה ומתי
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await requireAdmin())) return forbidden()
+  if (!(await requirePermission('matchmaker_grants', 'view'))) return forbidden()
   const { id } = await params
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })

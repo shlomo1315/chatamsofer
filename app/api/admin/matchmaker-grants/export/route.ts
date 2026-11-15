@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import ExcelJS from 'exceljs'
-import { requireAdmin, getServiceClient, forbidden } from '@/lib/apiAuth'
+import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
 import { filterClaims, filterFromParams, loadAdminClaims, logAudit } from '@/lib/matchmaker/adminData'
 import { reasonsText } from '@/lib/matchmaker/reasons'
 
@@ -11,7 +11,7 @@ const parents = (fn: string | null, fp: string | null, mn: string | null, mp: st
 
 // ייצוא לאקסל לפי הסינון הנוכחי. ת"ז מוסתרות חלקית גם בקובץ.
 export async function GET(request: NextRequest) {
-  const staff = await requireAdmin()
+  const staff = await requirePermission('matchmaker_grants', 'edit')
   if (!staff) return forbidden()
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
