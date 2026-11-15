@@ -90,4 +90,8 @@ alter table public.matchmaker_claims enable row level security;
 alter table public.matchmaker_settings enable row level security;
 alter table public.matchmaker_audit enable row level security;
 
+-- הגישה רק דרך השרת (service_role). מפורש, למקרה שאין default privileges על הסכמה
+grant all on public.matchmakers, public.matchmaker_login_codes, public.matchmaker_claims,
+  public.matchmaker_settings, public.matchmaker_audit to service_role;
+
 notify pgrst, 'reload schema';
