@@ -5,6 +5,7 @@ import {
   EMPTY_FILTER, ascending, checkSums, dimValue, dimValues, filterView, groupBy, isFiltered, matches, monthKey, totals,
   type DimKey, type Group, type ViewFilter,
 } from '@/lib/donorReportCalc'
+import PeriodPanel from './PeriodPanel'
 import './donor-report.css'
 
 // העיצוב זהה למוקאפ המאושר (uploads/…mockup-donor-report.html). כל מה שמוצג נגזר מאותה רשימה
@@ -453,6 +454,9 @@ export default function DonorReportView({ token }: { token: string }) {
               })}
             </div>
           </section>
+          <PeriodPanel all={all} rows={R} F={F} homes={homes} homeGroups={homeGroups} T={T}
+            setRange={(from, to) => { setF(f => ({ ...f, from, to })); setShown(10) }}
+            setHome={home => { setF(f => ({ ...f, home })); setShown(10) }} />
           <section className="tile li"><h3>פירוט יולדות <span>{fmt(R.length)} יולדות</span></h3>
             <div>
               {R.length

@@ -137,3 +137,84 @@ export function checkSums(all: DonorRow[], shown: DonorRow[]): boolean {
 export function ascending(rows: DonorRow[]): DonorRow[] {
   return rows.slice().sort((a, b) => a.date.localeCompare(b.date))
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// סינון לפי תקופה: קיצורי תקופה וחלוקה ליום, שבוע או חודש. הכול על תאריכי YYYY-MM-DD ב-UTC.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type Gran = 'day' | 'week' | 'month'
+export type PresetKey = 'month' | 'prev' | 'd30' | 'm3' | 'ytd'
+
+const DAY_MS = 864e5
+const toMs = (d: string) => Date.parse(`${d}T00:00:00Z`)
+const toIso = (ms: number) => new Date(ms).toISOString().slice(0, 10)
+
+export const PRESETS: { key: PresetKey; label: string }[] = [
+  { key: 'month', label: 'החודש' },
+  { key: 'prev', label: 'חודש קודם' },
+  { key: 'd30', label: '30 יום' },
+  { key: 'm3', label: '3 חודשים' },
+  { key: 'ytd', label: 'מתחילת השנה' },
+]
+
+/** טווח של קיצור תקופה, יחסית ל-today (YYYY-MM-DD). */
+export function presetRange(key: PresetKey, today: string): { from: string; to: string } {
+  const y = Number(today.slice(0, 4)), m = Number(today.slice(5, 7)) - 1
+  const first = (yy: number, mm: number) => toIso(Date.UTC(yy, mm, 1))
+  switch (key) {
+    case 'month': return { from: first(y, m), to: today }
+    case 'prev': return { from: first(y, m - 1), to: toIso(Date.UTC(y, m, 1) - DAY_MS) }
+    case 'd30': return { from: toIso(toMs(today) - 29 * DAY_MS), to: today }
+    case 'm3': return { from: first(y, m - 2), to: today }
+    case 'ytd': return { from: first(y, 0), to: today }
+  }
+}
+
+/** חלוקה אוטומטית לפי אורך הטווח: עד 45 יום ביום, עד 190 בשבוע, מעבר לכך בחודש. */
+export function autoGran(from: string, to: string): Gran {
+  const n = (toMs(to) - toMs(from)) / DAY_MS + 1
+  return n <= 45 ? 'day' : n <= 190 ? 'week' : 'month'
+}
+
+/** הטווח שמוצג: הסינון אם הוגדר, ואחרת מהתאריך הראשון עד האחרון ברשימה. null כשאין תאריכים. */
+export function effectiveRange(f: Pick<ViewFilter, 'from' | 'to'>, rows: DonorRow[]): { from: string; to: string } | null {
+  let min = '', max = ''
+  for (const r of rows) {
+    if (!r.date) continue
+    if (!min || r.date < min) min = r.date
+    if (!max || r.date > max) max = r.date
+  }
+  const from = f.from || min, to = f.to || max
+  return from && to && from <= to ? { from, to } : null
+}
+
+export interface Bucket {
+  start: string
+  end: string
+  count: number
+  amount: number
+  by: Record<string, { count: number; amount: number }>
+}
+
+/** עמודות הגרף: שבוע מתחיל ביום ראשון ונגמר בשבת, וחודש נגמר בסוף החודש. שורה בלי תאריך לא נספרת. */
+export function buckets(rows: DonorRow[], gran: Gran, from: string, to: string, homes: string[]): Bucket[] {
+  const out: Bucket[] = []
+  const last = toMs(to)
+  for (let s = toMs(from); s <= last;) {
+    const d = new Date(s)
+    const e = gran === 'day' ? s
+      : gran === 'week' ? Math.min(last, s + (6 - d.getUTCDay()) * DAY_MS)
+      : Math.min(last, Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1) - DAY_MS)
+    out.push({ start: toIso(s), end: toIso(e), count: 0, amount: 0, by: Object.fromEntries(homes.map(h => [h, { count: 0, amount: 0 }])) })
+    s = e + DAY_MS
+  }
+  for (const r of rows) {
+    if (!r.date) continue
+    const b = out.find(x => r.date >= x.start && r.date <= x.end)
+    if (!b) continue
+    b.count++; b.amount += r.amount
+    const h = b.by[r.home]
+    if (h) { h.count++; h.amount += r.amount }
+  }
+  return out
+}
