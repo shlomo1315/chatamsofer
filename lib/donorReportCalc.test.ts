@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { DonorRow } from '@/lib/donorReport'
 import {
-  EMPTY_FILTER, checkSums, dimValues, filterView, groupBy, matches, monthKey, totals, ascending, STATE_LABELS, type ViewFilter,
+  EMPTY_FILTER, checkSums, dimValues, filterView, groupBy, matches, monthKey, totals, ascending, STATE_LABELS, autoGran, buckets, effectiveRange, presetRange, type ViewFilter,
 } from '@/lib/donorReportCalc'
 
 const CITIES = ['בני ברק', 'ירושלים', 'בית שמש', 'לא צוין']
@@ -105,5 +105,55 @@ describe('סינון לפי תאריך', () => {
     expect(ids({ from: '2026-09-16' })).toBe('c')
     expect(ids({ to: '2026-09-01' })).toBe('a')
     expect(ids({})).toBe('abcd')
+  })
+})
+
+describe('סינון לפי תקופה', () => {
+  it('קיצורי תקופה', () => {
+    expect(presetRange('month', '2026-11-15')).toEqual({ from: '2026-11-01', to: '2026-11-15' })
+    expect(presetRange('prev', '2026-11-15')).toEqual({ from: '2026-10-01', to: '2026-10-31' })
+    expect(presetRange('prev', '2026-01-10')).toEqual({ from: '2025-12-01', to: '2025-12-31' })
+    expect(presetRange('d30', '2026-11-15')).toEqual({ from: '2026-10-17', to: '2026-11-15' })
+    expect(presetRange('m3', '2026-11-15')).toEqual({ from: '2026-09-01', to: '2026-11-15' })
+    expect(presetRange('ytd', '2026-11-15')).toEqual({ from: '2026-01-01', to: '2026-11-15' })
+  })
+
+  it('חלוקה אוטומטית', () => {
+    expect(autoGran('2026-10-01', '2026-10-31')).toBe('day')
+    expect(autoGran('2026-09-01', '2026-11-15')).toBe('week')
+    expect(autoGran('2026-01-01', '2026-11-15')).toBe('month')
+  })
+
+  it('טווח מוצג: סינון או גבולות הרשימה', () => {
+    expect(effectiveRange(f({}), rows)!.from <= effectiveRange(f({}), rows)!.to).toBe(true)
+    expect(effectiveRange(f({ from: '2026-03-01', to: '2026-03-31' }), rows)).toEqual({ from: '2026-03-01', to: '2026-03-31' })
+    expect(effectiveRange(f({}), [])).toBeNull()
+  })
+
+  it.each(['day', 'week', 'month'] as const)('עמודות לפי %s מסתכמות לסכום השורות בטווח', gran => {
+    const range = { from: '2026-03-01', to: '2026-09-30' }
+    const inRange = filterView(rows, f(range), none)
+    const bs = buckets(inRange, gran, range.from, range.to, HOMES)
+    expect(bs.reduce((a, b) => a + b.amount, 0)).toBe(totals(inRange).amount)
+    expect(bs.reduce((a, b) => a + b.count, 0)).toBe(inRange.length)
+    for (const b of bs) {
+      expect(HOMES.reduce((a, h) => a + b.by[h].amount, 0)).toBe(b.amount)
+      expect(HOMES.reduce((a, h) => a + b.by[h].count, 0)).toBe(b.count)
+    }
+  })
+
+  it('שבוע מתחיל ביום ראשון ונגמר בשבת, ואחרון נחתך בסוף הטווח', () => {
+    // 2026-11-15 הוא יום ראשון
+    const bs = buckets([], 'week', '2026-11-15', '2026-11-25', HOMES)
+    expect(bs.map(b => [b.start, b.end])).toEqual([['2026-11-15', '2026-11-21'], ['2026-11-22', '2026-11-25']])
+  })
+
+  it('חודש נגמר בסוף החודש, ויולדת בלי סכום נספרת בלי להוסיף לסכום', () => {
+    const one: DonorRow[] = [
+      { ...rows[1], date: '2026-10-31', amount: 0, home: HOMES[0] },
+      { ...rows[2], date: '2026-11-02', amount: 500, home: HOMES[1] },
+    ]
+    const bs = buckets(one, 'month', '2026-10-15', '2026-11-20', HOMES)
+    expect(bs.map(b => [b.start, b.end, b.count, b.amount])).toEqual([['2026-10-15', '2026-10-31', 1, 0], ['2026-11-01', '2026-11-20', 1, 500]])
   })
 })
