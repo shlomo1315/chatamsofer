@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ArrowRight, Copy, Ban, Loader2, Plus, KeyRound } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
+import CommunityMerge from './CommunityMerge'
 
 // ניהול קישורי דוח יולדות לנדיב (דף ציבורי לקריאה בלבד: /donor-report/<טוקן>).
 interface DonorLinkRow {
@@ -132,6 +133,8 @@ export default function DonorLinksPage() {
           </tbody>
         </table>
       </div>
+
+      <CommunityMerge canEdit />
     </div>
   )
 }
