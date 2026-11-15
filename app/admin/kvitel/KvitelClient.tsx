@@ -9,6 +9,7 @@ import { ListTable } from '@/components/admin/system/ListTable'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import { useTablePagination } from '@/lib/useTablePagination'
 import { countByStatus, hebrewDay } from '@/lib/kvitelView'
+import KvitelLinesEditor from './KvitelLinesEditor'
 import KvitelCardModal from './KvitelCardModal'
 import ExportDialog from './ExportDialog'
 import PrintNewDialog from './PrintNewDialog'
@@ -48,7 +49,7 @@ const label = 'flex min-w-0 flex-col gap-1 text-xs font-medium text-ink-soft'
 const dateFmt = new Intl.DateTimeFormat('he-IL', { timeZone: 'Asia/Jerusalem', day: 'numeric', month: 'numeric', year: '2-digit', hour: '2-digit', minute: '2-digit' })
 
 // במובייל: כרטיס לכל בקשה (מגיש וסטטוס, שמות, תאריך). הטבלה מוסתרת מתחת ל-md.
-function MobileCards({ rows, canEdit, onOpen }: { rows: KvitelRequestRow[]; canEdit: boolean; onOpen: (r: KvitelRequestRow, editing?: boolean) => void }) {
+function MobileCards({ rows, canEdit, onOpen, onApprove }: { rows: KvitelRequestRow[]; canEdit: boolean; onOpen: (r: KvitelRequestRow, editing?: boolean) => void; onApprove: (r: KvitelRequestRow) => void }) {
   if (!rows.length) return <p className="rounded-xl border border-line bg-white px-4 py-10 text-center text-ink-faint md:hidden">אין בקשות בסינון הזה.</p>
   return (
     <ul className="space-y-2 md:hidden">
@@ -61,7 +62,12 @@ function MobileCards({ rows, canEdit, onOpen }: { rows: KvitelRequestRow[]; canE
             </span>
             <span className="flex items-center justify-between text-xs text-ink-faint"><span>{KVITEL_CHANNELS[r.channel]} · {r.contact_name || 'מגיש לא ידוע'} · {dateFmt.format(new Date(r.submitted_at))}</span><ChevronLeft className="h-4 w-4" aria-hidden /></span>
           </button>
-          {canEdit && <button type="button" onClick={() => onOpen(r, true)} aria-label="עריכה" className="mt-1 grid h-9 w-9 place-items-center rounded-[10px] border border-line bg-white text-navy"><Pencil className="h-4 w-4" aria-hidden /></button>}
+          {canEdit && (
+            <div className="mt-1 flex gap-2">
+              {r.needsReview && <button type="button" onClick={() => onApprove(r)} className="flex h-9 items-center gap-1.5 rounded-[10px] bg-[#17663F] px-3 text-[13px] font-semibold text-white"><Check className="h-4 w-4" aria-hidden /> אישור</button>}
+              <button type="button" onClick={() => onOpen(r, true)} className="flex h-9 items-center gap-1.5 rounded-[10px] border border-line bg-white px-3 text-[13px] font-semibold text-navy"><Pencil className="h-4 w-4" aria-hidden /> תיקון</button>
+            </div>
+          )}
         </li>
       ))}
     </ul>
@@ -92,9 +98,9 @@ function NamesCell({ r }: { r: KvitelRequestRow }) {
   )
 }
 
-// סטטוס: "לא נשלח" כולל גם בקשה ישנה במצב "לבדיקה", בלי תגית סיבה.
+// סטטוס: בקשה שנקלטה כ"לבדיקה" מסומנת בתגית "לבדיקה" עד שמאשרים אותה; שאר הבקשות "לא נשלח" וכו'.
 function StatusCell({ r }: { r: KvitelRequestRow }) {
-  return <StatusPill status={r.status === 'review' ? 'pending' : r.status} />
+  return <StatusPill status={r.needsReview ? 'review' : r.status} />
 }
 
 // מגיש (עמודה אופציונלית): שם, ומתחתיו טלפון ומייל.
@@ -138,6 +144,7 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs }: { allR
   const [previewRow, setPreviewRow] = useState<KvitelRequestRow | null>(null)
   const [openIdx, setOpenIdx] = useState<number | null>(null)
   const [openEditing, setOpenEditing] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)   // תיקון inline בשורה בטבלה
   const [datesOpen, setDatesOpen] = useState(false)
   const [q, setQ] = useState(filters.q ?? '')
   const [channel, setChannel] = useState<string>(filters.channel ?? '')
@@ -332,14 +339,25 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs }: { allR
                 case 'count': return <span className="tabular-nums text-ink-soft">{r.kvitel_request_lines.length}</span>
               }
             }}
+            expandedRow={r => editingId === r.id ? (
+              <KvitelLinesEditor requestId={r.id} lines={r.kvitel_request_lines} contact={{ name: r.contact_name, phone: r.contact_phone, email: r.contact_email }}
+                editable={canEdit} onCancel={() => setEditingId(null)}
+                onSaved={m => { setEditingId(null); setMessage(m); router.refresh() }} />
+            ) : null}
             actions={r => (
               <div className="flex items-center gap-3">
+                {canEdit && r.needsReview && (
+                  <button type="button" disabled={busy} onClick={() => void setStatus([r.id], 'pending')} className="flex h-9 items-center gap-1.5 rounded-[10px] bg-[#17663F] px-3 text-[13px] font-semibold text-white disabled:opacity-40"
+                    aria-label={`אישור הבקשה של ${r.contact_name || dateFmt.format(new Date(r.submitted_at))}`}>
+                    <Check className="h-4 w-4" aria-hidden /> אישור
+                  </button>
+                )}
                 {canEdit && <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} className="h-4 w-4"
                   aria-label={`בחירת הבקשה של ${r.contact_name || dateFmt.format(new Date(r.submitted_at))}`} />}
                 {canEdit && (
-                  <button type="button" onClick={() => openRow(r, true)} className="grid h-9 w-9 place-items-center rounded-[10px] border border-line bg-white text-navy hover:border-[#cfc8bb]"
-                    aria-label={`עריכת הבקשה של ${r.contact_name || dateFmt.format(new Date(r.submitted_at))}`}>
-                    <Pencil className="h-4 w-4" aria-hidden />
+                  <button type="button" onClick={() => setEditingId(id => (id === r.id ? null : r.id))} aria-expanded={editingId === r.id} className="flex h-9 items-center gap-1.5 rounded-[10px] border border-line bg-white px-3 text-[13px] font-semibold text-navy hover:border-[#cfc8bb]"
+                    aria-label={`תיקון הבקשה של ${r.contact_name || dateFmt.format(new Date(r.submitted_at))}`}>
+                    <Pencil className="h-4 w-4" aria-hidden /> תיקון
                   </button>
                 )}
               </div>
@@ -347,7 +365,7 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs }: { allR
             actionsHead="" />
         </div>
       </div>
-      <MobileCards rows={pg.rows} canEdit={canEdit} onOpen={(r, editing) => openRow(r, editing)} />
+      <MobileCards rows={pg.rows} canEdit={canEdit} onOpen={(r, editing) => openRow(r, editing)} onApprove={r => void setStatus([r.id], 'pending')} />
       {openIdx !== null && tc.rows[openIdx] && (
         <KvitelCardModal rows={tc.rows} index={openIdx} onIndex={i => { setOpenIdx(i); setOpenEditing(false) }} onClose={() => setOpenIdx(null)} startEditing={openEditing}
           canEdit={canEdit} busy={busy} setStatus={setStatus} onPreview={setPreviewRow}

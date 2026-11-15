@@ -55,10 +55,11 @@ function oneLine(raw: { name: string; mother: string; relation: string; request:
   const req = requestOf(raw.request, raw.note)
   const v = validateLine({
     name: raw.name, parentName: raw.mother, relation: rel ?? 'ben',
-    requestType: req?.requestType ?? 'yeshua', requestNote: req?.requestNote ?? null,
-  }, index)
+    requestType: req?.requestType ?? '', requestNote: req?.requestNote ?? null,
+  }, index, { optionalRequest: true, optionalParent: true })
+  // שם בלי שם אם נקלט ומסומן (קודם נזרק, והבקשה נקלטה כ"לא נקלטו שמות"). בלי סוג בקשה = בלי בקשה, תקין.
   if (!v.ok) return null
-  const missing = [!rel && 'בן או בת', !req && 'סוג בקשה'].filter(Boolean)
+  const missing = [!rel && 'בן או בת', !v.line.parentName && 'שם האם'].filter(Boolean)
   return { line: v.line, flag: missing.length ? `חסר בטופס נדרים: ${missing.join(', ')}` : null }
 }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import Pagination from '@/components/ui/Pagination'
 import type { ColDef, TableColumns } from '@/components/ui/TableColumns'
 
@@ -24,6 +24,7 @@ export function ListTable<K extends string, R extends object>({
   leadHead,
   leadCell,
   rowKey,
+  expandedRow,
 }: {
   tc: TableColumns<K, R>
   /** השורות של העמוד הנוכחי (אחרי דפדוף) */
@@ -42,6 +43,8 @@ export function ListTable<K extends string, R extends object>({
   leadCell?: (row: R) => ReactNode
   /** מפתח שורה כשאין לה שדה id */
   rowKey?: (row: R) => string | number
+  /** תוכן שנפתח מתחת לשורה (למשל עריכה inline). null = סגור */
+  expandedRow?: (row: R) => ReactNode | null
 }) {
   const lead = leadHead !== undefined && leadCell ? 1 : 0
   const extra = (actions ? 1 : 0) + lead
@@ -68,8 +71,11 @@ export function ListTable<K extends string, R extends object>({
             {tc.rows.length === 0 ? (
               <tr><td colSpan={tc.shown.length + extra} className="px-4 py-12 text-center text-ink-faint">{empty}</td></tr>
             ) : (
-              rows.map(row => (
-                <ListRow key={rowKey ? rowKey(row) : (row as { id: string | number }).id} onClick={onOpen ? () => onOpen(row) : undefined}>
+              rows.map(row => {
+                const open = expandedRow?.(row)
+                return (
+                <Fragment key={rowKey ? rowKey(row) : (row as { id: string | number }).id}>
+                <ListRow onClick={onOpen ? () => onOpen(row) : undefined}>
                   {lead === 1 && <td className="align-top" onClick={e => e.stopPropagation()}>{leadCell!(row)}</td>}
                   {tc.shown.map(c => (
                     <td key={c.key} className={tc.cellClass(c)} onClick={stopCell?.(c) ? e => e.stopPropagation() : undefined}>{renderCell(c, row)}</td>
@@ -78,7 +84,10 @@ export function ListTable<K extends string, R extends object>({
                     <td className="align-top" onClick={e => e.stopPropagation()}>{actions(row)}</td>
                   )}
                 </ListRow>
-              ))
+                {open != null && <tr className="bg-[#FBFAF7]"><td colSpan={tc.shown.length + extra} className="px-4 py-4">{open}</td></tr>}
+                </Fragment>
+                )
+              })
             )}
           </tbody>
         </table>

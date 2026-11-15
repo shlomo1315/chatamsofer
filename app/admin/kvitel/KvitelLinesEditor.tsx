@@ -13,7 +13,7 @@ const toDraft = (l: KvitelLineRow): Draft => ({
   name: l.name, relation: l.relation === 'bat' ? 'bat' : 'ben', parentName: l.parent_name,
   requestType: l.request_type, requestNote: l.request_note ?? '',
 })
-const blank = (): Draft => ({ name: '', relation: 'ben', parentName: '', requestType: KVITEL_REQUEST_OPTIONS[0].key, requestNote: '' })
+const blank = (): Draft => ({ name: '', relation: 'ben', parentName: '', requestType: '', requestNote: '' })
 
 const input = 'w-full rounded-lg border bg-white px-2.5 py-1.5 text-sm text-ink'
 const ok = 'border-line-strong'
@@ -76,6 +76,7 @@ export default function KvitelLinesEditor({ requestId, lines, contact, editable,
             </select>
             <input aria-label="שם האם" placeholder="שם האם" value={d.parentName} onChange={e => set(i, { parentName: e.target.value })} className={`${input} ${noMom ? miss : ok}`} />
             <select aria-label="סוג הבקשה" value={d.requestType} onChange={e => set(i, { requestType: e.target.value })} className={`${input} ${ok}`}>
+              <option value="">בלי בקשה</option>
               {KVITEL_REQUEST_OPTIONS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
             </select>
             <button type="button" aria-label="הסרת השם" onClick={() => setDrafts(x => x.filter((_, j) => j !== i))} className="justify-self-end rounded-lg p-2 text-ink-faint hover:bg-sand hover:text-ink"><Trash2 className="h-4 w-4" aria-hidden /></button>

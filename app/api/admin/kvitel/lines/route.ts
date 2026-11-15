@@ -29,7 +29,7 @@ export async function PUT(request: NextRequest) {
 
   const id = typeof body.id === 'string' && UUID_RE.test(body.id) ? body.id : null
   if (!id) return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 })
-  const v = validateLines(body.lines)
+  const v = validateLines(body.lines, { optionalRequest: true })
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })
 
   let contact: Record<string, string | null> | null = null

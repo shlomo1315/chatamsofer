@@ -16,6 +16,7 @@ export interface KvitelRequestRow {
   contact_name: string | null; contact_phone: string | null; contact_email: string | null
   raw_text: string | null; recording_url: string | null; note: string | null; submitted_at: string; done_at: string | null
   kvitel_request_lines: KvitelLineRow[]
+  needsReview?: boolean   // נקלטה כ"לבדיקה" (המסך מציג אותה כ"לא נשלח", עם אישור inline)
 }
 
 // status: 'open' (ברירת מחדל: כל מה שטרם נשלח לציון — לבדיקה + ממתין) / 'all' / סטטוס בודד.

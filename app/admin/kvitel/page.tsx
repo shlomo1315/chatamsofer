@@ -29,7 +29,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   const needRows = tab === 'requests'
   const { rows: loaded, error } = db && needRows ? await loadKvitelRequests(db, { ...filters, status: 'all' }) : { rows: [], error: db ? '' : 'השרת אינו מוגדר' }
   // אין מצב "דורש בדיקה": בקשה שנקלטה נחשבת "לא נשלח" (ממתין). לתצוגה בלבד, השרת לא משתנה.
-  const rows = loaded.map(r => (r.status === 'review' ? { ...r, status: 'pending' as const } : r))
+  const rows = loaded.map(r => (r.status === 'review' ? { ...r, status: 'pending' as const, needsReview: true } : r))
   const canEdit = staff.role === 'admin' || roleAllows(staff.role, staff.permissions as UserPermissions, 'kvitel', 'edit')
   const nedarimView = db && canEdit && tab === 'nedarim' ? await getKvitelPullView(db).catch(() => null) : null
 

@@ -111,8 +111,8 @@ export function parseKvitelEmailText(subject: string, text: string): ParsedKvite
       const req = own ?? general
       const v = validateLine({
         name: m[1], relation: m[2] === 'בת' ? 'bat' : 'ben', parentName: m[3],
-        requestType: req?.requestType ?? 'yeshua', requestNote: req?.requestNote ?? null,
-      }, out.lines.length)
+        requestType: req?.requestType ?? '', requestNote: req?.requestNote ?? null,
+      }, out.lines.length, { optionalRequest: true })
       if (!v.ok) { out.leftover.push(part); continue }
       // "נתן בן שרה מלכה לתפילה בציון": המשפט נבלע בשם האם. נשאר ל-AI ומסומן.
       const longParent = m[3].trim().split(/\s+/).length > 3
@@ -120,9 +120,8 @@ export function parseKvitelEmailText(subject: string, text: string): ParsedKvite
       out.lines.push(v.line)
       out.flags.push(
         longParent ? 'שם האם ארוך, ייתכן שנבלע בו טקסט'
-        : !req ? 'לא צוין סוג בקשה (הונח "ישועה וברכה")'
-          : m[2] === 'ב"ר' || m[2] === 'בר' ? 'בן או בת? (נכתב ב"ר)'
-            : req.requestType === 'other' ? 'בקשה חופשית מהמייל' : null,
+        : m[2] === 'ב"ר' || m[2] === 'בר' ? 'בן או בת? (נכתב ב"ר)'
+          : req?.requestType === 'other' ? 'בקשה חופשית מהמייל' : null,
       )
     }
     if (!matched && !NOISE.test(line) && !isRequestLine(line)) out.leftover.push(line)
@@ -140,7 +139,7 @@ export async function aiParseKvitelEmail(subject: string, text: string): Promise
     system: 'אתה מפענח מיילים שנשלחים לתיבת קוויטלאך (שמות לתפילה על ציון צדיק). חלץ כל אדם: שם פרטי, בן או בת, שם האם, וסוג הבקשה. אל תמציא שמות ואל תתקן כתיב. ענה JSON בלבד.',
     prompt: `סוגי בקשה מותרים: refua (רפואה), parnasa (פרנסה), zivug (זיווג), zera (זרע של קיימא), hatzlacha (הצלחה), yeshua (ישועה וברכה), other (אחר, עם requestNote קצר).
 החזר {"lines":[{"name":"","relation":"ben|bat","parentName":"","requestType":"","requestNote":null,"sure":true}]}.
-sure=false כשחסר שם האם, כשלא ברור אם בן או בת, או כשהבקשה לא נאמרה במפורש.
+requestType ריק ("") כשלא נאמרה בקשה, ואל תמציא בקשה. sure=false כשחסר שם האם או כשלא ברור אם בן או בת.
 
 נושא: ${subject}
 ${text.slice(0, MAX_TEXT)}`,
@@ -150,7 +149,7 @@ ${text.slice(0, MAX_TEXT)}`,
   const lines: KvitelLineInput[] = []
   const flags: (string | null)[] = []
   for (const l of res.lines.slice(0, MAX_LINES)) {
-    const v = validateLine(l as unknown as Record<string, unknown>, lines.length)
+    const v = validateLine(l as unknown as Record<string, unknown>, lines.length, { optionalRequest: true })
     if (!v.ok) continue
     lines.push(v.line)
     flags.push(l.sure === false ? 'פענוח AI לא בטוח' : null)
