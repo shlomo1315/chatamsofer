@@ -37,7 +37,7 @@ body[data-dir="b"] .dirs{background:rgba(27,35,56,.06);border-color:rgba(27,35,5
 /* ---------- מסגרת הווידאו ---------- */
 .frame{position:relative;width:min(100vw - 32px,1600px,(100vh - 190px)*16/9);aspect-ratio:16/9;margin-inline:auto;overflow:hidden;border-radius:var(--r2);box-shadow:0 30px 80px rgba(0,0,0,.45);background:#000}
 body[data-dir="b"] .frame{box-shadow:0 30px 70px rgba(60,45,20,.25)}
-.stage{position:absolute;top:0;right:0;width:1600px;height:900px;transform-origin:top right;transform:scale(var(--k,1));overflow:hidden;direction:rtl}
+.stage{position:absolute;top:0;right:0;width:1600px;height:900px;transform-origin:top right;transform:scale(calc(var(--k,1) * var(--pu,1)));overflow:hidden;direction:rtl}
 
 /* ---------- רקעים ---------- */
 .bg{position:absolute;inset:0}
@@ -103,28 +103,37 @@ body[data-dir="b"] .phone{left:-40px;top:170px;transform:translateZ(80px) transl
 .phone .screen{border-radius:38px}
 .phone .screen::before{content:"";position:absolute;z-index:3;top:10px;left:50%;width:92px;height:26px;margin-left:-46px;border-radius:20px;background:#05070B}
 .phone .shot{object-position:50% calc(var(--e) * 100%)}
-.ui{position:absolute;top:0;right:0;width:1440px;height:902px;transform-origin:top right;transform:scale(.6694);direction:rtl;color:var(--ink);font-family:Heebo,sans-serif}
+.ui{position:absolute;top:0;left:0;width:1440px;height:902px;transform-origin:0 0;transform:translate(var(--tx,0px),var(--ty,0px)) scale(calc(.6694 * var(--sc,1)));direction:rtl;color:var(--ink);font-family:Heebo,sans-serif}
 .phone .ui{width:390px;height:842px;transform:scale(.7077)}
 
 /* ---------- מסכי ניהול משוחזרים ---------- */
-.adm{display:grid;grid-template-columns:1fr 248px;background:#FBF8F1}
-.adm aside{grid-column:2;grid-row:1;background:var(--navy);color:#D9D4C6;padding:var(--s5) var(--s4);display:flex;flex-direction:column;gap:2px}
+.adm{display:grid;grid-template-columns:248px 1fr;background:#FBF8F1}
+.adm aside{grid-column:1;grid-row:1;background:var(--navy);color:#D9D4C6;padding:var(--s5) var(--s4);display:flex;flex-direction:column;gap:2px}
 .adm .logo{display:flex;align-items:center;gap:var(--s3);padding-bottom:var(--s5);margin-bottom:var(--s3);border-bottom:1px solid rgba(255,255,255,.1);color:#fff;font-weight:700;font-size:17px}
 .adm .logo img{width:40px;height:40px;border-radius:50%;background:#fff}
 .adm nav a{display:flex;align-items:center;gap:var(--s3);padding:9px var(--s3);border-radius:var(--r1);font-size:15px;color:inherit;text-decoration:none}
-.adm nav a i{width:16px;height:16px;border:1.5px solid currentColor;border-radius:4px;opacity:.6}
+.adm nav a svg{width:18px;height:18px;flex:none;opacity:.75;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.adm nav a .chev{margin-inline-start:auto;width:14px;height:14px}
+.adm nav a.kid{padding-inline-start:44px;font-size:14px;color:#B9B3A2}
+.adm nav a.kid.on{color:#fff}
+.adm nav .sp{flex:1;min-height:6px}
 .adm nav a.on{background:rgba(192,145,47,.18);color:#fff;box-shadow:inset -3px 0 0 var(--gold)}
-.adm main{grid-column:1;grid-row:1;display:flex;flex-direction:column;min-width:0}
-.adm header{height:72px;display:flex;align-items:center;justify-content:space-between;padding:0 var(--s6);background:#fff;border-bottom:1px solid var(--line)}
-.adm header h1{font-size:24px;font-weight:800}
-.adm header small{display:block;font-size:13px;color:var(--ink-soft);font-weight:400}
-.adm .search{width:300px;height:40px;border:1px solid var(--line);border-radius:var(--r1);display:flex;align-items:center;padding:0 var(--s3);color:#A69D88;font-size:14px}
+.adm main{grid-column:2;grid-row:1;display:flex;flex-direction:column;min-width:0}
+.adm header{height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 var(--s6);background:#F7F3EA;border-bottom:1px solid #E6DFCF}
+.adm header h1{font-size:16px;font-weight:600;color:#27272A}
+.usr{display:flex;align-items:center;gap:var(--s2);background:#FFFDF8;border:1px solid #E6DFCF;border-radius:999px;padding:4px 14px 4px 4px}
+.usr .av{width:36px;height:36px;border-radius:50%;background:var(--navy);color:var(--gold);display:grid;place-items:center;font-weight:700;font-size:14px}
+.usr b{display:block;font-size:14px;font-weight:600;color:var(--navy);line-height:1.2}
+.usr small{display:block;font-size:11px;color:#8A6316;font-weight:500}
+
+
 .adm section{padding:var(--s5) var(--s6);display:flex;flex-direction:column;gap:var(--s5);overflow:hidden}
 .pii{font-style:normal;filter:blur(5px);display:inline-block;user-select:none}
 .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--s4)}
-.kpi{background:#fff;border:1px solid var(--line);border-radius:var(--r2);padding:var(--s5)}
-.kpi span{font-size:14px;color:var(--ink-soft)}
-.kpi b{display:block;font-size:40px;font-weight:800;margin-top:var(--s2);font-variant-numeric:tabular-nums}
+.kpi{background:#FFFDF8;border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:4px}
+.kpi span{font-size:14px;font-weight:500;color:var(--ink-soft);display:flex;align-items:center;gap:var(--s2)}
+.kpi span svg{width:15px;height:15px;color:var(--gold);fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.kpi b{display:block;font-size:30px;font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums;line-height:1.15}
 .kpi em{font-style:normal;font-size:13px;color:#2F7A4F}
 .panel{background:#fff;border:1px solid var(--line);border-radius:var(--r2);padding:var(--s5)}
 .panel h3{font-size:17px;font-weight:700;margin-bottom:var(--s4);display:flex;justify-content:space-between}
@@ -209,6 +218,21 @@ body[data-dir="b"] .hud div i{background:var(--navy)}
 .mark img{width:34px;height:34px;object-fit:contain}
 body[data-dir="b"] .tc,body[data-dir="b"] .mark{color:var(--ink)}
 
+
+/* ---------- תקריב ומצלמה ---------- */
+.screen .shot.z{position:absolute;left:0;top:0;width:100%;height:auto;object-fit:initial;transform-origin:0 0;transform:translate(var(--tx,0px),var(--ty,0px)) scale(var(--sc,1))}
+.ring{position:absolute;z-index:2;border-radius:12px;border:2px solid var(--gold-hi);pointer-events:none;opacity:var(--hl,0);box-shadow:0 0 0 2400px rgba(6,10,22,.46),0 0 36px rgba(231,200,115,.65)}
+.ztag{position:absolute;z-index:3;left:16px;bottom:14px;padding:6px 14px;border-radius:999px;background:var(--gold);color:#1B1405;font-size:15px;font-weight:700;opacity:var(--hl,0);transform:translateY(calc((1 - var(--hl,0)) * 12px))}
+body[data-dir="a"] .rigwrap{transform:translateX(calc(var(--pan,0px) * (1 - 2 * var(--e))))}
+body[data-dir="b"] .rigwrap{transform:translateX(calc(var(--pan,0px) * (1 - 2 * var(--e))))}
+.stat{display:flex;align-items:baseline;gap:var(--s4);margin-top:var(--s5);--w:clamp(0,calc((var(--tin) - 1.6) * 2),1);opacity:var(--w);transform:translateY(calc((1 - var(--w)) * 16px))}
+.stat b{font-size:96px;font-weight:900;color:var(--gold-hi);font-variant-numeric:tabular-nums;line-height:1}
+.stat span{font-size:22px;opacity:.85}
+body[data-dir="b"] .stat b{color:#8A6316}
+.hero .stat{justify-content:center}
+.flash{position:absolute;inset:0;z-index:20;pointer-events:none;background:radial-gradient(circle at 50% 50%,#fff,#F3E2A8 55%,transparent 100%);opacity:var(--fl,0)}
+.snd{min-width:130px}
+
 /* ---------- בקרה ---------- */
 .ctrl{display:flex;align-items:center;gap:var(--s3);max-width:1600px;margin:var(--s4) auto 0;padding:0 var(--s5);flex-wrap:wrap}
 .ctrl button.play{width:44px;height:44px;border-radius:50%;border:0;background:var(--gold);color:#1B1405;font-size:16px;font-weight:900}
@@ -234,12 +258,13 @@ body[data-dir="b"] .subs .d{color:#8A6316}
 </head>
 <body data-dir="a">
 <div class="top">
-  <div class="brand"><b>סרטון תדמית · היכל החתם סופר</b><span>כ-90 שניות · כל הנתונים האישיים מטושטשים</span></div>
+  <div class="brand"><b>סרטון תדמית · היכל החתם סופר</b><span>כ-2 דקות · כל הנתונים האישיים מטושטשים</span></div>
   <div class="dirs" role="group" aria-label="כיוון">
     <button data-hq-option="א׳ · לילה נייבי" data-dir="a" aria-pressed="true">א׳ · לילה נייבי</button>
     <button data-hq-option="ב׳ · נייר וזהב" data-dir="b" aria-pressed="false">ב׳ · נייר וזהב</button>
   </div>
   <div style="display:flex;gap:8px">
+    <button class="dl snd" id="snd" aria-pressed="false">🔇 צליל כבוי</button>
     <button class="dl" id="rec">הקלטה כסרטון</button>
     <button class="dl" id="dl">הורדת HTML</button>
   </div>
@@ -250,6 +275,7 @@ body[data-dir="b"] .subs .d{color:#8A6316}
   <div class="dust" id="dust"></div>
   <div class="mark"><img src="/logo.png" alt=""><span>היכל החתם סופר</span></div>
   <div class="tc" id="tc">00:00</div>
+  <div class="flash" id="flash"></div>
   <div id="scenes"></div>
   <div class="hud" id="hud"></div>
 </div></div>
@@ -260,7 +286,7 @@ body[data-dir="b"] .subs .d{color:#8A6316}
   <div class="chaps" id="chaps"></div>
 </div>
 <div class="subs" id="subs"><div class="d"></div><div class="t"></div><div class="l"></div></div>
-<p class="note">מסכי הציבור צולמו מהאתר החי היום. מסכי הניהול משוחזרים בעיצוב המערכת, וכל שם, מספר זהות, טלפון וסכום בהם מטושטש. הסרטון בלי מוזיקה בשלב הזה.</p>
+<p class="note">מסכי הציבור צולמו מהאתר החי היום. מסכי הניהול משוחזרים בעיצוב המערכת, וכל שם, מספר זהות, טלפון וסכום בהם מטושטש. המוזיקה נוצרת בדפדפן, ללא קובץ חיצוני.</p>
 
 <script>
 const ORIGINAL='<!doctype html>\n'+document.documentElement.outerHTML;
@@ -273,14 +299,18 @@ const syl='בר גד מה לו נת שם רי פל זכ חנ קוב תמ אל י
 const word=n=>Array.from({length:n},()=>syl[Math.floor(rnd()*syl.length)]).join('');
 const P=t=>`<i class="pii">${t}</i>`;
 const nm=()=>P(word(2)+' '+word(2));
-const num=d=>P(Array.from({length:d},()=>Math.floor(rnd()*10)).join(''));
+const num=d=>{const v=Array.from({length:d},()=>Math.floor(rnd()*9)+1).join('');return `<i class="pii" data-v="${v}">${v}</i>`};
 
-const NAV=['לוח בקרה','צאצאים','עץ הדורות','אגף יולדות','הלוואות','מחלקת סיוע','חלוקות חגים','דוחות','ניוזלטר','יריד ספרים','קוויטלאך','גיליונות החתם סופר','ארכיון','מרכזיה טלפונית','הגדרות'];
-const shell=(active,title,sub,body)=>`<div class="ui adm"><aside><div class="logo"><img src="${LOGO}" alt="">היכל החתם סופר</div><nav>${NAV.map(n=>`<a class="${n===active?'on':''}"><i></i>${n}</a>`).join('')}</nav></aside><main><header><h1>${title}<small>ראשי ‹ ${sub}</small></h1><div class="search">חיפוש לפי שם, ת״ז או טלפון…</div></header><section>${body}</section></main></div>`;
+const IC={"layout-dashboard":"<rect width=\"7\" height=\"9\" x=\"3\" y=\"3\" rx=\"1\"/><rect width=\"7\" height=\"5\" x=\"14\" y=\"3\" rx=\"1\"/><rect width=\"7\" height=\"9\" x=\"14\" y=\"12\" rx=\"1\"/><rect width=\"7\" height=\"5\" x=\"3\" y=\"16\" rx=\"1\"/>","users":"<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\"/><path d=\"M16 3.128a4 4 0 0 1 0 7.744\"/><path d=\"M22 21v-2a4 4 0 0 0-3-3.87\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/>","trees":"<path d=\"M10 10v.2A3 3 0 0 1 8.9 16H5a3 3 0 0 1-1-5.8V10a3 3 0 0 1 6 0Z\"/><path d=\"M7 16v6\"/><path d=\"M13 19v3\"/><path d=\"M12 19h8.3a1 1 0 0 0 .7-1.7L18 14h.3a1 1 0 0 0 .7-1.7L16 9h.2a1 1 0 0 0 .8-1.7L13 3l-1.4 1.5\"/>","baby":"<path d=\"M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5\"/><path d=\"M15 12h.01\"/><path d=\"M19.38 6.813A9 9 0 0 1 20.8 10.2a2 2 0 0 1 0 3.6 9 9 0 0 1-17.6 0 2 2 0 0 1 0-3.6A9 9 0 0 1 12 3c2 0 3.5 1.1 3.5 2.5s-.9 2.5-2 2.5c-.8 0-1.5-.4-1.5-1\"/><path d=\"M9 12h.01\"/>","credit-card":"<rect width=\"20\" height=\"14\" x=\"2\" y=\"5\" rx=\"2\"/><line x1=\"2\" x2=\"22\" y1=\"10\" y2=\"10\"/>","hand-coins":"<path d=\"M11 15h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 17\"/><path d=\"m7 21 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a2 2 0 0 0-2.75-2.91l-4.2 3.9\"/><path d=\"m2 16 6 6\"/><circle cx=\"16\" cy=\"9\" r=\"2.9\"/><circle cx=\"6\" cy=\"5\" r=\"3\"/>","gift":"<path d=\"M12 7v14\"/><path d=\"M20 11v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8\"/><path d=\"M7.5 7a1 1 0 0 1 0-5A4.8 8 0 0 1 12 7a4.8 8 0 0 1 4.5-5 1 1 0 0 1 0 5\"/><rect x=\"3\" y=\"7\" width=\"18\" height=\"4\" rx=\"1\"/>","chart-column":"<path d=\"M3 3v16a2 2 0 0 0 2 2h16\"/><path d=\"M18 17V9\"/><path d=\"M13 17V5\"/><path d=\"M8 17v-3\"/>","send":"<path d=\"M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z\"/><path d=\"m21.854 2.147-10.94 10.939\"/>","book-open":"<path d=\"M12 7v14\"/><path d=\"M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z\"/>","scroll-text":"<path d=\"M15 12h-5\"/><path d=\"M15 8h-5\"/><path d=\"M19 17V5a2 2 0 0 0-2-2H4\"/><path d=\"M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3\"/>","newspaper":"<path d=\"M15 18h-5\"/><path d=\"M18 14h-8\"/><path d=\"M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-4 0v-9a2 2 0 0 1 2-2h2\"/><rect width=\"8\" height=\"4\" x=\"10\" y=\"6\" rx=\"1\"/>","images":"<path d=\"m22 11-1.296-1.296a2.4 2.4 0 0 0-3.408 0L11 16\"/><path d=\"M4 8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2\"/><circle cx=\"13\" cy=\"7\" r=\"1\" fill=\"currentColor\"/><rect x=\"8\" y=\"2\" width=\"14\" height=\"14\" rx=\"2\"/>","settings":"<path d=\"M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/>","phone-call":"<path d=\"M13 2a9 9 0 0 1 9 9\"/><path d=\"M13 6a5 5 0 0 1 5 5\"/><path d=\"M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384\"/>","chevron-down":"<path d=\"m6 9 6 6 6-6\"/>","heart":"<path d=\"M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5\"/>","utensils-crossed":"<path d=\"m16 2-2.3 2.3a3 3 0 0 0 0 4.2l1.8 1.8a3 3 0 0 0 4.2 0L22 8\"/><path d=\"M15 15 3.3 3.3a4.2 4.2 0 0 0 0 6l7.3 7.3c.7.7 2 .7 2.8 0L15 15Zm0 0 7 7\"/><path d=\"m2.1 21.8 6.4-6.3\"/><path d=\"m19 5-7 7\"/>","star":"<path d=\"M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z\"/>"};
+const ic=(k,c='')=>'<svg viewBox="0 0 24 24" class="'+c+'" aria-hidden="true">'+IC[k]+'</svg>';
+const NAV=[['לוח בקרה','layout-dashboard'],['צאצאים','users'],['עץ הדורות','trees'],['אגף יולדות','baby',['עזר יולדות','לידה שקטה','כרטיסי מזון יולדות','מכתבי ברכה','משוב בתי החלמה']],['הלוואות','credit-card'],['מחלקת סיוע','hand-coins'],['חלוקות חגים','gift'],['דוחות','chart-column'],['ניוזלטר','send'],['יריד ספרים','book-open'],['קוויטלאך','scroll-text'],['גיליונות החתם סופר','newspaper'],['ארכיון','images'],null,['מרכזיה טלפונית','phone-call'],['הגדרות','settings']];
+const navHtml=(active,sub)=>NAV.map(n=>{if(!n)return '<div class="sp"></div>';const [name,k,kids]=n;const on=name===active;
+  return '<a class="'+(on&&!kids?'on':'')+'">'+ic(k)+name+(kids?ic('chevron-down','chev'):'')+'</a>'+(kids&&on?kids.map(c=>'<a class="kid '+(c===sub?'on':'')+'">'+c+'</a>').join(''):'')}).join('');
+const shell=(active,title,sub,body)=>`<div class="ui adm"><aside><div class="logo"><img src="${LOGO}" alt="">היכל החתם סופר</div><nav>${navHtml(active,title)}</nav></aside><main><header><h1>${title}</h1><div class="usr"><div class="av">מ</div><div><b>${nm()}</b><small>מנהל מערכת</small></div></div></header><section>${body}</section></main></div>`;
 
 const SCR={
 dashboard:()=>shell('לוח בקרה','לוח בקרה','לוח בקרה',`
- <div class="cards">${['משפחות רשומות','נרשמו השבוע','הלוואות בפועל','יולדות בטיפול'].map(l=>`<div class="kpi"><span>${l}</span><b>${num(3)}</b></div>`).join('')}</div>
+ <div class="cards">${[['משפחות רשומות','users'],['נרשמו השבוע','star'],['הלוואות בפועל','credit-card'],['יולדות בטיפול','baby']].map(([l,k])=>`<div class="kpi"><span>${ic(k)}${l}</span><b>${num(3)}</b></div>`).join('')}</div>
  <div class="grid2">
   <div class="panel"><h3>תור העבודה שלך <small>לפי דחיפות</small></h3>
    ${[['עזר יולדות · אישור בית החלמה','red','דחוף'],['גמ״ח הלוואות · בקשה חדשה','wait','ממתין לטיפול'],['מחלקת סיוע · מסמכים חסרים','wait','ממתין לטיפול'],['צאצאים · אישור רישום','gold','לאישור'],['כרטיסי מזון · טעינה','ok','מוכן'],['חלוקות חגים · שוברים','gold','לאישור']].map(([a,c,s])=>`<div class="q"><span class="who">${a}<br><small style="color:#958C78">${nm()}</small></span><span class="chip ${c}">${s}</span></div>`).join('')}
@@ -326,22 +356,22 @@ dial:()=>`<div class="ui dial"><small>שיחה פעילה · ${num(2)}:${num(2)}
 
 const S=[
  {k:'intro',d:5.5},
- {dept:'אזור אישי',t:'צאצא נכנס עם תעודת זהות.',l:'ורואה את התיק המשפחתי שלו. כל הפרטים מוצפנים.',lap:{img:'home'},ry:26},
- {dept:'לוח בקרה',t:'הבוקר מתחיל מהדחוף.',l:'תור העבודה מסודר לפי אגף ולפי דחיפות.',lap:{ui:'dashboard'},ry:22},
- {dept:'צאצאים',t:'כל משפחה, תיק אחד.',l:'פרטים, ילדים, מסמכים וסטטוס רישום, במסך אחד.',lap:{ui:'beneficiaries'},ry:28},
- {dept:'עץ הדורות',t:'381 צמתים. עשרה דורות.',l:'מרן החתם סופר זי״ע בראש העץ, וכל צאצא במקומו.',lap:{img:'family'},ry:20},
- {dept:'עזר יולדות',t:'כרטיס מזון ובית החלמה.',l:'כרטיס טעון למזון מוכן, ולילות החלמה. בתאומים, ארבעה לילות.',lap:{ui:'maternity'},ry:26},
- {dept:'גמ״ח הלוואות',t:'הלוואה, שלב אחרי שלב.',l:'מהבקשה ועד ההחזר האחרון, כל שלב גלוי לצוות.',lap:{ui:'loans'},ry:22},
- {dept:'מחלקת סיוע',t:'ממלאים פעם אחת.',l:'בקשת סיוע עם המסמכים, ישר למזכירות המחלקה.',lap:{img:'medical'},ph:{img:'medicalM'},ry:24},
- {dept:'חלוקות חגים',t:'שובר לכל משפחה.',l:'המשפחה בוחרת מוקד איסוף, והשובר נשלח אליה במייל.',lap:{ui:'distributions'},ry:28},
- {dept:'מרכזיה טלפונית',t:'גם בלי מחשב.',l:'שלוחות במרכזיה, ושיוך כרטיס עם אימות מול הכרטסת.',lap:{ui:'technoline'},ph:{ui:'dial'},ry:20},
- {dept:'קוויטלאך',t:'שם ושם האם, לציון.',l:'קוויטל לציון רבינו הקדוש, נשלח מכל טלפון.',lap:{img:'kvitel'},ph:{img:'kvitelM'},ry:26},
- {dept:'גיליונות החתם סופר',t:'הגיליון השבועי, בתיבת המייל.',l:'על הפרשה, כל שבוע. נרשמים פעם אחת.',lap:{img:'gilyonot'},ry:22},
- {dept:'יריד ספרים',t:'ספרי החתם סופר, בהזמנה.',l:'הזמנה מקוונת, ומעקב אחרי ההזמנה לפי מספר טלפון.',lap:{img:'yerid'},ph:{img:'yeridM'},ry:26},
- {dept:'דוח לנדיב',t:'כל יולדת, כל לילה, כל קבלה.',l:'דוח לתורם, להשוואה מול חיובי האשראי.',lap:{ui:'donor'},ph:{ui:'donorM'},ry:22},
+ {dept:'אזור אישי',t:'צאצא נכנס עם תעודת זהות.',l:'ורואה את התיק המשפחתי שלו. כל הפרטים מוצפנים.',lap:{img:'home'},ry:26,zr:{x:150,y:120,w:660,h:300},ztag:'התיק המשפחתי',pan:46},
+ {dept:'לוח בקרה',t:'הבוקר מתחיל מהדחוף.',l:'תור העבודה מסודר לפי אגף ולפי דחיפות.',lap:{ui:'dashboard'},ry:22,zsel:'.cards',ztag:'מונים בזמן אמת',pan:-46},
+ {dept:'צאצאים',t:'כל משפחה, תיק אחד.',l:'פרטים, ילדים, מסמכים וסטטוס רישום, במסך אחד.',lap:{ui:'beneficiaries'},ry:28,zsel:'tr.hl',ztag:'כרטיס משפחה',pan:46},
+ {dept:'עץ הדורות',t:'381 צמתים. עשרה דורות.',l:'מרן החתם סופר זי״ע בראש העץ, וכל צאצא במקומו.',lap:{img:'family'},ry:20,zr:{x:150,y:120,w:660,h:300},ztag:'עשרה דורות',pan:-46},
+ {dept:'עזר יולדות',t:'כרטיס מזון ובית החלמה.',l:'כרטיס טעון למזון מוכן, ולילות החלמה. בתאומים, ארבעה לילות.',lap:{ui:'maternity'},ry:26,zsel:'tr.hl',ztag:'תאומים · 4 לילות',stat:{n:4,u:'לילות החלמה בתאומים'},pan:46},
+ {dept:'גמ״ח הלוואות',t:'הלוואה, שלב אחרי שלב.',l:'מהבקשה ועד ההחזר האחרון, כל שלב גלוי לצוות.',lap:{ui:'loans'},ry:22,zsel:'.col:nth-child(3) .card',ztag:'שלב בהלוואה',pan:-46},
+ {dept:'מחלקת סיוע',t:'ממלאים פעם אחת.',l:'בקשת סיוע עם המסמכים, ישר למזכירות המחלקה.',lap:{img:'medical'},ph:{img:'medicalM'},ry:24,zr:{x:150,y:120,w:660,h:300},ztag:'טופס בקשה',pan:46},
+ {dept:'חלוקות חגים',t:'שובר לכל משפחה.',l:'המשפחה בוחרת מוקד איסוף, והשובר נשלח אליה במייל.',lap:{ui:'distributions'},ry:28,zsel:'.cards',ztag:'שוברים לפי מוקד',pan:-46},
+ {dept:'מרכזיה טלפונית',t:'גם בלי מחשב.',l:'שלוחות במרכזיה, ושיוך כרטיס עם אימות מול הכרטסת.',lap:{ui:'technoline'},ph:{ui:'dial'},ry:20,zsel:'.flow',ztag:'אימות מול הכרטסת',pan:46},
+ {dept:'קוויטלאך',t:'שם ושם האם, לציון.',l:'קוויטל לציון רבינו הקדוש, נשלח מכל טלפון.',lap:{img:'kvitel'},ph:{img:'kvitelM'},ry:26,zr:{x:150,y:120,w:660,h:300},ztag:'שליחת קוויטל',pan:-46},
+ {dept:'גיליונות החתם סופר',t:'הגיליון השבועי, בתיבת המייל.',l:'על הפרשה, כל שבוע. נרשמים פעם אחת.',lap:{img:'gilyonot'},ry:22,zr:{x:150,y:120,w:660,h:300},ztag:'הגיליון השבועי',pan:46},
+ {dept:'יריד ספרים',t:'ספרי החתם סופר, בהזמנה.',l:'הזמנה מקוונת, ומעקב אחרי ההזמנה לפי מספר טלפון.',lap:{img:'yerid'},ph:{img:'yeridM'},ry:26,zr:{x:150,y:120,w:660,h:300},ztag:'הזמנה מקוונת',pan:-46},
+ {dept:'דוח לנדיב',t:'כל יולדת, כל לילה, כל קבלה.',l:'דוח לתורם, להשוואה מול חיובי האשראי.',lap:{ui:'donor'},ph:{ui:'donorM'},ry:22,zsel:'.sum',ztag:'סיכום לתורם',pan:46},
  {k:'outro',d:6},
 ];
-const SC_D=6.3, X=0.6;
+const SC_D=8, X=0.6;
 let acc=0;S.forEach((s,i)=>{s.d=s.d||SC_D;s.start=acc;acc+=s.d;s.i=i});
 const TOTAL=acc;
 const depts=S.filter(s=>!s.k);
@@ -354,11 +384,11 @@ S.forEach((s,i)=>{
   if(s.k){
     el.innerHTML=`<div class="hero">${s.k==='intro'
       ?`<img src="${HEICHAL}" alt="היכל החתם סופר"><div class="kick">היכל החתם סופר · איגוד הצאצאים</div><h1 class="title">${split('מהרישום ועד הקוויטל.')}</h1><p class="line">המערכת שמנהלת את כל פעילות העמותה.</p>`
-      :`<img src="${HEICHAL}" alt="היכל החתם סופר"><h1 class="title">${split('היכל החתם סופר')}</h1><p class="line">${depts.length} מחלקות. מערכת אחת.</p><div class="url">chasamsofer.co.il</div>`}</div>`;
+      :`<img src="${HEICHAL}" alt="היכל החתם סופר"><h1 class="title">${split('היכל החתם סופר')}</h1><div class="stat"><b data-c="${depts.length}">0</b><span>מחלקות. מערכת אחת.</span></div><div class="url">chasamsofer.co.il</div>`}</div>`;
   }else{
     const n=String(depts.indexOf(s)+1).padStart(2,'0');
-    el.style.setProperty('--ry',s.ry+'deg');
-    el.innerHTML=`<div class="bignum">${n}</div><div class="cap"><div class="dept"><span class="no">${n}</span><span class="rule"></span><span>${s.dept}</span></div><h2 class="title">${split(s.t)}</h2><p class="line">${s.l}</p></div>
+    el.style.setProperty('--ry',s.ry+'deg');el.style.setProperty('--pan',s.pan+'px');
+    el.innerHTML=`<div class="bignum">${n}</div><div class="cap"><div class="dept"><span class="no">${n}</span><span class="rule"></span><span>${s.dept}</span></div><h2 class="title">${split(s.t)}</h2><p class="line">${s.l}</p>${s.stat?`<div class="stat"><b data-c="${s.stat.n}">0</b><span>${s.stat.u}</span></div>`:''}</div>
     <div class="rigwrap"><div class="rig"><div class="shadow"></div><div class="laptop"><div class="lid">${screen(s.lap)}</div><div class="base"></div></div>${s.ph?`<div class="phone">${screen(s.ph)}</div>`:''}</div></div>`;
   }
   root.appendChild(el);s.el=el;
@@ -366,6 +396,20 @@ S.forEach((s,i)=>{
 /* תוויות פתיחה: מילים נחשפות גם שם */
 document.querySelectorAll('.hero .title span').forEach(()=>{});
 
+function zsetup(s){
+  const scr=s.el.querySelector('.laptop .screen');let r=s.zr;
+  if(s.zsel){const ui=scr.querySelector('.ui'),el=ui.querySelector(s.zsel);let x=0,y=0;for(let n=el;n&&n!==ui;n=n.offsetParent){x+=n.offsetLeft;y+=n.offsetTop}const k=.6694;r={x:x*k,y:y*k,w:el.offsetWidth*k,h:el.offsetHeight*k}}
+  const pad=10;r={x:r.x-pad,y:r.y-pad,w:r.w+2*pad,h:r.h+2*pad};
+  s.zrect=r;s.zk=Math.max(1.25,Math.min(2.8,Math.min(964*.74/r.w,604*.74/r.h)));
+}
+S.forEach(s=>{
+  if(s.k)return;
+  const scr=s.scr=s.el.querySelector('.laptop .screen');
+  s.ring=document.createElement('div');s.ring.className='ring';scr.appendChild(s.ring);
+  const tag=document.createElement('div');tag.className='ztag';tag.textContent=s.ztag;scr.appendChild(tag);
+  if(!s.zsel)scr.querySelector('.shot').classList.add('z');
+});
+document.fonts&&document.fonts.ready.then(()=>S.forEach(s=>{s.zrect=null}));
 const hud=document.getElementById('hud');hud.innerHTML=depts.map(()=>'<div><i></i></div>').join('');
 const chaps=document.getElementById('chaps');
 chaps.innerHTML=S.map((s,i)=>`<button class="chap" data-i="${i}">${s.k==='intro'?'פתיחה':s.k==='outro'?'סיום':s.dept}</button>`).join('');
@@ -386,20 +430,34 @@ function render(){
     st.setProperty('--e',ease(cl(lt/s.d)).toFixed(4));
     st.setProperty('--in',(s.i===0?1:ease(cl(lt/0.9))).toFixed(4));
     st.setProperty('--out',(s.i===S.length-1?0:cl((lt-s.d)/X)).toFixed(4));
+    if(s.scr){
+      if(!s.zrect)zsetup(s);
+      const c=ease(cl((lt-2.6)/1.1))*(1-ease(cl((lt-(s.d-1.5))/1.0)));
+      const r=s.zrect,k=1+(s.zk-1)*c,cx=r.x+r.w/2,cy=r.y+r.h/2;
+      const tx=cx+(482-cx)*c-cx*k, ty=cy+(302-cy)*c-cy*k, ss=s.scr.style;
+      ss.setProperty('--sc',k.toFixed(4));ss.setProperty('--tx',tx.toFixed(1)+'px');ss.setProperty('--ty',ty.toFixed(1)+'px');ss.setProperty('--hl',c.toFixed(3));
+      const rs=s.ring.style;rs.left=(tx+r.x*k)+'px';rs.top=(ty+r.y*k)+'px';rs.width=(r.w*k)+'px';rs.height=(r.h*k)+'px';
+    }
+    if(!s.cnt)s.cnt=[...s.el.querySelectorAll('.laptop .kpi [data-v],.laptop .bar [data-v],.laptop .sum [data-v]')];
+    const pv=ease(cl((lt-.7)/1.8));s.cnt.forEach(e=>{e.textContent=Math.round(+e.dataset.v*pv)});
+    if(!s.cc)s.cc=[...s.el.querySelectorAll('[data-c]')];
+    const pc=ease(cl((lt-1.6)/1.8));s.cc.forEach(e=>{e.textContent=Math.round(+e.dataset.c*pc)});
   });
   const idx=S.findIndex(s=>t>=s.start&&t<s.start+s.d);const i=idx<0?S.length-1:idx;
   if(i!==cur){cur=i;chaps.querySelectorAll('.chap').forEach((c,j)=>c.classList.toggle('on',j===i));
     const s=S[i];subs.querySelector('.d').textContent=s.k?'היכל החתם סופר':s.dept;subs.querySelector('.t').textContent=s.k==='intro'?'מהרישום ועד הקוויטל.':s.k==='outro'?'היכל החתם סופר':s.t;subs.querySelector('.l').textContent=s.k==='intro'?'המערכת שמנהלת את כל פעילות העמותה.':s.k==='outro'?depts.length+' מחלקות. מערכת אחת.':s.l;}
   hud.querySelectorAll('div').forEach((d,j)=>{const s=depts[j];d.style.setProperty('--f',cl((t-s.start)/s.d))});
   stage.style.setProperty('--intro',S[0].el.classList.contains('on')&&t<S[0].d?1:(S[S.length-1].el.classList.contains('on')?1:0));
+  const dd=t-DROP;stage.style.setProperty('--pu',dd>=0?(1+.045*Math.exp(-dd*5)).toFixed(4):1);
+  document.getElementById('flash').style.setProperty('--fl',dd>=0&&dd<1.5?(.85*Math.exp(-dd*6)).toFixed(3):0);
   const sec=Math.floor(t);tc.textContent=String(Math.floor(sec/60)).padStart(2,'0')+':'+String(sec%60).padStart(2,'0')+' / 01:'+String(Math.round(TOTAL-60)).padStart(2,'0');
 }
 function loop(now){const dt=(now-last)/1000;last=now;if(playing){t+=dt;if(t>=TOTAL){t=TOTAL-0.001;setPlaying(false);onEnd()}}render();requestAnimationFrame(loop)}
-function setPlaying(p){playing=p;playBtn.textContent=p?'❚❚':'▶';document.body.classList.toggle('paused',!p)}
+function setPlaying(p){playing=p;music.pause(!p);playBtn.textContent=p?'❚❚':'▶';document.body.classList.toggle('paused',!p)}
 let onEnd=()=>{};
-playBtn.onclick=()=>{if(!playing&&t>=TOTAL-0.01)t=0;setPlaying(!playing)};
-document.getElementById('restart').onclick=()=>{t=0;setPlaying(true)};
-chaps.onclick=e=>{const b=e.target.closest('.chap');if(!b)return;t=S[+b.dataset.i].start+0.01;setPlaying(true)};
+playBtn.onclick=()=>{if(!playing&&t>=TOTAL-0.01){t=0;music.seek(0)}setPlaying(!playing)};
+document.getElementById('restart').onclick=()=>{t=0;setPlaying(true);music.seek(0)};
+chaps.onclick=e=>{const b=e.target.closest('.chap');if(!b)return;t=S[+b.dataset.i].start+0.01;setPlaying(true);music.seek(t)};
 document.addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();playBtn.click()}});
 
 /* קנה מידה */
@@ -415,12 +473,90 @@ addEventListener('message',e=>{if(e.data&&e.data.hq==='select'){const b=document
 document.getElementById('dl').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([ORIGINAL],{type:'text/html'}));a.download='chasamsofer-promo.html';a.click()};
 document.getElementById('rec').onclick=async()=>{
   try{
-    const st=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:60},audio:false,preferCurrentTab:true});
-    const rec=new MediaRecorder(st,{mimeType:MediaRecorder.isTypeSupported('video/webm;codecs=vp9')?'video/webm;codecs=vp9':'video/webm'});const ch=[];
-    rec.ondataavailable=e=>ch.push(e.data);rec.onstop=()=>{st.getTracks().forEach(x=>x.stop());const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(ch,{type:'video/webm'}));a.download='chasamsofer-promo.webm';a.click()};
-    onEnd=()=>{onEnd=()=>{};rec.stop()};t=0;setPlaying(true);rec.start();
+    const st0=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:60},audio:false,preferCurrentTab:true});music.enable(true);const st=new MediaStream([...st0.getVideoTracks(),...music.stream().getAudioTracks()]);
+    const rec=new MediaRecorder(st,{mimeType:MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')?'video/webm;codecs=vp9,opus':'video/webm'});const ch=[];
+    rec.ondataavailable=e=>ch.push(e.data);rec.onstop=()=>{st0.getTracks().forEach(x=>x.stop());const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(ch,{type:'video/webm'}));a.download='chasamsofer-promo.webm';a.click()};
+    onEnd=()=>{onEnd=()=>{};setTimeout(()=>rec.stop(),600)};t=0;setPlaying(true);music.seek(0);rec.start();
   }catch(err){alert('ההקלטה עובדת כשפותחים את הקובץ שהורד בדפדפן כרום. לחצו "הורדת HTML", פתחו את הקובץ ונסו שוב.')}
 };
+
+/* ---------- מוזיקה: נוצרת בדפדפן עם WebAudio, בלי קובץ חיצוני ---------- */
+const DROP=depts[6].start, OUTRO=S[S.length-1].start, INTRO=S[0].d;
+const music=(()=>{
+  const BPM=96, ST=60/BPM/4, BAR=ST*16, G0=((DROP%BAR)+BAR)%BAR, K=Math.round((DROP-G0)/BAR);
+  let ctx=null, master, spk, dest, bus, delay, base=0, n=0, timer=null, on=false, noise;
+  const mt=m=>440*Math.pow(2,(m-69)/12);
+  const CH=[[57,60,64],[57,60,65],[55,60,64],[55,59,62]], RT=[45,41,48,43], ARP=[0,1,2,1,2,1,2,1];
+  const MEL=[[[0,76,6],[6,74,2],[8,72,4],[12,69,4]],[[0,72,6],[6,69,2],[8,72,4],[12,77,4]],[[0,76,6],[6,72,2],[8,67,4],[12,72,4]],[[0,74,8],[8,71,4],[12,74,4]]];
+  function init(){
+    ctx=new (window.AudioContext||window.webkitAudioContext)();
+    master=ctx.createGain();spk=ctx.createGain();spk.gain.value=0;dest=ctx.createMediaStreamDestination();
+    master.connect(spk);spk.connect(ctx.destination);master.connect(dest);
+    noise=ctx.createBuffer(1,ctx.sampleRate*2,ctx.sampleRate);const d=noise.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+  }
+  function begin(t0){
+    if(bus){const old=bus;old.gain.setTargetAtTime(0,ctx.currentTime,.03);setTimeout(()=>old.disconnect(),400)}
+    bus=ctx.createGain();bus.connect(master);
+    delay=ctx.createDelay(1);delay.delayTime.value=.46875;const fb=ctx.createGain();fb.gain.value=.34;const wet=ctx.createGain();wet.gain.value=.32;
+    delay.connect(fb);fb.connect(delay);delay.connect(wet);wet.connect(bus);
+    base=ctx.currentTime-t0;n=Math.ceil((t0-G0)/ST);
+    const e=base+TOTAL;master.gain.cancelScheduledValues(ctx.currentTime);master.gain.setValueAtTime(.85,ctx.currentTime);
+    if(e-4>ctx.currentTime){master.gain.setValueAtTime(.85,e-4)}master.gain.linearRampToValueAtTime(0,e);
+    if(!timer)timer=setInterval(tick,90);
+  }
+  const gain=(T,a,pk,hold,rel,send)=>{const g=ctx.createGain();g.gain.setValueAtTime(.0001,T);g.gain.exponentialRampToValueAtTime(pk,T+a);g.gain.setValueAtTime(pk,T+a+hold);g.gain.exponentialRampToValueAtTime(.0001,T+a+hold+rel);g.connect(bus);if(send){const s=ctx.createGain();s.gain.value=send;g.connect(s);s.connect(delay)}return g};
+  const osc=(type,f,T,dur,dst,det=0)=>{const o=ctx.createOscillator();o.type=type;o.frequency.value=f;o.detune.value=det;o.connect(dst);o.start(T);o.stop(T+dur+.05);return o};
+  const lp=(f,dst)=>{const b=ctx.createBiquadFilter();b.type='lowpass';b.frequency.value=f;b.connect(dst);return b};
+  const hit=(T,dur,type,f,pk,Q=1)=>{const s=ctx.createBufferSource();s.buffer=noise;const b=ctx.createBiquadFilter();b.type=type;b.frequency.value=f;b.Q.value=Q;const g=gain(T,.003,pk,0,dur);s.connect(b);b.connect(g);s.start(T,Math.random());s.stop(T+dur+.1)};
+  const pad=(ci,T,dur)=>{const g=gain(T,.7,.05,Math.max(.05,dur-.7),.5,.25),f=lp(1200,g);CH[ci].forEach(m=>{osc('sawtooth',mt(m),T,dur+1.3,f,-8);osc('sawtooth',mt(m),T,dur+1.3,f,8)})};
+  const bass=(m,T,dur)=>{const g=gain(T,.01,.3,dur*.5,dur*.5);osc('sine',mt(m),T,dur+.1,g);osc('triangle',mt(m),T,dur+.1,lp(500,g))};
+  const pluck=(m,T,pk)=>{const g=gain(T,.004,pk,0,.42,.5);osc('triangle',mt(m),T,.5,g);osc('sine',mt(m+12),T,.5,g,3)};
+  const lead=(m,T,dur,pk)=>{const g=gain(T,.03,pk,dur*.7,.45,.6);const f=lp(2800,g);osc('sawtooth',mt(m),T,dur+.6,f,-5);osc('triangle',mt(m),T,dur+.6,g,5)};
+  const kick=(T,pk)=>{const o=ctx.createOscillator(),g=gain(T,.004,pk,.04,.3);o.frequency.setValueAtTime(150,T);o.frequency.exponentialRampToValueAtTime(42,T+.22);o.connect(g);o.start(T);o.stop(T+.4)};
+  const boom=T=>{const g=gain(T,.01,.9,.3,2.2);osc('sine',46,T,2.6,g);hit(T,2.6,'highpass',2500,.3);hit(T,.6,'lowpass',700,.5);[45,57,64,69].forEach(m=>{const h=gain(T,.02,.09,1.4,1.4,.3);osc('sawtooth',mt(m),T,3,lp(1800,h))})};
+  const riser=(T,len)=>{const s=ctx.createBufferSource();s.buffer=noise;s.loop=true;const b=ctx.createBiquadFilter();b.type='bandpass';b.Q.value=2;b.frequency.setValueAtTime(300,T);b.frequency.exponentialRampToValueAtTime(7000,T+len);const g=ctx.createGain();g.gain.setValueAtTime(.0001,T);g.gain.exponentialRampToValueAtTime(.28,T+len);g.gain.linearRampToValueAtTime(0,T+len+.05);s.connect(b);b.connect(g);g.connect(bus);s.start(T);s.stop(T+len+.1);
+    const o=ctx.createOscillator();o.type='sawtooth';o.frequency.setValueAtTime(110,T);o.frequency.exponentialRampToValueAtTime(880,T+len);const g2=ctx.createGain();g2.gain.setValueAtTime(.0001,T);g2.gain.exponentialRampToValueAtTime(.05,T+len);g2.gain.linearRampToValueAtTime(0,T+len+.05);o.connect(lp(2400,g2));g2.connect(bus);o.start(T);o.stop(T+len+.1)};
+  function sched(nn){
+    const tv=G0+nn*ST,T=base+tv;if(T<ctx.currentTime-.03)return;
+    const s=((nn%16)+16)%16,ci=((Math.floor(nn/16)-K)%4+4)%4;
+    const pre=tv<DROP,ris=pre&&tv>=DROP-4,outro=tv>=OUTRO,intro=tv<INTRO;
+    if(pre&&tv>=DROP-.5)return;
+    if(nn===K*16){boom(T);kick(T,1);return}
+    if(s===0)pad(ci,T,pre?Math.min(BAR,DROP-.5-tv):BAR);
+    if(!intro){
+      const dense=!pre&&!outro;
+      if(dense?s%2===0:(s===0||s===8)&&!outro||(outro&&s===0))bass(RT[ci]+(dense&&s%4===2?12:0),T,ST*1.8);
+      if(s%2===0&&!ris)pluck(CH[ci][ARP[s/2]]+12,T,pre?.07:.1);
+      if(tv>=INTRO+10&&!ris)MEL[ci].forEach(([st,m,l])=>{if(st===s)lead(m+(pre?0:12*0),T,l*ST,pre?.055:.085)});
+      if(tv>=INTRO+10&&pre&&!ris&&(s===0||s===8))kick(T,.45);
+    }
+    if(ris){const p=(tv-(DROP-4))/4;if(tv-ST<DROP-4)riser(T,DROP-.5-tv);
+      if(s%4===0&&p<.5||s%2===0&&p>=.5&&p<.75||p>=.75)hit(T,.12,'bandpass',1800,.1+.22*p,.8)}
+    if(!pre&&!outro){
+      if(s%4===0||s===10)kick(T,.95);
+      if(s===4||s===12){hit(T,.2,'bandpass',1900,.3,.8);hit(T,.08,'highpass',3000,.12)}
+      if(s%2===0)hit(T,.05,'highpass',7500,s%4===2?.09:.05);
+    }
+  }
+  function tick(){
+    if(!ctx||ctx.state!=='running'||!bus)return;
+    const now=ctx.currentTime,d=(now-base)-t;
+    if(playing&&Math.abs(d)>.08&&Math.abs(d)<.8)base=now-t;
+    const tvNow=now-base;while(G0+n*ST<tvNow+.45){sched(n);n++}
+  }
+  return{
+    enable(v){
+      if(v){if(!ctx)init();ctx.resume();if(!bus)begin(t);spk.gain.setTargetAtTime(1,ctx.currentTime,.05);if(!playing)ctx.suspend()}
+      else if(ctx)spk.gain.setTargetAtTime(0,ctx.currentTime,.05);
+      on=v;const b=document.getElementById('snd');if(b){b.textContent=v?'🔊 צליל פעיל':'🔇 צליל כבוי';b.setAttribute('aria-pressed',v)}
+    },
+    toggle(){this.enable(!on)},
+    pause(p){if(!ctx)return;p?ctx.suspend():ctx.resume()},
+    seek(x){if(ctx)begin(x)},
+    stream(){return dest.stream}
+  };
+})();
+document.getElementById('snd').onclick=()=>music.toggle();
 
 /* מעבר ישיר לרגע: #t=20 או #t=20&dir=b */
 const h=new URLSearchParams(location.hash.slice(1));if(h.get('dir'))setDir(h.get('dir'));if(h.get('t')){t=+h.get('t');setPlaying(false)}
