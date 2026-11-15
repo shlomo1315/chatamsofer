@@ -16,6 +16,9 @@ const nextConfig: NextConfig = {
   // שנטען מ-node_modules ב-runtime, בלי לעבור bundling כלל. נדרש ליצירת
   // ברקודים ל-PDF יריד הספרים (lib/bookFairBarcodesPdf.ts).
   serverExternalPackages: ['@napi-rs/canvas'],
+  async rewrites() {
+    return [{ source: "/promo", destination: "/promo.html" }];
+  },
   async headers() {
     // ⚠️ no-cache ולא no-store. ההבדל מכריע לביצועים: no-store אוסר על
     // הדפדפן לשמור את התגובה בכלל, ולכן גם ה-Router Cache של Next נפסל —
@@ -54,6 +57,9 @@ const nextConfig: NextConfig = {
       { source: "/admin/:path*", headers: noStore },
       { source: "/portal/:path*", headers: noStore },
       { source: "/", headers: noStore },
+      // עמוד התדמית: לא מאונדקס
+      { source: "/promo", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] },
+      { source: "/promo.html", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] },
     ];
   },
 };
