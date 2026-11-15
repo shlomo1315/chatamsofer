@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, GitBranch, Baby, CreditCard, Gift,
   BarChart3, Settings, Menu, X, Building2, Trees, HeartHandshake,
-  Mail, ChevronDown, ChevronUp, UtensilsCrossed, HandCoins, Heart, Send, Star, ShieldAlert, PhoneCall, BookOpen, ScrollText, Newspaper, Images,
+  Mail, ChevronDown, ChevronUp, UtensilsCrossed, HandCoins, Heart, Send, Star, ShieldAlert, PhoneCall, BookOpen, ScrollText, Newspaper, Images, Handshake,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { UserPermissions, SectionKey, UserRole } from '@/types'
@@ -205,6 +205,7 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
         {topVisible.map(renderLink)}
         {/* אישורים חריגים — admin-only. אנשים שאושרו ידנית (אינם צאצאים). */}
         {isAdmin && renderLink({ href: '/admin/special-approvals', label: 'אישורים חריגים', icon: ShieldAlert })}
+        {isAdmin && renderLink({ href: '/admin/matchmaker-grants', label: 'מלגות שדכנים', icon: Handshake })}
 
         {/* Maternity accordion */}
         {maternityVisible.length > 0 && (

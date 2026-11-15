@@ -38,7 +38,27 @@ function rememberProfile(userId: string, prof: StaffProfile | null) {
   profileCache.set(userId, { at: Date.now(), prof })
 }
 
+// בידוד דומיין פורטל השדכנים: בדומיין הפורטל רק הפורטל וה-API שלו; בדומיין הראשי הפורטל לא קיים.
+// פעיל רק כש-MATCHMAKER_HOST מוגדר (למשל mazal.example.co.il).
+function matchmakerHostGate(request: NextRequest): NextResponse | null {
+  const portalHost = (process.env.MATCHMAKER_HOST || '').trim().toLowerCase()
+  if (!portalHost) return null
+  const host = (request.headers.get('host') || '').split(':')[0].toLowerCase()
+  const path = request.nextUrl.pathname
+  const isPortalPath = path === '/matchmakers' || path.startsWith('/matchmakers/') || path.startsWith('/api/matchmakers/')
+  if (host === portalHost) {
+    if (path === '/') return NextResponse.redirect(new URL('/matchmakers', request.url))
+    if (!isPortalPath && !path.startsWith('/_next/') && path !== '/favicon.ico') {
+      return new NextResponse('לא נמצא', { status: 404 })
+    }
+    return null
+  }
+  return isPortalPath ? new NextResponse('לא נמצא', { status: 404 }) : null
+}
+
 export async function proxy(request: NextRequest) {
+  const gate = matchmakerHostGate(request)
+  if (gate) return gate
   // מצב תחזוקה: כניסה, הרשמה ואימות מחזירים 503 גם מצד השרת (לא רק הסתרה בממשק)
   if (request.nextUrl.pathname.startsWith('/api/')) {
     if (maintenanceOn() && isMaintenanceBlockedApi(request.nextUrl.pathname)) {
@@ -203,5 +223,6 @@ export const config = {
     '/api/portal/verify-email',
     '/api/portal/lookup',
     '/api/register',
+    '/api/matchmakers/:path*',
   ],
 }
