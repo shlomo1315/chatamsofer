@@ -387,8 +387,10 @@ function renderScreens() {
     const html = name === 'portal' ? portalScreen() : appShell(name, name === 'lineage' ? V.lineage(false) : V[name]());
     s.innerHTML = `<div class="scaler" style="width:${w}px;height:${h}px">${html}</div>`;
     const sc = s.querySelector('.scaler');
-    const fit = () => { const k = s.clientWidth / w; sc.style.transform = `scale(${k})`; };
-    fit();
+    // scale to the screen's width and stretch the layout to its exact height: no gaps, no crop
+    const k = s.clientWidth / w;
+    sc.style.height = (s.clientHeight / k) + 'px';
+    sc.style.transform = `scale(${k})`;
   });
 }
 
@@ -529,27 +531,37 @@ function treeLoop() { if (heroVisible && !reduce) drawTree((performance.now() - 
 
 /* ---------- tour: one continuous camera ---------- */
 const world = $('#world'), tour = $('#tour'), blurwrap = $('#blurwrap');
+const PERS = 1500; // perspective
+// t = point on the plane the camera locks onto; fit = size of that object, so it lands framed and square
 const STOPS = [
-  { cam: { x: 60, y: 20, z: 0, rx: 57, rz: -24, d: -1500 }, eyebrow: '01', title: 'שש מחלקות. מערכת אחת.', text: () => 'נתמכים, עץ הדורות, יולדות, הלוואות, חלוקות ודוחות. הכל יושב על אותו משטח, מחובר לאותו שורש.' },
-  { cam: { x: -420, y: -480, z: 120, rx: 50, rz: -6, d: -380 }, eyebrow: '02', title: 'כל נתמך במקומו', text: () => `${fmt(D.beneficiaries.total)} נתמכים רשומים: ${fmt(D.beneficiaries.by_status.approved || 0)} מאושרים, ${fmt(D.beneficiaries.by_status.pending || 0)} ממתינים ו־${fmt(D.beneficiaries.by_status.review || 0)} בבדיקה.` },
-  { cam: { x: 400, y: -250, z: 230, rx: 74, rz: 0, d: -320 }, eyebrow: '03', title: 'לוח בקרה', text: () => 'כל המספרים החשובים בהצצה אחת, עם קיצורים לפעולות של כל יום ושעון זמני היום ברקע.' },
-  { cam: { x: -470, y: 150, z: 10, rx: 16, rz: 8, d: -360 }, eyebrow: '04', title: 'עץ הדורות', text: () => `${fmt(D.lineage.nodes)} צמתים ב־${fmt(D.lineage.generations)} דורות. כל צומת עובר אימות לפני שהוא נכנס לעץ.` },
-  { cam: { x: -60, y: 600, z: 46, rx: 14, rz: -9, d: -180 }, eyebrow: '05', title: 'פורטל בתי ההחלמה', text: () => `קישור מאובטח לכל אחד מ־${fmt(D.recovery_homes)} בתי ההחלמה. סיסמה אישית, ורק הרשימה הפעילה.` },
-  { cam: { x: 520, y: 600, z: 0, rx: 0, rz: 0, d: 1180 }, eyebrow: '06', title: 'הכל מתחיל בשורש', text: () => 'ומכאן, אל הממשק עצמו.' }
+  { t: [-200, -40, 0], rx: 56, rz: -22, fit: [2500, 1800], eyebrow: '01', title: 'שש מחלקות. מערכת אחת.', text: () => 'נתמכים, עץ הדורות, יולדות, הלוואות, חלוקות ודוחות. הכל יושב על אותו משטח, מחובר לאותו שורש.' },
+  { t: [-760, -650, 110], rx: 50, rz: -4, fit: [1000, 700], eyebrow: '02', title: 'כל נתמך במקומו', text: () => `${fmt(D.beneficiaries.total)} נתמכים רשומים: ${fmt(D.beneficiaries.by_status.approved || 0)} מאושרים, ${fmt(D.beneficiaries.by_status.pending || 0)} ממתינים ו־${fmt(D.beneficiaries.by_status.review || 0)} בבדיקה.` },
+  { t: [400, -254, 238], rx: 76, rz: 0, fit: [800, 530], eyebrow: '03', title: 'לוח בקרה', text: () => 'כל המספרים החשובים בהצצה אחת, עם קיצורים לפעולות של כל יום ושעון זמני היום ברקע.' },
+  { t: [-470, 150, 10], rx: 0, rz: 8, fit: [680, 500], eyebrow: '04', title: 'עץ הדורות', text: () => `${fmt(D.lineage.nodes)} צמתים ב־${fmt(D.lineage.generations)} דורות. כל צומת עובר אימות לפני שהוא נכנס לעץ.` },
+  { t: [-60, 600, 46], rx: 0, rz: -9, fit: [330, 640], eyebrow: '05', title: 'פורטל בתי ההחלמה', text: () => `קישור מאובטח לכל אחד מ־${fmt(D.recovery_homes)} בתי ההחלמה. סיסמה אישית, ורק הרשימה הפעילה.` },
+  { t: [700, 720, 0], rx: 0, rz: 0, d: 1180, eyebrow: '06', title: 'הכל מתחיל בשורש', text: () => 'ומכאן, אל הממשק עצמו.' }
 ];
-// [progress, stop index] — holds give each stop time on screen
-const KEYS = [[0, 0], [.07, 0], [.2, 1], [.27, 1], [.4, 2], [.48, 2], [.6, 3], [.67, 3], [.79, 4], [.85, 4], [.98, 5], [1, 5]];
+// [progress, stop]: long holds so every stop settles before the next move
+const KEYS = [[0, 0], [.08, 0], [.17, 1], [.25, 1], [.35, 2], [.44, 2], [.54, 3], [.63, 3], [.73, 4], [.82, 4], [.97, 5], [1, 5]];
 const rail = $('#rail'); rail.innerHTML = STOPS.map(() => '<li></li>').join('');
 let curStop = -1, lastY = scrollY, vel = 0, blurNow = 0;
+function frameFor(s) {
+  const mob = innerWidth < 760;
+  const availW = innerWidth * (mob ? .9 : .56), availH = innerHeight * (mob ? .5 : .74);
+  let d = s.d;
+  if (s.fit) { const F = Math.min(availW / s.fit[0], availH / s.fit[1]); d = Math.min(PERS - 60, PERS - PERS / F); }
+  // screen-space offset: devices to the left of the caption (desktop) or above it (phone)
+  const OX = s.d ? 0 : mob ? 0 : -innerWidth * .19, OY = s.d ? 0 : mob ? -innerHeight * .17 : innerHeight * .01;
+  return { x: s.t[0], y: s.t[1], z: s.t[2], rx: s.rx, rz: s.rz, d, OX, OY };
+}
 function camAt(p) {
   let i = 0; while (i < KEYS.length - 2 && p > KEYS[i + 1][0]) i++;
   const [p0, s0] = KEYS[i], [p1, s1] = KEYS[i + 1];
-  const k = p1 > p0 ? ease(clamp((p - p0) / (p1 - p0))) : 0;
-  const a = STOPS[s0].cam, b = STOPS[s1].cam, c = {};
+  const raw = p1 > p0 ? clamp((p - p0) / (p1 - p0)) : 0, k = ease(raw);
+  const a = frameFor(STOPS[s0]), b = frameFor(STOPS[s1]), c = {};
   for (const key in a) c[key] = lerp(a[key], b[key], k);
-  // nearest stop for captions
-  let near = 0, best = 9; KEYS.forEach(([kp, s]) => { const dd = Math.abs(p - kp); if (dd < best) { best = dd; near = s; } });
-  return { c, near };
+  const moving = s0 !== s1;
+  return { c, near: moving ? (raw < .5 ? s0 : s1) : s0, settle: moving ? Math.abs(raw - .5) * 2 : 1 };
 }
 function setCaption(i) {
   if (i === curStop) return; curStop = i;
@@ -566,19 +578,26 @@ function tourFrame() {
   const p = clamp(-r.top / span);
   const inView = r.top < innerHeight && r.bottom > 0;
   if (!inView) return;
-  const { c, near } = camAt(p);
-  const s = Math.min(1, innerWidth / 1300) * (innerWidth < 620 ? 1.25 : 1);
-  world.style.transform = `translateZ(${c.d}px) scale(${s}) rotateX(${c.rx}deg) rotateZ(${c.rz}deg) translate3d(${-c.x}px, ${-c.y}px, ${-c.z}px)`;
+  const { c, near, settle } = camAt(p);
+  const sc = (PERS - c.d) / PERS; // screen px -> camera px at the target's depth
+  world.style.transform = `translate3d(${c.OX * sc}px, ${c.OY * sc}px, 0) translateZ(${c.d}px) rotateX(${c.rx}deg) rotateZ(${c.rz}deg) translate3d(${-c.x}px, ${-c.y}px, ${-c.z}px)`;
   setCaption(near);
-  // plane tree draws itself as the shot progresses
+  const cap = $('#captions');
+  cap.style.opacity = (0.12 + .88 * ease(settle)) * (1 - clamp((p - .9) / .05));
+  cap.style.transform = `translateY(${(1 - ease(settle)) * 14}px)`;
+  $('#capShade').style.opacity = (.55 + .45 * ease(settle)) * (1 - clamp((p - .88) / .05));
   $$('.grow', planeSvg).forEach(pth => { pth.style.strokeDashoffset = pth._len * (1 - clamp(p * 1.6 - pth._d)); });
-  // match cut: dive into the root, the iris opens
   const irisK = clamp((p - .9) / .1);
   const iris = $('#iris'), dia = ease(irisK) * Math.hypot(innerWidth, innerHeight) * 1.1;
   iris.style.width = iris.style.height = dia + 'px';
   iris.style.opacity = irisK > 0 ? 1 : 0;
-  $('#captions').style.opacity = 1 - clamp((p - .93) / .04);
   $('#scrollHint').style.opacity = p < .03 ? 1 : 0;
+}
+// scroll lands softly on each stop
+function snapMarkers() {
+  $$('.snap', tour).forEach(m => m.remove());
+  const span = tour.offsetHeight - innerHeight;
+  [.04, .21, .395, .585, .775].forEach(pp => { const m = document.createElement('div'); m.className = 'snap'; m.style.top = Math.round(pp * span) + 'px'; tour.appendChild(m); });
 }
 // motion blur from scroll velocity
 function blurFrame() {
@@ -592,8 +611,8 @@ function blurFrame() {
 const planeSvg = $('#planeSvg');
 function drawPlane() {
   const O = [1400, 1100], pt = (x, y) => [x + O[0], y + O[1]];
-  const root = pt(520, 640);
-  const targets = [pt(400, 260), pt(-470, 150), pt(-60, 600), pt(-420, -330), pt(-420, -640)];
+  const root = pt(700, 760);
+  const targets = [pt(400, 260), pt(-470, 150), pt(-60, 600), pt(-760, -400), pt(-760, -760)];
   const r = rng(77); let s = '';
   targets.forEach((t, i) => {
     const mx = (root[0] + t[0]) / 2 + (r() - .5) * 400, my = (root[1] + t[1]) / 2 + (r() - .5) * 300;
@@ -613,13 +632,13 @@ function drawPlane() {
 }
 function drawPillars() {
   const bs = D.beneficiaries.by_status, ks = ['approved', 'pending', 'review', 'rejected'], max = Math.max(1, ...ks.map(k => bs[k] || 0));
-  $('#pillars').innerHTML = ks.map(k => { const h = 30 + (bs[k] || 0) / max * 300; return `<div class="pillar" style="--h:${h}px;--c:${SC[k]}"><div class="face shadow"></div><div class="face front"></div><div class="face side"></div><div class="face top"><span><b>${fmt(bs[k] || 0)}</b><small>${STATUS[k]}</small></span></div><div class="plabel">${STATUS[k]}</div></div>`; }).join('');
+  $('#pillars').innerHTML = ks.map(k => { const h = 30 + (bs[k] || 0) / max * 200; return `<div class="pillar" style="--h:${h}px;--c:${SC[k]}"><div class="face shadow"></div><div class="face front"></div><div class="face side"></div><div class="face top"><span><b>${fmt(bs[k] || 0)}</b><small>${STATUS[k]}</small></span></div><div class="plabel">${STATUS[k]}</div></div>`; }).join('');
 }
 
 /* ---------- match cut part 2: circle becomes the app window ---------- */
 const appwin = $('#appwin');
 function morphFrame() {
-  if (reduce) { appwin.style.clipPath = 'none'; return; }
+  if (reduce || window.__noMorph) { appwin.style.clipPath = 'none'; appwin.style.transform = 'none'; return; }
   const r = appwin.getBoundingClientRect();
   const q = clamp((innerHeight - r.top) / (innerHeight * .62));
   const k = ease(q), w = r.width, h = r.height, r0 = 70;
@@ -840,7 +859,7 @@ function frame() { blurFrame(); tourFrame(); morphFrame(); bpFrame(); requestAni
 function boot() {
   buildModel(); renderNav(); render(); renderScreens(); drawPillars(); drawPlane(); buildBlueprint(); buildNumbers(); notes(); kinetic(); grain();
   tickClock(); setInterval(tickClock, 1000);
-  sizeTree(); addEventListener('resize', () => { sizeTree(); renderScreens(); });
+  sizeTree(); snapMarkers(); addEventListener('resize', () => { sizeTree(); renderScreens(); snapMarkers(); });
   runIntro(); treeLoop(); frame();
   loadLive();
 }
