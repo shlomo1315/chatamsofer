@@ -1,5 +1,5 @@
 'use client'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { digitsQuery, type DonorRow } from '@/lib/donorReport'
 import {
   EMPTY_FILTER, ascending, checkSums, dimValue, dimValues, filterView, groupBy, isFiltered, matches, monthKey, totals,
@@ -125,7 +125,11 @@ export default function DonorReportView({ token }: { token: string }) {
   const [data, setData] = useState<Report | null>(null)
   const [state, setState] = useState<'loading' | 'password' | 'inactive' | 'error' | 'ok'>('loading')
   const [error, setError] = useState('')
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const [theme, setThemeState] = useState<'dark' | 'light'>('light')
+  // ברירת מחדל בהיר; בחירה שנשמרה נטענת לפני הציור הראשון כדי שלא יהיה הבהוב.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useLayoutEffect(() => { try { if (localStorage.getItem('dr-theme') === 'dark') setThemeState('dark') } catch {} }, [])
+  const setTheme = (t: 'dark' | 'light') => { setThemeState(t); try { localStorage.setItem('dr-theme', t) } catch {} }
   const [F, setF] = useState<ViewFilter>(EMPTY_FILTER)
   const [shown, setShown] = useState(10)
   const [expanded, setExpanded] = useState<DimKey[]>([])
@@ -331,6 +335,9 @@ export default function DonorReportView({ token }: { token: string }) {
       <div className="report">
         <div className="top"><div className="mark">ח</div><div><h1>דוח יולדות</h1><p>היכל החתם סופר</p></div><span className="live"><i />מתעדכן חי</span></div>
         <div className="grid">
+          <PeriodPanel all={all} rows={R} F={F} homes={homes} homeGroups={homeGroups} T={T}
+            setRange={(from, to) => { setF(f => ({ ...f, from, to })); setShown(10) }}
+            setHome={home => { setF(f => ({ ...f, home })); setShown(10) }} />
           <section className="tile game" aria-label="יולדות שהצטברו עד היום">
             <div className="gtop">
               <div>
@@ -454,9 +461,6 @@ export default function DonorReportView({ token }: { token: string }) {
               })}
             </div>
           </section>
-          <PeriodPanel all={all} rows={R} F={F} homes={homes} homeGroups={homeGroups} T={T}
-            setRange={(from, to) => { setF(f => ({ ...f, from, to })); setShown(10) }}
-            setHome={home => { setF(f => ({ ...f, home })); setShown(10) }} />
           <section className="tile li"><h3>פירוט יולדות <span>{fmt(R.length)} יולדות</span></h3>
             <div>
               {R.length
