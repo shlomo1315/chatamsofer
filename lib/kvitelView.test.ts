@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { countByStatus, hebrewDay, parseRawFields, pendingForPrint, reviewReason } from './kvitelView'
+import { countByStatus, hebrewDay, parseRawFields, pendingForPrint, reviewReason, cleanTranscript, MAX_TRANSCRIPT } from './kvitelView'
 import { kvitelExportLines, type KvitelRequestRow } from './kvitelQuery'
 
 const line = (o: Partial<{ name: string; parent_name: string; flagged: boolean; flag_reason: string | null }> = {}) =>
@@ -41,4 +41,15 @@ describe('pendingForPrint', () => {
     expect(kvitelExportLines(list)).toHaveLength(list.length)
   })
   it('אין חדשות: רשימה ריקה', () => expect(pendingForPrint([row('b', 'done')])).toEqual([]))
+})
+
+describe('cleanTranscript', () => {
+  it('מנקה רווחים ומחזיר null לריק', () => {
+    expect(cleanTranscript('  שלום \r\nעולם ')).toBe('שלום \nעולם')
+    expect(cleanTranscript('   ')).toBeNull()
+  })
+  it('דוחה טקסט ארוך מדי ולא-מחרוזת', () => {
+    expect(cleanTranscript('א'.repeat(MAX_TRANSCRIPT + 1))).toBeUndefined()
+    expect(cleanTranscript(5)).toBeUndefined()
+  })
 })
