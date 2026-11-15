@@ -2,6 +2,7 @@ import { randomBytes } from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { recoveryDaysOf } from '@/lib/maternity'
+import { buildResolver, type CommunityMap } from '@/lib/communityMerge'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // דוח יולדות לנדיב: יולדות שאושרו (status='active'), לפי בית החלמה, תאריך וסכום.
@@ -140,8 +141,19 @@ export function summarize(rows: DonorRow[]) {
   }
 }
 
-/** שליפת כל היולדות שאושרו עם בית החלמה. */
-export async function loadApprovedRows(db: SupabaseClient): Promise<DonorRowFull[]> {
+/** מיפוי איחוד הקהילות השמור (מפתח מנורמל → שם מאוחד). אם הטבלה חסרה, מחזיר ריק. */
+export async function loadCommunityMap(db: SupabaseClient): Promise<CommunityMap> {
+  const { rows, error } = await fetchAllRows<{ original_key: string; canonical: string }>((from, to) => db
+    .from('donor_community_merges').select('original_key, canonical').range(from, to))
+  if (error) return {}
+  return Object.fromEntries(rows.map(r => [r.original_key, r.canonical]))
+}
+
+/**
+ * שליפת כל היולדות שאושרו עם בית החלמה.
+ * שמות הקהילות מאוחדים לפי המיפוי (ושמות זהים מאוחדים אוטומטית); raw=true מדלג על כך.
+ */
+export async function loadApprovedRows(db: SupabaseClient, opts: { raw?: boolean } = {}): Promise<DonorRowFull[]> {
   const { rows: aids, error } = await fetchAllRows<Record<string, unknown>>((from, to) => db
     .from('maternity_aids')
     .select('id, birth_date, recovery_home, recovery_arrived, recovery_arrived_at, recovery_amount, recovery_nights, recovery_eligibility_days, is_twins, babies, beneficiary:beneficiaries(full_name, family_name, spouse_name, id_number, city, community_affiliation)')
@@ -186,6 +198,10 @@ export async function loadApprovedRows(db: SupabaseClient): Promise<DonorRowFull
       idLast4: idNumber.slice(-4),
       idNumber,
     })
+  }
+  if (!opts.raw) {
+    const resolve = buildResolver(out.map(r => r.community), await loadCommunityMap(db))
+    for (const r of out) if (r.community !== UNKNOWN_LABEL) r.community = resolve(r.community)
   }
   return out.sort((x, y) => x.date.localeCompare(y.date))
 }
