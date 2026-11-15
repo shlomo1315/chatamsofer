@@ -2,7 +2,8 @@
 
 import { useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { FileDown, Printer, Check, RotateCcw, X, Filter, Link2, ChevronLeft, Search, CalendarDays, Pencil } from 'lucide-react'
+import KvitelRecordingPanel from './KvitelRecordingPanel'
+import { FileDown, Printer, Check, RotateCcw, X, Filter, Link2, ChevronLeft, Search, CalendarDays, Pencil, Mic } from 'lucide-react'
 import { KVITEL_CHANNELS, KVITEL_REQUEST_OPTIONS, KVITEL_STATUSES, requestTypeLabel, type KvitelStatus } from '@/lib/kvitel'
 import { kvitelRequestLines, type KvitelFilters, type KvitelLineRow, type KvitelRequestRow } from '@/lib/kvitelQuery'
 import { ListTable } from '@/components/admin/system/ListTable'
@@ -145,6 +146,7 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs }: { allR
   const [openIdx, setOpenIdx] = useState<number | null>(null)
   const [openEditing, setOpenEditing] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)   // תיקון inline בשורה בטבלה
+  const [recordingId, setRecordingId] = useState<string | null>(null)   // הקלטה ותמלול inline בשורה
   const [datesOpen, setDatesOpen] = useState(false)
   const [q, setQ] = useState(filters.q ?? '')
   const [channel, setChannel] = useState<string>(filters.channel ?? '')
@@ -343,9 +345,18 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs }: { allR
               <KvitelLinesEditor requestId={r.id} lines={r.kvitel_request_lines} contact={{ name: r.contact_name, phone: r.contact_phone, email: r.contact_email }}
                 editable={canEdit} onCancel={() => setEditingId(null)}
                 onSaved={m => { setEditingId(null); setMessage(m); router.refresh() }} />
+            ) : recordingId === r.id && r.recording_url ? (
+              <KvitelRecordingPanel key={r.id} requestId={r.id} recordingUrl={r.recording_url} transcript={r.raw_text} needsReview={!!r.needsReview}
+                editable={canEdit} onSaved={m => { setMessage(m); router.refresh() }} />
             ) : null}
             actions={r => (
               <div className="flex items-center gap-3">
+                {r.recording_url && (
+                  <button type="button" onClick={() => setRecordingId(id => (id === r.id ? null : r.id))} aria-expanded={recordingId === r.id} className="flex h-9 items-center gap-1.5 rounded-[10px] border border-line bg-white px-3 text-[13px] font-semibold text-navy hover:border-[#cfc8bb]"
+                    aria-label={`הקלטה ותמלול של הבקשה של ${r.contact_name || dateFmt.format(new Date(r.submitted_at))}`}>
+                    <Mic className="h-4 w-4" aria-hidden /> הקלטה
+                  </button>
+                )}
                 {canEdit && r.needsReview && (
                   <button type="button" disabled={busy} onClick={() => void setStatus([r.id], 'pending')} className="flex h-9 items-center gap-1.5 rounded-[10px] bg-[#17663F] px-3 text-[13px] font-semibold text-white disabled:opacity-40"
                     aria-label={`אישור הבקשה של ${r.contact_name || dateFmt.format(new Date(r.submitted_at))}`}>

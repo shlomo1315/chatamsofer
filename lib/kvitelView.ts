@@ -55,3 +55,13 @@ export function parseRawFields(raw: string | null | undefined): { key: string; v
 export function pendingForPrint(rows: KvitelRequestRow[]): KvitelRequestRow[] {
   return rows.filter(r => r.status === 'pending' && r.kvitel_request_lines.length > 0)
 }
+
+export const MAX_TRANSCRIPT = 4000
+
+/** תמלול ידני של הקלטה: מנקה רווחים, מגביל אורך. null = לא תקין. */
+export function cleanTranscript(v: unknown): string | null | undefined {
+  if (v === null || v === undefined) return undefined
+  if (typeof v !== 'string') return undefined
+  const t = v.replace(/\r\n/g, '\n').trim()
+  return t.length > MAX_TRANSCRIPT ? undefined : t || null
+}
