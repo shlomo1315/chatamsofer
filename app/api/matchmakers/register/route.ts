@@ -34,7 +34,8 @@ export async function POST(request: NextRequest) {
   const { data: created, error } = await db.from('matchmakers').insert({
     first_name: f.first_name, last_name: f.last_name, id_enc: encryptValue(f.id_number), id_hash: idHash,
     phone: f.phone, phone_norm: f.phone, email: f.email, email_norm: f.email,
-    address: f.address, city: f.city, birth_date: f.birth_date,
+    address: f.address, city: f.city, birth_date: f.birth_date, circle: f.circle,
+    bank_name: f.bank_name, bank_branch: f.bank_branch, bank_account_enc: encryptValue(f.bank_account),
   }).select('id, first_name, email').single()
   if (error || !created) {
     // מרוץ בין שתי הרשמות זהות: אילוץ הייחודיות במסד מכריע

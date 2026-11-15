@@ -27,13 +27,15 @@ type SideChoice = 'groom' | 'bride' | 'both'
 export async function verifyGrandchild(
   db: SupabaseClient,
   side: SideChoice,
-  ids: { groom: string; bride: string },
+  ids: { groom: string | null; bride: string | null },
   now = new Date(),
 ): Promise<GrandchildVerification> {
   const sides: ('groom' | 'bride')[] = side === 'both' ? ['groom', 'bride'] : [side]
   const matches: GrandchildMatch[] = []
   for (const s of sides) {
-    const filter = idOrFilter(ids[s], ['id_number', 'spouse_id_number'])
+    const id = ids[s]
+    if (!id) continue
+    const filter = idOrFilter(id, ['id_number', 'spouse_id_number'])
     if (!filter) continue
     const { data } = await db
       .from('beneficiaries')
@@ -41,7 +43,7 @@ export async function verifyGrandchild(
       .or(filter)
       .limit(5)
     for (const b of data ?? []) {
-      const matched_on = sameId(b.id_number, ids[s]) ? 'id_number' : sameId(b.spouse_id_number, ids[s]) ? 'spouse_id_number' : null
+      const matched_on = sameId(b.id_number, id) ? 'id_number' : sameId(b.spouse_id_number, id) ? 'spouse_id_number' : null
       if (!matched_on) continue
       matches.push({
         side: s, beneficiary_id: b.id, name: b.full_name, family_id: b.family_id ?? null,

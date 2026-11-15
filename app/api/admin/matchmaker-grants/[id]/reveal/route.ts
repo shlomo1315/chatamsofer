@@ -18,7 +18,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const col = body.who === 'groom' ? 'groom_id_enc' : 'bride_id_enc'
   const { data } = await db.from('matchmaker_claims').select(col).eq('id', id).maybeSingle()
   if (!data) return NextResponse.json({ error: 'הבקשה לא נמצאה' }, { status: 404 })
-  const value = decryptValue((data as unknown as Record<string, string>)[col])
+  const enc = (data as unknown as Record<string, string | null>)[col]
+  if (!enc) return NextResponse.json({ error: 'לא הוזנה ת"ז' }, { status: 404 })
+  const value = decryptValue(enc)
   await logAudit(db, id, 'reveal_id', body.who === 'groom' ? 'חתן' : 'כלה', staff.email ?? staff.userId)
   return NextResponse.json({ id_number: value }, { headers: { 'Cache-Control': 'no-store' } })
 }

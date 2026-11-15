@@ -60,8 +60,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
     case 'recheck': {
       if (!c.is_grandchild || !c.grandchild_side) return NextResponse.json({ error: 'הבקשה לא סומנה כנכד החתם סופר' }, { status: 400 })
-      const gId = decryptValue(c.groom_id_enc), bId = decryptValue(c.bride_id_enc)
-      if (!gId || !bId) return NextResponse.json({ error: 'לא ניתן לפענח ת"ז' }, { status: 500 })
+      const gId = c.groom_id_enc ? decryptValue(c.groom_id_enc) : null, bId = c.bride_id_enc ? decryptValue(c.bride_id_enc) : null
+      if (!gId && !bId) return NextResponse.json({ error: 'לא הוזנה ת"ז לאימות' }, { status: 400 })
       const verification = await verifyGrandchild(db, c.grandchild_side, { groom: gId, bride: bId })
       await db.from('matchmaker_claims').update({ verification }).eq('id', id)
       await logAudit(db, id, 'recheck', verification.result === 'verified' ? 'אומת' : 'לא נמצא', actor)

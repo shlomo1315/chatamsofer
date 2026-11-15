@@ -1,14 +1,16 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { rateLimit } from '@/lib/rateLimit'
-import { validateClaim } from '@/lib/matchmaker/validate'
+import { validateClaim, pairKey, claimsOpenDate } from '@/lib/matchmaker/validate'
 import { encryptValue, hashValue } from '@/lib/matchmaker/crypto'
 import { verifyGrandchild } from '@/lib/matchmaker/grandchildCheck'
-import { loadSettings, suggestedAmount } from '@/lib/matchmaker/settings'
+import { loadSettings, suggestedAmount, effectiveLimit } from '@/lib/matchmaker/settings'
 import { sendClaimReceived } from '@/lib/matchmaker/mail'
 import { JSON_HEADERS, currentMatchmaker } from '@/lib/matchmaker/session'
 
 export const dynamic = 'force-dynamic'
+
+export const HUMAN_REVIEW_NOTE = 'לא מצאנו אימות, הבקשה תועבר לאימות אנושי'
 
 // הגשת בקשת מלגה על שידוך. אימות "נכד החתם סופר" נשמר עם הבקשה ונראה למנהל בלבד.
 export async function POST(request: NextRequest) {
@@ -27,25 +29,37 @@ export async function POST(request: NextRequest) {
   const c = v.value
 
   const settings = await loadSettings(db)
-  if (settings.max_claims_per_matchmaker != null) {
+  // המתנה אחרי ההרשמה ולא לפני מועד הפתיחה הכללי (שניהם הגדרות מנהל)
+  const opens = claimsOpenDate(m.created_at, settings.claim_wait_days, settings.claims_open_from)
+  if (new Date().toISOString().slice(0, 10) < opens) {
+    return NextResponse.json({ error: 'עדיין לא ניתן להגיש בקשה.', can_claim_from: opens }, { status: 403, headers: JSON_HEADERS })
+  }
+  const limit = effectiveLimit(settings, m.claims_limit)
+  if (limit != null) {
     const { count } = await db.from('matchmaker_claims').select('id', { count: 'exact', head: true }).eq('matchmaker_id', m.id)
-    if ((count ?? 0) >= settings.max_claims_per_matchmaker) {
+    if ((count ?? 0) >= limit) {
       return NextResponse.json({ error: 'הגעתם למספר הבקשות המרבי. פנו למשרד.' }, { status: 403, headers: JSON_HEADERS })
     }
   }
 
   const verification = c.is_grandchild && c.grandchild_side
-    ? await verifyGrandchild(db, c.grandchild_side, { groom: c.groom_id, bride: c.bride_id })
+    ? await verifyGrandchild(db, c.grandchild_side, { groom: c.groom.id, bride: c.bride.id })
     : null
 
+  const g = c.groom, b = c.bride
   const { error } = await db.from('matchmaker_claims').insert({
-    matchmaker_id: m.id, match_date: c.match_date,
-    groom_first_name: c.groom_first_name, groom_last_name: c.groom_last_name,
-    groom_id_enc: encryptValue(c.groom_id), groom_id_hash: hashValue(c.groom_id),
-    groom_father_name: c.groom_father_name || null, groom_phone: c.groom_phone || null,
-    bride_first_name: c.bride_first_name, bride_last_name: c.bride_last_name,
-    bride_id_enc: encryptValue(c.bride_id), bride_id_hash: hashValue(c.bride_id),
-    bride_father_name: c.bride_father_name || null, bride_phone: c.bride_phone || null,
+    matchmaker_id: m.id, match_date: c.match_date, pair_key: pairKey(c),
+    groom_first_name: g.first_name, groom_last_name: g.last_name,
+    groom_id_enc: g.id ? encryptValue(g.id) : null, groom_id_hash: g.id ? hashValue(g.id) : null,
+    groom_father_name: g.father_name || null, groom_phone: g.father_phone || null,
+    groom_mother_name: g.mother_name || null, groom_mother_phone: g.mother_phone || null,
+    groom_address: g.address, groom_circle: g.circle,
+    bride_first_name: b.first_name, bride_last_name: b.last_name,
+    bride_id_enc: b.id ? encryptValue(b.id) : null, bride_id_hash: b.id ? hashValue(b.id) : null,
+    bride_father_name: b.father_name || null, bride_phone: b.father_phone || null,
+    bride_mother_name: b.mother_name || null, bride_mother_phone: b.mother_phone || null,
+    bride_address: b.address, bride_circle: b.circle,
+    second_matchmaker: c.second_matchmaker ? { ...c.second_matchmaker, id_number: encryptValue(c.second_matchmaker.id_number) } : null, reasons: c.reasons,
     is_grandchild: c.is_grandchild, grandchild_side: c.grandchild_side, verification,
     amount: suggestedAmount(settings, c.is_grandchild),
   })
@@ -53,6 +67,8 @@ export async function POST(request: NextRequest) {
     if (error.code === '23505') return NextResponse.json({ error: 'בקשה על השידוך הזה כבר הוגשה.' }, { status: 409, headers: JSON_HEADERS })
     return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500, headers: JSON_HEADERS })
   }
-  void sendClaimReceived(m.email, m.first_name, `${c.groom_first_name} ${c.groom_last_name}`, `${c.bride_first_name} ${c.bride_last_name}`).catch(() => {})
-  return NextResponse.json({ ok: true }, { status: 201, headers: JSON_HEADERS })
+  void sendClaimReceived(m.email, m.first_name, `${g.first_name} ${g.last_name}`, `${b.first_name} ${b.last_name}`).catch(() => {})
+  // בלי אימות אוטומטי: לא דוחים, מודיעים שהבקשה עוברת לבדיקה אנושית (התוצאה עצמה נשארת פנימית)
+  const human_review = !verification || verification.result !== 'verified'
+  return NextResponse.json({ ok: true, ...(c.is_grandchild && human_review ? { note: HUMAN_REVIEW_NOTE } : {}) }, { status: 201, headers: JSON_HEADERS })
 }
