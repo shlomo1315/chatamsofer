@@ -1,14 +1,15 @@
 'use client'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Download, Search, Settings, ShieldCheck, ShieldAlert, Eye, RefreshCw } from 'lucide-react'
+import { Download, Search, Settings, ShieldCheck, ShieldAlert, Eye, RefreshCw, Users } from 'lucide-react'
 import Modal from '@/components/ui/Modal'
-import type { AdminClaim } from '@/lib/matchmaker/adminData'
+import type { AdminClaim, AdminMatchmaker } from '@/lib/matchmaker/adminData'
+import { reasonsText } from '@/lib/matchmaker/reasons'
 
 interface Data {
   claims: AdminClaim[]
   counters: { pending: number; approved: number; grandchildren: number; payable: number }
-  settings: { regular_amount: number | null; enlarged_amount: number | null; max_claims_per_matchmaker: number | null }
-  matchmakers: { id: string; name: string }[]
+  settings: { regular_amount: number | null; enlarged_amount: number | null; max_claims_per_matchmaker: number | null; claims_open_from: string | null; claim_wait_days: number }
+  matchmakers: AdminMatchmaker[]
 }
 interface LogRow { action: string; detail: string | null; actor: string | null; created_at: string }
 
@@ -18,7 +19,7 @@ const STATUS_CLS: Record<string, string> = {
   paid: 'bg-navy text-white', rejected: 'bg-line text-ink-soft',
 }
 const ACTION_LABEL: Record<string, string> = {
-  approve: 'אישור', reject: 'דחייה', paid: 'סימון שולם', amount: 'קביעת סכום', recheck: 'בדיקה חוזרת', reveal_id: 'חשיפת ת"ז', settings: 'הגדרות', export: 'ייצוא',
+  approve: 'אישור', reject: 'דחייה', paid: 'סימון שולם', amount: 'קביעת סכום', recheck: 'בדיקה חוזרת', reveal_id: 'חשיפת ת"ז', reveal_bank: 'חשיפת חשבון בנק', matchmaker_edit: 'עריכת שדכן', settings: 'הגדרות', export: 'ייצוא',
 }
 const SIDE_LABEL = { groom: 'החתן', bride: 'הכלה', both: 'שניהם' }
 const fmtDate = (s: string) => new Date(s).toLocaleDateString('he-IL')
@@ -32,6 +33,7 @@ export default function MatchmakerGrantsClient({ demo }: { demo?: Data }) {
   const [f, setF] = useState({ status: '', grandchild: '', from: '', to: '', matchmaker: '', q: '' })
   const [open, setOpen] = useState<AdminClaim | null>(null)
   const [showSettings, setShowSettings] = useState(false)
+  const [showMatchmakers, setShowMatchmakers] = useState(false)
 
   const query = useMemo(() => {
     const p = new URLSearchParams()
@@ -91,6 +93,7 @@ export default function MatchmakerGrantsClient({ demo }: { demo?: Data }) {
         <input type="date" className={inputCls} value={f.to} onChange={e => setF({ ...f, to: e.target.value })} aria-label="עד תאריך" />
         <button onClick={load} className="h-10 w-10 grid place-items-center rounded-lg border border-line bg-white text-navy hover:bg-gold-soft" aria-label="רענון"><RefreshCw className="w-4 h-4" /></button>
         <a href={`/api/admin/matchmaker-grants/export?${query}`} className="h-10 px-4 inline-flex items-center gap-2 rounded-lg bg-gold text-navy-dark font-bold text-sm hover:brightness-105"><Download className="w-4 h-4" />ייצוא לאקסל</a>
+        <button onClick={() => setShowMatchmakers(true)} className="h-10 px-3 inline-flex items-center gap-2 rounded-lg border border-line bg-white text-navy text-sm hover:bg-gold-soft"><Users className="w-4 h-4" />שדכנים</button>
         <button onClick={() => setShowSettings(true)} className="h-10 px-3 inline-flex items-center gap-2 rounded-lg border border-line bg-white text-navy text-sm hover:bg-gold-soft"><Settings className="w-4 h-4" />הגדרות</button>
       </div>
 
@@ -122,6 +125,7 @@ export default function MatchmakerGrantsClient({ demo }: { demo?: Data }) {
       </div>
 
       {open && <ClaimModal claim={open} demo={!!demo} onClose={() => setOpen(null)} onChanged={async () => { await load(); setOpen(null) }} />}
+      {showMatchmakers && data && <MatchmakersModal list={data.matchmakers} demo={!!demo} onClose={() => setShowMatchmakers(false)} onChanged={load} />}
       {showSettings && data && <SettingsModal settings={data.settings} onClose={() => setShowSettings(false)} onSaved={() => { setShowSettings(false); load() }} />}
     </div>
   )
@@ -192,13 +196,24 @@ function ClaimModal({ claim, demo, onClose, onChanged }: { claim: AdminClaim; de
             <div key={w} className="rounded-lg border border-line p-3 space-y-1">
               <div className="text-xs font-bold text-gold">{w === 'groom' ? 'החתן' : 'הכלה'}</div>
               <div className="font-bold">{claim[`${w}_name`]}</div>
-              <div className="flex items-center gap-2 text-ink-soft"><span dir="ltr" className="tabular-nums">{revealed[w] || claim[`${w}_id_masked`]}</span>
-                {!revealed[w] && <button onClick={() => reveal(w)} className="inline-flex items-center gap-1 text-xs text-navy underline"><Eye className="w-3 h-3" />הצג (נרשם ביומן)</button>}</div>
-              <div className="text-ink-soft">אב: {claim[`${w}_father_name`] || '—'}</div>
-              <div className="text-ink-soft" dir="ltr" style={{ textAlign: 'right' }}>{claim[`${w}_phone`] || '—'}</div>
+              {claim[`${w}_id_masked`] && <div className="flex items-center gap-2 text-ink-soft"><span dir="ltr" className="tabular-nums">{revealed[w] || claim[`${w}_id_masked`]}</span>
+                {!revealed[w] && <button onClick={() => reveal(w)} className="inline-flex items-center gap-1 text-xs text-navy underline"><Eye className="w-3 h-3" />הצג (נרשם ביומן)</button>}</div>}
+              <div className="text-ink-soft">אב: {claim[`${w}_father_name`] || '—'} · <span dir="ltr">{claim[`${w}_phone`] || '—'}</span></div>
+              <div className="text-ink-soft">אם: {claim[`${w}_mother_name`] || '—'} · <span dir="ltr">{claim[`${w}_mother_phone`] || '—'}</span></div>
+              <div className="text-ink-soft">{claim[`${w}_address`] || '—'}{claim[`${w}_circle`] ? ` · חוג ${claim[`${w}_circle`]}` : ''}</div>
             </div>
           ))}
         </div>
+
+        {reasonsText(claim.reasons) && <div className="rounded-lg border border-line p-3">
+          <div className="text-xs font-bold text-gold mb-1">סיבות למלגה</div>
+          <div>{reasonsText(claim.reasons)}</div>
+        </div>}
+        {claim.second_matchmaker && <div className="rounded-lg border border-line p-3">
+          <div className="text-xs font-bold text-gold mb-1">שדכן נוסף</div>
+          <div className="font-bold">{claim.second_matchmaker.first_name} {claim.second_matchmaker.last_name}{claim.second_matchmaker.circle ? ` · חוג ${claim.second_matchmaker.circle}` : ''}</div>
+          <div className="text-ink-soft"><span dir="ltr">{claim.second_matchmaker.phone}</span> · {claim.second_matchmaker.email} · {claim.second_matchmaker.address}, {claim.second_matchmaker.city}</div>
+        </div>}
 
         <div className="rounded-lg border border-line p-3">
           <div className="text-xs font-bold text-gold mb-1">שדכן</div>
@@ -240,15 +255,18 @@ function ClaimModal({ claim, demo, onClose, onChanged }: { claim: AdminClaim; de
 }
 
 function SettingsModal({ settings, onClose, onSaved }: { settings: Data['settings']; onClose: () => void; onSaved: () => void }) {
-  const [s, setS] = useState({ regular: settings.regular_amount?.toString() ?? '', enlarged: settings.enlarged_amount?.toString() ?? '', max: settings.max_claims_per_matchmaker?.toString() ?? '' })
+  const [s, setS] = useState({
+    regular: settings.regular_amount?.toString() ?? '', enlarged: settings.enlarged_amount?.toString() ?? '', max: settings.max_claims_per_matchmaker?.toString() ?? '',
+    wait: String(settings.claim_wait_days ?? 7), open: settings.claims_open_from ?? '',
+  })
   const [err, setErr] = useState('')
   async function save() {
     const res = await fetch('/api/admin/matchmaker-grants/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ regular_amount: s.regular, enlarged_amount: s.enlarged, max_claims_per_matchmaker: s.max }) })
+      body: JSON.stringify({ regular_amount: s.regular, enlarged_amount: s.enlarged, max_claims_per_matchmaker: s.max, claim_wait_days: s.wait, claims_open_from: s.open }) })
     if (!res.ok) { setErr((await res.json().catch(() => ({}))).error ?? 'שגיאה'); return }
     onSaved()
   }
-  const field = (label: string, key: 'regular' | 'enlarged' | 'max', hint: string) => (
+  const field = (label: string, key: 'regular' | 'enlarged' | 'max' | 'wait', hint: string) => (
     <label className="block"><span className="text-sm font-bold">{label}</span><span className="block text-xs text-ink-soft">{hint}</span>
       <input className={`${inputCls} w-full mt-1`} inputMode="numeric" value={s[key]} onChange={e => setS({ ...s, [key]: e.target.value.replace(/\D/g, '') })} /></label>
   )
@@ -258,9 +276,88 @@ function SettingsModal({ settings, onClose, onSaved }: { settings: Data['setting
       <div className="space-y-4">
         {field('מלגה רגילה (₪)', 'regular', 'מוצע אוטומטית בבקשה רגילה')}
         {field('מלגה מוגדלת (₪)', 'enlarged', 'מוצע אוטומטית כשסומן נכד החתם סופר')}
-        {field('מקסימום בקשות לשדכן', 'max', 'ריק = ללא הגבלה')}
+        {field('מקסימום בקשות לשדכן', 'max', 'ריק = ללא הגבלה. אפשר להגדיר הגבלה פרטנית לכל שדכן במסך "שדכנים"')}
+        <label className="block"><span className="text-sm font-bold">פתיחת הגשת בקשות</span><span className="block text-xs text-ink-soft">לא לפני תאריך זה (ברירת מחדל: ה׳ בטבת, 15.12.2026)</span>
+          <input type="date" className={`${inputCls} w-full mt-1`} value={s.open} onChange={e => setS({ ...s, open: e.target.value })} /></label>
+        {field('ימי המתנה אחרי ההרשמה', 'wait', 'שדכן יכול להגיש בקשה רק כך וכך ימים אחרי שנרשם')}
         {err && <div role="alert" className="text-sm text-red-700">{err}</div>}
       </div>
+    </Modal>
+  )
+}
+
+function MatchmakersModal({ list, demo, onClose, onChanged }: { list: AdminMatchmaker[]; demo: boolean; onClose: () => void; onChanged: () => void }) {
+  const [editing, setEditing] = useState<AdminMatchmaker | null>(null)
+  const [limit, setLimit] = useState('')
+  const [bank, setBank] = useState({ bank_name: '', bank_branch: '', bank_account: '' })
+  const [revealed, setRevealed] = useState<Record<string, string>>({})
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  function edit(m: AdminMatchmaker) {
+    setEditing(m); setErr('')
+    setLimit(m.claims_limit != null ? String(m.claims_limit) : '')
+    setBank({ bank_name: m.bank_name ?? '', bank_branch: m.bank_branch ?? '', bank_account: '' })
+  }
+  async function save() {
+    if (!editing || demo) return
+    setBusy(true); setErr('')
+    const body: Record<string, unknown> = { claims_limit: limit }
+    if (bank.bank_account) Object.assign(body, bank)
+    const res = await fetch(`/api/admin/matchmaker-grants/matchmakers/${editing.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    setBusy(false)
+    if (!res.ok) { setErr((await res.json().catch(() => ({}))).error ?? 'שגיאה'); return }
+    setEditing(null); onChanged()
+  }
+  async function reveal(id: string) {
+    if (demo) return
+    const res = await fetch(`/api/admin/matchmaker-grants/matchmakers/${id}/reveal`, { method: 'POST' })
+    if (res.ok) { const d = await res.json(); setRevealed(r => ({ ...r, [id]: d.bank_account ?? '' })) }
+  }
+
+  return (
+    <Modal open onClose={onClose} size="lg" title={editing ? `עריכת שדכן: ${editing.name}` : 'שדכנים'}
+      footer={editing ? (
+        <div className="flex gap-2">
+          <button disabled={busy} onClick={save} className="h-10 px-5 rounded-lg bg-navy text-white font-bold text-sm disabled:opacity-50">שמירה</button>
+          <button onClick={() => setEditing(null)} className="h-10 px-4 rounded-lg border border-line bg-white text-sm">ביטול</button>
+        </div>
+      ) : undefined}>
+      {editing ? (
+        <div className="space-y-4 text-sm">
+          <label className="block"><span className="font-bold">הגבלת בקשות לשדכן</span><span className="block text-xs text-ink-soft">גוברת על ההגדרה הכללית. ריק = לפי ההגדרה הכללית</span>
+            <input className={`${inputCls} w-full mt-1`} inputMode="numeric" value={limit} onChange={e => setLimit(e.target.value.replace(/\D/g, ''))} /></label>
+          <fieldset className="rounded-lg border border-line p-3 space-y-3">
+            <legend className="px-2 text-xs font-bold text-gold">פרטי העברה (רק מנהל משנה)</legend>
+            <p className="text-xs text-ink-soft">להשאיר את החשבון ריק כדי לא לשנות. שינוי נרשם ביומן.</p>
+            <input className={`${inputCls} w-full`} placeholder="בנק" value={bank.bank_name} onChange={e => setBank({ ...bank, bank_name: e.target.value })} />
+            <div className="grid grid-cols-2 gap-2">
+              <input className={inputCls} inputMode="numeric" dir="ltr" placeholder="סניף" value={bank.bank_branch} onChange={e => setBank({ ...bank, bank_branch: e.target.value.replace(/\D/g, '') })} />
+              <input className={inputCls} inputMode="numeric" dir="ltr" placeholder="חשבון חדש" value={bank.bank_account} onChange={e => setBank({ ...bank, bank_account: e.target.value.replace(/\D/g, '') })} />
+            </div>
+          </fieldset>
+          {err && <div role="alert" className="text-sm text-red-700">{err}</div>}
+        </div>
+      ) : (
+        <div className="min-w-0">
+          <table className="w-full text-sm">
+            <thead><tr className="text-xs text-ink-soft text-right"><th className="py-2">שדכן</th><th className="hidden sm:table-cell">חוג</th><th>בקשות</th><th>בנק</th><th /></tr></thead>
+            <tbody>{list.map(m => (
+              <tr key={m.id} className="border-t border-line align-top">
+                <td className="py-2"><div className="font-bold">{m.name}</div><div className="text-xs text-ink-soft" dir="ltr" style={{ textAlign: 'right' }}>{m.phone}</div></td>
+                <td className="hidden sm:table-cell">{m.circle || "—"}</td>
+                <td>{m.claims_count}{m.claims_limit != null ? ` / ${m.claims_limit}` : ''}</td>
+                <td className="text-xs">
+                  {m.bank_name ? <>{m.bank_name} · סניף {m.bank_branch} · <span dir="ltr" className="tabular-nums">{revealed[m.id] || m.bank_account_masked}</span>
+                    {!revealed[m.id] && <button onClick={() => reveal(m.id)} className="ms-2 inline-flex items-center gap-1 text-navy underline"><Eye className="w-3 h-3" />הצג (נרשם ביומן)</button>}</> : '—'}
+                </td>
+                <td><button onClick={() => edit(m)} className="text-xs text-navy underline">עריכה</button></td>
+              </tr>
+            ))}</tbody>
+          </table>
+          {!list.length && <div className="py-6 text-center text-ink-soft">אין שדכנים רשומים</div>}
+        </div>
+      )}
     </Modal>
   )
 }

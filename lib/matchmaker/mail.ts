@@ -1,4 +1,5 @@
 import { deliverMail } from '@/lib/sendMail'
+import { loadFlyer } from './flyer'
 
 // מיילים של פורטל השדכנים: קוד כניסה, אישור קבלה, אישור/דחייה.
 // הכול תפעולי (בלי מעקב ובלי כותרות הסרה); הקוד בעדיפות גבוהה.
@@ -36,4 +37,14 @@ export function sendClaimDecision(to: string, name: string, groom: string, bride
     ? `<p>שלום ${esc(name)},</p><p>בקשת המלגה על השידוך ${esc(groom)} ו${esc(bride)} אושרה${amount != null ? ` בסכום של ₪${amount.toLocaleString('he-IL')}` : ''}.</p>`
     : `<p>שלום ${esc(name)},</p><p>בקשת המלגה על השידוך ${esc(groom)} ו${esc(bride)} לא אושרה.${reason ? `<br/>סיבה: ${esc(reason)}` : ''}</p>`
   return deliverMail(to, approved ? 'בקשת המלגה אושרה' : 'עדכון לגבי בקשת המלגה', shell(approved ? 'המלגה אושרה' : 'עדכון בקשה', body), undefined, FROM)
+}
+
+export async function sendWelcomeRegistered(to: string, name: string) {
+  const flyer = await loadFlyer()
+  return deliverMail(to, 'נרשמתם בהצלחה לפרויקט המלגות', shell('נרשמתם בהצלחה', `
+    <p>שלום ${esc(name)},</p>
+    <p>נרשמתם בהצלחה לפרויקט המלגות של הגפן בשיתוף איגוד צאצאי מרן החת"ס זיע"א.</p>
+    ${flyer ? '<p>דף הפרסום של הפרויקט מצורף למייל זה.</p>' : ''}
+    <p>אפשר להגיש בקשת מלגה שבוע אחרי ההרשמה, ולא לפני ה' בטבת. המועד המדויק מופיע באזור האישי.</p>`),
+  flyer ? [flyer] : undefined, FROM)
 }

@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { JSON_HEADERS, currentMatchmaker } from '@/lib/matchmaker/session'
+import { loadSettings } from '@/lib/matchmaker/settings'
+import { claimsOpenDate } from '@/lib/matchmaker/validate'
 import { MM_COOKIE, SESSION_COOKIE_OPTIONS, issueSession } from '@/lib/matchmaker/crypto'
 
 export const dynamic = 'force-dynamic'
@@ -17,8 +19,10 @@ export async function GET(request: NextRequest) {
     .select('id, match_date, groom_first_name, groom_last_name, bride_first_name, bride_last_name, is_grandchild, status, amount, reject_reason, created_at')
     .eq('matchmaker_id', m.id).order('created_at', { ascending: false }).limit(200)
 
+  const settings = await loadSettings(db)
   const res = NextResponse.json({
-    matchmaker: { first_name: m.first_name, last_name: m.last_name, email: m.email },
+    matchmaker: { first_name: m.first_name, last_name: m.last_name, email: m.email, circle: m.circle, bank_name: m.bank_name, bank_branch: m.bank_branch },
+    can_claim_from: claimsOpenDate(m.created_at, settings.claim_wait_days, settings.claims_open_from),
     claims: (claims ?? []).map(c => ({ ...c, amount: c.status === 'approved' || c.status === 'paid' ? c.amount : null })),
   }, { headers: JSON_HEADERS })
   // חוסר פעילות: כל פנייה מאריכה את הסשן ב-30 דקות
