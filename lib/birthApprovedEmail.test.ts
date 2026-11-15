@@ -52,11 +52,38 @@ describe('מייל אישור לידה כשאין מלאי כרטיסים', () =
     const m = noStock({ wantsCard: false, wantsRecovery: true })
     expect(text(m.html)).not.toContain('כרטיס')
     expect(text(m.html)).not.toContain('יישלח')
-    expect(m.html).toContain('שובר ההבראה')
+    expect(m.html).toContain('להדפיס</span> את השובר')
     expect(m.html).toContain('טלזסטון')
   })
   it('ביקשה כרטיס: ממשיך להופיע "יישלח בהמשך"', () => {
     const m = noStock({ wantsCard: true, wantsRecovery: true })
     expect(m.html).toContain('כרטיס מזון — יישלח בהמשך')
+  })
+})
+
+describe('משבצת "חובה להדפיס" במייל האישור', () => {
+  const nostock = (o: { wantsCard: boolean; wantsRecovery: boolean }) =>
+    birthApprovedEmail(ben as never, birth, { centers, cardInStock: false, ...o })
+
+  it('שניהם: נוסח שוברים, ראשונה בגוף המייל לפני "בשורה טובה"', () => {
+    const m = build({ wantsCard: true, wantsRecovery: true })
+    expect(m.html).toContain('להדפיס</span> את השוברים')
+    expect(m.html).toContain('ללא שוברים אלו אין אפשרות לממש את הזכאות!')
+    expect(m.html.indexOf('שובר למימוש ההטבה')).toBeLessThan(m.html.indexOf('בשורה טובה'))
+  })
+  it('בית החלמה בלבד: נוסח יחיד', () => {
+    const m = build({ wantsCard: false, wantsRecovery: true })
+    expect(m.html).toContain('להדפיס</span> את השובר')
+    expect(m.html).toContain('ללא שובר זה אין אפשרות')
+  })
+  it('כרטיס מזון בלבד: בכרטיס המזון', () => {
+    expect(build({ wantsCard: true, wantsRecovery: false }).html).toContain('לצורך מימוש ההטבה בכרטיס המזון')
+  })
+  it('כרטיס בלבד בלי מלאי: אין שובר להדפסה', () => {
+    expect(nostock({ wantsCard: true, wantsRecovery: false }).html).not.toContain('שובר למימוש ההטבה')
+  })
+  it('שניהם בלי מלאי: רק שובר הבראה', () => {
+    const m = nostock({ wantsCard: true, wantsRecovery: true })
+    expect(m.html).toContain('לצורך מימוש ההטבה בבית ההחלמה יש')
   })
 })

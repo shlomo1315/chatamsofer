@@ -1179,10 +1179,33 @@ export function birthApprovedEmail(
         </p>
       </td></tr>
     </table>`
-  const voucherNote = foodOnly
-    ? (cardInStock ? 'הדפיסו את השובר והביאו אותו למוקד לצורך מימוש ההטבה.' : 'שובר כרטיס המזון יישלח אליכם בהמשך למייל.')
-    : recoveryOnly ? 'הדפיסו את שובר ההבראה והביאו אותו לבית ההחלמה לצורך מימוש ההטבה.'
-    : cardInStock ? T('vouchers_note') : T('vouchers_note_no_stock')
+  // משבצת "חובה להדפיס" — ראשונה בגוף המייל, בסגנון שובר מנוקב בצבעי המותג (נייבי וזהב).
+  // הנוסח לפי השוברים שמצורפים בפועל: בלי מלאי כרטיסים, שובר כרטיס המזון לא מצורף.
+  const voucherKind = foodOnly ? (cardInStock ? 'card' : null)
+    : recoveryOnly || !cardInStock ? 'recovery' : 'both'
+  const voucherX = voucherKind && {
+    both: { where: 'בבית ההחלמה ובקבלת כרטיס המזון', what: 'השוברים המיוחדים שקיבלתם במייל זה', no: 'ללא שוברים אלו', it: 'השוברים' },
+    recovery: { where: 'בבית ההחלמה', what: 'השובר המיוחד שקיבלתם במייל זה', no: 'ללא שובר זה', it: 'השובר' },
+    card: { where: 'בכרטיס המזון', what: 'השובר המיוחד שקיבלתם במייל זה', no: 'ללא שובר זה', it: 'השובר' },
+  }[voucherKind]
+  const voucherBlock = !voucherX ? '' : `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;border:4px dashed #C0912F;border-radius:16px;background:#14213D;">
+      <tr><td style="padding:0;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="background:#0E1830;border-top-right-radius:12px;padding:12px 20px;color:#F3E9CF;font-size:14px;font-weight:800;letter-spacing:.5px;">✂&nbsp; שובר למימוש ההטבה</td>
+            <td align="left" style="background:#0E1830;border-top-left-radius:12px;padding:12px 20px;"><span style="display:inline-block;background:#C0912F;color:#14213D;font-size:14px;font-weight:900;padding:4px 14px;border-radius:6px;letter-spacing:1px;">חובה</span></td>
+          </tr>
+        </table>
+        <div style="padding:24px 24px 8px;">
+          <p style="margin:0 0 12px;color:#ffffff;font-size:30px;font-weight:900;line-height:1.2;">חובה <span style="color:#E3B65B;">להדפיס</span> את ${voucherX.it}</p>
+          <p style="margin:0;color:#F3E9CF;font-size:17px;font-weight:700;line-height:1.75;">לצורך מימוש ההטבה ${voucherX.where} יש להדפיס את ${voucherX.what}.</p>
+        </div>
+        <div style="padding:16px 24px 24px;">
+          <p style="margin:0;background:#C0912F;color:#14213D;font-size:19px;font-weight:900;line-height:1.5;padding:14px 18px;border-radius:10px;text-align:center;">${voucherX.no} אין אפשרות לממש את הזכאות!</p>
+        </div>
+      </td></tr>
+    </table>`
   const approvedNote = foodOnly ? 'בקשתך לכרטיס מזון אושרה, מזל טוב!' : T('approved_note')
   const headingSuffix = foodOnly ? 'בקשת כרטיס המזון אושרה' : T('heading_suffix')
   // "להמשך התהליך" עוסק רק בבית החלמה — מוצג רק כשהבקשה כוללת בית החלמה
@@ -1196,12 +1219,7 @@ export function birthApprovedEmail(
       </td></tr>
     </table>` : ''
   const body = `
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
-      <tr><td style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:14px 18px;text-align:center;">
-        <p style="margin:0;color:#3730a3;font-size:15px;font-weight:900;line-height:1.7;">${T('vouchers_title')}</p>
-        <p style="margin:4px 0 0;color:#4338ca;font-size:13px;line-height:1.7;">${voucherNote}</p>
-      </td></tr>
-    </table>
+    ${voucherBlock}
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">${T('kicker')}</p>
     <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetMrs(b.family_name, b.spouse_name || b.full_name)} ${headingSuffix} </h2>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
