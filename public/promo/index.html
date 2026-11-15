@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>היכל החתם סופר · מערכת הניהול</title>
+<meta name="description" content="מערכת הניהול של היכל החתם סופר: נתמכים, עץ הדורות, יולדות, הלוואות, חלוקות ודוחות במקום אחד.">
+<link rel="icon" href="logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@400;500;700;900&family=IBM+Plex+Sans+Hebrew:wght@400;500;600;700&family=Amatic+SC:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="grain" id="grain" aria-hidden="true"></div>
+<div class="vignette" aria-hidden="true"></div>
+<div class="flash" id="flash" aria-hidden="true"></div>
+
+<nav class="nav" id="nav">
+  <a class="brand" href="#top">
+    <span class="brand-badge"><img src="logo.png" alt=""></span>
+    <span class="brand-text"><b>היכל החתם סופר</b><small>מערכת ניהול</small></span>
+  </a>
+  <div class="nav-links">
+    <a href="#tour">סיור</a>
+    <a href="#demo">הממשק</a>
+    <a href="#build">איך זה בנוי</a>
+    <a href="#numbers">במספרים</a>
+  </div>
+  <a class="btn btn-gold btn-sm" href="https://chasamsofer.info/login">כניסה למערכת</a>
+</nav>
+
+<!-- ============ HERO ============ -->
+<header class="hero" id="top">
+  <canvas id="treeCanvas" class="tree-canvas" aria-hidden="true"></canvas>
+  <div class="hero-floor" aria-hidden="true"></div>
+
+  <div class="hero-inner">
+    <div class="zman-strip w" data-beat="0" id="zmanStrip">
+      <span class="z-item"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><b id="zTime" class="num">--:--:--</b></span>
+      <span class="z-sep"></span>
+      <span class="z-item" id="zHeb">…</span>
+      <span class="z-sep"></span>
+      <span class="z-item"><span id="zNext">…</span></span>
+    </div>
+
+    <h1 class="hero-title" id="heroTitle">
+      <span class="line"><span class="w" data-beat="1">כל</span> <span class="w" data-beat="2">העמותה.</span></span>
+      <span class="line gold"><span class="w" data-beat="3">מסך</span> <span class="w" data-beat="4">אחד.</span></span>
+    </h1>
+
+    <p class="lede w" data-beat="5">מערכת הניהול של היכל החתם סופר. נתמכים, עץ הדורות, יולדות, הלוואות, חלוקות ודוחות במקום אחד, מעודכנים בזמן אמת.</p>
+
+    <div class="hero-cta w" data-beat="6">
+      <a class="btn btn-gold" href="#tour">לסיור במערכת
+        <svg class="ic" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></a>
+      <a class="btn btn-ghost" href="#demo">לנסות את הממשק</a>
+      <span class="player">
+        <button class="icon-btn" id="replayBtn" type="button" aria-label="הפעלה מחדש של הפתיח"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><polyline points="3 3 3 8 8 8"/></svg></button>
+        <button class="icon-btn" id="soundBtn" type="button" aria-pressed="false" aria-label="הפעלת צליל"><svg class="ic" id="soundIc" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg></button>
+        <span class="beat-dots" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      </span>
+    </div>
+  </div>
+
+  <div class="hero-stage" aria-hidden="true">
+    <div class="hero-device w-drop" id="heroDevice">
+      <div class="laptop hero-laptop">
+        <div class="lap-screen"><div class="bezel"><div class="screen" data-screen="dashboard" data-w="1180" data-h="738"></div></div></div>
+        <div class="lap-base"><div class="keys"></div><div class="pad"></div></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ============ TOUR: one continuous camera shot over a tilted plane ============ -->
+<section class="tour" id="tour" aria-label="סיור בתלת-ממד במערכת">
+  <div class="stage">
+    <div class="blurwrap" id="blurwrap">
+      <div class="viewport">
+        <div class="world" id="world">
+          <div class="plane" id="plane">
+            <svg class="plane-svg" id="planeSvg" viewBox="0 0 2800 2200" aria-hidden="true"></svg>
+          </div>
+
+          <div class="obj title3d" style="--x:-420px;--y:-720px;--z:0px">
+            <div class="t3d" data-text="היכל החתם סופר">היכל החתם סופר</div>
+            <div class="t3d-sub">מערכת ניהול · גרסה 1.0</div>
+          </div>
+
+          <div class="obj pillars" id="pillars" style="--x:-420px;--y:-400px;--z:0px"></div>
+
+          <div class="obj" style="--x:400px;--y:40px;--z:0px">
+            <div class="laptop">
+              <div class="lap-screen"><div class="bezel"><div class="screen" data-screen="dashboard" data-w="1180" data-h="738"></div></div></div>
+              <div class="lap-base"><div class="keys"></div><div class="pad"></div></div>
+            </div>
+          </div>
+
+          <div class="obj" style="--x:-470px;--y:150px;--z:10px;--rz:-8deg">
+            <div class="tablet"><div class="screen" data-screen="lineage" data-w="1000" data-h="700"></div></div>
+          </div>
+
+          <div class="obj" style="--x:-60px;--y:600px;--z:46px;--rz:9deg">
+            <div class="phone"><div class="notch"></div><div class="screen" data-screen="portal" data-w="375" data-h="770"></div></div>
+          </div>
+
+          <div class="obj rootnode" style="--x:520px;--y:640px;--z:2px">
+            <div class="root-ring"><img src="logo.png" alt=""></div>
+            <div class="root-label">השורש</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="captions" id="captions" aria-live="polite">
+      <div class="cap-eyebrow num" id="capEyebrow">01 / 06</div>
+      <h2 class="cap-title" id="capTitle"></h2>
+      <p class="cap-text" id="capText"></p>
+    </div>
+    <ol class="rail" id="rail" aria-hidden="true"></ol>
+    <div class="scroll-hint" id="scrollHint">גללו להמשך הסיור</div>
+    <div class="iris" id="iris" aria-hidden="true"></div>
+  </div>
+</section>
+
+<!-- ============ LIVE DEMO ============ -->
+<section class="demo" id="demo">
+  <div class="demo-head">
+    <span class="eyebrow">הממשק עצמו</span>
+    <h2 class="sec-title kin" data-kin>לחצו על הכל. זה עובד.</h2>
+    <p class="sec-lede">זו העתקה חיה של ממשק הניהול. אפשר לסנן נתמכים, לאמת צמתים בעץ, להטעין כרטיס נדרים, לחשב הלוואה ולשנות הרשאות. המספרים המצטברים לקוחים מהמערכת; שמות ופרטים מזהים מוסתרים.</p>
+  </div>
+
+  <div class="appwin-wrap">
+    <div class="appwin" id="appwin">
+      <div class="chrome">
+        <span class="dots"><i></i><i></i><i></i></span>
+        <span class="url"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span id="urlText" class="num">chasamsofer.info/admin/dashboard</span></span>
+      </div>
+      <div class="app" id="app">
+        <aside class="app-side">
+          <div class="app-brand"><span class="brand-badge sm"><img src="logo.png" alt=""></span><span><b>היכל החתם סופר</b><small>תוכנת ניהול</small></span></div>
+          <nav class="app-nav" id="appNav"></nav>
+          <div class="app-ver">גרסה 1.0.0</div>
+        </aside>
+        <div class="app-body">
+          <div class="app-head">
+            <h3 id="appTitle">לוח בקרה</h3>
+            <div class="app-head-end">
+              <span class="hd-time num" id="hdTime"></span>
+              <span class="hd-heb" id="hdHeb"></span>
+              <span class="hd-user"><span class="av">ש</span><span><b>שלמה</b><small>מנהל</small></span></span>
+            </div>
+          </div>
+          <main class="app-main" id="appMain"></main>
+        </div>
+        <div class="toast" id="toast" role="status"></div>
+      </div>
+    </div>
+  </div>
+  <p class="data-note" id="dataNote"></p>
+</section>
+
+<!-- ============ BLUEPRINT ============ -->
+<section class="blueprint" id="build" aria-label="שרטוט טכני של המערכת">
+  <div class="bp-stage">
+    <div class="bp-paper">
+      <div class="bp-head">
+        <span class="eyebrow ink">גיליון 1 מתוך 1 · קנה מידה: כל העמותה</span>
+        <h2 class="sec-title ink">איך זה בנוי</h2>
+      </div>
+      <div class="bp-svg-wrap">
+        <svg id="bp" viewBox="0 0 1100 640" role="img" aria-label="מסלול בקשה: פורטל ציבורי, אימות במייל, בדיקת ייחוס, אישור צוות, ואז שירותים: הלוואה, יולדות, חלוקות ודוחות, על גבי תשתית Supabase, Resend, נדרים פלוס ו-Railway"></svg>
+      </div>
+      <div class="bp-stamp">
+        <span>שורטט עבור</span><b>היכל החתם סופר</b><span class="num" id="bpDate"></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ NUMBERS ============ -->
+<section class="numbers" id="numbers">
+  <div class="num-head">
+    <span class="eyebrow">במספרים</span>
+    <h2 class="sec-title kin" data-kin>מה שהמערכת מחזיקה היום</h2>
+  </div>
+  <div class="num-grid" id="numGrid"></div>
+  <p class="data-note" id="numNote"></p>
+</section>
+
+<!-- ============ FINALE ============ -->
+<section class="finale" id="contact">
+  <div class="finale-inner">
+    <img class="finale-logo" src="logo.png" alt="לוגו היכל החתם סופר">
+    <h2 class="finale-title kin" data-kin>מהשורש, ועד הדור האחרון.</h2>
+    <p class="sec-lede">צוות העמותה נכנס עם המשתמש האישי שלו. צאצאים מגישים בקשה דרך הפורטל הציבורי.</p>
+    <div class="finale-cta">
+      <a class="btn btn-gold" href="https://chasamsofer.info/login">כניסה לצוות</a>
+      <a class="btn btn-ghost" href="https://chasamsofer.info">הגשת בקשה בפורטל</a>
+    </div>
+  </div>
+  <footer class="foot">
+    <span>היכל החתם סופר · מערכת הניהול</span>
+    <span class="num">chasamsofer.info</span>
+  </footer>
+</section>
+
+<div class="tip" id="tip" role="tooltip"></div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

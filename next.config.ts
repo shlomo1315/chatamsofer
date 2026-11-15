@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    // אתר התדמית יושב ב-public/promo
+    return [{ source: "/promo", destination: "/promo/index.html", permanent: false }];
+  },
   async headers() {
     return [
       {
