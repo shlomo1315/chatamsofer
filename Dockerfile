@@ -37,6 +37,7 @@ COPY --from=build --chown=app:app /app/.next/static ./.next/static
 # הקוד קורא קבצים (גופנים, לוגואים, טפסים) מ-public דרך process.cwd()
 COPY --from=build --chown=app:app /app/public ./public
 COPY --from=build --chown=app:app /app/scripts/fix-missing-cards.mjs ./scripts/fix-missing-cards.mjs
+COPY --from=build --chown=app:app /app/scripts/find-card-holder.mjs ./scripts/find-card-holder.mjs
 COPY --from=build --chown=app:app /app/node_modules/undici ./node_modules/undici
 USER app
 EXPOSE 3000
