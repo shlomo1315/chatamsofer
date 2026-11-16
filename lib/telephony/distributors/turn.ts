@@ -24,6 +24,9 @@ const THANKS: Record<RecordingPurpose, string> = {
   note: 'ההודעה התקבלה, והמשרד יחזור אליכם. תודה ושלום',
 }
 
+const UNKNOWN_PROMPT = 'אתם לא מזוהים במערכת. ניתן להשאיר הודעה מסודרת למנהל אחרי הצליל, כולל שם ומספר טלפון. בסיום הקישו סולמית'
+const UNKNOWN_THANKS = 'ההודעה התקבלה, והיא תועבר למנהל. תודה ושלום'
+
 function agent(ctx: PhoneContext): DistributorTurn | null {
   const dial = (ctx.agentPhone ?? '').replace(/\D/g, '')
   if (!ctx.agentOpen || !dial) return null
@@ -47,15 +50,11 @@ function hilula(p: TlParams, id: string | null): DistributorTurn {
   )
 }
 
-function unknownCaller(p: TlParams, ctx: PhoneContext): DistributorTurn {
-  const a = agent(ctx)
-  const choice = p[DM_MENU] ?? ''
-  if (choice === '1' && ctx.hasPhone) return hilula(p, null)
-  if (choice === '2' && a) return a
-  const intro = 'שלום, כאן מערך המפיצים של גיליונות החתם סופר. המספר שממנו התקשרתם אינו רשום כמפיץ.'
-  if (!ctx.hasPhone) return a ?? bye(intro, 'כדי להשתמש בקו נא להתקשר ממספר מזוהה. תודה ושלום')
-  const options = ['להרשמה לסעודת ההילולא הקישו 1.', ...(a ? ['לשיחה עם נציג הקישו 2.'] : [])]
-  return done(menu(DM_MENU, a ? ['1', '2'] : ['1'], say(intro, ...options)))
+// מתקשר לא מזוהה (גם מספר חסוי): הודעה, הקלטה למנהל ופרידה. בלי תפריט.
+function unknownCaller(p: TlParams): DistributorTurn {
+  const rec = (p[`PATH_${DM_REC}`] ?? p[DM_REC] ?? '').trim()
+  if (!rec) return done({ type: 'record', name: DM_REC, max: 90, min: 2, confirm: 'confirmOnly', files: say(UNKNOWN_PROMPT), maskLog: true })
+  return done(goodbye(UNKNOWN_THANKS), { kind: 'recording', distributorId: null, purpose: 'note', path: rec, transcript: null })
 }
 
 export const MENU_TEXT = [
@@ -65,7 +64,7 @@ export const MENU_TEXT = [
 
 export function distributorTurn(p: TlParams, ctx: PhoneContext): DistributorTurn {
   const list = ctx.distributors.slice(0, MAX_PICK)
-  if (!list.length) return unknownCaller(p, ctx)
+  if (!list.length) return unknownCaller(p)
 
   let d = list[0]
   if (list.length > 1) {
