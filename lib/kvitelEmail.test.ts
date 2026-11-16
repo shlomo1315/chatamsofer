@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { decodeEntities, detectKvitelEmail, guessRequestType, isKvitelMailbox, parseKvitelEmailText } from './kvitelEmail'
+import { stripYedaPhoneNoise, decodeEntities, detectKvitelEmail, guessRequestType, isKvitelMailbox, parseKvitelEmailText } from './kvitelEmail'
 
 describe('kvitelEmail', () => {
   it('isKvitelMailbox', () => {
@@ -73,5 +73,32 @@ describe('kvitelEmail: טקסט חופשי', () => {
     const p = parseKvitelEmailText('קויטל', 'אשמח אם תוכלו להעביר השם, נתן צבי בן שרה מלכה לתפילה בציון הקדוש')
     expect(p.leftover).toHaveLength(1)
     expect(p.flags[0]).toContain('שם האם ארוך')
+  })
+})
+
+describe('kvitelEmail: רעש של ידע פון', () => {
+  const mail = [
+    'הקלטה: kvitel-0501234567.wav',
+    'שמעון בן רחל - לרפואה שלימה',
+    'הגדרות השאלון: https://app.yeda-phone.com/learning/sclasstest/123/settings',
+    'לצפיה בתוצאות השאלון <https://app.yeda-phone.com/learning/sclasstest/123/results>',
+    '',
+    'נשלח ע"י חברת ידע פון - מערכות טלפוניה מתקדמות',
+    'https://yeda-phone.co.il/',
+  ].join('\n')
+
+  it('מסיר קישורים וחתימה ומשאיר את התוכן', () => {
+    expect(stripYedaPhoneNoise(mail)).toBe('הקלטה: kvitel-0501234567.wav\nשמעון בן רחל - לרפואה שלימה')
+  })
+  it('קישור בתוך שורת תוכן מוסר בלי למחוק את השורה', () => {
+    expect(stripYedaPhoneNoise('דוד בן שרה [https://app.yeda-phone.com/x] לפרנסה')).toBe('דוד בן שרה  לפרנסה')
+  })
+  it('טקסט רגיל לא משתנה', () => {
+    const t = 'משה בן שרה\n\n\nלרפואה'
+    expect(stripYedaPhoneNoise(t)).toBe(t)
+  })
+  it('אחרי הניקוי המייל עדיין מפוענח', () => {
+    const r = parseKvitelEmailText('קוויטל', stripYedaPhoneNoise(mail))
+    expect(r.lines.map(l => l.name)).toContain('שמעון')
   })
 })
