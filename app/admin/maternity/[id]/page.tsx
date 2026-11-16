@@ -640,12 +640,8 @@ export default async function MaternityDetailPage(
                     const relOf = (g: number) => chainSorted.find(c => c.generation === g)?.relation ?? null
                     const source = displayChain(
                       chainSorted,
-                      lineagePath.length
-                        ? [
-                            ...lineagePath.map((name, i) => ({ generation: i + 1, name, relation: relOf(i + 1) })),
-                            ...lineageManual.map((name, i) => ({ generation: lineagePath.length + 1 + i, name, relation: null })),
-                          ]
-                        : [],
+                      lineagePath.map((name, i) => ({ generation: i + 1, name, relation: relOf(i + 1) })),
+                      lineageManual,
                     )
                     if (!source.length) return null
                     const gens: ChainGen[] = source.map(c => {

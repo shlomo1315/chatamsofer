@@ -52,4 +52,26 @@ describe('🔴 displayChain — מקור אחד לכל המסכים', () => {
   it('🔴 אותו קלט → אותו פלט, תמיד', () => {
     expect(displayChain(saved, tree)).toEqual(displayChain(saved, tree))
   })
+
+  // 🔴 אבות שהוכנסו ידנית מדור 4 והלאה נעלמו מהכרטסת.
+  describe('lineage_manual', () => {
+    const three = [1, 2, 3].map(g => ({ generation: g, name: `אב${g}` }))
+
+    it('🔴 מצרף ידניים אחרי הדור האחרון בשרשרת השמורה', () => {
+      const out = displayChain(three, null, ['אב4', ' אב5 '])
+      expect(out.map(e => [e.generation, e.name])).toEqual([[1, 'אב1'], [2, 'אב2'], [3, 'אב3'], [4, 'אב4'], [5, 'אב5']])
+    })
+
+    it('מצרף ידניים גם כשהבסיס הוא מסלול העץ', () => {
+      expect(displayChain(null, three, ['אב4'])).toHaveLength(4)
+    })
+
+    it('לא מכפיל שם שכבר בשרשרת, ומסנן ריקים', () => {
+      expect(displayChain(three, null, ['אב3', '  ', 'אב4'])).toHaveLength(4)
+    })
+
+    it('בלי ידניים → ללא שינוי', () => {
+      expect(displayChain(three, null, [])).toEqual(displayChain(three, null))
+    })
+  })
 })

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Check } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Beneficiary, ELIGIBILITY_LABELS } from '@/types'
+import { displayChain } from '@/lib/lineageDisplayChain'
 import { registrationSourceLabel } from '@/lib/distributionSources'
 import RecordModal, { modalBtn, type RecordTone } from '@/components/admin/system/RecordModal'
 
@@ -12,7 +13,7 @@ import RecordModal, { modalBtn, type RecordTone } from '@/components/admin/syste
 // ⚠️ אישור והעברה לבדיקה מעמיקה מתבצעים בכרטסת המלאה: שם רצה האזהרה על אישור
 // אבות ממתינים, שליחת המייל וסנכרון נדרים. אין לשכפל את הלוגיקה הזו כאן.
 
-type Extra = Pick<Beneficiary, 'children' | 'lineage_chain' | 'notes'>
+type Extra = Pick<Beneficiary, 'children' | 'lineage_chain' | 'lineage_manual' | 'notes'>
 type Log = { id: string; action: string; created_at: string }
 
 const TONE: Record<string, RecordTone> = {
@@ -44,7 +45,7 @@ export default function BeneficiaryCardModal({ rows, index, onIndex, onClose }: 
     let alive = true
     const sb = createClient()
     Promise.all([
-      sb.from('beneficiaries').select('children, lineage_chain, notes').eq('id', b.id).single(),
+      sb.from('beneficiaries').select('children, lineage_chain, lineage_manual, notes').eq('id', b.id).single(),
       sb.from('activity_log').select('id, action, created_at').eq('entity_id', b.id).order('created_at', { ascending: false }).limit(30),
     ]).then(([a, l]) => {
       if (alive && a.data) setLoaded({ id: b.id, data: a.data as Extra, log: (l.data as Log[] | null) ?? [] })
@@ -54,7 +55,7 @@ export default function BeneficiaryCardModal({ rows, index, onIndex, onClose }: 
 
   const status = b.eligibility_status
   const children = ready?.data.children ?? []
-  const chain = [...(ready?.data.lineage_chain ?? [])].sort((x, y) => x.generation - y.generation)
+  const chain = displayChain(ready?.data.lineage_chain, null, ready?.data.lineage_manual)
   const href = `/admin/beneficiaries/${b.id}`
   const loading = <Empty>טוען…</Empty>
   const days = Math.max(0, Math.floor((now - new Date(b.created_at).getTime()) / 86400000))
