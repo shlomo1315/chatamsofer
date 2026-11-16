@@ -21,7 +21,7 @@ import { splitAddress } from '@/lib/splitAddress'
 import { registerToOpenDistribution } from '@/lib/holidayDistributions'
 import type { RegisterSource } from '@/lib/distributionSources'
 import { addDescendantToMailing } from '@/lib/gilyonotDescendants'
-import { earlyManualBlocked } from '@/lib/lineageFixApply'
+import { earlyManualBlocked, manualAncestorNames } from '@/lib/lineageFixApply'
 
 export const dynamic = 'force-dynamic'
 
@@ -593,6 +593,15 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
     if (lineage_node_id && Array.isArray(lineage_new_nodes) && lineage_new_nodes.length) {
       earlyBlocked = await earlyManualBlocked(admin, String(lineage_node_id))
       if (earlyBlocked) console.warn(`[public-register] הקלדה ידנית בדורות 2–5 תחת ${lineage_node_id} — לא נכתבה לעץ (${cleanId})`)
+      // 🔴 האבות שהוקלדו לא ייזרקו: אם הלקוח לא שלח lineage_manual, נשמור אותם
+      // מתוך lineage_new_nodes (בלי הנרשם האחרון), כדי שיופיעו בכרטסת.
+      if (earlyBlocked && !(Array.isArray(lineage_manual) && lineage_manual.length > 0)) {
+        const names = manualAncestorNames(lineage_new_nodes)
+        if (names.length) {
+          const { error: manErr } = await admin.from('beneficiaries').update({ lineage_manual: names }).eq('id_number', cleanId)
+          if (manErr) console.error(`[public-register] שמירת lineage_manual נכשלה (${cleanId}):`, manErr.message)
+        }
+      }
     }
   } catch (e) { console.error('[public-register] earlyManualBlocked failed:', e) }
 

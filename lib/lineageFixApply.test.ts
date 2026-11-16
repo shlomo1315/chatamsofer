@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { earlyGenerationsCheck } from './lineageFixApply'
+import { earlyGenerationsCheck, manualAncestorNames } from './lineageFixApply'
 import { buildApprovedRefTree } from './lineageApprovedRef'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -43,5 +43,19 @@ describe('earlyGenerationsCheck', () => {
   it('דור 4 שאינו בקובץ כלל — לא תקין', () => {
     const bad = [...path.slice(0, 3), { name: 'רבי אליעזר שרייבר', generation: 4 }]
     expect(earlyGenerationsCheck(bad, approved)).toEqual({ ok: false, generation: 4 })
+  })
+})
+
+describe('manualAncestorNames', () => {
+  it('בחסימה מוקדמת שומר את האבות שהוקלדו ולא את הנרשם האחרון', () => {
+    const nodes = [{ name: 'רבי משה' }, { name: 'רבי דוד' }, { name: 'רבי אהרן יוסף' }]
+    expect(manualAncestorNames(nodes)).toHaveLength(2)
+  })
+  it('"זה אני": כל השמות הם אבות', () => {
+    expect(manualAncestorNames([{ name: 'רבי משה' }], false)).toHaveLength(1)
+  })
+  it('קלט לא תקין או ריק מחזיר רשימה ריקה', () => {
+    expect(manualAncestorNames(undefined)).toEqual([])
+    expect(manualAncestorNames([{ name: '' }])).toEqual([])
   })
 })
