@@ -11,9 +11,9 @@
 import { isNamePending, type AidNameFields } from './babyNames'
 import { isAwaitingReply, isReturnedFromInquiry } from './maternityInquiryState'
 
-export type MaternityBucket = 'all' | 'pending' | 'pending_fixes' | 'active' | 'cancelled' | 'deep_review'
+export type MaternityBucket = 'all' | 'pending' | 'pending_fixes' | 'active' | 'cancelled' | 'deep_review' | 'awaiting_reply'
 
-const BUCKETS: MaternityBucket[] = ['all', 'pending', 'pending_fixes', 'active', 'cancelled', 'deep_review']
+const BUCKETS: MaternityBucket[] = ['all', 'pending', 'pending_fixes', 'active', 'cancelled', 'deep_review', 'awaiting_reply']
 
 export const BUCKET_LABEL: Record<MaternityBucket, string> = {
   all: 'הכל',
@@ -22,6 +22,7 @@ export const BUCKET_LABEL: Record<MaternityBucket, string> = {
   deep_review: 'ממתין לאישור מנהל',
   active: 'מאושר',
   cancelled: 'לא מאושר',
+  awaiting_reply: 'ממתין לתשובת היולדת',
 }
 
 export function isBucket(v: unknown): v is MaternityBucket {
@@ -96,7 +97,9 @@ export function returnedFromInquiry(a: BucketAid): boolean {
 
 export function matchesBucket(a: BucketAid, bucket: MaternityBucket): boolean {
   if (bucket === 'all') return true
-  // ⚠️ ממתין לתשובת היולדת — יורד מכל הקבוצות הפעילות, לרבות pending_fixes.
+  // ⚠️ ממתין לתשובת היולדת — קבוצה משלו, ויורד מכל הקבוצות הפעילות האחרות
+  // (לרבות pending_fixes), כך שסכום הכרטיסים תואם ל"הכל".
+  if (bucket === 'awaiting_reply') return awaitingInquiryReply(a)
   if (awaitingInquiryReply(a)) return false
   if (bucket === 'pending_fixes') return awaitingFixes(a)
   // "ממתין לאישור" אינו כולל את מי שממתין לתיקון — הם לשונית נפרדת, אחרת

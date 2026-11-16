@@ -162,7 +162,27 @@ describe('בירור מול היולדת', () => {
   })
 })
 
-describe('pickNextPending — הקפיצה לתיק הבא אחרי אישור', () => {
+describe('כרטיס "ממתין לתשובת היולדת"', () => {
+  const rows = [
+    { status: 'pending' }, { status: 'pending', inquiryLastDirection: 'staff' },
+    { status: 'deep_review', inquiryLastDirection: 'staff' }, { status: 'pending', baby_name_pending: true, inquiryLastDirection: 'staff' },
+    { status: 'deep_review' }, { status: 'active' }, { status: 'cancelled' },
+  ]
+  it('מתאים בדיוק לתיקים שהכדור אצל היולדת', () => {
+    expect(rows.filter(a => matchesBucket(a, 'awaiting_reply')).length).toBe(3)
+    expect(isBucket('awaiting_reply')).toBe(true)
+  })
+  it('⚠️ סכום הכרטיסים שווה ל"הכל"', () => {
+    const keys = ['pending', 'pending_fixes', 'deep_review', 'awaiting_reply', 'active', 'cancelled'] as const
+    const sum = keys.reduce((n, k) => n + rows.filter(a => matchesBucket(a, k)).length, 0)
+    expect(sum).toBe(rows.length)
+  })
+  it('תיק סגור אינו נספר כממתין לתשובה', () => {
+    expect(matchesBucket({ status: 'active', inquiryLastDirection: 'staff' }, 'awaiting_reply')).toBe(false)
+  })
+})
+
+describe('pickNextPending —הקפיצה לתיק הבא אחרי אישור', () => {
   const fixes = { id: 'a', status: 'pending', beneficiary: { eligibility_status: 'docs_pending' } }
   const name = { id: 'b', status: 'pending', baby_name_pending: true, babies: [] }
   const inquiry = { id: 'c', status: 'pending', inquiryLastDirection: 'staff' }

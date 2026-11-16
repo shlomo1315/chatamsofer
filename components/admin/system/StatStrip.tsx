@@ -16,7 +16,7 @@ interface StatStripProps<K extends string> {
 
 // שורת מונים מסננת אחידה לכל מחלקות האדמין (v4). לחיצה על הפעיל מבטלת סינון.
 export default function StatStrip<K extends string>({ items, active, onSelect }: StatStripProps<K>) {
-  const cols = items.length > 5 ? 'lg:grid-cols-6' : items.length === 5 ? 'lg:grid-cols-5' : 'lg:grid-cols-4'
+  const cols = items.length > 6 ? 'lg:grid-cols-7' : items.length > 5 ? 'lg:grid-cols-6' : items.length === 5 ? 'lg:grid-cols-5' : 'lg:grid-cols-4'
   return (
     <div className={`grid grid-cols-2 sm:grid-cols-3 ${cols} gap-2.5`}>
       {items.map(it => {
