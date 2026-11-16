@@ -41,6 +41,7 @@ export interface TreeNodeLite {
 export function displayChain(
   saved: ChainEntry[] | null | undefined,
   treePath: TreeNodeLite[] | null | undefined,
+  manual?: readonly string[] | null,
 ): ChainEntry[] {
   const clean = (rows: readonly ChainEntry[]): ChainEntry[] =>
     rows
@@ -49,8 +50,25 @@ export function displayChain(
       .sort((a, b) => a.generation - b.generation)
 
   const fromSaved = Array.isArray(saved) ? clean(saved) : []
-  if (fromSaved.length) return fromSaved
-
   const fromTree = Array.isArray(treePath) ? clean(treePath) : []
-  return fromTree
+  return withManual(fromSaved.length ? fromSaved : fromTree, manual)
+}
+
+/**
+ * 🔴 אבות שהוכנסו ידנית (lineage_manual) נשמרים בנפרד מהשרשרת השמורה ומהעץ,
+ * והטריגרים מסנכרנים את השרשרת רק למסלול בעץ. בלי הצירוף הזה דור 4 והלאה
+ * שהוזנו ידנית נעלמו מהכרטסת. מצרפים אחרי הדור האחרון, ורק שמות שאינם כבר בשרשרת.
+ */
+function withManual(base: ChainEntry[], manual: readonly string[] | null | undefined): ChainEntry[] {
+  if (!Array.isArray(manual) || !manual.length) return base
+  const seen = new Set(base.map(e => e.name))
+  const out = [...base]
+  let gen = base.length ? Math.max(...base.map(e => e.generation)) : 0
+  for (const raw of manual) {
+    const name = typeof raw === 'string' ? raw.trim() : ''
+    if (!name || seen.has(name)) continue
+    seen.add(name)
+    out.push({ generation: ++gen, name, relation: null })
+  }
+  return out
 }
