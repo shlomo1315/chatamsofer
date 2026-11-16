@@ -185,6 +185,16 @@ export async function recordPhoneMessage(db: SupabaseClient, distributorId: stri
   return { ok: true }
 }
 
+// הודעה מוקלטת ממתקשר שלא רשום כמפיץ (או ממספר חסוי): נשמרת כפנייה פתוחה בלי מפיץ, למנהל.
+export async function recordUnknownCallerMessage(db: SupabaseClient, phone: string | null, recordingPath: string, transcript: string | null): Promise<{ ok: true } | { ok: false; error: string }> {
+  const text = transcript?.trim().slice(0, 1500) || null
+  const details = [text ? `תמלול אוטומטי: ${text}` : 'הודעה מוקלטת (בלי תמלול)', `קובץ ההקלטה: ${recordingPath.slice(0, 300)}`].join('\n')
+  const { error } = await db.from('gilyonot_distributor_events').insert({
+    distributor_id: null, caller_phone: phone, channel: 'phone', kind: 'note', details, status: 'open',
+  })
+  return error ? { ok: false, error: 'השמירה נכשלה' } : { ok: true }
+}
+
 // ── סעודת ההילולא: קדימות למפיץ פעיל ──
 export const MAX_HILULA_GUESTS = 50
 

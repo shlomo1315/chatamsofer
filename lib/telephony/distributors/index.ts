@@ -2,7 +2,7 @@
 import { getServiceClient } from '@/lib/apiAuth'
 import { normalizePhone } from '@/lib/kvitel'
 import { isAgentAvailable } from '@/lib/gilyonotDistributors'
-import { loadDistributorSettings, recordPhoneMessage, requestHilula, runDistributorAction } from '@/lib/gilyonotDistributorServer'
+import { loadDistributorSettings, recordPhoneMessage, recordUnknownCallerMessage, requestHilula, runDistributorAction } from '@/lib/gilyonotDistributorServer'
 import { MAX_PICK, type PhoneDistributor } from '@/lib/gilyonotDistributorPhone'
 import { goodbye } from '../modules'
 import type { TlHandler } from '../types'
@@ -35,7 +35,9 @@ export const distributors: TlHandler = async ({ phone, params, callId }) => {
     const r = await runDistributorAction(db, a.distributorId, 'leave', { details: 'התנתקות בקו הטלפוני' }, 'phone')
     if (!r.ok) error = r.error
   } else if (a.kind === 'recording') {
-    const r = await recordPhoneMessage(db, a.distributorId, a.purpose, a.path, a.transcript)
+    const r = a.distributorId
+      ? await recordPhoneMessage(db, a.distributorId, a.purpose, a.path, a.transcript)
+      : await recordUnknownCallerMessage(db, norm, a.path, a.transcript)
     if (!r.ok) error = r.error
   } else if (a.kind === 'hilula') {
     const r = await requestHilula(db, { distributorId: a.distributorId, phone: norm, guests: a.guests, channel: 'phone' })
