@@ -73,5 +73,10 @@ describe('🔴 displayChain — מקור אחד לכל המסכים', () => {
     it('בלי ידניים → ללא שינוי', () => {
       expect(displayChain(three, null, [])).toEqual(displayChain(three, null))
     })
+
+    // מונה "דור" בחלונית הכרטסת הוא אורך השרשרת המוצגת.
+    it('🔴 שלושה דורות שמורים ועוד ארבעה ידניים → דור 7', () => {
+      expect(displayChain(three, null, ['א', 'ב', 'ג', 'ד'])).toHaveLength(7)
+    })
   })
 })
