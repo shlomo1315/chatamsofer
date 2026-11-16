@@ -1,9 +1,10 @@
 'use client'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Download, Search, Settings, ShieldCheck, ShieldAlert, Eye, RefreshCw, Users } from 'lucide-react'
+import { Download, Search, ShieldCheck, ShieldAlert, Eye, RefreshCw } from 'lucide-react'
 import Modal from '@/components/ui/Modal'
 import type { AdminClaim, AdminMatchmaker } from '@/lib/matchmaker/adminData'
 import { reasonsText } from '@/lib/matchmaker/reasons'
+import MatchmakersTab from './MatchmakersTab'
 
 interface Data {
   claims: AdminClaim[]
@@ -27,13 +28,14 @@ const fmtMoney = (n: number | null) => (n == null ? '—' : `₪${n.toLocaleStri
 
 const inputCls = 'h-10 rounded-lg border border-line bg-white px-3 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-gold/40'
 
-export default function MatchmakerGrantsClient({ demo }: { demo?: Data }) {
+type Tab = 'claims' | 'matchmakers' | 'settings'
+
+export default function MatchmakerGrantsClient({ demo, canEdit = false, isAdmin = false }: { demo?: Data; canEdit?: boolean; isAdmin?: boolean }) {
+  const [tab, setTab] = useState<Tab>('claims')
   const [data, setData] = useState<Data | null>(demo ?? null)
   const [error, setError] = useState('')
   const [f, setF] = useState({ status: '', grandchild: '', from: '', to: '', matchmaker: '', q: '' })
   const [open, setOpen] = useState<AdminClaim | null>(null)
-  const [showSettings, setShowSettings] = useState(false)
-  const [showMatchmakers, setShowMatchmakers] = useState(false)
 
   const query = useMemo(() => {
     const p = new URLSearchParams()
@@ -58,8 +60,25 @@ export default function MatchmakerGrantsClient({ demo }: { demo?: Data }) {
     { label: 'סה״כ לתשלום', value: fmtMoney(c?.payable ?? 0), gold: true },
   ]
 
+  const tabs: { key: Tab; label: string }[] = [
+    { key: 'claims', label: 'בקשות' }, { key: 'matchmakers', label: 'שדכנים' },
+    ...(isAdmin ? [{ key: 'settings' as Tab, label: 'הגדרות' }] : []),
+  ]
+
   return (
     <div className="space-y-5">
+      <div role="tablist" className="flex gap-1 border-b border-line">
+        {tabs.map(t => (
+          <button key={t.key} role="tab" aria-selected={tab === t.key} onClick={() => setTab(t.key)}
+            className={`px-5 py-2.5 text-sm font-bold -mb-px border-b-2 ${tab === t.key ? 'border-gold text-navy' : 'border-transparent text-ink-soft hover:text-navy'}`}>{t.label}</button>
+        ))}
+      </div>
+
+      {tab === 'matchmakers' && <MatchmakersTab canEdit={canEdit} isAdmin={isAdmin}
+        onShowClaims={id => { setF({ status: '', grandchild: '', from: '', to: '', matchmaker: id, q: '' }); setTab('claims') }} onChanged={load} />}
+      {tab === 'settings' && isAdmin && data && <SettingsPanel settings={data.settings} onSaved={load} />}
+
+      {tab === 'claims' && <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {counters.map(k => (
           <div key={k.label} className="rounded-xl border border-line bg-paper p-4">
@@ -93,8 +112,6 @@ export default function MatchmakerGrantsClient({ demo }: { demo?: Data }) {
         <input type="date" className={inputCls} value={f.to} onChange={e => setF({ ...f, to: e.target.value })} aria-label="עד תאריך" />
         <button onClick={load} className="h-10 w-10 grid place-items-center rounded-lg border border-line bg-white text-navy hover:bg-gold-soft" aria-label="רענון"><RefreshCw className="w-4 h-4" /></button>
         <a href={`/api/admin/matchmaker-grants/export?${query}`} className="h-10 px-4 inline-flex items-center gap-2 rounded-lg bg-gold text-navy-dark font-bold text-sm hover:brightness-105"><Download className="w-4 h-4" />ייצוא לאקסל</a>
-        <button onClick={() => setShowMatchmakers(true)} className="h-10 px-3 inline-flex items-center gap-2 rounded-lg border border-line bg-white text-navy text-sm hover:bg-gold-soft"><Users className="w-4 h-4" />שדכנים</button>
-        <button onClick={() => setShowSettings(true)} className="h-10 px-3 inline-flex items-center gap-2 rounded-lg border border-line bg-white text-navy text-sm hover:bg-gold-soft"><Settings className="w-4 h-4" />הגדרות</button>
       </div>
 
       {error && <div role="alert" className="rounded-lg bg-red-50 text-red-700 px-4 py-2 text-sm">{error}</div>}
@@ -124,9 +141,9 @@ export default function MatchmakerGrantsClient({ demo }: { demo?: Data }) {
         </table>
       </div>
 
-      {open && <ClaimModal claim={open} demo={!!demo} onClose={() => setOpen(null)} onChanged={async () => { await load(); setOpen(null) }} />}
-      {showMatchmakers && data && <MatchmakersModal list={data.matchmakers} demo={!!demo} onClose={() => setShowMatchmakers(false)} onChanged={load} />}
-      {showSettings && data && <SettingsModal settings={data.settings} onClose={() => setShowSettings(false)} onSaved={() => { setShowSettings(false); load() }} />}
+      </>}
+
+      {open && <ClaimModal claim={open} demo={!!demo} canEdit={canEdit} onClose={() => setOpen(null)} onChanged={async () => { await load(); setOpen(null) }} />}
     </div>
   )
 }
@@ -141,7 +158,7 @@ function GrandchildBadge({ c }: { c: AdminClaim }) {
   )
 }
 
-function ClaimModal({ claim, demo, onClose, onChanged }: { claim: AdminClaim; demo: boolean; onClose: () => void; onChanged: () => void }) {
+function ClaimModal({ claim, demo, canEdit, onClose, onChanged }: { claim: AdminClaim; demo: boolean; canEdit: boolean; onClose: () => void; onChanged: () => void }) {
   const [amount, setAmount] = useState(claim.amount != null ? String(claim.amount) : '')
   const [reason, setReason] = useState('')
   const [rejecting, setRejecting] = useState(false)
@@ -176,7 +193,7 @@ function ClaimModal({ claim, demo, onClose, onChanged }: { claim: AdminClaim; de
   const v = claim.verification
   return (
     <Modal open onClose={onClose} size="lg" title={`${claim.groom_name} ו${claim.bride_name}`}
-      footer={claim.status === 'paid' ? undefined : (
+      footer={claim.status === 'paid' || !canEdit ? undefined : (
         <div className="flex flex-wrap gap-2 w-full">
           {claim.status !== 'approved' && !rejecting && <button disabled={busy} onClick={() => act('approve')} className="h-10 px-5 rounded-lg bg-navy text-white font-bold text-sm disabled:opacity-50">אישור</button>}
           {claim.status === 'approved' && <button disabled={busy} onClick={() => act('paid')} className="h-10 px-5 rounded-lg bg-gold text-navy-dark font-bold text-sm disabled:opacity-50">סימון כשולם</button>}
@@ -228,15 +245,15 @@ function ClaimModal({ claim, demo, onClose, onChanged }: { claim: AdminClaim; de
               ? v.matches.map((m, i) => <div key={i}>אומת: {m.name}{m.family_name ? `, משפחת ${m.family_name}` : ''} ({m.side === 'groom' ? 'חתן' : 'כלה'}, לפי {m.matched_on === 'id_number' ? 'ת״ז צאצא' : 'ת״ז בן/בת זוג'})</div>)
               : <div>לא נמצא במאגר הצאצאים. המלצה בלבד, ההחלטה שלך.</div>}
             {v && <div className="text-xs text-ink-soft">נבדק {fmtDate(v.checked_at)}</div>}
-            {!demo && <button onClick={() => act('recheck')} disabled={busy} className="text-xs text-navy underline">בדיקה חוזרת</button>}
+            {!demo && canEdit && <button onClick={() => act('recheck')} disabled={busy} className="text-xs text-navy underline">בדיקה חוזרת</button>}
           </div>
         )}
 
         <label className="block">
           <span className="text-xs font-bold text-ink-soft">סכום מלגה (₪)</span>
           <div className="flex gap-2 mt-1">
-            <input className={`${inputCls} w-40`} inputMode="numeric" value={amount} disabled={claim.status === 'paid'} onChange={e => setAmount(e.target.value.replace(/[^\d.]/g, ''))} />
-            {claim.status !== 'paid' && <button onClick={() => act('amount')} disabled={busy} className="h-10 px-4 rounded-lg border border-line bg-white text-sm">שמירת סכום</button>}
+            <input className={`${inputCls} w-40`} inputMode="numeric" value={amount} disabled={claim.status === 'paid' || !canEdit} onChange={e => setAmount(e.target.value.replace(/[^\d.]/g, ''))} />
+            {claim.status !== 'paid' && canEdit && <button onClick={() => act('amount')} disabled={busy} className="h-10 px-4 rounded-lg border border-line bg-white text-sm">שמירת סכום</button>}
           </div>
         </label>
 
@@ -254,110 +271,37 @@ function ClaimModal({ claim, demo, onClose, onChanged }: { claim: AdminClaim; de
   )
 }
 
-function SettingsModal({ settings, onClose, onSaved }: { settings: Data['settings']; onClose: () => void; onSaved: () => void }) {
+function SettingsPanel({ settings, onSaved }: { settings: Data['settings']; onSaved: () => void }) {
   const [s, setS] = useState({
     regular: settings.regular_amount?.toString() ?? '', enlarged: settings.enlarged_amount?.toString() ?? '', max: settings.max_claims_per_matchmaker?.toString() ?? '',
     wait: String(settings.claim_wait_days ?? 7), open: settings.claims_open_from ?? '',
   })
   const [err, setErr] = useState('')
+  const [saved, setSaved] = useState(false)
   async function save() {
+    setSaved(false)
     const res = await fetch('/api/admin/matchmaker-grants/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ regular_amount: s.regular, enlarged_amount: s.enlarged, max_claims_per_matchmaker: s.max, claim_wait_days: s.wait, claims_open_from: s.open }) })
     if (!res.ok) { setErr((await res.json().catch(() => ({}))).error ?? 'שגיאה'); return }
-    onSaved()
+    setSaved(true); onSaved()
   }
   const field = (label: string, key: 'regular' | 'enlarged' | 'max' | 'wait', hint: string) => (
     <label className="block"><span className="text-sm font-bold">{label}</span><span className="block text-xs text-ink-soft">{hint}</span>
       <input className={`${inputCls} w-full mt-1`} inputMode="numeric" value={s[key]} onChange={e => setS({ ...s, [key]: e.target.value.replace(/\D/g, '') })} /></label>
   )
   return (
-    <Modal open onClose={onClose} size="sm" title="הגדרות מלגות"
-      footer={<button onClick={save} className="h-10 px-5 rounded-lg bg-navy text-white font-bold text-sm">שמירה</button>}>
+    <div className="rounded-xl border border-line bg-paper p-5 max-w-xl">
       <div className="space-y-4">
         {field('מלגה רגילה (₪)', 'regular', 'מוצע אוטומטית בבקשה רגילה')}
         {field('מלגה מוגדלת (₪)', 'enlarged', 'מוצע אוטומטית כשסומן נכד החתם סופר')}
-        {field('מקסימום בקשות לשדכן', 'max', 'ריק = ללא הגבלה. אפשר להגדיר הגבלה פרטנית לכל שדכן במסך "שדכנים"')}
+        {field('מקסימום בקשות לשדכן', 'max', 'ריק = ללא הגבלה. אפשר להגדיר הגבלה פרטנית לכל שדכן בלשונית "שדכנים"')}
         <label className="block"><span className="text-sm font-bold">פתיחת הגשת בקשות</span><span className="block text-xs text-ink-soft">לא לפני תאריך זה (ברירת מחדל: ה׳ בטבת, 15.12.2026)</span>
           <input type="date" className={`${inputCls} w-full mt-1`} value={s.open} onChange={e => setS({ ...s, open: e.target.value })} /></label>
         {field('ימי המתנה אחרי ההרשמה', 'wait', 'שדכן יכול להגיש בקשה רק כך וכך ימים אחרי שנרשם')}
         {err && <div role="alert" className="text-sm text-red-700">{err}</div>}
+        {saved && <div role="status" className="text-sm text-[#2F6B4F]">ההגדרות נשמרו</div>}
+        <button onClick={save} className="h-10 px-5 rounded-lg bg-navy text-white font-bold text-sm">שמירה</button>
       </div>
-    </Modal>
-  )
-}
-
-function MatchmakersModal({ list, demo, onClose, onChanged }: { list: AdminMatchmaker[]; demo: boolean; onClose: () => void; onChanged: () => void }) {
-  const [editing, setEditing] = useState<AdminMatchmaker | null>(null)
-  const [limit, setLimit] = useState('')
-  const [bank, setBank] = useState({ bank_name: '', bank_branch: '', bank_account: '' })
-  const [revealed, setRevealed] = useState<Record<string, string>>({})
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState('')
-
-  function edit(m: AdminMatchmaker) {
-    setEditing(m); setErr('')
-    setLimit(m.claims_limit != null ? String(m.claims_limit) : '')
-    setBank({ bank_name: m.bank_name ?? '', bank_branch: m.bank_branch ?? '', bank_account: '' })
-  }
-  async function save() {
-    if (!editing || demo) return
-    setBusy(true); setErr('')
-    const body: Record<string, unknown> = { claims_limit: limit }
-    if (bank.bank_account) Object.assign(body, bank)
-    const res = await fetch(`/api/admin/matchmaker-grants/matchmakers/${editing.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-    setBusy(false)
-    if (!res.ok) { setErr((await res.json().catch(() => ({}))).error ?? 'שגיאה'); return }
-    setEditing(null); onChanged()
-  }
-  async function reveal(id: string) {
-    if (demo) return
-    const res = await fetch(`/api/admin/matchmaker-grants/matchmakers/${id}/reveal`, { method: 'POST' })
-    if (res.ok) { const d = await res.json(); setRevealed(r => ({ ...r, [id]: d.bank_account ?? '' })) }
-  }
-
-  return (
-    <Modal open onClose={onClose} size="lg" title={editing ? `עריכת שדכן: ${editing.name}` : 'שדכנים'}
-      footer={editing ? (
-        <div className="flex gap-2">
-          <button disabled={busy} onClick={save} className="h-10 px-5 rounded-lg bg-navy text-white font-bold text-sm disabled:opacity-50">שמירה</button>
-          <button onClick={() => setEditing(null)} className="h-10 px-4 rounded-lg border border-line bg-white text-sm">ביטול</button>
-        </div>
-      ) : undefined}>
-      {editing ? (
-        <div className="space-y-4 text-sm">
-          <label className="block"><span className="font-bold">הגבלת בקשות לשדכן</span><span className="block text-xs text-ink-soft">גוברת על ההגדרה הכללית. ריק = לפי ההגדרה הכללית</span>
-            <input className={`${inputCls} w-full mt-1`} inputMode="numeric" value={limit} onChange={e => setLimit(e.target.value.replace(/\D/g, ''))} /></label>
-          <fieldset className="rounded-lg border border-line p-3 space-y-3">
-            <legend className="px-2 text-xs font-bold text-gold">פרטי העברה (רק מנהל משנה)</legend>
-            <p className="text-xs text-ink-soft">להשאיר את החשבון ריק כדי לא לשנות. שינוי נרשם ביומן.</p>
-            <input className={`${inputCls} w-full`} placeholder="בנק" value={bank.bank_name} onChange={e => setBank({ ...bank, bank_name: e.target.value })} />
-            <div className="grid grid-cols-2 gap-2">
-              <input className={inputCls} inputMode="numeric" dir="ltr" placeholder="סניף" value={bank.bank_branch} onChange={e => setBank({ ...bank, bank_branch: e.target.value.replace(/\D/g, '') })} />
-              <input className={inputCls} inputMode="numeric" dir="ltr" placeholder="חשבון חדש" value={bank.bank_account} onChange={e => setBank({ ...bank, bank_account: e.target.value.replace(/\D/g, '') })} />
-            </div>
-          </fieldset>
-          {err && <div role="alert" className="text-sm text-red-700">{err}</div>}
-        </div>
-      ) : (
-        <div className="min-w-0">
-          <table className="w-full text-sm">
-            <thead><tr className="text-xs text-ink-soft text-right"><th className="py-2">שדכן</th><th className="hidden sm:table-cell">חוג</th><th>בקשות</th><th>בנק</th><th /></tr></thead>
-            <tbody>{list.map(m => (
-              <tr key={m.id} className="border-t border-line align-top">
-                <td className="py-2"><div className="font-bold">{m.name}</div><div className="text-xs text-ink-soft" dir="ltr" style={{ textAlign: 'right' }}>{m.phone}</div></td>
-                <td className="hidden sm:table-cell">{m.circle || "—"}</td>
-                <td>{m.claims_count}{m.claims_limit != null ? ` / ${m.claims_limit}` : ''}</td>
-                <td className="text-xs">
-                  {m.bank_name ? <>{m.bank_name} · סניף {m.bank_branch} · <span dir="ltr" className="tabular-nums">{revealed[m.id] || m.bank_account_masked}</span>
-                    {!revealed[m.id] && <button onClick={() => reveal(m.id)} className="ms-2 inline-flex items-center gap-1 text-navy underline"><Eye className="w-3 h-3" />הצג (נרשם ביומן)</button>}</> : '—'}
-                </td>
-                <td><button onClick={() => edit(m)} className="text-xs text-navy underline">עריכה</button></td>
-              </tr>
-            ))}</tbody>
-          </table>
-          {!list.length && <div className="py-6 text-center text-ink-soft">אין שדכנים רשומים</div>}
-        </div>
-      )}
-    </Modal>
+    </div>
   )
 }
