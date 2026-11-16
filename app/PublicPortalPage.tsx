@@ -5,6 +5,7 @@ import EmailInput from '@/components/ui/EmailInput'
 import VerifyControl from '@/components/VerifyControl'
 import { childRegisteredSeparatelyMessage, isChildMarried } from '@/lib/childDuplicateMessage'
 import { toSafeDateValue } from '@/lib/safeDateValue'
+import { shouldShowIdDocsSection } from '@/lib/portalIdDocsSection'
 import { PHONE_LOGIN_OFF_MESSAGE, phoneConfirmError, phoneConfirmMismatch } from '@/lib/registrationGate'
 import EmailVerifyModal from '@/components/EmailVerifyModal'
 import { fetchWithRetry, CONNECTION_LOST_MESSAGE } from '@/lib/fetchRetry'
@@ -3662,9 +3663,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   }
   // forceFresh — בבקשת הלוואה הצילומים נדרשים *מחדש* בכל הגשה, גם ממשפחה
   // מאושרת. לכן הקטע מוצג תמיד ולא רק לפני אישור.
+  // 🔴 בבקשת לידה (רגילה ושקטה) הקטע מוצג גם למשפחה מאושרת — השרת דורש
+  // את הצילומים, ובלי הקטע לא היה איפה להעלות אותם (ראו portalIdDocsSection).
   const renderIdDocsSection = (forceFresh = false) => {
-    if (!beneficiary) return null
-    if (!forceFresh && isApproved) return null
+    if (!shouldShowIdDocsSection({ hasBeneficiary: !!beneficiary, isApproved, isBirthRequest, forceFresh })) return null
     return (
       <Card>
         <div className="flex items-start gap-3 mb-4">
