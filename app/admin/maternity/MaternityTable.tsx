@@ -69,6 +69,7 @@ const CARD_DEFS: CardDef[] = [
   { key: 'pending', label: 'ממתין לאישור', icon: Clock, base: 'border-amber-200 hover:border-amber-300', active: 'border-amber-400 ring-2 ring-amber-200 bg-amber-50', iconCls: 'bg-amber-100 text-amber-700' },
   { key: 'pending_fixes', label: 'ממתין לתיקונים', icon: PencilLine, base: 'border-rose-200 hover:border-rose-300', active: 'border-rose-400 ring-2 ring-rose-200 bg-rose-50', iconCls: 'bg-rose-100 text-rose-700' },
   { key: 'deep_review', label: 'ממתין לאישור מנהל', icon: AlertTriangle, base: 'border-orange-200 hover:border-orange-300', active: 'border-orange-400 ring-2 ring-orange-200 bg-orange-50', iconCls: 'bg-orange-100 text-orange-700' },
+  { key: 'awaiting_reply', label: BUCKET_LABEL.awaiting_reply, icon: MessageSquare, base: 'border-sky-200 hover:border-sky-300', active: 'border-sky-400 ring-2 ring-sky-200 bg-sky-50', iconCls: 'bg-sky-100 text-sky-700' },
   { key: 'active', label: 'מאושר', icon: Check, base: 'border-green-200 hover:border-green-300', active: 'border-green-400 ring-2 ring-green-200 bg-green-50', iconCls: 'bg-green-100 text-green-700' },
   { key: 'cancelled', label: 'לא מאושר', icon: X, base: 'border-red-200 hover:border-red-300', active: 'border-red-400 ring-2 ring-red-200 bg-red-50', iconCls: 'bg-red-100 text-red-700' },
 ]
@@ -220,7 +221,7 @@ const COLUMNS: ColDef<ColKey, MaternityAid>[] = [
     // ⚠️ אותן קבוצות כמו הכרטיסים למעלה (matchesBucket), אחרת הבורר סופר 'ממתין לאישור'
     // כולל מי שממתין לתיקונים / לתשובת יולדת, והמספרים לא מסתדרים עם הכרטיסים.
     value: a => {
-      if (awaitingInquiryReply(a as BucketAid)) return 'ממתין לתשובת היולדת'
+      if (awaitingInquiryReply(a as BucketAid)) return BUCKET_LABEL.awaiting_reply
       if (a.status === 'deep_review') return BUCKET_LABEL.deep_review
       if (awaitingFixes(a as BucketAid)) return BUCKET_LABEL.pending_fixes
       return STATUS_PILL[a.status]?.label ?? null
@@ -463,7 +464,7 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Filter cards — 6 כרטיסים → 6 עמודות במסך רחב, מצומצמים כדי שייכנסו בשורה אחת */}
+      {/* Filter cards — 7 כרטיסים → 7 עמודות במסך רחב, מצומצמים כדי שייכנסו בשורה אחת */}
       {!hideFilters && (
       <StatStrip active={filter}
         items={CARD_DEFS.map(c => ({ key: c.key, label: c.label, icon: c.icon, count: counts[c.key] }))}
