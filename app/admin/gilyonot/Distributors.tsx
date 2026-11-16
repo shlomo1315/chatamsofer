@@ -30,7 +30,7 @@ export interface DistributorView extends DistributorFields {
 
 export interface DistributorEventView {
   id: string
-  distributor_id: string
+  distributor_id: string | null
   distributor_name: string
   kind: EventKind
   channel: EventChannel

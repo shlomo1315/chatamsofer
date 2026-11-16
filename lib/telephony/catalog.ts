@@ -39,7 +39,7 @@ const INFO: Omit<ExtInfo, 'name'>[] = [
   { sys: 'yerid', ext: 'menu', how: 'כל שיחה נכנסת', what: 'מכירה בטלפון: הזמנה חדשה, קיימת, שירות לקוחות', source: 'bookfair',
     keys: [['1', 'הזמנה חדשה'], ['2', 'הזמנה קיימת'], ['3', 'שירות לקוחות']] },
   { sys: 'yerid', ext: 'credits', how: 'שלוחה ישירה', what: 'זיכויים', keys: [] },
-  { sys: 'distributors', ext: 'menu', how: 'כל שיחה נכנסת', what: 'מפיץ מזוהה: תפריט של 8 מקשים. לא מזוהה: הילולא או נציג', keys: [] },
+  { sys: 'distributors', ext: 'menu', how: 'כל שיחה נכנסת', what: 'מפיץ מזוהה: תפריט של 8 מקשים. לא מזוהה: הודעה מוקלטת למנהל', keys: [] },
 ]
 
 export const EXTS: ExtInfo[] = INFO.map((i) => ({
@@ -75,7 +75,7 @@ export const MAP: Record<TelephonySystemId, { root: MapNode; direct: string[] }>
   distributors: {
     root: { nm: 'תפריט מפיצים', tp: 'כל שיחה נכנסת', ext: 'distributors/menu', kids: [
       { nm: 'מפיץ מזוהה', tp: '8 מקשים', step: true },
-      { nm: 'מספר לא מזוהה', step: true, kids: [{ k: '1', nm: 'הילולא', step: true }, { k: '2', nm: 'נציג', step: true }] },
+      { nm: 'מספר לא מזוהה (או חסוי)', tp: 'הודעה מוקלטת למנהל', step: true },
     ] },
     direct: [],
   },
