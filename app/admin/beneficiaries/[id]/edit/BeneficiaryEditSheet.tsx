@@ -161,6 +161,7 @@ export default function BeneficiaryEditSheet({ beneficiaryId, defaults }: { bene
     origKids.forEach((o, i) => { if (!live.has(i)) out.push({ label: `הסרת ילד · ${o.name || i + 1}`, section: 's2' }) })
     if (lin.node !== origLin.node) out.push({ label: 'שושלת', section: 's4' })
     if (lin.special !== origLin.special) out.push({ label: 'מקרה מיוחד', section: 's4' })
+    if (JSON.stringify(lin.manual.map(m => m.trim()).filter(Boolean)) !== JSON.stringify(origLin.manual.map(m => m.trim()).filter(Boolean))) out.push({ label: 'אבות שהוזנו ידנית', section: 's4' })
     return out
   }, [defs, orig, vals, kids, origKids, lin, origLin])
 
@@ -457,6 +458,19 @@ export default function BeneficiaryEditSheet({ beneficiaryId, defaults }: { bene
                   <div className="chain">
                     {chain.map((nm, i) => <span key={i} style={{ display: 'contents' }}><span className={i >= path.length ? 'manual' : ''}>{nm}</span><b>‹</b></span>)}
                     <span className="me">{selfName}</span>
+                  </div>
+                )}
+                {editing && !lin.special && (
+                  <div style={{ marginTop: 12 }}>
+                    <div className="sub" style={{ margin: '0 0 6px' }}>אבות שהוזנו ידנית (לפי הסדר, מהאב הקרוב לעוגן ועד הנרשם)</div>
+                    {lin.manual.map((nm, i) => (
+                      <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                        <input value={nm} placeholder={`דור ${path.length + i + 1} — שם האב`} style={{ flex: 1 }}
+                          onChange={e => setLin(p => ({ ...p, manual: p.manual.map((m, j) => j === i ? e.target.value : m) }))} />
+                        <button type="button" className="btn sm" aria-label="הסרת אב" onClick={() => setLin(p => ({ ...p, manual: p.manual.filter((_, j) => j !== i) }))}>הסרה</button>
+                      </div>
+                    ))}
+                    <button type="button" className="btn sm" onClick={() => setLin(p => ({ ...p, manual: [...p.manual, ''] }))}>הוספת אב ידנית</button>
                   </div>
                 )}
                 <div className="chain-foot">
