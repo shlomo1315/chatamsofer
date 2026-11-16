@@ -92,3 +92,16 @@ export async function earlyManualBlocked(admin: SupabaseClient, anchorId: string
   const { pickableNodes } = await import('./lineageApprovedColor')
   return pickableNodes(kids as { name: string; generation: number; status: string }[], await getPickerApproval(admin, anchorId)).length > 0
 }
+
+/**
+ * אבות שהוקלדו ידנית ברישום, כשהכנסה לעץ נחסמה (earlyManualBlocked): הנרשם הוא
+ * הצומת האחרון ב-`lineage_new_nodes` (אלא אם סימן "זה אני"), ולכן הוא לא נשמר
+ * כאב. השמות מנורמלים באותו אופן כמו בכתיבה לעץ.
+ */
+export function manualAncestorNames(newNodes: unknown, selfIsLast = true): string[] {
+  if (!Array.isArray(newNodes)) return []
+  const names = newNodes
+    .map(n => normalizeLineageNodeName(n as { name?: string }))
+    .filter((n): n is string => !!n)
+  return selfIsLast ? names.slice(0, -1) : names
+}

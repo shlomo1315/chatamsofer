@@ -49,23 +49,26 @@ export async function POST(request: NextRequest) {
   }
 
   let body: { token?: string; lineage_node_id?: string; lineage_new_nodes?: { name?: string; relation?: string }[]; self_is_existing?: boolean }
-  try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
+  try { body = await request.json() } catch { console.warn('[lineage-review/apply] 400: גוף בקשה לא תקין'); return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
 
   const { data: inv } = await admin.from('lineage_share_invites')
     .select('token, root_node_id, revoked_at, expires_at, recipient_name, beneficiary_id, mode')
     .eq('token', String(body.token ?? '')).maybeSingle()
   if (!inv || inv.revoked_at || new Date(inv.expires_at) < new Date() || inv.mode !== 'order' || !inv.beneficiary_id) {
+    console.warn(`[lineage-review/apply] 403: קישור לא תקין/פג/בוטל (${String(body.token ?? '').slice(0, 6)}…)`)
     return NextResponse.json({ error: 'הקישור אינו תקין, בוטל, או פג תוקפו' }, { status: 403 })
   }
 
   const selfExisting = body.self_is_existing === true
   const newNodes = Array.isArray(body.lineage_new_nodes) ? body.lineage_new_nodes.slice(0, MAX_NEW) : []
+  if (!selfExisting && !newNodes.length) console.warn(`[lineage-review/apply] 400: לא נשלחו דורות (${inv.beneficiary_id})`)
   if (!selfExisting && !newNodes.length) return NextResponse.json({ error: 'יש להשלים את סדר הדורות עד אליכם' }, { status: 400 })
 
   const { rows: nodes } = await fetchAllRows<TreeNodeRow>((from, to) =>
     admin.from('lineage_nodes').select(NODE_SELECT).range(from, to),
   )
   const anchor = nodes.find(n => n.id === body.lineage_node_id)
+  if (!anchor) console.warn(`[lineage-review/apply] 400: עוגן לא נמצא ${body.lineage_node_id} (${inv.beneficiary_id})`)
   if (!anchor) return NextResponse.json({ error: 'הדור שנבחר לא נמצא בעץ' }, { status: 400 })
   const path = pathToRoot(nodes, anchor.id)
 
@@ -111,6 +114,7 @@ export async function POST(request: NextRequest) {
 
   // ⚠️ בחירת הצומת של הנמען עצמו (או צאצא שלו) כאב — לולאה בעץ.
   if (!selfExisting && oldSelf && path.some(n => n.id === oldSelf!.id)) {
+    console.warn(`[lineage-review/apply] 400: לולאה בעץ (${inv.beneficiary_id})`)
     return NextResponse.json({ error: 'לא ניתן לבחור את עצמכם כאחד מהאבות. אם זה אתם — לחצו "זה אני".' }, { status: 400 })
   }
 
