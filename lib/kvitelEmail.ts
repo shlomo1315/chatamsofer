@@ -47,6 +47,19 @@ export function decodeEntities(text: string): string {
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
 }
 
+// מיילים מהמרכזיה הישנה (ידע פון) נושאים קישורים לשאלון וחתימה של החברה. זה רעש, ונטפרי עלול
+// לחסום בגללו את מסך הקוויטלעך. מוסרים אותו, בלי לפגוע בתוכן אמיתי.
+// ⚠️ אותה לוגיקה במיגרציה 20261116_kvitel_strip_yedaphone.sql, ושינוי כאן מחייב שינוי שם.
+export function stripYedaPhoneNoise(text: string): string {
+  if (!/yeda-phone|ידע\s*פון/i.test(text)) return text
+  return text
+    .replace(/(^|\n)[^\n]*ידע\s*פון[\s\S]*$/, '')
+    .replace(/(^|\n)[^\n]*(?:הגדרות השאלון|לצפי[הת]? בתוצאות השאלון)[^\n]*/g, '')
+    .replace(/[<\[(]*https?:\/\/[^\s<>\])]*yeda-phone[^\s<>\])]*[>\])]*/gi, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 const TYPE_WORDS: [KvitelRequestType, RegExp][] = [
   ['refua', /רפו(א|ו)ה|רפו"ש|רפוש|רפ"ש|לרפו|בריאות/],
   ['parnasa', /פרנס/],
@@ -162,7 +175,7 @@ ${text.slice(0, MAX_TEXT)}`,
 export async function handleKvitelEmail(db: SupabaseClient, m: {
   messageId: string; fromEmail: string; fromName: string | null; subject: string; text: string; requireLines?: boolean
 }): Promise<{ ok: boolean; requestId?: string; status?: string; skipped?: string }> {
-  m = { ...m, subject: decodeEntities(m.subject), text: decodeEntities(m.text) }
+  m = { ...m, subject: decodeEntities(m.subject), text: stripYedaPhoneNoise(decodeEntities(m.text)) }
   const { count } = await db.from('kvitel_requests').select('id', { count: 'exact', head: true })
     .eq('channel', 'email').eq('source_ref', m.messageId)
   if (count) return { ok: true }

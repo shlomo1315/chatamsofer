@@ -119,7 +119,7 @@ async function loadDistributors(db: NonNullable<ReturnType<typeof getServiceClie
     if (!data || data.length < PAGE) break
   }
   const [{ data: ev }, { data: msgs }, settings, { data: hil }, { data: apps }, nedarim] = await Promise.all([
-    db.from('gilyonot_distributor_events').select('id, distributor_id, kind, channel, quantity, details, status, created_at')
+    db.from('gilyonot_distributor_events').select('id, distributor_id, caller_phone, kind, channel, quantity, details, status, created_at')
       .eq('status', 'open').order('created_at', { ascending: false }).limit(500),
     db.from('gilyonot_distributor_messages').select('id, subject, city, recipients, sent_count, failed_count, skipped_count, created_at')
       .order('created_at', { ascending: false }).limit(30),
@@ -131,7 +131,7 @@ async function loadDistributors(db: NonNullable<ReturnType<typeof getServiceClie
     getDistNedarimView(db),
   ])
   const names = new Map(rows.map(r => [r.id, r.full_name]))
-  const events = (ev ?? []).map(e => ({ ...e, distributor_name: names.get(e.distributor_id) ?? '—' })) as DistributorEventView[]
+  const events = (ev ?? []).map(e => ({ ...e, distributor_name: e.distributor_id ? names.get(e.distributor_id) ?? '—' : `הודעה ממספר לא מזוהה${e.caller_phone ? ` · ${e.caller_phone}` : ' (מספר חסוי)'}` })) as DistributorEventView[]
   const hilula = ((hil ?? []) as unknown as HilulaRequestView[]).map(h => ({ ...h, full_name: h.full_name ?? (h.distributor_id ? names.get(h.distributor_id) ?? null : null) }))
   const applications = ((apps ?? []) as unknown as (Omit<DistributorApplicationView, 'reason_label' | 'conflict_name'> & { reason: ApplicationReason; conflict_id: string | null })[])
     .map(({ conflict_id, ...a }) => ({ ...a, reason_label: REASON_LABELS[a.reason] ?? a.reason, conflict_name: conflict_id ? names.get(conflict_id) ?? null : null }))

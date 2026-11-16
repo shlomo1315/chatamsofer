@@ -27,6 +27,6 @@ export type RecordingPurpose = 'issue' | 'address' | 'note'
 export type DistributorPhoneAction =
   | { kind: 'quantity'; distributorId: string; action: 'received' | 'increase' | 'decrease'; quantity: number }
   | { kind: 'leave'; distributorId: string }
-  | { kind: 'recording'; distributorId: string; purpose: RecordingPurpose; path: string; transcript: string | null }
+  | { kind: 'recording'; distributorId: string | null; purpose: RecordingPurpose; path: string; transcript: string | null }
   | { kind: 'hilula'; distributorId: string | null; guests: number }
   | null
