@@ -663,6 +663,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
           pathNodes.length
             ? pathNodes.map(n => ({ generation: n.generation, name: n.name, relation: n.relation ?? null }))
             : lineagePath.map((name, i) => ({ generation: i + 1, name, relation: null as string | null })),
+          beneficiary.lineage_manual,
         )
         const gens: import('./LineageChainChips').ChainGen[] = source.map(c => {
           const isRoot = c.generation === 1
