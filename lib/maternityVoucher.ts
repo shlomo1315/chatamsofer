@@ -246,7 +246,7 @@ export function detailsBox(c: Ctx, title: string, y: number, rows: [string, stri
 
 // תיבת מוקדים — לכל מוקד: שם, כתובת, ימים ושעות
 type Center = { name: string; city?: string | null; address?: string | null; pickup_days?: string | null; pickup_hours?: string | null }
-function centersBox(c: Ctx, title: string, y: number, centers: Center[]): number {
+function centersBox(c: Ctx, title: string, y: number, centers: Center[], perH = 26): number {
   const x = MX, w = W - MX * 2
   const titleH = 22
   const items = centers.filter(cn => cn.name)
@@ -255,7 +255,7 @@ function centersBox(c: Ctx, title: string, y: number, centers: Center[]): number
   // על 6 מוקדים — מקום קריטי כדי שבלוק ההערות+חתימה בתחתית לא ייחתך.
   // מרווח גדול יותר בין מוקדים (26 במקום 21) — כל מוקד "נושם", וקו מפריד דק
   // מבהיר את הגבול. שורת השם ב-ry, הפרטים ב-ry-12.5.
-  const perH = 26
+  // perH מתכווץ אוטומטית (renderFoodCardLayout) כשיש הרבה מוקדים, כדי שבלוק ההפעלה לא יחפוף את האזהרה שמתחתיו.
   const contentH = items.length ? items.length * perH : 22
   const boxH = titleH + contentH + 6
   roundedBox(c, x, y - boxH, w, boxH, GOLD, rgb(1, 1, 1))
@@ -319,7 +319,33 @@ export function drawIssueDate(c: Ctx, y: number) {
   rightText(c, `${prefix}${greg}`, W - MX, y, 10, SUB)
 }
 
+// גובה מינימלי (y) שמותר לבלוק ההפעלה להגיע אליו — מעל אזהרת החנויות המעוגנת (שורה ראשונה ב-y=92).
+const ACTIVATION_MIN_BOTTOM = 106
+const CENTER_ROW_MAX = 26
+const CENTER_ROW_MIN = 19
+
 async function renderFoodCard(input: VoucherInput): Promise<string> {
+  return (await renderFoodCardLayout(input)).b64
+}
+
+/** מצייר את שובר הכרטיס; מכווץ את גובה שורת המוקד עד שבלוק ההפעלה נכנס מעל אזהרת החנויות. */
+export async function renderFoodCardLayout(input: VoucherInput): Promise<{ b64: string; activationBottom: number; rowH: number; pages: number }> {
+  let rowH = CENTER_ROW_MAX
+  let r = await drawFoodCard(input, rowH, false)
+  const n = (input.centers ?? []).filter(cn => cn.name).length
+  if (n > 0 && r.activationBottom < ACTIVATION_MIN_BOTTOM) {
+    rowH = Math.max(CENTER_ROW_MIN, CENTER_ROW_MAX - Math.ceil((ACTIVATION_MIN_BOTTOM - r.activationBottom) / n))
+    r = await drawFoodCard(input, rowH, false)
+    // גם בגובה המינימלי לא נכנס (7 מוקדים ומעלה) — בלוק ההפעלה, אזהרת החנויות וההערות עוברים לעמוד שני.
+    if (r.activationBottom < ACTIVATION_MIN_BOTTOM) {
+      rowH = CENTER_ROW_MAX
+      r = await drawFoodCard(input, rowH, true)
+    }
+  }
+  return { ...r, rowH }
+}
+
+async function drawFoodCard(input: VoucherInput, rowH: number, split: boolean): Promise<{ b64: string; activationBottom: number; pages: number }> {
   await loadVoucherTexts()
   const doc = await PDFDocument.create()
   doc.registerFontkit(fontkit)
@@ -381,7 +407,7 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
   // מוקד האיסוף — היולדת בחרה אותו מראש בעת הגשת הבקשה; הכרטיס ניתן
   // לאיסוף רק שם. פירוט (יותר ממוקד אחד) נשאר לתאימות אחורה לבקשות ישנות.
   const singleCenter = (input.centers ?? []).length === 1
-  y = centersBox(c, singleCenter ? 'מוקד איסוף הכרטיס' : 'מוקדי איסוף הכרטיס', y, input.centers ?? [])
+  y = centersBox(c, singleCenter ? 'מוקד איסוף הכרטיס' : 'מוקדי איסוף הכרטיס', y, input.centers ?? [], rowH)
   // ⚠️ פונט וריווח מוקטנים — הבלוק שמתחת ירד נמוך מדי והחתימה נחתכה
   // בקצה העמוד. הקיצור כאן מעלה את כל התחתית פנימה.
   y = paragraph(c,
@@ -392,6 +418,13 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
   y += 2
 
   // ── הפעלת הכרטיס — תיבת הדגשה (חובה לפני השימוש) ──
+  if (split) {
+    // עמוד שני: אותה מסגרת וכותרת, והבלוקים המעוגנים לתחתית (חנויות, הערות, ברכה) נצבעים עליו.
+    c.page = doc.addPage([W, H])
+    y = drawHeader(c, input.silent ? 'היכל החתם סופר' : 'אגף עזר ליולדות')
+    centerText(c, 'המשך השובר', W / 2, y, 14, NAVY)
+    y -= 26
+  }
   {
     const innerRight = W - MX - 14
     const innerW = W - MX * 2 - 28
@@ -437,6 +470,7 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
 
     y = y - boxH - 8
   }
+  const activationBottom = y
 
   // ── בלוק הסיום (הערות + ברכה + חתימה) מעוגן לתחתית העמוד ──
   // ⚠️ קודם השורות האלה זרמו מ-y של התוכן שמעליהן. עם רשימת מוקדים מלאה
@@ -479,7 +513,7 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
   centerText(c, input.silent ? 'בברכה' : 'בברכת מזל טוב ורוב נחת', W / 2, blessY, 11, NAVY)
   centerText(c, input.silent ? 'היכל החתם סופר' : 'אגף עזר ליולדות · היכל החתם סופר', W / 2, blessY - 14, 10, SUB)
 
-  return Buffer.from(await doc.save()).toString('base64')
+  return { b64: Buffer.from(await doc.save()).toString('base64'), activationBottom, pages: doc.getPageCount() }
 }
 
 async function renderRecovery(input: VoucherInput): Promise<string> {

@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { buildCardVoucherOnly } from './maternityVoucher'
+import { buildCardVoucherOnly, renderFoodCardLayout } from './maternityVoucher'
 
-// שובר כרטיס המזון נדחס לעמוד A4 יחיד. הבדיקה מוודאת שהוא אכן נבנה
-// ונשאר בעמוד אחד גם ברשימת מוקדים מלאה — המקרה שגלש בפועל.
+// שובר כרטיס המזון: עמוד אחד כשיש מעט מוקדים, ושני עמודים מ-6 מוקדים ומעלה.
 const CENTERS = [
   { name: 'מוקד בית שמש רמה ב - משפחת אונגר', address: 'דובר שלום 11', city: 'בית שמש', pickup_days: 'ימי ראשון ושלישי', pickup_hours: '19:00 - 21:00' },
   { name: 'מוקד בני ברק - אזור חזון איש נחמיה - משפחת שמרלר', address: 'הרב לנדא יעקב 3', city: 'בני ברק', pickup_days: 'ימי שני ושלישי', pickup_hours: '20:00 - 22:00' },
@@ -33,7 +32,8 @@ describe('שובר כרטיס מזון — פריסה', () => {
     // נקרא דרך pdf-lib ולא ב-regex, כי המבנה דחוס באובייקט-סטרים.
     const { PDFDocument } = await import('pdf-lib')
     const parsed = await PDFDocument.load(pdf)
-    expect(parsed.getPageCount()).toBe(1)
+    // ⚠️ עם 6 מוקדים ומעלה השובר נפרס על שני עמודים (בלוק ההפעלה בעמוד השני) כדי לא לחפוף.
+    expect(parsed.getPageCount()).toBe(2)
   })
 
   it('לידה שקטה — בלי ברכות ובלי המילה "יולדת"', async () => {
@@ -71,4 +71,27 @@ describe('שובר כרטיס מזון — פריסה', () => {
     expect(toVisual('0527101315')).toBe('5131017250')      // ההיפוך המכוון
     expect(toVisual('להפעלה חייגו: 02-376-6363')).toContain('3636-673-20')
   })
+})
+
+describe('שובר כרטיס מזון — בלוק ההפעלה לא חופף את אזהרת החנויות', () => {
+  const EXTRA = [
+    { name: 'מוקד בית שמש רמה ד׳ 3 - משפחת גרליץ', address: 'רב עמרם 6', city: 'בית שמש', pickup_days: 'ימי ראשון ושלישי', pickup_hours: '19:00 - 21:00' },
+    { name: 'מוקד מודיעין עילית - גרין פארק - משפחת רבינוביץ, שימו לב בקומה 4!', address: 'אשר לשלמה 3', city: 'מודיעין עילית', pickup_days: 'ימי ראשון ורביעי', pickup_hours: '18:00 - 20:00' },
+  ]
+  const base = { motherName: 'ויסברג גיטי', motherId: '207212911', address: 'איש מצליח 1', city: 'עמנואל', birthDate: '2026-07-20' }
+  // שורה ראשונה של אזהרת החנויות ב-y=92 (גובה שורה ~9) — הבלוק חייב להסתיים מעליה.
+  const STORES_TOP = 101
+
+  for (const n of [6, 7, 8]) {
+    for (const phones of [['0527101315'], ['0527101315', '0501234567']]) {
+      it(`${n} מוקדים, ${phones.length} טלפונים — בלי חפיפה`, async () => {
+        const centers = [...CENTERS, ...EXTRA].slice(0, n)
+        const r = await renderFoodCardLayout({ ...base, centers, phone: phones[0], spousePhone: phones[1] })
+        expect(r.activationBottom).toBeGreaterThanOrEqual(STORES_TOP)
+        const { PDFDocument } = await import('pdf-lib')
+        expect((await PDFDocument.load(Buffer.from(r.b64, 'base64'))).getPageCount()).toBe(r.pages)
+        expect(r.pages).toBe(2)
+      })
+    }
+  }
 })
