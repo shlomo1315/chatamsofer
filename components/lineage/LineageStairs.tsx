@@ -17,9 +17,14 @@ export interface StairGen {
 
 const TONE = { green: '', orange: s.o, red: s.r } as const
 
-export default function LineageStairs({ gens }: { gens: StairGen[] }) {
-  return (
-    <div className={`${s.root} ${s.ro}`}>
+const LABEL = { green: 'מאושרים', orange: 'ממתינים', red: 'חריג' } as const
+const VAR = { green: '--g', orange: '--o', red: '--r' } as const
+
+// framed: כותרת עם מונים בראש ומקרא צבעים בתחתית, כמו בכרטסת המלאה (בכרטסת הזוג).
+// ⚠️ המונים והמקרא של הצבעים מוצגים רק כשיש צבעים, כדי לא להציג סטטוס שלא חושב.
+export default function LineageStairs({ gens, framed }: { gens: StairGen[]; framed?: boolean }) {
+  const counts = (['green', 'orange', 'red'] as const).map((c) => ({ c, n: gens.filter((g) => g.color === c).length })).filter((x) => x.n > 0)
+  const list = (
       <ol className={s.tree}>
         {gens.map((g, i) => (
           <li key={`${g.generation}-${i}`} className={`${s.gen} ${g.color ? TONE[g.color] : s.n}`} style={{ '--i': i } as React.CSSProperties}>
@@ -39,6 +44,32 @@ export default function LineageStairs({ gens }: { gens: StairGen[] }) {
           </li>
         ))}
       </ol>
+  )
+  if (!framed) return <div className={`${s.root} ${s.ro}`}>{list}</div>
+  return (
+    <div className={`${s.root} ${s.ro}`}>
+      <div className={s.head}>
+        <div>
+          <h2>סדר הדורות</h2>
+          <p>כל דור נכנס מדרגה אחת פנימה מאביו.</p>
+        </div>
+        <div className={s.tally}>
+          <span><b>{gens.length}</b> דורות</span>
+          {counts.map(({ c, n }) => <span key={c} style={{ '--c': `var(${VAR[c]})` } as React.CSSProperties}><i /><b>{n}</b> {LABEL[c]}</span>)}
+        </div>
+      </div>
+      <div className={s.panel}>
+        {list}
+        {counts.length > 0 && (
+          <div className={s.foot}>
+            <div className={s.legend}>
+              <span><i style={{ '--c': 'var(--g)' } as React.CSSProperties} />מאושר</span>
+              <span><i className={s.hollow} />ממתין לאימות</span>
+              <span><i style={{ '--c': 'var(--r)' } as React.CSSProperties} />חריג: בדיקה מעמיקה</span>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
