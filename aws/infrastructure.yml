@@ -30,6 +30,8 @@ Parameters:
   CreateOidcProvider: {Type: String, Default: 'true', AllowedValues: ['true', 'false'], Description: "false אם כבר קיים provider של GitHub בחשבון"}
   ExistingOidcProviderArn: {Type: String, Default: ''}
 
+  ManageWafLogs: {Type: String, Default: 'false', AllowedValues: ['true', 'false'], Description: "false = לוגי ה-WAF קיימים ומנוהלים ידנית (ברירת מחדל, כדי שעדכון לא ייכשל על כבר קיים). true = רק אחרי ייבוא (import) של המשאבים הקיימים ל-stack"}
+
 Conditions:
   HasAdminIps: !Not [!Equals [!Join ['', !Ref AdminAllowedIps], '']]
   HasCert: !Not [!Equals [!Ref CertificateArn, '']]
@@ -37,6 +39,7 @@ Conditions:
   UseExistingNamespace: !Not [!Equals [!Ref InternalNamespaceId, '']]
   CreateNamespace: !And [!Condition HasCert, !Not [!Condition UseExistingNamespace]]
   HasCertValidation: !Not [!Equals [!Ref CertValidationName, '']]
+  MakeWafLogs: !Equals [!Ref ManageWafLogs, 'true']
   MakeZone: !Equals [!Ref CreateDnsZone, 'true']
   MakeCertRecord: !And [!Condition MakeZone, !Condition HasCertValidation]
   MakeOidc: !Equals [!Ref CreateOidcProvider, 'true']
@@ -891,6 +894,32 @@ Resources:
     Properties:
       ResourceArn: !Ref Alb
       WebACLArn: !GetAtt Waf.Arn
+
+  # לוגי WAF: רק בקשות חסומות, בלי Authorization ו-Cookie. נוצרו ידנית ב-17.11.2026, לכן מנוהלים כאן רק עם ManageWafLogs=true אחרי ייבוא
+  WafLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: MakeWafLogs
+    Properties:
+      LogGroupName: !Sub "aws-waf-logs-${ProjectName}"
+      RetentionInDays: 30
+      Tags: [{Key: project, Value: !Ref ProjectName}, {Key: owner, Value: shlomo}]
+
+  WafLogging:
+    Type: AWS::WAFv2::LoggingConfiguration
+    Condition: MakeWafLogs
+    Properties:
+      ResourceArn: !GetAtt Waf.Arn
+      LogDestinationConfigs: [!GetAtt WafLogGroup.Arn]
+      RedactedFields:
+        - SingleHeader: {Name: authorization}
+        - SingleHeader: {Name: cookie}
+      LoggingFilter:
+        DefaultBehavior: DROP
+        Filters:
+          - Behavior: KEEP
+            Requirement: MEETS_ANY
+            Conditions:
+              - ActionCondition: {Action: BLOCK}
 
   # אזור DNS ב-Route 53, רק במעבר סופי (CreateDnsZone=true). עד שמחליפים את שרתי השמות אצל הרשם הוא לא משפיע על האתר החי
   Zone:
