@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, type ReactNode } from 'react'
-import { X, ChevronUp, ChevronDown, Lock, Check, Copy } from 'lucide-react'
+import { X, ChevronUp, ChevronDown, Lock, Check, Copy, Mail } from 'lucide-react'
 
 // כרטסת קופצת אחידה לכל מחלקות הניהול: חלונית במרכז המסך על רקע מטושטש.
 // כל מחלקה מעבירה רק הגדרות (שדות, שלבים, מספרים, לשוניות ופעולות). עיצוב ומקלדת כאן, במקום אחד.
@@ -15,8 +15,12 @@ export type RecordField = {
   copy?: boolean
   full?: boolean
   chain?: string[]
+  // תגית בולטת במקום טקסט רגיל (למשל מצב משפחתי)
+  badge?: boolean
+  // כתובת מייל: לחיצה פותחת חלונית שליחה
+  onEmail?: (email: string) => void
 }
-export type RecordSection = { title: string; fields: RecordField[]; wide?: boolean }
+export type RecordSection = { title: string; fields: RecordField[]; wide?: boolean; custom?: ReactNode }
 export type RecordTab = { key: string; label: string; count?: number; content: ReactNode }
 export type RecordFact = { label: string; value: string; ltr?: boolean; hl?: boolean }
 export type RecordSteps = { labels: string[]; current: number; rejected?: boolean; dates?: (string | undefined)[] }
@@ -70,7 +74,16 @@ function Field({ f }: { f: RecordField }) {
           </span>
         ) : has ? (
           <>
-            <span dir={f.ltr ? 'ltr' : undefined} className={`min-w-0 tabular-nums ${f.ltr ? 'text-right [unicode-bidi:isolate]' : ''}`}>{f.value}</span>
+            {f.onEmail ? (
+              <button type="button" dir="ltr" title="שליחת מייל" onClick={() => f.onEmail!(f.value!)}
+                className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-md bg-[#F4E9CF] px-2.5 py-1 text-[15px] font-medium text-[#8A6316] [unicode-bidi:isolate] hover:bg-[#EFDDB1]">
+                <Mail size={15} className="flex-none" /><span className="truncate">{f.value}</span>
+              </button>
+            ) : f.badge ? (
+              <span className="rounded-full bg-[#E0EFE4] px-3.5 py-0.5 text-[15px] font-bold text-[#22663A]">{f.value}</span>
+            ) : (
+              <span dir={f.ltr ? 'ltr' : undefined} className={`min-w-0 tabular-nums ${f.ltr ? 'text-right [unicode-bidi:isolate]' : ''}`}>{f.value}</span>
+            )}
             {(f.copy || f.ltr) && <CopyBtn text={f.value!} />}
           </>
         ) : (
@@ -115,6 +128,7 @@ export default function RecordModal(props: {
     const go = (s: number) => onIndex((index + s + total) % total)
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
+      if (document.querySelector('[data-mail-dialog]') || t?.isContentEditable) return
       if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) { if (e.key === 'Escape') onClose(); return }
       if (e.key === 'Escape') onClose()
       else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { e.preventDefault(); go(1) }
@@ -136,6 +150,7 @@ export default function RecordModal(props: {
       <h3 className="flex items-baseline gap-2.5 border-b-[1.5px] border-[#14213D] pb-2.5 pt-3.5 text-[15px] font-bold text-[#14213D]">
         <em className="text-[22px] font-black not-italic leading-none tabular-nums text-[#C0912F]">{i + 1}</em>{sec.title}
       </h3>
+      {sec.custom && <div className="pb-1 pt-3">{sec.custom}</div>}
       <div className={`grid grid-cols-1 gap-x-7 ${sec.wide ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
         {sec.fields.map((f) => <Field key={f.label} f={f} />)}
       </div>

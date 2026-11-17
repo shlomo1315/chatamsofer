@@ -133,3 +133,10 @@
   .gen:not(:first-child)::before{border-end-start-radius:12px}
   .menu{min-width:0;inset-inline-end:0}
 }
+
+/* תצוגה לקריאה בלבד (LineageStairs): ניטרלי, בלי סטטוס אישור */
+.gen.n{--c:#14213D; --soft:#f6f5f2; --line:#cfc8b5}
+.ro{margin-bottom:0}
+@media (min-width:641px){.ro{--step:40px}}
+.ro .node:hover{background:var(--surface);border-color:var(--hair)}
+.ro .node:active{transform:none}
