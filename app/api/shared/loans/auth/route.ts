@@ -1,19 +1,16 @@
 import { NextResponse } from 'next/server'
 import { verifyPortalPassword, issuePortalToken, PORTAL_COOKIE } from '@/lib/loansPortalAuth'
-import { rateLimit, clientIp } from '@/lib/rateLimit'
+import { clientIp } from '@/lib/rateLimit'
+import { guardedPasswordCheck } from '@/lib/portalLoginLock'
 
 export async function POST(req: Request) {
   try {
-    // הגבלת קצב — בולמת ניחוש הסיסמה המשותפת (אין lockout אחר). עקבי עם portal/login.
-    if (!rateLimit(`loans-auth:${clientIp(req)}`, 10, 15 * 60 * 1000)) {
-      return NextResponse.json({ error: 'יותר מדי ניסיונות. נסה שוב בעוד מספר דקות.' }, { status: 429 })
-    }
-
     const { password } = await req.json()
     if (!password) return NextResponse.json({ error: 'חסרה סיסמה' }, { status: 400 })
 
-    const ok = await verifyPortalPassword(String(password))
-    if (!ok) return NextResponse.json({ error: 'סיסמה שגויה' }, { status: 401 })
+    // נעילה לפי IP במסד: 3 ניסיונות, חסימה ל-3 שעות ואז ל-24 שעות (lib/portalLoginLock)
+    const denied = await guardedPasswordCheck('loans-auth', clientIp(req), () => verifyPortalPassword(String(password)))
+    if (denied) return NextResponse.json({ error: denied.error }, { status: denied.status })
 
     // ⚠️ מזוהה ל-portal_sessions כדי שהמנהל יוכל לזהות מכשיר ולנתק אותו
     // נקודתית. לא מזהה ודאי — עזר תפעולי בלבד.

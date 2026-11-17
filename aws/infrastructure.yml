@@ -17,7 +17,7 @@ Parameters:
   CertValidationValue: {Type: String, Default: '', Description: "ערך רשומת האימות"}
   VpcId: {Type: AWS::EC2::VPC::Id, Description: "ה-VPC ברירת המחדל"}
   SubnetIds: {Type: "List<AWS::EC2::Subnet::Id>", Description: "שתי תתי-רשתות ציבוריות בשני אזורי זמינות (המאזן והשרת)"}
-  AdminAllowedIps: {Type: CommaDelimitedList, Default: "", Description: "כתובות IPv4 מורשות לניהול ממדינות שמחוץ לרשימת המדינות המורשות (ישראל, ארצות הברית, קנדה, אירופה), בפורמט 1.2.3.4/32 ומופרדות בפסיק. ריק = רק המדינות המורשות"}
+  AdminAllowedIps: {Type: CommaDelimitedList, Default: "", Description: "כתובות IPv4 מורשות לניהול ממדינות שמחוץ לרשימת המדינות המורשות (ישראל וארצות הברית), בפורמט 1.2.3.4/32 ומופרדות בפסיק. ריק = רק המדינות המורשות"}
   CostCapUsd: {Type: Number, Default: 60, Description: "תקרת עלות חודשית בדולרים. בחציית ה-100% נחסמת יצירת משאבים חדשים בתשלום"}
   CostAlertEmail: {Type: String, Default: s0527101315@gmail.com, Description: "מייל להתראות עלות"}
   ProxyAmiId: {Type: "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>", Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64, Description: "תמונת Amazon Linux 2023 (ARM) לשרת הביניים של נדרים"}
@@ -765,7 +765,7 @@ Resources:
       DefaultAction: {Allow: {}}
       VisibilityConfig: {SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: !Sub "${ProjectName}-waf"}
       Rules:
-        # מערכת הניהול רק מישראל, ארצות הברית, קנדה ואירופה (האיחוד האירופי, בריטניה, שווייץ, נורווגיה, איסלנד וליכטנשטיין): /admin, /yerid-admin ו-/api/admin נחסמים לכל מי שלא מגיע ממדינה ברשימה או מכתובת ברשימה AdminAllowedIps.
+        # מערכת הניהול רק מישראל וארצות הברית: /admin, /yerid-admin ו-/api/admin נחסמים לכל מי שלא מגיע ממדינה ברשימה או מכתובת ברשימה AdminAllowedIps.
         # כל נתיבי /api/admin דורשים סשן של צוות ואין בהם קריאות משירותים חיצוניים. webhooks, נדרים, המרכזיה, cron, Google ו-Supabase (/auth/v1) לא בנתיבים האלה ולא מושפעים
         - Name: admin-israel-only
           Priority: 0
@@ -781,7 +781,7 @@ Resources:
                       - ByteMatchStatement: {SearchString: /yerid101315, FieldToMatch: {UriPath: {}}, PositionalConstraint: STARTS_WITH, TextTransformations: [{Priority: 0, Type: URL_DECODE}, {Priority: 1, Type: LOWERCASE}]}
                 - NotStatement:
                     Statement:
-                      GeoMatchStatement: {CountryCodes: [IL, US, CA, AT, BE, BG, HR, CY, CZ, DK, EE, FI, FR, DE, GR, HU, IE, IT, LV, LT, LU, MT, NL, PL, PT, RO, SK, SI, ES, SE, GB, CH, NO, IS, LI]}
+                      GeoMatchStatement: {CountryCodes: [IL, US]}
                 - NotStatement:
                     Statement:
                       IPSetReferenceStatement: {Arn: !GetAtt AdminAllowedIpSet.Arn}
