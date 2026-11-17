@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# מערכת הניהול רק מישראל, ארצות הברית, קנדה ואירופה + הגבלת קצב על הכניסה (כללי WAF). מריצים ב-CloudShell:
+# מערכת הניהול רק מישראל וארצות הברית + הגבלת קצב על הכניסה (כללי WAF). מריצים ב-CloudShell:
 #   bash <(curl -fsSL "https://raw.githubusercontent.com/shlomo1315/chatamsofer/main/aws/admin-geo.sh?$(date +%s)")
 # כניסה ממדינה אחרת: מוסיפים את הכתובת (מ-https://checkip.amazonaws.com) ומריצים:
 #   ADMIN_IPS=1.2.3.4/32 bash <(curl ...)        כמה כתובות: ADMIN_IPS=1.2.3.4/32,5.6.7.8/32
@@ -24,4 +24,4 @@ ALLOWED=$(param AdminAllowedIps)
 code() { curl -s -o /dev/null -w '%{http_code}' "https://$DOMAIN$1"; }
 echo "== בדיקה מ-CloudShell (שרת באירופה, ולכן הניהול אמור להיפתח ולא להחזיר 403):"
 echo "   /admin: $(code /admin)   /api/health: $(code /api/health)"
-echo "מוכן: מערכת הניהול פתוחה רק מישראל, ארצות הברית, קנדה ואירופה${ALLOWED:+ ומהכתובות $ALLOWED}"
+echo "מוכן: מערכת הניהול פתוחה רק מישראל וארצות הברית${ALLOWED:+ ומהכתובות $ALLOWED}"
