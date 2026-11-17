@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { displayChain } from './lineageDisplayChain'
+import { displayChain, registrantGeneration } from './lineageDisplayChain'
 
 // 🔴 אותו מוטב חייב להיראות זהה בכל מסך (עקשטיין 212404438, בלייכברד 200360204).
 describe('🔴 displayChain — מקור אחד לכל המסכים', () => {
@@ -92,6 +92,24 @@ describe('🔴 displayChain — מקור אחד לכל המסכים', () => {
     it('שרשרת תקינה לא משתנה', () => {
       const rows = [{ generation: 1, name: 'א' }, { generation: 2, name: 'ב' }]
       expect(displayChain(rows, null).map(c => c.generation)).toEqual([1, 2])
+    })
+  })
+
+  describe('registrantGeneration', () => {
+    it('אחרי דור 4 הנרשם הוא דור 5', () => {
+      const chain = displayChain([1, 2, 3, 4].map(g => ({ generation: g, name: 'א' + g })), null)
+      expect(registrantGeneration(chain)).toBe(5)
+    })
+    it('שרשרת עם אב ידני נספרת לפי הדור האחרון ולא לפי האורך', () => {
+      const chain = displayChain([{ generation: 3, name: 'ג' }, { generation: 4, name: 'ד' }], null, ['ה'])
+      expect(chain.map(c => c.generation)).toEqual([3, 4, 5])
+      expect(registrantGeneration(chain)).toBe(6)
+    })
+    it('נרשם שכבר בשרשרת — הדור שלו הוא האחרון', () => {
+      expect(registrantGeneration([{ generation: 4, name: 'ד' }, { generation: 5, name: 'נרשם' }], true)).toBe(5)
+    })
+    it('שרשרת ריקה — אין דור', () => {
+      expect(registrantGeneration([])).toBeNull()
     })
   })
 })

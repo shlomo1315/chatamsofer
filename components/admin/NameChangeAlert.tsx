@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { UserPen, Loader2, Check, X } from 'lucide-react'
+import LineageStairs from '@/components/lineage/LineageStairs'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // חלונית התראה על בקשות שינוי שם ממתינות.
@@ -180,29 +181,12 @@ export default function NameChangeAlert() {
               )}
 
               {/* ── סדר הדורות, שורה אחרי שורה ──
-                  ⚠️ ממוין לפי דור: הסדר הוא כל המשמעות של הייחוס, ורשימה
-                  לא ממוינת מציגה שרשרת שבורה. דור 1 הוא רבינו החתם סופר. */}
+                  ⚠️ השרשרת כבר עברה displayChain בשרת (ממוינת, עוקבת, עם אבות ידניים).
+                  דור 1 הוא רבינו החתם סופר. */}
               {r.beneficiary?.lineage_chain?.length ? (
                 <div className="mt-2.5 rounded-lg border border-slate-200 bg-white px-3 py-2.5">
                   <p className="text-[10px] font-semibold text-slate-400 mb-1.5">סדר הדורות</p>
-                  <ol className="flex flex-col gap-1">
-                    {r.beneficiary.lineage_chain
-                      .slice()
-                      .sort((a, b) => a.generation - b.generation)
-                      .map((g, i) => (
-                        <li key={`${g.generation}-${i}`} className="flex items-start gap-2 text-[11.5px] leading-snug">
-                          <span className="mt-px flex h-4 w-4 flex-shrink-0 items-center justify-center rounded bg-sand text-[9px] font-bold text-navy">
-                            {g.generation}
-                          </span>
-                          <span className="min-w-0 flex-1 font-medium text-slate-700">{g.name}</span>
-                          {g.relation && (
-                            <span className="flex-shrink-0 rounded px-1.5 py-px text-[9px] font-bold text-slate-500 bg-slate-100">
-                              {g.relation === 'son' ? 'בן' : 'חתן'}
-                            </span>
-                          )}
-                        </li>
-                      ))}
-                  </ol>
+                  <LineageStairs gens={r.beneficiary.lineage_chain} />
                 </div>
               ) : (
                 <p className="mt-2.5 rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-400">

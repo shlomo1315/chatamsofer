@@ -79,3 +79,14 @@ function withManual(base: ChainEntry[], manual: readonly string[] | null | undef
   }
   return out
 }
+
+/**
+ * 🔴 הדור של הנרשם עצמו: הדור הבא אחרי האב האחרון בשרשרת. ארבעה אבות (דורות 1–4)
+ * הם נרשם בדור 5. ספירת אורך השרשרת טעתה כשהשרשרת לא מתחילה ב-1 או שיש בה דילוג.
+ * ⚠️ אם הנרשם עצמו כבר האיבר האחרון (selfIncluded), הדור שלו הוא האחרון עצמו.
+ */
+export function registrantGeneration(chain: readonly ChainEntry[], selfIncluded = false): number | null {
+  if (!chain.length) return null
+  const last = chain[chain.length - 1].generation
+  return selfIncluded ? last : last + 1
+}

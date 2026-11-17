@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { normalizeName as norm } from '@/lib/lineageChainDiff'
+import { displayChain, type ChainEntry } from '@/lib/lineageDisplayChain'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,7 +33,7 @@ export async function GET(request: NextRequest) {
   if (!id) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
 
   const { data, error } = await admin.from('beneficiaries')
-    .select('id, full_name, family_name, id_number, phone, city, eligibility_status, lineage_chain, lineage_node_id')
+    .select('id, full_name, family_name, id_number, phone, city, eligibility_status, lineage_chain, lineage_manual, lineage_node_id')
     .eq('id', id).maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!data) return NextResponse.json({ error: 'המשפחה לא נמצאה' }, { status: 404 })
@@ -40,7 +41,7 @@ export async function GET(request: NextRequest) {
   const b = data as {
     id: string; full_name: string | null; family_name: string | null
     id_number: string | null; phone: string | null; city: string | null
-    eligibility_status: string | null; lineage_chain: unknown; lineage_node_id: string | null
+    eligibility_status: string | null; lineage_chain: unknown; lineage_manual?: unknown; lineage_node_id: string | null
   }
 
   let nodeName: string | null = null
@@ -120,7 +121,10 @@ export async function GET(request: NextRequest) {
       phone: b.phone,
       city: b.city,
       status: b.eligibility_status,
-      chain: Array.isArray(b.lineage_chain) ? b.lineage_chain : [],
+      chain: displayChain(
+        Array.isArray(b.lineage_chain) ? (b.lineage_chain as ChainEntry[]) : null, null,
+        Array.isArray(b.lineage_manual) ? (b.lineage_manual as string[]) : null,
+      ),
       nodeName, nodeStatus, nodeSiblingDup,
       duplicates: dups.slice(0, 10),
     },

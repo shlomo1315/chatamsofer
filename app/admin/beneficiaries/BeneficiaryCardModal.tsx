@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { Check } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Beneficiary, ELIGIBILITY_LABELS } from '@/types'
-import { displayChain } from '@/lib/lineageDisplayChain'
+import { displayChain, registrantGeneration } from '@/lib/lineageDisplayChain'
 import { registrationSourceLabel } from '@/lib/distributionSources'
 import RecordModal, { modalBtn, type RecordTone } from '@/components/admin/system/RecordModal'
 import RecordMailDialog from '@/components/admin/system/RecordMailDialog'
@@ -86,7 +86,7 @@ export default function BeneficiaryCardModal({ rows, index, onIndex, onClose }: 
       facts={[
         { label: 'תיק', value: `#${b.id.slice(0, 6)}`, ltr: true },
         { label: 'ילדים', value: String(b.children_count ?? 0) },
-        { label: 'דור', value: chain.length ? String(chain.length) : '—' },
+        { label: 'דור', value: String(registrantGeneration(chain) ?? '—') },
         { label: 'ימים בטיפול', value: String(days) },
       ]}
       readiness={checks}
