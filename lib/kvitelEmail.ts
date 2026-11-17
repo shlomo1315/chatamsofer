@@ -49,11 +49,13 @@ export function decodeEntities(text: string): string {
 
 // מיילים מהמרכזיה הישנה (ידע פון) נושאים קישורים לשאלון וחתימה של החברה. זה רעש, ונטפרי עלול
 // לחסום בגללו את מסך הקוויטלעך. מוסרים אותו, בלי לפגוע בתוכן אמיתי.
-// ⚠️ אותה לוגיקה במיגרציה 20261116_kvitel_strip_yedaphone.sql, ושינוי כאן מחייב שינוי שם.
+// ⚠️ אותה לוגיקה במיגרציות 20261116_kvitel_strip_yedaphone.sql ו-20261117_kvitel_strip_forward_header.sql, ושינוי כאן מחייב שינוי שם.
 export function stripYedaPhoneNoise(text: string): string {
-  if (!/yeda-phone|ידע\s*פון/i.test(text)) return text
+  if (!/yeda-phone|ידע\s*[-–]?\s*פון/i.test(text)) return text
   return text
-    .replace(/(^|\n)[^\n]*ידע\s*פון[\s\S]*$/, '')
+    // כותרת הודעה מועברת: שולח, כתובות מייל וקו "Forwarded message".
+    .replace(/(^|\n)[^\n]*(?:-{3,}\s*Forwarded|[\w.+-]+@[\w-]+\.[\w.-]+)[^\n]*/gi, '')
+    .replace(/(^|\n)[^\n]*ידע\s*[-–]?\s*פון[\s\S]*$/, '')
     .replace(/(^|\n)[^\n]*(?:הגדרות השאלון|לצפי[הת]? בתוצאות השאלון)[^\n]*/g, '')
     .replace(/[<\[(]*https?:\/\/[^\s<>\])]*yeda-phone[^\s<>\])]*[>\])]*/gi, '')
     .replace(/\n{3,}/g, '\n\n')
