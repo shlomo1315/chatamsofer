@@ -4,9 +4,12 @@
 #   bash <(curl -fsSL "https://raw.githubusercontent.com/shlomo1315/chatamsofer/main/aws/cost-cap.sh?$(date +%s)")
 set -euo pipefail
 export AWS_DEFAULT_REGION=eu-central-1
-P=${PROJECT:-chasamsofer}; STACK=${STACK:-$P}; DOMAIN=${DOMAIN:-aws.chasamsofer.co.il}
+P=${PROJECT:-chasamsofer}; STACK=${STACK:-$P}
 RAW=https://raw.githubusercontent.com/shlomo1315/chatamsofer/main/aws
 param() { aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Parameters[?ParameterKey=='$1'].ParameterValue" --output text; }
+# הדומיין ומצב ה-DNS נשמרים כמו שהם בסטאק. ברירת מחדל קבועה (aws.chasamsofer.co.il) החליפה את התעודה הראשית של האתר והפילה אותו
+DOMAIN=${DOMAIN:-$(param DomainName)}; CREATE_ZONE=${CREATE_ZONE:-$(param CreateDnsZone)}
+[[ -n "$DOMAIN" && "$DOMAIN" != None ]] || { echo "לא נמצא DomainName בסטאק"; exit 1; }
 count() { aws ecs describe-services --cluster "$P" --services "$1" --query 'services[0].desiredCount' --output text; }
 CAP=${CAP:-$(param CostCapUsd)}; [[ -n "$CAP" && "$CAP" != None ]] || CAP=60
 [[ "$CAP" =~ ^[0-9]+$ ]] || { echo "CAP חייב להיות מספר שלם בדולרים"; exit 1; }
@@ -16,7 +19,7 @@ ACC=$(aws sts get-caller-identity --query Account --output text)
 aws budgets update-budget --account-id "$ACC" --new-budget "$(aws budgets describe-budget --account-id "$ACC" --budget-name monthly-total --query Budget --output json | sed -E "/\"BudgetLimit\"/,/\}/ s/\"Amount\": \"[0-9.]+\"/\"Amount\": \"$CAP.0\"/")"
 echo "== התקציב monthly-total עודכן ל-$CAP\$ (התראות 50%, 80%, 100% ותחזית נשארו)"
 CPU=$(param TaskCpu); MEM=$(param TaskMemory)
-env DOMAIN="$DOMAIN" CPU="${CPU:-512}" MEMORY="${MEM:-1024}" EXTRA_PARAMS="$EXTRA" DESIRED="$(count "$P")" SUPA="$(count "$P-supabase")" \
+env DOMAIN="$DOMAIN" CREATE_ZONE="$CREATE_ZONE" CPU="${CPU:-512}" MEMORY="${MEM:-1024}" EXTRA_PARAMS="$EXTRA" DESIRED="$(count "$P")" SUPA="$(count "$P-supabase")" \
   bash <(curl -fsSL "$RAW/cloudshell-setup.sh?$(date +%s)") >/tmp/cost-cap-setup.log 2>&1 || { tail -30 /tmp/cost-cap-setup.log; exit 1; }
 aws budgets describe-budget-actions-for-budget --account-id "$ACC" --budget-name "$P-cost-cap" --query 'Actions[].[ActionThreshold.Value,Status]' --output text
 echo "מוכן: בחציית $CAP\$ נחסמת יצירת משאבים חדשים בתשלום (האתר ממשיך לרוץ)"

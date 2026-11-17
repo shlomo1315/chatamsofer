@@ -6,9 +6,12 @@
 #   ADMIN_IPS=none bash <(curl ...)               ניקוי הכתובות (רק המדינות המורשות)
 set -euo pipefail
 export AWS_DEFAULT_REGION=eu-central-1
-P=${PROJECT:-chasamsofer}; STACK=${STACK:-$P}; DOMAIN=${DOMAIN:-aws.chasamsofer.co.il}
+P=${PROJECT:-chasamsofer}; STACK=${STACK:-$P}
 RAW=https://raw.githubusercontent.com/shlomo1315/chatamsofer/main/aws
 param() { aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Parameters[?ParameterKey=='$1'].ParameterValue" --output text; }
+# הדומיין ומצב ה-DNS נשמרים כמו שהם בסטאק. ברירת מחדל קבועה (aws.chasamsofer.co.il) החליפה את התעודה הראשית של האתר והפילה אותו
+DOMAIN=${DOMAIN:-$(param DomainName)}; CREATE_ZONE=${CREATE_ZONE:-$(param CreateDnsZone)}
+[[ -n "$DOMAIN" && "$DOMAIN" != None ]] || { echo "לא נמצא DomainName בסטאק"; exit 1; }
 count() { aws ecs describe-services --cluster "$P" --services "$1" --query 'services[0].desiredCount' --output text; }
 EXTRA=""
 if [[ -n "${ADMIN_IPS:-}" ]]; then
@@ -18,7 +21,7 @@ if [[ -n "${ADMIN_IPS:-}" ]]; then
 fi
 echo "== עדכון הסטאק (כמה דקות)"
 CPU=$(param TaskCpu); MEM=$(param TaskMemory)
-env DOMAIN="$DOMAIN" CPU="${CPU:-512}" MEMORY="${MEM:-1024}" DESIRED="$(count "$P")" SUPA="$(count "$P-supabase")" EXTRA_PARAMS="$EXTRA" \
+env DOMAIN="$DOMAIN" CREATE_ZONE="$CREATE_ZONE" CPU="${CPU:-512}" MEMORY="${MEM:-1024}" DESIRED="$(count "$P")" SUPA="$(count "$P-supabase")" EXTRA_PARAMS="$EXTRA" \
   bash <(curl -fsSL "$RAW/cloudshell-setup.sh?$(date +%s)") >/tmp/admin-geo-setup.log 2>&1 || { tail -30 /tmp/admin-geo-setup.log; exit 1; }
 ALLOWED=$(param AdminAllowedIps)
 code() { curl -s -o /dev/null -w '%{http_code}' "https://$DOMAIN$1"; }
