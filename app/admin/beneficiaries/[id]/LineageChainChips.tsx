@@ -1,9 +1,9 @@
 'use client'
-import { useState, useMemo, useEffect } from 'react'
-import { ChevronLeft, Loader2, GitBranch, Palette, Check, X, Search, AlertTriangle, Undo2 } from 'lucide-react'
+import { useState, useMemo, useEffect, type CSSProperties } from 'react'
+import { Loader2, AlertTriangle, Undo2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { genColor, asGenStatus } from '@/lib/lineageDeviation'
-
+import s from './LineageChainChips.module.css'
 // דור בשרשרת: שם, מספר דור, סטטוס הצומת בעץ, ותגית בן/חתן.
 export interface ChainGen {
   generation: number
@@ -39,22 +39,12 @@ type Color = 'green' | 'orange' | 'red'
 //   verified=ירוק · rejected=אדום בכל דור · pending בדורות 2–5=אדום (צומת שנוסף
 //   לתוך הליבה המאושרת) · pending מעל 5 או "לא נמצא"=כתום.
 // ─────────────────────────────────────────────────────────────────────────────
-// ⚠️ עיצוב "קלף וחותם" — עקבי עם עץ הדורות שמתחת ועם מסך הניהול.
-// הצ'יפים והעץ מציגים את אותה שרשרת; שתי שפות עיצוב שונות על אותו מסך
-// גרמו לצ'יפים להיראות כרכיב ישן שנשכח.
-//
-// ⚠️ הסמנטיקה של הצבע *לא* השתנתה: מאושר/ממתין/חריג נשארים שלושה מצבים
-// נבדלים — רק הגוון הותאם. אחידות עיצובית שמוחקת את ההבחנה הזו הייתה
-// הופכת אזהרה אמיתית לקישוט.
-// 🔴 שלושת הצבעים שסוכמו. הגוון הקודם ל"מאושר" היה זהב (#e0b94a) —
-// כמעט זהה לחום-הנחושת של "ממתין", כך ששני המצבים נראו אותו דבר
-// ו"מאושר" נקרא כאזהרה.
-const STYLE: Record<Color, string> = {
-  green:  'text-white font-semibold border-[#166534] bg-[linear-gradient(160deg,#22c55e,#16a34a)] shadow-[0_2px_6px_-2px_rgba(22,163,74,0.55)]',
-  orange: 'text-white font-semibold border-[#9a3412] bg-[linear-gradient(160deg,#fb923c,#ea580c)] shadow-[0_2px_6px_-2px_rgba(234,88,12,0.55)]',
-  red:    'text-white font-bold border-[#7f1d1d] bg-[linear-gradient(160deg,#b91c1c,#991b1b)] shadow-[0_2px_8px_-2px_rgba(153,27,27,0.6)]',
-}
-const GEN_TXT: Record<Color, string> = { green: 'text-green-50/85', orange: 'text-orange-50/85', red: 'text-red-100' }
+// ⚠️ עיצוב "מדרגות": כל דור נכנס מדרגה אחת פנימה מאביו (LineageChainChips.module.css,
+// לפי המוקאפ המאושר). הסמנטיקה של הצבע *לא* השתנתה: מאושר=ירוק מלא, ממתין=כתום
+// חלול, חריג=אדום עם הילה. אחידות עיצובית שמוחקת את ההבחנה הזו הייתה הופכת
+// אזהרה אמיתית לקישוט.
+const CLS: Record<Color, string> = { green: '', orange: s.o, red: s.r }
+const PILL: Record<Color, string> = { green: 'מאושר', orange: 'ממתין', red: 'חריג' }
 // ⚠️ כלל הצבע מגיע מ-lib/lineageDeviation ואינו משוכפל כאן: הצ'יפים וחלונית
 // ההתראה חייבים לומר את אותו דבר. עותק שני היה נפרד מהראשון בתיקון הבא, ואז
 // ההתראה מדברת על דור שהצ'יפים מציגים כתקין.
@@ -76,9 +66,11 @@ export default function LineageChainChips({
   const router = useRouter()
   const [marks, setMarks] = useState<Record<string, 'red' | 'green'>>(initialMarks)
   const [saving, setSaving] = useState(false)
-  const [menuGen, setMenuGen] = useState<number | null>(null)   // איזה דור פתח תפריט
+  const [menuIdx, setMenuIdx] = useState<number | null>(null)   // איזה דור (לפי מיקום) פתח תפריט
+  const [marking, setMarking] = useState(false)                  // שורת מאושר/נדחה פתוחה בתפריט
   const [pickerGen, setPickerGen] = useState<number | null>(null) // בורר צמתים פתוח לדור
   const [q, setQ] = useState('')
+  const [sel, setSel] = useState<string | null>(null)            // צומת שסומן בבורר; null = הנוכחי
   const [assigning, setAssigning] = useState(false)
   const [err, setErr] = useState('')
   // 🔴 הצומת שנבחר *ממתין לאישור* ואינו נשלח עדיין. קודם לחיצה אחת על שם
@@ -123,11 +115,10 @@ export default function LineageChainChips({
     return autoColor(g)
   }
 
-  // צביעה ידנית — מחזור אוטומטי → מאושר(כחול) → נדחה(אדום) → אוטומטי
-  const cycle = async (g: ChainGen) => {
-    setMenuGen(null)
-    const cur = marks[String(g.generation)]
-    const next: 'red' | 'green' | null = cur == null ? 'green' : cur === 'green' ? 'red' : null
+  // סימון ידני (override). לחיצה על הסימון שכבר פעיל מחזירה לצבע האוטומטי.
+  const setMark = async (g: ChainGen, v: 'red' | 'green') => {
+    setMenuIdx(null); setMarking(false)
+    const next: 'red' | 'green' | null = marks[String(g.generation)] === v ? null : v
     const nextMarks = { ...marks }
     if (next) nextMarks[String(g.generation)] = next
     else delete nextMarks[String(g.generation)]
@@ -141,6 +132,22 @@ export default function LineageChainChips({
     } catch { /* best-effort */ }
     setSaving(false)
   }
+
+  // סגירת התפריט בלחיצה מחוצה לו או ב-Escape; Escape סוגר גם את הבורר.
+  useEffect(() => {
+    if (menuIdx == null && pickerGen == null) return
+    const onDown = (e: PointerEvent) => {
+      if (menuIdx != null && !(e.target as Element | null)?.closest?.('.' + s.nodeWrap)) { setMenuIdx(null); setMarking(false) }
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      setMenuIdx(null); setMarking(false)
+      if (pickerGen != null && !pending && !assigning) { setPickerGen(null); setSel(null) }
+    }
+    document.addEventListener('pointerdown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('pointerdown', onDown); document.removeEventListener('keydown', onKey) }
+  }, [menuIdx, pickerGen, pending, assigning])
 
   // נרמול שם להשוואה (הסרת רווחים כפולים, גרשיים/מקפים) — לזיהוי צומת הדור הקודם
   const norm = (s: string) => String(s ?? '').replace(/["'`׳״]/g, '').replace(/\s+/g, ' ').trim()
@@ -197,7 +204,7 @@ export default function LineageChainChips({
       })
       const d = await res.json()
       if (!res.ok) { setErr(d.error ?? 'השיוך נכשל'); return }
-      setPending(null); setPickerGen(null); setMenuGen(null); setQ('')
+      setPending(null); setPickerGen(null); setSel(null); setMenuIdx(null); setQ('')
       setCanUndo(true)
       router.refresh()
     } catch { setErr('שגיאת תקשורת') }
@@ -238,58 +245,89 @@ export default function LineageChainChips({
     }
   }, [pending, pickerGen, gens])
 
-  // תגית בן/חתן — רקע לבן מלא וטקסט כהה, כדי שתבלוט ברור על הצ'יפ הצבעוני
-  // (כחול/כתום/אדום). בן=כחול כהה · חתן=ענבר כהה.
-  const relTag = (r?: 'son' | 'son_in_law' | null) =>
-    (r === 'son' || r === 'son_in_law')
-      ? <span className={`text-[10px] font-bold rounded px-1.5 py-0.5 mr-1 bg-white ${r === 'son' ? 'text-blue-700' : 'text-amber-700'}`}>{r === 'son' ? 'בן' : 'חתן'}</span>
-      : null
+  const total = { g: 0, o: 0, r: 0 }
+  gens.forEach(g => { const c = colorOf(g); total[c === 'green' ? 'g' : c === 'orange' ? 'o' : 'r']++ })
+  const pickerCur = pickerGen == null ? undefined : gens.find(g => g.generation === pickerGen)
+  const pickerPrev = pickerGen == null ? undefined : gens.find(g => g.generation === pickerGen - 1)
+  const closePicker = () => { if (!assigning) { setPickerGen(null); setSel(null) } }
+  const confirmPick = () => {
+    if (sel == null) { closePicker(); return }
+    const n = pickerOptions.find(o => o.id === sel)
+    if (n) { setPending(n); setErr('') }
+  }
 
   return (
-    <div className="mb-4">
-      <div className="flex items-center gap-1.5 flex-wrap">
-        {gens.map((g, i) => {
-          const color = colorOf(g)
-          const overridden = marks[String(g.generation)] != null
-          return (
-            <span key={g.generation} className="relative flex items-center gap-1.5">
-              {i > 0 && <ChevronLeft size={12} className="text-slate-300" />}
-              <button type="button" onClick={() => setMenuGen(menuGen === g.generation ? null : g.generation)}
-                title={`דור ${g.generation} — לחצו לעריכה`}
-                className={`text-xs px-2.5 py-1 rounded-full border transition-all hover:brightness-95 ${STYLE[color]} ${overridden ? 'ring-2 ring-offset-1 ring-slate-300' : ''}`}>
-                <span className={`ml-1 ${GEN_TXT[color]}`}>דור {g.generation}</span>{g.name}{relTag(g.relation)}
-                {color === 'red' && <span className="mr-1">!</span>}
-              </button>
-
-              {/* תפריט קטן — נפתח בלחיצה על הצ'יפ */}
-              {menuGen === g.generation && (
-                <div className="absolute z-30 top-full mt-1 right-0 bg-white rounded-xl shadow-lg border border-slate-200 py-1 w-44 text-right"
-                  onMouseLeave={() => setMenuGen(null)}>
-                  <button type="button" onClick={() => { setPickerGen(g.generation); setQ(''); setErr('') }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-700 hover:bg-sand transition-colors">
-                    <GitBranch size={13} className="text-navy-soft" /> בחר צומת אחר לדור זה
-                  </button>
-                  <button type="button" onClick={() => cycle(g)}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 transition-colors">
-                    <Palette size={13} className="text-slate-400" /> סמן ידנית (מאושר/נדחה)
-                  </button>
-                </div>
-              )}
-            </span>
-          )
-        })}
-        {saving && <Loader2 size={13} className="animate-spin text-slate-400" />}
+    <div className={s.root}>
+      <div className={s.head}>
+        <div>
+          <h2>סדר הדורות</h2>
+          <p>כל דור נכנס מדרגה אחת פנימה מאביו. לחיצה על דור פותחת עריכה והחלפה.</p>
+        </div>
+        <div className={s.tally}>
+          {saving && <Loader2 size={13} className="animate-spin text-slate-400" />}
+          <span><b>{gens.length}</b> דורות</span>
+          {total.g > 0 && <span style={{ '--c': 'var(--g)' } as CSSProperties}><i /><b>{total.g}</b> מאושרים</span>}
+          {total.o > 0 && <span style={{ '--c': 'var(--o)' } as CSSProperties}><i /><b>{total.o}</b> ממתינים</span>}
+          {total.r > 0 && <span style={{ '--c': 'var(--r)' } as CSSProperties}><i /><b>{total.r}</b> חריג</span>}
+        </div>
       </div>
-      <p className="text-[11px] text-slate-400 mt-1.5 flex items-center gap-2 flex-wrap">
-        {/* ⚠️ נקודות המקרא נגזרות מאותם גוונים כמו הצ'יפים — מקרא שאינו
-            תואם את מה שמעליו גרוע מהיעדר מקרא. */}
-        {/* ⚠️ הנקודות במקרא לוקחות את הגוון *מאותו* STYLE שהצ'יפים
-            משתמשים בו. מקרא בגוון אחר מלמד את הקורא צבע שגוי. */}
-        <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#16a34a] inline-block" /> מאושר</span>
-        <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#ea580c] inline-block" /> ממתין לאימות</span>
-        <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#991b1b] inline-block" /> חריג — בדיקה מעמיקה</span>
-        <span>· לחצו על דור לבחירת צומת אחר או לסימון ידני.</span>
-      </p>
+
+      <div className={s.panel}>
+        <ol className={s.tree}>
+          {gens.map((g, i) => {
+            const color = colorOf(g)
+            const open = menuIdx === i
+            const prev = gens[i - 1]
+            const rel = g.relation === 'son' ? 'בן' : g.relation === 'son_in_law' ? 'חתן' : ''
+            return (
+              <li key={`${g.generation}-${i}`} className={`${s.gen} ${CLS[color]}`} style={{ '--i': i } as CSSProperties}>
+                <span className={s.dot}>{g.generation}</span>
+                <div className={`${s.nodeWrap} ${open ? s.open : ''} ${open && marking ? s.marking : ''}`}>
+                  <button type="button" className={s.node} aria-haspopup="menu" aria-expanded={open}
+                    title={`דור ${g.generation}, לחצו לעריכה`}
+                    onClick={() => { setMenuIdx(open ? null : i); setMarking(false) }}>
+                    <span className={s.txt}>
+                      <span className={s.nm}>{g.name}</span>
+                      <span className={s.meta}>
+                        {rel && <><span className={s.rel}>{rel}</span><span className={s.sep} /></>}
+                        <span className={s.par}>{prev ? `אביו: ${prev.name.split(' ומרת')[0].split(',')[0]}` : 'ראש השושלת'}</span>
+                      </span>
+                    </span>
+                    <span className={s.pill}>{PILL[color]}</span>
+                    <svg className={s.chev} width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 6l4 4 4-4" /></svg>
+                  </button>
+                  <div className={s.menu} role="menu">
+                    <button type="button" className={s.mi} role="menuitem"
+                      onClick={() => { setMenuIdx(null); setMarking(false); setPickerGen(g.generation); setSel(null); setQ(''); setErr('') }}>
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 5h9l-2.5-2.5M13 11H4l2.5 2.5" /></svg>
+                      בחר צומת אחר לדור זה
+                    </button>
+                    <hr />
+                    <button type="button" className={s.mi} role="menuitem" onClick={() => setMarking(m => !m)}>
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 8.5l3 3 7-7" /></svg>
+                      סמן ידנית (מאושר/נדחה)
+                    </button>
+                    {/* ⚠️ לחיצה על הסימון שכבר פעיל מבטלת אותו וחוזרת לצבע האוטומטי */}
+                    <div className={s.mark}>
+                      <button type="button" className={s.ok} aria-pressed={marks[String(g.generation)] === 'green'} onClick={() => setMark(g, 'green')}>מאושר</button>
+                      <button type="button" className={s.no} aria-pressed={marks[String(g.generation)] === 'red'} onClick={() => setMark(g, 'red')}>נדחה</button>
+                    </div>
+                  </div>
+                </div>
+              </li>
+            )
+          })}
+        </ol>
+
+        <div className={s.foot}>
+          <div className={s.legend}>
+            <span><i style={{ '--c': 'var(--g)' } as CSSProperties} />מאושר</span>
+            <span><i className={s.hollow} />ממתין לאימות</span>
+            <span><i style={{ '--c': 'var(--r)' } as CSSProperties} />חריג: בדיקה מעמיקה</span>
+          </div>
+          <span>לחצו על דור כדי להחליף או לסמן ידנית</span>
+        </div>
+      </div>
 
       {/* ⚠️ כפתור הביטול מוצג רק אחרי שינוי בפועל, ומיד מתחת לשרשרת —
           במקום שבו רואים את התוצאה ומזהים שהיא שגויה. */}
@@ -305,18 +343,13 @@ export default function LineageChainChips({
         </div>
       )}
 
-      {/* בורר צמתים — מודל */}
+      {/* בורר צמתים: באמצע המסך עם טשטוש */}
       {pickerGen != null && (
-        <div className="dlg-backdrop " dir="rtl"
-          onClick={() => !assigning && setPickerGen(null)}>
-          <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md max-h-[80vh] overflow-y-auto p-5"
-            onClick={e => e.stopPropagation()}>
-            <button type="button" onClick={() => setPickerGen(null)} disabled={assigning}
-              className="absolute top-4 left-4 text-slate-400 hover:text-slate-600"><X size={18} /></button>
-            <h2 className="text-sm font-bold text-slate-900 mb-1 flex items-center gap-2">
-              <GitBranch size={16} className="text-navy" /> בחירת צומת לדור {pickerGen}
-            </h2>
-            <p className="text-xs text-slate-500 mb-3">בחרו צומת מאומת מדור {pickerGen}. השרשרת המלאה תיגזר אוטומטית מהצומת עד השורש.</p>
+        <div className={s.ov} dir="rtl" onClick={closePicker}>
+          <div className={s.dlg} role="dialog" aria-modal="true" aria-labelledby="lineage-pick-title" onClick={e => e.stopPropagation()}>
+            <div className={s.k}>דור {pickerGen} · אביו: {pickerPrev?.name ?? '—'}</div>
+            <h3 id="lineage-pick-title">בחירת צומת אחר לדור הזה</h3>
+            <p>צמתים מהעץ באותו דור, שאביהם הוא הדור הקודם בשרשרת.</p>
 
             {/* ⚠️ חסימה — הדור הקודם עדיין לא מסודר. חייבים דור-אחר-דור. */}
             {prevGenUnresolved ? (
@@ -331,40 +364,38 @@ export default function LineageChainChips({
               </div>
             ) : (
             <>
-            <div className="relative mb-3">
-              <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input value={q} onChange={e => setQ(e.target.value)} placeholder="חיפוש לפי שם…" autoFocus
-                className="w-full rounded-xl border border-slate-300 pr-9 pl-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-soft" />
-            </div>
+            <input value={q} onChange={e => setQ(e.target.value)} placeholder="חיפוש לפי שם…" autoFocus aria-label="חיפוש לפי שם" />
 
             {err && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-2">{err}</p>}
 
-            <div className="flex flex-col gap-1 max-h-72 overflow-y-auto">
+            <div className={s.cands} role="radiogroup">
+              {pickerCur && (
+                <button type="button" role="radio" aria-checked={sel == null}
+                  className={`${s.cand} ${sel == null ? s.sel : ''}`} onClick={() => setSel(null)}>
+                  <span className={s.radio} /><b>{pickerCur.name}</b><small>נוכחי</small>
+                </button>
+              )}
               {loadingNodes ? (
-                <p className="text-sm text-slate-400 py-4 text-center flex items-center justify-center gap-2">
-                  <Loader2 size={14} className="animate-spin" /> טוען צמתים…
-                </p>
+                <div className={s.empty}><Loader2 size={14} className="animate-spin" /> טוען צמתים…</div>
               ) : pickerOptions.length === 0 ? (
-                <p className="text-sm text-slate-400 py-4 text-center">
-                  {q.trim() ? 'לא נמצאו צמתים תואמים' : `אין צמתים מאומתים בדור ${pickerGen}`}
-                </p>
+                <div className={s.empty}>{q.trim() ? 'לא נמצאו צמתים תואמים' : `אין צמתים מאומתים בדור ${pickerGen}`}</div>
               ) : pickerOptions.map(n => (
-                <button key={n.id} type="button" onClick={() => { setPending(n); setErr('') }} disabled={assigning}
-                  className="flex items-center justify-between text-right rounded-lg border border-slate-200 px-3 py-2 text-sm hover:border-line-strong hover:bg-sand transition-colors disabled:opacity-50">
-                  <span className="font-medium text-slate-800">
-                    {n.name}
-                    {/* ⚠️ הסטטוס גלוי: מאז שגם ממתינים מוצעים, צריך לדעת שהצומת
-                        שנבחר עדיין לא אושר — אחרת השיוך נראה סופי והוא לא. */}
-                    {(n.status ?? '') !== 'verified' && (
-                      <span className="mr-2 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">ממתין</span>
-                    )}
-                  </span>
-                  {assigning ? <Loader2 size={13} className="animate-spin text-slate-400" /> : <Check size={14} className="text-gold" />}
+                <button key={n.id} type="button" role="radio" aria-checked={sel === n.id} disabled={assigning}
+                  className={`${s.cand} ${sel === n.id ? s.sel : ''}`} onClick={() => setSel(n.id)}>
+                  <span className={s.radio} /><b>{n.name}</b>
+                  {/* ⚠️ הסטטוס גלוי: מאז שגם ממתינים מוצעים, צריך לדעת שהצומת
+                      שנבחר עדיין לא אושר — אחרת השיוך נראה סופי והוא לא. */}
+                  <small>{(n.status ?? '') === 'verified' ? 'מאושר' : 'ממתין'}</small>
                 </button>
               ))}
             </div>
             </>
             )}
+
+            <div className={s.acts}>
+              <button type="button" className={s.x} onClick={closePicker} disabled={assigning}>ביטול</button>
+              <button type="button" className={s.go} onClick={confirmPick} disabled={assigning || prevGenUnresolved}>שייך לדור הזה</button>
+            </div>
           </div>
         </div>
       )}
