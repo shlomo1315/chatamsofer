@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, type ReactNode } from 'react'
 import { X, ChevronUp, ChevronDown, Lock, Check, Copy, Mail } from 'lucide-react'
+import { CoupleCard, type CoupleFact } from './RecordCouple'
 
 // כרטסת קופצת אחידה לכל מחלקות הניהול: חלונית במרכז המסך על רקע מטושטש.
 // כל מחלקה מעבירה רק הגדרות (שדות, שלבים, מספרים, לשוניות ופעולות). עיצוב ומקלדת כאן, במקום אחד.
@@ -101,6 +102,8 @@ export default function RecordModal(props: {
   mainTab?: { label: string; content: ReactNode }
   // מצב סקירה אחת: בלי לשוניות. מסמך חי בצד, קובייה ראשית (כרטיס) ליד, ושאר הסעיפים בקוביות; below מוצג מתחת
   overview?: { doc: ReactNode; main: ReactNode; below?: ReactNode }
+  // כרטסת זוג (דוגמה "מולר"): במקום הראש, הפס והסעיפים הרגילים מוצג כרטיס אחד בעיצוב הזוג
+  couple?: { idNumber?: string | null; facts: CoupleFact[]; sections: { title: string; content: ReactNode }[] }
   actions?: ReactNode
   kind: string
   index: number
@@ -108,7 +111,7 @@ export default function RecordModal(props: {
   onIndex: (i: number) => void
   onClose: () => void
 }) {
-  const { title, meta, statusLabel, statusTone, stampDate, crumb, facts, readiness, steps, sections, note, tabs, mainTab, overview, actions, kind, index, total, onIndex, onClose } = props
+  const { title, meta, statusLabel, statusTone, stampDate, crumb, facts, readiness, steps, sections, note, tabs, mainTab, overview, couple, actions, kind, index, total, onIndex, onClose } = props
   const [tab, setTab] = useState(0)
   const [view, setView] = useState(0)
   const [prevIndex, setPrevIndex] = useState(index)
@@ -156,7 +159,28 @@ export default function RecordModal(props: {
       aria-label={`כרטסת ${kind}`}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#FFFDF8] shadow-[0_50px_120px_rgba(13,23,48,.5),0_0_0_1px_rgba(13,23,48,.08)] md:h-[min(calc(100vh-40px),900px)] md:max-w-[1240px] md:rounded-[18px]">
+      <div className={`flex h-[100dvh] w-full flex-col overflow-hidden bg-[#FFFDF8] shadow-[0_50px_120px_rgba(13,23,48,.5),0_0_0_1px_rgba(13,23,48,.08)] md:h-[min(calc(100vh-40px),900px)] md:rounded-[22px] ${couple ? 'md:max-w-[1000px]' : 'md:max-w-[1240px]'}`}>
+        {couple && steps ? (
+          <div className="min-h-0 flex-1 overflow-auto">
+            <CoupleCard
+              title={title}
+              idNumber={couple.idNumber}
+              statusLabel={statusLabel}
+              statusColor={tone.color}
+              steps={{ labels: steps.labels, current: steps.current }}
+              facts={[...couple.facts, ...(readiness?.length ? [{ label: 'מוכנות לאישור', value: `${done}/${readiness.length}` }] : [])]}
+              sections={couple.sections}
+              nav={
+                <div className="flex items-center gap-1 text-xs text-[#c5cbe0]">
+                  <span className="mr-auto px-2 tabular-nums">{index + 1} מתוך {total}</span>
+                  <button onClick={() => onIndex((index - 1 + total) % total)} title="הקודם (↑)" aria-label="הקודם" className={navBtn}><ChevronUp size={18} /></button>
+                  <button onClick={() => onIndex((index + 1) % total)} title="הבא (↓)" aria-label="הבא" className={navBtn}><ChevronDown size={18} /></button>
+                  <button onClick={onClose} title="סגירה (Esc)" aria-label="סגירה" className={`${navBtn} mr-1.5 border border-[#2F4170]`}><X size={18} /></button>
+                </div>
+              }
+            />
+          </div>
+        ) : <>
         {/* 1. ראש: מי זה ואיפה הוא בתהליך */}
         <div className="relative flex-none bg-[#14213D] px-3 pt-1.5 text-white md:px-7 md:pt-3">
           <div className="flex items-center gap-1 text-xs text-[#8F9AB5]">
@@ -331,6 +355,7 @@ export default function RecordModal(props: {
           </div>
           )}
         </div>
+        </>}
 
         <div className="flex min-h-[70px] flex-none flex-wrap items-center gap-2 border-t border-[#E6DFCF] bg-[#FFFDF8] px-3 py-3 max-md:sticky max-md:bottom-0 md:px-6">
           {actions}

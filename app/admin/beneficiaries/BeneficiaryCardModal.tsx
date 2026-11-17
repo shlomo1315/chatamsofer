@@ -5,10 +5,10 @@ import { Check } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Beneficiary, ELIGIBILITY_LABELS } from '@/types'
 import { displayChain, registrantGeneration } from '@/lib/lineageDisplayChain'
-import { registrationSourceLabel } from '@/lib/distributionSources'
 import RecordModal, { modalBtn, type RecordTone } from '@/components/admin/system/RecordModal'
 import RecordMailDialog from '@/components/admin/system/RecordMailDialog'
 import LineageStairs from '@/components/lineage/LineageStairs'
+import { CoupleFamily } from '@/components/admin/system/RecordCouple'
 
 // כרטסת צאצא: הגדרות בלבד, התצוגה והמקלדת ב-RecordModal המשותף.
 // ⚠️ ילדים ושרשרת יוחסין לא נטענים עם הרשימה (שדות כבדים), לכן נשלפים כאן לפי המזהה.
@@ -59,6 +59,9 @@ export default function BeneficiaryCardModal({ rows, index, onIndex, onClose }: 
   const status = b.eligibility_status
   const children = ready?.data.children ?? []
   const chain = displayChain(ready?.data.lineage_chain, null, ready?.data.lineage_manual)
+  const generation = registrantGeneration(chain)
+  // הנרשם עצמו הוא השורה האחרונה, בדור שלו (האב האחרון ועוד 1)
+  const stairs = chain.length && generation ? [...chain, { generation, name: fullName(b), badge: 'הנרשם' }] : chain
   const href = `/admin/beneficiaries/${b.id}`
   const loading = <Empty>טוען…</Empty>
   const days = Math.max(0, Math.floor((now - new Date(b.created_at).getTime()) / 86400000))
@@ -73,24 +76,33 @@ export default function BeneficiaryCardModal({ rows, index, onIndex, onClose }: 
     <>
     <RecordModal
       kind="צאצא"
-      crumb={`צאצאים / תיק ${b.id.slice(0, 8)}`}
       title={fullName(b)}
-      meta={[
-        { label: 'ת״ז', value: b.id_number || '—', ltr: true },
-        { label: 'נרשם', value: fmt(b.created_at) },
-        { label: 'אופן רישום', value: registrationSourceLabel(b.registration_source) || '—' },
-      ]}
       statusLabel={ELIGIBILITY_LABELS[status as keyof typeof ELIGIBILITY_LABELS] ?? status}
       statusTone={TONE[status] ?? 'wait'}
       stampDate={fmt(b.created_at)}
       facts={[
-        { label: 'תיק', value: `#${b.id.slice(0, 6)}`, ltr: true },
         { label: 'ילדים', value: String(b.children_count ?? 0) },
         { label: 'דור', value: String(registrantGeneration(chain) ?? '—') },
         { label: 'ימים בטיפול', value: String(days) },
       ]}
       readiness={checks}
       steps={{ labels: STEPS, current: STEP_OF[status] ?? 1, rejected: status === 'rejected', dates: [fmt(b.created_at)] }}
+      couple={{
+        idNumber: b.id_number,
+        facts: [
+          { label: 'ילדים', value: String(b.children_count ?? 0) },
+          { label: 'דור', value: String(generation ?? '—'), sub: generation ? `${generation - 1} דורות מעליו` : undefined },
+          { label: 'ימים בטיפול', value: String(days) },
+        ],
+        sections: [
+          { title: 'פרטי המשפחה', content: <CoupleFamily d={{
+            him: { role: 'הבעל · הנרשם', name: fullName(b), idNumber: b.id_number, phone: b.phone, email: b.email },
+            her: { role: 'האישה', name: b.spouse_name, idNumber: b.spouse_id_number, phone: b.spouse_phone },
+            status: b.marital_status, kids: b.children_count ?? 0, city: b.city, address: b.address, onEmail: setMailTo,
+          }} /> },
+          { title: 'ייחוס ומשפחה', content: !ready ? loading : stairs.length ? <LineageStairs framed gens={stairs} /> : <Empty>לא מולאה שרשרת ייחוס</Empty> },
+        ],
+      }}
       sections={[
         { title: 'פרטים אישיים', fields: [
           { label: 'שם מלא', value: fullName(b), lock: 'שינוי בבקשה' },
