@@ -7,6 +7,8 @@ import { Beneficiary, ELIGIBILITY_LABELS } from '@/types'
 import { displayChain } from '@/lib/lineageDisplayChain'
 import { registrationSourceLabel } from '@/lib/distributionSources'
 import RecordModal, { modalBtn, type RecordTone } from '@/components/admin/system/RecordModal'
+import RecordMailDialog from '@/components/admin/system/RecordMailDialog'
+import LineageStairs from '@/components/lineage/LineageStairs'
 
 // כרטסת צאצא: הגדרות בלבד, התצוגה והמקלדת ב-RecordModal המשותף.
 // ⚠️ ילדים ושרשרת יוחסין לא נטענים עם הרשימה (שדות כבדים), לכן נשלפים כאן לפי המזהה.
@@ -37,6 +39,7 @@ export default function BeneficiaryCardModal({ rows, index, onIndex, onClose }: 
   onClose: () => void
 }) {
   const b = rows[index]
+  const [mailTo, setMailTo] = useState<string | null>(null)
   const [now] = useState(() => Date.now())
   const [loaded, setLoaded] = useState<{ id: string; data: Extra; log: Log[] } | null>(null)
   const ready = loaded && loaded.id === b.id ? loaded : null
@@ -65,9 +68,9 @@ export default function BeneficiaryCardModal({ rows, index, onIndex, onClose }: 
     { label: 'טלפון', ok: !!b.phone },
     { label: 'מייל מאומת', ok: !!b.email_verified_at },
   ]
-  const chainNames = chain.map((c) => (c.relation === 'son_in_law' ? `${c.name} (חתן)` : c.name))
 
   return (
+    <>
     <RecordModal
       kind="צאצא"
       crumb={`צאצאים / תיק ${b.id.slice(0, 8)}`}
@@ -92,18 +95,17 @@ export default function BeneficiaryCardModal({ rows, index, onIndex, onClose }: 
         { title: 'פרטים אישיים', fields: [
           { label: 'שם מלא', value: fullName(b), lock: 'שינוי בבקשה' },
           { label: 'ת״ז', value: b.id_number, ltr: true, copy: true, lock: 'נעול' },
-          { label: 'מצב משפחתי', value: b.marital_status },
+          { label: 'מצב משפחתי', value: b.marital_status, badge: true },
           { label: 'בן/בת זוג', value: b.spouse_name },
+          { label: 'ת״ז בן/בת זוג', value: b.spouse_id_number, ltr: true, copy: true },
         ] },
         { title: 'יצירת קשר', fields: [
           { label: 'טלפון', value: b.phone, ltr: true, copy: true },
-          { label: 'מייל', value: b.email, ltr: true, copy: true },
+          { label: 'מייל', value: b.email, ltr: true, copy: true, full: true, onEmail: setMailTo },
           { label: 'עיר', value: b.city },
-          { label: 'כתובת', value: b.address },
+          { label: 'כתובת', value: b.address, full: true },
         ] },
-        { title: 'ייחוס ומשפחה', wide: true, fields: [
-          { label: 'שרשרת ייחוס', full: true, chain: chainNames, value: !ready ? 'טוען…' : undefined },
-          { label: 'ת״ז בן/בת זוג', value: b.spouse_id_number, ltr: true },
+        { title: 'ייחוס ומשפחה', wide: true, custom: !ready ? loading : chain.length ? <LineageStairs gens={chain} /> : <Empty>לא מולאה שרשרת ייחוס</Empty>, fields: [
           { label: 'מספר ילדים', value: String(b.children_count ?? 0) },
         ] },
       ]}
@@ -130,5 +132,7 @@ export default function BeneficiaryCardModal({ rows, index, onIndex, onClose }: 
       onIndex={onIndex}
       onClose={onClose}
     />
+    {mailTo && <div data-mail-dialog className="contents"><RecordMailDialog to={mailTo} subject={`הודעה מהיכל החתם סופר`} onClose={() => setMailTo(null)} /></div>}
+    </>
   )
 }
