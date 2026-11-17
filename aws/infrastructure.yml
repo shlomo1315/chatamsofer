@@ -898,6 +898,7 @@ Resources:
   # לוגי WAF: רק בקשות חסומות, בלי Authorization ו-Cookie. נוצרו ידנית ב-17.11.2026, לכן מנוהלים כאן רק עם ManageWafLogs=true אחרי ייבוא
   WafLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
     Condition: MakeWafLogs
     Properties:
       LogGroupName: !Sub "aws-waf-logs-${ProjectName}"
@@ -906,6 +907,7 @@ Resources:
 
   WafLogging:
     Type: AWS::WAFv2::LoggingConfiguration
+    DeletionPolicy: Retain
     Condition: MakeWafLogs
     Properties:
       ResourceArn: !GetAtt Waf.Arn
