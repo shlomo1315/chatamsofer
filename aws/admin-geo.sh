@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# מערכת הניהול רק מישראל + הגבלת קצב על הכניסה (כללי WAF). מריצים ב-CloudShell:
+# מערכת הניהול רק מישראל, ארצות הברית, קנדה ואירופה + הגבלת קצב על הכניסה (כללי WAF). מריצים ב-CloudShell:
 #   bash <(curl -fsSL "https://raw.githubusercontent.com/shlomo1315/chatamsofer/main/aws/admin-geo.sh?$(date +%s)")
-# כניסה מחו"ל (למשל בנסיעה): מוסיפים את הכתובת (מ-https://checkip.amazonaws.com) ומריצים:
+# כניסה ממדינה אחרת: מוסיפים את הכתובת (מ-https://checkip.amazonaws.com) ומריצים:
 #   ADMIN_IPS=1.2.3.4/32 bash <(curl ...)        כמה כתובות: ADMIN_IPS=1.2.3.4/32,5.6.7.8/32
-#   ADMIN_IPS=none bash <(curl ...)               חזרה לישראל בלבד
+#   ADMIN_IPS=none bash <(curl ...)               ניקוי הכתובות (רק המדינות המורשות)
 set -euo pipefail
 export AWS_DEFAULT_REGION=eu-central-1
 P=${PROJECT:-chasamsofer}; STACK=${STACK:-$P}; DOMAIN=${DOMAIN:-aws.chasamsofer.co.il}
@@ -22,6 +22,6 @@ env DOMAIN="$DOMAIN" CPU="${CPU:-512}" MEMORY="${MEM:-1024}" DESIRED="$(count "$
   bash <(curl -fsSL "$RAW/cloudshell-setup.sh?$(date +%s)") >/tmp/admin-geo-setup.log 2>&1 || { tail -30 /tmp/admin-geo-setup.log; exit 1; }
 ALLOWED=$(param AdminAllowedIps)
 code() { curl -s -o /dev/null -w '%{http_code}' "https://$DOMAIN$1"; }
-echo "== בדיקה מ-CloudShell (שרת באירופה, ולכן הניהול אמור להיחסם ב-403):"
+echo "== בדיקה מ-CloudShell (שרת באירופה, ולכן הניהול אמור להיפתח ולא להחזיר 403):"
 echo "   /admin: $(code /admin)   /api/health: $(code /api/health)"
-echo "מוכן: מערכת הניהול פתוחה רק מישראל${ALLOWED:+ ומהכתובות $ALLOWED}"
+echo "מוכן: מערכת הניהול פתוחה רק מישראל, ארצות הברית, קנדה ואירופה${ALLOWED:+ ומהכתובות $ALLOWED}"
