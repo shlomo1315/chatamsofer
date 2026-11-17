@@ -14,7 +14,6 @@ export type RecordField = {
   lock?: string
   copy?: boolean
   full?: boolean
-  chain?: string[]
   // תגית בולטת במקום טקסט רגיל (למשל מצב משפחתי)
   badge?: boolean
   // כתובת מייל: לחיצה פותחת חלונית שליחה
@@ -63,16 +62,7 @@ function Field({ f }: { f: RecordField }) {
         {f.lock && <span className="inline-flex items-center gap-[3px] text-[10.5px] font-normal text-[#958C78]"><Lock size={11} />{f.lock}</span>}
       </small>
       <div className="mt-[3px] flex min-w-0 items-center gap-1 break-words text-base font-medium leading-snug text-[#1B2338] md:text-[17px]">
-        {f.chain && f.chain.length > 0 ? (
-          <span className="flex flex-wrap items-center gap-1.5 text-sm">
-            {f.chain.map((c, i) => (
-              <span key={i} className="flex items-center gap-1.5">
-                {i > 0 && <i className="text-xs not-italic text-[#958C78]">←</i>}
-                <span className={`rounded-[5px] px-[11px] py-1 ${i === 0 ? 'bg-[#14213D] font-bold text-[#C0912F]' : i === f.chain!.length - 1 ? 'bg-[#F4E9CF] font-bold text-[#8A6316] outline outline-1 outline-[#E3C98A]' : 'bg-[#F1ECE0]'}`}>{c}</span>
-              </span>
-            ))}
-          </span>
-        ) : has ? (
+        {has ? (
           <>
             {f.onEmail ? (
               <button type="button" dir="ltr" title="שליחת מייל" onClick={() => f.onEmail!(f.value!)}

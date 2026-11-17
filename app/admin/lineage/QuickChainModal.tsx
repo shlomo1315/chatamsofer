@@ -16,6 +16,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Loader2, X, Trash2, ExternalLink, AlertTriangle, GitBranch, Copy, CheckCircle2 } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
+import LineageStairs from '@/components/lineage/LineageStairs'
 
 interface ChainRow { generation: number; name: string; relation?: string | null }
 interface Dup {
@@ -179,23 +180,7 @@ export default function QuickChainModal({
 
             {/* ── השרשרת ── */}
             {d.chain.length ? (
-              <div className="mb-3 flex flex-col gap-0.5">
-                {d.chain.map((c, i) => (
-                  <div key={`${c.generation}-${i}`}
-                    className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5"
-                    style={{ marginRight: Math.min(i, 10) * 11 }}>
-                    <span className="flex-shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">
-                      דור {c.generation}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-[12px] text-slate-700">{c.name}</span>
-                    {c.relation && (
-                      <span className="flex-shrink-0 text-[10px] text-slate-400">
-                        {c.relation === 'son_in_law' ? 'חתן' : 'בן'}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
+              <div className="mb-3"><LineageStairs gens={d.chain} /></div>
             ) : (
               <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
                 אין שרשרת דורות רשומה למשפחה זו.

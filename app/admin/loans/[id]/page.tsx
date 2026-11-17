@@ -37,10 +37,10 @@ async function getLoan(id: string): Promise<Loan | null> {
   // `${string}` — מה שמבטל את הסקת הטיפוס ומחזיר ParserError.
   const run = (withLabel: boolean) => withLabel
     ? supabase.from('loans')
-        .select('*, beneficiary:beneficiaries(id, full_name, family_name, spouse_name, spouse_id_number, id_number, email, phone, address, city, marital_status, children_count, eligibility_status, lineage_chain, approval_label:approval_labels(id, name, color, notes))')
+        .select('*, beneficiary:beneficiaries(id, full_name, family_name, spouse_name, spouse_id_number, id_number, email, phone, address, city, marital_status, children_count, eligibility_status, lineage_chain, lineage_manual, approval_label:approval_labels(id, name, color, notes))')
         .eq('id', id).single()
     : supabase.from('loans')
-        .select('*, beneficiary:beneficiaries(id, full_name, family_name, spouse_name, spouse_id_number, id_number, email, phone, address, city, marital_status, children_count, eligibility_status, lineage_chain)')
+        .select('*, beneficiary:beneficiaries(id, full_name, family_name, spouse_name, spouse_id_number, id_number, email, phone, address, city, marital_status, children_count, eligibility_status, lineage_chain, lineage_manual)')
         .eq('id', id).single()
 
   // ⚠️ קודם עם תווית סיבת האישור ובנפילה בלעדיה: ה-join אינו קיים עד

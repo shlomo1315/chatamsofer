@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
+import { displayChain, type ChainEntry } from '@/lib/lineageDisplayChain'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,7 +51,7 @@ export async function GET() {
   if (ids.length) {
     const { data: bens } = await db
       .from('beneficiaries')
-      .select('id, full_name, family_name, id_number, spouse_name, spouse_id_number, city, address, phone, email, marital_status, children_count, lineage_chain')
+      .select('id, full_name, family_name, id_number, spouse_name, spouse_id_number, city, address, phone, email, marital_status, children_count, lineage_chain, lineage_manual')
       .in('id', ids)
     for (const b of bens ?? []) {
       const r = b as Record<string, unknown>
@@ -69,8 +70,12 @@ export async function GET() {
         children_count: (r.children_count as number) ?? null,
         // סדר הדורות — מוצג בחלונית שורה אחרי שורה, כדי שההכרעה על השם
         // תיעשה מול הייחוס ולא רק מול פרטי הזיהוי.
+        // ⚠️ דרך displayChain כמו בכל מסך: אבות ידניים ומספור דורות עוקב.
         lineage_chain: Array.isArray(r.lineage_chain)
-          ? (r.lineage_chain as { generation: number; name: string; relation: 'son' | 'son_in_law' | null }[])
+          ? (displayChain(
+              r.lineage_chain as ChainEntry[], null,
+              Array.isArray(r.lineage_manual) ? (r.lineage_manual as string[]) : null,
+            ) as BenInfo['lineage_chain'])
           : null,
       })
     }

@@ -1,6 +1,8 @@
 'use client'
 import Link from 'next/link'
-import { AlertTriangle, CheckCircle2, ExternalLink, ChevronLeft } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ExternalLink } from 'lucide-react'
+import LineageStairs from '@/components/lineage/LineageStairs'
+import { displayChain } from '@/lib/lineageDisplayChain'
 import StatusControl from '@/app/admin/beneficiaries/[id]/StatusControl'
 import type { EligibilityStatus } from '@/types'
 
@@ -18,6 +20,7 @@ interface GateBeneficiary {
   children_count?: number | null
   eligibility_status?: string | null
   lineage_chain?: { generation: number; name: string; relation?: 'son' | 'son_in_law' | null }[] | null
+  lineage_manual?: string[] | null
   is_special?: boolean | null
 }
 
@@ -28,6 +31,7 @@ export default function FamilyApprovalGate({ beneficiary, compact }: { beneficia
   const approved = beneficiary.eligibility_status === 'approved'
   const isSpecial = beneficiary.is_special === true
   const fullName = [beneficiary.family_name, beneficiary.full_name].filter(Boolean).join(' ') || (beneficiary.full_name ?? '')
+  const chain = displayChain(beneficiary.lineage_chain, null, beneficiary.lineage_manual)
   const married = (beneficiary.marital_status ?? '').startsWith('נשו')
 
   if (approved) {
@@ -78,22 +82,10 @@ export default function FamilyApprovalGate({ beneficiary, compact }: { beneficia
           <p><span className="text-slate-500">מספר ילדים: </span>{beneficiary.children_count ?? 0}</p>
         </div>
 
-        {Array.isArray(beneficiary.lineage_chain) && beneficiary.lineage_chain.length > 0 && (
+        {chain.length > 0 && (
           <div className="mt-3">
             <p className="text-xs font-semibold text-amber-700 mb-1.5">סדר הייחוס:</p>
-            <div className="flex items-center gap-1 flex-wrap">
-              {beneficiary.lineage_chain.map((c, i) => (
-                <span key={i} className="flex items-center gap-1">
-                  {i > 0 && <ChevronLeft size={11} className="text-amber-300" />}
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-white text-amber-800 border border-amber-200">
-                    {c.name}
-                    {(c.relation === 'son' || c.relation === 'son_in_law') && (
-                      <span className="text-[10px] text-amber-400 mr-1">({c.relation === 'son' ? 'בן' : 'חתן'})</span>
-                    )}
-                  </span>
-                </span>
-              ))}
-            </div>
+            <LineageStairs gens={chain} />
           </div>
         )}
       </div>

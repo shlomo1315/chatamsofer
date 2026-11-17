@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { AlertTriangle, X } from 'lucide-react'
+import LineageStairs from '@/components/lineage/LineageStairs'
 
 // דור להצגה בחלונית — שם, מספר, וצבע (כחול=מאושר · כתום=ממתין · אדום=נדחה).
 export interface AlertGen {
@@ -15,16 +16,9 @@ export interface AlertGen {
 //
 // ⚠️ מי חורג נקבע ב-lib/lineageDeviation ולא כאן. שרשרת שלא נמצאה בעץ בהתאמת
 // שמות *אינה* חריגה — קודם היא נחשבה כזו, וההתראה קפצה לכל מי שנרשם.
-// ⚠️ אותם שלושה צבעים כמו בצ'יפים: ירוק=מאושר · כתום=ממתין · אדום=חריג.
-// ההתראה והצ'יפים מציגים את אותה שרשרת; גוונים שונים בין שני המקומות
-// גורמים לקורא לחשוב שמדובר בשני מצבים שונים.
-const CHIP: Record<AlertGen['color'], string> = {
-  green:  'bg-green-600 text-white border-green-700 font-semibold',
-  red:    'bg-red-600 text-white border-red-700 font-bold',
-  orange: 'bg-orange-500 text-white border-orange-600 font-semibold',
-}
-const GEN_TXT: Record<AlertGen['color'], string> = { green: 'text-green-100', red: 'text-red-100', orange: 'text-orange-100' }
-
+// ⚠️ הדורות מוצגים ב-LineageStairs, באותו עיצוב ובאותם שלושה צבעים כמו בצ'יפים:
+// ירוק=מאושר · כתום=ממתין · אדום=חריג. גוונים שונים בין שני המקומות גורמים
+// לקורא לחשוב שמדובר בשני מצבים שונים.
 export default function LineageAlertModal({ generations, allGens }: {
   generations: number[]            // הדורות החורגים (לטקסט)
   allGens?: AlertGen[]             // כל הדורות בצבעים (לתצוגה מלאה)
@@ -49,14 +43,8 @@ export default function LineageAlertModal({ generations, allGens }: {
 
         {/* כל הדורות בצבעים — דור אחרי דור, שורה אחרי שורה (מלמעלה למטה) */}
         {allGens && allGens.length > 0 && (
-          <div className="flex flex-col gap-1.5 mb-4 rounded-xl bg-slate-50 border border-slate-200 p-3">
-            {[...allGens].sort((a, b) => a.generation - b.generation).map(g => (
-              <div key={g.generation} className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg border ${CHIP[g.color]}`}>
-                <span className={`text-xs font-bold ${GEN_TXT[g.color]} shrink-0`}>דור {g.generation}</span>
-                <span className="flex-1 text-right">{g.name}</span>
-                {g.color === 'red' && <AlertTriangle size={14} className="shrink-0" />}
-              </div>
-            ))}
+          <div className="mb-4 rounded-xl bg-slate-50 border border-slate-200 p-3 text-start">
+            <LineageStairs gens={[...allGens].sort((a, b) => a.generation - b.generation)} />
           </div>
         )}
 

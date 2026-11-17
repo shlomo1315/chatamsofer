@@ -17,6 +17,7 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
   rejected: { label: 'נדחה', cls: 'bg-red-100 text-red-700 border-red-200' },
 }
 import { LineageBuilder, type LineageResult } from '@/components/lineage/LineageBuilder'
+import LineageStairs from '@/components/lineage/LineageStairs'
 
 const NON_HEBREW = /[^֐-׿ ׳״'"-]/g
 
@@ -262,23 +263,14 @@ export default function LineageReviewClient({ token }: { token: string }) {
         {chain.length > 0 && !orderEditing && (
           <div className="mb-4 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
             <div className="text-[11px] font-bold uppercase tracking-wider text-indigo-400 mb-2.5">סדר הדורות הרשום</div>
-            <div className="flex flex-col gap-1.5">
-              {chain.map((g, i) => (
-                <div key={g.id} className="rounded-xl bg-white border border-indigo-100 flex items-center gap-2.5 px-3 py-2 flex-wrap">
-                  <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[11px] font-extrabold text-indigo-700">{g.generation}</span>
-                  <span className="flex-1 min-w-[120px] text-sm font-bold text-slate-800">{g.name}</span>
-                  {g.relation && <span className="text-[10px] font-bold text-slate-400">{g.relation === 'son_in_law' ? 'חתן' : 'בן'}</span>}
-                  {/* ⚠️ "האב שלכם" יושב על הדור שלפני הנמען, לא על האחרון.
-                      כשהנרשם עצמו נמצא בשרשרת (selfNodeId), האחרון הוא הוא —
-                      ותיוגו כאב הציג לנמען את שמו שלו כאביו. בקישורים ישנים
-                      אין selfNodeId, ואז האחרון הוא באמת האב. */}
-                  {g.id === selfNodeId
-                    ? <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700">זה אתם</span>
-                    : i === chain.length - (selfNodeId ? 2 : 1) &&
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">האב שלכם</span>}
-                </div>
-              ))}
-            </div>
+            {/* ⚠️ "האב שלכם" יושב על הדור שלפני הנמען, לא על האחרון.
+                כשהנרשם עצמו נמצא בשרשרת (selfNodeId), האחרון הוא הוא —
+                ותיוגו כאב הציג לנמען את שמו שלו כאביו. בקישורים ישנים
+                אין selfNodeId, ואז האחרון הוא באמת האב. */}
+            <LineageStairs gens={chain.map((g, i) => ({
+              generation: g.generation, name: g.name, relation: g.relation,
+              badge: g.id === selfNodeId ? 'זה אתם' : i === chain.length - (selfNodeId ? 2 : 1) ? 'האב שלכם' : undefined,
+            }))} />
             {mode === 'order' && !applyResult && (
               <>
                 <button type="button" onClick={() => { setOrderEditing(true); setError('') }}
