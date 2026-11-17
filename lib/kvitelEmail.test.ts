@@ -102,3 +102,11 @@ describe('kvitelEmail: רעש של ידע פון', () => {
     expect(r.lines.map(l => l.name)).toContain('שמעון')
   })
 })
+
+describe('stripYedaPhoneNoise: כותרת הודעה מועברת', () => {
+  it('מסיר שולח, כתובות מייל וחתימה', () => {
+    const t = '---------- Forwarded message ---------\nמאת: ידע - פון <noreply@yeda-phone.co.il>\nאל: a@gmail.com\n\nמשה בן שרה - לרפואה\n\nידע - פון תא קולי'
+    const out = stripYedaPhoneNoise(t)
+    expect(out).toBe('משה בן שרה - לרפואה')
+  })
+})
