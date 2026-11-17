@@ -43,11 +43,18 @@ export function displayChain(
   treePath: TreeNodeLite[] | null | undefined,
   manual?: readonly string[] | null,
 ): ChainEntry[] {
-  const clean = (rows: readonly ChainEntry[]): ChainEntry[] =>
-    rows
+  // ⚠️ מספרי דור כפולים (שני "דור 6") גורמים לכפילות במסך ולצבע שמחושב מול
+  // הדור הלא נכון. אחרי המיון, דור שקטן או שווה לקודם מקבל את הקודם ועוד 1.
+  const clean = (rows: readonly ChainEntry[]): ChainEntry[] => {
+    const sorted = rows
       .filter(e => e && typeof e.name === 'string' && e.name.trim())
       .map(e => ({ generation: e.generation, name: e.name.trim(), relation: e.relation ?? null }))
       .sort((a, b) => a.generation - b.generation)
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i].generation <= sorted[i - 1].generation) sorted[i].generation = sorted[i - 1].generation + 1
+    }
+    return sorted
+  }
 
   const fromSaved = Array.isArray(saved) ? clean(saved) : []
   const fromTree = Array.isArray(treePath) ? clean(treePath) : []

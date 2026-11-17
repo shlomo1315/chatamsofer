@@ -79,4 +79,19 @@ describe('🔴 displayChain — מקור אחד לכל המסכים', () => {
       expect(displayChain(three, null, ['א', 'ב', 'ג', 'ד'])).toHaveLength(7)
     })
   })
+
+  describe('מספרי דור כפולים', () => {
+    it('שני "דור 6" הופכים ל-6 ו-7', () => {
+      const rows = [
+        { generation: 5, name: 'א' },
+        { generation: 6, name: 'ב' },
+        { generation: 6, name: 'ג' },
+      ]
+      expect(displayChain(rows, null).map(c => c.generation)).toEqual([5, 6, 7])
+    })
+    it('שרשרת תקינה לא משתנה', () => {
+      const rows = [{ generation: 1, name: 'א' }, { generation: 2, name: 'ב' }]
+      expect(displayChain(rows, null).map(c => c.generation)).toEqual([1, 2])
+    })
+  })
 })
