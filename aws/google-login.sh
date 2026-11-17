@@ -6,9 +6,12 @@
 #   https://aws.chasamsofer.co.il/auth/v1/callback
 set -euo pipefail
 export AWS_DEFAULT_REGION=eu-central-1
-P=${PROJECT:-chasamsofer}; STACK=${STACK:-$P}; DOMAIN=${DOMAIN:-aws.chasamsofer.co.il}
+P=${PROJECT:-chasamsofer}; STACK=${STACK:-$P}
 RAW=https://raw.githubusercontent.com/shlomo1315/chatamsofer/main/aws
 param() { aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Parameters[?ParameterKey=='$1'].ParameterValue" --output text; }
+# הדומיין ומצב ה-DNS נשמרים כמו שהם בסטאק. ברירת מחדל קבועה (aws.chasamsofer.co.il) החליפה את התעודה הראשית של האתר והפילה אותו
+DOMAIN=${DOMAIN:-$(param DomainName)}; CREATE_ZONE=${CREATE_ZONE:-$(param CreateDnsZone)}
+[[ -n "$DOMAIN" && "$DOMAIN" != None ]] || { echo "לא נמצא DomainName בסטאק"; exit 1; }
 count() { aws ecs describe-services --cluster "$P" --services "$1" --query 'services[0].desiredCount' --output text; }
 [[ "$(aws cloudformation describe-stacks --stack-name "$STACK" --query 'Stacks[0].StackStatus' --output text)" != *_IN_PROGRESS ]] \
   || { echo "הסטאק באמצע עדכון. מחכים שיסתיים ומריצים שוב"; exit 1; }
@@ -25,7 +28,7 @@ echo "== נשמר ב-$P/supabase-gw (בלי הדפסה)"
 
 echo "== עדכון הסטאק (כמה דקות)"
 CPU=$(param TaskCpu); MEM=$(param TaskMemory)
-env DOMAIN="$DOMAIN" CPU="${CPU:-512}" MEMORY="${MEM:-1024}" DESIRED="$(count "$P")" SUPA="$(count "$P-supabase")" \
+env DOMAIN="$DOMAIN" CREATE_ZONE="$CREATE_ZONE" CPU="${CPU:-512}" MEMORY="${MEM:-1024}" DESIRED="$(count "$P")" SUPA="$(count "$P-supabase")" \
   bash <(curl -fsSL "$RAW/cloudshell-setup.sh?$(date +%s)") >/tmp/google-setup.log 2>&1 || { tail -30 /tmp/google-setup.log; exit 1; }
 # הסוד נקרא רק כשמשימה עולה, אז מרימים את Supabase מחדש גם אם התבנית לא השתנתה
 aws ecs update-service --cluster "$P" --service "$P-supabase" --force-new-deployment >/dev/null
