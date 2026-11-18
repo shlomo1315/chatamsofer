@@ -20,9 +20,19 @@ import { loadLists, resolveRecipients, type Recipient } from './gilyonotLists'
 // ─────────────────────────────────────────────────────────────────────────────
 
 const BATCH_SIZE = 100
-const THROTTLE_MS = 1000 // שתי שליחות במקביל, ואז שנייה
+// קצב: כמה מיילים מתחילים בכל שנייה. ברירת המחדל 2 היא המגבלה של Resend לחשבון.
+// אחרי ש-Resend מעלה את המגבלה, מגדירים GILYONOT_RATE_PER_SEC בשרת בלי שינוי קוד.
+// השליחות לא מחכות זו לזו: מייל עם PDF כבד לוקח זמן להעלות, וקודם הוא עיכב את כל השאר (2 מיילים, המתנה לשניהם, ועוד שנייה).
+const RATE_PER_SEC = Math.max(1, Math.floor(Number(process.env.GILYONOT_RATE_PER_SEC) || 2))
+const MAX_IN_FLIGHT = RATE_PER_SEC * 4
 const MAX_ATTEMPTS = 3
-const TICK_BUDGET_MS = 50_000 // ה-worker רץ כל דקה, עם נעילה
+const RATE_LIMIT_RETRIES = 5
+// ה-worker נקרא כל דקה, אבל סבב שליחה ממשיך עד 10 דקות (הנעילה מתחדשת), ולא נעצר כל 50 שניות
+const TICK_BUDGET_MS = 10 * 60_000
+const isRateLimit = (e: unknown) => {
+  const x = e as { name?: string; statusCode?: number } | null
+  return x?.name === 'rate_limit_exceeded' || x?.statusCode === 429
+}
 /** מגבלת Resend: 40MB למייל אחרי קידוד base64 (גדל ב-33%) */
 export const RESEND_MAX_BYTES = 40 * 1024 * 1024
 const LOCK_KEY = 771122335 // שונה מהניוזלטר (771122334)
@@ -255,7 +265,8 @@ async function promoteDueScheduled(db: SupabaseClient): Promise<void> {
 
 /** ה-worker. נקרא כל דקה מ-instrumentation.ts. */
 export async function runGilyonotSender(): Promise<{ sent: number; failed: number }> {
-  if (stopping) return { sent: 0, failed: 0 }
+  // סבב קודם עדיין שולח (סבב נמשך עד 10 דקות): לא מתחילים סבב נוסף באותו תהליך
+  if (stopping || running) return { sent: 0, failed: 0 }
   const p = runSender()
   running = p
   try { return await p } finally { if (running === p) running = null }
@@ -328,39 +339,54 @@ async function sendBatches(db: SupabaseClient, resend: Resend, issue: IssueRow):
     if (!batch.length) { await finalize(db, issue.id); break }
 
     let hadFailure = false
-    for (let i = 0; i < batch.length && Date.now() < deadline && !hadFailure && !stopping; i += 2) {
-      const results = await Promise.all(batch.slice(i, i + 2).map(async d => {
-        const { html, unsubscribeUrl } = issueEmail(issue, {
-          deliveryToken: d.token,
-          subscriberToken: d.gilyonot_subscribers?.token ?? null,
-        })
-        try {
-          const { data: res, error } = await resend.emails.send({
-            from: from(), to: d.email, subject: issue.subject, html, text: htmlToPlainText(html), replyTo: GILYONOT_FROM_EMAIL, attachments: file.atts,
-            headers: unsubscribeUrl
-              ? { 'List-Unsubscribe': `<${unsubscribeUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' }
-              : undefined,
-          // אם התהליך נהרג בין השליחה לסימון במסד, הניסיון הבא נושא אותו מפתח
-          // ו-Resend לא שולח שוב (חלון של 24 שעות).
-          }, { idempotencyKey: `gilyon-${d.id}-${d.attempts}` })
-          if (error) throw new Error(String(error.message ?? error))
-          await db.from('gilyonot_deliveries')
-            .update({ status: 'sent', resend_id: res?.id ?? null, sent_at: new Date().toISOString(), attempts: d.attempts + 1, error: null })
-            .eq('id', d.id)
-          return true
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err)
-          console.error(`[gilyonot] send failed (${issue.id}):`, msg)
-          const attempts = d.attempts + 1
-          await db.from('gilyonot_deliveries')
-            .update({ attempts, status: attempts >= MAX_ATTEMPTS ? 'failed' : 'pending', error: msg.slice(0, 300) })
-            .eq('id', d.id)
-          return false
+    const sendOne = async (d: DeliveryRow, retry = 0): Promise<boolean> => {
+      const { html, unsubscribeUrl } = issueEmail(issue, {
+        deliveryToken: d.token,
+        subscriberToken: d.gilyonot_subscribers?.token ?? null,
+      })
+      try {
+        const { data: res, error } = await resend.emails.send({
+          from: from(), to: d.email, subject: issue.subject, html, text: htmlToPlainText(html), replyTo: GILYONOT_FROM_EMAIL, attachments: file.atts,
+          headers: unsubscribeUrl
+            ? { 'List-Unsubscribe': `<${unsubscribeUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' }
+            : undefined,
+        // אם התהליך נהרג בין השליחה לסימון במסד, הניסיון הבא נושא אותו מפתח
+        // ו-Resend לא שולח שוב (חלון של 24 שעות).
+        }, { idempotencyKey: `gilyon-${d.id}-${d.attempts}` })
+        if (error) {
+          // חריגה מהקצב של Resend: מחכים ומנסים שוב באותו מפתח, בלי לספור ניסיון ובלי לעצור את הסבב
+          if (isRateLimit(error) && retry < RATE_LIMIT_RETRIES && !stopping) { await sleep(1000 * (retry + 1)); return sendOne(d, retry + 1) }
+          throw new Error(String(error.message ?? error))
         }
-      }))
-      for (const ok of results) { if (ok) sent++; else { failed++; hadFailure = true } }
-      if (!stopping) await sleep(THROTTLE_MS)
+        await db.from('gilyonot_deliveries')
+          .update({ status: 'sent', resend_id: res?.id ?? null, sent_at: new Date().toISOString(), attempts: d.attempts + 1, error: null })
+          .eq('id', d.id)
+        return true
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error(`[gilyonot] send failed (${issue.id}):`, msg)
+        const attempts = d.attempts + 1
+        await db.from('gilyonot_deliveries')
+          .update({ attempts, status: attempts >= MAX_ATTEMPTS ? 'failed' : 'pending', error: msg.slice(0, 300) })
+          .eq('id', d.id)
+        return false
+      }
     }
+    const inFlight = new Set<Promise<void>>()
+    let renewedAt = Date.now()
+    for (let i = 0; i < batch.length && Date.now() < deadline && !hadFailure && !stopping; i += RATE_PER_SEC) {
+      const startedAt = Date.now()
+      for (const d of batch.slice(i, i + RATE_PER_SEC)) {
+        const p: Promise<void> = sendOne(d).then(ok => { if (ok) sent++; else { failed++; hadFailure = true } }).finally(() => { inFlight.delete(p) })
+        inFlight.add(p)
+      }
+      while (inFlight.size >= MAX_IN_FLIGHT) await Promise.race(inFlight)
+      if (Date.now() - renewedAt > 30_000) { await renewLock(db); renewedAt = Date.now() }
+      const wait = 1000 - (Date.now() - startedAt)
+      if (wait > 0 && !stopping) await sleep(wait)
+    }
+    // מסיימים את כל מה שבדרך לפני שמושכים נמענים חדשים, כדי שאף אחד לא יישלף פעמיים
+    await Promise.all(inFlight)
     if (hadFailure) break // לא יורים על קיר; ננסה שוב בטיק הבא
   }
   return { sent, failed }
