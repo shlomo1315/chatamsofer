@@ -387,6 +387,8 @@ async function sendBatches(db: SupabaseClient, resend: Resend, issue: IssueRow):
     for (let i = 0; i < batch.length && Date.now() < deadline && !hadFailure && !stopping; i += RATE_PER_SEC) {
       const startedAt = Date.now()
       for (const d of batch.slice(i, i + RATE_PER_SEC)) {
+        // הגבול נבדק לפני כל מייל, אחרת קצב גבוה (GILYONOT_RATE_PER_SEC) מוסיף מנה שלמה מעל הגבול
+        while (inFlight.size >= maxInFlight) await Promise.race(inFlight)
         const p: Promise<void> = sendOne(d).then(ok => { if (ok) sent++; else { failed++; hadFailure = true } }).finally(() => { inFlight.delete(p) })
         inFlight.add(p)
       }
