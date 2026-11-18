@@ -25,6 +25,7 @@ export default function KvitelRequests({ filters, canEdit, tabs }: { filters: Kv
     }
   }, [query])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load() }, [load])
 
   if (rows === null) {
