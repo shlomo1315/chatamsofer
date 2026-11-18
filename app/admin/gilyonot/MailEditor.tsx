@@ -118,9 +118,11 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
 
   const [html, setHtml] = useState(() => initialHtml(issue))
   const [design, setDesign] = useState<MailDesign>(() => normalizeDesign(issue.design))
+  const [subject, setSubject] = useState(issue.subject)
   const htmlRef = useRef(html)
   const designRef = useRef(design)
-  useEffect(() => { htmlRef.current = html; designRef.current = design }, [html, design])
+  const subjectRef = useRef(subject)
+  useEffect(() => { htmlRef.current = html; designRef.current = design; subjectRef.current = subject }, [html, design, subject])
 
   const [mode, setMode] = useState<'visual' | 'code'>('visual')
   const [code, setCode] = useState('')
@@ -193,7 +195,7 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
     dirty.current = false
     setState('saving')
     try {
-      await call(base, jsonInit('PATCH', { body_html: htmlRef.current, design: designRef.current }))
+      await call(base, jsonInit('PATCH', { body_html: htmlRef.current, design: designRef.current, subject: subjectRef.current }))
       if (v === ver.current) { setState(dirty.current ? 'dirty' : 'saved'); setErr('') }
     } catch (e) {
       dirty.current = true
@@ -210,7 +212,7 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
     setState('dirty')
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(() => { save().catch(() => {}) }, 1500)
-  }, [html, design, save])
+  }, [html, design, subject, save])
 
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => { if (dirty.current) e.preventDefault() }
@@ -242,7 +244,7 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
     if (ed.current) ed.current.innerHTML = body
     setHtml(body); setDesign(normalizeDesign(t.design)); setPicked(null)
     if (t.subject && t.subject !== issue.subject) {
-      try { await call(base, jsonInit('PATCH', { subject: t.subject })); router.refresh() } catch { /* הנושא יישאר כמו שהוא */ }
+      try { await call(base, jsonInit('PATCH', { subject: t.subject })); setSubject(t.subject); router.refresh() } catch { /* הנושא יישאר כמו שהוא */ }
     }
   }
   async function saveTemplate(asNew: boolean) {
@@ -252,7 +254,7 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
     if (!asNew && cur && !confirm(`לעדכן את התבנית "${cur.name}" לפי המייל הנוכחי?`)) return
     setTplBusy(true)
     try {
-      const d = await call('/api/admin/gilyonot/templates', jsonInit('POST', { id: asNew ? undefined : cur?.id, name, subject: issue.subject, body_html: htmlRef.current, design: designRef.current }))
+      const d = await call('/api/admin/gilyonot/templates', jsonInit('POST', { id: asNew ? undefined : cur?.id, name, subject: subjectRef.current, body_html: htmlRef.current, design: designRef.current }))
       const t = d.template as Template
       setTemplates(list => [t, ...list.filter(x => x.id !== t.id)]); setTplId(t.id); setErr('')
     } catch (e) { setErr(e instanceof Error ? e.message : 'שמירת התבנית נכשלה') }
@@ -533,6 +535,7 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
               </button>
             </div>
             <div className="space-y-4 p-4" role="tabpanel">
+              <Field label="נושא המייל" hint="זה הנושא שיישלח בניסיון ובשליחה לכל הרשימה."><input className={input} value={subject} maxLength={200} onChange={e => setSubject(e.target.value)} /></Field>
               {tab === 'header' && <>
                 <Toggle label="להציג כותרת עליונה" checked={design.showHeader} onChange={v => set('showHeader', v)} />
                 {design.showHeader && <>
