@@ -5,7 +5,7 @@ import { loadIssue } from '@/lib/gilyonotSender'
 import { sanitizeMailHtml } from '@/lib/gilyonotRichHtml'
 import { normalizeDesign } from '@/lib/gilyonotDesign'
 
-// עריכה ומחיקה של גיליון — רק כל עוד הוא טיוטה (לפני שליחה).
+// עריכה: בכל שלב חוץ מבזמן שליחה. מחיקה: רק טיוטה (גיליון שנשלח נשאר בארכיון).
 export const dynamic = 'force-dynamic'
 
 type Ctx = { params: Promise<{ id: string }> }
@@ -18,7 +18,9 @@ export async function PATCH(request: Request, { params }: Ctx) {
   if (!db) return serverMisconfigured()
   const issue = await loadIssue(db, (await params).id)
   if (!issue) return NextResponse.json({ error: 'הגיליון לא נמצא' }, { status: 404 })
-  if (issue.status !== 'draft') return NextResponse.json({ error: 'אי אפשר לערוך גיליון שכבר נשלח' }, { status: 409 })
+  // עריכה מותרת בכל שלב (טיוטה, מתוזמן, נשלח), כדי שאפשר יהיה לתקן נושא וכל דבר אחר.
+  // רק בזמן שהמנות יוצאות חוסמים, כדי שלא יצאו מיילים בשתי גרסאות שונות.
+  if (issue.status === 'sending') return NextResponse.json({ error: 'הגיליון נשלח כרגע. אפשר לערוך שוב כשהשליחה תסתיים.' }, { status: 409 })
 
   const body = await request.json().catch(() => ({})) as Record<string, unknown>
   const patch = {
@@ -31,8 +33,9 @@ export async function PATCH(request: Request, { params }: Ctx) {
     design: body.design !== undefined ? normalizeDesign(body.design) : normalizeDesign(issue.design),
     updated_at: new Date().toISOString(),
   }
-  const { error } = await db.from('gilyonot_issues').update(patch).eq('id', issue.id).eq('status', 'draft')
+  const { data, error } = await db.from('gilyonot_issues').update(patch).eq('id', issue.id).neq('status', 'sending').select('id').maybeSingle()
   if (error) return NextResponse.json({ error: 'השמירה נכשלה' }, { status: 500 })
+  if (!data) return NextResponse.json({ error: 'הגיליון נשלח כרגע. אפשר לערוך שוב כשהשליחה תסתיים.' }, { status: 409 })
   return NextResponse.json({ ok: true })
 }
 
