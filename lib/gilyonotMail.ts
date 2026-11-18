@@ -102,3 +102,14 @@ ${pixel}
 </body>
 </html>`
 }
+
+const OLD_AUTO_TITLE = 'גיליון החתם סופר'
+
+/** נושא שנוצר אוטומטית עם השם הישן ("גיליון החתם סופר · פרשה ...") מיושר לשם החדש. נושא ידני נשאר. */
+export function syncAutoSubject(subject: string | null | undefined, parasha: string): string | null | undefined {
+  const prefix = `${OLD_AUTO_TITLE} · `
+  if (!subject || !subject.startsWith(prefix)) return subject
+  const rest = subject.slice(prefix.length)
+  if (parasha && !rest.startsWith(parasha)) return subject
+  return `היכל החתם סופר · ${rest}`
+}

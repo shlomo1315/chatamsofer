@@ -255,7 +255,13 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
     call('/api/admin/gilyonot/templates').then(d => {
       const list = (d.templates ?? []) as Template[]
       setTemplates(list)
-      if (!autoLoad.current) return
+      if (!autoLoad.current) {
+        // גיליון שכבר נטענה בו תבנית: מסמנים אותה ברשימה לפי התוכן השמור
+        const cur = (ed.current?.innerHTML ?? htmlRef.current).trim()
+        const match = pickDefaultTemplate(list)
+        if (match && cur && cur === (match.body_html || '').trim()) setTplId(match.id)
+        return
+      }
       autoLoad.current = false
       const t = pickDefaultTemplate(list)
       if (!t || !isBlankHtml(ed.current?.innerHTML ?? htmlRef.current)) return

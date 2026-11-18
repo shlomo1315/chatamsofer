@@ -2,6 +2,7 @@ import { guardPage } from '@/lib/pageGuard'
 import { getServiceClient } from '@/lib/apiAuth'
 import { roleAllows } from '@/lib/permissions'
 import { currentParasha, GILYONOT_FROM_EMAIL, GILYONOT_FROM_NAME } from '@/lib/gilyonot'
+import { syncAutoSubject } from '@/lib/gilyonotMail'
 import PageHeader from '@/components/ui/PageHeader'
 import type { UserPermissions } from '@/types'
 import { getPullView, type NedarimPullView } from '@/lib/gilyonotNedarimPull'
@@ -68,6 +69,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
       const { file_path, ...rest } = i
       return {
         ...rest,
+        subject: syncAutoSubject(rest.subject, rest.parasha) ?? rest.subject,
         compressed: String(file_path).includes('/compressed.'),
         sent_count: s?.sent_count ?? 0, failed_count: s?.failed_count ?? 0, pending_count: s?.pending_count ?? 0,
         opened_count: s?.opened_count ?? 0, downloaded_count: s?.downloaded_count ?? 0,
