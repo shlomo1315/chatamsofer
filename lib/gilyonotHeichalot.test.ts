@@ -44,7 +44,7 @@ vi.mock('@/lib/apiAuth', () => ({
 }))
 vi.mock('@/lib/activityLog', () => ({ logActivity: async () => {} }))
 
-const { heichalotSubject, issueNumberLabel, getNextIssueNumber, setNextIssueNumber, advanceIssueCounter } = await import('@/lib/gilyonotHeichalot')
+const { heichalotSubject, issueNumberLabel, getNextIssueNumber, setNextIssueNumber, advanceIssueCounter, heichalotMissingError, HEICHALOT_DIR } = await import('@/lib/gilyonotHeichalot')
 const { POST } = await import('@/app/api/admin/gilyonot/issues/route')
 
 // 18.11.2026 = ט' כסלו תשפ״ז
@@ -110,8 +110,40 @@ describe('יצירת גיליון', () => {
     fd.set('file', new File([new Uint8Array(5)], 'g.pdf', { type: 'application/pdf' }))
     fd.set('title', 'גיליון החתם סופר'); fd.set('parasha', 'פרשת תולדות')
     for (const [k, v] of Object.entries(extra)) fd.set(k, v)
+    if (extra.heichalot_new) fd.set('file2', new File([new Uint8Array(7)], 'h.pdf', { type: 'application/pdf' }))
     return POST(new Request('http://x', { method: 'POST', body: fd }))
   }
+
+  it('סימון "יש היכלות חדש" בלי קובץ: נדחה', async () => {
+    const fd = new FormData()
+    fd.set('file', new File([new Uint8Array(5)], 'g.pdf', { type: 'application/pdf' }))
+    fd.set('title', 'ג'); fd.set('parasha', 'תולדות'); fd.set('heichalot_new', '1')
+    expect((await POST(new Request('http://x', { method: 'POST', body: fd }))).status).toBe(400)
+    expect(tables.gilyonot_issues).toHaveLength(0)
+  })
+
+  it('היכלות חדש נשמר כנוכחי, ומצורף אוטומטית לגיליון הבא בלי סימון, עם הפסקה המתאימה', async () => {
+    expect((await create({ heichalot_new: '1' })).status).toBe(200)
+    expect((await create({})).status).toBe(200)
+    const [first, second] = tables.gilyonot_issues
+    expect(String(first.intro)).toContain('ראו זה חדש!')
+    expect(String(second.intro)).toContain('לטובת חובבי תורת משה צירפנו שוב')
+    expect(second.file2_path).toBe(first.file2_path)
+    expect(String(first.file2_path).startsWith(HEICHALOT_DIR)).toBe(true)
+    expect(second.heichalot_new).toBeUndefined()
+  })
+
+  it('בלי קובץ שמור ובלי סימון: נוצר בלי היכלות ובלי פסקה', async () => {
+    expect((await create({})).status).toBe(200)
+    expect(tables.gilyonot_issues[0].file2_path).toBeUndefined()
+    expect(tables.gilyonot_issues[0].intro).toBeNull()
+  })
+
+  it('שליחה נחסמת לגיליון מסומן בלי קובץ', () => {
+    expect(heichalotMissingError({ heichalot_new: true, file2_path: null })).toContain('יש היכלות חדש')
+    expect(heichalotMissingError({ heichalot_new: true, file2_path: 'x' })).toBeNull()
+    expect(heichalotMissingError({ heichalot_new: false, file2_path: null })).toBeNull()
+  })
 
   it('בלי נושא ידני: נושא אוטומטי עם המספר, ועם התיבה גם קטע היכלות; יצירה לא מקדמת את המונה', async () => {
     await setNextIssueNumber(db, 81)
