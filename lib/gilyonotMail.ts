@@ -30,7 +30,7 @@ function paragraphs(text: string): string {
 }
 
 export function defaultSubject(title: string, parasha: string, date: Date = new Date()): string {
-  return [title.trim() || 'גיליון החתם סופר', withHebrewYear(parasha, date)].filter(Boolean).join(' · ')
+  return [title.trim() || 'היכל החתם סופר', withHebrewYear(parasha, date)].filter(Boolean).join(' · ')
 }
 
 /** טקסט קצר מהעיצוב (כותרת, פוטר): escape, וירידת שורה = <br>. */

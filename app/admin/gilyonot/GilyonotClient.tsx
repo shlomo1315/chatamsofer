@@ -599,7 +599,7 @@ function Issues({ rows, lists, activeCount, defaultParasha, canAdd, canEdit, can
 
 export function NewIssue({ defaultParasha, onClose, onCreated }: { defaultParasha: string; onClose: () => void; onCreated: (id: string) => void }) {
   const router = useRouter()
-  const [title, setTitle] = useState('גיליון החתם סופר')
+  const [title, setTitle] = useState('היכל החתם סופר')
   const [parasha, setParasha] = useState(defaultParasha)
   const [subject, setSubject] = useState('')
   const [intro, setIntro] = useState('')
