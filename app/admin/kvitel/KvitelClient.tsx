@@ -1,7 +1,6 @@
 'use client'
 
 import { useMemo, useState, type ReactNode } from 'react'
-import { useRouter } from 'next/navigation'
 import KvitelRecordingPanel from './KvitelRecordingPanel'
 import { FileDown, Printer, Check, RotateCcw, X, Filter, Link2, ChevronLeft, Search, CalendarDays, Pencil, Mic } from 'lucide-react'
 import { KVITEL_CHANNELS, KVITEL_REQUEST_OPTIONS, KVITEL_STATUSES, requestTypeLabel, type KvitelStatus } from '@/lib/kvitel'
@@ -134,8 +133,8 @@ const CHANNEL_SEG: { key: string; label: string }[] = [
   { key: '', label: 'הכול' }, { key: 'web', label: 'לינק' }, { key: 'phone', label: 'טלפון' }, { key: 'email', label: 'מייל' }, { key: 'nedarim', label: 'נדרים' },
 ]
 
-export default function KvitelClient({ allRows, filters, canEdit, tabs }: { allRows: KvitelRequestRow[]; filters: KvitelFilters; canEdit: boolean; tabs?: ReactNode }) {
-  const router = useRouter()
+export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload }: { allRows: KvitelRequestRow[]; filters: KvitelFilters; canEdit: boolean; tabs?: ReactNode; onReload: () => void }) {
+  const router = { refresh: onReload }   // רענון = טעינה מחדש של הרשימה המעורבלת (KvitelRequests)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
