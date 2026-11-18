@@ -10,8 +10,9 @@ import DOMPurify from 'dompurify'
 import {
   AlignCenter, AlignLeft, AlignRight, Baseline, Bold, Check, Code2, Eraser, Highlighter, ImagePlus, Italic, LayoutTemplate,
   Link2, List, ListOrdered, Loader2, Minus, Monitor, MousePointerClick, Palette, PilcrowRight, Redo2, RotateCcw, Save,
-  Smartphone, Strikethrough, Trash2, Underline, Undo2, Unlink, X,
+  Smartphone, Strikethrough, Trash2, Underline, Undo2, Unlink, X, Heading1, Heading2, Heading3, Quote, Type,
 } from 'lucide-react'
+import { HEADING_SNIPPETS, TEXT_SNIPPETS, imageHtml, isBlankHtml, isNewIssue, pickDefaultTemplate, type Snippet } from '@/lib/gilyonotDefaultTemplate'
 import { DEFAULT_DESIGN, normalizeDesign, SYSTEM_BLUE, type MailDesign } from '@/lib/gilyonotDesign'
 import { alignBlocks, type Align } from '@/lib/gilyonotAlign'
 import { btnDanger, btnGhost, btnPrimary, input } from './ui'
@@ -132,6 +133,7 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
   const [linkUrl, setLinkUrl] = useState('')
   const [imgUrl, setImgUrl] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [gallery, setGallery] = useState<string[]>([])
   const [picked, setPicked] = useState<HTMLElement | null>(null)
   const [, bump] = useState(0)
   const [tab, setTab] = useState<'header' | 'footer' | 'bg'>('header')
@@ -246,8 +248,21 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
   }, [base, html, design])
 
   // ── תבניות ──
+  // גיליון חדש נפתח עם תבנית "גיליון החתם סופר" טעונה. נדרס רק עורך ריק שלא נגעו בו,
+  // והנושא נשאר כמו שהוא (נוצר אוטומטית מהפרשה). השמירה האוטומטית מקבעת את התבנית בגיליון.
+  const autoLoad = useRef(isNewIssue(issue))
   useEffect(() => {
-    call('/api/admin/gilyonot/templates').then(d => setTemplates(d.templates ?? [])).catch(() => {})
+    call('/api/admin/gilyonot/templates').then(d => {
+      const list = (d.templates ?? []) as Template[]
+      setTemplates(list)
+      if (!autoLoad.current) return
+      autoLoad.current = false
+      const t = pickDefaultTemplate(list)
+      if (!t || !isBlankHtml(ed.current?.innerHTML ?? htmlRef.current)) return
+      const body = t.body_html || '<p><br></p>'
+      if (ed.current) ed.current.innerHTML = body
+      setHtml(body); setDesign(normalizeDesign(t.design)); setTplId(t.id)
+    }).catch(() => {})
   }, [])
 
   async function loadTemplate() {
@@ -302,18 +317,35 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
     insert(buttonHtml(linkText.trim() || 'לחצו כאן', withScheme(linkUrl.trim())))
   }
   const insertImage = (src: string) => {
-    insert(`<img src="${esc(src)}" alt="" style="display:block;width:100%;max-width:100%;height:auto;margin:0 auto 14px;"><p><br></p>`)
+    insert(imageHtml(src))
     setImgUrl('')
   }
-  async function upload(file: File) {
+  async function upload(files: File[]) {
     setUploading(true); setErr('')
     try {
-      const fd = new FormData()
-      fd.set('file', file)
-      const d = await call('/api/admin/gilyonot/upload', { method: 'POST', body: fd })
-      insertImage(String(d.url))
+      for (const file of files) {
+        const fd = new FormData()
+        fd.set('file', file)
+        const d = await call('/api/admin/gilyonot/upload', { method: 'POST', body: fd })
+        const url = String(d.url)
+        setGallery(g => [url, ...g.filter(u => u !== url)])
+        insertImage(url)
+      }
     } catch (e) { setErr(e instanceof Error ? e.message : 'העלאת התמונה נכשלה') }
     finally { setUploading(false); if (fileRef.current) fileRef.current.value = '' }
+  }
+  const imageFiles = (list: FileList | null | undefined) => Array.from(list ?? []).filter(f => f.type.startsWith('image/'))
+
+  // גרירה לעורך: אלמנט מהפאנל או קובץ תמונה מהמחשב, נכנסים במקום שבו שחררו.
+  function onDrop(e: React.DragEvent) {
+    const snippet = e.dataTransfer.getData('application/x-gilyon-snippet')
+    const files = imageFiles(e.dataTransfer.files)
+    if (!snippet && !files.length) return
+    e.preventDefault()
+    const pos = (document as Document & { caretRangeFromPoint?: (x: number, y: number) => Range | null }).caretRangeFromPoint?.(e.clientX, e.clientY)
+    if (pos && ed.current?.contains(pos.startContainer)) range.current = pos
+    if (snippet) insert(snippet)
+    else upload(files)
   }
 
   // ── אלמנט שנבחר בלחיצה (קישור, כפתור או תמונה) ──
@@ -377,7 +409,48 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
 
       {err && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800">{err}</p>}
 
-      <div className="grid gap-5 xl:grid-cols-2">
+      <div className="grid gap-5 xl:grid-cols-[13.5rem_minmax(0,1fr)_minmax(0,1fr)]">
+        {/* ── פאנל אלמנטים (בצד ימין) ── */}
+        <aside className="min-w-0" aria-label="אלמנטים להוספה">
+          <div className="space-y-4 rounded-xl bg-slate-50/80 p-3 ring-1 ring-inset ring-slate-900/[0.04] xl:sticky xl:top-4">
+            <p className="text-sm font-semibold text-slate-800">אלמנטים להוספה</p>
+            <p className="-mt-2 text-xs text-slate-500">לחיצה מוסיפה במקום הסמן, וגרירה לעורך מוסיפה במקום השחרור.</p>
+
+            <PanelGroup title="תמונות">
+              <button type="button" className={`${btnPrimary} w-full py-2`} disabled={uploading} onClick={() => fileRef.current?.click()}>
+                {uploading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <ImagePlus className="h-4 w-4" aria-hidden />}העלאה מהמחשב
+              </button>
+              <input ref={fileRef} type="file" multiple accept="image/png,image/jpeg,image/gif,image/webp" className="sr-only" tabIndex={-1} aria-hidden
+                onChange={e => { const f = imageFiles(e.target.files); setPop(''); if (f.length) upload(f) }} />
+              {gallery.length > 0 && (
+                <div className="grid grid-cols-3 gap-1.5">
+                  {gallery.map(u => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img key={u} src={u} alt="תמונה שהועלתה, לחיצה להוספה" draggable title="הוספה לגוף המייל"
+                      onDragStart={e => { e.dataTransfer.setData('application/x-gilyon-snippet', imageHtml(u)); e.dataTransfer.effectAllowed = 'copy' }}
+                      onClick={() => insertImage(u)}
+                      className="aspect-square w-full cursor-grab rounded-md object-cover ring-1 ring-slate-900/10 hover:ring-2 hover:ring-[#2563eb]/50" />
+                  ))}
+                </div>
+              )}
+            </PanelGroup>
+
+            <PanelGroup title="כותרות">
+              {HEADING_SNIPPETS.map(s => <PanelItem key={s.key} snippet={s} icon={{ h1: Heading1, h2: Heading2, h3: Heading3 }[s.key] ?? Type} onAdd={insert} />)}
+            </PanelGroup>
+
+            <PanelGroup title="טקסט">
+              {TEXT_SNIPPETS.map(s => <PanelItem key={s.key} snippet={s} icon={{ p: Type, quote: Quote, ul: List, ol: ListOrdered, hr: Minus }[s.key] ?? Type} onAdd={insert} />)}
+            </PanelGroup>
+
+            <PanelGroup title="כפתור וקישור">
+              <button type="button" onClick={() => openPop('button')} className="flex min-h-9 w-full items-center gap-2 rounded-lg bg-white px-2.5 text-sm text-slate-700 ring-1 ring-slate-200 hover:ring-[#2563eb]/40"><MousePointerClick className="h-4 w-4 text-slate-500" aria-hidden />כפתור</button>
+              <button type="button" onClick={() => openPop('link')} className="flex min-h-9 w-full items-center gap-2 rounded-lg bg-white px-2.5 text-sm text-slate-700 ring-1 ring-slate-200 hover:ring-[#2563eb]/40"><Link2 className="h-4 w-4 text-slate-500" aria-hidden />קישור</button>
+              <p className="text-xs text-slate-500">החלון נפתח בסרגל הכלים.</p>
+            </PanelGroup>
+          </div>
+        </aside>
+
         {/* ── עמודת העריכה ── */}
         <div className="min-w-0 space-y-4">
           <div className="overflow-visible rounded-xl ring-1 ring-slate-200 focus-within:ring-[#2563eb]/40">
@@ -453,7 +526,6 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
                       </div>
                     </div>
                   </Pop>
-                  <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp" className="sr-only" tabIndex={-1} aria-hidden onChange={e => { const f = e.target.files?.[0]; setPop(''); if (f) upload(f) }} />
                 </div>
                 <Tool label="קו מפריד" onClick={() => exec('insertHorizontalRule')}><Minus className="h-4 w-4" /></Tool>
                 <Tool label="ניקוי עיצוב" onClick={() => exec('removeFormat')}><Eraser className="h-4 w-4" /></Tool>
@@ -474,6 +546,8 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
               onInput={sync}
               onBlur={sync}
               onPaste={onPaste}
+              onDragOver={e => { if (e.dataTransfer.types.includes('application/x-gilyon-snippet') || e.dataTransfer.types.includes('Files')) e.preventDefault() }}
+              onDrop={onDrop}
               onFocus={() => setPop('')}
               onClick={e => {
                 const el = (e.target as HTMLElement).closest('a, img') as HTMLElement | null
@@ -601,6 +675,25 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
         </div>
       </div>
     </div>
+  )
+}
+
+function PanelGroup({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="space-y-1.5">
+      <h4 className="text-xs font-semibold text-slate-500">{title}</h4>
+      {children}
+    </section>
+  )
+}
+
+function PanelItem({ snippet, icon: Icon, onAdd }: { snippet: Snippet; icon: React.ElementType; onAdd: (html: string) => void }) {
+  return (
+    <button type="button" draggable onClick={() => onAdd(snippet.html)}
+      onDragStart={e => { e.dataTransfer.setData('application/x-gilyon-snippet', snippet.html); e.dataTransfer.effectAllowed = 'copy' }}
+      className="flex min-h-9 w-full cursor-grab items-center gap-2 rounded-lg bg-white px-2.5 text-sm text-slate-700 ring-1 ring-slate-200 hover:ring-[#2563eb]/40">
+      <Icon className="h-4 w-4 text-slate-500" aria-hidden />{snippet.label}
+    </button>
   )
 }
 
