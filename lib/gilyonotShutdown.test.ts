@@ -97,7 +97,7 @@ describe('כיבוי מסודר של שליחת הגיליונות', () => {
     state.onSend = null
     vi.useFakeTimers({ toFake: ['Date'] })
     let n = 0
-    state.onSend = () => { if (++n === 4) vi.setSystemTime(Date.now() + 60_000) }
+    state.onSend = () => { if (++n === 4) vi.setSystemTime(Date.now() + 11 * 60_000) }
     await runGilyonotSender()
     vi.useRealTimers()
 
