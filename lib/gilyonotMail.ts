@@ -47,6 +47,8 @@ export function buildGilyonHtml(opts: {
   downloadUrl?: string | null
   unsubscribeUrl: string | null
   pixelUrl?: string | null
+  /** כתובת השולח: מוצגת בשורת "להוסיף לאנשי הקשר", כדי שהגיליון לא ייפול לספאם. */
+  senderEmail?: string | null
 }): string {
   const d = normalizeDesign(opts.design)
   const withName = (html: string) => html.split(NAME_TOKEN).join('')
@@ -55,6 +57,9 @@ export function buildGilyonHtml(opts: {
   const sub = d.headerSub.trim() || opts.parasha
   const unsub = opts.unsubscribeUrl
     ? `להסרה מרשימת התפוצה <a href="${escHtml(opts.unsubscribeUrl)}" style="color:#64748b;">לחצו כאן</a>`
+    : ''
+  const contacts = opts.senderEmail
+    ? `כדי שהגיליון יגיע תמיד לתיבה הראשית, הוסיפו את הכתובת <span dir="ltr" style="unicode-bidi:embed;">${escHtml(opts.senderEmail)}</span> לאנשי הקשר שלכם.<br/>`
     : ''
   const pixel = opts.pixelUrl ? `<img src="${escHtml(opts.pixelUrl)}" width="1" height="1" alt="" style="display:block;border:0;width:1px;height:1px;"/>` : ''
   const header = d.showHeader ? `<tr><td style="background:${d.headerColor};padding:26px 28px;text-align:center;">
@@ -84,7 +89,7 @@ ${body}
 </td></tr>
 ${button}
 <tr><td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:18px 28px;text-align:center;color:#64748b;font-size:12px;line-height:1.7;">
-${d.footerText.trim() ? `${plain(d.footerText)}<br/>` : ''}${unsub}
+${d.footerText.trim() ? `${plain(d.footerText)}<br/>` : ''}${contacts}${unsub}
 </td></tr>
 </table>
 ${pixel}
