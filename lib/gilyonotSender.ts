@@ -28,6 +28,12 @@ export const RESEND_MAX_BYTES = 40 * 1024 * 1024
 const LOCK_KEY = 771122335 // שונה מהניוזלטר (771122334)
 const PAGE = 1000
 
+/** ה-RPC מחזיק את הנעילה 15 דקות. פריסה באמצע שליחה הורגת את התהליך והנעילה נשארת, ולכן מקצרים אותה לדקתיים ומחדשים בכל סבב. */
+const LOCK_TTL_MS = 2 * 60_000
+async function renewLock(db: SupabaseClient) {
+  await db.from('worker_locks').update({ expires_at: new Date(Date.now() + LOCK_TTL_MS).toISOString() }).eq('key', LOCK_KEY)
+}
+
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 /** גרסת טקסט של המייל: מיילים בלי חלק טקסט נראים יותר כמו ספאם. קישורים נשמרים כ"טקסט: כתובת". */
 export function htmlToPlainText(html: string): string {
@@ -251,6 +257,7 @@ export async function runGilyonotSender(): Promise<{ sent: number; failed: numbe
 
   const { data: gotLock } = await db.rpc('try_worker_lock', { p_key: LOCK_KEY })
   if (gotLock === false) return empty
+  await renewLock(db)
 
   let sent = 0, failed = 0
   try {
@@ -277,6 +284,7 @@ async function sendBatches(db: SupabaseClient, resend: Resend, issue: IssueRow):
   }
 
   while (Date.now() < deadline) {
+    await renewLock(db)
     const { data } = await db.from('gilyonot_deliveries')
       .select('id, email, token, attempts, gilyonot_subscribers(full_name, token, status)')
       .eq('issue_id', issue.id).eq('status', 'pending').limit(BATCH_SIZE)
