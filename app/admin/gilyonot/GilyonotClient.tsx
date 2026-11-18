@@ -606,6 +606,7 @@ export function NewIssue({ defaultParasha, onClose, onCreated }: { defaultParash
   const [file, setFile] = useState<File | null>(null)
   const [file2, setFile2] = useState<File | null>(null)
   const [heichalotNew, setHeichalotNew] = useState(false)
+  const [currentHeichalot, setCurrentHeichalot] = useState<{ name: string; month: string } | null>(null)
   // מספר הגיליון הבא מהשרת (null = עוד לא הוגדר), ושדה ההגדרה
   const [nextNum, setNextNum] = useState<number | null>(null)
   const [numInput, setNumInput] = useState('')
@@ -614,7 +615,10 @@ export function NewIssue({ defaultParasha, onClose, onCreated }: { defaultParash
   const [err, setErr] = useState('')
 
   useEffect(() => {
-    api('/api/admin/gilyonot/settings').then(d => setNextNum(typeof d.nextIssueNumber === 'number' ? d.nextIssueNumber : null)).catch(() => null)
+    api('/api/admin/gilyonot/settings').then(d => {
+      setNextNum(typeof d.nextIssueNumber === 'number' ? d.nextIssueNumber : null)
+      setCurrentHeichalot((d.currentHeichalot ?? null) as { name: string; month: string } | null)
+    }).catch(() => null)
   }, [])
 
   // הנושא האוטומטי הוא הצעה בלבד (placeholder): מה שנכתב ידנית בשדה גובר ולא נדרס
@@ -634,6 +638,7 @@ export function NewIssue({ defaultParasha, onClose, onCreated }: { defaultParash
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!file) { setErr('בחרו את קובץ הגיליון'); return }
+    if (heichalotNew && !file2) { setErr('סימנתם "יש היכלות חדש": העלו את קובץ ההיכלות החדש, או בטלו את הסימון.'); return }
     setBusy(true); setErr('')
     const fd = new FormData()
     fd.set('file', file); if (file2) fd.set('file2', file2); fd.set('title', title); fd.set('parasha', parasha); fd.set('intro', intro)
@@ -677,12 +682,18 @@ export function NewIssue({ defaultParasha, onClose, onCreated }: { defaultParash
         </details>
         <div className="grid gap-4 sm:grid-cols-2">
           <FileBox title="גיליון הפרשה" required file={file} onChange={setFile} />
-          <FileBox title="היכלות" file={file2} onChange={setFile2} />
+          {heichalotNew && <FileBox title="היכלות חדש" required file={file2} onChange={setFile2} />}
         </div>
         <label className="flex cursor-pointer items-start gap-3 rounded-xl bg-slate-50/80 p-4 ring-1 ring-inset ring-slate-900/[0.04]">
-          <input type="checkbox" checked={heichalotNew} onChange={e => setHeichalotNew(e.target.checked)} className="mt-1 h-4 w-4" />
-          <span className="text-sm text-slate-800"><span className="font-medium">זה קובץ היכלות חדש</span>
-            <span className="mt-0.5 block text-xs text-slate-500">בנושא המייל יתווסף: | הקובץ החדש &quot;היכלות&quot; - חודש {hebrewMonthLabel()}</span>
+          <input type="checkbox" checked={heichalotNew} onChange={e => { setHeichalotNew(e.target.checked); if (!e.target.checked) setFile2(null) }} className="mt-1 h-4 w-4" />
+          <span className="text-sm text-slate-800"><span className="font-medium">יש היכלות חדש</span>
+            <span className="mt-0.5 block text-xs text-slate-500">
+              {heichalotNew
+                ? <>חובה להעלות קובץ חדש. הוא יחליף את הנוכחי, ובנושא המייל יתווסף: | הקובץ החדש &quot;היכלות&quot; - חודש {hebrewMonthLabel()}</>
+                : currentHeichalot
+                  ? <>בלי סימון יצורף ההיכלות השמור ({currentHeichalot.name}, חודש {currentHeichalot.month}).</>
+                  : <span className="font-medium text-amber-700">עוד אין קובץ היכלות שמור, ולכן לא יצורף היכלות. סמנו כאן והעלו קובץ.</span>}
+            </span>
           </span>
         </label>
         <div className="rounded-xl bg-slate-50/80 p-4 ring-1 ring-inset ring-slate-900/[0.04]">

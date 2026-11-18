@@ -6,7 +6,7 @@ import { isBlockedForMail } from './jewishCalendar'
 import { GILYONOT_FROM_EMAIL, GILYONOT_FROM_NAME } from './gilyonot'
 import { buildGilyonHtml, gilyonotUrls } from './gilyonotMail'
 import { sanitizeMailHtml } from './gilyonotRichHtml'
-import { advanceIssueCounter } from './gilyonotHeichalot'
+import { advanceIssueCounter, heichalotMissingError } from './gilyonotHeichalot'
 import { loadLists, resolveRecipients, type Recipient } from './gilyonotLists'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -59,6 +59,8 @@ export interface IssueRow {
   /** קובץ שני ("היכלות"), לא חובה */
   file2_path?: string | null
   file2_name?: string | null
+  /** סומן "יש היכלות חדש": חובה קובץ חדש לפני שמירה ושליחה */
+  heichalot_new?: boolean | null
   status: 'draft' | 'scheduled' | 'sending' | 'sent'
   /** 'attachment' = קובץ מצורף במייל (ברירת מחדל, אין נתוני הורדות); 'link' = גיליונות שנשלחו עם קישור הורדה שנספר */
   delivery_mode?: 'link' | 'attachment'
@@ -107,7 +109,9 @@ export async function loadAttachment(db: SupabaseClient, issue: Pick<IssueRow, '
 }
 
 /** כל הצרופות של הגיליון: קובץ הגיליון, ואם יש, גם "היכלות". הגודל המצטבר נבדק מול מגבלת המייל. */
-export async function loadAttachments(db: SupabaseClient, issue: Pick<IssueRow, 'title' | 'parasha' | 'file_path' | 'file2_path'>): Promise<{ ok: true; atts: Attachment[] } | { ok: false; error: string }> {
+export async function loadAttachments(db: SupabaseClient, issue: Pick<IssueRow, 'title' | 'parasha' | 'file_path' | 'file2_path' | 'heichalot_new'>): Promise<{ ok: true; atts: Attachment[] } | { ok: false; error: string }> {
+  const missing = heichalotMissingError(issue)
+  if (missing) return { ok: false, error: missing }
   const first = await loadAttachment(db, issue)
   if (!first.ok) return first
   const atts = [first.att]
@@ -161,10 +165,10 @@ export async function sendGilyonTest(db: SupabaseClient, issue: IssueRow, to: st
  * ה-worker ישלח בטיק הקרוב. מחזיר את מספר הנמענים.
  */
 export async function startIssueSend(db: SupabaseClient, issueId: string, listIds?: string[], from: 'draft' | 'scheduled' = 'draft'): Promise<{ ok: true; total: number } | { ok: false; error: string }> {
-  const { data: row } = await db.from('gilyonot_issues').select('title, parasha, file_path, file_name, file2_path').eq('id', issueId).maybeSingle()
+  const { data: row } = await db.from('gilyonot_issues').select('title, parasha, file_path, file_name, file2_path, heichalot_new').eq('id', issueId).maybeSingle()
   if (!row) return { ok: false, error: 'הגיליון לא נמצא' }
   // הקובץ מצורף לכל מייל, אז בודקים כבר כאן שהוא קיים ונכנס במייל
-  const file = await loadAttachments(db, row as Pick<IssueRow, 'title' | 'parasha' | 'file_path' | 'file2_path'>)
+  const file = await loadAttachments(db, row as Pick<IssueRow, 'title' | 'parasha' | 'file_path' | 'file2_path' | 'heichalot_new'>)
   if (!file.ok) return file
   // נעילה אופטימית: רק טיוטה עוברת לשליחה, כך שלחיצה כפולה לא מכפילה
   const { data: claimed, error: claimErr } = await db.from('gilyonot_issues')
@@ -212,9 +216,9 @@ export async function startIssueSend(db: SupabaseClient, issueId: string, listId
 
 /** בדיקה בזמן התזמון שהקובץ קיים ונכנס במייל (אותה בדיקה כמו בשליחה). */
 export async function checkScheduleReady(db: SupabaseClient, issueId: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { data: row } = await db.from('gilyonot_issues').select('title, parasha, file_path, file_name, file2_path').eq('id', issueId).maybeSingle()
+  const { data: row } = await db.from('gilyonot_issues').select('title, parasha, file_path, file_name, file2_path, heichalot_new').eq('id', issueId).maybeSingle()
   if (!row) return { ok: false, error: 'הגיליון לא נמצא' }
-  const file = await loadAttachments(db, row as Pick<IssueRow, 'title' | 'parasha' | 'file_path' | 'file2_path'>)
+  const file = await loadAttachments(db, row as Pick<IssueRow, 'title' | 'parasha' | 'file_path' | 'file2_path' | 'heichalot_new'>)
   return file.ok ? { ok: true } : file
 }
 

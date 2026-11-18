@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
-import { getNextIssueNumber, setNextIssueNumber } from '@/lib/gilyonotHeichalot'
+import { getCurrentHeichalot, getNextIssueNumber, setNextIssueNumber } from '@/lib/gilyonotHeichalot'
 
 // מספר הגיליון הבא (פ''א, פ''ב...). נשמר בשרת, ומתקדם אוטומטית בשליחה אמיתית.
 export const dynamic = 'force-dynamic'
@@ -10,7 +10,8 @@ export async function GET() {
   if (!staff) return forbidden()
   const db = getServiceClient()
   if (!db) return serverMisconfigured()
-  return NextResponse.json({ nextIssueNumber: await getNextIssueNumber(db) })
+  const cur = await getCurrentHeichalot(db)
+  return NextResponse.json({ nextIssueNumber: await getNextIssueNumber(db), currentHeichalot: cur ? { name: cur.name, month: cur.month } : null })
 }
 
 export async function PUT(request: Request) {
