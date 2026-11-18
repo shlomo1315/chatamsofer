@@ -53,7 +53,10 @@ Resources:
       LifecyclePolicy:
         LifecyclePolicyText: '{"rules":[{"rulePriority":1,"description":"untagged-after-1-day","selection":{"tagStatus":"untagged","countType":"sinceImagePushed","countUnit":"days","countNumber":1},"action":{"type":"expire"}},{"rulePriority":2,"description":"keep-last-10","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}'
 
-  # ⚠️ הערכים ריקים בכוונה: ממלאים אותם ב-Secrets Manager (Retrieve/Edit) ולא כאן. אל תשנו את SecretString בתבנית אחרי המילוי.
+  # 🔴 אסור לשנות את SecretString בשום עדכון! כל שינוי בו (גם הוספת מפתח) גורם ל-CloudFormation לדרוס את הסוד כולו בערכים ריקים
+  # (קרה ב-17.11 ב-#670: האתר פנה לנדרים בלי הפרוקסי). מפתח חדש: מוסיפים אותו קודם ישירות ב-Secrets Manager (Retrieve/Edit),
+  # ורק אחר כך שורת ValueFrom לפי המפתח. ערך שנשאר כאן הוא רק ערך התחלתי ליצירה ראשונה.
+  # אם חייבים לשנות כאן: לשמור גרסה של הסוד לפני, ולשחזר אותה (put-secret-value) מיד אחרי העדכון.
   AppSecret:
     Type: AWS::SecretsManager::Secret
     DeletionPolicy: Retain

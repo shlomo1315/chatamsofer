@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
 import { getNedarimCreds, NEDARIM_URL } from '@/lib/nedarim'
 import { guardBeforeNedarim, guardAfterNedarim } from '@/lib/nedarimGuard'
+import { nedarimFetch } from '@/lib/nedarimFetch'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,7 +37,7 @@ export async function GET() {
   const timer = setTimeout(() => controller.abort(), 25_000)
   let text: string
   try {
-    const res = await fetch(NEDARIM_URL, {
+    const res = await nedarimFetch(NEDARIM_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: form.toString(),
