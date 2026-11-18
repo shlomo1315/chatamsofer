@@ -6,6 +6,7 @@ import { isBlockedForMail } from './jewishCalendar'
 import { GILYONOT_FROM_EMAIL, GILYONOT_FROM_NAME } from './gilyonot'
 import { buildGilyonHtml, gilyonotUrls } from './gilyonotMail'
 import { sanitizeMailHtml } from './gilyonotRichHtml'
+import { advanceIssueCounter } from './gilyonotHeichalot'
 import { loadLists, resolveRecipients, type Recipient } from './gilyonotLists'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -203,6 +204,9 @@ export async function startIssueSend(db: SupabaseClient, issueId: string, listId
     return { ok: false, error: 'אין נמענים ברשימות שנבחרו' }
   }
   await db.from('gilyonot_issues').update({ total_count: total }).eq('id', issueId)
+  // השליחה האמיתית יצאה לדרך (לא נכשלה ולא חזרה לטיוטה): מקדמים את מספר הגיליון הבא.
+  // פעם אחת לגיליון, ולא במייל ניסיון.
+  await advanceIssueCounter(db, issueId).catch(() => null)
   return { ok: true, total }
 }
 

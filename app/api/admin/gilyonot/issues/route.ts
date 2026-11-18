@@ -3,6 +3,7 @@ import { requirePermission, forbidden, getServiceClient, serverMisconfigured } f
 import { logActivity } from '@/lib/activityLog'
 import { gilyonFileName } from '@/lib/gilyonotFileName'
 import { defaultSubject } from '@/lib/gilyonotMail'
+import { getNextIssueNumber, heichalotSubject } from '@/lib/gilyonotHeichalot'
 
 // גיליון חדש: מעלה את הקובץ לדלי הפרטי documents ויוצר טיוטה.
 // השליחה עצמה: issues/[id]/send. ההורדה לנמענים: /api/gilyonot/d/<token>.
@@ -31,7 +32,12 @@ export async function POST(request: Request) {
   const title = str(form.get('title'), 120)
   const parasha = str(form.get('parasha'), 60)
   const intro = str(form.get('intro'), 4000)
-  const subject = str(form.get('subject'), 200) || defaultSubject(title, parasha)
+  const heichalotNew = form.get('heichalot_new') === '1'
+  // מספר הגיליון הבא (אם הוגדר). הוא רק נרשם כאן; המונה מתקדם בשליחה אמיתית (advanceIssueCounter).
+  const issueNumber = await getNextIssueNumber(db)
+  // נושא ידני גובר. בלי נושא ידני: האוטומטי (כשיש מספר או קובץ היכלות חדש), ואחרת הדיפולטי הישן.
+  const subject = str(form.get('subject'), 200)
+    || (issueNumber || heichalotNew ? heichalotSubject({ number: issueNumber, parasha, heichalotNew }) : defaultSubject(title, parasha))
 
   const file2 = form.get('file2')
   const hasFile2 = file2 instanceof File && file2.size > 0
@@ -71,6 +77,8 @@ export async function POST(request: Request) {
   const { error } = await db.from('gilyonot_issues').insert({
     id, title, parasha, subject, intro: intro || null,
     file_path: path, file_name: fileName, file_size: file.size, created_by: staff.userId,
+    ...(issueNumber ? { issue_number: issueNumber } : {}),
+    ...(heichalotNew ? { heichalot_new: true } : {}),
     ...(hasFile2 ? { file2_path: path2, file2_name: `היכלות.${ext2}`, file2_size: file2.size } : {}),
   })
   if (error) {
