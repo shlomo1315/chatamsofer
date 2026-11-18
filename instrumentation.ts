@@ -35,6 +35,21 @@ export async function register() {
 
   if (process.env.NODE_ENV !== 'production') return
 
+  // ── כיבוי מסודר בפריסה ──
+  // 🔴 Next יוצא מיד ב-SIGTERM, וזה הרג את שליחת הגיליונות באמצע והשאיר את
+  // הנעילה תפוסה. ב-Dockerfile מוגדר NEXT_MANUAL_SIG_HANDLE=true, ולכן הטיפול
+  // כאן: ה-sender מסיים את הזוג שבשליחה ומשחרר את הנעילה, ורק אז יציאה.
+  // תקרה של 20 שניות, מתחת ל-30 השניות ש-ECS נותן לפני SIGKILL.
+  const shutdown = async (signal: string) => {
+    console.log(`[shutdown] ${signal} · מסיים את שליחת הגיליונות`)
+    const { stopGilyonotSender } = await import('@/lib/gilyonotSender')
+    await Promise.race([stopGilyonotSender(), new Promise(r => setTimeout(r, 20_000))])
+    console.log('[shutdown] יציאה')
+    process.exit(0)
+  }
+  process.once('SIGTERM', () => { void shutdown('SIGTERM') })
+  process.once('SIGINT', () => { void shutdown('SIGINT') })
+
   // ── כתובת ה-IP היוצאת של השרת — נרשמת בכל עלייה ──
   //
   // 🔴 מפתחות ה-API של נדרים (חגים 7014553, יולדות 7018265) מוגבלים

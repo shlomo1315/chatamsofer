@@ -31,8 +31,21 @@ const PAGE = 1000
 /** ה-RPC מחזיק את הנעילה 15 דקות. פריסה באמצע שליחה הורגת את התהליך והנעילה נשארת, ולכן מקצרים אותה לדקתיים ומחדשים בכל סבב. */
 const LOCK_TTL_MS = 2 * 60_000
 async function renewLock(db: SupabaseClient) {
-  await db.from('worker_locks').update({ expires_at: new Date(Date.now() + LOCK_TTL_MS).toISOString() }).eq('key', LOCK_KEY)
+  const { error } = await db.from('worker_locks').update({ expires_at: new Date(Date.now() + LOCK_TTL_MS).toISOString() }).eq('key', LOCK_KEY)
+  if (error) console.error('[gilyonot] חידוש הנעילה נכשל:', error.message)
 }
+
+// ── כיבוי מסודר בפריסה ──
+// ECS שולח SIGTERM לשרת הישן. מכאן לא לוקחים נמענים חדשים: הזוג שבשליחה
+// מסתיים ומסומן במסד, הנעילה משתחררת, והשרת החדש ממשיך בטיק הבא בלי המתנה.
+let stopping = false
+let running: Promise<unknown> | null = null
+export async function stopGilyonotSender(): Promise<void> {
+  stopping = true
+  if (running) await running.catch(() => {})
+}
+/** לבדיקות בלבד */
+export function resetGilyonotSenderForTest() { stopping = false; running = null }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 /** גרסת טקסט של המייל: מיילים בלי חלק טקסט נראים יותר כמו ספאם. קישורים נשמרים כ"טקסט: כתובת". */
@@ -242,6 +255,13 @@ async function promoteDueScheduled(db: SupabaseClient): Promise<void> {
 
 /** ה-worker. נקרא כל דקה מ-instrumentation.ts. */
 export async function runGilyonotSender(): Promise<{ sent: number; failed: number }> {
+  if (stopping) return { sent: 0, failed: 0 }
+  const p = runSender()
+  running = p
+  try { return await p } finally { if (running === p) running = null }
+}
+
+async function runSender(): Promise<{ sent: number; failed: number }> {
   const empty = { sent: 0, failed: 0 }
   // לא שולחים בשבת ובחג: הגיליון ממתין לטיק הבא ביום חול
   if (isBlockedForMail(new Date())) return empty
@@ -283,7 +303,7 @@ async function sendBatches(db: SupabaseClient, resend: Resend, issue: IssueRow):
     return { sent, failed }
   }
 
-  while (Date.now() < deadline) {
+  while (Date.now() < deadline && !stopping) {
     await renewLock(db)
     const { data } = await db.from('gilyonot_deliveries')
       .select('id, email, token, attempts, gilyonot_subscribers(full_name, token, status)')
@@ -308,7 +328,7 @@ async function sendBatches(db: SupabaseClient, resend: Resend, issue: IssueRow):
     if (!batch.length) { await finalize(db, issue.id); break }
 
     let hadFailure = false
-    for (let i = 0; i < batch.length && Date.now() < deadline && !hadFailure; i += 2) {
+    for (let i = 0; i < batch.length && Date.now() < deadline && !hadFailure && !stopping; i += 2) {
       const results = await Promise.all(batch.slice(i, i + 2).map(async d => {
         const { html, unsubscribeUrl } = issueEmail(issue, {
           deliveryToken: d.token,
@@ -320,7 +340,9 @@ async function sendBatches(db: SupabaseClient, resend: Resend, issue: IssueRow):
             headers: unsubscribeUrl
               ? { 'List-Unsubscribe': `<${unsubscribeUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' }
               : undefined,
-          })
+          // אם התהליך נהרג בין השליחה לסימון במסד, הניסיון הבא נושא אותו מפתח
+          // ו-Resend לא שולח שוב (חלון של 24 שעות).
+          }, { idempotencyKey: `gilyon-${d.id}-${d.attempts}` })
           if (error) throw new Error(String(error.message ?? error))
           await db.from('gilyonot_deliveries')
             .update({ status: 'sent', resend_id: res?.id ?? null, sent_at: new Date().toISOString(), attempts: d.attempts + 1, error: null })
@@ -337,7 +359,7 @@ async function sendBatches(db: SupabaseClient, resend: Resend, issue: IssueRow):
         }
       }))
       for (const ok of results) { if (ok) sent++; else { failed++; hadFailure = true } }
-      await sleep(THROTTLE_MS)
+      if (!stopping) await sleep(THROTTLE_MS)
     }
     if (hadFailure) break // לא יורים על קיר; ננסה שוב בטיק הבא
   }

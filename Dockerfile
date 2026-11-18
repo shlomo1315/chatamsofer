@@ -30,6 +30,7 @@ ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \
     HOSTNAME=0.0.0.0 \
+    NEXT_MANUAL_SIG_HANDLE=true \
     APP_BUILD_ID=$APP_BUILD_ID
 RUN groupadd -g 1001 app && useradd -u 1001 -g app -m app
 COPY --from=build --chown=app:app /app/.next/standalone ./
