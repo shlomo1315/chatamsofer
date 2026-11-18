@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { CheckCircle2, Copy, Minimize2, Download, ExternalLink, Eye, FileSpreadsheet, FileText, FileUp, Inbox, Link2, Loader2, MailCheck, Newspaper, Plus, RefreshCw, Search, Send, ShieldAlert, Trash2, Truck, Upload, UserPlus, Users, X } from 'lucide-react'
 import { downloadXlsx, todayStamp } from '@/lib/downloadXlsx'
 import { defaultSubject } from '@/lib/gilyonotMail'
+import { heichalotSubject, hebrewMonthLabel, issueNumberLabel } from '@/lib/gilyonotHeichalot'
 import type { NedarimPullView } from '@/lib/gilyonotNedarimPull'
 import NedarimPull from './NedarimPull'
 import Distributors from './Distributors'
@@ -596,7 +597,7 @@ function Issues({ rows, lists, activeCount, defaultParasha, canAdd, canEdit, can
   )
 }
 
-function NewIssue({ defaultParasha, onClose, onCreated }: { defaultParasha: string; onClose: () => void; onCreated: (id: string) => void }) {
+export function NewIssue({ defaultParasha, onClose, onCreated }: { defaultParasha: string; onClose: () => void; onCreated: (id: string) => void }) {
   const router = useRouter()
   const [title, setTitle] = useState('גיליון החתם סופר')
   const [parasha, setParasha] = useState(defaultParasha)
@@ -604,8 +605,31 @@ function NewIssue({ defaultParasha, onClose, onCreated }: { defaultParasha: stri
   const [intro, setIntro] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [file2, setFile2] = useState<File | null>(null)
+  const [heichalotNew, setHeichalotNew] = useState(false)
+  // מספר הגיליון הבא מהשרת (null = עוד לא הוגדר), ושדה ההגדרה
+  const [nextNum, setNextNum] = useState<number | null>(null)
+  const [numInput, setNumInput] = useState('')
+  const [numMsg, setNumMsg] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+
+  useEffect(() => {
+    api('/api/admin/gilyonot/settings').then(d => setNextNum(typeof d.nextIssueNumber === 'number' ? d.nextIssueNumber : null)).catch(() => null)
+  }, [])
+
+  // הנושא האוטומטי הוא הצעה בלבד (placeholder): מה שנכתב ידנית בשדה גובר ולא נדרס
+  const autoSubject = nextNum || heichalotNew
+    ? heichalotSubject({ number: nextNum, parasha, heichalotNew })
+    : defaultSubject(title, parasha)
+
+  async function saveNumber() {
+    const n = Number(numInput)
+    setNumMsg('')
+    try {
+      const d = await api('/api/admin/gilyonot/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nextIssueNumber: n }) })
+      setNextNum(Number(d.nextIssueNumber)); setNumInput(''); setNumMsg('נשמר')
+    } catch (e) { setNumMsg(e instanceof Error ? e.message : 'השמירה נכשלה') }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -613,7 +637,9 @@ function NewIssue({ defaultParasha, onClose, onCreated }: { defaultParasha: stri
     setBusy(true); setErr('')
     const fd = new FormData()
     fd.set('file', file); if (file2) fd.set('file2', file2); fd.set('title', title); fd.set('parasha', parasha); fd.set('intro', intro)
-    fd.set('subject', subject.trim() || defaultSubject(title, parasha))
+    // נושא ידני בלבד: אם ריק, השרת בונה את האוטומטי עם מספר הגיליון הנכון
+    if (subject.trim()) fd.set('subject', subject.trim())
+    if (heichalotNew) fd.set('heichalot_new', '1')
     try {
       const d = await api('/api/admin/gilyonot/issues', { method: 'POST', body: fd })
       router.refresh()
@@ -636,13 +662,13 @@ function NewIssue({ defaultParasha, onClose, onCreated }: { defaultParasha: stri
             <input className={input} value={title} onChange={e => setTitle(e.target.value)} required maxLength={120} />
           </label>
         </div>
-        <details className="rounded-xl bg-slate-50/80 p-4 ring-1 ring-inset ring-slate-900/[0.04]">
-          <summary className="cursor-pointer text-sm font-medium text-slate-700">אפשרויות מתקדמות (נושא המייל ופתיח)</summary>
-          <div className="mt-4 space-y-4">
         <label className="block"><span className={label}>נושא המייל</span>
-          <input className={input} value={subject} onChange={e => setSubject(e.target.value)} placeholder={defaultSubject(title, parasha)} maxLength={200} />
-          <span className="mt-1 block text-xs text-slate-500">אם תשאירו ריק, יישלח הנושא שמוצג באפור.</span>
+          <input className={input} aria-label="נושא המייל" value={subject} onChange={e => setSubject(e.target.value)} placeholder={autoSubject} maxLength={200} />
+          <span className="mt-1 block text-xs text-slate-500">אם תשאירו ריק, יישלח הנושא שמוצג באפור. מה שתכתבו כאן גובר, ואפשר לערוך אותו גם אחרי ההעלאה.</span>
         </label>
+        <details className="rounded-xl bg-slate-50/80 p-4 ring-1 ring-inset ring-slate-900/[0.04]">
+          <summary className="cursor-pointer text-sm font-medium text-slate-700">אפשרויות מתקדמות (פתיח)</summary>
+          <div className="mt-4 space-y-4">
         <label className="block"><span className={label}>פתיח למייל <span className="font-normal text-slate-500">(לא חובה)</span></span>
           <textarea className={`${input} h-24`} value={intro} onChange={e => setIntro(e.target.value)} maxLength={4000} />
           <span className="mt-1 block text-xs text-slate-500">בשלב הבא תוכלו לעצב את המייל בעורך: טקסט, קישורים, כפתורים, תמונות ותבניות שמורות.</span>
@@ -652,6 +678,21 @@ function NewIssue({ defaultParasha, onClose, onCreated }: { defaultParasha: stri
         <div className="grid gap-4 sm:grid-cols-2">
           <FileBox title="גיליון הפרשה" required file={file} onChange={setFile} />
           <FileBox title="היכלות" file={file2} onChange={setFile2} />
+        </div>
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl bg-slate-50/80 p-4 ring-1 ring-inset ring-slate-900/[0.04]">
+          <input type="checkbox" checked={heichalotNew} onChange={e => setHeichalotNew(e.target.checked)} className="mt-1 h-4 w-4" />
+          <span className="text-sm text-slate-800"><span className="font-medium">זה קובץ היכלות חדש</span>
+            <span className="mt-0.5 block text-xs text-slate-500">בנושא המייל יתווסף: | הקובץ החדש &quot;היכלות&quot; - חודש {hebrewMonthLabel()}</span>
+          </span>
+        </label>
+        <div className="rounded-xl bg-slate-50/80 p-4 ring-1 ring-inset ring-slate-900/[0.04]">
+          <p className="text-sm text-slate-800"><span className="font-medium">מספר הגיליון הבא:</span> {nextNum ? `גיליון ${issueNumberLabel(nextNum)}` : 'עוד לא הוגדר'}</p>
+          <p className="mt-0.5 text-xs text-slate-500">המספר עולה אוטומטית אחרי כל שליחה אמיתית (לא אחרי מייל ניסיון). אפשר לקבוע אותו מחדש בכל רגע.</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <input className={`${input} !w-32`} type="number" min={1} max={999} inputMode="numeric" aria-label="מספר גיליון" placeholder="למשל 81" value={numInput} onChange={e => setNumInput(e.target.value)} />
+            <button type="button" className={btnGhost} onClick={saveNumber} disabled={!numInput}>קביעת המספר</button>
+            {numMsg && <span role="status" className="text-xs text-slate-600">{numMsg}</span>}
+          </div>
         </div>
         {err && <Notice msg={{ ok: false, text: err }} />}
         <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-5">
