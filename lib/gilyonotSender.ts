@@ -25,6 +25,13 @@ const BATCH_SIZE = 100
 // השליחות לא מחכות זו לזו: מייל עם PDF כבד לוקח זמן להעלות, וקודם הוא עיכב את כל השאר (2 מיילים, המתנה לשניהם, ועוד שנייה).
 const RATE_PER_SEC = Math.max(1, Math.floor(Number(process.env.GILYONOT_RATE_PER_SEC) || 2))
 const MAX_IN_FLIGHT = RATE_PER_SEC * 4
+// זיכרון: כל שליחה בדרך מחזיקה עותק של הקבצים בבקשה. מגבילים כמה בדרך לפי גודל הקבצים, ולא פחות מ-2 כמו קודם.
+// (18.11: השרת החזיר 503 בזמן שליחה בגלל זיכרון, עוד לפני ההאצה)
+const IN_FLIGHT_BYTES = 120 * 1024 * 1024
+export function inFlightLimit(attachmentBytes: number, max = MAX_IN_FLIGHT): number {
+  const perSend = Math.max(1, attachmentBytes * 2) // base64 פעם אחת + גוף ה-JSON של הבקשה
+  return Math.max(2, Math.min(max, Math.floor(IN_FLIGHT_BYTES / perSend)))
+}
 const MAX_ATTEMPTS = 3
 const RATE_LIMIT_RETRIES = 5
 // ה-worker נקרא כל דקה, אבל סבב שליחה ממשיך עד 10 דקות (הנעילה מתחדשת), ולא נעצר כל 50 שניות
@@ -339,6 +346,8 @@ async function sendBatches(db: SupabaseClient, resend: Resend, issue: IssueRow):
     if (!batch.length) { await finalize(db, issue.id); break }
 
     let hadFailure = false
+    // הקבצים מקודדים ל-base64 פעם אחת לסבב, ולא מחדש בכל מייל (חוסך זיכרון ומעבד)
+    const atts = file.atts.map(a => ({ filename: a.filename, content: a.content.toString('base64') }))
     const sendOne = async (d: DeliveryRow, retry = 0): Promise<boolean> => {
       const { html, unsubscribeUrl } = issueEmail(issue, {
         deliveryToken: d.token,
@@ -346,7 +355,7 @@ async function sendBatches(db: SupabaseClient, resend: Resend, issue: IssueRow):
       })
       try {
         const { data: res, error } = await resend.emails.send({
-          from: from(), to: d.email, subject: issue.subject, html, text: htmlToPlainText(html), replyTo: GILYONOT_FROM_EMAIL, attachments: file.atts,
+          from: from(), to: d.email, subject: issue.subject, html, text: htmlToPlainText(html), replyTo: GILYONOT_FROM_EMAIL, attachments: atts,
           headers: unsubscribeUrl
             ? { 'List-Unsubscribe': `<${unsubscribeUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' }
             : undefined,
@@ -373,6 +382,7 @@ async function sendBatches(db: SupabaseClient, resend: Resend, issue: IssueRow):
       }
     }
     const inFlight = new Set<Promise<void>>()
+    const maxInFlight = inFlightLimit(atts.reduce((n, a) => n + a.content.length, 0))
     let renewedAt = Date.now()
     for (let i = 0; i < batch.length && Date.now() < deadline && !hadFailure && !stopping; i += RATE_PER_SEC) {
       const startedAt = Date.now()
@@ -380,7 +390,7 @@ async function sendBatches(db: SupabaseClient, resend: Resend, issue: IssueRow):
         const p: Promise<void> = sendOne(d).then(ok => { if (ok) sent++; else { failed++; hadFailure = true } }).finally(() => { inFlight.delete(p) })
         inFlight.add(p)
       }
-      while (inFlight.size >= MAX_IN_FLIGHT) await Promise.race(inFlight)
+      while (inFlight.size >= maxInFlight) await Promise.race(inFlight)
       if (Date.now() - renewedAt > 30_000) { await renewLock(db); renewedAt = Date.now() }
       const wait = 1000 - (Date.now() - startedAt)
       if (wait > 0 && !stopping) await sleep(wait)

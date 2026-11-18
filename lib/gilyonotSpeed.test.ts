@@ -101,3 +101,13 @@ describe('קצב שליחת הגיליונות', () => {
     expect(state.sends).toHaveLength(10)
   })
 })
+
+describe('זיכרון בזמן שליחה', () => {
+  it('כמה מיילים בדרך במקביל לפי גודל הקבצים, ולא פחות מ-2', async () => {
+    const { inFlightLimit } = await import('./gilyonotSender')
+    const MB = 1024 * 1024
+    expect(inFlightLimit(1 * MB, 8)).toBe(8)
+    expect(inFlightLimit(20 * MB, 8)).toBe(3)
+    expect(inFlightLimit(40 * MB, 8)).toBe(2)
+  })
+})
