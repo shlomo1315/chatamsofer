@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
 import { KVITEL_STATUSES, type KvitelStatus } from '@/lib/kvitel'
+import { loadKvitelRequests, parseKvitelFilters } from '@/lib/kvitelQuery'
+import { encodeKvitelPayload } from '@/lib/kvitelPayload'
 
 // עדכון סטטוס לבקשה אחת או לכמה יחד (app/admin/kvitel).
 // PATCH { ids: uuid[], status } — "נשלח לציון" (done) רושם מתי ומי; חזרה ממנו מנקה.
@@ -13,6 +15,18 @@ export const runtime = 'nodejs'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const MAX_IDS = 500
+
+// רשימת הבקשות למסך, בערבול (lib/kvitelPayload): טקסט הבקשות לא נשלח גלוי ל-HTML כדי שנטפרי לא יחסום את הדף.
+export async function GET(request: NextRequest) {
+  const staff = await requirePermission('kvitel', 'view')
+  if (!staff) return forbidden()
+  const db = getServiceClient()
+  if (!db) return serverMisconfigured()
+  const filters = parseKvitelFilters(Object.fromEntries(request.nextUrl.searchParams.entries()))
+  const { rows, error } = await loadKvitelRequests(db, { ...filters, status: 'all' })
+  if (error) return NextResponse.json({ error: 'שליפת הבקשות נכשלה' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
+  return NextResponse.json(encodeKvitelPayload(rows), { headers: { 'Cache-Control': 'no-store' } })
+}
 
 export async function PATCH(request: NextRequest) {
   const staff = await requirePermission('kvitel', 'edit')
