@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import { CalendarClock, Loader2, MousePointerClick } from 'lucide-react'
 import { Badge, btnDanger, btnPrimary, Card, CardHeader, input, Notice, type Tone } from './ui'
 import type { IssueView } from './GilyonotClient'
+import { SendLive } from './SendLive'
 
 const num = (n: number) => n.toLocaleString('he-IL')
 const pct = (n: number, of: number) => (of ? `${Math.round((n / of) * 1000) / 10}%` : '–')
@@ -133,8 +134,12 @@ export function SendsManager({ rows }: { rows: IssueView[] }) {
     .sort((a, b) => (b.scheduled_at ?? b.started_at ?? b.created_at).localeCompare(a.scheduled_at ?? a.started_at ?? a.created_at))
   const [openId, setOpenId] = useState<string | null>(null)
   if (!list.length) return <Card><div className="p-8 text-center text-sm text-slate-500">עוד לא נשלח או תוזמן אף גיליון.</div></Card>
+  // שליחה חיה: הגיליון שבשליחה עכשיו, ואם אין, האחרון שנשלח
+  const liveId = (list.find(r => r.status === 'sending') ?? list.find(r => r.status === 'sent'))?.id
 
   return (
+    <div className="space-y-4">
+    {liveId && <SendLive key={liveId} issueId={liveId} />}
     <Card className="overflow-hidden">
       <CardHeader title="כל השליחות" hint="לחצו על שורה לפירוט ההקלקות לפי קישור" />
       <div>
@@ -166,6 +171,7 @@ export function SendsManager({ rows }: { rows: IssueView[] }) {
         </table>
       </div>
     </Card>
+    </div>
   )
 }
 
