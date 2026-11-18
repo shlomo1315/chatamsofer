@@ -209,13 +209,13 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
     setState('saving')
     try {
       await call(base, jsonInit('PATCH', { body_html: htmlRef.current, design: designRef.current, subject: subjectRef.current }))
-      if (v === ver.current) { setState(dirty.current ? 'dirty' : 'saved'); setErr('') }
+      if (v === ver.current) { setState(dirty.current ? 'dirty' : 'saved'); setErr(''); router.refresh() }
     } catch (e) {
       dirty.current = true
       setState('error'); setErr(e instanceof Error ? e.message : 'השמירה נכשלה')
       throw e
     }
-  }, [base])
+  }, [base, router])
 
   useEffect(() => { saveRef.current = save; return () => { saveRef.current = null } }, [save, saveRef])
 
@@ -533,6 +533,13 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
             </div>
           )}
 
+          {/* נושא המייל: תמיד גלוי ופתוח לעריכה, בכל מצב של הגיליון */}
+          <div className="rounded-xl bg-white p-4 ring-1 ring-slate-200">
+            <Field label="נושא המייל" hint="זה הנושא שיישלח בניסיון ובשליחה. אפשר לשנות בכל שלב, והשמירה אוטומטית.">
+              <input className={input} value={subject} maxLength={200} aria-label="נושא המייל" onChange={e => setSubject(e.target.value)} />
+            </Field>
+          </div>
+
           {/* עיצוב החלקים הקבועים */}
           <div className="rounded-xl ring-1 ring-slate-200">
             <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-3 pt-2">
@@ -548,7 +555,6 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
               </button>
             </div>
             <div className="space-y-4 p-4" role="tabpanel">
-              <Field label="נושא המייל" hint="זה הנושא שיישלח בניסיון ובשליחה לכל הרשימה."><input className={input} value={subject} maxLength={200} onChange={e => setSubject(e.target.value)} /></Field>
               {tab === 'header' && <>
                 <Toggle label="להציג כותרת עליונה" checked={design.showHeader} onChange={v => set('showHeader', v)} />
                 {design.showHeader && <>

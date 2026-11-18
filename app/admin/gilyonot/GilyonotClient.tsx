@@ -685,6 +685,8 @@ function IssueDetail({ issue, lists, canEdit, canDelete, onClose }: { issue: Iss
   const [frameKey, setFrameKey] = useState(0)
   const saveRef = useRef<(() => Promise<void>) | null>(null)
   const editing = draft && canEdit
+  // גיליון מתוזמן או שכבר נשלח: העורך נשאר פתוח לתיקונים. שליחה חוזרת לא מוצעת כאן.
+  const reEdit = canEdit && (issue.status === 'scheduled' || issue.status === 'sent')
   // שלב התחלתי לפי מצב הגיליון: הקובץ כבר הועלה, אז בדיקה; ואם כבר נשלח ניסיון – שליחה
   const [step, setStep] = useState(2)
   const [tested, setTested] = useState(false)
@@ -750,9 +752,28 @@ function IssueDetail({ issue, lists, canEdit, canDelete, onClose }: { issue: Iss
       {editing && <Stepper steps={['העלאת הקובץ', 'בדיקה', 'שליחה לכל הרשימה']} current={step} done={[true, tested, false]} onSelect={setStep} />}
       {editing && step === 1 && <FilePanel issue={issue} base={base} />}
       {editing && <div className={step === 2 ? '' : 'hidden'}><MailEditor base={base} issue={issue} saveRef={saveRef} /></div>}
+      {reEdit && (
+        <div className="space-y-4">
+          <p className="mx-5 mt-5 rounded-xl bg-amber-50 p-3 text-sm leading-relaxed text-amber-900 ring-1 ring-inset ring-amber-200">
+            {issue.status === 'sent'
+              ? 'הגיליון כבר נשלח. התיקונים נשמרים בארכיון ובגיליון, אבל מיילים שכבר יצאו לא משתנים, ושליחה חוזרת לרשימה לא מתבצעת מכאן.'
+              : 'הגיליון מתוזמן. התיקונים נשמרים והשליחה המתוזמנת תשתמש בגרסה העדכנית.'}
+          </p>
+          <MailEditor base={base} issue={issue} saveRef={saveRef} />
+          {canEdit && (
+            <div className="mx-5 rounded-xl bg-slate-50/80 p-4 ring-1 ring-inset ring-slate-900/[0.04]">
+              <h3 className="text-sm font-semibold text-slate-900">מייל ניסיון</h3>
+              <p className="mt-2 text-xs leading-relaxed text-slate-600">הניסיון נשלח עם הנושא והתוכן העדכניים. בלי כתובת, יישלח למייל שלכם.</p>
+              <input className={`${input} mt-3`} type="email" dir="ltr" placeholder="המייל שלי (ברירת מחדל)" value={testTo} onChange={e => setTestTo(e.target.value)} aria-label="כתובת לניסיון" />
+              <button type="button" disabled={busy} className={`${btnGhost} mt-2 w-full`} onClick={sendTest}><MailCheck className="h-4 w-4" aria-hidden />שליחת ניסיון</button>
+              <div className="mt-3"><Notice msg={msg} /></div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-5 p-5">
-        {!editing && <div className="min-w-0">
+        {!editing && !reEdit && <div className="min-w-0">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-800"><Eye className="h-4 w-4" aria-hidden />כך המייל ייראה אצל הנמען</h3>
             <button type="button" className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-800" onClick={() => setFrameKey(k => k + 1)}><RefreshCw className="h-3.5 w-3.5" aria-hidden />רענון</button>
