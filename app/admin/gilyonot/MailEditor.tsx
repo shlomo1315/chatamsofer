@@ -13,6 +13,7 @@ import {
   Smartphone, Strikethrough, Trash2, Underline, Undo2, Unlink, X,
 } from 'lucide-react'
 import { DEFAULT_DESIGN, normalizeDesign, SYSTEM_BLUE, type MailDesign } from '@/lib/gilyonotDesign'
+import { alignBlocks, type Align } from '@/lib/gilyonotAlign'
 import { btnDanger, btnGhost, btnPrimary, input } from './ui'
 import type { IssueView } from './GilyonotClient'
 
@@ -175,6 +176,18 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
     sync()
   }
   const insert = (h: string) => exec('insertHTML', h)
+  // execCommand('justify*') מיישר רק חלק מהבלוקים, לכן מיישרים ידנית כל בלוק מסומן.
+  const align = (a: Align) => {
+    restore()
+    const s = document.getSelection()
+    const r = s?.rangeCount ? s.getRangeAt(0) : null
+    if (!ed.current || !r || !alignBlocks(ed.current, r, a)) {
+      exec(a === 'center' ? 'justifyCenter' : a === 'right' ? 'justifyRight' : 'justifyLeft')
+      return
+    }
+    setPop('')
+    sync()
+  }
   const setDir = (dir: 'rtl' | 'ltr') => {
     restore()
     let n: Node | null = document.getSelection()?.anchorNode ?? null
@@ -406,9 +419,9 @@ export default function MailEditor({ base, issue, saveRef }: { base: string; iss
                   <Pop open={pop === 'hilite'}><Swatches colors={[...HILITES, 'transparent']} onPick={c => exec('hiliteColor', c)} /></Pop>
                 </div>
                 <Sep />
-                <Tool label="יישור לימין" onClick={() => exec('justifyRight')}><AlignRight className="h-4 w-4" /></Tool>
-                <Tool label="מרכוז" onClick={() => exec('justifyCenter')}><AlignCenter className="h-4 w-4" /></Tool>
-                <Tool label="יישור לשמאל" onClick={() => exec('justifyLeft')}><AlignLeft className="h-4 w-4" /></Tool>
+                <Tool label="יישור לימין" onClick={() => align('right')}><AlignRight className="h-4 w-4" /></Tool>
+                <Tool label="מרכוז" onClick={() => align('center')}><AlignCenter className="h-4 w-4" /></Tool>
+                <Tool label="יישור לשמאל" onClick={() => align('left')}><AlignLeft className="h-4 w-4" /></Tool>
                 <Tool label="פסקה משמאל לימין (אנגלית)" onClick={() => setDir('ltr')}><span className="text-[11px] font-bold">LTR</span></Tool>
                 <Tool label="פסקה מימין לשמאל" onClick={() => setDir('rtl')}><span className="text-[11px] font-bold">RTL</span></Tool>
                 <Tool label="רשימה" onClick={() => exec('insertUnorderedList')}><List className="h-4 w-4" /></Tool>
