@@ -49,6 +49,7 @@ export function buildGilyonHtml(opts: {
   pixelUrl?: string | null
   /** כתובת השולח: מוצגת בשורת "להוסיף לאנשי הקשר", כדי שהגיליון לא ייפול לספאם. */
   senderEmail?: string | null
+  senderName?: string | null
 }): string {
   const d = normalizeDesign(opts.design)
   const withName = (html: string) => html.split(NAME_TOKEN).join('')
@@ -59,7 +60,7 @@ export function buildGilyonHtml(opts: {
     ? `להסרה מרשימת התפוצה <a href="${escHtml(opts.unsubscribeUrl)}" style="color:#64748b;">לחצו כאן</a>`
     : ''
   const contacts = opts.senderEmail
-    ? `כדי שהגיליון יגיע תמיד לתיבה הראשית, הוסיפו את הכתובת <span dir="ltr" style="unicode-bidi:embed;">${escHtml(opts.senderEmail)}</span> לאנשי הקשר שלכם.<br/>`
+    ? `כדי שהגיליון יגיע תמיד לתיבה הראשית, <a href="${escHtml(`https://contacts.google.com/new?givenname=${encodeURIComponent(opts.senderName || '')}&email=${encodeURIComponent(opts.senderEmail)}`)}" style="color:#64748b;">להוסיף כתובת זו לאנשי הקשר שלכם</a> (<span dir="ltr" style="unicode-bidi:embed;">${escHtml(opts.senderEmail)}</span>).<br/>`
     : ''
   const pixel = opts.pixelUrl ? `<img src="${escHtml(opts.pixelUrl)}" width="1" height="1" alt="" style="display:block;border:0;width:1px;height:1px;"/>` : ''
   const header = d.showHeader ? `<tr><td style="background:${d.headerColor};padding:26px 28px;text-align:center;">
