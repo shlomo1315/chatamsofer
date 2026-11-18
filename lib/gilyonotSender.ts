@@ -133,7 +133,7 @@ export function issueEmail(issue: MailFields, r: { deliveryToken: string; subscr
     html: buildGilyonHtml({
       title: issue.title, parasha: issue.parasha, intro: issue.intro,
       bodyHtml: cleanBody(issue.body_html), design: issue.design,
-      unsubscribeUrl, senderEmail: GILYONOT_FROM_EMAIL,
+      unsubscribeUrl, senderEmail: GILYONOT_FROM_EMAIL, senderName: GILYONOT_FROM_NAME,
       pixelUrl: gilyonotUrls.pixel(r.deliveryToken),
     }),
     unsubscribeUrl,
@@ -148,7 +148,7 @@ export async function sendGilyonTest(db: SupabaseClient, issue: IssueRow, to: st
   if (!file.ok) return file
   const html = buildGilyonHtml({
     title: issue.title, parasha: issue.parasha, intro: issue.intro, bodyHtml: cleanBody(issue.body_html), design: issue.design,
-    unsubscribeUrl: await testUnsubscribeUrl(db, to), senderEmail: GILYONOT_FROM_EMAIL,
+    unsubscribeUrl: await testUnsubscribeUrl(db, to), senderEmail: GILYONOT_FROM_EMAIL, senderName: GILYONOT_FROM_NAME,
   })
   const { error } = await new Resend(apiKey).emails.send({ from: from(), to, subject: `[ניסיון] ${issue.subject}`, html, text: htmlToPlainText(html), replyTo: GILYONOT_FROM_EMAIL, attachments: file.atts })
   if (error) return { ok: false, error: String(error.message ?? error) }
