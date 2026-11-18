@@ -86,7 +86,7 @@ describe('זיכרון בשליחת הגיליונות', () => {
   it('קובץ כבד מוריד את מספר המיילים במקביל, וכולם עדיין נשלחים', async () => {
     state.fileBytes = 25 * 1024 * 1024
     expect(await runGilyonotSender()).toEqual({ sent: 20, failed: 0 })
-    expect(state.maxLive).toBeLessThanOrEqual(3)
+    expect(state.maxLive).toBeLessThanOrEqual(2) // המינימום של inFlightLimit
   }, 30_000)
 
   it('קובץ קטן: שולחים במקביל כרגיל', async () => {

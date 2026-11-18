@@ -25,8 +25,13 @@ const BATCH_SIZE = 100
 // השליחות לא מחכות זו לזו: מייל עם PDF כבד לוקח זמן להעלות, וקודם הוא עיכב את כל השאר (2 מיילים, המתנה לשניהם, ועוד שנייה).
 const RATE_PER_SEC = Math.max(1, Math.floor(Number(process.env.GILYONOT_RATE_PER_SEC) || 2))
 const MAX_IN_FLIGHT = RATE_PER_SEC * 4
-// כל מייל שבדרך מחזיק בזיכרון עותק של הקובץ (גוף הבקשה). השרת עם 1GB, לכן קובץ כבד מוריד את מספר המיילים במקביל.
-const IN_FLIGHT_BYTES = 64 * 1024 * 1024
+// זיכרון: כל שליחה בדרך מחזיקה עותק של הקבצים בבקשה. מגבילים כמה בדרך לפי גודל הקבצים, ולא פחות מ-2 כמו קודם.
+// (18.11: השרת החזיר 503 בזמן שליחה בגלל זיכרון, עוד לפני ההאצה)
+const IN_FLIGHT_BYTES = 120 * 1024 * 1024
+export function inFlightLimit(attachmentBytes: number, max = MAX_IN_FLIGHT): number {
+  const perSend = Math.max(1, attachmentBytes * 2) // base64 פעם אחת + גוף ה-JSON של הבקשה
+  return Math.max(2, Math.min(max, Math.floor(IN_FLIGHT_BYTES / perSend)))
+}
 const MAX_ATTEMPTS = 3
 const RATE_LIMIT_RETRIES = 5
 // ה-worker נקרא כל דקה, אבל סבב שליחה ממשיך עד 10 דקות (הנעילה מתחדשת), ולא נעצר כל 50 שניות
@@ -117,11 +122,6 @@ export { gilyonFileName } from './gilyonotFileName'
 
 export interface Attachment { filename: string; content: Buffer }
 
-/** הצרופות כמחרוזת base64. Resend מריץ JSON.stringify על הבקשה, ו-Buffer הופך שם למערך של מספר לכל בית
- *  (PDF של 10MB = עשרות MB בזיכרון בכל מייל). מחרוזת עוברת כמו שהיא, ומכינים אותה פעם אחת לכל הסבב. */
-export const toMailAttachments = (atts: Attachment[]) =>
-  atts.map(a => ({ filename: a.filename, content: a.content.toString('base64') }))
-
 
 /** האם קובץ בגודל הזה נכנס במייל אחד (עם base64). נשאר לגיליונות ישנים ולכיווץ. */
 export const fitsInMail = (bytes: number) => Math.ceil(bytes * 4 / 3) <= RESEND_MAX_BYTES
@@ -191,7 +191,7 @@ export async function sendGilyonTest(db: SupabaseClient, issue: IssueRow, to: st
     title: issue.title, parasha: issue.parasha, intro: issue.intro, bodyHtml: cleanBody(issue.body_html), design: issue.design,
     unsubscribeUrl: await testUnsubscribeUrl(db, to), senderEmail: GILYONOT_FROM_EMAIL, senderName: GILYONOT_FROM_NAME,
   })
-  const { error } = await new Resend(apiKey).emails.send({ from: from(), to, subject: `[ניסיון] ${issue.subject}`, html, text: htmlToPlainText(html), replyTo: GILYONOT_FROM_EMAIL, attachments: toMailAttachments(file.atts) })
+  const { error } = await new Resend(apiKey).emails.send({ from: from(), to, subject: `[ניסיון] ${issue.subject}`, html, text: htmlToPlainText(html), replyTo: GILYONOT_FROM_EMAIL, attachments: file.atts })
   if (error) return { ok: false, error: String(error.message ?? error) }
   return { ok: true }
 }
@@ -320,9 +320,6 @@ async function sendBatches(db: SupabaseClient, resend: Resend, issue: IssueRow):
     console.error(`[gilyonot] ${issue.id}: ${file.error}`)
     return { sent, failed }
   }
-  const atts = toMailAttachments(file.atts)
-  const attBytes = atts.reduce((n, a) => n + a.content.length, 0)
-  const maxInFlight = Math.max(1, Math.min(MAX_IN_FLIGHT, Math.floor(IN_FLIGHT_BYTES / Math.max(1, attBytes))))
 
   while (Date.now() < deadline && !stopping) {
     await renewLock(db)
@@ -349,6 +346,8 @@ async function sendBatches(db: SupabaseClient, resend: Resend, issue: IssueRow):
     if (!batch.length) { await finalize(db, issue.id); break }
 
     let hadFailure = false
+    // הקבצים מקודדים ל-base64 פעם אחת לסבב, ולא מחדש בכל מייל (חוסך זיכרון ומעבד)
+    const atts = file.atts.map(a => ({ filename: a.filename, content: a.content.toString('base64') }))
     const sendOne = async (d: DeliveryRow, retry = 0): Promise<boolean> => {
       const { html, unsubscribeUrl } = issueEmail(issue, {
         deliveryToken: d.token,
@@ -383,10 +382,12 @@ async function sendBatches(db: SupabaseClient, resend: Resend, issue: IssueRow):
       }
     }
     const inFlight = new Set<Promise<void>>()
+    const maxInFlight = inFlightLimit(atts.reduce((n, a) => n + a.content.length, 0))
     let renewedAt = Date.now()
     for (let i = 0; i < batch.length && Date.now() < deadline && !hadFailure && !stopping; i += RATE_PER_SEC) {
       const startedAt = Date.now()
       for (const d of batch.slice(i, i + RATE_PER_SEC)) {
+        // הגבול נבדק לפני כל מייל, אחרת קצב גבוה (GILYONOT_RATE_PER_SEC) מוסיף מנה שלמה מעל הגבול
         while (inFlight.size >= maxInFlight) await Promise.race(inFlight)
         const p: Promise<void> = sendOne(d).then(ok => { if (ok) sent++; else { failed++; hadFailure = true } }).finally(() => { inFlight.delete(p) })
         inFlight.add(p)
