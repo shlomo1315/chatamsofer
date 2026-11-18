@@ -30,7 +30,7 @@ function paragraphs(text: string): string {
 }
 
 export function defaultSubject(title: string, parasha: string, date: Date = new Date()): string {
-  return [title.trim() || 'היכל החתם סופר', withHebrewYear(parasha, date)].filter(Boolean).join(' · ')
+  return [title.trim() || 'גיליון היכל החתם סופר', withHebrewYear(parasha, date)].filter(Boolean).join(' · ')
 }
 
 /** טקסט קצר מהעיצוב (כותרת, פוטר): escape, וירידת שורה = <br>. */
@@ -103,13 +103,18 @@ ${pixel}
 </html>`
 }
 
-const OLD_AUTO_TITLE = 'גיליון החתם סופר'
+const NEW_AUTO_TITLE = 'גיליון היכל החתם סופר'
+const OLD_AUTO_TITLES = ['גיליון החתם סופר', 'היכל החתם סופר']
 
-/** נושא שנוצר אוטומטית עם השם הישן ("גיליון החתם סופר · פרשה ...") מיושר לשם החדש. נושא ידני נשאר. */
+/** נושא שנוצר אוטומטית עם שם ישן ("גיליון החתם סופר · ..." או "היכל החתם סופר · ...") מיושר לשם הנוכחי. נושא ידני נשאר. */
 export function syncAutoSubject(subject: string | null | undefined, parasha: string): string | null | undefined {
-  const prefix = `${OLD_AUTO_TITLE} · `
-  if (!subject || !subject.startsWith(prefix)) return subject
-  const rest = subject.slice(prefix.length)
-  if (parasha && !rest.startsWith(parasha)) return subject
-  return `היכל החתם סופר · ${rest}`
+  if (!subject) return subject
+  for (const old of OLD_AUTO_TITLES) {
+    const prefix = `${old} · `
+    if (!subject.startsWith(prefix)) continue
+    const rest = subject.slice(prefix.length)
+    if (parasha && !rest.startsWith(parasha)) return subject
+    return `${NEW_AUTO_TITLE} · ${rest}`
+  }
+  return subject
 }
