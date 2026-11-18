@@ -4,6 +4,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { DEFAULT_DESIGN, NAME_TOKEN, normalizeDesign } from './gilyonotDesign'
+import { withHebrewYear } from './gilyonotYear'
 
 const SITE = (process.env.NEXT_PUBLIC_SITE_URL || 'https://chasamsofer.co.il').replace(/\/$/, '')
 
@@ -28,8 +29,8 @@ function paragraphs(text: string): string {
     .join('')
 }
 
-export function defaultSubject(title: string, parasha: string): string {
-  return [title.trim() || 'גיליון החתם סופר', parasha.trim()].filter(Boolean).join(' · ')
+export function defaultSubject(title: string, parasha: string, date: Date = new Date()): string {
+  return [title.trim() || 'גיליון החתם סופר', withHebrewYear(parasha, date)].filter(Boolean).join(' · ')
 }
 
 /** טקסט קצר מהעיצוב (כותרת, פוטר): escape, וירידת שורה = <br>. */
@@ -50,12 +51,14 @@ export function buildGilyonHtml(opts: {
   /** כתובת השולח: מוצגת בשורת "להוסיף לאנשי הקשר", כדי שהגיליון לא ייפול לספאם. */
   senderEmail?: string | null
   senderName?: string | null
+  /** תאריך הגיליון לחישוב השנה העברית בכותרת (ברירת מחדל: עכשיו). */
+  date?: Date
 }): string {
   const d = normalizeDesign(opts.design)
   const withName = (html: string) => html.split(NAME_TOKEN).join('')
   const body = opts.bodyHtml?.trim() ? withName(opts.bodyHtml) : (opts.intro?.trim() ? paragraphs(opts.intro) : '')
   const title = d.headerTitle.trim() || opts.title
-  const sub = d.headerSub.trim() || opts.parasha
+  const sub = d.headerSub.trim() || withHebrewYear(opts.parasha, opts.date)
   const unsub = opts.unsubscribeUrl
     ? `להסרה מרשימת התפוצה <a href="${escHtml(opts.unsubscribeUrl)}" style="color:#64748b;">לחצו כאן</a>`
     : ''

@@ -58,7 +58,7 @@ describe('gilyonot: פרשה ומייל', () => {
     expect(html).toContain('https://a/u')
   })
   it('נושא ברירת מחדל', () => {
-    expect(defaultSubject('גיליון החתם סופר', 'פרשת נח')).toBe('גיליון החתם סופר · פרשת נח')
+    expect(defaultSubject('גיליון החתם סופר', 'פרשת נח', new Date('2026-10-20T12:00:00Z'))).toBe('גיליון החתם סופר · פרשת נח תשפ״ז')
   })
 })
 
