@@ -37,13 +37,6 @@ function Para({ p }: { p: KvitelDocPara }) {
   )
 }
 
-function fileNameFrom(res: Response): string {
-  const cd = res.headers.get('Content-Disposition') ?? ''
-  const utf = /filename\*=UTF-8''([^;]+)/i.exec(cd)
-  if (utf) return decodeURIComponent(utf[1])
-  return /filename="([^"]+)"/i.exec(cd)?.[1] ?? 'kvitel.pdf'
-}
-
 // הורדת הקובץ (PDF בדף A4) מנתיב הייצוא. מחזיר הודעת שגיאה, או null כשהקובץ ירד.
 // ⚠️ המזהים בגוף הבקשה ולא בכתובת: חומת ההגנה חוסמת כתובת ארוכה (ראה export/route.ts).
 export async function downloadKvitel(href: string, ids: string[] = [], format: 'pdf' | 'docx' = 'pdf'): Promise<string | null> {
@@ -51,11 +44,17 @@ export async function downloadKvitel(href: string, ids: string[] = [], format: '
     const res = await fetch(href, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids, format }),
     })
-    if (!res.ok) return (await res.json().catch(() => ({}))).error || 'ההורדה נכשלה'
-    const url = URL.createObjectURL(await res.blob())
+    // קוד הסטטוס בהודעה: 418 = נטפרי, 403 = חומת ההגנה או הרשאה — כדי שאפשר יהיה לאבחן מצילום.
+    if (!res.ok) return (await res.json().catch(() => ({}))).error || `ההורדה נכשלה (${res.status})`
+    // הקובץ מגיע כ-JSON מעורבל ולא כ-PDF (נטפרי חוסם תגובת קובץ) — ראו lib/kvitelFileResponse.
+    const payload = await res.json().catch(() => null) as { name?: string; contentType?: string; enc?: string; data?: string } | null
+    if (!payload?.data) return 'ההורדה נכשלה: הקובץ לא התקבל'
+    const bytes = Uint8Array.from(atob(payload.data), c => c.charCodeAt(0))
+    if (payload.enc === DOC_CIPHER_ID) scrambleBytes(bytes)
+    const url = URL.createObjectURL(new Blob([bytes], { type: payload.contentType }))
     const a = document.createElement('a')
     a.href = url
-    a.download = fileNameFrom(res)
+    a.download = payload.name || `kvitel.${format}`
     document.body.appendChild(a)
     a.click()
     a.remove()

@@ -5,6 +5,7 @@ import { requirePermission, forbidden, getServiceClient, serverMisconfigured } f
 import { buildKvitelDocx } from '@/lib/kvitelDocx'
 import { buildKvitelPdf } from '@/lib/kvitelPdf'
 import { KVITEL_LOGO } from '@/lib/kvitelDocLayout'
+import { kvitelFileResponse } from '@/lib/kvitelFileResponse'
 import { kvitelExportLines, loadKvitelRequests, parseKvitelFilters } from '@/lib/kvitelQuery'
 
 // ייצוא הקוויטל — אותו סינון כמו במסך (lib/kvitelQuery), כ-PDF בדף A4 (ברירת מחדל) או Word.
@@ -44,15 +45,7 @@ async function exportFile(request: NextRequest, ids: string[], format: unknown) 
   const logoPng = await readFile(path.join(process.cwd(), 'public', KVITEL_LOGO.file)).catch(() => null)
   const date = new Date()
   const bytes = fmt === 'pdf' ? await buildKvitelPdf({ lines, date, logoPng }) : await buildKvitelDocx({ lines, date, logoPng })
-  const type = fmt === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(date)
-  return new NextResponse(Buffer.from(bytes), {
-    headers: {
-      'Content-Type': type,
-      'Content-Disposition': `attachment; filename="kvitel-${day}.${fmt}"; filename*=UTF-8''${encodeURIComponent(`קוויטל-${day}.${fmt}`)}`,
-      'Cache-Control': 'no-store',
-    },
-  })
+  return kvitelFileResponse(bytes, fmt, date)
 }
 
 // GET — תאימות לקישור ישן (?ids=a,b&format=docx). מזהה אחד או כמה — לא רשימה ארוכה.
