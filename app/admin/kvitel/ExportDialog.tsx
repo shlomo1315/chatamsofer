@@ -14,11 +14,13 @@ import { KvitelSheet, downloadKvitel } from './KvitelPreview'
 
 const dateFmt = new Intl.DateTimeFormat('he-IL', { timeZone: 'Asia/Jerusalem', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })
 
-export default function ExportDialog({ open, onClose, rows, exportHref, canEdit, onDone }: {
+export default function ExportDialog({ open, onClose, rows, exportHref, exportIds, canEdit, onDone }: {
   open: boolean
   onClose: () => void
   rows: KvitelRequestRow[]
   exportHref: string
+  // הבקשות שנבחרו במסך (ריק = כל מה שבסינון). נשלחות בגוף הבקשה, לא בכתובת.
+  exportIds: string[]
   canEdit: boolean
   onDone: (message: string) => void
 }) {
@@ -52,7 +54,7 @@ export default function ExportDialog({ open, onClose, rows, exportHref, canEdit,
     setBusy(true)
     setError('')
     try {
-      const failed = await downloadKvitel(exportHref)
+      const failed = await downloadKvitel(exportHref, exportIds)
       if (failed) { setError(failed); return }
 
       const ids = [...marked]
@@ -114,7 +116,7 @@ export default function ExportDialog({ open, onClose, rows, exportHref, canEdit,
         {!exportable.length ? (
           <p className="py-6 text-center text-slate-500">אין שמות מאושרים לייצוא בסינון הזה.</p>
         ) : preview ? (
-          <KvitelSheet lines={previewLines} downloadHref={exportHref} />
+          <KvitelSheet lines={previewLines} downloadHref={exportHref} downloadIds={exportIds} />
         ) : (
           <>
             {canEdit && markable.length > 0 && (

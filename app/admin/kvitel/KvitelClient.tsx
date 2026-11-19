@@ -212,7 +212,7 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
   const ids = [...selected]
   // ייצוא: מה שנבחר, ואחרת כל מה שבתצוגה (הקובץ כולל רק בקשות שלא בוטלו)
   const exportRows = selected.size ? rows.filter(r => selected.has(r.id)) : scoped.filter(r => r.status !== 'cancelled')
-  const exportHref = `/api/admin/kvitel/export?${filtersToQuery({ ...filters, status: 'all', channel: (channel || null) as KvitelFilters['channel'], type: type || null, q }, selected.size ? { ids: ids.join(',') } : {})}`
+  const exportHref = `/api/admin/kvitel/export?${filtersToQuery({ ...filters, status: 'all', channel: (channel || null) as KvitelFilters['channel'], type: type || null, q })}`
 
   return (
     <div className="space-y-5">
@@ -297,14 +297,15 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
 
       {message && <p role="status" className="rounded-lg bg-sand px-4 py-2.5 text-sm text-navy">{message}</p>}
 
-      <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} rows={exportRows} exportHref={exportHref} canEdit={canEdit}
+      <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} rows={exportRows} exportHref={exportHref} exportIds={ids} canEdit={canEdit}
         onDone={m => { setExportOpen(false); setMessage(m); setSelected(new Set()); router.refresh() }} />
       <PrintNewDialog open={printOpen} onClose={() => setPrintOpen(false)} rows={allRows} canEdit={canEdit}
         onDone={m => { setPrintOpen(false); setMessage(m); router.refresh() }} />
       <KvitelPreview open={!!previewRow} onClose={() => setPreviewRow(null)} lines={previewRow ? kvitelRequestLines(previewRow) : []}
         title={previewRow?.contact_name ? `הבקשה של ${previewRow.contact_name} בקובץ` : 'הבקשה בקובץ'}
         downloadHref={previewRow && previewRow.status !== 'cancelled'
-          ? `/api/admin/kvitel/export?status=all&ids=${previewRow.id}` : undefined}
+          ? '/api/admin/kvitel/export?status=all' : undefined}
+        downloadIds={previewRow ? [previewRow.id] : undefined}
         downloadNote="אפשר להוריד את הקובץ אחרי שהבקשה אושרה." />
 
       <div className="overflow-hidden rounded-[14px] border border-line bg-white">

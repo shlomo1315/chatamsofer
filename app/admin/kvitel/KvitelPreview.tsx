@@ -40,13 +40,16 @@ function fileNameFrom(res: Response): string {
   const cd = res.headers.get('Content-Disposition') ?? ''
   const utf = /filename\*=UTF-8''([^;]+)/i.exec(cd)
   if (utf) return decodeURIComponent(utf[1])
-  return /filename="([^"]+)"/i.exec(cd)?.[1] ?? 'kvitel.docx'
+  return /filename="([^"]+)"/i.exec(cd)?.[1] ?? 'kvitel.pdf'
 }
 
-// הורדת קובץ ה-Word מנתיב הייצוא. מחזיר הודעת שגיאה, או null כשהקובץ ירד.
-export async function downloadKvitel(href: string): Promise<string | null> {
+// הורדת הקובץ (PDF בדף A4) מנתיב הייצוא. מחזיר הודעת שגיאה, או null כשהקובץ ירד.
+// ⚠️ המזהים בגוף הבקשה ולא בכתובת: חומת ההגנה חוסמת כתובת ארוכה (ראה export/route.ts).
+export async function downloadKvitel(href: string, ids: string[] = []): Promise<string | null> {
   try {
-    const res = await fetch(href)
+    const res = await fetch(href, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids, format: 'pdf' }),
+    })
     if (!res.ok) return (await res.json().catch(() => ({}))).error || 'ההורדה נכשלה'
     const url = URL.createObjectURL(await res.blob())
     const a = document.createElement('a')
@@ -114,10 +117,11 @@ async function printSheet(page: HTMLElement, onAfter?: () => void) {
 }
 
 // downloadHref — נתיב הייצוא לכפתור "הורדה". בלי נתיב, downloadNote מסביר למה אין הורדה.
-export function KvitelSheet({ lines, date = new Date(), downloadHref, downloadNote, onPrinted }: {
+export function KvitelSheet({ lines, date = new Date(), downloadHref, downloadIds, downloadNote, onPrinted }: {
   lines: string[]
   date?: Date
   downloadHref?: string
+  downloadIds?: string[]
   downloadNote?: string
   // נקרא אחרי שחלון ההדפסה נסגר (הדפסה או ביטול)
   onPrinted?: () => void
@@ -131,7 +135,7 @@ export function KvitelSheet({ lines, date = new Date(), downloadHref, downloadNo
     if (!downloadHref) return
     setBusy(true)
     setError('')
-    setError(await downloadKvitel(downloadHref) ?? '')
+    setError(await downloadKvitel(downloadHref, downloadIds) ?? '')
     setBusy(false)
   }
 
@@ -170,18 +174,19 @@ export function KvitelSheet({ lines, date = new Date(), downloadHref, downloadNo
   )
 }
 
-export default function KvitelPreview({ open, onClose, lines, title = 'תצוגה מקדימה של הקובץ', downloadHref, downloadNote }: {
+export default function KvitelPreview({ open, onClose, lines, title = 'תצוגה מקדימה של הקובץ', downloadHref, downloadIds, downloadNote }: {
   open: boolean
   onClose: () => void
   lines: string[]
   title?: string
   downloadHref?: string
+  downloadIds?: string[]
   downloadNote?: string
 }) {
   return (
     <Modal open={open} onClose={onClose} title={title} size="lg">
       {lines.length
-        ? <KvitelSheet lines={lines} downloadHref={downloadHref} downloadNote={downloadNote} />
+        ? <KvitelSheet lines={lines} downloadHref={downloadHref} downloadIds={downloadIds} downloadNote={downloadNote} />
         : <p className="py-6 text-center text-slate-500">אין שמות להצגה.</p>}
     </Modal>
   )
