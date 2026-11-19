@@ -8,7 +8,7 @@ import { kvitelRequestLines, type KvitelFilters, type KvitelLineRow, type Kvitel
 import { ListTable } from '@/components/admin/system/ListTable'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import { useTablePagination } from '@/lib/useTablePagination'
-import { countByStatus, hebrewDay } from '@/lib/kvitelView'
+import { byKvitelTab, countByStatus, hebrewDay, KVITEL_DEFAULT_TAB, scopeKvitelRows, type KvitelTab } from '@/lib/kvitelView'
 import { InlineText, InlineRequest } from './KvitelInlineCell'
 import { saveInlineEdit, personText, PERSON_HINT, type InlineEdit } from '@/lib/kvitelInlineEdit'
 import KvitelCardModal from './KvitelCardModal'
@@ -23,7 +23,7 @@ const STATUS_STYLE: Record<KvitelStatus, { pill: string; dot: string }> = {
   done: { pill: 'bg-[#E3F0E9] text-[#2F6B4F]', dot: 'bg-[#2F6B4F]' },
   cancelled: { pill: 'bg-line text-[#7A7F8C]', dot: 'bg-[#7A7F8C]' },
 }
-type Tab = 'all' | 'pending' | 'done' | 'cancelled'
+type Tab = KvitelTab
 
 export function StatusPill({ status }: { status: KvitelStatus }) {
   const st = STATUS_STYLE[status]
@@ -197,8 +197,17 @@ const btnSec = 'flex h-9 items-center gap-2 self-start rounded-[10px] border bor
 const CHANNEL_SEG: { key: string; label: string }[] = [
   { key: '', label: 'הכול' }, { key: 'web', label: 'לינק' }, { key: 'phone', label: 'טלפון' }, { key: 'email', label: 'מייל' }, { key: 'nedarim', label: 'נדרים' },
 ]
+const STATUS_SEG: { key: Tab; label: string }[] = [
+  { key: 'pending', label: 'לא נשלח' }, { key: 'done', label: 'נשלח לציון' }, { key: 'cancelled', label: 'בוטלו' }, { key: 'all', label: 'הכול' },
+]
+const segBtn = (on: boolean) => `min-h-[38px] whitespace-nowrap rounded-lg px-3 text-sm ${on ? 'bg-white font-semibold text-navy shadow-sm' : 'text-ink-soft'}`
 
-export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload }: { allRows: KvitelRequestRow[]; filters: KvitelFilters; canEdit: boolean; tabs?: ReactNode; onReload: () => void }) {
+// embedded: הטבלה בתוך מסך "השבוע" — בלי הכותרת וכרטיסי השלבים, עם קוביית סטטוס בשורת הסינון.
+// channel/onChannel: מקור שנבחר מבחוץ (פסי הערוצים בכרטיס "נכנסו השבוע").
+export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload, embedded, channel: channelIn, onChannel }: {
+  allRows: KvitelRequestRow[]; filters: KvitelFilters; canEdit: boolean; tabs?: ReactNode; onReload: () => void
+  embedded?: boolean; channel?: string; onChannel?: (channel: string) => void
+}) {
   const router = { refresh: onReload }   // רענון = טעינה מחדש של הרשימה המעורבלת (KvitelRequests)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
@@ -217,24 +226,17 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
   const [recordingId, setRecordingId] = useState<string | null>(null)   // הקלטה ותמלול inline בשורה
   const [datesOpen, setDatesOpen] = useState(false)
   const [q, setQ] = useState(filters.q ?? '')
-  const [channel, setChannel] = useState<string>(filters.channel ?? '')
+  const [channelOwn, setChannelOwn] = useState<string>(filters.channel ?? '')
+  const channel = channelIn ?? channelOwn
+  const setChannel = onChannel ?? setChannelOwn
   const [type, setType] = useState<string>(filters.type ?? '')
   // הלשונית הראשונה: מה שנבחר בכתובת, ובברירת מחדל "לא נשלח".
-  const [tab, setTab] = useState<Tab>(filters.status === 'open' || filters.status === 'review' ? 'pending' : filters.status)
+  const [tab, setTab] = useState<Tab>(filters.status === 'open' || filters.status === 'review' ? KVITEL_DEFAULT_TAB : filters.status)
 
   // חיפוש, ערוץ וסוג מסוננים בדפדפן; התאריכים דרך הכתובת (השרת).
-  const scoped = useMemo(() => {
-    const needle = q.trim().toLowerCase()
-    return liveRows.filter(r => {
-      if (channel && r.channel !== channel) return false
-      if (type && !r.kvitel_request_lines.some(l => l.request_type === type)) return false
-      if (!needle) return true
-      const hay = [r.contact_name, r.contact_phone, ...r.kvitel_request_lines.flatMap(l => [l.name, l.parent_name])].join(' ').toLowerCase()
-      return hay.includes(needle)
-    })
-  }, [liveRows, q, channel, type])
+  const scoped = useMemo(() => scopeKvitelRows(liveRows, { channel, type, q }), [liveRows, q, channel, type])
   const counts = useMemo(() => countByStatus(scoped), [scoped])
-  const rows = useMemo(() => (tab === 'all' ? scoped : scoped.filter(r => r.status === tab)), [scoped, tab])
+  const rows = useMemo(() => byKvitelTab(scoped, tab), [scoped, tab])
   // תיבת הבחירה בראש השורה (צרה) ועמודת הפעולות בסופה. ':v2' מאפס רוחב שנשמר לפני הסידור החדש
   const tc = useTableColumns<ColKey, KvitelRequestRow>('kvitel', COLUMNS, { sortFilter: { mode: 'client', rows }, leadCol: canEdit, extraCols: 1, extraWeight: 0.5, idSuffix: ':v2' })
   const pg = useTablePagination(tc.rows)
@@ -296,6 +298,7 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
 
   return (
     <div className="space-y-5">
+      {!embedded && <>
       <div className="border-b border-line pb-5">
         <p className="text-[13px] text-ink-soft">מחלקות / קוויטלאך</p>
         <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
@@ -338,6 +341,7 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
           <button type="button" onClick={() => pickTab('cancelled')} className={`underline underline-offset-[3px] ${tab === 'cancelled' ? 'font-bold text-navy' : ''}`}>בוטלו ({counts.cancelled})</button>
         </div>
       </div>
+      </>}
 
       <div className="rounded-[14px] border border-line bg-white p-3">
         <div className="flex flex-wrap items-center gap-3">
@@ -346,10 +350,18 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
             <input type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="שם, שם האם, מגיש או טלפון" aria-label="חיפוש"
               className="min-w-0 flex-1 border-0 bg-transparent text-[15px] text-ink outline-none" />
           </label>
+          {embedded && (
+            <div role="group" aria-label="סטטוס" className="flex flex-wrap rounded-[10px] bg-[#F7F5F1] p-[3px]">
+              {STATUS_SEG.map(t => (
+                <button key={t.key} type="button" onClick={() => pickTab(t.key)} aria-pressed={tab === t.key} className={segBtn(tab === t.key)}>
+                  {t.label} <span className="tabular-nums text-ink-faint">{counts[t.key]}</span>
+                </button>
+              ))}
+            </div>
+          )}
           <div role="group" aria-label="ערוץ" className="flex flex-wrap rounded-[10px] bg-[#F7F5F1] p-[3px]">
             {CHANNEL_SEG.map(c => (
-              <button key={c.key} type="button" onClick={() => setChannel(c.key)}
-                className={`min-h-[38px] whitespace-nowrap rounded-lg px-3 text-sm ${channel === c.key ? 'bg-white font-semibold text-navy shadow-sm' : 'text-ink-soft'}`}>{c.label}</button>
+              <button key={c.key} type="button" onClick={() => setChannel(c.key)} aria-pressed={channel === c.key} className={segBtn(channel === c.key)}>{c.label}</button>
             ))}
           </div>
           <select value={type} onChange={e => setType(e.target.value)} aria-label="סוג בקשה" className="h-11 rounded-[10px] border border-line bg-white px-3 text-sm text-ink">

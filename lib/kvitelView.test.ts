@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { countByStatus, hebrewDay, parseRawFields, pendingForPrint, reviewReason, cleanTranscript, MAX_TRANSCRIPT } from './kvitelView'
+import { byKvitelTab, countByStatus, hebrewDay, KVITEL_DEFAULT_TAB, parseRawFields, pendingForPrint, reviewReason, scopeKvitelRows, cleanTranscript, MAX_TRANSCRIPT } from './kvitelView'
 import { kvitelExportLines, type KvitelRequestRow } from './kvitelQuery'
 
 const line = (o: Partial<{ name: string; parent_name: string; flagged: boolean; flag_reason: string | null }> = {}) =>
@@ -51,5 +51,29 @@ describe('cleanTranscript', () => {
   it('דוחה טקסט ארוך מדי ולא-מחרוזת', () => {
     expect(cleanTranscript('א'.repeat(MAX_TRANSCRIPT + 1))).toBeUndefined()
     expect(cleanTranscript(5)).toBeUndefined()
+  })
+})
+
+describe('טבלת הבקשות במסך השבוע', () => {
+  const r = (id: string, channel: string, status: string, o: Record<string, unknown> = {}) =>
+    ({ id, channel, status, contact_name: 'דוד', contact_phone: '0501234567', kvitel_request_lines: [line()], ...o }) as unknown as KvitelRequestRow
+  const rows = [r('a', 'email', 'pending'), r('b', 'phone', 'pending'), r('c', 'email', 'done'), r('d', 'nedarim', 'cancelled'),
+    r('e', 'nedarim', 'pending', { kvitel_request_lines: [line({ name: 'יוסף', parent_name: 'מרים' })] })]
+  const ids = (xs: KvitelRequestRow[]) => xs.map(x => x.id)
+
+  it('סינון לפי מקור', () => {
+    expect(ids(scopeKvitelRows(rows, { channel: 'email' }))).toEqual(['a', 'c'])
+    expect(ids(scopeKvitelRows(rows, { channel: '' }))).toEqual(['a', 'b', 'c', 'd', 'e'])
+  })
+  it('מקור וחיפוש יחד', () => expect(ids(scopeKvitelRows(rows, { channel: 'nedarim', q: 'מרים' }))).toEqual(['e']))
+  it('ברירת המחדל: רק מה שלא נשלח לציון', () => {
+    expect(KVITEL_DEFAULT_TAB).toBe('pending')
+    expect(ids(byKvitelTab(rows, KVITEL_DEFAULT_TAB))).toEqual(['a', 'b', 'e'])
+  })
+  it('אחרי שליחה לציון הבקשה עוברת ל"נשלח" ויוצאת מברירת המחדל', () => {
+    const after = rows.map(x => (x.id === 'a' ? { ...x, status: 'done' as const } : x))
+    expect(ids(byKvitelTab(after, KVITEL_DEFAULT_TAB))).toEqual(['b', 'e'])
+    expect(ids(byKvitelTab(after, 'done'))).toEqual(['a', 'c'])
+    expect(byKvitelTab(after, 'all')).toHaveLength(5)
   })
 })
