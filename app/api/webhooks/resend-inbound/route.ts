@@ -8,7 +8,8 @@ import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { handleEmailRequest, isRequestSubject, isRequestMailFor, effectiveRequestSubject } from '@/lib/emailRequestIntake'
 import { shouldForwardToGmail } from '@/lib/mailForwardPolicy'
 import { resolveMailbox } from '@/lib/mailRouting'
-import { verifySvixSignature, hasSvixHeaders, safeEqual } from '@/lib/svix'
+import { hasSvixHeaders, safeEqual } from '@/lib/svix'
+import { verifyInboundSvix } from '@/lib/resendInboundSecret'
 
 export const dynamic = 'force-dynamic'
 
@@ -256,14 +257,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
-  if (!signingSecret && !staticSecret) {
+  // RESEND_API_KEY מאפשר למשוך את סוד החתימה האמיתי מ-Resend כשהמשתנה שגוי או חסר
+  const canFetchSecret = Boolean(process.env.RESEND_API_KEY)
+
+  if (!signingSecret && !staticSecret && !canFetchSecret) {
     return await denyAuth('אין סוד אימות מוגדר כלל (fail-closed)')
   }
 
   let authenticated = false
 
-  if (signingSecret && hasSvixHeaders(request)) {
-    authenticated = verifySvixSignature(request, rawBody, signingSecret)
+  if ((signingSecret || canFetchSecret) && hasSvixHeaders(request)) {
+    authenticated = await verifyInboundSvix(request, rawBody, signingSecret)
     // נפילה-לאחור לסוד הסטטי: אם סוד ה-Svix שגוי או שייך ל-webhook אחר,
     // בלי זה כל הדואר הנכנס מת בשקט עד שמישהו יבחין.
     //
@@ -277,7 +281,7 @@ export async function POST(request: NextRequest) {
       authenticated = Boolean(provided) && safeEqual(provided!, staticSecret)
       if (authenticated) console.warn('[resend-inbound] חתימת Svix נכשלה — אומת בסוד הסטטי. בדוק את RESEND_WEBHOOK_SIGNING_SECRET.')
     }
-    if (!authenticated) return await denyAuth('חתימת Svix לא תקינה — ככל הנראה RESEND_WEBHOOK_SIGNING_SECRET שגוי')
+    if (!authenticated) return await denyAuth('חתימת Svix לא תקינה — לא תואמת ל-RESEND_WEBHOOK_SIGNING_SECRET ולא לסוד שנמשך מ-Resend')
   } else if (staticSecret) {
     const provided = request.headers.get('x-webhook-secret')
     authenticated = Boolean(provided) && safeEqual(provided!, staticSecret)
