@@ -82,6 +82,26 @@ describe('ייצוא קוויטל', () => {
   })
 })
 
+describe('לוגו לתצוגה המקדימה', () => {
+  it('מגיע כ-JSON מעורבל (בלי חתימת PNG גלויה), ואחרי פענוח זה הלוגו המלא', async () => {
+    const { GET: logo } = await import('@/app/api/admin/kvitel/logo/route')
+    const { scrambleBytes } = await import('@/lib/docCipher')
+    const res = await logo()
+    expect(res.status).toBe(200)
+    expect(res.headers.get('Content-Type')).toMatch(/json/)
+    const { enc, data } = await res.json()
+    expect(enc).toBeTruthy()
+    expect(data.startsWith('iVBOR')).toBe(false) // חתימת PNG ב-base64
+    const bytes = scrambleBytes(new Uint8Array(Buffer.from(data, 'base64')))
+    expect([...bytes.slice(1, 4)].map(b => String.fromCharCode(b)).join('')).toBe('PNG')
+    const img = await PDFDocument.create().then(d => d.embedPng(bytes))
+    expect(img.width).toBe(900)
+    expect(img.height).toBe(903)
+    allowed = false
+    expect((await logo()).status).toBe(403)
+  })
+})
+
 describe('downloadKvitel (הדפדפן)', () => {
   it('שולח POST עם המזהים בגוף ולא בכתובת; חסימה מחזירה שגיאה, ולכן הסימון "נשלחו" לא רץ', async () => {
     const { downloadKvitel } = await import('@/app/admin/kvitel/KvitelPreview')
