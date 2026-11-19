@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { kvitelCloseFlow, type KvitelFormat } from '@/lib/kvitelCloseFlow'
 import { CalendarDays, Check, Download, Landmark, Link2, Mail, Phone, type LucideIcon } from 'lucide-react'
 import type { KvitelChannel, KvitelStatus } from '@/lib/kvitel'
 import { KVITEL_CHANNELS, KVITEL_STATUSES } from '@/lib/kvitel'
@@ -53,7 +54,6 @@ export default function KvitelWeek({ rows, canEdit, tabs, onReload, onOpenList }
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ text: string; err?: boolean } | null>(null)
   const [closing, setClosing] = useState(false)
-  const [fmt, setFmt] = useState<'pdf' | 'docx'>('pdf')
   const [cardIdx, setCardIdx] = useState<number | null>(null)
   const [previewRow, setPreviewRow] = useState<KvitelRequestRow | null>(null)
   const [batches, setBatches] = useState<BatchList | null>(null)
@@ -99,25 +99,48 @@ export default function KvitelWeek({ rows, canEdit, tabs, onReload, onOpenList }
   const loadBatches = () => fetchBatches().then(setBatches)
   useEffect(() => { void fetchBatches().then(setBatches) }, [])
 
-  // סגירת המנה: קודם הורדה, ורק אם הצליחה — רישום המנה וסימון "נשלח לציון" של אותן בקשות בדיוק
-  async function closeWeek() {
-    const ids = file.ids
-    if (!(await download(fmt))) return
+  // רישום המנה וסימון "נשלח לציון" — רק מתוך האישור בחלון, עם הבקשות שירדו בפועל
+  async function recordBatch(ids: string[]): Promise<boolean> {
+    const res = await fetch(BATCHES, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids, parsha: current.parsha }),
+    }).catch(() => null)
+    const data = await res?.json().catch(() => ({})) ?? {}
+    if (!res?.ok) { setMsg({ text: data.error || 'הסימון נכשל. אפשר ללחוץ שוב על האישור.', err: true }); return false }
     setClosing(false)
+    setMsg(data.recorded
+      ? { text: `המנה נרשמה, ו־${data.updated} בקשות סומנו שנשלחו לציון הקדוש.` }
+      : { text: `${data.updated} בקשות סומנו שנשלחו לציון הקדוש, אבל המנה לא נרשמה: טבלת המנות עוד לא נוצרה במסד.`, err: true })
+    await Promise.all([onReload(), loadBatches()])
+    return true
+  }
+
+  // החלון: שתי הורדות (PDF ו-Word) שלא מסמנות כלום, ואחריהן שאלת אישור — ראו lib/kvitelCloseFlow
+  const flowRef = useRef<ReturnType<typeof kvitelCloseFlow> | null>(null)
+  const [got, setGot] = useState<KvitelFormat[]>([])
+  const [marked, setMarked] = useState(0)
+  function openClose() {
+    flowRef.current = kvitelCloseFlow({ download: (ids, f) => downloadKvitel(PRINT_FILE, ids, f), record: recordBatch })
+    setGot([])
+    setMarked(0)
+    setMsg(null)
+    setClosing(true)
+  }
+  async function closeDownload(format: KvitelFormat) {
+    const flow = flowRef.current
+    if (!flow) return
     setBusy(true)
-    try {
-      const res = await fetch(BATCHES, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids, parsha: current.parsha }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) { setMsg({ text: data.error || 'הסגירה נכשלה', err: true }); return }
-      setMsg(data.recorded
-        ? { text: `הקובץ ירד, המנה נרשמה, ו־${data.updated} בקשות סומנו "נשלח לציון".` }
-        : { text: `הקובץ ירד ו־${data.updated} בקשות סומנו "נשלח לציון", אבל המנה לא נרשמה: טבלת המנות עוד לא נוצרה במסד.`, err: true })
-      await Promise.all([onReload(), loadBatches()])
-    } finally {
-      setBusy(false)
-    }
+    setMsg(null)
+    const err = await flow.download(file.ids, format)
+    if (err) setMsg({ text: err, err: true })
+    else { setGot(g => (g.includes(format) ? g : [...g, format])); setMarked(flow.downloadedIds.length) }
+    setBusy(false)
+  }
+  async function confirmClose() {
+    const flow = flowRef.current
+    if (!flow) return
+    setBusy(true)
+    setMsg(null)
+    try { await flow.confirm() } finally { setBusy(false) }
   }
 
   async function redownload(id: string, format: 'pdf' | 'docx') {
@@ -260,13 +283,13 @@ export default function KvitelWeek({ rows, canEdit, tabs, onReload, onOpenList }
               )}
             </div>
             <div className={s.sheetfoot}>
-              <button type="button" className={cx(s.btn, s.pri)} disabled={!canEdit || busy || !file.ids.length || !isCurrent} onClick={() => setClosing(true)}>
-                <Ico icon={Download} />סגירת המנה: הורדה וסימון כנשלח
+              <button type="button" className={cx(s.btn, s.pri)} disabled={!canEdit || busy || !file.ids.length || !isCurrent} onClick={openClose}>
+                <Ico icon={Download} />הורדת הקויטלאך וסימון שנשלח לציון הקדוש
               </button>
             </div>
             <p className={s.sheetnote}>
               {isCurrent
-                ? 'רק מה שירד בפועל יסומן "נשלח לציון". מה שייכנס אחרי הסגירה עובר לשבוע הבא.'
+                ? 'הסימון רק אחרי אישור, ורק למה שירד בפועל. מה שייכנס אחרי הסגירה עובר לשבוע הבא.'
                 : `הסגירה נעשית בשבוע של ${current.parsha}.`}
             </p>
             {msg && <p role={msg.err ? 'alert' : 'status'} className={cx(s.msg, msg.err && s.err)}>{msg.text}</p>}
@@ -302,22 +325,32 @@ export default function KvitelWeek({ rows, canEdit, tabs, onReload, onOpenList }
       {closing && (
         <div className={s.ov} role="dialog" aria-modal="true" aria-labelledby="kvitel-close-t" onClick={e => { if (e.target === e.currentTarget && !busy) setClosing(false) }}>
           <div className={s.modal}>
-            <h3 id="kvitel-close-t">סגירת הקוויטל של {current.parsha}</h3>
-            <p className={s.mSub}>{fileStats}</p>
+            <h3 id="kvitel-close-t">הורדת הקויטלאך וסימון שנשלח לציון הקדוש</h3>
+            <p className={s.mSub}>{current.parsha} · {fileStats}</p>
             <ol className={s.mstep}>
               <li className={s.done}><span className={s.ic}><Check size={14} strokeWidth={3} aria-hidden /></span><div><b>הקובץ נבנה</b><span>כולל הלוגו והכותרת של {current.label}</span></div></li>
-              <li className={s.cur}><span className={s.ic}>2</span><div><b>הורדה</b><span>באיזה פורמט?</span>
+              <li className={got.length ? s.done : s.cur}><span className={s.ic}>{got.length ? <Check size={14} strokeWidth={3} aria-hidden /> : 2}</span><div><b>הורדה</b><span>אפשר להוריד את שני הקבצים. ההורדה לא מסמנת כלום.</span>
                 <div className={s.fmt}>
-                  <label><input type="radio" name="kvitel-fmt" checked={fmt === 'pdf'} onChange={() => setFmt('pdf')} /> PDF</label>
-                  <label><input type="radio" name="kvitel-fmt" checked={fmt === 'docx'} onChange={() => setFmt('docx')} /> Word</label>
+                  {(['pdf', 'docx'] as const).map(f => (
+                    <button key={f} type="button" className={cx(s.btn, s.sm, got.includes(f) && s.ghost)} disabled={busy} onClick={() => void closeDownload(f)}>
+                      {got.includes(f) ? <Check size={14} strokeWidth={3} aria-hidden /> : <Download size={14} strokeWidth={2} aria-hidden />}
+                      הורדת {f === 'pdf' ? 'PDF' : 'Word'}
+                    </button>
+                  ))}
                 </div></div></li>
-              <li><span className={s.ic}>3</span><div><b>רישום המנה וסימון &quot;נשלח לציון&quot;</b><span>רק ה־{file.ids.length} שבקובץ, ורק אחרי שההורדה הצליחה</span></div></li>
+              <li className={got.length ? s.cur : undefined}><span className={s.ic}>3</span><div><b>סימון שנשלח לציון הקדוש</b>
+                {got.length
+                  ? <><span>לסמן את כולם (<span className={s.num}>{marked}</span> בקשות) כנשלחו לציון הקדוש?</span>
+                      <div className={s.fmt}>
+                        <button type="button" className={cx(s.btn, s.pri)} disabled={busy} onClick={() => void confirmClose()}>{busy ? 'מסמן…' : 'לאישור לחץ כאן'}</button>
+                      </div></>
+                  : <span>השאלה תופיע אחרי שאחד הקבצים ירד</span>}
+              </div></li>
             </ol>
-            <div className={s.guard}><Check className={s.i} size={16} strokeWidth={1.8} style={{ width: 16 }} aria-hidden />אם ההורדה נכשלת, שום דבר לא מסומן ואפשר לנסות שוב.</div>
+            <div className={s.guard}><Check className={s.i} size={16} strokeWidth={1.8} style={{ width: 16 }} aria-hidden />בלי לחיצה על האישור שום בקשה לא מסומנת. הסימון חל רק על הבקשות שבקובץ שירד.</div>
             {msg?.err && <p role="alert" className={cx(s.msg, s.err)}>{msg.text}</p>}
             <div className={s.macts}>
-              <button type="button" className={cx(s.btn, s.pri)} disabled={busy} onClick={() => void closeWeek()}>{busy ? 'מוריד…' : 'הורדה וסימון'}</button>
-              <button type="button" className={s.btn} disabled={busy} onClick={() => setClosing(false)}>ביטול</button>
+              <button type="button" className={s.btn} disabled={busy} onClick={() => setClosing(false)}>{got.length ? 'סגירה בלי סימון' : 'ביטול'}</button>
             </div>
           </div>
         </div>

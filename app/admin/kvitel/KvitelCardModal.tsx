@@ -5,6 +5,7 @@ import { KVITEL_CHANNELS, KVITEL_STATUSES, type KvitelStatus } from '@/lib/kvite
 import type { KvitelRequestRow } from '@/lib/kvitelQuery'
 import { hebrewDay, parseRawFields } from '@/lib/kvitelView'
 import KvitelLinesEditor from './KvitelLinesEditor'
+import { downloadKvitel } from './KvitelPreview'
 import RecordModal, { modalBtn, type RecordTone } from '@/components/admin/system/RecordModal'
 
 // כרטסת בקשת קוויטל: הגדרות בלבד, התצוגה ב-RecordModal המשותף.
@@ -29,7 +30,15 @@ export default function KvitelCardModal({ rows, index, onIndex, onClose, canEdit
   startEditing: boolean
 }) {
   const [editing, setEditing] = useState(startEditing)
+  const [downloading, setDownloading] = useState(false)
   const r = rows[index]
+  // דרך downloadKvitel: הנתיב מחזיר JSON מעורבל (נטפרי), וקישור רגיל היה מציג אותו כטקסט במקום קובץ
+  async function download() {
+    setDownloading(true)
+    const err = await downloadKvitel('/api/admin/kvitel/export?status=all', [r.id])
+    setDownloading(false)
+    if (err) onSaved(err)
+  }
   const lines = r.kvitel_request_lines
   const rawFields = parseRawFields(r.raw_text)
   const playable = !!r.recording_url && /^(https?:|\/)/.test(r.recording_url)
@@ -90,7 +99,7 @@ export default function KvitelCardModal({ rows, index, onIndex, onClose, canEdit
           <button type="button" disabled={busy} className={modalBtn.primary} onClick={() => setStatus([r.id], 'done')}><Check size={14} /> סימון כנשלח לציון</button>
         )}
         {r.status === 'done' && (
-          <a href={`/api/admin/kvitel/export?status=all&ids=${r.id}`} className={modalBtn.ghost}><FileDown size={14} /> הורדת הקובץ</a>
+          <button type="button" disabled={downloading} className={modalBtn.ghost} onClick={download}><FileDown size={14} /> {downloading ? 'מוריד…' : 'הורדת הקובץ'}</button>
         )}
         {canEdit && r.status === 'cancelled' && (
           <button type="button" disabled={busy} className={modalBtn.ghost} onClick={() => setStatus([r.id], 'pending')}><RotateCcw size={14} /> שחזור הבקשה</button>
