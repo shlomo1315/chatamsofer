@@ -70,12 +70,35 @@ function header(titlesLayout: KvitelDocPara[], withLogo: boolean): string {
     + `<w:tc><w:tcPr><w:tcW w:w="2300" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>${para(logoDrawing(), { center: true })}</w:tc></w:tr></w:tbl>`
 }
 
+const XMLNS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
+const XML_HEAD = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+
+// כותרת עליונה בכל עמוד אחרי הראשון (בראשון — הכותרת המלאה עם הלוגו, ולכן כותרת ריקה)
+export function buildKvitelHeaderXml(paras: KvitelDocPara[]): string {
+  return `${XML_HEAD}<w:hdr ${XMLNS}>${paras.length ? paras.map(toXml).join('') : para('')}</w:hdr>`
+}
+
+// מספר העמוד במרכז התחתית — שדה PAGE, והאותיות (א, ב, ג) נקבעות ב-pgNumType="hebrew1"
+export function buildKvitelFooterXml(): string {
+  const r = (inner: string) => `<w:r><w:rPr><w:rFonts w:ascii="${FONT}" w:hAnsi="${FONT}" w:cs="${FONT}"/><w:b/><w:bCs/><w:sz w:val="24"/><w:szCs w:val="24"/><w:rtl/></w:rPr>${inner}</w:r>`
+  const field = r('<w:fldChar w:fldCharType="begin"/>') + r('<w:instrText xml:space="preserve"> PAGE </w:instrText>')
+    + r('<w:fldChar w:fldCharType="separate"/>') + r('<w:t>א</w:t>') + r('<w:fldChar w:fldCharType="end"/>')
+  return `${XML_HEAD}<w:ftr ${XMLNS}>${para(field, { center: true })}</w:ftr>`
+}
+
 export function buildKvitelDocumentXml(input: KvitelDocInput): string {
   const layout = kvitelDocLayout(input.lines, input.date)
   const body = [header(layout.titles, !!input.logoPng), ...layout.body.map(toXml)].join('')
-  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-    + '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">'
-    + `<w:body>${body}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="900" w:right="1000" w:bottom="900" w:left="1000" w:header="500" w:footer="500" w:gutter="0"/><w:bidi/></w:sectPr></w:body></w:document>`
+  // ⚠️ סדר הילדים ב-sectPr לפי הסכמה: headerReference/footerReference, pgSz, pgMar, pgNumType, titlePg, bidi
+  const sectPr = '<w:sectPr>'
+    + '<w:headerReference w:type="default" r:id="rIdHdr"/><w:headerReference w:type="first" r:id="rIdHdrFirst"/>'
+    + '<w:footerReference w:type="default" r:id="rIdFtr"/><w:footerReference w:type="first" r:id="rIdFtr"/>'
+    + '<w:pgSz w:w="11906" w:h="16838"/>'
+    + '<w:pgMar w:top="1400" w:right="1000" w:bottom="1300" w:left="1000" w:header="560" w:footer="560" w:gutter="0"/>'
+    + '<w:pgNumType w:fmt="hebrew1" w:start="1"/><w:titlePg/><w:bidi/></w:sectPr>'
+  return XML_HEAD
+    + `<w:document ${XMLNS} xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">`
+    + `<w:body>${body}${sectPr}</w:body></w:document>`
 }
 
 export async function buildKvitelDocx(input: KvitelDocInput): Promise<Uint8Array> {
@@ -88,6 +111,9 @@ export async function buildKvitelDocx(input: KvitelDocInput): Promise<Uint8Array
     + '<Default Extension="xml" ContentType="application/xml"/>'
     + '<Default Extension="png" ContentType="image/png"/>'
     + '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+    + '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>'
+    + '<Override PartName="/word/header2.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>'
+    + '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>'
     + '</Types>')
   zip.file('_rels/.rels',
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -98,8 +124,14 @@ export async function buildKvitelDocx(input: KvitelDocInput): Promise<Uint8Array
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
     + (withLogo ? '<Relationship Id="rIdLogo" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/logo.png"/>' : '')
+    + '<Relationship Id="rIdHdr" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>'
+    + '<Relationship Id="rIdHdrFirst" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header2.xml"/>'
+    + '<Relationship Id="rIdFtr" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>'
     + '</Relationships>')
   if (withLogo) zip.file('word/media/logo.png', input.logoPng!)
   zip.file('word/document.xml', buildKvitelDocumentXml(input))
+  zip.file('word/header1.xml', buildKvitelHeaderXml(kvitelDocLayout(input.lines, input.date).runningHeader))
+  zip.file('word/header2.xml', buildKvitelHeaderXml([]))
+  zip.file('word/footer1.xml', buildKvitelFooterXml())
   return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' })
 }
