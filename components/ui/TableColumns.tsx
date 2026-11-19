@@ -174,13 +174,15 @@ export function useTableColumns<K extends string, R = never>(
     extraCols?: number
     /** משקל כל עמודה נוספת (ברירת מחדל 0.8). */
     extraWeight?: number
+    /** עמודה צרה בתחילת השורה (leadHead/leadCell ב-ListTable) — בלי זה היא מקבלת את משקל העמודה הראשונה. */
+    leadCol?: boolean
     /** תוספת למזהה כשאותה טבלה מוצגת בשני מצבים (עריכה מול צפייה). */
     idSuffix?: string
     /** מיון וסינון מהכותרת. ⚠️ חובה לציין mode — ראו SortFilterOpts. */
     sortFilter?: SortFilterOpts<K, R>
   },
 ): TableColumns<K, R> {
-  const { filter, extraCols = 0, extraWeight = 0.8, idSuffix = '', sortFilter } = opts ?? {}
+  const { filter, extraCols = 0, extraWeight = 0.8, leadCol = false, idSuffix = '', sortFilter } = opts ?? {}
 
   const available = useMemo(
     () => (filter ? columns.filter(filter) : columns),
@@ -229,13 +231,13 @@ export function useTableColumns<K extends string, R = never>(
   // ⚠️ משקלי העמודות המוצגות + משקל לכל עמודה נוספת (פעולות/צ׳קבוקס).
   // עמודת הפעולות צרה יחסית ולכן 0.8 ולא 1.
   const weights = useMemo(
-    () => [...shown.map(c => c.weight ?? 1), ...Array(extraCols).fill(extraWeight)],
-    [shown, extraCols, extraWeight],
+    () => [...(leadCol ? [0.3] : []), ...shown.map(c => c.weight ?? 1), ...Array(extraCols).fill(extraWeight)],
+    [shown, extraCols, extraWeight, leadCol],
   )
 
   const rt = useResizableColumns(
     `${tableId}-${shown.length}${idSuffix}`,
-    shown.length + extraCols,
+    shown.length + extraCols + (leadCol ? 1 : 0),
     weights,
   )
 

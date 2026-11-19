@@ -9,7 +9,8 @@ import { ListTable } from '@/components/admin/system/ListTable'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import { useTablePagination } from '@/lib/useTablePagination'
 import { countByStatus, hebrewDay } from '@/lib/kvitelView'
-import KvitelLinesEditor from './KvitelLinesEditor'
+import { InlineText, InlineRequest } from './KvitelInlineCell'
+import { saveInlineEdit, personText, PERSON_HINT, type InlineEdit } from '@/lib/kvitelInlineEdit'
 import KvitelCardModal from './KvitelCardModal'
 import ExportDialog from './ExportDialog'
 import PrintNewDialog from './PrintNewDialog'
@@ -26,23 +27,26 @@ type Tab = 'all' | 'pending' | 'done' | 'cancelled'
 
 export function StatusPill({ status }: { status: KvitelStatus }) {
   const st = STATUS_STYLE[status]
-  return <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${st.pill}`}><span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} aria-hidden />{KVITEL_STATUSES[status]}</span>
+  return <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ${st.pill}`}><span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} aria-hidden />{KVITEL_STATUSES[status]}</span>
 }
 
 type ColKey = 'status' | 'channel' | 'date' | 'contact' | 'phone' | 'email' | 'names' | 'request' | 'count'
 const personOf = (l: KvitelLineRow) => `${l.name} ${l.relation === 'bat' ? 'בת' : 'בן'} ${l.parent_name}`.trim()
 const requestsOf = (r: KvitelRequestRow) => [...new Set(r.kvitel_request_lines.map(l => (l.request_type === 'other' ? l.request_note || 'אחר' : requestTypeLabel(l.request_type))))].join(', ')
 const COLUMNS: ColDef<ColKey, KvitelRequestRow>[] = [
-  { key: 'names', label: 'שמות', def: true, value: r => r.kvitel_request_lines.map(personOf).join(' · ') || null },
-  { key: 'request', label: 'בקשה', def: true, value: r => requestsOf(r) || null },
-  { key: 'contact', label: 'מגיש', def: true, value: r => r.contact_name || null },
-  { key: 'channel', label: 'ערוץ', def: true, kind: 'enum', filterable: true, value: r => KVITEL_CHANNELS[r.channel] },
-  { key: 'date', label: 'הוגשה', def: true, value: r => r.submitted_at },
-  { key: 'status', label: 'סטטוס', def: true, kind: 'enum', filterable: true, value: r => KVITEL_STATUSES[r.status] },
+  { key: 'names', label: 'שמות', def: true, weight: 2.4, value: r => r.kvitel_request_lines.map(personOf).join(' · ') || null },
+  { key: 'request', label: 'בקשה', def: true, weight: 1, value: r => requestsOf(r) || null },
+  { key: 'contact', label: 'מגיש', def: true, weight: 1.3, value: r => r.contact_name || null },
+  { key: 'channel', label: 'ערוץ', def: true, weight: 0.7, kind: 'enum', filterable: true, value: r => KVITEL_CHANNELS[r.channel] },
+  { key: 'date', label: 'הוגשה', def: true, weight: 0.9, value: r => r.submitted_at },
+  { key: 'status', label: 'סטטוס', def: true, weight: 1, kind: 'enum', filterable: true, value: r => KVITEL_STATUSES[r.status] },
   { key: 'phone', label: 'טלפון', def: false, value: r => r.contact_phone },
   { key: 'email', label: 'מייל', def: false, value: r => r.contact_email },
   { key: 'count', label: 'מס׳ שמות', def: false, kind: 'number', value: r => r.kvitel_request_lines.length },
 ]
+
+// עמודות שנערכות בתוך התא: לחיצה בהן לא פותחת את הכרטסת
+const INLINE_COLS = new Set<ColKey>(['names', 'request', 'contact', 'phone', 'email'])
 
 const field = 'w-full rounded-lg border border-line-strong bg-white px-3 py-2 text-sm text-ink'
 const label = 'flex min-w-0 flex-col gap-1 text-xs font-medium text-ink-soft'
@@ -86,32 +90,93 @@ function filtersToQuery(f: KvitelFilters, extra: Record<string, string> = {}): s
   return p.toString()
 }
 
-// עד שלושה שמות בתא, והשאר בספירה. בלי אזהרות: הסיבה בתגית הסטטוס וההסבר המלא בכרטסת.
-function NamesCell({ r }: { r: KvitelRequestRow }) {
+type Save = (edit: InlineEdit) => Promise<string | null>
+// "הוספה" בתא ריק: מופיע רק בריחוף על השורה, כדי שתאים ריקים לא יעמיסו על הטבלה
+const addHint = (text = 'הוספה') => <span className="text-xs text-ink-faint opacity-0 transition-opacity group-hover:opacity-100">+ {text}</span>
+
+// במובייל: עד שלושה שמות, והשאר בספירה. בטבלה (save): כל השמות, כל שם בשורה משלו ונפתח לעריכה בלחיצה.
+function NamesCell({ r, save }: { r: KvitelRequestRow; save?: Save }) {
   const ls = r.kvitel_request_lines
-  if (!ls.length) return <span className="text-sm text-ink-faint">לא נקלטו שמות</span>
+  if (!save) {
+    if (!ls.length) return <span className="text-sm text-ink-faint">לא נקלטו שמות</span>
+    return (
+      <div className="min-w-48 space-y-0.5 text-ink">
+        {ls.slice(0, 3).map(l => <div key={l.id} className="break-words">{personOf(l)}</div>)}
+        {ls.length > 3 && <div className="text-xs text-ink-faint">ועוד {ls.length - 3}</div>}
+      </div>
+    )
+  }
   return (
-    <div className="min-w-48 space-y-0.5 text-ink">
-      {ls.slice(0, 3).map(l => <div key={l.id} className="break-words">{personOf(l)}</div>)}
-      {ls.length > 3 && <div className="text-xs text-ink-faint">ועוד {ls.length - 3}</div>}
+    <div className="min-w-52 space-y-0.5 text-ink">
+      {ls.map((l, i) => (
+        <InlineText key={l.id} label={`השם ${personText(l)}`} value={personText(l)} placeholder={PERSON_HINT}
+          onSave={text => save({ kind: 'line', index: i, text })}>
+          <span className="break-words">{personText(l)}</span>
+        </InlineText>
+      ))}
+      <InlineText label="שם חדש" value="" placeholder={PERSON_HINT} onSave={text => save({ kind: 'add', text })}>
+        {ls.length ? addHint('הוספת שם') : <span className="text-sm text-ink-faint">לא נקלטו שמות · הוספה</span>}
+      </InlineText>
     </div>
+  )
+}
+
+function RequestCell({ r, save }: { r: KvitelRequestRow; save: Save | null }) {
+  const text = requestsOf(r)
+  const view = text ? <span className="inline-block rounded-full bg-sand px-2.5 py-0.5 text-xs text-navy">{text}</span> : null
+  if (!save || !r.kvitel_request_lines.length) return view
+  const first = r.kvitel_request_lines[0]
+  return (
+    <InlineRequest type={first.request_type} note={first.request_note ?? ''}
+      onSave={(requestType, requestNote) => save({ kind: 'request', requestType, requestNote })}>
+      {view ?? addHint()}
+    </InlineRequest>
+  )
+}
+
+// מגיש: שם, ומתחתיו טלפון ומייל. כל שדה נפתח לעריכה בנפרד; שדה ריק לא תופס מקום עד הריחוף.
+function ContactCell({ r, save }: { r: KvitelRequestRow; save: Save | null }) {
+  if (!save) {
+    return (
+      <div className="min-w-36">
+        {r.contact_name && <div className="font-medium text-ink">{r.contact_name}</div>}
+        {r.contact_phone && <div dir="ltr" className="text-end text-xs tabular-nums text-ink-soft">{r.contact_phone}</div>}
+        {r.contact_email && <div dir="ltr" className="break-all text-end text-xs text-ink-faint">{r.contact_email}</div>}
+      </div>
+    )
+  }
+  // בלי שם: רמז ההוספה בסוף התא, כדי שלא תיפתח שורה ריקה מעל הטלפון
+  const name = (
+    <InlineText label="שם המגיש" value={r.contact_name ?? ''} onSave={value => save({ kind: 'contact', field: 'name', value })}>
+      {r.contact_name ? <span className="font-medium text-ink">{r.contact_name}</span> : addHint('שם המגיש')}
+    </InlineText>
+  )
+  return (
+    <div className="min-w-36 space-y-0.5">
+      {r.contact_name && name}
+      {r.contact_phone && <ContactField r={r} save={save} field="phone" />}
+      {r.contact_email && <ContactField r={r} save={save} field="email" />}
+      {!r.contact_name && name}
+    </div>
+  )
+}
+
+const CONTACT_LABEL = { phone: 'טלפון', email: 'מייל' } as const
+function ContactField({ r, save, field, wide }: { r: KvitelRequestRow; save: Save | null; field: 'phone' | 'email'; wide?: boolean }) {
+  const value = (field === 'phone' ? r.contact_phone : r.contact_email) ?? ''
+  const cls = field === 'phone' ? 'tabular-nums' : 'break-all'
+  const view = value ? <span dir="ltr" className={`block ${wide ? '' : 'text-end text-xs'} ${cls} text-ink-soft`}>{value}</span> : null
+  if (!save) return view
+  return (
+    <InlineText label={CONTACT_LABEL[field]} value={value} dir="ltr" onSave={v => save({ kind: 'contact', field, value: v })}>
+      {view ?? addHint(CONTACT_LABEL[field])}
+    </InlineText>
   )
 }
 
 // סטטוס: בקשה שנקלטה כ"לבדיקה" מסומנת בתגית "לבדיקה" עד שמאשרים אותה; שאר הבקשות "לא נשלח" וכו'.
 function StatusCell({ r }: { r: KvitelRequestRow }) {
   return <StatusPill status={r.needsReview ? 'review' : r.status} />
-}
-
-// מגיש (עמודה אופציונלית): שם, ומתחתיו טלפון ומייל.
-function ContactCell({ r }: { r: KvitelRequestRow }) {
-  return (
-    <div className="min-w-36">
-      <div className="font-medium text-ink">{r.contact_name || '—'}</div>
-      {r.contact_phone && <div dir="ltr" className="text-end text-xs tabular-nums text-ink-soft">{r.contact_phone}</div>}
-      {r.contact_email && <div dir="ltr" className="break-all text-end text-xs text-ink-faint">{r.contact_email}</div>}
-    </div>
-  )
 }
 
 const dayFmt = new Intl.DateTimeFormat('he-IL', { timeZone: 'Asia/Jerusalem', day: 'numeric', month: 'numeric' })
@@ -144,7 +209,11 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
   const [previewRow, setPreviewRow] = useState<KvitelRequestRow | null>(null)
   const [openIdx, setOpenIdx] = useState<number | null>(null)
   const [openEditing, setOpenEditing] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)   // תיקון inline בשורה בטבלה
+  // שורות שנשמרו בעריכה בתוך הטבלה — מוצגות מיד, עד שהרשימה נטענת מחדש מהשרת
+  const [saved, setSaved] = useState<Record<string, KvitelRequestRow>>({})
+  const [savedFor, setSavedFor] = useState(allRows)
+  if (savedFor !== allRows) { setSavedFor(allRows); setSaved({}) }
+  const liveRows = useMemo(() => allRows.map(r => saved[r.id] ?? r), [allRows, saved])
   const [recordingId, setRecordingId] = useState<string | null>(null)   // הקלטה ותמלול inline בשורה
   const [datesOpen, setDatesOpen] = useState(false)
   const [q, setQ] = useState(filters.q ?? '')
@@ -156,17 +225,18 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
   // חיפוש, ערוץ וסוג מסוננים בדפדפן; התאריכים דרך הכתובת (השרת).
   const scoped = useMemo(() => {
     const needle = q.trim().toLowerCase()
-    return allRows.filter(r => {
+    return liveRows.filter(r => {
       if (channel && r.channel !== channel) return false
       if (type && !r.kvitel_request_lines.some(l => l.request_type === type)) return false
       if (!needle) return true
       const hay = [r.contact_name, r.contact_phone, ...r.kvitel_request_lines.flatMap(l => [l.name, l.parent_name])].join(' ').toLowerCase()
       return hay.includes(needle)
     })
-  }, [allRows, q, channel, type])
+  }, [liveRows, q, channel, type])
   const counts = useMemo(() => countByStatus(scoped), [scoped])
   const rows = useMemo(() => (tab === 'all' ? scoped : scoped.filter(r => r.status === tab)), [scoped, tab])
-  const tc = useTableColumns<ColKey, KvitelRequestRow>('kvitel', COLUMNS, { sortFilter: { mode: 'client', rows } })
+  // תיבת הבחירה בראש השורה (צרה) ועמודת הפעולות בסופה. ':v2' מאפס רוחב שנשמר לפני הסידור החדש
+  const tc = useTableColumns<ColKey, KvitelRequestRow>('kvitel', COLUMNS, { sortFilter: { mode: 'client', rows }, leadCol: canEdit, extraCols: 1, extraWeight: 0.5, idSuffix: ':v2' })
   const pg = useTablePagination(tc.rows)
 
   const stageLines = (st: KvitelStatus) => scoped.filter(r => r.status === st).reduce((n, r) => n + r.kvitel_request_lines.length, 0)
@@ -178,6 +248,16 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
     if (n.has(id)) n.delete(id); else n.add(id)
     return n
   })
+  // עריכה בתא: אותו נתיב שמירה (PUT /api/admin/kvitel/lines) — מחזיר שגיאה או null
+  async function saveEdit(r: KvitelRequestRow, edit: InlineEdit): Promise<string | null> {
+    const res = await saveInlineEdit(r, edit)
+    if ('error' in res) return res.error
+    setSaved(s => ({ ...s, [r.id]: res.row }))
+    setMessage('התיקון נשמר')
+    router.refresh()
+    return null
+  }
+  const saveFor = (r: KvitelRequestRow): Save | null => (canEdit ? e => saveEdit(r, e) : null)
   const openRow = (r: KvitelRequestRow, editing = false) => { setOpenEditing(editing); setOpenIdx(tc.rows.findIndex(x => x.id === r.id)) }
   const pickTab = (t: Tab) => { setTab(t); setSelected(new Set()) }
 
@@ -327,25 +407,27 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
         <div className="hidden md:block">
           <ListTable tc={tc} rows={pg.rows} pg={pg} empty="אין בקשות בסינון הזה."
             onOpen={r => openRow(r)}
+            stopCell={c => canEdit && INLINE_COLS.has(c.key)}
+            leadHead={canEdit ? <input type="checkbox" checked={pg.rows.length > 0 && pg.rows.every(r => selected.has(r.id))}
+              onChange={e => setSelected(s => { const n = new Set(s); for (const r of pg.rows) { if (e.target.checked) n.add(r.id); else n.delete(r.id) } return n })}
+              className="h-4 w-4 accent-navy" aria-label="בחירת כל הבקשות בעמוד" /> : undefined}
+            leadCell={canEdit ? r => <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} className="mt-0.5 h-4 w-4 accent-navy"
+              aria-label={`בחירת הבקשה של ${r.contact_name || dateFmt.format(new Date(r.submitted_at))}`} /> : undefined}
             toolbar={<h2 className="font-bold text-navy">{tabTitle} <span className="text-sm font-normal text-ink-faint">· {rows.length} בקשות · {lineCount} שמות</span></h2>}
             renderCell={(c, r) => {
               switch (c.key) {
                 case 'status': return <StatusCell r={r} />
                 case 'channel': return <span className="text-ink-soft">{KVITEL_CHANNELS[r.channel]}</span>
                 case 'date': return <DateCell iso={r.submitted_at} />
-                case 'contact': return <ContactCell r={r} />
-                case 'phone': return <span dir="ltr" className="tabular-nums text-ink-soft">{r.contact_phone || '—'}</span>
-                case 'email': return <span dir="ltr" className="break-all text-ink-soft">{r.contact_email || '—'}</span>
-                case 'names': return <NamesCell r={r} />
-                case 'request': return requestsOf(r) ? <span className="inline-block rounded-full bg-sand px-2.5 py-0.5 text-xs text-navy">{requestsOf(r)}</span> : <span className="text-ink-faint">—</span>
+                case 'contact': return <ContactCell r={r} save={saveFor(r)} />
+                case 'phone': return <ContactField r={r} save={saveFor(r)} field="phone" wide />
+                case 'email': return <ContactField r={r} save={saveFor(r)} field="email" wide />
+                case 'names': return canEdit ? <NamesCell r={r} save={e => saveEdit(r, e)} /> : <NamesCell r={r} />
+                case 'request': return <RequestCell r={r} save={saveFor(r)} />
                 case 'count': return <span className="tabular-nums text-ink-soft">{r.kvitel_request_lines.length}</span>
               }
             }}
-            expandedRow={r => editingId === r.id ? (
-              <KvitelLinesEditor requestId={r.id} lines={r.kvitel_request_lines} contact={{ name: r.contact_name, phone: r.contact_phone, email: r.contact_email }}
-                editable={canEdit} onCancel={() => setEditingId(null)}
-                onSaved={m => { setEditingId(null); setMessage(m); router.refresh() }} />
-            ) : recordingId === r.id && r.recording_url ? (
+            expandedRow={r => recordingId === r.id && r.recording_url ? (
               <KvitelRecordingPanel key={r.id} requestId={r.id} recordingUrl={r.recording_url} transcript={r.raw_text} needsReview={!!r.needsReview}
                 editable={canEdit} onSaved={m => { setMessage(m); router.refresh() }} />
             ) : null}
@@ -361,14 +443,6 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
                   <button type="button" disabled={busy} onClick={() => void setStatus([r.id], 'pending')} className="flex h-9 items-center gap-1.5 rounded-[10px] bg-[#17663F] px-3 text-[13px] font-semibold text-white disabled:opacity-40"
                     aria-label={`אישור הבקשה של ${r.contact_name || dateFmt.format(new Date(r.submitted_at))}`}>
                     <Check className="h-4 w-4" aria-hidden /> אישור
-                  </button>
-                )}
-                {canEdit && <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} className="h-4 w-4"
-                  aria-label={`בחירת הבקשה של ${r.contact_name || dateFmt.format(new Date(r.submitted_at))}`} />}
-                {canEdit && (
-                  <button type="button" onClick={() => setEditingId(id => (id === r.id ? null : r.id))} aria-expanded={editingId === r.id} className="flex h-9 items-center gap-1.5 rounded-[10px] border border-line bg-white px-3 text-[13px] font-semibold text-navy hover:border-[#cfc8bb]"
-                    aria-label={`תיקון הבקשה של ${r.contact_name || dateFmt.format(new Date(r.submitted_at))}`}>
-                    <Pencil className="h-4 w-4" aria-hidden /> תיקון
                   </button>
                 )}
               </div>

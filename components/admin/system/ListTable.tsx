@@ -104,7 +104,7 @@ export function ListRow({ children, onClick }: { children: ReactNode; onClick?: 
   return (
     <tr
       onClick={onClick}
-      className={`transition-colors hover:bg-sand [&>td]:px-3 [&>td]:py-3 [&>td]:text-right ${onClick ? 'cursor-pointer' : ''}`}
+      className={`group transition-colors hover:bg-sand has-[[data-editing]]:bg-[#FBF6EA] has-[[data-editing]]:shadow-[inset_-3px_0_0_#C0912F] [&>td]:px-3 [&>td]:py-3 [&>td]:text-right ${onClick ? 'cursor-pointer' : ''}`}
     >
       {children}
     </tr>
