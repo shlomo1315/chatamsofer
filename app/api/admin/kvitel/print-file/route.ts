@@ -5,6 +5,7 @@ import { requirePermission, forbidden, getServiceClient, serverMisconfigured } f
 import { buildKvitelDocx } from '@/lib/kvitelDocx'
 import { buildKvitelPdf } from '@/lib/kvitelPdf'
 import { KVITEL_LOGO } from '@/lib/kvitelDocLayout'
+import { kvitelFileResponse } from '@/lib/kvitelFileResponse'
 import { kvitelExportLines, loadKvitelRequests, parseKvitelFilters } from '@/lib/kvitelQuery'
 
 // הורדת קוויטלאך חדשים כ-PDF או Word. ההורדה לא משנה סטטוס — הסימון "נשלח לציון" נעשה בנפרד.
@@ -37,8 +38,5 @@ export async function POST(req: NextRequest) {
   const logoPng = await readFile(path.join(process.cwd(), 'public', KVITEL_LOGO.file)).catch(() => null)
   const date = new Date()
   const bytes = format === 'pdf' ? await buildKvitelPdf({ lines, date, logoPng }) : await buildKvitelDocx({ lines, date, logoPng })
-  const type = format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  return new NextResponse(Buffer.from(bytes), {
-    headers: { 'Content-Type': type, 'Content-Disposition': `attachment; filename="kvitel.${format}"`, 'Cache-Control': 'no-store' },
-  })
+  return kvitelFileResponse(bytes, format, date)
 }

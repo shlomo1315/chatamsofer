@@ -5,7 +5,7 @@ import { Check, FileText, Loader2 } from 'lucide-react'
 import Modal from '@/components/ui/Modal'
 import { kvitelExportLines, type KvitelRequestRow } from '@/lib/kvitelQuery'
 import { pendingForPrint } from '@/lib/kvitelView'
-import { KvitelSheet } from './KvitelPreview'
+import { KvitelSheet, downloadKvitel } from './KvitelPreview'
 
 // הדפסת הקוויטלאך החדשים: כל הבקשות שבסטטוס "לא נשלח" (חדשות שאושרו ועוד לא נשלחו).
 // אחרי סגירת חלון ההדפסה נשאלת השאלה "לסמן כנשלחו?", ו"כן" מעביר ל"נשלח לציון"
@@ -40,24 +40,8 @@ export default function PrintNewDialog({ open, onClose, rows, canEdit, onDone }:
     setDownloading(format)
     setError('')
     try {
-      const res = await fetch('/api/admin/kvitel/print-file', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: printed.ids, format }),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        setError(data.error || 'ההורדה נכשלה')
-        return
-      }
-      const url = URL.createObjectURL(await res.blob())
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'kvitel.' + format
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      setTimeout(() => URL.revokeObjectURL(url), 1000)
-    } catch {
-      setError('ההורדה נכשלה. בדוק את החיבור ונסה שוב.')
+      const err = await downloadKvitel('/api/admin/kvitel/print-file', printed.ids, format)
+      if (err) setError(err)
     } finally {
       setDownloading(null)
     }

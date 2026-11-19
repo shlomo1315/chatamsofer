@@ -5,6 +5,7 @@ import { requirePermission, forbidden, getServiceClient, serverMisconfigured } f
 import { buildKvitelDocx } from '@/lib/kvitelDocx'
 import { buildKvitelPdf } from '@/lib/kvitelPdf'
 import { KVITEL_LOGO } from '@/lib/kvitelDocLayout'
+import { kvitelFileResponse } from '@/lib/kvitelFileResponse'
 
 // הורדה חוזרת של קובץ ממנה שנסגרה: נבנה מהשורות שנרשמו בסגירה ובתאריך הסגירה — בדיוק מה שנשלח.
 // POST { format } (ולא GET, כמו שאר ההורדות של הקוויטלאך).
@@ -33,13 +34,5 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const date = new Date(data.closed_at)
   const lines = data.lines as string[]
   const bytes = format === 'pdf' ? await buildKvitelPdf({ lines, date, logoPng }) : await buildKvitelDocx({ lines, date, logoPng })
-  const type = format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(date)
-  return new NextResponse(Buffer.from(bytes), {
-    headers: {
-      'Content-Type': type,
-      'Content-Disposition': `attachment; filename="kvitel-${day}.${format}"; filename*=UTF-8''${encodeURIComponent(`קוויטל-${day}.${format}`)}`,
-      'Cache-Control': 'no-store',
-    },
-  })
+  return kvitelFileResponse(bytes, format, date)
 }
