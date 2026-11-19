@@ -14,6 +14,13 @@ export interface KvitelDocLayout {
   // הכותרות — מימין ללוגו כשיש לוגו
   titles: KvitelDocPara[]
   body: KvitelDocPara[]
+  // כותרת מקוצרת בראש כל עמוד אחרי הראשון (בראשון — הכותרת המלאה עם הלוגו)
+  runningHeader: KvitelDocPara[]
+}
+
+// מספר עמוד באותיות: א, ב ... י, יא ... טו, טז ... כ, כא (בלי גרש וגרשיים).
+export function hebrewPageNumber(n: number): string {
+  return gematriya(n).replace(/[׳״'"]/g, '')
 }
 
 const stripNiqqud = (s: string) => s.replace(/[֑-ׇ]/g, '')
@@ -42,6 +49,10 @@ export function kvitelDocLayout(lines: string[], date: Date): KvitelDocLayout {
       { run: { text: 'רשימת שמות ובקשות לתפילה', size: 34, bold: true, italic: true, underline: true }, center: true, after: 240 },
       { border: 'single' },
       ...lines.map((text): KvitelDocPara => ({ run: { text, size: 26, italic: true }, border: 'single', before: 100, after: 60 })),
+    ],
+    runningHeader: [
+      { run: { text: 'קויטל לציון רבינו הקדוש מרנא ורבנא בעל החתם סופר זיע"א', size: 24, bold: true }, center: true },
+      { run: { text: `[${shabbatLabel(date)}]`, size: 20, bold: true }, center: true, border: 'double' },
     ],
   }
 }
