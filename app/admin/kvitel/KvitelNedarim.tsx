@@ -91,7 +91,7 @@ export default function KvitelNedarim({ view: initial, isAdmin }: { view: Kvitel
   const reprocess = () => run(async () => {
     const d = await post({ mode: 'reprocess' })
     router.refresh()
-    return `נבדקו ${d.checked} בקשות בלי שמות: ${d.fixed} הושלמו · ${d.stillEmpty} עדיין בלי שמות · ${d.missing} לא נמצאו בנדרים`
+    return `נבדקו ${d.checked} בקשות: ${d.fixed} קיבלו שמות · ${d.notes} קיבלו את פרטי הבקשה · ${d.stillEmpty} עדיין בלי שמות · ${d.missing} לא נמצאו בנדרים`
   })
 
   const st = view.state
@@ -130,9 +130,9 @@ export default function KvitelNedarim({ view: initial, isAdmin }: { view: Kvitel
         {isAdmin && connected && (
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <button type="button" onClick={() => void reprocess()} disabled={busy} className={btnGhost}>
-              <RefreshCw className="h-4 w-4" aria-hidden />עיבוד מחדש של בקשות בלי שמות
+              <RefreshCw className="h-4 w-4" aria-hidden />עיבוד מחדש של בקשות חסרות
             </button>
-            <span className="text-sm text-slate-600">מושך שוב את הגשות נדרים שנקלטו ריקות ומשלים אותן, בלי ליצור כפילויות.</span>
+            <span className="text-sm text-slate-600">מושך שוב הגשות נדרים שנקלטו בלי שמות או בלי פרטי הבקשה ומשלים אותן, בלי כפילויות ובלי לגעת בבקשות שכבר נשלחו.</span>
           </div>
         )}
 

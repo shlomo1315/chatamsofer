@@ -42,7 +42,7 @@ export interface KvitelLineInput {
 
 export const MAX_LINES = 40
 const MAX_NAME = 40
-const MAX_NOTE = 80
+const MAX_NOTE = 300
 
 const TYPE_KEYS = new Set<string>(KVITEL_REQUEST_TYPES.map(t => t.key))
 export function isRequestType(v: unknown): v is KvitelRequestType {

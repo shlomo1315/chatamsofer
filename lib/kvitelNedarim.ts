@@ -36,7 +36,11 @@ function requestOf(v: string, note: string): { requestType: string; requestNote:
   if (isRequestType(v)) return { requestType: v, requestNote: note || null }
   const byLabel = KVITEL_REQUEST_TYPES.find(t => t.label === v)
   if (byLabel) return { requestType: byLabel.key, requestNote: note || null }
-  return guessRequestType(v || note)
+  // פרטי בקשה שכתב הפונה ("להצלחה בכל העניינים ולנחת מכל יוצ"ח..."): נשמרים במלואם כ"אחר".
+  // ניחוש לסוג קבוע רק לביטוי קצר ("לרפואה", "פרנסה טובה"), אחרת כל ההמשך היה נמחק.
+  const text = [v, note].filter(Boolean).join(' ').trim()
+  if (text.split(/\s+/).length > 3) return { requestType: 'other', requestNote: text }
+  return guessRequestType(text)
 }
 
 export interface ParsedNedarimKvitel {

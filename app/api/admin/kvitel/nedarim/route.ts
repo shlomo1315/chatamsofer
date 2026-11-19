@@ -53,7 +53,7 @@ export async function POST(request: Request) {
 
   if (body.mode === 'reprocess') {
     const res = await reprocessKvitelFromNedarim(db)
-    await logActivity(db, { userId: staff.userId, action: 'kvitel_nedarim_reprocess', entityType: 'kvitel_request', details: { checked: res.checked, fixed: res.fixed, error: res.error ?? null } })
+    await logActivity(db, { userId: staff.userId, action: 'kvitel_nedarim_reprocess', entityType: 'kvitel_request', details: { checked: res.checked, fixed: res.fixed, notes: res.notes, error: res.error ?? null } })
     return NextResponse.json(res, { status: res.ok ? 200 : 422 })
   }
 
