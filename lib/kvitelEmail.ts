@@ -28,8 +28,8 @@ export function isKvitelSubject(subject: string): boolean {
   return KVITEL_SUBJECT.test(subject) && !REPLY_SUBJECT.test(subject)
 }
 
-// איך זוהה מייל קוויטל: לפי התיבה k@ (כל מייל נקלט), או לפי הנושא בתיבה אחרת
-// (נקלט רק אם נמצא בו שם, כדי ששאלה כללית לא תיכנס כבקשה). מייל מכתובת הארגון עצמו לא נקלט לפי הנושא.
+// איך זוהה מייל קוויטל: לפי התיבה k@, או לפי הנושא בתיבה אחרת. בשני המקרים הוא נקלט
+// רק אם נמצא בו שם (handleKvitelEmail). מייל מכתובת הארגון עצמו לא נקלט לפי הנושא.
 export function detectKvitelEmail(m: {
   recipients: string[]; subject: string; fromEmail: string; isOrgAddr: (a: string) => boolean
 }): 'mailbox' | 'subject' | null {
@@ -173,14 +173,15 @@ ${text.slice(0, MAX_TEXT)}`,
 }
 
 // נקרא מ-webhook של Resend לכל מייל קוויטל (ראו detectKvitelEmail). בטוח לקריאה חוזרת (sourceRef = message-id).
-// requireLines: מייל שזוהה לפי הנושא בלבד נקלט רק אם נמצא בו שם.
+// מייל נקלט כבקשה רק אם נמצא בו לפחות שם אחד ("משה בן יהודית"), גם בתיבה k@. מייל בלי שם
+// (תודה, שאלה, צרופה בלבד) נשאר רק בתיבה הרגילה ולא יוצר בקשה ריקה.
 export async function handleKvitelEmail(db: SupabaseClient, m: {
-  messageId: string; fromEmail: string; fromName: string | null; subject: string; text: string; requireLines?: boolean
-}): Promise<{ ok: boolean; requestId?: string; status?: string; skipped?: string }> {
+  messageId: string; fromEmail: string; fromName: string | null; subject: string; text: string
+}): Promise<{ ok: boolean; requestId?: string; status?: string; skipped?: string; duplicate?: boolean }> {
   m = { ...m, subject: decodeEntities(m.subject), text: stripYedaPhoneNoise(decodeEntities(m.text)) }
   const { count } = await db.from('kvitel_requests').select('id', { count: 'exact', head: true })
     .eq('channel', 'email').eq('source_ref', m.messageId)
-  if (count) return { ok: true }
+  if (count) return { ok: true, duplicate: true }
 
   let parsed: { lines: KvitelLineInput[]; flags: (string | null)[] } = parseKvitelEmailText(m.subject, m.text)
   let note = 'פוענח מהמייל לפי תבנית'
@@ -190,7 +191,7 @@ export async function handleKvitelEmail(db: SupabaseClient, m: {
     if (ai && ai.lines.length >= parsed.lines.length) { parsed = ai; note = 'פוענח מהמייל ב-AI' }
     else if (leftover.length) note = `נשארו ${leftover.length} שורות שלא פוענחו — יש לבדוק את המקור`
   }
-  if (m.requireLines && !parsed.lines.length) return { ok: true, skipped: 'no-names' }
+  if (!parsed.lines.length) return { ok: true, skipped: 'no-names' }
 
   const res = await ingestKvitel(db, {
     channel: 'email',

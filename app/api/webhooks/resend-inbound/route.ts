@@ -917,7 +917,7 @@ export async function POST(request: NextRequest) {
     if (kvitelBy) {
       const text = (plain && plain.trim()) ? plain : htmlToPlainText(html ?? '')
       const r = await handleKvitelEmail(admin, {
-        messageId, fromEmail: from.email, fromName: from.name, subject, text, requireLines: kvitelBy === 'subject',
+        messageId, fromEmail: from.email, fromName: from.name, subject, text,
       })
       console.log('[resend-inbound] קוויטל:', r)
     }
