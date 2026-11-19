@@ -101,3 +101,22 @@ describe('levelAllows — סדר הרמות', () => {
     expect(levelAllows(undefined, 'view')).toBe(false)
   })
 })
+
+describe('אישורים חריגים כמחלקה', () => {
+  it("'special_approvals' ניתן לסימון במסך ההרשאות", () => {
+    expect(ALL_SECTIONS.map(s => s.key)).toContain('special_approvals')
+  })
+
+  it('סגור כברירת מחדל — עריכה בצאצאים אינה פותחת אותו', () => {
+    const perms: UserPermissions = { beneficiaries: 'edit', distributions: 'edit' }
+    expect(sectionVisible(false, 'secretary', perms, 'special_approvals')).toBe(false)
+    expect(roleAllows('secretary', perms, 'special_approvals', 'view')).toBe(false)
+  })
+
+  it('סימון special_approvals פותח רק אותו', () => {
+    const perms: UserPermissions = { special_approvals: 'edit' }
+    expect(roleAllows('secretary', perms, 'special_approvals', 'add')).toBe(true)
+    expect(roleAllows('secretary', perms, 'beneficiaries', 'view')).toBe(false)
+    expect(roleAllows('secretary', perms, 'loans', 'view')).toBe(false)
+  })
+})

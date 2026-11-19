@@ -203,8 +203,8 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
         {/* Section: ניווט ראשי */}
         <p className="px-3 pt-1 pb-2 text-[11px] font-medium tracking-widest text-[#6f7a96]">ראשי</p>
         {topVisible.map(renderLink)}
-        {/* אישורים חריגים — admin-only. אנשים שאושרו ידנית (אינם צאצאים). */}
-        {isAdmin && renderLink({ href: '/admin/special-approvals', label: 'אישורים חריגים', icon: ShieldAlert })}
+        {/* אישורים חריגים — לפי מחלקת special_approvals. אנשים שאושרו ידנית (אינם צאצאים). */}
+        {canSee('special_approvals') && renderLink({ href: '/admin/special-approvals', label: 'אישורים חריגים', icon: ShieldAlert })}
         {canSee('matchmaker_grants') && renderLink({ href: '/admin/matchmaker-grants', label: 'מלגות שדכנים', icon: Handshake })}
 
         {/* Maternity accordion */}

@@ -1,8 +1,6 @@
-import { guardAdminPage } from '@/lib/pageGuard'
+import { guardPage } from '@/lib/pageGuard'
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
 import { Plus } from 'lucide-react'
-import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import PageHeader from '@/components/ui/PageHeader'
 import Button from '@/components/ui/Button'
 import BeneficiariesTable from '@/app/admin/beneficiaries/BeneficiariesTable'
@@ -17,20 +15,12 @@ import { approvalLabelOf } from '@/lib/approvalLabel'
 // דף "אישורים חריגים" — אנשים שאינם צאצאים (נכדים) שהמנהל אישר להם להגיש
 // בקשות. משתמש חוזר באותה טבלה ובאותם מסכי פרטים כמו הצאצאים, מסונן
 // is_special=true.
-
-// מנהל הראשי בלבד — מזכירות אינה רשאית לגשת (גם לא ב-URL ישיר).
-async function assertAdmin() {
-  if (!isSupabaseConfigured()) return
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-  if (profile?.role !== 'admin') redirect('/admin')
-}
+//
+// הגישה לפי המחלקה 'special_approvals' במסך ההרשאות (מנהל — תמיד). עד אז
+// המסך היה למנהל הראשי בלבד, בלי דרך לפתוח אותו לאיש צוות מסוים.
 
 export default async function SpecialApprovalsPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
-  await guardAdminPage()
-  await assertAdmin()
+  await guardPage('special_approvals')
   const rawParams = await searchParams
   const p = readListParams({ get: (k) => rawParams[k] ?? null })
   const { rows, total, counts } = await getBeneficiaries(p, true)

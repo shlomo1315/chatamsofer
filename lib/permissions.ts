@@ -19,6 +19,7 @@ export type PermAction = 'view' | 'add' | 'edit' | 'delete'
 // ─────────────────────────────────────────────────────────────────────────────
 export const ALL_SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'beneficiaries',   label: 'צאצאים' },
+  { key: 'special_approvals', label: 'אישורים חריגים' },
   { key: 'lineage',         label: 'עץ הדורות' },
   { key: 'maternity',       label: 'עזר יולדות' },
   { key: 'maternity_cards', label: 'כרטיסי מזון יולדות' },
