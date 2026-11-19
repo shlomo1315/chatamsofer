@@ -6,6 +6,7 @@ import { buildKvitelDocx } from '@/lib/kvitelDocx'
 import { buildKvitelPdf } from '@/lib/kvitelPdf'
 import { KVITEL_LOGO } from '@/lib/kvitelDocLayout'
 import { kvitelFileResponse } from '@/lib/kvitelFileResponse'
+import { loadOpenKvitelWeek, weekDate } from '@/lib/kvitelOpenWeek'
 import { kvitelExportLines, loadKvitelRequests, parseKvitelFilters } from '@/lib/kvitelQuery'
 
 // הורדת קוויטלאך חדשים כ-PDF או Word. ההורדה לא משנה סטטוס — הסימון "נשלח לציון" נעשה בנפרד.
@@ -36,7 +37,8 @@ export async function POST(req: NextRequest) {
   if (!lines.length) return NextResponse.json({ error: 'אין שמות להורדה' }, { status: 404 })
 
   const logoPng = await readFile(path.join(process.cwd(), 'public', KVITEL_LOGO.file)).catch(() => null)
-  const date = new Date()
+  // הכותרת לפי השבוע הפתוח (הפרשה שאחרי המנה האחרונה), לא לפי התאריך של היום
+  const date = weekDate(await loadOpenKvitelWeek(db))
   const bytes = format === 'pdf' ? await buildKvitelPdf({ lines, date, logoPng }) : await buildKvitelDocx({ lines, date, logoPng })
-  return kvitelFileResponse(bytes, format, date)
+  return kvitelFileResponse(bytes, format, new Date())
 }

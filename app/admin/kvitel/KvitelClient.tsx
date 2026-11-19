@@ -2,13 +2,14 @@
 
 import { useMemo, useState, type ReactNode } from 'react'
 import KvitelRecordingPanel from './KvitelRecordingPanel'
-import { FileDown, Printer, Check, RotateCcw, X, Filter, Link2, ChevronLeft, Search, CalendarDays, Pencil, Mic } from 'lucide-react'
+import { FileDown, Printer, Check, RotateCcw, X, Filter, Link2, ChevronLeft, Search, CalendarDays, Pencil, Mic, Trash2 } from 'lucide-react'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { KVITEL_CHANNELS, KVITEL_REQUEST_OPTIONS, KVITEL_STATUSES, requestTypeLabel, type KvitelStatus } from '@/lib/kvitel'
 import { kvitelRequestLines, type KvitelFilters, type KvitelLineRow, type KvitelRequestRow } from '@/lib/kvitelQuery'
 import { ListTable } from '@/components/admin/system/ListTable'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import { useTablePagination } from '@/lib/useTablePagination'
-import { byKvitelTab, countByStatus, hebrewDay, KVITEL_DEFAULT_TAB, scopeKvitelRows, type KvitelTab } from '@/lib/kvitelView'
+import { byKvitelTab, countByStatus, hebrewDay, KVITEL_DEFAULT_TAB, kvitelRowActions, scopeKvitelRows, type KvitelTab } from '@/lib/kvitelView'
 import { InlineText, InlineRequest } from './KvitelInlineCell'
 import { saveInlineEdit, personText, PERSON_HINT, type InlineEdit } from '@/lib/kvitelInlineEdit'
 import KvitelCardModal from './KvitelCardModal'
@@ -53,7 +54,10 @@ const label = 'flex min-w-0 flex-col gap-1 text-xs font-medium text-ink-soft'
 const dateFmt = new Intl.DateTimeFormat('he-IL', { timeZone: 'Asia/Jerusalem', day: 'numeric', month: 'numeric', year: '2-digit', hour: '2-digit', minute: '2-digit' })
 
 // במובייל: כרטיס לכל בקשה (מגיש וסטטוס, שמות, תאריך). הטבלה מוסתרת מתחת ל-md.
-function MobileCards({ rows, canEdit, onOpen, onApprove }: { rows: KvitelRequestRow[]; canEdit: boolean; onOpen: (r: KvitelRequestRow, editing?: boolean) => void; onApprove: (r: KvitelRequestRow) => void }) {
+function MobileCards({ rows, canEdit, onOpen, onApprove, onRemove }: {
+  rows: KvitelRequestRow[]; canEdit: boolean; onOpen: (r: KvitelRequestRow, editing?: boolean) => void
+  onApprove: (r: KvitelRequestRow) => void; onRemove: (r: KvitelRequestRow) => void
+}) {
   if (!rows.length) return <p className="rounded-xl border border-line bg-white px-4 py-10 text-center text-ink-faint md:hidden">אין בקשות בסינון הזה.</p>
   return (
     <ul className="space-y-2 md:hidden">
@@ -66,15 +70,40 @@ function MobileCards({ rows, canEdit, onOpen, onApprove }: { rows: KvitelRequest
             </span>
             <span className="flex items-center justify-between text-xs text-ink-faint"><span>{KVITEL_CHANNELS[r.channel]} · {r.contact_name || 'מגיש לא ידוע'} · {dateFmt.format(new Date(r.submitted_at))}</span><ChevronLeft className="h-4 w-4" aria-hidden /></span>
           </button>
-          {canEdit && (
-            <div className="mt-1 flex gap-2">
-              {r.needsReview && <button type="button" onClick={() => onApprove(r)} className="flex h-9 items-center gap-1.5 rounded-[10px] bg-[#17663F] px-3 text-[13px] font-semibold text-white"><Check className="h-4 w-4" aria-hidden /> אישור</button>}
-              <button type="button" onClick={() => onOpen(r, true)} className="flex h-9 items-center gap-1.5 rounded-[10px] border border-line bg-white px-3 text-[13px] font-semibold text-navy"><Pencil className="h-4 w-4" aria-hidden /> תיקון</button>
-            </div>
-          )}
+          <RowActions r={r} canEdit={canEdit} onApprove={onApprove} onEdit={rr => onOpen(rr, true)} onRemove={onRemove} className="mt-1 flex gap-2" />
         </li>
       ))}
     </ul>
+  )
+}
+
+const rowBtn = 'flex h-9 items-center gap-1.5 rounded-[10px] border border-line bg-white px-3 text-[13px] font-semibold text-navy hover:border-[#cfc8bb] disabled:opacity-40'
+const whoOf = (r: KvitelRequestRow) => r.contact_name || dateFmt.format(new Date(r.submitted_at))
+
+// אישור (רק "לבדיקה"), תיקון ומחיקה — בטבלה ובכרטיסים במובייל, לפי kvitelRowActions
+function RowActions({ r, canEdit, busy, onApprove, onEdit, onRemove, className }: {
+  r: KvitelRequestRow; canEdit: boolean; busy?: boolean; className: string
+  onApprove: (r: KvitelRequestRow) => void; onEdit: (r: KvitelRequestRow) => void; onRemove: (r: KvitelRequestRow) => void
+}) {
+  const a = kvitelRowActions(r, canEdit)
+  if (!a.edit) return null
+  return (
+    <div className={className}>
+      {a.approve && (
+        <button type="button" disabled={busy} onClick={() => onApprove(r)} className="flex h-9 items-center gap-1.5 rounded-[10px] bg-[#17663F] px-3 text-[13px] font-semibold text-white disabled:opacity-40"
+          aria-label={`אישור הבקשה של ${whoOf(r)}`}>
+          <Check className="h-4 w-4" aria-hidden /> אישור
+        </button>
+      )}
+      <button type="button" disabled={busy} onClick={() => onEdit(r)} className={rowBtn} aria-label={`תיקון הבקשה של ${whoOf(r)}`}>
+        <Pencil className="h-4 w-4" aria-hidden /> תיקון
+      </button>
+      {a.remove && (
+        <button type="button" disabled={busy} onClick={() => onRemove(r)} className={`${rowBtn} text-[#9B2C2C]`} aria-label={`מחיקת הבקשה של ${whoOf(r)}`}>
+          <Trash2 className="h-4 w-4" aria-hidden /> מחיקה
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -209,6 +238,7 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
   embedded?: boolean; channel?: string; onChannel?: (channel: string) => void
 }) {
   const router = { refresh: onReload }   // רענון = טעינה מחדש של הרשימה המעורבלת (KvitelRequests)
+  const { confirm, confirmDialog } = useConfirm()
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
@@ -279,6 +309,15 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
     } finally {
       setBusy(false)
     }
+  }
+
+  // מחיקה מהשורה: אחרי אישור בחלון — הבקשה עוברת ל"בוטלו" ואפשר לשחזר אותה משם
+  async function removeRow(r: KvitelRequestRow) {
+    const ok = await confirm({
+      title: 'מחיקת הבקשה', danger: true, confirmLabel: 'מחיקה',
+      message: `למחוק את הבקשה של ${whoOf(r)}?\nהיא לא תיכנס לקובץ ותעבור ללשונית "בוטלו", ואפשר לשחזר אותה משם.`,
+    })
+    if (ok) await setStatus([r.id], 'cancelled')
   }
 
   function copyFormLink() {
@@ -451,18 +490,16 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
                     <Mic className="h-4 w-4" aria-hidden /> הקלטה
                   </button>
                 )}
-                {canEdit && r.needsReview && (
-                  <button type="button" disabled={busy} onClick={() => void setStatus([r.id], 'pending')} className="flex h-9 items-center gap-1.5 rounded-[10px] bg-[#17663F] px-3 text-[13px] font-semibold text-white disabled:opacity-40"
-                    aria-label={`אישור הבקשה של ${r.contact_name || dateFmt.format(new Date(r.submitted_at))}`}>
-                    <Check className="h-4 w-4" aria-hidden /> אישור
-                  </button>
-                )}
+                <RowActions r={r} canEdit={canEdit} busy={busy} className="flex items-center gap-2"
+                  onApprove={x => void setStatus([x.id], 'pending')} onEdit={x => openRow(x, true)} onRemove={x => void removeRow(x)} />
               </div>
             )}
             actionsHead="" />
         </div>
       </div>
-      <MobileCards rows={pg.rows} canEdit={canEdit} onOpen={(r, editing) => openRow(r, editing)} onApprove={r => void setStatus([r.id], 'pending')} />
+      <MobileCards rows={pg.rows} canEdit={canEdit} onOpen={(r, editing) => openRow(r, editing)} onApprove={r => void setStatus([r.id], 'pending')}
+        onRemove={r => void removeRow(r)} />
+      {confirmDialog}
       {openIdx !== null && tc.rows[openIdx] && (
         <KvitelCardModal rows={tc.rows} index={openIdx} onIndex={i => { setOpenIdx(i); setOpenEditing(false) }} onClose={() => setOpenIdx(null)} startEditing={openEditing}
           canEdit={canEdit} busy={busy} setStatus={setStatus} onPreview={setPreviewRow}

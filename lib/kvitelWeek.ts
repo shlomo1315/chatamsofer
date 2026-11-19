@@ -34,27 +34,61 @@ export function recentWeeks(today: string, n = 4): KvitelWeekInfo[] {
   return Array.from({ length: n }, (_, i) => kvitelWeek(addDays(cur, (i - n + 1) * 7)))
 }
 
-const inWeek = (iso: string | null, w: KvitelWeekInfo) => {
+// ── השבוע מתחלף ב"שליחה לציון", לא לפי הלוח ──
+// עד שליחה כל בקשה שייכת לשבוע הפתוח. אחרי שמנה נשלחה, השבוע הפתוח הוא הפרשה שאחריה,
+// גם אם בלוח עוד לא הגענו אליה (נשלח ויצא ביום ה׳ ← בקשה חדשה כבר בוישלח).
+// לבקשה עצמה אין פרשה שמורה: "לא נשלח" שייכת לשבוע הפתוח, ו"נשלח" למנה שבה נסגרה.
+
+export interface KvitelBatchRef { closed_at: string; parsha: string | null }
+
+// השבת שהמנה נשלחה עבורה: השבת הקרובה ליום הסגירה שהפרשה שלה היא הפרשה שנרשמה במנה.
+// מנה בלי פרשה, או שלא נמצאה סביב יום הסגירה — השבת של יום הסגירה.
+const SEARCH_WEEKS = [0, -1, 1, -2, 2, -3, 3, -4, -5, -6, -7, -8, -9, -10]
+export function batchShabbat(b: KvitelBatchRef): string {
+  const base = shabbatOf(israelDay(b.closed_at))
+  if (b.parsha) {
+    for (const k of SEARCH_WEEKS) {
+      const sh = addDays(base, k * 7)
+      if (kvitelWeek(sh).parsha === b.parsha) return sh
+    }
+  }
+  return base
+}
+
+// השבוע הפתוח: הפרשה שאחרי המנה האחרונה. בלי מנות בכלל — השבוע של היום.
+export function openKvitelWeek(last: KvitelBatchRef | null, today: string): KvitelWeekInfo {
+  return kvitelWeek(last ? addDays(batchShabbat(last), 7) : shabbatOf(today))
+}
+
+// לשונית במסך: מנה שנשלחה, או השבוע הפתוח (batch = null, תמיד האחרונה).
+// since/until = גבולות הקליטה: הסגירה הקודמת עד הסגירה הזו. since חסר → מתחילת השבוע בלוח.
+export interface KvitelWeekTab<B extends KvitelBatchRef = KvitelBatchRef> {
+  week: KvitelWeekInfo; since: string | null; until: string | null; batch: B | null
+}
+
+// batches מהחדשה לישנה (כמו ב-GET של המנות). מחזיר מהישן לחדש: n-1 מנות ואז השבוע הפתוח.
+export function kvitelWeekTabs<B extends KvitelBatchRef>(batches: B[], today: string, n = 4): KvitelWeekTab<B>[] {
+  const sent = batches.slice(0, n - 1).map((b, i) => ({
+    week: kvitelWeek(batchShabbat(b)), since: batches[i + 1]?.closed_at ?? null, until: b.closed_at, batch: b,
+  })).reverse()
+  return [...sent, { week: openKvitelWeek(batches[0] ?? null, today), since: batches[0]?.closed_at ?? null, until: null, batch: null }]
+}
+
+const inTab = (iso: string | null, t: Pick<KvitelWeekTab, 'week' | 'since' | 'until'>) => {
   if (!iso) return false
-  const d = israelDay(iso)
-  return d >= w.from && d <= w.to
+  const at = Date.parse(iso)
+  if (t.until && at > Date.parse(t.until)) return false
+  return t.since ? at > Date.parse(t.since) : israelDay(iso) >= t.week.from
 }
 
 // סדר הערוצים כמו בעיצוב
 export const CHANNEL_ORDER: KvitelChannel[] = ['web', 'nedarim', 'phone', 'email']
 
-// "נכנסו השבוע": כל מה שהוגש בשבוע, לפי ערוץ.
-export function weekIntake(rows: KvitelRequestRow[], w: KvitelWeekInfo) {
-  const inside = rows.filter(r => inWeek(r.submitted_at, w))
+// "נכנסו השבוע": כל מה שהוגש מאז הסגירה הקודמת (ועד הסגירה של המנה), לפי ערוץ.
+export function weekIntake(rows: KvitelRequestRow[], t: Pick<KvitelWeekTab, 'week' | 'since' | 'until'>) {
+  const inside = rows.filter(r => inTab(r.submitted_at, t))
   const byChannel = CHANNEL_ORDER.map(channel => ({ channel, label: KVITEL_CHANNELS[channel], n: inside.filter(r => r.channel === channel).length }))
   return { total: inside.length, byChannel }
-}
-
-// "נשלח לציון": בקשות שסומנו כנשלחו בתוך השבוע. at = הסימון האחרון.
-export function weekSent(rows: KvitelRequestRow[], w: KvitelWeekInfo): { count: number; at: string | null } {
-  const sent = rows.filter(r => r.status === 'done' && inWeek(r.done_at, w))
-  const at = sent.reduce<string | null>((max, r) => (!max || Date.parse(r.done_at!) > Date.parse(max) ? r.done_at : max), null)
-  return { count: sent.length, at }
 }
 
 // מספר עמודי ה-A4 של הקובץ (lib/kvitelPdf.ts): 19 שורות בעמוד הראשון (מתחת לכותרת והלוגו), 24 בכל עמוד נוסף.

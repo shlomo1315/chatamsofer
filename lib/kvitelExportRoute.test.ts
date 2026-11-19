@@ -10,7 +10,11 @@ let rows: Record<string, unknown>[] = []
 // מנה שנסגרה — לנתיב ההורדה החוזרת (batches/[id]/file)
 let batch: { closed_at: string; lines: string[] } | null = null
 const fakeDb = {
-  from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: batch, error: null }) }) }) }),
+  from: () => ({ select: () => ({
+    eq: () => ({ maybeSingle: async () => ({ data: batch, error: null }) }),
+    // המנה האחרונה (השבוע הפתוח) — אין מנות קודמות
+    order: () => ({ limit: async () => ({ data: [], error: null }) }),
+  }) }),
 }
 
 vi.mock('@/lib/apiAuth', async () => {

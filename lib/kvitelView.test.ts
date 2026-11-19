@@ -1,6 +1,16 @@
 import { describe, it, expect } from 'vitest'
-import { byKvitelTab, countByStatus, hebrewDay, KVITEL_DEFAULT_TAB, parseRawFields, pendingForPrint, reviewReason, scopeKvitelRows, cleanTranscript, MAX_TRANSCRIPT } from './kvitelView'
+import { byKvitelTab, countByStatus, hebrewDay, KVITEL_DEFAULT_TAB, kvitelRowActions, parseRawFields, pendingForPrint, reviewReason, scopeKvitelRows, cleanTranscript, MAX_TRANSCRIPT } from './kvitelView'
 import { kvitelExportLines, type KvitelRequestRow } from './kvitelQuery'
+
+describe('kvitelRowActions — כפתורי השורה', () => {
+  it('תיקון ומחיקה בכל שורה למי שיש לו עריכה; מחיקה לא בבקשה שכבר בוטלה', () => {
+    expect(kvitelRowActions({ status: 'pending' }, true)).toEqual({ approve: false, edit: true, remove: true })
+    expect(kvitelRowActions({ status: 'pending', needsReview: true }, true)).toEqual({ approve: true, edit: true, remove: true })
+    expect(kvitelRowActions({ status: 'done' }, true)).toEqual({ approve: false, edit: true, remove: true })
+    expect(kvitelRowActions({ status: 'cancelled' }, true)).toEqual({ approve: false, edit: true, remove: false })
+    expect(kvitelRowActions({ status: 'pending', needsReview: true }, false)).toEqual({ approve: false, edit: false, remove: false })
+  })
+})
 
 const line = (o: Partial<{ name: string; parent_name: string; flagged: boolean; flag_reason: string | null }> = {}) =>
   ({ id: '1', position: 0, name: 'משה', relation: 'ben', parent_name: 'שרה', request_type: 'refua', request_note: null, flagged: false, flag_reason: null, ...o })

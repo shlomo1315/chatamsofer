@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import type { KvitelRequestRow } from './kvitelQuery'
 import {
-  addDays, closeAt, closeLabel, hoursToClose, kvitelBatch, kvitelFile, kvitelPages, kvitelWeek, maskPhone, recentWeeks,
-  sentLabel, shabbatOf, weekIntake, weekSent, whenLabel,
+  addDays, batchShabbat, closeAt, closeLabel, hoursToClose, kvitelBatch, kvitelFile, kvitelPages, kvitelWeek, kvitelWeekTabs,
+  maskPhone, openKvitelWeek, recentWeeks, sentLabel, shabbatOf, weekIntake, whenLabel,
 } from './kvitelWeek'
 
 const row = (over: Partial<KvitelRequestRow>): KvitelRequestRow => ({
@@ -43,12 +43,48 @@ describe('kvitelWeek', () => {
       row({ id: '6', status: 'done', submitted_at: '2026-11-10T08:00:00Z', done_at: '2026-11-18T08:00:00Z' }),
       row({ id: '7', status: 'done', submitted_at: '2026-11-10T08:00:00Z', done_at: '2026-11-12T08:00:00Z' }),
     ]
-    const intake = weekIntake(rows, w)
+    const intake = weekIntake(rows, { week: w, since: null, until: null })
     expect(intake.total).toBe(3)
     expect(intake.byChannel.map(c => [c.label, c.n])).toEqual([['לינק', 1], ['נדרים פלוס', 0], ['טלפון', 1], ['מייל', 1]])
-    expect(weekSent(rows, w)).toEqual({ count: 2, at: '2026-11-18T08:00:00Z' })
-    expect(weekSent(rows, kvitelWeek('2026-11-28'))).toEqual({ count: 0, at: null })
     expect(sentLabel('2026-11-13T08:00:00Z')).toBe('ביום ו׳ ג׳ כסלו')
+  })
+
+  it('השבוע מתחלף בשליחה לציון ולא לפי הלוח: ויצא ← נשלח ← וישלח', () => {
+    const today = '2026-11-19'                                  // יום ה׳, בלוח פרשת ויצא
+    // עוד לא נשלחה אף מנה: השבוע הפתוח לפי הלוח
+    expect(openKvitelWeek(null, today).parsha).toBe('ויצא')
+    // נשלחה מנת תולדות בשבוע שעבר: עדיין ויצא, וכל הבקשות מאז שייכות אליו
+    const toldot = { closed_at: '2026-11-13T09:00:00Z', parsha: 'תולדות' }
+    expect(openKvitelWeek(toldot, today).parsha).toBe('ויצא')
+    // ביום ה׳ נשלחה מנת ויצא: מיד נפתח וישלח, אף שבלוח השבת הקרובה היא עדיין ויצא
+    const vayetze = { closed_at: '2026-11-19T10:00:00Z', parsha: 'ויצא' }
+    expect(batchShabbat(vayetze)).toBe('2026-11-21')
+    expect(openKvitelWeek(vayetze, today)).toMatchObject({ shabbat: '2026-11-28', parsha: 'וישלח' })
+    // ואם לא שלחו עד אחרי שבת, הבקשות נשארות בשבוע של ויצא עד השליחה
+    expect(openKvitelWeek(toldot, '2026-11-24').parsha).toBe('ויצא')
+    // מנה שנסגרה מוקדם (וישלח נשלח עוד בשבוע של ויצא) נמצאת לפי הפרשה שנרשמה בה
+    expect(batchShabbat({ closed_at: '2026-11-20T08:00:00Z', parsha: 'וישלח' })).toBe('2026-11-28')
+    // מנה בלי פרשה: השבת של יום הסגירה
+    expect(batchShabbat({ closed_at: '2026-11-19T10:00:00Z', parsha: null })).toBe('2026-11-21')
+
+    // הלשוניות והקליטה: בקשה שנכנסה אחרי השליחה כבר בוישלח, גם אם זה עוד באותו יום
+    const tabs = kvitelWeekTabs([vayetze, toldot], today)
+    expect(tabs.map(t => t.week.parsha)).toEqual(['תולדות', 'ויצא', 'וישלח'])
+    expect(tabs.map(t => t.batch?.parsha ?? null)).toEqual(['תולדות', 'ויצא', null])
+    const rows = [
+      row({ id: 'a', channel: 'email', status: 'done', submitted_at: '2026-11-15T08:00:00Z' }),
+      row({ id: 'b', channel: 'nedarim', status: 'done', submitted_at: '2026-11-19T09:59:00Z' }),
+      row({ id: 'c', channel: 'email', submitted_at: '2026-11-19T10:01:00Z' }),   // אחרי השליחה
+      row({ id: 'd', channel: 'web', submitted_at: '2026-11-19T12:00:00Z' }),
+    ]
+    expect(weekIntake(rows, tabs[1]).total).toBe(2)            // ויצא: a, b
+    const open = weekIntake(rows, tabs[2])                     // וישלח: c, d — מכל המקורות
+    expect(open.total).toBe(2)
+    expect(open.byChannel.map(c => c.n)).toEqual([1, 0, 0, 1])
+    // הלשונית הישנה ביותר בלי מנה קודמת ברשימה: מתחילת השבוע בלוח
+    expect(tabs[0].since).toBeNull()
+    expect(kvitelWeekTabs([], today).map(t => [t.week.parsha, t.batch])).toEqual([['ויצא', null]])
+    expect(kvitelWeekTabs([vayetze, toldot, toldot, toldot], today)).toHaveLength(4)
   })
 
   it('בקובץ: רק "לא נשלח" עם שמות — "לבדיקה" נשאר בחוץ', () => {

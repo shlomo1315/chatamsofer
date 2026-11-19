@@ -6,6 +6,8 @@ import { buildKvitelDocx } from '@/lib/kvitelDocx'
 import { buildKvitelPdf } from '@/lib/kvitelPdf'
 import { KVITEL_LOGO } from '@/lib/kvitelDocLayout'
 import { kvitelFileResponse } from '@/lib/kvitelFileResponse'
+import { weekDate } from '@/lib/kvitelOpenWeek'
+import { batchShabbat } from '@/lib/kvitelWeek'
 
 // הורדה חוזרת של קובץ ממנה שנסגרה: נבנה מהשורות שנרשמו בסגירה ובתאריך הסגירה — בדיוק מה שנשלח.
 // POST { format } (ולא GET, כמו שאר ההורדות של הקוויטלאך).
@@ -26,13 +28,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const format = body?.format
   if (format !== 'pdf' && format !== 'docx') return NextResponse.json({ error: 'פורמט לא נתמך' }, { status: 400 })
 
-  const { data, error } = await db.from('kvitel_batches').select('closed_at, lines').eq('id', id).maybeSingle()
+  const { data, error } = await db.from('kvitel_batches').select('closed_at, parsha, lines').eq('id', id).maybeSingle()
   if (error) return NextResponse.json({ error: 'טעינת המנה נכשלה' }, { status: 500 })
   if (!data?.lines?.length) return NextResponse.json({ error: 'המנה לא נמצאה' }, { status: 404 })
 
   const logoPng = await readFile(path.join(process.cwd(), 'public', KVITEL_LOGO.file)).catch(() => null)
-  const date = new Date(data.closed_at)
+  // השבת שהמנה נשלחה עבורה (לפי הפרשה שנרשמה בה), כמו בכותרת של הקובץ המקורי
+  const date = weekDate({ shabbat: batchShabbat(data) })
   const lines = data.lines as string[]
   const bytes = format === 'pdf' ? await buildKvitelPdf({ lines, date, logoPng }) : await buildKvitelDocx({ lines, date, logoPng })
-  return kvitelFileResponse(bytes, format, date)
+  return kvitelFileResponse(bytes, format, new Date(data.closed_at))
 }
