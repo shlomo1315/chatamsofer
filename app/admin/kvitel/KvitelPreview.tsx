@@ -1,6 +1,7 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { scrambleBytes, DOC_CIPHER_ID } from '@/lib/docCipher'
 import { Download, Loader2, Printer } from 'lucide-react'
 import Modal from '@/components/ui/Modal'
 import { KVITEL_LOGO, kvitelDocLayout, type KvitelDocPara } from '@/lib/kvitelDocLayout'
@@ -65,6 +66,34 @@ export async function downloadKvitel(href: string, ids: string[] = []): Promise<
   }
 }
 
+// הלוגו מצויר על canvas מנתונים (/api/admin/kvitel/logo) ולא בתג <img>: מסנן התוכן החליף
+// את התמונה בריבוע אפור מטושטש. נטען פעם אחת לכל העמוד.
+let logoBitmap: Promise<ImageBitmap> | null = null
+function loadLogo(): Promise<ImageBitmap> {
+  logoBitmap ??= (async () => {
+    const res = await fetch('/api/admin/kvitel/logo', { credentials: 'same-origin' })
+    const { data, enc } = await res.json()
+    if (!res.ok || !data) throw new Error('logo')
+    const bytes = Uint8Array.from(atob(data), c => c.charCodeAt(0))
+    if (enc === DOC_CIPHER_ID) scrambleBytes(bytes)
+    return createImageBitmap(new Blob([bytes], { type: 'image/png' }))
+  })()
+  logoBitmap.catch(() => { logoBitmap = null })
+  return logoBitmap
+}
+
+function KvitelLogo({ className }: { className?: string }) {
+  const ref = useRef<HTMLCanvasElement>(null)
+  useEffect(() => {
+    let alive = true
+    loadLogo().then(bmp => {
+      if (alive) ref.current?.getContext('2d')?.drawImage(bmp, 0, 0, KVITEL_LOGO.width, KVITEL_LOGO.height)
+    }).catch(() => { /* בלי לוגו — הדף עצמו לא נפגע */ })
+    return () => { alive = false }
+  }, [])
+  return <canvas ref={ref} width={KVITEL_LOGO.width} height={KVITEL_LOGO.height} role="img" aria-label="היכל החתם סופר" className={className} />
+}
+
 // הדפסה של הדף בלבד: עותק שלו ב-iframe נסתר, ברוחב A4 מלא (210mm = 595pt, אז pt() בגודל אמיתי).
 // הלוגו מוטמע כ-data URI, כך שהוא לא תלוי בנתיב או בטעינה מחדש בתוך חלון ההדפסה.
 async function inlineImages(root: HTMLElement) {
@@ -100,6 +129,9 @@ async function printSheet(page: HTMLElement, onAfter?: () => void) {
     + '.kvitel-print>div{max-width:none!important;width:100%!important;box-shadow:none!important;aspect-ratio:auto!important}</style>'
     + `</head><body><div class="kvitel-print">${copy.outerHTML}</div></body></html>`)
   doc.close()
+  // canvas לא נושא את הציור שלו ב-HTML שהועתק — מעתיקים את הפיקסלים (הלוגו) לעותק שבחלון ההדפסה
+  const srcCanvases = page.querySelectorAll('canvas')
+  doc.querySelectorAll('canvas').forEach((c, i) => { if (srcCanvases[i]) c.getContext('2d')?.drawImage(srcCanvases[i], 0, 0) })
   let done = false
   const go = () => {
     if (done) return
@@ -148,8 +180,7 @@ export function KvitelSheet({ lines, date = new Date(), downloadHref, downloadId
             style={{ aspectRatio: '210 / 297', fontFamily: 'David, "David Libre", "Frank Ruehl CLM", serif', padding: `${pt(45)} ${pt(50)}`, lineHeight: 1.25 }}>
             <div className="flex items-center" style={{ gap: pt(8) }}>
               <div className="min-w-0 flex-1">{layout.titles.map((p, i) => <Para key={i} p={p} />)}</div>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={`/${KVITEL_LOGO.file}`} alt="היכל החתם סופר" className="w-[22%] max-w-[97pt] shrink-0" />
+              <KvitelLogo className="h-auto w-[22%] max-w-[97pt] shrink-0" />
             </div>
             {layout.body.map((p, i) => <Para key={i} p={p} />)}
           </div>
