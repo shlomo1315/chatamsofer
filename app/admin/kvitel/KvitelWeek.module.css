@@ -155,3 +155,18 @@
   .modal{padding:var(--s5)}
 }
 @media (prefers-reduced-motion:reduce){.root *{animation:none!important;transition:none!important}}
+
+/* פסי הערוצים — לחיצה מסננת את הטבלה, לחיצה חוזרת מבטלת */
+.chan button{display:grid;grid-template-columns:72px 1fr 28px;align-items:center;gap:var(--s2);width:100%;min-height:28px;padding:2px 6px;margin:0 -6px;border:0;border-radius:6px;background:transparent;font:inherit;font-size:var(--t-xs);color:var(--ink-2);text-align:start;cursor:pointer;transition:background .15s}
+.chan button:hover{background:var(--sunk)}
+.chan button.on{background:var(--sunk);color:var(--navy);font-weight:700;box-shadow:inset 0 0 0 1px var(--navy)}
+.chan button:focus-visible{outline:2px solid var(--navy);outline-offset:1px}
+.chan button span:last-child{text-align:end;font-weight:700;color:var(--ink)}
+
+/* טבלת הבקשות במקום "צריך יד אדם" */
+.listSec{margin-top:var(--s6)}
+.actBar{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2);margin-bottom:var(--s2)}
+.actBar h2{font-size:var(--t-xl);font-weight:800;color:var(--navy)}
+.actBar p{font-size:var(--t-sm);color:var(--ink-3)}
+.actBar .sp{flex:1}
+.expLbl{font-size:var(--t-sm);font-weight:700;color:var(--ink-2)}

@@ -45,7 +45,7 @@ export default function KvitelRequests({ filters, canEdit, tabs }: { filters: Kv
     )
   }
   if (view === 'week') {
-    return <KvitelWeek rows={raw ?? []} canEdit={canEdit} tabs={tabs} onReload={load} onOpenList={() => setView('list')} />
+    return <KvitelWeek rows={raw ?? []} filters={filters} canEdit={canEdit} tabs={tabs} onReload={load} />
   }
   return (
     <div className="space-y-4">

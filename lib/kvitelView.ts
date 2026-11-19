@@ -41,6 +41,26 @@ export function countByStatus(rows: Pick<KvitelRequestRow, 'status'>[]): StatusC
   return c
 }
 
+// סינון טבלת הבקשות בדפדפן: מקור (ערוץ), סוג בקשה, חיפוש חופשי, ואחריהם הסטטוס.
+// ברירת המחדל היא "לא נשלח" — בקשה שסומנה "נשלח לציון" יוצאת מהתצוגה.
+export type KvitelTab = 'all' | 'pending' | 'done' | 'cancelled'
+export const KVITEL_DEFAULT_TAB: KvitelTab = 'pending'
+export interface KvitelRowFilter { channel?: string; type?: string; q?: string }
+
+export function scopeKvitelRows<R extends Pick<KvitelRequestRow, 'channel' | 'contact_name' | 'contact_phone' | 'kvitel_request_lines'>>(rows: R[], f: KvitelRowFilter): R[] {
+  const needle = (f.q ?? '').trim().toLowerCase()
+  return rows.filter(r => {
+    if (f.channel && r.channel !== f.channel) return false
+    if (f.type && !r.kvitel_request_lines.some(l => l.request_type === f.type)) return false
+    if (!needle) return true
+    const hay = [r.contact_name, r.contact_phone, ...r.kvitel_request_lines.flatMap(l => [l.name, l.parent_name])].join(' ').toLowerCase()
+    return hay.includes(needle)
+  })
+}
+
+export const byKvitelTab = <R extends Pick<KvitelRequestRow, 'status'>>(rows: R[], tab: KvitelTab): R[] =>
+  tab === 'all' ? rows : rows.filter(r => r.status === tab)
+
 // raw_text נשמר כשורות "שדה: ערך" (הגשת נדרים). טקסט חופשי בלי נקודתיים לא נחשב שדות.
 export function parseRawFields(raw: string | null | undefined): { key: string; value: string }[] {
   const out: { key: string; value: string }[] = []
