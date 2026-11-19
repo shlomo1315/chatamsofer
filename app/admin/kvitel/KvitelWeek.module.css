@@ -1,0 +1,142 @@
+/* מסך "השבוע" — מועתק מהעיצוב המאושר של ארי (מוקאפ הקוויטל, כיוון א׳). לא לשנות בלי אישור. */
+.root{
+  /* טיפוגרפיה · יחס 1.25 */
+  --t-xs:12px; --t-sm:13px; --t-md:15px; --t-lg:18px; --t-xl:23px; --t-2xl:29px; --t-3xl:36px; --t-4xl:56px;
+  /* ריווח */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px; --s8:64px;
+  /* צבע: בסיס חם של המערכת, כחול לפעולה, זהב כסימן בלבד */
+  --bg:#F5F1E8; --surface:#FFFDF8; --sunk:#EFEADF; --line:#E3DBC9; --line-2:#D4C9B1;
+  --ink:#1B2338; --ink-2:#5F5847; --ink-3:#8E8572;
+  --navy:#14213D; --navy-2:#22345E; --gold:#B8862A; --gold-soft:#F3E9CF;
+  --ok:#2F6B4F; --ok-soft:#E3F0E9; --warn:#8A5A0B; --warn-soft:#F7ECD3; --info:#2C4A7A; --info-soft:#E4EBF6; --bad:#8E3434;
+  --r1:8px; --r2:14px;
+  --ease:cubic-bezier(.2,.8,.2,1);
+  font-family:Heebo,system-ui,sans-serif;color:var(--ink);font-size:var(--t-md);line-height:1.55;-webkit-font-smoothing:antialiased;
+}
+.root *{box-sizing:border-box}
+.root button{font:inherit;color:inherit;cursor:pointer}
+.root button:focus-visible,.root a:focus-visible,.root input:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
+.root h1,.root h2,.root h3{margin:0;text-wrap:balance}
+.root p{margin:0}
+.num{font-variant-numeric:tabular-nums}
+.ltr{direction:ltr;unicode-bidi:isolate}
+.i{width:18px;height:18px;flex:none}
+
+/* ── משותף ── */
+.crumb{font-size:var(--t-sm);color:var(--ink-3)}
+.h1{font-size:var(--t-3xl);font-weight:900;line-height:1.08;letter-spacing:-.01em;color:var(--navy)}
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--s4);flex-wrap:wrap;padding-bottom:var(--s5);border-bottom:1px solid var(--line)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--s2);min-height:44px;padding:0 18px;border-radius:10px;border:1px solid var(--line-2);background:var(--surface);font-size:var(--t-sm);font-weight:700;color:var(--ink);transition:transform .15s var(--ease),background .15s,border-color .15s}
+.btn:hover{border-color:var(--ink-3)}
+.btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn.pri{background:var(--navy);border-color:var(--navy);color:#fff}
+.btn.pri:hover{background:var(--navy-2)}
+.btn.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+.btn.sm{min-height:36px;padding:0 12px;font-size:var(--t-sm)}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--ink-2)}
+.btn.ghost:hover{background:var(--sunk)}
+.chip{display:inline-flex;align-items:center;gap:6px;border-radius:99px;padding:2px 10px;font-size:var(--t-xs);font-weight:700;white-space:nowrap}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.info{background:var(--info-soft);color:var(--info)}
+.chip.ok{background:var(--ok-soft);color:var(--ok)}
+.chip.mute{background:var(--sunk);color:var(--ink-2)}
+.chip.gold{background:var(--gold-soft);color:#6E4F12}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r2)}
+
+/* ══════════ כיוון א׳ · השבוע ══════════ */
+.wk{display:flex;align-items:center;gap:2px;background:var(--sunk);border-radius:10px;padding:3px}
+.wk button{border:0;background:transparent;padding:6px 12px;border-radius:8px;font-size:var(--t-sm);color:var(--ink-2);min-height:36px}
+.wk button.on{background:var(--surface);color:var(--navy);font-weight:800;box-shadow:0 0 0 1px var(--line)}
+.aClose{display:flex;align-items:center;gap:var(--s2);margin-top:var(--s3);font-size:var(--t-sm);color:var(--ink-2)}
+.aClose b{color:var(--navy)}
+.pipe{margin-top:var(--s5);display:grid;grid-template-columns:1.25fr .9fr 1.25fr .9fr;border:1px solid var(--line);border-radius:var(--r2);background:var(--surface);overflow:hidden}
+.pipe>div{padding:var(--s5);border-inline-start:1px solid var(--line);position:relative}
+.pipe>div:first-child{border-inline-start:0}
+.pipe .k{display:flex;align-items:center;gap:var(--s2);font-size:var(--t-sm);font-weight:700;color:var(--ink-2)}
+.pipe .v{font-size:var(--t-4xl);font-weight:900;line-height:1;margin-top:var(--s3);color:var(--navy);letter-spacing:-.02em}
+.pipe .d{font-size:var(--t-sm);color:var(--ink-2);margin-top:var(--s2)}
+.pipe .warn .v{color:var(--warn)}
+.pipe .hot{background:linear-gradient(0deg,var(--gold-soft),transparent 70%)}
+.chan{display:grid;gap:6px;margin-top:var(--s3)}
+.chan div{display:grid;grid-template-columns:72px 1fr 28px;align-items:center;gap:var(--s2);font-size:var(--t-xs);color:var(--ink-2)}
+.chan i{display:block;height:6px;border-radius:3px;background:var(--navy);opacity:.85}
+.chan span:last-child{text-align:end;font-weight:700;color:var(--ink)}
+.aGrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:var(--s6);margin-top:var(--s6);align-items:start}
+.secH{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s3);margin-bottom:var(--s3)}
+.secH h2{font-size:var(--t-xl);font-weight:800;color:var(--navy)}
+.secH p{font-size:var(--t-sm);color:var(--ink-3)}
+.dec{list-style:none;margin:0;padding:0;display:grid;gap:var(--s3)}
+.dec li{padding:var(--s4);transition:opacity .25s var(--ease),transform .25s var(--ease)}
+.dec .top{display:flex;align-items:center;gap:var(--s2);font-size:var(--t-xs);color:var(--ink-3)}
+.dec .top .ch{display:flex;align-items:center;gap:6px;font-weight:700;color:var(--ink-2)}
+.dec .top .chip{margin-inline-start:auto}
+.dec .line{font-size:var(--t-lg);font-weight:700;margin-top:var(--s2);color:var(--ink)}
+.dec .why{font-size:var(--t-sm);color:var(--ink-2);margin-top:2px}
+.dec .act{display:flex;gap:var(--s2);margin-top:var(--s3);flex-wrap:wrap}
+.transc{margin-top:var(--s3);font-size:var(--t-sm);border-inline-start:2px solid var(--gold);padding-inline-start:var(--s3);color:var(--ink-2);display:grid;gap:2px}
+.transc b{color:var(--ink);font-weight:700}
+.allClear{text-align:center;padding:var(--s7) var(--s5)}
+.allClear b{display:block;font-size:var(--t-xl);font-weight:800;color:var(--ok)}
+.allClear p{color:var(--ink-2);font-size:var(--t-sm);margin-top:var(--s2)}
+.link{border:0;background:none;padding:0;color:var(--navy);font-weight:700;text-decoration:underline}
+
+.sheetwrap{position:sticky;top:74px}
+.sheetbar{display:flex;align-items:center;gap:var(--s3);margin-bottom:var(--s3)}
+.sheetbar .pg{font-size:var(--t-sm);color:var(--ink-2)}
+.sp{flex:1}
+.paper{background:#fff;aspect-ratio:210/297;border-radius:3px;box-shadow:0 1px 0 var(--line-2),0 18px 40px -24px rgba(20,33,61,.35);padding:7% 8%;position:relative;overflow:hidden;color:#111}
+.paper .ph{display:grid;grid-template-columns:1fr 22%;align-items:center;gap:4%}
+.paper .tt{text-align:center;font-weight:800;line-height:1.25}
+.paper .tt .a{font-size:clamp(11px,1.45vw,18px)}
+.paper .tt .b{font-size:clamp(12px,1.6vw,20px)}
+.paper .tt .c{font-size:clamp(9px,1vw,13px);margin-top:4px}
+.paper .ph canvas{width:100%;height:auto;display:block}
+.paper .dbl{border-top:3px double #111;margin:5% 0 4%}
+.paper .lt{text-align:center;font-weight:800;font-style:italic;text-decoration:underline;font-size:clamp(11px,1.3vw,16px);margin-bottom:3%}
+.paper ol{list-style:none;margin:0;padding:0;border-top:1px solid #111}
+.paper ol li{font-style:italic;font-size:clamp(9px,1.02vw,13px);padding:1.4% 0 1%;border-bottom:1px solid #111;display:flex;justify-content:space-between;gap:8px}
+.paper .empty{text-align:center;font-size:var(--t-sm);color:var(--ink-3);margin-top:8%}
+.paper .fold{position:absolute;inset-inline:0;bottom:0;height:22%;background:linear-gradient(transparent,#fff 70%);display:flex;align-items:flex-end;justify-content:center;padding-bottom:4%;font-size:var(--t-xs);color:var(--ink-3)}
+.sheetfoot{display:flex;gap:var(--s2);margin-top:var(--s4)}
+.sheetfoot .btn.pri{flex:1;min-height:52px;font-size:var(--t-md)}
+.sheetnote{font-size:var(--t-xs);color:var(--ink-3);margin-top:var(--s2);text-align:center}
+.msg{margin-top:var(--s4);border-radius:var(--r1);padding:var(--s3) var(--s4);font-size:var(--t-sm);background:var(--ok-soft);color:var(--ok)}
+.msg.err{background:#F6E3E3;color:var(--bad)}
+
+/* ══════════ חלון קופץ (באמצע, עם טשטוש) ══════════ */
+.ov{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:var(--s4);background:rgba(20,33,61,.28);backdrop-filter:blur(8px) saturate(1.1);animation:fade .2s var(--ease)}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.modal{width:min(520px,100%);max-height:calc(100vh - 32px);overflow:auto;background:var(--surface);border-radius:18px;border:1px solid var(--line);box-shadow:0 30px 80px -30px rgba(20,33,61,.55);padding:var(--s6);animation:pop .25s var(--ease)}
+@keyframes pop{from{transform:scale(.97) translateY(6px);opacity:0}to{transform:none;opacity:1}}
+.modal h3{font-size:var(--t-xl);font-weight:900;color:var(--navy)}
+.modal .mSub{font-size:var(--t-sm);color:var(--ink-2);margin-top:var(--s1)}
+.mstep{list-style:none;margin:var(--s5) 0 0;padding:0;display:grid;gap:0}
+.mstep li{display:grid;grid-template-columns:28px 1fr;gap:var(--s3);padding:var(--s3) 0;border-top:1px solid var(--line)}
+.mstep li:first-child{border-top:0}
+.mstep .ic{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--sunk);color:var(--ink-3);font-size:var(--t-xs);font-weight:800}
+.mstep li.done .ic{background:var(--ok);color:#fff}
+.mstep li.cur .ic{background:var(--navy);color:#fff}
+.mstep b{display:block;font-size:var(--t-md)}
+.mstep span{font-size:var(--t-sm);color:var(--ink-2)}
+.fmt{display:flex;gap:var(--s2);margin-top:var(--s2)}
+.fmt label{display:flex;align-items:center;gap:6px;border:1px solid var(--line-2);border-radius:var(--r1);padding:6px 12px;font-size:var(--t-sm);cursor:pointer}
+.fmt label:has(input:checked){border-color:var(--navy);background:var(--info-soft);font-weight:700}
+.macts{display:flex;gap:var(--s2);margin-top:var(--s5)}
+.macts .btn.pri{flex:1}
+.guard{margin-top:var(--s4);display:flex;gap:var(--s2);font-size:var(--t-xs);color:var(--ink-2);background:var(--sunk);border-radius:var(--r1);padding:var(--s3)}
+
+/* ── טלפון ── */
+@media (max-width:900px){
+  .h1{font-size:var(--t-2xl)}
+  .pipe{grid-template-columns:1fr 1fr}
+  .pipe>div:nth-child(3){border-inline-start:0}
+  .pipe>div:nth-child(n+3){border-top:1px solid var(--line)}
+  .pipe .v{font-size:var(--t-3xl)}
+  .pipe>div{padding:var(--s4)}
+  .aGrid{grid-template-columns:1fr}
+  .sheetwrap{position:static;order:-1}
+  .modal{padding:var(--s5)}
+}
+@media (prefers-reduced-motion:reduce){.root *{animation:none!important;transition:none!important}}

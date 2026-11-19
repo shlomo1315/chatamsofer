@@ -46,10 +46,10 @@ function fileNameFrom(res: Response): string {
 
 // הורדת הקובץ (PDF בדף A4) מנתיב הייצוא. מחזיר הודעת שגיאה, או null כשהקובץ ירד.
 // ⚠️ המזהים בגוף הבקשה ולא בכתובת: חומת ההגנה חוסמת כתובת ארוכה (ראה export/route.ts).
-export async function downloadKvitel(href: string, ids: string[] = []): Promise<string | null> {
+export async function downloadKvitel(href: string, ids: string[] = [], format: 'pdf' | 'docx' = 'pdf'): Promise<string | null> {
   try {
     const res = await fetch(href, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids, format: 'pdf' }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids, format }),
     })
     if (!res.ok) return (await res.json().catch(() => ({}))).error || 'ההורדה נכשלה'
     const url = URL.createObjectURL(await res.blob())
@@ -82,7 +82,7 @@ function loadLogo(): Promise<ImageBitmap> {
   return logoBitmap
 }
 
-function KvitelLogo({ className }: { className?: string }) {
+export function KvitelLogo({ className }: { className?: string }) {
   const ref = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
     let alive = true
