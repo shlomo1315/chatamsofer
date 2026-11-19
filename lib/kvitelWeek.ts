@@ -73,6 +73,13 @@ export function kvitelFile(rows: KvitelRequestRow[]) {
   return { ids: list.map(r => r.id), lines, pages: kvitelPages(lines.length) }
 }
 
+// המנה שנרשמת בסגירה (app/api/admin/kvitel/batches): מתוך המזהים שירדו בקובץ, רק מה שעדיין "לא נשלח"
+// ויש בו שמות — כך בקשה שהוחזרה לבדיקה או כבר נשלחה בינתיים לא נרשמת פעמיים.
+export function kvitelBatch(rows: KvitelRequestRow[], ids: string[]) {
+  const want = new Set(ids)
+  return kvitelFile(rows.filter(r => want.has(r.id)))
+}
+
 // הרגע של יום ו׳ 12:00 בשעון ישראל (חורף +2, קיץ +3).
 const hourFmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', hour: '2-digit', hourCycle: 'h23' })
 export function closeAt(w: KvitelWeekInfo): number {

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { KvitelRequestRow } from './kvitelQuery'
 import {
-  addDays, closeAt, closeLabel, hoursToClose, kvitelFile, kvitelPages, kvitelWeek, maskPhone, recentWeeks,
+  addDays, closeAt, closeLabel, hoursToClose, kvitelBatch, kvitelFile, kvitelPages, kvitelWeek, maskPhone, recentWeeks,
   sentLabel, shabbatOf, weekIntake, weekSent, whenLabel,
 } from './kvitelWeek'
 
@@ -61,6 +61,19 @@ describe('kvitelWeek', () => {
     expect(f.ids).toEqual(['1'])
     expect(f.lines).toEqual(['מאיר בן רחל - לרפואה שלימה'])
     expect(f.pages).toBe(1)
+  })
+
+  it('מנה נרשמת רק מהמזהים שירדו, ורק מה שעדיין "לא נשלח"', () => {
+    const rows = [
+      row({ id: '1' }),
+      row({ id: '2', status: 'review' }),                          // הוחזר לבדיקה אחרי ההורדה
+      row({ id: '3', status: 'done' }),                            // כבר נשלח במנה אחרת
+      row({ id: '4' }),                                            // נכנס אחרי ההורדה — לא במנה
+    ]
+    const b = kvitelBatch(rows, ['1', '2', '3'])
+    expect(b.ids).toEqual(['1'])
+    expect(b.lines).toEqual(['מאיר בן רחל - לרפואה שלימה'])
+    expect(kvitelBatch(rows, []).ids).toEqual([])
   })
 
   it('עמודי A4: 19 בראשון, 24 בכל עמוד נוסף', () => {
