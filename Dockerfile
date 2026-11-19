@@ -40,6 +40,8 @@ COPY --from=build --chown=app:app /app/public ./public
 COPY --from=build --chown=app:app /app/scripts/fix-missing-cards.mjs ./scripts/fix-missing-cards.mjs
 COPY --from=build --chown=app:app /app/scripts/find-card-holder.mjs ./scripts/find-card-holder.mjs
 COPY --from=build --chown=app:app /app/node_modules/undici ./node_modules/undici
+# קריאת PDF מצורף למייל קוויטל: ה-tracing מעתיק רק את pdf.mjs, בלי ה-worker שנטען בנתיב יחסי
+COPY --from=build --chown=app:app /app/node_modules/pdfjs-dist ./node_modules/pdfjs-dist
 USER app
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \

@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { MAX_LINES, validateLine, type KvitelLineInput, type KvitelRequestType } from '@/lib/kvitel'
 import { askClaudeJson } from '@/lib/kvitelAi'
 import { ingestKvitel } from '@/lib/kvitelIngest'
+import type { KvitelAttachmentText } from '@/lib/kvitelAttachments'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ערוץ המייל של הקוויטלאך: מייל לתיבה k@ מפוענח לשורות (שם, בן/בת, שם האם, בקשה).
@@ -84,13 +85,29 @@ export function guessRequestType(text: string): { requestType: KvitelRequestType
 // ⚠️ לא "כל מילה שמתחילה ב-ל": "פעשא לאה" היה נחתך ל"פעשא".
 const LINE_RE = /^(.+?)\s+(בן|בת|ב"ר|בר)\s+(.+?)(?:\s*[-–—:,]\s*(.+)|\s+((?:ל|ש|ל?ה)(?:רפו|רפ"ש|פרנס|זיווג|זווג|זיווה|זווה|זוו"ה|שידוך|זרע|זש"ק|זשק|זחו"ק|הצלח|ישוע|ברכה|בריאות|יזכה|תזכה|שלום)\S*.*))?$/
 
+// מייל שהועבר (Fwd): הבקשה היא ההודעה המועברת עצמה, ולכן ממשיכים לקרוא אחרי
+// הכותרת שלה ומדלגים רק על שורות הכותרת (מאת, תאריך, נושא, אל).
+// ב-Outlook גם העברה מסומנת "-----Original Message-----": נחשב העברה רק כשהנושא הוא Fw/Fwd,
+// אחרת זה ציטוט של תשובה, ושם עוצרים.
+const FORWARD_MARK = /^-{2,}\s*(forwarded message|הודעה שהועברה|הודעה מועברת)\s*-*$/i
+const ORIGINAL_MARK = /^-{3,}\s*original message\s*-*$/i
+const FORWARD_HEADER = /^(from|date|sent|subject|to|cc|מאת|תאריך|נשלח|נושא|אל|עותק)\s*:/i
+export const isForwardSubject = (subject: string) => /^\s*(fw|fwd|הועבר)\s*:/i.test(subject)
+
 // שורות התוכן: עד החתימה או הציטוט של מייל קודם, בלי מספור ותבליטים.
-function bodyLines(text: string): string[] {
+function bodyLines(text: string, forwarded = false): string[] {
   const out: string[] = []
+  let inForwardHeader = false
   for (const raw of decodeEntities(text).slice(0, MAX_TEXT).split(/\r?\n/)) {
     const line = raw.trim()
-    if (/^(--|__|On .+wrote:|ב.+כתב|-----Original|נשלח מ)/.test(line)) break
-    if (!line || line.startsWith('>')) continue
+    if (FORWARD_MARK.test(line) || (forwarded && ORIGINAL_MARK.test(line))) { inForwardHeader = true; continue }
+    if (inForwardHeader) {
+      if (FORWARD_HEADER.test(line)) continue
+      inForwardHeader = false
+      if (!line) continue
+    }
+    if (/^(--\s*$|__|On .+wrote:|ב.+כתב|-----Original|נשלח מ)/.test(line)) break
+    if (!line || line.startsWith('>') || /^[-_=]{3,}$/.test(line)) continue
     out.push(line.replace(/^[\d]+[.)]\s*|^[•*\-–]\s*/, ''))
   }
   return out
@@ -100,6 +117,7 @@ export interface ParsedKvitelEmail {
   lines: KvitelLineInput[]
   flags: (string | null)[]
   leftover: string[]   // שורות שלא פוענחו (לא ברכות/חתימה)
+  found?: number       // כמה שמות נמצאו לפני החיתוך ל-MAX_LINES
 }
 
 // מילים שאינן שמות: פתיחה וסגירה של מייל.
@@ -110,7 +128,7 @@ const isRequestLine = (l: string) => { const g = guessRequestType(l); return !!g
 
 export function parseKvitelEmailText(subject: string, text: string): ParsedKvitelEmail {
   // בקשה כללית לכל המייל ("לרפואה שלימה" בנושא או בשורה נפרדת) לשורות שאין להן בקשה.
-  const lines = bodyLines(text)
+  const lines = bodyLines(text, isForwardSubject(subject))
   const general = [subject, ...lines.filter(l => !LINE_RE.test(l))]
     .filter(isRequestLine).map(l => guessRequestType(l)).find(Boolean) ?? null
 
@@ -141,6 +159,7 @@ export function parseKvitelEmailText(subject: string, text: string): ParsedKvite
     }
     if (!matched && !NOISE.test(line) && !isRequestLine(line)) out.leftover.push(line)
   }
+  out.found = out.lines.length
   out.lines = out.lines.slice(0, MAX_LINES)
   out.flags = out.flags.slice(0, MAX_LINES)
   return out
@@ -175,31 +194,50 @@ ${text.slice(0, MAX_TEXT)}`,
 // נקרא מ-webhook של Resend לכל מייל קוויטל (ראו detectKvitelEmail). בטוח לקריאה חוזרת (sourceRef = message-id).
 // מייל נקלט כבקשה רק אם נמצא בו לפחות שם אחד ("משה בן יהודית"), גם בתיבה k@. מייל בלי שם
 // (תודה, שאלה, צרופה בלבד) נשאר רק בתיבה הרגילה ולא יוצר בקשה ריקה.
+// קבצים מצורפים (Word, PDF, טקסט) מפוענחים כמו הגוף, והשמות מהגוף ומהקבצים מתאחדים לבקשה אחת.
 export async function handleKvitelEmail(db: SupabaseClient, m: {
   messageId: string; fromEmail: string; fromName: string | null; subject: string; text: string
+  attachments?: KvitelAttachmentText[]
 }): Promise<{ ok: boolean; requestId?: string; status?: string; skipped?: string; duplicate?: boolean }> {
   m = { ...m, subject: decodeEntities(m.subject), text: stripYedaPhoneNoise(decodeEntities(m.text)) }
   const { count } = await db.from('kvitel_requests').select('id', { count: 'exact', head: true })
     .eq('channel', 'email').eq('source_ref', m.messageId)
   if (count) return { ok: true, duplicate: true }
 
-  let parsed: { lines: KvitelLineInput[]; flags: (string | null)[] } = parseKvitelEmailText(m.subject, m.text)
-  let note = 'פוענח מהמייל לפי תבנית'
-  const leftover = (parsed as ParsedKvitelEmail).leftover
-  if (!parsed.lines.length || leftover.length) {
-    const ai = await aiParseKvitelEmail(m.subject, m.text)
-    if (ai && ai.lines.length >= parsed.lines.length) { parsed = ai; note = 'פוענח מהמייל ב-AI' }
-    else if (leftover.length) note = `נשארו ${leftover.length} שורות שלא פוענחו — יש לבדוק את המקור`
+  const files = (m.attachments ?? []).filter(a => a.text.trim())
+  const sources = [m.text, ...files.map(f => f.text)]
+  const all: ParsedKvitelEmail = { lines: [], flags: [], leftover: [] }
+  let found = 0
+  for (const src of sources) {
+    const p = parseKvitelEmailText(m.subject, src)
+    all.lines.push(...p.lines); all.flags.push(...p.flags); all.leftover.push(...p.leftover)
+    found += p.found ?? p.lines.length
+  }
+  // הטקסט המלא: הגוף ואחריו כל קובץ עם שמו, גם ל-AI וגם למקור שנשמר בבקשה.
+  const fullText = [m.text, ...files.map(f => `[קובץ מצורף: ${f.filename}]\n${f.text}`)].join('\n\n')
+
+  let parsed: { lines: KvitelLineInput[]; flags: (string | null)[] } = {
+    lines: all.lines.slice(0, MAX_LINES), flags: all.flags.slice(0, MAX_LINES),
+  }
+  const from = files.length ? 'מהמייל ומהקובץ המצורף' : 'מהמייל'
+  let note = `פוענח ${from} לפי תבנית`
+  if (!parsed.lines.length || all.leftover.length) {
+    const ai = await aiParseKvitelEmail(m.subject, fullText)
+    if (ai && ai.lines.length >= parsed.lines.length) { parsed = ai; note = `פוענח ${from} ב-AI` }
+    else if (all.leftover.length) note = `נשארו ${all.leftover.length} שורות שלא פוענחו — יש לבדוק את המקור`
   }
   if (!parsed.lines.length) return { ok: true, skipped: 'no-names' }
+  // יותר שמות ממה שנכנס לבקשה אחת: לא נבלעים בשקט, הבקשה עוברת לבדיקה.
+  const truncated = found > MAX_LINES
+  if (truncated) note = `נמצאו ${found} שמות, נקלטו ${MAX_LINES} הראשונים — יש לבדוק את המקור`
 
   const res = await ingestKvitel(db, {
     channel: 'email',
     // שורות שלא פוענחו → כל הבקשה לבדיקה, גם אם הסוכן לא סימן דבר.
-    status: note.startsWith('נשארו') ? 'review' : undefined,
+    status: note.startsWith('נשארו') || truncated ? 'review' : undefined,
     email: m.fromEmail, contactName: m.fromName,
     lines: parsed.lines, lineFlags: parsed.flags,
-    rawText: `${m.subject}\n\n${m.text}`.slice(0, MAX_TEXT),
+    rawText: `${m.subject}\n\n${fullText}`.slice(0, MAX_TEXT),
     sourceRef: m.messageId, note,
   })
   if (!res.ok) { console.error('[kvitel-email] ingest failed:', res.error); return { ok: false } }

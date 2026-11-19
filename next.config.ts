@@ -15,7 +15,9 @@ const nextConfig: NextConfig = {
   // placeable asset". serverExternalPackages משאיר אותו כ-require חיצוני
   // שנטען מ-node_modules ב-runtime, בלי לעבור bundling כלל. נדרש ליצירת
   // ברקודים ל-PDF יריד הספרים (lib/bookFairBarcodesPdf.ts).
-  serverExternalPackages: ['@napi-rs/canvas'],
+  // pdfjs-dist: קריאת PDF שמצורף למייל קוויטל (lib/kvitelAttachments.ts). ה-worker
+  // שלו נטען בנתיב יחסי מ-node_modules, ולכן גם הוא לא עובר bundling.
+  serverExternalPackages: ['@napi-rs/canvas', 'pdfjs-dist'],
   async rewrites() {
     return [{ source: "/promo", destination: "/promo.html" }];
   },

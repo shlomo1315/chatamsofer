@@ -551,6 +551,8 @@ export async function POST(request: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rawAttachments: any[] = Array.isArray(data.attachments) ? data.attachments : []
   const attachments: { filename: string; mimeType: string; size: number; url?: string }[] = []
+  // התוכן עצמו נשמר גם לפענוח קוויטל (שמות בקובץ Word/PDF מצורף)
+  const attachmentFiles: { filename: string; mimeType: string; buffer: Buffer }[] = []
   const attCount = Math.max(rawAttachments.length, fetchedAtts.length)
   for (let i = 0; i < attCount; i++) {
     const a = rawAttachments[i] ?? {}
@@ -573,6 +575,7 @@ export async function POST(request: NextRequest) {
       }
     }
     if (buffer) {
+      attachmentFiles.push({ filename, mimeType, buffer })
       try {
         size = buffer.length
         const safe = filename.replace(/[^\w.\-]+/g, '_')
@@ -920,8 +923,10 @@ export async function POST(request: NextRequest) {
     const kvitelBy = detectKvitelEmail({ recipients: [resolvedToEmail, ...candidates], subject, fromEmail: from.email, isOrgAddr })
     if (kvitelBy) {
       const text = (plain && plain.trim()) ? plain : htmlToPlainText(html ?? '')
+      const { extractAttachmentTexts } = await import('@/lib/kvitelAttachments')
       const r = await handleKvitelEmail(admin, {
         messageId, fromEmail: from.email, fromName: from.name, subject, text,
+        attachments: await extractAttachmentTexts(attachmentFiles),
       })
       console.log('[resend-inbound] קוויטל:', r)
     }
