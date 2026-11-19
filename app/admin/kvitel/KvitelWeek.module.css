@@ -49,9 +49,7 @@
 .wk{display:flex;align-items:center;gap:2px;background:var(--sunk);border-radius:10px;padding:3px}
 .wk button{border:0;background:transparent;padding:6px 12px;border-radius:8px;font-size:var(--t-sm);color:var(--ink-2);min-height:36px}
 .wk button.on{background:var(--surface);color:var(--navy);font-weight:800;box-shadow:0 0 0 1px var(--line)}
-.aClose{display:flex;align-items:center;gap:var(--s2);margin-top:var(--s3);font-size:var(--t-sm);color:var(--ink-2)}
-.aClose b{color:var(--navy)}
-.pipe{margin-top:var(--s5);display:grid;grid-template-columns:1.25fr .9fr 1.25fr .9fr;border:1px solid var(--line);border-radius:var(--r2);background:var(--surface);overflow:hidden}
+.aClose{display:flex;align-items:center;gap:var(--s2);margin-top:var(--s3);font-size:var(--t-sm);color:var(--ink-2)}.pipe{margin-top:var(--s5);display:grid;grid-template-columns:1.25fr .9fr 1.25fr .9fr;border:1px solid var(--line);border-radius:var(--r2);background:var(--surface);overflow:hidden}
 .pipe>div{padding:var(--s5);border-inline-start:1px solid var(--line);position:relative}
 .pipe>div:first-child{border-inline-start:0}
 .pipe .k{display:flex;align-items:center;gap:var(--s2);font-size:var(--t-sm);font-weight:700;color:var(--ink-2)}

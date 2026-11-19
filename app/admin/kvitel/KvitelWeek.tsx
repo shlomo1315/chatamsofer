@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { kvitelCloseFlow, type KvitelFormat } from '@/lib/kvitelCloseFlow'
 import { CalendarDays, Check, Download, Send, type LucideIcon } from 'lucide-react'
 import { israelDay, type KvitelFilters, type KvitelRequestRow } from '@/lib/kvitelQuery'
-import { closeLabel, hoursToClose, kvitelFile, recentWeeks, sentLabel, weekIntake, weekSent } from '@/lib/kvitelWeek'
+import { kvitelFile, recentWeeks, sentLabel, weekIntake, weekSent } from '@/lib/kvitelWeek'
 import { downloadKvitel } from './KvitelPreview'
 import KvitelClient from './KvitelClient'
 import s from './KvitelWeek.module.css'
@@ -55,7 +55,6 @@ export default function KvitelWeek({ rows, filters, canEdit, tabs, onReload }: {
   const sent = useMemo(() => weekSent(rows, w), [rows, w])
   const prevSent = useMemo(() => (weekIdx > 0 ? weekSent(rows, weeks[weekIdx - 1]) : null), [rows, weeks, weekIdx])
   const maxChan = Math.max(1, ...intake.byChannel.map(c => c.n))
-  const hours = hoursToClose(w, now)
 
   async function download(format: 'pdf' | 'docx') {
     setBusy(true)
@@ -139,8 +138,7 @@ export default function KvitelWeek({ rows, filters, canEdit, tabs, onReload }: {
             <p className={s.crumb}>מחלקות / קוויטלאך</p>
             <h1 className={s.h1}>הקוויטל של {w.parsha}</h1>
             <p className={s.aClose}>
-              <Ico icon={CalendarDays} />{w.label} · <b>נסגר {closeLabel(w)}</b>
-              {hours !== null && <> · עוד <span className={s.num}>{hours}</span> שעות</>}
+              <Ico icon={CalendarDays} />{w.label}
             </p>
           </div>
           <div className={s.wk} role="group" aria-label="שבוע">
