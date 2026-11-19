@@ -127,8 +127,23 @@
 .macts .btn.pri{flex:1}
 .guard{margin-top:var(--s4);display:flex;gap:var(--s2);font-size:var(--t-xs);color:var(--ink-2);background:var(--sunk);border-radius:var(--r1);padding:var(--s3)}
 
+/* ── מנות קודמות (תוכנית א׳) ── */
+.batches{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:var(--r2);background:var(--surface);overflow:hidden}
+.batch{display:grid;grid-template-columns:1.2fr 1fr 1.2fr auto;align-items:center;gap:var(--s4);padding:var(--s3) var(--s5);border-top:1px solid var(--line)}
+.batch:first-child{border-top:0}
+.bWhen b{display:block;font-size:var(--t-md);font-weight:800;color:var(--navy)}
+.bWhen span{font-size:var(--t-sm);color:var(--ink-2)}
+.bCount{font-size:var(--t-sm);color:var(--ink-2)}
+.bWho{font-size:var(--t-sm);color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bAct{display:flex;gap:var(--s2)}
+
 /* ── טלפון ── */
 @media (max-width:900px){
+  .batch{grid-template-columns:1fr auto;gap:var(--s1) var(--s3);padding:var(--s3) var(--s4)}
+  .bAct{grid-row:1 / span 3;grid-column:2}
+  .secH{flex-wrap:wrap}
+  .secH h2{white-space:nowrap}
+
   .h1{font-size:var(--t-2xl)}
   .pipe{grid-template-columns:1fr 1fr}
   .pipe>div:nth-child(3){border-inline-start:0}
