@@ -35,6 +35,13 @@ export function verifySvixSignature(
   const age = Math.abs(Date.now() / 1000 - Number(timestamp))
   if (!Number.isFinite(age) || age > TOLERANCE_SEC) return false
 
+  // המשתנה יכול להכיל כמה סודות מופרדים ברווח או בפסיק: לכל webhook ב-Resend
+  // (מייל נכנס, מסירות) יש סוד חתימה משלו, ושני הנתיבים קוראים מאותו משתנה.
+  return secret.split(/[\s,]+/).filter(Boolean)
+    .some(s => matchesSecret(s, `${id}.${timestamp}.${rawBody}`, signature))
+}
+
+function matchesSecret(secret: string, payload: string, signature: string): boolean {
   // הסוד מגיע בפורמט "whsec_<base64>"
   let key: Buffer
   try {
@@ -44,9 +51,7 @@ export function verifySvixSignature(
   }
   if (!key.length) return false
 
-  const expected = createHmac('sha256', key)
-    .update(`${id}.${timestamp}.${rawBody}`)
-    .digest('base64')
+  const expected = createHmac('sha256', key).update(payload).digest('base64')
 
   // הכותרת עשויה להכיל כמה חתימות מופרדות ברווח ("v1,aaa v1,bbb") —
   // מספיק שאחת מהן תואמת (מאפשר סבב מפתחות ללא downtime)
