@@ -61,6 +61,11 @@ export function scopeKvitelRows<R extends Pick<KvitelRequestRow, 'channel' | 'co
 export const byKvitelTab = <R extends Pick<KvitelRequestRow, 'status'>>(rows: R[], tab: KvitelTab): R[] =>
   tab === 'all' ? rows : rows.filter(r => r.status === tab)
 
+// כפתורי השורה בטבלה ובכרטיסים במובייל. "מחיקה" = ביטול (עוברת ל"בוטלו" ואפשר לשחזר משם).
+export function kvitelRowActions(r: Pick<KvitelRequestRow, 'status' | 'needsReview'>, canEdit: boolean) {
+  return { approve: canEdit && !!r.needsReview, edit: canEdit, remove: canEdit && r.status !== 'cancelled' }
+}
+
 // raw_text נשמר כשורות "שדה: ערך" (הגשת נדרים). טקסט חופשי בלי נקודתיים לא נחשב שדות.
 export function parseRawFields(raw: string | null | undefined): { key: string; value: string }[] {
   const out: { key: string; value: string }[] = []

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { kvitelCloseFlow, type KvitelFormat } from '@/lib/kvitelCloseFlow'
 import { CalendarDays, Check, Download, Send, type LucideIcon } from 'lucide-react'
 import { israelDay, type KvitelFilters, type KvitelRequestRow } from '@/lib/kvitelQuery'
-import { kvitelFile, recentWeeks, sentLabel, weekIntake, weekSent } from '@/lib/kvitelWeek'
+import { kvitelFile, kvitelWeekTabs, sentLabel, weekIntake } from '@/lib/kvitelWeek'
 import { downloadKvitel } from './KvitelPreview'
 import KvitelClient from './KvitelClient'
 import s from './KvitelWeek.module.css'
@@ -35,25 +35,28 @@ export default function KvitelWeek({ rows, filters, canEdit, tabs, onReload }: {
   onReload: () => Promise<void>
 }) {
   const [now] = useState(() => Date.now())
-  const weeks = useMemo(() => recentWeeks(israelDay(new Date(now).toISOString())), [now])
-  const current = weeks[weeks.length - 1]
-  const [weekIdx, setWeekIdx] = useState(weeks.length - 1)
-  const w = weeks[weekIdx]
-  const isCurrent = weekIdx === weeks.length - 1
-
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ text: string; err?: boolean } | null>(null)
   const [closing, setClosing] = useState(false)
   const [batches, setBatches] = useState<BatchList | null>(null)
   const [chan, setChan] = useState('')   // ערוץ שנבחר בכרטיס "נכנסו השבוע" — מסנן את הטבלה
 
+  // השבוע מתחלף בשליחה לציון ולא לפי הלוח: הלשונית האחרונה היא השבוע הפתוח (הפרשה שאחרי המנה האחרונה),
+  // והקודמות הן המנות שנשלחו — ראו kvitelWeekTabs
+  const weeks = useMemo(() => kvitelWeekTabs(batches?.list ?? [], israelDay(new Date(now).toISOString())), [batches, now])
+  const current = weeks[weeks.length - 1].week
+  const [picked, setPicked] = useState<number | null>(null)   // null = השבוע הפתוח
+  const weekIdx = picked != null && picked < weeks.length - 1 ? picked : weeks.length - 1
+  const tab = weeks[weekIdx]
+  const w = tab.week
+  const isCurrent = weekIdx === weeks.length - 1
+  const prevBatch = weeks[weekIdx - 1]?.batch ?? null
+
   const reviewCount = useMemo(() => rows.filter(r => r.status === 'review').length, [rows])
   // בטבלה, כמו ברשימה: "לבדיקה" מוצג כ"לא נשלח" עם תגית וכפתור אישור
   const listRows = useMemo(() => rows.map(r => (r.status === 'review' ? { ...r, status: 'pending' as const, needsReview: true } : r)), [rows])
   const file = useMemo(() => kvitelFile(rows), [rows])
-  const intake = useMemo(() => weekIntake(rows, w), [rows, w])
-  const sent = useMemo(() => weekSent(rows, w), [rows, w])
-  const prevSent = useMemo(() => (weekIdx > 0 ? weekSent(rows, weeks[weekIdx - 1]) : null), [rows, weeks, weekIdx])
+  const intake = useMemo(() => weekIntake(rows, tab), [rows, tab])
   const maxChan = Math.max(1, ...intake.byChannel.map(c => c.n))
 
   async function download(format: 'pdf' | 'docx') {
@@ -71,11 +74,12 @@ export default function KvitelWeek({ rows, filters, canEdit, tabs, onReload }: {
   // רישום המנה וסימון "נשלח לציון" — רק מתוך האישור בחלון, עם הבקשות שירדו בפועל
   async function recordBatch(ids: string[]): Promise<boolean> {
     const res = await fetch(BATCHES, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids, parsha: current.parsha }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }),
     }).catch(() => null)
     const data = await res?.json().catch(() => ({})) ?? {}
     if (!res?.ok) { setMsg({ text: data.error || 'הסימון נכשל. אפשר ללחוץ שוב על האישור.', err: true }); return false }
     setClosing(false)
+    setPicked(null)
     setMsg(data.recorded
       ? { text: `המנה נרשמה, ו־${data.updated} בקשות סומנו שנשלחו לציון הקדוש.` }
       : { text: `${data.updated} בקשות סומנו שנשלחו לציון הקדוש, אבל המנה לא נרשמה: טבלת המנות עוד לא נוצרה במסד.`, err: true })
@@ -143,8 +147,8 @@ export default function KvitelWeek({ rows, filters, canEdit, tabs, onReload }: {
           </div>
           <div className={s.wk} role="group" aria-label="שבוע">
             {weeks.map((x, i) => (
-              <button key={x.shabbat} type="button" className={cx(i === weekIdx && s.on)} aria-current={i === weekIdx || undefined}
-                onClick={() => setWeekIdx(i)}>{x.parsha}</button>
+              <button key={x.batch?.id ?? 'open'} type="button" className={cx(i === weekIdx && s.on)} aria-current={i === weekIdx || undefined}
+                onClick={() => setPicked(i === weeks.length - 1 ? null : i)}>{x.week.parsha}</button>
             ))}
           </div>
         </div>
@@ -175,14 +179,14 @@ export default function KvitelWeek({ rows, filters, canEdit, tabs, onReload }: {
           </div>
           <div>
             <p className={s.k}><span className={s.dot} style={{ color: 'var(--ok)' }} />נשלח לציון</p>
-            {sent.count
+            {tab.batch
               ? <>
-                  <p className={cx(s.v, s.num)}>{sent.count} <span style={{ fontSize: 'var(--t-lg)', fontWeight: 700, color: 'var(--ink-2)' }}>בקשות</span></p>
-                  <p className={s.d}>נשלחו {sentLabel(sent.at!)}</p>
+                  <p className={cx(s.v, s.num)}>{tab.batch.request_count} <span style={{ fontSize: 'var(--t-lg)', fontWeight: 700, color: 'var(--ink-2)' }}>בקשות</span></p>
+                  <p className={s.d}>נשלחו {sentLabel(tab.batch.closed_at)}</p>
                 </>
               : <>
                   <p className={s.v} style={{ fontSize: 'var(--t-xl)', marginTop: 'var(--s4)' }}>עוד לא</p>
-                  {prevSent?.count ? <p className={s.d}>{weeks[weekIdx - 1].parsha}: {prevSent.count} בקשות, נשלחו {sentLabel(prevSent.at!)}</p> : null}
+                  {prevBatch ? <p className={s.d}>{prevBatch.parsha ?? 'המנה הקודמת'}: {prevBatch.request_count} בקשות, נשלחו {sentLabel(prevBatch.closed_at)}</p> : null}
                 </>}
           </div>
         </div>
@@ -197,14 +201,14 @@ export default function KvitelWeek({ rows, filters, canEdit, tabs, onReload }: {
             <span className={s.expLbl}>ייצוא לקוויטל:</span>
             <button type="button" className={cx(s.btn, s.sm)} disabled={busy || !file.ids.length} onClick={() => void download('pdf')}><Ico icon={Download} />PDF</button>
             <button type="button" className={cx(s.btn, s.sm)} disabled={busy || !file.ids.length} onClick={() => void download('docx')}><Ico icon={Download} />Word</button>
-            <button type="button" className={cx(s.btn, s.pri)} disabled={!canEdit || busy || !file.ids.length || !isCurrent} onClick={openClose}>
+            <button type="button" className={cx(s.btn, s.pri)} disabled={!canEdit || busy || !batches || !file.ids.length || !isCurrent} onClick={openClose}>
               <Ico icon={Send} />שליחה לציון
             </button>
           </div>
           <p className={s.sheetnote} style={{ textAlign: 'start' }}>
             {isCurrent
-              ? 'הייצוא לא מסמן כלום. "שליחה לציון" מורידה את הקובץ ומסמנת "נשלח לציון" רק אחרי אישור, ורק את מה שירד בפועל.'
-              : `השליחה לציון נעשית בשבוע של ${current.parsha}.`}
+              ? 'הייצוא לא מסמן כלום. "שליחה לציון" מורידה את הקובץ ומסמנת "נשלח לציון" רק אחרי אישור, ורק את מה שירד בפועל. אחרי השליחה כל בקשה חדשה נכנסת לפרשה הבאה.'
+              : `${w.parsha} כבר נשלח לציון. השליחה הבאה היא של ${current.parsha}.`}
           </p>
           {msg && <p role={msg.err ? 'alert' : 'status'} className={cx(s.msg, msg.err && s.err)}>{msg.text}</p>}
           <KvitelClient embedded allRows={listRows} filters={filters} canEdit={canEdit} onReload={() => void onReload()}

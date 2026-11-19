@@ -7,6 +7,7 @@ import { scrambleBytes, DOC_CIPHER_ID } from '@/lib/docCipher'
 // "ההורדה נכשלה" בסגירת המנה. המטען מעורבל לפני ה-base64, אחרת חתימת ה-PDF ("JVBERi")
 // גלויה גם בתוך JSON. הדפדפן מבטל את הערבול ומרכיב Blob מקומי (downloadKvitel).
 // אותו מנגנון כמו מכתבי הברכה (api/admin/gratitude/batch-pdf).
+// date — היום שבשם הקובץ (יום ההורדה או יום סגירת המנה), לא השבת שבכותרת.
 export function kvitelFileResponse(bytes: Uint8Array, format: 'pdf' | 'docx', date: Date) {
   const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(date)
   return NextResponse.json({

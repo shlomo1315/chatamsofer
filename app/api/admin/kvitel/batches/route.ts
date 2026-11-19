@@ -3,10 +3,11 @@ import { requirePermission, forbidden, getServiceClient, serverMisconfigured } f
 import { logActivity } from '@/lib/activityLog'
 import { loadKvitelRequests, parseKvitelFilters } from '@/lib/kvitelQuery'
 import { kvitelBatch } from '@/lib/kvitelWeek'
+import { loadOpenKvitelWeek } from '@/lib/kvitelOpenWeek'
 
 // מנות שבועיות של קוויטלאך (app/admin/kvitel/KvitelWeek.tsx, טבלת kvitel_batches).
 // GET  — המנות האחרונות, בלי השורות עצמן (נטפרי חוסם דף עם שמות גלויים).
-// POST { ids, parsha } — סגירת מנה אחרי שהקובץ ירד: רושם את השורות כפי שירדו ומסמן "נשלח לציון".
+// POST { ids } — סגירת מנה אחרי שהקובץ ירד: רושם את השורות כפי שירדו ומסמן "נשלח לציון".
 //
 // ⚠️ כל נתיב מגן על עצמו: ה-middleware אינו מכסה /api כלל.
 
@@ -43,12 +44,13 @@ export async function POST(req: NextRequest) {
   const db = getServiceClient()
   if (!db) return serverMisconfigured()
 
-  const body = await req.json().catch(() => null) as { ids?: unknown; parsha?: unknown } | null
+  const body = await req.json().catch(() => null) as { ids?: unknown } | null
   const ids = Array.isArray(body?.ids) ? body.ids : null
   if (!ids || !ids.length || ids.length > MAX_IDS || !ids.every((i): i is string => typeof i === 'string' && UUID_RE.test(i))) {
     return NextResponse.json({ error: 'רשימת מזהים לא תקינה' }, { status: 400 })
   }
-  const parsha = typeof body?.parsha === 'string' ? body.parsha.trim().slice(0, 40) || null : null
+  // הפרשה של המנה נקבעת כאן ולא בדפדפן: השבוע הפתוח = הפרשה שאחרי המנה האחרונה, לא לפי התאריך
+  const { parsha } = await loadOpenKvitelWeek(db)
 
   // רק מה שעדיין "לא נשלח" — בקשה שהוחזרה לבדיקה או כבר נשלחה בינתיים לא נרשמת פעמיים
   const { rows, error: loadError } = await loadKvitelRequests(db, parseKvitelFilters({ status: 'pending' }))
