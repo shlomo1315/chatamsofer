@@ -141,9 +141,15 @@ export async function ingestKvitel(db: SupabaseClient, s: KvitelSubmission): Pro
  * עיבוד מחדש של בקשה קיימת שנקלטה בלי שמות: מעדכן את פרטי הפונה והמקור ומוסיף את השורות,
  * בלי ליצור בקשה חדשה. הסטטוס מחושב מחדש רק אם הבקשה עדיין "לבדיקה" או "ממתין".
  */
-export async function reprocessKvitelRequest(db: SupabaseClient, requestId: string, s: KvitelSubmission): Promise<{ ok: true; status: KvitelStatus; lines: number } | { ok: false; error: string }> {
+export async function reprocessKvitelRequest(db: SupabaseClient, requestId: string, s: KvitelSubmission, opts: { replaceLines?: boolean } = {}): Promise<{ ok: true; status: KvitelStatus; lines: number } | { ok: false; error: string }> {
   const { data: cur } = await db.from('kvitel_requests').select('id, status').eq('id', requestId).maybeSingle()
   if (!cur) return { ok: false, error: 'הבקשה לא נמצאה' }
+  // שורות שנקלטו חלקית מוחלפות בפענוח המלא (רק בקשה שעוד לא נשלחה)
+  if (opts.replaceLines) {
+    if (cur.status !== 'pending' && cur.status !== 'review') return { ok: false, error: 'הבקשה כבר נשלחה' }
+    const { error: delErr } = await db.from('kvitel_request_lines').delete().eq('request_id', requestId)
+    if (delErr) { console.error('[kvitel] reprocess delete lines failed:', delErr); return { ok: false, error: 'החלפת השורות נכשלה' } }
+  }
   const requesterId = await findOrCreateRequester(db, s)
   const prep = await prepareLines(db, s)
   const flags = prep.flags

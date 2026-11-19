@@ -99,8 +99,10 @@ export function autoKvitelBody(row: NedarimRow): Record<string, string> {
     else if (PHONE_RE.test(v)) { if (!body.Phone) body.Phone = v }
     else if (RELATION_RE.test(v)) toks.push({ kind: 'relation', v })
     else if (requestLike(v)) toks.push({ kind: 'request', v })
-    else if (NAME_LINE_RE.test(v) || v.length > 40) free.push(v)
-    else if (NAME_RE.test(v)) toks.push({ kind: 'name', v })
+    else if (NAME_LINE_RE.test(v)) free.push(v)
+    else if (NAME_RE.test(v) && v.split(/\s+/).length <= 4) toks.push({ kind: 'name', v })
+    // טקסט ארוך שאינו שם ("פרטי הבקשה"): הבקשה של השורה. קודם נשלח לטקסט החופשי ונבלע.
+    else if (v.length > 3) toks.push({ kind: 'request', v })
   }
 
   // המגיש: שם נוסף לפני שורת השמות הראשונה
@@ -297,26 +299,35 @@ async function doPull(dbArg?: SupabaseClient): Promise<KvitelPullResult> {
 // ── עיבוד מחדש ──
 const MAX_REPROCESS = 100
 
-export interface KvitelReprocessResult { ok: boolean; checked: number; fixed: number; stillEmpty: number; missing: number; error?: string }
+export interface KvitelReprocessResult { ok: boolean; checked: number; fixed: number; notes: number; stillEmpty: number; missing: number; error?: string }
+
+type ReRow = { id: string; source_ref: string; status: string; kvitel_request_lines: { request_note: string | null }[] }
 
 /**
- * בקשות מנדרים שנקלטו בלי שמות: מושך שוב את הרשומה לפי ה-ID שלה, מפענח במנגנון העדכני
- * ומשלים את הבקשה הקיימת. אין קליטה כפולה. עד 100 בקשות בהרצה.
+ * בקשות מנדרים שנקלטו חלקית: מושך שוב את הרשומה לפי ה-ID שלה, מפענח במנגנון העדכני ומשלים
+ * את הבקשה הקיימת, בלי קליטה כפולה. שני מקרים:
+ *  - בלי שמות בכלל: השמות נקלטים.
+ *  - שמות בלי פרטי הבקשה (נמחקו בפענוח הישן), בבקשה שעוד לא נשלחה: השורות מוחלפות,
+ *    ורק אם בפענוח החדש יש פרטי בקשה. בקשה שכבר נכתבו בה פרטים (גם ידנית) לא נדרסת.
+ * עד 100 בקשות בהרצה.
  */
 export async function reprocessKvitelFromNedarim(dbArg?: SupabaseClient): Promise<KvitelReprocessResult> {
-  const out: KvitelReprocessResult = { ok: true, checked: 0, fixed: 0, stillEmpty: 0, missing: 0 }
+  const out: KvitelReprocessResult = { ok: true, checked: 0, fixed: 0, notes: 0, stillEmpty: 0, missing: 0 }
   const db = dbArg ?? getServiceClient()
   if (!db) return { ...out, ok: false, error: 'השרת אינו מוגדר' }
   const c = await getReadyConfig(db)
   if (!c) return { ...out, ok: false, error: 'צריך קודם להגדיר מוסד, מפתח וטופס' }
   const { data, error } = await db.from('kvitel_requests')
-    .select('id, source_ref, kvitel_request_lines(id)').eq('channel', 'nedarim').like('source_ref', 'nedarim-form:%')
+    .select('id, source_ref, status, kvitel_request_lines(request_note)').eq('channel', 'nedarim').like('source_ref', 'nedarim-form:%')
     .order('submitted_at', { ascending: false }).limit(1000)
   if (error) return { ...out, ok: false, error: 'קריאת הבקשות נכשלה' }
-  const empties = ((data ?? []) as unknown as { id: string; source_ref: string; kvitel_request_lines: unknown[] }[])
-    .filter(r => !r.kvitel_request_lines?.length).slice(0, MAX_REPROCESS)
+  const todo = ((data ?? []) as unknown as ReRow[]).filter(r => {
+    const lines = r.kvitel_request_lines ?? []
+    if (!lines.length) return true
+    return (r.status === 'pending' || r.status === 'review') && !lines.some(l => l.request_note)
+  }).slice(0, MAX_REPROCESS)
   const fields = configFields(c)
-  for (const r of empties) {
+  for (const r of todo) {
     const id = Number(r.source_ref.slice('nedarim-form:'.length))
     if (!Number.isFinite(id) || id < 1) continue
     out.checked++
@@ -325,12 +336,16 @@ export async function reprocessKvitelFromNedarim(dbArg?: SupabaseClient): Promis
     const row = res.rows.find(x => Number(x.ID) === id)
     if (!row) { out.missing++; continue }
     const p = mapKvitelRow(row, c)
+    const partial = (r.kvitel_request_lines ?? []).length > 0
+    // שמות קיימים: מחליפים רק כשהפענוח החדש מביא את פרטי הבקשה שחסרו
+    if (partial && !p.lines.some(l => l.requestNote)) continue
     const s = await reprocessKvitelRequest(db, r.id, {
       channel: 'nedarim', phone: p.phone, email: p.email, contactName: p.contactName,
       lines: p.lines, lineFlags: p.flags, rawText: p.rawText, sourceRef: p.sourceRef,
-    })
+    }, { replaceLines: partial })
     if (!s.ok) { out.ok = false; out.error = s.error; break }
-    if (s.lines) out.fixed++; else out.stillEmpty++
+    if (partial) out.notes++
+    else if (s.lines) out.fixed++; else out.stillEmpty++
   }
   return out
 }

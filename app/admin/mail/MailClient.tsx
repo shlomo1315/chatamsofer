@@ -8,6 +8,7 @@ import { docViewUrl, docDownloadUrl } from '@/lib/docUrl'
 import { openDocInNewTab, downloadDocViaData } from '@/lib/docBlob'
 import DocThumb from '@/components/ui/DocThumb'
 import RelatedRecords from './RelatedRecords'
+import KvitelMailDecode from '../kvitel/KvitelMailDecode'
 import {
   Inbox, Send, RefreshCw, PenSquare, Mail, Search, X,
   ChevronLeft, ChevronRight, Loader2, Reply, User, Phone, MapPin,
@@ -1541,6 +1542,8 @@ export default function MailClient({ lockDepartment }: { lockDepartment?: string
     : Object.values(DEPARTMENTS).filter(d => myAllowedKeys.includes(d.key))
   // מציגים בורר תיבות למנהל, או למשתמש מוגבל עם יותר מתיבה אחת
   const showDeptFilter = !lockDepartment && (myProfile?.role === 'admin' || filterableDepts.length > 1)
+  // לשונית המייל של הקוויטלעך: ליד הרשימה שתי עמודות, המייל המקורי והפיענוח שלו.
+  const kvitelDecode = lockDepartment === 'kvitel' && folder === 'INBOX'
 
   return (
     <div className="flex h-[calc(100vh-120px)] bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -1629,7 +1632,7 @@ export default function MailClient({ lockDepartment }: { lockDepartment?: string
 
       {/* Message List */}
       {/* במובייל: רשימה במסך מלא; כשנבחרה הודעה — תצוגת ההודעה תופסת את כל המסך (חזרה ב-X) */}
-      <div className={`flex-col border-l border-slate-200 ${selected ? 'hidden md:flex md:w-72 md:flex-shrink-0' : 'flex flex-1'}`}>
+      <div className={`flex-col border-l border-slate-200 ${selected ? 'hidden md:flex md:w-72 md:flex-shrink-0' : kvitelDecode ? 'flex flex-1 md:flex-none md:w-72 md:flex-shrink-0' : 'flex flex-1'}`}>
         <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100">
           <div className="flex-1 flex items-center gap-2 bg-slate-100 rounded-lg px-3 py-1.5">
             <Search size={14} className="text-slate-400 flex-shrink-0" />
@@ -1784,6 +1787,17 @@ export default function MailClient({ lockDepartment }: { lockDepartment?: string
         {paginationBar('bottom')}
       </div>
 
+      {kvitelDecode && !selected && (
+        <div className="hidden md:flex flex-1 min-w-0">
+          {['המייל המקורי', 'הפיענוח'].map(title => (
+            <section key={title} className="flex-1 flex flex-col border-l border-slate-200 last:border-l-0">
+              <h3 className="px-4 py-3 border-b border-slate-200 text-sm font-semibold text-slate-700">{title}</h3>
+              <p className="flex-1 flex items-center justify-center text-sm text-slate-400">בחר מייל מהרשימה</p>
+            </section>
+          ))}
+        </div>
+      )}
+
       {/* Message View */}
       {selected && (
         <div className="flex-1 flex flex-col overflow-hidden">
@@ -1872,11 +1886,25 @@ export default function MailClient({ lockDepartment }: { lockDepartment?: string
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto">
-            <MessageBody body={selected.body || ''} bodyText={selected.bodyText} snippet={selected.snippet} />
-            <AttachmentBar attachments={selected.attachments ?? []} messageId={selected.id} senderEmail={selected.fromEmail} />
-            {folder === 'INBOX' && <BeneficiaryCard email={selected.fromEmail} />}
-          </div>
+          {kvitelDecode ? (
+            <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden">
+              <section className="md:flex-1 min-w-0 md:overflow-y-auto border-b md:border-b-0 md:border-l border-slate-200">
+                <h3 className="px-4 py-3 border-b border-slate-200 text-sm font-semibold text-slate-700">המייל המקורי</h3>
+                <MessageBody body={selected.body || ''} bodyText={selected.bodyText} snippet={selected.snippet} />
+                <AttachmentBar attachments={selected.attachments ?? []} messageId={selected.id} senderEmail={selected.fromEmail} />
+              </section>
+              <section className="md:flex-1 min-w-0 md:overflow-y-auto bg-slate-50">
+                <h3 className="px-4 py-3 border-b border-slate-200 text-sm font-semibold text-slate-700">הפיענוח</h3>
+                <KvitelMailDecode mailId={selected.id} />
+              </section>
+            </div>
+          ) : (
+            <div className="flex-1 overflow-y-auto">
+              <MessageBody body={selected.body || ''} bodyText={selected.bodyText} snippet={selected.snippet} />
+              <AttachmentBar attachments={selected.attachments ?? []} messageId={selected.id} senderEmail={selected.fromEmail} />
+              {folder === 'INBOX' && <BeneficiaryCard email={selected.fromEmail} />}
+            </div>
+          )}
         </div>
       )}
 
