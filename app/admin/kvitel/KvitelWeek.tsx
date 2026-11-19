@@ -19,6 +19,16 @@ import s from './KvitelWeek.module.css'
 // הסגירה מורידה את הקובץ, ורק אם ההורדה הצליחה מסמנת "נשלח לציון" את אותן בקשות בדיוק.
 
 const PRINT_FILE = '/api/admin/kvitel/print-file'
+const BATCHES = '/api/admin/kvitel/batches'
+
+interface KvitelBatch { id: string; closed_at: string; closed_by_name: string | null; parsha: string | null; request_count: number; name_count: number }
+type BatchList = { list: KvitelBatch[]; missing: boolean; err?: boolean }
+
+async function fetchBatches(): Promise<BatchList> {
+  const res = await fetch(BATCHES, { cache: 'no-store' }).catch(() => null)
+  const data = res?.ok ? await res.json().catch(() => null) : null
+  return data ? { list: data.batches ?? [], missing: !!data.missing } : { list: [], missing: false, err: true }
+}
 const SHEET_LINES = 13     // השורות שנראות בדף לפני הקיפול, כמו בעיצוב
 const MAX_CARDS = 4
 
@@ -46,6 +56,7 @@ export default function KvitelWeek({ rows, canEdit, tabs, onReload, onOpenList }
   const [fmt, setFmt] = useState<'pdf' | 'docx'>('pdf')
   const [cardIdx, setCardIdx] = useState<number | null>(null)
   const [previewRow, setPreviewRow] = useState<KvitelRequestRow | null>(null)
+  const [batches, setBatches] = useState<BatchList | null>(null)
 
   const review = useMemo(() => rows.filter(r => r.status === 'review')
     .sort((a, b) => Date.parse(b.submitted_at) - Date.parse(a.submitted_at)), [rows])
@@ -85,12 +96,36 @@ export default function KvitelWeek({ rows, canEdit, tabs, onReload, onOpenList }
     return !err
   }
 
-  // סגירת השבוע: קודם הורדה, ורק אם הצליחה — סימון "נשלח לציון" של אותן בקשות בדיוק
+  const loadBatches = () => fetchBatches().then(setBatches)
+  useEffect(() => { void fetchBatches().then(setBatches) }, [])
+
+  // סגירת המנה: קודם הורדה, ורק אם הצליחה — רישום המנה וסימון "נשלח לציון" של אותן בקשות בדיוק
   async function closeWeek() {
     const ids = file.ids
     if (!(await download(fmt))) return
     setClosing(false)
-    if (await setStatus(ids, 'done')) setMsg({ text: `הקובץ ירד, ו־${ids.length} בקשות סומנו "נשלח לציון".` })
+    setBusy(true)
+    try {
+      const res = await fetch(BATCHES, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids, parsha: current.parsha }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { setMsg({ text: data.error || 'הסגירה נכשלה', err: true }); return }
+      setMsg(data.recorded
+        ? { text: `הקובץ ירד, המנה נרשמה, ו־${data.updated} בקשות סומנו "נשלח לציון".` }
+        : { text: `הקובץ ירד ו־${data.updated} בקשות סומנו "נשלח לציון", אבל המנה לא נרשמה: טבלת המנות עוד לא נוצרה במסד.`, err: true })
+      await Promise.all([onReload(), loadBatches()])
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function redownload(id: string, format: 'pdf' | 'docx') {
+    setBusy(true)
+    setMsg(null)
+    const err = await downloadKvitel(`${BATCHES}/${id}/file`, [], format)
+    if (err) setMsg({ text: err, err: true })
+    setBusy(false)
   }
 
   useEffect(() => {
@@ -226,7 +261,7 @@ export default function KvitelWeek({ rows, canEdit, tabs, onReload, onOpenList }
             </div>
             <div className={s.sheetfoot}>
               <button type="button" className={cx(s.btn, s.pri)} disabled={!canEdit || busy || !file.ids.length || !isCurrent} onClick={() => setClosing(true)}>
-                <Ico icon={Download} />סגירת השבוע: הורדה וסימון כנשלח
+                <Ico icon={Download} />סגירת המנה: הורדה וסימון כנשלח
               </button>
             </div>
             <p className={s.sheetnote}>
@@ -238,6 +273,31 @@ export default function KvitelWeek({ rows, canEdit, tabs, onReload, onOpenList }
           </div>
         </div>
       </div>
+
+      <section aria-labelledby="kvitel-batches-t">
+        <div className={s.secH}><h2 id="kvitel-batches-t">מנות קודמות</h2><p>כל סגירה נרשמת, ואפשר להוריד שוב את הקובץ בדיוק כפי שנשלח</p></div>
+        {!batches
+          ? <p className={s.sheetnote} style={{ textAlign: 'start' }}>טוען…</p>
+          : batches.missing
+            ? <p className={cx(s.msg, s.err)}>טבלת המנות עוד לא נוצרה במסד, ולכן סגירות לא נרשמות עדיין.</p>
+            : batches.err
+              ? <p className={cx(s.msg, s.err)}>טעינת המנות נכשלה.</p>
+              : !batches.list.length
+                ? <p className={s.sheetnote} style={{ textAlign: 'start' }}>עוד לא נסגרה מנה. המנה הראשונה תופיע כאן אחרי הסגירה.</p>
+                : <ul className={s.batches}>
+                    {batches.list.map(b => (
+                      <li key={b.id} className={s.batch}>
+                        <div className={s.bWhen}><b>{b.parsha ?? 'מנה'}</b><span>נסגרה {sentLabel(b.closed_at)}</span></div>
+                        <p className={s.bCount}><span className={s.num}>{b.request_count}</span> בקשות · <span className={s.num}>{b.name_count}</span> שמות</p>
+                        <p className={s.bWho}>סימן: {b.closed_by_name ? <span className={s.ltr}>{b.closed_by_name}</span> : 'לא ידוע'}</p>
+                        <div className={s.bAct}>
+                          <button type="button" className={cx(s.btn, s.sm, s.ghost)} disabled={busy} onClick={() => void redownload(b.id, 'docx')}>Word</button>
+                          <button type="button" className={cx(s.btn, s.sm, s.ghost)} disabled={busy} onClick={() => void redownload(b.id, 'pdf')}>PDF</button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>}
+      </section>
 
       {closing && (
         <div className={s.ov} role="dialog" aria-modal="true" aria-labelledby="kvitel-close-t" onClick={e => { if (e.target === e.currentTarget && !busy) setClosing(false) }}>
@@ -251,7 +311,7 @@ export default function KvitelWeek({ rows, canEdit, tabs, onReload, onOpenList }
                   <label><input type="radio" name="kvitel-fmt" checked={fmt === 'pdf'} onChange={() => setFmt('pdf')} /> PDF</label>
                   <label><input type="radio" name="kvitel-fmt" checked={fmt === 'docx'} onChange={() => setFmt('docx')} /> Word</label>
                 </div></div></li>
-              <li><span className={s.ic}>3</span><div><b>סימון &quot;נשלח לציון&quot;</b><span>רק ה־{file.ids.length} שבקובץ, ורק אחרי שההורדה הצליחה</span></div></li>
+              <li><span className={s.ic}>3</span><div><b>רישום המנה וסימון &quot;נשלח לציון&quot;</b><span>רק ה־{file.ids.length} שבקובץ, ורק אחרי שההורדה הצליחה</span></div></li>
             </ol>
             <div className={s.guard}><Check className={s.i} size={16} strokeWidth={1.8} style={{ width: 16 }} aria-hidden />אם ההורדה נכשלת, שום דבר לא מסומן ואפשר לנסות שוב.</div>
             {msg?.err && <p role="alert" className={cx(s.msg, s.err)}>{msg.text}</p>}
