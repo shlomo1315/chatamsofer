@@ -20,7 +20,7 @@ import { parseRequest } from '@/lib/archiveRequests'
 import { __resetRateLimits } from '@/lib/rateLimit'
 
 const req = (body: unknown, ip = '1.1.1.1') =>
-  new Request('http://x/api', { method: 'POST', headers: { 'x-real-ip': ip }, body: JSON.stringify(body) })
+  new Request('http://x/api', { method: 'POST', headers: { 'x-forwarded-for': ip } /* ALB מוסיף את הלקוח ל-XFF; x-real-ip אינו נאמן (22.11) */, body: JSON.stringify(body) })
 
 beforeEach(() => { __resetRateLimits(); insert.mockClear(); update.mockClear() })
 

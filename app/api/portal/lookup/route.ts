@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { maskEmail } from '@/lib/phone'
 import { resolveBeneficiaryByEnteredId } from '@/lib/portalBeneficiary'
+import { getPortalBeneficiaryId } from '@/lib/portalSession'
 
 export const dynamic = 'force-dynamic'
 
@@ -55,7 +56,10 @@ export async function GET(request: NextRequest) {
         hasEmail: !!data.email,
         emailHint: maskEmail(data.email),
         isRejected,
-        rejectionReason: isRejected ? (data.rejection_reason ?? '') : '',
+        // 🔴 22.11.2026 (ביקורת אבטחה, באישור המשתמש): סיבת הדחייה רק למי שכבר
+        // מחובר כמשפחה הזו. קודם כל מי שהחזיק ת"ז ראה אותה בלי אימות.
+        // המשפחה רואה אותה אחרי אימות הקוד.
+        rejectionReason: isRejected && getPortalBeneficiaryId(request) === data.id ? (data.rejection_reason ?? '') : '',
       })
     }
 
@@ -99,14 +103,22 @@ export async function GET(request: NextRequest) {
     }
 
     if (hit) {
+      // 🔴 22.11.2026 (ביקורת אבטחה): מגבלה קשוחה רק על *פגיעות* בת"ז של ילד —
+      // שם הסיכון (שם ההורה, תאריך לידה, ייחוס) בלי אימות. משפחה רגילה כמעט
+      // לא מגיעה לכאן, ולכן המגבלה אינה חוסמת עמדות רישום משותפות.
+      if (!rateLimit(`lookup-child:${clientIp(request)}`, 30, 15 * 60 * 1000)) {
+        return NextResponse.json({ error: 'יותר מדי ניסיונות. נסה שוב בעוד מספר דקות.' }, { status: 429 })
+      }
+      const sessionBen = getPortalBeneficiaryId(request)
       const match = hit.child ?? {}
       const parentName = [hit.family_name, hit.full_name].filter(Boolean).join(' ')
       return NextResponse.json({
         found: false,
         foundAsChild: true,
         parentName,
-        // מזהה המשפחה שהילד רשום אצלה — לבדיקה אם זו המשפחה המחוברת או אחרת
-        parentBeneficiaryId: hit.id,
+        // 🔴 22.11.2026: המזהה הפנימי של המשפחה לא נחשף. במקומו — האם הילד רשום
+        // במשפחה *אחרת* מזו המחוברת (נבדק כאן בשרת מול הסשן).
+        otherFamily: !!sessionBen && sessionBen !== hit.id,
         childData: {
           name: match.name ?? '',
           id_number: idParam,

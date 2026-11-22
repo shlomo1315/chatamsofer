@@ -110,7 +110,14 @@ export async function GET(request: NextRequest) {
   for (const row of rows ?? []) {
     const kids: Record<string, string>[] = Array.isArray((row as ParentRow).children) ? (row as ParentRow).children as Record<string, string>[] : []
     const match = kids.find((k) => (k.id_number ?? '').replace(/\D/g, '') === idParam)
-    if (match) return childResponse(row as ParentRow, match)
+    if (match) {
+      // 🔴 22.11.2026 (ביקורת אבטחה): מגבלה קשוחה רק על פגיעות בת"ז של ילד —
+      // התשובה חושפת שם הורה, תאריך לידה וייחוס בלי אימות. כמו ב-portal/lookup.
+      if (!rateLimit(`nedarim-lookup-child:${clientIp(request)}`, 30, 15 * 60 * 1000)) {
+        return jsonCors({ error: 'יותר מדי ניסיונות. נסה שוב בעוד מספר דקות.' }, { status: 429 }, origin)
+      }
+      return childResponse(row as ParentRow, match)
+    }
   }
 
   return jsonCors({ found: false }, undefined, origin)

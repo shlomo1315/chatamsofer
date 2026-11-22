@@ -479,8 +479,8 @@ function BabyFields({
                 if (d.found) { setIdError('תעודת זהות זו רשומה במערכת כמוטב — נא לבדוק את המספר'); return }
                 // ⚠️ ת"ז של ילד הרשום ב*משפחה אחרת* (לא המחוברת) — חוסמים.
                 // אי אפשר להגיש בקשת לידה על ילד ששייך למשפחה אחרת.
-                if (d.foundAsChild && d.parentBeneficiaryId && currentBeneficiaryId
-                    && d.parentBeneficiaryId !== currentBeneficiaryId) {
+                // ⚠️ otherFamily מחושב בשרת מול הסשן (המזהה הפנימי כבר לא נחשף)
+                if (d.foundAsChild && d.otherFamily && currentBeneficiaryId) {
                   onExistingChild?.(null)
                   setIdError('תעודת הזהות כבר רשומה במשפחה אחרת')
                   return
