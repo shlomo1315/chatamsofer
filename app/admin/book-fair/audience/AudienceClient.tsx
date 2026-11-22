@@ -124,7 +124,7 @@ export default function AudienceClient({ members, optedOut }: {
       </div>
 
       {/* ── לשוניות ── */}
-      <div className="flex gap-2 border-b border-slate-200">
+      <div className="flex flex-wrap gap-x-2 border-b border-slate-200">
         {[
           { key: 'list' as const, label: 'רשימת תפוצה', icon: Users },
           { key: 'send' as const, label: 'שליחת ניוזלטר', icon: Send },
