@@ -218,7 +218,8 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
             touched = true
             return {
               ...c,
-              name: (babyNames[0] ?? '').trim(),
+              // ⚠️ "עדיין אין שם" מסומן — לא מעתיקים לכרטסת טקסט ישן מהשדה (נכתב "עדיין אין" כשם הילד)
+              name: babyNamePending ? '' : (babyNames[0] ?? '').trim(),
               id_number: babyIdNumber.trim() || null,
               doc_type: babyIdType,
               gender: babyGender || null,
