@@ -56,6 +56,8 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
   const [babyNames, setBabyNames] = useState<string[]>([])
   const [babyIdType, setBabyIdType] = useState<'id' | 'passport'>('id')
   const [babyIdNumber, setBabyIdNumber] = useState('')
+  // המספר כפי שנטען — כדי למצוא את הילד בכרטסת גם כשהמספר תוקן (למשל "עדיין אין" → ריק)
+  const [origBabyIdNumber, setOrigBabyIdNumber] = useState('')
   const [babyGender, setBabyGender] = useState<'male' | 'female' | ''>('')
   const [babyBirthDate, setBabyBirthDate] = useState('')
   const [recoveryHome, setRecoveryHome] = useState('')
@@ -86,6 +88,7 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
         setBabyNames(babiesOf(data as AidNameFields).map(b => b.name ?? ''))
         setBabyIdType(data.baby_id_type ?? 'id')
         setBabyIdNumber(data.baby_id_number ?? '')
+        setOrigBabyIdNumber(data.baby_id_number ?? '')
         setBabyGender(data.baby_gender ?? '')
         setBabyBirthDate(data.birth_date ?? '')
         setRecoveryHome(data.recovery_home ?? '')
@@ -116,7 +119,11 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
   const validate = (): Record<string, string> => {
     const e: Record<string, string> = {}
     if (!babyNames.some(n => n.trim()) && !babyNamePending) e.babyName = 'שם תינוק חובה (או סמנו "עדיין אין שם")'
-    if (!babyIdNumber.trim()) e.babyIdNumber = babyIdType === 'id' ? 'מספר תעודת זהות תינוק חובה' : 'מספר דרכון חובה'
+    // ⚠️ דרכון — מותר ריק: לנולד של משפחה זרה עדיין אין דרכון בזמן הלידה.
+    // כשהשדה היה חובה, נכתב בו "עדיין אין" — טקסט בשדה מספר, שנשמר גם
+    // בכרטסת המשפחה כ"ת"ז" של הילד ושבר חיפוש והתאמות.
+    if (!babyIdNumber.trim()) { if (babyIdType === 'id') e.babyIdNumber = 'מספר תעודת זהות תינוק חובה' }
+    else if (/[֐-׿]/.test(babyIdNumber)) e.babyIdNumber = 'מספר מסמך לא יכול להכיל אותיות עבריות. אם אין עדיין דרכון — השאירו ריק'
     else if (babyIdType === 'id' && !validateIsraeliId(babyIdNumber)) e.babyIdNumber = 'תעודת זהות ישראלית לא תקינה'
     if (!babyGender) e.babyGender = 'יש לבחור מין תינוק'
     if (!babyBirthDate) e.babyBirthDate = 'תאריך לידת תינוק חובה'
@@ -164,6 +171,12 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
       // אם הזכאות הוארכה ידנית — שומרים על תאריך הסיום הידני ולא דורסים אותו.
       // אחרת מחשבים מחדש לפי תאריך הלידה (ברירת מחדל: 6 שבועות).
       if (!eligibilityExtended) updatePayload.six_weeks_end = sixEnd
+      // לידה בודדת: מספר המסמך נכתב גם ל-babies[0]. אחרת המערך שומר את
+      // המספר הישן (למשל "עדיין אין") והחיפוש/הכרטסת ממשיכים לראות אותו.
+      const pb = updatePayload.babies
+      if (Array.isArray(pb) && pb.length === 1) {
+        updatePayload.babies = [{ ...pb[0], id_number: babyIdNumber.trim() || null, id_type: babyIdType }]
+      }
 
       const { error } = await supabase
         .from('maternity_aids')
@@ -199,7 +212,8 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
           }
           // לידה בודדת — אין ת"ז פר-תינוק, נופלים לקישור לתיק כמו קודם.
           const single = babySlots.length === 1 &&
-            ((c.maternity_aid_id && c.maternity_aid_id === id) || (babyIdNumber && c.id_number === babyIdNumber))
+            ((c.maternity_aid_id && c.maternity_aid_id === id) || (babyIdNumber && c.id_number === babyIdNumber)
+              || (origBabyIdNumber && c.id_number === origBabyIdNumber))
           if (single) {
             touched = true
             return {
@@ -319,6 +333,7 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
             onChange={e => { setBabyIdNumber(e.target.value); clearErr('babyIdNumber') }}
             className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left ${fieldErrors.babyIdNumber ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-navy-soft'}`}
             dir="ltr" />
+          {babyIdType === 'passport' && !fieldErrors.babyIdNumber && <p className="text-xs text-ink-soft">אם עדיין אין דרכון לתינוק — השאירו ריק.</p>}
           {fieldErrors.babyIdNumber && <p className="text-xs text-red-600">{fieldErrors.babyIdNumber}</p>}
         </div>
 
