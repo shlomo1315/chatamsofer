@@ -32,7 +32,8 @@
   container-type:inline-size}
 .gen{position:relative;display:flex;align-items:center;gap:var(--s3);
   height:var(--rowh);margin-top:var(--gap);
-  --stp:clamp(22px, calc((100cqi - 230px) / var(--n, 7)), var(--step));
+  /* כל המדרגות יחד ≤ שליש מהרוחב — כך גם לדור האחרון נשארות שתי שלישים לשם (קודם "רבי א…") */
+  --stp:clamp(22px, calc(34cqi / var(--n, 7)), var(--step));
   padding-inline-start:calc(var(--i) * var(--stp));
   --c:var(--g); --soft:var(--g-soft); --line:var(--g-line)}
 .gen:first-child{margin-top:0}
