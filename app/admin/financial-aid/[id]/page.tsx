@@ -63,7 +63,7 @@ export default async function FinancialAidDetailPage({ params }: { params: Promi
   const money = (n?: number | null) => n != null ? `₪${Number(n).toLocaleString('he-IL')}` : '—'
 
   return (
-    <div className="grid max-w-6xl grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
+    <div className="grid max-w-6xl grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(300px,400px)]">
     <div className="flex min-w-0 flex-col gap-5">
       <div className="flex items-center gap-3">
         <Link href="/admin/financial-aid" className="text-slate-400 hover:text-slate-600"><ArrowRight size={20} /></Link>

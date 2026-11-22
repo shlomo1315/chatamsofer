@@ -1001,7 +1001,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
           ⚠️ sticky ולא רק grid: הטור הימני ארוך (פרטים, ילדים, הטבות,
           מסמכים, עץ), ובלי ההצמדה הבירור נעלם אחרי הגלילה הראשונה.
        ───────────────────────────────────────────────────────────────── */}
-      <div className="grid gap-5 lg:grid-cols-[1fr_minmax(320px,420px)] items-start">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(300px,400px)] items-start">
         <div className="min-w-0">
       <Tabs tabs={[
         { key: 'personal', label: 'פרטים אישיים', accent: 'indigo', icon: <User size={15} />, content: personalTab },
@@ -1026,7 +1026,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         </div>
 
         {/* ── טור שמאל: הבירור, צמוד לכל הגובה ── */}
-        <aside className="flex flex-col gap-2 lg:sticky lg:top-4">
+        <aside className="flex min-w-0 flex-col gap-2 xl:sticky xl:top-4">
           <div className="flex items-center gap-2 text-rose-600">
             <MessageSquare size={16} />
             <h2 className="text-sm font-bold text-slate-700">בירורים והתכתבות</h2>

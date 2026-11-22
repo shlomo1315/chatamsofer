@@ -273,7 +273,7 @@ export default function LineageChainChips({
       </div>
 
       <div className={s.panel}>
-        <ol className={s.tree}>
+        <ol className={s.tree} style={{ "--n": Math.max(1, gens.length - 1) } as CSSProperties}>
           {gens.map((g, i) => {
             const color = colorOf(g)
             const open = menuIdx === i

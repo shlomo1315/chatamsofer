@@ -25,7 +25,7 @@ const VAR = { green: '--g', orange: '--o', red: '--r' } as const
 export default function LineageStairs({ gens, framed }: { gens: StairGen[]; framed?: boolean }) {
   const counts = (['green', 'orange', 'red'] as const).map((c) => ({ c, n: gens.filter((g) => g.color === c).length })).filter((x) => x.n > 0)
   const list = (
-      <ol className={s.tree}>
+      <ol className={s.tree} style={{ "--n": Math.max(1, gens.length - 1) } as React.CSSProperties}>
         {gens.map((g, i) => (
           <li key={`${g.generation}-${i}`} className={`${s.gen} ${g.color ? TONE[g.color] : s.n}`} style={{ '--i': i } as React.CSSProperties}>
             <span className={s.dot}>{g.generation}</span>
