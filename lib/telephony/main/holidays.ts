@@ -96,19 +96,26 @@ export async function holidays(ctx: TlContext): Promise<TlResult> {
     // 🧪 כשהרישום סגור — מספר ניסיון (מוגדר בפאנל החלוקה) מקבל את החלוקה כאילו פתוחה.
     const open = await getOpenDistribution()
     const regDist = open ? (open.phone_only ? open : null) : await testDistributionFor(ctx.phone)
-    const phoneFlow = !!regDist
     const choice = tapped(ctx.params[MENU_VAR])
-    if (!choice) {
-      if (!regDist) return menu(MENU_VAR, ['1', '2', '3', '4'], k.files('main_menu'))
-      const distName = `${regDist.name}${regDist.year ? ` ${regDist.year}` : ''}`
-      return menu(MENU_VAR, ['1', '2', '3', '4', '5'],
-        [...k.files('reg_menu_prompt', { distribution: distName }), ...k.files('main_menu')])
+
+    // 🔴 תפריט נפרד ונקי לחלוקת "טלפון בלבד" — לא מערבבים את תפריט תשרי
+    // (שיוך כרטיס, הודעות פתיחת מוקדים) עם הרישום. 1 רישום · 2 זכאות · 3 המוקד שלי.
+    if (regDist) {
+      if (!choice) {
+        const distName = `${regDist.name}${regDist.year ? ` ${regDist.year}` : ''}`
+        return menu(MENU_VAR, ['1', '2', '3'], k.files('reg_main_menu', { distribution: distName }), { timeout: 7 })
+      }
+      console.log(`${LOG} callId=${ctx.callId} route=${choice} (phone-only${open ? '' : ' TEST'})`)
+      if (choice === '2') return await eligibility(k)
+      if (choice === '3') return await centers(k, 'hear')
+      return await phoneRegistration(k, regDist)
     }
-    console.log(`${LOG} callId=${ctx.callId} route=${choice}${phoneFlow ? ` (phone-only${open ? '' : ' TEST'})` : ''}`)
+
+    if (!choice) return menu(MENU_VAR, ['1', '2', '3', '4'], k.files('main_menu'))
+    console.log(`${LOG} callId=${ctx.callId} route=${choice}`)
     if (choice === '1') return await eligibility(k)
     if (choice === '2') return await centers(k, 'hear')
     if (choice === '3') return await cardRoute(k)
-    if (regDist) return await phoneRegistration(k, regDist)
     if (choice === '4') return await centers(k, 'pick')
     return await registration(k)
   } catch (e) {

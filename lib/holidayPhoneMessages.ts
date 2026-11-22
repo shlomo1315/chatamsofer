@@ -452,9 +452,10 @@ export const HOLIDAY_MESSAGE_META: HolidayMsgMeta[] = [
   // ⚠️ הרישום אינו מקש אחד: ת"ז, תאריך לידה, טלפון ושתי הצהרות.
   // ─────────────────────────────────────────────────────────────────────────
   {
-    key: 'reg_menu_prompt', label: 'רישום בטלפון: הזמנה בתפריט (מקש 5)', allowAudio: false, placeholders: ['distribution'],
-    defaultText: 'לרישום לחלוקת {distribution} הקישו 5',
-    hint: 'נשמע לפני התפריט כשהרישום בטלפון בלבד. חובה לציין את מקש 5.',
+    // 🔴 התפריט כולו כשהחלוקה "בטלפון בלבד" — במקום תפריט תשרי, לא בנוסף לו.
+    key: 'reg_main_menu', label: 'רישום בטלפון: תפריט השלוחה', allowAudio: true,
+    defaultText: 'שלוחת חלוקת חנוכה. לרישום לחלוקה הקישו 1, לבדיקת זכאות הקישו 2, לשמיעת המוקד שבחרתם הקישו 3',
+    hint: 'המקשים קבועים: 1 רישום ובחירת מוקד, 2 בדיקת זכאות, 3 המוקד שנבחר.',
   },
   {
     key: 'reg_notice', label: 'רישום בטלפון: הודעה מקדימה', allowAudio: true,
@@ -523,7 +524,7 @@ export const HOLIDAY_MESSAGE_META: HolidayMsgMeta[] = [
   },
   {
     key: 'reg_center_later', label: 'רישום בטלפון: המוקד ייבחר מאוחר יותר', allowAudio: true,
-    defaultText: 'רישומכם נשמר. לבחירת מוקד החלוקה חייגו שוב לקו זה והקישו 4',
+    defaultText: 'רישומכם נשמר. לבחירת מוקד החלוקה חייגו שוב לקו זה והקישו 1',
   },
   {
     key: 'center_hours_later', label: 'ימים ושעות טרם פורסמו', allowAudio: true,

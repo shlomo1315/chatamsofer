@@ -18,7 +18,7 @@ vi.mock('@/lib/holidayNotify', () => notify)
 vi.mock('@/lib/holidayDistRules', async (orig) => ({ ...(await orig<typeof import('@/lib/holidayDistRules')>()), ...rules }))
 vi.mock('@/lib/holidayPhoneMessages', () => ({
   getHolidayMessages: async () => Object.fromEntries(Object.entries({
-    main_menu: 'תפריט ראשי', reg_menu_prompt: 'לרישום ל{distribution} הקישו 5', reg_notice: 'הודעה מקדימה',
+    main_menu: 'תפריט ראשי', reg_main_menu: 'שלוחת חנוכה: רישום 1 זכאות 2 מוקד 3', reg_notice: 'הודעה מקדימה',
     reg_welcome: 'ברוכים הבאים', reg_ask_id: 'הקישו תעודת זהות', id_invalid: 'מספר שגוי', not_found: 'לא נמצאתם',
     not_eligible: 'אינכם זכאים', reg_deep_review: 'פנו למשרד', reg_ask_birth: 'הקישו תאריך לידה', reg_ask_birth_married: 'תאריך לידה של האבא או האמא',
     reg_birth_mismatch: 'תאריך לא תואם', reg_ask_phone: 'הקישו טלפון', reg_phone_mismatch: 'טלפון לא תואם',
@@ -46,7 +46,7 @@ const RULES = { phoneOnly: true, blockDeepReview: true, autoApprove: true, hours
 
 let n = 0
 const call = (p: Record<string, string> = {}) =>
-  dispatch('main', 'main-secret-1', 'holidays', { PBXphone: '0501234567', PBXcallId: `rc-${n}`, menu_pick: '5', ...p })
+  dispatch('main', 'main-secret-1', 'holidays', { PBXphone: '0501234567', PBXcallId: `rc-${n}`, menu_pick: '1', ...p })
 const text = (r: { body: unknown }) => JSON.stringify(r.body)
 const first = (r: { body: unknown }) => (Array.isArray(r.body) ? r.body[0] : r.body)
 const full = { r_id: ID, r_bd: '15031990', r_ph: '0527654321' }
@@ -70,10 +70,10 @@ beforeEach(() => {
 })
 
 describe('רישום בטלפון בלבד', () => {
-  it('תפריט השלוחה מציע מקש 5 עם שם החלוקה', async () => {
+  it('תפריט נקי לחנוכה: 1 רישום, 2 זכאות, 3 מוקד', async () => {
     const r = await call({ menu_pick: '' })
-    expect(first(r)).toMatchObject({ type: 'simpleMenu', enabledKeys: '1,2,3,4,5' })
-    expect(text(r)).toContain('לרישום לחנוכה תשפ״ז הקישו 5')
+    expect(first(r)).toMatchObject({ type: 'simpleMenu', enabledKeys: '1,2,3' })
+    expect(text(r)).toContain('שלוחת חנוכה'); expect(text(r)).not.toContain('תפריט ראשי')
   })
 
   it('פנייה ראשונה: הודעה מקדימה, ברוכים הבאים ובקשת ת"ז', async () => {
@@ -158,18 +158,18 @@ describe('רישום בטלפון בלבד', () => {
 })
 
 describe('מספרי ניסיון — כשהרישום סגור', () => {
-  it('מספר ניסיון מקבל את מקש 5 ונרשם לחלוקה הסגורה', async () => {
+  it('מספר ניסיון מקבל את תפריט חנוכה ונרשם לחלוקה הסגורה', async () => {
     dist.getOpenDistribution.mockResolvedValue(null)
     dist.testDistributionFor.mockResolvedValue(OPEN)
     const menuR = await call({ menu_pick: '' })
-    expect(first(menuR)).toMatchObject({ enabledKeys: '1,2,3,4,5' })
+    expect(first(menuR)).toMatchObject({ enabledKeys: '1,2,3' })
     dist.registerToOpenDistribution.mockResolvedValue({ ok: true, created: true, approved: true, recipientId: 'r1' })
     data.getRecipient.mockResolvedValueOnce(null).mockResolvedValue({ id: 'r1', center_id: null, approval_status: 'approved' })
     await call({ ...full, r_lin: '1', r_need: '1' })
     expect(dist.registerToOpenDistribution).toHaveBeenCalledWith('b1', 'phone', expect.objectContaining({ distribution: OPEN }))
   })
 
-  it('מספר רגיל כשהרישום סגור — תפריט רגיל בלי מקש 5', async () => {
+  it('מספר רגיל כשהרישום סגור — תפריט תשרי הרגיל', async () => {
     dist.getOpenDistribution.mockResolvedValue(null)
     dist.testDistributionFor.mockResolvedValue(null)
     expect(first(await call({ menu_pick: '' }))).toMatchObject({ enabledKeys: '1,2,3,4' })
