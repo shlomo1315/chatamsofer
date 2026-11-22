@@ -4,6 +4,7 @@ import { mailFor } from './departments'
 import { shell, greetByStatus } from './emailTemplates'
 import { getOrCreateReplyToken } from './publicToken'
 import { randomBytes } from 'node:crypto'
+import { mentionsLineageOrder } from './lineageMention'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // בירור מול היולדת — התכתבות דו-כיוונית, מקבילה לבירור ההלוואות.
@@ -72,9 +73,10 @@ export async function sendMaternityInquiry(
   body: string,
   sender: { id: string; name: string },
   extra: InquiryExtra = 'none',
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; linkAttached: boolean } | { ok: false; error: string }> {
   const text = body.trim()
   if (!text) return { ok: false, error: 'ההודעה ריקה' }
+  if (extra === 'none' && mentionsLineageOrder(text)) extra = 'lineage'
 
   const { data: aid } = await db
     .from('maternity_aids')
@@ -107,6 +109,15 @@ export async function sendMaternityInquiry(
   // ⚠️ בלי שיוך לצומת אין ענף להציג — מדלגים על הקישור במקום לשלוח
   // קישור שייפתח ריק.
   // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 22.11: כשהקישור נדרש ואי אפשר לצרף אותו — עוצרים ומודיעים למזכירה,
+  // ולא שולחים בשקט מייל "נא לתקן" בלי קישור (מה שקרה בפועל).
+  if (extra === 'lineage' && (!a.beneficiary_id || !ben?.lineage_node_id)) {
+    return {
+      ok: false,
+      error: 'למשפחה אין שיוך לעץ הדורות, ולכן אי אפשר לצרף קישור לתיקון. יש לשייך אותה לצומת בעץ (בכרטסת הצאצא) ואז לשלוח שוב.',
+    }
+  }
+
   let lineageBlock = ''
   if (extra === 'lineage' && a.beneficiary_id && ben?.lineage_node_id) {
     const lineageToken = randomBytes(16).toString('base64url')
@@ -122,13 +133,15 @@ export async function sendMaternityInquiry(
       recipient_email: email,
       created_by: sender.id,
     })
-    // ⚠️ כשל ביצירת ההזמנה אינו מבטל את הבירור — הטקסט של המזכירות
-    // חשוב בפני עצמו. פשוט לא מצרפים קישור שלא יעבוד.
+    // 🔴 כשל ביצירת ההזמנה עוצר את השליחה (היה: נשלח בשקט בלי קישור).
+    // בקשה לתקן דורות בלי קישור משאירה את המשפחה בלי דרך לתקן.
     const base = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://chasamsofer.co.il').replace(/\/$/, '')
     const url = `${base}/lineage-review/${lineageToken}`
     if (invErr) {
       console.error('[maternityInquiry] יצירת הזמנת תיקון הדורות נכשלה:', invErr.message)
-    } else lineageBlock = `
+      return { ok: false, error: 'יצירת הקישור לתיקון הדורות נכשלה — ההודעה לא נשלחה. נסו שוב.' }
+    }
+    lineageBlock = `
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
         <tr><td style="background:#eef2ff;border-right:4px solid #4f46e5;border-radius:0 12px 12px 0;padding:16px 20px;">
           <p style="margin:0 0 10px;color:#3730a3;font-size:15px;font-weight:700;">תיקון סדר הדורות</p>
@@ -235,7 +248,7 @@ export async function sendMaternityInquiry(
     is_read: true,   // הודעה שלנו — אין מה לסמן כנקראה
   })
 
-  return { ok: true }
+  return { ok: true, linkAttached: lineageBlock !== '' }
 }
 
 /**

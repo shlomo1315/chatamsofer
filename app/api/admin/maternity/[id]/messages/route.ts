@@ -61,5 +61,5 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   )
 
   if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 })
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({ ok: true, linkAttached: res.linkAttached })
 }
