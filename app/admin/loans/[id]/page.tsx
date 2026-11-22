@@ -312,7 +312,7 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
           ⚠️ sticky ולא רק grid: הטור הימני ארוך (סיכום, פרטים, היסטוריה,
           מסמכים), ובלי ההצמדה הבירור נעלם מהמסך אחרי הגלילה הראשונה.
        ───────────────────────────────────────────────────────────────── */}
-      <div className="grid gap-5 lg:grid-cols-[1fr_minmax(320px,420px)] items-start">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(300px,400px)] items-start">
 
         {/* ── טור ימין: כל התוכן, בסדר העבודה ── */}
         <div className="flex flex-col gap-5 min-w-0">
@@ -519,7 +519,7 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
         </div>
 
         {/* ── טור שמאל: הבירור, צמוד לכל הגובה ── */}
-        <aside className="flex flex-col gap-2 lg:sticky lg:top-4">
+        <aside className="flex min-w-0 flex-col gap-2 xl:sticky xl:top-4">
           <div className="flex items-center gap-2 text-sky-600">
             <MessageSquare size={16} />
             <h2 className="text-sm font-bold text-slate-700">בירור מול המבקש</h2>

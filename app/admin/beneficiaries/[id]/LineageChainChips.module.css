@@ -26,10 +26,14 @@
 
 .panel{background:var(--surface);border:1px solid var(--hair);border-radius:20px;padding:var(--s6) var(--s6) var(--s5)}
 
-.tree{list-style:none;margin:0;padding:0;position:relative}
+.tree{list-style:none;margin:0;padding:0;position:relative;
+  /* 🔴 22.11: המדרגה קבועה (60px) הוציאה 8 דורות מהעמודה במסך צר — העץ עלה על
+     צ׳אט הבירור. עכשיו המדרגה נגזרת מרוחב העמודה בפועל ומספר הדורות (--n). */
+  container-type:inline-size}
 .gen{position:relative;display:flex;align-items:center;gap:var(--s3);
   height:var(--rowh);margin-top:var(--gap);
-  padding-inline-start:calc(var(--i) * var(--step));
+  --stp:clamp(22px, calc((100cqi - 230px) / var(--n, 7)), var(--step));
+  padding-inline-start:calc(var(--i) * var(--stp));
   --c:var(--g); --soft:var(--g-soft); --line:var(--g-line)}
 .gen:first-child{margin-top:0}
 .gen.o{--c:var(--o); --soft:var(--o-soft); --line:var(--o-line)}
@@ -37,10 +41,10 @@
 
 /* קו מהאב: יורד ממרכז העיגול של הדור הקודם ופונה בפינה מעוגלת אל העיגול של הדור הזה */
 .gen:not(:first-child)::before{content:"";position:absolute;
-  inset-inline-start:calc((var(--i) - 1) * var(--step) + var(--dot) / 2 - var(--lw) / 2);
+  inset-inline-start:calc((var(--i) - 1) * var(--stp) + var(--dot) / 2 - var(--lw) / 2);
   top:calc(-1 * var(--gap) - var(--rowh) / 2 + var(--dot) / 2);
   height:calc(var(--gap) + var(--rowh) / 2 - var(--dot) / 2 + var(--rowh) / 2 + var(--lw) / 2);
-  width:calc(var(--step) - var(--dot) / 2 + var(--lw) / 2 - 3px);
+  width:calc(var(--stp) - var(--dot) / 2 + var(--lw) / 2 - 3px);
   border-inline-start:var(--lw) solid var(--line);border-bottom:var(--lw) solid var(--line);
   border-end-start-radius:18px}
 
