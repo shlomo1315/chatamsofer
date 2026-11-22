@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
     const inviteRules = await getDistRules(distribution.id)
     if (inviteRules.phoneOnly) {
       const nm = `${distribution.name}${distribution.year ? ` ${distribution.year}` : ''}`
-      const message = phoneOnlyMessage(nm, inviteRules.phoneNumber || (process.env.TELEPHONY_MAIN_NUMBER || '').trim())
+      const message = phoneOnlyMessage(nm, inviteRules.phoneNumber || (process.env.TECHNOLINE_MAIN_NUMBER || '').trim())
       return NextResponse.json(
         { open: false, phoneOnly: true, invite: { ok: false, reason: 'phone-only', message } },
         { headers: { 'Cache-Control': 'no-store' } },
@@ -324,7 +324,7 @@ async function registerViaInvite(
   const rules = await getDistRules(distribution.id)
   if (rules.phoneOnly) {
     const name = `${distribution.name ?? ''}${(distribution as { year?: string | null }).year ? ` ${(distribution as { year?: string | null }).year}` : ''}`
-    const phone = rules.phoneNumber || (process.env.TELEPHONY_MAIN_NUMBER || '').trim()
+    const phone = rules.phoneNumber || (process.env.TECHNOLINE_MAIN_NUMBER || '').trim()
     return { status: 409, body: { error: phoneOnlyMessage(name, phone), phoneOnly: true } }
   }
 

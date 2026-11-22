@@ -33,7 +33,7 @@ export interface ActiveDistribution {
 
 /** מספר הקו הראשי (טכנוליין) מהסביבה — לתצוגה בלבד. */
 function defaultPhoneNumber(): string {
-  return (process.env.TELEPHONY_MAIN_NUMBER || process.env.HOLIDAY_PHONE_NUMBER || '').trim()
+  return (process.env.TECHNOLINE_MAIN_NUMBER || process.env.HOLIDAY_PHONE_NUMBER || '').trim()
 }
 
 /**
