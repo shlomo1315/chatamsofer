@@ -472,9 +472,13 @@ export const HOLIDAY_MESSAGE_META: HolidayMsgMeta[] = [
     defaultText: 'הקישו את מספר תעודת הזהות, 9 ספרות, ולאחר מכן סולמית',
   },
   {
-    key: 'reg_ask_birth', label: 'רישום בטלפון: בקשת תאריך לידה', allowAudio: true,
-    defaultText: 'הקישו את תאריך הלידה הלועזי של בעל תעודת הזהות, יום חודש ושנה, 8 ספרות. '
-      + 'לדוגמה, לתאריך חמישה עשר במרץ אלף תשע מאות תשעים הקישו 1 5 0 3 1 9 9 0',
+    key: 'reg_ask_birth', label: 'רישום בטלפון: בקשת תאריך לידה (לא נשואים)', allowAudio: true,
+    defaultText: 'הקישו את תאריך הלידה ב-8 ספרות, כגון 0 1 0 1 2 0 0 0',
+  },
+  {
+    // 🔴 בסטטוס נשואים מתקבל תאריך הלידה של האב או של האם — שניהם בכרטסת.
+    key: 'reg_ask_birth_married', label: 'רישום בטלפון: בקשת תאריך לידה (נשואים)', allowAudio: true,
+    defaultText: 'נא להקיש את תאריך הלידה של האבא או האמא ב-8 ספרות, כגון 0 1 0 1 2 0 0 0',
   },
   {
     key: 'reg_birth_mismatch', label: 'רישום בטלפון: תאריך לידה לא תואם', allowAudio: true,

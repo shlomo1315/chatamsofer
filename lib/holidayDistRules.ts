@@ -29,6 +29,11 @@ export interface DistRules {
   hoursPublished: boolean
   /** מספר הקו שמוצג למשפחות באתר ("חייגו ..."). */
   phoneNumber: string
+  /**
+   * 🧪 מספרי ניסיון: מתקשר מאחד מהם עובר את מסלול הרישום בטלפון גם כשהרישום
+   * סגור, כדי שהמנהל יוכל להתנסות לפני הפתיחה. רישום שלו נשמר כרישום אמיתי.
+   */
+  testPhones: string[]
 }
 
 export const DEFAULT_RULES: DistRules = {
@@ -37,6 +42,26 @@ export const DEFAULT_RULES: DistRules = {
   autoApprove: false,
   hoursPublished: true,
   phoneNumber: '',
+  testPhones: [],
+}
+
+/** רשימת מספרי ניסיון: ספרות בלבד, 9-10 ספרות, בלי כפילויות, עד 30. */
+export function normalizeTestPhones(raw: unknown): string[] {
+  const list = Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(/[\s,;]+/) : []
+  const out: string[] = []
+  for (const v of list) {
+    const d = String(v ?? '').replace(/\D/g, '').replace(/^972/, '0')
+    if (d.length >= 9 && d.length <= 10 && !out.includes(d)) out.push(d)
+  }
+  return out.slice(0, 30)
+}
+
+/** האם המתקשר הוא אחד ממספרי הניסיון (השוואה בלי 0 מוביל / 972). */
+export function isTestCaller(rules: DistRules, caller: string | null | undefined): boolean {
+  const norm = (v: string) => v.replace(/\D/g, '').replace(/^972/, '').replace(/^0+/, '')
+  const c = norm(String(caller ?? ''))
+  if (c.length < 8) return false
+  return rules.testPhones.some(p => norm(p) === c)
 }
 
 /** מנרמל ערך שנשמר (או קלט מהמסך) לכללים שלמים ותקינים. */
@@ -49,6 +74,7 @@ export function normalizeRules(raw: unknown): DistRules {
     autoApprove: bool(r.autoApprove, DEFAULT_RULES.autoApprove),
     hoursPublished: bool(r.hoursPublished, DEFAULT_RULES.hoursPublished),
     phoneNumber: typeof r.phoneNumber === 'string' ? r.phoneNumber.replace(/[^\d-]/g, '').slice(0, 15) : '',
+    testPhones: normalizeTestPhones(r.testPhones),
   }
 }
 

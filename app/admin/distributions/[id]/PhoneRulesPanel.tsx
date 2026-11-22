@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Phone, Loader2, ShieldAlert, Check, MapPin, Clock } from 'lucide-react'
+import { Phone, Loader2, ShieldAlert, Check, MapPin, Clock, FlaskConical } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // כללי הרישום של החלוקה — "בטלפון בלבד" ושאר המתגים (חנוכה תשפ״ז ואילך).
@@ -16,6 +16,7 @@ interface Rules {
   autoApprove: boolean
   hoursPublished: boolean
   phoneNumber: string
+  testPhones: string[]
 }
 
 export default function PhoneRulesPanel({ distributionId, canEdit }: { distributionId: string; canEdit: boolean }) {
@@ -26,6 +27,7 @@ export default function PhoneRulesPanel({ distributionId, canEdit }: { distribut
   const [busy, setBusy] = useState<string | null>(null)
   const [err, setErr] = useState('')
   const [phoneDraft, setPhoneDraft] = useState('')
+  const [testDraft, setTestDraft] = useState('')
 
   const url = `/api/admin/distributions/${encodeURIComponent(distributionId)}/rules`
   const load = useCallback(async () => {
@@ -35,6 +37,7 @@ export default function PhoneRulesPanel({ distributionId, canEdit }: { distribut
       if (!res.ok) { setErr(d.error ?? 'הטעינה נכשלה'); return }
       setRules(d.rules)
       setPhoneDraft(d.rules?.phoneNumber ?? '')
+      setTestDraft((d.rules?.testPhones ?? []).join(', '))
       setDefaultPhone(d.defaultPhoneNumber ?? '')
       setCenters(d.centers ?? null)
       setDeepCount(typeof d.deepReviewFamilies === 'number' ? d.deepReviewFamilies : null)
@@ -53,6 +56,7 @@ export default function PhoneRulesPanel({ distributionId, canEdit }: { distribut
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { setErr(d.error ?? 'השמירה נכשלה'); return }
       setRules(d.rules)
+      if (which === 'test') setTestDraft((d.rules?.testPhones ?? []).join(', '))
     } catch { setErr('שגיאת רשת') } finally { setBusy(null) }
   }
 
@@ -79,7 +83,7 @@ export default function PhoneRulesPanel({ distributionId, canEdit }: { distribut
 
   const shownPhone = rules.phoneNumber || defaultPhone
   const toggle = ({ k, title, desc, icon, tone }: {
-    k: keyof Omit<Rules, 'phoneNumber'>; title: string; desc: React.ReactNode; icon: React.ReactNode; tone: string
+    k: keyof Omit<Rules, 'phoneNumber' | 'testPhones'>; title: string; desc: React.ReactNode; icon: React.ReactNode; tone: string
   }) => (
     <label key={k} className={`flex cursor-pointer items-start gap-3 rounded-xl border-2 p-3.5 transition-colors ${
       rules[k] ? tone : 'border-slate-200 bg-slate-50/50'} ${!canEdit ? 'cursor-not-allowed opacity-70' : ''}`}>
@@ -160,6 +164,28 @@ export default function PhoneRulesPanel({ distributionId, canEdit }: { distribut
               </button>
             )}
           </div>
+        )}
+      </div>
+      <div className="mt-4 rounded-xl border-2 border-dashed border-violet-300 bg-violet-50/50 p-3.5">
+        <label className="mb-1 flex items-center gap-2 text-sm font-extrabold text-violet-900">
+          <FlaskConical size={15} /> מספרי ניסיון — לבדיקת הקו לפני פתיחת הרישום
+        </label>
+        <p className="mb-2 text-xs leading-relaxed text-violet-800">
+          מי שמתקשר מאחד המספרים האלה יעבור את כל מסלול הרישום בטלפון (מקש 5) <strong>גם כשהרישום סגור</strong>.
+          ⚠️ רישום בניסיון נשמר כרישום אמיתי ושולח מייל זכאות, לכן מומלץ לנסות עם ת״ז שלכם. אפשר למחוק את השורה מרשימת הנרשמים אחר כך.
+        </p>
+        <div className="flex flex-wrap items-start gap-2">
+          <textarea value={testDraft} onChange={e => setTestDraft(e.target.value)} disabled={!canEdit} rows={2} dir="ltr"
+            placeholder="0501234567, 0527654321"
+            className="min-w-[220px] flex-1 resize-none rounded-xl border border-violet-300 px-3 py-2 text-left text-sm focus:border-violet-500 focus:outline-none" />
+          <button type="button" disabled={!canEdit || !!busy || testDraft === rules.testPhones.join(', ')}
+            onClick={() => void save({ testPhones: testDraft.split(/[\s,;]+/).filter(Boolean) }, 'test')}
+            className="rounded-xl bg-violet-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-40">
+            {busy === 'test' ? <Loader2 size={14} className="animate-spin" /> : 'שמירת מספרי ניסיון'}
+          </button>
+        </div>
+        {rules.testPhones.length > 0 && (
+          <p className="mt-2 text-xs font-bold text-violet-900">פעילים: <span dir="ltr" className="ltr-num">{rules.testPhones.join(' · ')}</span></p>
         )}
       </div>
       {err && <p className="mt-3 text-sm font-bold text-red-600">{err}</p>}

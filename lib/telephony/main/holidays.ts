@@ -8,7 +8,7 @@
 // הלוגיקה זהה לשלוחה הקודמת, שהוסרה.
 // ההודעות נערכות באותו מסך ניהול (getHolidayMessages). בשלב זה TTS בלבד — הקלטות בהמשך.
 import { getHolidayMessages, type HolidayMessages } from '@/lib/holidayPhoneMessages'
-import { getOpenDistribution, registerToOpenDistribution } from '@/lib/holidayDistributions'
+import { getOpenDistribution, registerToOpenDistribution, testDistributionFor } from '@/lib/holidayDistributions'
 import { linkHolidayCard } from '@/lib/holidayCards'
 import { resolveCardFamily } from '@/lib/cardIdentity'
 import { digitsOnly } from '@/lib/idLookup'
@@ -93,20 +93,22 @@ export async function holidays(ctx: TlContext): Promise<TlResult> {
   try {
     // 🔴 חלוקה שמוגדרת "רישום בטלפון בלבד": מקש 5 (וגם 4 והטיימאאוט) עוברים
     // למסלול הרישום המלא: ת"ז, תאריך לידה, טלפון, הצהרות, ומשם לבחירת מוקד.
+    // 🧪 כשהרישום סגור — מספר ניסיון (מוגדר בפאנל החלוקה) מקבל את החלוקה כאילו פתוחה.
     const open = await getOpenDistribution()
-    const phoneFlow = !!open?.phone_only
+    const regDist = open ? (open.phone_only ? open : null) : await testDistributionFor(ctx.phone)
+    const phoneFlow = !!regDist
     const choice = tapped(ctx.params[MENU_VAR])
     if (!choice) {
-      if (!open || !phoneFlow) return menu(MENU_VAR, ['1', '2', '3', '4'], k.files('main_menu'))
-      const distName = `${open.name}${open.year ? ` ${open.year}` : ''}`
+      if (!regDist) return menu(MENU_VAR, ['1', '2', '3', '4'], k.files('main_menu'))
+      const distName = `${regDist.name}${regDist.year ? ` ${regDist.year}` : ''}`
       return menu(MENU_VAR, ['1', '2', '3', '4', '5'],
         [...k.files('reg_menu_prompt', { distribution: distName }), ...k.files('main_menu')])
     }
-    console.log(`${LOG} callId=${ctx.callId} route=${choice}${phoneFlow ? ' (phone-only)' : ''}`)
+    console.log(`${LOG} callId=${ctx.callId} route=${choice}${phoneFlow ? ` (phone-only${open ? '' : ' TEST'})` : ''}`)
     if (choice === '1') return await eligibility(k)
     if (choice === '2') return await centers(k, 'hear')
     if (choice === '3') return await cardRoute(k)
-    if (phoneFlow) return await phoneRegistration(k)
+    if (regDist) return await phoneRegistration(k, regDist)
     if (choice === '4') return await centers(k, 'pick')
     return await registration(k)
   } catch (e) {
