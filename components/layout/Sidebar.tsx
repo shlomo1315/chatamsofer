@@ -79,6 +79,16 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
 }) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+  // פתיחה מכפתור ☰ בכותרת · סגירה ב-Esc ובמעבר דף
+  useEffect(() => {
+    const open = () => setMobileOpen(true)
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMobileOpen(false) }
+    window.addEventListener("admin-menu-open", open)
+    window.addEventListener("keydown", onKey)
+    return () => { window.removeEventListener("admin-menu-open", open); window.removeEventListener("keydown", onKey) }
+  }, [])
+  const [lastPath, setLastPath] = useState(pathname)
+  if (lastPath !== pathname) { setLastPath(pathname); setMobileOpen(false) }
   const [mailOpen, setMailOpen] = useState(pathname.startsWith('/admin/mail'))
   const [maternityOpen, setMaternityOpen] = useState(pathname.startsWith('/admin/maternity'))
   const [unreadCounts, setUnreadCounts] = useState<{ byDepartment: Record<string, number>; total: number }>({ byDepartment: {}, total: 0 })
@@ -394,26 +404,25 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
 
   return (
     <>
-      <aside className="hidden lg:flex flex-col w-[248px] bg-navy flex-shrink-0">
+      {/* 🔴 22.11.2026: התפריט הקבוע רק מ-1280 (xl). מתחת לזה הוא תפס 248px מתוכן
+          צפוף, והכרטסות נדחסו. מתחת ל-xl: מגירה שנשלפת מימין, נפתחת מכפתור ☰
+          בכותרת (אירוע admin-menu-open), עם טשטוש מאחור. */}
+      <aside className="hidden xl:flex flex-col w-[248px] bg-navy flex-shrink-0">
         <SidebarContent />
       </aside>
 
-      <button onClick={() => setMobileOpen(true)}
-        className="lg:hidden fixed bottom-4 left-4 z-40 bg-navy text-gold p-3 rounded-full shadow-lg">
-        <Menu size={20} />
-      </button>
-
-      {mobileOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 flex">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)} />
-          <aside className="relative w-[248px] bg-navy flex flex-col">
-            <button onClick={() => setMobileOpen(false)} className="absolute top-4 left-4 text-[#8f9ab5] hover:text-white">
-              <X size={20} />
-            </button>
-            <SidebarContent />
-          </aside>
-        </div>
-      )}
+      <div className={`xl:hidden fixed inset-0 z-50 ${mobileOpen ? "" : "pointer-events-none"}`} aria-hidden={!mobileOpen}>
+        <div onClick={() => setMobileOpen(false)}
+          className={`absolute inset-0 bg-[#0b1530]/45 backdrop-blur-[3px] transition-opacity duration-200 ${mobileOpen ? "opacity-100" : "opacity-0"}`} />
+        <aside role="dialog" aria-modal="true" aria-label="תפריט ראשי"
+          className={`absolute inset-y-0 right-0 flex w-[280px] max-w-[85vw] flex-col bg-navy shadow-2xl transition-transform duration-200 ease-out ${mobileOpen ? "translate-x-0" : "translate-x-full"}`}>
+          <button onClick={() => setMobileOpen(false)} aria-label="סגירת התפריט"
+            className="absolute top-4 left-4 z-10 grid h-9 w-9 place-items-center rounded-lg text-[#8f9ab5] hover:bg-white/10 hover:text-white">
+            <X size={20} />
+          </button>
+          <SidebarContent />
+        </aside>
+      </div>
     </>
   )
 }

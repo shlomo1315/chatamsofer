@@ -1,5 +1,5 @@
 'use client'
-import { LogOut, User } from 'lucide-react'
+import { LogOut, User, Menu } from 'lucide-react'
 import NotificationBell from './NotificationBell'
 import SessionGuard, { signOutEverywhere } from './SessionGuard'
 import { Profile, ROLE_LABELS } from '@/types'
@@ -19,8 +19,14 @@ export default function Header({ user, title }: HeaderProps) {
   const handleSignOut = () => signOutEverywhere('manual')
 
   return (
-    <header className="relative z-30 h-[60px] bg-[#f7f3ea] border-b border-[#e6dfcf] flex items-center justify-between px-6 flex-shrink-0">
-      <div className="flex items-center gap-3">
+    <header className="relative z-30 h-[60px] bg-[#f7f3ea] border-b border-[#e6dfcf] flex items-center justify-between gap-2 px-3 sm:px-6 flex-shrink-0">
+      <div className="flex min-w-0 items-center gap-3">
+        {/* ☰ — פותח את מגירת התפריט מתחת ל-1280 (Sidebar מאזין לאירוע) */}
+        <button type="button" onClick={() => window.dispatchEvent(new Event('admin-menu-open'))}
+          aria-label="פתיחת התפריט"
+          className="xl:hidden grid h-10 w-10 flex-none place-items-center rounded-xl border border-[#e6dfcf] bg-[#fffdf8] text-navy hover:border-navy">
+          <Menu size={20} />
+        </button>
         {title && <h1 className="text-base font-semibold text-zinc-800">{title}</h1>}
       </div>
 
