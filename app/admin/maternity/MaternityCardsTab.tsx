@@ -104,6 +104,9 @@ export function CardPanel({ aid, data, state, centerName, voucher, holder, onRet
   const pct = balance != null && loadedAmt ? Math.min(100, Math.round((balance / loadedAmt) * 100)) : 0
   const tl = useMemo(() => buildTimeline(aid, loads), [aid, loads])
   const last4 = aid.card_number ? aid.card_number.slice(-4) : null
+  // ⚠️ לפני טעינה אין יתרה — "—" גדול ו"לא נטען כסף" נקראו כתקלה. משפט שמסביר מה יקרה.
+  const notLoadedYet = !aid.card_tlush_id && !aid.card_number && key !== 'failed' && key !== 'awaiting'
+  const beforeApproval = aid.status === 'pending' || aid.status === 'deep_review'
 
   return (
     <section className={`${card} md:col-span-8`}>
@@ -136,13 +139,21 @@ export function CardPanel({ aid, data, state, centerName, voucher, holder, onRet
 
       <div className="mt-4 grid grid-cols-1 items-center gap-4 md:grid-cols-[auto_1fr]">
         <div className={`relative flex aspect-[1.586] w-full max-w-[290px] flex-col justify-between rounded-2xl p-4 text-white shadow-[0_10px_24px_rgba(20,33,61,.25)] ${aid.card_number ? 'bg-gradient-to-br from-[#14213D] to-[#22345E]' : 'border-2 border-dashed border-[#D9CFB9] bg-[#F1ECE0] text-[#6B6352] shadow-none'}`}>
-          <div className="flex justify-between text-xs"><span>היכל החתם סופר</span><span>כרטיס מזון</span></div>
+          <div className="text-xs font-bold">היכל החתם סופר · כרטיס מזון</div>
           <span aria-hidden className="h-6 w-8 rounded bg-[#C0912F]/80" />
-          <div dir="ltr" className="text-right text-lg font-bold tracking-[.12em] tabular-nums">{aid.card_number || 'עוד לא שויך כרטיס'}</div>
+          {aid.card_number
+            ? <div dir="ltr" className="text-right text-lg font-bold tracking-[.12em] tabular-nums">{aid.card_number}</div>
+            : <div className="text-base font-extrabold text-[#5C5340]">עוד לא שויך כרטיס</div>}
           <div className="flex justify-between text-xs"><span>{holder}</span></div>
         </div>
         <div className="min-w-0">
           <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${st.cls}`}>{st.label}</span>
+          {notLoadedYet ? (
+            <p className="mt-3 text-[15px] font-bold leading-snug text-[#14213D]">
+              {beforeApproval ? 'הכרטיס ייטען אחרי אישור התיק' : 'הכרטיס עוד לא נטען'}
+              <small className="mt-1 block text-[13px] font-normal text-[#6B6352]">כשיטען, יופיעו כאן היתרה, השיוך במוקד והרכישות.</small>
+            </p>
+          ) : <>
           <small className="mt-3 block text-xs text-[#6B6352]">יתרה בכרטיס</small>
           {state === 'loading' ? <Loader2 size={20} className="animate-spin text-[#6B6352]" /> : (
             <div className="text-[40px] font-black leading-none tabular-nums text-[#14213D]">{balance != null ? money(balance) : '—'}</div>
@@ -151,6 +162,7 @@ export function CardPanel({ aid, data, state, centerName, voucher, holder, onRet
             {loadedAmt ? `נטענו ${money(loadedAmt)}${used != null ? ` · נוצלו ${money(used)}` : ''}` : 'לא נטען כסף'}
           </div>
           <span className="mt-2 block h-[6px] overflow-hidden rounded-[3px] bg-[#EBDFC2]"><i className="block h-full bg-[#C0912F]" style={{ width: `${pct}%` }} /></span>
+          </>}
           {state === 'hidden' && <p className="mt-2 text-xs text-[#958C78]">יתרה חיה ורכישות מוצגות למנהל בלבד</p>}
           {state === 'error' && <p className="mt-2 text-xs text-[#9A4314]">לא ניתן לטעון את נתוני הכרטיס כרגע</p>}
           {onRetry && (
@@ -162,20 +174,20 @@ export function CardPanel({ aid, data, state, centerName, voucher, holder, onRet
       </div>
 
       <div className="mt-3 grid grid-cols-1 gap-x-7 sm:grid-cols-2 lg:grid-cols-4">
-        <Kv label="מספר כרטיס"><span dir="ltr" className="inline-block [unicode-bidi:isolate]">{aid.card_number || <Muted>—</Muted>}</span></Kv>
+        <Kv label="מספר כרטיס">{aid.card_number ? <span dir="ltr" className="inline-block [unicode-bidi:isolate]">{aid.card_number}</span> : <Muted>עוד לא שויך</Muted>}</Kv>
         <Kv label="שויך בתאריך">{aid.card_picked_up_at ? fmtTime(aid.card_picked_up_at) : aid.card_number ? 'שויך' : <Muted>טרם שויך</Muted>}</Kv>
-        <Kv label="נטען בתאריך">{aid.card_loaded_at ? fmtTime(aid.card_loaded_at) : <Muted>—</Muted>}</Kv>
-        <Kv label="סכום שנטען">{aid.card_load_amount ? money(Number(aid.card_load_amount)) : <Muted>—</Muted>}</Kv>
+        <Kv label="נטען בתאריך">{aid.card_loaded_at ? fmtTime(aid.card_loaded_at) : <Muted>עוד לא נטען</Muted>}</Kv>
+        <Kv label="סכום שנטען">{aid.card_load_amount ? money(Number(aid.card_load_amount)) : <Muted>עוד לא נטען</Muted>}</Kv>
         <Kv label="מוקד איסוף">{aid.card_center_id ? (centerName ?? TBD) : <Muted>לא נבחר</Muted>}</Kv>
-        <Kv label="תוקף">{aid.card_expires_at ? new Date(aid.card_expires_at).toLocaleDateString('he-IL') : <Muted>—</Muted>}</Kv>
+        <Kv label="תוקף">{aid.card_expires_at ? new Date(aid.card_expires_at).toLocaleDateString('he-IL') : <Muted>ייקבע בטעינה</Muted>}</Kv>
         <Kv label="שובר כרטיס">{voucher ? <span dir="ltr" className="inline-block [unicode-bidi:isolate]">{voucher}</span> : <Muted>{TBD}</Muted>}</Kv>
-        <Kv label="מזהה תלוש בנדרים"><span dir="ltr" className="inline-block [unicode-bidi:isolate]">{aid.card_tlush_id || <Muted>—</Muted>}</span></Kv>
+        <Kv label="אישור טעינה בנדרים">{aid.card_tlush_id ? <span dir="ltr" className="inline-block [unicode-bidi:isolate]">{aid.card_tlush_id}</span> : <Muted>עוד לא נטען</Muted>}</Kv>
       </div>
       {last4 && <span className="sr-only">ארבע ספרות אחרונות {last4}</span>}
 
       <div className="mt-4">
         <h4 className="text-sm font-bold text-[#14213D]">מה קרה עם הכרטיס</h4>
-        {tl.length === 0 ? <p className="py-3 text-sm text-[#6B6352]">אין אירועים ביומן</p> : (
+        {tl.length === 0 ? <p className="py-3 text-sm text-[#6B6352]">עוד אין פעולות על הכרטיס</p> : (
           <ol className="mt-2">
             {tl.map((t, i) => (
               <li key={i} className="flex items-start gap-3 border-b border-[#EFE9DC] py-2 text-sm">

@@ -8,7 +8,9 @@ import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import type { MaternityAid } from '@/types'
 import { babyNameLabel, type AidNameFields } from '@/lib/babyNames'
-import { STATUS_PILL, type MotherRef } from './maternityStatus'
+import { STATUS_PILL, StatusControl, type MotherRef } from './maternityStatus'
+import LineageStairs, { type StairGen } from '@/components/lineage/LineageStairs'
+import MaternityInquiryPanel from './[id]/MaternityInquiryPanel'
 import { useCardActivity, CardPanel, CardHistory, money, cardStatusKey } from './MaternityCardsTab'
 import SafeDocImage from '@/components/ui/SafeDocImage'
 import PdfCanvasView from '@/components/ui/PdfCanvasView'
@@ -17,7 +19,8 @@ import RecordModal, { modalBtn, type RecordTone } from '@/components/admin/syste
 
 // כרטסת לידה: הגדרות בלבד, התצוגה ב-RecordModal המשותף.
 // ⚠️ אישור, דחייה, הארכת זכאות וטעינת כרטיס מתבצעים בכרטסת המלאה ולא משוכפלים כאן.
-// ⚠️ ליולדות אין שרשור התכתבות במסד (שליחת קישור תיקון שם בלבד), ולכן אין לשונית התכתבות.
+// ✅ שרשור הבירור (MaternityInquiryPanel) מוצג גם כאן — אותו רכיב כמו בכרטסת המלאה.
+// ✅ האישור דרך StatusControl — אותו כפתור כמו בטבלה, עם כל בדיקות המשפחה והמלאי.
 
 type Extra = Partial<MaternityAid> & { beneficiary?: (MotherRef & { email?: string; city?: string; address?: string }) | null }
 
@@ -178,6 +181,18 @@ export default function MaternityCardModal({ rows, index, onIndex, onClose }: {
   }, [a.id])
   const fixList = fixes && fixes.id === a.id ? fixes.list : []
 
+  // סדר הדורות הצבוע — אותו חישוב כמו בכרטסת המלאה (lib/maternityLineage)
+  const [lineage, setLineage] = useState<{ id: string; gens: StairGen[] } | null>(null)
+  useEffect(() => {
+    let alive = true
+    fetch(`/api/admin/maternity/${a.id}/lineage`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (alive) setLineage({ id: a.id, gens: (d?.gens ?? []) as StairGen[] }) })
+      .catch(() => { if (alive) setLineage({ id: a.id, gens: [] }) })
+    return () => { alive = false }
+  }, [a.id])
+  const gens = lineage && lineage.id === a.id ? lineage.gens : null
+
   const m = a.beneficiary as MotherRef | undefined
   const email = ((ready?.beneficiary as { email?: string } | null | undefined)?.email ?? '').trim()
   const merged = { ...a, ...(ready ?? {}) } as MaternityAid
@@ -190,6 +205,9 @@ export default function MaternityCardModal({ rows, index, onIndex, onClose }: {
   const activity = useCardActivity(a.id, reloadKey)
   const key = cardStatusKey(merged)
   const voucher = (merged as MaternityAid & { voucher_serial?: string | null }).voucher_serial ?? null
+  const beforeApproval = a.status === 'pending' || a.status === 'deep_review'
+  const wc = merged.wants_food_card !== false, wr = merged.wants_recovery !== false
+  const benefits = wc && wr ? 'כרטיס + הבראה' : wc ? 'כרטיס בלבד' : wr ? 'הבראה בלבד' : '—'
   const canRetry = canEdit && merged.card_load_status === 'failed' && !merged.card_tlush_id
 
   // הרצה חוזרת של טעינה לתיק הזה בלבד (אותו ראוט של מסך "טעינות שנכשלו")
@@ -236,7 +254,7 @@ export default function MaternityCardModal({ rows, index, onIndex, onClose }: {
   return (<>
     <RecordModal
       kind="לידה"
-      crumb={`יולדות / תיק ${a.id.slice(0, 8)}`}
+      crumb="יולדות"
       title={motherName(m)}
       meta={[
         { label: 'ת״ז יולדת', value: m?.spouse_id_number || '—', ltr: true },
@@ -247,13 +265,16 @@ export default function MaternityCardModal({ rows, index, onIndex, onClose }: {
       statusTone={TONE[a.status] ?? 'wait'}
       stampDate={fmt(a.created_at)}
       facts={[
-        { label: 'תיק', value: `#${a.id.slice(0, 6)}`, ltr: true },
-        { label: 'תינוקות', value: String(merged.babies?.length || 1) },
-        { label: 'תאריך אישור', value: a.approved_at ? fmt(a.approved_at) : '—' },
-        { label: 'סוף זכאות', value: fmt(merged.six_weeks_end) },
-        { label: 'ימים בטיפול', value: String(days) },
-        { label: 'כרטיס', hl: true, ltr: !!merged.card_number, value: merged.card_number ? `··${merged.card_number.slice(-4)}` : key === 'failed' ? 'נכשל' : 'ממתין' },
-        { label: 'יתרה', hl: true, value: activity.data?.balance != null ? money(activity.data.balance) : '—' },
+        { label: 'ימים בטיפול', value: String(days), sub: `מאז ${fmt(a.created_at)}` },
+        { label: 'הטבות שביקשה', value: benefits, sub: merged.wants_recovery !== false && merged.recovery_home ? `בית החלמה ${merged.recovery_home}` : undefined },
+        { label: 'כרטיס מזון', hl: true, ltr: !!merged.card_number,
+          value: merged.wants_food_card === false ? 'לא ביקשה'
+            : merged.card_number ? `··${merged.card_number.slice(-4)}`
+            : key === 'failed' ? 'הטעינה נכשלה'
+            : beforeApproval ? 'ייטען אחרי אישור' : 'טרם נטען',
+          sub: activity.data?.balance != null ? `יתרה ${money(activity.data.balance)}` : undefined },
+        { label: 'תאריך אישור', value: a.approved_at ? fmt(a.approved_at) : 'עוד לא אושר', muted: !a.approved_at },
+        { label: 'סוף זכאות', value: merged.six_weeks_end ? fmt(merged.six_weeks_end) : 'ייקבע באישור', muted: !merged.six_weeks_end, sub: '6 שבועות מהלידה' },
       ]}
       readiness={[
         { label: 'ת״ז הוזנה', ok: !!(m?.spouse_id_number || m?.id_number) },
@@ -293,19 +314,35 @@ export default function MaternityCardModal({ rows, index, onIndex, onClose }: {
             { label: 'ת״ז', value: m?.spouse_id_number ?? '' },
             { label: 'תאריך לידה', value: fmt(a.birth_date) },
           ]} />,
-        main: <CardPanel aid={merged} data={activity.data} state={activity.state}
+        main: <>
+          <section className="rounded-xl border border-[#E6DFCF] bg-[#FFFDF8] px-5 pb-4 pt-1 shadow-[0_1px_2px_rgba(20,33,61,.05)] md:col-span-8">
+            <h3 className="border-b-[1.5px] border-[#14213D] pb-2.5 pt-3.5 text-[15px] font-bold text-[#14213D]">סדר הדורות</h3>
+            <div className="pt-4">
+              {gens === null ? <p className="py-3 text-sm text-[#6B6352]">טוען…</p>
+                : gens.length ? <LineageStairs framed gens={gens} />
+                : <p className="py-3 text-sm text-[#6B6352]">לא מולא סדר דורות</p>}
+              <Link href={full} className="mt-1 inline-block text-sm font-bold text-[#1D4ED8] hover:underline">עריכה בכרטסת המלאה ←</Link>
+            </div>
+          </section>
+          <div className="min-w-0 md:col-span-8">
+            <MaternityInquiryPanel aidId={a.id} motherName={motherName(m)} hasEmail={!!email} />
+          </div>
+          <CardPanel aid={merged} data={activity.data} state={activity.state}
           centerName={merged.card_center_id ? (centers[merged.card_center_id] ?? null) : null}
           voucher={voucher} holder={motherName(m)}
           onRetry={canRetry ? retryLoad : undefined} retrying={retrying}
-          onRelink={canEdit ? relinkCard : undefined} relinking={relinking} />,
+          onRelink={canEdit ? relinkCard : undefined} relinking={relinking} />
+        </>,
         below: <>
           <CardHistory data={activity.data} state={activity.state} />
           {fixList.length > 0 && <FixesList list={fixList} />}
         </>,
       }}
       actions={<>
-        <Link href={full} title="האישור מתבצע בכרטסת המלאה" className={modalBtn.primary}>טיפול בתיק</Link>
         <Link href={full} className={modalBtn.ghost}>פתיחת כרטסת מלאה</Link>
+        {/* ⚠️ a ולא merged: ב-merged ה-beneficiary הוחלף בשליפה המצומצמת (מייל/עיר),
+            ו-StatusControl צריך את children של המשפחה לסנכרון התינוק. */}
+        <StatusControl aid={a} variant="header" />
       </>}
       index={index}
       total={rows.length}
