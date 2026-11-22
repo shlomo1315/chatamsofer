@@ -57,7 +57,8 @@ export function ListTable<K extends string, R extends object>({
       </div>
       {/* בלי overflow-x: אין גלילה לרוחב בשום טבלה */}
       <div className="w-full">
-        <table className="w-full text-right text-sm" style={tc.rt.tableStyle}>
+        {/* lt-cards: בנייד כל שורה הופכת לכרטיס (globals.css) */}
+        <table className="lt-cards w-full text-right text-sm" style={tc.rt.tableStyle}>
           <colgroup>{tc.rt.cols}</colgroup>
           <thead>
             <tr className="border-b border-line bg-sand [&>th]:px-3 [&>th]:py-3.5 [&>th]:text-right [&>th]:align-middle [&>th]:text-[11px] [&>th]:font-bold [&>th]:tracking-wide [&>th]:text-ink-soft">
@@ -77,11 +78,11 @@ export function ListTable<K extends string, R extends object>({
                 <Fragment key={rowKey ? rowKey(row) : (row as { id: string | number }).id}>
                 <ListRow onClick={onOpen ? () => onOpen(row) : undefined}>
                   {lead === 1 && <td className="align-top" onClick={e => e.stopPropagation()}>{leadCell!(row)}</td>}
-                  {tc.shown.map(c => (
-                    <td key={c.key} className={tc.cellClass(c)} onClick={stopCell?.(c) ? e => e.stopPropagation() : undefined}>{renderCell(c, row)}</td>
+                  {tc.shown.map((c, ci) => (
+                    <td key={c.key} data-label={ci === 0 ? undefined : c.label} className={`${tc.cellClass(c)}${ci === 0 ? ' lt-first' : ''}`} onClick={stopCell?.(c) ? e => e.stopPropagation() : undefined}>{renderCell(c, row)}</td>
                   ))}
                   {actions && (
-                    <td className="align-top" onClick={e => e.stopPropagation()}>{actions(row)}</td>
+                    <td className="align-top" data-label={actionsHead} onClick={e => e.stopPropagation()}>{actions(row)}</td>
                   )}
                 </ListRow>
                 {open != null && <tr className="bg-[#FBFAF7]"><td colSpan={tc.shown.length + extra} className="px-4 py-4">{open}</td></tr>}

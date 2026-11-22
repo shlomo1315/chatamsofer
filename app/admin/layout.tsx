@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 export const metadata = { title: 'היכל החתם סופר - מערכת ניהול' }
 
 import Sidebar from '@/components/layout/Sidebar'
+import MobileTableCards from '@/components/admin/system/MobileTableCards'
 import Header from '@/components/layout/Header'
 import WelcomeModal from '@/components/ui/WelcomeModal'
 import DeployBanner from '@/components/ui/DeployBanner'
@@ -36,6 +37,8 @@ export default async function DashboardLayout({
     <div className="admin-shell flex h-screen overflow-hidden bg-[#f7f3ea]">
       {/* 🔴 עדכון גרסה — באמצע פריסה או אחריה. ראו DeployBanner. */}
       <DeployBanner />
+      {/* טבלאות רחבות → כרטיסים בנייד (ראו globals.css lt-cards) */}
+      <MobileTableCards />
       <WelcomeModal />
       {/* בקשות תיקון שם ממתינות — קופצת בכניסה לתוכנה. */}
       <NameChangeAlert />

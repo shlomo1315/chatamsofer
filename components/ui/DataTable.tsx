@@ -217,7 +217,7 @@ export default function DataTable<T extends { id: string }>({
       {/* 🔴 בלי overflow-x: הכלל במערכת הוא שאין גלילה לרוחב בשום טבלה.
           הגרירה מחלקת מחדש את הרוחב הקיים ואינה מרחיבה מעבר למסך. */}
       <div className="rounded-2xl border border-line bg-white">
-        <table className="w-full text-sm text-right border-collapse"
+        <table className="lt-cards w-full text-sm text-right border-collapse"
           style={tableId ? tc.rt.tableStyle : undefined}>
           {tableId && <colgroup>{tc.rt.cols}</colgroup>}
           <thead className="sticky top-0 z-10">
@@ -275,8 +275,8 @@ export default function DataTable<T extends { id: string }>({
                 <tr key={row.id}
                   onClick={onRowClick ? () => onRowClick(row) : rowHref ? () => router.push(rowHref(row)) : undefined}
                   className={`hover:bg-sand transition-colors duration-100 ${rowHref || onRowClick ? 'cursor-pointer' : ''}`}>
-                  {view.map((col) => (
-                    <td key={String(col.key)} className={`px-3 py-4 text-ink align-middle ${tableId ? tc.rt.cellClass : "whitespace-nowrap"} ${col.className ?? ''}`}>
+                  {view.map((col, ci) => (
+                    <td key={String(col.key)} data-label={ci === 0 || typeof col.header !== 'string' ? undefined : col.header} className={`${ci === 0 ? 'lt-first ' : ''}px-3 py-4 text-ink align-middle ${tableId ? tc.rt.cellClass : "whitespace-nowrap"} ${col.className ?? ''}`}>
                       {col.render
                         ? col.render(row)
                         : String((row as Record<string, unknown>)[String(col.key)] ?? '—')}

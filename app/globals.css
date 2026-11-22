@@ -286,3 +286,27 @@ th.ltr-num {
 .admin-shell .border-indigo-200, .admin-shell .border-violet-200 { border-color: #e3c98a; }
 
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   🔴 22.11.2026: טבלה כרטיסים בנייד (lt-cards).
+   טבלה של 16 עמודות יצאה ברוחב 1520px בתוך מסך של 390 — והמסגרת (overflow
+   hidden) פשוט חתכה את רוב העמודות. מתחת ל-640px כל שורה היא כרטיס, וכל תא
+   מציג את שם העמודה שלו (data-label) לצד הערך. בלי גלילה לרוחב, בלי חיתוך.
+   ───────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  table.lt-cards, table.lt-cards tbody { display: block; width: 100% !important; }
+  table.lt-cards colgroup, table.lt-cards thead { display: none; }
+  table.lt-cards tbody > tr { display: block; padding: 12px 14px !important; }
+  table.lt-cards tbody > tr > td {
+    display: flex; gap: 12px; justify-content: space-between; align-items: flex-start;
+    width: auto !important; padding: 3px 0 !important; text-align: start; border: 0;
+  }
+  table.lt-cards tbody > tr > td[data-label]::before {
+    content: attr(data-label); flex: none; max-width: 42%;
+    font-size: 12px; font-weight: 600; color: #78716c; padding-top: 1px;
+  }
+  table.lt-cards tbody > tr > td.lt-first { font-size: 15px; font-weight: 700; padding-bottom: 6px !important; }
+  table.lt-cards tbody > tr > td.lt-first::before { display: none; }
+  table.lt-cards tbody > tr > td:empty { display: none; }
+  table.lt-cards tbody > tr > td[colspan] { display: block; }
+}
