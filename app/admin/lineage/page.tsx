@@ -723,10 +723,15 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
     if (!formName.trim()) { setSaveErr('נא להזין שם'); return }
     setSaving(true); setSaveErr('')
     try {
+      let res: Response | null = null
       if (modal?.type === 'edit') {
-        await fetch('/api/admin/lineage', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: modal.node.id, name: formName, relation: formRelation }) })
+        res = await fetch('/api/admin/lineage', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: modal.node.id, name: formName, relation: formRelation }) })
       } else if (modal?.type === 'add') {
-        await fetch('/api/admin/lineage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: formName, parent_id: modal.parentId, relation: formRelation }) })
+        res = await fetch('/api/admin/lineage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: formName, parent_id: modal.parentId, relation: formRelation }) })
+      }
+      if (res && !res.ok) {
+        const d = await res.json().catch(() => ({}))
+        setSaveErr(d.error || 'שגיאה בשמירה'); setSaving(false); return
       }
       onRefresh(); close()
     } catch { setSaveErr('שגיאה בשמירה') }
@@ -737,7 +742,11 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
     if (modal?.type !== 'delete') return
     setSaving(true)
     try {
-      await fetch(`/api/admin/lineage?id=${modal.node.id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/admin/lineage?id=${modal.node.id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        setSaveErr(d.error || 'שגיאה במחיקה'); setSaving(false); return
+      }
       if (selected === modal.node.id) setSelected(null)
       onRefresh(); close()
     } catch { setSaveErr('שגיאה במחיקה') }

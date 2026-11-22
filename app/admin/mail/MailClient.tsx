@@ -189,7 +189,9 @@ function ComposeModal({ onClose, replyTo, initialTo, department }: { onClose: ()
     if (scheduledIso && new Date(scheduledIso).getTime() <= Date.now() + 30_000) { alert('יש לבחור מועד עתידי לתזמון'); return }
     setSending(true)
     const html = editorRef.current?.innerHTML ?? body
-    await fetch('/api/admin/gmail/send', {
+    let ok = false
+    try {
+    const res = await fetch('/api/admin/gmail/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -200,7 +202,11 @@ function ComposeModal({ onClose, replyTo, initialTo, department }: { onClose: ()
         scheduledAt: scheduledIso,
       }),
     })
-    setSending(false)
+    ok = res.ok
+    if (!ok) { const d = await res.json().catch(() => ({})); alert(d.error || 'שליחת המייל נכשלה') }
+    } catch { alert('שליחת המייל נכשלה — בעיית רשת') }
+    finally { setSending(false) }
+    if (!ok) return
     setSentInfo({ to, toName, body: (html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() })
     setTimeout(onClose, 2000)
   }
@@ -581,7 +587,7 @@ function AssignAttachmentModal({ attachment, messageId, senderEmail, onClose }: 
       try {
         const res = await fetch(`/api/admin/beneficiary-search?email=${encodeURIComponent(email)}&exact=1`)
         const data = await res.json()
-        const match = data.beneficiaries?.[0]
+        const match = data.results?.[0]
         if (!cancelled && match) {
           setSelected({ id: match.id, full_name: match.full_name })
           setMaritalStatus(match.marital_status ?? null)
@@ -603,7 +609,7 @@ function AssignAttachmentModal({ attachment, messageId, senderEmail, onClose }: 
     const timer = setTimeout(async () => {
       const res = await fetch(`/api/admin/beneficiary-search?q=${encodeURIComponent(query)}&limit=6`)
       const data = await res.json()
-      setResults(data.beneficiaries ?? [])
+      setResults(data.results ?? [])
     }, 300)
     return () => clearTimeout(timer)
   }, [query])

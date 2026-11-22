@@ -27,12 +27,18 @@ function ComposePane({ toEmail, toName, replyTo, onSent, onCancel }: {
   const send = async () => {
     if (!subject) return
     setSending(true)
-    await fetch('/api/admin/gmail/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to: toEmail, subject, body: body.replace(/\n/g, '<br/>'), threadId: replyTo?.threadId }),
-    })
-    setSending(false)
+    let ok = false
+    try {
+      const res = await fetch('/api/admin/gmail/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: toEmail, subject, body: body.replace(/\n/g, '<br/>'), threadId: replyTo?.threadId }),
+      })
+      ok = res.ok
+      if (!ok) { const d = await res.json().catch(() => ({})); alert(d.error || 'שליחת המייל נכשלה') }
+    } catch { alert('שליחת המייל נכשלה — בעיית רשת') }
+    finally { setSending(false) }
+    if (!ok) return
     setSent(true)
     setTimeout(() => onSent(), 2000)
   }
