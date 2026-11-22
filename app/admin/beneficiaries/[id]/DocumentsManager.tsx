@@ -165,7 +165,16 @@ export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { b
         const idx = doc.file_url.indexOf(marker)
         if (idx !== -1) {
           const path = decodeURIComponent(doc.file_url.slice(idx + marker.length))
-          await supabase.storage.from(BUCKET).remove([path])
+          // 🔴 קובץ שתיק לידה מצביע עליו (אישור לידה) — מוחקים רק את השורה ברשימה,
+          // לא את הקובץ. אחרת אישור הלידה בתיק נשבר לצמיתות (28 תיקים, 22.11.2026).
+          // ⚠️ שתי שאילתות eq ולא .or() עם הכתובת בתוך המחרוזת — הזרקה ל-.or() כבר נמצאה בעבר.
+          const [r1, r2] = await Promise.all([
+            // לפי נתיב הקובץ ולא הכתובת המלאה: בתיקים ישנים הכתובת היא של השרת הקודם.
+            // ⚠️ "_" ב-like הוא תו כללי — במקרה הגרוע הקובץ לא יימחק, וזה הכיוון הבטוח.
+            supabase.from('maternity_aids').select('id').like('birth_certificate_url', `%${path}`).limit(1),
+            supabase.from('maternity_aids').select('id').like('birth_certificate_url_2', `%${path}`).limit(1),
+          ])
+          if (!r1.data?.length && !r2.data?.length) await supabase.storage.from(BUCKET).remove([path])
         }
       }
       await supabase.from('documents').delete().eq('id', doc.id)
