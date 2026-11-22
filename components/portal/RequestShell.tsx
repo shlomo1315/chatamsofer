@@ -55,9 +55,12 @@ export function RequestShell({
     ['טלפון', family.phone, true],
   ]
   return (
-    <div dir="rtl" className="lg:grid lg:grid-cols-[minmax(320px,400px)_1fr] lg:gap-0 lg:rounded-2xl lg:overflow-hidden lg:border lg:border-[#e3dbcc] bg-[#f2efe8]">
+    <div dir="rtl" className="lg:grid lg:grid-cols-[minmax(320px,400px)_1fr] lg:gap-0 lg:rounded-2xl lg:overflow-clip lg:border lg:border-[#e3dbcc] bg-[#f2efe8]">
       {/* ── הפאנל הכחול ── */}
-      <aside className="bg-[#132a52] text-[#dfe4ee] px-4 py-4 lg:px-8 lg:py-8 lg:sticky lg:top-0 lg:self-start lg:min-h-[calc(100vh-120px)] flex flex-col bg-[radial-gradient(120%_60%_at_100%_0%,rgba(217,181,110,0.10),transparent_60%)]">
+      {/* ⚠️ הרקע הכחול נמתח לכל גובה הטופס (aside ב-stretch), והתוכן
+          שבתוכו נצמד למסך בגלילה (sticky) — כך הפאנל לא "נגמר" באמצע הדף. */}
+      <aside className="bg-[#132a52] text-[#dfe4ee] bg-[radial-gradient(120%_60%_at_100%_0%,rgba(217,181,110,0.10),transparent_60%)]">
+      <div className="px-4 py-4 lg:px-8 lg:py-8 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto flex flex-col">
         <div className="flex items-center gap-3">
           <img src="/logo.png" alt="איגוד הצאצאים" className="w-10 h-10 lg:w-14 lg:h-14 object-contain" />
           <div className="leading-tight">
@@ -112,6 +115,7 @@ export function RequestShell({
           {submitBtn('w-full min-h-[52px] px-6 text-[17px] bg-[#d9b56e] text-[#132a52] hover:bg-[#e6c788]')}
           <p className="text-xs text-[#8592ad] mt-3 text-center">אישור יישלח למייל הרשום אצלנו</p>
         </div>
+      </div>
       </aside>
 
       {/* ── הטופס ── */}

@@ -3653,8 +3653,98 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // 🔴 בבקשת לידה (רגילה ושקטה) הקטע מוצג גם למשפחה מאושרת — השרת דורש
   // את הצילומים, ובלי הקטע לא היה איפה להעלות אותם (ראו portalIdDocsSection).
   // bare — בתוך כרטיס "מסמכים" של מעטפת הבקשה (RequestShell): בלי Card משלו.
+  // משבצת קומפקטית לכרטיס "מסמכים" של מעטפת הבקשה — אותה התנהגות בדיוק כמו
+  // renderIdDocSlot (קובץ נוסף, קובץ קיים + החלפה), בעיצוב קצר ומסודר.
+  const renderIdDocCompact = (docType: string, label: string, forceFresh: boolean) => {
+    const file = docFiles[docType] ?? null
+    const setFile = (f: File | null) => setDocFile(docType, f)
+    const existing = forceFresh ? undefined : existingDocs[docType]
+    const replacing = !!replaceDoc[docType]
+    const isAppx = docType.endsWith('_appx')
+    // מספיק ספח אחד — אחרי שצורף ספח של בן הזוג, המשבצת הזו אינה חובה
+    const optional = isAppx && !file && requiredDocs.some(x => x !== docType && x.endsWith('_appx') && has(x, forceFresh))
+    const okRow =(text: string, onClear?: () => void, extra?: React.ReactNode) => (
+      <div className="flex items-center gap-2.5 px-3 py-2.5 border border-[#2c6a4e] bg-[#e3efe8] rounded-md min-h-[52px]">
+        <CheckCircle2 size={18} className="text-[#2c6a4e] flex-shrink-0" />
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#16213a]">{text}</span>
+        {extra}
+        {onClear && <button type="button" onClick={onClear} aria-label="הסרה" className="text-[#9b2c2c] p-1 rounded hover:bg-white/60"><X size={15} /></button>}
+      </div>
+    )
+    return (
+      <div className="flex flex-col gap-1.5 min-w-0">
+        <span className="text-sm font-semibold text-[#16213a]">
+          {label}{optional ? <span className="text-xs font-normal text-[#6f6a5e] ms-1.5">(לא חובה — כבר צורף ספח)</span> : <span className="text-[#a87a2f] ms-0.5">*</span>}
+        </span>
+        {file ? (
+          <>
+            {okRow(file.name, () => setFile(null))}
+            {(extraDocs[docType] ?? []).map((xf, i) => (
+              <div key={i}>{okRow(xf.name, () => removeExtraDoc(docType, i))}</div>
+            ))}
+            {/* 🔴 קובץ נוסף — לספח מרובה עמודים או צילום דו-צדדי */}
+            <label className="self-start inline-flex items-center gap-1 cursor-pointer text-xs font-bold text-[#2c6a4e] hover:underline">
+              <Plus size={13} /> הוספת עמוד נוסף
+              <input type="file" accept={UPLOAD_ACCEPT} className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) addExtraDoc(docType, f); e.target.value = '' }} />
+            </label>
+          </>
+        ) : existing && !replacing ? (
+          okRow('כבר במערכת', undefined, (
+            <span className="flex items-center gap-2.5 text-xs flex-shrink-0">
+              {existing.url && <ViewDocButton url={existing.url} name={existing.name} className="text-[#1e3d73] underline">צפייה</ViewDocButton>}
+              <button type="button" onClick={() => setReplaceDoc(p => ({ ...p, [docType]: true }))} className="text-[#465068] underline">החלפה</button>
+            </span>
+          ))
+        ) : (
+          <>
+            <label className="flex items-center gap-2.5 px-3 py-2.5 min-h-[52px] border border-dashed border-[#cbbfa8] bg-white rounded-md cursor-pointer hover:border-[#1e3d73] transition">
+              <span className="w-8 h-8 rounded-full bg-[#e9edf5] text-[#132a52] grid place-items-center flex-none"><Upload size={15} /></span>
+              <span className="min-w-0">
+                <b className="block text-sm font-semibold text-[#16213a]">לחצו להעלאה</b>
+                <small className="block text-xs text-[#6f6a5e] truncate">{isAppx ? 'כל העמודים שבהם רשומים הילדים' : 'צילום ברור של התעודה עצמה'}</small>
+              </span>
+              <input type="file" accept={UPLOAD_ACCEPT} className="hidden" onChange={e => setFile(e.target.files?.[0] ?? null)} />
+            </label>
+            {existing && replacing && (
+              <button type="button" onClick={() => setReplaceDoc(p => ({ ...p, [docType]: false }))}
+                className="self-start text-xs text-[#6f6a5e] hover:text-[#16213a]">ביטול — השארת הקובץ הקיים</button>
+            )}
+          </>
+        )}
+      </div>
+    )
+  }
+
   const renderIdDocsSection = (forceFresh = false, bare = false) => {
     if (!shouldShowIdDocsSection({ hasBeneficiary: !!beneficiary, isApproved, isBirthRequest, forceFresh })) return null
+    // ── גרסה קומפקטית לכרטיס "מסמכים" (בקשת יולדת / הלוואה) ──
+    if (bare) {
+      const hasAppx = requiredDocs.some(d => d.endsWith('_appx'))
+      return (
+        <div className="border-t border-[#e3dbcc] pt-4 flex flex-col gap-3">
+          <div>
+            <div className="text-[15px] font-bold text-[#16213a]">תעודות זהות וספח</div>
+            <p className="text-[13px] text-[#6f6a5e] m-0">
+              {forceFresh
+                ? 'בכל בקשת הלוואה מעלים צילומים עדכניים, גם אם כבר שלחתם בעבר. הם יחליפו את הקיימים.'
+                : 'צילומים ברורים. מספיק ספח אחד — של הבעל או של האשה.'}
+            </p>
+          </div>
+          {hasAppx && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-[#f0c9c9] bg-[#fbeeee] text-[13px] font-extrabold text-[#9b2c2c]">
+              <AlertCircle size={15} className="flex-shrink-0" />
+              חובה להעלות ספח מלא — כולל כל דפי הילדים
+            </div>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+            {requiredDocs.map(d => (
+              <div key={d}>{renderIdDocCompact(d, idDocLabel(d), forceFresh)}</div>
+            ))}
+          </div>
+        </div>
+      )
+    }
     const wrap = (inner: React.ReactNode) => bare
       ? <div className="border-t border-[#e3dbcc] pt-4">{inner}</div>
       : <Card>{inner}</Card>
@@ -5931,10 +6021,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     <span>שימו לב — לא ניתן להגיש בקשת לידה לאחר {MATERNITY_SUBMIT_DAYS} יום מהלידה. אם קיימות נסיבות מיוחדות, נשמח לסייע — אנא פנו למשרד.</span>
                   </div>
                 )}
-                {/* קישור עדין ללידה שקטה */}
+                {/* קישור ללידה שקטה — גלוי אבל עדין (בקשת המנהל 22.11: קודם לא נראה כלל) */}
                 <button type="button" onClick={() => { setError(''); setShowSilentInfo(true) }}
-                  className="mx-auto flex items-center gap-1.5 text-xs text-slate-400 hover:text-rose-500 transition-all duration-150">
-                  <Heart size={13} /> עברת לידה שקטה? להגשת בקשה מותאמת — לחצי כאן
+                  className="w-full flex items-center justify-center gap-2 rounded-[14px] border border-dashed border-[#e2c6cc] bg-[#fbf4f5] px-4 py-3 text-sm text-[#7d4652] hover:bg-[#f7eaed] transition">
+                  <Heart size={15} className="text-[#b5677a]" /> עברת לידה שקטה? להגשת בקשה מותאמת — לחצי כאן
                 </button>
               </>}
             >
