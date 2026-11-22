@@ -3,6 +3,7 @@ import { Heebo } from 'next/font/google'
 import './globals.css'
 import './aidui.css'
 import { DocViewerProvider } from '@/components/ui/DocViewer'
+import PasteSanitizer from '@/components/PasteSanitizer'
 
 const heebo = Heebo({
   variable: '--font-heebo',
@@ -31,6 +32,7 @@ export default function RootLayout({
         <meta name="google" content="notranslate" />
       </head>
       <body className="min-h-full bg-slate-50">
+        <PasteSanitizer />
         <DocViewerProvider>{children}</DocViewerProvider>
       </body>
     </html>
