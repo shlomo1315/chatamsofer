@@ -19,6 +19,7 @@ import { groupDocsByType } from '@/lib/groupDocsByType'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import Card from '@/components/ui/Card'
 import PriorRejectionAlert from './PriorRejectionAlert'
+import PortalNotePanel from './PortalNotePanel'
 import { LoanStatusControl, DeleteLoanButton } from '../LoanControls'
 import FamilyApprovalGate from '@/components/admin/FamilyApprovalGate'
 import BackButton from '@/components/ui/BackButton'
@@ -240,6 +241,12 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
           לסגור חלוניות בלי לקרוא אותן. */}
       {(loan.status === 'pending' || loan.status === 'inquiry') && (
         <PriorRejectionAlert loanId={loan.id} familyName={borrower ?? undefined} />
+      )}
+      {/* הערה שנכתבה בפורטל הביצוע — עם טופל / לטיפול בהמשך. */}
+      {loan.portal_note && (
+        <PortalNotePanel loanId={loan.id} note={loan.portal_note}
+          noteAt={loan.portal_note_at ?? null} alert={loan.portal_note_alert ?? null}
+          remindAt={loan.portal_note_remind_at ?? null} handledAt={loan.portal_note_handled_at ?? null} />
       )}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">

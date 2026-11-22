@@ -25,13 +25,36 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const parsed = normalizePortalNote(body.note)
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
 
+  const db = adminClient()
+  const now = new Date().toISOString()
+
+  // ⚠️ ההשוואה לערך הקודם בשרת ולא רק בדפדפן: שמירה חוזרת של אותו טקסט
+  // לא פותחת מחדש התראה שהמזכירות כבר סימנו "טופל".
+  const { data: cur } = await db.from('loans').select('portal_note').eq('id', id).maybeSingle()
+  const changed = (cur?.portal_note ?? null) !== parsed.value
+
+  // 🔴 הערה חדשה/ששונתה פותחת התראה למזכירות ההלוואות (חלונית + הבהוב
+  // ברשימה). מחיקת ההערה סוגרת אותה — אין על מה לטפל.
+  const alert = !changed ? {}
+    : parsed.value
+      ? { portal_note_at: now, portal_note_alert: 'open', portal_note_remind_at: null,
+          portal_note_handled_at: null, portal_note_handled_by: null }
+      : { portal_note_alert: null, portal_note_remind_at: null }
+
   // ⚠️ רק הלוואות שמוצגות בפורטל (מאושרות/פעילות).
-  const { data, error } = await adminClient()
+  const run = (extra: Record<string, unknown>) => db
     .from('loans')
-    .update({ portal_note: parsed.value, updated_at: new Date().toISOString() })
+    .update({ portal_note: parsed.value, updated_at: now, ...extra })
     .eq('id', id)
     .in('status', ['approved', 'active'])
     .select('id')
+
+  let { data, error } = await run(alert)
+  // ⚠️ לפני שמיגרציית ההתראה רצה העמודות חסרות — ההערה עצמה נשמרת בכל זאת.
+  if (error && /portal_note_(at|alert|remind_at|handled)/.test(error.message)) {
+    console.error('[portal-note] עמודות ההתראה חסרות — נשמר בלי התראה:', error.message)
+    ;({ data, error } = await run({}))
+  }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!data?.length) return NextResponse.json({ error: 'ההלוואה לא נמצאה' }, { status: 404 })
