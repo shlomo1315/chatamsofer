@@ -8,6 +8,7 @@ import { nodeIsSelf, beneficiaryNodeName, type BeneficiaryForNode } from '@/lib/
 import { getApprovedRefTree } from '@/lib/lineageApprovedRef'
 import { earlyGenerationsCheck, appendManualGenerations } from '@/lib/lineageFixApply'
 import { normalizeLineageNodeName, lineageIdentityKey } from '@/lib/lineageNameFormat'
+import { markMaternityInquiryAnswered } from '@/lib/maternityInquiry'
 
 export const dynamic = 'force-dynamic'
 
@@ -134,6 +135,8 @@ export async function POST(request: NextRequest) {
       payload: { text, proposed_chain: proposed }, reviewer_name: inv.recipient_name, status: 'pending',
     })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    // 🔴 המשפחה השיבה דרך הקישור — התיק יוצא מ"ממתין לתשובת היולדת"
+    await markMaternityInquiryAnswered(admin, inv.beneficiary_id, 'המשפחה שלחה תיקון לסדר הדורות דרך הקישור (ממתין לבדיקה)')
     return NextResponse.json({ ok: true, applied: false, reason: blockReason })
   }
 
@@ -206,5 +209,7 @@ export async function POST(request: NextRequest) {
     },
   })
 
+  // 🔴 המשפחה השיבה דרך הקישור — התיק יוצא מ"ממתין לתשובת היולדת"
+  await markMaternityInquiryAnswered(admin, inv.beneficiary_id, 'המשפחה תיקנה את סדר הדורות דרך הקישור')
   return NextResponse.json({ ok: true, applied: true })
 }

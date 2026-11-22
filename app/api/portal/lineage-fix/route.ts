@@ -15,6 +15,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { validateFixRequest, cleanFixText } from '@/lib/lineageFixRequest'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
+import { markMaternityInquiryAnswered } from '@/lib/maternityInquiry'
 
 export const dynamic = 'force-dynamic'
 
@@ -163,5 +164,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // 🔴 תיקון מהאזור האישי — התיק יוצא מ"ממתין לתשובת היולדת"
+  await markMaternityInquiryAnswered(admin, ben.id, 'המשפחה שלחה תיקון לסדר הדורות מהאזור האישי')
   return NextResponse.json({ ok: true, applied: false })
 }
