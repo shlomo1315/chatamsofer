@@ -48,7 +48,7 @@ export async function findMemberById(idNumber: string): Promise<Member | null> {
 }
 
 export type Registrant = Member & {
-  birth_date: string | null; spouse_birth_date: string | null
+  birth_date: string | null; spouse_birth_date: string | null; marital_status: string | null
   phone: string | null; phone2: string | null; spouse_phone: string | null
 }
 
@@ -56,7 +56,7 @@ export type Registrant = Member & {
 export async function findRegistrantById(idNumber: string): Promise<Registrant | null> {
   const id = digitsOnly(idNumber)
   const { data } = await db().from('beneficiaries')
-    .select(`${MEMBER_COLS}, birth_date, spouse_birth_date, phone, phone2, spouse_phone`)
+    .select(`${MEMBER_COLS}, birth_date, spouse_birth_date, marital_status, phone, phone2, spouse_phone`)
     .or(idOrFilter(id, ['id_number', 'spouse_id_number'])).limit(5)
   const exact = ((data ?? []) as Registrant[]).filter(m => sameId(m.id_number, id) || sameId(m.spouse_id_number, id))
   return exact.find(memberCanRegister) ?? exact[0] ?? null

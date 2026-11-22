@@ -6,6 +6,7 @@
 // אחר אינו יכול לרשום אותו.
 // ─────────────────────────────────────────────────────────────────────────────
 import { isKnownPhone } from '@/lib/cardIdentity'
+import { isMarried } from '@/lib/aidApplyValidation'
 
 export type BirthCheck = 'match' | 'mismatch' | 'unknown'
 
@@ -41,6 +42,36 @@ export function checkBirthDate(typed: string | null | undefined, stored: string 
   if (!s) return 'unknown'
   const t = typedBirthKey(typed)
   return t && t === s ? 'match' : 'mismatch'
+}
+
+/**
+ * השוואה מול כמה תאריכים אפשריים (נשואים: של האב או של האם).
+ * 'unknown' רק כשאין אף תאריך שמור קריא.
+ */
+export function checkBirthDateAny(typed: string | null | undefined, stored: (string | null | undefined)[]): BirthCheck {
+  const keys = stored.map(storedBirthKey).filter((k): k is string => !!k)
+  if (!keys.length) return 'unknown'
+  const t = typedBirthKey(typed)
+  return t && keys.includes(t) ? 'match' : 'mismatch'
+}
+
+/** האם התאריך שהמתקשר מתבקש להקיש הוא "של האבא או האמא" (סטטוס נשואים). */
+export function asksParentBirth(m: { marital_status?: string | null }): boolean {
+  return isMarried(String(m.marital_status ?? ''))
+}
+
+/**
+ * הכרעת תאריך הלידה לפי הסטטוס.
+ *
+ * 🔴 נשואים מתבקשים "תאריך הלידה של האבא או האמא" ⇒ כל אחד משני התאריכים
+ * שבכרטסת מתקבל. אחרים ⇒ תאריך הלידה של בעל הת"ז שהוקשה.
+ */
+export function checkRegistrantBirth(
+  typed: string | null | undefined, typedId: string,
+  m: { marital_status?: string | null; id_number?: string | null; spouse_id_number?: string | null; birth_date?: string | null; spouse_birth_date?: string | null },
+): BirthCheck {
+  if (asksParentBirth(m)) return checkBirthDateAny(typed, [m.birth_date, m.spouse_birth_date])
+  return checkBirthDate(typed, birthDateForId(typedId, m))
 }
 
 /** תאריך הלידה הרלוונטי: של בעל הת"ז שהוקשה (הנרשם או בן/בת הזוג). */

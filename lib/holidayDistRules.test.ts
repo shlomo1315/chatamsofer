@@ -40,3 +40,15 @@ describe('זיהוי ברישום הטלפוני', () => {
     expect(phoneMatches('0500000000', m)).toBe(false)
   })
 })
+
+describe('מספרי ניסיון', () => {
+  it('נרמול: ספרות, 972→0, בלי כפילויות', async () => {
+    const { normalizeTestPhones, isTestCaller } = await import('./holidayDistRules')
+    expect(normalizeTestPhones('050-123-4567, 972501234567; 123')).toEqual(['0501234567'])
+    const r = normalizeRules({ testPhones: ['0501234567'] })
+    expect(isTestCaller(r, '972501234567')).toBe(true)
+    expect(isTestCaller(r, '0501234567')).toBe(true)
+    expect(isTestCaller(r, '0509999999')).toBe(false)
+    expect(isTestCaller(r, '')).toBe(false)
+  })
+})

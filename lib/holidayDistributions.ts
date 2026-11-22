@@ -17,7 +17,7 @@ import { getServiceClient } from '@/lib/apiAuth'
 export type { RegisterSource } from '@/lib/distributionSources'
 export { SOURCE_LABEL } from '@/lib/distributionSources'
 import type { RegisterSource } from '@/lib/distributionSources'
-import { getDistRules, channelAllowed, blockedByDeepReview, phoneOnlyMessage } from '@/lib/holidayDistRules'
+import { getDistRules, channelAllowed, blockedByDeepReview, phoneOnlyMessage, isTestCaller } from '@/lib/holidayDistRules'
 
 export interface ActiveDistribution {
   id: string
@@ -94,12 +94,16 @@ export interface RegisterResult {
 export async function registerToOpenDistribution(
   beneficiaryId: string,
   source: RegisterSource,
-  opts: { phone?: string | null } = {},
+  opts: {
+    phone?: string | null
+    /** 🧪 רישום מספר ניסיון לחלוקה שהרישום אליה עדיין סגור (testDistributionFor). */
+    distribution?: ActiveDistribution | null
+  } = {},
 ): Promise<RegisterResult> {
   const db = getServiceClient()
   if (!db) return { ok: false, created: false, error: 'שגיאת שרת' }
 
-  const dist = await getOpenDistribution()
+  const dist = opts.distribution ?? await getOpenDistribution()
   if (!dist) return { ok: false, created: false, error: 'אין כרגע חלוקה שהרישום אליה פתוח' }
 
   // 🔴 כללי החלוקה: "בטלפון בלבד" ו"חסימת בדיקה מעמיקה". נאכפים כאן ולא
@@ -230,4 +234,23 @@ export async function getLiveDistribution(): Promise<LiveDistribution | null> {
     .limit(1)
     .maybeSingle()
   return (data as LiveDistribution | null) ?? null
+}
+
+/**
+ * 🧪 חלוקה לניסיון: כשהרישום סגור, מתקשר ממספר ניסיון של החלוקה האחרונה
+ * (לא מבוטלת) מקבל אותה כאילו היא פתוחה ו"בטלפון בלבד".
+ *
+ * ⚠️ רק כשאין חלוקה פתוחה: כשהרישום פתוח כולם עוברים במסלול הרגיל.
+ */
+export async function testDistributionFor(callerPhone: string | null | undefined): Promise<ActiveDistribution | null> {
+  if (!callerPhone) return null
+  const live = await getLiveDistribution()
+  if (!live) return null
+  const rules = await getDistRules(live.id)
+  if (!isTestCaller(rules, callerPhone)) return null
+  console.log(`[holiday] TEST caller allowed dist=${live.id}`)
+  return {
+    id: live.id, name: live.name, year: live.year, amount_per_family: live.amount_per_family,
+    registration_open: true, phone_only: true, phone_number: rules.phoneNumber || defaultPhoneNumber(),
+  }
 }

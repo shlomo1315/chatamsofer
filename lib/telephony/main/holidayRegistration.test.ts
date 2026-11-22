@@ -7,7 +7,7 @@ const { data, dist, rules, notify } = vi.hoisted(() => ({
     getRecipient: vi.fn(), pickupEverStarted: vi.fn(), centerOpening: vi.fn(), getCenter: vi.fn(), getSpokenCenter: vi.fn(),
     centerCapacities: vi.fn(), openCenters: vi.fn(), saveCenterChoice: vi.fn(), loadCard: vi.fn(), clearFailedCard: vi.fn(),
   },
-  dist: { getOpenDistribution: vi.fn(), registerToOpenDistribution: vi.fn() },
+  dist: { getOpenDistribution: vi.fn(), registerToOpenDistribution: vi.fn(), testDistributionFor: vi.fn() },
   rules: { getDistRules: vi.fn() },
   notify: { notifyHolidayApproved: vi.fn() },
 }))
@@ -20,7 +20,7 @@ vi.mock('@/lib/holidayPhoneMessages', () => ({
   getHolidayMessages: async () => Object.fromEntries(Object.entries({
     main_menu: 'תפריט ראשי', reg_menu_prompt: 'לרישום ל{distribution} הקישו 5', reg_notice: 'הודעה מקדימה',
     reg_welcome: 'ברוכים הבאים', reg_ask_id: 'הקישו תעודת זהות', id_invalid: 'מספר שגוי', not_found: 'לא נמצאתם',
-    not_eligible: 'אינכם זכאים', reg_deep_review: 'פנו למשרד', reg_ask_birth: 'הקישו תאריך לידה',
+    not_eligible: 'אינכם זכאים', reg_deep_review: 'פנו למשרד', reg_ask_birth: 'הקישו תאריך לידה', reg_ask_birth_married: 'תאריך לידה של האבא או האמא',
     reg_birth_mismatch: 'תאריך לא תואם', reg_ask_phone: 'הקישו טלפון', reg_phone_mismatch: 'טלפון לא תואם',
     identify: 'שלום {name}', reg_ask_lineage: 'הצהרת ייחוס', reg_ask_need: 'הצהרת נזקקות', reg_declined: 'הרישום לא בוצע',
     reg_success_approved: 'נרשמתם ל{distribution} וזכאים', reg_success_pending: 'נרשמתם', reg_to_centers: 'מעבר למוקד',
@@ -36,7 +36,7 @@ import { validateResult } from '../schema'
 const ID = '123456782'
 const ben = {
   id: 'b1', family_name: 'כהן', full_name: 'משה', spouse_name: null, id_number: ID, spouse_id_number: null,
-  is_active: true, eligibility_status: 'approved', birth_date: '1990-03-15', spouse_birth_date: null,
+  is_active: true, eligibility_status: 'approved', birth_date: '1990-03-15', spouse_birth_date: null, marital_status: 'רווק',
   phone: '0527654321', phone2: null, spouse_phone: null,
 }
 const C1 = { id: 'c1', city: 'ירושלים', name: 'ירושלים', region: 'jerusalem', sort_order: 1 }
@@ -119,7 +119,7 @@ describe('רישום בטלפון בלבד', () => {
     dist.registerToOpenDistribution.mockResolvedValue({ ok: true, created: true, approved: true, recipientId: 'r1' })
     data.getRecipient.mockResolvedValueOnce(null).mockResolvedValue({ id: 'r1', center_id: null, approval_status: 'approved' })
     const r = await call({ ...full, r_lin: '1', r_need: '1' })
-    expect(dist.registerToOpenDistribution).toHaveBeenCalledWith('b1', 'phone', { phone: '0527654321' })
+    expect(dist.registerToOpenDistribution).toHaveBeenCalledWith('b1', 'phone', { phone: '0527654321', distribution: OPEN })
     expect(notify.notifyHolidayApproved).toHaveBeenCalledWith(['r1'], { email: true, phone: false })
     expect(first(r)).toMatchObject({ type: 'simpleMenu', name: 'c_city', enabledKeys: '1,2' })
     expect(text(r)).toContain('וזכאים')
@@ -140,5 +140,38 @@ describe('רישום בטלפון בלבד', () => {
     expect(text(r)).toContain('כבר רשומים')
     expect(text(r)).toContain('ירושלים')
     expect(dist.registerToOpenDistribution).not.toHaveBeenCalled()
+  })
+
+  it('לא נשואים: "הקישו את התאריך לידה" ורק התאריך של בעל הת"ז', async () => {
+    const r = await call({ r_id: ID })
+    expect(text(r)).toContain('הקישו תאריך לידה')
+    expect(text(r)).not.toContain('האבא או האמא')
+  })
+
+  it('נשואים: "של האבא או האמא", ושני התאריכים מתקבלים', async () => {
+    data.findRegistrantById.mockResolvedValue({ ...ben, marital_status: 'נשואים', spouse_birth_date: '1992-07-20' })
+    expect(text(await call({ r_id: ID }))).toContain('האבא או האמא')
+    expect(first(await call({ r_id: ID, r_bd: '15031990' }))).toMatchObject({ name: 'r_ph' })
+    expect(first(await call({ r_id: ID, r_bd: '20071992' }))).toMatchObject({ name: 'r_ph' })
+    expect(first(await call({ r_id: ID, r_bd: '01012000' }))).toMatchObject({ name: 'r_bd2' })
+  })
+})
+
+describe('מספרי ניסיון — כשהרישום סגור', () => {
+  it('מספר ניסיון מקבל את מקש 5 ונרשם לחלוקה הסגורה', async () => {
+    dist.getOpenDistribution.mockResolvedValue(null)
+    dist.testDistributionFor.mockResolvedValue(OPEN)
+    const menuR = await call({ menu_pick: '' })
+    expect(first(menuR)).toMatchObject({ enabledKeys: '1,2,3,4,5' })
+    dist.registerToOpenDistribution.mockResolvedValue({ ok: true, created: true, approved: true, recipientId: 'r1' })
+    data.getRecipient.mockResolvedValueOnce(null).mockResolvedValue({ id: 'r1', center_id: null, approval_status: 'approved' })
+    await call({ ...full, r_lin: '1', r_need: '1' })
+    expect(dist.registerToOpenDistribution).toHaveBeenCalledWith('b1', 'phone', expect.objectContaining({ distribution: OPEN }))
+  })
+
+  it('מספר רגיל כשהרישום סגור — תפריט רגיל בלי מקש 5', async () => {
+    dist.getOpenDistribution.mockResolvedValue(null)
+    dist.testDistributionFor.mockResolvedValue(null)
+    expect(first(await call({ menu_pick: '' }))).toMatchObject({ enabledKeys: '1,2,3,4' })
   })
 })

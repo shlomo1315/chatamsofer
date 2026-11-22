@@ -14,9 +14,9 @@
 // ⚠️ שמות משתנים ייחודיים (r_*) — לא משותפים למסלול הרישום הישן או לבירור
 // הזכאות, כדי שערך ממסלול אחר באותה שיחה לא ידלג על שאלה.
 // ─────────────────────────────────────────────────────────────────────────────
-import { getOpenDistribution, registerToOpenDistribution } from '@/lib/holidayDistributions'
+import { registerToOpenDistribution, type ActiveDistribution } from '@/lib/holidayDistributions'
 import { getDistRules, blockedByDeepReview, type DistRules } from '@/lib/holidayDistRules'
-import { birthDateForId, checkBirthDate, phoneMatches } from '@/lib/holidayPhoneRegistrationRules'
+import { asksParentBirth, checkRegistrantBirth, phoneMatches } from '@/lib/holidayPhoneRegistrationRules'
 import { notifyHolidayApproved } from '@/lib/holidayNotify'
 import { digitsOnly } from '@/lib/idLookup'
 import { spokenCenterDetails, spokenCenterName } from '@/lib/holidayCenterSpeech'
@@ -73,10 +73,8 @@ function stage(
   }
 }
 
-export async function phoneRegistration(k: RegKit): Promise<TlResult> {
+export async function phoneRegistration(k: RegKit, dist: ActiveDistribution): Promise<TlResult> {
   const { params, callId, phone: callerPhone } = k.ctx
-  const dist = await getOpenDistribution()
-  if (!dist) return k.end('closed')
   const rules = await getDistRules(dist.id)
   const distName = `${dist.name}${dist.year ? ` ${dist.year}` : ''}`
 
@@ -98,11 +96,12 @@ export async function phoneRegistration(k: RegKit): Promise<TlResult> {
     return k.end('reg_deep_review')
   }
 
-  // ── 2. תאריך לידה של בעל הת"ז ──
+  // ── 2. תאריך לידה: נשואים, של האבא או האמא; אחרים, של בעל הת"ז ──
+  const birthPrompt = asksParentBirth(ben) ? 'reg_ask_birth_married' : 'reg_ask_birth'
   const bdStage = stage(k, REG_VARS.birth, (name, lead) =>
-    askDigits(name, 8, [...lead, ...k.files('reg_ask_birth')], { min: 1, maskLog: true, post: true }))
+    askDigits(name, 8, [...lead, ...k.files(birthPrompt)], { min: 1, maskLog: true, post: true }))
   if ('reply' in bdStage) return bdStage.reply
-  const bd = checkBirthDate(bdStage.value, birthDateForId(idStage.value, ben))
+  const bd = checkRegistrantBirth(bdStage.value, idStage.value, ben)
   if (bd === 'mismatch') {
     console.log(`${LOG} callId=${callId} ben=${ben.id} birth mismatch (attempt ${bdStage.attempt + 1})`)
     return bdStage.retry('reg_birth_mismatch')
@@ -137,7 +136,7 @@ export async function phoneRegistration(k: RegKit): Promise<TlResult> {
   let rec = existing
   let lead: TlFile[] = []
   if (!rec) {
-    const result = await registerToOpenDistribution(ben.id, 'phone', { phone: phStage.value || callerPhone })
+    const result = await registerToOpenDistribution(ben.id, 'phone', { phone: phStage.value || callerPhone, distribution: dist })
     if (!result.ok) {
       console.error(`${LOG} register failed ben=${ben.id}: ${result.error}`)
       return k.end(result.deepReview ? 'reg_deep_review' : 'failed')
