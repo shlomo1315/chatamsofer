@@ -26,6 +26,7 @@ import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import ApprovalLabelTag from '@/components/ui/ApprovalLabelTag'
 import { approvalLabelOf } from '@/lib/approvalLabel'
 import { dayKey, inApprovalRange, countByApprovalDay } from '@/lib/approvalDates'
+import { normalizeSearch, digitsQuery, digitsKey } from '@/lib/searchText'
 
 const formatDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yy', { locale: he }) : '—'
 
@@ -121,11 +122,24 @@ const searchHaystack = (a: MaternityAid) => {
     m?.id_number,
     babyNameLabel(a as AidNameFields).text,
     a.baby_id_number,
+    // ⚠️ תאומים: התינוק השני קיים רק ב-babies — בלעדיו הת"ז שלו לא נמצאה.
+    ...babiesOf(a).flatMap(b => [b.name, b.id_number]),
     formatDate(a.birth_date),
     a.recovery_home,
     a.card_number,
     STATUS_PILL[a.status]?.label,
   ].filter(Boolean).join(' ').toLowerCase()
+}
+
+const babiesOf = (a: MaternityAid) =>
+  ((a as { babies?: { name?: string | null; id_number?: string | null }[] | null }).babies ?? [])
+
+// מפתחות מספריים (ת"ז אם/אב/תינוקות + טלפון) — לחיפוש שמתעלם ממקפים,
+// רווחים ואפס מוביל. ראו lib/searchText.
+const idKeys = (a: MaternityAid): string[] => {
+  const m = a.beneficiary as (MotherRef & { phone?: string | null }) | undefined
+  return [m?.id_number, m?.spouse_id_number, m?.phone, a.baby_id_number, ...babiesOf(a).map(b => b.id_number)]
+    .map(digitsKey).filter(Boolean)
 }
 
 // ── Main table ──────────────────────────────────────────────────────────────────
@@ -262,10 +276,18 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
   ) as Record<Filter, number>, [data])
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    return data.filter(a =>
-      matchesFilter(a, filter) && matchesBenefit(a, benefit) && inApprovalRange(a.approved_at, apFrom, apTo) && (q === '' || searchHaystack(a).includes(q))
+    // 🔴 normalizeSearch ולא trim(): ת"ז שהודבקה עם סימן כיווניות נסתר לא נמצאה
+    // ("לא נמצאו לידות") אף שהתיק קיים. ראו lib/searchText.
+    const q = normalizeSearch(query)
+    const qd = digitsQuery(query)
+    const hit = (a: MaternityAid) => q === '' || searchHaystack(a).includes(q) || (qd !== null && idKeys(a).some(k => k.includes(qd)))
+    const rows = data.filter(a =>
+      matchesFilter(a, filter) && matchesBenefit(a, benefit) && inApprovalRange(a.approved_at, apFrom, apTo) && hit(a)
     )
+    // 🔴 תיק שקיים אבל מחוץ ללשונית/הסינון — המסך נפתח ב"ממתין לאישור",
+    // וחיפוש ת"ז של תיק מאושר החזיר "לא נמצאו" כאילו אין תיק כזה.
+    const elsewhere = rows.length === 0 && q !== '' ? data.filter(hit).length : 0
+    return Object.assign(rows, { elsewhere })
   }, [data, filter, benefit, query, apFrom, apTo])
 
   // כמה אושרו בכל יום, בטווח שנבחר, בלי קשר לכרטיס הסטטוס שנבחר
@@ -499,6 +521,15 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
           </div>
         )}
       </div>
+
+      {filtered.elsewhere > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-gold bg-sand px-4 py-3 text-sm text-navy-dark">
+          <AlertTriangle size={16} className="text-gold" />
+          <span>אין תוצאות בסינון הנוכחי, אבל נמצאו <b>{filtered.elsewhere}</b> תיקים תואמים בלשוניות או בסינונים אחרים.</span>
+          <button onClick={() => { setFilter('all'); setBenefit('all'); setRange('', '') }}
+            className="rounded-lg bg-navy px-3 py-1.5 text-xs font-bold text-white hover:bg-navy-dark">הצג בכל הלידות</button>
+        </div>
+      )}
 
       {/* Table */}
       <ListTable tc={tc} rows={visibleRows} pg={pg} empty={emptyMessage ?? 'לא נמצאו לידות בסינון זה'}
