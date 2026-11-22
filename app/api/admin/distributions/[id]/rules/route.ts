@@ -27,7 +27,7 @@ export async function GET(_request: NextRequest, ctx: { params: Promise<{ id: st
   ])
   return NextResponse.json({
     rules,
-    defaultPhoneNumber: (process.env.TELEPHONY_MAIN_NUMBER || process.env.HOLIDAY_PHONE_NUMBER || '').trim(),
+    defaultPhoneNumber: (process.env.TECHNOLINE_MAIN_NUMBER || process.env.HOLIDAY_PHONE_NUMBER || '').trim(),
     centers: { open: openCount ?? 0, active: activeCount ?? 0 },
     deepReviewFamilies: deepCount ?? 0,
   }, { headers: { 'Cache-Control': 'no-store' } })
