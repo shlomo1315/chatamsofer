@@ -73,6 +73,20 @@ export function useResizableColumns(
   const [loaded, setLoaded] = useState(false)
   const dragRef = useRef<{ index: number; startX: number; startW: number } | null>(null)
   const thRefs = useRef<Record<number, HTMLElement | null>>({})
+  // 🔴 22.11.2026: רוחב שנגרר נשמר בפיקסלים. במסך צר יותר סכום העמודות עלה על
+  // המקום, והטבלה (צאצאים) יצאה 250px מהמסגרת. מודדים את רוחב המיכל בפועל
+  // ומכווצים את הרוחבים השמורים באופן יחסי כשהם לא נכנסים.
+  const [boxW, setBoxW] = useState(0)
+  const hasWidths = Object.keys(widths).length > 0
+  useEffect(() => {
+    if (!hasWidths) return
+    const th = Object.values(thRefs.current).find(Boolean)
+    const box = th?.closest('table')?.parentElement
+    if (!box || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(([e]) => setBoxW(Math.round(e.contentRect.width)))
+    ro.observe(box)
+    return () => ro.disconnect()
+  }, [hasWidths, loaded])
 
   // ⚠️ נטען אחרי הרינדור הראשון ולא ב-useState: קריאה מ-localStorage בזמן
   // הרינדור מייצרת אי-התאמה בין השרת ללקוח (hydration mismatch).
@@ -132,9 +146,14 @@ export function useResizableColumns(
     ? weights.slice(0, count).reduce((a, b) => a + (b || 1), 0)
     : 0
 
+  const draggedSum = Array.from({ length: count }, (_, i) => widths[i] || 0).reduce((a, b) => a + b, 0)
+  const free = Array.from({ length: count }, (_, i) => widths[i]).filter(w => !w).length
+  const scale = boxW && draggedSum && draggedSum + free * MIN_WIDTH > boxW
+    ? Math.max(0, boxW - free * MIN_WIDTH) / draggedSum
+    : 1
   const cols = Array.from({ length: count }, (_, i) => {
-    // רוחב שהמשתמש גרר גובר תמיד על ברירת המחדל.
-    if (widths[i]) return <col key={i} style={{ width: `${widths[i]}px` }} />
+    // רוחב שהמשתמש גרר גובר תמיד על ברירת המחדל — מכווץ יחסית כשלא נכנס.
+    if (widths[i]) return <col key={i} style={{ width: `${Math.max(MIN_WIDTH, Math.floor(widths[i] * scale))}px` }} />
     if (totalWeight > 0) {
       const w = (weights![i] || 1) / totalWeight * 100
       return <col key={i} style={{ width: `${w.toFixed(3)}%` }} />
