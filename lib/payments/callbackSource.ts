@@ -17,17 +17,16 @@ import { isNedarimWebhookIp } from './nedarimProvider'
 
 export type CallbackSource = 'trusted' | 'spoofed' | 'unknown'
 
+// 🔴 22.11.2026 (ביקורת אבטחה): מאז המעבר ל-AWS (19.11) הדומיין מפנה ישירות
+// ל-ALB. ה-ALB *אינו* קובע x-real-ip ואינו מוחק אותו — הערך שהלקוח שולח מגיע
+// כמות שהוא. תוקף יכול היה לשלוח X-Real-IP של נדרים ולסמן הזמנה כשולמה.
+// ה-ALB מוסיף את כתובת הלקוח האמיתית *בסוף* X-Forwarded-For — רק היא נאמנה.
+// x-real-ip *לעולם* אינו מעניק אמון. כתובת נדרים שמופיעה רק בו (או לפני
+// האחרון בשרשרת) ⇒ spoofed: לא מסומן שולם ולא נכשל, עובר לבדיקת אנוש. כך גם
+// אם ההנחה על התשתית שגויה, תשלום אמיתי לא נדחה ולא אובד — רק ממתין לאישור.
 export function classifyCallbackSource(xForwardedFor: string | null, xRealIp: string | null): CallbackSource {
   const chain = String(xForwardedFor ?? '').split(',').map(s => s.trim()).filter(Boolean)
   const real = String(xRealIp ?? '').trim()
-
-  if (real) {
-    if (isNedarimWebhookIp(real)) return 'trusted'
-    return chain.some(isNedarimWebhookIp) ? 'spoofed' : 'unknown'
-  }
-
-  // ⚠️ בלי x-real-ip (שינוי תשתית) — הכתובת האחרונה בשרשרת היא זו
-  // שהתשתית הוסיפה. כל ערך לפניה עשוי להיות של השולח.
   if (chain.length && isNedarimWebhookIp(chain[chain.length - 1])) return 'trusted'
-  return chain.some(isNedarimWebhookIp) ? 'spoofed' : 'unknown'
+  return chain.some(isNedarimWebhookIp) || (real && isNedarimWebhookIp(real)) ? 'spoofed' : 'unknown'
 }

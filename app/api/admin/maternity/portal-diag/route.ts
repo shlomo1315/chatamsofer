@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff, requirePermission, unauthorized, forbidden, getServiceClient } from '@/lib/apiAuth'
+import { requirePermission, unauthorized, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { isWithinRecoveryWindow, recoveryWindowEnd } from '@/lib/maternity'
 
 export const dynamic = 'force-dynamic'
@@ -21,10 +21,11 @@ export const dynamic = 'force-dynamic'
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
-  const staff = await requireStaff()
-  if (!staff) return unauthorized()
+  // 🔴 22.11.2026 (ביקורת): הרשאת יולדות ולא סתם "צוות" — עובד דואר-בלבד שלף כאן ת"ז ותיקי לידה.
+  if (!(await requirePermission('maternity', 'view'))) return unauthorized()
 
-  const idNumber = (request.nextUrl.searchParams.get('id_number') ?? '').trim()
+  // ספרות בלבד — הערך נכנס ל-.or() (הזרקת מסנן PostgREST)
+  const idNumber = (request.nextUrl.searchParams.get('id_number') ?? '').replace(/D/g, '')
   if (!idNumber) return NextResponse.json({ error: 'חסר מספר תעודת זהות' }, { status: 400 })
 
   const db = getServiceClient()
