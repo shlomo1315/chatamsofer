@@ -22,7 +22,8 @@ export type RecordField = {
 }
 export type RecordSection = { title: string; fields: RecordField[]; wide?: boolean; custom?: ReactNode }
 export type RecordTab = { key: string; label: string; count?: number; content: ReactNode }
-export type RecordFact = { label: string; value: string; ltr?: boolean; hl?: boolean }
+// sub: שורת הסבר קטנה מתחת לערך. muted: ערך שעוד לא נקבע (אפור, לא "—").
+export type RecordFact = { label: string; value: string; ltr?: boolean; hl?: boolean; sub?: string; muted?: boolean }
 export type RecordSteps = { labels: string[]; current: number; rejected?: boolean; dates?: (string | undefined)[] }
 export type RecordCheck = { label: string; ok: boolean; onAsk?: () => void }
 
@@ -250,17 +251,20 @@ export default function RecordModal(props: {
               {facts?.map((f, i) => (
                 <div key={i} className={`min-w-0 flex-1 border-b border-[#EFE9DC] px-3.5 py-2.5 md:border-b-0 md:border-l md:px-6 md:pb-[13px] md:pt-3.5 md:last:border-l-0 ${f.hl ? 'bg-[#FFF8E6]' : ''}`}>
                   <small className="block text-xs text-[#6B6352]">{f.label}</small>
-                  <b dir={f.ltr ? 'ltr' : undefined} className={`block truncate text-[22px] font-black leading-[1.15] tabular-nums md:text-[30px] ${f.hl ? 'text-[#8A6316]' : 'text-[#14213D]'} ${f.ltr ? 'text-right' : ''}`}>{f.value}</b>
+                  {/* ⚠️ ערך מילולי ארוך ("ייטען אחרי אישור") בגופן 30 נחתך — גופן קטן יותר לטקסט */}
+                  <b dir={f.ltr ? 'ltr' : undefined} className={`block font-black leading-[1.15] tabular-nums ${f.value.length > 6 ? 'text-[16px] md:text-[18px] leading-snug' : 'truncate text-[22px] md:text-[30px]'} ${f.muted ? 'text-[#958C78]' : f.hl ? 'text-[#8A6316]' : 'text-[#14213D]'} ${f.ltr ? 'text-right' : ''}`}>{f.value}</b>
+                  {f.sub && <small className="mt-0.5 block text-[12px] text-[#958C78]">{f.sub}</small>}
                 </div>
               ))}
               {readiness && readiness.length > 0 && (
-                <div className="order-first col-span-2 bg-[#FBF6EA] px-3.5 py-2.5 md:order-none md:flex-[1.5] md:px-6 md:pb-[13px] md:pt-3.5">
+                <div className={`order-first col-span-2 px-3.5 py-2.5 md:order-none md:flex-[1.5] md:px-6 md:pb-[13px] md:pt-3.5 ${missing === 0 ? 'bg-[#ECF7EF]' : 'bg-[#FBF6EA]'}`}>
                   <small className="block text-xs text-[#6B6352]">מוכנות לאישור</small>
-                  <b className="block text-[22px] font-black leading-[1.15] tabular-nums text-[#8A6316] md:text-[30px]">
-                    {done}/{readiness.length}
-                    <span className="mr-1.5 text-[15px] font-light text-[#6B6352]">{missing === 0 ? 'אפשר לאשר' : `חסרים ${missing}`}</span>
+                  {/* 🔴 הטקסט בשורה משלו: בתוך ה-b הוא עלה על "4/4" */}
+                  <b className={`block text-[18px] font-black leading-snug md:text-[20px] ${missing === 0 ? 'text-[#1F6B3A]' : 'text-[#8A6316]'}`}>
+                    {missing === 0 ? 'הכל תקין' : `חסרים ${missing}`}
+                    <span className="mr-1.5 tabular-nums font-bold" dir="ltr">{done}/{readiness.length}</span>
                   </b>
-                  <span className="mt-1.5 block h-[5px] overflow-hidden rounded-[3px] bg-[#EBDFC2]"><i className="block h-full bg-[#C0912F]" style={{ width: `${(done / readiness.length) * 100}%` }} /></span>
+                  <span className={`mt-1.5 block h-[5px] overflow-hidden rounded-[3px] ${missing === 0 ? 'bg-[#CFE9D8]' : 'bg-[#EBDFC2]'}`}><i className={`block h-full ${missing === 0 ? 'bg-[#2E7A47]' : 'bg-[#C0912F]'}`} style={{ width: `${(done / readiness.length) * 100}%` }} /></span>
                 </div>
               )}
             </div>
