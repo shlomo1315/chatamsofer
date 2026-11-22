@@ -278,3 +278,44 @@ export async function handleMaternityInquiryReply(
 
   return !error
 }
+
+/**
+ * 🔴 22.11.2026: המשפחה פעלה מחוץ לצ'אט — התיק יוצא מ"ממתין לתשובת היולדת".
+ *
+ * עד היום תיק יצא מההמתנה רק כשהיולדת השיבה *למייל*. משפחה שתיקנה את סדר
+ * הדורות דרך הקישור שקיבלה (הבקשה הנפוצה ביותר) או העלתה מסמך — נשארה
+ * "ממתינה לתשובה" לנצח, והמזכירות לא ראו שהכדור חזר אליהן (20 תיקים).
+ *
+ * רושם הודעת 'applicant' אוטומטית בכל תיק לידה פתוח של המשפחה שההודעה
+ * האחרונה בו היא של הצוות. is_read=false ⇒ חיווי "התקבלה תשובה" נדלק.
+ * לא זורק — כשל כאן לא יפיל את הפעולה של המשפחה.
+ */
+export async function markMaternityInquiryAnswered(
+  db: SupabaseClient,
+  beneficiaryId: string,
+  what: string,
+): Promise<number> {
+  try {
+    const { data: aids } = await db.from('maternity_aids')
+      .select('id').eq('beneficiary_id', beneficiaryId).in('status', ['pending', 'deep_review'])
+    let n = 0
+    for (const a of aids ?? []) {
+      const { data: last } = await db.from('maternity_messages')
+        .select('direction').eq('aid_id', a.id)
+        .order('created_at', { ascending: false }).limit(1).maybeSingle()
+      if (last?.direction !== 'staff') continue
+      const { error } = await db.from('maternity_messages').insert({
+        aid_id: a.id,
+        direction: 'applicant',
+        body: `✅ ${what} (נרשם אוטומטית — המשפחה פעלה דרך האתר ולא השיבה למייל)`,
+        sender_name: 'המערכת',
+        is_read: false,
+      })
+      if (!error) n++
+    }
+    return n
+  } catch (e) {
+    console.error('[maternityInquiry] markMaternityInquiryAnswered failed:', e)
+    return 0
+  }
+}

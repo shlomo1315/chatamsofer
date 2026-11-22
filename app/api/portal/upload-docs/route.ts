@@ -4,6 +4,8 @@ import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { maybeMarkDocsReturned } from '@/lib/docsReturnCheck'
 import { ALLOWED_UPLOAD_TYPES, uploadExt, uploadFileError } from '@/lib/uploads'
+import { markMaternityInquiryAnswered } from '@/lib/maternityInquiry'
+import { docTypeLabel } from '@/lib/docTypes'
 
 export const dynamic = 'force-dynamic'
 
@@ -216,5 +218,7 @@ export async function POST(request: NextRequest) {
     returned = await maybeMarkDocsReturned(admin, beneficiaryId)
   }
 
+  // 🔴 המשפחה העלתה מסמכים — תיק לידה שממתין לתשובתה חוזר לרשימה
+  if (uploaded.length) await markMaternityInquiryAnswered(admin, beneficiaryId, `המשפחה העלתה מסמכים: ${uploaded.map(t => docTypeLabel(t)).join(', ')}`)
   return NextResponse.json({ ok: true, uploaded, url: lastUrl, returned })
 }

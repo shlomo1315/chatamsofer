@@ -4,6 +4,7 @@ import { NODE_SELECT, subtreeNodeIds, type TreeNodeRow } from '@/lib/lineageSync
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { isSiblingOfCurrentParent } from '@/lib/lineageReparentRule'
+import { markMaternityInquiryAnswered } from '@/lib/maternityInquiry'
 
 export const dynamic = 'force-dynamic'
 
@@ -133,6 +134,8 @@ export async function POST(request: NextRequest) {
     status: 'pending',
   })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  // 🔴 הערה/תיקון מהקישור — התיק יוצא מ"ממתין לתשובת היולדת"
+  if (inv.beneficiary_id) await markMaternityInquiryAnswered(admin, inv.beneficiary_id, 'המשפחה שלחה הערה על סדר הדורות דרך הקישור')
 
   return NextResponse.json({ ok: true })
 }
