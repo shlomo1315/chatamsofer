@@ -33,11 +33,13 @@ import PersonalArea from '@/components/portal/PersonalArea'
 import { SCREEN_TARGETS, isPortalScreen } from '@/lib/portalScreens'
 import {
   Search, AlertCircle, Loader2, CheckCircle2, User,
-  Baby, CreditCard, Gift, ChevronLeft, Phone, MapPin, Mail, Landmark,
+  Baby, Gift, ChevronLeft, Phone, MapPin, Mail, Landmark,
   Users, GitBranch, Heart, ArrowRight, Clock, Shield, Plus, Trash2, Check, X, Upload, FileText, HandCoins,
   Send, Lock,
 } from 'lucide-react'
 import NameChangeRequest from '@/components/portal/NameChangeRequest'
+import { RequestShell, RequestSection, UploadBox, CenterAlert, ChoiceTile, type FamilyInfo, type SummaryRow } from '@/components/portal/RequestShell'
+import { displayPurpose } from '@/lib/emailRequestForms'
 
 // ─── Types ───
 
@@ -297,30 +299,9 @@ function BenefitChoices({
   wantsFoodCard: boolean; wantsRecovery: boolean
   onToggleFoodCard: () => void; onToggleRecovery: () => void
 }) {
+  // תיבת סימון ברורה ומסודרת — לפי המוקאפ שאושר 22.11 (ChoiceTile)
   const opt = (checked: boolean, label: string, desc: string, onToggle: () => void) => (
-    <button type="button" onClick={onToggle} aria-pressed={checked}
-      className={`group relative flex items-start gap-3 p-4 rounded-2xl border-2 text-right transition-all duration-200 ${
-        checked
-          ? 'border-indigo-500 bg-gradient-to-br from-indigo-50 to-white shadow-[0_4px_16px_-6px_rgba(79,70,229,0.4)]'
-          : 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/30 hover:-translate-y-0.5'
-      }`}>
-      {/* תיבת סימון מעוצבת — V מונפש */}
-      <span className={`mt-0.5 w-6 h-6 rounded-lg border-2 flex items-center justify-center flex-shrink-0 transition-all duration-200 ${
-        checked
-          ? 'bg-gradient-to-br from-indigo-500 to-indigo-600 border-indigo-600 scale-100 shadow-sm'
-          : 'border-slate-300 bg-white group-hover:border-indigo-400'
-      }`}>
-        <Check
-          size={15}
-          strokeWidth={3.5}
-          className={`text-white transition-all duration-200 ${checked ? 'scale-100 opacity-100' : 'scale-50 opacity-0'}`}
-        />
-      </span>
-      <span className="flex-1">
-        <span className={`block text-sm font-bold transition-colors ${checked ? 'text-indigo-900' : 'text-slate-800'}`}>{label}</span>
-        <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">{desc}</span>
-      </span>
-    </button>
+    <ChoiceTile checked={checked} onClick={onToggle} label={label} desc={desc} />
   )
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -432,6 +413,9 @@ function BabyFields({
   // האישור מחייב אישור מחדש, אחרת אפשר לאשר "משה" ולשלוח בפועל "מ".
   const [confirmedName, setConfirmedName] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
+  // התראה כשמסמנים "עדיין אין שם" — לבקשת המנהל 22.11: חובה להשלים את השם
+  // במערכת מיד אחרי שניתן.
+  const [noNameAlert, setNoNameAlert] = useState(false)
   const nameInputRef = useRef<HTMLInputElement>(null)
 
   // ילד קיים זוהה במשפחה המחוברת → פרטיו (מין/שם/תאריך) נעולים לעריכה,
@@ -607,7 +591,7 @@ function BabyFields({
           {!lockedFromExisting && (
           <div className="mt-2">
             <button type="button"
-              onClick={() => { const next = !noName; setNoName(next); if (next) onChange('baby_name', '') }}
+              onClick={() => { const next = !noName; setNoName(next); if (next) { onChange('baby_name', ''); setNoNameAlert(true) } }}
               className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-all duration-150 ${
                 noName
                   ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
@@ -705,7 +689,7 @@ function BabyFields({
                     </li>
                   </ul>
                   <button type="button"
-                    onClick={() => { setNoName(true); onChange('baby_name', ''); setNameGate(false) }}
+                    onClick={() => { setNoName(true); onChange('baby_name', ''); setNameGate(false); setNoNameAlert(true) }}
                     className="w-full flex items-center justify-center gap-2 border-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-semibold rounded-xl px-4 py-3 transition-colors text-sm">
                     <Clock size={17} /> עדיין אין שם — סמן עבורי
                   </button>
@@ -718,6 +702,9 @@ function BabyFields({
               </div>
             </div>
           )}
+          <CenterAlert open={noNameAlert} onClose={() => setNoNameAlert(false)}
+            title="שימו לב!"
+            text={`חובה להשלים את שם ${gender === 'female' ? 'התינוקת' : 'התינוק'} במערכת מיד אחרי שניתן השם.`} />
         </Field>
       )}
     </div>
@@ -3665,10 +3652,14 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // מאושרת. לכן הקטע מוצג תמיד ולא רק לפני אישור.
   // 🔴 בבקשת לידה (רגילה ושקטה) הקטע מוצג גם למשפחה מאושרת — השרת דורש
   // את הצילומים, ובלי הקטע לא היה איפה להעלות אותם (ראו portalIdDocsSection).
-  const renderIdDocsSection = (forceFresh = false) => {
+  // bare — בתוך כרטיס "מסמכים" של מעטפת הבקשה (RequestShell): בלי Card משלו.
+  const renderIdDocsSection = (forceFresh = false, bare = false) => {
     if (!shouldShowIdDocsSection({ hasBeneficiary: !!beneficiary, isApproved, isBirthRequest, forceFresh })) return null
-    return (
-      <Card>
+    const wrap = (inner: React.ReactNode) => bare
+      ? <div className="border-t border-[#e3dbcc] pt-4">{inner}</div>
+      : <Card>{inner}</Card>
+    return wrap(
+      <>
         <div className="flex items-start gap-3 mb-4">
           <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
             <FileText size={20} className="text-amber-600" />
@@ -3705,9 +3696,32 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
             <div key={d}>{renderIdDocSlot(d, idDocLabel(d), forceFresh)}</div>
           ))}
         </div>
-      </Card>
+      </>
     )
   }
+  // האם צילומי הת"ז נדרשים בטופס הנוכחי, והאם כולם כבר צורפו
+  const idDocsDone = (forceFresh = false) =>
+    !shouldShowIdDocsSection({ hasBeneficiary: !!beneficiary, isApproved, isBirthRequest, forceFresh })
+    || missingRequestIdDocs(forceFresh).length === 0
+
+  // פרטי המשפחה לפאנל הכחול של טופסי הבקשה
+  const familyInfo: FamilyInfo = (() => {
+    const b = beneficiary
+    if (!b) return { familyName: '' }
+    const fam = b.family_name?.trim()
+    const self = [b.full_name, fam].filter(Boolean).join(' ')
+    const femaleHead = ['גרושה', 'אלמנה'].includes(b.marital_status ?? '')
+    return {
+      familyName: fam ? `משפחת ${fam}` : b.full_name,
+      husband: femaleHead ? undefined : self,
+      husbandId: femaleHead ? undefined : b.id_number,
+      wife: femaleHead ? self : b.spouse_name || undefined,
+      wifeId: femaleHead ? b.id_number : b.spouse_id_number || undefined,
+      phone: b.phone,
+      email: b.email,
+      address: [b.address, b.city].filter(Boolean).join(', ') || undefined,
+    }
+  })()
 
   const backToDashboard = () => {
     setStep('dashboard')
@@ -3994,7 +4008,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         </div>
       </header>
 
-      <main className={step === 'id-lookup' ? 'hp-main' : hpShell ? 'hp-main hp-flow' : `mx-auto px-4 py-8 ${step === 'dashboard' ? 'max-w-2xl lg:max-w-[1200px]' : 'max-w-2xl'}`}>
+      {/* new-birth — מעטפת הבקשה (פאנל + טופס) צריכה רוחב מלא; בנייד בלי ריווח
+          חיצוני, כי למעטפת ריווח משלה. */}
+      <main className={step === 'id-lookup' ? 'hp-main' : hpShell ? 'hp-main hp-flow' : step === 'new-birth' ? 'mx-auto lg:px-4 lg:py-8 max-w-[1240px]' : `mx-auto px-4 py-8 ${step === 'dashboard' ? 'max-w-2xl lg:max-w-[1200px]' : 'max-w-2xl'}`}>
 
         {/* ─── Step: ID Lookup ─── (גרסה א׳ · מלוטש — סגנון תחת .hp-root) */}
         {step === 'id-lookup' && (
@@ -5871,93 +5887,128 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
           </div>
         )}
 
-        {/* ─── Step: New Birth ─── */}
-        {step === 'new-birth' && (
-          <form onSubmit={handleBirthRequest} className="flex flex-col gap-4">
-            <div className="flex items-center gap-3 mb-1">
-              <button type="button" onClick={closeRequestForm} className="text-slate-400 hover:text-slate-600">
-                <ArrowRight size={20} />
-              </button>
-              <EditableText k="birth.title" as="h2" className="font-bold text-slate-900 text-lg" />
-            </div>
-
-            {renderIdDocsSection()}
-
-            <Card>
-              <div className="flex items-center gap-2 mb-4">
-                <Baby size={18} className="text-pink-500" />
-                <EditableText k="birth.details.title" as="h3" className="font-semibold text-slate-900" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                {/* בורר לידת תאומים — ראשון: קובע כמה תינוקות מציגים.
-                    תעודת הזהות היא השדה הראשון בכל תינוק (BabyFields), ותאריך
-                    הלידה מוצג אחרי פרטי התינוקות — כדי שיתמלא אוטומטית מזיהוי
-                    ילד קיים לפי ת"ז, במקום שהמשתמש ימלא ידנית ואז יידרס. */}
-                <div className="col-span-2">
-                  <Field label={<EditableText k="birth.type.label" />} required>
-                    <div className="flex gap-2">
-                      {[{ v: false, l: 'לידה רגילה' }, { v: true, l: 'לידת תאומים' }].map(({ v, l }) => (
-                        <button key={String(v)} type="button"
-                          onClick={() => {
-                            setIsTwins(v)
-                            // חזרה ל"לידה רגילה" — לנקות את פרטי התאום השני כדי
-                            // שזיהוי ילד קיים/אזהרה לא יישארו תקועים.
-                            if (!v) {
-                              setBaby2({ baby_gender: '', baby_name: '', baby_id_number: '', baby_id_type: 'id' })
-                              setNoBaby2Name(false); setBaby2IdError(''); setExistingBaby2BirthDate('')
-                              setBirthCertFile2(null)
-                            }
-                          }}
-                          className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-all duration-150 ${
-                            isTwins === v ? 'bg-indigo-100 text-indigo-800 border-indigo-400' : GENDER_BTN_UNSEL
-                          }`}
-                        >{l}</button>
-                      ))}
-                    </div>
-                    {isTwins && <EditableText k="birth.twins.note" as="p" className="mt-1.5 text-xs text-indigo-600" />}
-                  </Field>
+        {/* ─── Step: New Birth ───
+            עיצוב "כיוון ג׳ · סיכום חי" לפי המוקאפ שאושר 22.11.2026.
+            ⚠️ הלוגיקה לא השתנתה — רק המעטפת והסידור בכרטיסים. */}
+        {step === 'new-birth' && (() => {
+          const babyDone = (g: string, n: string, idn: string, noN: boolean, err: string) => !!(g && idn.trim() && (n.trim() || noN) && !err)
+          const sec2 = babyDone(birthForm.baby_gender, birthForm.baby_name, birthForm.baby_id_number, noBabyName, babyIdError)
+            && (!isTwins || babyDone(baby2.baby_gender, baby2.baby_name, baby2.baby_id_number, noBaby2Name, baby2IdError))
+          const sec4 = (wantsFoodCard || wantsRecovery) && (!wantsFoodCard || !!cardCenterId) && (!wantsRecovery || !!birthForm.recovery_home)
+          const sec5 = !!birthCertFile && (!isTwins || !!birthCertFile2) && idDocsDone()
+          const babyText = (g: string, n: string, noN: boolean) =>
+            [g === 'male' ? 'בן' : g === 'female' ? 'בת' : '', noN ? 'טרם ניתן שם' : n.trim()].filter(Boolean).join(' · ')
+          const bd = birthForm.birth_date ? new Date(birthForm.birth_date) : null
+          const summary: SummaryRow[] = [
+            ['סוג לידה', isTwins ? 'תאומים' : 'רגילה'],
+            ['תינוק', babyText(birthForm.baby_gender, birthForm.baby_name, noBabyName)],
+            ...(isTwins ? [['תינוק שני', babyText(baby2.baby_gender, baby2.baby_name, noBaby2Name)] as SummaryRow] : []),
+            ['תאריך לידה', bd && !isNaN(bd.getTime()) ? bd.toLocaleDateString('he-IL') : ''],
+            ['עזרה', [wantsFoodCard && 'כרטיס מזון', wantsRecovery && ('החלמה' + (birthForm.recovery_home ? ' · ' + birthForm.recovery_home : ''))].filter(Boolean).join(' + ')],
+            ['אישור לידה', birthCertFile && (!isTwins || birthCertFile2) ? 'צורף' : ''],
+            ...(shouldShowIdDocsSection({ hasBeneficiary: !!beneficiary, isApproved, isBirthRequest, forceFresh: false })
+              ? [['ת״ז וספח', idDocsDone() ? 'צורפו' : ''] as SummaryRow] : []),
+          ]
+          return (
+          <form onSubmit={handleBirthRequest}>
+            <RequestShell
+              dept="עזר יולדות"
+              title={<EditableText k="birth.title" />}
+              intro="ממלאים פעם אחת, והבקשה עוברת ישר למשרד. אפשר להגיש עד 30 יום מתאריך הלידה."
+              family={familyInfo}
+              summary={summary}
+              submitLabel="שליחת הבקשה למשרד"
+              loading={loading}
+              disabled={birthWindowClosedForExisting}
+              onBack={closeRequestForm}
+              onEditDetails={openEditDetails}
+              footer={<>
+                {error && <ErrorBox message={error} />}
+                {/* חלף חלון ה-30 יום עבור ילד קיים שזוהה — אזהרה חוסמת */}
+                {birthWindowClosedForExisting && (
+                  <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 text-sm text-red-700">
+                    <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+                    <span>שימו לב — לא ניתן להגיש בקשת לידה לאחר {MATERNITY_SUBMIT_DAYS} יום מהלידה. אם קיימות נסיבות מיוחדות, נשמח לסייע — אנא פנו למשרד.</span>
+                  </div>
+                )}
+                {/* קישור עדין ללידה שקטה */}
+                <button type="button" onClick={() => { setError(''); setShowSilentInfo(true) }}
+                  className="mx-auto flex items-center gap-1.5 text-xs text-slate-400 hover:text-rose-500 transition-all duration-150">
+                  <Heart size={13} /> עברת לידה שקטה? להגשת בקשה מותאמת — לחצי כאן
+                </button>
+              </>}
+            >
+              {/* 1 · סוג הלידה */}
+              <RequestSection n={1} title={<EditableText k="birth.type.label" />} done>
+                <div className="flex gap-1 p-1 border border-[#cbbfa8] rounded-md bg-white">
+                  {[{ v: false, l: 'לידה רגילה' }, { v: true, l: 'לידת תאומים' }].map(({ v, l }) => (
+                    <button key={String(v)} type="button" aria-pressed={isTwins === v}
+                      onClick={() => {
+                        setIsTwins(v)
+                        // חזרה ל"לידה רגילה" — לנקות את פרטי התאום השני כדי
+                        // שזיהוי ילד קיים/אזהרה לא יישארו תקועים.
+                        if (!v) {
+                          setBaby2({ baby_gender: '', baby_name: '', baby_id_number: '', baby_id_type: 'id' })
+                          setNoBaby2Name(false); setBaby2IdError(''); setExistingBaby2BirthDate('')
+                          setBirthCertFile2(null)
+                        }
+                      }}
+                      className={`flex-1 min-h-[42px] rounded text-[15px] transition ${
+                        isTwins === v ? 'bg-[#132a52] text-white font-semibold' : 'text-[#16213a] font-medium hover:bg-[#e9edf5]'
+                      }`}
+                    >{l}</button>
+                  ))}
                 </div>
-
-                {/* תינוק ראשון (או התינוק הבודד בלידה רגילה) */}
-                <BabyFields
-                  title={isTwins ? 'תינוק ראשון' : undefined}
-                  gender={birthForm.baby_gender} name={birthForm.baby_name}
-                  idType={birthForm.baby_id_type} idNumber={birthForm.baby_id_number}
-                  noName={noBabyName} idError={babyIdError}
-                  onChange={(field, value) => setBirthForm(f => ({ ...f, [field]: value }))}
-                  setNoName={setNoBabyName} setIdError={setBabyIdError}
-                  currentBeneficiaryId={beneficiary?.id}
-                  existingChildBirthDate={existingBabyBirthDate}
-                  onExistingChild={child => {
-                    setExistingBabyBirthDate(child?.birth_date ?? '')
-                    // מילוי אוטומטי של תאריך הלידה מהילד הקיים (אם קיים תאריך תקין)
-                    if (child?.birth_date) setBirthForm(f => ({ ...f, birth_date: child.birth_date }))
-                  }}
-                />
-
-                {/* תינוק שני — רק בלידת תאומים. תאומים חולקים תאריך לידה אחד,
-                    לכן זיהוי תאום שני קיים ממלא גם הוא את birthForm.birth_date. */}
                 {isTwins && (
+                  <div className="mt-3 px-4 py-3 border-s-[3px] border-[#a87a2f] bg-[#f3e9d3] rounded-e-md text-[15px] text-[#4d3a17]">
+                    <EditableText k="birth.twins.note" />
+                  </div>
+                )}
+              </RequestSection>
+
+              {/* 2 · פרטי התינוק — ת"ז ראשונה (מזהה ילד קיים וממלאת אוטומטית) */}
+              <RequestSection n={2} title={<EditableText k="birth.details.title" />} done={sec2}>
+                <div className="grid grid-cols-2 gap-4">
                   <BabyFields
-                    title="תינוק שני" accent="violet"
-                    gender={baby2.baby_gender} name={baby2.baby_name}
-                    idType={baby2.baby_id_type} idNumber={baby2.baby_id_number}
-                    noName={noBaby2Name} idError={baby2IdError}
-                    onChange={(field, value) => setBaby2(b => ({ ...b, [field]: value }))}
-                    setNoName={setNoBaby2Name} setIdError={setBaby2IdError}
+                    title={isTwins ? 'תינוק ראשון' : undefined}
+                    gender={birthForm.baby_gender} name={birthForm.baby_name}
+                    idType={birthForm.baby_id_type} idNumber={birthForm.baby_id_number}
+                    noName={noBabyName} idError={babyIdError}
+                    onChange={(field, value) => setBirthForm(f => ({ ...f, [field]: value }))}
+                    setNoName={setNoBabyName} setIdError={setBabyIdError}
                     currentBeneficiaryId={beneficiary?.id}
-                    existingChildBirthDate={existingBaby2BirthDate}
+                    existingChildBirthDate={existingBabyBirthDate}
                     onExistingChild={child => {
-                      setExistingBaby2BirthDate(child?.birth_date ?? '')
+                      setExistingBabyBirthDate(child?.birth_date ?? '')
+                      // מילוי אוטומטי של תאריך הלידה מהילד הקיים (אם קיים תאריך תקין)
                       if (child?.birth_date) setBirthForm(f => ({ ...f, birth_date: child.birth_date }))
                     }}
                   />
-                )}
-                {/* תאריך הלידה — אחרי פרטי התינוקות. כשמזוהה ילד קיים לפי ת"ז
-                    התאריך מולא אוטומטית ו*ננעל* (מגיע מרישום המשפחה); אחרת בחירה ידנית. */}
-                <div className="col-span-2 sm:col-span-1">
-                  <Field label={<EditableText k="birth.date.label" />} required>
-                    {/* ההגשה נסגרת ב-30 יום — לפני תום 6 שבועות המימוש. */}
+                  {/* תינוק שני — רק בתאומים. תאומים חולקים תאריך לידה אחד. */}
+                  {isTwins && (
+                    <BabyFields
+                      title="תינוק שני" accent="violet"
+                      gender={baby2.baby_gender} name={baby2.baby_name}
+                      idType={baby2.baby_id_type} idNumber={baby2.baby_id_number}
+                      noName={noBaby2Name} idError={baby2IdError}
+                      onChange={(field, value) => setBaby2(b => ({ ...b, [field]: value }))}
+                      setNoName={setNoBaby2Name} setIdError={setBaby2IdError}
+                      currentBeneficiaryId={beneficiary?.id}
+                      existingChildBirthDate={existingBaby2BirthDate}
+                      onExistingChild={child => {
+                        setExistingBaby2BirthDate(child?.birth_date ?? '')
+                        if (child?.birth_date) setBirthForm(f => ({ ...f, birth_date: child.birth_date }))
+                      }}
+                    />
+                  )}
+                </div>
+              </RequestSection>
+
+              {/* 3 · תאריך הלידה — אותו לוח עברי/לועזי של הרישום. כשמזוהה ילד
+                  קיים לפי ת"ז התאריך מולא אוטומטית וננעל. */}
+              <RequestSection n={3} title={<EditableText k="birth.date.label" />} done={!!birthForm.birth_date}>
+                <div className="max-w-sm">
+                  <Field label={<EditableText k="birth.date.label" />} required hint={`עד ${MATERNITY_SUBMIT_DAYS} יום אחורה מהיום`}>
                     <HebrewDatePicker
                       value={birthForm.birth_date}
                       onChange={iso => setBirthForm(f => ({ ...f, birth_date: iso }))}
@@ -5968,9 +6019,11 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     />
                   </Field>
                 </div>
-                {/* בחירת ההטבות — כרטיס מזון ו/או בית החלמה. רשימת בתי ההחלמה
-                    נפתחת רק כש"בית החלמה" מסומן. */}
-                <div className="col-span-2">
+              </RequestSection>
+
+              {/* 4 · במה נעזור — כרטיס מזון ו/או בית החלמה */}
+              <RequestSection n={4} title="במה נעזור" done={sec4}>
+                <div className="flex flex-col gap-4">
                   <Field label="במה תרצו להיעזר?" required>
                     <BenefitChoices
                       wantsFoodCard={wantsFoodCard} wantsRecovery={wantsRecovery}
@@ -5978,111 +6031,48 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                       onToggleRecovery={() => setWantsRecovery(v => { const nv = !v; if (!nv) setBirthForm(f => ({ ...f, recovery_home: '' })); return nv })}
                     />
                   </Field>
-                </div>
-                {wantsFoodCard && (
-                  <div className="col-span-2">
+                  {wantsFoodCard && (
                     <CardCenterPicker centers={cardCenters} value={cardCenterId} onChange={setCardCenterId} />
-                  </div>
-                )}
-                {wantsRecovery && (
-                  <div className="col-span-2">
+                  )}
+                  {wantsRecovery && (
                     <Field label={<EditableText k="birth.home.label" />} required>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         {recoveryHomes.map(h => (
-                          <button key={h} type="button"
-                            onClick={() => setBirthForm(f => ({ ...f, recovery_home: f.recovery_home === h ? '' : h }))}
-                            className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all duration-150 ${
-                              birthForm.recovery_home === h
-                                ? 'bg-indigo-100 text-indigo-800 border-indigo-300'
-                                : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50'
-                            }`}
-                          >{h}</button>
+                          <ChoiceTile key={h} radio label={h} checked={birthForm.recovery_home === h}
+                            onClick={() => setBirthForm(f => ({ ...f, recovery_home: f.recovery_home === h ? '' : h }))} />
                         ))}
                       </div>
                     </Field>
-                  </div>
-                )}
-                <div className="col-span-2">
+                  )}
                   <Field label="הערות">
                     <textarea value={birthForm.notes} onChange={setBirth('notes')} rows={3}
-                      placeholder="כל מידע רלוונטי נוסף..."
-                      className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none w-full"
-                    />
+                      placeholder="כל דבר שחשוב שנדע"
+                      className="rounded-md border border-[#cbbfa8] px-3.5 py-2.5 text-[15px] text-slate-900 bg-white focus:outline-none focus:border-[#1e3d73] focus:ring-[3px] focus:ring-[#1e3d73]/15 resize-y w-full" />
                   </Field>
                 </div>
-                <div className={isTwins ? 'col-span-2 sm:col-span-1' : 'col-span-2'}>
-                  <Field label={isTwins ? 'אישור לידה — תינוק ראשון' : <EditableText k="birth.cert.label" />} required hint={`אישור הלידה מבית החולים. ${UPLOAD_HINT}`}>
-                    {birthCertFile ? (
-                      <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                        <span className="text-sm text-green-700 flex items-center gap-2">
-                          <CheckCircle2 size={14} /> {birthCertFile.name}
-                        </span>
-                        <button type="button" onClick={() => setBirthCertFile(null)} className="text-red-400 hover:text-red-600">
-                          <X size={14} />
-                        </button>
-                      </div>
-                    ) : (
-                      <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-pink-50 border-2 border-dashed border-slate-300 hover:border-pink-400 rounded-xl px-4 py-3 transition-all duration-150">
-                        <Upload size={16} className="text-slate-400" />
-                        <span className="text-sm text-slate-500">לחץ להעלאת אישור לידה</span>
-                        <input type="file" accept={UPLOAD_ACCEPT} className="hidden"
-                          onChange={e => setBirthCertFile(e.target.files?.[0] ?? null)} />
-                      </label>
-                    )}
-                  </Field>
-                </div>
-                {/* אישור לידה שני — רק בתאומים. שני מסמכים נפרדים, אחד לכל תינוק,
-                    ולא מסמך משותף אחד. */}
-                {isTwins && (
-                  <div className="col-span-2 sm:col-span-1">
-                    <Field label="אישור לידה — תינוק שני" required hint={`אישור הלידה מבית החולים. ${UPLOAD_HINT}`}>
-                      {birthCertFile2 ? (
-                        <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                          <span className="text-sm text-green-700 flex items-center gap-2">
-                            <CheckCircle2 size={14} /> {birthCertFile2.name}
-                          </span>
-                          <button type="button" onClick={() => setBirthCertFile2(null)} className="text-red-400 hover:text-red-600">
-                            <X size={14} />
-                          </button>
-                        </div>
-                      ) : (
-                        <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-violet-50 border-2 border-dashed border-slate-300 hover:border-violet-400 rounded-xl px-4 py-3 transition-all duration-150">
-                          <Upload size={16} className="text-slate-400" />
-                          <span className="text-sm text-slate-500">לחץ להעלאת אישור לידה</span>
-                          <input type="file" accept={UPLOAD_ACCEPT} className="hidden"
-                            onChange={e => setBirthCertFile2(e.target.files?.[0] ?? null)} />
-                        </label>
-                      )}
+              </RequestSection>
+
+              {/* 5 · מסמכים — אישור/י לידה + צילומי ת"ז וספח (כשנדרשים) */}
+              <RequestSection n={5} title="מסמכים" done={sec5}>
+                <div className="flex flex-col gap-4">
+                  <div className={`grid gap-4 ${isTwins ? 'sm:grid-cols-2' : ''}`}>
+                    <Field label={isTwins ? 'אישור לידה — תינוק ראשון' : <EditableText k="birth.cert.label" />} required hint="אישור הלידה מבית החולים">
+                      <UploadBox file={birthCertFile} onFile={setBirthCertFile} onClear={() => setBirthCertFile(null)} accept={UPLOAD_ACCEPT} hint={UPLOAD_HINT} />
                     </Field>
+                    {/* אישור לידה שני — רק בתאומים. מסמך נפרד לכל תינוק. */}
+                    {isTwins && (
+                      <Field label="אישור לידה — תינוק שני" required hint="אישור הלידה מבית החולים">
+                        <UploadBox file={birthCertFile2} onFile={setBirthCertFile2} onClear={() => setBirthCertFile2(null)} accept={UPLOAD_ACCEPT} hint={UPLOAD_HINT} />
+                      </Field>
+                    )}
                   </div>
-                )}
-              </div>
-            </Card>
-
-
-            {error && <ErrorBox message={error} />}
-
-            {/* קישור עדין ללידה שקטה */}
-            <button type="button" onClick={() => { setError(''); setShowSilentInfo(true) }}
-              className="mx-auto flex items-center gap-1.5 text-xs text-slate-400 hover:text-rose-500 transition-all duration-150">
-              <Heart size={13} /> עברת לידה שקטה? להגשת בקשה מותאמת — לחצי כאן
-            </button>
-
-            {/* חלף חלון ה-30 יום עבור ילד קיים שזוהה — אזהרה חוסמת מעל הכפתור */}
-            {birthWindowClosedForExisting && (
-              <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 text-sm text-red-700">
-                <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
-                <span>שימו לב — לא ניתן להגיש בקשת לידה לאחר {MATERNITY_SUBMIT_DAYS} יום מהלידה. אם קיימות נסיבות מיוחדות, נשמח לסייע — אנא פנו למשרד.</span>
-              </div>
-            )}
-            <button type="submit" disabled={loading || birthWindowClosedForExisting}
-              className="flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:bg-indigo-400 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-xl transition-all duration-150 text-base"
-            >
-              {loading ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle2 size={20} />}
-              {loading ? 'שולח...' : 'שלח בקשה'}
-            </button>
+                  {renderIdDocsSection(false, true)}
+                </div>
+              </RequestSection>
+            </RequestShell>
           </form>
-        )}
+          )
+        })()}
 
         {/* ─── Step: New Silent Birth ─── */}
         {step === 'new-silent-birth' && (
@@ -6197,200 +6187,139 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
           </form>
         )}
 
-        {/* ─── Loan Modal ─── */}
-        {loanModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-              {/* Modal header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 sticky top-0 bg-white rounded-t-2xl z-10">
-                <div className="flex items-center gap-2">
-                  <CreditCard size={18} className="text-blue-600" />
-                  <EditableText k="loan.modal.title" as="h3" className="font-bold text-slate-900" />
-                </div>
-                <button type="button" onClick={() => { setLoanModalOpen(false); setError(''); if (arrivedFor) backToHome() }}
-                  className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100">
-                  <X size={20} />
-                </button>
-              </div>
-
-              {/* 🔴 המסך ה"נעול" (טיוטה שממתינה לטופס) הוסר.
-                  הוא היה חצי השני של התהליך הישן: המבקש הגיש, קיבל טופס,
-                  ונדרש לחזור בכניסה נפרדת כדי להעלותו. עכשיו הטופס מתקבל
-                  בחלונית ההנחיות לפני המילוי ומצורף בהגשה עצמה, ולכן אין
-                  יותר מצב ביניים שצריך מסך משלו. */}
-              {(
-              /* Modal body */
-              <form onSubmit={handleLoanRequest} className="p-6 flex flex-col gap-4">
-                {/* ⚠️ forceFresh — בהלוואה הצילומים נדרשים מחדש בכל הגשה,
-                    גם ממשפחה מאושרת שכבר העלתה בעבר. הספח חייב לשקף את
-                    הרכב המשפחה כיום. */}
-                {renderIdDocsSection(true)}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2">
-                    <Field label={<EditableText k="loan.purpose.label" />} required>
-                      <SelectInput value={loanForm.purpose} onChange={setLoan('purpose')} required>
-                        <option value="">{t('loan.purpose.placeholder')}</option>
-                        {LOAN_PURPOSES.map(p => (
-                          <option key={p.value} value={p.value}>{p.value}</option>
-                        ))}
-                      </SelectInput>
-                      {loanForm.purpose && LOAN_PURPOSES.find(p => p.value === loanForm.purpose)?.desc && (
-                        <p className="text-xs text-indigo-600 mt-1">
-                          {LOAN_PURPOSES.find(p => p.value === loanForm.purpose)?.desc}
-                        </p>
-                      )}
-                    </Field>
-                  </div>
-                  {loanForm.purpose && loanForm.purpose !== WEDDING_PURPOSE && (
-                    <div className="col-span-2">
+        {/* ─── Loan — עמוד מלא בעיצוב "כיוון ג׳ · סיכום חי" (מוקאפ 22.11.2026) ───
+            ⚠️ נשאר תחת loanModalOpen (כל הכניסות וה-deep-link עובדים כמו קודם),
+            אבל מוצג כשכבה במסך מלא במקום חלונית צרה. הלוגיקה לא השתנתה. */}
+        {loanModalOpen && (() => {
+          const closeLoan = () => { setLoanModalOpen(false); setError(''); if (arrivedFor) backToHome() }
+          const isWedding = loanForm.purpose === WEDDING_PURPOSE
+          const sec1 = !!loanForm.purpose && (isWedding || !!loanForm.purpose_details.trim())
+          const sec2 = !!loanForm.amount && !!loanForm.installments
+          const sec4 = !!rabbiFormFile && (!isWedding || !!loanWeddingFile) && idDocsDone(true)
+          const summary: SummaryRow[] = [
+            ['מטרה', loanForm.purpose ? displayPurpose(loanForm.purpose) : ''],
+            ['סכום', loanForm.amount ? `${Number(loanForm.amount).toLocaleString('en-US')}$` : ''],
+            ['תשלומים', loanForm.installments ? `${loanForm.installments} תשלומים` : ''],
+            ['פנייה קודמת', loanForm.declaration],
+            ['טופס רב', rabbiFormFile ? 'צורף' : ''],
+            ['ת״ז וספח', idDocsDone(true) ? 'צורפו' : ''],
+            ...(isWedding ? [['הזמנת חתונה', loanWeddingFile ? 'צורפה' : ''] as SummaryRow] : []),
+          ]
+          return (
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-[#f2efe8]" dir="rtl">
+            <form onSubmit={handleLoanRequest} className="max-w-[1240px] mx-auto lg:p-6">
+              <RequestShell
+                dept="גמ״ח חתם סופר"
+                title={<EditableText k="loan.modal.title" />}
+                intro={`הלוואה בדולרים, עד ${LOAN_MAX_AMOUNT.toLocaleString('en-US')}$ ועד 60 תשלומים. הכסף עצמו ניתן ומוחזר בשקלים, לפי שער הדולר.`}
+                family={familyInfo}
+                summary={summary}
+                submitLabel="שליחת הבקשה לגמ״ח"
+                loading={loading}
+                onSubmitClick={handleSubmitLoan}
+                onBack={closeLoan}
+                onEditDetails={openEditDetails}
+                footer={error ? <ErrorBox message={error} /> : null}
+              >
+                {/* 1 · מטרת ההלוואה */}
+                <RequestSection n={1} title={<EditableText k="loan.purpose.label" />} done={sec1}>
+                  <div className="flex flex-col gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {LOAN_PURPOSES.map(p => (
+                        <ChoiceTile key={p.value} radio label={displayPurpose(p.value)} checked={loanForm.purpose === p.value}
+                          onClick={() => setLoanForm(f => ({ ...f, purpose: p.value }))} />
+                      ))}
+                    </div>
+                    {loanForm.purpose && LOAN_PURPOSES.find(p => p.value === loanForm.purpose)?.desc && (
+                      <div className="px-4 py-3 border-s-[3px] border-[#a87a2f] bg-[#f3e9d3] rounded-e-md text-[15px] text-[#4d3a17]">
+                        {LOAN_PURPOSES.find(p => p.value === loanForm.purpose)?.desc}
+                      </div>
+                    )}
+                    {loanForm.purpose && !isWedding && (
                       <Field label={<EditableText k="loan.purposeDetails.label" />} required hint="פרטו בהרחבה על מטרת ההלוואה והצורך">
                         <textarea value={loanForm.purpose_details} onChange={setLoan('purpose_details')} rows={4}
                           placeholder={t('loan.purposeDetails.placeholder')}
-                          className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none w-full" />
+                          className="rounded-md border border-[#cbbfa8] px-3.5 py-2.5 text-[15px] text-slate-900 bg-white focus:outline-none focus:border-[#1e3d73] focus:ring-[3px] focus:ring-[#1e3d73]/15 resize-y w-full" />
                       </Field>
-                    </div>
-                  )}
-                  {loanForm.purpose === WEDDING_PURPOSE && (
-                    <div className="col-span-2">
-                      <Field label="הזמנה של החתונה" required hint={`יש לצרף הזמנה של החתונה. ${UPLOAD_HINT}`}>
-                        {loanWeddingFile ? (
-                          <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2.5">
-                            <span className="text-sm text-green-700 flex items-center gap-2 min-w-0"><CheckCircle2 size={14} className="flex-shrink-0" /><span className="truncate">{loanWeddingFile.name}</span></span>
-                            <button type="button" onClick={() => setLoanWeddingFile(null)} className="text-red-400 hover:text-red-600"><X size={14} /></button>
-                          </div>
-                        ) : (
-                          <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-300 rounded-lg px-3 py-4 text-sm text-slate-500 cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/40">
-                            <Upload size={16} /> לחץ לצירוף הזמנת החתונה
-                            <input type="file" accept={UPLOAD_ACCEPT} className="hidden" onChange={e => setLoanWeddingFile(e.target.files?.[0] ?? null)} />
-                          </label>
-                        )}
-                      </Field>
-                    </div>
-                  )}
-                  {loanForm.purpose && loanForm.purpose !== WEDDING_PURPOSE && (
-                    <div className="col-span-2">
-                      <Field label="מסמך מצורף (לא חובה)" hint={`ניתן לצרף מסמך תומך. ${UPLOAD_HINT}`}>
-                        {loanOtherFile ? (
-                          <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2.5">
-                            <span className="text-sm text-green-700 flex items-center gap-2 min-w-0"><CheckCircle2 size={14} className="flex-shrink-0" /><span className="truncate">{loanOtherFile.name}</span></span>
-                            <button type="button" onClick={() => setLoanOtherFile(null)} className="text-red-400 hover:text-red-600"><X size={14} /></button>
-                          </div>
-                        ) : (
-                          <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-300 rounded-lg px-3 py-4 text-sm text-slate-500 cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/40">
-                            <Upload size={16} /> לחץ לצירוף מסמך
-                            <input type="file" accept={UPLOAD_ACCEPT} className="hidden" onChange={e => setLoanOtherFile(e.target.files?.[0] ?? null)} />
-                          </label>
-                        )}
-                      </Field>
-                    </div>
-                  )}
-                  <div className="col-span-2 sm:col-span-1">
+                    )}
+                  </div>
+                </RequestSection>
+
+                {/* 2 · סכום ותשלומים */}
+                <RequestSection n={2} title="סכום ותשלומים" done={sec2}>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Field label={<EditableText k="loan.amount.label" />} required hint={<EditableText k="loan.amount.hint" />}>
                       <TextInput
                         type="number" min="100" max={LOAN_MAX_AMOUNT} step="100"
                         value={loanForm.amount} onChange={setLoanClamped('amount', LOAN_MAX_AMOUNT)}
-                        placeholder="5000" required
+                        placeholder="5000" required dir="ltr"
                       />
                     </Field>
-                  </div>
-                  <div className="col-span-2 sm:col-span-1">
                     <Field label={<EditableText k="loan.installments.label" />} required hint={<EditableText k="loan.installments.hint" />}>
                       <TextInput
                         type="number" min="1" max="60"
                         value={loanForm.installments} onChange={setLoanClamped('installments', 60)}
-                        placeholder="12" required
+                        placeholder="12" required dir="ltr"
                       />
                     </Field>
-                  </div>
-                  <div className="col-span-2">
-                    <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-sm text-amber-800 font-bold">
-                      <AlertCircle size={16} className="flex-shrink-0" />
+                    {/* ⚠️ "תשלום חודשי משוער" הוסר לבקשת המנהל (גם במוקאפ 22.11). */}
+                    <div className="sm:col-span-2 px-4 py-3 border-s-[3px] border-[#1e3d73] bg-[#e9edf5] rounded-e-md text-[15px] text-[#16213a]">
                       <EditableText k="loan.currency.notice" />
                     </div>
                   </div>
-                  {/* ⚠️ "תשלום חודשי משוער" הוסר לבקשת המנהל. הוא גם הציג ₪
-                      בזמן שההלוואה נקובה בדולר, וכך סתר את ההודעה שמעליו. */}
-                  <div className="col-span-2">
-                    <Field label={<EditableText k="loan.declaration.label" />} required>
-                      <div className="flex flex-col gap-2">
-                        {LOAN_DECLARATIONS.map(opt => (
-                          <label key={opt} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                            <input type="radio" name="declaration" value={opt}
-                              checked={loanForm.declaration === opt}
-                              onChange={setLoan('declaration')}
-                              className="accent-indigo-600"
-                            />
-                            {opt}
-                          </label>
-                        ))}
-                      </div>
+                </RequestSection>
+
+                {/* 3 · פנייה קודמת */}
+                <RequestSection n={3} title="פנייה קודמת" done={!!loanForm.declaration}>
+                  <Field label={<EditableText k="loan.declaration.label" />} required>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {LOAN_DECLARATIONS.map(opt => (
+                        <ChoiceTile key={opt} radio label={opt} checked={loanForm.declaration === opt}
+                          onClick={() => setLoanForm(f => ({ ...f, declaration: opt }))} />
+                      ))}
+                    </div>
+                  </Field>
+                </RequestSection>
+
+                {/* 4 · מסמכים — טופס רב (חובה), ת"ז וספח (חדשים בכל הגשה),
+                    הזמנת חתונה / מסמך תומך, והערות */}
+                <RequestSection n={4} title="מסמכים" done={sec4}>
+                  <div className="flex flex-col gap-4">
+                    {/* ⚠️ קישור ההורדה גם כאן ולא רק בחלונית ההנחיות: מי שסגר
+                        אותה חייב דרך להשיג את הטופס בלי להתחיל מחדש. */}
+                    <button type="button" onClick={handleDownloadRabbiForm} disabled={rabbiDownloading}
+                      className="self-start inline-flex items-center gap-2 font-semibold text-[#1e3d73] border-b border-current pb-px">
+                      {rabbiDownloading ? <Loader2 size={15} className="animate-spin" /> : <FileText size={15} />}
+                      הורדת טופס האישור להחתמת הרב
+                    </button>
+                    {/* 🔴 הטופס החתום מצורף כאן, וההגשה נעשית פעם אחת. */}
+                    <Field label="טופס אישור רב חתום" required hint="העלו את הטופס לאחר החתמת הרב">
+                      <UploadBox file={rabbiFormFile} onFile={setRabbiFormFile} onClear={() => setRabbiFormFile(null)} accept={UPLOAD_ACCEPT} hint={UPLOAD_HINT} />
                     </Field>
-                  </div>
-                  <div className="col-span-2">
+                    {isWedding && (
+                      <Field label="הזמנה של החתונה" required hint="נדרש בהלוואה לנישואי הילדים">
+                        <UploadBox file={loanWeddingFile} onFile={setLoanWeddingFile} onClear={() => setLoanWeddingFile(null)} accept={UPLOAD_ACCEPT} hint={UPLOAD_HINT} />
+                      </Field>
+                    )}
+                    {loanForm.purpose && !isWedding && (
+                      <Field label="מסמך תומך (לא חובה)" hint="כל מסמך שעוזר להבין את הבקשה">
+                        <UploadBox file={loanOtherFile} onFile={setLoanOtherFile} onClear={() => setLoanOtherFile(null)} accept={UPLOAD_ACCEPT} hint={UPLOAD_HINT} />
+                      </Field>
+                    )}
+                    {/* ⚠️ forceFresh — בהלוואה הצילומים נדרשים מחדש בכל הגשה. */}
+                    {renderIdDocsSection(true, true)}
                     <Field label={<EditableText k="loan.notes.label" />}>
                       <textarea value={loanForm.notes} onChange={setLoan('notes')} rows={3}
                         placeholder={t('loan.notes.placeholder')}
-                        className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none w-full"
-                      />
+                        className="rounded-md border border-[#cbbfa8] px-3.5 py-2.5 text-[15px] text-slate-900 bg-white focus:outline-none focus:border-[#1e3d73] focus:ring-[3px] focus:ring-[#1e3d73]/15 resize-y w-full" />
                     </Field>
                   </div>
-                </div>
-
-
-                {error && <ErrorBox message={error} />}
-
-                {/* ─── טופס אישור רב — שדה חובה בהגשה ─────────────────────
-                    🔴 הטופס החתום מצורף כאן, וההגשה נעשית פעם אחת.
-
-                    ⚠️ קודם הכפתור שמר טיוטה והוריד את הטופס, וההגשה בפועל
-                    התרחשה רק בכניסה נפרדת אחרי שהמבקש חזר עם הטופס החתום.
-                    רבים לא חזרו: הבקשה נותרה תקועה בסטטוס ביניים והקפיצה
-                    חלונית השלמה בכל כניסה. */}
-                <Field label="טופס אישור רב חתום" required
-                  hint={`העלו את הטופס לאחר החתמת הרב. ${UPLOAD_HINT}`}>
-                  <div className="flex flex-col gap-2">
-                    {rabbiFormFile ? (
-                      <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2.5">
-                        <span className="text-sm text-green-700 flex items-center gap-2 min-w-0">
-                          <CheckCircle2 size={14} className="flex-shrink-0" />
-                          <span className="truncate">{rabbiFormFile.name}</span>
-                        </span>
-                        <button type="button" onClick={() => setRabbiFormFile(null)} className="text-red-400 hover:text-red-600"><X size={14} /></button>
-                      </div>
-                    ) : (
-                      <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-300 rounded-lg px-3 py-4 text-sm text-slate-500 cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/40">
-                        <Upload size={16} /> לחצו להעלאת הטופס החתום
-                        <input type="file" accept={UPLOAD_ACCEPT} className="hidden"
-                          onChange={e => setRabbiFormFile(e.target.files?.[0] ?? null)} />
-                      </label>
-                    )}
-                    {/* ⚠️ קישור ההורדה גם כאן ולא רק בחלונית ההנחיות: מי
-                        שסגר אותה או חזר מאוחר יותר חייב דרך להשיג את הטופס
-                        בלי לצאת מהתהליך ולהתחיל מחדש. */}
-                    <button type="button" onClick={handleDownloadRabbiForm} disabled={rabbiDownloading}
-                      className="self-start inline-flex items-center gap-1.5 text-xs font-bold text-indigo-700 hover:text-indigo-900 underline decoration-dotted underline-offset-4">
-                      {rabbiDownloading ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
-                      הורידו את הטופס שלכם
-                    </button>
-                  </div>
-                </Field>
-
-                <div className="flex gap-3 pt-2">
-                  <button type="button" onClick={() => { setLoanModalOpen(false); setError(''); if (arrivedFor) backToHome() }}
-                    className="flex-1 py-2.5 rounded-xl border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-all duration-150">
-                    <EditableText k="loan.cancel" />
-                  </button>
-                  <button type="button" onClick={handleSubmitLoan} disabled={loading}
-                    className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 text-white font-semibold py-2.5 rounded-xl transition-all duration-150 text-sm">
-                    {loading ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
-                    {loading ? 'שולח...' : 'הגשת הבקשה'}
-                  </button>
-                </div>
-              </form>
-              )}
-            </div>
+                </RequestSection>
+              </RequestShell>
+            </form>
           </div>
-        )}
+          )
+        })()}
 
         {/* ─── חלונית הטופס — הצגה, הדפסה והורדה בתוך הכרטסת ───
             ⚠️ iframe ולא כרטיסייה חדשה: פתיחת כרטיסייה נחסמת ע"י חוסמי
