@@ -83,17 +83,17 @@ describe('clientIpOrNull — IP חסר', () => {
     expect(clientIpOrNull(req({ 'x-forwarded-for': '203.0.113.9' }))).toBe('203.0.113.9')
   })
 
-  it('נופל ל-x-real-ip', () => {
-    expect(clientIpOrNull(req({ 'x-real-ip': '8.8.8.8' }))).toBe('8.8.8.8')
+  // 🔴 22.11.2026 (AWS/ALB): x-real-ip נשלט ע"י הלקוח — מתעלמים ממנו.
+  // (ב-07.10, על Railway, הוא נקבע בתשתית והועדף. זה כבר לא נכון.)
+  it('מתעלם מ-x-real-ip (זיוף מאחורי ALB)', () => {
+    expect(clientIpOrNull(req({ 'x-real-ip': '8.8.8.8' }))).toBeNull()
   })
 
-  // 🔴 ביקורת 07.10: בשרת הערך האחרון ב-XFF הוא כתובת תשתית —
-  // בלי העדפת x-real-ip כל הפונים דרך אותו צומת חלקו מונה אחד.
-  it('x-real-ip גובר על השרשרת — הערך האחרון בה הוא תשתית', () => {
+  it('x-real-ip מזויף אינו גובר על הערך שה-ALB הוסיף בסוף השרשרת', () => {
     expect(clientIpOrNull(req({
       'x-forwarded-for': '104.16.0.1, 79.127.178.82',
       'x-real-ip': '203.0.113.50',
-    }))).toBe('203.0.113.50')
+    }))).toBe('79.127.178.82')
   })
 
   it('מחזיר null כשאין כותרת — ולא ערך משותף לכולם', () => {

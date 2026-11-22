@@ -75,8 +75,9 @@ export function clientIpOrNull(request: Request): string | null {
   // הוא כתובת *תשתית* (79.127.178.82), ולא הלקוח — כך שכל הפונים דרך אותו
   // צומת נספרו כפונה אחד: תוקף אחד יכול היה לנעול את הקופה ואת כניסת
   // המוכרים לכולם. x-real-ip נקבע ע"י ה-proxy, וזיוף שלו מבחוץ נדרס.
-  const realFirst = request.headers.get('x-real-ip')?.trim()
-  if (realFirst) return realFirst
+  // 🔴 22.11.2026: ב-AWS (ALB ישיר) x-real-ip נשלט ע"י הלקוח — זיוף שלו עקף כל
+  // מגבלת קצב (ניחוש סיסמאות, סריקת ת"ז). לוקחים רק את הערך האחרון ב-XFF,
+  // שה-ALB מוסיף ואי אפשר לזייף מבחוץ.
 
   const fwd = request.headers.get('x-forwarded-for')
   if (fwd) {
@@ -84,9 +85,7 @@ export function clientIpOrNull(request: Request): string | null {
     const last = parts[parts.length - 1]
     if (last) return last
   }
-  // ⚠️ x-real-ip מוגדר ע"י ה-proxy ואינו רשימה, ולכן בטוח לקחתו כמות שהוא.
-  const real = request.headers.get('x-real-ip')?.trim()
-  return real || null
+  return null
 }
 
 export function clientIp(request: Request): string {

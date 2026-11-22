@@ -18,7 +18,8 @@ export async function GET(_r: NextRequest, { params }: { params: Promise<{ name:
   const clean = decodeURIComponent(name)
 
   // הגנה: רק שם קובץ פשוט, בלי מעבר תיקיות
-  if (clean.includes('/') || clean.includes('..') || !ALLOWED_EXT.test(clean)) {
+  // ⚠️ % ו-\ — פענוח כפול (Next כבר פענח), אותו דפוס שתוקן ב-lib/fileAccess (07.10)
+  if (clean.includes('/') || clean.includes('..') || clean.includes('%') || clean.includes('\\') || !ALLOWED_EXT.test(clean)) {
     return new NextResponse('Not found', { status: 404 })
   }
 

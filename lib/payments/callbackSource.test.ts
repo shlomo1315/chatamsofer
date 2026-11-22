@@ -6,8 +6,12 @@ const CF = '162.158.94.235'
 const HOP = '79.127.178.82'
 
 describe('🔴 classifyCallbackSource — לפי המבנה שנמדד בפרודקשן', () => {
-  it('🔴 נדרים אמיתי: שרשרת תשתית + x-real-ip של נדרים ⇒ trusted', () => {
-    expect(classifyCallbackSource(`${CF}, ${HOP}`, NEDARIM)).toBe('trusted')
+  // 🔴 22.11 (AWS/ALB): x-real-ip נשלט ע"י הלקוח — אינו מעניק אמון, רק בדיקת אנוש.
+  it('🔴 x-real-ip של נדרים בלבד ⇒ spoofed (לא trusted — זיוף אפשרי מאחורי ALB)', () => {
+    expect(classifyCallbackSource(`${CF}, ${HOP}`, NEDARIM)).toBe('spoofed')
+  })
+  it('🔴 ALB: כתובת נדרים אחרונה בשרשרת ⇒ trusted גם כשהלקוח זייף x-real-ip', () => {
+    expect(classifyCallbackSource(`1.2.3.4, ${NEDARIM}`, '5.6.7.8')).toBe('trusted')
   })
   it('🔴 בדיקת curl אמיתית מ-05.10 (לא נדרים) ⇒ unknown (נדחה)', () => {
     expect(classifyCallbackSource(`${CF}, ${HOP}`, '213.57.81.115')).toBe('unknown')
