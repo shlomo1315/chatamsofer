@@ -144,8 +144,24 @@ export async function POST(request: NextRequest) {
         })
         .filter((p): p is string => Boolean(p))
 
-      if (paths.length) {
-        await admin.storage.from(BUCKET).remove(paths)
+      // 🔴 22.11.2026: 28 תיקי לידה נמצאו עם אישור לידה שהקובץ שלו כבר לא קיים.
+      // העלאה חדשה מסוג birth_cert מחקה את כל אישורי הלידה הקודמים של המשפחה —
+      // גם קובץ שתיק לידה עדיין מצביע עליו. קובץ שתיק לידה משתמש בו לא נמחק לעולם.
+      const { data: aidRefs } = await admin
+        .from('maternity_aids')
+        .select('birth_certificate_url, birth_certificate_url_2')
+        .eq('beneficiary_id', beneficiaryId)
+      const inUse = new Set(
+        (aidRefs ?? []).flatMap(r => [r.birth_certificate_url, r.birth_certificate_url_2])
+          .map(u => {
+            const m = String(u ?? '').match(new RegExp(`/${BUCKET}/(.+)$`))
+            return m?.[1] ? decodeURIComponent(m[1]) : null
+          })
+          .filter((p): p is string => Boolean(p)),
+      )
+      const removable = paths.filter(p => !inUse.has(p))
+      if (removable.length) {
+        await admin.storage.from(BUCKET).remove(removable)
           .catch(e => console.error('[upload-docs] מחיקת קובץ ישן נכשלה:', e))
       }
 
