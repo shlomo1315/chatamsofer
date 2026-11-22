@@ -1749,6 +1749,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     centerAddress?: string | null
     centerHours?: string | null
     centerPhone?: string | null
+    /** 🔴 הרישום לחלוקה בטלפון בלבד — אין כפתור רישום, רק הודעה בולטת. */
+    phoneOnly?: boolean
+    phoneNumber?: string | null
   } | null>(null)
   const [holidaySaving, setHolidaySaving] = useState(false)
   // פופאפ מלא לחלוקה: הזמנה להירשם (מקישור המייל), הצלחה חדשה, "כבר רשומים",
@@ -2990,6 +2993,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 centerAddress: d.centerAddress ?? null,
                 centerHours: d.centerHours ?? null,
                 centerPhone: d.centerPhone ?? null,
+                phoneOnly: !!d.phoneOnly,
+                phoneNumber: d.phoneNumber ?? null,
               }
             : null)
           // ⚠️ סימון שהנתונים *נטענו* — כדי להבחין בין "עדיין טוען" (holiday=null
@@ -5563,7 +5568,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 ...(gateAllows('maternity') && canRequestBirth ? ['maternity' as const] : []),
                 ...(gateAllows('gemach') ? ['gemach' as const] : []),
                 ...(gateAllows('financial_aid') ? ['financial_aid' as const] : []),
-                ...(holiday?.open && !holiday.registered ? ['holidays' as const] : []),
+                ...(holiday?.open && !holiday.registered && !holiday.phoneOnly ? ['holidays' as const] : []),
               ]}
               onStartRequest={(k) => {
                 if (k === 'maternity') goToBirthForm()
@@ -5760,6 +5765,27 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                               צפייה בפרטי הרישום
                             </button>
                           </>
+                        ) : holiday.phoneOnly ? (
+                          // 🔴 רישום בטלפון בלבד — הדגשה בולטת, בלי כפתור רישום.
+                          <div className="mt-2 rounded-2xl border-2 border-amber-400 bg-amber-50 p-4">
+                            <p className="flex items-center gap-2 text-base font-black text-amber-900">
+                              <Phone size={20} className="shrink-0" />
+                              הרישום לחלוקה זו בטלפון בלבד!
+                            </p>
+                            {holiday.phoneNumber && (
+                              <a href={`tel:${holiday.phoneNumber.replace(/\D/g, '')}`}
+                                className="mt-2 inline-flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-lg font-black text-white shadow-sm ltr-num" dir="ltr">
+                                {holiday.phoneNumber}
+                              </a>
+                            )}
+                            <p className="mt-2 text-sm font-bold leading-relaxed text-amber-900">
+                              הרישום מתבצע <u>אך ורק</u> בשלוחה הטלפונית. אין אפשרות להירשם באתר, במייל או בנדרים פלוס.
+                            </p>
+                            <p className="mt-1 text-xs leading-relaxed text-amber-800">
+                              בשיחה תתבקשו להקיש תעודת זהות, תאריך לידה ומספר הטלפון המעודכן במערכת, ולאחר מכן לבחור מוקד חלוקה.
+                              אישור על הזכאות יישלח במייל, וניתן לבדוק אותו גם בקו הטלפוני.
+                            </p>
+                          </div>
                         ) : (
                           <>
                             <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">

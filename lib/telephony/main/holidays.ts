@@ -19,6 +19,9 @@ import { centerStatusKey } from '@/lib/holidayCenterStatusMessage'
 import { spokenCenterDetails } from '@/lib/holidayCenterSpeech'
 import { centerLabel } from '@/lib/holidayCenterPick'
 import { CENTER_VARS, buildChoiceList, nextCenterStep } from '@/lib/holidayCenterIvr'
+import { getDistRules } from '@/lib/holidayDistRules'
+import { spokenCenterName } from '@/lib/holidayCenterSpeech'
+import { phoneRegistration } from './holidayRegistration'
 import { askDigits, digits, fill, hangup, menu, say } from '../modules'
 import type { TlContext, TlFile, TlResponse, TlResult } from '../types'
 import {
@@ -88,12 +91,22 @@ function choose(name: string, numbers: number[], files: TlFile[]): TlResponse {
 export async function holidays(ctx: TlContext): Promise<TlResult> {
   const k = kit(ctx, await messages())
   try {
+    // 🔴 חלוקה שמוגדרת "רישום בטלפון בלבד": מקש 5 (וגם 4 והטיימאאוט) עוברים
+    // למסלול הרישום המלא: ת"ז, תאריך לידה, טלפון, הצהרות, ומשם לבחירת מוקד.
+    const open = await getOpenDistribution()
+    const phoneFlow = !!open?.phone_only
     const choice = tapped(ctx.params[MENU_VAR])
-    if (!choice) return menu(MENU_VAR, ['1', '2', '3', '4'], k.files('main_menu'))
-    console.log(`${LOG} callId=${ctx.callId} route=${choice}`)
+    if (!choice) {
+      if (!open || !phoneFlow) return menu(MENU_VAR, ['1', '2', '3', '4'], k.files('main_menu'))
+      const distName = `${open.name}${open.year ? ` ${open.year}` : ''}`
+      return menu(MENU_VAR, ['1', '2', '3', '4', '5'],
+        [...k.files('reg_menu_prompt', { distribution: distName }), ...k.files('main_menu')])
+    }
+    console.log(`${LOG} callId=${ctx.callId} route=${choice}${phoneFlow ? ' (phone-only)' : ''}`)
     if (choice === '1') return await eligibility(k)
     if (choice === '2') return await centers(k, 'hear')
     if (choice === '3') return await cardRoute(k)
+    if (phoneFlow) return await phoneRegistration(k)
     if (choice === '4') return await centers(k, 'pick')
     return await registration(k)
   } catch (e) {
@@ -281,6 +294,13 @@ async function centers(k: Kit, mode: 'hear' | 'pick'): Promise<TlResult> {
   const rec = await getRecipient(dist.id, ben.id, 'id, center_id, approval_status, load_status, source, deadline_extended')
   if (!rec) return k.end('not_eligible')
   const { centers: list, taken } = await openCenters(dist.id)
+  // ⚠️ הימים והשעות מוקראים רק אחרי שהמנהל סימן שפורסמו (כללי החלוקה).
+  const rules = await getDistRules(dist.id)
+  const spokenWithRules = async (centerId: string, label: string): Promise<TlFile[]> => {
+    const c = await getSpokenCenter(centerId)
+    if (rules.hoursPublished) return spoken(c, label)
+    return [...say(spokenCenterName(c) || label), ...k.files('center_hours_later')]
+  }
 
   if (mode === 'hear') {
     if (!rec.center_id) return k.end('center_none')
@@ -289,7 +309,7 @@ async function centers(k: Kit, mode: 'hear' | 'pick'): Promise<TlResult> {
     const phase = pickupPhaseOf(await centerOpening(dist.id, rec.center_id))
     if (phase === 'ended') return k.end('card_center_ended')
     const readyKey = centerStatusKey({ centerPickupOpen: phase === 'active', loaded: rec.load_status === 'loaded' })
-    const details = spoken(await getSpokenCenter(rec.center_id), label)
+    const details = await spokenWithRules(rec.center_id, label)
     return [{ type: 'simpleMessage', files: [...k.files(readyKey), ...details] }, hangup()]
   }
 
@@ -315,7 +335,7 @@ async function centers(k: Kit, mode: 'hear' | 'pick'): Promise<TlResult> {
     case 'no_centers':
       return k.end('centers_closed')
     case 'already': {
-      const details = spoken(await getSpokenCenter(step.centerId), step.label)
+      const details = await spokenWithRules(step.centerId, step.label)
       return [{ type: 'simpleMessage', files: [...k.files('center_already'), ...details] }, hangup()]
     }
     case 'full':

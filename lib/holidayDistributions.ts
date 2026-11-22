@@ -17,6 +17,7 @@ import { getServiceClient } from '@/lib/apiAuth'
 export type { RegisterSource } from '@/lib/distributionSources'
 export { SOURCE_LABEL } from '@/lib/distributionSources'
 import type { RegisterSource } from '@/lib/distributionSources'
+import { getDistRules, channelAllowed, blockedByDeepReview, phoneOnlyMessage } from '@/lib/holidayDistRules'
 
 export interface ActiveDistribution {
   id: string
@@ -24,6 +25,15 @@ export interface ActiveDistribution {
   year: string | null
   amount_per_family: number | null
   registration_open: boolean
+  /** 🔴 רישום בטלפון בלבד (holidayDistRules). כל ערוץ אחר מציג הודעה ואינו רושם. */
+  phone_only?: boolean
+  /** מספר הקו להצגה למשפחות כשהרישום בטלפון בלבד. */
+  phone_number?: string
+}
+
+/** מספר הקו הראשי (טכנוליין) מהסביבה — לתצוגה בלבד. */
+function defaultPhoneNumber(): string {
+  return (process.env.TELEPHONY_MAIN_NUMBER || process.env.HOLIDAY_PHONE_NUMBER || '').trim()
 }
 
 /**
@@ -50,7 +60,10 @@ export async function getOpenDistribution(): Promise<ActiveDistribution | null> 
   if (error) { console.error('[getOpenDistribution] query error:', error.message); return null }
   if (!data) { console.log('[getOpenDistribution] closed=NO_OPEN_DISTRIBUTION (אין חלוקה עם registration_open=true)') }
   else { console.log(`[getOpenDistribution] OPEN dist=${(data as ActiveDistribution).id} name=${(data as ActiveDistribution).name}`) }
-  return (data as ActiveDistribution | null) ?? null
+  if (!data) return null
+  const dist = data as ActiveDistribution
+  const rules = await getDistRules(dist.id)
+  return { ...dist, phone_only: rules.phoneOnly, phone_number: rules.phoneNumber || defaultPhoneNumber() }
 }
 
 export interface RegisterResult {
@@ -61,6 +74,14 @@ export interface RegisterResult {
   /** תאריך הרישום — הקיים כשכבר רשום, או של הרישום החדש. ISO. */
   registeredAt?: string | null
   error?: string
+  /** 🔴 נדחה כי הרישום לחלוקה זו בטלפון בלבד. */
+  phoneOnly?: boolean
+  /** נדחה כי המשפחה בבדיקה מעמיקה והחלוקה חוסמת זאת. */
+  deepReview?: boolean
+  /** מזהה השורה בטבלת הנרשמים (חדשה או קיימת). */
+  recipientId?: string
+  /** האם השורה מאושרת (אישור אוטומטי ברישום הטלפוני, או אושרה קודם). */
+  approved?: boolean
 }
 
 /**
@@ -81,19 +102,41 @@ export async function registerToOpenDistribution(
   const dist = await getOpenDistribution()
   if (!dist) return { ok: false, created: false, error: 'אין כרגע חלוקה שהרישום אליה פתוח' }
 
+  // 🔴 כללי החלוקה: "בטלפון בלבד" ו"חסימת בדיקה מעמיקה". נאכפים כאן ולא
+  // בכל ערוץ, כדי שאף ערוץ (גם עתידי) לא יעקוף אותם.
+  const rules = await getDistRules(dist.id)
+  const distName = `${dist.name}${dist.year ? ` ${dist.year}` : ''}`
+  if (!channelAllowed(rules, source)) {
+    console.log(`[holiday] register refused PHONE_ONLY dist=${dist.id} source=${source}`)
+    return { ok: false, created: false, phoneOnly: true, error: phoneOnlyMessage(distName, dist.phone_number ?? '') }
+  }
+
   const { data: existing } = await db
     .from('distribution_recipients')
-    .select('id, registered_at')
+    .select('id, registered_at, approval_status')
     .eq('distribution_id', dist.id)
     .eq('beneficiary_id', beneficiaryId)
     .maybeSingle()
   if (existing) {
-    const reg = existing as { registered_at?: string | null }
-    return { ok: true, created: false, distribution: dist, registeredAt: reg.registered_at ?? null }
+    const reg = existing as { id: string; registered_at?: string | null; approval_status?: string | null }
+    return {
+      ok: true, created: false, distribution: dist, registeredAt: reg.registered_at ?? null,
+      recipientId: reg.id, approved: reg.approval_status === 'approved',
+    }
   }
 
+  if (rules.blockDeepReview) {
+    const { data: ben } = await db.from('beneficiaries').select('eligibility_status').eq('id', beneficiaryId).maybeSingle()
+    if (blockedByDeepReview(rules, (ben as { eligibility_status?: string | null } | null)?.eligibility_status)) {
+      console.log(`[holiday] register refused DEEP_REVIEW dist=${dist.id} ben=${beneficiaryId}`)
+      return { ok: false, created: false, deepReview: true, error: 'לא ניתן להשלים את הרישום כעת. לפרטים נא לפנות למשרד.' }
+    }
+  }
+
+  // ⚠️ אישור אוטומטי רק לרישום הטלפוני, שעבר את כל שאלות הזיהוי וההצהרה.
+  const approve = rules.autoApprove && source === 'phone'
   const now = new Date().toISOString()
-  const { error } = await db.from('distribution_recipients').insert({
+  const { data: inserted, error } = await db.from('distribution_recipients').insert({
     distribution_id: dist.id,
     beneficiary_id: beneficiaryId,
     amount: dist.amount_per_family ?? null,
@@ -101,7 +144,8 @@ export async function registerToOpenDistribution(
     phone: opts.phone ?? null,
     registered_at: now,
     status: 'pending',
-  })
+    ...(approve ? { approval_status: 'approved' } : {}),
+  }).select('id').maybeSingle()
   if (error) {
     // התנגשות באינדקס הייחודי = נרשם במקביל בערוץ אחר. זו הצלחה, לא כשל.
     // ⚠️ נמשך שוב את התאריך הקיים — כדי שגם במרוץ מקביל נחזיר את תאריך המקור.
@@ -117,7 +161,10 @@ export async function registerToOpenDistribution(
     console.error('[holiday] register failed:', error.message)
     return { ok: false, created: false, error: 'הרישום נכשל' }
   }
-  return { ok: true, created: true, distribution: dist, registeredAt: now }
+  return {
+    ok: true, created: true, distribution: dist, registeredAt: now,
+    recipientId: (inserted as { id?: string } | null)?.id, approved: approve,
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

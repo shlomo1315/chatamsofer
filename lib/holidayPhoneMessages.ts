@@ -446,6 +446,89 @@ export const HOLIDAY_MESSAGE_META: HolidayMsgMeta[] = [
     key: 'center_none', label: 'אין מוקד שנבחר', allowAudio: true,
     defaultText: 'טרם נבחר עבורכם מוקד חלוקה',
   },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 מסלול הרישום המלא — לחלוקה שמוגדרת "רישום בטלפון בלבד" (חנוכה תשפ״ז).
+  // ⚠️ הרישום אינו מקש אחד: ת"ז, תאריך לידה, טלפון ושתי הצהרות.
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    key: 'reg_menu_prompt', label: 'רישום בטלפון: הזמנה בתפריט (מקש 5)', allowAudio: false, placeholders: ['distribution'],
+    defaultText: 'לרישום לחלוקת {distribution} הקישו 5',
+    hint: 'נשמע לפני התפריט כשהרישום בטלפון בלבד. חובה לציין את מקש 5.',
+  },
+  {
+    key: 'reg_notice', label: 'רישום בטלפון: הודעה מקדימה', allowAudio: true,
+    defaultText: 'שימו לב, לאחר ביצוע הרישום תתבקשו לבחור מוקד חלוקה. '
+      + 'בעת בחירת מוקד החלוקה עדיין לא תוכלו לשמוע באילו ימים ושעות המוקד יהיה פעיל. '
+      + 'פירוט מסודר של הימים והשעות תוכלו לשמוע בקו הטלפוני שלנו כאן מספר ימים לפני חנוכה, '
+      + 'ואלו שנרשמו לקבלת צינתוקים יקבלו צינתוק כאשר הפירוט יעלה למערכת',
+  },
+  {
+    key: 'reg_welcome', label: 'רישום בטלפון: ברוכים הבאים', allowAudio: true,
+    defaultText: 'ברוכים הבאים, הגעתם לרישום לחלוקת חנוכה לצאצאי החתם סופר מבית היכל החתם סופר',
+  },
+  {
+    key: 'reg_ask_id', label: 'רישום בטלפון: בקשת תעודת זהות', allowAudio: true,
+    defaultText: 'הקישו את מספר תעודת הזהות, 9 ספרות, ולאחר מכן סולמית',
+  },
+  {
+    key: 'reg_ask_birth', label: 'רישום בטלפון: בקשת תאריך לידה', allowAudio: true,
+    defaultText: 'הקישו את תאריך הלידה הלועזי של בעל תעודת הזהות, יום חודש ושנה, 8 ספרות. '
+      + 'לדוגמה, לתאריך חמישה עשר במרץ אלף תשע מאות תשעים הקישו 1 5 0 3 1 9 9 0',
+  },
+  {
+    key: 'reg_birth_mismatch', label: 'רישום בטלפון: תאריך לידה לא תואם', allowAudio: true,
+    defaultText: 'תאריך הלידה שהוקש אינו תואם את הרשום במערכת',
+  },
+  {
+    key: 'reg_ask_phone', label: 'רישום בטלפון: בקשת מספר טלפון', allowAudio: true,
+    defaultText: 'הקישו את מספר הטלפון שלכם המעודכן במערכת, ולאחר מכן סולמית',
+  },
+  {
+    key: 'reg_phone_mismatch', label: 'רישום בטלפון: מספר טלפון לא תואם', allowAudio: true,
+    defaultText: 'מספר הטלפון שהוקש אינו רשום אצלנו בכרטיס המשפחה. לעדכון פרטים יש לפנות למשרד',
+  },
+  {
+    key: 'reg_ask_lineage', label: 'רישום בטלפון: הצהרת ייחוס', allowAudio: true,
+    defaultText: 'האם הינכם נכדי החתם סופר דור אחר דור בצורה ודאית ומוסמכת? לאישור הקישו 1, אם לא הקישו 2',
+  },
+  {
+    key: 'reg_ask_need', label: 'רישום בטלפון: הצהרת נזקקות', allowAudio: true,
+    defaultText: 'החלוקה מיועדת לאלו הנצרכים לכך ומרגישים צורך בסיוע כלכלי. לאישור הגשת הבקשה הקישו 1, לביטול הקישו 2',
+  },
+  {
+    key: 'reg_declined', label: 'רישום בטלפון: ההצהרה לא אושרה', allowAudio: true,
+    defaultText: 'הרישום לא בוצע. תודה ולהתראות',
+  },
+  {
+    key: 'reg_deep_review', label: 'רישום בטלפון: משפחה בבדיקה מעמיקה', allowAudio: true,
+    defaultText: 'לא ניתן להשלים את הרישום כעת. לפרטים נא לפנות למשרד',
+    hint: 'נשמע רק כשבחלוקה מסומן "חסימת משפחות בבדיקה מעמיקה".',
+  },
+  {
+    key: 'reg_success_approved', label: 'רישום בטלפון: נרשמתם ואתם זכאים', allowAudio: false, placeholders: ['distribution'],
+    defaultText: 'רישומכם לחלוקת {distribution} נקלט בהצלחה ונמצאתם זכאים. אישור על זכאותכם יישלח גם למייל הרשום אצלנו',
+  },
+  {
+    key: 'reg_success_pending', label: 'רישום בטלפון: נרשמתם (ממתין לאישור)', allowAudio: false, placeholders: ['distribution'],
+    defaultText: 'רישומכם לחלוקת {distribution} נקלט בהצלחה',
+  },
+  {
+    key: 'reg_to_centers', label: 'רישום בטלפון: מעבר לבחירת מוקד', allowAudio: true,
+    defaultText: 'הינכם מועברים לבחירת מוקד החלוקה.',
+  },
+  {
+    key: 'reg_center_later', label: 'רישום בטלפון: המוקד ייבחר מאוחר יותר', allowAudio: true,
+    defaultText: 'רישומכם נשמר. לבחירת מוקד החלוקה חייגו שוב לקו זה והקישו 4',
+  },
+  {
+    key: 'center_hours_later', label: 'ימים ושעות טרם פורסמו', allowAudio: true,
+    defaultText: 'פירוט הימים והשעות שבהם המוקד יהיה פעיל יפורסם בקו זה מספר ימים לפני החלוקה',
+  },
+  {
+    key: 'reg_goodbye', label: 'רישום בטלפון: סיום', allowAudio: true,
+    defaultText: 'תודה ולהתראות',
+  },
 ]
 
 const META_BY_KEY = new Map(HOLIDAY_MESSAGE_META.map(m => [m.key, m]))
