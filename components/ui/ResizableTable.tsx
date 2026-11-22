@@ -196,6 +196,8 @@ export function useResizableColumns(
     customized: Object.keys(widths).length > 0,
     // break-words שובר גם מחרוזת רצופה בלי רווחים (מייל ארוך, ת"ז),
     // ו-align-top מיישר את כל התאים לראש כשהשורה מתגבהת.
-    cellClass: 'whitespace-normal break-words align-top',
+    // 🔴 overflow-wrap:anywhere ולא break-words: רק הוא נספר בחישוב רוחב העמודה
+    // (min-content). עם break-words מייל ארוך הרחיב את הטבלה מעבר למסגרת (תפוצת היריד).
+    cellClass: 'whitespace-normal break-words [overflow-wrap:anywhere] align-top',
   }
 }
