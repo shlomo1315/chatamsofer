@@ -316,7 +316,6 @@ export default function MaternityCardModal({ rows, index, onIndex, onClose }: {
           ]} />,
         main: <>
           <section className="rounded-xl border border-[#E6DFCF] bg-[#FFFDF8] px-5 pb-4 pt-1 shadow-[0_1px_2px_rgba(20,33,61,.05)] md:col-span-8">
-            <h3 className="border-b-[1.5px] border-[#14213D] pb-2.5 pt-3.5 text-[15px] font-bold text-[#14213D]">סדר הדורות</h3>
             <div className="pt-4">
               {gens === null ? <p className="py-3 text-sm text-[#6B6352]">טוען…</p>
                 : gens.length ? <LineageStairs framed gens={gens} />
