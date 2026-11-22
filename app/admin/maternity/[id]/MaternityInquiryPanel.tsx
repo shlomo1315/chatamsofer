@@ -4,6 +4,7 @@ import { staffDisplayName } from '@/lib/staffInitials'
 import { useRouter } from 'next/navigation'
 import { Send, Loader2, MessageSquare, Mail, GitBranch } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
+import { mentionsLineageOrder } from '@/lib/lineageMention'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // שרשור הבירור עם היולדת.
@@ -41,6 +42,15 @@ export default function MaternityInquiryPanel({ aidId, motherName, hasEmail }: {
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [text, setText] = useState('')
   const [withLineage, setWithLineage] = useState(false)
+  // ⚠️ המזכירה הסירה את הסימון ידנית — לא מסמנים מחדש מעל ראשה.
+  const [lineageTouched, setLineageTouched] = useState(false)
+
+  // 🔴 22.11: "נא לתקן סדר הדורות" נשלח בלי קישור כי התיבה לא סומנה.
+  // הודעה שמדברת על דורות מסמנת את התיבה מעצמה (השרת אוכף את זה ממילא).
+  const onTextChange = (v: string) => {
+    setText(v)
+    if (!lineageTouched && mentionsLineageOrder(v)) setWithLineage(true)
+  }
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const endRef = useRef<HTMLDivElement>(null)
@@ -85,7 +95,10 @@ export default function MaternityInquiryPanel({ aidId, motherName, hasEmail }: {
       if (!res.ok) throw new Error(d.error || 'השליחה נכשלה')
       setText('')
       setWithLineage(false)
-      toast.success('הבירור נשלח ליולדת')
+      setLineageTouched(false)
+      toast.success(d.linkAttached
+        ? 'הבירור נשלח ליולדת, כולל קישור לתיקון סדר הדורות'
+        : 'הבירור נשלח ליולדת')
       const err = await load()
       if (err) toast.error(err)
       router.refresh()
@@ -167,7 +180,7 @@ export default function MaternityInquiryPanel({ aidId, motherName, hasEmail }: {
                   שממתין לאישור, ולכן הקישור זמין בלחיצה ולא דורש ניסוח. */}
               <label className="mb-2 flex cursor-pointer items-center gap-2 rounded-lg border border-line bg-sand px-2.5 py-1.5">
                 <input type="checkbox" checked={withLineage}
-                  onChange={e => setWithLineage(e.target.checked)}
+                  onChange={e => { setWithLineage(e.target.checked); setLineageTouched(true) }}
                   className="h-3.5 w-3.5 rounded border-slate-300 text-navy" />
                 <GitBranch size={13} className="text-navy" />
                 <span className="text-xs font-medium text-navy-dark">צרף קישור לתיקון סדר הדורות</span>
@@ -175,7 +188,7 @@ export default function MaternityInquiryPanel({ aidId, motherName, hasEmail }: {
 
               <div className="flex items-end gap-2">
                 <textarea
-                  value={text} onChange={e => setText(e.target.value)}
+                  value={text} onChange={e => onTextChange(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) send() }}
                   placeholder="כתבו כאן את ההודעה ליולדת… (Ctrl+Enter לשליחה)"
                   rows={3}
