@@ -78,7 +78,8 @@ export async function POST(request: NextRequest) {
   const { getOpenDistribution } = await import('@/lib/holidayDistributions')
   const openDist = await getOpenDistribution()
   const mail = benefitsLinkEmail(name, undefined, undefined, draftLinks, ben.marital_status, gates,
-    openDist ? { open: true, name: [openDist.name, openDist.year].filter(Boolean).join(' ') } : null)
+    // 🔴 חלוקה "בטלפון בלבד" — המייל אינו מציע כפתור רישום באתר.
+    openDist && !openDist.phone_only ? { open: true, name: [openDist.name, openDist.year].filter(Boolean).join(' ') } : null)
   const result = await deliverMail(ben.email, mail.subject, mail.html, undefined, mailFor('igud'))
   if (!result.ok) {
     console.error('[send-benefits-link] deliverMail failed:', result.error)

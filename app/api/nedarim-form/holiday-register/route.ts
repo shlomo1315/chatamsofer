@@ -18,6 +18,7 @@ import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { resolveBeneficiaryByEnteredId } from '@/lib/portalBeneficiary'
 import { jsonCors, preflight } from '@/lib/cors'
 import { getOpenDistribution, registerToOpenDistribution } from '@/lib/holidayDistributions'
+import { phoneOnlyMessage } from '@/lib/holidayDistRules'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,6 +53,11 @@ export async function GET(request: NextRequest) {
   const dist = await getOpenDistribution()
   const idParam = (request.nextUrl.searchParams.get('id') ?? '').replace(/\D/g, '')
   if (!dist) return jsonCors({ open: false }, undefined, origin)
+  // 🔴 חלוקה "בטלפון בלבד": הטופס בנדרים מציג את ההודעה ואינו מציע רישום.
+  if (dist.phone_only) {
+    const nm = `${dist.name}${dist.year ? ` ${dist.year}` : ''}`
+    return jsonCors({ open: false, phone_only: true, message: phoneOnlyMessage(nm, dist.phone_number ?? '') }, undefined, origin)
+  }
 
   const payload = {
     open: true,
@@ -91,7 +97,10 @@ export async function POST(request: NextRequest) {
   if (!ben) return jsonCors({ ok: false, found: false, error: NOT_REGISTERED }, { status: 404 }, origin)
 
   const result = await registerToOpenDistribution(ben.id, 'nedarim', {})
-  if (!result.ok) return jsonCors({ ok: false, error: result.error ?? 'הרישום נכשל' }, { status: 500 }, origin)
+  if (!result.ok) {
+    return jsonCors({ ok: false, phone_only: !!result.phoneOnly, error: result.error ?? 'הרישום נכשל' },
+      { status: result.phoneOnly ? 409 : 500 }, origin)
+  }
 
   return jsonCors({
     ok: true,

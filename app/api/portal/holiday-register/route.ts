@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { getServiceClient } from '@/lib/apiAuth'
 import { getOpenDistribution, getLiveDistribution, registerToOpenDistribution } from '@/lib/holidayDistributions'
+import { getDistRules, phoneOnlyMessage } from '@/lib/holidayDistRules'
 import { holidayRegisteredEmail, holidayAlreadyRegisteredEmail } from '@/lib/emailTemplates'
 import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { deliverMail } from '@/lib/sendMail'
@@ -81,6 +82,17 @@ export async function GET(request: NextRequest) {
       )
     }
     const { distribution } = resolved
+
+    // 🔴 חלוקה "בטלפון בלבד" — הקישור מציג את הודעת הטלפון ולא מזמין להירשם.
+    const inviteRules = await getDistRules(distribution.id)
+    if (inviteRules.phoneOnly) {
+      const nm = `${distribution.name}${distribution.year ? ` ${distribution.year}` : ''}`
+      const message = phoneOnlyMessage(nm, inviteRules.phoneNumber || (process.env.TELEPHONY_MAIN_NUMBER || '').trim())
+      return NextResponse.json(
+        { open: false, phoneOnly: true, invite: { ok: false, reason: 'phone-only', message } },
+        { headers: { 'Cache-Control': 'no-store' } },
+      )
+    }
 
     // האם המשפחה *המחוברת* כבר רשומה — רק אם יש מי שמחובר.
     let registered = false
@@ -201,6 +213,8 @@ export async function GET(request: NextRequest) {
     // 🔴 שער האיסוף — המשפחה יודעת *לאן* מרגע הבחירה, אבל *מתי* רק כאן.
     pickupOpen, pickupNote,
     centerAddress, centerHours, centerPhone,
+    // 🔴 רישום בטלפון בלבד — האתר מציג הודעה בולטת עם מספר הקו, בלי כפתור רישום.
+    phoneOnly: !!dist?.phone_only, phoneNumber: dist?.phone_number ?? null,
   }, { headers: { 'Cache-Control': 'no-store' } })
 }
 
@@ -305,6 +319,14 @@ async function registerViaInvite(
     return { status: 409, body: { error: resolved.message, reason: resolved.reason } }
   }
   const { distribution } = resolved
+
+  // 🔴 חלוקה "בטלפון בלבד" — גם קישור הזמנה אינו רושם באתר.
+  const rules = await getDistRules(distribution.id)
+  if (rules.phoneOnly) {
+    const name = `${distribution.name ?? ''}${(distribution as { year?: string | null }).year ? ` ${(distribution as { year?: string | null }).year}` : ''}`
+    const phone = rules.phoneNumber || (process.env.TELEPHONY_MAIN_NUMBER || '').trim()
+    return { status: 409, body: { error: phoneOnlyMessage(name, phone), phoneOnly: true } }
+  }
 
   // ⚠️ כבר רשומה — הצלחה עם already=true, בדיוק כמו במסלול הרגיל. משפחה
   // שלוחצת פעמיים צריכה לשמוע "אתם כבר רשומים" ולא הודעת שגיאה.

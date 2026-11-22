@@ -13,6 +13,7 @@ import { format, differenceInYears } from 'date-fns'
 import { he } from 'date-fns/locale'
 import HolidayRegistrations, { type RegistrationRow } from './HolidayRegistrations'
 import InviteLinkPanel from './InviteLinkPanel'
+import PhoneRulesPanel from './PhoneRulesPanel'
 import { toRegistrationRow } from '@/lib/distributionRow'
 import type { RegisterSource } from '@/lib/distributionSources'
 import type { ApprovalStatus } from '@/lib/holidayCards'
@@ -186,6 +187,8 @@ export default async function DistributionDetailPage({ params }: { params: Promi
           לא הוגדר סכום למשפחה — הצפי התקציבי יוצג כאפס. יש להזין את הסכום בעריכת החלוקה.
         </div>
       )}
+
+      <PhoneRulesPanel distributionId={d.id} canEdit={canEditDistribution} />
 
       <InviteLinkPanel distributionId={d.id} canEdit={canEditDistribution} />
 
