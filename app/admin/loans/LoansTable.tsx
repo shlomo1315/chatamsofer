@@ -4,7 +4,8 @@ import StatStrip from '@/components/admin/system/StatStrip'
 import { ListTable, rowActionClass } from '@/components/admin/system/ListTable'
 import { SearchBar } from '@/components/admin/system/SearchBar'
 import Link from 'next/link'
-import { Clock, Check, X, Eye, Layers, CheckCircle2, Minus, MessageSquare } from 'lucide-react'
+import { Clock, Check, X, Eye, Layers, CheckCircle2, Minus, MessageSquare, MessageSquareWarning, CalendarClock } from 'lucide-react'
+import { usePortalNoteAlerts, PORTAL_NOTES_OPEN } from '@/components/admin/LoanPortalNoteAlert'
 import LoanCardModal from './LoanCardModal'
 import { LoanStatusControl, DeleteLoanButton, PILL } from './LoanControls'
 import type { Loan } from '@/types'
@@ -112,6 +113,11 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SortMode>('newest')
 
+  // 🔴 הערות מפורטל הביצוע שממתינות לטיפול — מהבהבות בשורה ובבאנר.
+  const noteAlerts = usePortalNoteAlerts()
+  const noteAlertById = useMemo(() => new Map(noteAlerts.map(a => [a.id, a])), [noteAlerts])
+  const dueNotes = noteAlerts.filter(a => a.due).length
+
   const replied = useMemo(() => new Set(repliedIds), [repliedIds])
   const hasReplied = (l: Loan) => replied.has(String(l.id))
 
@@ -217,6 +223,25 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
                 חזר מבירור
               </span>
             )}
+            {/* הערה מפורטל הביצוע: מהבהבת עד "טופל"; אחרי "לטיפול בהמשך"
+                נשאר תג שקט עם תאריך התזכורת. */}
+            {(() => {
+              const na = noteAlertById.get(String(loan.id))
+              if (!na) return null
+              return na.due ? (
+                <span title={`הערה מפורטל הביצוע: ${na.note}`}
+                  className="animate-portal-note-flash inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold">
+                  <MessageSquareWarning size={10} className="flex-shrink-0" />
+                  הערה מהפורטל
+                </span>
+              ) : (
+                <span title={`הערה מפורטל הביצוע: ${na.note}`}
+                  className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-bold text-sky-700">
+                  <CalendarClock size={10} className="flex-shrink-0" />
+                  תזכורת {na.remind_at ? format(new Date(na.remind_at), 'dd/MM', { locale: he }) : ''}
+                </span>
+              )
+            })()}
             {/* ⚠️ גם ליד השם וגם בעמודה משלה: מי שכיבה את העמודה עדיין
                 צריך לדעת שהמבקש אינו צאצא רגיל. */}
             <ApprovalLabelTag label={approvalLabelOf(b)} size="xs" />
@@ -290,6 +315,15 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
 
   return (
     <div className="flex flex-col gap-5">
+      {/* 🔴 באנר מהבהב: יש הערות מפורטל הביצוע שממתינות לטיפול. לחיצה
+          פותחת את החלונית מחדש — גם אם נסגרה ב"לא עכשיו". */}
+      {dueNotes > 0 && (
+        <button type="button" onClick={() => window.dispatchEvent(new Event(PORTAL_NOTES_OPEN))}
+          className="animate-portal-note-flash flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold">
+          <MessageSquareWarning size={17} />
+          {dueNotes === 1 ? 'הערה חדשה מפורטל הביצוע' : `${dueNotes} הערות חדשות מפורטל הביצוע`} — לחצו לצפייה
+        </button>
+      )}
       {/* Filter cards */}
       <StatStrip active={filter}
         items={CARD_DEFS.map(c => ({ key: c.key, label: c.label, icon: c.icon, count: counts[c.key] }))}

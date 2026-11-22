@@ -180,6 +180,14 @@ th.ltr-num {
 }
 .animate-returned-pulse { animation: returned-pulse 2s ease-out infinite; }
 
+/* הערה מפורטל הביצוע שממתינה לטיפול — הבהוב ממש (רקע מתחלף), לא רק הילה:
+   המזכירות צריכות לראות אותה מכל מקום במסך. */
+@keyframes portal-note-flash {
+  0%, 100% { background-color: #fff1f2; border-color: #fda4af; color: #9f1239; }
+  50%      { background-color: #e11d48; border-color: #e11d48; color: #ffffff; }
+}
+.animate-portal-note-flash { animation: portal-note-flash 1.2s ease-in-out infinite; }
+
 /* כיבוד העדפת המשתמש להפחתת תנועה */
 @media (prefers-reduced-motion: reduce) {
   .animate-ping-slow { animation: none; }
@@ -193,6 +201,8 @@ th.ltr-num {
   }
   /* ⚠️ התג עצמו נשאר — הטקסט "חזר מבירור" הוא המידע, לא התנועה. */
   .animate-returned-pulse { animation: none; }
+  /* ⚠️ נשאר אדום גם בלי ההבהוב — הצבע הוא המידע. */
+  .animate-portal-note-flash { animation: none; background-color: #e11d48; border-color: #e11d48; color: #fff; }
 }
 
 /* ─────────────────────────────────────────────────────────────────────────

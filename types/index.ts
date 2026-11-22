@@ -279,6 +279,14 @@ export interface Loan {
   note_sent_by?: string | null
   disbursed_at?: string | null
   disbursed_by?: string | null
+  /** הערה שנכתבה בפורטל הביצוע (/shared/loans) + מצב ההתראה למזכירות. */
+  portal_note?: string | null
+  portal_note_at?: string | null
+  /** 'open' = ממתינה לטיפול · 'handled' = טופלה · null = אין הערה */
+  portal_note_alert?: string | null
+  /** "לטיפול בהמשך" — ההתראה שקטה עד המועד הזה. */
+  portal_note_remind_at?: string | null
+  portal_note_handled_at?: string | null
   /** טופס אישור הרב החתום, כפי שצורף בהגשה. */
   rabbi_form_url?: string | null
   /** מועד ההכרעה. null בבקשות שהוכרעו לפני הוספת התיעוד. */

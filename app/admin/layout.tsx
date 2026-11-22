@@ -7,6 +7,8 @@ import Header from '@/components/layout/Header'
 import WelcomeModal from '@/components/ui/WelcomeModal'
 import DeployBanner from '@/components/ui/DeployBanner'
 import NameChangeAlert from '@/components/admin/NameChangeAlert'
+import LoanPortalNoteAlert from '@/components/admin/LoanPortalNoteAlert'
+import { roleAllows } from '@/lib/permissions'
 import { ToastProvider } from '@/components/ui/Toast'
 import { StaffPermissionsProvider } from '@/components/StaffPermissions'
 import { isSupabaseConfigured } from '@/lib/supabase/server'
@@ -42,6 +44,9 @@ export default async function DashboardLayout({
       <WelcomeModal />
       {/* בקשות תיקון שם ממתינות — קופצת בכניסה לתוכנה. */}
       <NameChangeAlert />
+      {/* הערות מפורטל הביצוע על הלוואות — קופצת למזכירות ההלוואות בכניסה. */}
+      <LoanPortalNoteAlert enabled={!!profile && (profile.role === 'admin'
+        || roleAllows(profile.role, profile.permissions, 'loans', 'view'))} />
       <Sidebar
         isAdmin={profile?.role === 'admin'}
         role={profile?.role}
