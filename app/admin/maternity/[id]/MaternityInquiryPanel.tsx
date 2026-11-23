@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { staffDisplayName } from '@/lib/staffInitials'
 import { useRouter } from 'next/navigation'
-import { Send, Loader2, MessageSquare, Mail, GitBranch } from 'lucide-react'
+import { Send, Loader2, MessageSquare, Mail, GitBranch, AlertTriangle } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 import { mentionsLineageOrder } from '@/lib/lineageMention'
 
@@ -32,10 +32,12 @@ const fmt = (d: string) => {
   return `${p(t.getDate())}.${p(t.getMonth() + 1)}.${String(t.getFullYear()).slice(2)} ${p(t.getHours())}:${p(t.getMinutes())}`
 }
 
-export default function MaternityInquiryPanel({ aidId, motherName, hasEmail }: {
+export default function MaternityInquiryPanel({ aidId, motherName, hasEmail, canLinkLineage = true }: {
   aidId: string
   motherName?: string
   hasEmail: boolean
+  /** למשפחה יש שיוך לצומת בעץ — בלעדיו אין ענף לקישור תיקון הדורות. */
+  canLinkLineage?: boolean
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -49,10 +51,13 @@ export default function MaternityInquiryPanel({ aidId, motherName, hasEmail }: {
   // הודעה שמדברת על דורות מסמנת את התיבה מעצמה (השרת אוכף את זה ממילא).
   const onTextChange = (v: string) => {
     setText(v)
-    if (!lineageTouched && mentionsLineageOrder(v)) setWithLineage(true)
+    if (canLinkLineage && !lineageTouched && mentionsLineageOrder(v)) setWithLineage(true)
   }
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  // 🔴 23.11: כשל בשליחה הוצג רק בהודעה קופצת שנעלמת, והמזכירה חשבה
+  // שהבירור יצא. השגיאה נשארת במסך עד הניסיון הבא.
+  const [sendError, setSendError] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
 
   const load = useCallback(async (): Promise<string | null> => {
@@ -85,25 +90,29 @@ export default function MaternityInquiryPanel({ aidId, motherName, hasEmail }: {
     const body = text.trim()
     if (!body) return
     setSending(true)
+    setSendError(null)
     try {
       const res = await fetch(`/api/admin/maternity/${aidId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ body, extra: withLineage ? 'lineage' : 'none' }),
+        body: JSON.stringify({ body, extra: canLinkLineage && withLineage ? 'lineage' : 'none' }),
       })
-      const d = await res.json()
-      if (!res.ok) throw new Error(d.error || 'השליחה נכשלה')
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || `השליחה נכשלה (שגיאה ${res.status}) — הבירור לא נשלח`)
       setText('')
       setWithLineage(false)
       setLineageTouched(false)
       toast.success(d.linkAttached
         ? 'הבירור נשלח ליולדת, כולל קישור לתיקון סדר הדורות'
         : 'הבירור נשלח ליולדת')
+      if (d.warning) setSendError(d.warning)
       const err = await load()
       if (err) toast.error(err)
       router.refresh()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e))
+      const msg = e instanceof Error ? e.message : String(e)
+      setSendError(msg)
+      toast.error(msg)
     } finally {
       setSending(false)
     }
@@ -176,14 +185,24 @@ export default function MaternityInquiryPanel({ aidId, motherName, hasEmail }: {
             </p>
           ) : (
             <>
+              {sendError && (
+                <div role="alert" className="mb-2 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs leading-relaxed text-red-800">
+                  <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                  <span>{sendError}</span>
+                </div>
+              )}
               {/* ⚠️ תיקון סדר הדורות הוא הסיבה הנפוצה ביותר לבירור בתיק
                   שממתין לאישור, ולכן הקישור זמין בלחיצה ולא דורש ניסוח. */}
-              <label className="mb-2 flex cursor-pointer items-center gap-2 rounded-lg border border-line bg-sand px-2.5 py-1.5">
-                <input type="checkbox" checked={withLineage}
+              <label className={`mb-2 flex items-center gap-2 rounded-lg border border-line bg-sand px-2.5 py-1.5 ${canLinkLineage ? 'cursor-pointer' : 'opacity-60'}`}>
+                <input type="checkbox" checked={canLinkLineage && withLineage} disabled={!canLinkLineage}
                   onChange={e => { setWithLineage(e.target.checked); setLineageTouched(true) }}
                   className="h-3.5 w-3.5 rounded border-slate-300 text-navy" />
                 <GitBranch size={13} className="text-navy" />
-                <span className="text-xs font-medium text-navy-dark">צרף קישור לתיקון סדר הדורות</span>
+                <span className="text-xs font-medium text-navy-dark">
+                  {canLinkLineage
+                    ? 'צרף קישור לתיקון סדר הדורות'
+                    : 'קישור לתיקון הדורות לא זמין — המשפחה לא משויכת לעץ. ההודעה תישלח בלי קישור.'}
+                </span>
               </label>
 
               <div className="flex items-end gap-2">

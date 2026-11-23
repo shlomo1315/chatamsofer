@@ -22,7 +22,7 @@ import RecordModal, { modalBtn, type RecordTone } from '@/components/admin/syste
 // ✅ שרשור הבירור (MaternityInquiryPanel) מוצג גם כאן — אותו רכיב כמו בכרטסת המלאה.
 // ✅ האישור דרך StatusControl — אותו כפתור כמו בטבלה, עם כל בדיקות המשפחה והמלאי.
 
-type Extra = Partial<MaternityAid> & { beneficiary?: (MotherRef & { email?: string; city?: string; address?: string }) | null }
+type Extra = Partial<MaternityAid> & { beneficiary?: (MotherRef & { email?: string; city?: string; address?: string; lineage_node_id?: string | null }) | null }
 
 type FixHistory = { requestedAt: string; requestedBy: string | null; notes: string | null; complete: boolean; items: { docType: string; label: string; doneAt: string | null }[] }
 
@@ -155,7 +155,7 @@ export default function MaternityCardModal({ rows, index, onIndex, onClose }: {
   useEffect(() => {
     let alive = true
     createClient().from('maternity_aids')
-      .select('*, beneficiary:beneficiaries(email, city, address)')
+      .select('*, beneficiary:beneficiaries(email, city, address, lineage_node_id)')
       .eq('id', a.id).single()
       .then(({ data }) => { if (alive && data) setLoaded({ id: a.id, data: data as unknown as Extra }) })
     return () => { alive = false }
@@ -324,7 +324,8 @@ export default function MaternityCardModal({ rows, index, onIndex, onClose }: {
             </div>
           </section>
           <div className="min-w-0 md:col-span-8">
-            <MaternityInquiryPanel aidId={a.id} motherName={motherName(m)} hasEmail={!!email} />
+            <MaternityInquiryPanel aidId={a.id} motherName={motherName(m)} hasEmail={!!email}
+              canLinkLineage={!!ready?.beneficiary?.lineage_node_id} />
           </div>
           <CardPanel aid={merged} data={activity.data} state={activity.state}
           centerName={merged.card_center_id ? (centers[merged.card_center_id] ?? null) : null}

@@ -911,6 +911,7 @@ export default async function MaternityDetailPage(
             aidId={aid.id}
             motherName={[ben?.family_name, ben?.spouse_name || ben?.full_name].filter(Boolean).join(' ') || undefined}
             hasEmail={!!ben?.email}
+            canLinkLineage={!!ben?.lineage_node_id}
           />
         </aside>
       </div>
