@@ -31,6 +31,7 @@ import StatusControl from './StatusControl'
 import ReturnedFixesBanner from './ReturnedFixesBanner'
 import LineageAlertModal from './LineageAlertModal'
 import LineageChainChips from './LineageChainChips'
+import LineageChainEditButton from '@/components/lineage/LineageChainEditButton'
 import DocumentsManager from './DocumentsManager'
 import LineageBranchView from './LineageBranchView'
 import LineageReliabilityPanel from './LineageReliabilityPanel'
@@ -731,7 +732,13 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         // ⚡ הצמתים לבורר *אינם* נשלחים יותר כ-prop: קודם כל ~5000 צמתי העץ עברו
         // סריאליזציה ל-HTML ולפיילואד בכל טעינת כרטסת, גם כשהמשתמש בטאב אחר.
         // הבורר מושך עכשיו לבדו את הדור שהוא צריך (/api/admin/lineage/generation).
-        return <LineageChainChips beneficiaryId={id} gens={gens} initialMarks={manualMarks} />
+        // 🔴 עריכה מלאה (שם, בן/חתן, הוספה, מחיקה, סידור) — מאותו סדר שמוצג.
+        return (
+          <div>
+            <LineageChainChips beneficiaryId={id} gens={gens} initialMarks={manualMarks} />
+            <LineageChainEditButton beneficiaryId={id} initialChain={gens.map(g => ({ generation: g.generation, name: g.name, relation: g.relation ?? null }))} />
+          </div>
+        )
       })()}
 
       {/* עריכת שיוך ידנית — בחירת צומת העלה בעץ (השרשרת נגזרת אוטומטית).

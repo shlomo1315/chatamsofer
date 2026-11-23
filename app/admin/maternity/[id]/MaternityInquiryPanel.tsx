@@ -201,7 +201,7 @@ export default function MaternityInquiryPanel({ aidId, motherName, hasEmail, can
                 <span className="text-xs font-medium text-navy-dark">
                   {canLinkLineage
                     ? 'צרף קישור לתיקון סדר הדורות'
-                    : 'קישור לתיקון הדורות לא זמין — המשפחה לא משויכת לעץ. ההודעה תישלח בלי קישור.'}
+                    : 'קישור לתיקון הדורות לא זמין — אין כרטסת משפחה. ההודעה תישלח בלי קישור.'}
                 </span>
               </label>
 

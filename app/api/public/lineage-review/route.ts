@@ -95,7 +95,9 @@ export async function GET(request: NextRequest) {
   const { rows: nodes } = await fetchAllRows<TreeNodeRow>((from, to) =>
     admin.from('lineage_nodes').select(NODE_SELECT).range(from, to),
   )
-  const ids = subtreeNodeIds(nodes, inv.root_node_id)
+  // ⚠️ בקישור תיקון סדר (order) העריכה היא של השרשרת בלבד, ו-root_node_id
+  // עשוי להיות שורש העץ (משפחה שלא שויכה) — לא שולחים את העץ כולו.
+  const ids = inv.mode === 'order' ? new Set<string>() : subtreeNodeIds(nodes, inv.root_node_id)
   // מחזירים רק את צמתי תת-העץ — שום דבר מחוץ ל-scope לא נחשף
   const subtree = nodes.filter(n => ids.has(n.id))
 
@@ -115,6 +117,8 @@ export async function GET(request: NextRequest) {
   // האחרון בשרשרת הוא הנרשם, לא האב. בלי ההבחנה הזאת הדף תייג את הנרשם עצמו
   // כ"האב שלכם", והנמען ראה את עצמו מוצג כאביו.
   let selfNodeId: string | null = null
+  // השרשרת השמורה בכרטסת — נקודת המוצא של העורך כשהמשפחה לא משויכת לעץ.
+  let savedChain: unknown[] = []
   if (inv.beneficiary_id) {
     const { data: ben } = await admin.from('beneficiaries')
       .select('full_name, family_name, spouse_name, id_number, phone, address, city, gender, lineage_chain, lineage_node_id')
@@ -129,6 +133,7 @@ export async function GET(request: NextRequest) {
         idMasked: idNum, phone: ben.phone ?? null,
         address: [ben.address, ben.city].filter(Boolean).join(', ') || null,
       }
+      savedChain = Array.isArray(ben.lineage_chain) ? ben.lineage_chain : []
       if (ben.lineage_node_id) {
         chain = pathToRoot(nodes, ben.lineage_node_id as string)
         // אותה בדיקת בעלות כמו בהשלמה למפרע: ת"ז זהה, או שם הצומת זהה לשם
@@ -158,7 +163,7 @@ export async function GET(request: NextRequest) {
   // אין צורך לשלוח את כל העץ לכל פתיחת קישור.
   return NextResponse.json({
     rootNodeId: inv.root_node_id, recipientName: inv.recipient_name,
-    mode: inv.mode ?? 'full', recipient, chain, selfNodeId, nodes: subtree,
+    mode: inv.mode ?? 'full', recipient, chain, selfNodeId, savedChain, nodes: subtree,
   })
 }
 

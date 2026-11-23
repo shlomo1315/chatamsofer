@@ -15,6 +15,7 @@ import FamilyApprovalGate from '@/components/admin/FamilyApprovalGate'
 import BeneficiaryNameEditor from '@/components/admin/BeneficiaryNameEditor'
 import MaternityActions from './MaternityActions'
 import MaternityInquiryPanel from './MaternityInquiryPanel'
+import LineageChainEditButton from '@/components/lineage/LineageChainEditButton'
 import AdminReviewAlert from './AdminReviewAlert'
 import { AdminOnly } from '@/components/StaffPermissions'
 import GratitudeTab from './GratitudeTab'
@@ -486,7 +487,8 @@ export default async function MaternityDetailPage(
                   </div>
                 </div>
               )}
-              {(lineagePath.length > 0 || lineageManual.length > 0 || ben.lineage_node_id) && (
+              {/* 🔴 מוצג גם למשפחה בלי סדר דורות — כדי לבנות אותו מאפס. */}
+              {ben.id && (
                 <div className="pt-3 border-t border-slate-100">
                   <div className="flex items-center gap-2 mb-2">
                     <GitBranch size={14} className="text-navy-soft" />
@@ -498,8 +500,12 @@ export default async function MaternityDetailPage(
                   {(() => {
                     // 🔴 מקור אחד עם חלון התיק המהיר — lib/maternityLineage.
                     const gens: ChainGen[] = buildMaternityGens({ typedChain, lineagePath, lineageManual, genStatus, approvedRef })
-                    if (!gens.length) return null
-                    return <LineageChainChips beneficiaryId={ben.id} gens={gens} initialMarks={manualMarks} />
+                    return (
+                      <>
+                        {gens.length > 0 && <LineageChainChips beneficiaryId={ben.id} gens={gens} initialMarks={manualMarks} />}
+                        <LineageChainEditButton beneficiaryId={ben.id} initialChain={gens.map(g => ({ generation: g.generation, name: g.name, relation: g.relation ?? null }))} />
+                      </>
+                    )
                   })()}
                   {ben.lineage_node_id && (
                     <div className="mt-3">
@@ -911,7 +917,7 @@ export default async function MaternityDetailPage(
             aidId={aid.id}
             motherName={[ben?.family_name, ben?.spouse_name || ben?.full_name].filter(Boolean).join(' ') || undefined}
             hasEmail={!!ben?.email}
-            canLinkLineage={!!ben?.lineage_node_id}
+            canLinkLineage={!!ben?.id}
           />
         </aside>
       </div>

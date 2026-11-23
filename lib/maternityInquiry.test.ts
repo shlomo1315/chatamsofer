@@ -19,8 +19,10 @@ function fakeDb(ben: Ben, opts: { msgInsertError?: string } = {}) {
       const q = {
         select: () => q,
         eq: () => q,
+        is: () => q,
+        limit: () => q,
         order: async () => ({ data: [] }),
-        maybeSingle: async () => ({
+        maybeSingle: async () => (table === 'lineage_nodes' ? { data: { id: 'root' } } : {
           data: {
             id: 'aid1', beneficiary_id: 'ben1',
             beneficiary: { family_name: 'וייס', full_name: 'חיה', marital_status: 'married', ...ben },
@@ -47,13 +49,15 @@ describe('sendMaternityInquiry', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
-  it('הודעה על דורות למשפחה בלי שיוך לעץ נשלחת (בלי קישור) ולא נחסמת', async () => {
+  it('הודעה על דורות למשפחה בלי שיוך לעץ יוצאת עם קישור לבנייה מחדש (רבינוביץ)', async () => {
     const { db, inserts } = fakeDb({ email: 'a@b.com', lineage_node_id: null })
     const res = await sendMaternityInquiry(db, 'aid1', 'נא לתקן את סדר הדורות', sender)
-    expect(res).toEqual({ ok: true, linkAttached: false })
+    expect(res).toEqual({ ok: true, linkAttached: true })
     expect(deliverMail).toHaveBeenCalledTimes(1)
     expect(deliverMail.mock.calls[0][0]).toBe('a@b.com')
-    expect(inserts.lineage_share_invites).toBeUndefined()
+    expect(inserts.lineage_share_invites).toHaveLength(1)
+    expect(inserts.lineage_share_invites[0]).toMatchObject({ root_node_id: 'root', beneficiary_id: 'ben1', mode: 'order' })
+    expect(String(deliverMail.mock.calls[0][2])).toContain('/lineage-review/')
     expect(inserts.maternity_messages).toHaveLength(1)
   })
 
@@ -65,12 +69,11 @@ describe('sendMaternityInquiry', () => {
     expect(String(deliverMail.mock.calls[0][2])).toContain('/lineage-review/')
   })
 
-  it('בקשה מפורשת לקישור בלי שיוך לעץ נעצרת עם הסבר ולא נשלחת', async () => {
-    const { db } = fakeDb({ email: 'a@b.com', lineage_node_id: null })
+  it('בקשה מפורשת לקישור בלי שיוך לעץ נשלחת עם קישור', async () => {
+    const { db, inserts } = fakeDb({ email: 'a@b.com', lineage_node_id: null })
     const res = await sendMaternityInquiry(db, 'aid1', 'שלום', sender, 'lineage')
-    expect(res.ok).toBe(false)
-    expect(!res.ok && res.error).toContain('שיוך לעץ')
-    expect(deliverMail).not.toHaveBeenCalled()
+    expect(res).toEqual({ ok: true, linkAttached: true })
+    expect(inserts.lineage_share_invites).toHaveLength(1)
   })
 
   it('בלי כתובת מייל — שגיאה ברורה, בלי שליחה', async () => {
