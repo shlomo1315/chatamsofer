@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { getDepartmentGates, getDepartmentPreviewCode, previewGates } from '@/lib/departmentGates'
+import { getDepartmentGatesRaw, resolveGates, activeClosedMessages, getDepartmentPreviewCode, previewGates } from '@/lib/departmentGates'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,6 +32,8 @@ export async function GET(request: NextRequest) {
       }
     }
   }
-  const gates = await getDepartmentGates()
-  return NextResponse.json({ gates }, { headers: { 'Cache-Control': 'no-store' } })
+  // closedMessages — הודעות הסגירה של מחלקות סגורות ("הקפאה זמנית"). מחלקה כזו
+  // ממשיכה להופיע בפורטל, ולחיצה עליה מציגה את ההודעה במקום הטופס.
+  const { gates, messages } = resolveGates(await getDepartmentGatesRaw())
+  return NextResponse.json({ gates, closedMessages: activeClosedMessages(gates, messages) },{ headers: { 'Cache-Control': 'no-store' } })
 }
