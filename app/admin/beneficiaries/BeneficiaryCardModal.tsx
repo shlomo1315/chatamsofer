@@ -8,6 +8,8 @@ import { displayChain, registrantGeneration } from '@/lib/lineageDisplayChain'
 import RecordModal, { modalBtn, type RecordTone } from '@/components/admin/system/RecordModal'
 import RecordMailDialog from '@/components/admin/system/RecordMailDialog'
 import LineageStairs from '@/components/lineage/LineageStairs'
+import LineageChainEditButton from '@/components/lineage/LineageChainEditButton'
+import { useCan } from '@/components/StaffPermissions'
 import { CoupleFamily } from '@/components/admin/system/RecordCouple'
 
 // כרטסת צאצא: הגדרות בלבד, התצוגה והמקלדת ב-RecordModal המשותף.
@@ -43,6 +45,8 @@ export default function BeneficiaryCardModal({ rows, index, onIndex, onClose }: 
   const [now] = useState(() => Date.now())
   const [loaded, setLoaded] = useState<{ id: string; data: Extra; log: Log[] } | null>(null)
   const ready = loaded && loaded.id === b.id ? loaded : null
+  const [reloadKey, setReloadKey] = useState(0)
+  const canEditChain = useCan('beneficiaries', 'edit')
 
   useEffect(() => {
     let alive = true
@@ -54,7 +58,7 @@ export default function BeneficiaryCardModal({ rows, index, onIndex, onClose }: 
       if (alive && a.data) setLoaded({ id: b.id, data: a.data as Extra, log: (l.data as Log[] | null) ?? [] })
     })
     return () => { alive = false }
-  }, [b.id])
+  }, [b.id, reloadKey])
 
   const status = b.eligibility_status
   const children = ready?.data.children ?? []
@@ -62,6 +66,11 @@ export default function BeneficiaryCardModal({ rows, index, onIndex, onClose }: 
   const generation = registrantGeneration(chain)
   // הנרשם עצמו הוא השורה האחרונה, בדור שלו (האב האחרון ועוד 1)
   const stairs = chain.length && generation ? [...chain, { generation, name: fullName(b), badge: 'הנרשם' }] : chain
+  const chainEdit = canEditChain ? (
+    <LineageChainEditButton compact beneficiaryId={b.id}
+      initialChain={chain.map(g => ({ generation: g.generation, name: g.name, relation: g.relation ?? null }))}
+      onSaved={() => setReloadKey(k => k + 1)} />
+  ) : null
   const href = `/admin/beneficiaries/${b.id}`
   const loading = <Empty>טוען…</Empty>
   const days = Math.max(0, Math.floor((now - new Date(b.created_at).getTime()) / 86400000))
@@ -100,7 +109,7 @@ export default function BeneficiaryCardModal({ rows, index, onIndex, onClose }: 
             her: { role: 'האישה', name: b.spouse_name, idNumber: b.spouse_id_number, phone: b.spouse_phone },
             status: b.marital_status, kids: b.children_count ?? 0, city: b.city, address: b.address, onEmail: setMailTo,
           }} /> },
-          { title: 'ייחוס ומשפחה', content: !ready ? loading : stairs.length ? <LineageStairs framed gens={stairs} /> : <Empty>לא מולאה שרשרת ייחוס</Empty> },
+          { title: 'ייחוס ומשפחה', content: !ready ? loading : stairs.length ? <LineageStairs framed gens={stairs} action={chainEdit} /> : <><Empty>לא מולאה שרשרת ייחוס</Empty><div className="mt-2">{chainEdit}</div></> },
         ],
       }}
       sections={[

@@ -16,6 +16,7 @@ import SafeDocImage from '@/components/ui/SafeDocImage'
 import PdfCanvasView from '@/components/ui/PdfCanvasView'
 import { loadDocBlob, openDocInNewTab, downloadDocViaData } from '@/lib/docBlob'
 import RecordModal, { modalBtn, type RecordTone } from '@/components/admin/system/RecordModal'
+import LineageChainEditButton from '@/components/lineage/LineageChainEditButton'
 
 // כרטסת לידה: הגדרות בלבד, התצוגה ב-RecordModal המשותף.
 // ⚠️ אישור, דחייה, הארכת זכאות וטעינת כרטיס מתבצעים בכרטסת המלאה ולא משוכפלים כאן.
@@ -183,6 +184,7 @@ export default function MaternityCardModal({ rows, index, onIndex, onClose }: {
 
   // סדר הדורות הצבוע — אותו חישוב כמו בכרטסת המלאה (lib/maternityLineage)
   const [lineage, setLineage] = useState<{ id: string; gens: StairGen[] } | null>(null)
+  const [lineageKey, setLineageKey] = useState(0)
   useEffect(() => {
     let alive = true
     fetch(`/api/admin/maternity/${a.id}/lineage`)
@@ -190,8 +192,14 @@ export default function MaternityCardModal({ rows, index, onIndex, onClose }: {
       .then(d => { if (alive) setLineage({ id: a.id, gens: (d?.gens ?? []) as StairGen[] }) })
       .catch(() => { if (alive) setLineage({ id: a.id, gens: [] }) })
     return () => { alive = false }
-  }, [a.id])
+  }, [a.id, lineageKey])
   const gens = lineage && lineage.id === a.id ? lineage.gens : null
+  // "תיקון סדר הדורות" — אותו עורך כמו בכרטסת המלאה; אחרי שמירה נטען מחדש.
+  const chainEdit = canEdit && a.beneficiary_id ? (
+    <LineageChainEditButton compact beneficiaryId={a.beneficiary_id}
+      initialChain={(gens ?? []).map(g => ({ generation: g.generation, name: g.name, relation: g.relation ?? null }))}
+      onSaved={() => setLineageKey(k => k + 1)} />
+  ) : null
 
   const m = a.beneficiary as MotherRef | undefined
   const email = ((ready?.beneficiary as { email?: string } | null | undefined)?.email ?? '').trim()
@@ -318,8 +326,8 @@ export default function MaternityCardModal({ rows, index, onIndex, onClose }: {
           <section className="rounded-xl border border-[#E6DFCF] bg-[#FFFDF8] px-5 pb-4 pt-1 shadow-[0_1px_2px_rgba(20,33,61,.05)] md:col-span-8">
             <div className="pt-4">
               {gens === null ? <p className="py-3 text-sm text-[#6B6352]">טוען…</p>
-                : gens.length ? <LineageStairs framed gens={gens} />
-                : <p className="py-3 text-sm text-[#6B6352]">לא מולא סדר דורות</p>}
+                : gens.length ? <LineageStairs framed gens={gens} action={chainEdit} />
+                : <div className="flex flex-wrap items-center justify-between gap-2 py-3"><p className="text-sm text-[#6B6352]">לא מולא סדר דורות</p>{chainEdit}</div>}
               <Link href={full} className="mt-1 inline-block text-sm font-bold text-[#1D4ED8] hover:underline">עריכה בכרטסת המלאה ←</Link>
             </div>
           </section>

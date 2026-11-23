@@ -1,8 +1,45 @@
 import { describe, it, expect } from 'vitest'
 import {
   rowsFromChain, chainFromRows, updateRow, insertRow, removeRow, moveRow, emptyRows,
-  sanitizeEditedChain, ROOT_NAME, type EditRow,
+  sanitizeEditedChain, treeChildrenOf, ROOT_NAME, type EditRow, type TreeNode,
 } from './lineageChainEdit'
+
+describe('הוספת דור ידני / קיים (insertRow עם שורה)', () => {
+  const rows: EditRow[] = [{ name: ROOT_NAME, relation: null }, { name: 'א', relation: 'son' }, { name: 'ג', relation: 'son' }]
+  it('דור ידני נכנס במקום הנבחר והבאים יורדים', () => {
+    const out = insertRow(rows, 2, { name: '  ב  ', relation: 'son_in_law' })
+    expect(out.map(r => r.name)).toEqual([ROOT_NAME, 'א', 'ב', 'ג'])
+    expect(out[2].relation).toBe('son_in_law')
+  })
+  it('הוספה בסוף', () => {
+    expect(insertRow(rows, 3, { name: 'ד', relation: null }).at(-1)?.name).toBe('ד')
+  })
+})
+
+describe('treeChildrenOf — דור קיים מאותו גזע', () => {
+  const nodes: TreeNode[] = [
+    { id: '1', name: 'רבי אברהם שמואל בנימין', generation: 2, parent_id: null, status: 'verified' },
+    { id: '2', name: 'רבי שמעון', generation: 2, parent_id: null, status: 'rejected' },
+    { id: '3', name: 'רבי יוסף', generation: 3, parent_id: '1', status: 'verified', relation: 'son' },
+    { id: '4', name: 'רבי משה', generation: 3, parent_id: '1', status: 'pending' },
+    { id: '5', name: 'רבי זר', generation: 3, parent_id: '9', status: 'verified' },
+    { id: '6', name: 'רבי נדחה', generation: 3, parent_id: '1', status: 'rejected' },
+    { id: '7', name: 'רבי יוסף', generation: 3, parent_id: '1', status: 'verified' },
+  ]
+  it('מחזיר רק ילדים של האב מהדור הקודם, בלי נדחים ובלי כפולים', () => {
+    expect(treeChildrenOf(nodes, 'רבי אברהם שמואל בנימין', 3).map(n => n.id).sort()).toEqual(['3', '4'])
+  })
+  it('השוואת שם מתעלמת מגרשיים ורווחים', () => {
+    expect(treeChildrenOf(nodes, ' רבי  אברהם שמואל בנימין״', 3)).toHaveLength(2)
+  })
+  it('דור 2 — כל צמתי הדור שלא נדחו', () => {
+    expect(treeChildrenOf(nodes, ROOT_NAME, 2).map(n => n.id)).toEqual(['1'])
+  })
+  it('אב לא מוכר או ריק — אין הצעות', () => {
+    expect(treeChildrenOf(nodes, 'לא קיים', 3)).toEqual([])
+    expect(treeChildrenOf(nodes, '', 3)).toEqual([])
+  })
+})
 
 const names = (rows: EditRow[]) => rows.map(r => r.name)
 const base = () => rowsFromChain([
