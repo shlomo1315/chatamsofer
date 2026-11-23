@@ -39,8 +39,8 @@ type Color = 'green' | 'orange' | 'red'
 //   verified=ירוק · rejected=אדום בכל דור · pending בדורות 2–5=אדום (צומת שנוסף
 //   לתוך הליבה המאושרת) · pending מעל 5 או "לא נמצא"=כתום.
 // ─────────────────────────────────────────────────────────────────────────────
-// ⚠️ עיצוב "מדרגות": כל דור נכנס מדרגה אחת פנימה מאביו (LineageChainChips.module.css,
-// לפי המוקאפ המאושר). הסמנטיקה של הצבע *לא* השתנתה: מאושר=ירוק מלא, ממתין=כתום
+// ⚠️ עיצוב (LineageChainChips.module.css): כל הדורות מיושרים לימין, דור מתחת לאביו,
+// עם קו ישר בין העיגולים. הסמנטיקה של הצבע *לא* השתנתה: מאושר=ירוק מלא, ממתין=כתום
 // חלול, חריג=אדום עם הילה. אחידות עיצובית שמוחקת את ההבחנה הזו הייתה הופכת
 // אזהרה אמיתית לקישוט.
 const CLS: Record<Color, string> = { green: '', orange: s.o, red: s.r }
@@ -261,7 +261,7 @@ export default function LineageChainChips({
       <div className={s.head}>
         <div>
           <h2>סדר הדורות</h2>
-          <p>כל דור נכנס מדרגה אחת פנימה מאביו. לחיצה על דור פותחת עריכה והחלפה.</p>
+          <p>כל דור מופיע מתחת לאביו. לחיצה על דור פותחת עריכה והחלפה.</p>
         </div>
         <div className={s.tally}>
           {saving && <Loader2 size={13} className="animate-spin text-slate-400" />}
@@ -273,7 +273,7 @@ export default function LineageChainChips({
       </div>
 
       <div className={s.panel}>
-        <ol className={s.tree} style={{ "--n": Math.max(1, gens.length - 1) } as CSSProperties}>
+        <ol className={s.tree}>
           {gens.map((g, i) => {
             const color = colorOf(g)
             const open = menuIdx === i

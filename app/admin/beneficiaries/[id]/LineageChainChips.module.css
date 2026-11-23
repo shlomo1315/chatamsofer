@@ -8,7 +8,7 @@
   --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px;
   --t-xs:12px; --t-s:13px; --t-m:15px; --t-l:19px; --t-xl:24px;
   /* גאומטריית המדרגות: הכול נגזר מכאן, כדי שכל קו ייפגש בדיוק במרכז העיגול */
-  --step:60px; --dot:38px; --rowh:62px; --gap:22px; --lw:2px;
+  --dot:38px; --rowh:62px; --gap:22px; --lw:2px;
   margin-bottom:var(--s4);
   color:var(--ink);font-size:var(--t-m);line-height:1.5;-webkit-font-smoothing:antialiased;
 }
@@ -26,28 +26,21 @@
 
 .panel{background:var(--surface);border:1px solid var(--hair);border-radius:20px;padding:var(--s6) var(--s6) var(--s5)}
 
-.tree{list-style:none;margin:0;padding:0;position:relative;
-  /* 🔴 22.11: המדרגה קבועה (60px) הוציאה 8 דורות מהעמודה במסך צר — העץ עלה על
-     צ׳אט הבירור. עכשיו המדרגה נגזרת מרוחב העמודה בפועל ומספר הדורות (--n). */
-  container-type:inline-size}
+/* 🔴 23.11: כל הדורות מיושרים לימין באותו רוחב, בלי הזחה מדורגת (בקשת שלמה) */
+.tree{list-style:none;margin:0;padding:0;position:relative}
 .gen{position:relative;display:flex;align-items:center;gap:var(--s3);
   height:var(--rowh);margin-top:var(--gap);
-  /* כל המדרגות יחד ≤ שליש מהרוחב — כך גם לדור האחרון נשארות שתי שלישים לשם (קודם "רבי א…") */
-  --stp:clamp(22px, calc(34cqi / var(--n, 7)), var(--step));
-  padding-inline-start:calc(var(--i) * var(--stp));
   --c:var(--g); --soft:var(--g-soft); --line:var(--g-line)}
 .gen:first-child{margin-top:0}
 .gen.o{--c:var(--o); --soft:var(--o-soft); --line:var(--o-line)}
 .gen.r{--c:var(--r); --soft:var(--r-soft); --line:var(--r-line)}
 
-/* קו מהאב: יורד ממרכז העיגול של הדור הקודם ופונה בפינה מעוגלת אל העיגול של הדור הזה */
+/* קו מהאב: קו ישר מתחתית העיגול של הדור הקודם אל ראש העיגול של הדור הזה */
 .gen:not(:first-child)::before{content:"";position:absolute;
-  inset-inline-start:calc((var(--i) - 1) * var(--stp) + var(--dot) / 2 - var(--lw) / 2);
+  inset-inline-start:calc(var(--dot) / 2 - var(--lw) / 2);
   top:calc(-1 * var(--gap) - var(--rowh) / 2 + var(--dot) / 2);
-  height:calc(var(--gap) + var(--rowh) / 2 - var(--dot) / 2 + var(--rowh) / 2 + var(--lw) / 2);
-  width:calc(var(--stp) - var(--dot) / 2 + var(--lw) / 2 - 3px);
-  border-inline-start:var(--lw) solid var(--line);border-bottom:var(--lw) solid var(--line);
-  border-end-start-radius:18px}
+  height:calc(var(--gap) + var(--rowh) - var(--dot));
+  width:var(--lw);background:var(--line)}
 
 .dot{position:relative;z-index:1;flex:none;width:var(--dot);height:var(--dot);border-radius:50%;
   display:grid;place-items:center;background:var(--c);color:#fff;font-weight:800;font-size:var(--t-m);
@@ -127,7 +120,7 @@
 
 /* טלפון */
 @media (max-width:640px){
-  .root{--step:24px;--dot:30px;--rowh:66px;--gap:16px}
+  .root{--dot:30px;--rowh:66px;--gap:16px}
   .panel{padding:var(--s4) var(--s3);border-radius:16px}
   .head h2{font-size:var(--t-l)}
   .gen{gap:var(--s2)}
@@ -135,13 +128,11 @@
   .node{padding:0 var(--s3);gap:var(--s2)}
   .nm{font-size:var(--t-s);white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
   .pill,.chev{display:none}
-  .gen:not(:first-child)::before{border-end-start-radius:12px}
   .menu{min-width:0;inset-inline-end:0}
 }
 
 /* תצוגה לקריאה בלבד (LineageStairs): ניטרלי, בלי סטטוס אישור */
 .gen.n{--c:#14213D; --soft:#f6f5f2; --line:#cfc8b5}
 .ro{margin-bottom:0}
-@media (min-width:641px){.ro{--step:40px}}
 .ro .node:hover{background:var(--surface);border-color:var(--hair)}
 .ro .node:active{transform:none}
