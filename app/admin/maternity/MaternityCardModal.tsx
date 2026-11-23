@@ -325,7 +325,7 @@ export default function MaternityCardModal({ rows, index, onIndex, onClose }: {
           </section>
           <div className="min-w-0 md:col-span-8">
             <MaternityInquiryPanel aidId={a.id} motherName={motherName(m)} hasEmail={!!email}
-              canLinkLineage={!!ready?.beneficiary?.lineage_node_id} />
+              canLinkLineage={!!ready?.beneficiary} />
           </div>
           <CardPanel aid={merged} data={activity.data} state={activity.state}
           centerName={merged.card_center_id ? (centers[merged.card_center_id] ?? null) : null}

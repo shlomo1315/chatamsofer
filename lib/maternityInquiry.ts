@@ -92,9 +92,9 @@ export async function sendMaternityInquiry(
 
   // 🔴 23.11: הודעה שמזכירה "דורות" שודרגה תמיד לקישור, ומשפחה בלי שיוך
   // לעץ (למשל עם אב ידני) נחסמה — כל בירור על דורות לא יצא מעולם, והמזכירה
-  // ראתה רק הודעה קופצת שנעלמה (וייס חיה). השדרוג האוטומטי רק כשיש צומת;
-  // בקשה מפורשת לקישור בלי צומת עדיין נעצרת למטה.
-  if (extra === 'none' && ben?.lineage_node_id && mentionsLineageOrder(text)) extra = 'lineage'
+  // ראתה רק הודעה קופצת שנעלמה (וייס חיה). מאז העורך המלא הקישור בונה את
+  // הסדר מחדש גם בלי שיוך (רבינוביץ חיה רחל), ולכן השדרוג תמיד כשיש כרטסת.
+  if (extra === 'none' && a.beneficiary_id && mentionsLineageOrder(text)) extra = 'lineage'
 
   // reply-to ייחודי — כך שהתשובה תזוהה בוודאות לתיק הזה
   const token = await getOrCreateReplyToken(db, 'm', aidId, 'maternity_aids')
@@ -111,26 +111,29 @@ export async function sendMaternityInquiry(
   // ⚠️ אותם פרמטרים בדיוק כמו במסלול שעובד (send-lineage-link): mode='order'
   // מגביל להצעות בלבד, 30 יום תוקף, ומוגבל לענף של המשפחה.
   //
-  // ⚠️ בלי שיוך לצומת אין ענף להציג — מדלגים על הקישור במקום לשלוח
-  // קישור שייפתח ריק.
+  // ⚠️ משפחה בלי שיוך לצומת (23.11): הקישור נפתח בעורך המלא ובונה את הסדר
+  // מחדש. root_node_id הוא NOT NULL, ולכן מקבל את שורש העץ. ההרשאה בעורך
+  // נקבעת לפי beneficiary_id בלבד, ולא לפי הענף.
   // ─────────────────────────────────────────────────────────────────────────
   // 🔴 22.11: כשהקישור נדרש ואי אפשר לצרף אותו — עוצרים ומודיעים למזכירה,
   // ולא שולחים בשקט מייל "נא לתקן" בלי קישור (מה שקרה בפועל).
-  if (extra === 'lineage' && (!a.beneficiary_id || !ben?.lineage_node_id)) {
-    return {
-      ok: false,
-      error: 'למשפחה אין שיוך לעץ הדורות, ולכן אי אפשר לצרף קישור לתיקון. יש לשייך אותה לצומת בעץ (בכרטסת הצאצא) ואז לשלוח שוב.',
-    }
+  let inviteRoot = ben?.lineage_node_id ?? null
+  if (extra === 'lineage' && a.beneficiary_id && !inviteRoot) {
+    const { data: root } = await db.from('lineage_nodes').select('id').is('parent_id', null).limit(1).maybeSingle()
+    inviteRoot = (root as { id?: string } | null)?.id ?? null
+  }
+  if (extra === 'lineage' && (!a.beneficiary_id || !inviteRoot)) {
+    return { ok: false, error: 'לא ניתן ליצור קישור לתיקון הדורות לתיק הזה. נסו שוב או פנו למנהל.' }
   }
 
   let lineageBlock = ''
-  if (extra === 'lineage' && a.beneficiary_id && ben?.lineage_node_id) {
+  if (extra === 'lineage' && a.beneficiary_id && ben && inviteRoot) {
     const lineageToken = randomBytes(16).toString('base64url')
     const recipientName = [ben.family_name, ben.spouse_name || ben.full_name]
       .filter(Boolean).join(' ') || 'משפחה יקרה'
     const { error: invErr } = await db.from('lineage_share_invites').insert({
       token: lineageToken,
-      root_node_id: ben.lineage_node_id,
+      root_node_id: inviteRoot,
       beneficiary_id: a.beneficiary_id,
       mode: 'order',
       expires_at: new Date(Date.now() + 30 * 86400_000).toISOString(),

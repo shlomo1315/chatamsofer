@@ -16,7 +16,8 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
   pending: { label: 'ממתין', cls: 'bg-amber-100 text-amber-700 border-amber-200' },
   rejected: { label: 'נדחה', cls: 'bg-red-100 text-red-700 border-red-200' },
 }
-import { LineageBuilder, type LineageResult } from '@/components/lineage/LineageBuilder'
+import LineageChainEditor from '@/components/lineage/LineageChainEditor'
+import type { ChainStep } from '@/lib/lineageChainEdit'
 import LineageStairs from '@/components/lineage/LineageStairs'
 
 const NON_HEBREW = /[^֐-׿ ׳״'"-]/g
@@ -44,7 +45,8 @@ export default function LineageReviewClient({ token }: { token: string }) {
   const [mode, setMode] = useState<'full' | 'order'>('full')
   // ── עורך סדר הדורות (קישור order) — הבורר של הרישום ──
   const [orderEditing, setOrderEditing] = useState(false)
-  const [orderResult, setOrderResult] = useState<LineageResult | null>(null)
+  // 🔴 הסדר השמור בכרטסת — לבנייה מחדש כשהמשפחה לא משויכת לעץ (chain ריק).
+  const [savedChain, setSavedChain] = useState<{ generation?: number; name?: string; relation?: unknown }[]>([])
   const [applyResult, setApplyResult] = useState<{ applied: boolean; reason?: string } | null>(null)
   // ── קישור שפג תוקפו ──
   // 🔴 המצב הנפוץ ביותר בתלונות "לא עובד לי". מסך השגיאה היה מבוי סתום,
@@ -78,6 +80,7 @@ export default function LineageReviewClient({ token }: { token: string }) {
       setRecipient(data.recipient ?? null)
       setChain(data.chain ?? [])
       setSelfNodeId(data.selfNodeId ?? null)
+      setSavedChain(Array.isArray(data.savedChain) ? data.savedChain : [])
       setMode(data.mode === 'order' ? 'order' : 'full')
     } catch { setError('שגיאת רשת') }
     finally { setLoading(false) }
@@ -129,23 +132,22 @@ export default function LineageReviewClient({ token }: { token: string }) {
   }
 
   // שמירת הסדר המתוקן — נכנס מיד, או לתור הצוות (השרת מכריע ומחזיר למה).
-  const submitOrder = async () => {
-    const r = orderResult
-    if (!r?.valid || !r.nodeId) return
+  // הסדר שנטען לעורך: מהעץ, ואם המשפחה לא משויכת — מהכרטסת. בקישורים ישנים
+  // (בלי selfNodeId) האחרון בעץ הוא האב, ולכן הנמען נוסף בסוף.
+  const editorInitial = useMemo(() => {
+    if (!chain.length) return savedChain
+    const base = chain.map(c => ({ generation: c.generation, name: c.name, relation: c.relation }))
+    if (selfNodeId || !recipient?.name) return base
+    return [...base, { generation: base[base.length - 1].generation + 1, name: recipient.name, relation: null }]
+  }, [chain, savedChain, selfNodeId, recipient])
+
+  // 🔴 נשלח כל הסדר (chain) — השרת מאמת, מגביל לדורות של הנמען בלבד ומחיל דרך העץ.
+  const submitOrder = async (edited: ChainStep[]) => {
     setBusy('apply'); setError('')
     try {
-      const anc = r.ancestors
       const res = await fetch('/api/public/lineage-review/apply', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          lineage_node_id: r.nodeId,
-          self_is_existing: r.selfIsExisting,
-          lineage_new_nodes: [
-            ...anc.filter(a => a.isNew).map(a => ({ name: a.name, relation: a.relation })),
-            ...(r.selfIsExisting ? [] : [{ name: recipient?.name ?? '', relation: r.selfRelation }]),
-          ],
-        }),
+        body: JSON.stringify({ token, chain: edited }),
       })
       const data = await res.json()
       if (!res.ok || data.ok === false) { setError(data.error || 'השמירה נכשלה'); return }
@@ -278,7 +280,7 @@ export default function LineageReviewClient({ token }: { token: string }) {
                   <Pencil size={15} /> תיקון סדר הדורות
                 </button>
                 <p className="mt-2 text-[11px] leading-relaxed text-indigo-500">
-                  נפלה טעות בסדר? לחצו על <strong>תיקון סדר הדורות</strong>, ובנו את הסדר הנכון דור אחר דור — בדיוק כמו ברישום.
+                  נפלה טעות בסדר? לחצו על <strong>תיקון סדר הדורות</strong> — אפשר לתקן שם, להוסיף או למחוק דור ולשנות את הסדר.
                   התיקון נכנס מיד, והכרטסת שלכם חוזרת לבדיקה ראשונית אצל הצוות.
                 </p>
               </>
@@ -301,28 +303,31 @@ export default function LineageReviewClient({ token }: { token: string }) {
           </div>
         )}
 
-        {/* העורך — הבורר של הרישום, טעון מראש בסדר הקיים */}
+        {/* משפחה שלא משויכת לעץ — אין סדר להציג, בונים אותו מחדש */}
+        {chain.length === 0 && mode === 'order' && !orderEditing && !applyResult && (
+          <div className="mb-4 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-indigo-400 mb-2.5">סדר הדורות</div>
+            <p className="text-sm text-indigo-700">סדר הדורות שלכם עדיין לא שויך במערכת. נא לבנות אותו מרבינו החתם סופר ועד אליכם.</p>
+            <button type="button" onClick={() => { setOrderEditing(true); setError('') }}
+              className="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-700">
+              <Pencil size={15} /> בניית סדר הדורות
+            </button>
+          </div>
+        )}
+
+        {/* העורך — עריכה מלאה: שם, בן/חתן, הוספה, מחיקה וסידור */}
         {orderEditing && (
           <div className="mb-4 rounded-2xl border border-indigo-200 bg-white p-4 shadow-sm">
             <div className="text-[11px] font-bold uppercase tracking-wider text-indigo-400 mb-2.5">תיקון סדר הדורות</div>
-            <LineageBuilder
-              selfName={recipient?.name ?? ''}
-              onChange={setOrderResult}
-              // ⚠️ בלי הנמען עצמו: הבורר מוסיף אותו בסוף ("הוסיפו אותי").
-              prefillChain={chain.filter(c => c.id !== selfNodeId).map(c => ({ generation: c.generation, name: c.name, relation: (c.relation === 'son' || c.relation === 'son_in_law') ? c.relation : null }))}
+            <LineageChainEditor
+              initialChain={editorInitial}
+              lastLabel="זה אתם"
+              saving={busy === 'apply'}
+              saveLabel="שמירת הסדר המתוקן"
+              onSave={submitOrder}
+              onCancel={() => { setOrderEditing(false); setError('') }}
             />
-            {error && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600">{error}</div>}
-            <div className="mt-4 flex gap-2">
-              <button type="button" disabled={!orderResult?.valid || busy === 'apply'} onClick={() => { void submitOrder() }}
-                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50">
-                {busy === 'apply' ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} שמירת הסדר המתוקן
-              </button>
-              <button type="button" onClick={() => { setOrderEditing(false); setError('') }}
-                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">ביטול</button>
-            </div>
-            {!orderResult?.valid && (
-              <p className="mt-2 text-[11px] text-slate-500">יש להשלים את הסדר עד אליכם — כולל «הוסיפו אותי» וסימון בן/חתן (או «זה אני»).</p>
-            )}
+            <p className="mt-2 text-[11px] text-slate-500">הדור האחרון ברשימה הוא אתם. סמנו בכל דור אם הוא בן או חתן.</p>
           </div>
         )}
 

@@ -9,6 +9,9 @@ import { getApprovedRefTree } from '@/lib/lineageApprovedRef'
 import { earlyGenerationsCheck, appendManualGenerations } from '@/lib/lineageFixApply'
 import { normalizeLineageNodeName, lineageIdentityKey } from '@/lib/lineageNameFormat'
 import { markMaternityInquiryAnswered } from '@/lib/maternityInquiry'
+import { sanitizeEditedChain } from '@/lib/lineageChainEdit'
+import { saveChainFromLink } from '@/lib/lineageChainSave'
+import { lineageSaveDeps } from '@/lib/lineageChainSaveDeps'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,8 +26,13 @@ export const dynamic = 'force-dynamic'
 // של המשפחה נושא צאצאים או משפחות נוספות — הבקשה נכנסת לתור הצוות כהערה,
 // בדיוק כמו קודם. תיקון של משפחה אחת לעולם אינו מזיז צומת משותף.
 //
-// ⚠️ השרשרת נבנית *בשרת* מהעץ, לא מהדפדפן: הנתיב ציבורי, ושרשרת שנשלחה
-// מהלקוח הייתה מאפשרת לכתוב לכרטסת כל סדר שהוא.
+// שני מסלולים:
+//   { token, chain } — העורך המלא (components/lineage/LineageChainEditor):
+//     הוספה, מחיקה, סידור ותיקון של כל דור. מאומת בשרת (sanitizeEditedChain)
+//     ומוחל דרך העץ (lib/lineageChainSave) — רק לכרטסת שבהזמנה, ורק כש-5
+//     הדורות הראשונים תואמים את הקובץ המאושר. אחרת נכנס לתור הצוות.
+//   { token, lineage_node_id, lineage_new_nodes } — הבורר הישן (תאימות).
+//     כאן השרשרת נבנית בשרת מהעץ.
 // ─────────────────────────────────────────────────────────────────────────────
 
 function getAdmin(): SupabaseClient | null {
@@ -49,7 +57,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'יותר מדי בקשות. נסו שוב מאוחר יותר.' }, { status: 429 })
   }
 
-  let body: { token?: string; lineage_node_id?: string; lineage_new_nodes?: { name?: string; relation?: string }[]; self_is_existing?: boolean }
+  let body: { token?: string; chain?: unknown; lineage_node_id?: string; lineage_new_nodes?: { name?: string; relation?: string }[]; self_is_existing?: boolean }
   try { body = await request.json() } catch { console.warn('[lineage-review/apply] 400: גוף בקשה לא תקין'); return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
 
   const { data: inv } = await admin.from('lineage_share_invites')
@@ -58,6 +66,20 @@ export async function POST(request: NextRequest) {
   if (!inv || inv.revoked_at || new Date(inv.expires_at) < new Date() || inv.mode !== 'order' || !inv.beneficiary_id) {
     console.warn(`[lineage-review/apply] 403: קישור לא תקין/פג/בוטל (${String(body.token ?? '').slice(0, 6)}…)`)
     return NextResponse.json({ error: 'הקישור אינו תקין, בוטל, או פג תוקפו' }, { status: 403 })
+  }
+
+  // ── העורך המלא ──
+  if (Array.isArray(body.chain)) {
+    const clean = sanitizeEditedChain(body.chain)
+    if (!clean.ok) return NextResponse.json({ error: clean.error }, { status: 400 })
+    const res = await saveChainFromLink(admin, lineageSaveDeps, {
+      token: inv.token, root_node_id: inv.root_node_id, recipient_name: inv.recipient_name, beneficiary_id: inv.beneficiary_id,
+    }, clean.chain, await getApprovedRefTree(admin))
+    if (!res.ok) return NextResponse.json({ error: res.error }, { status: 500 })
+    await markMaternityInquiryAnswered(admin, inv.beneficiary_id, res.applied
+      ? 'המשפחה תיקנה את סדר הדורות דרך הקישור'
+      : 'המשפחה שלחה תיקון לסדר הדורות דרך הקישור (ממתין לבדיקה)')
+    return NextResponse.json(res)
   }
 
   const selfExisting = body.self_is_existing === true
