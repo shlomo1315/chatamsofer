@@ -7,6 +7,7 @@ import { sendAutoReply } from '@/lib/autoReplySender'
 import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { handleEmailRequest, isRequestSubject, isRequestMailFor, effectiveRequestSubject } from '@/lib/emailRequestIntake'
 import { shouldForwardToGmail } from '@/lib/mailForwardPolicy'
+import { PERSONAL_FORWARD, personalForwardHit } from '@/lib/personalForward'
 import { resolveMailbox } from '@/lib/mailRouting'
 import { hasSvixHeaders, safeEqual } from '@/lib/svix'
 import { verifyInboundSvix } from '@/lib/resendInboundSecret'
@@ -412,11 +413,9 @@ export async function POST(request: NextRequest) {
   }
 
   // ── t@: הפניה ישירה לג'ימייל האישי של המנהל, בלי שמירה במערכת ──
-  const PERSONAL_FORWARD: Record<string, string> = { 't@chasamsofer.info': '4363773@gmail.com' }
   {
-    const hit = directRecipients.map(a => a.toLowerCase().trim()).find(a => PERSONAL_FORWARD[a])
-    const fromLc = (from.email || '').toLowerCase()
-    if (hit && !fromLc.endsWith('@chasamsofer.info')) {
+    const hit = personalForwardHit(directRecipients, from.email)
+    if (hit) {
       const rid = String(data.email_id ?? data.emailId ?? data.id ?? '').trim()
       let fHtml: string | null = null
       let fText: string | null = null
