@@ -18,7 +18,12 @@ import type { RegisterSource } from '@/lib/distributionSources'
 
 export const DIST_RULES_KEY = 'holiday_distribution_rules'
 
+export { PHASES, PHASE_LABEL, phaseGates, type DistPhase } from './holidayDistPhase'
+import { PHASES, type DistPhase } from './holidayDistPhase'
+
 export interface DistRules {
+  /** שלב החלוקה (null = ניהול בשערים הישנים). */
+  phase: DistPhase | null
   /** רישום אך ורק בשלוחה הטלפונית. */
   phoneOnly: boolean
   /** משפחה בסטטוס "בדיקה מעמיקה" (deep_review) אינה יכולה להירשם. */
@@ -37,6 +42,7 @@ export interface DistRules {
 }
 
 export const DEFAULT_RULES: DistRules = {
+  phase: null,
   phoneOnly: false,
   blockDeepReview: false,
   autoApprove: false,
@@ -69,6 +75,7 @@ export function normalizeRules(raw: unknown): DistRules {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof DistRules, unknown>>
   const bool = (v: unknown, d: boolean) => (typeof v === 'boolean' ? v : d)
   return {
+    phase: PHASES.includes(r.phase as DistPhase) ? (r.phase as DistPhase) : null,
     phoneOnly: bool(r.phoneOnly, DEFAULT_RULES.phoneOnly),
     blockDeepReview: bool(r.blockDeepReview, DEFAULT_RULES.blockDeepReview),
     autoApprove: bool(r.autoApprove, DEFAULT_RULES.autoApprove),

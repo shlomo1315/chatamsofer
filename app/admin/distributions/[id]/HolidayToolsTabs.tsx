@@ -28,8 +28,9 @@ const TABS: { id: TabId; label: string; icon: typeof MapPin }[] = [
   { id: 'ivr', label: 'בדיקת שלוחה', icon: Phone },
 ]
 
-export default function HolidayToolsTabs({ distributionId }: { distributionId: string }) {
-  const [tab, setTab] = useState<TabId>('centers')
+export default function HolidayToolsTabs({ distributionId, hideCenters = false }: { distributionId: string; hideCenters?: boolean }) {
+  // ⚠️ בחלוקה בשלבים המוקדים יושבים בלשונית "מוקדים" של המסך — לא פעמיים.
+  const [tab, setTab] = useState<TabId>(hideCenters ? 'load' : 'centers')
 
   return (
     <div id="tools-centers" className="flex flex-col gap-5">
@@ -37,7 +38,7 @@ export default function HolidayToolsTabs({ distributionId }: { distributionId: s
           (eslint-rules/no-horizontal-scroll). בנייד הטאבים יורדים לשורה
           שנייה במקום להיחתך מחוץ למסך. */}
       <div className="flex flex-wrap items-center gap-1 border-b border-slate-200">
-        {TABS.map(t => {
+        {TABS.filter(t => !(hideCenters && t.id === 'centers')).map(t => {
           const Icon = t.icon
           const active = tab === t.id
           return (
@@ -55,7 +56,7 @@ export default function HolidayToolsTabs({ distributionId }: { distributionId: s
           🔴 כל פאנל בגבול-שגיאה משלו: עד כה תקלה באחד מהם הפילה את
           **כל** דף החלוקה, כולל טבלת הנרשמים והאישורים. אובדן הגישה
           לחלוקה כולה בגלל פאנל צדדי חמור בהרבה מהתקלה עצמה. */}
-      {tab === 'centers' && (
+      {tab === 'centers' && !hideCenters && (
         <ToolPanelBoundary name="מוקדי חלוקה"><CenterBreakdown distributionId={distributionId} /></ToolPanelBoundary>
       )}
       {tab === 'load' && (

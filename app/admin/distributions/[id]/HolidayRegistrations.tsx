@@ -108,8 +108,10 @@ const SOURCE_ORDER: RegisterSource[] = ['phone', 'portal', 'nedarim', 'email', '
 
 export default function HolidayRegistrations({
   distributionId, rows, totalCount, amountPerFamily, registrationOpen, distributionActive, distributionName,
-  testMode = false, testEmail = null,
+  testMode = false, testEmail = null, phased = false,
 }: {
+  /** 🔴 חלוקה בשלבים: השערים נשלטים מהפאנל הכחול, והמוקדים בלשונית נפרדת. */
+  phased?: boolean
   distributionId: string
   rows: RegistrationRow[]
   /** ⚠️ מצב בדיקה של החלוקה — משנה את נוסח האישור ואת יעד המייל. */
@@ -771,13 +773,13 @@ export default function HolidayRegistrations({
       {/* ── לוח השערים ──
           🔴 ראשון במסך בכוונה: "מה פתוח כרגע" היא השאלה שנשאלת לפני כל
           פעולה אחרת, וקודם התשובה הייתה מפוזרת בין כרטיס לטאב נסתר. */}
-      <GatesPanel
+      {!phased && <GatesPanel
         distributionId={distributionId}
         registrationOpen={registrationOpen}
         onToggleRegistration={() => void toggleRegistration()}
         registrationBusy={toggling}
         canEdit={canEdit}
-      />
+      />}
 
       {/* ── מונים חיים: נרשמים וצפי תקציבי ── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
@@ -875,7 +877,7 @@ export default function HolidayRegistrations({
       {/* ── כלי החלוקה — טאבים, באותו דפוס של מסך כרטיסי המזון ──
           ⚡ רק הטאב הפעיל מרונדר, ולכן אף קריאה לשרת אינה יוצאת עד
           שנכנסים אליו. זה מה שהאט את המסך כשכל הפאנלים היו זה מתחת לזה. */}
-      {canEdit && <HolidayToolsTabs distributionId={distributionId} />}
+      {canEdit && <HolidayToolsTabs distributionId={distributionId} hideCenters={phased} />}
 
       {/* ── פילוח לפי עיר ── */}
       {/* 🔴 פילוח המוקדים — השאלה המרכזית בשלב הבחירה: לאן המשפחות

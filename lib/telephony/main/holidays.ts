@@ -8,7 +8,7 @@
 // הלוגיקה זהה לשלוחה הקודמת, שהוסרה.
 // ההודעות נערכות באותו מסך ניהול (getHolidayMessages). בשלב זה TTS בלבד — הקלטות בהמשך.
 import { getHolidayMessages, type HolidayMessages } from '@/lib/holidayPhoneMessages'
-import { getOpenDistribution, registerToOpenDistribution, testDistributionFor } from '@/lib/holidayDistributions'
+import { getOpenDistribution, getLiveDistribution, registerToOpenDistribution, testDistributionFor, type LiveDistribution } from '@/lib/holidayDistributions'
 import { linkHolidayCard } from '@/lib/holidayCards'
 import { resolveCardFamily } from '@/lib/cardIdentity'
 import { digitsOnly } from '@/lib/idLookup'
@@ -19,9 +19,9 @@ import { centerStatusKey } from '@/lib/holidayCenterStatusMessage'
 import { spokenCenterDetails } from '@/lib/holidayCenterSpeech'
 import { centerLabel } from '@/lib/holidayCenterPick'
 import { CENTER_VARS, buildChoiceList, nextCenterStep } from '@/lib/holidayCenterIvr'
-import { getDistRules } from '@/lib/holidayDistRules'
+import { getDistRules, isTestCaller, type DistRules } from '@/lib/holidayDistRules'
 import { spokenCenterName } from '@/lib/holidayCenterSpeech'
-import { phoneRegistration } from './holidayRegistration'
+import { phoneRegistration, phoneEligibility, phoneHearCenter } from './holidayRegistration'
 import { askDigits, digits, fill, hangup, menu, say } from '../modules'
 import type { TlContext, TlFile, TlResponse, TlResult } from '../types'
 import {
@@ -94,6 +94,12 @@ export async function holidays(ctx: TlContext): Promise<TlResult> {
     // 🔴 חלוקה שמוגדרת "רישום בטלפון בלבד": מקש 5 (וגם 4 והטיימאאוט) עוברים
     // למסלול הרישום המלא: ת"ז, תאריך לידה, טלפון, הצהרות, ומשם לבחירת מוקד.
     // 🧪 כשהרישום סגור — מספר ניסיון (מוגדר בפאנל החלוקה) מקבל את החלוקה כאילו פתוחה.
+    // 🔴 חלוקה שמנוהלת בשלבים (חנוכה תשפ"ז ואילך): הקו עושה דבר אחד בכל שלב,
+    // בלי תפריט. ראו lib/holidayDistRules.ts DistPhase.
+    const live = await getLiveDistribution()
+    const liveRules = live ? await getDistRules(live.id) : null
+    if (live && liveRules?.phase) return await phasedLine(k, live, liveRules)
+
     const open = await getOpenDistribution()
     const regDist = open ? (open.phone_only ? open : null) : await testDistributionFor(ctx.phone)
     const choice = tapped(ctx.params[MENU_VAR])
@@ -213,7 +219,12 @@ async function cardRoute(k: Kit): Promise<TlResult> {
   }
   const ben = candidates.find(c => c.id === resolved.familyId)
   if (!ben) return k.end('failed')
+  return await cardForMember(k, dist, ben, k.files('identify', { name: readableName(ben) }))
+}
 
+/** שיוך כרטיס וטעינה למשפחה שכבר זוהתה (בטלפון או בת"ז). */
+async function cardForMember(k: Kit, dist: CardDist, ben: Member, firstLead: TlFile[]): Promise<TlResult> {
+  const { params, callId } = k.ctx
   const rec = await getRecipient(dist.id, ben.id, 'id, center_id, approval_status, card_number, load_status')
   if (!rec) return k.end('not_found')
   if (rec.approval_status !== 'approved') return k.end('pending_approval')
@@ -226,7 +237,7 @@ async function cardRoute(k: Kit): Promise<TlResult> {
   const askCard = (name: string, lead: TlFile[]) =>
     askDigits(name, CARD_MAX_DIGITS, [...lead, ...k.files('card_ask')], { min: 1, maskLog: true, post: true })
   const cAttempt = lastAttempt(params, CARD_VARS)
-  if (cAttempt < 0) return askCard(CARD_VARS[0], k.files('identify', { name: readableName(ben) }))
+  if (cAttempt < 0) return askCard(CARD_VARS[0], firstLead)
 
   const card = digitsOnly(params[CARD_VARS[cAttempt]])
   const hasNext = cAttempt + 1 < CARD_VARS.length
@@ -375,4 +386,60 @@ async function centers(k: Kit, mode: 'hear' | 'pick'): Promise<TlResult> {
       return k.end('center_success', { center: step.label })
     }
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 הקו של חלוקה בשלבים — תפריט קבוע של 4 מקשים (לבקשת המשתמש 23.11):
+//   1 רישום   — רק בשלב "רישום פתוח" (בהכנה: מספרי ניסיון בלבד); אחרת הודעה
+//   2 זכאות   — ת"ז + תאריך לידה ⇒ נרשם ואושר / זכאי להגיש / זמן הרישום חלף
+//   3 המוקד   — שם המוקד + ימים ושעות אם פורסמו; בשלב "החלוקה פתוחה" גם
+//               הסכום ושיוך כרטיס
+//   4 הודעות כלליות — נוסח שהצוות מעדכן במסך הנוסחים
+// ─────────────────────────────────────────────────────────────────────────────
+const DIST_ID_VARS = ['dst_id', 'dst_id2', 'dst_id3']
+const DIST_CARD_VAR = 'dst_card'
+
+async function phasedLine(k: Kit, live: LiveDistribution, rules: DistRules): Promise<TlResult> {
+  const phase = rules.phase
+  const test = isTestCaller(rules, k.ctx.phone)
+  const choice = tapped(k.ctx.params[MENU_VAR])
+  if (!choice) {
+    const distName = `${live.name}${live.year ? ` ${live.year}` : ''}`
+    return menu(MENU_VAR, ['1', '2', '3', '4'], k.files('phase_menu', { distribution: distName }), { timeout: 7 })
+  }
+  console.log(`${LOG} callId=${k.ctx.callId} phase=${phase} key=${choice}${test ? ' TEST' : ''}`)
+  const regOpen = phase === 'registration' || (phase === 'setup' && test)
+  if (choice === '2') return await phoneEligibility(k, live.id, rules, regOpen)
+  if (choice === '3') return phase === 'distribution' ? await distributionInfo(k, live) : await phoneHearCenter(k, live.id, rules)
+  if (choice === '4') return k.end('general_announcements')
+  if (regOpen) return await phoneRegistration(k, { ...live, registration_open: true, phone_only: true, phone_number: rules.phoneNumber })
+  if (phase === 'setup') return k.end('phase_not_open')
+  return k.end(phase === 'distribution' ? 'elig_registration_passed' : 'phase_closed_wait')
+}
+
+async function distributionInfo(k: Kit, live: LiveDistribution): Promise<TlResult> {
+  const id = await identifyById(k, DIST_ID_VARS)
+  if ('reply' in id) return id.reply
+  const { ben } = id
+  const dist = await latestDistribution<CardDist>('id, amount_per_family, card_expiry, test_mode, pickup_open')
+  if (!dist || dist.id !== live.id) return k.end('failed')
+  const rec = await getRecipient(dist.id, ben.id, 'id, center_id, approval_status, card_number')
+  if (!rec) return k.end('phase_not_registered')
+  if (rec.approval_status !== 'approved') return k.end('pending_approval')
+
+  const pressed = tapped(k.ctx.params[DIST_CARD_VAR])
+  if (pressed === '1') return await cardForMember(k, dist, ben, [])
+  if (pressed) return k.end('reg_goodbye')
+
+  const amount = Number(dist.amount_per_family ?? 0)
+  const name = readableName(ben)
+  const details: TlFile[] = [...k.files('phase_dist_details', { name, amount: String(amount) })]
+  if (rec.center_id) {
+    const c = await getSpokenCenter(rec.center_id)
+    details.push(...spoken(c, ''))
+  } else {
+    details.push(...k.files('center_none'))
+  }
+  if (rec.card_number) return [{ type: 'simpleMessage', files: [...details, ...k.files('card_already')] }, hangup()]
+  return menu(DIST_CARD_VAR, ['1', '2'], [...details, ...k.files('phase_card_prompt')], { timeout: 7 })
 }
