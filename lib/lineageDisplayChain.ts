@@ -68,24 +68,48 @@ export function displayChain(
  */
 // 🔴 23.11 וייס חיה (347425142): השרשרת סונכרנה מהעץ בניסוח "ומרת", והרשימה הידנית
 // נשארה "והרבנית", ושלושה דורות הוצגו פעמיים. משווים לפי האדם: בלי תארים וגרשיים.
-// שם האשה נשאר במפתח, כדי שנכד על שם סבו (עם אשה אחרת) לא ייבלע.
-const TITLES = new Set(['רבי', 'הרב', "ר'", 'ר', 'מרן', 'מרת', 'ומרת', 'הרבנית', 'והרבנית', 'זי"ע', 'זצ"ל', 'ז"ל'])
-function personKey(name: string): string {
-  return name.replace(/[״]/g, '"').replace(/[׳]/g, "'").split(/[\s,]+/)
-    .filter(w => w && !TITLES.has(w))
-    .map(w => w.replace(/["'()]/g, ''))
-    .join(' ')
+// האדם מפורק לבעל, אשה ושם משפחה: "רבי דוד והינדל שישא" = "רבי דוד ומרת הינדל שישא".
+// אשה חסרה בצד אחד לא מונעת התאמה; אשה אחרת כן (נכד על שם סבו לא ייבלע).
+const TITLES = new Set(['רבי', 'הרב', "ר'", 'ר', 'מרן', 'מרת', 'הרבנית', 'זי"ע', 'זצ"ל', 'ז"ל', 'זיע"א'])
+type Person = { husband: string; wife: string; surname: string }
+function parsePerson(name: string): Person {
+  const words = name.replace(/[״]/g, '"').replace(/[׳]/g, "'").replace(/\([^)]*\)/g, ' ').split(/[\s,]+/).filter(w => w && !TITLES.has(w))
+  const husband: string[] = []
+  const wife: string[] = []
+  let inWife = false
+  words.forEach((raw, i) => {
+    let w = raw
+    const last = i === words.length - 1
+    // "ומרת" / "והרבנית" / "והינדל" פותחים את שם האשה
+    if (!last && husband.length && w.length > 1 && w.startsWith('ו')) { inWife = true; w = w.slice(1) }
+    if (TITLES.has(w)) return
+    w = w.replace(/["'()]/g, '')
+    if (!w) return
+    if (last && words.length > 1) return
+    ;(inWife ? wife : husband).push(w)
+  })
+  const surname = words.length > 1 ? words[words.length - 1].replace(/["'()]/g, '') : ''
+  return { husband: husband.join(' '), wife: wife.join(' '), surname }
+}
+// ⚠️ האשה לפי תחילית מילים: שם אמצעי בוי"ו ("זאב וולף") נקרא כתחילת שם האשה,
+// ו"זאב וולף כהן" חייב להתאים ל"זאב וולף ומרת חיה כהן".
+function samePerson(a: Person, b: Person): boolean {
+  if (a.husband !== b.husband || a.surname !== b.surname) return false
+  const [x, y] = a.wife.length <= b.wife.length ? [a.wife, b.wife] : [b.wife, a.wife]
+  return !x || y === x || y.startsWith(x + ' ')
 }
 
 function withManual(base: ChainEntry[], manual: readonly string[] | null | undefined): ChainEntry[] {
   if (!Array.isArray(manual) || !manual.length) return base
-  const seen = new Set(base.map(e => personKey(e.name)))
+  const seen = base.map(e => parsePerson(e.name))
   const out = [...base]
   let gen = base.length ? Math.max(...base.map(e => e.generation)) : 0
   for (const raw of manual) {
     const name = typeof raw === 'string' ? raw.trim() : ''
-    if (!name || seen.has(personKey(name))) continue
-    seen.add(personKey(name))
+    if (!name) continue
+    const p = parsePerson(name)
+    if (seen.some(s => samePerson(s, p))) continue
+    seen.push(p)
     out.push({ generation: ++gen, name, relation: null })
   }
   return out
