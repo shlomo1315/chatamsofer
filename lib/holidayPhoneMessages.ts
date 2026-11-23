@@ -477,9 +477,14 @@ export const HOLIDAY_MESSAGE_META: HolidayMsgMeta[] = [
     defaultText: 'הקישו את תאריך הלידה ב-8 ספרות, כגון 0 1 0 1 2 0 0 0',
   },
   {
-    // 🔴 בסטטוס נשואים מתקבל תאריך הלידה של האב או של האם — שניהם בכרטסת.
-    key: 'reg_ask_birth_married', label: 'רישום בטלפון: בקשת תאריך לידה (נשואים)', allowAudio: true,
-    defaultText: 'נא להקיש את תאריך הלידה של האבא או האמא ב-8 ספרות, כגון 0 1 0 1 2 0 0 0',
+    // 🔴 בסטטוס נשואים מתקבל תאריך הלידה של הבעל או של האשה — שניהם בכרטסת.
+    // ⚠️ מפתח חדש (במקום reg_ask_birth_married): הנוסח הישן כבר שמור במסד וגובר על ברירת המחדל.
+    key: 'reg_ask_birth_couple', label: 'רישום בטלפון: בקשת תאריך לידה (נשואים)', allowAudio: true,
+    defaultText: 'נא להקיש את תאריך הלידה של הבעל או של האשה ב-8 ספרות, כגון 0 1 0 1 2 0 0 0',
+  },
+  {
+    key: 'reg_id_not_found', label: 'רישום בטלפון: ת"ז לא קיימת במערכת (סיום)', allowAudio: true,
+    defaultText: 'מספר זהות זה אינו מופיע במערכת. בהצלחה',
   },
   {
     key: 'reg_birth_mismatch', label: 'רישום בטלפון: תאריך לידה לא תואם', allowAudio: true,
@@ -533,6 +538,11 @@ export const HOLIDAY_MESSAGE_META: HolidayMsgMeta[] = [
   {
     key: 'reg_goodbye', label: 'רישום בטלפון: סיום', allowAudio: true,
     defaultText: 'תודה ולהתראות',
+  },
+  {
+    // נאמרת רק אחרי שהרישום נשמר בפועל, ואחריה ניתוק.
+    key: 'reg_final', label: 'רישום בטלפון: הודעת סיום אחרי רישום', allowAudio: true,
+    defaultText: 'הרשמתך התקבלה בהצלחה במערכת. ברגע שהחלוקה תתבצע תקבלו על כך עדכון במייל ובטלפון. אין צורך לפנות למשרד בעניין זה, תקבלו על כך עדכון מסודר.',
   },
   // ── הקו לפי שלב החלוקה ──
   {
