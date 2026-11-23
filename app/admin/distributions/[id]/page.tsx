@@ -14,6 +14,10 @@ import { he } from 'date-fns/locale'
 import HolidayRegistrations, { type RegistrationRow } from './HolidayRegistrations'
 import InviteLinkPanel from './InviteLinkPanel'
 import PhoneRulesPanel from './PhoneRulesPanel'
+import DistributionShell from './DistributionShell'
+import CenterBreakdown from './CenterBreakdown'
+import ToolPanelBoundary from './ToolPanelBoundary'
+import { getDistRules, saveDistRules } from '@/lib/holidayDistRules'
 import { toRegistrationRow } from '@/lib/distributionRow'
 import type { RegisterSource } from '@/lib/distributionSources'
 import type { ApprovalStatus } from '@/lib/holidayCards'
@@ -154,6 +158,66 @@ export default async function DistributionDetailPage({ params }: { params: Promi
   if (!d && isSupabaseConfigured()) notFound()
   if (!d) return <div className="p-8 text-center text-slate-400">הגדר Supabase לצפייה</div>
   const amount = Number(d.amount_per_family ?? 0)
+  const rules = await getDistRules(d.id)
+  // ⚠️ חלוקת "טלפון בלבד" שנוצרה לפני בורר השלבים — השלב נגזר פעם אחת
+  // מהשערים הקיימים ונשמר, כדי שגם הקו יעבור מיד לתפריט השלבים.
+  if (!rules.phase && rules.phoneOnly && canEditDistribution) {
+    const g = d as { registration_open?: boolean | null; pickup_open?: boolean | null }
+    const derived = g.pickup_open ? 'distribution' : g.registration_open ? 'registration' : 'setup'
+    const saved = await saveDistRules(d.id, { phase: derived })
+    if (saved) rules.phase = saved.phase
+  }
+  const distName = `${d.name}${d.year ? ` ${d.year}` : ''}`
+
+  // 🔴 חלוקה בשלבים (חנוכה תשפ"ז ואילך) — המסך החדש לפי המוקאפ שאושר:
+  // פאנל כחול עם השלבים + לשוניות סקירה / נרשמים / מוקדים / הגדרות.
+  if (rules.phase) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between gap-3">
+          <Link href="/admin/distributions" className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#1e3d73] hover:text-[#132a52]">
+            <ArrowRight size={16} /> כל החלוקות
+          </Link>
+        </div>
+        <DistributionShell
+          distributionId={d.id}
+          name={distName}
+          amount={amount}
+          canEdit={canEditDistribution}
+          initialPhase={rules.phase}
+          registrants={
+            <Suspense fallback={<RegistrationsSkeleton />}>
+              <RegistrationsLoader id={d.id} amount={amount} registrationOpen={d.registration_open === true}
+                distributionActive={d.status !== 'cancelled'} distributionName={distName} phased
+                testMode={(d as { test_mode?: boolean | null }).test_mode === true}
+                testEmail={(d as { test_email?: string | null }).test_email ?? null} />
+            </Suspense>
+          }
+          centers={<ToolPanelBoundary name="מוקדים"><CenterBreakdown distributionId={d.id} /></ToolPanelBoundary>}
+          settings={
+            <div className="flex flex-col gap-5">
+              <section className="bg-[#fffdf8] border border-[#e3dbcc] rounded-[14px] p-5 flex items-center gap-4 flex-wrap">
+                <span className="w-7 h-7 rounded-full grid place-items-center text-[13px] font-bold border border-[#cbbfa8] text-[#465068]">1</span>
+                <div className="min-w-0">
+                  <h3 className="font-extrabold text-[#132a52]">פרטי החלוקה</h3>
+                  <p className="text-sm text-[#6b6352]">
+                    {distName} · {amount > 0 ? `${amount.toLocaleString('he-IL')} ₪ למשפחה` : 'סכום לא הוגדר'}
+                    {d.distribution_date ? ` · ${fmtDate(d.distribution_date)}` : ''}
+                  </p>
+                </div>
+                <Link href={`/admin/distributions/${d.id}/edit`}
+                  className="ms-auto inline-flex items-center gap-1.5 rounded-xl border border-[#e3dbcc] bg-white px-3.5 py-2 text-xs font-bold text-[#465068] hover:text-[#132a52]">
+                  <Pencil size={14} /> עריכה
+                </Link>
+              </section>
+              <PhoneRulesPanel distributionId={d.id} canEdit={canEditDistribution} />
+              <InviteLinkPanel distributionId={d.id} canEdit={canEditDistribution} />
+            </div>
+          }
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -217,8 +281,8 @@ export default async function DistributionDetailPage({ params }: { params: Promi
 // ישיר בדף היה משהה את *כל* הדף בדיוק כמו קודם.
 // ─────────────────────────────────────────────────────────────────────────────
 async function RegistrationsLoader({ id, amount, registrationOpen, distributionActive, distributionName,
-  testMode, testEmail }: {
-  id: string; amount: number; registrationOpen: boolean
+  testMode, testEmail, phased }: {
+  id: string; amount: number; registrationOpen: boolean; phased?: boolean
   distributionActive?: boolean; distributionName: string
   /** ⚠️ מצב בדיקה — משנה את נוסח האישור ואת יעד המייל בחלונית השובר. */
   testMode?: boolean; testEmail?: string | null
@@ -236,6 +300,7 @@ async function RegistrationsLoader({ id, amount, registrationOpen, distributionA
       distributionName={distributionName}
       testMode={testMode}
       testEmail={testEmail}
+      phased={phased}
     />
   )
 }

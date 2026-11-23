@@ -8,7 +8,7 @@ const { data, dist, cards } = vi.hoisted(() => ({
     pickupEverStarted: vi.fn(), centerOpening: vi.fn(), getCenter: vi.fn(), getSpokenCenter: vi.fn(),
     centerCapacities: vi.fn(), openCenters: vi.fn(), saveCenterChoice: vi.fn(), loadCard: vi.fn(), clearFailedCard: vi.fn(),
   },
-  dist: { getOpenDistribution: vi.fn(), registerToOpenDistribution: vi.fn(), testDistributionFor: vi.fn() },
+  dist: { getOpenDistribution: vi.fn(), registerToOpenDistribution: vi.fn(), testDistributionFor: vi.fn(), getLiveDistribution: vi.fn().mockResolvedValue(null) },
   cards: { linkHolidayCard: vi.fn() },
 }))
 vi.mock('./holidaysData', async (orig) => ({ ...(await orig<typeof import('./holidaysData')>()), ...data }))

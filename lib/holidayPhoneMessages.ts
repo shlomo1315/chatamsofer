@@ -534,6 +534,59 @@ export const HOLIDAY_MESSAGE_META: HolidayMsgMeta[] = [
     key: 'reg_goodbye', label: 'רישום בטלפון: סיום', allowAudio: true,
     defaultText: 'תודה ולהתראות',
   },
+  // ── הקו לפי שלב החלוקה ──
+  {
+    key: 'phase_menu', label: 'תפריט החלוקה (4 מקשים)', allowAudio: true,
+    defaultText: 'שלוחת חלוקת חנוכה. לרישום הקישו 1. לשמיעת הזכאות שלכם הקישו 2. לשמיעת המוקד שבחרתם הקישו 3. להודעות כלליות הקישו 4',
+  },
+  {
+    key: 'elig_registered_approved', label: 'זכאות: נרשמתם ואושרתם', allowAudio: false,
+    defaultText: '{name}, נרשמתם לחלוקה ואושרתם. תודה ולהתראות',
+  },
+  {
+    key: 'elig_registered_pending', label: 'זכאות: נרשמתם, ממתין לאישור', allowAudio: false,
+    defaultText: '{name}, נרשמתם לחלוקה והבקשה ממתינה לאישור. תודה ולהתראות',
+  },
+  {
+    key: 'elig_can_apply', label: 'זכאות: זכאים להגיש בקשה (בזמן הרישום)', allowAudio: false,
+    defaultText: '{name}, הנכם זכאים להגיש בקשה לחלוקה. להרשמה חייגו שוב לקו זה והקישו 1. תודה ולהתראות',
+  },
+  {
+    key: 'elig_registration_passed', label: 'זכאות: לא נרשמו וזמן הרישום חלף', allowAudio: false,
+    defaultText: '{name}, לא נמצא רישום על שמכם, וזמן הרישום לחלוקה חלף. תודה ולהתראות',
+  },
+  {
+    key: 'center_yours', label: 'שמיעת המוקד: פתיח', allowAudio: true,
+    defaultText: 'המוקד שבחרתם:',
+  },
+  {
+    key: 'center_update_later', label: 'שמיעת המוקד: מועד החלוקה טרם פורסם', allowAudio: true,
+    defaultText: 'עדכון מדויק מתי תתקיים חלוקת הכרטיסים במוקד יימסר בהמשך. תודה ולהתראות',
+  },
+  {
+    key: 'general_announcements', label: 'הודעות כלליות (מקש 4)', allowAudio: true,
+    defaultText: 'אין כרגע הודעות חדשות. תודה ולהתראות',
+  },
+  {
+    key: 'phase_not_open', label: 'שלב הכנה: הרישום טרם נפתח', allowAudio: true,
+    defaultText: 'הרישום לחלוקת חנוכה טרם נפתח. הודעה על פתיחת הרישום תפורסם בקו זה. תודה ולהתראות',
+  },
+  {
+    key: 'phase_closed_wait', label: 'הרישום נסגר — עדכון יישלח', allowAudio: true,
+    defaultText: 'הרישום לחלוקת חנוכה נסגר. עדכון על מועד פתיחת החלוקה יישלח אליכם. תודה ולהתראות',
+  },
+  {
+    key: 'phase_not_registered', label: 'החלוקה פתוחה: המשפחה לא נרשמה', allowAudio: true,
+    defaultText: 'לא נמצא רישום לחלוקה זו על שמכם. תודה ולהתראות',
+  },
+  {
+    key: 'phase_dist_details', label: 'החלוקה פתוחה: פרטי הזכאות', allowAudio: false,
+    defaultText: 'שלום {name}. הנכם זכאים למענק חנוכה בסך {amount} שקלים. פרטי המוקד שלכם:',
+  },
+  {
+    key: 'phase_card_prompt', label: 'החלוקה פתוחה: הצעה לשיוך כרטיס', allowAudio: true,
+    defaultText: 'לשיוך כרטיס החלוקה הקישו 1. לסיום הקישו 2',
+  },
 ]
 
 const META_BY_KEY = new Map(HOLIDAY_MESSAGE_META.map(m => [m.key, m]))

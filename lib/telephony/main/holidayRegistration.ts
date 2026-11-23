@@ -224,3 +224,62 @@ async function centerStep(
     }
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// מקש 2 — שמיעת הזכאות: ת"ז + תאריך לידה (כמו ברישום), ואז:
+//   נרשם ואושר → "נרשמתם ואושרתם" · נרשם וממתין → "ממתין לאישור"
+//   לא נרשם, הרישום פתוח → "זכאים להגיש בקשה, להרשמה הקישו 1" (או סיבת החסימה)
+//   לא נרשם, הרישום כבר לא פתוח → "זמן הרישום חלף"
+// ⚠️ משתנים e_* — נפרדים מהרישום (r_*), כדי שמעבר בין מסלולים לא ידלג על שאלה.
+// ─────────────────────────────────────────────────────────────────────────────
+export const ELIG_VARS = { id: ['e_id', 'e_id2', 'e_id3'], birth: ['e_bd', 'e_bd2', 'e_bd3'] } as const
+
+export async function phoneEligibility(
+  k: RegKit, distId: string, rules: DistRules, registrationOpen: boolean,
+): Promise<TlResult> {
+  const { callId } = k.ctx
+  const idStage = stage(k, ELIG_VARS.id, (name, lead) =>
+    askDigits(name, ID_DIGITS, [...lead, ...k.files('reg_ask_id')], { min: 1, maskLog: true, post: true }))
+  if ('reply' in idStage) return idStage.reply
+  if (idStage.value.length !== ID_DIGITS) return idStage.retry('id_invalid')
+  const ben = await findRegistrantById(idStage.value)
+  if (!ben) return idStage.retry('not_found')
+
+  const birthPrompt = asksParentBirth(ben) ? 'reg_ask_birth_married' : 'reg_ask_birth'
+  const bdStage = stage(k, ELIG_VARS.birth, (name, lead) =>
+    askDigits(name, 8, [...lead, ...k.files(birthPrompt)], { min: 1, maskLog: true, post: true }))
+  if ('reply' in bdStage) return bdStage.reply
+  if (checkRegistrantBirth(bdStage.value, idStage.value, ben) === 'mismatch') return bdStage.retry('reg_birth_mismatch')
+
+  const name = readableName(ben)
+  const rec = await getRecipient(distId, ben.id, 'id, approval_status')
+  console.log(`${LOG} callId=${callId} eligibility ben=${ben.id} registered=${!!rec} open=${registrationOpen}`)
+  if (rec) return k.end(rec.approval_status === 'approved' ? 'elig_registered_approved' : 'elig_registered_pending', { name })
+  if (!registrationOpen) return k.end('elig_registration_passed', { name })
+  if (!memberCanRegister(ben)) return k.end('not_eligible')
+  if (blockedByDeepReview(rules, ben.eligibility_status)) return k.end('reg_deep_review')
+  return k.end('elig_can_apply', { name })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// מקש 3 — שמיעת המוקד שנבחר: שם המוקד, ואם הימים והשעות פורסמו — גם הם;
+// אחרת "עדכון מדויק על מועד החלוקה במוקד יימסר בהמשך".
+// ─────────────────────────────────────────────────────────────────────────────
+export const CENTER_HEAR_VARS = ['h_id', 'h_id2', 'h_id3'] as const
+
+export async function phoneHearCenter(k: RegKit, distId: string, rules: DistRules): Promise<TlResult> {
+  const idStage = stage(k, CENTER_HEAR_VARS, (name, lead) =>
+    askDigits(name, ID_DIGITS, [...lead, ...k.files('reg_ask_id')], { min: 1, maskLog: true, post: true }))
+  if ('reply' in idStage) return idStage.reply
+  if (idStage.value.length !== ID_DIGITS) return idStage.retry('id_invalid')
+  const ben = await findRegistrantById(idStage.value)
+  if (!ben) return idStage.retry('not_found')
+  const rec = await getRecipient(distId, ben.id, 'id, center_id')
+  if (!rec) return k.end('phase_not_registered')
+  if (!rec.center_id) return k.end('center_none')
+  const c = await getSpokenCenter(rec.center_id)
+  const files: TlFile[] = rules.hoursPublished
+    ? [...k.files('center_yours'), ...say(spokenCenterDetails(c) || spokenCenterName(c))]
+    : [...k.files('center_yours'), ...say(spokenCenterName(c)), ...k.files('center_update_later')]
+  return [{ type: 'simpleMessage', files }, hangup()]
+}
