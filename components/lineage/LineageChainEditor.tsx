@@ -7,11 +7,11 @@
 // 🔴 הלוגיקה ב-lib/lineageChainEdit — אותה לוגיקה גם בשרת.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react'
-import { ArrowUp, ArrowDown, Trash2, Plus, Loader2, Check } from 'lucide-react'
+import { ArrowUp, ArrowDown, Trash2, Plus, Loader2, Check, PenLine, GitBranch, Search } from 'lucide-react'
 import Modal from '@/components/ui/Modal'
 import {
-  rowsFromChain, chainFromRows, updateRow, insertRow, removeRow, moveRow, emptyRows,
-  MAX_EDIT_GENERATIONS, MAX_GEN_NAME, type EditRow, type ChainStep, type RemoveMode,
+  rowsFromChain, chainFromRows, updateRow, insertRow, removeRow, moveRow, emptyRows, treeChildrenOf, rel,
+  MAX_EDIT_GENERATIONS, MAX_GEN_NAME, type EditRow, type ChainStep, type RemoveMode, type TreeNode,
 } from '@/lib/lineageChainEdit'
 
 export interface LineageChainEditorProps {
@@ -23,7 +23,14 @@ export interface LineageChainEditorProps {
   saveLabel?: string
   /** תווית לשורה האחרונה (למשל "זה אתם") */
   lastLabel?: string
+  /**
+   * טעינת צמתי העץ לדור gen (והדור שלפניו). כשקיים — "+" פותח בחירה בין דור
+   * ידני לבין דור קיים מאותו גזע. בלי — "+" מוסיף שורה ריקה (קישור ציבורי).
+   */
+  loadTreeNodes?: (gen: number) => Promise<TreeNode[]>
 }
+
+type AddState = { at: number; mode: 'manual' | 'tree'; name: string; relation: EditRow['relation']; nodes: TreeNode[] | null; loadError: string; q: string }
 
 function RelationToggle({ value, onChange, disabled }: { value: EditRow['relation']; onChange: (v: EditRow['relation']) => void; disabled?: boolean }) {
   const opt = (v: 'son' | 'son_in_law', label: string) => (
@@ -40,7 +47,23 @@ function RelationToggle({ value, onChange, disabled }: { value: EditRow['relatio
   )
 }
 
-export default function LineageChainEditor({ initialChain, onSave, onCancel, saving, error, saveLabel = 'שמירת סדר הדורות', lastLabel }: LineageChainEditorProps) {
+export default function LineageChainEditor({ initialChain, onSave, onCancel, saving, error, saveLabel = 'שמירת סדר הדורות', lastLabel, loadTreeNodes }: LineageChainEditorProps) {
+  const [add, setAdd] = useState<AddState | null>(null)
+  const patchAdd = (p: Partial<AddState>) => setAdd(a => (a ? { ...a, ...p } : a))
+
+  // "+" במקום at (אינדקס שורה). הדור החדש יהיה דור at+1, ואביו — השורה at-1.
+  const openAdd = (at: number) => {
+    if (!loadTreeNodes) { setRows(rs => insertRow(rs, at)); return }
+    setAdd({ at, mode: 'manual', name: '', relation: 'son', nodes: null, loadError: '', q: '' })
+    loadTreeNodes(at + 1)
+      .then(nodes => setAdd(a => (a && a.at === at ? { ...a, nodes } : a)))
+      .catch(() => setAdd(a => (a && a.at === at ? { ...a, nodes: [], loadError: 'לא ניתן לטעון את העץ כרגע' } : a)))
+  }
+  const commitAdd = (row: EditRow) => {
+    if (!add || !row.name.trim()) return
+    setRows(rs => insertRow(rs, add.at, row))
+    setAdd(null)
+  }
   const [rows, setRows] = useState<EditRow[]>(() => {
     const r = rowsFromChain(initialChain)
     return r.length > 1 ? r : insertRow(r, 1)
@@ -108,7 +131,8 @@ export default function LineageChainEditor({ initialChain, onSave, onCancel, sav
               {/* הוספת דור אחרי השורה הזו */}
               <div className="flex justify-start ps-12">
                 <button type="button" disabled={saving || full}
-                  onClick={() => setRows(rs => insertRow(rs, i + 1))}
+                  onClick={() => openAdd(i + 1)}
+                  aria-label={i === rows.length - 1 ? 'הוספת דור בסוף' : `הוספת דור בין דור ${i + 1} לדור ${i + 2}`}
                   className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-indigo-500 hover:bg-indigo-50 disabled:opacity-40">
                   <Plus size={12} /> {i === rows.length - 1 ? 'הוספת דור בסוף' : `הוספת דור כאן (בין דור ${i + 1} לדור ${i + 2})`}
                 </button>
@@ -169,6 +193,86 @@ export default function LineageChainEditor({ initialChain, onSave, onCancel, sav
           ))}
           <button type="button" onClick={() => setPendingDelete(null)} className="text-xs font-semibold text-slate-500 hover:underline">ביטול</button>
         </div>
+      </Modal>
+
+      <Modal open={add !== null} onClose={() => setAdd(null)} size="sm"
+        title={add ? `הוספת דור ${add.at + 1}${rows[add.at - 1]?.name ? ` — אחרי ${rows[add.at - 1].name}` : ''}` : ''}>
+        {add && (() => {
+          const prevName = rows[add.at - 1]?.name ?? ''
+          const kids = add.nodes ? treeChildrenOf(add.nodes, prevName, add.at + 1) : null
+          const q = add.q.trim()
+          const shown = kids?.filter(n => !q || n.name.includes(q)) ?? null
+          const tab = (m: AddState['mode'], label: string, Icon: typeof PenLine) => (
+            <button type="button" role="tab" aria-selected={add.mode === m} onClick={() => patchAdd({ mode: m })}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-bold transition-colors ${add.mode === m ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+              <Icon size={15} /> {label}
+            </button>
+          )
+          return (
+            <div dir="rtl" className="flex flex-col gap-3 text-sm">
+              <div role="tablist" className="flex gap-1 rounded-xl bg-slate-100 p-1">
+                {tab('manual', 'דור ידני', PenLine)}
+                {tab('tree', 'דור קיים מאותו גזע', GitBranch)}
+              </div>
+
+              {add.mode === 'manual' ? (
+                <form className="flex flex-col gap-3" onSubmit={e => { e.preventDefault(); commitAdd({ name: add.name, relation: add.relation }) }}>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs font-semibold text-slate-500">שם</span>
+                    <input autoFocus value={add.name} maxLength={MAX_GEN_NAME} aria-label="שם הדור החדש"
+                      onChange={e => patchAdd({ name: e.target.value })}
+                      className="rounded-lg border border-slate-300 px-2.5 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100" />
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-slate-500">{prevName ? `קשר ל${prevName}` : 'קשר'}</span>
+                    <RelationToggle value={add.relation} onChange={v => patchAdd({ relation: v })} />
+                  </div>
+                  <button type="submit" disabled={!add.name.trim()}
+                    className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-40">הוספה</button>
+                </form>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs text-slate-500">
+                    {add.at === 1 ? 'בני רבינו החתם סופר בעץ.' : `ילדי ${prevName || 'הדור הקודם'} בעץ (דור ${add.at + 1}).`}
+                  </p>
+                  {shown === null ? (
+                    <div className="flex items-center gap-2 py-4 text-slate-400"><Loader2 size={15} className="animate-spin" /> טוען מהעץ…</div>
+                  ) : add.loadError ? (
+                    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600">{add.loadError}</div>
+                  ) : !kids?.length ? (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-600">
+                      {prevName ? `ל${prevName} אין ילדים בעץ בדור ${add.at + 1}.` : 'הדור הקודם ריק — יש למלא אותו קודם.'} אפשר להוסיף דור ידני.
+                    </div>
+                  ) : (
+                    <>
+                      {kids.length > 6 && (
+                        <div className="relative">
+                          <Search size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input value={add.q} onChange={e => patchAdd({ q: e.target.value })} placeholder="חיפוש שם" aria-label="חיפוש בעץ"
+                            className="w-full rounded-lg border border-slate-300 py-2 pe-2.5 ps-8 text-sm focus:border-indigo-500 focus:outline-none" />
+                        </div>
+                      )}
+                      <ul className="flex max-h-72 flex-col gap-1 overflow-y-auto">
+                        {shown!.map(n => (
+                          <li key={n.id}>
+                            <button type="button" onClick={() => commitAdd({ name: n.name, relation: rel(n.relation) ?? 'son' })}
+                              className="flex w-full items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-right hover:border-indigo-400 hover:bg-indigo-50">
+                              <span className="font-semibold text-slate-800">{n.name}</span>
+                              <span className="shrink-0 text-[11px] text-slate-400">
+                                {rel(n.relation) === 'son_in_law' ? 'חתן' : 'בן'}{n.status === 'verified' ? ' · מאושר' : ''}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                        {!shown!.length && <li className="py-2 text-xs text-slate-400">אין תוצאות</li>}
+                      </ul>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })()}
       </Modal>
     </div>
   )

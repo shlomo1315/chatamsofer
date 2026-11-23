@@ -47,11 +47,36 @@ export function updateRow(rows: EditRow[], i: number, patch: Partial<EditRow>): 
   return rows.map((r, k) => (k === i ? { ...r, ...patch } : r))
 }
 
-/** הוספת דור ריק במקום at (הדורות מ-at ואילך יורדים דור). */
-export function insertRow(rows: EditRow[], at: number): EditRow[] {
+/** הוספת דור במקום at (הדורות מ-at ואילך יורדים דור). בלי row — שורה ריקה. */
+export function insertRow(rows: EditRow[], at: number, row?: EditRow): EditRow[] {
   if (rows.length >= MAX_EDIT_GENERATIONS) return rows
   const pos = Math.min(Math.max(at, 1), rows.length)
-  return [...rows.slice(0, pos), { name: '', relation: null }, ...rows.slice(pos)]
+  const add: EditRow = row ? { name: row.name.trim().slice(0, MAX_GEN_NAME), relation: rel(row.relation) } : { name: '', relation: null }
+  return [...rows.slice(0, pos), add, ...rows.slice(pos)]
+}
+
+export interface TreeNode { id: string; name: string; generation: number; parent_id: string | null; status?: string | null; relation?: string | null }
+
+export const normGenName = (s: string) => String(s ?? '').replace(/["'`׳״]/g, '').replace(/\s+/g, ' ').trim()
+
+/**
+ * "דור קיים מאותו גזע": הילדים בעץ (בדור gen) של הצמתים בדור הקודם ששמם
+ * כשם הדור הקודם בשרשרת. בדור 2 — כל צמתי הדור (כולם בני רבינו).
+ * צמתים שנדחו לא מוצעים, ושמות כפולים מוצגים פעם אחת.
+ */
+export function treeChildrenOf(nodes: TreeNode[], prevName: string, gen: number): TreeNode[] {
+  const live = nodes.filter(n => n.status !== 'rejected')
+  let kids = live.filter(n => n.generation === gen)
+  if (gen > 2) {
+    const want = normGenName(prevName)
+    if (!want) return []
+    const parents = new Set(live.filter(n => n.generation === gen - 1 && normGenName(n.name) === want).map(n => n.id))
+    kids = kids.filter(n => n.parent_id !== null && parents.has(n.parent_id))
+  }
+  const seen = new Set<string>()
+  return kids
+    .filter(n => { const k = normGenName(n.name); if (!k || seen.has(k)) return false; seen.add(k); return true })
+    .sort((a, b) => a.name.localeCompare(b.name, 'he'))
 }
 
 export type RemoveMode = 'shift' | 'keep'

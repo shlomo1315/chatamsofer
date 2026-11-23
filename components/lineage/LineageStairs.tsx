@@ -22,7 +22,8 @@ const VAR = { green: '--g', orange: '--o', red: '--r' } as const
 
 // framed: כותרת עם מונים בראש ומקרא צבעים בתחתית, כמו בכרטסת המלאה (בכרטסת הזוג).
 // ⚠️ המונים והמקרא של הצבעים מוצגים רק כשיש צבעים, כדי לא להציג סטטוס שלא חושב.
-export default function LineageStairs({ gens, framed }: { gens: StairGen[]; framed?: boolean }) {
+// action: כפתור בכותרת, בין הכותרת למונים (למשל "תיקון סדר הדורות").
+export default function LineageStairs({ gens, framed, action }: { gens: StairGen[]; framed?: boolean; action?: React.ReactNode }) {
   const counts = (['green', 'orange', 'red'] as const).map((c) => ({ c, n: gens.filter((g) => g.color === c).length })).filter((x) => x.n > 0)
   const list = (
       <ol className={s.tree}>
@@ -53,6 +54,7 @@ export default function LineageStairs({ gens, framed }: { gens: StairGen[]; fram
           <h2>סדר הדורות</h2>
           <p>כל דור מופיע מתחת לאביו.</p>
         </div>
+        {action}
         <div className={s.tally}>
           <span><b>{gens.length}</b> דורות</span>
           {counts.map(({ c, n }) => <span key={c} style={{ '--c': `var(${VAR[c]})` } as React.CSSProperties}><i /><b>{n}</b> {LABEL[c]}</span>)}
