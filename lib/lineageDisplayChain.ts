@@ -66,15 +66,26 @@ export function displayChain(
  * והטריגרים מסנכרנים את השרשרת רק למסלול בעץ. בלי הצירוף הזה דור 4 והלאה
  * שהוזנו ידנית נעלמו מהכרטסת. מצרפים אחרי הדור האחרון, ורק שמות שאינם כבר בשרשרת.
  */
+// 🔴 23.11 וייס חיה (347425142): השרשרת סונכרנה מהעץ בניסוח "ומרת", והרשימה הידנית
+// נשארה "והרבנית", ושלושה דורות הוצגו פעמיים. משווים לפי האדם: בלי תארים וגרשיים.
+// שם האשה נשאר במפתח, כדי שנכד על שם סבו (עם אשה אחרת) לא ייבלע.
+const TITLES = new Set(['רבי', 'הרב', "ר'", 'ר', 'מרן', 'מרת', 'ומרת', 'הרבנית', 'והרבנית', 'זי"ע', 'זצ"ל', 'ז"ל'])
+function personKey(name: string): string {
+  return name.replace(/[״]/g, '"').replace(/[׳]/g, "'").split(/[\s,]+/)
+    .filter(w => w && !TITLES.has(w))
+    .map(w => w.replace(/["'()]/g, ''))
+    .join(' ')
+}
+
 function withManual(base: ChainEntry[], manual: readonly string[] | null | undefined): ChainEntry[] {
   if (!Array.isArray(manual) || !manual.length) return base
-  const seen = new Set(base.map(e => e.name))
+  const seen = new Set(base.map(e => personKey(e.name)))
   const out = [...base]
   let gen = base.length ? Math.max(...base.map(e => e.generation)) : 0
   for (const raw of manual) {
     const name = typeof raw === 'string' ? raw.trim() : ''
-    if (!name || seen.has(name)) continue
-    seen.add(name)
+    if (!name || seen.has(personKey(name))) continue
+    seen.add(personKey(name))
     out.push({ generation: ++gen, name, relation: null })
   }
   return out
