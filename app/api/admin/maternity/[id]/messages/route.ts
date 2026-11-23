@@ -60,6 +60,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     body?.extra === 'lineage' ? 'lineage' : 'none',
   )
 
-  if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 })
-  return NextResponse.json({ ok: true, linkAttached: res.linkAttached })
+  // ⚠️ כל דחייה נרשמת ביומן: עד כה בירור שנעצר בבדיקה (בלי מייל, בלי
+  // שיוך לעץ) לא השאיר שום עקבה, ולשאלה "למה לא הגיע?" לא הייתה תשובה.
+  if (!res.ok) {
+    console.warn(`[maternityInquiry] בירור לא נשלח (aid=${id}, user=${staff.userId}): ${res.error}`)
+    return NextResponse.json({ error: res.error }, { status: 400 })
+  }
+  return NextResponse.json({ ok: true, linkAttached: res.linkAttached, warning: res.warning })
 }

@@ -73,10 +73,9 @@ export async function sendMaternityInquiry(
   body: string,
   sender: { id: string; name: string },
   extra: InquiryExtra = 'none',
-): Promise<{ ok: true; linkAttached: boolean } | { ok: false; error: string }> {
+): Promise<{ ok: true; linkAttached: boolean; warning?: string } | { ok: false; error: string }> {
   const text = body.trim()
   if (!text) return { ok: false, error: 'ההודעה ריקה' }
-  if (extra === 'none' && mentionsLineageOrder(text)) extra = 'lineage'
 
   const { data: aid } = await db
     .from('maternity_aids')
@@ -90,6 +89,12 @@ export async function sendMaternityInquiry(
   const ben = Array.isArray(a.beneficiary) ? a.beneficiary[0] : a.beneficiary
   const email = (ben?.email ?? '').trim()
   if (!email) return { ok: false, error: 'למשפחה אין כתובת מייל רשומה' }
+
+  // 🔴 23.11: הודעה שמזכירה "דורות" שודרגה תמיד לקישור, ומשפחה בלי שיוך
+  // לעץ (למשל עם אב ידני) נחסמה — כל בירור על דורות לא יצא מעולם, והמזכירה
+  // ראתה רק הודעה קופצת שנעלמה (וייס חיה). השדרוג האוטומטי רק כשיש צומת;
+  // בקשה מפורשת לקישור בלי צומת עדיין נעצרת למטה.
+  if (extra === 'none' && ben?.lineage_node_id && mentionsLineageOrder(text)) extra = 'lineage'
 
   // reply-to ייחודי — כך שהתשובה תזוהה בוודאות לתיק הזה
   const token = await getOrCreateReplyToken(db, 'm', aidId, 'maternity_aids')
@@ -237,9 +242,14 @@ export async function sendMaternityInquiry(
     ...thread,
   })
 
-  if (!sent.ok) return { ok: false, error: 'שליחת המייל נכשלה' }
+  if (!sent.ok) {
+    console.error(`[maternityInquiry] שליחת הבירור נכשלה (aid=${aidId}):`, sent.error)
+    return { ok: false, error: `שליחת המייל נכשלה${sent.error ? ` (${sent.error})` : ''} — הבירור לא נשלח. נסו שוב.` }
+  }
 
-  await db.from('maternity_messages').insert({
+  // ⚠️ המייל כבר יצא — כשל ברישום לא הופך את השליחה לכישלון, אבל בלי
+  // הרישום השרשור נראה ריק ("טרם נשלחה"), ולכן מדווחים ולא בולעים.
+  const { error: insErr } = await db.from('maternity_messages').insert({
     aid_id: aidId,
     direction: 'staff',
     body: text,
@@ -247,6 +257,14 @@ export async function sendMaternityInquiry(
     sender_name: sender.name,
     is_read: true,   // הודעה שלנו — אין מה לסמן כנקראה
   })
+  if (insErr) {
+    console.error(`[maternityInquiry] המייל נשלח אך הרישום בשרשור נכשל (aid=${aidId}):`, insErr.message)
+    return {
+      ok: true,
+      linkAttached: lineageBlock !== '',
+      warning: 'המייל נשלח ליולדת, אבל שמירת ההודעה בשרשור נכשלה ולכן היא לא תופיע כאן.',
+    }
+  }
 
   return { ok: true, linkAttached: lineageBlock !== '' }
 }
