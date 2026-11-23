@@ -44,23 +44,35 @@ export const DEFAULT_GATES: DepartmentGates = {
 }
 
 export type DepartmentOpenings = Partial<Record<GatedDepartment, string>>
+export type DepartmentMessages = Partial<Record<GatedDepartment, string>>
 
 // פענוח הערך השמור. פורמט תואם לאחור: מחלקה מחזיקה 'open'/'closed' (או boolean),
 // ובנוסף מפתח אופציונלי opens_at: { gemach: '2026-11-10T08:00:00.000Z' } —
 // מחלקה סגורה שנפתחת לבד כשהתאריך עבר. אין צורך ב-cron: הפתיחה מחושבת בקריאה.
+//
+// ⚠️ closed_messages: { gemach: 'לעת עתה אין אפשרות…' } — הודעת סגירה למחלקה.
+// מחלקה סגורה *עם* הודעה היא "הקפאה זמנית": היא ממשיכה להופיע באזור האישי,
+// ולחיצה עליה מציגה את ההודעה (כמו "הרישום סגור" בחגים). מחלקה סגורה *בלי*
+// הודעה נשארת מוסתרת כמו קודם — מחלקה שטרם עלתה לא מוזכרת בשום מקום.
+// ההודעה מחליפה את נוסח ברירת המחדל בכל הערוצים: API, מייל וקישורי הטיוטה.
 export function resolveGates(raw: string | null | undefined, now: Date = new Date()): {
   gates: DepartmentGates
   opensAt: DepartmentOpenings // רק תאריכים עתידיים של מחלקות שעדיין סגורות
   scheduled: DepartmentOpenings // כל התאריכים השמורים, לעריכה בממשק
+  messages: DepartmentMessages // הודעות הסגירה השמורות (גם של מחלקה פתוחה, לעריכה)
 } {
   const gates: DepartmentGates = { ...DEFAULT_GATES }
   const opensAt: DepartmentOpenings = {}
   const scheduled: DepartmentOpenings = {}
-  if (!raw) return { gates, opensAt, scheduled }
+  const messages: DepartmentMessages = {}
+  if (!raw) return { gates, opensAt, scheduled, messages }
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>
     const openings = (parsed.opens_at && typeof parsed.opens_at === 'object' ? parsed.opens_at : {}) as Record<string, unknown>
+    const texts = (parsed.closed_messages && typeof parsed.closed_messages === 'object' ? parsed.closed_messages : {}) as Record<string, unknown>
     for (const d of GATED_DEPARTMENTS) {
+      const msg = texts[d]
+      if (typeof msg === 'string' && msg.trim()) messages[d] = msg.trim()
       // תמיכה בשני הפורמטים: boolean או 'open'/'closed'
       const v = parsed[d]
       if (v === true || v === 'open') gates[d] = true
@@ -75,8 +87,21 @@ export function resolveGates(raw: string | null | undefined, now: Date = new Dat
       }
     }
   } catch { /* value אינו JSON — ברירת מחדל */ }
-  return { gates, opensAt, scheduled }
+  return { gates, opensAt, scheduled, messages }
 }
+
+// הודעות הסגירה שמוצגות לציבור: רק של מחלקות סגורות כרגע.
+export function activeClosedMessages(gates: DepartmentGates, messages: DepartmentMessages): DepartmentMessages {
+  return Object.fromEntries(GATED_DEPARTMENTS.filter(d => !gates[d] && messages[d]).map(d => [d, messages[d]]))
+}
+
+export async function getClosedMessages(admin?: SupabaseClient): Promise<DepartmentMessages> {
+  const { gates, messages } = resolveGates(await readGatesRaw(admin))
+  return activeClosedMessages(gates, messages)
+}
+
+// הערך השמור הגולמי — למי שצריך גם את השערים וגם את ההודעות בקריאה אחת.
+export const getDepartmentGatesRaw = (admin?: SupabaseClient) => readGatesRaw(admin)
 
 async function readGatesRaw(admin?: SupabaseClient): Promise<string | null> {
   const client = admin ?? getServiceClient()
@@ -104,36 +129,45 @@ export async function isDepartmentOpen(dept: GatedDepartment, admin?: SupabaseCl
 
 // שמירת מצב כל המחלקות (upsert).
 export async function saveDepartmentGates(
-  admin: SupabaseClient, gates: DepartmentGates, openings: DepartmentOpenings = {},
+  admin: SupabaseClient, gates: DepartmentGates, openings: DepartmentOpenings = {}, messages: DepartmentMessages = {},
 ): Promise<boolean> {
-  // נשמר כ-'open'/'closed' לקריאוּת בבסיס הנתונים. opens_at רק למחלקות עם תאריך.
-  const obj: Record<string, unknown> = Object.fromEntries(GATED_DEPARTMENTS.map(d => [d, gates[d] ? 'open' : 'closed']))
-  const opens = Object.fromEntries(GATED_DEPARTMENTS.filter(d => openings[d]).map(d => [d, openings[d]]))
-  if (Object.keys(opens).length) obj.opens_at = opens
   const { error } = await admin.from('app_settings').upsert(
-    { key: GATES_KEY, value: JSON.stringify(obj), updated_at: new Date().toISOString() },
+    { key: GATES_KEY, value: serializeGates(gates, openings, messages), updated_at: new Date().toISOString() },
     { onConflict: 'key' },
   )
   return !error
 }
 
+// הערך השמור. נשמר כ-'open'/'closed' לקריאוּת בבסיס הנתונים; opens_at ו-closed_messages
+// רק למחלקות שיש להן ערך.
+export function serializeGates(gates: DepartmentGates, openings: DepartmentOpenings = {}, messages: DepartmentMessages = {}): string {
+  const obj: Record<string, unknown> = Object.fromEntries(GATED_DEPARTMENTS.map(d => [d, gates[d] ? 'open' : 'closed']))
+  const opens = Object.fromEntries(GATED_DEPARTMENTS.filter(d => openings[d]).map(d => [d, openings[d]]))
+  if (Object.keys(opens).length) obj.opens_at = opens
+  const texts = Object.fromEntries(GATED_DEPARTMENTS.filter(d => messages[d]?.trim()).map(d => [d, messages[d]!.trim()]))
+  if (Object.keys(texts).length) obj.closed_messages = texts
+  return JSON.stringify(obj)
+}
+
 // הודעת "מחלקה סגורה" אחידה — לשימוש ב-API של הבקשות ובטופס.
-// עם opensAt (ISO) מוצג גם מתי המחלקה נפתחת.
-export function departmentClosedMessage(dept: GatedDepartment, opensAt?: string | null): string {
-  const base = `הגשת בקשות ל${DEPARTMENT_LABELS[dept]} אינה זמינה כעת במערכת.`
+// עם opensAt (ISO) מוצג גם מתי המחלקה נפתחת. custom — הודעת הסגירה השמורה
+// בהגדרות, שמחליפה את נוסח ברירת המחדל.
+export function departmentClosedMessage(dept: GatedDepartment, opensAt?: string | null, custom?: string | null): string {
+  const text = custom?.trim()
+  const base = text || `הגשת בקשות ל${DEPARTMENT_LABELS[dept]} אינה זמינה כעת במערכת.`
   if (opensAt && !Number.isNaN(Date.parse(opensAt))) {
     const when = new Date(opensAt).toLocaleString('he-IL', {
       timeZone: 'Asia/Jerusalem', day: 'numeric', month: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit',
     })
-    return `${base} המחלקה תיפתח אוטומטית ב-${when}. לפרטים ניתן לפנות למזכירות.`
+    return `${base} המחלקה תיפתח אוטומטית ב-${when}.${text ? '' : ' לפרטים ניתן לפנות למזכירות.'}`
   }
-  return `${base} לפרטים ניתן לפנות למזכירות.`
+  return text ? base : `${base} לפרטים ניתן לפנות למזכירות.`
 }
 
-// הודעת סגירה עם תאריך הפתיחה המתוכנן של המחלקה (אם יש).
+// הודעת סגירה: ההודעה השמורה (אם יש) ותאריך הפתיחה המתוכנן (אם יש).
 export async function closedMessageFor(dept: GatedDepartment, admin?: SupabaseClient): Promise<string> {
-  const { opensAt } = await getDepartmentOpenings(admin)
-  return departmentClosedMessage(dept, opensAt[dept])
+  const { opensAt, messages } = resolveGates(await readGatesRaw(admin))
+  return departmentClosedMessage(dept, opensAt[dept], messages[dept])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

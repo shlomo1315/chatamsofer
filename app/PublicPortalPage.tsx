@@ -1362,6 +1362,11 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // לפני שידוע מצב המחלקה — אחרת קישור לגיטימי למחלקה פתוחה היה מפוספס בזמן
   // שברירת המחדל עדיין סגורה.
   const [gatesLoaded, setGatesLoaded] = useState(false)
+  // ⚠️ "הקפאה זמנית": מחלקה סגורה שנקבעה לה הודעת סגירה בהגדרות ממשיכה להופיע
+  // באזור האישי, ולחיצה עליה פותחת חלונית עם ההודעה (כמו "הרישום סגור" בחגים).
+  // מחלקה סגורה בלי הודעה — מוסתרת כמו קודם.
+  const [closedMessages, setClosedMessages] = useState<Record<string, string>>({})
+  const [deptClosedNotice, setDeptClosedNotice] = useState<{ title: string; text: string } | null>(null)
   // ⚠️ קוד תצוגה מוקדמת (?preview=) — נשלח לשרת, והוא מחזיר את השערים כאילו
   // המחלקות פתוחות. כך אפשר לעבור על הזרימה של מחלקה סגורה מקצה לקצה לפני
   // הפתיחה לציבור, בלי לפתוח אותה לכל מי שנכנס לאתר באותן דקות.
@@ -1381,7 +1386,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     if (code && scope) qs.set('only', scope)
     const url = qs.size ? `/api/portal/department-gates?${qs}` : '/api/portal/department-gates'
     fetch(url).then(r => r.json())
-      .then(d => { if (d.gates) setDeptGates(d.gates) })
+      .then(d => {
+        if (d.gates) setDeptGates(d.gates)
+        if (d.closedMessages) setClosedMessages(d.closedMessages)
+      })
       .catch(() => {})
       .finally(() => setGatesLoaded(true))
   }, [])
@@ -3198,7 +3206,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   }
 
   const goToLoanForm = () => {
-    if (!gateAllows('gemach', 'גמ"ח ההלוואות')) return
+    if (!gateAllows('gemach', 'גמ"ח ההלוואות')) {
+      if (closedMessages.gemach) setDeptClosedNotice({ title: 'בקשות הלוואה', text: closedMessages.gemach })
+      return
+    }
     if (isDocsPending) { setDocsGateModal(true); return }
     // ⚠️ לפני הטופס ולא אחריו: הבקשה הפתוחה חוסמת ממילא בשרת, ואין טעם
     // לתת למשפחה למלא סכום, תשלומים ומסמכים כדי לקבל דחייה בסוף.
@@ -3309,7 +3320,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     else if (a === 'loan') {
       if (!openLoanLoaded) { /* opened=false — ה-effect ינסה שוב כשהתשובה תגיע */ }
       else if (openLoanNotice) setOpenLoanModal(true)
-      else if (decision.open === 'loan-intro') goToLoanForm()
+      else if (decision.open === 'loan-intro' || (gatesLoaded && !deptGates.gemach && closedMessages.gemach)) goToLoanForm()
     }
     else if (a === 'aid') { if (decision.open === 'aid-modal') goToAidForm() }
     else if (a === 'docs') { setError(''); setDocsPendingReason(null); setStep('docs-needed') }
@@ -5566,7 +5577,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               contacts={PORTAL_CONTACTS}
               openDepartments={[
                 ...(gateAllows('maternity') && canRequestBirth ? ['maternity' as const] : []),
-                ...(gateAllows('gemach') ? ['gemach' as const] : []),
+                ...(gateAllows('gemach') || closedMessages.gemach ? ['gemach' as const] : []),
                 ...(gateAllows('financial_aid') ? ['financial_aid' as const] : []),
                 ...(holiday?.open && !holiday.registered && !holiday.phoneOnly ? ['holidays' as const] : []),
               ]}
@@ -6835,6 +6846,24 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               <button type="button" onClick={() => setCenterDone(null)}
                 className="mt-5 w-full rounded-2xl bg-gradient-to-b from-teal-500 to-teal-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition-all hover:from-teal-600 hover:to-teal-700 active:scale-[0.98]">
                 הבנתי, תודה
+              </button>
+            </div>
+          </div>
+        )}
+
+        {deptClosedNotice && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" dir="rtl"
+            onClick={() => setDeptClosedNotice(null)}>
+            <div className="w-full max-w-md rounded-3xl bg-white p-7 shadow-2xl text-center" role="dialog" aria-modal="true"
+              onClick={e => e.stopPropagation()}>
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
+                <Landmark size={32} className="text-slate-400" />
+              </div>
+              <h2 className="text-xl font-extrabold text-slate-900 mb-3">{deptClosedNotice.title}</h2>
+              <p className="text-[15px] leading-relaxed text-slate-600 mb-6 whitespace-pre-line">{deptClosedNotice.text}</p>
+              <button onClick={() => setDeptClosedNotice(null)}
+                className="w-full rounded-2xl bg-slate-900 py-3 text-sm font-bold text-white hover:bg-slate-800">
+                סגירה
               </button>
             </div>
           </div>

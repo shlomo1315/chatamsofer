@@ -1,5 +1,5 @@
 'use client'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowRight, Search, Loader2, Check, AlertTriangle, X, CreditCard, Upload, FileText } from 'lucide-react'
@@ -53,6 +53,17 @@ export default function NewLoanPage() {
   const [files, setFiles] = useState<File[]>([])
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
+  // ⚠️ גמ"ח סגור בהגדרות → גם המזכירות לא פותחת בקשה חדשה מכאן.
+  // החסימה כאן בממשק בלבד: הדף כותב ישירות למסד דרך הלקוח של הצוות.
+  const [gemachClosed, setGemachClosed] = useState<string | null>(null)
+  useEffect(() => {
+    fetch('/api/admin/department-gates').then(r => r.json())
+      .then(d => {
+        if (d.gates && d.gates.gemach === false) {
+          setGemachClosed(d.closedMessages?.gemach || 'גמ"ח הלוואות סגור כרגע בהגדרות — לא ניתן לפתוח בקשה חדשה.')
+        }
+      }).catch(() => {})
+  }, [])
   const [saveError, setSaveError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
@@ -123,6 +134,7 @@ export default function NewLoanPage() {
 
   const handleSubmit = async () => {
     if (!beneficiary) return
+    if (gemachClosed) { setSaveError(gemachClosed); return }
     const errs = validate()
     setFieldErrors(errs)
     if (Object.keys(errs).length > 0) { setSaveError('יש למלא את כל השדות המסומנים'); return }
@@ -173,6 +185,17 @@ export default function NewLoanPage() {
           <p className="text-sm text-slate-500">מילוי פרטי בקשת הלוואה</p>
         </div>
       </div>
+
+      {gemachClosed && (
+        <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <AlertTriangle size={18} className="mt-0.5 flex-shrink-0 text-amber-600" />
+          <div>
+            <p className="font-bold">הגשת בקשות הלוואה חדשות סגורה</p>
+            <p className="mt-0.5">{gemachClosed}</p>
+            <p className="mt-1 text-xs text-amber-700">פתיחה מחדש: הגדרות ← הגדרות בקשות ← גמ&quot;ח הלוואות.</p>
+          </div>
+        </div>
+      )}
 
       {/* ── Step 1: Beneficiary lookup ── */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-4">

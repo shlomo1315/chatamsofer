@@ -4,7 +4,7 @@ const deliverMail = vi.fn().mockResolvedValue(undefined)
 vi.mock('./sendMail', () => ({ deliverMail: (...a: unknown[]) => deliverMail(...a) }))
 vi.mock('./departmentGates', () => ({
   isDepartmentOpen: async () => true,
-  departmentClosedMessage: () => '',
+  closedMessageFor: async () => '',
 }))
 
 import { handleEmailRequest } from './emailRequestIntake'

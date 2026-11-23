@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, requireAdmin, forbidden, getServiceClient } from '@/lib/apiAuth'
-import { getDepartmentGates, getDepartmentOpenings, resolveGates, saveDepartmentGates, getDepartmentPreviewCode, regenerateDepartmentPreviewCode, GATED_DEPARTMENTS, DEFAULT_GATES, type DepartmentGates, type DepartmentOpenings } from '@/lib/departmentGates'
+import { getDepartmentGates, getDepartmentGatesRaw, resolveGates, saveDepartmentGates, serializeGates, getDepartmentPreviewCode, regenerateDepartmentPreviewCode, GATED_DEPARTMENTS, DEFAULT_GATES, type DepartmentGates, type DepartmentOpenings, type DepartmentMessages } from '@/lib/departmentGates'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,8 +14,8 @@ export async function GET() {
   const previewCode = (await requireAdmin())
     ? await getDepartmentPreviewCode(admin ?? undefined)
     : undefined
-  const { scheduled } = await getDepartmentOpenings(admin ?? undefined)
-  return NextResponse.json({ gates, opensAt: scheduled, previewCode },{ headers: { 'Cache-Control': 'no-store' } })
+  const { scheduled, messages } = resolveGates(await getDepartmentGatesRaw(admin ?? undefined))
+  return NextResponse.json({ gates, opensAt: scheduled, closedMessages: messages, previewCode },{ headers: { 'Cache-Control': 'no-store' } })
 }
 
 // PUT — יצירת קוד תצוגה מוקדמת חדש (מבטל מיידית כל קישור שהופץ). מנהל בלבד.
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
   const admin = getServiceClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  let body: { gates?: Record<string, unknown>; opens_at?: Record<string, unknown> }
+  let body: { gates?: Record<string, unknown>; opens_at?: Record<string, unknown>; closed_messages?: Record<string, unknown> }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
 
   // מיזוג עם הקיים — מעדכן רק מחלקות שנשלחו, שאר הערכים נשמרים.
@@ -60,9 +60,20 @@ export async function POST(request: NextRequest) {
     if (next[d]) delete openings[d]
   }
 
-  if (!(await saveDepartmentGates(admin, next, openings))) {
+  // הודעת סגירה: מחרוזת = קביעה, null או ריק = ביטול (חזרה לנוסח ברירת המחדל)
+  const messages: DepartmentMessages = { ...stored.messages }
+  for (const d of GATED_DEPARTMENTS) {
+    const m = body.closed_messages?.[d]
+    if (m === null || (typeof m === 'string' && !m.trim())) delete messages[d]
+    else if (typeof m === 'string') {
+      if (m.length > 500) return NextResponse.json({ error: 'הודעת הסגירה ארוכה מדי' }, { status: 400 })
+      messages[d] = m.trim()
+    }
+  }
+
+  if (!(await saveDepartmentGates(admin, next, openings, messages))) {
     return NextResponse.json({ error: 'שגיאה בשמירה' }, { status: 500 })
   }
-  const resolved = resolveGates(JSON.stringify({ ...Object.fromEntries(GATED_DEPARTMENTS.map(d => [d, next[d] ? 'open' : 'closed'])), opens_at: openings }))
-  return NextResponse.json({ ok: true, gates: resolved.gates, opensAt: resolved.scheduled })
+  const resolved = resolveGates(serializeGates(next, openings, messages))
+  return NextResponse.json({ ok: true, gates: resolved.gates, opensAt: resolved.scheduled, closedMessages: resolved.messages })
 }

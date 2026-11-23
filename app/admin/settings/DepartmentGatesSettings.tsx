@@ -19,6 +19,9 @@ export default function DepartmentGatesSettings() {
   // פתיחה אוטומטית: תאריך שמור (ISO) לכל מחלקה, והערך שבשדה העריכה (שעון מקומי)
   const [opensAt, setOpensAt] = useState<Record<string, string>>({})
   const [draft, setDraft] = useState<Record<string, string>>({})
+  // הודעת סגירה: השמורה לכל מחלקה, והטקסט שבשדה העריכה
+  const [messages, setMessages] = useState<Record<string, string>>({})
+  const [msgDraft, setMsgDraft] = useState<Record<string, string>>({})
   // קוד התצוגה המוקדמת — מנהל בלבד (השרת לא מחזיר אותו לאיש צוות רגיל)
   const [previewCode, setPreviewCode] = useState('')
   const [copied, setCopied] = useState(false)
@@ -29,6 +32,7 @@ export default function DepartmentGatesSettings() {
       .then(d => {
         if (d.gates) setGates(d.gates)
         if (d.opensAt) setOpensAt(d.opensAt)
+        if (d.closedMessages) setMessages(d.closedMessages)
         if (typeof d.previewCode === 'string') setPreviewCode(d.previewCode)
       }).catch(() => {})
   }, [])
@@ -65,6 +69,22 @@ export default function DepartmentGatesSettings() {
         if (d.gates) setGates(d.gates)
         setOpensAt(d.opensAt ?? {})
         setDraft(prev => { const n = { ...prev }; delete n[dept]; return n })
+      }
+    } catch { /* שקט */ }
+    setSaving(null)
+  }
+
+  const saveMessage = async (dept: string, value: string | null) => {
+    setSaving(dept)
+    try {
+      const r = await fetch('/api/admin/department-gates', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ closed_messages: { [dept]: value?.trim() || null } }),
+      })
+      const d = await r.json()
+      if (r.ok) {
+        setMessages(d.closedMessages ?? {})
+        setMsgDraft(prev => { const n = { ...prev }; delete n[dept]; return n })
       }
     } catch { /* שקט */ }
     setSaving(null)
@@ -149,6 +169,34 @@ export default function DepartmentGatesSettings() {
                     <button onClick={() => saveOpening(key, null)} disabled={saving === key}
                       className="rounded-lg border border-slate-200 px-3 py-1 text-slate-600 hover:bg-slate-50">ביטול</button>
                   )}
+                </div>
+              )}
+              {!open && (
+                <div className="px-3 pb-3 text-xs text-slate-600">
+                  <label htmlFor={`msg-${key}`} className="block mb-1">הודעת סגירה לציבור (רשות):</label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      id={`msg-${key}`} type="text" maxLength={500}
+                      value={msgDraft[key] ?? messages[key] ?? ''}
+                      onChange={e => setMsgDraft(prev => ({ ...prev, [key]: e.target.value }))}
+                      placeholder="לדוגמה: לעת עתה אין אפשרות להגיש בקשות חדשות"
+                      className="flex-1 min-w-[220px] rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs"
+                    />
+                    <button
+                      onClick={() => saveMessage(key, msgDraft[key] ?? messages[key] ?? '')}
+                      disabled={msgDraft[key] === undefined || saving === key}
+                      className="rounded-lg bg-emerald-600 px-3 py-1 font-bold text-white hover:bg-emerald-700 disabled:opacity-40"
+                    >שמירה</button>
+                    {messages[key] && (
+                      <button onClick={() => saveMessage(key, null)} disabled={saving === key}
+                        className="rounded-lg border border-slate-200 px-3 py-1 text-slate-600 hover:bg-slate-50">הסרה</button>
+                    )}
+                  </div>
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    {messages[key]
+                      ? 'המחלקה מוצגת לציבור, ולחיצה עליה מציגה את ההודעה. אותה הודעה נשלחת גם למי שמגיש במייל.'
+                      : 'בלי הודעה — המחלקה מוסתרת מהציבור לגמרי.'}
+                  </p>
                 </div>
               )}
               </div>

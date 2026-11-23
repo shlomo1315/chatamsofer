@@ -1,7 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { getServiceClient } from '@/lib/apiAuth'
 import { SUBJECT_PREFIX, MAILBOX_REQUEST_TYPE, IGUD_MAILBOX, buildDraftBodyCompact, type ReqType } from '@/lib/emailRequestForms'
-import { loadCtx } from '@/lib/emailRequestIntake'
+import { loadCtx, REQ_TO_DEPT } from '@/lib/emailRequestIntake'
+import { isDepartmentOpen, closedMessageFor, DEPARTMENT_LABELS } from '@/lib/departmentGates'
+
+const escapeHtml = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
 import { gmailComposeLink, GMAIL_URL_SAFE_LIMIT } from "@/lib/draftLink"
 
 /**
@@ -38,6 +42,11 @@ export async function GET(request: NextRequest) {
 
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
+
+  if (sp.get('raw') !== '1') {
+    const closed = await closedPage(type, db)
+    if (closed) return closed
+  }
 
   // ⚠️ ת"ז אינה ידועה כאן — המשפחה מקלידה אותה בשורת הנושא.
   const ctx = await loadCtx(db, type, true)
@@ -87,4 +96,23 @@ export async function GET(request: NextRequest) {
   }
 
   return NextResponse.redirect(url)
+}
+
+// ⚠️ מחלקה סגורה: מי שלחץ על הכפתור במייל מקבל דף עם הודעת הסגירה במקום
+// טיוטה. raw=1 (מסך העריכה באדמין) לא נחסם — הכפתור נשמר ויעבוד כשהמחלקה
+// תיפתח, וגם טיוטה שתישלח בכל זאת נחסמת בקליטת המייל (emailRequestIntake).
+async function closedPage(type: ReqType, db: SupabaseClient): Promise<NextResponse | null> {
+  const dept = REQ_TO_DEPT[type]
+  if (dept && !(await isDepartmentOpen(dept, db))) {
+    const msg = escapeHtml(await closedMessageFor(dept, db))
+    return new NextResponse(
+      `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(DEPARTMENT_LABELS[dept])}</title></head>`
+      + `<body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f1f5f9;font-family:Heebo,Arial,sans-serif">`
+      + `<div style="max-width:420px;margin:16px;padding:28px;background:#fff;border-radius:24px;box-shadow:0 10px 30px rgba(15,23,42,.12);text-align:center">`
+      + `<h1 style="margin:0 0 12px;font-size:20px;color:#0f172a">${escapeHtml(DEPARTMENT_LABELS[dept])}</h1>`
+      + `<p style="margin:0;font-size:16px;line-height:1.7;color:#334155">${msg}</p></div></body></html>`,
+      { status: 403, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } },
+    )
+  }
+  return null
 }

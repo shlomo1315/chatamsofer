@@ -42,18 +42,21 @@ import {
   detectReqType, detectReqTypeForMailbox, SUBJECT_PREFIX, attachmentsFor, parseDraft, validateRequest, looksLikeSubmittedDraft,
   draftMailto, IGUD_MAILBOX, type ReqType,
 } from './emailRequestForms'
-import { isDepartmentOpen, departmentClosedMessage, type GatedDepartment } from './departmentGates'
+import { isDepartmentOpen, closedMessageFor, type GatedDepartment } from './departmentGates'
 import { findOpenLoan, openLoanEmailReason } from './openLoanGuard'
 import { mergeTwinAttachments } from './twinAttachments'
 
 // מיפוי סוג בקשה → מחלקה (שער), כדי לדעת אם המחלקה פתוחה כרגע.
 // משמש גם את חסימת הקליטה (מחלקה סגורה) וגם את בניית קישורי הטיוטה.
-const REQ_TO_DEPT: Partial<Record<ReqType, GatedDepartment>> = {
+export const REQ_TO_DEPT: Partial<Record<ReqType, GatedDepartment>> = {
   birth: 'maternity', silent_birth: 'maternity',
   loan: 'gemach', financial_aid: 'financial_aid', widow: 'widows',
 }
 
-type InAttachment = { filename: string; url?: string; mimeType?: string }
+// הודעת הסגירה נכתבת בהגדרות כטקסט חופשי — מנוקה לפני הכנסה ל-HTML של המייל.
+const escapeClosed = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
+
+type InAttachment ={ filename: string; url?: string; mimeType?: string }
 type Msg = { fromEmail: string; subject: string; body: string; attachments: InAttachment[] }
 
 const RH_DEFAULT = ['אם וילד', 'טלזסטון', 'ביכורים']
@@ -331,7 +334,7 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
     console.log(`[emailRequestIntake] ${type} blocked — ${gateDept} department closed (from=${from})`)
     await deliverMail(
       from, 'לגבי פנייתכם',
-      `<div dir="rtl" style="font-family:Heebo,Arial,sans-serif;font-size:15px;color:#334155;line-height:1.7">שלום רב,<br/><br/>${departmentClosedMessage(gateDept)}<br/><br/>בברכה,<br/>מזכירות היכל החתם סופר</div>`,
+      `<div dir="rtl" style="font-family:Heebo,Arial,sans-serif;font-size:15px;color:#334155;line-height:1.7">שלום רב,<br/><br/>${escapeClosed(await closedMessageFor(gateDept, admin))}<br/><br/>בברכה,<br/>מזכירות היכל החתם סופר</div>`,
       undefined, { ...mailFor('igud'), skipLog: true },
     ).catch(() => {})
     return true
