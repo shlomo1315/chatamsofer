@@ -22,7 +22,7 @@ export default function MaternityActions({ aid }: { aid: MaternityAid }) {
   const sendNameFix = async () => {
     if (!(await confirm({
       title: 'שליחת קישור לתיקון שם',
-      message: 'לשלוח למייל היולדת קישור אישי (תקף 7 ימים) להזנת/תיקון שם התינוק?',
+      message: 'לשלוח למייל היולדת קישור אישי (תקף 30 ימים) להזנת/תיקון שם התינוק?',
       confirmLabel: 'שליחה',
     }))) return
     setSendingNameFix(true)
