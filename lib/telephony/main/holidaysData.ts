@@ -2,7 +2,7 @@
 // השאילתות זהות לשלוחה הקודמת, שהוסרה.
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getServiceClient } from '@/lib/apiAuth'
-import { digitsOnly, idOrFilter, sameId } from '@/lib/idLookup'
+import { digitsOnly, idOrFilter, sameId, passportDigitsMatch, passportDigitsPattern, PASSPORT_MIN_DIGITS } from '@/lib/idLookup'
 import { isKnownPhone } from '@/lib/cardIdentity'
 import { loadOpenCenters } from '@/lib/holidayCenterIvr'
 import { ensureCenterOpening } from '@/lib/centerOpeningRow'
@@ -62,6 +62,30 @@ export async function findRegistrantById(idNumber: string): Promise<Registrant |
   const exact = ((data ?? []) as Registrant[]).filter(m => sameId(m.id_number, id) || sameId(m.spouse_id_number, id))
   return exact.find(memberCanRegister) ?? exact[0] ?? null
 }
+
+/**
+ * כרטסת לפי הספרות בלבד של דרכון עם אותיות ("AB1234567" ← 1234567).
+ * 🔴 רק התאמה לכרטסת אחת מזהה: אם אותן ספרות שייכות לכמה כרטסות (דרכונים
+ * ממדינות שונות), מחזירים null ולא מנחשים, כדי לא לרשום משפחה לא נכונה.
+ */
+async function findByPassportDigits<T extends Member>(typed: string, cols: string): Promise<T | null> {
+  const t = digitsOnly(typed)
+  if (t.length < PASSPORT_MIN_DIGITS) return null
+  const p = passportDigitsPattern(t)
+  const { data } = await db().from('beneficiaries').select(cols)
+    .or(`id_number.ilike.${p},spouse_id_number.ilike.${p}`).limit(20)
+  const hits = ((data ?? []) as unknown as T[])
+    .filter(m => passportDigitsMatch(m.id_number, t) || passportDigitsMatch(m.spouse_id_number, t))
+  if (hits.length > 1) {
+    console.log(`[holidays] passport digits match ${hits.length} families — not identified`)
+    return null
+  }
+  return hits[0] ?? null
+}
+
+export const findMemberByPassportDigits = (typed: string) => findByPassportDigits<Member>(typed, MEMBER_COLS)
+export const findRegistrantByPassportDigits = (typed: string) =>
+  findByPassportDigits<Registrant>(typed, `${MEMBER_COLS}, birth_date, spouse_birth_date, marital_status, phone, phone2, spouse_phone`)
 
 /** כל המשפחות הפעילות שהמספר רשום אצלן (טלפון, טלפון 2, טלפון בן/בת זוג). */
 export async function findMembersByPhone(callerPhone: string): Promise<Member[]> {
