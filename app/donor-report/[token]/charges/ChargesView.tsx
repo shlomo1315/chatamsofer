@@ -337,12 +337,14 @@ export default function ChargesView({ token }: { token: string }) {
     return () => window.removeEventListener('resize', draw)
   }, [rd, done, step])
 
-  const back = `/donor-report/${encodeURIComponent(token)}`
+  const logout = async () => {
+    try { await fetch('/api/donor-report/auth', { method: 'DELETE' }) } catch { /* גם אם נכשל, מחזירים למסך הסיסמה */ }
+    setData(null); setState('password')
+  }
   const gate = (children: React.ReactNode) => (
     <div className="dr-root" data-theme="dark" dir="rtl" style={{ minHeight: '100vh' }}>
       <div className="bar">
         <div><b>דוח חיובים</b></div>
-        <span className="barr"><a className="lo" href={back}>חזרה לדוח היולדות</a></span>
       </div>
       <main className="wrap">{children}</main>
     </div>
@@ -368,7 +370,7 @@ export default function ChargesView({ token }: { token: string }) {
           </div>
           <div className="top-l">
             <span className="live">מתעדכן אוטומטית</span>
-            <a className="back" href={back}>חזרה לדוח היולדות</a>
+            <button type="button" className="back" onClick={() => void logout()}>התנתקות</button>
           </div>
         </header>
 
