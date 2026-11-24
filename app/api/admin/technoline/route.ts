@@ -4,6 +4,7 @@ import {
   SYSTEM_IDS, isSystemId, systemStatus, accountConfig, applyTree, maskedUrls,
   uploadRecording, listRecordings, accountOverview, buyNumber, callConfigured,
 } from '@/lib/telephony/admin'
+import { LIST_NAME, MESSAGE_TEXT, ensureList, findList, runCampaign } from '@/lib/telephony/campaigns/hanukkah'
 
 // ניהול טכנוליין: מצב, בניית עץ שלוחות, הקלטות ורכישת מספרים. מנהלים בלבד.
 export const dynamic = 'force-dynamic'
@@ -54,6 +55,23 @@ export async function POST(req: NextRequest) {
     if (!isSystemId(sys)) return bad('מערכת לא מוכרת')
     const steps = await applyTree(sys, String(body.rootId ?? ''), SITE())
     return NextResponse.json({ steps })
+  }
+  if (body.action === 'campaign-list') {
+    const res = await ensureList()
+    return res.ok ? NextResponse.json({ ok: true, list: res.data, message: MESSAGE_TEXT }) : bad(res.error, 502)
+  }
+  if (body.action === 'campaign-test') {
+    const res = await runCampaign(SITE(), { phone: String(body.phone ?? '') })
+    return res.ok ? NextResponse.json({ ok: true, data: res.data }) : bad(res.error, 502)
+  }
+  if (body.action === 'campaign-send') {
+    // שליחה לכל הרשימה — רק עם אישור מפורש מהמסך
+    if (body.confirm !== LIST_NAME) return bad('חסר אישור שליחה')
+    const list = await findList()
+    if (!list.ok) return bad(list.error, 502)
+    if (!list.data) return bad('הרשימה לא נמצאה')
+    const res = await runCampaign(SITE(), { listId: list.data.id })
+    return res.ok ? NextResponse.json({ ok: true, data: res.data }) : bad(res.error, 502)
   }
   if (body.action === 'buy') {
     const res = await buyNumber({

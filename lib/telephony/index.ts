@@ -9,6 +9,7 @@ import { yeridSale } from './yerid/sale'
 import { credits } from './yerid/credits'
 import { kvitel } from './main/kvitel'
 import { centerLoad } from './main/centerLoad'
+import { campaignHanukkah, CAMPAIGN_EXT } from './campaigns/hanukkah'
 
 register('main', 'menu', mainMenu)
 register('main', 'otp', otp)
@@ -16,6 +17,7 @@ register('main', 'maternity', maternity)
 register('main', 'holidays', holidays)
 register('main', 'kvitel', kvitel)
 register('main', 'center-load', centerLoad)
+register('main', CAMPAIGN_EXT, campaignHanukkah)
 register('yerid', 'menu', yeridSale)
 register('yerid', 'credits', credits)
 register('distributors', 'menu', distributors)
