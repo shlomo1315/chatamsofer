@@ -36,6 +36,8 @@
 .hd h1 small { display: block; font-size: 13px; font-weight: 400; color: var(--mute); letter-spacing: 0; margin-bottom: 2px }
 .live { display: inline-flex; align-items: center; gap: var(--s2); font-size: 12.5px; color: var(--mute) }
 .live i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 0 var(--ok); animation: ring 2s infinite }
+.live.stale { color: var(--ac2) }
+.live.stale i { background: var(--ac2); animation: none }
 @keyframes ring { 70% { box-shadow: 0 0 0 6px transparent } 100% { box-shadow: 0 0 0 0 transparent } }
 .tg { font-size: 12.5px; border: 1px solid var(--line) !important; border-radius: 99px; padding: 0 var(--s3) !important; min-height: 32px; color: var(--mute) !important }
 .tg[aria-pressed=true] { color: var(--ink) !important }

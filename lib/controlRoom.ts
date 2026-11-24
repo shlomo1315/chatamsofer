@@ -154,6 +154,19 @@ export function freshIds<T extends CrRow>(prev: Set<string>, rows: T[]): T[] {
     .sort((a, b) => (Date.parse(b.registered_at ?? '') || 0) - (Date.parse(a.registered_at ?? '') || 0))
 }
 
+/**
+ * נרשמים חדשים מול כל מה שכבר נראה בחלוקה הזו (לא רק ברענון הקודם), ומוסיף אותם ל-seen.
+ * ⚠️ כך שורה שנעלמה לרענון אחד וחזרה לא קופצת שוב כ"נרשמה עכשיו".
+ */
+export function takeFresh<T extends CrRow>(seen: Set<string>, rows: T[]): T[] {
+  const fresh = freshIds(seen, rows)
+  for (const r of fresh) seen.add(r.id)
+  return fresh
+}
+
+/** הרענון האחרון שהצליח ישן משלושה רענונים: הדף לא מקבל נתונים חדשים. */
+export const isStale = (updatedAt: Date | null, now: number, ms = 45_000) => !!updatedAt && now - updatedAt.getTime() > ms
+
 /** "משפחת X" לפי שם המשפחה, ואם חסר, המילה האחרונה בשם המלא. */
 export function famLabel(r: CrRow): string {
   const fam = r.beneficiary?.family_name?.trim() || r.beneficiary?.full_name?.trim().split(/\s+/).pop() || ''

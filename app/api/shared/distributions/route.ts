@@ -58,6 +58,9 @@ export async function GET(req: NextRequest) {
       .select('id, distribution_id, source, registered_at, phone, notified_at, amount, beneficiary_id, approval_status, approved_at, card_number, card_linked_at, beneficiary:beneficiaries(id, full_name, family_name, spouse_name, id_number, phone, phone2, email, address, city, community_affiliation, children_count, birth_date, spouse_birth_date, lineage_node_id)')
       .in('distribution_id', ids)
       .order('registered_at', { ascending: false })
+      // ⚠️ שובר שוויון: הדפים נשלפים במקביל, ובלי סדר יציב שורה יכלה ליפול בין דפים
+      // ברענון אחד ולחזור בבא, ולקפוץ שוב כ"נרשמה עכשיו".
+      .order('id', { ascending: true })
       .range(from, to))
     if (recErr) return NextResponse.json({ error: recErr }, { status: 500 })
     recipients = rows
