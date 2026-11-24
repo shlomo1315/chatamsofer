@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { findDeepReviewGaps, classifyLineage, type GapNode, type GapBen } from './deepReviewGaps'
+import { findDeepReviewGaps, classifyLineage, reviewDeepReviewFamilies, type GapNode, type GapBen } from './deepReviewGaps'
 import { buildApprovedRefTree } from './lineageApprovedRef'
 
 // קובץ מאושר: חתם סופר ← שמעון ← יוסף ← משה ← אברהם (דורות 1–5)
@@ -75,13 +75,35 @@ describe('classifyLineage', () => {
 describe('findDeepReviewGaps', () => {
   it('מדלג על deep_review ו-rejected, ומחזיר את השאר עם ת"ז ושם', () => {
     const rows = findDeepReviewGaps([
-      ben({ id: 'a', id_number: '302746730', lineage_node_id: 'x6', spouse_name: 'שרה' }),
+      ben({ id: 'a', id_number: '302746730', full_name: 'יעקב', lineage_node_id: 'x6', spouse_name: 'שרה' }),
       ben({ id: 'b', eligibility_status: 'approved', lineage_node_id: 'x6' }),
       ben({ id: 'c', eligibility_status: 'deep_review', lineage_node_id: 'x6' }),
       ben({ id: 'd', eligibility_status: 'rejected', lineage_node_id: 'x6' }),
       ben({ id: 'e', lineage_node_id: 'n6' }),
     ], nodes, approved)
     expect(rows.map(r => r.id)).toEqual(['a', 'b'])
-    expect(rows[0]).toMatchObject({ id_number: '302746730', name: 'פלוני ושרה', status: 'pending', kind: 'not_in_ref' })
+    // ⚠️ full_name הוא השם הפרטי — השם המוצג הוא משפחה ואז פרטי
+    expect(rows[0]).toMatchObject({ id_number: '302746730', name: 'פלוני יעקב ושרה', status: 'pending', kind: 'not_in_ref' })
+  })
+})
+
+describe('reviewDeepReviewFamilies — הכיוון ההפוך', () => {
+  it('רק משפחות בבדיקה מעמיקה; מסמן מי עדיין שגוי ומי כבר תקין', () => {
+    const rows = reviewDeepReviewFamilies([
+      { ...ben({ id: 'a', eligibility_status: 'deep_review', lineage_node_id: 'x6' }), deep_review_reason: 'דור 2–5 אינו בקובץ המאושר (דור 4: בנימין)' },
+      { ...ben({ id: 'b', eligibility_status: 'deep_review', lineage_node_id: 'n6' }), deep_review_reason: 'הערה של המזכיר' },
+      ben({ id: 'c', eligibility_status: 'deep_review', lineage_node_id: 'n6' }),
+      ben({ id: 'd', eligibility_status: 'pending', lineage_node_id: 'x6' }),
+    ], nodes, approved)
+    expect(rows.map(r => r.id)).toEqual(['a', 'b', 'c'])
+    expect(rows[0].finding).toMatchObject({ kind: 'not_in_ref', generation: 4 })
+    // תקינים כעת — הדגל נשאר מהרישום או מהערת מזכיר
+    expect(rows[1]).toMatchObject({ finding: null, reason: 'הערה של המזכיר' })
+    expect(rows[2]).toMatchObject({ finding: null, reason: null })
+  })
+
+  it('עוגן רדוד בבדיקה מעמיקה נשאר שגוי (too_shallow)', () => {
+    const [r] = reviewDeepReviewFamilies([ben({ eligibility_status: 'deep_review', lineage_node_id: 'n3' })], nodes, approved)
+    expect(r.finding?.kind).toBe('too_shallow')
   })
 })

@@ -64,6 +64,19 @@ export interface GateResult {
   reason: string | null
 }
 
+const UNKNOWN_REASON_PREFIX = 'סדר הדורות לא נבדק מול הקובץ המאושר'
+
+/**
+ * האם deep_review_reason נכתב ע"י השער (ולא הערה שהמזכיר הקליד).
+ * ⚠️ הבאנר בכרטסת הציג כל סיבה כ"הערת המזכיר" ו"המסמכים אושרו ע"י המזכירות",
+ * גם כשהשער קבע אותה ברישום ואיש לא אישר דבר.
+ */
+export function isAutoDeepReason(reason: string | null | undefined): boolean {
+  const s = String(reason ?? '').trim()
+  if (!s) return false
+  return s.startsWith(UNKNOWN_REASON_PREFIX) || Object.values(GAP_KIND_LABEL).some(l => s.startsWith(l))
+}
+
 /** בדיקת המשפחה מול הקובץ המאושר. עם approved מוכן נחסכת טעינה חוזרת. */
 export async function earlyLineageGate(
   db: SupabaseClient,
@@ -71,7 +84,7 @@ export async function earlyLineageGate(
   approvedIn?: ApprovedRefTreeLookup | null,
 ): Promise<GateResult> {
   const unknown = (why: string): GateResult =>
-    ({ deep: true, finding: null, unknown: true, reason: `סדר הדורות לא נבדק מול הקובץ המאושר (${why}) — נדרשת בדיקה ידנית` })
+    ({ deep: true, finding: null, unknown: true, reason: `${UNKNOWN_REASON_PREFIX} (${why}) — נדרשת בדיקה ידנית` })
   try {
     const approved = approvedIn ?? await loadApprovedRefStrict(db)
     if (!approved) return unknown('הקובץ המאושר לא נטען')

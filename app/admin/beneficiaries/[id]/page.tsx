@@ -47,8 +47,9 @@ import ChildrenTabPanel from './ChildrenTabPanel'
 import PhoneActivity from './PhoneActivity'
 import { registrationSourceLabel } from '@/lib/distributionSources'
 import { isNodeVerified } from '@/lib/lineageDeviation'
-import { genColorByRef, deviatingGensByRef } from '@/lib/lineageApprovedColor'
+import { genColorByRef, deviatingGensByRef, chainRefLookup } from '@/lib/lineageApprovedColor'
 import { getApprovedRefLookup } from '@/lib/lineageApprovedRef'
+import { earlyLineageGate, isAutoDeepReason, loadApprovedRefStrict } from '@/lib/earlyLineageGate'
 import { isChildMarried, isChildSingle } from '@/lib/childDuplicateMessage'
 
 // ⚡ עמודות מפורשות במקום select('*'). שתי סיבות:
@@ -375,7 +376,14 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
   // 2–5 נצבעים אדום אצל *כל* המשפחות — נראה כמו נתונים שגויים ולא כמו תקלה.
   // התגלה 14.09 אצל שרייבר דוד, ששני דורותיו הראשונים זהים תו-בתו לקובץ.
   const { getServiceClient: getApprovedRefDb } = await import('@/lib/apiAuth')
-  const approvedRef = await getApprovedRefLookup(getApprovedRefDb())
+  const refDb = getApprovedRefDb()
+  const approvedRef = await getApprovedRefLookup(refDb)
+  // 🔴 אותו כלל כמו השער של הבדיקה המעמיקה: שם, דור *והורה*. בלי ההורה, שם
+  // שקיים בקובץ תחת אב אחר נצבע ירוק — והמשפחה ישבה בבדיקה מעמיקה בלי שום
+  // אדום על המסך (24.11, אולמן 326133576). כשל בטעינה → שם ודור בלבד, כמו קודם.
+  const approvedTree = refDb ? await loadApprovedRefStrict(refDb) : null
+  const refFor = (chain: { generation: number; name: string }[]) =>
+    approvedTree ? chainRefLookup(chain, approvedTree) : approvedRef
 
   // כל הדורות בצבעים לחלונית ההתראה (דור 1 = החתם סופר תמיד כחול/מאושר).
   const CHATAM_SOFER_ROOT = 'מרן החתם סופר זי"ע'
@@ -396,6 +404,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
   // ─────────────────────────────────────────────────────────────────────────
   // 🔴 מקור אחד לכל המסכים — ראו lib/lineageDisplayChain.
   const alertSource = displayChain(chainForMarks, pathNodes)
+  const alertRef = refFor(alertSource)
   const alertGens: { generation: number; name: string; color: 'green' | 'red' | 'orange' }[] =
     alertSource.map(c => ({
       generation: c.generation,
@@ -403,7 +412,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
       // ⚠️ דור 1 (החתם סופר) תמיד מאושר — הוא שורש העץ בהגדרה.
       // 🔴 הצבע נקבע מהקובץ המאושר ולא מהתווית — ראו lineageApprovedColor.
       color: c.generation === 1 ? 'green'
-        : genColorByRef(c.generation, c.name, genStatus.get(c.generation) ?? null, approvedRef),
+        : genColorByRef(c.generation, c.name, genStatus.get(c.generation) ?? null, alertRef),
     }))
 
   // 🔴 הדורות החורגים נגזרים מ*אותה* שרשרת שממנה נגזרו הצבעים — ולא מהתווית.
@@ -417,9 +426,19 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
       name: c.generation === 1 ? CHATAM_SOFER_ROOT : c.name,
       status: genStatus.get(c.generation) ?? null,
     })),
-    approvedRef,
+    alertRef,
   )
   const earlyDeviation = earlyRedGens.length > 0
+
+  // 🔴 משפחה בבדיקה מעמיקה: מה השער אומר עליה *עכשיו*. הדגל נקבע ברישום
+  // ו"נדבק", ולכן מציגים גם את הסיבה הנוכחית — או שהסיבה כבר לא קיימת.
+  const liveGate = beneficiary?.eligibility_status === 'deep_review' && refDb
+    ? await earlyLineageGate(refDb, {
+        lineage_node_id: beneficiary.lineage_node_id ? String(beneficiary.lineage_node_id) : null,
+        lineage_chain: beneficiary.lineage_chain,
+        lineage_manual: (beneficiary as { lineage_manual?: unknown }).lineage_manual,
+      }, approvedTree)
+    : null
 
   if (!beneficiary && isSupabaseConfigured()) notFound()
 
@@ -666,6 +685,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
             : lineagePath.map((name, i) => ({ generation: i + 1, name, relation: null as string | null })),
           beneficiary.lineage_manual,
         )
+        const sourceRef = refFor(source)
         const gens: import('./LineageChainChips').ChainGen[] = source.map(c => {
           const isRoot = c.generation === 1
           return {
@@ -678,7 +698,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
             // ואינם יכולים לשאול את המסד. בלי זה הם נפלו לתווית שעל הצומת
             // והציגו ירוק על מי שאינו ברשימה המאושרת הראשונית.
             color: isRoot ? 'green' as const
-              : genColorByRef(c.generation, c.name, genStatus.get(c.generation) ?? null, approvedRef),
+              : genColorByRef(c.generation, c.name, genStatus.get(c.generation) ?? null, sourceRef),
           }
         })
         // אם משום מה אין דור 1 כלל בשרשרת — מוסיפים אותו בראש (החתם סופר קבוע).
@@ -949,8 +969,11 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
           שדורותיה כבר אושרו (בכל דרך אחרת) נותרה עם הדגל, והבאנר הופיע בטעות.
           לכן מציגים את הבאנר רק כשהסטייה עדיין *אמיתית*: או שהמזכיר העביר ידנית
           (deep_review_reason), או שבפועל יש דור חריג (earlyDeviation). */}
+      {/* 🔴 (24.11) הבאנר מוצג לכל משפחה בבדיקה מעמיקה, עם תוצאת השער *עכשיו*
+          (liveGate). כך דגל שנשאר מהרישום מוצג כ"הסיבה כבר לא קיימת", ולא
+          מוסתר — אולמן 326133576 ישב בבדיקה מעמיקה בלי שום הסבר על המסך. */}
       {!isSpecial && beneficiary.eligibility_status === 'deep_review'
-        && (!!(beneficiary as { deep_review_reason?: string | null }).deep_review_reason || earlyDeviation) && (
+        && (!!(beneficiary as { deep_review_reason?: string | null }).deep_review_reason || earlyDeviation || !!liveGate) && (
         <div className="rounded-2xl border-2 border-orange-300 bg-orange-50 px-5 py-4 flex items-start gap-3">
           <div className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center flex-shrink-0">
             <AlertTriangle size={18} className="text-orange-600" />
@@ -961,10 +984,26 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
               {/* "אושרו ע"י המזכירות" מוצג רק כשהמזכירות העבירה ידנית לבדיקה מעמיקה
                   (יש deep_review_reason). בכניסה אוטומטית ל-deep_review (סטייה ב-5
                   הדורות הראשונים בעת הרישום) המזכירות לא אישרה דבר — לכן לא מוצג. */}
-              {(beneficiary as { deep_review_reason?: string | null }).deep_review_reason
-                ? <>המסמכים והפרטים אושרו ע"י המזכירות. סדר היחוס דורש בדיקה מעמיקה. <span className="font-semibold">הערת המזכיר:</span> {(beneficiary as { deep_review_reason?: string | null }).deep_review_reason}</>
-                : 'סדר היחוס דורש בדיקה מעמיקה (סטייה בסדר הדורות זוהתה אוטומטית בעת הרישום).'}
+              {/* ⚠️ מאז #784 השער שומר את הסיבה שלו באותו שדה — היא אינה הערת מזכיר. */}
+              {(() => {
+                const reason = (beneficiary as { deep_review_reason?: string | null }).deep_review_reason
+                if (reason && !isAutoDeepReason(reason)) {
+                  return <>המסמכים והפרטים אושרו ע״י המזכירות. סדר היחוס דורש בדיקה מעמיקה. <span className="font-semibold">הערת המזכיר:</span> {reason}</>
+                }
+                return <>
+                  סדר היחוס דורש בדיקה מעמיקה (זוהה אוטומטית בבדיקת 5 הדורות הראשונים מול הקובץ המאושר).
+                  {reason && <> <span className="font-semibold">הסיבה שנרשמה:</span> {reason}</>}
+                </>
+              })()}
             </p>
+            {liveGate && (
+              <p className={`text-sm mt-2 ${liveGate.deep ? 'text-orange-900' : 'text-emerald-800'}`}>
+                <span className="font-semibold">בדיקה נוכחית מול הקובץ המאושר (שם, דור והורה):</span>{' '}
+                {liveGate.deep
+                  ? liveGate.reason
+                  : 'דורות 2–5 תקינים כעת. הסיבה שבגללה המשפחה נכנסה לבדיקה מעמיקה כבר לא קיימת.'}
+              </p>
+            )}
             {/* פירוט הדורות הבעייתיים — רק עד דור 5. דורות 6+ הם דורות חדשים
                 (מעבר לעץ המאושר, מסומנים כתום), ואינם "לא תואמים" — אין טעם
                 להציגם כאן. רק סטיות בדורות 1-5 (שאמורים להיות מאושרים) בעייתיות. */}
