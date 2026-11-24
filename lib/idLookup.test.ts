@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { idVariants, idOrFilter, sameId, digitsOnly } from './idLookup'
+import { idVariants, idOrFilter, sameId, digitsOnly, passportDigitsMatch, passportDigitsPattern } from './idLookup'
 
 describe('digitsOnly', () => {
   it('מסיר מקפים רווחים וריק', () => {
@@ -54,6 +54,26 @@ describe('idOrFilter', () => {
   it('מייצר ספרות בלבד — בלי תווים שדורשים בריחה בתחביר or', () => {
     const f = idOrFilter('12-34/56 78', ['id_number'])
     expect(f).not.toMatch(/[^a-z_.,0-9]/)
+  })
+})
+
+describe('דרכון עם אותיות — זיהוי לפי הספרות בלבד', () => {
+  it('ספרות הדרכון בלבד תואמות לדרכון השמור עם האותיות', () => {
+    expect(passportDigitsMatch('AB1234567', '1234567')).toBe(true)
+    expect(passportDigitsMatch('ab 123-4567', '1234567')).toBe(true)
+    expect(passportDigitsMatch('C01234567', '01234567')).toBe(true)
+  })
+  it('לא מתאים חלק מהספרות, ולא ת"ז רגילה בלי אותיות', () => {
+    expect(passportDigitsMatch('AB1234567', '123456')).toBe(false)
+    expect(passportDigitsMatch('AB1234567', '12345678')).toBe(false)
+    expect(passportDigitsMatch('123456782', '123456782')).toBe(false)
+  })
+  it('פחות מ-5 ספרות אינו מזהה', () => {
+    expect(passportDigitsMatch('ABC1234', '1234')).toBe(false)
+  })
+  it('תבנית החיפוש: כוכבית בין הספרות, ספרות בלבד', () => {
+    expect(passportDigitsPattern('12-34')).toBe('*1*2*3*4*')
+    expect(passportDigitsPattern('')).toBe('')
   })
 })
 

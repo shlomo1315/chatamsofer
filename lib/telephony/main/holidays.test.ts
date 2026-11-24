@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // והנתונים מדומים (holidaysData וספריות החלוקה) — בלי מסד ובלי נדרים.
 const { data, dist, cards } = vi.hoisted(() => ({
   data: {
-    findMemberById: vi.fn(), findMembersByPhone: vi.fn(), latestDistribution: vi.fn(), getRecipient: vi.fn(),
+    findMemberById: vi.fn(), findMemberByPassportDigits: vi.fn(), findMembersByPhone: vi.fn(), latestDistribution: vi.fn(), getRecipient: vi.fn(),
     pickupEverStarted: vi.fn(), centerOpening: vi.fn(), getCenter: vi.fn(), getSpokenCenter: vi.fn(),
     centerCapacities: vi.fn(), openCenters: vi.fn(), saveCenterChoice: vi.fn(), loadCard: vi.fn(), clearFailedCard: vi.fn(),
   },

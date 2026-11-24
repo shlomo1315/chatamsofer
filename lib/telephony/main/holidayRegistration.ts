@@ -25,7 +25,7 @@ import { spokenCenterDetails, spokenCenterName } from '@/lib/holidayCenterSpeech
 import { validateIsraeliId } from '@/lib/validation'
 import { askDigits, menu, say, hangup } from '../modules'
 import type { TlContext, TlFile, TlResponse, TlResult } from '../types'
-import { findRegistrantById, getRecipient, getSpokenCenter, memberCanRegister, readableName } from './holidaysData'
+import { findRegistrantById, findRegistrantByPassportDigits, type Registrant, getRecipient, getSpokenCenter, memberCanRegister, readableName } from './holidaysData'
 
 // ⚠️ 6 משתנים ל-3 ניסיונות: אחרי כל ניסיון עלולה להגיע סולמית שנשארה (ראו stage).
 const tries6 = (p: string) => [p, `${p}2`, `${p}3`, `${p}4`, `${p}5`, `${p}6`] as const
@@ -55,6 +55,16 @@ function lastAttempt(params: Record<string, string>, vars: readonly string[]): n
 }
 /** ת"ז תקינה: בדיוק 9 ספרות וספרת ביקורת נכונה. */
 export const validPhoneId = (id: string) => id.length === ID_DIGITS && validateIsraeliId(id)
+
+/**
+ * הכרטסת לפי מה שהוקש: ת"ז תקינה — לפי הת"ז; אחרת — לפי הספרות בלבד של דרכון
+ * עם אותיות (בטלפון אי אפשר להקיש אותיות). 'invalid' — לא ת"ז תקינה ולא דרכון
+ * מוכר, כלומר טעות הקשה: ניסיון נוסף כמו קודם.
+ */
+async function lookupTyped(typed: string): Promise<Registrant | null | 'invalid'> {
+  if (validPhoneId(typed)) return findRegistrantById(typed)
+  return (await findRegistrantByPassportDigits(typed)) ?? 'invalid'
+}
 
 /**
  * שלב הקשה עם עד 3 ניסיונות. מחזיר את הערך האמיתי האחרון שהוקש והאם יש ניסיון נוסף,
@@ -89,8 +99,8 @@ export async function phoneRegistration(k: RegKit, dist: ActiveDistribution): Pr
   const idStage = stage(k, REG_VARS.id, (name, lead) =>
     askDigits(name, ID_DIGITS, [...lead, ...k.files('reg_ask_id_full')], { min: 1, maskLog: true, post: true }))
   if ('reply' in idStage) return idStage.reply
-  if (!validPhoneId(idStage.value)) return idStage.retry('id_invalid')
-  const ben = await findRegistrantById(idStage.value)
+  const ben = await lookupTyped(idStage.value)
+  if (ben === 'invalid') return idStage.retry('id_invalid')
   if (!ben) {
     // ת"ז שלא קיימת באיגוד הצאצאים — הודעה וניתוק, בלי ניסיון נוסף.
     console.log(`${LOG} callId=${callId} id not found`)
@@ -189,8 +199,8 @@ export async function phoneEligibility(
   const idStage = stage(k, ELIG_VARS.id, (name, lead) =>
     askDigits(name, ID_DIGITS, [...lead, ...k.files('reg_ask_id_full')], { min: 1, maskLog: true, post: true }))
   if ('reply' in idStage) return idStage.reply
-  if (!validPhoneId(idStage.value)) return idStage.retry('id_invalid')
-  const ben = await findRegistrantById(idStage.value)
+  const ben = await lookupTyped(idStage.value)
+  if (ben === 'invalid') return idStage.retry('id_invalid')
   if (!ben) return idStage.retry('not_found')
 
   const birthPrompt = asksParentBirth(ben) ? 'reg_ask_birth_couple' : 'reg_ask_birth'
@@ -219,8 +229,8 @@ export async function phoneHearCenter(k: RegKit, distId: string, rules: DistRule
   const idStage = stage(k, CENTER_HEAR_VARS, (name, lead) =>
     askDigits(name, ID_DIGITS, [...lead, ...k.files('reg_ask_id_full')], { min: 1, maskLog: true, post: true }))
   if ('reply' in idStage) return idStage.reply
-  if (!validPhoneId(idStage.value)) return idStage.retry('id_invalid')
-  const ben = await findRegistrantById(idStage.value)
+  const ben = await lookupTyped(idStage.value)
+  if (ben === 'invalid') return idStage.retry('id_invalid')
   if (!ben) return idStage.retry('not_found')
   const rec = await getRecipient(distId, ben.id, 'id, center_id')
   if (!rec) return k.end('phase_not_registered')

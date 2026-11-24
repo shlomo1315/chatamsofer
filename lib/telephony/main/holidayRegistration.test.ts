@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // מסלול הרישום המלא (חלוקה "בטלפון בלבד"): ת"ז → תאריך לידה → טלפון → 2 הצהרות → רישום → מוקד.
 const { data, dist, rules, notify } = vi.hoisted(() => ({
   data: {
-    findMemberById: vi.fn(), findRegistrantById: vi.fn(), findMembersByPhone: vi.fn(), latestDistribution: vi.fn(),
+    findMemberById: vi.fn(), findRegistrantById: vi.fn(), findRegistrantByPassportDigits: vi.fn(), findMemberByPassportDigits: vi.fn(), findMembersByPhone: vi.fn(), latestDistribution: vi.fn(),
     getRecipient: vi.fn(), pickupEverStarted: vi.fn(), centerOpening: vi.fn(), getCenter: vi.fn(), getSpokenCenter: vi.fn(),
     centerCapacities: vi.fn(), openCenters: vi.fn(), saveCenterChoice: vi.fn(), loadCard: vi.fn(), clearFailedCard: vi.fn(),
   },
@@ -215,6 +215,40 @@ describe('רישום בטלפון בלבד', () => {
     expect(text(r)).toContain('אינו מופיע במערכת. בהצלחה')
     expect(text(r)).not.toContain('r_id2')
     expect(Array.isArray(r.body) && r.body.at(-1)).toMatchObject({ type: 'hangup' })
+  })
+
+  it('דרכון עם אותיות: הקשת הספרות בלבד מזהה את הכרטסת וממשיכה לתאריך הלידה', async () => {
+    const pass = { ...ben, id_number: 'AB1234567' }
+    data.findRegistrantByPassportDigits.mockResolvedValue(pass)
+    const r = await call({ r_id: '1234567' })
+    expect(data.findRegistrantById).not.toHaveBeenCalled()
+    expect(data.findRegistrantByPassportDigits).toHaveBeenCalledWith('1234567')
+    expect(text(r)).toContain('הינכם מועברים לרישום לחלוקה')
+    expect(text(r)).toContain('r_bd')
+  })
+
+  it('דרכון: רישום מלא עד הסוף עם הספרות בלבד', async () => {
+    data.findRegistrantByPassportDigits.mockResolvedValue({ ...ben, id_number: 'AB1234567' })
+    dist.registerToOpenDistribution.mockResolvedValue({ ok: true, created: true, approved: true, recipientId: 'rec1' })
+    data.getRecipient.mockResolvedValueOnce(null).mockResolvedValue({ id: 'rec1', approval_status: 'approved' })
+    const r = await call({ r_id: '1234567', r_bd: '15031990', r_ph: '0527654321', r_lin: '1', r_need: '1' })
+    expect(dist.registerToOpenDistribution).toHaveBeenCalledWith('b1', 'phone', expect.anything())
+    expect(text(r)).toContain('הרשמתכם התקבלה בהצלחה במערכת')
+  })
+
+  it('ת"ז ישראלית רגילה ממשיכה לחפש לפי ת"ז, בלי חיפוש דרכון', async () => {
+    const r = await call({ r_id: ID })
+    expect(data.findRegistrantById).toHaveBeenCalledWith(ID)
+    expect(data.findRegistrantByPassportDigits).not.toHaveBeenCalled()
+    expect(text(r)).toContain('r_bd')
+  })
+
+  it('ספרות שאינן ת"ז תקינה ואינן דרכון מוכר (או תואמות כמה כרטסות) — "מספר שגוי" וניסיון נוסף', async () => {
+    data.findRegistrantByPassportDigits.mockResolvedValue(null)
+    const r = await call({ r_id: '1234567' })
+    expect(text(r)).toContain('מספר שגוי')
+    expect(first(r)).toMatchObject({ type: 'getDTMF', name: 'r_id2' })
+    expect(dist.registerToOpenDistribution).not.toHaveBeenCalled()
   })
 
   it('סולמית שנשארה אחרי הת"ז (SKIP) — הודעות המעבר והתאריך שוב, בלי "אינו תואם"', async () => {

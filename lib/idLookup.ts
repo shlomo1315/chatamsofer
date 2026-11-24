@@ -49,6 +49,32 @@ export function idOrFilter(raw: unknown, columns: string[]): string {
   return parts.join(',')
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// דרכון עם אותיות (למשל "AB1234567") — בטלפון אפשר להקיש רק ספרות, ולכן
+// מזהים לפי הספרות בלבד של הדרכון השמור.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** מינימום ספרות לזיהוי לפי דרכון: פחות מזה ההתאמה חלשה מדי. */
+export const PASSPORT_MIN_DIGITS = 5
+
+/**
+ * תבנית ilike של PostgREST: כל ספרה עם כוכבית לפניה ואחריה ("*1*2*3*"),
+ * כדי שאותיות, רווחים ומקפים בין הספרות לא יפילו את החיפוש. ההתאמה המדויקת
+ * נעשית אחר כך ב-passportDigitsMatch. ספרות בלבד, ולכן אין תו שדורש בריחה.
+ */
+export function passportDigitsPattern(typed: unknown): string {
+  const d = digitsOnly(typed)
+  return d ? `*${d.split('').join('*')}*` : ''
+}
+
+/** האם המספר השמור הוא דרכון עם אותיות, שהספרות שלו (בלבד) הן בדיוק מה שהוקש. */
+export function passportDigitsMatch(stored: unknown, typed: unknown): boolean {
+  const s = String(stored ?? '')
+  const t = digitsOnly(typed)
+  if (t.length < PASSPORT_MIN_DIGITS || !/\p{L}/u.test(s)) return false
+  return digitsOnly(s) === t
+}
+
 /** האם שני מספרי ת"ז הם אותו מספר, בהתעלם מאפסים מובילים ומתווים שאינם ספרות. */
 export function sameId(a: unknown, b: unknown): boolean {
   const na = digitsOnly(a).replace(/^0+/, '')
