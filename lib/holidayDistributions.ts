@@ -18,6 +18,7 @@ export type { RegisterSource } from '@/lib/distributionSources'
 export { SOURCE_LABEL } from '@/lib/distributionSources'
 import type { RegisterSource } from '@/lib/distributionSources'
 import { getDistRules, channelAllowed, blockedByDeepReview, phoneOnlyMessage, isTestCaller } from '@/lib/holidayDistRules'
+import { isDistributionEnabled, firstEnabled } from '@/lib/distributionEnabled'
 
 export interface ActiveDistribution {
   id: string
@@ -50,18 +51,21 @@ export async function getOpenDistribution(): Promise<ActiveDistribution | null> 
   const { isDepartmentOpen } = await import('@/lib/departmentGates')
   const deptOpen = await isDepartmentOpen('holidays', db)
   if (!deptOpen) { console.log('[getOpenDistribution] closed=DEPARTMENT_GATE (holidays סגור בהגדרות)'); return null }
+  // ⚠️ '*' ולא רשימת עמודות — ראו lib/distributionEnabled.ts.
   const { data, error } = await db
     .from('distributions')
-    .select('id, name, year, amount_per_family, registration_open')
+    .select('*')
     .eq('registration_open', true)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
   if (error) { console.error('[getOpenDistribution] query error:', error.message); return null }
-  if (!data) { console.log('[getOpenDistribution] closed=NO_OPEN_DISTRIBUTION (אין חלוקה עם registration_open=true)') }
-  else { console.log(`[getOpenDistribution] OPEN dist=${(data as ActiveDistribution).id} name=${(data as ActiveDistribution).name}`) }
-  if (!data) return null
-  const dist = data as ActiveDistribution
+  if (!data) { console.log('[getOpenDistribution] closed=NO_OPEN_DISTRIBUTION (אין חלוקה עם registration_open=true)'); return null }
+  // 🔴 חלוקה מושבתת אינה קיימת מבחינת אף ערוץ, גם כשהרישום אליה מסומן פתוח.
+  if (!isDistributionEnabled(data)) { console.log(`[getOpenDistribution] closed=DISABLED dist=${data.id}`); return null }
+  const { id, name, year, amount_per_family, registration_open } = data as ActiveDistribution
+  const dist: ActiveDistribution = { id, name, year, amount_per_family, registration_open }
+  console.log(`[getOpenDistribution] OPEN dist=${dist.id} name=${dist.name}`)
   const rules = await getDistRules(dist.id)
   return { ...dist, phone_only: rules.phoneOnly, phone_number: rules.phoneNumber || defaultPhoneNumber() }
 }
@@ -226,14 +230,17 @@ export interface LiveDistribution extends ActiveDistribution {
 export async function getLiveDistribution(): Promise<LiveDistribution | null> {
   const db = getServiceClient()
   if (!db) return null
+  // 🔴 חלוקה מושבתת מדולגת, כאילו אינה קיימת: "החיה" היא האחרונה שפעילה.
   const { data } = await db
     .from('distributions')
-    .select('id, name, year, amount_per_family, registration_open, centers_open, status')
+    .select('*')
     .neq('status', 'cancelled')
     .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  return (data as LiveDistribution | null) ?? null
+    .limit(20)
+  const row = firstEnabled(data as LiveDistribution[] | null)
+  if (!row) return null
+  const { id, name, year, amount_per_family, registration_open, centers_open, status } = row
+  return { id, name, year, amount_per_family, registration_open, centers_open, status }
 }
 
 /**

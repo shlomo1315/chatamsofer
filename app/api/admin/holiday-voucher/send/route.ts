@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { unauthorized, getServiceClient, requirePermission } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { distributionDisabledError } from '@/lib/distributionEnabled'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { buildHolidayVoucher } from '@/lib/holidayVoucher'
@@ -103,6 +104,8 @@ export async function POST(request: NextRequest) {
 
   const distributionId = String(body.distribution_id ?? '')
   if (!distributionId) return NextResponse.json({ error: 'חסר מזהה חלוקה' }, { status: 400 })
+  const off = await distributionDisabledError(db, distributionId)
+  if (off) return NextResponse.json({ error: off }, { status: 409 })
 
   const all = await loadRows(db, distributionId)
   const scoped = body.ids?.length ? all.filter(r => body.ids!.includes(r.id)) : all

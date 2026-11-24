@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { notifyHolidayApproved } from '@/lib/holidayNotify'
 import { logActivity } from '@/lib/activityLog'
+import { distributionDisabledError } from '@/lib/distributionEnabled'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,6 +35,13 @@ export async function POST(request: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     ids = (data ?? []).map(r => String(r.id))
     if (!ids.length) return NextResponse.json({ ok: true, sent: 0, skipped: 0, failed: 0, results: [], empty: true })
+  }
+
+  // חלוקה מושבתת לא שולחת הודעות — נבדקות כל החלוקות של הרשומות שנבחרו.
+  const { data: recDists } = await db.from('distribution_recipients').select('distribution_id').in('id', ids)
+  for (const distId of new Set((recDists ?? []).map(r => String(r.distribution_id)))) {
+    const off = await distributionDisabledError(db, distId)
+    if (off) return NextResponse.json({ error: off }, { status: 409 })
   }
 
   const summary = await notifyHolidayApproved(ids, {

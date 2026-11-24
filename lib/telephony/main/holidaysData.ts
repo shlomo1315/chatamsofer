@@ -8,6 +8,7 @@ import { loadOpenCenters } from '@/lib/holidayCenterIvr'
 import { ensureCenterOpening } from '@/lib/centerOpeningRow'
 import { runLoadBatch, type LoadTarget, type LoadSummary } from '@/lib/holidayCardLoad'
 import type { CenterRow } from '@/lib/holidayCenterPick'
+import { firstEnabled } from '@/lib/distributionEnabled'
 
 export type Member = {
   id: string; family_name: string | null; full_name: string | null; spouse_name: string | null
@@ -76,11 +77,15 @@ export async function findMembersByPhone(callerPhone: string): Promise<Member[]>
   return ((data ?? []) as Row[]).filter(m => isKnownPhone(caller, [m.phone, m.phone2, m.spouse_phone]))
 }
 
-/** החלוקה האחרונה (לפי תאריך יצירה), עם העמודות שהמסלול צריך. */
+/**
+ * החלוקה האחרונה (לפי תאריך יצירה) שאינה מושבתת.
+ * ⚠️ cols נשמר לתיעוד המסלול, אך נשלף '*' — ראו lib/distributionEnabled.ts.
+ */
 export async function latestDistribution<T>(cols: string): Promise<T | null> {
-  const { data } = await db().from('distributions').select(cols)
-    .order('created_at', { ascending: false }).limit(1).maybeSingle()
-  return (data as T | null) ?? null
+  void cols
+  const { data } = await db().from('distributions').select('*')
+    .order('created_at', { ascending: false }).limit(20)
+  return firstEnabled(data as T[] | null)
 }
 
 export async function getRecipient(distributionId: string, beneficiaryId: string, cols: string): Promise<Recipient | null> {

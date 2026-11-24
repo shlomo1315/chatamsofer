@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { distributionDisabledError } from '@/lib/distributionEnabled'
 import { buildAssignPlan, type AssignCenter, type AssignRecipient } from '@/lib/autoAssignCenters'
 
 export const dynamic = 'force-dynamic'
@@ -107,6 +108,8 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
   const { id } = await ctx.params
+  const off = await distributionDisabledError(db, id)
+  if (off) return NextResponse.json({ error: off }, { status: 409 })
   const body = await request.json().catch(() => ({})) as {
     includeExtended?: boolean
     /** מספר השורות שהוצגו בתצוגה המקדימה — אישור שהמנהל ראה את המספר. */

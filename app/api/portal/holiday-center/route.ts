@@ -7,6 +7,7 @@ import {
   FINAL_WARNING, REGIONS, type CenterRow,
 } from '@/lib/holidayCenterPick'
 import { loadOpenCenters } from '@/lib/holidayCenterIvr'
+import { firstEnabled } from '@/lib/distributionEnabled'
 import { ensureCenterOpening } from '@/lib/centerOpeningRow'
 import { citiesByNumber } from '@/lib/holidayCityMenu'
 
@@ -66,10 +67,11 @@ async function loadOwnRecipient(
 
 /** החלוקה האחרונה. ⚠️ distributions ולא holiday_distributions — ראו FK. */
 async function latestDistribution(db: NonNullable<ReturnType<typeof getServiceClient>>) {
+  // 🔴 חלוקה מושבתת מדולגת, כאילו אינה קיימת ('*' — ראו lib/distributionEnabled.ts).
   const { data } = await db.from('distributions')
-    .select('id, centers_open, centers_deadline, centers_deadline_extended')
-    .order('created_at', { ascending: false }).limit(1).maybeSingle()
-  return data as { id: string; centers_open: boolean; centers_deadline: string | null; centers_deadline_extended: string | null } | null
+    .select('*')
+    .order('created_at', { ascending: false }).limit(20)
+  return firstEnabled(data as { id: string; centers_open: boolean; centers_deadline: string | null; centers_deadline_extended: string | null }[] | null)
 }
 
 export async function GET(request: NextRequest) {

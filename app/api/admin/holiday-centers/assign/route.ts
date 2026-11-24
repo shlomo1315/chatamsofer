@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
 import { ensureCenterOpening } from '@/lib/centerOpeningRow'
+import { distributionDisabledError } from '@/lib/distributionEnabled'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,6 +47,8 @@ export async function POST(request: NextRequest) {
     .select('id, distribution_id, center_id').eq('id', recipientId).maybeSingle()
   const rec = recRow as { id: string; distribution_id: string; center_id: string | null } | null
   if (!rec) return NextResponse.json({ error: 'הנרשם לא נמצא' }, { status: 404 })
+  const off = await distributionDisabledError(db, rec.distribution_id)
+  if (off) return NextResponse.json({ error: off }, { status: 409 })
 
   // ── ביטול שיוך ──
   if (b.center_id === null || b.center_id === '') {
