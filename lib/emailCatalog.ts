@@ -137,7 +137,7 @@ export const EMAIL_CATALOG: EmailSpec[] = [
       { key: 'title', label: 'כותרת ראשית', default: 'הבקשה התקבלה' },
       { key: 'subtitle', label: 'כותרת משנה', default: '{חלוקה}' },
       { key: 'intro', label: 'פסקת פתיחה', multiline: true, default: 'הבקשה שלכם ל{חלוקה} התקבלה במערכת ותטופל בהקדם.' },
-      { key: 'next', label: 'מה צפוי בהמשך', multiline: true, default: 'נשלח לכם עדכון מסודר בימים הקרובים בטלפון ובמייל.' },
+      { key: 'next', label: 'מה צפוי בהמשך', multiline: true, default: 'נשלח לכם עדכון מסודר בימים הקרובים בטלפון ובמייל לגבי המשך הטיפול בחלוקה, אין צורך לפנות למשרד בעניין זה.' },
     ],
   },
   {
