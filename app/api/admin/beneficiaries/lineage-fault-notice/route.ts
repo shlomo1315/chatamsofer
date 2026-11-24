@@ -4,11 +4,12 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
-import { lineageFaultEmail } from '@/lib/emailTemplates'
+import { lineageFaultEmail } from '@/lib/lineageFaultEmail'
 import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { logActivity } from '@/lib/activityLog'
 import {
-  LINEAGE_FAULT_ACTION, LINEAGE_FAULT_BATCH, planLineageFaultNotice, recipientNameOf, type FaultRow,
+  DEFAULT_LINEAGE_FAULT_TEMPLATE, LINEAGE_FAULT_ACTION, LINEAGE_FAULT_BATCH, LINEAGE_FAULT_TEMPLATE_KEY, NAME_TOKEN,
+  normalizeLineageFaultTemplate, planLineageFaultNotice, recipientNameOf, type FaultRow, type LineageFaultTemplate,
 } from '@/lib/lineageFaultNotice'
 
 export const dynamic = 'force-dynamic'
@@ -22,6 +23,11 @@ export const dynamic = 'force-dynamic'
 //
 // ⚠️ מניעת כפילויות: כל משפחה שקיבלה נרשמת ב-activity_log עם
 // LINEAGE_FAULT_ACTION, ומשפחה שרשומה שם לא נשלחת שוב, גם בהרצה חוזרת.
+//
+// הנוסח נערך במסך ונשמר ב-app_settings (LINEAGE_FAULT_TEMPLATE_KEY):
+//   { action: 'render', template, sampleName } → המייל לתצוגה חיה, בלי מסד
+//   { action: 'save', template }               → שמירת הנוסח
+// ⚠️ השליחה קוראת תמיד את הנוסח השמור במסד, לא נוסח שהגיע בבקשה.
 
 const LINK_DAYS = 30 // חייב להתאים לנוסח במייל ול-send-lineage-link
 
@@ -44,24 +50,49 @@ async function loadPlan(admin: SupabaseClient) {
   return planLineageFaultNotice(rows, new Set(sent.map(s => s.entity_id).filter((x): x is string => !!x)))
 }
 
+async function loadTemplate(admin: SupabaseClient): Promise<LineageFaultTemplate> {
+  const { data, error } = await admin.from('app_settings').select('value').eq('key', LINEAGE_FAULT_TEMPLATE_KEY).maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!data?.value) return DEFAULT_LINEAGE_FAULT_TEMPLATE
+  try { return normalizeLineageFaultTemplate(JSON.parse(data.value as string)) } catch { return DEFAULT_LINEAGE_FAULT_TEMPLATE }
+}
+
 const siteBase = () =>
   (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://chasamsofer.co.il').replace(/\/$/, '')
+
+const sampleLink = () => `${siteBase()}/lineage-review/<קישור-אישי-לכל-משפחה>`
+const fail = (e: unknown) => NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 })
 
 export async function POST(request: NextRequest) {
   await ensureEmailTexts()
   const staff = await requirePermission('lineage', 'edit')
   if (!staff) return forbidden()
 
-  let body: { send?: boolean } = {}
+  let body: { send?: boolean; action?: string; template?: unknown; sampleName?: unknown } = {}
   try { body = await request.json() } catch { /* בלי גוף = תצוגה מקדימה */ }
+
+  // תצוגה חיה בזמן העריכה: אותה בנייה בדיוק כמו בשליחה, בלי מסד.
+  if (body.action === 'render') {
+    const name = typeof body.sampleName === 'string' && body.sampleName.trim() ? body.sampleName.trim().slice(0, 120) : 'כהן משה'
+    const mail = lineageFaultEmail({ recipientName: name, link: sampleLink(), template: normalizeLineageFaultTemplate(body.template) })
+    return NextResponse.json(mail)
+  }
 
   const admin = getServiceClient()
   if (!admin) return NextResponse.json({ error: 'Supabase לא מוגדר' }, { status: 500 })
 
-  let plan
-  try { plan = await loadPlan(admin) } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 })
+  if (body.action === 'save') {
+    const template = normalizeLineageFaultTemplate(body.template)
+    const { error } = await admin.from('app_settings').upsert(
+      { key: LINEAGE_FAULT_TEMPLATE_KEY, value: JSON.stringify(template), updated_at: new Date().toISOString() },
+      { onConflict: 'key' },
+    )
+    if (error) return fail(error)
+    return NextResponse.json({ ok: true, template })
   }
+
+  let plan, template
+  try { [plan, template] = await Promise.all([loadPlan(admin), loadTemplate(admin)]) } catch (e) { return fail(e) }
 
   const sender = mailFor('igud')
   const names = (rows: FaultRow[]) => rows.map(r => ({ id: r.id, name: recipientNameOf(r), email: r.email }))
@@ -70,7 +101,8 @@ export async function POST(request: NextRequest) {
     const first = plan.toSend[0]
     const sample = lineageFaultEmail({
       recipientName: first ? recipientNameOf(first) : 'כהן משה',
-      link: `${siteBase()}/lineage-review/<קישור-אישי-לכל-משפחה>`,
+      link: sampleLink(),
+      template,
     })
     return NextResponse.json({
       dryRun: true,
@@ -80,8 +112,15 @@ export async function POST(request: NextRequest) {
       noLineage: names(plan.noLineage),
       alreadySent: plan.alreadySent.length,
       from: `${sender.fromName} <${sender.fromEmail}>`,
-      sample: { to: first?.email ?? null, subject: sample.subject, html: sample.html },
+      sample: { to: first?.email ?? null, name: first ? recipientNameOf(first) : 'כהן משה', subject: sample.subject, html: sample.html },
+      template,
+      defaultTemplate: DEFAULT_LINEAGE_FAULT_TEMPLATE,
     })
+  }
+
+  // שם המשפחה נמחק מהגוף: לא שולחים מייל בלי פנייה אישית.
+  if (!template.bodyHtml.includes(NAME_TOKEN)) {
+    return NextResponse.json({ error: 'שם המשפחה חסר בגוף המייל. יש להחזיר אותו ולשמור את הנוסח לפני השליחה.' }, { status: 400 })
   }
 
   const batch = plan.toSend.slice(0, LINEAGE_FAULT_BATCH)
@@ -102,7 +141,7 @@ export async function POST(request: NextRequest) {
     })
     if (invErr) { failed.push({ name: recipientName, email: ben.email, error: invErr.message }); continue }
 
-    const mail = lineageFaultEmail({ recipientName, link: `${siteBase()}/lineage-review/${token}` })
+    const mail = lineageFaultEmail({ recipientName, link: `${siteBase()}/lineage-review/${token}`, template })
     let res: { ok: boolean; error?: string }
     try {
       res = await deliverMail(ben.email, mail.subject, mail.html, [], { ...sender, transactional: true })
