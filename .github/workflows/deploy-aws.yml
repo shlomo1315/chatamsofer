@@ -24,8 +24,10 @@ env:
   ECS_TASK_FAMILY: ${{ vars.ECS_TASK_FAMILY }}
 
 jobs:
-  # בדיקת טיפוסים במקביל לפריסה (בבנייה עצמה היא מדולגת)
-  typecheck:
+  # 🔴 שער לפני פריסה: בדיקת טיפוסים + כל הבדיקות האוטומטיות.
+  # הפריסה (needs) לא מתחילה אם אחת מהן נכשלה — גרסה שבורה לא עולה לאוויר.
+  # (קודם בדיקת הטיפוסים רצה *במקביל* לפריסה ולא עצרה אותה, והבדיקות לא רצו בכלל.)
+  checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,9 +36,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx tsc --noEmit
+      - name: בדיקת טיפוסים
+        run: npx tsc --noEmit
+      - name: בדיקות אוטומטיות
+        run: npx vitest run
 
   deploy:
+    needs: checks
     if: ${{ vars.AWS_DEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     steps:
