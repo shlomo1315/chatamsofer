@@ -58,7 +58,8 @@ function rangeText(rows: DonorRow[]): string {
 export function Gate({ title, text, children }: { title: string; text: string; children?: React.ReactNode }) {
   return (
     <div className="login"><div className="tile">
-      <div className="mark" style={{ margin: 'auto' }}>ח</div>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img className="logo logo-lg" src="/logo.png" alt="איגוד הצאצאים של רבינו החתם סופר" width={512} height={428} />
       <h2>{title}</h2><p>{text}</p>
       {children}
     </div></div>
@@ -334,7 +335,8 @@ export default function DonorReportView({ token }: { token: string }) {
     <>
       <div id="tip" ref={tip} />
       <div className="report">
-        <div className="top"><div className="mark">ח</div><div><h1>דוח יולדות</h1><p>היכל החתם סופר</p></div><span className="live"><i />מתעדכן חי</span></div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <div className="top"><img className="logo" src="/logo.png" alt="איגוד הצאצאים של רבינו החתם סופר" width={512} height={428} /><div><h1>דוח יולדות</h1><p>היכל החתם סופר</p></div><span className="live"><i />מתעדכן חי</span></div>
         <div className="grid">
           <PeriodPanel all={all} rows={R} F={F} homes={homes} homeGroups={homeGroups} T={T}
             setRange={(from, to) => { setF(f => ({ ...f, from, to })); setShown(10) }}

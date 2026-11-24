@@ -359,7 +359,8 @@ export default function ChargesView({ token }: { token: string }) {
       <div className="wrap">
         <header className="top">
           <div className="brand">
-            <span className="mark" aria-hidden="true">ח</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="logo" src="/logo.png" alt="איגוד הצאצאים של רבינו החתם סופר" width={512} height={428} />
             <div>
               <h1>{data?.label || 'מעקב אשראי – יולדות שאושרו'}</h1>
               <small>קישור צפייה{homesText ? ` · ${homesText}` : ''}</small>
