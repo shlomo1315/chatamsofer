@@ -24,6 +24,15 @@ const GEN_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
 
 const noSubscribe = () => () => {}
 
+/** ISO → "YYYY-MM-DDTHH:mm" בשעון המקומי, לשדה datetime-local. */
+function toLocalInput(iso: unknown): string {
+  const t = typeof iso === 'string' ? Date.parse(iso) : NaN
+  if (Number.isNaN(t)) return ''
+  const d = new Date(t)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
 function score(v: string): number {
   if (!v) return 0
   let n = 0
@@ -57,6 +66,8 @@ export default function DistributionsShareDashboard() {
   const [copied, setCopied] = useState(false)
   const [holidaysOnly, setHolidaysOnly] = useState<boolean | null>(null)
   const [scopeSaving, setScopeSaving] = useState(false)
+  // מועד סגירת הרישום לשעון העצר, בפורמט של datetime-local (שעון מקומי)
+  const [closesAt, setClosesAt] = useState('')
 
   const loadSessions = useCallback(async () => {
     const r = await fetch('/api/admin/distributions-share/sessions')
@@ -74,7 +85,11 @@ export default function DistributionsShareDashboard() {
       .catch(() => {})
     fetch('/api/admin/distributions-share/scope')
       .then(r => (r.ok ? r.json() : null))
-      .then(d => { if (d) setHolidaysOnly(d.holidaysOnly !== false) })
+      .then(d => {
+        if (!d) return
+        setHolidaysOnly(d.holidaysOnly !== false)
+        setClosesAt(toLocalInput(d.closesAt))
+      })
       .catch(() => {})
   }, [])
 
@@ -103,6 +118,25 @@ export default function DistributionsShareDashboard() {
       if (!r.ok) { toast.error(d.error || 'שגיאה בשמירה'); return }
       setHolidaysOnly(on)
       toast.success(on ? 'הקישור מציג עכשיו רק חלוקות חגים' : 'הקישור מציג עכשיו את כל המחלקות')
+    } catch {
+      toast.error('שגיאה בשמירה')
+    } finally {
+      setScopeSaving(false)
+    }
+  }
+
+  async function saveClosesAt(local: string) {
+    setScopeSaving(true)
+    try {
+      const r = await fetch('/api/admin/distributions-share/scope', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ closesAt: local ? new Date(local).toISOString() : null }),
+      })
+      const d = await r.json()
+      if (!r.ok) { toast.error(d.error || 'שגיאה בשמירה'); return }
+      setClosesAt(local)
+      toast.success(local ? 'מועד הסגירה נשמר, והשעון בקישור מתעדכן' : 'השעון הוסר מהקישור')
     } catch {
       toast.error('שגיאה בשמירה')
     } finally {
@@ -198,6 +232,27 @@ export default function DistributionsShareDashboard() {
               />
               <span>חלוקות חגים בלבד (עזר יולדות וצאצאים מוסתרים)</span>
             </label>
+          )}
+          {holidaysOnly !== null && (
+            <div className={s.row} style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <label htmlFor="share-closes-at">סגירת הרישום (לשעון בקישור)</label>
+              <input
+                id="share-closes-at"
+                type="datetime-local"
+                value={closesAt}
+                disabled={scopeSaving}
+                onChange={e => setClosesAt(e.target.value)}
+              />
+              <button type="button" className={`${s.btn} ${s.pri}`} disabled={scopeSaving || !closesAt} onClick={() => void saveClosesAt(closesAt)}>
+                שמור מועד
+              </button>
+              {closesAt && (
+                <button type="button" className={s.btn} disabled={scopeSaving} onClick={() => void saveClosesAt('')}>
+                  הסר
+                </button>
+              )}
+              <p style={{ margin: 0, fontSize: 12 }}>תצוגה בלבד: הרישום עצמו נסגר במתג של החלוקה.</p>
+            </div>
           )}
         </div>
 

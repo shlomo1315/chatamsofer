@@ -3,7 +3,7 @@ import { verifyPortalToken, DIST_PORTAL_COOKIE } from '@/lib/distributionsPortal
 import { createClient } from '@supabase/supabase-js'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { pickLiveDistribution } from '@/lib/distributionEnabled'
-import { getHolidaysOnly } from '@/lib/distributionsShareScope'
+import { getHolidaysOnly, getClosesAt } from '@/lib/distributionsShareScope'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // דף שיתוף חלוקות חגים — API לתצוגה בלבד (view-only).
@@ -70,9 +70,11 @@ export async function GET(req: NextRequest) {
   // הייתה סיבת האיטיות של הדף כולו.
 
   // 🔴 "חגים בלבד" (ברירת המחדל): לא שולפים ולא מחזירים יולדות או צאצאים.
-  if (await getHolidaysOnly(admin)) {
+  // מועד הסגירה לשעון העצר בראש דף החגים (תצוגה בלבד).
+  const [holidaysOnly, closesAt] = await Promise.all([getHolidaysOnly(admin), getClosesAt(admin)])
+  if (holidaysOnly) {
     return NextResponse.json(
-      { distributions: distributions ?? [], recipients, holidaysOnly: true },
+      { distributions: distributions ?? [], recipients, holidaysOnly: true, closesAt },
       { headers: { 'Cache-Control': 'no-store' } },
     )
   }
@@ -122,6 +124,7 @@ export async function GET(req: NextRequest) {
       recipients,
       beneficiariesCount: beneficiariesCount ?? 0,
       maternity,
+      closesAt,
     },
     { headers: { 'Cache-Control': 'no-store' } },
   )

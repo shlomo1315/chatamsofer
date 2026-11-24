@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useMemo, type CSSProperties, type ReactNode } from 'react'
 import SharedRecipientsTable from './panels/SharedRecipientsTable'
+import MoneyBoard, { Countdown } from './panels/MoneyBoard'
 import { Lock, LogIn, Loader2, Users, Search, MapPin, Baby, GitBranch } from 'lucide-react'
 import s from './board.module.css'
 import {
@@ -923,6 +924,7 @@ export default function SharedDistributionsPage() {
   // 🔴 "חגים בלבד" (הגדרת ניהול, ברירת מחדל פעילה): רק דף החגים מוצג.
   // מתחיל כ-true כדי ששאר המחלקות לא יהבהבו לפני שהשרת עונה.
   const [holidaysOnly, setHolidaysOnly] = useState(true)
+  const [closesAt, setClosesAt] = useState<string | null>(null)
   const page: Page = holidaysOnly ? 'holidays' : hashPage
   // null = ברירת מחדל: החלוקה החיה אם יש, אחרת חלוקות קודמות
   const [holView, setHolView] = useState<'live' | 'prev' | null>(null)
@@ -942,6 +944,7 @@ export default function SharedDistributionsPage() {
         setBeneficiariesCount(d.beneficiariesCount ?? 0)
         setMaternity(d.maternity ?? [])
         setHolidaysOnly(d.holidaysOnly === true)
+        setClosesAt(typeof d.closesAt === 'string' ? d.closesAt : null)
         setUpdatedAt(new Date())
         setState('unlocked')
       }
@@ -1221,6 +1224,8 @@ export default function SharedDistributionsPage() {
 
                   {tab !== 'recipients' && tab !== 'breakdown' && (
                     <>
+                      {view === 'live' && <Countdown closesAt={closesAt} />}
+                      {selected && <MoneyBoard rows={selRows} perFamily={selected.amount_per_family} />}
                       <div className={`${s.g} ${s.k2} ${s.mb}`}>
                         <div className={`${s.kpi} ${s.s3}`}>
                           <span className={s.lb}>נרשמו</span>

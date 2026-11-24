@@ -1,0 +1,53 @@
+/* מחוני כסף, סינון ושעון עצר בראש דף חלוקות החגים (עיצוב ב׳ · לוח).
+   המשתנים (--ink, --line, --s4 ...) מגיעים מ-.B שבדף. */
+
+/* ── שעון עצר ── */
+.cd { display: flex; align-items: center; justify-content: space-between; gap: var(--s5); flex-wrap: wrap;
+  background: var(--ink); color: #fff; border-radius: 10px; padding: var(--s4) var(--s5); }
+.cd h2 { font-size: var(--t1); font-weight: 600; }
+.cd p { font-size: var(--t-1); color: #d8d2c4; margin-top: 2px; }
+.units { display: flex; gap: var(--s2); }
+.u { min-width: 72px; text-align: center; background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 8px; padding: var(--s2) var(--s3); }
+.u b { display: block; font-size: var(--t4); font-weight: 700; line-height: 1.1; color: #e9cf8e; font-variant-numeric: tabular-nums; }
+.u span { font-size: var(--t-1); color: #d8d2c4; }
+.closed { background: var(--surf); color: var(--ink); border: 1px solid var(--line); }
+.closed p { color: var(--mut); }
+.closed .tag { font-size: var(--t2); font-weight: 700; color: #a3361f; }
+
+/* ── סינון ── */
+.fl { display: grid; gap: var(--s3); }
+.row { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: flex-end; }
+.fld { display: grid; gap: 4px; font-size: var(--t-1); color: var(--mut); }
+.fld input, .fld select { font: inherit; font-size: var(--t0); color: var(--ink); background: var(--surf);
+  border: 1px solid var(--line); border-radius: 8px; height: 34px; padding: 0 var(--s2); min-width: 0; }
+.fld input[type='number'] { width: 96px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 104px; overflow-y: auto; }
+.chip { font-size: var(--t-1); border: 1px solid var(--line) !important; border-radius: 99px !important; padding: 4px 10px !important;
+  min-height: 30px; color: var(--ink); background: var(--surf) !important; }
+.chip em { font-style: normal; color: var(--mut); margin-inline-start: 4px; }
+.chipOn { background: var(--ink) !important; color: #fff !important; border-color: var(--ink) !important; }
+.chipOn em { color: #d8d2c4; }
+.meta { display: flex; justify-content: space-between; align-items: center; gap: var(--s3); font-size: var(--t-1); color: var(--mut); }
+.reset { font-size: var(--t-1); font-weight: 600; color: var(--acc); text-decoration: underline; }
+
+/* ── פסי קהילות ── */
+.cm { display: grid; grid-template-columns: 120px 1fr 92px; align-items: center; gap: var(--s3); font-size: var(--t0); padding: 5px 0; }
+.cm .l { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cm .t { height: 12px; background: var(--track); border-radius: 2px; overflow: hidden; }
+.cm .t i { display: block; height: 100%; width: var(--w); min-width: 3px; background: var(--hol); border-radius: 2px; }
+.cm b { text-align: left; font-weight: 600; }
+.cm small { display: block; text-align: left; font-size: 11px; color: var(--mut); font-weight: 400; }
+.cmList { max-height: 340px; overflow-y: auto; }
+.split { height: 8px; border-radius: 99px; overflow: hidden; display: flex; background: var(--track); margin-top: 4px; }
+.split i { display: block; height: 100%; }
+
+@media (max-width: 760px) {
+  .cd { padding: var(--s4); }
+  .units { width: 100%; }
+  .u { flex: 1; min-width: 0; padding: var(--s2) 4px; }
+  .u b { font-size: var(--t3); }
+  .fld { flex: 1 1 140px; }
+  .fld input[type='number'] { width: 100%; }
+  .cm { grid-template-columns: 84px 1fr 78px; }
+}
