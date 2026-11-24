@@ -38,6 +38,10 @@
 .live i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 0 var(--ok); animation: ring 2s infinite }
 .live.stale { color: var(--ac2) }
 .live.stale i { background: var(--ac2); animation: none }
+/* טעינה ברקע / כשל בטעינה — שורה מתחת לכותרת */
+.note { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; font-size: 13px; color: var(--mute); background: var(--sf2); border: 1px solid var(--line); border-radius: 10px; padding: var(--s2) var(--s3); margin: calc(-1 * var(--s2)) 0 var(--s4) }
+.note.err { color: var(--ac2); border-color: var(--ac2-s); background: var(--ac2-s) }
+.note button { font-weight: 700; text-decoration: underline; color: inherit }
 @keyframes ring { 70% { box-shadow: 0 0 0 6px transparent } 100% { box-shadow: 0 0 0 0 transparent } }
 .tg { font-size: 12.5px; border: 1px solid var(--line) !important; border-radius: 99px; padding: 0 var(--s3) !important; min-height: 32px; color: var(--mute) !important }
 .tg[aria-pressed=true] { color: var(--ink) !important }

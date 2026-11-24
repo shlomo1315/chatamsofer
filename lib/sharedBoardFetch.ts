@@ -140,9 +140,14 @@ export function sharedLoadingText(p: BoardProgress): string {
   return `נטענו ${p.loaded.toLocaleString('he-IL')} נרשמים · טוען חלק ${p.part}…`
 }
 
+/**
+ * 🔴 24.11.2026: onPartial מקבל את הנתונים אחרי כל חלק שאחריו יש עוד, כדי
+ * שהדף יוצג מיד אחרי החלק הראשון ולא יחכה לכל הנרשמים (שלמה חיכה על גלגל).
+ */
 export async function fetchSharedBoard(
   fetchFn: FetchFn = fetch, timeoutMs = SHARED_FETCH_TIMEOUT_MS, distId: string | null = null,
   onProgress?: (p: BoardProgress) => void, totalMs = SHARED_TOTAL_TIMEOUT_MS,
+  onPartial?: (data: Record<string, unknown>) => void,
 ): Promise<BoardResult> {
   const dist = distId ? `dist=${encodeURIComponent(distId)}` : ''
   let data: Record<string, unknown> | null = null
@@ -173,8 +178,50 @@ export async function fetchSharedBoard(
       recipients.push(row)
     }
     if (r.data.hasMore !== true) break
+    onPartial?.({ ...data, recipients: [...recipients] })
   }
   return { kind: 'ok', data: { ...data, recipients } }
+}
+
+// ── עדכון חי ─────────────────────────────────────────────────────────────────
+// 🔴 24.11.2026: הרענון האוטומטי טען מחדש את כל הנרשמים בכל סבב, חלק אחרי חלק.
+// עכשיו כל סבב מבקש רק נרשמים מהזמן האחרון ואילך (?after=), וטעינה מלאה
+// (שמשלימה גם שינויי סטטוס בנרשמים ישנים) רצה ברקע רק פעם ב-SHARED_FULL_REFRESH_MS.
+export const SHARED_LIVE_TICK_MS = 10_000
+export const SHARED_FULL_REFRESH_MS = 120_000
+
+/** הנרשמים מהזמן `after` ואילך (כולל), עם החלוקות והגדרות הדף. */
+export async function fetchBoardUpdates(
+  after: string, distId: string | null = null, fetchFn: FetchFn = fetch, timeoutMs = SHARED_FETCH_TIMEOUT_MS,
+): Promise<BoardResult> {
+  const qs = [`after=${encodeURIComponent(after)}`, distId ? `dist=${encodeURIComponent(distId)}` : ''].filter(Boolean).join('&')
+  const r = await fetchPart(fetchFn, `/api/shared/distributions?${qs}`, timeoutMs)
+  if (r.kind !== 'ok') return r
+  return { kind: 'ok', data: r.data }
+}
+
+/** זמן הרישום המאוחר ביותר — נקודת ההמשך לעדכון החי. */
+export function latestRegisteredAt(rows: { registered_at?: string | null }[]): string | null {
+  let max: string | null = null
+  let maxMs = -Infinity
+  for (const r of rows) {
+    const ms = r.registered_at ? Date.parse(r.registered_at) : NaN
+    if (ms > maxMs) { maxMs = ms; max = r.registered_at! }
+  }
+  return max
+}
+
+/** משלב נרשמים שהגיעו בעדכון: שורה קיימת מתעדכנת במקומה, חדשה נכנסת בסוף. */
+export function mergeRecipients<T extends { id: string }>(rows: T[], incoming: T[]): T[] {
+  if (!incoming.length) return rows
+  const byId = new Map(incoming.map(r => [r.id, r]))
+  const merged = rows.map(r => {
+    const n = byId.get(r.id)
+    if (!n) return r
+    byId.delete(r.id)
+    return { ...r, ...n }
+  })
+  return [...merged, ...byId.values()]
 }
 
 export async function postSharedPassword(password: string, fetchFn: FetchFn = fetch, timeoutMs = SHARED_FETCH_TIMEOUT_MS): Promise<AuthResult> {

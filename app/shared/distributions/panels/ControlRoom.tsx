@@ -20,6 +20,10 @@ type Props = {
   rows: CrRow[]
   closesAt: string | null
   updatedAt: Date | null
+  /** נרשמים שכבר נטענו כשעוד נטענים ברקע (null = הכול נטען). */
+  loadingMore?: number | null
+  loadError?: string | null
+  onRetry?: () => void
   onPickLive: () => void
   onPickPrev: (id: string) => void
   onLogout: () => void
@@ -33,7 +37,7 @@ const CH_CLASS = [c.c0, c.c1, c.c2, c.c3, c.c4]
 const hhmm = (iso?: string | null) => (iso ? new Date(iso).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', hour12: false }) : '')
 const cls = (...a: (string | false | null | undefined)[]) => a.filter(Boolean).join(' ')
 
-export default function ControlRoom({ live, prevDists, selected, rows, closesAt, updatedAt, onPickLive, onPickPrev, onLogout, otherPages }: Props) {
+export default function ControlRoom({ live, prevDists, selected, rows, closesAt, updatedAt, loadingMore = null, loadError = null, onRetry, onPickLive, onPickPrev, onLogout, otherPages }: Props) {
   const isLive = !!selected && selected.id === live?.id
   const per = selected?.amount_per_family
 
@@ -54,14 +58,18 @@ export default function ControlRoom({ live, prevDists, selected, rows, closesAt,
   const [alertOn, setAlertOn] = useState(true)
   const [queue, setQueue] = useState<CrRow[]>([])
   const seen = useRef<{ id?: string; ids: Set<string> }>({ ids: new Set() })
+  // ⚠️ נרשמים שמגיעים בטעינה ברקע (וגם בחלק האחרון שלה) הם לא "נרשמו עכשיו"
+  const wasLoading = useRef(false)
   useEffect(() => {
-    if (seen.current.id !== selected?.id) {
+    const seeding = loadingMore != null || wasLoading.current
+    wasLoading.current = loadingMore != null
+    if (seen.current.id !== selected?.id || seeding) {
       seen.current = { id: selected?.id, ids: new Set(rows.map(r => r.id)) }
       return
     }
     const fresh = takeFresh(seen.current.ids, rows)
     if (isLive && alertOn && fresh.length) setQueue(q => [...q, ...fresh].slice(0, 3))
-  }, [rows, selected?.id, isLive, alertOn])
+  }, [rows, selected?.id, isLive, alertOn, loadingMore])
   const toast = queue[0] ?? null
   useEffect(() => {
     if (!toast) return
@@ -167,6 +175,16 @@ export default function ControlRoom({ live, prevDists, selected, rows, closesAt,
               </button>
             )}
           </div>
+          {loadError ? (
+            <div role="alert" className={cls(c.note, c.err)}>
+              <span>{loadError}</span>
+              {onRetry && <button type="button" onClick={onRetry}>נסה שוב</button>}
+            </div>
+          ) : loadingMore != null && (
+            <div role="status" className={c.note}>
+              נטענו {loadingMore.toLocaleString('he-IL')} נרשמים · טוען את השאר ברקע, הסיכומים מתעדכנים תוך כדי…
+            </div>
+          )}
 
           <div className={c.fl}>
             {on.length ? (
@@ -220,7 +238,7 @@ export default function ControlRoom({ live, prevDists, selected, rows, closesAt,
 
               {isLive && (
                 <section className={cls(c.p, c.sLive)}>
-                  <h2>קצב רישום <small>15 הדקות האחרונות · מתעדכן כל 15 שניות</small></h2>
+                  <h2>קצב רישום <small>15 הדקות האחרונות · מתעדכן כל 10 שניות</small></h2>
                   <div className={c.lvTop}>
                     <div className={c.rate}><b>{ratePerMinute(buckets)}</b><small>נרשמים בדקה</small></div>
                     <div className={c.cn}>
