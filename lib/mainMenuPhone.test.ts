@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  MAIN_MENU_MESSAGE_META, defaultMainMenuMessages, mergeMainMenuMessages,
+  MAIN_MENU_MESSAGE_META, defaultMainMenuMessages, mergeMainMenuMessages, toStoredMainMenuMessages,
 } from './mainMenuPhone'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -60,5 +60,43 @@ describe('הודעות התפריט הראשי', () => {
     for (const digit of ['1', '2', '9']) {
       expect(menu, `מקש ${digit} אינו מוזכר בתפריט`).toContain(digit)
     }
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 24.11: שלוחה 9 השמיעה "אין כרגע הודעות חדשות" במקום נוסח חנוכה, כי
+// שמירה ישנה במסך הניהול הקפיאה את ברירת המחדל הקודמת במסד.
+describe('נוסח ישן שהוקפא במסד', () => {
+  const noticeDefault = MAIN_MENU_MESSAGE_META.find(m => m.key === 'notice')!.defaultText
+
+  it('"אין כרגע הודעות חדשות" שמור מוחלף בנוסח הנוכחי, גם עם קובץ קול ישן', () => {
+    for (const text of ['אין כרגע הודעות חדשות', 'אין כרגע הודעות חדשות.', ' אין כרגע הודעות חדשות ']) {
+      const m = mergeMainMenuMessages({ notice: { text, audio: 'old.wav' }, welcome: { text: 'שלום' } })
+      expect(m.notice).toEqual({ text: noticeDefault, audio: null })
+      expect(m.welcome.text).toBe('שלום')
+    }
+    expect(noticeDefault).toContain('חנוכה')
+  })
+
+  it('נוסח שנערך ידנית נשאר', () => {
+    expect(mergeMainMenuMessages({ notice: { text: 'אין כרגע הודעות חדשות, חוץ מזו' } }).notice.text)
+      .toBe('אין כרגע הודעות חדשות, חוץ מזו')
+  })
+
+  it('שמירה לא מקפיאה ברירות מחדל: נשמרות רק הודעות שנערכו', () => {
+    const all = defaultMainMenuMessages()
+    all.welcome = { text: 'ברוכים הבאים', audio: null }
+    all.invalid = { ...all.invalid, audio: 'invalid.wav' }
+    const stored = toStoredMainMenuMessages(all)
+    expect(Object.keys(stored).sort()).toEqual(['invalid', 'welcome'])
+    expect(stored.notice).toBeUndefined()
+    // ונטען בחזרה עם ברירות המחדל הנוכחיות
+    expect(mergeMainMenuMessages(stored).notice.text).toBe(noticeDefault)
+  })
+
+  it('ריק נשמר (ריק = דלג)', () => {
+    const all = defaultMainMenuMessages()
+    all.temp_notice = { text: '', audio: null }
+    expect(toStoredMainMenuMessages(all).temp_notice).toEqual({ text: '', audio: null })
   })
 })
