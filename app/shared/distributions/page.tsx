@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback, useMemo, type CSSProperties, type ReactNode } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, type CSSProperties, type ReactNode } from 'react'
 import ControlRoom from './panels/ControlRoom'
 import { Lock, LogIn, Loader2, Search, GitBranch, AlertTriangle, RefreshCw } from 'lucide-react'
 import { fetchSharedBoard, postSharedPassword } from '@/lib/sharedBoardFetch'
@@ -832,13 +832,15 @@ export default function SharedDistributionsPage() {
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
 
   const [loadError, setLoadError] = useState<string | null>(null)
+  // חלוקה קודמת שנבחרה לצפייה — השרת מחזיר נרשמים רק לחיה ולזו (boardRecipientDistIds)
+  const wantDistRef = useRef<string | null>(null)
 
   const load = useCallback(async () => {
     // 🔴 מגבלת זמן: בקשה אחת שנתקעה (למשל בסינון של נטפרי) השאירה את
     // הרענון האוטומטי "עסוק" לתמיד, והדף הפסיק לקבל נרשמים חדשים בשקט.
     // 🔴 כשל נשמר ב-loadError ומוצג: קודם כשל בטעינה הראשונה (גם מיד אחרי
     // סיסמה נכונה) השאיר את הדף על גלגל טעינה לנצח, בלי הודעה.
-    const r = await fetchSharedBoard()
+    const r = await fetchSharedBoard(undefined, undefined, wantDistRef.current)
     if (r.kind === 'locked') { setLoadError(null); setState('locked'); return }
     if (r.kind === 'error') { setLoadError(r.message); return }
     const d = r.data as {
@@ -932,6 +934,13 @@ export default function SharedDistributionsPage() {
   const selected = view === 'live' && live ? live : (prevDists.find(d => d.id === pickedId) ?? prevDists[0] ?? null)
   const selRows = useMemo(() => (selected ? byDist.get(selected.id) ?? [] : []), [selected, byDist])
   const homeDist = live ?? distributions[0] ?? null
+  // מעבר לחלוקה קודמת: טוענים מיד את הנרשמים שלה (הם לא מגיעים ברענון הרגיל)
+  const wantDist = selected && selected.id !== homeDist?.id ? selected.id : null
+  useEffect(() => {
+    if (wantDistRef.current === wantDist) return
+    wantDistRef.current = wantDist
+    if (wantDist && !byDist.has(wantDist)) load()
+  }, [wantDist, byDist, load])
   const homeRows = useMemo(() => (homeDist ? byDist.get(homeDist.id) ?? [] : []), [homeDist, byDist])
 
   const home = useMemo(() => ({

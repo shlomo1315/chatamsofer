@@ -4,11 +4,13 @@ import { createClient } from '@supabase/supabase-js'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { pickLiveDistribution } from '@/lib/distributionEnabled'
 import { getHolidaysOnly, getClosesAt } from '@/lib/distributionsShareScope'
+import { boardRecipientDistIds } from '@/lib/sharedBoardFetch'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // דף שיתוף חלוקות חגים — API לתצוגה בלבד (view-only).
 //
-// מחזיר את *כל* החלוקות ואת *כל* הנרשמים בהן, עם אותם שדות שמסך הניהול מציג.
+// מחזיר את *כל* החלוקות, ואת הנרשמים רק בחלוקה החיה ובחלוקה שנבחרה (?dist=),
+// עם אותם שדות שמסך הניהול מציג.
 // אין כאן שום כתיבה — הדף המשותף הוא קריאה בלבד. אימות דרך cookie הסיסמה בלבד.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -50,7 +52,8 @@ export async function GET(req: NextRequest) {
   // ⚠️ שליפה בדפים ולא ב-limit: התקרה נאכפת בצד השרת (db-max-rows) ואינה
   // ניתנת לעקיפה מהלקוח — .limit(100000) נוסה ולא עזר, הרשימה נחתכה ב-1,000
   // בלי שגיאה. ראו lib/fetchAllRows.
-  const ids = (distributions ?? []).map(d => d.id)
+  // 🔴 רק החלוקות שהדף מציג (החיה + קודמת שנבחרה ב-?dist=) — ראו boardRecipientDistIds.
+  const ids = boardRecipientDistIds(rows, liveId, req.nextUrl.searchParams.get('dist'))
   let recipients: unknown[] = []
   if (ids.length) {
     const { rows, error: recErr } = await fetchAllRows<unknown>((from, to) => admin
