@@ -279,6 +279,26 @@ async function logSentEmail(
   }
 }
 
+// 🔴 גרסת הטקסט של המייל.
+//
+// ⚠️ קישור נשמר ככתובת מלאה ("תווית: כתובת"). קודם כל התגיות נמחקו
+// כולל ה-href, ובגרסת הטקסט של מייל הבירור נשאר רק "לעדכון סדר הדורות"
+// בלי כתובת — המשפחה קיבלה "מצ"ב קישור" בלי קישור (A2, 16.11).
+export function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<a\b[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (_m, href: string, inner: string) => {
+      const label = inner.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
+      if (!/^https?:/i.test(href)) return label
+      return label && label !== href ? `${label}: ${href}` : href
+    })
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|tr|h[1-6])>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/\n{3,}/g, '\n\n').replace(/[ \t]{2,}/g, ' ').trim()
+}
+
 // שליחת מייל דרך Resend. ברירת המחדל לשולח היא noreply@chasamsofer.info,
 // אך מיילים מחלקתיים נשלחים מכתובת המחלקה (fromEmail). תומך בצרופות.
 export async function deliverMail(
@@ -365,13 +385,7 @@ export async function deliverMail(
   }
 
   // גרסת טקסט רגיל (multipart) — משפרת מסירה ומקטינה סיכוי לספאם
-  const text = html
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div|tr|h[1-6])>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-    .replace(/\n{3,}/g, '\n\n').replace(/[ \t]{2,}/g, ' ').trim()
+  const text = htmlToPlainText(html)
 
   // כותרת הסרה מרשימת תפוצה. לדיוור המוני (ניוזלטר) מעבירים קישור One-Click —
   // דרישה של Gmail משולחים מסיביים; בלעדיה המיילים מסומנים כספאם.
