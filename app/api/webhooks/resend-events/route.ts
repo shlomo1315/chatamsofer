@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { addUnsubscribe } from '@/lib/unsubscribe'
 import { verifySvixSignature } from '@/lib/svix'
+import { recordNewsletterEvent } from '@/lib/newsletter/trackEvent'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Webhook לאירועי מסירה של Resend — delivered / opened / clicked / bounced /
@@ -23,8 +24,6 @@ function admin(): SupabaseClient | null {
 // מיפוי סוג האירוע → העמודה שמתעדכנת אצל הנמען
 const EVENT_COLUMN: Record<string, string> = {
   'email.delivered': 'delivered_at',
-  'email.opened': 'opened_at',
-  'email.clicked': 'clicked_at',
   'email.bounced': 'bounced_at',
   'email.complained': 'complained_at',
 }
@@ -54,12 +53,27 @@ export async function POST(request: NextRequest) {
   const db = admin()
   if (!db) return NextResponse.json({ error: 'server' }, { status: 500 })
 
-  // איתור הנמען לפי מזהה Resend
-  const { data: recipient } = await db
-    .from('campaign_recipients')
-    .select('id, email, campaign_id, beneficiary_id, open_count, click_count')
-    .eq('resend_id', resendId)
-    .maybeSingle()
+  // איתור הנמען לפי מזהה Resend (own_tracking קיים רק אחרי המיגרציה של 24.11)
+  const cols = 'id, email, campaign_id, beneficiary_id'
+  let found = await db.from('campaign_recipients').select(`${cols}, own_tracking`).eq('resend_id', resendId).maybeSingle()
+  if (found.error) found = await db.from('campaign_recipients').select(cols).eq('resend_id', resendId).maybeSingle()
+  const recipient = found.data as { id: string; email: string; campaign_id: string; beneficiary_id: string | null; own_tracking?: boolean } | null
+
+  // פתיחה וקליק: דרך אותו רישום של הפיקסל שלנו (שעה ראשונה נשמרת, מונים אטומיים,
+  // סינון מכונות). כשהמעקב אצלנו, אירועי Resend מתעלמים כדי שלא ייספרו פעמיים.
+  if (recipient && (type === 'email.opened' || type === 'email.clicked')) {
+    if (recipient.own_tracking) return NextResponse.json({ ok: true, skipped: 'own tracking' })
+    const ev = (data.click ?? data.open) as Record<string, unknown> | undefined
+    await recordNewsletterEvent(db, {
+      recipientId: recipient.id,
+      kind: type === 'email.clicked' ? 'click' : 'open',
+      link: type === 'email.clicked' ? String(ev?.link ?? '') || null : null,
+      ua: String(ev?.userAgent ?? '') || null,
+      source: 'resend',
+      raw: data,
+    })
+    return NextResponse.json({ ok: true })
+  }
 
   const linkUrl = type === 'email.clicked'
     ? String((data.click as Record<string, unknown> | undefined)?.link ?? '')
@@ -77,14 +91,10 @@ export async function POST(request: NextRequest) {
 
   if (recipient) {
     const column = EVENT_COLUMN[type]
+    // השעה הראשונה נשמרת: אירוע חוזר לא דורס אותה
     if (column) {
-      const patch: Record<string, unknown> = { [column]: new Date().toISOString() }
-
-      // מונים — פתיחה/קליק יכולים לקרות כמה פעמים
-      if (type === 'email.opened') patch.open_count = (recipient.open_count ?? 0) + 1
-      if (type === 'email.clicked') patch.click_count = (recipient.click_count ?? 0) + 1
-
-      await db.from('campaign_recipients').update(patch).eq('id', recipient.id)
+      await db.from('campaign_recipients').update({ [column]: new Date().toISOString() })
+        .eq('id', recipient.id).is(column, null)
     }
 
     // ── הגנה על בריאות הדומיין ──
