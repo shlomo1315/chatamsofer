@@ -1,0 +1,52 @@
+/* דוח חיובים לפי תאריך: נשען על donor-report.css (משתנים, tile, seg, chip, dt, lo). */
+.dr-root.ch{font-family:Heebo,system-ui,sans-serif}
+.dr-root .barr{display:flex;gap:var(--s-2);align-items:center}
+.dr-root .ch-pick{display:flex;flex-direction:column;gap:var(--s-4);margin-top:var(--s-5)}
+.dr-root .ch-pick .seg{align-self:flex-start;flex-wrap:wrap}
+.dr-root .ch-inputs{display:flex;flex-wrap:wrap;gap:var(--s-3);align-items:center}
+.dr-root .ch-chips{display:flex;flex-wrap:wrap;gap:var(--s-2);width:100%}
+.dr-root .ch-presets{display:flex;flex-wrap:wrap;gap:var(--s-2)}
+.dr-root .ch-hint{font-size:13px;color:var(--mut)}
+.dr-root .ch-err{color:#b42318;font-size:14px;margin-top:var(--s-3)}
+.dr-root .ch-actions{display:flex;flex-wrap:wrap;gap:var(--s-3);align-items:center;margin:var(--s-4) 0}
+.dr-root .ch-actions .go{background:var(--tx);color:var(--bg);border:0;border-radius:var(--rad2);padding:8px 18px;font-size:14px;font-weight:700;min-height:40px}
+.dr-root .ch-actions button:disabled{opacity:.45;cursor:not-allowed}
+.dr-root .ch-sum{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--s-4);margin-bottom:var(--s-4)}
+.dr-root .ch-big{font-size:30px;font-weight:800;margin-top:4px}
+.dr-root .ch-mid{font-size:22px;font-weight:700;margin-top:4px}
+.dr-root .ch-branch{margin-bottom:var(--s-4)}
+.dr-root .ch-branch h2{font-size:18px;font-weight:800;display:flex;justify-content:space-between;gap:var(--s-3);flex-wrap:wrap;margin-bottom:var(--s-3)}
+.dr-root .ch-branch h2 span{font-size:14px;font-weight:600;color:var(--mut)}
+.dr-root .ch-day{margin-top:var(--s-4)}
+.dr-root .ch-day h3{font-size:14px;font-weight:700;color:var(--tx);letter-spacing:0;margin-bottom:var(--s-2)}
+.dr-root .ch-scroll{overflow-x:auto}
+.dr-root .ch-t{width:100%;border-collapse:collapse;font-size:13px}
+.dr-root .ch-t th{text-align:start;font-weight:600;color:var(--mut);padding:6px 8px;border-bottom:1px solid var(--ln2);white-space:nowrap}
+.dr-root .ch-t td{padding:7px 8px;border-bottom:1px solid var(--ln);vertical-align:top}
+.dr-root .ch-t td:last-child,.dr-root .ch-t th:last-child{text-align:end;white-space:nowrap}
+.dr-root .ch-day .ch-t td{white-space:nowrap}
+.dr-root .ch-day .ch-t td:nth-child(6){white-space:normal;min-width:160px}
+.dr-root .ch-day .ch-t .ch-tot td{white-space:normal}
+.dr-root .ch-t .ch-tot td{font-weight:800;background:var(--hov);border-bottom:0}
+@media(max-width:599px){
+  .dr-root .ch-sum{grid-template-columns:1fr 1fr}
+  .dr-root .ch-sum>div:first-child{grid-column:1/-1}
+  .dr-root .ch-big{font-size:26px}
+}
+
+/* הדפסה: רק הדוח, על רקע לבן, בלי סרגל ובלי בקרים. */
+@media print{
+  @page{size:A4;margin:12mm}
+  .dr-root.ch,.dr-root.ch *{--tx:#111;--mut:#444;--ln:#ccc;--ln2:#999;--hov:#f1f1f1;--bg:#fff;--s1:#fff;--s2:#fff;color-scheme:light}
+  .dr-root.ch{background:#fff !important;color:#111}
+  .dr-root.ch .bar,.dr-root.ch .no-print,.dr-root.ch .mark{display:none !important}
+  .dr-root.ch .wrap{max-width:none;padding:0}
+  .dr-root.ch .tile{background:#fff !important;border:0;border-radius:0;padding:0;box-shadow:none;overflow:visible}
+  .dr-root.ch .ch-sum{border-bottom:2px solid #111;padding-bottom:8px}
+  .dr-root.ch .ch-branch{break-before:auto;margin-top:16px}
+  .dr-root.ch .ch-day{break-inside:avoid}
+  .dr-root.ch .ch-scroll{overflow:visible}
+  .dr-root.ch .ch-t{font-size:11px}
+  .dr-root.ch .ch-t thead{display:table-header-group}
+  .dr-root.ch .ch-t .ch-tot td{background:#eee !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
