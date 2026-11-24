@@ -12,6 +12,8 @@ import { MERGE_TAGS, CONDITIONAL_BLOCKS } from '@/lib/newsletter/merge'
 import { NEWSLETTER_ACTIONS } from '@/lib/newsletter/actions'
 import { useToast } from '@/components/ui/Toast'
 import { sanitizeEmailHtml } from '@/lib/sanitizeEmailHtml'
+import { cleanPaste } from '@/components/editor/richTextTools'
+import FormatToolbar from './FormatToolbar'
 
 const NAVY = '#1B3256'
 const GOLD = '#C69D2D'
@@ -554,6 +556,7 @@ export default function BlockEditor({
 
       {/* ── קנבס חי ── */}
       <div className="flex-1 overflow-y-auto bg-slate-100 p-6" dir="rtl">
+        <FormatToolbar targetRef={lastEditable} onCommit={el => { if (el.dataset.blockId) update(el.dataset.blockId, { content: el.innerHTML }) }} />
         <div className="mx-auto max-w-[620px] overflow-hidden rounded-2xl bg-white shadow-lg">
           {/* פס navy + לוגו — כמו במעטפת האמיתית */}
           <div style={{ height: 6, background: NAVY }} />
@@ -951,10 +954,11 @@ function Editable({
           if (onAtKey(e)) e.preventDefault()
         }}
         onPaste={e => {
-          // הדבקה כטקסט נקי — HTML מ-Word/אתרים שובר את המייל
+          // הדבקה עם עיצוב, מנוקה לתגיות שתוכנות מייל מבינות (כמו בגיליונות)
           e.preventDefault()
-          const text = e.clipboardData.getData('text/plain')
-          document.execCommand('insertText', false, text)
+          const html = e.clipboardData.getData('text/html')
+          if (html) document.execCommand('insertHTML', false, cleanPaste(html))
+          else document.execCommand('insertText', false, e.clipboardData.getData('text/plain'))
         }}
         onDragEnter={e => { if (isTagDrag(e.dataTransfer)) onEditableDragEnter() }}
         onDragOver={e => {
