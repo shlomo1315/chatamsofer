@@ -46,14 +46,14 @@ export default function BirthCertificatePreview({
     const hadFile = !!url
     setBusy(true)
     try {
-      const safe = file.name.replace(/[^\w.\-]+/g, '_')
-      const path = `maternity/${beneficiaryId}/${Date.now()}_${safe}`
-      const { error: upErr } = await supabase.storage.from('documents').upload(path, file, { upsert: true })
-      if (upErr) throw upErr
-      const { data: pub } = supabase.storage.from('documents').getPublicUrl(path)
-      const { error } = await supabase.from('maternity_aids').update({ [field]: pub.publicUrl }).eq('id', aidId)
-      if (error) throw error
-      setUrl(pub.publicUrl)
+      // 🔴 D1: דרך השרת — העלאה ישירה מהדפדפן נחסמה ב-RLS של דלי documents.
+      const fd = new FormData()
+      fd.append('file', file); fd.append('beneficiaryId', beneficiaryId)
+      fd.append('aidId', aidId); fd.append('field', field)
+      const res = await fetch('/api/admin/maternity/birth-certificate', { method: 'POST', body: fd })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json.url) throw new Error(json.error || `שגיאה ${res.status}`)
+      setUrl(json.url)
       toast.success(hadFile ? 'הקובץ הוחלף בהצלחה' : 'אישור הלידה צורף לבקשה')
       router.refresh()
     } catch (e) {
