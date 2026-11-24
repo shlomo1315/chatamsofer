@@ -1597,6 +1597,11 @@ export function lineageFaultEmail(opts: {
       יש להסדיר מחדש את סדר הדורות דרך הקישור שלהלן. בקישור יופיעו פרטיכם ושרשרת הדורות
       כפי שהיא רשומה כעת, ותוכלו לסדר אותה מחדש.
     </p>
+    <!-- ⚠️ נאכף רק כשבחלוקת חנוכה מסומן "חסימת משפחות בבדיקה מעמיקה"
+         (blockDeepReview ב-holidayDistRules). בלי הסימון הזה המשפט לא נכון. -->
+    <p style="margin:0 0 18px;padding:12px 14px;background:#fef3c7;border-right:4px solid #d97706;border-radius:8px;color:#78350f;font-size:15px;font-weight:800;line-height:1.7;">
+      כל עוד סדר הדורות לא יוסדר מחדש, לא תהיה אפשרות לקבל את הכרטיס של מענק חג החנוכה.
+    </p>
     <div style="text-align:center;margin:0 0 18px;">
       <a href="${escapeHtml(opts.link)}" style="display:inline-block;background:#4f46e5;color:#fff;font-size:16px;font-weight:800;text-decoration:none;border-radius:12px;padding:14px 32px;">
         להסדרת סדר הדורות
