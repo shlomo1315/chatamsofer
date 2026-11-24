@@ -8,7 +8,7 @@
 // הלוגיקה זהה לשלוחה הקודמת, שהוסרה.
 // ההודעות נערכות באותו מסך ניהול (getHolidayMessages). בשלב זה TTS בלבד — הקלטות בהמשך.
 import { getHolidayMessages, type HolidayMessages } from '@/lib/holidayPhoneMessages'
-import { getOpenDistribution, getLiveDistribution, registerToOpenDistribution, testDistributionFor, type LiveDistribution } from '@/lib/holidayDistributions'
+import { getOpenDistribution, getLiveDistribution, isRegistrationDeadlinePassed, registerToOpenDistribution, testDistributionFor, type LiveDistribution } from '@/lib/holidayDistributions'
 import { linkHolidayCard } from '@/lib/holidayCards'
 import { resolveCardFamily } from '@/lib/cardIdentity'
 import { digitsOnly } from '@/lib/idLookup'
@@ -404,7 +404,9 @@ async function phasedLine(k: Kit, live: LiveDistribution, rules: DistRules): Pro
   const phase = rules.phase
   const test = isTestCaller(rules, k.ctx.phone)
   const choice = tapped(k.ctx.params[MENU_VAR])
-  const regOpen = phase === 'registration' || (phase === 'setup' && test)
+  // 🔴 מועד הסגירה (הגדרות → שיתוף חלוקות חגים) סוגר את הרישום גם בשלב "רישום פתוח"
+  const deadline = phase === 'registration' && await isRegistrationDeadlinePassed()
+  const regOpen = (phase === 'registration' && !deadline) || (phase === 'setup' && test)
   if (!choice) {
     const distName = `${live.name}${live.year ? ` ${live.year}` : ''}`
     const intro = regOpen ? 'phase_menu_open' : phase === 'setup' ? 'phase_menu_setup' : 'phase_menu'

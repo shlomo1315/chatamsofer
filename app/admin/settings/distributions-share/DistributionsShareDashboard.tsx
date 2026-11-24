@@ -33,6 +33,15 @@ function toLocalInput(iso: unknown): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
+/** ISO → "יום שלישי, 1 בדצמבר 2026 בשעה 20:00" בשעון ישראל. */
+function closeLabel(iso: string): string {
+  const d = new Date(iso)
+  const tz = { timeZone: 'Asia/Jerusalem' } as const
+  const date = d.toLocaleDateString('he-IL', { ...tz, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const time = d.toLocaleTimeString('he-IL', { ...tz, hour: '2-digit', minute: '2-digit', hour12: false })
+  return `${date} בשעה ${time}`
+}
+
 function score(v: string): number {
   if (!v) return 0
   let n = 0
@@ -66,8 +75,16 @@ export default function DistributionsShareDashboard() {
   const [copied, setCopied] = useState(false)
   const [holidaysOnly, setHolidaysOnly] = useState<boolean | null>(null)
   const [scopeSaving, setScopeSaving] = useState(false)
-  // מועד סגירת הרישום לשעון העצר, בפורמט של datetime-local (שעון מקומי)
-  const [closesAt, setClosesAt] = useState('')
+  // מועד סגירת הרישום: תאריך ושעה בנפרד (שעון מקומי), והמועד השמור (ISO)
+  const [closeDate, setCloseDate] = useState('')
+  const [closeTime, setCloseTime] = useState('')
+  const [savedClose, setSavedClose] = useState<string | null>(null)
+  // השעה הנוכחית, כדי שהשורה תעבור ל"נסגר" כשהמועד מגיע בזמן שהמסך פתוח
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30_000)
+    return () => clearInterval(t)
+  }, [])
 
   const loadSessions = useCallback(async () => {
     const r = await fetch('/api/admin/distributions-share/sessions')
@@ -88,7 +105,10 @@ export default function DistributionsShareDashboard() {
       .then(d => {
         if (!d) return
         setHolidaysOnly(d.holidaysOnly !== false)
-        setClosesAt(toLocalInput(d.closesAt))
+        const local = toLocalInput(d.closesAt)
+        setCloseDate(local.slice(0, 10))
+        setCloseTime(local.slice(11))
+        setSavedClose(local ? new Date(local).toISOString() : null)
       })
       .catch(() => {})
   }, [])
@@ -126,17 +146,19 @@ export default function DistributionsShareDashboard() {
   }
 
   async function saveClosesAt(local: string) {
+    const iso = local ? new Date(local).toISOString() : null
     setScopeSaving(true)
     try {
       const r = await fetch('/api/admin/distributions-share/scope', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ closesAt: local ? new Date(local).toISOString() : null }),
+        body: JSON.stringify({ closesAt: iso }),
       })
       const d = await r.json()
       if (!r.ok) { toast.error(d.error || 'שגיאה בשמירה'); return }
-      setClosesAt(local)
-      toast.success(local ? 'מועד הסגירה נשמר, והשעון בקישור מתעדכן' : 'השעון הוסר מהקישור')
+      setSavedClose(iso)
+      if (!local) { setCloseDate(''); setCloseTime('') }
+      toast.success(local ? 'מועד הסגירה נשמר: במועד הזה הרישום ייסגר' : 'מועד הסגירה הוסר')
     } catch {
       toast.error('שגיאה בשמירה')
     } finally {
@@ -234,24 +256,39 @@ export default function DistributionsShareDashboard() {
             </label>
           )}
           {holidaysOnly !== null && (
-            <div className={s.row} style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <label htmlFor="share-closes-at">סגירת הרישום (לשעון בקישור)</label>
-              <input
-                id="share-closes-at"
-                type="datetime-local"
-                value={closesAt}
-                disabled={scopeSaving}
-                onChange={e => setClosesAt(e.target.value)}
-              />
-              <button type="button" className={`${s.btn} ${s.pri}`} disabled={scopeSaving || !closesAt} onClick={() => void saveClosesAt(closesAt)}>
-                שמור מועד
-              </button>
-              {closesAt && (
-                <button type="button" className={s.btn} disabled={scopeSaving} onClick={() => void saveClosesAt('')}>
-                  הסר
+            <div className={s.close}>
+              <b>סגירת הרישום</b>
+              <p className={`${s.closeState} ${savedClose && Date.parse(savedClose) <= now ? s.past : ''}`}>
+                {!savedClose
+                  ? 'לא נקבע מועד: הרישום נסגר רק במתג "רישום פתוח"'
+                  : `${Date.parse(savedClose) <= now ? 'הרישום נסגר ב' : 'הרישום ייסגר ב'}${closeLabel(savedClose)}`}
+              </p>
+              <div className={s.closeFields}>
+                <label>
+                  תאריך
+                  <input type="date" value={closeDate} disabled={scopeSaving} onChange={e => setCloseDate(e.target.value)} />
+                </label>
+                <label>
+                  שעה
+                  <input type="time" value={closeTime} disabled={scopeSaving} onChange={e => setCloseTime(e.target.value)} />
+                </label>
+              </div>
+              <div className={s.closeFields}>
+                <button
+                  type="button"
+                  className={`${s.btn} ${s.closeBtn}`}
+                  disabled={scopeSaving || !closeDate || !closeTime}
+                  onClick={() => void saveClosesAt(`${closeDate}T${closeTime}`)}
+                >
+                  שמור מועד
                 </button>
-              )}
-              <p style={{ margin: 0, fontSize: 12 }}>לשעון בקישור בלבד: הרישום עצמו נסגר במתג &quot;רישום פתוח&quot; של החלוקה.</p>
+                {savedClose && (
+                  <button type="button" className={`${s.btn} ${s.closeGhost}`} disabled={scopeSaving} onClick={() => void saveClosesAt('')}>
+                    הסר מועד
+                  </button>
+                )}
+              </div>
+              <p className={s.closeNote}>במועד הזה הרישום נסגר בפועל באתר, במייל ובטלפון (שם ישמעו &quot;הרישום נסגר&quot;), והשעון בקישור עובר ל&quot;נסגר&quot;.</p>
             </div>
           )}
         </div>
