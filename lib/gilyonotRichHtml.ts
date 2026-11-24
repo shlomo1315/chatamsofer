@@ -28,7 +28,7 @@ const allowedStyles: Record<string, RegExp[]> = {
   'line-height': [LEN, /^normal$/],
   'margin': [BOX], 'margin-top': [LEN], 'margin-bottom': [LEN],
   'padding': [BOX],
-  'border': [BORDER], 'border-top': [BORDER], 'border-bottom': [BORDER],
+  'border': [BORDER], 'border-top': [BORDER], 'border-bottom': [BORDER], 'border-right': [BORDER],
   'border-radius': [LEN],
   'display': [/^(block|inline-block|inline)$/],
   'width': [LEN, /^auto$/], 'max-width': [LEN], 'height': [LEN, /^auto$/],

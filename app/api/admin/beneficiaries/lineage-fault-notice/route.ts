@@ -8,7 +8,7 @@ import { lineageFaultEmail } from '@/lib/lineageFaultEmail'
 import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { logActivity } from '@/lib/activityLog'
 import {
-  DEFAULT_LINEAGE_FAULT_TEMPLATE, LINEAGE_FAULT_ACTION, LINEAGE_FAULT_BATCH, LINEAGE_FAULT_TEMPLATE_KEY,
+  DEFAULT_LINEAGE_FAULT_TEMPLATE, LINEAGE_FAULT_ACTION, LINEAGE_FAULT_BATCH, LINEAGE_FAULT_TEMPLATE_KEY, NAME_TOKEN,
   normalizeLineageFaultTemplate, planLineageFaultNotice, recipientNameOf, type FaultRow, type LineageFaultTemplate,
 } from '@/lib/lineageFaultNotice'
 
@@ -116,6 +116,11 @@ export async function POST(request: NextRequest) {
       template,
       defaultTemplate: DEFAULT_LINEAGE_FAULT_TEMPLATE,
     })
+  }
+
+  // שם המשפחה נמחק מהגוף: לא שולחים מייל בלי פנייה אישית.
+  if (!template.bodyHtml.includes(NAME_TOKEN)) {
+    return NextResponse.json({ error: 'שם המשפחה חסר בגוף המייל. יש להחזיר אותו ולשמור את הנוסח לפני השליחה.' }, { status: 400 })
   }
 
   const batch = plan.toSend.slice(0, LINEAGE_FAULT_BATCH)

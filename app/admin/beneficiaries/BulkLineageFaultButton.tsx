@@ -25,6 +25,10 @@ const API = '/api/admin/beneficiaries/lineage-fault-notice'
 const input = 'w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-slate-800 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100'
 const label = 'block text-xs font-bold text-slate-600 mb-1'
 
+const NAME_CHIP = `<span data-name-token="1" contenteditable="false" class="mx-0.5 rounded bg-indigo-100 px-1.5 text-indigo-700">${NAME_TOKEN}</span>`
+const toEditorHtml = (html: string) => html.split(NAME_TOKEN).join(NAME_CHIP)
+const fromEditorHtml = (html: string) => html.replace(/<span[^>]*data-name-token[^>]*>[\s\S]*?<\/span>/g, NAME_TOKEN)
+
 async function post(payload: object) {
   const r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
   const d = await r.json().catch(() => ({}))
@@ -59,12 +63,14 @@ export default function BulkLineageFaultButton() {
 
   // גוף המייל נערך ישירות ב-DOM (contentEditable), ולכן ה-HTML נכתב אליו רק
   // בטעינה ובשחזור ולא בכל הקלדה (אחרת הסמן קופץ להתחלה).
-  const loadBody = (html: string) => { if (bodyRef.current) bodyRef.current.innerHTML = html }
+  // שם המשפחה מוצג בעורך כתג נעול (contenteditable=false), כדי שלא יימחק
+  // או ישתבש בטעות באמצע הקלדה. בנוסח שנשמר הוא חוזר להיות NAME_TOKEN.
+  const loadBody = (html: string) => { if (bodyRef.current) bodyRef.current.innerHTML = toEditorHtml(html) }
   const bodyReady = !!tpl
   useEffect(() => { if (bodyReady && tpl) loadBody(tpl.bodyHtml) }, [bodyReady]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const patch = (p: Partial<LineageFaultTemplate>) => setTpl(t => (t ? { ...t, ...p } : t))
-  const syncBody = () => { if (bodyRef.current) patch({ bodyHtml: bodyRef.current.innerHTML }) }
+  const syncBody = () => { if (bodyRef.current) patch({ bodyHtml: fromEditorHtml(bodyRef.current.innerHTML) }) }
 
   // תצוגה חיה: אותה בנייה כמו בשליחה, עם שם המשפחה הראשונה ברשימה.
   const sampleName = preview?.sample.name
@@ -101,7 +107,7 @@ export default function BulkLineageFaultButton() {
     el.focus()
     const s = document.getSelection()
     if (s && !(s.rangeCount && el.contains(s.anchorNode))) { s.selectAllChildren(el); s.collapseToEnd() }
-    document.execCommand('insertText', false, NAME_TOKEN)
+    document.execCommand('insertHTML', false, NAME_CHIP)
     syncBody()
   }
 
@@ -112,7 +118,7 @@ export default function BulkLineageFaultButton() {
   }
 
   const sendAll = async () => {
-    if (save !== 'saved') return
+    if (save !== 'saved' || missingName) return
     setBusy(true); setErr(''); setSent(0)
     let total = 0
     try {
@@ -206,7 +212,7 @@ export default function BulkLineageFaultButton() {
                         <p className="mt-1 text-xs text-slate-500">
                           <b dir="rtl">{NAME_TOKEN}</b> מוחלף אוטומטית בשם של כל משפחה, גם בנושא.
                         </p>
-                        {missingName && <p className="mt-1 text-xs font-semibold text-amber-700">שם המשפחה לא מופיע בגוף המייל.</p>}
+                        {missingName && <p className="mt-1 text-xs font-semibold text-amber-700">שם המשפחה נמחק מגוף המייל. החזירו אותו בכפתור &quot;הוספת שם המשפחה&quot; כדי לשלוח.</p>}
                       </div>
                       <div>
                         <label className={label} htmlFor="lf-btn">טקסט הכפתור</label>
@@ -257,13 +263,15 @@ export default function BulkLineageFaultButton() {
                   )}
 
                   <div className="flex items-center justify-end gap-2">
-                    {sent === null && save !== 'saved' && <span className="text-xs text-slate-500">השליחה תיפתח אחרי שמירת הנוסח</span>}
+                    {sent === null && (missingName
+                      ? <span className="text-xs text-amber-700">השליחה תיפתח אחרי שיוחזר שם המשפחה לגוף המייל</span>
+                      : save !== 'saved' && <span className="text-xs text-slate-500">השליחה תיפתח אחרי שמירת הנוסח</span>)}
                     <button type="button" disabled={busy} onClick={() => setOpen(false)}
                       className="rounded-xl border border-line px-4 py-2 font-semibold text-slate-600 hover:bg-sand disabled:opacity-50">
                       {done ? 'סגירה' : 'ביטול'}
                     </button>
                     {sent === null && preview.toSend > 0 && (
-                      <button type="button" disabled={busy || save !== 'saved'} onClick={sendAll}
+                      <button type="button" disabled={busy || save !== 'saved' || missingName} onClick={sendAll}
                         className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-4 py-2 font-bold text-white hover:bg-navy-dark disabled:opacity-50">
                         <Send size={15} /> שלח ל-{preview.toSend} משפחות
                       </button>

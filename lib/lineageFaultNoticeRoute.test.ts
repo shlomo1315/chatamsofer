@@ -116,4 +116,22 @@ describe('נוסח ההודעה על תקלה בסדר הדורות', () => {
     expect(data.sent).toBe(0)
     expect(delivered).toHaveLength(1)
   })
+
+  it('נוסח שמור בלי שם המשפחה לא נשלח לאף אחד', async () => {
+    await call({ action: 'save', template: { ...edited, bodyHtml: '<p>שלום רב</p>' } })
+    const { status, data } = await call({ send: true })
+    expect(status).toBe(400)
+    expect(data.error).toContain('שם המשפחה')
+    expect(delivered).toHaveLength(0)
+    expect(sentLog).toHaveLength(0)
+  })
+
+  it('ברירת המחדל נשלחת בעיצוב שאושר: פס כתום מימין ותקציר קבוע', async () => {
+    await call({ send: true })
+    const html = delivered[0].html
+    expect(html).toContain('border-right:4px solid #d97706')
+    expect(html).toContain('color:#475569;font-size:15px;line-height:1.8')
+    expect(html).toContain('התגלתה תקלה בסדר הדורות הרשום אצלכם')
+    expect(html).toContain('text-align:center;margin:0 0 18px;')
+  })
 })

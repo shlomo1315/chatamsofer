@@ -21,7 +21,7 @@ export function lineageFaultEmail(opts: {
   const body = sanitizeMailHtml(t.bodyHtml).split(NAME_TOKEN).join(escapeHtml(opts.recipientName))
   const html = `
     ${body}
-    <div style="text-align:center;margin:4px 0 18px;">
+    <div style="text-align:center;margin:0 0 18px;">
       <a href="${escapeHtml(opts.link)}" style="display:inline-block;background:#4f46e5;color:#fff;font-size:16px;font-weight:800;text-decoration:none;border-radius:12px;padding:14px 32px;">
         ${escapeHtml(t.buttonLabel)}
       </a>
@@ -32,7 +32,7 @@ export function lineageFaultEmail(opts: {
   return {
     subject: t.subject.split(NAME_TOKEN).join(opts.recipientName),
     html: shell({
-      preheader: t.title,
+      preheader: 'התגלתה תקלה בסדר הדורות הרשום אצלכם',
       accent: '#4f46e5',
       title: t.title,
       subtitle: 'איגוד צאצאי החתם סופר',
