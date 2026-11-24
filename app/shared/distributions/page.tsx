@@ -1,14 +1,13 @@
 'use client'
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import Home, { type DeptSummary } from './panels/Home'
-import MaternityDept from './panels/MaternityDept'
-import LoansDept, { type LoanRow, type LegacySummary } from './panels/LoansDept'
-import { DeptHeader } from './panels/Chrome'
+import { useState, useEffect, useCallback, useMemo, type CSSProperties, type ReactNode } from 'react'
 import SharedRecipientsTable from './panels/SharedRecipientsTable'
-import Image from 'next/image'
-import { Lock, LogIn, Loader2, RefreshCw, Users, Gift, CalendarDays, ShieldCheck, Search, LogOut, MapPin, Baby, GitBranch, History, ChevronDown } from 'lucide-react'
-import HolidayRecipientsTable from '@/app/admin/distributions/[id]/HolidayRecipientsTable'
-import type { RegisterSource } from '@/lib/distributionSources'
+import { Lock, LogIn, Loader2, Users, Search, MapPin, Baby, GitBranch } from 'lucide-react'
+import s from './board.module.css'
+import {
+  registrationSeries, areaPaths, dayAxis, channelShares, conicOf, topCounts, kidsBuckets, pctOf,
+  maternityFunnel, inPeriod, byRecoveryHome, paidByMonth, generationCounts, fanRings,
+  type Bar, type Channel,
+} from '@/lib/sharedBoard'
 import LineageTreeSvg from '@/app/lineage-review/[token]/LineageTreeSvg'
 import { BRAND } from './brand'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
@@ -160,29 +159,8 @@ interface Distribution {
   live?: boolean
 }
 
-const fmtCur = (n?: number | null) => n != null ? `${Math.round(Number(n) || 0).toLocaleString('he-IL')} ₪` : '—'
 const fmtCurNum = (n: number) => `${Math.round(n || 0).toLocaleString('he-IL')} ₪`
 const fmtDate = (d?: string | null) => d ? new Date(d).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'
-// ⚠️ כולל שניות — לבקשת ההנהלה, לראות את הרגע המדויק של הרישום (חשוב בשחרור המוני).
-const fmtDateTime = (d?: string | null) => d ? new Date(d).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'
-
-const SOURCE_LABEL: Record<string, string> = { phone: 'טלפון', portal: 'ממשק דיגיטלי', email: 'מייל', admin: 'הזנה ידנית' }
-const APPROVAL_LABEL: Record<string, string> = { pending: 'ממתין לאישור', approved: 'מאושר', rejected: 'נדחה' }
-const APPROVAL_STYLE: Record<string, string> = {
-  pending: 'bg-amber-50 text-amber-800 border-amber-200',
-  approved: 'bg-green-50 text-green-800 border-green-200',
-  rejected: 'bg-rose-50 text-rose-700 border-rose-200',
-}
-const benName = (b?: Beneficiary | null) =>
-  b ? ([b.family_name, b.full_name || b.spouse_name].filter(Boolean).join(' ') || b.full_name || 'ללא שם') : 'ללא שם'
-const ageOf = (b?: Beneficiary | null): number | null => {
-  const dob = b?.birth_date || b?.spouse_birth_date
-  if (!dob) return null
-  try {
-    const diff = Date.now() - new Date(dob).getTime()
-    return Math.floor(diff / (365.25 * 24 * 60 * 60 * 1000))
-  } catch { return null }
-}
 
 // ── Password Screen ──
 function PasswordScreen({ onAuth }: { onAuth: () => void }) {
@@ -742,96 +720,212 @@ function MaternityPanel({ rows }: { rows: MaternityRow[] }) {
   )
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// עיצוב ב׳ · לוח (מוקאפ מאושר 24.11.2026): תפריט צד, ארבעה דפים — בית,
+// חלוקות חגים, עזר יולדות וצאצאים. גמ״ח ההלוואות הוצא מכאן (נשאר ב-/shared/loans).
+// ⚠️ הניווט ב-hash (#page/tab), כדי שקישור או רענון ישאירו את אותו מסך.
+// ─────────────────────────────────────────────────────────────────────────────
+const cssVars = (o: Record<string, string | number>) => o as CSSProperties
+const num = (v: number) => Math.round(v || 0).toLocaleString('he-IL')
+
+const ICONS: Record<'home' | 'gift' | 'baby' | 'tree' | 'ref' | 'out', ReactNode> = {
+  home: <path d="M4 11l8-6 8 6v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z" />,
+  gift: <><rect x="4" y="9" width="16" height="11" rx="1" /><path d="M3 9h18M12 9v11M12 9c-2-4-6-4-6-1.5S10 9 12 9zm0 0c2-4 6-4 6-1.5S14 9 12 9z" /></>,
+  baby: <><circle cx="12" cy="12" r="8" /><path d="M9 11h.01M15 11h.01M9.5 15c1.5 1 3.5 1 5 0" /></>,
+  tree: <><circle cx="6" cy="6" r="2" /><circle cx="18" cy="6" r="2" /><circle cx="12" cy="19" r="2" /><path d="M6 8v2a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3V8M12 13v4" /></>,
+  ref: <path d="M20 11a8 8 0 1 0-2 5.3M20 5v6h-6" />,
+  out: <path d="M10 5H5v14h5M14 8l-4 4 4 4M10 12h10" />,
+}
+const Ico = ({ k, className }: { k: keyof typeof ICONS; className?: string }) => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" className={className}>{ICONS[k]}</svg>
+)
+
+type Page = 'home' | 'holidays' | 'maternity' | 'tree'
+const PAGES: Page[] = ['home', 'holidays', 'maternity', 'tree']
+
+function readHash(): [Page, string] {
+  if (typeof window === 'undefined') return ['home', '']
+  const [p = '', t = ''] = window.location.hash.slice(1).split('/')
+  return [PAGES.includes(p as Page) ? (p as Page) : 'home', t]
+}
+
+function greeting(d = new Date()) {
+  const h = d.getHours()
+  return h < 5 ? 'לילה טוב' : h < 12 ? 'בוקר טוב' : h < 17 ? 'צהריים טובים' : h < 21 ? 'ערב טוב' : 'לילה טוב'
+}
+
+const famName = (b?: { full_name?: string | null; family_name?: string | null; spouse_name?: string | null } | null) => {
+  if (!b) return '—'
+  const name = [b.family_name, b.full_name].filter(Boolean).join(' ') || '—'
+  return b.spouse_name ? `${name} ו${b.spouse_name}` : name
+}
+
+const distLabel = (d: Distribution) => `${d.name}${d.year ? ` ${d.year}` : ''}`
+
+/** "21.11 · 18:04:39" — כמו בטבלה במוקאפ. */
+const stamp = (iso?: string | null) => {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${p(d.getDate())}.${p(d.getMonth() + 1)} · ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+
+const channelOf = (source?: string | null) => channelShares([{ source }]).find(c => c.count > 0)?.label ?? '—'
+
+const APPROVAL_PILL: Record<string, [string, string]> = {
+  approved: [s.pOk, 'מאושר'],
+  pending: [s.pWt, 'ממתין'],
+  rejected: [s.pNo, 'נדחה'],
+}
+const MAT_PILL: Record<ReturnType<typeof stateOf>, string> = {
+  'realized-charged': s.pOk,
+  'realized-unbilled': s.pWt,
+  'not-realized': s.pNo,
+  none: s.pNo,
+}
+
+// ── רכיבי הלוח ──
+function AreaChart({ values }: { values: number[] }) {
+  const { line, area } = areaPaths(values)
+  return (
+    <svg className={s.area} viewBox="0 0 600 170" preserveAspectRatio="none" aria-hidden="true">
+      <path d={area} fill="var(--area)" />
+      <path d={line} fill="none" stroke="currentColor" strokeWidth={2.2} vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function HBars({ bars, fmt = num }: { bars: Bar[]; fmt?: (v: number) => string }) {
+  const max = Math.max(0, ...bars.map(b => b.value))
+  return (
+    <div>
+      {bars.map(b => (
+        <div key={b.label} className={s.hb}>
+          <span className={s.l} title={b.label}>{b.label}</span>
+          <span className={s.t}><i style={cssVars({ '--w': `${pctOf(b.value, max)}%` })} /></span>
+          <b>{fmt(b.value)}</b>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function Cols({ bars, fmt = num, height, lastBar }: { bars: Bar[]; fmt?: (v: number) => string; height?: number; lastBar?: string }) {
+  const max = Math.max(0, ...bars.map(b => b.value))
+  return (
+    <div className={s.cols} style={height ? { height } : undefined}>
+      {bars.map((b, i) => (
+        <div key={`${b.label}-${i}`} className={s.c}>
+          <b>{fmt(b.value)}</b>
+          <i style={cssVars({ '--h': `${pctOf(b.value, max)}%`, ...(lastBar && i === bars.length - 1 ? { '--bar': lastBar } : {}) })} />
+          <span>{b.label}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function Legend({ parts, wide }: { parts: Channel[]; wide?: boolean }) {
+  return (
+    <div className={s.leg} style={wide ? { width: '100%' } : undefined}>
+      {parts.map(p => (
+        <div key={p.key}>
+          <i style={{ background: p.color }} />
+          <span>{p.label}</span>
+          <b>{Math.round(p.pct)}%</b>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function Panel({ title, hint, link, className, style, flush, children }: {
+  title: ReactNode; hint?: ReactNode; link?: { href: string; label: string }
+  className?: string; style?: CSSProperties; flush?: boolean; children: ReactNode
+}) {
+  return (
+    <section className={`${s.pn} ${className ?? ''}`} style={style}>
+      <div className={s.ph}>
+        <h3>{title}</h3>
+        {link ? <a className={s.lk} href={link.href}>{link.label}</a> : hint ? <span className={s.hint}>{hint}</span> : null}
+      </div>
+      {flush ? children : <div className={s.bd}>{children}</div>}
+    </section>
+  )
+}
+
+function Funnel({ f, gaps }: { f: ReturnType<typeof maternityFunnel>; gaps?: boolean }) {
+  const row = (label: string, value: number, opacity: number) => (
+    <div className={s.r}>
+      <span>{label}</span>
+      <span className={s.t}><i style={cssVars({ '--w': `${pctOf(value, f.born)}%`, opacity })} /></span>
+      <b>{num(value)}</b>
+    </div>
+  )
+  return (
+    <div className={s.fun}>
+      {row('נולדו', f.born, 1)}
+      {gaps && <div className={s.gap}>{num(f.born - f.arrived)} לא הגיעו</div>}
+      {row('הגיעו לבית החלמה', f.arrived, 0.7)}
+      {gaps && <div className={s.gap}>{num(f.waiting)} ממתינות לקבלה</div>}
+      {row('חויבו · שולם', f.billed, 0.45)}
+    </div>
+  )
+}
+
+function FanChart({ counts }: { counts: { generation: number; count: number }[] }) {
+  const rings = fanRings(counts)
+  return (
+    <svg className={s.fan} viewBox="0 0 400 214" role="img" aria-label="מניפת הדורות">
+      <path d="M164,206 A36 36 0 0 1 236,206Z" fill="currentColor" />
+      {rings.map(r => (
+        <path
+          key={r.generation}
+          d={`M${200 - r.r},206 A${r.r} ${r.r} 0 0 1 ${200 + r.r},206`}
+          fill="none" stroke="currentColor" strokeWidth={r.width}
+          strokeDasharray={`${r.dash} 2`} opacity={r.opacity}
+        >
+          <title>{`דור ${r.generation}`}</title>
+        </path>
+      ))}
+    </svg>
+  )
+}
+
+const Skeleton = ({ h }: { h: number }) => <div className={s.sk} style={{ height: h }} />
+
+function Tabs({ page, tab, items }: { page: Page; tab: string; items: { key: string; label: string; count?: number }[] }) {
+  return (
+    <nav className={s.tabs}>
+      {items.map(t => (
+        <a key={t.key} href={`#${page}${t.key ? `/${t.key}` : ''}`} className={tab === t.key ? s.on : undefined}>
+          {t.label}{t.count != null && <em>{num(t.count)}</em>}
+        </a>
+      ))}
+    </nav>
+  )
+}
+
 export default function SharedDistributionsPage() {
   const [state, setState] = useState<'checking' | 'locked' | 'unlocked'>('checking')
   const [distributions, setDistributions] = useState<Distribution[]>([])
   const [recipients, setRecipients] = useState<Recipient[]>([])
   const [lineageNodes, setLineageNodes] = useState<LineageNode[]>([])
-  // 🔴 העץ נטען **פעם אחת בלבד**, לפי דרישה, ולעולם לא ברענון האוטומטי.
-  // קודם הוא נשלף בכל טעינה וכל 10 שניות — אלפי צמתים ברשת גם כשאיש
-  // לא הסתכל עליו. הדגל מונע שליפה חוזרת בכל כניסה למחלקה.
+  // 🔴 העץ נטען **פעם אחת בלבד**, לפי דרישה (בכניסה לבית או לצאצאים) —
+  // אלפי צמתים, ואין סיבה למשוך אותם שוב בכל רענון.
   const [lineageLoaded, setLineageLoaded] = useState(false)
   const [lineageLoading, setLineageLoading] = useState(false)
   const [beneficiariesCount, setBeneficiariesCount] = useState(0)
   const [maternity, setMaternity] = useState<MaternityRow[]>([])
-  const [loans, setLoans] = useState<LoanRow[]>([])
-  const [legacyLoans, setLegacyLoans] = useState<LegacySummary>({ count: 0, takenCount: 0, totalApproved: 0, totalTaken: 0 })
-  // 🔴 ניווט דו-שלבי: מסך בית עם שלוש מחלקות, וכניסה לאחת מהן.
-  // ⚠️ החליף שורת טאבים: שלוש מחלקות שונות לגמרי (לא שלוש תצוגות של
-  // אותו נתון) — טאבים היו מרמזים שמדובר בחתכים של אותו דבר.
-  const [dept, setDept] = useState<null | 'holidays' | 'maternity' | 'loans' | 'tree'>(null)
-  const [activeTab, setActiveTab] = useState<'distributions' | 'breakdown'>('distributions')
-  const [openId, setOpenId] = useState<string | null>(null)
-  const [query, setQuery] = useState('')
-  const [showPrev, setShowPrev] = useState(false)
+  const [[page, tab], setRoute] = useState<[Page, string]>(['home', ''])
+  // null = ברירת מחדל: החלוקה החיה אם יש, אחרת חלוקות קודמות
+  const [holView, setHolView] = useState<'live' | 'prev' | null>(null)
+  const [pickedId, setPickedId] = useState<string | null>(null)
+  const [period, setPeriod] = useState<number | null>(null)
   const [refreshing, setRefreshing] = useState(false)
-
-  // ── סיכומי שלוש המחלקות למסך הבית ──
-  // ⚠️ נגזרים מהנתונים שכבר נטענו ולא בשאילתה נוספת: הדף מרענן כל 10
-  // שניות, וקריאה שנייה הייתה מכפילה את העומס בלי להוסיף מידע.
-  const deptSummaries: DeptSummary[] = useMemo(() => {
-    // חלוקות חגים — אישורים מול ממתינים, של החלוקה הפעילה בלבד (אם יש).
-    // ⚠️ קודם נספרו כל הנרשמים מכל השנים, והמספר לא שיקף את החלוקה הנוכחית.
-    const live = distributions.find(d => d.live)
-    const liveRecipients = live ? recipients.filter(r => r.distribution_id === live.id) : recipients
-    const approved = liveRecipients.filter(r => r.approval_status === 'approved').length
-    const openDists = distributions.filter(d => d.registration_open).length
-
-    // יולדות — מומש מול חויב (הפער הוא כסף שטרם שולם)
-    const arrived = maternity.filter(m => m.recovery_arrived).length
-    const billed = maternity.filter(m => (m.receiptCount ?? 0) > 0).length
-    const paid = maternity.reduce((s, m) => s + ((m.receiptCount ?? 0) > 0 ? Number(m.recovery_amount ?? 0) : 0), 0)
-
-    // הלוואות — אושר מול נמסר שטר
-    const loanApproved = loans.filter(l => ['approved', 'active', 'completed'].includes(String(l.status))).length
-    const loanOut = loans.filter(l => !!l.disbursed_at)
-    const loanOutAmt = loanOut.reduce((s, l) => s + (Number(l.approved_amount ?? l.amount ?? 0) || 0), 0)
-
-    return [
-      {
-        key: 'holidays', headline: liveRecipients.length,
-        headlineLabel: live ? `נרשמו ל${live.name}${live.year ? ` ${live.year}` : ''}` : 'נרשמו לחלוקות',
-        rows: [
-          { label: 'חלוקות פתוחות', value: String(openDists) },
-          { label: 'אושרו', value: approved.toLocaleString('he-IL') },
-          { label: 'ממתינים לאישור', value: (liveRecipients.length - approved).toLocaleString('he-IL') },
-        ],
-        progress: liveRecipients.length ? approved / liveRecipients.length : 0,
-        progressLabel: 'שיעור האישורים',
-      },
-      {
-        key: 'maternity', headline: maternity.length, headlineLabel: 'לידות במערכת',
-        rows: [
-          { label: 'הגיעו לבית החלמה', value: arrived.toLocaleString('he-IL') },
-          { label: 'שולם בפועל', value: fmtCurNum(paid) },
-          { label: 'ממתין לקבלה', value: (arrived - billed).toLocaleString('he-IL') },
-        ],
-        progress: arrived ? billed / arrived : 0,
-        progressLabel: 'שיעור החיוב',
-      },
-      {
-        key: 'loans', headline: loans.length, headlineLabel: 'בקשות הלוואה',
-        rows: [
-          { label: 'אושרו', value: loanApproved.toLocaleString('he-IL') },
-          { label: 'נמסר שטר', value: loanOut.length.toLocaleString('he-IL') },
-          { label: 'סכום שנמסר', value: `$${Math.round(loanOutAmt).toLocaleString('he-IL')}` },
-        ],
-        progress: loanApproved ? loanOut.length / loanApproved : 0,
-        progressLabel: 'שיעור המסירה',
-      },
-      {
-        // ⚠️ המונה מגיע מהמסלול הראשי (ספירה בלבד). הצמתים עצמם נטענים רק
-        // בכניסה למחלקה, ולכן אין כאן שורות משנה: הצגת ״—״ נראתה כתקלה,
-        // ופס על 100% קבוע הציג מדד שאינו קיים.
-        key: 'tree', headline: beneficiariesCount, headlineLabel: 'צאצאים רשומים',
-        rows: [
-          { label: 'עץ היוחסין', value: 'שרשרת מלאה' },
-        ],
-        progress: null,
-        progressLabel: '',
-      },
-    ]
-  }, [recipients, distributions, maternity, loans, beneficiariesCount, lineageNodes])
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -843,14 +937,12 @@ export default function SharedDistributionsPage() {
         setRecipients(d.recipients ?? [])
         setBeneficiariesCount(d.beneficiariesCount ?? 0)
         setMaternity(d.maternity ?? [])
-        setLoans(d.loans ?? [])
-        if (d.legacyLoans) setLegacyLoans(d.legacyLoans)
+        setUpdatedAt(new Date())
         setState('unlocked')
       }
-    } catch { /* השאר במצב הנוכחי — הטיימר ינסה שוב */ }
+    } catch { /* נשאר במצב הנוכחי; כפתור הרענון ינסה שוב */ }
   }, [])
 
-  // ⚠️ נטען פעם אחת בכניסה למחלקת עץ הדורות, ולא ברענון האוטומטי.
   // ⚠️ `force` נדרש ל"נסה שוב": איפוס `lineageLoaded` ב-state לא משנה את
   // הערך שנתפס ב-closure של הפונקציה הזו, והניסיון החוזר היה יוצא מיד.
   const loadLineage = useCallback(async (force = false) => {
@@ -867,242 +959,501 @@ export default function SharedDistributionsPage() {
     finally { setLineageLoading(false) }
   }, [lineageLoaded, lineageLoading])
 
-  // טעינה ראשונית
+  // טעינה ראשונית (ה-setState קורה אחרי ה-fetch, לא באופן סינכרוני)
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load() }, [load])
 
-  // ⚠️ החלוקה הפעילה נפתחת מאליה: הרשימה היא *הסיבה* שנכנסים למסך,
-  // ולחיצה נוספת רק כדי לראות אותה היא חיכוך מיותר. נעשה פעם אחת בלבד
-  // (openId מתמלא), כדי שסגירה ידנית לא תיפתח מחדש בכל רענון.
-  // 🔴 קודם נפתחה distributions[0] — החדשה ביותר, גם אם הייתה מושבתת.
   useEffect(() => {
-    const live = distributions.find(d => d.live)
-    if (dept === 'holidays' && openId === null && live) setOpenId(live.id)
-  }, [dept, distributions, openId])
+    const sync = () => setRoute(readHash())
+    sync()
+    window.addEventListener('hashchange', sync)
+    return () => window.removeEventListener('hashchange', sync)
+  }, [])
 
-  // ⚠️ נטען רק כשנכנסים למחלקת העץ.
-  useEffect(() => { if (dept === 'tree') void loadLineage() }, [dept, loadLineage])
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (state === 'unlocked' && (page === 'home' || page === 'tree')) void loadLineage()
+  }, [state, page, loadLineage])
 
-  // 🔴 הרענון האוטומטי (כל 10 שניות) הוסר.
-  //
-  // ⚠️ הוא משך מחדש אלפי שורות ורינדר את כל הדף כל 10 שניות — כולל בזמן
-  // שהמשתמש קרא טבלה או הקליד בחיפוש. זו הייתה סיבת ה"תקיעות": לא איטיות
-  // של שליפה בודדת אלא עבודה חוזרת שלא נגמרת.
-  //
-  // ⚠️ הנתונים כאן אינם קריטיים-לשנייה (דוח הנהלה, לא מסך תפעול), ולכן
-  // רענון ידני עדיף על אוטומטי שפוגע בשימוש.
+  // 🔴 אין רענון אוטומטי (הוא משך אלפי שורות כל 10 שניות ותקע את הדף) — רק כפתור.
+  const refresh = useCallback(async () => {
+    setRefreshing(true)
+    await load()
+    setRefreshing(false)
+  }, [load])
 
   const logout = useCallback(async () => {
     try { await fetch('/api/shared/distributions/logout', { method: 'POST' }) } catch {}
     setState('locked')
   }, [])
 
-  // ספירות ופילוח — נגזרים מהנתונים בכל טעינה
+  // ── חלוקות חגים ──
   const byDist = useMemo(() => {
     const m = new Map<string, Recipient[]>()
     for (const r of recipients) {
-      const arr = m.get(r.distribution_id) ?? []
-      arr.push(r)
-      m.set(r.distribution_id, arr)
+      const list = m.get(r.distribution_id) ?? []
+      list.push(r)
+      m.set(r.distribution_id, list)
     }
     return m
   }, [recipients])
+  const live = distributions.find(d => d.live) ?? null
+  const prevDists = useMemo(() => distributions.filter(d => !d.live), [distributions])
+  const view = holView ?? (live ? 'live' : 'prev')
+  const selected = view === 'live' && live ? live : (prevDists.find(d => d.id === pickedId) ?? prevDists[0] ?? null)
+  const selRows = useMemo(() => (selected ? byDist.get(selected.id) ?? [] : []), [selected, byDist])
+  const homeDist = live ?? distributions[0] ?? null
+  const homeRows = useMemo(() => (homeDist ? byDist.get(homeDist.id) ?? [] : []), [homeDist, byDist])
 
-  const totals = useMemo(() => {
-    const openCount = distributions.filter(d => d.registration_open).length
-    return { openCount, distributions: distributions.length }
-  }, [distributions])
+  const hol = useMemo(() => {
+    const approved = selRows.filter(r => r.approval_status === 'approved').length
+    const rejected = selRows.filter(r => r.approval_status === 'rejected').length
+    const series = registrationSeries(selRows)
+    const recent = [...selRows]
+      .sort((a, b) => String(b.registered_at ?? '').localeCompare(String(a.registered_at ?? '')))
+      .slice(0, 8)
+    return {
+      approved,
+      pending: selRows.length - approved - rejected,
+      series,
+      channels: channelShares(selRows),
+      cities: topCounts(selRows, r => r.beneficiary?.city, 6),
+      kids: kidsBuckets(selRows.map(r => r.beneficiary ?? {})),
+      recent,
+    }
+  }, [selRows])
 
-  // ── החלוקה הפעילה למעלה, וכל השאר תחת "חלוקות קודמות" ──
-  const liveDist = useMemo(() => distributions.find(d => d.live) ?? null, [distributions])
-  const previous = useMemo(() => distributions.filter(d => !d.live), [distributions])
-  // ⚠️ בלי חלוקה פעילה אין מה להציג למעלה — הקודמות נפתחות מאליהן.
-  const prevShown = showPrev || !liveDist
+  const home = useMemo(() => ({
+    approved: homeRows.filter(r => r.approval_status === 'approved').length,
+    series: registrationSeries(homeRows),
+    channels: channelShares(homeRows),
+  }), [homeRows])
 
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return previous
-    return previous.filter(d => [d.name, d.year, d.holiday, d.description].filter(Boolean).join(' ').toLowerCase().includes(q))
-  }, [previous, query])
+  // ── עזר יולדות ──
+  const matAll = useMemo(() => maternityFunnel(maternity), [maternity])
+  const matRows = useMemo(() => inPeriod(maternity, period), [maternity, period])
+  const mat = useMemo(() => ({
+    funnel: maternityFunnel(matRows),
+    homes: byRecoveryHome(matRows),
+    recent: [...matRows].sort((a, b) => String(b.birth_date ?? '').localeCompare(String(a.birth_date ?? ''))).slice(0, 8),
+  }), [matRows])
+  const months = useMemo(() => paidByMonth(maternity), [maternity])
+
+  // ── צאצאים ──
+  const gens = useMemo(() => generationCounts(lineageNodes), [lineageNodes])
+  const biggest = gens.reduce<{ generation: number; count: number } | null>((m, g) => (!m || g.count > m.count ? g : m), null)
+  const homeGens = [...gens].sort((a, b) => b.count - a.count).slice(0, 4).sort((a, b) => a.generation - b.generation)
+  const treeReady = lineageLoaded && !lineageLoading
 
   if (state === 'checking') {
-    return <div className="min-h-screen flex items-center justify-center bg-[#faf7f0]"><Loader2 size={28} className="animate-spin text-[#b08d3f]" /></div>
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f3f1ec]" dir="rtl">
+        <Loader2 className="animate-spin text-[#9a6b12]" size={32} />
+      </div>
+    )
   }
   if (state === 'locked') {
     return <PasswordScreen onAuth={() => { setState('checking'); void load() }} />
   }
 
+  const refreshBtn = (
+    <button type="button" className={s.btn} onClick={() => void refresh()} disabled={refreshing}>
+      <Ico k="ref" className={refreshing ? s.spin : undefined} />רענון
+    </button>
+  )
+  const nav = (key: Page, label: string, icon: keyof typeof ICONS, count?: number) => (
+    <a href={`#${key}`} className={page === key ? s.on : undefined} aria-current={page === key ? 'page' : undefined}>
+      <Ico k={icon} /><span>{label}</span>{count != null ? <em>{num(count)}</em> : <span />}
+    </a>
+  )
+  const treeSk = <><Skeleton h={18} /><div style={{ height: 8 }} /><Skeleton h={18} /><div style={{ height: 8 }} /><Skeleton h={18} /></>
+
   return (
-    <div className="min-h-screen bg-[#faf7f0]" dir="rtl"
-      style={{ backgroundImage: 'radial-gradient(70% 50% at 50% 0%, rgba(176,141,63,0.10), transparent 60%)' }}>
-      {/* Header — פס זהב עליון (חותם השושלת) + כותרת ספרותית */}
-      <div className="h-1.5 bg-gradient-to-l from-[#d9b95c] via-[#b08d3f] to-[#8a6a24]" />
-      <header className="bg-white/80 backdrop-blur border-b border-[#e8dfc9] sticky top-0 z-10">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-8 py-4 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Image src="/logo.png" alt="היכל החתם סופר" width={46} height={46} className="rounded-xl ring-1 ring-[#e8dfc9]" />
-            <div>
-              <h1 className="text-xl font-extrabold text-[#3a3630] tracking-tight">איגוד הצאצאים · היכל החתם סופר</h1>
+    <div className={s.B} dir="rtl">
+      <div className={s.app}>
+        <aside className={s.side}>
+          <div className={s.brand}>
+            <span className={s.mono}>ח״ס</span>
+            <div><b>איגוד הצאצאים</b><span>היכל החתם סופר</span></div>
+          </div>
+          <div>
+            <p className={s.sl}>סקירה</p>
+            <nav className={s.nv}>{nav('home', 'בית', 'home')}</nav>
+          </div>
+          <div>
+            <p className={s.sl}>מחלקות</p>
+            <nav className={s.nv}>
+              {nav('holidays', 'חלוקות חגים', 'gift', live ? (byDist.get(live.id) ?? []).length : undefined)}
+              {nav('maternity', 'עזר יולדות', 'baby', maternity.length)}
+              {nav('tree', 'צאצאים', 'tree', beneficiariesCount)}
+            </nav>
+          </div>
+          <div className={s.sfoot}>
+            <span className={s.ro}>תצוגה בלבד</span>
+            {updatedAt && <span>עודכן {updatedAt.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}</span>}
+            <button type="button" className={s.out} onClick={() => void logout()}><Ico k="out" />התנתקות</button>
+          </div>
+        </aside>
+
+        <main className={s.main}>
+          {page === 'home' && (
+            <div className={s.page} key="home">
+              <header className={s.hd}>
+                <div>
+                  <h1>{greeting()}</h1>
+                  <p>{homeDist ? `${distLabel(homeDist)} · ${homeDist.registration_open ? 'הרישום פתוח' : 'הרישום סגור'}` : 'אין עדיין חלוקות'}</p>
+                </div>
+                <div className={s.acts}>{refreshBtn}</div>
+              </header>
+
+              <div className={`${s.g} ${s.k2} ${s.mb}`}>
+                <a className={`${s.kpi} ${s.s3}`} href="#holidays">
+                  <span className={s.lb}><span className={s.dot} style={cssVars({ '--d': 'var(--hol)' })} />{homeDist ? `נרשמו ל${homeDist.name}` : 'נרשמו'}</span>
+                  <b>{num(homeRows.length)}</b>
+                  <span className={s.ft}><strong>{homeRows.length ? Math.round((home.approved / homeRows.length) * 100) : 0}%</strong> אושרו</span>
+                  <AreaChart values={home.series.cumulative} />
+                </a>
+                <a className={`${s.kpi} ${s.s3}`} href="#maternity">
+                  <span className={s.lb}><span className={s.dot} style={cssVars({ '--d': 'var(--mat)' })} />לידות במעקב</span>
+                  <b>{num(matAll.born)}</b>
+                  <span className={s.ft}><strong>{num(matAll.arrived)}</strong> הגיעו לבית החלמה</span>
+                </a>
+                <a className={`${s.kpi} ${s.s3}`} href="#maternity">
+                  <span className={s.lb}><span className={s.dot} style={cssVars({ '--d': 'var(--mat)' })} />שולם ליולדות</span>
+                  <b>{fmtCurNum(matAll.paid)}</b>
+                  <span className={s.ft}><strong>{num(matAll.waiting)}</strong> ממתינות לקבלה</span>
+                </a>
+                <a className={`${s.kpi} ${s.s3}`} href="#tree">
+                  <span className={s.lb}><span className={s.dot} style={cssVars({ '--d': 'var(--tree)' })} />צאצאים רשומים</span>
+                  <b>{num(beneficiariesCount)}</b>
+                  <span className={s.ft}>שרשרת יוחסין מלאה</span>
+                </a>
+              </div>
+
+              <div className={s.g}>
+                <Panel className={s.s8} title={homeDist ? `רישום ל${distLabel(homeDist)}` : 'רישום'} link={{ href: '#holidays/recipients', label: 'לכל הנרשמים ←' }}>
+                  {home.series.cumulative.length ? (
+                    <>
+                      <AreaChart values={home.series.cumulative} />
+                      <div className={s.axis}>{dayAxis(home.series.daily.length).map(l => <span key={l}>{l}</span>)}</div>
+                    </>
+                  ) : <div className={s.empty}><b>אין עדיין רישומים</b></div>}
+                </Panel>
+                <Panel className={s.s4} title="ערוץ רישום">
+                  <div className={s.dn}>
+                    <div className={s.donut} style={{ background: conicOf(home.channels) }} />
+                    <Legend parts={home.channels} />
+                  </div>
+                </Panel>
+                <Panel className={s.s6} style={cssVars({ '--acc': 'var(--mat)' })} title="עזר יולדות · מלידה ועד תשלום" link={{ href: '#maternity', label: 'לפירוט ←' }}>
+                  <Funnel f={matAll} />
+                </Panel>
+                <Panel className={s.s6} style={cssVars({ '--acc': 'var(--tree)' })} title="צאצאים לפי דור" link={{ href: '#tree', label: 'לעץ ←' }}>
+                  {treeReady ? (homeGens.length ? <HBars bars={homeGens.map(g => ({ label: `דור ${g.generation}`, value: g.count }))} /> : <div className={s.empty}><b>אין נתוני דורות</b></div>) : treeSk}
+                </Panel>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <button onClick={() => { setRefreshing(true); void load().finally(() => setRefreshing(false)) }}
-              disabled={refreshing}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-[#e8dfc9] bg-white px-3 py-2 text-xs font-bold text-[#6b5d3e] transition hover:border-[#d9b95c] hover:text-[#8a6a24] disabled:opacity-50">
-              {refreshing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-              רענון
-            </button>
-            <button onClick={logout}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-[#e8dfc9] bg-white px-3 py-2 text-xs font-bold text-slate-500 hover:border-rose-300 hover:text-rose-600 transition">
-              <LogOut size={14} /> התנתקות
-            </button>
-          </div>
-        </div>
-      </header>
+          )}
 
-      <main className="max-w-[1600px] mx-auto px-4 sm:px-8 py-8 flex flex-col gap-7">
-        {/* ── מסך הבית: שלוש המחלקות ── */}
-        {/* ⚠️ מוצג כשלא נבחרה מחלקה. הכניסה למחלקה מחליפה את כל התוכן
-            ולא מוסיפה טאב — כך היציאה תמיד באותו מקום. */}
-        {dept === null && (
-          <Home summaries={deptSummaries} onOpen={setDept} />
-        )}
+          {page === 'holidays' && (
+            <div className={s.page} key="holidays" style={cssVars({ '--acc': 'var(--hol)' })}>
+              <header className={s.hd}>
+                <div>
+                  <h1>חלוקות חגים</h1>
+                  <p>{selected ? `${distLabel(selected)} · ${selected.registration_open ? 'הרישום פתוח' : 'הרישום סגור'}` : 'אין כרגע חלוקה פתוחה'}</p>
+                </div>
+                <div className={s.acts}>
+                  <div className={s.seg} role="group" aria-label="בחירת חלוקה">
+                    {live && <button type="button" className={view === 'live' ? s.on : undefined} onClick={() => setHolView('live')}>{live.name}</button>}
+                    <button type="button" className={view === 'prev' ? s.on : undefined} onClick={() => setHolView('prev')}>חלוקות קודמות</button>
+                  </div>
+                  {refreshBtn}
+                </div>
+              </header>
 
-        {dept === 'maternity' && (
-          <MaternityDept rows={maternity} onBack={() => setDept(null)} />
-        )}
+              {view === 'prev' && prevDists.length > 0 && (
+                <Panel className={s.mb} title="חלוקות קודמות" hint="לחצו על חלוקה כדי לראות את הנתונים שלה" flush>
+                  <div className={`${s.tbl} ${s.tscroll}`}>
+                    <table>
+                      <thead><tr><th>חלוקה</th><th className={s.hideM}>תאריך חלוקה</th><th>נרשמו</th><th>אושרו</th></tr></thead>
+                      <tbody>
+                        {prevDists.map(d => {
+                          const rows = byDist.get(d.id) ?? []
+                          return (
+                            <tr key={d.id} className={`${s.pick} ${selected?.id === d.id ? s.sel : ''}`} onClick={() => setPickedId(d.id)}>
+                              <td>{distLabel(d)}</td>
+                              <td className={s.hideM}>{fmtDate(d.distribution_date)}</td>
+                              <td>{num(rows.length)}</td>
+                              <td>{num(rows.filter(r => r.approval_status === 'approved').length)}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </Panel>
+              )}
 
-        {dept === 'loans' && (
-          <LoansDept rows={loans} legacy={legacyLoans} onBack={() => setDept(null)} />
-        )}
+              {!selected ? (
+                <div className={s.empty}><b>אין חלוקות להצגה</b>כשתיפתח חלוקה, הנתונים שלה יופיעו כאן.</div>
+              ) : (
+                <>
+                  <Tabs page="holidays" tab={tab} items={[
+                    { key: '', label: 'סקירה' },
+                    { key: 'recipients', label: 'הנרשמים', count: selRows.length },
+                    { key: 'breakdown', label: 'פילוחים' },
+                  ]} />
 
-        {/* 🔴 המחלקה הזו לא רונדרה כלל: הכרטיס במסך הבית עדכן `dept` ל-'tree',
-            אך לא היה ענף שמציג משהו — ולכן המסך נראה ריק לחלוטין. */}
-        {dept === 'tree' && <>
-          <DeptHeader title="צאצאים ועץ הדורות" subtitle="שרשרת היוחסין המלאה" ink="#7c3aed" onBack={() => setDept(null)} />
-          <GenerationExplorer
-            nodes={lineageNodes}
-            loading={lineageLoading}
-            onRetry={() => void loadLineage(true)}
-          />
-        </>}
+                  {tab === 'recipients' && (
+                    <Panel title={`הנרשמים ל${distLabel(selected)}`} flush>
+                      <div className={s.embed}><SharedRecipientsTable rows={selRows} /></div>
+                    </Panel>
+                  )}
 
-        {dept === 'holidays' && <>
-        <DeptHeader title="חלוקות חגים" subtitle="רישום · אישורים · כרטיסי מזון" ink="#b45309" onBack={() => setDept(null)} />
+                  {tab === 'breakdown' && <BreakdownPanels recipients={selRows} />}
 
-        {/* ⚠️ תת-הטאבים הם חתכים של *אותו* נתון (נרשמים, פילוחים).
-            🔴 "עץ הדורות" הוסר מכאן: הוא מחלקה עצמאית במסך הבית ואין לו
-            שום קשר לחלוקות. הופעתו בשני מקומות רמזה שמדובר בשני דברים. */}
-        <div className="grid grid-cols-2 gap-3">
-          {([
-            { key: 'distributions', label: 'רשימת הנרשמים', icon: <Gift size={18} /> },
-            { key: 'breakdown', label: 'פילוחים', icon: <MapPin size={18} /> },
-          ] as const).map(t => (
-            <button key={t.key} type="button" onClick={() => setActiveTab(t.key)}
-              className={`flex items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-[13px] font-bold transition-all ${
-                activeTab === t.key
-                  ? 'bg-gradient-to-b from-[#b08d3f] to-[#8a6a24] text-white shadow-[0_6px_18px_-6px_rgba(176,141,63,0.6)]'
-                  : 'bg-white border border-[#e8dfc9] text-[#6b5d3e] hover:border-[#d9b95c] hover:text-[#8a6a24]'
-              }`}>
-              {t.icon}{t.label}
-            </button>
-          ))}
-        </div>
+                  {tab !== 'recipients' && tab !== 'breakdown' && (
+                    <>
+                      <div className={`${s.g} ${s.k2} ${s.mb}`}>
+                        <div className={`${s.kpi} ${s.s3}`}>
+                          <span className={s.lb}>נרשמו</span>
+                          <b>{num(selRows.length)}</b>
+                          <span className={s.ft}>ב-<strong>{num(hol.series.daily.length)}</strong> ימי רישום</span>
+                        </div>
+                        <div className={`${s.kpi} ${s.s3}`}>
+                          <span className={s.lb}>אושרו</span>
+                          <b>{num(hol.approved)}</b>
+                          <span className={s.ft}><strong>{selRows.length ? Math.round((hol.approved / selRows.length) * 100) : 0}%</strong> מהנרשמים</span>
+                        </div>
+                        <div className={`${s.kpi} ${s.s3}`}>
+                          <span className={s.lb}>ממתינים לאישור</span>
+                          <b>{num(hol.pending)}</b>
+                          <span className={s.ft}>טרם טופלו</span>
+                        </div>
+                        <div className={`${s.kpi} ${s.s3}`}>
+                          <span className={s.lb}>חלוקות פתוחות</span>
+                          <b>{num(distributions.filter(d => d.registration_open).length)}</b>
+                          <span className={s.ft}>מתוך <strong>{num(distributions.length)}</strong> חלוקות</span>
+                        </div>
+                      </div>
 
-        {/* ⚠️ הפילוחים — של החלוקה הפעילה, כמו הכותרת במסך הבית. */}
-        {activeTab === 'breakdown' && <BreakdownPanels recipients={liveDist ? (byDist.get(liveDist.id) ?? []) : recipients} />}
+                      <div className={s.g}>
+                        <Panel className={s.s8} title="קצב הרישום" hint="מצטבר · ומתחת לפי יום">
+                          {hol.series.cumulative.length ? (() => {
+                            const days = hol.series.daily.slice(-40)
+                            const max = Math.max(0, ...days)
+                            const cum = hol.series.cumulative
+                            return (
+                              <>
+                                <AreaChart values={cum} />
+                                <div className={s.dly}>{days.map((d, i) => <i key={i} title={num(d)} style={cssVars({ '--h': `${Math.max(4, pctOf(d, max))}%` })} />)}</div>
+                                <div className={s.axis}>
+                                  <span>יום 1 · {num(cum[0])}</span>
+                                  <span>יום {cum.length} · {num(cum[cum.length - 1])}</span>
+                                </div>
+                              </>
+                            )
+                          })() : <div className={s.empty}><b>אין עדיין רישומים</b></div>}
+                        </Panel>
+                        <Panel className={s.s4} title="ערוץ רישום">
+                          <div className={s.dg}>
+                            <div className={s.donut} style={{ background: conicOf(hol.channels) }} />
+                            <Legend parts={hol.channels} wide />
+                          </div>
+                        </Panel>
+                        <Panel className={s.s6} title="לפי עיר" hint={`${hol.cities.length} מובילות`}>
+                          {hol.cities.length ? <HBars bars={hol.cities} /> : <div className={s.empty}>אין נתוני ערים</div>}
+                        </Panel>
+                        <Panel className={s.s6} title="לפי מספר ילדים">
+                          <Cols bars={hol.kids} height={170} />
+                        </Panel>
+                        <Panel className={s.s12} title="נרשמו לאחרונה" link={{ href: '#holidays/recipients', label: 'לכל הנרשמים ←' }} flush>
+                          <div className={`${s.tbl} ${s.tscroll}`}>
+                            <table>
+                              <thead><tr><th>משפחה</th><th>עיר</th><th>ילדים</th><th className={s.hideM}>ערוץ</th><th className={s.hideM}>נרשם</th><th>מצב</th></tr></thead>
+                              <tbody>
+                                {hol.recent.map(r => {
+                                  const [cls, label] = APPROVAL_PILL[r.approval_status ?? ''] ?? APPROVAL_PILL.pending
+                                  return (
+                                    <tr key={r.id}>
+                                      <td>{famName(r.beneficiary)}</td>
+                                      <td>{r.beneficiary?.city || '—'}</td>
+                                      <td>{r.beneficiary?.children_count ?? '—'}</td>
+                                      <td className={s.hideM}>{channelOf(r.source)}</td>
+                                      <td className={`${s.hideM} ${s.mut}`}><span className={s.ltr}>{stamp(r.registered_at)}</span></td>
+                                      <td><span className={`${s.pill} ${cls}`}>{label}</span></td>
+                                    </tr>
+                                  )
+                                })}
+                              </tbody>
+                            </table>
+                            {!hol.recent.length && <div className={s.empty}>אין עדיין נרשמים</div>}
+                          </div>
+                        </Panel>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          )}
 
-        {activeTab === 'distributions' && <>
-        {liveDist && (
-          <section className="flex flex-col gap-3">
-            <h2 className="text-sm font-extrabold text-[#6b5d3e]">החלוקה הפעילה</h2>
-            <div className="grid gap-4">{renderCard(liveDist)}</div>
-          </section>
-        )}
+          {page === 'maternity' && (
+            <div className={s.page} key="maternity" style={cssVars({ '--acc': 'var(--mat)', '--area': 'rgba(15,118,110,.14)' })}>
+              <header className={s.hd}>
+                <div>
+                  <h1>עזר יולדות</h1>
+                  <p>בתי החלמה · תשלומים · כרטיסי מזון</p>
+                </div>
+                <div className={s.acts}>
+                  <div className={s.seg} role="group" aria-label="תקופה">
+                    {([[1, 'החודש'], [3, '3 חודשים'], [null, 'הכול']] as const).map(([m, label]) => (
+                      <button key={label} type="button" className={period === m ? s.on : undefined} onClick={() => setPeriod(m)}>{label}</button>
+                    ))}
+                  </div>
+                  {refreshBtn}
+                </div>
+              </header>
 
-        {previous.length > 0 && liveDist && (
-          <button type="button" onClick={() => setShowPrev(v => !v)} aria-expanded={showPrev}
-            className="self-start inline-flex items-center gap-1.5 rounded-xl border border-[#e8dfc9] bg-white px-4 py-2.5 text-sm font-bold text-[#6b5d3e] transition hover:border-[#d9b95c] hover:text-[#8a6a24]">
-            <History size={16} />
-            {showPrev ? 'הסתרת החלוקות הקודמות' : `צפייה בחלוקות קודמות (${previous.length})`}
-            <ChevronDown size={15} className={`transition-transform ${showPrev ? 'rotate-180' : ''}`} />
-          </button>
-        )}
+              <Tabs page="maternity" tab={tab} items={[
+                { key: '', label: 'סקירה' },
+                { key: 'mothers', label: 'היולדות', count: matRows.length },
+                { key: 'homes', label: 'בתי החלמה' },
+              ]} />
 
-        {prevShown && previous.length > 0 && <>
-        {liveDist && <h2 className="text-sm font-extrabold text-[#6b5d3e]">חלוקות קודמות</h2>}
-        {/* חיפוש */}
-        {previous.length > 3 && (
-          <div className="relative max-w-md">
-            <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
-            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="חיפוש חלוקה…"
-              className="w-full pr-9 pl-3 py-2 text-sm rounded-xl border border-slate-200 bg-white text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 shadow-sm" />
-          </div>
-        )}
+              {tab === 'mothers' && <MaternityPanel rows={matRows} />}
 
-        {/* קוביות חלוקות */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {visible.map(d => renderCard(d))}
-        </div>
-        </>}
+              {tab === 'homes' && (
+                <Panel title="בתי החלמה" hint="לפי התקופה שנבחרה" flush>
+                  <div className={`${s.tbl} ${s.tscroll}`}>
+                    <table>
+                      <thead><tr><th>בית החלמה</th><th>הגיעו</th><th>לילות</th><th>שולם</th><th>טרם חויבו</th></tr></thead>
+                      <tbody>
+                        {mat.homes.map(h => (
+                          <tr key={h.home}>
+                            <td>{h.home}</td><td>{num(h.arrived)}</td><td>{num(h.nights)}</td>
+                            <td>{fmtCurNum(h.paid)}</td>
+                            <td>{h.unbilled ? <span className={`${s.pill} ${s.pWt}`}>{num(h.unbilled)}</span> : <span className={s.mut}>0</span>}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {!mat.homes.length && <div className={s.empty}>אין בתי החלמה בתקופה הזו</div>}
+                  </div>
+                </Panel>
+              )}
 
-        {prevShown && visible.length === 0 && !(liveDist && !query) && (
-          <div className="bg-white rounded-2xl border border-slate-200 p-16 text-center">
-            <Gift size={28} className="text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500 font-medium">{query ? 'לא נמצאו חלוקות לחיפוש זה' : 'אין חלוקות להצגה'}</p>
-          </div>
-        )}
-        </>}
-        </>}
+              {tab !== 'mothers' && tab !== 'homes' && (
+                <>
+                  <div className={`${s.g} ${s.k2} ${s.mb}`}>
+                    <div className={`${s.kpi} ${s.s3}`}>
+                      <span className={s.lb}>לידות</span>
+                      <b>{num(mat.funnel.born)}</b>
+                      <span className={s.ft}>{period === 1 ? 'החודש' : period ? `ב-${period} חודשים` : 'מתחילת הרישום'}</span>
+                    </div>
+                    <div className={`${s.kpi} ${s.s3}`}>
+                      <span className={s.lb}>הגיעו לבית החלמה</span>
+                      <b>{num(mat.funnel.arrived)}</b>
+                      <span className={s.ft}><strong>{mat.funnel.born ? Math.round((mat.funnel.arrived / mat.funnel.born) * 100) : 0}%</strong> מהלידות</span>
+                    </div>
+                    <div className={`${s.kpi} ${s.s3}`}>
+                      <span className={s.lb}>שולם בפועל</span>
+                      <b>{fmtCurNum(mat.funnel.paid)}</b>
+                      <span className={s.ft}><strong>{num(mat.funnel.billed)}</strong> חויבו</span>
+                    </div>
+                    <div className={`${s.kpi} ${s.s3}`}>
+                      <span className={s.lb}>ממתינות לקבלה</span>
+                      <b style={{ color: '#8a5a00' }}>{num(mat.funnel.waiting)}</b>
+                      <span className={s.ft}>הגיעו, טרם חויבו</span>
+                    </div>
+                  </div>
 
-        <p className="text-center text-[11px] text-slate-400 pt-2">לחצו על רענון לעדכון הנתונים · כל הפרטים מוצפנים</p>
-      </main>
+                  <div className={s.g}>
+                    <Panel className={s.s7} title="מלידה ועד תשלום" hint="השלב שבו נתקעים">
+                      <Funnel f={mat.funnel} gaps />
+                    </Panel>
+                    <Panel className={s.s5} title="לפי בית החלמה" hint="₪ ששולם">
+                      {mat.homes.length ? <HBars bars={mat.homes.slice(0, 6).map(h => ({ label: h.home, value: h.paid }))} fmt={v => `${num(v)}`} /> : <div className={s.empty}>אין נתונים</div>}
+                    </Panel>
+                    <Panel className={s.s12} title="תשלומים לפי חודש" hint="₪ · שישה חודשים">
+                      <Cols bars={months} fmt={v => num(v)} lastBar="#7fb8b0" />
+                      <p className={s.note}>החודש נקבע לפי ההגעה לבית ההחלמה, והסכום נספר רק כשיש קבלה.</p>
+                    </Panel>
+                    <Panel className={s.s12} title="יולדות" link={{ href: '#maternity/mothers', label: 'לכל היולדות ←' }} flush>
+                      <div className={`${s.tbl} ${s.tscroll}`}>
+                        <table>
+                          <thead><tr><th>משפחה</th><th>בית החלמה</th><th>לילות</th><th>סכום</th><th>מצב</th></tr></thead>
+                          <tbody>
+                            {mat.recent.map(r => {
+                              const st = stateOf(r)
+                              return (
+                                <tr key={r.id}>
+                                  <td>{famName(r.beneficiary)}</td>
+                                  <td>{r.recovery_home || '—'}</td>
+                                  <td>{r.recovery_nights ?? '—'}</td>
+                                  <td>{r.recovery_amount != null ? fmtCurNum(Number(r.recovery_amount)) : '—'}</td>
+                                  <td><span className={`${s.pill} ${MAT_PILL[st]}`}>{LABEL[st]}</span></td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                        {!mat.recent.length && <div className={s.empty}>אין לידות בתקופה הזו</div>}
+                      </div>
+                    </Panel>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {page === 'tree' && (
+            <div className={s.page} key="tree" style={cssVars({ '--acc': 'var(--tree)' })}>
+              <header className={s.hd}>
+                <div>
+                  <h1>צאצאים ועץ הדורות</h1>
+                  <p>שרשרת היוחסין המלאה · לצפייה בלבד</p>
+                </div>
+                <div className={s.acts}>{refreshBtn}</div>
+              </header>
+
+              <Tabs page="tree" tab={tab} items={[{ key: '', label: 'סקירה' }, { key: 'full', label: 'העץ המלא' }]} />
+
+              {tab === 'full' ? (
+                <GenerationExplorer nodes={lineageNodes} loading={lineageLoading} onRetry={() => void loadLineage(true)} />
+              ) : (
+                <>
+                  <div className={`${s.g} ${s.mb}`}>
+                    <div className={`${s.kpi} ${s.s4}`}>
+                      <span className={s.lb}>צאצאים רשומים</span>
+                      <b>{num(beneficiariesCount)}</b>
+                      <span className={s.ft}>שרשרת יוחסין מלאה</span>
+                    </div>
+                    <div className={`${s.kpi} ${s.s4}`}>
+                      <span className={s.lb}>הדור הגדול ביותר</span>
+                      <b>{biggest ? `דור ${biggest.generation}` : '—'}</b>
+                      <span className={s.ft}>{biggest ? <><strong>{num(biggest.count)}</strong> צאצאים</> : 'נטען…'}</span>
+                    </div>
+                    <div className={`${s.kpi} ${s.s4}`}>
+                      <span className={s.lb}>דורות ברשומות</span>
+                      <b>{treeReady ? num(gens.length) : '—'}</b>
+                      <span className={s.ft}>מהחתם סופר ועד היום</span>
+                    </div>
+                  </div>
+                  <div className={s.g}>
+                    <Panel className={s.s7} title="מניפת הדורות" hint="כל טבעת היא דור">
+                      {treeReady ? (gens.length ? <FanChart counts={gens} /> : <div className={s.empty}><b>אין נתוני דורות</b></div>) : <Skeleton h={214} />}
+                    </Panel>
+                    <Panel className={s.s5} title="לפי דור">
+                      {treeReady ? <HBars bars={gens.map(g => ({ label: `דור ${g.generation}`, value: g.count }))} /> : treeSk}
+                    </Panel>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </main>
+      </div>
     </div>
   )
-
-  // כרטיס חלוקה — משותף לחלוקה הפעילה ולחלוקות הקודמות.
-  function renderCard(d: Distribution) {
-            const rows = byDist.get(d.id) ?? []
-            const isOpen = openId === d.id
-            return (
-              <button key={d.id} type="button" onClick={() => setOpenId(isOpen ? null : d.id)}
-                className={`text-right overflow-hidden bg-white rounded-2xl border transition-all duration-200 ${isOpen ? 'border-indigo-400 ring-2 ring-indigo-100 shadow-lg sm:col-span-2 lg:col-span-3' : 'border-slate-200 hover:border-indigo-300 hover:shadow-md'}`}>
-                <div className={`h-1 ${d.registration_open ? 'bg-gradient-to-l from-green-400 to-emerald-500' : 'bg-slate-200'}`} />
-                <div className="p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3 min-w-0">
-                      <div className="w-11 h-11 bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                        <Gift size={20} className="text-indigo-600" />
-                      </div>
-                      <div className="min-w-0">
-                        <h3 className="font-bold text-slate-900 flex items-center gap-2 flex-wrap">
-                          <span className="truncate">{d.name}</span>
-                          {d.year && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">{d.year}</span>}
-                        </h3>
-                        {d.holiday && <p className="text-xs text-slate-500 mt-0.5">{d.holiday}</p>}
-                      </div>
-                    </div>
-                    {d.registration_open
-                      ? <span className="rounded-full bg-green-100 border border-green-300 px-2.5 py-0.5 text-[11px] font-extrabold text-green-800 flex-shrink-0">🟢 פתוח</span>
-                      : <span className="rounded-full bg-slate-100 border border-slate-200 px-2.5 py-0.5 text-[11px] font-bold text-slate-500 flex-shrink-0">סגור</span>}
-                  </div>
-                  <div className="flex items-stretch gap-3 mt-4">
-                    <div className={`flex-1 rounded-xl border p-3 ${rows.length > 0 ? 'bg-indigo-50 border-indigo-100' : 'bg-slate-50 border-slate-100'}`}>
-                      <div className="flex items-center gap-1.5 text-indigo-600 mb-0.5"><Users size={14} /><span className="text-[11px] font-bold text-slate-500">נרשמו</span></div>
-                      <p className={`text-2xl font-extrabold ltr-num ${rows.length > 0 ? 'text-indigo-700' : 'text-slate-400'}`}>{rows.length.toLocaleString('he-IL')}</p>
-                    </div>
-                  </div>
-                  {d.distribution_date && (
-                    <p className="text-xs text-slate-400 flex items-center gap-1 mt-3"><CalendarDays size={12} />{fmtDate(d.distribution_date)}</p>
-                  )}
-                  <p className="text-[11px] text-indigo-500 font-bold mt-2">{isOpen ? 'לחצו לסגירת רשימת הנרשמים ▲' : 'לחצו לצפייה ברשימת הנרשמים ▼'}</p>
-                </div>
-                {/* טבלת נרשמים — נפתחת בלחיצה */}
-                {isOpen && (
-                  <div className="border-t border-slate-200 bg-white" onClick={e => e.stopPropagation()}>
-                    <SharedRecipientsTable rows={rows} />
-                  </div>
-                )}
-              </button>
-            )
-  }
 }
