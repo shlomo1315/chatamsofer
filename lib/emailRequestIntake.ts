@@ -195,7 +195,7 @@ async function handleHolidayEmail(admin: SupabaseClient, msg: Msg): Promise<bool
 
   const { data: ben } = await admin
     .from('beneficiaries')
-    .select('id, full_name, family_name, spouse_name, email, eligibility_status')
+    .select('id, full_name, family_name, spouse_name, marital_status, email, eligibility_status')
     .or(`id_number.eq.${idNumber},spouse_id_number.eq.${idNumber}`)
     .maybeSingle()
 
@@ -213,7 +213,8 @@ async function handleHolidayEmail(admin: SupabaseClient, msg: Msg): Promise<bool
     return true
   }
 
-  const name = [ben.family_name, ben.spouse_name || ben.full_name].filter(Boolean).join(' ')
+  const { holidayFamilyName } = await import('./holidayFamilyName')
+  const name = holidayFamilyName(ben)
   const mail = holidayRegisteredEmail(name, { distribution: [dist.name, dist.year].filter(Boolean).join(' ') })
   // ⚠️ מי שכבר רשום מקבל את אותו מייל עם שורת פתיחה שמבהירה זאת, ולא הודעת
   // כשל: רישום כפול אינו שגיאה מבחינת המשפחה, והיא צריכה לדעת שהיא בפנים.

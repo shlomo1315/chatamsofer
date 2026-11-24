@@ -4,6 +4,7 @@ import { getServiceClient } from '@/lib/apiAuth'
 import { getOpenDistribution, getLiveDistribution, registerToOpenDistribution } from '@/lib/holidayDistributions'
 import { getDistRules, phoneOnlyMessage } from '@/lib/holidayDistRules'
 import { holidayRegisteredEmail, holidayAlreadyRegisteredEmail } from '@/lib/emailTemplates'
+import { holidayFamilyName } from '@/lib/holidayFamilyName'
 import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
@@ -253,10 +254,10 @@ export async function POST(request: NextRequest) {
   let email: string | null = null
   if (db) {
     const { data: ben } = await db.from('beneficiaries')
-      .select('email, full_name, family_name, spouse_name').eq('id', beneficiaryId).maybeSingle()
-    const b = ben as { email?: string | null; full_name?: string | null; family_name?: string | null; spouse_name?: string | null } | null
+      .select('email, full_name, family_name, spouse_name, marital_status').eq('id', beneficiaryId).maybeSingle()
+    const b = ben as { email?: string | null; full_name?: string | null; family_name?: string | null; spouse_name?: string | null; marital_status?: string | null } | null
     email = b?.email ?? null
-    name = [b?.family_name, b?.full_name || b?.spouse_name].filter(Boolean).join(' ') || String(b?.full_name ?? '')
+    name = holidayFamilyName(b)
   }
 
   // ── כבר רשום: מייל "כבר נקלט" עם תאריך הרישום המקורי, בלי ליצור שורה נוספת ──
@@ -396,10 +397,10 @@ async function sendRegistrationMail(
   distributionName: string | null,
 ): Promise<{ mailed: boolean }> {
   const { data: ben } = await db.from('beneficiaries')
-    .select('email, full_name, family_name, spouse_name').eq('id', beneficiaryId).maybeSingle()
-  const b = ben as { email?: string | null; full_name?: string | null; family_name?: string | null; spouse_name?: string | null } | null
+    .select('email, full_name, family_name, spouse_name, marital_status').eq('id', beneficiaryId).maybeSingle()
+  const b = ben as { email?: string | null; full_name?: string | null; family_name?: string | null; spouse_name?: string | null; marital_status?: string | null } | null
   const email = b?.email ?? null
-  const name = [b?.family_name, b?.full_name || b?.spouse_name].filter(Boolean).join(' ') || String(b?.full_name ?? '')
+  const name = holidayFamilyName(b)
 
   let mailed = false
   let mailError: string | null = null
