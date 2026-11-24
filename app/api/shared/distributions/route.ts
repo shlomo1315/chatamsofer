@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { pickLiveDistribution } from '@/lib/distributionEnabled'
 import { getHolidaysOnly, getClosesAt } from '@/lib/distributionsShareScope'
-import { boardRecipientDistIds } from '@/lib/sharedBoardFetch'
+import { boardRecipientDistIds, RECIPIENTS_PART_SIZE } from '@/lib/sharedBoardFetch'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // דף שיתוף חלוקות חגים — API לתצוגה בלבד (view-only).
@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'נדרשת אימות' }, { status: 401 })
   }
 
+  const started = Date.now()
   const admin = adminClient()
 
   // ⚠️ '*' ולא רשימת עמודות — ראו lib/distributionEnabled.ts. לדף יוצאות רק
@@ -49,24 +50,42 @@ export async function GET(req: NextRequest) {
     live: d.id === liveId,
   }))
 
-  // ⚠️ שליפה בדפים ולא ב-limit: התקרה נאכפת בצד השרת (db-max-rows) ואינה
-  // ניתנת לעקיפה מהלקוח — .limit(100000) נוסה ולא עזר, הרשימה נחתכה ב-1,000
-  // בלי שגיאה. ראו lib/fetchAllRows.
   // 🔴 רק החלוקות שהדף מציג (החיה + קודמת שנבחרה ב-?dist=) — ראו boardRecipientDistIds.
+  // 🔴 הנרשמים נשלחים בחלקים (?part=N, ‏RECIPIENTS_PART_SIZE לחלק) והדף מבקש
+  // חלק-אחר-חלק — ראו fetchSharedBoard. תשובה אחת עם כל הנרשמים לא עברה
+  // בזמן דרך הסינון בטלפון (24.11.2026).
   const ids = boardRecipientDistIds(rows, liveId, req.nextUrl.searchParams.get('dist'))
+  const part = Math.min(Math.max(Number.parseInt(req.nextUrl.searchParams.get('part') ?? '0', 10) || 0, 0), 500)
   let recipients: unknown[] = []
   if (ids.length) {
-    const { rows, error: recErr } = await fetchAllRows<unknown>((from, to) => admin
+    const from = part * RECIPIENTS_PART_SIZE
+    const { data, error: recErr } = await admin
       .from('distribution_recipients')
       .select('id, distribution_id, source, registered_at, phone, notified_at, amount, beneficiary_id, approval_status, approved_at, card_number, card_linked_at, beneficiary:beneficiaries(id, full_name, family_name, spouse_name, id_number, phone, phone2, email, address, city, community_affiliation, children_count, birth_date, spouse_birth_date, lineage_node_id)')
       .in('distribution_id', ids)
-      .order('registered_at', { ascending: false })
-      // ⚠️ שובר שוויון: הדפים נשלפים במקביל, ובלי סדר יציב שורה יכלה ליפול בין דפים
-      // ברענון אחד ולחזור בבא, ולקפוץ שוב כ"נרשמה עכשיו".
+      // ⚠️ מהישן לחדש: נרשם חדש נכנס בסוף ולא מזיז שורות בין החלקים שכבר
+      // נטענו. הדף ממיין בעצמו (lib/controlRoom).
+      .order('registered_at', { ascending: true })
+      // ⚠️ שובר שוויון: בלי סדר יציב שורה יכלה ליפול בין חלקים.
       .order('id', { ascending: true })
-      .range(from, to))
+      .range(from, from + RECIPIENTS_PART_SIZE - 1)
     if (recErr) return NextResponse.json({ error: recErr }, { status: 500 })
-    recipients = rows
+    recipients = data ?? []
+  }
+  const hasMore = recipients.length === RECIPIENTS_PART_SIZE
+  const timing = () => {
+    const serverMs = Date.now() - started
+    console.log(`[shared-board] part=${part} rows=${recipients.length} ms=${serverMs}`)
+    return serverMs
+  }
+
+  // חלק המשך: רק הנרשמים — כל השאר כבר הגיע בחלק הראשון.
+  if (part > 0) {
+    const serverMs = timing()
+    return NextResponse.json(
+      { recipients, hasMore, serverMs },
+      { headers: { 'Cache-Control': 'no-store', 'Server-Timing': `app;dur=${serverMs}` } },
+    )
   }
 
   // 🔴 עץ הדורות **הוצא מכאן** למסלול /lineage הנפרד.
@@ -79,9 +98,10 @@ export async function GET(req: NextRequest) {
   // מועד הסגירה לשעון העצר בראש דף החגים (וגם סוגר את הרישום בפועל, ראו lib/distributionsShareScope).
   const [holidaysOnly, closesAt] = await Promise.all([getHolidaysOnly(admin), getClosesAt(admin)])
   if (holidaysOnly) {
+    const serverMs = timing()
     return NextResponse.json(
-      { distributions: distributions ?? [], recipients, holidaysOnly: true, closesAt },
-      { headers: { 'Cache-Control': 'no-store' } },
+      { distributions: distributions ?? [], recipients, hasMore, serverMs, holidaysOnly: true, closesAt },
+      { headers: { 'Cache-Control': 'no-store', 'Server-Timing': `app;dur=${serverMs}` } },
     )
   }
 
@@ -124,14 +144,17 @@ export async function GET(req: NextRequest) {
     }
   })
 
+  const serverMs = timing()
   return NextResponse.json(
     {
       distributions: distributions ?? [],
       recipients,
+      hasMore,
+      serverMs,
       beneficiariesCount: beneficiariesCount ?? 0,
       maternity,
       closesAt,
     },
-    { headers: { 'Cache-Control': 'no-store' } },
+    { headers: { 'Cache-Control': 'no-store', 'Server-Timing': `app;dur=${serverMs}` } },
   )
 }
