@@ -1925,8 +1925,10 @@ export function holidayCallNoticeEmail(name: string, vars: { distribution?: stri
 }
 
 export function holidayRegisteredEmail(name: string, vars: { distribution?: string } = {}): BuiltEmail {
-  const t = (k: string) => textFor('holiday_registered', k)
-  const fill = (v: string) => v.replace(/\{חלוקה\}/g, vars.distribution ?? '')
+  const t = (k: string) => textFor('holiday_received', k)
+  const dist = vars.distribution?.trim()
+  const distLabel = !dist ? 'חלוקת החגים' : dist.startsWith('חלוקת') ? dist : `חלוקת ${dist}`
+  const fill = (v: string) => v.replace(/\{חלוקה\}/g, distLabel)
   const body = `
     <p style="margin:0 0 16px;color:#0f172a;font-size:17px;font-weight:800;font-family:'Heebo',Arial,sans-serif;">שלום וברכה${name ? `, ${escapeHtml(name)}` : ''},</p>
     <div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:12px;padding:16px 18px;margin:0 0 18px;">
