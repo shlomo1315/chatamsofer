@@ -91,6 +91,29 @@ export function communityMoney(rows: CrRow[], perFamily?: number | null): CommMo
   return [...m.values()].sort((a, b) => b.value - a.value || b.count - a.count)
 }
 
+/** כמה קהילות מוצגות בדף השיתוף. השאר מסוכמות בשורה אחת. */
+export const COMM_TOP = 10
+
+/** הקהילות המובילות, וסיכום של כל השאר (כמה קהילות, כמה משפחות וכמה כסף). */
+export function topCommunities(list: CommMoney[], n = COMM_TOP): { top: CommMoney[]; rest: { communities: number; count: number; value: number } } {
+  const rest = list.slice(n)
+  return {
+    top: list.slice(0, n),
+    rest: { communities: rest.length, count: rest.reduce((s, x) => s + x.count, 0), value: rest.reduce((s, x) => s + x.value, 0) },
+  }
+}
+
+/** השם המלא של הנרשם, ואם אין: "משפחת X". */
+export function regName(r: CrRow): string {
+  return r.beneficiary?.full_name?.trim() || famLabel(r)
+}
+
+/** כל הנרשמים לרשימת השמות: החדש ראשון, ומי שאין לו שעת רישום בסוף. */
+export function regNames<T extends CrRow>(rows: T[]): { id: string; name: string }[] {
+  const t = (r: CrRow) => (r.registered_at ? Date.parse(r.registered_at) || 0 : 0)
+  return [...rows].sort((a, b) => t(b) - t(a)).map(r => ({ id: r.id, name: regName(r) }))
+}
+
 /** ספירת רישומים לכל ערוץ, בסדר של המוקאפ. */
 export function channelCounts(rows: CrRow[]): { key: string; label: string; count: number }[] {
   const c: Record<string, number> = {}

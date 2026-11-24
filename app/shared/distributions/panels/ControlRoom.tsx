@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import c from './control.module.css'
 import { channelKeyOf, cityOf, familyAmount } from '@/lib/sharedBoard'
 import {
-  CR_EMPTY, CR_KEYS, CR_NAMES, channelLabel, subRows, toggleF, stLevel, kpis, communityMoney, channelCounts,
+  CR_EMPTY, CR_KEYS, CR_NAMES, channelLabel, subRows, toggleF, stLevel, kpis, communityMoney, topCommunities, regNames, COMM_TOP, channelCounts,
   cityTop, hourCountsCr, rateBuckets, ratePerMinute, sparkPoints, pickup, takeFresh, isStale, famLabel, latest,
   num, shekel, pad2, type CrRow, type CrFilter, type CrKey,
 } from '@/lib/controlRoom'
@@ -72,11 +72,17 @@ export default function ControlRoom({ live, prevDists, selected, rows, closesAt,
   // ── נתונים ──
   const all = useMemo(() => subRows(rows, f), [rows, f])
   const k = useMemo(() => kpis(all, per, tick), [all, per, tick])
-  const comms = useMemo(() => {
-    const order = communityMoney(rows, per).map(x => x.label)
-    const m = new Map(communityMoney(subRows(rows, f, 'comm'), per).map(x => [x.label, x]))
-    return order.map(label => m.get(label) ?? { label, value: 0, pending: 0, count: 0 })
+  // רק 10 הקהילות המובילות (לפי כל החלוקה), וכל השאר בשורת סיכום אחת
+  const { comms, commRest } = useMemo(() => {
+    const order = topCommunities(communityMoney(rows, per)).top.map(x => x.label)
+    const filtered = communityMoney(subRows(rows, f, 'comm'), per)
+    const m = new Map(filtered.map(x => [x.label, x]))
+    return {
+      comms: order.map(label => m.get(label) ?? { label, value: 0, pending: 0, count: 0 }),
+      commRest: topCommunities(filtered.filter(x => !order.includes(x.label)), 0).rest,
+    }
   }, [rows, f, per])
+  const names = useMemo(() => regNames(all), [all])
   const commMax = Math.max(1, ...comms.map(x => x.value))
   const chans = useMemo(() => channelCounts(subRows(rows, f, 'ch')), [rows, f])
   const chTotal = chans.reduce((s, x) => s + x.count, 0)
@@ -207,7 +213,7 @@ export default function ControlRoom({ live, prevDists, selected, rows, closesAt,
               )}
 
               <section className={cls(c.p, c.sComm)}>
-                <h2>כסף לפי קהילה <small>לחיצה על שורה מסננת את הדף</small></h2>
+                <h2>כסף לפי קהילה <small>{COMM_TOP} הקהילות המובילות · לחיצה על שורה מסננת את הדף</small></h2>
                 {comms.map(x => (
                   <button key={x.label} type="button" className={cls(c.rw, lvl('comm', x.label))} onClick={() => pick('comm', x.label)}>
                     <span className={c.n}>{x.label}<small>{num(x.count)} משפחות</small></span>
@@ -219,6 +225,9 @@ export default function ControlRoom({ live, prevDists, selected, rows, closesAt,
                   </button>
                 ))}
                 {!comms.length && <p className={c.empty}>אין נתונים.</p>}
+                {commRest.communities > 0 && (
+                  <p className={c.more}>ועוד {num(commRest.communities)} קהילות · {num(commRest.count)} משפחות · {shekel(commRest.value)}</p>
+                )}
                 <div className={c.lg}><span><i />מאושר</span><span><i className={c.w} />ממתין לאישור</span></div>
               </section>
 
@@ -265,6 +274,13 @@ export default function ControlRoom({ live, prevDists, selected, rows, closesAt,
                   </button>
                 ))}
                 {!cities.length && <p className={c.empty}>אין נתונים.</p>}
+              </section>
+
+              <section className={cls(c.p, c.sNames)}>
+                <h2>הנרשמים <small>{num(names.length)} שמות · החדש ראשון</small></h2>
+                {names.length ? (
+                  <ol className={c.names}>{names.map(x => <li key={x.id}>{x.name}</li>)}</ol>
+                ) : <p className={c.empty}>עוד אין נרשמים.</p>}
               </section>
             </div>
           )}

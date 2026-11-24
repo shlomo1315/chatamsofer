@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  CR_EMPTY, subRows, toggleF, stLevel, kpis, communityMoney, channelCounts, cityTop, hourCountsCr,
+  CR_EMPTY, subRows, toggleF, stLevel, kpis, communityMoney, topCommunities, COMM_TOP, regName, regNames, channelCounts, cityTop, hourCountsCr,
   rateBuckets, ratePerMinute, sparkPoints, pickup, freshIds, takeFresh, isStale, famLabel, latest, shekel, type CrRow,
 } from './controlRoom'
 
@@ -116,5 +116,41 @@ describe('קצב רישום חי', () => {
   it('שם המשפחה בחלונית', () => {
     expect(famLabel(row('a'))).toBe('משפחת כהן')
     expect(famLabel({ id: 'x', beneficiary: { full_name: 'משה גרינפלד' } })).toBe('משפחת גרינפלד')
+  })
+})
+
+describe('דף השיתוף: 10 קהילות ורשימת שמות', () => {
+  const rows = Array.from({ length: 30 }, (_, i) => row(`r${i}`, { comm: `קהילה ${i % 14}`, registered_at: at(i * 1000) }))
+
+  it('מציג רק 10 קהילות, ומסכם את השאר בלי לאבד משפחות', () => {
+    const list = communityMoney(rows, 1000)
+    expect(list).toHaveLength(14)
+    const { top, rest } = topCommunities(list)
+    expect(COMM_TOP).toBe(10)
+    expect(top).toHaveLength(10)
+    expect(top).toEqual(list.slice(0, 10))
+    expect(rest.communities).toBe(4)
+    expect(top.reduce((s, x) => s + x.count, 0) + rest.count).toBe(30)
+    expect(rest.value).toBe(rest.count * 1000)
+  })
+
+  it('פחות מ-10 קהילות: הכול מוצג ואין שורת "שאר"', () => {
+    const { top, rest } = topCommunities(communityMoney(rows.slice(0, 5)))
+    expect(top).toHaveLength(5)
+    expect(rest).toEqual({ communities: 0, count: 0, value: 0 })
+  })
+
+  it('כל השמות מוצגים, החדש ראשון, עם שם מלא', () => {
+    const named = rows.map((r, i) => ({ ...r, beneficiary: { ...r.beneficiary, full_name: `משה כהן ${i}` } }))
+    const names = regNames(named)
+    expect(names).toHaveLength(30)
+    expect(names[0]).toEqual({ id: 'r0', name: 'משה כהן 0' })
+    expect(names[29].id).toBe('r29')
+  })
+
+  it('בלי שם מלא: "משפחת X", ובלי שעת רישום: בסוף', () => {
+    expect(regName(row('a'))).toBe('משפחת כהן')
+    const names = regNames([{ ...row('old'), registered_at: null }, row('new')])
+    expect(names.map(x => x.id)).toEqual(['new', 'old'])
   })
 })

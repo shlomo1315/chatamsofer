@@ -152,6 +152,12 @@
 .sHour { grid-column: span 12; order: 2 }
 .sComm { grid-column: span 7; order: 3 }
 .sCity { grid-column: span 5; order: 4 }
+.sNames { grid-column: span 12; order: 5 }
+
+/* רשימת כל הנרשמים: גלויה מיד, בעמודות צפופות */
+.names { list-style: none; padding: 0; margin: 0; columns: 4 170px; column-gap: var(--s4); font-size: 13px }
+.names li { padding: 5px 0; border-bottom: 1px solid var(--line); break-inside: avoid; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.more { font-size: 12.5px; color: var(--mute); padding: var(--s2) var(--s2) 0 }
 
 @media (max-width: 900px) {
   .app { grid-template-columns: 1fr }
@@ -170,6 +176,7 @@
   .hx { gap: 2px }
   .hx span:nth-child(odd) { visibility: hidden }
   .rw { grid-template-columns: 70px minmax(0, 1fr) 78px; gap: var(--s2) }
+  .names { columns: 2; column-gap: var(--s3) }
   .rate b { font-size: 48px }
   .cn { margin: 0; width: 100%; justify-content: space-between }
   .toast { left: 12px; right: auto; bottom: 12px; width: min(280px, calc(100vw - 24px)) }
