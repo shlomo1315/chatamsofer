@@ -20,6 +20,22 @@ export function firstEnabled<T>(rows: T[] | null | undefined): T | null {
   return (rows ?? []).find(r => isDistributionEnabled(r as { enabled?: boolean | null })) ?? null
 }
 
+/**
+ * חלוקה "חיה" — לא מושבתת ולא מבוטלת. אותה הגדרה כמו getLiveDistribution
+ * (lib/holidayDistributions), שעליה נשענים הטלפון והפורטל.
+ */
+export function isLiveDistribution(row: { enabled?: boolean | null; status?: string | null } | null | undefined): boolean {
+  return isDistributionEnabled(row) && row!.status !== 'cancelled'
+}
+
+/**
+ * החלוקה החיה מתוך רשימה ממוינת מהחדשה לישנה. כשיש כמה — העדכנית.
+ * ⚠️ מושבתת או מבוטלת לעולם אינה נבחרת, גם אם היא החדשה ביותר.
+ */
+export function pickLiveDistribution<T extends { enabled?: boolean | null; status?: string | null }>(rows: T[] | null | undefined): T | null {
+  return (rows ?? []).find(r => isLiveDistribution(r)) ?? null
+}
+
 export const DISTRIBUTION_DISABLED_ERROR = 'החלוקה מושבתת. יש להפעיל אותה במסך "חלוקות חגים" לפני כל פעולה בה.'
 
 /**
