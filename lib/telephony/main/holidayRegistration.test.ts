@@ -22,6 +22,7 @@ vi.mock('@/lib/holidayPhoneMessages', () => ({
     reg_welcome: 'ברוכים הבאים', reg_ask_id: 'הקישו תעודת זהות', id_invalid: 'מספר שגוי', not_found: 'לא נמצאתם',
     not_eligible: 'אינכם זכאים', reg_deep_review: 'פנו למשרד', reg_ask_birth: 'הקישו תאריך לידה', reg_ask_birth_couple: 'תאריך לידה של הבעל או של האשה',
     reg_id_not_found: 'מספר זהות זה אינו מופיע במערכת. בהצלחה', reg_final: 'הרשמתך התקבלה בהצלחה במערכת',
+    reg_already_registered: 'שימו לב, הרישום שלכם לחלוקה זו כבר התקבל במערכת',
     reg_birth_mismatch: 'תאריך לא תואם', reg_ask_id_full: 'הקישו ת"ז כולל ספרת ביקורת',
     reg_to_registration: 'הינכם מועברים לרישום לחלוקה', reg_questions_notice: 'שימו לב מספר שאלות',
     reg_birth_no_match: 'אינו תואם לתאריך שמעודכן במערכת', reg_ask_phone: 'הקישו טלפון', reg_phone_mismatch: 'טלפון לא תואם',
@@ -167,20 +168,36 @@ describe('רישום בטלפון בלבד', () => {
     expect(text(r)).not.toContain('וזכאים')
   })
 
-  it('כבר רשום בלי מוקד — "כבר רשומים" וניתוק, בלי רישום חוזר', async () => {
-    data.getRecipient.mockResolvedValue({ id: 'r1', center_id: null, approval_status: 'approved' })
-    const r = await call(full)
-    expect(text(r)).toContain('כבר רשומים')
+  const WIFE = '000000018'
+  const couple = { ...ben, marital_status: 'נשוי', spouse_name: 'שרה', spouse_id_number: WIFE, spouse_birth_date: '1992-07-01' }
+  const alreadyHeard = (r: { body: unknown }) => {
+    expect(text(r)).toContain('הרישום שלכם לחלוקה זו כבר התקבל')
+    expect(text(r)).not.toContain('המוקד שלכם')
+    expect(text(r)).not.toContain('הקישו תאריך לידה')
     expect(dist.registerToOpenDistribution).not.toHaveBeenCalled()
     expect(Array.isArray(r.body) && r.body.at(-1)).toMatchObject({ type: 'hangup' })
+  }
+
+  it('כבר רשום, ת"ז של הבעל — מיד אחרי הת"ז "כבר התקבל" וניתוק, בלי שאלות ובלי מוקד', async () => {
+    data.findRegistrantById.mockResolvedValue(couple)
+    data.getRecipient.mockResolvedValue({ id: 'r1', center_id: 'c1', approval_status: 'approved' })
+    alreadyHeard(await call({ r_id: ID }))
+    expect(data.getRecipient).toHaveBeenCalledWith('d1', 'b1', expect.any(String))
   })
 
-  it('רשום שכבר בחר מוקד — שומע אישור ושם המוקד', async () => {
-    data.getRecipient.mockResolvedValue({ id: 'r1', center_id: 'c1', approval_status: 'approved' })
-    const r = await call(full)
-    expect(text(r)).toContain('כבר רשומים')
-    expect(text(r)).toContain('ירושלים')
-    expect(dist.registerToOpenDistribution).not.toHaveBeenCalled()
+  it('כבר רשום, ת"ז של האשה — אותה כרטסת, אותה הודעה', async () => {
+    data.findRegistrantById.mockResolvedValue(couple)
+    data.getRecipient.mockResolvedValue({ id: 'r1', center_id: null, approval_status: 'pending' })
+    alreadyHeard(await call({ r_id: WIFE }))
+    expect(data.findRegistrantById).toHaveBeenCalledWith(WIFE)
+    expect(data.getRecipient).toHaveBeenCalledWith('d1', 'b1', expect.any(String))
+  })
+
+  it('רשום שבקשתו נדחתה — "אינכם זכאים" ולא "כבר התקבל"', async () => {
+    data.getRecipient.mockResolvedValue({ id: 'r1', center_id: null, approval_status: 'rejected' })
+    const r = await call({ r_id: ID })
+    expect(text(r)).toContain('אינכם זכאים')
+    expect(text(r)).not.toContain('כבר התקבל')
   })
 
   it('לא נשואים: "הקישו את התאריך לידה" ורק התאריך של בעל הת"ז', async () => {
