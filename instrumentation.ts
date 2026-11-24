@@ -67,6 +67,19 @@ export async function register() {
     }
   })()
 
+  // ── הקלטות חסרות בקול המשובט — פעם אחת בכל עלייה ──
+  //
+  // ⚠️ נוסח טלפוני שנכנס רק בקוד הוקרא בקול ממוחשב עד שמישהו לחץ "צור הקלטות
+  // בקולי" במסך הניהול. כאן נוצרים רק קטעים חסרים, עם נעילה בין המופעים,
+  // וכשל נרשם ללוג בלבד. כיבוי: PHONE_VOICE_STARTUP_SYNC_DISABLED=1.
+  if (process.env.PHONE_VOICE_STARTUP_SYNC_DISABLED !== '1') {
+    setTimeout(() => {
+      void import('@/lib/telephony/voiceStartupSync')
+        .then(({ syncVoiceOnStartup }) => syncVoiceOnStartup())
+        .catch((e) => console.error('[voice-startup] טעינה נכשלה:', e instanceof Error ? e.message : e))
+    }, 30 * 1000)
+  }
+
   // ⚠️ סורק ה-Gmail הישן (lib/autoReply) הוסר. הוא סרק את תיבת Gmail כל 15
   // דקות וענה בעצמו, לפי מכסה של 2 לשבוע — סותרת את המכסה שבמנגנון החי.
   // כל המענה האוטומטי נמצא היום ב-lib/autoReplySender, מונע מהגדרות שנערכות
