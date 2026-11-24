@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireAdmin, forbidden, getServiceClient } from '@/lib/apiAuth'
+import { recheckAfterLineageEdit } from '@/lib/lineageEditRecheck'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,7 +49,12 @@ export async function POST(request: NextRequest) {
     if (dup) return NextResponse.json({ error: 'תעודת זהות זו כבר קיימת במערכת — לא ניתן לרשום אותה שוב' }, { status: 409 })
   }
 
-  const { error } = await admin.from('beneficiaries').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', id)
+  // שינוי שושלת: השרשרת, הסטטוס והסיבה מחושבים מחדש — ראו lib/lineageEditRecheck.
+  let lineageExtra: Record<string, unknown> = {}
+  try { lineageExtra = await recheckAfterLineageEdit(admin, id, payload) }
+  catch (e) { console.error('[beneficiaries/update] בדיקת השושלת מחדש נכשלה:', e instanceof Error ? e.message : e) }
+
+  const { error } = await admin.from('beneficiaries').update({ ...payload, ...lineageExtra, updated_at: new Date().toISOString() }).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // תיקי לידה נמחקים רק אחרי שמירת הכרטסת, וכשל כאן לא מבטל אותה
