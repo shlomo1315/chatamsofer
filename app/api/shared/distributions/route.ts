@@ -56,15 +56,21 @@ export async function GET(req: NextRequest) {
   // בזמן דרך הסינון בטלפון (24.11.2026).
   const ids = boardRecipientDistIds(rows, liveId, req.nextUrl.searchParams.get('dist'))
   const part = Math.min(Math.max(Number.parseInt(req.nextUrl.searchParams.get('part') ?? '0', 10) || 0, 0), 500)
+  // 🔴 עדכון חי (?after=): רק נרשמים מהזמן הזה ואילך, בתשובה קלה — ראו fetchBoardUpdates.
+  const afterRaw = req.nextUrl.searchParams.get('after')
+  const after = afterRaw && !Number.isNaN(Date.parse(afterRaw)) ? new Date(afterRaw).toISOString() : null
   let recipients: unknown[] = []
   if (ids.length) {
-    const from = part * RECIPIENTS_PART_SIZE
-    const { data, error: recErr } = await admin
+    const from = after ? 0 : part * RECIPIENTS_PART_SIZE
+    let q = admin
       .from('distribution_recipients')
       // 🔴 רק השדות שהסיכומים והסינון צריכים (ושם המשפחה להתראה "נרשמה עכשיו").
       // טלפונים, כתובת ובן/בת זוג נטענים לפי עמוד בטבלה — ראו ./registrants.
       .select('id, distribution_id, source, registered_at, amount, approval_status, card_linked_at, beneficiary:beneficiaries(full_name, family_name, city, community_affiliation, children_count)')
       .in('distribution_id', ids)
+    // ⚠️ gte ולא gt: נרשם עם אותה שנייה בדיוק לא ייפול; הכפילות מסוננת בדף לפי id.
+    if (after) q = q.gte('registered_at', after)
+    const { data, error: recErr } = await q
       // ⚠️ מהישן לחדש: נרשם חדש נכנס בסוף ולא מזיז שורות בין החלקים שכבר
       // נטענו. הדף ממיין בעצמו (lib/controlRoom).
       .order('registered_at', { ascending: true })
@@ -99,10 +105,10 @@ export async function GET(req: NextRequest) {
   // 🔴 "חגים בלבד" (ברירת המחדל): לא שולפים ולא מחזירים יולדות או צאצאים.
   // מועד הסגירה לשעון העצר בראש דף החגים (וגם סוגר את הרישום בפועל, ראו lib/distributionsShareScope).
   const [holidaysOnly, closesAt] = await Promise.all([getHolidaysOnly(admin), getClosesAt(admin)])
-  if (holidaysOnly) {
+  if (holidaysOnly || after) {
     const serverMs = timing()
     return NextResponse.json(
-      { distributions: distributions ?? [], recipients, hasMore, serverMs, holidaysOnly: true, closesAt },
+      { distributions: distributions ?? [], recipients, hasMore, serverMs, holidaysOnly, closesAt },
       { headers: { 'Cache-Control': 'no-store', 'Server-Timing': `app;dur=${serverMs}` } },
     )
   }

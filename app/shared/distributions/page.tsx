@@ -2,7 +2,10 @@
 import { useState, useEffect, useCallback, useMemo, useRef, type CSSProperties, type ReactNode } from 'react'
 import ControlRoom from './panels/ControlRoom'
 import { Lock, LogIn, Loader2, Search, GitBranch, AlertTriangle, RefreshCw } from 'lucide-react'
-import { fetchSharedBoard, postSharedPassword, SHARED_FETCH_TIMEOUT_MS, sharedLoadingText, type BoardProgress } from '@/lib/sharedBoardFetch'
+import {
+  fetchSharedBoard, fetchBoardUpdates, latestRegisteredAt, mergeRecipients, postSharedPassword,
+  SHARED_FETCH_TIMEOUT_MS, SHARED_FULL_REFRESH_MS, SHARED_LIVE_TICK_MS, sharedLoadingText, type BoardProgress,
+} from '@/lib/sharedBoardFetch'
 import s from './board.module.css'
 import {
   registrationSeries, areaPaths, dayAxis, channelShares, conicOf, pctOf,
@@ -859,30 +862,76 @@ export default function SharedDistributionsPage() {
   const [progress, setProgress] = useState<BoardProgress | null>(null)
   // חלוקה קודמת שנבחרה לצפייה — השרת מחזיר נרשמים רק לחיה ולזו (boardRecipientDistIds)
   const wantDistRef = useRef<string | null>(null)
+  // נרשמים שעוד נטענים ברקע אחרי שהלוח כבר מוצג (null = הכול נטען)
+  const [loadingMore, setLoadingMore] = useState<number | null>(null)
+  // מצב עדכני לעדכון החי (בלי לחכות לרינדור): הנרשמים, החלוקה החיה, טעינה מלאה
+  const boardRef = useRef<{ recipients: Recipient[]; liveId: string | null; shown: boolean; loading: boolean; fullAt: number }>(
+    { recipients: [], liveId: null, shown: false, loading: false, fullAt: 0 },
+  )
+
+  const apply = useCallback((raw: Record<string, unknown>) => {
+    const d = raw as {
+      distributions?: Distribution[]; recipients?: Recipient[]; beneficiariesCount?: number
+      maternity?: MaternityRow[]; holidaysOnly?: boolean; closesAt?: unknown
+    }
+    const dists = d.distributions ?? []
+    boardRef.current = { ...boardRef.current, recipients: d.recipients ?? [], liveId: dists.find(x => x.live)?.id ?? null, shown: true }
+    setDistributions(dists)
+    setRecipients(d.recipients ?? [])
+    setBeneficiariesCount(d.beneficiariesCount ?? 0)
+    setMaternity(d.maternity ?? [])
+    setHolidaysOnly(d.holidaysOnly === true)
+    setClosesAt(typeof d.closesAt === 'string' ? d.closesAt : null)
+  }, [])
 
   const load = useCallback(async () => {
     // 🔴 מגבלת זמן: בקשה אחת שנתקעה (למשל בסינון של נטפרי) השאירה את
     // הרענון האוטומטי "עסוק" לתמיד, והדף הפסיק לקבל נרשמים חדשים בשקט.
     // 🔴 כשל נשמר ב-loadError ומוצג: קודם כשל בטעינה הראשונה (גם מיד אחרי
     // סיסמה נכונה) השאיר את הדף על גלגל טעינה לנצח, בלי הודעה.
-    const r = await fetchSharedBoard(undefined, undefined, wantDistRef.current, setProgress)
+    // 🔴 24.11.2026: כשעוד לא מוצג כלום, הלוח נפתח כבר אחרי החלק הראשון
+    // ושאר הנרשמים נכנסים ברקע. טעינה חוזרת (לוח כבר מוצג) מחליפה רק בסוף.
+    const first = !boardRef.current.shown
+    boardRef.current.loading = true
+    const r = await fetchSharedBoard(undefined, undefined, wantDistRef.current, setProgress, undefined, first ? partial => {
+      apply(partial)
+      setLoadingMore((partial.recipients as unknown[]).length)
+      setState('unlocked')
+    } : undefined)
+    boardRef.current.loading = false
     setProgress(null)
-    if (r.kind === 'locked') { setLoadError(null); setState('locked'); return }
+    setLoadingMore(null)
+    if (r.kind === 'locked') { boardRef.current.shown = false; setLoadError(null); setState('locked'); return }
     if (r.kind === 'error') { setLoadError(r.message); return }
-    const d = r.data as {
-      distributions?: Distribution[]; recipients?: Recipient[]; beneficiariesCount?: number
-      maternity?: MaternityRow[]; holidaysOnly?: boolean; closesAt?: unknown
-    }
-    setDistributions(d.distributions ?? [])
-    setRecipients(d.recipients ?? [])
-    setBeneficiariesCount(d.beneficiariesCount ?? 0)
-    setMaternity(d.maternity ?? [])
+    apply(r.data)
+    boardRef.current.fullAt = Date.now()
+    setUpdatedAt(new Date())
+    setLoadError(null)
+    setState('unlocked')
+  }, [apply])
+
+  // עדכון חי: רק נרשמים מהזמן האחרון ואילך. טעינה מלאה רק כשצריך (ראו SHARED_FULL_REFRESH_MS).
+  const update = useCallback(async () => {
+    const b = boardRef.current
+    if (b.loading) return
+    const after = latestRegisteredAt(b.recipients)
+    if (!after || Date.now() - b.fullAt > SHARED_FULL_REFRESH_MS) return load()
+    const r = await fetchBoardUpdates(after, wantDistRef.current)
+    if (r.kind === 'locked') { boardRef.current.shown = false; setLoadError(null); setState('locked'); return }
+    if (r.kind === 'error') { setLoadError(r.message); return }
+    const d = r.data as { distributions?: Distribution[]; recipients?: Recipient[]; holidaysOnly?: boolean; closesAt?: unknown; hasMore?: boolean }
+    const dists = d.distributions ?? []
+    // חלוקה חיה חדשה, או יותר נרשמים חדשים ממה שנכנס בתשובה אחת: טעינה מלאה
+    if (d.hasMore === true || (dists.find(x => x.live)?.id ?? null) !== boardRef.current.liveId) return load()
+    const merged = mergeRecipients(boardRef.current.recipients, d.recipients ?? [])
+    boardRef.current.recipients = merged
+    setDistributions(dists)
+    setRecipients(merged)
     setHolidaysOnly(d.holidaysOnly === true)
     setClosesAt(typeof d.closesAt === 'string' ? d.closesAt : null)
     setUpdatedAt(new Date())
     setLoadError(null)
-    setState('unlocked')
-  }, [])
+  }, [load])
 
   // ⚠️ `force` נדרש ל"נסה שוב": איפוס `lineageLoaded` ב-state לא משנה את
   // הערך שנתפס ב-closure של הפונקציה הזו, והניסיון החוזר היה יוצא מיד.
@@ -916,7 +965,8 @@ export default function SharedDistributionsPage() {
     if (state === 'unlocked' && (page === 'home' || page === 'tree')) void loadLineage()
   }, [state, page, loadLineage])
 
-  // רענון אוטומטי כל 15 שניות, רק בדף החגים ורק כשהלשונית גלויה.
+  // עדכון חי כל SHARED_LIVE_TICK_MS, רק בדף החגים ורק כשהלשונית גלויה.
+  // כל סבב מביא רק את הנרשמים החדשים (update), לא את כולם מחדש.
   // עץ הצאצאים (אלפי צמתים, שתקעו בעבר את הדף) לא נמשך כאן — יש לו טעינה נפרדת.
   useEffect(() => {
     if (state !== 'unlocked' || page !== 'holidays') return
@@ -924,14 +974,14 @@ export default function SharedDistributionsPage() {
     const tick = async () => {
       if (busy || document.visibilityState !== 'visible') return
       busy = true
-      try { await load() } finally { busy = false }
+      try { await update() } finally { busy = false }
     }
-    const id = window.setInterval(() => void tick(), 15_000)
+    const id = window.setInterval(() => void tick(), SHARED_LIVE_TICK_MS)
     // חזרה ללשונית: רענון מיד, בלי לחכות לסבב הבא
     const onVisible = () => { if (document.visibilityState === 'visible') void tick() }
     document.addEventListener('visibilitychange', onVisible)
     return () => { window.clearInterval(id); document.removeEventListener('visibilitychange', onVisible) }
-  }, [state, page, load])
+  }, [state, page, update])
 
   const refresh = useCallback(async () => {
     setRefreshing(true)
@@ -1019,6 +1069,7 @@ export default function SharedDistributionsPage() {
   if (page === 'holidays') {
     return (
       <ControlRoom live={live} prevDists={prevDists} selected={selected} rows={selRows} closesAt={closesAt} updatedAt={updatedAt}
+        loadingMore={loadingMore} loadError={loadError} onRetry={() => void refresh()}
         onPickLive={() => setHolView('live')} onPickPrev={id => { setHolView('prev'); setPickedId(id) }}
         onLogout={() => void logout()} otherPages={!holidaysOnly} />
     )
