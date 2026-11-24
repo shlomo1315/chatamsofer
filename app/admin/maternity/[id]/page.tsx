@@ -45,6 +45,8 @@ import { isConsecutive } from '@/lib/recoveryRange'
 import DocumentsManager from '@/app/admin/beneficiaries/[id]/DocumentsManager'
 import RecoveryUnlockButton from './RecoveryUnlockButton'
 import LineageTreeToggle from './LineageTreeToggle'
+import FamilyLineageRequests from './FamilyLineageRequests'
+import { loadFamilyLineageRequests } from '@/lib/familyLineageRequests'
 import LineageChainChips, { type ChainGen } from '@/app/admin/beneficiaries/[id]/LineageChainChips'
 import { getLineageMap, computeGenStatus, getLineagePath, buildMaternityGens } from '@/lib/maternityLineage'
 import { getApprovedRefLookup } from '@/lib/lineageApprovedRef'
@@ -257,6 +259,10 @@ export default async function MaternityDetailPage(
   // אצל כל היולדות. אותה תקלה בדיוק תוקנה בכרטסת הצאצא (14.09).
   const { getServiceClient: getApprovedRefDb } = await import('@/lib/apiAuth')
   const approvedRef = await getApprovedRefLookup(getApprovedRefDb())
+  // 🔴 A3: תיקון סדר הדורות שהמשפחה שלחה ולא הוחל — מוצג כאן ולא רק ב"בקשות משפחות".
+  const familyLineageRequests = await loadFamilyLineageRequests(getApprovedRefDb(), ben?.id)
+  const canApproveLineage = staff.role === 'admin'
+    || roleAllows(staff.role, staff.permissions, 'lineage', 'edit')
   const lineageManual = Array.isArray(ben?.lineage_manual) ? (ben.lineage_manual as string[]) : []
   // סימונים ידניים (override צבע) — כמו בכרטסת הצאצא
   const manualMarks = ((ben as { lineage_manual_marks?: Record<string, 'red' | 'green'> } | undefined)?.lineage_manual_marks) ?? {}
@@ -494,6 +500,7 @@ export default async function MaternityDetailPage(
                     <GitBranch size={14} className="text-navy-soft" />
                     <span className="text-xs font-semibold text-slate-500 uppercase">סדר הדורות</span>
                   </div>
+                  <FamilyLineageRequests beneficiaryId={ben.id} requests={familyLineageRequests} canApprove={canApproveLineage} />
                   {/* צ'יפים צבועים לפי סטטוס (ירוק=מאומת / אדום=סוטה / כתום=נוסף)
                       + סימון ידני — זהה לכרטסת הצאצא. מקור אחד בלבד (chain או path),
                       כדי שלא תחזור ההכפלה בין lineagePath ל-lineage_manual. */}
