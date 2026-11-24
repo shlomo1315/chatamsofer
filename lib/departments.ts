@@ -30,9 +30,11 @@ export interface Department {
   noReply?: boolean
 }
 
-// כתובות ניתנות להגדרה: מחלקת סיוע ב-c@ כברירת מחדל, ועזר לחגים עבר ל-h@.
-export const AID_DEPT_EMAIL = process.env.AID_DEPT_EMAIL || 'c@chasamsofer.info'
-export const HOLIDAYS_DEPT_EMAIL = process.env.HOLIDAYS_DEPT_EMAIL || 'h@chasamsofer.info'
+// כתובות ניתנות להגדרה: עזר לחגים ב-c@ ומחלקת סיוע ב-h@ (הוחלפו ב-24.11.2026).
+// ⚠️ לפני ההחלפה פניות החגים הגיעו ל-c@ בפועל, נוחתו במחלקת סיוע — ולא קיבלו
+// את המענה האוטומטי של עזר לחגים.
+export const AID_DEPT_EMAIL = process.env.AID_DEPT_EMAIL || 'h@chasamsofer.info'
+export const HOLIDAYS_DEPT_EMAIL = process.env.HOLIDAYS_DEPT_EMAIL || 'c@chasamsofer.info'
 
 // כתובות ישנות שנוחתות עכשיו במחלקת סיוע.
 export const AID_ALIAS_EMAILS = ['a@chasamsofer.info', 'r@chasamsofer.info']
