@@ -11,6 +11,7 @@ import { getNedarimCreds, setMagneticCard, findClientByZeout, getClientCardFull 
 import { getMaternityMessages, type MaternityMessages } from '@/lib/maternityPhoneMessages'
 import { canLinkMaternityCard } from '@/lib/maternityCardGate'
 import { askDigits, digits, fill, goodbye, hangup, menu } from '../modules'
+import { nameFile } from '../voiceFiles'
 import { normalizePhone } from '../shared/phone'
 import type { TlFile, TlHandler, TlResponse, TlResult } from '../types'
 import {
@@ -125,7 +126,7 @@ export const maternity: TlHandler = async ({ phone, callId, params }) => {
     await setCardNumber(aid.id, null)
   }
 
-  return askCard(1, [...files('identify', { name: familyName }), ...files('welcome')])
+  return askCard(1, [...files('identify', { name: nameFile(familyName) }), ...files('welcome')])
 }
 
 type LinkArgs = {

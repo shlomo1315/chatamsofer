@@ -62,7 +62,7 @@ beforeEach(() => {
 describe('יולדות — זיהוי', () => {
   it('לידה פעילה: שם, ברכה ובקשת כרטיס מוסתרת בלוג', async () => {
     const r = await call()
-    expect(text(r)).toContain('שלום משפחת כהן')
+    expect(text(r)).toContain('{"text":"שלום משפחת"},{"text":"כהן"}')
     expect(r.body).toMatchObject({ type: 'getDTMF', name: 'card1', max: 16, maskLog: true, post: true })
     expect(validateResult(r.body).ok).toBe(true)
   })

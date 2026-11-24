@@ -58,22 +58,107 @@ async function cachedIndex(): Promise<Index | null> {
   return idx
 }
 
-/** מחליף {text} קבוע בקישור לקובץ הקול, כשקיים. כל כשל → הקלט המקורי. */
+const link = (h: string): TlFile => ({ fileLink: `${SITE}/api/telephony/voice/${h}.wav`, fileName: `${h}.wav` })
+
+// ── שם המתקשר ──
+// השם משתנה בכל שיחה, ולכן לא נוצר מראש. בפעם הראשונה שנשמע שם מסוים הוא מוקרא
+// בקול של המרכזיה, ובמקביל (ברקע, בלי לעכב את השיחה) נוצרת הקלטה של השם בלבד
+// ונשמרת לפי hash של הקול והשם. מהשיחה הבאה מושמעת ההקלטה, בלי יצירה נוספת.
+// ⚠️ האחסון עצמו הוא האינדקס של השמות: syncMainVoice לא נוגע בו, ולכן "צור הקלטות
+// בקולי" לא מוחק שמות.
+const NAME_MARK = 'caller-name'
+const NAME_RETRY_MS = 30 * 60_000
+const VOICE_TTL = 10 * 60_000
+
+/** השם בתוך הודעה (fill): קטע נפרד, כדי שהפתיח הקבוע יושמע מההקלטה והשם יוקלט לבד. */
+export const nameFile = (name: string): TlFile => ({ text: name, voice: NAME_MARK })
+const isName = (f: TlFile): f is { text: string; voice: string } => 'text' in f && f.voice === NAME_MARK
+
+const knownNames = new Set<string>()
+const pendingNames = new Set<string>()
+let namesBlockedUntil = 0
+let voiceCache: { at: number; id: string | null } | null = null
+
+async function nameVoiceId(): Promise<string | null> {
+  if (voiceCache && Date.now() - voiceCache.at < VOICE_TTL) return voiceCache.id
+  const id = await resolveVoiceId().catch(() => null)
+  voiceCache = { at: Date.now(), id }
+  return id
+}
+
+/** יוצר הקלטה לשם אחד ושומר. פעם אחת לכל שם; כשל (מכסה/מפתח) עוצר יצירה לחצי שעה. */
+async function createNameVoice(h: string, name: string, voiceId: string) {
+  try {
+    const db = getServiceClient()
+    if (!db) return
+    const gen = await generateSpeech(name, { voiceId, outputFormat: FORMAT })
+    if (!gen.ok || !gen.audio) throw new Error(gen.error ?? 'יצירה נכשלה')
+    const up = await db.storage.from(BUCKET).upload(voicePath(h), Buffer.from(gen.audio), { contentType: 'audio/wav', upsert: true })
+    if (up.error) throw new Error(up.error.message)
+    knownNames.add(h)
+  } catch (e) {
+    namesBlockedUntil = Date.now() + NAME_RETRY_MS
+    console.warn('[telephony:voice] הקלטת שם נכשלה:', e instanceof Error ? e.message : e)
+  } finally {
+    pendingNames.delete(h)
+  }
+}
+
+/** קישור להקלטת השם אם קיימת; אחרת הטקסט עצמו, ויצירה ברקע לפעם הבאה. */
+async function nameVoice(name: string, idx: Index | null): Promise<TlFile> {
+  const plain: TlFile = { text: name }
+  try {
+    const voiceId = await nameVoiceId()
+    if (!voiceId) return plain
+    const h = voiceHash(voiceId, name)
+    if (knownNames.has(h) || (idx?.voiceId === voiceId && idx.hashes[h] !== undefined)) return link(h)
+    // תפוס לפני הבדיקה באחסון: שיחות מקבילות לאותו שם לא יוצרות פעמיים.
+    if (pendingNames.has(h)) return plain
+    pendingNames.add(h)
+    let creating = false
+    try {
+      const db = getServiceClient()
+      if (!db) return plain
+      const { data: exists } = await db.storage.from(BUCKET).exists(voicePath(h))
+      if (exists) { knownNames.add(h); return link(h) }
+      if (Date.now() >= namesBlockedUntil) { creating = true; void createNameVoice(h, name, voiceId) }
+      return plain
+    } finally {
+      if (!creating) pendingNames.delete(h)
+    }
+  } catch {
+    return plain
+  }
+}
+
+const mapFiles = (result: TlResult, fn: (f: TlFile) => TlFile): TlResult => {
+  const one = (r: TlResponse): TlResponse => ('files' in r && r.files ? { ...r, files: r.files.map(fn) } as TlResponse : r)
+  return Array.isArray(result) ? result.map(one) : one(result)
+}
+const plainNames = (result: TlResult) => mapFiles(result, (f) => (isName(f) ? { text: f.text } : f))
+
+/** מחליף {text} קבוע ושם מתקשר בקישור לקובץ הקול, כשקיים. כל כשל → טקסט. */
 export async function applyVoice(result: TlResult): Promise<TlResult> {
   try {
     const idx = await cachedIndex()
-    if (!idx?.voiceId || !Object.keys(idx.hashes).length) return result
-    const swap = (files?: TlFile[]) => files?.map((f): TlFile => {
-      if (!('text' in f) || f.voice) return f
+    const names = new Map<string, TlFile>()
+    mapFiles(result, (f) => { if (isName(f)) names.set(f.text, { text: f.text }); return f })
+    await Promise.all([...names.keys()].map(async (n) => names.set(n, await nameVoice(n, idx))))
+    return mapFiles(result, (f): TlFile => {
+      if (isName(f)) return names.get(f.text) ?? { text: f.text }
+      if (!('text' in f) || f.voice || !idx?.voiceId) return f
       const h = voiceHash(idx.voiceId, f.text)
-      return idx.hashes[h] === undefined ? f : { fileLink: `${SITE}/api/telephony/voice/${h}.wav`, fileName: `${h}.wav` }
+      return idx.hashes[h] === undefined ? f : link(h)
     })
-    const one = (r: TlResponse): TlResponse => ('files' in r && r.files ? { ...r, files: swap(r.files) } as TlResponse : r)
-    return Array.isArray(result) ? result.map(one) : one(result)
   } catch (e) {
     console.warn('[telephony:voice] נפילה לטקסט:', e instanceof Error ? e.message : e)
-    return result
+    return plainNames(result)
   }
+}
+
+/** לבדיקות בלבד. */
+export function resetNameVoiceState() {
+  knownNames.clear(); pendingNames.clear(); namesBlockedUntil = 0; voiceCache = null; cache = null
 }
 type TlResponse = Exclude<TlResult, unknown[]>
 

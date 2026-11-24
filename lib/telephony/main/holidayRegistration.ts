@@ -24,6 +24,7 @@ import { digitsOnly } from '@/lib/idLookup'
 import { spokenCenterDetails, spokenCenterName } from '@/lib/holidayCenterSpeech'
 import { validateIsraeliId } from '@/lib/validation'
 import { askDigits, menu, say, hangup } from '../modules'
+import { nameFile } from '../voiceFiles'
 import type { TlContext, TlFile, TlResponse, TlResult } from '../types'
 import { findRegistrantById, findRegistrantByPassportDigits, type Registrant, getRecipient, getSpokenCenter, memberCanRegister, readableName } from './holidaysData'
 
@@ -151,7 +152,7 @@ export async function phoneRegistration(k: RegKit, dist: ActiveDistribution): Pr
   // ── 4-5. הצהרות ──
   const lineage = tapped(params[REG_VARS.lineage])
   if (!lineage) {
-    return menu(REG_VARS.lineage, ['1', '2'], [...k.files('identify', { name }), ...k.files('reg_ask_lineage')], { timeout: 7 })
+    return menu(REG_VARS.lineage, ['1', '2'], [...k.files('identify', { name: nameFile(name) }), ...k.files('reg_ask_lineage')], { timeout: 7 })
   }
   if (lineage !== '1') return k.end('reg_declined')
   const need = tapped(params[REG_VARS.need])
@@ -214,11 +215,11 @@ export async function phoneEligibility(
   const name = readableName(ben)
   const rec = await getRecipient(distId, ben.id, 'id, approval_status')
   console.log(`${LOG} callId=${callId} eligibility ben=${ben.id} registered=${!!rec} open=${registrationOpen}`)
-  if (rec) return rec.approval_status === 'approved' ? k.end('elig_already_registered') : k.end('elig_registered_pending', { name })
-  if (!registrationOpen) return k.end('elig_registration_passed', { name })
+  if (rec) return rec.approval_status === 'approved' ? k.end('elig_already_registered') : k.end('elig_registered_pending', { name: nameFile(name) })
+  if (!registrationOpen) return k.end('elig_registration_passed', { name: nameFile(name) })
   if (!memberCanRegister(ben)) return k.end('not_eligible')
   if (blockedByDeepReview(rules, ben.eligibility_status)) return k.end('reg_deep_review')
-  return k.end('elig_can_apply', { name })
+  return k.end('elig_can_apply', { name: nameFile(name) })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
