@@ -23,6 +23,7 @@ import { getDistRules, isTestCaller, type DistRules } from '@/lib/holidayDistRul
 import { spokenCenterName } from '@/lib/holidayCenterSpeech'
 import { phoneRegistration, phoneEligibility, phoneHearCenter } from './holidayRegistration'
 import { askDigits, digits, fill, hangup, menu, say } from '../modules'
+import { nameFile } from '../voiceFiles'
 import type { TlContext, TlFile, TlResponse, TlResult } from '../types'
 import {
   centerCapacities, centerOpening, clearFailedCard, findMemberById, findMemberByPassportDigits, findMembersByPhone, getCenter,
@@ -165,7 +166,7 @@ async function registration(k: Kit): Promise<TlResult> {
 
   const confirmed = tapped(k.ctx.params[CONFIRM_VARS[attempt]])
   if (!confirmed) {
-    return menu(CONFIRM_VARS[attempt], ['1'], [...k.files('identify', { name }), ...k.files('ask_confirm', { distribution: distName })])
+    return menu(CONFIRM_VARS[attempt], ['1'], [...k.files('identify', { name: nameFile(name) }), ...k.files('ask_confirm', { distribution: distName })])
   }
   if (confirmed !== '1') return k.end('cancelled')
 
@@ -220,7 +221,7 @@ async function cardRoute(k: Kit): Promise<TlResult> {
   }
   const ben = candidates.find(c => c.id === resolved.familyId)
   if (!ben) return k.end('failed')
-  return await cardForMember(k, dist, ben, k.files('identify', { name: readableName(ben) }))
+  return await cardForMember(k, dist, ben, k.files('identify', { name: nameFile(readableName(ben)) }))
 }
 
 /** שיוך כרטיס וטעינה למשפחה שכבר זוהתה (בטלפון או בת"ז). */
@@ -370,7 +371,7 @@ async function centers(k: Kit, mode: 'hear' | 'pick'): Promise<TlResult> {
     case 'ask_city':
       // המספר הוא של העיר (מתפרסם מראש), ולא מיקום ברשימה — ולכן יכול להיות דו-ספרתי.
       return choose(CENTER_VARS.city, step.options.map(o => o.number), [
-        ...k.files('identify', { name: readableName(ben) }), ...k.files('centers_intro'), ...countdown,
+        ...k.files('identify', { name: nameFile(readableName(ben)) }), ...k.files('centers_intro'), ...countdown,
         ...k.files('ask_city_intro'), ...say(step.options.map(o => `ל${o.city} הקישו ${o.number}`).join(' ')),
       ])
     case 'ask_center':
@@ -435,7 +436,7 @@ async function distributionInfo(k: Kit, live: LiveDistribution): Promise<TlResul
 
   const amount = Number(dist.amount_per_family ?? 0)
   const name = readableName(ben)
-  const details: TlFile[] = [...k.files('phase_dist_details', { name, amount: String(amount) })]
+  const details: TlFile[] = [...k.files('phase_dist_details', { name: nameFile(name), amount: String(amount) })]
   if (rec.center_id) {
     const c = await getSpokenCenter(rec.center_id)
     details.push(...spoken(c, ''))
