@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { planLineageFaultNotice, recipientNameOf, type FaultRow } from './lineageFaultNotice'
-import { lineageFaultEmail } from './emailTemplates'
+import {
+  DEFAULT_LINEAGE_FAULT_TEMPLATE, NAME_TOKEN, normalizeLineageFaultTemplate, planLineageFaultNotice, recipientNameOf,
+  type FaultRow,
+} from './lineageFaultNotice'
+import { lineageFaultEmail } from './lineageFaultEmail'
 
 const row = (id: string, over: Partial<FaultRow> = {}): FaultRow => ({
   id, full_name: 'משה', family_name: 'כהן', spouse_name: null,
@@ -47,7 +50,45 @@ describe('lineageFaultEmail', () => {
     const m = lineageFaultEmail({ recipientName: 'כהן <b>', link: 'https://chasamsofer.co.il/lineage-review/abc' })
     expect(m.subject).toContain('תקלה בסדר הדורות')
     expect(m.html).toContain('התגלתה תקלה')
+    expect(m.html).toContain('לא תהיה אפשרות לקבל את הכרטיס של מענק חג החנוכה')
     expect(m.html).toContain('https://chasamsofer.co.il/lineage-review/abc')
     expect(m.html).not.toContain('כהן <b>')
+    expect(m.html).toContain('לכבוד משפחת כהן &lt;b&gt;,')
+  })
+
+  it('בונה מנוסח ערוך: נושא, כותרת, גוף, כפתור והערה', () => {
+    const m = lineageFaultEmail({
+      recipientName: 'לוי',
+      link: 'https://chasamsofer.co.il/lineage-review/xyz',
+      template: {
+        subject: `עדכון ל${NAME_TOKEN}`, title: 'כותרת חדשה', bodyHtml: `<p>שלום ${NAME_TOKEN}</p><img src=x onerror="alert(1)">`,
+        buttonLabel: 'לחצו כאן', note: '',
+      },
+    })
+    expect(m.subject).toBe('עדכון ללוי')
+    expect(m.html).toContain('כותרת חדשה')
+    expect(m.html).toMatch(/<p[^>]*>שלום לוי<\/p>/)
+    expect(m.html).toContain('לחצו כאן')
+    expect(m.html).toContain('href="https://chasamsofer.co.il/lineage-review/xyz"')
+    expect(m.html).not.toContain('onerror')
+    expect(m.html).not.toContain('הקישור אישי ותקף')
+  })
+})
+
+describe('normalizeLineageFaultTemplate', () => {
+  it('שדות חובה ריקים חוזרים לברירת המחדל, הערה ריקה נשארת ריקה', () => {
+    const t = normalizeLineageFaultTemplate({ subject: '  ', title: '', bodyHtml: '', buttonLabel: '', note: '' })
+    expect(t).toEqual({ ...DEFAULT_LINEAGE_FAULT_TEMPLATE, note: '' })
+  })
+
+  it('מסיר מעברי שורה מהנושא ומגביל אורך', () => {
+    const t = normalizeLineageFaultTemplate({ subject: 'א\nב', buttonLabel: 'x'.repeat(500) })
+    expect(t.subject).toBe('א ב')
+    expect(t.buttonLabel).toHaveLength(60)
+    expect(t.note).toBe(DEFAULT_LINEAGE_FAULT_TEMPLATE.note)
+  })
+
+  it('קלט שאינו אובייקט מחזיר את ברירת המחדל', () => {
+    expect(normalizeLineageFaultTemplate(null)).toEqual(DEFAULT_LINEAGE_FAULT_TEMPLATE)
   })
 })

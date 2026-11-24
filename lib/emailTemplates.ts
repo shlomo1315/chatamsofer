@@ -1581,41 +1581,8 @@ export function lineageOrderFixEmail(opts: {
 }
 
 // ─── הודעה למשפחות בבדיקה מעמיקה: התגלתה תקלה בסדר הדורות ─────────────────
-// נשלח במרוכז מ-/api/admin/beneficiaries/lineage-fault-notice. הקישור זהה לזה
-// של lineageOrderFixEmail (mode='order', 30 יום), רק הנוסח שונה: כאן מודיעים
-// על תקלה ומבקשים להסדיר מחדש, ולא מבקשים "לעבור ולוודא".
-export function lineageFaultEmail(opts: {
-  recipientName: string
-  link: string
-}): { subject: string; html: string } {
-  const body = `
-    <p style="margin:0 0 14px;color:#0f172a;font-size:18px;font-weight:800;">לכבוד משפחת ${escapeHtml(opts.recipientName)},</p>
-    <p style="margin:0 0 12px;color:#475569;font-size:15px;line-height:1.8;">
-      בבדיקת המאגר התגלתה תקלה ב<strong>סדר הדורות</strong> הרשום אצלכם במערכת.
-    </p>
-    <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.8;">
-      יש להסדיר מחדש את סדר הדורות דרך הקישור שלהלן. בקישור יופיעו פרטיכם ושרשרת הדורות
-      כפי שהיא רשומה כעת, ותוכלו לסדר אותה מחדש.
-    </p>
-    <div style="text-align:center;margin:0 0 18px;">
-      <a href="${escapeHtml(opts.link)}" style="display:inline-block;background:#4f46e5;color:#fff;font-size:16px;font-weight:800;text-decoration:none;border-radius:12px;padding:14px 32px;">
-        להסדרת סדר הדורות
-      </a>
-    </div>
-    <p style="margin:0;color:#94a3b8;font-size:12px;">הקישור אישי ותקף 30 יום. לאחר ההסדרה יועבר לאישור המזכירות.</p>
-    <p style="margin:10px 0 0;color:#cbd5e1;font-size:11px;">אין להשיב למייל זה. לפניות: <a href="mailto:igud@chasamsofer.info" style="color:#a5b4fc;text-decoration:none;">igud@chasamsofer.info</a></p>
-  `
-  return {
-    subject: 'תקלה בסדר הדורות: נא להסדיר מחדש · איגוד צאצאי החתם סופר',
-    html: shell({
-      preheader: 'התגלתה תקלה בסדר הדורות הרשום אצלכם',
-      accent: '#4f46e5',
-      title: 'הסדרה מחדש של סדר הדורות',
-      subtitle: 'איגוד צאצאי החתם סופר',
-      body,
-    }),
-  }
-}
+// הנוסח ניתן לעריכה מלאה, ולכן הבנייה ב-lib/lineageFaultEmail.ts (צד שרת בלבד,
+// כי היא מנקה HTML עם sanitize-html, וקובץ זה נטען גם בדפדפן).
 
 // ─── התראה: תשלום משלים מבית ההחלמה (קבלה נוספת לרשומה שכבר הוגשה) ──────────
 export function recoveryTopupEmail(opts: {
