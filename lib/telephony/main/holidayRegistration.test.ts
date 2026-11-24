@@ -21,13 +21,13 @@ vi.mock('@/lib/holidayPhoneMessages', () => ({
     main_menu: 'תפריט ראשי', reg_main_menu: 'שלוחת חנוכה: רישום 1 זכאות 2 מוקד 3', reg_notice: 'הודעה מקדימה',
     reg_welcome: 'ברוכים הבאים', reg_ask_id: 'הקישו תעודת זהות', id_invalid: 'מספר שגוי', not_found: 'לא נמצאתם',
     not_eligible: 'אינכם זכאים', reg_deep_review: 'פנו למשרד', reg_ask_birth: 'הקישו תאריך לידה', reg_ask_birth_couple: 'תאריך לידה של הבעל או של האשה',
-    reg_id_not_found: 'מספר זהות זה אינו מופיע במערכת. בהצלחה', reg_final: 'הרשמתך התקבלה בהצלחה במערכת',
-    reg_already_registered: 'שימו לב, הרישום שלכם לחלוקה זו כבר התקבל במערכת',
+    reg_id_not_found: 'מספר זהות זה אינו מופיע במערכת. בהצלחה', reg_final_plural: 'הרשמתכם התקבלה בהצלחה במערכת',
+    reg_already_received: 'הרישום שלכם כבר נקלט במערכת',
     reg_birth_mismatch: 'תאריך לא תואם', reg_ask_id_full: 'הקישו ת"ז כולל ספרת ביקורת',
     reg_to_registration: 'הינכם מועברים לרישום לחלוקה', reg_questions_notice: 'שימו לב מספר שאלות',
     reg_birth_no_match: 'אינו תואם לתאריך שמעודכן במערכת', reg_ask_phone: 'הקישו טלפון', reg_phone_mismatch: 'טלפון לא תואם',
     identify: 'שלום {name}', reg_ask_lineage: 'הצהרת ייחוס', reg_ask_need: 'הצהרת נזקקות', reg_declined: 'הרישום לא בוצע',
-    reg_success_approved: 'נרשמתם ל{distribution} וזכאים', reg_success_pending: 'נרשמתם', reg_to_centers: 'מעבר למוקד',
+    reg_success_received: 'הרישום שלכם נקלט במערכת', reg_success_pending: 'נרשמתם', reg_to_centers: 'מעבר למוקד',
     reg_center_later: 'המוקד ייבחר אחר כך', center_hours_later: 'השעות יפורסמו', reg_goodbye: 'להתראות',
     center_confirm: 'לאישור {center} הקישו 1', center_success: 'נבחר {center}', center_already: 'המוקד שלכם',
     already: '{name} כבר רשומים ל{distribution}', failed: 'תקלה', closed: 'סגור', center_full: 'מלא',
@@ -153,8 +153,8 @@ describe('רישום בטלפון בלבד', () => {
     const r = await call({ ...full, r_lin: '1', r_need: '1' })
     expect(dist.registerToOpenDistribution).toHaveBeenCalledWith('b1', 'phone', { phone: '0527654321', distribution: OPEN })
     expect(notify.notifyHolidayApproved).toHaveBeenCalledWith(['r1'], { email: true, phone: false })
-    expect(text(r)).toContain('וזכאים')
-    expect(text(r)).toContain('הרשמתך התקבלה בהצלחה במערכת')
+    expect(text(r)).toContain('הרישום שלכם נקלט במערכת')
+    expect(text(r)).toContain('הרשמתכם התקבלה בהצלחה במערכת')
     expect(text(r)).not.toContain('c_city')
     expect(data.openCenters).not.toHaveBeenCalled()
     expect(Array.isArray(r.body) && r.body.at(-1)).toMatchObject({ type: 'hangup' })
@@ -164,14 +164,15 @@ describe('רישום בטלפון בלבד', () => {
     dist.registerToOpenDistribution.mockResolvedValue({ ok: true, created: true, approved: false, recipientId: 'r1' })
     data.getRecipient.mockResolvedValueOnce(null).mockResolvedValue({ id: 'r1', center_id: null, approval_status: 'pending' })
     const r = await call({ ...full, r_lin: '1', r_need: '1' })
-    expect(text(r)).toContain('הרשמתך התקבלה בהצלחה במערכת')
-    expect(text(r)).not.toContain('וזכאים')
+    expect(text(r)).toContain('הרשמתכם התקבלה בהצלחה במערכת')
+    expect(text(r)).not.toContain('הרישום שלכם נקלט')
   })
 
   const WIFE = '000000018'
   const couple = { ...ben, marital_status: 'נשוי', spouse_name: 'שרה', spouse_id_number: WIFE, spouse_birth_date: '1992-07-01' }
   const alreadyHeard = (r: { body: unknown }) => {
-    expect(text(r)).toContain('הרישום שלכם לחלוקה זו כבר התקבל')
+    expect(text(r)).toContain('הרישום שלכם כבר נקלט במערכת')
+    expect(text(r)).not.toContain('הרשמתכם')
     expect(text(r)).not.toContain('המוקד שלכם')
     expect(text(r)).not.toContain('הקישו תאריך לידה')
     expect(dist.registerToOpenDistribution).not.toHaveBeenCalled()
@@ -197,7 +198,7 @@ describe('רישום בטלפון בלבד', () => {
     data.getRecipient.mockResolvedValue({ id: 'r1', center_id: null, approval_status: 'rejected' })
     const r = await call({ r_id: ID })
     expect(text(r)).toContain('אינכם זכאים')
-    expect(text(r)).not.toContain('כבר התקבל')
+    expect(text(r)).not.toContain('כבר נקלט')
   })
 
   it('לא נשואים: "הקישו את התאריך לידה" ורק התאריך של בעל הת"ז', async () => {
@@ -238,11 +239,11 @@ describe('רישום בטלפון בלבד', () => {
     expect(Array.isArray(r3.body) && r3.body.at(-1)).toMatchObject({ type: 'hangup' })
   })
 
-  it('רישום שנכשל — בלי הודעת "הרשמתך התקבלה"', async () => {
+  it('רישום שנכשל — בלי הודעת "הרשמתכם התקבלה"', async () => {
     dist.registerToOpenDistribution.mockResolvedValue({ ok: false, error: 'x' })
     const r = await call({ ...full, r_lin: '1', r_need: '1' })
     expect(text(r)).toContain('תקלה')
-    expect(text(r)).not.toContain('הרשמתך התקבלה')
+    expect(text(r)).not.toContain('הרשמתכם התקבלה')
   })
 
   it('נשואים: "של הבעל או של האשה", ושני התאריכים מתקבלים', async () => {
