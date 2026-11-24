@@ -6,7 +6,7 @@ import LoansDept, { type LoanRow, type LegacySummary } from './panels/LoansDept'
 import { DeptHeader } from './panels/Chrome'
 import SharedRecipientsTable from './panels/SharedRecipientsTable'
 import Image from 'next/image'
-import { Lock, LogIn, Loader2, RefreshCw, Users, Gift, CalendarDays, ShieldCheck, Search, LogOut, MapPin, Baby, GitBranch } from 'lucide-react'
+import { Lock, LogIn, Loader2, RefreshCw, Users, Gift, CalendarDays, ShieldCheck, Search, LogOut, MapPin, Baby, GitBranch, History, ChevronDown } from 'lucide-react'
 import HolidayRecipientsTable from '@/app/admin/distributions/[id]/HolidayRecipientsTable'
 import type { RegisterSource } from '@/lib/distributionSources'
 import LineageTreeSvg from '@/app/lineage-review/[token]/LineageTreeSvg'
@@ -156,6 +156,8 @@ interface Distribution {
   total_budget?: number | null
   distribution_date?: string | null
   created_at?: string | null
+  /** החלוקה החיה — נקבע בשרת (pickLiveDistribution). לכל היותר אחת. */
+  live?: boolean
 }
 
 const fmtCur = (n?: number | null) => n != null ? `${Math.round(Number(n) || 0).toLocaleString('he-IL')} ₪` : '—'
@@ -761,14 +763,18 @@ export default function SharedDistributionsPage() {
   const [activeTab, setActiveTab] = useState<'distributions' | 'breakdown'>('distributions')
   const [openId, setOpenId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
+  const [showPrev, setShowPrev] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
   // ── סיכומי שלוש המחלקות למסך הבית ──
   // ⚠️ נגזרים מהנתונים שכבר נטענו ולא בשאילתה נוספת: הדף מרענן כל 10
   // שניות, וקריאה שנייה הייתה מכפילה את העומס בלי להוסיף מידע.
   const deptSummaries: DeptSummary[] = useMemo(() => {
-    // חלוקות חגים — אישורים מול ממתינים
-    const approved = recipients.filter(r => r.approval_status === 'approved').length
+    // חלוקות חגים — אישורים מול ממתינים, של החלוקה הפעילה בלבד (אם יש).
+    // ⚠️ קודם נספרו כל הנרשמים מכל השנים, והמספר לא שיקף את החלוקה הנוכחית.
+    const live = distributions.find(d => d.live)
+    const liveRecipients = live ? recipients.filter(r => r.distribution_id === live.id) : recipients
+    const approved = liveRecipients.filter(r => r.approval_status === 'approved').length
     const openDists = distributions.filter(d => d.registration_open).length
 
     // יולדות — מומש מול חויב (הפער הוא כסף שטרם שולם)
@@ -783,13 +789,14 @@ export default function SharedDistributionsPage() {
 
     return [
       {
-        key: 'holidays', headline: recipients.length, headlineLabel: 'נרשמו לחלוקות',
+        key: 'holidays', headline: liveRecipients.length,
+        headlineLabel: live ? `נרשמו ל${live.name}${live.year ? ` ${live.year}` : ''}` : 'נרשמו לחלוקות',
         rows: [
           { label: 'חלוקות פתוחות', value: String(openDists) },
           { label: 'אושרו', value: approved.toLocaleString('he-IL') },
-          { label: 'ממתינים לאישור', value: (recipients.length - approved).toLocaleString('he-IL') },
+          { label: 'ממתינים לאישור', value: (liveRecipients.length - approved).toLocaleString('he-IL') },
         ],
-        progress: recipients.length ? approved / recipients.length : 0,
+        progress: liveRecipients.length ? approved / liveRecipients.length : 0,
         progressLabel: 'שיעור האישורים',
       },
       {
@@ -863,13 +870,13 @@ export default function SharedDistributionsPage() {
   // טעינה ראשונית
   useEffect(() => { void load() }, [load])
 
-  // ⚠️ החלוקה הראשונה נפתחת מאליה: הרשימה היא *הסיבה* שנכנסים למסך,
+  // ⚠️ החלוקה הפעילה נפתחת מאליה: הרשימה היא *הסיבה* שנכנסים למסך,
   // ולחיצה נוספת רק כדי לראות אותה היא חיכוך מיותר. נעשה פעם אחת בלבד
   // (openId מתמלא), כדי שסגירה ידנית לא תיפתח מחדש בכל רענון.
+  // 🔴 קודם נפתחה distributions[0] — החדשה ביותר, גם אם הייתה מושבתת.
   useEffect(() => {
-    if (dept === 'holidays' && openId === null && distributions.length) {
-      setOpenId(distributions[0].id)
-    }
+    const live = distributions.find(d => d.live)
+    if (dept === 'holidays' && openId === null && live) setOpenId(live.id)
   }, [dept, distributions, openId])
 
   // ⚠️ נטען רק כשנכנסים למחלקת העץ.
@@ -905,21 +912,17 @@ export default function SharedDistributionsPage() {
     return { openCount, distributions: distributions.length }
   }, [distributions])
 
-  // ── החלוקה הפתוחה לרישום + מספר הנרשמים אליה (הנתון הראשי בכרטיס-העל) ──
-  // אם יש כמה פתוחות — הראשונה (העדכנית). אם אין — נופלים לעדכנית ביותר.
-  const featured = useMemo(() => {
-    const open = distributions.find(d => d.registration_open) ?? distributions[0] ?? null
-    if (!open) return null
-    const count = (byDist.get(open.id) ?? []).length
-    const title = `${open.name}${open.year ? ` ${open.year}` : ''}`
-    return { title, count }
-  }, [distributions, byDist])
+  // ── החלוקה הפעילה למעלה, וכל השאר תחת "חלוקות קודמות" ──
+  const liveDist = useMemo(() => distributions.find(d => d.live) ?? null, [distributions])
+  const previous = useMemo(() => distributions.filter(d => !d.live), [distributions])
+  // ⚠️ בלי חלוקה פעילה אין מה להציג למעלה — הקודמות נפתחות מאליהן.
+  const prevShown = showPrev || !liveDist
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return distributions
-    return distributions.filter(d => [d.name, d.year, d.holiday, d.description].filter(Boolean).join(' ').toLowerCase().includes(q))
-  }, [distributions, query])
+    if (!q) return previous
+    return previous.filter(d => [d.name, d.year, d.holiday, d.description].filter(Boolean).join(' ').toLowerCase().includes(q))
+  }, [previous, query])
 
   if (state === 'checking') {
     return <div className="min-h-screen flex items-center justify-center bg-[#faf7f0]"><Loader2 size={28} className="animate-spin text-[#b08d3f]" /></div>
@@ -1005,11 +1008,30 @@ export default function SharedDistributionsPage() {
           ))}
         </div>
 
-        {activeTab === 'breakdown' && <BreakdownPanels recipients={recipients} />}
+        {/* ⚠️ הפילוחים — של החלוקה הפעילה, כמו הכותרת במסך הבית. */}
+        {activeTab === 'breakdown' && <BreakdownPanels recipients={liveDist ? (byDist.get(liveDist.id) ?? []) : recipients} />}
 
         {activeTab === 'distributions' && <>
+        {liveDist && (
+          <section className="flex flex-col gap-3">
+            <h2 className="text-sm font-extrabold text-[#6b5d3e]">החלוקה הפעילה</h2>
+            <div className="grid gap-4">{renderCard(liveDist)}</div>
+          </section>
+        )}
+
+        {previous.length > 0 && liveDist && (
+          <button type="button" onClick={() => setShowPrev(v => !v)} aria-expanded={showPrev}
+            className="self-start inline-flex items-center gap-1.5 rounded-xl border border-[#e8dfc9] bg-white px-4 py-2.5 text-sm font-bold text-[#6b5d3e] transition hover:border-[#d9b95c] hover:text-[#8a6a24]">
+            <History size={16} />
+            {showPrev ? 'הסתרת החלוקות הקודמות' : `צפייה בחלוקות קודמות (${previous.length})`}
+            <ChevronDown size={15} className={`transition-transform ${showPrev ? 'rotate-180' : ''}`} />
+          </button>
+        )}
+
+        {prevShown && previous.length > 0 && <>
+        {liveDist && <h2 className="text-sm font-extrabold text-[#6b5d3e]">חלוקות קודמות</h2>}
         {/* חיפוש */}
-        {distributions.length > 3 && (
+        {previous.length > 3 && (
           <div className="relative max-w-md">
             <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
             <input value={query} onChange={e => setQuery(e.target.value)} placeholder="חיפוש חלוקה…"
@@ -1019,7 +1041,26 @@ export default function SharedDistributionsPage() {
 
         {/* קוביות חלוקות */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {visible.map(d => {
+          {visible.map(d => renderCard(d))}
+        </div>
+        </>}
+
+        {prevShown && visible.length === 0 && !(liveDist && !query) && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-16 text-center">
+            <Gift size={28} className="text-slate-300 mx-auto mb-3" />
+            <p className="text-slate-500 font-medium">{query ? 'לא נמצאו חלוקות לחיפוש זה' : 'אין חלוקות להצגה'}</p>
+          </div>
+        )}
+        </>}
+        </>}
+
+        <p className="text-center text-[11px] text-slate-400 pt-2">לחצו על רענון לעדכון הנתונים · כל הפרטים מוצפנים</p>
+      </main>
+    </div>
+  )
+
+  // כרטיס חלוקה — משותף לחלוקה הפעילה ולחלוקות הקודמות.
+  function renderCard(d: Distribution) {
             const rows = byDist.get(d.id) ?? []
             const isOpen = openId === d.id
             return (
@@ -1063,20 +1104,5 @@ export default function SharedDistributionsPage() {
                 )}
               </button>
             )
-          })}
-        </div>
-
-        {visible.length === 0 && (
-          <div className="bg-white rounded-2xl border border-slate-200 p-16 text-center">
-            <Gift size={28} className="text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500 font-medium">{query ? 'לא נמצאו חלוקות לחיפוש זה' : 'אין חלוקות להצגה'}</p>
-          </div>
-        )}
-        </>}
-        </>}
-
-        <p className="text-center text-[11px] text-slate-400 pt-2">לחצו על רענון לעדכון הנתונים · כל הפרטים מוצפנים</p>
-      </main>
-    </div>
-  )
+  }
 }

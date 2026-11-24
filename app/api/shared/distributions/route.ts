@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyPortalToken, DIST_PORTAL_COOKIE } from '@/lib/distributionsPortalAuth'
 import { createClient } from '@supabase/supabase-js'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { pickLiveDistribution } from '@/lib/distributionEnabled'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // דף שיתוף חלוקות חגים — API לתצוגה בלבד (view-only).
@@ -24,12 +25,26 @@ export async function GET(req: NextRequest) {
 
   const admin = adminClient()
 
-  const { data: distributions, error: distErr } = await admin
+  // ⚠️ '*' ולא רשימת עמודות — ראו lib/distributionEnabled.ts. לדף יוצאות רק
+  // העמודות שברשימה למטה, ולא כל השורה.
+  const { data: distRows, error: distErr } = await admin
     .from('distributions')
-    .select('id, name, year, holiday, description, status, registration_open, amount_per_family, total_budget, distribution_date, created_at')
+    .select('*')
     .order('created_at', { ascending: false })
     .limit(10000)
   if (distErr) return NextResponse.json({ error: distErr.message }, { status: 500 })
+
+  // 🔴 הקישור לא מצביע על מזהה קבוע: הדף מציג את החלוקה החיה (העדכנית שאינה
+  // מושבתת או מבוטלת), וכל השאר תחת "חלוקות קודמות".
+  type DistRow = Record<string, unknown> & { id: string; enabled?: boolean | null; status?: string | null }
+  const rows = (distRows ?? []) as DistRow[]
+  const liveId = pickLiveDistribution(rows)?.id ?? null
+  const distributions = rows.map(d => ({
+    id: d.id, name: d.name, year: d.year, holiday: d.holiday, description: d.description,
+    status: d.status, registration_open: d.registration_open, amount_per_family: d.amount_per_family,
+    total_budget: d.total_budget, distribution_date: d.distribution_date, created_at: d.created_at,
+    live: d.id === liveId,
+  }))
 
   // ⚠️ שליפה בדפים ולא ב-limit: התקרה נאכפת בצד השרת (db-max-rows) ואינה
   // ניתנת לעקיפה מהלקוח — .limit(100000) נוסה ולא עזר, הרשימה נחתכה ב-1,000
