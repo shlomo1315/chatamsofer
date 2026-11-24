@@ -16,6 +16,13 @@ describe('הודעות התפריט הראשי', () => {
     }
   })
 
+  it('הודעה 9 מסתיימת בניתוק — בלי "הקישו" שאי אפשר להקיש בה', () => {
+    const notice = defaultMainMenuMessages().notice.text
+    expect(notice).toContain('חנוכה')
+    expect(notice).toContain('התקשרו שוב לקו זה והקישו 1')
+    expect(notice).not.toMatch(/כעת הקישו|הקישו 2/)
+  })
+
   it('נוסח שנשמר גובר על ברירת המחדל', () => {
     const out = mergeMainMenuMessages({ menu: { text: 'לחגים הקישו 1' } })
     expect(out.menu.text).toBe('לחגים הקישו 1')
