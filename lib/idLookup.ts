@@ -67,12 +67,15 @@ export function passportDigitsPattern(typed: unknown): string {
   return d ? `*${d.split('').join('*')}*` : ''
 }
 
-/** האם המספר השמור הוא דרכון עם אותיות, שהספרות שלו (בלבד) הן בדיוק מה שהוקש. */
+/**
+ * האם הספרות (בלבד) של המספר השמור הן בדיוק מה שהוקש.
+ * גם דרכון שנשמר בספרות בלבד ("556212027") מתאים: הוא לא עובר בדיקת ספרת
+ * ביקורת של ת"ז, ולכן מגיע לכאן ולא לחיפוש הרגיל.
+ */
 export function passportDigitsMatch(stored: unknown, typed: unknown): boolean {
-  const s = String(stored ?? '')
   const t = digitsOnly(typed)
-  if (t.length < PASSPORT_MIN_DIGITS || !/\p{L}/u.test(s)) return false
-  return digitsOnly(s) === t
+  if (t.length < PASSPORT_MIN_DIGITS) return false
+  return digitsOnly(stored) === t
 }
 
 /** האם שני מספרי ת"ז הם אותו מספר, בהתעלם מאפסים מובילים ומתווים שאינם ספרות. */
