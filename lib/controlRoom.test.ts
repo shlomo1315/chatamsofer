@@ -169,6 +169,15 @@ describe('דף השיתוף: 10 קהילות ורשימת שמות', () => {
     expect(t).toMatchObject({ name: 'משפחת לוי', spouse: '', phones: '', address: '', city: '', kids: null, amount: 0, status: 'rejected', at: null })
   })
 
+  // 24.11.2026: בכרטסת full_name הוא השם הפרטי ושם המשפחה נפרד, והטבלה הציגה רק "משה".
+  it('שם פרטי ושם משפחה בשדות נפרדים: שם מלא, בלי לכפול כשהשם כבר כולל את המשפחה', () => {
+    expect(regName({ id: 'a', beneficiary: { full_name: 'משה', family_name: 'כהן' } })).toBe('כהן משה')
+    expect(regName({ id: 'b', beneficiary: { full_name: ' משה ', family_name: ' כהן ' } })).toBe('כהן משה')
+    expect(regName({ id: 'c', beneficiary: { full_name: 'משה כהן', family_name: 'כהן' } })).toBe('משה כהן')
+    expect(regName({ id: 'd', beneficiary: { full_name: 'משה', family_name: null } })).toBe('משה')
+    expect(regTable([{ id: 'e', beneficiary: { full_name: 'יעקב', family_name: 'וייס' } }])[0].name).toBe('וייס יעקב')
+  })
+
   it('בלי שם מלא: "משפחת X", ובלי שעת רישום: בסוף', () => {
     expect(regName(row('a'))).toBe('משפחת כהן')
     const t = regTable([{ ...row('old'), registered_at: null }, row('new')])

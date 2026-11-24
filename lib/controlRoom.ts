@@ -108,9 +108,16 @@ export function topCommunities(list: CommMoney[], n = COMM_TOP): { top: CommMone
   }
 }
 
-/** השם המלא של הנרשם, ואם אין: "משפחת X". */
+/** השם המלא של הנרשם, ואם אין: "משפחת X".
+ *  🔴 בכרטסת full_name הוא בדרך כלל השם הפרטי בלבד, ושם המשפחה ב-family_name
+ *  משפחה ואז פרטי, כמו בשאר דף השיתוף (famName ב-page.tsx), בלי לכפול כשהשם
+ *  כבר כולל את המשפחה. */
 export function regName(r: CrRow): string {
-  return r.beneficiary?.full_name?.trim() || famLabel(r)
+  const first = r.beneficiary?.full_name?.trim() || ''
+  const fam = r.beneficiary?.family_name?.trim() || ''
+  if (!first) return famLabel(r)
+  if (!fam || first.split(/\s+/).includes(fam)) return first
+  return `${fam} ${first}`
 }
 
 export type RegRow = {
