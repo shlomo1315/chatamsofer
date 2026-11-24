@@ -7,10 +7,31 @@ let sentLog: { entity_id: string; created_at: string }[]
 let settings: Record<string, string>
 const delivered: { to: string; subject: string; html: string }[] = []
 
+// הקובץ המאושר והעץ: n5 = שרשרת תקינה, y5 = ענף שאינו בקובץ המאושר.
+const REF = [
+  { key: 'r1', name: 'חתם סופר', generation: 1, parent_key: null },
+  { key: 'r2', name: 'שמעון', generation: 2, parent_key: 'r1' },
+  { key: 'r3', name: 'יוסף', generation: 3, parent_key: 'r2' },
+  { key: 'r4', name: 'משה', generation: 4, parent_key: 'r3' },
+  { key: 'r5', name: 'אביגדור', generation: 5, parent_key: 'r4' },
+]
+const NODES = [
+  { id: 'n1', name: 'מרן החתם סופר זי"ע', parent_id: null, generation: 1 },
+  { id: 'n2', name: 'שמעון', parent_id: 'n1', generation: 2 },
+  { id: 'n3', name: 'יוסף', parent_id: 'n2', generation: 3 },
+  { id: 'n4', name: 'משה', parent_id: 'n3', generation: 4 },
+  { id: 'n5', name: 'אביגדור', parent_id: 'n4', generation: 5 },
+  { id: 'x4', name: 'בנימין', parent_id: 'n3', generation: 4 },
+  { id: 'y5', name: 'אביגדור', parent_id: 'x4', generation: 5 },
+]
+let refRows: typeof REF
+
 function table(name: string) {
   let since = ''
   const result = () => {
-    if (name === 'beneficiaries') return { data: families, error: null }
+    if (name === 'beneficiaries') return { data: families.map(f => ({ eligibility_status: 'deep_review', ...f })), error: null }
+    if (name === 'lineage_approved_ref') return { data: refRows, error: null }
+    if (name === 'lineage_nodes') return { data: NODES, error: null }
     if (name === 'activity_log') return { data: sentLog.filter(s => !since || s.created_at >= since), error: null }
     return { data: null, error: null }
   }
@@ -59,7 +80,8 @@ const edited = {
 }
 
 beforeEach(() => {
-  families = [{ id: 'b1', full_name: 'משה', family_name: 'לוי', spouse_name: null, email: 'levi@example.com', lineage_node_id: 'n1' }]
+  families = [{ id: 'b1', full_name: 'משה', family_name: 'לוי', spouse_name: null, email: 'levi@example.com', lineage_node_id: 'y5' }]
+  refRows = REF
   sentLog = []
   settings = {}
   delivered.length = 0
@@ -144,19 +166,20 @@ describe('סבב חוזר (תזכורת)', () => {
   beforeEach(() => {
     families = [
       // קיבלה בסבב הקודם ועדיין לא הסדירה
-      { id: 'old', full_name: 'משה', family_name: 'לוי', spouse_name: null, email: 'levi@example.com', lineage_node_id: 'n1', deep_review_reason: 'דור 2–5 אינו בקובץ המאושר (דור 4: בנימין)' },
+      { id: 'old', full_name: 'משה', family_name: 'לוי', spouse_name: null, email: 'levi@example.com', lineage_node_id: 'y5', deep_review_reason: 'דור 2–5 אינו בקובץ המאושר (דור 4: בנימין)' },
       // בלי מייל
-      { id: 'nomail', full_name: 'דוד', family_name: 'כהן', spouse_name: null, email: null, lineage_node_id: 'n1', deep_review_reason: null },
+      { id: 'nomail', full_name: 'דוד', family_name: 'כהן', spouse_name: null, email: null, lineage_node_id: 'y5', deep_review_reason: null },
       // בבדיקה מעמיקה מסיבה שהמזכירות הקלידה
-      { id: 'manual', full_name: 'יוסף', family_name: 'פרידמן', spouse_name: null, email: 'f@example.com', lineage_node_id: 'n1', deep_review_reason: 'חסר אישור רב קהילה' },
+      { id: 'manual', full_name: 'יוסף', family_name: 'פרידמן', spouse_name: null, email: 'f@example.com', lineage_node_id: 'y5', deep_review_reason: 'חסר אישור רב קהילה' },
     ]
     sentLog = [{ entity_id: 'old', created_at: yesterday }]
   })
 
-  it('הסבב הרגיל חוסם את מי שקיבל אי פעם', async () => {
+  it('הסבב הרגיל חוסם את מי שקיבל אי פעם, ולא שולח למי שבבדיקה מסיבה של המזכירות', async () => {
     const { data } = await call({})
     expect(data.alreadySent).toBe(1)
-    expect(data.toSend).toBe(1) // manual, כי הסבב הרגיל לא מסנן לפי סיבה
+    expect(data.toSend).toBe(0)
+    expect(data.otherReason.map((p: { id: string }) => p.id)).toEqual(['manual'])
   })
 
   it('תזכורת: נשלחת למי שקיבל אתמול, בלי מייל מוצגים בנפרד, וסיבה ידנית לא מקבלת', async () => {
@@ -180,6 +203,36 @@ describe('סבב חוזר (תזכורת)', () => {
     expect(delivered).toHaveLength(1)
     const { data } = await call({ resend: true })
     expect(data).toMatchObject({ toSend: 0, alreadySent: 1 })
+  })
+})
+
+// התקלה של 24.11: המייל נשלח לפי הסטטוס בלבד, וקיבלו אותו גם משפחות תקינות.
+describe('רק משפחה שסדר הדורות שלה באמת שגוי מקבלת', () => {
+  beforeEach(() => {
+    families = [
+      { id: 'bad', full_name: 'משה', family_name: 'לוי', spouse_name: null, email: 'levi@example.com', lineage_node_id: 'y5', deep_review_reason: null },
+      // בבדיקה מעמיקה, אבל השרשרת תקינה מול הקובץ המאושר (כמו משפחת פויפר)
+      { id: 'ok', full_name: 'גילה', family_name: 'פויפר', spouse_name: null, email: 'ok@example.com', lineage_node_id: 'n5', deep_review_reason: 'דור 2–5 אינו בקובץ המאושר (דור 4: בנימין)' },
+      { id: 'ok-empty', full_name: 'דוד', family_name: 'כהן', spouse_name: null, email: 'k@example.com', lineage_node_id: 'n5', deep_review_reason: null },
+    ]
+  })
+
+  it('משפחה תקינה לא מקבלת, לא בסבב הראשון ולא בתזכורת', async () => {
+    const pre = await call({})
+    expect(pre.data.toSend).toBe(1)
+    expect(pre.data.chainOk.map((p: { id: string }) => p.id).sort()).toEqual(['ok', 'ok-empty'])
+
+    await call({ send: true })
+    await call({ send: true, resend: true })
+    expect(delivered.map(d => d.to)).toEqual(['levi@example.com'])
+  })
+
+  it('כשהקובץ המאושר לא נטען לא נשלח לאף אחד', async () => {
+    refRows = []
+    const { status, data } = await call({ send: true })
+    expect(status).toBe(500)
+    expect(data.error).toContain('הקובץ המאושר')
+    expect(delivered).toHaveLength(0)
   })
 })
 

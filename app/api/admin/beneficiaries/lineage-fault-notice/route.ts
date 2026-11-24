@@ -11,7 +11,9 @@ import {
   DEFAULT_LINEAGE_FAULT_TEMPLATE, LINEAGE_FAULT_ACTION, LINEAGE_FAULT_BATCH, LINEAGE_FAULT_TEMPLATE_KEY, NAME_TOKEN,
   israelDayStart, normalizeLineageFaultTemplate, planLineageFaultNotice, recipientNameOf, type FaultRow, type LineageFaultTemplate,
 } from '@/lib/lineageFaultNotice'
-import { isAutoDeepReason } from '@/lib/earlyLineageGate'
+import { loadApprovedRefStrict } from '@/lib/earlyLineageGate'
+import { planDeepReviewRecheck, type RecheckBen } from '@/lib/deepReviewRecheck'
+import type { GapNode } from '@/lib/deepReviewGaps'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,26 +44,37 @@ async function fetchAll<T>(build: (from: number, to: number) => PromiseLike<{ da
   }
 }
 
-// סבב חוזר (resend): לתזכורת למי שעדיין לא הסדיר אחרי הסבב הראשון.
-//   ⚠️ נחסם רק מי שקיבל *היום* (שעון ישראל), ולא כל מי שקיבל אי פעם.
-//   ⚠️ רק מי שבבדיקה מעמיקה בגלל סדר הדורות: סיבה ריקה או סיבה שהשער כתב.
-//   סיבה שהמזכירות הקלידה = בדיקה מעמיקה מסיבה אחרת, ולא מקבלים "תקלה בדורות".
-// כדאי להריץ קודם את החישוב מחדש (/api/admin/lineage/deep-review-recheck),
-// כדי שמי שכבר הסדיר יעבור ל"ממתין" ולא יקבל תזכורת.
-type PlanRow = FaultRow & { deep_review_reason?: string | null }
+// 🔴 מי מקבל (בסבב הראשון ובתזכורת): רק מי שבבדיקה מעמיקה *וגם* סדר הדורות
+// שלו נכשל עכשיו באותו שער כמו ברישום (planDeepReviewRecheck).
+//   • סדר הדורות תקין (chainOk) → לא מקבל. הסטטוס לבד לא מספיק: ב-24.11 18:25
+//     המייל נשלח לפי הסטטוס בלבד, וקיבלו אותו גם משפחות שהשרשרת שלהן תקינה.
+//   • סיבה שהמזכירות הקלידה (otherReason) → בדיקה מעמיקה מסיבה אחרת, לא מקבל.
+//   • כשל בטעינת הקובץ המאושר → לא נשלח לאף אחד.
+// סבב חוזר (resend): נחסם רק מי שקיבל *היום* (שעון ישראל), ולא כל מי שקיבל אי פעם.
+type PlanRow = FaultRow & RecheckBen
 
 async function loadPlan(admin: SupabaseClient, resend: boolean) {
-  const all = await fetchAll<PlanRow>((a, b) => admin.from('beneficiaries')
-    .select('id, full_name, family_name, spouse_name, email, lineage_node_id, deep_review_reason')
-    .eq('eligibility_status', 'deep_review').order('id').range(a, b))
-  const otherReason = resend ? all.filter(r => (r.deep_review_reason ?? '').trim() && !isAutoDeepReason(r.deep_review_reason)) : []
-  const rows = resend ? all.filter(r => !otherReason.includes(r)) : all
+  const approved = await loadApprovedRefStrict(admin)
+  if (!approved) throw new Error('הקובץ המאושר לא נטען, ולכן אי אפשר לוודא מי באמת עם תקלה בסדר הדורות. לא נשלח שום מייל.')
+  const [all, nodes] = await Promise.all([
+    fetchAll<PlanRow>((a, b) => admin.from('beneficiaries')
+      .select('id, id_number, full_name, family_name, spouse_name, email, eligibility_status, lineage_node_id, lineage_chain, lineage_manual, deep_review_reason')
+      .eq('eligibility_status', 'deep_review').order('id').range(a, b)),
+    fetchAll<GapNode>((a, b) => admin.from('lineage_nodes').select('id, name, parent_id, generation').range(a, b)),
+  ])
+  const check = planDeepReviewRecheck(all, new Map(nodes.map(n => [n.id, n])), approved)
+  const faulty = new Set<PlanRow>([...check.reasonUpdate.map(r => r.ben as PlanRow), ...(check.unchanged as PlanRow[])])
+  const rows = all.filter(r => faulty.has(r))
   const sent = await fetchAll<{ entity_id: string | null }>((a, b) => {
     let q = admin.from('activity_log').select('entity_id').eq('action', LINEAGE_FAULT_ACTION)
     if (resend) q = q.gte('created_at', israelDayStart())
     return q.order('created_at').range(a, b)
   })
-  return { ...planLineageFaultNotice(rows, new Set(sent.map(s => s.entity_id).filter((x): x is string => !!x))), otherReason }
+  return {
+    ...planLineageFaultNotice(rows, new Set(sent.map(s => s.entity_id).filter((x): x is string => !!x))),
+    otherReason: check.manual as PlanRow[],
+    chainOk: check.release as PlanRow[],
+  }
 }
 
 async function loadTemplate(admin: SupabaseClient): Promise<LineageFaultTemplate> {
@@ -122,11 +135,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       dryRun: true,
       resend,
-      total: plan.toSend.length + plan.noEmail.length + plan.noLineage.length + plan.alreadySent.length + plan.otherReason.length,
+      total: plan.toSend.length + plan.noEmail.length + plan.noLineage.length + plan.alreadySent.length + plan.otherReason.length + plan.chainOk.length,
       toSend: plan.toSend.length,
       noEmail: names(plan.noEmail),
       noLineage: names(plan.noLineage),
       otherReason: names(plan.otherReason),
+      chainOk: names(plan.chainOk),
       alreadySent: plan.alreadySent.length,
       from: `${sender.fromName} <${sender.fromEmail}>`,
       sample: { to: first?.email ?? null, name: first ? recipientNameOf(first) : 'כהן משה', subject: sample.subject, html: sample.html },

@@ -14,10 +14,11 @@ import { NAME_TOKEN, requestErrorMessage, type LineageFaultTemplate } from '@/li
 type Person = { id: string; name: string; email: string | null }
 //
 // סבב חוזר (תזכורת): נשלח גם למי שקיבל בימים קודמים ועדיין בבדיקה מעמיקה.
-// נחסם רק מי שקיבל היום, ומי שבבדיקה מעמיקה מסיבה שהמזכירות הקלידה.
+// נחסם רק מי שקיבל היום. בשני הסבבים לא מקבל מי שסדר הדורות שלו תקין עכשיו
+// (chainOk), ומי שבבדיקה מעמיקה מסיבה שהמזכירות הקלידה (otherReason).
 type Preview = {
   total: number; toSend: number; alreadySent: number; resend?: boolean
-  noEmail: Person[]; noLineage: Person[]; otherReason?: Person[]
+  noEmail: Person[]; noLineage: Person[]; otherReason?: Person[]; chainOk?: Person[]
   from: string; sample: { to: string | null; name: string; subject: string; html: string }
   template: LineageFaultTemplate; defaultTemplate: LineageFaultTemplate
 }
@@ -197,7 +198,10 @@ export default function BulkLineageFaultButton() {
                     <p className="text-slate-600">{preview.noLineage.length} משפחות עם מייל אבל בלי שיוך לעץ הדורות, ולכן לא יקבלו קישור.</p>
                   )}
                   {(preview.otherReason?.length ?? 0) > 0 && (
-                    <p className="text-slate-600">{preview.otherReason!.length} משפחות בבדיקה מעמיקה מסיבה שהמזכירות רשמה (לא סדר הדורות), ולכן לא יקבלו תזכורת.</p>
+                    <p className="text-slate-600">{preview.otherReason!.length} משפחות בבדיקה מעמיקה מסיבה שהמזכירות רשמה (לא סדר הדורות), ולכן לא יקבלו מייל.</p>
+                  )}
+                  {(preview.chainOk?.length ?? 0) > 0 && (
+                    <p className="text-slate-600">{preview.chainOk!.length} משפחות בבדיקה מעמיקה שסדר הדורות שלהן תקין כעת, ולכן לא יקבלו מייל. כדאי להריץ &quot;בדיקה מחדש של סדר הדורות&quot; כדי לשחרר אותן.</p>
                   )}
                   {preview.noEmail.length > 0 && (
                     <details className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2">
@@ -272,12 +276,13 @@ export default function BulkLineageFaultButton() {
                     </div>
                   </div>
 
-                  {(preview.noLineage.length > 0 || (preview.otherReason?.length ?? 0) > 0) && (
+                  {(preview.noLineage.length > 0 || (preview.otherReason?.length ?? 0) > 0 || (preview.chainOk?.length ?? 0) > 0) && (
                     <details className="rounded-xl border border-line px-3 py-2">
-                      <summary className="cursor-pointer font-semibold text-slate-700">משפחות נוספות שלא יקבלו ({preview.noLineage.length + (preview.otherReason?.length ?? 0)})</summary>
+                      <summary className="cursor-pointer font-semibold text-slate-700">משפחות נוספות שלא יקבלו ({preview.noLineage.length + (preview.otherReason?.length ?? 0) + (preview.chainOk?.length ?? 0)})</summary>
                       <ul className="mt-2 space-y-0.5 text-slate-600 max-h-48 overflow-y-auto">
                         {preview.noLineage.map(p => <li key={p.id}>{p.name}: אין שיוך לעץ</li>)}
                         {preview.otherReason?.map(p => <li key={p.id}>{p.name}: בבדיקה מעמיקה מסיבה אחרת</li>)}
+                        {preview.chainOk?.map(p => <li key={p.id}>{p.name}: סדר הדורות תקין</li>)}
                       </ul>
                     </details>
                   )}
