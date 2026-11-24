@@ -1132,7 +1132,7 @@ export default function HolidayRegistrations({
                       טעון שאין לאיש דרך למסור. */}
                   {loadScope.noCenter > 0 && (
                     <li className="text-amber-700">
-                      · {loadScope.noCenter} טרם בחרו מוקד — לא ייטענו
+                      · {loadScope.noCenter} טרם שויכו למוקד — לא ייטענו
                     </li>
                   )}
                 </ul>
@@ -1148,7 +1148,7 @@ export default function HolidayRegistrations({
                   יישלחו <strong className="text-navy-dark">{voucherScope.eligible.length}</strong> שוברים במייל.
                 </p>
                 <ul className="my-3 flex flex-col gap-0.5 text-[11px] text-slate-500">
-                  {voucherScope.noCenter > 0 && <li className="text-amber-700">· {voucherScope.noCenter} טרם בחרו מוקד — אין להם שובר</li>}
+                  {voucherScope.noCenter > 0 && <li className="text-amber-700">· {voucherScope.noCenter} טרם שויכו למוקד — אין להם שובר</li>}
                   {voucherScope.noEmail > 0 && <li className="text-amber-700">· {voucherScope.noEmail} בלי כתובת מייל</li>}
                 </ul>
                 {testMode && (

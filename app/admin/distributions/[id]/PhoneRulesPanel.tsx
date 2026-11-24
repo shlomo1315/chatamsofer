@@ -156,7 +156,7 @@ export default function PhoneRulesPanel({ distributionId, canEdit }: { distribut
         {centers && (
           <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs">
             <MapPin size={14} className="text-slate-500" />
-            <span>מוקדים פתוחים לבחירה בחלוקה: <strong>{centers.open}</strong> מתוך {centers.active} פעילים</span>
+            <span>מוקדים פתוחים בחלוקה: <strong>{centers.open}</strong> מתוך {centers.active} פעילים</span>
             {canEdit && centers.open < centers.active && (
               <button type="button" disabled={!!busy} onClick={() => void openAllCenters()}
                 className="mr-2 rounded-lg bg-teal-600 px-2.5 py-1 font-bold text-white disabled:opacity-50">

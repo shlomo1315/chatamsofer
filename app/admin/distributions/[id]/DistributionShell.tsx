@@ -38,7 +38,7 @@ const PHONE_BY_PHASE: Record<DistPhase, { k: string; t: string }[]> = {
     { k: '4', t: 'הודעות כלליות' },
   ],
   registration: [
-    { k: '1', t: 'רישום מלא: ת"ז, תאריך לידה, טלפון, הצהרות, מוקד' },
+    { k: '1', t: 'רישום: ת"ז, תאריך לידה, טלפון והצהרות (בלי בחירת מוקד)' },
     { k: '2', t: 'ת"ז + תאריך לידה ⇒ נרשם ואושר / זכאי להגיש' },
     { k: '3', t: 'שם המוקד (+ ימים ושעות אם פורסמו)' },
     { k: '4', t: 'הודעות כלליות' },
@@ -66,7 +66,7 @@ const NEXT_LABEL: Record<DistPhase, string | null> = {
 
 const CONFIRM_TEXT: Record<DistPhase, string> = {
   setup: 'החלוקה תחזור להכנה: הרישום ייסגר, ורק מספרי הניסיון יוכלו להירשם.',
-  registration: 'הרישום ייפתח לכולם בקו הטלפוני (מקש 1), כולל בחירת מוקד.',
+  registration: 'הרישום ייפתח לכולם בקו הטלפוני (מקש 1), בלי בחירת מוקד. השיוך למוקד נעשה אחר כך.',
   closed: 'מקש 1 בקו ישמיע "הרישום נסגר, עדכון יישלח". אי אפשר יהיה להירשם עוד.',
   distribution: 'כל הנרשמים ישמעו במקש 3 את הסכום, המוקד, הכתובת והשעות ויוכלו לשייך כרטיס. כל המוקדים שטרם התחילו יתחילו לחלק.',
 }
@@ -138,12 +138,7 @@ export default function DistributionShell({
   // ── רשימת המוכנות ──
   const checks: { ok: boolean; title: string; detail: string; fix?: Tab }[] = [
     { ok: amount > 0, title: 'סכום למשפחה', detail: amount > 0 ? `${fmtCur(amount)} למשפחה` : 'לא הוגדר — בעריכת החלוקה', fix: 'settings' },
-    {
-      ok: (info?.centers.open ?? 0) > 0,
-      title: 'מוקדים פתוחים לבחירה',
-      detail: info ? `${info.centers.open} מתוך ${info.centers.active} מוקדים פעילים` : '…',
-      fix: 'settings',
-    },
+    // אין "מוקדים פתוחים לבחירה": בשלוחת הרישום אין בחירת מוקד, השיוך נעשה אחר כך.
     {
       ok: missing.length === 0,
       title: 'כתובת וימים ושעות לכל מוקד',
@@ -228,7 +223,7 @@ export default function DistributionShell({
             { l: 'נרשמו', v: c ? c.registered.toLocaleString('he-IL') : '…' },
             { l: 'צפי תקציב', v: c ? fmtCur(c.registered * amount) : '…' },
             { l: 'מאושרים', v: c ? c.approved.toLocaleString('he-IL') : '…' },
-            { l: 'לא בחרו מוקד', v: c ? c.noCenter.toLocaleString('he-IL') : '…' },
+            { l: 'טרם שויכו למוקד', v: c ? c.noCenter.toLocaleString('he-IL') : '…' },
           ].map(k => (
             <div key={k.l} className="rounded-xl bg-white/5 border border-white/10 px-3 py-2.5">
               <p className="text-[11px] text-white/60 font-bold">{k.l}</p>
