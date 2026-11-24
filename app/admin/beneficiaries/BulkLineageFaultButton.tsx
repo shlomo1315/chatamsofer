@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, X, Send, RotateCcw, UserRound, Check, Loader2 } from 'lucide-react'
 import FormatToolbar from '@/components/newsletter/FormatToolbar'
-import { NAME_TOKEN, type LineageFaultTemplate } from '@/lib/lineageFaultNotice'
+import { NAME_TOKEN, requestErrorMessage, type LineageFaultTemplate } from '@/lib/lineageFaultNotice'
 
 // הודעה מרוכזת לכל המשפחות בבדיקה מעמיקה: "התגלתה תקלה בסדר הדורות".
 // הפתיחה מריצה תצוגה מקדימה בלבד (כמה ייכנסו, מי בלי מייל, המייל המלא),
@@ -31,8 +31,9 @@ const fromEditorHtml = (html: string) => html.replace(/<span[^>]*data-name-token
 
 async function post(payload: object) {
   const r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    .catch(() => { throw new Error(requestErrorMessage(0, null)) })
   const d = await r.json().catch(() => ({}))
-  if (!r.ok) throw new Error(d.error || 'הבקשה נכשלה')
+  if (!r.ok) throw new Error(requestErrorMessage(r.status, d))
   return d
 }
 
