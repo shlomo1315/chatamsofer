@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { fetchSharedBoard, postSharedPassword, boardRecipientDistIds } from './sharedBoardFetch'
+import { fetchSharedBoard, postSharedPassword, boardRecipientDistIds, sharedLoadingText, type BoardProgress } from './sharedBoardFetch'
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
@@ -51,6 +51,42 @@ describe('fetchSharedBoard', () => {
       expect(r.message).toContain('נכשל חלק 2, אחרי 1 נרשמים')
       expect(r.message).toContain("שרת 1.5 ש'")
     }
+  })
+
+  // 24.11.2026: בטלפון נשאר רק גלגל — לכל חלק הייתה מגבלה, אבל לא לטעינה כולה
+  it('מגבלה כוללת: חלקים איטיים שכל אחד בתוך המגבלה שלו עוצרים בהודעה עם מה שנטען', async () => {
+    let n = 0
+    const r = await fetchSharedBoard(async () => {
+      n++
+      await new Promise(res => setTimeout(res, 20))
+      return json({ recipients: [{ id: n }], hasMore: true })
+    }, 1000, null, undefined, 70)
+    expect(r.kind).toBe('error')
+    if (r.kind === 'error') {
+      expect(r.message).toMatch(/לא הסתיימה|לא ענה בזמן/)
+      expect(r.message).toMatch(/נרשמים/)
+    }
+    expect(n).toBeLessThan(6)
+  })
+
+  it('בקשה שמתעלמת מהביטול עדיין מסתיימת (לא נשאר גלגל לנצח)', async () => {
+    const r = await fetchSharedBoard(() => new Promise<Response>(() => {}), 30)
+    expect(r).toEqual({ kind: 'error', message: expect.stringContaining('לא ענה בזמן') })
+  })
+
+  it('גוף שלא מגיע ומתעלם מהביטול עדיין מסתיים', async () => {
+    const r = await fetchSharedBoard(async () => new Response(new ReadableStream({ start() {} }), { status: 200 }), 30)
+    expect(r).toEqual({ kind: 'error', message: expect.stringContaining('לא ענה בזמן') })
+  })
+
+  it('מדווח התקדמות לפני כל חלק', async () => {
+    const seen: BoardProgress[] = []
+    let n = 0
+    await fetchSharedBoard(async () => (++n === 1
+      ? json({ recipients: [{ id: 1 }, { id: 2 }], hasMore: true })
+      : json({ recipients: [{ id: 3 }], hasMore: false })), 1000, null, p => seen.push(p))
+    expect(seen).toEqual([{ part: 1, loaded: 0 }, { part: 2, loaded: 2 }])
+    expect(sharedLoadingText(seen[1])).toBe('נטענו 2 נרשמים · טוען חלק 2…')
   })
 
   it('401 בחלק המשך מחזיר למסך הסיסמה', async () => {

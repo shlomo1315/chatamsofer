@@ -71,23 +71,43 @@ type PartResult =
   | { kind: 'locked' }
   | { kind: 'error'; message: string }
 
+/**
+ * בקשה + קריאת הגוף, שמסתיימות תמיד עד timeoutMs.
+ * 🔴 24.11.2026: טיימר רגיל + Promise.race ולא רק AbortSignal.timeout — אם
+ * הדפדפן לא מכבד את הביטול (או משהה את הטיימר שלו), הבקשה עדיין מסתיימת,
+ * והדף לא נשאר על גלגל טעינה.
+ */
+async function fetchText(fetchFn: FetchFn, url: string, timeoutMs: number): Promise<{ res: Response; text: string | null }> {
+  const ctrl = new AbortController()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<never>((_, rej) => {
+    timer = setTimeout(() => {
+      const err = new DOMException('timeout', 'TimeoutError')
+      ctrl.abort(err)
+      rej(err)
+    }, timeoutMs)
+  })
+  try {
+    const res = await Promise.race([fetchFn(url, { cache: 'no-store', signal: ctrl.signal }), deadline])
+    if (res.status === 401) return { res, text: null }
+    return { res, text: await Promise.race([res.text(), deadline]) }
+  } finally {
+    clearTimeout(timer)
+    deadline.catch(() => {})
+  }
+}
+
 async function fetchPart(fetchFn: FetchFn, url: string, timeoutMs: number): Promise<PartResult> {
   const started = Date.now()
-  let res: Response
-  try {
-    res = await fetchFn(url, { cache: 'no-store', signal: AbortSignal.timeout(timeoutMs) })
-  } catch (e) {
-    return { kind: 'error', message: isTimeout(e) ? MSG_TIMEOUT : MSG_NETWORK }
-  }
-  if (res.status === 401) return { kind: 'locked' }
   // ⚠️ הגוף נקרא כטקסט ורק אז מפוענח: מגבלת הזמן חלה גם על ההורדה, וקטיעה
   // באמצע היא "לא ענה בזמן" — לא "תשובה לא תקינה" (כך הוצג קודם בטעות).
-  let text: string
+  let res: Response, text: string | null
   try {
-    text = await res.text()
+    ({ res, text } = await fetchText(fetchFn, url, timeoutMs))
   } catch (e) {
     return { kind: 'error', message: isTimeout(e) ? MSG_TIMEOUT : MSG_NETWORK }
   }
+  if (res.status === 401 || text === null) return { kind: 'locked' }
   if (!res.ok) return { kind: 'error', message: `השרת החזיר שגיאה (${res.status}). נסה שוב בעוד רגע. [${snippet(text)}]` }
   let data: unknown = null
   try { data = JSON.parse(text) } catch { /* מטופל למטה */ }
@@ -106,18 +126,39 @@ function partsLog(parts: { bytes: number; ms: number; serverMs: unknown }[]): st
 /**
  * טעינת הדף: החלק הראשון מביא את החלוקות, ההגדרות ו-1,000 הנרשמים הראשונים,
  * וכל עוד השרת מסמן hasMore נטענים החלקים הבאים (?part=N), אחד-אחד.
- * לכל חלק מגבלת זמן משלו, כך שהטעינה כולה לא נחתכת בגלל הכמות.
+ * לכל חלק מגבלת זמן משלו, ובנוסף מגבלה כוללת לכל הטעינה (totalMs).
+ * 🔴 24.11.2026: בלי המגבלה הכוללת הדף יכל להישאר על גלגל טעינה עד 50 חלקים
+ * × 40 שניות (יותר מחצי שעה), בלי שום התקדמות או הודעה — כך נראה בטלפון.
+ * onProgress מדווח לפני כל חלק כמה נרשמים כבר נטענו, כדי שהמסך יראה תזוזה.
  */
-export async function fetchSharedBoard(fetchFn: FetchFn = fetch, timeoutMs = SHARED_FETCH_TIMEOUT_MS, distId: string | null = null): Promise<BoardResult> {
+export type BoardProgress = { part: number; loaded: number }
+export const SHARED_TOTAL_TIMEOUT_MS = 90_000
+
+/** הטקסט מתחת לגלגל הטעינה. */
+export function sharedLoadingText(p: BoardProgress): string {
+  if (p.part <= 1) return 'טוען חלוקות ונרשמים…'
+  return `נטענו ${p.loaded.toLocaleString('he-IL')} נרשמים · טוען חלק ${p.part}…`
+}
+
+export async function fetchSharedBoard(
+  fetchFn: FetchFn = fetch, timeoutMs = SHARED_FETCH_TIMEOUT_MS, distId: string | null = null,
+  onProgress?: (p: BoardProgress) => void, totalMs = SHARED_TOTAL_TIMEOUT_MS,
+): Promise<BoardResult> {
   const dist = distId ? `dist=${encodeURIComponent(distId)}` : ''
   let data: Record<string, unknown> | null = null
   const recipients: unknown[] = []
   const seen = new Set<unknown>()
   const parts: { bytes: number; ms: number; serverMs: unknown }[] = []
+  const endAt = Date.now() + totalMs
 
   for (let part = 0; part < MAX_PARTS; part++) {
+    const left = endAt - Date.now()
+    if (left <= 0) {
+      return { kind: 'error', message: `הטעינה לא הסתיימה תוך ${Math.round(totalMs / 1000)} שניות (נטענו ${recipients.length} נרשמים ב-${part} חלקים. ${partsLog(parts)}). נסה שוב.` }
+    }
+    onProgress?.({ part: part + 1, loaded: recipients.length })
     const qs = [part > 0 ? `part=${part}` : '', dist].filter(Boolean).join('&')
-    const r = await fetchPart(fetchFn, qs ? `/api/shared/distributions?${qs}` : '/api/shared/distributions', timeoutMs)
+    const r = await fetchPart(fetchFn, qs ? `/api/shared/distributions?${qs}` : '/api/shared/distributions', Math.min(timeoutMs, left))
     if (r.kind === 'locked') return r
     if (r.kind === 'error') {
       if (part === 0) return r

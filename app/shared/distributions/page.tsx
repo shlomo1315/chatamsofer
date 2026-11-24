@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, type CSSProperties, type ReactNode } from 'react'
 import ControlRoom from './panels/ControlRoom'
 import { Lock, LogIn, Loader2, Search, GitBranch, AlertTriangle, RefreshCw } from 'lucide-react'
-import { fetchSharedBoard, postSharedPassword } from '@/lib/sharedBoardFetch'
+import { fetchSharedBoard, postSharedPassword, SHARED_FETCH_TIMEOUT_MS, sharedLoadingText, type BoardProgress } from '@/lib/sharedBoardFetch'
 import s from './board.module.css'
 import {
   registrationSeries, areaPaths, dayAxis, channelShares, conicOf, pctOf,
@@ -163,6 +163,29 @@ interface Distribution {
 const fmtCurNum = (n: number) => `${Math.round(n || 0).toLocaleString('he-IL')} ₪`
 
 // ── Password Screen ──
+/**
+ * גלגל הטעינה הראשונית, עם התקדמות ומונה שניות.
+ * 🔴 24.11.2026: בטלפון נראה רק גלגל, בלי שום דרך לדעת אם הטעינה זזה או תקועה.
+ * הטעינה עצמה מוגבלת בזמן (SHARED_TOTAL_TIMEOUT_MS) ומסתיימת בנתונים או בהודעה.
+ */
+function LoadingScreen({ progress }: { progress: BoardProgress | null }) {
+  const [secs, setSecs] = useState(0)
+  useEffect(() => {
+    const started = Date.now()
+    const id = window.setInterval(() => setSecs(Math.floor((Date.now() - started) / 1000)), 1000)
+    return () => window.clearInterval(id)
+  }, [])
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-[#f3f1ec] p-4" dir="rtl">
+      <Loader2 className="animate-spin text-[#9a6b12]" size={32} />
+      <p role="status" className="text-sm text-slate-600 text-center">
+        {progress ? sharedLoadingText(progress) : 'מתחבר…'}
+        {secs > 0 && <span className="block text-xs text-slate-500 mt-1">{secs} שניות</span>}
+      </p>
+    </div>
+  )
+}
+
 function PasswordScreen({ onAuth }: { onAuth: () => void }) {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -832,6 +855,8 @@ export default function SharedDistributionsPage() {
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
 
   const [loadError, setLoadError] = useState<string | null>(null)
+  // התקדמות הטעינה בחלקים — מוצגת מתחת לגלגל, כדי שיראו אם היא זזה או תקועה
+  const [progress, setProgress] = useState<BoardProgress | null>(null)
   // חלוקה קודמת שנבחרה לצפייה — השרת מחזיר נרשמים רק לחיה ולזו (boardRecipientDistIds)
   const wantDistRef = useRef<string | null>(null)
 
@@ -840,7 +865,8 @@ export default function SharedDistributionsPage() {
     // הרענון האוטומטי "עסוק" לתמיד, והדף הפסיק לקבל נרשמים חדשים בשקט.
     // 🔴 כשל נשמר ב-loadError ומוצג: קודם כשל בטעינה הראשונה (גם מיד אחרי
     // סיסמה נכונה) השאיר את הדף על גלגל טעינה לנצח, בלי הודעה.
-    const r = await fetchSharedBoard(undefined, undefined, wantDistRef.current)
+    const r = await fetchSharedBoard(undefined, undefined, wantDistRef.current, setProgress)
+    setProgress(null)
     if (r.kind === 'locked') { setLoadError(null); setState('locked'); return }
     if (r.kind === 'error') { setLoadError(r.message); return }
     const d = r.data as {
@@ -864,7 +890,7 @@ export default function SharedDistributionsPage() {
     if (!force && (lineageLoaded || lineageLoading)) return
     setLineageLoading(true)
     try {
-      const r = await fetch('/api/shared/distributions/lineage', { cache: 'no-store' })
+      const r = await fetch('/api/shared/distributions/lineage', { cache: 'no-store', signal: AbortSignal.timeout(SHARED_FETCH_TIMEOUT_MS) })
       if (r.ok) {
         const d = await r.json()
         setLineageNodes(d.lineageNodes ?? [])
@@ -939,6 +965,7 @@ export default function SharedDistributionsPage() {
   useEffect(() => {
     if (wantDistRef.current === wantDist) return
     wantDistRef.current = wantDist
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- רק התקדמות הטעינה
     if (wantDist && !byDist.has(wantDist)) load()
   }, [wantDist, byDist, load])
   const homeRows = useMemo(() => (homeDist ? byDist.get(homeDist.id) ?? [] : []), [homeDist, byDist])
@@ -972,23 +999,18 @@ export default function SharedDistributionsPage() {
           <AlertTriangle size={30} className="mx-auto text-red-600" />
           <h1 className="mt-3 text-lg font-extrabold text-slate-800">הנתונים לא נטענו</h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">{loadError}</p>
-          <button type="button" onClick={() => void refresh()} disabled={refreshing}
+          <button type="button" onClick={() => { setLoadError(null); void load() }}
             className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white disabled:opacity-60"
             style={{ background: `linear-gradient(90deg, ${BRAND.goldDeep}, ${BRAND.gold})` }}>
-            <RefreshCw size={16} className={refreshing ? 'animate-spin' : undefined} />
+            <RefreshCw size={16} />
             נסה שוב
           </button>
         </div>
       </div>
     )
   }
-  if (state === 'checking') {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f3f1ec]" dir="rtl">
-        <Loader2 className="animate-spin text-[#9a6b12]" size={32} />
-      </div>
-    )
-  }
+  if (state === 'checking') return <LoadingScreen progress={progress} />
+
   if (state === 'locked') {
     return <PasswordScreen onAuth={() => { setState('checking'); void load() }} />
   }
