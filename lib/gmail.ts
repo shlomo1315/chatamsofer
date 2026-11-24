@@ -1,5 +1,6 @@
 import { google } from 'googleapis'
 import { createClient } from '@supabase/supabase-js'
+import { cleanOutgoingHtml, stripInvisibleChars } from './emailSanitize'
 
 function getAdminDb() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -74,14 +75,15 @@ export async function sendGmailMessage(gmail: any, opts: {
 }) {
   const from = opts.from || process.env.GMAIL_EMAIL || 'office@chasamsofer.info'
   const fromName = opts.fromName || 'היכל החתם סופר משרד ראשי'
-  const bodyB64 = Buffer.from(opts.html ?? '', 'utf8').toString('base64')
+  // ניקוי תווים בלתי נראים (lib/emailSanitize.ts) — גם לתשובות מתיבת הדואר
+  const bodyB64 = Buffer.from(cleanOutgoingHtml(opts.html ?? ''), 'utf8').toString('base64')
   const raw = [
     `From: ${_encodeHeader(fromName)} <${from}>`,
     `To: ${opts.to}`,
     ...(opts.cc ? [`Cc: ${opts.cc}`] : []),
     ...(opts.bcc ? [`Bcc: ${opts.bcc}`] : []),
     ...(opts.replyTo ? [`Reply-To: ${opts.replyTo}`] : []),
-    `Subject: ${_encodeHeader(opts.subject)}`,
+    `Subject: ${_encodeHeader(stripInvisibleChars(opts.subject))}`,
     ...(opts.inReplyTo ? [`In-Reply-To: ${opts.inReplyTo}`] : []),
     ...(opts.references ? [`References: ${opts.references}`] : []),
     'MIME-Version: 1.0',

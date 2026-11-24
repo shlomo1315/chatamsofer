@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { deliverMail } from '@/lib/sendMail'
 import { GILYONOT_FROM_EMAIL, GILYONOT_FROM_NAME, normalizeEmail } from '@/lib/gilyonot'
 import { escHtml } from '@/lib/gilyonotMail'
+import { cleanOutgoingHtml, stripInvisibleChars } from '@/lib/emailSanitize'
 import {
   EVENT_LABELS, cleanText, normalizeAgentHours, planDistributorAction,
   type AgentWindow, type DistributorSnapshot, type EventChannel,
@@ -146,8 +147,8 @@ export async function sendDistributorBroadcast(db: SupabaseClient, opts: { subje
     const chunk = list.slice(i, i + BATCH_SIZE)
     try {
       const { error } = await resend.batch.send(chunk.map(([to, name]) => ({
-        from: from(), to, subject: opts.subject,
-        html: distributorMailHtml(opts.subject, `לכבוד ${name},\n\n${opts.body}`),
+        from: from(), to, subject: stripInvisibleChars(opts.subject),
+        html: cleanOutgoingHtml(distributorMailHtml(opts.subject, `לכבוד ${name},\n\n${opts.body}`)),
         tracking: { open: false, click: false },
       })))
       if (error) throw new Error(String(error.message ?? error))
