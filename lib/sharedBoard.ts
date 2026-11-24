@@ -239,3 +239,109 @@ export function fanRings(counts: { generation: number; count: number }[], cap = 
     }
   })
 }
+
+// ── מחוני כסף, פילוח לפי קהילות וסינון (דף חלוקות החגים) ──
+
+export type MoneyRow = {
+  amount?: number | null
+  approval_status?: string | null
+  source?: string | null
+  registered_at?: string | null
+  beneficiary?: { community_affiliation?: string | null } | null
+}
+
+export const NO_COMMUNITY = 'לא צוין'
+
+/** קהילת המשפחה; משפחה בלי קהילה נספרת תחת "לא צוין". */
+export const communityOf = (r: MoneyRow) => r.beneficiary?.community_affiliation?.trim() || NO_COMMUNITY
+
+/** מפתח ערוץ הרישום, באותה חלוקה כמו channelShares. */
+export function channelKeyOf(source?: string | null): string {
+  const s = registrationSourceOf(source)
+  if (s === 'phone') return 'phone'
+  if (s === 'portal' || s === 'nedarim') return 'digital'
+  if (s === 'email') return 'email'
+  if (s === 'admin') return 'manual'
+  return 'none'
+}
+
+/**
+ * הסכום של משפחה בחלוקה. ⚠️ סכום שנקבע לנרשם גובר; בלעדיו — הסכום הקבוע
+ * לכל משפחה בחלוקה. נדחה לא מקבל כסף ולכן נספר כ-0.
+ */
+export function familyAmount(r: MoneyRow, perFamily?: number | null): number {
+  if (r.approval_status === 'rejected') return 0
+  const own = Number(r.amount ?? 0)
+  return own > 0 ? own : Number(perFamily ?? 0) || 0
+}
+
+export type MoneyFilter = {
+  communities: string[]   // ריק = כל הקהילות
+  status: string          // '' = הכול
+  channel: string         // '' = הכול
+  from: string            // YYYY-MM-DD או ''
+  to: string              // YYYY-MM-DD או ''
+  minAmount: number | null
+  maxAmount: number | null
+}
+
+export const EMPTY_FILTER: MoneyFilter = { communities: [], status: '', channel: '', from: '', to: '', minAmount: null, maxAmount: null }
+
+export function filterMoneyRows<T extends MoneyRow>(rows: T[], f: MoneyFilter, perFamily?: number | null): T[] {
+  return rows.filter(r => {
+    if (f.communities.length && !f.communities.includes(communityOf(r))) return false
+    if (f.status && (r.approval_status || 'pending') !== f.status) return false
+    if (f.channel && channelKeyOf(r.source) !== f.channel) return false
+    if (f.from || f.to) {
+      if (!r.registered_at) return false
+      const d = dayKey(r.registered_at)
+      if (f.from && d < f.from) return false
+      if (f.to && d > f.to) return false
+    }
+    const a = familyAmount(r, perFamily)
+    if (f.minAmount != null && a < f.minAmount) return false
+    if (f.maxAmount != null && a > f.maxAmount) return false
+    return true
+  })
+}
+
+export function moneySummary(rows: MoneyRow[], perFamily?: number | null) {
+  let total = 0, approved = 0, pending = 0, paying = 0
+  for (const r of rows) {
+    const a = familyAmount(r, perFamily)
+    total += a
+    if (a > 0) paying++
+    if (r.approval_status === 'approved') approved += a
+    else if (r.approval_status !== 'rejected') pending += a
+  }
+  return { total, approved, pending, families: rows.length, avg: paying ? total / paying : 0 }
+}
+
+export type CommunityMoney = { label: string; value: number; count: number }
+
+/** סכום ומספר משפחות לכל קהילה, מהגבוה לנמוך. */
+export function moneyByCommunity(rows: MoneyRow[], perFamily?: number | null): CommunityMoney[] {
+  const m = new Map<string, CommunityMoney>()
+  for (const r of rows) {
+    const k = communityOf(r)
+    const e = m.get(k) ?? { label: k, value: 0, count: 0 }
+    e.value += familyAmount(r, perFamily)
+    e.count++
+    m.set(k, e)
+  }
+  return [...m.values()].sort((a, b) => b.value - a.value || b.count - a.count)
+}
+
+/** החלקים של שעון העצר עד `target`. done כשהמועד עבר (או לא תקין). */
+export function countdownParts(target: string | null | undefined, now = Date.now()) {
+  const t = target ? Date.parse(target) : NaN
+  if (Number.isNaN(t)) return null
+  const left = Math.max(0, Math.floor((t - now) / 1000))
+  return {
+    done: left === 0,
+    days: Math.floor(left / 86400),
+    hours: Math.floor((left % 86400) / 3600),
+    minutes: Math.floor((left % 3600) / 60),
+    seconds: left % 60,
+  }
+}

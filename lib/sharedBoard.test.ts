@@ -2,7 +2,45 @@ import { describe, it, expect } from 'vitest'
 import {
   registrationSeries, areaPaths, dayAxis, channelShares, conicOf, topCounts, kidsBuckets,
   maternityFunnel, inPeriod, byRecoveryHome, paidByMonth, generationCounts, fanRings,
+  familyAmount, filterMoneyRows, moneySummary, moneyByCommunity, countdownParts, EMPTY_FILTER, NO_COMMUNITY,
 } from './sharedBoard'
+
+describe('מחוני כסף וקהילות', () => {
+  const rows = [
+    { amount: 500, approval_status: 'approved', source: 'phone', registered_at: '2026-11-20T10:00:00', beneficiary: { community_affiliation: 'סאטמר' } },
+    { amount: null, approval_status: 'pending', source: 'portal', registered_at: '2026-11-22T10:00:00', beneficiary: { community_affiliation: 'בעלזא' } },
+    { amount: null, approval_status: 'rejected', source: 'phone', registered_at: '2026-11-22T11:00:00', beneficiary: { community_affiliation: 'סאטמר' } },
+    { amount: 300, approval_status: 'approved', source: 'admin', registered_at: '2026-11-23T10:00:00', beneficiary: null },
+  ]
+  it('סכום לנרשם גובר על הסכום הקבוע, ונדחה מקבל 0', () => {
+    expect(familyAmount(rows[0], 400)).toBe(500)
+    expect(familyAmount(rows[1], 400)).toBe(400)
+    expect(familyAmount(rows[2], 400)).toBe(0)
+  })
+  it('סיכום: סך הכול, מאושר, ממתין וממוצע למשפחה שמקבלת', () => {
+    expect(moneySummary(rows, 400)).toEqual({ total: 1200, approved: 800, pending: 400, families: 4, avg: 400 })
+  })
+  it('פילוח לפי קהילה, כולל "לא צוין", מהגבוה לנמוך', () => {
+    expect(moneyByCommunity(rows, 400)).toEqual([
+      { label: 'סאטמר', value: 500, count: 2 },
+      { label: 'בעלזא', value: 400, count: 1 },
+      { label: NO_COMMUNITY, value: 300, count: 1 },
+    ])
+  })
+  it('סינון לפי קהילות, סטטוס, ערוץ, תאריכים וסכום', () => {
+    expect(filterMoneyRows(rows, { ...EMPTY_FILTER, communities: ['סאטמר'] }, 400)).toHaveLength(2)
+    expect(filterMoneyRows(rows, { ...EMPTY_FILTER, status: 'pending' }, 400)).toEqual([rows[1]])
+    expect(filterMoneyRows(rows, { ...EMPTY_FILTER, channel: 'phone' }, 400)).toHaveLength(2)
+    expect(filterMoneyRows(rows, { ...EMPTY_FILTER, from: '2026-11-22', to: '2026-11-22' }, 400)).toHaveLength(2)
+    expect(filterMoneyRows(rows, { ...EMPTY_FILTER, minAmount: 350, maxAmount: 450 }, 400)).toEqual([rows[1]])
+  })
+  it('שעון עצר: ימים, שעות, דקות ושניות; אחרי המועד נגמר', () => {
+    const now = Date.parse('2026-11-24T10:00:00Z')
+    expect(countdownParts('2026-11-25T11:02:03Z', now)).toEqual({ done: false, days: 1, hours: 1, minutes: 2, seconds: 3 })
+    expect(countdownParts('2026-11-24T09:00:00Z', now)?.done).toBe(true)
+    expect(countdownParts('', now)).toBeNull()
+  })
+})
 
 describe('registrationSeries', () => {
   it('ממלא ימים ריקים באפס ומצטבר', () => {
