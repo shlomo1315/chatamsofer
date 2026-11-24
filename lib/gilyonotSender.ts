@@ -6,6 +6,7 @@ import { isBlockedForMail } from './jewishCalendar'
 import { GILYONOT_FROM_EMAIL, GILYONOT_FROM_NAME } from './gilyonot'
 import { buildGilyonHtml, gilyonotUrls } from './gilyonotMail'
 import { sanitizeMailHtml } from './gilyonotRichHtml'
+import { cleanOutgoingHtml, stripInvisibleChars } from './emailSanitize'
 import { advanceIssueCounter, heichalotMissingError } from './gilyonotHeichalot'
 import { loadLists, resolveRecipients, type Recipient } from './gilyonotLists'
 
@@ -187,11 +188,11 @@ export async function sendGilyonTest(db: SupabaseClient, issue: IssueRow, to: st
   if (!apiKey) return { ok: false, error: 'RESEND_API_KEY לא מוגדר בשרת' }
   const file = await loadAttachments(db, issue)
   if (!file.ok) return file
-  const html = buildGilyonHtml({
+  const html = cleanOutgoingHtml(buildGilyonHtml({
     title: issue.title, parasha: issue.parasha, intro: issue.intro, bodyHtml: cleanBody(issue.body_html), design: issue.design,
     unsubscribeUrl: await testUnsubscribeUrl(db, to), senderEmail: GILYONOT_FROM_EMAIL, senderName: GILYONOT_FROM_NAME,
-  })
-  const { error } = await new Resend(apiKey).emails.send({ from: from(), to, subject: `[ניסיון] ${issue.subject}`, html, text: htmlToPlainText(html), replyTo: GILYONOT_FROM_EMAIL, attachments: file.atts })
+  }))
+  const { error } = await new Resend(apiKey).emails.send({ from: from(), to, subject: `[ניסיון] ${stripInvisibleChars(issue.subject)}`, html, text: htmlToPlainText(html), replyTo: GILYONOT_FROM_EMAIL, attachments: file.atts })
   if (error) return { ok: false, error: String(error.message ?? error) }
   return { ok: true }
 }
@@ -349,15 +350,17 @@ async function sendBatches(db: SupabaseClient, resend: Resend, issue: IssueRow):
     // הקבצים מקודדים ל-base64 פעם אחת לסבב, ולא מחדש בכל מייל (חוסך זיכרון ומעבד)
     const atts = file.atts.map(a => ({ filename: a.filename, content: a.content.toString('base64') }))
     const sendOne = async (d: DeliveryRow, retry = 0): Promise<boolean> => {
-      const { html, unsubscribeUrl } = issueEmail(issue, {
+      const mail = issueEmail(issue, {
         deliveryToken: d.token,
         subscriberToken: d.gilyonot_subscribers?.token ?? null,
       })
+      const html = cleanOutgoingHtml(mail.html)
+      const unsubscribeUrl = mail.unsubscribeUrl
       try {
         const { data: res, error } = await resend.emails.send({
-          from: from(), to: d.email, subject: issue.subject, html, text: htmlToPlainText(html), replyTo: GILYONOT_FROM_EMAIL, attachments: atts,
+          from: from(), to: d.email, subject: stripInvisibleChars(issue.subject), html, text: htmlToPlainText(html), replyTo: GILYONOT_FROM_EMAIL, attachments: atts,
           headers: unsubscribeUrl
-            ? { 'List-Unsubscribe': `<${unsubscribeUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' }
+            ? { 'List-Unsubscribe': `<${unsubscribeUrl}>, <mailto:${GILYONOT_FROM_EMAIL}?subject=unsubscribe>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' }
             : undefined,
         // אם התהליך נהרג בין השליחה לסימון במסד, הניסיון הבא נושא אותו מפתח
         // ו-Resend לא שולח שוב (חלון של 24 שעות).

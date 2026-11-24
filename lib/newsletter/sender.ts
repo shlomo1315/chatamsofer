@@ -5,6 +5,7 @@ import { applyMerge } from './merge'
 import { buildCampaignHtml, type Block } from './blocks'
 import { unsubscribeUrl } from '../unsubscribe'
 import { addTracking } from './tracking'
+import { cleanOutgoingHtml, stripInvisibleChars } from '../emailSanitize'
 import { isBlockedForMail } from '../jewishCalendar'
 import type { SegmentDef as SegmentDefType } from './segments'
 
@@ -240,9 +241,10 @@ async function sendCampaignBatches(
         from: `${dept.fromName} <${dept.fromEmail}>`,
         to: r.email,
         // בנושא לא מנטרלים HTML — זה טקסט רגיל
-        subject: applyMerge(campaign.subject, data, false),
-        // פיקסל וקישורים עטופים משלנו (אחרי המיזוג, כדי שגם קישורים אישיים ייעטפו)
-        html: addTracking(applyMerge(html, data, true), r.id, [unsubUrl]),
+        subject: stripInvisibleChars(applyMerge(campaign.subject, data, false)),
+        // פיקסל וקישורים עטופים משלנו (אחרי המיזוג, כדי שגם קישורים אישיים ייעטפו).
+        // הניקוי אחרון, כדי שיתפוס גם תווים שהגיעו מנתוני המיזוג.
+        html: cleanOutgoingHtml(addTracking(applyMerge(html, data, true), r.id, [unsubUrl])),
         // plus-addressing עם 8 התווים הראשונים של מזהה הקמפיין —
         // כך תגובה חוזרת מזוהה ומקושרת לקמפיין. (כתובת קצרה; מזהה מלא
         // היה חורג מהאורך ש-Resend מקבל.)
@@ -250,7 +252,9 @@ async function sendCampaignBatches(
         // המעקב אצלנו (lib/newsletter/tracking.ts), לכן כבוי ב-Resend כדי שלא ייספר פעמיים
         tracking: { open: false, click: false },
         headers: {
-          'List-Unsubscribe': `<${unsubUrl}>`,
+          // mailto בדומיין השולח לצד הקישור: נותן לספקים אפשרות הסרה גם בדומיין
+          // של ה-From, כמו ב-deliverMail.
+          'List-Unsubscribe': `<${unsubUrl}>, <mailto:office@chasamsofer.info?subject=unsubscribe>`,
           'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
         },
       }

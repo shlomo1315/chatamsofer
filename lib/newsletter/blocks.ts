@@ -1,3 +1,5 @@
+import { preheaderHtml } from '../emailSanitize'
+
 // הלוגו — כתובת רשת, בדיוק כמו בכל תבניות המייל הקיימות (emailTemplates.ts).
 //
 // ⚠️ אל תחזירו ל-data: URI — Gmail חוסם אותו לחלוטין בתמונות, והלוגו
@@ -66,12 +68,14 @@ function renderBlock(b: Block): string {
   switch (b.type) {
     case 'heading': {
       const size = b.level === 2 ? 20 : 25
+      // ⚠️ div ולא h2: בקמפיין חנוכה תשפ"ז כל גוף המייל הודבק לבלוק כותרת, והמייל
+      // יצא כתגית כותרת אחת ענקית, דפוס שמסנני ספאם מסמנים. המראה זהה.
       return `
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;">
         <tr><td style="text-align:${align};">
-          <h2 style="margin:0;color:${NAVY};font-size:${size}px;font-weight:900;line-height:1.4;">
+          <div style="margin:0;color:${NAVY};font-size:${size}px;font-weight:900;line-height:1.4;">
             ${b.content ?? ''}
-          </h2>
+          </div>
         </td></tr>
       </table>`
     }
@@ -185,7 +189,7 @@ function newsletterShell(preheader: string, body: string): string {
   <style>* { font-family: 'Heebo', Arial, sans-serif !important; }</style>
 </head>
 <body style="margin:0;padding:0;background:#eef2f7;font-family:'Heebo',Arial,sans-serif;direction:rtl;">
-  <span style="display:none;font-size:1px;color:#eef2f7;max-height:0;overflow:hidden;">${safePreheader}</span>
+  ${preheaderHtml(safePreheader)}
 
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f7;padding:36px 16px;">
     <tr><td align="center">

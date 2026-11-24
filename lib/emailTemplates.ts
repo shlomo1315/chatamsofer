@@ -9,6 +9,7 @@ import { textFor } from './emailTextsStore'
 import { fmtLoanAmount } from './loanCurrency'
 import { fmtAgorot } from './bookFairPricing'
 import { richToHtml } from './richText'
+import { preheaderHtml } from './emailSanitize'
 import type { BookFairOrderStatus } from '../types/bookFair'
 
 export interface BuiltEmail {
@@ -158,7 +159,7 @@ export function shell(opts: {
   <style>* { font-family: 'Heebo', Arial, sans-serif !important; }</style>
 </head>
 <body style="margin:0;padding:0;background:#eef2f7;font-family:'Heebo',Arial,sans-serif;direction:rtl;">
-  <span style="display:none;font-size:1px;color:#eef2f7;max-height:0;overflow:hidden;">${safePreheader}</span>
+  ${preheaderHtml(safePreheader)}
 
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f7;padding:36px 16px;">
     <tr><td align="center">
