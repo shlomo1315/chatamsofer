@@ -473,6 +473,22 @@ export const HOLIDAY_MESSAGE_META: HolidayMsgMeta[] = [
     defaultText: 'הקישו את מספר תעודת הזהות, 9 ספרות, ולאחר מכן סולמית',
   },
   {
+    key: 'reg_ask_id_full', label: 'רישום בטלפון: בקשת ת"ז כולל ספרת ביקורת (בכניסה לשלוחה)', allowAudio: true,
+    defaultText: 'הקישו את מספר תעודת הזהות כולל ספרת ביקורת, 9 ספרות',
+  },
+  {
+    key: 'reg_to_registration', label: 'רישום בטלפון: מעבר לרישום (אחרי ת"ז קיימת)', allowAudio: true,
+    defaultText: 'הינכם מועברים לרישום לחלוקה. יש להזין עד הסוף ולקבל אישור מהמערכת שהבקשה שלכם נקלטה במערכת.',
+  },
+  {
+    key: 'reg_questions_notice', label: 'רישום בטלפון: שימו לב, מספר שאלות ועדכון על המוקד', allowAudio: true,
+    defaultText: 'שימו לב, בשלב זה הינכם מועברים למספר שאלות. בעוד מספר ימים יישלח לכם עדכון נוסף לבחור את מוקד החלוקה שלכם.',
+  },
+  {
+    key: 'reg_birth_no_match', label: 'רישום וזכאות בטלפון: תאריך לידה אינו תואם', allowAudio: true,
+    defaultText: 'תאריך הלידה שהקשתם אינו תואם לתאריך שמעודכן במערכת',
+  },
+  {
     key: 'reg_ask_birth', label: 'רישום בטלפון: בקשת תאריך לידה (לא נשואים)', allowAudio: true,
     defaultText: 'הקישו את תאריך הלידה ב-8 ספרות, כגון 0 1 0 1 2 0 0 0',
   },

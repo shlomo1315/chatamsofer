@@ -22,7 +22,9 @@ vi.mock('@/lib/holidayPhoneMessages', () => ({
     reg_welcome: 'ברוכים הבאים', reg_ask_id: 'הקישו תעודת זהות', id_invalid: 'מספר שגוי', not_found: 'לא נמצאתם',
     not_eligible: 'אינכם זכאים', reg_deep_review: 'פנו למשרד', reg_ask_birth: 'הקישו תאריך לידה', reg_ask_birth_couple: 'תאריך לידה של הבעל או של האשה',
     reg_id_not_found: 'מספר זהות זה אינו מופיע במערכת. בהצלחה', reg_final: 'הרשמתך התקבלה בהצלחה במערכת',
-    reg_birth_mismatch: 'תאריך לא תואם', reg_ask_phone: 'הקישו טלפון', reg_phone_mismatch: 'טלפון לא תואם',
+    reg_birth_mismatch: 'תאריך לא תואם', reg_ask_id_full: 'הקישו ת"ז כולל ספרת ביקורת',
+    reg_to_registration: 'הינכם מועברים לרישום לחלוקה', reg_questions_notice: 'שימו לב מספר שאלות',
+    reg_birth_no_match: 'אינו תואם לתאריך שמעודכן במערכת', reg_ask_phone: 'הקישו טלפון', reg_phone_mismatch: 'טלפון לא תואם',
     identify: 'שלום {name}', reg_ask_lineage: 'הצהרת ייחוס', reg_ask_need: 'הצהרת נזקקות', reg_declined: 'הרישום לא בוצע',
     reg_success_approved: 'נרשמתם ל{distribution} וזכאים', reg_success_pending: 'נרשמתם', reg_to_centers: 'מעבר למוקד',
     reg_center_later: 'המוקד ייבחר אחר כך', center_hours_later: 'השעות יפורסמו', reg_goodbye: 'להתראות',
@@ -79,23 +81,49 @@ describe('רישום בטלפון בלבד', () => {
     expect(text(r)).toContain('שלוחת חנוכה'); expect(text(r)).not.toContain('תפריט ראשי')
   })
 
-  it('פנייה ראשונה: הודעה מקדימה, ברוכים הבאים ובקשת ת"ז', async () => {
+  it('כניסה לשלוחה: מיד בקשת ת"ז כולל ספרת ביקורת, בלי הודעות לפני', async () => {
     const r = await call()
+    expect(Array.isArray(r.body)).toBe(false)
     expect(first(r)).toMatchObject({ type: 'getDTMF', name: 'r_id', maskLog: true })
-    expect(text(r)).toContain('הודעה מקדימה')
-    expect(text(r)).toContain('ברוכים הבאים')
+    expect((first(r) as { files: unknown[] }).files).toHaveLength(1)
+    expect(text(r)).toContain('כולל ספרת ביקורת')
+    expect(text(r)).not.toContain('הודעה מקדימה')
+    expect(text(r)).not.toContain('ברוכים הבאים')
     expect(validateResult(r.body).ok).toBe(true)
   })
 
-  it('אחרי ת"ז — תאריך לידה, ואחריו טלפון', async () => {
-    expect(first(await call({ r_id: ID }))).toMatchObject({ name: 'r_bd' })
+  it('ת"ז עם ספרת ביקורת שגויה — "מספר שגוי" וניסיון נוסף, בלי חיפוש במערכת', async () => {
+    const r = await call({ r_id: '123456789' })
+    expect(first(r)).toMatchObject({ name: 'r_id2' })
+    expect(text(r)).toContain('מספר שגוי')
+    expect(data.findRegistrantById).not.toHaveBeenCalled()
+    expect(first(await call({ r_id: '12345678' }))).toMatchObject({ name: 'r_id2' })
+  })
+
+  it('ת"ז קיימת — שתי הודעות המעבר, ואז תאריך לידה, ואחריו טלפון', async () => {
+    const r = await call({ r_id: ID })
+    expect(first(r)).toMatchObject({ name: 'r_bd' })
+    const t = text(r)
+    expect(t.indexOf('הינכם מועברים לרישום לחלוקה')).toBeGreaterThan(-1)
+    expect(t.indexOf('שימו לב מספר שאלות')).toBeGreaterThan(t.indexOf('הינכם מועברים לרישום לחלוקה'))
+    expect(t.indexOf('הקישו תאריך לידה')).toBeGreaterThan(t.indexOf('שימו לב מספר שאלות'))
     expect(first(await call({ r_id: ID, r_bd: '15031990' }))).toMatchObject({ name: 'r_ph' })
   })
 
-  it('תאריך לידה שגוי — ניסיון נוסף בשם משתנה חדש', async () => {
+  it('תאריך לידה שגוי — "אינו תואם לתאריך שמעודכן במערכת" ושאלה חוזרת, ואז נכון ממשיך', async () => {
     const r = await call({ r_id: ID, r_bd: '01011990' })
     expect(first(r)).toMatchObject({ name: 'r_bd2' })
-    expect(text(r)).toContain('תאריך לא תואם')
+    expect(text(r)).toContain('אינו תואם לתאריך שמעודכן במערכת')
+    expect(text(r)).toContain('הקישו תאריך לידה')
+    expect(text(r)).not.toContain('הינכם מועברים לרישום')
+    expect(first(await call({ r_id: ID, r_bd: '01011990', r_bd2: '15031990' }))).toMatchObject({ name: 'r_ph' })
+  })
+
+  it('באג: תאריך שגוי ואחריו סולמית (SKIP) — הודעת אי-ההתאמה מושמעת שוב ולא נבלעת', async () => {
+    const r = await call({ r_id: ID, r_bd: '01011990', r_bd2: 'SKIP' })
+    expect(first(r)).toMatchObject({ name: 'r_bd3' })
+    expect(text(r)).toContain('אינו תואם לתאריך שמעודכן במערכת')
+    expect(first(await call({ r_id: ID, r_bd: '01011990', r_bd2: 'SKIP', r_bd3: '15031990' }))).toMatchObject({ name: 'r_ph' })
   })
 
   it('טלפון שאינו בכרטסת — ניסיון נוסף', async () => {
@@ -118,23 +146,33 @@ describe('רישום בטלפון בלבד', () => {
     expect(dist.registerToOpenDistribution).not.toHaveBeenCalled()
   })
 
-  it('רישום → מייל זכאות → מעבר ישיר לבחירת עיר', async () => {
+  it('רישום מוצלח עד הסוף: נשמר, מייל זכאות, הודעת הסיום וניתוק — בלי בחירת מוקד', async () => {
     dist.registerToOpenDistribution.mockResolvedValue({ ok: true, created: true, approved: true, recipientId: 'r1' })
     data.getRecipient.mockResolvedValueOnce(null).mockResolvedValue({ id: 'r1', center_id: null, approval_status: 'approved' })
     const r = await call({ ...full, r_lin: '1', r_need: '1' })
     expect(dist.registerToOpenDistribution).toHaveBeenCalledWith('b1', 'phone', { phone: '0527654321', distribution: OPEN })
     expect(notify.notifyHolidayApproved).toHaveBeenCalledWith(['r1'], { email: true, phone: false })
-    expect(first(r)).toMatchObject({ type: 'simpleMenu', name: 'c_city', enabledKeys: '1,2' })
     expect(text(r)).toContain('וזכאים')
-    expect(text(r)).toContain('לירושלים הקישו 1')
+    expect(text(r)).toContain('הרשמתך התקבלה בהצלחה במערכת')
+    expect(text(r)).not.toContain('c_city')
+    expect(data.openCenters).not.toHaveBeenCalled()
+    expect(Array.isArray(r.body) && r.body.at(-1)).toMatchObject({ type: 'hangup' })
   })
 
-  it('בחירת מוקד ושמירה — בלי ימים ושעות עד שפורסמו', async () => {
+  it('רישום שממתין לאישור — רק הודעת הסיום', async () => {
+    dist.registerToOpenDistribution.mockResolvedValue({ ok: true, created: true, approved: false, recipientId: 'r1' })
+    data.getRecipient.mockResolvedValueOnce(null).mockResolvedValue({ id: 'r1', center_id: null, approval_status: 'pending' })
+    const r = await call({ ...full, r_lin: '1', r_need: '1' })
+    expect(text(r)).toContain('הרשמתך התקבלה בהצלחה במערכת')
+    expect(text(r)).not.toContain('וזכאים')
+  })
+
+  it('כבר רשום בלי מוקד — "כבר רשומים" וניתוק, בלי רישום חוזר', async () => {
     data.getRecipient.mockResolvedValue({ id: 'r1', center_id: null, approval_status: 'approved' })
-    const r = await call({ ...full, c_city: '1', c_ok: '1' })
-    expect(data.saveCenterChoice).toHaveBeenCalledWith('d1', 'r1', 'c1')
-    expect(text(r)).toContain('השעות יפורסמו')
-    expect(text(r)).not.toContain('10-12')
+    const r = await call(full)
+    expect(text(r)).toContain('כבר רשומים')
+    expect(dist.registerToOpenDistribution).not.toHaveBeenCalled()
+    expect(Array.isArray(r.body) && r.body.at(-1)).toMatchObject({ type: 'hangup' })
   })
 
   it('רשום שכבר בחר מוקד — שומע אישור ושם המוקד', async () => {
@@ -161,34 +199,26 @@ describe('רישום בטלפון בלבד', () => {
     expect(Array.isArray(r.body) && r.body.at(-1)).toMatchObject({ type: 'hangup' })
   })
 
-  it('באג: סולמית שנשארה אחרי הת"ז (SKIP) — שואלים שוב את התאריך בלי "לא תואם"', async () => {
+  it('סולמית שנשארה אחרי הת"ז (SKIP) — הודעות המעבר והתאריך שוב, בלי "אינו תואם"', async () => {
     const r = await call({ r_id: ID, r_bd: 'SKIP' })
     expect(first(r)).toMatchObject({ type: 'getDTMF', name: 'r_bd2' })
+    expect(text(r)).toContain('הינכם מועברים לרישום לחלוקה')
     expect(text(r)).toContain('הקישו תאריך לידה')
-    expect(text(r)).not.toContain('תאריך לא תואם')
+    expect(text(r)).not.toContain('אינו תואם')
     expect(first(await call({ r_id: ID, r_bd: 'SKIP', r_bd2: '15031990' }))).toMatchObject({ name: 'r_ph' })
   })
 
-  it('תאריך שגוי: 3 ניסיונות אמיתיים גם אחרי SKIP, ואז סיום', async () => {
+  it('תאריך שגוי: 3 ניסיונות אמיתיים גם עם SKIP אחרי כל אחד, ואז הודעה וניתוק', async () => {
     const wrong = '01011990'
-    expect(first(await call({ r_id: ID, r_bd: 'SKIP', r_bd2: wrong, r_bd3: wrong }))).toMatchObject({ name: 'r_bd4' })
-    const r = await call({ r_id: ID, r_bd: 'SKIP', r_bd2: wrong, r_bd3: wrong, r_bd4: wrong })
-    expect(text(r)).toContain('תאריך לא תואם')
+    const skips = { r_id: ID, r_bd: 'SKIP', r_bd2: wrong, r_bd3: 'SKIP', r_bd4: wrong, r_bd5: 'SKIP' }
+    expect(first(await call(skips))).toMatchObject({ name: 'r_bd6' })
+    const r = await call({ ...skips, r_bd6: wrong })
+    expect(text(r)).toContain('אינו תואם לתאריך שמעודכן במערכת')
     expect(Array.isArray(r.body) && r.body.at(-1)).toMatchObject({ type: 'hangup' })
     const r3 = await call({ r_id: ID, r_bd: wrong, r_bd2: wrong, r_bd3: wrong })
     expect(text(r3)).not.toContain('r_bd4')
+    expect(text(r3)).toContain('אינו תואם לתאריך שמעודכן במערכת')
     expect(Array.isArray(r3.body) && r3.body.at(-1)).toMatchObject({ type: 'hangup' })
-  })
-
-  it('רישום מוצלח עד הסוף: נשמר, נבחר מוקד, ונשמעת הודעת הסיום וניתוק', async () => {
-    dist.registerToOpenDistribution.mockResolvedValue({ ok: true, created: true, approved: true, recipientId: 'r1' })
-    data.getRecipient.mockResolvedValueOnce(null).mockResolvedValue({ id: 'r1', center_id: null, approval_status: 'approved' })
-    await call({ ...full, r_lin: '1', r_need: '1' })
-    expect(dist.registerToOpenDistribution).toHaveBeenCalled()
-    const r = await call({ ...full, r_lin: '1', r_need: '1', c_city: '1', c_ok: '1' })
-    expect(data.saveCenterChoice).toHaveBeenCalledWith('d1', 'r1', 'c1')
-    expect(text(r)).toContain('הרשמתך התקבלה בהצלחה במערכת')
-    expect(Array.isArray(r.body) && r.body.at(-1)).toMatchObject({ type: 'hangup' })
   })
 
   it('רישום שנכשל — בלי הודעת "הרשמתך התקבלה"', async () => {
@@ -196,14 +226,6 @@ describe('רישום בטלפון בלבד', () => {
     const r = await call({ ...full, r_lin: '1', r_need: '1' })
     expect(text(r)).toContain('תקלה')
     expect(text(r)).not.toContain('הרשמתך התקבלה')
-  })
-
-  it('בחירת המוקד עוד סגורה — הרישום נשמר והודעת הסיום נשמעת', async () => {
-    dist.registerToOpenDistribution.mockResolvedValue({ ok: true, created: true, approved: true, recipientId: 'r1' })
-    data.getRecipient.mockResolvedValueOnce(null).mockResolvedValue({ id: 'r1', center_id: null, approval_status: 'approved' })
-    data.openCenters.mockResolvedValue({ centers: [], taken: {} })
-    const r = await call({ ...full, r_lin: '1', r_need: '1' })
-    expect(text(r)).toContain('הרשמתך התקבלה בהצלחה במערכת')
   })
 
   it('נשואים: "של הבעל או של האשה", ושני התאריכים מתקבלים', async () => {
@@ -254,7 +276,7 @@ describe('הקו לפי שלב החלוקה — תפריט 4 מקשים', () => 
   it('1 ברישום פתוח: מסלול הרישום', async () => {
     phase('registration')
     const r = await call({ menu_pick: '1' })
-    expect(text(r)).toContain('הודעה מקדימה'); expect(text(r)).toContain('r_id')
+    expect(text(r)).toContain('כולל ספרת ביקורת'); expect(text(r)).toContain('r_id')
   })
 
   it('1 בהכנה: "טרם נפתח"; מספר ניסיון — מסלול הרישום', async () => {
@@ -275,7 +297,9 @@ describe('הקו לפי שלב החלוקה — תפריט 4 מקשים', () => 
     phase('closed')
     expect(text(await call({ menu_pick: '2' }))).toContain('e_id')
     expect(text(await call({ menu_pick: '2', e_id: ID }))).toContain('e_bd')
-    expect(text(await call({ menu_pick: '2', e_id: ID, e_bd: '01012000' }))).toContain('e_bd2')
+    const wrong = await call({ menu_pick: '2', e_id: ID, e_bd: '01012000' })
+    expect(text(wrong)).toContain('e_bd2'); expect(text(wrong)).toContain('אינו תואם לתאריך שמעודכן במערכת')
+    expect(text(await call({ menu_pick: '2', e_id: '123456789' }))).toContain('מספר שגוי')
     data.getRecipient.mockResolvedValue({ id: 'r1', approval_status: 'approved' })
     expect(text(await call({ menu_pick: '2', ...elig }))).toContain('נרשמתם ואושרתם')
     data.getRecipient.mockResolvedValue(null)
