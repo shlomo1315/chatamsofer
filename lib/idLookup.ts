@@ -63,19 +63,20 @@ export const PASSPORT_MIN_DIGITS = 5
  * נעשית אחר כך ב-passportDigitsMatch. ספרות בלבד, ולכן אין תו שדורש בריחה.
  */
 export function passportDigitsPattern(typed: unknown): string {
-  const d = digitsOnly(typed)
+  // בלי אפסים מובילים: "012345678" שמור גם כ-"12345678", והתבנית צריכה למצוא את שניהם.
+  const d = digitsOnly(typed).replace(/^0+/, '')
   return d ? `*${d.split('').join('*')}*` : ''
 }
 
 /**
- * האם הספרות (בלבד) של המספר השמור הן בדיוק מה שהוקש.
- * גם דרכון שנשמר בספרות בלבד ("556212027") מתאים: הוא לא עובר בדיקת ספרת
- * ביקורת של ת"ז, ולכן מגיע לכאן ולא לחיפוש הרגיל.
+ * האם הספרות (בלבד) של המספר השמור הן בדיוק מה שהוקש, בהתעלם מאפסים מובילים.
+ * מתאים לדרכון עם אותיות ("AB1234567"), לדרכון בספרות בלבד ("556212027"),
+ * לת"ז שנשמרה בלי האפס המוביל או איתו, ולרווחים ומקפים.
  */
 export function passportDigitsMatch(stored: unknown, typed: unknown): boolean {
-  const t = digitsOnly(typed)
+  const t = digitsOnly(typed).replace(/^0+/, '')
   if (t.length < PASSPORT_MIN_DIGITS) return false
-  return digitsOnly(stored) === t
+  return digitsOnly(stored).replace(/^0+/, '') === t
 }
 
 /** האם שני מספרי ת"ז הם אותו מספר, בהתעלם מאפסים מובילים ומתווים שאינם ספרות. */

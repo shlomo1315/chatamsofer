@@ -68,20 +68,23 @@ export async function findRegistrantById(idNumber: string): Promise<Registrant |
  * שנשמר בספרות בלבד ואינו עובר בדיקת ספרת ביקורת של ת"ז ("556212027").
  * 🔴 רק התאמה לכרטסת אחת מזהה: אם אותן ספרות שייכות לכמה כרטסות (דרכונים
  * ממדינות שונות), מחזירים null ולא מנחשים, כדי לא לרשום משפחה לא נכונה.
+ * חריג אחד: כשרק אחת מהן פעילה ולא נדחתה, היא הכרטסת (השאר כפילות ישנה).
  */
 async function findByPassportDigits<T extends Member>(typed: string, cols: string): Promise<T | null> {
   const t = digitsOnly(typed)
-  if (t.length < PASSPORT_MIN_DIGITS) return null
+  if (t.replace(/^0+/, '').length < PASSPORT_MIN_DIGITS) return null
   const p = passportDigitsPattern(t)
+  // ⚠️ התבנית מתאימה גם למספרים שהספרות מופיעות בהם בסדר הזה עם ספרות נוספות
+  // ביניהן, ובדרכון קצר יש הרבה כאלה. המגבלה גבוהה כדי שההתאמה האמיתית לא תיחתך.
   const { data } = await db().from('beneficiaries').select(cols)
-    .or(`id_number.ilike.${p},spouse_id_number.ilike.${p}`).limit(20)
+    .or(`id_number.ilike.${p},spouse_id_number.ilike.${p}`).limit(500)
   const hits = ((data ?? []) as unknown as T[])
     .filter(m => passportDigitsMatch(m.id_number, t) || passportDigitsMatch(m.spouse_id_number, t))
-  if (hits.length > 1) {
-    console.log(`[holidays] passport digits match ${hits.length} families — not identified`)
-    return null
-  }
-  return hits[0] ?? null
+  if (hits.length <= 1) return hits[0] ?? null
+  const active = hits.filter(memberCanRegister)
+  if (active.length === 1) return active[0]
+  console.log(`[holidays] passport digits match ${hits.length} families — not identified`)
+  return null
 }
 
 export const findMemberByPassportDigits = (typed: string) => findByPassportDigits<Member>(typed, MEMBER_COLS)
