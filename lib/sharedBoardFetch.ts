@@ -195,3 +195,51 @@ export async function postSharedPassword(password: string, fetchFn: FetchFn = fe
   if (res.status === 401 || res.status === 400) return { ok: false, blocked: false, message: serverMsg ?? 'סיסמה שגויה' }
   return { ok: false, blocked: false, message: serverMsg ?? `השרת החזיר שגיאה (${res.status}). נסה שוב בעוד רגע.` }
 }
+
+// ── טבלת הנרשמים בעמודים ──────────────────────────────────────────────────────
+// 🔴 24.11.2026: פרטי המשפחה (טלפונים, כתובת, בן/בת זוג) לא נשלחים יותר עם כל
+// הנרשמים. הטבלה מציגה עמוד של REG_PAGE_SIZE ומבקשת רק את הפרטים שלו.
+
+export const REG_PAGE_SIZE = 50
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** מזהים מ-?ids= — רק UUID תקינים, בלי כפילויות, עד גודל עמוד. */
+export function parseRegIds(raw: string | null | undefined): string[] {
+  return [...new Set((raw ?? '').split(',').map(s => s.trim()).filter(s => UUID_RE.test(s)))].slice(0, REG_PAGE_SIZE)
+}
+
+/** מספר העמודים (לפחות 1) ועמוד שנשאר בטווח אחרי שהסינון הקטין את הרשימה. */
+export function regPages(total: number, size = REG_PAGE_SIZE): number {
+  return Math.max(1, Math.ceil(total / size))
+}
+export function clampPage(page: number, total: number, size = REG_PAGE_SIZE): number {
+  return Math.min(Math.max(0, page), regPages(total, size) - 1)
+}
+
+export type RegDetails = {
+  id: string
+  phone?: string | null
+  beneficiary?: { full_name?: string | null; family_name?: string | null; spouse_name?: string | null; phone?: string | null; phone2?: string | null; address?: string | null } | null
+}
+export type RegDetailsResult =
+  | { kind: 'ok'; details: RegDetails[] }
+  | { kind: 'locked' }
+  | { kind: 'error'; message: string }
+
+/** פרטי המשפחה לעמוד אחד בטבלה — בקשה קטנה אחת עם מגבלת זמן. */
+export async function fetchRegDetails(ids: string[], fetchFn: FetchFn = fetch, timeoutMs = 20_000): Promise<RegDetailsResult> {
+  if (!ids.length) return { kind: 'ok', details: [] }
+  const r = await fetchPart(fetchFn, `/api/shared/distributions/registrants?ids=${ids.map(encodeURIComponent).join(',')}`, timeoutMs)
+  if (r.kind !== 'ok') return r
+  const details = Array.isArray(r.data.details) ? (r.data.details as RegDetails[]) : []
+  return { kind: 'ok', details }
+}
+
+/** משלב את פרטי המשפחה שנטענו בשורות הקלות (שורה בלי פרטים נשארת כמו שהיא). */
+export function withDetails<T extends { id: string; phone?: string | null; beneficiary?: object | null }>(rows: T[], details: Map<string, RegDetails>): T[] {
+  return rows.map(r => {
+    const d = details.get(r.id)
+    if (!d) return r
+    return { ...r, phone: d.phone ?? r.phone ?? null, beneficiary: { ...(r.beneficiary ?? {}), ...(d.beneficiary ?? {}) } }
+  })
+}

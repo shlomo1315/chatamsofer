@@ -7,8 +7,9 @@ import { channelKeyOf, cityOf, familyAmount } from '@/lib/sharedBoard'
 import {
   CR_EMPTY, CR_KEYS, CR_NAMES, channelLabel, subRows, toggleF, stLevel, kpis, communityMoney, topCommunities, regTable, REG_STATUS, COMM_TOP, channelCounts,
   cityTop, hourCountsCr, rateBuckets, ratePerMinute, sparkPoints, pickup, takeFresh, isStale, famLabel, latest,
-  num, shekel, pad2, type CrRow, type CrFilter, type CrKey,
+  num, shekel, pad2, regOrder, type CrRow, type CrFilter, type CrKey,
 } from '@/lib/controlRoom'
+import { REG_PAGE_SIZE, clampPage, regPages, fetchRegDetails, withDetails, type RegDetails } from '@/lib/sharedBoardFetch'
 
 export type CrDist = { id: string; name: string; live?: boolean; amount_per_family?: number | null }
 
@@ -82,7 +83,42 @@ export default function ControlRoom({ live, prevDists, selected, rows, closesAt,
       commRest: topCommunities(filtered.filter(x => !order.includes(x.label)), 0).rest,
     }
   }, [rows, f, per])
-  const regs = useMemo(() => regTable(all, per), [all, per])
+  // טבלת הנרשמים בעמודים: הסדר והספירה מכל השורות הקלות שכבר בדף, ופרטי
+  // המשפחה (טלפונים, כתובת) נטענים רק לעמוד המוצג — ראו fetchRegDetails.
+  const ordered = useMemo(() => regOrder(all), [all])
+  const pgKey = `${selected?.id}|${JSON.stringify(f)}`
+  const [pg, setPg] = useState({ key: '', n: 0 })
+  const page = clampPage(pg.key === pgKey ? pg.n : 0, ordered.length)
+  const pages = regPages(ordered.length)
+  const goPage = (n: number) => setPg({ key: pgKey, n: clampPage(n, ordered.length) })
+  const pageRows = useMemo(() => ordered.slice(page * REG_PAGE_SIZE, (page + 1) * REG_PAGE_SIZE), [ordered, page])
+  const [details, setDetails] = useState<Map<string, RegDetails>>(() => new Map())
+  const [detErr, setDetErr] = useState<{ key: string; msg: string } | null>(null)
+  const [retry, setRetry] = useState(0)
+  const missingKey = pageRows.filter(r => !details.has(r.id)).map(r => r.id).join(',')
+  useEffect(() => {
+    if (!missingKey) return
+    let alive = true
+    const ids = missingKey.split(',')
+    fetchRegDetails(ids).then(r => {
+      if (!alive) return
+      if (r.kind !== 'ok') {
+        setDetErr({ key: missingKey, msg: r.kind === 'locked' ? 'פג תוקף הכניסה. רענן את הדף והזן את הסיסמה.' : r.message })
+        return
+      }
+      setDetErr(null)
+      setDetails(prev => {
+        const m = new Map(prev)
+        for (const d of r.details) m.set(d.id, d)
+        // ⚠️ מזהה שלא חזר (נמחק בינתיים) מסומן כטעון, אחרת היה נשלח שוב בכל ציור.
+        for (const id of ids) if (!m.has(id)) m.set(id, { id })
+        return m
+      })
+    })
+    return () => { alive = false }
+  }, [missingKey, retry])
+  const pageErr = detErr && detErr.key === missingKey ? detErr.msg : null
+  const regs = useMemo(() => regTable(withDetails(pageRows, details), per), [pageRows, details, per])
   const commMax = Math.max(1, ...comms.map(x => x.value))
   const chans = useMemo(() => channelCounts(subRows(rows, f, 'ch')), [rows, f])
   const chTotal = chans.reduce((s, x) => s + x.count, 0)
@@ -277,18 +313,26 @@ export default function ControlRoom({ live, prevDists, selected, rows, closesAt,
               </section>
 
               <section className={cls(c.p, c.sNames)}>
-                <h2>הנרשמים <small>{num(regs.length)} משפחות · החדש ראשון</small></h2>
-                {regs.length ? (
+                <h2>הנרשמים <small>{num(ordered.length)} משפחות · החדש ראשון</small></h2>
+                {regs.length ? (<>
+                  {pageErr && (
+                    <p className={c.pgErr} role="alert">
+                      לא נטענו הטלפונים והכתובות של העמוד הזה. {pageErr}
+                      <button type="button" onClick={() => setRetry(x => x + 1)}>נסה שוב</button>
+                    </p>
+                  )}
                   <div className={c.tw}>
                     <table className={c.regs}>
                       <thead><tr>
                         <th>שם</th><th>טלפון</th><th>כתובת</th><th>עיר</th><th>קהילה</th><th>ילדים</th><th>סכום</th><th>סטטוס</th><th>ערוץ</th><th>שעה</th>
                       </tr></thead>
-                      <tbody>{regs.map(x => (
+                      <tbody>{regs.map(x => {
+                        const wait = !details.has(x.id) && !pageErr
+                        return (
                         <tr key={x.id}>
                           <th scope="row">{x.name}{x.spouse && <small>{x.spouse}</small>}</th>
-                          <td dir="ltr" className={c.ph}>{x.phones}</td>
-                          <td>{x.address}</td>
+                          <td dir="ltr" className={c.ph}>{wait ? <span className={c.wait}>…</span> : x.phones}</td>
+                          <td>{wait ? <span className={c.wait}>…</span> : x.address}</td>
                           <td>{x.city}</td>
                           <td>{x.comm}</td>
                           <td className={c.nm}>{x.kids ?? ''}</td>
@@ -297,10 +341,15 @@ export default function ControlRoom({ live, prevDists, selected, rows, closesAt,
                           <td>{x.channel}</td>
                           <td className={c.nm}>{hhmm(x.at)}</td>
                         </tr>
-                      ))}</tbody>
+                      )})}</tbody>
                     </table>
                   </div>
-                ) : <p className={c.empty}>עוד אין נרשמים.</p>}
+                  <div className={c.pager}>
+                    <button type="button" onClick={() => goPage(page - 1)} disabled={page === 0}>→ הקודם</button>
+                    <span>עמוד <b>{num(page + 1)}</b> מתוך {num(pages)} · {num(page * REG_PAGE_SIZE + 1)}–{num(page * REG_PAGE_SIZE + regs.length)} מתוך {num(ordered.length)}</span>
+                    <button type="button" onClick={() => goPage(page + 1)} disabled={page >= pages - 1}>הבא ←</button>
+                  </div>
+                </>) : <p className={c.empty}>עוד אין נרשמים.</p>}
               </section>
             </div>
           )}
