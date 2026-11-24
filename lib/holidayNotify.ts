@@ -13,6 +13,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { getServiceClient } from '@/lib/apiAuth'
 import { holidayApprovedEmail, holidayRegisteredEmail } from '@/lib/emailTemplates'
+import { holidayFamilyName, holidayFirstNames } from '@/lib/holidayFamilyName'
 import { deliverMail } from '@/lib/sendMail'
 import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { mailFor } from '@/lib/departments'
@@ -49,7 +50,7 @@ type Row = {
   phone: string | null
   distribution: { name: string | null; year: string | null; amount_per_family: number | null } | null
   beneficiary: {
-    family_name: string | null; full_name: string | null; spouse_name: string | null
+    family_name: string | null; full_name: string | null; spouse_name: string | null; marital_status: string | null
     email: string | null; phone: string | null; phone2: string | null; spouse_phone: string | null
   } | null
 }
@@ -57,7 +58,7 @@ type Row = {
 const SELECT =
   'id, approval_status, notified_at, amount, phone, ' +
   'distribution:distributions(name, year, amount_per_family), ' +
-  'beneficiary:beneficiaries(family_name, full_name, spouse_name, email, phone, phone2, spouse_phone)'
+  'beneficiary:beneficiaries(family_name, full_name, spouse_name, marital_status, email, phone, phone2, spouse_phone)'
 
 /** נוסח הצינתוק — קצר ובלי פסיקים (פסיק ב-ttsMode מפצל את הטקסט למשתני תבנית). */
 export function approvalCallText(distributionName: string): string {
@@ -82,7 +83,7 @@ export async function notifyHolidayReceived(id: string): Promise<{ emailSent: bo
   if (!r || !b?.email) return { emailSent: false, error: 'למשפחה אין כתובת מייל במערכת' }
 
   const distName = [r.distribution?.name, r.distribution?.year].filter(Boolean).join(' ') || undefined
-  const name = [b.family_name, b.spouse_name || b.full_name].filter(Boolean).join(' ')
+  const name = holidayFamilyName(b)
   try {
     await ensureEmailTexts()
     const built = holidayRegisteredEmail(name, { distribution: distName })
@@ -120,7 +121,7 @@ export async function notifyHolidayApproved(
 
   for (const r of rows) {
     const b = r.beneficiary
-    const name = [b?.family_name, b?.spouse_name || b?.full_name].filter(Boolean).join(' ') || 'משפחה'
+    const name = holidayFamilyName(b) || 'משפחה'
     const res: NotifyOutcome = { id: r.id, name }
 
     if (r.approval_status !== 'approved') {
@@ -137,7 +138,7 @@ export async function notifyHolidayApproved(
     if (email && b?.email) {
       try {
         const built = holidayApprovedEmail({
-          familyName: b.family_name, spouseName: b.spouse_name || b.full_name,
+          familyName: b.family_name, spouseName: holidayFirstNames(b),
           distributionName: distName, amount, phoneExtension: phoneExt,
         })
         await deliverMail(b.email, built.subject, built.html, undefined, mailFor('igud'))
