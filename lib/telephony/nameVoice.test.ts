@@ -28,8 +28,20 @@ const turn = () => applyVoice({ type: 'simpleMessage', files: fill('שלום ו�
 const files = async () => ((await turn()) as { files: TlFile[] }).files
 const flush = () => new Promise((r) => setTimeout(r, 0))
 
+// 🔴 24.11: מרגע שהקישורים לקבצים נכנסו המתקשרים לא שמעו כלום. בלי המתג — רק טקסט.
+describe('השמעה מקבצים כבויה כברירת מחדל', () => {
+  beforeEach(() => { stored.clear(); gen.mockClear(); resetNameVoiceState(); delete process.env.PHONE_VOICE_FILES })
+
+  it('שיחה בלי המתג: טקסט בלבד, בלי קישור, בלי סימון שם ובלי יצירה', async () => {
+    stored.add(`phone-voice/${voiceHash('v1', 'כהן משה')}.wav`)
+    expect(await files()).toEqual([{ text: 'שלום וברכה בשם' }, { text: 'כהן משה' }])
+    await flush()
+    expect(gen).not.toHaveBeenCalled()
+  })
+})
+
 describe('הקלטת שם המתקשר', () => {
-  beforeEach(() => { stored.clear(); gen.mockClear(); resetNameVoiceState() })
+  beforeEach(() => { stored.clear(); gen.mockClear(); resetNameVoiceState(); process.env.PHONE_VOICE_FILES = '1' })
 
   it('השם קטע נפרד מהפתיח הקבוע', () => {
     expect(fill('שלום וברכה בשם {name}', { name: nameFile('כהן משה') }).map((f) => 'text' in f && f.text))

@@ -137,8 +137,16 @@ const mapFiles = (result: TlResult, fn: (f: TlFile) => TlFile): TlResult => {
 }
 const plainNames = (result: TlResult) => mapFiles(result, (f) => (isName(f) ? { text: f.text } : f))
 
+/**
+ * 🔴 24.11 11:50: מרגע שנכתב האינדקס (121 קבצים) המתקשרים לא שמעו כלום. הפניות לשלוחת
+ * החגים צנחו בשני שלישים, ו-key=ERROR חזר כל 6 שניות (זמן ההמתנה עובר בשקט). לכן הקישורים
+ * כבויים כברירת מחדל, ונדלקים רק עם PHONE_VOICE_FILES=1 אחרי אימות בשיחה אמיתית.
+ */
+export const voiceFilesEnabled = () => process.env.PHONE_VOICE_FILES === '1'
+
 /** מחליף {text} קבוע ושם מתקשר בקישור לקובץ הקול, כשקיים. כל כשל → טקסט. */
 export async function applyVoice(result: TlResult): Promise<TlResult> {
+  if (!voiceFilesEnabled()) return plainNames(result)
   try {
     const idx = await cachedIndex()
     const names = new Map<string, TlFile>()
