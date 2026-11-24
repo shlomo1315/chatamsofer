@@ -84,7 +84,6 @@ function stage(
 export async function phoneRegistration(k: RegKit, dist: ActiveDistribution): Promise<TlResult> {
   const { params, callId, phone: callerPhone } = k.ctx
   const rules = await getDistRules(dist.id)
-  const distName = `${dist.name}${dist.year ? ` ${dist.year}` : ''}`
 
   // ── 1. ת"ז כולל ספרת ביקורת — מיד בכניסה, בלי הודעות לפני ──
   const idStage = stage(k, REG_VARS.id, (name, lead) =>
@@ -108,7 +107,7 @@ export async function phoneRegistration(k: RegKit, dist: ActiveDistribution): Pr
   if (existing) {
     if (existing.approval_status === 'rejected') return k.end('not_eligible')
     console.log(`${LOG} callId=${callId} ben=${ben.id} already registered`)
-    return k.end('reg_already_registered')
+    return k.end('reg_already_received')
   }
 
   // ── 2. הודעות המעבר, ואחריהן תאריך לידה: נשואים, של הבעל או של האשה; אחרים, של בעל הת"ז ──
@@ -167,8 +166,8 @@ export async function phoneRegistration(k: RegKit, dist: ActiveDistribution): Pr
     if (!rec) return k.end('failed')
     if (rec.approval_status === 'rejected') return k.end('not_eligible')
     return bye([
-      ...(result.approved ? k.files('reg_success_approved', { distribution: distName }) : []),
-      ...k.files('reg_final'),
+      ...(result.approved ? k.files('reg_success_received') : []),
+      ...k.files('reg_final_plural'),
     ])
   }
 }
