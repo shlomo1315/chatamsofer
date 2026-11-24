@@ -5,7 +5,12 @@ import { channelKeyOf, cityOf, communityOf, familyAmount, type MoneyRow } from '
 export type CrRow = MoneyRow & {
   id: string
   card_linked_at?: string | null
-  beneficiary?: (MoneyRow['beneficiary'] & { family_name?: string | null; full_name?: string | null }) | null
+  /** הטלפון שממנו נרשמו (בשלוחה), כשאין טלפון בכרטסת. */
+  phone?: string | null
+  beneficiary?: (MoneyRow['beneficiary'] & {
+    family_name?: string | null; full_name?: string | null; spouse_name?: string | null
+    phone?: string | null; phone2?: string | null; address?: string | null
+  }) | null
 }
 
 /** הסינון של הדף: ערך אחד לכל ממד, null = בלי סינון. */
@@ -108,10 +113,28 @@ export function regName(r: CrRow): string {
   return r.beneficiary?.full_name?.trim() || famLabel(r)
 }
 
-/** כל הנרשמים לרשימת השמות: החדש ראשון, ומי שאין לו שעת רישום בסוף. */
-export function regNames<T extends CrRow>(rows: T[]): { id: string; name: string }[] {
+export type RegRow = {
+  id: string; name: string; spouse: string; phones: string; address: string; city: string; comm: string
+  kids: number | null; amount: number; status: 'approved' | 'pending' | 'rejected'; channel: string; at: string | null
+}
+export const REG_STATUS: Record<RegRow['status'], string> = { approved: 'מאושר', pending: 'ממתין', rejected: 'נדחה' }
+
+/** טבלת הנרשמים: כל פרטי המשפחה שנשלחים לדף, החדש ראשון, ומי שאין לו שעת רישום בסוף.
+ *  שדה שאין בו ערך נשאר ריק (לא ממציאים). */
+export function regTable<T extends CrRow>(rows: T[], perFamily?: number | null): RegRow[] {
   const t = (r: CrRow) => (r.registered_at ? Date.parse(r.registered_at) || 0 : 0)
-  return [...rows].sort((a, b) => t(b) - t(a)).map(r => ({ id: r.id, name: regName(r) }))
+  return [...rows].sort((a, b) => t(b) - t(a)).map(r => {
+    const b = r.beneficiary
+    const phones = [...new Set([b?.phone, b?.phone2, r.phone].map(p => p?.trim()).filter(Boolean))].join(' · ')
+    const kids = b?.children_count
+    return {
+      id: r.id, name: regName(r), spouse: b?.spouse_name?.trim() || '', phones,
+      address: b?.address?.trim() || '', city: cityOf(r), comm: communityOf(r),
+      kids: kids == null ? null : Number(kids), amount: familyAmount(r, perFamily),
+      status: r.approval_status === 'approved' ? 'approved' : r.approval_status === 'rejected' ? 'rejected' : 'pending',
+      channel: channelLabel(channelKeyOf(r.source)), at: r.registered_at ?? null,
+    }
+  })
 }
 
 /** ספירת רישומים לכל ערוץ, בסדר של המוקאפ. */

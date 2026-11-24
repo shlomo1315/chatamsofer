@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import c from './control.module.css'
 import { channelKeyOf, cityOf, familyAmount } from '@/lib/sharedBoard'
 import {
-  CR_EMPTY, CR_KEYS, CR_NAMES, channelLabel, subRows, toggleF, stLevel, kpis, communityMoney, topCommunities, regNames, COMM_TOP, channelCounts,
+  CR_EMPTY, CR_KEYS, CR_NAMES, channelLabel, subRows, toggleF, stLevel, kpis, communityMoney, topCommunities, regTable, REG_STATUS, COMM_TOP, channelCounts,
   cityTop, hourCountsCr, rateBuckets, ratePerMinute, sparkPoints, pickup, takeFresh, isStale, famLabel, latest,
   num, shekel, pad2, type CrRow, type CrFilter, type CrKey,
 } from '@/lib/controlRoom'
@@ -82,7 +82,7 @@ export default function ControlRoom({ live, prevDists, selected, rows, closesAt,
       commRest: topCommunities(filtered.filter(x => !order.includes(x.label)), 0).rest,
     }
   }, [rows, f, per])
-  const names = useMemo(() => regNames(all), [all])
+  const regs = useMemo(() => regTable(all, per), [all, per])
   const commMax = Math.max(1, ...comms.map(x => x.value))
   const chans = useMemo(() => channelCounts(subRows(rows, f, 'ch')), [rows, f])
   const chTotal = chans.reduce((s, x) => s + x.count, 0)
@@ -277,9 +277,29 @@ export default function ControlRoom({ live, prevDists, selected, rows, closesAt,
               </section>
 
               <section className={cls(c.p, c.sNames)}>
-                <h2>הנרשמים <small>{num(names.length)} שמות · החדש ראשון</small></h2>
-                {names.length ? (
-                  <ol className={c.names}>{names.map(x => <li key={x.id}>{x.name}</li>)}</ol>
+                <h2>הנרשמים <small>{num(regs.length)} משפחות · החדש ראשון</small></h2>
+                {regs.length ? (
+                  <div className={c.tw}>
+                    <table className={c.regs}>
+                      <thead><tr>
+                        <th>שם</th><th>טלפון</th><th>כתובת</th><th>עיר</th><th>קהילה</th><th>ילדים</th><th>סכום</th><th>סטטוס</th><th>ערוץ</th><th>שעה</th>
+                      </tr></thead>
+                      <tbody>{regs.map(x => (
+                        <tr key={x.id}>
+                          <th scope="row">{x.name}{x.spouse && <small>{x.spouse}</small>}</th>
+                          <td dir="ltr" className={c.ph}>{x.phones}</td>
+                          <td>{x.address}</td>
+                          <td>{x.city}</td>
+                          <td>{x.comm}</td>
+                          <td className={c.nm}>{x.kids ?? ''}</td>
+                          <td className={c.nm}>{x.amount ? shekel(x.amount) : ''}</td>
+                          <td><span className={cls(c.st, c[x.status])}>{REG_STATUS[x.status]}</span></td>
+                          <td>{x.channel}</td>
+                          <td className={c.nm}>{hhmm(x.at)}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
                 ) : <p className={c.empty}>עוד אין נרשמים.</p>}
               </section>
             </div>

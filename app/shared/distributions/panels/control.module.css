@@ -154,9 +154,21 @@
 .sCity { grid-column: span 5; order: 4 }
 .sNames { grid-column: span 12; order: 5 }
 
-/* רשימת כל הנרשמים: גלויה מיד, בעמודות צפופות */
-.names { list-style: none; padding: 0; margin: 0; columns: 4 170px; column-gap: var(--s4); font-size: 13px }
-.names li { padding: 5px 0; border-bottom: 1px solid var(--line); break-inside: avoid; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+/* טבלת כל הנרשמים: גלויה מיד. בטלפון נגללת לצדדים, ועמודת השם נשארת צמודה מימין */
+.tw { overflow-x: auto; max-height: 70vh; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--r1) }
+.regs { width: 100%; min-width: 960px; border-collapse: separate; border-spacing: 0; font-size: 13px }
+.regs th, .regs td { padding: 7px var(--s3); text-align: start; white-space: nowrap; border-bottom: 1px solid var(--line) }
+.regs thead th { position: sticky; top: 0; z-index: 2; background: var(--sf2); color: var(--mute); font-weight: 600; font-size: 12px }
+.regs tbody th { position: sticky; right: 0; z-index: 1; background: var(--sf); font-weight: 600 }
+.regs thead th:first-child { right: 0; z-index: 3 }
+.regs tbody th small { display: block; color: var(--mute); font-weight: 400; font-size: 11.5px }
+.regs tbody tr:hover > * { background: var(--sf2) }
+.regs .ph { text-align: end; font-variant-numeric: tabular-nums }
+.regs .nm { font-variant-numeric: tabular-nums }
+.st { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; border: 1px solid currentColor }
+.approved { color: var(--ok) }
+.pending { color: var(--ac) }
+.rejected { color: var(--mute) }
 .more { font-size: 12.5px; color: var(--mute); padding: var(--s2) var(--s2) 0 }
 
 @media (max-width: 900px) {
@@ -176,7 +188,8 @@
   .hx { gap: 2px }
   .hx span:nth-child(odd) { visibility: hidden }
   .rw { grid-template-columns: 70px minmax(0, 1fr) 78px; gap: var(--s2) }
-  .names { columns: 2; column-gap: var(--s3) }
+  .regs { min-width: 880px; font-size: 12.5px }
+  .regs th, .regs td { padding: 6px var(--s2) }
   .rate b { font-size: 48px }
   .cn { margin: 0; width: 100%; justify-content: space-between }
   .toast { left: 12px; right: auto; bottom: 12px; width: min(280px, calc(100vw - 24px)) }
