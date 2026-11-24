@@ -161,6 +161,8 @@ export interface TableColumns<K extends string, R = never> {
   activeFilters: ReactNode
   /** סינוני העמודות הפעילים על רשימה כלשהי (בלי מיון) — למוני כרטיסים. */
   applyFilters: (list: readonly R[]) => R[]
+  /** מפתח מצב המיון והסינון מהכותרת — לאיפוס דפדוף רק כשהם משתנים (useTablePagination.resetKey). */
+  viewKey: string
 }
 
 export function useTableColumns<K extends string, R = never>(
@@ -446,5 +448,7 @@ export function useTableColumns<K extends string, R = never>(
     </div>
   )
 
-  return { shown, available, rt, picker, cellClass, headClass, th, rows, activeFilters, applyFilters }
+  const viewKey = JSON.stringify([cSort, cFilters])
+
+  return { shown, available, rt, picker, cellClass, headClass, th, rows, activeFilters, applyFilters, viewKey }
 }

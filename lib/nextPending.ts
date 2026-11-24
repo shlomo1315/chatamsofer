@@ -15,6 +15,7 @@ export async function goToNextPending(
     currentId: string
     detailBase: string   // לדוגמה '/admin/loans'
     listPath: string     // לדוגמה '/admin/loans'
+    detailQuery?: string // לדוגמה '?st=pending' — שומר את הלשונית שממנה נכנסו
   },
 ) {
   try {
@@ -25,7 +26,7 @@ export async function goToNextPending(
     })
     const res = await fetch(`/api/admin/next-pending?${params.toString()}`, { cache: 'no-store' })
     const data = await res.json()
-    if (data?.id) { router.push(`${opts.detailBase}/${data.id}`); return }
+    if (data?.id) { router.push(`${opts.detailBase}/${data.id}${opts.detailQuery ?? ''}`); return }
   } catch { /* נופלים לרשימה */ }
   router.push(opts.listPath)
 }
