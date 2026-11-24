@@ -14,6 +14,7 @@ import QuickEmailModal from '@/components/QuickEmailModal'
 import BeneficiaryCardModal from './BeneficiaryCardModal'
 import SendLineageLinkButton from './SendLineageLinkButton'
 import BulkLineageFaultButton from './BulkLineageFaultButton'
+import DeepReviewRecheckButton from './DeepReviewRecheckButton'
 import { useListParams } from '@/lib/useListParams'
 import { type AdvFilters } from '@/lib/listParams'
 import AdvancedFilters from './AdvancedFilters'
@@ -346,7 +347,9 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
     <div className="flex flex-col gap-5">
       {/* כפתור פעולה (למשל רישום אדם חריג) — בראש הטבלה, מיושר לסוף */}
       {headerAction && <div className="flex justify-end">{headerAction}</div>}
-      {activeFilter === 'deep_review' && <div className="flex justify-end"><BulkLineageFaultButton /></div>}
+      {activeFilter === 'deep_review' && (
+        <div className="flex flex-wrap justify-end gap-2"><DeepReviewRecheckButton /><BulkLineageFaultButton /></div>
+      )}
       {/* Status filter cards — ה-counts מגיעים מ-DB (מדויקים על כל הרשומות) */}
       <StatStrip active={activeFilter}
         items={cards.map(c => ({ key: c.key, label: c.label, icon: c.icon, count: counts[c.key] ?? 0 }))}

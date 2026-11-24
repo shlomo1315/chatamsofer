@@ -102,6 +102,20 @@ export function recipientNameOf(row: Pick<FaultRow, 'family_name' | 'spouse_name
   return [row.family_name, row.spouse_name || row.full_name].filter(Boolean).join(' ') || 'משפחה יקרה'
 }
 
+/**
+ * תחילת היום הנוכחי בשעון ישראל, כ-ISO. בסבב חוזר נחסם רק מי שקיבל מאז.
+ * ישראל ב-UTC+2 בחורף ו-UTC+3 בקיץ: בוחרים את ההפרש שבו השעה היא 00.
+ */
+export function israelDayStart(now = new Date()): string {
+  const ymd = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })
+  const hour = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', hour: '2-digit', hourCycle: 'h23' })
+  for (const h of [2, 3]) {
+    const t = new Date(`${ymd}T00:00:00+0${h}:00`)
+    if (hour.format(t) === '00') return t.toISOString()
+  }
+  return new Date(`${ymd}T00:00:00+02:00`).toISOString()
+}
+
 export function planLineageFaultNotice(rows: FaultRow[], sentIds: Set<string>): FaultPlan {
   const plan: FaultPlan = { toSend: [], noEmail: [], noLineage: [], alreadySent: [] }
   for (const row of rows) {

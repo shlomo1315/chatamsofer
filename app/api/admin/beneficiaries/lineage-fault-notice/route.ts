@@ -9,8 +9,9 @@ import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { logActivity } from '@/lib/activityLog'
 import {
   DEFAULT_LINEAGE_FAULT_TEMPLATE, LINEAGE_FAULT_ACTION, LINEAGE_FAULT_BATCH, LINEAGE_FAULT_TEMPLATE_KEY, NAME_TOKEN,
-  normalizeLineageFaultTemplate, planLineageFaultNotice, recipientNameOf, type FaultRow, type LineageFaultTemplate,
+  israelDayStart, normalizeLineageFaultTemplate, planLineageFaultNotice, recipientNameOf, type FaultRow, type LineageFaultTemplate,
 } from '@/lib/lineageFaultNotice'
+import { isAutoDeepReason } from '@/lib/earlyLineageGate'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,13 +42,26 @@ async function fetchAll<T>(build: (from: number, to: number) => PromiseLike<{ da
   }
 }
 
-async function loadPlan(admin: SupabaseClient) {
-  const rows = await fetchAll<FaultRow>((a, b) => admin.from('beneficiaries')
-    .select('id, full_name, family_name, spouse_name, email, lineage_node_id')
+// סבב חוזר (resend): לתזכורת למי שעדיין לא הסדיר אחרי הסבב הראשון.
+//   ⚠️ נחסם רק מי שקיבל *היום* (שעון ישראל), ולא כל מי שקיבל אי פעם.
+//   ⚠️ רק מי שבבדיקה מעמיקה בגלל סדר הדורות: סיבה ריקה או סיבה שהשער כתב.
+//   סיבה שהמזכירות הקלידה = בדיקה מעמיקה מסיבה אחרת, ולא מקבלים "תקלה בדורות".
+// כדאי להריץ קודם את החישוב מחדש (/api/admin/lineage/deep-review-recheck),
+// כדי שמי שכבר הסדיר יעבור ל"ממתין" ולא יקבל תזכורת.
+type PlanRow = FaultRow & { deep_review_reason?: string | null }
+
+async function loadPlan(admin: SupabaseClient, resend: boolean) {
+  const all = await fetchAll<PlanRow>((a, b) => admin.from('beneficiaries')
+    .select('id, full_name, family_name, spouse_name, email, lineage_node_id, deep_review_reason')
     .eq('eligibility_status', 'deep_review').order('id').range(a, b))
-  const sent = await fetchAll<{ entity_id: string | null }>((a, b) => admin.from('activity_log')
-    .select('entity_id').eq('action', LINEAGE_FAULT_ACTION).order('created_at').range(a, b))
-  return planLineageFaultNotice(rows, new Set(sent.map(s => s.entity_id).filter((x): x is string => !!x)))
+  const otherReason = resend ? all.filter(r => (r.deep_review_reason ?? '').trim() && !isAutoDeepReason(r.deep_review_reason)) : []
+  const rows = resend ? all.filter(r => !otherReason.includes(r)) : all
+  const sent = await fetchAll<{ entity_id: string | null }>((a, b) => {
+    let q = admin.from('activity_log').select('entity_id').eq('action', LINEAGE_FAULT_ACTION)
+    if (resend) q = q.gte('created_at', israelDayStart())
+    return q.order('created_at').range(a, b)
+  })
+  return { ...planLineageFaultNotice(rows, new Set(sent.map(s => s.entity_id).filter((x): x is string => !!x))), otherReason }
 }
 
 async function loadTemplate(admin: SupabaseClient): Promise<LineageFaultTemplate> {
@@ -68,8 +82,9 @@ export async function POST(request: NextRequest) {
   const staff = await requirePermission('lineage', 'edit')
   if (!staff) return forbidden()
 
-  let body: { send?: boolean; action?: string; template?: unknown; sampleName?: unknown } = {}
+  let body: { send?: boolean; resend?: boolean; action?: string; template?: unknown; sampleName?: unknown } = {}
   try { body = await request.json() } catch { /* בלי גוף = תצוגה מקדימה */ }
+  const resend = body.resend === true
 
   // תצוגה חיה בזמן העריכה: אותה בנייה בדיוק כמו בשליחה, בלי מסד.
   if (body.action === 'render') {
@@ -92,7 +107,7 @@ export async function POST(request: NextRequest) {
   }
 
   let plan, template
-  try { [plan, template] = await Promise.all([loadPlan(admin), loadTemplate(admin)]) } catch (e) { return fail(e) }
+  try { [plan, template] = await Promise.all([loadPlan(admin, resend), loadTemplate(admin)]) } catch (e) { return fail(e) }
 
   const sender = mailFor('igud')
   const names = (rows: FaultRow[]) => rows.map(r => ({ id: r.id, name: recipientNameOf(r), email: r.email }))
@@ -106,10 +121,12 @@ export async function POST(request: NextRequest) {
     })
     return NextResponse.json({
       dryRun: true,
-      total: plan.toSend.length + plan.noEmail.length + plan.noLineage.length + plan.alreadySent.length,
+      resend,
+      total: plan.toSend.length + plan.noEmail.length + plan.noLineage.length + plan.alreadySent.length + plan.otherReason.length,
       toSend: plan.toSend.length,
       noEmail: names(plan.noEmail),
       noLineage: names(plan.noLineage),
+      otherReason: names(plan.otherReason),
       alreadySent: plan.alreadySent.length,
       from: `${sender.fromName} <${sender.fromEmail}>`,
       sample: { to: first?.email ?? null, name: first ? recipientNameOf(first) : 'כהן משה', subject: sample.subject, html: sample.html },
