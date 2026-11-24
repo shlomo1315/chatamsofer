@@ -1,5 +1,5 @@
 // שכבת Interaction API המשותפת של טכנוליין (https://api.tlivr.com/) לשלוש המערכות.
-// כל קריאה נבדקת: status === "OK" (ivrFilesApi, campaignApi) או ok === true (accountApi).
+// כל קריאה נבדקת: status === "OK"/"Ok" (ivrFilesApi, campaignApi, mailingListsApi) או ok === true (accountApi).
 //
 // ⚠️ ה-IP היוצא של השרת חייב להיות מאושר ב"אבטחת API" (campaignApi/ivrFilesApi), אחרת errorCode -99.
 // ⚠️ מפתחות לא נרשמים בלוג ולא מוחזרים בשגיאות.
@@ -23,7 +23,7 @@ async function send(url: string, init: RequestInit, kind: 'status' | 'ok'): Prom
   try {
     const res = await fetch(url, { ...init, cache: 'no-store', signal: AbortSignal.timeout(20_000) })
     const json = await res.json().catch(() => null) as Json | null
-    const good = kind === 'status' ? json?.status === 'OK' : json?.ok === true
+    const good = kind === 'status' ? String(json?.status ?? '').toUpperCase() === 'OK' : json?.ok === true
     if (!json || !good) return failFrom(json, res.status)
     return { ok: true, data: json }
   } catch (e) {
@@ -66,4 +66,13 @@ export async function accountApi(action: string, body?: Json): Promise<ApiResult
   return send(`${BASE}/accountApi.php?action=${encodeURIComponent(action)}`, {
     method: body ? 'POST' : 'GET', headers, body: body ? JSON.stringify(body) : undefined,
   }, 'ok')
+}
+
+/** mailingListsApi.php — רשימות תפוצה ומספרים. POST ב-JSON; מחזיר status "Ok". */
+export async function mailingListApi(system: TelephonySystemId, action: string, body: Json = {}): Promise<ApiResult<Json>> {
+  const apiKey = keyOf(system)
+  if (!apiKey) return { ok: false, error: 'חסר מפתח API למערכת', code: 'not_configured' }
+  return send(`${BASE}/mailingListsApi.php`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, action, apiKey }),
+  }, 'status')
 }

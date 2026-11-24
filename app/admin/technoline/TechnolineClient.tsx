@@ -3,12 +3,13 @@ import { useCallback, useEffect, useState } from 'react'
 import { EXTS, MAP, SOURCE_API, SYSTEM_LABELS, extId, findExt, type MapNode, type MessageSource } from '@/lib/telephony/catalog'
 import MessageList, { type Msgs, type SourceData } from './MessageList'
 import { AccountPanel, HealthPanel, LogPanel, TestPanel, type Status } from './Panels'
+import CampaignPanel from './CampaignPanel'
 import './technoline.css'
 
 type SysId = 'main' | 'yerid' | 'distributors'
-type Tab = 'map' | 'msgs' | 'test' | 'log' | 'account' | 'health'
+type Tab = 'map' | 'msgs' | 'test' | 'campaign' | 'log' | 'account' | 'health'
 type DrTab = 'msgs' | 'keys' | 'rec' | 'test'
-const TABS: [Tab, string][] = [['map', 'שלוחות'], ['msgs', 'נוסחים והקלטות'], ['test', 'בדיקת שיחה'], ['log', 'יומן שיחות'], ['account', 'מספרים וחשבון'], ['health', 'חיבור ובנייה']]
+const TABS: [Tab, string][] = [['map', 'שלוחות'], ['msgs', 'נוסחים והקלטות'], ['test', 'בדיקת שיחה'], ['campaign', 'רשימת תפוצה'], ['log', 'יומן שיחות'], ['account', 'מספרים וחשבון'], ['health', 'חיבור ובנייה']]
 const DR_TABS: [DrTab, string][] = [['msgs', 'נוסחים'], ['keys', 'מקשים'], ['rec', 'הקלטות'], ['test', 'בדיקה']]
 const SOURCES = Object.keys(SOURCE_API) as MessageSource[]
 
@@ -144,6 +145,7 @@ export default function TechnolineClient() {
         )}
 
         {tab === 'test' && <TestPanel sources={src} />}
+        {tab === 'campaign' && <CampaignPanel />}
         {tab === 'log' && <LogPanel />}
         {tab === 'account' && <AccountPanel st={st} />}
         {tab === 'health' && <HealthPanel st={st} />}
