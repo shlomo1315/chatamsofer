@@ -23,13 +23,16 @@ describe('קישור Google Contacts', () => {
       'https://contacts.google.com/new?givenname=%D7%9E%D7%99%D7%99%D7%9C%20%D7%9E%D7%99%D7%95%D7%96%D7%99%D7%A7&email=music%40mailmusic.co.il',
     )
   })
-  it('התבנית כוללת את הקישור ואת גיבוי ה-vCard', () => {
+  it('המייל לא כולל את כפתור אנשי הקשר, והפוטר נשאר', () => {
     const html = buildCampaignHtml({
       mode: 'blocks', blocks: [], unsubscribeUrl: 'https://x/u',
       fromDepartment: 'mailing', fromEmail: 'a@b.co', fromName: 'שם',
     })
-    expect(html).toContain('contacts.google.com/new?givenname=')
-    expect(html).toContain('לחצו כאן להוסיף את הכתובת המייל שלנו לאנשי קשר שלכם')
-    expect(html).toContain('/api/newsletter-contact?d=mailing')
+    expect(html).not.toContain('contacts.google.com')
+    expect(html).not.toContain('לאנשי קשר שלכם')
+    expect(html).not.toContain('כרטיס איש קשר')
+    expect(html).not.toContain('/api/newsletter-contact')
+    expect(html).toContain('קיבלתם מייל זה כחלק מרשימת התפוצה של היכל החתם סופר')
+    expect(html).toContain('href="https://x/u"')
   })
 })
