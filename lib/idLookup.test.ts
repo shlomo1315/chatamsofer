@@ -72,6 +72,12 @@ describe('דרכון עם אותיות — זיהוי לפי הספרות בלב
     expect(passportDigitsMatch('556212027', '556212027')).toBe(true)
     expect(passportDigitsMatch(' 556-212027 ', '556212027')).toBe(true)
   })
+  it('אפסים מובילים לא משנים, משני הצדדים', () => {
+    expect(passportDigitsMatch('012345678', '12345678')).toBe(true)
+    expect(passportDigitsMatch('12345678', '012345678')).toBe(true)
+    expect(passportDigitsMatch('AB0012345', '12345')).toBe(true)
+    expect(passportDigitsMatch('00001234', '00001234')).toBe(false)
+  })
   it('פחות מ-5 ספרות אינו מזהה', () => {
     expect(passportDigitsMatch('ABC1234', '1234')).toBe(false)
   })
