@@ -31,8 +31,8 @@ describe('מחלקת סיוע — כתובות', () => {
     expect(normalizeDepartmentKey('medical')).toBe('aid')
     expect(normalizeDepartmentKey('loans')).toBe('loans')
   })
-  it('c@ למחלקה, ו-a@ ו-r@ נשארות כינויים', () => {
-    expect(AID_DEPT_EMAIL).toBe('c@chasamsofer.info')
+  it('h@ למחלקה, ו-a@ ו-r@ נשארות כינויים', () => {
+    expect(AID_DEPT_EMAIL).toBe('h@chasamsofer.info')
     expect(AID_ALIAS_EMAILS).toEqual(['a@chasamsofer.info', 'r@chasamsofer.info'])
     expect(mailFor('medical').fromEmail).toBe(AID_DEPT_EMAIL)
     expect(mailFor('widows').department).toBe('aid')

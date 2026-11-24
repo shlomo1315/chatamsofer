@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { CUSTOM_PREFIX } from './customMailboxes'
-import { DEPARTMENTS, type DepartmentKey } from './departments'
+import { DEPARTMENTS, HOLIDAYS_DEPT_EMAIL, type DepartmentKey } from './departments'
 import { escapeHtml } from './emailTemplates'
 import { richToHtml } from './richText'
 
@@ -607,6 +607,22 @@ export function defaultAutoReplyMap(): AutoReplyMap {
     weeklyCap: DEFAULT_WEEKLY_CAP,
   }
 
+  // ── עזר לחגים (c@) — בעונת הרישום רוב הפניות הן תקלות כניסה ורישום ──
+  map.holidays = {
+    ...map.holidays!,
+    enabled: true,
+    subject: 'פנייתכם התקבלה · עזר לחגים',
+    message:
+      'שלום וברכה!\n\n' +
+      'פנייתכם לאגף עזר לחגים של איגוד הצאצאים התקבלה, ותטופל בהקדם בימי פעילות האגף.\n\n' +
+      'שימו לב: עזר לחגים מיועד רק למי שקיבל הודעה על זכאותו, והרישום פתוח רק בימי הרישום שפורסמו.\n\n' +
+      'זהו מענה אוטומטי — אין צורך להשיב להודעה זו.',
+    buttons: [],
+    sections: [],
+    footnote: '',
+    weeklyCap: DEFAULT_WEEKLY_CAP,
+  }
+
   // ⚠️ igud היא תיבת הכניסה של איגוד הצאצאים. עד המעבר היא החזירה לפונה
   // מזוהה את פרטיו וקישורי הגשה חתומים; זה הוסר בכוונה — התיבה מפנה לאגף
   // הנכון, ואינה משמשת להגשת בקשות.
@@ -665,7 +681,7 @@ export function defaultAutoReplyMap(): AutoReplyMap {
               'מיועד רק לאלו שקיבלו הודעה על זכאותם.\n' +
               'הגשת בקשה פעילה בימי הרישום לפני החגים, בהתאם להודעה שנשלחה לזכאים.\n' +
               'לשאלות ובירורים — אך ורק בעת פעילות האגף בתקופת הרישום לחלוקת חגים:',
-        buttons: [{ label: 'שאלות ובירורים', url: 'mailto:CHAGIM@chasamsofer.info' }],
+        buttons: [{ label: 'שאלות ובירורים', url: `mailto:${HOLIDAYS_DEPT_EMAIL}` }],
       },
       {
         title: 'אגף עזר לשמחות — קייטרינג מסובסד לנכדי החת"ס',
