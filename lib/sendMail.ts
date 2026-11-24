@@ -3,7 +3,7 @@ import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 import { NOREPLY_FROM, BRAND_NAME, DEPARTMENTS, departmentByEmail } from './departments'
 import { storagePath } from './docUrl'
-import { cleanOutgoingHtml, stripInvisibleChars } from './emailSanitize'
+import { cleanOutgoingHtml, cleanSubject, emailPlainText } from './emailSanitize'
 
 export interface MailAttachment { filename: string; mimeType: string; contentB64: string }
 export interface MailOptions {
@@ -304,7 +304,7 @@ export async function deliverMail(
   // 🔴 ניקוי תווים בלתי נראים — לכל המסלולים (Gmail, ‏Resend והתיעוד ב"דואר יוצא").
   // ההסבר ב-lib/emailSanitize.ts.
   html = cleanOutgoingHtml(html)
-  subject = stripInvisibleChars(subject)
+  subject = cleanSubject(subject)
 
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) {
@@ -365,13 +365,7 @@ export async function deliverMail(
   }
 
   // גרסת טקסט רגיל (multipart) — משפרת מסירה ומקטינה סיכוי לספאם
-  const text = html
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div|tr|h[1-6])>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-    .replace(/\n{3,}/g, '\n\n').replace(/[ \t]{2,}/g, ' ').trim()
+  const text = emailPlainText(html)
 
   // כותרת הסרה מרשימת תפוצה. לדיוור המוני (ניוזלטר) מעבירים קישור One-Click —
   // דרישה של Gmail משולחים מסיביים; בלעדיה המיילים מסומנים כספאם.

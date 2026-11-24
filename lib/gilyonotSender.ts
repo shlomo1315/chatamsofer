@@ -6,7 +6,7 @@ import { isBlockedForMail } from './jewishCalendar'
 import { GILYONOT_FROM_EMAIL, GILYONOT_FROM_NAME } from './gilyonot'
 import { buildGilyonHtml, gilyonotUrls } from './gilyonotMail'
 import { sanitizeMailHtml } from './gilyonotRichHtml'
-import { cleanOutgoingHtml, stripInvisibleChars } from './emailSanitize'
+import { cleanOutgoingHtml, cleanSubject, emailPlainText } from './emailSanitize'
 import { advanceIssueCounter, heichalotMissingError } from './gilyonotHeichalot'
 import { loadLists, resolveRecipients, type Recipient } from './gilyonotLists'
 
@@ -68,14 +68,7 @@ export function resetGilyonotSenderForTest() { stopping = false; running = null 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 /** גרסת טקסט של המייל: מיילים בלי חלק טקסט נראים יותר כמו ספאם. קישורים נשמרים כ"טקסט: כתובת". */
 export function htmlToPlainText(html: string): string {
-  return html
-    .replace(/<head[\s\S]*?<\/head>/gi, '')
-    .replace(/<img[^>]*>/gi, '')
-    .replace(/<a\s[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, (_m, href: string, label: string) => `${label.replace(/<[^>]+>/g, '').trim()}: ${href}`)
-    .replace(/<br\s*\/?>|<\/(p|h1|h2|h3|li|tr|div)>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
-    .replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
+  return emailPlainText(html)
 }
 
 const from = () => `${GILYONOT_FROM_NAME} <${GILYONOT_FROM_EMAIL}>`
@@ -192,7 +185,7 @@ export async function sendGilyonTest(db: SupabaseClient, issue: IssueRow, to: st
     title: issue.title, parasha: issue.parasha, intro: issue.intro, bodyHtml: cleanBody(issue.body_html), design: issue.design,
     unsubscribeUrl: await testUnsubscribeUrl(db, to), senderEmail: GILYONOT_FROM_EMAIL, senderName: GILYONOT_FROM_NAME,
   }))
-  const { error } = await new Resend(apiKey).emails.send({ from: from(), to, subject: `[ניסיון] ${stripInvisibleChars(issue.subject)}`, html, text: htmlToPlainText(html), replyTo: GILYONOT_FROM_EMAIL, attachments: file.atts })
+  const { error } = await new Resend(apiKey).emails.send({ from: from(), to, subject: `[ניסיון] ${cleanSubject(issue.subject)}`, html, text: htmlToPlainText(html), replyTo: GILYONOT_FROM_EMAIL, attachments: file.atts })
   if (error) return { ok: false, error: String(error.message ?? error) }
   return { ok: true }
 }
@@ -358,7 +351,7 @@ async function sendBatches(db: SupabaseClient, resend: Resend, issue: IssueRow):
       const unsubscribeUrl = mail.unsubscribeUrl
       try {
         const { data: res, error } = await resend.emails.send({
-          from: from(), to: d.email, subject: stripInvisibleChars(issue.subject), html, text: htmlToPlainText(html), replyTo: GILYONOT_FROM_EMAIL, attachments: atts,
+          from: from(), to: d.email, subject: cleanSubject(issue.subject), html, text: htmlToPlainText(html), replyTo: GILYONOT_FROM_EMAIL, attachments: atts,
           headers: unsubscribeUrl
             ? { 'List-Unsubscribe': `<${unsubscribeUrl}>, <mailto:${GILYONOT_FROM_EMAIL}?subject=unsubscribe>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' }
             : undefined,

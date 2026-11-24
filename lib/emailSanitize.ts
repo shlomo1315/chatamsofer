@@ -40,3 +40,55 @@ export function preheaderHtml(safeText: string): string {
   if (!t) return ''
   return `<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">${t}</div>`
 }
+
+/**
+ * נושא מייל יוצא: בלי תווים בלתי נראים, וסימני קריאה/שאלה כפולים מצומצמים לאחד.
+ * "!!!" בנושא הוא אחד הסימנים הוותיקים ביותר שמסנני ספאם בודקים.
+ */
+export function cleanSubject(s: string): string {
+  return stripInvisibleChars(s).replace(/([!?])\1+/g, '$1').replace(/\s{2,}/g, ' ').trim()
+}
+
+/**
+ * גרסת טקסט רגיל של המייל (חלק text/plain לצד ה-HTML).
+ * מייל עם HTML בלבד נראה יותר כמו ספאם. קישורים נשמרים כ"טקסט: כתובת".
+ */
+export function emailPlainText(html: string): string {
+  return cleanOutgoingHtml(html)
+    .replace(/<head[\s\S]*?<\/head>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<div style="display:none[^"]*">[\s\S]*?<\/div>/gi, '')
+    .replace(/<img[^>]*>/gi, '')
+    .replace(/<a\s[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, (_m, href: string, label: string) => {
+      const l = label.replace(/<[^>]+>/g, '').trim()
+      return l && l !== href ? `${l}: ${href}` : href
+    })
+    .replace(/<br\s*\/?>|<\/(p|h1|h2|h3|li|tr|div)>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+    .replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim()
+}
+
+// Gmail חותך מייל שה-HTML שלו מעל ~102KB ("[ההודעה נחתכה]"), ומייל ענק נחשד יותר
+export const MAX_HTML_BYTES = 100 * 1024
+
+/**
+ * בדיקת מייל יוצא מול כללי הספאם שאפשר לאכוף בקוד. מחזירה רשימת בעיות (ריקה = תקין).
+ * משמשת את lib/emailOutbound.test.ts, שמריץ את כל בוני המיילים של המערכת.
+ */
+export function auditOutgoingMail(html: string, subject = ''): string[] {
+  const problems: string[] = []
+  const invisible = new RegExp(`[${String.fromCharCode(...INVISIBLE_CODES)}]`)
+  if (invisible.test(html) || /&#(?:8203|x200b);|&ZeroWidthSpace;/i.test(html)) problems.push('תווים בלתי נראים בגוף')
+  if (invisible.test(subject)) problems.push('תווים בלתי נראים בנושא')
+  if (/([!?])\1/.test(subject)) problems.push('סימני קריאה/שאלה כפולים בנושא')
+  if (/font-size:\s*[01]px/i.test(html.replace(/font-size:0;line-height:0;">&nbsp;/g, ''))) problems.push('טקסט בגופן 0-1px')
+  if (Buffer.byteLength(html, 'utf8') > MAX_HTML_BYTES) problems.push('HTML גדול מ-100KB')
+  const text = emailPlainText(html)
+  if (text.length < 20) problems.push('אין כמעט טקסט (מייל של תמונה בלבד)')
+  // כותרת שעוטפת את רוב התוכן: סכום הטקסט בתגיות h1-h6 מעל חצי מטקסט המייל
+  const headingText = [...html.matchAll(/<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/gi)]
+    .map(m => emailPlainText(m[1])).join('').length
+  if (text.length > 200 && headingText > text.length / 2) problems.push('תגית כותרת עוטפת את רוב התוכן')
+  return problems
+}

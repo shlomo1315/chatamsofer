@@ -1,6 +1,6 @@
 import { google } from 'googleapis'
 import { createClient } from '@supabase/supabase-js'
-import { cleanOutgoingHtml, stripInvisibleChars } from './emailSanitize'
+import { cleanOutgoingHtml, cleanSubject, emailPlainText } from './emailSanitize'
 
 function getAdminDb() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -76,21 +76,34 @@ export async function sendGmailMessage(gmail: any, opts: {
   const from = opts.from || process.env.GMAIL_EMAIL || 'office@chasamsofer.info'
   const fromName = opts.fromName || 'היכל החתם סופר משרד ראשי'
   // ניקוי תווים בלתי נראים (lib/emailSanitize.ts) — גם לתשובות מתיבת הדואר
-  const bodyB64 = Buffer.from(cleanOutgoingHtml(opts.html ?? ''), 'utf8').toString('base64')
+  const html = cleanOutgoingHtml(opts.html ?? '')
+  const bodyB64 = Buffer.from(html, 'utf8').toString('base64')
+  // multipart/alternative: גרסת טקסט לצד ה-HTML. מייל עם HTML בלבד נחשד יותר כספאם.
+  const textB64 = Buffer.from(emailPlainText(html), 'utf8').toString('base64')
+  const boundary = `----=_Alt_${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`
   const raw = [
     `From: ${_encodeHeader(fromName)} <${from}>`,
     `To: ${opts.to}`,
     ...(opts.cc ? [`Cc: ${opts.cc}`] : []),
     ...(opts.bcc ? [`Bcc: ${opts.bcc}`] : []),
     ...(opts.replyTo ? [`Reply-To: ${opts.replyTo}`] : []),
-    `Subject: ${_encodeHeader(stripInvisibleChars(opts.subject))}`,
+    `Subject: ${_encodeHeader(cleanSubject(opts.subject))}`,
     ...(opts.inReplyTo ? [`In-Reply-To: ${opts.inReplyTo}`] : []),
     ...(opts.references ? [`References: ${opts.references}`] : []),
     'MIME-Version: 1.0',
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    '',
+    `--${boundary}`,
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    textB64,
+    `--${boundary}`,
     'Content-Type: text/html; charset=UTF-8',
     'Content-Transfer-Encoding: base64',
     '',
     bodyB64,
+    `--${boundary}--`,
   ].join('\r\n')
   const encoded = Buffer.from(raw).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
   await gmail.users.messages.send({

@@ -5,7 +5,7 @@ import { applyMerge } from './merge'
 import { buildCampaignHtml, type Block } from './blocks'
 import { unsubscribeUrl } from '../unsubscribe'
 import { addTracking } from './tracking'
-import { cleanOutgoingHtml, stripInvisibleChars } from '../emailSanitize'
+import { cleanOutgoingHtml, cleanSubject, emailPlainText } from '../emailSanitize'
 import { isBlockedForMail } from '../jewishCalendar'
 import type { SegmentDef as SegmentDefType } from './segments'
 
@@ -237,14 +237,17 @@ async function sendCampaignBatches(
         fromName: dept.fromName,
       })
 
+      // פיקסל וקישורים עטופים משלנו (אחרי המיזוג, כדי שגם קישורים אישיים ייעטפו).
+      // הניקוי אחרון, כדי שיתפוס גם תווים שהגיעו מנתוני המיזוג.
+      const mailHtml = cleanOutgoingHtml(addTracking(applyMerge(html, data, true), r.id, [unsubUrl]))
       return {
         from: `${dept.fromName} <${dept.fromEmail}>`,
         to: r.email,
         // בנושא לא מנטרלים HTML — זה טקסט רגיל
-        subject: stripInvisibleChars(applyMerge(campaign.subject, data, false)),
-        // פיקסל וקישורים עטופים משלנו (אחרי המיזוג, כדי שגם קישורים אישיים ייעטפו).
-        // הניקוי אחרון, כדי שיתפוס גם תווים שהגיעו מנתוני המיזוג.
-        html: cleanOutgoingHtml(addTracking(applyMerge(html, data, true), r.id, [unsubUrl])),
+        subject: cleanSubject(applyMerge(campaign.subject, data, false)),
+        html: mailHtml,
+        // גרסת טקסט רגיל: מייל דיוור עם HTML בלבד נחשד יותר כספאם
+        text: emailPlainText(mailHtml),
         // plus-addressing עם 8 התווים הראשונים של מזהה הקמפיין —
         // כך תגובה חוזרת מזוהה ומקושרת לקמפיין. (כתובת קצרה; מזהה מלא
         // היה חורג מהאורך ש-Resend מקבל.)

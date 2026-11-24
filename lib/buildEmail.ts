@@ -1,4 +1,4 @@
-import { cleanOutgoingHtml, stripInvisibleChars } from './emailSanitize'
+import { cleanOutgoingHtml, cleanSubject } from './emailSanitize'
 
 // Builds a properly-formatted multipart/alternative RFC 2822 email message
 // ready for base64url-encoding and sending via the Gmail API.
@@ -87,7 +87,7 @@ function randomId(): string {
 export function buildRawEmail(opts: BuildOptions): string {
   const { from, fromName, to, replyTo, inReplyTo, trackingToken, attachments } = opts
   // ניקוי תווים בלתי נראים (lib/emailSanitize.ts)
-  const subject = stripInvisibleChars(opts.subject)
+  const subject = cleanSubject(opts.subject)
   const html = cleanOutgoingHtml(opts.html)
   // בסיס הכתובת לפיקסל המעקב — נגזר מ-env (סביבה). אם לא מוגדר — לא מזריקים פיקסל שבור.
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '')

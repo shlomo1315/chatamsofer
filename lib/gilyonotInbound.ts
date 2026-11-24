@@ -5,7 +5,7 @@ import { shouldSkipAutoReply, isAutoSubmittedMail } from '@/lib/maintenanceReply
 import { GILYONOT_FROM_EMAIL, GILYONOT_FROM_NAME, normalizeEmail, cleanSubscriberName, subscribeGilyonot } from '@/lib/gilyonot'
 import { gilyonotUrls, escHtml } from '@/lib/gilyonotMail'
 import { htmlToPlainText } from '@/lib/gilyonotSender'
-import { cleanOutgoingHtml, stripInvisibleChars } from '@/lib/emailSanitize'
+import { cleanOutgoingHtml, cleanSubject } from '@/lib/emailSanitize'
 import { textOf, type EmailTexts } from '@/lib/emailCatalog'
 import { ensureEmailTexts, textFor } from '@/lib/emailTextsStore'
 
@@ -164,7 +164,7 @@ export const sendReplyViaResend: SendReply = async (to, mail, unsubscribeUrl) =>
   const html = cleanOutgoingHtml(mail.html)
   const { error } = await new Resend(apiKey).emails.send({
     from: `${GILYONOT_FROM_NAME} <${GILYONOT_FROM_EMAIL}>`,
-    to, subject: stripInvisibleChars(mail.subject), html, text: htmlToPlainText(html),
+    to, subject: cleanSubject(mail.subject), html, text: htmlToPlainText(html),
     // ⚠️ תשובה לא חוזרת ל-d@ (שאינה נקראת), אלא למשרד הראשי
     replyTo: GILYONOT_CONTACTS[0].email,
     headers: {
