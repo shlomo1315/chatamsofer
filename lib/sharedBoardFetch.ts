@@ -19,11 +19,15 @@ type FetchFn = (input: string, init?: RequestInit) => Promise<Response>
 
 const MSG_TIMEOUT = 'השרת לא ענה בזמן. ייתכן שהחיבור איטי או שהסינון עיכב את הבקשה. נסה שוב.'
 const MSG_NETWORK = 'אין חיבור לשרת. בדוק את החיבור לאינטרנט ונסה שוב.'
-const MSG_BAD_BODY = 'התקבלה תשובה לא תקינה מהשרת. ייתכן שהסינון חסם את הבקשה. נסה שוב.'
-
 function isTimeout(e: unknown): boolean {
   const name = (e as { name?: string } | null)?.name
   return name === 'TimeoutError' || name === 'AbortError'
+}
+
+/** תחילת הגוף בשורה אחת — מוצגת על המסך כדי שנדע מיד מה חזר במקום JSON. */
+function snippet(text: string): string {
+  const t = text.replace(/\s+/g, ' ').trim().slice(0, 120)
+  return t || '(גוף ריק)'
 }
 
 async function readJson(res: Response): Promise<Record<string, unknown> | null> {
@@ -33,21 +37,44 @@ async function readJson(res: Response): Promise<Record<string, unknown> | null> 
   } catch { return null }
 }
 
-export async function fetchSharedBoard(fetchFn: FetchFn = fetch, timeoutMs = SHARED_FETCH_TIMEOUT_MS): Promise<BoardResult> {
+/**
+ * הנרשמים שהדף צריך: החלוקה של מסך הבית (החיה, ואם אין — העדכנית ביותר),
+ * ובנוסף חלוקה קודמת שנבחרה לצפייה.
+ * 🔴 24.11.2026: קודם נשלחו כל הנרשמים מכל החלוקות שהיו אי פעם, עם כל פרטי
+ * המשפחה, בכל רענון (כל 10 שניות). דרך הסינון ההורדה לא הסתיימה בזמן, והדף
+ * הציג "התקבלה תשובה לא תקינה מהשרת".
+ */
+export function boardRecipientDistIds(
+  distsNewestFirst: { id: string }[], liveId: string | null, requested: string | null,
+): string[] {
+  const home = liveId ?? distsNewestFirst[0]?.id ?? null
+  const ids = home ? [home] : []
+  if (requested && requested !== home && distsNewestFirst.some(d => d.id === requested)) ids.push(requested)
+  return ids
+}
+
+export async function fetchSharedBoard(fetchFn: FetchFn = fetch, timeoutMs = SHARED_FETCH_TIMEOUT_MS, distId: string | null = null): Promise<BoardResult> {
+  const url = distId ? `/api/shared/distributions?dist=${encodeURIComponent(distId)}` : '/api/shared/distributions'
   let res: Response
   try {
-    res = await fetchFn('/api/shared/distributions', { cache: 'no-store', signal: AbortSignal.timeout(timeoutMs) })
+    res = await fetchFn(url, { cache: 'no-store', signal: AbortSignal.timeout(timeoutMs) })
   } catch (e) {
     return { kind: 'error', message: isTimeout(e) ? MSG_TIMEOUT : MSG_NETWORK }
   }
   if (res.status === 401) return { kind: 'locked' }
-  if (!res.ok) return { kind: 'error', message: `השרת החזיר שגיאה (${res.status}). נסה שוב בעוד רגע.` }
+  // ⚠️ הגוף נקרא כטקסט ורק אז מפוענח: מגבלת הזמן חלה גם על ההורדה, וקטיעה
+  // באמצע היא "לא ענה בזמן" — לא "תשובה לא תקינה" (כך הוצג קודם בטעות).
+  let text: string
   try {
-    const data = await readJson(res)
-    return data ? { kind: 'ok', data } : { kind: 'error', message: MSG_BAD_BODY }
+    text = await res.text()
   } catch (e) {
-    return { kind: 'error', message: isTimeout(e) ? MSG_TIMEOUT : MSG_BAD_BODY }
+    return { kind: 'error', message: isTimeout(e) ? MSG_TIMEOUT : MSG_NETWORK }
   }
+  if (!res.ok) return { kind: 'error', message: `השרת החזיר שגיאה (${res.status}). נסה שוב בעוד רגע. [${snippet(text)}]` }
+  let data: unknown = null
+  try { data = JSON.parse(text) } catch { /* מטופל למטה */ }
+  if (data && typeof data === 'object') return { kind: 'ok', data: data as Record<string, unknown> }
+  return { kind: 'error', message: `התקבלה תשובה לא תקינה מהשרת (קוד ${res.status}). ייתכן שהסינון חסם את הבקשה. נסה שוב. [${snippet(text)}]` }
 }
 
 export async function postSharedPassword(password: string, fetchFn: FetchFn = fetch, timeoutMs = SHARED_FETCH_TIMEOUT_MS): Promise<AuthResult> {
