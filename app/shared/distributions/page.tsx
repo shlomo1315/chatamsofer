@@ -2,12 +2,15 @@
 import { useState, useEffect, useCallback, useMemo, type CSSProperties, type ReactNode } from 'react'
 import SharedRecipientsTable from './panels/SharedRecipientsTable'
 import MoneyBoard, { Countdown } from './panels/MoneyBoard'
+import FilterBar from './panels/FilterBar'
+import TimeCharts from './panels/TimeCharts'
 import { Lock, LogIn, Loader2, Users, Search, MapPin, Baby, GitBranch } from 'lucide-react'
 import s from './board.module.css'
 import {
   registrationSeries, areaPaths, dayAxis, channelShares, conicOf, topCounts, kidsBuckets, pctOf,
   maternityFunnel, inPeriod, byRecoveryHome, paidByMonth, generationCounts, fanRings,
-  type Bar, type Channel,
+  EMPTY_FILTER, filterMoneyRows, toggleIn,
+  type Bar, type Channel, type MoneyFilter,
 } from '@/lib/sharedBoard'
 import LineageTreeSvg from '@/app/lineage-review/[token]/LineageTreeSvg'
 import { BRAND } from './brand'
@@ -798,12 +801,21 @@ function AreaChart({ values }: { values: number[] }) {
   )
 }
 
-function HBars({ bars, fmt = num }: { bars: Bar[]; fmt?: (v: number) => string }) {
+// לחיצה על פריט בגרף מסננת את הדף. בלי onPick הגרף לקריאה בלבד.
+type Pick = { onPick?: (key: string) => void; picked?: string[] }
+const pickProps = (key: string, { onPick, picked }: Pick) => onPick ? {
+  role: 'button', tabIndex: 0, 'aria-pressed': !!picked?.includes(key),
+  onClick: () => onPick(key),
+  onKeyDown: (e: { key: string }) => { if (e.key === 'Enter' || e.key === ' ') onPick(key) },
+  style: { cursor: 'pointer', opacity: picked?.length && !picked.includes(key) ? 0.45 : 1 },
+} : {}
+
+function HBars({ bars, fmt = num, ...pick }: { bars: Bar[]; fmt?: (v: number) => string } & Pick) {
   const max = Math.max(0, ...bars.map(b => b.value))
   return (
     <div>
       {bars.map(b => (
-        <div key={b.label} className={s.hb}>
+        <div key={b.label} className={s.hb} {...pickProps(b.label, pick)}>
           <span className={s.l} title={b.label}>{b.label}</span>
           <span className={s.t}><i style={cssVars({ '--w': `${pctOf(b.value, max)}%` })} /></span>
           <b>{fmt(b.value)}</b>
@@ -813,26 +825,26 @@ function HBars({ bars, fmt = num }: { bars: Bar[]; fmt?: (v: number) => string }
   )
 }
 
-function Cols({ bars, fmt = num, height, lastBar }: { bars: Bar[]; fmt?: (v: number) => string; height?: number; lastBar?: string }) {
+function Cols({ bars, fmt = num, height, lastBar, ...pick }: { bars: Bar[]; fmt?: (v: number) => string; height?: number; lastBar?: string } & Pick) {
   const max = Math.max(0, ...bars.map(b => b.value))
   return (
     <div className={s.cols} style={height ? { height } : undefined}>
       {bars.map((b, i) => (
-        <div key={`${b.label}-${i}`} className={s.c}>
+        <div key={`${b.label}-${i}`} className={s.c} {...pickProps(b.label, pick)}>
           <b>{fmt(b.value)}</b>
           <i style={cssVars({ '--h': `${pctOf(b.value, max)}%`, ...(lastBar && i === bars.length - 1 ? { '--bar': lastBar } : {}) })} />
-          <span>{b.label}</span>
+          <span><bdi>{b.label}</bdi></span>
         </div>
       ))}
     </div>
   )
 }
 
-function Legend({ parts, wide }: { parts: Channel[]; wide?: boolean }) {
+function Legend({ parts, wide, ...pick }: { parts: Channel[]; wide?: boolean } & Pick) {
   return (
     <div className={s.leg} style={wide ? { width: '100%' } : undefined}>
       {parts.map(p => (
-        <div key={p.key}>
+        <div key={p.key} {...pickProps(p.key, pick)}>
           <i style={{ background: p.color }} />
           <span>{p.label}</span>
           <b>{Math.round(p.pct)}%</b>
@@ -1013,23 +1025,30 @@ export default function SharedDistributionsPage() {
   const homeDist = live ?? distributions[0] ?? null
   const homeRows = useMemo(() => (homeDist ? byDist.get(homeDist.id) ?? [] : []), [homeDist, byDist])
 
+  // סינון מתקדם: חל על כל דף החלוקה (מספרים, גרפים, טבלה ופילוחים), ומתאפס במעבר חלוקה
+  const [fState, setFState] = useState<{ id?: string; f: MoneyFilter }>({ f: EMPTY_FILTER })
+  const selId = selected?.id
+  const filter = fState.id === selId ? fState.f : EMPTY_FILTER
+  const setFilter = useCallback((f: MoneyFilter) => setFState({ id: selId, f }), [selId])
+  const fRows = useMemo(() => filterMoneyRows(selRows, filter, selected?.amount_per_family), [selRows, filter, selected?.amount_per_family])
+
   const hol = useMemo(() => {
-    const approved = selRows.filter(r => r.approval_status === 'approved').length
-    const rejected = selRows.filter(r => r.approval_status === 'rejected').length
-    const series = registrationSeries(selRows)
-    const recent = [...selRows]
+    const approved = fRows.filter(r => r.approval_status === 'approved').length
+    const rejected = fRows.filter(r => r.approval_status === 'rejected').length
+    const series = registrationSeries(fRows)
+    const recent = [...fRows]
       .sort((a, b) => String(b.registered_at ?? '').localeCompare(String(a.registered_at ?? '')))
       .slice(0, 8)
     return {
       approved,
-      pending: selRows.length - approved - rejected,
+      pending: fRows.length - approved - rejected,
       series,
-      channels: channelShares(selRows),
-      cities: topCounts(selRows, r => r.beneficiary?.city, 6),
-      kids: kidsBuckets(selRows.map(r => r.beneficiary ?? {})),
+      channels: channelShares(fRows),
+      cities: topCounts(fRows, r => r.beneficiary?.city, 6),
+      kids: kidsBuckets(fRows.map(r => r.beneficiary ?? {})),
       recent,
     }
-  }, [selRows])
+  }, [fRows])
 
   const home = useMemo(() => ({
     approved: homeRows.filter(r => r.approval_status === 'approved').length,
@@ -1081,7 +1100,8 @@ export default function SharedDistributionsPage() {
       <div className={s.app}>
         <aside className={s.side}>
           <div className={s.brand}>
-            <span className={s.mono}>ח״ס</span>
+            {/* eslint-disable-next-line @next/next/no-img-element -- לוגו סטטי קטן, בלי צורך באופטימיזציה */}
+            <img src="/logo.png" alt="לוגו איגוד הצאצאים של רבינו החתם סופר" className={s.logo} width={52} height={44} />
             <div><b>איגוד הצאצאים</b><span>היכל החתם סופר</span></div>
           </div>
           {!holidaysOnly && (
@@ -1208,34 +1228,34 @@ export default function SharedDistributionsPage() {
                 <div className={s.empty}><b>אין חלוקות להצגה</b>כשתיפתח חלוקה, הנתונים שלה יופיעו כאן.</div>
               ) : (
                 <>
+                  {view === 'live' && <Countdown closesAt={closesAt} />}
                   <Tabs page="holidays" tab={tab} items={[
                     { key: '', label: 'סקירה' },
-                    { key: 'recipients', label: 'הנרשמים', count: selRows.length },
+                    { key: 'recipients', label: 'הנרשמים', count: fRows.length },
                     { key: 'breakdown', label: 'פילוחים' },
                   ]} />
+                  <FilterBar rows={selRows} shown={fRows.length} filter={filter} setFilter={setFilter} perFamily={selected.amount_per_family} />
 
                   {tab === 'recipients' && (
                     <Panel title={`הנרשמים ל${distLabel(selected)}`} flush>
-                      <div className={s.embed}><SharedRecipientsTable rows={selRows} /></div>
+                      <div className={s.embed}><SharedRecipientsTable rows={fRows} /></div>
                     </Panel>
                   )}
 
-                  {tab === 'breakdown' && <BreakdownPanels recipients={selRows} />}
+                  {tab === 'breakdown' && <BreakdownPanels recipients={fRows} />}
 
                   {tab !== 'recipients' && tab !== 'breakdown' && (
                     <>
-                      {view === 'live' && <Countdown closesAt={closesAt} />}
-                      {selected && <MoneyBoard rows={selRows} perFamily={selected.amount_per_family} />}
                       <div className={`${s.g} ${s.k2} ${s.mb}`}>
                         <div className={`${s.kpi} ${s.s3}`}>
                           <span className={s.lb}>נרשמו</span>
-                          <b>{num(selRows.length)}</b>
+                          <b>{num(fRows.length)}</b>
                           <span className={s.ft}>ב-<strong>{num(hol.series.daily.length)}</strong> ימי רישום</span>
                         </div>
                         <div className={`${s.kpi} ${s.s3}`}>
                           <span className={s.lb}>אושרו</span>
                           <b>{num(hol.approved)}</b>
-                          <span className={s.ft}><strong>{selRows.length ? Math.round((hol.approved / selRows.length) * 100) : 0}%</strong> מהנרשמים</span>
+                          <span className={s.ft}><strong>{fRows.length ? Math.round((hol.approved / fRows.length) * 100) : 0}%</strong> מהנרשמים</span>
                         </div>
                         <div className={`${s.kpi} ${s.s3}`}>
                           <span className={s.lb}>ממתינים לאישור</span>
@@ -1249,35 +1269,27 @@ export default function SharedDistributionsPage() {
                         </div>
                       </div>
 
+                      {fRows.length
+                        ? <TimeCharts rows={fRows} filter={filter} setFilter={setFilter} />
+                        : <div className={`${s.empty} ${s.mb}`}><b>{selRows.length ? 'אין נרשמים שמתאימים לסינון' : 'אין עדיין רישומים'}</b></div>}
+                      <MoneyBoard rows={fRows} perFamily={selected.amount_per_family} picked={filter.communities}
+                        onPick={c => setFilter({ ...filter, communities: toggleIn(filter.communities, c) })} />
+
                       <div className={s.g}>
-                        <Panel className={s.s8} title="קצב הרישום" hint="מצטבר · ומתחת לפי יום">
-                          {hol.series.cumulative.length ? (() => {
-                            const days = hol.series.daily.slice(-40)
-                            const max = Math.max(0, ...days)
-                            const cum = hol.series.cumulative
-                            return (
-                              <>
-                                <AreaChart values={cum} />
-                                <div className={s.dly}>{days.map((d, i) => <i key={i} title={num(d)} style={cssVars({ '--h': `${Math.max(4, pctOf(d, max))}%` })} />)}</div>
-                                <div className={s.axis}>
-                                  <span>יום 1 · {num(cum[0])}</span>
-                                  <span>יום {cum.length} · {num(cum[cum.length - 1])}</span>
-                                </div>
-                              </>
-                            )
-                          })() : <div className={s.empty}><b>אין עדיין רישומים</b></div>}
-                        </Panel>
-                        <Panel className={s.s4} title="ערוץ רישום">
+                        <Panel className={s.s4} title="ערוץ רישום" hint="לחיצה מסננת">
                           <div className={s.dg}>
                             <div className={s.donut} style={{ background: conicOf(hol.channels) }} />
-                            <Legend parts={hol.channels} wide />
+                            <Legend parts={hol.channels.filter(c => c.count > 0)} wide picked={filter.channel ? [filter.channel] : []}
+                              onPick={k => setFilter({ ...filter, channel: filter.channel === k ? '' : k })} />
                           </div>
                         </Panel>
-                        <Panel className={s.s6} title="לפי עיר" hint={`${hol.cities.length} מובילות`}>
-                          {hol.cities.length ? <HBars bars={hol.cities} /> : <div className={s.empty}>אין נתוני ערים</div>}
+                        <Panel className={s.s4} title="לפי עיר" hint={`${hol.cities.length} מובילות`}>
+                          {hol.cities.length
+                            ? <HBars bars={hol.cities} picked={filter.cities} onPick={c => setFilter({ ...filter, cities: toggleIn(filter.cities, c) })} />
+                            : <div className={s.empty}>אין נתוני ערים</div>}
                         </Panel>
-                        <Panel className={s.s6} title="לפי מספר ילדים">
-                          <Cols bars={hol.kids} height={170} />
+                        <Panel className={s.s4} title="לפי מספר ילדים">
+                          <Cols bars={hol.kids} height={170} picked={filter.kids} onPick={k => setFilter({ ...filter, kids: toggleIn(filter.kids, k) })} />
                         </Panel>
                         <Panel className={s.s12} title="נרשמו לאחרונה" link={{ href: '#holidays/recipients', label: 'לכל הנרשמים ←' }} flush>
                           <div className={`${s.tbl} ${s.tscroll}`}>

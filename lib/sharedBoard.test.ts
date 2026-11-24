@@ -3,7 +3,57 @@ import {
   registrationSeries, areaPaths, dayAxis, channelShares, conicOf, topCounts, kidsBuckets,
   maternityFunnel, inPeriod, byRecoveryHome, paidByMonth, generationCounts, fanRings,
   familyAmount, filterMoneyRows, moneySummary, moneyByCommunity, countdownParts, EMPTY_FILTER, NO_COMMUNITY,
+  hourCounts, weekdayHourMatrix, hourlySeries, kidsBucketOf, isFiltered, toggleIn,
 } from './sharedBoard'
+
+describe('סינון מורחב ושעות', () => {
+  // 2026-11-22 הוא יום ראשון. התאריכים בשעון מקומי, כמו בדפדפן.
+  const at = (d: number, h: number, m = 0) => new Date(2026, 10, d, h, m).toISOString()
+  const rows = [
+    { registered_at: at(22, 9), beneficiary: { city: 'ירושלים', children_count: 2 } },
+    { registered_at: at(22, 9, 40), beneficiary: { city: 'בני ברק', children_count: 7 } },
+    { registered_at: at(23, 21), beneficiary: { city: 'ירושלים', children_count: 10 } },
+    { registered_at: null, beneficiary: { city: ' ירושלים ', children_count: null } },
+  ]
+  it('ספירה לפי שעה ביממה', () => {
+    const h = hourCounts(rows)
+    expect(h).toHaveLength(24)
+    expect(h[9]).toBe(2)
+    expect(h[21]).toBe(1)
+    expect(h.reduce((a, b) => a + b, 0)).toBe(3)
+  })
+  it('מפת חום של יום בשבוע מול שעה', () => {
+    const m = weekdayHourMatrix(rows)
+    expect(m).toHaveLength(7)
+    expect(m[0][9]).toBe(2)
+    expect(m[1][21]).toBe(1)
+  })
+  it('סדרה לפי שעה ממלאת שעות ריקות ומצטברת', () => {
+    const s = hourlySeries(rows)
+    expect(s.daily).toHaveLength(37) // 09:00 ביום ראשון עד 21:00 ביום שני
+    expect(s.daily[0]).toBe(2)
+    expect(s.cumulative[s.cumulative.length - 1]).toBe(3)
+    const cut = hourlySeries(rows, 5)
+    expect(cut.daily).toHaveLength(5)
+    expect(cut.cumulative).toEqual([2, 2, 2, 2, 3]) // מה שלפני החלון נספר במצטבר
+  })
+  it('דלי ילדים', () => {
+    expect([kidsBucketOf(0), kidsBucketOf(4), kidsBucketOf(8), kidsBucketOf(12), kidsBucketOf(null)]).toEqual(['0–2', '3–5', '6–8', '9+', null])
+  })
+  it('סינון לפי עיר, ילדים, שעות וימים', () => {
+    expect(filterMoneyRows(rows, { ...EMPTY_FILTER, cities: ['ירושלים'] })).toEqual([rows[0], rows[2], rows[3]])
+    expect(filterMoneyRows(rows, { ...EMPTY_FILTER, kids: ['6–8', '9+'] })).toEqual([rows[1], rows[2]])
+    expect(filterMoneyRows(rows, { ...EMPTY_FILTER, hours: [9] })).toEqual([rows[0], rows[1]])
+    expect(filterMoneyRows(rows, { ...EMPTY_FILTER, weekdays: [1] })).toEqual([rows[2]])
+    expect(filterMoneyRows(rows, { ...EMPTY_FILTER, weekdays: [0], kids: ['0–2'] })).toEqual([rows[0]])
+  })
+  it('סינון פעיל והחלפת ערך ברשימה', () => {
+    expect(isFiltered(EMPTY_FILTER)).toBe(false)
+    expect(isFiltered({ ...EMPTY_FILTER, hours: [3] })).toBe(true)
+    expect(toggleIn([1, 2], 2)).toEqual([1])
+    expect(toggleIn([1], 2)).toEqual([1, 2])
+  })
+})
 
 describe('מחוני כסף וקהילות', () => {
   const rows = [
