@@ -4,6 +4,7 @@ import { mailFor, type DepartmentKey } from '../departments'
 import { applyMerge } from './merge'
 import { buildCampaignHtml, type Block } from './blocks'
 import { unsubscribeUrl } from '../unsubscribe'
+import { addTracking } from './tracking'
 import { isBlockedForMail } from '../jewishCalendar'
 import type { SegmentDef as SegmentDefType } from './segments'
 
@@ -216,14 +217,14 @@ async function sendCampaignBatches(
         to: r.email,
         // בנושא לא מנטרלים HTML — זה טקסט רגיל
         subject: applyMerge(campaign.subject, data, false),
-        html: applyMerge(html, data, true),
+        // פיקסל וקישורים עטופים משלנו (אחרי המיזוג, כדי שגם קישורים אישיים ייעטפו)
+        html: addTracking(applyMerge(html, data, true), r.id, [unsubUrl]),
         // plus-addressing עם 8 התווים הראשונים של מזהה הקמפיין —
         // כך תגובה חוזרת מזוהה ומקושרת לקמפיין. (כתובת קצרה; מזהה מלא
         // היה חורג מהאורך ש-Resend מקבל.)
         replyTo: `office+c${campaign.id.replace(/-/g, '').slice(0, 8)}@${REPLY_DOMAIN}`,
-        // מעקב פתיחות וקליקים — בלי זה Resend לא מזריק פיקסל ולא עוטף
-        // קישורים, ולכן לא נשלחים אירועי opened/clicked ל-webhook.
-        tracking: { open: true, click: true },
+        // המעקב אצלנו (lib/newsletter/tracking.ts), לכן כבוי ב-Resend כדי שלא ייספר פעמיים
+        tracking: { open: false, click: false },
         headers: {
           'List-Unsubscribe': `<${unsubUrl}>`,
           'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
@@ -249,6 +250,10 @@ async function sendCampaignBatches(
           attempts: r.attempts + 1,
         }).eq('id', r.id),
       ))
+      // סימון שהמעקב אצלנו, כדי שה-webhook לא יספור פתיחות וקליקים של Resend.
+      // בנפרד ובלי לעצור, כי לפני המיגרציה העמודה לא קיימת.
+      await db.from('campaign_recipients').update({ own_tracking: true })
+        .in('id', recipients.map(r => r.id)).then(() => {}, () => {})
 
       sent += recipients.length
       await db.rpc('bump_campaign_sent', { p_campaign: campaign.id, p_delta: recipients.length })
