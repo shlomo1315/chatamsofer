@@ -11,6 +11,9 @@ import DateTimePicker from '@/components/newsletter/DateTimePicker'
 import type { SegmentDef } from '@/lib/newsletter/segments'
 import type { Block } from '@/lib/newsletter/blocks'
 import { DEPARTMENTS } from '@/lib/departments'
+import { fetchJson } from '@/lib/newsletter/fetchJson'
+
+type PreviewData = { html: string; subject: string; sampleEmail: string | null; index: number; total: number }
 
 export interface Campaign {
   id: string
@@ -54,7 +57,8 @@ export default function CampaignWizard({ campaign: initial }: { campaign: Campai
   const save = useCallback(async (silent = false) => {
     setSaving(true)
     try {
-      const res = await fetch(`/api/admin/campaigns/${c.id}`, {
+      // ניסיון חוזר אחד: תקלה רגעית בדרך לשרת לא מאבדת את השמירה
+      const { ok, data: d } = await fetchJson<{ error?: string }>(`/api/admin/campaigns/${c.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -63,9 +67,8 @@ export default function CampaignWizard({ campaign: initial }: { campaign: Campai
           content: c.content, content_mode: c.content_mode, raw_html: c.raw_html,
           segment: c.segment,
         }),
-      })
-      const d = await res.json()
-      if (!res.ok) throw new Error(d.error || 'שמירה נכשלה')
+      }, { retries: 1 })
+      if (!ok) throw new Error(d.error || 'שמירה נכשלה')
       setDirty(false)
       if (!silent) toast.success('נשמר')
       return true
@@ -241,7 +244,7 @@ function PreviewStep({ campaignId, onSave, dirty }: {
   campaignId: string; onSave: () => Promise<boolean>; dirty: boolean
 }) {
   const toast = useToast()
-  const [data, setData] = useState<{ html: string; subject: string; sampleEmail: string | null; index: number; total: number } | null>(null)
+  const [data, setData] = useState<PreviewData | null>(null)
   const [i, setI] = useState(0)
   const [loading, setLoading] = useState(true)
   const [testTo, setTestTo] = useState('')
@@ -251,8 +254,8 @@ function PreviewStep({ campaignId, onSave, dirty }: {
     setLoading(true)
     try {
       if (dirty) await onSave()
-      const res = await fetch(`/api/admin/campaigns/${campaignId}/preview?i=${idx}`)
-      if (res.ok) setData(await res.json())
+      const { ok, data: d } = await fetchJson<PreviewData>(`/api/admin/campaigns/${campaignId}/preview?i=${idx}`)
+      if (ok) setData(d)
     } catch { /* ignore */ }
     finally { setLoading(false) }
   }, [campaignId, dirty, onSave])
@@ -263,13 +266,13 @@ function PreviewStep({ campaignId, onSave, dirty }: {
     if (!testTo.includes('@')) { toast.error('כתובת לא תקינה'); return }
     setSendingTest(true)
     try {
-      const res = await fetch(`/api/admin/campaigns/${campaignId}/preview`, {
+      if (dirty && !(await onSave())) return
+      const { ok, data: d } = await fetchJson<{ error?: string }>(`/api/admin/campaigns/${campaignId}/preview`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ to: testTo }),
       })
-      const d = await res.json()
-      if (!res.ok) throw new Error(d.error)
+      if (!ok) throw new Error(d.error || 'שליחת הבדיקה נכשלה')
       toast.success(`מייל בדיקה נשלח אל ${testTo}`)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'שגיאה')
@@ -362,9 +365,8 @@ function SendStep({ campaignId, onSave, onSent }: {
   const [scheduledAt, setScheduledAt] = useState('')
 
   useEffect(() => {
-    fetch(`/api/admin/campaigns/${campaignId}/preview`)
-      .then(r => r.json())
-      .then(d => setCount(d.total ?? 0))
+    fetchJson<{ total?: number }>(`/api/admin/campaigns/${campaignId}/preview`)
+      .then(({ data: d }) => setCount(d.total ?? 0))
       .catch(() => setCount(0))
   }, [campaignId])
 
@@ -376,16 +378,16 @@ function SendStep({ campaignId, onSave, onSent }: {
   async function send() {
     setSending(true)
     try {
-      await onSave()
-      const res = await fetch(`/api/admin/campaigns/${campaignId}/send`, {
+      // שמירה שנכשלה עוצרת את השליחה: אחרת יוצאת לנמענים הגרסה הקודמת של המייל
+      if (!(await onSave())) return
+      const { ok, data: d } = await fetchJson<{ error?: string; scheduled?: boolean; scheduledAt: string; moved?: boolean; total: number }>(`/api/admin/campaigns/${campaignId}/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(
           when === 'later' ? { scheduledAt: new Date(scheduledAt).toISOString() } : {},
         ),
       })
-      const d = await res.json()
-      if (!res.ok) throw new Error(d.error || 'שליחה נכשלה')
+      if (!ok) throw new Error(d.error || 'שליחה נכשלה')
 
       if (d.scheduled) {
         const at = new Date(d.scheduledAt).toLocaleString('he-IL', {

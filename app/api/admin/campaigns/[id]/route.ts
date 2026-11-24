@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
+import { sanitizeCampaignPatch } from '@/lib/newsletter/sanitizeCampaign'
 
 // טעינה / עדכון / מחיקה של קמפיין.
 export const dynamic = 'force-dynamic'
@@ -47,6 +48,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   for (const key of EDITABLE) {
     if (key in payload) patch[key] = payload[key]
   }
+
+  sanitizeCampaignPatch(patch)
 
   const { error } = await db.from('campaigns').update(patch).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
