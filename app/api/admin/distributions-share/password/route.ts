@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
 import { setPortalPassword, hasPortalPassword } from '@/lib/distributionsPortalAuth'
+import { revokeAllSessions } from '@/lib/portalSessions'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,5 +21,8 @@ export async function POST(req: NextRequest) {
   }
 
   await setPortalPassword(String(password))
-  return NextResponse.json({ ok: true })
+  // ⚠️ הסשנים הישנים כבר נפסלים דרך טביעת-הסיסמה שבחתימה. הסימון במסד
+  // נועד לרשימת "מחוברים" במסך: בלעדיו הם היו נראים מחוברים אחרי ההחלפה.
+  const revoked = await revokeAllSessions('distributions', 'password-change')
+  return NextResponse.json({ ok: true, revoked })
 }

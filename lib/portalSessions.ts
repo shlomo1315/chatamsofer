@@ -177,13 +177,18 @@ export async function listActiveSessions(portal: PortalKind): Promise<PortalSess
   } catch { return [] }
 }
 
-/** ניתוק סשן יחיד מהניהול — בלי לגעת באחרים. */
-export async function revokeSession(id: string, by: string): Promise<boolean> {
+/**
+ * ניתוק סשן יחיד מהניהול — בלי לגעת באחרים.
+ * ⚠️ מסונן גם לפי הפורטל: מסך ניהול של פורטל אחד לא אמור לנתק סשן של השני.
+ */
+export async function revokeSession(portal: PortalKind, id: string, by: string): Promise<boolean> {
   try {
-    const { error } = await adminClient().from('portal_sessions')
+    const { data, error } = await adminClient().from('portal_sessions')
       .update({ revoked_at: new Date().toISOString(), revoked_by: by.slice(0, 120) })
+      .eq('portal', portal)
       .eq('id', id)
-    return !error
+      .select('id')
+    return !error && (data?.length ?? 0) > 0
   } catch { return false }
 }
 

@@ -20,7 +20,6 @@ import EmailTemplatesManager from './EmailTemplatesManager'
 import NedarimSettings from './NedarimSettings'
 import NedarimHolidaySettings from './NedarimHolidaySettings'
 import LoansPortalSettings from './LoansPortalSettings'
-import DistributionsShareSettings from './DistributionsShareSettings'
 import ElevenLabsStudio from './ElevenLabsStudio'
 import BackupSettings from './BackupSettings'
 import DailyDigestSettings from './DailyDigestSettings'
@@ -258,7 +257,15 @@ export default async function SettingsPage() {
 
         {/* שיתוף חלוקות חגים — דף תצוגה בלבד מוגן בסיסמה */}
         <Collapsible title="שיתוף חלוקות חגים (תצוגה בלבד)" icon={<Gift size={16} className="text-navy-soft" />}>
-          <DistributionsShareSettings />
+          <div className="flex flex-col gap-3 rounded-2xl border border-line bg-paper p-4">
+            <p className="text-[13px] leading-relaxed text-navy">
+              הסיסמה, הקישור, רשימת המחוברים וההגנה מניחוש עברו למסך ייעודי.
+            </p>
+            <a href="/admin/settings/distributions-share"
+              className="inline-flex w-fit items-center gap-1.5 rounded-xl bg-navy px-4 py-2 text-xs font-extrabold text-white hover:opacity-90">
+              <Gift size={13} /> מעבר למסך שיתוף החלוקות
+            </a>
+          </div>
         </Collapsible>
 
         {/* ── המערכת הטלפונית — עברה למסך משלה ────────────────────────────
