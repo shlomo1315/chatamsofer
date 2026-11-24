@@ -28,7 +28,7 @@ const TABS: { id: TabId; label: string; icon: typeof MapPin }[] = [
   { id: 'ivr', label: 'בדיקת שלוחה', icon: Phone },
 ]
 
-export default function HolidayToolsTabs({ distributionId, hideCenters = false }: { distributionId: string; hideCenters?: boolean }) {
+export default function HolidayToolsTabs({ distributionId, hideCenters = false, amountPerFamily }: { distributionId: string; hideCenters?: boolean; amountPerFamily?: number }) {
   // ⚠️ בחלוקה בשלבים המוקדים יושבים בלשונית "מוקדים" של המסך — לא פעמיים.
   const [tab, setTab] = useState<TabId>(hideCenters ? 'load' : 'centers')
 
@@ -60,7 +60,7 @@ export default function HolidayToolsTabs({ distributionId, hideCenters = false }
         <ToolPanelBoundary name="מוקדי חלוקה"><CenterBreakdown distributionId={distributionId} /></ToolPanelBoundary>
       )}
       {tab === 'load' && (
-        <ToolPanelBoundary name="טעינת כרטיסים"><LoadCardsPanel distributionId={distributionId} /></ToolPanelBoundary>
+        <ToolPanelBoundary name="טעינת כרטיסים"><LoadCardsPanel distributionId={distributionId} amountPerFamily={amountPerFamily} /></ToolPanelBoundary>
       )}
       {tab === 'vouchers' && (
         <ToolPanelBoundary name="שוברים"><SendVouchersPanel distributionId={distributionId} /></ToolPanelBoundary>
