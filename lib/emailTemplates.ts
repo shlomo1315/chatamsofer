@@ -1936,6 +1936,7 @@ export function holidayRegisteredEmail(name: string, vars: { distribution?: stri
       <p style="margin:0;color:#065f46;font-size:16px;font-weight:800;line-height:1.9;font-family:'Heebo',Arial,sans-serif;">${escapeHtml(fill(t('intro')))}</p>
     </div>
     <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.9;font-family:'Heebo',Arial,sans-serif;">${escapeHtml(fill(t('next')))}</p>
+    <p style="margin:0 0 16px;color:#475569;font-size:14px;line-height:1.8;font-family:'Heebo',Arial,sans-serif;">${escapeHtml(fill(t('spam')))}</p>
     <p style="margin:0;color:#0f172a;font-size:15px;font-weight:700;line-height:1.9;font-family:'Heebo',Arial,sans-serif;">בברכה מרובה,<br/>היכל החתם סופר</p>`
   return {
     subject: fill(t('subject')),
