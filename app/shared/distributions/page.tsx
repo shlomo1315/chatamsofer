@@ -1,16 +1,12 @@
 'use client'
 import { useState, useEffect, useCallback, useMemo, type CSSProperties, type ReactNode } from 'react'
-import SharedRecipientsTable from './panels/SharedRecipientsTable'
-import MoneyBoard, { Countdown } from './panels/MoneyBoard'
-import FilterBar from './panels/FilterBar'
-import TimeCharts from './panels/TimeCharts'
-import { Lock, LogIn, Loader2, Users, Search, MapPin, Baby, GitBranch } from 'lucide-react'
+import ControlRoom from './panels/ControlRoom'
+import { Lock, LogIn, Loader2, Search, GitBranch } from 'lucide-react'
 import s from './board.module.css'
 import {
-  registrationSeries, areaPaths, dayAxis, channelShares, conicOf, topCounts, kidsBuckets, pctOf,
+  registrationSeries, areaPaths, dayAxis, channelShares, conicOf, pctOf,
   maternityFunnel, inPeriod, byRecoveryHome, paidByMonth, generationCounts, fanRings,
-  EMPTY_FILTER, filterMoneyRows, toggleIn,
-  type Bar, type Channel, type MoneyFilter,
+  type Bar, type Channel,
 } from '@/lib/sharedBoard'
 import LineageTreeSvg from '@/app/lineage-review/[token]/LineageTreeSvg'
 import { BRAND } from './brand'
@@ -164,7 +160,6 @@ interface Distribution {
 }
 
 const fmtCurNum = (n: number) => `${Math.round(n || 0).toLocaleString('he-IL')} ₪`
-const fmtDate = (d?: string | null) => d ? new Date(d).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'
 
 // ── Password Screen ──
 function PasswordScreen({ onAuth }: { onAuth: () => void }) {
@@ -222,106 +217,6 @@ function PasswordScreen({ onAuth }: { onAuth: () => void }) {
   )
 }
 
-// ── פילוחים חיים: ערים · קהילות · מספר ילדים ─────────────────────────────────
-// כל פילוח מחושב בזמן אמת מכלל הנרשמים (על פני כל החלוקות), ומוצג כגרף עמודות
-// אופקי — כדי שאפשר יהיה לסרוק את ההתפלגות במבט. הרשימות ארוכות מקבלות גלילה
-// פנימית, כדי שאלפי נרשמים לא ידחפו את הדף.
-const KIDS_BUCKETS: { label: string; test: (n: number) => boolean }[] = [
-  { label: '0–2 ילדים', test: n => n <= 2 },
-  { label: '3–5 ילדים', test: n => n >= 3 && n <= 5 },
-  { label: '6–8 ילדים', test: n => n >= 6 && n <= 8 },
-  { label: '9 ילדים ומעלה', test: n => n >= 9 },
-]
-
-function BarRow({ label, count, max, color }: { label: string; count: number; max: number; color: string }) {
-  const pct = max > 0 ? Math.round((count / max) * 100) : 0
-  return (
-    <div className="flex items-center gap-2">
-      <span className="w-28 shrink-0 truncate text-[12px] text-slate-600" title={label}>{label}</span>
-      <div className="flex-1 h-5 rounded-full bg-slate-100 overflow-hidden">
-        <div className={`h-full rounded-full ${color} transition-all duration-500`} style={{ width: `${Math.max(pct, count > 0 ? 6 : 0)}%` }} />
-      </div>
-      <span className="w-8 shrink-0 text-left text-[12px] font-bold text-slate-700 ltr-num">{count}</span>
-    </div>
-  )
-}
-
-function BreakdownCard({ title, icon, rows, color, scroll, collapsible }: {
-  title: string; icon: React.ReactNode; rows: { label: string; count: number }[]; color: string; scroll?: boolean
-  collapsible?: boolean   // ⚠️ קהילות — עשוי להכיל עשרות ערכים ברישום מאסיבי, ולכן
-                          // מכווץ כברירת מחדל ונפתח בלחיצה לקוביות קטנות, שלא ידחוף את הדף.
-}) {
-  const max = rows.reduce((m, r) => Math.max(m, r.count), 0)
-  const [open, setOpen] = useState(!collapsible)
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 flex flex-col">
-      <button type="button" disabled={!collapsible} onClick={() => collapsible && setOpen(o => !o)}
-        className={`flex items-center gap-2 text-slate-700 ${collapsible ? 'justify-between cursor-pointer' : ''} ${open ? 'mb-4' : ''}`}>
-        <span className="flex items-center gap-2">{icon}<h3 className="text-sm font-bold">{title}</h3>
-          {collapsible && <span className="text-[11px] font-bold text-slate-400 ltr-num">({rows.length})</span>}
-        </span>
-        {collapsible && <span className="text-xs text-slate-400">{open ? '▲' : '▼'}</span>}
-      </button>
-      {open && (rows.length === 0 ? (
-        <p className="text-center text-slate-400 text-xs py-6">אין נתונים</p>
-      ) : collapsible ? (
-        // ── תצוגת קוביות קטנות (chips) — קומפקטית, מתאימה להרבה ערכים ──
-        <div className="flex flex-wrap gap-2 max-h-64 overflow-y-auto pl-1">
-          {rows.map(r => (
-            <span key={r.label} className="inline-flex items-center gap-1.5 rounded-xl border border-violet-100 bg-violet-50 px-2.5 py-1.5">
-              <span className="text-[12px] text-slate-700 font-medium max-w-[120px] truncate" title={r.label}>{r.label}</span>
-              <span className="rounded-full bg-violet-500 text-white text-[11px] font-bold px-1.5 ltr-num">{r.count}</span>
-            </span>
-          ))}
-        </div>
-      ) : (
-        <div className={`flex flex-col gap-2.5 ${scroll ? 'max-h-64 overflow-y-auto pl-1' : ''}`}>
-          {rows.map(r => <BarRow key={r.label} label={r.label} count={r.count} max={max} color={color} />)}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function BreakdownPanels({ recipients }: { recipients: Recipient[] }) {
-  // ⚠️ פילוח לפי *משפחה ייחודית* (beneficiary_id) ולא לפי שורת רישום — משפחה
-  // שרשומה לשתי חלוקות לא תיספר פעמיים בהתפלגות הדמוגרפית.
-  const uniq = useMemo(() => {
-    const seen = new Map<string, Beneficiary>()
-    for (const r of recipients) {
-      const b = r.beneficiary
-      const key = b?.id || r.id
-      if (b && !seen.has(key)) seen.set(key, b)
-    }
-    return [...seen.values()]
-  }, [recipients])
-
-  const cities = useMemo(() => {
-    const m = new Map<string, number>()
-    uniq.forEach(b => { const c = b.city?.trim() || 'לא צוין'; m.set(c, (m.get(c) ?? 0) + 1) })
-    return [...m.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count)
-  }, [uniq])
-
-  const communities = useMemo(() => {
-    const m = new Map<string, number>()
-    uniq.forEach(b => { const c = b.community_affiliation?.trim() || 'לא צוין'; m.set(c, (m.get(c) ?? 0) + 1) })
-    return [...m.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count)
-  }, [uniq])
-
-  const kids = useMemo(() =>
-    KIDS_BUCKETS.map(bkt => ({ label: bkt.label, count: uniq.filter(b => bkt.test(b.children_count ?? 0)).length })),
-    [uniq])
-
-  if (!uniq.length) return null
-  return (
-    <div className="grid gap-4 md:grid-cols-3">
-      <BreakdownCard title="לפי ערים" icon={<MapPin size={16} className="text-rose-500" />} rows={cities} color="bg-rose-400" scroll />
-      <BreakdownCard title="לפי קהילות" icon={<Users size={16} className="text-violet-500" />} rows={communities} color="bg-violet-400" scroll />
-      <BreakdownCard title="לפי מספר ילדים" icon={<Baby size={16} className="text-teal-500" />} rows={kids} color="bg-teal-400" />
-    </div>
-  )
-}
-
 // ── עץ הדורות הוויזואלי המלא — לצפייה בלבד ────────────────────────────────────
 // שימוש חוזר ב-LineageTreeSvg (אותו מנוע בדיוק כמו עץ הניהול ודף הביקורת), עם
 // אותם נתונים בדיוק (lineageNodes מה-API). לצפייה בלבד — onSelect ריק, אין עריכה.
@@ -372,8 +267,6 @@ function GenerationExplorer({ nodes, loading, onRetry }: {
     </div>
   )
 }
-// ⚠️ הטבלה עברה ל-panels/SharedRecipientsTable — היא זהה במבנה לזו של
-// ממשק הניהול (עמודות נפרדות, בורר עמודות, חיפוש חופשי, בלי גלילה לרוחב).
 
 // ── Main ──
 // ─────────────────────────────────────────────────────────────────────────────
@@ -767,22 +660,6 @@ const famName = (b?: { full_name?: string | null; family_name?: string | null; s
 
 const distLabel = (d: Distribution) => `${d.name}${d.year ? ` ${d.year}` : ''}`
 
-/** "21.11 · 18:04:39" — כמו בטבלה במוקאפ. */
-const stamp = (iso?: string | null) => {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '—'
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${p(d.getDate())}.${p(d.getMonth() + 1)} · ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
-}
-
-const channelOf = (source?: string | null) => channelShares([{ source }]).find(c => c.count > 0)?.label ?? '—'
-
-const APPROVAL_PILL: Record<string, [string, string]> = {
-  approved: [s.pOk, 'מאושר'],
-  pending: [s.pWt, 'ממתין'],
-  rejected: [s.pNo, 'נדחה'],
-}
 const MAT_PILL: Record<ReturnType<typeof stateOf>, string> = {
   'realized-charged': s.pOk,
   'realized-unbilled': s.pWt,
@@ -947,7 +824,9 @@ export default function SharedDistributionsPage() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch('/api/shared/distributions', { cache: 'no-store' })
+      // 🔴 מגבלת זמן: בקשה אחת שנתקעה (למשל בסינון של נטפרי) השאירה את
+      // הרענון האוטומטי "עסוק" לתמיד, והדף הפסיק לקבל נרשמים חדשים בשקט.
+      const res = await fetch('/api/shared/distributions', { cache: 'no-store', signal: AbortSignal.timeout(25_000) })
       if (res.status === 401) { setState('locked'); return }
       if (res.ok) {
         const d = await res.json()
@@ -995,7 +874,23 @@ export default function SharedDistributionsPage() {
     if (state === 'unlocked' && (page === 'home' || page === 'tree')) void loadLineage()
   }, [state, page, loadLineage])
 
-  // 🔴 אין רענון אוטומטי (הוא משך אלפי שורות כל 10 שניות ותקע את הדף) — רק כפתור.
+  // רענון אוטומטי כל 15 שניות, רק בדף החגים ורק כשהלשונית גלויה.
+  // עץ הצאצאים (אלפי צמתים, שתקעו בעבר את הדף) לא נמשך כאן — יש לו טעינה נפרדת.
+  useEffect(() => {
+    if (state !== 'unlocked' || page !== 'holidays') return
+    let busy = false
+    const tick = async () => {
+      if (busy || document.visibilityState !== 'visible') return
+      busy = true
+      try { await load() } finally { busy = false }
+    }
+    const id = window.setInterval(() => void tick(), 15_000)
+    // חזרה ללשונית: רענון מיד, בלי לחכות לסבב הבא
+    const onVisible = () => { if (document.visibilityState === 'visible') void tick() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => { window.clearInterval(id); document.removeEventListener('visibilitychange', onVisible) }
+  }, [state, page, load])
+
   const refresh = useCallback(async () => {
     setRefreshing(true)
     await load()
@@ -1024,31 +919,6 @@ export default function SharedDistributionsPage() {
   const selRows = useMemo(() => (selected ? byDist.get(selected.id) ?? [] : []), [selected, byDist])
   const homeDist = live ?? distributions[0] ?? null
   const homeRows = useMemo(() => (homeDist ? byDist.get(homeDist.id) ?? [] : []), [homeDist, byDist])
-
-  // סינון מתקדם: חל על כל דף החלוקה (מספרים, גרפים, טבלה ופילוחים), ומתאפס במעבר חלוקה
-  const [fState, setFState] = useState<{ id?: string; f: MoneyFilter }>({ f: EMPTY_FILTER })
-  const selId = selected?.id
-  const filter = fState.id === selId ? fState.f : EMPTY_FILTER
-  const setFilter = useCallback((f: MoneyFilter) => setFState({ id: selId, f }), [selId])
-  const fRows = useMemo(() => filterMoneyRows(selRows, filter, selected?.amount_per_family), [selRows, filter, selected?.amount_per_family])
-
-  const hol = useMemo(() => {
-    const approved = fRows.filter(r => r.approval_status === 'approved').length
-    const rejected = fRows.filter(r => r.approval_status === 'rejected').length
-    const series = registrationSeries(fRows)
-    const recent = [...fRows]
-      .sort((a, b) => String(b.registered_at ?? '').localeCompare(String(a.registered_at ?? '')))
-      .slice(0, 8)
-    return {
-      approved,
-      pending: fRows.length - approved - rejected,
-      series,
-      channels: channelShares(fRows),
-      cities: topCounts(fRows, r => r.beneficiary?.city, 6),
-      kids: kidsBuckets(fRows.map(r => r.beneficiary ?? {})),
-      recent,
-    }
-  }, [fRows])
 
   const home = useMemo(() => ({
     approved: homeRows.filter(r => r.approval_status === 'approved').length,
@@ -1081,6 +951,15 @@ export default function SharedDistributionsPage() {
   }
   if (state === 'locked') {
     return <PasswordScreen onAuth={() => { setState('checking'); void load() }} />
+  }
+
+  // חלוקות חגים: "חדר הבקרה" במסך מלא, עם תפריט משלו
+  if (page === 'holidays') {
+    return (
+      <ControlRoom live={live} prevDists={prevDists} selected={selected} rows={selRows} closesAt={closesAt} updatedAt={updatedAt}
+        onPickLive={() => setHolView('live')} onPickPrev={id => { setHolView('prev'); setPickedId(id) }}
+        onLogout={() => void logout()} otherPages={!holidaysOnly} />
+    )
   }
 
   const refreshBtn = (
@@ -1182,143 +1061,6 @@ export default function SharedDistributionsPage() {
                   {treeReady ? (homeGens.length ? <HBars bars={homeGens.map(g => ({ label: `דור ${g.generation}`, value: g.count }))} /> : <div className={s.empty}><b>אין נתוני דורות</b></div>) : treeSk}
                 </Panel>
               </div>
-            </div>
-          )}
-
-          {page === 'holidays' && (
-            <div className={s.page} key="holidays" style={cssVars({ '--acc': 'var(--hol)' })}>
-              <header className={s.hd}>
-                <div>
-                  <h1>חלוקות חגים</h1>
-                  <p>{selected ? `${distLabel(selected)} · ${selected.registration_open ? 'הרישום פתוח' : 'הרישום סגור'}` : 'אין כרגע חלוקה פתוחה'}</p>
-                </div>
-                <div className={s.acts}>
-                  <div className={s.seg} role="group" aria-label="בחירת חלוקה">
-                    {live && <button type="button" className={view === 'live' ? s.on : undefined} onClick={() => setHolView('live')}>{live.name}</button>}
-                    <button type="button" className={view === 'prev' ? s.on : undefined} onClick={() => setHolView('prev')}>חלוקות קודמות</button>
-                  </div>
-                  {refreshBtn}
-                </div>
-              </header>
-
-              {view === 'prev' && prevDists.length > 0 && (
-                <Panel className={s.mb} title="חלוקות קודמות" hint="לחצו על חלוקה כדי לראות את הנתונים שלה" flush>
-                  <div className={`${s.tbl} ${s.tscroll}`}>
-                    <table>
-                      <thead><tr><th>חלוקה</th><th className={s.hideM}>תאריך חלוקה</th><th>נרשמו</th><th>אושרו</th></tr></thead>
-                      <tbody>
-                        {prevDists.map(d => {
-                          const rows = byDist.get(d.id) ?? []
-                          return (
-                            <tr key={d.id} className={`${s.pick} ${selected?.id === d.id ? s.sel : ''}`} onClick={() => setPickedId(d.id)}>
-                              <td>{distLabel(d)}</td>
-                              <td className={s.hideM}>{fmtDate(d.distribution_date)}</td>
-                              <td>{num(rows.length)}</td>
-                              <td>{num(rows.filter(r => r.approval_status === 'approved').length)}</td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </Panel>
-              )}
-
-              {!selected ? (
-                <div className={s.empty}><b>אין חלוקות להצגה</b>כשתיפתח חלוקה, הנתונים שלה יופיעו כאן.</div>
-              ) : (
-                <>
-                  {view === 'live' && <Countdown closesAt={closesAt} />}
-                  <Tabs page="holidays" tab={tab} items={[
-                    { key: '', label: 'סקירה' },
-                    { key: 'recipients', label: 'הנרשמים', count: fRows.length },
-                    { key: 'breakdown', label: 'פילוחים' },
-                  ]} />
-                  <FilterBar rows={selRows} shown={fRows.length} filter={filter} setFilter={setFilter} perFamily={selected.amount_per_family} />
-
-                  {tab === 'recipients' && (
-                    <Panel title={`הנרשמים ל${distLabel(selected)}`} flush>
-                      <div className={s.embed}><SharedRecipientsTable rows={fRows} /></div>
-                    </Panel>
-                  )}
-
-                  {tab === 'breakdown' && <BreakdownPanels recipients={fRows} />}
-
-                  {tab !== 'recipients' && tab !== 'breakdown' && (
-                    <>
-                      <div className={`${s.g} ${s.k2} ${s.mb}`}>
-                        <div className={`${s.kpi} ${s.s3}`}>
-                          <span className={s.lb}>נרשמו</span>
-                          <b>{num(fRows.length)}</b>
-                          <span className={s.ft}>ב-<strong>{num(hol.series.daily.length)}</strong> ימי רישום</span>
-                        </div>
-                        <div className={`${s.kpi} ${s.s3}`}>
-                          <span className={s.lb}>אושרו</span>
-                          <b>{num(hol.approved)}</b>
-                          <span className={s.ft}><strong>{fRows.length ? Math.round((hol.approved / fRows.length) * 100) : 0}%</strong> מהנרשמים</span>
-                        </div>
-                        <div className={`${s.kpi} ${s.s3}`}>
-                          <span className={s.lb}>ממתינים לאישור</span>
-                          <b>{num(hol.pending)}</b>
-                          <span className={s.ft}>טרם טופלו</span>
-                        </div>
-                        <div className={`${s.kpi} ${s.s3}`}>
-                          <span className={s.lb}>חלוקות פתוחות</span>
-                          <b>{num(distributions.filter(d => d.registration_open).length)}</b>
-                          <span className={s.ft}>מתוך <strong>{num(distributions.length)}</strong> חלוקות</span>
-                        </div>
-                      </div>
-
-                      {fRows.length
-                        ? <TimeCharts rows={fRows} filter={filter} setFilter={setFilter} />
-                        : <div className={`${s.empty} ${s.mb}`}><b>{selRows.length ? 'אין נרשמים שמתאימים לסינון' : 'אין עדיין רישומים'}</b></div>}
-                      <MoneyBoard rows={fRows} perFamily={selected.amount_per_family} picked={filter.communities}
-                        onPick={c => setFilter({ ...filter, communities: toggleIn(filter.communities, c) })} />
-
-                      <div className={s.g}>
-                        <Panel className={s.s4} title="ערוץ רישום" hint="לחיצה מסננת">
-                          <div className={s.dg}>
-                            <div className={s.donut} style={{ background: conicOf(hol.channels) }} />
-                            <Legend parts={hol.channels.filter(c => c.count > 0)} wide picked={filter.channel ? [filter.channel] : []}
-                              onPick={k => setFilter({ ...filter, channel: filter.channel === k ? '' : k })} />
-                          </div>
-                        </Panel>
-                        <Panel className={s.s4} title="לפי עיר" hint={`${hol.cities.length} מובילות`}>
-                          {hol.cities.length
-                            ? <HBars bars={hol.cities} picked={filter.cities} onPick={c => setFilter({ ...filter, cities: toggleIn(filter.cities, c) })} />
-                            : <div className={s.empty}>אין נתוני ערים</div>}
-                        </Panel>
-                        <Panel className={s.s4} title="לפי מספר ילדים">
-                          <Cols bars={hol.kids} height={170} picked={filter.kids} onPick={k => setFilter({ ...filter, kids: toggleIn(filter.kids, k) })} />
-                        </Panel>
-                        <Panel className={s.s12} title="נרשמו לאחרונה" link={{ href: '#holidays/recipients', label: 'לכל הנרשמים ←' }} flush>
-                          <div className={`${s.tbl} ${s.tscroll}`}>
-                            <table>
-                              <thead><tr><th>משפחה</th><th>עיר</th><th>ילדים</th><th className={s.hideM}>ערוץ</th><th className={s.hideM}>נרשם</th><th>מצב</th></tr></thead>
-                              <tbody>
-                                {hol.recent.map(r => {
-                                  const [cls, label] = APPROVAL_PILL[r.approval_status ?? ''] ?? APPROVAL_PILL.pending
-                                  return (
-                                    <tr key={r.id}>
-                                      <td>{famName(r.beneficiary)}</td>
-                                      <td>{r.beneficiary?.city || '—'}</td>
-                                      <td>{r.beneficiary?.children_count ?? '—'}</td>
-                                      <td className={s.hideM}>{channelOf(r.source)}</td>
-                                      <td className={`${s.hideM} ${s.mut}`}><span className={s.ltr}>{stamp(r.registered_at)}</span></td>
-                                      <td><span className={`${s.pill} ${cls}`}>{label}</span></td>
-                                    </tr>
-                                  )
-                                })}
-                              </tbody>
-                            </table>
-                            {!hol.recent.length && <div className={s.empty}>אין עדיין נרשמים</div>}
-                          </div>
-                        </Panel>
-                      </div>
-                    </>
-                  )}
-                </>
-              )}
             </div>
           )}
 

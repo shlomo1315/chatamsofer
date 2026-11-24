@@ -236,6 +236,30 @@ describe('רישום בטלפון בלבד', () => {
     expect(text(r)).toContain('הרשמתכם התקבלה בהצלחה במערכת')
   })
 
+  it('דרכון של 9 ספרות בלי אותיות וספרת ביקורת לא תקינה (556212027) — מזוהה ולא "מספר שגוי"', async () => {
+    data.findRegistrantByPassportDigits.mockResolvedValue({ ...ben, id_number: '556212027' })
+    const r = await call({ r_id: '556212027' })
+    expect(data.findRegistrantByPassportDigits).toHaveBeenCalledWith('556212027')
+    expect(text(r)).not.toContain('מספר שגוי')
+    expect(text(r)).toContain('r_bd')
+  })
+
+  it('ת"ז שנשמרה עם אפס מוביל והוקשה ב-8 ספרות — מזוהה', async () => {
+    data.findRegistrantByPassportDigits.mockResolvedValue({ ...ben, id_number: '012345678' })
+    const r = await call({ r_id: '12345678' })
+    expect(data.findRegistrantByPassportDigits).toHaveBeenCalledWith('12345678')
+    expect(text(r)).toContain('r_bd')
+  })
+
+  it('דרכון עם אותיות שהספרות שלו הן במקרה ת"ז תקינה — לא "אינו מופיע", אלא חיפוש דרכון', async () => {
+    data.findRegistrantById.mockResolvedValue(null)
+    data.findRegistrantByPassportDigits.mockResolvedValue({ ...ben, id_number: 'AB123456782' })
+    const r = await call({ r_id: ID })
+    expect(data.findRegistrantByPassportDigits).toHaveBeenCalledWith(ID)
+    expect(text(r)).not.toContain('אינו מופיע')
+    expect(text(r)).toContain('r_bd')
+  })
+
   it('ת"ז ישראלית רגילה ממשיכה לחפש לפי ת"ז, בלי חיפוש דרכון', async () => {
     const r = await call({ r_id: ID })
     expect(data.findRegistrantById).toHaveBeenCalledWith(ID)

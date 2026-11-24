@@ -57,12 +57,14 @@ function lastAttempt(params: Record<string, string>, vars: readonly string[]): n
 export const validPhoneId = (id: string) => id.length === ID_DIGITS && validateIsraeliId(id)
 
 /**
- * הכרטסת לפי מה שהוקש: ת"ז תקינה — לפי הת"ז; אחרת — לפי הספרות בלבד של דרכון
- * עם אותיות (בטלפון אי אפשר להקיש אותיות). 'invalid' — לא ת"ז תקינה ולא דרכון
- * מוכר, כלומר טעות הקשה: ניסיון נוסף כמו קודם.
+ * הכרטסת לפי מה שהוקש: ת"ז תקינה — לפי הת"ז; אחרת, או כשלא נמצאה — לפי הספרות
+ * בלבד של המספר השמור (דרכון עם אותיות או בלעדיהן, ת"ז בלי האפס המוביל).
+ * ⚠️ גם אחרי ת"ז תקינה: דרכון "AB123456782" שספרותיו הן במקרה ת"ז תקינה לא
+ * נמצא בחיפוש לפי ת"ז. 'invalid' — לא ת"ז תקינה ולא מספר מוכר, כלומר טעות
+ * הקשה: ניסיון נוסף כמו קודם.
  */
 async function lookupTyped(typed: string): Promise<Registrant | null | 'invalid'> {
-  if (validPhoneId(typed)) return findRegistrantById(typed)
+  if (validPhoneId(typed)) return (await findRegistrantById(typed)) ?? (await findRegistrantByPassportDigits(typed)) ?? null
   return (await findRegistrantByPassportDigits(typed)) ?? 'invalid'
 }
 
