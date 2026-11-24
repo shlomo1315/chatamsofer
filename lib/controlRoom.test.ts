@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  CR_EMPTY, subRows, toggleF, stLevel, kpis, communityMoney, topCommunities, COMM_TOP, regName, regNames, channelCounts, cityTop, hourCountsCr,
+  CR_EMPTY, subRows, toggleF, stLevel, kpis, communityMoney, topCommunities, COMM_TOP, regName, regTable, REG_STATUS, channelCounts, cityTop, hourCountsCr,
   rateBuckets, ratePerMinute, sparkPoints, pickup, freshIds, takeFresh, isStale, famLabel, latest, shekel, type CrRow,
 } from './controlRoom'
 
@@ -140,17 +140,38 @@ describe('דף השיתוף: 10 קהילות ורשימת שמות', () => {
     expect(rest).toEqual({ communities: 0, count: 0, value: 0 })
   })
 
-  it('כל השמות מוצגים, החדש ראשון, עם שם מלא', () => {
+  it('כל הנרשמים בטבלה, החדש ראשון, עם שם מלא', () => {
     const named = rows.map((r, i) => ({ ...r, beneficiary: { ...r.beneficiary, full_name: `משה כהן ${i}` } }))
-    const names = regNames(named)
-    expect(names).toHaveLength(30)
-    expect(names[0]).toEqual({ id: 'r0', name: 'משה כהן 0' })
-    expect(names[29].id).toBe('r29')
+    const t = regTable(named)
+    expect(t).toHaveLength(30)
+    expect(t[0].id).toBe('r0')
+    expect(t[0].name).toBe('משה כהן 0')
+    expect(t[29].id).toBe('r29')
+  })
+
+  it('כל פרטי המשפחה בשורה', () => {
+    const r: CrRow = {
+      id: 'x', amount: 0, approval_status: 'pending', source: 'phone', registered_at: at(0), phone: '0527000000',
+      beneficiary: {
+        full_name: 'משה גרינפלד', spouse_name: 'רחל', phone: '0501234567', phone2: '0527000000', address: 'רבי עקיבא 10',
+        city: 'בני ברק', community_affiliation: 'בעלזא', children_count: 7,
+      },
+    }
+    expect(regTable([r], 1200)[0]).toEqual({
+      id: 'x', name: 'משה גרינפלד', spouse: 'רחל', phones: '0501234567 · 0527000000', address: 'רבי עקיבא 10',
+      city: 'בני ברק', comm: 'בעלזא', kids: 7, amount: 1200, status: 'pending', channel: 'טלפון', at: at(0),
+    })
+    expect(REG_STATUS.pending).toBe('ממתין')
+  })
+
+  it('שדות חסרים נשארים ריקים, לא ממציאים', () => {
+    const t = regTable([{ id: 'e', source: null, approval_status: 'rejected', amount: 500, beneficiary: { family_name: 'לוי' } }], 1000)[0]
+    expect(t).toMatchObject({ name: 'משפחת לוי', spouse: '', phones: '', address: '', city: '', kids: null, amount: 0, status: 'rejected', at: null })
   })
 
   it('בלי שם מלא: "משפחת X", ובלי שעת רישום: בסוף', () => {
     expect(regName(row('a'))).toBe('משפחת כהן')
-    const names = regNames([{ ...row('old'), registered_at: null }, row('new')])
-    expect(names.map(x => x.id)).toEqual(['new', 'old'])
+    const t = regTable([{ ...row('old'), registered_at: null }, row('new')])
+    expect(t.map(x => x.id)).toEqual(['new', 'old'])
   })
 })
