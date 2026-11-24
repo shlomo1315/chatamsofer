@@ -29,6 +29,14 @@ const TABS: { id: Tab; label: string; icon: typeof Users }[] = [
   { id: 'settings', label: 'הגדרות', icon: Settings },
 ]
 
+/** הפתיח שלפני המקשים בכל שלב (המפתח במסך נוסחי שלוחת החגים). */
+const PHONE_INTRO: Record<DistPhase, string> = {
+  setup: 'phase_menu_setup: פתיח קצר בלי הזמנה להקיש 1 (מספרי ניסיון שומעים את פתיח הרישום)',
+  registration: 'phase_menu_open: "שלום וברכה, הודעה משמחת…" עד "למעבר לרישום כעת הקישו 1"',
+  closed: 'phase_menu: פתיח קצר עם 4 המקשים',
+  distribution: 'phase_menu: פתיח קצר עם 4 המקשים',
+}
+
 /** מה המתקשר שומע בכל שלב — לפי מקש. */
 const PHONE_BY_PHASE: Record<DistPhase, { k: string; t: string }[]> = {
   setup: [
@@ -39,19 +47,19 @@ const PHONE_BY_PHASE: Record<DistPhase, { k: string; t: string }[]> = {
   ],
   registration: [
     { k: '1', t: 'רישום: ת"ז, תאריך לידה, טלפון והצהרות (בלי בחירת מוקד)' },
-    { k: '2', t: 'ת"ז + תאריך לידה ⇒ נרשם ואושר / זכאי להגיש' },
+    { k: '2', t: 'ת"ז + תאריך לידה ⇒ "כבר נרשמתם לחלוקה זו" / זכאי להגיש' },
     { k: '3', t: 'שם המוקד (+ ימים ושעות אם פורסמו)' },
     { k: '4', t: 'הודעות כלליות' },
   ],
   closed: [
     { k: '1', t: '"הרישום נסגר, עדכון יישלח"' },
-    { k: '2', t: 'נרשם ואושר / זמן הרישום חלף' },
+    { k: '2', t: '"כבר נרשמתם לחלוקה זו" / זמן הרישום חלף' },
     { k: '3', t: 'שם המוקד + "עדכון מדויק יימסר"' },
     { k: '4', t: 'הודעות כלליות' },
   ],
   distribution: [
     { k: '1', t: '"זמן הרישום חלף"' },
-    { k: '2', t: 'נרשם ואושר / זמן הרישום חלף' },
+    { k: '2', t: '"כבר נרשמתם לחלוקה זו" / זמן הרישום חלף' },
     { k: '3', t: 'סכום, מוקד, כתובת ושעות ⇒ שיוך כרטיס' },
     { k: '4', t: 'הודעות כלליות' },
   ],
@@ -303,6 +311,7 @@ export default function DistributionShell({
                     <p className="font-bold text-[#132a52] text-sm mb-2">
                       {PHASE_LABEL[p]} {p === phase && <span className="text-[11px] text-[#7d5310]">· עכשיו</span>}
                     </p>
+                    <p className="text-[12px] text-[#6b6352] mb-2">פתיח: {PHONE_INTRO[p]}</p>
                     <ul className="flex flex-col gap-1 text-[13px] text-[#1b2338]">
                       {PHONE_BY_PHASE[p].map(r => (
                         <li key={r.k} className="flex gap-2"><b className="text-[#132a52]">{r.k}</b><span>{r.t}</span></li>

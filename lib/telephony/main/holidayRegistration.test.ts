@@ -31,7 +31,7 @@ vi.mock('@/lib/holidayPhoneMessages', () => ({
     reg_center_later: 'המוקד ייבחר אחר כך', center_hours_later: 'השעות יפורסמו', reg_goodbye: 'להתראות',
     center_confirm: 'לאישור {center} הקישו 1', center_success: 'נבחר {center}', center_already: 'המוקד שלכם',
     already: '{name} כבר רשומים ל{distribution}', failed: 'תקלה', closed: 'סגור', center_full: 'מלא',
-    ask_id: 'הקישו ת"ז', phase_menu: 'תפריט ארבעה מקשים', elig_registered_approved: 'נרשמתם ואושרתם', elig_registered_pending: 'ממתינה לאישור', elig_can_apply: 'זכאים להגיש בקשה', elig_registration_passed: 'זמן הרישום חלף', center_yours: 'המוקד שבחרתם', center_update_later: 'עדכון מדויק יימסר', general_announcements: 'הודעה כללית לכולם', phase_not_open: 'הרישום טרם נפתח', phase_closed_wait: 'הרישום נסגר עדכון יישלח', phase_not_registered: 'לא נמצא רישום',
+    ask_id: 'הקישו ת"ז', phase_menu: 'תפריט ארבעה מקשים', phase_menu_open: 'פתיח הודעה משמחת למעבר לרישום הקישו 1', phase_menu_setup: 'תפריט הכנה בלי רישום', elig_already_registered: 'כבר נרשמתם לחלוקה זו', elig_registered_pending: 'ממתינה לאישור', elig_can_apply: 'זכאים להגיש בקשה', elig_registration_passed: 'זמן הרישום חלף', center_yours: 'המוקד שבחרתם', center_update_later: 'עדכון מדויק יימסר', general_announcements: 'הודעה כללית לכולם', phase_not_open: 'הרישום טרם נפתח', phase_closed_wait: 'הרישום נסגר עדכון יישלח', phase_not_registered: 'לא נמצא רישום',
     phase_dist_details: 'שלום {name} זכאים ל-{amount}', phase_card_prompt: 'לשיוך כרטיס הקישו 1', pending_approval: 'ממתין', card_already: 'כרטיס כבר מחובר', center_none: 'אין מוקד',
   }).map(([k, text]) => [k, { text }])),
 }))
@@ -282,19 +282,36 @@ describe('הקו לפי שלב החלוקה — תפריט 4 מקשים', () => 
   }
   const elig = { e_id: ID, e_bd: '15031990' }
 
-  it('תפריט קבוע 1-4 בכל שלב', async () => {
+  it('תפריט קבוע 1-4 בכל שלב, והפתיח לפי השלב', async () => {
+    const intro: Record<string, string> = {
+      setup: 'תפריט הכנה בלי רישום', registration: 'פתיח הודעה משמחת',
+      closed: 'תפריט ארבעה מקשים', distribution: 'תפריט ארבעה מקשים',
+    }
     for (const p of ['setup', 'registration', 'closed', 'distribution']) {
       phase(p)
       const r = await call({ menu_pick: '' })
       expect(first(r)).toMatchObject({ type: 'simpleMenu', enabledKeys: '1,2,3,4' })
-      expect(text(r)).toContain('תפריט ארבעה מקשים')
+      expect(text(r)).toContain(intro[p])
+      if (p !== 'registration') expect(text(r)).not.toContain('פתיח הודעה משמחת')
     }
+    phase('setup', { testPhones: ['0501234567'] })
+    expect(text(await call({ menu_pick: '' }))).toContain('פתיח הודעה משמחת')
   })
 
-  it('1 ברישום פתוח: מסלול הרישום', async () => {
+  it('1 ברישום פתוח: הפתיח החדש, והקשה 1 מובילה למסלול הרישום', async () => {
     phase('registration')
+    expect(text(await call({ menu_pick: '' }))).toContain('פתיח הודעה משמחת')
     const r = await call({ menu_pick: '1' })
     expect(text(r)).toContain('כולל ספרת ביקורת'); expect(text(r)).toContain('r_id')
+  })
+
+  it('נוסחי ברירת המחדל: הפתיח של הרישום והנוסח של "כבר נרשמתם"', async () => {
+    const { HOLIDAY_MESSAGE_META } = await vi.importActual<typeof import('@/lib/holidayPhoneMessages')>('@/lib/holidayPhoneMessages')
+    const def = (key: string) => HOLIDAY_MESSAGE_META.find(m => m.key === key)?.defaultText
+    expect(def('phase_menu_open')).toMatch(/^שלום וברכה, הודעה משמחת מטעם איגוד הצאצאים.*למעבר לרישום כעת הקישו 1, לשמיעת הזכאות שלכם הקישו 2/)
+    expect(def('phase_menu_setup')).not.toContain('הקישו 1')
+    expect(def('elig_already_registered')).toBe('כבר נרשמתם לחלוקה זו, נשלח לכם עדכון מסודר בטלפון ובמייל על המשך הטיפול בחלוקה, נא עקבו אחר ההודעות, אין צורך לפנות למשרד בעניין זה')
+    expect(def('elig_registered_approved')).toBeUndefined()
   })
 
   it('1 בהכנה: "טרם נפתח"; מספר ניסיון — מסלול הרישום', async () => {
@@ -319,7 +336,8 @@ describe('הקו לפי שלב החלוקה — תפריט 4 מקשים', () => 
     expect(text(wrong)).toContain('e_bd2'); expect(text(wrong)).toContain('אינו תואם לתאריך שמעודכן במערכת')
     expect(text(await call({ menu_pick: '2', e_id: '123456789' }))).toContain('מספר שגוי')
     data.getRecipient.mockResolvedValue({ id: 'r1', approval_status: 'approved' })
-    expect(text(await call({ menu_pick: '2', ...elig }))).toContain('נרשמתם ואושרתם')
+    const approved = text(await call({ menu_pick: '2', ...elig }))
+    expect(approved).toContain('כבר נרשמתם לחלוקה זו'); expect(approved).not.toContain('ואושרתם')
     data.getRecipient.mockResolvedValue(null)
     expect(text(await call({ menu_pick: '2', ...elig }))).toContain('זמן הרישום חלף')
     phase('registration')

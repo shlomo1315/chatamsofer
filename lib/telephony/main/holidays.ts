@@ -403,12 +403,13 @@ async function phasedLine(k: Kit, live: LiveDistribution, rules: DistRules): Pro
   const phase = rules.phase
   const test = isTestCaller(rules, k.ctx.phone)
   const choice = tapped(k.ctx.params[MENU_VAR])
+  const regOpen = phase === 'registration' || (phase === 'setup' && test)
   if (!choice) {
     const distName = `${live.name}${live.year ? ` ${live.year}` : ''}`
-    return menu(MENU_VAR, ['1', '2', '3', '4'], k.files('phase_menu', { distribution: distName }), { timeout: 7 })
+    const intro = regOpen ? 'phase_menu_open' : phase === 'setup' ? 'phase_menu_setup' : 'phase_menu'
+    return menu(MENU_VAR, ['1', '2', '3', '4'], k.files(intro, { distribution: distName }), { timeout: 7 })
   }
   console.log(`${LOG} callId=${k.ctx.callId} phase=${phase} key=${choice}${test ? ' TEST' : ''}`)
-  const regOpen = phase === 'registration' || (phase === 'setup' && test)
   if (choice === '2') return await phoneEligibility(k, live.id, rules, regOpen)
   if (choice === '3') return phase === 'distribution' ? await distributionInfo(k, live) : await phoneHearCenter(k, live.id, rules)
   if (choice === '4') return k.end('general_announcements')
