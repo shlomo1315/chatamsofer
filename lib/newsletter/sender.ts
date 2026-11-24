@@ -35,10 +35,14 @@ function adminClient(): SupabaseClient | null {
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
-/** כתובת ש-Resend יקבל: ASCII בלבד, חלק מקומי, @, ודומיין עם סיומת של 2 אותיות לפחות. */
+/**
+ * כתובת ש-Resend יקבל: ASCII בלבד; חלק מקומי בלי נקודה בהתחלה, בסוף או כפולה;
+ * דומיין מתוויות של אותיות, ספרות ומקף (לא בקצוות), עם סיומת של 2 אותיות לפחות.
+ */
 export function isSendableEmail(email: string): boolean {
-  return /^[!-~]+$/.test(email)
-    && /^[^\s@<>(),;:"[\]\\]+@[^\s@<>(),;:"[\]\\.]+(\.[^\s@<>(),;:"[\]\\.]+)*\.[A-Za-z]{2,}$/.test(email)
+  const LOCAL = "[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+"
+  const LABEL = '[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?'
+  return new RegExp(`^${LOCAL}(?:\\.${LOCAL})*@(?:${LABEL}\\.)+[A-Za-z]{2,}$`).test(email)
 }
 
 interface CampaignRow {

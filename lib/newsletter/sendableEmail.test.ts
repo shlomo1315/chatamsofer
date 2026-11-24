@@ -18,6 +18,11 @@ describe('isSendableEmail', () => {
       'a0527618765@g.k',
       'a@w0548494514.c',
       '0533195278@30005000.,com',
+      '.s053416061@gmail.com',
+      'hadasg@.bbm.org.il',
+      'a..b@gmail.com',
+      'ab.@gmail.com',
+      'a@-gmail.com',
       'no-at-sign.com',
       'a@b@c.com',
     ]) {
