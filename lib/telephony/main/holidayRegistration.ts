@@ -202,7 +202,7 @@ export async function phoneEligibility(
   const name = readableName(ben)
   const rec = await getRecipient(distId, ben.id, 'id, approval_status')
   console.log(`${LOG} callId=${callId} eligibility ben=${ben.id} registered=${!!rec} open=${registrationOpen}`)
-  if (rec) return k.end(rec.approval_status === 'approved' ? 'elig_registered_approved' : 'elig_registered_pending', { name })
+  if (rec) return rec.approval_status === 'approved' ? k.end('elig_already_registered') : k.end('elig_registered_pending', { name })
   if (!registrationOpen) return k.end('elig_registration_passed', { name })
   if (!memberCanRegister(ben)) return k.end('not_eligible')
   if (blockedByDeepReview(rules, ben.eligibility_status)) return k.end('reg_deep_review')
