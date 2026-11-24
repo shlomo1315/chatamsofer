@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
   // הייתה סיבת האיטיות של הדף כולו.
 
   // 🔴 "חגים בלבד" (ברירת המחדל): לא שולפים ולא מחזירים יולדות או צאצאים.
-  // מועד הסגירה לשעון העצר בראש דף החגים (תצוגה בלבד).
+  // מועד הסגירה לשעון העצר בראש דף החגים (וגם סוגר את הרישום בפועל, ראו lib/distributionsShareScope).
   const [holidaysOnly, closesAt] = await Promise.all([getHolidaysOnly(admin), getClosesAt(admin)])
   if (holidaysOnly) {
     return NextResponse.json(
