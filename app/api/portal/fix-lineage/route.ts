@@ -5,6 +5,7 @@ import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { maybeMarkDocsReturned } from '@/lib/docsReturnCheck'
 import { normalizeLineageNodeName, lineageIdentityKey } from '@/lib/lineageNameFormat'
 import { earlyManualBlocked } from '@/lib/lineageFixApply'
+import { latinChainError } from '@/lib/lineageChainEdit'
 
 export const dynamic = 'force-dynamic'
 
@@ -58,6 +59,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'שרשרת דורות לא תקינה' }, { status: 400 })
     }
   }
+  // 🔴 A6: שמות הדורות בעברית בלבד.
+  const latinErr = latinChainError(chain)
+  if (latinErr) return NextResponse.json({ error: latinErr }, { status: 400 })
 
   const { data: ben } = await admin
     .from('beneficiaries')

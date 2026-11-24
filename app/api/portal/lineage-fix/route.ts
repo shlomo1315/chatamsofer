@@ -15,6 +15,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { validateFixRequest, cleanFixText } from '@/lib/lineageFixRequest'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
+import { latinChainError } from '@/lib/lineageChainEdit'
 import { markMaternityInquiryAnswered } from '@/lib/maternityInquiry'
 
 export const dynamic = 'force-dynamic'
@@ -69,6 +70,9 @@ export async function POST(request: NextRequest) {
     if (chain.some(r => !r.name)) {
       return NextResponse.json({ error: 'יש דור ללא שם' }, { status: 400 })
     }
+    // 🔴 A6: שמות הדורות בעברית בלבד.
+    const latinErr = latinChainError(chain)
+    if (latinErr) return NextResponse.json({ error: latinErr }, { status: 400 })
   }
 
   // ⚠️ הטקסט נדרש רק כשאין שרשרת: אחרת ההצעה כבר מפורשת, ואילוץ הסבר
