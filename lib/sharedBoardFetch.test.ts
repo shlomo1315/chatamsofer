@@ -12,7 +12,51 @@ const hanging = (_: string, init?: RequestInit) => new Promise<Response>((_res, 
 describe('fetchSharedBoard', () => {
   it('מחזיר נתונים כשהשרת עונה', async () => {
     const r = await fetchSharedBoard(async () => json({ distributions: [] }))
-    expect(r).toEqual({ kind: 'ok', data: { distributions: [] } })
+    expect(r).toEqual({ kind: 'ok', data: { distributions: [], recipients: [] } })
+  })
+
+  // 24.11.2026: תשובה אחת עם כל הנרשמים לא עברה בזמן בטלפון — עכשיו חלק-אחר-חלק
+  it('טוען את הנרשמים בחלקים עד שהשרת מסמן שאין עוד', async () => {
+    const urls: string[] = []
+    const r = await fetchSharedBoard(async u => {
+      urls.push(u)
+      if (urls.length === 1) return json({ distributions: [{ id: 'd' }], closesAt: 'x', recipients: [{ id: 1 }, { id: 2 }], hasMore: true })
+      if (urls.length === 2) return json({ recipients: [{ id: 2 }, { id: 3 }], hasMore: true })
+      return json({ recipients: [{ id: 4 }], hasMore: false })
+    }, 1000, 'live')
+    expect(urls).toEqual([
+      '/api/shared/distributions?dist=live',
+      '/api/shared/distributions?part=1&dist=live',
+      '/api/shared/distributions?part=2&dist=live',
+    ])
+    expect(r.kind).toBe('ok')
+    if (r.kind === 'ok') {
+      // ההגדרות מהחלק הראשון נשמרות, ונרשם שהופיע בשני חלקים נספר פעם אחת
+      expect(r.data.closesAt).toBe('x')
+      expect(r.data.distributions).toEqual([{ id: 'd' }])
+      expect((r.data.recipients as { id: number }[]).map(x => x.id)).toEqual([1, 2, 3, 4])
+    }
+  })
+
+  it('כל חלק מקבל מגבלת זמן משלו, וכשל באמצע מציג מה נטען וכמה זמן לקח', async () => {
+    let n = 0
+    const r = await fetchSharedBoard(async (u, init) => {
+      n++
+      if (n === 1) return json({ recipients: [{ id: 1 }], hasMore: true, serverMs: 1500 })
+      return hanging(u, init)
+    }, 30)
+    expect(r.kind).toBe('error')
+    if (r.kind === 'error') {
+      expect(r.message).toContain('לא ענה בזמן')
+      expect(r.message).toContain('נכשל חלק 2, אחרי 1 נרשמים')
+      expect(r.message).toContain("שרת 1.5 ש'")
+    }
+  })
+
+  it('401 בחלק המשך מחזיר למסך הסיסמה', async () => {
+    let n = 0
+    const r = await fetchSharedBoard(async () => (++n === 1 ? json({ recipients: [], hasMore: true }) : json({}, 401)))
+    expect(r).toEqual({ kind: 'locked' })
   })
 
   it('401 מחזיר למסך הסיסמה', async () => {
