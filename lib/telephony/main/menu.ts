@@ -14,7 +14,7 @@ export const mainMenu: TlHandler = async (ctx) => {
   const text = (k: string) => m[k]?.text ?? ''
   const keys = ['1', '2', '9']
   const menuFiles = () => say(text('menu'))
-  if (!choice || choice === 'ERROR') return menu('menuChoice', keys, say(text('welcome'), text('menu')))
+  if (!choice || choice === 'ERROR') return menu('menuChoice', keys, say(text('temp_notice'), text('welcome'), text('menu')))
   if (choice === '9') return goodbye(text('notice'))
   if (choice === '1') return holidays(ctx)
   if (choice === '2') return maternity(ctx)

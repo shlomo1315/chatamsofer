@@ -22,6 +22,13 @@ export type MainMenuMsgMeta = {
 
 export const MAIN_MENU_MESSAGE_META: MainMenuMsgMeta[] = [
   {
+    key: 'temp_notice',
+    label: 'הודעה זמנית בתחילת התפריט',
+    defaultText: 'שימו לב, נשלחה אליכם הודעה חדשה. ניתן לשמוע את ההודעה בשלוחה 9.',
+    allowAudio: true,
+    hint: 'נשמעת לפני "ברוכים הבאים", רק בפתיחה. ריק — מדלגים עליה (לרוקן בסוף הקמפיין).',
+  },
+  {
     key: 'welcome',
     label: 'ברוכים הבאים',
     defaultText: 'ברוכים הבאים להיכל החתם סופר',
