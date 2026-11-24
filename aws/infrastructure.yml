@@ -851,7 +851,7 @@ Resources:
                     Statement:
                       ByteMatchStatement: {SearchString: /api/webhooks/technoline/, FieldToMatch: {UriPath: {}}, PositionalConstraint: STARTS_WITH, TextTransformations: [{Priority: 0, Type: NONE}]}
           VisibilityConfig: {SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: no-user-agent}
-        # XSS בגוף הבקשה נחסם כמו קודם, חוץ מעורך מייל הגיליונות ועורך הניוזלטר (מנהל מחובר, מישראל בלבד, והשרת מנקה את ה-HTML)
+        # XSS בגוף הבקשה נחסם כמו קודם, חוץ מעורך מייל הגיליונות, עורך הניוזלטר ועורך ההודעה על תקלה בסדר הדורות (מנהל מחובר, מישראל בלבד, והשרת מנקה את ה-HTML)
         - Name: xss-body
           Priority: 7
           Action: {Block: {}}
@@ -865,6 +865,7 @@ Resources:
                         Statements:
                           - ByteMatchStatement: {SearchString: /api/admin/gilyonot/, FieldToMatch: {UriPath: {}}, PositionalConstraint: STARTS_WITH, TextTransformations: [{Priority: 0, Type: NONE}]}
                           - ByteMatchStatement: {SearchString: /api/admin/campaigns/, FieldToMatch: {UriPath: {}}, PositionalConstraint: STARTS_WITH, TextTransformations: [{Priority: 0, Type: NONE}]}
+                          - ByteMatchStatement: {SearchString: /api/admin/beneficiaries/lineage-fault-notice, FieldToMatch: {UriPath: {}}, PositionalConstraint: STARTS_WITH, TextTransformations: [{Priority: 0, Type: NONE}]}
           VisibilityConfig: {SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: xss-body}
         - Name: known-bad-inputs
           Priority: 3

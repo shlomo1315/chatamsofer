@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  DEFAULT_LINEAGE_FAULT_TEMPLATE, NAME_TOKEN, normalizeLineageFaultTemplate, planLineageFaultNotice, recipientNameOf,
+  DEFAULT_LINEAGE_FAULT_TEMPLATE, NAME_TOKEN, normalizeLineageFaultTemplate, planLineageFaultNotice, recipientNameOf, requestErrorMessage,
   type FaultRow,
 } from './lineageFaultNotice'
 import { lineageFaultEmail } from './lineageFaultEmail'
@@ -90,5 +90,17 @@ describe('normalizeLineageFaultTemplate', () => {
 
   it('קלט שאינו אובייקט מחזיר את ברירת המחדל', () => {
     expect(normalizeLineageFaultTemplate(null)).toEqual(DEFAULT_LINEAGE_FAULT_TEMPLATE)
+  })
+})
+
+describe('requestErrorMessage', () => {
+  it('הודעה מהשרת מוצגת כמו שהיא', () => {
+    expect(requestErrorMessage(400, { error: 'שם המשפחה חסר' })).toBe('שם המשפחה חסר')
+  })
+  it('חסימת WAF (403 בלי JSON) מוצגת במפורש', () => {
+    expect(requestErrorMessage(403, {})).toMatch(/חומת ההגנה/)
+  })
+  it('כשל אחר מציג את קוד התשובה', () => {
+    expect(requestErrorMessage(502, null)).toMatch(/502/)
   })
 })

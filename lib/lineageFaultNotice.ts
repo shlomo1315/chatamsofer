@@ -84,6 +84,19 @@ export function normalizeLineageFaultTemplate(raw: unknown): LineageFaultTemplat
 
 export const isValidEmail =(s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)
 
+/**
+ * הודעת שגיאה למסך לפי תשובת השרת. כשהתשובה לא הגיעה מהקוד שלנו (אין error
+ * ב-JSON), בדרך כלל חומת ההגנה (WAF) חסמה אותה ב-403, ואז אומרים את זה במפורש.
+ */
+export function requestErrorMessage(status: number, data: unknown): string {
+  const err = data && typeof data === 'object' ? (data as { error?: unknown }).error : undefined
+  if (typeof err === 'string' && err.trim()) return err
+  if (status === 403) return 'הבקשה נחסמה בחומת ההגנה של האתר (WAF, קוד 403) ולא הגיעה לשרת. יש להעביר לצוות הפיתוח.'
+  if (status === 401) return 'פג תוקף ההתחברות (קוד 401). יש להתחבר מחדש ולנסות שוב.'
+  if (status === 0) return 'אין חיבור לשרת. יש לבדוק את החיבור לאינטרנט ולנסות שוב.'
+  return `הבקשה נכשלה בשרת (קוד ${status}).`
+}
+
 /** אותו שם נמען כמו בשליחה האישית (send-lineage-link). */
 export function recipientNameOf(row: Pick<FaultRow, 'family_name' | 'spouse_name' | 'full_name'>): string {
   return [row.family_name, row.spouse_name || row.full_name].filter(Boolean).join(' ') || 'משפחה יקרה'
