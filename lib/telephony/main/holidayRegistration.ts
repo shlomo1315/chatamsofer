@@ -19,7 +19,7 @@
 import { registerToOpenDistribution, type ActiveDistribution } from '@/lib/holidayDistributions'
 import { getDistRules, blockedByDeepReview, type DistRules } from '@/lib/holidayDistRules'
 import { asksParentBirth, checkRegistrantBirth, phoneMatches } from '@/lib/holidayPhoneRegistrationRules'
-import { notifyHolidayApproved } from '@/lib/holidayNotify'
+import { notifyHolidayReceived } from '@/lib/holidayNotify'
 import { digitsOnly } from '@/lib/idLookup'
 import { spokenCenterDetails, spokenCenterName } from '@/lib/holidayCenterSpeech'
 import { validateIsraeliId } from '@/lib/validation'
@@ -157,10 +157,11 @@ export async function phoneRegistration(k: RegKit, dist: ActiveDistribution): Pr
     }
     console.log(`${LOG} registered ben=${ben.id} dist=${dist.id} created=${result.created} approved=${!!result.approved}`)
     if (result.created && result.approved && result.recipientId) {
-      // ⚠️ המייל אינו מעכב את השיחה; כשל נרשם על השורה (notify_error).
+      // ⚠️ מייל "הבקשה התקבלה", לא מייל האישור עם סכום ושיוך כרטיס: זה נשלח
+      // רק כשהצוות מאשר. המייל אינו מעכב את השיחה; כשל נרשם על השורה (notify_error).
       const rid = result.recipientId
-      void notifyHolidayApproved([rid], { email: true, phone: false })
-        .catch(e => console.error(`${LOG} approval mail failed rec=${rid}`, e instanceof Error ? e.message : e))
+      void notifyHolidayReceived(rid)
+        .catch(e => console.error(`${LOG} received mail failed rec=${rid}`, e instanceof Error ? e.message : e))
     }
     const rec = await getRecipient(dist.id, ben.id, 'id, approval_status')
     if (!rec) return k.end('failed')

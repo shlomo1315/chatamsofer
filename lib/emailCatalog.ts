@@ -121,20 +121,23 @@ export const EMAIL_CATALOG: EmailSpec[] = [
     ],
   },
   {
-    id: 'holiday_registered',
+    // ⚠️ מפתח חדש במקום 'holiday_registered' (נוסח תשרי עם "חודש אלול"), כדי שנוסח
+    // ישן ששמור במסד לא ידרוס את הנוסח הזה. {חלוקה} = "חלוקת <שם החלוקה>".
+    // אין כאן "אושרה", סכום או שיוך כרטיס: אלה שייכים למייל האישור של הצוות.
+    id: 'holiday_received',
     group: 'registration',
-    title: 'חלוקות חגים — אישור רישום',
+    title: 'חלוקות חגים — הבקשה התקבלה',
     trigger: 'מיד לאחר שהמשפחה נרשמה לחלוקה (ממשק / טלפון / מייל)',
     recipient: 'המשפחה',
     department: 'igud',
     wired: true,
     fields: [
-      { key: 'subject', label: 'שורת הנושא', default: 'רישומכם לחלוקת החגים נקלט — היכל החתם סופר' },
-      { key: 'preheader', label: 'שורת התצוגה המקדימה', default: 'הרישום לחלוקת החגים נקלט בהצלחה.' },
-      { key: 'title', label: 'כותרת ראשית', default: 'הרישום נקלט בהצלחה' },
-      { key: 'subtitle', label: 'כותרת משנה', default: 'היכל החתם סופר · חלוקות חגים' },
-      { key: 'intro', label: 'פסקת פתיחה', multiline: true, default: 'רישומכם לחלוקת החגים נקלט בהצלחה.' },
-      { key: 'next', label: 'מה צפוי בהמשך', multiline: true, default: 'שימו לב: בעזרת השם, במהלך חודש אלול תקבלו עדכון מדויק על אופן החלוקה. אין צורך בפעולה נוספת מצדכם.' },
+      { key: 'subject', label: 'שורת הנושא', default: 'בקשתכם ל{חלוקה} התקבלה — היכל החתם סופר' },
+      { key: 'preheader', label: 'שורת התצוגה המקדימה', default: 'הבקשה התקבלה במערכת ותטופל בהקדם.' },
+      { key: 'title', label: 'כותרת ראשית', default: 'הבקשה התקבלה' },
+      { key: 'subtitle', label: 'כותרת משנה', default: '{חלוקה}' },
+      { key: 'intro', label: 'פסקת פתיחה', multiline: true, default: 'הבקשה שלכם ל{חלוקה} התקבלה במערכת ותטופל בהקדם.' },
+      { key: 'next', label: 'מה צפוי בהמשך', multiline: true, default: 'נשלח לכם עדכון מסודר בימים הקרובים בטלפון ובמייל.' },
     ],
   },
   {

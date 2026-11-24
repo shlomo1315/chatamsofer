@@ -9,7 +9,7 @@ const { data, dist, rules, notify } = vi.hoisted(() => ({
   },
   dist: { getOpenDistribution: vi.fn(), registerToOpenDistribution: vi.fn(), testDistributionFor: vi.fn(), getLiveDistribution: vi.fn().mockResolvedValue(null) },
   rules: { getDistRules: vi.fn() },
-  notify: { notifyHolidayApproved: vi.fn() },
+  notify: { notifyHolidayReceived: vi.fn() },
 }))
 vi.mock('./holidaysData', async (orig) => ({ ...(await orig<typeof import('./holidaysData')>()), ...data }))
 vi.mock('@/lib/holidayDistributions', () => dist)
@@ -72,7 +72,7 @@ beforeEach(() => {
   data.centerCapacities.mockResolvedValue({})
   data.saveCenterChoice.mockResolvedValue(null)
   data.getSpokenCenter.mockResolvedValue({ city: 'ירושלים', name: 'ירושלים', address: 'רחוב א', hours: '10-12', audio_file: null })
-  notify.notifyHolidayApproved.mockResolvedValue({ sent: 1 })
+  notify.notifyHolidayReceived.mockResolvedValue({ emailSent: true })
 })
 
 describe('רישום בטלפון בלבד', () => {
@@ -147,12 +147,12 @@ describe('רישום בטלפון בלבד', () => {
     expect(dist.registerToOpenDistribution).not.toHaveBeenCalled()
   })
 
-  it('רישום מוצלח עד הסוף: נשמר, מייל זכאות, הודעת הסיום וניתוק — בלי בחירת מוקד', async () => {
+  it('רישום מוצלח עד הסוף: נשמר, מייל "הבקשה התקבלה", הודעת הסיום וניתוק — בלי בחירת מוקד', async () => {
     dist.registerToOpenDistribution.mockResolvedValue({ ok: true, created: true, approved: true, recipientId: 'r1' })
     data.getRecipient.mockResolvedValueOnce(null).mockResolvedValue({ id: 'r1', center_id: null, approval_status: 'approved' })
     const r = await call({ ...full, r_lin: '1', r_need: '1' })
     expect(dist.registerToOpenDistribution).toHaveBeenCalledWith('b1', 'phone', { phone: '0527654321', distribution: OPEN })
-    expect(notify.notifyHolidayApproved).toHaveBeenCalledWith(['r1'], { email: true, phone: false })
+    expect(notify.notifyHolidayReceived).toHaveBeenCalledWith('r1')
     expect(text(r)).toContain('הרישום שלכם נקלט במערכת')
     expect(text(r)).toContain('הרשמתכם התקבלה בהצלחה במערכת')
     expect(text(r)).not.toContain('c_city')

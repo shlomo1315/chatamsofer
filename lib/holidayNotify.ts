@@ -12,8 +12,9 @@
 // שלא קיבלה הודעה, והיא הייתה מגיעה למוקד בלי לדעת שצריך לשייך.
 // ─────────────────────────────────────────────────────────────────────────────
 import { getServiceClient } from '@/lib/apiAuth'
-import { holidayApprovedEmail } from '@/lib/emailTemplates'
+import { holidayApprovedEmail, holidayRegisteredEmail } from '@/lib/emailTemplates'
 import { deliverMail } from '@/lib/sendMail'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { mailFor } from '@/lib/departments'
 import { placeTtsCall } from '@/lib/phoneCall'
 
@@ -63,6 +64,38 @@ export function approvalCallText(distributionName: string): string {
   return `שלום וברכה מהיכל החתם סופר בקשתכם לחלוקת ${distributionName} אושרה `
     + 'לאחר קבלת הכרטיס יש לשייך אותו בשלוחה הטלפונית בהקשה 2 כדי שיהיה פעיל '
     + 'ואני חוזר שנית הבקשה אושרה ויש לשייך את הכרטיס לאחר קבלתו'
+}
+
+/**
+ * מייל "הבקשה התקבלה" אחרי רישום בשלוחה הטלפונית — אותו מייל שהפורטל שולח.
+ *
+ * ⚠️ לא מייל האישור (holidayApprovedEmail): בשלב הרישום אין עדיין סכום, מוקד
+ * או כרטיס, ו"אושרה" עם הוראות שיוך מבלבל משפחות. notified_at לא נכתב כאן,
+ * כדי שהודעת האישור של הצוות בהמשך לא תדולג כ"כבר נשלחה".
+ */
+export async function notifyHolidayReceived(id: string): Promise<{ emailSent: boolean; error?: string }> {
+  const db = getServiceClient()
+  if (!db) return { emailSent: false, error: 'אין חיבור למסד' }
+  const { data } = await db.from('distribution_recipients').select(SELECT).eq('id', id).maybeSingle()
+  const r = data as unknown as Row | null
+  const b = r?.beneficiary
+  if (!r || !b?.email) return { emailSent: false, error: 'למשפחה אין כתובת מייל במערכת' }
+
+  const distName = [r.distribution?.name, r.distribution?.year].filter(Boolean).join(' ') || undefined
+  const name = [b.family_name, b.spouse_name || b.full_name].filter(Boolean).join(' ')
+  try {
+    await ensureEmailTexts()
+    const built = holidayRegisteredEmail(name, { distribution: distName })
+    const res = await deliverMail(b.email, built.subject, built.html, undefined, mailFor('igud'))
+    if (res.ok) return { emailSent: true }
+    const error = `מייל: ${res.error ?? 'שליחת המייל נכשלה'}`
+    await db.from('distribution_recipients').update({ notify_error: error }).eq('id', id)
+    return { emailSent: false, error }
+  } catch (e) {
+    const error = `מייל: ${e instanceof Error ? e.message : String(e)}`
+    await db.from('distribution_recipients').update({ notify_error: error }).eq('id', id)
+    return { emailSent: false, error }
+  }
 }
 
 /**
