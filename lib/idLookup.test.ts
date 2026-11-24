@@ -63,10 +63,14 @@ describe('דרכון עם אותיות — זיהוי לפי הספרות בלב
     expect(passportDigitsMatch('ab 123-4567', '1234567')).toBe(true)
     expect(passportDigitsMatch('C01234567', '01234567')).toBe(true)
   })
-  it('לא מתאים חלק מהספרות, ולא ת"ז רגילה בלי אותיות', () => {
+  it('לא מתאים חלק מהספרות', () => {
     expect(passportDigitsMatch('AB1234567', '123456')).toBe(false)
     expect(passportDigitsMatch('AB1234567', '12345678')).toBe(false)
-    expect(passportDigitsMatch('123456782', '123456782')).toBe(false)
+    expect(passportDigitsMatch('556212027', '55621202')).toBe(false)
+  })
+  it('דרכון שנשמר בספרות בלבד, בלי ספרת ביקורת תקינה, מתאים (מקרה 556212027)', () => {
+    expect(passportDigitsMatch('556212027', '556212027')).toBe(true)
+    expect(passportDigitsMatch(' 556-212027 ', '556212027')).toBe(true)
   })
   it('פחות מ-5 ספרות אינו מזהה', () => {
     expect(passportDigitsMatch('ABC1234', '1234')).toBe(false)
