@@ -35,6 +35,12 @@ function adminClient(): SupabaseClient | null {
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
+/** כתובת ש-Resend יקבל: ASCII בלבד, חלק מקומי, @, ודומיין עם סיומת של 2 אותיות לפחות. */
+export function isSendableEmail(email: string): boolean {
+  return /^[!-~]+$/.test(email)
+    && /^[^\s@<>(),;:"[\]\\]+@[^\s@<>(),;:"[\]\\.]+(\.[^\s@<>(),;:"[\]\\.]+)*\.[A-Za-z]{2,}$/.test(email)
+}
+
 interface CampaignRow {
   id: string
   subject: string
@@ -188,13 +194,27 @@ async function sendCampaignBatches(
       .eq('status', 'pending')
       .limit(BATCH_SIZE)
 
-    const recipients = (batch ?? []) as RecipientRow[]
+    const fetched = (batch ?? []) as RecipientRow[]
 
     // אין עוד נמענים — הקמפיין הושלם
-    if (!recipients.length) {
+    if (!fetched.length) {
       await finalizeCampaign(db, campaign.id)
       break
     }
+
+    // Resend דוחה את כל ה-batch בגלל כתובת פגומה אחת, לכן מסננים אותן מראש:
+    // הכתובת הפגומה מסומנת failed, ושאר ה-batch נשלח כרגיל.
+    const invalid = fetched.filter(r => !isSendableEmail(r.email))
+    if (invalid.length) {
+      await db.from('campaign_recipients').update({
+        status: 'failed',
+        attempts: MAX_ATTEMPTS,
+        error: 'כתובת מייל לא תקינה',
+      }).in('id', invalid.map(r => r.id))
+      failed += invalid.length
+    }
+    const recipients = fetched.filter(r => isSendableEmail(r.email))
+    if (!recipients.length) continue
 
     // בניית המיילים — כל אחד עם המשתנים שלו
     const payload = recipients.map(r => {
