@@ -1,7 +1,8 @@
 'use client'
 import { useState, useEffect, useCallback, useMemo, type CSSProperties, type ReactNode } from 'react'
 import ControlRoom from './panels/ControlRoom'
-import { Lock, LogIn, Loader2, Search, GitBranch } from 'lucide-react'
+import { Lock, LogIn, Loader2, Search, GitBranch, AlertTriangle, RefreshCw } from 'lucide-react'
+import { fetchSharedBoard, postSharedPassword } from '@/lib/sharedBoardFetch'
 import s from './board.module.css'
 import {
   registrationSeries, areaPaths, dayAxis, channelShares, conicOf, pctOf,
@@ -166,18 +167,17 @@ function PasswordScreen({ onAuth }: { onAuth: () => void }) {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [blocked, setBlocked] = useState(false)
 
+  // 🔴 הבקשה מוגבלת בזמן (lib/sharedBoardFetch): קודם בקשה שנתקעה השאירה
+  // את הכפתור מסתובב לנצח, וחסימת IP הוצגה בשורה קטנה שקל לפספס.
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError(''); setLoading(true)
-    try {
-      const res = await fetch('/api/shared/distributions/auth', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }),
-      })
-      if (!res.ok) { const d = await res.json(); setError(d.error ?? 'סיסמה שגויה') }
-      else onAuth()
-    } catch { setError('שגיאת תקשורת, נסה שוב') }
-    finally { setLoading(false) }
+    setError(''); setBlocked(false); setLoading(true)
+    const r = await postSharedPassword(password)
+    setLoading(false)
+    if (r.ok) onAuth()
+    else { setError(r.message); setBlocked(r.blocked) }
   }
 
   return (
@@ -202,8 +202,17 @@ function PasswordScreen({ onAuth }: { onAuth: () => void }) {
               <input type="password" value={password} onChange={e => setPassword(e.target.value)}
                 placeholder="הזן סיסמה..." autoFocus
                 className="w-full rounded-xl border border-[#e8dfc9] bg-[#faf7f0] px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#d9b95c]/60 focus:border-[#b08d3f] transition-shadow" />
-              {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
             </div>
+            {error && (
+              <div role="alert" className={`flex items-start gap-2.5 rounded-xl border px-3.5 py-3 text-sm font-medium leading-6 ${blocked ? 'border-red-300 bg-red-50 text-red-800' : 'border-red-200 bg-red-50/70 text-red-700'}`}>
+                <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+                <div>
+                  {blocked && <p className="font-bold">הכניסה חסומה זמנית</p>}
+                  <p>{error}</p>
+                </div>
+              </div>
+            )}
+            {!password && !loading && <p className="-mt-2 text-xs text-slate-500">הזן סיסמה כדי להפעיל את כפתור הכניסה</p>}
             <button type="submit" disabled={loading || !password}
               className="flex items-center justify-center gap-2 rounded-xl text-white font-bold py-3 text-sm transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ background: `linear-gradient(90deg, ${BRAND.goldDeep}, ${BRAND.gold})`, boxShadow: '0 10px 24px -14px rgba(138,106,36,0.9)' }}>
@@ -822,24 +831,29 @@ export default function SharedDistributionsPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
 
+  const [loadError, setLoadError] = useState<string | null>(null)
+
   const load = useCallback(async () => {
-    try {
-      // 🔴 מגבלת זמן: בקשה אחת שנתקעה (למשל בסינון של נטפרי) השאירה את
-      // הרענון האוטומטי "עסוק" לתמיד, והדף הפסיק לקבל נרשמים חדשים בשקט.
-      const res = await fetch('/api/shared/distributions', { cache: 'no-store', signal: AbortSignal.timeout(25_000) })
-      if (res.status === 401) { setState('locked'); return }
-      if (res.ok) {
-        const d = await res.json()
-        setDistributions(d.distributions ?? [])
-        setRecipients(d.recipients ?? [])
-        setBeneficiariesCount(d.beneficiariesCount ?? 0)
-        setMaternity(d.maternity ?? [])
-        setHolidaysOnly(d.holidaysOnly === true)
-        setClosesAt(typeof d.closesAt === 'string' ? d.closesAt : null)
-        setUpdatedAt(new Date())
-        setState('unlocked')
-      }
-    } catch { /* נשאר במצב הנוכחי; כפתור הרענון ינסה שוב */ }
+    // 🔴 מגבלת זמן: בקשה אחת שנתקעה (למשל בסינון של נטפרי) השאירה את
+    // הרענון האוטומטי "עסוק" לתמיד, והדף הפסיק לקבל נרשמים חדשים בשקט.
+    // 🔴 כשל נשמר ב-loadError ומוצג: קודם כשל בטעינה הראשונה (גם מיד אחרי
+    // סיסמה נכונה) השאיר את הדף על גלגל טעינה לנצח, בלי הודעה.
+    const r = await fetchSharedBoard()
+    if (r.kind === 'locked') { setLoadError(null); setState('locked'); return }
+    if (r.kind === 'error') { setLoadError(r.message); return }
+    const d = r.data as {
+      distributions?: Distribution[]; recipients?: Recipient[]; beneficiariesCount?: number
+      maternity?: MaternityRow[]; holidaysOnly?: boolean; closesAt?: unknown
+    }
+    setDistributions(d.distributions ?? [])
+    setRecipients(d.recipients ?? [])
+    setBeneficiariesCount(d.beneficiariesCount ?? 0)
+    setMaternity(d.maternity ?? [])
+    setHolidaysOnly(d.holidaysOnly === true)
+    setClosesAt(typeof d.closesAt === 'string' ? d.closesAt : null)
+    setUpdatedAt(new Date())
+    setLoadError(null)
+    setState('unlocked')
   }, [])
 
   // ⚠️ `force` נדרש ל"נסה שוב": איפוס `lineageLoaded` ב-state לא משנה את
@@ -942,6 +956,23 @@ export default function SharedDistributionsPage() {
   const homeGens = [...gens].sort((a, b) => b.count - a.count).slice(0, 4).sort((a, b) => a.generation - b.generation)
   const treeReady = lineageLoaded && !lineageLoading
 
+  if (state === 'checking' && loadError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f3f1ec] p-4" dir="rtl">
+        <div role="alert" className="w-full max-w-sm rounded-2xl border border-red-200 bg-white p-7 text-center shadow-sm">
+          <AlertTriangle size={30} className="mx-auto text-red-600" />
+          <h1 className="mt-3 text-lg font-extrabold text-slate-800">הנתונים לא נטענו</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-600">{loadError}</p>
+          <button type="button" onClick={() => void refresh()} disabled={refreshing}
+            className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white disabled:opacity-60"
+            style={{ background: `linear-gradient(90deg, ${BRAND.goldDeep}, ${BRAND.gold})` }}>
+            <RefreshCw size={16} className={refreshing ? 'animate-spin' : undefined} />
+            נסה שוב
+          </button>
+        </div>
+      </div>
+    )
+  }
   if (state === 'checking') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f3f1ec]" dir="rtl">
@@ -976,6 +1007,13 @@ export default function SharedDistributionsPage() {
 
   return (
     <div className={s.B} dir="rtl">
+      {loadError && (
+        <div role="alert" className="fixed inset-x-3 bottom-3 z-50 mx-auto flex max-w-md items-center gap-2.5 rounded-xl border border-red-200 bg-white px-4 py-3 text-sm text-red-700 shadow-lg">
+          <AlertTriangle size={18} className="shrink-0" />
+          <span className="flex-1">הרענון נכשל. {loadError}</span>
+          <button type="button" onClick={() => void refresh()} disabled={refreshing} className="shrink-0 font-bold underline disabled:opacity-60">נסה שוב</button>
+        </div>
+      )}
       <div className={s.app}>
         <aside className={s.side}>
           <div className={s.brand}>
