@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
 import { normalizeCardExpiry } from '@/lib/distributionCardExpiry'
+import { distributionDisabledError } from '@/lib/distributionEnabled'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,6 +27,7 @@ interface Body {
   test_mode?: boolean
   test_email?: string | null
   status?: string
+  enabled?: boolean
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -129,8 +131,17 @@ export async function PATCH(request: NextRequest) {
     updates.amount_per_family = amount
   }
 
+  // ⚠️ מתג פעילה / מושבתת — ראו lib/distributionEnabled.ts. === true כמו מצב
+  // בדיקה: undefined לא נוגע, וכיבוי מפורש מכבה.
+  if (body.enabled !== undefined) updates.enabled = body.enabled === true
+
   if (body.registration_open !== undefined) {
     const open = body.registration_open === true
+    // חלוקה מושבתת לא נפתחת לרישום (אלא אם מפעילים אותה באותה בקשה).
+    if (open && body.enabled !== true) {
+      const off = await distributionDisabledError(db, id)
+      if (off) return NextResponse.json({ error: off }, { status: 409 })
+    }
     if (open) {
       // סוגרים כל חלוקה אחרת לפני הפתיחה — בלעדיות (ראו ההערה בראש הקובץ)
       await db.from('distributions')
@@ -149,7 +160,13 @@ export async function PATCH(request: NextRequest) {
   }
 
   const { error } = await db.from('distributions').update(updates).eq('id', id)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    // העמודה נוספת במיגרציה 20261124_distributions_enabled — עד שהיא רצה המתג לא נשמר.
+    const msg = body.enabled !== undefined && /enabled/.test(error.message)
+      ? 'לא ניתן לשמור את המתג עדיין: חסרה עמודת enabled במסד (המיגרציה 20261124_distributions_enabled טרם הורצה).'
+      : error.message
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
 
   await logActivity(db, {
     userId: staff.userId, action: 'distribution_updated',

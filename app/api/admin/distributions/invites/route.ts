@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
+import { distributionDisabledError } from '@/lib/distributionEnabled'
 import { newInviteToken, normalizeExpiry, inviteExpiry, MAX_INVITE_DAYS } from '@/lib/distributionInvites'
 
 export const dynamic = 'force-dynamic'
@@ -86,6 +87,8 @@ export async function POST(request: NextRequest) {
 
   const { data: dist } = await db.from('distributions').select('id, name').eq('id', distributionId).maybeSingle()
   if (!dist) return NextResponse.json({ error: 'החלוקה לא נמצאה' }, { status: 404 })
+  const off = await distributionDisabledError(db, distributionId)
+  if (off) return NextResponse.json({ error: off }, { status: 409 })
 
   const now = new Date()
 

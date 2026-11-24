@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { unauthorized, getServiceClient, requirePermission } from '@/lib/apiAuth'
 import { deadlineState } from '@/lib/centerDeadline'
+import { distributionDisabledError } from '@/lib/distributionEnabled'
 
 export const dynamic = 'force-dynamic'
 
@@ -67,6 +68,8 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
   const { id } = await ctx.params
+  const off = await distributionDisabledError(db, id)
+  if (off) return NextResponse.json({ error: off }, { status: 409 })
   const body = await request.json().catch(() => ({})) as {
     centers_open?: boolean
     /** ⚠️ undefined = לא נגענו במועד. null = הסרת המועד. */

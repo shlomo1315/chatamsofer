@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
+import { distributionDisabledError } from '@/lib/distributionEnabled'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -51,6 +52,8 @@ export async function POST(request: NextRequest) {
   if (ids.length > MAX_BATCH) {
     return NextResponse.json({ error: `אפשר לצרף עד ${MAX_BATCH} בכל פעם` }, { status: 400 })
   }
+  const off = await distributionDisabledError(db, distributionId)
+  if (off) return NextResponse.json({ error: off }, { status: 409 })
 
   // ── החלוקה קיימת? ──
   const { data: dist } = await db

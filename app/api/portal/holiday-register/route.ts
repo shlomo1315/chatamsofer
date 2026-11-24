@@ -8,6 +8,7 @@ import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { checkInvite, INVITE_MESSAGE, type InviteRow } from '@/lib/distributionInvites'
+import { isDistributionEnabled } from '@/lib/distributionEnabled'
 
 export const dynamic = 'force-dynamic'
 
@@ -55,11 +56,13 @@ async function resolveInvite(
 
   const invite = data as InviteRow
   const { data: dist } = await db.from('distributions')
-    .select('id, name, year, amount_per_family').eq('id', invite.distribution_id).maybeSingle()
+    .select('*').eq('id', invite.distribution_id).maybeSingle()
   // ⚠️ חלוקה שנמחקה מתחת לקישור — נאמר "אינו תקין" ולא ניפול על שגיאת שרת.
-  if (!dist) return { ok: false, reason: 'not-found', message: INVITE_MESSAGE['not-found'] }
+  // 🔴 וכך גם חלוקה מושבתת: הקישור עוקף את סגירת הרישום, לא את ההשבתה.
+  if (!dist || !isDistributionEnabled(dist)) return { ok: false, reason: 'not-found', message: INVITE_MESSAGE['not-found'] }
 
-  return { ok: true, invite, distribution: dist as { id: string; name: string; year: string | null; amount_per_family: number | null } }
+  const { id, name, year, amount_per_family } = dist as { id: string; name: string; year: string | null; amount_per_family: number | null }
+  return { ok: true, invite, distribution: { id, name, year, amount_per_family } }
 }
 
 export async function GET(request: NextRequest) {

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, unauthorized, getServiceClient } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { distributionDisabledError } from '@/lib/distributionEnabled'
 import { eligibleForLoad, runLoadBatch, DEFAULT_LOAD_AMOUNT } from '@/lib/holidayCardLoad'
 import { resolveTestMode } from '@/lib/holidayTestMode'
 
@@ -171,6 +172,8 @@ export async function POST(request: NextRequest) {
 
   const distributionId = String(body.distribution_id ?? '')
   if (!distributionId) return NextResponse.json({ error: 'חסר מזהה חלוקה' }, { status: 400 })
+  const off = await distributionDisabledError(db, distributionId)
+  if (off) return NextResponse.json({ error: off }, { status: 409 })
 
   const amount = Number(body.amount ?? DEFAULT_LOAD_AMOUNT)
   if (!Number.isFinite(amount) || amount <= 0) {

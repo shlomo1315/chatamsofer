@@ -340,6 +340,8 @@ export interface Distribution {
   amount_per_family?: number
   /** הרישום פתוח? רק חלוקה פעילה מקבלת רישומים */
   registration_open?: boolean
+  /** מתג פעילה / מושבתת. false = החלוקה לא עובדת בשום ערוץ (חסר = פעילה) */
+  enabled?: boolean | null
   registration_opened_at?: string
   registration_closed_at?: string
   created_by?: string

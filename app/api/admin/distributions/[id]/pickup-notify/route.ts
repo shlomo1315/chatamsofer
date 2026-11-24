@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { distributionDisabledError } from '@/lib/distributionEnabled'
 import { logActivity } from '@/lib/activityLog'
 import { scopeNotify, type NotifyCandidate } from '@/lib/pickupNotify'
 import { pickupPhoneText, pickupEmailText } from '@/lib/pickupMessages'
@@ -111,6 +112,8 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
   const { id } = await ctx.params
+  const off = await distributionDisabledError(db, id)
+  if (off) return NextResponse.json({ error: off }, { status: 409 })
   const body = await request.json().catch(() => ({})) as {
     confirm?: boolean
     ids?: string[]

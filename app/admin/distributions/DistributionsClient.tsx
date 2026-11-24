@@ -1,6 +1,7 @@
 'use client'
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Search, Gift, CalendarDays, Wallet, Users, ChevronLeft } from 'lucide-react'
 import { Distribution } from '@/types'
 import StatusBadge from '@/components/ui/StatusBadge'
@@ -15,6 +16,50 @@ const fmtCur = (n?: number) =>
     // לא הצורה שקוראים בעברית ("500 ₪" ולא "₪500").
     ? `${new Intl.NumberFormat('he-IL', { maximumFractionDigits: 0 }).format(n)} ₪`
     : '—'
+
+/**
+ * מתג פעילה / מושבתת בכרטיס. יושב בתוך הקישור לכרטיס, ולכן הלחיצה לא מנווטת.
+ * חלוקה מושבתת לא עובדת בשום ערוץ — ראו lib/distributionEnabled.ts.
+ */
+function EnabledSwitch({ id, name, initial }: { id: string; name: string; initial: boolean }) {
+  const [on, setOn] = useState(initial)
+  const [busy, setBusy] = useState(false)
+  const router = useRouter()
+
+  async function toggle(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (busy) return
+    const next = !on
+    if (!next && !confirm(`להשבית את "${name}"? החלוקה לא תעבוד בטלפון, בפורטל ובפעולות הניהול עד שתופעל שוב.`)) return
+    setBusy(true)
+    setOn(next)
+    const res = await fetch('/api/admin/distributions', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, enabled: next }),
+    }).catch(() => null)
+    setBusy(false)
+    if (!res?.ok) {
+      setOn(!next)
+      const j = await res?.json().catch(() => null) as { error?: string } | null
+      alert(j?.error ?? 'השמירה נכשלה')
+      return
+    }
+    router.refresh()
+  }
+
+  return (
+    <button type="button" role="switch" aria-checked={on} aria-label={on ? 'החלוקה פעילה — לחצו להשבתה' : 'החלוקה מושבתת — לחצו להפעלה'}
+      onClick={toggle} disabled={busy}
+      className="flex items-center gap-1.5 rounded-full px-1 py-0.5 text-[11px] font-bold text-slate-600 hover:bg-slate-100 disabled:opacity-60 transition-colors">
+      <span className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full transition-colors ${on ? 'bg-emerald-600' : 'bg-slate-300'}`}>
+        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${on ? 'right-[18px]' : 'right-0.5'}`} />
+      </span>
+      {on ? 'פעילה' : 'מושבתת'}
+    </button>
+  )
+}
 
 export default function DistributionsClient({ distributions, counts = {} }: { distributions: Distribution[]; counts?: Record<string, number> }) {
   const [query, setQuery] = useState('')
@@ -57,14 +102,15 @@ export default function DistributionsClient({ distributions, counts = {} }: { di
           {visible.map(d => {
             const registered = counts[d.id] ?? 0
             const expected = d.amount_per_family != null ? registered * Number(d.amount_per_family) : null
+            const enabled = d.enabled !== false
             return (
             <Link key={d.id} href={`/admin/distributions/${d.id}`} className="group">
-              <div className="relative overflow-hidden bg-white rounded-2xl border border-slate-200 hover:border-line-strong hover:shadow-lg transition-all duration-200 cursor-pointer h-full flex flex-col">
+              <div className={`relative overflow-hidden rounded-2xl border hover:border-line-strong hover:shadow-lg transition-all duration-200 cursor-pointer h-full flex flex-col ${enabled ? 'bg-white border-slate-200' : 'bg-slate-50 border-slate-200 grayscale'}`}>
                 {/* פס עליון צבעוני לפי מצב הרישום */}
-                <div className={`h-1 ${d.registration_open ? 'bg-emerald-600' : 'bg-slate-200'}`} />
+                <div className={`h-1 ${enabled && d.registration_open ? 'bg-emerald-600' : 'bg-slate-200'}`} />
                 <div className="p-5 flex flex-col gap-4 flex-1">
                   {/* כותרת + סטטוסים */}
-                  <div className="flex items-start justify-between gap-3">
+                  <div className={`flex items-start justify-between gap-3 ${enabled ? '' : 'opacity-60'}`}>
                     <div className="flex items-start gap-3 min-w-0">
                       <div className="w-11 h-11 bg-sand rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
                         <Gift size={20} className="text-navy" />
@@ -81,7 +127,7 @@ export default function DistributionsClient({ distributions, counts = {} }: { di
                   </div>
 
                   {/* מונה נרשמים חי — בולט */}
-                  <div className="flex items-stretch gap-3">
+                  <div className={`flex items-stretch gap-3 ${enabled ? '' : 'opacity-60'}`}>
                     <div className={`flex-1 rounded-xl border p-3 ${registered > 0 ? 'bg-sand border-gold-soft' : 'bg-slate-50 border-slate-100'}`}>
                       <div className="flex items-center gap-1.5 text-navy mb-0.5">
                         <Users size={14} />
@@ -105,6 +151,7 @@ export default function DistributionsClient({ distributions, counts = {} }: { di
                   {/* שורת מטא תחתונה */}
                   <div className="flex items-center justify-between gap-2 flex-wrap mt-auto pt-1">
                     <div className="flex items-center gap-2 flex-wrap">
+                      <EnabledSwitch id={d.id} name={d.name} initial={enabled} />
                       {d.registration_open
                         ? <span className="rounded-full bg-green-100 border border-green-300 px-2.5 py-0.5 text-[11px] font-extrabold text-green-800">🟢 פתוח לרישום</span>
                         : <span className="rounded-full bg-slate-100 border border-slate-200 px-2.5 py-0.5 text-[11px] font-bold text-slate-500">סגור לרישום</span>}
