@@ -21,7 +21,7 @@
 .ch2 .brand h1{display:block;font-size:17px;font-weight:700;line-height:1.3}
 .ch2 .brand small{color:var(--mut);font-size:13px}
 .ch2 .top-l{display:flex;align-items:center;gap:16px}
-.ch2 .back{font-size:13px;color:var(--mut);text-decoration:none;white-space:nowrap}
+.ch2 .back{font:inherit;font-size:13px;color:var(--mut);background:none;border:0;padding:0;cursor:pointer;white-space:nowrap}
 .ch2 .back:hover{color:var(--tx)}
 .ch2 .live{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--mut);white-space:nowrap}
 .ch2 .live::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--ok);animation:ch2-pulse 2s ease-in-out infinite}
