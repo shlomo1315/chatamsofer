@@ -84,6 +84,21 @@ export function defaultMainMenuMessages(): MainMenuMessages {
  * ⚠️ הודעה שנוספה לקוד אחרי השמירה האחרונה חייבת לקבל את ברירת המחדל שלה
  * ולא להיעלם — אחרת התפריט משמיע שקט במקום מקש שקיים.
  */
+/**
+ * ברירות מחדל קודמות מהקוד. 🔴 שמירה במסך הניהול כתבה בעבר את כל ההודעות,
+ * כולל ברירות מחדל שלא נערכו, ולכן "אין כרגע הודעות חדשות" הוקפא במסד וגבר
+ * על נוסח חנוכה בשלוחה 9 (24.11). ערך שמור ששווה לאחד מאלה = לא נערך.
+ */
+export const LEGACY_DEFAULT_TEXTS: Record<string, string[]> = {
+  notice: ['אין כרגע הודעות חדשות'],
+}
+
+const norm = (s: string) => s.trim().replace(/[.\s]+$/, '')
+
+function isLegacyDefault(key: string, text: string): boolean {
+  return (LEGACY_DEFAULT_TEXTS[key] ?? []).some(t => norm(t) === norm(text))
+}
+
 export function mergeMainMenuMessages(saved: unknown): MainMenuMessages {
   const out = defaultMainMenuMessages()
   if (!saved || typeof saved !== 'object') return out
@@ -91,12 +106,28 @@ export function mergeMainMenuMessages(saved: unknown): MainMenuMessages {
     const v = (saved as Record<string, unknown>)[m.key]
     if (!v || typeof v !== 'object') continue
     const rec = v as { text?: unknown; audio?: unknown }
+    // נוסח ישן שלא נערך: גם קובץ קול שצורף אליו משמיע את הנוסח הישן
+    if (typeof rec.text === 'string' && isLegacyDefault(m.key, rec.text)) continue
     out[m.key] = {
       // ⚠️ מחרוזת ריקה נשמרת כפי שהיא: "ריק = דלג" הוא בחירה מפורשת
       // (למשל ברכת פתיחה שלא רוצים), ולא היעדר הגדרה.
       text: typeof rec.text === 'string' ? rec.text : m.defaultText,
       audio: typeof rec.audio === 'string' && rec.audio ? rec.audio : null,
     }
+  }
+  return out
+}
+
+/**
+ * מה שנשמר במסד: רק הודעות שנערכו. הודעה ששווה לברירת המחדל ובלי קובץ קול
+ * לא נשמרת, כדי ששינוי נוסח בקוד ייכנס לתוקף ולא יוקפא בשמירה הבאה.
+ */
+export function toStoredMainMenuMessages(input: MainMenuMessages): MainMenuMessages {
+  const merged = mergeMainMenuMessages(input)
+  const out: MainMenuMessages = {}
+  for (const m of MAIN_MENU_MESSAGE_META) {
+    const rec = merged[m.key]
+    if (rec && (rec.audio || rec.text !== m.defaultText)) out[m.key] = rec
   }
   return out
 }
@@ -123,10 +154,9 @@ export async function saveMainMenuMessages(input: MainMenuMessages): Promise<boo
   if (!admin) return false
   // ⚠️ ממוזג מעל ברירות המחדל ולא נשמר כפי שהתקבל: קלט חלקי היה מוחק
   // הודעות שלא נערכו.
-  const merged = mergeMainMenuMessages(input)
   const { error } = await admin.from('app_settings').upsert({
     key: MAIN_MENU_MSG_KEY,
-    value: JSON.stringify(merged),
+    value: JSON.stringify(toStoredMainMenuMessages(input)),
     updated_at: new Date().toISOString(),
   }, { onConflict: 'key' })
   return !error
