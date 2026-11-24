@@ -1551,13 +1551,17 @@ export function lineageOrderFixEmail(opts: {
   const body = `
     <p style="margin:0 0 14px;color:#0f172a;font-size:18px;font-weight:800;">לכבוד משפחת ${escapeHtml(opts.recipientName)},</p>
     <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.8;">
-      במסגרת עדכון מאגר צאצאי מרן החתם סופר זי"ע, נבקשכם לעבור על <strong>סדר הדורות</strong> הרשום אצלנו
-      ולוודא שהוא מדויק. בקישור שלהלן יופיעו פרטיכם ושרשרת הדורות כפי שהיא במערכת,
-      ותוכלו לתקן את הסדר במידת הצורך.
+      המערכת האוטומטית שלנו זיהתה רישום שגוי ב<strong>סדר הדורות</strong> שלכם.
+    </p>
+    <p style="margin:0 0 16px;color:#0f172a;font-size:15px;line-height:1.8;font-weight:700;">
+      שימו לב: עד לתיקון סדר הדורות הנכון, דור אחר דור עד לרבינו החתם סופר, לא נוכל לאשר את רישומכם באיגוד הצאצאים.
+    </p>
+    <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.8;">
+      בקישור שלהלן יופיעו פרטיכם ושרשרת הדורות כפי שהיא במערכת, ובו יש לתקן את הסדר.
     </p>
     <div style="text-align:center;margin:0 0 18px;">
       <a href="${escapeHtml(opts.link)}" style="display:inline-block;background:#4f46e5;color:#fff;font-size:16px;font-weight:800;text-decoration:none;border-radius:12px;padding:14px 32px;">
-        לתיקון סדר הדורות
+        לתיקון סדר הדורות הקישו כאן
       </a>
     </div>
     <!-- ⚠️ 30 יום — חייב להתאים ל-LINK_DAYS ב-send-lineage-link. הנוסח הקודם
@@ -1571,7 +1575,7 @@ export function lineageOrderFixEmail(opts: {
   return {
     subject: 'תיקון סדר הדורות — איגוד צאצאי החתם סופר',
     html: shell({
-      preheader: 'נא לעבור על סדר הדורות הרשום במאגר',
+      preheader: 'זוהה רישום שגוי בסדר הדורות. עד לתיקון לא נוכל לאשר את הרישום באיגוד',
       accent: '#4f46e5',
       title: 'תיקון סדר הדורות',
       subtitle: 'איגוד צאצאי החתם סופר',
