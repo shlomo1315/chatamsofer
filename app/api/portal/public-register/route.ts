@@ -22,6 +22,7 @@ import { registerToOpenDistribution } from '@/lib/holidayDistributions'
 import type { RegisterSource } from '@/lib/distributionSources'
 import { addDescendantToMailing } from '@/lib/gilyonotDescendants'
 import { earlyManualBlocked, manualAncestorNames } from '@/lib/lineageFixApply'
+import { latinChainError } from '@/lib/lineageChainEdit'
 
 export const dynamic = 'force-dynamic'
 
@@ -154,6 +155,11 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
   if (!community_affiliation || !String(community_affiliation).trim()) {
     return NextResponse.json({ error: 'יש להזין השתייכות קהילתית' }, { status: 400 })
   }
+
+  // 🔴 A6: שמות הדורות בעברית בלבד (גם בשמות חדשים שנוספו לעץ).
+  const latinErr = latinChainError(lineage_chain)
+    ?? latinChainError(Array.isArray(lineage_manual) ? lineage_manual.map((name: unknown) => ({ name })) : null)
+  if (latinErr) return NextResponse.json({ error: latinErr }, { status: 400 })
 
   // ⚠️ "מענק לקראת החגים" — מי שסימן אותו חייב לציין באילו חגים. עד כה זה נאכף
   // בטופס שלנו בלבד, ולכן טופס נדרים (matara.pro) שפונה ישירות ל-API היה יכול

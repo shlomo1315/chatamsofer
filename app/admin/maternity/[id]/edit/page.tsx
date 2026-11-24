@@ -139,12 +139,14 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
     try {
       let newCertUrl = certUrl ?? undefined
       if (certFile && motherId) {
-        const path = `maternity/${motherId}/${Date.now()}_${certFile.name}`
-        const { error: upErr } = await supabase.storage.from('documents').upload(path, certFile)
-        if (!upErr) {
-          const { data: pub } = supabase.storage.from('documents').getPublicUrl(path)
-          newCertUrl = pub.publicUrl
-        }
+        // 🔴 D1: דרך השרת. העלאה ישירה נחסמה ב-RLS (ושם עברי בנתיב נדחה), והשגיאה
+        // נבלעה — התיק נשמר בלי האישור והמשתמש לא ידע. עכשיו כשל עוצר את השמירה.
+        const fd = new FormData()
+        fd.append('file', certFile); fd.append('beneficiaryId', motherId)
+        const res = await fetch('/api/admin/maternity/birth-certificate', { method: 'POST', body: fd })
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok || !json.url) throw new Error(`העלאת אישור הלידה נכשלה: ${json.error || res.status}`)
+        newCertUrl = json.url
       }
 
       const sixEnd = addWeeks(new Date(babyBirthDate), 6).toISOString().split('T')[0]
@@ -252,8 +254,8 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
 
       router.push(`/admin/maternity/${id}`)
       router.refresh()
-    } catch {
-      setSaveError('שגיאה בשמירה — נסה שוב')
+    } catch (e) {
+      setSaveError(e instanceof Error && e.message.startsWith('העלאת') ? e.message : 'שגיאה בשמירה — נסה שוב')
       setSaving(false)
     }
   }

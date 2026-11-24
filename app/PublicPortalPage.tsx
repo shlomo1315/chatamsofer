@@ -2147,6 +2147,11 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         // פותחים את שדה הקוד: הקוד הקודם עדיין בתוקף והמשתמש יכול להשתמש בו.
         if (typeof data.retryAfter === 'number' && data.retryAfter > 0) {
           setCodeCooldown(Math.ceil(data.retryAfter)); setEmailStep('code')
+        } else {
+          // 🔴 C1: שליחה שנכשלה (למשל 502) השאירה את מסך הקוד פתוח מניסיון
+          // קודם, והמשתמש ראה "שלחנו קוד" ירוק יחד עם "שליחת המייל נכשלה".
+          // השרת כבר החליף את הקוד, כך שגם הקוד הקודם אינו תקף — חוזרים למסך הבחירה.
+          setEmailStep(''); setAuthCode('')
         }
         setError(data.error || 'שגיאת שרת'); setLoading(false); return
       }

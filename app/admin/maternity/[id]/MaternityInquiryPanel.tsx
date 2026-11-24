@@ -4,7 +4,7 @@ import { staffDisplayName } from '@/lib/staffInitials'
 import { useRouter } from 'next/navigation'
 import { Send, Loader2, MessageSquare, Mail, GitBranch, AlertTriangle } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
-import { mentionsLineageOrder } from '@/lib/lineageMention'
+import { mentionsLineageOrder, mentionsLink } from '@/lib/lineageMention'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // שרשור הבירור עם היולדת.
@@ -204,6 +204,13 @@ export default function MaternityInquiryPanel({ aidId, motherName, hasEmail, can
                     : 'קישור לתיקון הדורות לא זמין — אין כרטסת משפחה. ההודעה תישלח בלי קישור.'}
                 </span>
               </label>
+              {/* 🔴 A2 (16.11): "מצ"ב קישור" נשלח כשהתיבה לא מסומנת — המשפחה קיבלה מייל בלי קישור. */}
+              {mentionsLink(text) && !(canLinkLineage && withLineage) && (
+                <p role="alert" className="mb-2 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-900">
+                  בהודעה כתוב &quot;קישור&quot;, אבל שום קישור לא יצורף.
+                  {canLinkLineage ? ' אם הכוונה לתיקון סדר הדורות, סמנו את התיבה למעלה.' : ''}
+                </p>
+              )}
 
               <div className="flex items-end gap-2">
                 <textarea

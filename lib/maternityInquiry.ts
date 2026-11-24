@@ -159,6 +159,9 @@ export async function sendMaternityInquiry(
           <a href="${url}" style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:700;">
             לעדכון סדר הדורות
           </a>
+          <p style="margin:12px 0 0;color:#6366f1;font-size:12px;line-height:1.6;direction:ltr;text-align:right;word-break:break-all;">
+            ${url}
+          </p>
         </td></tr>
       </table>`
   }

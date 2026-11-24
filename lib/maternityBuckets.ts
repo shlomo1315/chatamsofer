@@ -159,3 +159,23 @@ export function pickNextPending<T extends BucketAid & { id: string }>(rows: T[])
   const row = rows.find(a => !awaitingInquiryReply(a) && !awaitingFixes(a))
   return row ? row.id : null
 }
+
+/**
+ * 🔴 E: הקפיצה אחרי אישור — לתיק *שמתחת* לנוכחי, בסדר הרשימה (חדש→ישן).
+ *
+ * pickNextPending בחר את הוותיק ביותר בתור, בעוד שהרשימה וכפתור "ללידה הבאה"
+ * ממוינים מהחדש לישן. כך כל אישור הקפיץ את המזכירות לתחתית הרשימה ("קופץ לי
+ * הראשון למטה") במקום לתיק הבא. בסוף הרשימה חוזרים לראשה, כמו לולאת עבודה.
+ */
+export function pickNextPendingAfter<T extends BucketAid & { id: string; created_at?: string | null }>(
+  rows: T[], current: { id: string; created_at?: string | null },
+): string | null {
+  let below: T | null = null
+  let top: T | null = null
+  for (const a of rows) {
+    if (a.id === current.id || awaitingInquiryReply(a) || awaitingFixes(a)) continue
+    if (!top || before(a, top)) top = a
+    if (before(current, a) && (!below || before(a, below))) below = a
+  }
+  return (below ?? top)?.id ?? null
+}

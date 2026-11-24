@@ -14,14 +14,42 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 export type PublicTokenKind = 'g' | 's' | 'l' | 'n' | 'm' | 'f' | 'a'
 
 const TTL_MS = 90 * 24 * 60 * 60 * 1000 // 90 יום (ברירת מחדל)
-// תוקף מותאם לכל סוג — תיקון שם תקף 7 ימים בלבד (חלון קצר, מאובטח יותר)
+// תוקף מותאם לכל סוג.
+//
+// 🔴 A7 (24.11): תיקון שם היה תקף 7 ימים בלבד, ומשפחות שפתחו את המייל אחרי
+// שבוע קיבלו "הקישור אינו תקין" בלי דרך להמשיך. עכשיו 30 יום (ניתן לשינוי
+// ב-NAME_FIX_LINK_DAYS), ובדף שפג יש כפתור לקבלת קישור חדש למייל הרשום.
 //
 // ⚠️ מעקב הזמנה ביריד תקף שנה: הלקוח מקבל את הקישור במייל, ועשוי לחזור
 // אליו הרבה אחרי המשלוח כדי לאמת מה הזמין. קישור שפג הופך את המייל
 // לחסר ערך, ואין כאן מידע רגיש מעבר לפרטי ההזמנה שלו עצמו.
 const TTL_BY_KIND: Partial<Record<PublicTokenKind, number>> = {
-  n: 7 * 24 * 60 * 60 * 1000,
+  n: nameFixLinkDays() * 24 * 60 * 60 * 1000,
   f: 365 * 24 * 60 * 60 * 1000,
+}
+
+/** תוקף קישור השלמת שם התינוק בימים (ברירת מחדל 30). */
+export function nameFixLinkDays(): number {
+  const d = Number(process.env.NAME_FIX_LINK_DAYS)
+  return Number.isFinite(d) && d >= 1 && d <= 365 ? Math.floor(d) : 30
+}
+
+/**
+ * מזהה הלידה מטוקן שחתימתו תקינה — גם אם פג תוקפו.
+ *
+ * ⚠️ לשימוש בחידוש קישור בלבד: הקישור החדש נשלח רק למייל הרשום בתיק,
+ * כך שמי שמחזיק טוקן ישן לא מקבל גישה — רק גורם לשליחה לבעלת התיק.
+ */
+export function aidIdFromSignedToken(token: string | undefined | null, kind: PublicTokenKind): string | null {
+  if (!token) return null
+  let decoded: string
+  try { decoded = Buffer.from(token, 'base64url').toString('utf-8') } catch { return null }
+  const lastSep = decoded.lastIndexOf(':')
+  if (lastSep < 0) return null
+  const payload = decoded.slice(0, lastSep)
+  if (!verifySignature(payload, decoded.slice(lastSep + 1))) return null
+  const [k, aidId, exp] = payload.split(':')
+  return payload.split(':').length === 3 && k === kind && aidId && exp ? aidId : null
 }
 
 // ⚠️ מחרוזת ריקה = אין סוד חתימה, ולכן אין קישור (ראו lib/signedToken).

@@ -4,6 +4,7 @@ import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { generateCode, hashCode, maskEmail } from '@/lib/portalPassword'
 import { normalizeId, resolveBeneficiaryByEnteredId } from '@/lib/portalBeneficiary'
 import { deliverMail } from '@/lib/sendMail'
+import { logActivity } from '@/lib/activityLog'
 
 export const dynamic = 'force-dynamic'
 
@@ -115,14 +116,23 @@ export async function POST(request: NextRequest) {
   // פשוט לא נבדקה במסלול הזה, וכל נמען ג'ימייל המשיך לקבל דרך Gmail — בעוד
   // שהמסך במערכת הציג 100%. transactional: true מונע כותרות הסרה (קוד
   // חד-פעמי אינו דיוור). זהה ל-lib/transactionalMail.
-  const mail = await deliverMail(data.email, 'קוד אימות — אזור אישי היכל החתם סופר', codeEmailHtml(code),
+  //
+  // 🔴 C1: כתובות שמורות לעיתים באותיות גדולות (N3...@GMAIL.COM). שולחים
+  // ומציגים באותיות קטנות — ספקי הדואר מתעלמים מגודל האותיות, והמסכה ברורה יותר.
+  const to = data.email.trim().toLowerCase()
+  const mail = await deliverMail(to, 'קוד אימות — אזור אישי היכל החתם סופר', codeEmailHtml(code),
     undefined, { transactional: true, gmailPriority: 'high' })
+  // 🔴 C2: לוג פנימי לכל ניסיון — המזכירות רואה ערוץ, יעד מוסתר, תוצאה ושגיאה.
+  await logActivity(admin, {
+    action: 'portal_code_sent', entityType: 'beneficiary', entityId: data.id,
+    details: { channel: 'email', to: maskEmail(to), ok: mail.ok, error: mail.ok ? null : (mail.error ?? 'unknown') },
+  })
   if (!mail.ok) return NextResponse.json({ error: 'שליחת המייל נכשלה. נסה שוב מאוחר יותר.' }, { status: 502 })
 
   // cooldown — כמה שניות הכפתור צריך להישאר נעול. מגיע מהשרת ולא מקבוע בלקוח,
   // כדי שהספירה שהמשתמש רואה תהיה בדיוק זו שתיאכף בבקשה הבאה.
   return NextResponse.json({
     ok: true, sent: true, hasEmail: true,
-    emailHint: maskEmail(data.email), cooldown: RESEND_COOLDOWN_MS / 1000,
+    emailHint: maskEmail(to), cooldown: RESEND_COOLDOWN_MS / 1000,
   })
 }

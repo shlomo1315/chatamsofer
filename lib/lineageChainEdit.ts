@@ -107,6 +107,28 @@ export function emptyRows(rows: EditRow[]): number[] {
   return rows.flatMap((r, i) => (i > 0 && !r.name.trim() ? [i] : []))
 }
 
+// 🔴 A6 (18.11): "gyhk rcev" נשמר בדור 8 אצל זלצמן — עברית שהוקלדה במקלדת
+// אנגלית. שמות בדורות בעברית בלבד; נאכף בכל מסלולי השמירה בשרת.
+const LATIN = /[a-z]/i
+
+/** הודעת שגיאה לשם דור עם אותיות לועזיות, או null כשהשם תקין. */
+export function latinNameError(name: unknown, generation: number): string | null {
+  return typeof name === 'string' && LATIN.test(name)
+    ? `השם בדור ${generation} ("${name.trim()}") כתוב באותיות לועזיות. יש לכתוב בעברית בלבד (אולי המקלדת על אנגלית?).`
+    : null
+}
+
+/** השגיאה הראשונה בשרשרת שיש בה שם לועזי, או null. */
+export function latinChainError(chain: unknown): string | null {
+  if (!Array.isArray(chain)) return null
+  for (let i = 0; i < chain.length; i++) {
+    const c = chain[i] as { name?: unknown; generation?: unknown } | null
+    const err = latinNameError(c?.name, Number(c?.generation) || i + 1)
+    if (err) return err
+  }
+  return null
+}
+
 export type SanitizeResult = { ok: true; chain: ChainStep[] } | { ok: false; error: string }
 
 /**
@@ -126,6 +148,8 @@ export function sanitizeEditedChain(raw: unknown, max = MAX_EDIT_GENERATIONS): S
     const name = String(c.name ?? '').replace(/\s+/g, ' ').trim()
     if (!name) return { ok: false, error: `דור ${chain.length + 1} ריק — יש למלא שם או למחוק אותו` }
     if (name.length > MAX_GEN_NAME) return { ok: false, error: `השם בדור ${chain.length + 1} ארוך מדי` }
+    const latin = latinNameError(name, chain.length + 1)
+    if (latin) return { ok: false, error: latin }
     chain.push({ generation: chain.length + 1, name, relation: rel(c.relation) })
   }
   return { ok: true, chain }
