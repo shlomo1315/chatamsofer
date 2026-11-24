@@ -344,11 +344,14 @@ export function StatusControl({ aid, advance, variant = 'pill' }: {
       const nextValues = fromStatus === 'deep_review' ? ['deep_review'] : ['pending']
       // ⚠️ ההשהיה נשמרת — בלעדיה חלונית ההצלחה מהבהבת ונעלמת לפני
       // שהמשתמש מספיק לראות מה אושר.
+      // 🔴 E: הלשונית (?st=) עוברת לתיק הבא, כדי ש"ללידה הבאה" תישאר נעולה לאותה רשימה.
+      const st = new URLSearchParams(window.location.search).get('st')
       setTimeout(() => {
         goToNextPending(supabase, router, {
           table: 'maternity_aids', statusColumn: 'status',
           pendingValues: nextValues,
           currentId: aid.id, detailBase: '/admin/maternity', listPath: '/admin/maternity',
+          detailQuery: st ? `?st=${encodeURIComponent(st)}` : '',
         })
       }, 1200)
     }

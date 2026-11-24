@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { awaitingFixes, pickNextPending, matchesBucket, awaitingInquiryReply, returnedFromInquiry, adjacentInBucket, isBucket, type AdjacentRow } from './maternityBuckets'
+import { awaitingFixes, pickNextPending, pickNextPendingAfter, matchesBucket, awaitingInquiryReply, returnedFromInquiry, adjacentInBucket, isBucket, type AdjacentRow } from './maternityBuckets'
 
 // ⚠️ מה שנבדק כאן הוא ההסכמה בין הרשימה לניווט. כשהם חלוקים, "הבאה" קופצת
 // ליולדת מלשונית אחרת — וזה בדיוק המצב שהתיקון בא לסגור.
@@ -200,5 +200,28 @@ describe('pickNextPending —הקפיצה לתיק הבא אחרי אישור', 
     const deepInquiry = { id: 'e', status: 'deep_review', inquiryLastDirection: 'staff' }
     const deep = { id: 'f', status: 'deep_review', beneficiary: { eligibility_status: 'docs_pending' } }
     expect(pickNextPending([deepInquiry, deep])).toBe('f')
+  })
+})
+
+describe('pickNextPendingAfter — E: הבא בתור לפי סדר הרשימה (חדש→ישן)', () => {
+  const r = (id: string, created_at: string, o: Partial<AdjacentRow> = {}) =>
+    aid({ id, created_at, beneficiary: { eligibility_status: 'approved' }, ...o })
+  const rows = [r('old', '2026-11-01'), r('mid', '2026-11-10'), r('new', '2026-11-20')]
+
+  it('עובר לתיק שמתחתיו ברשימה, ולא לוותיק ביותר', () => {
+    expect(pickNextPendingAfter(rows, { id: 'x', created_at: '2026-11-15' })).toBe('mid')
+  })
+
+  it('מדלג על תיק שממתין למשפחה', () => {
+    const withFixes = [...rows, r('fix', '2026-11-12', { beneficiary: { eligibility_status: 'docs_pending' } })]
+    expect(pickNextPendingAfter(withFixes, { id: 'x', created_at: '2026-11-15' })).toBe('mid')
+  })
+
+  it('בסוף הרשימה חוזר לראשה', () => {
+    expect(pickNextPendingAfter(rows, { id: 'x', created_at: '2026-10-01' })).toBe('new')
+  })
+
+  it('לא מחזיר את התיק הנוכחי', () => {
+    expect(pickNextPendingAfter([r('only', '2026-11-01')], { id: 'only', created_at: '2026-11-01' })).toBeNull()
   })
 })

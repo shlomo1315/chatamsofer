@@ -6,6 +6,7 @@ import { normalizeId, resolveBeneficiaryByEnteredId } from '@/lib/portalBenefici
 import { normalizePhone, maskPhone } from '@/lib/phone'
 import { placeCodeCall, phoneCallConfigured } from '@/lib/phoneCall'
 import { getRegistrationGate, phoneCodeLoginBlocked } from '@/lib/registrationGate'
+import { logActivity } from '@/lib/activityLog'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,6 +35,9 @@ export async function POST(request: NextRequest) {
   }
 
   if (!phoneCallConfigured()) {
+    // 🔴 C2: זו ההודעה שהופיעה ב-18.11 — הגדרות המרכזייה חסרות בשרת. נרשם בלוג
+    // כדי שהתקלה תיראה במערכת ולא רק אצל המשפחה.
+    console.error('[send-phone-code] ספק השיחות אינו מוגדר בשרת')
     return NextResponse.json({ error: 'כניסה טלפונית אינה זמינה כרגע. אנא היכנס עם סיסמה.' }, { status: 503 })
   }
 
@@ -97,6 +101,11 @@ export async function POST(request: NextRequest) {
   if (upErr) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
   const call = await placeCodeCall(phone, code)
+  // 🔴 C2: לוג פנימי לכל ניסיון — המזכירות רואה ערוץ, יעד מוסתר, תוצאה ושגיאה.
+  await logActivity(admin, {
+    action: 'portal_code_sent', entityType: 'beneficiary', entityId: data.id,
+    details: { channel: 'phone', to: maskPhone(phone), ok: call.ok, error: call.ok ? null : (call.error ?? 'unknown') },
+  })
   if (!call.ok) {
     console.error('[send-phone-code] placeCodeCall failed:', call.error)
     // ניקוי הקוד אם השיחה לא יצאה

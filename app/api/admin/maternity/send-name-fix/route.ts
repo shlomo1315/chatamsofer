@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 
 // שליחת קישור ייחודי למייל היולדת לתיקון / השלמת שם התינוק.
 // נשלח כשסומן "עדיין אין שם", או כשהוזן שם לא-תקין ורוצים שהיולדת תתקן במיידי.
-// הקישור נושא טוקן HMAC חתום (kind='n', תקף 7 ימים) — היולדת מזינה שם והוא נקלט אוטומטית.
+// הקישור נושא טוקן HMAC חתום (kind='n', תקף 30 ימים — NAME_FIX_LINK_DAYS) — היולדת מזינה שם והוא נקלט אוטומטית.
 export async function POST(request: NextRequest) {
   await ensureEmailTexts()
   const staff = await requirePermission('maternity', 'edit')

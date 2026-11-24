@@ -11,3 +11,13 @@
 export function mentionsLineageOrder(text: string): boolean {
   return /(סדר|תיקון|לתקן|לעדכן|עדכון)\s+(ה)?דורות|עץ\s+(ה)?דורות|שושלת|ייחוס/.test(text)
 }
+
+/**
+ * האם ההודעה מבטיחה קישור ("מצ"ב קישור", "לינק", "בקישור הבא").
+ *
+ * 🔴 A2 (16.11): נכתב "מצ"ב קישור" והתיבה לא סומנה — המייל יצא בלי קישור.
+ * משמש לאזהרה במסך לפני השליחה, כשהתיבה לא מסומנת.
+ */
+export function mentionsLink(text: string): boolean {
+  return /קישור|לינק|link/i.test(text)
+}

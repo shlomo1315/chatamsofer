@@ -5,7 +5,7 @@
 // מתפצל בתיקון הראשון, והמשפחה הייתה מקבלת בתזכורת מייל אחר מזה שראתה
 // בפעם הראשונה — עם קישור שנבנה אחרת.
 // ─────────────────────────────────────────────────────────────────────────────
-import { signPublicToken } from './publicToken'
+import { signPublicToken, nameFixLinkDays } from './publicToken'
 import { shell } from './emailTemplates'
 
 export interface NameFixMailInput {
@@ -20,7 +20,7 @@ export interface NameFixMailInput {
 export const NAME_FIX_SUBJECT = 'השלמת שם התינוק — היכל החתם סופר'
 export const NAME_FIX_REMINDER_SUBJECT = 'תזכורת: השלמת שם התינוק — היכל החתם סופר'
 
-/** קישור התיקון האישי (טוקן HMAC חתום, תקף 7 ימים). */
+/** קישור התיקון האישי (טוקן HMAC חתום, תקף nameFixLinkDays() ימים — ברירת מחדל 30). */
 export function nameFixLink(aidId: string): string {
   const token = signPublicToken('n', aidId)
   const base = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://chasamsofer.co.il'
@@ -51,7 +51,7 @@ export function buildNameFixMail(input: NameFixMailInput): { subject: string; ht
         הזנת ${noun}
       </a>
     </div>
-    <p style="margin:0;color:#94a3b8;font-size:12px;">הקישור אישי ותקף 7 ימים. אם לא ביקשתם — ניתן להתעלם.</p>
+    <p style="margin:0;color:#94a3b8;font-size:12px;">הקישור אישי ותקף ${nameFixLinkDays()} ימים. אם לא ביקשתם — ניתן להתעלם.</p>
   `
 
   return {

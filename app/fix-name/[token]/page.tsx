@@ -1,4 +1,5 @@
-import { verifyPublicToken } from '@/lib/publicToken'
+import { verifyPublicToken, aidIdFromSignedToken, nameFixLinkDays } from '@/lib/publicToken'
+import RenewLinkButton from './RenewLinkButton'
 import { createClient } from '@supabase/supabase-js'
 import { babiesOf, babyLabel, type AidNameFields } from '@/lib/babyNames'
 import FixNameForm from './FixNameForm'
@@ -11,6 +12,8 @@ export default async function Page({ params }: { params: Promise<{ token: string
   const aidId = verifyPublicToken(token, 'n')
 
   if (!aidId) {
+    // ⚠️ חתימה תקינה ותוקף שפג — אפשר לחדש. טוקן משובש מקבל את ההסבר הישן.
+    const renewable = !!aidIdFromSignedToken(token, 'n')
     return (
       <main dir="rtl" className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-10">
         <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
@@ -21,10 +24,11 @@ export default async function Page({ params }: { params: Promise<{ token: string
           </div>
           <h1 className="text-xl font-bold" style={{ color: '#1B3256' }}>הקישור אינו תקין</h1>
           <p className="mt-3 text-sm leading-relaxed text-slate-600">
-            ייתכן שהקישור פג תוקף (הקישור תקף 7 ימים) או הועתק באופן חלקי.
-            <br />
-            נשמח אם תנסו שוב מהקישור המקורי שקיבלתם, או לפנות למשרד.
+            {renewable
+              ? `הקישור האישי היה בתוקף ${nameFixLinkDays()} ימים, והוא פג. ניתן לבקש קישור חדש למייל הרשום אצלנו.`
+              : <>ייתכן שהקישור הועתק באופן חלקי.<br />נשמח אם תנסו שוב מהקישור המקורי שקיבלתם, או לפנות למשרד.</>}
           </p>
+          {renewable && <RenewLinkButton token={token} />}
         </div>
       </main>
     )

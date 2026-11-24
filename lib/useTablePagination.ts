@@ -25,7 +25,15 @@ import { rowsKeyOf } from '@/lib/rowsKey'
 
 export { PAGE_SIZES, DEFAULT_PAGE_SIZE }
 
-export function useTablePagination<T>(all: T[], opts?: { initialSize?: number }) {
+export function useTablePagination<T>(all: T[], opts?: {
+  initialSize?: number
+  /**
+   * 🔴 E: כשמועבר — העמוד מתאפס רק כשהמפתח משתנה (סינון/מיון/חיפוש), ולא
+   * כשתוכן הרשימה משתנה. בלעדיו כל אישור (שמוציא שורה מהלשונית) החזיר את
+   * המזכירות לעמוד 1. שורות שנמחקו מטופלות בחגורת הביטחון (safePage).
+   */
+  resetKey?: string
+}) {
   const initialSize = opts?.initialSize ?? DEFAULT_PAGE_SIZE
   const [page, setPage] = useState(1)
   const [size, setSize] = useState(initialSize)
@@ -43,7 +51,7 @@ export function useTablePagination<T>(all: T[], opts?: { initialSize?: number })
   // `filter` inline) היה מכשיל את ההשוואה תמיד: setPrevAll רץ בכל רינדור,
   // וכל setState בזמן רינדור מזמן רינדור נוסף — לולאה אינסופית ו-React #301.
   // בדיוק כך נפל מסך החלוקה. מפתח-תוכן מחסן את ה-hook מכל קורא כזה.
-  const key = rowsKeyOf(all)
+  const key = opts?.resetKey ?? rowsKeyOf(all)
   const [prevKey, setPrevKey] = useState(key)
   if (prevKey !== key) {
     setPrevKey(key)

@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission } from '@/lib/apiAuth'
-import { pickNextPending, type BucketAid } from '@/lib/maternityBuckets'
+import { pickNextPending, pickNextPendingAfter, type BucketAid } from '@/lib/maternityBuckets'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,13 +48,15 @@ export async function GET(request: NextRequest) {
   // ─────────────────────────────────────────────────────────────────────────
   // ליולדות נשלפים גם השדות של "ממתין לתיקונים" (שם / מסמכים) — ראו pickNextPending.
   const cols = table === 'maternity_aids'
-    ? 'id, status, baby_name, baby_name_pending, babies, beneficiary:beneficiaries(eligibility_status)'
+    ? 'id, created_at, status, baby_name, baby_name_pending, babies, beneficiary:beneficiaries(eligibility_status)'
     : 'id'
+  // ⚠️ ליולדות נשלף כל התור (ולא 100 הוותיקים) — הבחירה לפי מקום התיק ברשימה,
+  // ומגבלה מהצד הוותיק הייתה חותכת דווקא את התיקים שמתחתיו.
   let q = admin.from(table).select(cols).in('status', pendingValues)
-    .order('created_at', { ascending: true }).limit(100)
+    .order('created_at', { ascending: true }).limit(table === 'maternity_aids' ? 1000 : 100)
   if (currentId) q = q.neq('id', currentId)
   const { data } = await q
-  const rows = (data ?? []) as unknown as (BucketAid & { id: string })[]
+  const rows = (data ?? []) as unknown as (BucketAid & { id: string; created_at?: string | null })[]
   const ids = rows.map(r => String(r.id))
   if (!ids.length) {
     return NextResponse.json({ id: null }, { headers: { 'Cache-Control': 'no-store' } })
@@ -80,6 +82,13 @@ export async function GET(request: NextRequest) {
   const lastDir = new Map<string, string>()
   for (const m of sorted) if (!lastDir.has(m.aid_id)) lastDir.set(m.aid_id, m.direction)
 
-  const next = pickNextPending(rows.map(r => ({ ...r, inquiryLastDirection: lastDir.get(String(r.id)) ?? null })))
+  const withDir = rows.map(r => ({ ...r, inquiryLastDirection: lastDir.get(String(r.id)) ?? null }))
+  // 🔴 E: התיק שמתחת לנוכחי בסדר הרשימה (חדש→ישן), ולא הוותיק ביותר בתור.
+  const { data: cur } = currentId
+    ? await admin.from('maternity_aids').select('id, created_at').eq('id', currentId).maybeSingle()
+    : { data: null }
+  const next = cur
+    ? pickNextPendingAfter(withDir, cur as { id: string; created_at: string | null })
+    : pickNextPending(withDir)
   return NextResponse.json({ id: next }, { headers: { 'Cache-Control': 'no-store' } })
 }

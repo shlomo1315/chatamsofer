@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import StatStrip from '@/components/admin/system/StatStrip'
 import { ListTable } from '@/components/admin/system/ListTable'
 import { SearchBar } from '@/components/admin/system/SearchBar'
@@ -338,8 +338,76 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
   // המסוננות בבת אחת (עד ~1000 שורות × 15 עמודות = ~15,000 תאים), וכל
   // סינון/מיון/הקלדה בנה אותן מחדש.
   // ⚠️ החיתוך אחרון — אחרי המיון והסינון מהכותרת.
-  const pg = useTablePagination(tc.rows)
+  // 🔴 E: העמוד מתאפס רק כשהסינון/המיון/החיפוש משתנים — לא כשאישור מוציא שורה
+  // מהלשונית. קודם כל אישור החזיר את המזכירות לעמוד 1.
+  const pg = useTablePagination(tc.rows, {
+    resetKey: JSON.stringify([filter, sort, benefit, query, apFrom, apTo, tc.viewKey]),
+  })
   const visibleRows = pg.rows
+
+  // 🔴 E: שמירת המקום ברשימה (לשונית, סינון, עמוד, גלילה) לאורך הסשן. מי שנכנס
+  // לתיק וחזר נחת קודם על "ממתין לאישור", עמוד 1, בראש הדף — ואיבד את הרצף.
+  const viewKey = `maternity-view:${defaultFilter}`
+  const restoreRef = useRef<{ page: number; y: number } | null>(null)
+  const scrollRef = useRef(0)
+  const [restored, setRestored] = useState(false)
+  // ⚠️ קריאה מ-sessionStorage חייבת לרוץ אחרי ההידרציה (בשרת אין אחסון), ולכן
+  // ב-effect ולא ב-useState(initializer) — אחרת השרת והדפדפן מרנדרים שונה.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    try {
+      const s = JSON.parse(sessionStorage.getItem(viewKey) ?? 'null')
+      if (s && typeof s === 'object') {
+        if (s.filter) setFilter(s.filter)
+        if (s.sort) setSort(s.sort)
+        if (s.benefit) setBenefit(s.benefit)
+        setQuery(String(s.query ?? ''))
+        setApFrom(String(s.apFrom ?? ''))
+        setApTo(String(s.apTo ?? ''))
+        restoreRef.current = { page: Number(s.page) || 1, y: Number(s.y) || 0 }
+      }
+    } catch { /* אין שמירה — מתחילים מברירת המחדל */ }
+    setRestored(true)
+  }, [viewKey])
+  /* eslint-enable react-hooks/set-state-in-effect */
+  // ⚠️ שלב שני: העמוד והגלילה משוחזרים רק אחרי שהסינון כבר הוחל — אחרת שינוי
+  // ה-resetKey היה מאפס את העמוד מיד אחרי השחזור.
+  const setPage = pg.setPage
+  useEffect(() => {
+    const r = restoreRef.current
+    if (!restored || !r) return
+    restoreRef.current = null
+    setPage(r.page)
+    requestAnimationFrame(() => window.scrollTo(0, r.y))
+  }, [restored, setPage])
+  useEffect(() => {
+    const onScroll = () => { scrollRef.current = window.scrollY }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+  useEffect(() => {
+    if (!restored) return
+    const save = () => {
+      try {
+        sessionStorage.setItem(viewKey, JSON.stringify({
+          filter, sort, benefit, query, apFrom, apTo, page: pg.page, y: scrollRef.current,
+        }))
+      } catch { /* אחסון מלא/חסום — לא קריטי */ }
+    }
+    save()
+    return save
+  }, [restored, viewKey, filter, sort, benefit, query, apFrom, apTo, pg.page])
+
+  // 🔴 E: התיק שפתוח בחלונית אושר ויצא מהלשונית — עוברים לתיק שתפס את מקומו
+  // ברשימה, במקום לסגור את החלונית ולהשאיר את המזכירות לחפש מאיפה להמשיך.
+  const openIdx = openId ? tc.rows.findIndex(x => x.id === openId) : -1
+  const lastOpenIdx = useRef(-1)
+  useEffect(() => {
+    if (!openId) { lastOpenIdx.current = -1; return }
+    if (openIdx >= 0) { lastOpenIdx.current = openIdx; return }
+    const i = Math.min(lastOpenIdx.current, tc.rows.length - 1)
+    setOpenId(i >= 0 ? tc.rows[i].id : null)
+  }, [openId, openIdx, tc.rows])
 
   // תוכן התא לפי מפתח העמודה
   const cell = (key: ColKey, aid: MaternityAid, m?: MotherRef) => {
@@ -538,7 +606,7 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
         actionsHead="פעולות"
         actions={aid => (
           <div className="flex flex-nowrap items-center justify-center gap-1">
-            <Link href={`/admin/maternity/${aid.id}`} title="צפייה בתיק" aria-label="צפייה בתיק"
+            <Link href={`/admin/maternity/${aid.id}?st=${filter}`} title="צפייה בתיק" aria-label="צפייה בתיק"
               className="inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-line text-ink-soft transition-colors hover:border-gold hover:bg-sand hover:text-navy">
               <Eye size={14} />
             </Link>

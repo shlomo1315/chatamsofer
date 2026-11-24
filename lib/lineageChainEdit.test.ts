@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   rowsFromChain, chainFromRows, updateRow, insertRow, removeRow, moveRow, emptyRows,
-  sanitizeEditedChain, treeChildrenOf, ROOT_NAME, type EditRow, type TreeNode,
+  sanitizeEditedChain, latinChainError, treeChildrenOf, ROOT_NAME, type EditRow, type TreeNode,
 } from './lineageChainEdit'
 
 describe('הוספת דור ידני / קיים (insertRow עם שורה)', () => {
@@ -128,6 +128,17 @@ describe('sanitizeEditedChain (שרת)', () => {
     const mk = (n: number) => Array.from({ length: n }, (_, i) => ({ generation: i + 2, name: `ד${i}` }))
     expect(sanitizeEditedChain(mk(30)).ok).toBe(true)
     expect(sanitizeEditedChain(mk(40)).ok).toBe(false)
+  })
+  it('A6: שם באותיות לועזיות נדחה עם מספר הדור', () => {
+    const r = sanitizeEditedChain([{ generation: 2, name: 'א' }, { generation: 3, name: 'gyhk rcev' }])
+    expect(r.ok).toBe(false)
+    expect(!r.ok && r.error).toContain('בדור 3')
+    expect(!r.ok && r.error).toContain('עברית בלבד')
+  })
+  it('A6: latinChainError — עברית, גרשיים ומספרים עוברים', () => {
+    expect(latinChainError([{ generation: 2, name: 'ר\' משה ב"ר יוסף 2' }])).toBeNull()
+    expect(latinChainError([{ name: 'א' }, { name: 'Moshe' }])).toContain('בדור 2')
+    expect(latinChainError(null)).toBeNull()
   })
   it('קלט שאינו מערך או בלי דורות — נדחה', () => {
     expect(sanitizeEditedChain('x').ok).toBe(false)
