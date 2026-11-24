@@ -77,6 +77,12 @@ export function isAutoDeepReason(reason: string | null | undefined): boolean {
   return s.startsWith(UNKNOWN_REASON_PREFIX) || Object.values(GAP_KIND_LABEL).some(l => s.startsWith(l))
 }
 
+/** נוסח הסיבה שהשער כותב ב-deep_review_reason לממצא נתון. */
+export function gateReasonOf(finding: GapFinding): string {
+  const where = finding.generation ? ` (דור ${finding.generation}${finding.detail ? `: ${finding.detail}` : ''})` : ''
+  return `${GAP_KIND_LABEL[finding.kind]}${where}`
+}
+
 /** בדיקת המשפחה מול הקובץ המאושר. עם approved מוכן נחסכת טעינה חוזרת. */
 export async function earlyLineageGate(
   db: SupabaseClient,
@@ -99,8 +105,7 @@ export async function earlyLineageGate(
       lineage_node_id: ben.lineage_node_id, lineage_chain: ben.lineage_chain, lineage_manual: ben.lineage_manual,
     }, byId, approved)
     if (!finding) return { deep: false, finding: null, unknown: false, reason: null }
-    const where = finding.generation ? ` (דור ${finding.generation}${finding.detail ? `: ${finding.detail}` : ''})` : ''
-    return { deep: true, finding, unknown: false, reason: `${GAP_KIND_LABEL[finding.kind]}${where}` }
+    return { deep: true, finding, unknown: false, reason: gateReasonOf(finding) }
   } catch (e) {
     console.error('[early-lineage-gate]', e instanceof Error ? e.message : e)
     return unknown('שגיאה בבדיקה')

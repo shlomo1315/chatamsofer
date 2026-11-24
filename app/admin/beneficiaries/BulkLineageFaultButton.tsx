@@ -12,9 +12,12 @@ import { NAME_TOKEN, requestErrorMessage, type LineageFaultTemplate } from '@/li
 // התצוגה מתעדכנת בזמן ההקלדה, והנוסח נשמר אוטומטית. השרת שולח רק את הנוסח
 // השמור, ולכן כפתור השליחה נעול עד שהשמירה הסתיימה.
 type Person = { id: string; name: string; email: string | null }
+//
+// סבב חוזר (תזכורת): נשלח גם למי שקיבל בימים קודמים ועדיין בבדיקה מעמיקה.
+// נחסם רק מי שקיבל היום, ומי שבבדיקה מעמיקה מסיבה שהמזכירות הקלידה.
 type Preview = {
-  total: number; toSend: number; alreadySent: number
-  noEmail: Person[]; noLineage: Person[]
+  total: number; toSend: number; alreadySent: number; resend?: boolean
+  noEmail: Person[]; noLineage: Person[]; otherReason?: Person[]
   from: string; sample: { to: string | null; name: string; subject: string; html: string }
   template: LineageFaultTemplate; defaultTemplate: LineageFaultTemplate
 }
@@ -44,6 +47,7 @@ export default function BulkLineageFaultButton() {
   const [err, setErr] = useState('')
   const [sent, setSent] = useState<number | null>(null)
   const [failed, setFailed] = useState<Failure[]>([])
+  const [resend, setResend] = useState(false)
 
   const [tpl, setTpl] = useState<LineageFaultTemplate | null>(null)
   const [mail, setMail] = useState<{ subject: string; html: string } | null>(null)
@@ -53,10 +57,11 @@ export default function BulkLineageFaultButton() {
   const savedJson = useRef('')
   const latestJson = useRef('')
 
-  const openPreview = async () => {
+  const openPreview = async (again = resend) => {
+    setResend(again)
     setOpen(true); setPreview(null); setTpl(null); setMail(null); setSent(null); setFailed([]); setErr(''); setBusy(true)
     try {
-      const d: Preview = await post({ send: false })
+      const d: Preview = await post({ send: false, resend: again })
       savedJson.current = JSON.stringify(d.template)
       setPreview(d); setTpl(d.template); setMail(d.sample); setSave('saved')
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
@@ -126,7 +131,7 @@ export default function BulkLineageFaultButton() {
       // שולחים במנות עד שלא נשאר אף אחד, או עד מנה שבה אף מייל לא יצא
       // (כשל קבוע אצל כולם), כדי לא להיתקע בלולאה.
       for (;;) {
-        const d = await post({ send: true })
+        const d = await post({ send: true, resend })
         total += d.sent; setSent(total); setFailed(d.failed ?? [])
         if (!d.remaining || !d.sent) break
       }
@@ -139,7 +144,7 @@ export default function BulkLineageFaultButton() {
 
   return (
     <>
-      <button type="button" onClick={openPreview}
+      <button type="button" onClick={() => openPreview()}
         className="inline-flex items-center gap-1.5 rounded-xl border border-orange-300 bg-orange-50 px-3.5 py-2 text-sm font-bold text-orange-800 hover:bg-orange-100 transition-colors">
         <AlertTriangle size={15} /> הודעה על תקלה בסדר הדורות
       </button>
@@ -152,12 +157,24 @@ export default function BulkLineageFaultButton() {
               <AlertTriangle size={20} className="flex-shrink-0 mt-0.5" />
               <div className="flex-1">
                 <p className="font-bold text-base">הודעה למשפחות בבדיקה מעמיקה</p>
-                <p className="text-gold-soft text-xs mt-1">עורכים את הנוסח מימין ורואים את המייל משמאל. מה שמוצג הוא מה שיישלח. משפחה שכבר קיבלה לא תקבל שוב.</p>
+                <p className="text-gold-soft text-xs mt-1">
+                  עורכים את הנוסח מימין ורואים את המייל משמאל. מה שמוצג הוא מה שיישלח.{' '}
+                  {resend ? 'תזכורת: נשלח שוב גם למי שקיבל בימים קודמים. מי שקיבל היום לא יקבל שוב.' : 'משפחה שכבר קיבלה לא תקבל שוב.'}
+                </p>
               </div>
               <button onClick={() => { if (!busy) setOpen(false) }} className="text-line hover:text-white"><X size={18} /></button>
             </div>
 
             <div className="p-5 space-y-4 text-sm">
+              <div role="radiogroup" aria-label="סוג השליחה" className="inline-flex rounded-xl border border-line p-1 gap-1">
+                {([[false, 'שליחה ראשונה'], [true, 'תזכורת חוזרת']] as const).map(([v, l]) => (
+                  <button key={l} type="button" role="radio" aria-checked={resend === v}
+                    disabled={busy || sent !== null || resend === v} onClick={() => openPreview(v)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${resend === v ? 'bg-navy text-white' : 'text-slate-600 hover:bg-sand disabled:opacity-50'}`}>
+                    {l}
+                  </button>
+                ))}
+              </div>
               {busy && !preview && <p className="text-slate-500">טוען תצוגה מקדימה…</p>}
               {err && <p className="text-red-700 font-semibold">{err}</p>}
 
@@ -168,7 +185,7 @@ export default function BulkLineageFaultButton() {
                       ['בבדיקה מעמיקה', preview.total],
                       ['יקבלו מייל', preview.toSend],
                       ['בלי מייל תקין', preview.noEmail.length],
-                      ['כבר קיבלו', preview.alreadySent],
+                      [resend ? 'קיבלו היום' : 'כבר קיבלו', preview.alreadySent],
                     ].map(([l, v]) => (
                       <div key={l} className="rounded-xl border border-line px-3 py-2">
                         <dt className="text-xs text-slate-500">{l}</dt>
@@ -178,6 +195,17 @@ export default function BulkLineageFaultButton() {
                   </dl>
                   {preview.noLineage.length > 0 && (
                     <p className="text-slate-600">{preview.noLineage.length} משפחות עם מייל אבל בלי שיוך לעץ הדורות, ולכן לא יקבלו קישור.</p>
+                  )}
+                  {(preview.otherReason?.length ?? 0) > 0 && (
+                    <p className="text-slate-600">{preview.otherReason!.length} משפחות בבדיקה מעמיקה מסיבה שהמזכירות רשמה (לא סדר הדורות), ולכן לא יקבלו תזכורת.</p>
+                  )}
+                  {preview.noEmail.length > 0 && (
+                    <details className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2">
+                      <summary className="cursor-pointer font-semibold text-amber-900">בלי מייל תקין: {preview.noEmail.length} משפחות. צריך לפנות אליהן בטלפון</summary>
+                      <ul className="mt-2 space-y-0.5 text-amber-900 max-h-48 overflow-y-auto">
+                        {preview.noEmail.map(p => <li key={p.id}>{p.name}{p.email ? <> · <span dir="ltr">{p.email}</span></> : ''}</li>)}
+                      </ul>
+                    </details>
                   )}
 
                   <div className="grid gap-5 lg:grid-cols-2">
@@ -244,12 +272,12 @@ export default function BulkLineageFaultButton() {
                     </div>
                   </div>
 
-                  {(preview.noEmail.length > 0 || preview.noLineage.length > 0) && (
+                  {(preview.noLineage.length > 0 || (preview.otherReason?.length ?? 0) > 0) && (
                     <details className="rounded-xl border border-line px-3 py-2">
-                      <summary className="cursor-pointer font-semibold text-slate-700">משפחות שלא יקבלו ({preview.noEmail.length + preview.noLineage.length})</summary>
+                      <summary className="cursor-pointer font-semibold text-slate-700">משפחות נוספות שלא יקבלו ({preview.noLineage.length + (preview.otherReason?.length ?? 0)})</summary>
                       <ul className="mt-2 space-y-0.5 text-slate-600 max-h-48 overflow-y-auto">
-                        {preview.noEmail.map(p => <li key={p.id}>{p.name}: אין מייל תקין</li>)}
                         {preview.noLineage.map(p => <li key={p.id}>{p.name}: אין שיוך לעץ</li>)}
+                        {preview.otherReason?.map(p => <li key={p.id}>{p.name}: בבדיקה מעמיקה מסיבה אחרת</li>)}
                       </ul>
                     </details>
                   )}

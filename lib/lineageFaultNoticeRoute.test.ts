@@ -2,19 +2,21 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { DEFAULT_LINEAGE_FAULT_TEMPLATE, LINEAGE_FAULT_TEMPLATE_KEY, type FaultRow } from './lineageFaultNotice'
 
 // מסד דמה בזיכרון ומשלוח מדומה: שום מייל אמיתי לא יוצא מהבדיקה הזו.
-let families: FaultRow[]
-let sentLog: { entity_id: string }[]
+let families: (FaultRow & { deep_review_reason?: string | null })[]
+let sentLog: { entity_id: string; created_at: string }[]
 let settings: Record<string, string>
 const delivered: { to: string; subject: string; html: string }[] = []
 
 function table(name: string) {
+  let since = ''
   const result = () => {
     if (name === 'beneficiaries') return { data: families, error: null }
-    if (name === 'activity_log') return { data: sentLog, error: null }
+    if (name === 'activity_log') return { data: sentLog.filter(s => !since || s.created_at >= since), error: null }
     return { data: null, error: null }
   }
   const b: Record<string, unknown> = {}
   for (const m of ['select', 'eq', 'order', 'range']) b[m] = () => b
+  b.gte = (c: string, v: string) => { if (c === 'created_at') since = v; return b }
   b.then = (ok: (v: unknown) => unknown) => Promise.resolve(result()).then(ok)
   b.maybeSingle = async () => ({ data: settings[LINEAGE_FAULT_TEMPLATE_KEY] ? { value: settings[LINEAGE_FAULT_TEMPLATE_KEY] } : null, error: null })
   b.insert = async () => ({ error: null })
@@ -35,7 +37,7 @@ vi.mock('@/lib/sendMail', () => ({
   deliverMail: async (to: string, subject: string, html: string) => { delivered.push({ to, subject, html }); return { ok: true } },
 }))
 vi.mock('@/lib/activityLog', () => ({
-  logActivity: async (_a: unknown, e: { entityId: string }) => { sentLog.push({ entity_id: e.entityId }) },
+  logActivity: async (_a: unknown, e: { entityId: string }) => { sentLog.push({ entity_id: e.entityId, created_at: new Date().toISOString() }) },
 }))
 vi.mock('@/lib/emailTextsStore', () => ({ ensureEmailTexts: async () => {} }))
 vi.mock('@/lib/departments', () => ({ mailFor: () => ({ fromName: 'איגוד', fromEmail: 'igud@chasamsofer.info' }) }))
@@ -133,5 +135,60 @@ describe('נוסח ההודעה על תקלה בסדר הדורות', () => {
     expect(html).toContain('color:#475569;font-size:15px;line-height:1.8')
     expect(html).toContain('התגלתה תקלה בסדר הדורות הרשום אצלכם')
     expect(html).toContain('text-align:center;margin:0 0 18px;')
+  })
+})
+
+describe('סבב חוזר (תזכורת)', () => {
+  const yesterday = new Date(Date.now() - 2 * 86400_000).toISOString()
+
+  beforeEach(() => {
+    families = [
+      // קיבלה בסבב הקודם ועדיין לא הסדירה
+      { id: 'old', full_name: 'משה', family_name: 'לוי', spouse_name: null, email: 'levi@example.com', lineage_node_id: 'n1', deep_review_reason: 'דור 2–5 אינו בקובץ המאושר (דור 4: בנימין)' },
+      // בלי מייל
+      { id: 'nomail', full_name: 'דוד', family_name: 'כהן', spouse_name: null, email: null, lineage_node_id: 'n1', deep_review_reason: null },
+      // בבדיקה מעמיקה מסיבה שהמזכירות הקלידה
+      { id: 'manual', full_name: 'יוסף', family_name: 'פרידמן', spouse_name: null, email: 'f@example.com', lineage_node_id: 'n1', deep_review_reason: 'חסר אישור רב קהילה' },
+    ]
+    sentLog = [{ entity_id: 'old', created_at: yesterday }]
+  })
+
+  it('הסבב הרגיל חוסם את מי שקיבל אי פעם', async () => {
+    const { data } = await call({})
+    expect(data.alreadySent).toBe(1)
+    expect(data.toSend).toBe(1) // manual, כי הסבב הרגיל לא מסנן לפי סיבה
+  })
+
+  it('תזכורת: נשלחת למי שקיבל אתמול, בלי מייל מוצגים בנפרד, וסיבה ידנית לא מקבלת', async () => {
+    const { data } = await call({ resend: true })
+    expect(data).toMatchObject({ dryRun: true, resend: true, total: 3, toSend: 1, alreadySent: 0 })
+    expect(data.noEmail.map((p: { id: string }) => p.id)).toEqual(['nomail'])
+    expect(data.otherReason.map((p: { id: string }) => p.id)).toEqual(['manual'])
+    expect(data.sample.to).toBe('levi@example.com')
+    expect(delivered).toHaveLength(0) // תצוגה מקדימה לא שולחת
+
+    const sent = await call({ send: true, resend: true })
+    expect(sent.data).toMatchObject({ sent: 1, remaining: 0 })
+    expect(delivered.map(d => d.to)).toEqual(['levi@example.com'])
+  })
+
+  it('תזכורת שנייה באותו יום לא שולחת שוב', async () => {
+    await call({ send: true, resend: true })
+    expect(delivered).toHaveLength(1)
+    const again = await call({ send: true, resend: true })
+    expect(again.data).toMatchObject({ sent: 0, remaining: 0 })
+    expect(delivered).toHaveLength(1)
+    const { data } = await call({ resend: true })
+    expect(data).toMatchObject({ toSend: 0, alreadySent: 1 })
+  })
+})
+
+describe('israelDayStart', () => {
+  it('חצות בשעון ישראל, בחורף ובקיץ', async () => {
+    const { israelDayStart } = await import('./lineageFaultNotice')
+    expect(israelDayStart(new Date('2026-11-24T22:30:00Z'))).toBe('2026-11-24T22:00:00.000Z') // כבר 25.11 בישראל
+    expect(israelDayStart(new Date('2026-11-24T21:30:00Z'))).toBe('2026-11-23T22:00:00.000Z') // עדיין 24.11
+    expect(israelDayStart(new Date('2026-11-24T10:00:00Z'))).toBe('2026-11-23T22:00:00.000Z')
+    expect(israelDayStart(new Date('2026-07-01T10:00:00Z'))).toBe('2026-06-30T21:00:00.000Z')
   })
 })
