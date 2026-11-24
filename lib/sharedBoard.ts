@@ -247,10 +247,77 @@ export type MoneyRow = {
   approval_status?: string | null
   source?: string | null
   registered_at?: string | null
-  beneficiary?: { community_affiliation?: string | null } | null
+  beneficiary?: { community_affiliation?: string | null; city?: string | null; children_count?: number | null } | null
 }
 
 export const NO_COMMUNITY = 'לא צוין'
+
+/** עיר המשפחה ('' כשלא צוינה). */
+export const cityOf = (r: MoneyRow) => r.beneficiary?.city?.trim() || ''
+
+export const KIDS_BUCKETS = ['0–2', '3–5', '6–8', '9+'] as const
+
+/** הדלי של מספר הילדים, באותה חלוקה כמו kidsBuckets. null כשלא צוין. */
+export function kidsBucketOf(n?: number | null): string | null {
+  if (n == null) return null
+  const k = Number(n)
+  return KIDS_BUCKETS[k >= 9 ? 3 : k >= 6 ? 2 : k >= 3 ? 1 : 0]
+}
+
+export const WEEKDAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
+
+const validDate = (iso?: string | null) => {
+  if (!iso) return null
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+/** מספר הרישומים בכל שעה ביממה (24 ערכים, שעון מקומי). */
+export function hourCounts(rows: { registered_at?: string | null }[]): number[] {
+  const out = Array<number>(24).fill(0)
+  for (const r of rows) {
+    const d = validDate(r.registered_at)
+    if (d) out[d.getHours()]++
+  }
+  return out
+}
+
+/** מפת חום: [יום בשבוע 0=ראשון][שעה 0–23]. */
+export function weekdayHourMatrix(rows: { registered_at?: string | null }[]): number[][] {
+  const m = Array.from({ length: 7 }, () => Array<number>(24).fill(0))
+  for (const r of rows) {
+    const d = validDate(r.registered_at)
+    if (d) m[d.getDay()][d.getHours()]++
+  }
+  return m
+}
+
+const HOUR = 3_600_000
+
+/**
+ * רישומים לפי שעה, מהשעה הראשונה עד האחרונה (שעות ריקות = 0), ומצטבר.
+ * מוגבל ל-`max` השעות האחרונות, כדי שהגרף יישאר קריא.
+ */
+export function hourlySeries(rows: { registered_at?: string | null }[], max = 24 * 14) {
+  const counts = new Map<number, number>()
+  for (const r of rows) {
+    const d = validDate(r.registered_at)
+    if (!d) continue
+    const k = Math.floor(d.getTime() / HOUR)
+    counts.set(k, (counts.get(k) ?? 0) + 1)
+  }
+  if (!counts.size) return { daily: [] as number[], cumulative: [] as number[], start: null as number | null }
+  const keys = [...counts.keys()]
+  const last = Math.max(...keys)
+  const first = Math.max(Math.min(...keys), last - max + 1)
+  let before = 0
+  for (const [k, n] of counts) if (k < first) before += n
+  const daily: number[] = []
+  for (let k = first; k <= last; k++) daily.push(counts.get(k) ?? 0)
+  const cumulative: number[] = []
+  daily.reduce((s, n) => { cumulative.push(s + n); return s + n }, before)
+  return { daily, cumulative, start: first * HOUR }
+}
 
 /** קהילת המשפחה; משפחה בלי קהילה נספרת תחת "לא צוין". */
 export const communityOf = (r: MoneyRow) => r.beneficiary?.community_affiliation?.trim() || NO_COMMUNITY
@@ -283,20 +350,37 @@ export type MoneyFilter = {
   to: string              // YYYY-MM-DD או ''
   minAmount: number | null
   maxAmount: number | null
+  cities: string[]        // ריק = כל הערים
+  kids: string[]          // דליים מ-KIDS_BUCKETS; ריק = הכול
+  hours: number[]         // 0–23; ריק = כל השעות
+  weekdays: number[]      // 0=ראשון; ריק = כל הימים
 }
 
-export const EMPTY_FILTER: MoneyFilter = { communities: [], status: '', channel: '', from: '', to: '', minAmount: null, maxAmount: null }
+export const EMPTY_FILTER: MoneyFilter = {
+  communities: [], status: '', channel: '', from: '', to: '', minAmount: null, maxAmount: null,
+  cities: [], kids: [], hours: [], weekdays: [],
+}
+
+export const isFiltered = (f: MoneyFilter) => JSON.stringify(f) !== JSON.stringify(EMPTY_FILTER)
+
+/** מוסיף ערך לרשימה או מסיר אותו אם כבר קיים. */
+export const toggleIn = <V>(list: V[], v: V): V[] => (list.includes(v) ? list.filter(x => x !== v) : [...list, v])
 
 export function filterMoneyRows<T extends MoneyRow>(rows: T[], f: MoneyFilter, perFamily?: number | null): T[] {
   return rows.filter(r => {
     if (f.communities.length && !f.communities.includes(communityOf(r))) return false
+    if (f.cities.length && !f.cities.includes(cityOf(r))) return false
+    if (f.kids.length && !f.kids.includes(kidsBucketOf(r.beneficiary?.children_count) ?? '')) return false
     if (f.status && (r.approval_status || 'pending') !== f.status) return false
     if (f.channel && channelKeyOf(r.source) !== f.channel) return false
-    if (f.from || f.to) {
-      if (!r.registered_at) return false
-      const d = dayKey(r.registered_at)
+    if (f.from || f.to || f.hours.length || f.weekdays.length) {
+      const dt = validDate(r.registered_at)
+      if (!dt) return false
+      const d = dayKey(r.registered_at!)
       if (f.from && d < f.from) return false
       if (f.to && d > f.to) return false
+      if (f.hours.length && !f.hours.includes(dt.getHours())) return false
+      if (f.weekdays.length && !f.weekdays.includes(dt.getDay())) return false
     }
     const a = familyAmount(r, perFamily)
     if (f.minAmount != null && a < f.minAmount) return false
