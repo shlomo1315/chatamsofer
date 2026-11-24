@@ -122,6 +122,12 @@ export async function POST(request: NextRequest) {
 
   const cleanEmail = String(email).toLowerCase().trim()
   const cleanSpouseId = spouse_id_number ? String(spouse_id_number).replace(/\D/g, '') : null
+  // 🔴 דורות 2–5 מול הקובץ המאושר — ראו lib/earlyLineageGate. הטופס הזה
+  // שולח רק lineage_node_id: בלי שיוך לעץ אין מה לבדוק → בדיקה מעמיקה.
+  const { earlyLineageGate } = await import('@/lib/earlyLineageGate')
+  const gate = await earlyLineageGate(adminClient, { lineage_node_id: lineage_node_id ? String(lineage_node_id) : null })
+  if (gate.unknown) console.error('[register] בדיקת 5 הדורות לא הושלמה — נשלח לבדיקה מעמיקה')
+
   const { data: insertedBen, error } = await adminClient.from('beneficiaries').insert({
     id_number: cleanId,
     full_name: String(full_name).trim(),
@@ -138,7 +144,8 @@ export async function POST(request: NextRequest) {
     lineage_node_id: lineage_node_id ? String(lineage_node_id) : null,
     spouse_name: spouse_name ? String(spouse_name).trim() : null,
     spouse_id_number: cleanSpouseId,
-    eligibility_status: 'pending',
+    eligibility_status: gate.deep ? 'deep_review' : 'pending',
+    ...(gate.deep ? { deep_review_reason: gate.reason } : {}),
     is_active: true,
     // באיזה אופן נרשם — הראוט הזה הוא הרישום מהאתר שלנו
     registration_source: 'portal',

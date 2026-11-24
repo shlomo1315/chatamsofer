@@ -464,24 +464,21 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
     : null
 
   // ── קביעת רמת הבדיקה לפי סדר הדורות ─────────────────────────────────────────
-  // בדיקה מעמיקה (deep_review) כשהנרשם *סטה מהנתיב המאומת בתוך 5 הדורות
-  // הראשונים* — כלומר הוסיף צמתים חדשים שאינם במאגר בדור רדוד (≤5).
-  //   • הצומת המאומת שנבחר (lineage_node_id) נמצא בדור N.
-  //   • צמתים חדשים (lineage_new_nodes) נוספים מתחתיו — בדורות N+1, N+2…
-  //   • אם N ≥ 5 → החדשים בדור 6+ בלבד → בדיקה רגילה (הוסיף *מעבר* ל-5).
-  //   • אם N < 5 והוסיף חדשים → חלקם נופלים *בתוך* 5 הדורות → בדיקה מעמיקה.
-  // ללא צמתים חדשים כלל → בדיקה רגילה (בחר נתיב קיים במלואו).
-  const NORMAL_DEPTH = 5
-  let eligibilityStatus = 'pending'
-  try {
-    const hasNewNodes = Array.isArray(lineage_new_nodes) && lineage_new_nodes.length > 0
-    if (hasNewNodes && lineage_node_id) {
-      const { data: sel } = await admin.from('lineage_nodes').select('generation').eq('id', String(lineage_node_id)).maybeSingle()
-      const gen = sel?.generation != null ? Number(sel.generation) : null
-      // הצומת שנבחר רדוד (בתוך 5 הדורות) והנרשם הוסיף עליו צמתים חדשים → סטייה
-      if (gen != null && gen < NORMAL_DEPTH) eligibilityStatus = 'deep_review'
-    }
-  } catch { /* כשל בזיהוי — נשאר pending (בדיקה רגילה), לא חוסם רישום */ }
+  // 🔴 הכלל (24.11): דורות 2–5 נבדקים מול הקובץ המאושר — שם, דור והורה.
+  // כל סטייה, כולל ענף שגוי שנבחר מהרשימה בלי הקלדה, עוגן בתוך 5 הדורות,
+  // או רישום בלי שיוך לעץ → בדיקה מעמיקה. ראו lib/earlyLineageGate.
+  //
+  // ⚠️ נבדק העוגן שנבחר (lineage_node_id) — הצמתים שהוקלדו נכתבים לעץ רק
+  // בהמשך, מתחתיו, ולכן עוגן רדוד עם הקלדה נופל כ"בתוך 5 הדורות".
+  // ⚠️ כשל בטעינת הקובץ או העץ → בדיקה מעמיקה, עם הסבר. הרישום לא נחסם.
+  const { earlyLineageGate } = await import('@/lib/earlyLineageGate')
+  const gate = await earlyLineageGate(admin, {
+    lineage_node_id: lineage_node_id ? String(lineage_node_id) : null,
+    lineage_chain,
+    lineage_manual,
+  })
+  if (gate.unknown) console.error('[public-register] בדיקת 5 הדורות לא הושלמה — נשלח לבדיקה מעמיקה')
+  const eligibilityStatus = gate.deep ? 'deep_review' : 'pending'
   const sharedFields = {
     // טלפון ראשי — של הבעל אם הוזן, אחרת המספר הראשון שהוזן (בעל אינו חובה יותר)
     phone: phone ? String(phone).trim() : (phoneList[0] ?? null),
@@ -508,6 +505,7 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
     signature: typeof signature === 'string' && /^data:image\/(png|jpeg);base64,/.test(signature) && signature.length <= 400_000 ? signature : null,
     // 'pending' (בדיקה רגילה) או 'deep_review' (סטייה ביחוס בתוך 5 הדורות)
     eligibility_status: eligibilityStatus,
+    ...(gate.deep ? { deep_review_reason: gate.reason } : {}),
     is_active: true,
     // באיזה אופן נרשם — נשמר בעת הרישום, כי בדיעבד אין דרך להבדיל בין ערוץ לערוץ
     registration_source: registrationSource,

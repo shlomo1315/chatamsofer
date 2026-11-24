@@ -100,24 +100,16 @@ export async function POST(request: NextRequest) {
   const update: Record<string, unknown> = { lineage_chain: chain, lineage_node_id: leafId }
 
   // ── החזרת סטטוס מ-deep_review ל-pending כשתוקנו 5 הדורות הראשונים ──
-  // צאצא נכנס ל-deep_review כי נגע ב-5 הדורות הראשונים. ברגע שכל דור ≤5
-  // בשרשרת החדשה תואם לצומת מאומת בעץ (verified) — הסטייה תוקנה, ולכן הסטטוס
-  // חוזר אוטומטית ל-pending (ממתין לאישור ראשוני). לא נוגעים בסטטוסים אחרים.
+  // 🔴 רק כשהבדיקה המלאה מול הקובץ המאושר עוברת — שם, דור *והורה* — על
+  // המסלול בעץ אחרי השיוך (ראו lib/earlyLineageGate). עד 24.11 נבדקו רק
+  // שם ודור מול צומת verified כלשהו, ושם נכון תחת הורה שגוי שוחרר.
+  // ⚠️ כשל בבדיקה = נשאר deep_review. לא נוגעים בסטטוסים אחרים.
   try {
     const { data: ben } = await db.from('beneficiaries').select('eligibility_status').eq('id', String(beneficiaryId)).maybeSingle()
     if (ben?.eligibility_status === 'deep_review') {
-      const { namesMatch } = await import('@/lib/hebrewName')
-      const nodesArr = allNodes
-      // כל דור ≤5 (למעט דור 1 = החתם סופר, תמיד מאושר) חייב צומת verified תואם
-      const early = chain.filter(e => e.generation > 1 && e.generation <= 5)
-      // ⚠️ חייב לכסות את *כל* דורות 2–5 (לא רשימה חלקית): early.every על רשימה
-      // חסרה מחזיר true בטעות ומוריד מ-deep_review משפחה שעדיין חריגה. דורשים
-      // שכל דור 2..5 קיים בשרשרת *וגם* תואם לצומת verified.
-      const coversAllEarly = [2, 3, 4, 5].every(g => early.some(e => e.generation === g))
-      const allEarlyVerified = coversAllEarly && early.every(e =>
-        nodesArr.some(n => n.status === 'verified' && n.generation === e.generation && namesMatch(n.name, e.name)),
-      )
-      if (allEarlyVerified) update.eligibility_status = 'pending'
+      const { earlyLineageGate } = await import('@/lib/earlyLineageGate')
+      const gate = await earlyLineageGate(db, { lineage_node_id: leafId ? String(leafId) : null, lineage_chain: chain })
+      if (!gate.deep) update.eligibility_status = 'pending'
     }
   } catch { /* בדיקת deep_review best-effort — לא חוסמת את השיוך */ }
 

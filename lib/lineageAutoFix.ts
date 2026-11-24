@@ -60,6 +60,12 @@ export async function autoApplyLineageFix(
       admin.from('lineage_nodes').select('id, parent_id, generation').range(from, to))
     needsReview = chainHasGap(nodeId, new Map(rows.map(n => [n.id, n])))
   }
+  // 🔴 גם דורות 2–5 מול הקובץ המאושר (24.11) — לא רק דילוג. כשל בבדיקה,
+  // או שרשרת שלא חוברה לצומת, = בדיקה מעמיקה. ראו lib/earlyLineageGate.
+  if (!needsReview) {
+    const { earlyLineageGate } = await import('./earlyLineageGate')
+    needsReview = (await earlyLineageGate(admin, { lineage_node_id: nodeId })).deep
+  }
 
   // ⚠️ 'rejected' אינו נדרס: משפחה שנדחתה במפורש אינה חוזרת להמתנה רק
   // משום שתיקנה ייחוס. ההחלטה הזו היא של המשרד ולא של המבקש.

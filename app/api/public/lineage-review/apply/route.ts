@@ -5,7 +5,7 @@ import { fetchAllRows } from '@/lib/fetchAllRows'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { logActivity } from '@/lib/activityLog'
 import { nodeIsSelf, beneficiaryNodeName, type BeneficiaryForNode } from '@/lib/beneficiaryNode'
-import { getApprovedRefTree } from '@/lib/lineageApprovedRef'
+import { loadApprovedRefStrict } from '@/lib/earlyLineageGate'
 import { earlyGenerationsCheck, appendManualGenerations } from '@/lib/lineageFixApply'
 import { normalizeLineageNodeName, lineageIdentityKey } from '@/lib/lineageNameFormat'
 import { markMaternityInquiryAnswered } from '@/lib/maternityInquiry'
@@ -14,6 +14,14 @@ import { saveChainFromLink } from '@/lib/lineageChainSave'
 import { lineageSaveDeps } from '@/lib/lineageChainSaveDeps'
 
 export const dynamic = 'force-dynamic'
+
+// 🔴 כשל בטעינת הקובץ המאושר = שום דור אינו "מאושר", והתיקון עובר לתור
+// הצוות במקום להיכנס ולשחרר לאישור ראשוני (getApprovedRefTree מתירני בכשל).
+async function approvedRefOrDeny(db: SupabaseClient) {
+  const ref = await loadApprovedRefStrict(db)
+  if (!ref) console.error('[lineage-review/apply] הקובץ המאושר לא נטען — התיקון לא יוחל אוטומטית')
+  return ref ?? (() => false)
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // קישור תיקון סדר הדורות — החלת התיקון *מיד* (החלטת המשתמש 11.10).
@@ -74,7 +82,7 @@ export async function POST(request: NextRequest) {
     if (!clean.ok) return NextResponse.json({ error: clean.error }, { status: 400 })
     const res = await saveChainFromLink(admin, lineageSaveDeps, {
       token: inv.token, root_node_id: inv.root_node_id, recipient_name: inv.recipient_name, beneficiary_id: inv.beneficiary_id,
-    }, clean.chain, await getApprovedRefTree(admin))
+    }, clean.chain, await approvedRefOrDeny(admin))
     if (!res.ok) return NextResponse.json({ error: res.error }, { status: 500 })
     await markMaternityInquiryAnswered(admin, inv.beneficiary_id, res.applied
       ? 'המשפחה תיקנה את סדר הדורות דרך הקישור'
@@ -142,7 +150,7 @@ export async function POST(request: NextRequest) {
   }
 
   // ── שער: 5 הדורות הראשונים + צומת שאינו משותף ──
-  const early = earlyGenerationsCheck(path, await getApprovedRefTree(admin))
+  const early = earlyGenerationsCheck(path, await approvedRefOrDeny(admin))
   const blockReason = !early.ok
     ? `דור ${early.generation} אינו תואם את סדר הדורות המאושר`
     : (oldSelfShared && oldSelf && !(selfExisting && oldSelf.id === anchor.id))
