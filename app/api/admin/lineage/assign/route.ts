@@ -109,7 +109,9 @@ export async function POST(request: NextRequest) {
     if (ben?.eligibility_status === 'deep_review') {
       const { earlyLineageGate } = await import('@/lib/earlyLineageGate')
       const gate = await earlyLineageGate(db, { lineage_node_id: leafId ? String(leafId) : null, lineage_chain: chain })
-      if (!gate.deep) update.eligibility_status = 'pending'
+      // הסיבה נשמרת ברישום; בלי עדכון כאן היא נשארה ישנה אחרי התיקון.
+      if (!gate.deep) { update.eligibility_status = 'pending'; update.deep_review_reason = null }
+      else if (gate.reason) update.deep_review_reason = gate.reason
     }
   } catch { /* בדיקת deep_review best-effort — לא חוסמת את השיוך */ }
 
