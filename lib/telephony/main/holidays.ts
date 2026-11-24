@@ -25,7 +25,7 @@ import { phoneRegistration, phoneEligibility, phoneHearCenter } from './holidayR
 import { askDigits, digits, fill, hangup, menu, say } from '../modules'
 import type { TlContext, TlFile, TlResponse, TlResult } from '../types'
 import {
-  centerCapacities, centerOpening, clearFailedCard, findMemberById, findMembersByPhone, getCenter,
+  centerCapacities, centerOpening, clearFailedCard, findMemberById, findMemberByPassportDigits, findMembersByPhone, getCenter,
   getRecipient, getSpokenCenter, latestDistribution, loadCard, memberCanRegister, openCenters,
   pickupEverStarted, readableName, saveCenterChoice, type Member, type SpokenCenter,
 } from './holidaysData'
@@ -140,8 +140,9 @@ async function identifyById(k: Kit, vars: string[]): Promise<{ ben: Member; atte
   const typed = digitsOnly(k.ctx.params[vars[attempt]])
   const hasNext = attempt + 1 < vars.length
   const retry = (key: string) => ({ reply: hasNext ? k.askId(vars[attempt + 1], k.files(key)) : k.end(key) })
-  if (typed.length !== ID_DIGITS) return retry('id_invalid')
-  const ben = await findMemberById(typed)
+  // לא 9 ספרות — אולי הספרות בלבד של דרכון עם אותיות; 9 ספרות שלא נמצאו — גם.
+  const ben = (typed.length === ID_DIGITS ? await findMemberById(typed) : null) ?? await findMemberByPassportDigits(typed)
+  if (!ben && typed.length !== ID_DIGITS) return retry('id_invalid')
   if (!ben) {
     console.log(`${LOG} callId=${k.ctx.callId} id not found (attempt ${attempt + 1})`)
     return retry('not_found')
