@@ -119,11 +119,16 @@ export type RegRow = {
 }
 export const REG_STATUS: Record<RegRow['status'], string> = { approved: 'מאושר', pending: 'ממתין', rejected: 'נדחה' }
 
+/** סדר הטבלה: החדש ראשון, ומי שאין לו שעת רישום בסוף (מיון יציב). */
+export function regOrder<T extends CrRow>(rows: T[]): T[] {
+  const t = (r: CrRow) => (r.registered_at ? Date.parse(r.registered_at) || 0 : 0)
+  return [...rows].sort((a, b) => t(b) - t(a))
+}
+
 /** טבלת הנרשמים: כל פרטי המשפחה שנשלחים לדף, החדש ראשון, ומי שאין לו שעת רישום בסוף.
  *  שדה שאין בו ערך נשאר ריק (לא ממציאים). */
 export function regTable<T extends CrRow>(rows: T[], perFamily?: number | null): RegRow[] {
-  const t = (r: CrRow) => (r.registered_at ? Date.parse(r.registered_at) || 0 : 0)
-  return [...rows].sort((a, b) => t(b) - t(a)).map(r => {
+  return regOrder(rows).map(r => {
     const b = r.beneficiary
     const phones = [...new Set([b?.phone, b?.phone2, r.phone].map(p => p?.trim()).filter(Boolean))].join(' · ')
     const kids = b?.children_count

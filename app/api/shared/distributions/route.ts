@@ -61,7 +61,9 @@ export async function GET(req: NextRequest) {
     const from = part * RECIPIENTS_PART_SIZE
     const { data, error: recErr } = await admin
       .from('distribution_recipients')
-      .select('id, distribution_id, source, registered_at, phone, notified_at, amount, beneficiary_id, approval_status, approved_at, card_number, card_linked_at, beneficiary:beneficiaries(id, full_name, family_name, spouse_name, id_number, phone, phone2, email, address, city, community_affiliation, children_count, birth_date, spouse_birth_date, lineage_node_id)')
+      // 🔴 רק השדות שהסיכומים והסינון צריכים (ושם המשפחה להתראה "נרשמה עכשיו").
+      // טלפונים, כתובת ובן/בת זוג נטענים לפי עמוד בטבלה — ראו ./registrants.
+      .select('id, distribution_id, source, registered_at, amount, approval_status, card_linked_at, beneficiary:beneficiaries(full_name, family_name, city, community_affiliation, children_count)')
       .in('distribution_id', ids)
       // ⚠️ מהישן לחדש: נרשם חדש נכנס בסוף ולא מזיז שורות בין החלקים שכבר
       // נטענו. הדף ממיין בעצמו (lib/controlRoom).
