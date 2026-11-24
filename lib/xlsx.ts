@@ -42,6 +42,8 @@ export type SheetSpec = {
   name: string
   columns: Column[]
   rows: CellValue[][]
+  /** אינדקסים (מ-0) של שורות ב-rows שיודגשו, למשל שורות סה״כ */
+  boldRows?: number[]
 }
 
 // ⚠️ אקסל אוסר על התווים : \ / ? * [ ] בשם לשונית, ומגביל ל-31 תווים.
@@ -120,19 +122,22 @@ export async function buildXlsx(sheets: SheetSpec[]): Promise<Buffer> {
 
     // ── עיצוב הגוף: פונט אחיד, יישור לימין, פסים וגבולות ──
     const lastRow = ws.rowCount
+    const bold = new Set(spec.boldRows ?? [])
     for (let r = 2; r <= lastRow; r++) {
       const row = ws.getRow(r)
       row.height = 19
       const banded = r % 2 === 0   // פס על שורות זוגיות — קל לעקוב אחרי שורה ארוכה
+      const isBold = bold.has(r - 2)
       spec.columns.forEach((col, i) => {
         const cell = row.getCell(i + 1)
-        cell.font = { ...FONT }
+        cell.font = { ...FONT, bold: isBold }
         // ⚠️ readingOrder:'rtl' על *כל* תא, לא רק על הכותרת. בלעדיו טקסט עברי
         // שמכיל ספרות או סימני פיסוק ("רח' הרצל 5") מוצג בסדר הפוך באקסל.
         cell.alignment = { horizontal: 'right', vertical: 'middle', readingOrder: 'rtl' }
         if (col.kind === 'number') cell.numFmt = '#,##0'
         else if (col.kind === 'date') cell.numFmt = 'dd/mm/yyyy'
-        if (banded) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BRAND.bandFill } }
+        if (isBold) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BRAND.headerFill } }
+        else if (banded) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BRAND.bandFill } }
         cell.border = {
           top:    { style: 'hair', color: { argb: BRAND.border } },
           bottom: { style: 'hair', color: { argb: BRAND.border } },

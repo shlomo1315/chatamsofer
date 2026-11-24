@@ -55,7 +55,7 @@ function rangeText(rows: DonorRow[]): string {
   return a.y === b.y ? `${a.m} עד ${b.m} ${b.y}` : `${a.m} ${a.y} עד ${b.m} ${b.y}`
 }
 
-function Gate({ title, text, children }: { title: string; text: string; children?: React.ReactNode }) {
+export function Gate({ title, text, children }: { title: string; text: string; children?: React.ReactNode }) {
   return (
     <div className="login"><div className="tile">
       <div className="mark" style={{ margin: 'auto' }}>ח</div>
@@ -65,7 +65,7 @@ function Gate({ title, text, children }: { title: string; text: string; children
   )
 }
 
-function PasswordScreen({ token, onAuth }: { token: string; onAuth: () => void }) {
+export function PasswordScreen({ token, onAuth }: { token: string; onAuth: () => void }) {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -251,6 +251,7 @@ export default function DonorReportView({ token }: { token: string }) {
           <button aria-pressed={theme === 'dark'} onClick={() => setTheme('dark')}>כהה</button>
           <button aria-pressed={theme === 'light'} onClick={() => setTheme('light')}>בהיר</button>
         </span>
+        {state === 'ok' && <a className="lo" href={`/donor-report/${encodeURIComponent(token)}/charges`}>דוח חיובים לפי תאריך</a>}
         {state === 'ok' && <button className="lo" onClick={() => void logout()}>התנתקות</button>}
         </span>
       </div>

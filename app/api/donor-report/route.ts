@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
-import { DONOR_COOKIE, verifyDonorSession } from '@/lib/donorReportAuth'
-import { loadApprovedRows, resolveDonorLink, effectiveFilter, filterRows, summarize, digitsQuery } from '@/lib/donorReport'
+import { authorizeDonorRequest } from '@/lib/donorReportGate'
+import { loadApprovedRows, effectiveFilter, filterRows, summarize, digitsQuery } from '@/lib/donorReport'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,16 +20,10 @@ export async function GET(request: NextRequest) {
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500, headers: HEADERS })
 
   const sp = request.nextUrl.searchParams
-  const link = await resolveDonorLink(db, sp.get('t'))
-  if (!link) return NextResponse.json({ error: 'הקישור אינו תקין או שבוטל' }, { status: 404, headers: HEADERS })
-
   // 🔴 בלי סיסמה שהוגדרה ובלי cookie תקף של הקישור הזה — אין נתונים.
-  if (!link.password_hash) {
-    return NextResponse.json({ error: 'הקישור טרם הופעל. פנו למשרד לקבלת סיסמה.', inactive: true }, { status: 403, headers: HEADERS })
-  }
-  if (!verifyDonorSession(request.cookies.get(DONOR_COOKIE)?.value, link.id, link.password_hash)) {
-    return NextResponse.json({ error: 'נדרשת סיסמה', needsPassword: true }, { status: 401, headers: HEADERS })
-  }
+  const gate = await authorizeDonorRequest(request, db, sp.get('t'))
+  if (!gate.ok) return NextResponse.json(gate.body, { status: gate.status, headers: HEADERS })
+  const { link, lockedHome } = gate
 
   let all
   try { all = await loadApprovedRows(db) } catch (e) {
@@ -38,7 +32,6 @@ export async function GET(request: NextRequest) {
   }
 
   // 🔴 רשימת הבתים והשורות מוגבלות לבית הנעול *לפני* כל סינון של הלקוח.
-  const lockedHome = (link.recovery_home ?? '').trim() || null
   const scope = lockedHome ? all.filter(r => r.home === lockedHome) : all
   const filter = effectiveFilter(link, { from: sp.get('from'), to: sp.get('to'), home: sp.get('home') })
   const rows = filterRows(scope, filter)
