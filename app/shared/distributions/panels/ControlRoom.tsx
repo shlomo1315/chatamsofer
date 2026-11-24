@@ -6,7 +6,7 @@ import c from './control.module.css'
 import { channelKeyOf, cityOf, familyAmount } from '@/lib/sharedBoard'
 import {
   CR_EMPTY, CR_KEYS, CR_NAMES, channelLabel, subRows, toggleF, stLevel, kpis, communityMoney, channelCounts,
-  cityTop, hourCountsCr, rateBuckets, ratePerMinute, sparkPoints, pickup, freshIds, famLabel, latest,
+  cityTop, hourCountsCr, rateBuckets, ratePerMinute, sparkPoints, pickup, takeFresh, isStale, famLabel, latest,
   num, shekel, pad2, type CrRow, type CrFilter, type CrKey,
 } from '@/lib/controlRoom'
 
@@ -46,17 +46,20 @@ export default function ControlRoom({ live, prevDists, selected, rows, closesAt,
   const [tick, setTick] = useState(() => Date.now())
   useEffect(() => { const t = setInterval(() => setTick(Date.now()), 1000); return () => clearInterval(t) }, [])
 
-  // חלונית "נרשמה עכשיו": רק בחלוקה החיה, לא בטעינה הראשונה, עד 3 בתור, 5 שניות לכל אחת
+  const stale = isStale(updatedAt, tick)
+
+  // חלונית "נרשמה עכשיו": רק בחלוקה החיה, לא בטעינה הראשונה, עד 3 בתור, 5 שניות לכל אחת.
+  // seen מצטבר לכל החלוקה, כך שנרשם שכבר הוצג לא יוצג שוב.
   const [alertOn, setAlertOn] = useState(true)
   const [queue, setQueue] = useState<CrRow[]>([])
   const seen = useRef<{ id?: string; ids: Set<string> }>({ ids: new Set() })
   useEffect(() => {
-    const ids = new Set(rows.map(r => r.id))
-    const prev = seen.current
-    seen.current = { id: selected?.id, ids }
-    if (!isLive || !alertOn || prev.id !== selected?.id) return
-    const fresh = freshIds(prev.ids, rows)
-    if (fresh.length) setQueue(q => [...q, ...fresh].slice(0, 3))
+    if (seen.current.id !== selected?.id) {
+      seen.current = { id: selected?.id, ids: new Set(rows.map(r => r.id)) }
+      return
+    }
+    const fresh = takeFresh(seen.current.ids, rows)
+    if (isLive && alertOn && fresh.length) setQueue(q => [...q, ...fresh].slice(0, 3))
   }, [rows, selected?.id, isLive, alertOn])
   const toast = queue[0] ?? null
   useEffect(() => {
@@ -115,7 +118,7 @@ export default function ControlRoom({ live, prevDists, selected, rows, closesAt,
         <main>
           <div className={c.hd}>
             <h1><small>חלוקות חגים · דף הנהלה</small>{selected?.name ?? 'אין חלוקות להצגה'}</h1>
-            <span className={c.live}><i /><span>מתעדכן חי · {(updatedAt ?? new Date(tick)).toLocaleTimeString('he-IL', { hour12: false })}</span></span>
+            <span className={cls(c.live, stale && c.stale)}><i /><span>{stale ? 'לא מתעדכן, מנסה שוב · עודכן לאחרונה ' : 'מתעדכן חי · '}{(updatedAt ?? new Date(tick)).toLocaleTimeString('he-IL', { hour12: false })}</span></span>
             {isLive && (
               <button type="button" className={c.tg} aria-pressed={alertOn} onClick={toggleAlert}>
                 התראת נרשם חדש: {alertOn ? 'פועלת' : 'כבויה'}

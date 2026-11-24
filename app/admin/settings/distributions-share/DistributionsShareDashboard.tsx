@@ -251,7 +251,7 @@ export default function DistributionsShareDashboard() {
                   הסר
                 </button>
               )}
-              <p style={{ margin: 0, fontSize: 12 }}>תצוגה בלבד: הרישום עצמו נסגר במתג של החלוקה.</p>
+              <p style={{ margin: 0, fontSize: 12 }}>לשעון בקישור בלבד: הרישום עצמו נסגר במתג &quot;רישום פתוח&quot; של החלוקה.</p>
             </div>
           )}
         </div>

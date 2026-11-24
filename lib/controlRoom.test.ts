@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   CR_EMPTY, subRows, toggleF, stLevel, kpis, communityMoney, channelCounts, cityTop, hourCountsCr,
-  rateBuckets, ratePerMinute, sparkPoints, pickup, freshIds, famLabel, latest, shekel, type CrRow,
+  rateBuckets, ratePerMinute, sparkPoints, pickup, freshIds, takeFresh, isStale, famLabel, latest, shekel, type CrRow,
 } from './controlRoom'
 
 const NOW = new Date(2026, 10, 24, 22, 41, 0).getTime()
@@ -101,6 +101,17 @@ describe('קצב רישום חי', () => {
     const rows = [row('a', { registered_at: at(9000) }), row('b', { registered_at: at(1000) }), row('c', { registered_at: at(5000) })]
     expect(freshIds(new Set(['a']), rows).map(r => r.id)).toEqual(['b', 'c'])
     expect(latest(rows, 2).map(r => r.id)).toEqual(['b', 'c'])
+  })
+  it('נרשם שכבר הוצג לא מוצג שוב, גם אם נעלם לרענון אחד', () => {
+    const seen = new Set(['a'])
+    expect(takeFresh(seen, [row('a'), row('b')]).map(r => r.id)).toEqual(['b'])
+    expect(takeFresh(seen, [row('a')])).toEqual([])
+    expect(takeFresh(seen, [row('a'), row('b'), row('c')]).map(r => r.id)).toEqual(['c'])
+  })
+  it('סימון "לא מתעדכן" כשהרענון האחרון ישן מ-45 שניות', () => {
+    expect(isStale(new Date(NOW - 20_000), NOW)).toBe(false)
+    expect(isStale(new Date(NOW - 50_000), NOW)).toBe(true)
+    expect(isStale(null, NOW)).toBe(false)
   })
   it('שם המשפחה בחלונית', () => {
     expect(famLabel(row('a'))).toBe('משפחת כהן')

@@ -824,7 +824,9 @@ export default function SharedDistributionsPage() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch('/api/shared/distributions', { cache: 'no-store' })
+      // 🔴 מגבלת זמן: בקשה אחת שנתקעה (למשל בסינון של נטפרי) השאירה את
+      // הרענון האוטומטי "עסוק" לתמיד, והדף הפסיק לקבל נרשמים חדשים בשקט.
+      const res = await fetch('/api/shared/distributions', { cache: 'no-store', signal: AbortSignal.timeout(25_000) })
       if (res.status === 401) { setState('locked'); return }
       if (res.ok) {
         const d = await res.json()
@@ -877,13 +879,16 @@ export default function SharedDistributionsPage() {
   useEffect(() => {
     if (state !== 'unlocked' || page !== 'holidays') return
     let busy = false
-    const id = window.setInterval(async () => {
+    const tick = async () => {
       if (busy || document.visibilityState !== 'visible') return
       busy = true
-      await load()
-      busy = false
-    }, 15_000)
-    return () => window.clearInterval(id)
+      try { await load() } finally { busy = false }
+    }
+    const id = window.setInterval(() => void tick(), 15_000)
+    // חזרה ללשונית: רענון מיד, בלי לחכות לסבב הבא
+    const onVisible = () => { if (document.visibilityState === 'visible') void tick() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => { window.clearInterval(id); document.removeEventListener('visibilitychange', onVisible) }
   }, [state, page, load])
 
   const refresh = useCallback(async () => {
