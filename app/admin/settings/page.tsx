@@ -259,7 +259,7 @@ export default async function SettingsPage() {
         <Collapsible title="שיתוף חלוקות חגים (תצוגה בלבד)" icon={<Gift size={16} className="text-navy-soft" />}>
           <div className="flex flex-col gap-3 rounded-2xl border border-line bg-paper p-4">
             <p className="text-[13px] leading-relaxed text-navy">
-              הסיסמה, הקישור, רשימת המחוברים, ההגנה מניחוש ומועד סגירת הרישום לשעון בקישור עברו למסך ייעודי.
+              הסיסמה, הקישור, רשימת המחוברים, ההגנה מניחוש ומועד סגירת הרישום (שסוגר את הרישום בפועל) עברו למסך ייעודי.
             </p>
             <a href="/admin/settings/distributions-share"
               className="inline-flex w-fit items-center gap-1.5 rounded-xl bg-navy px-4 py-2 text-xs font-extrabold text-white hover:opacity-90">

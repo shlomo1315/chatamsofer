@@ -7,7 +7,7 @@ const { data, dist, rules, notify } = vi.hoisted(() => ({
     getRecipient: vi.fn(), pickupEverStarted: vi.fn(), centerOpening: vi.fn(), getCenter: vi.fn(), getSpokenCenter: vi.fn(),
     centerCapacities: vi.fn(), openCenters: vi.fn(), saveCenterChoice: vi.fn(), loadCard: vi.fn(), clearFailedCard: vi.fn(),
   },
-  dist: { getOpenDistribution: vi.fn(), registerToOpenDistribution: vi.fn(), testDistributionFor: vi.fn(), getLiveDistribution: vi.fn().mockResolvedValue(null) },
+  dist: { getOpenDistribution: vi.fn(), isRegistrationDeadlinePassed: vi.fn(), registerToOpenDistribution: vi.fn(), testDistributionFor: vi.fn(), getLiveDistribution: vi.fn().mockResolvedValue(null) },
   rules: { getDistRules: vi.fn() },
   notify: { notifyHolidayReceived: vi.fn() },
 }))
@@ -376,6 +376,22 @@ describe('הקו לפי שלב החלוקה — תפריט 4 מקשים', () => 
     phase('setup')
     expect(text(await call({ menu_pick: '1' }))).toContain('טרם נפתח')
     phase('setup', { testPhones: ['0501234567'] })
+    expect(text(await call({ menu_pick: '1' }))).toContain('r_id')
+  })
+
+  it('מועד הסגירה עבר ברישום פתוח: פתיח בלי "הקישו 1", מקש 1 "הרישום נסגר", ובזכאות "זמן הרישום חלף"', async () => {
+    phase('registration')
+    dist.isRegistrationDeadlinePassed.mockResolvedValueOnce(true)
+    const intro = text(await call({ menu_pick: '' }))
+    expect(intro).toContain('תפריט ארבעה מקשים'); expect(intro).not.toContain('פתיח הודעה משמחת')
+    dist.isRegistrationDeadlinePassed.mockResolvedValueOnce(true)
+    const one = text(await call({ menu_pick: '1' }))
+    expect(one).toContain('הרישום נסגר'); expect(one).not.toContain('r_id')
+    data.getRecipient.mockResolvedValue(null)
+    dist.isRegistrationDeadlinePassed.mockResolvedValueOnce(true)
+    expect(text(await call({ menu_pick: '2', ...elig }))).toContain('זמן הרישום חלף')
+    // לפני המועד / בלי מועד: הרישום פתוח כרגיל
+    dist.isRegistrationDeadlinePassed.mockResolvedValueOnce(false)
     expect(text(await call({ menu_pick: '1' }))).toContain('r_id')
   })
 

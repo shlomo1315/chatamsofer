@@ -92,6 +92,20 @@
 .tStatus p{font-size:var(--t2);color:rgba(255,255,255,.75)}
 .unset .tStatus{background:var(--warn-wash);color:var(--warn);border-color:#ECD5B3}
 .unset .tStatus .k,.unset .tStatus p{color:var(--warn)}
+/* בורר מועד סגירת הרישום באריח המצב — ⚠️ צבעים מפורשים: .root input יורש לבן */
+.close{display:flex;flex-direction:column;gap:var(--s2);padding-top:var(--s3);border-top:1px solid color-mix(in srgb,currentColor 18%,transparent)}
+.close b{font-size:var(--t2);font-weight:700}
+.closeFields{display:flex;gap:var(--s2);flex-wrap:wrap}
+.closeFields label{display:flex;flex-direction:column;gap:4px;font-size:var(--t1);color:color-mix(in srgb,currentColor 75%,transparent)}
+.close .closeFields input{height:40px;padding:0 var(--s2);border:1px solid var(--line-strong);border-radius:var(--r1);background:#fff;color:var(--ink);font-size:var(--t3);color-scheme:light}
+.close .closeFields input:focus{outline:0;box-shadow:0 0 0 3px color-mix(in srgb,var(--gold) 45%,transparent)}
+.closeState{margin:0;font-size:var(--t2);font-weight:600}
+.closeState.past{color:var(--gold)}
+.close .closeBtn{background:#fff;border-color:#fff;color:var(--ink)}
+.close .closeGhost{background:transparent;color:inherit;border-color:color-mix(in srgb,currentColor 40%,transparent)}
+.close .closeGhost:hover{background:color-mix(in srgb,currentColor 12%,transparent);border-color:currentColor}
+.tStatus input[type=checkbox]{accent-color:var(--gold);width:16px;height:16px}
+.tStatus .closeNote{margin:0;font-size:var(--t1);opacity:.8}
 .tLink{grid-column:span 8}
 .u{font-size:var(--t4);font-weight:700}
 .u span{color:var(--muted);font-weight:400}

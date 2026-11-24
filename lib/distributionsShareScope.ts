@@ -27,10 +27,18 @@ export async function setHolidaysOnly(admin: SupabaseClient, on: boolean): Promi
   if (error) throw new Error(error.message)
 }
 
-// ── מועד סגירת הרישום לשעון העצר בדף השיתוף ──
-// ⚠️ תצוגה בלבד: המועד לא סוגר את הרישום בפועל. הסגירה עצמה היא עדיין
-// המתג registration_open של החלוקה במסך הניהול.
+// ── מועד סגירת הרישום (שעון העצר בדף השיתוף + סגירה בפועל) ──
+// 🔴 נאכף בזמן הבדיקה, בלי cron: אחרי המועד getOpenDistribution מחזירה null
+// (אתר, מייל, נדרים, טלפון), והשלוחה המדורגת עוברת ל"הרישום נסגר".
+// ⚠️ לא מחליף את registration_open אלא נוסף עליו: אם אחד מהם סגור, הרישום סגור.
+// הסרת המועד מחזירה את ההתנהגות הקודמת.
 export const CLOSES_AT_KEY = 'distributions_share_closes_at'
+
+/** האם מועד הסגירה כבר הגיע. בלי מועד: לא. */
+export function isPastClosesAt(iso: string | null | undefined, now = Date.now()): boolean {
+  const t = iso ? Date.parse(iso) : NaN
+  return !Number.isNaN(t) && now >= t
+}
 
 /** ISO תקין או null. */
 export function parseClosesAt(value: unknown): string | null {

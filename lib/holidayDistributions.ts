@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { getServiceClient } from '@/lib/apiAuth'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -51,6 +52,7 @@ export async function getOpenDistribution(): Promise<ActiveDistribution | null> 
   const { isDepartmentOpen } = await import('@/lib/departmentGates')
   const deptOpen = await isDepartmentOpen('holidays', db)
   if (!deptOpen) { console.log('[getOpenDistribution] closed=DEPARTMENT_GATE (holidays סגור בהגדרות)'); return null }
+  if (await isRegistrationDeadlinePassed(db)) { console.log('[getOpenDistribution] closed=DEADLINE (מועד הסגירה עבר)'); return null }
   // ⚠️ '*' ולא רשימת עמודות — ראו lib/distributionEnabled.ts.
   const { data, error } = await db
     .from('distributions')
@@ -68,6 +70,16 @@ export async function getOpenDistribution(): Promise<ActiveDistribution | null> 
   console.log(`[getOpenDistribution] OPEN dist=${dist.id} name=${dist.name}`)
   const rules = await getDistRules(dist.id)
   return { ...dist, phone_only: rules.phoneOnly, phone_number: rules.phoneNumber || defaultPhoneNumber() }
+}
+
+/**
+ * 🔴 מועד סגירת הרישום (הגדרות → שיתוף חלוקות חגים) עבר — הרישום סגור בכל
+ * הערוצים, גם כש-registration_open עדיין דלוק. ראו lib/distributionsShareScope.
+ */
+export async function isRegistrationDeadlinePassed(db: SupabaseClient | null = getServiceClient()): Promise<boolean> {
+  if (!db) return false
+  const { getClosesAt, isPastClosesAt } = await import('@/lib/distributionsShareScope')
+  return isPastClosesAt(await getClosesAt(db))
 }
 
 export interface RegisterResult {
