@@ -877,7 +877,7 @@ export default function HolidayRegistrations({
       {/* ── כלי החלוקה — טאבים, באותו דפוס של מסך כרטיסי המזון ──
           ⚡ רק הטאב הפעיל מרונדר, ולכן אף קריאה לשרת אינה יוצאת עד
           שנכנסים אליו. זה מה שהאט את המסך כשכל הפאנלים היו זה מתחת לזה. */}
-      {canEdit && <HolidayToolsTabs distributionId={distributionId} hideCenters={phased} />}
+      {canEdit && <HolidayToolsTabs distributionId={distributionId} hideCenters={phased} amountPerFamily={amountPerFamily} />}
 
       {/* ── פילוח לפי עיר ── */}
       {/* 🔴 פילוח המוקדים — השאלה המרכזית בשלב הבחירה: לאן המשפחות

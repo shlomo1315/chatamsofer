@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { Loader2, Wallet, AlertTriangle, Check, X, Bell } from 'lucide-react'
+import { initialLoadAmount } from '@/lib/holidayLoadAmount'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // טעינת הכרטיסים — הפעולה הכספית.
@@ -29,8 +30,10 @@ interface Preview {
 
 const fmt = (n: number) => new Intl.NumberFormat('he-IL').format(n)
 
-export default function LoadCardsPanel({ distributionId }: { distributionId: string }) {
-  const [amount, setAmount] = useState(500)
+export default function LoadCardsPanel({ distributionId, amountPerFamily }: { distributionId: string; amountPerFamily?: number }) {
+  // 🔴 נפתח על הסכום למשפחה של החלוקה, כמו בצפי התקציבי. עריכה ידנית
+  // נשמרת — ה-state מאותחל פעם אחת, והבדיקה והטעינה שולחות בדיוק אותו ערך.
+  const [amount, setAmount] = useState(() => initialLoadAmount(amountPerFamily))
   const [preview, setPreview] = useState<Preview | null>(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
