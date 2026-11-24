@@ -3,6 +3,7 @@ import { verifyPortalToken, DIST_PORTAL_COOKIE } from '@/lib/distributionsPortal
 import { createClient } from '@supabase/supabase-js'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { pickLiveDistribution } from '@/lib/distributionEnabled'
+import { getHolidaysOnly } from '@/lib/distributionsShareScope'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // דף שיתוף חלוקות חגים — API לתצוגה בלבד (view-only).
@@ -67,6 +68,14 @@ export async function GET(req: NextRequest) {
   // ⚠️ המסלול הזה רץ בכל טעינה *וכל 10 שניות* ברענון האוטומטי, ולכן
   // אלפי צמתים עברו ברשת כל 10 שניות גם כשאיש לא הסתכל על העץ. זו
   // הייתה סיבת האיטיות של הדף כולו.
+
+  // 🔴 "חגים בלבד" (ברירת המחדל): לא שולפים ולא מחזירים יולדות או צאצאים.
+  if (await getHolidaysOnly(admin)) {
+    return NextResponse.json(
+      { distributions: distributions ?? [], recipients, holidaysOnly: true },
+      { headers: { 'Cache-Control': 'no-store' } },
+    )
+  }
 
   // סה"כ צאצאים רשומים במערכת (לקוביית הסיכום בדשבורד) — ספירה בלבד, ללא נתונים.
   const { count: beneficiariesCount } = await admin

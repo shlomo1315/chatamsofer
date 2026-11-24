@@ -55,6 +55,8 @@ export default function DistributionsShareDashboard() {
   const [saving, setSaving] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [holidaysOnly, setHolidaysOnly] = useState<boolean | null>(null)
+  const [scopeSaving, setScopeSaving] = useState(false)
 
   const loadSessions = useCallback(async () => {
     const r = await fetch('/api/admin/distributions-share/sessions')
@@ -70,6 +72,10 @@ export default function DistributionsShareDashboard() {
       .then(r => (r.ok ? r.json() : { sessions: [] }))
       .then(d => setSessions(d.sessions ?? []))
       .catch(() => {})
+    fetch('/api/admin/distributions-share/scope')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d) setHolidaysOnly(d.holidaysOnly !== false) })
+      .catch(() => {})
   }, [])
 
   const url = origin + SHARE_PATH
@@ -83,6 +89,25 @@ export default function DistributionsShareDashboard() {
     navigator.clipboard?.writeText(url).catch(() => {})
     setCopied(true)
     setTimeout(() => setCopied(false), 1600)
+  }
+
+  async function saveScope(on: boolean) {
+    setScopeSaving(true)
+    try {
+      const r = await fetch('/api/admin/distributions-share/scope', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ holidaysOnly: on }),
+      })
+      const d = await r.json()
+      if (!r.ok) { toast.error(d.error || 'שגיאה בשמירה'); return }
+      setHolidaysOnly(on)
+      toast.success(on ? 'הקישור מציג עכשיו רק חלוקות חגים' : 'הקישור מציג עכשיו את כל המחלקות')
+    } catch {
+      toast.error('שגיאה בשמירה')
+    } finally {
+      setScopeSaving(false)
+    }
   }
 
   async function save() {
@@ -162,6 +187,17 @@ export default function DistributionsShareDashboard() {
               <div className={s.big}>סגור</div>
               <p>אין סיסמה, ולכן הקישור לא נפתח לאף אחד.</p>
             </>
+          )}
+          {holidaysOnly !== null && (
+            <label className={s.row} style={{ gap: 8, alignItems: 'center', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={holidaysOnly}
+                disabled={scopeSaving}
+                onChange={e => void saveScope(e.target.checked)}
+              />
+              <span>חלוקות חגים בלבד (עזר יולדות וצאצאים מוסתרים)</span>
+            </label>
           )}
         </div>
 

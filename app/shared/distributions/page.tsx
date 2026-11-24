@@ -919,7 +919,11 @@ export default function SharedDistributionsPage() {
   const [lineageLoading, setLineageLoading] = useState(false)
   const [beneficiariesCount, setBeneficiariesCount] = useState(0)
   const [maternity, setMaternity] = useState<MaternityRow[]>([])
-  const [[page, tab], setRoute] = useState<[Page, string]>(['home', ''])
+  const [[hashPage, tab], setRoute] = useState<[Page, string]>(['home', ''])
+  // 🔴 "חגים בלבד" (הגדרת ניהול, ברירת מחדל פעילה): רק דף החגים מוצג.
+  // מתחיל כ-true כדי ששאר המחלקות לא יהבהבו לפני שהשרת עונה.
+  const [holidaysOnly, setHolidaysOnly] = useState(true)
+  const page: Page = holidaysOnly ? 'holidays' : hashPage
   // null = ברירת מחדל: החלוקה החיה אם יש, אחרת חלוקות קודמות
   const [holView, setHolView] = useState<'live' | 'prev' | null>(null)
   const [pickedId, setPickedId] = useState<string | null>(null)
@@ -937,6 +941,7 @@ export default function SharedDistributionsPage() {
         setRecipients(d.recipients ?? [])
         setBeneficiariesCount(d.beneficiariesCount ?? 0)
         setMaternity(d.maternity ?? [])
+        setHolidaysOnly(d.holidaysOnly === true)
         setUpdatedAt(new Date())
         setState('unlocked')
       }
@@ -1076,16 +1081,18 @@ export default function SharedDistributionsPage() {
             <span className={s.mono}>ח״ס</span>
             <div><b>איגוד הצאצאים</b><span>היכל החתם סופר</span></div>
           </div>
+          {!holidaysOnly && (
+            <div>
+              <p className={s.sl}>סקירה</p>
+              <nav className={s.nv}>{nav('home', 'בית', 'home')}</nav>
+            </div>
+          )}
           <div>
-            <p className={s.sl}>סקירה</p>
-            <nav className={s.nv}>{nav('home', 'בית', 'home')}</nav>
-          </div>
-          <div>
-            <p className={s.sl}>מחלקות</p>
+            <p className={s.sl}>{holidaysOnly ? 'חלוקות' : 'מחלקות'}</p>
             <nav className={s.nv}>
               {nav('holidays', 'חלוקות חגים', 'gift', live ? (byDist.get(live.id) ?? []).length : undefined)}
-              {nav('maternity', 'עזר יולדות', 'baby', maternity.length)}
-              {nav('tree', 'צאצאים', 'tree', beneficiariesCount)}
+              {!holidaysOnly && nav('maternity', 'עזר יולדות', 'baby', maternity.length)}
+              {!holidaysOnly && nav('tree', 'צאצאים', 'tree', beneficiariesCount)}
             </nav>
           </div>
           <div className={s.sfoot}>
