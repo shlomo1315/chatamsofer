@@ -62,6 +62,32 @@ describe('/api/donor-report/charges', () => {
     expect(JSON.stringify(body)).not.toContain('012345678')
   })
 
+  it('כל הבתים: שני הסניפים ורשימת הבתים לבורר', async () => {
+    vi.mocked(getServiceClient).mockReturnValue(fakeDb(link(null)) as never)
+    const body = await (await GET(req('dates=2026-11-10'))).json()
+    expect(body.branches.map((b: { home: string }) => b.home)).toEqual(['בית א', 'בית ב'])
+    expect(body.homes).toEqual(['בית א', 'בית ב'])
+    expect(body.home).toBeNull()
+    expect(body.amount).toBe(1200)
+  })
+
+  it('home= מסנן לבית אחד, והבורר עדיין מקבל את כל הבתים', async () => {
+    vi.mocked(getServiceClient).mockReturnValue(fakeDb(link(null)) as never)
+    const body = await (await GET(req(`dates=2026-11-10&home=${encodeURIComponent('בית א')}`))).json()
+    expect(body.branches.map((b: { home: string }) => b.home)).toEqual(['בית א'])
+    expect(body.home).toBe('בית א')
+    expect(body.homes).toEqual(['בית א', 'בית ב'])
+    expect(body.amount).toBe(500)
+  })
+
+  it('קישור נעול: home= של בית אחר לא עוקף את הנעילה', async () => {
+    vi.mocked(getServiceClient).mockReturnValue(fakeDb(link('בית ב')) as never)
+    const body = await (await GET(req(`dates=2026-11-10&home=${encodeURIComponent('בית א')}`))).json()
+    expect(body.branches.map((b: { home: string }) => b.home)).toEqual(['בית ב'])
+    expect(body.homes).toEqual(['בית ב'])
+    expect(body.amount).toBe(700)
+  })
+
   it('format=xlsx מחזיר קובץ אקסל', async () => {
     vi.mocked(getServiceClient).mockReturnValue(fakeDb(link(null)) as never)
     const res = await GET(req('from=2026-11-10&to=2026-11-10&format=xlsx'))

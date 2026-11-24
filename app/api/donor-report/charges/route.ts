@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { authorizeDonorRequest } from '@/lib/donorReportGate'
-import { chargesFileName, chargesSheets, groupCharges, loadCharges, parseDateSelection, selectionDays, selectionLabel } from '@/lib/donorCharges'
+import { chargesFileName, chargesSheets, groupCharges, loadCharges, parseDateSelection, pickHome, selectionDays, selectionLabel, splitByHome } from '@/lib/donorCharges'
 import { buildXlsx, xlsxHeaders } from '@/lib/xlsx'
 
 export const dynamic = 'force-dynamic'
@@ -25,13 +25,16 @@ export async function GET(request: NextRequest) {
   const gate = await authorizeDonorRequest(request, db, sp.get('t'))
   if (!gate.ok) return NextResponse.json(gate.body, { status: gate.status, headers: HEADERS })
 
+  // ?home= מסנן לבית אחד. 🔴 בקישור נעול pickHome מחזיר תמיד את הבית של הקישור.
+  const home = pickHome(sp.get('home'), gate.lockedHome)
+
   const month = sp.get('month')
   if (month !== null) {
     const m = /^(\d{4})-(\d{2})$/.exec(month)
     if (!m || +m[2] < 1 || +m[2] > 12) return NextResponse.json({ error: 'חודש לא תקין' }, { status: 400, headers: HEADERS })
     const last = new Date(Date.UTC(+m[1], +m[2], 0)).getUTCDate()
     try {
-      const charges = await loadCharges(db, { from: `${month}-01`, to: `${month}-${String(last).padStart(2, '0')}` }, gate.lockedHome)
+      const { charges } = splitByHome(await loadCharges(db, { from: `${month}-01`, to: `${month}-${String(last).padStart(2, '0')}` }, gate.lockedHome), home)
       return NextResponse.json({ days: [...new Set(charges.map(c => c.date))].sort() }, { headers: HEADERS })
     } catch (e) {
       console.error('[donor-report/charges month]', e)
@@ -42,8 +45,12 @@ export async function GET(request: NextRequest) {
   const sel = parseDateSelection({ dates: sp.get('dates'), from: sp.get('from'), to: sp.get('to') })
   if (!sel) return NextResponse.json({ error: 'בחרו תאריך או טווח תאריכים תקין (עד שנה)' }, { status: 400, headers: HEADERS })
 
-  let report
-  try { report = groupCharges(await loadCharges(db, sel, gate.lockedHome)) } catch (e) {
+  let report, homes: string[]
+  try {
+    const split = splitByHome(await loadCharges(db, sel, gate.lockedHome), home)
+    homes = split.homes
+    report = groupCharges(split.charges)
+  } catch (e) {
     console.error('[donor-report/charges]', e)
     return NextResponse.json({ error: 'שליפת החיובים נכשלה' }, { status: 500, headers: HEADERS })
   }
@@ -54,5 +61,5 @@ export async function GET(request: NextRequest) {
     return new NextResponse(new Uint8Array(buf), { headers: { ...xlsxHeaders(chargesFileName(sel)), 'X-Robots-Tag': 'noindex' } })
   }
 
-  return NextResponse.json({ label: gate.link.label, lockedHome: gate.lockedHome, selection: selectionLabel(sel), days, ...report }, { headers: HEADERS })
+  return NextResponse.json({ label: gate.link.label, lockedHome: gate.lockedHome, home, homes, selection: selectionLabel(sel), days, ...report }, { headers: HEADERS })
 }

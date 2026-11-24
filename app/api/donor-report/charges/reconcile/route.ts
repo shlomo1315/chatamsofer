@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { authorizeDonorRequest } from '@/lib/donorReportGate'
-import { loadCharges, MAX_RANGE_DAYS } from '@/lib/donorCharges'
+import { loadCharges, MAX_RANGE_DAYS, pickHome, splitByHome } from '@/lib/donorCharges'
 import { CardFileError, DATE_SLACK_DAYS, MAX_CARD_FILE_BYTES, parseCardFile, reconcile } from '@/lib/donorCardReconcile'
 
 export const dynamic = 'force-dynamic'
@@ -51,7 +51,9 @@ export async function POST(request: NextRequest) {
     if ((Date.parse(to) - Date.parse(from)) / DAY_MS + 1 > MAX_RANGE_DAYS) {
       return NextResponse.json({ error: 'הקובץ מכסה יותר משנה. העלו פירוט של חודש או כמה חודשים' }, { status: 400, headers: HEADERS })
     }
-    const charges = await loadCharges(db, { from, to }, gate.lockedHome)
+    // ?home= מצמצם את ההתאמה לבית אחד. 🔴 בקישור נעול הנעילה גוברת (pickHome).
+    const home = pickHome(request.nextUrl.searchParams.get('home'), gate.lockedHome)
+    const { charges } = splitByHome(await loadCharges(db, { from, to }, gate.lockedHome), home)
     const result = reconcile(parsed.rows, charges)
     const shown = new Set([...result.rows.map(r => r.chargeId).filter(Boolean), ...result.missing])
     return NextResponse.json({

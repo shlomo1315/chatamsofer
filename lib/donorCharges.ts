@@ -131,6 +131,22 @@ export function toCharges(rows: Record<string, unknown>[], sel: DateSelection, l
   return out.sort((a, b) => a.home.localeCompare(b.home, 'he') || a.date.localeCompare(b.date) || a.time.localeCompare(b.time))
 }
 
+/**
+ * הבית שהדוח מסונן אליו. 🔴 בקישור נעול הנעילה גוברת תמיד, ובית אחר מהבקשה מתעלם.
+ * null = כל הבתים.
+ */
+export function pickHome(requested: string | null | undefined, lockedHome: string | null): string | null {
+  if (lockedHome) return lockedHome
+  const h = String(requested ?? '').trim()
+  return h && h.length <= 120 ? h : null
+}
+
+/** רשימת הבתים שיש להם חיובים (לבורר), וסינון החיובים לבית שנבחר. */
+export function splitByHome(charges: DonorCharge[], home: string | null): { homes: string[]; charges: DonorCharge[] } {
+  const homes = [...new Set(charges.map(c => c.home))].sort((a, b) => a.localeCompare(b, 'he'))
+  return { homes, charges: home ? charges.filter(c => c.home === home) : charges }
+}
+
 export interface ChargeDay { date: string; count: number; amount: number; charges: DonorCharge[] }
 export interface ChargeBranch { home: string; count: number; amount: number; days: ChargeDay[] }
 export interface ChargesReport { count: number; amount: number; branches: ChargeBranch[] }

@@ -3,15 +3,17 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { ChargeDay, ChargesReport } from '@/lib/donorCharges'
 import type { CardColumns, MatchedRow, MatchStatus, ReconcileResult } from '@/lib/donorCardReconcile'
 import { Gate, PasswordScreen } from '../DonorReportView'
+import ChargesCharts from './ChargesCharts'
 import '../donor-report.css'
 import './charges.css'
 
-// דוח חיובים לנדיב ("לוח נייבי"): בחירת תאריכים בלוח שנה, מספר החתימה, מטריצה של
+// דוח חיובים לנדיב ("לוח נייבי"): בחירת בית החלמה ותאריכים, מספר החתימה, גרפים, מטריצה של
 // יום × סניף עם פירוט, הדפסה ואקסל (01); והתאמה של קובץ האשראי מול החיובים במערכת (02).
 // הכול נגזר מהשרת (/api/donor-report/charges ו-/reconcile), שגם נועל את הקישור לבית שלו.
-// הקובץ שהועלה נשלח לשרת לקריאה בלבד ולא נשמר, גם לא בדפדפן אחרי השליחה.
+// הקובץ שהועלה נשלח לשרת לקריאה בלבד ולא נשמר בשרת. בדפדפן הוא נשאר רק בזיכרון של הדף,
+// כדי להריץ את ההתאמה שוב כשמחליפים בית, ונמחק בהסרה או ביציאה מהדף.
 type Mode = 'day' | 'range' | 'multi'
-interface Data extends ChargesReport { label: string; lockedHome: string | null; selection: string; days: string[] }
+interface Data extends ChargesReport { label: string; lockedHome: string | null; home: string | null; homes: string[]; selection: string; days: string[] }
 interface RecCharge { id: string; date: string; home: string; name: string; amount: number }
 interface RecData { columns: CardColumns; rows: MatchedRow[]; range: ReconcileResult['range']; missing: string[]; charges: RecCharge[] }
 type Phase = 'reading' | 'learn' | 'run' | 'done' | 'error'
@@ -49,11 +51,15 @@ function daysBetween(from: string, to: string): string[] {
   return out
 }
 
+// בטווח כותבים "עד" ולא מקף: מקף בין שני תאריכים בטקסט מימין לשמאל מתהפך בתצוגה
+// ("25.11.2026–03.11"), והמילה שומרת על הסדר הנכון.
 function selLabel(list: string[]): string {
   if (!list.length) return 'לא נבחרו תאריכים'
   if (list.length === 1) return `${dayName(list[0])} ${fdy(list[0])}`
   const first = list[0], last = list[list.length - 1]
-  if (list.every((d, i) => i === 0 || d === addDays(list[i - 1], 1))) return `${fd(first)}–${fdy(last)} · ${list.length} ימים`
+  if (list.every((d, i) => i === 0 || d === addDays(list[i - 1], 1))) {
+    return `${first.slice(0, 4) === last.slice(0, 4) ? fd(first) : fdy(first)} עד ${fdy(last)} · ${list.length} ימים`
+  }
   const shown = list.slice(0, 6).map(fd).join(', ')
   return `${list.length} ימים: ${shown}${list.length > 6 ? '…' : ''}`
 }
@@ -122,6 +128,8 @@ export default function ChargesView({ token }: { token: string }) {
   const [sheet, setSheet] = useState(0)
   const [rec, setRec] = useState<Rec | null>(null)
   const [over, setOver] = useState(false)
+  const [home, setHome] = useState<string | null>(null)
+  const lastFile = useRef<File | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   const lastFocus = useRef<HTMLElement | null>(null)
   const closeBtn = useRef<HTMLButtonElement>(null)
@@ -130,9 +138,10 @@ export default function ChargesView({ token }: { token: string }) {
 
   const selected = useMemo(() => (mode === 'range' ? daysBetween(from, to) : [...dates].sort()), [mode, from, to, dates])
   const query = useMemo((): Record<string, string> | null => {
-    if (mode === 'range') return { from, to }
-    return dates.length ? { dates: [...dates].sort().join(',') } : null
-  }, [mode, from, to, dates])
+    const h: Record<string, string> = home ? { home } : {}
+    if (mode === 'range') return { from, to, ...h }
+    return dates.length ? { dates: [...dates].sort().join(','), ...h } : null
+  }, [mode, from, to, dates, home])
 
   const load = useCallback(async (silent = false) => {
     if (!query) { setData(null); setError(''); setState('ok'); return }
@@ -151,10 +160,10 @@ export default function ChargesView({ token }: { token: string }) {
 
   const loadMonth = useCallback(async () => {
     try {
-      const res = await fetch(`/api/donor-report/charges?${new URLSearchParams({ t: token, month: viewMonth })}`, { cache: 'no-store' })
+      const res = await fetch(`/api/donor-report/charges?${new URLSearchParams({ t: token, month: viewMonth, ...(home ? { home } : {}) })}`, { cache: 'no-store' })
       if (res.ok) setMonthDays(new Set((await res.json()).days as string[]))
     } catch { /* הנקודות בלוח הן תוספת; בלי רשת פשוט לא מוצגות */ }
-  }, [token, viewMonth])
+  }, [token, viewMonth, home])
 
   useEffect(() => {
     const t = setTimeout(() => void load(), 250)
@@ -171,11 +180,13 @@ export default function ChargesView({ token }: { token: string }) {
   }, [load, loadMonth])
 
   // ── בורר התאריכים ──
+  // בטווח, הלחיצה הראשונה רק מסמנת יום התחלה. הדוח הקודם נשאר מוצג עד שבוחרים יום סיום,
+  // במקום לטעון יום בודד ולהציג "אין חיובים" באמצע הבחירה.
   const clickDay = (d: string) => {
     setFocus(null)
     if (mode === 'day') setDates([d])
     else if (mode === 'multi') setDates(p => (p.includes(d) ? p.filter(x => x !== d) : p.length >= MAX_DATES ? p : [...p, d].sort()))
-    else if (!anchor) { setAnchor(d); setFrom(d); setTo(d) }
+    else if (!anchor) setAnchor(d)
     else { const [a, b] = [anchor, d].sort(); setFrom(a); setTo(b); setAnchor(null) }
   }
   const switchMode = (m: Mode) => {
@@ -204,7 +215,14 @@ export default function ChargesView({ token }: { token: string }) {
 
   // ── הדוח ──
   const branches = useMemo(() => data?.branches ?? [], [data])
-  const colorOf = useMemo(() => new Map(branches.map((b, i) => [b.home, COLORS[i % COLORS.length]])), [branches])
+  // הצבע נקבע לפי רשימת הבתים של התקופה (לפני הסינון), כדי שבית ישמור על הצבע שלו גם כשבוחרים אותו.
+  const homeList = useMemo(() => {
+    const list = [...(data?.homes ?? [])]
+    for (const b of branches) if (!list.includes(b.home)) list.push(b.home)
+    if (home && !list.includes(home)) list.push(home)
+    return list
+  }, [data, branches, home])
+  const colorOf = useMemo(() => new Map(homeList.map((h, i) => [h, COLORS[i % COLORS.length]])), [homeList])
   const cells = useMemo(() => {
     const map = new Map<string, ChargeDay>()
     for (const b of branches) for (const d of b.days) map.set(`${b.home}|${d.date}`, d)
@@ -214,6 +232,7 @@ export default function ChargesView({ token }: { token: string }) {
   const rowDays = data && data.days.length <= 31 ? data.days : chargeDates
   const focusCell = focus ? cells.get(`${focus.h}|${focus.d}`) ?? null : null
   const label = selLabel(selected)
+  const pickLabel = anchor ? `התחלה ${fdy(anchor)} · בחרו יום סיום` : label
 
   const download = async () => {
     if (!query || !selected.length) return
@@ -248,14 +267,16 @@ export default function ChargesView({ token }: { token: string }) {
   }, [modal, closeModal])
 
   // ── התאמה ──
-  const upload = async (f: File) => {
-    const fail = (msg: string) => setRec({ name: f.name, phase: 'error', data: null, chips: 0, step: 0, error: msg })
-    if (!FILE_TYPES.includes(f.name.toLowerCase().split('.').pop() ?? '')) return fail('אפשר להעלות PDF, Excel או CSV')
+  const upload = async (f: File, h: string | null = home) => {
+    const fail = (msg: string) => { lastFile.current = null; setRec({ name: f.name, phase: 'error', data: null, chips: 0, step: 0, error: msg }) }
+    if (!FILE_TYPES.includes(f.name.toLowerCase().split('.').pop() ?? '')) return fail('סוג הקובץ לא נתמך. אפשר להעלות PDF, Excel או CSV')
+    if (f.size === 0) return fail('הקובץ ריק. בחרו קובץ אחר')
     if (f.size > MAX_FILE) return fail('הקובץ גדול מ-5MB')
+    lastFile.current = f
     setRec({ name: f.name, phase: 'reading', data: null, chips: 0, step: 0, error: '' })
     try {
       const body = JSON.stringify({ name: f.name, data: await readBase64(f) })
-      const res = await fetch(`/api/donor-report/charges/reconcile?${new URLSearchParams({ t: token })}`, {
+      const res = await fetch(`/api/donor-report/charges/reconcile?${new URLSearchParams({ t: token, ...(h ? { home: h } : {}) })}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
       })
       const j = await res.json().catch(() => ({}))
@@ -269,6 +290,14 @@ export default function ChargesView({ token }: { token: string }) {
     } catch { fail('שגיאת רשת, נסו שוב') }
   }
   const rerun = () => setRec(r => (r?.data ? { ...r, phase: 'learn', chips: 0, step: 0 } : r))
+  const removeFile = () => { lastFile.current = null; setRec(null) }
+  const pickFile = () => fileInput.current?.click()
+  // החלפת בית מסננת את הדוח, ואם כבר הועלה קובץ מריצה עליו את ההתאמה מחדש לבית שנבחר.
+  const chooseHome = (h: string | null) => {
+    if (h === home) return
+    setHome(h); setFocus(null)
+    if (lastFile.current) void upload(lastFile.current, h)
+  }
 
   const colNames = rec?.data ? COL_KEYS.map(k => rec.data!.columns[k]).filter((c): c is string => !!c) : []
   useEffect(() => {
@@ -354,7 +383,10 @@ export default function ChargesView({ token }: { token: string }) {
   if (state === 'error') return gate(<Gate title={error} text="אם הגעתם לכאן בטעות, פנו למשרד לקבלת קישור חדש." />)
 
   const loaded = !!rec && rec.phase !== 'error'
-  const homesText = data?.lockedHome ?? branches.map(b => b.home).join(' · ')
+  const reading = rec?.phase === 'reading'
+  const locked = data?.lockedHome ?? null
+  const homesText = locked ?? (home ? `מסונן: ${home}` : homeList.join(' · '))
+  const scope = locked ?? home ?? 'כל הבתים'
 
   return (
     <div className="ch2" dir="rtl">
@@ -370,6 +402,7 @@ export default function ChargesView({ token }: { token: string }) {
           </div>
           <div className="top-l">
             <span className="live">מתעדכן אוטומטית</span>
+            <a className="back" href="#ch2-rec"><Icon n="up" />העלאת קובץ אשראי</a>
             <button type="button" className="back" onClick={() => void logout()}>התנתקות</button>
           </div>
         </header>
@@ -385,7 +418,18 @@ export default function ChargesView({ token }: { token: string }) {
               <button type="button" className="btn gold" onClick={openModal} disabled={!data}><Icon n="xl" />הורדה לאקסל</button>
             </div>
           </div>
-          <div className="printhead"><b>דוח חיובים לפי יום וסניף</b><span>{label}</span><span>הופק {fdy(today)}</span></div>
+          <div className="printhead"><b>דוח חיובים לפי יום וסניף</b><span>{label}{scope !== 'כל הבתים' || locked ? ` · ${scope}` : ''}</span><span>הופק {fdy(today)}</span></div>
+
+          {!locked && homeList.length > 1 && (
+            <div className="homes noprint" role="group" aria-label="סינון לפי בית החלמה">
+              <button type="button" aria-pressed={!home} onClick={() => chooseHome(null)}>כל הבתים</button>
+              {homeList.map(h => (
+                <button key={h} type="button" aria-pressed={home === h} onClick={() => chooseHome(h)}>
+                  <span className="dot" style={cssC(colorOf.get(h)!)} />{h}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="rep-grid">
             <aside className="pick panel" aria-label="בחירת תאריכים">
@@ -406,8 +450,8 @@ export default function ChargesView({ token }: { token: string }) {
                 {'אבגדהוש'.split('').map(w => <span key={w} className="cal-w" aria-hidden="true">{w}</span>)}
                 {Array.from({ length: calCells.blanks }, (_, i) => <span key={`b${i}`} />)}
                 {calCells.days.map(d => {
-                  const on = mode === 'range' ? d === from || d === to : dates.includes(d)
-                  const inside = mode === 'range' && d > from && d < to
+                  const on = mode === 'range' ? (anchor ? d === anchor : d === from || d === to) : dates.includes(d)
+                  const inside = mode === 'range' && !anchor && d > from && d < to
                   const has = monthDays.has(d)
                   return (
                     <button
@@ -422,15 +466,19 @@ export default function ChargesView({ token }: { token: string }) {
                   )
                 })}
               </div>
-              <div className="selsum">נבחר: <b>{label}</b></div>
+              <div className={`selsum${anchor ? ' wait' : ''}`} aria-live="polite">{anchor ? <b>{pickLabel}</b> : <>נבחר: <b>{label}</b></>}</div>
             </aside>
 
             <div aria-live="polite">
               {error ? <div className="panel empty err" role="alert">{error}</div>
                 : !query ? <div className="panel empty">בחרו תאריך בלוח השנה</div>
                 : !data ? <div className="panel empty">טוען…</div>
-                : !branches.length ? <div className="panel empty">אין חיובים בתאריכים שנבחרו</div>
-                : (
+                : !branches.length ? (
+                  <div className="panel empty">
+                    <b>אין חיובים ב{label}{home ? ` ב${home}` : ''}</b>
+                    <span>ימים עם חיובים מסומנים בנקודה בלוח השנה{home && !locked ? '. אפשר גם לבחור "כל הבתים"' : ''}</span>
+                  </div>
+                ) : (
                   <>
                     <div className="hero panel">
                       <div>
@@ -447,6 +495,8 @@ export default function ChargesView({ token }: { token: string }) {
                         {branches.map(b => <i key={b.home} style={{ flex: b.amount || 1, background: colorOf.get(b.home) }} />)}
                       </div>
                     </div>
+
+                    <ChargesCharts days={rowDays} branches={branches} colorOf={colorOf} amount={data.amount} count={data.count} />
 
                     <div className="tscroll">
                       <table className="mx">
@@ -551,37 +601,56 @@ export default function ChargesView({ token }: { token: string }) {
             </div>
           </div>
 
-          <div
-            className={`drop${over ? ' over' : ''}${loaded ? ' loaded' : ''}`}
-            onDragOver={e => { e.preventDefault(); setOver(true) }}
-            onDragLeave={() => setOver(false)}
-            onDrop={e => { e.preventDefault(); setOver(false); const f = e.dataTransfer.files[0]; if (f) void upload(f) }}
-          >
-            <div className="ic"><Icon n={loaded ? 'doc' : 'up'} /></div>
-            <div className="tx" aria-live="polite">
-              {loaded ? (
-                <>
-                  <b className="ltr">{rec.name}</b>
-                  <span>{!rd || rec.phase === 'learn' ? 'מזהה עמודות בקובץ…' : `זוהו ${colNames.length} עמודות ו-${nRows} שורות חיוב · התאמה לפי סניף, תאריך וסכום`}</span>
-                  {rd && <div className="chips">{colNames.map((c, i) => <span key={c} className={`chip${i < rec.chips ? ' on' : ''}`}>{c}</span>)}</div>}
-                </>
-              ) : (
-                <>
-                  <b>העלאת פירוט חיובים מחברת האשראי</b>
-                  <span>PDF או Excel. המערכת מזהה לבד את העמודות ומשייכת כל שורה לחיוב.</span>
-                </>
-              )}
-              {rec?.error && <span className="err" role="alert">{rec.error}</span>}
+          <div className="upl panel">
+            <div className="upl-h">
+              <div>
+                <h3>העלאת קובץ אשראי להתאמה</h3>
+                <p>PDF, Excel או CSV, עד 5MB. הקובץ נבדק מול החיובים ולא נשמר בשרת.</p>
+              </div>
+              <span className="scope">התאמה מול: <b>{scope}</b></span>
             </div>
-            <div className="acts">
-              {rd && <button type="button" className="btn sm" onClick={rerun} disabled={rec?.phase === 'learn' || rec?.phase === 'run'}><Icon n="re" />הרצה מחדש</button>}
-              <button type="button" className={`btn ${loaded ? 'sm' : 'gold'}`} onClick={() => fileInput.current?.click()} disabled={rec?.phase === 'reading'}>
-                {loaded ? 'קובץ אחר' : 'בחירת קובץ'}
-              </button>
-              <input
-                ref={fileInput} type="file" hidden accept=".pdf,.xlsx,.xls,.csv"
-                onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void upload(f) }}
-              />
+
+            <div
+              className={`drop${over ? ' over' : ''}${loaded ? ' loaded' : ''}${rec?.phase === 'error' ? ' bad' : ''}`}
+              role={loaded ? undefined : 'button'} tabIndex={loaded ? undefined : 0}
+              aria-label={loaded ? undefined : 'בחירת קובץ אשראי או גרירה לכאן'}
+              onClick={loaded ? undefined : pickFile}
+              onKeyDown={loaded ? undefined : e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickFile() } }}
+              onDragOver={e => { e.preventDefault(); setOver(true) }}
+              onDragLeave={() => setOver(false)}
+              onDrop={e => { e.preventDefault(); setOver(false); const f = e.dataTransfer.files[0]; if (f) void upload(f) }}
+            >
+              <div className="ic"><Icon n={loaded ? 'doc' : 'up'} /></div>
+              <div className="tx" aria-live="polite">
+                {loaded ? (
+                  <>
+                    <b className="ltr">{rec.name}</b>
+                    <span>{reading ? 'קורא את הקובץ…' : !rd || rec.phase === 'learn' ? 'מזהה עמודות בקובץ…' : `זוהו ${colNames.length} עמודות ו-${nRows} שורות חיוב · התאמה לפי סניף, תאריך וסכום`}</span>
+                    {rd && <div className="chips">{colNames.map((c, i) => <span key={c} className={`chip${i < rec.chips ? ' on' : ''}`}>{c}</span>)}</div>}
+                  </>
+                ) : rec?.phase === 'error' ? (
+                  <>
+                    <b className="ltr">{rec.name}</b>
+                    <span className="err" role="alert">{rec.error}</span>
+                  </>
+                ) : (
+                  <>
+                    <b>גררו לכאן את קובץ האשראי</b>
+                    <span>או לחצו לבחירת קובץ מהמחשב</span>
+                  </>
+                )}
+              </div>
+              <div className="acts" onClick={e => e.stopPropagation()}>
+                {rd && <button type="button" className="btn sm" onClick={rerun} disabled={rec?.phase === 'learn' || rec?.phase === 'run'}><Icon n="re" />הרצה מחדש</button>}
+                <button type="button" className={`btn ${loaded ? 'sm' : 'gold'}`} onClick={pickFile} disabled={reading}>
+                  {loaded || rec?.phase === 'error' ? 'החלפת קובץ' : 'בחירת קובץ'}
+                </button>
+                {rec && <button type="button" className="btn sm" onClick={removeFile} disabled={reading}>הסרה</button>}
+                <input
+                  ref={fileInput} type="file" hidden accept=".pdf,.xlsx,.xls,.csv"
+                  onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void upload(f) }}
+                />
+              </div>
             </div>
           </div>
 
@@ -620,7 +689,7 @@ export default function ChargesView({ token }: { token: string }) {
                   </div>
                   <div className="c-gap" aria-hidden="true" />
                   <div className="c-col c-sys">
-                    <h4>חיובים במערכת <span>{fd(rd.range.from)}–{fd(rd.range.to)} · {sysCharges.length}</span></h4>
+                    <h4>חיובים במערכת <span>{fd(rd.range.from)} עד {fd(rd.range.to)} · {sysCharges.length}</span></h4>
                     {sysCharges.map(c => {
                       const s = sysStatus.get(c.id)
                       return (
@@ -640,7 +709,7 @@ export default function ChargesView({ token }: { token: string }) {
               {done && sums && (
                 <div className="recsum panel">
                   <div><span>סה״כ בקובץ האשראי</span><b className="num">{M(sums.file)}</b></div>
-                  <div><span>סה״כ במערכת · {fd(rd.range.from)}–{fd(rd.range.to)}</span><b className="num">{M(sums.sys)}</b></div>
+                  <div><span>סה״כ במערכת · {fd(rd.range.from)} עד {fd(rd.range.to)}</span><b className="num">{M(sums.sys)}</b></div>
                   <div className="dif">
                     <span>הפרש לבירור</span>
                     <b className="num">{signed(sums.total)}</b>

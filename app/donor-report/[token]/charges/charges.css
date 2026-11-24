@@ -211,6 +211,54 @@
 .ch2 .mbox footer>span{font-size:12px;color:var(--mut);max-width:48ch}
 .ch2 .btn.pri{background:var(--acc);color:var(--acc-tx);border-color:var(--acc)}
 
+/* בורר בית החלמה */
+.ch2 .homes{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+.ch2 .homes button{display:inline-flex;align-items:center;gap:8px;min-height:38px;padding:6px 16px;border-radius:999px;border:1px solid var(--ln);background:var(--s1);color:var(--mut);font-size:14px;transition:background .15s,color .15s,border-color .15s}
+.ch2 .homes button:hover{color:var(--tx);border-color:var(--ln2)}
+.ch2 .homes button[aria-pressed=true]{background:var(--s3);color:var(--tx);font-weight:700;border-color:var(--acc)}
+.ch2 .top-l a.back{display:inline-flex;align-items:center;gap:6px;text-decoration:none}
+.ch2 .top-l a.back svg{width:15px;height:15px}
+.ch2 .selsum.wait b{color:var(--acc)}
+.ch2 .empty b{display:block;color:var(--tx);font-size:16px;margin-bottom:4px}
+.ch2 .empty span{display:block}
+
+/* גרפים */
+.ch2 .charts{display:grid;gap:16px;margin-bottom:16px}
+.ch2 .kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.ch2 .kpis>div{padding:16px 20px;display:flex;flex-direction:column;gap:4px}
+.ch2 .kpis span,.ch2 .kpis small{font-size:13px;color:var(--mut)}
+.ch2 .kpis b{font-size:22px;font-weight:800}
+.ch2 .cgrid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px}
+.ch2 .cgrid.one{grid-template-columns:1fr}
+.ch2 .chart{margin:0;padding:16px 20px;min-width:0}
+.ch2 .chart figcaption{font-size:14px;font-weight:700;margin-bottom:12px}
+.ch2 .cbox{min-width:0}
+.ch2 .cbox .recharts-text{font-family:inherit}
+.ch2 .cbox .recharts-surface{overflow:visible}
+.ch2 .donut{display:grid;gap:12px}
+.ch2 .leg{list-style:none;margin:0;padding:0;display:grid;gap:6px;font-size:13px}
+.ch2 .leg li{display:flex;align-items:center;gap:8px}
+.ch2 .leg i,.ch2 .ctip i{display:inline-block;width:8px;height:8px;border-radius:50%;flex:none}
+.ch2 .leg .num{margin-inline-start:auto;color:var(--mut)}
+.ch2 .ctip{background:var(--s2);border:1px solid var(--ln2);border-radius:var(--rad2);padding:8px 12px;font-size:13px;color:var(--tx);min-width:150px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.ch2 .ctip>b{display:block;margin-bottom:4px}
+.ch2 .ctip>div{display:flex;align-items:center;gap:8px}
+.ch2 .ctip .num{margin-inline-start:auto;padding-inline-start:12px}
+.ch2 .ctip .t{border-top:1px solid var(--ln);margin-top:4px;padding-top:4px;font-weight:700}
+
+/* אזור העלאת הקובץ */
+.ch2 .upl{padding:20px 24px;margin-bottom:16px}
+.ch2 .upl-h{display:flex;justify-content:space-between;align-items:flex-start;gap:12px 24px;flex-wrap:wrap;margin-bottom:16px}
+.ch2 .upl-h h3{margin:0 0 4px;font-size:18px;font-weight:800}
+.ch2 .upl-h p{margin:0;font-size:13px;color:var(--mut)}
+.ch2 .upl .scope{font-size:13px;color:var(--mut);padding:6px 12px;border:1px solid var(--ln);border-radius:999px;white-space:nowrap}
+.ch2 .upl .scope b{color:var(--acc)}
+.ch2 .upl .drop{background:var(--bg)}
+.ch2 .drop[role=button]{cursor:pointer}
+.ch2 .drop[role=button]:hover,.ch2 .drop[role=button]:focus-visible{border-color:var(--acc);outline:none}
+.ch2 .drop.bad{border-color:var(--bad)}
+.ch2 .drop.bad .ic{color:var(--bad)}
+
 /* טלפון */
 @media (max-width:760px){
  .ch2 .wrap{padding:0 16px}
@@ -223,6 +271,16 @@
  .ch2 .rep-grid{grid-template-columns:1fr;gap:16px}
  .ch2 .pick{position:static}
  .ch2 .hero{grid-template-columns:1fr;padding:20px}
+ .ch2 .top-l a.back{display:none}
+ .ch2 .homes{flex-wrap:nowrap;overflow-x:auto;margin:0 -16px 16px;padding:0 16px 4px}
+ .ch2 .homes button{flex:none}
+ .ch2 .kpis{grid-template-columns:1fr 1fr}
+ .ch2 .kpis>div:last-child{grid-column:1/-1}
+ .ch2 .kpis b{font-size:19px}
+ .ch2 .cgrid{grid-template-columns:1fr}
+ .ch2 .chart{padding:14px}
+ .ch2 .upl{padding:16px}
+ .ch2 .upl .scope{white-space:normal}
  .ch2 .mx{font-size:13px}
  .ch2 .mx tr>*:first-child{padding:10px 8px}
  .ch2 .mx td button,.ch2 .mx td.z,.ch2 .mx .dt,.ch2 .mx tfoot td{padding:8px 6px}
