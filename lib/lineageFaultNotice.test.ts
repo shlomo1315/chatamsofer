@@ -47,6 +47,7 @@ describe('lineageFaultEmail', () => {
     const m = lineageFaultEmail({ recipientName: 'כהן <b>', link: 'https://chasamsofer.co.il/lineage-review/abc' })
     expect(m.subject).toContain('תקלה בסדר הדורות')
     expect(m.html).toContain('התגלתה תקלה')
+    expect(m.html).toContain('לא תהיה אפשרות לקבל את הכרטיס של מענק חג החנוכה')
     expect(m.html).toContain('https://chasamsofer.co.il/lineage-review/abc')
     expect(m.html).not.toContain('כהן <b>')
   })
