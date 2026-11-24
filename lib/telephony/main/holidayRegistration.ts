@@ -2,11 +2,13 @@
 // מסלול הרישום המלא בשלוחת החגים (טכנוליין) — לחלוקה שמוגדרת "בטלפון בלבד".
 //
 // הסדר (לבקשת המשתמש, חנוכה תשפ״ז):
-//   הודעה מקדימה ("לאחר הרישום תתבקשו לבחור מוקד…") → ברוכים הבאים
-//   → ת"ז → תאריך לידה → מספר טלפון המעודכן במערכת
+//   ת"ז כולל ספרת ביקורת (מיד בכניסה, בלי הודעות לפני)
+//   → "הינכם מועברים לרישום לחלוקה…" → "שימו לב, בשלב זה הינכם מועברים למספר שאלות…"
+//   → תאריך לידה → מספר טלפון המעודכן במערכת
 //   → הצהרת ייחוס ("נכדי החתם סופר דור אחר דור…", 1 לאישור)
 //   → הצהרת נזקקות ("לאישור הגשת בקשה", 1 לאישור)
-//   → רישום (+ אישור אוטומטי ומייל זכאות) → מעבר ישיר לבחירת מוקד.
+//   → רישום (+ אישור אוטומטי ומייל זכאות) → הודעת סיום וניתוק.
+//   בחירת המוקד אינה בשיחה הזו: עדכון לבחירת המוקד יישלח בהמשך.
 //
 // 🔴 חסר-מצב כמו כל השלוחה: השלב נגזר מהמשתנים שחזרו מהמרכזיה. בכל פנייה
 // הזיהוי נבדק מחדש מהערכים שכבר הוקשו, ולכן אי אפשר "לקפוץ" לשלב מאוחר.
@@ -20,19 +22,17 @@ import { asksParentBirth, checkRegistrantBirth, phoneMatches } from '@/lib/holid
 import { notifyHolidayApproved } from '@/lib/holidayNotify'
 import { digitsOnly } from '@/lib/idLookup'
 import { spokenCenterDetails, spokenCenterName } from '@/lib/holidayCenterSpeech'
-import { CENTER_VARS, nextCenterStep, buildChoiceList } from '@/lib/holidayCenterIvr'
+import { validateIsraeliId } from '@/lib/validation'
 import { askDigits, menu, say, hangup } from '../modules'
 import type { TlContext, TlFile, TlResponse, TlResult } from '../types'
-import {
-  centerCapacities, findRegistrantById, getRecipient, getSpokenCenter, memberCanRegister,
-  openCenters, readableName, saveCenterChoice,
-} from './holidaysData'
+import { findRegistrantById, getRecipient, getSpokenCenter, memberCanRegister, readableName } from './holidaysData'
 
-// ⚠️ 4 משתנים ל-3 ניסיונות: אחד שמור לסולמית שנשארה מהשאלה הקודמת (ראו stage).
+// ⚠️ 6 משתנים ל-3 ניסיונות: אחרי כל ניסיון עלולה להגיע סולמית שנשארה (ראו stage).
+const tries6 = (p: string) => [p, `${p}2`, `${p}3`, `${p}4`, `${p}5`, `${p}6`] as const
 export const REG_VARS = {
-  id: ['r_id', 'r_id2', 'r_id3', 'r_id4'],
-  birth: ['r_bd', 'r_bd2', 'r_bd3', 'r_bd4'],
-  phone: ['r_ph', 'r_ph2', 'r_ph3', 'r_ph4'],
+  id: tries6('r_id'),
+  birth: tries6('r_bd'),
+  phone: tries6('r_ph'),
   lineage: 'r_lin',
   need: 'r_need',
 } as const
@@ -53,31 +53,30 @@ function lastAttempt(params: Record<string, string>, vars: readonly string[]): n
   for (let i = vars.length - 1; i >= 0; i--) if (tapped(params[vars[i]])) return i
   return -1
 }
-function choose(name: string, numbers: number[], files: TlFile[]): TlResponse {
-  if (numbers.every(n => n >= 1 && n <= 9)) return menu(name, numbers.map(String), files)
-  return askDigits(name, Math.max(...numbers.map(n => String(n).length)), files, { min: 1 })
-}
+/** ת"ז תקינה: בדיוק 9 ספרות וספרת ביקורת נכונה. */
+export const validPhoneId = (id: string) => id.length === ID_DIGITS && validateIsraeliId(id)
 
 /**
- * שלב הקשה עם עד 3 ניסיונות. מחזיר את הערך שהוקש בניסיון האחרון והאם יש ניסיון נוסף,
- * או בקשה למרכזיה לשאול (שוב).
+ * שלב הקשה עם עד 3 ניסיונות. מחזיר את הערך האמיתי האחרון שהוקש והאם יש ניסיון נוסף,
+ * או בקשה למרכזיה לשאול (שוב). intro מושמע לפני השאלה הראשונה.
+ *
+ * 🔴 סולמית שנשארה מההקשה הקודמת מגיעה לשאלה הבאה כ-SKIP תוך שבריר שנייה וקוטעת
+ * את מה שמתנגן. זו לא תשובה: אם עוד לא הוקש ערך — שואלים שוב עם ה-intro; אם הוקש —
+ * מחזירים אותו לבדיקה חוזרת, וכך הודעת השגיאה ("אינו תואם") מושמעת שוב ולא נבלעת.
  */
 function stage(
-  k: RegKit, vars: readonly string[], ask: (name: string, lead: TlFile[]) => TlResponse,
+  k: RegKit, vars: readonly string[], ask: (name: string, lead: TlFile[]) => TlResponse, intro: TlFile[] = [],
 ): { value: string; attempt: number; retry: (key: string) => TlResult } | { reply: TlResult } {
   const { params } = k.ctx
   const attempt = lastAttempt(params, vars)
-  if (attempt < 0) return { reply: ask(vars[0], []) }
-  const value = digitsOnly(params[vars[attempt]])
+  if (attempt < 0) return { reply: ask(vars[0], intro) }
   const canAsk = attempt + 1 < vars.length
-  // 🔴 סולמית שנשארה מההקשה הקודמת (ת"ז של 9 ספרות "ולאחר מכן סולמית") מגיעה
-  // לשאלה הבאה כ-SKIP תוך שבריר שנייה. זו לא תשובה: שואלים שוב, בלי הודעת שגיאה.
-  if (!value && canAsk) return { reply: ask(vars[attempt + 1], []) }
-  const tries = vars.slice(0, attempt + 1).filter(v => digitsOnly(params[v])).length
-  const hasNext = canAsk && tries < MAX_TRIES
+  const real = vars.slice(0, attempt + 1).map(v => digitsOnly(params[v])).filter(Boolean)
+  if (!real.length && canAsk) return { reply: ask(vars[attempt + 1], intro) }
+  const hasNext = canAsk && real.length < MAX_TRIES
   return {
-    value,
-    attempt,
+    value: real.at(-1) ?? '',
+    attempt: Math.max(real.length - 1, 0),
     retry: (key: string) => (hasNext ? ask(vars[attempt + 1], k.files(key)) : k.end(key)),
   }
 }
@@ -87,13 +86,11 @@ export async function phoneRegistration(k: RegKit, dist: ActiveDistribution): Pr
   const rules = await getDistRules(dist.id)
   const distName = `${dist.name}${dist.year ? ` ${dist.year}` : ''}`
 
-  // ── 1. ת"ז (לפניה: ההודעה המקדימה וברוכים הבאים — רק בפנייה הראשונה) ──
-  const idStage = stage(k, REG_VARS.id, (name, lead) => askDigits(name, ID_DIGITS, [
-    ...(name === REG_VARS.id[0] ? [...k.files('reg_notice'), ...k.files('reg_welcome', { distribution: distName })] : []),
-    ...lead, ...k.files('reg_ask_id'),
-  ], { min: 1, maskLog: true, post: true }))
+  // ── 1. ת"ז כולל ספרת ביקורת — מיד בכניסה, בלי הודעות לפני ──
+  const idStage = stage(k, REG_VARS.id, (name, lead) =>
+    askDigits(name, ID_DIGITS, [...lead, ...k.files('reg_ask_id_full')], { min: 1, maskLog: true, post: true }))
   if ('reply' in idStage) return idStage.reply
-  if (idStage.value.length !== ID_DIGITS) return idStage.retry('id_invalid')
+  if (!validPhoneId(idStage.value)) return idStage.retry('id_invalid')
   const ben = await findRegistrantById(idStage.value)
   if (!ben) {
     // ת"ז שלא קיימת באיגוד הצאצאים — הודעה וניתוק, בלי ניסיון נוסף.
@@ -106,15 +103,18 @@ export async function phoneRegistration(k: RegKit, dist: ActiveDistribution): Pr
     return k.end('reg_deep_review')
   }
 
-  // ── 2. תאריך לידה: נשואים, של הבעל או של האשה; אחרים, של בעל הת"ז ──
+  // ── 2. הודעות המעבר, ואחריהן תאריך לידה: נשואים, של הבעל או של האשה; אחרים, של בעל הת"ז ──
+  // ⚠️ הודעות המעבר הן ה-intro של שאלת התאריך: סולמית שנשארה אחרי הת"ז קוטעת אותן,
+  // ו-stage משמיע אותן שוב.
   const birthPrompt = asksParentBirth(ben) ? 'reg_ask_birth_couple' : 'reg_ask_birth'
   const bdStage = stage(k, REG_VARS.birth, (name, lead) =>
-    askDigits(name, 8, [...lead, ...k.files(birthPrompt)], { min: 1, maskLog: true, post: true }))
+    askDigits(name, 8, [...lead, ...k.files(birthPrompt)], { min: 1, maskLog: true, post: true }),
+  [...k.files('reg_to_registration'), ...k.files('reg_questions_notice')])
   if ('reply' in bdStage) return bdStage.reply
   const bd = checkRegistrantBirth(bdStage.value, idStage.value, ben)
   if (bd === 'mismatch') {
     console.log(`${LOG} callId=${callId} ben=${ben.id} birth mismatch (attempt ${bdStage.attempt + 1})`)
-    return bdStage.retry('reg_birth_mismatch')
+    return bdStage.retry('reg_birth_no_match')
   }
   if (bd === 'unknown') console.log(`${LOG} callId=${callId} ben=${ben.id} no stored birth date — skipped`)
 
@@ -142,10 +142,21 @@ export async function phoneRegistration(k: RegKit, dist: ActiveDistribution): Pr
     if (need !== '1') return k.end('reg_declined')
   }
 
-  // ── 6. רישום ──
-  let rec = existing
-  let lead: TlFile[] = []
-  if (!rec) {
+  const bye = (files: TlFile[]): TlResponse[] => [{ type: 'simpleMessage', files }, hangup()]
+
+  // כבר רשומים — אישור (ואם כבר נבחר מוקד, גם פרטיו) וניתוק.
+  if (existing) {
+    if (existing.approval_status === 'rejected') return k.end('not_eligible')
+    return bye([
+      ...k.files('already', { name, distribution: distName }),
+      ...(existing.center_id
+        ? [...k.files('center_already'), ...(await centerSpeech(k, rules, existing.center_id, ''))]
+        : []),
+    ])
+  }
+
+  // ── 6. רישום → הודעת סיום וניתוק (בחירת המוקד תיעשה בהמשך, בעדכון נפרד) ──
+  {
     const result = await registerToOpenDistribution(ben.id, 'phone', { phone: phStage.value || callerPhone, distribution: dist })
     if (!result.ok) {
       console.error(`${LOG} register failed ben=${ben.id}: ${result.error}`)
@@ -158,14 +169,14 @@ export async function phoneRegistration(k: RegKit, dist: ActiveDistribution): Pr
       void notifyHolidayApproved([rid], { email: true, phone: false })
         .catch(e => console.error(`${LOG} approval mail failed rec=${rid}`, e instanceof Error ? e.message : e))
     }
-    rec = await getRecipient(dist.id, ben.id, 'id, center_id, approval_status')
+    const rec = await getRecipient(dist.id, ben.id, 'id, approval_status')
     if (!rec) return k.end('failed')
-    lead = k.files(result.approved ? 'reg_success_approved' : 'reg_success_pending', { distribution: distName })
+    if (rec.approval_status === 'rejected') return k.end('not_eligible')
+    return bye([
+      ...(result.approved ? k.files('reg_success_approved', { distribution: distName }) : []),
+      ...k.files('reg_final'),
+    ])
   }
-  if (rec.approval_status === 'rejected') return k.end('not_eligible')
-
-  // ── 7. בחירת מוקד ──
-  return centerStep(k, dist.id, rec, rules, lead, distName, name)
 }
 
 /** מה שמוקרא על מוקד: עם ימים ושעות רק אחרי שפורסמו. */
@@ -175,66 +186,6 @@ async function centerSpeech(k: RegKit, rules: DistRules, centerId: string, fallb
   return [...say(spokenCenterName(c) || fallback), ...k.files('center_hours_later')]
 }
 
-async function centerStep(
-  k: RegKit, distributionId: string, rec: { id: string; center_id: string | null },
-  rules: DistRules, lead: TlFile[], distName: string, name: string,
-): Promise<TlResult> {
-  const { params } = k.ctx
-  if (Object.values(CENTER_VARS).some(v => tapped(params[v]) === 'ERROR')) return k.end('reg_center_later')
-
-  const { centers, taken } = await openCenters(distributionId)
-  const step = nextCenterStep({
-    centers, taken, capacities: await centerCapacities(), currentCenterId: rec.center_id, centersOpen: true,
-    tapped: {
-      region: params[CENTER_VARS.region], city: params[CENTER_VARS.city],
-      center: params[CENTER_VARS.center], confirm: params[CENTER_VARS.confirm],
-    },
-  })
-  const bye = (files: TlFile[]): TlResponse[] => [{ type: 'simpleMessage', files }, hangup()]
-
-  switch (step.kind) {
-    case 'closed':
-    case 'no_centers':
-      return bye([...lead, ...k.files('reg_center_later'), ...k.files('reg_final')])
-    case 'already':
-      // כבר רשומים וכבר בחרו מוקד — אישור ופרטי המוקד.
-      return bye([
-        ...k.files('already', { name, distribution: distName }), ...k.files('center_already'),
-        ...(await centerSpeech(k, rules, step.centerId, step.label)),
-      ])
-    case 'full':
-      return bye(k.files('center_full'))
-    case 'cancelled':
-      return bye(k.files('reg_center_later'))
-    case 'ask_region':
-      return choose(CENTER_VARS.region, step.options.map((_, i) => i + 1), [
-        ...lead, ...k.files('ask_region'), ...say(buildChoiceList(step.options)),
-      ])
-    case 'ask_city':
-      return choose(CENTER_VARS.city, step.options.map(o => o.number), [
-        ...lead, ...k.files('reg_to_centers'),
-        ...say(step.options.map(o => `ל${o.city} הקישו ${o.number}`).join(' ')),
-      ])
-    case 'ask_center':
-      return choose(CENTER_VARS.center, step.options.map((_, i) => i + 1), say(buildChoiceList(step.options.map(o => ({ label: o.name })))))
-    case 'confirm':
-      return menu(CENTER_VARS.confirm, ['1', '2'], k.files('center_confirm', { center: step.label }))
-    case 'save': {
-      const error = await saveCenterChoice(distributionId, rec.id, step.center.id)
-      if (error) {
-        console.error(`${LOG} save center failed`, error)
-        return k.end('failed')
-      }
-      console.log(`${LOG} center chosen rec=${rec.id} center=${step.center.id}`)
-      return bye([
-        ...k.files('center_success', { center: step.label }),
-        ...(rules.hoursPublished ? [] : k.files('center_hours_later')),
-        ...k.files('reg_final'),
-      ])
-    }
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // מקש 2 — שמיעת הזכאות: ת"ז + תאריך לידה (כמו ברישום), ואז:
 //   נרשם ואושר → "נרשמתם ואושרתם" · נרשם וממתין → "ממתין לאישור"
@@ -242,16 +193,16 @@ async function centerStep(
 //   לא נרשם, הרישום כבר לא פתוח → "זמן הרישום חלף"
 // ⚠️ משתנים e_* — נפרדים מהרישום (r_*), כדי שמעבר בין מסלולים לא ידלג על שאלה.
 // ─────────────────────────────────────────────────────────────────────────────
-export const ELIG_VARS = { id: ['e_id', 'e_id2', 'e_id3', 'e_id4'], birth: ['e_bd', 'e_bd2', 'e_bd3', 'e_bd4'] } as const
+export const ELIG_VARS = { id: tries6('e_id'), birth: tries6('e_bd') } as const
 
 export async function phoneEligibility(
   k: RegKit, distId: string, rules: DistRules, registrationOpen: boolean,
 ): Promise<TlResult> {
   const { callId } = k.ctx
   const idStage = stage(k, ELIG_VARS.id, (name, lead) =>
-    askDigits(name, ID_DIGITS, [...lead, ...k.files('reg_ask_id')], { min: 1, maskLog: true, post: true }))
+    askDigits(name, ID_DIGITS, [...lead, ...k.files('reg_ask_id_full')], { min: 1, maskLog: true, post: true }))
   if ('reply' in idStage) return idStage.reply
-  if (idStage.value.length !== ID_DIGITS) return idStage.retry('id_invalid')
+  if (!validPhoneId(idStage.value)) return idStage.retry('id_invalid')
   const ben = await findRegistrantById(idStage.value)
   if (!ben) return idStage.retry('not_found')
 
@@ -259,7 +210,7 @@ export async function phoneEligibility(
   const bdStage = stage(k, ELIG_VARS.birth, (name, lead) =>
     askDigits(name, 8, [...lead, ...k.files(birthPrompt)], { min: 1, maskLog: true, post: true }))
   if ('reply' in bdStage) return bdStage.reply
-  if (checkRegistrantBirth(bdStage.value, idStage.value, ben) === 'mismatch') return bdStage.retry('reg_birth_mismatch')
+  if (checkRegistrantBirth(bdStage.value, idStage.value, ben) === 'mismatch') return bdStage.retry('reg_birth_no_match')
 
   const name = readableName(ben)
   const rec = await getRecipient(distId, ben.id, 'id, approval_status')
@@ -275,13 +226,13 @@ export async function phoneEligibility(
 // מקש 3 — שמיעת המוקד שנבחר: שם המוקד, ואם הימים והשעות פורסמו — גם הם;
 // אחרת "עדכון מדויק על מועד החלוקה במוקד יימסר בהמשך".
 // ─────────────────────────────────────────────────────────────────────────────
-export const CENTER_HEAR_VARS = ['h_id', 'h_id2', 'h_id3', 'h_id4'] as const
+export const CENTER_HEAR_VARS = tries6('h_id')
 
 export async function phoneHearCenter(k: RegKit, distId: string, rules: DistRules): Promise<TlResult> {
   const idStage = stage(k, CENTER_HEAR_VARS, (name, lead) =>
-    askDigits(name, ID_DIGITS, [...lead, ...k.files('reg_ask_id')], { min: 1, maskLog: true, post: true }))
+    askDigits(name, ID_DIGITS, [...lead, ...k.files('reg_ask_id_full')], { min: 1, maskLog: true, post: true }))
   if ('reply' in idStage) return idStage.reply
-  if (idStage.value.length !== ID_DIGITS) return idStage.retry('id_invalid')
+  if (!validPhoneId(idStage.value)) return idStage.retry('id_invalid')
   const ben = await findRegistrantById(idStage.value)
   if (!ben) return idStage.retry('not_found')
   const rec = await getRecipient(distId, ben.id, 'id, center_id')
