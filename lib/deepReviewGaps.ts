@@ -128,6 +128,50 @@ export interface GapRow extends GapFinding {
   created_at: string | null
 }
 
+export interface InReviewRow {
+  id: string
+  id_number: string | null
+  name: string
+  /** מה השער אומר *עכשיו*. null = 5 הדורות תקינים, והסיבה שנרשמה כבר לא קיימת. */
+  finding: GapFinding | null
+  /** הסיבה שנשמרה בכרטסת (אוטומטית או הערת מזכיר). */
+  reason: string | null
+  registration_source: string | null
+  created_at: string | null
+}
+
+/**
+ * הכיוון ההפוך: משפחות שכבר בבדיקה מעמיקה, ומה הבדיקה אומרת עליהן כרגע.
+ * ⚠️ הדגל נקבע ברישום ו"נדבק" — משפחה שתוקנה בדרך אחרת נשארת בו. finding=null
+ * מסמן בדיוק אותן. הערת מזכיר (reason) נשמרת לצד, כי מזכיר יכול להעביר
+ * לבדיקה מעמיקה גם כשהדורות תקינים.
+ */
+export function reviewDeepReviewFamilies(
+  bens: (GapBen & { deep_review_reason?: string | null })[],
+  nodes: GapNode[],
+  approved: ApprovedRefTreeLookup,
+): InReviewRow[] {
+  const byId = new Map(nodes.map(n => [n.id, n]))
+  return bens
+    .filter(b => b.eligibility_status === 'deep_review')
+    .map(b => ({
+      id: b.id,
+      id_number: b.id_number,
+      name: familyLabel(b),
+      finding: classifyLineage(b, byId, approved),
+      reason: b.deep_review_reason ?? null,
+      registration_source: b.registration_source ?? null,
+      created_at: b.created_at ?? null,
+    }))
+}
+
+function familyLabel(b: GapBen): string {
+  // ⚠️ full_name הוא השם הפרטי בלבד — שם המשפחה ב-family_name.
+  const own = [b.family_name, b.full_name].map(s => String(s ?? '').trim()).filter(Boolean).join(' ')
+  const spouse = String(b.spouse_name ?? '').trim()
+  return spouse ? `${own} ו${spouse}` : own
+}
+
 /** כל המשפחות שבפער — לא בבדיקה מעמיקה ולא נדחו, ו-5 הדורות שלהן אינם תקינים. */
 export function findDeepReviewGaps(
   bens: GapBen[],
@@ -144,7 +188,7 @@ export function findDeepReviewGaps(
       ...f,
       id: b.id,
       id_number: b.id_number,
-      name: [b.full_name, b.spouse_name].filter(Boolean).join(' ו') || (b.family_name ?? ''),
+      name: familyLabel(b),
       status: b.eligibility_status,
       registration_source: b.registration_source ?? null,
       created_at: b.created_at ?? null,

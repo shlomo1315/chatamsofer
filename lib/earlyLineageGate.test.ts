@@ -1,6 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { earlyLineageGate } from './earlyLineageGate'
+import { earlyLineageGate, isAutoDeepReason } from './earlyLineageGate'
+
+describe('isAutoDeepReason — סיבה שהשער כתב מול הערת מזכיר', () => {
+  it('סיבות שהשער כותב מזוהות כאוטומטיות', () => {
+    expect(isAutoDeepReason('דור 2–5 אינו בקובץ המאושר (דור 4: בנימין)')).toBe(true)
+    expect(isAutoDeepReason('המשפחה או דור שהוקלד יושבים בתוך 5 הדורות (דור 4)')).toBe(true)
+    expect(isAutoDeepReason('סדר הדורות לא נבדק מול הקובץ המאושר (העץ לא נטען) — נדרשת בדיקה ידנית')).toBe(true)
+  })
+
+  it('הערה חופשית של מזכיר, או ריק — לא אוטומטית', () => {
+    expect(isAutoDeepReason('לבדוק מול הרב, יש ספק בדור 3')).toBe(false)
+    expect(isAutoDeepReason('')).toBe(false)
+    expect(isAutoDeepReason(null)).toBe(false)
+  })
+})
 
 // קובץ מאושר: חתם סופר ← שמעון ← יוסף ← משה ← אברהם (דורות 1–5)
 const REF = [

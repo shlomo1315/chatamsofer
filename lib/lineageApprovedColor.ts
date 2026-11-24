@@ -19,6 +19,23 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { EARLY_DEPTH, type GenStatus, type GenColor } from './lineageDeviation'
+import type { ApprovedRefTreeLookup } from './lineageApprovedRef'
+
+/**
+ * בודק (שם, דור) לשרשרת מסוימת — גם *ההורה* נבדק, לפי הדור הקודם באותה שרשרת.
+ *
+ * 🔴 הבאג (24.11, אולמן שלמה 326133576): הכרטסת צבעה לפי שם ודור בלבד, והשער
+ * של הבדיקה המעמיקה (earlyGenerationsCheck) בודק גם את ההורה. שם שקיים בקובץ
+ * בדור 4, אבל תחת אב אחר, נצבע ירוק — והמשפחה ישבה בבדיקה מעמיקה בלי שום אדום.
+ */
+export function chainRefLookup(
+  chain: Iterable<{ generation: number; name: string }>,
+  tree: ApprovedRefTreeLookup,
+): (name: string, generation: number) => boolean {
+  const byGen = new Map<number, string>()
+  for (const c of chain) if (!byGen.has(c.generation)) byGen.set(c.generation, c.name)
+  return (name, generation) => tree(name, generation, byGen.get(generation - 1) ?? null)
+}
 
 /** האם קיים בקובץ המאושר — לפי שם *ודור* גם יחד. */
 export function isInApprovedRef(

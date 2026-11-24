@@ -1,5 +1,40 @@
 import { describe, it, expect } from 'vitest'
-import { genColorByRef, isInApprovedRef, deviatingGensByRef } from './lineageApprovedColor'
+import { genColorByRef, isInApprovedRef, deviatingGensByRef, chainRefLookup } from './lineageApprovedColor'
+import { buildApprovedRefTree } from './lineageApprovedRef'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 (24.11, אולמן 326133576) הצבע בודק גם את ההורה — כמו השער.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('chainRefLookup — הצבע כולל את ההורה', () => {
+  const tree = buildApprovedRefTree([
+    { key: 'r1', name: 'חתם סופר', generation: 1, parent_key: null },
+    { key: 'r2', name: 'שמעון', generation: 2, parent_key: 'r1' },
+    { key: 'r3', name: 'יוסף', generation: 3, parent_key: 'r2' },
+    { key: 'r3b', name: 'בנימין', generation: 3, parent_key: 'r2' },
+    { key: 'r4', name: 'משה', generation: 4, parent_key: 'r3' },
+  ])
+
+  it('שם נכון תחת ההורה הנכון — ירוק', () => {
+    const chain = [
+      { generation: 1, name: 'חתם סופר', status: 'verified' as const },
+      { generation: 2, name: 'שמעון', status: 'verified' as const },
+      { generation: 3, name: 'יוסף', status: 'verified' as const },
+      { generation: 4, name: 'משה', status: 'verified' as const },
+    ]
+    expect(deviatingGensByRef(chain, chainRefLookup(chain, tree))).toEqual([])
+  })
+
+  it('🔴 שם שקיים בקובץ בדור 4, אבל תחת אב אחר — אדום', () => {
+    const chain = [
+      { generation: 1, name: 'חתם סופר', status: 'verified' as const },
+      { generation: 2, name: 'שמעון', status: 'verified' as const },
+      { generation: 3, name: 'בנימין', status: 'verified' as const },
+      { generation: 4, name: 'משה', status: 'verified' as const },
+    ]
+    expect(genColorByRef(4, 'משה', 'verified', chainRefLookup(chain, tree))).toBe('red')
+    expect(deviatingGensByRef(chain, chainRefLookup(chain, tree))).toEqual([4])
+  })
+})
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 🔴 הכלל שסוכם: עד דור 5 — מי שבטבלה המאושרת ירוק, וכל השאר אדום.
