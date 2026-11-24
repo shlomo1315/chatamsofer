@@ -3,6 +3,7 @@
 #   bash aws/run-migration.sh supabase/migrations/20261115_matchmaker_grants.sql [טבלה לבדיקה ...]
 # הקובץ נשלח למשימה כמשתנה סביבה ורץ ב-psql בטרנזקציה אחת עם ON_ERROR_STOP, בתור dbadmin.
 # המיגרציה צריכה להיות חוזרת בבטחה (if not exists). בסוף מודפס אילו מהטבלאות שצוינו קיימות.
+# אחרי כל הרצה מתבקש מ-PostgREST לטעון מחדש את מבנה הטבלאות (ראו SQL למטה).
 set -euo pipefail
 FILE=${1:?"נתיב לקובץ מיגרציה"}; shift
 [ -f "$FILE" ] || { echo "לא נמצא: $FILE"; exit 1; }
@@ -16,7 +17,10 @@ TABLES=$(IFS=,; echo "$*")
 aws logs create-log-group --log-group-name "/ecs/$P-copy" 2>/dev/null || true
 
 CMD='printf "%s" "$MIG_SQL" | PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -U "$DB_USER" -d app -v ON_ERROR_STOP=1 -1 -q -f - && echo "REPORT|המיגרציה רצה בהצלחה" && { [ -z "$CHECK_TABLES" ] || PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -U "$DB_USER" -d app -At -F"|" -c "select '"'"'REPORT'"'"', t, case when to_regclass('"'"'public.'"'"'||t) is null then '"'"'חסרה'"'"' else '"'"'קיימת'"'"' end from unnest(string_to_array('"'"'$CHECK_TABLES'"'"', '"'"','"'"')) t"; }'
-ENV=$(jq -n --arg sql "$(cat "$FILE")" --arg h "$DBH" --arg t "$TABLES" '[{name:"MIG_SQL",value:$sql},{name:"DB_HOST",value:$h},{name:"CHECK_TABLES",value:$t}]')
+# PostgREST שומר מטמון של מבנה הטבלאות: בלי רענון, עמודה חדשה מחזירה 400 (PGRST204)
+# עד אתחול השירות. ה-notify נשלח בסוף הטרנזקציה, רק אם המיגרציה הצליחה.
+SQL="$(cat "$FILE")"$'\n'"notify pgrst, 'reload schema';"
+ENV=$(jq -n --arg sql "$SQL" --arg h "$DBH" --arg t "$TABLES" '[{name:"MIG_SQL",value:$sql},{name:"DB_HOST",value:$h},{name:"CHECK_TABLES",value:$t}]')
 SEC=$(jq -n --arg s "$DBS" '[{name:"DB_USER",valueFrom:"\($s):username::"},{name:"DB_PASS",valueFrom:"\($s):password::"}]')
 CD=$(jq -n --arg cmd "$CMD" --argjson env "$ENV" --argjson sec "$SEC" --arg g "/ecs/$P-copy" --arg r "$R" \
   '[{name:"c",image:"postgres:17",essential:true,entryPoint:["sh","-c"],command:[$cmd],environment:$env,secrets:$sec,
