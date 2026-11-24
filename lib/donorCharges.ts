@@ -164,41 +164,55 @@ export function selectionLabel(s: DateSelection): string {
   return s.from === s.to ? heDate(s.from) : `${heDate(s.from)} עד ${heDate(s.to)}`
 }
 
+/** כל הימים בבחירה (בטווח: כל יום בטווח), לשורות של גיליון הסיכום. */
+export function selectionDays(s: DateSelection): string[] {
+  if ('dates' in s) return s.dates
+  const out: string[] = []
+  for (let t = Date.parse(s.from); t <= Date.parse(s.to); t += DAY_MS) out.push(new Date(t).toISOString().slice(0, 10))
+  return out
+}
+
+/** שם הקובץ להורדה, כמו במסך: דוח-חיובים_17.11-23.11.2026 */
+export function chargesFileName(s: DateSelection): string {
+  const { first, last } = selectionBounds(s)
+  if (first === last) return `דוח-חיובים_${heDate(first)}`
+  const from = first.slice(0, 4) === last.slice(0, 4) ? heDate(first).slice(0, 5) : heDate(first)
+  return `דוח-חיובים_${from}-${heDate(last)}`
+}
+
 /**
- * גיליונות האקסל: "סיכום" (סכום לכל יום בכל סניף, וסה״כ לסניף), ולשונית פירוט
- * לכל סניף עם שורת סה״כ מודגשת אחרי כל יום ובסוף.
+ * גיליונות האקסל, כמו בתצוגה המקדימה במסך: "סיכום" (שורה לכל יום, עמודה לכל
+ * סניף וסה״כ ליום, ושורת סה״כ מודגשת), וגיליון לכל סניף עם החיובים, סה״כ היום
+ * בשורה האחרונה של כל יום, ושורת סה״כ לסניף.
  */
-export function chargesSheets(report: ChargesReport): SheetSpec[] {
-  const summaryRows: CellValue[][] = []
-  const summaryBold: number[] = []
-  for (const b of report.branches) {
-    for (const d of b.days) summaryRows.push([b.home, d.date, d.count, d.amount])
-    summaryBold.push(summaryRows.length)
-    summaryRows.push([`סה״כ ${b.home}`, null, b.count, b.amount])
-  }
-  summaryBold.push(summaryRows.length)
-  summaryRows.push(['סה״כ כל הסניפים', null, report.count, report.amount])
+export function chargesSheets(report: ChargesReport, days?: string[]): SheetSpec[] {
+  const homes = report.branches.map(b => b.home)
+  const dayList = days ?? [...new Set(report.branches.flatMap(b => b.days.map(d => d.date)))].sort()
+  const cell = (b: ChargeBranch, date: string) => b.days.find(d => d.date === date)?.amount ?? 0
+  const summaryRows: CellValue[][] = dayList.map(date => {
+    const perHome = report.branches.map(b => cell(b, date))
+    return [date, ...perHome, perHome.reduce((a, n) => a + n, 0)]
+  })
+  summaryRows.push(['סה״כ', ...report.branches.map(b => b.amount), report.amount])
 
   const sheets: SheetSpec[] = [{
     name: 'סיכום',
-    columns: [{ header: 'סניף' }, { header: 'תאריך', kind: 'date' }, { header: 'מספר חיובים', kind: 'number' }, { header: 'סכום (₪)', kind: 'number' }],
+    columns: [
+      { header: 'תאריך', kind: 'date' },
+      ...homes.map(h => ({ header: h, kind: 'number' as const })),
+      { header: 'סה״כ ליום', kind: 'number' },
+    ],
     rows: summaryRows,
-    boldRows: summaryBold,
+    boldRows: [summaryRows.length - 1],
   }]
 
   const used = new Set(['סיכום'])
   for (const b of report.branches) {
     const rows: CellValue[][] = []
-    const bold: number[] = []
     for (const d of b.days) {
-      for (const c of d.charges) {
-        rows.push([d.date, c.time, c.name, c.idLast4, c.nights, c.initial ? 'חיוב ראשון' : 'תוספת', c.note ?? '', c.amount])
-      }
-      bold.push(rows.length)
-      rows.push([d.date, null, `סה״כ ליום ${heDate(d.date)}`, null, null, null, `${d.count} חיובים`, d.amount])
+      d.charges.forEach((c, i) => rows.push([d.date, c.name, c.nights, c.amount, i === d.charges.length - 1 ? d.amount : null]))
     }
-    bold.push(rows.length)
-    rows.push([null, null, `סה״כ ${b.home}`, null, null, null, `${b.count} חיובים`, b.amount])
+    rows.push([`סה״כ ${b.home}`, null, null, null, b.amount])
 
     let name = b.home.replace(/[:\\/?*[\]]/g, '-').trim().slice(0, 28) || 'סניף'
     for (let i = 2; used.has(name); i++) name = `${name.slice(0, 26)} ${i}`
@@ -206,11 +220,11 @@ export function chargesSheets(report: ChargesReport): SheetSpec[] {
     sheets.push({
       name,
       columns: [
-        { header: 'תאריך', kind: 'date' }, { header: 'שעה' }, { header: 'יולדת' }, { header: 'ת״ז (4 אחרונות)', kind: 'id' },
-        { header: 'לילות', kind: 'number' }, { header: 'סוג' }, { header: 'הערת בית ההחלמה' }, { header: 'סכום (₪)', kind: 'number' },
+        { header: 'תאריך', kind: 'date' }, { header: 'שם היולדת' }, { header: 'לילות', kind: 'number' },
+        { header: 'סכום (₪)', kind: 'number' }, { header: 'סה״כ ליום (₪)', kind: 'number' },
       ],
       rows,
-      boldRows: bold,
+      boldRows: [rows.length - 1],
     })
   }
   return sheets

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import ExcelJS from 'exceljs'
-import { chargesSheets, groupCharges, israelDateTime, parseDateSelection, selectionLabel, toCharges } from './donorCharges'
+import { chargesFileName, chargesSheets, groupCharges, selectionDays, israelDateTime, parseDateSelection, selectionLabel, toCharges } from './donorCharges'
 import { buildXlsx } from './xlsx'
 
 const row = (over: Record<string, unknown> = {}) => ({
@@ -84,27 +84,35 @@ describe('groupCharges ו-chargesSheets', () => {
     expect(selectionLabel({ dates: ['2026-11-10', '2026-11-12'] })).toBe('10.11.2026, 12.11.2026')
   })
 
-  it('קובץ האקסל: גיליון סיכום וגיליון לכל סניף, RTL, עם שורות סה״כ מודגשות', async () => {
-    const sheets = chargesSheets(report)
+  it('ימי הבחירה ושם הקובץ', () => {
+    expect(selectionDays({ from: '2026-10-30', to: '2026-11-02' })).toEqual(['2026-10-30', '2026-10-31', '2026-11-01', '2026-11-02'])
+    expect(selectionDays({ dates: ['2026-11-10', '2026-11-12'] })).toEqual(['2026-11-10', '2026-11-12'])
+    expect(chargesFileName({ from: '2026-11-17', to: '2026-11-23' })).toBe('דוח-חיובים_17.11-23.11.2026')
+    expect(chargesFileName({ dates: ['2026-11-19'] })).toBe('דוח-חיובים_19.11.2026')
+    expect(chargesFileName({ from: '2025-12-30', to: '2026-01-02' })).toBe('דוח-חיובים_30.12.2025-02.01.2026')
+  })
+
+  it('קובץ האקסל: סיכום יום × סניף וגיליון לכל סניף, RTL, עם שורות סה״כ מודגשות', async () => {
+    const sheets = chargesSheets(report, ['2026-11-10', '2026-11-11', '2026-11-12'])
     expect(sheets.map(s => s.name)).toEqual(['סיכום', 'בית א', 'בית ב'])
     const wb = new ExcelJS.Workbook()
     await wb.xlsx.load(await buildXlsx(sheets) as unknown as ArrayBuffer)
     const sum = wb.getWorksheet('סיכום')!
     expect(sum.views[0]?.rightToLeft).toBe(true)
-    expect(sum.getRow(1).values).toEqual([, 'סניף', 'תאריך', 'מספר חיובים', 'סכום (₪)'])
+    expect(sum.getRow(1).values).toEqual([, 'תאריך', 'בית א', 'בית ב', 'סה״כ ליום'])
+    expect([2, 3, 4].map(r => [2, 3, 4].map(c => sum.getRow(r).getCell(c).value))).toEqual([[800, 700, 1500], [200, 0, 200], [0, 0, 0]])
     const last = sum.getRow(sum.rowCount)
-    expect(last.getCell(1).value).toBe('סה״כ כל הסניפים')
-    expect(last.getCell(4).value).toBe(1700)
+    expect([1, 2, 3, 4].map(c => last.getCell(c).value)).toEqual(['סה״כ', 1000, 700, 1700])
     expect(last.getCell(1).font?.bold).toBe(true)
     expect(sum.getRow(2).getCell(1).font?.bold).toBeFalsy()
 
     const a = wb.getWorksheet('בית א')!
-    const texts = a.getColumn(3).values.filter(Boolean)
-    expect(texts).toContain('סה״כ ליום 10.11.2026')
-    expect(texts).toContain('סה״כ בית א')
-    const dayTotal = a.getRow(4)
-    expect(dayTotal.getCell(3).value).toBe('סה״כ ליום 10.11.2026')
-    expect(dayTotal.getCell(8).value).toBe(800)
-    expect(dayTotal.getCell(3).font?.bold).toBe(true)
+    expect(a.getRow(1).values).toEqual([, 'תאריך', 'שם היולדת', 'לילות', 'סכום (₪)', 'סה״כ ליום (₪)'])
+    // שני חיובים ב-10.11: הסה״כ היומי רק בשורה האחרונה של היום
+    expect([2, 3, 4].map(r => [a.getRow(r).getCell(4).value, a.getRow(r).getCell(5).value])).toEqual([[500, null], [300, 800], [200, 200]])
+    const total = a.getRow(a.rowCount)
+    expect([total.getCell(1).value, total.getCell(5).value]).toEqual(['סה״כ בית א', 1000])
+    expect(total.getCell(1).font?.bold).toBe(true)
+    expect(JSON.stringify(sheets)).not.toContain('5678')
   })
 })
