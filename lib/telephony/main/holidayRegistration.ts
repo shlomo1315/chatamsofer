@@ -102,6 +102,14 @@ export async function phoneRegistration(k: RegKit, dist: ActiveDistribution): Pr
     console.log(`${LOG} callId=${callId} ben=${ben.id} blocked: deep_review`)
     return k.end('reg_deep_review')
   }
+  // כבר רשומים — מיד אחרי הת"ז, בלי שאלות. הבעל והאשה באותה כרטסת, ולכן ת"ז של כל אחד מהם מזהה.
+  // ⚠️ מפתח חדש ולא 'already': נוסחים שנשמרו מהמסך גוברים על defaultText.
+  const existing = await getRecipient(dist.id, ben.id, 'id, approval_status')
+  if (existing) {
+    if (existing.approval_status === 'rejected') return k.end('not_eligible')
+    console.log(`${LOG} callId=${callId} ben=${ben.id} already registered`)
+    return k.end('reg_already_registered')
+  }
 
   // ── 2. הודעות המעבר, ואחריהן תאריך לידה: נשואים, של הבעל או של האשה; אחרים, של בעל הת"ז ──
   // ⚠️ הודעות המעבר הן ה-intro של שאלת התאריך: סולמית שנשארה אחרי הת"ז קוטעת אותן,
@@ -128,32 +136,18 @@ export async function phoneRegistration(k: RegKit, dist: ActiveDistribution): Pr
   }
 
   const name = readableName(ben)
-  const existing = await getRecipient(dist.id, ben.id, 'id, center_id, approval_status')
 
-  // ── 4-5. הצהרות — רק למי שעוד לא רשום ──
-  if (!existing) {
-    const lineage = tapped(params[REG_VARS.lineage])
-    if (!lineage) {
-      return menu(REG_VARS.lineage, ['1', '2'], [...k.files('identify', { name }), ...k.files('reg_ask_lineage')], { timeout: 7 })
-    }
-    if (lineage !== '1') return k.end('reg_declined')
-    const need = tapped(params[REG_VARS.need])
-    if (!need) return menu(REG_VARS.need, ['1', '2'], k.files('reg_ask_need'), { timeout: 7 })
-    if (need !== '1') return k.end('reg_declined')
+  // ── 4-5. הצהרות ──
+  const lineage = tapped(params[REG_VARS.lineage])
+  if (!lineage) {
+    return menu(REG_VARS.lineage, ['1', '2'], [...k.files('identify', { name }), ...k.files('reg_ask_lineage')], { timeout: 7 })
   }
+  if (lineage !== '1') return k.end('reg_declined')
+  const need = tapped(params[REG_VARS.need])
+  if (!need) return menu(REG_VARS.need, ['1', '2'], k.files('reg_ask_need'), { timeout: 7 })
+  if (need !== '1') return k.end('reg_declined')
 
   const bye = (files: TlFile[]): TlResponse[] => [{ type: 'simpleMessage', files }, hangup()]
-
-  // כבר רשומים — אישור (ואם כבר נבחר מוקד, גם פרטיו) וניתוק.
-  if (existing) {
-    if (existing.approval_status === 'rejected') return k.end('not_eligible')
-    return bye([
-      ...k.files('already', { name, distribution: distName }),
-      ...(existing.center_id
-        ? [...k.files('center_already'), ...(await centerSpeech(k, rules, existing.center_id, ''))]
-        : []),
-    ])
-  }
 
   // ── 6. רישום → הודעת סיום וניתוק (בחירת המוקד תיעשה בהמשך, בעדכון נפרד) ──
   {
@@ -177,13 +171,6 @@ export async function phoneRegistration(k: RegKit, dist: ActiveDistribution): Pr
       ...k.files('reg_final'),
     ])
   }
-}
-
-/** מה שמוקרא על מוקד: עם ימים ושעות רק אחרי שפורסמו. */
-async function centerSpeech(k: RegKit, rules: DistRules, centerId: string, fallback: string): Promise<TlFile[]> {
-  const c = await getSpokenCenter(centerId)
-  if (rules.hoursPublished) return say(spokenCenterDetails(c) || fallback)
-  return [...say(spokenCenterName(c) || fallback), ...k.files('center_hours_later')]
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
