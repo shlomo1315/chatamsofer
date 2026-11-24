@@ -1,7 +1,7 @@
 'use client'
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { Check, Phone, Loader2, AlertTriangle, CircleCheck, LayoutDashboard, Users, MapPin, Settings, X } from 'lucide-react'
+import { Check, Phone, Loader2, AlertTriangle, CircleCheck, Clock, LayoutDashboard, Users, MapPin, Settings, X } from 'lucide-react'
 import { PHASES, PHASE_LABEL, type DistPhase } from '@/lib/holidayDistPhase'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -136,9 +136,19 @@ export default function DistributionShell({
   const missing = info?.centersMissing ?? []
 
   // ── רשימת המוכנות ──
-  const checks: { ok: boolean; title: string; detail: string; fix?: Tab }[] = [
+  // later: נדרש רק אחרי הרישום (שיוך למוקדים / החלוקה), ולכן לא מוצג כ"חסר" לפני כן.
+  const checks: { ok: boolean; title: string; detail: string; fix?: Tab; later?: boolean }[] = [
     { ok: amount > 0, title: 'סכום למשפחה', detail: amount > 0 ? `${fmtCur(amount)} למשפחה` : 'לא הוגדר — בעריכת החלוקה', fix: 'settings' },
-    // אין "מוקדים פתוחים לבחירה": בשלוחת הרישום אין בחירת מוקד, השיוך נעשה אחר כך.
+    {
+      // ברישום אין בחירת מוקד, אבל השיוך האוטומטי (auto-assign-centers) משייך רק למוקדים שנפתחו בחלוקה.
+      ok: (info?.centers.open ?? 0) > 0,
+      title: 'מוקדים פתוחים בחלוקה',
+      detail: info
+        ? `${info.centers.open} מתוך ${info.centers.active} מוקדים פעילים · נדרש לשיוך המשפחות למוקדים אחרי הרישום, לא לרישום`
+        : '…',
+      fix: 'settings',
+      later: phase === 'setup' || phase === 'registration',
+    },
     {
       ok: missing.length === 0,
       title: 'כתובת וימים ושעות לכל מוקד',
@@ -264,14 +274,16 @@ export default function DistributionShell({
                   <li key={ch.title} className="flex items-center gap-3 py-3">
                     {ch.ok
                       ? <CircleCheck size={20} className="text-[#2c6a4e] shrink-0" />
-                      : <AlertTriangle size={20} className="text-[#b7791f] shrink-0" />}
+                      : ch.later
+                        ? <Clock size={20} className="text-[#6b6352] shrink-0" />
+                        : <AlertTriangle size={20} className="text-[#b7791f] shrink-0" />}
                     <div className="min-w-0">
                       <p className="font-bold text-[#1b2338] text-[15px]">{ch.title}</p>
                       <p className="text-[13px] text-[#6b6352]">{ch.detail}</p>
                     </div>
                     <span className={`ms-auto text-xs font-semibold px-2.5 py-0.5 rounded-full shrink-0 ${
-                      ch.ok ? 'bg-[#e3efe8] text-[#2c6a4e]' : 'bg-[#fbf0d9] text-[#7d5310]'}`}>
-                      {ch.ok ? 'הושלם' : 'חסר'}
+                      ch.ok ? 'bg-[#e3efe8] text-[#2c6a4e]' : ch.later ? 'bg-[#efe8da] text-[#4a4335]' : 'bg-[#fbf0d9] text-[#7d5310]'}`}>
+                      {ch.ok ? 'הושלם' : ch.later ? 'לפני השיוך' : 'חסר'}
                     </span>
                     {!ch.ok && ch.fix && (
                       <button type="button" onClick={() => go(ch.fix!)}
