@@ -6,7 +6,6 @@
 
 import { useCallback, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import DOMPurify from 'dompurify'
 import {
   AlignCenter, AlignLeft, AlignRight, Baseline, Bold, Check, Code2, Eraser, Highlighter, ImagePlus, Italic, LayoutTemplate,
   Link2, List, ListOrdered, Loader2, Minus, Monitor, MousePointerClick, Palette, PilcrowRight, Redo2, RotateCcw, Save,
@@ -15,22 +14,16 @@ import {
 import { HEADING_SNIPPETS, TEXT_SNIPPETS, imageHtml, isBlankHtml, isNewIssue, pickDefaultTemplate, type Snippet } from '@/lib/gilyonotDefaultTemplate'
 import { DEFAULT_DESIGN, normalizeDesign, SYSTEM_BLUE, type MailDesign } from '@/lib/gilyonotDesign'
 import { alignBlocks, type Align } from '@/lib/gilyonotAlign'
+import { FONTS, HILITES, Pop, SIZES, Sep, SWATCHES, Swatches, TEXT_BLOCKS, Tool, cleanPaste, escHtml, rgbToHex, withScheme } from '@/components/editor/richTextTools'
 import { btnDanger, btnGhost, btnPrimary, input } from './ui'
 import type { IssueView } from './GilyonotClient'
 
 interface Template { id: string; name: string; subject: string | null; body_html: string | null; design: unknown; updated_at: string }
 type SaveState = 'saved' | 'dirty' | 'saving' | 'error'
 
-const SWATCHES = ['#0f172a', '#334155', '#64748b', SYSTEM_BLUE, '#1d4ed8', '#0891b2', '#059669', '#ca8a04', '#ea580c', '#e11d48', '#14213D', '#ffffff']
-const HILITES = ['#fef08a', '#bbf7d0', '#bfdbfe', '#fbcfe8', '#fed7aa', '#e2e8f0']
-const FONTS = [['Arial', 'אריאל'], ['David', 'דוד'], ['Frank Ruehl CLM, David, serif', 'פרנק רוהל'], ['Tahoma', 'טהומה'], ['Georgia, serif', 'ג׳ורג׳יה']]
-const SIZES = [['2', 'קטן'], ['3', 'רגיל'], ['4', 'בינוני'], ['5', 'גדול'], ['6', 'גדול מאוד']]
-const BLOCKS = [['p', 'פסקה'], ['h1', 'כותרת ראשית'], ['h2', 'כותרת'], ['h3', 'כותרת משנה'], ['blockquote', 'ציטוט']]
-const PASTE_TAGS = ['p', 'br', 'div', 'span', 'strong', 'b', 'em', 'i', 'u', 's', 'h1', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'a', 'img', 'hr', 'blockquote']
-
-const clean = (html: string) => DOMPurify.sanitize(html, { ALLOWED_TAGS: [...PASTE_TAGS, 'table', 'tbody', 'tr', 'td', 'font'], ALLOWED_ATTR: ['href', 'src', 'alt', 'style', 'dir', 'data-btn', 'width', 'align', 'size', 'face', 'color'] })
-const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
-const withScheme = (u: string) => (/^(https?:|mailto:)/i.test(u) ? u : /^[\w.+-]+@[\w-]+\.[\w.]+$/.test(u) ? `mailto:${u}` : `https://${u}`)
+const BLOCKS = TEXT_BLOCKS
+const clean = cleanPaste
+const esc = escHtml
 const buttonHtml = (label: string, href: string, bg = SYSTEM_BLUE, fg = '#ffffff') =>
   `<p style="text-align:center"><a href="${esc(href)}" data-btn="1" style="display:inline-block;background-color:${bg};color:${fg};padding:12px 28px;border-radius:10px;font-weight:bold;text-decoration:none;">${esc(label)}</a></p><p><br></p>`
 
@@ -49,33 +42,6 @@ async function call(url: string, init?: RequestInit) {
 const jsonInit = (method: string, body: unknown): RequestInit => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 
 // ─── רכיבים קטנים ────────────────────────────────────────────────────────────
-
-function Tool({ label, onClick, active, children }: { label: string; onClick: () => void; active?: boolean; children: ReactNode }) {
-  return (
-    <button type="button" title={label} aria-label={label} aria-pressed={active}
-      onMouseDown={e => e.preventDefault()} onClick={onClick}
-      className={`flex h-9 min-w-9 items-center justify-center rounded-lg px-1.5 text-slate-600 transition-colors hover:bg-white hover:text-slate-900 hover:shadow-sm ${active ? 'bg-white text-[#2563eb] shadow-sm' : ''}`}>
-      {children}
-    </button>
-  )
-}
-const Sep = () => <span className="mx-0.5 h-6 w-px bg-slate-200" aria-hidden />
-
-function Pop({ open, children }: { open: boolean; children: ReactNode }) {
-  if (!open) return null
-  return <div className="absolute top-full z-20 mt-1 rounded-xl bg-white p-2.5 shadow-lg ring-1 ring-slate-900/10" onMouseDown={e => { if ((e.target as HTMLElement).tagName !== 'INPUT') e.preventDefault() }}>{children}</div>
-}
-
-function Swatches({ colors, onPick }: { colors: string[]; onPick: (c: string) => void }) {
-  return (
-    <div className="grid grid-cols-6 gap-1.5">
-      {colors.map(c => (
-        <button key={c} type="button" onMouseDown={e => e.preventDefault()} onClick={() => onPick(c)} aria-label={c} title={c}
-          className="h-6 w-6 rounded-md ring-1 ring-inset ring-slate-900/15 hover:scale-110" style={{ background: c }} />
-      ))}
-    </div>
-  )
-}
 
 function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
@@ -701,10 +667,4 @@ function PanelItem({ snippet, icon: Icon, onAdd }: { snippet: Snippet; icon: Rea
       <Icon className="h-4 w-4 text-slate-500" aria-hidden />{snippet.label}
     </button>
   )
-}
-
-function rgbToHex(v: string) {
-  if (/^#[0-9a-f]{6}$/i.test(v)) return v
-  const m = v.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/)
-  return m ? `#${m.slice(1, 4).map(n => Number(n).toString(16).padStart(2, '0')).join('')}` : ''
 }
