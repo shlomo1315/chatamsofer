@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { Plus, Save, Trash2 } from 'lucide-react'
-import { KVITEL_REQUEST_OPTIONS, formatLine } from '@/lib/kvitel'
+import { KVITEL_REQUEST_OPTIONS, formatRequestLines } from '@/lib/kvitel'
 import type { KvitelLineRow } from '@/lib/kvitelQuery'
 import { modalBtn } from '@/components/admin/system/RecordModal'
 
@@ -34,10 +34,8 @@ export default function KvitelLinesEditor({ requestId, lines, contact, editable,
       <p className="rounded-lg bg-[#FBEFD2] px-3 py-2 text-sm text-[#8A5A00]">לא נקלטו שמות. אפשר לראות את מה שנכתב בטופס בלשונית «מה שנכתב בטופס», ולבטל את הבקשה.</p>
     ) : (
       <ol className="space-y-1.5">
-        {lines.map(l => (
-          <li key={l.id} className="break-words border-s-2 border-navy/20 ps-3 text-base text-ink">
-            {formatLine({ name: l.name, relation: l.relation, parentName: l.parent_name, requestType: l.request_type, requestNote: l.request_note })}
-          </li>
+        {formatRequestLines(lines.map(l => ({ name: l.name, relation: l.relation, parentName: l.parent_name, requestType: l.request_type, requestNote: l.request_note }))).map((text, i) => (
+          <li key={lines[i].id} className="break-words border-s-2 border-navy/20 ps-3 text-base text-ink">{text}</li>
         ))}
       </ol>
     )

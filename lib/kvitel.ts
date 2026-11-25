@@ -122,3 +122,29 @@ export function formatLine(l: { name: string; relation: string; parentName: stri
   const what = l.requestType === 'other' ? (l.requestNote || '') : requestTypeLabel(l.requestType)
   return what ? `${who} - ${what}` : who
 }
+
+// בקשה ארוכה שמשותפת לכמה שמות באותה הגשה: במסד היא נשמרת במלואה אצל כל שם, אבל בקובץ
+// ובתצוגה היא מופיעה במלואה רק בפעם הראשונה, ואצל השאר "הנ"ל". עד 7 מילים — מלאה אצל כולם.
+// מחושב בכל תצוגה, ולכן מחיקת השם הראשון מעבירה את הנוסח המלא לשם שאחריו.
+export const SHARED_REQUEST_MAX_WORDS = 7
+export const SAME_AS_ABOVE = 'הנ"ל'
+
+type LineLike = Parameters<typeof formatLine>[0]
+const requestWords = (l: LineLike) => (l.requestType === 'other' ? (l.requestNote || '') : '').trim().split(/\s+/).filter(Boolean)
+
+/** השורות של הגשה אחת לפי הסדר, כשבקשה ארוכה שחוזרת מוחלפת ב"הנ"ל" (לתצוגה בלבד). */
+export function applySharedRequests<T extends LineLike>(lines: T[]): T[] {
+  const seen = new Set<string>()
+  return lines.map(l => {
+    const words = requestWords(l)
+    if (words.length <= SHARED_REQUEST_MAX_WORDS) return l
+    const key = words.join(' ')
+    if (!seen.has(key)) { seen.add(key); return l }
+    return { ...l, requestNote: SAME_AS_ABOVE }
+  })
+}
+
+/** השורות של הגשה אחת לפי הסדר, עם כלל 7 המילים. */
+export function formatRequestLines(lines: LineLike[]): string[] {
+  return applySharedRequests(lines).map(formatLine)
+}

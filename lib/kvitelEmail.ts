@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { MAX_LINES, validateLine, type KvitelLineInput, type KvitelRequestType } from '@/lib/kvitel'
 import { askClaudeJson } from '@/lib/kvitelAi'
-import { ingestKvitel } from '@/lib/kvitelIngest'
+import { ingestKvitel, reprocessKvitelRequest, type KvitelSubmission } from '@/lib/kvitelIngest'
 import type { KvitelAttachmentText } from '@/lib/kvitelAttachments'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -174,6 +174,7 @@ export async function aiParseKvitelEmail(subject: string, text: string): Promise
     prompt: `סוגי בקשה מותרים: refua (רפואה), parnasa (פרנסה), zivug (זיווג), zera (זרע של קיימא), hatzlacha (הצלחה), yeshua (ישועה וברכה), other (אחר, עם requestNote קצר).
 החזר {"lines":[{"name":"","relation":"ben|bat","parentName":"","requestType":"","requestNote":null,"sure":true}]}.
 requestType ריק ("") כשלא נאמרה בקשה, ואל תמציא בקשה. sure=false כשחסר שם האם או כשלא ברור אם בן או בת.
+בקשה שנכתבה פעם אחת ומתייחסת לכמה שמות (למשל אחרי רשימת שמות, או "לכולם"): שייך אותה לכל אחד מהשמות, במלואה ובאותו נוסח בדיוק, ולא רק לשם הראשון או האחרון.
 
 נושא: ${subject}
 ${text.slice(0, MAX_TEXT)}`,
@@ -195,15 +196,46 @@ ${text.slice(0, MAX_TEXT)}`,
 // מייל נקלט כבקשה רק אם נמצא בו לפחות שם אחד ("משה בן יהודית"), גם בתיבה k@. מייל בלי שם
 // (תודה, שאלה, צרופה בלבד) נשאר רק בתיבה הרגילה ולא יוצר בקשה ריקה.
 // קבצים מצורפים (Word, PDF, טקסט) מפוענחים כמו הגוף, והשמות מהגוף ומהקבצים מתאחדים לבקשה אחת.
-export async function handleKvitelEmail(db: SupabaseClient, m: {
+export interface KvitelEmailMessage {
   messageId: string; fromEmail: string; fromName: string | null; subject: string; text: string
   attachments?: KvitelAttachmentText[]
-}): Promise<{ ok: boolean; requestId?: string; status?: string; skipped?: string; duplicate?: boolean }> {
-  m = { ...m, subject: decodeEntities(m.subject), text: stripYedaPhoneNoise(decodeEntities(m.text)) }
+}
+
+export async function handleKvitelEmail(db: SupabaseClient, m: KvitelEmailMessage): Promise<{ ok: boolean; requestId?: string; status?: string; skipped?: string; duplicate?: boolean }> {
   const { count } = await db.from('kvitel_requests').select('id', { count: 'exact', head: true })
     .eq('channel', 'email').eq('source_ref', m.messageId)
   if (count) return { ok: true, duplicate: true }
 
+  const d = await decodeKvitelEmail(m)
+  if (!d) return { ok: true, skipped: 'no-names' }
+  const res = await ingestKvitel(db, d)
+  if (!res.ok) { console.error('[kvitel-email] ingest failed:', res.error); return { ok: false } }
+  return { ok: true, requestId: res.requestId, status: res.status }
+}
+
+// קליטה מחדש של מייל מלשונית המייל: בקשה קיימת שעוד לא נשלחה מקבלת את הפענוח החדש במקום השורות
+// הישנות (אותה בקשה, בלי כפילות); מייל שעוד לא נקלט נקלט עכשיו. בקשה שכבר נשלחה לציון לא נוגעים בה.
+export async function reingestKvitelEmail(db: SupabaseClient, m: KvitelEmailMessage): Promise<
+  { ok: true; requestId: string; status: string; lines: number; created: boolean } | { ok: false; error: string; noNames?: boolean }
+> {
+  const { data: cur } = await db.from('kvitel_requests').select('id, status')
+    .eq('channel', 'email').eq('source_ref', m.messageId).maybeSingle()
+  if (cur && cur.status !== 'pending' && cur.status !== 'review') return { ok: false, error: 'הבקשה כבר נשלחה לציון או בוטלה, ולכן לא נקלטת מחדש' }
+  const d = await decodeKvitelEmail(m)
+  if (!d) return { ok: false, error: 'לא נמצא במייל אף שם', noNames: true }
+  if (cur) {
+    const res = await reprocessKvitelRequest(db, cur.id, d, { replaceLines: true })
+    if (!res.ok) return res
+    return { ok: true, requestId: cur.id, status: res.status, lines: res.lines, created: false }
+  }
+  const res = await ingestKvitel(db, d)
+  if (!res.ok) return { ok: false, error: res.error }
+  return { ok: true, requestId: res.requestId, status: res.status, lines: d.lines.length, created: true }
+}
+
+// הפענוח עצמו: תבנית, ו-AI כשהתבנית לא מצאה או השאירה שורות. null = לא נמצא אף שם.
+async function decodeKvitelEmail(m: KvitelEmailMessage): Promise<KvitelSubmission | null> {
+  m = { ...m, subject: decodeEntities(m.subject), text: stripYedaPhoneNoise(decodeEntities(m.text)) }
   const files = (m.attachments ?? []).filter(a => a.text.trim())
   const sources = [m.text, ...files.map(f => f.text)]
   const all: ParsedKvitelEmail = { lines: [], flags: [], leftover: [] }
@@ -226,12 +258,12 @@ export async function handleKvitelEmail(db: SupabaseClient, m: {
     if (ai && ai.lines.length >= parsed.lines.length) { parsed = ai; note = `פוענח ${from} ב-AI` }
     else if (all.leftover.length) note = `נשארו ${all.leftover.length} שורות שלא פוענחו — יש לבדוק את המקור`
   }
-  if (!parsed.lines.length) return { ok: true, skipped: 'no-names' }
+  if (!parsed.lines.length) return null
   // יותר שמות ממה שנכנס לבקשה אחת: לא נבלעים בשקט, הבקשה עוברת לבדיקה.
   const truncated = found > MAX_LINES
   if (truncated) note = `נמצאו ${found} שמות, נקלטו ${MAX_LINES} הראשונים — יש לבדוק את המקור`
 
-  const res = await ingestKvitel(db, {
+  return {
     channel: 'email',
     // שורות שלא פוענחו → כל הבקשה לבדיקה, גם אם הסוכן לא סימן דבר.
     status: note.startsWith('נשארו') || truncated ? 'review' : undefined,
@@ -239,7 +271,5 @@ export async function handleKvitelEmail(db: SupabaseClient, m: {
     lines: parsed.lines, lineFlags: parsed.flags,
     rawText: `${m.subject}\n\n${fullText}`.slice(0, MAX_TEXT),
     sourceRef: m.messageId, note,
-  })
-  if (!res.ok) { console.error('[kvitel-email] ingest failed:', res.error); return { ok: false } }
-  return { ok: true, requestId: res.requestId, status: res.status }
+  }
 }

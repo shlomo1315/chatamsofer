@@ -174,9 +174,12 @@ export function configFields(c: KvitelNedarimConfig): string[] {
  * שורה שאין לה עמודת שם האם (שם מלא בשדה אחד, "משה בן שרה") עוברת לפענוח כטקסט חופשי.
  */
 export function mapKvitelRow(row: NedarimRow, c: KvitelNedarimConfig): ParsedNedarimKvitel {
-  if (!isMapped(c)) {
-    return parseBody(autoKvitelBody(row), row)
-  }
+  return parseBody(kvitelRowBody(row, c), row)
+}
+
+/** הגוף שנבנה מהרשומה (לפי המיפוי, או זיהוי אוטומטי), לפני הפענוח. משמש גם את דוח הבדיקה. */
+export function kvitelRowBody(row: NedarimRow, c: KvitelNedarimConfig): Record<string, string> {
+  if (!isMapped(c)) return autoKvitelBody(row)
   const get = (f: string) => (f ? str(row[f]) : '')
   const body: Record<string, string> = { ClientName: get(c.contactField), Phone: get(c.phoneField), Mail: get(c.emailField) }
   const free = [get(c.textField)]
@@ -189,7 +192,7 @@ export function mapKvitelRow(row: NedarimRow, c: KvitelNedarimConfig): ParsedNed
     Object.assign(body, { [`name${n}`]: name, [`mother${n}`]: get(l.mother), [`relation${n}`]: get(l.relation), [`request${n}`]: get(l.request) })
   }
   body.Comments = free.filter(Boolean).join('\n')
-  return parseBody(body, row)
+  return body
 }
 
 // ── קריאה ושמירה ──
@@ -197,7 +200,11 @@ async function readConfig(db: SupabaseClient): Promise<KvitelNedarimConfig> {
   const c = await readJson(db, CONFIG_KEY, EMPTY_CONFIG)
   return { ...c, lines: Array.isArray(c.lines) ? c.lines : [] }
 }
-export const getKvitelPullState = (db: SupabaseClient) => readJson(db, STATE_KEY, EMPTY_STATE)
+/** המיפוי בלבד, בלי המפתח: לדוח הבדיקה, שמפענח מחדש את המקור השמור ולא פונה לנדרים. */
+export async function getKvitelMapping(db: SupabaseClient): Promise<KvitelNedarimConfig> {
+  return { ...(await readConfig(db)), apiKey: '' }
+}
+export const getKvitelPullState =(db: SupabaseClient) => readJson(db, STATE_KEY, EMPTY_STATE)
 
 /** המפתח בפועל: של הקוויטל, ואם אין — של הגיליונות כשהמוסד זהה. */
 async function resolveKey(db: SupabaseClient, c: KvitelNedarimConfig): Promise<{ key: string; shared: boolean }> {

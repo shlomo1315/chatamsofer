@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { fetchAllRows } from '@/lib/fetchAllRows'
-import { KVITEL_CHANNELS, KVITEL_STATUSES, formatLine, isRequestType, type KvitelChannel, type KvitelStatus } from '@/lib/kvitel'
+import { KVITEL_CHANNELS, KVITEL_STATUSES, formatRequestLines, isRequestType, type KvitelChannel, type KvitelStatus } from '@/lib/kvitel'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // סינון ושליפה של בקשות הקוויטל — משותף למסך הניהול ולייצוא ה-Word,
@@ -100,9 +100,9 @@ export function kvitelExportLines(rows: KvitelRequestRow[], ids?: Set<string>): 
     .flatMap(kvitelRequestLines)
 }
 
-// השורות של בקשה אחת, כפי שייכתבו בקובץ (גם לתצוגה המקדימה בכרטיס).
+// השורות של בקשה אחת, כפי שייכתבו בקובץ (גם לתצוגה המקדימה בכרטיס), עם כלל 7 המילים.
 export function kvitelRequestLines(r: KvitelRequestRow): string[] {
-  return [...r.kvitel_request_lines].sort((a, b) => a.position - b.position).map(l => formatLine({
+  return formatRequestLines([...r.kvitel_request_lines].sort((a, b) => a.position - b.position).map(l => ({
     name: l.name, relation: l.relation, parentName: l.parent_name, requestType: l.request_type, requestNote: l.request_note,
-  }))
+  })))
 }
