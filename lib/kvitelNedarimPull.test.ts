@@ -265,3 +265,44 @@ describe('kvitelNedarimPull: עיבוד מחדש של בקשה שנשמרה בל
     expect(reprocessKvitelRequest).not.toHaveBeenCalled()
   })
 })
+
+describe('kvitelNedarimPull: השלמת שמות שחסרו בקליטה ישירה', () => {
+  const RAW = 'TransactionId: T1\nname1: דוד\nmother1: לאה\nrelation1: בן\nComments: משה בן שרה\nיוסף בן רחל'
+  const david = { name: 'דוד', relation: 'ben', parent_name: 'לאה', request_note: null }
+  function reDb(rows: unknown[]) {
+    const q = { select: () => q, eq: () => q, like: () => q, order: () => q, limit: async () => ({ data: rows, error: null }) } as Record<string, unknown>
+    return Object.assign(fakeDb({ kvitel_nedarim_config: base }), { from: (t: string) => (t === 'kvitel_requests' ? q : fakeDb({ kvitel_nedarim_config: base }).from()) }) as unknown as SupabaseClient
+  }
+  beforeEach(() => {
+    fetchRows.mockReset(); reprocessKvitelRequest.mockReset()
+    reprocessKvitelRequest.mockResolvedValue({ ok: true, status: 'pending', lines: 2 })
+  })
+
+  it('בקשה פתוחה שנקלט בה רק השם מהשדות: השמות מהטקסט החופשי מתווספים אחרי הקיים', async () => {
+    const r = await reprocessKvitelFromNedarim(reDb([{ id: 'd', source_ref: 'T1', status: 'pending', raw_text: RAW, kvitel_request_lines: [david] }]))
+    expect(r).toMatchObject({ ok: true, checked: 1, completed: 1 })
+    const [, id, sub, opts] = reprocessKvitelRequest.mock.calls[0]
+    expect(id).toBe('d')
+    expect(opts).toEqual({ appendAfter: 1 })
+    expect(sub.lines.map((l: { name: string }) => l.name)).toEqual(['משה', 'יוסף'])
+    expect(sub).toMatchObject({ rawText: RAW, sourceRef: 'T1' })
+    expect(fetchRows).not.toHaveBeenCalled()
+  })
+
+  it('בקשה שכבר שלמה, או שכבר נשלחה, לא נוגעים בה', async () => {
+    const all = [david, { name: 'משה', relation: 'ben', parent_name: 'שרה', request_note: null }, { name: 'יוסף', relation: 'ben', parent_name: 'רחל', request_note: null }]
+    const r = await reprocessKvitelFromNedarim(reDb([
+      { id: 'e', source_ref: 'T1', status: 'pending', raw_text: RAW, kvitel_request_lines: all },
+      { id: 'f', source_ref: 'T2', status: 'done', raw_text: RAW, kvitel_request_lines: [david] },
+    ]))
+    expect(r).toMatchObject({ ok: true, checked: 0, completed: 0 })
+    expect(reprocessKvitelRequest).not.toHaveBeenCalled()
+  })
+
+  it('קליטה ישירה בלי שמות: נקלטים מהמקור השמור, בלי לפנות לנדרים', async () => {
+    const r = await reprocessKvitelFromNedarim(reDb([{ id: 'g', source_ref: 'T3', status: 'review', raw_text: RAW, kvitel_request_lines: [] }]))
+    expect(r).toMatchObject({ checked: 1, fixed: 1 })
+    expect(reprocessKvitelRequest.mock.calls[0][2].lines).toHaveLength(3)
+    expect(reprocessKvitelRequest.mock.calls[0][3]).toEqual({ appendAfter: 0 })
+  })
+})

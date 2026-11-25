@@ -1,9 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getServiceClient } from './apiAuth'
-import { KVITEL_REQUEST_TYPES, MAX_LINES } from './kvitel'
-import { parseKvitelEmailText } from './kvitelEmail'
+import { KVITEL_REQUEST_TYPES, MAX_LINES, personKey, type KvitelLineInput, type KvitelRelation } from './kvitel'
 import { ingestKvitel, reprocessKvitelRequest } from './kvitelIngest'
-import { parseNedarimKvitel, type ParsedNedarimKvitel } from './kvitelNedarim'
+import { parseNedarimKvitel, rawToRecord, type ParsedNedarimKvitel } from './kvitelNedarim'
 import { SAMPLE_FIELDS, fetchRows, getPullConfig, isFieldName, readJson, writeJson, type NedarimRow } from './gilyonotNedarimPull'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -145,17 +144,9 @@ export function rawRowText(row: NedarimRow): string {
     .map(([k, v]) => `${k}: ${str(v)}`).join('\n').slice(0, 6000)
 }
 
-/** מפענח גוף שנבנה מהרשומה; טקסט חופשי שלא נקלט כשורות מובנות מפוענח ומתווסף. */
+/** מפענח גוף שנבנה מהרשומה (שורות מובנות וגם טקסט חופשי, כמו בקליטה הישירה). */
 function parseBody(body: Record<string, string>, row: NedarimRow): ParsedNedarimKvitel {
-  const structured = Object.keys(body).some(k => /^name\d+$/.test(k) && body[k])
   const p = parseNedarimKvitel(body)
-  // parseNedarimKvitel מפענח טקסט חופשי רק כשאין שורות מובנות. כאן יש גם וגם, אז מוסיפים אותו.
-  if (structured && p.freeText) {
-    const extra = parseKvitelEmailText('', p.freeText)
-    extra.lines.forEach((line, i) => {
-      if (p.lines.length < MAX_LINES) { p.lines.push(line); p.flags.push(extra.flags[i]) }
-    })
-  }
   p.sourceRef = row.ID ? `nedarim-form:${row.ID}` : null
   p.rawText = rawRowText(row)
   return p
@@ -306,36 +297,83 @@ async function doPull(dbArg?: SupabaseClient): Promise<KvitelPullResult> {
 // ── עיבוד מחדש ──
 const MAX_REPROCESS = 100
 
-export interface KvitelReprocessResult { ok: boolean; checked: number; fixed: number; notes: number; stillEmpty: number; missing: number; error?: string }
+export interface KvitelReprocessResult { ok: boolean; checked: number; fixed: number; notes: number; completed: number; stillEmpty: number; missing: number; error?: string }
 
-type ReRow = { id: string; source_ref: string; status: string; kvitel_request_lines: { request_note: string | null }[] }
+type ReLine = { name: string; relation: KvitelRelation; parent_name: string | null; request_note: string | null }
+type ReRow = { id: string; source_ref: string | null; status: string; raw_text: string | null; kvitel_request_lines: ReLine[] }
+
+const FORM_REF = 'nedarim-form:'
+const isOpen = (status: string) => status === 'pending' || status === 'review'
+
+/** פענוח מחדש מהמקור ששמור בבקשה (raw_text), בלי לפנות לנדרים. */
+function reparseStored(r: ReRow, c: KvitelNedarimConfig): ParsedNedarimKvitel | null {
+  if (!r.raw_text?.trim()) return null
+  const record = rawToRecord(r.raw_text)
+  return r.source_ref?.startsWith(FORM_REF) ? mapKvitelRow(record, c) : parseNedarimKvitel(record)
+}
+
+/** שורות מהפענוח שאין להן שורה שמורה (לפי שם + בן/בת + שם האם), עד המקסימום לבקשה. */
+function missingLines(p: ParsedNedarimKvitel, stored: ReLine[]): { lines: KvitelLineInput[]; flags: (string | null)[] } {
+  const have = new Set(stored.map(l => personKey({ name: l.name, relation: l.relation, parentName: l.parent_name ?? '' })))
+  const room = Math.max(0, MAX_LINES - stored.length)
+  const idx = p.lines.map((l, i) => (have.has(personKey(l)) ? -1 : i)).filter(i => i >= 0).slice(0, room)
+  return { lines: idx.map(i => p.lines[i]), flags: idx.map(i => p.flags[i] ?? null) }
+}
 
 /**
- * בקשות מנדרים שנקלטו חלקית: מושך שוב את הרשומה לפי ה-ID שלה, מפענח במנגנון העדכני ומשלים
- * את הבקשה הקיימת, בלי קליטה כפולה. שני מקרים:
- *  - בלי שמות בכלל: השמות נקלטים.
- *  - שמות בלי פרטי הבקשה (נמחקו בפענוח הישן), בבקשה שעוד לא נשלחה: השורות מוחלפות,
+ * בקשות מנדרים שנקלטו חלקית: מפענח שוב במנגנון העדכני ומשלים את הבקשה הקיימת, בלי קליטה כפולה.
+ *  - בקשה פתוחה עם שמות (טופס או קליטה ישירה): שמות שבמקור השמור ולא נקלטו (למשל טקסט חופשי
+ *    שנזרק כשהיו גם שמות בשדות) מתווספים אחרי הקיימים. השורות הקיימות ותיקונים ידניים בהן לא נדרסים.
+ *  - קליטה ישירה בלי שמות: נקלטים מהמקור השמור.
+ *  - טופס בלי שמות: מושך שוב את הרשומה מנדרים לפי ה-ID שלה.
+ *  - טופס עם שמות בלי פרטי הבקשה (נמחקו בפענוח הישן), בבקשה פתוחה: השורות מוחלפות,
  *    ורק אם בפענוח החדש יש פרטי בקשה. בקשה שכבר נכתבו בה פרטים (גם ידנית) לא נדרסת.
  * עד 100 בקשות בהרצה.
  */
 export async function reprocessKvitelFromNedarim(dbArg?: SupabaseClient): Promise<KvitelReprocessResult> {
-  const out: KvitelReprocessResult = { ok: true, checked: 0, fixed: 0, notes: 0, stillEmpty: 0, missing: 0 }
+  const out: KvitelReprocessResult = { ok: true, checked: 0, fixed: 0, notes: 0, completed: 0, stillEmpty: 0, missing: 0 }
   const db = dbArg ?? getServiceClient()
   if (!db) return { ...out, ok: false, error: 'השרת אינו מוגדר' }
   const c = await getReadyConfig(db)
   if (!c) return { ...out, ok: false, error: 'צריך קודם להגדיר מוסד, מפתח וטופס' }
   const { data, error } = await db.from('kvitel_requests')
-    .select('id, source_ref, status, kvitel_request_lines(request_note)').eq('channel', 'nedarim').like('source_ref', 'nedarim-form:%')
+    .select('id, source_ref, status, raw_text, kvitel_request_lines(name, relation, parent_name, request_note)').eq('channel', 'nedarim')
     .order('submitted_at', { ascending: false }).limit(1000)
   if (error) return { ...out, ok: false, error: 'קריאת הבקשות נכשלה' }
-  const todo = ((data ?? []) as unknown as ReRow[]).filter(r => {
+  const rows = (data ?? []) as unknown as ReRow[]
+
+  // 1. השלמה מהמקור השמור: שמות שחסרים בבקשה פתוחה, וקליטה ישירה בלי שמות
+  let budget = MAX_REPROCESS
+  const done = new Set<string>()
+  for (const r of rows) {
+    if (budget <= 0) break
+    const stored = r.kvitel_request_lines ?? []
+    const isForm = !!r.source_ref?.startsWith(FORM_REF)
+    if (stored.length ? !isOpen(r.status) : isForm) continue
+    const p = reparseStored(r, c)
+    if (!p) continue
+    const add = stored.length ? missingLines(p, stored) : { lines: p.lines, flags: p.flags }
+    if (!add.lines.length) continue
+    budget--; out.checked++; done.add(r.id)
+    const s = await reprocessKvitelRequest(db, r.id, {
+      channel: 'nedarim', phone: p.phone, email: p.email, contactName: p.contactName,
+      lines: add.lines, lineFlags: add.flags, rawText: r.raw_text, sourceRef: r.source_ref,
+    }, { appendAfter: stored.length })
+    if (!s.ok) { out.ok = false; out.error = s.error; return out }
+    if (stored.length) { if (s.lines) out.completed++ }
+    else if (s.lines) out.fixed++; else out.stillEmpty++
+  }
+
+  // 2. טופס: משיכה חוזרת מנדרים לבקשות בלי שמות או בלי פרטי בקשה
+  const todo = rows.filter(r => {
+    if (done.has(r.id) || !r.source_ref?.startsWith(FORM_REF)) return false
     const lines = r.kvitel_request_lines ?? []
     if (!lines.length) return true
-    return (r.status === 'pending' || r.status === 'review') && !lines.some(l => l.request_note)
-  }).slice(0, MAX_REPROCESS)
+    return isOpen(r.status) && !lines.some(l => l.request_note)
+  }).slice(0, budget)
   const fields = configFields(c)
   for (const r of todo) {
-    const id = Number(r.source_ref.slice('nedarim-form:'.length))
+    const id = Number(r.source_ref!.slice(FORM_REF.length))
     if (!Number.isFinite(id) || id < 1) continue
     out.checked++
     const res = await fetchRows(c, fields, { lastId: id - 1, max: 1 })

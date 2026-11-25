@@ -91,7 +91,7 @@ export default function KvitelNedarim({ view: initial, isAdmin }: { view: Kvitel
   const reprocess = () => run(async () => {
     const d = await post({ mode: 'reprocess' })
     router.refresh()
-    return `נבדקו ${d.checked} בקשות: ${d.fixed} קיבלו שמות · ${d.notes} קיבלו את פרטי הבקשה · ${d.stillEmpty} עדיין בלי שמות · ${d.missing} לא נמצאו בנדרים`
+    return `נבדקו ${d.checked} בקשות: ${d.fixed} קיבלו שמות · ${d.notes} קיבלו את פרטי הבקשה · ${d.completed ?? 0} הושלמו בשמות שחסרו · ${d.stillEmpty} עדיין בלי שמות · ${d.missing} לא נמצאו בנדרים`
   })
 
   const st = view.state

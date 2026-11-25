@@ -3,7 +3,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import KvitelRecordingPanel from './KvitelRecordingPanel'
 import { Printer, Check, RotateCcw, X, Filter, Link2, ChevronLeft, ChevronDown, Search, CalendarDays, Pencil, Mic, Trash2 } from 'lucide-react'
-import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { KVITEL_CHANNELS, KVITEL_REQUEST_OPTIONS, KVITEL_STATUSES, requestTypeLabel, type KvitelStatus } from '@/lib/kvitel'
 import { kvitelRequestLines, type KvitelFilters, type KvitelLineRow, type KvitelRequestRow } from '@/lib/kvitelQuery'
 import { ListTable } from '@/components/admin/system/ListTable'
@@ -236,10 +235,10 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
   embedded?: boolean; channel?: string; onChannel?: (channel: string) => void
 }) {
   const router = { refresh: onReload }   // רענון = טעינה מחדש של הרשימה המעורבלת (KvitelRequests)
-  const { confirm, confirmDialog } = useConfirm()
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
+  const [undo, setUndo] = useState<{ id: string; status: KvitelStatus; msg: string } | null>(null)   // הבקשה האחרונה שנמחקה מהשורה
   const [printOpen, setPrintOpen] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
   const [previewRow, setPreviewRow] = useState<KvitelRequestRow | null>(null)
@@ -298,31 +297,34 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
   )
   const pickTab = (t: Tab) => { setTab(t); setSelected(new Set()) }
 
-  async function setStatus(ids: string[], status: KvitelStatus) {
-    if (!ids.length) return
+  async function setStatus(ids: string[], status: KvitelStatus, doneMessage?: string): Promise<boolean> {
+    if (!ids.length) return false
     setBusy(true)
     setMessage('')
+    setUndo(null)
     try {
       const res = await fetch('/api/admin/kvitel/requests', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids, status }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) { setMessage(data.error || 'העדכון נכשל'); return }
-      setMessage(`עודכנו ${data.updated} בקשות ל"${KVITEL_STATUSES[status]}"`)
+      if (!res.ok) { setMessage(data.error || 'העדכון נכשל'); return false }
+      setMessage(doneMessage ?? `עודכנו ${data.updated} בקשות ל"${KVITEL_STATUSES[status]}"`)
       setSelected(new Set())
       router.refresh()
+      return true
     } finally {
       setBusy(false)
     }
   }
 
-  // מחיקה מהשורה: אחרי אישור בחלון — הבקשה עוברת ל"בוטלו" ואפשר לשחזר אותה משם
+  // מחיקה מהשורה: מיד, בלי חלון אישור. הבקשה עוברת ל"בוטלו", ו"ביטול" בהודעה מחזיר אותה למצב שהייתה בו
   async function removeRow(r: KvitelRequestRow) {
-    const ok = await confirm({
-      title: 'מחיקת הבקשה', danger: true, confirmLabel: 'מחיקה',
-      message: `למחוק את הבקשה של ${whoOf(r)}?\nהיא לא תיכנס לקובץ ותעבור ללשונית "בוטלו", ואפשר לשחזר אותה משם.`,
-    })
-    if (ok) await setStatus([r.id], 'cancelled')
+    const prev: KvitelStatus = r.needsReview ? 'review' : r.status
+    const msg = `הבקשה של ${whoOf(r)} נמחקה`
+    if (await setStatus([r.id], 'cancelled', msg)) setUndo({ id: r.id, status: prev, msg })
+  }
+  async function undoRemove() {
+    if (undo) await setStatus([undo.id], undo.status, 'המחיקה בוטלה')
   }
 
   function copyFormLink() {
@@ -425,7 +427,12 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
         )}
       </div>
 
-      {message && <p role="status" className="rounded-lg bg-sand px-4 py-2.5 text-sm text-navy">{message}</p>}
+      {message && (
+        <p role="status" className="flex items-center gap-3 rounded-lg bg-sand px-4 py-2.5 text-sm text-navy">
+          <span>{message}</span>
+          {undo?.msg === message && <button type="button" disabled={busy} onClick={() => void undoRemove()} className="font-semibold underline underline-offset-[3px] disabled:opacity-40">ביטול</button>}
+        </p>
+      )}
 
       <PrintNewDialog open={printOpen} onClose={() => setPrintOpen(false)} rows={allRows} canEdit={canEdit}
         onDone={m => { setPrintOpen(false); setMessage(m); router.refresh() }} />
@@ -497,7 +504,6 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
       </div>
       <MobileCards rows={pg.rows} canEdit={canEdit} openId={openId} details={details} onOpen={(r, editing) => openRow(r, editing)} onApprove={r => void setStatus([r.id], 'pending')}
         onRemove={r => void removeRow(r)} />
-      {confirmDialog}
     </div>
   )
 }

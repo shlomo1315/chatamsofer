@@ -99,17 +99,34 @@ export function parseNedarimKvitel(body: Record<string, unknown>): ParsedNedarim
     }
   }
 
-  // 3. טקסט חופשי
+  // 3. טקסט חופשי — נקלט תמיד, גם כשיש שמות בשדות (קודם נזרק במקרה כזה, והשמות שבו לא נכנסו)
   const free = pick(body, ['Comments', 'Comment', 'names', 'text', 'Param1'])
   out.freeText = free
-  if (!out.lines.length && free) {
+  if (free) {
     const p = parseKvitelEmailText('', free)
-    out.lines = p.lines
-    out.flags = p.flags.map((f, i) => f ?? (p.leftover.length && i === 0 ? `לא פוענח: ${p.leftover.join(' / ').slice(0, 120)}` : null))
+    p.lines.forEach((line, i) => {
+      if (out.lines.length >= MAX_LINES) return
+      out.lines.push(line)
+      out.flags.push(p.flags[i] ?? (p.leftover.length && i === 0 ? `לא פוענח: ${p.leftover.join(' / ').slice(0, 120)}` : null))
+    })
   }
 
   out.rawText = Object.entries(body)
     .filter(([k]) => !/token|password|secret|card|cvv/i.test(k))
     .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('\n').slice(0, 6000)
+  return out
+}
+
+const RAW_KEY = /^([A-Za-z_][\w-]{0,40}):\s?(.*)$/
+
+/** raw_text ("שדה: ערך" בכל שורה) חזרה לרשומה. שורה בלי שדה היא המשך של הערך הקודם (טקסט חופשי רב-שורות). */
+export function rawToRecord(raw: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  let key: string | null = null
+  for (const line of raw.split(/\r?\n/)) {
+    const m = RAW_KEY.exec(line)
+    if (m) { key = m[1]; out[key] = m[2]; continue }
+    if (key) out[key] += `\n${line}`
+  }
   return out
 }

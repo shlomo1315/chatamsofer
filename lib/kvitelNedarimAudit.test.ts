@@ -14,8 +14,8 @@ describe('דוח הבדיקה של נדרים פלוס', () => {
   it('קליטה ישירה: שמות בשדות וגם בטקסט החופשי, הטקסט החופשי חסר', () => {
     const raw = 'name1: דוד\nmother1: לאה\nrelation1: בן\nComments: משה בן שרה\nיוסף בן רחל'
     const a = auditNedarimSubmission({ kind: 'direct', rawText: raw, captured: 1 }, auto)
-    expect(a).toMatchObject({ source: 3, structured: 1, free: 2, captured: 1, current: 1, missing: 2 })
-    expect(a.reasons).toContain('free_ignored')
+    expect(a).toMatchObject({ source: 3, structured: 1, free: 2, captured: 1, current: 3, missing: 2 })
+    expect(a.reasons).toEqual(expect.arrayContaining(['free_ignored', 'reprocess_would_add']))
   })
 
   it('משיכה מהטופס עם מיפוי: שם בלי עמודת אם עובר לטקסט החופשי ונספר', () => {

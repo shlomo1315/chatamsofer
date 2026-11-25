@@ -25,4 +25,10 @@ describe('kvitelNedarim', () => {
     expect(p.rawText).not.toContain('token')
     expect(p.rawText).not.toContain('4580')
   })
+
+  it('הגשה חדשה עם שמות בשדות וגם בטקסט החופשי: כל השמות נקלטים', () => {
+    const p = parseNedarimKvitel({ TransactionId: 'T1', name1: 'דוד', mother1: 'לאה', relation1: 'בן', Comments: 'משה בן שרה\nיוסף בן רחל' })
+    expect(p.lines.map(l => l.name)).toEqual(['דוד', 'משה', 'יוסף'])
+    expect(p.lines[1]).toMatchObject({ relation: 'ben', parentName: 'שרה' })
+  })
 })
