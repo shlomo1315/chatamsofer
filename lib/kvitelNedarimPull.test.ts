@@ -134,7 +134,7 @@ describe('kvitelNedarimPull: המשיכה', () => {
 
   it('בלי בחירת עמודות: מושך את כל העמודות ומזהה מייל, טלפון ושמות לבד', async () => {
     const auto = { ...base, contactField: '', phoneField: '', emailField: '', textField: '', lines: [] }
-    expect(configFields(auto)).toHaveLength(100)
+    expect(configFields(auto)).toHaveLength(110)
     const db = fakeDb({ kvitel_nedarim_config: auto })
     fetchRows.mockResolvedValueOnce({ ok: true, rows: [
       { ID: '5', Field1: 'דוד כהן', Field2: '050-1234567', Field3: 'a@b.co', Field4: 'יעקב בן מרים - רפואה', Field5: '18' },
@@ -248,34 +248,91 @@ describe('kvitelNedarimPull: רשומה 4498102 מהשליפה עד הטבלה �
 })
 
 describe('kvitelNedarimPull: עיבוד מחדש של בקשה שנשמרה בלי פרטי הבקשה', () => {
-  type R = { id: string; source_ref: string; status: string; kvitel_request_lines: { request_note: string | null }[] }
+  type L = { id: string; position: number; name: string; relation: string; parent_name: string | null; request_type: string | null; request_note: string | null }
+  type R = { id: string; source_ref: string; status: string; kvitel_request_lines: L[] }
+  let updates: Record<string, unknown>[] = []
   function reDb(rows: R[]) {
     const q = { select: () => q, eq: () => q, like: () => q, order: () => q, limit: async () => ({ data: rows, error: null }) } as Record<string, unknown>
-    return Object.assign(fakeDb({ kvitel_nedarim_config: base }), { from: (t: string) => (t === 'kvitel_requests' ? q : fakeDb({ kvitel_nedarim_config: base }).from()) }) as unknown as SupabaseClient
+    const lines = { update: (patch: Record<string, unknown>) => ({ eq: (_: string, id: string) => ({ is: async () => { updates.push({ id, ...patch }); return { error: null } } }) }) }
+    return Object.assign(fakeDb({ kvitel_nedarim_config: base }), {
+      from: (t: string) => (t === 'kvitel_requests' ? q : t === 'kvitel_request_lines' ? lines : fakeDb({ kvitel_nedarim_config: base }).from()),
+    }) as unknown as SupabaseClient
   }
+  const line = (id: string, name: string, parent: string, note: string | null = null): L =>
+    ({ id, position: 0, name, relation: 'ben', parent_name: parent, request_type: null, request_note: note })
   const row = { ID: '4498102', Field4: 'מאיר נחמיה', Field5: 'קילה', Field6: 'בן', Field7: REQ_4498102 }
   beforeEach(() => {
+    updates = []
     fetchRows.mockReset(); reprocessKvitelRequest.mockReset()
     fetchRows.mockResolvedValue({ ok: true, rows: [row] })
     reprocessKvitelRequest.mockResolvedValue({ ok: true, status: 'pending', lines: 1 })
   })
 
-  it('בקשה שעוד לא נשלחה: נשלפת שוב והשורות מוחלפות בפענוח המלא', async () => {
-    const r = await reprocessKvitelFromNedarim(reDb([{ id: 'a', source_ref: 'nedarim-form:4498102', status: 'pending', kvitel_request_lines: [{ request_note: null }] }]))
-    expect(r).toMatchObject({ ok: true, checked: 1, notes: 1 })
-    const [, id, sub, opts] = reprocessKvitelRequest.mock.calls[0]
-    expect(id).toBe('a')
-    expect(opts).toEqual({ replaceLines: true })
-    expect(sub.lines[0]).toMatchObject({ requestType: 'other', requestNote: REQ_4498102 })
+  it('בקשה פתוחה: רק שדה הבקשה מתמלא בשורה הקיימת, בלי למחוק שורות ובלי לשנות סטטוס', async () => {
+    const r = await reprocessKvitelFromNedarim(reDb([{ id: 'a', source_ref: 'nedarim-form:4498102', status: 'review', kvitel_request_lines: [line('l1', 'מאיר נחמיה', 'קילה')] }]))
+    expect(r).toMatchObject({ ok: true, checked: 1, notes: 1, noRequest: 0 })
+    expect(updates).toEqual([{ id: 'l1', request_type: 'other', request_note: REQ_4498102 }])
+    expect(reprocessKvitelRequest).not.toHaveBeenCalled()
   })
 
-  it('בקשה שכבר נשלחה, או שכבר יש בה פרטי בקשה, לא נוגעים בה', async () => {
+  it('שם שתוקן ידנית: הבקשה נכנסת לפי המיקום כשמספר השורות זהה', async () => {
+    await reprocessKvitelFromNedarim(reDb([{ id: 'a', source_ref: 'nedarim-form:4498102', status: 'pending', kvitel_request_lines: [line('l1', 'מאיר נחמי', 'קיילה')] }]))
+    expect(updates).toEqual([{ id: 'l1', request_type: 'other', request_note: REQ_4498102 }])
+  })
+
+  it('אין בקשה גם בנדרים: נספר, ושום דבר לא משתנה', async () => {
+    fetchRows.mockResolvedValue({ ok: true, rows: [{ ...row, Field7: '' }] })
+    const r = await reprocessKvitelFromNedarim(reDb([{ id: 'a', source_ref: 'nedarim-form:4498102', status: 'review', kvitel_request_lines: [line('l1', 'מאיר נחמיה', 'קילה')] }]))
+    expect(r).toMatchObject({ notes: 0, noRequest: 1 })
+    expect(updates).toEqual([])
+  })
+
+  it('בקשה שכבר נשלחה או בוטלה, או שכבר יש בה פרטי בקשה, לא נוגעים בה', async () => {
     const r = await reprocessKvitelFromNedarim(reDb([
-      { id: 'b', source_ref: 'nedarim-form:4498102', status: 'done', kvitel_request_lines: [{ request_note: null }] },
-      { id: 'c', source_ref: 'nedarim-form:4498103', status: 'pending', kvitel_request_lines: [{ request_note: 'ידני' }] },
+      { id: 'b', source_ref: 'nedarim-form:4498102', status: 'done', kvitel_request_lines: [line('l1', 'מאיר נחמיה', 'קילה')] },
+      { id: 'x', source_ref: 'nedarim-form:4498102', status: 'cancelled', kvitel_request_lines: [line('l2', 'מאיר נחמיה', 'קילה')] },
+      { id: 'c', source_ref: 'nedarim-form:4498103', status: 'pending', kvitel_request_lines: [line('l3', 'מאיר נחמיה', 'קילה', 'ידני')] },
     ]))
     expect(r.checked).toBe(0)
+    expect(fetchRows).not.toHaveBeenCalled()
+    expect(updates).toEqual([])
     expect(reprocessKvitelRequest).not.toHaveBeenCalled()
+  })
+
+  it('כמה בקשות נמשכות מנדרים במנה אחת, מה-ID הנמוך', async () => {
+    fetchRows.mockResolvedValue({ ok: true, rows: [row, { ...row, ID: '4498110', Field7: 'לרפואה שלמה' }] })
+    const r = await reprocessKvitelFromNedarim(reDb([
+      { id: 'a', source_ref: 'nedarim-form:4498110', status: 'review', kvitel_request_lines: [line('l1', 'מאיר נחמיה', 'קילה')] },
+      { id: 'b', source_ref: 'nedarim-form:4498102', status: 'review', kvitel_request_lines: [line('l2', 'מאיר נחמיה', 'קילה')] },
+    ]))
+    expect(fetchRows).toHaveBeenCalledTimes(1)
+    expect(fetchRows.mock.calls[0][2]).toMatchObject({ lastId: 4498101 })
+    expect(r.notes).toBe(2)
+    expect(updates).toContainEqual({ id: 'l1', request_type: 'refua', request_note: null })
+  })
+})
+
+describe('kvitelNedarimPull: פרטי הבקשה בעמודות הטקסט הארוך (FieldNMax)', () => {
+  const auto = { ...base, contactField: '', phoneField: '', emailField: '', textField: '', lines: [] }
+
+  it('בלי בחירת עמודות מבקשים מנדרים גם את Field1Max..Field10Max', () => {
+    const f = configFields(auto)
+    expect(f).toContain('Field1Max')
+    expect(f).toContain('Field10Max')
+    expect(f).toContain('Field100')
+  })
+
+  it('בקשה אחת בטקסט הארוך חלה על כל השמות, והשמות לא זזים', () => {
+    const p = mapKvitelRow({ ID: '4521910', Field20: 'משה', Field21: 'בן', Field22: 'שרה', Field23: 'רבקה', Field24: 'בת', Field25: 'לאה', Field1Max: REQ_4498102 }, auto)
+    expect(p.lines).toHaveLength(2)
+    expect(p.lines[0]).toMatchObject({ name: 'משה', relation: 'ben', parentName: 'שרה', requestNote: REQ_4498102 })
+    expect(p.lines[1]).toMatchObject({ name: 'רבקה', relation: 'bat', parentName: 'לאה', requestNote: REQ_4498102 })
+  })
+
+  it('בקשה לכל שם: לפי הסדר', () => {
+    const p = mapKvitelRow({ ID: '1', Field20: 'משה', Field21: 'בן', Field22: 'שרה', Field23: 'רבקה', Field24: 'בת', Field25: 'לאה', Field2Max: 'לזיווג הגון בקרוב', Field1Max: REQ_4498102 }, auto)
+    expect(p.lines[0]).toMatchObject({ requestNote: REQ_4498102 })
+    expect(p.lines[1]).toMatchObject({ requestType: 'zivug' })
   })
 })
 
