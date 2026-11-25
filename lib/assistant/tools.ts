@@ -454,9 +454,8 @@ export async function runTool(ctx: ToolCtx, name: string, input: Record<string, 
       }
 
       const limit = Math.min(Math.max(Number(input.limit) || 25, 1), 100)
-      const select = spec.joinBeneficiary
-        ? `${spec.columns.join(', ')}, ${BEN_JOIN}`
-        : spec.columns.join(', ')
+      const select = [spec.columns.join(', '), spec.joinBeneficiary ? BEN_JOIN : '', spec.join ?? '']
+        .filter(Boolean).join(', ')
 
       /** מצרף לכל רשומה קישור ישיר לכרטסת שלה במערכת. */
       const withLinks = (rows: Record<string, unknown>[]) =>
