@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Check, ChevronDown, ChevronUp, Lock, Pencil, Plus, X } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, Lock, Pencil, Plus, Send, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Beneficiary, ELIGIBILITY_LABELS, MATERNITY_STATUS_LABELS } from '@/types'
 import { displayChain, registrantGeneration } from '@/lib/lineageDisplayChain'
@@ -84,7 +84,7 @@ function Field({ label, tag, wide, locked, editing, ltr, value, children }: {
   const stripes = editing && locked ? { background: 'repeating-linear-gradient(135deg,#FBFAF6 0 8px,#F3EFE4 8px 9px)' } : undefined
   return (
     <div className={`min-w-0 px-4 py-3 ${wide ? 'sm:col-span-2' : ''} ${locked ? 'bg-[#FBFAF6]' : 'bg-white'}`} style={stripes}>
-      <div className="mb-0.5 flex items-center gap-2 text-[12px] text-[#7A7363]">
+      <div className="mb-0.5 flex flex-wrap items-center gap-2 text-[12px] text-[#7A7363]">
         {label}
         {locked && <Tag><Lock size={10} />לא ניתן לשינוי</Tag>}
         {tag}
@@ -149,6 +149,7 @@ function FamilyCard({ b, tab, setTab, editing, setEditing, position, canNav, onP
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [mailTo, setMailTo] = useState<string | null>(null)
+  const [verify, setVerify] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle')
   const dialogRef = useRef<HTMLElement>(null)
 
   useEffect(() => { dialogRef.current?.focus() }, [])
@@ -237,7 +238,27 @@ function FamilyCard({ b, tab, setTab, editing, setEditing, position, canNav, onP
       initialChain={chain.map((g) => ({ generation: g.generation, name: g.name, relation: g.relation ?? null }))}
       onSaved={() => { setReloadKey((k) => k + 1); setLineageKey((k) => k + 1) }} />
   ) : null
-  const emailTag = cur.email ? (cur.email_verified_at ? <Tag color={C.ok}>אומת</Tag> : <Tag color={C.wait}>לא אומת</Tag>) : null
+  // שליחת קישור אימות דרך אותו נתיב של הכרטסת המלאה (EmailRow), שמוגן ב-beneficiaries/edit
+  const sendVerification = async () => {
+    setVerify('sending')
+    try {
+      const res = await fetch(`/api/admin/beneficiaries/${b.id}/email`, { method: 'POST' })
+      const j = await res.json().catch(() => ({}))
+      setVerify(res.ok && j.sent !== 0 ? 'sent' : 'failed')
+    } catch {
+      setVerify('failed')
+    }
+  }
+  const verifyBtn = canEdit && cur.email && !cur.email_verified_at && !editing ? (
+    verify === 'sent' ? <Tag color={C.ok}><Check size={10} />קישור אימות נשלח</Tag>
+      : (
+        <button type="button" onClick={sendVerification} disabled={verify === 'sending'} title="שליחת קישור לאימות המייל לכתובת הזו"
+          className="inline-flex min-h-7 items-center gap-1 rounded-full border border-[#B8913A] bg-white px-2.5 text-[12px] font-bold text-[#141D33] hover:bg-[#F7F1E2] disabled:opacity-60">
+          <Send size={11} />{verify === 'sending' ? 'שולח…' : verify === 'failed' ? 'השליחה נכשלה · לנסות שוב' : 'שליחת קישור לאימות'}
+        </button>
+      )
+  ) : null
+  const emailTag = cur.email ? (cur.email_verified_at ? <Tag color={C.ok}>אומת</Tag> : <><Tag color={C.wait}>לא אומת</Tag>{verifyBtn}</>) : null
   const iconBtn = 'grid size-11 place-items-center rounded-[10px] text-white/80 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent'
 
   return (
