@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { invalidateLineageCache, subtreeNodeIds, type TreeNodeRow } from '@/lib/lineageSync'
+import { expandRejectionTargets } from '@/lib/lineageRejectCascade'
 import { logActivity } from '@/lib/activityLog'
 
 export const dynamic = 'force-dynamic'
@@ -316,6 +317,11 @@ export async function POST(request: NextRequest) {
   } else if (Array.isArray(body.nodeIds)) {
     targetIds = body.nodeIds.filter(id => typeof id === 'string' && byId.has(id))
   }
+
+  // 🔴 פסילה יורדת לכל תת-העץ, כמו פסילה בעץ (cascadeRejectSubtree). עד כה
+  // נפסלו רק הצמתים שנבחרו, ונשאר ענף שבו דור פסול ודור מתחתיו מאושר.
+  // התצוגה המקדימה כוללת את הצאצאים, כך שהמנהל רואה את ההיקף לפני הביצוע.
+  if (status === 'rejected') targetIds = expandRejectionTargets(nodes, targetIds)
 
   // ⚠️ רק מה שבאמת משתנה — אין טעם לכתוב מחדש צומת שכבר בסטטוס המבוקש,
   // וזה גם משאיר את התיעוד (approved_at) של האישור המקורי על כנו.

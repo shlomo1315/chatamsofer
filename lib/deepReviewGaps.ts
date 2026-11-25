@@ -15,7 +15,7 @@ import { earlyGenerationsCheck } from './lineageFixApply'
 import { chainHasGap } from './lineageChainHealth'
 import type { ApprovedRefTreeLookup } from './lineageApprovedRef'
 
-export interface GapNode { id: string; name: string; parent_id: string | null; generation: number }
+export interface GapNode { id: string; name: string; parent_id: string | null; generation: number; status?: string | null }
 
 export interface GapBen {
   id: string

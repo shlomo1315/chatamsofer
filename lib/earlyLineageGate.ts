@@ -77,6 +77,11 @@ export function isAutoDeepReason(reason: string | null | undefined): boolean {
   return s.startsWith(UNKNOWN_REASON_PREFIX) || Object.values(GAP_KIND_LABEL).some(l => s.startsWith(l))
 }
 
+/** האם הסיבה נכתבה כי השער לא הצליח לבדוק (כשל בטעינת הקובץ המאושר). */
+export function isUncheckedDeepReason(reason: string | null | undefined): boolean {
+  return String(reason ?? '').trim().startsWith(UNKNOWN_REASON_PREFIX)
+}
+
 /** נוסח הסיבה שהשער כותב ב-deep_review_reason לממצא נתון. */
 export function gateReasonOf(finding: GapFinding): string {
   const where = finding.generation ? ` (דור ${finding.generation}${finding.detail ? `: ${finding.detail}` : ''})` : ''
