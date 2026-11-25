@@ -1,10 +1,11 @@
 'use client'
 import { useState, useMemo, useCallback, useEffect, useRef, type ReactNode } from 'react'
-import { Columns3, Check } from 'lucide-react'
-import { useResizableColumns, type ResizableColumns } from './ResizableTable'
+import { Columns3, Check, ArrowRight, ArrowLeft, ArrowUp, ArrowDown, Pin, PinOff, MoveHorizontal, EyeOff, GripVertical, X, RotateCcw } from 'lucide-react'
+import { useResizableColumns, type ResizableColumns, type FixedWidths } from './ResizableTable'
 import TableHeadMenu, { ActiveFilters } from './TableHeadMenu'
 import { sortRows, filterRows, distinctValues, type ColKind, type SortDir, type DistinctValue } from '@/lib/tableSort'
 import { mergeSavedVisibility, toSavedVisibility, type SavedVisibility } from '@/lib/tableColumnVisibility'
+import { mergeSavedOrder, moveTo, arrangeKeys, fitMask } from '@/lib/tableColumnLayout'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // בורר עמודות + גרירת רוחב — hook מערכתי אחד לכל טבלאות המערכת.
@@ -44,6 +45,12 @@ import { mergeSavedVisibility, toSavedVisibility, type SavedVisibility } from '@
 // ─────────────────────────────────────────────────────────────────────────────
 
 const VIS_PREFIX = 'tblvis:'
+// סידור עמודות (opts.arrange) — הסדר וההצמדה נשמרים בנפרד מהנראות.
+const ORD_PREFIX = 'tblord:'
+const PIN_PREFIX = 'tblpin:'
+
+const MENU_ITEM = 'flex w-full items-center gap-2 px-3 py-2 text-xs text-slate-700 transition-colors hover:bg-indigo-50 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent'
+const ICON_BTN = 'flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-navy disabled:cursor-not-allowed disabled:text-slate-200 disabled:hover:bg-transparent'
 
 export interface ColDef<K extends string = string, R = never> {
   key: K
@@ -80,6 +87,10 @@ export interface ColDef<K extends string = string, R = never> {
    * ⚠️ יחסי ולא פיקסלים — סכום פיקסלים גדול מהמסך מחזיר את הבעיה.
    */
   weight?: number
+  /** רוחב ברירת המחדל בפיקסלים — רק במצב סידור עמודות (opts.arrange). */
+  width?: number
+  /** רוחב מינימלי לגרירה בפיקסלים — רק במצב סידור עמודות. ברירת מחדל 96. */
+  minWidth?: number
   /** מחלקות נוספות ל-<th> (ריפוד, רקע) — מגיעות מהצרכן דרך tc.th. */
   headClassName?: string
   /**
@@ -151,7 +162,11 @@ export interface TableColumns<K extends string, R = never> {
    * כותרת מוכנה — מיון, סינון וידית הגרירה. שורת ה-thead כולה:
    *   <tr>{tc.shown.map((c, i) => tc.th(c, i))}</tr>
    */
-  th: (c: ColDef<K, R>, i: number) => ReactNode
+  th: (c: ColDef<K, R>, i: number, extra?: { style?: React.CSSProperties; className?: string }) => ReactNode
+  /** מצב סידור עמודות פעיל (opts.arrange). */
+  arranged: boolean
+  /** העמודות המוצמדות — הן תמיד בראש shown. */
+  pinned: ReadonlySet<K>
   /**
    * השורות אחרי מיון וסינון.
    * ⚠️ במצב 'server' מוחזרות כפי שהתקבלו — המסד כבר עשה את העבודה.
@@ -182,9 +197,26 @@ export function useTableColumns<K extends string, R = never>(
     idSuffix?: string
     /** מיון וסינון מהכותרת. ⚠️ חובה לציין mode — ראו SortFilterOpts. */
     sortFilter?: SortFilterOpts<K, R>
+    /**
+     * סידור עמודות: גרירה לשינוי סדר, הצמדה לימין, רוחב בפיקסלים שנשמר
+     * לפי מפתח, וחלונית עמודות.
+     *
+     * 🔴 בלי גלילה לרוחב: העמודות מתכווצות עד minWidth, ומה שעדיין לא
+     * נכנס מוסתר מסוף הסדר (squeezed) — כך הן לא עולות זו על זו.
+     */
+    arrange?: {
+      /** מוצמדות כברירת מחדל. */
+      pinned?: K[]
+      /** רוחב כל עמודה נוספת (פעולות) בפיקסלים. ברירת מחדל 120. */
+      extraWidth?: number
+      /** רוחב הטבלה בפועל בפיקסלים. 0 = טרם נמדד / כרטיסים — בלי התאמה. */
+      boxWidth?: number
+    }
   },
 ): TableColumns<K, R> {
-  const { filter, extraCols = 0, extraWeight = 0.8, leadCol = false, idSuffix = '', sortFilter } = opts ?? {}
+  const { filter, extraCols = 0, extraWeight = 0.8, leadCol = false, idSuffix = '', sortFilter, arrange } = opts ?? {}
+  const arranged = !!arrange
+  const extraWidth = arrange?.extraWidth ?? 120
 
   const available = useMemo(
     () => (filter ? columns.filter(filter) : columns),
@@ -224,9 +256,53 @@ export function useTableColumns<K extends string, R = never>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableId])
 
-  const shown = useMemo(
-    () => available.filter(c => visible.has(c.key)),
-    [available, visible],
+  // ── סידור עמודות (רק ב-opts.arrange) ────────────────────────────────────
+  // order = null: סדר הקוד. ⚠️ נטען אחרי הרינדור הראשון — כמו הנראות.
+  const [order, setOrder] = useState<string[] | null>(null)
+  const [pinned, setPinned] = useState<Set<K>>(() => new Set(arrange?.pinned ?? []))
+  useEffect(() => {
+    if (!arranged) return
+    try {
+      const o = localStorage.getItem(ORD_PREFIX + tableId)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- טעינה אחרי hydration, כמו הנראות
+      if (o) setOrder(JSON.parse(o))
+      const p = localStorage.getItem(PIN_PREFIX + tableId)
+      if (p) setPinned(new Set(JSON.parse(p) as K[]))
+    } catch { /* אחסון חסום — ברירות המחדל */ }
+  }, [tableId, arranged])
+
+  const byKey = useMemo(() => new Map(available.map(c => [c.key, c])), [available])
+
+  // הסדר המלא (כולל מוסתרות): הסדר השמור ממוזג עם הקוד, והמוצמדות קודם.
+  const sequence = useMemo<K[]>(() => {
+    const keys = available.map(c => c.key)
+    if (!arranged) return keys
+    return arrangeKeys(mergeSavedOrder(keys, order), pinned)
+  }, [available, arranged, order, pinned])
+
+  // chosen = מה שהמשתמש בחר להציג; shown = מה שנכנס בפועל ברוחב הטבלה.
+  const chosen = useMemo(
+    () => sequence.filter(k => visible.has(k)).map(k => byKey.get(k)!),
+    [sequence, visible, byKey],
+  )
+  // 🔴 אין גלילה לרוחב (docs/no-horizontal-scroll.md): מה שלא נכנס גם
+  // במינימום שלו מוסתר מסוף הסדר — כך עמודות אף פעם לא עולות זו על זו.
+  // המוצמדות והעמודה הראשונה נשארות תמיד.
+  const boxWidth = arrange?.boxWidth ?? 0
+  const shown = useMemo(() => {
+    if (!arranged || !boxWidth) return chosen
+    const first = available[0]?.key
+    const mask = fitMask(
+      chosen.map(c => c.minWidth ?? 96),
+      chosen.map(c => pinned.has(c.key) || c.key === first),
+      (leadCol ? 40 : 0) + extraCols * extraWidth,
+      boxWidth,
+    )
+    return chosen.filter((_, i) => mask[i])
+  }, [arranged, boxWidth, chosen, available, pinned, leadCol, extraCols, extraWidth])
+  const squeezed = useMemo(
+    () => (shown.length === chosen.length ? [] : chosen.filter(c => !shown.includes(c))),
+    [shown, chosen],
   )
 
   // 🔴 המזהה כולל את מספר העמודות הנראות — ראו ההערה בראש הקובץ.
@@ -237,10 +313,25 @@ export function useTableColumns<K extends string, R = never>(
     [shown, extraCols, extraWeight, leadCol],
   )
 
+  // ⚠️ במצב סידור הרוחב נשמר לפי מפתח העמודה, ולכן המזהה *אינו* כולל את
+  // מספר העמודות: הסתרה או הזזה לא מזיזות רוחב לעמודה אחרת.
+  const fixed = useMemo<FixedWidths | undefined>(() => {
+    if (!arranged) return undefined
+    const extras = Array.from({ length: extraCols }, (_, i) => `__extra${i}`)
+    return {
+      keys: [...(leadCol ? ['__lead'] : []), ...shown.map(c => c.key), ...extras],
+      px: [...(leadCol ? [40] : []), ...shown.map(c => c.width ?? 140), ...extras.map(() => extraWidth)],
+      // עמודה נוספת (פעולות) לא מתכווצת מתחת לרוחב שלה — הכפתורים היו נחתכים.
+      mins: [...(leadCol ? [40] : []), ...shown.map(c => c.minWidth ?? 96), ...extras.map(() => extraWidth)],
+      box: boxWidth,
+    }
+  }, [arranged, shown, extraCols, extraWidth, leadCol, boxWidth])
+
   const rt = useResizableColumns(
-    `${tableId}-${shown.length}${idSuffix}`,
+    arranged ? `${tableId}${idSuffix}` : `${tableId}-${shown.length}${idSuffix}`,
     shown.length + extraCols + (leadCol ? 1 : 0),
     weights,
+    fixed,
   )
 
   const toggle = useCallback((k: K) => {
@@ -256,6 +347,93 @@ export function useTableColumns<K extends string, R = never>(
     const next = new Set(available.map(c => c.key))
     setVisible(next); persist(next)
   }, [available, persist])
+
+  // ── פעולות הסידור ───────────────────────────────────────────────────────
+  // ⚠️ כל פעולה שומרת את sequence המלא (כולל מוסתרות): כך גם עמודה שהוסתרה
+  // חוזרת בדיוק למקום שבו הייתה.
+  const saveOrder = useCallback((next: K[]) => {
+    setOrder(next)
+    try { localStorage.setItem(ORD_PREFIX + tableId, JSON.stringify(next)) } catch { /* ignore */ }
+  }, [tableId])
+
+  const savePinned = useCallback((next: Set<K>) => {
+    setPinned(next)
+    try { localStorage.setItem(PIN_PREFIX + tableId, JSON.stringify([...next])) } catch { /* ignore */ }
+  }, [tableId])
+
+  /** הזזה בתוך אותה קבוצת הצמדה — עמודה לא חוצה את גבול המוצמדות. */
+  const moveCol = useCallback((key: K, delta: -1 | 1) => {
+    const inPin = pinned.has(key)
+    const group = sequence.filter(k => pinned.has(k) === inPin && (k === key || visible.has(k)))
+    const i = group.indexOf(key)
+    const j = i + delta
+    if (i < 0 || j < 0 || j >= group.length) return
+    saveOrder(moveTo(sequence, key, group[j]))
+  }, [pinned, sequence, visible, saveOrder])
+
+  const canMove = useCallback((key: K, delta: -1 | 1) => {
+    const inPin = pinned.has(key)
+    const group = sequence.filter(k => pinned.has(k) === inPin && (k === key || visible.has(k)))
+    const j = group.indexOf(key) + delta
+    return j >= 0 && j < group.length
+  }, [pinned, sequence, visible])
+
+  const dropOn = useCallback((key: K, target: K) => {
+    if (key === target || pinned.has(key) !== pinned.has(target)) return
+    saveOrder(moveTo(sequence, key, target))
+  }, [pinned, sequence, saveOrder])
+
+  /** הצמדה: העמודה הופכת לאחרונה במוצמדות; ביטול: לראשונה בשאר. */
+  const togglePin = useCallback((key: K) => {
+    const next = new Set(pinned)
+    if (next.has(key)) next.delete(key); else next.add(key)
+    saveOrder(sequence)
+    savePinned(next)
+  }, [pinned, sequence, saveOrder, savePinned])
+
+  // 🔴 העמודה הראשונה בקוד (בדרך כלל השם) לא מוסתרת — בלעדיה השורה לא מזוהה.
+  const lockedKey = available[0]?.key
+
+  const [undo, setUndo] = useState<{ key: K; label: string } | null>(null)
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (undoTimer.current) clearTimeout(undoTimer.current) }, [])
+
+  const hideCol = useCallback((key: K) => {
+    if (key === lockedKey || !visible.has(key)) return
+    const next = new Set(visible); next.delete(key)
+    setVisible(next); persist(next)
+    setUndo({ key, label: byKey.get(key)?.label ?? '' })
+    if (undoTimer.current) clearTimeout(undoTimer.current)
+    undoTimer.current = setTimeout(() => setUndo(null), 6000)
+  }, [lockedKey, visible, persist, byKey])
+
+  const undoHide = useCallback(() => {
+    if (!undo) return
+    setVisible(prev => { const next = new Set(prev); next.add(undo.key); persist(next); return next })
+    setUndo(null)
+  }, [undo, persist])
+
+  const resetLayout = useCallback(() => {
+    try {
+      localStorage.removeItem(ORD_PREFIX + tableId)
+      localStorage.removeItem(PIN_PREFIX + tableId)
+      localStorage.removeItem(VIS_PREFIX + tableId)
+    } catch { /* ignore */ }
+    setOrder(null)
+    setPinned(new Set(arrange?.pinned ?? []))
+    setVisible(new Set(columns.filter(c => c.def).map(c => c.key)))
+    rt.reset()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tableId, rt])
+
+  useEffect(() => {
+    if (!picking || !arranged) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPicking(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [picking, arranged])
+
+  const dragKey = useRef<K | null>(null)
 
   const cellClass = useCallback(
     (c: ColDef<K, R>) => `${rt.cellClass}${c.align === 'center' ? ' text-center' : ''}`,
@@ -365,10 +543,53 @@ export function useTableColumns<K extends string, R = never>(
     return out
   }, [sfMode, available, filters, valueOf])
 
-  const th = useCallback((c: ColDef<K, R>, i: number): ReactNode => {
+  const th = useCallback((c: ColDef<K, R>, i: number, extra?: { style?: React.CSSProperties; className?: string }): ReactNode => {
     const sel = new Set(filters[c.key] ?? [])
+    const arrangeProps = arranged ? {
+      floating: true,
+      lead: (
+        <span
+          draggable
+          onDragStart={e => { dragKey.current = c.key; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', c.key) }}
+          onDragEnd={() => { dragKey.current = null }}
+          title="גרירה לשינוי מיקום העמודה"
+          className="hidden sm:inline-flex cursor-grab items-center text-slate-300 hover:text-slate-500 active:cursor-grabbing align-middle ms-[-4px] me-0.5"
+        >
+          <GripVertical size={13} />
+        </span>
+      ),
+      thProps: {
+        style: extra?.style,
+        onDragOver: (e: React.DragEvent) => { if (dragKey.current) e.preventDefault() },
+        onDrop: (e: React.DragEvent) => {
+          e.preventDefault()
+          if (dragKey.current) dropOn(dragKey.current, c.key)
+          dragKey.current = null
+        },
+      },
+      extraItems: (close: () => void) => (
+        <>
+          <button type="button" className={MENU_ITEM} disabled={!canMove(c.key, -1)} onClick={() => { moveCol(c.key, -1); close() }}>
+            <ArrowRight size={13} />הזזה ימינה
+          </button>
+          <button type="button" className={MENU_ITEM} disabled={!canMove(c.key, 1)} onClick={() => { moveCol(c.key, 1); close() }}>
+            <ArrowLeft size={13} />הזזה שמאלה
+          </button>
+          <button type="button" className={MENU_ITEM} onClick={() => { togglePin(c.key); close() }}>
+            {pinned.has(c.key) ? <><PinOff size={13} />ביטול הצמדה</> : <><Pin size={13} />הצמדה לימין</>}
+          </button>
+          <button type="button" className={MENU_ITEM} onClick={() => { rt.resetCol(i); close() }}>
+            <MoveHorizontal size={13} />רוחב רגיל
+          </button>
+          <button type="button" className={MENU_ITEM} disabled={c.key === lockedKey} onClick={() => { hideCol(c.key); close() }}>
+            <EyeOff size={13} />הסתרת העמודה
+          </button>
+        </>
+      ),
+    } : {}
     return (
       <TableHeadMenu
+        {...arrangeProps}
         key={c.key}
         label={c.label}
         kind={c.kind ?? 'text'}
@@ -387,10 +608,11 @@ export function useTableColumns<K extends string, R = never>(
           setFilters(f)
         }}
         handle={rt.handle(i)}
-        className={`${headClass(c)} ${c.headClassName ?? ''}`}
+        className={`${headClass(c)} ${c.headClassName ?? ''} ${extra?.className ?? ''}`}
       />
     )
-  }, [filters, sort, optionsByCol, sfMode, rt, headClass, setSort, setFilters])
+  }, [filters, sort, optionsByCol, sfMode, rt, headClass, setSort, setFilters,
+    arranged, dropOn, canMove, moveCol, togglePin, pinned, lockedKey, hideCol])
 
   const activeFilters = useMemo(() => {
     const items = available
@@ -407,7 +629,88 @@ export function useTableColumns<K extends string, R = never>(
 
   // ⚠️ "הצגת הכל" ליד הבורר ולא בקצה הנגדי: היא פעולה *על* הבורר,
   // וריחוק ממנו נראה כפריט מנותק.
-  const picker = (
+  // ── מצב סידור: כפתור + חלונית באמצע המסך, ו-toast לביטול הסתרה ──────────
+  const undoToast = undo && (
+    <div role="status" className="fixed bottom-5 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-3 rounded-full bg-navy px-4 py-2 text-xs text-white shadow-lg">
+      <span>העמודה &quot;{undo.label}&quot; הוסתרה</span>
+      <button type="button" onClick={undoHide} className="font-bold text-amber-300 hover:text-amber-200">ביטול</button>
+    </div>
+  )
+
+  const arrangePicker = (
+    <>
+      <div className="flex items-center gap-2 flex-wrap">
+        <button type="button" onClick={() => setPicking(true)}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-600 transition hover:border-indigo-300 hover:text-indigo-600">
+          <Columns3 size={13} />
+          עמודות ({chosen.length}/{available.length})
+        </button>
+        {squeezed.length > 0 && (
+          <button type="button" onClick={() => setPicking(true)}
+            title={`לא נכנסות ברוחב המסך: ${squeezed.map(c => c.label).join(', ')}`}
+            className="text-[11px] font-medium text-amber-700 hover:underline">
+            {squeezed.length === 1 ? 'עמודה אחת לא נכנסת ברוחב המסך' : `${squeezed.length} עמודות לא נכנסות ברוחב המסך`}
+          </button>
+        )}
+      </div>
+
+      {picking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-sm"
+          onMouseDown={e => { if (e.target === e.currentTarget) setPicking(false) }}>
+          <div role="dialog" aria-modal="true" aria-label="סידור עמודות"
+            className="flex max-h-[85vh] w-full max-w-sm flex-col rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+              <h2 className="text-sm font-bold text-navy">סידור עמודות</h2>
+              <button type="button" onClick={() => setPicking(false)} className={ICON_BTN} aria-label="סגירה"><X size={16} /></button>
+            </div>
+            <p className="px-5 pt-3 text-[11px] text-slate-500">
+              סימון מציג או מסתיר, החצים משנים מיקום, והנעץ מצמיד לימין ושומר שהעמודה תמיד מוצגת. אפשר גם לגרור כותרת בטבלה.
+            </p>
+            {squeezed.length > 0 && (
+              <p className="mx-5 mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                ברוחב המסך הנוכחי לא נכנסות: {squeezed.map(c => c.label).join(', ')}. כדי להציג אותן, הסתירו עמודה אחרת או העבירו אותן למעלה.
+              </p>
+            )}
+            <ul className="flex-1 overflow-y-auto px-3 py-2">
+              {sequence.map(k => {
+                const c = byKey.get(k)!
+                const on = visible.has(k)
+                const isPinned = pinned.has(k)
+                return (
+                  <li key={k} className="flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-slate-50">
+                    <label className="flex flex-1 cursor-pointer items-center gap-2 py-1 text-xs text-slate-700">
+                      <input type="checkbox" checked={on} disabled={k === lockedKey}
+                        onChange={() => toggle(k)} className="h-4 w-4 accent-navy" />
+                      <span className={on ? '' : 'text-slate-400'}>{c.label}</span>
+                      {isPinned && <span className="rounded bg-amber-50 px-1.5 text-[10px] font-bold text-amber-700">מוצמדת</span>}
+                      {on && squeezed.some(s => s.key === k) && <span className="rounded bg-slate-100 px-1.5 text-[10px] font-bold text-slate-500">לא נכנסת</span>}
+                    </label>
+                    <button type="button" className={ICON_BTN} disabled={!on || !canMove(k, -1)} onClick={() => moveCol(k, -1)} aria-label={`הזזת ${c.label} למעלה`}><ArrowUp size={14} /></button>
+                    <button type="button" className={ICON_BTN} disabled={!on || !canMove(k, 1)} onClick={() => moveCol(k, 1)} aria-label={`הזזת ${c.label} למטה`}><ArrowDown size={14} /></button>
+                    <button type="button" className={`${ICON_BTN} ${isPinned ? 'text-amber-600' : ''}`} onClick={() => togglePin(k)}
+                      aria-label={isPinned ? `ביטול הצמדת ${c.label}` : `הצמדת ${c.label}`}>
+                      {isPinned ? <PinOff size={14} /> : <Pin size={14} />}
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+            <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
+              <button type="button" onClick={resetLayout}
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-navy">
+                <RotateCcw size={13} />איפוס לברירת המחדל
+              </button>
+              <button type="button" onClick={() => setPicking(false)}
+                className="rounded-lg bg-navy px-4 py-1.5 text-xs font-bold text-white hover:opacity-90">סיום</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {undoToast}
+    </>
+  )
+
+  const picker = arranged ? arrangePicker : (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2 flex-wrap">
         <button type="button" onClick={() => setPicking(o => !o)}
@@ -450,5 +753,5 @@ export function useTableColumns<K extends string, R = never>(
 
   const viewKey = JSON.stringify([cSort, cFilters])
 
-  return { shown, available, rt, picker, cellClass, headClass, th, rows, activeFilters, applyFilters, viewKey }
+  return { shown, available, rt, picker, cellClass, headClass, th, rows, activeFilters, applyFilters, viewKey, arranged, pinned }
 }

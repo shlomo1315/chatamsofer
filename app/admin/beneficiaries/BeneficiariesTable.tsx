@@ -33,7 +33,7 @@ const STATUS_CHIP: Record<string, string> = {
   rejected:     'bg-red-100 text-red-800 ring-red-200',
 }
 const StatusChip = ({ status }: { status: string }) => (
-  <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ring-1 ${STATUS_CHIP[status] ?? 'bg-slate-100 text-slate-700 ring-slate-200'}`}>
+  <span className={`inline-block max-w-full rounded-full px-2.5 py-1 leading-snug text-xs font-medium ring-1 ${STATUS_CHIP[status] ?? 'bg-slate-100 text-slate-700 ring-slate-200'}`}>
     {ELIGIBILITY_LABELS[status as keyof typeof ELIGIBILITY_LABELS] ?? status}
   </span>
 )
@@ -73,6 +73,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   {
     key: 'full_name',
     weight: 2,
+    width: 180,
     kind: 'text',
     value: (row) => fullName(row),
     header: 'שם מלא',
@@ -87,7 +88,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
             <span className="absolute -bottom-0.5 -left-0.5 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-white" />
           )}
         </div>
-        <span className="font-medium text-slate-800 group-hover/name:text-navy">
+        <span className="min-w-0 break-words font-medium text-slate-800 group-hover/name:text-navy">
           {fullName(row)}
         </span>
         <LineageInquiryBadge row={row} />
@@ -97,6 +98,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   {
     key: 'id_number',
     weight: 1.15,
+    width: 112,
     kind: 'number',
     value: (row) => row.id_number ?? null,
     header: 'מספר ת.ז.',
@@ -112,6 +114,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
     key: 'spouse_name',
     def: false,
     weight: 1.35,
+    width: 150,
     kind: 'text',
     value: (row) => row.spouse_name ?? null,
     header: 'בן/בת זוג',
@@ -131,6 +134,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   {
     key: 'phone',
     weight: 1.2,
+    width: 128,
     kind: 'text',
     value: (row) => row.phone ?? null,
     header: 'טלפון',
@@ -148,6 +152,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   {
     key: 'email',
     weight: 1.9,
+    width: 222,
     kind: 'text',
     value: (row) => row.email ?? null,
     header: 'מייל',
@@ -159,10 +164,10 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
           onClick={(e) => { e.stopPropagation(); e.preventDefault(); onEmail(row) }}
           dir="ltr"
           title="שליחת מייל מתוך המערכת"
-          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-navy hover:underline text-left w-fit"
+          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-navy hover:underline text-left max-w-full"
         >
           <Mail size={11} className="text-slate-400 flex-shrink-0" />
-          <span className="truncate max-w-[160px]">{row.email}</span>
+          <span className="min-w-0 break-all">{row.email}</span>
         </button>
       ) : (
         <span className="text-slate-300">—</span>
@@ -171,6 +176,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   {
     key: 'city',
     weight: 1,
+    width: 124,
     kind: 'text',
     filterable: true,
     value: (row) => row.city ?? null,
@@ -180,7 +186,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
       row.city ? (
         <span className="inline-flex items-center gap-1 text-xs text-slate-600">
           <MapPin size={11} className="text-slate-400 flex-shrink-0" />
-          <span className="truncate max-w-[90px]">{row.city}</span>
+          <span className="min-w-0">{row.city}</span>
         </span>
       ) : (
         <span className="text-slate-300">—</span>
@@ -190,6 +196,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
     key: 'marital_status',
     def: false,
     weight: 1.05,
+    width: 130,
     kind: 'enum',
     filterable: true,
     value: (row) => row.marital_status ?? null,
@@ -209,10 +216,11 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   {
     key: 'children_count',
     weight: 0.5,
+    width: 88,
+    minWidth: 88,
     kind: 'number',
     value: (row) => row.children_count ?? 0,
     header: 'ילדים',
-    className: 'text-center',
     sortable: true,
     render: (row) => (
       <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1.5 rounded-full bg-slate-100 text-slate-600 text-xs font-medium tabular-nums">
@@ -223,6 +231,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   {
     key: 'eligibility_status',
     weight: 1.5,
+    width: 182,
     kind: 'enum',
     filterable: true,
     value: (row) => row.eligibility_status ?? null,
@@ -237,6 +246,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
     key: 'registration_source',
     def: false,
     weight: 1.15,
+    width: 140,
     kind: 'enum',
     filterable: true,
     value: (row) => row.registration_source ?? null,
@@ -355,6 +365,7 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
       {/* Status filter cards — ה-counts מגיעים מ-DB (מדויקים על כל הרשומות) */}
       <StatStrip active={activeFilter}
         items={cards.map(c => ({ key: c.key, label: c.label, icon: c.icon, count: counts[c.key] ?? 0 }))}
+        total={counts.all}
         onSelect={k => setStatus(activeFilter === k && k !== 'all' ? 'all' : k)} />
 
       {/* ── חיפוש ── */}
@@ -418,18 +429,21 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
           <span className="w-24 shrink-0 pt-1.5 text-xs font-semibold text-slate-600">מייל</span>
           <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
             {([
-              { v: 'all', l: 'הכל' },
-              { v: 'verified', l: 'מאומת' },
-              { v: 'unverified', l: 'לא מאומת' },
-              { v: 'invalid', l: 'פגום' },
-              { v: 'no_email', l: 'ללא מייל' },
+              { v: 'all', l: 'הכל', dot: null },
+              { v: 'verified', l: 'מאומת', dot: '#3D8A4F' },
+              { v: 'unverified', l: 'לא מאומת', dot: '#C0912F' },
+              { v: 'invalid', l: 'פגום', dot: '#B3412E' },
+              { v: 'no_email', l: 'ללא מייל', dot: '#B9B09B' },
             ] as const).map(o => (
               <button key={o.v} type="button" onClick={() => setEmail(o.v)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
                   email === o.v
                     ? 'bg-navy border-navy text-white shadow-sm'
                     : 'bg-white border-line text-slate-500 hover:border-gold hover:text-navy'
-                }`}>{o.l}</button>
+                }`}>
+                {o.dot && <span aria-hidden className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: o.dot }} />}
+                {o.l}
+              </button>
             ))}
           </div>
         </div>
@@ -459,6 +473,8 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
         columns={columns}
         tableId="beneficiaries"
         actionsWeight={1.7}
+        arrangeable
+        actionsWidth={180}
         onRowClick={(row) => setOpenIdx(data.findIndex((r) => r.id === row.id))}
         serverMode
         // 🔴 serverMode + sortFilter = המיון והסינון רצים במסד. סינון
@@ -474,12 +490,12 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
         emptyMessage={qInput ? 'לא נמצאו תוצאות לחיפוש.' : "לא נמצאו צאצאים. לחץ על 'רישום צאצא חדש' להוספה."}
         actions={(row) => (
           <div className="flex items-center gap-1.5">
-            <button onClick={() => setOpenIdx(data.findIndex((r) => r.id === row.id))} className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-soft hover:text-navy transition-colors px-2.5 py-1.5 rounded-lg border border-line hover:border-gold hover:bg-sand">
+            <button type="button" title="פתיחת כרטסת הצאצא" onClick={() => setOpenIdx(data.findIndex((r) => r.id === row.id))} className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-soft hover:text-navy transition-colors px-2.5 py-1.5 rounded-lg border border-line hover:border-gold hover:bg-sand">
               <Eye size={14} />
               כרטסת
             </button>
             {/* שליחת קישור תיקון סדר הדורות ישירות מהשורה — בלי להיכנס לכרטסת */}
-            <span className="inline-flex px-2.5 py-1.5 rounded-lg border border-line hover:border-gold hover:bg-sand transition-colors">
+            <span title="שליחת קישור לתיקון סדר הדורות" className="inline-flex px-2.5 py-1.5 rounded-lg border border-line hover:border-gold hover:bg-sand transition-colors">
               <SendLineageLinkButton beneficiaryId={row.id} name={row.full_name ?? row.family_name ?? ''} email={row.email} variant="icon" />
             </span>
           </div>
