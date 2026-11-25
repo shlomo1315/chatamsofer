@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { asApproved, byKvitelTab, countByStatus, needsApproval, nextToApprove, hebrewDay, KVITEL_DEFAULT_TAB, kvitelRowActions, parseRawFields, patchKvitelStatus, pendingForPrint, reviewReason, scopeKvitelRows, cleanTranscript, MAX_TRANSCRIPT } from './kvitelView'
+import { asApproved, bulkApproval, exportLockReason, bulkApprovalMessage, byKvitelTab, countByStatus, needsApproval, nextToApprove, hebrewDay, KVITEL_DEFAULT_TAB, kvitelRowActions, parseRawFields, patchKvitelStatus, pendingForPrint, reviewReason, scopeKvitelRows, cleanTranscript, MAX_TRANSCRIPT } from './kvitelView'
 import { kvitelExportLines, type KvitelRequestRow } from './kvitelQuery'
 
 describe('kvitelRowActions — כפתורי השורה', () => {
@@ -137,5 +137,36 @@ describe('אישור מהיר שם אחרי שם', () => {
     expect(order).toEqual(['a', 'b', 'c'])
     expect(byKvitelTab(rows, 'review')).toEqual([])
     expect(ids(byKvitelTab(rows, 'pending'))).toEqual(['a', 'b', 'c'])
+  })
+})
+
+describe('bulkApproval — אישור קבוצתי מהסרגל', () => {
+  const r = (id: string, status: KvitelRequestRow['status'], needsReview = false) => ({ id, status, needsReview })
+  it('רק בקשות לבדיקה עוברות לאישור; נשלחו, בוטלו וכבר מאושרות מדולגות', () => {
+    const { todo, skipped } = bulkApproval([r('a', 'review'), r('b', 'pending', true), r('c', 'pending'), r('d', 'done', true), r('e', 'cancelled', true), r('f', 'done')])
+    expect(todo.map(x => x.id)).toEqual(['a', 'b'])
+    expect(skipped).toBe(4)
+  })
+  it('הודעה עם מספר שאושרו ומספר שדולגו', () => {
+    expect(bulkApprovalMessage(3, 0)).toBe('אושרו 3 בקשות')
+    expect(bulkApprovalMessage(3, 2)).toBe('אושרו 3 בקשות · 2 דולגו (כבר מאושרות, נשלחו או בוטלו)')
+    expect(bulkApprovalMessage(1, 1)).toBe('אושרה בקשה אחת · 1 דולגו (כבר מאושרות, נשלחו או בוטלו)')
+  })
+})
+
+describe('exportLockReason — למה "ייצוא לקוויטל" נעול', () => {
+  const base = { canEdit: true, loaded: true, isCurrent: true, fileCount: 0, reviewCount: 0 }
+  it('אין בקשות מאושרות אבל יש לבדיקה: מסביר שצריך לאשר', () => {
+    expect(exportLockReason({ ...base, reviewCount: 348 })).toBe('הכפתור ייפתח אחרי שתאשרו בקשות: כרגע 348 בקשות מחכות לבדיקה, ובקובץ נכללות רק בקשות מאושרות.')
+  })
+  it('אין בקשות בכלל', () => {
+    expect(exportLockReason(base)).toBe('אין השבוע בקשות מאושרות לייצוא.')
+  })
+  it('יש בקשות מאושרות: לא נעול', () => {
+    expect(exportLockReason({ ...base, fileCount: 3, reviewCount: 5 })).toBeNull()
+  })
+  it('בלי הרשאה, או שבוע שכבר נשלח (מוסבר בשורה נפרדת)', () => {
+    expect(exportLockReason({ ...base, fileCount: 3, canEdit: false })).toBe('אין לך הרשאה לייצא.')
+    expect(exportLockReason({ ...base, fileCount: 3, isCurrent: false })).toBeNull()
   })
 })
