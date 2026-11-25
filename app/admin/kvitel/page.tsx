@@ -9,6 +9,7 @@ import MailClient from '@/app/admin/mail/MailClient'
 import KvitelRequests from './KvitelRequests'
 import KvitelTabs from './KvitelTabs'
 import KvitelNedarim from './KvitelNedarim'
+import KvitelMailSync from './KvitelMailSync'
 import { parseKvitelTab, type KvitelTabKey } from './kvitelTabs'
 
 // מחלקת קוויטלאך — לשוניות (שורה בראש המסך): בקשות · מייל (תיבת k@ בלבד) · נדרים.
@@ -37,6 +38,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
       {!db && <p role="alert" className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-800">השרת אינו מוגדר</p>}
 
       {tab === 'requests' && <KvitelRequests filters={filters} canEdit={canEdit} tabs={<KvitelTabs active={tab} />} />}
+      {tab === 'mail' && canEdit && <KvitelMailSync />}
       {tab === 'mail' && <MailClient lockDepartment="kvitel" />}
       {tab === 'nedarim' && (nedarimView
         ? <KvitelNedarim view={nedarimView} isAdmin={staff.role === 'admin'} />

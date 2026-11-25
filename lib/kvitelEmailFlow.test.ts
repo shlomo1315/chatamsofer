@@ -5,7 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 // ה-AI כבוי (מחזיר null), כך שנבדק הפענוח לפי תבנית בלבד.
 vi.mock('./kvitelAi', () => ({ askClaudeJson: async () => null }))
 
-import { handleKvitelEmail } from './kvitelEmail'
+import { handleKvitelEmail, reingestKvitelEmail } from './kvitelEmail'
 import { extractAttachmentTexts, type KvitelAttachmentText } from './kvitelAttachments'
 
 type Row = Record<string, unknown>
@@ -224,5 +224,46 @@ describe('קובץ מצורף במייל ל-k@', () => {
       { filename: 'bad.docx', mimeType: '', buffer: Buffer.from('not a zip') },
     ])
     expect(got).toEqual([{ filename: 'a.txt', text: 'רבקה בת שרה' }])
+  })
+})
+
+describe('קליטה מחדש של מייל (reingestKvitelEmail)', () => {
+  let db: ReturnType<typeof fakeDb>
+  beforeEach(() => { db = fakeDb() })
+
+  it('מייל שלא נקלט: נוצרת בקשה', async () => {
+    const r = await reingestKvitelEmail(db, mail({ text: 'משה בן יהודית - לרפואה שלימה' }))
+    expect(r).toMatchObject({ ok: true, created: true, lines: 1 })
+    expect(db.tables.kvitel_requests).toHaveLength(1)
+  })
+
+  it('מייל שכבר נקלט: אותה בקשה, השורות מוחלפות, בלי כפילות', async () => {
+    await handleKvitelEmail(db, mail({ text: 'משה בן יהודית' }))
+    const [req] = db.tables.kvitel_requests
+    const r = await reingestKvitelEmail(db, mail({ text: 'משה בן יהודית\nשרה בת רחל' }))
+    expect(r).toMatchObject({ ok: true, created: false, requestId: req.id, lines: 2 })
+    expect(db.tables.kvitel_requests).toHaveLength(1)
+    expect(db.tables.kvitel_request_lines.map(l => [l.request_id, l.name])).toEqual([[req.id, 'משה'], [req.id, 'שרה']])
+  })
+
+  it('פעמיים ברצף: עדיין בקשה אחת ושורה אחת לכל שם', async () => {
+    await reingestKvitelEmail(db, mail({ text: 'משה בן יהודית' }))
+    await reingestKvitelEmail(db, mail({ text: 'משה בן יהודית' }))
+    expect(db.tables.kvitel_requests).toHaveLength(1)
+    expect(db.tables.kvitel_request_lines).toHaveLength(1)
+  })
+
+  it('בקשה שכבר נשלחה לציון: לא נקלטת מחדש', async () => {
+    await handleKvitelEmail(db, mail({ text: 'משה בן יהודית' }))
+    db.tables.kvitel_requests[0].status = 'done'
+    const r = await reingestKvitelEmail(db, mail({ text: 'שרה בת רחל' }))
+    expect(r.ok).toBe(false)
+    expect(db.tables.kvitel_request_lines.map(l => l.name)).toEqual(['משה'])
+  })
+
+  it('מייל בלי שמות: noNames, ולא נוצרת בקשה', async () => {
+    const r = await reingestKvitelEmail(db, mail({ text: 'שלום, תודה רבה' }))
+    expect(r).toMatchObject({ ok: false, noNames: true })
+    expect(db.tables.kvitel_requests ?? []).toHaveLength(0)
   })
 })
