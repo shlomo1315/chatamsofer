@@ -768,6 +768,16 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
       .catch((e) => console.error('[public-register] announcement call error:', e))
   }
 
+  // סדר דורות שלא תואם את הקובץ → קישור לתיקון מיד (לא חוסם). אחרי כתיבת
+  // הדורות שהוקלדו, כדי שהקישור ייצא מהשיוך הסופי. ראו lib/lineageInquiry.
+  if (gate.deep) {
+    void (async () => {
+      const { data: b } = await admin.from('beneficiaries').select('id').eq('id_number', cleanId).maybeSingle()
+      const { autoSendLineageFixLink } = await import('@/lib/lineageInquiry')
+      await autoSendLineageFixLink(admin, b?.id)
+    })().catch(e => console.error('[public-register] lineage fix link failed:', e))
+  }
+
   // holiday — מוחזר כדי שהטופס יוכל להציג "נרשמתם גם לחלוקת החגים"
   return NextResponse.json({ ok: true, ...(wantsHoliday ? { holidayRegistered } : {}) })
 }

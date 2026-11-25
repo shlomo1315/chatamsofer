@@ -17,6 +17,7 @@ import RecordMailDialog from '@/components/admin/system/RecordMailDialog'
 import LineageStairs, { type StairGen } from '@/components/lineage/LineageStairs'
 import LineageChainEditButton from '@/components/lineage/LineageChainEditButton'
 import { useCan } from '@/components/StaffPermissions'
+import LineageInquiryBadge from '@/components/admin/LineageInquiryBadge'
 
 // כרטסת משפחה מהירה בדף הצאצאים: חלונית באמצע המסך עם שש לשוניות ועריכה במקום.
 // ⚠️ ילדים, שרשרת והערות לא נטענים עם הרשימה (שדות כבדים), לכן נשלפים כאן לפי המזהה.
@@ -25,8 +26,8 @@ import { useCan } from '@/components/StaffPermissions'
 // 🔒 ת״ז (בעל, אישה, ילדים) לא נערכת כאן — ראו lib/beneficiaryCardEdit.
 // 🔴 הצבעים של סדר הדורות מחושבים בשרת (/api/admin/beneficiaries/[id]/lineage).
 
-const FIELDS = 'full_name, family_name, birth_date, phone, phone2, email, email_verified_at, spouse_name, spouse_birth_date, spouse_phone, marital_status, city, address, notes, children, lineage_chain, lineage_manual, past_benefits, deep_review_reason, registration_source'
-type Extra = CardSource & Pick<Beneficiary, 'lineage_chain' | 'lineage_manual' | 'past_benefits' | 'registration_source' | 'email_verified_at'> & { deep_review_reason?: string | null }
+const FIELDS = 'full_name, family_name, birth_date, phone, phone2, email, email_verified_at, spouse_name, spouse_birth_date, spouse_phone, marital_status, city, address, notes, children, lineage_chain, lineage_manual, past_benefits, deep_review_reason, registration_source, lineage_link_sent_at, lineage_inquiry_returned_at'
+type Extra = CardSource & Pick<Beneficiary, 'lineage_chain' | 'lineage_manual' | 'past_benefits' | 'registration_source' | 'email_verified_at' | 'lineage_link_sent_at' | 'lineage_inquiry_returned_at'> & { deep_review_reason?: string | null }
 type Log = { id: string; action: string; created_at: string }
 type Doc = { id: string; doc_type: string; file_name: string | null; file_url: string | null; uploaded_at: string }
 type Recipient = { id: string; approval_status: string | null; registered_at: string | null; distribution: { name: string } | { name: string }[] | null }
@@ -269,6 +270,7 @@ function FamilyCard({ b, tab, setTab, editing, setEditing, position, canNav, onP
                 <i className="size-[7px] rounded-full" style={{ background: tone }} />
                 {ELIGIBILITY_LABELS[status as keyof typeof ELIGIBILITY_LABELS] ?? status}
               </span>
+              <LineageInquiryBadge row={cur} />
               {cur.id_number && <span>ת״ז <b dir="ltr" className="font-bold text-white tabular-nums">{cur.id_number}</b></span>}
               {cur.id_number && <span className="inline-flex items-center gap-1 rounded-full border border-white/30 px-2.5 py-0.5 text-[12px] text-white/80"><Lock size={11} />נעול</span>}
               {generation && <span>דור <b className="font-bold text-white tabular-nums">{generation}</b> לחתם סופר</span>}

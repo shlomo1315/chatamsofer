@@ -12,6 +12,7 @@ import type { DupGroup, DupLevel, DupNode } from './lineageDupGroups'
 import type { SelfDupRow } from './selfDuplicateNodes'
 import type { GhostRow } from './ghostChildren'
 import { buildClusters, type ClusterNode, type ClusterRisk } from './mergeClusters'
+import { lineageInquiryTag, type LineageInquiryTag } from './lineageInquiryTag'
 
 export type IssueKind =
   | 'unlinked'      // לא מקושרת לצומת בעץ
@@ -46,6 +47,8 @@ export interface ControlBen {
   deep_review_reason?: string | null
   lineage_reviewed_at?: string | null
   lineage_reviewed_by?: string | null
+  lineage_link_sent_at?: string | null
+  lineage_inquiry_returned_at?: string | null
 }
 
 export interface FamilyReview {
@@ -61,6 +64,8 @@ export interface FamilyReview {
   ok: boolean
   reviewedAt: string | null
   reviewedBy: string | null
+  /** "נשלח לבירור" / "חזר מבירור" — lib/lineageInquiryTag. */
+  inquiry: LineageInquiryTag | null
 }
 
 export const STATUS_ORDER = ['pending', 'deep_review', 'docs_returned', 'docs_pending', 'approved', 'rejected'] as const
@@ -198,6 +203,7 @@ export function buildControlCenter(input: {
       ok: issues.length === 0,
       reviewedAt: b.lineage_reviewed_at ?? null,
       reviewedBy: b.lineage_reviewed_by ?? null,
+      inquiry: lineageInquiryTag(b),
     })
   }
 

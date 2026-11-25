@@ -3,6 +3,7 @@ import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { attachGenerationsBelow } from '@/lib/lineageAssignBelow'
 import { invalidateLineageCache } from '@/lib/lineageSync'
+import { autoSendLineageFixLink } from '@/lib/lineageInquiry'
 
 export const dynamic = 'force-dynamic'
 
@@ -148,6 +149,9 @@ export async function POST(request: NextRequest) {
     .update(update)
     .eq('id', String(beneficiaryId))
   if (uErr) return NextResponse.json({ error: 'עדכון השיוך נכשל' }, { status: 500 })
+
+  // נשאר בבדיקה מעמיקה כי הסדר לא תואם את הקובץ → קישור לתיקון (רק אם אין קישור בתוקף).
+  await autoSendLineageFixLink(db, String(beneficiaryId), staff.userId)
 
   return NextResponse.json({ ok: true, chain, statusReverted: update.eligibility_status === 'pending' })
 }

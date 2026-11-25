@@ -106,6 +106,9 @@ export interface Beneficiary {
     maternity_aid_id?: string
   }[]
   eligibility_status: EligibilityStatus
+  // בירור סדר הדורות: נשלח קישור לתיקון / המשפחה השיבה. ראו lib/lineageInquiry.
+  lineage_link_sent_at?: string | null
+  lineage_inquiry_returned_at?: string | null
   // תווית סיבת האישור (אישורים חריגים בלבד — "משפחת שטרן"). רוב הצאצאים
   // בלי תווית, ולכן שני השדות אופציונליים. ה-join מוגדר כמערך אפשרי כי
   // PostgREST מחזיר לעתים אובייקט ולעתים מערך בן-איבר — ראו lib/approvalLabel.

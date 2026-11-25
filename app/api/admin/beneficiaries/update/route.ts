@@ -3,6 +3,7 @@ import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { roleAllows } from '@/lib/permissions'
 import type { UserPermissions } from '@/types'
 import { recheckAfterLineageEdit } from '@/lib/lineageEditRecheck'
+import { autoSendLineageFixLink } from '@/lib/lineageInquiry'
 
 export const dynamic = 'force-dynamic'
 
@@ -67,6 +68,11 @@ export async function POST(request: NextRequest) {
 
   const { error } = await admin.from('beneficiaries').update({ ...payload, ...lineageExtra, updated_at: new Date().toISOString() }).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // שינוי שושלת שהשאיר בבדיקה מעמיקה בגלל אי-התאמה לקובץ → קישור לתיקון (ראו lib/lineageInquiry).
+  if ('lineage_node_id' in payload || 'lineage_manual' in payload || 'eligibility_status' in payload) {
+    await autoSendLineageFixLink(admin, id, staff.userId)
+  }
 
   // תיקי לידה נמחקים רק אחרי שמירת הכרטסת, וכשל כאן לא מבטל אותה
   let maternityError: string | null = null

@@ -12,6 +12,7 @@ import {
   israelDayStart, normalizeLineageFaultTemplate, planLineageFaultNotice, recipientNameOf, type FaultRow, type LineageFaultTemplate,
 } from '@/lib/lineageFaultNotice'
 import { loadApprovedRefStrict } from '@/lib/earlyLineageGate'
+import { linkSentRecently } from '@/lib/lineageInquiry'
 import { planDeepReviewRecheck, type RecheckBen } from '@/lib/deepReviewRecheck'
 import type { GapNode } from '@/lib/deepReviewGaps'
 
@@ -51,14 +52,14 @@ async function fetchAll<T>(build: (from: number, to: number) => PromiseLike<{ da
 //   • סיבה שהמזכירות הקלידה (otherReason) → בדיקה מעמיקה מסיבה אחרת, לא מקבל.
 //   • כשל בטעינת הקובץ המאושר → לא נשלח לאף אחד.
 // סבב חוזר (resend): נחסם רק מי שקיבל *היום* (שעון ישראל), ולא כל מי שקיבל אי פעם.
-type PlanRow = FaultRow & RecheckBen
+type PlanRow = FaultRow & RecheckBen & { lineage_link_sent_at?: string | null }
 
 async function loadPlan(admin: SupabaseClient, resend: boolean) {
   const approved = await loadApprovedRefStrict(admin)
   if (!approved) throw new Error('הקובץ המאושר לא נטען, ולכן אי אפשר לוודא מי באמת עם תקלה בסדר הדורות. לא נשלח שום מייל.')
   const [all, nodes] = await Promise.all([
     fetchAll<PlanRow>((a, b) => admin.from('beneficiaries')
-      .select('id, id_number, full_name, family_name, spouse_name, marital_status, email, eligibility_status, lineage_node_id, lineage_chain, lineage_manual, deep_review_reason')
+      .select('id, id_number, full_name, family_name, spouse_name, marital_status, email, eligibility_status, lineage_node_id, lineage_chain, lineage_manual, deep_review_reason, lineage_link_sent_at')
       .eq('eligibility_status', 'deep_review').order('id').range(a, b)),
     fetchAll<GapNode>((a, b) => admin.from('lineage_nodes').select('id, name, parent_id, generation').range(a, b)),
   ])
@@ -70,8 +71,11 @@ async function loadPlan(admin: SupabaseClient, resend: boolean) {
     if (resend) q = q.gte('created_at', israelDayStart())
     return q.order('created_at').range(a, b)
   })
+  // מי שכבר קיבל קישור בתוקף (אישי או אוטומטי, ראו lib/lineageInquiry) נחשב "כבר קיבל".
+  const sentIds = new Set(sent.map(s => s.entity_id).filter((x): x is string => !!x))
+  for (const r of rows) if (linkSentRecently(r.lineage_link_sent_at)) sentIds.add(r.id)
   return {
-    ...planLineageFaultNotice(rows, new Set(sent.map(s => s.entity_id).filter((x): x is string => !!x))),
+    ...planLineageFaultNotice(rows, sentIds),
     otherReason: check.manual as PlanRow[],
     chainOk: check.release as PlanRow[],
   }

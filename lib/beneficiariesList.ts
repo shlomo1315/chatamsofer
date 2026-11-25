@@ -12,7 +12,7 @@ import { SORT_COLUMNS, FILTER_COLUMNS, ageToBirthRange, hasAdvFilters, type AdvF
 // lineage_chain, lineage_manual וכו') מה-payload. כרטיס המוטב וייצוא האקסל מושכים בנפרד.
 export const LIST_COLUMNS =
   'id, created_at, full_name, family_name, id_number, phone, phone2, email, address, city, ' +
-  'marital_status, spouse_name, spouse_id_number, nedarim_id, notes, children_count, eligibility_status, is_active, registration_source, approval_label:approval_labels(id, name, color, notes)'
+  'marital_status, spouse_name, spouse_id_number, nedarim_id, notes, children_count, eligibility_status, is_active, registration_source, lineage_link_sent_at, lineage_inquiry_returned_at, approval_label:approval_labels(id, name, color, notes)'
 
 // כרטיסי הסטטוס שהטבלה מציגה — ה-counts נשלפים לכל אחד בנפרד מ-DB.
 export const STATUS_KEYS = ['pending', 'docs_pending', 'docs_returned', 'deep_review', 'approved', 'rejected', 'review'] as const

@@ -169,6 +169,12 @@ export async function POST(request: NextRequest) {
     }).catch(e => console.error('[register] attach orphan mail failed:', e))
   }
 
+  // סדר דורות שלא תואם את הקובץ → קישור לתיקון מיד (לא חוסם). ראו lib/lineageInquiry.
+  if (gate.deep && insertedBen?.id) {
+    import('@/lib/lineageInquiry').then(m => m.autoSendLineageFixLink(adminClient, insertedBen.id))
+      .catch(e => console.error('[register] lineage fix link failed:', e))
+  }
+
   // Send confirmation email (non-blocking)
   sendEmail({ ...templateRegistrationConfirmed(String(full_name).trim()), to: cleanEmail }, mailFor('igud'))
     .catch(e => console.error('[register] confirmation email failed:', e))

@@ -1,25 +1,16 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { randomBytes } from 'crypto'
 import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
-import { deliverMail } from '@/lib/sendMail'
-import { mailFor } from '@/lib/departments'
-import { lineageOrderFixEmail } from '@/lib/emailTemplates'
-import { recipientNameOf } from '@/lib/lineageFaultNotice'
-import { ensureEmailTexts } from '@/lib/emailTextsStore'
-import { logActivity } from '@/lib/activityLog'
+import { loadBenForLink, sendLineageFixLink } from '@/lib/lineageInquiry'
 
 export const dynamic = 'force-dynamic'
-
-const isValidEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)
 
 // שליחת קישור אישי לתיקון סדר הדורות — מהכרטסת של הצאצא.
 //
 // ⚠️ בשונה מ-/api/admin/lineage/share, ההזמנה כאן משויכת לצאצא (beneficiary_id)
 // ולא רק לצומת בעץ. זה מה שמאפשר לדף הציבורי להציג לנמען את הפרטים של עצמו,
 // ולקשר את ההצעות שיגיעו חזרה לכרטסת שלו. mode='order' מגביל את הדף לתיקון
-// סדר הדורות בלבד — בלי אישור/דחייה/שינוי שם של צמתים אחרים בענף.
+// סדר הדורות בלבד. הלוגיקה עצמה ב-lib/lineageInquiry (משותפת לשליחה האוטומטית).
 export async function POST(request: NextRequest) {
-  await ensureEmailTexts()
   const staff = await requirePermission('lineage', 'edit')
   if (!staff) return forbidden()
 
@@ -32,76 +23,12 @@ export async function POST(request: NextRequest) {
   const admin = getServiceClient()
   if (!admin) return NextResponse.json({ error: 'Supabase לא מוגדר' }, { status: 500 })
 
-  const { data: ben } = await admin.from('beneficiaries')
-    .select('id, full_name, family_name, spouse_name, marital_status, email, lineage_node_id')
-    .eq('id', beneficiaryId).maybeSingle()
+  const ben = await loadBenForLink(admin, beneficiaryId)
   if (!ben) return NextResponse.json({ error: 'הצאצא לא נמצא' }, { status: 404 })
 
   // כתובת המייל: מה שנשלח בבקשה גובר (המנהל עשוי לתקן), אחרת זו שבכרטסת.
-  const email = (body.email ?? '').trim() || (ben.email ?? '').trim()
-  if (!email || !isValidEmail(email)) {
-    return NextResponse.json({ error: 'לצאצא אין כתובת מייל תקינה — יש להזין אחת' }, { status: 400 })
-  }
-
-  // ⚠️ הענף שהנמען יראה מתחיל מהאב האחרון המשויך לו. הצאצא עצמו אינו צומת
-  // בעץ (העץ הוא של האבות), ולכן lineage_node_id מצביע על האב — וזה בדיוק
-  // השורש הנכון: משם ומעלה נבנית שרשרת הדורות שהוא מתבקש לאמת.
-  if (!ben.lineage_node_id) {
-    return NextResponse.json(
-      { error: 'לצאצא אין שיוך לעץ הדורות — יש לשייך אותו לצומת לפני שליחת הקישור' },
-      { status: 400 },
-    )
-  }
-
-  const token = randomBytes(16).toString('base64url')
-  const recipientName = recipientNameOf(ben)
-
-  // ── תוקף הקישור ──
-  // 🔴 30 יום, אחרי שהיה 7. הנימוק המקורי (חשיפה מיותרת) היה סביר בתיאוריה,
-  // אבל בפועל 5 מתוך 10 הקישורים שנשלחו פגו בעוד 9 מהם כבר נפתחו: משפחה
-  // שקראה את המייל אחרי שבוע, או חזרה להשלים את התיקון מאוחר יותר, נחסמה.
-  // זה מקור מרכזי לתלונות "קיבלתי קישור ולא עובד".
-  //
-  // ⚠️ החשיפה נשארת מוגבלת: הקישור מאפשר *הצעות בלבד* (mode='order' חוסם
-  // verify/reject), הוא מוגבל לענף אחד, וניתן לביטול מיידי מהממשק. בנוסף
-  // אפשר עכשיו לבקש קישור חדש מהדף עצמו (ראו lineage-review/renew).
-  const LINK_DAYS = 30
-  const expiresAt = new Date(Date.now() + LINK_DAYS * 86400_000).toISOString()
-
-  const { error } = await admin.from('lineage_share_invites').insert({
-    token,
-    root_node_id: ben.lineage_node_id,
-    beneficiary_id: ben.id,
-    mode: 'order',
-    expires_at: expiresAt,
-    recipient_name: recipientName,
-    recipient_email: email,
-    created_by: staff.userId,
-  })
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-  const base = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://chasamsofer.co.il').replace(/\/$/, '')
-  const link = `${base}/lineage-review/${token}`
-
-  const mail = lineageOrderFixEmail({ recipientName, link })
-  try {
-    // ⚠️ מחלקת איגוד הצאצאים ולא יולדות: זו פנייה על סדר היוחסין, והתשובות
-    // צריכות להגיע לתיבה שמטפלת בזה. (נתיב השיתוף הישן שולח ל-maternity.)
-    await deliverMail(email, mail.subject, mail.html, [], { ...mailFor('igud'), transactional: true })
-  } catch (e) {
-    // ההזמנה כבר נוצרה — מחזירים הצלחה חלקית עם הקישור, כדי שהמנהל יוכל
-    // להעתיק ולשלוח ידנית במקום לאבד את הטוקן.
-    return NextResponse.json({ ok: true, link, mailError: e instanceof Error ? e.message : String(e) })
-  }
-
-  await admin.from('beneficiaries')
-    .update({ lineage_link_sent_at: new Date().toISOString() }).eq('id', ben.id)
-
-  await logActivity(admin, {
-    userId: staff.userId, action: 'lineage_order_link_sent',
-    entityType: 'beneficiary', entityId: ben.id,
-    details: { email, rootNodeId: ben.lineage_node_id },
-  })
-
-  return NextResponse.json({ ok: true, sentTo: email, link })
+  const res = await sendLineageFixLink(admin, ben, { email: body.email, userId: staff.userId })
+  if (!res.ok) return NextResponse.json({ error: res.error }, { status: res.status })
+  if (res.mailError) return NextResponse.json({ ok: true, link: res.link, mailError: res.mailError })
+  return NextResponse.json({ ok: true, sentTo: res.sentTo, link: res.link })
 }
