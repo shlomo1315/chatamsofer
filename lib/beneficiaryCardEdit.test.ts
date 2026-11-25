@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { draftFrom, buildCardPayload, validateCardPayload, readiness, type CardSource } from './beneficiaryCardEdit'
+import { draftFrom, buildCardPayload, validateCardPayload, readiness, showVerifyButton, sendVerifyLink, type CardSource } from './beneficiaryCardEdit'
 
 const src: CardSource = {
   full_name: 'עזרא', family_name: 'זלצמן', birth_date: '1991-05-03', phone: '0533174528', phone2: undefined,
@@ -54,5 +54,33 @@ describe('readiness', () => {
     const r = readiness({ id_number: '1', phone: '05', email_verified_at: null }, 9)
     expect(r.done).toBe(3)
     expect(r.missing).toEqual(['חסר אימות מייל'])
+  })
+})
+
+describe('קישור לאימות מייל בחלונית', () => {
+  it('הכפתור מוצג רק כשיש מייל שלא אומת, הרשאת עריכה, ולא בזמן עריכה', () => {
+    const b = { email: 'a@b.co', email_verified_at: null }
+    expect(showVerifyButton(b, true, false)).toBe(true)
+    expect(showVerifyButton({ ...b, email_verified_at: '2026-11-01' }, true, false)).toBe(false)
+    expect(showVerifyButton({ ...b, email: '' }, true, false)).toBe(false)
+    expect(showVerifyButton(b, false, false)).toBe(false)
+    expect(showVerifyButton(b, true, true)).toBe(false)
+  })
+
+  it('לחיצה שולחת POST לנתיב המייל של הצאצא ומחזירה נשלח', async () => {
+    const calls: [string, RequestInit | undefined][] = []
+    const fetcher = (async (url: string, init?: RequestInit) => {
+      calls.push([url, init])
+      return new Response(JSON.stringify({ sent: 1 }), { status: 200 })
+    }) as typeof fetch
+    expect(await sendVerifyLink('abc', fetcher)).toBe('sent')
+    expect(calls).toEqual([['/api/admin/beneficiaries/abc/email', { method: 'POST' }]])
+  })
+
+  it('שגיאת שרת, sent=0 או תקלת רשת מחזירים נכשל', async () => {
+    const res = (body: unknown, status: number) => (async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch
+    expect(await sendVerifyLink('abc', res({ error: 'x' }, 403))).toBe('failed')
+    expect(await sendVerifyLink('abc', res({ sent: 0 }, 200))).toBe('failed')
+    expect(await sendVerifyLink('abc', (async () => { throw new Error('net') }) as unknown as typeof fetch)).toBe('failed')
   })
 })

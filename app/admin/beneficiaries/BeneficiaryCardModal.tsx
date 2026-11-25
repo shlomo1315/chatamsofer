@@ -10,7 +10,7 @@ import { docTypeLabel } from '@/lib/docTypes'
 import { docViewUrl } from '@/lib/docUrl'
 import { registrationSourceLabel } from '@/lib/distributionSources'
 import {
-  draftFrom, buildCardPayload, validateCardPayload, readiness, MARITAL_OPTIONS,
+  draftFrom, buildCardPayload, validateCardPayload, readiness, MARITAL_OPTIONS, showVerifyButton, sendVerifyLink,
   type CardDraft, type CardSource,
 } from '@/lib/beneficiaryCardEdit'
 import RecordMailDialog from '@/components/admin/system/RecordMailDialog'
@@ -238,18 +238,11 @@ function FamilyCard({ b, tab, setTab, editing, setEditing, position, canNav, onP
       initialChain={chain.map((g) => ({ generation: g.generation, name: g.name, relation: g.relation ?? null }))}
       onSaved={() => { setReloadKey((k) => k + 1); setLineageKey((k) => k + 1) }} />
   ) : null
-  // שליחת קישור אימות דרך אותו נתיב של הכרטסת המלאה (EmailRow), שמוגן ב-beneficiaries/edit
   const sendVerification = async () => {
     setVerify('sending')
-    try {
-      const res = await fetch(`/api/admin/beneficiaries/${b.id}/email`, { method: 'POST' })
-      const j = await res.json().catch(() => ({}))
-      setVerify(res.ok && j.sent !== 0 ? 'sent' : 'failed')
-    } catch {
-      setVerify('failed')
-    }
+    setVerify(await sendVerifyLink(b.id))
   }
-  const verifyBtn = canEdit && cur.email && !cur.email_verified_at && !editing ? (
+  const verifyBtn = showVerifyButton(cur, canEdit, editing) ? (
     verify === 'sent' ? <Tag color={C.ok}><Check size={10} />קישור אימות נשלח</Tag>
       : (
         <button type="button" onClick={sendVerification} disabled={verify === 'sending'} title="שליחת קישור לאימות המייל לכתובת הזו"
@@ -313,6 +306,19 @@ function FamilyCard({ b, tab, setTab, editing, setEditing, position, canNav, onP
       <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
         {tab === 0 && (
           <>
+            {/* מצב משפחתי ופרטי הבית בראש הלשונית, כדי שיראו אותם מיד בפתיחה */}
+            <Card title="בית ומשפחה">
+              <Grid>
+                <Field label="מצב משפחתי" editing={editing} value={cur.marital_status}>
+                  <select className={inputCls} value={d?.marital_status ?? ''} onChange={set('marital_status')}>
+                    {!MARITAL_OPTIONS.includes(d?.marital_status ?? '') && <option value={d?.marital_status ?? ''}>{d?.marital_status || 'לא הוזן'}</option>}
+                    {MARITAL_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </Field>
+                <Field label="עיר" editing={editing} value={cur.city}><input className={inputCls} value={d?.city ?? ''} onChange={set('city')} /></Field>
+                <Field label="כתובת" wide editing={editing} value={cur.address}><input className={inputCls} value={d?.address ?? ''} onChange={set('address')} /></Field>
+              </Grid>
+            </Card>
             <Card title="הבעל" sub="הנרשם">
               <Grid>
                 <Field label="שם פרטי" editing={editing} value={cur.full_name}><input className={inputCls} value={d?.full_name ?? ''} onChange={set('full_name')} /></Field>
@@ -334,18 +340,6 @@ function FamilyCard({ b, tab, setTab, editing, setEditing, position, canNav, onP
                 <Field label="ת״ז" locked editing={editing} ltr value={cur.spouse_id_number} />
                 <Field label="תאריך לידה" editing={editing} value={fmt(cur.spouse_birth_date)}><input type="date" className={inputCls} value={d?.spouse_birth_date ?? ''} onChange={set('spouse_birth_date')} /></Field>
                 <Field label="טלפון" editing={editing} ltr value={cur.spouse_phone}><input dir="ltr" type="tel" className={inputCls} value={d?.spouse_phone ?? ''} onChange={set('spouse_phone')} /></Field>
-              </Grid>
-            </Card>
-            <Card title="בית ומשפחה">
-              <Grid>
-                <Field label="מצב משפחתי" editing={editing} value={cur.marital_status}>
-                  <select className={inputCls} value={d?.marital_status ?? ''} onChange={set('marital_status')}>
-                    {!MARITAL_OPTIONS.includes(d?.marital_status ?? '') && <option value={d?.marital_status ?? ''}>{d?.marital_status || 'לא הוזן'}</option>}
-                    {MARITAL_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-                  </select>
-                </Field>
-                <Field label="עיר" editing={editing} value={cur.city}><input className={inputCls} value={d?.city ?? ''} onChange={set('city')} /></Field>
-                <Field label="כתובת" wide editing={editing} value={cur.address}><input className={inputCls} value={d?.address ?? ''} onChange={set('address')} /></Field>
               </Grid>
             </Card>
           </>
