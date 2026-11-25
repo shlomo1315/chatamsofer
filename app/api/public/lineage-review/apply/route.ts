@@ -9,6 +9,7 @@ import { loadApprovedRefStrict } from '@/lib/earlyLineageGate'
 import { earlyGenerationsCheck, appendManualGenerations } from '@/lib/lineageFixApply'
 import { normalizeLineageNodeName, lineageIdentityKey } from '@/lib/lineageNameFormat'
 import { markMaternityInquiryAnswered } from '@/lib/maternityInquiry'
+import { markLineageInquiryReturned } from '@/lib/lineageInquiry'
 import { sanitizeEditedChain } from '@/lib/lineageChainEdit'
 import { saveChainFromLink } from '@/lib/lineageChainSave'
 import { lineageSaveDeps } from '@/lib/lineageChainSaveDeps'
@@ -87,6 +88,8 @@ export async function POST(request: NextRequest) {
     await markMaternityInquiryAnswered(admin, inv.beneficiary_id, res.applied
       ? 'המשפחה תיקנה את סדר הדורות דרך הקישור'
       : 'המשפחה שלחה תיקון לסדר הדורות דרך הקישור (ממתין לבדיקה)')
+    // "חזר מבירור" — מוצג רק אם נשאר בבדיקה מעמיקה (lib/lineageInquiry).
+    await markLineageInquiryReturned(admin, inv.beneficiary_id)
     return NextResponse.json(res)
   }
 
@@ -167,6 +170,7 @@ export async function POST(request: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     // 🔴 המשפחה השיבה דרך הקישור — התיק יוצא מ"ממתין לתשובת היולדת"
     await markMaternityInquiryAnswered(admin, inv.beneficiary_id, 'המשפחה שלחה תיקון לסדר הדורות דרך הקישור (ממתין לבדיקה)')
+    await markLineageInquiryReturned(admin, inv.beneficiary_id)
     return NextResponse.json({ ok: true, applied: false, reason: blockReason })
   }
 
@@ -241,5 +245,6 @@ export async function POST(request: NextRequest) {
 
   // 🔴 המשפחה השיבה דרך הקישור — התיק יוצא מ"ממתין לתשובת היולדת"
   await markMaternityInquiryAnswered(admin, inv.beneficiary_id, 'המשפחה תיקנה את סדר הדורות דרך הקישור')
+  await markLineageInquiryReturned(admin, inv.beneficiary_id)
   return NextResponse.json({ ok: true, applied: true })
 }

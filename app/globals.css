@@ -151,6 +151,18 @@ th.ltr-num {
   animation: soft-attention 3s ease-in-out infinite;
 }
 
+/* תווית בירור סדר הדורות ("נשלח לבירור"): הבהוב עדין בשקיפות, בלי להזיז את השורה. */
+@keyframes inquiry-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+.animate-inquiry-blink {
+  animation: inquiry-blink 2.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-inquiry-blink { animation: none; }
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    כפתור "שמור שינויים" עם שינויים ממתינים.
 

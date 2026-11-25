@@ -20,6 +20,7 @@ import { type AdvFilters } from '@/lib/listParams'
 import AdvancedFilters from './AdvancedFilters'
 import { Beneficiary, ELIGIBILITY_LABELS } from '@/types'
 import { registrationSourceLabel, registrationSourceOf } from '@/lib/distributionSources'
+import LineageInquiryBadge from '@/components/admin/LineageInquiryBadge'
 
 // תווית סטטוס מלאה לטבלה
 const STATUS_CHIP: Record<string, string> = {
@@ -89,6 +90,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
         <span className="font-medium text-slate-800 group-hover/name:text-navy">
           {fullName(row)}
         </span>
+        <LineageInquiryBadge row={row} />
       </div>
     ),
   },

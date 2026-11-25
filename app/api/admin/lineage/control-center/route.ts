@@ -23,6 +23,7 @@ export const maxDuration = 120
 
 const BASE_COLS = 'id, full_name, family_name, spouse_name, id_number, spouse_id_number, gender, children, lineage_node_id, lineage_chain, eligibility_status, deep_review_reason'
 const MARK_COLS = 'lineage_reviewed_at, lineage_reviewed_by'
+const INQUIRY_COLS = 'lineage_link_sent_at, lineage_inquiry_returned_at'
 
 type BenRow = ControlBen & SelfDupBen & GhostBenRow
 
@@ -36,7 +37,9 @@ export async function GET() {
 
   // העמודות של סימון הסקירה נוספות במיגרציה נפרדת; בלעדיה המסך עדיין עובד.
   let marksReady = true
-  let bensRes = await loadBens(`${BASE_COLS}, ${MARK_COLS}`)
+  // תוויות הבירור (20261125_lineage_inquiry_returned) — בלי המיגרציה פשוט אין תווית.
+  let bensRes = await loadBens(`${BASE_COLS}, ${MARK_COLS}, ${INQUIRY_COLS}`)
+  if (bensRes.error) bensRes = await loadBens(`${BASE_COLS}, ${MARK_COLS}`)
   if (bensRes.error) { marksReady = false; bensRes = await loadBens(BASE_COLS) }
 
   const [nodesRes, notDupRes] = await Promise.all([
