@@ -43,15 +43,31 @@ export interface HeadMenuProps {
   /** ידית גרירת הרוחב של ResizableTable. */
   handle?: ReactNode
   className?: string
+  /** פריטים נוספים בתחתית התפריט (סידור עמודות). מקבל פונקציה לסגירה. */
+  extraItems?: (close: () => void) => ReactNode
+  /** מאפיינים נוספים ל-<th> (style, גרירה). */
+  thProps?: React.ThHTMLAttributes<HTMLTableCellElement>
+  /**
+   * תפריט צף (position: fixed) — בטבלה שנגללת לרוחב.
+   * ⚠️ בלעדיו overflow-x של המיכל חותך את התפריט בעמודה הקיצונית.
+   */
+  floating?: boolean
+  /** תוכן לפני התווית (ידית גרירה). */
+  lead?: ReactNode
 }
+
+const MENU_W = 240
 
 export default function TableHeadMenu({
   label, kind, sortable, filterable, sortDir, onSort,
   options, selected, onSelect, formatValue, handle, className = '',
+  extraItems, thProps, floating, lead,
 }: HeadMenuProps) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
   const ref = useRef<HTMLTableCellElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   // ⚠️ סגירה בלחיצה בחוץ וב-Escape. בלעדיהן התפריט נשאר פתוח מעל
   // הטבלה ומסתיר שורות — בדיוק מה שהמשתמש ניסה לראות.
@@ -61,13 +77,34 @@ export default function TableHeadMenu({
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    // תפריט צף לא זז עם הגלילה — סוגרים אותו (חוץ מגלילה בתוך הרשימה שלו).
+    const onScroll = (e: Event) => {
+      if (menuRef.current && menuRef.current.contains(e.target as Node)) return
+      setOpen(false)
+    }
     document.addEventListener('mousedown', onDoc)
     document.addEventListener('keydown', onKey)
+    if (floating) {
+      window.addEventListener('scroll', onScroll, true)
+      window.addEventListener('resize', onScroll)
+    }
     return () => {
       document.removeEventListener('mousedown', onDoc)
       document.removeEventListener('keydown', onKey)
+      window.removeEventListener('scroll', onScroll, true)
+      window.removeEventListener('resize', onScroll)
     }
-  }, [open])
+  }, [open, floating])
+
+  const toggleOpen = () => {
+    if (!open && floating && ref.current) {
+      const r = ref.current.getBoundingClientRect()
+      // נצמד לקצה השמאלי של הכותרת (end ב-RTL), ולא יוצא מהמסך.
+      const left = Math.max(8, Math.min(r.left, window.innerWidth - MENU_W - 8))
+      setPos({ top: r.bottom + 4, left })
+    }
+    setOpen(o => !o)
+  }
 
   // ⚠️ החיפוש רץ על *התווית המוצגת*: המשתמש מקליד "ממתין", לא "pending".
   const labelOf = useCallback((v: string) =>
@@ -81,7 +118,7 @@ export default function TableHeadMenu({
 
   const canFilter = filterable && options.length > 0
   const isFiltered = selected.size > 0
-  const interactive = sortable || canFilter
+  const interactive = sortable || canFilter || !!extraItems
 
   const toggle = (v: string) => {
     const next = new Set(selected)
@@ -90,11 +127,12 @@ export default function TableHeadMenu({
   }
 
   return (
-    <th ref={ref} className={`relative ${className}`}>
+    <th ref={ref} {...thProps} className={`relative ${className}`}>
+      {lead}
       <button
         type="button"
         disabled={!interactive}
-        onClick={() => interactive && setOpen(o => !o)}
+        onClick={() => interactive && toggleOpen()}
         // ⚠️ w-full + justify-between כדי שכל רוחב הכותרת יהיה לחיץ.
         // אזור לחיצה בגודל הטקסט בלבד הוא מטרה שקשה לפגוע בה.
         className={`flex w-full items-center gap-1 text-right ${
@@ -111,7 +149,9 @@ export default function TableHeadMenu({
       {open && (
         // ⚠️ end-0 (ולא right-0): ב-RTL התפריט נצמד לקצה ההתחלתי של
         // הכותרת. right-0 היה מוציא אותו מהמסך בעמודה הימנית.
-        <div className="absolute z-40 top-full mt-1 end-0 w-60 rounded-xl border border-slate-200 bg-white py-1 shadow-xl text-right normal-case tracking-normal">
+        <div ref={menuRef}
+          style={floating && pos ? { position: 'fixed', top: pos.top, left: pos.left, width: MENU_W } : undefined}
+          className={`${floating ? 'fixed' : 'absolute top-full mt-1 end-0'} z-40 w-60 rounded-xl border border-slate-200 bg-white py-1 shadow-xl text-right font-normal normal-case tracking-normal`}>
           {sortable && (
             <>
               <button type="button" onClick={() => { onSort('asc'); setOpen(false) }}
@@ -174,6 +214,13 @@ export default function TableHeadMenu({
                   </span>
                 )}
               </div>
+            </>
+          )}
+
+          {extraItems && (
+            <>
+              {(sortable || canFilter) && <div className="my-1 border-t border-slate-100" />}
+              {extraItems(() => setOpen(false))}
             </>
           )}
         </div>

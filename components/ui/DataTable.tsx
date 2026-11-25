@@ -1,5 +1,5 @@
 'use client'
-import { ReactNode, useState, useMemo } from 'react'
+import { ReactNode, useState, useMemo, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronUp, ChevronDown, Search, Inbox } from 'lucide-react'
 import { useTableColumns, type ColDef, type SortState, type SortFilterOpts } from './TableColumns'
@@ -27,6 +27,10 @@ export interface Column<T> {
   weight?: number
   /** false = מוסתרת כברירת מחדל (אפשר להציג מבורר העמודות). */
   def?: boolean
+  /** רוחב בפיקסלים — רק ב-arrangeable. */
+  width?: number
+  /** רוחב מינימלי בפיקסלים — רק ב-arrangeable. */
+  minWidth?: number
 }
 
 interface DataTableProps<T> {
@@ -68,6 +72,14 @@ interface DataTableProps<T> {
     /** נדרש ב-serverMode: distinct על כל המאגר, לא על הדף. */
     options?: Readonly<Record<string, DistinctValue[]>>
   }
+  /**
+   * סידור עמודות (דורש tableId): גרירה לשינוי סדר, הצמדה, רוחב בפיקסלים,
+   * מפרידים דקים. 🔴 בלי גלילה לרוחב: עמודות מתכווצות עד המינימום שלהן,
+   * ומה שלא נכנס מוסתר מסוף הסדר (עם הודעה בבורר) — כך הן לא עולות זו על זו.
+   */
+  arrangeable?: boolean
+  /** רוחב עמודת הפעולות בפיקסלים — רק ב-arrangeable. */
+  actionsWidth?: number
 }
 
 export default function DataTable<T extends { id: string }>({
@@ -85,6 +97,8 @@ export default function DataTable<T extends { id: string }>({
   serverMode,
   tableId,
   sortFilter,
+  arrangeable,
+  actionsWidth,
 }: DataTableProps<T>) {
   const router = useRouter()
   const [search, setSearch] = useState('')
@@ -110,6 +124,8 @@ export default function DataTable<T extends { id: string }>({
       value: c.value,
       formatValue: c.formatValue,
       weight: c.weight,
+      width: c.width,
+      minWidth: c.minWidth,
       // ⚠️ הריפוד והרקע של הכותרת מגיעים מכאן: tc.th מרנדר את ה-<th>
       // בעצמו, ובלי זה הכותרות היו מאבדות את עיצוב הטבלה.
       headClassName: `bg-sand px-3 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-sand0 ${c.className ?? ''}`,
@@ -133,14 +149,34 @@ export default function DataTable<T extends { id: string }>({
     return { mode: 'client', rows: data }
   }, [sortFilter, serverMode, data])
 
+  // ── רוחב הטבלה (רק ב-arrangeable) ────────────────────────────────────
+  // 🔴 אין גלילה לרוחב: הרוחבים מותאמים לרוחב הזה, ומה שלא נכנס גם
+  // במינימום מוסתר מסוף הסדר (fitMask/fitWidths). מתחת ל-640 — כרטיסים.
+  const wantArrange = !!(arrangeable && tableId)
+  const boxRef = useRef<HTMLDivElement>(null)
+  const [boxW, setBoxW] = useState(0)
+  useEffect(() => {
+    const el = boxRef.current
+    if (!wantArrange || !el) return
+    const measure = () => setBoxW(el.clientWidth)
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [wantArrange])
+
   const tc = useTableColumns<string, T>(tableId ?? "", colDefs, {
     extraCols: actions ? 1 : 0,
     extraWeight: actionsWeight,
     sortFilter: sfOpts,
+    arrange: wantArrange ? { extraWidth: actionsWidth, boxWidth: boxW >= 640 ? boxW : 0 } : undefined,
   })
   const view = tableId
     ? tc.shown.map(c => columns.find(x => String(x.key) === c.key)!).filter(Boolean)
     : columns
+  const arranged = tc.arranged
+  // מפריד דק בין העמודות — רק בטבלה רגילה, לא בכרטיסים של הנייד.
+  const sepRow = arranged ? 'sm:[&>*+*]:border-s sm:[&>*+*]:border-s-[#ECE5D5]' : ''
 
   // השורות שעליהן עובדים: כשיש sortFilter הן עוברות דרך ה-hook (ממוינות
   // ומסוננות). ⚠️ ב-serverMode ה-hook מחזיר אותן כפי שהתקבלו — המסד כבר
@@ -216,17 +252,17 @@ export default function DataTable<T extends { id: string }>({
 
       {/* 🔴 בלי overflow-x: הכלל במערכת הוא שאין גלילה לרוחב בשום טבלה.
           הגרירה מחלקת מחדש את הרוחב הקיים ואינה מרחיבה מעבר למסך. */}
-      <div className="rounded-2xl border border-line bg-white">
+      <div ref={boxRef} className="rounded-2xl border border-line bg-white">
         <table className="lt-cards w-full text-sm text-right border-collapse"
           style={tableId ? tc.rt.tableStyle : undefined}>
           {tableId && <colgroup>{tc.rt.cols}</colgroup>}
           <thead className="sticky top-0 z-10">
-            <tr className="bg-sand border-b-2 border-line">
+            <tr className={`bg-sand border-b-2 border-line ${sepRow}`}>
               {view.map((col, i) => {
                 // ── התקן: כותרת עם מיון וסינון, זהה בכל טבלאות המערכת.
                 // tc.th מרנדר <th> משלו (כולל ידית הגרירה), ולכן הוא
                 // מוחזר כמו שהוא ולא נעטף.
-                if (sortFilter) {
+                if (sortFilter || arranged) {
                   const def = tc.shown.find(c => c.key === String(col.key))
                   if (def) return tc.th(def, i)
                 }
@@ -246,7 +282,7 @@ export default function DataTable<T extends { id: string }>({
                 </th>
                 )
               })}
-              {actions && <th className="w-px whitespace-nowrap bg-sand px-3 py-3.5 text-center text-[11px] font-semibold uppercase tracking-wider text-sand0">פעולות</th>}
+              {actions && <th className={`${arranged ? '' : 'w-px '}whitespace-nowrap bg-sand px-3 py-3.5 text-center text-[11px] font-semibold uppercase tracking-wider text-sand0`}>פעולות</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
@@ -274,14 +310,16 @@ export default function DataTable<T extends { id: string }>({
               paged.map((row) => (
                 <tr key={row.id}
                   onClick={onRowClick ? () => onRowClick(row) : rowHref ? () => router.push(rowHref(row)) : undefined}
-                  className={`hover:bg-sand transition-colors duration-100 ${rowHref || onRowClick ? 'cursor-pointer' : ''}`}>
-                  {view.map((col, ci) => (
+                  className={`group hover:bg-sand transition-colors duration-100 ${rowHref || onRowClick ? 'cursor-pointer' : ''} ${sepRow}`}>
+                  {view.map((col, ci) => {
+                    return (
                     <td key={String(col.key)} data-label={ci === 0 || typeof col.header !== 'string' ? undefined : col.header} className={`${ci === 0 ? 'lt-first ' : ''}px-3 py-4 text-ink align-middle ${tableId ? tc.rt.cellClass : "whitespace-nowrap"} ${col.className ?? ''}`}>
                       {col.render
                         ? col.render(row)
                         : String((row as Record<string, unknown>)[String(col.key)] ?? '—')}
                     </td>
-                  ))}
+                    )
+                  })}
                   {actions && (
                     // ⚠️ ה-sticky הוסר יחד עם הגלילה לרוחב: הוא נועד לשמור
                     // את עמודת הפעולות נראית בטבלה שגוללת, ובלי גלילה הוא רק
@@ -290,7 +328,7 @@ export default function DataTable<T extends { id: string }>({
                     // מכולת flex, ועליה text-center אינו משפיע — הכפתורים
                     // נצמדו לקצה התא ונחתכו. w-px מכווץ את העמודה לרוחב
                     // התוכן, ו-nowrap מונע שבירה של הכפתורים לשתי שורות.
-                    <td className="w-px whitespace-nowrap px-3 py-3.5 align-middle" onClick={(e) => e.stopPropagation()}>
+                    <td className={`${arranged ? '' : 'w-px '}whitespace-nowrap px-3 py-3.5 align-middle`} onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-center">{actions(row)}</div>
                     </td>
                   )}
