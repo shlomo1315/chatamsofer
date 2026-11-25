@@ -74,7 +74,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const PHONE_RE = /^\+?[\d\s-]{9,15}$/
 const NAME_LINE_RE = /(?:^|\s)(?:בן|בת)\s+\S/
 const RELATION_RE = /^(?:בן|בת|ב"ר|זכר|נקבה)$/
-const NAME_RE = /^[\p{L}'"׳״\s.-]{2,40}$/u
+// גם "משה/נחמה גיטל" ו"משה (מוישי)": בלי הקו הנטוי ההגשה כולה נספרה ריקה ודולגה
+const NAME_RE = /^[\p{L}'"׳״\s.\-/()]{2,40}$/u
 const REQUEST_RE = /^(?:[לש]|ל?ה)?(?:רפוא|רפו|פרנס|זיווג|זווג|שידוך|זרע|הצלח|בריאות|ישוע)|^ברכה\s+ו|^אחר$/
 const requestLike = (v: string) => REQUEST_RE.test(v) || KVITEL_REQUEST_TYPES.some(t => t.label === v || t.key === v)
 
@@ -142,6 +143,19 @@ export function rawRowText(row: NedarimRow): string {
   return Object.entries(row)
     .filter(([k, v]) => str(v) && !/token|password|secret|card|cvv/i.test(k))
     .map(([k, v]) => `${k}: ${str(v)}`).join('\n').slice(0, 6000)
+}
+
+/** CreatedDate של נדרים ("24/11/2026 20:24:19", שעון ישראל) כ-ISO. ערך לא תקין או עתידי: null. */
+export function nedarimCreatedAt(v: unknown): string | null {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(str(v))
+  if (!m) return null
+  const local = Date.UTC(+m[3], +m[2] - 1, +m[1], +m[4], +m[5], +(m[6] ?? 0))
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Jerusalem', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(new Date(local)).map(x => [x.type, Number(x.value)]))
+  const offset = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - local
+  const t = local - offset
+  return Number.isFinite(t) && t <= Date.now() ? new Date(t).toISOString() : null
 }
 
 /** מפענח גוף שנבנה מהרשומה (שורות מובנות וגם טקסט חופשי, כמו בקליטה הישירה). */
@@ -276,6 +290,7 @@ async function doPull(dbArg?: SupabaseClient): Promise<KvitelPullResult> {
         const s = await ingestKvitel(db, {
           channel: 'nedarim', phone: p.phone, email: p.email, contactName: p.contactName,
           lines: p.lines, lineFlags: p.flags, rawText: p.rawText, sourceRef: p.sourceRef,
+          submittedAt: nedarimCreatedAt(r.CreatedDate),
         })
         // שמירה נכשלה: עוצרים לפני הרשומה הזו, והריצה הבאה תנסה אותה שוב
         if (!s.ok) { out.ok = false; out.error = s.error; break pages }
