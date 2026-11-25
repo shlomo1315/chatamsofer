@@ -8,7 +8,7 @@ import { kvitelRequestLines, type KvitelFilters, type KvitelLineRow, type Kvitel
 import { ListTable } from '@/components/admin/system/ListTable'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import { useTablePagination } from '@/lib/useTablePagination'
-import { byKvitelTab, countByStatus, hebrewDay, KVITEL_DEFAULT_TAB, kvitelRowActions, scopeKvitelRows, type KvitelTab } from '@/lib/kvitelView'
+import { byKvitelTab, countByStatus, hebrewDay, KVITEL_DEFAULT_TAB, kvitelRowActions, patchKvitelStatus, scopeKvitelRows, type KvitelTab } from '@/lib/kvitelView'
 import { InlineText, InlineRequest } from './KvitelInlineCell'
 import { saveInlineEdit, personText, PERSON_HINT, type InlineEdit } from '@/lib/kvitelInlineEdit'
 import KvitelRowDetails from './KvitelRowDetails'
@@ -88,7 +88,7 @@ const rowBtn = 'flex h-9 items-center gap-1.5 rounded-[10px] border border-line 
 const whoOf = (r: KvitelRequestRow) => r.contact_name || dateFmt.format(new Date(r.submitted_at))
 
 // אישור, תיקון ומחיקה בכל שורה — בטבלה ובכרטיסים במובייל, לפי kvitelRowActions.
-// האישור פעיל רק בבקשה "לבדיקה"; בשאר השורות הוא מוצג מושבת, כדי שהכפתורים יהיו באותו מקום תמיד.
+// כפתור "אישור" רק בבקשה "לבדיקה"; בבקשה שכבר אושרה או נשלחה מוצגת תווית מצב (לא כפתור), באותו מקום.
 function RowActions({ r, canEdit, busy, onApprove, onEdit, onRemove, className }: {
   r: KvitelRequestRow; canEdit: boolean; busy?: boolean; className: string
   onApprove: (r: KvitelRequestRow) => void; onEdit: (r: KvitelRequestRow) => void; onRemove: (r: KvitelRequestRow) => void
@@ -97,12 +97,16 @@ function RowActions({ r, canEdit, busy, onApprove, onEdit, onRemove, className }
   if (!a.edit) return null
   return (
     <div className={className}>
-      {a.approve && (
-        <button type="button" disabled={busy || !a.approveEnabled} onClick={() => onApprove(r)} className="flex h-9 items-center gap-1.5 rounded-[10px] bg-[#17663F] px-3 text-[13px] font-semibold text-white disabled:opacity-40"
-          title={a.approveEnabled ? undefined : r.status === 'cancelled' ? 'הבקשה בוטלה' : 'הבקשה כבר אושרה'}
+      {a.approve === 'button' && (
+        <button type="button" disabled={busy} onClick={() => onApprove(r)} className="flex h-9 items-center gap-1.5 rounded-[10px] bg-[#17663F] px-3 text-[13px] font-semibold text-white hover:bg-[#12532F] disabled:opacity-40"
           aria-label={`אישור הבקשה של ${whoOf(r)}`}>
           <Check className="h-4 w-4" aria-hidden /> אישור
         </button>
+      )}
+      {(a.approve === 'approved' || a.approve === 'sent') && (
+        <span className={`flex h-9 items-center gap-1.5 px-1 text-[13px] font-semibold ${a.approve === 'sent' ? 'text-[#17663F]' : 'text-ink-soft'}`}>
+          <Check className="h-4 w-4" aria-hidden /> {a.approve === 'sent' ? 'נשלח לציון' : 'מאושר'}
+        </span>
       )}
       <button type="button" disabled={busy} onClick={() => onEdit(r)} className={rowBtn} aria-label={`תיקון הבקשה של ${whoOf(r)}`}>
         <Pencil className="h-4 w-4" aria-hidden /> תיקון
@@ -303,12 +307,9 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
     setMessage('')
     setUndo(null)
     try {
-      const res = await fetch('/api/admin/kvitel/requests', {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids, status }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) { setMessage(data.error || 'העדכון נכשל'); return false }
-      setMessage(doneMessage ?? `עודכנו ${data.updated} בקשות ל"${KVITEL_STATUSES[status]}"`)
+      const res = await patchKvitelStatus(ids, status)
+      if ('error' in res) { setMessage(res.error); return false }
+      setMessage(doneMessage ?? `עודכנו ${res.updated} בקשות ל"${KVITEL_STATUSES[status]}"`)
       setSelected(new Set())
       router.refresh()
       return true
