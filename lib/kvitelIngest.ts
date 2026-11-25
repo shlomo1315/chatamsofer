@@ -141,9 +141,12 @@ export async function ingestKvitel(db: SupabaseClient, s: KvitelSubmission): Pro
  * עיבוד מחדש של בקשה קיימת שנקלטה בלי שמות: מעדכן את פרטי הפונה והמקור ומוסיף את השורות,
  * בלי ליצור בקשה חדשה. הסטטוס מחושב מחדש רק אם הבקשה עדיין "לבדיקה" או "ממתין".
  */
-export async function reprocessKvitelRequest(db: SupabaseClient, requestId: string, s: KvitelSubmission, opts: { replaceLines?: boolean } = {}): Promise<{ ok: true; status: KvitelStatus; lines: number } | { ok: false; error: string }> {
+// appendAfter: השורות מתווספות אחרי N השורות הקיימות (השלמת שמות חסרים), בלי לגעת בקיימות ובתיקונים הידניים שבהן.
+export async function reprocessKvitelRequest(db: SupabaseClient, requestId: string, s: KvitelSubmission, opts: { replaceLines?: boolean; appendAfter?: number } = {}): Promise<{ ok: true; status: KvitelStatus; lines: number } | { ok: false; error: string }> {
   const { data: cur } = await db.from('kvitel_requests').select('id, status').eq('id', requestId).maybeSingle()
   if (!cur) return { ok: false, error: 'הבקשה לא נמצאה' }
+  const append = opts.appendAfter ?? 0
+  if (append && cur.status !== 'pending' && cur.status !== 'review') return { ok: false, error: 'הבקשה כבר נשלחה' }
   // שורות שנקלטו חלקית מוחלפות בפענוח המלא (רק בקשה שעוד לא נשלחה)
   if (opts.replaceLines) {
     if (cur.status !== 'pending' && cur.status !== 'review') return { ok: false, error: 'הבקשה כבר נשלחה' }
@@ -156,7 +159,8 @@ export async function reprocessKvitelRequest(db: SupabaseClient, requestId: stri
   const lines = prep.lines
   const flagged = flags.filter(Boolean).length
   let status = cur.status as KvitelStatus
-  if (status === 'review' || status === 'pending') status = flagged || !lines.length ? 'review' : 'pending'
+  // בהוספה השורות הקיימות נשארות כמו שהן, אז רק סימון חדש מעביר ל"לבדיקה"
+  if (append) { if (flagged) status = 'review' } else if (status === 'review' || status === 'pending') status = flagged || !lines.length ? 'review' : 'pending'
   const patch: Record<string, unknown> = { status, raw_text: s.rawText ?? null }
   if (requesterId) patch.requester_id = requesterId
   if (s.contactName) patch.contact_name = s.contactName
@@ -166,7 +170,7 @@ export async function reprocessKvitelRequest(db: SupabaseClient, requestId: stri
   if (flagged) patch.note = `סוכן האחידות סימן ${flagged} שורות לבדיקה`
   if (lines.length) {
     const { error: linesErr } = await db.from('kvitel_request_lines').insert(lines.map((l, i) => ({
-      request_id: requestId, position: i,
+      request_id: requestId, position: append + i,
       name: l.name, relation: l.relation, parent_name: l.parentName,
       request_type: l.requestType, request_note: l.requestNote ?? null,
       flagged: !!flags[i], flag_reason: flags[i] ?? null,

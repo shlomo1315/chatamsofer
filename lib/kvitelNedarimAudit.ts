@@ -1,6 +1,6 @@
 import { MAX_LINES } from './kvitel'
 import { parseKvitelEmailText } from './kvitelEmail'
-import { parseNedarimKvitel } from './kvitelNedarim'
+import { parseNedarimKvitel, rawToRecord } from './kvitelNedarim'
 import { kvitelRowBody, mapKvitelRow, type KvitelNedarimConfig } from './kvitelNedarimPull'
 
 // דוח בדיקה לקליטה מנדרים פלוס (קריאה בלבד): לכל הגשה, כמה שמות יש במקור וכמה נקלטו.
@@ -35,19 +35,7 @@ export interface AuditResult {
 const FREE_KEYS = ['Comments', 'Comment', 'names', 'text', 'Param1']
 const NAME_KEY = /^(?:name|shem|first_name)(?:_?\d+)?$/i
 const NAME_IN_LINE = /^(?:name|shem|first_name|שם)$/i
-const RAW_KEY = /^([A-Za-z_][\w-]{0,40}):\s?(.*)$/
-
-/** raw_text ("שדה: ערך" בכל שורה) חזרה לרשומה. שורה בלי שדה היא המשך של הערך הקודם (טקסט חופשי רב-שורות). */
-export function rawToRecord(raw: string): Record<string, string> {
-  const out: Record<string, string> = {}
-  let key: string | null = null
-  for (const line of raw.split(/\r?\n/)) {
-    const m = RAW_KEY.exec(line)
-    if (m) { key = m[1]; out[key] = m[2]; continue }
-    if (key) out[key] += `\n${line}`
-  }
-  return out
-}
+export { rawToRecord }
 
 function structuredCount(body: Record<string, unknown>): number {
   let n = 0
@@ -83,7 +71,8 @@ export function auditNedarimSubmission(input: AuditInput, mapping: KvitelNedarim
 
   const source = structured + freeFound
   const reasons: AuditReason[] = []
-  if (input.kind === 'direct' && structured && freeFound && current < source) reasons.push('free_ignored')
+  // נקלטו רק השמות שבשדות (הפענוח הישן התעלם מהטקסט החופשי כשהיו גם שדות)
+  if (input.kind === 'direct' && structured && freeFound && input.captured < source && input.captured <= validStructured) reasons.push('free_ignored')
   if (validStructured < structured) reasons.push('invalid_field')
   if (source > MAX_LINES) reasons.push('over_max')
   if (unclear) reasons.push('unparsed_text')
