@@ -22,15 +22,21 @@ import { EARLY_DEPTH } from './lineageDeviation'
 import { chainHasGap, statusAfterFix, type ChainNode } from './lineageChainHealth'
 import type { ApprovedRefTreeLookup } from './lineageApprovedRef'
 import type { ChainStep } from './lineageChainEdit'
+import type { GateInput, GateResult } from './earlyLineageGate'
 
 type ApplyChain = (admin: SupabaseClient, beneficiaryId: string, chain: ChainStep[]) => Promise<{ createdNodes: number; movedTo: string | null }>
+type TreeNode = ChainNode & { name: string; relation?: string | null }
 
 export interface SaveDeps {
   applyChain: ApplyChain
   /** הנתיב של הצומת מהשורש — לעדכון סימון בן/חתן ולבדיקת דילוג דורות. */
-  loadNodes: (admin: SupabaseClient) => Promise<(ChainNode & { name: string; relation?: string | null })[]>
+  loadNodes: (admin: SupabaseClient) => Promise<TreeNode[]>
   logActivity: (admin: SupabaseClient, entry: Record<string, unknown>) => Promise<unknown>
   invalidate: () => void
+  /** השער המלא (שם, דור והורה) — לחישוב הסטטוס ו-deep_review_reason אחרי השמירה. */
+  gate?: (admin: SupabaseClient, ben: GateInput, approved?: ApprovedRefTreeLookup | null) => Promise<GateResult>
+  /** רענון השרשרת השמורה של משפחות תחת צומת ששמו תוקן. */
+  resyncSubtree?: (admin: SupabaseClient, nodes: TreeNode[], nodeId: string) => Promise<unknown>
 }
 
 export type SaveResult =
@@ -65,11 +71,11 @@ function pathOf(nodes: { id: string; parent_id: string | null }[], id: string | 
 /** מחילה ומחזירה את השרשרת השמורה החדשה (כפי שהעץ בנה אותה). */
 async function applyAndRefresh(
   admin: SupabaseClient, deps: SaveDeps, ben: BenRow, chain: ChainStep[], extra: Record<string, unknown>,
-  opts: { syncRelations: boolean },
+  opts: { syncRelations: boolean; renameAll: boolean },
 ) {
   const res = await deps.applyChain(admin, ben.id, chain)
   const nodes = await deps.loadNodes(admin)
-  const path = pathOf(nodes, res.movedTo) as (ChainNode & { name: string; relation?: string | null })[]
+  const path = pathOf(nodes, res.movedTo) as TreeNode[]
 
   // 🔴 סימון בן/חתן לדור שכבר קיים בעץ — applyChain מתאימה לפי שם בלבד ולא
   // מעדכנת את הקשר. רק בעריכת צוות: בקישור הציבורי אין נגיעה בצמתים קיימים.
@@ -81,6 +87,32 @@ async function applyAndRefresh(
         path[i].relation = want
       }
     }
+  }
+
+  // 🔴 תיקון שם בדור קיים (הבאג של 25.11): applyChain מתאימה גם לפי שם הבעל
+  // בלבד, ולכן "רבי עזרא ומרת gyhk rcev זלצמן" ← "רבי עזרא ומרת רחל זלצמן"
+  // נמצא כאותו צומת והשם החדש נזרק. השרשרת נבנתה מחדש מהצומת עם השם הישן,
+  // והתיקון "לא נקלט". כאן השם שנשלח נכתב לצומת עצמו.
+  // ⚠️ צומת קיים משותף למשפחות אחרות: עורך עץ מתקן כל דור, ובשאר המקרים
+  // (מזכירות, קישור המשפחה) רק את הדור של המשפחה עצמה — האחרון בשרשרת.
+  // ⚠️ רק שם שהמשתמש שינה בפועל מול השרשרת השמורה — שרשרת שמורה ישנה לא
+  // מחזירה לאחור שם שתוקן בעץ בינתיים.
+  const before = new Map((Array.isArray(ben.lineage_chain) ? ben.lineage_chain as { generation?: unknown; name?: unknown }[] : [])
+    .map(e => [Number(e?.generation), String(e?.name ?? '').trim()]))
+  const renamed: string[] = []
+  for (let i = 1; i < path.length && i < chain.length; i++) {
+    const want = chain[i].name.trim()
+    const own = i === path.length - 1 && i === chain.length - 1
+    if (!want || path[i].name === want || before.get(chain[i].generation) === want) continue
+    if (!opts.renameAll && !own) continue
+    await admin.from('lineage_nodes').update({ name: want }).eq('id', path[i].id)
+    path[i].name = want
+    renamed.push(path[i].id)
+  }
+  if (renamed.length && deps.resyncSubtree) {
+    const byId = new Map(path.map(n => [n.id, n]))
+    const fresh = nodes.map(n => byId.get(n.id) ?? n)
+    await deps.resyncSubtree(admin, fresh, renamed[0]).catch(() => {})
   }
 
   const fresh = path.map(n => ({ generation: n.generation, name: n.name, relation: n.relation ?? null }))
@@ -105,16 +137,31 @@ export async function saveChainByStaff(
   if (!ben) return { ok: false, error: 'הכרטסת לא נמצאה' }
   let out
   try {
-    out = await applyAndRefresh(admin, deps, ben, chain, {}, { syncRelations: opts.canEditTree })
+    out = await applyAndRefresh(admin, deps, ben, chain, {}, { syncRelations: opts.canEditTree, renameAll: opts.canEditTree })
   } catch (e) {
     // מצב מעורפל (שני צמתים באותו שם תחת אותו אב) — הודעה ברורה, בלי כתיבה.
     return { ok: false, error: e instanceof Error ? e.message : 'שמירת סדר הדורות נכשלה' }
   }
+  // 🔴 כרטסת בבדיקה מעמיקה: השער המלא מוחל מחדש על השרשרת המתוקנת (כמו בדף
+  // העריכה, lib/lineageEditRecheck). משתחררת ל"ממתין" רק כשהיא עוברת; אחרת
+  // הסיבה מתעדכנת למצב הנוכחי. סטטוס אחר לא משתנה בעריכת צוות.
+  let status: string | undefined
+  if (ben.eligibility_status === 'deep_review' && deps.gate) {
+    const gate = await deps.gate(admin, { lineage_node_id: out.nodeId, lineage_chain: out.chain, lineage_manual: [] })
+    const extra = !gate.deep && !out.gap
+      ? { eligibility_status: 'pending', deep_review_reason: null }
+      : { deep_review_reason: gate.reason ?? 'דילוג דורות' }
+    await admin.from('beneficiaries').update(extra).eq('id', ben.id)
+    if ('eligibility_status' in extra) status = extra.eligibility_status
+  }
   await deps.logActivity(admin, {
     userId, action: 'lineage_chain_edited', entityType: 'beneficiary', entityId: ben.id,
-    details: { before: { chain: ben.lineage_chain ?? null, node_id: ben.lineage_node_id }, after: { chain: out.chain, node_id: out.nodeId } },
+    details: {
+      before: { chain: ben.lineage_chain ?? null, node_id: ben.lineage_node_id, eligibility_status: ben.eligibility_status },
+      after: { chain: out.chain, node_id: out.nodeId, eligibility_status: status ?? ben.eligibility_status },
+    },
   }).catch(() => {})
-  return { ok: true, applied: true, chain: out.chain }
+  return { ok: true, applied: true, chain: out.chain, ...(status ? { status } : {}) }
 }
 
 export interface LinkInvite { token: string; root_node_id: string | null; recipient_name: string | null; beneficiary_id: string }
@@ -152,13 +199,19 @@ export async function saveChainFromLink(
 
   let out
   try {
-    out = await applyAndRefresh(admin, deps, ben, chain, {}, { syncRelations: false })
+    out = await applyAndRefresh(admin, deps, ben, chain, {}, { syncRelations: false, renameAll: false })
   } catch (e) {
     return queue(e instanceof Error ? e.message : 'לא ניתן היה להחיל אוטומטית')
   }
-  // 🔴 כמו רישום חדש (החלטה 11.10) — חוזר לאישור ראשוני, או לבדיקה מעמיקה כשיש דילוג.
-  const status = statusAfterFix(out.gap)
-  await admin.from('beneficiaries').update({ eligibility_status: status }).eq('id', ben.id)
+  // 🔴 כמו רישום חדש (החלטה 11.10) — חוזר לאישור ראשוני, או לבדיקה מעמיקה כשיש
+  // דילוג או כשהשער המלא נכשל. deep_review_reason מתעדכן תמיד: קודם נשארה
+  // הסיבה הישנה (או ריקה) גם אחרי שהמשפחה תיקנה.
+  const gate = deps.gate
+    ? await deps.gate(admin, { lineage_node_id: out.nodeId, lineage_chain: out.chain, lineage_manual: [] }, approved)
+    : null
+  const status = statusAfterFix(out.gap || !!gate?.deep)
+  const reason = status === 'deep_review' ? (gate?.reason ?? 'דילוג דורות') : null
+  await admin.from('beneficiaries').update({ eligibility_status: status, deep_review_reason: reason }).eq('id', ben.id)
   await deps.logActivity(admin, {
     action: 'lineage_review_applied', entityType: 'beneficiary', entityId: ben.id,
     details: {

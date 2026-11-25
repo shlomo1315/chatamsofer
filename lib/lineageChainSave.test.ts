@@ -121,7 +121,7 @@ describe('saveChainFromLink — קישור התיקון', () => {
     const res = await saveChainFromLink(db, deps(TREE, 'n6'), inv, c, approvedAll)
     expect(res).toMatchObject({ ok: true, applied: true, status: 'pending' })
     expect(updates.some(u => u.table === 'lineage_nodes')).toBe(false)
-    expect(updates).toContainEqual({ table: 'beneficiaries', row: { eligibility_status: 'pending' }, id: 'b1' })
+    expect(updates).toContainEqual({ table: 'beneficiaries', row: { eligibility_status: 'pending', deep_review_reason: null }, id: 'b1' })
     expect(inserts).toHaveLength(0)
   })
 
@@ -166,5 +166,89 @@ describe('earlyOk', () => {
   })
   it('שרשרת של 6 דורות תקינה', () => {
     expect(earlyOk(chain('א', 'ב', 'ג', 'ד', 'ה'), approvedAll)).toEqual({ ok: true })
+  })
+})
+
+// ── הבאג של 25.11: תיקון שם בדור קיים "לא נקלט" ──
+// applyChain מתאימה לפי שם הבעל, ולכן שם האישה המתוקן נזרק והשרשרת נבנתה
+// מחדש מהצומת עם השם הישן.
+describe('תיקון שם בדור קיים וחישוב מחדש של הבדיקה המעמיקה', () => {
+  const OLD = 'רבי עזרא ומרת gyhk rcev זלצמן'
+  const NEW = 'רבי עזרא ומרת רחל זלצמן'
+  const SALZ: Node[] = [...TREE, { id: 'n7', parent_id: 'n6', generation: 7, name: OLD, relation: 'son' }]
+  const stored = [...chain('א', 'ב', 'ג', 'ד', 'ה', OLD)].map(c => ({ ...c }))
+  const BEN7 = { ...BEN, lineage_chain: stored, lineage_node_id: 'n7' }
+  const pass = vi.fn(async () => ({ deep: false, finding: null, unknown: false, reason: null }))
+  const fail = (reason: string) => vi.fn(async () => ({ deep: true, finding: null, unknown: false, reason }))
+
+  it('מנהל: השם המתוקן נכתב לצומת ולשרשרת, ומשפחות תחת הצומת מתרעננות', async () => {
+    const { db, updates } = fakeDb(BEN7)
+    const d = { ...deps(SALZ, 'n7'), resyncSubtree: vi.fn(async () => 0) }
+    const res = await saveChainByStaff(db, d, 'b1', chain('א', 'ב', 'ג', 'ד', 'ה', NEW), 'u1')
+    expect(res).toMatchObject({ ok: true, applied: true })
+    expect(updates).toContainEqual({ table: 'lineage_nodes', row: { name: NEW }, id: 'n7' })
+    const benUpd = updates.find(u => u.table === 'beneficiaries' && 'lineage_chain' in u.row)!
+    expect((benUpd.row.lineage_chain as { name: string }[]).at(-1)!.name).toBe(NEW)
+    expect(d.resyncSubtree).toHaveBeenCalledWith(db, expect.anything(), 'n7')
+  })
+
+  it('מזכירה בלי עריכת עץ: הדור של המשפחה מתוקן, דור משותף למעלה לא', async () => {
+    const { db, updates } = fakeDb(BEN7)
+    await saveChainByStaff(db, deps(SALZ, 'n7'), 'b1', chain('א', 'ב', 'שונה', 'ד', 'ה', NEW), 'u1', { canEditTree: false })
+    const renames = updates.filter(u => u.table === 'lineage_nodes')
+    expect(renames).toEqual([{ table: 'lineage_nodes', row: { name: NEW }, id: 'n7' }])
+  })
+
+  it('שם שלא שונה מול השרשרת השמורה לא דורס את העץ', async () => {
+    const { db, updates } = fakeDb({ ...BEN7, lineage_chain: stored.map(s => s.generation === 3 ? { ...s, name: 'ב-ישן' } : s) })
+    await saveChainByStaff(db, deps(SALZ, 'n7'), 'b1', chain('א', 'ב-ישן', 'ג', 'ד', 'ה', OLD), 'u1')
+    expect(updates.some(u => u.table === 'lineage_nodes')).toBe(false)
+  })
+
+  it('מנהל, כרטסת בבדיקה מעמיקה ותקינה אחרי התיקון — משתחררת לממתין והסיבה נמחקת', async () => {
+    const { db, updates } = fakeDb({ ...BEN7, eligibility_status: 'deep_review' })
+    const res = await saveChainByStaff(db, { ...deps(SALZ, 'n7'), gate: pass }, 'b1', chain('א', 'ב', 'ג', 'ד', 'ה', NEW), 'u1')
+    expect(res).toMatchObject({ ok: true, status: 'pending' })
+    expect(updates).toContainEqual({ table: 'beneficiaries', row: { eligibility_status: 'pending', deep_review_reason: null }, id: 'b1' })
+  })
+
+  it('מנהל, עדיין לא תקין — נשאר בבדיקה מעמיקה עם הסיבה העדכנית', async () => {
+    const { db, updates } = fakeDb({ ...BEN7, eligibility_status: 'deep_review' })
+    await saveChainByStaff(db, { ...deps(SALZ, 'n7'), gate: fail('דור 2–5 אינו בקובץ המאושר (דור 3)') }, 'b1', chain('א', 'ב', 'ג', 'ד', 'ה', NEW), 'u1')
+    expect(updates).toContainEqual({ table: 'beneficiaries', row: { deep_review_reason: 'דור 2–5 אינו בקובץ המאושר (דור 3)' }, id: 'b1' })
+    expect(updates.some(u => u.row.eligibility_status)).toBe(false)
+  })
+
+  it('מנהל, כרטסת שאינה בבדיקה מעמיקה — הסטטוס לא נוגעים', async () => {
+    const { db, updates } = fakeDb(BEN7)
+    const gate = fail('x')
+    await saveChainByStaff(db, { ...deps(SALZ, 'n7'), gate }, 'b1', chain('א', 'ב', 'ג', 'ד', 'ה', NEW), 'u1')
+    expect(gate).not.toHaveBeenCalled()
+    expect(updates.some(u => 'eligibility_status' in u.row || 'deep_review_reason' in u.row)).toBe(false)
+  })
+
+  const inv = { token: 't1', root_node_id: 'r', recipient_name: 'עזרא', beneficiary_id: 'b1' }
+
+  it('קישור: המשפחה מתקנת את השם שלה — נכתב לצומת ולשרשרת, וחוזר לממתין בלי סיבה', async () => {
+    const { db, updates } = fakeDb({ ...BEN7, eligibility_status: 'deep_review' })
+    const res = await saveChainFromLink(db, { ...deps(SALZ, 'n7'), gate: pass }, inv, chain('א', 'ב', 'ג', 'ד', 'ה', NEW), approvedAll)
+    expect(res).toMatchObject({ ok: true, applied: true, status: 'pending' })
+    expect(updates).toContainEqual({ table: 'lineage_nodes', row: { name: NEW }, id: 'n7' })
+    const benUpd = updates.find(u => u.table === 'beneficiaries' && 'lineage_chain' in u.row)!
+    expect((benUpd.row.lineage_chain as { name: string }[]).at(-1)!.name).toBe(NEW)
+    expect(updates).toContainEqual({ table: 'beneficiaries', row: { eligibility_status: 'pending', deep_review_reason: null }, id: 'b1' })
+  })
+
+  it('קישור: דור משותף למעלה לא משתנה בעץ', async () => {
+    const { db, updates } = fakeDb(BEN7)
+    await saveChainFromLink(db, { ...deps(SALZ, 'n7'), gate: pass }, inv, chain('א', 'ב', 'ג', 'ד', 'ה-אחר', NEW), approvedAll)
+    expect(updates.filter(u => u.table === 'lineage_nodes')).toEqual([{ table: 'lineage_nodes', row: { name: NEW }, id: 'n7' }])
+  })
+
+  it('קישור: השער המלא נכשל — בדיקה מעמיקה עם הסיבה', async () => {
+    const { db, updates } = fakeDb(BEN7)
+    const res = await saveChainFromLink(db, { ...deps(SALZ, 'n7'), gate: fail('דילוג דורות (דור 7)') }, inv, chain('א', 'ב', 'ג', 'ד', 'ה', NEW), approvedAll)
+    expect(res).toMatchObject({ ok: true, applied: true, status: 'deep_review' })
+    expect(updates).toContainEqual({ table: 'beneficiaries', row: { eligibility_status: 'deep_review', deep_review_reason: 'דילוג דורות (דור 7)' }, id: 'b1' })
   })
 })
