@@ -171,6 +171,7 @@ export async function reprocessKvitelRequest(db: SupabaseClient, requestId: stri
   if (s.contactName) patch.contact_name = s.contactName
   if (s.phone) patch.contact_phone = s.phone
   if (s.email) patch.contact_email = s.email.toLowerCase()
+  if (s.recordingUrl) patch.recording_url = s.recordingUrl
   if (prep.dropped) patch.note = `נמחקו ${prep.dropped} כפילויות`
   if (flagged) patch.note = `סוכן האחידות סימן ${flagged} שורות לבדיקה`
   if (lines.length) {

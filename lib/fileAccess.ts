@@ -32,12 +32,13 @@ export const isLoadFailure = (r: LoadedDoc | LoadFailure): r is LoadFailure =>
 const EXT_CONTENT_TYPES: Record<string, string> = {
   '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp',
   '.gif': 'image/gif', '.heic': 'image/heic', '.pdf': 'application/pdf',
+  '.wav': 'audio/wav', '.mp3': 'audio/mpeg',
 }
 
 /** סוגים שבטוח להציג בדפדפן. ⚠️ בלי svg ובלי html — שניהם מריצים סקריפט. */
 const SAFE_INLINE_TYPES = new Set([
   'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic',
-  'application/pdf', 'text/plain',
+  'application/pdf', 'text/plain', 'audio/wav', 'audio/mpeg',
 ])
 
 // שם הקובץ הסופי: השם המבוקש אם ניתן, אחרת שם הקובץ מנתיב האחסון.

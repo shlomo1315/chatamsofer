@@ -6,6 +6,7 @@ import type { KvitelRequestRow } from '@/lib/kvitelQuery'
 import { hebrewDay, parseRawFields } from '@/lib/kvitelView'
 import KvitelLinesEditor from './KvitelLinesEditor'
 import { downloadKvitel } from './KvitelPreview'
+import { useRecordingSrc } from './useRecordingSrc'
 
 // פרטי בקשה שנפתחים מתחת לשורה (לחיצה על השורה מכווצת ומרחיבה, בלי חלונית):
 // השמות לעריכה, מה שנכתב במקור, ופעולות שלא נמצאות בשורה עצמה.
@@ -33,7 +34,7 @@ export default function KvitelRowDetails({ r, canEdit, editing, onEditing, busy,
   }
   const lines = r.kvitel_request_lines
   const rawFields = parseRawFields(r.raw_text)
-  const playable = !!r.recording_url && /^(https?:|\/)/.test(r.recording_url)
+  const { src: audioSrc, playable, failed: audioFailed } = useRecordingSrc(r.recording_url)
   return (
     <div className="grid gap-5 text-start md:grid-cols-[3fr_2fr]">
       <section>
@@ -47,7 +48,9 @@ export default function KvitelRowDetails({ r, canEdit, editing, onEditing, busy,
           <h3 className={h}>מה שנכתב במקור</h3>
           <div className="space-y-2 text-sm text-ink-soft">
             {r.recording_url && !playable && <p>ההקלטה נשמרה במערכת הטלפון הקודמת ואינה זמינה להשמעה כאן.</p>}
-            {playable && <audio controls preload="none" src={r.recording_url ?? undefined} className="w-full" aria-label="ההקלטה של המתקשר" />}
+            {playable && (audioFailed ? <p>טעינת ההקלטה נכשלה</p>
+              : audioSrc ? <audio controls preload="none" src={audioSrc} className="w-full" aria-label="ההקלטה של המתקשר" />
+              : <p className="text-ink-faint">טוען את ההקלטה…</p>)}
             {rawFields.length
               ? <table className="w-full"><tbody className="divide-y divide-line">
                   {rawFields.map((f, i) => <tr key={i}><th scope="row" className="w-2/5 py-1.5 pe-3 text-start font-medium">{f.key}</th><td className="break-words py-1.5 text-ink">{f.value}</td></tr>)}
