@@ -71,21 +71,31 @@ function pathOf(nodes: { id: string; parent_id: string | null }[], id: string | 
 /** מחילה ומחזירה את השרשרת השמורה החדשה (כפי שהעץ בנה אותה). */
 async function applyAndRefresh(
   admin: SupabaseClient, deps: SaveDeps, ben: BenRow, chain: ChainStep[], extra: Record<string, unknown>,
-  opts: { syncRelations: boolean; renameAll: boolean },
+  opts: { relations: 'all' | 'fill' | 'none'; renameAll: boolean },
 ) {
   const res = await deps.applyChain(admin, ben.id, chain)
   const nodes = await deps.loadNodes(admin)
   const path = pathOf(nodes, res.movedTo) as TreeNode[]
 
   // 🔴 סימון בן/חתן לדור שכבר קיים בעץ — applyChain מתאימה לפי שם בלבד ולא
-  // מעדכנת את הקשר. רק בעריכת צוות: בקישור הציבורי אין נגיעה בצמתים קיימים.
-  if (opts.syncRelations) {
+  // מעדכנת את הקשר.
+  //   all  — עורך עץ: כל דור.
+  //   fill — קישור המשפחה: סימון שחסר בצומת, והדור של המשפחה עצמה (האחרון).
+  //          סימון שסותר סימון קיים בצומת משותף לא נדרס; הוא חוזר ב-conflicts
+  //          ונכנס לתור המזכירות. (הבאג של גולדשטיין 25.11: קודם הסימון נזרק
+  //          בשקט, המשפחה קיבלה "התקבל" ובכניסה חוזרת הסימון היה חסר.)
+  const conflicts: { generation: number; name: string; relation: string; current: string }[] = []
+  if (opts.relations !== 'none') {
     for (let i = 1; i < path.length && i < chain.length; i++) {
       const want = chain[i].relation
-      if (want && path[i].relation !== want) {
-        await admin.from('lineage_nodes').update({ relation: want }).eq('id', path[i].id)
-        path[i].relation = want
+      if (!want || path[i].relation === want) continue
+      const own = i === path.length - 1 && i === chain.length - 1
+      if (opts.relations === 'fill' && path[i].relation && !own) {
+        conflicts.push({ generation: chain[i].generation, name: path[i].name, relation: want, current: path[i].relation! })
+        continue
       }
+      await admin.from('lineage_nodes').update({ relation: want }).eq('id', path[i].id)
+      path[i].relation = want
     }
   }
 
@@ -125,7 +135,7 @@ async function applyAndRefresh(
   }).eq('id', ben.id)
   deps.invalidate()
   const gap = res.movedTo ? chainHasGap(res.movedTo, new Map(nodes.map(n => [n.id, n]))) : false
-  return { nodeId: res.movedTo, chain: fresh, gap }
+  return { nodeId: res.movedTo, chain: fresh, gap, conflicts }
 }
 
 export async function saveChainByStaff(
@@ -137,7 +147,7 @@ export async function saveChainByStaff(
   if (!ben) return { ok: false, error: 'הכרטסת לא נמצאה' }
   let out
   try {
-    out = await applyAndRefresh(admin, deps, ben, chain, {}, { syncRelations: opts.canEditTree, renameAll: opts.canEditTree })
+    out = await applyAndRefresh(admin, deps, ben, chain, {}, { relations: opts.canEditTree ? 'all' : 'none', renameAll: opts.canEditTree })
   } catch (e) {
     // מצב מעורפל (שני צמתים באותו שם תחת אותו אב) — הודעה ברורה, בלי כתיבה.
     return { ok: false, error: e instanceof Error ? e.message : 'שמירת סדר הדורות נכשלה' }
@@ -199,9 +209,21 @@ export async function saveChainFromLink(
 
   let out
   try {
-    out = await applyAndRefresh(admin, deps, ben, chain, {}, { syncRelations: false, renameAll: false })
+    out = await applyAndRefresh(admin, deps, ben, chain, {}, { relations: 'fill', renameAll: false })
   } catch (e) {
     return queue(e instanceof Error ? e.message : 'לא ניתן היה להחיל אוטומטית')
+  }
+  // סימון בן/חתן שסותר צומת משותף — לא נדרס, אבל גם לא נעלם: נכנס לתור המזכירות.
+  if (out.conflicts.length) {
+    const label = (r: string) => (r === 'son' ? 'בן' : 'חתן')
+    const text = 'המשפחה סימנה בן/חתן שונה מהרשום בעץ (צומת משותף, לא עודכן אוטומטית):\n'
+      + out.conflicts.map(c => `דור ${c.generation}: ${c.name}: ${label(c.relation)} (בעץ: ${label(c.current)})`).join('\n')
+    await admin.from('lineage_review_suggestions').insert({
+      token: inv.token, root_node_id: inv.root_node_id, kind: 'note', node_id: out.nodeId,
+      beneficiary_id: ben.id,
+      payload: { text, chain, chain_before: ben.lineage_chain ?? null, source: 'lineage_link_editor' },
+      reviewer_name: inv.recipient_name, status: 'pending',
+    })
   }
   // 🔴 כמו רישום חדש (החלטה 11.10) — חוזר לאישור ראשוני, או לבדיקה מעמיקה כשיש
   // דילוג או כשהשער המלא נכשל. deep_review_reason מתעדכן תמיד: קודם נשארה

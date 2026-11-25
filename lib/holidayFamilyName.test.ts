@@ -20,7 +20,7 @@ describe('שם המשפחה בהודעות חלוקת חגים', () => {
   })
 
   it('נשואים שחסר בהם שם אחד: השם שקיים', () => {
-    expect(holidayFamilyName({ family_name: 'פרנקל', spouse_name: 'פייגא', marital_status: 'נשואים' })).toBe('פרנקל פייגא')
+    expect(holidayFamilyName({ family_name: 'פרנקל', spouse_name: 'פייגא', marital_status: 'נשואים' })).toBe('פרנקל')
     expect(holidayFamilyName({ family_name: 'פרנקל', full_name: 'מנחם מענדיל', marital_status: 'נשואים' })).toBe('פרנקל מנחם מענדיל')
   })
 

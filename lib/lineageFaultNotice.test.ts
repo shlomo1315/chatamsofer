@@ -38,8 +38,10 @@ describe('planLineageFaultNotice', () => {
 })
 
 describe('recipientNameOf', () => {
-  it('משפחה + שם בן/בת הזוג או השם המלא', () => {
-    expect(recipientNameOf({ family_name: 'כהן', spouse_name: 'שרה', full_name: 'משה' })).toBe('כהן שרה')
+  it('משפחה, שם הבעל ושם האשה; לעולם לא משפחה ואשה לבד', () => {
+    expect(recipientNameOf({ family_name: 'כהן', spouse_name: 'שרה', full_name: 'משה' })).toBe('כהן משה ושרה')
+    expect(recipientNameOf({ family_name: 'גולדשטיין', spouse_name: 'חוה בשמת', full_name: null })).toBe('גולדשטיין')
+    expect(recipientNameOf({ family_name: 'כהן', spouse_name: null, full_name: 'רחל', marital_status: 'אלמנה' })).toBe('כהן רחל')
     expect(recipientNameOf({ family_name: 'כהן', spouse_name: null, full_name: 'משה' })).toBe('כהן משה')
     expect(recipientNameOf({ family_name: null, spouse_name: null, full_name: null })).toBe('משפחה יקרה')
   })

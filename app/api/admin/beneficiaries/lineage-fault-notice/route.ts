@@ -58,7 +58,7 @@ async function loadPlan(admin: SupabaseClient, resend: boolean) {
   if (!approved) throw new Error('הקובץ המאושר לא נטען, ולכן אי אפשר לוודא מי באמת עם תקלה בסדר הדורות. לא נשלח שום מייל.')
   const [all, nodes] = await Promise.all([
     fetchAll<PlanRow>((a, b) => admin.from('beneficiaries')
-      .select('id, id_number, full_name, family_name, spouse_name, email, eligibility_status, lineage_node_id, lineage_chain, lineage_manual, deep_review_reason')
+      .select('id, id_number, full_name, family_name, spouse_name, marital_status, email, eligibility_status, lineage_node_id, lineage_chain, lineage_manual, deep_review_reason')
       .eq('eligibility_status', 'deep_review').order('id').range(a, b)),
     fetchAll<GapNode>((a, b) => admin.from('lineage_nodes').select('id, name, parent_id, generation').range(a, b)),
   ])

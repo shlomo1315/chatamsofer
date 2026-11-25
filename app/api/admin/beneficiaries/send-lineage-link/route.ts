@@ -4,6 +4,7 @@ import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { lineageOrderFixEmail } from '@/lib/emailTemplates'
+import { recipientNameOf } from '@/lib/lineageFaultNotice'
 import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { logActivity } from '@/lib/activityLog'
 
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
   if (!admin) return NextResponse.json({ error: 'Supabase לא מוגדר' }, { status: 500 })
 
   const { data: ben } = await admin.from('beneficiaries')
-    .select('id, full_name, family_name, spouse_name, email, lineage_node_id')
+    .select('id, full_name, family_name, spouse_name, marital_status, email, lineage_node_id')
     .eq('id', beneficiaryId).maybeSingle()
   if (!ben) return NextResponse.json({ error: 'הצאצא לא נמצא' }, { status: 404 })
 
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
   }
 
   const token = randomBytes(16).toString('base64url')
-  const recipientName = [ben.family_name, ben.spouse_name || ben.full_name].filter(Boolean).join(' ') || 'משפחה יקרה'
+  const recipientName = recipientNameOf(ben)
 
   // ── תוקף הקישור ──
   // 🔴 30 יום, אחרי שהיה 7. הנימוק המקורי (חשיפה מיותרת) היה סביר בתיאוריה,

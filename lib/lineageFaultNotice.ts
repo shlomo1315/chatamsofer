@@ -4,6 +4,8 @@
 // כאן רק החלוקה הטהורה (מי מקבל, מי בלי מייל, מי כבר קיבל), כדי שתיבדק בלי
 // מסד. השליחה עצמה ב-/api/admin/beneficiaries/lineage-fault-notice.
 
+import { holidayFamilyName, type HolidayNameSource } from './holidayFamilyName'
+
 /** הפעולה שנרשמת ב-activity_log לכל משפחה שקיבלה. משמשת גם למניעת כפילויות. */
 export const LINEAGE_FAULT_ACTION = 'lineage_fault_notice_sent'
 
@@ -15,6 +17,7 @@ export type FaultRow = {
   full_name: string | null
   family_name: string | null
   spouse_name: string | null
+  marital_status?: string | null
   email: string | null
   lineage_node_id: string | null
 }
@@ -97,9 +100,12 @@ export function requestErrorMessage(status: number, data: unknown): string {
   return `הבקשה נכשלה בשרת (קוד ${status}).`
 }
 
-/** אותו שם נמען כמו בשליחה האישית (send-lineage-link). */
-export function recipientNameOf(row: Pick<FaultRow, 'family_name' | 'spouse_name' | 'full_name'>): string {
-  return [row.family_name, row.spouse_name || row.full_name].filter(Boolean).join(' ') || 'משפחה יקרה'
+/**
+ * שם הנמען: משפחה, שם הבעל ושם האשה. לעולם לא משפחה ואשה לבד (הבאג של
+ * "גולדשטיין חוה בשמת"). אותו שם גם בשליחה האישית (send-lineage-link).
+ */
+export function recipientNameOf(row: HolidayNameSource): string {
+  return holidayFamilyName(row) || 'משפחה יקרה'
 }
 
 /**
