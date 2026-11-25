@@ -1,13 +1,14 @@
 'use client'
 
 // שליחה חיה של גיליון: מחוון התקדמות, ספירה לאחור, קצב מול התקרה, קצב לפי דקה, משפך מתוך מה שנשלח,
-// פעילות לפי שעה, רשימת המעורבים (חלון קופץ), עשרת האחרונים ויומן.
+// פעילות לפי שעה, חיפוש נמען (חלון קופץ), עשרת האחרונים ויומן.
 // נתונים: /api/admin/gilyonot/issues/[id]/live. בזמן שליחה מתעדכן כל 5 שניות, והשעון יורד כל שנייה.
 
-import { useEffect, useMemo, useState } from 'react'
-import { Users } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Search } from 'lucide-react'
 import Modal from '@/components/ui/Modal'
 import { pctOfSent, type EngagedPerson, type EngageHour, type LiveGap, type LiveMinute } from '@/lib/gilyonotLive'
+import { RecipientSearch } from './RecipientSearch'
 import s from './SendLive.module.css'
 
 interface LiveData {
@@ -21,14 +22,11 @@ interface LiveData {
   ceiling: number; byHour: EngageHour[]; people: EngagedPerson[]
 }
 
-type Who = 'all' | 'clicked' | 'downloaded'
-
 const POLL_MS = 5000
 const ARC = 653
 const f = (n: number) => n.toLocaleString('en')
 const hm = (iso: string | null | undefined) => iso ? new Date(iso).toTimeString().slice(0, 5) : '—'
 const hms = (iso: string) => new Date(iso).toTimeString().slice(0, 8)
-const dhm = (iso: string | null) => iso ? new Date(iso).toLocaleString('he-IL', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
 const clock = (sec: number) => {
   const r = Math.max(0, Math.round(sec))
   return `${Math.floor(r / 3600)}:${String(Math.floor((r % 3600) / 60)).padStart(2, '0')}:${String(r % 60).padStart(2, '0')}`
@@ -41,8 +39,7 @@ export function SendLive({ issueId }: { issueId: string }) {
   const [at, setAt] = useState(0)
   const [now, setNow] = useState(() => Date.now())
   const [err, setErr] = useState('')
-  const [who, setWho] = useState<Who | null>(null)
-  const [q, setQ] = useState('')
+  const [search, setSearch] = useState(false)
   const sending = d?.issue.status === 'sending'
 
   useEffect(() => {
@@ -68,12 +65,6 @@ export function SendLive({ issueId }: { issueId: string }) {
     const t = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(t)
   }, [sending])
-
-  const people = useMemo(() => {
-    const term = q.trim().toLowerCase()
-    return (d?.people ?? []).filter(p =>
-      (who === 'clicked' ? p.clicked_at : who === 'downloaded' ? p.downloaded_at : true) && (!term || p.email.toLowerCase().includes(term)))
-  }, [d?.people, who, q])
 
   if (!d) return <div className={s.wrap}><p className={s.sub}>{err || 'טוען את מצב השליחה...'}</p></div>
 
@@ -173,8 +164,8 @@ export function SendLive({ issueId }: { issueId: string }) {
               </div>
             ))}
           </div>
-          <button type="button" className={s.who} onClick={() => setWho('all')} disabled={!d.people.length}>
-            <Users size={16} aria-hidden />מי פתח, הקליק והוריד{d.people.length ? ` (${f(d.people.length)})` : ''}
+          <button type="button" className={s.who} onClick={() => setSearch(true)} disabled={!d.sent}>
+            <Search size={16} aria-hidden />חיפוש נמען: מי פתח, מתי, ומי לא
           </button>
         </div>
 
@@ -211,33 +202,8 @@ export function SendLive({ issueId }: { issueId: string }) {
       </div>
       {err && <p className={s.sub} style={{ marginTop: 12, color: '#b91c1c' }}>{err} · מנסה שוב</p>}
 
-      <Modal open={who !== null} onClose={() => setWho(null)} title="מי פתח, הקליק והוריד" size="xl">
-        <div className={s.mtools}>
-          <div className={s.tabs} role="tablist">
-            {([['all', 'כולם', d.people.length], ['clicked', 'הקליקו', d.people.filter(x => x.clicked_at).length], ['downloaded', 'הורידו', d.people.filter(x => x.downloaded_at).length]] as const).map(([k, l, n]) => (
-              <button key={k} type="button" role="tab" aria-selected={who === k} className={who === k ? s.on : undefined} onClick={() => setWho(k)}>{l} <span className={s.num}>{f(n)}</span></button>
-            ))}
-          </div>
-          <input className={s.search} value={q} onChange={e => setQ(e.target.value)} placeholder="חיפוש לפי מייל" aria-label="חיפוש לפי מייל" dir="ltr" />
-        </div>
-        {d.opened > d.people.length && <p className={s.hint}>מוצגים {f(d.people.length)} האחרונים מתוך {f(d.opened)}.</p>}
-        <div className={s.tableWrap}>
-          <table className={s.table}>
-            <thead><tr><th>מייל</th><th>פתח</th><th>הקליק</th><th>הוריד</th><th>פעולה אחרונה</th></tr></thead>
-            <tbody>
-              {people.map(x => (
-                <tr key={x.email}>
-                  <td dir="ltr">{x.email}</td>
-                  <td className={s.num}>{x.opened_at ? <>{dhm(x.opened_at)}{x.opens > 1 && <span className={s.cnt}>×{x.opens}</span>}</> : '—'}</td>
-                  <td className={s.num}>{x.clicked_at ? <>{dhm(x.clicked_at)}{x.clicks > 1 && <span className={s.cnt}>×{x.clicks}</span>}</> : '—'}</td>
-                  <td className={s.num}>{x.downloaded_at ? <>{dhm(x.downloaded_at)}{x.downloads > 1 && <span className={s.cnt}>×{x.downloads}</span>}</> : '—'}</td>
-                  <td className={s.num}>{dhm(x.last)}</td>
-                </tr>
-              ))}
-              {!people.length && <tr><td colSpan={5} className={s.empty}>אין תוצאות</td></tr>}
-            </tbody>
-          </table>
-        </div>
+      <Modal open={search} onClose={() => setSearch(false)} title="חיפוש נמען: מה קרה למייל שלו" size="xl">
+        <RecipientSearch issueId={issueId} />
       </Modal>
     </div>
   )
