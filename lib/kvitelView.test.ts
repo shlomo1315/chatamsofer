@@ -1,14 +1,32 @@
 import { describe, it, expect } from 'vitest'
-import { byKvitelTab, countByStatus, hebrewDay, KVITEL_DEFAULT_TAB, kvitelRowActions, parseRawFields, pendingForPrint, reviewReason, scopeKvitelRows, cleanTranscript, MAX_TRANSCRIPT } from './kvitelView'
+import { asApproved, byKvitelTab, countByStatus, needsApproval, nextToApprove, hebrewDay, KVITEL_DEFAULT_TAB, kvitelRowActions, parseRawFields, patchKvitelStatus, pendingForPrint, reviewReason, scopeKvitelRows, cleanTranscript, MAX_TRANSCRIPT } from './kvitelView'
 import { kvitelExportLines, type KvitelRequestRow } from './kvitelQuery'
 
 describe('kvitelRowActions — כפתורי השורה', () => {
-  it('תיקון, מחיקה ואישור בכל שורה למי שיש לו עריכה; האישור פעיל רק בבקשה לבדיקה, ומחיקה לא בבקשה שבוטלה', () => {
-    expect(kvitelRowActions({ status: 'pending' }, true)).toEqual({ approve: true, approveEnabled: false, edit: true, remove: true })
-    expect(kvitelRowActions({ status: 'pending', needsReview: true }, true)).toEqual({ approve: true, approveEnabled: true, edit: true, remove: true })
-    expect(kvitelRowActions({ status: 'done' }, true)).toEqual({ approve: true, approveEnabled: false, edit: true, remove: true })
-    expect(kvitelRowActions({ status: 'cancelled' }, true)).toEqual({ approve: true, approveEnabled: false, edit: true, remove: false })
-    expect(kvitelRowActions({ status: 'pending', needsReview: true }, false)).toEqual({ approve: false, approveEnabled: false, edit: false, remove: false })
+  it('כפתור אישור רק בבקשה לבדיקה; בבקשה שאושרה או נשלחה תווית מצב ולא כפתור מת', () => {
+    expect(kvitelRowActions({ status: 'pending', needsReview: true }, true)).toEqual({ approve: 'button', edit: true, remove: true })
+    expect(kvitelRowActions({ status: 'review' }, true)).toEqual({ approve: 'button', edit: true, remove: true })
+    expect(kvitelRowActions({ status: 'pending' }, true)).toEqual({ approve: 'approved', edit: true, remove: true })
+    expect(kvitelRowActions({ status: 'done' }, true)).toEqual({ approve: 'sent', edit: true, remove: true })
+    expect(kvitelRowActions({ status: 'cancelled' }, true)).toEqual({ approve: null, edit: true, remove: false })
+    expect(kvitelRowActions({ status: 'pending', needsReview: true }, false)).toEqual({ approve: null, edit: false, remove: false })
+  })
+})
+
+describe('patchKvitelStatus — לחיצה על אישור', () => {
+  const reply = (status: number, body: unknown) => (async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch
+  it('אישור בקשה לבדיקה שולח status=pending ומחזיר כמה עודכנו', async () => {
+    let sent: unknown = null
+    const f = (async (_u: string, init: RequestInit) => { sent = JSON.parse(String(init.body)); return new Response(JSON.stringify({ ok: true, updated: 1 })) }) as unknown as typeof fetch
+    expect(await patchKvitelStatus(['r1'], 'pending', f)).toEqual({ updated: 1 })
+    expect(sent).toEqual({ ids: ['r1'], status: 'pending' })
+  })
+  it('כישלון לא שקט: שגיאת שרת, הרשאה, אפס עודכנו ואין חיבור — כולם מחזירים הודעה', async () => {
+    expect(await patchKvitelStatus(['r1'], 'pending', reply(500, { error: 'העדכון נכשל' }))).toEqual({ error: 'העדכון נכשל' })
+    expect(await patchKvitelStatus(['r1'], 'pending', reply(403, {}))).toEqual({ error: 'אין לך הרשאה לעדכן בקשות' })
+    expect('error' in await patchKvitelStatus(['r1'], 'pending', reply(200, { ok: true, updated: 0 }))).toBe(true)
+    const down = (async () => { throw new TypeError('fetch failed') }) as unknown as typeof fetch
+    expect(await patchKvitelStatus(['r1'], 'pending', down)).toEqual({ error: 'העדכון נכשל: אין חיבור לשרת' })
   })
 })
 
@@ -85,5 +103,39 @@ describe('טבלת הבקשות במסך השבוע', () => {
     expect(ids(byKvitelTab(after, KVITEL_DEFAULT_TAB))).toEqual(['b', 'e'])
     expect(ids(byKvitelTab(after, 'done'))).toEqual(['a', 'c'])
     expect(byKvitelTab(after, 'all')).toHaveLength(5)
+  })
+})
+
+describe('אישור מהיר שם אחרי שם', () => {
+  const r = (id: string, status: string, needsReview = false) =>
+    ({ id, channel: 'nedarim', status, needsReview, contact_name: 'דוד', kvitel_request_lines: [line()] }) as unknown as KvitelRequestRow
+  const ids = (xs: KvitelRequestRow[]) => xs.map(x => x.id)
+
+  it('לשונית "לבדיקה" מציגה רק מה שמחכה לאישור, והספירה כוללת את מה שמוצג כ"לא נשלח"', () => {
+    const rows = [r('a', 'pending', true), r('b', 'pending'), r('c', 'review'), r('d', 'done')]
+    expect(ids(byKvitelTab(rows, 'review'))).toEqual(['a', 'c'])
+    expect(countByStatus(rows)).toMatchObject({ review: 2, pending: 2, done: 1, all: 4 })
+  })
+
+  it('הבאה בתור: אחרי הנוכחית, ואם אין — הראשונה שלפניה', () => {
+    const rows = [r('a', 'pending', true), r('b', 'pending'), r('c', 'pending', true), r('d', 'pending', true)]
+    expect(nextToApprove(rows, 'a')).toBe('c')
+    expect(nextToApprove(rows, 'd')).toBe('a')
+    expect(nextToApprove([r('a', 'pending', true)], 'a')).toBeNull()
+  })
+
+  it('אישור ברצף עובר על כל הבקשות עד שהלשונית מתרוקנת', () => {
+    let rows = [r('a', 'pending', true), r('b', 'pending', true), r('c', 'pending', true)]
+    const order: string[] = []
+    let cur: string | null = 'a'
+    while (cur) {
+      const id: string = cur
+      order.push(id)
+      rows = rows.map(x => (x.id === id ? asApproved(x) : x))
+      cur = rows.some(needsApproval) ? nextToApprove(rows, id) : null
+    }
+    expect(order).toEqual(['a', 'b', 'c'])
+    expect(byKvitelTab(rows, 'review')).toEqual([])
+    expect(ids(byKvitelTab(rows, 'pending'))).toEqual(['a', 'b', 'c'])
   })
 })

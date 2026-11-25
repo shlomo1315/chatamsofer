@@ -8,7 +8,7 @@ vi.mock('@/lib/kvitelReview', () => ({
   reviewLines: (lines: unknown[]) => lines.map(() => null),
 }))
 
-import { reprocessKvitelRequest } from './kvitelIngest'
+import { ingestKvitel, reprocessKvitelRequest } from './kvitelIngest'
 
 // מסד מדומה שרושם מה נמחק, מה נוסף ומה עודכן
 function fakeDb(status: string) {
@@ -41,5 +41,38 @@ describe('reprocessKvitelRequest: השלמת שמות שחסרו', () => {
     const r = await reprocessKvitelRequest(db, 'r1', { channel: 'nedarim', lines: [line('משה')] }, { appendAfter: 1 })
     expect(r.ok).toBe(false)
     expect(log.inserted).toEqual([])
+  })
+})
+
+// מסד מדומה לקליטה: כל קריאה שרשרת, ונרשם הסטטוס שבו הבקשה נשמרה
+function ingestDb() {
+  const saved: Record<string, unknown>[] = []
+  const chain = (t: string): Record<string, unknown> => {
+    const q: Record<string, unknown> = {
+      select: () => q, eq: () => q, update: () => q,
+      maybeSingle: async () => ({ data: null }),
+      single: async () => ({ data: { id: t === 'kvitel_requests' ? 'req1' : 'p1' }, error: null }),
+      insert: (row: Record<string, unknown>) => { if (t === 'kvitel_requests') saved.push(row); return Object.assign(Promise.resolve({ error: null }), q) },
+      upsert: async () => ({ error: null }),
+      then: (f: (v: unknown) => unknown) => Promise.resolve({ error: null }).then(f),
+    }
+    return q
+  }
+  return { db: { from: chain } as unknown as SupabaseClient, saved }
+}
+
+describe('ingestKvitel: כל בקשה חדשה נכנסת "לבדיקה"', () => {
+  it.each(['web', 'nedarim', 'phone', 'email'] as const)('ערוץ %s', async channel => {
+    const { db, saved } = ingestDb()
+    const r = await ingestKvitel(db, { channel, phone: '0501234567', contactName: 'דוד', lines: [line('משה')] })
+    expect(r).toMatchObject({ ok: true, status: 'review' })
+    expect(saved[0]).toMatchObject({ channel, status: 'review' })
+  })
+
+  it('עיבוד מחדש לא מאשר בקשה שבבדיקה', async () => {
+    const { db, log } = fakeDb('review')
+    const r = await reprocessKvitelRequest(db, 'r1', { channel: 'nedarim', lines: [line('משה')] }, { appendAfter: 1 })
+    expect(r).toEqual({ ok: true, status: 'review', lines: 1 })
+    expect(log.patch).toMatchObject({ status: 'review' })
   })
 })
