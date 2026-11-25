@@ -29,6 +29,8 @@ export interface TableSpec {
   statusCol?: string
   /** קשר למשפחה — כדי לצרף שם בעלים לרשומה */
   joinBeneficiary?: boolean
+  /** טבלה קשורה שמצורפת לכל רשומה (תחביר embed של PostgREST), למשל שם הפרשה למשלוח גיליון */
+  join?: string
   /**
    * מסלול המסך במערכת, עם {id} כמציין מקום.
    * מאפשר לעוזר לצרף לתשובה כפתור שמוביל ישירות לכרטסת.
@@ -190,10 +192,55 @@ export const TABLES: TableSpec[] = [
     table: 'sent_emails',
     label: 'דואר יוצא',
     perm: null,
-    about: 'מיילים שהמערכת שלחה.',
+    about: 'מיילים בודדים שהמערכת שלחה מהתיבות (תשובות, אישורים, הודעות). '
+      + '🔴 הגיליונות השבועיים והניוזלטר **אינם** כאן: מייל גיליון נמצא ב-gilyonot_deliveries. היעדר מייל כאן אינו אומר שגיליון לא נשלח.',
     columns: ['id', 'subject', 'to_email', 'department', 'created_at'],
     dateCol: 'created_at',
     searchCols: ['subject', 'to_email'],
+  },
+  {
+    table: 'gilyonot_issues',
+    label: 'גיליונות שבועיים',
+    perm: 'gilyonot',
+    about: 'הגיליון השבועי לכל פרשה. status: draft=טיוטה · scheduled=מתוזמן · sending=בשליחה · sent=נשלח. total_count = מספר הנמענים.',
+    columns: ['id', 'title', 'parasha', 'subject', 'status', 'scheduled_at', 'started_at', 'completed_at', 'total_count', 'created_at'],
+    dateCol: 'created_at',
+    searchCols: ['parasha', 'title', 'subject'],
+    statusCol: 'status',
+  },
+  {
+    table: 'gilyonot_deliveries',
+    label: 'משלוחי גיליונות',
+    perm: 'gilyonot',
+    about: 'שורה לכל נמען בכל גיליון: האם הגיליון נשלח אליו, ומה קרה אחר כך. issue.parasha = הפרשה. '
+      + 'status: sent=נשלח · pending=ממתין בתור · failed=נכשל (error מפרט). opened_at/open_count = נפתח, downloaded_at = הורד, bounced_at = חזר. '
+      + '🔴 לשאלה "האם גיליון פרשה X נשלח ל-<מייל>" — חפש כאן לפי המייל (search). '
+      + '⚠️ אין שורה לנמען = הוא לא היה ברשימה בזמן השליחה, או שהסיר את עצמו (unsubscribes) ולכן דולג.',
+    columns: ['id', 'issue_id', 'email', 'status', 'attempts', 'error', 'sent_at', 'opened_at', 'open_count', 'downloaded_at', 'bounced_at', 'bounce_type'],
+    dateCol: 'sent_at',
+    searchCols: ['email'],
+    statusCol: 'status',
+    join: 'issue:gilyonot_issues(parasha, title)',
+  },
+  {
+    table: 'gilyonot_subscribers',
+    label: 'מנויי הגיליונות',
+    perm: 'gilyonot',
+    about: 'הרשימה הראשית של מנויי הגיליון. status: active=פעיל · unsubscribed=הוסר. source = מאיפה נרשם. '
+      + '⚠️ מנוי פעיל שכתובתו מופיעה ב-unsubscribes (הסרה מקישור בניוזלטר) לא מקבל גיליונות.',
+    columns: ['id', 'email', 'full_name', 'source', 'status', 'unsubscribed_at', 'created_at'],
+    dateCol: 'created_at',
+    searchCols: ['email', 'full_name'],
+    statusCol: 'status',
+  },
+  {
+    table: 'unsubscribes',
+    label: 'הסרות מדיוור',
+    perm: 'gilyonot',
+    about: 'כתובות שהוסרו מכל הדיוור (ניוזלטר וגיליונות). reason: user=הסיר בעצמו · bounce=חזר · complaint=סימן כספאם · manual=הוסר ידנית.',
+    columns: ['email', 'reason', 'created_at'],
+    dateCol: 'created_at',
+    searchCols: ['email'],
   },
   {
     table: 'campaigns',

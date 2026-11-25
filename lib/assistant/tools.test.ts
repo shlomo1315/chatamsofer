@@ -350,3 +350,41 @@ describe('חיפוש לפי מייל וטלפון', () => {
     expect(looksLikeEmail('066526427')).toBe(false)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ⚠️ רגרסיה (25.11): "האם גיליון ויצא נשלח ל-tora@enativ.com?" — העוזר חיפש
+// רק ב-sent_emails, לא מצא, וענה "לא נשלח". בפועל הגיליון נשלח ונפתח: משלוחי
+// הגיליונות נשמרים ב-gilyonot_deliveries, שהעוזר לא הכיר.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('גיליונות — העוזר רואה את המשלוחים', () => {
+  it('משלוחי גיליונות נשלפים לפי מייל, עם שם הפרשה', async () => {
+    const selects: string[] = []
+    const ilikes: string[] = []
+    const chain: Record<string, unknown> = {}
+    const self = () => chain
+    Object.assign(chain, {
+      from: self, eq: self, neq: self, gte: self, or: self, order: self, limit: self, in: self, range: self,
+      select: (s: string) => { selects.push(s); return chain },
+      ilike: (col: string) => { ilikes.push(col); return chain },
+      then: (r: (v: unknown) => unknown) => r({ data: [{ id: '1', email: 'tora@enativ.com', status: 'sent', issue: { parasha: 'פרשת ויצא' } }] }),
+    })
+    const ctx: ToolCtx = { ...admin, db: chain as never }
+    const r = await runTool(ctx, 'query_data', { table: 'gilyonot_deliveries', search: 'tora@enativ.com' }) as { error?: string; נמצאו?: number }
+    expect(r.error).toBeUndefined()
+    expect(r.נמצאו).toBe(1)
+    expect(ilikes).toContain('email')
+    expect(selects[0]).toContain('issue:gilyonot_issues(parasha')
+  })
+
+  it('רק מי שיש לו הרשאת גיליונות רואה את המשלוחים', async () => {
+    const no = await runTool(secretary('loans'), 'query_data', { table: 'gilyonot_deliveries' }) as { error?: string }
+    expect(no.error).toContain('אין לך הרשאה')
+    const yes = await runTool(secretary('gilyonot'), 'count_data', { table: 'gilyonot_deliveries' }) as { error?: string }
+    expect(yes.error).toBeUndefined()
+  })
+
+  it('דואר יוצא מפנה לגיליונות, כדי שהיעדר מייל שם לא ייקרא "לא נשלח"', () => {
+    const sent = TABLES.find(t => t.table === 'sent_emails')
+    expect(sent?.about).toContain('gilyonot_deliveries')
+  })
+})
