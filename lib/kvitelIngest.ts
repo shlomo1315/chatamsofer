@@ -5,8 +5,8 @@ import { aiNoteFlags, dropDuplicateLines, loadReviewContext, reviewLines } from 
 // ─────────────────────────────────────────────────────────────────────────────
 // קליטת הגשת קוויטל — נקודת כניסה אחת לכל הערוצים.
 //
-// לינק ונדרים פלוס נכנסים ישר כ"ממתין"; טלפון ומייל (פענוח אוטומטי) ייכנסו
-// כ"לבדיקה" עד שאיש צוות מאשר. המגיש מזוהה לפי טלפון, או לפי מייל אם אין.
+// כל הגשה חדשה, מכל ערוץ (לינק, נדרים פלוס, טלפון, מייל), נכנסת כ"לבדיקה" עד שאיש
+// צוות מאשר אותה במסך. המגיש מזוהה לפי טלפון, או לפי מייל אם אין.
 // השמות נשמרים אצלו, כדי שבפעם הבאה יוצעו לו לאישור.
 //
 // כל הגשה עוברת את סוכן האחידות (lib/kvitelReview): שורה שסומנה (כפילות, כתיב,
@@ -78,7 +78,8 @@ export async function ingestKvitel(db: SupabaseClient, s: KvitelSubmission): Pro
   const lines = prep.lines
   const flagged = flags.filter(Boolean).length
   const allDuplicates = prep.dropped > 0 && !lines.length
-  let status: KvitelStatus = s.status ?? 'pending'
+  // כל בקשה חדשה, מכל ערוץ, נכנסת "לבדיקה" ומחכה לאישור ידני לפני שליחה לציון
+  let status: KvitelStatus = s.status ?? 'review'
   if (allDuplicates) status = 'cancelled'
   else if (status === 'pending' && (flagged || !lines.length)) status = 'review'
   const note = [s.note, prep.dropped ? (allDuplicates ? 'כל השמות כבר ממתינים לשליחה, הבקשה בוטלה' : `נמחקו ${prep.dropped} כפילויות`) : null, flagged ? `סוכן האחידות סימן ${flagged} שורות לבדיקה` : null].filter(Boolean).join(' · ') || null
@@ -160,7 +161,8 @@ export async function reprocessKvitelRequest(db: SupabaseClient, requestId: stri
   const flagged = flags.filter(Boolean).length
   let status = cur.status as KvitelStatus
   // בהוספה השורות הקיימות נשארות כמו שהן, אז רק סימון חדש מעביר ל"לבדיקה"
-  if (append) { if (flagged) status = 'review' } else if (status === 'review' || status === 'pending') status = flagged || !lines.length ? 'review' : 'pending'
+  // עיבוד מחדש לא מאשר בקשה בעצמו: "לבדיקה" נשאר לבדיקה, ומאושרת יורדת לבדיקה רק כשיש סימון
+  if (status === 'pending' && (flagged || (!append && !lines.length))) status = 'review'
   const patch: Record<string, unknown> = { status, raw_text: s.rawText ?? null }
   if (requesterId) patch.requester_id = requesterId
   if (s.contactName) patch.contact_name = s.contactName

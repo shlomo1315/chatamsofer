@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { byKvitelTab, countByStatus, hebrewDay, KVITEL_DEFAULT_TAB, kvitelRowActions, parseRawFields, patchKvitelStatus, pendingForPrint, reviewReason, scopeKvitelRows, cleanTranscript, MAX_TRANSCRIPT } from './kvitelView'
+import { asApproved, byKvitelTab, countByStatus, needsApproval, nextToApprove, hebrewDay, KVITEL_DEFAULT_TAB, kvitelRowActions, parseRawFields, patchKvitelStatus, pendingForPrint, reviewReason, scopeKvitelRows, cleanTranscript, MAX_TRANSCRIPT } from './kvitelView'
 import { kvitelExportLines, type KvitelRequestRow } from './kvitelQuery'
 
 describe('kvitelRowActions — כפתורי השורה', () => {
@@ -103,5 +103,39 @@ describe('טבלת הבקשות במסך השבוע', () => {
     expect(ids(byKvitelTab(after, KVITEL_DEFAULT_TAB))).toEqual(['b', 'e'])
     expect(ids(byKvitelTab(after, 'done'))).toEqual(['a', 'c'])
     expect(byKvitelTab(after, 'all')).toHaveLength(5)
+  })
+})
+
+describe('אישור מהיר שם אחרי שם', () => {
+  const r = (id: string, status: string, needsReview = false) =>
+    ({ id, channel: 'nedarim', status, needsReview, contact_name: 'דוד', kvitel_request_lines: [line()] }) as unknown as KvitelRequestRow
+  const ids = (xs: KvitelRequestRow[]) => xs.map(x => x.id)
+
+  it('לשונית "לבדיקה" מציגה רק מה שמחכה לאישור, והספירה כוללת את מה שמוצג כ"לא נשלח"', () => {
+    const rows = [r('a', 'pending', true), r('b', 'pending'), r('c', 'review'), r('d', 'done')]
+    expect(ids(byKvitelTab(rows, 'review'))).toEqual(['a', 'c'])
+    expect(countByStatus(rows)).toMatchObject({ review: 2, pending: 2, done: 1, all: 4 })
+  })
+
+  it('הבאה בתור: אחרי הנוכחית, ואם אין — הראשונה שלפניה', () => {
+    const rows = [r('a', 'pending', true), r('b', 'pending'), r('c', 'pending', true), r('d', 'pending', true)]
+    expect(nextToApprove(rows, 'a')).toBe('c')
+    expect(nextToApprove(rows, 'd')).toBe('a')
+    expect(nextToApprove([r('a', 'pending', true)], 'a')).toBeNull()
+  })
+
+  it('אישור ברצף עובר על כל הבקשות עד שהלשונית מתרוקנת', () => {
+    let rows = [r('a', 'pending', true), r('b', 'pending', true), r('c', 'pending', true)]
+    const order: string[] = []
+    let cur: string | null = 'a'
+    while (cur) {
+      const id: string = cur
+      order.push(id)
+      rows = rows.map(x => (x.id === id ? asApproved(x) : x))
+      cur = rows.some(needsApproval) ? nextToApprove(rows, id) : null
+    }
+    expect(order).toEqual(['a', 'b', 'c'])
+    expect(byKvitelTab(rows, 'review')).toEqual([])
+    expect(ids(byKvitelTab(rows, 'pending'))).toEqual(['a', 'b', 'c'])
   })
 })

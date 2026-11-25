@@ -35,15 +35,31 @@ function gematria(n: number): string {
 }
 
 export type StatusCounts = Record<KvitelStatus | 'all', number>
-export function countByStatus(rows: Pick<KvitelRequestRow, 'status'>[]): StatusCounts {
+// בקשה "לבדיקה" מוצגת במסך כ"לא נשלח" עם needsReview — היא נספרת גם ב"לא נשלח" וגם ב"לבדיקה"
+export function countByStatus(rows: Pick<KvitelRequestRow, 'status' | 'needsReview'>[]): StatusCounts {
   const c: StatusCounts = { all: rows.length, review: 0, pending: 0, done: 0, cancelled: 0 }
-  for (const r of rows) c[r.status] += 1
+  for (const r of rows) {
+    c[r.status] += 1
+    if (r.needsReview && r.status !== 'review') c.review += 1
+  }
   return c
 }
 
+export const needsApproval = (r: Pick<KvitelRequestRow, 'status' | 'needsReview'>) => r.status === 'review' || !!r.needsReview
+
+// הבקשה הבאה שמחכה לאישור אחרי id, לפי סדר התצוגה. אם אין אחריה, הראשונה שלפניה. null כשאין עוד.
+export function nextToApprove<R extends Pick<KvitelRequestRow, 'id' | 'status' | 'needsReview'>>(rows: R[], id: string): string | null {
+  const i = rows.findIndex(r => r.id === id)
+  const after = rows.slice(i + 1).find(needsApproval)
+  return (after ?? rows.slice(0, Math.max(i, 0)).find(needsApproval))?.id ?? null
+}
+
+// השורה אחרי אישור, כפי שתוצג מיד בלי לחכות לשרת
+export const asApproved = <R extends KvitelRequestRow>(r: R): R => ({ ...r, status: 'pending', needsReview: false })
+
 // סינון טבלת הבקשות בדפדפן: מקור (ערוץ), סוג בקשה, חיפוש חופשי, ואחריהם הסטטוס.
-// ברירת המחדל היא "לא נשלח" — בקשה שסומנה "נשלח לציון" יוצאת מהתצוגה.
-export type KvitelTab = 'all' | 'pending' | 'done' | 'cancelled'
+// ברירת המחדל היא "לא נשלח" — בקשה שסומנה "נשלח לציון" יוצאת מהתצוגה. "לבדיקה" = רק מה שמחכה לאישור.
+export type KvitelTab = 'all' | 'review' | 'pending' | 'done' | 'cancelled'
 export const KVITEL_DEFAULT_TAB: KvitelTab = 'pending'
 export interface KvitelRowFilter { channel?: string; type?: string; q?: string }
 
@@ -58,8 +74,8 @@ export function scopeKvitelRows<R extends Pick<KvitelRequestRow, 'channel' | 'co
   })
 }
 
-export const byKvitelTab = <R extends Pick<KvitelRequestRow, 'status'>>(rows: R[], tab: KvitelTab): R[] =>
-  tab === 'all' ? rows : rows.filter(r => r.status === tab)
+export const byKvitelTab = <R extends Pick<KvitelRequestRow, 'status' | 'needsReview'>>(rows: R[], tab: KvitelTab): R[] =>
+  tab === 'all' ? rows : tab === 'review' ? rows.filter(needsApproval) : rows.filter(r => r.status === tab)
 
 // כפתורי השורה בטבלה ובכרטיסים במובייל. "מחיקה" = ביטול (עוברת ל"בוטלו" ואפשר לשחזר משם).
 // approve: 'button' — כפתור אישור (רק בבקשה לבדיקה); 'approved' / 'sent' — תווית מצב במקום כפתור; null — כלום.
