@@ -31,7 +31,8 @@
 .lin .now small{display:block;font-weight:400;font-size:12px;opacity:.8}
 .lin .bar2{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:18px 0 14px}
 .lin .tabs{display:flex;background:#ebe7de;border-radius:12px;padding:4px;gap:2px}
-.lin .tabs button{border:0;background:none;padding:9px 18px;border-radius:9px;font-size:15px;font-weight:500;color:var(--ink2);min-height:40px}
+.lin .tabs button,.lin .tabs a{border:0;background:none;padding:9px 18px;border-radius:9px;font-size:15px;font-weight:500;color:var(--ink2);min-height:40px}
+.lin .tabs a{display:flex;align-items:center;text-decoration:none}
 .lin .tabs button.on{background:var(--card);color:var(--brand);font-weight:700;box-shadow:var(--sh)}
 .lin .tabs .n{font-size:11px;background:var(--warnbg);color:var(--warn);border-radius:99px;padding:1px 7px;margin-inline-start:6px}
 .lin .flt{display:flex;gap:8px;align-items:center;margin-inline-start:auto;flex-wrap:wrap}
@@ -196,7 +197,7 @@
 .lin .flt{margin:0;width:100%}
 .lin .flt input{flex:1;width:auto}
 .lin .tabs{width:100%;overflow-x:auto}
-.lin .tabs button{padding:9px 12px;flex:1 0 auto}
+.lin .tabs button,.lin .tabs a{padding:9px 12px;flex:1 0 auto}
 .lin .tools{grid-template-columns:1fr}
 .lin .demo{display:none}
 .lin .q{display:flex;overflow-x:auto;gap:4px}

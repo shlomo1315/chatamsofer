@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useMemo, useState, type ReactNode } from 'react'
 import { fmt, pathTo, type ShellData } from '@/lib/lineageShell'
 import FanChart from './FanChart'
@@ -75,6 +76,7 @@ export default function LineageShell(p: Props) {
                 {t.l}{t.v === 'work' && pendingBadge > 0 && <span className="n">{fmt(pendingBadge)}</span>}
               </button>
             ))}
+            <Link href="/admin/lineage/ladder">מאושרים</Link>
           </div>
           <div className="flt">
             <select value={trunk} aria-label="סינון לפי גזע" onChange={e => setTrunk(Number(e.target.value))}>
