@@ -199,6 +199,8 @@ ${text.slice(0, MAX_TEXT)}`,
 export interface KvitelEmailMessage {
   messageId: string; fromEmail: string; fromName: string | null; subject: string; text: string
   attachments?: KvitelAttachmentText[]
+  // הקלטה מצורפת (שאלון טלפוני). מייל עם הקלטה נקלט לבדיקה גם כשלא נמצא בו שם, כי השם בהקלטה.
+  recordingUrl?: string | null
 }
 
 export async function handleKvitelEmail(db: SupabaseClient, m: KvitelEmailMessage): Promise<{ ok: boolean; requestId?: string; status?: string; skipped?: string; duplicate?: boolean }> {
@@ -258,7 +260,11 @@ async function decodeKvitelEmail(m: KvitelEmailMessage): Promise<KvitelSubmissio
     if (ai && ai.lines.length >= parsed.lines.length) { parsed = ai; note = `פוענח ${from} ב-AI` }
     else if (all.leftover.length) note = `נשארו ${all.leftover.length} שורות שלא פוענחו — יש לבדוק את המקור`
   }
-  if (!parsed.lines.length) return null
+  const recordingUrl = m.recordingUrl || null
+  if (!parsed.lines.length && !recordingUrl) return null
+  if (recordingUrl) note = parsed.lines.length
+    ? `${note} · שאלון טלפוני: השם מהתמלול האוטומטי, יש לבדוק מול ההקלטה`
+    : 'שאלון טלפוני: לא זוהה שם בתמלול, יש להאזין להקלטה ולהקליד את השם'
   // יותר שמות ממה שנכנס לבקשה אחת: לא נבלעים בשקט, הבקשה עוברת לבדיקה.
   const truncated = found > MAX_LINES
   if (truncated) note = `נמצאו ${found} שמות, נקלטו ${MAX_LINES} הראשונים — יש לבדוק את המקור`
@@ -266,9 +272,10 @@ async function decodeKvitelEmail(m: KvitelEmailMessage): Promise<KvitelSubmissio
   return {
     channel: 'email',
     // שורות שלא פוענחו → כל הבקשה לבדיקה, גם אם הסוכן לא סימן דבר.
-    status: note.startsWith('נשארו') || truncated ? 'review' : undefined,
+    status: note.startsWith('נשארו') || truncated || recordingUrl ? 'review' : undefined,
     email: m.fromEmail, contactName: m.fromName,
-    lines: parsed.lines, lineFlags: parsed.flags,
+    lines: parsed.lines, lineFlags: recordingUrl ? parsed.lines.map((_, i) => parsed.flags[i] || 'תמלול אוטומטי של שאלון טלפוני, לבדוק מול ההקלטה') : parsed.flags,
+    recordingUrl,
     rawText: `${m.subject}\n\n${fullText}`.slice(0, MAX_TEXT),
     sourceRef: m.messageId, note,
   }

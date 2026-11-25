@@ -6,7 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 vi.mock('./kvitelAi', () => ({ askClaudeJson: async () => null }))
 
 import { handleKvitelEmail, reingestKvitelEmail } from './kvitelEmail'
-import { extractAttachmentTexts, type KvitelAttachmentText } from './kvitelAttachments'
+import { audioAttachmentUrl, extractAttachmentTexts, storedAttachmentTexts, type KvitelAttachmentText } from './kvitelAttachments'
 
 type Row = Record<string, unknown>
 
@@ -48,7 +48,7 @@ function fakeDb() {
   return db as unknown as SupabaseClient & { tables: Record<string, Row[]> }
 }
 
-const mail = (o: Partial<{ messageId: string; subject: string; text: string; attachments: KvitelAttachmentText[] }>) => ({
+const mail = (o: Partial<{ messageId: string; subject: string; text: string; attachments: KvitelAttachmentText[]; recordingUrl: string }>) => ({
   messageId: '<m1@mail>', fromEmail: 'Donor@Gmail.com', fromName: 'משפחת כהן', subject: 'שמות לתפילה', text: '', ...o,
 })
 
@@ -265,5 +265,73 @@ describe('קליטה מחדש של מייל (reingestKvitelEmail)', () => {
     const r = await reingestKvitelEmail(db, mail({ text: 'שלום, תודה רבה' }))
     expect(r).toMatchObject({ ok: false, noNames: true })
     expect(db.tables.kvitel_requests ?? []).toHaveLength(0)
+  })
+})
+
+describe('שאלון טלפוני עם הקלטה מצורפת (ידע פון)', () => {
+  let db: ReturnType<typeof fakeDb>
+  beforeEach(() => { db = fakeDb() })
+  const rec = 'https://x.supabase.co/storage/v1/object/public/documents/mail/a/0_rec.wav'
+  const yeda = (text: string) => mail({ subject: 'התקבל נתון חדש בשלוחת שאלון 1.1.5.2-קוויטל', text, recordingUrl: rec })
+
+  it('תמלול בלי שם: נוצרת בקשה לבדיקה עם ההקלטה ובלי שורות', async () => {
+    const r = await handleKvitelEmail(db, yeda('שם: why the same sky the recession'))
+    expect(r).toMatchObject({ ok: true, status: 'review' })
+    const [req] = db.tables.kvitel_requests
+    expect(req).toMatchObject({ status: 'review', recording_url: rec })
+    expect(String(req.note)).toContain('יש להאזין להקלטה')
+    expect(db.tables.kvitel_request_lines ?? []).toHaveLength(0)
+  })
+
+  it('תמלול עם שם: השם נקלט עם סימון לבדיקה מול ההקלטה', async () => {
+    await handleKvitelEmail(db, yeda('משה בן יהודית'))
+    const [req] = db.tables.kvitel_requests
+    expect(req).toMatchObject({ status: 'review', recording_url: rec })
+    expect(db.tables.kvitel_request_lines[0]).toMatchObject({ name: 'משה', flagged: true })
+    expect(String(db.tables.kvitel_request_lines[0].flag_reason)).toContain('לבדוק מול ההקלטה')
+  })
+
+  it('אותו שאלון פעמיים: בקשה אחת', async () => {
+    await handleKvitelEmail(db, yeda(''))
+    await handleKvitelEmail(db, yeda(''))
+    expect(db.tables.kvitel_requests).toHaveLength(1)
+  })
+
+  it('קליטה מחדש של בקשה ריקה קיימת: ההקלטה נוספת לאותה בקשה', async () => {
+    await handleKvitelEmail(db, yeda(''))
+    db.tables.kvitel_requests[0].recording_url = null
+    const r = await reingestKvitelEmail(db, yeda(''))
+    expect(r).toMatchObject({ ok: true, created: false })
+    expect(db.tables.kvitel_requests).toHaveLength(1)
+    expect(db.tables.kvitel_requests[0].recording_url).toBe(rec)
+  })
+
+  it('מייל בלי שם ובלי הקלטה: עדיין לא נוצרת בקשה', async () => {
+    const r = await handleKvitelEmail(db, mail({ text: 'שם:' }))
+    expect(r).toMatchObject({ ok: true, skipped: 'no-names' })
+  })
+})
+
+describe('audioAttachmentUrl', () => {
+  it('מוצא WAV לפי סוג או סיומת, ומדלג על קובץ בלי כתובת', () => {
+    expect(audioAttachmentUrl([{ filename: 'a.pdf', mimeType: 'application/pdf', url: 'p' }, { filename: 'r.wav', mimeType: 'application/octet-stream', url: 'w' }])).toBe('w')
+    expect(audioAttachmentUrl([{ filename: 'r', mimeType: 'audio/x-wav', url: null }])).toBeNull()
+  })
+})
+
+describe('storedAttachmentTexts', () => {
+  it('מוריד מהדלי רק קובץ שאפשר לקרוא, לפי נתיב האחסון, ומחלץ ממנו טקסט', async () => {
+    const paths: string[] = []
+    const db = { storage: { from: (b: string) => ({ download: async (p: string) => {
+      paths.push(`${b}:${p}`)
+      return { data: new Blob(['אברהם בן שרה']), error: null }
+    } }) } }
+    const out = await storedAttachmentTexts(db, [
+      { filename: 'k.txt', mimeType: 'text/plain', url: 'https://x/storage/v1/object/public/documents/mail/m/0.txt' },
+      { filename: 'r.wav', mimeType: 'audio/wav', url: 'https://x/storage/v1/object/public/documents/mail/m/1.wav' },
+      { filename: 'big.pdf', mimeType: 'application/pdf', url: 'u', size: 9e6 },
+    ])
+    expect(paths).toEqual(['documents:mail/m/0.txt'])
+    expect(out).toEqual([{ filename: 'k.txt', text: 'אברהם בן שרה' }])
   })
 })

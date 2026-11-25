@@ -1,4 +1,5 @@
 import JSZip from 'jszip'
+import { storagePath } from '@/lib/docUrl'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // חילוץ טקסט מקבצים שמצורפים למייל קוויטל (Word, PDF, טקסט), כדי שהשמות שבהם
@@ -20,6 +21,14 @@ export function attachmentKind(filename: string, mimeType: string): Kind | null 
   if (ext === 'pdf' || mt === 'application/pdf') return 'pdf'
   if (ext === 'txt' || mt.startsWith('text/plain')) return 'text'
   return null
+}
+
+// הקלטה מצורפת (השאלון הטלפוני של ידע פון שולח WAV): הכתובת הציבורית שלה נשמרת בבקשה,
+// כדי שהצוות יאזין לשם מהמסך, כי התמלול האוטומטי שלהם שגוי או ריק לעיתים קרובות.
+export function audioAttachmentUrl(files: { filename?: string | null; mimeType?: string | null; url?: string | null }[]): string | null {
+  const isAudio = (f: { filename?: string | null; mimeType?: string | null }) =>
+    (f.mimeType ?? '').toLowerCase().startsWith('audio/') || /\.(wav|mp3|m4a|ogg|amr)$/i.test(f.filename ?? '')
+  return files.find(f => f.url && isAudio(f))?.url ?? null
 }
 
 const unescapeXml = (s: string) => s
@@ -52,6 +61,23 @@ async function pdfText(buffer: Buffer): Promise<string> {
     out.push(items.map(i => (i.str ?? '') + (i.hasEOL ? '\n' : '')).join(''))
   }
   return out.join('\n')
+}
+
+type StoredFile = { filename?: string | null; mimeType?: string | null; url?: string | null; size?: number | null }
+type StorageReader = { storage: { from(bucket: string): { download(path: string): PromiseLike<{ data: Blob | null; error: unknown }> } } }
+
+// קליטה מחדש של מייל שמור (סנכרון במסך): הקבצים נמשכים מהדלי documents, שבו ה-webhook שמר אותם,
+// ועוברים את אותו חילוץ טקסט. כך נקלט גם מייל שהגיע לפני שהקליטה קראה קבצים מצורפים.
+export async function storedAttachmentTexts(db: StorageReader, files: StoredFile[]): Promise<KvitelAttachmentText[]> {
+  const read: KvitelAttachmentFile[] = []
+  for (const f of files) {
+    const filename = f.filename ?? '', mimeType = f.mimeType ?? ''
+    if (!f.url || !attachmentKind(filename, mimeType) || (f.size ?? 0) > MAX_ATTACHMENT_BYTES) continue
+    const { data, error } = await db.storage.from('documents').download(storagePath(f.url))
+    if (error || !data) { console.error('[kvitel-email] הורדת קובץ מצורף נכשלה:', filename); continue }
+    read.push({ filename, mimeType, buffer: Buffer.from(await data.arrayBuffer()) })
+  }
+  return extractAttachmentTexts(read)
 }
 
 /** טקסט מכל קובץ שאפשר לקרוא. קובץ שנכשל נרשם ביומן ומדולג, בלי להפיל את הקליטה. */

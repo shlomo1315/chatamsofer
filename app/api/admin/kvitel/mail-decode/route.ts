@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
 import { KVITEL_MAILBOX, isKvitelMailbox, isKvitelSubject, reingestKvitelEmail } from '@/lib/kvitelEmail'
+import { audioAttachmentUrl, storedAttachmentTexts } from '@/lib/kvitelAttachments'
 import { decodeFromSaved, decodeFromText, mailPlainText } from '@/lib/kvitelMailDecode'
 import { encodeKvitelPayload } from '@/lib/kvitelPayload'
 
@@ -24,19 +25,26 @@ const noStore = { 'Cache-Control': 'no-store' }
 const SYNC_BATCH = 5
 const SYNC_SCAN = 200
 
-const MAIL_COLS = 'id, message_id, from_email, from_name, to_email, subject, plain_text, html, received_at'
+const MAIL_COLS = 'id, message_id, from_email, from_name, to_email, subject, plain_text, html, attachments, received_at'
 type MailRow = {
   id: string; message_id: string | null; from_email: string | null; from_name: string | null
   to_email: string | null; subject: string | null; plain_text: string | null; html: string | null; received_at: string
+  attachments?: { filename?: string | null; mimeType?: string | null; url?: string | null; size?: number | null }[] | null
 }
 
 const isKvitelMail = (m: Pick<MailRow, 'to_email' | 'subject'>) =>
   isKvitelMailbox([String(m.to_email ?? '')]) || isKvitelSubject(String(m.subject ?? ''))
 
-const toMessage = (m: MailRow) => ({
-  messageId: m.message_id as string, fromEmail: String(m.from_email ?? ''), fromName: m.from_name,
-  subject: String(m.subject ?? ''), text: mailPlainText(m.plain_text, m.html),
-})
+// הקבצים המצורפים (Word, PDF) נקראים מהדלי, כמו בקליטה החיה, וההקלטה נשמרת לבקשה
+const toMessage = async (db: SupabaseClient, m: MailRow) => {
+  const files = Array.isArray(m.attachments) ? m.attachments : []
+  return {
+    messageId: m.message_id as string, fromEmail: String(m.from_email ?? ''), fromName: m.from_name,
+    subject: String(m.subject ?? ''), text: mailPlainText(m.plain_text, m.html),
+    attachments: await storedAttachmentTexts(db, files),
+    recordingUrl: audioAttachmentUrl(files),
+  }
+}
 
 export async function GET(request: NextRequest) {
   const staff = await requirePermission('kvitel', 'view')
@@ -91,7 +99,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const res = await reingestKvitelEmail(db, toMessage(mail))
+    const res = await reingestKvitelEmail(db, await toMessage(db, mail))
     if (!res.ok) return NextResponse.json({ error: res.error }, { status: res.noNames ? 422 : 409, headers: noStore })
     return NextResponse.json(res, { headers: noStore })
   } catch (e) {
@@ -126,7 +134,7 @@ async function syncMails(db: SupabaseClient, before: string | null) {
     if (taken.has(m.message_id as string)) { out.skipped++; continue }
     tried++
     try {
-      const res = await reingestKvitelEmail(db, toMessage(m))
+      const res = await reingestKvitelEmail(db, await toMessage(db, m))
       if (res.ok) { if (res.created) out.created++; else out.skipped++ }
       else if (res.noNames) out.noNames++
       else out.failed++

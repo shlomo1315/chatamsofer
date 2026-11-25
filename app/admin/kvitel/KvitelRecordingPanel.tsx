@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { Check, Pencil, Save } from 'lucide-react'
 import { MAX_TRANSCRIPT } from '@/lib/kvitelView'
+import { useRecordingSrc } from './useRecordingSrc'
 
 // שורה מורחבת לבקשה שהוקלטה בטלפון: השמעה, תמלול, "המלל תקין" ו"עריכה".
 // ההקלטה ניתנת להשמעה רק כשהכתובת שלה http(s) או יחסית; הקלטה שנשמרה כ-technoline:<נתיב> עדיין לא.
@@ -10,7 +11,7 @@ export default function KvitelRecordingPanel({ requestId, recordingUrl, transcri
   requestId: string; recordingUrl: string; transcript: string | null; needsReview: boolean
   editable: boolean; onSaved: (msg: string) => void
 }) {
-  const playable = /^(https?:|\/)/.test(recordingUrl)
+  const { src, playable, failed } = useRecordingSrc(recordingUrl)
   const [text, setText] = useState(transcript ?? '')
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -37,7 +38,9 @@ export default function KvitelRecordingPanel({ requestId, recordingUrl, transcri
       <div>
         <h3 className="mb-2 text-sm font-bold text-navy">השמעת ההקלטה</h3>
         {playable
-          ? <audio controls preload="none" src={recordingUrl} className="w-full" aria-label="ההקלטה של המתקשר" />
+          ? failed ? <p className="text-sm text-[#8A5A00]">טעינת ההקלטה נכשלה</p>
+            : src ? <audio controls preload="none" src={src} className="w-full" aria-label="ההקלטה של המתקשר" />
+            : <p className="text-sm text-ink-faint">טוען את ההקלטה…</p>
           : <p className="rounded-lg bg-[#FBEFD2] px-3 py-2 text-sm text-[#8A5A00]">ההקלטה שמורה בטכנוליין ועדיין אי אפשר להשמיע אותה כאן.</p>}
       </div>
       <div>

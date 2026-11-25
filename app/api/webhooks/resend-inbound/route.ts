@@ -922,10 +922,11 @@ export async function POST(request: NextRequest) {
     const kvitelBy = detectKvitelEmail({ recipients: [resolvedToEmail, ...candidates], subject, fromEmail: from.email, isOrgAddr })
     if (kvitelBy) {
       const text = (plain && plain.trim()) ? plain : htmlToPlainText(html ?? '')
-      const { extractAttachmentTexts } = await import('@/lib/kvitelAttachments')
+      const { extractAttachmentTexts, audioAttachmentUrl } = await import('@/lib/kvitelAttachments')
       const r = await handleKvitelEmail(admin, {
         messageId, fromEmail: from.email, fromName: from.name, subject, text,
         attachments: await extractAttachmentTexts(attachmentFiles),
+        recordingUrl: audioAttachmentUrl(attachments),
       })
       console.log('[resend-inbound] קוויטל:', r)
     }
