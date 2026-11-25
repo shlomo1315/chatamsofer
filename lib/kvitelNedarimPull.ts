@@ -40,6 +40,11 @@ export interface KvitelNedarimState { lastId: number; lastRunAt: string | null; 
 
 export type KvitelNedarimView = Omit<KvitelNedarimConfig, 'apiKey'> & { hasKey: boolean; sharedKey: boolean; state: KvitelNedarimState }
 
+// פרטי הבקשה (שדה טקסט ארוך בטופס) יושבים בעמודות Field1Max..Field10Max. נדרים מחזיר רק עמודות
+// שמבקשים ב-GetJsonParam, ובלעדיהן כל ההגשות נקלטו עם שמות בלבד, בלי הבקשה.
+export const LONG_FIELDS = Array.from({ length: 10 }, (_, i) => `Field${i + 1}Max`)
+export const KVITEL_FIELDS = [...SAMPLE_FIELDS, ...LONG_FIELDS]
+
 const EMPTY_CONFIG: KvitelNedarimConfig = { mosadId: '', apiKey: '', tofesId: '', contactField: '', phoneField: '', emailField: '', textField: '', lines: [] }
 const EMPTY_STATE: KvitelNedarimState = { lastId: 0, lastRunAt: null, lastAdded: 0, totalAdded: 0, lastError: null }
 
@@ -91,7 +96,8 @@ export function autoKvitelBody(row: NedarimRow): Record<string, string> {
   const body: Record<string, string> = { ClientName: '', Phone: '', Mail: '', Comments: '' }
   const free: string[] = []
   const toks: Tok[] = []
-  const keys = Object.keys(row).filter(k => /^Field\d/.test(k)).sort((a, b) => parseInt(a.slice(5)) - parseInt(b.slice(5)))
+  const byNum = (a: string, b: string) => parseInt(a.slice(5)) - parseInt(b.slice(5))
+  const keys = Object.keys(row).filter(k => /^Field\d+$/.test(k)).sort(byNum)
   for (const k of keys) {
     const v = str(row[k])
     if (!v) continue
@@ -130,6 +136,20 @@ export function autoKvitelBody(row: NedarimRow): Record<string, string> {
     }
   }
   flush()
+
+  // עמודות הטקסט הארוך (FieldNMax): פרטי הבקשה. בקשה לכל שורה לפי הסדר, ובקשה אחת חלה על כל השמות.
+  // שורה שכבר יש לה בקשה מהעמודות הרגילות לא נדרסת. בלי שורות שם, טקסט של שמות עובר לטקסט החופשי.
+  const reqs: string[] = []
+  for (const k of Object.keys(row).filter(k => /^Field\d+Max$/.test(k)).sort(byNum)) {
+    const v = str(row[k])
+    if (!v) continue
+    if (EMAIL_RE.test(v)) { if (!body.Mail) body.Mail = v }
+    else if (PHONE_RE.test(v)) { if (!body.Phone) body.Phone = v }
+    else if (!lines.length && NAME_LINE_RE.test(v)) free.push(v)
+    else reqs.push(v)
+  }
+  if (reqs.length) lines.forEach((l, i) => { const r = reqs.length === 1 ? reqs[0] : reqs[i]; if (r && !l.request) l.request = r })
+
   lines.slice(0, MAX_LINES).forEach((l, i) => {
     const n = i + 1
     Object.assign(body, { [`name${n}`]: l.name ?? '', [`mother${n}`]: l.mother ?? '', [`relation${n}`]: l.relation ?? '', [`request${n}`]: l.request ?? '' })
@@ -168,7 +188,7 @@ function parseBody(body: Record<string, string>, row: NedarimRow): ParsedNedarim
 
 /** כל העמודות שצריך לבקש מנדרים, בלי כפילויות. */
 export function configFields(c: KvitelNedarimConfig): string[] {
-  if (!isMapped(c)) return [...SAMPLE_FIELDS]
+  if (!isMapped(c)) return [...KVITEL_FIELDS]
   const all = [c.contactField, c.phoneField, c.emailField, c.textField, ...c.lines.flatMap(l => [l.name, l.mother, l.relation, l.request])]
   return [...new Set(all.filter(isFieldName))]
 }
@@ -251,9 +271,9 @@ export async function saveKvitelPullConfig(db: SupabaseClient, input: Partial<Kv
 export async function loadKvitelSample(db: SupabaseClient) {
   const c = await getReadyConfig(db)
   if (!c) return { ok: false as const, error: 'צריך קודם לשמור מספר מוסד, מפתח ומספר טופס' }
-  let res = await fetchRows(c, SAMPLE_FIELDS, { lastId: 0, max: 5, desc: true })
+  let res = await fetchRows(c, KVITEL_FIELDS, { lastId: 0, max: 5, desc: true })
   // נדרים לא תמיד מכבד סדר יורד: אם חזר ריק, מנסים גם בסדר רגיל
-  if (res.ok && !res.rows.length) res = await fetchRows(c, SAMPLE_FIELDS, { lastId: 0, max: 5 })
+  if (res.ok && !res.rows.length) res = await fetchRows(c, KVITEL_FIELDS, { lastId: 0, max: 5 })
   return res.ok ? { ok: true as const, rows: res.rows } : res
 }
 
@@ -311,10 +331,13 @@ async function doPull(dbArg?: SupabaseClient): Promise<KvitelPullResult> {
 
 // ── עיבוד מחדש ──
 const MAX_REPROCESS = 100
+// השלמת פרטי הבקשה זולה (עדכון שדה), ולכן כל הבקשות הפתוחות בהרצה אחת
+const MAX_FILL = 1000
 
-export interface KvitelReprocessResult { ok: boolean; checked: number; fixed: number; notes: number; completed: number; stillEmpty: number; missing: number; error?: string }
+export interface KvitelReprocessResult { ok: boolean; checked: number; fixed: number; notes: number; noRequest: number; completed: number; stillEmpty: number; missing: number; error?: string }
 
-type ReLine = { name: string; relation: KvitelRelation; parent_name: string | null; request_note: string | null }
+type ReLine = { id: string; position?: number | null; name: string; relation: KvitelRelation; parent_name: string | null; request_type?: string | null; request_note: string | null }
+const hasRequest = (l: ReLine) => !!(l.request_note || l.request_type)
 type ReRow = { id: string; source_ref: string | null; status: string; raw_text: string | null; kvitel_request_lines: ReLine[] }
 
 const FORM_REF = 'nedarim-form:'
@@ -346,13 +369,13 @@ function missingLines(p: ParsedNedarimKvitel, stored: ReLine[]): { lines: Kvitel
  * עד 100 בקשות בהרצה.
  */
 export async function reprocessKvitelFromNedarim(dbArg?: SupabaseClient): Promise<KvitelReprocessResult> {
-  const out: KvitelReprocessResult = { ok: true, checked: 0, fixed: 0, notes: 0, completed: 0, stillEmpty: 0, missing: 0 }
+  const out: KvitelReprocessResult = { ok: true, checked: 0, fixed: 0, notes: 0, noRequest: 0, completed: 0, stillEmpty: 0, missing: 0 }
   const db = dbArg ?? getServiceClient()
   if (!db) return { ...out, ok: false, error: 'השרת אינו מוגדר' }
   const c = await getReadyConfig(db)
   if (!c) return { ...out, ok: false, error: 'צריך קודם להגדיר מוסד, מפתח וטופס' }
   const { data, error } = await db.from('kvitel_requests')
-    .select('id, source_ref, status, raw_text, kvitel_request_lines(name, relation, parent_name, request_note)').eq('channel', 'nedarim')
+    .select('id, source_ref, status, raw_text, kvitel_request_lines(id, position, name, relation, parent_name, request_type, request_note)').eq('channel', 'nedarim')
     .order('submitted_at', { ascending: false }).limit(1000)
   if (error) return { ...out, ok: false, error: 'קריאת הבקשות נכשלה' }
   const rows = (data ?? []) as unknown as ReRow[]
@@ -379,33 +402,81 @@ export async function reprocessKvitelFromNedarim(dbArg?: SupabaseClient): Promis
     else if (s.lines) out.fixed++; else out.stillEmpty++
   }
 
-  // 2. טופס: משיכה חוזרת מנדרים לבקשות בלי שמות או בלי פרטי בקשה
-  const todo = rows.filter(r => {
-    if (done.has(r.id) || !r.source_ref?.startsWith(FORM_REF)) return false
+  // 2. טופס: משיכה חוזרת מנדרים. בקשה בלי שמות נקלטת מחדש (עד התקציב). בקשה פתוחה עם שמות בלי בקשה:
+  //    רק שדה הבקשה מתמלא בשורות הקיימות. בלי מחיקת שורות, בלי שינוי סטטוס, ותיקונים ידניים בשמות נשמרים.
+  const formId = (r: ReRow) => Number(r.source_ref!.slice(FORM_REF.length))
+  const refetch = (r: ReRow) => !done.has(r.id) && !!r.source_ref?.startsWith(FORM_REF) && Number.isFinite(formId(r)) && formId(r) > 0
+  const empty = rows.filter(r => refetch(r) && !(r.kvitel_request_lines ?? []).length).slice(0, budget)
+  const partial = rows.filter(r => {
     const lines = r.kvitel_request_lines ?? []
-    if (!lines.length) return true
-    return isOpen(r.status) && !lines.some(l => l.request_note)
-  }).slice(0, budget)
-  const fields = configFields(c)
+    return refetch(r) && lines.length > 0 && isOpen(r.status) && !lines.some(hasRequest)
+  }).slice(0, MAX_FILL)
+  const todo = [...empty, ...partial]
+  if (!todo.length) return out
+  const got = await fetchByIds(c, configFields(c), todo.map(formId))
+  if (!got.ok) return { ...out, ok: false, error: got.error }
+
   for (const r of todo) {
-    const id = Number(r.source_ref!.slice(FORM_REF.length))
-    if (!Number.isFinite(id) || id < 1) continue
     out.checked++
-    const res = await fetchRows(c, fields, { lastId: id - 1, max: 1 })
-    if (!res.ok) { out.ok = false; out.error = res.error; break }
-    const row = res.rows.find(x => Number(x.ID) === id)
+    const row = got.rows.get(formId(r))
     if (!row) { out.missing++; continue }
     const p = mapKvitelRow(row, c)
-    const partial = (r.kvitel_request_lines ?? []).length > 0
-    // שמות קיימים: מחליפים רק כשהפענוח החדש מביא את פרטי הבקשה שחסרו
-    if (partial && !p.lines.some(l => l.requestNote)) continue
+    const stored = r.kvitel_request_lines ?? []
+    if (stored.length) {
+      const fill = requestFill(p, stored)
+      if (!fill.length) { out.noRequest++; continue }
+      for (const f of fill) {
+        const { error: e } = await db.from('kvitel_request_lines')
+          .update({ request_type: f.requestType, request_note: f.requestNote }).eq('id', f.id).is('request_note', null)
+        if (e) return { ...out, ok: false, error: 'שמירת פרטי הבקשה נכשלה' }
+      }
+      out.notes++
+      continue
+    }
     const s = await reprocessKvitelRequest(db, r.id, {
       channel: 'nedarim', phone: p.phone, email: p.email, contactName: p.contactName,
       lines: p.lines, lineFlags: p.flags, rawText: p.rawText, sourceRef: p.sourceRef,
-    }, { replaceLines: partial })
+    })
     if (!s.ok) { out.ok = false; out.error = s.error; break }
-    if (partial) out.notes++
-    else if (s.lines) out.fixed++; else out.stillEmpty++
+    if (s.lines) out.fixed++; else out.stillEmpty++
   }
+  return out
+}
+
+/** רשומות טופס לפי ID, במנות של 200 מה-ID הנמוך ועד הגבוה (ולא קריאה לכל בקשה). */
+async function fetchByIds(c: KvitelNedarimConfig, fields: string[], ids: number[]): Promise<{ ok: true; rows: Map<number, NedarimRow> } | { ok: false; error: string }> {
+  const want = new Set(ids)
+  const rows = new Map<number, NedarimRow>()
+  const top = Math.max(...ids)
+  let last = Math.min(...ids) - 1
+  for (let page = 0; page < MAX_PAGES_PER_RUN * 2 && rows.size < want.size; page++) {
+    const res = await fetchRows(c, fields, { lastId: last, max: PAGE_SIZE })
+    if (!res.ok) return res
+    let high = last
+    for (const r of res.rows) {
+      const id = Number(r.ID)
+      if (want.has(id)) rows.set(id, r)
+      if (id > high) high = id
+    }
+    if (res.rows.length < PAGE_SIZE || high <= last || high >= top) break
+    last = high
+  }
+  return { ok: true, rows }
+}
+
+/**
+ * פרטי הבקשה מהפענוח החדש לשורות השמורות שאין בהן בקשה: לפי שם + בן/בת + שם האם,
+ * ואם השם תוקן ידנית אבל מספר השורות זהה, לפי המיקום.
+ */
+export function requestFill(p: ParsedNedarimKvitel, stored: ReLine[]): { id: string; requestType: string | null; requestNote: string | null }[] {
+  const sorted = [...stored].sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+  const keyOf = new Map(p.lines.map(l => [personKey(l), l]))
+  const out: { id: string; requestType: string | null; requestNote: string | null }[] = []
+  sorted.forEach((s, i) => {
+    if (hasRequest(s)) return
+    const l = keyOf.get(personKey({ name: s.name, relation: s.relation, parentName: s.parent_name ?? '' }))
+      ?? (p.lines.length === sorted.length ? p.lines[i] : undefined)
+    if (l && (l.requestType || l.requestNote)) out.push({ id: s.id, requestType: l.requestType ?? null, requestNote: l.requestNote ?? null })
+  })
   return out
 }
