@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
 import { loadIssue } from '@/lib/gilyonotSender'
 
-// הקלקות לפי קישור, לגיליון אחד. מקור: אירועי Resend (email_events), ראו gilyonot_link_clicks.
+// הקלקות לפי קישור, לגיליון אחד. מקור: email_events, שנרשמים בקישור המעקב שלנו (gilyonot_track_click).
 export const dynamic = 'force-dynamic'
 
 export async function GET(_r: Request, { params }: { params: Promise<{ id: string }> }) {

@@ -1,11 +1,13 @@
 'use client'
 
-// שליחה חיה של גיליון: מחוון התקדמות, ספירה לאחור, קצב לפי דקה, משפך, עשרת האחרונים ויומן.
-// בנוי לפי המוקאפ שאושר (uploads/…-mockup-gilyonot-send-live.html). נתונים: /api/admin/gilyonot/issues/[id]/live
-// בזמן שליחה מתעדכן כל 5 שניות, והשעון יורד כל שנייה בין עדכון לעדכון.
+// שליחה חיה של גיליון: מחוון התקדמות, ספירה לאחור, קצב מול התקרה, קצב לפי דקה, משפך מתוך מה שנשלח,
+// פעילות לפי שעה, רשימת המעורבים (חלון קופץ), עשרת האחרונים ויומן.
+// נתונים: /api/admin/gilyonot/issues/[id]/live. בזמן שליחה מתעדכן כל 5 שניות, והשעון יורד כל שנייה.
 
-import { useEffect, useState } from 'react'
-import type { LiveGap, LiveMinute } from '@/lib/gilyonotLive'
+import { useEffect, useMemo, useState } from 'react'
+import { Users } from 'lucide-react'
+import Modal from '@/components/ui/Modal'
+import { pctOfSent, type EngagedPerson, type EngageHour, type LiveGap, type LiveMinute } from '@/lib/gilyonotLive'
 import s from './SendLive.module.css'
 
 interface LiveData {
@@ -16,24 +18,31 @@ interface LiveData {
   rate: number; etaSec: number | null; active: boolean
   firstSent: string | null; lastSent: string | null
   minutes: LiveMinute[]; gaps: LiveGap[]
+  ceiling: number; byHour: EngageHour[]; people: EngagedPerson[]
 }
+
+type Who = 'all' | 'clicked' | 'downloaded'
 
 const POLL_MS = 5000
 const ARC = 653
 const f = (n: number) => n.toLocaleString('en')
 const hm = (iso: string | null | undefined) => iso ? new Date(iso).toTimeString().slice(0, 5) : '—'
 const hms = (iso: string) => new Date(iso).toTimeString().slice(0, 8)
+const dhm = (iso: string | null) => iso ? new Date(iso).toLocaleString('he-IL', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
 const clock = (sec: number) => {
   const r = Math.max(0, Math.round(sec))
   return `${Math.floor(r / 3600)}:${String(Math.floor((r % 3600) / 60)).padStart(2, '0')}:${String(r % 60).padStart(2, '0')}`
 }
 const w = (n: number, of: number) => `${of ? Math.min(100, (n / of) * 100) : 0}%`
+const SERIES = [['opened', 'פתחו', '#16213a'], ['clicked', 'הקליקו', '#c8902d'], ['downloaded', 'הורידו', '#7a8aa8']] as const
 
 export function SendLive({ issueId }: { issueId: string }) {
   const [d, setD] = useState<LiveData | null>(null)
   const [at, setAt] = useState(0)
   const [now, setNow] = useState(() => Date.now())
   const [err, setErr] = useState('')
+  const [who, setWho] = useState<Who | null>(null)
+  const [q, setQ] = useState('')
   const sending = d?.issue.status === 'sending'
 
   useEffect(() => {
@@ -60,6 +69,12 @@ export function SendLive({ issueId }: { issueId: string }) {
     return () => clearInterval(t)
   }, [sending])
 
+  const people = useMemo(() => {
+    const term = q.trim().toLowerCase()
+    return (d?.people ?? []).filter(p =>
+      (who === 'clicked' ? p.clicked_at : who === 'downloaded' ? p.downloaded_at : true) && (!term || p.email.toLowerCase().includes(term)))
+  }, [d?.people, who, q])
+
   if (!d) return <div className={s.wrap}><p className={s.sub}>{err || 'טוען את מצב השליחה...'}</p></div>
 
   const p = d.total ? d.sent / d.total : 0
@@ -68,6 +83,10 @@ export function SendLive({ issueId }: { issueId: string }) {
   const stopped = sending && !d.active && d.pending > 0
   const max = Math.max(1, ...d.minutes.map(m => m.count))
   const lastGap = d.gaps.at(-1)
+  const ceiling = d.ceiling || 1
+  const hourMax = Math.max(1, ...d.byHour.map(h => h.opened + h.clicked + h.downloaded))
+  const hourTotal = d.byHour.reduce((n, h) => n + h.opened, 0)
+  const noDelivery = d.sent > 50 && d.delivered === 0
 
   const events: [string, string][] = []
   if (d.issue.started_at || d.firstSent) events.push([hm(d.issue.started_at ?? d.firstSent), `השליחה התחילה · ${f(d.total)} נמענים`])
@@ -78,6 +97,13 @@ export function SendLive({ issueId }: { issueId: string }) {
   events.push(d.issue.status === 'sent'
     ? [hm(d.issue.completed_at), `השליחה הסתיימה · ${f(d.sent)} נשלחו${d.failed ? `, ${f(d.failed)} נכשלו` : ''}`]
     : ['—', stopped ? `השליחה עצורה כבר ${lastGap?.minutes ?? 0} דקות · ${f(d.pending)} ממתינים` : 'השליחה פעילה · לא למזג ולא לפרוס עד הסיום'])
+
+  const funnel: [string, number, string | null][] = [
+    ['נמסרו', d.delivered, noDelivery ? 'Resend לא מעביר לנו אירועי מסירה. צריך לסמן email.delivered ב-Webhook של Resend.' : null],
+    ['פתחו', d.opened, 'לפי תמונת מעקב. מי שחוסם תמונות נספר רק כשהוא מקליק או מוריד.'],
+    ['הקליקו', d.clicked, 'כל קישור בגוף המייל, חוץ מקישור ההסרה.'],
+    ['הורידו מהקישור', d.downloaded, 'הקובץ מצורף למייל, ולכן רוב הקוראים פותחים אותו מהצרופה. כאן נספר רק מי שהוריד מהקישור באתר.'],
+  ]
 
   return (
     <div className={s.wrap}>
@@ -97,17 +123,24 @@ export function SendLive({ issueId }: { issueId: string }) {
             : <span className={s.live} style={stopped ? { background: '#ef444422', color: '#f87171' } : undefined}>{stopped ? 'השליחה עצורה' : d.issue.status === 'sent' ? 'השליחה הסתיימה' : 'ממתין לשליחה'}</span>}
           <h2 className={s.h2}>{d.issue.status === 'sent' ? 'השליחה הסתיימה' : left !== null ? <>נותרו <span className={s.num}>{clock(left)}</span> שעות</> : 'אין קצב לחשב זמן סיום'}</h2>
           <div style={{ color: '#b9c1d4', fontSize: 14 }}>
-            {d.issue.status === 'sent' ? 'הסתיימה ב-' : 'צפי סיום: '}<b style={{ color: '#fff' }} className={s.num}>{hm(endIso)}</b> · קצב <b style={{ color: '#fff' }}>~{d.rate} מיילים בשנייה</b>
+            {d.issue.status === 'sent' ? 'הסתיימה ב-' : 'צפי סיום: '}<b style={{ color: '#fff' }} className={s.num}>{hm(endIso)}</b>
           </div>
           <div className={s.kp}>
             <div><span>נשלחו</span><b className={s.num}>{f(d.sent)}</b></div>
             <div><span>ממתינים</span><b className={s.num}>{f(d.pending)}</b></div>
             <div><span>נכשלו</span><b className={s.num}>{f(d.failed)}</b></div>
-            <div><span>נפתחו</span><b className={s.num}>{f(d.opened)}</b></div>
+            <div><span>פתחו</span><b className={s.num}>{f(d.opened)}</b><em className={s.num}>{pctOfSent(d.opened, d.sent)}%</em></div>
           </div>
           <div className={s.bar}><i style={{ background: '#c8902d', width: w(d.sent, d.total) }} /><i style={{ background: '#ef4444', width: w(d.failed, d.total) }} /></div>
           <div className={s.tl}><span>התחלה {hm(d.issue.started_at ?? d.firstSent)}</span><span>עכשיו</span><span>סיום משוער</span></div>
-          <div className={s.shield}>🛡 {lastGap
+          <div className={s.speed}>
+            <div className={s.speedHead}><span>קצב שליחה</span><b className={s.num}>{d.rate} <small>מתוך {ceiling} בשנייה</small></b></div>
+            <div className={s.gauge} role="meter" aria-valuemin={0} aria-valuemax={ceiling} aria-valuenow={d.rate} aria-label="קצב שליחה מול התקרה">
+              <i style={{ width: w(d.rate, ceiling) }} />
+            </div>
+            <small>התקרה היא המכסה של חשבון Resend. מעל המכסה Resend דוחה מיילים, ולכן השליחה לא עוברת אותה.</small>
+          </div>
+          <div className={s.shield}>{lastGap
             ? lastGap.to
               ? `עצירה אחרונה ב-${hm(lastGap.from)} למשך ${lastGap.minutes} דקות, השליחה המשיכה מנמען ${f(lastGap.resumedAt ?? 0)} בלי כפילות.`
               : `השליחה עצורה מאז ${hm(lastGap.from)}. היא תמשיך מהנמען הבא כשהנעילה תשתחרר.`
@@ -128,21 +161,84 @@ export function SendLive({ issueId }: { issueId: string }) {
               : null)}
           </svg>
         </div>
-        <div className={s.card}><h3>משפך פתיחה</h3><p>מתעדכן בזמן אמת</p><div className={s.funnel}>
-          {([['נמסרו', d.delivered], ['פתחו', d.opened], ['הקליקו', d.clicked], ['הורידו PDF', d.downloaded]] as const).map(([l, v]) => (
-            <div key={l}><div className={s.l}><span>{l}</span><span className={s.num}>{f(v)}</span></div><div className={s.t}><i style={{ width: w(v, d.total) }} /></div></div>
-          ))}
-        </div></div>
+
+        <div className={s.card}>
+          <h3>משפך הקריאה</h3><p>אחוז מתוך {f(d.sent)} שנשלחו בפועל · מתעדכן בזמן אמת</p>
+          <div className={s.funnel}>
+            {funnel.map(([l, v, hint]) => (
+              <div key={l}>
+                <div className={s.l}><span>{l}</span><span className={s.num}><b>{f(v)}</b> · {pctOfSent(v, d.sent)}%</span></div>
+                <div className={s.t}><i style={{ width: `${pctOfSent(v, d.sent)}%` }} /></div>
+                {hint && <small className={l === 'נמסרו' && noDelivery ? s.warn : s.hint}>{hint}</small>}
+              </div>
+            ))}
+          </div>
+          <button type="button" className={s.who} onClick={() => setWho('all')} disabled={!d.people.length}>
+            <Users size={16} aria-hidden />מי פתח, הקליק והוריד{d.people.length ? ` (${f(d.people.length)})` : ''}
+          </button>
+        </div>
+
+        <div className={s.card}>
+          <h3>פעילות לפי שעה</h3><p>24 השעות האחרונות · {f(hourTotal)} פתחו לראשונה בטווח הזה</p>
+          <div className={s.legend}>{SERIES.map(([, l, c]) => <span key={l}><i style={{ background: c }} />{l}</span>)}</div>
+          <svg viewBox="0 0 600 170" width="100%" height="170" role="img" aria-label="פתיחות, הקלקות והורדות בכל שעה ב-24 השעות האחרונות">
+            {d.byHour.map((h, i) => {
+              // RTL: השעה החדשה בצד שמאל, כמו בגרף הדקות
+              const x = 576 - (d.byHour.length - 1 - i) * 24
+              let y = 150
+              return <g key={h.t}>
+                {SERIES.map(([k, l, c]) => {
+                  const v = (h[k] / hourMax) * 130
+                  y -= v
+                  return v > 0 ? <rect key={k} x={x} y={y} width="16" height={v} fill={c}><title>{`${hm(h.t)} · ${l} ${f(h[k])}`}</title></rect> : null
+                })}
+                {i % 4 === 3 && <text x={x + 8} y="166" fontSize="10" fill="#5b6475" textAnchor="middle">{hm(h.t)}</text>}
+              </g>
+            })}
+            <line x1="0" x2="600" y1="150.5" y2="150.5" stroke="#ece3d6" />
+          </svg>
+        </div>
+
         <div className={s.card}><h3>נשלחו עכשיו</h3><p>עשרת האחרונים</p>
           <ul className={s.feed}>
             {d.recent.length ? d.recent.map(r => <li key={r.email + r.sent_at}><span dir="ltr">{r.email}</span><em className={s.num}>✓ {hms(r.sent_at)}</em></li>) : <li>עוד לא נשלח אף מייל</li>}
           </ul>
         </div>
-        <div className={s.card}><h3>יומן אירועים</h3><p>מה קרה בשליחה הזו</p>
+
+        <div className={`${s.card} ${s.wide}`}><h3>יומן אירועים</h3><p>מה קרה בשליחה הזו</p>
           {events.map(([t, x], i) => <div key={i} className={s.ev}><b className={s.num}>{t}</b>{x}</div>)}
         </div>
       </div>
       {err && <p className={s.sub} style={{ marginTop: 12, color: '#b91c1c' }}>{err} · מנסה שוב</p>}
+
+      <Modal open={who !== null} onClose={() => setWho(null)} title="מי פתח, הקליק והוריד" size="xl">
+        <div className={s.mtools}>
+          <div className={s.tabs} role="tablist">
+            {([['all', 'כולם', d.people.length], ['clicked', 'הקליקו', d.people.filter(x => x.clicked_at).length], ['downloaded', 'הורידו', d.people.filter(x => x.downloaded_at).length]] as const).map(([k, l, n]) => (
+              <button key={k} type="button" role="tab" aria-selected={who === k} className={who === k ? s.on : undefined} onClick={() => setWho(k)}>{l} <span className={s.num}>{f(n)}</span></button>
+            ))}
+          </div>
+          <input className={s.search} value={q} onChange={e => setQ(e.target.value)} placeholder="חיפוש לפי מייל" aria-label="חיפוש לפי מייל" dir="ltr" />
+        </div>
+        {d.opened > d.people.length && <p className={s.hint}>מוצגים {f(d.people.length)} האחרונים מתוך {f(d.opened)}.</p>}
+        <div className={s.tableWrap}>
+          <table className={s.table}>
+            <thead><tr><th>מייל</th><th>פתח</th><th>הקליק</th><th>הוריד</th><th>פעולה אחרונה</th></tr></thead>
+            <tbody>
+              {people.map(x => (
+                <tr key={x.email}>
+                  <td dir="ltr">{x.email}</td>
+                  <td className={s.num}>{x.opened_at ? <>{dhm(x.opened_at)}{x.opens > 1 && <span className={s.cnt}>×{x.opens}</span>}</> : '—'}</td>
+                  <td className={s.num}>{x.clicked_at ? <>{dhm(x.clicked_at)}{x.clicks > 1 && <span className={s.cnt}>×{x.clicks}</span>}</> : '—'}</td>
+                  <td className={s.num}>{x.downloaded_at ? <>{dhm(x.downloaded_at)}{x.downloads > 1 && <span className={s.cnt}>×{x.downloads}</span>}</> : '—'}</td>
+                  <td className={s.num}>{dhm(x.last)}</td>
+                </tr>
+              ))}
+              {!people.length && <tr><td colSpan={5} className={s.empty}>אין תוצאות</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </Modal>
     </div>
   )
 }

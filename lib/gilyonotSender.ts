@@ -9,28 +9,36 @@ import { sanitizeMailHtml } from './gilyonotRichHtml'
 import { cleanOutgoingHtml, stripInvisibleChars } from './emailSanitize'
 import { advanceIssueCounter, heichalotMissingError } from './gilyonotHeichalot'
 import { loadLists, resolveRecipients, type Recipient } from './gilyonotLists'
+import { wrapGilyonLinks } from './gilyonotTracking'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // שליחת הגיליון השבועי לרשימת התפוצה, באותה שיטה כמו מנוע הניוזלטר
 // (lib/newsletter/sender.ts): Resend Batch של עד 100 מיילים, 2 בקשות בשנייה,
 // נעילה נגד ריצה כפולה, והמשך מהשורות שנשארו pending אם השרת נפל באמצע.
 //
-// הגיליון נשלח כקישור הורדה אישי (/api/gilyonot/d/<טוקן>) ולא כקובץ מצורף, ולכן
-// אפשר לספור הורדות. המעקב: פיקסל פתיחה (/api/gilyonot/o), הקלקות, הורדות
-// והאירועים של Resend (נמסר, חזר, ספאם). אין שמות בשום מקום במייל.
+// הקובץ מצורף למייל (החלטת הבעלים 25.11). Resend מקבל קישור חתום לקובץ באחסון (path)
+// ומצרף אותו בעצמו, כך שהשרת לא מעלה 13MB לכל נמען (25.11: 3 קריסות זיכרון, 137,
+// באמצע שליחה של 11,700). אם Resend נכשל במשיכה, עוברים לשליחת הקובץ עצמו (inline).
+// GILYONOT_ATTACH_MODE=inline מחזיר את השיטה הישנה בלי שינוי קוד.
+// המעקב: פיקסל פתיחה (/api/gilyonot/o), הקלקות אצלנו (/api/gilyonot/c), הורדות
+// (/api/gilyonot/d) והאירועים של Resend (נמסר, חזר, ספאם). אין שמות בשום מקום במייל.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const BATCH_SIZE = 100
 // קצב: כמה מיילים מתחילים בכל שנייה. ברירת המחדל 2 היא המגבלה של Resend לחשבון.
 // אחרי ש-Resend מעלה את המגבלה, מגדירים GILYONOT_RATE_PER_SEC בשרת בלי שינוי קוד.
 // השליחות לא מחכות זו לזו: מייל עם PDF כבד לוקח זמן להעלות, וקודם הוא עיכב את כל השאר (2 מיילים, המתנה לשניהם, ועוד שנייה).
-const RATE_PER_SEC = Math.max(1, Math.floor(Number(process.env.GILYONOT_RATE_PER_SEC) || 2))
+export const RATE_PER_SEC = Math.max(1, Math.floor(Number(process.env.GILYONOT_RATE_PER_SEC) || 2))
 const MAX_IN_FLIGHT = RATE_PER_SEC * 4
+const ATTACH_BY_URL = process.env.GILYONOT_ATTACH_MODE !== 'inline'
+// הקישור צריך להחזיק עד ש-Resend מושך את הקובץ, גם אם המייל נכנס אצלם לתור
+const ATTACH_LINK_TTL_SEC = 24 * 3600
 // זיכרון: כל שליחה בדרך מחזיקה עותק של הקבצים בבקשה. מגבילים כמה בדרך לפי גודל הקבצים, ולא פחות מ-2 כמו קודם.
 // (18.11: השרת החזיר 503 בזמן שליחה בגלל זיכרון, עוד לפני ההאצה)
 const IN_FLIGHT_BYTES = 120 * 1024 * 1024
 export function inFlightLimit(attachmentBytes: number, max = MAX_IN_FLIGHT): number {
-  const perSend = Math.max(1, attachmentBytes * 2) // base64 פעם אחת + גוף ה-JSON של הבקשה
+  // base64, גוף ה-JSON של הבקשה, והעותק של fetch בדרך החוצה (25.11: פי 2 עדיין קרס ב-1GB)
+  const perSend = Math.max(1, attachmentBytes * 3)
   return Math.max(2, Math.min(max, Math.floor(IN_FLIGHT_BYTES / perSend)))
 }
 const MAX_ATTEMPTS = 3
@@ -122,6 +130,26 @@ function cleanBody(raw: string | null): string {
 export { gilyonFileName } from './gilyonotFileName'
 
 export interface Attachment { filename: string; content: Buffer }
+/** צרופה כפי שעוברת ל-Resend: הקובץ עצמו (base64) או קישור שממנו Resend מושך אותו */
+type MailAttachment = { filename: string; content: string } | { filename: string; path: string }
+
+/** קישורים חתומים לקבצי הגיליון, בשמות של הצרופות. null אם אחד מהם לא נוצר (ואז שולחים את הקובץ עצמו). */
+export async function attachmentLinks(db: SupabaseClient, issue: Pick<IssueRow, 'file_path' | 'file2_path'>, atts: Attachment[]): Promise<MailAttachment[] | null> {
+  const paths = [issue.file_path, issue.file2_path].filter((p): p is string => !!p)
+  if (paths.length !== atts.length) return null
+  try {
+    const links = await Promise.all(paths.map(async (p, i) => {
+      const { data, error } = await db.storage.from('documents').createSignedUrl(p, ATTACH_LINK_TTL_SEC, { download: atts[i].filename })
+      return error || !data?.signedUrl ? null : { filename: atts[i].filename, path: data.signedUrl }
+    }))
+    return links.every(Boolean) ? links as MailAttachment[] : null
+  } catch {
+    return null
+  }
+}
+
+const inlineAttachments = (atts: Attachment[]): MailAttachment[] => atts.map(a => ({ filename: a.filename, content: a.content.toString('base64') }))
+const byUrl = (atts: MailAttachment[]) => atts.some(a => 'path' in a)
 
 
 /** האם קובץ בגודל הזה נכנס במייל אחד (עם base64). נשאר לגיליונות ישנים ולכיווץ. */
@@ -192,7 +220,16 @@ export async function sendGilyonTest(db: SupabaseClient, issue: IssueRow, to: st
     title: issue.title, parasha: issue.parasha, intro: issue.intro, bodyHtml: cleanBody(issue.body_html), design: issue.design,
     unsubscribeUrl: await testUnsubscribeUrl(db, to), senderEmail: GILYONOT_FROM_EMAIL, senderName: GILYONOT_FROM_NAME,
   }))
-  const { error } = await new Resend(apiKey).emails.send({ from: from(), to, subject: `[ניסיון] ${stripInvisibleChars(issue.subject)}`, html, text: htmlToPlainText(html), replyTo: GILYONOT_FROM_EMAIL, attachments: file.atts })
+  // באותה שיטה כמו השליחה האמיתית, כדי שמייל הניסיון יראה בדיוק מה הנמענים יקבלו
+  const resend = new Resend(apiKey)
+  const mail = { from: from(), to, subject: `[ניסיון] ${stripInvisibleChars(issue.subject)}`, html, text: htmlToPlainText(html), replyTo: GILYONOT_FROM_EMAIL }
+  const links = ATTACH_BY_URL ? await attachmentLinks(db, issue, file.atts) : null
+  if (links) {
+    const { error } = await resend.emails.send({ ...mail, attachments: links })
+    if (!error) return { ok: true }
+    console.error('[gilyonot] ניסיון עם צרופה בקישור נכשל, שולח את הקובץ עצמו:', error.message)
+  }
+  const { error } = await resend.emails.send({ ...mail, attachments: inlineAttachments(file.atts) })
   if (error) return { ok: false, error: String(error.message ?? error) }
   return { ok: true }
 }
@@ -321,6 +358,9 @@ async function sendBatches(db: SupabaseClient, resend: Resend, issue: IssueRow):
     console.error(`[gilyonot] ${issue.id}: ${file.error}`)
     return { sent, failed }
   }
+  // הצרופות נקבעות פעם אחת לסבב. כישלון בקישור מעביר את שאר הסבב ל-inline.
+  let atts: MailAttachment[] | null = null
+  let urlFailed = false
 
   while (Date.now() < deadline && !stopping) {
     await renewLock(db)
@@ -347,27 +387,38 @@ async function sendBatches(db: SupabaseClient, resend: Resend, issue: IssueRow):
     if (!batch.length) { await finalize(db, issue.id); break }
 
     let hadFailure = false
-    // הקבצים מקודדים ל-base64 פעם אחת לסבב, ולא מחדש בכל מייל (חוסך זיכרון ומעבד)
-    const atts = file.atts.map(a => ({ filename: a.filename, content: a.content.toString('base64') }))
+    // צרופה בקישור: הבקשה ל-Resend קטנה. אחרת הקבצים מקודדים ל-base64 פעם אחת לסבב (inline), ולא בכל מייל.
+    if (!atts) atts = (ATTACH_BY_URL && await attachmentLinks(db, issue, file.atts)) || inlineAttachments(file.atts)
     const sendOne = async (d: DeliveryRow, retry = 0): Promise<boolean> => {
       const mail = issueEmail(issue, {
         deliveryToken: d.token,
         subscriberToken: d.gilyonot_subscribers?.token ?? null,
       })
-      const html = cleanOutgoingHtml(mail.html)
       const unsubscribeUrl = mail.unsubscribeUrl
+      // כל קישור במייל עובר דרך /api/gilyonot/c כדי לספור הקלקות אצלנו (חוץ מההסרה)
+      const html = cleanOutgoingHtml(wrapGilyonLinks(mail.html, d.token, [unsubscribeUrl]))
+      const current = atts!
       try {
         const { data: res, error } = await resend.emails.send({
-          from: from(), to: d.email, subject: stripInvisibleChars(issue.subject), html, text: htmlToPlainText(html), replyTo: GILYONOT_FROM_EMAIL, attachments: atts,
+          from: from(), to: d.email, subject: stripInvisibleChars(issue.subject), html, text: htmlToPlainText(html), replyTo: GILYONOT_FROM_EMAIL, attachments: current,
           headers: unsubscribeUrl
             ? { 'List-Unsubscribe': `<${unsubscribeUrl}>, <mailto:${GILYONOT_FROM_EMAIL}?subject=unsubscribe>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' }
             : undefined,
         // אם התהליך נהרג בין השליחה לסימון במסד, הניסיון הבא נושא אותו מפתח
-        // ו-Resend לא שולח שוב (חלון של 24 שעות).
-        }, { idempotencyKey: `gilyon-${d.id}-${d.attempts}` })
+        // ו-Resend לא שולח שוב (חלון של 24 שעות). שליחה inline אחרי כישלון בקישור היא בקשה אחרת, ולכן מפתח אחר.
+        }, { idempotencyKey: `gilyon-${d.id}-${d.attempts}${byUrl(current) ? '' : urlFailed ? '-inline' : ''}` })
         if (error) {
           // חריגה מהקצב של Resend: מחכים ומנסים שוב באותו מפתח, בלי לספור ניסיון ובלי לעצור את הסבב
           if (isRateLimit(error) && retry < RATE_LIMIT_RETRIES && !stopping) { await sleep(1000 * (retry + 1)); return sendOne(d, retry + 1) }
+          // Resend לא הצליח למשוך את הקובץ מהקישור: עוברים לשליחת הקובץ עצמו לשאר הסבב, ומנסים שוב את המייל הזה
+          if (byUrl(current)) {
+            if (atts === current) {
+              console.error(`[gilyonot] ${issue.id}: צרופה בקישור נכשלה (${error.message}), עובר לשליחת הקובץ עצמו`)
+              atts = inlineAttachments(file.atts)
+              urlFailed = true
+            }
+            return sendOne(d, retry)
+          }
           throw new Error(String(error.message ?? error))
         }
         await db.from('gilyonot_deliveries')
@@ -385,17 +436,18 @@ async function sendBatches(db: SupabaseClient, resend: Resend, issue: IssueRow):
       }
     }
     const inFlight = new Set<Promise<void>>()
-    const maxInFlight = inFlightLimit(atts.reduce((n, a) => n + a.content.length, 0))
+    // צרופה בקישור לא תופסת זיכרון בשרת; אחרי מעבר ל-inline הגבול יורד לפי גודל הקבצים
+    const maxInFlight = () => inFlightLimit(atts!.reduce((n, a) => n + ('content' in a ? a.content.length : 0), 0))
     let renewedAt = Date.now()
     for (let i = 0; i < batch.length && Date.now() < deadline && !hadFailure && !stopping; i += RATE_PER_SEC) {
       const startedAt = Date.now()
       for (const d of batch.slice(i, i + RATE_PER_SEC)) {
         // הגבול נבדק לפני כל מייל, אחרת קצב גבוה (GILYONOT_RATE_PER_SEC) מוסיף מנה שלמה מעל הגבול
-        while (inFlight.size >= maxInFlight) await Promise.race(inFlight)
+        while (inFlight.size >= maxInFlight()) await Promise.race(inFlight)
         const p: Promise<void> = sendOne(d).then(ok => { if (ok) sent++; else { failed++; hadFailure = true } }).finally(() => { inFlight.delete(p) })
         inFlight.add(p)
       }
-      while (inFlight.size >= maxInFlight) await Promise.race(inFlight)
+      while (inFlight.size >= maxInFlight()) await Promise.race(inFlight)
       if (Date.now() - renewedAt > 30_000) { await renewLock(db); renewedAt = Date.now() }
       const wait = 1000 - (Date.now() - startedAt)
       if (wait > 0 && !stopping) await sleep(wait)

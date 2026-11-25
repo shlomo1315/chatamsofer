@@ -7,6 +7,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MIN = 60_000
+const HOUR = 60 * MIN
 export const LIVE_MINUTES = 40
 export const GAP_MS = 2 * MIN
 const RATE_WINDOW_MS = 5 * MIN
@@ -86,4 +87,68 @@ export function buildLiveView(sentTimes: number[], pending: number, opts: { now?
     minutes,
     gaps,
   }
+}
+
+// ── מעורבות: פתיחות, הקלקות והורדות לפי שעה, ומי שפתח/הקליק/הוריד ──
+
+export const ENGAGE_HOURS = 24
+export const ENGAGE_PEOPLE = 500
+
+export interface EngagementRow {
+  email: string
+  opened_at: string | null
+  clicked_at: string | null
+  downloaded_at: string | null
+  open_count?: number | null
+  click_count?: number | null
+  download_count?: number | null
+}
+export interface EngagedPerson {
+  email: string
+  opened_at: string | null
+  clicked_at: string | null
+  downloaded_at: string | null
+  opens: number
+  clicks: number
+  downloads: number
+  /** הפעולה האחרונה (הראשונה מכל סוג) */
+  last: string
+}
+export interface EngageHour { t: string; opened: number; clicked: number; downloaded: number }
+export interface LiveEngagement {
+  /** ENGAGE_HOURS שעות, מהישנה לחדשה. כל אדם נספר פעם אחת לכל סוג, בשעה של הפעם הראשונה */
+  byHour: EngageHour[]
+  people: EngagedPerson[]
+}
+
+export function buildEngagement(rows: EngagementRow[], opts: { now?: Date; hours?: number; limit?: number } = {}): LiveEngagement {
+  const now = (opts.now ?? new Date()).getTime()
+  const hours = opts.hours ?? ENGAGE_HOURS
+  const endHour = Math.floor(now / HOUR) * HOUR
+  const startHour = endHour - (hours - 1) * HOUR
+  const byHour: EngageHour[] = Array.from({ length: hours }, (_, i) => ({ t: new Date(startHour + i * HOUR).toISOString(), opened: 0, clicked: 0, downloaded: 0 }))
+  const people: EngagedPerson[] = []
+  for (const r of rows) {
+    const marks = (['opened', 'clicked', 'downloaded'] as const).map(k => [k, r[`${k}_at`]] as const).filter(([, at]) => at)
+    if (!marks.length) continue
+    for (const [k, at] of marks) {
+      const i = Math.floor((Date.parse(at!) - startHour) / HOUR)
+      if (i >= 0 && i < hours) byHour[i][k]++
+    }
+    people.push({
+      email: r.email, opened_at: r.opened_at, clicked_at: r.clicked_at, downloaded_at: r.downloaded_at,
+      // פתיחה בלי פיקסל (קליק או הורדה) נרשמת בלי ספירה, ולכן לפחות 1
+      opens: Math.max(r.open_count ?? 0, r.opened_at ? 1 : 0),
+      clicks: Math.max(r.click_count ?? 0, r.clicked_at ? 1 : 0),
+      downloads: Math.max(r.download_count ?? 0, r.downloaded_at ? 1 : 0),
+      last: marks.map(([, at]) => at!).sort().at(-1)!,
+    })
+  }
+  people.sort((a, b) => b.last.localeCompare(a.last))
+  return { byHour, people: people.slice(0, opts.limit ?? ENGAGE_PEOPLE) }
+}
+
+/** אחוז מתוך מה שנשלח בפועל (לא מתוך כל הנמענים), עד ספרה אחת אחרי הנקודה */
+export function pctOfSent(n: number, sent: number): number {
+  return sent > 0 ? Math.round(Math.min(1, n / sent) * 1000) / 10 : 0
 }
