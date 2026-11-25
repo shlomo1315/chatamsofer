@@ -1,12 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden, getServiceClient, serverMisconfigured } from '@/lib/apiAuth'
 import { loadIssue } from '@/lib/gilyonotSender'
+import { parseRecipientQuery, RECIPIENT_COLUMNS } from '@/lib/gilyonotRecipients'
 
-// פירוט לפי נמען: מי קיבל, פתח, הקליק, חזר או הסיר. ?q= חיפוש מייל, ?f= סינון, ?csv=1 הורדה.
+// פירוט לפי נמען: מי קיבל, פתח, הקליק, הוריד, חזר או הסיר. ?q= חיפוש מייל, ?f= סינון, ?csv=1 הורדה.
 export const dynamic = 'force-dynamic'
 
 const PAGE = 1000
-const FILTERS = ['opened', 'unopened', 'clicked', 'bounced', 'unsubscribed', 'failed'] as const
 type Ctx = { params: Promise<{ id: string }> }
 
 const csvCell = (v: unknown) => {
@@ -23,23 +23,24 @@ export async function GET(request: NextRequest, { params }: Ctx) {
   if (!issue) return NextResponse.json({ error: 'הגיליון לא נמצא' }, { status: 404 })
 
   const sp = new URL(request.url).searchParams
-  const f = sp.get('f') ?? ''
-  const q = (sp.get('q') ?? '').trim().toLowerCase().replace(/[%,()]/g, '')
+  const { q, f, error: badFilter } = parseRecipientQuery(sp)
+  if (badFilter) return NextResponse.json({ error: badFilter }, { status: 400 })
   const csv = sp.get('csv') === '1'
-  const page = Math.max(0, Number(sp.get('page')) || 0)
+  const page = Math.min(10000, Math.max(0, Number(sp.get('page')) || 0))
   const size = csv ? 100000 : 50
 
+  // החיפוש רץ בתוך גיליון אחד בלבד: האינדקס הייחודי (issue_id, email) מצמצם לשורות הגיליון, ומחזירים 50 בעמוד
   let query = db.from('gilyonot_deliveries')
-    .select('email, status, sent_at, delivered_at, opened_at, open_count, clicked_at, click_count, bounced_at, unsubscribed_at, error', { count: 'exact' })
+    .select(RECIPIENT_COLUMNS, { count: 'exact' })
     .eq('issue_id', issue.id)
   if (q) query = query.ilike('email', `%${q}%`)
   if (f === 'opened') query = query.not('opened_at', 'is', null)
   else if (f === 'unopened') query = query.eq('status', 'sent').is('opened_at', null)
   else if (f === 'clicked') query = query.not('clicked_at', 'is', null)
+  else if (f === 'downloaded') query = query.not('downloaded_at', 'is', null)
   else if (f === 'bounced') query = query.not('bounced_at', 'is', null)
   else if (f === 'unsubscribed') query = query.not('unsubscribed_at', 'is', null)
   else if (f === 'failed') query = query.eq('status', 'failed')
-  else if (f && !(FILTERS as readonly string[]).includes(f)) return NextResponse.json({ error: 'סינון לא מוכר' }, { status: 400 })
 
   const rows: Record<string, unknown>[] = []
   if (csv) {
@@ -49,8 +50,8 @@ export async function GET(request: NextRequest, { params }: Ctx) {
       rows.push(...(data ?? []))
       if (!data || data.length < PAGE) break
     }
-    const head = ['מייל', 'סטטוס', 'נשלח', 'נמסר', 'נפתח', 'פתיחות', 'הקליק', 'קליקים', 'חזר', 'הוסר']
-    const lines = rows.map(r => [r.email, r.status, r.sent_at, r.delivered_at, r.opened_at, r.open_count, r.clicked_at, r.click_count, r.bounced_at, r.unsubscribed_at].map(csvCell).join(','))
+    const head = ['מייל', 'סטטוס', 'נשלח', 'נמסר', 'נפתח', 'פתיחות', 'הקליק', 'קליקים', 'הוריד', 'הורדות', 'חזר', 'ספאם', 'הוסר']
+    const lines = rows.map(r => [r.email, r.status, r.sent_at, r.delivered_at, r.opened_at, r.open_count, r.clicked_at, r.click_count, r.downloaded_at, r.download_count, r.bounced_at, r.complained_at, r.unsubscribed_at].map(csvCell).join(','))
     return new NextResponse('﻿' + [head.map(csvCell).join(','), ...lines].join('\r\n'), {
       headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="recipients.csv"', 'Cache-Control': 'no-store' },
     })
