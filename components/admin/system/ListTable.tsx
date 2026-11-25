@@ -25,6 +25,7 @@ export function ListTable<K extends string, R extends object>({
   leadCell,
   rowKey,
   expandedRow,
+  rowClass,
 }: {
   tc: TableColumns<K, R>
   /** השורות של העמוד הנוכחי (אחרי דפדוף) */
@@ -45,6 +46,8 @@ export function ListTable<K extends string, R extends object>({
   rowKey?: (row: R) => string | number
   /** תוכן שנפתח מתחת לשורה (למשל עריכה inline). null = סגור */
   expandedRow?: (row: R) => ReactNode | null
+  /** מחלקה לשורה (למשל רקע לפי סטטוס) */
+  rowClass?: (row: R) => string | undefined
 }) {
   const lead = leadHead !== undefined && leadCell ? 1 : 0
   const extra = (actions ? 1 : 0) + lead
@@ -76,7 +79,7 @@ export function ListTable<K extends string, R extends object>({
                 const open = expandedRow?.(row)
                 return (
                 <Fragment key={rowKey ? rowKey(row) : (row as { id: string | number }).id}>
-                <ListRow onClick={onOpen ? () => onOpen(row) : undefined}>
+                <ListRow onClick={onOpen ? () => onOpen(row) : undefined} className={rowClass?.(row)}>
                   {lead === 1 && <td className="align-top" onClick={e => e.stopPropagation()}>{leadCell!(row)}</td>}
                   {tc.shown.map((c, ci) => (
                     <td key={c.key} data-label={ci === 0 ? undefined : c.label} className={`${tc.cellClass(c)}${ci === 0 ? ' lt-first' : ''}`} onClick={stopCell?.(c) ? e => e.stopPropagation() : undefined}>{renderCell(c, row)}</td>
@@ -101,11 +104,11 @@ export function ListTable<K extends string, R extends object>({
 }
 
 // שורה אחידה: ריחוף זהב עדין, סמן לחיצה כשיש פעולה.
-export function ListRow({ children, onClick }: { children: ReactNode; onClick?: () => void }) {
+export function ListRow({ children, onClick, className }: { children: ReactNode; onClick?: () => void; className?: string }) {
   return (
     <tr
       onClick={onClick}
-      className={`group transition-colors hover:bg-sand has-[[data-editing]]:bg-[#FBF6EA] has-[[data-editing]]:shadow-[inset_-3px_0_0_#C0912F] [&>td]:px-3 [&>td]:py-3 [&>td]:text-right ${onClick ? 'cursor-pointer' : ''}`}
+      className={`group transition-colors ${className ?? 'hover:bg-sand'} has-[[data-editing]]:bg-[#FBF6EA] has-[[data-editing]]:shadow-[inset_-3px_0_0_#C0912F] [&>td]:px-3 [&>td]:py-3 [&>td]:text-right ${onClick ? 'cursor-pointer' : ''}`}
     >
       {children}
     </tr>
