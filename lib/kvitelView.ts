@@ -63,7 +63,8 @@ export const byKvitelTab = <R extends Pick<KvitelRequestRow, 'status'>>(rows: R[
 
 // כפתורי השורה בטבלה ובכרטיסים במובייל. "מחיקה" = ביטול (עוברת ל"בוטלו" ואפשר לשחזר משם).
 export function kvitelRowActions(r: Pick<KvitelRequestRow, 'status' | 'needsReview'>, canEdit: boolean) {
-  return { approve: canEdit && !!r.needsReview, edit: canEdit, remove: canEdit && r.status !== 'cancelled' }
+  // אישור מוצג תמיד למי שעורך, ופעיל רק בבקשה שממתינה לבדיקה
+  return { approve: canEdit, approveEnabled: canEdit && !!r.needsReview, edit: canEdit, remove: canEdit && r.status !== 'cancelled' }
 }
 
 // raw_text נשמר כשורות "שדה: ערך" (הגשת נדרים). טקסט חופשי בלי נקודתיים לא נחשב שדות.

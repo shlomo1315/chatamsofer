@@ -3,12 +3,12 @@ import { byKvitelTab, countByStatus, hebrewDay, KVITEL_DEFAULT_TAB, kvitelRowAct
 import { kvitelExportLines, type KvitelRequestRow } from './kvitelQuery'
 
 describe('kvitelRowActions — כפתורי השורה', () => {
-  it('תיקון ומחיקה בכל שורה למי שיש לו עריכה; מחיקה לא בבקשה שכבר בוטלה', () => {
-    expect(kvitelRowActions({ status: 'pending' }, true)).toEqual({ approve: false, edit: true, remove: true })
-    expect(kvitelRowActions({ status: 'pending', needsReview: true }, true)).toEqual({ approve: true, edit: true, remove: true })
-    expect(kvitelRowActions({ status: 'done' }, true)).toEqual({ approve: false, edit: true, remove: true })
-    expect(kvitelRowActions({ status: 'cancelled' }, true)).toEqual({ approve: false, edit: true, remove: false })
-    expect(kvitelRowActions({ status: 'pending', needsReview: true }, false)).toEqual({ approve: false, edit: false, remove: false })
+  it('תיקון, מחיקה ואישור בכל שורה למי שיש לו עריכה; האישור פעיל רק בבקשה לבדיקה, ומחיקה לא בבקשה שבוטלה', () => {
+    expect(kvitelRowActions({ status: 'pending' }, true)).toEqual({ approve: true, approveEnabled: false, edit: true, remove: true })
+    expect(kvitelRowActions({ status: 'pending', needsReview: true }, true)).toEqual({ approve: true, approveEnabled: true, edit: true, remove: true })
+    expect(kvitelRowActions({ status: 'done' }, true)).toEqual({ approve: true, approveEnabled: false, edit: true, remove: true })
+    expect(kvitelRowActions({ status: 'cancelled' }, true)).toEqual({ approve: true, approveEnabled: false, edit: true, remove: false })
+    expect(kvitelRowActions({ status: 'pending', needsReview: true }, false)).toEqual({ approve: false, approveEnabled: false, edit: false, remove: false })
   })
 })
 

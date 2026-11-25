@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from 'react'
 import KvitelRecordingPanel from './KvitelRecordingPanel'
-import { FileDown, Printer, Check, RotateCcw, X, Filter, Link2, ChevronLeft, Search, CalendarDays, Pencil, Mic, Trash2 } from 'lucide-react'
+import { Printer, Check, RotateCcw, X, Filter, Link2, ChevronLeft, ChevronDown, Search, CalendarDays, Pencil, Mic, Trash2 } from 'lucide-react'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { KVITEL_CHANNELS, KVITEL_REQUEST_OPTIONS, KVITEL_STATUSES, requestTypeLabel, type KvitelStatus } from '@/lib/kvitel'
 import { kvitelRequestLines, type KvitelFilters, type KvitelLineRow, type KvitelRequestRow } from '@/lib/kvitelQuery'
@@ -12,8 +12,7 @@ import { useTablePagination } from '@/lib/useTablePagination'
 import { byKvitelTab, countByStatus, hebrewDay, KVITEL_DEFAULT_TAB, kvitelRowActions, scopeKvitelRows, type KvitelTab } from '@/lib/kvitelView'
 import { InlineText, InlineRequest } from './KvitelInlineCell'
 import { saveInlineEdit, personText, PERSON_HINT, type InlineEdit } from '@/lib/kvitelInlineEdit'
-import KvitelCardModal from './KvitelCardModal'
-import ExportDialog from './ExportDialog'
+import KvitelRowDetails from './KvitelRowDetails'
 import PrintNewDialog from './PrintNewDialog'
 import KvitelPreview from './KvitelPreview'
 
@@ -25,6 +24,8 @@ const STATUS_STYLE: Record<KvitelStatus, { pill: string; dot: string }> = {
   cancelled: { pill: 'bg-line text-[#7A7F8C]', dot: 'bg-[#7A7F8C]' },
 }
 type Tab = KvitelTab
+// בקשה שנשלחה לציון (אחרי ייצוא לקוויטל): כל השורה בירוק בהיר
+const DONE_ROW = 'bg-[#F1F8F3] hover:bg-[#E3F0E9]'
 
 export function StatusPill({ status }: { status: KvitelStatus }) {
   const st = STATUS_STYLE[status]
@@ -54,25 +55,32 @@ const label = 'flex min-w-0 flex-col gap-1 text-xs font-medium text-ink-soft'
 const dateFmt = new Intl.DateTimeFormat('he-IL', { timeZone: 'Asia/Jerusalem', day: 'numeric', month: 'numeric', year: '2-digit', hour: '2-digit', minute: '2-digit' })
 
 // במובייל: כרטיס לכל בקשה (מגיש וסטטוס, שמות, תאריך). הטבלה מוסתרת מתחת ל-md.
-function MobileCards({ rows, canEdit, onOpen, onApprove, onRemove }: {
-  rows: KvitelRequestRow[]; canEdit: boolean; onOpen: (r: KvitelRequestRow, editing?: boolean) => void
+// לחיצה על הכרטיס מרחיבה את הפרטים מתחתיו, ולחיצה נוספת מכווצת.
+function MobileCards({ rows, canEdit, openId, details, onOpen, onApprove, onRemove }: {
+  rows: KvitelRequestRow[]; canEdit: boolean; openId: string | null; details: (r: KvitelRequestRow) => ReactNode
+  onOpen: (r: KvitelRequestRow, editing?: boolean) => void
   onApprove: (r: KvitelRequestRow) => void; onRemove: (r: KvitelRequestRow) => void
 }) {
   if (!rows.length) return <p className="rounded-xl border border-line bg-white px-4 py-10 text-center text-ink-faint md:hidden">אין בקשות בסינון הזה.</p>
   return (
     <ul className="space-y-2 md:hidden">
-      {rows.map(r => (
-        <li key={r.id}>
-          <button type="button" onClick={() => onOpen(r)} className={`grid w-full gap-2 rounded-xl border border-line bg-white p-4 text-start`}>
-            <span className="flex items-start justify-between gap-2">
-              <span className="min-w-0 flex-1"><NamesCell r={r} /></span>
-              <StatusCell r={r} />
-            </span>
-            <span className="flex items-center justify-between text-xs text-ink-faint"><span>{KVITEL_CHANNELS[r.channel]} · {r.contact_name || 'מגיש לא ידוע'} · {dateFmt.format(new Date(r.submitted_at))}</span><ChevronLeft className="h-4 w-4" aria-hidden /></span>
-          </button>
-          <RowActions r={r} canEdit={canEdit} onApprove={onApprove} onEdit={rr => onOpen(rr, true)} onRemove={onRemove} className="mt-1 flex gap-2" />
-        </li>
-      ))}
+      {rows.map(r => {
+        const open = openId === r.id
+        return (
+          <li key={r.id} className={`rounded-xl border border-line ${r.status === 'done' ? 'bg-[#F1F8F3]' : 'bg-white'}`}>
+            <button type="button" onClick={() => onOpen(r)} aria-expanded={open} className="grid w-full gap-2 p-4 text-start">
+              <span className="flex items-start justify-between gap-2">
+                <span className="min-w-0 flex-1"><NamesCell r={r} /></span>
+                <StatusCell r={r} />
+              </span>
+              <span className="flex items-center justify-between text-xs text-ink-faint"><span>{KVITEL_CHANNELS[r.channel]} · {r.contact_name || 'מגיש לא ידוע'} · {dateFmt.format(new Date(r.submitted_at))}</span>
+                {open ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronLeft className="h-4 w-4" aria-hidden />}</span>
+            </button>
+            <RowActions r={r} canEdit={canEdit} onApprove={onApprove} onEdit={rr => onOpen(rr, true)} onRemove={onRemove} className="flex gap-2 px-4 pb-3" />
+            {open && <div className="border-t border-line px-4 py-4">{details(r)}</div>}
+          </li>
+        )
+      })}
     </ul>
   )
 }
@@ -80,7 +88,8 @@ function MobileCards({ rows, canEdit, onOpen, onApprove, onRemove }: {
 const rowBtn = 'flex h-9 items-center gap-1.5 rounded-[10px] border border-line bg-white px-3 text-[13px] font-semibold text-navy hover:border-[#cfc8bb] disabled:opacity-40'
 const whoOf = (r: KvitelRequestRow) => r.contact_name || dateFmt.format(new Date(r.submitted_at))
 
-// אישור (רק "לבדיקה"), תיקון ומחיקה — בטבלה ובכרטיסים במובייל, לפי kvitelRowActions
+// אישור, תיקון ומחיקה בכל שורה — בטבלה ובכרטיסים במובייל, לפי kvitelRowActions.
+// האישור פעיל רק בבקשה "לבדיקה"; בשאר השורות הוא מוצג מושבת, כדי שהכפתורים יהיו באותו מקום תמיד.
 function RowActions({ r, canEdit, busy, onApprove, onEdit, onRemove, className }: {
   r: KvitelRequestRow; canEdit: boolean; busy?: boolean; className: string
   onApprove: (r: KvitelRequestRow) => void; onEdit: (r: KvitelRequestRow) => void; onRemove: (r: KvitelRequestRow) => void
@@ -90,7 +99,8 @@ function RowActions({ r, canEdit, busy, onApprove, onEdit, onRemove, className }
   return (
     <div className={className}>
       {a.approve && (
-        <button type="button" disabled={busy} onClick={() => onApprove(r)} className="flex h-9 items-center gap-1.5 rounded-[10px] bg-[#17663F] px-3 text-[13px] font-semibold text-white disabled:opacity-40"
+        <button type="button" disabled={busy || !a.approveEnabled} onClick={() => onApprove(r)} className="flex h-9 items-center gap-1.5 rounded-[10px] bg-[#17663F] px-3 text-[13px] font-semibold text-white disabled:opacity-40"
+          title={a.approveEnabled ? undefined : r.status === 'cancelled' ? 'הבקשה בוטלה' : 'הבקשה כבר אושרה'}
           aria-label={`אישור הבקשה של ${whoOf(r)}`}>
           <Check className="h-4 w-4" aria-hidden /> אישור
         </button>
@@ -107,17 +117,6 @@ function RowActions({ r, canEdit, busy, onApprove, onEdit, onRemove, className }
   )
 }
 
-function filtersToQuery(f: KvitelFilters, extra: Record<string, string> = {}): string {
-  const p = new URLSearchParams()
-  if (f.from) p.set('from', f.from)
-  if (f.to) p.set('to', f.to)
-  if (f.status !== 'open') p.set('status', f.status)
-  if (f.channel) p.set('channel', f.channel)
-  if (f.type) p.set('type', f.type)
-  if (f.q) p.set('q', f.q)
-  for (const [k, v] of Object.entries(extra)) p.set(k, v)
-  return p.toString()
-}
 
 type Save = (edit: InlineEdit) => Promise<string | null>
 // "הוספה" בתא ריק: מופיע רק בריחוף על השורה, כדי שתאים ריקים לא יעמיסו על הטבלה
@@ -222,7 +221,6 @@ function DateCell({ iso }: { iso: string }) {
 
 const stageCls = (on: boolean) => `flex flex-col gap-1.5 rounded-xl p-5 text-start transition-colors ${on ? 'bg-[#F7F0E3]' : 'hover:bg-[#FBFAF7]'}`
 const btnPri = 'flex h-9 items-center gap-2 self-start rounded-[10px] bg-navy px-3 text-[13px] font-semibold text-white disabled:pointer-events-none disabled:opacity-40'
-const btnSec = 'flex h-9 items-center gap-2 self-start rounded-[10px] border border-line bg-white px-3 text-[13px] font-semibold text-ink disabled:pointer-events-none disabled:opacity-40'
 const CHANNEL_SEG: { key: string; label: string }[] = [
   { key: '', label: 'הכול' }, { key: 'web', label: 'לינק' }, { key: 'phone', label: 'טלפון' }, { key: 'email', label: 'מייל' }, { key: 'nedarim', label: 'נדרים' },
 ]
@@ -242,11 +240,10 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
-  const [exportOpen, setExportOpen] = useState(false)
   const [printOpen, setPrintOpen] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
   const [previewRow, setPreviewRow] = useState<KvitelRequestRow | null>(null)
-  const [openIdx, setOpenIdx] = useState<number | null>(null)
+  const [openId, setOpenId] = useState<string | null>(null)   // הבקשה שמורחבת מתחת לשורה
   const [openEditing, setOpenEditing] = useState(false)
   // שורות שנשמרו בעריכה בתוך הטבלה — מוצגות מיד, עד שהרשימה נטענת מחדש מהשרת
   const [saved, setSaved] = useState<Record<string, KvitelRequestRow>>({})
@@ -290,7 +287,15 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
     return null
   }
   const saveFor = (r: KvitelRequestRow): Save | null => (canEdit ? e => saveEdit(r, e) : null)
-  const openRow = (r: KvitelRequestRow, editing = false) => { setOpenEditing(editing); setOpenIdx(tc.rows.findIndex(x => x.id === r.id)) }
+  // לחיצה על השורה מכווצת ומרחיבה; "תיקון" תמיד פותח את השורה במצב עריכה
+  const openRow = (r: KvitelRequestRow, editing = false) => {
+    setOpenEditing(editing)
+    setOpenId(id => (id === r.id && !editing ? null : r.id))
+  }
+  const details = (r: KvitelRequestRow) => (
+    <KvitelRowDetails key={r.id} r={r} canEdit={canEdit} editing={openEditing} onEditing={setOpenEditing} busy={busy} setStatus={setStatus}
+      onPreview={setPreviewRow} onSaved={m => { setMessage(m); router.refresh() }} />
+  )
   const pickTab = (t: Tab) => { setTab(t); setSelected(new Set()) }
 
   async function setStatus(ids: string[], status: KvitelStatus) {
@@ -331,9 +336,6 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
   }
 
   const ids = [...selected]
-  // ייצוא: מה שנבחר, ואחרת כל מה שבתצוגה (הקובץ כולל רק בקשות שלא בוטלו)
-  const exportRows = selected.size ? rows.filter(r => selected.has(r.id)) : scoped.filter(r => r.status !== 'cancelled')
-  const exportHref = `/api/admin/kvitel/export?${filtersToQuery({ ...filters, status: 'all', channel: (channel || null) as KvitelFilters['channel'], type: type || null, q })}`
 
   return (
     <div className="space-y-5">
@@ -369,10 +371,7 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
           <div role="button" tabIndex={0} onClick={() => pickTab('done')} onKeyDown={e => { if (e.key === 'Enter') pickTab('done') }} className={`${stageCls(tab === 'done')} cursor-pointer`}>
             <span className="flex items-center gap-2 text-sm font-semibold text-ink-soft"><span className="h-[9px] w-[9px] rounded-full bg-[#2F6B4F]" />נשלח לציון<span className="text-[11px] text-ink-faint">שלב 2</span></span>
             <b className="text-[44px] font-extrabold leading-none tabular-nums text-navy">{counts.done}</b>
-            <p className="min-h-5 text-[13px] text-ink-soft">אפשר להוריד כל אחד מחדש.</p>
-            <button type="button" disabled={!exportRows.length} onClick={e => { e.stopPropagation(); setMessage(''); setExportOpen(true) }} className={`${btnSec} mt-auto`}>
-              <FileDown className="h-[18px] w-[18px]" aria-hidden /> {selected.size ? `ייצוא ${selected.size} שנבחרו` : 'ייצוא'}
-            </button>
+            <p className="min-h-5 text-[13px] text-ink-soft">אפשר להוריד כל אחד מחדש מתוך הבקשה.</p>
           </div>
         </div>
         <div className="mt-3 flex items-center gap-4 text-[13px] text-ink-soft">
@@ -428,8 +427,6 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
 
       {message && <p role="status" className="rounded-lg bg-sand px-4 py-2.5 text-sm text-navy">{message}</p>}
 
-      <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} rows={exportRows} exportHref={exportHref} exportIds={ids} canEdit={canEdit}
-        onDone={m => { setExportOpen(false); setMessage(m); setSelected(new Set()); router.refresh() }} />
       <PrintNewDialog open={printOpen} onClose={() => setPrintOpen(false)} rows={allRows} canEdit={canEdit}
         onDone={m => { setPrintOpen(false); setMessage(m); router.refresh() }} />
       <KvitelPreview open={!!previewRow} onClose={() => setPreviewRow(null)} lines={previewRow ? kvitelRequestLines(previewRow) : []}
@@ -478,10 +475,11 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
                 case 'count': return <span className="tabular-nums text-ink-soft">{r.kvitel_request_lines.length}</span>
               }
             }}
+            rowClass={r => (r.status === 'done' ? DONE_ROW : undefined)}
             expandedRow={r => recordingId === r.id && r.recording_url ? (
               <KvitelRecordingPanel key={r.id} requestId={r.id} recordingUrl={r.recording_url} transcript={r.raw_text} needsReview={!!r.needsReview}
                 editable={canEdit} onSaved={m => { setMessage(m); router.refresh() }} />
-            ) : null}
+            ) : openId === r.id ? details(r) : null}
             actions={r => (
               <div className="flex items-center gap-3">
                 {r.recording_url && (
@@ -497,14 +495,9 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
             actionsHead="" />
         </div>
       </div>
-      <MobileCards rows={pg.rows} canEdit={canEdit} onOpen={(r, editing) => openRow(r, editing)} onApprove={r => void setStatus([r.id], 'pending')}
+      <MobileCards rows={pg.rows} canEdit={canEdit} openId={openId} details={details} onOpen={(r, editing) => openRow(r, editing)} onApprove={r => void setStatus([r.id], 'pending')}
         onRemove={r => void removeRow(r)} />
       {confirmDialog}
-      {openIdx !== null && tc.rows[openIdx] && (
-        <KvitelCardModal rows={tc.rows} index={openIdx} onIndex={i => { setOpenIdx(i); setOpenEditing(false) }} onClose={() => setOpenIdx(null)} startEditing={openEditing}
-          canEdit={canEdit} busy={busy} setStatus={setStatus} onPreview={setPreviewRow}
-          onSaved={m => { setMessage(m); router.refresh() }} />
-      )}
     </div>
   )
 }
