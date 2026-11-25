@@ -171,18 +171,19 @@ async function sendLoanReceivedMail(
   try {
     const { data: ben } = await admin
       .from('beneficiaries')
-      .select('email, family_name, full_name, id_number, lineage_chain')
+      .select('email, family_name, full_name, spouse_name, marital_status, id_number, lineage_chain')
       .eq('id', beneficiaryId)
       .maybeSingle()
     if (!ben?.email) return
 
     const { loanReceivedEmail } = await import('@/lib/emailTemplates')
+    const { holidayFirstNames } = await import('@/lib/holidayFamilyName')
     const { deliverMail } = await import('@/lib/sendMail')
     const { mailFor } = await import('@/lib/departments')
 
     const mail = loanReceivedEmail({
       familyName: ben.family_name,
-      applicantName: ben.full_name,
+      applicantName: holidayFirstNames(ben),
       amount,
       installments,
       submittedAt: new Date().toLocaleDateString('he-IL'),

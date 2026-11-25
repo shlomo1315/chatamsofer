@@ -114,7 +114,7 @@ describe('saveChainByStaff — מזכירות ומנהל', () => {
 describe('saveChainFromLink — קישור התיקון', () => {
   const inv = { token: 't1', root_node_id: 'r', recipient_name: 'חיה', beneficiary_id: 'b1' }
 
-  it('5 דורות תקינים — מוחל מיד, חוזר לאישור ראשוני, בלי לגעת בסימון של צמתים קיימים', async () => {
+  it('5 דורות תקינים — מוחל מיד, חוזר לאישור ראשוני, סימון שסותר צומת משותף לא נדרס ונכנס לתור', async () => {
     const { db, updates, inserts } = fakeDb(BEN)
     const c = chain('א', 'ב', 'ג', 'ד', 'ה')
     c[2].relation = 'son_in_law'
@@ -122,6 +122,35 @@ describe('saveChainFromLink — קישור התיקון', () => {
     expect(res).toMatchObject({ ok: true, applied: true, status: 'pending' })
     expect(updates.some(u => u.table === 'lineage_nodes')).toBe(false)
     expect(updates).toContainEqual({ table: 'beneficiaries', row: { eligibility_status: 'pending', deep_review_reason: null }, id: 'b1' })
+    expect(inserts).toHaveLength(1)
+    expect(inserts[0].table).toBe('lineage_review_suggestions')
+    expect(String(inserts[0].row.payload && (inserts[0].row.payload as { text: string }).text)).toContain('דור 3: ב: חתן (בעץ: בן)')
+  })
+
+  // הבאג של גולדשטיין (25.11): בן/חתן חסר בשני דורות, המשפחה סימנה ושמרה,
+  // ובכניסה חוזרת הסימון לא היה. עכשיו הסימון נכתב לצומת ונשמר בשרשרת.
+  it('בן/חתן חסר בשני דורות — נכתב לצמתים ונשמר בשרשרת, בלי תור', async () => {
+    const tree = TREE.map(n => (n.id === 'n3' || n.id === 'n5' ? { ...n, relation: null } : n))
+    const { db, updates, inserts } = fakeDb(BEN)
+    const c = chain('א', 'ב', 'ג', 'ד', 'ה')
+    c[2].relation = 'son_in_law'
+    c[4].relation = 'son'
+    const res = await saveChainFromLink(db, deps(tree, 'n6'), inv, c, approvedAll)
+    expect(res).toMatchObject({ ok: true, applied: true })
+    expect(updates).toContainEqual({ table: 'lineage_nodes', row: { relation: 'son_in_law' }, id: 'n3' })
+    expect(updates).toContainEqual({ table: 'lineage_nodes', row: { relation: 'son' }, id: 'n5' })
+    const saved = updates.find(u => u.table === 'beneficiaries' && 'lineage_chain' in u.row)!.row.lineage_chain as { generation: number; relation: string | null }[]
+    expect(saved.find(s => s.generation === 3)!.relation).toBe('son_in_law')
+    expect(saved.find(s => s.generation === 5)!.relation).toBe('son')
+    expect(inserts).toHaveLength(0)
+  })
+
+  it('הדור של המשפחה עצמה — בן/חתן מתעדכן גם כשכבר היה סימון', async () => {
+    const { db, updates, inserts } = fakeDb(BEN)
+    const c = chain('א', 'ב', 'ג', 'ד', 'ה')
+    c[5].relation = 'son_in_law'
+    await saveChainFromLink(db, deps(TREE, 'n6'), inv, c, approvedAll)
+    expect(updates).toContainEqual({ table: 'lineage_nodes', row: { relation: 'son_in_law' }, id: 'n6' })
     expect(inserts).toHaveLength(0)
   })
 
