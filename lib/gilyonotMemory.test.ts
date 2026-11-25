@@ -13,6 +13,12 @@ const state = {
   bodyBytes: [] as number[],
   live: 0,
   maxLive: 0,
+  /** קישור חתום זמין באחסון (מצב צרופה בקישור) */
+  signed: false,
+  /** Resend מסרב לצרופה בקישור */
+  failPath: false,
+  paths: 0,
+  keys: [] as string[],
 }
 
 function builder(table: string) {
@@ -42,7 +48,10 @@ function builder(table: string) {
 const db = {
   from: (t: string) => builder(t),
   rpc: async () => ({ data: true, error: null }),
-  storage: { from: () => ({ download: async () => ({ data: new Blob([new Uint8Array(state.fileBytes)]), error: null }) }) },
+  storage: { from: () => ({
+    download: async () => ({ data: new Blob([new Uint8Array(state.fileBytes)]), error: null }),
+    createSignedUrl: async (p: string) => state.signed ? { data: { signedUrl: `https://files.test/${p}` }, error: null } : { data: null, error: { message: 'no' } },
+  }) },
 }
 
 vi.mock('./apiAuth', () => ({ getServiceClient: () => db }))
@@ -51,7 +60,12 @@ vi.mock('./gilyonotHeichalot', () => ({ heichalotMissingError: () => null, advan
 vi.mock('resend', () => ({
   Resend: class {
     emails = {
-      send: async (p: { to: string; attachments?: { content: unknown }[] }) => {
+      send: async (p: { to: string; attachments?: { content?: unknown; path?: string }[] }, o?: { idempotencyKey?: string }) => {
+        if (o?.idempotencyKey) state.keys.push(o.idempotencyKey)
+        if (p.attachments?.some(a => a.path)) {
+          if (state.failPath) return { data: null, error: { message: 'could not fetch attachment', name: 'validation_error' } }
+          state.paths++
+        }
         state.live++; state.maxLive = Math.max(state.maxLive, state.live)
         for (const a of p.attachments ?? []) state.contentTypes.push(typeof a.content)
         state.bodyBytes.push(JSON.stringify(p).length) // מה ש-Resend באמת שולח
@@ -69,6 +83,7 @@ beforeEach(() => {
   process.env.RESEND_API_KEY = 'test'
   resetGilyonotSenderForTest()
   state.contentTypes = []; state.bodyBytes = []; state.live = 0; state.maxLive = 0; state.fileBytes = 4
+  state.signed = false; state.failPath = false; state.paths = 0; state.keys = []
   state.deliveries = Array.from({ length: 20 }, (_, i) => ({
     id: `d${i}`, email: `u${i}@example.com`, token: `t${i}`, attempts: 0, status: 'pending', issue_id: 'i1', gilyonot_subscribers: null,
   }))
@@ -92,5 +107,25 @@ describe('זיכרון בשליחת הגיליונות', () => {
   it('קובץ קטן: שולחים במקביל כרגיל', async () => {
     expect(await runGilyonotSender()).toEqual({ sent: 20, failed: 0 })
     expect(state.maxLive).toBeGreaterThan(3)
+  })
+})
+
+describe('צרופה בקישור (Resend מושך את הקובץ, השרת לא מחזיק אותו בזיכרון)', () => {
+  it('כשיש קישור חתום: כל המיילים יוצאים עם path ובלי תוכן הקובץ, גם בקובץ כבד', async () => {
+    state.signed = true
+    state.fileBytes = 25 * 1024 * 1024
+    expect(await runGilyonotSender()).toEqual({ sent: 20, failed: 0 })
+    expect(state.paths).toBe(20)
+    expect(new Set(state.contentTypes)).toEqual(new Set(['undefined']))
+    expect(Math.max(...state.bodyBytes)).toBeLessThan(10_000)
+    expect(state.maxLive).toBeGreaterThan(3) // אין קובץ בזיכרון, ולכן אין הגבלה לפי גודל
+  })
+
+  it('Resend מסרב לקישור: עוברים פעם אחת לקובץ עצמו, עם מפתח חדש, וכולם נשלחים', async () => {
+    state.signed = true; state.failPath = true
+    expect(await runGilyonotSender()).toEqual({ sent: 20, failed: 0 })
+    expect(state.paths).toBe(0)
+    expect(state.contentTypes.filter(t => t === 'string')).toHaveLength(20)
+    expect(state.keys.filter(k => k.endsWith('-inline'))).toHaveLength(20)
   })
 })

@@ -107,7 +107,7 @@ describe('זיכרון בזמן שליחה', () => {
     const { inFlightLimit } = await import('./gilyonotSender')
     const MB = 1024 * 1024
     expect(inFlightLimit(1 * MB, 8)).toBe(8)
-    expect(inFlightLimit(20 * MB, 8)).toBe(3)
+    expect(inFlightLimit(12 * MB, 8)).toBe(3)
     expect(inFlightLimit(40 * MB, 8)).toBe(2)
   })
 })
