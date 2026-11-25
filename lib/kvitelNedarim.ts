@@ -130,3 +130,19 @@ export function rawToRecord(raw: string): Record<string, string> {
   }
   return out
 }
+
+// ── תיקון לאחור: "ברכה והצלחה" שהוכנסה כברירת מחדל ──
+// עד 15.11 הקליטה מנדרים שמה בכל שורה בלי בקשה request_type='yeshua' ("ברכה והצלחה") וסימנה אותה.
+// הטופס בנדרים לא שולח בקשה בכלל, ולכן זו לא בקשה אמיתית: מחזירים ל"לא צוינה בקשה" ומורידים את הסימון על הבקשה.
+// שורה שה-yeshua בה לא מסומן כברירת מחדל (אולי נבחר ידנית) — לא נוגעים. מראה את המיגרציה 20261125_kvitel_nedarim_default_request.sql.
+const DEFAULT_REQUEST_FLAG = /סוג בקשה|הונח "ישועה וברכה"/
+
+export function clearDefaultRequest(l: { request_type: string; request_note: string | null; flag_reason: string | null }):
+  { request_type: ''; flagged: boolean; flag_reason: string | null } | null {
+  if (l.request_type !== 'yeshua' || l.request_note || !l.flag_reason || !DEFAULT_REQUEST_FLAG.test(l.flag_reason)) return null
+  const rest = l.flag_reason.split(' · ')
+    .map(p => p.replace(/(, )?סוג בקשה$/, ''))
+    .filter(p => !/^לא צוין סוג בקשה/.test(p) && !/:\s*$/.test(p))
+  const reason = rest.join(' · ') || null
+  return { request_type: '', flagged: !!reason, flag_reason: reason }
+}

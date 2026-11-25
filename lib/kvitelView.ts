@@ -62,9 +62,27 @@ export const byKvitelTab = <R extends Pick<KvitelRequestRow, 'status'>>(rows: R[
   tab === 'all' ? rows : rows.filter(r => r.status === tab)
 
 // כפתורי השורה בטבלה ובכרטיסים במובייל. "מחיקה" = ביטול (עוברת ל"בוטלו" ואפשר לשחזר משם).
+// approve: 'button' — כפתור אישור (רק בבקשה לבדיקה); 'approved' / 'sent' — תווית מצב במקום כפתור; null — כלום.
+export type KvitelApproveState = 'button' | 'approved' | 'sent' | null
 export function kvitelRowActions(r: Pick<KvitelRequestRow, 'status' | 'needsReview'>, canEdit: boolean) {
-  // אישור מוצג תמיד למי שעורך, ופעיל רק בבקשה שממתינה לבדיקה
-  return { approve: canEdit, approveEnabled: canEdit && !!r.needsReview, edit: canEdit, remove: canEdit && r.status !== 'cancelled' }
+  const approve: KvitelApproveState = !canEdit || r.status === 'cancelled' ? null
+    : r.needsReview || r.status === 'review' ? 'button' : r.status === 'done' ? 'sent' : 'approved'
+  return { approve, edit: canEdit, remove: canEdit && r.status !== 'cancelled' }
+}
+
+// שינוי סטטוס של בקשות (אישור, מחיקה, שחזור). מחזיר את מספר הבקשות שעודכנו, או שגיאה ברורה — אף פעם לא נכשל בשקט.
+export async function patchKvitelStatus(ids: string[], status: KvitelStatus, fetcher: typeof fetch = fetch): Promise<{ updated: number } | { error: string }> {
+  try {
+    const res = await fetcher('/api/admin/kvitel/requests', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids, status }),
+    })
+    const data = await res.json().catch(() => ({})) as { error?: string; updated?: number }
+    if (!res.ok) return { error: data.error || (res.status === 403 ? 'אין לך הרשאה לעדכן בקשות' : `העדכון נכשל (${res.status})`) }
+    if (!data.updated) return { error: 'הבקשה לא עודכנה — ייתכן שנמחקה. רעננו את הרשימה' }
+    return { updated: data.updated }
+  } catch {
+    return { error: 'העדכון נכשל: אין חיבור לשרת' }
+  }
 }
 
 // raw_text נשמר כשורות "שדה: ערך" (הגשת נדרים). טקסט חופשי בלי נקודתיים לא נחשב שדות.
