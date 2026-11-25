@@ -47,6 +47,24 @@ export function countByStatus(rows: Pick<KvitelRequestRow, 'status' | 'needsRevi
 
 export const needsApproval = (r: Pick<KvitelRequestRow, 'status' | 'needsReview'>) => r.status === 'review' || !!r.needsReview
 
+// אישור (לרבות קבוצתי): רק מה שמחכה לבדיקה. ⚠️ נשלחו ובוטלו לא חוזרים ל"לא נשלח" גם כשיש עליהן סימון בדיקה.
+export function bulkApproval<R extends Pick<KvitelRequestRow, 'status' | 'needsReview'>>(rows: R[]): { todo: R[]; skipped: number } {
+  const todo = rows.filter(r => needsApproval(r) && r.status !== 'done' && r.status !== 'cancelled')
+  return { todo, skipped: rows.length - todo.length }
+}
+
+// הסבר ליד "ייצוא לקוויטל" כשהוא נעול. null — פתוח, או שבוע קודם (שם יש כבר שורת הסבר משלו).
+export function exportLockReason(o: { canEdit: boolean; loaded: boolean; isCurrent: boolean; fileCount: number; reviewCount: number }): string | null {
+  if (!o.canEdit) return 'אין לך הרשאה לייצא.'
+  if (!o.loaded || !o.isCurrent || o.fileCount > 0) return null
+  return o.reviewCount > 0
+    ? `הכפתור ייפתח אחרי שתאשרו בקשות: כרגע ${o.reviewCount} בקשות מחכות לבדיקה, ובקובץ נכללות רק בקשות מאושרות.`
+    : 'אין השבוע בקשות מאושרות לייצוא.'
+}
+
+export const bulkApprovalMessage =(approved: number, skipped: number) =>
+  (approved === 1 ? 'אושרה בקשה אחת' : `אושרו ${approved} בקשות`) + (skipped ? ` · ${skipped} דולגו (כבר מאושרות, נשלחו או בוטלו)` : '')
+
 // הבקשה הבאה שמחכה לאישור אחרי id, לפי סדר התצוגה. אם אין אחריה, הראשונה שלפניה. null כשאין עוד.
 export function nextToApprove<R extends Pick<KvitelRequestRow, 'id' | 'status' | 'needsReview'>>(rows: R[], id: string): string | null {
   const i = rows.findIndex(r => r.id === id)

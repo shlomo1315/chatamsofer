@@ -8,7 +8,7 @@ import { kvitelRequestLines, type KvitelFilters, type KvitelLineRow, type Kvitel
 import { ListTable } from '@/components/admin/system/ListTable'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import { useTablePagination } from '@/lib/useTablePagination'
-import { asApproved, byKvitelTab, countByStatus, hebrewDay, KVITEL_DEFAULT_TAB, kvitelRowActions, needsApproval, nextToApprove, patchKvitelStatus, scopeKvitelRows, type KvitelTab } from '@/lib/kvitelView'
+import { asApproved, bulkApproval, bulkApprovalMessage, byKvitelTab, countByStatus, hebrewDay, KVITEL_DEFAULT_TAB, kvitelRowActions, needsApproval, nextToApprove, patchKvitelStatus, scopeKvitelRows, type KvitelTab } from '@/lib/kvitelView'
 import { InlineText, InlineRequest } from './KvitelInlineCell'
 import { saveInlineEdit, personText, PERSON_HINT, type InlineEdit } from '@/lib/kvitelInlineEdit'
 import KvitelRowDetails from './KvitelRowDetails'
@@ -338,12 +338,12 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
 
   // אישור מהיר: השורה מאושרת מיד והפוקוס עובר ל"אישור" של הבקשה הבאה, והשמירה רצה ברקע.
   // בלי חלון ובלי לנעול את המסך, כדי שאפשר לאשר שם אחרי שם. נכשל — השורה חוזרת לבדיקה עם הודעה.
-  async function approve(list: KvitelRequestRow[]) {
-    const todo = list.filter(needsApproval)
+  async function approve(list: KvitelRequestRow[], skipped = 0) {
+    const { todo } = bulkApproval(list)
     if (!todo.length) return
     const ids = todo.map(r => r.id)
-    const next = todo.length === 1 ? nextToApprove(pg.rows, ids[0]) : null
-    const msg = todo.length === 1 ? `הבקשה של ${whoOf(todo[0])} אושרה` : `אושרו ${todo.length} בקשות`
+    const next = todo.length === 1 && !skipped ? nextToApprove(pg.rows, ids[0]) : null
+    const msg = todo.length === 1 && !skipped ? `הבקשה של ${whoOf(todo[0])} אושרה` : bulkApprovalMessage(todo.length, skipped)
     setApprovedHere(s => new Set([...s, ...ids]))
     setSelected(s => (s.size ? new Set([...s].filter(id => !ids.includes(id))) : s))
     setMessage(msg)
@@ -361,7 +361,12 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
     }
     router.refresh()
   }
-  const toApprove = liveRows.filter(r => selected.has(r.id) && needsApproval(r))
+  const bulk = bulkApproval(liveRows.filter(r => selected.has(r.id)))
+  const toApprove = bulk.todo
+  function approveSelected() {
+    if (!window.confirm(`לאשר ${toApprove.length} בקשות?`)) return
+    void approve(toApprove, bulk.skipped)
+  }
 
   function copyFormLink() {
     const url = `${window.location.origin}/kvitel`
@@ -484,9 +489,10 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
         {canEdit && selected.size > 0 && (
           <div className="flex flex-wrap items-center gap-2.5 bg-navy px-4 py-2.5 text-white">
             <b className="text-sm">נבחרו {selected.size}</b>
+            {/* ⚠️ ירוק מלא כמו "אישור" בשורה: הגרסה הלבנה נראתה בחי כמלבן ריק בלי טקסט */}
             {toApprove.length > 0 && (
-              <button type="button" onClick={() => void approve(toApprove)} className="flex h-9 items-center gap-2 rounded-[10px] bg-white px-3 text-[13px] font-semibold text-[#17663F]">
-                <Check className="h-4 w-4" aria-hidden /> אישור {toApprove.length === selected.size ? 'הכול' : `${toApprove.length} לבדיקה`}
+              <button type="button" disabled={busy} onClick={approveSelected} data-bulk-approve className="flex h-9 items-center gap-2 rounded-[10px] bg-[#1F8A54] px-3 text-[13px] font-semibold text-white ring-1 ring-white/40 hover:bg-[#17663F] disabled:opacity-40">
+                <Check className="h-4 w-4" aria-hidden /> אישור {toApprove.length === selected.size ? `${toApprove.length}` : `${toApprove.length} מתוך ${selected.size}`}
               </button>
             )}
             <button disabled={busy} onClick={() => setStatus(ids, 'done')} className="flex h-9 items-center gap-2 rounded-[10px] bg-[#17663F] px-3 text-[13px] font-semibold disabled:opacity-40">

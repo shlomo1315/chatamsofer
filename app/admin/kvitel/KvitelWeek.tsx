@@ -5,6 +5,7 @@ import { kvitelCloseFlow, type KvitelFormat } from '@/lib/kvitelCloseFlow'
 import { CalendarDays, Check, Download, Send, type LucideIcon } from 'lucide-react'
 import { israelDay, type KvitelFilters, type KvitelRequestRow } from '@/lib/kvitelQuery'
 import { kvitelFile, kvitelWeekTabs, sentLabel, weekIntake } from '@/lib/kvitelWeek'
+import { exportLockReason } from '@/lib/kvitelView'
 import { downloadKvitel } from './KvitelPreview'
 import KvitelClient from './KvitelClient'
 import s from './KvitelWeek.module.css'
@@ -56,6 +57,7 @@ export default function KvitelWeek({ rows, filters, canEdit, tabs, onReload }: {
   // בטבלה, כמו ברשימה: "לבדיקה" מוצג כ"לא נשלח" עם תגית וכפתור אישור
   const listRows = useMemo(() => rows.map(r => (r.status === 'review' ? { ...r, status: 'pending' as const, needsReview: true } : r)), [rows])
   const file = useMemo(() => kvitelFile(rows), [rows])
+  const exportLock = exportLockReason({ canEdit, loaded: !!batches, isCurrent, fileCount: file.ids.length, reviewCount })
   const intake = useMemo(() => weekIntake(rows, tab), [rows, tab])
   const maxChan = Math.max(1, ...intake.byChannel.map(c => c.n))
 
@@ -193,6 +195,7 @@ export default function KvitelWeek({ rows, filters, canEdit, tabs, onReload }: {
               <Ico icon={Send} />ייצוא לקוויטל
             </button>
           </div>
+          {exportLock && <p className={s.sheetnote} role="status" style={{ textAlign: 'start', color: 'var(--ink-2)', fontWeight: 600 }}>{exportLock}</p>}
           <p className={s.sheetnote} style={{ textAlign: 'start' }}>
             {isCurrent
               ? '"ייצוא לקוויטל" מוריד את הקובץ (PDF או Word), ואחרי אישור מסמן את מה שירד בפועל "נשלח לציון" ומרוקן את השבוע. כל בקשה חדשה נכנסת לפרשה הבאה.'
