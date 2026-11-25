@@ -69,17 +69,23 @@ const MARITAL_TINT: Record<string, string> = {
   'אלמנה': 'bg-amber-50 text-amber-700',
 }
 
-const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[] => [
+export const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[] => [
   {
     key: 'full_name',
     weight: 2,
-    width: 180,
+    width: 210,
+    // ⚠️ מתחת לזה תווית "חזר מבירור - בדיקה מעמיקה" (שאינה נשברת) לא נכנסת.
+    minWidth: 200,
     kind: 'text',
     value: (row) => fullName(row),
     header: 'שם מלא',
     sortable: true,
+    // 🔴 התווית בשורה נפרדת מתחת לשם: באותה שורה היא (flex-none) דחקה את
+    // השם לאות אחת בשורה. והשם נשבר רק בין מילים — התא מגדיר overflow-wrap
+    // anywhere, שמאפשר לכווץ את השם עד אות אחת.
     render: (row) => (
-      <div className="flex items-center gap-2.5 group/name">
+      <div className="flex flex-col items-start gap-1.5 group/name">
+      <div className="flex w-full items-center gap-2.5">
         <div className="relative flex-shrink-0">
           <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${avatarColor(row.id)}`}>
             {initials(row)}
@@ -88,9 +94,10 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
             <span className="absolute -bottom-0.5 -left-0.5 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-white" />
           )}
         </div>
-        <span className="min-w-0 break-words font-medium text-slate-800 group-hover/name:text-navy">
+        <span className="min-w-0 [overflow-wrap:break-word] font-medium text-slate-800 group-hover/name:text-navy">
           {fullName(row)}
         </span>
+      </div>
         <LineageInquiryBadge row={row} />
       </div>
     ),
