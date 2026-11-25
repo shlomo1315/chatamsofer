@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react'
 import { ancestorIds } from '@/lib/lineageChain'
+import { ancestorsToVerify } from '@/lib/lineageRejectCascade'
 import Link from 'next/link'
 import { Plus, RefreshCw, Loader2, ChevronRight, ChevronLeft, ChevronDown, Pencil, Trash2, X, Users, Check, Printer, MapPin, Link2, ExternalLink, Activity, ShieldCheck, ShieldAlert, Ghost, GitMerge, ClipboardCheck } from 'lucide-react'
 import { genTone } from '@/lib/lineagePalette'
@@ -765,23 +766,21 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
     let verifyAncestors = false
     if (status === 'verified') {
       const byId = new Map(nodes.map(n => [n.id, n]))
-      const pend: LineageNode[] = []
-      const seen = new Set<string>([node.id])
-      let cur = node.parent_id
-      while (cur && !seen.has(cur)) {
-        seen.add(cur)
-        const a = byId.get(cur)
-        if (!a || (a.status ?? 'pending') === 'verified') break
-        pend.push(a)
-        cur = a.parent_id
-      }
+      // ⚠️ נעצר באב פסול — הוא לא יאושר דרך הצאצא שלו.
+      const { pending: pend, blockedBy } = ancestorsToVerify(node.parent_id, k => byId.get(k), node.id)
+      const blockedNote = blockedBy
+        ? `\n\nשימו לב: ${blockedBy.name} (דור ${blockedBy.generation}) פסול, ולכן האישור נעצר בו. הוא והאבות שמעליו לא יאושרו.`
+        : ''
       if (pend.length) {
         verifyAncestors = confirm(
           `לאשר גם את ${pend.length} הדורות שמעליו?\n\n` +
           pend.map((a, i) => `${i + 1}. ${a.name}  (דור ${a.generation})`).join('\n') +
           '\n\nאישור = כל אלה יסומנו "מאושר".\n' +
-          'ביטול = רק הצומת הזה יאושר. שימו לב: כל עוד אב שלו "ממתין", הוא לא יופיע לנרשמים בבורר סדר הדורות.',
+          'ביטול = רק הצומת הזה יאושר. שימו לב: כל עוד אב שלו "ממתין", הוא לא יופיע לנרשמים בבורר סדר הדורות.' +
+          blockedNote,
         )
+      } else if (blockedBy) {
+        toast.error(`אב במסלול פסול: ${blockedBy.name} (דור ${blockedBy.generation}). הצומת יאושר, אבל הוא עדיין תלוי בפסילה.`)
       }
     }
     onStatusChange(node.id, status)

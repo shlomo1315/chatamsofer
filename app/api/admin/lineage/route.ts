@@ -6,6 +6,7 @@ import { syncChildrenOfBeneficiary } from '@/lib/lineageFamilyChildren'
 import { logActivity } from '@/lib/activityLog'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { getApprovedRefLookup } from '@/lib/lineageApprovedRef'
+import { ancestorsToVerify } from '@/lib/lineageRejectCascade'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -284,19 +285,19 @@ export async function PATCH(request: NextRequest) {
   // ⚠️ הצורך אמיתי ולכן האפשרות נשארה: בורר סדר הדורות ברישום מנווט דרך צמתים
   // מאושרים בלבד, ולכן בן מאושר שאביו "ממתין" פשוט לא יופיע לנרשמים הבאים.
   // המסך מציג את רשימת האבות ושואל; כאן רק מבצעים את מה שנענה.
+  // 🔴 האישור נעצר בצומת פסול (ancestorsToVerify): עד כה הוא אישר בשקט גם אב
+  // שנפסל, ומחק בכך את הפסילה של הענף כולו בלי שאיש החליט על כך.
+  let ancestorsBlockedBy: string | null = null
   if (updates.status === 'verified' && body.verifyAncestors === true) {
-    let cur: string | null = (data?.parent_id as string | null) ?? null
-    const guard = new Set<string>([id])
-    while (cur && !guard.has(cur)) {
-      guard.add(cur)
-      const { data: anc } = await admin.from('lineage_nodes').select('id, parent_id, status').eq('id', cur).maybeSingle() as {
-        data: { id: string; parent_id: string | null; status: string } | null
-      }
-      if (!anc) break
-      if (anc.status === 'verified') break
-      await admin.from('lineage_nodes').update({ status: 'verified' }).eq('id', cur).then(undefined, () => {})
-      cur = (anc.parent_id as string | null) ?? null
+    const { rows: ancNodes } = await fetchAllRows<TreeNodeRow>((from, to) =>
+      admin.from('lineage_nodes').select(NODE_SELECT).range(from, to),
+    )
+    const ancById = new Map(ancNodes.map(n => [n.id, n]))
+    const { pending, blockedBy } = ancestorsToVerify((data?.parent_id as string | null) ?? null, k => ancById.get(k), id)
+    if (pending.length) {
+      await admin.from('lineage_nodes').update({ status: 'verified' }).in('id', pending.map(a => a.id)).then(undefined, () => {})
     }
+    ancestorsBlockedBy = blockedBy?.name ?? null
   }
 
   // ── דחיית מפל בעץ בלבד ──
@@ -362,7 +363,7 @@ export async function PATCH(request: NextRequest) {
   }
 
   invalidateLineageCache()
-  return NextResponse.json({ node: data, approvedBeneficiaries: approved, rejectedBeneficiaries: 0 })
+  return NextResponse.json({ node: data, approvedBeneficiaries: approved, rejectedBeneficiaries: 0, ancestorsBlockedBy })
 }
 
 export async function DELETE(request: NextRequest) {
