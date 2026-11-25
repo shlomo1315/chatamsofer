@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireAdmin, forbidden, getServiceClient } from '@/lib/apiAuth'
+import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
+import { roleAllows } from '@/lib/permissions'
+import type { UserPermissions } from '@/types'
 import { recheckAfterLineageEdit } from '@/lib/lineageEditRecheck'
 
 export const dynamic = 'force-dynamic'
@@ -21,11 +23,20 @@ export function pickEditable(raw: unknown): Record<string, unknown> {
   return out
 }
 
-// 🔒 עריכת תיק צאצא — מנהל בלבד, גם אם הלקוח הסתיר את הכפתור.
+// 🔒 עריכת תיק צאצא — לפי הרשאת עריכה בצאצאים (מנהל, או מזכירה שסומנה לה עריכה),
+// גם אם הלקוח הסתיר את הכפתור.
 // פעולות: save (שמירת שינויים + מחיקת תיקי לידה שנבחרו) ו-approve-birth.
+// ⚠️ אישור לידה ומחיקת תיק לידה נוגעים בטבלת היולדות, ולכן דורשים גם עריכה ביולדות.
 export async function POST(request: NextRequest) {
-  if (!(await requireAdmin())) return forbidden('עריכת תיק צאצא שמורה למנהל המערכת בלבד')
+  const staff = await requirePermission('beneficiaries', 'edit')
+  if (!staff) return forbidden('אין הרשאת עריכה בצאצאים')
+  const canEditMaternity = staff.role === 'admin'
+    || roleAllows(staff.role, staff.permissions as UserPermissions, 'maternity', 'edit')
   const body = await request.json().catch(() => ({}))
+  const toDelete: string[] = Array.isArray(body.maternityToDelete) ? body.maternityToDelete.filter((x: unknown) => typeof x === 'string') : []
+  if ((body.action === 'approve-birth' || toDelete.length) && !canEditMaternity) {
+    return forbidden('אישור לידה ומחיקת תיק לידה דורשים הרשאת עריכה ביולדות')
+  }
   const id = typeof body.id === 'string' ? body.id : ''
   if (!id) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
 
@@ -59,7 +70,6 @@ export async function POST(request: NextRequest) {
 
   // תיקי לידה נמחקים רק אחרי שמירת הכרטסת, וכשל כאן לא מבטל אותה
   let maternityError: string | null = null
-  const toDelete = Array.isArray(body.maternityToDelete) ? body.maternityToDelete.filter((x: unknown) => typeof x === 'string') : []
   if (toDelete.length) {
     const { error: aidErr } = await admin.from('maternity_aids').delete().in('id', toDelete).eq('beneficiary_id', id)
     if (aidErr) maternityError = aidErr.message

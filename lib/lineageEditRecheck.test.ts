@@ -61,7 +61,7 @@ function fakeDb(ben: Row) {
 
 const mocks = vi.hoisted(() => ({ db: null as unknown }))
 vi.mock('@/lib/apiAuth', () => ({
-  requireAdmin: async () => ({ userId: 'admin' }),
+  requirePermission: async () => ({ userId: 'admin', role: 'admin', permissions: {} }),
   forbidden: () => new Response(null, { status: 403 }),
   getServiceClient: () => mocks.db,
 }))

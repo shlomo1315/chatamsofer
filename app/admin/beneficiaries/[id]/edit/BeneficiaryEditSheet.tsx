@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useIsAdmin } from '@/components/StaffPermissions'
+import { useCan } from '@/components/StaffPermissions'
 import { LineageTreePicker } from '../../BeneficiaryForm'
 import { validateIsraeliId, validatePhone } from '@/lib/validation'
 import { childrenPayload, emptyChild, isLinkedToMaternity, docTypeOf, type EditableChild } from '@/lib/childrenEditor'
@@ -52,7 +52,10 @@ function initialVals(d: SheetDefaults): Record<string, string> {
 
 export default function BeneficiaryEditSheet({ beneficiaryId, defaults }: { beneficiaryId: string; defaults: SheetDefaults }) {
   const router = useRouter()
-  const isAdmin = useIsAdmin()
+  // עריכה לפי הרשאת הצאצאים (מנהל או מזכירה שסומנה לה עריכה) — כמו בשרת.
+  // אישור לידה ומחיקת תיק לידה נוגעים ביולדות, ולכן דורשים גם עריכה שם.
+  const canEdit = useCan('beneficiaries', 'edit')
+  const canEditMaternity = useCan('maternity', 'edit')
   const [mode, setMode] = useState<'view' | 'edit'>('view')
   const [orig, setOrig] = useState(() => initialVals(defaults))
   const [vals, setVals] = useState(orig)
@@ -75,7 +78,7 @@ export default function BeneficiaryEditSheet({ beneficiaryId, defaults }: { bene
 
   const showToast = useCallback((m: string) => { setToast(m); setTimeout(() => setToast(''), 1800) }, [])
   const set = (k: string, v: string) => setVals(p => ({ ...p, [k]: v }))
-  const editing = mode === 'edit' && isAdmin
+  const editing = mode === 'edit' && canEdit
 
   const marital = vals.marital_status
   const primaryIsWife = WIFE_PRIMARY.includes(marital)
@@ -280,6 +283,7 @@ export default function BeneficiaryEditSheet({ beneficiaryId, defaults }: { bene
     const r = kids.find(x => x.key === key)
     if (!r) return
     if (isLinkedToMaternity(r.c) && r.c.maternity_aid_id) {
+      if (!canEditMaternity) { showToast('הילד מקושר לתיק יולדת — מחיקה דורשת הרשאת עריכה ביולדות'); return }
       if (!window.confirm(`${r.c.name || 'הילד'} מקושר לתיק יולדת. למחוק גם את תיק היולדת בשמירה?`)) return
       setMaternityDel(p => [...p, r.c.maternity_aid_id as string])
     }
@@ -327,7 +331,7 @@ export default function BeneficiaryEditSheet({ beneficiaryId, defaults }: { bene
   const created = defaults.created_at ? isoToDmy(defaults.created_at) : ''
 
   return (
-    <div className={`bx ${editing ? 'm-edit' : 'm-view'} ${isAdmin ? 'role-admin' : 'role-staff'}`}>
+    <div className={`bx ${editing ? 'm-edit' : 'm-view'} ${canEdit ? 'role-admin' : 'role-staff'}`}>
       <main className="page">
         <div className="crumb"><Link href="/admin/beneficiaries">צאצאים</Link> ‹ <b>{fullTitle}</b></div>
 
@@ -346,11 +350,11 @@ export default function BeneficiaryEditSheet({ beneficiaryId, defaults }: { bene
             <div className="acts">
               <div className="mode" role="group" aria-label="מצב התיק">
                 <button className={mode === 'view' ? 'on' : ''} onClick={requestView} data-m="view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>צפייה</button>
-                <button className={editing ? 'on' : ''} onClick={() => isAdmin && setMode('edit')} data-m="edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 20h4L19 9l-4-4L4 16z" /></svg>עריכה <span className="tag">מנהל</span></button>
+                <button className={editing ? 'on' : ''} onClick={() => canEdit && setMode('edit')} data-m="edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 20h4L19 9l-4-4L4 16z" /></svg>עריכה</button>
               </div>
-              <span className="lock"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>צפייה בלבד · עריכה למנהל</span>
-              {isAdmin && <StatusControl id={beneficiaryId} status={defaults.eligibility_status as never} advance />}
-              {isAdmin && <button className="btn icon only-view" onClick={() => setModal('m-more')} aria-label="פעולות נוספות"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg></button>}
+              <span className="lock"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>צפייה בלבד · אין הרשאת עריכה</span>
+              {canEdit && <StatusControl id={beneficiaryId} status={defaults.eligibility_status as never} advance />}
+              {canEdit && <button className="btn icon only-view" onClick={() => setModal('m-more')} aria-label="פעולות נוספות"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg></button>}
             </div>
           </div>
           <div className="edit-strip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 20h4L19 9l-4-4L4 16z" /></svg>מצב עריכה · שום דבר לא נשמר עד הלחיצה על שמירה</div>
@@ -424,7 +428,7 @@ export default function BeneficiaryEditSheet({ beneficiaryId, defaults }: { bene
                             : <>{dt === 'passport' && 'דרכון '}<span className="ltr num">{c.id_number || '—'}</span></>}</td>
                           <td className="k-st">
                             {c.birth_status === 'pending' ? <><span className="pill w">{female ? 'ממתינה' : 'ממתין'} לאישור לידה</span>
-                              {isAdmin && c.maternity_aid_id && <button type="button" className="btn sm gold" style={{ marginInlineStart: 6 }} onClick={() => setModal('m-birth')}>אישור לידה</button>}</>
+                              {canEditMaternity && c.maternity_aid_id &&<button type="button" className="btn sm gold" style={{ marginInlineStart: 6 }} onClick={() => setModal('m-birth')}>אישור לידה</button>}</>
                               : c.birth_status === 'approved' ? <span className="pill ok2">לידה מאושרת</span>
                               : <span className="pill n">{female ? 'רשומה' : 'רשום'}</span>}
                           </td>
