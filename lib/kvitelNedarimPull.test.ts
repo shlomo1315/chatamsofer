@@ -8,7 +8,7 @@ vi.mock('./gilyonotNedarimPull', async orig => ({ ...(await orig<typeof import('
 vi.mock('./kvitelIngest', () => ({ ingestKvitel: (...a: unknown[]) => ingestKvitel(...a), reprocessKvitelRequest: (...a: unknown[]) => reprocessKvitelRequest(...a) }))
 
 import { kvitelExportLines, kvitelRequestLines, type KvitelRequestRow } from './kvitelQuery'
-import { autoKvitelBody, rawRowText, reprocessKvitelFromNedarim, configFields, getKvitelPullView, mapKvitelRow, pullKvitelFromNedarim, saveKvitelPullConfig, validateKvitelConfig, type KvitelNedarimConfig } from './kvitelNedarimPull'
+import { autoKvitelBody, nedarimCreatedAt, rawRowText, reprocessKvitelFromNedarim, configFields, getKvitelPullView, mapKvitelRow, pullKvitelFromNedarim, saveKvitelPullConfig, validateKvitelConfig, type KvitelNedarimConfig } from './kvitelNedarimPull'
 
 // מסד מדומה: רק app_settings
 function fakeDb(init: Record<string, unknown> = {}) {
@@ -160,6 +160,19 @@ describe('kvitelNedarimPull: זיהוי אוטומטי', () => {
     const p = mapKvitelRow({ ID: '9', Field1: 'יוסף', Field2: 'בן', Field3: 'רחל', Field4: 'רפואה שלמה', Field5: '0521112233' }, { ...base, textField: '', contactField: '', phoneField: '', emailField: '', lines: [] })
     expect(p.lines[0]).toMatchObject({ name: 'יוסף', relation: 'ben', parentName: 'רחל' })
     expect(p.phone).toBe('0521112233')
+  })
+
+  it('שם עם קו נטוי ("משה/נחמה גיטל") נקלט ולא נספר כהגשה ריקה (הגשה 4517093)', () => {
+    const p = mapKvitelRow({ ID: '4517093', Field20: 'משה/נחמה גיטל', Field21: 'בן', Field22: 'חנה טובא/רייזל', Field23: '' }, { ...base, textField: '', contactField: '', phoneField: '', emailField: '', lines: [] })
+    expect(p.lines).toHaveLength(1)
+    expect(p.lines[0]).toMatchObject({ name: 'משה נחמה גיטל', relation: 'ben', parentName: 'חנה טובא רייזל' })
+  })
+
+  it('מועד ההגשה נלקח מ-CreatedDate של נדרים, בשעון ישראל (קיץ וחורף)', () => {
+    expect(nedarimCreatedAt('24/11/2026 20:24:19')).toBe('2026-11-24T18:24:19.000Z')
+    expect(nedarimCreatedAt('09/09/2026 11:34:13')).toBe('2026-09-09T08:34:13.000Z')
+    expect(nedarimCreatedAt('')).toBeNull()
+    expect(nedarimCreatedAt('01/01/2999 10:00:00')).toBeNull()
   })
 
   it('שומר את כל השורה הגולמית ללא סודות', () => {

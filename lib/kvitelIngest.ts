@@ -25,6 +25,8 @@ export interface KvitelSubmission {
   recordingUrl?: string | null
   sourceRef?: string | null
   note?: string | null
+  // מועד ההגשה במקור (למשל CreatedDate של נדרים). בלעדיו: רגע הקליטה
+  submittedAt?: string | null
   // סימונים שהערוץ כבר יודע (למשל שורה שפענוח המייל לא בטוח בה). מתווספים לסימוני הסוכן.
   lineFlags?: (string | null)[]
 }
@@ -95,6 +97,7 @@ export async function ingestKvitel(db: SupabaseClient, s: KvitelSubmission): Pro
     recording_url: s.recordingUrl ?? null,
     source_ref: s.sourceRef ?? null,
     note,
+    ...(s.submittedAt ? { submitted_at: s.submittedAt } : {}),
   }).select('id').single()
   if (error?.code === '23505' && s.sourceRef) {
     // מרוץ: אותה הגשה נקלטה במקביל (Resend שולח את ה-webhook פעמיים).
