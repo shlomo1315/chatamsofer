@@ -59,15 +59,6 @@ export default function KvitelWeek({ rows, filters, canEdit, tabs, onReload }: {
   const intake = useMemo(() => weekIntake(rows, tab), [rows, tab])
   const maxChan = Math.max(1, ...intake.byChannel.map(c => c.n))
 
-  async function download(format: 'pdf' | 'docx') {
-    setBusy(true)
-    setMsg(null)
-    const err = await downloadKvitel(PRINT_FILE, file.ids, format)
-    if (err) setMsg({ text: err, err: true })
-    setBusy(false)
-    return !err
-  }
-
   const loadBatches = () => fetchBatches().then(setBatches)
   useEffect(() => { void fetchBatches().then(setBatches) }, [])
 
@@ -198,16 +189,13 @@ export default function KvitelWeek({ rows, filters, canEdit, tabs, onReload }: {
               <p>בקובץ: {fileStats}{reviewCount > 0 && <> · <span className={s.num}>{reviewCount}</span> לבדיקה לא ייכנסו עד שיאושרו</>}</p>
             </div>
             <span className={s.sp} />
-            <span className={s.expLbl}>ייצוא לקוויטל:</span>
-            <button type="button" className={cx(s.btn, s.sm)} disabled={busy || !file.ids.length} onClick={() => void download('pdf')}><Ico icon={Download} />PDF</button>
-            <button type="button" className={cx(s.btn, s.sm)} disabled={busy || !file.ids.length} onClick={() => void download('docx')}><Ico icon={Download} />Word</button>
             <button type="button" className={cx(s.btn, s.pri)} disabled={!canEdit || busy || !batches || !file.ids.length || !isCurrent} onClick={openClose}>
-              <Ico icon={Send} />שליחה לציון
+              <Ico icon={Send} />ייצוא לקוויטל
             </button>
           </div>
           <p className={s.sheetnote} style={{ textAlign: 'start' }}>
             {isCurrent
-              ? 'הייצוא לא מסמן כלום. "שליחה לציון" מורידה את הקובץ ומסמנת "נשלח לציון" רק אחרי אישור, ורק את מה שירד בפועל. אחרי השליחה כל בקשה חדשה נכנסת לפרשה הבאה.'
+              ? '"ייצוא לקוויטל" מוריד את הקובץ (PDF או Word), ואחרי אישור מסמן את מה שירד בפועל "נשלח לציון" ומרוקן את השבוע. כל בקשה חדשה נכנסת לפרשה הבאה.'
               : `${w.parsha} כבר נשלח לציון. השליחה הבאה היא של ${current.parsha}.`}
           </p>
           {msg && <p role={msg.err ? 'alert' : 'status'} className={cx(s.msg, msg.err && s.err)}>{msg.text}</p>}
@@ -244,7 +232,7 @@ export default function KvitelWeek({ rows, filters, canEdit, tabs, onReload }: {
       {closing && (
         <div className={s.ov} role="dialog" aria-modal="true" aria-labelledby="kvitel-close-t" onClick={e => { if (e.target === e.currentTarget && !busy) setClosing(false) }}>
           <div className={s.modal}>
-            <h3 id="kvitel-close-t">הורדת הקויטלאך וסימון שנשלח לציון הקדוש</h3>
+            <h3 id="kvitel-close-t">ייצוא לקוויטל וסימון שנשלח לציון הקדוש</h3>
             <p className={s.mSub}>{current.parsha} · {fileStats}</p>
             <ol className={s.mstep}>
               <li className={s.done}><span className={s.ic}><Check size={14} strokeWidth={3} aria-hidden /></span><div><b>הקובץ נבנה</b><span>כולל הלוגו והכותרת של {current.label}</span></div></li>
