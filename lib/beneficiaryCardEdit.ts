@@ -96,3 +96,19 @@ export function readiness(b: Pick<Beneficiary, 'id_number' | 'phone' | 'email_ve
   ]
   return { checks, done: checks.filter(c => c.ok).length, missing: checks.filter(c => !c.ok).map(c => c.missing) }
 }
+
+// כפתור "שליחת קישור לאימות" בחלונית: רק למייל שלא אומת, למי שמורשה לערוך, ולא באמצע עריכה
+export function showVerifyButton(b: { email?: string | null; email_verified_at?: string | null }, canEdit: boolean, editing: boolean) {
+  return canEdit && !!b.email && !b.email_verified_at && !editing
+}
+
+// אותו נתיב של הכרטסת המלאה (EmailRow), שמוגן בשרת ב-beneficiaries/edit
+export async function sendVerifyLink(id: string, fetcher: typeof fetch = fetch): Promise<'sent' | 'failed'> {
+  try {
+    const res = await fetcher(`/api/admin/beneficiaries/${id}/email`, { method: 'POST' })
+    const j = await res.json().catch(() => ({}))
+    return res.ok && j.sent !== 0 ? 'sent' : 'failed'
+  } catch {
+    return 'failed'
+  }
+}
