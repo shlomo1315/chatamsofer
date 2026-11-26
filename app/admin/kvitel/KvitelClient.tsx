@@ -14,6 +14,8 @@ import { saveInlineEdit, personText, PERSON_HINT, type InlineEdit } from '@/lib/
 import KvitelRowDetails from './KvitelRowDetails'
 import PrintNewDialog from './PrintNewDialog'
 import KvitelPreview from './KvitelPreview'
+import KvitelDuplicates, { DupBadge, DupContext } from './KvitelDuplicates'
+import { duplicateIndex, findDuplicateGroups } from '@/lib/kvitelDuplicates'
 
 // כל סטטוס: צבע רקע וטקסט של הגלולה + צבע הנקודה
 const STATUS_STYLE: Record<KvitelStatus, { pill: string; dot: string }> = {
@@ -132,7 +134,7 @@ function NamesCell({ r, save }: { r: KvitelRequestRow; save?: Save }) {
     if (!ls.length) return <span className="text-sm text-ink-faint">לא נקלטו שמות</span>
     return (
       <div className="min-w-48 space-y-0.5 text-ink">
-        {ls.slice(0, 3).map(l => <div key={l.id} className="break-words">{personOf(l)}</div>)}
+        {ls.slice(0, 3).map(l => <div key={l.id} className="break-words">{personOf(l)}<DupBadge lineId={l.id} /></div>)}
         {ls.length > 3 && <div className="text-xs text-ink-faint">ועוד {ls.length - 3}</div>}
       </div>
     )
@@ -140,10 +142,13 @@ function NamesCell({ r, save }: { r: KvitelRequestRow; save?: Save }) {
   return (
     <div className="min-w-52 space-y-0.5 text-ink">
       {ls.map((l, i) => (
-        <InlineText key={l.id} label={`השם ${personText(l)}`} value={personText(l)} placeholder={PERSON_HINT}
-          onSave={text => save({ kind: 'line', index: i, text })}>
-          <span className="break-words">{personText(l)}</span>
-        </InlineText>
+        <div key={l.id} className="flex flex-wrap items-center">
+          <InlineText label={`השם ${personText(l)}`} value={personText(l)} placeholder={PERSON_HINT}
+            onSave={text => save({ kind: 'line', index: i, text })}>
+            <span className="break-words">{personText(l)}</span>
+          </InlineText>
+          <DupBadge lineId={l.id} />
+        </div>
       ))}
       <InlineText label="שם חדש" value="" placeholder={PERSON_HINT} onSave={text => save({ kind: 'add', text })}>
         {ls.length ? addHint('הוספת שם') : <span className="text-sm text-ink-faint">לא נקלטו שמות · הוספה</span>}
@@ -259,6 +264,10 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
     const x = saved[r.id] ?? r
     return approvedHere.has(r.id) && needsApproval(x) ? asApproved(x) : x
   }), [allRows, saved, approvedHere])
+  // שמות כפולים בבקשות שעוד לא נשלחו — תגית ליד השם ולוח מיזוג ידני (KvitelDuplicates)
+  const dupGroups = useMemo(() => findDuplicateGroups(liveRows), [liveRows])
+  const [dupOpen, setDupOpen] = useState<string | null>(null)
+  const dupCtx = useMemo(() => ({ index: duplicateIndex(dupGroups), open: setDupOpen }), [dupGroups])
   const [recordingId, setRecordingId] = useState<string | null>(null)   // הקלטה ותמלול inline בשורה
   const [datesOpen, setDatesOpen] = useState(false)
   const [q, setQ] = useState(filters.q ?? '')
@@ -381,6 +390,7 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
   const ids = [...selected]
 
   return (
+    <DupContext.Provider value={dupCtx}>
     <div className="space-y-5">
       {!embedded && <>
       <div className="border-b border-line pb-5">
@@ -469,6 +479,9 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
         )}
       </div>
 
+      <KvitelDuplicates groups={dupGroups} canEdit={canEdit} openKey={dupOpen} onOpenKey={setDupOpen}
+        onDone={m => { setDupOpen(null); setMessage(m); router.refresh() }} />
+
       {message && (
         <p role="status" className="flex items-center gap-3 rounded-lg bg-sand px-4 py-2.5 text-sm text-navy">
           <span>{message}</span>
@@ -553,5 +566,6 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
       <MobileCards rows={pg.rows} canEdit={canEdit} openId={openId} details={details} onOpen={(r, editing) => openRow(r, editing)} onApprove={r => void approve([r])}
         onRemove={r => void removeRow(r)} />
     </div>
+    </DupContext.Provider>
   )
 }
