@@ -51,11 +51,13 @@ type AidLike = Pick<MaternityAid,
 > & { recovery_end_override?: string | null }
 
 export default function ExtendEligibility({
-  aid, variant = 'button', onDone,
+  aid, variant = 'button', onDone, defaultScope = 'both',
 }: {
   aid: AidLike
   variant?: 'button' | 'icon'
   onDone?: () => void
+  // ההיקף שנבחר מראש בפתיחה (למשל 'recovery' מלשונית בית ההחלמה); ניתן לשינוי בחלונית
+  defaultScope?: Scope
 }) {
   const canEdit = useCan('maternity', 'edit')
   const router = useRouter()
@@ -87,7 +89,7 @@ export default function ExtendEligibility({
 
   const openModal = () => {
     setStep('scope')
-    setScope('both')
+    setScope(defaultScope)
     setSeparate(false)
     setCardDate(currentCardEnd)
     setRecoveryDate(currentRecoveryEnd)

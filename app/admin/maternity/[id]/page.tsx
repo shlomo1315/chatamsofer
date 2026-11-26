@@ -799,6 +799,24 @@ export default async function MaternityDetailPage(
                 </div>
                 <RecoveryDaysEditor aid={aid} />
               </div>
+              {/* תוקף הזכאות לבית ההחלמה + הארכה ישירות מהלשונית (נפתח על היקף "בית החלמה") */}
+              <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                {(() => {
+                  const recEnd = recoveryWindowEnd(aid)
+                  if (!recEnd) return <span />
+                  const left = differenceInCalendarDays(recEnd, new Date())
+                  return (
+                    <p className="text-sm">
+                      <span className="text-slate-500">זכאות לבית החלמה עד: </span>
+                      <span className="ltr-num text-navy font-medium">{fmtDate(recEnd.toISOString())}</span>
+                      {left >= 0
+                        ? <span className="mr-2 text-xs text-amber-600">(עוד {left} ימים)</span>
+                        : <span className="mr-2 text-xs text-red-500">(הסתיים)</span>}
+                    </p>
+                  )
+                })()}
+                <ExtendEligibility aid={aid} defaultScope="recovery" />
+              </div>
               {aid.recovery_arrived != null && (
                 <div className="text-sm mt-2">
                   <span className="text-slate-500">הגעה: </span>
