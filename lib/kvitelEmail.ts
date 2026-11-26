@@ -210,6 +210,7 @@ export async function handleKvitelEmail(db: SupabaseClient, m: KvitelEmailMessag
 
   const d = await decodeKvitelEmail(m)
   if (!d) return { ok: true, skipped: 'no-names' }
+  if (await sameMailRequest(db, d)) return { ok: true, duplicate: true }
   const res = await ingestKvitel(db, d)
   if (!res.ok) { console.error('[kvitel-email] ingest failed:', res.error); return { ok: false } }
   return { ok: true, requestId: res.requestId, status: res.status }
@@ -230,9 +231,21 @@ export async function reingestKvitelEmail(db: SupabaseClient, m: KvitelEmailMess
     if (!res.ok) return res
     return { ok: true, requestId: cur.id, status: res.status, lines: res.lines, created: false }
   }
+  const same = await sameMailRequest(db, d)
+  if (same) return { ok: true, requestId: same.id, status: same.status, lines: d.lines.length, created: false }
   const res = await ingestKvitel(db, d)
   if (!res.ok) return { ok: false, error: res.error }
   return { ok: true, requestId: res.requestId, status: res.status, lines: d.lines.length, created: true }
+}
+
+// אותו מייל שהגיע פעמיים עם message-id שונה (העברה חוזרת, עותק מתיבה אחרת): אותו שולח ואותו
+// תוכן כבר נקלטו כבקשה, ולא נוצרת בקשה שנייה. מייל עם הקלטה לא נבדק כך: כל הקלטה היא פנייה נפרדת.
+async function sameMailRequest(db: SupabaseClient, d: KvitelSubmission): Promise<{ id: string; status: string } | null> {
+  if (d.recordingUrl || !d.rawText || !d.email) return null
+  const { data } = await db.from('kvitel_requests').select('id, status')
+    .eq('channel', 'email').eq('contact_email', d.email.toLowerCase()).eq('raw_text', d.rawText)
+    .limit(1).maybeSingle()
+  return data ?? null
 }
 
 // הפענוח עצמו: תבנית, ו-AI כשהתבנית לא מצאה או השאירה שורות. null = לא נמצא אף שם.

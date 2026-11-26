@@ -197,6 +197,34 @@ describe('קובץ מצורף במייל ל-k@', () => {
     expect(db.tables.kvitel_requests).toHaveLength(1)
   })
 
+  it('מייל מועבר עם בקשה בגוף וקובץ Word, בסנכרון: השמות והבקשה נקלטים', async () => {
+    const r = await reingestKvitelEmail(db, mail({
+      subject: 'Fwd: קויטל יב חשון',
+      text: '---------- Forwarded message ---------\nFrom: יוסי <y@gmail.com>\nSubject: קויטל\n\nדוד בן מרים - לרפואה שלימה',
+      attachments: await wordFile(['קויטל יב חשון'], [['משה', 'בן', 'יהודית'], ['שרה', 'בת', 'רחל']]),
+    }))
+    expect(r).toMatchObject({ ok: true, created: true, lines: 3 })
+    expect(db.tables.kvitel_request_lines.map(l => [l.name, l.relation, l.parent_name, l.request_type]))
+      .toEqual([['דוד', 'ben', 'מרים', 'refua'], ['משה', 'ben', 'יהודית', ''], ['שרה', 'bat', 'רחל', '']])
+    expect(String(db.tables.kvitel_requests[0].raw_text)).toContain('[קובץ מצורף: שמות.docx]')
+  })
+
+  it('אותו מייל עם message-id אחר (עותק או העברה חוזרת): לא נוצרת בקשה שנייה', async () => {
+    const attachments = await wordFile(['משה בן יהודית'])
+    await handleKvitelEmail(db, mail({ messageId: '<a@mail>', attachments }))
+    expect(await handleKvitelEmail(db, mail({ messageId: '<b@mail>', attachments }))).toEqual({ ok: true, duplicate: true })
+    expect(await reingestKvitelEmail(db, mail({ messageId: '<c@mail>', attachments }))).toMatchObject({ ok: true, created: false })
+    expect(db.tables.kvitel_requests).toHaveLength(1)
+    expect(db.tables.kvitel_request_lines).toHaveLength(1)
+  })
+
+  it('אותו תוכן משולח אחר: בקשה נפרדת', async () => {
+    const attachments = await wordFile(['משה בן יהודית'])
+    await handleKvitelEmail(db, mail({ messageId: '<a@mail>', attachments }))
+    await handleKvitelEmail(db, mail({ messageId: '<b@mail>', fromEmail: 'other@gmail.com', attachments }))
+    expect(db.tables.kvitel_requests).toHaveLength(2)
+  })
+
   it('יותר מ-40 שמות: 40 נקלטים והבקשה עוברת לבדיקה', async () => {
     const abc = 'אבגדהוזחטיכלמנסעפצקרשת'
     const many = Array.from({ length: 45 }, (_, i) => `משה${abc[i % 22]}${abc[Math.floor(i / 22)]} בן יהודית`)
