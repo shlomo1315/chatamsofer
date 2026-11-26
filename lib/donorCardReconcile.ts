@@ -27,10 +27,25 @@ export interface FileRow {
   date: string
   merchant: string
   ref: string
+  /** בשקלים; כשהקובץ במטבע זר ולא נמצא סכום בשקלים, זה הסכום המקורי ו-usd=true */
   amount: number
+  usd?: boolean
 }
 
 export type CardColumns = { date: string; amount: string; merchant: string | null; ref: string | null }
+
+/** שורה בקובץ שלא נקלטה כעסקה, עם הסיבה */
+export interface SkippedRow { line: number; why: string }
+
+export interface CardFile {
+  columns: CardColumns
+  rows: FileRow[]
+  skipped: SkippedRow[]
+  order: DateOrder
+  /** הקובץ במטבע זר (כמו אמקס בדולרים); הסכום בשקלים נלקח מהעמודה הזו */
+  ilsFrom: string | null
+  foreign: boolean
+}
 
 // ── קריאת הקובץ לטבלה ──────────────────────────────────────────────────────
 
@@ -67,28 +82,31 @@ function decodeText(buf: ArrayBuffer): string {
   try { return new TextDecoder('windows-1255').decode(buf) } catch { return utf8 }
 }
 
-function splitLine(line: string, delim: string): string[] {
-  const out: string[] = []
-  let cur = '', q = false
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i]
+/**
+ * CSV/TSV. תא במירכאות יכול להכיל ירידת שורה (כמו Extended Details ו-Address
+ * באמקס), ולכן מפרקים את כל הטקסט ולא שורה-שורה. מירכאות פותחות רק בתחילת תא,
+ * כדי ש-בע"מ או ש"ח באמצע תא לא "יבלעו" את המשך הקובץ.
+ */
+function delimitedTable(text: string): string[][] {
+  const sample = text.split(/\r?\n/, 20).join('\n')
+  const delim = sample.includes('\t') ? '\t' : sample.split(';').length > sample.split(',').length ? ';' : ','
+  const rows: string[][] = []
+  let row: string[] = [], cur = '', q = false
+  const endCell = () => { row.push(cur.replace(/\s+/g, ' ').trim()); cur = '' }
+  const endRow = () => { endCell(); if (row.some(Boolean)) rows.push(row); row = [] }
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
     if (q) {
-      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++ }
+      if (ch === '"' && text[i + 1] === '"') { cur += '"'; i++ }
       else if (ch === '"') q = false
       else cur += ch
-    } else if (ch === '"') q = true
-    else if (ch === delim) { out.push(cur.trim()); cur = '' }
+    } else if (ch === '"' && !cur.trim()) { cur = ''; q = true }
+    else if (ch === delim) endCell()
+    else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; endRow() }
     else cur += ch
   }
-  out.push(cur.trim())
-  return out
-}
-
-function delimitedTable(text: string): string[][] {
-  const lines = text.split(/\r?\n/).filter(l => l.trim())
-  const sample = lines.slice(0, 20).join('\n')
-  const delim = sample.includes('\t') ? '\t' : sample.split(';').length > sample.split(',').length ? ';' : ','
-  return lines.map(l => splitLine(l, delim))
+  endRow()
+  return rows
 }
 
 const ENTITIES: Record<string, string> = { nbsp: ' ', amp: '&', quot: '"', apos: "'", lt: '<', gt: '>' }
@@ -177,13 +195,20 @@ export async function readCardTable(buf: ArrayBuffer, name: string): Promise<str
 
 // ── זיהוי העמודות והשורות ──────────────────────────────────────────────────
 
+/** סדר התאריך בקובץ: יום/חודש (ישראל) או חודש/יום (ארה״ב, למשל אמקס). */
+export type DateOrder = 'dmy' | 'mdy'
+const SHORT_DATE = /^(\d{1,2})[./-](\d{1,2})[./-](\d{2}|\d{4})$/
+
 /** תאריך בכל אחד מהפורמטים הנפוצים → YYYY-MM-DD, או null. */
-export function parseCardDate(raw: string): string | null {
+export function parseCardDate(raw: string, order: DateOrder = 'dmy'): string | null {
   const s = raw.trim()
   let y: number, m: number, d: number
   let r = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s].*)?$/)
   if (r) { y = +r[1]; m = +r[2]; d = +r[3] }
-  else if ((r = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2}|\d{4})$/))) { d = +r[1]; m = +r[2]; y = r[3].length === 2 ? 2000 + +r[3] : +r[3] }
+  else if ((r = s.match(SHORT_DATE))) {
+    ;[d, m] = order === 'mdy' ? [+r[2], +r[1]] : [+r[1], +r[2]]
+    y = r[3].length === 2 ? 2000 + +r[3] : +r[3]
+  }
   else return null
   if (m < 1 || m > 12 || d < 1 || d > 31 || y < 2000 || y > 2100) return null
   const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
@@ -192,12 +217,42 @@ export function parseCardDate(raw: string): string | null {
 
 /** סכום כסף (₪, ש״ח, פסיקים, מינוס מימין או משמאל) → מספר, או null. */
 export function parseMoney(raw: string): number | null {
-  let s = raw.replace(/₪|ש["״']?ח|NIS|ILS|\s/gi, '').replace(/,/g, '')
+  let s = raw.replace(/₪|ש["״']?ח|NIS|ILS|USD|\$|\s/gi, '').replace(/,/g, '')
   let neg = false
   if (/^-|-$/.test(s)) { neg = true; s = s.replace(/^-|-$/g, '') }
   if (!/^\d+(\.\d{1,2})?$/.test(s)) return null
   const n = Number(s)
   return neg ? -n : n
+}
+
+/**
+ * סדר התאריך נקבע לכל הקובץ יחד: תאריך שהחלק הראשון שלו גדול מ-12 מוכיח יום/חודש,
+ * והחלק השני גדול מ-12 מוכיח חודש/יום. כשכל התאריכים דו-משמעיים (09/08/2026),
+ * קובץ באנגלית (כמו אמקס) הוא חודש/יום וקובץ בעברית הוא יום/חודש.
+ */
+export function detectDateOrder(table: string[][]): DateOrder {
+  let dmy = 0, mdy = 0
+  for (const row of table) for (const c of row) {
+    const r = c.trim().match(SHORT_DATE)
+    if (!r) continue
+    if (+r[1] > 12 && +r[2] <= 12) dmy++
+    else if (+r[2] > 12 && +r[1] <= 12) mdy++
+  }
+  if (dmy !== mdy) return dmy > mdy ? 'dmy' : 'mdy'
+  const english = table.slice(0, 15).some(r => r.some(c => /^(transaction\s+)?date$/i.test(c.trim())) && !r.some(c => /[א-ת]/.test(c)))
+  return english ? 'mdy' : 'dmy'
+}
+
+/**
+ * סכום בשקלים מתוך טקסט באנגלית, כמו בעמודת Extended Details של אמקס:
+ * "Foreign Spend Amount: 1,380.00 Israeli New Sheqels Commission Amount: …".
+ */
+export function ilsInText(s: string): number | null {
+  const r = s.match(/(\d[\d,]*(?:\.\d{1,2})?)\s*(?:israeli\s+new\s+sh?e[qk]e?l\w*|ILS\b|NIS\b)/i)
+    ?? s.match(/\b(?:ILS|NIS)\s*(\d[\d,]*(?:\.\d{1,2})?)/)
+  if (!r) return null
+  const n = Number(r[1].replace(/,/g, ''))
+  return n > 0 ? n : null
 }
 
 const maskMerchant = (s: string) => s.replace(/\d{7,}/g, '•••').replace(/\s+/g, ' ').trim().slice(0, 80)
@@ -219,10 +274,10 @@ function pickHead(cells: string[], pats: RegExp[], taken: number[]): number {
   return -1
 }
 
-function findHeader(table: string[][]) {
+function findHeader(table: string[][], order: DateOrder) {
   for (let r = 0; r < Math.min(table.length, 15); r++) {
     const cells = table[r]
-    if (cells.some(c => parseCardDate(c))) continue
+    if (cells.some(c => parseCardDate(c, order))) continue
     const date = pickHead(cells, HEADS.date, [])
     const amount = pickHead(cells, HEADS.amount, [date])
     if (date < 0 || amount < 0) continue
@@ -234,29 +289,44 @@ function findHeader(table: string[][]) {
 }
 
 /** בלי כותרת (או כשהשורה לא בנויה כמו הכותרת): זיהוי לפי התוכן. בלי אסמכתא, כדי לא לחשוף מספר מזהה. */
-function rowByContent(cells: string[]): { date: string; amount: number; merchant: string } | null {
-  const di = cells.findIndex(c => parseCardDate(c))
+function rowByContent(cells: string[], order: DateOrder): { date: string; amount: number; amountAt: number; dateAt: number; merchant: string } | null {
+  const di = cells.findIndex(c => parseCardDate(c, order))
   if (di < 0) return null
-  let amount: number | null = null
+  let amount: number | null = null, amountAt = -1
   for (let i = cells.length - 1; i >= 0; i--) {
     if (i === di || /^\d{5,}$/.test(cells[i].trim())) continue
     const n = parseMoney(cells[i])
-    if (n != null && n !== 0) { amount = n; break }
+    if (n != null && n !== 0) { amount = n; amountAt = i; break }
   }
   if (amount == null) return null
-  const merchant = cells.filter(c => /\p{L}/u.test(c) && !parseCardDate(c)).sort((a, b) => b.length - a.length)[0] ?? ''
-  return { date: parseCardDate(cells[di])!, amount, merchant }
+  const merchant = cells.filter(c => /\p{L}/u.test(c) && !parseCardDate(c, order)).sort((a, b) => b.length - a.length)[0] ?? ''
+  return { date: parseCardDate(cells[di], order)!, amount, amountAt, dateAt: di, merchant }
 }
 
-/** שורות העסקאות מהטבלה, עם שמות העמודות שזוהו. */
-export function extractCardRows(table: string[][]): { columns: CardColumns; rows: FileRow[] } {
-  const h = findHeader(table)
-  const rows: FileRow[] = []
+const EXTENDED_HEAD = /extended\s*details/i
+const FOREIGN_AMOUNT_HEAD = /usd|\$|dollar|דולר/i
+const MAX_SKIPPED = 500
+
+/**
+ * שורות העסקאות מהטבלה, עם שמות העמודות שזוהו.
+ * קובץ במטבע זר (אמקס בדולרים): הסכום בשקלים נלקח מהטקסט של Extended Details,
+ * ושורה שאין בה סכום בשקלים מסומנת usd ולא נכנסת להתאמה.
+ * כל שורה אחרי הכותרת שלא נקלטה נרשמת ב-skipped עם הסיבה.
+ */
+export function extractCardRows(table: string[][]): CardFile {
+  const order = detectDateOrder(table)
+  const h = findHeader(table, order)
+  const ext = h ? h.names.findIndex(c => EXTENDED_HEAD.test(c)) : -1
+  let foreign = ext >= 0 || (h != null && FOREIGN_AMOUNT_HEAD.test(h.names[h.amount]))
+  let ilsFrom: string | null = null
+  const rows: FileRow[] = [], skipped: SkippedRow[] = [], inShekels = new Set<FileRow>()
   for (let r = h ? h.row + 1 : 0; r < table.length; r++) {
     const cells = table[r]
-    let row: FileRow | null = null
+    let row: FileRow | null = null, why = ''
+    let skip: number[] = []
     if (h && cells.length >= h.width - 1) {
-      const date = parseCardDate(cells[h.date] ?? '')
+      const rawDate = (cells[h.date] ?? '').trim()
+      const date = parseCardDate(rawDate, order)
       const amount = parseMoney(cells[h.amount] ?? '')
       if (date && amount != null && amount !== 0) {
         row = {
@@ -264,24 +334,47 @@ export function extractCardRows(table: string[][]): { columns: CardColumns; rows
           merchant: maskMerchant(h.merchant >= 0 ? cells[h.merchant] ?? '' : ''),
           ref: h.ref >= 0 ? cleanRef(cells[h.ref] ?? '') : '',
         }
+        skip = [h.date, h.amount, h.merchant]
+      } else {
+        why = !rawDate ? 'אין תאריך' : !date ? `תאריך לא תקין: ${rawDate.slice(0, 20)}` : amount == null ? 'לא נמצא סכום' : 'סכום אפס'
       }
     }
     if (!row) {
-      const c = rowByContent(cells)
-      if (c) row = { line: r + 1, date: c.date, amount: c.amount, merchant: maskMerchant(c.merchant), ref: '' }
+      const c = rowByContent(cells, order)
+      if (c) {
+        row = { line: r + 1, date: c.date, amount: c.amount, merchant: maskMerchant(c.merchant), ref: '' }
+        skip = [c.dateAt, c.amountAt]
+      }
     }
-    if (!row) continue
+    if (!row) {
+      if (cells.filter(c => c.trim()).length >= 2 && skipped.length < MAX_SKIPPED) {
+        skipped.push({ line: r + 1, why: why || 'לא נמצאו תאריך וסכום' })
+      }
+      continue
+    }
+    // סכום בשקלים בתא אחר בשורה (Extended Details): הוא הסכום שנבדק, עם הסימן של הסכום המקורי
+    const where = ext >= 0 ? [ext] : cells.map((_, i) => i).filter(i => !skip.includes(i))
+    for (const i of where) {
+      const ils = ilsInText(cells[i] ?? '')
+      if (ils == null) continue
+      row.amount = row.amount < 0 ? -ils : ils
+      inShekels.add(row)
+      foreign = true
+      ilsFrom ??= h?.names[i] || 'פירוט העסקה'
+      break
+    }
     rows.push(row)
     if (rows.length > MAX_CARD_ROWS) throw new CardFileError(`בקובץ יותר מ-${MAX_CARD_ROWS.toLocaleString('en-US')} עסקאות. פצלו אותו לתקופות קצרות יותר`)
   }
   if (!rows.length) throw new CardFileError('לא נמצאו בקובץ עסקאות עם תאריך וסכום. ודאו שזה קובץ הפירוט מחברת האשראי')
+  if (foreign) for (const r of rows) if (!inShekels.has(r)) r.usd = true
   const columns: CardColumns = h
     ? { date: h.names[h.date], amount: h.names[h.amount], merchant: h.merchant >= 0 ? h.names[h.merchant] : null, ref: h.ref >= 0 ? h.names[h.ref] : null }
     : { date: 'תאריך (זוהה לפי התוכן)', amount: 'סכום (זוהה לפי התוכן)', merchant: 'בית עסק (זוהה לפי התוכן)', ref: null }
-  return { columns, rows }
+  return { columns, rows, skipped, order, ilsFrom, foreign }
 }
 
-export async function parseCardFile(buf: ArrayBuffer, name: string): Promise<{ columns: CardColumns; rows: FileRow[] }> {
+export async function parseCardFile(buf: ArrayBuffer, name: string): Promise<CardFile> {
   if (buf.byteLength === 0) throw new CardFileError('הקובץ ריק')
   if (buf.byteLength > MAX_CARD_FILE_BYTES) throw new CardFileError('הקובץ גדול מ-5MB')
   return extractCardRows(await readCardTable(buf, name))
@@ -289,7 +382,12 @@ export async function parseCardFile(buf: ArrayBuffer, name: string): Promise<{ c
 
 // ── ההתאמה ─────────────────────────────────────────────────────────────────
 
-export type MatchStatus = 'ok' | 'diff' | 'none'
+/**
+ * ok/diff/none: שורה של בית החלמה, מותאמת / עם פער / בלי חיוב.
+ * other: בית העסק לא זוהה כבית החלמה במערכת (לא נכנס להתאמה).
+ * out: התאריך מחוץ לטווח שנבחר.
+ */
+export type MatchStatus = 'ok' | 'diff' | 'none' | 'other' | 'out'
 export interface MatchedRow extends FileRow {
   status: MatchStatus
   chargeId: string | null
@@ -298,7 +396,7 @@ export interface MatchedRow extends FileRow {
 }
 export interface ReconcileResult {
   rows: MatchedRow[]
-  /** מזהי חיובים בטווח התאריכים של הקובץ שאין להם שורה בקובץ */
+  /** מזהי חיובים בטווח שאין להם שורה בקובץ */
   missing: string[]
   range: { from: string; to: string }
 }
@@ -310,26 +408,67 @@ const money = (n: number) => `₪${n.toLocaleString('en-US', { maximumFractionDi
 const norm = (s: string) => s.replace(/["'״׳`.,\-–()]/g, '').replace(/\s+/g, ' ').trim()
 const sameAmount = (a: number, b: number) => Math.abs(a - b) < 0.005
 
+const merchantKey = (s: string) => norm(s).toLowerCase()
+
 /**
- * כל שורה בקובץ מקבלת לכל היותר חיוב אחד, וכל חיוב משויך לשורה אחת.
- * שלושה מעברים, מהחזק לחלש: תאריך וסכום זהים; אותו סכום בתאריך קרוב (עד 3 ימים);
- * אותו תאריך בסכום קרוב (עד 25%). שורה שבית העסק שלה מזכיר סניף מחפשת רק בסניף הזה.
+ * לאיזה בית החלמה שייך בית עסק בקובץ: לפי השם (שם הבית מופיע בשם בית העסק),
+ * ואם לא, לפי הקובץ עצמו: בית שיש בו חיוב באותו סכום בדיוק ובתאריך קרוב
+ * לחלק מספיק מהשורות של בית העסק (לפחות 30% ולא פחות משתיים; לבית עסק עם שורה אחת, אותו תאריך בדיוק).
+ * כשכמה בתים עומדים בזה, רק הבית עם הכי הרבה התאמות.
+ * כך גם שם באנגלית (אמקס) מזוהה, ובית עסק שאינו בית החלמה (מוסדות, ישיבות) לא נכנס.
  */
-export function reconcile(fileRows: FileRow[], charges: DonorCharge[]): ReconcileResult {
+function homesOfMerchant(key: string, rows: FileRow[], homes: string[], charges: DonorCharge[]): string[] {
+  const byName = homes.filter(h => merchantKey(h) && key.includes(merchantKey(h)))
+  if (byName.length) return byName
+  const countable = rows.filter(r => !r.usd)
+  if (!countable.length) return []
+  // שורה יחידה: רק אותו תאריך ואותו סכום, כדי שתשלום מקרי באותו סכום לא יקושר
+  const single = countable.length === 1
+  const need = single ? 1 : Math.max(2, Math.ceil(countable.length * 0.3))
+  const hits = homes.map(h => ({ h, n: countable.filter(r => charges.some(c =>
+    c.home === h && sameAmount(c.amount, r.amount) && dayDiff(c.date, r.date) <= (single ? 0 : DATE_SLACK_DAYS))).length }))
+  // רק הבית עם הכי הרבה התאמות, כדי שבית עסק של סניף אחד לא יחפש גם בסניף אחר
+  const best = Math.max(0, ...hits.map(x => x.n))
+  return best >= need ? hits.filter(x => x.n === best).map(x => x.h) : []
+}
+
+/**
+ * רק שורות בטווח (ברירת מחדל: טווח הקובץ) ורק של בתי עסק שזוהו כבית החלמה נכנסות להתאמה,
+ * וכל אחת מחפשת רק בחיובים של הבית שלה, כך שאין התאמה בין סניפים.
+ * כל שורה מקבלת לכל היותר חיוב אחד, וכל חיוב משויך לשורה אחת.
+ * שלושה מעברים, מהחזק לחלש: תאריך וסכום זהים; אותו סכום בתאריך קרוב (עד 3 ימים);
+ * אותו תאריך בסכום קרוב (עד 25%).
+ */
+export function reconcile(fileRows: FileRow[], charges: DonorCharge[], opts: { range?: { from: string; to: string } } = {}): ReconcileResult {
+  const dates = fileRows.map(r => r.date).sort()
+  const range = opts.range ?? { from: dates[0], to: dates[dates.length - 1] }
   const homes = [...new Set(charges.map(c => c.home))]
   const used = new Set<string>()
   const result: MatchedRow[] = fileRows.map(r => ({ ...r, status: 'none', chargeId: null, why: '' }))
-  const pools = result.map(r => {
-    const m = norm(r.merchant)
-    const hit = homes.filter(h => norm(h) && m.includes(norm(h)))
-    return { home: hit[0] ?? null, list: hit.length ? charges.filter(c => hit.includes(c.home)) : charges }
-  })
+
+  const groups = new Map<string, MatchedRow[]>()
+  for (const r of result) {
+    if (r.date < range.from || r.date > range.to) { r.status = 'out'; r.why = 'מחוץ לטווח שנבחר'; continue }
+    const k = merchantKey(r.merchant)
+    groups.set(k, [...(groups.get(k) ?? []), r])
+  }
+  const pools = new Map<MatchedRow, { homes: string[]; list: DonorCharge[] }>()
+  for (const [key, rows] of groups) {
+    const linked = homesOfMerchant(key, rows, homes, charges)
+    const list = charges.filter(c => linked.includes(c.home))
+    for (const r of rows) {
+      if (!linked.length) { r.status = 'other'; r.why = 'בית העסק לא זוהה כבית החלמה במערכת' }
+      else if (r.usd) r.why = 'הסכום בקובץ בדולרים, ולא נמצא לו סכום בשקלים'
+      else pools.set(r, { homes: linked, list })
+    }
+  }
 
   const pass = (score: (r: MatchedRow, c: DonorCharge) => number | null, done: (r: MatchedRow, c: DonorCharge) => void) => {
-    result.forEach((r, i) => {
-      if (r.chargeId) return
+    result.forEach(r => {
+      const pool = pools.get(r)
+      if (r.chargeId || !pool) return
       let best: DonorCharge | null = null, bestScore = Infinity
-      for (const c of pools[i].list) {
+      for (const c of pool.list) {
         if (used.has(c.id)) continue
         const s = score(r, c)
         if (s != null && s < bestScore) { best = c; bestScore = s }
@@ -350,12 +489,11 @@ export function reconcile(fileRows: FileRow[], charges: DonorCharge[]): Reconcil
     return d / c.amount <= AMOUNT_SLACK ? d : null
   }, (r, c) => { r.status = 'diff'; r.why = `סכום: ${money(r.amount)} בקובץ, ${money(c.amount)} במערכת` })
 
-  result.forEach((r, i) => {
-    if (!r.chargeId) r.why = `אין חיוב${pools[i].home ? ` ב${pools[i].home}` : ''} ב-${dm(r.date)} על ${money(r.amount)}`
+  result.forEach(r => {
+    const pool = pools.get(r)
+    if (pool && !r.chargeId) r.why = `אין חיוב ב${pool.homes.join(' / ')} ב-${dm(r.date)} על ${money(r.amount)}`
   })
 
-  const dates = fileRows.map(r => r.date).sort()
-  const range = { from: dates[0], to: dates[dates.length - 1] }
   const missing = charges.filter(c => !used.has(c.id) && c.date >= range.from && c.date <= range.to).map(c => c.id)
   return { rows: result, missing, range }
 }

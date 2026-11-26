@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { authorizeDonorRequest } from '@/lib/donorReportGate'
-import { loadCharges, MAX_RANGE_DAYS } from '@/lib/donorCharges'
+import { loadCharges, MAX_RANGE_DAYS, parseDateSelection } from '@/lib/donorCharges'
 import { CardFileError, DATE_SLACK_DAYS, MAX_CARD_FILE_BYTES, parseCardFile, reconcile } from '@/lib/donorCardReconcile'
 
 export const dynamic = 'force-dynamic'
@@ -32,12 +32,16 @@ export async function POST(request: NextRequest) {
   if (!gate.ok) return NextResponse.json(gate.body, { status: gate.status, headers: HEADERS })
 
   let name = '', data = ''
+  let picked: { from: string; to: string } | null = null
   try {
     const raw = await request.text()
     if (raw.length > MAX_BODY) return NextResponse.json({ error: 'הקובץ גדול מ-5MB' }, { status: 413, headers: HEADERS })
-    const body = JSON.parse(raw) as { name?: unknown; data?: unknown }
+    const body = JSON.parse(raw) as { name?: unknown; data?: unknown; from?: unknown; to?: unknown }
     name = typeof body.name === 'string' ? body.name.slice(0, 200) : ''
     data = typeof body.data === 'string' ? body.data : ''
+    // הטווח שנבחר בדוח חל על ההתאמה ועל ההפרש; בלי טווח תקין, טווח הקובץ
+    const sel = parseDateSelection({ from: typeof body.from === 'string' ? body.from : null, to: typeof body.to === 'string' ? body.to : null })
+    picked = sel && 'from' in sel ? { from: sel.from, to: sel.to } : null
   } catch {
     return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400, headers: HEADERS })
   }
@@ -47,19 +51,30 @@ export async function POST(request: NextRequest) {
     const bytes = Buffer.from(data, 'base64')
     const parsed = await parseCardFile(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, name)
     const dates = parsed.rows.map(r => r.date).sort()
-    const from = shift(dates[0], -DATE_SLACK_DAYS), to = shift(dates[dates.length - 1], DATE_SLACK_DAYS)
+    const range = picked ?? { from: dates[0], to: dates[dates.length - 1] }
+    const from = shift(range.from, -DATE_SLACK_DAYS), to = shift(range.to, DATE_SLACK_DAYS)
     if ((Date.parse(to) - Date.parse(from)) / DAY_MS + 1 > MAX_RANGE_DAYS) {
       return NextResponse.json({ error: 'הקובץ מכסה יותר משנה. העלו פירוט של חודש או כמה חודשים' }, { status: 400, headers: HEADERS })
     }
     const charges = await loadCharges(db, { from, to }, gate.lockedHome)
-    const result = reconcile(parsed.rows, charges)
+    const result = reconcile(parsed.rows, charges, { range })
     const shown = new Set([...result.rows.map(r => r.chargeId).filter(Boolean), ...result.missing])
+    const matched = result.rows.filter(r => r.status === 'ok' || r.status === 'diff' || r.status === 'none')
     return NextResponse.json({
       columns: parsed.columns,
-      rows: result.rows,
+      rows: matched,
       range: result.range,
       missing: result.missing,
       charges: charges.filter(c => shown.has(c.id)).map(c => ({ id: c.id, date: c.date, home: c.home, name: c.name, amount: c.amount })),
+      // מה שלא נכנס להתאמה, כדי שאפשר יהיה לראות למה
+      other: result.rows.filter(r => r.status === 'other'),
+      out: result.rows.filter(r => r.status === 'out').length,
+      skipped: parsed.skipped.slice(0, 200),
+      skippedCount: parsed.skipped.length,
+      total: parsed.rows.length,
+      foreign: parsed.foreign,
+      ilsFrom: parsed.ilsFrom,
+      order: parsed.order,
     }, { headers: HEADERS })
   } catch (e) {
     if (e instanceof CardFileError) return NextResponse.json({ error: e.message }, { status: 400, headers: HEADERS })

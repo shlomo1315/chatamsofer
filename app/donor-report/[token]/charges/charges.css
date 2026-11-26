@@ -185,6 +185,17 @@
 .ch2 .recsum b{font-size:24px;font-weight:800}
 .ch2 .recsum small{display:block;font-size:12px;color:var(--mut);margin-top:4px}
 .ch2 .recsum .dif b{color:var(--warn)}
+.ch2 .recnote{font-size:13px;color:var(--mut);line-height:1.6}
+.ch2 .recnote b{color:var(--tx);font-weight:700}
+.ch2 .recnote.warn{margin-top:12px;color:var(--warn)}
+.ch2 .recskip{margin-top:16px;padding:16px 20px;display:grid;gap:8px}
+.ch2 .recskip h4{font-size:14px;font-weight:700}
+.ch2 .recskip summary{cursor:pointer;font-size:13px;min-height:32px;display:flex;align-items:center}
+.ch2 .recskip ul{list-style:none;padding:0;margin:4px 0 0;max-height:280px;overflow-y:auto;font-size:13px}
+.ch2 .recskip li{display:flex;gap:12px;padding:6px 0;border-top:1px solid var(--ln)}
+.ch2 .recskip li .num{flex:none;color:var(--mut)}
+.ch2 .recskip li bdi{flex:1;min-width:0;overflow-wrap:anywhere}
+.ch2 a.back{text-decoration:none}
 @keyframes ch2-rise{from{opacity:0;transform:translateY(6px)}}
 
 /* חלון אקסל */

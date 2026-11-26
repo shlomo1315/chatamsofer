@@ -1,7 +1,7 @@
 'use client'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ChargeDay, ChargesReport } from '@/lib/donorCharges'
-import type { CardColumns, MatchedRow, MatchStatus, ReconcileResult } from '@/lib/donorCardReconcile'
+import type { CardColumns, MatchedRow, MatchStatus, ReconcileResult, SkippedRow } from '@/lib/donorCardReconcile'
 import { Gate, PasswordScreen } from '../DonorReportView'
 import '../donor-report.css'
 import './charges.css'
@@ -13,10 +13,17 @@ import './charges.css'
 type Mode = 'day' | 'range' | 'multi'
 interface Data extends ChargesReport { label: string; lockedHome: string | null; selection: string; days: string[] }
 interface RecCharge { id: string; date: string; home: string; name: string; amount: number }
-interface RecData { columns: CardColumns; rows: MatchedRow[]; range: ReconcileResult['range']; missing: string[]; charges: RecCharge[] }
+/** שורה שנכנסה להתאמה (השרת מחזיר ב-rows רק אותן) */
+type RecRow = MatchedRow & { status: Exclude<MatchStatus, 'other' | 'out'> }
+interface RecData {
+  columns: CardColumns; rows: RecRow[]; range: ReconcileResult['range']; missing: string[]; charges: RecCharge[]
+  /** שורות שלא נכנסו להתאמה: בית עסק שאינו בית החלמה, מחוץ לטווח, ושורות שלא נקראו */
+  other: MatchedRow[]; out: number; skipped: SkippedRow[]; skippedCount: number; total: number
+  foreign: boolean; ilsFrom: string | null
+}
 type Phase = 'reading' | 'learn' | 'run' | 'done' | 'error'
 interface Rec { name: string; phase: Phase; data: RecData | null; chips: number; step: number; error: string }
-type St = MatchStatus | 'miss'
+type St = RecRow['status'] | 'miss'
 interface Sheet { name: string; head: string[]; rows: (string | number | null)[][]; numFrom: number }
 
 const DAY_MS = 86_400_000
@@ -38,6 +45,8 @@ const signed = (n: number) => (Math.round(n) === 0 ? '₪0' : `${n < 0 ? '−' :
 const todayIL = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(new Date())
 const addDays = (d: string, n: number) => new Date(Date.parse(d) + n * DAY_MS).toISOString().slice(0, 10)
 const fd = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}`
+/** סכום שורה בקובץ: בשקלים, או בדולרים כשלא נמצא לה סכום בשקלים */
+const FM = (r: MatchedRow) => (r.usd ? `$${Math.abs(r.amount).toLocaleString('en-US', { maximumFractionDigits: 2 })}${r.amount < 0 ? '−' : ''}` : M(r.amount))
 const fdy = (d: string) => `${fd(d)}.${d.slice(0, 4)}`
 const dayName = (d: string) => `יום ${['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'][new Date(`${d}T00:00:00Z`).getUTCDay()]}`
 const plural = (n: number, one: string, many: string) => (n === 1 ? one : `${n} ${many}`)
@@ -254,7 +263,9 @@ export default function ChargesView({ token }: { token: string }) {
     if (f.size > MAX_FILE) return fail('הקובץ גדול מ-5MB')
     setRec({ name: f.name, phase: 'reading', data: null, chips: 0, step: 0, error: '' })
     try {
-      const body = JSON.stringify({ name: f.name, data: await readBase64(f) })
+      // הטווח שנבחר בלוח חל גם על ההתאמה ועל ההפרש
+      const range = selected.length ? { from: selected[0], to: selected[selected.length - 1] } : {}
+      const body = JSON.stringify({ name: f.name, data: await readBase64(f), ...range })
       const res = await fetch(`/api/donor-report/charges/reconcile?${new URLSearchParams({ t: token })}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
       })
@@ -287,6 +298,8 @@ export default function ChargesView({ token }: { token: string }) {
 
   const rd = rec?.data ?? null
   const done = rec?.phase === 'done'
+  // הקובץ לא נשמר בכוונה, אז שינוי טווח אחרי ההעלאה דורש העלאה חוזרת
+  const rangeChanged = !!rd && selected.length > 0 && (selected[0] !== rd.range.from || selected[selected.length - 1] !== rd.range.to)
   const step = rec?.step ?? 0
   const passed = (i: number) => done || i < step
   const sysCharges = useMemo(() => (rd ? [...rd.charges].sort((a, b) => a.date.localeCompare(b.date) || a.home.localeCompare(b.home, 'he')) : []), [rd])
@@ -301,12 +314,13 @@ export default function ChargesView({ token }: { token: string }) {
 
   const sums = useMemo(() => {
     if (!rd) return null
-    const file = rd.rows.reduce((a, r) => a + r.amount, 0)
+    // שורה בדולרים בלי סכום בשקלים לא נכנסת לסכומים בשקלים
+    const file = rd.rows.reduce((a, r) => a + (r.usd ? 0 : r.amount), 0)
     const sys = rd.charges.reduce((a, c) => a + c.amount, 0)
     let diff = 0, none = 0
     for (const r of rd.rows) {
       if (r.status === 'diff' && r.chargeId) diff += r.amount - (byId.get(r.chargeId)?.amount ?? 0)
-      if (r.status === 'none') none += r.amount
+      if (r.status === 'none' && !r.usd) none += r.amount
     }
     const miss = rd.missing.reduce((a, id) => a + (byId.get(id)?.amount ?? 0), 0)
     return { file, sys, total: file - sys, diff, none, miss }
@@ -370,6 +384,7 @@ export default function ChargesView({ token }: { token: string }) {
           </div>
           <div className="top-l">
             <span className="live">מתעדכן אוטומטית</span>
+            <a className="back" href={`/donor-report/${encodeURIComponent(token)}`}>דוח יולדות מלא</a>
             <button type="button" className="back" onClick={() => void logout()}>התנתקות</button>
           </div>
         </header>
@@ -610,7 +625,7 @@ export default function ChargesView({ token }: { token: string }) {
                         <div key={r.line} className={`cf ${cls}`} data-row={i}>
                           <span className="num">{fd(r.date)}</span>
                           <b>{r.merchant || r.ref || '—'}</b>
-                          <span className="num">{M(r.amount)}</span>
+                          <span className="num">{FM(r)}</span>
                           <span className="tag">{isPassed ? <span className="pill">{ST[r.status]}</span> : scan ? <span className="scan-t">בודק…</span> : null}</span>
                           {isPassed && ch && <span className="to">← {ch.name} · {ch.home} · {fd(ch.date)}</span>}
                           {isPassed && r.why && <em className="why">{r.why}</em>}
@@ -646,6 +661,53 @@ export default function ChargesView({ token }: { token: string }) {
                     <b className="num">{signed(sums.total)}</b>
                     <small className="num">פער סכום {signed(sums.diff)} · לא נמצא {signed(sums.none)} · לא בקובץ {signed(-sums.miss)}</small>
                   </div>
+                </div>
+              )}
+
+              {done && rangeChanged && (
+                <p className="recnote warn">הטווח בלוח השתנה מאז ההעלאה. העלו את הקובץ שוב כדי להתאים לטווח החדש.</p>
+              )}
+
+              {done && (
+                <div className="recskip panel">
+                  <h4>מה נקרא מהקובץ</h4>
+                  <p className="recnote">
+                    נקראו <b className="num">{rd.total}</b> שורות
+                    {' · '}בהתאמה <b className="num">{rd.rows.length}</b>
+                    {rd.other.length > 0 && <>{' · '}לא בית החלמה <b className="num">{rd.other.length}</b></>}
+                    {rd.out > 0 && <>{' · '}מחוץ לטווח שנבחר <b className="num">{rd.out}</b></>}
+                    {rd.skippedCount > 0 && <>{' · '}לא נקראו <b className="num">{rd.skippedCount}</b></>}
+                  </p>
+                  {rd.foreign && (
+                    <p className="recnote">
+                      הקובץ בדולרים: הסכומים בשקלים נלקחו {rd.ilsFrom ? <>מעמודת <span className="ltr">{rd.ilsFrom}</span></> : 'מפירוט השורה'}.
+                    </p>
+                  )}
+                  {rd.other.length > 0 && (
+                    <details>
+                      <summary>חיובים שאינם של בית החלמה ({rd.other.length})</summary>
+                      <ul>
+                        {rd.other.map((r, i) => (
+                          <li key={`o${i}`}>
+                            <span className="num">{fd(r.date)}</span>
+                            <bdi>{r.merchant}</bdi>
+                            <span className="num">{FM(r)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                  {rd.skippedCount > 0 && (
+                    <details>
+                      <summary>שורות שלא נקראו ({rd.skippedCount})</summary>
+                      <ul>
+                        {rd.skipped.map(s => (
+                          <li key={`s${s.line}`}><span className="num">שורה {s.line}</span><span>{s.why}</span></li>
+                        ))}
+                        {rd.skippedCount > rd.skipped.length && <li>ועוד {rd.skippedCount - rd.skipped.length}</li>}
+                      </ul>
+                    </details>
+                  )}
                 </div>
               )}
             </div>

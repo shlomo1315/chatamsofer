@@ -1,18 +1,18 @@
 import type { Metadata } from 'next'
-import ChargesView from './charges/ChargesView'
+import DonorReportView from './DonorReportView'
 
 export const dynamic = 'force-dynamic'
 
 // ⚠️ הטוקן בכתובת: בלי אינדוקס ובלי העברת הכתובת הלאה ב-Referer.
-// העמוד הראשי של קישור הנדיב מציג ישירות את דוח החיובים (גם /charges נשאר לקישורים ישנים).
+// העמוד הראשי של קישור הנדיב הוא דוח היולדות המלא; דוח החיובים וההתאמה מול האשראי ב-/charges.
 export const metadata: Metadata = {
-  title: 'דוח חיובים לפי תאריך',
-  description: 'פירוט החיובים של בתי ההחלמה וסכום כולל לכל יום בכל סניף',
+  title: 'דוח יולדות',
+  description: 'דוח יולדות שאושרו לפי בית החלמה, תאריכים וסכומים',
   robots: { index: false, follow: false },
   referrer: 'no-referrer',
 }
 
 export default async function Page({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
-  return <ChargesView token={token} />
+  return <DonorReportView token={token} />
 }
