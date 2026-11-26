@@ -20,6 +20,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { chainHasGap, statusAfterFix, type ChainNode } from './lineageChainHealth'
 import { fetchAllRows } from './fetchAllRows'
+import { generationsStatus, registrantGeneration, tooFewGenerations } from './minGenerations'
 
 export interface FixChainRow {
   generation: number
@@ -34,6 +35,10 @@ export interface AutoFixResult {
   needsReview: boolean
   /** הצומת שאליו חובר המוטב. */
   nodeId: string | null
+  /** האם השרשרת המתוקנת עדיין מכילה פחות משבעה דורות (נשאר נדחה). */
+  tooFew: boolean
+  /** הדור של הנרשם לפי השרשרת המתוקנת. */
+  generation: number | null
 }
 
 /**
@@ -67,17 +72,29 @@ export async function autoApplyLineageFix(
     needsReview = (await earlyLineageGate(admin, { lineage_node_id: nodeId })).deep
   }
 
-  // ⚠️ 'rejected' אינו נדרס: משפחה שנדחתה במפורש אינה חוזרת להמתנה רק
-  // משום שתיקנה ייחוס. ההחלטה הזו היא של המשרד ולא של המבקש.
   const { data: cur } = await admin
-    .from('beneficiaries').select('eligibility_status').eq('id', beneficiaryId).maybeSingle()
-  const status = (cur as { eligibility_status?: string } | null)?.eligibility_status ?? ''
-  if (status !== 'rejected' && status !== 'approved') {
+    .from('beneficiaries').select('eligibility_status, deep_review_reason').eq('id', beneficiaryId).maybeSingle()
+  const row = cur as { eligibility_status?: string; deep_review_reason?: string | null } | null
+  const status = row?.eligibility_status ?? ''
+
+  // 🔴 שבעה דורות לפחות (lib/minGenerations): פחות → נדחה; מי שנדחה רק בגלל
+  // זה ותיקן כראוי → חוזר ל"ממתין" (או לבדיקה מעמיקה כשהשער נכשל).
+  const generation = registrantGeneration(chain)
+  const tooFew = tooFewGenerations(generation)
+  const byRule = await generationsStatus(
+    { status, reason: row?.deep_review_reason }, generation,
+    async () => ({ deep: needsReview, reason: needsReview ? 'סדר הדורות אחרי התיקון לא תואם את הקובץ' : null }),
+  )
+  if (byRule) {
+    await admin.from('beneficiaries').update(byRule).eq('id', beneficiaryId)
+  } else if (status !== 'rejected' && status !== 'approved') {
+    // ⚠️ 'rejected' אינו נדרס: משפחה שנדחתה במפורש אינה חוזרת להמתנה רק
+    // משום שתיקנה ייחוס. ההחלטה הזו היא של המשרד ולא של המבקש.
     await admin.from('beneficiaries')
       .update({ eligibility_status: statusAfterFix(needsReview) })
       .eq('id', beneficiaryId)
   }
 
   console.log(`[lineage-autofix] ben=${beneficiaryId} node=${nodeId} gap=${needsReview}`)
-  return { applied: true, needsReview, nodeId }
+  return { applied: true, needsReview, nodeId, tooFew, generation }
 }

@@ -7,6 +7,7 @@ import { recipientNameOf } from '@/lib/lineageFaultNotice'
 import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { logActivity } from '@/lib/activityLog'
 import { isAutoDeepReason, isUncheckedDeepReason } from '@/lib/earlyLineageGate'
+import { isTooFewReason } from '@/lib/minGenerations'
 import { LINEAGE_LINK_DAYS, linkSentRecently, type InquiryRow } from '@/lib/lineageInquiryTag'
 
 // ── בירור סדר הדורות: שליחת הקישור לתיקון וסימון התשובה ──
@@ -27,9 +28,13 @@ export interface AutoSendBen extends InquiryRow {
  * בטעינת הקובץ (לא באשמת המשפחה), לא מפעילים מייל.
  */
 export function autoSendSkipReason(ben: AutoSendBen, now = Date.now()): string | null {
-  if (ben.eligibility_status !== 'deep_review') return 'לא בבדיקה מעמיקה'
   const reason = ben.deep_review_reason ?? ''
-  if (!isAutoDeepReason(reason) || isUncheckedDeepReason(reason)) return 'הבדיקה המעמיקה אינה בגלל אי-התאמה לקובץ'
+  // 🔴 נדחה בגלל פחות משבעה דורות (lib/minGenerations) — מקבל קישור לתיקון
+  const tooFew = ben.eligibility_status === 'rejected' && isTooFewReason(reason)
+  if (!tooFew) {
+    if (ben.eligibility_status !== 'deep_review') return 'לא בבדיקה מעמיקה'
+    if (!isAutoDeepReason(reason) || isUncheckedDeepReason(reason)) return 'הבדיקה המעמיקה אינה בגלל אי-התאמה לקובץ'
+  }
   if (!ben.lineage_node_id) return 'אין שיוך לעץ'
   if (!isValidEmail((ben.email ?? '').trim())) return 'אין מייל תקין'
   if (linkSentRecently(ben.lineage_link_sent_at, now)) return 'כבר נשלח קישור בתוקף'

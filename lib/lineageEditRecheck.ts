@@ -14,6 +14,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { earlyLineageGate } from './earlyLineageGate'
+import { generationsStatus, registrantGeneration } from './minGenerations'
 
 type ChainEntry = { generation: number; name: string; relation: string | null }
 type Node = { id: string; name: string; parent_id: string | null; generation: number; relation: string | null }
@@ -51,10 +52,10 @@ export async function recheckAfterLineageEdit(
 ): Promise<Record<string, unknown>> {
   if (!('lineage_node_id' in payload) && !('lineage_manual' in payload)) return {}
   const { data: cur } = await db.from('beneficiaries')
-    .select('lineage_node_id, lineage_chain, lineage_manual, eligibility_status')
+    .select('lineage_node_id, lineage_chain, lineage_manual, eligibility_status, deep_review_reason')
     .eq('id', beneficiaryId).maybeSingle()
   if (!cur) return {}
-  const row = cur as { lineage_node_id: string | null; lineage_chain: unknown; lineage_manual: unknown; eligibility_status: string | null }
+  const row = cur as { lineage_node_id: string | null; lineage_chain: unknown; lineage_manual: unknown; eligibility_status: string | null; deep_review_reason?: string | null }
 
   const nodeId = 'lineage_node_id' in payload ? (payload.lineage_node_id ? String(payload.lineage_node_id) : null) : row.lineage_node_id
   const manual = 'lineage_manual' in payload ? payload.lineage_manual : row.lineage_manual
@@ -73,6 +74,17 @@ export async function recheckAfterLineageEdit(
         .sort((a, b) => a.generation - b.generation)
       extra.lineage_chain = chain
     }
+  }
+
+  // 🔴 שבעה דורות לפחות (lib/minGenerations) — גם בעריכה מאוחרת. סטטוס
+  // שהמנהל קבע במפורש באותה שמירה גובר.
+  if (!('eligibility_status' in payload)) {
+    const byRule = await generationsStatus(
+      { status: row.eligibility_status, reason: row.deep_review_reason },
+      registrantGeneration(chain),
+      () => earlyLineageGate(db, { lineage_node_id: nodeId, lineage_chain: chain, lineage_manual: manual }),
+    )
+    if (byRule) return { ...extra, ...byRule }
   }
 
   // סטטוס שהמנהל קבע במפורש באותה שמירה גובר. סטטוסים אחרים לא משתנים כאן.
