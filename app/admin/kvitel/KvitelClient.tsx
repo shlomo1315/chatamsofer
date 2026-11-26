@@ -10,7 +10,7 @@ import { kvitelRequestLines, type KvitelFilters, type KvitelLineRow, type Kvitel
 import { ListTable } from '@/components/admin/system/ListTable'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import { useTablePagination } from '@/lib/useTablePagination'
-import { asApproved, bulkApproval, bulkApprovalMessage, byKvitelTab, countByStatus, hebrewDay, KVITEL_DEFAULT_TAB, kvitelRowActions, needsApproval, nextToApprove, patchKvitelStatus, scopeKvitelRows, type KvitelTab } from '@/lib/kvitelView'
+import { asApproved, bulkApproval, bulkApprovalMessage, byKvitelTab, countByStatus, hebrewDay, KVITEL_DEFAULT_TAB, kvitelRowActions, kvitelRowTone, needsApproval, nextToApprove, patchKvitelStatus, scopeKvitelRows, type KvitelTab } from '@/lib/kvitelView'
 import { InlineText, InlineRequest } from './KvitelInlineCell'
 import { saveInlineEdit, personText, PERSON_HINT, type InlineEdit } from '@/lib/kvitelInlineEdit'
 import KvitelRowDetails from './KvitelRowDetails'
@@ -25,8 +25,10 @@ const STATUS_STYLE: Record<KvitelStatus, { pill: string; dot: string }> = {
   cancelled: { pill: 'bg-line text-[#7A7F8C]', dot: 'bg-[#7A7F8C]' },
 }
 type Tab = KvitelTab
-// בקשה שנשלחה לציון (אחרי ייצוא לקוויטל): כל השורה בירוק בהיר
-const DONE_ROW = 'bg-[#F1F8F3] hover:bg-[#E3F0E9]'
+// רקע כל השורה לפי kvitelRowTone: מאושרת — כחול בהיר (כמו תגית "לא נשלח"); נשלחה לציון (אחרי ייצוא לקוויטל) — ירוק בהיר
+const ROW_TONE = { approved: 'bg-[#EEF3FA] hover:bg-[#E4EBF6]', sent: 'bg-[#F1F8F3] hover:bg-[#E3F0E9]' } as const
+const CARD_TONE = { approved: 'bg-[#EEF3FA]', sent: 'bg-[#F1F8F3]' } as const
+const rowTone = (r: KvitelRequestRow) => { const t = kvitelRowTone(r); return t ? ROW_TONE[t] : undefined }
 
 export function StatusPill({ status }: { status: KvitelStatus }) {
   const st = STATUS_STYLE[status]
@@ -67,8 +69,9 @@ function MobileCards({ rows, canEdit, openId, details, onOpen, onApprove, onRemo
     <ul className="space-y-2 md:hidden">
       {rows.map(r => {
         const open = openId === r.id
+        const tone = kvitelRowTone(r)
         return (
-          <li key={r.id} className={`rounded-xl border border-line ${r.status === 'done' ? 'bg-[#F1F8F3]' : 'bg-white'}`}>
+          <li key={r.id} className={`rounded-xl border border-line ${tone ? CARD_TONE[tone] : 'bg-white'}`}>
             {/* בבקשה עם הקלטה: משולש השמעה במקום החץ (לחיצה על הכרטיס עדיין פותחת אותו) */}
             <div className="relative">
               <button type="button" onClick={() => onOpen(r)} aria-expanded={open} className="grid w-full gap-2 p-4 text-start">
@@ -280,7 +283,8 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
   // חיפוש, ערוץ וסוג מסוננים בדפדפן; התאריכים דרך הכתובת (השרת).
   const scoped = useMemo(() => scopeKvitelRows(liveRows, { channel, type, q }), [liveRows, q, channel, type])
   const counts = useMemo(() => countByStatus(scoped), [scoped])
-  const rows = useMemo(() => byKvitelTab(scoped, tab), [scoped, tab])
+  // מה שאושר כאן נשאר ב"לבדיקה" במקומו, צבוע כמאושר — לא נעלם ולא מקפיץ את הרשימה
+  const rows = useMemo(() => byKvitelTab(scoped, tab, approvedHere), [scoped, tab, approvedHere])
   // תיבת הבחירה בראש השורה (צרה) ועמודת הפעולות בסופה. ':v2' מאפס רוחב שנשמר לפני הסידור החדש
   const tc = useTableColumns<ColKey, KvitelRequestRow>('kvitel', COLUMNS, { sortFilter: { mode: 'client', rows }, leadCol: canEdit, extraCols: 1, extraWeight: 0.5, idSuffix: ':v2' })
   const pg = useTablePagination(tc.rows)
@@ -537,7 +541,7 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
                 case 'count': return <span className="tabular-nums text-ink-soft">{r.kvitel_request_lines.length}</span>
               }
             }}
-            rowClass={r => (r.status === 'done' ? DONE_ROW : undefined)}
+            rowClass={rowTone}
             expandedRow={r => recordingId === r.id && r.recording_url ? (
               <KvitelRecordingPanel key={r.id} requestId={r.id} recordingUrl={r.recording_url} transcript={r.raw_text} needsReview={!!r.needsReview}
                 editable={canEdit} onSaved={m => { setMessage(m); router.refresh() }} />

@@ -92,8 +92,13 @@ export function scopeKvitelRows<R extends Pick<KvitelRequestRow, 'channel' | 'co
   })
 }
 
-export const byKvitelTab = <R extends Pick<KvitelRequestRow, 'status' | 'needsReview'>>(rows: R[], tab: KvitelTab): R[] =>
-  tab === 'all' ? rows : tab === 'review' ? rows.filter(needsApproval) : rows.filter(r => r.status === tab)
+// keep: בקשות שאושרו עכשיו מהשורה — נשארות בלשונית "לבדיקה" במקומן (צבועות כמאושרות) עד טעינה מחדש של הדף
+export const byKvitelTab = <R extends Pick<KvitelRequestRow, 'id' | 'status' | 'needsReview'>>(rows: R[], tab: KvitelTab, keep?: ReadonlySet<string>): R[] =>
+  tab === 'all' ? rows : tab === 'review' ? rows.filter(r => needsApproval(r) || !!keep?.has(r.id)) : rows.filter(r => r.status === tab)
+
+// צבע הרקע של כל השורה, לפי הסטטוס במסד (ולכן נשמר גם אחרי רענון): מאושרת ("לא נשלח") או נשלחה לציון
+export const kvitelRowTone = (r: Pick<KvitelRequestRow, 'status' | 'needsReview'>): 'approved' | 'sent' | null =>
+  r.status === 'done' ? 'sent' : r.status === 'pending' && !r.needsReview ? 'approved' : null
 
 // כפתורי השורה בטבלה ובכרטיסים במובייל. "מחיקה" = ביטול (עוברת ל"בוטלו" ואפשר לשחזר משם).
 // approve: 'button' — כפתור אישור (רק בבקשה לבדיקה); 'approved' / 'sent' — תווית מצב במקום כפתור; null — כלום.
