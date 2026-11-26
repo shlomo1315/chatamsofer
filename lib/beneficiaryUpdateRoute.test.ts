@@ -7,6 +7,9 @@ import type { SectionKey } from '@/types'
 type Staff = { role: 'admin' | 'secretary' | 'reviewer'; permissions: Record<string, string> } | null
 let staff: Staff = null
 const calls: { table: string; op: string }[] = []
+// הרשומה הקיימת (לבדיקת שדות המזהה) ומה שנכתב בפועל
+let current: Record<string, unknown> | null = null
+let written: Record<string, unknown> | null = null
 
 vi.mock('@/lib/lineageEditRecheck', () => ({ recheckAfterLineageEdit: async () => ({}) }))
 vi.mock('@/lib/apiAuth', () => ({
@@ -20,10 +23,11 @@ vi.mock('@/lib/apiAuth', () => ({
     from: (table: string) => {
       const q: Record<string, unknown> = {}
       const chain = () => q
+      let cols = ''
       Object.assign(q, {
-        select: chain, eq: chain, neq: chain, in: chain, limit: chain,
-        maybeSingle: async () => ({ data: null }),
-        update: () => { calls.push({ table, op: 'update' }); return { eq: () => ({ eq: async () => ({ error: null }), then: (r: (v: unknown) => void) => r({ error: null }) }) } },
+        select: (c: string) => { cols = c; return q }, eq: chain, neq: chain, in: chain, limit: chain,
+        maybeSingle: async () => ({ data: cols.includes('id_doc_type') ? current : null }),
+        update: (row: Record<string, unknown>) => { calls.push({ table, op: 'update' }); if (table === 'beneficiaries') written = row; return { eq: () => ({ eq: async () => ({ error: null }), then: (r: (v: unknown) => void) => r({ error: null }) }) } },
         delete: () => { calls.push({ table, op: 'delete' }); return { in: () => ({ eq: async () => ({ error: null }) }) } },
       })
       return q
@@ -36,7 +40,7 @@ import { POST } from '@/app/api/admin/beneficiaries/update/route'
 const req = (body: unknown) => ({ json: async () => body }) as never
 const save = (extra: Record<string, unknown> = {}) => req({ action: 'save', id: 'b1', payload: { phone: '0501234567' }, ...extra })
 
-beforeEach(() => { staff = null; calls.length = 0 })
+beforeEach(() => { staff = null; calls.length = 0; current = null; written = null })
 
 describe('שמירת כרטסת צאצא — הרשאות', () => {
   it('מזכירה עם עריכה בצאצאים שומרת פרטים', async () => {
@@ -75,5 +79,48 @@ describe('שמירת כרטסת צאצא — הרשאות', () => {
     staff = { role: 'secretary', permissions: { beneficiaries: 'edit', maternity: 'edit' } }
     expect((await POST(approve)).status).toBe(200)
     expect(calls).toContainEqual({ table: 'maternity_aids', op: 'update' })
+  })
+})
+
+describe('החלפת ת.ז. ↔ דרכון בעריכת כרטסת', () => {
+  const doc = (payload: Record<string, unknown>) => req({ action: 'save', id: 'b1', payload })
+  beforeEach(() => { current = { id_number: '123456782', id_doc_type: 'id', spouse_id_number: 'AB12345', spouse_doc_type: 'passport' } })
+
+  it('מזכירה מחליפה ת.ז. לדרכון — נשמרים הסוג והמספר', async () => {
+    staff = { role: 'secretary', permissions: { beneficiaries: 'edit' } }
+    expect((await POST(doc({ id_number: ' P9876543 ', id_doc_type: 'passport' }))).status).toBe(200)
+    expect(written).toMatchObject({ id_number: 'P9876543', id_doc_type: 'passport' })
+  })
+  it('מנהל מחליף דרכון של האישה לת.ז. תקינה', async () => {
+    staff = { role: 'admin', permissions: {} }
+    expect((await POST(doc({ spouse_id_number: '000000018', spouse_doc_type: 'id' }))).status).toBe(200)
+    expect(written).toMatchObject({ spouse_id_number: '000000018', spouse_doc_type: 'id' })
+  })
+  it('החלפה לת.ז. כשהמספר הוא עדיין מספר דרכון — נחסמת', async () => {
+    staff = { role: 'admin', permissions: {} }
+    expect((await POST(doc({ spouse_id_number: 'AB12345', spouse_doc_type: 'id' }))).status).toBe(400)
+    expect(written).toBeNull()
+  })
+  it('ת.ז. לא תקינה, דרכון קצר או סוג לא מוכר — 400', async () => {
+    staff = { role: 'admin', permissions: {} }
+    expect((await POST(doc({ id_number: '123456789', id_doc_type: 'id' }))).status).toBe(400)
+    expect((await POST(doc({ id_number: 'AB1', id_doc_type: 'passport' }))).status).toBe(400)
+    expect((await POST(doc({ id_number: '123456782', id_doc_type: 'visa' }))).status).toBe(400)
+    expect(written).toBeNull()
+  })
+  it('ערך ישן שלא השתנה לא חוסם שמירה', async () => {
+    current = { id_number: '12345', id_doc_type: 'id', spouse_id_number: null, spouse_doc_type: null }
+    staff = { role: 'admin', permissions: {} }
+    expect((await POST(doc({ id_number: '12345', id_doc_type: 'id', phone: '0501234567' }))).status).toBe(200)
+  })
+  it('משתמש בלי הרשאת עריכה או לא מחובר — לא יכול להחליף', async () => {
+    const swap = () => doc({ id_number: 'P9876543', id_doc_type: 'passport' })
+    staff = { role: 'secretary', permissions: { beneficiaries: 'view' } }
+    expect((await POST(swap())).status).toBe(403)
+    staff = { role: 'reviewer', permissions: {} }
+    expect((await POST(swap())).status).toBe(403)
+    staff = null
+    expect((await POST(swap())).status).toBe(403)
+    expect(calls).toHaveLength(0)
   })
 })

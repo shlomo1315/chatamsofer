@@ -4,7 +4,7 @@ import { roleAllows } from '@/lib/permissions'
 import type { UserPermissions } from '@/types'
 import { recheckAfterLineageEdit } from '@/lib/lineageEditRecheck'
 import { autoSendLineageFixLink } from '@/lib/lineageInquiry'
-
+import { checkDocFields } from '@/lib/idDocValidation'
 export const dynamic = 'force-dynamic'
 
 // שדות שמותר לעדכן מעריכת התיק. כל מה שלא ברשימה נזרק.
@@ -55,10 +55,18 @@ export async function POST(request: NextRequest) {
   const payload = pickEditable(body.payload)
   if (Object.keys(payload).length === 0) return NextResponse.json({ error: 'אין מה לשמור' }, { status: 400 })
 
+  // החלפת ת.ז. ↔ דרכון ועריכת המספר: אימות לפי הסוג (רק מה שהשתנה) ונרמול
+  if (['id_number', 'id_doc_type', 'spouse_id_number', 'spouse_doc_type'].some(k => k in payload)) {
+    const { data: current } = await admin.from('beneficiaries')
+      .select('id_number, id_doc_type, spouse_id_number, spouse_doc_type').eq('id', id).maybeSingle()
+    const docErr = checkDocFields(payload, current as Record<string, unknown> | null)
+    if (docErr) return NextResponse.json({ error: docErr }, { status: 400 })
+  }
+
   // כפילות ת.ז. מול כרטסת אחרת
   if (typeof payload.id_number === 'string' && payload.id_number) {
     const { data: dup } = await admin.from('beneficiaries').select('id').eq('id_number', payload.id_number).neq('id', id).limit(1).maybeSingle()
-    if (dup) return NextResponse.json({ error: 'תעודת זהות זו כבר קיימת במערכת — לא ניתן לרשום אותה שוב' }, { status: 409 })
+    if (dup) return NextResponse.json({ error: payload.id_doc_type === 'passport' ? 'דרכון זה כבר קיים במערכת — לא ניתן לרשום אותו שוב' : 'תעודת זהות זו כבר קיימת במערכת — לא ניתן לרשום אותה שוב' }, { status: 409 })
   }
 
   // שינוי שושלת: השרשרת, הסטטוס והסיבה מחושבים מחדש — ראו lib/lineageEditRecheck.
