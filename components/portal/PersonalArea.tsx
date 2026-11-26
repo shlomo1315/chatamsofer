@@ -11,6 +11,8 @@ import {
   X, TriangleAlert, Check, ChevronLeft, ChevronRight, Lock,
 } from 'lucide-react'
 import { REQUEST_STAGES, type RequestProgress } from '@/lib/requestStages'
+import { formatBirthDate, type BirthDateWho } from '@/lib/portalBirthDate'
+import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
 
 interface PortalRequest {
   id: string; kind: string; kindLabel: string; statusLabel: string
@@ -30,6 +32,8 @@ export interface PersonalAreaBeneficiary {
   email?: string
   address?: string
   spouse_name?: string
+  birth_date?: string | null
+  spouse_birth_date?: string | null
   children?: unknown[]
   lineage_chain?: { generation: number; name: string; relation?: 'son' | 'son_in_law' | null }[]
   lineage_fix_required?: boolean
@@ -49,6 +53,7 @@ interface Props {
   onOpenDocs: () => void
   emailUnverified?: boolean
   onVerifyEmail?: () => void
+  onBirthDateSaved?: (who: BirthDateWho, iso: string) => void
 }
 
 type Filter = 'all' | 'open' | 'done'
@@ -72,7 +77,7 @@ const DEPTS: Record<PersonalAreaDept, { icon: ReactNode; title: string; short: s
   },
 }
 
-export default function PersonalArea({ beneficiary: b, docsCount, contacts, openDepartments, onStartRequest, onDeleted, onFixLineage, onEditDetails, onOpenDocs, emailUnverified, onVerifyEmail }: Props) {
+export default function PersonalArea({ beneficiary: b, docsCount, contacts, openDepartments, onStartRequest, onDeleted, onFixLineage, onEditDetails, onOpenDocs, emailUnverified, onVerifyEmail, onBirthDateSaved }: Props) {
   const [requests, setRequests] = useState<PortalRequest[] | null>(null)
   const [failed, setFailed] = useState(false)
   const [filter, setFilter] = useState<Filter>('all')
@@ -91,6 +96,12 @@ export default function PersonalArea({ beneficiary: b, docsCount, contacts, open
   const [delBusy, setDelBusy] = useState(false)
   const [delErr, setDelErr] = useState('')
   const [delDone, setDelDone] = useState(false)
+  // תיקון תאריך לידה: נשמר בשרת רק לרשומה של המשתמש המחובר (לפי הסשן)
+  const [bdWho, setBdWho] = useState<BirthDateWho | null>(null)
+  const [bdVal, setBdVal] = useState('')
+  const [bdBusy, setBdBusy] = useState(false)
+  const [bdErr, setBdErr] = useState('')
+  const [bdSaved, setBdSaved] = useState<Partial<Record<BirthDateWho, string>>>({})
 
   useEffect(() => {
     let alive = true
@@ -107,13 +118,31 @@ export default function PersonalArea({ beneficiary: b, docsCount, contacts, open
     setDelOpen(false)
     if (delDone) onDeleted()
   }
+  const birthOf = (who: BirthDateWho) => bdSaved[who] ?? (who === 'self' ? b.birth_date : b.spouse_birth_date) ?? null
+  const openBirth = (who: BirthDateWho) => { setBdVal(String(birthOf(who) ?? '').slice(0, 10)); setBdErr(''); setBdWho(who) }
+  const closeBirth = () => { if (!bdBusy) setBdWho(null) }
+  const saveBirth = async () => {
+    if (!bdWho || !bdVal) return
+    setBdBusy(true); setBdErr('')
+    try {
+      const res = await fetch('/api/portal/birth-date', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ who: bdWho, birth_date: bdVal }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setBdErr(d.error ?? 'שמירת התאריך נכשלה. נסו שוב.'); return }
+      setBdSaved(p => ({ ...p, [bdWho]: d.birth_date }))
+      onBirthDateSaved?.(bdWho, d.birth_date)
+      setBdWho(null)
+    } catch { setBdErr('שמירת התאריך נכשלה. נסו שוב.') } finally { setBdBusy(false) }
+  }
+
   useEffect(() => {
-    if (!newOpen && !delOpen) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { if (delOpen) closeDel(); else closeNew() } }
+    if (!newOpen && !delOpen && !bdWho) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { if (delOpen) closeDel(); else if (bdWho) closeBirth(); else closeNew() } }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [newOpen, delOpen, delBusy, delDone])
+  }, [newOpen, delOpen, delBusy, delDone, bdWho, bdBusy])
 
   const chain = useMemo(() => [...(b.lineage_chain ?? [])].sort((x, y) => x.generation - y.generation), [b.lineage_chain])
   const hasChildren = (b.children?.length ?? 0) > 0
@@ -296,11 +325,13 @@ export default function PersonalArea({ beneficiary: b, docsCount, contacts, open
                 <span className="eyebrow">הבעל</span>
                 <b>{[b.family_name, b.full_name].filter(Boolean).join(' ') || '[להשלים]'}</b>
                 <span className="idl"><span className="muted">ת״ז</span><span className="mono num ltr">{b.id_number || '[להשלים]'}</span><span className="lk"><Lock size={11} aria-hidden="true" />קבוע</span></span>
+                <BirthLine raw={birthOf('self')} onFix={() => openBirth('self')} who="הבעל" />
               </div>
               <div>
                 <span className="eyebrow">בת הזוג</span>
                 <b>{b.spouse_name || '[להשלים]'}</b>
                 <span className="idl"><span className="muted">ת״ז</span><span className="mono num ltr">{b.spouse_id_number || '[להשלים]'}</span><span className="lk"><Lock size={11} aria-hidden="true" />קבוע</span></span>
+                <BirthLine raw={birthOf('spouse')} onFix={() => openBirth('spouse')} who="בת הזוג" />
               </div>
             </div>
             <dl className="contact">
@@ -309,7 +340,7 @@ export default function PersonalArea({ beneficiary: b, docsCount, contacts, open
               <div><dt>כתובת</dt><dd>{b.address || '[להשלים]'}</dd></div>
             </dl>
             {emailUnverified && <button type="button" className="unv" onClick={onVerifyEmail}>המייל לא מאומת · אימות עכשיו</button>}
-            <p className="note"><Lock size={12} aria-hidden="true" /><span>ת״ז לא משתנה. שינוי שם באישור המשרד. טלפון ומייל מתעדכנים אחרי קוד אימות.</span></p>
+            <p className="note"><Lock size={12} aria-hidden="true" /><span>ת״ז לא משתנה. שינוי שם באישור המשרד. טלפון ומייל מתעדכנים אחרי קוד אימות. תאריך לידה אפשר לתקן כאן.</span></p>
           </section>
 
           <section id="pa-tree" className="card sec tree-c">
@@ -460,7 +491,39 @@ export default function PersonalArea({ beneficiary: b, docsCount, contacts, open
           </div>
         </div>
       )}
+
+      {bdWho && (
+        <div className="ov" onClick={e => { if (e.target === e.currentTarget) closeBirth() }}>
+          <div className="md bd-md" role="dialog" aria-modal="true" aria-labelledby="pa-bd-t">
+            <div className="md-h">
+              <div><h2 id="pa-bd-t">תיקון תאריך לידה</h2><p>{bdWho === 'self' ? 'הבעל' : 'בת הזוג'}: {bdWho === 'self' ? [b.family_name, b.full_name].filter(Boolean).join(' ') : b.spouse_name || ''}</p></div>
+              <button type="button" className="x" onClick={closeBirth} aria-label="סגירה"><X size={18} aria-hidden="true" /></button>
+            </div>
+            <div className="md-b">
+              <p className="muted bd-now">כרגע במערכת: <b>{formatBirthDate(birthOf(bdWho))?.greg ?? 'לא הוזן'}</b></p>
+              <span className="bd-lbl">תאריך הלידה הנכון</span>
+              <HebrewDatePicker value={bdVal} onChange={setBdVal} maxToday yearFirst birthYearRange={{ minAge: 18, maxAge: 90 }} />
+              {bdErr && <p className="errb" role="alert">{bdErr}</p>}
+            </div>
+            <div className="md-f">
+              <button type="button" className="btn btn-pri" disabled={!bdVal || bdBusy} onClick={saveBirth}>{bdBusy ? 'שומר…' : 'שמירת התאריך'}</button>
+              <button type="button" className="btn btn-ghost" onClick={closeBirth}>ביטול</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+function BirthLine({ raw, onFix, who }: { raw: string | null; onFix: () => void; who: string }) {
+  const f = formatBirthDate(raw)
+  return (
+    <span className="idl bdl">
+      <span className="muted">תאריך לידה</span>
+      {f ? <span><span className="num ltr">{f.greg}</span>{f.hebrew && <span className="muted"> · {f.hebrew}</span>}</span> : <span className="muted">לא הוזן</span>}
+      <button type="button" className="bd-fix" onClick={onFix} aria-label={`תיקון תאריך הלידה של ${who}`}><Pencil size={12} aria-hidden="true" />{f ? 'תיקון' : 'הוספה'}</button>
+    </span>
   )
 }
 
@@ -562,6 +625,14 @@ const CSS = `
 .pa .people b{display:block;font-size:var(--t4);font-weight:800;margin:2px 0 var(--s2)}
 .pa .idl{display:flex;align-items:center;gap:var(--s2);font-size:var(--t2);flex-wrap:wrap}
 .pa .idl .mono{font-weight:700}
+.pa .bdl{margin-top:var(--s2)}
+.pa .bd-fix{border:1px solid var(--line);background:#fff;border-radius:99px;font-size:12px;font-weight:700;color:var(--navy-2);padding:0 10px;min-height:32px;display:inline-flex;align-items:center;gap:4px}
+.pa .bd-fix:hover{border-color:var(--navy)}
+.pa .bd-md .md-b{min-height:150px}
+.pa .bd-md .md-b .absolute{position:static;width:100%;max-width:none}
+.pa .bd-now{font-size:var(--t2);margin-bottom:var(--s3)}
+.pa .bd-lbl{display:block;font-size:var(--t2);font-weight:700;margin-bottom:6px}
+.pa .btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
 .pa .contact{display:grid;grid-template-columns:auto auto 1fr;gap:var(--s4) var(--s6);margin:var(--s4) 0 0}
 .pa .contact div{min-width:0}
 .pa .contact dt{font-size:var(--t1);color:var(--soft);font-weight:700}

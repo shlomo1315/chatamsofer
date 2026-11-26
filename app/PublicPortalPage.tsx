@@ -85,6 +85,8 @@ interface FoundBeneficiary {
   id_number?: string
   spouse_name?: string
   spouse_id_number?: string
+  birth_date?: string | null
+  spouse_birth_date?: string | null
   marital_status?: string
   children_count?: number
   required_docs?: string
@@ -5599,6 +5601,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               onFixLineage={() => document.getElementById('pa-tree')?.scrollIntoView({ behavior: 'smooth' })}
               emailUnverified={emailVerified === false}
               onVerifyEmail={() => setShowEmailVerifyModal(true)}
+              onBirthDateSaved={(who, iso) => setBeneficiary(p => p ? { ...p, [who === 'self' ? 'birth_date' : 'spouse_birth_date']: iso } : p)}
               onEditDetails={openEditDetails}
               onOpenDocs={() => document.getElementById('pa-docs')?.scrollIntoView({ behavior: 'smooth' })}
             />
