@@ -23,6 +23,7 @@ import { chainHasGap, statusAfterFix, type ChainNode } from './lineageChainHealt
 import type { ApprovedRefTreeLookup } from './lineageApprovedRef'
 import type { ChainStep } from './lineageChainEdit'
 import type { GateInput, GateResult } from './earlyLineageGate'
+import { generationsStatus, registrantGeneration } from './minGenerations'
 
 type ApplyChain = (admin: SupabaseClient, beneficiaryId: string, chain: ChainStep[]) => Promise<{ createdNodes: number; movedTo: string | null }>
 type TreeNode = ChainNode & { name: string; relation?: string | null }
@@ -50,11 +51,12 @@ interface BenRow {
   lineage_chain_before_fix: unknown[] | null
   lineage_node_id: string | null
   eligibility_status: string | null
+  deep_review_reason?: string | null
 }
 
 async function loadBen(admin: SupabaseClient, id: string): Promise<BenRow | null> {
   const { data } = await admin.from('beneficiaries')
-    .select('id, lineage_chain, lineage_chain_before_fix, lineage_node_id, eligibility_status')
+    .select('id, lineage_chain, lineage_chain_before_fix, lineage_node_id, eligibility_status, deep_review_reason')
     .eq('id', id).maybeSingle()
   return (data as BenRow | null) ?? null
 }
@@ -156,7 +158,19 @@ export async function saveChainByStaff(
   // העריכה, lib/lineageEditRecheck). משתחררת ל"ממתין" רק כשהיא עוברת; אחרת
   // הסיבה מתעדכנת למצב הנוכחי. סטטוס אחר לא משתנה בעריכת צוות.
   let status: string | undefined
-  if (ben.eligibility_status === 'deep_review' && deps.gate) {
+  // 🔴 שבעה דורות לפחות (lib/minGenerations) — גם בעריכת צוות.
+  const byRule = await generationsStatus(
+    { status: ben.eligibility_status, reason: ben.deep_review_reason },
+    registrantGeneration(out.chain),
+    async () => {
+      const g = deps.gate ? await deps.gate(admin, { lineage_node_id: out.nodeId, lineage_chain: out.chain, lineage_manual: [] }) : null
+      return { deep: out.gap || !!g?.deep, reason: g?.reason ?? (out.gap ? 'דילוג דורות' : null) }
+    },
+  )
+  if (byRule) {
+    await admin.from('beneficiaries').update(byRule).eq('id', ben.id)
+    status = byRule.eligibility_status
+  } else if (ben.eligibility_status === 'deep_review' && deps.gate) {
     const gate = await deps.gate(admin, { lineage_node_id: out.nodeId, lineage_chain: out.chain, lineage_manual: [] })
     const extra = !gate.deep && !out.gap
       ? { eligibility_status: 'pending', deep_review_reason: null }

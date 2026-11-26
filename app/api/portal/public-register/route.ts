@@ -478,7 +478,20 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
     lineage_manual,
   })
   if (gate.unknown) console.error('[public-register] בדיקת 5 הדורות לא הושלמה — נשלח לבדיקה מעמיקה')
-  const eligibilityStatus = gate.deep ? 'deep_review' : 'pending'
+  // 🔴 פחות משבעה דורות = נדחה מיד, עם קישור לתיקון (lib/minGenerations).
+  // בלי שרשרת (טופס חיצוני) — הדור נגזר מהעוגן ומהדורות שהוקלדו מתחתיו.
+  const { registrantGeneration, tooFewGenerations, tooFewReason } = await import('@/lib/minGenerations')
+  let selfGeneration = registrantGeneration(lineage_chain)
+  if (selfGeneration == null && lineage_node_id) {
+    const { data: anchorNode } = await admin.from('lineage_nodes').select('generation').eq('id', String(lineage_node_id)).maybeSingle()
+    const anchorGen = Number(anchorNode?.generation)
+    if (Number.isFinite(anchorGen) && anchorGen > 0) {
+      selfGeneration = anchorGen + (Array.isArray(lineage_new_nodes) ? lineage_new_nodes.length : 0)
+    }
+  }
+  const tooFew = tooFewGenerations(selfGeneration)
+  const eligibilityStatus = tooFew ? 'rejected' : gate.deep ? 'deep_review' : 'pending'
+  const statusReason = tooFew ? tooFewReason(selfGeneration as number) : gate.deep ? gate.reason : null
   const sharedFields = {
     // טלפון ראשי — של הבעל אם הוזן, אחרת המספר הראשון שהוזן (בעל אינו חובה יותר)
     phone: phone ? String(phone).trim() : (phoneList[0] ?? null),
@@ -505,7 +518,7 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
     signature: typeof signature === 'string' && /^data:image\/(png|jpeg);base64,/.test(signature) && signature.length <= 400_000 ? signature : null,
     // 'pending' (בדיקה רגילה) או 'deep_review' (סטייה ביחוס בתוך 5 הדורות)
     eligibility_status: eligibilityStatus,
-    ...(gate.deep ? { deep_review_reason: gate.reason } : {}),
+    ...(statusReason ? { deep_review_reason: statusReason } : {}),
     is_active: true,
     // באיזה אופן נרשם — נשמר בעת הרישום, כי בדיעבד אין דרך להבדיל בין ערוץ לערוץ
     registration_source: registrationSource,
@@ -770,7 +783,7 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
 
   // סדר דורות שלא תואם את הקובץ → קישור לתיקון מיד (לא חוסם). אחרי כתיבת
   // הדורות שהוקלדו, כדי שהקישור ייצא מהשיוך הסופי. ראו lib/lineageInquiry.
-  if (gate.deep) {
+  if (gate.deep || tooFew) {
     void (async () => {
       const { data: b } = await admin.from('beneficiaries').select('id').eq('id_number', cleanId).maybeSingle()
       const { autoSendLineageFixLink } = await import('@/lib/lineageInquiry')
