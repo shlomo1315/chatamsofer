@@ -3891,6 +3891,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         setBeneficiary(b => b ? { ...b, lineage_chain: d.lineage_chain } : b)
       }
 
+      // 🔴 עדיין פחות משבעה דורות: נשאר נדחה, והעורך נשאר פתוח עם ההסבר
+      if (d.tooFew) { setLineageFixErr(d.message ?? 'שימו לב, יש טעות בסדר הדורות שלכם'); return }
+
       // ⚠️ מבחין בין קליטה מיידית לבין בקשה שנשארה לטיפול ידני:
       // טקסט חופשי בלי שרשרת מובנית, או מקרה עמימות שההחלה נכשלה בו.
       // הודעת "נשמר" על בקשה שלא הוחלה היא בדיוק השקר שגרם לבלבול.

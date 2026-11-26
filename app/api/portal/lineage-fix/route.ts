@@ -17,6 +17,7 @@ import { validateFixRequest, cleanFixText } from '@/lib/lineageFixRequest'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { latinChainError } from '@/lib/lineageChainEdit'
 import { markMaternityInquiryAnswered } from '@/lib/maternityInquiry'
+import { tooFewMessage } from '@/lib/minGenerations'
 
 export const dynamic = 'force-dynamic'
 
@@ -160,6 +161,8 @@ export async function POST(request: NextRequest) {
         ok: true,
         applied: res.applied,
         needsReview: res.needsReview,
+        // 🔴 עדיין פחות משבעה דורות → נשאר נדחה, וההודעה מוצגת למשפחה
+        ...(res.tooFew && res.generation ? { tooFew: true, message: tooFewMessage(res.generation) } : {}),
         lineage_chain: (fresh as { lineage_chain?: unknown } | null)?.lineage_chain ?? null,
       })
     } catch (e) {

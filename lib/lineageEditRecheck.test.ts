@@ -30,6 +30,7 @@ const TYPED_CHAIN = [
   { generation: 4, name: 'משה', relation: null },
   { generation: 5, name: 'אביגדור כהן', relation: null },  // הוקלד ידנית
   { generation: 6, name: 'דוד', relation: null },
+  { generation: 7, name: 'צבי', relation: null },  // הנרשם — דור 7, המינימום
 ]
 
 type Row = Record<string, unknown>
@@ -91,7 +92,7 @@ describe('דף העריכה: תיקון דור 5 שהוקלד ידנית', () =>
     expect(row.eligibility_status).toBe('pending')
     expect(row.deep_review_reason).toBeNull()
     const chain = row.lineage_chain as { generation: number; name: string }[]
-    expect(chain.map(e => e.generation)).toEqual([1, 2, 3, 4, 5, 6])
+    expect(chain.map(e => e.generation)).toEqual([1, 2, 3, 4, 5, 6, 7])
     expect(chain[4].name).toBe('אביגדור')
     expect(chain[5].name).toBe('דוד')  // הדורות שמתחת נשמרים
   })
@@ -101,6 +102,12 @@ describe('דף העריכה: תיקון דור 5 שהוקלד ידנית', () =>
     expect(row.eligibility_status).toBeUndefined()
     expect(row.deep_review_reason).toBeTruthy()
     expect(row.deep_review_reason).not.toContain('העוגן בדור 4')
+  })
+
+  it('עריכה מאוחרת שמשאירה פחות משבעה דורות — נדחה', async () => {
+    const row = await save({ ...HIRSCH, lineage_chain: TYPED_CHAIN.slice(0, 6) }, { lineage_node_id: 'n5', lineage_manual: [] })
+    expect(row.eligibility_status).toBe('rejected')
+    expect(row.deep_review_reason).toContain('פחות משבעה דורות')
   })
 
   it('סטטוס שהמנהל בחר באותה שמירה גובר', async () => {
