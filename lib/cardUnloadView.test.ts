@@ -1,5 +1,28 @@
 import { describe, it, expect } from 'vitest'
-import { getCardUnloadView } from './cardUnloadView'
+import { getCardUnloadView, getCardWalletView } from './cardUnloadView'
+
+describe('getCardWalletView', () => {
+  // המקרה מהצילום: נטען 600, קנתה 220+12+74, בנדרים נשארו 294 — ו-card_balance נשאר 600
+  it('יתרה מנדרים עכשיו גוברת על card_balance שלא התעדכן', () => {
+    expect(getCardWalletView({ card_load_amount: 600, card_balance: 600 }, 294))
+      .toEqual({ loadedAmount: 600, balance: 294, used: 306 })
+  })
+  it('בלי שליפה חיה — live_balance מהרענון השעתי', () => {
+    expect(getCardWalletView({ card_load_amount: '600', card_balance: '600', live_balance: '294' }))
+      .toEqual({ loadedAmount: 600, balance: 294, used: 306 })
+  })
+  it('יתרה חיה 0 היא 0 ולא נופלת ל-card_balance', () => {
+    expect(getCardWalletView({ card_load_amount: 600, card_balance: 600, live_balance: 0 }))
+      .toMatchObject({ balance: 0, used: 600 })
+  })
+  it('אין יתרה חיה בכלל — card_balance', () => {
+    expect(getCardWalletView({ card_load_amount: 600, card_balance: 600, live_balance: null }, null))
+      .toMatchObject({ balance: 600, used: 0 })
+  })
+  it('אין שום יתרה — נוצל לא ידוע', () => {
+    expect(getCardWalletView({ card_load_amount: 600 })).toEqual({ loadedAmount: 600, balance: null, used: null })
+  })
+})
 
 describe('getCardUnloadView', () => {
   it('תיק שנטען רגיל — אין מצב פריקה', () => {

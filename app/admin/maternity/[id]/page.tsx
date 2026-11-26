@@ -1,5 +1,6 @@
 import { idDocLabel } from '@/lib/idDocLabel'
 import CardActivity from './CardActivity'
+import CardWallet from './CardWallet'
 import { getCardUnloadView } from '@/lib/cardUnloadView'
 import { guardPage } from '@/lib/pageGuard'
 import { roleAllows } from '@/lib/permissions'
@@ -750,29 +751,12 @@ export default async function MaternityDetailPage(
                         return <p className="mt-2 text-sm font-medium text-orange-700">עדיין לא בוצעה טעינה עקב שאין מלאי כרגע במערכת</p>
                       }
                       if (!isLoaded) return null
-                      const loadedAmt = Number(x.card_load_amount)
-                      const balance = x.card_balance == null ? NaN : Number(x.card_balance)
-                      const hasBal = Number.isFinite(balance)
-                      const used = Number.isFinite(loadedAmt) && hasBal ? Math.max(0, loadedAmt - balance) : null
-                      const money = (n: number) => `${n.toLocaleString('he-IL', { maximumFractionDigits: 2 })} ₪`
-                      return (
-                        <div className="mt-2 grid grid-cols-3 gap-2 text-center">
-                          <div className="rounded-lg bg-slate-50 border border-slate-100 px-2 py-2">
-                            <p className="text-xs text-slate-500">סכום הטעינה</p>
-                            <p className="text-sm font-semibold text-slate-800 ltr-num">{Number.isFinite(loadedAmt) ? money(loadedAmt) : '—'}</p>
-                          </div>
-                          <div className="rounded-lg bg-slate-50 border border-slate-100 px-2 py-2">
-                            <p className="text-xs text-slate-500">נוצלו</p>
-                            <p className="text-sm font-semibold text-slate-800 ltr-num">{used != null ? money(used) : '—'}</p>
-                          </div>
-                          <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-2 py-2">
-                            <p className="text-xs text-slate-500">נותרו בארנק</p>
-                            <p className="text-sm font-semibold text-emerald-700 ltr-num">{hasBal ? money(balance) : '—'}</p>
-                          </div>
-                        </div>
-                      )
+                      // 🔴 card_balance לא מתעדכן מקניות — היתרה מנדרים (חיה / רענון שעתי)
+                      const w = aid as { card_load_amount?: number | string | null; card_balance?: number | string | null; live_balance?: number | string | null }
+                      return <CardWallet aidId={aid.id} showActivity={isAdmin}
+                        aid={{ card_load_amount: w.card_load_amount, card_balance: w.card_balance, live_balance: w.live_balance }} />
                     })()}
-                    {isAdmin && (unloadView || cs === 'loaded' || (aid as { card_load_status?: string | null }).card_load_status === 'loaded') && <CardActivity aidId={aid.id} />}
+                    {isAdmin && unloadView && <CardActivity aidId={aid.id} />}
                   </>
                 )
               })()}
