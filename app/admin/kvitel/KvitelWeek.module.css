@@ -14,7 +14,8 @@
   font-family:Heebo,system-ui,sans-serif;color:var(--ink);font-size:var(--t-md);line-height:1.55;-webkit-font-smoothing:antialiased;
 }
 .root *{box-sizing:border-box}
-.root button{font:inherit;color:inherit;cursor:pointer}
+/* בלי font/color: כלל לא-בשכבה גובר על text-white ו-font-semibold של Tailwind, וכפתור "אישור" הירוק יצא עם טקסט כהה. ירושת הצבע והגופן כבר באה מ-preflight. */
+.root button{cursor:pointer}
 .root button:focus-visible,.root a:focus-visible,.root input:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
 .root h1,.root h2,.root h3{margin:0;text-wrap:balance}
 .root p{margin:0}

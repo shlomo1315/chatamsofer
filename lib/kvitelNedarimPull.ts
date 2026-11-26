@@ -137,18 +137,24 @@ export function autoKvitelBody(row: NedarimRow): Record<string, string> {
   }
   flush()
 
-  // עמודות הטקסט הארוך (FieldNMax): פרטי הבקשה. בקשה לכל שורה לפי הסדר, ובקשה אחת חלה על כל השמות.
+  // עמודות הטקסט הארוך (FieldNMax): פרטי הבקשה של האדם ה-N בטופס (Field2Max = האדם השני).
+  // אדם אחד בלבד: כל הבקשות שלו. בקשה בלי אדם במקום שלה עוברת לטקסט החופשי ולא נבלעת.
   // שורה שכבר יש לה בקשה מהעמודות הרגילות לא נדרסת. בלי שורות שם, טקסט של שמות עובר לטקסט החופשי.
-  const reqs: string[] = []
+  const reqs: { n: number; v: string }[] = []
   for (const k of Object.keys(row).filter(k => /^Field\d+Max$/.test(k)).sort(byNum)) {
     const v = str(row[k])
     if (!v) continue
     if (EMAIL_RE.test(v)) { if (!body.Mail) body.Mail = v }
     else if (PHONE_RE.test(v)) { if (!body.Phone) body.Phone = v }
     else if (!lines.length && NAME_LINE_RE.test(v)) free.push(v)
-    else reqs.push(v)
+    else reqs.push({ n: parseInt(k.slice(5)), v })
   }
-  if (reqs.length) lines.forEach((l, i) => { const r = reqs.length === 1 ? reqs[0] : reqs[i]; if (r && !l.request) l.request = r })
+  if (lines.length === 1 && reqs.length && !lines[0].request) lines[0].request = reqs.map(r => r.v).join('\n')
+  else for (const r of reqs) {
+    const l = lines[r.n - 1]
+    if (l && !l.request) l.request = r.v
+    else if (!l) free.push(r.v)
+  }
 
   lines.slice(0, MAX_LINES).forEach((l, i) => {
     const n = i + 1
