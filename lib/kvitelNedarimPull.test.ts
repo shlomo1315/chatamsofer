@@ -322,11 +322,27 @@ describe('kvitelNedarimPull: פרטי הבקשה בעמודות הטקסט הא�
     expect(f).toContain('Field100')
   })
 
-  it('בקשה אחת בטקסט הארוך חלה על כל השמות, והשמות לא זזים', () => {
-    const p = mapKvitelRow({ ID: '4521910', Field20: 'משה', Field21: 'בן', Field22: 'שרה', Field23: 'רבקה', Field24: 'בת', Field25: 'לאה', Field1Max: REQ_4498102 }, auto)
+  it('FieldNMax שייך לאדם ה-N (כמו בהגשה 4521910): הבקשה רק לאדם השני, והשמות לא זזים', () => {
+    const REQ = 'למציאת דירה עם כל התנאים הנצרכים בנקל במהירות ובקלות'
+    const p = mapKvitelRow({ ID: '4521910', Field20: 'שלמה זלמן', Field21: 'בן', Field22: 'ברכה ישראלה', Field23: 'חיה רחל', Field24: 'בת', Field25: 'שושנה פנינה', Field2Max: REQ }, auto)
     expect(p.lines).toHaveLength(2)
-    expect(p.lines[0]).toMatchObject({ name: 'משה', relation: 'ben', parentName: 'שרה', requestNote: REQ_4498102 })
-    expect(p.lines[1]).toMatchObject({ name: 'רבקה', relation: 'bat', parentName: 'לאה', requestNote: REQ_4498102 })
+    expect(p.lines[0]).toMatchObject({ name: 'שלמה זלמן', relation: 'ben', parentName: 'ברכה ישראלה' })
+    expect(p.lines[0].requestNote ?? null).toBeNull()
+    expect(p.lines[1]).toMatchObject({ name: 'חיה רחל', relation: 'bat', parentName: 'שושנה פנינה', requestNote: REQ })
+  })
+
+  it('אדם אחד: הבקשה שלו גם כשהיא בשורות נפרדות (כמו בהגשה 4521620)', () => {
+    const REQ = 'לחזרה בתשובה\nולשבירת הפלאפון הגדול (הסמרטפון)'
+    const p = mapKvitelRow({ ID: '4521620', Field20: 'אריה ליב', Field21: 'בן', Field22: 'ציפורה חנה', Field1Max: REQ }, auto)
+    expect(p.lines).toHaveLength(1)
+    expect(p.lines[0]).toMatchObject({ name: 'אריה ליב', parentName: 'ציפורה חנה' })
+    expect(p.lines[0].requestNote).toContain('הסמרטפון')
+  })
+
+  it('בקשה במקום שאין בו אדם לא נבלעת: עוברת לטקסט החופשי', () => {
+    const p = mapKvitelRow({ ID: '2', Field20: 'משה', Field21: 'בן', Field22: 'שרה', Field23: 'רבקה', Field24: 'בת', Field25: 'לאה', Field5Max: REQ_4498102 }, auto)
+    expect(p.lines).toHaveLength(2)
+    expect(p.freeText).toContain(REQ_4498102)
   })
 
   it('בקשה לכל שם: לפי הסדר', () => {
