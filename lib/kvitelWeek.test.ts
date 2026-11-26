@@ -87,6 +87,21 @@ describe('kvitelWeek', () => {
     expect(kvitelWeekTabs([vayetze, toldot, toldot, toldot], today)).toHaveLength(4)
   })
 
+  it('השבוע הפתוח לא מקדים את הלוח ביותר משבוע (26.11.2026: מנה כפולה וישלח + וישב)', () => {
+    const today = '2026-11-26'                                  // יום ה׳, בלוח פרשת וישלח
+    const vayishlach = { closed_at: '2026-11-26T07:29:56Z', parsha: 'וישלח' }
+    expect(openKvitelWeek(vayishlach, today)).toMatchObject({ shabbat: '2026-12-05', parsha: 'וישב' })
+    // המנה הכפולה שנרשמה כוישב 4 שניות אחר כך: עדיין וישב, לא מקץ
+    const vayeshev = { closed_at: '2026-11-26T07:30:00Z', parsha: 'וישב' }
+    expect(batchShabbat(vayeshev)).toBe('2026-12-05')
+    expect(openKvitelWeek(vayeshev, today)).toMatchObject({ shabbat: '2026-12-05', parsha: 'וישב' })
+    expect(kvitelWeekTabs([vayeshev, vayishlach], today).at(-1)?.week.parsha).toBe('וישב')
+    // ביום א׳ 29.11 הלוח כבר בוישב, ומנה של וישב פותחת את מקץ כרגיל
+    expect(openKvitelWeek(vayeshev, '2026-11-29').parsha).toBe('מקץ')
+    // מנה ישנה עדיין משאירה את הבקשות בשבוע שאחריה, גם אם הלוח כבר התקדם
+    expect(openKvitelWeek({ closed_at: '2026-11-13T09:00:00Z', parsha: 'תולדות' }, today).parsha).toBe('ויצא')
+  })
+
   it('בקובץ: רק "לא נשלח" עם שמות — "לבדיקה" נשאר בחוץ', () => {
     const f = kvitelFile([
       row({ id: '1' }),

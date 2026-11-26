@@ -56,8 +56,13 @@ export function batchShabbat(b: KvitelBatchRef): string {
 }
 
 // השבוע הפתוח: הפרשה שאחרי המנה האחרונה. בלי מנות בכלל — השבוע של היום.
+// לעולם לא יותר משבוע אחד לפני הלוח: מנה כפולה או סגירה נוספת באותו שבוע לא מקפיצות לפרשה שאחרי הבאה.
 export function openKvitelWeek(last: KvitelBatchRef | null, today: string): KvitelWeekInfo {
-  return kvitelWeek(last ? addDays(batchShabbat(last), 7) : shabbatOf(today))
+  const cur = shabbatOf(today)
+  if (!last) return kvitelWeek(cur)
+  const next = addDays(batchShabbat(last), 7)
+  const max = addDays(cur, 7)
+  return kvitelWeek(next > max ? max : next)
 }
 
 // לשונית במסך: מנה שנשלחה, או השבוע הפתוח (batch = null, תמיד האחרונה).

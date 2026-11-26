@@ -55,8 +55,23 @@ export async function POST(req: NextRequest) {
   // רק מה שעדיין "לא נשלח" — בקשה שהוחזרה לבדיקה או כבר נשלחה בינתיים לא נרשמת פעמיים
   const { rows, error: loadError } = await loadKvitelRequests(db, parseKvitelFilters({ status: 'pending' }))
   if (loadError) return NextResponse.json({ error: 'טעינת הבקשות נכשלה' }, { status: 500 })
-  const batch = kvitelBatch(rows, ids)
-  if (!batch.ids.length) return NextResponse.json({ error: 'אין בקשות לסגירה' }, { status: 404 })
+  const wanted = kvitelBatch(rows, ids)
+  if (!wanted.ids.length) return NextResponse.json({ error: 'אין בקשות לסגירה' }, { status: 404 })
+
+  // קודם תופסים את הבקשות (pending → done), ורק מה שנתפס נרשם במנה. כך שתי בקשות סגירה במקביל
+  // (אישור חוזר אחרי שהרשת נפלה, 26.11.2026: אותן 288 בקשות נרשמו כוישלח וגם כוישב) לא רושמות מנה כפולה.
+  const now = new Date().toISOString()
+  const { data, error } = await db.from('kvitel_requests')
+    .update({ status: 'done', done_at: now, done_by: staff.userId })
+    .in('id', wanted.ids)
+    .eq('status', 'pending')
+    .select('id')
+  if (error) {
+    console.error('[kvitel] batch status update failed:', error)
+    return NextResponse.json({ error: 'הסימון "נשלח לציון" נכשל' }, { status: 500 })
+  }
+  const batch = kvitelBatch(rows, (data ?? []).map(r => r.id as string))
+  if (!batch.ids.length) return NextResponse.json({ error: 'המנה הזו כבר נסגרה ונרשמה. רעננו את המסך.' }, { status: 409 })
 
   const { data: rec, error: insError } = await db.from('kvitel_batches').insert({
     closed_by: staff.userId, closed_by_name: staff.email, parsha,
@@ -65,18 +80,12 @@ export async function POST(req: NextRequest) {
   // בלי הטבלה הסגירה עדיין מסמנת "נשלח" כמו קודם — רק בלי הורדה חוזרת
   if (insError && !isMissingTable(insError)) {
     console.error('[kvitel] batch insert failed:', insError)
+    // הרישום נכשל: מחזירים ל"לא נשלח" רק את מה שסומן כאן, כדי שאפשר יהיה לאשר שוב
+    const { error: undoError } = await db.from('kvitel_requests')
+      .update({ status: 'pending', done_at: null, done_by: null })
+      .in('id', batch.ids).eq('status', 'done').eq('done_at', now)
+    if (undoError) console.error('[kvitel] batch status undo failed:', undoError)
     return NextResponse.json({ error: 'רישום המנה נכשל' }, { status: 500 })
-  }
-
-  const now = new Date().toISOString()
-  const { data, error } = await db.from('kvitel_requests')
-    .update({ status: 'done', done_at: now, done_by: staff.userId })
-    .in('id', batch.ids)
-    .eq('status', 'pending')
-    .select('id')
-  if (error) {
-    console.error('[kvitel] batch status update failed:', error)
-    return NextResponse.json({ error: 'הסימון "נשלח לציון" נכשל' }, { status: 500 })
   }
 
   await logActivity(db, {
