@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import ExcelJS from 'exceljs'
-import { chargesFileName, chargesSheets, groupCharges, selectionDays, israelDateTime, parseDateSelection, selectionLabel, toCharges } from './donorCharges'
+import { aidsAsReceipts, chargesFileName, chargesSheets, groupCharges, selectionDays, israelDateTime, parseDateSelection, selectionLabel, toCharges } from './donorCharges'
 import { buildXlsx } from './xlsx'
 
 const row = (over: Record<string, unknown> = {}) => ({
@@ -114,5 +114,18 @@ describe('groupCharges ו-chargesSheets', () => {
     expect([total.getCell(1).value, total.getCell(5).value]).toEqual(['סה״כ בית א', 1000])
     expect(total.getCell(1).font?.bold).toBe(true)
     expect(JSON.stringify(sheets)).not.toContain('5678')
+  })
+})
+
+describe('aidsAsReceipts', () => {
+  it('יולדת עם חיוב שבוצע ובלי קבלות נכנסת כחיוב אחד; עם קבלות לא נספרת פעמיים', () => {
+    const aid = (id: string) => ({
+      id, status: 'active', recovery_home: 'בית א', recovery_amount: 220, recovery_nights: 1,
+      recovery_amount_at: '2026-08-20T09:00:00Z', beneficiary: row().aid.beneficiary,
+    })
+    const rows = aidsAsReceipts([aid('1'), aid('2')], new Set(['2']))
+    expect(rows.map(r => r.id)).toEqual(['aid-1'])
+    const [c] = toCharges(rows, { from: '2026-08-16', to: '2026-09-18' }, null)
+    expect(c).toMatchObject({ id: 'aid-1', date: '2026-08-20', home: 'בית א', amount: 220, initial: true })
   })
 })

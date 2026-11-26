@@ -4,7 +4,7 @@ import ExcelJS from 'exceljs'
 import { PDFDocument } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
 import type { DonorCharge } from './donorCharges'
-import { CardFileError, extractCardRows, parseCardDate, parseCardFile, parseMoney, reconcile, type FileRow } from './donorCardReconcile'
+import { CardFileError, detectDateOrder, extractCardRows, ilsInText, parseCardDate, parseCardFile, parseMoney, reconcile, type FileRow } from './donorCardReconcile'
 
 const charge = (id: string, date: string, amount: number, home = 'בית החלמה רמת גן'): DonorCharge => ({
   id, date, time: '10:00', home, name: 'כהן שרה', idLast4: '1234', amount, nights: 3, note: null, initial: true,
@@ -44,7 +44,7 @@ describe('reconcile', () => {
 
   it('פער תאריך ופער סכום', () => {
     const r = reconcile(
-      [row('2026-11-20', 2000, 'x', 1), row('2026-11-19', 2050, 'x', 2)],
+      [row('2026-11-20', 2000, undefined, 1), row('2026-11-19', 2050, undefined, 2)],
       [charge('a', '2026-11-19', 2000), charge('b', '2026-11-19', 2000)],
     )
     expect(r.rows[0]).toMatchObject({ status: 'diff', why: 'תאריך: 20.11 בקובץ, 19.11 במערכת' })
@@ -138,5 +138,99 @@ describe('parseCardFile', () => {
     const { rows } = await parseCardFile(ab(bytes), 'card.pdf')
     expect(rows.map(r => [r.date, r.amount])).toEqual([['2026-11-19', 2000], ['2026-11-20', 1900]])
     expect(rows.map(r => r.merchant)).toEqual(['בית החלמה רמת גן', 'בני ברק'])
+  })
+})
+
+// קובץ בצורה של יצוא אמקס: סכומים בדולרים, השקלים בעמודת Extended Details, תאריכים MM/DD/YYYY
+const AMEX = [
+  'Date,Description,Card Member,Account #,Amount,Extended Details,Reference',
+  '09/08/2026,BEIT HAHLAMA BNEI BRAK,ISRAEL ISRAELI,-12345,379.12,"Foreign Spend Amount: 1,380.00 Israeli New Sheqels',
+  'Commission Amount: 0.00",\'320262510123456789\'',
+  '09/15/2026,BEIT HAHLAMA BNEI BRAK,ISRAEL ISRAELI,-12345,390.10,"Foreign Spend Amount: 1,420.00 Israeli New Sheqels",\'1\'',
+  '09/10/2026,BEIT HAHLAMA BNEI BRAK,ISRAEL ISRAELI,-12345,379.12,"Foreign Spend Amount: 1,380.00 Israeli New Sheqels",\'2\'',
+  '09/16/2026,KOCHAV MIYAAKOV YESHIVA,ISRAEL ISRAELI,-12345,55.00,"Foreign Spend Amount: 200.00 Israeli New Sheqels",\'3\'',
+  '08/20/2026,BEIT HAHLAMA BNEI BRAK,ISRAEL ISRAELI,-12345,12.00,,\'4\'',
+  '09/31/2026,BEIT HAHLAMA BNEI BRAK,ISRAEL ISRAELI,-12345,10.00,,\'5\'',
+].join('\r\n')
+
+describe('קובץ אמקס', () => {
+  it('תאריכים MM/DD, שקלים מ-Extended Details, ירידת שורה בתוך תא ושורה שנדחתה עם סיבה', async () => {
+    const f = await parseCardFile(ab(Buffer.from(AMEX)), 'activity.csv')
+    expect(f.order).toBe('mdy')
+    expect(f.foreign).toBe(true)
+    expect(f.ilsFrom).toBe('Extended Details')
+    expect(f.rows.map(r => [r.date, r.amount, !!r.usd])).toEqual([
+      ['2026-09-08', 1380, false],
+      ['2026-09-15', 1420, false],
+      ['2026-09-10', 1380, false],
+      ['2026-09-16', 200, false],
+      ['2026-08-20', 12, true],
+    ])
+    expect(f.skipped).toHaveLength(1)
+    expect(f.skipped[0].why).toMatch(/תאריך לא תקין/)
+  })
+
+  it('התאמה: רק בתוך הסניף, בלי בתי עסק שאינם בית החלמה, ושורה בדולרים לא נספרת בשקלים', async () => {
+    const f = await parseCardFile(ab(Buffer.from(AMEX)), 'activity.csv')
+    const BB = 'בית החלמה בני ברק', TZ = 'בית החלמה טלזסטון'
+    const r = reconcile(f.rows, [
+      charge('bb1', '2026-09-08', 1380, BB),
+      charge('bb2', '2026-09-15', 1420, BB),
+      charge('tz1', '2026-09-10', 1420, TZ),
+      charge('tz2', '2026-09-15', 200, TZ),
+    ])
+    const by = (d: string) => r.rows.find(x => x.date === d)!
+    expect(by('2026-09-08')).toMatchObject({ status: 'ok', chargeId: 'bb1' })
+    expect(by('2026-09-15')).toMatchObject({ status: 'ok', chargeId: 'bb2' })
+    // בני ברק 1,380 לא מותאם לטלזסטון 1,420 באותו יום
+    expect(by('2026-09-10')).toMatchObject({ status: 'none', chargeId: null })
+    expect(by('2026-09-10').why).toContain(BB)
+    // ישיבה עם סכום שיש בטלזסטון יום קודם: לא בית החלמה, לא נכנס להתאמה
+    expect(by('2026-09-16')).toMatchObject({ status: 'other', chargeId: null })
+    expect(by('2026-09-16').why).toMatch(/לא זוהה כבית החלמה/)
+    expect(by('2026-08-20')).toMatchObject({ status: 'none', chargeId: null })
+    expect(by('2026-08-20').why).toMatch(/דולרים/)
+    expect(r.missing.sort()).toEqual(['tz1', 'tz2'])
+  })
+
+  it('בית עסק עם שם הבית מקושר לפי השם גם בלי התאמה', () => {
+    const r = reconcile([row('2026-09-08', 999, 'בית החלמה טלזסטון בעמ')], [charge('tz', '2026-09-20', 500, 'בית החלמה טלזסטון')])
+    expect(r.rows[0].status).toBe('none')
+  })
+})
+
+describe('תאריכים דו-משמעיים', () => {
+  it('קובץ עברי: 09/08/2026 הוא 9 באוגוסט', () => {
+    const f = extractCardRows([
+      ['תאריך עסקה', 'שם בית העסק', 'סכום חיוב'],
+      ['09/08/2026', 'בית החלמה רמת גן', '1,380'],
+      ['10/08/2026', 'בית החלמה רמת גן', '1,420'],
+    ])
+    expect(f.order).toBe('dmy')
+    expect(f.rows.map(r => r.date)).toEqual(['2026-08-09', '2026-08-10'])
+  })
+  it('סדר התאריך נקבע לפי הקובץ כולו', () => {
+    expect(detectDateOrder([['09/08/2026'], ['09/15/2026']])).toBe('mdy')
+    expect(detectDateOrder([['09/08/2026'], ['15/09/2026']])).toBe('dmy')
+    expect(detectDateOrder([['Date', 'Amount'], ['09/08/2026', '1']])).toBe('mdy')
+    expect(detectDateOrder([['תאריך', 'סכום'], ['09/08/2026', '1']])).toBe('dmy')
+    expect(parseCardDate('09/08/2026', 'mdy')).toBe('2026-09-08')
+  })
+  it('סכום בשקלים מתוך טקסט באנגלית', () => {
+    expect(ilsInText('Foreign Spend Amount: 1,380.00 Israeli New Sheqels Commission Amount: 0.00')).toBe(1380)
+    expect(ilsInText('ILS 220.50')).toBe(220.5)
+    expect(ilsInText('Foreign Spend Amount: 50.00 Euros')).toBeNull()
+  })
+})
+
+describe('טווח שנבחר', () => {
+  it('שורה מחוץ לטווח לא נכנסת להתאמה, וחיוב מחוץ לטווח לא נחשב "לא בקובץ"', () => {
+    const r = reconcile(
+      [row('2026-08-16', 220, undefined, 1), row('2026-08-14', 500, undefined, 2)],
+      [charge('a', '2026-08-16', 220), charge('b', '2026-09-20', 300), charge('c', '2026-08-30', 400)],
+      { range: { from: '2026-08-16', to: '2026-09-18' } },
+    )
+    expect(r.rows.map(x => x.status)).toEqual(['ok', 'out'])
+    expect(r.missing).toEqual(['c'])
   })
 })

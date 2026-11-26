@@ -5,8 +5,9 @@ import type { CellValue, SheetSpec } from '@/lib/xlsx'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // דוח חיובים לנדיב: כל קבלה שבית החלמה הגיש (recovery_receipts) היא חיוב אחד,
-// בתאריך ההגשה (שעון ישראל) ובסכום הקבלה. הדוח מקובץ לפי סניף (בית ההחלמה
-// שהגיש את הקבלה) ולפי יום, עם סכום יומי לכל סניף.
+// בתאריך ההגשה (שעון ישראל) ובסכום הקבלה. יולדת בלי קבלות שהחיוב שלה בוצע
+// (recovery_amount_status='executed') היא חיוב אחד בתאריך הביצוע ובסכום שהוזן.
+// הדוח מקובץ לפי סניף (בית ההחלמה) ולפי יום, עם סכום יומי לכל סניף.
 //
 // 🔴 כמו דוח היולדות: רק יולדות שאושרו (status='active'), ונחשפים רק שם היולדת,
 // ארבע ספרות אחרונות של ת.ז., לילות, הסבר הבית וסכום. הנעילה לבית מתבצעת בשרת.
@@ -91,7 +92,41 @@ export async function loadCharges(db: SupabaseClient, sel: DateSelection, locked
     .order('created_at', { ascending: true })
     .range(from, to))
   if (error) throw new Error('שליפת החיובים נכשלה')
-  return toCharges(rows, sel, lockedHome)
+
+  // רוב החיובים נרשמים בלי קבלה: בית ההחלמה מזין סכום (recovery_amount) והחיוב
+  // מבוצע. יולדת שיש לה קבלות כבר נספרה מהן (recovery_amount שלה = סכום הקבלות).
+  const aids = await fetchAllRows<Record<string, unknown>>((from, to) => db
+    .from('maternity_aids')
+    .select('id, status, recovery_home, recovery_amount, recovery_nights, recovery_amount_at, beneficiary:beneficiaries(full_name, family_name, spouse_name, id_number)')
+    .eq('status', 'active')
+    .eq('recovery_amount_status', 'executed')
+    .gte('recovery_amount_at', since)
+    .lt('recovery_amount_at', until)
+    .order('recovery_amount_at', { ascending: true })
+    .range(from, to))
+  if (aids.error) throw new Error('שליפת החיובים נכשלה')
+  const ids = aids.rows.map(a => String(a.id))
+  const withReceipts = new Set<string>()
+  for (let i = 0; i < ids.length; i += 150) {
+    const { data, error: e } = await db.from('recovery_receipts').select('aid_id').in('aid_id', ids.slice(i, i + 150))
+    if (e) throw new Error('שליפת החיובים נכשלה')
+    for (const r of data ?? []) withReceipts.add(String((r as { aid_id: unknown }).aid_id))
+  }
+  return toCharges([...rows, ...aidsAsReceipts(aids.rows, withReceipts)], sel, lockedHome)
+}
+
+/** חיוב שבוצע בלי קבלה (סכום שבית ההחלמה הזין) → שורה במבנה של recovery_receipts. */
+export function aidsAsReceipts(aids: Record<string, unknown>[], withReceipts: Set<string>): Record<string, unknown>[] {
+  return aids.filter(a => !withReceipts.has(String(a.id))).map(a => ({
+    id: `aid-${a.id}`,
+    home: a.recovery_home,
+    amount: a.recovery_amount,
+    nights: a.recovery_nights,
+    note: null,
+    is_initial: true,
+    created_at: a.recovery_amount_at,
+    aid: { status: a.status, recovery_home: a.recovery_home, beneficiary: a.beneficiary },
+  }))
 }
 
 type AidJoin = {
