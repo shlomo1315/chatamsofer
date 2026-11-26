@@ -71,9 +71,10 @@ async function loadPlan(admin: SupabaseClient, resend: boolean) {
     if (resend) q = q.gte('created_at', israelDayStart())
     return q.order('created_at').range(a, b)
   })
-  // מי שכבר קיבל קישור בתוקף (אישי או אוטומטי, ראו lib/lineageInquiry) נחשב "כבר קיבל".
+  // בסבב הראשון: מי שכבר קיבל קישור בתוקף (אישי או אוטומטי, ראו lib/lineageInquiry) נחשב "כבר קיבל".
+  // 🔴 בתזכורת לא: הקישור תקף 30 יום, והוא חסם כ"קיבלו היום" את כל מי שקיבל ב-24.11 (126 ב-26.11).
   const sentIds = new Set(sent.map(s => s.entity_id).filter((x): x is string => !!x))
-  for (const r of rows) if (linkSentRecently(r.lineage_link_sent_at)) sentIds.add(r.id)
+  if (!resend) for (const r of rows) if (linkSentRecently(r.lineage_link_sent_at)) sentIds.add(r.id)
   return {
     ...planLineageFaultNotice(rows, sentIds),
     otherReason: check.manual as PlanRow[],
