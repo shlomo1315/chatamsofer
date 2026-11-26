@@ -4,9 +4,11 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCan } from '@/components/StaffPermissions'
 import { LineageTreePicker } from '../../BeneficiaryForm'
-import { validateIsraeliId, validatePhone } from '@/lib/validation'
+import { validatePhone } from '@/lib/validation'
 import { childrenPayload, emptyChild, isLinkedToMaternity, docTypeOf, type EditableChild } from '@/lib/childrenEditor'
-import { isoToDmy, dmyToIso, diffFields, normalizeId, type FieldDef, type Change } from './editLogic'
+import { isoToDmy, dmyToIso, diffFields, type FieldDef, type Change } from './editLogic'
+import { docNumberError, normalizeDocNumber, type DocType } from '@/lib/idDocValidation'
+import { idDocLabel } from '@/lib/idDocLabel'
 import StatusControl from '../StatusControl'
 import BeneficiaryActions from '../BeneficiaryActions'
 import DocumentsManager from '../DocumentsManager'
@@ -43,8 +45,8 @@ const fmtNote = (iso: string) => {
 
 function initialVals(d: SheetDefaults): Record<string, string> {
   return {
-    family_name: d.family_name, full_name: d.full_name, id_number: d.id_number, birth_date: isoToDmy(d.birth_date),
-    spouse_name: d.spouse_name, spouse_id_number: d.spouse_id_number, spouse_birth_date: isoToDmy(d.spouse_birth_date),
+    family_name: d.family_name, full_name: d.full_name, id_number: d.id_number, id_doc_type: d.id_doc_type, birth_date: isoToDmy(d.birth_date),
+    spouse_name: d.spouse_name, spouse_id_number: d.spouse_id_number, spouse_doc_type: d.spouse_doc_type, spouse_birth_date: isoToDmy(d.spouse_birth_date),
     spouse_phone: d.spouse_phone, marital_status: d.marital_status, community_affiliation: d.community_affiliation,
     phone: d.phone, phone2: d.phone2, email: d.email, address: d.address, city: d.city, notes: d.notes,
   }
@@ -83,6 +85,9 @@ export default function BeneficiaryEditSheet({ beneficiaryId, defaults }: { bene
   const marital = vals.marital_status
   const primaryIsWife = WIFE_PRIMARY.includes(marital)
   const married = marital === MARRIED
+  // סוג המזהה — מנהל ומזכירה מחליפים ת.ז. ↔ דרכון בעריכה; השרת מאמת שוב לפי הסוג
+  const docType = (vals.id_doc_type === 'passport' ? 'passport' : 'id') as DocType
+  const spouseDocType = (vals.spouse_doc_type === 'passport' ? 'passport' : 'id') as DocType
   const fullTitle = [vals.family_name, vals.full_name].filter(Boolean).join(' ')
   const title = married && vals.spouse_name ? `${fullTitle} ו${vals.spouse_name}` : fullTitle
 
@@ -127,12 +132,14 @@ export default function BeneficiaryEditSheet({ beneficiaryId, defaults }: { bene
     const out: FieldDef[] = [
       { key: 'family_name', label: `שם משפחה (${who})`, section: 's1' },
       { key: 'full_name', label: `שם פרטי (${who})`, section: 's1' },
-      { key: 'id_number', label: `ת.ז. ${primaryIsWife ? 'האישה' : 'הבעל'}`, section: 's1' },
+      { key: 'id_doc_type', label: `סוג מזהה (${who})`, section: 's1' },
+      { key: 'id_number', label: `${idDocLabel(docType)} ${primaryIsWife ? 'האישה' : 'הבעל'}`, section: 's1' },
       { key: 'birth_date', label: `תאריך לידה (${who})`, section: 's1' },
     ]
     if (married) out.push(
       { key: 'spouse_name', label: 'שם האישה', section: 's1' },
-      { key: 'spouse_id_number', label: 'ת.ז. האישה', section: 's1' },
+      { key: 'spouse_doc_type', label: 'סוג מזהה (אישה)', section: 's1' },
+      { key: 'spouse_id_number', label: `${idDocLabel(spouseDocType)} האישה`, section: 's1' },
       { key: 'spouse_birth_date', label: 'תאריך לידה (אישה)', section: 's1' },
       { key: 'spouse_phone', label: 'טלפון האישה', section: 's1' },
     )
@@ -147,7 +154,7 @@ export default function BeneficiaryEditSheet({ beneficiaryId, defaults }: { bene
       { key: 'notes', label: 'הערות לתיק', section: 's6' },
     )
     return out
-  }, [primaryIsWife, married])
+  }, [primaryIsWife, married, docType, spouseDocType])
 
   const changes: Change[] = useMemo(() => {
     // שדות שהוסתרו (אישה כשלא נשואים) לא נספרים כשינוי רק אם גם הערך המקורי זהה
@@ -183,15 +190,16 @@ export default function BeneficiaryEditSheet({ beneficiaryId, defaults }: { bene
   const validate = (): string | null => {
     if (!vals.family_name.trim()) return 'שם משפחה הוא שדה חובה'
     if (!vals.full_name.trim()) return 'שם פרטי הוא שדה חובה'
-    if (!vals.id_number.trim()) return 'ת.ז. היא שדה חובה'
-    if (defaults.id_doc_type === 'id' && !validateIsraeliId(vals.id_number)) return 'תעודת זהות ישראלית לא תקינה (כולל ספרת ביקורת)'
+    if (!vals.id_number.trim()) return `${idDocLabel(docType)} הוא שדה חובה`
+    const idErr = docNumberError(vals.id_number, docType)
+    if (idErr) return idErr
     if (dmyToIso(vals.birth_date) === null || !vals.birth_date.trim()) return 'תאריך לידה לא תקין (יי.חח.שששש)'
     if (married) {
       if (!vals.spouse_name.trim()) return 'שם האישה הוא שדה חובה'
       if (dmyToIso(vals.spouse_birth_date) === null || !vals.spouse_birth_date.trim()) return 'תאריך הלידה של האישה לא תקין'
-      if (vals.spouse_id_number && defaults.spouse_doc_type === 'id' && !validateIsraeliId(vals.spouse_id_number)) return 'ת.ז. האישה לא תקינה'
+      if (vals.spouse_id_number && docNumberError(vals.spouse_id_number, spouseDocType)) return `${idDocLabel(spouseDocType)} האישה לא תקין`
       if (vals.spouse_phone && !validatePhone(vals.spouse_phone)) return 'טלפון האישה לא תקין'
-      if (vals.spouse_id_number && normalizeId(vals.spouse_id_number, defaults.spouse_doc_type) === normalizeId(vals.id_number, defaults.id_doc_type)) return 'ת.ז. הבעל והאישה לא יכולות להיות זהות'
+      if (vals.spouse_id_number && normalizeDocNumber(vals.spouse_id_number, spouseDocType) === normalizeDocNumber(vals.id_number, docType)) return 'מספר המזהה של הבעל והאישה לא יכול להיות זהה'
       if (vals.spouse_phone && vals.phone && vals.spouse_phone.replace(/\D/g, '') === vals.phone.replace(/\D/g, '')) return 'טלפון הבעל והאישה לא יכולים להיות זהים'
     }
     if (vals.phone && !validatePhone(vals.phone)) return 'טלפון ראשי לא תקין'
@@ -211,19 +219,18 @@ export default function BeneficiaryEditSheet({ beneficiaryId, defaults }: { bene
     setErrMsg('')
     setSaving(true)
     try {
-      const docType = defaults.id_doc_type
       const { children, children_count } = childrenPayload(kids.map(r => r.c))
       const nul = (s: string) => s.trim() || null
       const payload = {
         family_name: vals.family_name.trim(), full_name: vals.full_name.trim(),
-        id_number: normalizeId(vals.id_number, docType), id_doc_type: docType,
+        id_number: normalizeDocNumber(vals.id_number, docType), id_doc_type: docType,
         phone: vals.phone.trim(), phone2: nul(vals.phone2), email: nul(vals.email),
         address: nul(vals.address), city: nul(vals.city),
         birth_date: dmyToIso(vals.birth_date) || null,
         gender: primaryIsWife ? 'female' : 'male', marital_status: vals.marital_status,
         spouse_name: married ? nul(vals.spouse_name) : null,
-        spouse_id_number: married ? nul(normalizeId(vals.spouse_id_number, defaults.spouse_doc_type)) : null,
-        spouse_doc_type: married ? defaults.spouse_doc_type : null,
+        spouse_id_number: married ? nul(normalizeDocNumber(vals.spouse_id_number, spouseDocType)) : null,
+        spouse_doc_type: married ? spouseDocType : null,
         spouse_birth_date: married ? dmyToIso(vals.spouse_birth_date) || null : null,
         spouse_phone: married ? nul(vals.spouse_phone) : null,
         community_affiliation: nul(vals.community_affiliation),
@@ -310,6 +317,20 @@ export default function BeneficiaryEditSheet({ beneficiaryId, defaults }: { bene
       <input className="in" dir={opts.ltr ? 'ltr' : undefined} inputMode={opts.mode} placeholder={opts.ph} value={vals[k] ?? ''} onChange={e => set(k, e.target.value)} />
     </div>
   )
+  // שדה מזהה עם בורר סוג (ת.ז. / דרכון) במצב עריכה
+  const IdF = (k: 'id_number' | 'spouse_id_number', tk: 'id_doc_type' | 'spouse_doc_type', t: DocType) => (
+    <div className={`f${isCh(k) || isCh(tk) ? ' changed' : ''}`}>
+      <label>{idDocLabel(t)}</label>
+      {V(k, true, t === 'id')}
+      <div className="idrow">
+        <select className="in" aria-label="סוג מזהה" value={t} onChange={e => set(tk, e.target.value)}>
+          <option value="id">ת.ז.</option>
+          <option value="passport">דרכון</option>
+        </select>
+        <input className="in" dir="ltr" inputMode={t === 'id' ? 'numeric' : 'text'} value={vals[k] ?? ''} onChange={e => set(k, e.target.value)} />
+      </div>
+    </div>
+  )
 
   const segActive = (s: typeof SEG[number]) => s.match.includes(marital)
   const pickSeg = (s: typeof SEG[number]) => {
@@ -341,7 +362,7 @@ export default function BeneficiaryEditSheet({ beneficiaryId, defaults }: { bene
             <div className="who">
               <h1>{title}</h1>
               <div className="meta">
-                <span>ת.ז. <b className="ltr num">{vals.id_number}</b></span>
+                <span>{idDocLabel(docType)} <b className="ltr num">{vals.id_number}</b></span>
                 {vals.city && <><i></i><span>{vals.city}</span></>}
                 <i></i><span><b className="num">{kids.length}</b> ילדים</span>
                 {created && <><i></i><span>{defaults.registration_source || 'נרשם'} · <b className="num">{created}</b></span></>}
@@ -377,14 +398,14 @@ export default function BeneficiaryEditSheet({ beneficiaryId, defaults }: { bene
                 <div className="fields">
                   {F('family_name', 'שם משפחה')}
                   {F('full_name', 'שם פרטי')}
-                  {F('id_number', 'ת.ז.', { ltr: true, num: true, mode: 'numeric' })}
+                  {IdF('id_number', 'id_doc_type', docType)}
                   {F('birth_date', 'תאריך לידה', { ltr: true, num: true, mode: 'numeric', ph: 'יי.חח.שששש' })}
                 </div>
                 {married && <>
                   <p className="sub">האישה</p>
                   <div className="fields">
                     {F('spouse_name', 'שם')}
-                    {F('spouse_id_number', 'ת.ז.', { ltr: true, num: true, mode: 'numeric' })}
+                    {IdF('spouse_id_number', 'spouse_doc_type', spouseDocType)}
                     {F('spouse_birth_date', 'תאריך לידה', { ltr: true, num: true, mode: 'numeric', ph: 'יי.חח.שששש' })}
                     {F('spouse_phone', 'טלפון האישה', { ltr: true, num: true, mode: 'tel' })}
                   </div>
