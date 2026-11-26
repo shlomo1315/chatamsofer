@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { DEFAULT_LINEAGE_FAULT_TEMPLATE, LINEAGE_FAULT_TEMPLATE_KEY, type FaultRow } from './lineageFaultNotice'
 
 // מסד דמה בזיכרון ומשלוח מדומה: שום מייל אמיתי לא יוצא מהבדיקה הזו.
-let families: (FaultRow & { deep_review_reason?: string | null })[]
+let families: (FaultRow & { deep_review_reason?: string | null; lineage_link_sent_at?: string | null })[]
 let sentLog: { entity_id: string; created_at: string }[]
 let settings: Record<string, string>
 const delivered: { to: string; subject: string; html: string }[] = []
@@ -165,8 +165,9 @@ describe('סבב חוזר (תזכורת)', () => {
 
   beforeEach(() => {
     families = [
-      // קיבלה בסבב הקודם ועדיין לא הסדירה
-      { id: 'old', full_name: 'משה', family_name: 'לוי', spouse_name: null, email: 'levi@example.com', lineage_node_id: 'y5', deep_review_reason: 'דור 2–5 אינו בקובץ המאושר (דור 4: בנימין)' },
+      // קיבלה בסבב הקודם ועדיין לא הסדירה. הקישור מאז עדיין בתוקף (30 יום),
+      // וזה לא חוסם תזכורת (26.11: 126 משפחות נחסמו כ"קיבלו היום" בגלל הקישור).
+      { id: 'old', full_name: 'משה', family_name: 'לוי', spouse_name: null, email: 'levi@example.com', lineage_node_id: 'y5', deep_review_reason: 'דור 2–5 אינו בקובץ המאושר (דור 4: בנימין)', lineage_link_sent_at: yesterday },
       // בלי מייל
       { id: 'nomail', full_name: 'דוד', family_name: 'כהן', spouse_name: null, email: null, lineage_node_id: 'y5', deep_review_reason: null },
       // בבדיקה מעמיקה מסיבה שהמזכירות הקלידה
@@ -193,6 +194,12 @@ describe('סבב חוזר (תזכורת)', () => {
     const sent = await call({ send: true, resend: true })
     expect(sent.data).toMatchObject({ sent: 1, remaining: 0 })
     expect(delivered.map(d => d.to)).toEqual(['levi@example.com'])
+  })
+
+  it('קישור בתוקף בלי רשומת מייל: חוסם בסבב הראשון, לא חוסם בתזכורת', async () => {
+    sentLog = []
+    expect((await call({})).data).toMatchObject({ toSend: 0, alreadySent: 1 })
+    expect((await call({ resend: true })).data).toMatchObject({ toSend: 1, alreadySent: 0 })
   })
 
   it('תזכורת שנייה באותו יום לא שולחת שוב', async () => {
