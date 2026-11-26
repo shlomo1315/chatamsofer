@@ -8,7 +8,7 @@ type Data = { available: boolean; balance: number | null; purchases: Purchase[] 
 const money = (n: number) => `${n.toLocaleString('he-IL', { maximumFractionDigits: 2 })} ₪`
 
 // תנועות ויתרה עכשווית מנדרים (מנהל בלבד — ה-API מחזיר 403 לאחרים ואז לא מוצג דבר)
-export default function CardActivity({ aidId }: { aidId: string }) {
+export default function CardActivity({ aidId, onBalance }: { aidId: string; onBalance?: (balance: number | null) => void }) {
   const [data, setData] = useState<Data | null>(null)
   const [state, setState] = useState<'loading' | 'ok' | 'hidden' | 'error'>('loading')
 
@@ -19,10 +19,11 @@ export default function CardActivity({ aidId }: { aidId: string }) {
         if (r.status === 401 || r.status === 403) { if (alive) setState('hidden'); return }
         if (!r.ok) throw new Error()
         const d = await r.json() as Data
-        if (alive) { setData(d); setState('ok') }
+        if (alive) { setData(d); setState('ok'); onBalance?.(d.balance) }
       })
       .catch(() => { if (alive) setState('error') })
     return () => { alive = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onBalance לא אמור להפעיל שליפה מחדש
   }, [aidId])
 
   if (state === 'hidden') return null

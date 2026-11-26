@@ -25,6 +25,34 @@ const toNum = (v: number | string | null | undefined): number | null => {
   return Number.isFinite(n) ? n : null
 }
 
+export type CardWalletInput = {
+  card_load_amount?: number | string | null
+  card_balance?: number | string | null
+  live_balance?: number | string | null
+}
+
+export type CardWalletView = {
+  loadedAmount: number | null
+  balance: number | null
+  // סכום הטעינה פחות היתרה; null כשאחד מהם לא ידוע
+  used: number | null
+}
+
+// כרטיס טעון: "נוצל" ו"נותרו בארנק".
+// 🔴 card_balance נכתב פעם אחת בטעינה ואינו מתעדכן מקניות, ולכן היתרה
+// נלקחת לפי סדר עדכניות: מנדרים עכשיו (fresh) → live_balance מהרענון
+// השעתי → card_balance רק כשאין שום יתרה חיה.
+export function getCardWalletView(x: CardWalletInput, fresh?: number | null): CardWalletView {
+  const loadedAmount = toNum(x.card_load_amount)
+  const balance = (fresh != null && Number.isFinite(fresh) ? fresh : null)
+    ?? toNum(x.live_balance) ?? toNum(x.card_balance)
+  return {
+    loadedAmount,
+    balance,
+    used: loadedAmount != null && balance != null ? Math.max(0, loadedAmount - balance) : null,
+  }
+}
+
 export function getCardUnloadView(x: CardUnloadInput): CardUnloadView | null {
   const unloaded = x.card_load_status === 'unloaded'
     || (!!x.card_unloaded_at && x.card_load_status !== 'loaded')

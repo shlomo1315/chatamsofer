@@ -48,6 +48,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!payload) return NextResponse.json({ available: false, unloaded, balance: unloaded ? 0 : null, purchases: [], loads })
 
   const act = parseCardActivity(payload)
+  // היתרה כבר נשלפה — נשמרת גם ב-live_balance, כדי שהרשימות לא יחכו לרענון השעתי.
+  // ⚠️ רק כשהיתרה ידועה ובתיק שלא נפרק (כמו ב-refreshLiveBalances).
+  if (!unloaded && act.balance != null) {
+    const { error: upErr } = await db.from('maternity_aids')
+      .update({ live_balance: act.balance, live_balance_at: new Date().toISOString() })
+      .eq('id', id)
+    if (upErr) console.error('[card-activity] live_balance update failed:', upErr.message)
+  }
   return NextResponse.json({
     available: true, unloaded,
     balance: unloaded ? 0 : act.balance,
