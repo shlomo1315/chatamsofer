@@ -13,6 +13,14 @@ import { markLineageInquiryReturned } from '@/lib/lineageInquiry'
 import { sanitizeEditedChain } from '@/lib/lineageChainEdit'
 import { saveChainFromLink } from '@/lib/lineageChainSave'
 import { lineageSaveDeps } from '@/lib/lineageChainSaveDeps'
+import { registrantGeneration, tooFewGenerations, tooFewMessage } from '@/lib/minGenerations'
+
+// 🔴 פחות משבעה דורות לא נקלט (lib/minGenerations): שום דבר לא נשמר, הכרטסת
+// נשארת כפי שהיא (נדחה), והמשפחה רואה בעורך מה לתקן.
+function tooFewResponse(chain: unknown): NextResponse | null {
+  const gen = registrantGeneration(chain)
+  return tooFewGenerations(gen) ? NextResponse.json({ error: tooFewMessage(gen as number), tooFew: true }, { status: 400 }) : null
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -81,6 +89,8 @@ export async function POST(request: NextRequest) {
   if (Array.isArray(body.chain)) {
     const clean = sanitizeEditedChain(body.chain)
     if (!clean.ok) return NextResponse.json({ error: clean.error }, { status: 400 })
+    const few = tooFewResponse(clean.chain)
+    if (few) return few
     const res = await saveChainFromLink(admin, lineageSaveDeps, {
       token: inv.token, root_node_id: inv.root_node_id, recipient_name: inv.recipient_name, beneficiary_id: inv.beneficiary_id,
     }, clean.chain, await approvedRefOrDeny(admin))
@@ -129,6 +139,9 @@ export async function POST(request: NextRequest) {
     ...manual.map((m, k) => ({ generation: anchor.generation + 1 + k, name: m.name, relation: m.relation })),
     ...(selfExisting ? [] : [{ generation: anchor.generation + 1 + manual.length, name: selfName, relation: selfRel }]),
   ]
+
+  const few = tooFewResponse(proposed)
+  if (few) return few
 
   // ── הצומת הנוכחי של הנמען — אותה זיהוי כמו בדף (ת"ז או שם מחושב) ──
   const cur = ben.lineage_node_id ? nodes.find(n => n.id === ben.lineage_node_id) : undefined
@@ -222,6 +235,7 @@ export async function POST(request: NextRequest) {
     lineage_fixed_at: now,
     // 🔴 כמו רישום חדש — חוזר ל"ממתין לאישור ראשוני", גם אם היה מאושר.
     eligibility_status: 'pending',
+    deep_review_reason: null,
     updated_at: now,
   }).eq('id', ben.id)
   if (upErr) {
