@@ -2,7 +2,9 @@
 
 import { useMemo, useState, type ReactNode } from 'react'
 import KvitelRecordingPanel from './KvitelRecordingPanel'
-import { Printer, Check, RotateCcw, X, Filter, Link2, ChevronLeft, ChevronDown, Search, CalendarDays, Pencil, Mic, Trash2 } from 'lucide-react'
+import KvitelPlayButton from './KvitelPlayButton'
+import { recordingPlayable } from './useRecordingSrc'
+import { Printer, Check, RotateCcw, X, Filter, Link2, ChevronLeft, ChevronDown, Search, CalendarDays, Pencil, FileText, Trash2 } from 'lucide-react'
 import { KVITEL_CHANNELS, KVITEL_REQUEST_OPTIONS, KVITEL_STATUSES, requestTypeLabel, type KvitelStatus } from '@/lib/kvitel'
 import { kvitelRequestLines, type KvitelFilters, type KvitelLineRow, type KvitelRequestRow } from '@/lib/kvitelQuery'
 import { ListTable } from '@/components/admin/system/ListTable'
@@ -72,14 +74,19 @@ function MobileCards({ rows, canEdit, openId, details, onOpen, onApprove, onRemo
         const tone = kvitelRowTone(r)
         return (
           <li key={r.id} className={`rounded-xl border border-line ${tone ? CARD_TONE[tone] : 'bg-white'}`}>
-            <button type="button" onClick={() => onOpen(r)} aria-expanded={open} className="grid w-full gap-2 p-4 text-start">
-              <span className="flex items-start justify-between gap-2">
-                <span className="min-w-0 flex-1"><NamesCell r={r} /></span>
-                <StatusCell r={r} />
-              </span>
-              <span className="flex items-center justify-between text-xs text-ink-faint"><span>{KVITEL_CHANNELS[r.channel]} · {r.contact_name || 'מגיש לא ידוע'} · {dateFmt.format(new Date(r.submitted_at))}</span>
-                {open ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronLeft className="h-4 w-4" aria-hidden />}</span>
-            </button>
+            {/* בבקשה עם הקלטה: משולש השמעה במקום החץ (לחיצה על הכרטיס עדיין פותחת אותו) */}
+            <div className="relative">
+              <button type="button" onClick={() => onOpen(r)} aria-expanded={open} className="grid w-full gap-2 p-4 text-start">
+                <span className="flex items-start justify-between gap-2">
+                  <span className="min-w-0 flex-1"><NamesCell r={r} /></span>
+                  <StatusCell r={r} />
+                </span>
+                <span className="flex items-center justify-between text-xs text-ink-faint"><span>{KVITEL_CHANNELS[r.channel]} · {r.contact_name || 'מגיש לא ידוע'} · {dateFmt.format(new Date(r.submitted_at))}</span>
+                  {recordingPlayable(r.recording_url) ? <span className="h-4 w-9" aria-hidden />
+                    : open ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronLeft className="h-4 w-4" aria-hidden />}</span>
+              </button>
+              {r.recording_url && <KvitelPlayButton url={r.recording_url} who={whoOf(r)} className="absolute bottom-2.5 left-3" />}
+            </div>
             <RowActions r={r} canEdit={canEdit} onApprove={onApprove} onEdit={rr => onOpen(rr, true)} onRemove={onRemove} className="flex gap-2 px-4 pb-3" />
             {open && <div className="border-t border-line px-4 py-4">{details(r)}</div>}
           </li>
@@ -554,10 +561,12 @@ export default function KvitelClient({ allRows, filters, canEdit, tabs, onReload
             ) : openId === r.id ? details(r) : null}
             actions={r => (
               <div className="flex items-center gap-3">
+                {/* משולש: השמעה ישר מהשורה, והשמות נערכים בתאים תוך כדי. "תמלול" פותח את ההקלטה והתמלול מתחת לשורה */}
+                {r.recording_url && <KvitelPlayButton url={r.recording_url} who={whoOf(r)} />}
                 {r.recording_url && (
                   <button type="button" onClick={() => setRecordingId(id => (id === r.id ? null : r.id))} aria-expanded={recordingId === r.id} className="flex h-9 items-center gap-1.5 rounded-[10px] border border-line bg-white px-3 text-[13px] font-semibold text-navy hover:border-[#cfc8bb]"
-                    aria-label={`הקלטה ותמלול של הבקשה של ${r.contact_name || dateFmt.format(new Date(r.submitted_at))}`}>
-                    <Mic className="h-4 w-4" aria-hidden /> הקלטה
+                    aria-label={`תמלול ההקלטה של הבקשה של ${whoOf(r)}`}>
+                    <FileText className="h-4 w-4" aria-hidden /> תמלול
                   </button>
                 )}
                 <RowActions r={r} canEdit={canEdit} busy={busy} className="flex items-center gap-2"

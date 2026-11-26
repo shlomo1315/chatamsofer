@@ -6,9 +6,11 @@ import { loadDocBlob } from '@/lib/docBlob'
 // כתובת להשמעת הקלטה. הקלטה ששמורה בדלי הפרטי (צרופת מייל של שאלון טלפוני) לא נפתחת
 // בכתובת הציבורית, ולכן נטענת דרך ערוץ הנתונים (/api/files/data) ומושמעת מ-blob מקומי.
 // הקלטה בכתובת אחרת (http או יחסית) מושמעת ישירות.
+export const recordingPlayable = (url: string | null | undefined) => !!url && (storagePath(url) !== url || /^(https?:|\/)/.test(url))
+
 export function useRecordingSrc(url: string | null | undefined): { src: string | null; playable: boolean; failed: boolean } {
   const stored = !!url && storagePath(url) !== url
-  const playable = !!url && (stored || /^(https?:|\/)/.test(url))
+  const playable = recordingPlayable(url)
   const [blob, setBlob] = useState<{ url: string; src: string | null; failed: boolean } | null>(null)
   useEffect(() => {
     if (!stored || !url) return
