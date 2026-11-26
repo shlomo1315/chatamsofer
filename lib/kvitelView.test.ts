@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { asApproved, bulkApproval, exportLockReason, bulkApprovalMessage, byKvitelTab, countByStatus, needsApproval, nextToApprove, hebrewDay, KVITEL_DEFAULT_TAB, kvitelRowActions, parseRawFields, patchKvitelStatus, pendingForPrint, reviewReason, scopeKvitelRows, cleanTranscript, MAX_TRANSCRIPT } from './kvitelView'
+import { asApproved, bulkApproval, exportLockReason, bulkApprovalMessage, byKvitelTab, countByStatus, needsApproval, nextToApprove, hebrewDay, KVITEL_DEFAULT_TAB, kvitelRowActions, kvitelRowTone, parseRawFields, patchKvitelStatus, pendingForPrint, reviewReason, scopeKvitelRows, cleanTranscript, MAX_TRANSCRIPT } from './kvitelView'
 import { kvitelExportLines, type KvitelRequestRow } from './kvitelQuery'
 
 describe('kvitelRowActions — כפתורי השורה', () => {
@@ -137,6 +137,23 @@ describe('אישור מהיר שם אחרי שם', () => {
     expect(order).toEqual(['a', 'b', 'c'])
     expect(byKvitelTab(rows, 'review')).toEqual([])
     expect(ids(byKvitelTab(rows, 'pending'))).toEqual(['a', 'b', 'c'])
+  })
+
+  it('בקשה שאושרה כאן נשארת בלשונית "לבדיקה" במקומה, ומסומנת כמאושרת', () => {
+    const rows = [r('a', 'pending', true), r('b', 'pending', true), r('c', 'pending')].map(x => (x.id === 'a' ? asApproved(x) : x))
+    expect(ids(byKvitelTab(rows, 'review', new Set(['a'])))).toEqual(['a', 'b'])
+    expect(ids(byKvitelTab(rows, 'review'))).toEqual(['b'])
+    expect(ids(byKvitelTab(rows, 'pending', new Set(['a'])))).toEqual(['a', 'b', 'c'])
+    expect(kvitelRowTone(rows[0])).toBe('approved')
+    expect(kvitelRowTone(rows[1])).toBeNull()
+  })
+
+  it('צבע השורה נגזר מהסטטוס במסד, ולכן נשאר גם אחרי רענון', () => {
+    expect(kvitelRowTone({ status: 'pending' })).toBe('approved')
+    expect(kvitelRowTone({ status: 'pending', needsReview: true })).toBeNull()
+    expect(kvitelRowTone({ status: 'review' })).toBeNull()
+    expect(kvitelRowTone({ status: 'done' })).toBe('sent')
+    expect(kvitelRowTone({ status: 'cancelled' })).toBeNull()
   })
 })
 
