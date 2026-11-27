@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { authorizeDonorRequest } from '@/lib/donorReportGate'
-import { chargesFileName, chargesSheets, groupCharges, loadCharges, parseDateSelection, selectionDays, selectionLabel } from '@/lib/donorCharges'
+import { chargeHomes, chargesFileName, chargesSheets, filterHomes, groupCharges, loadCharges, parseDateSelection, selectionDays, selectionLabel } from '@/lib/donorCharges'
+import { loadUsdRates } from '@/lib/boiRates'
 import { buildXlsx, xlsxHeaders } from '@/lib/xlsx'
 
 export const dynamic = 'force-dynamic'
@@ -42,17 +43,28 @@ export async function GET(request: NextRequest) {
   const sel = parseDateSelection({ dates: sp.get('dates'), from: sp.get('from'), to: sp.get('to') })
   if (!sel) return NextResponse.json({ error: 'בחרו תאריך או טווח תאריכים תקין (עד שנה)' }, { status: 400, headers: HEADERS })
 
-  let report
-  try { report = groupCharges(await loadCharges(db, sel, gate.lockedHome)) } catch (e) {
+  // ?home=א&home=ב מצמצם לבתים שנבחרו (בלי = כולם). הסינון אחרי הנעילה לבית.
+  const picked = sp.getAll('home').map(h => h.trim()).filter(Boolean).slice(0, 50)
+  let all, report
+  try {
+    all = await loadCharges(db, sel, gate.lockedHome)
+    report = groupCharges(filterHomes(all, picked))
+  } catch (e) {
     console.error('[donor-report/charges]', e)
     return NextResponse.json({ error: 'שליפת החיובים נכשלה' }, { status: 500, headers: HEADERS })
   }
 
   const days = selectionDays(sel)
+  const chargeDays = [...new Set(report.branches.flatMap(b => b.days.map(d => d.date)))]
+  // שער יציג של בנק ישראל. אם לא זמין, null: העמודות נשארות ריקות ולא ממציאים שער.
+  const rates = await loadUsdRates(chargeDays)
   if (sp.get('format') === 'xlsx') {
-    const buf = await buildXlsx(chargesSheets(report, days))
+    const buf = await buildXlsx(chargesSheets(report, days, rates))
     return new NextResponse(new Uint8Array(buf), { headers: { ...xlsxHeaders(chargesFileName(sel)), 'X-Robots-Tag': 'noindex' } })
   }
 
-  return NextResponse.json({ label: gate.link.label, lockedHome: gate.lockedHome, selection: selectionLabel(sel), days, ...report }, { headers: HEADERS })
+  return NextResponse.json({
+    label: gate.link.label, lockedHome: gate.lockedHome, selection: selectionLabel(sel), days,
+    homes: chargeHomes(all), rates, ...report,
+  }, { headers: HEADERS })
 }

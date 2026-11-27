@@ -35,6 +35,8 @@ export type Column = {
   kind?: 'text' | 'number' | 'date' | 'id'
   /** רוחב מפורש בתווים. בלעדיו הרוחב נמדד מהתוכן. */
   width?: number
+  /** פורמט מספר מפורש (למשל '0.000' לשער), במקום '#,##0' של kind:'number' */
+  numFmt?: string
 }
 
 export type SheetSpec = {
@@ -134,7 +136,8 @@ export async function buildXlsx(sheets: SheetSpec[]): Promise<Buffer> {
         // ⚠️ readingOrder:'rtl' על *כל* תא, לא רק על הכותרת. בלעדיו טקסט עברי
         // שמכיל ספרות או סימני פיסוק ("רח' הרצל 5") מוצג בסדר הפוך באקסל.
         cell.alignment = { horizontal: 'right', vertical: 'middle', readingOrder: 'rtl' }
-        if (col.kind === 'number') cell.numFmt = '#,##0'
+        if (col.numFmt) cell.numFmt = col.numFmt
+        else if (col.kind === 'number') cell.numFmt = '#,##0'
         else if (col.kind === 'date') cell.numFmt = 'dd/mm/yyyy'
         if (isBold) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BRAND.headerFill } }
         else if (banded) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BRAND.bandFill } }

@@ -252,7 +252,7 @@ export default function DonorReportView({ token }: { token: string }) {
           <button aria-pressed={theme === 'dark'} onClick={() => setTheme('dark')}>כהה</button>
           <button aria-pressed={theme === 'light'} onClick={() => setTheme('light')}>בהיר</button>
         </span>
-        {state === 'ok' && <a className="lo" href={`/donor-report/${encodeURIComponent(token)}/charges`}>דוח חיובים והתאמת אשראי</a>}
+        {state === 'ok' && <a className="lo" href={`/donor-report/${encodeURIComponent(token)}/charges`}>דוח חיובים לפי תאריך</a>}
         {state === 'ok' && <button className="lo" onClick={() => void logout()}>התנתקות</button>}
         </span>
       </div>

@@ -5,6 +5,7 @@ import { getServiceClient } from '@/lib/apiAuth'
 import { NextRequest } from 'next/server'
 import { GET } from '@/app/api/donor-report/charges/route'
 import { hashDonorPassword, issueDonorSession, DONOR_COOKIE } from './donorReportAuth'
+import { clearRateCache } from './boiRates'
 
 const TOKEN = 'b'.repeat(43)
 const aid = (home: string) => ({ status: 'active', recovery_home: home, beneficiary: { full_name: 'שרה', family_name: 'כהן', id_number: '012345678' } })
@@ -31,6 +32,9 @@ let hash = ''
 beforeEach(async () => {
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-secret'
   hash ||= await hashDonorPassword('secret1')
+  clearRateCache()
+  // בנק ישראל: שער 3.7 ל-10.11, בלי פנייה החוצה
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('TIME_PERIOD,OBS_VALUE\n2026-11-10,3.7'))
 })
 
 const link = (home: string | null) => ({ id: 'L1', token: TOKEN, label: 'x', recovery_home: home, revoked_at: null, password_hash: hash })
@@ -69,5 +73,29 @@ describe('/api/donor-report/charges', () => {
     expect(res.headers.get('content-type')).toContain('spreadsheetml')
     const buf = new Uint8Array(await res.arrayBuffer())
     expect([buf[0], buf[1]]).toEqual([0x50, 0x4b]) // ZIP
+  })
+
+  it('סינון לפי בית, רשימת הבתים ושער יציג ב-JSON', async () => {
+    vi.mocked(getServiceClient).mockReturnValue(fakeDb(link(null)) as never)
+    const body = await (await GET(req(`dates=2026-11-10&home=${encodeURIComponent('בית א')}`))).json()
+    expect(body.branches.map((b: { home: string }) => b.home)).toEqual(['בית א'])
+    expect(body.amount).toBe(500)
+    expect(body.homes).toEqual(['בית א', 'בית ב'])
+    expect(body.rates).toEqual({ '2026-11-10': { date: '2026-11-10', rate: 3.7 } })
+  })
+
+  it('קישור נעול שמבקש בית אחר מקבל ריק, לא הרחבה', async () => {
+    vi.mocked(getServiceClient).mockReturnValue(fakeDb(link('בית ב')) as never)
+    const body = await (await GET(req(`dates=2026-11-10&home=${encodeURIComponent('בית א')}`))).json()
+    expect(body.amount).toBe(0)
+    expect(body.homes).toEqual(['בית ב'])
+  })
+
+  it('בנק ישראל לא זמין: הדוח עובד, בלי שער', async () => {
+    vi.mocked(globalThis.fetch).mockRejectedValue(new Error('down'))
+    vi.mocked(getServiceClient).mockReturnValue(fakeDb(link(null)) as never)
+    const res = await GET(req('dates=2026-11-10'))
+    expect(res.status).toBe(200)
+    expect((await res.json()).rates).toBeNull()
   })
 })

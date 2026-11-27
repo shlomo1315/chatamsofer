@@ -2,16 +2,28 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ChargeDay, ChargesReport } from '@/lib/donorCharges'
 import type { CardColumns, MatchedRow, MatchStatus, ReconcileResult, SkippedRow } from '@/lib/donorCardReconcile'
+import type { RateMap } from '@/lib/boiRates'
+import { ALL_CHARGES_COLUMNS, ALL_CHARGES_SHEET, allChargesRows } from '@/lib/donorChargesList'
 import { Gate, PasswordScreen } from '../DonorReportView'
 import '../donor-report.css'
 import './charges.css'
 
-// דוח חיובים לנדיב ("לוח נייבי"): בחירת תאריכים בלוח שנה, מספר החתימה, מטריצה של
-// יום × סניף עם פירוט, הדפסה ואקסל (01); והתאמה של קובץ האשראי מול החיובים במערכת (02).
+// דוח חיובים לנדיב ("לוח נייבי"): בחירת תאריכים בלוח שנה ובתי החלמה, מספר החתימה,
+// מטריצה של יום × סניף עם פירוט, הדפסה ואקסל עם שער יציג משוער (01); והתאמה של קובץ
+// האשראי מול החיובים במערכת (02, מוסתרת כרגע, ראו SHOW_RECONCILE).
 // הכול נגזר מהשרת (/api/donor-report/charges ו-/reconcile), שגם נועל את הקישור לבית שלו.
 // הקובץ שהועלה נשלח לשרת לקריאה בלבד ולא נשמר, גם לא בדפדפן אחרי השליחה.
 type Mode = 'day' | 'range' | 'multi'
-interface Data extends ChargesReport { label: string; lockedHome: string | null; selection: string; days: string[] }
+interface Data extends ChargesReport {
+  label: string; lockedHome: string | null; selection: string; days: string[]
+  /** כל הבתים שיש להם חיובים בתאריכים שנבחרו, לפני הסינון לפי בתים */
+  homes: string[]
+  rates: RateMap | null
+}
+
+// ⚠️ ההתאמה מול קובץ האשראי מוסתרת: שער המט"ח של אמקס והפרשי השעות יוצרים כל חודש
+// עשרות "פערים" שאינם פערים. הקוד, הנתיב (/reconcile) והבדיקות נשארו; true מחזיר אותה.
+const SHOW_RECONCILE = false
 interface RecCharge { id: string; date: string; home: string; name: string; amount: number }
 /** שורה שנכנסה להתאמה (השרת מחזיר ב-rows רק אותן) */
 type RecRow = MatchedRow & { status: Exclude<MatchStatus, 'other' | 'out'> }
@@ -75,6 +87,7 @@ function fileName(first: string, last: string): string {
 
 // התצוגה המקדימה של האקסל, באותו מבנה כמו chargesSheets בשרת.
 function previewSheets(data: Data): Sheet[] {
+  const list: Sheet = { name: ALL_CHARGES_SHEET, head: ALL_CHARGES_COLUMNS.map(c => c.header), rows: allChargesRows(data, data.rates), numFrom: 4 }
   const summary: Sheet = {
     name: 'סיכום',
     head: ['תאריך', ...data.branches.map(b => b.home), 'סה״כ ליום'],
@@ -85,7 +98,7 @@ function previewSheets(data: Data): Sheet[] {
     numFrom: 1,
   }
   summary.rows.push(['סה״כ', ...data.branches.map(b => b.amount), data.amount])
-  return [summary, ...data.branches.map(b => {
+  return [list, summary, ...data.branches.map(b => {
     const rows: Sheet['rows'] = []
     for (const d of b.days) d.charges.forEach((c, i) => rows.push([d.date, c.name, c.nights, c.amount, i === d.charges.length - 1 ? d.amount : null]))
     rows.push([`סה״כ ${b.home}`, null, null, null, b.amount])
@@ -129,6 +142,7 @@ export default function ChargesView({ token }: { token: string }) {
   const [dlError, setDlError] = useState('')
   const [modal, setModal] = useState(false)
   const [sheet, setSheet] = useState(0)
+  const [picked, setPicked] = useState<string[]>([]) // בתי החלמה שנבחרו; ריק = כולם
   const [rec, setRec] = useState<Rec | null>(null)
   const [over, setOver] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
@@ -138,17 +152,26 @@ export default function ChargesView({ token }: { token: string }) {
   const lines = useRef<SVGSVGElement>(null)
 
   const selected = useMemo(() => (mode === 'range' ? daysBetween(from, to) : [...dates].sort()), [mode, from, to, dates])
-  const query = useMemo((): Record<string, string> | null => {
-    if (mode === 'range') return { from, to }
-    return dates.length ? { dates: [...dates].sort().join(',') } : null
-  }, [mode, from, to, dates])
+  const query = useMemo((): URLSearchParams | null => {
+    const q = new URLSearchParams({ t: token })
+    if (mode === 'range') { q.set('from', from); q.set('to', to) }
+    else if (dates.length) q.set('dates', [...dates].sort().join(','))
+    else return null
+    for (const h of picked) q.append('home', h)
+    return q
+  }, [token, mode, from, to, dates, picked])
 
   const load = useCallback(async (silent = false) => {
     if (!query) { setData(null); setError(''); setState('ok'); return }
     try {
-      const res = await fetch(`/api/donor-report/charges?${new URLSearchParams({ t: token, ...query })}`, { cache: 'no-store' })
+      const res = await fetch(`/api/donor-report/charges?${query}`, { cache: 'no-store' })
       const json = await res.json()
-      if (res.ok) { setData(json); setError(''); setState('ok') }
+      if (res.ok) {
+        setData(json); setError(''); setState('ok')
+        // בית שנבחר ואין לו חיובים בתאריכים החדשים יוצא מהבחירה, כדי שלא יסנן בסתר
+        const homes = json.homes as string[]
+        setPicked(p => (p.every(h => homes.includes(h)) ? p : p.filter(h => homes.includes(h))))
+      }
       else if (json.needsPassword) { setData(null); setState('password') }
       else if (json.inactive) { setData(null); setState('inactive') }
       else if (res.status === 400) { setData(null); setError(json.error); setState('ok') }
@@ -156,7 +179,7 @@ export default function ChargesView({ token }: { token: string }) {
     } catch {
       if (!silent) { setError('שגיאת רשת, נסו שוב'); setState('error') }
     }
-  }, [token, query])
+  }, [query])
 
   const loadMonth = useCallback(async () => {
     try {
@@ -228,7 +251,9 @@ export default function ChargesView({ token }: { token: string }) {
     if (!query || !selected.length) return
     setDlError('')
     try {
-      const res = await fetch(`/api/donor-report/charges?${new URLSearchParams({ t: token, ...query, format: 'xlsx' })}`, { cache: 'no-store' })
+      const q = new URLSearchParams(query)
+      q.set('format', 'xlsx')
+      const res = await fetch(`/api/donor-report/charges?${q}`, { cache: 'no-store' })
       if (!res.ok) { const j = await res.json().catch(() => ({})); setDlError(j.error || 'ההורדה נכשלה'); return }
       const url = URL.createObjectURL(await res.blob())
       const a = document.createElement('a')
@@ -400,7 +425,7 @@ export default function ChargesView({ token }: { token: string }) {
               <button type="button" className="btn gold" onClick={openModal} disabled={!data}><Icon n="xl" />הורדה לאקסל</button>
             </div>
           </div>
-          <div className="printhead"><b>דוח חיובים לפי יום וסניף</b><span>{label}</span><span>הופק {fdy(today)}</span></div>
+          <div className="printhead"><b>דוח חיובים לפי יום וסניף</b><span>{label}</span>{picked.length > 0 && <span>{picked.join(' · ')}</span>}<span>הופק {fdy(today)}</span></div>
 
           <div className="rep-grid">
             <aside className="pick panel" aria-label="בחירת תאריכים">
@@ -438,6 +463,18 @@ export default function ChargesView({ token }: { token: string }) {
                 })}
               </div>
               <div className="selsum">נבחר: <b>{label}</b></div>
+              {!data?.lockedHome && (data?.homes.length ?? 0) > 1 && (
+                <div className="homes" role="group" aria-label="בתי החלמה">
+                  <span className="homes-l">בתי החלמה</span>
+                  <button type="button" aria-pressed={!picked.length} onClick={() => { setFocus(null); setPicked([]) }}>כולם</button>
+                  {data!.homes.map(h => (
+                    <button
+                      key={h} type="button" aria-pressed={picked.includes(h)}
+                      onClick={() => { setFocus(null); setPicked(p => (p.includes(h) ? p.filter(x => x !== h) : [...p, h])) }}
+                    >{h}</button>
+                  ))}
+                </div>
+              )}
             </aside>
 
             <div aria-live="polite">
@@ -557,7 +594,7 @@ export default function ChargesView({ token }: { token: string }) {
           </div>
         </section>
 
-        <section className="sec noprint" aria-labelledby="ch2-rec">
+        {SHOW_RECONCILE && <section className="sec noprint" aria-labelledby="ch2-rec">
           <div className="sec-h">
             <div>
               <span className="eyebrow">02 · התאמה</span>
@@ -712,7 +749,7 @@ export default function ChargesView({ token }: { token: string }) {
               )}
             </div>
           )}
-        </section>
+        </section>}
       </div>
 
       {modal && data && activeSheet && (
@@ -745,7 +782,12 @@ export default function ChargesView({ token }: { token: string }) {
               </table>
             </div>
             <footer>
-              <span>גיליון סיכום (יום × סניף) וגיליון פירוט לכל סניף, עם סה״כ ליום ולסניף.</span>
+              <span>
+                כל החיובים לפי תאריך, סיכום (יום × סניף) וגיליון לכל סניף.
+                {' '}{data.rates
+                  ? 'השער הוא השער היציג של בנק ישראל לאותו יום (או האחרון שפורסם לפניו), להערכה בלבד: אמקס מחייבת בשער שלה.'
+                  : 'השער היציג של בנק ישראל לא זמין כרגע, ולכן עמודות השער והדולרים ריקות.'}
+              </span>
               {dlError && <span className="err" role="alert">{dlError}</span>}
               <button type="button" className="btn pri" onClick={() => void download()}><Icon n="xl" />הורדת הקובץ</button>
             </footer>
