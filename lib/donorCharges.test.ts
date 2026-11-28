@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import ExcelJS from 'exceljs'
-import { aidsAsReceipts, chargesFileName, chargesSheets, groupCharges, selectionDays, israelDateTime, parseDateSelection, selectionLabel, toCharges } from './donorCharges'
+import { aidsAsReceipts, chargeHomes, chargesFileName, chargesSheets, filterHomes, groupCharges, selectionDays, israelDateTime, parseDateSelection, selectionLabel, toCharges } from './donorCharges'
+import { allChargesRows } from './donorChargesList'
 import { buildXlsx } from './xlsx'
 
 const row = (over: Record<string, unknown> = {}) => ({
@@ -94,7 +95,7 @@ describe('groupCharges ו-chargesSheets', () => {
 
   it('קובץ האקסל: סיכום יום × סניף וגיליון לכל סניף, RTL, עם שורות סה״כ מודגשות', async () => {
     const sheets = chargesSheets(report, ['2026-11-10', '2026-11-11', '2026-11-12'])
-    expect(sheets.map(s => s.name)).toEqual(['סיכום', 'בית א', 'בית ב'])
+    expect(sheets.map(s => s.name)).toEqual(['כל החיובים', 'סיכום', 'בית א', 'בית ב'])
     const wb = new ExcelJS.Workbook()
     await wb.xlsx.load(await buildXlsx(sheets) as unknown as ArrayBuffer)
     const sum = wb.getWorksheet('סיכום')!
@@ -114,6 +115,46 @@ describe('groupCharges ו-chargesSheets', () => {
     expect([total.getCell(1).value, total.getCell(5).value]).toEqual(['סה״כ בית א', 1000])
     expect(total.getCell(1).font?.bold).toBe(true)
     expect(JSON.stringify(sheets)).not.toContain('5678')
+  })
+
+  it('כל החיובים: לפי תאריך ושעה בין הסניפים, עם שער, תאריך השער ודולרים', async () => {
+    const rates = { '2026-11-10': { rate: 3.7, date: '2026-11-10' }, '2026-11-11': { rate: 3.75, date: '2026-11-10' } }
+    const rows = allChargesRows(report, rates)
+    // בית ב (11:30) נכנס בין שני החיובים של בית א ב-10.11 (10:30 ו-14:00)
+    expect(rows.map(r => [r[0], r[1], r[2], r[5]])).toEqual([
+      ['2026-11-10', '10:30', 'בית א', 500], ['2026-11-10', '10:30', 'בית ב', 700],
+      ['2026-11-10', '14:00', 'בית א', 300], ['2026-11-11', '11:00', 'בית א', 200],
+      ['סה״כ', null, null, 1700],
+    ])
+    expect(rows[3].slice(6)).toEqual([3.75, '2026-11-10', 53.33])
+    expect(rows[0][8]).toBe(135.14)
+    expect(rows[4][8]).toBe(Math.round((135.14 + 189.19 + 81.08 + 53.33) * 100) / 100)
+
+    const wb = new ExcelJS.Workbook()
+    await wb.xlsx.load(await buildXlsx(chargesSheets(report, undefined, rates)) as unknown as ArrayBuffer)
+    const ws = wb.getWorksheet('כל החיובים')!
+    expect(ws.getRow(1).values).toEqual([, 'תאריך', 'שעה', 'בית החלמה', 'שם היולדת', 'לילות', 'סכום (₪)', 'שער יציג משוער', 'תאריך השער', 'סכום משוער ($)'])
+    expect(ws.getRow(2).getCell(7).value).toBe(3.7)
+    expect(ws.getRow(2).getCell(7).numFmt).toBe('0.000')
+    expect(ws.getRow(2).getCell(9).numFmt).toBe('#,##0.00')
+    expect(ws.getRow(ws.rowCount).getCell(1).font?.bold).toBe(true)
+  })
+
+  it('כל החיובים בלי שער: התאים ריקים וגם הסה״כ בדולרים, לא ממציאים שער', () => {
+    const none = allChargesRows(report, null)
+    expect(none.every(r => r[6] === null && r[8] === null)).toBe(true)
+    // שער רק ליום אחד: אין סה״כ דולרים חלקי
+    const partial = allChargesRows(report, { '2026-11-10': { rate: 3.7, date: '2026-11-10' } })
+    expect(partial[3][8]).toBeNull()
+    expect(partial[4][8]).toBeNull()
+  })
+
+  it('סינון לפי בתים: ריק = כולם, ובית שלא בנעילה לא נכנס', () => {
+    expect(filterHomes(charges, []).length).toBe(4)
+    expect(filterHomes(charges, ['בית ב']).map(c => c.id)).toEqual(['d'])
+    expect(chargeHomes(charges)).toEqual(['בית א', 'בית ב'])
+    const locked = toCharges([row({ id: 'a' }), row({ id: 'd', home: 'בית ב' })], { from: '2026-11-10', to: '2026-11-11' }, 'בית ב')
+    expect(filterHomes(locked, ['בית א'])).toEqual([])
   })
 })
 

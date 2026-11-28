@@ -2,6 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { cleanDate } from '@/lib/donorReport'
 import type { CellValue, SheetSpec } from '@/lib/xlsx'
+import type { RateMap } from '@/lib/boiRates'
+import { ALL_CHARGES_COLUMNS, ALL_CHARGES_SHEET, allChargesRows } from '@/lib/donorChargesList'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // דוח חיובים לנדיב: כל קבלה שבית החלמה הגיש (recovery_receipts) היא חיוב אחד,
@@ -166,6 +168,19 @@ export function toCharges(rows: Record<string, unknown>[], sel: DateSelection, l
   return out.sort((a, b) => a.home.localeCompare(b.home, 'he') || a.date.localeCompare(b.date) || a.time.localeCompare(b.time))
 }
 
+/** הבתים שיש להם חיובים בבחירה, לבורר הבתים במסך */
+export const chargeHomes = (charges: DonorCharge[]) => [...new Set(charges.map(c => c.home))].sort((a, b) => a.localeCompare(b, 'he'))
+
+/**
+ * סינון לפי בתים שהנדיב בחר. רשימה ריקה = כל הבתים.
+ * 🔴 רץ אחרי הנעילה של loadCharges, ולכן קישור נעול לא יכול להרחיב לבית אחר.
+ */
+export function filterHomes(charges: DonorCharge[], homes: string[]): DonorCharge[] {
+  if (!homes.length) return charges
+  const set = new Set(homes)
+  return charges.filter(c => set.has(c.home))
+}
+
 export interface ChargeDay { date: string; count: number; amount: number; charges: DonorCharge[] }
 export interface ChargeBranch { home: string; count: number; amount: number; days: ChargeDay[] }
 export interface ChargesReport { count: number; amount: number; branches: ChargeBranch[] }
@@ -216,11 +231,12 @@ export function chargesFileName(s: DateSelection): string {
 }
 
 /**
- * גיליונות האקסל, כמו בתצוגה המקדימה במסך: "סיכום" (שורה לכל יום, עמודה לכל
+ * גיליונות האקסל, כמו בתצוגה המקדימה במסך: "כל החיובים" (לפי תאריך, עם שער
+ * יציג משוער ודולרים, ראו lib/donorChargesList), "סיכום" (שורה לכל יום, עמודה לכל
  * סניף וסה״כ ליום, ושורת סה״כ מודגשת), וגיליון לכל סניף עם החיובים, סה״כ היום
  * בשורה האחרונה של כל יום, ושורת סה״כ לסניף.
  */
-export function chargesSheets(report: ChargesReport, days?: string[]): SheetSpec[] {
+export function chargesSheets(report: ChargesReport, days?: string[], rates?: RateMap | null): SheetSpec[] {
   const homes = report.branches.map(b => b.home)
   const dayList = days ?? [...new Set(report.branches.flatMap(b => b.days.map(d => d.date)))].sort()
   const cell = (b: ChargeBranch, date: string) => b.days.find(d => d.date === date)?.amount ?? 0
@@ -230,7 +246,13 @@ export function chargesSheets(report: ChargesReport, days?: string[]): SheetSpec
   })
   summaryRows.push(['סה״כ', ...report.branches.map(b => b.amount), report.amount])
 
+  const list = allChargesRows(report, rates ?? null)
   const sheets: SheetSpec[] = [{
+    name: ALL_CHARGES_SHEET,
+    columns: ALL_CHARGES_COLUMNS,
+    rows: list,
+    boldRows: [list.length - 1],
+  }, {
     name: 'סיכום',
     columns: [
       { header: 'תאריך', kind: 'date' },
@@ -241,7 +263,7 @@ export function chargesSheets(report: ChargesReport, days?: string[]): SheetSpec
     boldRows: [summaryRows.length - 1],
   }]
 
-  const used = new Set(['סיכום'])
+  const used = new Set([ALL_CHARGES_SHEET, 'סיכום'])
   for (const b of report.branches) {
     const rows: CellValue[][] = []
     for (const d of b.days) {

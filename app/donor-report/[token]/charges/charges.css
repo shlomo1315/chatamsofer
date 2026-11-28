@@ -67,6 +67,10 @@
 .ch2 .cal-d.on i{background:var(--acc-tx)}
 .ch2 .selsum{font-size:13px;color:var(--mut);padding-top:12px;border-top:1px solid var(--ln)}
 .ch2 .selsum b{color:var(--tx);font-weight:700}
+.ch2 .homes{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding-top:12px;margin-top:12px;border-top:1px solid var(--ln)}
+.ch2 .homes-l{width:100%;font-size:13px;color:var(--mut)}
+.ch2 .homes button{font-size:13px;min-height:34px;padding:4px 12px;border-radius:999px;border:1px solid var(--ln);color:var(--mut);transition:background .15s,color .15s,border-color .15s}
+.ch2 .homes button[aria-pressed=true]{background:var(--s3);color:var(--tx);font-weight:700;border-color:var(--ln2)}
 .ch2 .empty{color:var(--mut);font-size:14px;padding:24px}
 .ch2 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--c);flex:none}
 .ch2 .printhead{display:none}
